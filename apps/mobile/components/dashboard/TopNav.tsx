@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useTranslation } from "react-i18next";
-import React from "react";
+import React, { memo } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import { useTheme } from "@/context/ThemeContext";
 import { MonyviLogo } from "../ui/MonyviLogo";
@@ -73,8 +73,13 @@ function TopNavComponent({
               disabled={isCurrencyLoading}
               accessibilityLabel={t("change_currency")}
               accessibilityRole="button"
-              style={{ backgroundColor: theme.surfaceHighlight }}
-              className={`flex-row items-center gap-1 px-2.5 py-1.5 rounded-full ${isCurrencyLoading ? "opacity-50" : ""}`}
+              // NativeWind v4 can crash on opacity classes for TouchableOpacity.
+              // eslint-disable-next-line react-native/no-inline-styles
+              style={{
+                backgroundColor: theme.surfaceHighlight,
+                opacity: isCurrencyLoading ? 0.5 : 1,
+              }}
+              className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-full"
             >
               <Text className="text-sm">{currencyFlag ?? "💱"}</Text>
               <Text
@@ -129,4 +134,4 @@ function TopNavComponent({
   );
 }
 
-export const TopNav = React.memo(TopNavComponent);
+export const TopNav = memo(TopNavComponent);
