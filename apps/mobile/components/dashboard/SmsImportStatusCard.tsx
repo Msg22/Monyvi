@@ -83,12 +83,12 @@ function SmsImportStatusCardComponent(): React.ReactElement | null {
   );
 
   const handleCardPress = useCallback((): void => {
-    router.push("/sms-scan" as never);
+    router.push("/sms-scan");
   }, [router]);
 
   const handleToggle = useCallback((): void => {
     // Navigate to SMS settings/scan screen for toggling
-    router.push("/sms-scan" as never);
+    router.push("/sms-scan");
   }, [router]);
 
   // Only show on Android after user has synced at least once
@@ -100,7 +100,7 @@ function SmsImportStatusCardComponent(): React.ReactElement | null {
     <TouchableOpacity
       onPress={handleCardPress}
       activeOpacity={0.7}
-      className="flex-row items-center rounded-xl p-3.5 mt-4 overflow-hidden bg-slate-100 dark:bg-slate-800 border-l-2 border-l-nileGreen-500"
+      className="flex-row items-center rounded-xl p-3.5 mt-4 overflow-hidden bg-slate-100 dark:bg-slate-800 border-s-2 border-s-nileGreen-500"
     >
       {/* SMS Icon */}
       <View className="w-10 h-10 rounded-[10px] items-center justify-center bg-nileGreen-500/10">
@@ -108,7 +108,7 @@ function SmsImportStatusCardComponent(): React.ReactElement | null {
       </View>
 
       {/* Text Content */}
-      <View className="flex-1 ml-3">
+      <View className="flex-1 ms-3">
         <Text
           className="text-sm font-bold text-slate-800 dark:text-slate-50"
           numberOfLines={1}
