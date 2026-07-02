@@ -13,7 +13,7 @@
  * onAuthStateChange.
  */
 
-import type { Session, User } from "@supabase/supabase-js";
+import { AuthApiError, type Session, type User } from "@supabase/supabase-js";
 import React, {
   createContext,
   useCallback,
@@ -94,6 +94,14 @@ function isAuthBootstrapTimeout(error: unknown): boolean {
 function isInvalidRefreshTokenError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
+  }
+
+  if (
+    error instanceof AuthApiError &&
+    (error.code === "refresh_token_not_found" ||
+      error.code === "invalid_refresh_token")
+  ) {
+    return true;
   }
 
   const message = error.message.toLowerCase();

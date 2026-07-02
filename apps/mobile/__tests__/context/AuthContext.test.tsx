@@ -1,6 +1,7 @@
 import React from "react";
 import { Text } from "react-native";
 import { act, render, waitFor } from "@testing-library/react-native";
+import { AuthApiError } from "@supabase/supabase-js";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 
 const mockGetSession = jest.fn();
@@ -82,8 +83,7 @@ describe("AuthProvider", () => {
     expect(screen.getByText("loading")).toBeTruthy();
 
     await act(async () => {
-      jest.advanceTimersByTime(10_000);
-      await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(10_000);
     });
 
     await waitFor(() => {
@@ -161,6 +161,38 @@ describe("AuthProvider", () => {
       "auth.bootstrap.staleSessionCleared",
       {
         reason: "Invalid Refresh Token: Refresh Token Not Found",
+      }
+    );
+    expect(mockLoggerError).not.toHaveBeenCalled();
+  });
+
+  it("clears stale local auth when Supabase returns a refresh token error code", async () => {
+    mockGetSession.mockResolvedValue({
+      data: {
+        session: null,
+      },
+      error: new AuthApiError(
+        "Token is no longer valid",
+        400,
+        "refresh_token_not_found"
+      ),
+    });
+
+    const screen = render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("anonymous")).toBeTruthy();
+    });
+
+    expect(mockClearPersistedAuthSession).toHaveBeenCalledTimes(1);
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
+      "auth.bootstrap.staleSessionCleared",
+      {
+        reason: "Token is no longer valid",
       }
     );
     expect(mockLoggerError).not.toHaveBeenCalled();

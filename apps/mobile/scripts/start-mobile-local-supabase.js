@@ -456,7 +456,8 @@ function buildExpoStartArgs(expoArgs) {
 function buildExpoStartCommand(expoArgs, options = {}) {
   const pathExists = options.pathExists ?? existsSync;
   const installedExpoCliPath = options.expoCliPath ?? expoCliPath;
-  const startArgs = buildExpoStartArgs(expoArgs).slice(1);
+  const args = buildExpoStartArgs(expoArgs);
+  const startArgs = args.slice(1);
 
   if (pathExists(installedExpoCliPath)) {
     return {
@@ -468,7 +469,7 @@ function buildExpoStartCommand(expoArgs, options = {}) {
 
   return {
     command: resolveNpxCommand(),
-    args: buildExpoStartArgs(expoArgs),
+    args,
     shell: process.platform === "win32",
   };
 }
