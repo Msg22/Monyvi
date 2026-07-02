@@ -83,6 +83,7 @@ describe("AuthProvider", () => {
 
     await act(async () => {
       jest.advanceTimersByTime(10_000);
+      await Promise.resolve();
     });
 
     await waitFor(() => {

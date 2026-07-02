@@ -1,5 +1,5 @@
 interface SupabaseServiceModule {
-  getSupabaseStorageKey(url: string): string;
+  readonly getSupabaseStorageKey: (url: string) => string;
 }
 
 process.env.EXPO_PUBLIC_SUPABASE_URL = "https://test-ref.supabase.co";
