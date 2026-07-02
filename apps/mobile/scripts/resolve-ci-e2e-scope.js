@@ -107,9 +107,8 @@ function getSuitesForFile(filePath) {
     normalized.endsWith(".spec.tsx");
   const isSharedSmsParserPath =
     /ai-sms|sms-fixture|sms-hash|sms-keyword|egyptian-bank/i.test(normalized);
-  const isTransactionsLocaleFile = /locales\/(?:ar|en)\/transactions\.json/i.test(
-    normalized
-  );
+  const isTransactionsLocaleFile =
+    /locales\/(?:ar|en)\/transactions\.json/i.test(normalized);
   const maestroSuite = getSuiteForMaestroFlow(normalized);
   if (maestroSuite) {
     suites.push(maestroSuite);
@@ -132,7 +131,7 @@ function getSuitesForFile(filePath) {
   }
 
   const isAccountManagementPath =
-    /add-account|edit-account|account-form|institution|useCreateAccount|useUpdateAccount|edit-account-service/i.test(
+    /add-account|edit-account|account-form|institution|useCreateAccount|useUpdateAccount|account-service|edit-account-service/i.test(
       normalized
     );
   if (isAccountManagementPath) {
