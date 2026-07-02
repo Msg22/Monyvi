@@ -8,7 +8,7 @@
  */
 
 import { SupabaseDatabase } from "@monyvi/db";
-import { createClient, AuthError } from "@supabase/supabase-js";
+import { createClient, AuthError, processLock } from "@supabase/supabase-js";
 import * as SecureStore from "expo-secure-store";
 import { AUTH_REDIRECT_URL } from "@/constants/auth-constants";
 import { z } from "zod";
@@ -21,6 +21,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
     "Missing Supabase environment variables. Check EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in .env"
   );
 }
+
+export function getSupabaseStorageKey(url: string): string {
+  const withoutProtocol = url.replace(/^[a-z][a-z\d+\-.]*:\/\//i, "");
+  const host = withoutProtocol.split(/[/?#:]/, 1)[0] ?? "";
+  const projectRef = host.split(".")[0] ?? host;
+
+  return `sb-${projectRef}-auth-token`;
+}
+
+const AUTH_STORAGE_KEY = getSupabaseStorageKey(supabaseUrl);
 
 /**
  * Chunked SecureStore adapter for Supabase Auth.
@@ -150,12 +160,20 @@ export const supabase = createClient<SupabaseDatabase>(
   {
     auth: {
       storage: secureStoreAdapter,
+      storageKey: AUTH_STORAGE_KEY,
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
+      lock: processLock,
     },
   }
 );
+
+export async function clearPersistedAuthSession(): Promise<void> {
+  await secureStoreAdapter.removeItem(AUTH_STORAGE_KEY);
+  await secureStoreAdapter.removeItem(`${AUTH_STORAGE_KEY}-code-verifier`);
+  await secureStoreAdapter.removeItem(`${AUTH_STORAGE_KEY}-user`);
+}
 
 /**
  * Get current authenticated user ID.

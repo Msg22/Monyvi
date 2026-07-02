@@ -1,4 +1,6 @@
 import type { ParsedSmsTransaction } from "@monyvi/logic";
+import fs from "node:fs";
+import path from "node:path";
 
 const mockRegisterHeadlessTask = jest.fn<
   void,
@@ -27,7 +29,6 @@ jest.mock("@/services/sms-live-detection-handler", () => ({
 }));
 
 import { registerSmsHeadlessTask } from "@/services/sms-headless-task";
-import HeadlessJsTaskError from "react-native/Libraries/ReactNative/HeadlessJsTaskError";
 
 function createParsedTransaction(): ParsedSmsTransaction {
   return {
@@ -94,14 +95,34 @@ describe("sms-headless-task", () => {
     });
     const task = getRegisteredTask();
 
-    await expect(
-      task({
+    let caughtError: unknown;
+
+    try {
+      await task({
         sender: "NBE",
         body: "Purchase EGP 7.25 at DOUBLE CONFIRM TEST using card ending 1234",
         timestamp: 1778414400000,
-      })
-    ).rejects.toBeInstanceOf(HeadlessJsTaskError);
+      });
+    } catch (error: unknown) {
+      caughtError = error;
+    }
+
+    expect(caughtError).toBeInstanceOf(Error);
+    expect(
+      caughtError instanceof Error ? caughtError.constructor.name : null
+    ).toBe("HeadlessJsTaskError");
     expect(mockHandleDetectedSms).not.toHaveBeenCalled();
+  });
+
+  it("does not import the private HeadlessJsTaskError path at module startup", () => {
+    const source = fs.readFileSync(
+      path.resolve(__dirname, "../../services/sms-headless-task.ts"),
+      "utf8"
+    );
+
+    expect(source).not.toContain(
+      'import HeadlessJsTaskError from "react-native/Libraries/ReactNative/HeadlessJsTaskError"'
+    );
   });
 
   it("does not retry permanent AI parsing failures", async () => {

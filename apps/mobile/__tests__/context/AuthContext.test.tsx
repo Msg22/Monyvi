@@ -6,7 +6,10 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 const mockGetSession = jest.fn();
 const mockOnAuthStateChange = jest.fn();
 const mockSignOut = jest.fn();
+const mockClearPersistedAuthSession = jest.fn();
 const mockUnsubscribe = jest.fn();
+const mockLoggerError = jest.fn();
+const mockLoggerInfo = jest.fn();
 
 type AuthStateChangeCallback = (
   event: string,
@@ -14,6 +17,8 @@ type AuthStateChangeCallback = (
 ) => void;
 
 jest.mock("@/services/supabase", () => ({
+  clearPersistedAuthSession: (): Promise<void> =>
+    mockClearPersistedAuthSession() as Promise<void>,
   supabase: {
     auth: {
       getSession: (...args: unknown[]): Promise<unknown> =>
@@ -22,6 +27,17 @@ jest.mock("@/services/supabase", () => ({
         mockOnAuthStateChange(...args),
       signOut: (...args: unknown[]): Promise<unknown> =>
         mockSignOut(...args) as Promise<unknown>,
+    },
+  },
+}));
+
+jest.mock("@/utils/logger", () => ({
+  logger: {
+    error: (...args: unknown[]): void => {
+      mockLoggerError(...args);
+    },
+    info: (...args: unknown[]): void => {
+      mockLoggerInfo(...args);
     },
   },
 }));
@@ -40,6 +56,7 @@ describe("AuthProvider", () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    mockClearPersistedAuthSession.mockResolvedValue(undefined);
     mockOnAuthStateChange.mockReturnValue({
       data: {
         subscription: {
@@ -64,7 +81,7 @@ describe("AuthProvider", () => {
 
     expect(screen.getByText("loading")).toBeTruthy();
 
-    act(() => {
+    await act(async () => {
       jest.advanceTimersByTime(10_000);
     });
 
@@ -95,8 +112,65 @@ describe("AuthProvider", () => {
     });
   });
 
-  it("releases auth loading when the auth listener receives the initial session first", async () => {
-    mockGetSession.mockReturnValue(new Promise(() => {}));
+  it("clears stale local auth when Supabase rejects the stored refresh token", async () => {
+    mockGetSession.mockRejectedValue(
+      new Error("Invalid Refresh Token: Refresh Token Not Found")
+    );
+
+    const screen = render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("anonymous")).toBeTruthy();
+    });
+
+    expect(mockClearPersistedAuthSession).toHaveBeenCalledTimes(1);
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
+      "auth.bootstrap.staleSessionCleared",
+      {
+        reason: "Invalid Refresh Token: Refresh Token Not Found",
+      }
+    );
+    expect(mockLoggerError).not.toHaveBeenCalled();
+  });
+
+  it("clears stale local auth when Supabase returns a refresh token error", async () => {
+    mockGetSession.mockResolvedValue({
+      data: {
+        session: null,
+      },
+      error: new Error("Invalid Refresh Token: Refresh Token Not Found"),
+    });
+
+    const screen = render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("anonymous")).toBeTruthy();
+    });
+
+    expect(mockClearPersistedAuthSession).toHaveBeenCalledTimes(1);
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
+      "auth.bootstrap.staleSessionCleared",
+      {
+        reason: "Invalid Refresh Token: Refresh Token Not Found",
+      }
+    );
+    expect(mockLoggerError).not.toHaveBeenCalled();
+  });
+
+  it("applies auth listener changes after bootstrap", async () => {
+    mockGetSession.mockResolvedValue({
+      data: {
+        session: null,
+      },
+    });
     let authCallback: AuthStateChangeCallback | null = null;
     mockOnAuthStateChange.mockImplementationOnce(
       (callback: AuthStateChangeCallback) => {
@@ -117,10 +191,12 @@ describe("AuthProvider", () => {
       </AuthProvider>
     );
 
-    expect(screen.getByText("loading")).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByText("anonymous")).toBeTruthy();
+    });
 
     act(() => {
-      authCallback?.("INITIAL_SESSION", {
+      authCallback?.("SIGNED_IN", {
         user: {
           id: "user-1",
         },
