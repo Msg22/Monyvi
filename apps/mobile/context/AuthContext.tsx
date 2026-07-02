@@ -13,7 +13,7 @@
  * onAuthStateChange.
  */
 
-import type { Session, User } from "@supabase/supabase-js";
+import { AuthApiError, type Session, type User } from "@supabase/supabase-js";
 import React, {
   createContext,
   useCallback,
@@ -23,7 +23,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { supabase } from "@/services/supabase";
+import { clearPersistedAuthSession, supabase } from "@/services/supabase";
 import { logger } from "@/utils/logger";
 
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 10_000;
@@ -38,6 +38,10 @@ interface AuthContextValue {
   readonly isLoading: boolean;
   readonly isAuthenticated: boolean;
   readonly signOut: () => Promise<void>;
+}
+
+interface AuthSubscription {
+  unsubscribe(): void;
 }
 
 // =============================================================================
@@ -81,6 +85,30 @@ function withTimeout<T>(
       clearTimeout(timeoutHandle);
     }
   });
+}
+
+function isAuthBootstrapTimeout(error: unknown): boolean {
+  return error instanceof Error && error.message === "auth-bootstrap-timeout";
+}
+
+function isInvalidRefreshTokenError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  if (
+    error instanceof AuthApiError &&
+    (error.code === "refresh_token_not_found" ||
+      error.code === "invalid_refresh_token")
+  ) {
+    return true;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("invalid refresh token") ||
+    message.includes("refresh token not found")
+  );
 }
 
 interface AuthProviderProps {
@@ -129,34 +157,61 @@ export function AuthProvider({
   );
 
   useEffect(() => {
-    // Bootstrap: get initial session
-    withTimeout(
-      supabase.auth.getSession(),
-      AUTH_BOOTSTRAP_TIMEOUT_MS,
-      "auth-bootstrap-timeout"
-    )
-      .then(({ data: { session: initialSession } }) => {
-        applySession(initialSession, false);
-        setIsLoading(false);
-      })
-      .catch((error: unknown) => {
-        const isTimeout =
-          error instanceof Error && error.message === "auth-bootstrap-timeout";
-        if (!isTimeout) {
-          logger.error("Auth bootstrap failed", { error });
-        }
+    let isMounted = true;
+    let authSubscription: AuthSubscription | null = null;
+
+    const subscribeToAuthChanges = (): void => {
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((_event, newSession) => {
+        applySession(newSession, true);
         setIsLoading(false);
       });
 
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      applySession(newSession, true);
-      setIsLoading(false);
-    });
+      authSubscription = subscription;
+    };
 
-    return () => subscription.unsubscribe();
+    const bootstrapSession = async (): Promise<void> => {
+      try {
+        const {
+          data: { session: initialSession },
+          error,
+        } = await withTimeout(
+          supabase.auth.getSession(),
+          AUTH_BOOTSTRAP_TIMEOUT_MS,
+          "auth-bootstrap-timeout"
+        );
+
+        if (error) {
+          throw error;
+        }
+
+        if (!isMounted) return;
+
+        applySession(initialSession, false);
+      } catch (error: unknown) {
+        if (isInvalidRefreshTokenError(error)) {
+          await clearPersistedAuthSession();
+          logger.info("auth.bootstrap.staleSessionCleared", {
+            reason: error instanceof Error ? error.message : "unknown",
+          });
+        } else if (!isAuthBootstrapTimeout(error)) {
+          logger.error("Auth bootstrap failed", { error });
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+          subscribeToAuthChanges();
+        }
+      }
+    };
+
+    void bootstrapSession();
+
+    return () => {
+      isMounted = false;
+      authSubscription?.unsubscribe();
+    };
   }, [applySession]);
 
   const signOut = useCallback(async (): Promise<void> => {

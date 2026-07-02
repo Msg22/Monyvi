@@ -20,6 +20,7 @@ const NGROK_START_TIMEOUT_MS = 30_000;
 const NGROK_POLL_INTERVAL_MS = 500;
 const repoRoot = resolve(__dirname, "..", "..", "..");
 const mobileRoot = join(repoRoot, "apps", "mobile");
+const expoCliPath = join(repoRoot, "node_modules", "expo", "bin", "cli");
 
 function resolveNpxCommand() {
   return process.platform === "win32" ? "npx.cmd" : "npx";
@@ -452,23 +453,46 @@ function buildExpoStartArgs(expoArgs) {
   return ["expo", "start", ...defaultArgs, ...expoArgs];
 }
 
+function buildExpoStartCommand(expoArgs, options = {}) {
+  const pathExists = options.pathExists ?? existsSync;
+  const installedExpoCliPath = options.expoCliPath ?? expoCliPath;
+  const args = buildExpoStartArgs(expoArgs);
+  const startArgs = args.slice(1);
+
+  if (pathExists(installedExpoCliPath)) {
+    return {
+      command: options.nodeExecPath ?? process.execPath,
+      args: [installedExpoCliPath, ...startArgs],
+      shell: false,
+    };
+  }
+
+  return {
+    command: resolveNpxCommand(),
+    args,
+    shell: process.platform === "win32",
+  };
+}
+
 function runExpoSync(env, expoArgs) {
-  const result = spawnSync(resolveNpxCommand(), buildExpoStartArgs(expoArgs), {
+  const expoStart = buildExpoStartCommand(expoArgs);
+  const result = spawnSync(expoStart.command, expoStart.args, {
     cwd: mobileRoot,
     env,
     stdio: "inherit",
-    shell: process.platform === "win32",
+    shell: expoStart.shell,
   });
 
   process.exit(result.status ?? 1);
 }
 
 function startExpoProcess(env, expoArgs) {
-  return spawn(resolveNpxCommand(), buildExpoStartArgs(expoArgs), {
+  const expoStart = buildExpoStartCommand(expoArgs);
+  return spawn(expoStart.command, expoStart.args, {
     cwd: mobileRoot,
     env,
     stdio: "inherit",
-    shell: process.platform === "win32",
+    shell: expoStart.shell,
   });
 }
 
@@ -586,6 +610,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildExpoStartCommand,
   buildExpoStartArgs,
   buildManualQaSeedEnv,
   buildLocalSupabaseExpoEnv,

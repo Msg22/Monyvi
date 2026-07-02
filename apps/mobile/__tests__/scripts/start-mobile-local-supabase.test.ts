@@ -1,5 +1,17 @@
 interface StartMobileLocalSupabaseModule {
   buildExpoStartArgs(expoArgs: readonly string[]): readonly string[];
+  buildExpoStartCommand(
+    expoArgs: readonly string[],
+    options?: {
+      readonly expoCliPath?: string;
+      readonly nodeExecPath?: string;
+      readonly pathExists?: (path: string) => boolean;
+    }
+  ): {
+    readonly command: string;
+    readonly args: readonly string[];
+    readonly shell: boolean;
+  };
   buildManualQaSeedEnv(
     cliPassword: string | null,
     baseEnv?: Readonly<Record<string, string | undefined>>
@@ -112,6 +124,41 @@ describe("start-mobile-local-supabase script helpers", () => {
       "8081",
       "--clear",
     ]);
+  });
+
+  it("starts Expo through the installed package CLI when npm bin shims are missing", () => {
+    expect(
+      startMobileLocalSupabase.buildExpoStartCommand(["--clear"], {
+        expoCliPath:
+          "E:\\Work\\My Projects\\Monyvi\\node_modules\\expo\\bin\\cli",
+        nodeExecPath: "C:\\Program Files\\nodejs\\node.exe",
+        pathExists: () => true,
+      })
+    ).toEqual({
+      command: "C:\\Program Files\\nodejs\\node.exe",
+      args: [
+        "E:\\Work\\My Projects\\Monyvi\\node_modules\\expo\\bin\\cli",
+        "start",
+        "--dev-client",
+        "--port",
+        "8081",
+        "--clear",
+      ],
+      shell: false,
+    });
+  });
+
+  it("falls back to npx Expo resolution when the package CLI is unavailable", () => {
+    expect(
+      startMobileLocalSupabase.buildExpoStartCommand([], {
+        expoCliPath: "missing-expo-cli",
+        pathExists: () => false,
+      })
+    ).toEqual({
+      command: process.platform === "win32" ? "npx.cmd" : "npx",
+      args: ["expo", "start", "--dev-client", "--port", "8081"],
+      shell: process.platform === "win32",
+    });
   });
 
   it("allows callers to override the Expo port", () => {

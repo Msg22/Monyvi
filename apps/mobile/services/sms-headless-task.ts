@@ -9,7 +9,6 @@
  */
 
 import { AppRegistry } from "react-native";
-import HeadlessJsTaskError from "react-native/Libraries/ReactNative/HeadlessJsTaskError";
 import { handleDetectedSms } from "./sms-live-detection-handler";
 import { processLiveSmsEvent } from "./sms-live-processor";
 
@@ -22,6 +21,17 @@ interface SmsTaskData {
 
 /** Name used in both AppRegistry.registerHeadlessTask and the native service. */
 const SMS_DETECTION_TASK = "SmsDetectionTask";
+
+interface HeadlessJsTaskErrorModule {
+  readonly default: new () => Error;
+}
+
+function createHeadlessJsRetryError(): Error {
+  const { default: HeadlessJsTaskError } =
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- RN 0.83 does not expose HeadlessJsTaskError publicly yet.
+    require("react-native/Libraries/ReactNative/HeadlessJsTaskError") as HeadlessJsTaskErrorModule;
+  return new HeadlessJsTaskError();
+}
 
 /**
  * Headless JS task handler.
@@ -37,7 +47,7 @@ async function smsDetectionTask(taskData: SmsTaskData): Promise<void> {
   });
 
   if (result.status === "ai_failed" && result.isRetryable !== false) {
-    throw new HeadlessJsTaskError();
+    throw createHeadlessJsRetryError();
   }
 
   if (result.status !== "parsed") {
