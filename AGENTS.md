@@ -278,6 +278,12 @@ the true domain model.
 
 ## Styling Rules
 
+- **Visual mockups before UI changes**: Before coding an issue or feature that
+  adds a new page, adds a new visible UI item, or changes the design of an
+  existing UI item, create a scoped visual mockup for only the affected UI area
+  and get Mohamed's approval. Do not mock the whole page unless the whole page
+  is changing. If the change is backend-only, logic-only, copy-only, or a
+  non-visual bug fix, a mockup is not required.
 - **NativeWind classes only**: Use `className` for ALL styling. Do NOT use
   `StyleSheet.create()` or inline `style` unless there is no NativeWind
   equivalent (e.g., dynamic computed values like `` width: `${percent}%` ``).
@@ -341,6 +347,12 @@ All schema changes MUST go through local SQL migration files in
 
 Commit format: `<type>: <description>` — Types: feat, fix, refactor, docs, test,
 chore, perf, ci.
+
+- Branch base selection: When starting a new issue or feature, compare the
+  expected files and behavior against the current branch and any stacked base
+  branch. If the next work is likely to conflict with those in-flight changes,
+  create the new branch on top of the current/stacked branch. If it is
+  independent, create the branch from up-to-date `main`.
 
 ## Pull Request Review Comments
 
