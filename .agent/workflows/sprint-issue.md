@@ -1,4 +1,4 @@
-# Sprint Issue Workflow
+# Sprint Issue Agent Workflow
 
 This workflow applies when working GitHub sprint issues for Monyvi. GitHub
 issues may be AI-generated and not yet reviewed by Mohamed, so issue text is an
