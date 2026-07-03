@@ -188,10 +188,7 @@ function resolveLocalSupabaseKeys(env, readStatusEnv) {
 
   const statusEnv = parseSupabaseEnv(readStatusEnv());
   const anonKey =
-    explicitAnonKey ||
-    statusEnv.ANON_KEY ||
-    statusEnv.SUPABASE_ANON_KEY ||
-    statusEnv.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+    explicitAnonKey || statusEnv.ANON_KEY || statusEnv.SUPABASE_ANON_KEY;
   const serviceRoleKey =
     explicitServiceRoleKey ||
     statusEnv.SERVICE_ROLE_KEY ||
@@ -243,7 +240,6 @@ function getE2eSeedConfig(env = process.env, options = {}) {
     anonKey: isLocal
       ? localKeys.anonKey
       : (env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-        env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
         requiredRemoteEnv(env, "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY")),
     email:
       env.MAESTRO_E2E_EMAIL ??

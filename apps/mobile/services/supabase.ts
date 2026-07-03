@@ -14,9 +14,8 @@ import { AUTH_REDIRECT_URL } from "@/constants/auth-constants";
 import { z } from "zod";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL as string;
-const supabasePublishableKey =
-  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const supabasePublishableKey = process.env
+  .EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY as string;
 
 if (!supabaseUrl || !supabasePublishableKey) {
   throw new Error(

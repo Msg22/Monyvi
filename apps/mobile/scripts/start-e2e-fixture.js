@@ -8,8 +8,7 @@ function resolveNpxCommand() {
 function hasExplicitSupabaseAppEnv(baseEnv) {
   return Boolean(
     baseEnv.EXPO_PUBLIC_SUPABASE_URL &&
-    (baseEnv.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-      baseEnv.EXPO_PUBLIC_SUPABASE_ANON_KEY)
+    baseEnv.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY
   );
 }
 
@@ -30,9 +29,7 @@ function buildE2eFixtureEnv(baseEnv = process.env) {
     EXPO_PUBLIC_SUPABASE_URL:
       baseEnv.EXPO_PUBLIC_SUPABASE_URL ?? config.appSupabaseUrl,
     EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
-      baseEnv.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-      baseEnv.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
-      config.anonKey,
+      baseEnv.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? config.anonKey,
     EXPO_PUBLIC_SENTRY_DSN: baseEnv.EXPO_PUBLIC_SENTRY_DSN ?? "",
     EXPO_NO_TELEMETRY: "1",
     CI: baseEnv.CI ?? "1",
