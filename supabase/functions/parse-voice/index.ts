@@ -318,6 +318,18 @@ function errorResponse(message: string, status = 400): Response {
   return jsonResponse({ error: message, code: status }, status);
 }
 
+function getSafeErrorType(error: unknown): string {
+  if (error instanceof Error) {
+    return error.name || "Error";
+  }
+
+  return typeof error;
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /**
  * Verify the JWT from the Authorization header.
  */
@@ -427,8 +439,11 @@ async function processWithRetry(
       };
     } catch (err: unknown) {
       lastError = err;
-      const errMsg = err instanceof Error ? err.message : String(err);
-      console.error(`[parse-voice] Attempt ${attempt + 1} failed: ${errMsg}`);
+      const errMsg = getErrorMessage(err);
+      console.error("[parse-voice] Gemini attempt failed", {
+        attempt: attempt + 1,
+        errorType: getSafeErrorType(err),
+      });
 
       // Don't retry on non-retryable errors (auth, bad request)
       if (
@@ -442,9 +457,10 @@ async function processWithRetry(
   }
 
   // All retries exhausted — propagate the failure
-  const finalMsg =
-    lastError instanceof Error ? lastError.message : "Unknown error";
-  console.error(`[parse-voice] All retries exhausted: ${finalMsg}`);
+  const finalMsg = getErrorMessage(lastError);
+  console.error("[parse-voice] All retries exhausted", {
+    errorType: getSafeErrorType(lastError),
+  });
   throw lastError instanceof Error ? lastError : new Error(finalMsg);
 }
 
@@ -594,9 +610,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       transactions: result.transactions,
     });
   } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : "Unknown error occurred";
-    console.error("[parse-voice] Error:", message);
+    console.error("[parse-voice] Error", {
+      errorType: getSafeErrorType(error),
+    });
     return errorResponse("Internal server error", 500);
   }
 });

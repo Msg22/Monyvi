@@ -251,7 +251,7 @@
   "feature_instant_title": "Instant Tracking",
   "feature_instant_description": "Automatically detect transactions from your bank & wallet SMS",
   "feature_secure_title": "Private & Secure",
-  "feature_secure_description": "Your SMS messages are processed securely via encrypted connection. Your data is never stored or used for training.",
+  "feature_secure_description": "Matching financial SMS messages are sent securely to our AI provider so Monyvi can suggest transactions for you to review.",
   "feature_control_title": "You're in Control",
   "feature_control_description": "Review every transaction before it's saved. Decline any you don't want.",
   "allow_sms_access": "Allow SMS Access",

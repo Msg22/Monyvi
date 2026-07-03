@@ -10,6 +10,7 @@ import {
   registerNotificationActionHandler,
   resetNotificationServiceForTests,
   showTransactionCreatedNotification,
+  showTransactionNeedsAccountNotification,
   requestNotificationPermission,
   requestNotificationPermissionStatus,
   showTransactionNotification,
@@ -379,6 +380,54 @@ describe("notification-service", () => {
       expect(scheduledNotification.trigger).toEqual({
         channelId: "sms-transactions",
       });
+    });
+
+    it("does not include raw SMS body in actionable notification payloads", async () => {
+      mockGetPermissionsAsync.mockResolvedValueOnce(
+        createPermissionStatus({ granted: true })
+      );
+
+      await showTransactionNotification(
+        createParsedSmsTransaction(),
+        "account-1",
+        "MainCIBAccount"
+      );
+
+      const scheduledNotification = getScheduledNotificationInput();
+      expect(
+        scheduledNotification.content.data.transactionData
+      ).not.toHaveProperty("rawSmsBody");
+    });
+
+    it("does not include raw SMS body in auto-confirm info notification payloads", async () => {
+      mockGetPermissionsAsync.mockResolvedValueOnce(
+        createPermissionStatus({ granted: true })
+      );
+
+      await showTransactionCreatedNotification(
+        createParsedSmsTransaction(),
+        "MainCIBAccount"
+      );
+
+      const scheduledNotification = getScheduledNotificationInput();
+      expect(
+        scheduledNotification.content.data.transactionData
+      ).not.toHaveProperty("rawSmsBody");
+    });
+
+    it("does not include raw SMS body in account setup info notification payloads", async () => {
+      mockGetPermissionsAsync.mockResolvedValueOnce(
+        createPermissionStatus({ granted: true })
+      );
+
+      await showTransactionNeedsAccountNotification(
+        createParsedSmsTransaction()
+      );
+
+      const scheduledNotification = getScheduledNotificationInput();
+      expect(
+        scheduledNotification.content.data.transactionData
+      ).not.toHaveProperty("rawSmsBody");
     });
   });
 
