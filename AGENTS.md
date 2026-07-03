@@ -16,11 +16,9 @@ with Angular equivalents in chat (never in code comments).
   code.
 - The **constitution** (`.specify/memory/constitution.md`) is the highest
   authority. It supersedes all ad-hoc decisions.
-- GitHub issues may be AI-generated and not yet product-approved. If an issue or
-  feature introduces new business logic, changes existing business logic,
-  changes how the app works, or changes a user flow beyond fixing existing
-  behavior, stop before implementation and ask Mohamed to confirm the direction
-  with a brief explanation of the proposed impact.
+- When working GitHub sprint issues, follow
+  `docs/process/sprint-issue-workflow.md`. Its approval gates for business
+  logic, user-flow, and UI/design changes are mandatory.
 - **Offline-first**: WatermelonDB is the single source of truth for all
   user-facing data. Every read/write MUST happen locally first. Cloud sync to
   Supabase is non-blocking background work. The app MUST work with zero network
@@ -283,12 +281,8 @@ the true domain model.
 
 ## Styling Rules
 
-- **Visual mockups before UI changes**: Before coding an issue or feature that
-  adds a new page, adds a new visible UI item, or changes the design of an
-  existing UI item, create a scoped visual mockup for only the affected UI area
-  and get Mohamed's approval. Do not mock the whole page unless the whole page
-  is changing. If the change is backend-only, logic-only, copy-only, or a
-  non-visual bug fix, a mockup is not required.
+- For GitHub sprint issues that affect visible UI or design, follow the visual
+  mockup approval gate in `docs/process/sprint-issue-workflow.md` before coding.
 - **NativeWind classes only**: Use `className` for ALL styling. Do NOT use
   `StyleSheet.create()` or inline `style` unless there is no NativeWind
   equivalent (e.g., dynamic computed values like `` width: `${percent}%` ``).
@@ -353,11 +347,8 @@ All schema changes MUST go through local SQL migration files in
 Commit format: `<type>: <description>` — Types: feat, fix, refactor, docs, test,
 chore, perf, ci.
 
-- Branch base selection: When starting a new issue or feature, compare the
-  expected files and behavior against the current branch and any stacked base
-  branch. If the next work is likely to conflict with those in-flight changes,
-  create the new branch on top of the current/stacked branch. If it is
-  independent, create the branch from up-to-date `main`.
+- For GitHub sprint issue branches, follow the branch base selection rules in
+  `docs/process/sprint-issue-workflow.md`.
 
 ## Pull Request Review Comments
 
