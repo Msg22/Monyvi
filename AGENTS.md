@@ -16,6 +16,11 @@ with Angular equivalents in chat (never in code comments).
   code.
 - The **constitution** (`.specify/memory/constitution.md`) is the highest
   authority. It supersedes all ad-hoc decisions.
+- GitHub issues may be AI-generated and not yet product-approved. If an issue or
+  feature introduces new business logic, changes existing business logic,
+  changes how the app works, or changes a user flow beyond fixing existing
+  behavior, stop before implementation and ask Mohamed to confirm the direction
+  with a brief explanation of the proposed impact.
 - **Offline-first**: WatermelonDB is the single source of truth for all
   user-facing data. Every read/write MUST happen locally first. Cloud sync to
   Supabase is non-blocking background work. The app MUST work with zero network
