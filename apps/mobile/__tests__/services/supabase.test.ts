@@ -3,7 +3,7 @@ interface SupabaseServiceModule {
 }
 
 process.env.EXPO_PUBLIC_SUPABASE_URL = "https://test-ref.supabase.co";
-process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = "test-anon-key";
+process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "test-publishable-key";
 
 const { getSupabaseStorageKey } = jest.requireActual<SupabaseServiceModule>(
   "@/services/supabase"

@@ -242,8 +242,9 @@ function getE2eSeedConfig(env = process.env, options = {}) {
         requiredRemoteEnv(env, "SUPABASE_SERVICE_ROLE_KEY")),
     anonKey: isLocal
       ? localKeys.anonKey
-      : (env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
-        requiredRemoteEnv(env, "EXPO_PUBLIC_SUPABASE_ANON_KEY")),
+      : (env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+        env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
+        requiredRemoteEnv(env, "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY")),
     email:
       env.MAESTRO_E2E_EMAIL ??
       (isLocal

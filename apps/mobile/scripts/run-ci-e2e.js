@@ -85,7 +85,7 @@ function applyLocalE2eDefaults() {
   });
 
   process.env.EXPO_PUBLIC_SUPABASE_URL ??= config.appSupabaseUrl;
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??= config.anonKey;
+  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??= config.anonKey;
   process.env.MAESTRO_E2E_EMAIL ??= config.email;
   process.env.MAESTRO_E2E_PASSWORD ??= config.password;
   process.env.SUPABASE_SERVICE_ROLE_KEY ??= config.serviceRoleKey;
@@ -98,7 +98,7 @@ function assertRequiredEnv() {
     process.env.CI === "true" || getSupabaseMode() === "local"
       ? [
           "EXPO_PUBLIC_SUPABASE_URL",
-          "EXPO_PUBLIC_SUPABASE_ANON_KEY",
+          "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
           "EXPO_PUBLIC_MONYVI_TEST_MODE",
           "EXPO_PUBLIC_AI_SMS_PARSER_MODE",
           ...(shouldBootstrapAuth || shouldSeed

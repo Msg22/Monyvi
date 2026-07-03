@@ -298,7 +298,7 @@ describe("start-mobile-local-supabase script helpers", () => {
       "local-anon-key",
       {
         EXPO_PUBLIC_SUPABASE_URL: "https://custom-supabase.example.dev",
-        EXPO_PUBLIC_SUPABASE_ANON_KEY: "custom-anon-key",
+        EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "custom-publishable-key",
         MONYVI_LOCAL_GOOGLE_AUTH: "1",
       }
     );
@@ -306,7 +306,9 @@ describe("start-mobile-local-supabase script helpers", () => {
     expect(env.EXPO_PUBLIC_SUPABASE_URL).toBe(
       "https://custom-supabase.example.dev"
     );
-    expect(env.EXPO_PUBLIC_SUPABASE_ANON_KEY).toBe("custom-anon-key");
+    expect(env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY).toBe(
+      "custom-publishable-key"
+    );
   });
 
   it("does not opt out of Expo monorepo root detection", () => {

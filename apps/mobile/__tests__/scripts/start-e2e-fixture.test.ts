@@ -18,18 +18,20 @@ describe("start-e2e-fixture script helpers", () => {
     expect(env.EXPO_PUBLIC_MONYVI_TEST_MODE).toBe("e2e");
     expect(env.EXPO_PUBLIC_AI_SMS_PARSER_MODE).toBe("fixture");
     expect(env.EXPO_PUBLIC_SUPABASE_URL).toBe("http://10.0.2.2:54321");
-    expect(env.EXPO_PUBLIC_SUPABASE_ANON_KEY).toContain("eyJ");
+    expect(env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY).toContain("eyJ");
   });
 
   it("keeps explicitly provided Supabase env values", () => {
     const env = startE2eFixture.buildE2eFixtureEnv({
       EXPO_PUBLIC_SUPABASE_URL: "http://custom-supabase.test",
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: "custom-anon-key",
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "custom-publishable-key",
       SUPABASE_SERVICE_ROLE_KEY: "custom-service-role-key",
     });
 
     expect(env.EXPO_PUBLIC_SUPABASE_URL).toBe("http://custom-supabase.test");
-    expect(env.EXPO_PUBLIC_SUPABASE_ANON_KEY).toBe("custom-anon-key");
+    expect(env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY).toBe(
+      "custom-publishable-key"
+    );
   });
 
   it("does not opt out of Expo monorepo root detection", () => {
