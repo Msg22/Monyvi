@@ -107,9 +107,12 @@ function getSuitesForFile(filePath) {
     normalized.endsWith(".spec.tsx");
   const isSharedSmsParserPath =
     /ai-sms|sms-fixture|sms-hash|sms-keyword|egyptian-bank/i.test(normalized);
-  const isTransactionsLocaleFile = /locales\/(?:ar|en)\/transactions\.json/i.test(
-    normalized
-  );
+  const isSharedAccountServicePath =
+    normalized === "apps/mobile/services/account-service.ts";
+  const isPendingAccountServicePath =
+    normalized === "apps/mobile/services/pending-account-service.ts";
+  const isTransactionsLocaleFile =
+    /locales\/(?:ar|en)\/transactions\.json/i.test(normalized);
   const maestroSuite = getSuiteForMaestroFlow(normalized);
   if (maestroSuite) {
     suites.push(maestroSuite);
@@ -126,12 +129,15 @@ function getSuitesForFile(filePath) {
 
   if (
     isSharedSmsParserPath ||
+    isSharedAccountServicePath ||
+    isPendingAccountServicePath ||
     /sms-sync|sms-reader|sms-review/i.test(normalized)
   ) {
     suites.push("sms-sync");
   }
 
   const isAccountManagementPath =
+    isSharedAccountServicePath ||
     /add-account|edit-account|account-form|institution|useCreateAccount|useUpdateAccount|edit-account-service/i.test(
       normalized
     );

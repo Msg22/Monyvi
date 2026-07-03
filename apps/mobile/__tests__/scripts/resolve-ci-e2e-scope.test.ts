@@ -81,7 +81,9 @@ describe("resolve-ci-e2e-scope", () => {
 
   it("ignores global mobile files that do not directly affect E2E journeys", () => {
     expect(
-      scopeResolver.resolveCiE2eScope(["apps/mobile/i18n/translation-schema.ts"])
+      scopeResolver.resolveCiE2eScope([
+        "apps/mobile/i18n/translation-schema.ts",
+      ])
     ).toEqual({
       shouldRun: false,
       suites: [],
@@ -133,6 +135,29 @@ describe("resolve-ci-e2e-scope", () => {
     ).toEqual({
       shouldRun: true,
       suites: ["accounts", "transactions"],
+    });
+  });
+
+  it("keeps account, transaction, and SMS sync E2E coverage for shared account service changes", () => {
+    expect(
+      scopeResolver.resolveCiE2eScope([
+        "apps/mobile/services/account-service.ts",
+        "apps/mobile/__tests__/services/account-service.test.ts",
+      ])
+    ).toEqual({
+      shouldRun: true,
+      suites: ["accounts", "transactions", "sms-sync"],
+    });
+  });
+
+  it("routes pending account service changes to SMS sync coverage", () => {
+    expect(
+      scopeResolver.resolveCiE2eScope([
+        "apps/mobile/services/pending-account-service.ts",
+      ])
+    ).toEqual({
+      shouldRun: true,
+      suites: ["sms-sync"],
     });
   });
 
