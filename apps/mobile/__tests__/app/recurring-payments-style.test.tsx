@@ -167,8 +167,9 @@ jest.mock("@/hooks/useMarketRates", () => ({
     readonly latestRates: { readonly getRate: jest.Mock };
   } => ({
     latestRates: {
-      getRate: jest.fn((fromCurrency: CurrencyType, toCurrency: CurrencyType) =>
-        fromCurrency === "USD" && toCurrency === "EGP" ? 50 : 1
+      getRate: jest.fn(
+        (fromCurrency: CurrencyType, toCurrency: CurrencyType) =>
+          fromCurrency === "USD" && toCurrency === "EGP" ? 50 : 1
       ),
     },
   }),
@@ -254,6 +255,24 @@ describe("RecurringPaymentsScreen dashboard", () => {
     expect(screen.getByText("Jul 3")).toBeTruthy();
   });
 
+  it("keeps the summary compact and lets the next insight title wrap before the amount", () => {
+    render(<RecurringPaymentsScreen />);
+
+    expect(screen.getByTestId("recurring-payments-summary-card")).toHaveProp(
+      "className",
+      expect.stringContaining("py-3")
+    );
+    expect(
+      screen.getByTestId("recurring-payments-next-insight-title")
+    ).toHaveProp("numberOfLines", 2);
+    expect(
+      screen.getByTestId("recurring-payments-next-insight-title")
+    ).toHaveProp("className", expect.stringContaining("flex-1"));
+    expect(
+      screen.getByTestId("recurring-payments-next-insight-amount")
+    ).toHaveProp("className", expect.stringContaining("shrink-0"));
+  });
+
   it("includes the year in due groups outside the current year", () => {
     const currentYearPayment = createPayment({
       id: "payment-current-year",
@@ -325,9 +344,9 @@ describe("RecurringPaymentsScreen dashboard", () => {
 
     render(<RecurringPaymentsScreen />);
 
-    expect(screen.getByTestId("recurring-payments-next-insight")).toHaveTextContent(
-      /EGP 350/
-    );
+    expect(
+      screen.getByTestId("recurring-payments-next-insight")
+    ).toHaveTextContent(/EGP 350/);
     expect(screen.getByText("0")).toBeTruthy();
   });
 

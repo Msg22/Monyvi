@@ -118,7 +118,7 @@ export function StatusTabs({
                 isSelected ? "text-white" : "text-slate-700 dark:text-slate-300"
               }`}
             >
-              {statusLabels[tab]}  {counts[tab]}
+              {statusLabels[tab]} {counts[tab]}
             </Text>
           </TouchableOpacity>
         );
@@ -136,20 +136,23 @@ export function HeroSummary({
   const { t } = useTranslation("transactions");
 
   return (
-    <View className="rounded-xl border p-4 mb-2 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+    <View
+      testID="recurring-payments-summary-card"
+      className="rounded-xl border px-4 py-3 mb-2 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+    >
       <View className="flex-row">
-        <View className="flex-1 pe-4">
+        <View className="flex-1 pe-3">
           <Text className="text-xs font-medium text-text-muted dark:text-text-muted-dark">
             {t("due_this_month")}
           </Text>
-          <Text className="text-[28px] font-extrabold mt-1 text-nileGreen-700 dark:text-nileGreen-400">
+          <Text className="text-2xl font-extrabold mt-0.5 text-nileGreen-700 dark:text-nileGreen-400">
             {formatCurrency({ amount: thisMonth, currency: currencyCode })}
           </Text>
         </View>
 
         <View className="w-[1px] bg-slate-200 dark:bg-slate-700 mx-1" />
 
-        <View className="w-[118px] ps-4 justify-center gap-3">
+        <View className="w-[112px] ps-3 justify-center gap-2">
           <MetricText
             label={t("next_7_days")}
             value={formatCurrency({
@@ -185,33 +188,48 @@ export function NextPaymentInsight({
     <TouchableOpacity
       testID="recurring-payments-next-insight"
       onPress={() => onPress(payment)}
-      className="flex-row items-center rounded-xl border px-3 py-2.5 mb-3 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+      className="flex-row items-start rounded-xl border px-3 py-2.5 mb-3 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
     >
-      <View className="w-9 h-9 rounded-lg items-center justify-center bg-nileGreen-50 dark:bg-nileGreen-900">
+      <View className="w-9 h-9 rounded-lg items-center justify-center mt-0.5 bg-nileGreen-50 dark:bg-nileGreen-900">
         <Ionicons
           name="calendar-outline"
           size={18}
           color={palette.nileGreen[500]}
         />
       </View>
-      <View className="flex-1 ms-3">
-        <Text
-          className="text-sm font-semibold text-text-primary dark:text-text-primary-dark"
-          numberOfLines={1}
-        >
-          {t("renews_next", {
-            name: payment.name,
-            due: getDueText(payment.nextDueDate),
-          })}
-        </Text>
+      <View className="flex-1 min-w-0 ms-3">
+        <View className="flex-row items-start">
+          <Text
+            testID="recurring-payments-next-insight-title"
+            className="flex-1 pe-2 text-sm font-semibold text-text-primary dark:text-text-primary-dark"
+            numberOfLines={2}
+          >
+            {t("renews_next", {
+              name: payment.name,
+              due: getDueText(payment.nextDueDate),
+            })}
+          </Text>
+          <View className="shrink-0 flex-row items-center">
+            <Text
+              testID="recurring-payments-next-insight-amount"
+              className="shrink-0 text-sm font-bold me-2 text-nileGreen-700 dark:text-nileGreen-400"
+            >
+              {formatCurrency({
+                amount: payment.amount,
+                currency: payment.currency,
+              })}
+            </Text>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={palette.slate[400]}
+            />
+          </View>
+        </View>
         <Text className="text-xs text-text-muted dark:text-text-muted-dark mt-0.5">
           {getDueText(payment.nextDueDate)}
         </Text>
       </View>
-      <Text className="text-sm font-bold me-2 text-nileGreen-700 dark:text-nileGreen-400">
-        {formatCurrency({ amount: payment.amount, currency: payment.currency })}
-      </Text>
-      <Ionicons name="chevron-forward" size={18} color={palette.slate[400]} />
     </TouchableOpacity>
   );
 }
