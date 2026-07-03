@@ -191,17 +191,41 @@ describe("transaction-list-read-model-service", () => {
 
     const queries = observeTransactionListInvalidationSources({
       userId: "user-1",
+      period: "this_month",
     });
 
     expect(queries).toEqual({ transactionsQuery, transfersQuery });
-    expect(mockQueryOwned).toHaveBeenCalledWith(
-      mockTransactionsCollection,
-      "user-1"
-    );
-    expect(mockQueryOwned).toHaveBeenCalledWith(
-      mockTransfersCollection,
-      "user-1"
-    );
+    const transactionCall = mockQueryOwned.mock.calls[0] as readonly unknown[];
+    const transferCall = mockQueryOwned.mock.calls[1] as readonly unknown[];
+    expect(transactionCall[0]).toBe(mockTransactionsCollection);
+    expect(transactionCall[1]).toBe("user-1");
+    expect(transactionCall[2]).toEqual({
+      kind: "where",
+      column: "deleted",
+      value: false,
+    });
+    expect(transactionCall[3]).toMatchObject({
+      kind: "where",
+      column: "date",
+      value: { kind: "gte" },
+    });
+    expect(transferCall[0]).toBe(mockTransfersCollection);
+    expect(transferCall[1]).toBe("user-1");
+    expect(transferCall[2]).toEqual({
+      kind: "where",
+      column: "deleted",
+      value: false,
+    });
+    expect(transferCall[3]).toMatchObject({
+      kind: "where",
+      column: "date",
+      value: { kind: "gte" },
+    });
+    expect(transferCall[4]).toMatchObject({
+      kind: "where",
+      column: "date",
+      value: { kind: "lte" },
+    });
   });
 
   it("fetches selected transaction types, transfers, future transactions, and display account names", async () => {
@@ -267,7 +291,6 @@ describe("transaction-list-read-model-service", () => {
       userId: "user-1",
       period: "this_month",
       selectedTypes: ["Income", "Expense", "Transfer"],
-      searchQuery: "",
     });
 
     expect(model.futureTransactions).toEqual([future]);
@@ -361,7 +384,6 @@ describe("transaction-list-read-model-service", () => {
       userId: "user-1",
       period: "this_month",
       selectedTypes: ["Expense"],
-      searchQuery: "",
     });
 
     expect(model.displayedItems[0]).toMatchObject({
@@ -377,7 +399,7 @@ describe("transaction-list-read-model-service", () => {
     });
   });
 
-  it("filters display items by search query after enrichment", async () => {
+  it("keeps search filtering out of the database read model", async () => {
     const food = createTransaction({
       id: "food",
       amount: 100,
@@ -406,10 +428,12 @@ describe("transaction-list-read-model-service", () => {
       userId: "user-1",
       period: "this_month",
       selectedTypes: ["Expense"],
-      searchQuery: "rent",
     });
 
-    expect(model.displayedItems.map((item) => item.id)).toEqual(["rent"]);
+    expect(model.displayedItems.map((item) => item.id)).toEqual([
+      "food",
+      "rent",
+    ]);
   });
 
   it("builds net-worth groups without mutating source display items", () => {
@@ -495,5 +519,74 @@ describe("transaction-list-read-model-service", () => {
     expect(groups[0].transactions.map((item) => item.displayNetWorth)).toEqual([
       1050, 1150,
     ]);
+  });
+
+  it("filters grouped display items by search query without changing the read model", () => {
+    const foodRecord = createTransaction({
+      id: "food",
+      amount: 100,
+      type: "EXPENSE",
+      date: new Date("2026-05-14T10:00:00.000Z"),
+    });
+    const rentRecord = createTransaction({
+      id: "rent",
+      amount: 3000,
+      type: "EXPENSE",
+      date: new Date("2026-05-13T10:00:00.000Z"),
+      category: createCategory("Rent"),
+    });
+    const food: DisplayListItem = {
+      _type: "transaction",
+      record: foodRecord,
+      id: foodRecord.id,
+      userId: foodRecord.userId,
+      accountId: foodRecord.accountId,
+      categoryId: foodRecord.categoryId,
+      amount: foodRecord.amount,
+      currency: foodRecord.currency,
+      type: foodRecord.type,
+      date: foodRecord.date,
+      dateInMs: foodRecord.dateInMs,
+      isIncome: foodRecord.isIncome,
+      isExpense: foodRecord.isExpense,
+      source: "MANUAL",
+      accountName: "Cash",
+      categoryName: "Food",
+      categoryIconName: "restaurant",
+      categoryIconLibrary: "Ionicons",
+    };
+    const rent: DisplayListItem = {
+      _type: "transaction",
+      record: rentRecord,
+      id: rentRecord.id,
+      userId: rentRecord.userId,
+      accountId: rentRecord.accountId,
+      categoryId: rentRecord.categoryId,
+      amount: rentRecord.amount,
+      currency: rentRecord.currency,
+      type: rentRecord.type,
+      date: rentRecord.date,
+      dateInMs: rentRecord.dateInMs,
+      isIncome: rentRecord.isIncome,
+      isExpense: rentRecord.isExpense,
+      source: "MANUAL",
+      accountName: "Cash",
+      categoryName: "Rent",
+      categoryIconName: "home",
+      categoryIconLibrary: "Ionicons",
+    };
+
+    const groups = buildTransactionGroups({
+      futureTransactions: [],
+      displayedItems: [food, rent],
+      totalNetWorth: 5000,
+      preferredCurrency: "EGP",
+      latestRates: null,
+      period: "this_month",
+      searchQuery: "rent",
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].transactions.map((item) => item.id)).toEqual(["rent"]);
   });
 });
