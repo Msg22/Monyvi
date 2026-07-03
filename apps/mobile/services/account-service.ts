@@ -166,6 +166,13 @@ export async function createCashAccountWithinWriter(
     return { accountId: existing[0].id, created: false };
   }
 
+  const activeAccountCount = await queryOwned(
+    accountsCollection,
+    normalizedUserId,
+    Q.where("deleted", Q.notEq(true))
+  ).fetchCount();
+  const isFirstAccount = activeAccountCount === 0;
+
   const record = await accountsCollection.create((acc) => {
     acc.userId = normalizedUserId;
     acc.name = name?.trim() || CASH_ACCOUNT_NAME;
@@ -173,6 +180,7 @@ export async function createCashAccountWithinWriter(
     acc.currency = currency;
     acc.balance = 0;
     acc.deleted = false;
+    acc.isDefault = isFirstAccount;
   });
   return { accountId: record.id, created: true };
 }

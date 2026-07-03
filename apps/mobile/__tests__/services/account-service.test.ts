@@ -89,6 +89,7 @@ interface MockAccountRow {
   readonly userId: string;
   readonly currency: string;
   readonly deleted: boolean;
+  readonly isDefault?: boolean;
   readonly name?: string;
 }
 
@@ -107,6 +108,7 @@ function buildCollectionStub(seed: MockAccountRow[]): {
   createCalls: Array<Record<string, unknown>>;
 } {
   const createCalls: Array<Record<string, unknown>> = [];
+  const activeAccountCount = seed.filter((r) => r.deleted !== true).length;
 
   const collection = {
     query: jest.fn().mockReturnValue({
@@ -115,6 +117,7 @@ function buildCollectionStub(seed: MockAccountRow[]): {
         .mockResolvedValue(
           seed.filter((r) => r.type === "CASH" && r.deleted !== true)
         ),
+      fetchCount: jest.fn().mockResolvedValue(activeAccountCount),
     }),
     create: jest.fn(async (writer: (acc: Record<string, unknown>) => void) => {
       const acc: Record<string, unknown> = {};
@@ -161,6 +164,7 @@ describe("createCashAccountWithinWriter — cash-account idempotency", () => {
             (r) => r.type === "CASH" && !r.deleted && r.currency === "EGP"
           )
         ),
+      fetchCount: jest.fn().mockResolvedValue(1),
     });
 
     const result = await createCashAccountWithinWriter(
@@ -198,6 +202,7 @@ describe("createCashAccountWithinWriter — cash-account idempotency", () => {
             (r) => r.type === "CASH" && !r.deleted && r.currency === "EGP"
           )
         ),
+      fetchCount: jest.fn().mockResolvedValue(1),
     });
 
     const result = await createCashAccountWithinWriter(
@@ -233,6 +238,7 @@ describe("createCashAccountWithinWriter — cash-account idempotency", () => {
     const { collection, createCalls } = buildCollectionStub([]);
     collection.query.mockReturnValue({
       fetch: jest.fn().mockResolvedValue([]),
+      fetchCount: jest.fn().mockResolvedValue(0),
     });
 
     const result = await createCashAccountWithinWriter(
@@ -251,6 +257,60 @@ describe("createCashAccountWithinWriter — cash-account idempotency", () => {
       deleted: false,
       balance: 0,
       name: "Cash",
+    });
+  });
+
+  it("marks a newly seeded CASH account as default when it is the user's first active account", async () => {
+    const { collection, createCalls } = buildCollectionStub([]);
+    collection.query.mockReturnValue({
+      fetch: jest.fn().mockResolvedValue([]),
+      fetchCount: jest.fn().mockResolvedValue(0),
+    });
+
+    const result = await createCashAccountWithinWriter(
+      "user-1",
+      "EGP",
+      collection
+    );
+
+    expect(result.created).toBe(true);
+    expect(createCalls).toHaveLength(1);
+    expect(createCalls[0]).toMatchObject({
+      type: "CASH",
+      currency: "EGP",
+      isDefault: true,
+    });
+  });
+
+  it("does not make an auto-created CASH account default when another active account already exists", async () => {
+    const seed: MockAccountRow[] = [
+      {
+        id: "existing-bank-account",
+        type: "BANK",
+        userId: "user-1",
+        currency: "EGP",
+        deleted: false,
+        isDefault: true,
+      },
+    ];
+    const { collection, createCalls } = buildCollectionStub(seed);
+    collection.query.mockReturnValue({
+      fetch: jest.fn().mockResolvedValue([]),
+      fetchCount: jest.fn().mockResolvedValue(1),
+    });
+
+    const result = await createCashAccountWithinWriter(
+      "user-1",
+      "EGP",
+      collection
+    );
+
+    expect(result.created).toBe(true);
+    expect(createCalls).toHaveLength(1);
+    expect(createCalls[0]).toMatchObject({
+      type: "CASH",
+      currency: "EGP",
+      isDefault: false,
     });
   });
 
@@ -277,6 +337,7 @@ describe("createCashAccountWithinWriter — cash-account idempotency", () => {
               r.type === "CASH" && r.deleted === false && r.currency === "EGP"
           )
         ),
+      fetchCount: jest.fn().mockResolvedValue(0),
     });
 
     const result = await createCashAccountWithinWriter(
@@ -294,6 +355,7 @@ describe("createCashAccountWithinWriter — cash-account idempotency", () => {
     const { collection, createCalls } = buildCollectionStub([]);
     collection.query.mockReturnValue({
       fetch: jest.fn().mockResolvedValue([]),
+      fetchCount: jest.fn().mockResolvedValue(0),
     });
 
     await createCashAccountWithinWriter("  user-1  ", "EGP", collection);
@@ -306,6 +368,7 @@ describe("createCashAccountWithinWriter — cash-account idempotency", () => {
     const { collection, createCalls } = buildCollectionStub([]);
     collection.query.mockReturnValue({
       fetch: jest.fn().mockResolvedValue([]),
+      fetchCount: jest.fn().mockResolvedValue(0),
     });
 
     await createCashAccountWithinWriter(
@@ -332,6 +395,7 @@ describe("ensureCashAccount - localized seed name", () => {
     const { collection, createCalls } = buildCollectionStub([]);
     collection.query.mockReturnValue({
       fetch: jest.fn().mockResolvedValue([]),
+      fetchCount: jest.fn().mockResolvedValue(0),
     });
     const profilesCollection = {
       query: jest.fn().mockReturnValue({
@@ -354,6 +418,7 @@ describe("ensureCashAccount - localized seed name", () => {
     const { collection, createCalls } = buildCollectionStub([]);
     collection.query.mockReturnValue({
       fetch: jest.fn().mockResolvedValue([]),
+      fetchCount: jest.fn().mockResolvedValue(0),
     });
     const profilesCollection = {
       query: jest.fn().mockReturnValue({
@@ -377,6 +442,7 @@ describe("ensureCashAccount - localized seed name", () => {
     const { collection, createCalls } = buildCollectionStub([]);
     collection.query.mockReturnValue({
       fetch: jest.fn().mockResolvedValue([]),
+      fetchCount: jest.fn().mockResolvedValue(0),
     });
     mockDatabaseGet.mockImplementation((collectionName: string) => {
       if (collectionName === "accounts") return collection;
