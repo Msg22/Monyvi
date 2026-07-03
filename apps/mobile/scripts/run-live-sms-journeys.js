@@ -254,7 +254,7 @@ function applyLocalE2eDefaults() {
   });
 
   process.env.EXPO_PUBLIC_SUPABASE_URL = config.appSupabaseUrl;
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??= config.anonKey;
+  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??= config.anonKey;
   process.env.MAESTRO_E2E_EMAIL ??= config.email;
   process.env.MAESTRO_E2E_PASSWORD ??= config.password;
   applyE2eAuthDeepLink();

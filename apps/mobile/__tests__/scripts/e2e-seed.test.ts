@@ -73,7 +73,7 @@ describe("e2e-seed script helpers", () => {
       {
         E2E_SUPABASE_MODE: "local",
         EXPO_PUBLIC_SUPABASE_URL: "https://remote-project.supabase.co",
-        EXPO_PUBLIC_SUPABASE_ANON_KEY: "remote-anon-key",
+        EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "remote-publishable-key",
         SUPABASE_SERVICE_ROLE_KEY: "remote-service-role-key",
       },
       {
@@ -202,7 +202,7 @@ describe("e2e-seed script helpers", () => {
       ...getE2eSeedConfig({
         E2E_SUPABASE_MODE: "remote",
         EXPO_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
-        EXPO_PUBLIC_SUPABASE_ANON_KEY: "anon-key",
+        EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "publishable-key",
         SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
         MAESTRO_E2E_EMAIL: "e2e@monyvi.test",
         MAESTRO_E2E_PASSWORD: "Password123!",

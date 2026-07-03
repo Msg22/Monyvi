@@ -92,7 +92,8 @@ jobs:
 
       - name: Build Debug APK
         working-directory: apps/mobile/android
-        run: ./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --no-daemon
+        run:
+          ./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -159,20 +160,20 @@ jobs:
           . ./supabase.env
           MAESTRO_E2E_EMAIL="e2e-${GITHUB_RUN_ID}@monyvi.test"
           MAESTRO_E2E_PASSWORD="$(node -e "console.log(require('node:crypto').randomBytes(24).toString('base64url'))")"
-          EXPO_PUBLIC_SUPABASE_ANON_KEY="$ANON_KEY"
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$ANON_KEY"
           SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
-          export MAESTRO_E2E_EMAIL MAESTRO_E2E_PASSWORD EXPO_PUBLIC_SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY
+          export MAESTRO_E2E_EMAIL MAESTRO_E2E_PASSWORD EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY
           node - <<'NODE' >> "$GITHUB_ENV"
           const { getE2eSeedConfig } = require("./apps/mobile/scripts/e2e-seed");
           const config = getE2eSeedConfig({
             E2E_SUPABASE_MODE: "local",
-            EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+            EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
             SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
             MAESTRO_E2E_EMAIL: process.env.MAESTRO_E2E_EMAIL,
             MAESTRO_E2E_PASSWORD: process.env.MAESTRO_E2E_PASSWORD,
           });
           console.log(`EXPO_PUBLIC_SUPABASE_URL=${config.appSupabaseUrl}`);
-          console.log(`EXPO_PUBLIC_SUPABASE_ANON_KEY=${config.anonKey}`);
+          console.log(`EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${config.anonKey}`);
           console.log(`SUPABASE_SERVICE_ROLE_KEY=${config.serviceRoleKey}`);
           console.log(`MAESTRO_E2E_EMAIL=${config.email}`);
           console.log(`MAESTRO_E2E_PASSWORD=${config.password}`);

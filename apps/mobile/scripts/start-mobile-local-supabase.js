@@ -180,10 +180,7 @@ function getLocalSupabaseEnv() {
   }
 
   const supabaseEnv = parseSupabaseEnv(result.stdout);
-  const anonKey =
-    supabaseEnv.ANON_KEY ||
-    supabaseEnv.SUPABASE_ANON_KEY ||
-    supabaseEnv.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  const anonKey = supabaseEnv.ANON_KEY || supabaseEnv.SUPABASE_ANON_KEY;
 
   if (!anonKey) {
     throw new Error(
@@ -303,8 +300,8 @@ function buildLocalSupabaseExpoEnv(anonKey, baseEnv = process.env) {
     ...metroEnv,
     EXPO_PUBLIC_SUPABASE_URL:
       baseEnv.EXPO_PUBLIC_SUPABASE_URL ?? config.supabaseUrl,
-    EXPO_PUBLIC_SUPABASE_ANON_KEY:
-      baseEnv.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? anonKey,
+    EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+      baseEnv.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? anonKey,
     EXPO_PUBLIC_MONYVI_TEST_MODE: "off",
     EXPO_PUBLIC_AI_SMS_PARSER_MODE: "edge",
     EXPO_PUBLIC_SENTRY_DSN: baseEnv.EXPO_PUBLIC_SENTRY_DSN ?? "",

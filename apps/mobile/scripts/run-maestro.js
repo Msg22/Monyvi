@@ -50,7 +50,7 @@ function applyLocalE2eDefaults() {
 
   process.env.E2E_SUPABASE_MODE = "local";
   process.env.EXPO_PUBLIC_SUPABASE_URL ??= config.appSupabaseUrl;
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??= config.anonKey;
+  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??= config.anonKey;
   process.env.EXPO_PUBLIC_MONYVI_TEST_MODE ??= "e2e";
   process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE ??= "fixture";
   process.env.MAESTRO_E2E_EMAIL ??= config.email;

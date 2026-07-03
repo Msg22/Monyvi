@@ -14,11 +14,12 @@ import { AUTH_REDIRECT_URL } from "@/constants/auth-constants";
 import { z } from "zod";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL as string;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY as string;
+const supabasePublishableKey = process.env
+  .EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY as string;
 
-if (!supabaseUrl || !supabaseAnonKey) {
+if (!supabaseUrl || !supabasePublishableKey) {
   throw new Error(
-    "Missing Supabase environment variables. Check EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in .env"
+    "Missing Supabase environment variables. Check EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY in .env"
   );
 }
 
@@ -156,7 +157,7 @@ const secureStoreAdapter = {
 
 export const supabase = createClient<SupabaseDatabase>(
   supabaseUrl,
-  supabaseAnonKey,
+  supabasePublishableKey,
   {
     auth: {
       storage: secureStoreAdapter,
