@@ -53,6 +53,33 @@ describe("validateTransactionForm", () => {
       expect(result.errors.amount).toBeDefined();
     });
 
+    it("should fail when amount contains trailing calculator operators", () => {
+      const result = validateTransactionForm("EXPENSE", {
+        ...validPayload,
+        amount: "12+",
+      });
+      expect(result.isValid).toBe(false);
+      expect(result.errors.amount).toBeDefined();
+    });
+
+    it("should fail when amount is not finite", () => {
+      const result = validateTransactionForm("EXPENSE", {
+        ...validPayload,
+        amount: "Infinity",
+      });
+      expect(result.isValid).toBe(false);
+      expect(result.errors.amount).toBeDefined();
+    });
+
+    it("should fail when amount exceeds 1 billion", () => {
+      const result = validateTransactionForm("EXPENSE", {
+        ...validPayload,
+        amount: "2000000000",
+      });
+      expect(result.isValid).toBe(false);
+      expect(result.errors.amount).toBeDefined();
+    });
+
     it("should fail when accountId is empty", () => {
       const result = validateTransactionForm("EXPENSE", {
         ...validPayload,
@@ -143,6 +170,15 @@ describe("validateTransactionForm", () => {
       const result = validateTransactionForm("TRANSFER", {
         ...validTransfer,
         amount: "0",
+      });
+      expect(result.isValid).toBe(false);
+      expect(result.errors.amount).toBeDefined();
+    });
+
+    it("should fail when amount is not finite", () => {
+      const result = validateTransactionForm("TRANSFER", {
+        ...validTransfer,
+        amount: "Infinity",
       });
       expect(result.isValid).toBe(false);
       expect(result.errors.amount).toBeDefined();

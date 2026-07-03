@@ -1,4 +1,8 @@
 import { TransactionType } from "@monyvi/db";
+import {
+  MAX_TRANSACTION_AMOUNT,
+  parsePositiveFiniteAmountInput,
+} from "@monyvi/logic";
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
@@ -36,6 +40,15 @@ function requiredIdSchema(message: string): z.ZodType<string | null> {
     .refine((value) => value !== null && value.length > 0, message);
 }
 
+function isPositiveFiniteAmountInput(value: string): boolean {
+  return parsePositiveFiniteAmountInput(value) !== null;
+}
+
+function isWithinTransactionAmountLimit(value: string): boolean {
+  const amount = parsePositiveFiniteAmountInput(value);
+  return amount === null || amount <= MAX_TRANSACTION_AMOUNT;
+}
+
 /**
  * Zod schema for expense/income transaction form validation.
  */
@@ -47,8 +60,12 @@ function createBaseTransactionSchema(
       .string()
       .min(1, "Amount is required")
       .refine(
-        (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
+        (val) => isPositiveFiniteAmountInput(val),
         "Amount must be greater than 0"
+      )
+      .refine(
+        (val) => isWithinTransactionAmountLimit(val),
+        "Amount must be less than 1,000,000,000"
       ),
     accountId: requiredIdSchema(messages.accountRequired),
     categoryId: z.string().min(1, "Category is required"),
@@ -67,11 +84,11 @@ function createTransferSchema(
         .string()
         .min(1, "Amount is required")
         .refine(
-          (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
+          (val) => isPositiveFiniteAmountInput(val),
           "Amount must be greater than 0"
         )
         .refine(
-          (val) => parseFloat(val) <= 1000000000,
+          (val) => isWithinTransactionAmountLimit(val),
           "Amount must be less than 1,000,000,000"
         ),
       fromAccountId: requiredIdSchema(messages.sourceAccountRequired),

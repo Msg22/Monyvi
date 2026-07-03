@@ -32,7 +32,11 @@ import {
   deleteTransfer,
   updateTransfer,
 } from "@/services/transfer-service";
-import { formatAmountInput } from "@monyvi/logic";
+import {
+  evaluateAmountExpression,
+  formatAmountInput,
+  parsePositiveFiniteAmountInput,
+} from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import type { TransactionType } from "@monyvi/db";
 import * as Haptics from "expo-haptics";
@@ -211,15 +215,8 @@ export default function EditTransfer(): React.ReactNode {
   // ---------------------------------------------------------------------------
   // Calculator Evaluation
   // ---------------------------------------------------------------------------
-  const calculateResult = (expr: string): number => {
-    try {
-      // Only allow digits + - * / .
-      if (!/^[0-9+\-*/.]+$/.test(expr)) return parseFloat(expr) || 0;
-      // eslint-disable-next-line no-eval
-      return eval(expr) as number;
-    } catch {
-      return 0;
-    }
+  const calculateResult = (expr: string): number | null => {
+    return evaluateAmountExpression(expr);
   };
 
   // ---------------------------------------------------------------------------
@@ -230,7 +227,19 @@ export default function EditTransfer(): React.ReactNode {
 
     // Basic validation
     const parsedAmount = calculateResult(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+    if (
+      parsedAmount === null ||
+      !Number.isFinite(parsedAmount) ||
+      parsedAmount <= 0
+    ) {
+      setAmountError(t("invalid_amount"));
+      return;
+    }
+
+    const parsedTargetAmount = targetAmount
+      ? parsePositiveFiniteAmountInput(targetAmount)
+      : null;
+    if (targetAmount && parsedTargetAmount === null) {
       setAmountError(t("invalid_amount"));
       return;
     }
@@ -301,7 +310,7 @@ export default function EditTransfer(): React.ReactNode {
     try {
       await updateTransfer(transfer.id, {
         amount: parsedAmount,
-        convertedAmount: targetAmount ? parseFloat(targetAmount) : undefined,
+        convertedAmount: parsedTargetAmount ?? undefined,
         notes: notes || undefined,
         date,
         fromAccountId,
@@ -348,8 +357,8 @@ export default function EditTransfer(): React.ReactNode {
 
     if (key === "=") {
       const result = calculateResult(currentValue);
-      if (result !== 0 || currentValue.length > 0) {
-        const formatted = parseFloat(result.toFixed(10)).toString();
+      if (result !== null) {
+        const formatted = Number(result.toFixed(10)).toString();
         setValue(formatted);
       }
       return;
