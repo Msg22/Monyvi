@@ -36,6 +36,8 @@ const defaultValidationMessages: TransactionValidationMessages = {
 const TRANSACTION_AMOUNT_LIMIT_MESSAGE = `Amount must be at most ${MAX_TRANSACTION_AMOUNT.toLocaleString(
   "en-US"
 )}`;
+const INVALID_AMOUNT_MESSAGE = "Please enter a valid amount";
+const FINITE_AMOUNT_INPUT_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)$/;
 
 function requiredIdSchema(message: string): z.ZodType<string | null> {
   return z
@@ -44,8 +46,23 @@ function requiredIdSchema(message: string): z.ZodType<string | null> {
     .refine((value) => value !== null && value.length > 0, message);
 }
 
-function isPositiveFiniteAmountInput(value: string): boolean {
-  return parsePositiveFiniteAmountInput(value) !== null;
+function parseFiniteAmountInput(value: string): number | null {
+  const normalized = value.trim().replace(/,/g, "");
+  if (!FINITE_AMOUNT_INPUT_PATTERN.test(normalized)) {
+    return null;
+  }
+
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? amount : null;
+}
+
+function isFiniteAmountInput(value: string): boolean {
+  return parseFiniteAmountInput(value) !== null;
+}
+
+function isPositiveAmountInput(value: string): boolean {
+  const amount = parseFiniteAmountInput(value);
+  return amount === null || amount > 0;
 }
 
 function isWithinTransactionAmountLimit(value: string): boolean {
@@ -63,8 +80,9 @@ function createBaseTransactionSchema(
     amount: z
       .string()
       .min(1, "Amount is required")
+      .refine((val) => isFiniteAmountInput(val), INVALID_AMOUNT_MESSAGE)
       .refine(
-        (val) => isPositiveFiniteAmountInput(val),
+        (val) => isPositiveAmountInput(val),
         "Amount must be greater than 0"
       )
       .refine(
@@ -87,8 +105,9 @@ function createTransferSchema(
       amount: z
         .string()
         .min(1, "Amount is required")
+        .refine((val) => isFiniteAmountInput(val), INVALID_AMOUNT_MESSAGE)
         .refine(
-          (val) => isPositiveFiniteAmountInput(val),
+          (val) => isPositiveAmountInput(val),
           "Amount must be greater than 0"
         )
         .refine(
