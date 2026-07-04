@@ -16,6 +16,10 @@ const preflightAttemptTimeoutMs = parsePositiveInt(
   process.env.E2E_PREFLIGHT_ATTEMPT_TIMEOUT_MS,
   300000
 );
+const androidDeviceReconnectTimeoutMs = parsePositiveInt(
+  process.env.E2E_ADB_RECONNECT_TIMEOUT_MS,
+  180000
+);
 const devClientUrl = buildDevClientUrl(metroUrl);
 const devMenuPreferencesPath =
   "shared_prefs/expo.modules.devmenu.sharedpreferences.xml";
@@ -223,7 +227,7 @@ function isRetryableMaestroTransportFailure(output) {
 function reconnectAndroidDevice() {
   run("adb", ["kill-server"], { allowFailure: true, timeout: 30000 });
   run("adb", ["start-server"], { timeout: 30000 });
-  adb(["wait-for-device"], { timeout: 60000 });
+  adb(["wait-for-device"], { timeout: androidDeviceReconnectTimeoutMs });
 
   if (!isReleaseBuild) {
     adb(["reverse", "tcp:8081", "tcp:8081"], { allowFailure: true });
@@ -730,6 +734,7 @@ module.exports = {
   didDumpUiHierarchy,
   disableExpoDevMenuFabForE2e,
   getHttpClientNameForUrl,
+  androidDeviceReconnectTimeoutMs,
   isAppReady,
   isNativeRootMounted,
   isReleaseBuild,

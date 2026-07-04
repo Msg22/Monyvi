@@ -9,6 +9,7 @@ interface E2ePreflightModule {
   isAppReady(uiXml: string): boolean;
   isNativeRootMounted(uiXml: string): boolean;
   isRetryableMaestroTransportFailure(output: string): boolean;
+  androidDeviceReconnectTimeoutMs: number;
   shouldRestoreFromDevLauncher(uiXml: string, currentFocus: string): boolean;
   resolveMetroUrls(env?: Readonly<Record<string, string | undefined>>): {
     hostMetroUrl: string;
@@ -50,6 +51,10 @@ describe("e2e-preflight", () => {
         E2E_DEVICE_METRO_URL: "http://custom-device:8081",
       }).metroUrl
     ).toBe("http://custom-device:8081/?platform=android");
+  });
+
+  it("waits long enough for ADB reconnects after emulator transport drops", () => {
+    expect(preflight.androidDeviceReconnectTimeoutMs).toBe(180000);
   });
 
   it("builds the Monyvi dev-client URL with the app scheme", () => {
