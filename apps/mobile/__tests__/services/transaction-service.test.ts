@@ -139,6 +139,7 @@ import {
   INVALID_TRANSACTION_AMOUNT_ERROR_CODE,
 } from "@/services/transaction-service";
 import { USER_DATA_ACCESS_ERROR_CODES } from "@/services/user-data-access";
+import { MAX_TRANSACTION_AMOUNT } from "@monyvi/logic";
 
 import type { DisplayTransaction } from "@/hooks/useTransactionsGrouping";
 
@@ -289,6 +290,21 @@ describe("transaction-service", () => {
       expect(acc.balance).toBe(1000);
     });
 
+    it("should reject over-limit input without mutating the account", async () => {
+      const acc = seedAccount("acc-1", 1000);
+      await expect(
+        createTransaction({
+          amount: MAX_TRANSACTION_AMOUNT + 1,
+          currency: "EGP",
+          categoryId: "cat-1",
+          accountId: "acc-1",
+          type: "EXPENSE",
+          source: "MANUAL",
+        })
+      ).rejects.toThrow(INVALID_TRANSACTION_AMOUNT_ERROR_CODE);
+      expect(acc.balance).toBe(1000);
+    });
+
     it("should persist the SMS fingerprint for SMS transactions", async () => {
       seedAccount("acc-1", 1000);
       const result = await createTransaction({
@@ -380,12 +396,19 @@ describe("transaction-service", () => {
         type: "EXPENSE",
       });
 
-      await expect(
-        updateTransaction("tx-1", { amount: Number.NaN })
-      ).rejects.toThrow(INVALID_TRANSACTION_AMOUNT_ERROR_CODE);
+      for (const amount of [
+        Number.NaN,
+        -1,
+        0,
+        MAX_TRANSACTION_AMOUNT + 1,
+      ]) {
+        await expect(updateTransaction("tx-1", { amount })).rejects.toThrow(
+          INVALID_TRANSACTION_AMOUNT_ERROR_CODE
+        );
 
-      expect(acc.balance).toBe(900);
-      expect(tx.amount).toBe(100);
+        expect(acc.balance).toBe(900);
+        expect(tx.amount).toBe(100);
+      }
     });
 
     it("should handle account swap (revert old, apply new)", async () => {

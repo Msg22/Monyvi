@@ -33,6 +33,10 @@ const defaultValidationMessages: TransactionValidationMessages = {
   destinationAccountRequired: "Destination account is required",
 };
 
+const TRANSACTION_AMOUNT_LIMIT_MESSAGE = `Amount must be at most ${MAX_TRANSACTION_AMOUNT.toLocaleString(
+  "en-US"
+)}`;
+
 function requiredIdSchema(message: string): z.ZodType<string | null> {
   return z
     .string()
@@ -65,7 +69,7 @@ function createBaseTransactionSchema(
       )
       .refine(
         (val) => isWithinTransactionAmountLimit(val),
-        "Amount must be less than 1,000,000,000"
+        TRANSACTION_AMOUNT_LIMIT_MESSAGE
       ),
     accountId: requiredIdSchema(messages.accountRequired),
     categoryId: z.string().min(1, "Category is required"),
@@ -89,7 +93,7 @@ function createTransferSchema(
         )
         .refine(
           (val) => isWithinTransactionAmountLimit(val),
-          "Amount must be less than 1,000,000,000"
+          TRANSACTION_AMOUNT_LIMIT_MESSAGE
         ),
       fromAccountId: requiredIdSchema(messages.sourceAccountRequired),
       toAccountId: requiredIdSchema(messages.destinationAccountRequired),
