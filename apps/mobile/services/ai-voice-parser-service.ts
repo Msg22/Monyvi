@@ -217,11 +217,14 @@ export async function parseVoiceWithAi(
         }
       }
 
+      const sanitizedError = new Error(response.error.message);
+      if (response.error instanceof Error) {
+        sanitizedError.name = response.error.name;
+      }
+
       logger.error(
         "[ai-voice-parser] parse-voice Edge Function error",
-        response.error instanceof Error
-          ? response.error
-          : new Error(response.error.message),
+        sanitizedError,
         { status, bodyLength }
       );
       return {

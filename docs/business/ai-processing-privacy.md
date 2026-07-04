@@ -1,6 +1,6 @@
 # AI Processing Privacy Notes
 
-Last reviewed: 2026-07-04
+Last reviewed: Pending production privacy review
 
 This document records the current Monyvi AI-processing data flow and the privacy
 assumptions that must stay aligned with product copy, store disclosures, and
@@ -38,8 +38,7 @@ Voice entry:
 Use careful language until the exact API billing and zero-data-retention status
 are verified for the production project.
 
-Based on Google's official Gemini API zero-data-retention documentation reviewed
-on 2026-07-04:
+Based on Google's official Gemini API zero-data-retention documentation:
 
 - For Gemini API Paid Services, Google says prompts and responses are not used
   to improve Google products.

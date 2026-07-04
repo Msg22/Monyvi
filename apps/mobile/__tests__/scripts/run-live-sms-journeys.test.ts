@@ -9,6 +9,9 @@ interface RunLiveSmsJourneysModule {
   getMaestroFlowTimeoutMs(
     env?: Readonly<Record<string, string | undefined>>
   ): number;
+  getMaestroTransportRetryAttempts(
+    env?: Readonly<Record<string, string | undefined>>
+  ): number;
   getAuthBootstrapFlow(
     env?: Readonly<Record<string, string | undefined>>
   ):
@@ -71,6 +74,15 @@ describe("run-live-sms-journeys helpers", () => {
         E2E_MAESTRO_FLOW_TIMEOUT_MS: "1000",
       })
     ).toBe(1000);
+  });
+
+  it("uses bounded Maestro transport retries with env override", () => {
+    expect(liveSmsJourneys.getMaestroTransportRetryAttempts({})).toBe(4);
+    expect(
+      liveSmsJourneys.getMaestroTransportRetryAttempts({
+        E2E_MAESTRO_TRANSPORT_RETRY_ATTEMPTS: "2",
+      })
+    ).toBe(2);
   });
 
   it("uses the guarded deep-link auth bootstrap when CI opts in", () => {
