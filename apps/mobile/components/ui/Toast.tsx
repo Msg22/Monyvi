@@ -11,11 +11,13 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
-import { Text, View } from "react-native";
-import Animated, { SlideInUp, SlideOutUp } from "react-native-reanimated";
+import { Text, View, type ViewStyle } from "react-native";
+import Animated, { Easing, FadeIn, FadeOut } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // =============================================================================
 // Types
@@ -69,32 +71,44 @@ const TOAST_COLORS: Record<
   { bg: string; icon: string; border: string }
 > = {
   success: {
-    bg: `${palette.nileGreen[800]}E6`,
+    bg: `${palette.slate[950]}F2`,
     icon: palette.nileGreen[400],
-    border: palette.nileGreen[600],
+    border: `${palette.nileGreen[500]}66`,
   },
   error: {
-    bg: `${palette.red[600]}E6`,
-    icon: palette.red[100],
-    border: palette.red[500],
+    bg: `${palette.slate[950]}F2`,
+    icon: palette.red[400],
+    border: `${palette.red[500]}66`,
   },
   info: {
-    bg: `${palette.blue[600]}E6`,
+    bg: `${palette.slate[950]}F2`,
     icon: palette.blue[100],
-    border: palette.blue[500],
+    border: `${palette.blue[500]}66`,
   },
   warning: {
-    bg: `${palette.orange[600]}E6`,
+    bg: `${palette.slate[950]}F2`,
     icon: palette.orange[100],
-    border: palette.orange[500],
+    border: `${palette.orange[500]}66`,
   },
+};
+
+const TOAST_ENTER_DURATION_MS = 180;
+const TOAST_EXIT_DURATION_MS = 140;
+const TOAST_ENTER_OFFSET_Y = -8;
+const TOAST_SHADOW_STYLE: ViewStyle = {
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 8 },
+  shadowOpacity: 0.22,
+  shadowRadius: 18,
+  elevation: 6,
 };
 
 function Toast({ config, onHide }: ToastProps): React.JSX.Element {
   const colors = TOAST_COLORS[config.type];
   const icon = TOAST_ICONS[config.type];
+  const insets = useSafeAreaInsets();
 
-  React.useEffect(() => {
+  useEffect(() => {
     const timer = setTimeout(() => {
       onHide();
     }, config.duration || 3000);
@@ -104,29 +118,31 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
 
   return (
     <Animated.View
-      entering={SlideInUp.springify().damping(15)}
-      exiting={SlideOutUp.springify().damping(15)}
-      className="absolute top-14 start-5 end-5 z-50"
+      entering={FadeIn.duration(TOAST_ENTER_DURATION_MS)
+        .easing(Easing.out(Easing.cubic))
+        .withInitialValues({
+          opacity: 0,
+          transform: [{ translateY: TOAST_ENTER_OFFSET_Y }],
+        })}
+      exiting={FadeOut.duration(TOAST_EXIT_DURATION_MS).easing(
+        Easing.in(Easing.cubic)
+      )}
+      className="absolute start-4 end-4 z-50"
+      style={{ top: insets.top + 12 }}
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
     >
       <View
-        className="flex-row items-center px-4 py-3 rounded-2xl border"
-        style={{
-          backgroundColor: colors.bg,
-          borderColor: colors.border,
-          // Glassmorphism shadow
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          elevation: 8,
-        }}
+        className="flex-row items-center rounded-2xl border px-4 py-3"
+        style={[
+          TOAST_SHADOW_STYLE,
+          { backgroundColor: colors.bg, borderColor: colors.border },
+        ]}
       >
-        {/* Icon */}
         <View className="me-3">
-          <Ionicons name={icon} size={24} color={colors.icon} />
+          <Ionicons name={icon} size={22} color={colors.icon} />
         </View>
 
-        {/* Text Content */}
         <View className="flex-1">
           <Text className="text-white text-sm font-semibold">
             {config.title}
