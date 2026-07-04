@@ -76,6 +76,12 @@ describe("e2e-preflight", () => {
     );
   });
 
+  it("treats the SMS onboarding prompt as loaded product UI", () => {
+    expect(
+      preflight.isAppReady('<node text="Auto-Track Transactions" />')
+    ).toBe(true);
+  });
+
   it("does not treat the Expo developer menu as product UI", () => {
     expect(
       preflight.isAppReady(

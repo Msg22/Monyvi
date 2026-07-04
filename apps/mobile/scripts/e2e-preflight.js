@@ -59,6 +59,7 @@ const authReadyMarkers = [
   "Sign In",
   "Skip",
   "Get Started",
+  "Auto-Track Transactions",
   "Track with your voice.",
   "Your bank texts. We listen.",
   "Live rates. Real gold.",
