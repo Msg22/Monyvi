@@ -476,7 +476,7 @@ export default function AddTransaction(): React.ReactNode {
   };
 
   return (
-    <View className="flex-1">
+    <View className="flex-1 bg-slate-50 dark:bg-slate-900">
       {/* Header */}
       <PageHeader
         title={t("new_transaction")}
@@ -490,7 +490,7 @@ export default function AddTransaction(): React.ReactNode {
       />
 
       <ScrollView
-        className="flex-1"
+        className="flex-1 bg-slate-50 dark:bg-slate-900"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
       >
@@ -769,7 +769,7 @@ export default function AddTransaction(): React.ReactNode {
       {type !== "TRANSFER" && !isOptionalExpanded && (
         <TouchableOpacity
           onPress={() => setIsOptionalExpanded(true)}
-          className="flex-row items-center justify-center py-2 border-t border-slate-200 dark:border-slate-800"
+          className="flex-row items-center justify-center border-t border-slate-200 bg-slate-50 py-2 dark:border-slate-800 dark:bg-slate-900"
         >
           <Ionicons
             name="create-outline"

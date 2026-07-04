@@ -8,7 +8,7 @@ jest.mock("@/services/supabase", () => ({
   },
 }));
 
-import type { CategoryTreeSource } from "@monyvi/logic";
+import { MAX_TRANSACTION_AMOUNT, type CategoryTreeSource } from "@monyvi/logic";
 import {
   parseSmsWithAi,
   type SmsCandidate,
@@ -169,6 +169,46 @@ describe("ai-sms-parser-service parser strategy", () => {
           {
             messageId: "sms-1",
             amount: 0,
+            currency: "EGP",
+            type: "EXPENSE",
+            counterparty: "Shop",
+            date: "2026-04-08T12:00:00.000Z",
+            categorySystemName: "shopping",
+            confidenceScore: 0.9,
+            isTrusted: true,
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await parseSmsWithAi(
+      [
+        {
+          message: {
+            id: "sms-1",
+            address: "NBE",
+            body: "Purchase EGP 25 at Shop",
+            date: 1775658180000,
+            read: false,
+          },
+          smsFingerprint: "edge-fingerprint",
+        },
+      ],
+      context
+    );
+
+    expect(result.transactions).toEqual([]);
+    expect(result.hasError).toBe(false);
+  });
+
+  it("skips AI transactions with amounts exceeding the maximum", async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        transactions: [
+          {
+            messageId: "sms-1",
+            amount: MAX_TRANSACTION_AMOUNT + 1,
             currency: "EGP",
             type: "EXPENSE",
             counterparty: "Shop",
