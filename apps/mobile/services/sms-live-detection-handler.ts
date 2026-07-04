@@ -69,12 +69,14 @@ const smsSaveLocks = new Map<string, Promise<void>>();
 function restoreNotificationTransactionDate(
   parsed: NotificationParsedSmsTransaction
 ): SaveableDetectedSmsTransaction {
-  if (parsed.date instanceof Date) {
-    return parsed;
+  const parsedDate = parsed.date;
+
+  if (parsedDate instanceof Date) {
+    return { ...parsed, date: parsedDate };
   }
 
-  if (typeof parsed.date === "string" || typeof parsed.date === "number") {
-    const date = new Date(parsed.date);
+  if (typeof parsedDate === "string" || typeof parsedDate === "number") {
+    const date = new Date(parsedDate);
     if (!Number.isNaN(date.getTime())) {
       return { ...parsed, date };
     }

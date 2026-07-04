@@ -90,6 +90,15 @@ function getScheduledNotificationInput(): Parameters<
   return scheduledNotification;
 }
 
+function getScheduledNotificationData(): Record<string, unknown> {
+  const data = getScheduledNotificationInput().content.data;
+  if (!data) {
+    throw new Error("Expected scheduled notification data");
+  }
+
+  return data;
+}
+
 function getNotificationCategoryActions(): Parameters<
   typeof Notifications.setNotificationCategoryAsync
 >[1] {
@@ -393,10 +402,9 @@ describe("notification-service", () => {
         "MainCIBAccount"
       );
 
-      const scheduledNotification = getScheduledNotificationInput();
-      expect(
-        scheduledNotification.content.data.transactionData
-      ).not.toHaveProperty("rawSmsBody");
+      expect(getScheduledNotificationData().transactionData).not.toHaveProperty(
+        "rawSmsBody"
+      );
     });
 
     it("does not include raw SMS body in auto-confirm info notification payloads", async () => {
@@ -409,10 +417,9 @@ describe("notification-service", () => {
         "MainCIBAccount"
       );
 
-      const scheduledNotification = getScheduledNotificationInput();
-      expect(
-        scheduledNotification.content.data.transactionData
-      ).not.toHaveProperty("rawSmsBody");
+      expect(getScheduledNotificationData().transactionData).not.toHaveProperty(
+        "rawSmsBody"
+      );
     });
 
     it("does not include raw SMS body in account setup info notification payloads", async () => {
@@ -424,10 +431,9 @@ describe("notification-service", () => {
         createParsedSmsTransaction()
       );
 
-      const scheduledNotification = getScheduledNotificationInput();
-      expect(
-        scheduledNotification.content.data.transactionData
-      ).not.toHaveProperty("rawSmsBody");
+      expect(getScheduledNotificationData().transactionData).not.toHaveProperty(
+        "rawSmsBody"
+      );
     });
   });
 

@@ -31,7 +31,11 @@ jest.mock("@/services/supabase", () => ({
 jest.mock("@/utils/logger", () => ({
   logger: {
     debug: jest.fn(),
-    error: (...args: unknown[]): unknown => mockLoggerError(...args),
+    error: (
+      message: string,
+      error?: unknown,
+      context?: Record<string, unknown>
+    ): void => mockLoggerError(message, error, context),
     info: jest.fn(),
     warn: jest.fn(),
   },
