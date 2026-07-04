@@ -403,5 +403,20 @@ end;`
         ),
       ],
     },
+    {
+      toVersion: 23,
+      steps: [
+        addColumns({
+          table: "profiles",
+          columns: [
+            {
+              name: "ai_processing_consent",
+              type: "string",
+              isOptional: true,
+            },
+          ],
+        }),
+      ],
+    },
   ],
 });

@@ -18,6 +18,7 @@ import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { SUPPORTED_CURRENCIES, type ParsedSmsTransaction } from "@monyvi/logic";
+import { AiProcessingConsentSheet } from "@/components/ai-consent/AiProcessingConsentSheet";
 import { SmsScanProgress } from "@/components/sms-sync/SmsScanProgress";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useAllCategories } from "@/context/CategoriesContext";
@@ -25,6 +26,7 @@ import { useSmsScanContext } from "@/context/SmsScanContext";
 import { useSmsScan } from "@/hooks/useSmsScan";
 import { useSmsPermission } from "@/hooks/useSmsPermission";
 import { useSmsSync } from "@/hooks/useSmsSync";
+import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
 import { loadExistingSmsFingerprints } from "@/services/sms-sync-service";
 import { palette } from "@/constants/colors";
 import { logger } from "@/utils/logger";
@@ -187,6 +189,9 @@ export default function SmsScanScreen(): React.JSX.Element {
   } = useSmsPermission();
   const { status, progress, result, transactions, error, startScan } =
     useSmsScan();
+  const aiConsent = useAiProcessingConsent();
+  const [isConsentSheetVisible, setIsConsentSheetVisible] =
+    React.useState(false);
 
   const { setTransactions, scanMode } = useSmsScanContext();
   const { lastSyncTimestamp } = useSmsSync();
@@ -231,6 +236,11 @@ export default function SmsScanScreen(): React.JSX.Element {
 
   // Auto-start scan on mount — waits until permission is granted and categories loaded
   useEffect(() => {
+    if (aiConsent.isLoading) return;
+    if (!aiConsent.isConsented) {
+      setIsConsentSheetVisible(true);
+      return;
+    }
     if (permissionStatus !== "granted") return;
     if (!isAiContextReady) return;
     if (!scanInitiated.current) {
@@ -239,7 +249,13 @@ export default function SmsScanScreen(): React.JSX.Element {
         logger.error("smsScan.autoStartFailed", err);
       });
     }
-  }, [initiateScan, isAiContextReady, permissionStatus]);
+  }, [
+    aiConsent.isConsented,
+    aiConsent.isLoading,
+    initiateScan,
+    isAiContextReady,
+    permissionStatus,
+  ]);
 
   const handleReviewPress = (): void => {
     if (transactions.length > 0) {
@@ -294,12 +310,49 @@ export default function SmsScanScreen(): React.JSX.Element {
   // Shared error handlers for permission gate callbacks — log failures
   // instead of silently swallowing them, per project coding guidelines.
   const handleGateRequest = (): void => {
+    if (!aiConsent.isConsented) {
+      setIsConsentSheetVisible(true);
+      return;
+    }
+
     requestPermission().catch((err: unknown) => {
       logger.warn("Failed to request SMS permission from gate", {
         error: err instanceof Error ? err.message : String(err),
       });
     });
   };
+
+  const handleConsentContinue = (): void => {
+    aiConsent
+      .grantConsent()
+      .then(() => {
+        setIsConsentSheetVisible(false);
+        if (permissionStatus !== "granted") {
+          return requestPermission();
+        }
+        return undefined;
+      })
+      .catch((err: unknown) => {
+        logger.error("smsScan.aiConsentGrantFailed", err);
+        setIsConsentSheetVisible(false);
+      });
+  };
+
+  const consentSheet = (
+    <AiProcessingConsentSheet
+      visible={isConsentSheetVisible}
+      variant="sms-permission-with-ai-consent"
+      onContinue={handleConsentContinue}
+      onNotNow={() => {
+        setIsConsentSheetVisible(false);
+        router.back();
+      }}
+      onPrivacyDetails={() => {
+        setIsConsentSheetVisible(false);
+        router.push("/ai-privacy-details");
+      }}
+    />
+  );
   const handleGateOpenSettings = (): void => {
     openSettings().catch((err: unknown) => {
       logger.warn("Failed to open settings from gate", {
@@ -316,46 +369,55 @@ export default function SmsScanScreen(): React.JSX.Element {
   // All hooks are called above (unconditionally) to satisfy Rules of Hooks.
   if (isPermissionLoading || permissionStatus === "undetermined") {
     return (
-      <SmsPermissionGate
-        status="undetermined"
-        isLoading
-        onRequest={handleGateRequest}
-        onOpenSettings={handleGateOpenSettings}
-        onBack={handleBackPress}
-      />
+      <>
+        <SmsPermissionGate
+          status="undetermined"
+          isLoading
+          onRequest={handleGateRequest}
+          onOpenSettings={handleGateOpenSettings}
+          onBack={handleBackPress}
+        />
+        {consentSheet}
+      </>
     );
   }
 
   if (permissionStatus === "denied" || permissionStatus === "blocked") {
     return (
-      <SmsPermissionGate
-        status={permissionStatus}
-        isLoading={false}
-        onRequest={handleGateRequest}
-        onOpenSettings={handleGateOpenSettings}
-        onBack={handleBackPress}
-      />
+      <>
+        <SmsPermissionGate
+          status={permissionStatus}
+          isLoading={false}
+          onRequest={handleGateRequest}
+          onOpenSettings={handleGateOpenSettings}
+          onBack={handleBackPress}
+        />
+        {consentSheet}
+      </>
     );
   }
 
   return (
-    <SafeAreaView
-      className="flex-1 bg-slate-50 dark:bg-slate-900"
-      edges={["top", "bottom"]}
-    >
-      <SmsScanProgress
-        status={status}
-        progress={progress}
-        transactionsFound={result?.totalFound ?? 0}
-        totalScanned={result?.totalScanned ?? 0}
-        durationMs={result?.durationMs ?? 0}
-        topCategories={topCategories}
-        categoryNameMap={categoryNameMap}
-        error={error}
-        onReviewPress={handleReviewPress}
-        onBackPress={handleBackPress}
-        onRetryPress={handleRetryPress}
-      />
-    </SafeAreaView>
+    <>
+      <SafeAreaView
+        className="flex-1 bg-slate-50 dark:bg-slate-900"
+        edges={["top", "bottom"]}
+      >
+        <SmsScanProgress
+          status={status}
+          progress={progress}
+          transactionsFound={result?.totalFound ?? 0}
+          totalScanned={result?.totalScanned ?? 0}
+          durationMs={result?.durationMs ?? 0}
+          topCategories={topCategories}
+          categoryNameMap={categoryNameMap}
+          error={error}
+          onReviewPress={handleReviewPress}
+          onBackPress={handleBackPress}
+          onRetryPress={handleRetryPress}
+        />
+      </SafeAreaView>
+      {consentSheet}
+    </>
   );
 }

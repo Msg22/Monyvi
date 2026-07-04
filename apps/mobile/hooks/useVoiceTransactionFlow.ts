@@ -83,6 +83,8 @@ interface FlowConfig {
   readonly originTabIndex?: number;
   /** When true, automatically starts the voice recording on mount */
   readonly autoStart?: boolean;
+  /** Ensure AI processing consent before recording starts. */
+  readonly ensureAiProcessingConsent?: () => boolean | Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------
@@ -139,6 +141,11 @@ export function useVoiceTransactionFlow(
     // Concurrency guard — prevent overlapping recording sessions (FR-017)
     if (flowStatusRef.current !== "idle") return;
 
+    if (config.ensureAiProcessingConsent) {
+      const canUseAi = await config.ensureAiProcessingConsent();
+      if (!canUseAi) return;
+    }
+
     // Request permission first if needed
     if (!recorder.hasPermission) {
       const granted = await recorder.requestPermission();
@@ -159,7 +166,12 @@ export function useVoiceTransactionFlow(
     originTabIndexRef.current = config.originTabIndex ?? 0;
 
     await recorder.start();
-  }, [recorder, config.originTabIndex, updateFlowStatus]);
+  }, [
+    recorder,
+    config.ensureAiProcessingConsent,
+    config.originTabIndex,
+    updateFlowStatus,
+  ]);
 
   // Keep ref in sync so the auto-start effect can call it
   startFlowRef.current = startFlow;

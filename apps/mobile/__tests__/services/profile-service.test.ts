@@ -169,6 +169,9 @@ import {
   setPreferredCurrency,
   completeOnboarding,
   confirmCurrencyAndOnboard,
+  getAiProcessingConsentStatus,
+  grantAiProcessingConsent,
+  revokeAiProcessingConsent,
 } from "@/services/profile-service";
 
 // =============================================================================
@@ -178,17 +181,33 @@ import {
 function createMockProfile(
   overrides: Record<string, unknown> = {}
 ): Record<string, unknown> {
-  return {
+  const state: Record<string, unknown> = {
     id: "profile-1",
+    aiProcessingConsentRaw: null,
     onboardingCompleted: false,
     preferredLanguage: "en",
     userId: "user-1",
     deleted: false,
-    update: jest.fn((fn: (p: Record<string, unknown>) => void) => {
-      fn(overrides);
-    }),
     ...overrides,
   };
+
+  Object.defineProperty(state, "aiProcessingConsent", {
+    get(): unknown {
+      const raw = state.aiProcessingConsentRaw;
+      if (typeof raw !== "string" || raw.trim().length === 0) return null;
+      return JSON.parse(raw) as unknown;
+    },
+  });
+
+  state.update = jest.fn((fn: (p: Record<string, unknown>) => void) => {
+    fn(state);
+  });
+
+  if (overrides.update) {
+    state.update = overrides.update;
+  }
+
+  return state;
 }
 
 function setupProfileFound(
@@ -349,6 +368,89 @@ describe("completeOnboarding", () => {
 // =============================================================================
 // confirmCurrencyAndOnboard — feature 026 atomic write
 // =============================================================================
+
+describe("AI processing consent", () => {
+  beforeEach(() => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-07-04T10:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("reports inactive consent when the profile has no consent record", async (): Promise<void> => {
+    const profile = createMockProfile();
+    setupProfileFound(profile);
+
+    await expect(getAiProcessingConsentStatus()).resolves.toEqual({
+      isConsented: false,
+      consent: null,
+    });
+  });
+
+  it("grants AI processing consent with the current version and timestamp", async (): Promise<void> => {
+    const profile = createMockProfile();
+    setupProfileFound(profile);
+
+    await grantAiProcessingConsent();
+
+    const parsed = JSON.parse(String(profile.aiProcessingConsentRaw)) as Record<
+      string,
+      unknown
+    >;
+    expect(parsed).toEqual({
+      version: 1,
+      consentedAt: "2026-07-04T10:00:00.000Z",
+      revokedAt: null,
+    });
+  });
+
+  it("revokes AI processing consent without deleting the original consent timestamp", async (): Promise<void> => {
+    const profile = createMockProfile({
+      aiProcessingConsentRaw: JSON.stringify({
+        version: 1,
+        consentedAt: "2026-07-04T09:00:00.000Z",
+        revokedAt: null,
+      }),
+    });
+    setupProfileFound(profile);
+
+    await revokeAiProcessingConsent();
+
+    const parsed = JSON.parse(String(profile.aiProcessingConsentRaw)) as Record<
+      string,
+      unknown
+    >;
+    expect(parsed).toEqual({
+      version: 1,
+      consentedAt: "2026-07-04T09:00:00.000Z",
+      revokedAt: "2026-07-04T10:00:00.000Z",
+    });
+  });
+
+  it("re-grants revoked AI processing consent by clearing the revocation timestamp", async (): Promise<void> => {
+    const profile = createMockProfile({
+      aiProcessingConsentRaw: JSON.stringify({
+        version: 1,
+        consentedAt: "2026-07-04T09:00:00.000Z",
+        revokedAt: "2026-07-04T09:30:00.000Z",
+      }),
+    });
+    setupProfileFound(profile);
+
+    await grantAiProcessingConsent();
+
+    const parsed = JSON.parse(String(profile.aiProcessingConsentRaw)) as Record<
+      string,
+      unknown
+    >;
+    expect(parsed).toEqual({
+      version: 1,
+      consentedAt: "2026-07-04T10:00:00.000Z",
+      revokedAt: null,
+    });
+  });
+});
 
 describe("confirmCurrencyAndOnboard", () => {
   it("wraps all 4 mutations in a SINGLE database.write (atomicity)", async (): Promise<void> => {

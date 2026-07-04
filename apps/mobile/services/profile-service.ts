@@ -13,6 +13,7 @@
 import {
   Account,
   Profile,
+  type AiProcessingConsent,
   type CurrencyType,
   type OnboardingFlags,
   type PreferredLanguageCode,
@@ -43,6 +44,13 @@ const SUPPORTED_CURRENCY_CODES: ReadonlySet<CurrencyType> = new Set(
   SUPPORTED_CURRENCIES.map((c) => c.code)
 );
 
+const AI_PROCESSING_CONSENT_VERSION = 1;
+
+export interface AiProcessingConsentStatus {
+  readonly isConsented: boolean;
+  readonly consent: AiProcessingConsent | null;
+}
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -71,6 +79,25 @@ async function getProfile(): Promise<Profile> {
     );
   }
   return profile;
+}
+
+export function isActiveAiProcessingConsent(
+  consent: AiProcessingConsent | null
+): boolean {
+  return (
+    consent !== null &&
+    consent.version >= AI_PROCESSING_CONSENT_VERSION &&
+    consent.consentedAt.trim().length > 0 &&
+    consent.revokedAt === null
+  );
+}
+
+function createAiProcessingConsent(now: Date): AiProcessingConsent {
+  return {
+    version: AI_PROCESSING_CONSENT_VERSION,
+    consentedAt: now.toISOString(),
+    revokedAt: null,
+  };
 }
 
 // =============================================================================
@@ -115,6 +142,46 @@ export async function setPreferredCurrency(
   await database.write(async () => {
     await profile.update((p) => {
       p.preferredCurrency = currency;
+    });
+  });
+}
+
+export async function getAiProcessingConsentStatus(): Promise<AiProcessingConsentStatus> {
+  const profile = await getProfile();
+  const consent = profile.aiProcessingConsent;
+  return {
+    consent,
+    isConsented: isActiveAiProcessingConsent(consent),
+  };
+}
+
+export async function grantAiProcessingConsent(
+  now: Date = new Date()
+): Promise<void> {
+  const profile = await getProfile();
+  const consent = createAiProcessingConsent(now);
+
+  await database.write(async () => {
+    await profile.update((p) => {
+      p.aiProcessingConsentRaw = JSON.stringify(consent);
+    });
+  });
+}
+
+export async function revokeAiProcessingConsent(
+  now: Date = new Date()
+): Promise<void> {
+  const profile = await getProfile();
+  const currentConsent = profile.aiProcessingConsent;
+  const revokedConsent: AiProcessingConsent = {
+    version: currentConsent?.version ?? AI_PROCESSING_CONSENT_VERSION,
+    consentedAt: currentConsent?.consentedAt ?? now.toISOString(),
+    revokedAt: now.toISOString(),
+  };
+
+  await database.write(async () => {
+    await profile.update((p) => {
+      p.aiProcessingConsentRaw = JSON.stringify(revokedConsent);
     });
   });
 }

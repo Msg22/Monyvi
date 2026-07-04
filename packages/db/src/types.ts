@@ -90,3 +90,9 @@ export interface OnboardingFlags {
   readonly cash_account_tooltip_dismissed?: boolean;
   readonly voice_tooltip_seen?: boolean;
 }
+
+export interface AiProcessingConsent {
+  readonly version: number;
+  readonly consentedAt: string;
+  readonly revokedAt: string | null;
+}

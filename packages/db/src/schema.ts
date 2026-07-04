@@ -7,7 +7,7 @@
 import { appSchema, tableSchema } from "@nozbe/watermelondb";
 
 export const schema = appSchema({
-  version: 22,
+  version: 23,
   tables: [
     tableSchema({
       name: "account_sms_senders",
@@ -246,6 +246,7 @@ export const schema = appSchema({
     tableSchema({
       name: "profiles",
       columns: [
+        { name: "ai_processing_consent", type: "string", isOptional: true },
         { name: "avatar_url", type: "string", isOptional: true },
         { name: "created_at", type: "number" },
         { name: "deleted", type: "boolean" },

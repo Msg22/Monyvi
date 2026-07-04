@@ -54,5 +54,9 @@
   "sync_failed_message": "Some data may not have been saved to the cloud. If you proceed, any unsynced data will be lost.",
   "proceed_anyway": "Proceed Anyway",
   "language_change_error_title": "Language Change Failed",
-  "language_change_failed": "Failed to change language. Please try again."
+  "language_change_failed": "Failed to change language. Please try again.",
+  "ai_features": "AI Features",
+  "ai_processing": "AI processing",
+  "ai_processing_description": "Allow SMS and voice AI parsing",
+  "ai_privacy_details": "AI privacy details"
 }

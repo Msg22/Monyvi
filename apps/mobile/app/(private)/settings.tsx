@@ -17,6 +17,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
 import { GradientBackground } from "@/components/ui/GradientBackground";
 import {
+  AiProcessingSettingsSection,
   AppearanceSettingsSection,
   CurrencySettingsSection,
   LanguageSettingsSection,
@@ -25,8 +26,10 @@ import {
   ProfileNotificationsSection,
   SmsSyncSettingsSection,
 } from "@/components/settings/SettingsSections";
+import { AiProcessingConsentSheet } from "@/components/ai-consent/AiProcessingConsentSheet";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
 import { useLogoutFlow } from "@/hooks/useLogoutFlow";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { setIntroLocaleOverride } from "@/services/intro-flag-service";
@@ -73,8 +76,11 @@ export default function SettingsScreen(): React.JSX.Element {
   const { t } = useTranslation("settings");
   const { t: tCommon } = useTranslation("common");
   const { language } = useLocale();
+  const aiConsent = useAiProcessingConsent();
   const [isCurrencyPickerVisible, setIsCurrencyPickerVisible] = useState(false);
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
+  const [isAiConsentSheetVisible, setIsAiConsentSheetVisible] = useState(false);
+  const [isAiConsentUpdating, setIsAiConsentUpdating] = useState(false);
   const {
     status: smsPermissionStatus,
     liveDetectionStatus,
@@ -527,6 +533,54 @@ export default function SettingsScreen(): React.JSX.Element {
     []
   );
 
+  const handleAiConsentToggle = useCallback(
+    (value: boolean): void => {
+      if (value) {
+        setIsAiConsentSheetVisible(true);
+        return;
+      }
+
+      setIsAiConsentUpdating(true);
+      aiConsent
+        .revokeConsent()
+        .catch((error: unknown) => {
+          logger.error("settings.revokeAiConsent.failed", error);
+          showToast({
+            type: "error",
+            title: tCommon("error"),
+          });
+        })
+        .finally(() => {
+          setIsAiConsentUpdating(false);
+        });
+    },
+    [aiConsent, showToast, tCommon]
+  );
+
+  const handleAiConsentContinue = useCallback((): void => {
+    setIsAiConsentUpdating(true);
+    aiConsent
+      .grantConsent()
+      .then(() => {
+        setIsAiConsentSheetVisible(false);
+      })
+      .catch((error: unknown) => {
+        logger.error("settings.grantAiConsent.failed", error);
+        showToast({
+          type: "error",
+          title: tCommon("error"),
+        });
+      })
+      .finally(() => {
+        setIsAiConsentUpdating(false);
+      });
+  }, [aiConsent, showToast, tCommon]);
+
+  const openAiPrivacyDetails = useCallback((): void => {
+    setIsAiConsentSheetVisible(false);
+    router.push("/ai-privacy-details");
+  }, []);
+
   const currencyInfo = CURRENCY_INFO_MAP[preferredCurrency];
   const permissionRecoveryContent =
     permissionRecovery === null
@@ -659,6 +713,14 @@ export default function SettingsScreen(): React.JSX.Element {
           onPress={() => setIsCurrencyPickerVisible(true)}
         />
 
+        <AiProcessingSettingsSection
+          t={t}
+          isConsented={aiConsent.isConsented}
+          isUpdating={aiConsent.isLoading || isAiConsentUpdating}
+          onToggleConsent={handleAiConsentToggle}
+          onPrivacyDetailsPress={openAiPrivacyDetails}
+        />
+
         {isAndroid && (
           <SmsSyncSettingsSection
             t={t}
@@ -778,6 +840,13 @@ export default function SettingsScreen(): React.JSX.Element {
         selectedCurrency={preferredCurrency}
         onSelect={handleCurrencySelect}
         onClose={() => setIsCurrencyPickerVisible(false)}
+      />
+      <AiProcessingConsentSheet
+        visible={isAiConsentSheetVisible}
+        variant="ai-consent"
+        onContinue={handleAiConsentContinue}
+        onNotNow={() => setIsAiConsentSheetVisible(false)}
+        onPrivacyDetails={openAiPrivacyDetails}
       />
     </GradientBackground>
   );

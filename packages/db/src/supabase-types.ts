@@ -655,6 +655,7 @@ export type Database = {
       };
       profiles: {
         Row: {
+          ai_processing_consent: Json | null;
           avatar_url: string | null;
           created_at: string;
           deleted: boolean;
@@ -674,6 +675,7 @@ export type Database = {
           user_id: string;
         };
         Insert: {
+          ai_processing_consent?: Json | null;
           avatar_url?: string | null;
           created_at?: string;
           deleted?: boolean;
@@ -693,6 +695,7 @@ export type Database = {
           user_id: string;
         };
         Update: {
+          ai_processing_consent?: Json | null;
           avatar_url?: string | null;
           created_at?: string;
           deleted?: boolean;

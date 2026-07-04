@@ -1,7 +1,20 @@
-import type { NotificationSettings, OnboardingFlags } from "../types";
+import type {
+  AiProcessingConsent,
+  NotificationSettings,
+  OnboardingFlags,
+} from "../types";
 import { BaseProfile } from "./base/base-profile";
 
 export class Profile extends BaseProfile {
+  get aiProcessingConsent(): AiProcessingConsent | null {
+    if (!this.aiProcessingConsentRaw) return null;
+    try {
+      return JSON.parse(this.aiProcessingConsentRaw) as AiProcessingConsent;
+    } catch {
+      return null;
+    }
+  }
+
   get notificationSettings(): NotificationSettings | undefined {
     if (!this.notificationSettingsRaw) return undefined;
     try {

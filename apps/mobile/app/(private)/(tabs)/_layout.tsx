@@ -1,4 +1,5 @@
 import { QuickActionFab } from "@/components/fab";
+import { AiProcessingConsentSheet } from "@/components/ai-consent/AiProcessingConsentSheet";
 import { CustomBottomTabBar } from "@/components/tab-bar/CustomBottomTabBar";
 import { VoiceRecordingOverlay } from "@/components/voice/VoiceRecordingOverlay";
 import { darkTheme, lightTheme } from "@/constants/colors";
@@ -11,6 +12,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories } from "@/hooks/useCategories";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
+import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
 import { useVoiceTransactionFlow } from "@/hooks/useVoiceTransactionFlow";
 import {
   registerVoiceEntry,
@@ -19,7 +21,7 @@ import {
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
 import { buildCategoryTree } from "@monyvi/logic";
 import { Tabs, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 
 export default function TabLayout(): React.ReactElement {
@@ -39,6 +41,8 @@ function TabLayoutInner(): React.ReactElement {
   const { accounts } = useAccounts();
   const router = useRouter();
   const micButtonRef = useMicButtonRef();
+  const aiConsent = useAiProcessingConsent();
+  const [isVoiceConsentVisible, setIsVoiceConsentVisible] = useState(false);
 
   const categoryTree = useMemo(
     () => buildCategoryTree(toCategoryTreeSources(allCategories)),
@@ -54,6 +58,13 @@ function TabLayoutInner(): React.ReactElement {
   const { retry } = useLocalSearchParams<{ retry?: string }>();
   const autoStart = retry === "true";
 
+  const ensureAiProcessingConsent = useCallback((): boolean => {
+    if (aiConsent.isLoading) return false;
+    if (aiConsent.isConsented) return true;
+    setIsVoiceConsentVisible(true);
+    return false;
+  }, [aiConsent.isConsented, aiConsent.isLoading]);
+
   useEffect(() => {
     if (autoStart) {
       router.setParams({ retry: undefined });
@@ -66,6 +77,7 @@ function TabLayoutInner(): React.ReactElement {
     accounts: accountInputs,
     categoryRecords: allCategories,
     autoStart,
+    ensureAiProcessingConsent,
   });
 
   // Register the voice entry handler so the onboarding guide's mic tooltip
@@ -141,6 +153,26 @@ function TabLayoutInner(): React.ReactElement {
         onPause={voiceFlow.pauseRecording}
         onResume={voiceFlow.resumeRecording}
         onRetry={voiceFlow.retryRecording}
+      />
+      <AiProcessingConsentSheet
+        visible={isVoiceConsentVisible}
+        variant="ai-consent"
+        onContinue={() => {
+          aiConsent
+            .grantConsent()
+            .then(() => {
+              setIsVoiceConsentVisible(false);
+              void voiceFlow.startFlow();
+            })
+            .catch(() => {
+              setIsVoiceConsentVisible(false);
+            });
+        }}
+        onNotNow={() => setIsVoiceConsentVisible(false)}
+        onPrivacyDetails={() => {
+          setIsVoiceConsentVisible(false);
+          router.push("/ai-privacy-details");
+        }}
       />
     </View>
   );
