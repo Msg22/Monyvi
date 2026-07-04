@@ -879,6 +879,10 @@ const journeys = {
       grantNotificationPermission();
       collapseSystemUi();
     },
+    after: async () => {
+      collapseSystemUi();
+      await runFlow("live-sms-journey-11-duplicate-sms-verification.yaml");
+    },
   },
   12: {
     flow: "live-sms-journey-12-auto-confirm.yaml",
