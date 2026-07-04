@@ -19,8 +19,8 @@ appId: com.monyvi.app
 - assertVisible: "Allow SMS sync?"
 - assertVisible:
     "Monyvi scans financial SMS from supported banks and wallets. Matching
-    messages are sent to our servers for AI parsing, not stored after parsing,
-    and not used for training."
+    messages are sent to our AI provider for parsing so you can review suggested
+    transactions."
 - assertVisible: "Allow SMS access"
 - assertVisible: "Not now"
 

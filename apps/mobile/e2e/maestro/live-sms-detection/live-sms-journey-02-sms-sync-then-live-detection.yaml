@@ -38,8 +38,8 @@ appId: com.monyvi.app
     timeout: 30000
 - assertVisible:
     "Monyvi uses SMS access to detect new financial messages. Matching messages
-    are sent to our servers for AI parsing, not stored after parsing, and not
-    used for training."
+    are sent to our AI provider for parsing so you can review new transaction
+    suggestions."
 - tapOn:
     id: "permission-modal-primary"
 
