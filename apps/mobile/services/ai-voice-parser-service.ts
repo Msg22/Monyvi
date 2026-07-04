@@ -29,6 +29,7 @@ import {
   clampConfidence,
   parseCategory,
   buildCategoryMap,
+  MAX_TRANSACTION_AMOUNT,
   type ParsedVoiceTransaction,
   type ReviewableTransaction,
   type VoiceParserError,
@@ -93,7 +94,7 @@ interface ParseVoiceResult {
  * (the AI may not know the counterparty or matched account).
  */
 const AiVoiceTransactionSchema = z.object({
-  amount: z.number(),
+  amount: z.number().finite().positive().max(MAX_TRANSACTION_AMOUNT),
   type: z.string(),
   counterparty: z.string().nullable(),
   categorySystemName: z.string(),
@@ -347,7 +348,7 @@ export async function parseVoiceWithAi(
           : (aiDetectedCurrency ?? validatedCurrency);
 
         results.push({
-          amount: Math.abs(aiTx.amount),
+          amount: aiTx.amount,
           currency: resolvedCurrency,
           type: normalizeType(aiTx.type),
           counterparty: aiTx.counterparty ?? undefined,

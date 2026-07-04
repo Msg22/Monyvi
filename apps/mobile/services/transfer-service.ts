@@ -5,7 +5,6 @@ import {
   database,
   Transaction,
   Transfer,
-  type TransactionSource,
   type TransactionType,
 } from "@monyvi/db";
 import { ensureCashAccount } from "./account-service";
@@ -13,6 +12,7 @@ import {
   getCurrentUserDataScope,
   type CurrentUserDataScope,
 } from "@/services/user-data-access";
+import { isValidTransactionAmount } from "@monyvi/logic";
 
 export interface TransferData {
   amount: number;
@@ -26,6 +26,8 @@ export interface TransferData {
   /** SMS fingerprint for deduplication (persisted in DB) */
   smsFingerprint?: string;
 }
+
+export const INVALID_TRANSFER_AMOUNT_ERROR_CODE = "INVALID_TRANSACTION_AMOUNT";
 
 function accountsCollection(): ReturnType<typeof database.get<Account>> {
   return database.get<Account>("accounts");
@@ -47,6 +49,12 @@ async function getOwnedTransfer(
   scope: CurrentUserDataScope
 ): Promise<Transfer> {
   return scope.findOwned(transfersCollection(), transferId);
+}
+
+function assertValidTransferAmount(amount: number): void {
+  if (!isValidTransactionAmount(Math.abs(amount))) {
+    throw new Error(INVALID_TRANSFER_AMOUNT_ERROR_CODE);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -143,6 +151,11 @@ export async function createSmsAtmTransfer(
  * Atomically creates the Transfer record and updates both account balances.
  */
 export async function createTransfer(data: TransferData): Promise<void> {
+  assertValidTransferAmount(data.amount);
+  if (data.convertedAmount !== undefined) {
+    assertValidTransferAmount(data.convertedAmount);
+  }
+
   const scope = await getCurrentUserDataScope();
 
   const transferCollection = transfersCollection();
@@ -209,6 +222,13 @@ export async function updateTransfer(
     readonly toAccountId?: string;
   }
 ): Promise<void> {
+  if (updates.amount !== undefined) {
+    assertValidTransferAmount(updates.amount);
+  }
+  if (updates.convertedAmount !== undefined) {
+    assertValidTransferAmount(updates.convertedAmount);
+  }
+
   const scope = await getCurrentUserDataScope();
 
   await database.write(async () => {
@@ -378,7 +398,7 @@ export async function convertTransferToTransaction(
       tx.counterparty = payload.counterparty;
       tx.date = transfer.date;
       tx.note = transfer.notes;
-      tx.source = "MANUAL" as TransactionSource;
+      tx.source = "MANUAL";
       tx.isDraft = false;
       tx.deleted = false;
     });

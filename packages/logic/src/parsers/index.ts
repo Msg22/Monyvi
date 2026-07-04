@@ -13,6 +13,7 @@ export {
   type SmsFingerprintInput,
 } from "./sms-hash";
 export { isLikelyFinancialSms } from "./sms-keyword-filter";
+export { evaluateAmountExpression } from "./expression-evaluator";
 export {
   EGYPTIAN_FINANCIAL_INSTITUTIONS,
   getAllFinancialSenders,
