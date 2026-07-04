@@ -53,7 +53,7 @@ interface VoiceTransactionFlowResult {
 
   // Actions
   /** Open overlay and start recording */
-  readonly startFlow: () => Promise<void>;
+  readonly startFlow: (options?: StartFlowOptions) => Promise<void>;
   /** Pause recording */
   readonly pauseRecording: () => void;
   /** Resume recording */
@@ -83,8 +83,14 @@ interface FlowConfig {
   readonly originTabIndex?: number;
   /** When true, automatically starts the voice recording on mount */
   readonly autoStart?: boolean;
+  /** When false, auto-start waits without consuming the one-shot request. */
+  readonly canAutoStart?: boolean;
   /** Ensure AI processing consent before recording starts. */
   readonly ensureAiProcessingConsent?: () => boolean | Promise<boolean>;
+}
+
+interface StartFlowOptions {
+  readonly skipAiProcessingConsent?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -131,47 +137,55 @@ export function useVoiceTransactionFlow(
   // Auto-start support (for retry flow from voice-review page)
   // ---------------------------------------------------------------------------
   const autoStartFiredRef = useRef(false);
-  const startFlowRef = useRef<(() => Promise<void>) | null>(null);
+  const startFlowRef = useRef<
+    ((options?: StartFlowOptions) => Promise<void>) | null
+  >(null);
 
   // ---------------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------------
 
-  const startFlow = useCallback(async (): Promise<void> => {
-    // Concurrency guard — prevent overlapping recording sessions (FR-017)
-    if (flowStatusRef.current !== "idle") return;
+  const startFlow = useCallback(
+    async (options?: StartFlowOptions): Promise<void> => {
+      // Concurrency guard — prevent overlapping recording sessions (FR-017)
+      if (flowStatusRef.current !== "idle") return;
 
-    if (config.ensureAiProcessingConsent) {
-      const canUseAi = await config.ensureAiProcessingConsent();
-      if (!canUseAi) return;
-    }
-
-    // Request permission first if needed
-    if (!recorder.hasPermission) {
-      const granted = await recorder.requestPermission();
-      if (!granted) {
-        setErrorMessage(
-          "Microphone permission is required for voice recording. Please enable it in Settings."
-        );
-        updateFlowStatus("error");
-        setIsOverlayVisible(true);
-        return;
+      if (
+        !options?.skipAiProcessingConsent &&
+        config.ensureAiProcessingConsent
+      ) {
+        const canUseAi = await config.ensureAiProcessingConsent();
+        if (!canUseAi) return;
       }
-    }
 
-    // Reset state and start recording
-    setErrorMessage(null);
-    setIsOverlayVisible(true);
-    updateFlowStatus("recording");
-    originTabIndexRef.current = config.originTabIndex ?? 0;
+      // Request permission first if needed
+      if (!recorder.hasPermission) {
+        const granted = await recorder.requestPermission();
+        if (!granted) {
+          setErrorMessage(
+            "Microphone permission is required for voice recording. Please enable it in Settings."
+          );
+          updateFlowStatus("error");
+          setIsOverlayVisible(true);
+          return;
+        }
+      }
 
-    await recorder.start();
-  }, [
-    recorder,
-    config.ensureAiProcessingConsent,
-    config.originTabIndex,
-    updateFlowStatus,
-  ]);
+      // Reset state and start recording
+      setErrorMessage(null);
+      setIsOverlayVisible(true);
+      updateFlowStatus("recording");
+      originTabIndexRef.current = config.originTabIndex ?? 0;
+
+      await recorder.start();
+    },
+    [
+      recorder,
+      config.ensureAiProcessingConsent,
+      config.originTabIndex,
+      updateFlowStatus,
+    ]
+  );
 
   // Keep ref in sync so the auto-start effect can call it
   startFlowRef.current = startFlow;
@@ -182,6 +196,9 @@ export function useVoiceTransactionFlow(
       autoStartFiredRef.current = false;
       return;
     }
+    if (config.canAutoStart === false) {
+      return;
+    }
     if (
       !autoStartFiredRef.current &&
       flowStatusRef.current === "idle" &&
@@ -190,7 +207,7 @@ export function useVoiceTransactionFlow(
       autoStartFiredRef.current = true;
       void startFlowRef.current();
     }
-  }, [config.autoStart]);
+  }, [config.autoStart, config.canAutoStart]);
 
   const pauseRecording = useCallback((): void => {
     recorder.pause();

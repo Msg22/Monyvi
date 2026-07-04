@@ -12,8 +12,13 @@ import {
   type ParseSmsContext,
   type SmsCandidate,
 } from "./ai-sms-parser-service";
-import { reconcileLiveDetectionPreference } from "./sms-live-detection-handler";
+import {
+  reconcileLiveDetectionPreference,
+  setAutoConfirm,
+  setLiveDetectionEnabled,
+} from "./sms-live-detection-handler";
 import { hasExistingSmsFingerprint } from "./sms-dedup-service";
+import { getAiProcessingConsentStatus } from "./profile-service";
 import { getCurrentUserDataScope } from "./user-data-access";
 import { logger } from "@/utils/logger";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
@@ -84,6 +89,13 @@ export async function processLiveSmsEvent(
 
   const canRun = await reconcileLiveDetectionPreference();
   if (!canRun) {
+    return createResult("disabled");
+  }
+
+  const aiConsentStatus = await getAiProcessingConsentStatus();
+  if (!aiConsentStatus.isConsented) {
+    await setLiveDetectionEnabled(false);
+    await setAutoConfirm(false);
     return createResult("disabled");
   }
 

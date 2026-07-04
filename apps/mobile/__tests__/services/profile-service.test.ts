@@ -388,6 +388,22 @@ describe("AI processing consent", () => {
     });
   });
 
+  it("treats malformed synced consent JSON as inactive", async (): Promise<void> => {
+    const profile = createMockProfile({
+      aiProcessingConsentRaw: JSON.stringify({
+        version: 1,
+        consentedAt: null,
+        revokedAt: null,
+      }),
+    });
+    setupProfileFound(profile);
+
+    await expect(getAiProcessingConsentStatus()).resolves.toEqual({
+      isConsented: false,
+      consent: null,
+    });
+  });
+
   it("grants AI processing consent with the current version and timestamp", async (): Promise<void> => {
     const profile = createMockProfile();
     setupProfileFound(profile);

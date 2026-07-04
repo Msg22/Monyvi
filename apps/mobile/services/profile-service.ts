@@ -81,14 +81,41 @@ async function getProfile(): Promise<Profile> {
   return profile;
 }
 
-export function isActiveAiProcessingConsent(
-  consent: AiProcessingConsent | null
-): boolean {
+function normalizeAiProcessingConsent(
+  consent: unknown
+): AiProcessingConsent | null {
+  if (typeof consent !== "object" || consent === null) {
+    return null;
+  }
+
+  const candidate = consent as Partial<AiProcessingConsent>;
+  const hasValidRevocation =
+    candidate.revokedAt === null || typeof candidate.revokedAt === "string";
+
+  if (
+    typeof candidate.version !== "number" ||
+    !Number.isFinite(candidate.version) ||
+    typeof candidate.consentedAt !== "string" ||
+    !hasValidRevocation
+  ) {
+    return null;
+  }
+
+  return {
+    version: candidate.version,
+    consentedAt: candidate.consentedAt,
+    revokedAt: candidate.revokedAt,
+  };
+}
+
+export function isActiveAiProcessingConsent(consent: unknown): boolean {
+  const normalizedConsent = normalizeAiProcessingConsent(consent);
+
   return (
-    consent !== null &&
-    consent.version >= AI_PROCESSING_CONSENT_VERSION &&
-    consent.consentedAt.trim().length > 0 &&
-    consent.revokedAt === null
+    normalizedConsent !== null &&
+    normalizedConsent.version >= AI_PROCESSING_CONSENT_VERSION &&
+    normalizedConsent.consentedAt.trim().length > 0 &&
+    normalizedConsent.revokedAt === null
   );
 }
 
@@ -148,7 +175,7 @@ export async function setPreferredCurrency(
 
 export async function getAiProcessingConsentStatus(): Promise<AiProcessingConsentStatus> {
   const profile = await getProfile();
-  const consent = profile.aiProcessingConsent;
+  const consent = normalizeAiProcessingConsent(profile.aiProcessingConsent);
   return {
     consent,
     isConsented: isActiveAiProcessingConsent(consent),
@@ -172,7 +199,9 @@ export async function revokeAiProcessingConsent(
   now: Date = new Date()
 ): Promise<void> {
   const profile = await getProfile();
-  const currentConsent = profile.aiProcessingConsent;
+  const currentConsent = normalizeAiProcessingConsent(
+    profile.aiProcessingConsent
+  );
   const revokedConsent: AiProcessingConsent = {
     version: currentConsent?.version ?? AI_PROCESSING_CONSENT_VERSION,
     consentedAt: currentConsent?.consentedAt ?? now.toISOString(),

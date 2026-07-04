@@ -77,6 +77,7 @@ function TabLayoutInner(): React.ReactElement {
     accounts: accountInputs,
     categoryRecords: allCategories,
     autoStart,
+    canAutoStart: !aiConsent.isLoading,
     ensureAiProcessingConsent,
   });
 
@@ -162,7 +163,7 @@ function TabLayoutInner(): React.ReactElement {
             .grantConsent()
             .then(() => {
               setIsVoiceConsentVisible(false);
-              void voiceFlow.startFlow();
+              void voiceFlow.startFlow({ skipAiProcessingConsent: true });
             })
             .catch(() => {
               setIsVoiceConsentVisible(false);

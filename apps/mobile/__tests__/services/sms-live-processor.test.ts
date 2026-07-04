@@ -6,6 +6,12 @@ import type {
 } from "@/services/ai-sms-parser-service";
 
 const mockReconcileLiveDetectionPreference = jest.fn<Promise<boolean>, []>();
+const mockSetLiveDetectionEnabled = jest.fn<Promise<void>, [boolean]>();
+const mockSetAutoConfirm = jest.fn<Promise<void>, [boolean]>();
+const mockGetAiProcessingConsentStatus = jest.fn<
+  Promise<{ isConsented: boolean }>,
+  []
+>();
 const mockHasExistingSmsFingerprint = jest.fn<Promise<boolean>, [string]>();
 const mockParseSmsWithAi = jest.fn<
   Promise<AiParseResult>,
@@ -28,6 +34,15 @@ jest.mock("@monyvi/logic", () => ({
 jest.mock("@/services/sms-live-detection-handler", () => ({
   reconcileLiveDetectionPreference: (): Promise<boolean> =>
     mockReconcileLiveDetectionPreference(),
+  setLiveDetectionEnabled: (enabled: boolean): Promise<void> =>
+    mockSetLiveDetectionEnabled(enabled),
+  setAutoConfirm: (enabled: boolean): Promise<void> =>
+    mockSetAutoConfirm(enabled),
+}));
+
+jest.mock("@/services/profile-service", () => ({
+  getAiProcessingConsentStatus: (): Promise<{ isConsented: boolean }> =>
+    mockGetAiProcessingConsentStatus(),
 }));
 
 jest.mock("@/services/sms-dedup-service", () => ({
@@ -90,6 +105,9 @@ describe("sms-live-processor", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockReconcileLiveDetectionPreference.mockResolvedValue(true);
+    mockSetLiveDetectionEnabled.mockResolvedValue(undefined);
+    mockSetAutoConfirm.mockResolvedValue(undefined);
+    mockGetAiProcessingConsentStatus.mockResolvedValue({ isConsented: true });
     mockHasExistingSmsFingerprint.mockResolvedValue(false);
     mockComputeSmsFingerprint.mockResolvedValue("hash-live");
     mockIsLikelyFinancialSms.mockReturnValue(true);
@@ -147,11 +165,11 @@ describe("sms-live-processor", () => {
   });
 
   it("deduplicates concurrent events with the same SMS fingerprint before AI parsing", async () => {
-    let releaseDedupCheck: (() => void) | undefined;
+    const releaseDedupChecks: Array<() => void> = [];
     mockHasExistingSmsFingerprint.mockImplementation(
       () =>
         new Promise<boolean>((resolve) => {
-          releaseDedupCheck = () => resolve(false);
+          releaseDedupChecks.push(() => resolve(false));
         })
     );
 
@@ -168,9 +186,13 @@ describe("sms-live-processor", () => {
       deliveryMode: "foreground",
     });
 
-    await Promise.resolve();
-    await Promise.resolve();
-    releaseDedupCheck?.();
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      if (releaseDedupChecks.length > 0) break;
+      await Promise.resolve();
+    }
+    for (const releaseDedupCheck of releaseDedupChecks) {
+      releaseDedupCheck();
+    }
 
     const results = await Promise.all([first, second]);
 
@@ -224,6 +246,23 @@ describe("sms-live-processor", () => {
     });
 
     expect(result.status).toBe("disabled");
+    expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+  });
+
+  it("does not parse and disables live detection when AI consent is revoked", async () => {
+    mockGetAiProcessingConsentStatus.mockResolvedValue({ isConsented: false });
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "headless",
+    });
+
+    expect(result.status).toBe("disabled");
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
+    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
     expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
     expect(mockParseSmsWithAi).not.toHaveBeenCalled();
   });

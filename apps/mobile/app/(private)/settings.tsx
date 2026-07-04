@@ -543,6 +543,17 @@ export default function SettingsScreen(): React.JSX.Element {
       setIsAiConsentUpdating(true);
       aiConsent
         .revokeConsent()
+        .then(async () => {
+          if (!liveDetection && !autoConfirmSms) {
+            return;
+          }
+
+          setLiveDetection(false);
+          stopSmsListener();
+          setAutoConfirmSms(false);
+          await setLiveDetectionEnabled(false);
+          await setAutoConfirm(false);
+        })
         .catch((error: unknown) => {
           logger.error("settings.revokeAiConsent.failed", error);
           showToast({
@@ -554,7 +565,7 @@ export default function SettingsScreen(): React.JSX.Element {
           setIsAiConsentUpdating(false);
         });
     },
-    [aiConsent, showToast, tCommon]
+    [aiConsent, autoConfirmSms, liveDetection, showToast, tCommon]
   );
 
   const handleAiConsentContinue = useCallback((): void => {
