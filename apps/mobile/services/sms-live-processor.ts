@@ -87,16 +87,23 @@ export async function processLiveSmsEvent(
     return createResult("ignored");
   }
 
-  const canRun = await reconcileLiveDetectionPreference();
-  if (!canRun) {
-    return createResult("disabled");
-  }
+  try {
+    const canRun = await reconcileLiveDetectionPreference();
+    if (!canRun) {
+      return createResult("disabled");
+    }
 
-  const aiConsentStatus = await getAiProcessingConsentStatus();
-  if (!aiConsentStatus.isConsented) {
-    await setLiveDetectionEnabled(false);
-    await setAutoConfirm(false);
-    return createResult("disabled");
+    const aiConsentStatus = await getAiProcessingConsentStatus();
+    if (!aiConsentStatus.isConsented) {
+      await setLiveDetectionEnabled(false);
+      await setAutoConfirm(false);
+      return createResult("disabled");
+    }
+  } catch (error: unknown) {
+    logger.error("liveSms.consentCheck.failed", error, {
+      deliveryMode: event.deliveryMode,
+    });
+    return createResult("infrastructure_error", undefined);
   }
 
   let smsFingerprint: string | undefined;

@@ -81,6 +81,13 @@ export function getRecoveryModeForPermissionStatus(
   return status === "blocked" ? "blocked" : "request";
 }
 
+export function createPermissionRecoveryState(
+  kind: PermissionRecoveryKind,
+  status: "undetermined" | "granted" | "denied" | "blocked"
+): PermissionRecoveryState {
+  return { kind, mode: getRecoveryModeForPermissionStatus(status) };
+}
+
 export function getPermissionRecoveryContent(
   recovery: PermissionRecoveryState,
   translate: (key: string) => string

@@ -266,4 +266,21 @@ describe("sms-live-processor", () => {
     expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
     expect(mockParseSmsWithAi).not.toHaveBeenCalled();
   });
+
+  it("returns infrastructure_error when AI consent lookup fails", async () => {
+    mockGetAiProcessingConsentStatus.mockRejectedValue(
+      new Error("profile unavailable")
+    );
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "headless",
+    });
+
+    expect(result.status).toBe("infrastructure_error");
+    expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+  });
 });

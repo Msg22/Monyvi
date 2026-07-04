@@ -254,6 +254,16 @@ export function useVoiceTransactionFlow(
     // Show analyzing state
     updateFlowStatus("analyzing");
 
+    if (config.ensureAiProcessingConsent) {
+      const canUseAi = await config.ensureAiProcessingConsent();
+      if (!canUseAi) {
+        await recorder.discard();
+        setIsOverlayVisible(false);
+        updateFlowStatus("idle");
+        return;
+      }
+    }
+
     // Submit to AI
     const aiResult = await parseVoiceWithAi({
       audioUri,
@@ -307,6 +317,7 @@ export function useVoiceTransactionFlow(
     config.categories,
     config.accounts,
     config.categoryRecords,
+    config.ensureAiProcessingConsent,
     updateFlowStatus,
   ]);
 

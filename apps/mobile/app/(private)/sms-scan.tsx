@@ -14,7 +14,7 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { Platform, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { SUPPORTED_CURRENCIES, type ParsedSmsTransaction } from "@monyvi/logic";
@@ -192,6 +192,7 @@ export default function SmsScanScreen(): React.JSX.Element {
   const aiConsent = useAiProcessingConsent();
   const [isConsentSheetVisible, setIsConsentSheetVisible] =
     React.useState(false);
+  const shouldResumeConsentAfterPrivacyDetails = useRef(false);
 
   const { setTransactions, scanMode } = useSmsScanContext();
   const { lastSyncTimestamp } = useSmsSync();
@@ -267,6 +268,19 @@ export default function SmsScanScreen(): React.JSX.Element {
   const handleBackPress = (): void => {
     router.back();
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!shouldResumeConsentAfterPrivacyDetails.current) {
+        return;
+      }
+
+      shouldResumeConsentAfterPrivacyDetails.current = false;
+      if (!aiConsent.isLoading && !aiConsent.isConsented) {
+        setIsConsentSheetVisible(true);
+      }
+    }, [aiConsent.isConsented, aiConsent.isLoading])
+  );
 
   const handleRetryPress = (): void => {
     initiateScan().catch((err: unknown) => {
@@ -348,6 +362,7 @@ export default function SmsScanScreen(): React.JSX.Element {
         router.back();
       }}
       onPrivacyDetails={() => {
+        shouldResumeConsentAfterPrivacyDetails.current = true;
         setIsConsentSheetVisible(false);
         router.push("/ai-privacy-details");
       }}

@@ -50,8 +50,8 @@ import {
 import { ConfirmationModal } from "@/components/modals/ConfirmationModal";
 import { PermissionRecoveryModal } from "@/components/permissions/PermissionRecoveryModal";
 import {
+  createPermissionRecoveryState,
   getPermissionRecoveryContent,
-  getRecoveryModeForPermissionStatus,
   type PermissionRecoveryState,
 } from "@/components/settings/permission-recovery-content";
 import { useToast } from "@/components/ui/Toast";
@@ -61,6 +61,7 @@ import {
   requestNotificationPermissionStatus,
 } from "@/services/notification-service";
 import { logger } from "@/utils/logger";
+import type { PendingAiAction } from "@/components/settings/settings-types";
 
 /**
  * Render the Settings screen for managing appearance, currency, and general preferences.
@@ -137,6 +138,8 @@ export default function SettingsScreen(): React.JSX.Element {
   const [pendingSmsScanMode, setPendingSmsScanMode] = useState<
     "incremental" | "full" | null
   >(null);
+  const [pendingAiConsentAction, setPendingAiConsentAction] =
+    useState<PendingAiAction | null>(null);
   const liveDetectionSwitchValue = liveDetection || isLiveDetectionEnabling;
   const previousNotificationAppState = useRef<AppStateStatus>(
     AppState.currentState
@@ -251,10 +254,9 @@ export default function SettingsScreen(): React.JSX.Element {
         const notificationStatus = await getNotificationPermissionStatus();
 
         if (notificationStatus !== "granted") {
-          setPermissionRecovery({
-            kind: "notification",
-            mode: getRecoveryModeForPermissionStatus(notificationStatus),
-          });
+          setPermissionRecovery(
+            createPermissionRecoveryState("notification", notificationStatus)
+          );
           return;
         }
 
@@ -278,10 +280,9 @@ export default function SettingsScreen(): React.JSX.Element {
 
       setHasPendingLiveDetectionEnable(false);
       setHasReturnedFromLiveDetectionSettings(false);
-      setPermissionRecovery({
-        kind: "sms-live",
-        mode: getRecoveryModeForPermissionStatus(liveDetectionStatus),
-      });
+      setPermissionRecovery(
+        createPermissionRecoveryState("sms-live", liveDetectionStatus)
+      );
       return;
     }
 
@@ -313,6 +314,21 @@ export default function SettingsScreen(): React.JSX.Element {
     router.push("/sms-scan");
   }, [pendingSmsScanMode, setScanMode, smsPermissionStatus]);
 
+  const continueLiveDetectionEnableWithConsent =
+    useCallback(async (): Promise<void> => {
+      hasActiveLiveDetectionEnableFlowRef.current = true;
+
+      if (liveDetectionStatus !== "granted") {
+        setPermissionRecovery(
+          createPermissionRecoveryState("sms-live", liveDetectionStatus)
+        );
+        setHasReturnedFromLiveDetectionSettings(false);
+        return;
+      }
+
+      await enableLiveDetectionWithGrantedSms();
+    }, [enableLiveDetectionWithGrantedSms, liveDetectionStatus]);
+
   const handleToggleLiveDetection = useCallback(
     async (value: boolean): Promise<void> => {
       liveDetectionPreferenceGenerationRef.current += 1;
@@ -323,6 +339,7 @@ export default function SettingsScreen(): React.JSX.Element {
         setHasPendingLiveDetectionEnable(false);
         setHasReturnedFromLiveDetectionSettings(false);
         setHasPendingNotificationEnable(false);
+        setPendingAiConsentAction(null);
         setPermissionRecovery(null);
         setLiveDetection(false);
         await setLiveDetectionEnabled(false);
@@ -332,20 +349,15 @@ export default function SettingsScreen(): React.JSX.Element {
         return;
       }
 
-      hasActiveLiveDetectionEnableFlowRef.current = true;
-
-      if (liveDetectionStatus !== "granted") {
-        setPermissionRecovery({
-          kind: "sms-live",
-          mode: getRecoveryModeForPermissionStatus(liveDetectionStatus),
-        });
-        setHasReturnedFromLiveDetectionSettings(false);
+      if (!aiConsent.isConsented) {
+        setPendingAiConsentAction({ kind: "live" });
+        setIsAiConsentSheetVisible(true);
         return;
       }
 
-      await enableLiveDetectionWithGrantedSms();
+      await continueLiveDetectionEnableWithConsent();
     },
-    [enableLiveDetectionWithGrantedSms, liveDetectionStatus]
+    [aiConsent.isConsented, continueLiveDetectionEnableWithConsent]
   );
 
   const handlePermissionModalCancel = useCallback((): void => {
@@ -355,6 +367,7 @@ export default function SettingsScreen(): React.JSX.Element {
     setHasReturnedFromLiveDetectionSettings(false);
     setHasPendingNotificationEnable(false);
     setPendingSmsScanMode(null);
+    setPendingAiConsentAction(null);
     setPermissionRecovery(null);
   }, []);
 
@@ -380,10 +393,9 @@ export default function SettingsScreen(): React.JSX.Element {
           return;
         }
 
-        setPermissionRecovery({
-          kind: "notification",
-          mode: getRecoveryModeForPermissionStatus(result),
-        });
+        setPermissionRecovery(
+          createPermissionRecoveryState("notification", result)
+        );
         return;
       }
 
@@ -404,10 +416,9 @@ export default function SettingsScreen(): React.JSX.Element {
           return;
         }
 
-        setPermissionRecovery({
-          kind: "sms-sync",
-          mode: getRecoveryModeForPermissionStatus(result),
-        });
+        setPermissionRecovery(
+          createPermissionRecoveryState("sms-sync", result)
+        );
         return;
       }
 
@@ -429,10 +440,7 @@ export default function SettingsScreen(): React.JSX.Element {
         return;
       }
 
-      setPermissionRecovery({
-        kind: "sms-live",
-        mode: getRecoveryModeForPermissionStatus(result),
-      });
+      setPermissionRecovery(createPermissionRecoveryState("sms-live", result));
     }, [
       enableLiveDetectionWithGrantedSms,
       openSettings,
@@ -460,10 +468,12 @@ export default function SettingsScreen(): React.JSX.Element {
             .then((notificationStatus) => {
               if (notificationStatus !== "granted") {
                 setHasPendingNotificationEnable(false);
-                setPermissionRecovery({
-                  kind: "notification",
-                  mode: getRecoveryModeForPermissionStatus(notificationStatus),
-                });
+                setPermissionRecovery(
+                  createPermissionRecoveryState(
+                    "notification",
+                    notificationStatus
+                  )
+                );
                 return;
               }
 
@@ -568,12 +578,49 @@ export default function SettingsScreen(): React.JSX.Element {
     [aiConsent, autoConfirmSms, liveDetection, showToast, tCommon]
   );
 
+  const continueSmsScanWithConsent = useCallback(
+    (mode: "incremental" | "full"): void => {
+      setScanMode(mode);
+
+      if (smsPermissionStatus === "granted") {
+        router.push("/sms-scan");
+        return;
+      }
+
+      setPendingSmsScanMode(mode);
+      setPermissionRecovery(
+        createPermissionRecoveryState("sms-sync", smsPermissionStatus)
+      );
+    },
+    [router, setScanMode, smsPermissionStatus]
+  );
+
   const handleAiConsentContinue = useCallback((): void => {
     setIsAiConsentUpdating(true);
     aiConsent
       .grantConsent()
       .then(() => {
         setIsAiConsentSheetVisible(false);
+        const pendingAction = pendingAiConsentAction;
+        setPendingAiConsentAction(null);
+
+        if (pendingAction?.kind === "sms") {
+          continueSmsScanWithConsent(pendingAction.mode);
+          return;
+        }
+
+        if (pendingAction?.kind === "live") {
+          continueLiveDetectionEnableWithConsent().catch((error: unknown) => {
+            logger.error(
+              "settings.resumeLiveDetectionAfterAiConsent.failed",
+              error
+            );
+            showToast({
+              type: "error",
+              title: tCommon("error"),
+            });
+          });
+        }
       })
       .catch((error: unknown) => {
         logger.error("settings.grantAiConsent.failed", error);
@@ -585,7 +632,14 @@ export default function SettingsScreen(): React.JSX.Element {
       .finally(() => {
         setIsAiConsentUpdating(false);
       });
-  }, [aiConsent, showToast, tCommon]);
+  }, [
+    aiConsent,
+    continueLiveDetectionEnableWithConsent,
+    continueSmsScanWithConsent,
+    pendingAiConsentAction,
+    showToast,
+    tCommon,
+  ]);
 
   const openAiPrivacyDetails = useCallback((): void => {
     setIsAiConsentSheetVisible(false);
@@ -612,20 +666,15 @@ export default function SettingsScreen(): React.JSX.Element {
         return;
       }
 
-      setScanMode(mode);
-
-      if (smsPermissionStatus === "granted") {
-        router.push("/sms-scan");
+      if (!aiConsent.isConsented) {
+        setPendingAiConsentAction({ kind: "sms", mode });
+        setIsAiConsentSheetVisible(true);
         return;
       }
 
-      setPendingSmsScanMode(mode);
-      setPermissionRecovery({
-        kind: "sms-sync",
-        mode: getRecoveryModeForPermissionStatus(smsPermissionStatus),
-      });
+      continueSmsScanWithConsent(mode);
     },
-    [isAndroid, smsPermissionStatus, setScanMode, showToast, t]
+    [aiConsent.isConsented, continueSmsScanWithConsent, isAndroid, showToast, t]
   );
 
   const handleIncrementalSync = useCallback((): void => {

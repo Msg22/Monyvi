@@ -69,7 +69,7 @@ function normalizeProfileFromSupabase(
 function normalizeProfileToSupabase(
   record: Record<string, unknown>
 ): Record<string, unknown> {
-  return {
+  const transformed = {
     ...record,
     [PROFILE_NOTIFICATION_SETTINGS_COLUMN]: parseJsonForSupabase(
       record[PROFILE_NOTIFICATION_SETTINGS_COLUMN],
@@ -87,6 +87,18 @@ function normalizeProfileToSupabase(
       PROFILE_ONBOARDING_FLAGS_COLUMN
     ),
   };
+
+  if (
+    record["_status"] === "updated" &&
+    typeof record["_changed"] === "string" &&
+    !record["_changed"]
+      .split(",")
+      .includes(PROFILE_AI_PROCESSING_CONSENT_COLUMN)
+  ) {
+    delete transformed[PROFILE_AI_PROCESSING_CONSENT_COLUMN];
+  }
+
+  return transformed;
 }
 
 export function transformFromSupabase(
