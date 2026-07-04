@@ -35,6 +35,7 @@ interface SupabaseResult {
 }
 
 let selectResult: SupabaseResult = { data: [], error: null };
+let selectResultsByTable: Record<string, SupabaseResult | undefined> = {};
 
 jest.mock("@monyvi/db", () => ({
   schema: {
@@ -82,26 +83,30 @@ jest.mock("@/utils/logger", () => ({
 
 import { syncDatabase } from "../../services/sync";
 
-function makeSelectChain(): Record<string, unknown> {
+function getSelectResult(table?: string): SupabaseResult {
+  return (table ? selectResultsByTable[table] : undefined) ?? selectResult;
+}
+
+function makeSelectChain(table?: string): Record<string, unknown> {
   const chain: Record<string, unknown> = {
     select: jest.fn(() => chain),
     eq: jest.fn(() => chain),
     gt: jest.fn(() => chain),
     or: jest.fn(() => chain),
-    order: jest.fn(() => Promise.resolve(selectResult)),
-    in: jest.fn(() => Promise.resolve(selectResult)),
+    order: jest.fn(() => Promise.resolve(getSelectResult(table))),
+    in: jest.fn(() => Promise.resolve(getSelectResult(table))),
     then: (
       resolve: (value: SupabaseResult) => unknown,
       reject?: (reason: unknown) => unknown
-    ) => Promise.resolve(selectResult).then(resolve, reject),
+    ) => Promise.resolve(getSelectResult(table)).then(resolve, reject),
   };
 
   return chain;
 }
 
 function mockSupabaseTable(): void {
-  mockFrom.mockImplementation(() => ({
-    ...makeSelectChain(),
+  mockFrom.mockImplementation((table: string) => ({
+    ...makeSelectChain(table),
     insert: mockInsert,
     upsert: mockUpsert,
     update: mockUpdate,
@@ -120,6 +125,7 @@ const mockDatabase = mockDatabaseStub as never;
 beforeEach(() => {
   jest.clearAllMocks();
   selectResult = { data: [], error: null };
+  selectResultsByTable = {};
   mockGetCurrentUserId.mockResolvedValue("current-user");
   mockSupabaseTable();
   mockForeignProfilesFetch.mockResolvedValue([]);
@@ -335,21 +341,23 @@ describe("syncDatabase", () => {
   });
 
   it("pulls profile JSON fields as WatermelonDB string fields", async () => {
-    selectResult = {
-      data: [
-        {
-          id: "profile-1",
-          user_id: "current-user",
-          deleted: false,
-          created_at: "2026-05-18T08:00:00.000Z",
-          updated_at: "2026-05-18T08:00:00.000Z",
-          onboarding_flags: { cash_account_tooltip_dismissed: true },
-          notification_settings: {
-            sms_transaction_confirmation: true,
+    selectResultsByTable = {
+      profiles: {
+        data: [
+          {
+            id: "profile-1",
+            user_id: "current-user",
+            deleted: false,
+            created_at: "2026-05-18T08:00:00.000Z",
+            updated_at: "2026-05-18T08:00:00.000Z",
+            onboarding_flags: { cash_account_tooltip_dismissed: true },
+            notification_settings: {
+              sms_transaction_confirmation: true,
+            },
           },
-        },
-      ],
-      error: null,
+        ],
+        error: null,
+      },
     };
 
     let pulledChanges: Record<string, unknown> | undefined;

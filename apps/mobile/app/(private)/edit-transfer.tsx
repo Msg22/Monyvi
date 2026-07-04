@@ -35,6 +35,7 @@ import {
 import {
   evaluateAmountExpression,
   formatAmountInput,
+  isValidTransactionAmount,
   parsePositiveFiniteAmountInput,
 } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
@@ -230,7 +231,7 @@ export default function EditTransfer(): React.ReactNode {
     if (
       parsedAmount === null ||
       !Number.isFinite(parsedAmount) ||
-      parsedAmount <= 0
+      !isValidTransactionAmount(parsedAmount)
     ) {
       setAmountError(t("invalid_amount"));
       return;
@@ -239,7 +240,11 @@ export default function EditTransfer(): React.ReactNode {
     const parsedTargetAmount = targetAmount
       ? parsePositiveFiniteAmountInput(targetAmount)
       : null;
-    if (targetAmount && parsedTargetAmount === null) {
+    if (
+      targetAmount &&
+      (parsedTargetAmount === null ||
+        !isValidTransactionAmount(parsedTargetAmount))
+    ) {
       setAmountError(t("invalid_amount"));
       return;
     }

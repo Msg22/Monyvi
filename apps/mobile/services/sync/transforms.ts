@@ -6,6 +6,9 @@ import {
   TIMESTAMP_COLUMNS,
 } from "./config";
 import type { SupabaseTablesNames, WritableSupabaseTablesNames } from "./types";
+import { isValidTransactionAmount } from "@monyvi/logic";
+
+const INVALID_SYNC_AMOUNT_ERROR_CODE = "INVALID_TRANSACTION_AMOUNT";
 
 export function stringifyJsonForWatermelon(
   value: unknown
@@ -80,10 +83,26 @@ function normalizeProfileToSupabase(
   };
 }
 
+function assertValidSyncedAmount(
+  table: SupabaseTablesNames,
+  record: Record<string, unknown>
+): void {
+  if (table !== "transactions" && table !== "transfers") {
+    return;
+  }
+
+  const amount = record.amount;
+  if (typeof amount !== "number" || !isValidTransactionAmount(amount)) {
+    throw new Error(INVALID_SYNC_AMOUNT_ERROR_CODE);
+  }
+}
+
 export function transformFromSupabase(
   table: SupabaseTablesNames,
   record: Record<string, unknown>
 ): Record<string, unknown> {
+  assertValidSyncedAmount(table, record);
+
   const transformed: Record<string, unknown> =
     table === "profiles" ? normalizeProfileFromSupabase(record) : { ...record };
 
