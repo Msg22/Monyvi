@@ -146,6 +146,7 @@ const TOAST_TOP_GAP = 12;
 const TOAST_KEYBOARD_GAP = 16;
 const TOAST_DARK_BACKGROUND = `${palette.slate[950]}F2`;
 const TOAST_LIGHT_BACKGROUND = `${palette.slate[25]}F2`;
+const TOAST_LIGHT_SUCCESS_BACKGROUND = `${palette.nileGreen[50]}F2`;
 const TOAST_SHADOW_STYLE: ViewStyle = {
   shadowColor: palette.slate[950],
   shadowOffset: { width: 0, height: 8 },
@@ -203,10 +204,18 @@ function getToastVisualStyle(
       borderColor: isDark ? colors.darkIconBorder : colors.lightIconBorder,
     },
     surfaceStyle: {
-      backgroundColor: isDark ? TOAST_DARK_BACKGROUND : TOAST_LIGHT_BACKGROUND,
+      backgroundColor: isDark
+        ? TOAST_DARK_BACKGROUND
+        : getLightToastBackground(type),
       borderColor: isDark ? colors.darkBorder : colors.lightBorder,
     },
   };
+}
+
+function getLightToastBackground(type: ToastType): string {
+  return type === "success"
+    ? TOAST_LIGHT_SUCCESS_BACKGROUND
+    : TOAST_LIGHT_BACKGROUND;
 }
 
 function Toast({ config, onHide }: ToastProps): React.JSX.Element {

@@ -332,7 +332,9 @@ describe("ToastProvider", () => {
       screen.getByTestId("toast-icon-shell")
     );
 
-    expect(toastSurfaceStyle.backgroundColor).toBe(`${palette.slate[25]}F2`);
+    expect(toastSurfaceStyle.backgroundColor).toBe(
+      `${palette.nileGreen[50]}F2`
+    );
     expect(toastSurfaceStyle.borderColor).toBe(`${palette.nileGreen[500]}66`);
     expect(toastAccentStyle.backgroundColor).toBe(palette.nileGreen[500]);
     expect(iconShellStyle.backgroundColor).toBe(palette.nileGreen[50]);
