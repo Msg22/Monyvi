@@ -271,6 +271,18 @@ describe("ToastProvider", () => {
     expect(toastContainerStyle.bottom).toBeUndefined();
   });
 
+  it("does not intercept touches while visible", () => {
+    renderToastHarness();
+
+    fireEvent.press(screen.getByTestId("show-success-toast"));
+
+    const toastContainerProps = getReactTestInstanceProps(
+      screen.getByTestId("toast-container")
+    );
+
+    expect(toastContainerProps.pointerEvents).toBe("none");
+  });
+
   it("uses bottom keyboard placement when a keyboard is already visible", () => {
     const keyboardMetricsSpy = jest.spyOn(Keyboard, "metrics").mockReturnValue({
       height: 280,

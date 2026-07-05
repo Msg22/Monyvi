@@ -240,6 +240,7 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
       className="absolute start-4 end-4 z-[110]"
       style={containerPositionStyle}
       testID="toast-container"
+      pointerEvents="none"
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
     >
