@@ -362,15 +362,17 @@ export default function SmsScanScreen(): React.JSX.Element {
   };
 
   const handleConsentContinue = async (): Promise<void> => {
+    let didGrantConsent = false;
     try {
       await aiConsent.grantConsent();
-      setIsConsentSheetVisible(false);
+      didGrantConsent = true;
       if (permissionStatus !== "granted") {
         await requestPermission();
       }
+      setIsConsentSheetVisible(false);
     } catch (err: unknown) {
       logger.error("smsScan.aiConsentGrantFailed", err);
-      setIsConsentSheetVisible(false);
+      setIsConsentSheetVisible(didGrantConsent ? false : true);
     }
   };
 

@@ -46,13 +46,19 @@ export function AiProcessingConsentSheet({
       setIsContinueSubmitting(false);
     }
   }, [isContinueSubmitting, onContinue]);
+  const handleNotNow = React.useCallback((): void => {
+    if (!isContinueSubmitting) onNotNow();
+  }, [isContinueSubmitting, onNotNow]);
+  const handlePrivacyDetails = React.useCallback((): void => {
+    if (!isContinueSubmitting) onPrivacyDetails();
+  }, [isContinueSubmitting, onPrivacyDetails]);
 
   return (
     <Modal
       visible={visible}
       transparent
       animationType="slide"
-      onRequestClose={onNotNow}
+      onRequestClose={handleNotNow}
     >
       <View className="flex-1 justify-end bg-black/50">
         <View className="rounded-t-[28px] bg-white px-5 pb-8 pt-5 dark:bg-slate-900">
@@ -94,7 +100,11 @@ export function AiProcessingConsentSheet({
             </View>
           )}
 
-          <TouchableOpacity onPress={onPrivacyDetails} className="mb-5 py-1">
+          <TouchableOpacity
+            onPress={handlePrivacyDetails}
+            disabled={isContinueSubmitting}
+            className="mb-5 py-1"
+          >
             <Text className="text-base font-semibold text-nileGreen-600 dark:text-nileGreen-400">
               {t("ai_consent_privacy_details")}
             </Text>
@@ -121,7 +131,8 @@ export function AiProcessingConsentSheet({
 
           <TouchableOpacity
             testID="ai-consent-not-now"
-            onPress={onNotNow}
+            onPress={handleNotNow}
+            disabled={isContinueSubmitting}
             className="rounded-2xl bg-slate-100 py-4 dark:bg-slate-800"
           >
             <Text className="text-center text-base font-semibold text-slate-700 dark:text-slate-200">

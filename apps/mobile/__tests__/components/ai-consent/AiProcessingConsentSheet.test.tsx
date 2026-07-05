@@ -74,4 +74,29 @@ describe("AiProcessingConsentSheet", () => {
       expect(screen.getByTestId("ai-consent-continue")).toBeTruthy();
     });
   });
+
+  it("blocks secondary actions while Continue is submitting", () => {
+    const grantConsent = createDeferred();
+    const onContinue = jest.fn(() => grantConsent.promise);
+    const onNotNow = jest.fn();
+    const onPrivacyDetails = jest.fn();
+
+    render(
+      <AiProcessingConsentSheet
+        visible
+        variant="ai-consent"
+        onContinue={onContinue}
+        onNotNow={onNotNow}
+        onPrivacyDetails={onPrivacyDetails}
+      />
+    );
+
+    fireEvent.press(screen.getByTestId("ai-consent-continue"));
+    fireEvent.press(screen.getByTestId("ai-consent-not-now"));
+    fireEvent.press(screen.getByText("ai_consent_privacy_details"));
+
+    expect(onContinue).toHaveBeenCalledTimes(1);
+    expect(onNotNow).not.toHaveBeenCalled();
+    expect(onPrivacyDetails).not.toHaveBeenCalled();
+  });
 });

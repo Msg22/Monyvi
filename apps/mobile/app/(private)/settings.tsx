@@ -32,6 +32,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
 import { useLogoutFlow } from "@/hooks/useLogoutFlow";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
+import { useSettingsAiConsentToggle } from "@/hooks/useSettingsAiConsentToggle";
 import { setIntroLocaleOverride } from "@/services/intro-flag-service";
 import { setPreferredLanguage } from "@/services/profile-service";
 import { useSmsPermission } from "@/hooks/useSmsPermission";
@@ -153,6 +154,15 @@ export default function SettingsScreen(): React.JSX.Element {
   );
   const hasActiveLiveDetectionEnableFlowRef = useRef(false);
   const liveDetectionPreferenceGenerationRef = useRef(0);
+  const cancelLiveDetectionEnableFlow = useCallback((): void => {
+    hasActiveLiveDetectionEnableFlowRef.current = false;
+    setIsLiveDetectionEnabling(false);
+    setHasPendingLiveDetectionEnable(false);
+    setHasReturnedFromLiveDetectionSettings(false);
+    setHasPendingNotificationEnable(false);
+    setPendingAiConsentAction(null);
+    setPermissionRecovery(null);
+  }, []);
 
   const reconcileStoredLiveDetection = useCallback(async (): Promise<void> => {
     if (!isAndroid) {
@@ -234,8 +244,13 @@ export default function SettingsScreen(): React.JSX.Element {
   }, [isAndroid, reconcileStoredLiveDetection]);
 
   const persistLiveDetectionEnabled = useCallback(async (): Promise<void> => {
+    if (!hasActiveLiveDetectionEnableFlowRef.current) return;
     try {
       await setLiveDetectionEnabled(true);
+      if (!hasActiveLiveDetectionEnableFlowRef.current) {
+        await setLiveDetectionEnabled(false);
+        return;
+      }
       setIsLiveDetectionPreferenceReady(true);
       setLiveDetection(true);
       startSmsListener();
@@ -253,6 +268,7 @@ export default function SettingsScreen(): React.JSX.Element {
       setIsLiveDetectionEnabling(true);
       try {
         const notificationStatus = await getNotificationPermissionStatus();
+        if (!hasActiveLiveDetectionEnableFlowRef.current) return;
 
         if (notificationStatus !== "granted") {
           setPermissionRecovery(
@@ -335,13 +351,7 @@ export default function SettingsScreen(): React.JSX.Element {
       liveDetectionPreferenceGenerationRef.current += 1;
 
       if (!value) {
-        hasActiveLiveDetectionEnableFlowRef.current = false;
-        setIsLiveDetectionEnabling(false);
-        setHasPendingLiveDetectionEnable(false);
-        setHasReturnedFromLiveDetectionSettings(false);
-        setHasPendingNotificationEnable(false);
-        setPendingAiConsentAction(null);
-        setPermissionRecovery(null);
+        cancelLiveDetectionEnableFlow();
         setLiveDetection(false);
         await setLiveDetectionEnabled(false);
         stopSmsListener();
@@ -358,7 +368,11 @@ export default function SettingsScreen(): React.JSX.Element {
 
       await continueLiveDetectionEnableWithConsent();
     },
-    [aiConsent.isConsented, continueLiveDetectionEnableWithConsent]
+    [
+      aiConsent.isConsented,
+      cancelLiveDetectionEnableFlow,
+      continueLiveDetectionEnableWithConsent,
+    ]
   );
 
   const handlePermissionModalCancel = useCallback((): void => {
@@ -388,6 +402,7 @@ export default function SettingsScreen(): React.JSX.Element {
         }
 
         const result = await requestNotificationPermissionStatus();
+        if (!hasActiveLiveDetectionEnableFlowRef.current) return;
         if (result === "granted") {
           setPermissionRecovery(null);
           await persistLiveDetectionEnabled();
@@ -433,6 +448,7 @@ export default function SettingsScreen(): React.JSX.Element {
       }
 
       const result = await requestLiveDetectionPermission();
+      if (!hasActiveLiveDetectionEnableFlowRef.current) return;
 
       if (result === "granted") {
         setHasPendingLiveDetectionEnable(false);
@@ -544,40 +560,22 @@ export default function SettingsScreen(): React.JSX.Element {
     []
   );
 
-  const handleAiConsentToggle = useCallback(
-    (value: boolean): void => {
-      if (value) {
-        setIsAiConsentSheetVisible(true);
-        return;
-      }
-
-      setIsAiConsentUpdating(true);
-      aiConsent
-        .revokeConsent()
-        .then(async () => {
-          if (!liveDetection && !autoConfirmSms) {
-            return;
-          }
-
-          setLiveDetection(false);
-          stopSmsListener();
-          setAutoConfirmSms(false);
-          await setLiveDetectionEnabled(false);
-          await setAutoConfirm(false);
-        })
-        .catch((error: unknown) => {
-          logger.error("settings.revokeAiConsent.failed", error);
-          showToast({
-            type: "error",
-            title: tCommon("error"),
-          });
-        })
-        .finally(() => {
-          setIsAiConsentUpdating(false);
-        });
-    },
-    [aiConsent, autoConfirmSms, liveDetection, showToast, tCommon]
-  );
+  const handleAiConsentToggle = useSettingsAiConsentToggle({
+    aiConsent,
+    autoConfirmSms,
+    cancelLiveDetectionEnableFlow,
+    hasActiveLiveDetectionEnableFlowRef,
+    hasPendingLiveDetectionEnable,
+    hasPendingNotificationEnable,
+    isLiveDetectionEnabling,
+    liveDetection,
+    setAutoConfirmSms,
+    setIsAiConsentSheetVisible,
+    setIsAiConsentUpdating,
+    setLiveDetection,
+    showToast,
+    tCommon,
+  });
 
   const continueSmsScanWithConsent = useCallback(
     (mode: "incremental" | "full"): void => {
