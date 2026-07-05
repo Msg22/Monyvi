@@ -1,6 +1,14 @@
+import { palette } from "@/constants/colors";
 import { fireEvent, render, screen, act } from "@testing-library/react-native";
 import React from "react";
-import { Pressable, Text } from "react-native";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
+import type { ReactTestInstance } from "react-test-renderer";
 import { SafeAreaProvider, type Metrics } from "react-native-safe-area-context";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 
@@ -33,6 +41,12 @@ declare global {
   // eslint-disable-next-line no-var
   var __toastReanimatedMock: ReanimatedToastMock | undefined;
 }
+
+const mockUseTheme = jest.fn(() => ({ isDark: false }));
+
+jest.mock("@/context/ThemeContext", () => ({
+  useTheme: () => mockUseTheme(),
+}));
 
 jest.mock("react-native-reanimated", () => {
   const ReactNative =
@@ -137,9 +151,21 @@ function renderToastHarness(): void {
   );
 }
 
+function getFlattenedViewStyle(instance: ReactTestInstance): ViewStyle {
+  const instanceWithProps = instance as unknown as { readonly props?: unknown };
+  const props =
+    instanceWithProps.props &&
+    typeof instanceWithProps.props === "object" &&
+    !Array.isArray(instanceWithProps.props)
+      ? (instanceWithProps.props as { readonly style?: StyleProp<ViewStyle> })
+      : {};
+  return StyleSheet.flatten(props.style) ?? {};
+}
+
 describe("ToastProvider", () => {
   beforeEach(() => {
     jest.useFakeTimers();
+    mockUseTheme.mockReturnValue({ isDark: false });
     const reanimated = getReanimatedMock();
     reanimated.FadeIn.duration.mockClear();
     reanimated.FadeIn.easing.mockClear();
@@ -171,9 +197,45 @@ describe("ToastProvider", () => {
     expect(reanimated.FadeIn.duration).toHaveBeenCalledWith(180);
     expect(reanimated.FadeIn.withInitialValues).toHaveBeenCalledWith({
       opacity: 0,
-      transform: [{ translateY: -8 }],
+      transform: [{ translateY: 12 }, { scale: 0.98 }],
     });
     expect(reanimated.FadeOut.duration).toHaveBeenCalledWith(140);
+  });
+
+  it("positions the toast above bottom navigation instead of overlapping headers", () => {
+    renderToastHarness();
+
+    fireEvent.press(screen.getByTestId("show-success-toast"));
+
+    const toastContainerStyle = getFlattenedViewStyle(
+      screen.getByTestId("toast-container")
+    );
+
+    expect(toastContainerStyle.top).toBeUndefined();
+    expect(toastContainerStyle.bottom).toBe(122);
+  });
+
+  it("uses a premium light success treatment", () => {
+    mockUseTheme.mockReturnValue({ isDark: false });
+    renderToastHarness();
+
+    fireEvent.press(screen.getByTestId("show-success-toast"));
+
+    const toastSurfaceStyle = getFlattenedViewStyle(
+      screen.getByTestId("toast-surface")
+    );
+    const toastAccentStyle = getFlattenedViewStyle(
+      screen.getByTestId("toast-accent")
+    );
+    const iconShellStyle = getFlattenedViewStyle(
+      screen.getByTestId("toast-icon-shell")
+    );
+
+    expect(toastSurfaceStyle.backgroundColor).toBe(palette.slate[25]);
+    expect(toastSurfaceStyle.borderColor).toBe(`${palette.nileGreen[500]}66`);
+    expect(toastAccentStyle.backgroundColor).toBe(palette.nileGreen[500]);
+    expect(iconShellStyle.backgroundColor).toBe(palette.nileGreen[50]);
+    expect(iconShellStyle.borderColor).toBe(palette.nileGreen[100]);
   });
 
   it("replaces an active toast without stacking or hiding the new toast early", () => {
