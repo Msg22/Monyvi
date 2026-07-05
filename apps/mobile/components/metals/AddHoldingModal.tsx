@@ -214,9 +214,8 @@ export function AddHoldingModal({
         message: t("holding_created_message"),
       });
       handleClose();
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : t("error_save_failed");
+    } catch {
+      const message = t("error_save_failed");
       setErrorMessage(message);
       showToast({
         type: "error",

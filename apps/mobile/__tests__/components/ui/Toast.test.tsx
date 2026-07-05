@@ -158,6 +158,18 @@ function ToastHarness(): React.JSX.Element {
       >
         <Text>Show error</Text>
       </Pressable>
+      <Pressable
+        testID="show-zero-duration-toast"
+        onPress={() =>
+          showToast({
+            type: "info",
+            title: "Instant note",
+            duration: 0,
+          })
+        }
+      >
+        <Text>Show instant</Text>
+      </Pressable>
     </>
   );
 }
@@ -378,5 +390,18 @@ describe("ToastProvider", () => {
     });
 
     expect(screen.queryByText("Save failed")).toBeNull();
+  });
+
+  it("preserves an explicit zero duration", () => {
+    renderToastHarness();
+
+    fireEvent.press(screen.getByTestId("show-zero-duration-toast"));
+    expect(screen.getByText("Instant note")).toBeTruthy();
+
+    act(() => {
+      jest.advanceTimersByTime(0);
+    });
+
+    expect(screen.queryByText("Instant note")).toBeNull();
   });
 });

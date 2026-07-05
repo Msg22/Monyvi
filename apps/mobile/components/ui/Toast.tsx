@@ -257,7 +257,7 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
   useEffect(() => {
     const timer = setTimeout(() => {
       onHide();
-    }, config.duration || 3000);
+    }, config.duration ?? 3000);
 
     return () => clearTimeout(timer);
   }, [config, onHide]);

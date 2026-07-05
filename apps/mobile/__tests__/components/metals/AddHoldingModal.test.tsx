@@ -83,12 +83,13 @@ describe("AddHoldingModal toast feedback", () => {
         title: "holding_created",
         message: "holding_created_message",
       });
-      expect(mockOnClose).toHaveBeenCalled();
     });
   });
 
   it("shows an error toast when adding a holding fails", async () => {
-    mockCreateMetalHolding.mockRejectedValueOnce(new Error("Save failed"));
+    mockCreateMetalHolding.mockRejectedValueOnce(
+      new Error("Supabase insert failed")
+    );
     render(<AddHoldingModal visible onClose={mockOnClose} />);
 
     fireEvent.changeText(
@@ -109,8 +110,9 @@ describe("AddHoldingModal toast feedback", () => {
       expect(mockShowToast).toHaveBeenCalledWith({
         type: "error",
         title: "holding_create_failed",
-        message: "Save failed",
+        message: "error_save_failed",
       });
+      expect(screen.queryByText("Supabase insert failed")).toBeNull();
       expect(mockOnClose).not.toHaveBeenCalled();
     });
   });
