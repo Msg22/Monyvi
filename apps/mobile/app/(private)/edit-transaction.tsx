@@ -346,7 +346,11 @@ export default function EditTransaction(): React.ReactNode {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
         console.error
       );
-      showToast({ type: "success", title: t("update_success") });
+      showToast({
+        type: "success",
+        title: t("update_success"),
+        message: t("update_success_message"),
+      });
       router.back();
     } catch (err) {
       console.error("[EditTransaction] Save error:", err);
@@ -378,7 +382,11 @@ export default function EditTransaction(): React.ReactNode {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
         console.error
       );
-      showToast({ type: "success", title: t("converted_to_transfer") });
+      showToast({
+        type: "success",
+        title: t("converted_to_transfer"),
+        message: t("converted_to_transfer_message"),
+      });
       router.back();
     } catch (err) {
       console.error("[EditTransaction] Conversion error:", err);
@@ -463,7 +471,11 @@ export default function EditTransaction(): React.ReactNode {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
         console.error
       );
-      showToast({ type: "success", title: t("delete_success") });
+      showToast({
+        type: "success",
+        title: t("delete_success"),
+        message: t("transaction_deleted_message"),
+      });
       router.back();
     } catch (err) {
       console.error("[EditTransaction] Delete error:", err);

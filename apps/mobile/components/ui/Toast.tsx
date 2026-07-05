@@ -72,7 +72,7 @@ interface ToastProps {
 }
 
 const TOAST_ICONS: Record<ToastType, keyof typeof Ionicons.glyphMap> = {
-  success: "checkmark-circle",
+  success: "checkmark",
   error: "close-circle",
   info: "information-circle",
   warning: "warning",
@@ -281,7 +281,12 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
           style={visualStyle.iconShellStyle}
           testID="toast-icon-shell"
         >
-          <Ionicons name={icon} size={19} color={visualStyle.iconColor} />
+          <Ionicons
+            name={icon}
+            size={19}
+            color={visualStyle.iconColor}
+            testID="toast-icon"
+          />
         </View>
 
         <View className="flex-1">

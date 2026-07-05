@@ -56,6 +56,17 @@ declare global {
 
 const mockUseTheme = jest.fn(() => ({ isDark: false }));
 
+jest.mock("@expo/vector-icons", () => {
+  const ReactNative =
+    jest.requireActual<typeof import("react-native")>("react-native");
+  const ReactActual = jest.requireActual<typeof import("react")>("react");
+
+  return {
+    Ionicons: (props: Record<string, unknown>): React.JSX.Element =>
+      ReactActual.createElement(ReactNative.View, props),
+  };
+});
+
 jest.mock("@/context/ThemeContext", () => ({
   useTheme: () => mockUseTheme(),
 }));
@@ -330,6 +341,9 @@ describe("ToastProvider", () => {
       getReactTestInstanceProps(screen.getByTestId("toast-icon-shell"))
         .className
     ).toContain("h-10 w-10");
+    expect(
+      getReactTestInstanceProps(screen.getByTestId("toast-icon")).name
+    ).toBe("checkmark");
   });
 
   it("replaces an active toast without stacking or hiding the new toast early", () => {
