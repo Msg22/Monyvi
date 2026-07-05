@@ -145,8 +145,13 @@ const TOAST_ENTER_OFFSET_Y = 12;
 const TOAST_ENTER_SCALE = 0.98;
 const TOAST_BOTTOM_GAP = 8;
 const MIC_BUTTON_PROTRUSION = MIC_BUTTON_SIZE / 2 - 8;
+const FLOATING_ACTION_FAB_SIZE = 56;
+const FLOATING_BOTTOM_CONTROL_CLEARANCE = Math.max(
+  MIC_BUTTON_PROTRUSION,
+  FLOATING_ACTION_FAB_SIZE
+);
 const TOAST_BOTTOM_OFFSET =
-  TAB_BAR_HEIGHT + MIC_BUTTON_PROTRUSION + TOAST_BOTTOM_GAP;
+  TAB_BAR_HEIGHT + FLOATING_BOTTOM_CONTROL_CLEARANCE + TOAST_BOTTOM_GAP;
 const TOAST_KEYBOARD_GAP = 16;
 const TOAST_DARK_BACKGROUND = `${palette.slate[950]}F2`;
 const TOAST_SHADOW_STYLE: ViewStyle = {
@@ -216,7 +221,9 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
   const icon = TOAST_ICONS[config.type];
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [keyboardHeight, setKeyboardHeight] = useState(
+    getVisibleKeyboardHeight
+  );
   const visualStyle = getToastVisualStyle(config.type, isDark);
 
   useEffect(() => {
@@ -256,7 +263,7 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
       exiting={FadeOut.duration(TOAST_EXIT_DURATION_MS).easing(
         Easing.in(Easing.cubic)
       )}
-      className="absolute start-4 end-4 z-50"
+      className="absolute start-4 end-4 z-[110]"
       style={{
         bottom:
           keyboardHeight > 0
@@ -299,6 +306,10 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
       </View>
     </Animated.View>
   );
+}
+
+function getVisibleKeyboardHeight(): number {
+  return Keyboard.metrics()?.height ?? 0;
 }
 
 // =============================================================================

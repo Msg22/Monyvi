@@ -246,7 +246,27 @@ describe("ToastProvider", () => {
     );
 
     expect(toastContainerStyle.top).toBeUndefined();
-    expect(toastContainerStyle.bottom).toBe(146);
+    expect(toastContainerStyle.bottom).toBe(178);
+  });
+
+  it("seeds the toast position from an already visible keyboard", () => {
+    const keyboardMetricsSpy = jest.spyOn(Keyboard, "metrics").mockReturnValue({
+      height: 280,
+      screenX: 0,
+      screenY: 564,
+      width: 390,
+    });
+
+    renderToastHarness();
+
+    fireEvent.press(screen.getByTestId("show-success-toast"));
+
+    const toastContainerStyle = getFlattenedViewStyle(
+      screen.getByTestId("toast-container")
+    );
+
+    expect(toastContainerStyle.bottom).toBe(296);
+    keyboardMetricsSpy.mockRestore();
   });
 
   it("moves the toast above the keyboard when text input is focused", () => {
