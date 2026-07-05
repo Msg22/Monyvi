@@ -342,14 +342,12 @@ describe("ToastProvider", () => {
         .className
     ).toContain("h-10 w-10");
     expect(
+      getReactTestInstanceProps(screen.getByTestId("toast-icon-shell"))
+        .className
+    ).toContain("ms-1");
+    expect(
       getReactTestInstanceProps(screen.getByTestId("toast-icon")).name
     ).toBe("checkmark");
-    expect(
-      StyleSheet.flatten(
-        getReactTestInstanceProps(screen.getByTestId("toast-icon"))
-          .style as StyleProp<ViewStyle>
-      )
-    ).toEqual(expect.objectContaining({ marginLeft: 1 }));
   });
 
   it("replaces an active toast without stacking or hiding the new toast early", () => {
