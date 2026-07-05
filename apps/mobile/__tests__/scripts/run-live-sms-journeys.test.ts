@@ -14,6 +14,15 @@ interface RunLiveSmsJourneysModule {
   ):
     | "../helpers/ci-auth-bootstrap.yaml"
     | "../helpers/ci-auth-deeplink-bootstrap.yaml";
+  getNotificationDumpRecords(notificationDump: string): string[];
+  notificationDumpMatchesPatterns(
+    notificationDump: string,
+    patterns: readonly string[],
+    packageName?: string
+  ): boolean;
+  parseBounds(
+    bounds: string
+  ): { left: number; top: number; right: number; bottom: number } | null;
   isRetryableMaestroTransportFailure(output: string): boolean;
   shouldPrepareLiveSmsFlowBeforeRetry(flow: string): boolean;
   shouldResetLiveSmsSideEffectsBeforeRetry(
@@ -82,6 +91,45 @@ describe("run-live-sms-journeys helpers", () => {
         E2E_AUTH_DEEPLINK_BOOTSTRAP: "1",
       })
     ).toBe("../helpers/ci-auth-deeplink-bootstrap.yaml");
+  });
+
+  it("parses Android notification bounds that start off screen", () => {
+    expect(liveSmsJourneys.parseBounds("[-104,0][-46,136]")).toEqual({
+      left: -104,
+      top: 0,
+      right: -46,
+      bottom: 136,
+    });
+  });
+
+  it("matches expected text within one active Monyvi notification record", () => {
+    const notificationDump = [
+      "NotificationRecord(pkg=android id=1)",
+      "  android.title=Expense Detected",
+      "NotificationRecord(pkg=com.monyvi.app id=2)",
+      "  android.title=Expense Detected",
+      "  android.text=63.21 EGP from QNB",
+      "  android.bigText=To: BACKGROUND LIVE SMS TEST",
+      "NotificationRecord(pkg=com.monyvi.app id=3)",
+      "  android.title=Expense Detected",
+      "  android.text=71.45 EGP from QNB",
+      "  android.bigText=To: BACKGROUND CONFIRM MARKET",
+    ].join("\n");
+
+    expect(
+      liveSmsJourneys.notificationDumpMatchesPatterns(
+        notificationDump,
+        ["Expense Detected", "BACKGROUND LIVE SMS TEST", "63\\.21"],
+        "com.monyvi.app"
+      )
+    ).toBe(true);
+    expect(
+      liveSmsJourneys.notificationDumpMatchesPatterns(
+        notificationDump,
+        ["Expense Detected", "BACKGROUND CONFIRM MARKET", "63\\.21"],
+        "com.monyvi.app"
+      )
+    ).toBe(false);
   });
 
   it("detects retryable Maestro Android transport disconnects", () => {

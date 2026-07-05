@@ -307,7 +307,7 @@ function parseBoundsCenter(bounds) {
 }
 
 function parseBounds(bounds) {
-  const match = bounds.match(/^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$/);
+  const match = bounds.match(/^\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]$/);
   if (!match) {
     return null;
   }
@@ -374,6 +374,49 @@ function findNotificationMatch(nodes, patterns) {
   return null;
 }
 
+function dumpActiveNotifications() {
+  return adb(["shell", "dumpsys", "notification", "--noredact"], {
+    capture: true,
+    allowFailure: true,
+  });
+}
+
+function getNotificationDumpRecords(notificationDump) {
+  const sections = notificationDump.split(/\n\s*NotificationRecord\(/);
+  return sections.map((section, index) =>
+    index === 0 ? section : `NotificationRecord(${section}`
+  );
+}
+
+function notificationDumpMatchesPatterns(
+  notificationDump,
+  patterns,
+  packageName = appId
+) {
+  const regexes = normalizeNotificationPatterns(patterns).map(
+    (pattern) => new RegExp(pattern, "i")
+  );
+  const records = getNotificationDumpRecords(notificationDump).filter(
+    (record) => record.includes(packageName)
+  );
+
+  return records.some((record) => regexes.every((regex) => regex.test(record)));
+}
+
+function findVisibleNotificationMatch(nodes, patterns) {
+  const match = findNotificationMatch(nodes, patterns);
+  if (match) {
+    return match;
+  }
+
+  if (!notificationDumpMatchesPatterns(dumpActiveNotifications(), patterns)) {
+    return null;
+  }
+
+  const [anchorPattern] = normalizeNotificationPatterns(patterns);
+  return findNotificationMatch(nodes, [anchorPattern]);
+}
+
 function isNodeNearNotification(node, notificationMatch) {
   const bounds = node.bounds ? parseBounds(node.bounds) : null;
   if (!bounds) {
@@ -424,7 +467,7 @@ function waitForNotificationText(patterns, timeoutMs = 60000) {
     wait(1000);
     const uiXml = dumpVisibleText();
     const nodes = parseUiNodes(uiXml);
-    if (findNotificationMatch(nodes, patterns)) {
+    if (findVisibleNotificationMatch(nodes, patterns)) {
       return;
     }
     collapseSystemUi();
@@ -450,7 +493,7 @@ function tapNotificationAction(notificationTextPatterns, actionText) {
 
     const uiXml = dumpVisibleText();
     const nodes = parseUiNodes(uiXml);
-    const notificationMatch = findNotificationMatch(
+    const notificationMatch = findVisibleNotificationMatch(
       nodes,
       notificationTextPatterns
     );
@@ -510,7 +553,7 @@ function waitForNotificationDismissed(patterns, timeoutMs = 30000) {
     wait(1000);
     const uiXml = dumpVisibleText();
     const nodes = parseUiNodes(uiXml);
-    if (!findNotificationMatch(nodes, patterns)) {
+    if (!findVisibleNotificationMatch(nodes, patterns)) {
       return;
     }
     wait(1000);
@@ -1007,6 +1050,7 @@ async function main() {
     }
 
     logInfo("liveSmsJourney.started", { id, flow: journey.flow });
+    clearDeliveredNotifications();
     journey.prepare();
     forceStopApp();
     await ensureE2eAppReady();
@@ -1039,6 +1083,9 @@ module.exports = {
   getAuthBootstrapFlow,
   getMaestroFlowTimeoutMs,
   getActiveUserFilter,
+  getNotificationDumpRecords,
+  notificationDumpMatchesPatterns,
+  parseBounds,
   isRetryableMaestroTransportFailure,
   shouldPrepareLiveSmsFlowBeforeRetry,
   shouldResetLiveSmsSideEffectsBeforeRetry,
