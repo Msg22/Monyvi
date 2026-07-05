@@ -18,7 +18,12 @@ import React, {
   useState,
 } from "react";
 import { Text, View, type ViewStyle } from "react-native";
-import Animated, { Easing, FadeIn, FadeOut } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  FadeOut,
+  withTiming,
+  type EntryExitAnimationFunction,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // =============================================================================
@@ -133,12 +138,39 @@ const TOAST_EXIT_DURATION_MS = 140;
 const TOAST_ENTER_OFFSET_Y = 12;
 const TOAST_ENTER_SCALE = 0.98;
 const TOAST_BOTTOM_OFFSET = TAB_BAR_HEIGHT + 8;
+const TOAST_DARK_BACKGROUND = `${palette.slate[950]}F2`;
 const TOAST_SHADOW_STYLE: ViewStyle = {
   shadowColor: palette.slate[950],
   shadowOffset: { width: 0, height: 8 },
   shadowOpacity: 0.22,
   shadowRadius: 18,
   elevation: 6,
+};
+
+const TOAST_ENTERING_ANIMATION: EntryExitAnimationFunction = () => {
+  "worklet";
+
+  const animationConfig = {
+    duration: TOAST_ENTER_DURATION_MS,
+    easing: Easing.out(Easing.cubic),
+  };
+
+  return {
+    animations: {
+      opacity: withTiming(1, animationConfig),
+      transform: [
+        { translateY: withTiming(0, animationConfig) },
+        { scale: withTiming(1, animationConfig) },
+      ],
+    },
+    initialValues: {
+      opacity: 0,
+      transform: [
+        { translateY: TOAST_ENTER_OFFSET_Y },
+        { scale: TOAST_ENTER_SCALE },
+      ],
+    },
+  };
 };
 
 interface ToastVisualStyle {
@@ -164,7 +196,7 @@ function getToastVisualStyle(
       borderColor: isDark ? colors.darkIconBorder : colors.lightIconBorder,
     },
     surfaceStyle: {
-      backgroundColor: isDark ? `${palette.slate[950]}F2` : palette.slate[25],
+      backgroundColor: isDark ? TOAST_DARK_BACKGROUND : palette.slate[25],
       borderColor: isDark ? colors.darkBorder : colors.lightBorder,
     },
   };
@@ -182,19 +214,11 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
     }, config.duration || 3000);
 
     return () => clearTimeout(timer);
-  }, [config.duration, onHide]);
+  }, [config, onHide]);
 
   return (
     <Animated.View
-      entering={FadeIn.duration(TOAST_ENTER_DURATION_MS)
-        .easing(Easing.out(Easing.cubic))
-        .withInitialValues({
-          opacity: 0,
-          transform: [
-            { translateY: TOAST_ENTER_OFFSET_Y },
-            { scale: TOAST_ENTER_SCALE },
-          ],
-        })}
+      entering={TOAST_ENTERING_ANIMATION}
       exiting={FadeOut.duration(TOAST_EXIT_DURATION_MS).easing(
         Easing.in(Easing.cubic)
       )}

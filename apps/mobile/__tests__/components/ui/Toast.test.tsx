@@ -15,6 +15,7 @@ import { ToastProvider, useToast } from "@/components/ui/Toast";
 type BuilderDuration = (durationMs: number) => ReanimatedBuilderMock;
 type BuilderEasing = (easing: unknown) => ReanimatedBuilderMock;
 type BuilderInitialValues = (values: unknown) => ReanimatedBuilderMock;
+type WithTimingMock = (value: number, config: unknown) => object;
 
 interface ReanimatedBuilderMock {
   readonly duration: jest.MockedFunction<BuilderDuration>;
@@ -23,7 +24,6 @@ interface ReanimatedBuilderMock {
 }
 
 interface ReanimatedToastMock {
-  readonly FadeIn: ReanimatedBuilderMock;
   readonly FadeOut: ReanimatedBuilderMock;
   readonly SlideInUp: {
     readonly springify: jest.MockedFunction<
@@ -34,6 +34,18 @@ interface ReanimatedToastMock {
     readonly springify: jest.MockedFunction<
       () => { readonly damping: jest.MockedFunction<(value: number) => object> }
     >;
+  };
+  readonly withTiming: jest.MockedFunction<WithTimingMock>;
+}
+
+interface ToastAnimationResult {
+  readonly animations: {
+    readonly opacity: unknown;
+    readonly transform: readonly unknown[];
+  };
+  readonly initialValues: {
+    readonly opacity: number;
+    readonly transform: readonly unknown[];
   };
 }
 
@@ -72,10 +84,13 @@ jest.mock("react-native-reanimated", () => {
   }
 
   const mock: ReanimatedToastMock = {
-    FadeIn: createBuilder(),
     FadeOut: createBuilder(),
     SlideInUp: { springify: jest.fn(createSpringBuilder) },
     SlideOutUp: { springify: jest.fn(createSpringBuilder) },
+    withTiming: jest.fn((value: number, config: unknown): object => ({
+      config,
+      value,
+    })),
   };
 
   global.__toastReanimatedMock = mock;
@@ -88,10 +103,10 @@ jest.mock("react-native-reanimated", () => {
       in: jest.fn((easing: unknown) => easing),
       out: jest.fn((easing: unknown) => easing),
     },
-    FadeIn: mock.FadeIn,
     FadeOut: mock.FadeOut,
     SlideInUp: mock.SlideInUp,
     SlideOutUp: mock.SlideOutUp,
+    withTiming: mock.withTiming,
   };
 });
 
@@ -152,14 +167,19 @@ function renderToastHarness(): void {
 }
 
 function getFlattenedViewStyle(instance: ReactTestInstance): ViewStyle {
+  const props = getReactTestInstanceProps(instance);
+  return StyleSheet.flatten(props.style as StyleProp<ViewStyle>) ?? {};
+}
+
+function getReactTestInstanceProps(
+  instance: ReactTestInstance
+): Record<string, unknown> {
   const instanceWithProps = instance as unknown as { readonly props?: unknown };
-  const props =
-    instanceWithProps.props &&
+  return instanceWithProps.props &&
     typeof instanceWithProps.props === "object" &&
     !Array.isArray(instanceWithProps.props)
-      ? (instanceWithProps.props as { readonly style?: StyleProp<ViewStyle> })
-      : {};
-  return StyleSheet.flatten(props.style) ?? {};
+    ? (instanceWithProps.props as Record<string, unknown>)
+    : {};
 }
 
 describe("ToastProvider", () => {
@@ -167,14 +187,12 @@ describe("ToastProvider", () => {
     jest.useFakeTimers();
     mockUseTheme.mockReturnValue({ isDark: false });
     const reanimated = getReanimatedMock();
-    reanimated.FadeIn.duration.mockClear();
-    reanimated.FadeIn.easing.mockClear();
-    reanimated.FadeIn.withInitialValues.mockClear();
     reanimated.FadeOut.duration.mockClear();
     reanimated.FadeOut.easing.mockClear();
     reanimated.FadeOut.withInitialValues.mockClear();
     reanimated.SlideInUp.springify.mockClear();
     reanimated.SlideOutUp.springify.mockClear();
+    reanimated.withTiming.mockClear();
   });
 
   afterEach(() => {
@@ -184,7 +202,7 @@ describe("ToastProvider", () => {
     jest.useRealTimers();
   });
 
-  it("uses calm timed fade motion instead of spring slide motion", () => {
+  it("uses calm timed fade and lift motion instead of spring slide motion", () => {
     renderToastHarness();
 
     fireEvent.press(screen.getByTestId("show-success-toast"));
@@ -194,11 +212,25 @@ describe("ToastProvider", () => {
     const reanimated = getReanimatedMock();
     expect(reanimated.SlideInUp.springify).not.toHaveBeenCalled();
     expect(reanimated.SlideOutUp.springify).not.toHaveBeenCalled();
-    expect(reanimated.FadeIn.duration).toHaveBeenCalledWith(180);
-    expect(reanimated.FadeIn.withInitialValues).toHaveBeenCalledWith({
+    const props = getReactTestInstanceProps(
+      screen.getByTestId("toast-container")
+    );
+    const entering = props.entering as () => ToastAnimationResult;
+    const animation = entering();
+
+    expect(animation.initialValues).toEqual({
       opacity: 0,
       transform: [{ translateY: 12 }, { scale: 0.98 }],
     });
+    expect(animation.animations.transform).toHaveLength(2);
+    expect(reanimated.withTiming).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ duration: 180 })
+    );
+    expect(reanimated.withTiming).toHaveBeenCalledWith(
+      0,
+      expect.objectContaining({ duration: 180 })
+    );
     expect(reanimated.FadeOut.duration).toHaveBeenCalledWith(140);
   });
 
@@ -243,6 +275,10 @@ describe("ToastProvider", () => {
 
     fireEvent.press(screen.getByTestId("show-success-toast"));
     expect(screen.getByText("Transaction saved")).toBeTruthy();
+
+    act(() => {
+      jest.advanceTimersByTime(700);
+    });
 
     fireEvent.press(screen.getByTestId("show-error-toast"));
 
