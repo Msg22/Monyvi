@@ -146,6 +146,10 @@ const TOAST_TOP_GAP = 12;
 const TOAST_KEYBOARD_GAP = 16;
 const TOAST_DARK_BACKGROUND = `${palette.slate[950]}F2`;
 const TOAST_LIGHT_BACKGROUND = `${palette.slate[25]}F2`;
+const SUCCESS_ICON_LEFT_NUDGE = 1;
+const SUCCESS_ICON_STYLE: Pick<ViewStyle, "marginLeft"> = {
+  marginLeft: SUCCESS_ICON_LEFT_NUDGE,
+};
 const TOAST_SHADOW_STYLE: ViewStyle = {
   shadowColor: palette.slate[950],
   shadowOffset: { width: 0, height: 8 },
@@ -285,6 +289,7 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
             name={icon}
             size={19}
             color={visualStyle.iconColor}
+            style={config.type === "success" ? SUCCESS_ICON_STYLE : undefined}
             testID="toast-icon"
           />
         </View>
