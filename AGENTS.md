@@ -437,6 +437,15 @@ chore, perf, ci.
 
 ## Tooling Guardrails
 
+- **Windows shell/runtime issues**: If a system runtime or shell behavior is
+  broken, fix or route around it durably instead of repeating the same
+  workaround. Prefer the bundled Codex runtime paths from
+  `load_workspace_dependencies` (especially Python) when the system `python`
+  launcher is broken or points to a missing install. For Python scripts that
+  call GitHub/plugin tooling on Windows, set `$env:PYTHONUTF8='1'` or otherwise
+  force UTF-8 subprocess decoding so GitHub responses with Unicode do not fail
+  under the Windows codepage. In PowerShell, use PowerShell-native command
+  sequencing and syntax; do not rely on bash/cmd-only separators such as `&&`.
 - **Secondary worktree dependencies**: Never run `npm install`, `npm ci`, or
   package-manager install commands inside a secondary git worktree. Secondary
   worktrees must reuse the main checkout dependency tree through a Windows
