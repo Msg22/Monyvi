@@ -6,16 +6,30 @@
  */
 
 import { palette } from "@/constants/colors";
+import { useTheme } from "@/context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
-import { Text, View } from "react-native";
-import Animated, { SlideInUp, SlideOutUp } from "react-native-reanimated";
+import {
+  Keyboard,
+  Text,
+  View,
+  type KeyboardEvent,
+  type ViewStyle,
+} from "react-native";
+import Animated, {
+  Easing,
+  FadeOut,
+  withTiming,
+  type EntryExitAnimationFunction,
+} from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // =============================================================================
 // Types
@@ -58,7 +72,7 @@ interface ToastProps {
 }
 
 const TOAST_ICONS: Record<ToastType, keyof typeof Ionicons.glyphMap> = {
-  success: "checkmark-circle",
+  success: "checkmark",
   error: "close-circle",
   info: "information-circle",
   warning: "warning",
@@ -66,73 +80,198 @@ const TOAST_ICONS: Record<ToastType, keyof typeof Ionicons.glyphMap> = {
 
 const TOAST_COLORS: Record<
   ToastType,
-  { bg: string; icon: string; border: string }
+  {
+    darkIcon: string;
+    lightIcon: string;
+    accentClassName: string;
+    iconShellClassName: string;
+    surfaceClassName: string;
+  }
 > = {
   success: {
-    bg: `${palette.nileGreen[800]}E6`,
-    icon: palette.nileGreen[400],
-    border: palette.nileGreen[600],
+    darkIcon: palette.nileGreen[400],
+    lightIcon: palette.nileGreen[600],
+    accentClassName: "bg-nileGreen-500",
+    iconShellClassName:
+      "bg-nileGreen-50 border-nileGreen-100 dark:bg-nileGreen-500/10 dark:border-nileGreen-500/20",
+    surfaceClassName:
+      "bg-nileGreen-50/95 border-nileGreen-500/40 dark:bg-slate-950/95 dark:border-nileGreen-500/40",
   },
   error: {
-    bg: `${palette.red[600]}E6`,
-    icon: palette.red[100],
-    border: palette.red[500],
+    darkIcon: palette.red[400],
+    lightIcon: palette.red[600],
+    accentClassName: "bg-red-500",
+    iconShellClassName:
+      "bg-red-100 border-red-500/20 dark:bg-red-500/10 dark:border-red-500/20",
+    surfaceClassName:
+      "bg-slate-25/95 border-red-500/20 dark:bg-slate-950/95 dark:border-red-500/40",
   },
   info: {
-    bg: `${palette.blue[600]}E6`,
-    icon: palette.blue[100],
-    border: palette.blue[500],
+    darkIcon: palette.blue[100],
+    lightIcon: palette.blue[600],
+    accentClassName: "bg-blue-500",
+    iconShellClassName:
+      "bg-blue-50 border-blue-100 dark:bg-blue-500/10 dark:border-blue-500/20",
+    surfaceClassName:
+      "bg-slate-25/95 border-blue-500/20 dark:bg-slate-950/95 dark:border-blue-500/40",
   },
   warning: {
-    bg: `${palette.orange[600]}E6`,
-    icon: palette.orange[100],
-    border: palette.orange[500],
+    darkIcon: palette.orange[100],
+    lightIcon: palette.orange[600],
+    accentClassName: "bg-orange-500",
+    iconShellClassName:
+      "bg-orange-100 border-orange-500/20 dark:bg-orange-500/10 dark:border-orange-500/20",
+    surfaceClassName:
+      "bg-slate-25/95 border-orange-500/20 dark:bg-slate-950/95 dark:border-orange-500/40",
   },
 };
 
-function Toast({ config, onHide }: ToastProps): React.JSX.Element {
-  const colors = TOAST_COLORS[config.type];
-  const icon = TOAST_ICONS[config.type];
+const TOAST_ENTER_DURATION_MS = 180;
+const TOAST_EXIT_DURATION_MS = 140;
+const TOAST_ENTER_OFFSET_Y = -10;
+const TOAST_ENTER_SCALE = 0.98;
+const TOAST_TOP_GAP = 12;
+const TOAST_KEYBOARD_GAP = 16;
+const TOAST_SHADOW_STYLE: ViewStyle = {
+  shadowColor: palette.slate[950],
+  shadowOffset: { width: 0, height: 8 },
+  shadowOpacity: 0.22,
+  shadowRadius: 18,
+  elevation: 6,
+};
 
-  React.useEffect(() => {
+const TOAST_ENTERING_ANIMATION: EntryExitAnimationFunction = () => {
+  "worklet";
+
+  const animationConfig = {
+    duration: TOAST_ENTER_DURATION_MS,
+    easing: Easing.out(Easing.cubic),
+  };
+
+  return {
+    animations: {
+      opacity: withTiming(1, animationConfig),
+      transform: [
+        { translateY: withTiming(0, animationConfig) },
+        { scale: withTiming(1, animationConfig) },
+      ],
+    },
+    initialValues: {
+      opacity: 0,
+      transform: [
+        { translateY: TOAST_ENTER_OFFSET_Y },
+        { scale: TOAST_ENTER_SCALE },
+      ],
+    },
+  };
+};
+
+interface ToastVisualStyle {
+  readonly accentClassName: string;
+  readonly iconColor: string;
+  readonly iconShellClassName: string;
+  readonly surfaceClassName: string;
+}
+
+function getToastVisualStyle(
+  type: ToastType,
+  isDark: boolean
+): ToastVisualStyle {
+  const colors = TOAST_COLORS[type];
+
+  return {
+    accentClassName: colors.accentClassName,
+    iconColor: isDark ? colors.darkIcon : colors.lightIcon,
+    iconShellClassName: colors.iconShellClassName,
+    surfaceClassName: colors.surfaceClassName,
+  };
+}
+
+function Toast({ config, onHide }: ToastProps): React.JSX.Element {
+  const icon = TOAST_ICONS[config.type];
+  const { isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const [keyboardHeight, setKeyboardHeight] = useState(
+    getVisibleKeyboardHeight
+  );
+  const visualStyle = getToastVisualStyle(config.type, isDark);
+  const containerPositionStyle =
+    keyboardHeight > 0
+      ? { bottom: keyboardHeight + TOAST_KEYBOARD_GAP }
+      : { top: insets.top + TOAST_TOP_GAP };
+
+  useEffect(() => {
+    const handleKeyboardShow = (event: KeyboardEvent): void => {
+      setKeyboardHeight(event.endCoordinates.height);
+    };
+    const handleKeyboardHide = (): void => {
+      setKeyboardHeight(0);
+    };
+
+    const showSubscription = Keyboard.addListener(
+      "keyboardDidShow",
+      handleKeyboardShow
+    );
+    const hideSubscription = Keyboard.addListener(
+      "keyboardDidHide",
+      handleKeyboardHide
+    );
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     const timer = setTimeout(() => {
       onHide();
-    }, config.duration || 3000);
+    }, config.duration ?? 3000);
 
     return () => clearTimeout(timer);
-  }, [config.duration, onHide]);
+  }, [config, onHide]);
 
   return (
     <Animated.View
-      entering={SlideInUp.springify().damping(15)}
-      exiting={SlideOutUp.springify().damping(15)}
-      className="absolute top-14 start-5 end-5 z-50"
+      entering={TOAST_ENTERING_ANIMATION}
+      exiting={FadeOut.duration(TOAST_EXIT_DURATION_MS).easing(
+        Easing.in(Easing.cubic)
+      )}
+      className="absolute start-4 end-4 z-[110]"
+      style={containerPositionStyle}
+      testID="toast-container"
+      pointerEvents="none"
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
     >
       <View
-        className="flex-row items-center px-4 py-3 rounded-2xl border"
-        style={{
-          backgroundColor: colors.bg,
-          borderColor: colors.border,
-          // Glassmorphism shadow
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          elevation: 8,
-        }}
+        className={`relative flex-row items-center overflow-hidden rounded-2xl border py-3 pe-4 ps-5 ${visualStyle.surfaceClassName}`}
+        style={TOAST_SHADOW_STYLE}
+        testID="toast-surface"
       >
-        {/* Icon */}
-        <View className="me-3">
-          <Ionicons name={icon} size={24} color={colors.icon} />
+        <View
+          className={`absolute bottom-3 start-0 top-3 w-1 rounded-e-full ${visualStyle.accentClassName}`}
+          testID="toast-accent"
+        />
+
+        <View
+          className={`ms-1 me-3 h-10 w-10 items-center justify-center rounded-full border ${visualStyle.iconShellClassName}`}
+          testID="toast-icon-shell"
+        >
+          <Ionicons
+            name={icon}
+            size={19}
+            color={visualStyle.iconColor}
+            testID="toast-icon"
+          />
         </View>
 
-        {/* Text Content */}
         <View className="flex-1">
-          <Text className="text-white text-sm font-semibold">
+          <Text className="text-slate-900 dark:text-slate-25 text-sm font-semibold">
             {config.title}
           </Text>
           {config.message && (
-            <Text className="text-white/80 text-xs mt-0.5">
+            <Text className="text-slate-500 dark:text-slate-300 text-xs mt-0.5">
               {config.message}
             </Text>
           )}
@@ -140,6 +279,10 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
       </View>
     </Animated.View>
   );
+}
+
+function getVisibleKeyboardHeight(): number {
+  return Keyboard.metrics()?.height ?? 0;
 }
 
 // =============================================================================

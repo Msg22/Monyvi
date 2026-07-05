@@ -335,8 +335,8 @@ export default function AddTransaction(): React.ReactNode {
 
       showToast({
         type: "success",
-        title: t("transaction_created"),
-        message: t("transaction_created_message"),
+        title: t("transfer_created"),
+        message: t("transfer_created_message"),
       });
     } catch (error: unknown) {
       showToast({
