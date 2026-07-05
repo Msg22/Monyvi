@@ -3,6 +3,7 @@ import type { AiProcessingConsent } from "@monyvi/db";
 import {
   grantAiProcessingConsent,
   isActiveAiProcessingConsent,
+  parseAiProcessingConsentRaw,
   revokeAiProcessingConsent,
 } from "@/services/profile-service";
 import { useProfile } from "./useProfile";
@@ -23,8 +24,8 @@ export function useAiProcessingConsent(): UseAiProcessingConsentResult {
 
   const persistedConsentRaw = profile?.aiProcessingConsentRaw ?? null;
   const persistedConsent = useMemo(
-    () => profile?.aiProcessingConsent ?? null,
-    [persistedConsentRaw, profile]
+    () => parseAiProcessingConsentRaw(persistedConsentRaw),
+    [persistedConsentRaw]
   );
   const persistedIsConsented = useMemo(
     () => isActiveAiProcessingConsent(persistedConsent),

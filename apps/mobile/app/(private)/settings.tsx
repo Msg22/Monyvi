@@ -1,7 +1,7 @@
 import type { CurrencyType } from "@monyvi/db";
 import { CURRENCY_INFO_MAP } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useTranslation } from "react-i18next";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -140,6 +140,7 @@ export default function SettingsScreen(): React.JSX.Element {
   >(null);
   const [pendingAiConsentAction, setPendingAiConsentAction] =
     useState<PendingAiAction | null>(null);
+  const shouldResumeAiConsentAfterPrivacyDetails = useRef(false);
   const liveDetectionSwitchValue = liveDetection || isLiveDetectionEnabling;
   const previousNotificationAppState = useRef<AppStateStatus>(
     AppState.currentState
@@ -595,43 +596,32 @@ export default function SettingsScreen(): React.JSX.Element {
     [router, setScanMode, smsPermissionStatus]
   );
 
-  const handleAiConsentContinue = useCallback((): void => {
+  const handleAiConsentContinue = useCallback(async (): Promise<void> => {
     setIsAiConsentUpdating(true);
-    aiConsent
-      .grantConsent()
-      .then(() => {
-        setIsAiConsentSheetVisible(false);
-        const pendingAction = pendingAiConsentAction;
-        setPendingAiConsentAction(null);
+    try {
+      await aiConsent.grantConsent();
+      shouldResumeAiConsentAfterPrivacyDetails.current = false;
+      setIsAiConsentSheetVisible(false);
+      const pendingAction = pendingAiConsentAction;
+      setPendingAiConsentAction(null);
 
-        if (pendingAction?.kind === "sms") {
-          continueSmsScanWithConsent(pendingAction.mode);
-          return;
-        }
+      if (pendingAction?.kind === "sms") {
+        continueSmsScanWithConsent(pendingAction.mode);
+        return;
+      }
 
-        if (pendingAction?.kind === "live") {
-          continueLiveDetectionEnableWithConsent().catch((error: unknown) => {
-            logger.error(
-              "settings.resumeLiveDetectionAfterAiConsent.failed",
-              error
-            );
-            showToast({
-              type: "error",
-              title: tCommon("error"),
-            });
-          });
-        }
-      })
-      .catch((error: unknown) => {
-        logger.error("settings.grantAiConsent.failed", error);
-        showToast({
-          type: "error",
-          title: tCommon("error"),
-        });
-      })
-      .finally(() => {
-        setIsAiConsentUpdating(false);
+      if (pendingAction?.kind === "live") {
+        await continueLiveDetectionEnableWithConsent();
+      }
+    } catch (error: unknown) {
+      logger.error("settings.grantAiConsent.failed", error);
+      showToast({
+        type: "error",
+        title: tCommon("error"),
       });
+    } finally {
+      setIsAiConsentUpdating(false);
+    }
   }, [
     aiConsent,
     continueLiveDetectionEnableWithConsent,
@@ -641,10 +631,21 @@ export default function SettingsScreen(): React.JSX.Element {
     tCommon,
   ]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (!shouldResumeAiConsentAfterPrivacyDetails.current) return;
+      shouldResumeAiConsentAfterPrivacyDetails.current = false;
+      const shouldReopenConsent = Boolean(pendingAiConsentAction && !aiConsent.isLoading && !aiConsent.isConsented);
+      setIsAiConsentSheetVisible(shouldReopenConsent);
+      if (!shouldReopenConsent) setPendingAiConsentAction(null);
+    }, [aiConsent.isConsented, aiConsent.isLoading, pendingAiConsentAction])
+  );
+
   const openAiPrivacyDetails = useCallback((): void => {
+    shouldResumeAiConsentAfterPrivacyDetails.current = pendingAiConsentAction !== null;
     setIsAiConsentSheetVisible(false);
     router.push("/ai-privacy-details");
-  }, []);
+  }, [pendingAiConsentAction]);
 
   const currencyInfo = CURRENCY_INFO_MAP[preferredCurrency];
   const permissionRecoveryContent =

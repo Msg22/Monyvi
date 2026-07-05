@@ -108,6 +108,20 @@ function normalizeAiProcessingConsent(
   };
 }
 
+export function parseAiProcessingConsentRaw(
+  rawConsent: string | null | undefined
+): AiProcessingConsent | null {
+  if (!rawConsent) {
+    return null;
+  }
+
+  try {
+    return normalizeAiProcessingConsent(JSON.parse(rawConsent) as unknown);
+  } catch {
+    return null;
+  }
+}
+
 export function isActiveAiProcessingConsent(consent: unknown): boolean {
   const normalizedConsent = normalizeAiProcessingConsent(consent);
 
@@ -175,7 +189,7 @@ export async function setPreferredCurrency(
 
 export async function getAiProcessingConsentStatus(): Promise<AiProcessingConsentStatus> {
   const profile = await getProfile();
-  const consent = normalizeAiProcessingConsent(profile.aiProcessingConsent);
+  const consent = parseAiProcessingConsentRaw(profile.aiProcessingConsentRaw);
   return {
     consent,
     isConsented: isActiveAiProcessingConsent(consent),
@@ -199,8 +213,8 @@ export async function revokeAiProcessingConsent(
   now: Date = new Date()
 ): Promise<void> {
   const profile = await getProfile();
-  const currentConsent = normalizeAiProcessingConsent(
-    profile.aiProcessingConsent
+  const currentConsent = parseAiProcessingConsentRaw(
+    profile.aiProcessingConsentRaw
   );
   const revokedConsent: AiProcessingConsent = {
     version: currentConsent?.version ?? AI_PROCESSING_CONSENT_VERSION,

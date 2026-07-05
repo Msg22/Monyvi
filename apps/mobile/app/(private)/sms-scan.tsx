@@ -361,20 +361,17 @@ export default function SmsScanScreen(): React.JSX.Element {
     });
   };
 
-  const handleConsentContinue = (): void => {
-    aiConsent
-      .grantConsent()
-      .then(() => {
-        setIsConsentSheetVisible(false);
-        if (permissionStatus !== "granted") {
-          return requestPermission();
-        }
-        return undefined;
-      })
-      .catch((err: unknown) => {
-        logger.error("smsScan.aiConsentGrantFailed", err);
-        setIsConsentSheetVisible(false);
-      });
+  const handleConsentContinue = async (): Promise<void> => {
+    try {
+      await aiConsent.grantConsent();
+      setIsConsentSheetVisible(false);
+      if (permissionStatus !== "granted") {
+        await requestPermission();
+      }
+    } catch (err: unknown) {
+      logger.error("smsScan.aiConsentGrantFailed", err);
+      setIsConsentSheetVisible(false);
+    }
   };
 
   const consentSheet = (

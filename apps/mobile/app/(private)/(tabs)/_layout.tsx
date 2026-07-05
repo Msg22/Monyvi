@@ -177,18 +177,16 @@ function TabLayoutInner(): React.ReactElement {
       <AiProcessingConsentSheet
         visible={isVoiceConsentVisible}
         variant="ai-consent"
-        onContinue={() => {
-          aiConsent
-            .grantConsent()
-            .then(() => {
-              shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
-              setIsVoiceConsentVisible(false);
-              void voiceFlow.startFlow({ skipAiProcessingConsent: true });
-            })
-            .catch(() => {
-              shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
-              setIsVoiceConsentVisible(false);
-            });
+        onContinue={async () => {
+          try {
+            await aiConsent.grantConsent();
+            shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
+            setIsVoiceConsentVisible(false);
+            await voiceFlow.startFlow({ skipAiProcessingConsent: true });
+          } catch {
+            shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
+            setIsVoiceConsentVisible(false);
+          }
         }}
         onNotNow={() => {
           shouldResumeVoiceConsentAfterPrivacyDetails.current = false;

@@ -38,6 +38,7 @@ let mockLiveDetectionPermissionStatus: SmsPermissionStatus = "denied";
 let mockIsAiConsented = true;
 let mockIsAiConsentLoading = false;
 let appStateChangeHandlers: Array<(status: AppStateStatus) => void> = [];
+let settingsFocusCallback: (() => void) | null = null;
 
 jest.mock("react-native/Libraries/Modal/Modal", () => {
   function MockModal({
@@ -56,6 +57,9 @@ jest.mock("react-native/Libraries/Modal/Modal", () => {
 });
 
 jest.mock("expo-router", () => ({
+  useFocusEffect: (callback: () => void): void => {
+    settingsFocusCallback = callback;
+  },
   router: {
     back: jest.fn(),
     push: (path: string) => mockRouterPush(path),
@@ -289,6 +293,7 @@ describe("Settings live SMS permission recovery", () => {
     mockIsAiConsentLoading = false;
     mockGrantAiConsent.mockResolvedValue();
     mockRevokeAiConsent.mockResolvedValue();
+    settingsFocusCallback = null;
   });
 
   it("waits for stored live detection state before rendering the switch", async () => {
@@ -391,6 +396,24 @@ describe("Settings live SMS permission recovery", () => {
       expect(mockGrantAiConsent).toHaveBeenCalledTimes(1);
     });
     expect(mockRouterPush).not.toHaveBeenCalledWith("/sms-scan");
+  });
+
+  it("reopens pending SMS consent after returning from privacy details", async () => {
+    mockIsAiConsented = false;
+    mockSmsPermissionStatus = "granted";
+    const screen = await renderReadySettings();
+
+    fireEvent.press(screen.getByText("sync_new"));
+    fireEvent.press(await screen.findByText("ai_consent_privacy_details"));
+
+    expect(mockRouterPush).toHaveBeenCalledWith("/ai-privacy-details");
+    expect(screen.queryByTestId("ai-consent-continue")).toBeNull();
+
+    act(() => {
+      settingsFocusCallback?.();
+    });
+
+    expect(await screen.findByTestId("ai-consent-continue")).toBeTruthy();
   });
 
   it("keeps SMS sync recovery actionable when SMS permission can still be requested", async () => {

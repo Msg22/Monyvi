@@ -11,7 +11,7 @@ export type AiProcessingConsentVariant =
 interface AiProcessingConsentSheetProps {
   readonly visible: boolean;
   readonly variant: AiProcessingConsentVariant;
-  readonly onContinue: () => void;
+  readonly onContinue: () => void | Promise<void>;
   readonly onNotNow: () => void;
   readonly onPrivacyDetails: () => void;
 }
@@ -25,6 +25,27 @@ export function AiProcessingConsentSheet({
 }: AiProcessingConsentSheetProps): React.JSX.Element {
   const { t } = useTranslation("transactions");
   const isSmsVariant = variant === "sms-permission-with-ai-consent";
+  const [isContinueSubmitting, setIsContinueSubmitting] =
+    React.useState(false);
+
+  React.useEffect(() => {
+    if (!visible && isContinueSubmitting) {
+      setIsContinueSubmitting(false);
+    }
+  }, [isContinueSubmitting, visible]);
+
+  const handleContinue = React.useCallback(async (): Promise<void> => {
+    if (isContinueSubmitting) {
+      return;
+    }
+
+    setIsContinueSubmitting(true);
+    try {
+      await onContinue();
+    } finally {
+      setIsContinueSubmitting(false);
+    }
+  }, [isContinueSubmitting, onContinue]);
 
   return (
     <Modal
@@ -87,7 +108,10 @@ export function AiProcessingConsentSheet({
 
           <TouchableOpacity
             testID="ai-consent-continue"
-            onPress={onContinue}
+            onPress={() => {
+              void handleContinue();
+            }}
+            disabled={isContinueSubmitting}
             className="mb-3 rounded-2xl bg-nileGreen-500 py-4"
           >
             <Text className="text-center text-base font-bold text-white">

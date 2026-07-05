@@ -192,6 +192,7 @@ function createMockProfile(
   };
 
   Object.defineProperty(state, "aiProcessingConsent", {
+    configurable: true,
     get(): unknown {
       const raw = state.aiProcessingConsentRaw;
       if (typeof raw !== "string" || raw.trim().length === 0) return null;
@@ -401,6 +402,32 @@ describe("AI processing consent", () => {
     await expect(getAiProcessingConsentStatus()).resolves.toEqual({
       isConsented: false,
       consent: null,
+    });
+  });
+
+  it("parses consent from the raw field instead of the DB model helper", async (): Promise<void> => {
+    const profile = createMockProfile({
+      aiProcessingConsentRaw: JSON.stringify({
+        version: 1,
+        consentedAt: "2026-07-04T09:00:00.000Z",
+        revokedAt: null,
+      }),
+    });
+    Object.defineProperty(profile, "aiProcessingConsent", {
+      configurable: true,
+      get(): unknown {
+        throw new Error("DB model helper should not parse consent");
+      },
+    });
+    setupProfileFound(profile);
+
+    await expect(getAiProcessingConsentStatus()).resolves.toEqual({
+      isConsented: true,
+      consent: {
+        version: 1,
+        consentedAt: "2026-07-04T09:00:00.000Z",
+        revokedAt: null,
+      },
     });
   });
 
