@@ -192,7 +192,10 @@ export default function SmsScanScreen(): React.JSX.Element {
   const aiConsent = useAiProcessingConsent();
   const [isConsentSheetVisible, setIsConsentSheetVisible] =
     React.useState(false);
+  const [scanRestartNonce, setScanRestartNonce] = React.useState(0);
   const shouldResumeConsentAfterPrivacyDetails = useRef(false);
+  const scanInitiated = useRef(false);
+  const pendingScanAfterAbortRef = useRef(false);
   const scanAbortControllerRef = useRef<AbortController | null>(null);
 
   const { setTransactions, scanMode } = useSmsScanContext();
@@ -212,6 +215,13 @@ export default function SmsScanScreen(): React.JSX.Element {
 
   // Shared scan initiation logic (used by both auto-start and retry)
   const initiateScan = useCallback(async (): Promise<void> => {
+    if (scanAbortControllerRef.current) {
+      scanAbortControllerRef.current.abort();
+      pendingScanAfterAbortRef.current = true;
+      scanInitiated.current = false;
+      return;
+    }
+
     const minDate =
       scanMode === "incremental" && lastSyncTimestamp
         ? lastSyncTimestamp
@@ -226,7 +236,6 @@ export default function SmsScanScreen(): React.JSX.Element {
       });
     }
 
-    scanAbortControllerRef.current?.abort();
     const abortController = new AbortController();
     scanAbortControllerRef.current = abortController;
 
@@ -245,12 +254,13 @@ export default function SmsScanScreen(): React.JSX.Element {
       .finally(() => {
         if (scanAbortControllerRef.current === abortController) {
           scanAbortControllerRef.current = null;
+          if (pendingScanAfterAbortRef.current) {
+            pendingScanAfterAbortRef.current = false;
+            setScanRestartNonce((value) => value + 1);
+          }
         }
       });
   }, [startScan, scanMode, lastSyncTimestamp, aiContext]);
-
-  // Track whether scan has been initiated to prevent double-start
-  const scanInitiated = useRef(false);
 
   // Auto-start scan on mount — waits until permission is granted and categories loaded
   useEffect(() => {
@@ -275,6 +285,7 @@ export default function SmsScanScreen(): React.JSX.Element {
     initiateScan,
     isAiContextReady,
     permissionStatus,
+    scanRestartNonce,
   ]);
 
   useEffect(() => {

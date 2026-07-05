@@ -165,8 +165,11 @@ export default function SettingsScreen(): React.JSX.Element {
   }, []);
 
   const reconcileStoredLiveDetection = useCallback(async (): Promise<void> => {
-    if (!isAndroid) {
-      setIsLiveDetectionPreferenceReady(true);
+    if (!isAndroid) { setIsLiveDetectionPreferenceReady(true); return; }
+
+    if (!aiConsent.isConsented) {
+      try { await setLiveDetectionEnabled(false); await setAutoConfirm(false); }
+      finally { setLiveDetection(false); stopSmsListener(); setAutoConfirmSms(false); setIsLiveDetectionPreferenceReady(true); }
       return;
     }
 
@@ -206,16 +209,12 @@ export default function SettingsScreen(): React.JSX.Element {
         setIsLiveDetectionPreferenceReady(true);
       }
     }
-  }, [isAndroid]);
+  }, [aiConsent.isConsented, isAndroid]);
 
   useEffect(() => {
-    if (!isAndroid) {
-      return;
-    }
-    reconcileStoredLiveDetection().catch((error: unknown) => {
-      logger.error("settings.reconcileLiveDetection.failed", error);
-    });
-  }, [isAndroid, reconcileStoredLiveDetection]);
+    if (!isAndroid || aiConsent.isLoading) return;
+    reconcileStoredLiveDetection().catch((error: unknown) => { logger.error("settings.reconcileLiveDetection.failed", error); });
+  }, [aiConsent.isLoading, isAndroid, reconcileStoredLiveDetection]);
 
   useEffect(() => {
     if (!isAndroid) {

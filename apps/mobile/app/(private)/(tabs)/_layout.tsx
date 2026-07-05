@@ -178,14 +178,16 @@ function TabLayoutInner(): React.ReactElement {
         visible={isVoiceConsentVisible}
         variant="ai-consent"
         onContinue={async () => {
+          let didGrantConsent = false;
           try {
             await aiConsent.grantConsent();
+            didGrantConsent = true;
             shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
             setIsVoiceConsentVisible(false);
             await voiceFlow.startFlow({ skipAiProcessingConsent: true });
           } catch {
             shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
-            setIsVoiceConsentVisible(false);
+            setIsVoiceConsentVisible(didGrantConsent ? false : true);
           }
         }}
         onNotNow={() => {

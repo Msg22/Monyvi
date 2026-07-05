@@ -4,7 +4,13 @@ import {
   Text as MockText,
   View as MockView,
 } from "react-native";
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react-native";
 
 let focusCallback: (() => void) | null = null;
 const mockRouterPush = jest.fn<void, [string]>();
@@ -66,15 +72,22 @@ jest.mock("@/components/voice/VoiceRecordingOverlay", () => ({
 jest.mock("@/components/ai-consent/AiProcessingConsentSheet", () => ({
   AiProcessingConsentSheet: ({
     visible,
+    onContinue,
     onPrivacyDetails,
   }: {
     readonly visible: boolean;
+    readonly onContinue: () => void | Promise<void>;
     readonly onPrivacyDetails: () => void;
   }): React.ReactElement | null => {
     return visible ? (
-      <MockPressable testID="voice-privacy-details" onPress={onPrivacyDetails}>
-        <MockText>Privacy details</MockText>
-      </MockPressable>
+      <MockView>
+        <MockPressable testID="voice-consent-continue" onPress={onContinue}>
+          <MockText>Continue</MockText>
+        </MockPressable>
+        <MockPressable testID="voice-privacy-details" onPress={onPrivacyDetails}>
+          <MockText>Privacy details</MockText>
+        </MockPressable>
+      </MockView>
     ) : null;
   },
 }));
@@ -174,5 +187,17 @@ describe("TabLayout AI consent", () => {
     });
 
     expect(screen.getByTestId("voice-privacy-details")).toBeTruthy();
+  });
+
+  it("keeps voice consent visible when granting consent fails", async () => {
+    mockGrantConsent.mockRejectedValue(new Error("profile unavailable"));
+    render(<TabLayout />);
+
+    fireEvent.press(screen.getByTestId("tab-mic"));
+    fireEvent.press(screen.getByTestId("voice-consent-continue"));
+
+    await waitFor(() => expect(mockGrantConsent).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId("voice-consent-continue")).toBeTruthy();
+    expect(mockStartVoiceFlow).toHaveBeenCalledTimes(1);
   });
 });

@@ -343,6 +343,12 @@ describe("Settings live SMS permission recovery", () => {
     expect(mockStopSmsListener).toHaveBeenCalledTimes(1);
   });
 
+  it("turns off stored live detection when AI consent is absent", async () => {
+    mockIsAiConsented = false; mockReconcileLiveDetectionPreference.mockResolvedValue(true); const screen = await renderReadySettings();
+    await waitFor(() => expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false));
+    expect(getLiveDetectionSwitchValue(screen)).toBe(false); expect(mockReconcileLiveDetectionPreference).not.toHaveBeenCalled(); expect(mockStopSmsListener).toHaveBeenCalled();
+  });
+
   it("opens the custom SMS sync permission modal before requesting Android permission", async () => {
     mockSmsPermissionStatus = "undetermined";
     const screen = await renderReadySettings();
@@ -747,22 +753,14 @@ describe("Settings live SMS permission recovery", () => {
   });
 
   it("cancels pending live detection enable work when AI consent is revoked", async () => {
-    const notificationCheck = createDeferred<NotificationPermissionStatus>();
-    mockSmsPermissionStatus = "granted";
-    mockLiveDetectionPermissionStatus = "granted";
-    mockGetNotificationPermissionStatus.mockReturnValue(notificationCheck.promise);
+    const notificationCheck = createDeferred<NotificationPermissionStatus>(); mockSmsPermissionStatus = "granted"; mockLiveDetectionPermissionStatus = "granted"; mockGetNotificationPermissionStatus.mockReturnValue(notificationCheck.promise);
     const screen = await renderReadySettings();
-
     fireEvent(screen.getByTestId("live-sms-detection-switch"), "valueChange", true);
     fireEvent(screen.getByTestId("ai-processing-consent-switch"), "valueChange", false);
-
     await waitFor(() => expect(mockRevokeAiConsent).toHaveBeenCalledTimes(1));
     await act(async () => { notificationCheck.resolve("granted"); await Promise.resolve(); });
-
-    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
-    expect(mockSetLiveDetectionEnabled).not.toHaveBeenCalledWith(true);
-    expect(mockStartSmsListener).not.toHaveBeenCalled();
-    expect(getLiveDetectionSwitchValue(screen)).toBe(false);
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false); expect(mockSetLiveDetectionEnabled).not.toHaveBeenCalledWith(true);
+    expect(mockStartSmsListener).not.toHaveBeenCalled(); expect(getLiveDetectionSwitchValue(screen)).toBe(false);
   });
 
   it("keeps SMS recovery actionable when SMS permission is denied but can be requested again", async () => {

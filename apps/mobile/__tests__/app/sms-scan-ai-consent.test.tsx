@@ -1,6 +1,6 @@
 import React, { type ReactNode } from "react";
 import { Platform } from "react-native";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 const mockGrantAiConsent = jest.fn<Promise<void>, []>();
 const mockRequestPermission = jest.fn<Promise<"granted">, []>();
@@ -8,6 +8,7 @@ const mockStartScan = jest.fn<Promise<void>, [unknown]>();
 const mockRouterBack = jest.fn();
 const mockRouterPush = jest.fn<void, [string]>();
 const mockRouterReplace = jest.fn<void, [string]>();
+let mockIsAiConsented = false;
 
 jest.mock("react-native/Libraries/Modal/Modal", () => {
   function MockModal({
@@ -108,7 +109,7 @@ jest.mock("@/hooks/useSmsSync", () => ({
 jest.mock("@/hooks/useAiProcessingConsent", () => ({
   useAiProcessingConsent: () => ({
     grantConsent: mockGrantAiConsent,
-    isConsented: false,
+    isConsented: mockIsAiConsented,
     isLoading: false,
   }),
 }));
@@ -140,6 +141,7 @@ describe("SmsScanScreen AI consent", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsAiConsented = false;
     mockRequestPermission.mockResolvedValue("granted");
     mockStartScan.mockResolvedValue();
   });
@@ -157,5 +159,38 @@ describe("SmsScanScreen AI consent", () => {
     expect(screen.getByTestId("ai-consent-continue")).toBeTruthy();
     expect(mockRequestPermission).not.toHaveBeenCalled();
     expect(mockStartScan).not.toHaveBeenCalled();
+  });
+
+  it("waits for an aborted scan to settle before retrying after consent returns", async () => {
+    let resolveFirstScan: () => void = () => {};
+    const firstScan = new Promise<void>((resolve) => {
+      resolveFirstScan = resolve;
+    });
+    mockIsAiConsented = true;
+    mockStartScan.mockReturnValueOnce(firstScan).mockResolvedValue(undefined);
+    const screenView = render(<SmsScanScreen />);
+
+    await waitFor(() => expect(mockStartScan).toHaveBeenCalledTimes(1));
+
+    mockIsAiConsented = false;
+    screenView.rerender(<SmsScanScreen />);
+    expect(await screen.findByTestId("ai-consent-continue")).toBeTruthy();
+
+    mockGrantAiConsent.mockImplementation(() => {
+      mockIsAiConsented = true;
+      screenView.rerender(<SmsScanScreen />);
+      return Promise.resolve();
+    });
+    fireEvent.press(screen.getByTestId("ai-consent-continue"));
+
+    await waitFor(() => expect(mockGrantAiConsent).toHaveBeenCalledTimes(1));
+    expect(mockStartScan).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFirstScan();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(mockStartScan).toHaveBeenCalledTimes(2));
   });
 });
