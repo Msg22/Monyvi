@@ -1,4 +1,3 @@
-import { palette } from "@/constants/colors";
 import { fireEvent, render, screen, act } from "@testing-library/react-native";
 import React from "react";
 import {
@@ -334,31 +333,25 @@ describe("ToastProvider", () => {
 
     fireEvent.press(screen.getByTestId("show-success-toast"));
 
-    const toastSurfaceStyle = getFlattenedViewStyle(
+    const toastSurfaceClassName = getReactTestInstanceProps(
       screen.getByTestId("toast-surface")
-    );
-    const toastAccentStyle = getFlattenedViewStyle(
+    ).className as string;
+    const toastAccentClassName = getReactTestInstanceProps(
       screen.getByTestId("toast-accent")
-    );
-    const iconShellStyle = getFlattenedViewStyle(
+    ).className as string;
+    const iconShellClassName = getReactTestInstanceProps(
       screen.getByTestId("toast-icon-shell")
-    );
+    ).className as string;
 
-    expect(toastSurfaceStyle.backgroundColor).toBe(
-      `${palette.nileGreen[50]}F2`
-    );
-    expect(toastSurfaceStyle.borderColor).toBe(`${palette.nileGreen[500]}66`);
-    expect(toastAccentStyle.backgroundColor).toBe(palette.nileGreen[500]);
-    expect(iconShellStyle.backgroundColor).toBe(palette.nileGreen[50]);
-    expect(iconShellStyle.borderColor).toBe(palette.nileGreen[100]);
-    expect(
-      getReactTestInstanceProps(screen.getByTestId("toast-icon-shell"))
-        .className
-    ).toContain("h-10 w-10");
-    expect(
-      getReactTestInstanceProps(screen.getByTestId("toast-icon-shell"))
-        .className
-    ).toContain("ms-1");
+    expect(toastSurfaceClassName).toContain("bg-nileGreen-50/95");
+    expect(toastSurfaceClassName).toContain("border-nileGreen-500/40");
+    expect(toastSurfaceClassName).toContain("dark:bg-slate-950/95");
+    expect(toastAccentClassName).toContain("bg-nileGreen-500");
+    expect(iconShellClassName).toContain("bg-nileGreen-50");
+    expect(iconShellClassName).toContain("border-nileGreen-100");
+    expect(iconShellClassName).toContain("dark:bg-nileGreen-500/10");
+    expect(iconShellClassName).toContain("h-10 w-10");
+    expect(iconShellClassName).toContain("ms-1");
     expect(
       getReactTestInstanceProps(screen.getByTestId("toast-icon")).name
     ).toBe("checkmark");

@@ -81,60 +81,48 @@ const TOAST_ICONS: Record<ToastType, keyof typeof Ionicons.glyphMap> = {
 const TOAST_COLORS: Record<
   ToastType,
   {
-    accent: string;
-    darkBorder: string;
     darkIcon: string;
-    darkIconBg: string;
-    darkIconBorder: string;
-    lightBorder: string;
     lightIcon: string;
-    lightIconBg: string;
-    lightIconBorder: string;
+    accentClassName: string;
+    iconShellClassName: string;
+    surfaceClassName: string;
   }
 > = {
   success: {
-    accent: palette.nileGreen[500],
-    darkBorder: `${palette.nileGreen[500]}66`,
     darkIcon: palette.nileGreen[400],
-    darkIconBg: `${palette.nileGreen[500]}1F`,
-    darkIconBorder: `${palette.nileGreen[500]}33`,
-    lightBorder: `${palette.nileGreen[500]}66`,
     lightIcon: palette.nileGreen[600],
-    lightIconBg: palette.nileGreen[50],
-    lightIconBorder: palette.nileGreen[100],
+    accentClassName: "bg-nileGreen-500",
+    iconShellClassName:
+      "bg-nileGreen-50 border-nileGreen-100 dark:bg-nileGreen-500/10 dark:border-nileGreen-500/20",
+    surfaceClassName:
+      "bg-nileGreen-50/95 border-nileGreen-500/40 dark:bg-slate-950/95 dark:border-nileGreen-500/40",
   },
   error: {
-    accent: palette.red[500],
-    darkBorder: `${palette.red[500]}66`,
     darkIcon: palette.red[400],
-    darkIconBg: `${palette.red[500]}1F`,
-    darkIconBorder: `${palette.red[500]}33`,
-    lightBorder: `${palette.red[500]}33`,
     lightIcon: palette.red[600],
-    lightIconBg: palette.red[100],
-    lightIconBorder: `${palette.red[500]}33`,
+    accentClassName: "bg-red-500",
+    iconShellClassName:
+      "bg-red-100 border-red-500/20 dark:bg-red-500/10 dark:border-red-500/20",
+    surfaceClassName:
+      "bg-slate-25/95 border-red-500/20 dark:bg-slate-950/95 dark:border-red-500/40",
   },
   info: {
-    accent: palette.blue[500],
-    darkBorder: `${palette.blue[500]}66`,
     darkIcon: palette.blue[100],
-    darkIconBg: `${palette.blue[500]}1F`,
-    darkIconBorder: `${palette.blue[500]}33`,
-    lightBorder: `${palette.blue[500]}33`,
     lightIcon: palette.blue[600],
-    lightIconBg: palette.blue[50],
-    lightIconBorder: palette.blue[100],
+    accentClassName: "bg-blue-500",
+    iconShellClassName:
+      "bg-blue-50 border-blue-100 dark:bg-blue-500/10 dark:border-blue-500/20",
+    surfaceClassName:
+      "bg-slate-25/95 border-blue-500/20 dark:bg-slate-950/95 dark:border-blue-500/40",
   },
   warning: {
-    accent: palette.orange[500],
-    darkBorder: `${palette.orange[500]}66`,
     darkIcon: palette.orange[100],
-    darkIconBg: `${palette.orange[500]}1F`,
-    darkIconBorder: `${palette.orange[500]}33`,
-    lightBorder: `${palette.orange[500]}33`,
     lightIcon: palette.orange[600],
-    lightIconBg: palette.orange[100],
-    lightIconBorder: `${palette.orange[500]}33`,
+    accentClassName: "bg-orange-500",
+    iconShellClassName:
+      "bg-orange-100 border-orange-500/20 dark:bg-orange-500/10 dark:border-orange-500/20",
+    surfaceClassName:
+      "bg-slate-25/95 border-orange-500/20 dark:bg-slate-950/95 dark:border-orange-500/40",
   },
 };
 
@@ -144,9 +132,6 @@ const TOAST_ENTER_OFFSET_Y = -10;
 const TOAST_ENTER_SCALE = 0.98;
 const TOAST_TOP_GAP = 12;
 const TOAST_KEYBOARD_GAP = 16;
-const TOAST_DARK_BACKGROUND = `${palette.slate[950]}F2`;
-const TOAST_LIGHT_BACKGROUND = `${palette.slate[25]}F2`;
-const TOAST_LIGHT_SUCCESS_BACKGROUND = `${palette.nileGreen[50]}F2`;
 const TOAST_SHADOW_STYLE: ViewStyle = {
   shadowColor: palette.slate[950],
   shadowOffset: { width: 0, height: 8 },
@@ -182,10 +167,10 @@ const TOAST_ENTERING_ANIMATION: EntryExitAnimationFunction = () => {
 };
 
 interface ToastVisualStyle {
-  readonly accentStyle: Pick<ViewStyle, "backgroundColor">;
+  readonly accentClassName: string;
   readonly iconColor: string;
-  readonly iconShellStyle: Pick<ViewStyle, "backgroundColor" | "borderColor">;
-  readonly surfaceStyle: Pick<ViewStyle, "backgroundColor" | "borderColor">;
+  readonly iconShellClassName: string;
+  readonly surfaceClassName: string;
 }
 
 function getToastVisualStyle(
@@ -195,27 +180,11 @@ function getToastVisualStyle(
   const colors = TOAST_COLORS[type];
 
   return {
-    accentStyle: {
-      backgroundColor: colors.accent,
-    },
+    accentClassName: colors.accentClassName,
     iconColor: isDark ? colors.darkIcon : colors.lightIcon,
-    iconShellStyle: {
-      backgroundColor: isDark ? colors.darkIconBg : colors.lightIconBg,
-      borderColor: isDark ? colors.darkIconBorder : colors.lightIconBorder,
-    },
-    surfaceStyle: {
-      backgroundColor: isDark
-        ? TOAST_DARK_BACKGROUND
-        : getLightToastBackground(type),
-      borderColor: isDark ? colors.darkBorder : colors.lightBorder,
-    },
+    iconShellClassName: colors.iconShellClassName,
+    surfaceClassName: colors.surfaceClassName,
   };
-}
-
-function getLightToastBackground(type: ToastType): string {
-  return type === "success"
-    ? TOAST_LIGHT_SUCCESS_BACKGROUND
-    : TOAST_LIGHT_BACKGROUND;
 }
 
 function Toast({ config, onHide }: ToastProps): React.JSX.Element {
@@ -275,19 +244,17 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
       accessibilityLiveRegion="polite"
     >
       <View
-        className="relative flex-row items-center overflow-hidden rounded-2xl border py-3 pe-4 ps-5"
-        style={[TOAST_SHADOW_STYLE, visualStyle.surfaceStyle]}
+        className={`relative flex-row items-center overflow-hidden rounded-2xl border py-3 pe-4 ps-5 ${visualStyle.surfaceClassName}`}
+        style={TOAST_SHADOW_STYLE}
         testID="toast-surface"
       >
         <View
-          className="absolute bottom-3 start-0 top-3 w-1 rounded-e-full"
-          style={visualStyle.accentStyle}
+          className={`absolute bottom-3 start-0 top-3 w-1 rounded-e-full ${visualStyle.accentClassName}`}
           testID="toast-accent"
         />
 
         <View
-          className="ms-1 me-3 h-10 w-10 items-center justify-center rounded-full border"
-          style={visualStyle.iconShellStyle}
+          className={`ms-1 me-3 h-10 w-10 items-center justify-center rounded-full border ${visualStyle.iconShellClassName}`}
           testID="toast-icon-shell"
         >
           <Ionicons
