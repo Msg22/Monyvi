@@ -905,7 +905,7 @@ export default function SettingsScreen(): React.JSX.Element {
         visible={isAiConsentSheetVisible}
         variant="ai-consent"
         onContinue={handleAiConsentContinue}
-        onNotNow={() => setIsAiConsentSheetVisible(false)}
+        onNotNow={() => { setPendingAiConsentAction(null); setIsAiConsentSheetVisible(false); }}
         onPrivacyDetails={openAiPrivacyDetails}
       />
     </GradientBackground>

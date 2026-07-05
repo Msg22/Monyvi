@@ -51,6 +51,8 @@ interface StartScanOptions {
   readonly existingFingerprints: ReadonlySet<string>;
   /** Context to pass to AI for better account suggestions. */
   readonly aiContext: ParseSmsContext;
+  /** Cancels the scan before more SMS candidates are sent to AI. */
+  readonly abortSignal?: AbortSignal;
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +90,7 @@ export function useSmsScan(): UseSmsScanResult {
             minDate: options.minDate,
             existingFingerprints: options.existingFingerprints,
             aiContext: options.aiContext,
+            abortSignal: options.abortSignal,
           },
           (p) => {
             setProgress(p);

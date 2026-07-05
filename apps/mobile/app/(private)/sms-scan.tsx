@@ -193,6 +193,7 @@ export default function SmsScanScreen(): React.JSX.Element {
   const [isConsentSheetVisible, setIsConsentSheetVisible] =
     React.useState(false);
   const shouldResumeConsentAfterPrivacyDetails = useRef(false);
+  const scanAbortControllerRef = useRef<AbortController | null>(null);
 
   const { setTransactions, scanMode } = useSmsScanContext();
   const { lastSyncTimestamp } = useSmsSync();
@@ -225,11 +226,27 @@ export default function SmsScanScreen(): React.JSX.Element {
       });
     }
 
-    startScan({ minDate, existingFingerprints, aiContext }).catch(
-      (err: unknown) => {
+    scanAbortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    scanAbortControllerRef.current = abortController;
+
+    startScan({
+      minDate,
+      existingFingerprints,
+      aiContext,
+      abortSignal: abortController.signal,
+    })
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === "AbortError") {
+          return;
+        }
         logger.error("smsScan.startFailed", err);
-      }
-    );
+      })
+      .finally(() => {
+        if (scanAbortControllerRef.current === abortController) {
+          scanAbortControllerRef.current = null;
+        }
+      });
   }, [startScan, scanMode, lastSyncTimestamp, aiContext]);
 
   // Track whether scan has been initiated to prevent double-start
@@ -239,6 +256,8 @@ export default function SmsScanScreen(): React.JSX.Element {
   useEffect(() => {
     if (aiConsent.isLoading) return;
     if (!aiConsent.isConsented) {
+      scanAbortControllerRef.current?.abort();
+      scanInitiated.current = false;
       setIsConsentSheetVisible(true);
       return;
     }
@@ -257,6 +276,12 @@ export default function SmsScanScreen(): React.JSX.Element {
     isAiContextReady,
     permissionStatus,
   ]);
+
+  useEffect(() => {
+    return () => {
+      scanAbortControllerRef.current?.abort();
+    };
+  }, []);
 
   const handleReviewPress = (): void => {
     if (transactions.length > 0) {

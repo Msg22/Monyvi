@@ -20,8 +20,13 @@ import {
 } from "@/services/voice-entry-service";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
 import { buildCategoryTree } from "@monyvi/logic";
-import { Tabs, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Tabs,
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+} from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 
 export default function TabLayout(): React.ReactElement {
@@ -43,6 +48,7 @@ function TabLayoutInner(): React.ReactElement {
   const micButtonRef = useMicButtonRef();
   const aiConsent = useAiProcessingConsent();
   const [isVoiceConsentVisible, setIsVoiceConsentVisible] = useState(false);
+  const shouldResumeVoiceConsentAfterPrivacyDetails = useRef(false);
 
   const categoryTree = useMemo(
     () => buildCategoryTree(toCategoryTreeSources(allCategories)),
@@ -91,6 +97,19 @@ function TabLayoutInner(): React.ReactElement {
       unregisterVoiceEntry();
     };
   }, [voiceFlow.startFlow]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!shouldResumeVoiceConsentAfterPrivacyDetails.current) {
+        return;
+      }
+
+      shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
+      if (!aiConsent.isLoading && !aiConsent.isConsented) {
+        setIsVoiceConsentVisible(true);
+      }
+    }, [aiConsent.isConsented, aiConsent.isLoading])
+  );
 
   return (
     <View className="flex-1 bg-background dark:bg-background-dark">
@@ -162,15 +181,21 @@ function TabLayoutInner(): React.ReactElement {
           aiConsent
             .grantConsent()
             .then(() => {
+              shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
               setIsVoiceConsentVisible(false);
               void voiceFlow.startFlow({ skipAiProcessingConsent: true });
             })
             .catch(() => {
+              shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
               setIsVoiceConsentVisible(false);
             });
         }}
-        onNotNow={() => setIsVoiceConsentVisible(false)}
+        onNotNow={() => {
+          shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
+          setIsVoiceConsentVisible(false);
+        }}
         onPrivacyDetails={() => {
+          shouldResumeVoiceConsentAfterPrivacyDetails.current = true;
           setIsVoiceConsentVisible(false);
           router.push("/ai-privacy-details");
         }}

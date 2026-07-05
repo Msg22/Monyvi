@@ -153,4 +153,23 @@ describe("ai-sms-parser-service parser strategy", () => {
 
     expect(mockInvoke).toHaveBeenCalled();
   });
+
+  it("does not call the Edge Function when parsing is aborted", async () => {
+    const abortController = new AbortController();
+    abortController.abort();
+
+    const result = await parseSmsWithAi(
+      [candidate("nbe_debit_purchase")],
+      context,
+      undefined,
+      abortController.signal
+    );
+
+    expect(mockInvoke).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      transactions: [],
+      hasError: true,
+      isRetryable: false,
+    });
+  });
 });

@@ -69,6 +69,11 @@ function normalizeProfileFromSupabase(
 function normalizeProfileToSupabase(
   record: Record<string, unknown>
 ): Record<string, unknown> {
+  const shouldOmitUnchangedAiConsent =
+    record["_status"] === "updated" &&
+    typeof record["_changed"] === "string" &&
+    !record["_changed"].split(",").includes(PROFILE_AI_PROCESSING_CONSENT_COLUMN);
+
   const transformed = {
     ...record,
     [PROFILE_NOTIFICATION_SETTINGS_COLUMN]: parseJsonForSupabase(
@@ -76,11 +81,15 @@ function normalizeProfileToSupabase(
       null,
       PROFILE_NOTIFICATION_SETTINGS_COLUMN
     ),
-    [PROFILE_AI_PROCESSING_CONSENT_COLUMN]: parseJsonForSupabase(
-      record[PROFILE_AI_PROCESSING_CONSENT_COLUMN],
-      null,
-      PROFILE_AI_PROCESSING_CONSENT_COLUMN
-    ),
+    ...(shouldOmitUnchangedAiConsent
+      ? {}
+      : {
+          [PROFILE_AI_PROCESSING_CONSENT_COLUMN]: parseJsonForSupabase(
+            record[PROFILE_AI_PROCESSING_CONSENT_COLUMN],
+            null,
+            PROFILE_AI_PROCESSING_CONSENT_COLUMN
+          ),
+        }),
     [PROFILE_ONBOARDING_FLAGS_COLUMN]: parseJsonForSupabase(
       record[PROFILE_ONBOARDING_FLAGS_COLUMN],
       {},
@@ -88,13 +97,7 @@ function normalizeProfileToSupabase(
     ),
   };
 
-  if (
-    record["_status"] === "updated" &&
-    typeof record["_changed"] === "string" &&
-    !record["_changed"]
-      .split(",")
-      .includes(PROFILE_AI_PROCESSING_CONSENT_COLUMN)
-  ) {
+  if (shouldOmitUnchangedAiConsent) {
     delete transformed[PROFILE_AI_PROCESSING_CONSENT_COLUMN];
   }
 

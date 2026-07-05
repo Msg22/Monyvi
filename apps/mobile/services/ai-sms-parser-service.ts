@@ -351,6 +351,10 @@ function loadFixtureSmsParser(): typeof import("./testing/ai-sms-fixture-parser"
   return fixtureParser.parseSmsWithFixtureAi;
 }
 
+function createAbortedParseResult(): AiParseResult {
+  return { transactions: [], hasError: true, isRetryable: false };
+}
+
 /**
  * Parse SMS candidates through the AI Edge Function.
  *
@@ -371,10 +375,12 @@ function loadFixtureSmsParser(): typeof import("./testing/ai-sms-fixture-parser"
 export async function parseSmsWithAi(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
-  onProgress?: (progress: AiParseProgress) => void
+  onProgress?: (progress: AiParseProgress) => void,
+  abortSignal?: AbortSignal
 ): Promise<AiParseResult> {
   const emptyResult: AiParseResult = { transactions: [], hasError: false };
   if (candidates.length === 0) return emptyResult;
+  if (abortSignal?.aborted) return createAbortedParseResult();
 
   try {
     if (shouldUseFixtureSmsParser()) {
@@ -417,12 +423,15 @@ export async function parseSmsWithAi(
 
     let chunkIndex = 0;
     while (chunkIndex < chunkQueue.length) {
+      if (abortSignal?.aborted) return createAbortedParseResult();
+
       // Delay between chunks to avoid Gemini rate limits (skip for first chunk)
       if (chunkIndex > 0) {
         await new Promise<void>((resolve) =>
           setTimeout(resolve, INTER_CHUNK_DELAY_MS)
         );
       }
+      if (abortSignal?.aborted) return createAbortedParseResult();
 
       const currentChunk = chunkQueue[chunkIndex];
       const chunkStartMs = Date.now();

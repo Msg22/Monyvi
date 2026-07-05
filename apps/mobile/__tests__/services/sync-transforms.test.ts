@@ -79,6 +79,28 @@ describe("sync transforms", () => {
     expect(transformed).not.toHaveProperty("ai_processing_consent");
   });
 
+  it("does not parse unchanged AI processing consent before omitting it", () => {
+    const transformed = transformToSupabase(
+      "profiles",
+      {
+        id: "profile-1",
+        ai_processing_consent: "legacy-invalid-json",
+        onboarding_flags: '{"cash_account_tooltip_dismissed":true}',
+        notification_settings: null,
+        _status: "updated",
+        _changed: "onboarding_flags",
+      },
+      "current-user"
+    );
+
+    expect(transformed).not.toHaveProperty("ai_processing_consent");
+    expect(transformed).toEqual(
+      expect.objectContaining({
+        onboarding_flags: { cash_account_tooltip_dismissed: true },
+      })
+    );
+  });
+
   it("keeps AI processing consent when the consent column changed", () => {
     const transformed = transformToSupabase(
       "profiles",

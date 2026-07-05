@@ -30,9 +30,13 @@ const mockGetNotificationPermissionStatus = jest.fn<
   []
 >();
 const mockRouterPush = jest.fn<void, [string]>();
+const mockGrantAiConsent = jest.fn<Promise<void>, []>();
+const mockRevokeAiConsent = jest.fn<Promise<void>, []>();
 
 let mockSmsPermissionStatus: SmsPermissionStatus = "denied";
 let mockLiveDetectionPermissionStatus: SmsPermissionStatus = "denied";
+let mockIsAiConsented = true;
+let mockIsAiConsentLoading = false;
 let appStateChangeHandlers: Array<(status: AppStateStatus) => void> = [];
 
 jest.mock("react-native/Libraries/Modal/Modal", () => {
@@ -85,6 +89,15 @@ jest.mock("@/hooks/usePreferredCurrency", () => ({
   usePreferredCurrency: () => ({
     preferredCurrency: "EGP",
     setPreferredCurrency: jest.fn(),
+  }),
+}));
+
+jest.mock("@/hooks/useAiProcessingConsent", () => ({
+  useAiProcessingConsent: () => ({
+    isConsented: mockIsAiConsented,
+    isLoading: mockIsAiConsentLoading,
+    grantConsent: mockGrantAiConsent,
+    revokeConsent: mockRevokeAiConsent,
   }),
 }));
 
@@ -272,6 +285,10 @@ describe("Settings live SMS permission recovery", () => {
     mockGetNotificationPermissionStatus.mockResolvedValue("granted");
     mockRequestNotificationPermissionStatus.mockResolvedValue("granted");
     mockOpenNotificationSettings.mockResolvedValue();
+    mockIsAiConsented = true;
+    mockIsAiConsentLoading = false;
+    mockGrantAiConsent.mockResolvedValue();
+    mockRevokeAiConsent.mockResolvedValue();
   });
 
   it("waits for stored live detection state before rendering the switch", async () => {
@@ -351,6 +368,29 @@ describe("Settings live SMS permission recovery", () => {
     });
     expect(mockRequestPermission).toHaveBeenCalledTimes(1);
     expect(mockRequestLiveDetectionPermission).not.toHaveBeenCalled();
+  });
+
+  it("does not replay a dismissed AI consent SMS action when enabling AI later", async () => {
+    mockIsAiConsented = false;
+    mockSmsPermissionStatus = "granted";
+    const screen = await renderReadySettings();
+
+    fireEvent.press(screen.getByText("sync_new"));
+    fireEvent.press(await screen.findByTestId("ai-consent-not-now"));
+
+    expect(mockRouterPush).not.toHaveBeenCalledWith("/sms-scan");
+
+    fireEvent(
+      screen.getByTestId("ai-processing-consent-switch"),
+      "valueChange",
+      true
+    );
+    fireEvent.press(await screen.findByTestId("ai-consent-continue"));
+
+    await waitFor(() => {
+      expect(mockGrantAiConsent).toHaveBeenCalledTimes(1);
+    });
+    expect(mockRouterPush).not.toHaveBeenCalledWith("/sms-scan");
   });
 
   it("keeps SMS sync recovery actionable when SMS permission can still be requested", async () => {

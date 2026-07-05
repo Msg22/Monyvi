@@ -88,6 +88,8 @@ interface ScanOptions {
   readonly yieldInterval?: number;
   /** Context to pass to AI for better account suggestions and parsing accuracy. */
   readonly aiContext: ParseSmsContext;
+  /** Cancels the pipeline before sending more SMS candidates to AI. */
+  readonly abortSignal?: AbortSignal;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +102,16 @@ const DEFAULT_YIELD_INTERVAL = 3;
 const SCAN_IN_PROGRESS_KEY = "@monyvi/sms_scan_in_progress";
 /** Default to 3 months ago for both initial and full resync. */
 const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
+
+function assertScanNotAborted(signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) {
+    return;
+  }
+
+  const error = new Error("SMS scan aborted");
+  error.name = "AbortError";
+  throw error;
+}
 
 /**
  * Regex patterns that identify non-transactional SMS from financial senders.
@@ -291,6 +303,7 @@ async function executeScanPipeline(
   const maxCount = options?.maxCount ?? DEFAULT_MAX_COUNT;
   const batchSize = options?.batchSize ?? DEFAULT_BATCH_SIZE;
   const yieldInterval = options?.yieldInterval ?? DEFAULT_YIELD_INTERVAL;
+  const abortSignal = options?.abortSignal;
   const existingFingerprints =
     options?.existingFingerprints ?? (await loadExistingSmsFingerprints());
   // Default to 3 months ago when no minDate is provided
@@ -301,6 +314,7 @@ async function executeScanPipeline(
     maxCount,
     minDate: effectiveMinDate,
   });
+  assertScanNotAborted(abortSignal);
 
   const totalMessages = messages.length;
   let messagesScanned = 0;
@@ -311,6 +325,7 @@ async function executeScanPipeline(
   const seenFingerprints = new Set(existingFingerprints);
 
   for (let i = 0; i < totalMessages; i += batchSize) {
+    assertScanNotAborted(abortSignal);
     const batch = messages.slice(i, i + batchSize);
 
     for (const sms of batch) {
@@ -365,6 +380,7 @@ async function executeScanPipeline(
   }
 
   // ─── Step 3: Send candidates to AI for parsing ────────────────────────
+  assertScanNotAborted(abortSignal);
   onProgress?.({
     totalMessages,
     messagesScanned: totalMessages,
@@ -413,7 +429,8 @@ async function executeScanPipeline(
         scanStartedAt: startTime,
         estimatedRemainingMs,
       });
-    }
+    },
+    abortSignal
   );
   const deduplicatedTransactions = deduplicateParsedSmsTransactions(
     aiResult.transactions
