@@ -32,6 +32,10 @@ export function assertPushRecordBelongsToCurrentUser(
 ): void {
   const payload = record as Record<string, unknown>;
 
+  if (isSharedSystemCategoryPushRecord(table, payload)) {
+    return;
+  }
+
   if (childConfig) {
     const parentId = payload[childConfig.foreignKey];
     if (
@@ -47,4 +51,15 @@ export function assertPushRecordBelongsToCurrentUser(
   if (payload.user_id !== userId) {
     throw createForeignLocalChangeError(table);
   }
+}
+
+function isSharedSystemCategoryPushRecord(
+  table: SyncableTable,
+  payload: Record<string, unknown>
+): boolean {
+  return (
+    table === "categories" &&
+    payload.is_system === true &&
+    (payload.user_id === null || payload.user_id === undefined)
+  );
 }

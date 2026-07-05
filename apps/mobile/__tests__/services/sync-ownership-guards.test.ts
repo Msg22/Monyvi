@@ -25,6 +25,34 @@ describe("sync ownership guards", () => {
     ).toThrow("Refusing to sync foreign local changes for profiles");
   });
 
+  it("allows shared system categories without forcing user ownership", () => {
+    expect(() =>
+      assertPushRecordBelongsToCurrentUser(
+        "categories",
+        {
+          id: "00000000-0000-0000-0001-000000000002",
+          user_id: null,
+          is_system: true,
+        },
+        "current-user",
+        undefined,
+        null
+      )
+    ).not.toThrow();
+  });
+
+  it("rejects unowned non-system categories", () => {
+    expect(() =>
+      assertPushRecordBelongsToCurrentUser(
+        "categories",
+        { id: "category-1", user_id: null, is_system: false },
+        "current-user",
+        undefined,
+        null
+      )
+    ).toThrow("Refusing to sync foreign local changes for categories");
+  });
+
   it("allows child-table records only when the local parent is owned", () => {
     expect(() =>
       assertPushRecordBelongsToCurrentUser(

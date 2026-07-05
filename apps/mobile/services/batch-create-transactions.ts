@@ -31,7 +31,7 @@ import {
   Transfer,
   type CurrencyType,
 } from "@monyvi/db";
-import type { ReviewableTransaction } from "@monyvi/logic";
+import { buildCategoryMap, type ReviewableTransaction } from "@monyvi/logic";
 import { Q, type Model } from "@nozbe/watermelondb";
 import { ensureCashAccount } from "./account-service";
 import { getCurrentUserId } from "./supabase";
@@ -47,6 +47,9 @@ interface BatchSaveResult {
   readonly failedCount: number;
   readonly errors: readonly string[];
 }
+
+const UUID_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ---------------------------------------------------------------------------
 // Balance delta accumulator
@@ -83,12 +86,23 @@ function getRuntimeCategoryId(tx: ReviewableTransaction): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-async function loadAccessibleCategoryIds(
+function isSharedSystemCategory(category: Category): boolean {
+  return (
+    category.isSystem === true &&
+    (category.userId === null || category.userId === undefined)
+  );
+}
+
+function isCanonicalSharedSystemCategory(category: Category): boolean {
+  return isSharedSystemCategory(category) && UUID_ID_PATTERN.test(category.id);
+}
+
+async function loadAccessibleCategoryIdMap(
   categoryIds: ReadonlySet<string>,
   userId: string
-): Promise<ReadonlySet<string>> {
+): Promise<ReadonlyMap<string, string>> {
   if (categoryIds.size === 0) {
-    return new Set();
+    return new Map();
   }
 
   const categories = await queryAccessibleCategories(
@@ -98,7 +112,48 @@ async function loadAccessibleCategoryIds(
     Q.where("deleted", false)
   ).fetch();
 
-  return new Set(categories.map((category) => category.id));
+  const resolvedCategoryIds = new Map<string, string>();
+  const sharedSystemNames = new Set<string>();
+
+  for (const category of categories) {
+    if (!isSharedSystemCategory(category)) {
+      resolvedCategoryIds.set(category.id, category.id);
+      continue;
+    }
+
+    sharedSystemNames.add(category.systemName);
+    if (isCanonicalSharedSystemCategory(category)) {
+      resolvedCategoryIds.set(category.id, category.id);
+    }
+  }
+
+  if (sharedSystemNames.size === 0) {
+    return resolvedCategoryIds;
+  }
+
+  const sharedSystemCategories = await queryAccessibleCategories(
+    database.get<Category>("categories"),
+    userId,
+    Q.where("system_name", Q.oneOf([...sharedSystemNames])),
+    Q.where("is_system", true),
+    Q.where("deleted", false)
+  ).fetch();
+  const canonicalCategoryMap = buildCategoryMap(
+    sharedSystemCategories.filter(isCanonicalSharedSystemCategory)
+  );
+
+  for (const category of categories) {
+    if (!isSharedSystemCategory(category)) {
+      continue;
+    }
+
+    const canonicalCategory = canonicalCategoryMap.get(category.systemName);
+    if (canonicalCategory) {
+      resolvedCategoryIds.set(category.id, canonicalCategory.id);
+    }
+  }
+
+  return resolvedCategoryIds;
 }
 
 // ---------------------------------------------------------------------------
@@ -167,7 +222,7 @@ export async function batchCreateTransactions<T extends ReviewableTransaction>(
     }
   }
 
-  const accessibleCategoryIds = await loadAccessibleCategoryIds(
+  const accessibleCategoryIds = await loadAccessibleCategoryIdMap(
     regularCategoryIds,
     userId
   );
@@ -273,7 +328,8 @@ export async function batchCreateTransactions<T extends ReviewableTransaction>(
       continue;
     }
 
-    if (!accessibleCategoryIds.has(categoryId)) {
+    const resolvedCategoryId = accessibleCategoryIds.get(categoryId);
+    if (!resolvedCategoryId) {
       errors.push(`Transaction ${i + 1} needs a valid category`);
       failedCount++;
       continue;
@@ -286,7 +342,7 @@ export async function batchCreateTransactions<T extends ReviewableTransaction>(
         record.amount = Math.abs(tx.amount);
         record.currency = tx.currency;
         record.type = tx.type;
-        record.categoryId = categoryId;
+        record.categoryId = resolvedCategoryId;
         record.counterparty = tx.counterparty ?? undefined;
         record.note = "";
         record.date = tx.date;

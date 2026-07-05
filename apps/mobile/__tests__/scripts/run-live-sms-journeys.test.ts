@@ -9,6 +9,9 @@ interface RunLiveSmsJourneysModule {
   getMaestroFlowTimeoutMs(
     env?: Readonly<Record<string, string | undefined>>
   ): number;
+  getMaestroTransportMaxAttempts(
+    env?: Readonly<Record<string, string | undefined>>
+  ): number;
   getAuthBootstrapFlow(
     env?: Readonly<Record<string, string | undefined>>
   ):
@@ -20,6 +23,16 @@ interface RunLiveSmsJourneysModule {
     patterns: readonly string[],
     packageName?: string
   ): boolean;
+  findVisibleNotificationMatch(
+    nodes: ReadonlyArray<{
+      readonly text: string;
+      readonly contentDescription: string;
+      readonly resourceId: string;
+      readonly bounds: string;
+    }>,
+    patterns: readonly string[],
+    notificationDump?: string
+  ): unknown;
   parseBounds(
     bounds: string
   ): { left: number; top: number; right: number; bottom: number } | null;
@@ -82,6 +95,25 @@ describe("run-live-sms-journeys helpers", () => {
     ).toBe(1000);
   });
 
+  it("uses a bounded Maestro transport retry budget with env override", () => {
+    expect(liveSmsJourneys.getMaestroTransportMaxAttempts({})).toBe(3);
+    expect(
+      liveSmsJourneys.getMaestroTransportMaxAttempts({
+        E2E_MAESTRO_TRANSPORT_MAX_ATTEMPTS: "4",
+      })
+    ).toBe(4);
+    expect(
+      liveSmsJourneys.getMaestroTransportMaxAttempts({
+        E2E_MAESTRO_TRANSPORT_MAX_ATTEMPTS: "1",
+      })
+    ).toBe(1);
+    expect(
+      liveSmsJourneys.getMaestroTransportMaxAttempts({
+        E2E_MAESTRO_TRANSPORT_MAX_ATTEMPTS: "0",
+      })
+    ).toBe(3);
+  });
+
   it("uses the guarded deep-link auth bootstrap when CI opts in", () => {
     expect(liveSmsJourneys.getAuthBootstrapFlow({})).toBe(
       "../helpers/ci-auth-bootstrap.yaml"
@@ -130,6 +162,37 @@ describe("run-live-sms-journeys helpers", () => {
         "com.monyvi.app"
       )
     ).toBe(false);
+  });
+
+  it("does not use title-only fallback when multiple visible notifications share the title", () => {
+    const nodes = [
+      {
+        text: "Expense Detected",
+        contentDescription: "",
+        resourceId: "",
+        bounds: "[0,100][900,160]",
+      },
+      {
+        text: "Expense Detected",
+        contentDescription: "",
+        resourceId: "",
+        bounds: "[0,500][900,560]",
+      },
+    ];
+    const notificationDump = [
+      "NotificationRecord(pkg=com.monyvi.app id=2)",
+      "  android.title=Expense Detected",
+      "  android.text=63.21 EGP from QNB",
+      "  android.bigText=To: BACKGROUND LIVE SMS TEST",
+    ].join("\n");
+
+    expect(
+      liveSmsJourneys.findVisibleNotificationMatch(
+        nodes,
+        ["Expense Detected", "BACKGROUND LIVE SMS TEST", "63\\.21"],
+        notificationDump
+      )
+    ).toBeNull();
   });
 
   it("detects retryable Maestro Android transport disconnects", () => {

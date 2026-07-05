@@ -19,6 +19,7 @@ const { getE2eSeedConfig, seedE2eData } = require("./e2e-seed");
 const mobileRoot = join(__dirname, "..");
 const flowDir = join("e2e", "maestro", "live-sms-detection");
 const defaultMaestroFlowTimeoutMs = 10 * 60 * 1000;
+const defaultMaestroTransportMaxAttempts = 3;
 const uiAuthBootstrapFlow = "../helpers/ci-auth-bootstrap.yaml";
 const deeplinkAuthBootstrapFlow = "../helpers/ci-auth-deeplink-bootstrap.yaml";
 
@@ -170,6 +171,13 @@ function getMaestroFlowTimeoutMs(env = process.env) {
     : defaultMaestroFlowTimeoutMs;
 }
 
+function getMaestroTransportMaxAttempts(env = process.env) {
+  const parsed = Number(env.E2E_MAESTRO_TRANSPORT_MAX_ATTEMPTS);
+  return Number.isInteger(parsed) && parsed > 0
+    ? parsed
+    : defaultMaestroTransportMaxAttempts;
+}
+
 function getAuthBootstrapFlow(env = process.env) {
   return env.E2E_AUTH_DEEPLINK_BOOTSTRAP === "1"
     ? deeplinkAuthBootstrapFlow
@@ -214,7 +222,11 @@ async function runFlow(flow, prepareRetry, retryOnTransportFailure = false) {
     throw new Error("Maestro was not found. Install it or set MAESTRO_BIN.");
   }
 
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
+  const maxAttempts = retryOnTransportFailure
+    ? getMaestroTransportMaxAttempts()
+    : 1;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const result = runMaestroFlowOnce(maestroBin, flow);
     if (result.status === 0) {
       return;
@@ -222,10 +234,11 @@ async function runFlow(flow, prepareRetry, retryOnTransportFailure = false) {
 
     if (
       retryOnTransportFailure &&
-      attempt === 1 &&
+      attempt < maxAttempts &&
       (result.didTimeout || isRetryableMaestroTransportFailure(result.output))
     ) {
       logInfo("liveSmsJourney.maestroTransportRetry", {
+        attempt,
         flow,
         reason: result.didTimeout ? "timeout" : "transport-unavailable",
       });
@@ -328,10 +341,11 @@ function normalizeNotificationPatterns(patterns) {
   return Array.isArray(patterns) ? patterns : [patterns];
 }
 
-function findNotificationMatch(nodes, patterns) {
+function findNotificationMatches(nodes, patterns) {
   const regexes = normalizeNotificationPatterns(patterns).map(
     (pattern) => new RegExp(pattern, "i")
   );
+  const matches = [];
 
   for (const anchor of nodes) {
     if (!regexes[0].test(getNodeVisibleText(anchor))) {
@@ -364,14 +378,18 @@ function findNotificationMatch(nodes, patterns) {
       .map((node) => (node.bounds ? parseBounds(node.bounds) : null))
       .filter(Boolean);
 
-    return {
+    matches.push({
       anchor,
       top: Math.min(...nearbyBounds.map((bounds) => bounds.top)),
       bottom: Math.max(...nearbyBounds.map((bounds) => bounds.bottom)),
-    };
+    });
   }
 
-  return null;
+  return matches;
+}
+
+function findNotificationMatch(nodes, patterns) {
+  return findNotificationMatches(nodes, patterns)[0] ?? null;
 }
 
 function dumpActiveNotifications() {
@@ -388,7 +406,7 @@ function getNotificationDumpRecords(notificationDump) {
   );
 }
 
-function notificationDumpMatchesPatterns(
+function getNotificationDumpMatchingRecords(
   notificationDump,
   patterns,
   packageName = appId
@@ -400,21 +418,43 @@ function notificationDumpMatchesPatterns(
     (record) => record.includes(packageName)
   );
 
-  return records.some((record) => regexes.every((regex) => regex.test(record)));
+  return records.filter((record) =>
+    regexes.every((regex) => regex.test(record))
+  );
 }
 
-function findVisibleNotificationMatch(nodes, patterns) {
+function notificationDumpMatchesPatterns(
+  notificationDump,
+  patterns,
+  packageName = appId
+) {
+  return (
+    getNotificationDumpMatchingRecords(notificationDump, patterns, packageName)
+      .length > 0
+  );
+}
+
+function findVisibleNotificationMatch(
+  nodes,
+  patterns,
+  notificationDump = dumpActiveNotifications()
+) {
   const match = findNotificationMatch(nodes, patterns);
   if (match) {
     return match;
   }
 
-  if (!notificationDumpMatchesPatterns(dumpActiveNotifications(), patterns)) {
+  const matchingRecords = getNotificationDumpMatchingRecords(
+    notificationDump,
+    patterns
+  );
+  if (matchingRecords.length !== 1) {
     return null;
   }
 
   const [anchorPattern] = normalizeNotificationPatterns(patterns);
-  return findNotificationMatch(nodes, [anchorPattern]);
+  const anchorMatches = findNotificationMatches(nodes, [anchorPattern]);
+  return anchorMatches.length === 1 ? anchorMatches[0] : null;
 }
 
 function isNodeNearNotification(node, notificationMatch) {
@@ -1084,6 +1124,8 @@ module.exports = {
   getMaestroFlowTimeoutMs,
   getActiveUserFilter,
   getNotificationDumpRecords,
+  findVisibleNotificationMatch,
+  getMaestroTransportMaxAttempts,
   notificationDumpMatchesPatterns,
   parseBounds,
   isRetryableMaestroTransportFailure,
