@@ -236,7 +236,7 @@ describe("ToastProvider", () => {
     expect(reanimated.FadeOut.duration).toHaveBeenCalledWith(140);
   });
 
-  it("positions the toast in the top feedback lane below the header", () => {
+  it("positions the toast at the traditional top app feedback position", () => {
     renderToastHarness();
 
     fireEvent.press(screen.getByTestId("show-success-toast"));
@@ -245,7 +245,7 @@ describe("ToastProvider", () => {
       screen.getByTestId("toast-container")
     );
 
-    expect(toastContainerStyle.top).toBe(136);
+    expect(toastContainerStyle.top).toBe(56);
     expect(toastContainerStyle.bottom).toBeUndefined();
   });
 
@@ -326,6 +326,10 @@ describe("ToastProvider", () => {
     expect(toastAccentStyle.backgroundColor).toBe(palette.nileGreen[500]);
     expect(iconShellStyle.backgroundColor).toBe(palette.nileGreen[50]);
     expect(iconShellStyle.borderColor).toBe(palette.nileGreen[100]);
+    expect(
+      getReactTestInstanceProps(screen.getByTestId("toast-icon-shell"))
+        .className
+    ).toContain("h-10 w-10");
   });
 
   it("replaces an active toast without stacking or hiding the new toast early", () => {

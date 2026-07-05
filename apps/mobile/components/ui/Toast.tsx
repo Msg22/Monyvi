@@ -142,7 +142,7 @@ const TOAST_ENTER_DURATION_MS = 180;
 const TOAST_EXIT_DURATION_MS = 140;
 const TOAST_ENTER_OFFSET_Y = -10;
 const TOAST_ENTER_SCALE = 0.98;
-const TOAST_TOP_HEADER_CLEARANCE = 92;
+const TOAST_TOP_GAP = 12;
 const TOAST_KEYBOARD_GAP = 16;
 const TOAST_DARK_BACKGROUND = `${palette.slate[950]}F2`;
 const TOAST_LIGHT_BACKGROUND = `${palette.slate[25]}F2`;
@@ -220,7 +220,7 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
   const containerPositionStyle =
     keyboardHeight > 0
       ? { bottom: keyboardHeight + TOAST_KEYBOARD_GAP }
-      : { top: insets.top + TOAST_TOP_HEADER_CLEARANCE };
+      : { top: insets.top + TOAST_TOP_GAP };
 
   useEffect(() => {
     const handleKeyboardShow = (event: KeyboardEvent): void => {
@@ -277,11 +277,11 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
         />
 
         <View
-          className="me-3 h-9 w-9 items-center justify-center rounded-full border"
+          className="me-3 h-10 w-10 items-center justify-center rounded-full border"
           style={visualStyle.iconShellStyle}
           testID="toast-icon-shell"
         >
-          <Ionicons name={icon} size={21} color={visualStyle.iconColor} />
+          <Ionicons name={icon} size={19} color={visualStyle.iconColor} />
         </View>
 
         <View className="flex-1">
