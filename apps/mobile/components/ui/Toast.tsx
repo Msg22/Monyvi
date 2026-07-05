@@ -6,7 +6,7 @@
  */
 
 import { palette } from "@/constants/colors";
-import { TAB_BAR_HEIGHT } from "@/constants/ui";
+import { MIC_BUTTON_SIZE, TAB_BAR_HEIGHT } from "@/constants/ui";
 import { useTheme } from "@/context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import React, {
@@ -17,7 +17,13 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import { Text, View, type ViewStyle } from "react-native";
+import {
+  Keyboard,
+  Text,
+  View,
+  type KeyboardEvent,
+  type ViewStyle,
+} from "react-native";
 import Animated, {
   Easing,
   FadeOut,
@@ -137,7 +143,11 @@ const TOAST_ENTER_DURATION_MS = 180;
 const TOAST_EXIT_DURATION_MS = 140;
 const TOAST_ENTER_OFFSET_Y = 12;
 const TOAST_ENTER_SCALE = 0.98;
-const TOAST_BOTTOM_OFFSET = TAB_BAR_HEIGHT + 8;
+const TOAST_BOTTOM_GAP = 8;
+const MIC_BUTTON_PROTRUSION = MIC_BUTTON_SIZE / 2 - 8;
+const TOAST_BOTTOM_OFFSET =
+  TAB_BAR_HEIGHT + MIC_BUTTON_PROTRUSION + TOAST_BOTTOM_GAP;
+const TOAST_KEYBOARD_GAP = 16;
 const TOAST_DARK_BACKGROUND = `${palette.slate[950]}F2`;
 const TOAST_SHADOW_STYLE: ViewStyle = {
   shadowColor: palette.slate[950],
@@ -206,7 +216,31 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
   const icon = TOAST_ICONS[config.type];
   const { isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const visualStyle = getToastVisualStyle(config.type, isDark);
+
+  useEffect(() => {
+    const handleKeyboardShow = (event: KeyboardEvent): void => {
+      setKeyboardHeight(event.endCoordinates.height);
+    };
+    const handleKeyboardHide = (): void => {
+      setKeyboardHeight(0);
+    };
+
+    const showSubscription = Keyboard.addListener(
+      "keyboardDidShow",
+      handleKeyboardShow
+    );
+    const hideSubscription = Keyboard.addListener(
+      "keyboardDidHide",
+      handleKeyboardHide
+    );
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -223,7 +257,12 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
         Easing.in(Easing.cubic)
       )}
       className="absolute start-4 end-4 z-50"
-      style={{ bottom: insets.bottom + TOAST_BOTTOM_OFFSET }}
+      style={{
+        bottom:
+          keyboardHeight > 0
+            ? keyboardHeight + TOAST_KEYBOARD_GAP
+            : insets.bottom + TOAST_BOTTOM_OFFSET,
+      }}
       testID="toast-container"
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"

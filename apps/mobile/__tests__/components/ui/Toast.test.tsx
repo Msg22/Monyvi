@@ -2,13 +2,13 @@ import { palette } from "@/constants/colors";
 import { fireEvent, render, screen, act } from "@testing-library/react-native";
 import React from "react";
 import {
+  Keyboard,
   Pressable,
   StyleSheet,
   Text,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import type { ReactTestInstance } from "react-test-renderer";
 import { SafeAreaProvider, type Metrics } from "react-native-safe-area-context";
 import { ToastProvider, useToast } from "@/components/ui/Toast";
 
@@ -166,15 +166,17 @@ function renderToastHarness(): void {
   );
 }
 
-function getFlattenedViewStyle(instance: ReactTestInstance): ViewStyle {
+interface ToastTestInstance {
+  readonly props?: unknown;
+}
+
+function getFlattenedViewStyle(instance: unknown): ViewStyle {
   const props = getReactTestInstanceProps(instance);
   return StyleSheet.flatten(props.style as StyleProp<ViewStyle>) ?? {};
 }
 
-function getReactTestInstanceProps(
-  instance: ReactTestInstance
-): Record<string, unknown> {
-  const instanceWithProps = instance as unknown as { readonly props?: unknown };
+function getReactTestInstanceProps(instance: unknown): Record<string, unknown> {
+  const instanceWithProps = instance as ToastTestInstance;
   return instanceWithProps.props &&
     typeof instanceWithProps.props === "object" &&
     !Array.isArray(instanceWithProps.props)
@@ -244,7 +246,43 @@ describe("ToastProvider", () => {
     );
 
     expect(toastContainerStyle.top).toBeUndefined();
-    expect(toastContainerStyle.bottom).toBe(122);
+    expect(toastContainerStyle.bottom).toBe(146);
+  });
+
+  it("moves the toast above the keyboard when text input is focused", () => {
+    const keyboardListeners = new Map<
+      string,
+      (event: { readonly endCoordinates: { readonly height: number } }) => void
+    >();
+    const keyboardSpy = jest
+      .spyOn(Keyboard, "addListener")
+      .mockImplementation((eventName, listener) => {
+        keyboardListeners.set(
+          eventName,
+          listener as (event: {
+            readonly endCoordinates: { readonly height: number };
+          }) => void
+        );
+        return {
+          remove: jest.fn(),
+        } as unknown as ReturnType<typeof Keyboard.addListener>;
+      });
+
+    renderToastHarness();
+
+    fireEvent.press(screen.getByTestId("show-success-toast"));
+    act(() => {
+      keyboardListeners.get("keyboardDidShow")?.({
+        endCoordinates: { height: 320 },
+      });
+    });
+
+    const toastContainerStyle = getFlattenedViewStyle(
+      screen.getByTestId("toast-container")
+    );
+
+    expect(toastContainerStyle.bottom).toBe(336);
+    keyboardSpy.mockRestore();
   });
 
   it("uses a premium light success treatment", () => {
