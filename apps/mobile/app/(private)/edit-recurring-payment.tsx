@@ -100,6 +100,11 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
         action: values.action,
         notes: values.notes.trim() || undefined,
       });
+      showToast({
+        type: "success",
+        title: t("recurring_payment_updated"),
+        message: t("recurring_payment_updated_message"),
+      });
       router.back();
     } catch (error: unknown) {
       showToast({
@@ -119,11 +124,25 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
     setIsPauseResumeVisible(false);
 
     try {
-      if (payment.status === "PAUSED") {
+      const isResuming = payment.status === "PAUSED";
+
+      if (isResuming) {
         await resumeRecurringPayment(payment.id);
       } else {
         await pauseRecurringPayment(payment.id);
       }
+
+      showToast({
+        type: "success",
+        title: t(
+          isResuming ? "recurring_payment_resumed" : "recurring_payment_paused"
+        ),
+        message: t(
+          isResuming
+            ? "recurring_payment_resumed_message"
+            : "recurring_payment_paused_message"
+        ),
+      });
     } catch (error: unknown) {
       showToast({
         type: "error",
@@ -138,6 +157,11 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
 
     try {
       await deleteRecurringPayment(payment.id);
+      showToast({
+        type: "success",
+        title: t("recurring_payment_deleted"),
+        message: t("recurring_payment_deleted_message"),
+      });
       router.back();
     } catch (error: unknown) {
       showToast({
