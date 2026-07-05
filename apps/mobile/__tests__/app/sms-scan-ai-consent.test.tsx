@@ -131,6 +131,15 @@ jest.mock("@/utils/logger", () => ({
 
 import SmsScanScreen from "@/app/(private)/sms-scan";
 
+const smsSyncServiceMock = jest.requireMock("@/services/sms-sync-service") as {
+  readonly loadExistingSmsFingerprints: jest.Mock<
+    Promise<ReadonlySet<string>>,
+    []
+  >;
+};
+const mockLoadExistingSmsFingerprints =
+  smsSyncServiceMock.loadExistingSmsFingerprints;
+
 describe("SmsScanScreen AI consent", () => {
   beforeAll(() => {
     Object.defineProperty(Platform, "OS", {
@@ -144,6 +153,7 @@ describe("SmsScanScreen AI consent", () => {
     mockIsAiConsented = false;
     mockRequestPermission.mockResolvedValue("granted");
     mockStartScan.mockResolvedValue();
+    mockLoadExistingSmsFingerprints.mockResolvedValue(new Set());
   });
 
   it("keeps consent visible so the user can retry when granting consent fails", async () => {
@@ -192,5 +202,31 @@ describe("SmsScanScreen AI consent", () => {
     });
 
     await waitFor(() => expect(mockStartScan).toHaveBeenCalledTimes(2));
+  });
+
+  it("does not start scanning when consent is revoked while fingerprint preload is pending", async () => {
+    mockIsAiConsented = true;
+    let resolveFingerprints: () => void = () => {};
+    mockLoadExistingSmsFingerprints.mockReturnValueOnce(
+      new Promise<ReadonlySet<string>>((resolve) => {
+        resolveFingerprints = () => resolve(new Set());
+      })
+    );
+
+    const screenView = render(<SmsScanScreen />);
+
+    await waitFor(() =>
+      expect(mockLoadExistingSmsFingerprints).toHaveBeenCalledTimes(1)
+    );
+    mockIsAiConsented = false;
+    screenView.rerender(<SmsScanScreen />);
+
+    await act(async () => {
+      resolveFingerprints();
+      await Promise.resolve();
+    });
+
+    expect(mockStartScan).not.toHaveBeenCalled();
+    expect(await screen.findByTestId("ai-consent-continue")).toBeTruthy();
   });
 });

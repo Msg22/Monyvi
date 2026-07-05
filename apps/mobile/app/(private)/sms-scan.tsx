@@ -227,6 +227,9 @@ export default function SmsScanScreen(): React.JSX.Element {
         ? lastSyncTimestamp
         : undefined;
 
+    const abortController = new AbortController();
+    scanAbortControllerRef.current = abortController;
+
     let existingFingerprints: ReadonlySet<string> = new Set();
     try {
       existingFingerprints = await loadExistingSmsFingerprints();
@@ -236,8 +239,16 @@ export default function SmsScanScreen(): React.JSX.Element {
       });
     }
 
-    const abortController = new AbortController();
-    scanAbortControllerRef.current = abortController;
+    if (abortController.signal.aborted) {
+      if (scanAbortControllerRef.current === abortController) {
+        scanAbortControllerRef.current = null;
+        if (pendingScanAfterAbortRef.current) {
+          pendingScanAfterAbortRef.current = false;
+          setScanRestartNonce((value) => value + 1);
+        }
+      }
+      return;
+    }
 
     startScan({
       minDate,
