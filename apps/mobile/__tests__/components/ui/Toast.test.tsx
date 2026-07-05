@@ -204,7 +204,7 @@ describe("ToastProvider", () => {
     jest.useRealTimers();
   });
 
-  it("uses calm timed fade and lift motion instead of spring slide motion", () => {
+  it("uses calm timed fade and top-drop motion instead of spring slide motion", () => {
     renderToastHarness();
 
     fireEvent.press(screen.getByTestId("show-success-toast"));
@@ -222,7 +222,7 @@ describe("ToastProvider", () => {
 
     expect(animation.initialValues).toEqual({
       opacity: 0,
-      transform: [{ translateY: 12 }, { scale: 0.98 }],
+      transform: [{ translateY: -10 }, { scale: 0.98 }],
     });
     expect(animation.animations.transform).toHaveLength(2);
     expect(reanimated.withTiming).toHaveBeenCalledWith(
@@ -236,7 +236,7 @@ describe("ToastProvider", () => {
     expect(reanimated.FadeOut.duration).toHaveBeenCalledWith(140);
   });
 
-  it("positions the toast above bottom navigation instead of overlapping headers", () => {
+  it("positions the toast in the top feedback lane below the header", () => {
     renderToastHarness();
 
     fireEvent.press(screen.getByTestId("show-success-toast"));
@@ -245,11 +245,11 @@ describe("ToastProvider", () => {
       screen.getByTestId("toast-container")
     );
 
-    expect(toastContainerStyle.top).toBeUndefined();
-    expect(toastContainerStyle.bottom).toBe(178);
+    expect(toastContainerStyle.top).toBe(136);
+    expect(toastContainerStyle.bottom).toBeUndefined();
   });
 
-  it("seeds the toast position from an already visible keyboard", () => {
+  it("uses bottom keyboard placement when a keyboard is already visible", () => {
     const keyboardMetricsSpy = jest.spyOn(Keyboard, "metrics").mockReturnValue({
       height: 280,
       screenX: 0,
@@ -321,7 +321,7 @@ describe("ToastProvider", () => {
       screen.getByTestId("toast-icon-shell")
     );
 
-    expect(toastSurfaceStyle.backgroundColor).toBe(palette.slate[25]);
+    expect(toastSurfaceStyle.backgroundColor).toBe(`${palette.slate[25]}F2`);
     expect(toastSurfaceStyle.borderColor).toBe(`${palette.nileGreen[500]}66`);
     expect(toastAccentStyle.backgroundColor).toBe(palette.nileGreen[500]);
     expect(iconShellStyle.backgroundColor).toBe(palette.nileGreen[50]);

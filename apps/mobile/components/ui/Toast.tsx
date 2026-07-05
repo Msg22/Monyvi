@@ -6,7 +6,6 @@
  */
 
 import { palette } from "@/constants/colors";
-import { MIC_BUTTON_SIZE, TAB_BAR_HEIGHT } from "@/constants/ui";
 import { useTheme } from "@/context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import React, {
@@ -141,19 +140,12 @@ const TOAST_COLORS: Record<
 
 const TOAST_ENTER_DURATION_MS = 180;
 const TOAST_EXIT_DURATION_MS = 140;
-const TOAST_ENTER_OFFSET_Y = 12;
+const TOAST_ENTER_OFFSET_Y = -10;
 const TOAST_ENTER_SCALE = 0.98;
-const TOAST_BOTTOM_GAP = 8;
-const MIC_BUTTON_PROTRUSION = MIC_BUTTON_SIZE / 2 - 8;
-const FLOATING_ACTION_FAB_SIZE = 56;
-const FLOATING_BOTTOM_CONTROL_CLEARANCE = Math.max(
-  MIC_BUTTON_PROTRUSION,
-  FLOATING_ACTION_FAB_SIZE
-);
-const TOAST_BOTTOM_OFFSET =
-  TAB_BAR_HEIGHT + FLOATING_BOTTOM_CONTROL_CLEARANCE + TOAST_BOTTOM_GAP;
+const TOAST_TOP_HEADER_CLEARANCE = 92;
 const TOAST_KEYBOARD_GAP = 16;
 const TOAST_DARK_BACKGROUND = `${palette.slate[950]}F2`;
+const TOAST_LIGHT_BACKGROUND = `${palette.slate[25]}F2`;
 const TOAST_SHADOW_STYLE: ViewStyle = {
   shadowColor: palette.slate[950],
   shadowOffset: { width: 0, height: 8 },
@@ -211,7 +203,7 @@ function getToastVisualStyle(
       borderColor: isDark ? colors.darkIconBorder : colors.lightIconBorder,
     },
     surfaceStyle: {
-      backgroundColor: isDark ? TOAST_DARK_BACKGROUND : palette.slate[25],
+      backgroundColor: isDark ? TOAST_DARK_BACKGROUND : TOAST_LIGHT_BACKGROUND,
       borderColor: isDark ? colors.darkBorder : colors.lightBorder,
     },
   };
@@ -225,6 +217,10 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
     getVisibleKeyboardHeight
   );
   const visualStyle = getToastVisualStyle(config.type, isDark);
+  const containerPositionStyle =
+    keyboardHeight > 0
+      ? { bottom: keyboardHeight + TOAST_KEYBOARD_GAP }
+      : { top: insets.top + TOAST_TOP_HEADER_CLEARANCE };
 
   useEffect(() => {
     const handleKeyboardShow = (event: KeyboardEvent): void => {
@@ -264,12 +260,7 @@ function Toast({ config, onHide }: ToastProps): React.JSX.Element {
         Easing.in(Easing.cubic)
       )}
       className="absolute start-4 end-4 z-[110]"
-      style={{
-        bottom:
-          keyboardHeight > 0
-            ? keyboardHeight + TOAST_KEYBOARD_GAP
-            : insets.bottom + TOAST_BOTTOM_OFFSET,
-      }}
+      style={containerPositionStyle}
       testID="toast-container"
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
