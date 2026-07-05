@@ -437,7 +437,7 @@ function notificationDumpMatchesPatterns(
 function findVisibleNotificationMatch(
   nodes,
   patterns,
-  notificationDump = dumpActiveNotifications()
+  notificationDump
 ) {
   const match = findNotificationMatch(nodes, patterns);
   if (match) {
@@ -445,7 +445,7 @@ function findVisibleNotificationMatch(
   }
 
   const matchingRecords = getNotificationDumpMatchingRecords(
-    notificationDump,
+    notificationDump ?? dumpActiveNotifications(),
     patterns
   );
   if (matchingRecords.length !== 1) {

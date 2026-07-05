@@ -195,6 +195,37 @@ describe("run-live-sms-journeys helpers", () => {
     ).toBeNull();
   });
 
+  it("does not require a notification dump when visible text already matches", () => {
+    const nodes = [
+      {
+        text: "Expense Detected",
+        contentDescription: "",
+        resourceId: "",
+        bounds: "[0,100][900,160]",
+      },
+      {
+        text: "BACKGROUND LIVE SMS TEST",
+        contentDescription: "",
+        resourceId: "",
+        bounds: "[0,170][900,230]",
+      },
+      {
+        text: "63.21",
+        contentDescription: "",
+        resourceId: "",
+        bounds: "[0,240][900,300]",
+      },
+    ];
+
+    expect(
+      liveSmsJourneys.findVisibleNotificationMatch(nodes, [
+        "Expense Detected",
+        "BACKGROUND LIVE SMS TEST",
+        "63\\.21",
+      ])
+    ).not.toBeNull();
+  });
+
   it("detects retryable Maestro Android transport disconnects", () => {
     expect(
       liveSmsJourneys.isRetryableMaestroTransportFailure(
