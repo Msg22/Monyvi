@@ -3,6 +3,7 @@ import type { ReviewableTransaction } from "@monyvi/logic";
 const mockGetCurrentUserId = jest.fn<Promise<string | null>, []>();
 const mockEnsureCashAccount = jest.fn();
 const mockQueryOwned = jest.fn();
+const mockQueryAccessibleCategories = jest.fn();
 const mockHasExistingSmsFingerprint = jest.fn<Promise<boolean>, [string]>();
 const mockPrepareTransactionCreate = jest.fn();
 const mockPrepareTransferCreate = jest.fn();
@@ -30,6 +31,8 @@ jest.mock("@/services/account-service", () => ({
 
 jest.mock("@/services/user-data-access", () => ({
   queryOwned: (...args: readonly unknown[]): unknown => mockQueryOwned(...args),
+  queryAccessibleCategories: (...args: readonly unknown[]): unknown =>
+    mockQueryAccessibleCategories(...args),
 }));
 
 jest.mock("@/services/sms-dedup-service", () => ({
@@ -102,6 +105,11 @@ describe("batchCreateTransactions", () => {
       await writer();
     });
     mockDatabaseBatch.mockResolvedValue();
+    mockQueryAccessibleCategories.mockReturnValue({
+      fetch: jest.fn<Promise<ReadonlyArray<{ readonly id: string }>>, []>(() =>
+        Promise.resolve([{ id: "cat-food" }])
+      ),
+    });
     mockPrepareTransactionCreate.mockImplementation(
       (builder: (record: Record<string, unknown>) => void) => {
         const record: Record<string, unknown> = {};
@@ -134,7 +142,6 @@ describe("batchCreateTransactions", () => {
         Promise.resolve([account])
       ),
     });
-
     const result = await batchCreateTransactions(
       [
         createReviewableTransaction({ amount: 100 }),
@@ -187,6 +194,57 @@ describe("batchCreateTransactions", () => {
     expect(result.errors[0]).toContain("Missing SMS fingerprint");
     expect(mockPrepareTransactionCreate).not.toHaveBeenCalled();
     expect(mockDatabaseBatch).not.toHaveBeenCalled();
+  });
+
+  it("rejects regular SMS transactions with a missing category before writing locally", async () => {
+    const account = createAccount("acc-1", 1000);
+    mockQueryOwned.mockReturnValue({
+      fetch: jest.fn<Promise<readonly MockAccount[]>, []>(() =>
+        Promise.resolve([account])
+      ),
+    });
+
+    const result = await batchCreateTransactions(
+      [
+        createReviewableTransaction({
+          categoryId: undefined as unknown as string,
+        }),
+      ],
+      new Map([[0, "acc-1"]])
+    );
+
+    expect(result.savedCount).toBe(0);
+    expect(result.failedCount).toBe(1);
+    expect(result.errors[0]).toContain("needs a category");
+    expect(mockPrepareTransactionCreate).not.toHaveBeenCalled();
+    expect(mockDatabaseBatch).not.toHaveBeenCalled();
+    expect(account.balance).toBe(1000);
+  });
+
+  it("rejects regular SMS transactions with inaccessible categories before writing locally", async () => {
+    const account = createAccount("acc-1", 1000);
+    mockQueryOwned.mockReturnValue({
+      fetch: jest.fn<Promise<readonly MockAccount[]>, []>(() =>
+        Promise.resolve([account])
+      ),
+    });
+    mockQueryAccessibleCategories.mockReturnValue({
+      fetch: jest.fn<Promise<ReadonlyArray<{ readonly id: string }>>, []>(() =>
+        Promise.resolve([])
+      ),
+    });
+
+    const result = await batchCreateTransactions(
+      [createReviewableTransaction({ categoryId: "missing-category" })],
+      new Map([[0, "acc-1"]])
+    );
+
+    expect(result.savedCount).toBe(0);
+    expect(result.failedCount).toBe(1);
+    expect(result.errors[0]).toContain("needs a valid category");
+    expect(mockPrepareTransactionCreate).not.toHaveBeenCalled();
+    expect(mockDatabaseBatch).not.toHaveBeenCalled();
+    expect(account.balance).toBe(1000);
   });
 
   it("silently skips SMS fingerprints that already exist locally", async () => {
