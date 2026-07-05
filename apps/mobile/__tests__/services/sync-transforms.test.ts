@@ -103,6 +103,28 @@ describe("sync transforms", () => {
     expect(transformed).not.toHaveProperty("user_id");
   });
 
+  it("keeps shared system categories unowned when pushing to Supabase", () => {
+    const transformed = transformToSupabase(
+      "categories",
+      {
+        id: "00000000-0000-0000-0001-000000000002",
+        user_id: null,
+        is_system: true,
+        created_at: Date.UTC(2026, 0, 15, 10),
+        updated_at: Date.UTC(2026, 0, 15, 11),
+      },
+      "current-user"
+    );
+
+    expect(transformed).toEqual(
+      expect.objectContaining({
+        id: "00000000-0000-0000-0001-000000000002",
+        user_id: null,
+        is_system: true,
+      })
+    );
+  });
+
   it("removes legacy bank details columns that no longer exist remotely", () => {
     const transformed = transformToSupabase(
       "bank_details",

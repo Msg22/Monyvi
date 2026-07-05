@@ -44,6 +44,9 @@ export interface CategoryMapSource {
   readonly id: Category["id"];
   readonly systemName: Category["systemName"];
   readonly displayName: Category["displayName"];
+  readonly isSystem?: Category["isSystem"];
+  readonly userId?: Category["userId"] | null;
+  readonly createdAt?: Category["createdAt"];
 }
 
 /**
@@ -69,6 +72,8 @@ export const DATE_ONLY_REGEX: RegExp = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Default category system name when AI returns an unknown category. */
 const FALLBACK_CATEGORY_SYSTEM_NAME = "other";
+const UUID_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ---------------------------------------------------------------------------
 // Pure Functions
@@ -227,8 +232,65 @@ export function buildCategoryMap(
   categories: readonly CategoryMapSource[]
 ): CategoryMap {
   const map: CategoryMap = new Map();
+  const selectedCategories = new Map<string, CategoryMapSource>();
+
   for (const cat of categories) {
+    const selected = selectedCategories.get(cat.systemName);
+    if (selected && !shouldReplaceCategoryMapSource(selected, cat)) {
+      continue;
+    }
+
+    selectedCategories.set(cat.systemName, cat);
     map.set(cat.systemName, { name: cat.displayName, id: cat.id });
   }
   return map;
+}
+
+function shouldReplaceCategoryMapSource(
+  selected: CategoryMapSource,
+  candidate: CategoryMapSource
+): boolean {
+  if (isSharedSystemCategory(selected) && isSharedSystemCategory(candidate)) {
+    return compareSharedSystemCategoryPriority(candidate, selected) < 0;
+  }
+
+  return true;
+}
+
+function compareSharedSystemCategoryPriority(
+  left: CategoryMapSource,
+  right: CategoryMapSource
+): number {
+  const leftIsUuid = isUuid(left.id);
+  const rightIsUuid = isUuid(right.id);
+  if (leftIsUuid !== rightIsUuid) {
+    return leftIsUuid ? -1 : 1;
+  }
+
+  const leftCreatedAt = getCreatedAtTime(left);
+  const rightCreatedAt = getCreatedAtTime(right);
+  if (leftCreatedAt !== null && rightCreatedAt !== null) {
+    const createdAtDiff = leftCreatedAt - rightCreatedAt;
+    if (createdAtDiff !== 0) {
+      return createdAtDiff;
+    }
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
+function isSharedSystemCategory(category: CategoryMapSource): boolean {
+  return (
+    category.isSystem === true &&
+    (category.userId === null || category.userId === undefined)
+  );
+}
+
+function isUuid(value: string): boolean {
+  return UUID_ID_PATTERN.test(value);
+}
+
+function getCreatedAtTime(category: CategoryMapSource): number | null {
+  const time = category.createdAt?.getTime();
+  return typeof time === "number" && Number.isFinite(time) ? time : null;
 }

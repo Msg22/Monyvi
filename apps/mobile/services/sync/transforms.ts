@@ -139,7 +139,9 @@ export function transformToSupabase(
     delete transformed["sms_sender_name"];
   }
 
-  if (!isChildTable) {
+  if (table === "categories" && transformed.is_system === true) {
+    transformed.user_id = null;
+  } else if (!isChildTable) {
     transformed.user_id = userId;
   }
 
