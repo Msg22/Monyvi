@@ -222,6 +222,12 @@ Dependency direction: `apps/ → packages/logic → packages/db`. **Never revers
   cold-start scroll-jump). Apply the inset exactly once per screen — do not nest
   a `SafeAreaView` inside a subtree that already sits under a parent that
   applied `paddingTop`.
+- Any bottom-anchored mobile UI, including fixed CTAs, bottom sheets, prompts,
+  and modals, MUST account for `useSafeAreaInsets().bottom` or an equivalent
+  `SafeAreaView` bottom edge. Do not rely on fixed `pb-*`, `bottom`, or spacer
+  values alone. When touching these surfaces, add or update a focused test that
+  proves the bottom inset is included so Android gesture and 3-button navigation
+  bars cannot overlap the action area.
 - Use `react-navigation` and `expo-router` for file-based routing.
 - Use Zod for runtime validation. Derive types with `z.infer<typeof schema>` —
   don't duplicate type definitions.

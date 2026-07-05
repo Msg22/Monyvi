@@ -24,6 +24,7 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { palette } from "@/constants/colors";
 import { useTranslation } from "react-i18next";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -41,6 +42,8 @@ interface SmsPermissionPromptProps {
     "undetermined" | "granted" | "denied" | "blocked"
   >;
 }
+
+const SHEET_BOTTOM_PADDING = 40;
 
 // ---------------------------------------------------------------------------
 // Feature Bullet
@@ -88,6 +91,7 @@ export function SmsPermissionPrompt({
   requestPermission,
 }: SmsPermissionPromptProps): React.JSX.Element {
   const { t } = useTranslation("transactions");
+  const insets = useSafeAreaInsets();
 
   const handleAllow = useCallback(async (): Promise<void> => {
     const result = await requestPermission();
@@ -109,7 +113,11 @@ export function SmsPermissionPrompt({
       <TouchableWithoutFeedback onPress={onDismiss}>
         <View className="flex-1 bg-black/60 justify-end">
           <TouchableWithoutFeedback>
-            <View className="bg-white dark:bg-slate-900 rounded-t-3xl px-6 pt-8 pb-10">
+            <View
+              testID="sms-permission-prompt-sheet"
+              className="bg-white dark:bg-slate-900 rounded-t-3xl px-6 pt-8"
+              style={{ paddingBottom: SHEET_BOTTOM_PADDING + insets.bottom }}
+            >
               {/* Header Icon */}
               <Animated.View
                 entering={FadeInUp.delay(200).springify()}
