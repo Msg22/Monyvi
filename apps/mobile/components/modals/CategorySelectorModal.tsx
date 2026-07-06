@@ -231,6 +231,7 @@ export function CategorySelectorModal({
             <View
               testID="category-selector-sheet"
               className="rounded-t-3xl overflow-hidden bg-white dark:bg-slate-900"
+              style={{ marginBottom: bottomInset }}
             >
               {/* Header */}
               <View className="flex-row justify-between items-center px-6 py-5 border-b border-slate-200 dark:border-slate-800">

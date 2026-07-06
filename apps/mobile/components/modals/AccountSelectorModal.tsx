@@ -67,7 +67,11 @@ export function AccountSelectorModal({
     >
       <TouchableWithoutFeedback onPress={onClose}>
         <View className="flex-1 bg-black/60 justify-end">
-          <View className="rounded-t-3xl overflow-hidden max-h-[80%] bg-white dark:bg-slate-900 z-50">
+          <View
+            testID="account-selector-sheet"
+            className="rounded-t-3xl overflow-hidden max-h-[80%] bg-white dark:bg-slate-900 z-50"
+            style={{ marginBottom: bottomInset }}
+          >
             <BlurView
               intensity={40}
               tint={isDark ? "dark" : "light"}

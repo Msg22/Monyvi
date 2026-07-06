@@ -134,6 +134,9 @@ describe("recurring payment selector safe areas", () => {
       />
     );
 
+    expect(screen.getByTestId("account-selector-sheet")).toHaveStyle({
+      marginBottom: 48,
+    });
     expect(screen.getByTestId("account-selector-scroll")).toHaveProp(
       "contentContainerStyle",
       expect.objectContaining({
@@ -154,6 +157,9 @@ describe("recurring payment selector safe areas", () => {
       />
     );
 
+    expect(screen.getByTestId("category-selector-sheet")).toHaveStyle({
+      marginBottom: 48,
+    });
     expect(screen.getByTestId("category-selector-list")).toHaveProp(
       "contentContainerStyle",
       expect.objectContaining({
