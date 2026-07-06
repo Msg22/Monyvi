@@ -11,6 +11,8 @@ jest.mock("react-native-safe-area-context", () => ({
   initialWindowMetrics: {
     insets: { bottom: 24, left: 0, right: 0, top: 0 },
   },
+  SafeAreaInsetsContext:
+    jest.requireActual<typeof import("react")>("react").createContext(null),
   useSafeAreaInsets: (): { readonly bottom: number } => ({ bottom: 0 }),
 }));
 

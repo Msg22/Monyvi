@@ -1,15 +1,17 @@
+import { useContext } from "react";
 import { Platform } from "react-native";
 import {
   initialWindowMetrics,
-  useSafeAreaInsets,
+  SafeAreaInsetsContext,
 } from "react-native-safe-area-context";
 
 export function useModalBottomInset(): number {
-  const insets = useSafeAreaInsets();
+  const insets = useContext(SafeAreaInsetsContext);
+  const initialBottomInset = initialWindowMetrics?.insets.bottom ?? 0;
 
   if (Platform.OS !== "android") {
-    return insets.bottom;
+    return insets?.bottom ?? initialBottomInset;
   }
 
-  return Math.max(insets.bottom, initialWindowMetrics?.insets.bottom ?? 0);
+  return Math.max(insets?.bottom ?? 0, initialBottomInset);
 }
