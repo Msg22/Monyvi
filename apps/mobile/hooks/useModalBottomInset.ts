@@ -11,6 +11,7 @@ interface ModalSafeAreaInsets {
 
 const fallbackSafeAreaInsetsContext =
   createContext<ModalSafeAreaInsets | null>(null);
+const ANDROID_MODAL_BOTTOM_INSET_FALLBACK = 48;
 
 export function useModalBottomInset(): number {
   const safeAreaInsetsContext = SafeAreaInsetsContext as
@@ -24,6 +25,10 @@ export function useModalBottomInset(): number {
 
   if (Platform.OS !== "android") {
     return bottomInset || initialBottomInset;
+  }
+
+  if (bottomInset === 0) {
+    return Math.max(initialBottomInset, ANDROID_MODAL_BOTTOM_INSET_FALLBACK);
   }
 
   return Math.max(bottomInset, initialBottomInset);

@@ -119,7 +119,7 @@ describe("recurring payment selector safe areas", () => {
     );
 
     expect(screen.getByTestId("frequency-picker-sheet-content")).toHaveStyle({
-      paddingBottom: 24,
+      paddingBottom: 48,
     });
   });
 
@@ -134,9 +134,12 @@ describe("recurring payment selector safe areas", () => {
       />
     );
 
-    expect(screen.getByTestId("account-selector-list-content")).toHaveStyle({
-      paddingBottom: 64,
-    });
+    expect(screen.getByTestId("account-selector-scroll")).toHaveProp(
+      "contentContainerStyle",
+      expect.objectContaining({
+        paddingBottom: 88,
+      })
+    );
   });
 
   it("pads the category selector above the native bottom bar", () => {
@@ -154,7 +157,7 @@ describe("recurring payment selector safe areas", () => {
     expect(screen.getByTestId("category-selector-list")).toHaveProp(
       "contentContainerStyle",
       expect.objectContaining({
-        paddingBottom: 64,
+        paddingBottom: 88,
       })
     );
   });

@@ -91,11 +91,19 @@ export function AccountSelectorModal({
               </View>
 
               {/* Account List */}
-              <ScrollView className="p-4" showsVerticalScrollIndicator={false}>
+              <ScrollView
+                testID="account-selector-scroll"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  gap: 12,
+                  paddingBottom: bottomInset + 40,
+                  paddingHorizontal: 16,
+                  paddingTop: 16,
+                }}
+              >
                 <View
                   testID="account-selector-list-content"
                   className="gap-3"
-                  style={{ paddingBottom: bottomInset + 40 }}
                 >
                   {accounts.map((account) => {
                     const isSelected = account.id === selectedId;
