@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react-native";
 import React from "react";
+import { Platform } from "react-native";
 
 import { AccountSelectorModal } from "@/components/modals/AccountSelectorModal";
 import { CategorySelectorModal } from "@/components/modals/CategorySelectorModal";
@@ -7,7 +8,12 @@ import { FrequencyPickerModal } from "@/components/modals/FrequencyPickerModal";
 import type { Account, Category } from "@monyvi/db";
 
 jest.mock("react-native-safe-area-context", () => ({
-  useSafeAreaInsets: (): { readonly bottom: number } => ({ bottom: 24 }),
+  initialWindowMetrics: {
+    insets: { bottom: 24, left: 0, right: 0, top: 0 },
+  },
+  SafeAreaInsetsContext:
+    jest.requireActual<typeof import("react")>("react").createContext(null),
+  useSafeAreaInsets: (): { readonly bottom: number } => ({ bottom: 0 }),
 }));
 
 jest.mock("@/context/ThemeContext", () => ({
@@ -95,7 +101,14 @@ const category = {
 };
 
 describe("recurring payment selector safe areas", () => {
-  it("pads the frequency picker above the native bottom bar", () => {
+  beforeAll(() => {
+    Object.defineProperty(Platform, "OS", {
+      configurable: true,
+      get: () => "android",
+    });
+  });
+
+  it("falls back to initial metrics when modal insets are zero", () => {
     render(
       <FrequencyPickerModal
         visible
@@ -106,7 +119,7 @@ describe("recurring payment selector safe areas", () => {
     );
 
     expect(screen.getByTestId("frequency-picker-sheet-content")).toHaveStyle({
-      paddingBottom: 24,
+      paddingBottom: 48,
     });
   });
 
@@ -121,9 +134,15 @@ describe("recurring payment selector safe areas", () => {
       />
     );
 
-    expect(screen.getByTestId("account-selector-list-content")).toHaveStyle({
-      paddingBottom: 64,
+    expect(screen.getByTestId("account-selector-sheet")).toHaveStyle({
+      marginBottom: 48,
     });
+    expect(screen.getByTestId("account-selector-scroll")).toHaveProp(
+      "contentContainerStyle",
+      expect.objectContaining({
+        paddingBottom: 88,
+      })
+    );
   });
 
   it("pads the category selector above the native bottom bar", () => {
@@ -138,10 +157,13 @@ describe("recurring payment selector safe areas", () => {
       />
     );
 
+    expect(screen.getByTestId("category-selector-sheet")).toHaveStyle({
+      marginBottom: 48,
+    });
     expect(screen.getByTestId("category-selector-list")).toHaveProp(
       "contentContainerStyle",
       expect.objectContaining({
-        paddingBottom: 64,
+        paddingBottom: 88,
       })
     );
   });
