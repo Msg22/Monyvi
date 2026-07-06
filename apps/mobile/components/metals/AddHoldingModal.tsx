@@ -35,14 +35,15 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 
 import type { MetalType } from "@monyvi/db";
 import { FINENESS_OPTIONS, GOLD_PURITY_OPTIONS } from "@monyvi/logic";
 
+import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { formatDate } from "@/utils/dateHelpers";
 import {
@@ -93,10 +94,11 @@ export function AddHoldingModal({
   initialMetalType = "GOLD",
 }: AddHoldingModalProps): React.JSX.Element {
   const { isDark } = useTheme();
-  const insets = useSafeAreaInsets();
+  const bottomInset = useModalBottomInset();
   const { preferredCurrency } = usePreferredCurrency();
   const { t } = useTranslation("metals");
   const { t: tCommon } = useTranslation("common");
+  const { showToast } = useToast();
 
   // Sync metalType when initialMetalType changes (e.g., opening from different tab)
   useEffect(() => {
@@ -206,11 +208,20 @@ export function AddHoldingModal({
 
     try {
       await createMetalHolding(data);
+      showToast({
+        type: "success",
+        title: t("holding_created"),
+        message: t("holding_created_message"),
+      });
       handleClose();
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : t("error_save_failed");
+    } catch {
+      const message = t("error_save_failed");
       setErrorMessage(message);
+      showToast({
+        type: "error",
+        title: t("holding_create_failed"),
+        message,
+      });
       // Auto-dismiss is handled by the useEffect above
     } finally {
       inFlightRef.current = false;
@@ -228,6 +239,7 @@ export function AddHoldingModal({
     preferredCurrency,
     selectedItemForm,
     handleClose,
+    showToast,
     t,
   ]);
 
@@ -250,7 +262,7 @@ export function AddHoldingModal({
             >
               <View
                 className="rounded-t-[32px] bg-white dark:bg-slate-800"
-                style={{ paddingBottom: insets.bottom + 24 }}
+                style={{ paddingBottom: bottomInset + 24 }}
               >
                 <ScrollView
                   bounces={false}

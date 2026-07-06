@@ -28,6 +28,7 @@ import {
 } from "@/constants/category-icons";
 import { palette } from "@/constants/colors";
 import { CategoryIcon } from "../common/CategoryIcon";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
 interface IconPickerProps {
   /** Whether the modal is visible */
@@ -87,6 +88,7 @@ export function IconPicker({
 }: IconPickerProps): React.ReactElement {
   const [searchQuery, setSearchQuery] = useState("");
   const { t } = useTranslation("common");
+  const bottomInset = useModalBottomInset();
 
   // Filter icons based on search query
   const filteredIcons = useMemo(() => {
@@ -122,7 +124,10 @@ export function IconPicker({
   );
 
   const renderGroupedIcons = (): React.ReactElement => (
-    <ScrollView showsVerticalScrollIndicator={false}>
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: bottomInset + 20 }}
+    >
       {Object.entries(ICON_GROUPS).map(([groupName, icons]) => (
         <View key={groupName} className="mb-4">
           <Text className="mb-2 px-1 text-sm font-medium text-slate-500 dark:text-slate-400">
@@ -150,7 +155,7 @@ export function IconPicker({
       numColumns={5}
       keyExtractor={searchKeyExtractor}
       // eslint-disable-next-line react-native/no-inline-styles
-      contentContainerStyle={{ paddingBottom: 20 }}
+      contentContainerStyle={{ paddingBottom: bottomInset + 20 }}
       renderItem={renderSearchItem}
       removeClippedSubviews
       maxToRenderPerBatch={20}

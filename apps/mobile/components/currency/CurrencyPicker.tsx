@@ -23,7 +23,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
 interface CurrencyPickerProps {
   readonly visible: boolean;
@@ -117,7 +117,7 @@ export function CurrencyPicker({
   onSelect,
   onClose,
 }: CurrencyPickerProps): React.JSX.Element {
-  const insets = useSafeAreaInsets();
+  const bottomInset = useModalBottomInset();
   const [searchQuery, setSearchQuery] = useState("");
   const { t } = useTranslation("common");
 
@@ -170,7 +170,7 @@ export function CurrencyPicker({
           <TouchableWithoutFeedback>
             <View
               className="rounded-t-[32px] bg-white dark:bg-slate-800 max-h-[80%]"
-              style={{ paddingBottom: insets.bottom }}
+              style={{ paddingBottom: bottomInset }}
             >
               {/* Handle */}
               <View className="pt-3 pb-2 items-center">
