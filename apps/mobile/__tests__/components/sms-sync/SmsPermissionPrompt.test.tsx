@@ -4,6 +4,13 @@ import React from "react";
 import { SmsPermissionPrompt } from "@/components/sms-sync/SmsPermissionPrompt";
 
 jest.mock("react-native-safe-area-context", () => ({
+  SafeAreaInsetsContext:
+    jest.requireActual<typeof import("react")>("react").createContext({
+      top: 0,
+      right: 0,
+      bottom: 24,
+      left: 0,
+    }),
   useSafeAreaInsets: (): {
     readonly top: number;
     readonly right: number;

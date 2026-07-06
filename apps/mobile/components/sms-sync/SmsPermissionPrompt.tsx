@@ -24,7 +24,7 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { palette } from "@/constants/colors";
 import { useTranslation } from "react-i18next";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -91,7 +91,7 @@ export function SmsPermissionPrompt({
   requestPermission,
 }: SmsPermissionPromptProps): React.JSX.Element {
   const { t } = useTranslation("transactions");
-  const insets = useSafeAreaInsets();
+  const bottomInset = useModalBottomInset();
 
   const handleAllow = useCallback(async (): Promise<void> => {
     const result = await requestPermission();
@@ -116,7 +116,7 @@ export function SmsPermissionPrompt({
             <View
               testID="sms-permission-prompt-sheet"
               className="bg-white dark:bg-slate-900 rounded-t-3xl px-6 pt-8"
-              style={{ paddingBottom: SHEET_BOTTOM_PADDING + insets.bottom }}
+              style={{ paddingBottom: SHEET_BOTTOM_PADDING + bottomInset }}
             >
               {/* Header Icon */}
               <Animated.View

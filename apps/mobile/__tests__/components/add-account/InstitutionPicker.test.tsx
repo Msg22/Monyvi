@@ -41,6 +41,15 @@ jest.mock("react-i18next", () => ({
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
+  SafeAreaInsetsContext:
+    jest.requireActual<typeof import("react")>("react").createContext({
+      top: 0,
+      right: 0,
+      get bottom(): number {
+        return mockBottomInset;
+      },
+      left: 0,
+    }),
   useSafeAreaInsets: (): {
     top: number;
     right: number;

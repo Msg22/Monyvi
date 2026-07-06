@@ -12,6 +12,7 @@ import {
 import { palette } from "@/constants/colors";
 import { GroupingPeriod } from "@/hooks/useTransactionsGrouping";
 import { useTranslation } from "react-i18next";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
 interface PeriodFilterModalProps {
   visible: boolean;
@@ -40,6 +41,7 @@ export function PeriodFilterModal({
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const { t } = useTranslation("common");
+  const bottomInset = useModalBottomInset();
 
   const periodOptions = useMemo(
     () =>
@@ -67,7 +69,7 @@ export function PeriodFilterModal({
             />
             <View className="absolute inset-0 bg-white/95 dark:bg-slate-900/95" />
 
-            <View>
+            <View style={{ paddingBottom: bottomInset }}>
               {/* Header */}
               <View className="flex-row justify-between items-center px-5 py-5 border-b border-slate-200 dark:border-slate-800">
                 <Text className="text-xl font-bold text-slate-800 dark:text-slate-100">

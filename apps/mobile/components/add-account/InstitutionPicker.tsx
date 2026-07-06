@@ -19,11 +19,11 @@ import {
   type ListRenderItem,
 } from "react-native";
 import { useTranslation } from "react-i18next";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { getEgyptianInstitutionAsset } from "@/constants/egyptian-institution-assets";
 import { InstitutionLogoMark } from "@/components/institutions/InstitutionLogoMark";
 import { palette } from "@/constants/colors";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
 type InstitutionPickerType = "bank" | "wallet";
 type SelectableEgyptianInstitution = ReturnType<
@@ -142,7 +142,7 @@ export function InstitutionPicker({
   onSelectOther,
 }: InstitutionPickerProps): JSX.Element {
   const { t, i18n } = useTranslation("accounts");
-  const insets = useSafeAreaInsets();
+  const bottomInset = useModalBottomInset();
   const language = i18n?.language ?? "en";
   const { height: windowHeight } = useWindowDimensions();
   const [searchText, setSearchText] = useState("");
@@ -379,7 +379,7 @@ export function InstitutionPicker({
                   className="rounded-t-3xl bg-white px-5 pt-5 dark:bg-slate-900"
                   style={{
                     maxHeight: sheetMaxHeight,
-                    paddingBottom: Math.max(insets.bottom + 24, 24),
+                    paddingBottom: Math.max(bottomInset + 24, 24),
                   }}
                 >
                   <View className="relative mb-4 min-h-10 flex-row items-center justify-center">
@@ -419,7 +419,7 @@ export function InstitutionPicker({
                     showsVerticalScrollIndicator={false}
                     getItemLayout={getInstitutionItemLayout}
                     contentContainerStyle={{
-                      paddingBottom: Math.max(insets.bottom, 12),
+                      paddingBottom: Math.max(bottomInset, 12),
                     }}
                     renderItem={renderInstitutionItem}
                     ListFooterComponent={renderOtherInstitution}

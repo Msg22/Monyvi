@@ -16,6 +16,7 @@ import type { BudgetAlert } from "@/services/budget-alert-service";
 import { formatCurrency } from "@monyvi/logic";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useTranslation } from "react-i18next";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,6 +47,7 @@ export function BudgetAlertModal({
 }: BudgetAlertModalProps): React.JSX.Element {
   const { preferredCurrency } = usePreferredCurrency();
   const { t } = useTranslation("budgets");
+  const bottomInset = useModalBottomInset();
 
   if (!alert) return <></>;
 
@@ -95,6 +97,7 @@ export function BudgetAlertModal({
     >
       <Pressable
         className="flex-1 bg-black/50 justify-center items-center px-6"
+        style={{ paddingBottom: bottomInset }}
         onPress={onDismiss}
       >
         <Pressable

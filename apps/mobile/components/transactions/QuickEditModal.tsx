@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import { Modal, Text, TouchableOpacity, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   type CalculatorKey,
   CalculatorKeypad,
@@ -16,6 +15,7 @@ import { CategorySelectorModal } from "@/components/modals/CategorySelectorModal
 import { palette } from "@/constants/colors";
 import { useCategoryLookup } from "@/context/CategoriesContext";
 import { useCategories } from "@/hooks/useCategories";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 import type { TransactionType } from "@monyvi/db";
 import { useTranslation } from "react-i18next";
 
@@ -43,7 +43,7 @@ export function QuickEditModal({
   onClose,
   onSave,
 }: QuickEditModalProps): React.JSX.Element | null {
-  const insets = useSafeAreaInsets();
+  const bottomInset = useModalBottomInset();
   const { t } = useTranslation("transactions");
 
   // State
@@ -129,7 +129,7 @@ export function QuickEditModal({
         <View className="flex-1 justify-end bg-black/50">
           <View
             className="bg-white dark:bg-slate-900 rounded-t-3xl overflow-hidden"
-            style={{ paddingBottom: insets.bottom }}
+            style={{ paddingBottom: bottomInset }}
           >
             {/* Header */}
             <View className="flex-row items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">

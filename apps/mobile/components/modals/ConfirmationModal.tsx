@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { palette } from "@/constants/colors";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
 type ConfirmationVariant = "danger" | "warning" | "success" | "info";
 
@@ -81,6 +82,7 @@ export function ConfirmationModal({
 }: ConfirmationModalProps): React.JSX.Element {
   const config = VARIANT_CONFIG[variant];
   const iconName = icon ?? config.defaultIcon;
+  const bottomInset = useModalBottomInset();
 
   return (
     <Modal
@@ -90,7 +92,10 @@ export function ConfirmationModal({
       onRequestClose={onCancel}
     >
       <TouchableWithoutFeedback onPress={onCancel}>
-        <View className="flex-1 bg-black/70 justify-center items-center">
+        <View
+          className="flex-1 bg-black/70 justify-center items-center"
+          style={{ paddingBottom: bottomInset }}
+        >
           <TouchableWithoutFeedback>
             <View className="w-[85%] max-w-[340px] rounded-2xl overflow-hidden border border-transparent dark:border-slate-700/40 bg-white dark:bg-slate-900">
               <View className="p-6">
