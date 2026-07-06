@@ -304,6 +304,12 @@ describe("recurring payment header and destructive actions", () => {
         action: "NOTIFY",
         notes: undefined,
       });
+      expect(mockShowToast).toHaveBeenCalledWith({
+        type: "success",
+        title: "recurring_payment_created",
+        message: "recurring_payment_created_message",
+      });
+      expect(router.back).toHaveBeenCalled();
     });
   });
 
@@ -345,6 +351,12 @@ describe("recurring payment header and destructive actions", () => {
           notes: undefined,
         }
       );
+      expect(mockShowToast).toHaveBeenCalledWith({
+        type: "success",
+        title: "recurring_payment_updated",
+        message: "recurring_payment_updated_message",
+      });
+      expect(router.back).toHaveBeenCalled();
     });
   });
 
@@ -402,6 +414,11 @@ describe("recurring payment header and destructive actions", () => {
       expect(serviceMocks().pauseRecurringPayment).toHaveBeenCalledWith(
         "payment-1"
       );
+      expect(mockShowToast).toHaveBeenCalledWith({
+        type: "success",
+        title: "recurring_payment_paused",
+        message: "recurring_payment_paused_message",
+      });
     });
     expect(screen.queryByText("pause_payment")).toBeNull();
   });
@@ -427,6 +444,11 @@ describe("recurring payment header and destructive actions", () => {
       expect(serviceMocks().resumeRecurringPayment).toHaveBeenCalledWith(
         "payment-1"
       );
+      expect(mockShowToast).toHaveBeenCalledWith({
+        type: "success",
+        title: "recurring_payment_resumed",
+        message: "recurring_payment_resumed_message",
+      });
     });
     expect(screen.queryByText("resume_payment")).toBeNull();
   });
@@ -472,6 +494,11 @@ describe("recurring payment header and destructive actions", () => {
       expect(serviceMocks().deleteRecurringPayment).toHaveBeenCalledWith(
         "payment-1"
       );
+      expect(mockShowToast).toHaveBeenCalledWith({
+        type: "success",
+        title: "recurring_payment_deleted",
+        message: "recurring_payment_deleted_message",
+      });
       expect(router.back).toHaveBeenCalled();
     });
   });

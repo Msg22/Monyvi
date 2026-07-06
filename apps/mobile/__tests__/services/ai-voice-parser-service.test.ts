@@ -275,14 +275,27 @@ describe("ai-voice-parser-service", () => {
       }
     });
 
-    it("should use absolute value for amounts", async () => {
+    it("should reject negative AI amounts", async () => {
       const tx = makeValidTransaction({ amount: -50 });
       mockInvoke.mockResolvedValueOnce(makeSuccessResponse([tx]));
 
       const result = await parseVoiceWithAi(makeDefaultOptions());
 
-      if (!isVoiceParserError(result)) {
-        expect(result.transactions[0].amount).toBe(50);
+      expect(isVoiceParserError(result)).toBe(true);
+      if (isVoiceParserError(result)) {
+        expect(result.kind).toBe("empty");
+      }
+    });
+
+    it("should reject non-finite AI amounts", async () => {
+      const tx = makeValidTransaction({ amount: Number.POSITIVE_INFINITY });
+      mockInvoke.mockResolvedValueOnce(makeSuccessResponse([tx]));
+
+      const result = await parseVoiceWithAi(makeDefaultOptions());
+
+      expect(isVoiceParserError(result)).toBe(true);
+      if (isVoiceParserError(result)) {
+        expect(result.kind).toBe("empty");
       }
     });
 

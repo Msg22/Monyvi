@@ -2,6 +2,10 @@
  * Formats a raw numeric string with commas for thousands separators,
  * preserving existing decimal components.
  */
+export const MAX_TRANSACTION_AMOUNT = 1_000_000_000;
+
+const STRICT_AMOUNT_INPUT_PATTERN = /^(?:\d+\.?\d*|\.\d+)$/;
+
 export function formatAmountInput(
   val: string,
   initialValue: string = ""
@@ -26,7 +30,7 @@ export function parseAmountInput(text: string): string {
 
 export function parsePositiveFiniteAmountInput(value: string): number | null {
   const normalized = value.trim().replace(/,/g, "");
-  if (!/^(?:\d+\.?\d*|\.\d+)$/.test(normalized)) {
+  if (!STRICT_AMOUNT_INPUT_PATTERN.test(normalized)) {
     return null;
   }
 
@@ -34,105 +38,8 @@ export function parsePositiveFiniteAmountInput(value: string): number | null {
   return Number.isFinite(amount) && amount > 0 ? amount : null;
 }
 
-export function evaluateAmountExpression(expression: string): number | null {
-  const tokens = tokenizeAmountExpression(expression);
-  if (tokens === null || tokens.length === 0) {
-    return null;
-  }
-
-  const values: number[] = [];
-  const operators: string[] = [];
-
-  for (const token of tokens) {
-    if (typeof token === "number") {
-      values.push(token);
-      continue;
-    }
-
-    while (
-      operators.length > 0 &&
-      getOperatorPrecedence(operators[operators.length - 1]) >=
-        getOperatorPrecedence(token)
-    ) {
-      if (!applyTopOperator(values, operators)) {
-        return null;
-      }
-    }
-    operators.push(token);
-  }
-
-  while (operators.length > 0) {
-    if (!applyTopOperator(values, operators)) {
-      return null;
-    }
-  }
-
-  const result = values[0];
-  return values.length === 1 && Number.isFinite(result) ? result : null;
-}
-
-function tokenizeAmountExpression(
-  expression: string
-): Array<number | string> | null {
-  const normalized = expression.replace(/,/g, "").replace(/\s+/g, "");
-  const tokens: Array<number | string> = [];
-  let index = 0;
-  let expectsNumber = true;
-
-  while (index < normalized.length) {
-    const char = normalized[index];
-    if (isOperator(char) && !expectsNumber) {
-      tokens.push(char);
-      expectsNumber = true;
-      index += 1;
-      continue;
-    }
-
-    const sign = char === "-" && expectsNumber ? "-" : "";
-    const numberStart = sign ? index + 1 : index;
-    const match = normalized.slice(numberStart).match(/^(?:\d+\.?\d*|\.\d+)/);
-    if (!match) {
-      return null;
-    }
-
-    const value = Number(`${sign}${match[0]}`);
-    if (!Number.isFinite(value)) {
-      return null;
-    }
-
-    tokens.push(value);
-    expectsNumber = false;
-    index = numberStart + match[0].length;
-  }
-
-  return expectsNumber ? null : tokens;
-}
-
-function isOperator(value: string): boolean {
-  return value === "+" || value === "-" || value === "*" || value === "/";
-}
-
-function getOperatorPrecedence(operator: string): number {
-  return operator === "*" || operator === "/" ? 2 : 1;
-}
-
-function applyTopOperator(values: number[], operators: string[]): boolean {
-  const operator = operators.pop();
-  const right = values.pop();
-  const left = values.pop();
-  if (operator === undefined || left === undefined || right === undefined) {
-    return false;
-  }
-
-  if (operator === "+") values.push(left + right);
-  if (operator === "-") values.push(left - right);
-  if (operator === "*") values.push(left * right);
-  if (operator === "/") {
-    if (right === 0) {
-      return false;
-    }
-    values.push(left / right);
-  }
-
-  return true;
+export function isValidTransactionAmount(amount: number): boolean {
+  return (
+    Number.isFinite(amount) && amount > 0 && amount <= MAX_TRANSACTION_AMOUNT
+  );
 }

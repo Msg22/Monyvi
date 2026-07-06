@@ -1,6 +1,7 @@
 import React from "react";
 import { I18nManager, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { palette } from "@/constants/colors";
 import { LanguageSwitcherPill } from "./LanguageSwitcherPill";
@@ -23,6 +24,8 @@ interface PitchSlideProps {
   readonly onAdvance: () => void;
   readonly children: React.ReactNode;
 }
+
+const PITCH_SLIDE_BOTTOM_PADDING = 32;
 
 /**
  * Layout per mockups (`01-slide-voice.png`, `02a-slide-sms-android.png`,
@@ -62,6 +65,7 @@ export function PitchSlide({
   children,
 }: PitchSlideProps): React.ReactElement {
   const { t } = useTranslation("onboarding");
+  const insets = useSafeAreaInsets();
 
   // Build the dot indices once per `totalSlides` change. `Array.from` with
   // an index map gives a stable list of integers without using a magic
@@ -69,7 +73,11 @@ export function PitchSlide({
   const dotIndices = Array.from({ length: totalSlides }, (_, i) => i);
 
   return (
-    <View className="flex-1 px-6 pt-14 pb-8 bg-background dark:bg-background-dark">
+    <View
+      testID="pitch-slide-root"
+      className="flex-1 px-6 pt-14 bg-background dark:bg-background-dark"
+      style={{ paddingBottom: PITCH_SLIDE_BOTTOM_PADDING + insets.bottom }}
+    >
       {/* Top bar — back-arrow on slides 2+3, language pill on slide 1 only. */}
       <View className="flex-row items-center justify-between">
         {hasPrevious ? (

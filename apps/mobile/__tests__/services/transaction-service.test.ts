@@ -136,8 +136,10 @@ import {
   convertTransactionToTransfer,
   batchDeleteDisplayTransactions,
   BALANCE_REVERSAL_ACCOUNT_NOT_FOUND_ERROR_CODE,
+  INVALID_TRANSACTION_AMOUNT_ERROR_CODE,
 } from "@/services/transaction-service";
 import { USER_DATA_ACCESS_ERROR_CODES } from "@/services/user-data-access";
+import { MAX_TRANSACTION_AMOUNT } from "@monyvi/logic";
 
 import type { DisplayTransaction } from "@/hooks/useTransactionsGrouping";
 
@@ -243,17 +245,64 @@ describe("transaction-service", () => {
       expect(acc.balance).toBe(1500);
     });
 
-    it("should store absolute amount for negative input", async () => {
-      seedAccount("acc-1", 1000);
-      const result = await createTransaction({
-        amount: -300,
-        currency: "EGP",
-        categoryId: "cat-1",
-        accountId: "acc-1",
-        type: "EXPENSE",
-        source: "MANUAL",
-      });
-      expect(result.amount).toBe(300);
+    it("should reject negative input without mutating the account", async () => {
+      const acc = seedAccount("acc-1", 1000);
+      await expect(
+        createTransaction({
+          amount: -300,
+          currency: "EGP",
+          categoryId: "cat-1",
+          accountId: "acc-1",
+          type: "EXPENSE",
+          source: "MANUAL",
+        })
+      ).rejects.toThrow(INVALID_TRANSACTION_AMOUNT_ERROR_CODE);
+      expect(acc.balance).toBe(1000);
+    });
+
+    it("should reject non-finite input without mutating the account", async () => {
+      const acc = seedAccount("acc-1", 1000);
+      await expect(
+        createTransaction({
+          amount: Number.POSITIVE_INFINITY,
+          currency: "EGP",
+          categoryId: "cat-1",
+          accountId: "acc-1",
+          type: "EXPENSE",
+          source: "MANUAL",
+        })
+      ).rejects.toThrow(INVALID_TRANSACTION_AMOUNT_ERROR_CODE);
+      expect(acc.balance).toBe(1000);
+    });
+
+    it("should reject zero input without mutating the account", async () => {
+      const acc = seedAccount("acc-1", 1000);
+      await expect(
+        createTransaction({
+          amount: 0,
+          currency: "EGP",
+          categoryId: "cat-1",
+          accountId: "acc-1",
+          type: "EXPENSE",
+          source: "MANUAL",
+        })
+      ).rejects.toThrow(INVALID_TRANSACTION_AMOUNT_ERROR_CODE);
+      expect(acc.balance).toBe(1000);
+    });
+
+    it("should reject over-limit input without mutating the account", async () => {
+      const acc = seedAccount("acc-1", 1000);
+      await expect(
+        createTransaction({
+          amount: MAX_TRANSACTION_AMOUNT + 1,
+          currency: "EGP",
+          categoryId: "cat-1",
+          accountId: "acc-1",
+          type: "EXPENSE",
+          source: "MANUAL",
+        })
+      ).rejects.toThrow(INVALID_TRANSACTION_AMOUNT_ERROR_CODE);
+      expect(acc.balance).toBe(1000);
     });
 
     it("should persist the SMS fingerprint for SMS transactions", async () => {
@@ -337,6 +386,29 @@ describe("transaction-service", () => {
       seedTx("tx-1", { accountId: "acc-1", amount: 200, type: "INCOME" });
       await updateTransaction("tx-1", { type: "EXPENSE" });
       expect(acc.balance).toBe(800);
+    });
+
+    it("rejects invalid amount updates without mutating the transaction or account", async () => {
+      const acc = seedAccount("acc-1", 900);
+      const tx = seedTx("tx-1", {
+        accountId: "acc-1",
+        amount: 100,
+        type: "EXPENSE",
+      });
+
+      for (const amount of [
+        Number.NaN,
+        -1,
+        0,
+        MAX_TRANSACTION_AMOUNT + 1,
+      ]) {
+        await expect(updateTransaction("tx-1", { amount })).rejects.toThrow(
+          INVALID_TRANSACTION_AMOUNT_ERROR_CODE
+        );
+
+        expect(acc.balance).toBe(900);
+        expect(tx.amount).toBe(100);
+      }
     });
 
     it("should handle account swap (revert old, apply new)", async () => {

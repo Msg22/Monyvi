@@ -130,6 +130,7 @@ import {
   updateTransfer,
   deleteTransfer,
   convertTransferToTransaction,
+  INVALID_TRANSFER_AMOUNT_ERROR_CODE,
 } from "@/services/transfer-service";
 import { USER_DATA_ACCESS_ERROR_CODES } from "@/services/user-data-access";
 
@@ -252,6 +253,41 @@ describe("transfer-service", () => {
       // Math.abs(-300) = 300 → from 1000 - 300 = 700
       expect(from.balance).toBe(700);
       expect(to.balance).toBe(800);
+    });
+
+    it("rejects amounts over the transaction cap without mutating balances", async () => {
+      const from = seedAccount("acc-from", 1000);
+      const to = seedAccount("acc-to", 500);
+
+      await expect(
+        createTransfer({
+          amount: 1_000_000_001,
+          currency: "EGP",
+          fromAccountId: "acc-from",
+          toAccountId: "acc-to",
+        })
+      ).rejects.toThrow(INVALID_TRANSFER_AMOUNT_ERROR_CODE);
+
+      expect(from.balance).toBe(1000);
+      expect(to.balance).toBe(500);
+    });
+
+    it("rejects converted amounts over the transaction cap without mutating balances", async () => {
+      const from = seedAccount("acc-from", 1000);
+      const to = seedAccount("acc-to", 500);
+
+      await expect(
+        createTransfer({
+          amount: 100,
+          convertedAmount: 1_000_000_001,
+          currency: "EGP",
+          fromAccountId: "acc-from",
+          toAccountId: "acc-to",
+        })
+      ).rejects.toThrow(INVALID_TRANSFER_AMOUNT_ERROR_CODE);
+
+      expect(from.balance).toBe(1000);
+      expect(to.balance).toBe(500);
     });
 
     it("should throw when user is not authenticated", async () => {
@@ -408,6 +444,24 @@ describe("transfer-service", () => {
       // Apply:  from -200=800,  to +4=504
       expect(from.balance).toBe(800);
       expect(to.balance).toBe(504);
+    });
+
+    it("rejects amount updates over the transaction cap without mutating balances", async () => {
+      const from = seedAccount("acc-from", 900);
+      const to = seedAccount("acc-to", 600);
+      const transfer = seedTransfer("tf-1", {
+        fromAccountId: "acc-from",
+        toAccountId: "acc-to",
+        amount: 100,
+      });
+
+      await expect(
+        updateTransfer("tf-1", { amount: 1_000_000_001 })
+      ).rejects.toThrow(INVALID_TRANSFER_AMOUNT_ERROR_CODE);
+
+      expect(from.balance).toBe(900);
+      expect(to.balance).toBe(600);
+      expect(transfer.amount).toBe(100);
     });
 
     it("rejects a foreign transfer without mutating balances", async () => {

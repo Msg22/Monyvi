@@ -70,6 +70,11 @@ export default function CreateRecurringPaymentScreen(): React.JSX.Element {
         action: values.action,
         notes: values.notes.trim() || undefined,
       });
+      showToast({
+        type: "success",
+        title: t("recurring_payment_created"),
+        message: t("recurring_payment_created_message"),
+      });
       router.back();
     } catch (error: unknown) {
       showToast({
