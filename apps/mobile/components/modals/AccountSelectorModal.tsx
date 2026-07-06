@@ -15,7 +15,7 @@ import type { Account, AccountType } from "@monyvi/db";
 import { useTranslation } from "react-i18next";
 import { buildAccountDisplayNames } from "@/utils/account-display";
 import { formatAccountBalance } from "@/utils/financial-display";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
 interface AccountSelectorModalProps {
   visible: boolean;
@@ -35,7 +35,7 @@ export function AccountSelectorModal({
   const { isDark } = useTheme();
   const { t } = useTranslation("common");
   const { t: tAccounts } = useTranslation("accounts");
-  const insets = useSafeAreaInsets();
+  const bottomInset = useModalBottomInset();
 
   // Resolve display names so duplicate-named accounts (e.g. two "Cash"
   // accounts in different currencies) are visually disambiguated in the
@@ -67,7 +67,11 @@ export function AccountSelectorModal({
     >
       <TouchableWithoutFeedback onPress={onClose}>
         <View className="flex-1 bg-black/60 justify-end">
-          <View className="rounded-t-3xl overflow-hidden max-h-[80%] bg-white dark:bg-slate-900 z-50">
+          <View
+            testID="account-selector-sheet"
+            className="rounded-t-3xl overflow-hidden max-h-[80%] bg-white dark:bg-slate-900 z-50"
+            style={{ marginBottom: bottomInset }}
+          >
             <BlurView
               intensity={40}
               tint={isDark ? "dark" : "light"}
@@ -91,11 +95,19 @@ export function AccountSelectorModal({
               </View>
 
               {/* Account List */}
-              <ScrollView className="p-4" showsVerticalScrollIndicator={false}>
+              <ScrollView
+                testID="account-selector-scroll"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  gap: 12,
+                  paddingBottom: bottomInset + 40,
+                  paddingHorizontal: 16,
+                  paddingTop: 16,
+                }}
+              >
                 <View
                   testID="account-selector-list-content"
                   className="gap-3"
-                  style={{ paddingBottom: insets.bottom + 40 }}
                 >
                   {accounts.map((account) => {
                     const isSelected = account.id === selectedId;
