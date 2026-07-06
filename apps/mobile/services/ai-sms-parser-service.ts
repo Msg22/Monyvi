@@ -19,6 +19,7 @@ import {
   buildCategoryMap,
   buildCategoryTree,
   clampConfidence,
+  MAX_TRANSACTION_AMOUNT,
   normalizeCurrency,
   normalizeType,
   parseCategory,
@@ -34,7 +35,7 @@ import {
 
 const AiSmsTransactionSchema = z.object({
   messageId: z.string(),
-  amount: z.number(),
+  amount: z.number().finite().positive().max(MAX_TRANSACTION_AMOUNT),
   currency: z.string(),
   type: z.string(),
   counterparty: z.string(),
@@ -233,7 +234,7 @@ function mapAiTransactions(
     const category = parseCategory(aiTx.categorySystemName, validCategoryMap);
 
     results.push({
-      amount: Math.abs(aiTx.amount),
+      amount: aiTx.amount,
       currency,
       type: normalizeType(aiTx.type),
       counterparty,

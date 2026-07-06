@@ -13,10 +13,13 @@ import {
   getCurrentUserDataScope,
   type CurrentUserDataScope,
 } from "@/services/user-data-access";
+import { isValidTransactionAmount } from "@monyvi/logic";
 
 export const INVALID_ACCOUNT_BALANCE_ERROR_CODE = "INVALID_ACCOUNT_BALANCE";
 export const BALANCE_REVERSAL_ACCOUNT_NOT_FOUND_ERROR_CODE =
   "BALANCE_REVERSAL_ACCOUNT_NOT_FOUND";
+export const INVALID_TRANSACTION_AMOUNT_ERROR_CODE =
+  "INVALID_TRANSACTION_AMOUNT";
 
 function accountsCollection(): ReturnType<typeof database.get<Account>> {
   return database.get<Account>("accounts");
@@ -42,6 +45,12 @@ async function getOwnedTransaction(
   return scope.findOwned(transactionsCollection(), transactionId);
 }
 
+function assertValidTransactionAmount(amount: number): void {
+  if (!isValidTransactionAmount(amount)) {
+    throw new Error(INVALID_TRANSACTION_AMOUNT_ERROR_CODE);
+  }
+}
+
 /**
  * Create a transaction from manual input.
  * Atomically creates the Transaction record and updates the account balance.
@@ -59,6 +68,7 @@ export async function createTransaction(data: {
   source: TransactionSource;
   smsFingerprint?: string;
 }): Promise<Transaction> {
+  assertValidTransactionAmount(data.amount);
   const scope = await getCurrentUserDataScope();
 
   const transactionCollection = transactionsCollection();
@@ -71,7 +81,7 @@ export async function createTransaction(data: {
     const transaction = await transactionCollection.create((tx) => {
       tx.userId = scope.userId;
       tx.accountId = data.accountId;
-      tx.amount = Math.abs(data.amount); // Amount is always positive
+      tx.amount = data.amount;
       tx.currency = data.currency;
       tx.type = data.type;
       tx.categoryId = data.categoryId;
@@ -88,9 +98,9 @@ export async function createTransaction(data: {
     // Update account balance in the same write block
     await account.update((acc) => {
       if (data.type === "EXPENSE") {
-        acc.balance -= Math.abs(data.amount);
+        acc.balance -= data.amount;
       } else {
-        acc.balance += Math.abs(data.amount);
+        acc.balance += data.amount;
       }
     });
 
@@ -124,6 +134,10 @@ export async function updateTransaction(
     readonly accountId?: string;
   }
 ): Promise<void> {
+  if (updates.amount !== undefined) {
+    assertValidTransactionAmount(updates.amount);
+  }
+
   const scope = await getCurrentUserDataScope();
 
   await database.write(async () => {
@@ -134,8 +148,7 @@ export async function updateTransaction(
     const oldAccountId = transaction.accountId;
 
     const newType = updates.type ?? oldType;
-    const newAmount =
-      updates.amount !== undefined ? Math.abs(updates.amount) : oldAmount;
+    const newAmount = updates.amount !== undefined ? updates.amount : oldAmount;
     const newAccountId = updates.accountId ?? oldAccountId;
 
     const isAccountChanging = newAccountId !== oldAccountId;
@@ -170,7 +183,7 @@ export async function updateTransaction(
 
     // Update Transaction Record
     await transaction.update((tx) => {
-      if (updates.amount !== undefined) tx.amount = Math.abs(updates.amount);
+      if (updates.amount !== undefined) tx.amount = updates.amount;
       if (updates.categoryId !== undefined) tx.categoryId = updates.categoryId;
       if (updates.note !== undefined) tx.note = updates.note;
       if (updates.date !== undefined) tx.date = updates.date;
@@ -326,14 +339,26 @@ export async function batchDeleteDisplayTransactions(
         recordsToDelete.push(record);
 
         if (record.isIncome) {
-          accumulateBalanceDelta(balanceDeltas, record.accountId, -record.amount);
+          accumulateBalanceDelta(
+            balanceDeltas,
+            record.accountId,
+            -record.amount
+          );
         } else if (record.isExpense) {
-          accumulateBalanceDelta(balanceDeltas, record.accountId, record.amount);
+          accumulateBalanceDelta(
+            balanceDeltas,
+            record.accountId,
+            record.amount
+          );
         }
       } else if (item._type === "transfer") {
         const record = scope.assertOwned(item.record);
         recordsToDelete.push(record);
-        accumulateBalanceDelta(balanceDeltas, record.fromAccountId, record.amount);
+        accumulateBalanceDelta(
+          balanceDeltas,
+          record.fromAccountId,
+          record.amount
+        );
         const amountToDeduct = record.convertedAmount ?? record.amount;
         accumulateBalanceDelta(
           balanceDeltas,

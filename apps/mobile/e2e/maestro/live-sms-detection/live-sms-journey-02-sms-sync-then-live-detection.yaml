@@ -36,7 +36,10 @@ appId: com.monyvi.app
 - extendedWaitUntil:
     visible: "Allow live SMS detection?"
     timeout: 30000
-- assertVisible: "Monyvi needs permission to receive new SMS messages."
+- assertVisible:
+    "Monyvi uses SMS access to detect new financial messages. Matching messages
+    are sent to our AI provider for parsing so you can review new transaction
+    suggestions."
 - tapOn:
     id: "permission-modal-primary"
 

@@ -40,6 +40,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { TransactionType } from "@monyvi/db";
 import {
   calculateEditedTransactionBalanceProjection,
+  evaluateAmountExpression,
   formatAmountInput,
 } from "@monyvi/logic";
 import * as Haptics from "expo-haptics";
@@ -233,15 +234,8 @@ export default function EditTransaction(): React.ReactNode {
   // ---------------------------------------------------------------------------
   // Calculator Evaluation
   // ---------------------------------------------------------------------------
-  const calculateResult = (expr: string): number => {
-    try {
-      // Only allow digits + - * / .
-      if (!/^[0-9+\-*/.]+$/.test(expr)) return parseFloat(expr) || 0;
-      // eslint-disable-next-line no-eval
-      return eval(expr) as number;
-    } catch {
-      return 0;
-    }
+  const calculateResult = (expr: string): number | null => {
+    return evaluateAmountExpression(expr);
   };
 
   const balanceProjection = (() => {
@@ -254,7 +248,11 @@ export default function EditTransaction(): React.ReactNode {
     }
 
     const parsedAmount = calculateResult(amount);
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    if (
+      parsedAmount === null ||
+      !Number.isFinite(parsedAmount) ||
+      parsedAmount <= 0
+    ) {
       return null;
     }
 
@@ -287,7 +285,11 @@ export default function EditTransaction(): React.ReactNode {
     if (isSubmitting || !transaction) return;
 
     const parsedAmount = calculateResult(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+    if (
+      parsedAmount === null ||
+      !Number.isFinite(parsedAmount) ||
+      parsedAmount <= 0
+    ) {
       setFormErrors({ amount: t("invalid_amount") });
       return;
     }
@@ -344,7 +346,11 @@ export default function EditTransaction(): React.ReactNode {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
         console.error
       );
-      showToast({ type: "success", title: t("update_success") });
+      showToast({
+        type: "success",
+        title: t("update_success"),
+        message: t("update_success_message"),
+      });
       router.back();
     } catch (err) {
       console.error("[EditTransaction] Save error:", err);
@@ -376,7 +382,11 @@ export default function EditTransaction(): React.ReactNode {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
         console.error
       );
-      showToast({ type: "success", title: t("converted_to_transfer") });
+      showToast({
+        type: "success",
+        title: t("converted_to_transfer"),
+        message: t("converted_to_transfer_message"),
+      });
       router.back();
     } catch (err) {
       console.error("[EditTransaction] Conversion error:", err);
@@ -407,8 +417,8 @@ export default function EditTransaction(): React.ReactNode {
 
     if (key === "=") {
       const result = calculateResult(amount);
-      if (result !== 0 || amount.length > 0) {
-        const formatted = parseFloat(result.toFixed(10)).toString();
+      if (result !== null) {
+        const formatted = Number(result.toFixed(10)).toString();
         setAmount(formatted);
       }
       return;
@@ -461,7 +471,11 @@ export default function EditTransaction(): React.ReactNode {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
         console.error
       );
-      showToast({ type: "success", title: t("delete_success") });
+      showToast({
+        type: "success",
+        title: t("delete_success"),
+        message: t("transaction_deleted_message"),
+      });
       router.back();
     } catch (err) {
       console.error("[EditTransaction] Delete error:", err);

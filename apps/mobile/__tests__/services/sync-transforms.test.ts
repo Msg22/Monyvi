@@ -29,6 +29,24 @@ describe("sync transforms", () => {
     );
   });
 
+  it("rejects synced transactions with amounts over the transaction cap", () => {
+    expect(() =>
+      transformFromSupabase("transactions", {
+        id: "tx-1",
+        amount: 1_000_000_001,
+      })
+    ).toThrow("INVALID_TRANSACTION_AMOUNT");
+  });
+
+  it("rejects synced transfers with invalid persisted amounts", () => {
+    expect(() =>
+      transformFromSupabase("transfers", {
+        id: "transfer-1",
+        amount: Number.POSITIVE_INFINITY,
+      })
+    ).toThrow("INVALID_TRANSACTION_AMOUNT");
+  });
+
   it("parses profile JSON fields for Supabase and removes local-only sync fields", () => {
     const transformed = transformToSupabase(
       "profiles",

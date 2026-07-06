@@ -222,6 +222,12 @@ Dependency direction: `apps/ → packages/logic → packages/db`. **Never revers
   cold-start scroll-jump). Apply the inset exactly once per screen — do not nest
   a `SafeAreaView` inside a subtree that already sits under a parent that
   applied `paddingTop`.
+- Any bottom-anchored mobile UI, including fixed CTAs, bottom sheets, prompts,
+  and modals, MUST account for `useSafeAreaInsets().bottom` or an equivalent
+  `SafeAreaView` bottom edge. Do not rely on fixed `pb-*`, `bottom`, or spacer
+  values alone. When touching these surfaces, add or update a focused test that
+  proves the bottom inset is included so Android gesture and 3-button navigation
+  bars cannot overlap the action area.
 - Use `react-navigation` and `expo-router` for file-based routing.
 - Use Zod for runtime validation. Derive types with `z.infer<typeof schema>` —
   don't duplicate type definitions.
@@ -437,6 +443,15 @@ chore, perf, ci.
 
 ## Tooling Guardrails
 
+- **Windows shell/runtime issues**: If a system runtime or shell behavior is
+  broken, fix or route around it durably instead of repeating the same
+  workaround. Prefer the bundled Codex runtime paths from
+  `load_workspace_dependencies` (especially Python) when the system `python`
+  launcher is broken or points to a missing install. For Python scripts that
+  call GitHub/plugin tooling on Windows, set `$env:PYTHONUTF8='1'` or otherwise
+  force UTF-8 subprocess decoding so GitHub responses with Unicode do not fail
+  under the Windows codepage. In PowerShell, use PowerShell-native command
+  sequencing and syntax; do not rely on bash/cmd-only separators such as `&&`.
 - **Secondary worktree dependencies**: Never run `npm install`, `npm ci`, or
   package-manager install commands inside a secondary git worktree. Secondary
   worktrees must reuse the main checkout dependency tree through a Windows

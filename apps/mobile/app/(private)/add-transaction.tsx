@@ -39,7 +39,11 @@ import type {
   TransactionType,
   Transaction,
 } from "@monyvi/db";
-import { formatAmountInput } from "@monyvi/logic";
+import {
+  evaluateAmountExpression,
+  formatAmountInput,
+  parsePositiveFiniteAmountInput,
+} from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -198,8 +202,8 @@ export default function AddTransaction(): React.ReactNode {
 
     if (key === "=") {
       const result = calculateResult(currentValue);
-      if (result !== 0 || currentValue.length > 0) {
-        const formatted = parseFloat(result.toFixed(10)).toString();
+      if (result !== null) {
+        const formatted = Number(result.toFixed(10)).toString();
         setValue(formatted);
       }
       return;
@@ -242,15 +246,8 @@ export default function AddTransaction(): React.ReactNode {
   };
 
   // Convert amount logic
-  const calculateResult = (expr: string): number => {
-    try {
-      // Only allow digits + - * / .
-      if (!/^[0-9+\-*/.]+$/.test(expr)) return parseFloat(expr) || 0;
-      // eslint-disable-next-line no-eval
-      return eval(expr) as number;
-    } catch {
-      return 0;
-    }
+  const calculateResult = (expr: string): number | null => {
+    return evaluateAmountExpression(expr);
   };
 
   // Auto-calculate target amount for transfers
@@ -263,7 +260,7 @@ export default function AddTransaction(): React.ReactNode {
       selectedAccount.currency !== toAccount.currency
     ) {
       const numAmount = calculateResult(amount);
-      if (numAmount > 0) {
+      if (numAmount !== null && numAmount > 0) {
         const rate = latestRates?.getRate(
           selectedAccount.currency,
           toAccount.currency
@@ -311,8 +308,18 @@ export default function AddTransaction(): React.ReactNode {
       return;
     }
 
+    const parsedTargetAmount = targetAmount
+      ? parsePositiveFiniteAmountInput(targetAmount)
+      : null;
+    if (targetAmount && parsedTargetAmount === null) {
+      setFormErrors({ amount: t("invalid_amount") });
+      return;
+    }
+
     const exchangeRate =
-      targetAmount && amount ? parseFloat(targetAmount) / amount : undefined;
+      parsedTargetAmount !== null && amount > 0
+        ? parsedTargetAmount / amount
+        : undefined;
 
     try {
       await createTransfer({
@@ -322,14 +329,14 @@ export default function AddTransaction(): React.ReactNode {
         toAccountId,
         date,
         notes: note,
-        convertedAmount: targetAmount ? parseFloat(targetAmount) : undefined,
+        convertedAmount: parsedTargetAmount ?? undefined,
         exchangeRate,
       });
 
       showToast({
         type: "success",
-        title: t("transaction_created"),
-        message: t("transaction_created_message"),
+        title: t("transfer_created"),
+        message: t("transfer_created_message"),
       });
     } catch (error: unknown) {
       showToast({
@@ -398,6 +405,10 @@ export default function AddTransaction(): React.ReactNode {
     }
 
     const finalAmount = calculateResult(amount);
+    if (finalAmount === null || finalAmount <= 0) {
+      setFormErrors({ amount: t("invalid_amount") });
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -465,7 +476,7 @@ export default function AddTransaction(): React.ReactNode {
   };
 
   return (
-    <View className="flex-1">
+    <View className="flex-1 bg-slate-50 dark:bg-slate-900">
       {/* Header */}
       <PageHeader
         title={t("new_transaction")}
@@ -479,7 +490,7 @@ export default function AddTransaction(): React.ReactNode {
       />
 
       <ScrollView
-        className="flex-1"
+        className="flex-1 bg-slate-50 dark:bg-slate-900"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
       >
@@ -495,12 +506,16 @@ export default function AddTransaction(): React.ReactNode {
             {type === "EXPENSE" &&
               selectedAccount &&
               amount &&
-              !isNaN(parseFloat(amount)) &&
-              parseFloat(amount) > selectedAccount.balance && (
+              parsePositiveFiniteAmountInput(amount) !== null &&
+              parsePositiveFiniteAmountInput(amount)! >
+                selectedAccount.balance && (
                 <Text className="text-amber-500 text-xs font-medium text-center mb-1">
                   ⚠️ {t("warning_negative_balance")} -
                   {formatAmountInput(
-                    (parseFloat(amount) - selectedAccount.balance).toFixed(2)
+                    (
+                      parsePositiveFiniteAmountInput(amount)! -
+                      selectedAccount.balance
+                    ).toFixed(2)
                   )}{" "}
                   {selectedAccount.currency}
                 </Text>
@@ -754,7 +769,7 @@ export default function AddTransaction(): React.ReactNode {
       {type !== "TRANSFER" && !isOptionalExpanded && (
         <TouchableOpacity
           onPress={() => setIsOptionalExpanded(true)}
-          className="flex-row items-center justify-center py-2 border-t border-slate-200 dark:border-slate-800"
+          className="flex-row items-center justify-center border-t border-slate-200 bg-slate-50 py-2 dark:border-slate-800 dark:bg-slate-900"
         >
           <Ionicons
             name="create-outline"

@@ -32,7 +32,7 @@ describe("validateTransactionForm", () => {
         amount: "0",
       });
       expect(result.isValid).toBe(false);
-      expect(result.errors.amount).toBeDefined();
+      expect(result.errors.amount).toBe("Amount must be greater than 0");
     });
 
     it("should fail when amount is negative", () => {
@@ -41,7 +41,7 @@ describe("validateTransactionForm", () => {
         amount: "-5",
       });
       expect(result.isValid).toBe(false);
-      expect(result.errors.amount).toBeDefined();
+      expect(result.errors.amount).toBe("Amount must be greater than 0");
     });
 
     it("should fail when amount is non-numeric", () => {
@@ -50,7 +50,34 @@ describe("validateTransactionForm", () => {
         amount: "abc",
       });
       expect(result.isValid).toBe(false);
-      expect(result.errors.amount).toBeDefined();
+      expect(result.errors.amount).toBe("Please enter a valid amount");
+    });
+
+    it("should fail when amount contains trailing calculator operators", () => {
+      const result = validateTransactionForm("EXPENSE", {
+        ...validPayload,
+        amount: "12+",
+      });
+      expect(result.isValid).toBe(false);
+      expect(result.errors.amount).toBe("Please enter a valid amount");
+    });
+
+    it("should fail when amount is not finite", () => {
+      const result = validateTransactionForm("EXPENSE", {
+        ...validPayload,
+        amount: "Infinity",
+      });
+      expect(result.isValid).toBe(false);
+      expect(result.errors.amount).toBe("Please enter a valid amount");
+    });
+
+    it("should fail when amount exceeds 1 billion", () => {
+      const result = validateTransactionForm("EXPENSE", {
+        ...validPayload,
+        amount: "2000000000",
+      });
+      expect(result.isValid).toBe(false);
+      expect(result.errors.amount).toBe("Amount must be at most 1,000,000,000");
     });
 
     it("should fail when accountId is empty", () => {
@@ -145,7 +172,16 @@ describe("validateTransactionForm", () => {
         amount: "0",
       });
       expect(result.isValid).toBe(false);
-      expect(result.errors.amount).toBeDefined();
+      expect(result.errors.amount).toBe("Amount must be greater than 0");
+    });
+
+    it("should fail when amount is not finite", () => {
+      const result = validateTransactionForm("TRANSFER", {
+        ...validTransfer,
+        amount: "Infinity",
+      });
+      expect(result.isValid).toBe(false);
+      expect(result.errors.amount).toBe("Please enter a valid amount");
     });
 
     it("should fail when fromAccountId is empty", () => {
@@ -220,7 +256,7 @@ describe("validateTransactionForm", () => {
         amount: "2000000000",
       });
       expect(result.isValid).toBe(false);
-      expect(result.errors.amount).toBeDefined();
+      expect(result.errors.amount).toBe("Amount must be at most 1,000,000,000");
     });
 
     it("should pass with amount at exactly 1 billion", () => {

@@ -1,4 +1,8 @@
 import { TransactionType } from "@monyvi/db";
+import {
+  MAX_TRANSACTION_AMOUNT,
+  parsePositiveFiniteAmountInput,
+} from "@monyvi/logic";
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
@@ -29,11 +33,41 @@ const defaultValidationMessages: TransactionValidationMessages = {
   destinationAccountRequired: "Destination account is required",
 };
 
+const TRANSACTION_AMOUNT_LIMIT_MESSAGE = `Amount must be at most ${MAX_TRANSACTION_AMOUNT.toLocaleString(
+  "en-US"
+)}`;
+const INVALID_AMOUNT_MESSAGE = "Please enter a valid amount";
+const FINITE_AMOUNT_INPUT_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)$/;
+
 function requiredIdSchema(message: string): z.ZodType<string | null> {
   return z
     .string()
     .nullable()
     .refine((value) => value !== null && value.length > 0, message);
+}
+
+function parseFiniteAmountInput(value: string): number | null {
+  const normalized = value.trim().replace(/,/g, "");
+  if (!FINITE_AMOUNT_INPUT_PATTERN.test(normalized)) {
+    return null;
+  }
+
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? amount : null;
+}
+
+function isFiniteAmountInput(value: string): boolean {
+  return parseFiniteAmountInput(value) !== null;
+}
+
+function isPositiveAmountInput(value: string): boolean {
+  const amount = parseFiniteAmountInput(value);
+  return amount === null || amount > 0;
+}
+
+function isWithinTransactionAmountLimit(value: string): boolean {
+  const amount = parsePositiveFiniteAmountInput(value);
+  return amount === null || amount <= MAX_TRANSACTION_AMOUNT;
 }
 
 /**
@@ -46,9 +80,14 @@ function createBaseTransactionSchema(
     amount: z
       .string()
       .min(1, "Amount is required")
+      .refine((val) => isFiniteAmountInput(val), INVALID_AMOUNT_MESSAGE)
       .refine(
-        (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
+        (val) => isPositiveAmountInput(val),
         "Amount must be greater than 0"
+      )
+      .refine(
+        (val) => isWithinTransactionAmountLimit(val),
+        TRANSACTION_AMOUNT_LIMIT_MESSAGE
       ),
     accountId: requiredIdSchema(messages.accountRequired),
     categoryId: z.string().min(1, "Category is required"),
@@ -66,13 +105,14 @@ function createTransferSchema(
       amount: z
         .string()
         .min(1, "Amount is required")
+        .refine((val) => isFiniteAmountInput(val), INVALID_AMOUNT_MESSAGE)
         .refine(
-          (val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0,
+          (val) => isPositiveAmountInput(val),
           "Amount must be greater than 0"
         )
         .refine(
-          (val) => parseFloat(val) <= 1000000000,
-          "Amount must be less than 1,000,000,000"
+          (val) => isWithinTransactionAmountLimit(val),
+          TRANSACTION_AMOUNT_LIMIT_MESSAGE
         ),
       fromAccountId: requiredIdSchema(messages.sourceAccountRequired),
       toAccountId: requiredIdSchema(messages.destinationAccountRequired),
