@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { palette } from "@/constants/colors";
 import { useTranslation } from "react-i18next";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
 interface RecurringEditModalProps {
   visible: boolean;
@@ -28,6 +29,7 @@ export function RecurringEditModal({
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const { t } = useTranslation("transactions");
+  const bottomInset = useModalBottomInset();
 
   return (
     <Modal
@@ -38,7 +40,10 @@ export function RecurringEditModal({
       statusBarTranslucent
     >
       <TouchableWithoutFeedback onPress={onCancel}>
-        <View className="flex-1 bg-black/60 justify-center items-center px-4">
+        <View
+          className="flex-1 bg-black/60 justify-center items-center px-4"
+          style={{ paddingBottom: bottomInset }}
+        >
           <TouchableWithoutFeedback>
             <View className="w-full bg-white dark:bg-slate-900 rounded-3xl overflow-hidden shadow-xl">
               <BlurView

@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -146,6 +147,8 @@ function DropdownModalView<T extends string | number>({
   onChange,
   onToggle,
 }: DropdownModalViewProps<T>): React.JSX.Element {
+  const bottomInset = useModalBottomInset();
+
   return (
     <Modal
       visible={isOpen}
@@ -163,7 +166,7 @@ function DropdownModalView<T extends string | number>({
             />
             <View className="absolute inset-0 bg-white/95 dark:bg-slate-900/95" />
 
-            <View>
+            <View style={{ paddingBottom: bottomInset }}>
               {/* Header */}
               <View className="flex-row justify-between items-center px-6 py-5 border-b border-slate-200 dark:border-slate-800">
                 <Text className="text-xl font-bold text-slate-800 dark:text-slate-100">
