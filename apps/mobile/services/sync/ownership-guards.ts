@@ -4,6 +4,9 @@ import { createForeignLocalChangeError } from "./errors";
 import type { SyncableTable } from "./config";
 import type { ChildParentTableName, ChildTableConfig } from "./types";
 
+const UUID_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function fetchOwnedParentIds(
   database: Database,
   parentTable: ChildParentTableName,
@@ -59,6 +62,8 @@ function isSharedSystemCategoryPushRecord(
 ): boolean {
   return (
     table === "categories" &&
+    typeof payload.id === "string" &&
+    UUID_ID_PATTERN.test(payload.id) &&
     payload.is_system === true &&
     (payload.user_id === null || payload.user_id === undefined)
   );

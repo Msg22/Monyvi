@@ -41,6 +41,22 @@ describe("sync ownership guards", () => {
     ).not.toThrow();
   });
 
+  it("rejects local-only shared system categories before push", () => {
+    expect(() =>
+      assertPushRecordBelongsToCurrentUser(
+        "categories",
+        {
+          id: "local-food",
+          user_id: null,
+          is_system: true,
+        },
+        "current-user",
+        undefined,
+        null
+      )
+    ).toThrow("Refusing to sync foreign local changes for categories");
+  });
+
   it("rejects unowned non-system categories", () => {
     expect(() =>
       assertPushRecordBelongsToCurrentUser(

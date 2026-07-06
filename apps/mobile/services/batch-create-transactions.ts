@@ -31,7 +31,7 @@ import {
   Transfer,
   type CurrencyType,
 } from "@monyvi/db";
-import { buildCategoryMap, type ReviewableTransaction } from "@monyvi/logic";
+import type { ReviewableTransaction } from "@monyvi/logic";
 import { Q, type Model } from "@nozbe/watermelondb";
 import { ensureCashAccount } from "./account-service";
 import { getCurrentUserId } from "./supabase";
@@ -97,6 +97,37 @@ function isCanonicalSharedSystemCategory(category: Category): boolean {
   return isSharedSystemCategory(category) && UUID_ID_PATTERN.test(category.id);
 }
 
+function getSharedSystemCategoryIdentityKey(category: Category): string {
+  return [
+    category.systemName,
+    category.displayName,
+    category.type ?? "",
+    category.parentId ?? "",
+    category.level,
+  ].join("|");
+}
+
+function getCreatedAtTime(category: Category): number | null {
+  const time = category.createdAt?.getTime();
+  return typeof time === "number" && Number.isFinite(time) ? time : null;
+}
+
+function shouldReplaceCanonicalCategory(
+  selected: Category,
+  candidate: Category
+): boolean {
+  const selectedCreatedAt = getCreatedAtTime(selected);
+  const candidateCreatedAt = getCreatedAtTime(candidate);
+  if (selectedCreatedAt !== null && candidateCreatedAt !== null) {
+    const createdAtDiff = candidateCreatedAt - selectedCreatedAt;
+    if (createdAtDiff !== 0) {
+      return createdAtDiff < 0;
+    }
+  }
+
+  return candidate.id.localeCompare(selected.id) < 0;
+}
+
 async function loadAccessibleCategoryIdMap(
   categoryIds: ReadonlySet<string>,
   userId: string
@@ -138,16 +169,27 @@ async function loadAccessibleCategoryIdMap(
     Q.where("is_system", true),
     Q.where("deleted", false)
   ).fetch();
-  const canonicalCategoryMap = buildCategoryMap(
-    sharedSystemCategories.filter(isCanonicalSharedSystemCategory)
-  );
+  const canonicalCategoryMap = new Map<string, Category>();
+  for (const category of sharedSystemCategories) {
+    if (!isCanonicalSharedSystemCategory(category)) {
+      continue;
+    }
+
+    const key = getSharedSystemCategoryIdentityKey(category);
+    const selected = canonicalCategoryMap.get(key);
+    if (!selected || shouldReplaceCanonicalCategory(selected, category)) {
+      canonicalCategoryMap.set(key, category);
+    }
+  }
 
   for (const category of categories) {
     if (!isSharedSystemCategory(category)) {
       continue;
     }
 
-    const canonicalCategory = canonicalCategoryMap.get(category.systemName);
+    const canonicalCategory = canonicalCategoryMap.get(
+      getSharedSystemCategoryIdentityKey(category)
+    );
     if (canonicalCategory) {
       resolvedCategoryIds.set(category.id, canonicalCategory.id);
     }
