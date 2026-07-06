@@ -14,9 +14,19 @@ import {
 
 let focusCallback: (() => void) | null = null;
 const mockRouterPush = jest.fn<void, [string]>();
+const mockSetParams = jest.fn<void, [Record<string, unknown>]>();
 const mockStartVoiceFlow = jest.fn<Promise<void>, [unknown?]>();
 const mockGrantConsent = jest.fn<Promise<void>, []>();
 let mockIsAiConsented = false;
+let mockIsAiConsentLoading = false;
+let mockRetryParam: string | undefined;
+let latestVoiceFlowOptions:
+  | {
+      readonly autoStart: boolean;
+      readonly canAutoStart: boolean;
+      readonly ensureAiProcessingConsent: () => boolean;
+    }
+  | undefined;
 
 jest.mock("expo-router", () => {
   function Tabs({
@@ -43,10 +53,10 @@ jest.mock("expo-router", () => {
     useFocusEffect: (callback: () => void): void => {
       focusCallback = callback;
     },
-    useLocalSearchParams: () => ({}),
+    useLocalSearchParams: () => ({ retry: mockRetryParam }),
     useRouter: () => ({
       push: mockRouterPush,
-      setParams: jest.fn(),
+      setParams: mockSetParams,
     }),
   };
 });
@@ -122,30 +132,35 @@ jest.mock("@/hooks/useAccounts", () => ({
 jest.mock("@/hooks/useAiProcessingConsent", () => ({
   useAiProcessingConsent: () => ({
     isConsented: mockIsAiConsented,
-    isLoading: false,
+    isLoading: mockIsAiConsentLoading,
     grantConsent: mockGrantConsent,
   }),
 }));
 
 jest.mock("@/hooks/useVoiceTransactionFlow", () => ({
   useVoiceTransactionFlow: (options: {
+    readonly autoStart: boolean;
+    readonly canAutoStart: boolean;
     readonly ensureAiProcessingConsent: () => boolean;
-  }) => ({
-    flowStatus: "idle",
-    isOverlayVisible: false,
-    durationMs: 0,
-    errorMessage: null,
-    startFlow: (args?: unknown) => {
-      mockStartVoiceFlow(args);
-      options.ensureAiProcessingConsent();
-      return Promise.resolve();
-    },
-    submitRecording: jest.fn(),
-    discardRecording: jest.fn(),
-    pauseRecording: jest.fn(),
-    resumeRecording: jest.fn(),
-    retryRecording: jest.fn(),
-  }),
+  }) => {
+    latestVoiceFlowOptions = options;
+    return {
+      flowStatus: "idle",
+      isOverlayVisible: false,
+      durationMs: 0,
+      errorMessage: null,
+      startFlow: (args?: unknown) => {
+        mockStartVoiceFlow(args);
+        options.ensureAiProcessingConsent();
+        return Promise.resolve();
+      },
+      submitRecording: jest.fn(),
+      discardRecording: jest.fn(),
+      pauseRecording: jest.fn(),
+      resumeRecording: jest.fn(),
+      retryRecording: jest.fn(),
+    };
+  },
 }));
 
 jest.mock("@/services/voice-entry-service", () => ({
@@ -168,6 +183,9 @@ describe("TabLayout AI consent", () => {
     jest.clearAllMocks();
     focusCallback = null;
     mockIsAiConsented = false;
+    mockIsAiConsentLoading = false;
+    mockRetryParam = undefined;
+    latestVoiceFlowOptions = undefined;
     mockGrantConsent.mockResolvedValue();
     mockStartVoiceFlow.mockResolvedValue();
   });
@@ -199,5 +217,26 @@ describe("TabLayout AI consent", () => {
     await waitFor(() => expect(mockGrantConsent).toHaveBeenCalledTimes(1));
     expect(screen.getByTestId("voice-consent-continue")).toBeTruthy();
     expect(mockStartVoiceFlow).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves retry auto-start until AI consent finishes loading", () => {
+    mockRetryParam = "true";
+    mockIsAiConsentLoading = true;
+    const { rerender } = render(<TabLayout />);
+
+    expect(latestVoiceFlowOptions).toMatchObject({
+      autoStart: true,
+      canAutoStart: false,
+    });
+    expect(mockSetParams).not.toHaveBeenCalled();
+
+    mockIsAiConsentLoading = false;
+    rerender(<TabLayout />);
+
+    expect(latestVoiceFlowOptions).toMatchObject({
+      autoStart: true,
+      canAutoStart: true,
+    });
+    expect(mockSetParams).toHaveBeenCalledWith({ retry: undefined });
   });
 });

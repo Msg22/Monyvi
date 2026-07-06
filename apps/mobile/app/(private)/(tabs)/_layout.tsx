@@ -63,6 +63,7 @@ function TabLayoutInner(): React.ReactElement {
 
   const { retry } = useLocalSearchParams<{ retry?: string }>();
   const autoStart = retry === "true";
+  const canAutoStart = !aiConsent.isLoading;
 
   const ensureAiProcessingConsent = useCallback((): boolean => {
     if (aiConsent.isLoading) return false;
@@ -72,10 +73,10 @@ function TabLayoutInner(): React.ReactElement {
   }, [aiConsent.isConsented, aiConsent.isLoading]);
 
   useEffect(() => {
-    if (autoStart) {
+    if (autoStart && canAutoStart) {
       router.setParams({ retry: undefined });
     }
-  }, [autoStart, router]);
+  }, [autoStart, canAutoStart, router]);
 
   const voiceFlow = useVoiceTransactionFlow({
     preferredCurrency,
@@ -83,7 +84,7 @@ function TabLayoutInner(): React.ReactElement {
     accounts: accountInputs,
     categoryRecords: allCategories,
     autoStart,
-    canAutoStart: !aiConsent.isLoading,
+    canAutoStart,
     ensureAiProcessingConsent,
   });
 

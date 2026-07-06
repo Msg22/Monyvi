@@ -79,6 +79,17 @@ async function loadAiContext(): Promise<ParseSmsContext> {
   };
 }
 
+async function hasLiveSmsAiConsent(): Promise<boolean> {
+  const aiConsentStatus = await getAiProcessingConsentStatus();
+  if (aiConsentStatus.isConsented) {
+    return true;
+  }
+
+  await setLiveDetectionEnabled(false);
+  await setAutoConfirm(false);
+  return false;
+}
+
 export async function processLiveSmsEvent(
   event: LiveSmsEvent,
   options: LiveSmsProcessingOptions = {}
@@ -93,10 +104,7 @@ export async function processLiveSmsEvent(
       return createResult("disabled");
     }
 
-    const aiConsentStatus = await getAiProcessingConsentStatus();
-    if (!aiConsentStatus.isConsented) {
-      await setLiveDetectionEnabled(false);
-      await setAutoConfirm(false);
+    if (!(await hasLiveSmsAiConsent())) {
       return createResult("disabled");
     }
   } catch (error: unknown) {
@@ -149,6 +157,17 @@ export async function processLiveSmsEvent(
       context = await loadAiContext();
     } catch (error: unknown) {
       logger.error("liveSms.context.failed", error, {
+        deliveryMode: event.deliveryMode,
+      });
+      return createResult("infrastructure_error", confirmedSmsFingerprint);
+    }
+
+    try {
+      if (!(await hasLiveSmsAiConsent())) {
+        return createResult("disabled", confirmedSmsFingerprint);
+      }
+    } catch (error: unknown) {
+      logger.error("liveSms.consentCheck.failed", error, {
         deliveryMode: event.deliveryMode,
       });
       return createResult("infrastructure_error", confirmedSmsFingerprint);
