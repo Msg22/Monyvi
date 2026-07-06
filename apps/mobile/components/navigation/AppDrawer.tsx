@@ -16,6 +16,7 @@ import {
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLogoutFlow } from "@/hooks/useLogoutFlow";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 import { useProfile } from "@/hooks/useProfile";
 import {
   getProfileDisplayName,
@@ -155,6 +156,7 @@ export function AppDrawer({
   );
 
   const insets = useSafeAreaInsets();
+  const bottomInset = useModalBottomInset();
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
 
   // Avatar image loading state
@@ -281,7 +283,7 @@ export function AppDrawer({
             {/* Settings section */}
             <View
               className="border-t p-4 border-slate-200 dark:border-slate-800"
-              style={{ paddingBottom: insets.bottom + 16 }}
+              style={{ paddingBottom: bottomInset + 16 }}
             >
               {/* Dark mode toggle */}
               <View className="flex-row items-center justify-between py-3">

@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
 import { useCategoryLookup } from "@/context/CategoriesContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 import type { SortOption } from "@/services/recurring-payments-dashboard-read-model";
 import { getCategoryIconConfig } from "@/utils/category-icon-config";
 import { getDueText } from "@/utils/dateHelpers";
@@ -25,7 +26,6 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface StatusTabsProps {
   readonly activeTab: RecurringStatus;
@@ -377,7 +377,7 @@ export function SortPaymentsModal({
   onClose,
 }: SortPaymentsModalProps): React.JSX.Element | null {
   const { t } = useTranslation("transactions");
-  const insets = useSafeAreaInsets();
+  const bottomInset = useModalBottomInset();
 
   if (!visible) return null;
 
@@ -412,7 +412,7 @@ export function SortPaymentsModal({
 
               <View
                 className="py-2"
-                style={{ paddingBottom: insets.bottom + 12 }}
+                style={{ paddingBottom: bottomInset + 12 }}
               >
                 {SORT_OPTIONS.map((option) => {
                   const isSelected = option.value === selectedSort;

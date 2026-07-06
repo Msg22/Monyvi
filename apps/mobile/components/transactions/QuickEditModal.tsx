@@ -1,17 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import { Modal, Text, TouchableOpacity, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   type CalculatorKey,
   CalculatorKeypad,
 } from "@/components/add-transaction/CalculatorKeypad";
-import { formatAmountInput } from "@monyvi/logic";
+import {
+  evaluateAmountExpression,
+  formatAmountInput,
+  parsePositiveFiniteAmountInput,
+} from "@monyvi/logic";
 import { CategoryPicker } from "@/components/add-transaction/CategoryPicker";
 import { CategorySelectorModal } from "@/components/modals/CategorySelectorModal";
 import { palette } from "@/constants/colors";
 import { useCategoryLookup } from "@/context/CategoriesContext";
 import { useCategories } from "@/hooks/useCategories";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 import type { TransactionType } from "@monyvi/db";
 import { useTranslation } from "react-i18next";
 
@@ -39,7 +43,7 @@ export function QuickEditModal({
   onClose,
   onSave,
 }: QuickEditModalProps): React.JSX.Element | null {
-  const insets = useSafeAreaInsets();
+  const bottomInset = useModalBottomInset();
   const { t } = useTranslation("transactions");
 
   // State
@@ -48,12 +52,14 @@ export function QuickEditModal({
     initialCategoryId || ""
   );
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [amountError, setAmountError] = useState<string | undefined>(undefined);
 
   // Reset state on open
   useEffect(() => {
     if (visible) {
       if (type === "AMOUNT") {
         setAmount(initialAmount?.toString() || "");
+        setAmountError(undefined);
       } else {
         setSelectedCategoryId(initialCategoryId || "");
       }
@@ -71,23 +77,26 @@ export function QuickEditModal({
 
   // Handlers
   const handleKeyPress = (key: CalculatorKey): void => {
+    if (amountError) {
+      setAmountError(undefined);
+    }
+
     if (key === "DONE") {
-      const val = parseFloat(amount);
-      if (!isNaN(val) && val > 0) {
+      const val = parsePositiveFiniteAmountInput(amount);
+      if (val !== null) {
         onSave(val);
+        onClose();
+      } else {
+        setAmountError(t("invalid_amount"));
       }
-      onClose();
       return;
     }
     if (key === "=") {
-      try {
-        if (/^[0-9+\-*/.]+$/.test(amount)) {
-          // eslint-disable-next-line no-eval
-          const result = eval(amount) as number;
-          setAmount(parseFloat(result.toFixed(10)).toString());
-        }
-      } catch {
-        // invalid expression, ignore
+      const result = evaluateAmountExpression(amount);
+      if (result !== null) {
+        setAmount(Number(result.toFixed(10)).toString());
+      } else {
+        setAmountError(t("invalid_amount"));
       }
       return;
     }
@@ -120,7 +129,7 @@ export function QuickEditModal({
         <View className="flex-1 justify-end bg-black/50">
           <View
             className="bg-white dark:bg-slate-900 rounded-t-3xl overflow-hidden"
-            style={{ paddingBottom: insets.bottom }}
+            style={{ paddingBottom: bottomInset }}
           >
             {/* Header */}
             <View className="flex-row items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
@@ -146,6 +155,11 @@ export function QuickEditModal({
                   >
                     {currency} {formatAmountInput(amount, "0")}
                   </Text>
+                  {amountError ? (
+                    <Text className="mt-3 text-sm font-medium text-red-500">
+                      {amountError}
+                    </Text>
+                  ) : null}
                 </View>
                 <CalculatorKeypad
                   onKeyPress={handleKeyPress}

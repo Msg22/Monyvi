@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 
 import { palette } from "@/constants/colors";
 import { TransactionTypeFilter } from "@/hooks/useTransactionsGrouping";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
 interface TypeFilterModalProps {
   visible: boolean;
@@ -41,6 +42,7 @@ export function TypeFilterModal({
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const { t } = useTranslation("common");
+  const bottomInset = useModalBottomInset();
 
   return (
     <Modal
@@ -59,7 +61,7 @@ export function TypeFilterModal({
             />
             <View className="absolute inset-0 bg-white/95 dark:bg-slate-900/95" />
 
-            <View>
+            <View style={{ paddingBottom: bottomInset }}>
               {/* Header */}
               <View className="flex-row justify-between items-center px-5 pt-5 pb-2">
                 <Text className="text-xl font-bold text-slate-800 dark:text-slate-100">

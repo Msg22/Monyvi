@@ -44,6 +44,7 @@ import { TypeTabs } from "../../add-transaction/TypeTabs";
 import { AccountSelector } from "./AccountSelector";
 import { CurrencyPicker } from "../../currency/CurrencyPicker";
 import { useTransactionEditState } from "@/hooks/useTransactionEditState";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
 export interface TransactionEditModalProps {
   /** Whether the modal is visible */
@@ -79,6 +80,7 @@ export function TransactionEditModal(
 ): React.JSX.Element {
   const { visible, onClose, latestRates, transaction } = props;
   const { t } = useTranslation("transactions");
+  const bottomInset = useModalBottomInset();
 
   const { state, setters, accountHandlers } = useTransactionEditState(props);
 
@@ -461,7 +463,7 @@ export function TransactionEditModal(
             )}
 
             {/* Bottom spacing */}
-            <View className="h-8" />
+            <View style={{ height: bottomInset + 32 }} />
           </ScrollView>
         </View>
 
