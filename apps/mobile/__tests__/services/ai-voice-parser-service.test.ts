@@ -421,12 +421,17 @@ describe("ai-voice-parser-service", () => {
       expect(isVoiceParserError(result)).toBe(true);
       expect(mockLoggerError).toHaveBeenCalledWith(
         "[ai-voice-parser] parse-voice Edge Function error",
-        errorWithContext,
+        expect.any(Error),
         expect.objectContaining({
           status: 502,
           bodyLength: sensitiveBody.length,
         })
       );
+      const loggedError = mockLoggerError.mock.calls[0]?.[1] as
+        | (Error & { readonly context?: unknown })
+        | undefined;
+      expect(loggedError).not.toBe(errorWithContext);
+      expect(loggedError).not.toHaveProperty("context");
       const loggerContext = mockLoggerError.mock.calls[0]?.[2];
       expect(loggerContext).not.toHaveProperty("body");
     });
