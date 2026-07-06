@@ -24,7 +24,6 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -32,6 +31,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -81,7 +81,7 @@ export function CategorySelectorModal({
 }: CategorySelectorModalProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { width, height } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
+  const bottomInset = useModalBottomInset();
   const { t } = useTranslation("common");
 
   // Navigation state machine
@@ -288,7 +288,7 @@ export function CategorySelectorModal({
                     keyExtractor={keyExtractor}
                     renderItem={renderItem}
                     contentContainerStyle={{
-                      paddingBottom: insets.bottom + 40,
+                      paddingBottom: bottomInset + 40,
                       paddingHorizontal: 16,
                       paddingTop: 4,
                     }}

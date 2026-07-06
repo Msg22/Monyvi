@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react-native";
 import React from "react";
+import { Platform } from "react-native";
 
 import { AccountSelectorModal } from "@/components/modals/AccountSelectorModal";
 import { CategorySelectorModal } from "@/components/modals/CategorySelectorModal";
@@ -7,7 +8,10 @@ import { FrequencyPickerModal } from "@/components/modals/FrequencyPickerModal";
 import type { Account, Category } from "@monyvi/db";
 
 jest.mock("react-native-safe-area-context", () => ({
-  useSafeAreaInsets: (): { readonly bottom: number } => ({ bottom: 24 }),
+  initialWindowMetrics: {
+    insets: { bottom: 24, left: 0, right: 0, top: 0 },
+  },
+  useSafeAreaInsets: (): { readonly bottom: number } => ({ bottom: 0 }),
 }));
 
 jest.mock("@/context/ThemeContext", () => ({
@@ -95,7 +99,14 @@ const category = {
 };
 
 describe("recurring payment selector safe areas", () => {
-  it("pads the frequency picker above the native bottom bar", () => {
+  beforeAll(() => {
+    Object.defineProperty(Platform, "OS", {
+      configurable: true,
+      get: () => "android",
+    });
+  });
+
+  it("falls back to initial metrics when modal insets are zero", () => {
     render(
       <FrequencyPickerModal
         visible

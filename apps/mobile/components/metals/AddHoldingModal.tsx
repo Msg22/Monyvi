@@ -35,7 +35,6 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 
 import type { MetalType } from "@monyvi/db";
@@ -44,6 +43,7 @@ import { FINENESS_OPTIONS, GOLD_PURITY_OPTIONS } from "@monyvi/logic";
 import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { formatDate } from "@/utils/dateHelpers";
 import {
@@ -94,7 +94,7 @@ export function AddHoldingModal({
   initialMetalType = "GOLD",
 }: AddHoldingModalProps): React.JSX.Element {
   const { isDark } = useTheme();
-  const insets = useSafeAreaInsets();
+  const bottomInset = useModalBottomInset();
   const { preferredCurrency } = usePreferredCurrency();
   const { t } = useTranslation("metals");
   const { t: tCommon } = useTranslation("common");
@@ -262,7 +262,7 @@ export function AddHoldingModal({
             >
               <View
                 className="rounded-t-[32px] bg-white dark:bg-slate-800"
-                style={{ paddingBottom: insets.bottom + 24 }}
+                style={{ paddingBottom: bottomInset + 24 }}
               >
                 <ScrollView
                   bounces={false}
