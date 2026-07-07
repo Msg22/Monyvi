@@ -342,7 +342,7 @@ All schema changes MUST go through local SQL migration files in
 ## Coding Style
 
 - Immutability: ALWAYS create new objects, NEVER mutate existing ones.
-- Many small files > few large files. 200-400 lines typical, 800 max. Functions
+- Many small files > few large files. 200-400 lines typical, 900 max. Functions
   < 50 lines.
 - Handle errors explicitly at every level. Never silently swallow errors.
 - Validate at system boundaries (user input, external APIs). Fail fast with

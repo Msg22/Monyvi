@@ -161,7 +161,9 @@ export default function SettingsScreen(): React.JSX.Element {
     setHasPendingLiveDetectionEnable(false);
     setHasReturnedFromLiveDetectionSettings(false);
     setHasPendingNotificationEnable(false);
-    setPendingAiConsentAction(null);
+    setPendingAiConsentAction((pendingAction) =>
+      pendingAction?.kind === "live" ? null : pendingAction
+    );
     setPermissionRecovery(null);
   }, []);
 

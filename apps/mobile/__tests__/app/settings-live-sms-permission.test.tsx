@@ -493,6 +493,26 @@ describe("Settings live SMS permission recovery", () => {
     expect(mockRouterPush).not.toHaveBeenCalledWith("/sms-scan");
   });
 
+  it("preserves pending SMS sync consent while live detection cleanup runs", async () => {
+    mockIsAiConsented = false;
+    mockSmsPermissionStatus = "granted";
+    const screen = await renderReadySettings();
+
+    fireEvent.press(screen.getByText("sync_new"));
+    expect(await screen.findByTestId("ai-consent-continue")).toBeTruthy();
+
+    emitAppStateChange("background");
+    emitAppStateChange("active");
+    fireEvent.press(screen.getByTestId("ai-consent-continue"));
+
+    await waitFor(() => {
+      expect(mockGrantAiConsent).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(mockRouterPush).toHaveBeenCalledWith("/sms-scan");
+    });
+  });
+
   it("keeps SMS sync recovery actionable when SMS permission can still be requested", async () => {
     mockSmsPermissionStatus = "undetermined";
     mockRequestPermission.mockResolvedValue("denied");
