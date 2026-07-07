@@ -55,6 +55,18 @@ function getNumberField(row: unknown, field: string): number | undefined {
   return typeof value === "number" ? value : undefined;
 }
 
+function expectRowsStampedForIncrementalPull(rows: readonly unknown[]): void {
+  for (const row of rows) {
+    const createdAt = getStringField(row, "created_at");
+    const updatedAt = getStringField(row, "updated_at");
+    expect(createdAt).toBeDefined();
+    expect(updatedAt).toBeDefined();
+    expect(new Date(updatedAt ?? "").getTime()).toBeGreaterThan(
+      new Date(createdAt ?? "").getTime()
+    );
+  }
+}
+
 function parsePauseIntervals(value: string): readonly PauseInterval[] {
   const parsed: unknown = JSON.parse(value);
   if (!Array.isArray(parsed)) return [];
@@ -215,6 +227,7 @@ describe("manual-qa-seed script helpers", () => {
       ])
     );
     expect(assetRows).toHaveLength(5);
+    expectRowsStampedForIncrementalPull(assetRows);
     expect(assetMetalRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ metal_type: "GOLD", item_form: "Jewelry" }),
@@ -222,6 +235,7 @@ describe("manual-qa-seed script helpers", () => {
         expect.objectContaining({ metal_type: "PLATINUM", item_form: "Bar" }),
       ])
     );
+    expectRowsStampedForIncrementalPull(assetMetalRows);
     expect(budgetRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -233,6 +247,7 @@ describe("manual-qa-seed script helpers", () => {
         expect.objectContaining({ name: "Overall Spending", type: "GLOBAL" }),
       ])
     );
+    expectRowsStampedForIncrementalPull(budgetRows);
     expect(
       budgetRows.every(
         (row) =>
@@ -257,6 +272,7 @@ describe("manual-qa-seed script helpers", () => {
         expect.objectContaining({ party_name: "Omar", status: "SETTLED" }),
       ])
     );
+    expectRowsStampedForIncrementalPull(debtRows);
     expect(recurringPaymentRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -268,6 +284,7 @@ describe("manual-qa-seed script helpers", () => {
         expect.objectContaining({ name: "Gym Membership", status: "PAUSED" }),
       ])
     );
+    expectRowsStampedForIncrementalPull(recurringPaymentRows);
     expect(
       recurringPaymentRows.some(
         (row) =>
@@ -295,6 +312,13 @@ describe("manual-qa-seed script helpers", () => {
       )
     ).toBe(true);
     expect(transactionRows).toHaveLength(8);
+    expectRowsStampedForIncrementalPull(
+      transactionRows.filter(
+        (row) =>
+          getStringField(row, "counterparty") !== "Metro Market" &&
+          getStringField(row, "counterparty") !== "Salary"
+      )
+    );
     expect(transferRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ notes: "Manual QA seeded ATM withdrawal" }),
@@ -308,6 +332,12 @@ describe("manual-qa-seed script helpers", () => {
       ])
     );
     expect(transferRows).toHaveLength(5);
+    expectRowsStampedForIncrementalPull(
+      transferRows.filter(
+        (row) =>
+          getStringField(row, "notes") !== "Manual QA seeded ATM withdrawal"
+      )
+    );
     expect(marketRateRows).toHaveLength(0);
   });
 });

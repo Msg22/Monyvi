@@ -46,7 +46,7 @@ function buildManualQaExtraRows({
         is_default: false,
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.accounts.cibCard,
@@ -60,7 +60,7 @@ function buildManualQaExtraRows({
         is_default: false,
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.accounts.binance,
@@ -74,7 +74,7 @@ function buildManualQaExtraRows({
         is_default: false,
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.accounts.travelWallet,
@@ -88,7 +88,7 @@ function buildManualQaExtraRows({
         is_default: false,
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
     ],
     bankDetails: [
@@ -99,7 +99,7 @@ function buildManualQaExtraRows({
         account_number: "41117788",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
     ],
     assets: [
@@ -115,7 +115,7 @@ function buildManualQaExtraRows({
         notes: "Jewelry purchase for metal asset QA",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.assets.silverCoins,
@@ -129,7 +129,7 @@ function buildManualQaExtraRows({
         notes: "Small silver holding",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.assets.platinumBar,
@@ -143,7 +143,7 @@ function buildManualQaExtraRows({
         notes: "Foreign-currency precious metal",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.assets.btcHolding,
@@ -157,7 +157,7 @@ function buildManualQaExtraRows({
         notes: "Crypto asset without metal details",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.assets.apartmentDownPayment,
@@ -171,7 +171,7 @@ function buildManualQaExtraRows({
         notes: "Illiquid real-estate scenario",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
     ],
     assetMetals: [
@@ -184,7 +184,7 @@ function buildManualQaExtraRows({
         item_form: "Jewelry",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.assetMetals.silverCoins,
@@ -195,7 +195,7 @@ function buildManualQaExtraRows({
         item_form: "Coins",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.assetMetals.platinumBar,
@@ -206,7 +206,7 @@ function buildManualQaExtraRows({
         item_form: "Bar",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
     ],
     debts: [
@@ -224,7 +224,7 @@ function buildManualQaExtraRows({
         notes: "Friend loan due soon",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.debts.partialBorrowed,
@@ -240,7 +240,7 @@ function buildManualQaExtraRows({
         notes: "Installment repayment scenario",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.debts.settledLent,
@@ -256,7 +256,7 @@ function buildManualQaExtraRows({
         notes: "Closed debt history",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
     ],
     budgets: [
@@ -278,7 +278,7 @@ function buildManualQaExtraRows({
         pause_intervals: "[]",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.budgets.transportWeekly,
@@ -298,7 +298,7 @@ function buildManualQaExtraRows({
         pause_intervals: "[]",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.budgets.ramadanHosting,
@@ -318,7 +318,7 @@ function buildManualQaExtraRows({
         pause_intervals: JSON.stringify([{ startedAt: currentTimestamp }]),
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.budgets.globalMonthly,
@@ -338,7 +338,7 @@ function buildManualQaExtraRows({
         pause_intervals: "[]",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
     ],
     recurringPayments: [
@@ -362,7 +362,7 @@ function buildManualQaExtraRows({
         notes: "Monthly rent reminder",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.recurringPayments.salary,
@@ -384,7 +384,7 @@ function buildManualQaExtraRows({
         notes: "Auto-create monthly salary",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.recurringPayments.debtRepayment,
@@ -406,7 +406,7 @@ function buildManualQaExtraRows({
         notes: "Linked debt repayment",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.recurringPayments.gym,
@@ -428,7 +428,7 @@ function buildManualQaExtraRows({
         notes: "Paused weekly subscription",
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
     ],
     transactions: [
@@ -455,7 +455,7 @@ function buildManualQaExtraRows({
         linked_recurring_id: null,
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.transactions.voiceCoffee,
@@ -475,7 +475,7 @@ function buildManualQaExtraRows({
         linked_recurring_id: null,
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.transactions.recurringRent,
@@ -495,7 +495,7 @@ function buildManualQaExtraRows({
         linked_recurring_id: seedIds.recurringPayments.rent,
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.transactions.debtPayment,
@@ -515,7 +515,7 @@ function buildManualQaExtraRows({
         linked_recurring_id: seedIds.recurringPayments.debtRepayment,
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.transactions.assetPurchase,
@@ -535,7 +535,7 @@ function buildManualQaExtraRows({
         linked_recurring_id: null,
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.transactions.refund,
@@ -555,7 +555,7 @@ function buildManualQaExtraRows({
         linked_recurring_id: null,
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
     ],
     transfers: [
@@ -572,7 +572,7 @@ function buildManualQaExtraRows({
         date: dateFromToday(-4),
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.transfers.qnbToCib,
@@ -587,7 +587,7 @@ function buildManualQaExtraRows({
         date: dateFromToday(-6),
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.transfers.usdToEgp,
@@ -602,7 +602,7 @@ function buildManualQaExtraRows({
         date: dateFromToday(-12),
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.transfers.btcRebalance,
@@ -617,7 +617,7 @@ function buildManualQaExtraRows({
         date: dateFromToday(-18),
         deleted: false,
         created_at: fixedNow,
-        updated_at: fixedNow,
+        updated_at: currentTimestamp,
       },
     ],
   };
