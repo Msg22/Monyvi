@@ -38,6 +38,7 @@ let mockSmsPermissionStatus: SmsPermissionStatus = "denied";
 let mockLiveDetectionPermissionStatus: SmsPermissionStatus = "denied";
 let mockIsAiConsented = true;
 let mockIsAiConsentLoading = false;
+let mockHasSynced = false;
 let appStateChangeHandlers: Array<(status: AppStateStatus) => void> = [];
 
 jest.mock("react-native/Libraries/Modal/Modal", () => {
@@ -134,7 +135,7 @@ jest.mock("@/hooks/useSmsPermission", () => ({
 
 jest.mock("@/hooks/useSmsSync", () => ({
   useSmsSync: () => ({
-    hasSynced: false,
+    hasSynced: mockHasSynced,
     lastSyncTimestamp: null,
   }),
 }));
@@ -289,6 +290,7 @@ describe("Settings live SMS permission recovery", () => {
     mockOpenNotificationSettings.mockResolvedValue();
     mockIsAiConsented = true;
     mockIsAiConsentLoading = false;
+    mockHasSynced = false;
     mockGrantAiConsent.mockResolvedValue();
     mockRevokeAiConsent.mockResolvedValue();
   });
@@ -448,6 +450,33 @@ describe("Settings live SMS permission recovery", () => {
     expect(await screen.findByText("ai_consent_title")).toBeTruthy();
     expect(screen.getByText("ai_consent_privacy_details")).toBeTruthy();
     expect(await screen.findByTestId("ai-consent-continue")).toBeTruthy();
+  });
+
+  it("waits for AI consent to load before gating SMS sync", async () => {
+    mockIsAiConsented = false;
+    mockIsAiConsentLoading = true;
+    mockSmsPermissionStatus = "granted";
+    const screen = renderSettings();
+
+    fireEvent.press(await screen.findByText("sync_new"));
+
+    expect(screen.queryByText("ai_consent_title")).toBeNull();
+    expect(mockRouterPush).not.toHaveBeenCalledWith("/sms-scan");
+  });
+
+  it("dismisses the full rescan confirmation before opening AI consent", async () => {
+    mockHasSynced = true;
+    mockIsAiConsented = false;
+    mockSmsPermissionStatus = "granted";
+    const screen = await renderReadySettings();
+
+    fireEvent.press(screen.getByText("full_rescan"));
+    expect(await screen.findByText("rescan_title")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("modal-confirm"));
+
+    expect(screen.queryByText("rescan_title")).toBeNull();
+    expect(await screen.findByText("ai_consent_title")).toBeTruthy();
   });
 
   it("shows SMS permission recovery after general AI consent for SMS sync", async () => {

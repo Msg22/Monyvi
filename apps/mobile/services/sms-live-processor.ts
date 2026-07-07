@@ -199,6 +199,17 @@ export async function processLiveSmsEvent(
       );
     }
 
+    try {
+      if (!(await hasLiveSmsAiConsent())) {
+        return createResult("disabled", confirmedSmsFingerprint);
+      }
+    } catch (error: unknown) {
+      logger.error("liveSms.consentRecheck.failed", error, {
+        deliveryMode: event.deliveryMode,
+      });
+      return createResult("infrastructure_error", confirmedSmsFingerprint);
+    }
+
     if (aiResult.hasError === true) {
       return createResult(
         "ai_failed",

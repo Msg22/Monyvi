@@ -276,6 +276,15 @@ export function useVoiceTransactionFlow(
     // Clean up temp audio file (FR-021)
     await recorder.discard();
 
+    if (config.ensureAiProcessingConsent) {
+      const canUseAi = await config.ensureAiProcessingConsent();
+      if (!canUseAi) {
+        setIsOverlayVisible(false);
+        updateFlowStatus("idle");
+        return;
+      }
+    }
+
     // Handle result
     if (isVoiceParserError(aiResult)) {
       setErrorMessage(aiResult.message);

@@ -291,13 +291,13 @@ export default function SmsScanScreen(): React.JSX.Element {
   // Auto-start scan on mount — waits until permission is granted and categories loaded
   useEffect(() => {
     if (aiConsent.isLoading) return;
-    if (permissionStatus !== "granted") return;
     if (!aiConsent.isConsented) {
       scanAbortControllerRef.current?.abort();
       scanInitiated.current = false;
       setIsConsentSheetVisible(true);
       return;
     }
+    if (permissionStatus !== "granted") return;
     if (!isAiContextReady) return;
     if (!scanInitiated.current) {
       scanInitiated.current = true;
@@ -466,6 +466,22 @@ export default function SmsScanScreen(): React.JSX.Element {
   // The native permission dialog is only opened from the app-side rationale
   // modal so users see the explanation first.
   // All hooks are called above unconditionally to satisfy the Rules of Hooks.
+  if (aiConsent.isLoading) {
+    return (
+      <SmsPermissionGate
+        status="undetermined"
+        isLoading={true}
+        onRequest={handleShowPermissionRecovery}
+        onOpenSettings={handleShowPermissionRecovery}
+        onBack={handleBackPress}
+      />
+    );
+  }
+
+  if (!aiConsent.isConsented) {
+    return consentSheet;
+  }
+
   if (isPermissionLoading || permissionStatus !== "granted") {
     const gateStatus =
       permissionStatus === "denied" || permissionStatus === "blocked"

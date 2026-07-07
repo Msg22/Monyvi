@@ -46,10 +46,7 @@ import {
   isAutoConfirmEnabled,
   setAutoConfirm,
 } from "@/services/sms-live-detection-handler";
-import {
-  startSmsListener,
-  stopSmsListener,
-} from "@/services/sms-live-listener-service";
+import { startSmsListener, stopSmsListener } from "@/services/sms-live-listener-service";
 import { SettingsConfirmationModals } from "@/components/settings/SettingsConfirmationModals";
 import { PermissionRecoveryModal } from "@/components/permissions/PermissionRecoveryModal";
 import {
@@ -66,13 +63,6 @@ import {
 import { logger } from "@/utils/logger";
 import type { PendingAiAction } from "@/components/settings/settings-types";
 
-/**
- * Render the Settings screen for managing appearance, currency, and general preferences.
- *
- * The screen provides a theme toggle, a preferred currency selector (modal), navigation back, and access to profile and notification options.
- *
- * @returns A JSX element representing the Settings screen UI.
- */
 export default function SettingsScreen(): React.JSX.Element {
   const { theme, isDark, toggleTheme } = useTheme();
   const { user } = useAuth();
@@ -179,6 +169,7 @@ export default function SettingsScreen(): React.JSX.Element {
     }
 
     if (!isAiConsentEnabled) {
+      liveDetectionPreferenceGenerationRef.current += 1;
       try {
         await setLiveDetectionEnabled(false);
         await setAutoConfirm(false);
@@ -693,6 +684,8 @@ export default function SettingsScreen(): React.JSX.Element {
         return;
       }
 
+      if (aiConsent.isLoading) return;
+
       if (!isAiConsentEnabled) {
         setPendingAiConsentAction({ kind: "sms", mode });
         setIsAiConsentSheetVisible(true);
@@ -701,7 +694,7 @@ export default function SettingsScreen(): React.JSX.Element {
 
       continueSmsScanWithConsent(mode);
     },
-    [continueSmsScanWithConsent, isAiConsentEnabled, isAndroid, showToast, t]
+    [aiConsent.isLoading, continueSmsScanWithConsent, isAiConsentEnabled, isAndroid, showToast, t]
   );
 
   const handleIncrementalSync = useCallback((): void => {
@@ -865,7 +858,10 @@ export default function SettingsScreen(): React.JSX.Element {
         onCancelAiDisableConfirm={() => setIsAiDisableConfirmOpen(false)}
         onCancelFullRescan={() => setIsFullRescanModalOpen(false)}
         onConfirmAiDisable={() => handleAiConsentToggle(false)}
-        onConfirmFullRescan={() => navigateToScan("full")}
+        onConfirmFullRescan={() => {
+          setIsFullRescanModalOpen(false);
+          navigateToScan("full");
+        }}
         showForceLogoutError={showForceLogoutError}
         showSyncWarning={showSyncWarning}
         t={t}

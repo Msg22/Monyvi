@@ -352,8 +352,16 @@ function loadFixtureSmsParser(): typeof import("./testing/ai-sms-fixture-parser"
   return fixtureParser.parseSmsWithFixtureAi;
 }
 
-function createAbortedParseResult(): AiParseResult {
-  return { transactions: [], hasError: true, isRetryable: false };
+function createAbortError(): Error {
+  const error = new Error("SMS parse aborted");
+  error.name = "AbortError";
+  return error;
+}
+
+function throwIfAborted(abortSignal?: AbortSignal): void {
+  if (abortSignal?.aborted) {
+    throw createAbortError();
+  }
 }
 
 /**
@@ -381,7 +389,7 @@ export async function parseSmsWithAi(
 ): Promise<AiParseResult> {
   const emptyResult: AiParseResult = { transactions: [], hasError: false };
   if (candidates.length === 0) return emptyResult;
-  if (abortSignal?.aborted) return createAbortedParseResult();
+  throwIfAborted(abortSignal);
 
   try {
     if (shouldUseFixtureSmsParser()) {
@@ -424,7 +432,7 @@ export async function parseSmsWithAi(
 
     let chunkIndex = 0;
     while (chunkIndex < chunkQueue.length) {
-      if (abortSignal?.aborted) return createAbortedParseResult();
+      throwIfAborted(abortSignal);
 
       // Delay between chunks to avoid Gemini rate limits (skip for first chunk)
       if (chunkIndex > 0) {
@@ -432,7 +440,7 @@ export async function parseSmsWithAi(
           setTimeout(resolve, INTER_CHUNK_DELAY_MS)
         );
       }
-      if (abortSignal?.aborted) return createAbortedParseResult();
+      throwIfAborted(abortSignal);
 
       const currentChunk = chunkQueue[chunkIndex];
       const chunkStartMs = Date.now();
@@ -441,6 +449,7 @@ export async function parseSmsWithAi(
         currentChunk.messages,
         context
       );
+      throwIfAborted(abortSignal);
       const chunkDurationMs = Date.now() - chunkStartMs;
 
       // Only retry-with-split on actual errors, not legitimate empty results
@@ -512,6 +521,10 @@ export async function parseSmsWithAi(
       isRetryable: hasError ? hasRetryableError : undefined,
     };
   } catch (err: unknown) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw err;
+    }
+
     logger.error(
       "[ai-sms-parser] Unexpected error during parseSmsWithAi",
       err,

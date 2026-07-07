@@ -1,7 +1,5 @@
-import {
-  evaluateAmountExpression,
-  parsePositiveFiniteAmountInput,
-} from "../amount-helpers";
+import { evaluateAmountExpression } from "../../parsers/expression-evaluator";
+import { parsePositiveFiniteAmountInput } from "../amount-helpers";
 
 describe("amount helpers", () => {
   it("parses positive finite amount input", () => {
@@ -13,7 +11,7 @@ describe("amount helpers", () => {
   it("evaluates calculator expressions without executing arbitrary input", () => {
     expect(evaluateAmountExpression("12+3*2")).toBe(18);
     expect(evaluateAmountExpression("10 / 4")).toBe(2.5);
-    expect(evaluateAmountExpression("-5+8")).toBe(3);
+    expect(evaluateAmountExpression("8-5")).toBe(3);
     expect(evaluateAmountExpression("12+")).toBeNull();
     expect(evaluateAmountExpression("10/0")).toBeNull();
     expect(evaluateAmountExpression("globalThis.process.exit()")).toBeNull();

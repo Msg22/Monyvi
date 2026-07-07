@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface UseSettingsAiConsentStateResult {
   readonly isAiConsentEnabled: boolean;
@@ -14,7 +14,20 @@ export function useSettingsAiConsentState({
   readonly revokePersistedConsent: () => Promise<void>;
 }): UseSettingsAiConsentStateResult {
   const [isGrantedInSession, setIsGrantedInSession] = useState(false);
+  const hasSeenPersistedConsentRef = useRef(isPersistedConsented);
   const isAiConsentEnabled = isPersistedConsented || isGrantedInSession;
+
+  useEffect((): void => {
+    if (isPersistedConsented) {
+      hasSeenPersistedConsentRef.current = true;
+      return;
+    }
+
+    if (hasSeenPersistedConsentRef.current) {
+      setIsGrantedInSession(false);
+    }
+  }, [isPersistedConsented]);
+
   const markAiConsentGranted = useCallback((): void => {
     setIsGrantedInSession(true);
   }, []);

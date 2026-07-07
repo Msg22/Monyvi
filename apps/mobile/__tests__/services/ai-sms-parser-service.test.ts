@@ -289,18 +289,15 @@ describe("ai-sms-parser-service parser strategy", () => {
     const abortController = new AbortController();
     abortController.abort();
 
-    const result = await parseSmsWithAi(
-      [candidate("nbe_debit_purchase")],
-      context,
-      undefined,
-      abortController.signal
-    );
+    await expect(
+      parseSmsWithAi(
+        [candidate("nbe_debit_purchase")],
+        context,
+        undefined,
+        abortController.signal
+      )
+    ).rejects.toMatchObject({ name: "AbortError" });
 
     expect(mockInvoke).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      transactions: [],
-      hasError: true,
-      isRetryable: false,
-    });
   });
 });

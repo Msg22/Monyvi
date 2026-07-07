@@ -445,6 +445,11 @@ function buildSeedRows(userId) {
       preferred_language: "en",
       theme: "SYSTEM",
       sms_detection_enabled: false,
+      ai_processing_consent: {
+        version: 1,
+        consentedAt: FIXED_NOW,
+        revokedAt: null,
+      },
       onboarding_completed: true,
       setup_guide_completed: true,
       onboarding_flags: {},

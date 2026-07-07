@@ -287,6 +287,26 @@ describe("sms-live-processor", () => {
     expect(mockParseSmsWithAi).not.toHaveBeenCalled();
   });
 
+  it("does not return parsed live SMS when AI consent is revoked during parsing", async () => {
+    mockGetAiProcessingConsentStatus
+      .mockResolvedValueOnce({ isConsented: true })
+      .mockResolvedValueOnce({ isConsented: true })
+      .mockResolvedValueOnce({ isConsented: false });
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("disabled");
+    expect(result.transactions).toEqual([]);
+    expect(mockParseSmsWithAi).toHaveBeenCalledTimes(1);
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
+    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
+  });
+
   it("returns infrastructure_error when AI consent lookup fails", async () => {
     mockGetAiProcessingConsentStatus.mockRejectedValue(
       new Error("profile unavailable")
