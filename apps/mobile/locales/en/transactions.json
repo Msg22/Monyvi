@@ -284,7 +284,7 @@
   "ai_sms_consent_ai_processing_body": "Used to parse matching messages into editable suggestions.",
   "ai_consent_row_choose": "Only when you choose SMS or voice",
   "ai_consent_row_review": "You review before saving",
-  "ai_consent_row_no_ads": "Not used for ads",
+  "ai_consent_row_no_ads": "Not used for ads or training",
   "ai_consent_privacy_details": "Privacy details",
   "ai_sms_consent_settings_note": "You can change this later in Settings.",
   "ai_consent_continue": "Continue",

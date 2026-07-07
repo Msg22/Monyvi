@@ -189,6 +189,39 @@ describe("useProfile", () => {
     expect(result.current.isLoading).toBe(false);
   });
 
+  it("rerenders consumers when Watermelon emits an updated same profile instance", () => {
+    const profile = {
+      id: "profile-1",
+      userId: "current-user",
+      aiProcessingConsentRaw: null as string | null,
+    };
+    const rendered = renderTestingHook(() => {
+      const { profile: currentProfile } = useProfile();
+      return (
+        (currentProfile as typeof profile | null)?.aiProcessingConsentRaw ??
+        null
+      );
+    });
+
+    act(() => {
+      activeSubscriber?.next([profile]);
+    });
+
+    expect(rendered.result.current).toBeNull();
+
+    profile.aiProcessingConsentRaw = JSON.stringify({
+      version: 1,
+      consentedAt: "2026-07-07T10:00:00.000Z",
+      revokedAt: null,
+    });
+
+    act(() => {
+      activeSubscriber?.next([profile]);
+    });
+
+    expect(rendered.result.current).toBe(profile.aiProcessingConsentRaw);
+  });
+
   it("unsubscribes on unmount", () => {
     const { unmount } = renderHook();
 

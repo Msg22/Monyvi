@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Modal, Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { palette } from "@/constants/colors";
+import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
 export type AiProcessingConsentVariant =
   | "ai-consent"
@@ -25,16 +26,16 @@ export function AiProcessingConsentSheet({
 }: AiProcessingConsentSheetProps): React.JSX.Element {
   const { t } = useTranslation("transactions");
   const isSmsVariant = variant === "sms-permission-with-ai-consent";
-  const [isContinueSubmitting, setIsContinueSubmitting] =
-    React.useState(false);
+  const bottomInset = useModalBottomInset();
+  const [isContinueSubmitting, setIsContinueSubmitting] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!visible && isContinueSubmitting) {
       setIsContinueSubmitting(false);
     }
   }, [isContinueSubmitting, visible]);
 
-  const handleContinue = React.useCallback(async (): Promise<void> => {
+  const handleContinue = useCallback(async (): Promise<void> => {
     if (isContinueSubmitting) {
       return;
     }
@@ -46,10 +47,10 @@ export function AiProcessingConsentSheet({
       setIsContinueSubmitting(false);
     }
   }, [isContinueSubmitting, onContinue]);
-  const handleNotNow = React.useCallback((): void => {
+  const handleNotNow = useCallback((): void => {
     if (!isContinueSubmitting) onNotNow();
   }, [isContinueSubmitting, onNotNow]);
-  const handlePrivacyDetails = React.useCallback((): void => {
+  const handlePrivacyDetails = useCallback((): void => {
     if (!isContinueSubmitting) onPrivacyDetails();
   }, [isContinueSubmitting, onPrivacyDetails]);
 
@@ -61,59 +62,106 @@ export function AiProcessingConsentSheet({
       onRequestClose={handleNotNow}
     >
       <View className="flex-1 justify-end bg-black/50">
-        <View className="rounded-t-[28px] bg-white px-5 pb-8 pt-5 dark:bg-slate-900">
+        <View
+          className={`rounded-t-[28px] bg-white px-5 pb-8 pt-5 dark:bg-slate-900 ${
+            isSmsVariant ? "pb-7" : ""
+          }`}
+          style={{ marginBottom: bottomInset }}
+        >
           <View className="mb-4 h-1.5 w-12 self-center rounded-full bg-slate-300 dark:bg-slate-700" />
 
-          <View className="mb-5 h-12 w-12 items-center justify-center rounded-2xl bg-nileGreen-500/15">
+          <View
+            testID={isSmsVariant ? "sms-consent-hero-icon" : undefined}
+            className={`h-14 w-14 items-center justify-center rounded-2xl bg-nileGreen-500/15 ${
+              isSmsVariant ? "mb-4 self-center" : "mb-5 self-center"
+            }`}
+          >
             <Ionicons
               name={isSmsVariant ? "chatbubble-ellipses" : "sparkles"}
-              size={24}
+              size={28}
               color={palette.nileGreen[500]}
             />
           </View>
 
-          <Text className="mb-2 text-2xl font-bold text-slate-900 dark:text-slate-25">
+          <Text
+            testID={isSmsVariant ? "sms-consent-title" : undefined}
+            className={`mb-3 font-bold text-slate-900 dark:text-slate-25 ${
+              isSmsVariant
+                ? "text-center text-[21px] leading-7"
+                : "text-center text-[22px] leading-7"
+            }`}
+          >
             {t(isSmsVariant ? "ai_sms_consent_title" : "ai_consent_title")}
           </Text>
-          <Text className="mb-5 text-base leading-6 text-slate-600 dark:text-slate-300">
+          <Text
+            testID={isSmsVariant ? "sms-consent-body" : undefined}
+            className={`text-slate-600 dark:text-slate-300 ${
+              isSmsVariant
+                ? "mb-5 px-3 text-center text-sm leading-5"
+                : "mb-6 px-3 text-center text-base leading-6"
+            }`}
+          >
             {t(isSmsVariant ? "ai_sms_consent_body" : "ai_consent_body")}
           </Text>
 
           {isSmsVariant ? (
-            <View className="mb-5 gap-3">
+            <View className="mb-4 gap-0">
               <ConsentRow
+                testID="sms-consent-row-sms-access"
                 icon="chatbox-outline"
                 title={t("ai_sms_consent_sms_access_title")}
                 body={t("ai_sms_consent_sms_access_body")}
               />
               <ConsentRow
+                testID="sms-consent-row-ai-processing"
                 icon="sparkles-outline"
                 title={t("ai_sms_consent_ai_processing_title")}
                 body={t("ai_sms_consent_ai_processing_body")}
               />
             </View>
           ) : (
-            <View className="mb-5 gap-3">
-              <CompactConsentRow label={t("ai_consent_row_choose")} />
-              <CompactConsentRow label={t("ai_consent_row_review")} />
-              <CompactConsentRow label={t("ai_consent_row_no_ads")} />
+            <View className="mb-6 gap-4 px-3">
+              <CompactConsentRow
+                icon="chatbox-outline"
+                label={t("ai_consent_row_choose")}
+              />
+              <CompactConsentRow
+                icon="shield-checkmark-outline"
+                label={t("ai_consent_row_review")}
+              />
+              <CompactConsentRow
+                icon="lock-closed-outline"
+                label={t("ai_consent_row_no_ads")}
+              />
             </View>
           )}
 
-          <TouchableOpacity
-            onPress={handlePrivacyDetails}
-            disabled={isContinueSubmitting}
-            className="mb-5 py-1"
-          >
-            <Text className="text-base font-semibold text-nileGreen-600 dark:text-nileGreen-400">
-              {t("ai_consent_privacy_details")}
-            </Text>
-          </TouchableOpacity>
+          {!isSmsVariant && (
+            <TouchableOpacity
+              onPress={handlePrivacyDetails}
+              disabled={isContinueSubmitting}
+              className="mb-5 items-center py-1"
+            >
+              <Text className="text-base font-semibold text-nileGreen-600 dark:text-nileGreen-400">
+                {t("ai_consent_privacy_details")}
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {isSmsVariant && (
-            <Text className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-              {t("ai_sms_consent_settings_note")}
-            </Text>
+            <View
+              testID="sms-consent-settings-note"
+              className="mb-4 flex-row items-center justify-center gap-2"
+            >
+              <Ionicons
+                name="lock-closed-outline"
+                size={14}
+                color={palette.slate[500]}
+              />
+              <Text className="text-center text-sm text-slate-600 dark:text-slate-300">
+                {t("ai_sms_consent_settings_note")}
+              </Text>
+            </View>
           )}
 
           <TouchableOpacity
@@ -133,9 +181,15 @@ export function AiProcessingConsentSheet({
             testID="ai-consent-not-now"
             onPress={handleNotNow}
             disabled={isContinueSubmitting}
-            className="rounded-2xl bg-slate-100 py-4 dark:bg-slate-800"
+            className="py-3"
           >
-            <Text className="text-center text-base font-semibold text-slate-700 dark:text-slate-200">
+            <Text
+              className={
+                isSmsVariant
+                  ? "text-center text-base font-semibold text-nileGreen-600 dark:text-nileGreen-400"
+                  : "text-center text-base font-semibold text-nileGreen-600 dark:text-nileGreen-400"
+              }
+            >
               {t("ai_consent_not_now")}
             </Text>
           </TouchableOpacity>
@@ -146,22 +200,29 @@ export function AiProcessingConsentSheet({
 }
 
 function ConsentRow({
+  testID,
   icon,
   title,
   body,
 }: {
+  readonly testID?: string;
   readonly icon: keyof typeof Ionicons.glyphMap;
   readonly title: string;
   readonly body: string;
 }): React.JSX.Element {
   return (
-    <View className="flex-row gap-3 rounded-2xl bg-slate-50 p-3 dark:bg-slate-800">
-      <Ionicons name={icon} size={20} color={palette.nileGreen[500]} />
+    <View
+      testID={testID}
+      className="-mt-px flex-row items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"
+    >
+      <View className="h-14 w-14 items-center justify-center rounded-2xl bg-nileGreen-500/15">
+        <Ionicons name={icon} size={24} color={palette.nileGreen[500]} />
+      </View>
       <View className="flex-1">
-        <Text className="text-sm font-semibold text-slate-900 dark:text-slate-25">
+        <Text className="text-base font-semibold text-slate-900 dark:text-slate-25">
           {title}
         </Text>
-        <Text className="mt-0.5 text-sm leading-5 text-slate-500 dark:text-slate-400">
+        <Text className="mt-1 text-sm leading-5 text-slate-600 dark:text-slate-300">
           {body}
         </Text>
       </View>
@@ -170,17 +231,17 @@ function ConsentRow({
 }
 
 function CompactConsentRow({
+  icon,
   label,
 }: {
+  readonly icon: keyof typeof Ionicons.glyphMap;
   readonly label: string;
 }): React.JSX.Element {
   return (
-    <View className="flex-row items-center gap-3">
-      <Ionicons
-        name="checkmark-circle"
-        size={20}
-        color={palette.nileGreen[500]}
-      />
+    <View className="flex-row items-center gap-4">
+      <View className="h-12 w-12 items-center justify-center rounded-2xl bg-nileGreen-500/15">
+        <Ionicons name={icon} size={22} color={palette.nileGreen[500]} />
+      </View>
       <Text className="text-base text-slate-700 dark:text-slate-200">
         {label}
       </Text>

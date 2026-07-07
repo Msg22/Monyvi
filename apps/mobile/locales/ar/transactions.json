@@ -335,7 +335,7 @@
   "ai_sms_consent_ai_processing_body": "تُستخدم لتحويل الرسائل المطابقة إلى اقتراحات قابلة للتعديل.",
   "ai_consent_row_choose": "فقط عند اختيار الرسائل أو الصوت",
   "ai_consent_row_review": "تراجع قبل الحفظ",
-  "ai_consent_row_no_ads": "لا نستخدمها للإعلانات",
+  "ai_consent_row_no_ads": "لا نستخدمها للإعلانات أو التدريب",
   "ai_consent_privacy_details": "تفاصيل الخصوصية",
   "ai_sms_consent_settings_note": "يمكنك تغيير هذا لاحقاً من الإعدادات.",
   "ai_consent_continue": "متابعة",

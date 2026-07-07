@@ -28,6 +28,10 @@ interface UseProfileResult {
   readonly isLoading: boolean;
 }
 
+interface ProfileSnapshot {
+  readonly profile: Profile | null;
+}
+
 // =============================================================================
 // Hook
 // =============================================================================
@@ -44,7 +48,9 @@ interface UseProfileResult {
  */
 export function useProfile(): UseProfileResult {
   const { userId, isResolvingUser } = useCurrentUser();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileSnapshot, setProfileSnapshot] = useState<ProfileSnapshot>({
+    profile: null,
+  });
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -52,15 +58,15 @@ export function useProfile(): UseProfileResult {
       userId,
       isResolvingUser,
       onResolving: () => {
-        setProfile(null);
+        setProfileSnapshot({ profile: null });
         setIsLoading(true);
       },
       onSignedOut: () => {
-        setProfile(null);
+        setProfileSnapshot({ profile: null });
         setIsLoading(false);
       },
       onAuthenticated: (currentUserId) => {
-        setProfile(null);
+        setProfileSnapshot({ profile: null });
         setIsLoading(true);
 
         const collection = database.get<Profile>("profiles");
@@ -73,7 +79,7 @@ export function useProfile(): UseProfileResult {
           .observe()
           .subscribe({
             next: (profiles) => {
-              setProfile(profiles[0] ?? null);
+              setProfileSnapshot({ profile: profiles[0] ?? null });
               setIsLoading(false);
             },
             error: (err: unknown) => {
@@ -88,7 +94,7 @@ export function useProfile(): UseProfileResult {
   }, [isResolvingUser, userId]);
 
   return {
-    profile,
+    profile: profileSnapshot.profile,
     isLoading,
   };
 }
