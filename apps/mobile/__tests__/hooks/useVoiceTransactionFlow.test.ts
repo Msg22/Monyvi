@@ -13,6 +13,20 @@ const mockRequestPermission = jest.fn();
 const mockParseVoiceWithAi = jest.fn();
 const mockOpenSettings = jest.fn();
 
+jest.mock("i18next", () => ({
+  t: (key: string): string => {
+    const messages: Record<string, string> = {
+      "common:voice_microphone_permission_error":
+        "Microphone permission is required for voice recording. Please enable it in Settings.",
+      "common:voice_recording_start_failed":
+        "Couldn't start recording. Please try again.",
+      "common:voice_settings_open_failed":
+        "Couldn't open Settings. Please open it from your device.",
+    };
+    return messages[key] ?? key;
+  },
+}));
+
 const recorderState = {
   status: "idle",
   durationMs: 0,
@@ -51,7 +65,9 @@ jest.mock("@/services/ai-voice-parser-service", () => ({
     !("transactions" in value),
 }));
 
-function renderVoiceFlow(): ReturnType<typeof renderHook<ReturnType<typeof useVoiceTransactionFlow>, never>> {
+function renderVoiceFlow(): ReturnType<
+  typeof renderHook<ReturnType<typeof useVoiceTransactionFlow>, undefined>
+> {
   return renderHook(() =>
     useVoiceTransactionFlow({
       preferredCurrency: "EGP",
@@ -103,9 +119,76 @@ describe("useVoiceTransactionFlow", () => {
     const { result } = renderVoiceFlow();
 
     await act(async () => {
+      await result.current.startFlow();
+    });
+
+    await act(async () => {
       await result.current.openMicrophoneSettings();
     });
 
     expect(mockOpenSettings).toHaveBeenCalledTimes(1);
+    expect(result.current.flowStatus).toBe("idle");
+    expect(result.current.isOverlayVisible).toBe(false);
+    expect(result.current.errorMessage).toBeNull();
+  });
+
+  it("shows a recovery error when opening device settings fails", async (): Promise<void> => {
+    mockOpenSettings.mockRejectedValueOnce(new Error("settings unavailable"));
+    const { result } = renderVoiceFlow();
+
+    await act(async () => {
+      await result.current.startFlow();
+    });
+
+    await act(async () => {
+      await result.current.openMicrophoneSettings();
+    });
+
+    expect(result.current.flowStatus).toBe("error");
+    expect(result.current.isOverlayVisible).toBe(true);
+    expect(result.current.errorMessage).toBe(
+      "Couldn't open Settings. Please open it from your device."
+    );
+    expect(result.current.isMicrophonePermissionError).toBe(false);
+  });
+
+  it("prevents overlapping retry recording starts", async (): Promise<void> => {
+    const { result, rerender } = renderVoiceFlow();
+
+    await act(async () => {
+      await result.current.startFlow();
+    });
+
+    recorderState.hasPermission = true;
+    rerender(undefined);
+
+    await act(async () => {
+      const firstRetry = result.current.retryRecording();
+      const secondRetry = result.current.retryRecording();
+      await Promise.all([firstRetry, secondRetry]);
+    });
+
+    expect(mockRecorderStart).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces recorder start failures during retry", async (): Promise<void> => {
+    mockRecorderStart.mockRejectedValueOnce(new Error("recorder failed"));
+    const { result, rerender } = renderVoiceFlow();
+
+    await act(async () => {
+      await result.current.startFlow();
+    });
+
+    recorderState.hasPermission = true;
+    rerender(undefined);
+
+    await act(async () => {
+      await result.current.retryRecording();
+    });
+
+    expect(result.current.flowStatus).toBe("error");
+    expect(result.current.errorMessage).toBe(
+      "Couldn't start recording. Please try again."
+    );
   });
 });

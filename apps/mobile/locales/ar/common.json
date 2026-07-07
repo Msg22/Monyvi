@@ -114,6 +114,9 @@
   "language_change_failed": "فشل تغيير اللغة. يرجى المحاولة مرة أخرى.",
   "voice_recording_hint": "اضغط لبدء التسجيل الصوتي لإضافة معاملة",
   "voice_recording_label": "إدخال صوتي - تسجيل معاملة",
+  "voice_microphone_permission_error": "نحتاج إذن الميكروفون لتسجيل المعاملة بصوتك. فعّله من الإعدادات.",
+  "voice_recording_start_failed": "تعذر بدء التسجيل. حاول مرة أخرى.",
+  "voice_settings_open_failed": "تعذر فتح الإعدادات. افتحها من جهازك.",
 
   "error_boundary_message": "حدث خطأ ما",
   "live_rates": "الأسعار المباشرة",
