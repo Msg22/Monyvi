@@ -56,7 +56,7 @@
   "language_change_error_title": "Language Change Failed",
   "language_change_failed": "Failed to change language. Please try again.",
   "ai_features": "AI Features",
-  "ai_processing": "AI processing",
-  "ai_processing_description": "Allow SMS and voice AI parsing",
+  "ai_processing": "AI transaction suggestions",
+  "ai_processing_description": "Use AI to suggest transactions from voice notes and selected SMS messages",
   "ai_privacy_details": "AI privacy details"
 }
