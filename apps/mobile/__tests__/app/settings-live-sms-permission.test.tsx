@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Settings permission regression tests share one screen-level mock harness. */
 import React, { type ReactNode } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
@@ -811,6 +812,9 @@ describe("Settings live SMS permission recovery", () => {
       "valueChange",
       false
     );
+    expect(await screen.findByText("ai_disable_confirm_title")).toBeTruthy();
+    expect(mockRevokeAiConsent).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId("modal-confirm"));
     await waitFor(() => expect(mockRevokeAiConsent).toHaveBeenCalledTimes(1));
     await act(async () => {
       notificationCheck.resolve("granted");
@@ -820,6 +824,19 @@ describe("Settings live SMS permission recovery", () => {
     expect(mockSetLiveDetectionEnabled).not.toHaveBeenCalledWith(true);
     expect(mockStartSmsListener).not.toHaveBeenCalled();
     expect(getLiveDetectionSwitchValue(screen)).toBe(false);
+  });
+
+  it("keeps AI consent enabled when disable confirmation is cancelled", async () => {
+    const screen = await renderReadySettings();
+    fireEvent(
+      screen.getByTestId("ai-processing-consent-switch"),
+      "valueChange",
+      false
+    );
+    expect(await screen.findByText("ai_disable_confirm_title")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("modal-cancel"));
+    expect(mockRevokeAiConsent).not.toHaveBeenCalled();
+    expect(screen.queryByText("ai_disable_confirm_title")).toBeNull();
   });
 
   it("keeps SMS recovery actionable when SMS permission is denied but can be requested again", async () => {

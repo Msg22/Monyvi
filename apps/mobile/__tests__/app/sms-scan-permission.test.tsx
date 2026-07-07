@@ -90,9 +90,8 @@ jest.mock("@/components/ai-consent/AiProcessingConsentSheet", () => ({
     readonly visible: boolean;
     readonly onContinue: () => void | Promise<void>;
   }): ReactNode => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const ReactNative =
-      require("react-native") as typeof import("react-native");
+      jest.requireActual<typeof import("react-native")>("react-native");
     const { Text, TouchableOpacity } = ReactNative;
 
     return visible ? (

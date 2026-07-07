@@ -50,7 +50,7 @@ import {
   startSmsListener,
   stopSmsListener,
 } from "@/services/sms-live-listener-service";
-import { ConfirmationModal } from "@/components/modals/ConfirmationModal";
+import { SettingsConfirmationModals } from "@/components/settings/SettingsConfirmationModals";
 import { PermissionRecoveryModal } from "@/components/permissions/PermissionRecoveryModal";
 import {
   createPermissionRecoveryState,
@@ -85,6 +85,7 @@ export default function SettingsScreen(): React.JSX.Element {
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
   const [isAiConsentSheetVisible, setIsAiConsentSheetVisible] = useState(false);
   const [isAiConsentUpdating, setIsAiConsentUpdating] = useState(false);
+  const [isAiDisableConfirmOpen, setIsAiDisableConfirmOpen] = useState(false);
   const {
     status: smsPermissionStatus,
     liveDetectionStatus,
@@ -595,6 +596,18 @@ export default function SettingsScreen(): React.JSX.Element {
     tCommon,
   });
 
+  const handleAiConsentToggleRequest = useCallback(
+    (value: boolean): void => {
+      if (!value) {
+        setIsAiDisableConfirmOpen(true);
+        return;
+      }
+
+      handleAiConsentToggle(true);
+    },
+    [handleAiConsentToggle]
+  );
+
   const openSmsScan = useCallback((): void => router.push("/sms-scan"), []);
   const { continueSmsScanWithConsent } = useSettingsSmsSyncActions({
     onOpenSmsScan: openSmsScan,
@@ -703,8 +716,6 @@ export default function SettingsScreen(): React.JSX.Element {
     [setPreferredCurrency]
   );
 
-  const handleForceLogout = forceLogout;
-
   const [isChangingLanguage, setIsChangingLanguage] = useState(false);
 
   const handleLanguageChange = useCallback(
@@ -791,7 +802,7 @@ export default function SettingsScreen(): React.JSX.Element {
           t={t}
           isConsented={isAiConsentEnabled}
           isUpdating={aiConsent.isLoading || isAiConsentUpdating}
-          onToggleConsent={handleAiConsentToggle}
+          onToggleConsent={handleAiConsentToggleRequest}
           onPrivacyDetailsPress={openAiPrivacyDetails}
         />
 
@@ -845,51 +856,20 @@ export default function SettingsScreen(): React.JSX.Element {
           }}
         />
       </ScrollView>
-      {/* {t("full_rescan")} Confirmation Modal */}
-      <ConfirmationModal
-        visible={isFullRescanModalOpen}
-        onConfirm={() => {
-          navigateToScan("full");
-        }}
-        onCancel={() => setIsFullRescanModalOpen(false)}
-        title={t("rescan_title")}
-        message={t("rescan_message")}
-        confirmLabel={t("rescan_confirm")}
-        variant="warning"
-      />
-
-      {/* Sync Failure Warning Modal */}
-      <ConfirmationModal
-        visible={showSyncWarning}
-        variant="warning"
-        icon="cloud-offline-outline"
-        title={t("sync_failed_title")}
-        message={t("sync_failed_message")}
-        confirmLabel={t("proceed_anyway")}
-        cancelLabel={tCommon("cancel")}
-        onConfirm={() => {
-          handleForceLogout().catch((error: unknown) => {
-            logger.error("settings.forceLogout.failed", error);
-          });
-        }}
-        onCancel={dismissSyncWarning}
-      />
-      {/* Force Logout Error Modal */}
-      <ConfirmationModal
-        visible={showForceLogoutError}
-        variant="warning"
-        icon="alert-circle-outline"
-        title={t("logout_failed")}
-        message={t("logout_failed_message")}
-        confirmLabel={tCommon("retry")}
-        cancelLabel={tCommon("cancel")}
-        onConfirm={() => {
-          dismissForceLogoutError();
-          handleForceLogout().catch((error: unknown) => {
-            logger.error("settings.forceLogout.retry.failed", error);
-          });
-        }}
-        onCancel={dismissForceLogoutError}
+      <SettingsConfirmationModals
+        dismissForceLogoutError={dismissForceLogoutError}
+        dismissSyncWarning={dismissSyncWarning}
+        forceLogout={forceLogout}
+        isAiDisableConfirmOpen={isAiDisableConfirmOpen}
+        isFullRescanModalOpen={isFullRescanModalOpen}
+        onCancelAiDisableConfirm={() => setIsAiDisableConfirmOpen(false)}
+        onCancelFullRescan={() => setIsFullRescanModalOpen(false)}
+        onConfirmAiDisable={() => handleAiConsentToggle(false)}
+        onConfirmFullRescan={() => navigateToScan("full")}
+        showForceLogoutError={showForceLogoutError}
+        showSyncWarning={showSyncWarning}
+        t={t}
+        tCommon={tCommon}
       />
       <PermissionRecoveryModal
         visible={permissionRecovery !== null}
