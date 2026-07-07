@@ -435,9 +435,14 @@ export default function SmsScanScreen(): React.JSX.Element {
     try {
       await aiConsent.grantConsent();
       didGrantConsent = true;
-      if (permissionStatus !== "granted") {
+
+      if (permissionStatus === "blocked") {
         setIsPermissionRecoveryVisible(true);
+      } else if (permissionStatus !== "granted") {
+        const result = await requestPermission();
+        setIsPermissionRecoveryVisible(result !== "granted");
       }
+
       setIsConsentSheetVisible(false);
     } catch (err: unknown) {
       logger.error("smsScan.aiConsentGrantFailed", err);

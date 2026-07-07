@@ -83,7 +83,33 @@ jest.mock("@/hooks/useAiProcessingConsent", () => ({
 }));
 
 jest.mock("@/components/ai-consent/AiProcessingConsentSheet", () => ({
-  AiProcessingConsentSheet: () => null,
+  AiProcessingConsentSheet: ({
+    visible,
+    variant,
+    onContinue,
+  }: {
+    readonly visible: boolean;
+    readonly variant: string;
+    readonly onContinue: () => void | Promise<void>;
+  }): ReactNode => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ReactNative = require("react-native") as typeof import("react-native");
+    const { Text, TouchableOpacity } = ReactNative;
+
+    return visible ? (
+      <>
+        <Text>{variant}</Text>
+        <TouchableOpacity
+          testID="ai-consent-continue"
+          onPress={() => {
+            void onContinue();
+          }}
+        >
+          <Text>Continue</Text>
+        </TouchableOpacity>
+      </>
+    ) : null;
+  },
 }));
 
 jest.mock("@/context/SmsScanContext", () => ({
@@ -167,5 +193,25 @@ describe("SmsScanScreen permission rationale", () => {
       expect(mockOpenSettings).toHaveBeenCalledTimes(1);
     });
     expect(mockRequestPermission).not.toHaveBeenCalled();
+  });
+
+  it("requests Android permission directly after combined SMS consent", async () => {
+    mockIsAiConsented = false;
+    mockPermissionStatus = "undetermined";
+
+    const screen = render(<SmsScanScreen />);
+
+    expect(
+      await screen.findByText("sms-permission-with-ai-consent")
+    ).toBeTruthy();
+    expect(screen.queryByTestId("permission-modal-primary")).toBeNull();
+
+    fireEvent.press(screen.getByTestId("ai-consent-continue"));
+
+    await waitFor(() => {
+      expect(mockGrantAiConsent).toHaveBeenCalledTimes(1);
+      expect(mockRequestPermission).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByTestId("permission-modal-primary")).toBeNull();
   });
 });
