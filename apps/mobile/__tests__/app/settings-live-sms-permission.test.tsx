@@ -3,11 +3,7 @@ import { AppState, type AppStateStatus } from "react-native";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 type SmsPermissionStatus = "undetermined" | "granted" | "denied" | "blocked";
-type NotificationPermissionStatus =
-  | "undetermined"
-  | "granted"
-  | "denied"
-  | "blocked";
+type NotificationPermissionStatus = "undetermined" | "granted" | "denied" | "blocked";
 
 const mockRequestPermission = jest.fn<Promise<SmsPermissionStatus>, []>();
 const mockRequestLiveDetectionPermission = jest.fn<
@@ -398,6 +394,16 @@ describe("Settings live SMS permission recovery", () => {
       expect(mockGrantAiConsent).toHaveBeenCalledTimes(1);
     });
     expect(mockRouterPush).not.toHaveBeenCalledWith("/sms-scan");
+  });
+
+  it("does not ask for AI consent again when live SMS is enabled after consenting in Settings", async () => {
+    mockIsAiConsented = false; mockSmsPermissionStatus = "granted"; mockLiveDetectionPermissionStatus = "undetermined"; const screen = await renderReadySettings();
+    mockReconcileLiveDetectionPreference.mockReturnValue(new Promise<boolean>(() => undefined));
+    fireEvent(screen.getByTestId("ai-processing-consent-switch"), "valueChange", true); await act(async () => { fireEvent.press(await screen.findByTestId("ai-consent-continue")); await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    await waitFor(() => expect(mockGrantAiConsent).toHaveBeenCalledTimes(1));
+    fireEvent(screen.getByTestId("live-sms-detection-switch"), "valueChange", true);
+    expect(screen.queryByText("ai_sms_consent_title")).toBeNull(); expect(await screen.findByText("sms_permission_request_title")).toBeTruthy();
   });
 
   it("uses the combined SMS consent sheet for SMS sync when AI consent is missing", async () => {

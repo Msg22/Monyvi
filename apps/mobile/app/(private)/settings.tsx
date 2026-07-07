@@ -33,6 +33,7 @@ import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
 import { useLogoutFlow } from "@/hooks/useLogoutFlow";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useSettingsAiConsentToggle } from "@/hooks/useSettingsAiConsentToggle";
+import { useSettingsAiConsentState } from "@/hooks/useSettingsAiConsentState";
 import { useSettingsSmsSyncActions } from "@/hooks/useSettingsSmsSyncActions";
 import { setIntroLocaleOverride } from "@/services/intro-flag-service";
 import { setPreferredLanguage } from "@/services/profile-service";
@@ -143,10 +144,8 @@ export default function SettingsScreen(): React.JSX.Element {
   const [pendingAiConsentAction, setPendingAiConsentAction] =
     useState<PendingAiAction | null>(null);
   const shouldResumeAiConsentAfterPrivacyDetails = useRef(false);
-  const aiConsentSheetVariant: AiProcessingConsentVariant =
-    pendingAiConsentAction?.kind === "sms" || pendingAiConsentAction?.kind === "live"
-      ? "sms-permission-with-ai-consent"
-      : "ai-consent";
+  const { isAiConsentEnabled, markAiConsentGranted, revokeConsent } = useSettingsAiConsentState({ isPersistedConsented: aiConsent.isConsented, revokePersistedConsent: aiConsent.revokeConsent });
+  const aiConsentSheetVariant: AiProcessingConsentVariant = pendingAiConsentAction?.kind === "sms" || pendingAiConsentAction?.kind === "live" ? "sms-permission-with-ai-consent" : "ai-consent";
   const liveDetectionSwitchValue = liveDetection || isLiveDetectionEnabling;
   const previousNotificationAppState = useRef<AppStateStatus>(
     AppState.currentState
@@ -172,7 +171,7 @@ export default function SettingsScreen(): React.JSX.Element {
   const reconcileStoredLiveDetection = useCallback(async (): Promise<void> => {
     if (!isAndroid) { setIsLiveDetectionPreferenceReady(true); return; }
 
-    if (!aiConsent.isConsented) {
+    if (!isAiConsentEnabled) {
       try { await setLiveDetectionEnabled(false); await setAutoConfirm(false); }
       finally { setLiveDetection(false); stopSmsListener(); setAutoConfirmSms(false); setIsLiveDetectionPreferenceReady(true); }
       return;
@@ -214,7 +213,7 @@ export default function SettingsScreen(): React.JSX.Element {
         setIsLiveDetectionPreferenceReady(true);
       }
     }
-  }, [aiConsent.isConsented, isAndroid]);
+  }, [isAiConsentEnabled, isAndroid]);
 
   useEffect(() => {
     if (!isAndroid || aiConsent.isLoading) return;
@@ -364,7 +363,7 @@ export default function SettingsScreen(): React.JSX.Element {
         return;
       }
 
-      if (!aiConsent.isConsented) {
+      if (!isAiConsentEnabled) {
         setPendingAiConsentAction({ kind: "live" });
         setIsAiConsentSheetVisible(true);
         return;
@@ -373,9 +372,9 @@ export default function SettingsScreen(): React.JSX.Element {
       await continueLiveDetectionEnableWithConsent();
     },
     [
-      aiConsent.isConsented,
       cancelLiveDetectionEnableFlow,
       continueLiveDetectionEnableWithConsent,
+      isAiConsentEnabled,
     ]
   );
 
@@ -565,7 +564,7 @@ export default function SettingsScreen(): React.JSX.Element {
   );
 
   const handleAiConsentToggle = useSettingsAiConsentToggle({
-    aiConsent,
+    aiConsent: { revokeConsent },
     autoConfirmSms,
     cancelLiveDetectionEnableFlow,
     hasActiveLiveDetectionEnableFlowRef,
@@ -582,8 +581,7 @@ export default function SettingsScreen(): React.JSX.Element {
   });
 
   const openSmsScan = useCallback((): void => router.push("/sms-scan"), []);
-  const { continueSmsScanAfterCombinedConsent, continueSmsScanWithConsent } =
-    useSettingsSmsSyncActions({
+  const { continueSmsScanAfterCombinedConsent, continueSmsScanWithConsent } = useSettingsSmsSyncActions({
     onOpenSmsScan: openSmsScan,
     requestPermission,
     setPendingSmsScanMode,
@@ -596,6 +594,7 @@ export default function SettingsScreen(): React.JSX.Element {
     setIsAiConsentUpdating(true);
     try {
       await aiConsent.grantConsent();
+      markAiConsentGranted();
       shouldResumeAiConsentAfterPrivacyDetails.current = false;
       setIsAiConsentSheetVisible(false);
       const pendingAction = pendingAiConsentAction;
@@ -622,6 +621,7 @@ export default function SettingsScreen(): React.JSX.Element {
     aiConsent,
     continueSmsScanAfterCombinedConsent,
     continueLiveDetectionEnableWithConsent,
+    markAiConsentGranted,
     pendingAiConsentAction,
     showToast,
     tCommon,
@@ -631,10 +631,10 @@ export default function SettingsScreen(): React.JSX.Element {
     useCallback(() => {
       if (!shouldResumeAiConsentAfterPrivacyDetails.current) return;
       shouldResumeAiConsentAfterPrivacyDetails.current = false;
-      const shouldReopenConsent = Boolean(pendingAiConsentAction && !aiConsent.isLoading && !aiConsent.isConsented);
+      const shouldReopenConsent = Boolean(pendingAiConsentAction && !aiConsent.isLoading && !isAiConsentEnabled);
       setIsAiConsentSheetVisible(shouldReopenConsent);
       if (!shouldReopenConsent) setPendingAiConsentAction(null);
-    }, [aiConsent.isConsented, aiConsent.isLoading, pendingAiConsentAction])
+    }, [aiConsent.isLoading, isAiConsentEnabled, pendingAiConsentAction])
   );
 
   const openAiPrivacyDetails = useCallback((): void => {
@@ -663,7 +663,7 @@ export default function SettingsScreen(): React.JSX.Element {
         return;
       }
 
-      if (!aiConsent.isConsented) {
+      if (!isAiConsentEnabled) {
         setPendingAiConsentAction({ kind: "sms", mode });
         setIsAiConsentSheetVisible(true);
         return;
@@ -671,7 +671,7 @@ export default function SettingsScreen(): React.JSX.Element {
 
       continueSmsScanWithConsent(mode);
     },
-    [aiConsent.isConsented, continueSmsScanWithConsent, isAndroid, showToast, t]
+    [continueSmsScanWithConsent, isAiConsentEnabled, isAndroid, showToast, t]
   );
 
   const handleIncrementalSync = useCallback((): void => {
@@ -772,7 +772,7 @@ export default function SettingsScreen(): React.JSX.Element {
 
         <AiProcessingSettingsSection
           t={t}
-          isConsented={aiConsent.isConsented}
+          isConsented={isAiConsentEnabled}
           isUpdating={aiConsent.isLoading || isAiConsentUpdating}
           onToggleConsent={handleAiConsentToggle}
           onPrivacyDetailsPress={openAiPrivacyDetails}
