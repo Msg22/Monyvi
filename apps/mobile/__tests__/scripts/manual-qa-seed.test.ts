@@ -1,10 +1,56 @@
-import {
-  getManualQaSeedConfig,
-  seedManualQaData,
-} from "../../scripts/manual-qa-seed";
-
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+
+interface SeedConfig {
+  readonly mode: string;
+  readonly supabaseUrl: string;
+  readonly appSupabaseUrl: string;
+  readonly anonKey: string;
+  readonly serviceRoleKey: string;
+  readonly email: string;
+  readonly password: string | null;
+  readonly preserveExistingPassword: boolean;
+  readonly userId?: string;
+}
+
+interface ManualQaSeedModule {
+  readonly getManualQaSeedConfig: (
+    env?: Record<string, string | undefined>
+  ) => SeedConfig;
+  readonly seedManualQaData: (
+    client: unknown,
+    config: SeedConfig
+  ) => Promise<unknown>;
+}
+
+const { getManualQaSeedConfig, seedManualQaData } =
+  jest.requireActual<ManualQaSeedModule>("../../scripts/manual-qa-seed");
+
+interface BudgetSeedRow {
+  readonly name?: string;
+  readonly pause_intervals?: string;
+}
+
+interface PauseInterval {
+  readonly startedAt: string;
+}
+
+function getStringField(row: unknown, field: string): string | undefined {
+  if (typeof row !== "object" || row === null) return undefined;
+  const value = (row as Record<string, unknown>)[field];
+  return typeof value === "string" ? value : undefined;
+}
+
+function parsePauseIntervals(value: string): readonly PauseInterval[] {
+  const parsed: unknown = JSON.parse(value);
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter(
+    (item): item is PauseInterval =>
+      typeof item === "object" &&
+      item !== null &&
+      typeof (item as Record<string, unknown>).startedAt === "string"
+  );
+}
 
 describe("manual-qa-seed script helpers", () => {
   it("uses the neutral seed engine instead of depending on E2E seed internals", () => {
@@ -15,6 +61,29 @@ describe("manual-qa-seed script helpers", () => {
 
     expect(manualQaSeedSource).toContain("./seed-fixtures/seed-engine");
     expect(manualQaSeedSource).not.toContain("./e2e-seed");
+  });
+
+  it("imports market rates when running the manual QA seed script", () => {
+    const mobilePackageJson = JSON.parse(
+      readFileSync(resolve(__dirname, "../../package.json"), "utf8")
+    ) as { readonly scripts?: Record<string, string> };
+
+    expect(mobilePackageJson.scripts?.["manual:seed-user"]).toContain(
+      "../../scripts/import-market-rates-to-local.js"
+    );
+  });
+
+  it("passes a local password after resetting before manual QA seeding", () => {
+    const rootPackageJson = JSON.parse(
+      readFileSync(resolve(__dirname, "../../../../package.json"), "utf8")
+    ) as { readonly scripts?: Record<string, string> };
+
+    expect(rootPackageJson.scripts?.["local:reset-and-seed"]).toContain(
+      "MANUAL_QA_PASSWORD=MonyviLocalQA123"
+    );
+    expect(rootPackageJson.scripts?.["local:reset-and-seed"]).toContain(
+      "manual:seed-user"
+    );
   });
 
   it("preserves the existing manual QA password when no password is provided", () => {
@@ -98,11 +167,9 @@ describe("manual-qa-seed script helpers", () => {
       ])
     );
     expect(accountRows).toHaveLength(8);
-    expect(accountRows).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: expect.stringContaining("E2E") }),
-      ])
-    );
+    expect(
+      accountRows.some((row) => getStringField(row, "name")?.includes("E2E"))
+    ).toBe(false);
     expect(assetRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: "21k Gold Chain", type: "METAL" }),
@@ -135,6 +202,20 @@ describe("manual-qa-seed script helpers", () => {
         expect.objectContaining({ name: "Overall Spending", type: "GLOBAL" }),
       ])
     );
+    expect(
+      budgetRows.every(
+        (row) =>
+          typeof (row as BudgetSeedRow).pause_intervals === "string"
+      )
+    ).toBe(true);
+    const pausedBudget = budgetRows.find(
+      (row) => (row as BudgetSeedRow).name === "Ramadan Hosting"
+    ) as BudgetSeedRow | undefined;
+    const pauseIntervals = parsePauseIntervals(
+      pausedBudget?.pause_intervals ?? "[]"
+    );
+    expect(pauseIntervals).toHaveLength(1);
+    expect(typeof pauseIntervals[0]?.startedAt).toBe("string");
     expect(debtRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ party_name: "Ahmed", type: "LENT" }),
@@ -152,13 +233,17 @@ describe("manual-qa-seed script helpers", () => {
           frequency: "MONTHLY",
         }),
         expect.objectContaining({ name: "Salary", type: "INCOME" }),
-        expect.objectContaining({
-          name: "Mona Repayment",
-          linked_debt_id: expect.any(String),
-        }),
+        expect.objectContaining({ name: "Mona Repayment" }),
         expect.objectContaining({ name: "Gym Membership", status: "PAUSED" }),
       ])
     );
+    expect(
+      recurringPaymentRows.some(
+        (row) =>
+          getStringField(row, "name") === "Mona Repayment" &&
+          getStringField(row, "linked_debt_id") !== undefined
+      )
+    ).toBe(true);
     expect(profileRows[0]).toMatchObject({ display_name: "Monyvi Manual QA" });
     expect(transactionRows).toEqual(
       expect.arrayContaining([
@@ -166,10 +251,18 @@ describe("manual-qa-seed script helpers", () => {
         expect.objectContaining({ counterparty: "Salary" }),
         expect.objectContaining({ source: "SMS" }),
         expect.objectContaining({ source: "VOICE" }),
-        expect.objectContaining({ linked_asset_id: expect.any(String) }),
-        expect.objectContaining({ linked_debt_id: expect.any(String) }),
       ])
     );
+    expect(
+      transactionRows.some(
+        (row) => getStringField(row, "linked_asset_id") !== undefined
+      )
+    ).toBe(true);
+    expect(
+      transactionRows.some(
+        (row) => getStringField(row, "linked_debt_id") !== undefined
+      )
+    ).toBe(true);
     expect(transactionRows).toHaveLength(8);
     expect(transferRows).toEqual(
       expect.arrayContaining([

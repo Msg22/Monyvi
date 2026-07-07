@@ -9,18 +9,20 @@
  */
 const { spawnSync } = require("node:child_process");
 const { writeFileSync, unlinkSync } = require("node:fs");
+const { join, resolve } = require("node:path");
+
+const repoRoot = resolve(__dirname, "..");
+
+function resolveNpxCommand() {
+  return process.platform === "win32" ? "npx.cmd" : "npx";
+}
 
 function runSupabase(args) {
-  const command = process.platform === "win32" ? "cmd.exe" : "npx";
-  const commandArgs =
-    process.platform === "win32"
-      ? ["/d", "/s", "/c", `npx supabase ${args.join(" ")}`]
-      : ["supabase", ...args];
-
-  const result = spawnSync(command, commandArgs, {
-    cwd: process.cwd(),
+  const result = spawnSync(resolveNpxCommand(), ["supabase", ...args], {
+    cwd: repoRoot,
     encoding: "utf8",
     maxBuffer: 50 * 1024 * 1024,
+    shell: process.platform === "win32",
   });
 
   if (result.status !== 0) {
@@ -39,7 +41,7 @@ function runSupabase(args) {
 }
 
 function queryLinkedMarketRates() {
-  const selectPath = ".tmp-market-rates-select.sql";
+  const selectPath = join(repoRoot, ".tmp-market-rates-select.sql");
   writeFileSync(
     selectPath,
     "select * from public.market_rates order by created_at asc;\n",
@@ -86,7 +88,7 @@ function parseSupabaseQueryRows(output) {
 
 function importLocalMarketRates(rows) {
   const serializedRows = JSON.stringify(rows).replaceAll("$copy$", "$ copy $");
-  const importPath = ".tmp-market-rates-import.sql";
+  const importPath = join(repoRoot, ".tmp-market-rates-import.sql");
 
   writeFileSync(
     importPath,
