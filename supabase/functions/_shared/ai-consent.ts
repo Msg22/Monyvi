@@ -45,6 +45,7 @@ export async function hasActiveAiProcessingConsent(
     .from("profiles")
     .select("ai_processing_consent")
     .eq("user_id", userId)
+    .eq("deleted", false)
     .maybeSingle();
 
   if (error) {

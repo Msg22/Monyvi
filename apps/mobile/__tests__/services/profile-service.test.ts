@@ -156,8 +156,16 @@ jest.mock("@/utils/logger", () => ({
 // missing, so we provide a lightweight mock.
 // =============================================================================
 
+const mockSupabaseFrom = jest.fn();
+const mockSupabaseProfileUpdate = jest.fn();
+const mockSupabaseProfileEqUser = jest.fn();
+const mockSupabaseProfileEqDeleted = jest.fn();
+
 jest.mock("@/services/supabase", () => ({
   getCurrentUserId: jest.fn().mockResolvedValue("user-1"),
+  supabase: {
+    from: (...args: readonly unknown[]): unknown => mockSupabaseFrom(...args),
+  },
 }));
 
 // =============================================================================
@@ -229,6 +237,16 @@ beforeEach(() => {
   jest.clearAllMocks();
   const { mockWrite } = getDbMocks();
   mockWrite.mockImplementation((fn: () => Promise<unknown>) => fn());
+  mockSupabaseProfileEqDeleted.mockResolvedValue({ error: null });
+  mockSupabaseProfileEqUser.mockReturnValue({
+    eq: mockSupabaseProfileEqDeleted,
+  });
+  mockSupabaseProfileUpdate.mockReturnValue({
+    eq: mockSupabaseProfileEqUser,
+  });
+  mockSupabaseFrom.mockReturnValue({
+    update: mockSupabaseProfileUpdate,
+  });
 });
 
 // =============================================================================
@@ -448,6 +466,42 @@ describe("AI processing consent", () => {
     });
   });
 
+  it("pushes granted AI processing consent to Supabase immediately", async (): Promise<void> => {
+    const profile = createMockProfile({ userId: "user-1" });
+    setupProfileFound(profile);
+
+    await grantAiProcessingConsent();
+
+    expect(mockSupabaseFrom).toHaveBeenCalledWith("profiles");
+    expect(mockSupabaseProfileUpdate).toHaveBeenCalledWith({
+      ai_processing_consent: {
+        version: "2026-07-ai-processing-v1",
+        consentedAt: "2026-07-04T10:00:00.000Z",
+        revokedAt: null,
+      },
+      updated_at: "2026-07-04T10:00:00.000Z",
+    });
+    expect(mockSupabaseProfileEqUser).toHaveBeenCalledWith("user_id", "user-1");
+    expect(mockSupabaseProfileEqDeleted).toHaveBeenCalledWith(
+      "deleted",
+      false
+    );
+  });
+
+  it("rolls back a local consent grant when the immediate Supabase push fails", async (): Promise<void> => {
+    const profile = createMockProfile();
+    setupProfileFound(profile);
+    mockSupabaseProfileEqDeleted.mockResolvedValueOnce({
+      error: new Error("network unavailable"),
+    });
+
+    await expect(grantAiProcessingConsent()).rejects.toThrow(
+      "network unavailable"
+    );
+
+    expect(profile.aiProcessingConsentRaw).toBeUndefined();
+  });
+
   it("revokes AI processing consent without deleting the original consent timestamp", async (): Promise<void> => {
     const profile = createMockProfile({
       aiProcessingConsentRaw: JSON.stringify({
@@ -468,6 +522,29 @@ describe("AI processing consent", () => {
       version: "2026-07-ai-processing-v1",
       consentedAt: "2026-07-04T09:00:00.000Z",
       revokedAt: "2026-07-04T10:00:00.000Z",
+    });
+  });
+
+  it("pushes revoked AI processing consent to Supabase immediately", async (): Promise<void> => {
+    const profile = createMockProfile({
+      userId: "user-1",
+      aiProcessingConsentRaw: JSON.stringify({
+        version: "2026-07-ai-processing-v1",
+        consentedAt: "2026-07-04T09:00:00.000Z",
+        revokedAt: null,
+      }),
+    });
+    setupProfileFound(profile);
+
+    await revokeAiProcessingConsent();
+
+    expect(mockSupabaseProfileUpdate).toHaveBeenCalledWith({
+      ai_processing_consent: {
+        version: "2026-07-ai-processing-v1",
+        consentedAt: "2026-07-04T09:00:00.000Z",
+        revokedAt: "2026-07-04T10:00:00.000Z",
+      },
+      updated_at: "2026-07-04T10:00:00.000Z",
     });
   });
 

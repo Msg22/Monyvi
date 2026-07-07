@@ -3,6 +3,8 @@ appId: com.monyvi.app
 # Helper: turn Auto Confirm off when the row is visible.
 # Preconditions: Settings is open and the live SMS section is visible.
 
+- runFlow: scroll-to-live-sms-auto-confirm-switch.yaml
+
 - runFlow:
     when:
       visible:

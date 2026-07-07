@@ -32,6 +32,7 @@ import {
   getDefaultCashAccountName,
 } from "@/services/account-service";
 import { clearOnboardingStep } from "@/services/onboarding-cursor-service";
+import { supabase } from "@/services/supabase";
 import { getCurrentUserDataScope } from "@/services/user-data-access";
 import { logger } from "@/utils/logger";
 
@@ -142,6 +143,46 @@ function createAiProcessingConsent(now: Date): AiProcessingConsent {
   };
 }
 
+function serializeAiProcessingConsent(
+  consent: AiProcessingConsent
+): Record<string, string | null> {
+  return {
+    version: consent.version,
+    consentedAt: consent.consentedAt,
+    revokedAt: consent.revokedAt,
+  };
+}
+
+async function updateRemoteAiProcessingConsent(
+  userId: string,
+  consent: AiProcessingConsent,
+  now: Date
+): Promise<void> {
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      ai_processing_consent: serializeAiProcessingConsent(consent),
+      updated_at: now.toISOString(),
+    })
+    .eq("user_id", userId)
+    .eq("deleted", false);
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function writeLocalAiProcessingConsent(
+  profile: Profile,
+  rawConsent: string | null
+): Promise<void> {
+  await database.write(async () => {
+    await profile.update((p) => {
+      p.aiProcessingConsentRaw = rawConsent ?? undefined;
+    });
+  });
+}
+
 // =============================================================================
 // Mutations
 // =============================================================================
@@ -202,12 +243,17 @@ export async function grantAiProcessingConsent(
 ): Promise<void> {
   const profile = await getProfile();
   const consent = createAiProcessingConsent(now);
+  const previousConsentRaw = profile.aiProcessingConsentRaw ?? null;
+  const consentRaw = JSON.stringify(consent);
 
-  await database.write(async () => {
-    await profile.update((p) => {
-      p.aiProcessingConsentRaw = JSON.stringify(consent);
-    });
-  });
+  await writeLocalAiProcessingConsent(profile, consentRaw);
+
+  try {
+    await updateRemoteAiProcessingConsent(profile.userId, consent, now);
+  } catch (error) {
+    await writeLocalAiProcessingConsent(profile, previousConsentRaw);
+    throw error;
+  }
 }
 
 export async function revokeAiProcessingConsent(
@@ -227,11 +273,8 @@ export async function revokeAiProcessingConsent(
     revokedAt: now.toISOString(),
   };
 
-  await database.write(async () => {
-    await profile.update((p) => {
-      p.aiProcessingConsentRaw = JSON.stringify(revokedConsent);
-    });
-  });
+  await writeLocalAiProcessingConsent(profile, JSON.stringify(revokedConsent));
+  await updateRemoteAiProcessingConsent(profile.userId, revokedConsent, now);
 }
 
 /**

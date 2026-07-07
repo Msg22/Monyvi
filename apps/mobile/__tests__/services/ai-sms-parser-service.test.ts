@@ -300,4 +300,41 @@ describe("ai-sms-parser-service parser strategy", () => {
 
     expect(mockInvoke).not.toHaveBeenCalled();
   });
+
+  it("passes the abort signal into the Edge Function request", async () => {
+    const abortController = new AbortController();
+    mockInvoke.mockResolvedValueOnce({
+      data: { transactions: [] },
+      error: null,
+    });
+
+    await parseSmsWithAi(
+      [candidate("nbe_debit_purchase")],
+      context,
+      undefined,
+      abortController.signal
+    );
+
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "parse-sms",
+      expect.objectContaining({ signal: abortController.signal })
+    );
+  });
+
+  it("stops the scan when the Edge Function requires AI consent", async () => {
+    const error = Object.assign(new Error("FunctionsHttpError"), {
+      context: new Response("AI processing consent required", { status: 403 }),
+    });
+    mockInvoke.mockResolvedValueOnce({
+      data: null,
+      error,
+    });
+
+    await expect(
+      parseSmsWithAi([candidate("nbe_debit_purchase")], context)
+    ).rejects.toMatchObject({
+      name: "AbortError",
+      message: "AI processing consent required",
+    });
+  });
 });

@@ -4,6 +4,7 @@ appId: com.monyvi.app
 # user still gets an informational notification.
 
 - runFlow: ensure-live-sms-enabled.yaml
+- runFlow: scroll-to-live-sms-auto-confirm-switch.yaml
 
 - runFlow:
     when:

@@ -428,6 +428,11 @@ async function executeScanPipeline(
     },
     abortSignal
   );
+
+  if (aiResult.hasError && aiResult.isRetryable === false) {
+    throw new Error("SMS AI parsing failed");
+  }
+
   const deduplicatedTransactions = deduplicateParsedSmsTransactions(
     aiResult.transactions
   );

@@ -14,7 +14,7 @@ import { z } from "zod";
 import { supabase } from "./supabase";
 import { logger } from "@/utils/logger";
 import { shouldUseFixtureSmsParser } from "@/config/e2e-test-config";
-import { assertNotAborted } from "./abort-utils";
+import { assertNotAborted, createAbortError } from "./abort-utils";
 
 import {
   buildCategoryMap,
@@ -98,6 +98,7 @@ const MIN_CHUNK_SIZE_FOR_SPLIT = 10;
 
 /** Delay between chunks (ms) to avoid Gemini rate limits. */
 const INTER_CHUNK_DELAY_MS = 2000;
+const AI_CONSENT_REQUIRED_STATUS = 403;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -263,14 +264,17 @@ function mapAiTransactions(
  */
 async function invokeParseChunk(
   messagesPayload: readonly MessagePayload[],
-  context: ParseSmsContext
+  context: ParseSmsContext,
+  abortSignal?: AbortSignal
 ): Promise<ChunkAiResult> {
+  throwIfAborted(abortSignal);
   const response = await supabase.functions.invoke("parse-sms", {
     body: {
       messages: messagesPayload,
       categories: buildCategoryTree(context.categories),
       supportedCurrencies: context.supportedCurrencies,
     },
+    signal: abortSignal,
   });
 
   if (response.error) {
@@ -295,7 +299,11 @@ async function invokeParseChunk(
       }
     }
 
-    // PII/privacy: do NOT include the response body — upstream providers
+    if (status === AI_CONSENT_REQUIRED_STATUS) {
+      throw createAbortError("AI processing consent required");
+    }
+
+    // PII/privacy: do NOT include the response body. Upstream providers
     // sometimes echo the original SMS text in error responses. Log only
     // the HTTP status, body length, and chunk size for diagnostics.
     logger.error(
@@ -445,7 +453,8 @@ export async function parseSmsWithAi(
 
       const chunkResult = await invokeParseChunk(
         currentChunk.messages,
-        context
+        context,
+        abortSignal
       );
       throwIfAborted(abortSignal);
       const chunkDurationMs = Date.now() - chunkStartMs;
