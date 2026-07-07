@@ -10,6 +10,7 @@ jest.mock("@/services/supabase", () => ({
 
 import { MAX_TRANSACTION_AMOUNT, type CategoryTreeSource } from "@monyvi/logic";
 import {
+  isAiConsentRequiredError,
   parseSmsWithAi,
   type SmsCandidate,
 } from "@/services/ai-sms-parser-service";
@@ -321,7 +322,7 @@ describe("ai-sms-parser-service parser strategy", () => {
     );
   });
 
-  it("stops the scan when the Edge Function requires AI consent", async () => {
+  it("returns a distinct consent-required error when the Edge Function requires AI consent", async () => {
     const error = Object.assign(new Error("FunctionsHttpError"), {
       context: new Response("AI processing consent required", { status: 403 }),
     });
@@ -330,11 +331,11 @@ describe("ai-sms-parser-service parser strategy", () => {
       error,
     });
 
-    await expect(
-      parseSmsWithAi([candidate("nbe_debit_purchase")], context)
-    ).rejects.toMatchObject({
-      name: "AbortError",
-      message: "AI processing consent required",
-    });
+    try {
+      await parseSmsWithAi([candidate("nbe_debit_purchase")], context);
+      throw new Error("Expected consent-required error");
+    } catch (error: unknown) {
+      expect(isAiConsentRequiredError(error)).toBe(true);
+    }
   });
 });

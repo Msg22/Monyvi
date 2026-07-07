@@ -14,7 +14,7 @@ import { z } from "zod";
 import { supabase } from "./supabase";
 import { logger } from "@/utils/logger";
 import { shouldUseFixtureSmsParser } from "@/config/e2e-test-config";
-import { assertNotAborted, createAbortError } from "./abort-utils";
+import { assertNotAborted } from "./abort-utils";
 
 import {
   buildCategoryMap,
@@ -99,10 +99,23 @@ const MIN_CHUNK_SIZE_FOR_SPLIT = 10;
 /** Delay between chunks (ms) to avoid Gemini rate limits. */
 const INTER_CHUNK_DELAY_MS = 2000;
 const AI_CONSENT_REQUIRED_STATUS = 403;
+const AI_CONSENT_REQUIRED_ERROR_NAME = "AiConsentRequiredError";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+export function createAiConsentRequiredError(): Error {
+  const error = new Error("AI processing consent required");
+  error.name = AI_CONSENT_REQUIRED_ERROR_NAME;
+  return error;
+}
+
+export function isAiConsentRequiredError(error: unknown): boolean {
+  return (
+    error instanceof Error && error.name === AI_CONSENT_REQUIRED_ERROR_NAME
+  );
+}
 
 /**
  * Parsed edge function response.
@@ -300,7 +313,7 @@ async function invokeParseChunk(
     }
 
     if (status === AI_CONSENT_REQUIRED_STATUS) {
-      throw createAbortError("AI processing consent required");
+      throw createAiConsentRequiredError();
     }
 
     // PII/privacy: do NOT include the response body. Upstream providers
@@ -528,7 +541,10 @@ export async function parseSmsWithAi(
       isRetryable: hasError ? hasRetryableError : undefined,
     };
   } catch (err: unknown) {
-    if (err instanceof Error && err.name === "AbortError") {
+    if (
+      (err instanceof Error && err.name === "AbortError") ||
+      isAiConsentRequiredError(err)
+    ) {
       throw err;
     }
 

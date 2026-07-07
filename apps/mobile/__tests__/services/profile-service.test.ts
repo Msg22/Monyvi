@@ -482,13 +482,10 @@ describe("AI processing consent", () => {
       updated_at: "2026-07-04T10:00:00.000Z",
     });
     expect(mockSupabaseProfileEqUser).toHaveBeenCalledWith("user_id", "user-1");
-    expect(mockSupabaseProfileEqDeleted).toHaveBeenCalledWith(
-      "deleted",
-      false
-    );
+    expect(mockSupabaseProfileEqDeleted).toHaveBeenCalledWith("deleted", false);
   });
 
-  it("rolls back a local consent grant when the immediate Supabase push fails", async (): Promise<void> => {
+  it("keeps a local consent grant when the immediate Supabase push fails", async (): Promise<void> => {
     const profile = createMockProfile();
     setupProfileFound(profile);
     mockSupabaseProfileEqDeleted.mockResolvedValueOnce({
@@ -499,7 +496,15 @@ describe("AI processing consent", () => {
       "network unavailable"
     );
 
-    expect(profile.aiProcessingConsentRaw).toBeUndefined();
+    const parsed = JSON.parse(String(profile.aiProcessingConsentRaw)) as Record<
+      string,
+      unknown
+    >;
+    expect(parsed).toEqual({
+      version: "2026-07-ai-processing-v1",
+      consentedAt: "2026-07-04T10:00:00.000Z",
+      revokedAt: null,
+    });
   });
 
   it("revokes AI processing consent without deleting the original consent timestamp", async (): Promise<void> => {

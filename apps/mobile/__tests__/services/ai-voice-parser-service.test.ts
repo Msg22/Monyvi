@@ -449,6 +449,35 @@ describe("ai-voice-parser-service", () => {
       expect(loggerContext).not.toHaveProperty("body");
     });
 
+    it("should return consent_required when the Edge Function requires AI consent", async () => {
+      const errorWithContext = new Error("FunctionsHttpError") as Error & {
+        context: Response;
+      };
+      errorWithContext.context = new Response(
+        "AI processing consent required",
+        {
+          status: 403,
+        }
+      );
+      mockInvoke.mockResolvedValueOnce({
+        data: null,
+        error: errorWithContext,
+      });
+
+      const result = await parseVoiceWithAi(makeDefaultOptions());
+
+      expect(isVoiceParserError(result)).toBe(true);
+      if (isVoiceParserError(result)) {
+        expect(result.kind).toBe("consent_required");
+        expect(result.message).toBe("AI processing consent is required.");
+      }
+      expect(mockLoggerError).not.toHaveBeenCalledWith(
+        "[ai-voice-parser] parse-voice Edge Function error",
+        expect.any(Error),
+        expect.any(Object)
+      );
+    });
+
     it("should return 'schema' error when response is missing required fields", async () => {
       mockInvoke.mockResolvedValueOnce({
         data: { transcript: "test" },

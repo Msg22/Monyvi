@@ -75,16 +75,16 @@ function normalizeProfileToSupabase(
   const shouldOmitUnchangedAiConsent =
     record["_status"] === "updated" &&
     typeof record["_changed"] === "string" &&
-    !record["_changed"].split(",").includes(PROFILE_AI_PROCESSING_CONSENT_COLUMN);
+    !record["_changed"]
+      .split(",")
+      .includes(PROFILE_AI_PROCESSING_CONSENT_COLUMN);
   const {
     [PROFILE_AI_PROCESSING_CONSENT_COLUMN]: aiProcessingConsent,
-    ...recordWithoutAiProcessingConsent
+    ...rest
   } = record;
 
   const transformed = {
-    ...(shouldOmitUnchangedAiConsent
-      ? recordWithoutAiProcessingConsent
-      : record),
+    ...rest,
     [PROFILE_NOTIFICATION_SETTINGS_COLUMN]: parseJsonForSupabase(
       record[PROFILE_NOTIFICATION_SETTINGS_COLUMN],
       null,

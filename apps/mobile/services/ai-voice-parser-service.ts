@@ -49,6 +49,7 @@ const AI_TIMEOUT_MS = 30_000;
 /** User-safe message for voice analysis connectivity failures. */
 const VOICE_ANALYSIS_NETWORK_ERROR_MESSAGE =
   "We couldn't reach voice analysis right now. Please check your connection and try again.";
+const AI_CONSENT_REQUIRED_STATUS = 403;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -216,6 +217,13 @@ export async function parseVoiceWithAi(
         } catch {
           bodyLength = undefined;
         }
+      }
+
+      if (status === AI_CONSENT_REQUIRED_STATUS) {
+        return {
+          kind: "consent_required",
+          message: "AI processing consent is required.",
+        };
       }
 
       const sanitizedError = new Error(response.error.message);

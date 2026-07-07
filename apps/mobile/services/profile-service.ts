@@ -243,17 +243,10 @@ export async function grantAiProcessingConsent(
 ): Promise<void> {
   const profile = await getProfile();
   const consent = createAiProcessingConsent(now);
-  const previousConsentRaw = profile.aiProcessingConsentRaw ?? null;
   const consentRaw = JSON.stringify(consent);
 
   await writeLocalAiProcessingConsent(profile, consentRaw);
-
-  try {
-    await updateRemoteAiProcessingConsent(profile.userId, consent, now);
-  } catch (error) {
-    await writeLocalAiProcessingConsent(profile, previousConsentRaw);
-    throw error;
-  }
+  await updateRemoteAiProcessingConsent(profile.userId, consent, now);
 }
 
 export async function revokeAiProcessingConsent(

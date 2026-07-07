@@ -77,7 +77,8 @@ const mockGetAiProcessingConsentStatus =
   >;
 
 function renderVoiceFlow(
-  ensureAiProcessingConsent?: () => boolean | Promise<boolean>
+  ensureAiProcessingConsent?: () => boolean | Promise<boolean>,
+  hasFreshAiProcessingConsent?: () => boolean | Promise<boolean>
 ): ReturnType<
   typeof renderHook<ReturnType<typeof useVoiceTransactionFlow>, undefined>
 > {
@@ -88,6 +89,7 @@ function renderVoiceFlow(
       accounts: [],
       categoryRecords: [],
       ensureAiProcessingConsent,
+      hasFreshAiProcessingConsent,
     })
   );
 }
@@ -217,6 +219,23 @@ describe("useVoiceTransactionFlow", () => {
     expect(mockRecorderStart).toHaveBeenCalledTimes(1);
   });
 
+  it("prevents overlapping recording starts while AI consent is pending", async (): Promise<void> => {
+    recorderState.hasPermission = true;
+    const consent = createDeferred<boolean>();
+    const ensureAiProcessingConsent = jest.fn(() => consent.promise);
+    const { result } = renderVoiceFlow(ensureAiProcessingConsent);
+
+    await act(async () => {
+      const firstStart = result.current.startFlow();
+      const secondStart = result.current.startFlow();
+      consent.resolve(true);
+      await Promise.all([firstStart, secondStart]);
+    });
+
+    expect(ensureAiProcessingConsent).toHaveBeenCalledTimes(1);
+    expect(mockRecorderStart).toHaveBeenCalledTimes(1);
+  });
+
   it("surfaces recorder start failures during retry", async (): Promise<void> => {
     mockRecorderStart.mockRejectedValueOnce(new Error("recorder failed"));
     const { result, rerender } = renderVoiceFlow();
@@ -244,24 +263,14 @@ describe("useVoiceTransactionFlow", () => {
     recorderState.audioUri = "file://completed.m4a";
     recorderState.hasPermission = true;
     const ensureAiProcessingConsent = jest.fn<Promise<boolean>, []>();
-    mockGetAiProcessingConsentStatus
-      .mockResolvedValueOnce({
-        consent: {
-          consentedAt: "2026-07-07T12:00:00.000Z",
-          revokedAt: null,
-          version: "2026-07-ai-processing-v1",
-        },
-        isConsented: true,
-      })
-      .mockResolvedValueOnce({
-        consent: {
-          consentedAt: "2026-07-07T12:00:00.000Z",
-          revokedAt: "2026-07-07T12:01:00.000Z",
-          version: "2026-07-ai-processing-v1",
-        },
-        isConsented: false,
-      });
-    const { result } = renderVoiceFlow(ensureAiProcessingConsent);
+    const hasFreshAiProcessingConsent = jest
+      .fn<Promise<boolean>, []>()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    const { result } = renderVoiceFlow(
+      ensureAiProcessingConsent,
+      hasFreshAiProcessingConsent
+    );
 
     await act(async () => {
       await result.current.submitRecording();
@@ -269,9 +278,46 @@ describe("useVoiceTransactionFlow", () => {
 
     expect(mockParseVoiceWithAi).toHaveBeenCalledTimes(1);
     expect(ensureAiProcessingConsent).not.toHaveBeenCalled();
-    expect(mockGetAiProcessingConsentStatus).toHaveBeenCalledTimes(2);
+    expect(hasFreshAiProcessingConsent).toHaveBeenCalledTimes(2);
+    expect(mockGetAiProcessingConsentStatus).not.toHaveBeenCalled();
     expect(mockRecorderDiscard).toHaveBeenCalledTimes(1);
     expect(mockPush).not.toHaveBeenCalled();
     expect(result.current.flowStatus).toBe("idle");
   });
+
+  it("closes the overlay when voice parsing reports missing AI consent", async (): Promise<void> => {
+    recorderState.status = "completed";
+    recorderState.durationMs = 2000;
+    recorderState.audioUri = "file://completed.m4a";
+    recorderState.hasPermission = true;
+    mockParseVoiceWithAi.mockResolvedValueOnce({
+      kind: "consent_required",
+      message: "AI processing consent is required.",
+    });
+    const { result } = renderVoiceFlow(
+      jest.fn(),
+      jest.fn(() => true)
+    );
+
+    await act(async () => {
+      await result.current.submitRecording();
+    });
+
+    expect(result.current.flowStatus).toBe("idle");
+    expect(result.current.isOverlayVisible).toBe(false);
+    expect(result.current.errorMessage).toBeNull();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
 });
+
+function createDeferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolve: (value: T) => void = () => {};
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+
+  return { promise, resolve };
+}

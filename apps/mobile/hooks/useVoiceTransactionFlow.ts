@@ -96,20 +96,12 @@ interface FlowConfig {
   readonly canAutoStart?: boolean;
   /** Ensure AI processing consent before recording starts. */
   readonly ensureAiProcessingConsent?: () => boolean | Promise<boolean>;
+  /** Re-check current AI processing consent before/after upload. */
+  readonly hasFreshAiProcessingConsent?: () => boolean | Promise<boolean>;
 }
 
 interface StartFlowOptions {
   readonly skipAiProcessingConsent?: boolean;
-}
-
-async function hasFreshAiProcessingConsent(): Promise<boolean> {
-  try {
-    const status = await getAiProcessingConsentStatus();
-    return status.isConsented;
-  } catch (error: unknown) {
-    logger.error("voice.aiConsentStatus.failed", error);
-    return false;
-  }
 }
 
 function getMicrophonePermissionError(): string {
@@ -143,6 +135,7 @@ export function useVoiceTransactionFlow(
 
   // Track flow status in a ref to avoid stale closure in startFlow guard
   const flowStatusRef = useRef<FlowStatus>("idle");
+  const isStartFlowPendingRef = useRef(false);
 
   /** Update both React state and ref to keep concurrency guard in sync */
   const updateFlowStatus = useCallback((next: FlowStatus): void => {
@@ -173,6 +166,49 @@ export function useVoiceTransactionFlow(
     ((options?: StartFlowOptions) => Promise<void>) | null
   >(null);
 
+  const hasFreshAiProcessingConsent =
+    useCallback(async (): Promise<boolean> => {
+      if (config.hasFreshAiProcessingConsent) {
+        return config.hasFreshAiProcessingConsent();
+      }
+
+      try {
+        const status = await getAiProcessingConsentStatus();
+        return status.isConsented;
+      } catch (error: unknown) {
+        logger.error("voice.aiConsentStatus.failed", error);
+        return false;
+      }
+    }, [config.hasFreshAiProcessingConsent]);
+
+  const stopAfterConsentLoss = useCallback(
+    async (options?: {
+      readonly discardRecording?: boolean;
+    }): Promise<boolean> => {
+      if (!config.ensureAiProcessingConsent) {
+        return false;
+      }
+
+      const canUseAi = await hasFreshAiProcessingConsent();
+      if (canUseAi) {
+        return false;
+      }
+
+      if (options?.discardRecording !== false) {
+        await recorder.discard();
+      }
+      setIsOverlayVisible(false);
+      updateFlowStatus("idle");
+      return true;
+    },
+    [
+      config.ensureAiProcessingConsent,
+      hasFreshAiProcessingConsent,
+      recorder,
+      updateFlowStatus,
+    ]
+  );
+
   // ---------------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------------
@@ -180,42 +216,49 @@ export function useVoiceTransactionFlow(
   const startFlow = useCallback(
     async (options?: StartFlowOptions): Promise<void> => {
       // Concurrency guard - prevent overlapping recording sessions (FR-017)
-      if (flowStatusRef.current !== "idle") return;
-
-      if (
-        !options?.skipAiProcessingConsent &&
-        config.ensureAiProcessingConsent
-      ) {
-        const canUseAi = await config.ensureAiProcessingConsent();
-        if (!canUseAi) return;
+      if (flowStatusRef.current !== "idle" || isStartFlowPendingRef.current) {
+        return;
       }
 
-      // Request permission first if needed
-      if (!recorder.hasPermission) {
-        const granted = await recorder.requestPermission();
-        if (!granted) {
-          setErrorMessage(getMicrophonePermissionError());
-          setErrorKind("microphone-permission");
+      isStartFlowPendingRef.current = true;
+      try {
+        if (
+          !options?.skipAiProcessingConsent &&
+          config.ensureAiProcessingConsent
+        ) {
+          const canUseAi = await config.ensureAiProcessingConsent();
+          if (!canUseAi) return;
+        }
+
+        // Request permission first if needed
+        if (!recorder.hasPermission) {
+          const granted = await recorder.requestPermission();
+          if (!granted) {
+            setErrorMessage(getMicrophonePermissionError());
+            setErrorKind("microphone-permission");
+            updateFlowStatus("error");
+            setIsOverlayVisible(true);
+            return;
+          }
+        }
+
+        // Reset state and start recording
+        setErrorMessage(null);
+        setErrorKind(null);
+        setIsOverlayVisible(true);
+        updateFlowStatus("recording");
+        originTabIndexRef.current = config.originTabIndex ?? 0;
+
+        try {
+          await recorder.start();
+        } catch {
+          setErrorMessage(getRecordingStartError());
+          setErrorKind("generic");
           updateFlowStatus("error");
           setIsOverlayVisible(true);
-          return;
         }
-      }
-
-      // Reset state and start recording
-      setErrorMessage(null);
-      setErrorKind(null);
-      setIsOverlayVisible(true);
-      updateFlowStatus("recording");
-      originTabIndexRef.current = config.originTabIndex ?? 0;
-
-      try {
-        await recorder.start();
-      } catch {
-        setErrorMessage(getRecordingStartError());
-        setErrorKind("generic");
-        updateFlowStatus("error");
-        setIsOverlayVisible(true);
+      } finally {
+        isStartFlowPendingRef.current = false;
       }
     },
     [
@@ -296,14 +339,8 @@ export function useVoiceTransactionFlow(
     setErrorKind(null);
     updateFlowStatus("analyzing");
 
-    if (config.ensureAiProcessingConsent) {
-      const canUseAi = await hasFreshAiProcessingConsent();
-      if (!canUseAi) {
-        await recorder.discard();
-        setIsOverlayVisible(false);
-        updateFlowStatus("idle");
-        return;
-      }
+    if (await stopAfterConsentLoss()) {
+      return;
     }
 
     // Submit to AI
@@ -318,17 +355,18 @@ export function useVoiceTransactionFlow(
     // Clean up temp audio file (FR-021)
     await recorder.discard();
 
-    if (config.ensureAiProcessingConsent) {
-      const canUseAi = await hasFreshAiProcessingConsent();
-      if (!canUseAi) {
-        setIsOverlayVisible(false);
-        updateFlowStatus("idle");
-        return;
-      }
+    if (await stopAfterConsentLoss({ discardRecording: false })) {
+      return;
     }
 
     // Handle result
     if (isVoiceParserError(aiResult)) {
+      if (aiResult.kind === "consent_required") {
+        setIsOverlayVisible(false);
+        updateFlowStatus("idle");
+        return;
+      }
+
       setErrorMessage(aiResult.message);
       setErrorKind("generic");
       updateFlowStatus("error");
@@ -372,6 +410,7 @@ export function useVoiceTransactionFlow(
     config.accounts,
     config.categoryRecords,
     config.ensureAiProcessingConsent,
+    stopAfterConsentLoss,
     updateFlowStatus,
   ]);
 
@@ -442,4 +481,3 @@ export function useVoiceTransactionFlow(
     openMicrophoneSettings,
   };
 }
-

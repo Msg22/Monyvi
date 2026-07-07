@@ -8,6 +8,7 @@ import {
 import { Q } from "@nozbe/watermelondb";
 import {
   type AiParseResult,
+  isAiConsentRequiredError,
   parseSmsWithAi,
   type ParseSmsContext,
   type SmsCandidate,
@@ -188,6 +189,12 @@ export async function processLiveSmsEvent(
     try {
       aiResult = await parseSmsWithAi([candidate], context);
     } catch (error: unknown) {
+      if (isAiConsentRequiredError(error)) {
+        await setLiveDetectionEnabled(false);
+        await setAutoConfirm(false);
+        return createResult("disabled", confirmedSmsFingerprint);
+      }
+
       logger.error("liveSms.aiParse.failed", error, {
         deliveryMode: event.deliveryMode,
       });

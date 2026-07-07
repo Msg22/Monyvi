@@ -20,6 +20,7 @@ import type {
  * - empty:   AI returned zero valid transactions
  * - schema:  backend response doesn't match ParseVoiceResponseSchema
  * - config:  client-side configuration error (e.g. empty category data)
+ * - consent_required: server requires AI processing consent before parsing
  * - unknown: unexpected exception
  */
 export type VoiceParserErrorKind =
@@ -28,6 +29,7 @@ export type VoiceParserErrorKind =
   | "empty"
   | "schema"
   | "config"
+  | "consent_required"
   | "unknown";
 
 /** Structured error returned by parseVoiceWithAi instead of throwing. */

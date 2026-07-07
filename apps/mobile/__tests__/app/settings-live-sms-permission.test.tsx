@@ -855,6 +855,51 @@ describe("Settings live SMS permission recovery", () => {
     expect(getLiveDetectionSwitchValue(screen)).toBe(false);
   });
 
+  it("cancels pending live detection settings return when AI consent syncs off", async () => {
+    mockLiveDetectionPermissionStatus = "blocked";
+    const screen = await renderReadySettings();
+
+    fireEvent(
+      screen.getByTestId("live-sms-detection-switch"),
+      "valueChange",
+      true
+    );
+    fireEvent.press(await screen.findByTestId("permission-modal-primary"));
+
+    await waitFor(() => {
+      expect(mockOpenSettings).toHaveBeenCalledTimes(1);
+    });
+
+    const enableCallCountBeforeConsentLoss =
+      mockSetLiveDetectionEnabled.mock.calls.filter(
+        ([value]) => value === true
+      ).length;
+
+    mockIsAiConsented = false;
+    mockLiveDetectionPermissionStatus = "granted";
+    await act(async () => {
+      screen.rerender(<SettingsScreen />);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
+    });
+
+    emitAppStateChange("background");
+    emitAppStateChange("active");
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      mockSetLiveDetectionEnabled.mock.calls.filter(([value]) => value === true)
+    ).toHaveLength(enableCallCountBeforeConsentLoss);
+    expect(mockStartSmsListener).not.toHaveBeenCalled();
+    expect(getLiveDetectionSwitchValue(screen)).toBe(false);
+  });
+
   it("keeps AI consent enabled when disable confirmation is cancelled", async () => {
     const screen = await renderReadySettings();
     fireEvent(

@@ -46,7 +46,10 @@ import {
   isAutoConfirmEnabled,
   setAutoConfirm,
 } from "@/services/sms-live-detection-handler";
-import { startSmsListener, stopSmsListener } from "@/services/sms-live-listener-service";
+import {
+  startSmsListener,
+  stopSmsListener,
+} from "@/services/sms-live-listener-service";
 import { SettingsConfirmationModals } from "@/components/settings/SettingsConfirmationModals";
 import { PermissionRecoveryModal } from "@/components/permissions/PermissionRecoveryModal";
 import {
@@ -170,6 +173,7 @@ export default function SettingsScreen(): React.JSX.Element {
 
     if (!isAiConsentEnabled) {
       liveDetectionPreferenceGenerationRef.current += 1;
+      cancelLiveDetectionEnableFlow();
       try {
         await setLiveDetectionEnabled(false);
         await setAutoConfirm(false);
@@ -218,7 +222,7 @@ export default function SettingsScreen(): React.JSX.Element {
         setIsLiveDetectionPreferenceReady(true);
       }
     }
-  }, [isAiConsentEnabled, isAndroid]);
+  }, [cancelLiveDetectionEnableFlow, isAiConsentEnabled, isAndroid]);
 
   useEffect(() => {
     if (!isAndroid || aiConsent.isLoading) return;
@@ -302,6 +306,11 @@ export default function SettingsScreen(): React.JSX.Element {
   useEffect(() => {
     if (!hasPendingLiveDetectionEnable) return;
 
+    if (!isAiConsentEnabled) {
+      cancelLiveDetectionEnableFlow();
+      return;
+    }
+
     if (liveDetectionStatus !== "granted") {
       if (!hasReturnedFromLiveDetectionSettings) return;
 
@@ -323,9 +332,11 @@ export default function SettingsScreen(): React.JSX.Element {
       });
     });
   }, [
+    cancelLiveDetectionEnableFlow,
     enableLiveDetectionWithGrantedSms,
     hasReturnedFromLiveDetectionSettings,
     hasPendingLiveDetectionEnable,
+    isAiConsentEnabled,
     showToast,
     liveDetectionStatus,
     tCommon,
@@ -694,7 +705,14 @@ export default function SettingsScreen(): React.JSX.Element {
 
       continueSmsScanWithConsent(mode);
     },
-    [aiConsent.isLoading, continueSmsScanWithConsent, isAiConsentEnabled, isAndroid, showToast, t]
+    [
+      aiConsent.isLoading,
+      continueSmsScanWithConsent,
+      isAiConsentEnabled,
+      isAndroid,
+      showToast,
+      t,
+    ]
   );
 
   const handleIncrementalSync = useCallback((): void => {
@@ -716,23 +734,8 @@ export default function SettingsScreen(): React.JSX.Element {
       if (isChangingLanguage) return;
       setIsChangingLanguage(true);
       try {
-        // Three writes, in order, before the RTL-flip reload kicks in:
-        //
-        //   1. `setIntroLocaleOverride(lang)` — device-scoped AsyncStorage
-        //      key (FR-030). `initI18n()` reads this FIRST on cold launch,
-        //      so the next reload starts with the right language and there
-        //      is no flash of the previous locale.
-        //   2. `setPreferredLanguage(lang)` — persists to
-        //      `profile.preferred_language` AND calls `changeLanguage`.
-        //      Updating the profile is required because `AppReadyGate`
-        //      syncs the runtime to `profile.preferred_language` on cold
-        //      launch — leaving the profile stale would make the gate
-        //      revert the user's choice.
-        //
-        // The previous code called `changeLanguage` directly without
-        // updating either the override OR the profile, which caused the
-        // 2026-04-26 user-reported regression where the app reloaded but
-        // came back in the OLD language.
+        // Keep the device override and profile language in sync before the
+        // RTL-flip reload so cold launch starts with the selected language.
         await setIntroLocaleOverride(lang);
         await setPreferredLanguage(lang);
       } catch (error) {
@@ -857,7 +860,10 @@ export default function SettingsScreen(): React.JSX.Element {
         isFullRescanModalOpen={isFullRescanModalOpen}
         onCancelAiDisableConfirm={() => setIsAiDisableConfirmOpen(false)}
         onCancelFullRescan={() => setIsFullRescanModalOpen(false)}
-        onConfirmAiDisable={() => { setIsAiDisableConfirmOpen(false); handleAiConsentToggle(false); }}
+        onConfirmAiDisable={() => {
+          setIsAiDisableConfirmOpen(false);
+          handleAiConsentToggle(false);
+        }}
         onConfirmFullRescan={() => {
           setIsFullRescanModalOpen(false);
           navigateToScan("full");
@@ -871,12 +877,9 @@ export default function SettingsScreen(): React.JSX.Element {
         visible={permissionRecovery !== null}
         icon={permissionRecoveryContent?.icon ?? "chatbubble-ellipses-outline"}
         onPrimaryPress={() => {
-          handlePermissionModalPrimaryPress().catch(() => {
-            showToast({
-              type: "error",
-              title: tCommon("error"),
-            });
-          });
+          handlePermissionModalPrimaryPress().catch(() =>
+            showToast({ type: "error", title: tCommon("error") })
+          );
         }}
         onCancel={handlePermissionModalCancel}
         title={permissionRecoveryContent?.title ?? ""}
