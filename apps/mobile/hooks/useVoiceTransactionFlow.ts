@@ -24,6 +24,8 @@ import {
   parseVoiceWithAi,
   isVoiceParserError,
 } from "@/services/ai-voice-parser-service";
+import { getAiProcessingConsentStatus } from "@/services/profile-service";
+import { logger } from "@/utils/logger";
 import type { Category } from "@monyvi/db";
 
 // ---------------------------------------------------------------------------
@@ -91,6 +93,16 @@ interface FlowConfig {
 
 interface StartFlowOptions {
   readonly skipAiProcessingConsent?: boolean;
+}
+
+async function hasFreshAiProcessingConsent(): Promise<boolean> {
+  try {
+    const status = await getAiProcessingConsentStatus();
+    return status.isConsented;
+  } catch (error: unknown) {
+    logger.error("voice.aiConsentStatus.failed", error);
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -255,7 +267,7 @@ export function useVoiceTransactionFlow(
     updateFlowStatus("analyzing");
 
     if (config.ensureAiProcessingConsent) {
-      const canUseAi = await config.ensureAiProcessingConsent();
+      const canUseAi = await hasFreshAiProcessingConsent();
       if (!canUseAi) {
         await recorder.discard();
         setIsOverlayVisible(false);
@@ -277,7 +289,7 @@ export function useVoiceTransactionFlow(
     await recorder.discard();
 
     if (config.ensureAiProcessingConsent) {
-      const canUseAi = await config.ensureAiProcessingConsent();
+      const canUseAi = await hasFreshAiProcessingConsent();
       if (!canUseAi) {
         setIsOverlayVisible(false);
         updateFlowStatus("idle");
