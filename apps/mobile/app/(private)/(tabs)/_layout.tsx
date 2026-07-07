@@ -34,6 +34,7 @@ import React, {
   useState,
 } from "react";
 import { View } from "react-native";
+import { useTranslation } from "react-i18next";
 
 export default function TabLayout(): React.ReactElement {
   return (
@@ -47,6 +48,7 @@ export default function TabLayout(): React.ReactElement {
 
 function TabLayoutInner(): React.ReactElement {
   const { isDark } = useTheme();
+  const { t: tCommon } = useTranslation("common");
   const { preferredCurrency } = usePreferredCurrency();
   const { categories: allCategories } = useCategories({ topLevelOnly: false });
   const { accounts } = useAccounts();
@@ -93,17 +95,20 @@ function TabLayoutInner(): React.ReactElement {
     canAutoStart,
     ensureAiProcessingConsent,
   });
+  const startVoiceFlow = voiceFlow.startFlow;
 
   // Register the voice entry handler so the onboarding guide's mic tooltip
   // can trigger the voice flow via openVoiceEntry(). Unregister on unmount
   // so a stale closure is never retained across tab-layout remounts (logout
   // → re-login, hot reload, future multi-window architecture).
   useEffect(() => {
-    registerVoiceEntry(voiceFlow.startFlow);
+    registerVoiceEntry(() => {
+      void startVoiceFlow();
+    });
     return (): void => {
       unregisterVoiceEntry();
     };
-  }, [voiceFlow.startFlow]);
+  }, [startVoiceFlow]);
 
   useFocusEffect(
     useCallback(() => {
@@ -179,7 +184,16 @@ function TabLayoutInner(): React.ReactElement {
         onDiscard={voiceFlow.discardRecording}
         onPause={voiceFlow.pauseRecording}
         onResume={voiceFlow.resumeRecording}
-        onRetry={voiceFlow.retryRecording}
+        onRetry={
+          voiceFlow.isMicrophonePermissionError
+            ? voiceFlow.openMicrophoneSettings
+            : voiceFlow.retryRecording
+        }
+        errorActionLabel={
+          voiceFlow.isMicrophonePermissionError
+            ? tCommon("open_settings")
+            : undefined
+        }
       />
       <AiProcessingConsentSheet
         visible={isVoiceConsentVisible}

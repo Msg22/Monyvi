@@ -76,6 +76,7 @@ const E2E_SMS_INBOX_FIXTURE_IDS = [
   "qnb_atm_withdrawal",
 ] as const;
 
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const E2E_DUPLICATE_SECOND_OFFSET_MS = 60_000;
 const INVALID_SMS_DATE_FALLBACK_BASE_MS = Date.UTC(2024, 0, 1);
 const INVALID_SMS_DATE_FALLBACK_STEP_MS = 1000;
@@ -102,6 +103,22 @@ function resolveFixtureTimestamp(
   return timestamp;
 }
 
+function toRollingFixtureInboxTimestamp(timestamp: number): number {
+  const now = new Date(Date.now());
+  const yesterdayStartUtc =
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) -
+    ONE_DAY_MS;
+  const source = new Date(timestamp);
+
+  return (
+    yesterdayStartUtc +
+    source.getUTCHours() * 60 * 60 * 1000 +
+    source.getUTCMinutes() * 60 * 1000 +
+    source.getUTCSeconds() * 1000 +
+    source.getUTCMilliseconds()
+  );
+}
+
 function readFixtureSmsInbox(
   options?: SmsReaderOptions
 ): readonly SmsMessage[] {
@@ -125,7 +142,7 @@ function readFixtureSmsInbox(
       id: `e2e-${fixtureId}-${index}`,
       address: fixture.sender,
       body: fixture.body,
-      date: baseDate + duplicateOffset,
+      date: toRollingFixtureInboxTimestamp(baseDate) + duplicateOffset,
       read: true,
     };
     return message;
