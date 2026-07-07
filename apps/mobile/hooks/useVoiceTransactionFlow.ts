@@ -19,6 +19,8 @@
 
 import { useCallback, useEffect, useState, useRef } from "react";
 import { router } from "expo-router";
+import { Linking } from "react-native";
+import { t } from "i18next";
 import { useVoiceRecorder } from "./useVoiceRecorder";
 import {
   parseVoiceWithAi,
@@ -39,6 +41,8 @@ type FlowStatus =
   | "success"
   | "error";
 
+type FlowErrorKind = "microphone-permission" | "generic";
+
 interface VoiceTransactionFlowResult {
   /** Current flow status */
   readonly flowStatus: FlowStatus;
@@ -48,6 +52,8 @@ interface VoiceTransactionFlowResult {
   readonly durationMs: number;
   /** Error message for display */
   readonly errorMessage: string | null;
+  /** Whether the current error requires opening device settings. */
+  readonly isMicrophonePermissionError: boolean;
   /** Whether microphone permission is granted */
   readonly hasPermission: boolean;
 
@@ -64,6 +70,8 @@ interface VoiceTransactionFlowResult {
   readonly discardRecording: () => Promise<void>;
   /** Retry recording from error state */
   readonly retryRecording: () => Promise<void>;
+  /** Open device app settings for microphone permission recovery. */
+  readonly openMicrophoneSettings: () => Promise<void>;
 }
 
 interface FlowConfig {
@@ -85,6 +93,18 @@ interface FlowConfig {
   readonly autoStart?: boolean;
 }
 
+function getMicrophonePermissionError(): string {
+  return t("common:voice_microphone_permission_error");
+}
+
+function getRecordingStartError(): string {
+  return t("common:voice_recording_start_failed");
+}
+
+function getSettingsOpenError(): string {
+  return t("common:voice_settings_open_failed");
+}
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -97,6 +117,7 @@ export function useVoiceTransactionFlow(
   const [flowStatus, setFlowStatus] = useState<FlowStatus>("idle");
   const [isOverlayVisible, setIsOverlayVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorKind, setErrorKind] = useState<FlowErrorKind | null>(null);
 
   // Store origin tab for post-save navigation
   const originTabIndexRef = useRef(config.originTabIndex ?? 0);
@@ -143,9 +164,8 @@ export function useVoiceTransactionFlow(
     if (!recorder.hasPermission) {
       const granted = await recorder.requestPermission();
       if (!granted) {
-        setErrorMessage(
-          "Microphone permission is required for voice recording. Please enable it in Settings."
-        );
+        setErrorMessage(getMicrophonePermissionError());
+        setErrorKind("microphone-permission");
         updateFlowStatus("error");
         setIsOverlayVisible(true);
         return;
@@ -154,11 +174,19 @@ export function useVoiceTransactionFlow(
 
     // Reset state and start recording
     setErrorMessage(null);
+    setErrorKind(null);
     setIsOverlayVisible(true);
     updateFlowStatus("recording");
     originTabIndexRef.current = config.originTabIndex ?? 0;
 
-    await recorder.start();
+    try {
+      await recorder.start();
+    } catch {
+      setErrorMessage(getRecordingStartError());
+      setErrorKind("generic");
+      updateFlowStatus("error");
+      setIsOverlayVisible(true);
+    }
   }, [recorder, config.originTabIndex, updateFlowStatus]);
 
   // Keep ref in sync so the auto-start effect can call it
@@ -200,6 +228,7 @@ export function useVoiceTransactionFlow(
       setErrorMessage(
         "Recording too short. Please speak for at least 1.5 seconds."
       );
+      setErrorKind("generic");
       updateFlowStatus("error");
       return;
     }
@@ -216,6 +245,7 @@ export function useVoiceTransactionFlow(
       const result = await recorder.stop();
       if (!result) {
         setErrorMessage("Failed to finalize recording. Please try again.");
+        setErrorKind("generic");
         updateFlowStatus("error");
         return;
       }
@@ -223,6 +253,7 @@ export function useVoiceTransactionFlow(
     }
 
     // Show analyzing state
+    setErrorKind(null);
     updateFlowStatus("analyzing");
 
     // Submit to AI
@@ -240,6 +271,7 @@ export function useVoiceTransactionFlow(
     // Handle result
     if (isVoiceParserError(aiResult)) {
       setErrorMessage(aiResult.message);
+      setErrorKind("generic");
       updateFlowStatus("error");
       return;
     }
@@ -249,11 +281,13 @@ export function useVoiceTransactionFlow(
       setErrorMessage(
         "We couldn't parse any transaction from the voice note. Please try again with clearer details."
       );
+      setErrorKind("generic");
       updateFlowStatus("error");
       return;
     }
 
     // Success — navigate to review screen
+    setErrorKind(null);
     updateFlowStatus("success");
     setIsOverlayVisible(false);
 
@@ -286,19 +320,58 @@ export function useVoiceTransactionFlow(
     setIsOverlayVisible(false);
     updateFlowStatus("idle");
     setErrorMessage(null);
+    setErrorKind(null);
   }, [recorder, updateFlowStatus]);
 
   const retryRecording = useCallback(async (): Promise<void> => {
+    if (flowStatusRef.current !== "error") return;
+
+    if (!recorder.hasPermission) {
+      const granted = await recorder.requestPermission();
+      if (!granted) {
+        setErrorMessage(getMicrophonePermissionError());
+        setErrorKind("microphone-permission");
+        updateFlowStatus("error");
+        setIsOverlayVisible(true);
+        return;
+      }
+    }
+
     setErrorMessage(null);
+    setErrorKind(null);
     updateFlowStatus("recording");
-    await recorder.start();
+
+    try {
+      await recorder.start();
+    } catch {
+      setErrorMessage(getRecordingStartError());
+      setErrorKind("generic");
+      updateFlowStatus("error");
+      setIsOverlayVisible(true);
+    }
   }, [recorder, updateFlowStatus]);
+
+  const openMicrophoneSettings = useCallback(async (): Promise<void> => {
+    try {
+      await Linking.openSettings();
+      setIsOverlayVisible(false);
+      updateFlowStatus("idle");
+      setErrorMessage(null);
+      setErrorKind(null);
+    } catch {
+      setErrorMessage(getSettingsOpenError());
+      setErrorKind("generic");
+      updateFlowStatus("error");
+      setIsOverlayVisible(true);
+    }
+  }, [updateFlowStatus]);
 
   return {
     flowStatus,
     isOverlayVisible,
     durationMs: recorder.durationMs,
     errorMessage,
+    isMicrophonePermissionError: errorKind === "microphone-permission",
     hasPermission: recorder.hasPermission,
     startFlow,
     pauseRecording,
@@ -306,5 +379,6 @@ export function useVoiceTransactionFlow(
     submitRecording,
     discardRecording,
     retryRecording,
+    openMicrophoneSettings,
   };
 }

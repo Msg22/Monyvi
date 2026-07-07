@@ -99,6 +99,9 @@
   "language_change_failed": "Failed to change language. Please try again.",
   "voice_recording_hint": "Tap to start voice recording for a transaction",
   "voice_recording_label": "Voice input - record a transaction",
+  "voice_microphone_permission_error": "Microphone permission is required for voice recording. Please enable it in Settings.",
+  "voice_recording_start_failed": "Couldn't start recording. Please try again.",
+  "voice_settings_open_failed": "Couldn't open Settings. Please open it from your device.",
 
   "error_boundary_message": "Something went wrong",
   "live_rates": "Live Rates",

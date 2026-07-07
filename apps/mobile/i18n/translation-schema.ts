@@ -115,6 +115,9 @@ interface CommonTranslations {
   readonly startup_loading_helper_text: string;
   readonly sign_out: string;
   readonly cash_account_creation_failed: string;
+  readonly voice_microphone_permission_error: string;
+  readonly voice_recording_start_failed: string;
+  readonly voice_settings_open_failed: string;
 }
 
 /** Transactions namespace */
