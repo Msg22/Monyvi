@@ -91,6 +91,12 @@ Use the `codex/` branch prefix by default.
    Windows, prefer the bundled Codex Python runtime with UTF-8 mode when the
    system `py` launcher points at a broken install or decodes GitHub responses
    with the wrong codepage.
+7. Treat automated tests, especially Maestro/E2E flows, as part of the product
+   contract. Before changing a user flow, permission flow, navigation target,
+   seed data, testID, or user-visible copy used by E2E, inspect the relevant E2E
+   coverage and update it alongside the implementation. Do not leave a PR with
+   known unit, integration, or E2E failures unless the failure is proven
+   unrelated to the PR and explicitly documented.
 
 ## 6. PR Expectations
 
