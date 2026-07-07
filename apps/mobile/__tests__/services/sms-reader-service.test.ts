@@ -9,7 +9,18 @@ jest.mock("react-native-get-sms-android", () => ({
 import { readSmsInbox } from "@/services/sms-reader-service";
 
 const originalPlatformOS = Platform.OS;
-const APRIL_8_2026_16_10 = 1775664600000;
+const TEST_NOW_MS = Date.parse("2026-07-07T16:18:00.000Z");
+const JULY_6_2026_16_10 = Date.parse("2026-07-06T16:10:00.000Z");
+const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
+
+function enableFixtureSmsInbox(): void {
+  process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
+  process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "fixture";
+}
+
+function freezeFixtureInboxClock(nowMs: number = TEST_NOW_MS): void {
+  jest.spyOn(Date, "now").mockReturnValue(nowMs);
+}
 
 describe("sms-reader-service", (): void => {
   beforeEach((): void => {
@@ -23,6 +34,7 @@ describe("sms-reader-service", (): void => {
   });
 
   afterEach((): void => {
+    jest.restoreAllMocks();
     Object.defineProperty(Platform, "OS", {
       configurable: true,
       value: originalPlatformOS,
@@ -69,8 +81,8 @@ describe("sms-reader-service", (): void => {
   });
 
   it("uses deterministic fixture inbox messages in E2E fixture mode", async (): Promise<void> => {
-    process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
-    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "fixture";
+    enableFixtureSmsInbox();
+    freezeFixtureInboxClock();
 
     const messages = await readSmsInbox();
 
@@ -86,9 +98,22 @@ describe("sms-reader-service", (): void => {
     expect(messages[1]?.date).toBeGreaterThan(messages[2]?.date ?? 0);
   });
 
+  it("keeps all fixture inbox messages inside the default rolling scan window", async (): Promise<void> => {
+    enableFixtureSmsInbox();
+    freezeFixtureInboxClock();
+
+    const messages = await readSmsInbox({
+      minDate: TEST_NOW_MS - THREE_MONTHS_MS,
+    });
+
+    expect(messages).toHaveLength(3);
+    expect(messages.some((message) => message.id === "e2e-qnb_atm_withdrawal-2"))
+      .toBe(true);
+  });
+
   it("applies fixture inbox maxCount after native-like newest-first ordering", async (): Promise<void> => {
-    process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
-    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "fixture";
+    enableFixtureSmsInbox();
+    freezeFixtureInboxClock();
 
     const messages = await readSmsInbox({ maxCount: 1 });
 
@@ -101,8 +126,7 @@ describe("sms-reader-service", (): void => {
   });
 
   it("keeps the fixture inbox disabled on iOS", async (): Promise<void> => {
-    process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
-    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "fixture";
+    enableFixtureSmsInbox();
     Object.defineProperty(Platform, "OS", {
       configurable: true,
       value: "ios",
@@ -115,28 +139,28 @@ describe("sms-reader-service", (): void => {
   });
 
   it("applies fixture inbox sender and scan-window filters", async (): Promise<void> => {
-    process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
-    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "fixture";
+    enableFixtureSmsInbox();
+    freezeFixtureInboxClock();
 
     const messages = await readSmsInbox({
       address: "NBE",
-      minDate: APRIL_8_2026_16_10,
+      minDate: JULY_6_2026_16_10,
     });
 
     expect(messages).toHaveLength(2);
     expect(messages.every((message) => message.address === "NBE")).toBe(true);
     expect(
-      messages.every((message) => message.date >= APRIL_8_2026_16_10)
+      messages.every((message) => message.date >= JULY_6_2026_16_10)
     ).toBe(true);
   });
 
   it("keeps fixture timestamps stable when scans use minDate filters", async (): Promise<void> => {
-    process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
-    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "fixture";
+    enableFixtureSmsInbox();
+    freezeFixtureInboxClock();
 
     const firstScan = await readSmsInbox();
     const filteredScan = await readSmsInbox({
-      minDate: APRIL_8_2026_16_10,
+      minDate: JULY_6_2026_16_10,
     });
     const firstDuplicate = firstScan.find(
       (message) => message.id === "e2e-pr622_batch_duplicate_shop-1"
