@@ -19,6 +19,7 @@ const { getE2eSeedConfig, seedE2eData } = require("./e2e-seed");
 const mobileRoot = join(__dirname, "..");
 const flowDir = join("e2e", "maestro", "live-sms-detection");
 const defaultMaestroFlowTimeoutMs = 10 * 60 * 1000;
+const defaultMaestroTransportRetryAttempts = 4;
 const uiAuthBootstrapFlow = "../helpers/ci-auth-bootstrap.yaml";
 const deeplinkAuthBootstrapFlow = "../helpers/ci-auth-deeplink-bootstrap.yaml";
 
@@ -170,6 +171,13 @@ function getMaestroFlowTimeoutMs(env = process.env) {
     : defaultMaestroFlowTimeoutMs;
 }
 
+function getMaestroTransportRetryAttempts(env = process.env) {
+  const parsed = Number(env.E2E_MAESTRO_TRANSPORT_RETRY_ATTEMPTS);
+  return Number.isInteger(parsed) && parsed > 0
+    ? parsed
+    : defaultMaestroTransportRetryAttempts;
+}
+
 function getAuthBootstrapFlow(env = process.env) {
   return env.E2E_AUTH_DEEPLINK_BOOTSTRAP === "1"
     ? deeplinkAuthBootstrapFlow
@@ -214,7 +222,11 @@ async function runFlow(flow, prepareRetry, retryOnTransportFailure = false) {
     throw new Error("Maestro was not found. Install it or set MAESTRO_BIN.");
   }
 
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
+  const maxAttempts = retryOnTransportFailure
+    ? getMaestroTransportRetryAttempts()
+    : 1;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const result = runMaestroFlowOnce(maestroBin, flow);
     if (result.status === 0) {
       return;
@@ -222,11 +234,13 @@ async function runFlow(flow, prepareRetry, retryOnTransportFailure = false) {
 
     if (
       retryOnTransportFailure &&
-      attempt === 1 &&
+      attempt < maxAttempts &&
       (result.didTimeout || isRetryableMaestroTransportFailure(result.output))
     ) {
       logInfo("liveSmsJourney.maestroTransportRetry", {
         flow,
+        attempt,
+        maxAttempts,
         reason: result.didTimeout ? "timeout" : "transport-unavailable",
       });
       reconnectMaestroTransport();
@@ -879,6 +893,10 @@ const journeys = {
       grantNotificationPermission();
       collapseSystemUi();
     },
+    after: async () => {
+      collapseSystemUi();
+      await runFlow("live-sms-journey-11-duplicate-sms-verification.yaml");
+    },
   },
   12: {
     flow: "live-sms-journey-12-auto-confirm.yaml",
@@ -1038,6 +1056,7 @@ module.exports = {
   createKilledAppConfirmMarker,
   getAuthBootstrapFlow,
   getMaestroFlowTimeoutMs,
+  getMaestroTransportRetryAttempts,
   getActiveUserFilter,
   isRetryableMaestroTransportFailure,
   shouldPrepareLiveSmsFlowBeforeRetry,

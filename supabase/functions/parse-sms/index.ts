@@ -326,6 +326,18 @@ function errorResponse(message: string, status = 400): Response {
   return jsonResponse({ error: message, code: status }, status);
 }
 
+function getSafeErrorType(error: unknown): string {
+  if (error instanceof Error) {
+    return error.name || "Error";
+  }
+
+  return typeof error;
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /**
  * Verify the JWT from the Authorization header using Supabase client.
  */
@@ -409,8 +421,11 @@ Body: ${m.body}
       };
     } catch (err: unknown) {
       lastError = err;
-      const errMsg = err instanceof Error ? err.message : String(err);
-      console.error(`[parse-sms] Attempt ${attempt + 1} failed: ${errMsg}`);
+      const errMsg = getErrorMessage(err);
+      console.error("[parse-sms] Gemini attempt failed", {
+        attempt: attempt + 1,
+        errorType: getSafeErrorType(err),
+      });
 
       // Don't retry on non-retryable errors (auth, bad request)
       if (
@@ -424,9 +439,9 @@ Body: ${m.body}
   }
 
   // All retries exhausted
-  const finalMsg =
-    lastError instanceof Error ? lastError.message : "Unknown error";
-  console.error(`[parse-sms] All retries exhausted: ${finalMsg}`);
+  console.error("[parse-sms] All retries exhausted", {
+    errorType: getSafeErrorType(lastError),
+  });
   return { transactions: [] };
 }
 
@@ -492,9 +507,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       transactions: result.transactions,
     });
   } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : "Unknown error occurred";
-    console.error("[parse-sms] Error:", message);
-    return errorResponse(message, 500);
+    console.error("[parse-sms] Error", {
+      errorType: getSafeErrorType(error),
+    });
+    return errorResponse("Internal server error", 500);
   }
 });

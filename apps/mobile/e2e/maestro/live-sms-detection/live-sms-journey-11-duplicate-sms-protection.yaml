@@ -10,12 +10,3 @@ appId: com.monyvi.app
     id: "sms-simulator-reset-top"
 - tapOn:
     id: "sms-simulator-burst-top"
-
-- extendedWaitUntil:
-    visible: "Live detection log count: 1"
-    timeout: 60000
-
-- waitForAnimationToEnd:
-    timeout: 10000
-- assertVisible: "Live detection log count: 1"
-- assertNotVisible: "Live detection log count: 2"

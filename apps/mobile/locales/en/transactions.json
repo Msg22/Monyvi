@@ -269,7 +269,7 @@
   "feature_instant_title": "Instant Tracking",
   "feature_instant_description": "Automatically detect transactions from your bank & wallet SMS",
   "feature_secure_title": "Private & Secure",
-  "feature_secure_description": "Only financial SMS from supported banks and wallets are sent to our servers for AI parsing. Message bodies are not stored after parsing and are not used for training.",
+  "feature_secure_description": "Only matching financial SMS from supported banks and wallets are sent securely to our AI provider for parsing. Message bodies are not stored after parsing and are not used for training.",
   "feature_control_title": "You're in Control",
   "feature_control_description": "Review every transaction before it's saved. Decline any you don't want.",
   "allow_sms_access": "Allow SMS Access",

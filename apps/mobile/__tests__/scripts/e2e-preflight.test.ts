@@ -9,6 +9,7 @@ interface E2ePreflightModule {
   isAppReady(uiXml: string): boolean;
   isNativeRootMounted(uiXml: string): boolean;
   isRetryableMaestroTransportFailure(output: string): boolean;
+  androidDeviceReconnectTimeoutMs: number;
   shouldRestoreFromDevLauncher(uiXml: string, currentFocus: string): boolean;
   resolveMetroUrls(env?: Readonly<Record<string, string | undefined>>): {
     hostMetroUrl: string;
@@ -52,6 +53,10 @@ describe("e2e-preflight", () => {
     ).toBe("http://custom-device:8081/?platform=android");
   });
 
+  it("waits long enough for ADB reconnects after emulator transport drops", () => {
+    expect(preflight.androidDeviceReconnectTimeoutMs).toBe(180000);
+  });
+
   it("builds the Monyvi dev-client URL with the app scheme", () => {
     expect(
       preflight.buildDevClientUrl("http://10.0.2.2:8081/?platform=android")
@@ -74,6 +79,12 @@ describe("e2e-preflight", () => {
     expect(preflight.isAppReady('<node text="Track with your voice." />')).toBe(
       true
     );
+  });
+
+  it("treats the SMS onboarding prompt as loaded product UI", () => {
+    expect(
+      preflight.isAppReady('<node text="Auto-Track Transactions" />')
+    ).toBe(true);
   });
 
   it("does not treat the Expo developer menu as product UI", () => {

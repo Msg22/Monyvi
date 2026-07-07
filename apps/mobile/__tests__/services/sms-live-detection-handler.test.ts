@@ -11,10 +11,17 @@ let mockRegisteredHandler:
 
 interface TransactionNotificationPayload {
   readonly type: "sms_transaction";
-  readonly transactionData: ParsedSmsTransaction;
+  readonly transactionData: NotificationParsedSmsTransaction;
   readonly resolvedAccountId: string;
   readonly resolvedAccountName: string;
 }
+
+type NotificationParsedSmsTransaction = Omit<
+  ParsedSmsTransaction,
+  "date" | "rawSmsBody"
+> & {
+  readonly date: Date | string | number | null;
+};
 
 type NotificationActionHandler = (
   actionId: string,
@@ -111,7 +118,7 @@ function createParsedSmsTransaction(): ParsedSmsTransaction {
 }
 
 function createPayload(
-  transactionData = createParsedSmsTransaction()
+  transactionData: NotificationParsedSmsTransaction = createNotificationParsedSmsTransaction()
 ): TransactionNotificationPayload {
   return {
     type: "sms_transaction",
@@ -119,6 +126,12 @@ function createPayload(
     resolvedAccountId: "account-1",
     resolvedAccountName: "MainCIBAccount",
   };
+}
+
+function createNotificationParsedSmsTransaction(): NotificationParsedSmsTransaction {
+  const { rawSmsBody: _rawSmsBody, ...transactionData } =
+    createParsedSmsTransaction();
+  return transactionData;
 }
 
 function getRegisteredHandler(): NotificationActionHandler {
@@ -176,13 +189,26 @@ describe("sms-live-detection-handler notification actions", () => {
     );
   });
 
+  it("confirms a notification transaction without raw SMS body payload data", async () => {
+    initializeDetectionActionHandler();
+
+    await getRegisteredHandler()("CONFIRM", createPayload());
+
+    expect(mockCreateTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "SMS",
+        smsFingerprint: "hash-1",
+      })
+    );
+  });
+
   it("restores the SMS date when confirming a serialized notification payload", async () => {
     initializeDetectionActionHandler();
-    const parsed = createParsedSmsTransaction();
+    const parsed = createNotificationParsedSmsTransaction();
     const serializedPayload = createPayload({
       ...parsed,
-      date: parsed.date.toISOString(),
-    } as unknown as ParsedSmsTransaction);
+      date: "2026-05-03T12:00:00.000Z",
+    });
 
     await getRegisteredHandler()("CONFIRM", serializedPayload);
 

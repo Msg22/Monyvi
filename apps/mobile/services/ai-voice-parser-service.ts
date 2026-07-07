@@ -204,25 +204,29 @@ export async function parseVoiceWithAi(
     clearTimeout(timeoutId);
 
     if (response.error) {
-      // Try to surface the actual status/body from the FunctionsHttpError.
+      // PII/privacy: do NOT log the response body; provider errors may echo
+      // transcript-derived content or account names.
       let status: number | undefined;
-      let bodyText = "";
+      let bodyLength: number | undefined;
       const ctx = (response.error as { context?: unknown }).context;
       if (ctx instanceof Response) {
         status = ctx.status;
         try {
-          bodyText = await ctx.clone().text();
+          bodyLength = (await ctx.clone().text()).length;
         } catch {
-          bodyText = "<unreadable response body>";
+          bodyLength = undefined;
         }
+      }
+
+      const sanitizedError = new Error(response.error.message);
+      if (response.error instanceof Error) {
+        sanitizedError.name = response.error.name;
       }
 
       logger.error(
         "[ai-voice-parser] parse-voice Edge Function error",
-        response.error instanceof Error
-          ? response.error
-          : new Error(response.error.message),
-        { status, body: bodyText.slice(0, 500) }
+        sanitizedError,
+        { status, bodyLength }
       );
       return {
         kind: "network",

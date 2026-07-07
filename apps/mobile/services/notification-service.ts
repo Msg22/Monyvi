@@ -56,7 +56,7 @@ interface TransactionInfoNotificationPayload {
 
 export type NotificationParsedSmsTransaction = Omit<
   ParsedSmsTransaction,
-  "date"
+  "date" | "rawSmsBody"
 > & {
   readonly date: Date | string | number | null;
 };
@@ -410,9 +410,10 @@ function formatAmount(amount: number, currency: string): string {
 function serializeTransactionData(
   parsed: ParsedSmsTransaction
 ): NotificationParsedSmsTransaction {
+  const { rawSmsBody: _rawSmsBody, date, ...transactionData } = parsed;
   return {
-    ...parsed,
-    date: parsed.date.toISOString(),
+    ...transactionData,
+    date: date.toISOString(),
   };
 }
 
