@@ -52,6 +52,8 @@ const LIVE_SMS_PERMISSIONS = [
   PermissionsAndroid.PERMISSIONS.RECEIVE_SMS,
 ] as const;
 
+type SaveableDetectedSmsTransaction = Omit<ParsedSmsTransaction, "rawSmsBody">;
+
 // ---------------------------------------------------------------------------
 // T046: Review page conflict — queue management
 // ---------------------------------------------------------------------------
@@ -66,13 +68,15 @@ const smsSaveLocks = new Map<string, Promise<void>>();
 
 function restoreNotificationTransactionDate(
   parsed: NotificationParsedSmsTransaction
-): ParsedSmsTransaction {
-  if (parsed.date instanceof Date) {
-    return parsed as ParsedSmsTransaction;
+): SaveableDetectedSmsTransaction {
+  const parsedDate = parsed.date;
+
+  if (parsedDate instanceof Date) {
+    return { ...parsed, date: parsedDate };
   }
 
-  if (typeof parsed.date === "string" || typeof parsed.date === "number") {
-    const date = new Date(parsed.date);
+  if (typeof parsedDate === "string" || typeof parsedDate === "number") {
+    const date = new Date(parsedDate);
     if (!Number.isNaN(date.getTime())) {
       return { ...parsed, date };
     }
@@ -225,7 +229,7 @@ export async function reconcileLiveDetectionPreference(): Promise<boolean> {
  * Save a detected SMS transaction to the database.
  */
 async function saveDetectedTransaction(
-  parsed: ParsedSmsTransaction,
+  parsed: SaveableDetectedSmsTransaction,
   accountId: string
 ): Promise<boolean> {
   return withSmsSaveLock(parsed.smsFingerprint, () =>
@@ -234,7 +238,7 @@ async function saveDetectedTransaction(
 }
 
 async function saveDetectedTransactionWithoutLock(
-  parsed: ParsedSmsTransaction,
+  parsed: SaveableDetectedSmsTransaction,
   accountId: string
 ): Promise<boolean> {
   if (await hasExistingSmsFingerprint(parsed.smsFingerprint)) {

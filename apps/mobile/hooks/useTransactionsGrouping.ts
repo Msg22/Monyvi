@@ -76,7 +76,6 @@ export function useTransactionsGrouping(
           userId,
           period,
           selectedTypes: selectedTypeFilters,
-          searchQuery,
         });
 
         if (!cancelled) {
@@ -92,7 +91,7 @@ export function useTransactionsGrouping(
       }
     };
     const { transactionsQuery, transfersQuery } =
-      observeTransactionListInvalidationSources({ userId });
+      observeTransactionListInvalidationSources({ userId, period });
 
     void performFetch();
 
@@ -113,14 +112,7 @@ export function useTransactionsGrouping(
       txSubscription.unsubscribe();
       transferSubscription.unsubscribe();
     };
-  }, [
-    period,
-    selectedTypeFilters,
-    searchQuery,
-    refetchTrigger,
-    userId,
-    isResolvingUser,
-  ]);
+  }, [period, selectedTypeFilters, refetchTrigger, userId, isResolvingUser]);
 
   const groupedData = useMemo((): GroupedTransaction[] => {
     if (!readModel) {

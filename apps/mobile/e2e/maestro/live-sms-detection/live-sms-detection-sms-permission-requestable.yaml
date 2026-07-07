@@ -20,7 +20,10 @@ appId: com.monyvi.app
     id: "live-sms-detection-switch"
 
 - assertVisible: "Allow live SMS detection?"
-- assertVisible: "Monyvi needs permission to receive new SMS messages."
+- assertVisible:
+    "Monyvi uses SMS access to detect new financial messages. Matching messages
+    are sent to our AI provider for parsing so you can review new transaction
+    suggestions."
 - assertVisible: "Allow SMS access"
 - assertVisible: "Not now"
 

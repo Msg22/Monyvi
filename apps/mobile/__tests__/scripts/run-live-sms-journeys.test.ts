@@ -9,7 +9,7 @@ interface RunLiveSmsJourneysModule {
   getMaestroFlowTimeoutMs(
     env?: Readonly<Record<string, string | undefined>>
   ): number;
-  getMaestroTransportMaxAttempts(
+  getMaestroTransportRetryAttempts(
     env?: Readonly<Record<string, string | undefined>>
   ): number;
   getAuthBootstrapFlow(
@@ -95,23 +95,18 @@ describe("run-live-sms-journeys helpers", () => {
     ).toBe(1000);
   });
 
-  it("uses a bounded Maestro transport retry budget with env override", () => {
-    expect(liveSmsJourneys.getMaestroTransportMaxAttempts({})).toBe(3);
+  it("uses bounded Maestro transport retries with env override", () => {
+    expect(liveSmsJourneys.getMaestroTransportRetryAttempts({})).toBe(4);
     expect(
-      liveSmsJourneys.getMaestroTransportMaxAttempts({
-        E2E_MAESTRO_TRANSPORT_MAX_ATTEMPTS: "4",
+      liveSmsJourneys.getMaestroTransportRetryAttempts({
+        E2E_MAESTRO_TRANSPORT_RETRY_ATTEMPTS: "2",
+      })
+    ).toBe(2);
+    expect(
+      liveSmsJourneys.getMaestroTransportRetryAttempts({
+        E2E_MAESTRO_TRANSPORT_RETRY_ATTEMPTS: "0",
       })
     ).toBe(4);
-    expect(
-      liveSmsJourneys.getMaestroTransportMaxAttempts({
-        E2E_MAESTRO_TRANSPORT_MAX_ATTEMPTS: "1",
-      })
-    ).toBe(1);
-    expect(
-      liveSmsJourneys.getMaestroTransportMaxAttempts({
-        E2E_MAESTRO_TRANSPORT_MAX_ATTEMPTS: "0",
-      })
-    ).toBe(3);
   });
 
   it("uses the guarded deep-link auth bootstrap when CI opts in", () => {

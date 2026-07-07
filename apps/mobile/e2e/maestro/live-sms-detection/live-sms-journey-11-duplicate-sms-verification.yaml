@@ -1,0 +1,16 @@
+appId: com.monyvi.app
+---
+# Journey 11 verification runs after the runner collapses Android system UI.
+
+- extendedWaitUntil:
+    visible: "SMS Simulator \\(dev\\)"
+    timeout: 30000
+
+- extendedWaitUntil:
+    visible: "Live detection log count: 1"
+    timeout: 60000
+
+- waitForAnimationToEnd:
+    timeout: 10000
+- assertVisible: "Live detection log count: 1"
+- assertNotVisible: "Live detection log count: 2"

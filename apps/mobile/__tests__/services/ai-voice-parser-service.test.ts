@@ -15,12 +15,29 @@
 // ---------------------------------------------------------------------------
 
 const mockInvoke = jest.fn();
+const mockLoggerError = jest.fn<
+  void,
+  [message: string, error?: unknown, context?: Record<string, unknown>]
+>();
 
 jest.mock("@/services/supabase", () => ({
   supabase: {
     functions: {
       invoke: (...args: unknown[]): unknown => mockInvoke(...args) as unknown,
     },
+  },
+}));
+
+jest.mock("@/utils/logger", () => ({
+  logger: {
+    debug: jest.fn(),
+    error: (
+      message: string,
+      error?: unknown,
+      context?: Record<string, unknown>
+    ): void => mockLoggerError(message, error, context),
+    info: jest.fn(),
+    warn: jest.fn(),
   },
 }));
 
@@ -398,6 +415,38 @@ describe("ai-voice-parser-service", () => {
           "We couldn't reach voice analysis right now. Please check your connection and try again."
         );
       }
+    });
+
+    it("should not log Edge Function response bodies on voice parser errors", async () => {
+      const sensitiveBody =
+        "provider response includes private transcript and account name";
+      const errorWithContext = new Error("FunctionsHttpError") as Error & {
+        context: Response;
+      };
+      errorWithContext.context = new Response(sensitiveBody, { status: 502 });
+      mockInvoke.mockResolvedValueOnce({
+        data: null,
+        error: errorWithContext,
+      });
+
+      const result = await parseVoiceWithAi(makeDefaultOptions());
+
+      expect(isVoiceParserError(result)).toBe(true);
+      expect(mockLoggerError).toHaveBeenCalledWith(
+        "[ai-voice-parser] parse-voice Edge Function error",
+        expect.any(Error),
+        expect.objectContaining({
+          status: 502,
+          bodyLength: sensitiveBody.length,
+        })
+      );
+      const loggedError = mockLoggerError.mock.calls[0]?.[1] as
+        | (Error & { readonly context?: unknown })
+        | undefined;
+      expect(loggedError).not.toBe(errorWithContext);
+      expect(loggedError).not.toHaveProperty("context");
+      const loggerContext = mockLoggerError.mock.calls[0]?.[2];
+      expect(loggerContext).not.toHaveProperty("body");
     });
 
     it("should return 'schema' error when response is missing required fields", async () => {

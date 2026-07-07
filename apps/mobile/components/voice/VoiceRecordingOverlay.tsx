@@ -24,10 +24,12 @@ import {
   type DimensionValue,
 } from "react-native";
 import Animated, {
+  Easing,
   FadeIn,
   FadeOut,
-  SlideInDown,
   SlideOutDown,
+  withTiming,
+  type EntryExitAnimationFunction,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -52,6 +54,28 @@ const NEAR_LIMIT_THRESHOLD_S = 50;
  * plus 8px breathing room.
  */
 const MIC_BUTTON_CLEARANCE = MIC_BUTTON_SIZE / 2 - 8 + 8;
+const PANEL_ENTER_DURATION_MS = 220;
+const PANEL_ENTER_OFFSET_Y = 320;
+
+const PANEL_ENTERING_ANIMATION: EntryExitAnimationFunction = () => {
+  "worklet";
+
+  return {
+    animations: {
+      transform: [
+        {
+          translateY: withTiming(0, {
+            duration: PANEL_ENTER_DURATION_MS,
+            easing: Easing.out(Easing.cubic),
+          }),
+        },
+      ],
+    },
+    initialValues: {
+      transform: [{ translateY: PANEL_ENTER_OFFSET_Y }],
+    },
+  };
+};
 
 // ---------------------------------------------------------------------------
 // Styles
@@ -136,6 +160,8 @@ interface VoiceRecordingOverlayProps {
   readonly onResume: () => void | Promise<void>;
   /** Called when user taps Retry (from error state). */
   readonly onRetry?: () => void | Promise<void>;
+  /** Label for the error-state primary action. Defaults to Retry. */
+  readonly errorActionLabel?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -232,6 +258,7 @@ function VoiceRecordingOverlayComponent({
   onPause,
   onResume,
   onRetry,
+  errorActionLabel,
 }: VoiceRecordingOverlayProps): React.ReactElement | null {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation("transactions");
@@ -289,9 +316,12 @@ function VoiceRecordingOverlayComponent({
   );
 
   // Progress bar width
-  const progressStyle = useMemo(
+  const progressStyle = useMemo<{
+    readonly width: DimensionValue;
+    readonly backgroundColor: string;
+  }>(
     () => ({
-      width: `${progressPercent}%` as DimensionValue,
+      width: `${progressPercent}%`,
       backgroundColor: isNearLimit ? palette.gold[500] : palette.nileGreen[500],
     }),
     [progressPercent, isNearLimit]
@@ -299,6 +329,9 @@ function VoiceRecordingOverlayComponent({
 
   // Status dot color
   const dotStyle = isRecording ? styles.recordingDot : styles.pausedDot;
+  const contentClassName = isError
+    ? "px-6 pb-1 pt-5"
+    : "min-h-[228px] px-6 pb-4 pt-5";
 
   if (!visible || status === "idle" || status === "success") return null;
 
@@ -320,12 +353,12 @@ function VoiceRecordingOverlayComponent({
 
       {/* Recording panel */}
       <Animated.View
-        entering={SlideInDown.springify().damping(18).stiffness(120)}
+        entering={PANEL_ENTERING_ANIMATION}
         exiting={SlideOutDown.duration(200)}
         className="absolute start-0 end-0 z-[22] rounded-t-3xl bg-white dark:bg-slate-800"
         style={panelStyle}
       >
-        <View className="px-6 pb-4 pt-5">
+        <View className={contentClassName}>
           {/* Analyzing state */}
           {isAnalyzing && (
             <View className="items-center py-8">
@@ -366,7 +399,7 @@ function VoiceRecordingOverlayComponent({
                     style={styles.retryBtn}
                   >
                     <Text className="text-sm font-semibold text-white">
-                      {t("voice_retry")}
+                      {errorActionLabel ?? t("voice_retry")}
                     </Text>
                   </Pressable>
                 )}

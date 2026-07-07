@@ -85,6 +85,12 @@ Use the `codex/` branch prefix by default.
    - Presentational components render shaped props only.
 5. Avoid unrelated refactors. Mention unrelated cleanup opportunities instead of
    bundling them.
+6. When a local tooling or shell issue blocks the normal workflow, fix the
+   recurring environment problem or document the durable workaround instead of
+   only bypassing it for the current command. For GitHub helper scripts on
+   Windows, prefer the bundled Codex Python runtime with UTF-8 mode when the
+   system `py` launcher points at a broken install or decodes GitHub responses
+   with the wrong codepage.
 
 ## 6. PR Expectations
 

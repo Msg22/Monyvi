@@ -11,13 +11,24 @@
  * @module sms-scan
  */
 
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Platform, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { SUPPORTED_CURRENCIES, type ParsedSmsTransaction } from "@monyvi/logic";
+import { PermissionRecoveryModal } from "@/components/permissions/PermissionRecoveryModal";
+import {
+  getPermissionRecoveryContent,
+  getRecoveryModeForPermissionStatus,
+} from "@/components/settings/permission-recovery-content";
 import { SmsScanProgress } from "@/components/sms-sync/SmsScanProgress";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useAllCategories } from "@/context/CategoriesContext";
@@ -179,12 +190,15 @@ function SmsPermissionGate({
  */
 export default function SmsScanScreen(): React.JSX.Element {
   const router = useRouter();
+  const { t: tSettings } = useTranslation("settings");
   const {
     status: permissionStatus,
     isLoading: isPermissionLoading,
     requestPermission,
     openSettings,
   } = useSmsPermission();
+  const [isPermissionRecoveryVisible, setIsPermissionRecoveryVisible] =
+    useState(true);
   const { status, progress, result, transactions, error, startScan } =
     useSmsScan();
 
@@ -228,6 +242,7 @@ export default function SmsScanScreen(): React.JSX.Element {
 
   // Track whether scan has been initiated to prevent double-start
   const scanInitiated = useRef(false);
+  const previousPermissionStatusRef = useRef(permissionStatus);
 
   // Auto-start scan on mount — waits until permission is granted and categories loaded
   useEffect(() => {
@@ -240,6 +255,18 @@ export default function SmsScanScreen(): React.JSX.Element {
       });
     }
   }, [initiateScan, isAiContextReady, permissionStatus]);
+
+  useEffect(() => {
+    if (previousPermissionStatusRef.current === permissionStatus) {
+      return;
+    }
+
+    previousPermissionStatusRef.current = permissionStatus;
+
+    if (!isPermissionLoading && permissionStatus !== "granted") {
+      setIsPermissionRecoveryVisible(true);
+    }
+  }, [isPermissionLoading, permissionStatus]);
 
   const handleReviewPress = (): void => {
     if (transactions.length > 0) {
@@ -291,50 +318,76 @@ export default function SmsScanScreen(): React.JSX.Element {
     return <SafeAreaView className="flex-1 bg-slate-50 dark:bg-slate-900" />;
   }
 
-  // Shared error handlers for permission gate callbacks — log failures
-  // instead of silently swallowing them, per project coding guidelines.
-  const handleGateRequest = (): void => {
-    requestPermission().catch((err: unknown) => {
-      logger.warn("Failed to request SMS permission from gate", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-    });
+  const handleShowPermissionRecovery = (): void => {
+    setIsPermissionRecoveryVisible(true);
   };
-  const handleGateOpenSettings = (): void => {
-    openSettings().catch((err: unknown) => {
-      logger.warn("Failed to open settings from gate", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-    });
+
+  const handlePermissionRecoveryCancel = (): void => {
+    setIsPermissionRecoveryVisible(false);
   };
+
+  const handlePermissionRecoveryPrimaryPress = (): void => {
+    if (permissionStatus === "blocked") {
+      setIsPermissionRecoveryVisible(false);
+      openSettings().catch((err: unknown) => {
+        logger.warn("Failed to open settings from SMS permission modal", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+      return;
+    }
+
+    requestPermission()
+      .then((result) => {
+        setIsPermissionRecoveryVisible(result !== "granted");
+      })
+      .catch((err: unknown) => {
+        logger.warn("Failed to request SMS permission from modal", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+  };
+
+  const permissionRecoveryContent = getPermissionRecoveryContent(
+    {
+      kind: "sms-sync",
+      mode: getRecoveryModeForPermissionStatus(permissionStatus),
+    },
+    tSettings
+  );
 
   // ── Permission gate ──
-  // While the initial permission check (or auto-request for first-time users)
-  // is in flight, show a skeleton loading state instead of the gate UI.
-  // Only render the visible gate when the user has explicitly denied or
-  // blocked the permission — first-time users see the native dialog directly.
-  // All hooks are called above (unconditionally) to satisfy Rules of Hooks.
-  if (isPermissionLoading || permissionStatus === "undetermined") {
-    return (
-      <SmsPermissionGate
-        status="undetermined"
-        isLoading
-        onRequest={handleGateRequest}
-        onOpenSettings={handleGateOpenSettings}
-        onBack={handleBackPress}
-      />
-    );
-  }
+  // The native permission dialog is only opened from the app-side rationale
+  // modal so users see the explanation first.
+  // All hooks are called above unconditionally to satisfy the Rules of Hooks.
+  if (isPermissionLoading || permissionStatus !== "granted") {
+    const gateStatus =
+      permissionStatus === "denied" || permissionStatus === "blocked"
+        ? permissionStatus
+        : "undetermined";
 
-  if (permissionStatus === "denied" || permissionStatus === "blocked") {
     return (
-      <SmsPermissionGate
-        status={permissionStatus}
-        isLoading={false}
-        onRequest={handleGateRequest}
-        onOpenSettings={handleGateOpenSettings}
-        onBack={handleBackPress}
-      />
+      <>
+        <SmsPermissionGate
+          status={gateStatus}
+          isLoading={isPermissionLoading}
+          onRequest={handleShowPermissionRecovery}
+          onOpenSettings={handleShowPermissionRecovery}
+          onBack={handleBackPress}
+        />
+        {!isPermissionLoading && (
+          <PermissionRecoveryModal
+            visible={isPermissionRecoveryVisible}
+            icon={permissionRecoveryContent.icon}
+            onPrimaryPress={handlePermissionRecoveryPrimaryPress}
+            onCancel={handlePermissionRecoveryCancel}
+            title={permissionRecoveryContent.title}
+            message={permissionRecoveryContent.message}
+            primaryLabel={permissionRecoveryContent.primaryLabel}
+            cancelLabel={tSettings("permission_not_now")}
+          />
+        )}
+      </>
     );
   }
 

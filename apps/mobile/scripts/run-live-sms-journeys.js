@@ -19,7 +19,7 @@ const { getE2eSeedConfig, seedE2eData } = require("./e2e-seed");
 const mobileRoot = join(__dirname, "..");
 const flowDir = join("e2e", "maestro", "live-sms-detection");
 const defaultMaestroFlowTimeoutMs = 10 * 60 * 1000;
-const defaultMaestroTransportMaxAttempts = 3;
+const defaultMaestroTransportRetryAttempts = 4;
 const uiAuthBootstrapFlow = "../helpers/ci-auth-bootstrap.yaml";
 const deeplinkAuthBootstrapFlow = "../helpers/ci-auth-deeplink-bootstrap.yaml";
 
@@ -171,11 +171,11 @@ function getMaestroFlowTimeoutMs(env = process.env) {
     : defaultMaestroFlowTimeoutMs;
 }
 
-function getMaestroTransportMaxAttempts(env = process.env) {
-  const parsed = Number(env.E2E_MAESTRO_TRANSPORT_MAX_ATTEMPTS);
+function getMaestroTransportRetryAttempts(env = process.env) {
+  const parsed = Number(env.E2E_MAESTRO_TRANSPORT_RETRY_ATTEMPTS);
   return Number.isInteger(parsed) && parsed > 0
     ? parsed
-    : defaultMaestroTransportMaxAttempts;
+    : defaultMaestroTransportRetryAttempts;
 }
 
 function getAuthBootstrapFlow(env = process.env) {
@@ -223,7 +223,7 @@ async function runFlow(flow, prepareRetry, retryOnTransportFailure = false) {
   }
 
   const maxAttempts = retryOnTransportFailure
-    ? getMaestroTransportMaxAttempts()
+    ? getMaestroTransportRetryAttempts()
     : 1;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -238,8 +238,9 @@ async function runFlow(flow, prepareRetry, retryOnTransportFailure = false) {
       (result.didTimeout || isRetryableMaestroTransportFailure(result.output))
     ) {
       logInfo("liveSmsJourney.maestroTransportRetry", {
-        attempt,
         flow,
+        attempt,
+        maxAttempts,
         reason: result.didTimeout ? "timeout" : "transport-unavailable",
       });
       reconnectMaestroTransport();
@@ -962,6 +963,10 @@ const journeys = {
       grantNotificationPermission();
       collapseSystemUi();
     },
+    after: async () => {
+      collapseSystemUi();
+      await runFlow("live-sms-journey-11-duplicate-sms-verification.yaml");
+    },
   },
   12: {
     flow: "live-sms-journey-12-auto-confirm.yaml",
@@ -1122,10 +1127,10 @@ module.exports = {
   createKilledAppConfirmMarker,
   getAuthBootstrapFlow,
   getMaestroFlowTimeoutMs,
+  getMaestroTransportRetryAttempts,
   getActiveUserFilter,
   getNotificationDumpRecords,
   findVisibleNotificationMatch,
-  getMaestroTransportMaxAttempts,
   notificationDumpMatchesPatterns,
   parseBounds,
   isRetryableMaestroTransportFailure,

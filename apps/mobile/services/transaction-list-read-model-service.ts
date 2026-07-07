@@ -102,7 +102,6 @@ export interface GetTransactionListReadModelInput {
   readonly userId: string;
   readonly period: GroupingPeriod;
   readonly selectedTypes: readonly TransactionTypeFilter[];
-  readonly searchQuery: string;
 }
 
 export interface BuildTransactionGroupsInput extends TransactionListReadModel {
@@ -115,6 +114,7 @@ export interface BuildTransactionGroupsInput extends TransactionListReadModel {
 
 export interface TransactionListInvalidationInput {
   readonly userId: string;
+  readonly period: GroupingPeriod;
 }
 
 export interface TransactionListInvalidationQueries {
@@ -130,6 +130,7 @@ export const TRANSACTION_LIST_TRANSACTION_COLUMNS = [
   "counterparty",
   "account_id",
   "date",
+  "deleted",
 ] as const;
 
 export const TRANSACTION_LIST_TRANSFER_COLUMNS = [
@@ -138,14 +139,28 @@ export const TRANSACTION_LIST_TRANSFER_COLUMNS = [
   "to_account_id",
   "notes",
   "date",
+  "deleted",
 ] as const;
 
 export function observeTransactionListInvalidationSources(
   input: TransactionListInvalidationInput
 ): TransactionListInvalidationQueries {
+  const { startDate, endDate } = getPeriodDateRange(input.period);
+
   return {
-    transactionsQuery: queryOwned(transactionsCollection(), input.userId),
-    transfersQuery: queryOwned(transfersCollection(), input.userId),
+    transactionsQuery: queryOwned(
+      transactionsCollection(),
+      input.userId,
+      Q.where("deleted", false),
+      Q.where("date", Q.gte(startDate))
+    ),
+    transfersQuery: queryOwned(
+      transfersCollection(),
+      input.userId,
+      Q.where("deleted", false),
+      Q.where("date", Q.gte(startDate)),
+      Q.where("date", Q.lte(endDate))
+    ),
   };
 }
 
@@ -177,7 +192,7 @@ export async function getTransactionListReadModel(
 
   return {
     futureTransactions,
-    displayedItems: filterDisplayItems(displayedItems, input.searchQuery),
+    displayedItems,
   };
 }
 
@@ -217,16 +232,18 @@ export function buildTransactionGroups(
   }
 
   let runningNetWorth = anchorNetWorth;
-  const processedItems = input.displayedItems.map(
-    (item): DisplayTransaction => {
-      const itemWithNetWorth: DisplayTransaction = {
-        ...item,
-        displayNetWorth: runningNetWorth,
-      };
-      runningNetWorth -= getSignedAmount(item);
-      return itemWithNetWorth;
-    }
+  const filteredItems = filterDisplayItems(
+    input.displayedItems,
+    input.searchQuery
   );
+  const processedItems = filteredItems.map((item): DisplayTransaction => {
+    const itemWithNetWorth: DisplayTransaction = {
+      ...item,
+      displayNetWorth: runningNetWorth,
+    };
+    runningNetWorth -= getSignedAmount(item);
+    return itemWithNetWorth;
+  });
 
   return groupDisplayItems(processedItems, input);
 }

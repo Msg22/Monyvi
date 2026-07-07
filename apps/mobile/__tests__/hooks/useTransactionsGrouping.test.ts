@@ -66,6 +66,7 @@ jest.mock("@/services/transaction-list-read-model-service", () => ({
     "counterparty",
     "account_id",
     "date",
+    "deleted",
   ],
   TRANSACTION_LIST_TRANSFER_COLUMNS: [
     "amount",
@@ -73,6 +74,7 @@ jest.mock("@/services/transaction-list-read-model-service", () => ({
     "to_account_id",
     "notes",
     "date",
+    "deleted",
   ],
   buildTransactionGroups: (...args: readonly unknown[]): unknown =>
     mockBuildTransactionGroups(...args),
@@ -143,12 +145,12 @@ describe("useTransactionsGrouping", () => {
 
     expect(mockObserveTransactionListInvalidationSources).toHaveBeenCalledWith({
       userId: "user-1",
+      period: "this_month",
     });
     expect(mockGetTransactionListReadModel).toHaveBeenCalledWith({
       userId: "user-1",
       period: "this_month",
       selectedTypes: ["Income", "Expense"],
-      searchQuery: "",
     });
     expect(mockBuildTransactionGroups).toHaveBeenCalledWith({
       ...readModel,
@@ -196,6 +198,32 @@ describe("useTransactionsGrouping", () => {
     await waitFor(() => {
       expect(mockGetTransactionListReadModel).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it("regroups existing read-model data when only search query changes", async () => {
+    const { rerender } = renderHook(
+      ({ searchQuery }: { readonly searchQuery: string }) =>
+        useTransactionsGrouping("this_month", ["Expense"], searchQuery),
+      { initialProps: { searchQuery: "" } }
+    );
+
+    await waitFor(() => {
+      expect(mockGetTransactionListReadModel).toHaveBeenCalledTimes(1);
+    });
+
+    rerender({ searchQuery: "rent" });
+
+    await waitFor(() => {
+      expect(mockBuildTransactionGroups).toHaveBeenLastCalledWith({
+        ...readModel,
+        totalNetWorth: 1000,
+        latestRates: null,
+        preferredCurrency: "EGP",
+        period: "this_month",
+        searchQuery: "rent",
+      });
+    });
+    expect(mockGetTransactionListReadModel).toHaveBeenCalledTimes(1);
   });
 
   it("logs read-model failures and resets loading state", async () => {

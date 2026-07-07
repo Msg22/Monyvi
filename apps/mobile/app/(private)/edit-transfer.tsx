@@ -325,7 +325,11 @@ export default function EditTransfer(): React.ReactNode {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
         console.error
       );
-      showToast({ type: "success", title: t("update_success") });
+      showToast({
+        type: "success",
+        title: t("transfer_updated"),
+        message: t("transfer_updated_message"),
+      });
       router.back();
     } catch (err) {
       console.error("[EditTransfer] Save error:", err);
@@ -416,7 +420,11 @@ export default function EditTransfer(): React.ReactNode {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
         console.error
       );
-      showToast({ type: "success", title: t("delete_success") });
+      showToast({
+        type: "success",
+        title: t("transfer_deleted"),
+        message: t("transfer_deleted_message"),
+      });
       router.back();
     } catch (err) {
       console.error("[EditTransfer] Delete error:", err);

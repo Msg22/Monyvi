@@ -10,6 +10,7 @@ import {
   registerNotificationActionHandler,
   resetNotificationServiceForTests,
   showTransactionCreatedNotification,
+  showTransactionNeedsAccountNotification,
   requestNotificationPermission,
   requestNotificationPermissionStatus,
   showTransactionNotification,
@@ -87,6 +88,15 @@ function getScheduledNotificationInput(): Parameters<
   }
 
   return scheduledNotification;
+}
+
+function getScheduledNotificationData(): Record<string, unknown> {
+  const data = getScheduledNotificationInput().content.data;
+  if (!data) {
+    throw new Error("Expected scheduled notification data");
+  }
+
+  return data;
 }
 
 function getNotificationCategoryActions(): Parameters<
@@ -379,6 +389,51 @@ describe("notification-service", () => {
       expect(scheduledNotification.trigger).toEqual({
         channelId: "sms-transactions",
       });
+    });
+
+    it("does not include raw SMS body in actionable notification payloads", async () => {
+      mockGetPermissionsAsync.mockResolvedValueOnce(
+        createPermissionStatus({ granted: true })
+      );
+
+      await showTransactionNotification(
+        createParsedSmsTransaction(),
+        "account-1",
+        "MainCIBAccount"
+      );
+
+      expect(getScheduledNotificationData().transactionData).not.toHaveProperty(
+        "rawSmsBody"
+      );
+    });
+
+    it("does not include raw SMS body in auto-confirm info notification payloads", async () => {
+      mockGetPermissionsAsync.mockResolvedValueOnce(
+        createPermissionStatus({ granted: true })
+      );
+
+      await showTransactionCreatedNotification(
+        createParsedSmsTransaction(),
+        "MainCIBAccount"
+      );
+
+      expect(getScheduledNotificationData().transactionData).not.toHaveProperty(
+        "rawSmsBody"
+      );
+    });
+
+    it("does not include raw SMS body in account setup info notification payloads", async () => {
+      mockGetPermissionsAsync.mockResolvedValueOnce(
+        createPermissionStatus({ granted: true })
+      );
+
+      await showTransactionNeedsAccountNotification(
+        createParsedSmsTransaction()
+      );
+
+      expect(getScheduledNotificationData().transactionData).not.toHaveProperty(
+        "rawSmsBody"
+      );
     });
   });
 
