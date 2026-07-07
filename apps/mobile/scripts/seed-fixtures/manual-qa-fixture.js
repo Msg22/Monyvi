@@ -3,6 +3,7 @@ const MANUAL_QA_SEED_FIXTURE = {
   userFullName: "Monyvi Manual QA",
   authLabel: "manual QA",
   includeLocalMarketRate: false,
+  restoreAccountBalancesAfterLedgerSeed: true,
   accountNames: {
     cash: "Cash Wallet",
     bank: "NBE Salary Account",
@@ -66,7 +67,7 @@ function buildManualQaExtraRows({
         user_id: userId,
         name: "Binance BTC Wallet",
         type: "DIGITAL_WALLET",
-        balance: 0.0345,
+        balance: 0.03,
         currency: "BTC",
         institution_id: "binance",
         provider_display_name: "Binance",

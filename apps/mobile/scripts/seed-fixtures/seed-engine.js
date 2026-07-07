@@ -14,6 +14,7 @@ const BASE_SEED_FIXTURE = {
   userFullName: "Monyvi Seed",
   authLabel: "seed",
   includeLocalMarketRate: false,
+  restoreAccountBalancesAfterLedgerSeed: false,
   accountNames: {
     cash: "Seed Cash",
     bank: "Seed Bank",
@@ -556,6 +557,21 @@ async function upsertRowsIfAny(client, table, rows, options) {
   await upsertRows(client, table, rows, options);
 }
 
+async function restoreSeededAccountBalances(client, accountRows) {
+  await Promise.all(
+    accountRows.map(async (account) =>
+      assertNoError(
+        await client
+          .from("accounts")
+          .update({ balance: account.balance, updated_at: account.updated_at })
+          .eq("id", account.id)
+          .eq("user_id", account.user_id),
+        `restore account balance ${account.id}`
+      )
+    )
+  );
+}
+
 function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
   const currentTimestamp = new Date().toISOString();
   const currentDate = currentTimestamp.slice(0, 10);
@@ -854,6 +870,9 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
     onConflict: "id",
   });
   await upsertRows(client, "transfers", rows.transfers, { onConflict: "id" });
+  if (fixture.restoreAccountBalancesAfterLedgerSeed) {
+    await restoreSeededAccountBalances(client, rows.accounts);
+  }
   if (config.mode === "local" && fixture.includeLocalMarketRate) {
     await upsertRows(client, "market_rates", rows.marketRate, {
       onConflict: "id",

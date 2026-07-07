@@ -86,6 +86,12 @@ function parseSupabaseQueryRows(output) {
   throw new Error("Supabase query JSON did not include result rows.");
 }
 
+function parseImportMarketRatesArgs(argv = process.argv.slice(2)) {
+  return {
+    bestEffort: argv.includes("--best-effort"),
+  };
+}
+
 function importLocalMarketRates(rows) {
   const serializedRows = JSON.stringify(rows).replaceAll("$copy$", "$ copy $");
   const importPath = join(repoRoot, ".tmp-market-rates-import.sql");
@@ -119,20 +125,38 @@ cross join deleted_count;
   }
 }
 
-function main() {
-  const rows = queryLinkedMarketRates();
-  if (!Array.isArray(rows) || rows.length === 0) {
-    throw new Error("Remote market_rates returned no rows.");
-  }
+function runMarketRatesImport() {
+  try {
+    const rows = queryLinkedMarketRates();
+    if (!Array.isArray(rows) || rows.length === 0) {
+      throw new Error("Remote market_rates returned no rows.");
+    }
 
-  importLocalMarketRates(rows);
-  console.log(`Imported ${rows.length} market_rates rows into local Supabase.`);
+    importLocalMarketRates(rows);
+    console.log(
+      `Imported ${rows.length} market_rates rows into local Supabase.`
+    );
+  } catch (error) {
+    const { bestEffort } = parseImportMarketRatesArgs();
+    if (!bestEffort) {
+      throw error;
+    }
+
+    console.warn(
+      [
+        "Skipped local market_rates import.",
+        "Manual QA user data was seeded, but linked remote market rates were not available.",
+        error instanceof Error ? error.message : String(error),
+      ].join("\n")
+    );
+  }
 }
 
 if (require.main === module) {
-  main();
+  runMarketRatesImport();
 }
 
 module.exports = {
+  parseImportMarketRatesArgs,
   parseSupabaseQueryRows,
 };

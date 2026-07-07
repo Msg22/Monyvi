@@ -31,6 +31,14 @@ interface BudgetSeedRow {
   readonly pause_intervals?: string;
 }
 
+interface AccountBalanceUpdate {
+  readonly balance?: number;
+  readonly filters: readonly {
+    readonly column: string;
+    readonly value: string;
+  }[];
+}
+
 interface PauseInterval {
   readonly startedAt: string;
 }
@@ -39,6 +47,12 @@ function getStringField(row: unknown, field: string): string | undefined {
   if (typeof row !== "object" || row === null) return undefined;
   const value = (row as Record<string, unknown>)[field];
   return typeof value === "string" ? value : undefined;
+}
+
+function getNumberField(row: unknown, field: string): number | undefined {
+  if (typeof row !== "object" || row === null) return undefined;
+  const value = (row as Record<string, unknown>)[field];
+  return typeof value === "number" ? value : undefined;
 }
 
 function parsePauseIntervals(value: string): readonly PauseInterval[] {
@@ -70,6 +84,9 @@ describe("manual-qa-seed script helpers", () => {
 
     expect(mobilePackageJson.scripts?.["manual:seed-user"]).toContain(
       "../../scripts/import-market-rates-to-local.js"
+    );
+    expect(mobilePackageJson.scripts?.["manual:seed-user"]).toContain(
+      "--best-effort"
     );
   });
 
@@ -127,6 +144,7 @@ describe("manual-qa-seed script helpers", () => {
   it("seeds manual QA fixture data instead of E2E-named rows", async () => {
     const operations: string[] = [];
     const accountRows: unknown[] = [];
+    const accountBalanceUpdates: AccountBalanceUpdate[] = [];
     const assetMetalRows: unknown[] = [];
     const assetRows: unknown[] = [];
     const budgetRows: unknown[] = [];
@@ -140,6 +158,7 @@ describe("manual-qa-seed script helpers", () => {
     await seedManualQaData(
       createMockClient(operations, {
         accountRows,
+        accountBalanceUpdates,
         assetMetalRows,
         assetRows,
         budgetRows,
@@ -164,9 +183,21 @@ describe("manual-qa-seed script helpers", () => {
       expect.arrayContaining([
         expect.objectContaining({ name: "Cash Wallet" }),
         expect.objectContaining({ name: "NBE Salary Account" }),
+        expect.objectContaining({
+          name: "Binance BTC Wallet",
+          balance: 0.03,
+        }),
       ])
     );
     expect(accountRows).toHaveLength(8);
+    expect(accountBalanceUpdates).toHaveLength(accountRows.length);
+    expect(accountBalanceUpdates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ balance: 2500 }),
+        expect.objectContaining({ balance: 12430.55 }),
+        expect.objectContaining({ balance: 0.03 }),
+      ])
+    );
     expect(
       accountRows.some((row) => getStringField(row, "name")?.includes("E2E"))
     ).toBe(false);
@@ -282,6 +313,7 @@ describe("manual-qa-seed script helpers", () => {
 });
 
 interface MockClientOptions {
+  readonly accountBalanceUpdates?: AccountBalanceUpdate[];
   readonly accountRows?: unknown[];
   readonly assetMetalRows?: unknown[];
   readonly assetRows?: unknown[];
@@ -361,6 +393,26 @@ function createMockClient(
           options.transferRows?.push(...rows);
         }
         return { error: null };
+      },
+      update: (patch: unknown) => {
+        const filters: { column: string; value: string }[] = [];
+        const builder = {
+          eq: (column: string, value: string) => {
+            filters.push({ column, value });
+            if (filters.length < 2) {
+              return builder;
+            }
+
+            operations.push(`update:${table}:${filters[0]?.value}`);
+            options.accountBalanceUpdates?.push({
+              balance: getNumberField(patch, "balance"),
+              filters: [...filters],
+            });
+            return Promise.resolve({ error: null });
+          },
+        };
+
+        return builder;
       },
     }),
   };

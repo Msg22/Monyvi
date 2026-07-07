@@ -2,6 +2,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 interface ImportMarketRatesModule {
+  parseImportMarketRatesArgs(
+    argv?: readonly string[]
+  ): { readonly bestEffort: boolean };
   parseSupabaseQueryRows(output: string): readonly unknown[];
 }
 
@@ -37,6 +40,15 @@ describe("import-market-rates-to-local helpers", () => {
         JSON.stringify([{ id: "rate-1" }])
       )
     ).toEqual([{ id: "rate-1" }]);
+  });
+
+  it("parses best-effort mode for manual seed imports", () => {
+    expect(
+      marketRatesImporter.parseImportMarketRatesArgs(["--best-effort"])
+    ).toEqual({ bestEffort: true });
+    expect(marketRatesImporter.parseImportMarketRatesArgs([])).toEqual({
+      bestEffort: false,
+    });
   });
 
   it("ignores non-JSON CLI text around the result", () => {
