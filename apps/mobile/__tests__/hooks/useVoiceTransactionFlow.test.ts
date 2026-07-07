@@ -97,7 +97,7 @@ function mockActiveAiConsent(): void {
     consent: {
       consentedAt: "2026-07-07T12:00:00.000Z",
       revokedAt: null,
-      version: 1,
+      version: "2026-07-ai-processing-v1",
     },
     isConsented: true,
   });
@@ -249,7 +249,7 @@ describe("useVoiceTransactionFlow", () => {
         consent: {
           consentedAt: "2026-07-07T12:00:00.000Z",
           revokedAt: null,
-          version: 1,
+          version: "2026-07-ai-processing-v1",
         },
         isConsented: true,
       })
@@ -257,7 +257,7 @@ describe("useVoiceTransactionFlow", () => {
         consent: {
           consentedAt: "2026-07-07T12:00:00.000Z",
           revokedAt: "2026-07-07T12:01:00.000Z",
-          version: 1,
+          version: "2026-07-ai-processing-v1",
         },
         isConsented: false,
       });

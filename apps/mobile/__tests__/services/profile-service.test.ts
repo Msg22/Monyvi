@@ -408,7 +408,7 @@ describe("AI processing consent", () => {
   it("parses consent from the raw field instead of the DB model helper", async (): Promise<void> => {
     const profile = createMockProfile({
       aiProcessingConsentRaw: JSON.stringify({
-        version: 1,
+        version: "2026-07-ai-processing-v1",
         consentedAt: "2026-07-04T09:00:00.000Z",
         revokedAt: null,
       }),
@@ -424,7 +424,7 @@ describe("AI processing consent", () => {
     await expect(getAiProcessingConsentStatus()).resolves.toEqual({
       isConsented: true,
       consent: {
-        version: 1,
+        version: "2026-07-ai-processing-v1",
         consentedAt: "2026-07-04T09:00:00.000Z",
         revokedAt: null,
       },
@@ -442,7 +442,7 @@ describe("AI processing consent", () => {
       unknown
     >;
     expect(parsed).toEqual({
-      version: 1,
+      version: "2026-07-ai-processing-v1",
       consentedAt: "2026-07-04T10:00:00.000Z",
       revokedAt: null,
     });
@@ -451,7 +451,7 @@ describe("AI processing consent", () => {
   it("revokes AI processing consent without deleting the original consent timestamp", async (): Promise<void> => {
     const profile = createMockProfile({
       aiProcessingConsentRaw: JSON.stringify({
-        version: 1,
+        version: "2026-07-ai-processing-v1",
         consentedAt: "2026-07-04T09:00:00.000Z",
         revokedAt: null,
       }),
@@ -465,7 +465,7 @@ describe("AI processing consent", () => {
       unknown
     >;
     expect(parsed).toEqual({
-      version: 1,
+      version: "2026-07-ai-processing-v1",
       consentedAt: "2026-07-04T09:00:00.000Z",
       revokedAt: "2026-07-04T10:00:00.000Z",
     });
@@ -474,7 +474,7 @@ describe("AI processing consent", () => {
   it("re-grants revoked AI processing consent by clearing the revocation timestamp", async (): Promise<void> => {
     const profile = createMockProfile({
       aiProcessingConsentRaw: JSON.stringify({
-        version: 1,
+        version: "2026-07-ai-processing-v1",
         consentedAt: "2026-07-04T09:00:00.000Z",
         revokedAt: "2026-07-04T09:30:00.000Z",
       }),
@@ -488,10 +488,21 @@ describe("AI processing consent", () => {
       unknown
     >;
     expect(parsed).toEqual({
-      version: 1,
+      version: "2026-07-ai-processing-v1",
       consentedAt: "2026-07-04T10:00:00.000Z",
       revokedAt: null,
     });
+  });
+
+  it("does not fabricate consent history when revoking an absent consent record", async (): Promise<void> => {
+    const profile = createMockProfile();
+    setupProfileFound(profile);
+
+    await revokeAiProcessingConsent();
+
+    const { mockWrite } = getDbMocks();
+    expect(mockWrite).not.toHaveBeenCalled();
+    expect(profile.aiProcessingConsentRaw).toBeNull();
   });
 });
 

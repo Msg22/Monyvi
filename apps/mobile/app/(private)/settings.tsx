@@ -857,7 +857,7 @@ export default function SettingsScreen(): React.JSX.Element {
         isFullRescanModalOpen={isFullRescanModalOpen}
         onCancelAiDisableConfirm={() => setIsAiDisableConfirmOpen(false)}
         onCancelFullRescan={() => setIsFullRescanModalOpen(false)}
-        onConfirmAiDisable={() => handleAiConsentToggle(false)}
+        onConfirmAiDisable={() => { setIsAiDisableConfirmOpen(false); handleAiConsentToggle(false); }}
         onConfirmFullRescan={() => {
           setIsFullRescanModalOpen(false);
           navigateToScan("full");

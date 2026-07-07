@@ -26,6 +26,7 @@ import {
   getCurrentLanguage,
   type SupportedLanguage,
 } from "@/i18n/changeLanguage";
+import aiProcessingConsentConfig from "@/config/ai-processing-consent.json";
 import {
   createCashAccountWithinWriter,
   getDefaultCashAccountName,
@@ -44,7 +45,7 @@ const SUPPORTED_CURRENCY_CODES: ReadonlySet<CurrencyType> = new Set(
   SUPPORTED_CURRENCIES.map((c) => c.code)
 );
 
-const AI_PROCESSING_CONSENT_VERSION = 1;
+export const AI_PROCESSING_CONSENT_VERSION = aiProcessingConsentConfig.version;
 
 export interface AiProcessingConsentStatus {
   readonly isConsented: boolean;
@@ -93,8 +94,8 @@ function normalizeAiProcessingConsent(
     candidate.revokedAt === null || typeof candidate.revokedAt === "string";
 
   if (
-    typeof candidate.version !== "number" ||
-    !Number.isFinite(candidate.version) ||
+    typeof candidate.version !== "string" ||
+    candidate.version !== AI_PROCESSING_CONSENT_VERSION ||
     typeof candidate.consentedAt !== "string" ||
     !hasValidRevocation
   ) {
@@ -127,7 +128,7 @@ export function isActiveAiProcessingConsent(consent: unknown): boolean {
 
   return (
     normalizedConsent !== null &&
-    normalizedConsent.version >= AI_PROCESSING_CONSENT_VERSION &&
+    normalizedConsent.version === AI_PROCESSING_CONSENT_VERSION &&
     normalizedConsent.consentedAt.trim().length > 0 &&
     normalizedConsent.revokedAt === null
   );
@@ -216,9 +217,13 @@ export async function revokeAiProcessingConsent(
   const currentConsent = parseAiProcessingConsentRaw(
     profile.aiProcessingConsentRaw
   );
+  if (!currentConsent) {
+    return;
+  }
+
   const revokedConsent: AiProcessingConsent = {
-    version: currentConsent?.version ?? AI_PROCESSING_CONSENT_VERSION,
-    consentedAt: currentConsent?.consentedAt ?? now.toISOString(),
+    version: currentConsent.version,
+    consentedAt: currentConsent.consentedAt,
     revokedAt: now.toISOString(),
   };
 

@@ -210,7 +210,7 @@ describe("useProfile", () => {
     expect(rendered.result.current).toBeNull();
 
     profile.aiProcessingConsentRaw = JSON.stringify({
-      version: 1,
+      version: "2026-07-ai-processing-v1",
       consentedAt: "2026-07-07T10:00:00.000Z",
       revokedAt: null,
     });

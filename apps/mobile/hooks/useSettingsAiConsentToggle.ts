@@ -20,7 +20,10 @@ interface UseSettingsAiConsentToggleParams {
   readonly setIsAiConsentSheetVisible: Dispatch<SetStateAction<boolean>>;
   readonly setIsAiConsentUpdating: Dispatch<SetStateAction<boolean>>;
   readonly setLiveDetection: Dispatch<SetStateAction<boolean>>;
-  readonly showToast: (config: { readonly type: "error"; readonly title: string }) => void;
+  readonly showToast: (config: {
+    readonly type: "error";
+    readonly title: string;
+  }) => void;
   readonly tCommon: (key: string) => string;
 }
 
@@ -46,12 +49,18 @@ export function useSettingsAiConsentToggle({
       return;
     }
 
-    const hadSmsAutomationWork = liveDetection || autoConfirmSms || isLiveDetectionEnabling || hasPendingLiveDetectionEnable || hasPendingNotificationEnable || hasActiveLiveDetectionEnableFlowRef.current;
-    cancelLiveDetectionEnableFlow();
+    const hadSmsAutomationWork =
+      liveDetection ||
+      autoConfirmSms ||
+      isLiveDetectionEnabling ||
+      hasPendingLiveDetectionEnable ||
+      hasPendingNotificationEnable ||
+      hasActiveLiveDetectionEnableFlowRef.current;
     setIsAiConsentUpdating(true);
     aiConsent
       .revokeConsent()
       .then(async () => {
+        cancelLiveDetectionEnableFlow();
         if (!hadSmsAutomationWork) return;
         setLiveDetection(false);
         stopSmsListener();

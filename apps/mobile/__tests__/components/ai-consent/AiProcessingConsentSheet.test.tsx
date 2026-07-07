@@ -1,5 +1,6 @@
 import React, { type ReactNode } from "react";
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -67,11 +68,17 @@ describe("AiProcessingConsentSheet", () => {
     fireEvent.press(screen.getByTestId("ai-consent-continue"));
 
     expect(onContinue).toHaveBeenCalledTimes(1);
-    grantConsent.resolve();
+    await act(async () => {
+      grantConsent.resolve();
+      await grantConsent.promise;
+    });
 
     await waitFor(() => {
       expect(screen.getByTestId("ai-consent-continue")).toBeTruthy();
     });
+
+    fireEvent.press(screen.getByTestId("ai-consent-continue"));
+    expect(onContinue).toHaveBeenCalledTimes(2);
   });
 
   it("blocks secondary actions while Continue is submitting", () => {

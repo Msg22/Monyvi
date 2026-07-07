@@ -14,6 +14,7 @@ import { z } from "zod";
 import { supabase } from "./supabase";
 import { logger } from "@/utils/logger";
 import { shouldUseFixtureSmsParser } from "@/config/e2e-test-config";
+import { assertNotAborted } from "./abort-utils";
 
 import {
   buildCategoryMap,
@@ -352,16 +353,8 @@ function loadFixtureSmsParser(): typeof import("./testing/ai-sms-fixture-parser"
   return fixtureParser.parseSmsWithFixtureAi;
 }
 
-function createAbortError(): Error {
-  const error = new Error("SMS parse aborted");
-  error.name = "AbortError";
-  return error;
-}
-
 function throwIfAborted(abortSignal?: AbortSignal): void {
-  if (abortSignal?.aborted) {
-    throw createAbortError();
-  }
+  assertNotAborted(abortSignal, "SMS parse aborted");
 }
 
 /**
@@ -394,7 +387,12 @@ export async function parseSmsWithAi(
   try {
     if (shouldUseFixtureSmsParser()) {
       const parseSmsWithFixtureAi = loadFixtureSmsParser();
-      return await parseSmsWithFixtureAi(candidates, context, onProgress);
+      return await parseSmsWithFixtureAi(
+        candidates,
+        context,
+        onProgress,
+        abortSignal
+      );
     }
 
     // Build validation set once for the entire parse session

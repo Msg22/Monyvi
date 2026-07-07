@@ -2,6 +2,9 @@ const { createHash, createHmac } = require("node:crypto");
 const { spawnSync } = require("node:child_process");
 const { resolve } = require("node:path");
 const { createClient } = require("@supabase/supabase-js");
+const {
+  version: AI_PROCESSING_CONSENT_VERSION,
+} = require("../config/ai-processing-consent.json");
 
 const LOCAL_SUPABASE_URL = "http://127.0.0.1:54321";
 const LOCAL_ANDROID_SUPABASE_URL = "http://10.0.2.2:54321";
@@ -446,7 +449,7 @@ function buildSeedRows(userId) {
       theme: "SYSTEM",
       sms_detection_enabled: false,
       ai_processing_consent: {
-        version: 1,
+        version: AI_PROCESSING_CONSENT_VERSION,
         consentedAt: FIXED_NOW,
         revokedAt: null,
       },

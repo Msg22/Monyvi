@@ -167,7 +167,7 @@ export async function processLiveSmsEvent(
         return createResult("disabled", confirmedSmsFingerprint);
       }
     } catch (error: unknown) {
-      logger.error("liveSms.consentCheck.failed", error, {
+      logger.error("liveSms.consentPreParseCheck.failed", error, {
         deliveryMode: event.deliveryMode,
       });
       return createResult("infrastructure_error", confirmedSmsFingerprint);

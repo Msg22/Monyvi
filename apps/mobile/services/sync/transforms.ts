@@ -76,9 +76,15 @@ function normalizeProfileToSupabase(
     record["_status"] === "updated" &&
     typeof record["_changed"] === "string" &&
     !record["_changed"].split(",").includes(PROFILE_AI_PROCESSING_CONSENT_COLUMN);
+  const {
+    [PROFILE_AI_PROCESSING_CONSENT_COLUMN]: aiProcessingConsent,
+    ...recordWithoutAiProcessingConsent
+  } = record;
 
   const transformed = {
-    ...record,
+    ...(shouldOmitUnchangedAiConsent
+      ? recordWithoutAiProcessingConsent
+      : record),
     [PROFILE_NOTIFICATION_SETTINGS_COLUMN]: parseJsonForSupabase(
       record[PROFILE_NOTIFICATION_SETTINGS_COLUMN],
       null,
@@ -88,7 +94,7 @@ function normalizeProfileToSupabase(
       ? {}
       : {
           [PROFILE_AI_PROCESSING_CONSENT_COLUMN]: parseJsonForSupabase(
-            record[PROFILE_AI_PROCESSING_CONSENT_COLUMN],
+            aiProcessingConsent,
             null,
             PROFILE_AI_PROCESSING_CONSENT_COLUMN
           ),
@@ -99,10 +105,6 @@ function normalizeProfileToSupabase(
       PROFILE_ONBOARDING_FLAGS_COLUMN
     ),
   };
-
-  if (shouldOmitUnchangedAiConsent) {
-    delete transformed[PROFILE_AI_PROCESSING_CONSENT_COLUMN];
-  }
 
   return transformed;
 }

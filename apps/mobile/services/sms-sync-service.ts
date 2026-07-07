@@ -33,6 +33,7 @@ import {
 import { getCurrentUserDataScope } from "./user-data-access";
 import { readSmsInbox } from "./sms-reader-service";
 import { logger } from "@/utils/logger";
+import { assertNotAborted } from "./abort-utils";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -104,13 +105,7 @@ const SCAN_IN_PROGRESS_KEY = "@monyvi/sms_scan_in_progress";
 const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
 
 function assertScanNotAborted(signal: AbortSignal | undefined): void {
-  if (!signal?.aborted) {
-    return;
-  }
-
-  const error = new Error("SMS scan aborted");
-  error.name = "AbortError";
-  throw error;
+  assertNotAborted(signal, "SMS scan aborted");
 }
 
 /**
@@ -310,6 +305,7 @@ async function executeScanPipeline(
   const effectiveMinDate = options?.minDate ?? Date.now() - THREE_MONTHS_MS;
 
   // ─── Step 1: Read SMS inbox ───────────────────────────────────────────
+  assertScanNotAborted(abortSignal);
   const messages: readonly SmsMessage[] = await readSmsInbox({
     maxCount,
     minDate: effectiveMinDate,

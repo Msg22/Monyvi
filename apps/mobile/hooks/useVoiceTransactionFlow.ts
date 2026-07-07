@@ -1,4 +1,4 @@
-﻿/**
+/**
  * useVoiceTransactionFlow Hook
  *
  * Orchestrates the full voice-to-transaction flow:
@@ -11,7 +11,7 @@
  * - Why: Coordinates multiple concerns (recording, AI submission,
  *   navigation, error handling) behind a single interface. Components
  *   consume one hook instead of managing three.
- * - SOLID: SRP â€” orchestration only. DIP â€” depends on abstractions
+ * - SOLID: SRP - orchestration only. DIP - depends on abstractions
  *   (service functions, hook interfaces), not concrete implementations.
  *
  * @module useVoiceTransactionFlow
@@ -86,7 +86,7 @@ interface FlowConfig {
     name: string;
     currency: string;
   }>;
-  /** User's categories from the database â€” used for AI category â†’ ID resolution */
+  /** User's categories from the database - used for AI category to ID resolution */
   readonly categoryRecords: readonly Category[];
   /** Origin tab index (for post-save navigation) */
   readonly originTabIndex?: number;
@@ -179,7 +179,7 @@ export function useVoiceTransactionFlow(
 
   const startFlow = useCallback(
     async (options?: StartFlowOptions): Promise<void> => {
-      // Concurrency guard â€” prevent overlapping recording sessions (FR-017)
+      // Concurrency guard - prevent overlapping recording sessions (FR-017)
       if (flowStatusRef.current !== "idle") return;
 
       if (
@@ -273,12 +273,12 @@ export function useVoiceTransactionFlow(
       return;
     }
 
-    // Resolve audio URI â€” either from an already-completed auto-stop (FR-004)
+    // Resolve audio URI - either from an already-completed auto-stop (FR-004)
     // or by explicitly stopping the recorder now.
     let audioUri: string;
 
     if (recorder.status === "completed" && recorder.audioUri) {
-      // Recorder already auto-stopped at 60s â€” use the finalized URI directly
+      // Recorder already auto-stopped at 60s - use the finalized URI directly
       audioUri = recorder.audioUri;
     } else {
       // Normal path: stop recording and get the finalized URI
@@ -345,7 +345,7 @@ export function useVoiceTransactionFlow(
       return;
     }
 
-    // Success â€” navigate to review screen
+    // Success - navigate to review screen
     setErrorKind(null);
     updateFlowStatus("success");
     setIsOverlayVisible(false);

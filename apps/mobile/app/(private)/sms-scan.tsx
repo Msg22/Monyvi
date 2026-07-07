@@ -426,15 +426,12 @@ export default function SmsScanScreen(): React.JSX.Element {
   };
 
   const handleConsentContinue = async (): Promise<void> => {
-    let didGrantConsent = false;
     try {
       await aiConsent.grantConsent();
-      didGrantConsent = true;
-
       setIsConsentSheetVisible(false);
     } catch (err: unknown) {
       logger.error("smsScan.aiConsentGrantFailed", err);
-      setIsConsentSheetVisible(didGrantConsent ? false : true);
+      setIsConsentSheetVisible(true);
     }
   };
 
@@ -442,11 +439,11 @@ export default function SmsScanScreen(): React.JSX.Element {
     <AiProcessingConsentSheet
       visible={isConsentSheetVisible}
       onContinue={handleConsentContinue}
-      onNotNow={() => {
+      onNotNow={(): void => {
         setIsConsentSheetVisible(false);
         router.back();
       }}
-      onPrivacyDetails={() => {
+      onPrivacyDetails={(): void => {
         shouldResumeConsentAfterPrivacyDetails.current = true;
         setIsConsentSheetVisible(false);
         router.push("/ai-privacy-details");

@@ -375,7 +375,7 @@ export interface OnboardingFlags {
 }
 
 export interface AiProcessingConsent {
-  readonly version: number;
+  readonly version: string;
   readonly consentedAt: string;
   readonly revokedAt: string | null;
 }

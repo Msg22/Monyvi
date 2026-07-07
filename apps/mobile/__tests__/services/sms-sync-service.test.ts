@@ -427,6 +427,7 @@ describe("sms-sync-service", () => {
         )
       ).rejects.toThrow("SMS scan aborted");
 
+      expect(mockReadSmsInbox).not.toHaveBeenCalled();
       expect(mockParseSmsWithAi).not.toHaveBeenCalled();
     });
 
