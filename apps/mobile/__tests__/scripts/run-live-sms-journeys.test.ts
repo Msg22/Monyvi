@@ -16,6 +16,7 @@ interface RunLiveSmsJourneysModule {
     | "../helpers/ci-auth-deeplink-bootstrap.yaml";
   isRetryableMaestroTransportFailure(output: string): boolean;
   shouldPrepareLiveSmsFlowBeforeRetry(flow: string): boolean;
+  shouldRetryLiveSmsVerificationFlow(flow: string): boolean;
   shouldResetLiveSmsSideEffectsBeforeRetry(
     flow: string,
     env?: Readonly<Record<string, string | undefined>>
@@ -119,6 +120,19 @@ describe("run-live-sms-journeys helpers", () => {
     expect(
       liveSmsJourneys.shouldPrepareLiveSmsFlowBeforeRetry(
         "live-sms-journey-09-confirm-verification.yaml"
+      )
+    ).toBe(false);
+  });
+
+  it("classifies nested verification flows for Maestro transport retry", () => {
+    expect(
+      liveSmsJourneys.shouldRetryLiveSmsVerificationFlow(
+        "live-sms-journey-10-discard-verification.yaml"
+      )
+    ).toBe(true);
+    expect(
+      liveSmsJourneys.shouldRetryLiveSmsVerificationFlow(
+        "live-sms-journey-10-discard-notification-action.yaml"
       )
     ).toBe(false);
   });

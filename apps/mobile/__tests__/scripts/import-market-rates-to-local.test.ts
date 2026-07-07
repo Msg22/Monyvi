@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 interface ImportMarketRatesModule {
   parseSupabaseQueryRows(output: string): readonly unknown[];
 }
@@ -7,6 +10,15 @@ const marketRatesImporter = jest.requireActual(
 ) as ImportMarketRatesModule;
 
 describe("import-market-rates-to-local helpers", () => {
+  it("ignores temporary SQL files created during market-rate import", () => {
+    const gitignore = readFileSync(
+      resolve(__dirname, "../../../../.gitignore"),
+      "utf8"
+    );
+
+    expect(gitignore).toContain(".tmp-market-rates-*.sql");
+  });
+
   it("parses Supabase agent JSON envelopes", () => {
     expect(
       marketRatesImporter.parseSupabaseQueryRows(

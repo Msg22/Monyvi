@@ -238,6 +238,14 @@ async function runFlow(flow, prepareRetry, retryOnTransportFailure = false) {
   }
 }
 
+async function runVerificationFlow(flow) {
+  if (!shouldRetryLiveSmsVerificationFlow(flow)) {
+    throw new Error(`Expected live SMS verification flow, received: ${flow}`);
+  }
+
+  await runFlow(flow, ensureE2eAppReady, true);
+}
+
 function applyLocalE2eDefaults() {
   if (process.env.E2E_SUPABASE_MODE !== "local") return;
 
@@ -739,7 +747,9 @@ async function sendForegroundSms() {
     "Purchase EGP 64.32 at FOREGROUND LIVE SMS TEST using card ending 5566"
   );
   wait(1000);
-  await runFlow("live-sms-journey-16-foreground-real-sms-verification.yaml");
+  await runVerificationFlow(
+    "live-sms-journey-16-foreground-real-sms-verification.yaml"
+  );
 }
 
 function sendBackgroundConfirmSms() {
@@ -852,7 +862,7 @@ const journeys = {
         "✓ Confirm"
       );
       await ensureE2eAppReady();
-      await runFlow("live-sms-journey-09-confirm-verification.yaml");
+      await runVerificationFlow("live-sms-journey-09-confirm-verification.yaml");
     },
   },
   10: {
@@ -869,7 +879,7 @@ const journeys = {
         "✗ Discard"
       );
       await ensureE2eAppReady();
-      await runFlow("live-sms-journey-10-discard-verification.yaml");
+      await runVerificationFlow("live-sms-journey-10-discard-verification.yaml");
     },
   },
   11: {
@@ -903,7 +913,9 @@ const journeys = {
       revokePermission(notificationPermission);
       forceStopApp();
       await ensureE2eAppReady();
-      await runFlow("live-sms-journey-13-revoked-permission-verification.yaml");
+      await runVerificationFlow(
+        "live-sms-journey-13-revoked-permission-verification.yaml"
+      );
     },
   },
   14: {
@@ -917,7 +929,9 @@ const journeys = {
     after: async () => {
       sendBackgroundConfirmSms();
       await ensureE2eAppReady();
-      await runFlow("live-sms-journey-14-background-confirm-verification.yaml");
+      await runVerificationFlow(
+        "live-sms-journey-14-background-confirm-verification.yaml"
+      );
     },
   },
   15: {
@@ -931,7 +945,9 @@ const journeys = {
     after: async () => {
       sendKilledAppConfirmSms();
       await ensureE2eAppReady();
-      await runFlow("live-sms-journey-15-killed-app-confirm-verification.yaml");
+      await runVerificationFlow(
+        "live-sms-journey-15-killed-app-confirm-verification.yaml"
+      );
     },
   },
   16: {
@@ -973,6 +989,10 @@ function shouldResetLiveSmsSideEffectsBeforeRetry(flow, env = process.env) {
     env.E2E_SKIP_AUTH_BOOTSTRAP !== "1" &&
     shouldPrepareLiveSmsFlowBeforeRetry(flow)
   );
+}
+
+function shouldRetryLiveSmsVerificationFlow(flow) {
+  return flow.endsWith("-verification.yaml");
 }
 
 function logInfo(event, fields) {
@@ -1041,6 +1061,7 @@ module.exports = {
   getActiveUserFilter,
   isRetryableMaestroTransportFailure,
   shouldPrepareLiveSmsFlowBeforeRetry,
+  shouldRetryLiveSmsVerificationFlow,
   shouldResetLiveSmsSideEffectsBeforeRetry,
   shouldSkipRunAsProbeCleanup,
 };

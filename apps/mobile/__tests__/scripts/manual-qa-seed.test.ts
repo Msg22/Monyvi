@@ -268,6 +268,12 @@ describe("manual-qa-seed script helpers", () => {
       expect.arrayContaining([
         expect.objectContaining({ notes: "Manual QA seeded ATM withdrawal" }),
         expect.objectContaining({ exchange_rate: 50 }),
+        expect.objectContaining({
+          amount: 0.01,
+          converted_amount: 650,
+          currency: "BTC",
+          notes: "Crypto rebalance to USD cash",
+        }),
       ])
     );
     expect(transferRows).toHaveLength(5);
