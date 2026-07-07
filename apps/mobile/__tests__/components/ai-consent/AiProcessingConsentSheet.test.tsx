@@ -49,14 +49,6 @@ function createDeferred(): {
   return { promise, resolve };
 }
 
-function getClassName(element: unknown): string {
-  const className = (
-    element as { readonly props: { readonly className?: unknown } }
-  ).props.className;
-
-  return typeof className === "string" ? className : "";
-}
-
 describe("AiProcessingConsentSheet", () => {
   it("submits Continue only once while consent is being granted", async () => {
     const grantConsent = createDeferred();
@@ -65,7 +57,6 @@ describe("AiProcessingConsentSheet", () => {
     render(
       <AiProcessingConsentSheet
         visible
-        variant="ai-consent"
         onContinue={onContinue}
         onNotNow={jest.fn()}
         onPrivacyDetails={jest.fn()}
@@ -92,7 +83,6 @@ describe("AiProcessingConsentSheet", () => {
     render(
       <AiProcessingConsentSheet
         visible
-        variant="ai-consent"
         onContinue={onContinue}
         onNotNow={onNotNow}
         onPrivacyDetails={onPrivacyDetails}
@@ -108,36 +98,20 @@ describe("AiProcessingConsentSheet", () => {
     expect(onPrivacyDetails).not.toHaveBeenCalled();
   });
 
-  it("renders the SMS import consent sheet with the approved centered layout", () => {
+  it("renders the general consent privacy details action", () => {
+    const onPrivacyDetails = jest.fn();
+
     render(
       <AiProcessingConsentSheet
         visible
-        variant="sms-permission-with-ai-consent"
         onContinue={jest.fn()}
         onNotNow={jest.fn()}
-        onPrivacyDetails={jest.fn()}
+        onPrivacyDetails={onPrivacyDetails}
       />
     );
 
-    expect(getClassName(screen.getByTestId("sms-consent-hero-icon"))).toContain(
-      "self-center"
-    );
-    expect(getClassName(screen.getByTestId("sms-consent-title"))).toContain(
-      "text-center"
-    );
-    expect(getClassName(screen.getByTestId("sms-consent-body"))).toContain(
-      "text-center"
-    );
-    expect(
-      getClassName(screen.getByTestId("sms-consent-row-sms-access"))
-    ).toContain("border");
-    expect(
-      getClassName(screen.getByTestId("sms-consent-row-ai-processing"))
-    ).toContain("border");
-    expect(screen.getByTestId("sms-consent-settings-note")).toBeTruthy();
-    expect(screen.queryByText("ai_consent_privacy_details")).toBeNull();
-    expect(getClassName(screen.getByText("ai_consent_not_now"))).toContain(
-      "text-nileGreen-600"
-    );
+    fireEvent.press(screen.getByText("ai_consent_privacy_details"));
+
+    expect(onPrivacyDetails).toHaveBeenCalledTimes(1);
   });
 });

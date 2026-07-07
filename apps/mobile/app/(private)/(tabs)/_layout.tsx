@@ -26,7 +26,13 @@ import {
   useLocalSearchParams,
   useRouter,
 } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { View } from "react-native";
 
 export default function TabLayout(): React.ReactElement {
@@ -177,7 +183,6 @@ function TabLayoutInner(): React.ReactElement {
       />
       <AiProcessingConsentSheet
         visible={isVoiceConsentVisible}
-        variant="ai-consent"
         onContinue={async () => {
           let didGrantConsent = false;
           try {

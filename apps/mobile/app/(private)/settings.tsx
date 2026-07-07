@@ -26,7 +26,7 @@ import {
   ProfileNotificationsSection,
   SmsSyncSettingsSection,
 } from "@/components/settings/SettingsSections";
-import { AiProcessingConsentSheet, type AiProcessingConsentVariant } from "@/components/ai-consent/AiProcessingConsentSheet";
+import { AiProcessingConsentSheet } from "@/components/ai-consent/AiProcessingConsentSheet";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
@@ -144,8 +144,11 @@ export default function SettingsScreen(): React.JSX.Element {
   const [pendingAiConsentAction, setPendingAiConsentAction] =
     useState<PendingAiAction | null>(null);
   const shouldResumeAiConsentAfterPrivacyDetails = useRef(false);
-  const { isAiConsentEnabled, markAiConsentGranted, revokeConsent } = useSettingsAiConsentState({ isPersistedConsented: aiConsent.isConsented, revokePersistedConsent: aiConsent.revokeConsent });
-  const aiConsentSheetVariant: AiProcessingConsentVariant = pendingAiConsentAction?.kind === "sms" || pendingAiConsentAction?.kind === "live" ? "sms-permission-with-ai-consent" : "ai-consent";
+  const { isAiConsentEnabled, markAiConsentGranted, revokeConsent } =
+    useSettingsAiConsentState({
+      isPersistedConsented: aiConsent.isConsented,
+      revokePersistedConsent: aiConsent.revokeConsent,
+    });
   const liveDetectionSwitchValue = liveDetection || isLiveDetectionEnabling;
   const previousNotificationAppState = useRef<AppStateStatus>(
     AppState.currentState
@@ -169,11 +172,21 @@ export default function SettingsScreen(): React.JSX.Element {
   }, []);
 
   const reconcileStoredLiveDetection = useCallback(async (): Promise<void> => {
-    if (!isAndroid) { setIsLiveDetectionPreferenceReady(true); return; }
+    if (!isAndroid) {
+      setIsLiveDetectionPreferenceReady(true);
+      return;
+    }
 
     if (!isAiConsentEnabled) {
-      try { await setLiveDetectionEnabled(false); await setAutoConfirm(false); }
-      finally { setLiveDetection(false); stopSmsListener(); setAutoConfirmSms(false); setIsLiveDetectionPreferenceReady(true); }
+      try {
+        await setLiveDetectionEnabled(false);
+        await setAutoConfirm(false);
+      } finally {
+        setLiveDetection(false);
+        stopSmsListener();
+        setAutoConfirmSms(false);
+        setIsLiveDetectionPreferenceReady(true);
+      }
       return;
     }
 
@@ -217,7 +230,9 @@ export default function SettingsScreen(): React.JSX.Element {
 
   useEffect(() => {
     if (!isAndroid || aiConsent.isLoading) return;
-    reconcileStoredLiveDetection().catch((error: unknown) => { logger.error("settings.reconcileLiveDetection.failed", error); });
+    reconcileStoredLiveDetection().catch((error: unknown) => {
+      logger.error("settings.reconcileLiveDetection.failed", error);
+    });
   }, [aiConsent.isLoading, isAndroid, reconcileStoredLiveDetection]);
 
   useEffect(() => {
@@ -581,9 +596,8 @@ export default function SettingsScreen(): React.JSX.Element {
   });
 
   const openSmsScan = useCallback((): void => router.push("/sms-scan"), []);
-  const { continueSmsScanAfterCombinedConsent, continueSmsScanWithConsent } = useSettingsSmsSyncActions({
+  const { continueSmsScanWithConsent } = useSettingsSmsSyncActions({
     onOpenSmsScan: openSmsScan,
-    requestPermission,
     setPendingSmsScanMode,
     setPermissionRecovery,
     setScanMode,
@@ -601,7 +615,7 @@ export default function SettingsScreen(): React.JSX.Element {
       setPendingAiConsentAction(null);
 
       if (pendingAction?.kind === "sms") {
-        await continueSmsScanAfterCombinedConsent(pendingAction.mode);
+        continueSmsScanWithConsent(pendingAction.mode);
         return;
       }
 
@@ -619,7 +633,7 @@ export default function SettingsScreen(): React.JSX.Element {
     }
   }, [
     aiConsent,
-    continueSmsScanAfterCombinedConsent,
+    continueSmsScanWithConsent,
     continueLiveDetectionEnableWithConsent,
     markAiConsentGranted,
     pendingAiConsentAction,
@@ -631,14 +645,17 @@ export default function SettingsScreen(): React.JSX.Element {
     useCallback(() => {
       if (!shouldResumeAiConsentAfterPrivacyDetails.current) return;
       shouldResumeAiConsentAfterPrivacyDetails.current = false;
-      const shouldReopenConsent = Boolean(pendingAiConsentAction && !aiConsent.isLoading && !isAiConsentEnabled);
+      const shouldReopenConsent = Boolean(
+        pendingAiConsentAction && !aiConsent.isLoading && !isAiConsentEnabled
+      );
       setIsAiConsentSheetVisible(shouldReopenConsent);
       if (!shouldReopenConsent) setPendingAiConsentAction(null);
     }, [aiConsent.isLoading, isAiConsentEnabled, pendingAiConsentAction])
   );
 
   const openAiPrivacyDetails = useCallback((): void => {
-    shouldResumeAiConsentAfterPrivacyDetails.current = pendingAiConsentAction !== null;
+    shouldResumeAiConsentAfterPrivacyDetails.current =
+      pendingAiConsentAction !== null;
     setIsAiConsentSheetVisible(false);
     router.push("/ai-privacy-details");
   }, [pendingAiConsentAction]);
@@ -900,9 +917,11 @@ export default function SettingsScreen(): React.JSX.Element {
       />
       <AiProcessingConsentSheet
         visible={isAiConsentSheetVisible}
-        variant={aiConsentSheetVariant}
         onContinue={handleAiConsentContinue}
-        onNotNow={() => { setPendingAiConsentAction(null); setIsAiConsentSheetVisible(false); }}
+        onNotNow={() => {
+          setPendingAiConsentAction(null);
+          setIsAiConsentSheetVisible(false);
+        }}
         onPrivacyDetails={openAiPrivacyDetails}
       />
     </GradientBackground>

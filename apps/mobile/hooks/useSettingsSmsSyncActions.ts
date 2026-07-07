@@ -9,7 +9,6 @@ type SmsScanMode = "incremental" | "full";
 
 interface UseSettingsSmsSyncActionsParams {
   readonly onOpenSmsScan: () => void;
-  readonly requestPermission: () => Promise<SmsPermissionStatus>;
   readonly setPendingSmsScanMode: (mode: SmsScanMode | null) => void;
   readonly setPermissionRecovery: (
     permissionRecovery: PermissionRecoveryState | null
@@ -19,15 +18,11 @@ interface UseSettingsSmsSyncActionsParams {
 }
 
 interface UseSettingsSmsSyncActionsResult {
-  readonly continueSmsScanAfterCombinedConsent: (
-    mode: SmsScanMode
-  ) => Promise<void>;
   readonly continueSmsScanWithConsent: (mode: SmsScanMode) => void;
 }
 
 export function useSettingsSmsSyncActions({
   onOpenSmsScan,
-  requestPermission,
   setPendingSmsScanMode,
   setPermissionRecovery,
   setScanMode,
@@ -56,46 +51,7 @@ export function useSettingsSmsSyncActions({
     ]
   );
 
-  const continueSmsScanAfterCombinedConsent = useCallback(
-    async (mode: SmsScanMode): Promise<void> => {
-      setScanMode(mode);
-
-      if (smsPermissionStatus === "granted") {
-        onOpenSmsScan();
-        return;
-      }
-
-      setPendingSmsScanMode(mode);
-
-      if (smsPermissionStatus === "blocked") {
-        setPermissionRecovery(
-          createPermissionRecoveryState("sms-sync", smsPermissionStatus)
-        );
-        return;
-      }
-
-      const result = await requestPermission();
-      if (result === "granted") {
-        setPendingSmsScanMode(null);
-        setPermissionRecovery(null);
-        onOpenSmsScan();
-        return;
-      }
-
-      setPermissionRecovery(createPermissionRecoveryState("sms-sync", result));
-    },
-    [
-      onOpenSmsScan,
-      requestPermission,
-      setPendingSmsScanMode,
-      setPermissionRecovery,
-      setScanMode,
-      smsPermissionStatus,
-    ]
-  );
-
   return {
-    continueSmsScanAfterCombinedConsent,
     continueSmsScanWithConsent,
   };
 }

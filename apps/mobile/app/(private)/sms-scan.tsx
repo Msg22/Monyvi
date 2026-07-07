@@ -291,13 +291,13 @@ export default function SmsScanScreen(): React.JSX.Element {
   // Auto-start scan on mount — waits until permission is granted and categories loaded
   useEffect(() => {
     if (aiConsent.isLoading) return;
+    if (permissionStatus !== "granted") return;
     if (!aiConsent.isConsented) {
       scanAbortControllerRef.current?.abort();
       scanInitiated.current = false;
       setIsConsentSheetVisible(true);
       return;
     }
-    if (permissionStatus !== "granted") return;
     if (!isAiContextReady) return;
     if (!scanInitiated.current) {
       scanInitiated.current = true;
@@ -396,11 +396,6 @@ export default function SmsScanScreen(): React.JSX.Element {
   }
 
   const handleShowPermissionRecovery = (): void => {
-    if (!aiConsent.isConsented) {
-      setIsConsentSheetVisible(true);
-      return;
-    }
-
     setIsPermissionRecoveryVisible(true);
   };
 
@@ -436,13 +431,6 @@ export default function SmsScanScreen(): React.JSX.Element {
       await aiConsent.grantConsent();
       didGrantConsent = true;
 
-      if (permissionStatus === "blocked") {
-        setIsPermissionRecoveryVisible(true);
-      } else if (permissionStatus !== "granted") {
-        const result = await requestPermission();
-        setIsPermissionRecoveryVisible(result !== "granted");
-      }
-
       setIsConsentSheetVisible(false);
     } catch (err: unknown) {
       logger.error("smsScan.aiConsentGrantFailed", err);
@@ -453,7 +441,6 @@ export default function SmsScanScreen(): React.JSX.Element {
   const consentSheet = (
     <AiProcessingConsentSheet
       visible={isConsentSheetVisible}
-      variant="sms-permission-with-ai-consent"
       onContinue={handleConsentContinue}
       onNotNow={() => {
         setIsConsentSheetVisible(false);
@@ -494,7 +481,7 @@ export default function SmsScanScreen(): React.JSX.Element {
           onOpenSettings={handleShowPermissionRecovery}
           onBack={handleBackPress}
         />
-        {!isPermissionLoading && aiConsent.isConsented && (
+        {!isPermissionLoading && (
           <PermissionRecoveryModal
             visible={isPermissionRecoveryVisible}
             icon={permissionRecoveryContent.icon}

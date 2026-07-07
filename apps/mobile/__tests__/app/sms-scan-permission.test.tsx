@@ -85,20 +85,19 @@ jest.mock("@/hooks/useAiProcessingConsent", () => ({
 jest.mock("@/components/ai-consent/AiProcessingConsentSheet", () => ({
   AiProcessingConsentSheet: ({
     visible,
-    variant,
     onContinue,
   }: {
     readonly visible: boolean;
-    readonly variant: string;
     readonly onContinue: () => void | Promise<void>;
   }): ReactNode => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const ReactNative = require("react-native") as typeof import("react-native");
+    const ReactNative =
+      require("react-native") as typeof import("react-native");
     const { Text, TouchableOpacity } = ReactNative;
 
     return visible ? (
       <>
-        <Text>{variant}</Text>
+        <Text>ai-consent</Text>
         <TouchableOpacity
           testID="ai-consent-continue"
           onPress={() => {
@@ -195,23 +194,31 @@ describe("SmsScanScreen permission rationale", () => {
     expect(mockRequestPermission).not.toHaveBeenCalled();
   });
 
-  it("requests Android permission directly after combined SMS consent", async () => {
+  it("shows general AI consent after SMS permission is granted", async () => {
     mockIsAiConsented = false;
     mockPermissionStatus = "undetermined";
+    mockRequestPermission.mockImplementation(() => {
+      mockPermissionStatus = "granted";
+      return Promise.resolve("granted");
+    });
 
     const screen = render(<SmsScanScreen />);
 
     expect(
-      await screen.findByText("sms-permission-with-ai-consent")
+      await screen.findByText("sms_sync_permission_request_title")
     ).toBeTruthy();
-    expect(screen.queryByTestId("permission-modal-primary")).toBeNull();
+    expect(screen.queryByText("ai-consent")).toBeNull();
 
-    fireEvent.press(screen.getByTestId("ai-consent-continue"));
+    fireEvent.press(screen.getByTestId("permission-modal-primary"));
 
     await waitFor(() => {
-      expect(mockGrantAiConsent).toHaveBeenCalledTimes(1);
       expect(mockRequestPermission).toHaveBeenCalledTimes(1);
     });
-    expect(screen.queryByTestId("permission-modal-primary")).toBeNull();
+
+    screen.rerender(<SmsScanScreen />);
+
+    expect(await screen.findByText("ai-consent")).toBeTruthy();
+    expect(mockGrantAiConsent).not.toHaveBeenCalled();
+    expect(mockStartScan).not.toHaveBeenCalled();
   });
 });
