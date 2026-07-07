@@ -18,6 +18,7 @@
 import "edge-runtime";
 import { GoogleGenAI } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
+import { hasActiveAiProcessingConsent } from "../_shared/ai-consent.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -465,6 +466,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const auth = await verifyAuth(req.headers.get("authorization"));
     if (!auth) {
       return errorResponse("Unauthorized", 401);
+    }
+    if (!(await hasActiveAiProcessingConsent(auth.userId))) {
+      return errorResponse("AI processing consent required", 403);
     }
 
     // 2. Parse input
