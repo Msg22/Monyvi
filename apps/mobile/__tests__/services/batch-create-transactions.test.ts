@@ -371,6 +371,11 @@ describe("batchCreateTransactions", () => {
             canonicalRootTravel,
           ])
         ),
+      })
+      .mockReturnValueOnce({
+        fetch: jest.fn<Promise<readonly MockCategory[]>, []>(() =>
+          Promise.resolve([])
+        ),
       });
 
     const result = await batchCreateTransactions(
@@ -387,6 +392,87 @@ describe("batchCreateTransactions", () => {
     builder(record);
     expect(record.categoryId).toBe(
       "00000000-0000-0000-0001-000000000222"
+    );
+  });
+
+  it("canonicalizes duplicate parent IDs before matching child system categories", async () => {
+    const account = createAccount("acc-1", 1000);
+    const localShoppingParent: MockCategory = {
+      id: "local-shopping",
+      systemName: "shopping",
+      displayName: "Shopping",
+      isSystem: true,
+      userId: null,
+      type: "EXPENSE",
+      parentId: null,
+      level: 1,
+    };
+    const canonicalShoppingParent: MockCategory = {
+      id: "00000000-0000-0000-0001-000000000020",
+      systemName: "shopping",
+      displayName: "Shopping",
+      isSystem: true,
+      userId: null,
+      type: "EXPENSE",
+      parentId: null,
+      level: 1,
+    };
+    const localShoppingTravel: MockCategory = {
+      id: "local-shopping-travel",
+      systemName: "travel",
+      displayName: "Travel",
+      isSystem: true,
+      userId: null,
+      type: "EXPENSE",
+      parentId: "local-shopping",
+      level: 2,
+    };
+    const canonicalShoppingTravel: MockCategory = {
+      id: "00000000-0000-0000-0001-000000000111",
+      systemName: "travel",
+      displayName: "Travel",
+      isSystem: true,
+      userId: null,
+      type: "EXPENSE",
+      parentId: "00000000-0000-0000-0001-000000000020",
+      level: 2,
+    };
+    mockQueryOwned.mockReturnValue({
+      fetch: jest.fn<Promise<readonly MockAccount[]>, []>(() =>
+        Promise.resolve([account])
+      ),
+    });
+    mockQueryAccessibleCategories
+      .mockReturnValueOnce({
+        fetch: jest.fn<Promise<readonly MockCategory[]>, []>(() =>
+          Promise.resolve([localShoppingTravel])
+        ),
+      })
+      .mockReturnValueOnce({
+        fetch: jest.fn<Promise<readonly MockCategory[]>, []>(() =>
+          Promise.resolve([localShoppingTravel, canonicalShoppingTravel])
+        ),
+      })
+      .mockReturnValueOnce({
+        fetch: jest.fn<Promise<readonly MockCategory[]>, []>(() =>
+          Promise.resolve([localShoppingParent, canonicalShoppingParent])
+        ),
+      });
+
+    const result = await batchCreateTransactions(
+      [createReviewableTransaction({ categoryId: "local-shopping-travel" })],
+      new Map([[0, "acc-1"]])
+    );
+
+    expect(result).toEqual({ savedCount: 1, failedCount: 0, errors: [] });
+    const builder = mockPrepareTransactionCreate.mock.calls[0]?.[0];
+    const record: Record<string, unknown> = {};
+    if (!builder) {
+      throw new Error("Expected transaction create builder to be recorded.");
+    }
+    builder(record);
+    expect(record.categoryId).toBe(
+      "00000000-0000-0000-0001-000000000111"
     );
   });
 

@@ -42,6 +42,7 @@ interface RunLiveSmsJourneysModule {
     flow: string,
     env?: Readonly<Record<string, string | undefined>>
   ): boolean;
+  isRetryableLiveSmsPreflightFailure(error: unknown): boolean;
 }
 
 const liveSmsJourneys = jest.requireActual(
@@ -243,6 +244,28 @@ describe("run-live-sms-journeys helpers", () => {
     expect(
       liveSmsJourneys.isRetryableMaestroTransportFailure(
         'Assertion is false: "Transactions" is visible'
+      )
+    ).toBe(false);
+  });
+
+  it("retries live-SMS preflight native-root launch stalls", () => {
+    expect(
+      liveSmsJourneys.isRetryableLiveSmsPreflightFailure(
+        new Error(
+          "E2E preflight failed. The native app root mounted, but no recognized Monyvi screen became visible."
+        )
+      )
+    ).toBe(true);
+    expect(
+      liveSmsJourneys.isRetryableLiveSmsPreflightFailure(
+        new Error(
+          "E2E preflight failed. The app did not reach a recognized Monyvi screen."
+        )
+      )
+    ).toBe(true);
+    expect(
+      liveSmsJourneys.isRetryableLiveSmsPreflightFailure(
+        new Error('Assertion is false: "Transactions" is visible')
       )
     ).toBe(false);
   });

@@ -98,13 +98,134 @@ function isCanonicalSharedSystemCategory(category: Category): boolean {
 }
 
 function getSharedSystemCategoryIdentityKey(category: Category): string {
+  return getSharedSystemCategoryIdentityKeyWithParent(
+    category,
+    category.parentId ?? null
+  );
+}
+
+function getSharedSystemCategoryIdentityKeyWithParent(
+  category: Category,
+  parentId: string | null
+): string {
   return [
     category.systemName,
     category.displayName,
     category.type ?? "",
-    category.parentId ?? "",
+    parentId ?? "",
     category.level,
   ].join("|");
+}
+
+function getCategoryLevel(category: Category): number {
+  return typeof category.level === "number" ? category.level : 0;
+}
+
+function collectParentIds(categories: readonly Category[]): ReadonlySet<string> {
+  const parentIds = new Set<string>();
+  for (const category of categories) {
+    if (typeof category.parentId === "string" && category.parentId.length > 0) {
+      parentIds.add(category.parentId);
+    }
+  }
+
+  return parentIds;
+}
+
+async function loadSharedSystemCategoryAncestors(
+  categories: readonly Category[],
+  userId: string
+): Promise<readonly Category[]> {
+  const categoriesById = new Map(
+    categories.map((category) => [category.id, category])
+  );
+  const missingParentIds = new Set(collectParentIds(categories));
+
+  for (const id of categoriesById.keys()) {
+    missingParentIds.delete(id);
+  }
+
+  while (missingParentIds.size > 0) {
+    const parentIds = [...missingParentIds];
+    missingParentIds.clear();
+
+    const parentCategories = await queryAccessibleCategories(
+      database.get<Category>("categories"),
+      userId,
+      Q.where("id", Q.oneOf(parentIds)),
+      Q.where("is_system", true),
+      Q.where("deleted", false)
+    ).fetch();
+
+    for (const parent of parentCategories) {
+      if (categoriesById.has(parent.id)) {
+        continue;
+      }
+
+      categoriesById.set(parent.id, parent);
+      if (
+        typeof parent.parentId === "string" &&
+        parent.parentId.length > 0 &&
+        !categoriesById.has(parent.parentId)
+      ) {
+        missingParentIds.add(parent.parentId);
+      }
+    }
+  }
+
+  return [...categoriesById.values()];
+}
+
+function buildCanonicalSharedCategoryMap(
+  categories: readonly Category[]
+): ReadonlyMap<string, Category> {
+  const canonicalCategoryMap = new Map<string, Category>();
+  const orderedCategories = [...categories].sort(
+    (left, right) => getCategoryLevel(left) - getCategoryLevel(right)
+  );
+
+  for (const category of orderedCategories) {
+    if (!isCanonicalSharedSystemCategory(category)) {
+      continue;
+    }
+
+    const key = getSharedSystemCategoryIdentityKey(category);
+    const selected = canonicalCategoryMap.get(key);
+    if (!selected || shouldReplaceCanonicalCategory(selected, category)) {
+      canonicalCategoryMap.set(key, category);
+    }
+  }
+
+  return canonicalCategoryMap;
+}
+
+function resolveCanonicalSharedCategoryIds(
+  categories: readonly Category[],
+  canonicalCategoryMap: ReadonlyMap<string, Category>
+): ReadonlyMap<string, string> {
+  const resolvedCategoryIds = new Map<string, string>();
+  const orderedCategories = [...categories].sort(
+    (left, right) => getCategoryLevel(left) - getCategoryLevel(right)
+  );
+
+  for (const category of orderedCategories) {
+    if (!isSharedSystemCategory(category)) {
+      continue;
+    }
+
+    const normalizedParentId =
+      category.parentId === null || category.parentId === undefined
+        ? null
+        : (resolvedCategoryIds.get(category.parentId) ?? category.parentId);
+    const canonicalCategory = canonicalCategoryMap.get(
+      getSharedSystemCategoryIdentityKeyWithParent(category, normalizedParentId)
+    );
+    if (canonicalCategory) {
+      resolvedCategoryIds.set(category.id, canonicalCategory.id);
+    }
+  }
+
+  return resolvedCategoryIds;
 }
 
 function getCreatedAtTime(category: Category): number | null {
@@ -169,29 +290,22 @@ async function loadAccessibleCategoryIdMap(
     Q.where("is_system", true),
     Q.where("deleted", false)
   ).fetch();
-  const canonicalCategoryMap = new Map<string, Category>();
-  for (const category of sharedSystemCategories) {
-    if (!isCanonicalSharedSystemCategory(category)) {
-      continue;
-    }
 
-    const key = getSharedSystemCategoryIdentityKey(category);
-    const selected = canonicalCategoryMap.get(key);
-    if (!selected || shouldReplaceCanonicalCategory(selected, category)) {
-      canonicalCategoryMap.set(key, category);
-    }
-  }
+  const sharedCategoriesWithAncestors = await loadSharedSystemCategoryAncestors(
+    [...categories, ...sharedSystemCategories],
+    userId
+  );
+  const canonicalCategoryMap = buildCanonicalSharedCategoryMap(
+    sharedCategoriesWithAncestors
+  );
+  const canonicalSharedCategoryIds = resolveCanonicalSharedCategoryIds(
+    sharedCategoriesWithAncestors,
+    canonicalCategoryMap
+  );
 
-  for (const category of categories) {
-    if (!isSharedSystemCategory(category)) {
-      continue;
-    }
-
-    const canonicalCategory = canonicalCategoryMap.get(
-      getSharedSystemCategoryIdentityKey(category)
-    );
-    if (canonicalCategory) {
-      resolvedCategoryIds.set(category.id, canonicalCategory.id);
+  for (const [categoryId, canonicalCategoryId] of canonicalSharedCategoryIds) {
+    if (categoryIds.has(categoryId)) {
+      resolvedCategoryIds.set(categoryId, canonicalCategoryId);
     }
   }
 

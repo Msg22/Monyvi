@@ -47,6 +47,9 @@ export interface CategoryMapSource {
   readonly isSystem?: Category["isSystem"];
   readonly userId?: Category["userId"] | null;
   readonly createdAt?: Category["createdAt"];
+  readonly type?: Category["type"];
+  readonly parentId?: Category["parentId"];
+  readonly level?: Category["level"];
 }
 
 /**
@@ -251,10 +254,29 @@ function shouldReplaceCategoryMapSource(
   candidate: CategoryMapSource
 ): boolean {
   if (isSharedSystemCategory(selected) && isSharedSystemCategory(candidate)) {
+    if (
+      getSharedSystemCategoryIdentityKey(selected) !==
+      getSharedSystemCategoryIdentityKey(candidate)
+    ) {
+      return true;
+    }
+
     return compareSharedSystemCategoryPriority(candidate, selected) < 0;
   }
 
   return true;
+}
+
+function getSharedSystemCategoryIdentityKey(
+  category: CategoryMapSource
+): string {
+  return [
+    category.systemName,
+    category.displayName,
+    category.type ?? "",
+    category.parentId ?? "",
+    category.level ?? "",
+  ].join("|");
 }
 
 function compareSharedSystemCategoryPriority(

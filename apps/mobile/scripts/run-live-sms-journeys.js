@@ -151,7 +151,10 @@ function blockSmsPermissions() {
 }
 
 function clearDeliveredNotifications() {
-  adb(["shell", "cmd", "notification", "cancel-all"], { allowFailure: true });
+  adb(["shell", "cmd", "notification", "cancel-all"], {
+    capture: true,
+    allowFailure: true,
+  });
 }
 
 function resetNotificationPermission() {
@@ -1063,10 +1066,38 @@ function shouldResetLiveSmsSideEffectsBeforeRetry(flow, env = process.env) {
   );
 }
 
+function isRetryableLiveSmsPreflightFailure(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    isRetryableMaestroTransportFailure(message) ||
+    /E2E preflight failed\.\s+(?:The native app root mounted, but no recognized Monyvi screen became visible|The app did not reach a recognized Monyvi screen)/i.test(
+      message
+    )
+  );
+}
+
 function logInfo(event, fields) {
   process.stdout.write(
     `${JSON.stringify({ level: "info", event, ...fields })}\n`
   );
+}
+
+async function ensureLiveSmsAppReady() {
+  try {
+    await ensureE2eAppReady();
+    return;
+  } catch (error) {
+    if (!isRetryableLiveSmsPreflightFailure(error)) {
+      throw error;
+    }
+
+    logInfo("liveSmsJourney.preflightRetry", {
+      reason: "app-launch-not-ready",
+    });
+    reconnectMaestroTransport();
+    forceStopApp();
+    await ensureE2eAppReady();
+  }
 }
 
 async function prepareLiveSmsJourneyRetry(journey) {
@@ -1074,7 +1105,7 @@ async function prepareLiveSmsJourneyRetry(journey) {
   clearDeliveredNotifications();
   journey.prepare();
   forceStopApp();
-  await ensureE2eAppReady();
+  await ensureLiveSmsAppReady();
 }
 
 async function main() {
@@ -1098,7 +1129,7 @@ async function main() {
     clearDeliveredNotifications();
     journey.prepare();
     forceStopApp();
-    await ensureE2eAppReady();
+    await ensureLiveSmsAppReady();
     const canResetSideEffects = shouldResetLiveSmsSideEffectsBeforeRetry(
       journey.flow
     );
@@ -1133,6 +1164,7 @@ module.exports = {
   findVisibleNotificationMatch,
   notificationDumpMatchesPatterns,
   parseBounds,
+  isRetryableLiveSmsPreflightFailure,
   isRetryableMaestroTransportFailure,
   shouldPrepareLiveSmsFlowBeforeRetry,
   shouldResetLiveSmsSideEffectsBeforeRetry,
