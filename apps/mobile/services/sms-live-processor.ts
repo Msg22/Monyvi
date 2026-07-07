@@ -94,10 +94,6 @@ export async function processLiveSmsEvent(
   event: LiveSmsEvent,
   options: LiveSmsProcessingOptions = {}
 ): Promise<LiveSmsProcessingResult> {
-  if (!isLikelyFinancialSms(event.body)) {
-    return createResult("ignored");
-  }
-
   try {
     const canRun = await reconcileLiveDetectionPreference();
     if (!canRun) {
@@ -112,6 +108,10 @@ export async function processLiveSmsEvent(
       deliveryMode: event.deliveryMode,
     });
     return createResult("infrastructure_error", undefined);
+  }
+
+  if (!isLikelyFinancialSms(event.body)) {
+    return createResult("ignored");
   }
 
   let smsFingerprint: string | undefined;

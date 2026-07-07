@@ -250,6 +250,43 @@ describe("sms-live-processor", () => {
     expect(mockParseSmsWithAi).not.toHaveBeenCalled();
   });
 
+  it("ignores non-financial SMS only after live detection consent is valid", async () => {
+    mockIsLikelyFinancialSms.mockReturnValue(false);
+
+    const result = await processLiveSmsEvent({
+      sender: "FRIEND",
+      body: "Dinner tonight?",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("ignored");
+    expect(mockReconcileLiveDetectionPreference).toHaveBeenCalledTimes(1);
+    expect(mockGetAiProcessingConsentStatus).toHaveBeenCalledTimes(1);
+    expect(mockIsLikelyFinancialSms).toHaveBeenCalledWith("Dinner tonight?");
+    expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+  });
+
+  it("disables stale live detection before filtering SMS bodies after consent revocation", async () => {
+    mockGetAiProcessingConsentStatus.mockResolvedValue({ isConsented: false });
+    mockIsLikelyFinancialSms.mockReturnValue(false);
+
+    const result = await processLiveSmsEvent({
+      sender: "FRIEND",
+      body: "Dinner tonight?",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("disabled");
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
+    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
+    expect(mockIsLikelyFinancialSms).not.toHaveBeenCalled();
+    expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+  });
+
   it("does not parse and disables live detection when AI consent is revoked", async () => {
     mockGetAiProcessingConsentStatus.mockResolvedValue({ isConsented: false });
 
