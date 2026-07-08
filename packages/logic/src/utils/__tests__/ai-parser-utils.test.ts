@@ -340,6 +340,40 @@ describe("ai-parser-utils", () => {
         id: "00000000-0000-0000-0001-000000000222",
       });
     });
+
+    it("keeps the root shared category when a child with the same system name appears later", () => {
+      const categories: CategoryMapSource[] = [
+        {
+          id: "00000000-0000-0000-0001-000000000222",
+          systemName: "travel",
+          displayName: "Travel",
+          isSystem: true,
+          userId: null,
+          type: "EXPENSE",
+          parentId: null,
+          level: 1,
+          createdAt: new Date("2026-01-02T00:00:00.000Z"),
+        },
+        {
+          id: "00000000-0000-0000-0001-000000000111",
+          systemName: "travel",
+          displayName: "Travel",
+          isSystem: true,
+          userId: null,
+          type: "EXPENSE",
+          parentId: "00000000-0000-0000-0001-000000000020",
+          level: 2,
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        },
+      ];
+
+      const map = buildCategoryMap(categories);
+
+      expect(map.get("travel")).toEqual({
+        name: "Travel",
+        id: "00000000-0000-0000-0001-000000000222",
+      });
+    });
   });
 
   // =========================================================================

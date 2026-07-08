@@ -258,7 +258,8 @@ function shouldReplaceCategoryMapSource(
       getSharedSystemCategoryIdentityKey(selected) !==
       getSharedSystemCategoryIdentityKey(candidate)
     ) {
-      return true;
+      return compareSharedSystemCategoryIdentityPriority(candidate, selected) <
+        0;
     }
 
     return compareSharedSystemCategoryPriority(candidate, selected) < 0;
@@ -277,6 +278,25 @@ function getSharedSystemCategoryIdentityKey(
     category.parentId ?? "",
     category.level ?? "",
   ].join("|");
+}
+
+function compareSharedSystemCategoryIdentityPriority(
+  left: CategoryMapSource,
+  right: CategoryMapSource
+): number {
+  const leftLevel = getCategoryLevelPriority(left);
+  const rightLevel = getCategoryLevelPriority(right);
+  if (leftLevel !== rightLevel) {
+    return leftLevel - rightLevel;
+  }
+
+  const leftHasParent = hasParent(left);
+  const rightHasParent = hasParent(right);
+  if (leftHasParent !== rightHasParent) {
+    return leftHasParent ? 1 : -1;
+  }
+
+  return compareSharedSystemCategoryPriority(left, right);
 }
 
 function compareSharedSystemCategoryPriority(
@@ -299,6 +319,18 @@ function compareSharedSystemCategoryPriority(
   }
 
   return left.id.localeCompare(right.id);
+}
+
+function getCategoryLevelPriority(category: CategoryMapSource): number {
+  return typeof category.level === "number"
+    ? category.level
+    : Number.MAX_SAFE_INTEGER;
+}
+
+function hasParent(category: CategoryMapSource): boolean {
+  return (
+    typeof category.parentId === "string" && category.parentId.trim().length > 0
+  );
 }
 
 function isSharedSystemCategory(category: CategoryMapSource): boolean {

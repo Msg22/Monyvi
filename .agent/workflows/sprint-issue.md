@@ -85,7 +85,14 @@ Use the `codex/` branch prefix by default.
    - Presentational components render shaped props only.
 5. Avoid unrelated refactors. Mention unrelated cleanup opportunities instead of
    bundling them.
-6. When a local tooling or shell issue blocks the normal workflow, fix the
+6. When a PR branch adds or changes files under `supabase/migrations/`, make
+   local Supabase match that branch before testing synced app behavior. Prefer
+   resetting/reapplying the local database (for example `npm run db:reset`) when
+   disposable local data is acceptable; use the repo migration flow only when
+   preserving local data is explicitly needed. Do not apply unmerged PR
+   migrations to a shared remote Supabase project unless that remote is a
+   dedicated preview/dev database for the PR.
+7. When a local tooling or shell issue blocks the normal workflow, fix the
    recurring environment problem or document the durable workaround instead of
    only bypassing it for the current command. For GitHub helper scripts on
    Windows, prefer the bundled Codex Python runtime with UTF-8 mode when the

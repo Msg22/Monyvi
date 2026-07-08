@@ -45,6 +45,7 @@ Thumbs.db
 
 # Supabase
 supabase/.temp
+.tmp-market-rates-*.sql
 
 # Metro
 .metro-health-check*

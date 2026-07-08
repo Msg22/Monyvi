@@ -36,7 +36,7 @@
     "e2e:live-sms:release": "cross-env E2E_RELEASE_BUILD=1 node scripts/run-live-sms-journeys.js",
     "e2e:device": "node scripts/run-maestro.js test",
     "e2e:studio": "node scripts/run-maestro.js studio",
-    "manual:seed-user": "node scripts/manual-qa-seed.js seed",
+    "manual:seed-user": "node scripts/manual-qa-seed.js seed && node ../../scripts/import-market-rates-to-local.js --best-effort",
     "manual:reset-user": "node scripts/manual-qa-seed.js reset",
     "test": "jest",
     "test:coverage": "jest --coverage",

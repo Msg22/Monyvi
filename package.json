@@ -26,6 +26,7 @@
     "mobile-prebuild": "npm run prebuild -w @monyvi/mobile",
     "mobile:doctor": "npm run doctor -w @monyvi/mobile",
     "mobile:install-check": "npm run install-check -w @monyvi/mobile",
+    "local:reset-and-seed": "npm run db:reset && cross-env MANUAL_QA_PASSWORD=MonyviLocalQA123 npm run manual:seed-user -w @monyvi/mobile",
     "lint": "eslint . --rulesdir scripts/eslint-rules --ext .ts,.tsx,.js,.jsx",
     "lint:fix": "eslint . --rulesdir scripts/eslint-rules --ext .ts,.tsx,.js,.jsx --fix",
     "test:eslint-rules": "node -e \"const fs=require('fs'); for (const f of fs.readdirSync('scripts/eslint-rules').filter((name)=>name.endsWith('.test.js'))) require('./scripts/eslint-rules/'+f)\"",

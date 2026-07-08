@@ -133,12 +133,12 @@ describe("e2e-seed script helpers", () => {
       operations.filter((operation) =>
         operation.startsWith("delete:bank_details:account_id:")
       )
-    ).toHaveLength(2);
+    ).toHaveLength(8);
     expect(
       operations.filter((operation) =>
         operation.startsWith("delete:account_sms_senders:account_id:")
       )
-    ).toHaveLength(4);
+    ).toHaveLength(8);
     expect(operations).toContain("upsert:profiles:user-e2e");
     expect(operations).toContain("upsert:accounts:4");
     expect(operations).toContain("upsert:account_sms_senders:3");

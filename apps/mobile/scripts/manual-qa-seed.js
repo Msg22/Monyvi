@@ -1,6 +1,11 @@
 const { createClient } = require("@supabase/supabase-js");
 
-const { getE2eSeedConfig, resetE2eData, seedE2eData } = require("./e2e-seed");
+const {
+  getSeedConfig,
+  resetFixtureData,
+  seedFixtureData,
+} = require("./seed-fixtures/seed-engine");
+const { MANUAL_QA_SEED_FIXTURE } = require("./seed-fixtures/manual-qa-fixture");
 
 const DEFAULT_MANUAL_QA_EMAIL = "manual-qa@monyvi.test";
 
@@ -9,13 +14,21 @@ function getManualQaSeedConfig(env = process.env) {
   const preserveExistingPassword =
     !password || env.MANUAL_QA_PRESERVE_PASSWORD === "1";
 
-  return getE2eSeedConfig({
+  return getSeedConfig({
     ...env,
     E2E_SUPABASE_MODE: "local",
     E2E_PRESERVE_EXISTING_PASSWORD: preserveExistingPassword ? "1" : undefined,
     MAESTRO_E2E_EMAIL: env.MANUAL_QA_EMAIL ?? DEFAULT_MANUAL_QA_EMAIL,
     MAESTRO_E2E_PASSWORD: password,
   });
+}
+
+async function seedManualQaData(client, config) {
+  return seedFixtureData(client, config, MANUAL_QA_SEED_FIXTURE);
+}
+
+async function resetManualQaData(client, config) {
+  return resetFixtureData(client, config, MANUAL_QA_SEED_FIXTURE);
 }
 
 async function main() {
@@ -30,14 +43,14 @@ async function main() {
   }
 
   if (action === "reset") {
-    const result = await resetE2eData(client, config);
+    const result = await resetManualQaData(client, config);
     console.log(
       `Reset manual QA data for ${config.email} (${result.userId}) on local Supabase`
     );
     return;
   }
 
-  const result = await seedE2eData(client, config);
+  const result = await seedManualQaData(client, config);
   console.log(
     `Seeded manual QA data for ${config.email} (${result.userId}) on local Supabase`
   );
@@ -53,4 +66,6 @@ if (require.main === module) {
 module.exports = {
   DEFAULT_MANUAL_QA_EMAIL,
   getManualQaSeedConfig,
+  resetManualQaData,
+  seedManualQaData,
 };
