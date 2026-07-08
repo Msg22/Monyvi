@@ -139,10 +139,10 @@ function CompactConsentRow({
 }): React.JSX.Element {
   return (
     <View className="flex-row items-center gap-4">
-      <View className="h-12 w-12 items-center justify-center rounded-2xl bg-nileGreen-500/15">
+      <View className="h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-nileGreen-500/15">
         <Ionicons name={icon} size={22} color={palette.nileGreen[500]} />
       </View>
-      <Text className="text-base text-slate-700 dark:text-slate-200">
+      <Text className="min-w-0 flex-1 text-base text-slate-700 dark:text-slate-200">
         {label}
       </Text>
     </View>

@@ -676,10 +676,10 @@ export default function SettingsScreen(): React.JSX.Element {
 
   const openAiPrivacyDetails = useCallback((): void => {
     shouldResumeAiConsentAfterPrivacyDetails.current =
-      pendingAiConsentAction !== null;
+      isAiConsentSheetVisible || pendingAiConsentAction !== null;
     setIsAiConsentSheetVisible(false);
     router.push("/ai-privacy-details");
-  }, [pendingAiConsentAction]);
+  }, [isAiConsentSheetVisible, pendingAiConsentAction]);
 
   const currencyInfo = CURRENCY_INFO_MAP[preferredCurrency];
   const permissionRecoveryContent =

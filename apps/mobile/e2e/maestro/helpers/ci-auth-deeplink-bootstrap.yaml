@@ -35,5 +35,22 @@ appId: com.monyvi.app
 
 - extendedWaitUntil:
     visible:
+      "Auto-Track Transactions|Transactions|Accounts|Open menu|Good Morning|Good
+      Afternoon|Good Evening"
+    timeout: 120000
+
+- runFlow:
+    when:
+      visible: "Auto-Track Transactions"
+    commands:
+      - tapOn: "Not Now"
+      - extendedWaitUntil:
+          visible:
+            "Transactions|Accounts|Open menu|Good Morning|Good Afternoon|Good
+            Evening"
+          timeout: 120000
+
+- extendedWaitUntil:
+    visible:
       "Transactions|Accounts|Open menu|Good Morning|Good Afternoon|Good Evening"
     timeout: 120000
