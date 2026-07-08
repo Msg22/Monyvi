@@ -296,6 +296,7 @@ export default function SmsScanScreen(): React.JSX.Element {
   // Auto-start scan on mount — waits until permission is granted and categories loaded
   useEffect(() => {
     if (status === "consent_required") return;
+    if (permissionStatus !== "granted") return;
     if (isAiConsentLoading) return;
     if (!isAiConsented) {
       scanAbortControllerRef.current?.abort();
@@ -303,7 +304,6 @@ export default function SmsScanScreen(): React.JSX.Element {
       setIsConsentSheetVisible(true);
       return;
     }
-    if (permissionStatus !== "granted") return;
     if (!isAiContextReady) return;
     if (!scanInitiated.current) {
       scanInitiated.current = true;
@@ -499,26 +499,6 @@ export default function SmsScanScreen(): React.JSX.Element {
   // The native permission dialog is only opened from the app-side rationale
   // modal so users see the explanation first.
   // All hooks are called above unconditionally to satisfy the Rules of Hooks.
-  if (isAiConsentLoading) {
-    return (
-      <SmsPermissionGate
-        status="undetermined"
-        isLoading={true}
-        onRequest={handleShowPermissionRecovery}
-        onOpenSettings={handleShowPermissionRecovery}
-        onBack={handleBackPress}
-      />
-    );
-  }
-
-  if (!isAiConsented) {
-    return consentSheet;
-  }
-
-  if (status === "consent_required") {
-    return consentSheet;
-  }
-
   if (isPermissionLoading || permissionStatus !== "granted") {
     const gateStatus =
       permissionStatus === "denied" || permissionStatus === "blocked"
@@ -549,6 +529,26 @@ export default function SmsScanScreen(): React.JSX.Element {
         {consentSheet}
       </>
     );
+  }
+
+  if (isAiConsentLoading) {
+    return (
+      <SmsPermissionGate
+        status="undetermined"
+        isLoading={true}
+        onRequest={handleShowPermissionRecovery}
+        onOpenSettings={handleShowPermissionRecovery}
+        onBack={handleBackPress}
+      />
+    );
+  }
+
+  if (!isAiConsented) {
+    return consentSheet;
+  }
+
+  if (status === "consent_required") {
+    return consentSheet;
   }
 
   return (

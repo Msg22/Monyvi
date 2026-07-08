@@ -17,6 +17,10 @@ const mockRouterPush = jest.fn<void, [string]>();
 const mockSetParams = jest.fn<void, [Record<string, unknown>]>();
 const mockStartVoiceFlow = jest.fn<Promise<void>, [unknown?]>();
 const mockGrantConsent = jest.fn<Promise<void>, []>();
+const mockGetAiProcessingConsentStatus = jest.fn<
+  Promise<{ readonly isConsented: boolean; readonly consent: null }>,
+  []
+>();
 let mockIsAiConsented = false;
 let mockIsAiConsentLoading = false;
 let mockRetryParam: string | undefined;
@@ -24,7 +28,7 @@ let latestVoiceFlowOptions:
   | {
       readonly autoStart: boolean;
       readonly canAutoStart: boolean;
-      readonly ensureAiProcessingConsent: () => boolean;
+      readonly ensureAiProcessingConsent: () => boolean | Promise<boolean>;
     }
   | undefined;
 
@@ -94,7 +98,10 @@ jest.mock("@/components/ai-consent/AiProcessingConsentSheet", () => ({
         <MockPressable testID="voice-consent-continue" onPress={onContinue}>
           <MockText>Continue</MockText>
         </MockPressable>
-        <MockPressable testID="voice-privacy-details" onPress={onPrivacyDetails}>
+        <MockPressable
+          testID="voice-privacy-details"
+          onPress={onPrivacyDetails}
+        >
           <MockText>Privacy details</MockText>
         </MockPressable>
       </MockView>
@@ -103,8 +110,11 @@ jest.mock("@/components/ai-consent/AiProcessingConsentSheet", () => ({
 }));
 
 jest.mock("@/context/MicButtonRefContext", () => ({
-  MicButtonRefProvider: ({ children }: { readonly children: React.ReactNode }) =>
+  MicButtonRefProvider: ({
     children,
+  }: {
+    readonly children: React.ReactNode;
+  }) => children,
   useMicButtonRef: () => null,
 }));
 
@@ -141,7 +151,7 @@ jest.mock("@/hooks/useVoiceTransactionFlow", () => ({
   useVoiceTransactionFlow: (options: {
     readonly autoStart: boolean;
     readonly canAutoStart: boolean;
-    readonly ensureAiProcessingConsent: () => boolean;
+    readonly ensureAiProcessingConsent: () => boolean | Promise<boolean>;
   }) => {
     latestVoiceFlowOptions = options;
     return {
@@ -151,8 +161,9 @@ jest.mock("@/hooks/useVoiceTransactionFlow", () => ({
       errorMessage: null,
       startFlow: (args?: unknown) => {
         mockStartVoiceFlow(args);
-        options.ensureAiProcessingConsent();
-        return Promise.resolve();
+        return Promise.resolve(options.ensureAiProcessingConsent()).then(
+          () => undefined
+        );
       },
       submitRecording: jest.fn(),
       discardRecording: jest.fn(),
@@ -166,6 +177,10 @@ jest.mock("@/hooks/useVoiceTransactionFlow", () => ({
 jest.mock("@/services/voice-entry-service", () => ({
   registerVoiceEntry: jest.fn(),
   unregisterVoiceEntry: jest.fn(),
+}));
+
+jest.mock("@/services/profile-service", () => ({
+  getAiProcessingConsentStatus: () => mockGetAiProcessingConsentStatus(),
 }));
 
 jest.mock("@/utils/category-tree-source", () => ({
@@ -188,13 +203,19 @@ describe("TabLayout AI consent", () => {
     latestVoiceFlowOptions = undefined;
     mockGrantConsent.mockResolvedValue();
     mockStartVoiceFlow.mockResolvedValue();
+    mockGetAiProcessingConsentStatus.mockResolvedValue({
+      consent: null,
+      isConsented: mockIsAiConsented,
+    });
   });
 
-  it("reopens voice consent after returning from privacy details", () => {
+  it("reopens voice consent after returning from privacy details", async () => {
     render(<TabLayout />);
 
     fireEvent.press(screen.getByTestId("tab-mic"));
-    expect(screen.getByTestId("voice-privacy-details")).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getByTestId("voice-privacy-details")).toBeTruthy()
+    );
 
     fireEvent.press(screen.getByTestId("voice-privacy-details"));
     expect(mockRouterPush).toHaveBeenCalledWith("/ai-privacy-details");
@@ -212,11 +233,31 @@ describe("TabLayout AI consent", () => {
     render(<TabLayout />);
 
     fireEvent.press(screen.getByTestId("tab-mic"));
+    await waitFor(() =>
+      expect(screen.getByTestId("voice-consent-continue")).toBeTruthy()
+    );
     fireEvent.press(screen.getByTestId("voice-consent-continue"));
 
     await waitFor(() => expect(mockGrantConsent).toHaveBeenCalledTimes(1));
     expect(screen.getByTestId("voice-consent-continue")).toBeTruthy();
     expect(mockStartVoiceFlow).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses fresh profile consent before starting voice from a stale mounted tab", async () => {
+    mockIsAiConsented = true;
+    mockGetAiProcessingConsentStatus.mockResolvedValue({
+      consent: null,
+      isConsented: false,
+    });
+
+    render(<TabLayout />);
+
+    fireEvent.press(screen.getByTestId("tab-mic"));
+
+    await waitFor(() =>
+      expect(mockGetAiProcessingConsentStatus).toHaveBeenCalledTimes(1)
+    );
+    expect(screen.getByTestId("voice-consent-continue")).toBeTruthy();
   });
 
   it("preserves retry auto-start until AI consent finishes loading", () => {

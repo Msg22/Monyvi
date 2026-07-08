@@ -193,18 +193,31 @@ describe("SmsScanScreen permission rationale", () => {
     expect(mockRequestPermission).not.toHaveBeenCalled();
   });
 
-  it("shows general AI consent before requesting SMS permission", async () => {
+  it("shows SMS permission before general AI consent on first-time import", async () => {
     mockIsAiConsented = false;
     mockPermissionStatus = "undetermined";
 
     const screen = render(<SmsScanScreen />);
 
-    expect(await screen.findByText("ai-consent")).toBeTruthy();
     expect(
-      screen.queryByText("sms_sync_permission_request_title")
-    ).toBeNull();
+      await screen.findByText("sms_sync_permission_request_title")
+    ).toBeTruthy();
+    expect(screen.queryByText("ai-consent")).toBeNull();
 
     expect(mockRequestPermission).not.toHaveBeenCalled();
+    expect(mockGrantAiConsent).not.toHaveBeenCalled();
+    expect(mockStartScan).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByTestId("permission-modal-primary"));
+
+    await waitFor(() => {
+      expect(mockRequestPermission).toHaveBeenCalledTimes(1);
+    });
+
+    mockPermissionStatus = "granted";
+    screen.rerender(<SmsScanScreen />);
+
+    expect(await screen.findByText("ai-consent")).toBeTruthy();
     expect(mockGrantAiConsent).not.toHaveBeenCalled();
     expect(mockStartScan).not.toHaveBeenCalled();
   });

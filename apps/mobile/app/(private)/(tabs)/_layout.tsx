@@ -18,7 +18,9 @@ import {
   registerVoiceEntry,
   unregisterVoiceEntry,
 } from "@/services/voice-entry-service";
+import { getAiProcessingConsentStatus } from "@/services/profile-service";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
+import { logger } from "@/utils/logger";
 import { buildCategoryTree } from "@monyvi/logic";
 import {
   Tabs,
@@ -73,12 +75,19 @@ function TabLayoutInner(): React.ReactElement {
   const autoStart = retry === "true";
   const canAutoStart = !aiConsent.isLoading;
 
-  const ensureAiProcessingConsent = useCallback((): boolean => {
+  const ensureAiProcessingConsent = useCallback(async (): Promise<boolean> => {
     if (aiConsent.isLoading) return false;
-    if (aiConsent.isConsented) return true;
+
+    try {
+      const status = await getAiProcessingConsentStatus();
+      if (status.isConsented) return true;
+    } catch (error: unknown) {
+      logger.error("voice.aiConsentFreshStatus.failed", error);
+    }
+
     setIsVoiceConsentVisible(true);
     return false;
-  }, [aiConsent.isConsented, aiConsent.isLoading]);
+  }, [aiConsent.isLoading]);
 
   useEffect(() => {
     if (autoStart && canAutoStart) {
