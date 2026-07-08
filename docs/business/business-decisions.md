@@ -1,6 +1,6 @@
 # Monyvi Business Decisions
 
-**Status:** Active product source of truth **Last updated:** 2026-05-25
+**Status:** Active product source of truth **Last updated:** 2026-07-08
 **Scope:** Business and product rules confirmed by the current codebase and
 implementation history.
 
@@ -69,6 +69,38 @@ safe. Supabase sync is background replication, not the interactive data source.
 Automation should reduce entry effort without silently corrupting financial
 records. Voice and SMS parsing produce reviewable transactions unless the user
 has explicitly opted into an auto-confirm mode.
+
+### AI Processing Consent
+
+AI transaction suggestions are controlled by one global consent setting. The
+setting covers every feature that sends user content to the AI provider for
+transaction suggestions: voice entry, batch SMS import, live SMS detection, and
+live SMS auto-confirm.
+
+Business rules:
+
+- Voice recordings and matching financial SMS content must not be sent to the AI
+  provider unless the current user's AI processing consent is active.
+- The mobile client must gate entry into voice recording, SMS import, and live
+  SMS detection before invoking AI parsing.
+- The `parse-voice` and `parse-sms` Edge Functions must also enforce active
+  consent server-side. Client-side consent state is a UX gate, not the final
+  privacy boundary.
+- Consent is stored on `profiles.ai_processing_consent` as versioned JSON with
+  `version`, `consentedAt`, and `revokedAt` fields. The current active version
+  is `2026-07-ai-processing-v1`.
+- Consent is active only when the JSON shape is valid for the current version,
+  `consentedAt` is present, and `revokedAt` is `null`.
+- Revoking consent is local-first and privacy-sensitive. The local profile must
+  keep the revoked state even if the remote update fails; normal sync can retry
+  the remote write later.
+- If a server-side AI parse returns "consent required" while local state still
+  appears consented, the app must treat local state as stale, return the user to
+  the consent flow, and avoid retrying the same AI request until consent is
+  granted again.
+- Disabling AI transaction suggestions also makes AI-dependent entry points
+  unavailable. Live SMS detection and auto-confirm must be disabled or prevented
+  from running when consent is not active.
 
 ### Authenticated By Default
 
