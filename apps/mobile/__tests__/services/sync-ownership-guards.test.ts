@@ -1,4 +1,7 @@
-import { assertPushRecordBelongsToCurrentUser } from "../../services/sync/ownership-guards";
+import {
+  assertPushRecordBelongsToCurrentUser,
+  isSharedSystemCategoryPushRecord,
+} from "../../services/sync/ownership-guards";
 
 describe("sync ownership guards", () => {
   it("allows user-owned writable records for the authenticated user", () => {
@@ -23,6 +26,60 @@ describe("sync ownership guards", () => {
         null
       )
     ).toThrow("Refusing to sync foreign local changes for profiles");
+  });
+
+  it("identifies canonical shared system categories as non-user-owned records", () => {
+    expect(
+      isSharedSystemCategoryPushRecord("categories", {
+        id: "00000000-0000-0000-0001-000000000002",
+        user_id: null,
+        is_system: true,
+      })
+    ).toBe(true);
+  });
+
+  it("rejects shared system categories if they reach ownership assertion", () => {
+    expect(() =>
+      assertPushRecordBelongsToCurrentUser(
+        "categories",
+        {
+          id: "00000000-0000-0000-0001-000000000002",
+          user_id: null,
+          is_system: true,
+        },
+        "current-user",
+        undefined,
+        null
+      )
+    ).toThrow("Refusing to sync foreign local changes for categories");
+  });
+
+  it("rejects local-only shared system categories before push", () => {
+    expect(() =>
+      assertPushRecordBelongsToCurrentUser(
+        "categories",
+        {
+          id: "local-food",
+          user_id: null,
+          is_system: true,
+        },
+        "current-user",
+        undefined,
+        null
+      )
+    ).toThrow("Refusing to sync foreign local changes for categories");
+  });
+
+  it("rejects unowned non-system categories", () => {
+    expect(() =>
+      assertPushRecordBelongsToCurrentUser(
+        "categories",
+        { id: "category-1", user_id: null, is_system: false },
+        "current-user",
+        undefined,
+        null
+      )
+    ).toThrow("Refusing to sync foreign local changes for categories");
   });
 
   it("allows child-table records only when the local parent is owned", () => {

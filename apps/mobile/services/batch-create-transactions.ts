@@ -25,6 +25,7 @@
 
 import {
   Account,
+  Category,
   database,
   Transaction,
   Transfer,
@@ -34,7 +35,7 @@ import type { ReviewableTransaction } from "@monyvi/logic";
 import { Q, type Model } from "@nozbe/watermelondb";
 import { ensureCashAccount } from "./account-service";
 import { getCurrentUserId } from "./supabase";
-import { queryOwned } from "./user-data-access";
+import { queryAccessibleCategories, queryOwned } from "./user-data-access";
 import { hasExistingSmsFingerprint } from "./sms-dedup-service";
 
 // ---------------------------------------------------------------------------
@@ -63,6 +64,41 @@ function accumulateBalanceDelta(
 ): void {
   const existing = deltas.get(accountId) ?? 0;
   deltas.set(accountId, existing + delta);
+}
+
+function isAtmWithdrawalTransaction(tx: ReviewableTransaction): boolean {
+  return (
+    "isAtmWithdrawal" in tx &&
+    (tx as { readonly isAtmWithdrawal?: boolean }).isAtmWithdrawal === true
+  );
+}
+
+function getRuntimeCategoryId(tx: ReviewableTransaction): string | null {
+  const value = (tx as { readonly categoryId?: unknown }).categoryId;
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+async function loadAccessibleCategoryIds(
+  categoryIds: ReadonlySet<string>,
+  userId: string
+): Promise<ReadonlySet<string>> {
+  if (categoryIds.size === 0) {
+    return new Set();
+  }
+
+  const categories = await queryAccessibleCategories(
+    database.get<Category>("categories"),
+    userId,
+    Q.where("id", Q.oneOf([...categoryIds])),
+    Q.where("deleted", false)
+  ).fetch();
+
+  return new Set(categories.map((category) => category.id));
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +145,7 @@ export async function batchCreateTransactions<T extends ReviewableTransaction>(
   }
 
   const errors: string[] = [];
+  const regularCategoryIds = new Set<string>();
 
   // Ensure Cash accounts exist for ATM withdrawal routing
   // Only needed for ATM transactions NOT already resolved via toAccountMap
@@ -117,14 +154,23 @@ export async function batchCreateTransactions<T extends ReviewableTransaction>(
 
   for (let i = 0; i < transactions.length; i++) {
     const tx = transactions[i];
-    if (
-      "isAtmWithdrawal" in tx &&
-      tx.isAtmWithdrawal === true &&
-      !toAccountMap?.has(i)
-    ) {
-      atmCurrencies.add(tx.currency);
+    if (isAtmWithdrawalTransaction(tx)) {
+      if (!toAccountMap?.has(i)) {
+        atmCurrencies.add(tx.currency);
+      }
+      continue;
+    }
+
+    const categoryId = getRuntimeCategoryId(tx);
+    if (categoryId) {
+      regularCategoryIds.add(categoryId);
     }
   }
+
+  const accessibleCategoryIds = await loadAccessibleCategoryIds(
+    regularCategoryIds,
+    userId
+  );
 
   for (const currency of atmCurrencies) {
     const result = await ensureCashAccount(userId, currency);
@@ -180,7 +226,7 @@ export async function batchCreateTransactions<T extends ReviewableTransaction>(
     }
 
     // ── ATM Withdrawal: prepare as Transfer (bank → cash) ──
-    if ("isAtmWithdrawal" in tx && tx.isAtmWithdrawal === true) {
+    if (isAtmWithdrawalTransaction(tx)) {
       // Prefer user-selected TO account, fall back to auto-resolved by currency
       const cashAccountId =
         toAccountMap?.get(i) ?? cashAccountIdByCurrency.get(tx.currency);
@@ -220,6 +266,19 @@ export async function batchCreateTransactions<T extends ReviewableTransaction>(
     }
 
     // ── Regular transaction ─
+    const categoryId = getRuntimeCategoryId(tx);
+    if (!categoryId) {
+      errors.push(`Transaction ${i + 1} needs a category`);
+      failedCount++;
+      continue;
+    }
+
+    if (!accessibleCategoryIds.has(categoryId)) {
+      errors.push(`Transaction ${i + 1} needs a valid category`);
+      failedCount++;
+      continue;
+    }
+
     preparedOps.push(
       transactionsCollection.prepareCreate((record) => {
         record.userId = userId;
@@ -227,7 +286,7 @@ export async function batchCreateTransactions<T extends ReviewableTransaction>(
         record.amount = Math.abs(tx.amount);
         record.currency = tx.currency;
         record.type = tx.type;
-        record.categoryId = tx.categoryId;
+        record.categoryId = categoryId;
         record.counterparty = tx.counterparty ?? undefined;
         record.note = "";
         record.date = tx.date;

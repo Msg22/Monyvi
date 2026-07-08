@@ -13,6 +13,7 @@ import { createSyncTableError } from "./errors";
 import {
   assertPushRecordBelongsToCurrentUser,
   fetchOwnedParentIds,
+  isSharedSystemCategoryPushRecord,
 } from "./ownership-guards";
 import { getChildTableConfig, isWritableTable } from "./table-predicates";
 import { transformToSupabase } from "./transforms";
@@ -44,6 +45,13 @@ function getSupabaseWriteTable(
   table: WritableSupabaseTablesNames
 ): SupabaseWriteTable {
   return supabase.from(table) as unknown as SupabaseWriteTable;
+}
+
+function isPushableRecord(
+  table: SyncableTable,
+  record: Record<string, unknown>
+): boolean {
+  return !isSharedSystemCategoryPushRecord(table, record);
 }
 
 export async function pushChanges(
@@ -100,11 +108,14 @@ export async function pushChanges(
       const upsertRecords = async (
         records: ReadonlyArray<Record<string, unknown>>
       ): Promise<void> => {
-        if (records.length === 0) {
+        const pushableRecords = records.filter((record) =>
+          isPushableRecord(table, record)
+        );
+        if (pushableRecords.length === 0) {
           return;
         }
 
-        const transformedRecords = records.map((record) => {
+        const transformedRecords = pushableRecords.map((record) => {
           assertPushRecordBelongsToCurrentUser(
             table,
             record,
@@ -157,24 +168,7 @@ export async function pushChanges(
       }
 
       if (tableChanges.created.length > 0) {
-        const records: Array<Record<string, unknown>> =
-          tableChanges.created.map((record) => {
-            assertPushRecordBelongsToCurrentUser(
-              table,
-              record,
-              userId,
-              childConfig,
-              activeParentIds
-            );
-            return transformToSupabase(table, record, userId, isChildTable);
-          });
-
-        const { error } = await getSupabaseWriteTable(table).upsert(records, {
-          onConflict: "id",
-        });
-        if (error) {
-          throw createSyncTableError("upsert", table, error);
-        }
+        await upsertRecords(tableChanges.created);
       }
 
       if (activeUpdates.length > 0) {
