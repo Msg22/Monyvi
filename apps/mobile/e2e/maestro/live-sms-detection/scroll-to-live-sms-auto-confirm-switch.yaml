@@ -5,5 +5,5 @@ appId: com.monyvi.app
 - scrollUntilVisible:
     element:
       id: "live-sms-auto-confirm-switch"
-    direction: UP
+    direction: DOWN
     centerElement: true
