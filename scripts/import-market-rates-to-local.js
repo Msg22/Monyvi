@@ -9,18 +9,20 @@
  */
 const { spawnSync } = require("node:child_process");
 const { writeFileSync, unlinkSync } = require("node:fs");
+const { join, resolve } = require("node:path");
+
+const repoRoot = resolve(__dirname, "..");
+
+function resolveNpxCommand() {
+  return process.platform === "win32" ? "npx.cmd" : "npx";
+}
 
 function runSupabase(args) {
-  const command = process.platform === "win32" ? "cmd.exe" : "npx";
-  const commandArgs =
-    process.platform === "win32"
-      ? ["/d", "/s", "/c", `npx supabase ${args.join(" ")}`]
-      : ["supabase", ...args];
-
-  const result = spawnSync(command, commandArgs, {
-    cwd: process.cwd(),
+  const result = spawnSync(resolveNpxCommand(), ["supabase", ...args], {
+    cwd: repoRoot,
     encoding: "utf8",
     maxBuffer: 50 * 1024 * 1024,
+    shell: process.platform === "win32",
   });
 
   if (result.status !== 0) {
@@ -39,7 +41,7 @@ function runSupabase(args) {
 }
 
 function queryLinkedMarketRates() {
-  const selectPath = ".tmp-market-rates-select.sql";
+  const selectPath = join(repoRoot, ".tmp-market-rates-select.sql");
   writeFileSync(
     selectPath,
     "select * from public.market_rates order by created_at asc;\n",
@@ -84,9 +86,15 @@ function parseSupabaseQueryRows(output) {
   throw new Error("Supabase query JSON did not include result rows.");
 }
 
+function parseImportMarketRatesArgs(argv = process.argv.slice(2)) {
+  return {
+    bestEffort: argv.includes("--best-effort"),
+  };
+}
+
 function importLocalMarketRates(rows) {
   const serializedRows = JSON.stringify(rows).replaceAll("$copy$", "$ copy $");
-  const importPath = ".tmp-market-rates-import.sql";
+  const importPath = join(repoRoot, ".tmp-market-rates-import.sql");
 
   writeFileSync(
     importPath,
@@ -117,20 +125,38 @@ cross join deleted_count;
   }
 }
 
-function main() {
-  const rows = queryLinkedMarketRates();
-  if (!Array.isArray(rows) || rows.length === 0) {
-    throw new Error("Remote market_rates returned no rows.");
-  }
+function runMarketRatesImport() {
+  try {
+    const rows = queryLinkedMarketRates();
+    if (!Array.isArray(rows) || rows.length === 0) {
+      throw new Error("Remote market_rates returned no rows.");
+    }
 
-  importLocalMarketRates(rows);
-  console.log(`Imported ${rows.length} market_rates rows into local Supabase.`);
+    importLocalMarketRates(rows);
+    console.log(
+      `Imported ${rows.length} market_rates rows into local Supabase.`
+    );
+  } catch (error) {
+    const { bestEffort } = parseImportMarketRatesArgs();
+    if (!bestEffort) {
+      throw error;
+    }
+
+    console.warn(
+      [
+        "Skipped local market_rates import.",
+        "Manual QA user data was seeded, but linked remote market rates were not available.",
+        error instanceof Error ? error.message : String(error),
+      ].join("\n")
+    );
+  }
 }
 
 if (require.main === module) {
-  main();
+  runMarketRatesImport();
 }
 
 module.exports = {
+  parseImportMarketRatesArgs,
   parseSupabaseQueryRows,
 };

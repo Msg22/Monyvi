@@ -1,4 +1,10 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 interface ImportMarketRatesModule {
+  parseImportMarketRatesArgs(argv?: readonly string[]): {
+    readonly bestEffort: boolean;
+  };
   parseSupabaseQueryRows(output: string): readonly unknown[];
 }
 
@@ -7,6 +13,15 @@ const marketRatesImporter = jest.requireActual(
 ) as ImportMarketRatesModule;
 
 describe("import-market-rates-to-local helpers", () => {
+  it("ignores temporary SQL files created during market-rate import", () => {
+    const gitignore = readFileSync(
+      resolve(__dirname, "../../../../.gitignore"),
+      "utf8"
+    );
+
+    expect(gitignore).toContain(".tmp-market-rates-*.sql");
+  });
+
   it("parses Supabase agent JSON envelopes", () => {
     expect(
       marketRatesImporter.parseSupabaseQueryRows(
@@ -25,6 +40,15 @@ describe("import-market-rates-to-local helpers", () => {
         JSON.stringify([{ id: "rate-1" }])
       )
     ).toEqual([{ id: "rate-1" }]);
+  });
+
+  it("parses best-effort mode for manual seed imports", () => {
+    expect(
+      marketRatesImporter.parseImportMarketRatesArgs(["--best-effort"])
+    ).toEqual({ bestEffort: true });
+    expect(marketRatesImporter.parseImportMarketRatesArgs([])).toEqual({
+      bestEffort: false,
+    });
   });
 
   it("ignores non-JSON CLI text around the result", () => {

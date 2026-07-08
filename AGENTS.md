@@ -527,6 +527,52 @@ Before implementing:
 - If a simpler approach exists, say so. Push back when warranted.
 - If something is unclear, stop. Name what's confusing. Ask.
 
+### Consequence and Boundary Review Gate
+
+**Do not start coding until you understand what the change can break.**
+
+For every bug fix, feature, refactor, or review-comment fix, complete this
+mental review before editing production code:
+
+- Identify the exact module, component, hook, service, model, table, edge
+  function, or workflow boundary being touched. Read the caller and callee paths
+  far enough to understand who depends on the behavior.
+- Name the source of truth for the expected behavior before changing it: feature
+  spec, linked issue, PR body, `docs/business/business-decisions.md`, existing
+  tests, or current production code. If the source of truth is missing or
+  conflicts with the code, stop and ask Mohamed before changing behavior.
+- Ask "what existing behavior depends on this?" and inspect those dependents. Do
+  not assume a function is single-use because the immediate file looks small.
+- Ask "what can fail silently?" Look for stale state, async races, retries,
+  cancellation, offline behavior, sync retries, permission revocation, duplicate
+  actions, idempotency, cross-device state, partial writes, and malformed remote
+  data.
+- Ask "what invariant must remain true?" Explicitly protect invariants around
+  user scope, local-first writes, sync metadata, category/account IDs, SMS
+  fingerprints, balances/net worth, consent/privacy gates, and route visibility.
+- Ask "what edge path will reviewers test?" Include unhappy paths, denied or
+  revoked permissions, app restart/resume, background/headless execution, stale
+  local data, missing local rows, remote 4xx/5xx errors, and repeated
+  button/action presses.
+- Verify the change does not move logic across architecture boundaries. UI
+  components render; hooks orchestrate lifecycle; services own persistence and
+  workflows; `packages/logic` owns pure calculations.
+- Write or update the smallest tests that would catch both the original issue
+  and the most likely regression in adjacent behavior. If an E2E path can be
+  affected, update the E2E plan or explain why it is manual-only.
+
+Use the `code-logic-reviewer` mindset before the external reviewer does:
+actively try to disprove your implementation. Search for failure modes, silent
+failures, spec gaps, stale-state paths, and behavior that only works on the
+happy path. PR #721 is the cautionary example: consent logic looked locally
+reasonable but reviewers found cross-path failures in live SMS, Settings, voice
+upload, stale profile state, and remote 403 handling. Future work MUST catch
+those classes of issues before review.
+
+Before final handoff, re-run this gate against the diff. If you cannot explain
+the module boundary, dependents, failure modes, protected invariants, and test
+coverage for the change, the work is not ready to push.
+
 ## 1.1. Debug Before Fixing
 
 **Do not patch from a hypothesis. Prove the root cause first.**
