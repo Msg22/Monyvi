@@ -142,11 +142,16 @@ export default function SettingsScreen(): React.JSX.Element {
   const [pendingAiConsentAction, setPendingAiConsentAction] =
     useState<PendingAiAction | null>(null);
   const shouldResumeAiConsentAfterPrivacyDetails = useRef(false);
-  const { isAiConsentEnabled, markAiConsentGranted, revokeConsent } =
-    useSettingsAiConsentState({
-      isPersistedConsented: aiConsent.isConsented,
-      revokePersistedConsent: aiConsent.revokeConsent,
-    });
+  const {
+    hasConsentedBefore,
+    isAiConsentEnabled,
+    markAiConsentGranted,
+    revokeConsent,
+  } = useSettingsAiConsentState({
+    hasPersistedConsentRecord: aiConsent.consent !== null,
+    isPersistedConsented: aiConsent.isConsented,
+    revokePersistedConsent: aiConsent.revokeConsent,
+  });
   const liveDetectionSwitchValue = liveDetection || isLiveDetectionEnabling;
   const previousNotificationAppState = useRef<AppStateStatus>(
     AppState.currentState
@@ -604,18 +609,6 @@ export default function SettingsScreen(): React.JSX.Element {
     tCommon,
   });
 
-  const handleAiConsentToggleRequest = useCallback(
-    (value: boolean): void => {
-      if (!value) {
-        setIsAiDisableConfirmOpen(true);
-        return;
-      }
-
-      handleAiConsentToggle(true);
-    },
-    [handleAiConsentToggle]
-  );
-
   const openSmsScan = useCallback((): void => router.push("/sms-scan"), []);
   const { continueSmsScanWithConsent } = useSettingsSmsSyncActions({
     onOpenSmsScan: openSmsScan,
@@ -661,6 +654,23 @@ export default function SettingsScreen(): React.JSX.Element {
     showToast,
     tCommon,
   ]);
+
+  const handleAiConsentToggleRequest = useCallback(
+    (value: boolean): void => {
+      if (!value) {
+        setIsAiDisableConfirmOpen(true);
+        return;
+      }
+
+      if (hasConsentedBefore) {
+        void handleAiConsentContinue();
+        return;
+      }
+
+      handleAiConsentToggle(true);
+    },
+    [handleAiConsentContinue, handleAiConsentToggle, hasConsentedBefore]
+  );
 
   useFocusEffect(
     useCallback(() => {
