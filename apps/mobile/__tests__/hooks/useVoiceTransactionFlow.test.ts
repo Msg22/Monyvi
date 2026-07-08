@@ -78,7 +78,8 @@ const mockGetAiProcessingConsentStatus =
 
 function renderVoiceFlow(
   ensureAiProcessingConsent?: () => boolean | Promise<boolean>,
-  hasFreshAiProcessingConsent?: () => boolean | Promise<boolean>
+  hasFreshAiProcessingConsent?: () => boolean | Promise<boolean>,
+  onAiProcessingConsentRequired?: () => void | Promise<void>
 ): ReturnType<
   typeof renderHook<ReturnType<typeof useVoiceTransactionFlow>, undefined>
 > {
@@ -90,6 +91,7 @@ function renderVoiceFlow(
       categoryRecords: [],
       ensureAiProcessingConsent,
       hasFreshAiProcessingConsent,
+      onAiProcessingConsentRequired,
     })
   );
 }
@@ -294,9 +296,11 @@ describe("useVoiceTransactionFlow", () => {
       kind: "consent_required",
       message: "AI processing consent is required.",
     });
+    const onAiProcessingConsentRequired = jest.fn();
     const { result } = renderVoiceFlow(
       jest.fn(),
-      jest.fn(() => true)
+      jest.fn(() => true),
+      onAiProcessingConsentRequired
     );
 
     await act(async () => {
@@ -306,6 +310,7 @@ describe("useVoiceTransactionFlow", () => {
     expect(result.current.flowStatus).toBe("idle");
     expect(result.current.isOverlayVisible).toBe(false);
     expect(result.current.errorMessage).toBeNull();
+    expect(onAiProcessingConsentRequired).toHaveBeenCalledTimes(1);
     expect(mockPush).not.toHaveBeenCalled();
   });
 });

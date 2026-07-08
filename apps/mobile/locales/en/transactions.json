@@ -277,7 +277,7 @@
   "ai_consent_title": "AI helps create transactions",
   "ai_consent_body": "To use this feature, Monyvi sends the SMS or voice note securely to our AI provider so it can suggest transactions.",
   "ai_consent_row_choose": "When you use voice, SMS import, or Live SMS detection",
-  "ai_consent_row_review": "You review before saving",
+  "ai_consent_row_review": "You review before saving, unless you turn on Live SMS auto-confirm",
   "ai_consent_row_no_ads": "Not used for ads",
   "ai_consent_privacy_details": "Privacy details",
   "ai_consent_continue": "Continue",

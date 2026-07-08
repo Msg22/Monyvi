@@ -272,9 +272,15 @@ export async function revokeAiProcessingConsent(
     consentedAt: currentConsent.consentedAt,
     revokedAt: now.toISOString(),
   };
+  const previousConsentRaw = profile.aiProcessingConsentRaw ?? null;
 
   await writeLocalAiProcessingConsent(profile, JSON.stringify(revokedConsent));
-  await updateRemoteAiProcessingConsent(profile.userId, revokedConsent, now);
+  try {
+    await updateRemoteAiProcessingConsent(profile.userId, revokedConsent, now);
+  } catch (error) {
+    await writeLocalAiProcessingConsent(profile, previousConsentRaw);
+    throw error;
+  }
 }
 
 /**

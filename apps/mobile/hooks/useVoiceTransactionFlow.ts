@@ -98,6 +98,8 @@ interface FlowConfig {
   readonly ensureAiProcessingConsent?: () => boolean | Promise<boolean>;
   /** Re-check current AI processing consent before/after upload. */
   readonly hasFreshAiProcessingConsent?: () => boolean | Promise<boolean>;
+  /** Open consent recovery when the AI provider rejects stale local consent. */
+  readonly onAiProcessingConsentRequired?: () => void | Promise<void>;
 }
 
 interface StartFlowOptions {
@@ -364,6 +366,7 @@ export function useVoiceTransactionFlow(
       if (aiResult.kind === "consent_required") {
         setIsOverlayVisible(false);
         updateFlowStatus("idle");
+        await config.onAiProcessingConsentRequired?.();
         return;
       }
 
@@ -410,6 +413,7 @@ export function useVoiceTransactionFlow(
     config.accounts,
     config.categoryRecords,
     config.ensureAiProcessingConsent,
+    config.onAiProcessingConsentRequired,
     stopAfterConsentLoss,
     updateFlowStatus,
   ]);

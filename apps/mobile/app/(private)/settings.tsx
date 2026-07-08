@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocale } from "@/context/LocaleContext";
 
 import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
@@ -66,8 +67,11 @@ import {
 import { logger } from "@/utils/logger";
 import type { PendingAiAction } from "@/components/settings/settings-types";
 
+const SETTINGS_SCROLL_BOTTOM_GAP = 32;
+
 export default function SettingsScreen(): React.JSX.Element {
   const { theme, isDark, toggleTheme } = useTheme();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { preferredCurrency, setPreferredCurrency } = usePreferredCurrency();
   const { t } = useTranslation("settings");
@@ -767,7 +771,12 @@ export default function SettingsScreen(): React.JSX.Element {
         </Text>
         <View className="w-6" />
       </View>
-      <ScrollView contentContainerClassName="px-5">
+      <ScrollView
+        contentContainerClassName="px-5"
+        contentContainerStyle={{
+          paddingBottom: insets.bottom + SETTINGS_SCROLL_BOTTOM_GAP,
+        }}
+      >
         <LanguageSettingsSection
           t={t}
           language={language}

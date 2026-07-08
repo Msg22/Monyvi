@@ -239,6 +239,27 @@ describe("sms-live-processor", () => {
     expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
   });
 
+  it("returns infrastructure_error when consent-required cleanup fails", async () => {
+    const consentError = new Error("AI processing consent required");
+    consentError.name = "AiConsentRequiredError";
+    mockParseSmsWithAi.mockRejectedValueOnce(consentError);
+    mockSetLiveDetectionEnabled.mockRejectedValueOnce(
+      new Error("settings write failed")
+    );
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("infrastructure_error");
+    expect(result.smsFingerprint).toBe("hash-live");
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
+    expect(mockSetAutoConfirm).not.toHaveBeenCalledWith(false);
+  });
+
   it("returns infrastructure_error when local deduplication fails", async () => {
     mockHasExistingSmsFingerprint.mockRejectedValue(
       new Error("database failed")

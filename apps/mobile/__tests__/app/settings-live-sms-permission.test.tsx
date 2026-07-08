@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Settings permission regression tests share one screen-level mock harness. */
 import React, { type ReactNode } from "react";
-import { AppState, type AppStateStatus } from "react-native";
+import { AppState, ScrollView, type AppStateStatus } from "react-native";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 type SmsPermissionStatus = "undetermined" | "granted" | "denied" | "blocked";
@@ -33,6 +33,7 @@ const mockGetNotificationPermissionStatus = jest.fn<
 const mockRouterPush = jest.fn<void, [string]>();
 const mockGrantAiConsent = jest.fn<Promise<void>, []>();
 const mockRevokeAiConsent = jest.fn<Promise<void>, []>();
+const SAFE_AREA_BOTTOM = 24;
 
 let mockSmsPermissionStatus: SmsPermissionStatus = "denied";
 let mockLiveDetectionPermissionStatus: SmsPermissionStatus = "denied";
@@ -166,6 +167,12 @@ jest.mock("@/services/notification-service", () => ({
   requestNotificationPermissionStatus: () =>
     mockRequestNotificationPermissionStatus(),
   openNotificationSettings: () => mockOpenNotificationSettings(),
+}));
+
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: (): { readonly bottom: number } => ({
+    bottom: SAFE_AREA_BOTTOM,
+  }),
 }));
 
 jest.mock("@/components/ui/Toast", () => ({
@@ -311,6 +318,20 @@ describe("Settings live SMS permission recovery", () => {
 
     await screen.findByTestId("live-sms-detection-switch");
     expect(getLiveDetectionSwitchValue(screen)).toBe(true);
+  });
+
+  it("adds bottom safe-area padding to keep lower settings rows scrollable", async () => {
+    const screen = await renderReadySettings();
+
+    const scrollView = screen.UNSAFE_getByType(ScrollView) as unknown as {
+      readonly props: {
+        readonly contentContainerStyle?: { readonly paddingBottom?: number };
+      };
+    };
+
+    expect(
+      scrollView.props.contentContainerStyle?.paddingBottom
+    ).toBeGreaterThan(SAFE_AREA_BOTTOM);
   });
 
   it("opens the custom SMS permission modal instead of enabling live detection immediately", async () => {

@@ -94,6 +94,7 @@ function TabLayoutInner(): React.ReactElement {
     autoStart,
     canAutoStart,
     ensureAiProcessingConsent,
+    onAiProcessingConsentRequired: () => setIsVoiceConsentVisible(true),
   });
   const startVoiceFlow = voiceFlow.startFlow;
 
