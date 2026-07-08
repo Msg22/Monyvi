@@ -48,9 +48,6 @@ interface BatchSaveResult {
   readonly errors: readonly string[];
 }
 
-const UUID_ID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 // ---------------------------------------------------------------------------
 // Balance delta accumulator
 // ---------------------------------------------------------------------------
@@ -86,175 +83,12 @@ function getRuntimeCategoryId(tx: ReviewableTransaction): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function isSharedSystemCategory(category: Category): boolean {
-  return (
-    category.isSystem === true &&
-    (category.userId === null || category.userId === undefined)
-  );
-}
-
-function isCanonicalSharedSystemCategory(category: Category): boolean {
-  return isSharedSystemCategory(category) && UUID_ID_PATTERN.test(category.id);
-}
-
-function getSharedSystemCategoryIdentityKey(category: Category): string {
-  return getSharedSystemCategoryIdentityKeyWithParent(
-    category,
-    category.parentId ?? null
-  );
-}
-
-function getSharedSystemCategoryIdentityKeyWithParent(
-  category: Category,
-  parentId: string | null
-): string {
-  return [
-    category.systemName,
-    category.displayName,
-    category.type ?? "",
-    parentId ?? "",
-    category.level,
-  ].join("|");
-}
-
-function getCategoryLevel(category: Category): number {
-  return typeof category.level === "number" ? category.level : 0;
-}
-
-function collectParentIds(categories: readonly Category[]): ReadonlySet<string> {
-  const parentIds = new Set<string>();
-  for (const category of categories) {
-    if (typeof category.parentId === "string" && category.parentId.length > 0) {
-      parentIds.add(category.parentId);
-    }
-  }
-
-  return parentIds;
-}
-
-async function loadSharedSystemCategoryAncestors(
-  categories: readonly Category[],
-  userId: string
-): Promise<readonly Category[]> {
-  const categoriesById = new Map(
-    categories.map((category) => [category.id, category])
-  );
-  const missingParentIds = new Set(collectParentIds(categories));
-
-  for (const id of categoriesById.keys()) {
-    missingParentIds.delete(id);
-  }
-
-  while (missingParentIds.size > 0) {
-    const parentIds = [...missingParentIds];
-    missingParentIds.clear();
-
-    const parentCategories = await queryAccessibleCategories(
-      database.get<Category>("categories"),
-      userId,
-      Q.where("id", Q.oneOf(parentIds)),
-      Q.where("is_system", true),
-      Q.where("deleted", false)
-    ).fetch();
-
-    for (const parent of parentCategories) {
-      if (categoriesById.has(parent.id)) {
-        continue;
-      }
-
-      categoriesById.set(parent.id, parent);
-      if (
-        typeof parent.parentId === "string" &&
-        parent.parentId.length > 0 &&
-        !categoriesById.has(parent.parentId)
-      ) {
-        missingParentIds.add(parent.parentId);
-      }
-    }
-  }
-
-  return [...categoriesById.values()];
-}
-
-function buildCanonicalSharedCategoryMap(
-  categories: readonly Category[]
-): ReadonlyMap<string, Category> {
-  const canonicalCategoryMap = new Map<string, Category>();
-  const orderedCategories = [...categories].sort(
-    (left, right) => getCategoryLevel(left) - getCategoryLevel(right)
-  );
-
-  for (const category of orderedCategories) {
-    if (!isCanonicalSharedSystemCategory(category)) {
-      continue;
-    }
-
-    const key = getSharedSystemCategoryIdentityKey(category);
-    const selected = canonicalCategoryMap.get(key);
-    if (!selected || shouldReplaceCanonicalCategory(selected, category)) {
-      canonicalCategoryMap.set(key, category);
-    }
-  }
-
-  return canonicalCategoryMap;
-}
-
-function resolveCanonicalSharedCategoryIds(
-  categories: readonly Category[],
-  canonicalCategoryMap: ReadonlyMap<string, Category>
-): ReadonlyMap<string, string> {
-  const resolvedCategoryIds = new Map<string, string>();
-  const orderedCategories = [...categories].sort(
-    (left, right) => getCategoryLevel(left) - getCategoryLevel(right)
-  );
-
-  for (const category of orderedCategories) {
-    if (!isSharedSystemCategory(category)) {
-      continue;
-    }
-
-    const normalizedParentId =
-      category.parentId === null || category.parentId === undefined
-        ? null
-        : (resolvedCategoryIds.get(category.parentId) ?? category.parentId);
-    const canonicalCategory = canonicalCategoryMap.get(
-      getSharedSystemCategoryIdentityKeyWithParent(category, normalizedParentId)
-    );
-    if (canonicalCategory) {
-      resolvedCategoryIds.set(category.id, canonicalCategory.id);
-    }
-  }
-
-  return resolvedCategoryIds;
-}
-
-function getCreatedAtTime(category: Category): number | null {
-  const time = category.createdAt?.getTime();
-  return typeof time === "number" && Number.isFinite(time) ? time : null;
-}
-
-function shouldReplaceCanonicalCategory(
-  selected: Category,
-  candidate: Category
-): boolean {
-  const selectedCreatedAt = getCreatedAtTime(selected);
-  const candidateCreatedAt = getCreatedAtTime(candidate);
-  if (selectedCreatedAt !== null && candidateCreatedAt !== null) {
-    const createdAtDiff = candidateCreatedAt - selectedCreatedAt;
-    if (createdAtDiff !== 0) {
-      return createdAtDiff < 0;
-    }
-  }
-
-  return candidate.id.localeCompare(selected.id) < 0;
-}
-
-async function loadAccessibleCategoryIdMap(
+async function loadAccessibleCategoryIds(
   categoryIds: ReadonlySet<string>,
   userId: string
-): Promise<ReadonlyMap<string, string>> {
+): Promise<ReadonlySet<string>> {
   if (categoryIds.size === 0) {
-    return new Map();
+    return new Set();
   }
 
   const categories = await queryAccessibleCategories(
@@ -264,52 +98,7 @@ async function loadAccessibleCategoryIdMap(
     Q.where("deleted", false)
   ).fetch();
 
-  const resolvedCategoryIds = new Map<string, string>();
-  const sharedSystemNames = new Set<string>();
-
-  for (const category of categories) {
-    if (!isSharedSystemCategory(category)) {
-      resolvedCategoryIds.set(category.id, category.id);
-      continue;
-    }
-
-    sharedSystemNames.add(category.systemName);
-    if (isCanonicalSharedSystemCategory(category)) {
-      resolvedCategoryIds.set(category.id, category.id);
-    }
-  }
-
-  if (sharedSystemNames.size === 0) {
-    return resolvedCategoryIds;
-  }
-
-  const sharedSystemCategories = await queryAccessibleCategories(
-    database.get<Category>("categories"),
-    userId,
-    Q.where("system_name", Q.oneOf([...sharedSystemNames])),
-    Q.where("is_system", true),
-    Q.where("deleted", false)
-  ).fetch();
-
-  const sharedCategoriesWithAncestors = await loadSharedSystemCategoryAncestors(
-    [...categories, ...sharedSystemCategories],
-    userId
-  );
-  const canonicalCategoryMap = buildCanonicalSharedCategoryMap(
-    sharedCategoriesWithAncestors
-  );
-  const canonicalSharedCategoryIds = resolveCanonicalSharedCategoryIds(
-    sharedCategoriesWithAncestors,
-    canonicalCategoryMap
-  );
-
-  for (const [categoryId, canonicalCategoryId] of canonicalSharedCategoryIds) {
-    if (categoryIds.has(categoryId)) {
-      resolvedCategoryIds.set(categoryId, canonicalCategoryId);
-    }
-  }
-
-  return resolvedCategoryIds;
+  return new Set(categories.map((category) => category.id));
 }
 
 // ---------------------------------------------------------------------------
@@ -378,7 +167,7 @@ export async function batchCreateTransactions<T extends ReviewableTransaction>(
     }
   }
 
-  const accessibleCategoryIds = await loadAccessibleCategoryIdMap(
+  const accessibleCategoryIds = await loadAccessibleCategoryIds(
     regularCategoryIds,
     userId
   );
@@ -484,8 +273,7 @@ export async function batchCreateTransactions<T extends ReviewableTransaction>(
       continue;
     }
 
-    const resolvedCategoryId = accessibleCategoryIds.get(categoryId);
-    if (!resolvedCategoryId) {
+    if (!accessibleCategoryIds.has(categoryId)) {
       errors.push(`Transaction ${i + 1} needs a valid category`);
       failedCount++;
       continue;
@@ -498,7 +286,7 @@ export async function batchCreateTransactions<T extends ReviewableTransaction>(
         record.amount = Math.abs(tx.amount);
         record.currency = tx.currency;
         record.type = tx.type;
-        record.categoryId = resolvedCategoryId;
+        record.categoryId = categoryId;
         record.counterparty = tx.counterparty ?? undefined;
         record.note = "";
         record.date = tx.date;

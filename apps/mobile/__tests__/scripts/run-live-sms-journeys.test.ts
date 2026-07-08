@@ -17,25 +17,6 @@ interface RunLiveSmsJourneysModule {
   ):
     | "../helpers/ci-auth-bootstrap.yaml"
     | "../helpers/ci-auth-deeplink-bootstrap.yaml";
-  getNotificationDumpRecords(notificationDump: string): string[];
-  notificationDumpMatchesPatterns(
-    notificationDump: string,
-    patterns: readonly string[],
-    packageName?: string
-  ): boolean;
-  findVisibleNotificationMatch(
-    nodes: ReadonlyArray<{
-      readonly text: string;
-      readonly contentDescription: string;
-      readonly resourceId: string;
-      readonly bounds: string;
-    }>,
-    patterns: readonly string[],
-    notificationDump?: string
-  ): unknown;
-  parseBounds(
-    bounds: string
-  ): { left: number; top: number; right: number; bottom: number } | null;
   isRetryableMaestroTransportFailure(output: string): boolean;
   shouldPrepareLiveSmsFlowBeforeRetry(flow: string): boolean;
   shouldRetryLiveSmsVerificationFlow(flow: string): boolean;
@@ -43,7 +24,6 @@ interface RunLiveSmsJourneysModule {
     flow: string,
     env?: Readonly<Record<string, string | undefined>>
   ): boolean;
-  isRetryableLiveSmsPreflightFailure(error: unknown): boolean;
 }
 
 const liveSmsJourneys = jest.requireActual(
@@ -104,11 +84,6 @@ describe("run-live-sms-journeys helpers", () => {
         E2E_MAESTRO_TRANSPORT_RETRY_ATTEMPTS: "2",
       })
     ).toBe(2);
-    expect(
-      liveSmsJourneys.getMaestroTransportRetryAttempts({
-        E2E_MAESTRO_TRANSPORT_RETRY_ATTEMPTS: "0",
-      })
-    ).toBe(4);
   });
 
   it("uses the guarded deep-link auth bootstrap when CI opts in", () => {
@@ -120,107 +95,6 @@ describe("run-live-sms-journeys helpers", () => {
         E2E_AUTH_DEEPLINK_BOOTSTRAP: "1",
       })
     ).toBe("../helpers/ci-auth-deeplink-bootstrap.yaml");
-  });
-
-  it("parses Android notification bounds that start off screen", () => {
-    expect(liveSmsJourneys.parseBounds("[-104,0][-46,136]")).toEqual({
-      left: -104,
-      top: 0,
-      right: -46,
-      bottom: 136,
-    });
-  });
-
-  it("matches expected text within one active Monyvi notification record", () => {
-    const notificationDump = [
-      "NotificationRecord(pkg=android id=1)",
-      "  android.title=Expense Detected",
-      "NotificationRecord(pkg=com.monyvi.app id=2)",
-      "  android.title=Expense Detected",
-      "  android.text=63.21 EGP from QNB",
-      "  android.bigText=To: BACKGROUND LIVE SMS TEST",
-      "NotificationRecord(pkg=com.monyvi.app id=3)",
-      "  android.title=Expense Detected",
-      "  android.text=71.45 EGP from QNB",
-      "  android.bigText=To: BACKGROUND CONFIRM MARKET",
-    ].join("\n");
-
-    expect(
-      liveSmsJourneys.notificationDumpMatchesPatterns(
-        notificationDump,
-        ["Expense Detected", "BACKGROUND LIVE SMS TEST", "63\\.21"],
-        "com.monyvi.app"
-      )
-    ).toBe(true);
-    expect(
-      liveSmsJourneys.notificationDumpMatchesPatterns(
-        notificationDump,
-        ["Expense Detected", "BACKGROUND CONFIRM MARKET", "63\\.21"],
-        "com.monyvi.app"
-      )
-    ).toBe(false);
-  });
-
-  it("does not use title-only fallback when multiple visible notifications share the title", () => {
-    const nodes = [
-      {
-        text: "Expense Detected",
-        contentDescription: "",
-        resourceId: "",
-        bounds: "[0,100][900,160]",
-      },
-      {
-        text: "Expense Detected",
-        contentDescription: "",
-        resourceId: "",
-        bounds: "[0,500][900,560]",
-      },
-    ];
-    const notificationDump = [
-      "NotificationRecord(pkg=com.monyvi.app id=2)",
-      "  android.title=Expense Detected",
-      "  android.text=63.21 EGP from QNB",
-      "  android.bigText=To: BACKGROUND LIVE SMS TEST",
-    ].join("\n");
-
-    expect(
-      liveSmsJourneys.findVisibleNotificationMatch(
-        nodes,
-        ["Expense Detected", "BACKGROUND LIVE SMS TEST", "63\\.21"],
-        notificationDump
-      )
-    ).toBeNull();
-  });
-
-  it("does not require a notification dump when visible text already matches", () => {
-    const nodes = [
-      {
-        text: "Expense Detected",
-        contentDescription: "",
-        resourceId: "",
-        bounds: "[0,100][900,160]",
-      },
-      {
-        text: "BACKGROUND LIVE SMS TEST",
-        contentDescription: "",
-        resourceId: "",
-        bounds: "[0,170][900,230]",
-      },
-      {
-        text: "63.21",
-        contentDescription: "",
-        resourceId: "",
-        bounds: "[0,240][900,300]",
-      },
-    ];
-
-    expect(
-      liveSmsJourneys.findVisibleNotificationMatch(nodes, [
-        "Expense Detected",
-        "BACKGROUND LIVE SMS TEST",
-        "63\\.21",
-      ])
-    ).not.toBeNull();
   });
 
   it("detects retryable Maestro Android transport disconnects", () => {
@@ -245,28 +119,6 @@ describe("run-live-sms-journeys helpers", () => {
     expect(
       liveSmsJourneys.isRetryableMaestroTransportFailure(
         'Assertion is false: "Transactions" is visible'
-      )
-    ).toBe(false);
-  });
-
-  it("retries live-SMS preflight native-root launch stalls", () => {
-    expect(
-      liveSmsJourneys.isRetryableLiveSmsPreflightFailure(
-        new Error(
-          "E2E preflight failed. The native app root mounted, but no recognized Monyvi screen became visible."
-        )
-      )
-    ).toBe(true);
-    expect(
-      liveSmsJourneys.isRetryableLiveSmsPreflightFailure(
-        new Error(
-          "E2E preflight failed. The app did not reach a recognized Monyvi screen."
-        )
-      )
-    ).toBe(true);
-    expect(
-      liveSmsJourneys.isRetryableLiveSmsPreflightFailure(
-        new Error('Assertion is false: "Transactions" is visible')
       )
     ).toBe(false);
   });

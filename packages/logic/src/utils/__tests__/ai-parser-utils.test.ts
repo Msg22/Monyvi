@@ -18,7 +18,6 @@ import {
   VALID_TYPES,
   DATE_ONLY_REGEX,
   type CategoryMap,
-  type CategoryMapSource,
 } from "../ai-parser-utils";
 import type { Category } from "@monyvi/db";
 
@@ -251,128 +250,6 @@ describe("ai-parser-utils", () => {
     it("should return empty map for empty array", () => {
       const map = buildCategoryMap([]);
       expect(map.size).toBe(0);
-    });
-
-    it("prefers a canonical UUID system category over a legacy local duplicate", () => {
-      const categories: CategoryMapSource[] = [
-        {
-          id: "00000000-0000-0000-0001-000000000002",
-          systemName: "food",
-          displayName: "Food",
-          isSystem: true,
-          userId: null,
-        },
-        {
-          id: "a1b2c3d4e5f6g7h8",
-          systemName: "food",
-          displayName: "Food",
-          isSystem: true,
-          userId: null,
-        },
-      ];
-
-      const map = buildCategoryMap(categories);
-
-      expect(map.get("food")).toEqual({
-        name: "Food",
-        id: "00000000-0000-0000-0001-000000000002",
-      });
-    });
-
-    it("mirrors server dedupe order for duplicate UUID system categories", () => {
-      const categories: CategoryMapSource[] = [
-        {
-          id: "00000000-0000-0000-0001-000000000020",
-          systemName: "food",
-          displayName: "Food",
-          isSystem: true,
-          userId: null,
-          createdAt: new Date("2026-01-02T00:00:00.000Z"),
-        },
-        {
-          id: "00000000-0000-0000-0001-000000000010",
-          systemName: "food",
-          displayName: "Food",
-          isSystem: true,
-          userId: null,
-          createdAt: new Date("2026-01-01T00:00:00.000Z"),
-        },
-      ];
-
-      const map = buildCategoryMap(categories);
-
-      expect(map.get("food")).toEqual({
-        name: "Food",
-        id: "00000000-0000-0000-0001-000000000010",
-      });
-    });
-
-    it("does not dedupe legitimate shared categories that only share system name", () => {
-      const categories: CategoryMapSource[] = [
-        {
-          id: "00000000-0000-0000-0001-000000000111",
-          systemName: "travel",
-          displayName: "Travel",
-          isSystem: true,
-          userId: null,
-          type: "EXPENSE",
-          parentId: "00000000-0000-0000-0001-000000000020",
-          level: 2,
-          createdAt: new Date("2026-01-01T00:00:00.000Z"),
-        },
-        {
-          id: "00000000-0000-0000-0001-000000000222",
-          systemName: "travel",
-          displayName: "Travel",
-          isSystem: true,
-          userId: null,
-          type: "EXPENSE",
-          parentId: null,
-          level: 1,
-          createdAt: new Date("2026-01-02T00:00:00.000Z"),
-        },
-      ];
-
-      const map = buildCategoryMap(categories);
-
-      expect(map.get("travel")).toEqual({
-        name: "Travel",
-        id: "00000000-0000-0000-0001-000000000222",
-      });
-    });
-
-    it("keeps the root shared category when a child with the same system name appears later", () => {
-      const categories: CategoryMapSource[] = [
-        {
-          id: "00000000-0000-0000-0001-000000000222",
-          systemName: "travel",
-          displayName: "Travel",
-          isSystem: true,
-          userId: null,
-          type: "EXPENSE",
-          parentId: null,
-          level: 1,
-          createdAt: new Date("2026-01-02T00:00:00.000Z"),
-        },
-        {
-          id: "00000000-0000-0000-0001-000000000111",
-          systemName: "travel",
-          displayName: "Travel",
-          isSystem: true,
-          userId: null,
-          type: "EXPENSE",
-          parentId: "00000000-0000-0000-0001-000000000020",
-          level: 2,
-          createdAt: new Date("2026-01-01T00:00:00.000Z"),
-        },
-      ];
-
-      const map = buildCategoryMap(categories);
-
-      expect(map.get("travel")).toEqual({
-        name: "Travel",
-        id: "00000000-0000-0000-0001-000000000222",
-      });
     });
   });
 

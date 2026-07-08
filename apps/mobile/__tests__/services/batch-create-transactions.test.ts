@@ -1,20 +1,12 @@
 import type { ReviewableTransaction } from "@monyvi/logic";
 
-type PrepareCreateBuilder = (record: Record<string, unknown>) => void;
-
 const mockGetCurrentUserId = jest.fn<Promise<string | null>, []>();
 const mockEnsureCashAccount = jest.fn();
 const mockQueryOwned = jest.fn();
 const mockQueryAccessibleCategories = jest.fn();
 const mockHasExistingSmsFingerprint = jest.fn<Promise<boolean>, [string]>();
-const mockPrepareTransactionCreate = jest.fn<
-  Record<string, unknown>,
-  [PrepareCreateBuilder]
->();
-const mockPrepareTransferCreate = jest.fn<
-  Record<string, unknown>,
-  [PrepareCreateBuilder]
->();
+const mockPrepareTransactionCreate = jest.fn();
+const mockPrepareTransferCreate = jest.fn();
 const mockDatabaseBatch = jest.fn<Promise<void>, [readonly unknown[]]>();
 const mockDatabaseWrite = jest.fn<Promise<void>, [() => Promise<void>]>();
 const mockDatabaseGet = jest.fn();
@@ -26,18 +18,6 @@ interface MockAccount {
     MockAccount,
     [(account: MockAccount) => void]
   >;
-}
-
-interface MockCategory {
-  readonly id: string;
-  readonly systemName: string;
-  readonly displayName: string;
-  readonly isSystem: boolean;
-  readonly userId?: string | null;
-  readonly createdAt?: Date;
-  readonly type?: string | null;
-  readonly parentId?: string | null;
-  readonly level?: number;
 }
 
 jest.mock("@/services/supabase", () => ({
@@ -162,6 +142,7 @@ describe("batchCreateTransactions", () => {
         Promise.resolve([account])
       ),
     });
+
     const result = await batchCreateTransactions(
       [
         createReviewableTransaction({ amount: 100 }),
@@ -267,251 +248,33 @@ describe("batchCreateTransactions", () => {
     expect(account.balance).toBe(1000);
   });
 
-  it("remaps local-only shared system category duplicates to the canonical category before saving", async () => {
-    const account = createAccount("acc-1", 1000);
-    const localDuplicate: MockCategory = {
-      id: "local-food",
-      systemName: "food",
-      displayName: "Food",
-      isSystem: true,
-      userId: null,
-      createdAt: new Date("2026-07-05T10:00:00.000Z"),
-    };
-    const canonicalCategory: MockCategory = {
-      id: "00000000-0000-0000-0001-000000000010",
-      systemName: "food",
-      displayName: "Food",
-      isSystem: true,
-      userId: null,
-      createdAt: new Date("2026-01-01T10:00:00.000Z"),
-    };
+  it("does not require a transaction category for ATM withdrawals saved as transfers", async () => {
+    const bankAccount = createAccount("bank-1", 1000);
+    const cashAccount = createAccount("cash-1", 100);
     mockQueryOwned.mockReturnValue({
       fetch: jest.fn<Promise<readonly MockAccount[]>, []>(() =>
-        Promise.resolve([account])
+        Promise.resolve([bankAccount, cashAccount])
       ),
     });
-    mockQueryAccessibleCategories
-      .mockReturnValueOnce({
-        fetch: jest.fn<Promise<readonly MockCategory[]>, []>(() =>
-          Promise.resolve([localDuplicate])
-        ),
-      })
-      .mockReturnValueOnce({
-        fetch: jest.fn<Promise<readonly MockCategory[]>, []>(() =>
-          Promise.resolve([localDuplicate, canonicalCategory])
-        ),
-      });
+
+    const atmWithdrawal = {
+      ...createReviewableTransaction({
+        categoryId: undefined as unknown as string,
+      }),
+      isAtmWithdrawal: true,
+    };
 
     const result = await batchCreateTransactions(
-      [createReviewableTransaction({ categoryId: "local-food" })],
-      new Map([[0, "acc-1"]])
+      [atmWithdrawal],
+      new Map([[0, "bank-1"]]),
+      new Map([[0, "cash-1"]])
     );
 
     expect(result).toEqual({ savedCount: 1, failedCount: 0, errors: [] });
-    expect(mockPrepareTransactionCreate).toHaveBeenCalledTimes(1);
-    const builder = mockPrepareTransactionCreate.mock.calls[0]?.[0];
-    const record: Record<string, unknown> = {};
-    if (!builder) {
-      throw new Error("Expected transaction create builder to be recorded.");
-    }
-    builder(record);
-    expect(record.categoryId).toBe(
-      "00000000-0000-0000-0001-000000000010"
-    );
-  });
-
-  it("matches shared system category duplicates by full category identity", async () => {
-    const account = createAccount("acc-1", 1000);
-    const localTravelRoot: MockCategory = {
-      id: "local-travel-root",
-      systemName: "travel",
-      displayName: "Travel",
-      isSystem: true,
-      userId: null,
-      type: "EXPENSE",
-      parentId: null,
-      level: 1,
-    };
-    const canonicalShoppingTravel: MockCategory = {
-      id: "00000000-0000-0000-0001-000000000111",
-      systemName: "travel",
-      displayName: "Travel",
-      isSystem: true,
-      userId: null,
-      type: "EXPENSE",
-      parentId: "00000000-0000-0000-0001-000000000020",
-      level: 2,
-    };
-    const canonicalRootTravel: MockCategory = {
-      id: "00000000-0000-0000-0001-000000000222",
-      systemName: "travel",
-      displayName: "Travel",
-      isSystem: true,
-      userId: null,
-      type: "EXPENSE",
-      parentId: null,
-      level: 1,
-    };
-    mockQueryOwned.mockReturnValue({
-      fetch: jest.fn<Promise<readonly MockAccount[]>, []>(() =>
-        Promise.resolve([account])
-      ),
-    });
-    mockQueryAccessibleCategories
-      .mockReturnValueOnce({
-        fetch: jest.fn<Promise<readonly MockCategory[]>, []>(() =>
-          Promise.resolve([localTravelRoot])
-        ),
-      })
-      .mockReturnValueOnce({
-        fetch: jest.fn<Promise<readonly MockCategory[]>, []>(() =>
-          Promise.resolve([
-            localTravelRoot,
-            canonicalShoppingTravel,
-            canonicalRootTravel,
-          ])
-        ),
-      })
-      .mockReturnValueOnce({
-        fetch: jest.fn<Promise<readonly MockCategory[]>, []>(() =>
-          Promise.resolve([])
-        ),
-      });
-
-    const result = await batchCreateTransactions(
-      [createReviewableTransaction({ categoryId: "local-travel-root" })],
-      new Map([[0, "acc-1"]])
-    );
-
-    expect(result).toEqual({ savedCount: 1, failedCount: 0, errors: [] });
-    const builder = mockPrepareTransactionCreate.mock.calls[0]?.[0];
-    const record: Record<string, unknown> = {};
-    if (!builder) {
-      throw new Error("Expected transaction create builder to be recorded.");
-    }
-    builder(record);
-    expect(record.categoryId).toBe(
-      "00000000-0000-0000-0001-000000000222"
-    );
-  });
-
-  it("canonicalizes duplicate parent IDs before matching child system categories", async () => {
-    const account = createAccount("acc-1", 1000);
-    const localShoppingParent: MockCategory = {
-      id: "local-shopping",
-      systemName: "shopping",
-      displayName: "Shopping",
-      isSystem: true,
-      userId: null,
-      type: "EXPENSE",
-      parentId: null,
-      level: 1,
-    };
-    const canonicalShoppingParent: MockCategory = {
-      id: "00000000-0000-0000-0001-000000000020",
-      systemName: "shopping",
-      displayName: "Shopping",
-      isSystem: true,
-      userId: null,
-      type: "EXPENSE",
-      parentId: null,
-      level: 1,
-    };
-    const localShoppingTravel: MockCategory = {
-      id: "local-shopping-travel",
-      systemName: "travel",
-      displayName: "Travel",
-      isSystem: true,
-      userId: null,
-      type: "EXPENSE",
-      parentId: "local-shopping",
-      level: 2,
-    };
-    const canonicalShoppingTravel: MockCategory = {
-      id: "00000000-0000-0000-0001-000000000111",
-      systemName: "travel",
-      displayName: "Travel",
-      isSystem: true,
-      userId: null,
-      type: "EXPENSE",
-      parentId: "00000000-0000-0000-0001-000000000020",
-      level: 2,
-    };
-    mockQueryOwned.mockReturnValue({
-      fetch: jest.fn<Promise<readonly MockAccount[]>, []>(() =>
-        Promise.resolve([account])
-      ),
-    });
-    mockQueryAccessibleCategories
-      .mockReturnValueOnce({
-        fetch: jest.fn<Promise<readonly MockCategory[]>, []>(() =>
-          Promise.resolve([localShoppingTravel])
-        ),
-      })
-      .mockReturnValueOnce({
-        fetch: jest.fn<Promise<readonly MockCategory[]>, []>(() =>
-          Promise.resolve([localShoppingTravel, canonicalShoppingTravel])
-        ),
-      })
-      .mockReturnValueOnce({
-        fetch: jest.fn<Promise<readonly MockCategory[]>, []>(() =>
-          Promise.resolve([localShoppingParent, canonicalShoppingParent])
-        ),
-      });
-
-    const result = await batchCreateTransactions(
-      [createReviewableTransaction({ categoryId: "local-shopping-travel" })],
-      new Map([[0, "acc-1"]])
-    );
-
-    expect(result).toEqual({ savedCount: 1, failedCount: 0, errors: [] });
-    const builder = mockPrepareTransactionCreate.mock.calls[0]?.[0];
-    const record: Record<string, unknown> = {};
-    if (!builder) {
-      throw new Error("Expected transaction create builder to be recorded.");
-    }
-    builder(record);
-    expect(record.categoryId).toBe(
-      "00000000-0000-0000-0001-000000000111"
-    );
-  });
-
-  it("rejects local-only shared system category duplicates when no canonical category exists", async () => {
-    const account = createAccount("acc-1", 1000);
-    const localDuplicate: MockCategory = {
-      id: "local-food",
-      systemName: "food",
-      displayName: "Food",
-      isSystem: true,
-      userId: null,
-      createdAt: new Date("2026-07-05T10:00:00.000Z"),
-    };
-    mockQueryOwned.mockReturnValue({
-      fetch: jest.fn<Promise<readonly MockAccount[]>, []>(() =>
-        Promise.resolve([account])
-      ),
-    });
-    mockQueryAccessibleCategories
-      .mockReturnValueOnce({
-        fetch: jest.fn<Promise<readonly MockCategory[]>, []>(() =>
-          Promise.resolve([localDuplicate])
-        ),
-      })
-      .mockReturnValueOnce({
-        fetch: jest.fn<Promise<readonly MockCategory[]>, []>(() =>
-          Promise.resolve([localDuplicate])
-        ),
-      });
-
-    const result = await batchCreateTransactions(
-      [createReviewableTransaction({ categoryId: "local-food" })],
-      new Map([[0, "acc-1"]])
-    );
-
-    expect(result.savedCount).toBe(0);
-    expect(result.failedCount).toBe(1);
-    expect(result.errors[0]).toContain("needs a valid category");
+    expect(mockPrepareTransferCreate).toHaveBeenCalledTimes(1);
     expect(mockPrepareTransactionCreate).not.toHaveBeenCalled();
+    expect(bankAccount.balance).toBe(900);
+    expect(cashAccount.balance).toBe(200);
   });
 
   it("silently skips SMS fingerprints that already exist locally", async () => {

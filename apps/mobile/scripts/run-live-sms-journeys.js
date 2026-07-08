@@ -151,10 +151,7 @@ function blockSmsPermissions() {
 }
 
 function clearDeliveredNotifications() {
-  adb(["shell", "cmd", "notification", "cancel-all"], {
-    capture: true,
-    allowFailure: true,
-  });
+  adb(["shell", "cmd", "notification", "cancel-all"], { allowFailure: true });
 }
 
 function resetNotificationPermission() {
@@ -332,7 +329,7 @@ function parseBoundsCenter(bounds) {
 }
 
 function parseBounds(bounds) {
-  const match = bounds.match(/^\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]$/);
+  const match = bounds.match(/^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$/);
   if (!match) {
     return null;
   }
@@ -353,11 +350,10 @@ function normalizeNotificationPatterns(patterns) {
   return Array.isArray(patterns) ? patterns : [patterns];
 }
 
-function findNotificationMatches(nodes, patterns) {
+function findNotificationMatch(nodes, patterns) {
   const regexes = normalizeNotificationPatterns(patterns).map(
     (pattern) => new RegExp(pattern, "i")
   );
-  const matches = [];
 
   for (const anchor of nodes) {
     if (!regexes[0].test(getNodeVisibleText(anchor))) {
@@ -390,83 +386,14 @@ function findNotificationMatches(nodes, patterns) {
       .map((node) => (node.bounds ? parseBounds(node.bounds) : null))
       .filter(Boolean);
 
-    matches.push({
+    return {
       anchor,
       top: Math.min(...nearbyBounds.map((bounds) => bounds.top)),
       bottom: Math.max(...nearbyBounds.map((bounds) => bounds.bottom)),
-    });
+    };
   }
 
-  return matches;
-}
-
-function findNotificationMatch(nodes, patterns) {
-  return findNotificationMatches(nodes, patterns)[0] ?? null;
-}
-
-function dumpActiveNotifications() {
-  return adb(["shell", "dumpsys", "notification", "--noredact"], {
-    capture: true,
-    allowFailure: true,
-  });
-}
-
-function getNotificationDumpRecords(notificationDump) {
-  const sections = notificationDump.split(/\n\s*NotificationRecord\(/);
-  return sections.map((section, index) =>
-    index === 0 ? section : `NotificationRecord(${section}`
-  );
-}
-
-function getNotificationDumpMatchingRecords(
-  notificationDump,
-  patterns,
-  packageName = appId
-) {
-  const regexes = normalizeNotificationPatterns(patterns).map(
-    (pattern) => new RegExp(pattern, "i")
-  );
-  const records = getNotificationDumpRecords(notificationDump).filter(
-    (record) => record.includes(packageName)
-  );
-
-  return records.filter((record) =>
-    regexes.every((regex) => regex.test(record))
-  );
-}
-
-function notificationDumpMatchesPatterns(
-  notificationDump,
-  patterns,
-  packageName = appId
-) {
-  return (
-    getNotificationDumpMatchingRecords(notificationDump, patterns, packageName)
-      .length > 0
-  );
-}
-
-function findVisibleNotificationMatch(
-  nodes,
-  patterns,
-  notificationDump
-) {
-  const match = findNotificationMatch(nodes, patterns);
-  if (match) {
-    return match;
-  }
-
-  const matchingRecords = getNotificationDumpMatchingRecords(
-    notificationDump ?? dumpActiveNotifications(),
-    patterns
-  );
-  if (matchingRecords.length !== 1) {
-    return null;
-  }
-
-  const [anchorPattern] = normalizeNotificationPatterns(patterns);
-  const anchorMatches = findNotificationMatches(nodes, [anchorPattern]);
-  return anchorMatches.length === 1 ? anchorMatches[0] : null;
+  return null;
 }
 
 function isNodeNearNotification(node, notificationMatch) {
@@ -519,7 +446,7 @@ function waitForNotificationText(patterns, timeoutMs = 60000) {
     wait(1000);
     const uiXml = dumpVisibleText();
     const nodes = parseUiNodes(uiXml);
-    if (findVisibleNotificationMatch(nodes, patterns)) {
+    if (findNotificationMatch(nodes, patterns)) {
       return;
     }
     collapseSystemUi();
@@ -545,7 +472,7 @@ function tapNotificationAction(notificationTextPatterns, actionText) {
 
     const uiXml = dumpVisibleText();
     const nodes = parseUiNodes(uiXml);
-    const notificationMatch = findVisibleNotificationMatch(
+    const notificationMatch = findNotificationMatch(
       nodes,
       notificationTextPatterns
     );
@@ -605,7 +532,7 @@ function waitForNotificationDismissed(patterns, timeoutMs = 30000) {
     wait(1000);
     const uiXml = dumpVisibleText();
     const nodes = parseUiNodes(uiXml);
-    if (!findVisibleNotificationMatch(nodes, patterns)) {
+    if (!findNotificationMatch(nodes, patterns)) {
       return;
     }
     wait(1000);
@@ -1082,16 +1009,6 @@ function shouldResetLiveSmsSideEffectsBeforeRetry(flow, env = process.env) {
   );
 }
 
-function isRetryableLiveSmsPreflightFailure(error) {
-  const message = error instanceof Error ? error.message : String(error);
-  return (
-    isRetryableMaestroTransportFailure(message) ||
-    /E2E preflight failed\.\s+(?:The native app root mounted, but no recognized Monyvi screen became visible|The app did not reach a recognized Monyvi screen)/i.test(
-      message
-    )
-  );
-}
-
 function shouldRetryLiveSmsVerificationFlow(flow) {
   return flow.endsWith("-verification.yaml");
 }
@@ -1102,30 +1019,12 @@ function logInfo(event, fields) {
   );
 }
 
-async function ensureLiveSmsAppReady() {
-  try {
-    await ensureE2eAppReady();
-    return;
-  } catch (error) {
-    if (!isRetryableLiveSmsPreflightFailure(error)) {
-      throw error;
-    }
-
-    logInfo("liveSmsJourney.preflightRetry", {
-      reason: "app-launch-not-ready",
-    });
-    reconnectMaestroTransport();
-    forceStopApp();
-    await ensureE2eAppReady();
-  }
-}
-
 async function prepareLiveSmsJourneyRetry(journey) {
   await bootstrapCleanAuthenticatedSession();
   clearDeliveredNotifications();
   journey.prepare();
   forceStopApp();
-  await ensureLiveSmsAppReady();
+  await ensureE2eAppReady();
 }
 
 async function main() {
@@ -1146,10 +1045,9 @@ async function main() {
     }
 
     logInfo("liveSmsJourney.started", { id, flow: journey.flow });
-    clearDeliveredNotifications();
     journey.prepare();
     forceStopApp();
-    await ensureLiveSmsAppReady();
+    await ensureE2eAppReady();
     const canResetSideEffects = shouldResetLiveSmsSideEffectsBeforeRetry(
       journey.flow
     );
@@ -1180,11 +1078,6 @@ module.exports = {
   getMaestroFlowTimeoutMs,
   getMaestroTransportRetryAttempts,
   getActiveUserFilter,
-  getNotificationDumpRecords,
-  findVisibleNotificationMatch,
-  notificationDumpMatchesPatterns,
-  parseBounds,
-  isRetryableLiveSmsPreflightFailure,
   isRetryableMaestroTransportFailure,
   shouldPrepareLiveSmsFlowBeforeRetry,
   shouldRetryLiveSmsVerificationFlow,
