@@ -1,12 +1,6 @@
 import React, { type ReactNode } from "react";
 import { Platform } from "react-native";
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react-native";
+import { act, render, screen, waitFor } from "@testing-library/react-native";
 
 const mockGrantAiConsent = jest.fn<Promise<void>, []>();
 const mockRevokeAiConsent = jest.fn<Promise<void>, []>();
@@ -20,6 +14,7 @@ const mockLoadExistingSmsFingerprints = jest.fn<
 const mockRouterBack = jest.fn();
 const mockRouterPush = jest.fn<void, [string]>();
 const mockRouterReplace = jest.fn<void, [string]>();
+let mockAiConsentContinue: (() => Promise<void>) | null = null;
 let mockIsAiConsented = false;
 let mockScanStatus:
   | "idle"
@@ -91,6 +86,24 @@ jest.mock("@/components/ui/Skeleton", () => ({
   },
 }));
 
+jest.mock("@/components/ai-consent/AiProcessingConsentSheet", () => ({
+  AiProcessingConsentSheet: ({
+    onContinue,
+    visible,
+  }: {
+    readonly onContinue: () => Promise<void>;
+    readonly visible: boolean;
+  }): React.JSX.Element | null => {
+    const ReactNative =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    mockAiConsentContinue = onContinue;
+
+    return visible ? (
+      <ReactNative.Text testID="ai-consent-continue">Continue</ReactNative.Text>
+    ) : null;
+  },
+}));
+
 jest.mock("@/context/CategoriesContext", () => ({
   useAllCategories: () => ({ categories: [], isLoading: false }),
 }));
@@ -154,6 +167,25 @@ jest.mock("@/utils/logger", () => ({
 
 import SmsScanScreen from "@/app/(private)/sms-scan";
 
+async function flushAsyncConsentUpdates(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
+async function continueAiConsent(): Promise<void> {
+  if (!mockAiConsentContinue) {
+    throw new Error("AI consent continue handler was not rendered");
+  }
+
+  await act(async () => {
+    await mockAiConsentContinue?.();
+    await flushAsyncConsentUpdates();
+  });
+}
+
 describe("SmsScanScreen AI consent", () => {
   beforeAll(() => {
     Object.defineProperty(Platform, "OS", {
@@ -164,6 +196,7 @@ describe("SmsScanScreen AI consent", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAiConsentContinue = null;
     mockIsAiConsented = false;
     mockScanStatus = "idle";
     mockRequestPermission.mockResolvedValue("granted");
@@ -177,7 +210,8 @@ describe("SmsScanScreen AI consent", () => {
 
     render(<SmsScanScreen />);
 
-    fireEvent.press(await screen.findByTestId("ai-consent-continue"));
+    expect(await screen.findByTestId("ai-consent-continue")).toBeTruthy();
+    await continueAiConsent();
 
     await waitFor(() => {
       expect(mockGrantAiConsent).toHaveBeenCalledTimes(1);
@@ -207,7 +241,7 @@ describe("SmsScanScreen AI consent", () => {
       screenView.rerender(<SmsScanScreen />);
       return Promise.resolve();
     });
-    fireEvent.press(screen.getByTestId("ai-consent-continue"));
+    await continueAiConsent();
 
     await waitFor(() => expect(mockGrantAiConsent).toHaveBeenCalledTimes(1));
     expect(mockStartScan).toHaveBeenCalledTimes(1);
@@ -256,5 +290,36 @@ describe("SmsScanScreen AI consent", () => {
     await waitFor(() => expect(mockRevokeAiConsent).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mockResetScan).toHaveBeenCalledTimes(1));
     expect(mockStartScan).not.toHaveBeenCalled();
+  });
+
+  it("waits for stale consent revocation before granting consent again", async () => {
+    mockIsAiConsented = true;
+    mockScanStatus = "consent_required";
+    let resolveRevoke: () => void = () => {};
+    mockRevokeAiConsent.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveRevoke = resolve;
+      })
+    );
+
+    render(<SmsScanScreen />);
+
+    expect(await screen.findByTestId("ai-consent-continue")).toBeTruthy();
+    if (!mockAiConsentContinue) {
+      throw new Error("AI consent continue handler was not rendered");
+    }
+
+    const continuePromise = mockAiConsentContinue();
+
+    await waitFor(() => expect(mockRevokeAiConsent).toHaveBeenCalledTimes(1));
+    expect(mockGrantAiConsent).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveRevoke();
+      await continuePromise;
+      await flushAsyncConsentUpdates();
+    });
+
+    await waitFor(() => expect(mockGrantAiConsent).toHaveBeenCalledTimes(1));
   });
 });

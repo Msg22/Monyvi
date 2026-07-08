@@ -217,6 +217,7 @@ export default function SmsScanScreen(): React.JSX.Element {
   const previousPermissionStatusRef = useRef(permissionStatus);
   const pendingScanAfterAbortRef = useRef(false);
   const scanAbortControllerRef = useRef<AbortController | null>(null);
+  const staleConsentRevokePromiseRef = useRef<Promise<void> | null>(null);
 
   const { setTransactions, scanMode } = useSmsScanContext();
   const { lastSyncTimestamp } = useSmsSync();
@@ -339,15 +340,21 @@ export default function SmsScanScreen(): React.JSX.Element {
     scanInitiated.current = false;
     setIsConsentSheetVisible(true);
 
-    revokeConsent()
+    const staleConsentRevokePromise = revokeConsent()
       .catch((err: unknown) => {
         logger.error("smsScan.revokeStaleAiConsentFailed", err);
       })
       .finally(() => {
+        if (
+          staleConsentRevokePromiseRef.current === staleConsentRevokePromise
+        ) {
+          staleConsentRevokePromiseRef.current = null;
+        }
         if (isActive) {
           reset();
         }
       });
+    staleConsentRevokePromiseRef.current = staleConsentRevokePromise;
 
     return () => {
       isActive = false;
@@ -461,6 +468,7 @@ export default function SmsScanScreen(): React.JSX.Element {
 
   const handleConsentContinue = async (): Promise<void> => {
     try {
+      await staleConsentRevokePromiseRef.current;
       await grantConsent();
       setIsConsentSheetVisible(false);
       scanInitiated.current = false;

@@ -19,7 +19,10 @@ import {
   setLiveDetectionEnabled,
 } from "./sms-live-detection-handler";
 import { hasExistingSmsFingerprint } from "./sms-dedup-service";
-import { getAiProcessingConsentStatus } from "./profile-service";
+import {
+  getAiProcessingConsentStatus,
+  revokeAiProcessingConsent,
+} from "./profile-service";
 import { getCurrentUserDataScope } from "./user-data-access";
 import { logger } from "@/utils/logger";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
@@ -133,6 +136,7 @@ async function disableLiveSmsAfterConsentRequired({
   readonly smsFingerprint: string;
 }): Promise<LiveSmsProcessingResult> {
   try {
+    await revokeAiProcessingConsent();
     await setLiveDetectionEnabled(false);
     await setAutoConfirm(false);
   } catch (settingsError: unknown) {

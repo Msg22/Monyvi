@@ -12,6 +12,7 @@ const mockGetAiProcessingConsentStatus = jest.fn<
   Promise<{ isConsented: boolean }>,
   []
 >();
+const mockRevokeAiProcessingConsent = jest.fn<Promise<void>, []>();
 const mockHasExistingSmsFingerprint = jest.fn<Promise<boolean>, [string]>();
 const mockParseSmsWithAi = jest.fn<
   Promise<AiParseResult>,
@@ -43,6 +44,8 @@ jest.mock("@/services/sms-live-detection-handler", () => ({
 jest.mock("@/services/profile-service", () => ({
   getAiProcessingConsentStatus: (): Promise<{ isConsented: boolean }> =>
     mockGetAiProcessingConsentStatus(),
+  revokeAiProcessingConsent: (): Promise<void> =>
+    mockRevokeAiProcessingConsent(),
 }));
 
 jest.mock("@/services/sms-dedup-service", () => ({
@@ -110,6 +113,7 @@ describe("sms-live-processor", () => {
     mockSetLiveDetectionEnabled.mockResolvedValue(undefined);
     mockSetAutoConfirm.mockResolvedValue(undefined);
     mockGetAiProcessingConsentStatus.mockResolvedValue({ isConsented: true });
+    mockRevokeAiProcessingConsent.mockResolvedValue(undefined);
     mockHasExistingSmsFingerprint.mockResolvedValue(false);
     mockComputeSmsFingerprint.mockResolvedValue("hash-live");
     mockIsLikelyFinancialSms.mockReturnValue(true);
@@ -235,6 +239,7 @@ describe("sms-live-processor", () => {
 
     expect(result.status).toBe("disabled");
     expect(result.isRetryable).toBeUndefined();
+    expect(mockRevokeAiProcessingConsent).toHaveBeenCalledTimes(1);
     expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
     expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
   });
@@ -256,6 +261,7 @@ describe("sms-live-processor", () => {
 
     expect(result.status).toBe("infrastructure_error");
     expect(result.smsFingerprint).toBe("hash-live");
+    expect(mockRevokeAiProcessingConsent).toHaveBeenCalledTimes(1);
     expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
     expect(mockSetAutoConfirm).not.toHaveBeenCalledWith(false);
   });
