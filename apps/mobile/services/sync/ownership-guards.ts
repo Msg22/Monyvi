@@ -35,10 +35,6 @@ export function assertPushRecordBelongsToCurrentUser(
 ): void {
   const payload = record as Record<string, unknown>;
 
-  if (isSharedSystemCategoryPushRecord(table, payload)) {
-    return;
-  }
-
   if (childConfig) {
     const parentId = payload[childConfig.foreignKey];
     if (
@@ -56,7 +52,7 @@ export function assertPushRecordBelongsToCurrentUser(
   }
 }
 
-function isSharedSystemCategoryPushRecord(
+export function isSharedSystemCategoryPushRecord(
   table: SyncableTable,
   payload: Record<string, unknown>
 ): boolean {

@@ -44,6 +44,7 @@ jest.mock("@monyvi/db", () => ({
       accounts: {},
       asset_metals: {},
       assets: {},
+      categories: {},
       profiles: {},
       transactions: {},
       transfers: {},

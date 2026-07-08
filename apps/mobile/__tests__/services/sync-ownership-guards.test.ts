@@ -1,4 +1,7 @@
-import { assertPushRecordBelongsToCurrentUser } from "../../services/sync/ownership-guards";
+import {
+  assertPushRecordBelongsToCurrentUser,
+  isSharedSystemCategoryPushRecord,
+} from "../../services/sync/ownership-guards";
 
 describe("sync ownership guards", () => {
   it("allows user-owned writable records for the authenticated user", () => {
@@ -25,7 +28,17 @@ describe("sync ownership guards", () => {
     ).toThrow("Refusing to sync foreign local changes for profiles");
   });
 
-  it("allows shared system categories without forcing user ownership", () => {
+  it("identifies canonical shared system categories as non-user-owned records", () => {
+    expect(
+      isSharedSystemCategoryPushRecord("categories", {
+        id: "00000000-0000-0000-0001-000000000002",
+        user_id: null,
+        is_system: true,
+      })
+    ).toBe(true);
+  });
+
+  it("rejects shared system categories if they reach ownership assertion", () => {
     expect(() =>
       assertPushRecordBelongsToCurrentUser(
         "categories",
@@ -38,7 +51,7 @@ describe("sync ownership guards", () => {
         undefined,
         null
       )
-    ).not.toThrow();
+    ).toThrow("Refusing to sync foreign local changes for categories");
   });
 
   it("rejects local-only shared system categories before push", () => {
