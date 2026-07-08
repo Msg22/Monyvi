@@ -1,0 +1,6 @@
+-- Intentionally empty.
+--
+-- Baseline system data is managed by migrations.
+-- Manual QA and E2E seed data is managed by apps/mobile/scripts/*seed.js.
+-- Local market_rates are hydrated from the linked remote Supabase project via:
+-- npm run supabase:market-rates:import-local

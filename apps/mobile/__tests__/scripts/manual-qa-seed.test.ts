@@ -1,6 +1,120 @@
-import { getManualQaSeedConfig } from "../../scripts/manual-qa-seed";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+interface SeedConfig {
+  readonly mode: string;
+  readonly supabaseUrl: string;
+  readonly appSupabaseUrl: string;
+  readonly anonKey: string;
+  readonly serviceRoleKey: string;
+  readonly email: string;
+  readonly password: string | null;
+  readonly preserveExistingPassword: boolean;
+  readonly userId?: string;
+}
+
+interface ManualQaSeedModule {
+  readonly getManualQaSeedConfig: (
+    env?: Record<string, string | undefined>
+  ) => SeedConfig;
+  readonly seedManualQaData: (
+    client: unknown,
+    config: SeedConfig
+  ) => Promise<unknown>;
+}
+
+const { getManualQaSeedConfig, seedManualQaData } =
+  jest.requireActual<ManualQaSeedModule>("../../scripts/manual-qa-seed");
+
+interface BudgetSeedRow {
+  readonly name?: string;
+  readonly pause_intervals?: string;
+}
+
+interface AccountBalanceUpdate {
+  readonly balance?: number;
+  readonly filters: readonly {
+    readonly column: string;
+    readonly value: string;
+  }[];
+}
+
+interface PauseInterval {
+  readonly startedAt: string;
+}
+
+function getStringField(row: unknown, field: string): string | undefined {
+  if (typeof row !== "object" || row === null) return undefined;
+  const value = (row as Record<string, unknown>)[field];
+  return typeof value === "string" ? value : undefined;
+}
+
+function getNumberField(row: unknown, field: string): number | undefined {
+  if (typeof row !== "object" || row === null) return undefined;
+  const value = (row as Record<string, unknown>)[field];
+  return typeof value === "number" ? value : undefined;
+}
+
+function expectRowsStampedForIncrementalPull(rows: readonly unknown[]): void {
+  for (const row of rows) {
+    const createdAt = getStringField(row, "created_at");
+    const updatedAt = getStringField(row, "updated_at");
+    expect(createdAt).toBeDefined();
+    expect(updatedAt).toBeDefined();
+    expect(new Date(updatedAt ?? "").getTime()).toBeGreaterThan(
+      new Date(createdAt ?? "").getTime()
+    );
+  }
+}
+
+function parsePauseIntervals(value: string): readonly PauseInterval[] {
+  const parsed: unknown = JSON.parse(value);
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter(
+    (item): item is PauseInterval =>
+      typeof item === "object" &&
+      item !== null &&
+      typeof (item as Record<string, unknown>).startedAt === "string"
+  );
+}
 
 describe("manual-qa-seed script helpers", () => {
+  it("uses the neutral seed engine instead of depending on E2E seed internals", () => {
+    const manualQaSeedSource = readFileSync(
+      resolve(__dirname, "../../scripts/manual-qa-seed.js"),
+      "utf8"
+    );
+
+    expect(manualQaSeedSource).toContain("./seed-fixtures/seed-engine");
+    expect(manualQaSeedSource).not.toContain("./e2e-seed");
+  });
+
+  it("imports market rates when running the manual QA seed script", () => {
+    const mobilePackageJson = JSON.parse(
+      readFileSync(resolve(__dirname, "../../package.json"), "utf8")
+    ) as { readonly scripts?: Record<string, string> };
+
+    expect(mobilePackageJson.scripts?.["manual:seed-user"]).toContain(
+      "../../scripts/import-market-rates-to-local.js"
+    );
+    expect(mobilePackageJson.scripts?.["manual:seed-user"]).toContain(
+      "--best-effort"
+    );
+  });
+
+  it("passes a local password after resetting before manual QA seeding", () => {
+    const rootPackageJson = JSON.parse(
+      readFileSync(resolve(__dirname, "../../../../package.json"), "utf8")
+    ) as { readonly scripts?: Record<string, string> };
+
+    expect(rootPackageJson.scripts?.["local:reset-and-seed"]).toContain(
+      "MANUAL_QA_PASSWORD=MonyviLocalQA123"
+    );
+    expect(rootPackageJson.scripts?.["local:reset-and-seed"]).toContain(
+      "manual:seed-user"
+    );
+  });
+
   it("preserves the existing manual QA password when no password is provided", () => {
     const config = getManualQaSeedConfig({
       E2E_SUPABASE_MODE: "local",
@@ -38,4 +152,298 @@ describe("manual-qa-seed script helpers", () => {
     expect(config.anonKey).not.toBe("remote-publishable-key");
     expect(config.serviceRoleKey).not.toBe("remote-service-role-key");
   });
+
+  it("seeds manual QA fixture data instead of E2E-named rows", async () => {
+    const operations: string[] = [];
+    const accountRows: unknown[] = [];
+    const accountBalanceUpdates: AccountBalanceUpdate[] = [];
+    const assetMetalRows: unknown[] = [];
+    const assetRows: unknown[] = [];
+    const budgetRows: unknown[] = [];
+    const debtRows: unknown[] = [];
+    const recurringPaymentRows: unknown[] = [];
+    const profileRows: unknown[] = [];
+    const transactionRows: unknown[] = [];
+    const transferRows: unknown[] = [];
+    const marketRateRows: unknown[] = [];
+
+    await seedManualQaData(
+      createMockClient(operations, {
+        accountRows,
+        accountBalanceUpdates,
+        assetMetalRows,
+        assetRows,
+        budgetRows,
+        debtRows,
+        marketRateRows,
+        profileRows,
+        recurringPaymentRows,
+        transactionRows,
+        transferRows,
+      }),
+      {
+        ...getManualQaSeedConfig({
+          E2E_LOCAL_JWT_SECRET: "local-test-jwt-secret-with-enough-length",
+          MANUAL_QA_PASSWORD: "Password123!",
+        }),
+        userId: "user-manual-qa",
+      }
+    );
+
+    expect(operations).toContain("upsert:profiles:user-manual-qa");
+    expect(accountRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "Cash Wallet" }),
+        expect.objectContaining({ name: "NBE Salary Account" }),
+        expect.objectContaining({
+          name: "Binance BTC Wallet",
+          balance: 0.03,
+        }),
+      ])
+    );
+    expect(accountRows).toHaveLength(8);
+    expect(accountBalanceUpdates).toHaveLength(accountRows.length);
+    expect(accountBalanceUpdates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ balance: 2500 }),
+        expect.objectContaining({ balance: 12430.55 }),
+        expect.objectContaining({ balance: 0.03 }),
+      ])
+    );
+    expect(
+      accountRows.some((row) => getStringField(row, "name")?.includes("E2E"))
+    ).toBe(false);
+    expect(assetRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "21k Gold Chain", type: "METAL" }),
+        expect.objectContaining({
+          name: "Apartment Down Payment",
+          type: "REAL_ESTATE",
+        }),
+        expect.objectContaining({
+          name: "BTC Long-term Holding",
+          type: "CRYPTO",
+        }),
+      ])
+    );
+    expect(assetRows).toHaveLength(5);
+    expectRowsStampedForIncrementalPull(assetRows);
+    expect(assetMetalRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ metal_type: "GOLD", item_form: "Jewelry" }),
+        expect.objectContaining({ metal_type: "SILVER", item_form: "Coins" }),
+        expect.objectContaining({ metal_type: "PLATINUM", item_form: "Bar" }),
+      ])
+    );
+    expectRowsStampedForIncrementalPull(assetMetalRows);
+    expect(budgetRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "Groceries Monthly",
+          period: "MONTHLY",
+        }),
+        expect.objectContaining({ name: "Transport Weekly", period: "WEEKLY" }),
+        expect.objectContaining({ name: "Ramadan Hosting", status: "PAUSED" }),
+        expect.objectContaining({ name: "Overall Spending", type: "GLOBAL" }),
+      ])
+    );
+    expectRowsStampedForIncrementalPull(budgetRows);
+    expect(
+      budgetRows.every(
+        (row) =>
+          typeof (row as BudgetSeedRow).pause_intervals === "string"
+      )
+    ).toBe(true);
+    const pausedBudget = budgetRows.find(
+      (row) => (row as BudgetSeedRow).name === "Ramadan Hosting"
+    ) as BudgetSeedRow | undefined;
+    const pauseIntervals = parsePauseIntervals(
+      pausedBudget?.pause_intervals ?? "[]"
+    );
+    expect(pauseIntervals).toHaveLength(1);
+    expect(typeof pauseIntervals[0]?.startedAt).toBe("string");
+    expect(debtRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ party_name: "Ahmed", type: "LENT" }),
+        expect.objectContaining({
+          party_name: "Mona",
+          status: "PARTIALLY_PAID",
+        }),
+        expect.objectContaining({ party_name: "Omar", status: "SETTLED" }),
+      ])
+    );
+    expectRowsStampedForIncrementalPull(debtRows);
+    expect(recurringPaymentRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "Apartment Rent",
+          frequency: "MONTHLY",
+        }),
+        expect.objectContaining({ name: "Salary", type: "INCOME" }),
+        expect.objectContaining({ name: "Mona Repayment" }),
+        expect.objectContaining({ name: "Gym Membership", status: "PAUSED" }),
+      ])
+    );
+    expectRowsStampedForIncrementalPull(recurringPaymentRows);
+    expect(
+      recurringPaymentRows.some(
+        (row) =>
+          getStringField(row, "name") === "Mona Repayment" &&
+          getStringField(row, "linked_debt_id") !== undefined
+      )
+    ).toBe(true);
+    expect(profileRows[0]).toMatchObject({ display_name: "Monyvi Manual QA" });
+    expect(transactionRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ counterparty: "Metro Market" }),
+        expect.objectContaining({ counterparty: "Salary" }),
+        expect.objectContaining({ source: "SMS" }),
+        expect.objectContaining({ source: "VOICE" }),
+      ])
+    );
+    expect(
+      transactionRows.some(
+        (row) => getStringField(row, "linked_asset_id") !== undefined
+      )
+    ).toBe(true);
+    expect(
+      transactionRows.some(
+        (row) => getStringField(row, "linked_debt_id") !== undefined
+      )
+    ).toBe(true);
+    expect(transactionRows).toHaveLength(8);
+    expectRowsStampedForIncrementalPull(
+      transactionRows.filter(
+        (row) =>
+          getStringField(row, "counterparty") !== "Metro Market" &&
+          getStringField(row, "counterparty") !== "Salary"
+      )
+    );
+    expect(transferRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ notes: "Manual QA seeded ATM withdrawal" }),
+        expect.objectContaining({ exchange_rate: 50 }),
+        expect.objectContaining({
+          amount: 0.01,
+          converted_amount: 650,
+          currency: "BTC",
+          notes: "Crypto rebalance to USD cash",
+        }),
+      ])
+    );
+    expect(transferRows).toHaveLength(5);
+    expectRowsStampedForIncrementalPull(
+      transferRows.filter(
+        (row) =>
+          getStringField(row, "notes") !== "Manual QA seeded ATM withdrawal"
+      )
+    );
+    expect(marketRateRows).toHaveLength(0);
+  });
 });
+
+interface MockClientOptions {
+  readonly accountBalanceUpdates?: AccountBalanceUpdate[];
+  readonly accountRows?: unknown[];
+  readonly assetMetalRows?: unknown[];
+  readonly assetRows?: unknown[];
+  readonly budgetRows?: unknown[];
+  readonly debtRows?: unknown[];
+  readonly marketRateRows?: unknown[];
+  readonly profileRows?: unknown[];
+  readonly recurringPaymentRows?: unknown[];
+  readonly transactionRows?: unknown[];
+  readonly transferRows?: unknown[];
+}
+
+function createMockClient(
+  operations: string[],
+  options: MockClientOptions = {}
+): unknown {
+  return {
+    auth: {
+      admin: {
+        listUsers: () =>
+          Promise.resolve({
+            data: {
+              users: [{ id: "user-manual-qa", email: "manual-qa@monyvi.test" }],
+            },
+            error: null,
+          }),
+        updateUserById: () => Promise.resolve({ error: null }),
+        createUser: () =>
+          Promise.resolve({
+            data: {
+              user: { id: "user-manual-qa", email: "manual-qa@monyvi.test" },
+            },
+            error: null,
+          }),
+      },
+    },
+    from: (table: string) => ({
+      delete: () => ({
+        eq: (column: string, value: string) => {
+          operations.push(`delete:${table}:${column}:${value}`);
+          return Promise.resolve({ error: null });
+        },
+      }),
+      upsert: (rows: unknown[] | { user_id?: string; id?: string }) => {
+        const marker = Array.isArray(rows)
+          ? `${rows.length}`
+          : String(rows.user_id ?? rows.id ?? "unknown");
+        operations.push(`upsert:${table}:${marker}`);
+        if (table === "accounts" && Array.isArray(rows)) {
+          options.accountRows?.push(...rows);
+        }
+        if (table === "asset_metals" && Array.isArray(rows)) {
+          options.assetMetalRows?.push(...rows);
+        }
+        if (table === "assets" && Array.isArray(rows)) {
+          options.assetRows?.push(...rows);
+        }
+        if (table === "budgets" && Array.isArray(rows)) {
+          options.budgetRows?.push(...rows);
+        }
+        if (table === "debts" && Array.isArray(rows)) {
+          options.debtRows?.push(...rows);
+        }
+        if (table === "market_rates") {
+          options.marketRateRows?.push(rows);
+        }
+        if (table === "profiles") {
+          options.profileRows?.push(rows);
+        }
+        if (table === "recurring_payments" && Array.isArray(rows)) {
+          options.recurringPaymentRows?.push(...rows);
+        }
+        if (table === "transactions" && Array.isArray(rows)) {
+          options.transactionRows?.push(...rows);
+        }
+        if (table === "transfers" && Array.isArray(rows)) {
+          options.transferRows?.push(...rows);
+        }
+        return { error: null };
+      },
+      update: (patch: unknown) => {
+        const filters: { column: string; value: string }[] = [];
+        const builder = {
+          eq: (column: string, value: string) => {
+            filters.push({ column, value });
+            if (filters.length < 2) {
+              return builder;
+            }
+
+            operations.push(`update:${table}:${filters[0]?.value}`);
+            options.accountBalanceUpdates?.push({
+              balance: getNumberField(patch, "balance"),
+              filters: [...filters],
+            });
+            return Promise.resolve({ error: null });
+          },
+        };
+
+        return builder;
+      },
+    }),
+  };
+}
