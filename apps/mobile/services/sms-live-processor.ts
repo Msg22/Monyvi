@@ -143,7 +143,6 @@ async function disableLiveSmsAfterConsentRequired({
     logger.error("liveSms.consentRequiredDisable.failed", settingsError, {
       deliveryMode,
     });
-    return createResult("infrastructure_error", smsFingerprint);
   }
 
   return createResult("disabled", smsFingerprint);

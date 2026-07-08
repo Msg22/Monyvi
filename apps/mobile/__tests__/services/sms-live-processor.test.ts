@@ -244,7 +244,7 @@ describe("sms-live-processor", () => {
     expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
   });
 
-  it("returns infrastructure_error when consent-required cleanup fails", async () => {
+  it("returns disabled when consent-required cleanup fails", async () => {
     const consentError = new Error("AI processing consent required");
     consentError.name = "AiConsentRequiredError";
     mockParseSmsWithAi.mockRejectedValueOnce(consentError);
@@ -259,7 +259,7 @@ describe("sms-live-processor", () => {
       deliveryMode: "foreground",
     });
 
-    expect(result.status).toBe("infrastructure_error");
+    expect(result.status).toBe("disabled");
     expect(result.smsFingerprint).toBe("hash-live");
     expect(mockRevokeAiProcessingConsent).toHaveBeenCalledTimes(1);
     expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);

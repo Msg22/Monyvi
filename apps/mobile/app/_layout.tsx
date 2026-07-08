@@ -38,13 +38,12 @@ import { initializeNotifications } from "../services/notification-service";
 import {
   handleDetectedSms,
   initializeDetectionActionHandler,
-  reconcileLiveDetectionPreference,
 } from "../services/sms-live-detection-handler";
 import {
   onTransactionDetected,
-  startSmsListener,
   stopSmsListener,
 } from "../services/sms-live-listener-service";
+import { startConsentAwareLiveSmsListenerIfEnabled } from "../services/sms-live-startup-service";
 import { logger } from "../utils/logger";
 
 import "../global.css";
@@ -106,16 +105,7 @@ function RootLayout(): React.ReactNode {
   const cleanupRef = useRef<(() => void) | null>(null);
 
   const startDetectionIfEnabled = useCallback(async (): Promise<void> => {
-    if (Platform.OS !== "android") {
-      return;
-    }
-    const enabled = await reconcileLiveDetectionPreference();
-    if (enabled) {
-      startSmsListener();
-      return;
-    }
-
-    stopSmsListener();
+    await startConsentAwareLiveSmsListenerIfEnabled();
   }, []);
 
   useEffect(() => {
