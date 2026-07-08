@@ -11,7 +11,10 @@
  * @module useSmsScan
  */
 
-import type { ParseSmsContext } from "@/services/ai-sms-parser-service";
+import {
+  isAiConsentRequiredError,
+  type ParseSmsContext,
+} from "@/services/ai-sms-parser-service";
 import {
   scanAndParseSms,
   type SmsScanProgress,
@@ -25,7 +28,12 @@ import { logger } from "@/utils/logger";
 // Types
 // ---------------------------------------------------------------------------
 
-type ScanStatus = "idle" | "scanning" | "complete" | "error";
+type ScanStatus =
+  | "idle"
+  | "scanning"
+  | "complete"
+  | "error"
+  | "consent_required";
 
 export interface UseSmsScanResult {
   /** Current scan status */
@@ -107,6 +115,12 @@ export function useSmsScan(): UseSmsScanResult {
       } catch (err) {
         if (isAbortError(err)) {
           setStatus("idle");
+          return;
+        }
+
+        if (isAiConsentRequiredError(err)) {
+          setError(null);
+          setStatus("consent_required");
           return;
         }
 

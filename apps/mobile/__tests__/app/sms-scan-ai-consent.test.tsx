@@ -1,14 +1,32 @@
 import React, { type ReactNode } from "react";
 import { Platform } from "react-native";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react-native";
 
 const mockGrantAiConsent = jest.fn<Promise<void>, []>();
+const mockRevokeAiConsent = jest.fn<Promise<void>, []>();
 const mockRequestPermission = jest.fn<Promise<"granted">, []>();
 const mockStartScan = jest.fn<Promise<void>, [unknown]>();
+const mockResetScan = jest.fn<void, []>();
+const mockLoadExistingSmsFingerprints = jest.fn<
+  Promise<ReadonlySet<string>>,
+  []
+>();
 const mockRouterBack = jest.fn();
 const mockRouterPush = jest.fn<void, [string]>();
 const mockRouterReplace = jest.fn<void, [string]>();
 let mockIsAiConsented = false;
+let mockScanStatus:
+  | "idle"
+  | "scanning"
+  | "complete"
+  | "error"
+  | "consent_required" = "idle";
 
 jest.mock("react-native/Libraries/Modal/Modal", () => {
   function MockModal({
@@ -59,7 +77,9 @@ jest.mock("@/components/sms-sync/SmsScanProgress", () => ({
   SmsScanProgress: (): React.JSX.Element => {
     const ReactNative =
       jest.requireActual<typeof import("react-native")>("react-native");
-    return <ReactNative.Text testID="sms-scan-progress">progress</ReactNative.Text>;
+    return (
+      <ReactNative.Text testID="sms-scan-progress">progress</ReactNative.Text>
+    );
   },
 }));
 
@@ -87,8 +107,9 @@ jest.mock("@/hooks/useSmsScan", () => ({
     error: null,
     progress: 0,
     result: null,
+    reset: mockResetScan,
     startScan: mockStartScan,
-    status: "idle",
+    status: mockScanStatus,
     transactions: [],
   }),
 }));
@@ -111,11 +132,13 @@ jest.mock("@/hooks/useAiProcessingConsent", () => ({
     grantConsent: mockGrantAiConsent,
     isConsented: mockIsAiConsented,
     isLoading: false,
+    revokeConsent: mockRevokeAiConsent,
   }),
 }));
 
 jest.mock("@/services/sms-sync-service", () => ({
-  loadExistingSmsFingerprints: jest.fn(() => Promise.resolve(new Set())),
+  loadExistingSmsFingerprints: (): Promise<ReadonlySet<string>> =>
+    mockLoadExistingSmsFingerprints(),
 }));
 
 jest.mock("@/utils/category-tree-source", () => ({
@@ -131,15 +154,6 @@ jest.mock("@/utils/logger", () => ({
 
 import SmsScanScreen from "@/app/(private)/sms-scan";
 
-const smsSyncServiceMock = jest.requireMock("@/services/sms-sync-service") as {
-  readonly loadExistingSmsFingerprints: jest.Mock<
-    Promise<ReadonlySet<string>>,
-    []
-  >;
-};
-const mockLoadExistingSmsFingerprints =
-  smsSyncServiceMock.loadExistingSmsFingerprints;
-
 describe("SmsScanScreen AI consent", () => {
   beforeAll(() => {
     Object.defineProperty(Platform, "OS", {
@@ -151,7 +165,9 @@ describe("SmsScanScreen AI consent", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockIsAiConsented = false;
+    mockScanStatus = "idle";
     mockRequestPermission.mockResolvedValue("granted");
+    mockRevokeAiConsent.mockResolvedValue();
     mockStartScan.mockResolvedValue();
     mockLoadExistingSmsFingerprints.mockResolvedValue(new Set());
   });
@@ -228,5 +244,17 @@ describe("SmsScanScreen AI consent", () => {
 
     expect(mockStartScan).not.toHaveBeenCalled();
     expect(await screen.findByTestId("ai-consent-continue")).toBeTruthy();
+  });
+
+  it("reopens consent when the server rejects SMS parsing for missing consent", async () => {
+    mockIsAiConsented = true;
+    mockScanStatus = "consent_required";
+
+    render(<SmsScanScreen />);
+
+    expect(await screen.findByTestId("ai-consent-continue")).toBeTruthy();
+    await waitFor(() => expect(mockRevokeAiConsent).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockResetScan).toHaveBeenCalledTimes(1));
+    expect(mockStartScan).not.toHaveBeenCalled();
   });
 });

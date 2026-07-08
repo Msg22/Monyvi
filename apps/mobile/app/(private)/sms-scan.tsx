@@ -201,9 +201,14 @@ export default function SmsScanScreen(): React.JSX.Element {
   } = useSmsPermission();
   const [isPermissionRecoveryVisible, setIsPermissionRecoveryVisible] =
     useState(true);
-  const { status, progress, result, transactions, error, startScan } =
+  const { status, progress, result, transactions, error, startScan, reset } =
     useSmsScan();
-  const aiConsent = useAiProcessingConsent();
+  const {
+    grantConsent,
+    isConsented: isAiConsented,
+    isLoading: isAiConsentLoading,
+    revokeConsent,
+  } = useAiProcessingConsent();
   const [isConsentSheetVisible, setIsConsentSheetVisible] =
     React.useState(false);
   const [scanRestartNonce, setScanRestartNonce] = React.useState(0);
@@ -290,8 +295,9 @@ export default function SmsScanScreen(): React.JSX.Element {
 
   // Auto-start scan on mount — waits until permission is granted and categories loaded
   useEffect(() => {
-    if (aiConsent.isLoading) return;
-    if (!aiConsent.isConsented) {
+    if (status === "consent_required") return;
+    if (isAiConsentLoading) return;
+    if (!isAiConsented) {
       scanAbortControllerRef.current?.abort();
       scanInitiated.current = false;
       setIsConsentSheetVisible(true);
@@ -306,12 +312,13 @@ export default function SmsScanScreen(): React.JSX.Element {
       });
     }
   }, [
-    aiConsent.isConsented,
-    aiConsent.isLoading,
+    isAiConsented,
+    isAiConsentLoading,
     initiateScan,
     isAiContextReady,
     permissionStatus,
     scanRestartNonce,
+    status,
   ]);
 
   useEffect(() => {
@@ -319,6 +326,33 @@ export default function SmsScanScreen(): React.JSX.Element {
       scanAbortControllerRef.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    if (status !== "consent_required") {
+      return;
+    }
+
+    let isActive = true;
+    scanAbortControllerRef.current?.abort();
+    scanAbortControllerRef.current = null;
+    pendingScanAfterAbortRef.current = false;
+    scanInitiated.current = false;
+    setIsConsentSheetVisible(true);
+
+    revokeConsent()
+      .catch((err: unknown) => {
+        logger.error("smsScan.revokeStaleAiConsentFailed", err);
+      })
+      .finally(() => {
+        if (isActive) {
+          reset();
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [reset, revokeConsent, status]);
 
   useEffect(() => {
     if (previousPermissionStatusRef.current === permissionStatus) {
@@ -350,10 +384,10 @@ export default function SmsScanScreen(): React.JSX.Element {
       }
 
       shouldResumeConsentAfterPrivacyDetails.current = false;
-      if (!aiConsent.isLoading && !aiConsent.isConsented) {
+      if (!isAiConsentLoading && !isAiConsented) {
         setIsConsentSheetVisible(true);
       }
-    }, [aiConsent.isConsented, aiConsent.isLoading])
+    }, [isAiConsented, isAiConsentLoading])
   );
 
   const handleRetryPress = (): void => {
@@ -427,8 +461,10 @@ export default function SmsScanScreen(): React.JSX.Element {
 
   const handleConsentContinue = async (): Promise<void> => {
     try {
-      await aiConsent.grantConsent();
+      await grantConsent();
       setIsConsentSheetVisible(false);
+      scanInitiated.current = false;
+      setScanRestartNonce((value) => value + 1);
     } catch (err: unknown) {
       logger.error("smsScan.aiConsentGrantFailed", err);
       setIsConsentSheetVisible(true);
@@ -463,7 +499,7 @@ export default function SmsScanScreen(): React.JSX.Element {
   // The native permission dialog is only opened from the app-side rationale
   // modal so users see the explanation first.
   // All hooks are called above unconditionally to satisfy the Rules of Hooks.
-  if (aiConsent.isLoading) {
+  if (isAiConsentLoading) {
     return (
       <SmsPermissionGate
         status="undetermined"
@@ -475,7 +511,11 @@ export default function SmsScanScreen(): React.JSX.Element {
     );
   }
 
-  if (!aiConsent.isConsented) {
+  if (!isAiConsented) {
+    return consentSheet;
+  }
+
+  if (status === "consent_required") {
     return consentSheet;
   }
 
