@@ -11,7 +11,10 @@
  * @module useSmsScan
  */
 
-import type { ParseSmsContext } from "@/services/ai-sms-parser-service";
+import {
+  isAiConsentRequiredError,
+  type ParseSmsContext,
+} from "@/services/ai-sms-parser-service";
 import {
   scanAndParseSms,
   type SmsScanProgress,
@@ -25,7 +28,12 @@ import { logger } from "@/utils/logger";
 // Types
 // ---------------------------------------------------------------------------
 
-type ScanStatus = "idle" | "scanning" | "complete" | "error";
+type ScanStatus =
+  | "idle"
+  | "scanning"
+  | "complete"
+  | "error"
+  | "consent_required";
 
 export interface UseSmsScanResult {
   /** Current scan status */
@@ -51,6 +59,12 @@ interface StartScanOptions {
   readonly existingFingerprints: ReadonlySet<string>;
   /** Context to pass to AI for better account suggestions. */
   readonly aiContext: ParseSmsContext;
+  /** Cancels the scan before more SMS candidates are sent to AI. */
+  readonly abortSignal?: AbortSignal;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +102,7 @@ export function useSmsScan(): UseSmsScanResult {
             minDate: options.minDate,
             existingFingerprints: options.existingFingerprints,
             aiContext: options.aiContext,
+            abortSignal: options.abortSignal,
           },
           (p) => {
             setProgress(p);
@@ -98,6 +113,17 @@ export function useSmsScan(): UseSmsScanResult {
         setTransactions(scanResult.transactions);
         setStatus("complete");
       } catch (err) {
+        if (isAbortError(err)) {
+          setStatus("idle");
+          return;
+        }
+
+        if (isAiConsentRequiredError(err)) {
+          setError(null);
+          setStatus("consent_required");
+          return;
+        }
+
         // Log raw error for debugging but don't expose English service
         // messages to the UI — the component falls back to t("scan_error_default")
         logger.error("smsScan.failed", err);

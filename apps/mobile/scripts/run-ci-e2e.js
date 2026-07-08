@@ -368,7 +368,17 @@ async function maybeRunSmsSyncJourneys() {
     return;
   }
 
-  await runNodeScript("scripts/run-sms-sync-journeys.js", []);
+  await runNodeScript(
+    "scripts/run-sms-sync-journeys.js",
+    [],
+    getSmsSyncJourneyOptions()
+  );
+}
+
+function getSmsSyncJourneyOptions() {
+  return {
+    retryOnDeviceFailure: true,
+  };
 }
 
 function getLiveSmsJourneys() {
@@ -474,6 +484,7 @@ module.exports = {
   getRequestedCiSuites,
   getAuthBootstrapFlow,
   getMaestroSuiteFlowOptions,
+  getSmsSyncJourneyOptions,
   isDeviceOfflineFailure,
   shouldResetMaestroFlowBeforeRetry,
   shouldRetryMaestroSuiteFlow,

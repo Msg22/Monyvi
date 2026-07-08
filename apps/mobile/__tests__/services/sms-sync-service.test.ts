@@ -412,6 +412,50 @@ describe("sms-sync-service", () => {
       expect(candidates?.[0]?.smsFingerprint).toBe("same-sms-hash");
     });
 
+    it("does not send SMS candidates to AI when the scan is aborted first", async () => {
+      const sms = createSmsMessage({
+        id: "sms-1",
+        body: "Debit EGP 100 at Shop",
+      });
+      const abortController = new AbortController();
+      mockReadSmsInbox.mockResolvedValue([sms]);
+      abortController.abort();
+
+      await expect(
+        scanAndParseSms(
+          defaultOptions({ abortSignal: abortController.signal })
+        )
+      ).rejects.toThrow("SMS scan aborted");
+
+      expect(mockReadSmsInbox).not.toHaveBeenCalled();
+      expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    });
+
+    it("does not complete the scan when AI parsing returns a non-retryable error", async () => {
+      const sms = createSmsMessage({
+        id: "sms-1",
+        body: "Debit EGP 100 at Shop",
+      });
+      mockReadSmsInbox.mockResolvedValue([sms]);
+      mockParseSmsWithAi.mockResolvedValue({
+        transactions: [],
+        hasError: true,
+        isRetryable: false,
+      });
+
+      const onProgress = jest.fn();
+      await expect(
+        scanAndParseSms(defaultOptions(), onProgress)
+      ).rejects.toThrow("SMS AI parsing failed");
+
+      expect(
+        onProgress.mock.calls.some(
+          (call: [Record<string, unknown>]) =>
+            call[0].currentPhase === "complete"
+        )
+      ).toBe(false);
+    });
+
     it("should deduplicate exact duplicate AI results before review", async () => {
       const sms = createSmsMessage({
         id: "sms-1",

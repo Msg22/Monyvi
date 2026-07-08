@@ -183,6 +183,20 @@ describe("ai-sms-fixture-parser", () => {
     });
   });
 
+  it("stops fixture parsing when the scan is aborted", async () => {
+    const abortController = new AbortController();
+    abortController.abort();
+
+    await expect(
+      parseSmsWithFixtureAi(
+        [candidateFromFixture("nbe_debit_purchase")],
+        context,
+        undefined,
+        abortController.signal
+      )
+    ).rejects.toMatchObject({ name: "AbortError" });
+  });
+
   it("keeps parsed transactions before a fixture failure in the same batch", async () => {
     const result = await parseSmsWithFixtureAi(
       [

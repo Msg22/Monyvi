@@ -10,6 +10,7 @@ jest.mock("@/services/supabase", () => ({
 
 import { MAX_TRANSACTION_AMOUNT, type CategoryTreeSource } from "@monyvi/logic";
 import {
+  isAiConsentRequiredError,
   parseSmsWithAi,
   type SmsCandidate,
 } from "@/services/ai-sms-parser-service";
@@ -283,5 +284,58 @@ describe("ai-sms-parser-service parser strategy", () => {
     await parseSmsWithAi([candidate("nbe_debit_purchase")], context);
 
     expect(mockInvoke).toHaveBeenCalled();
+  });
+
+  it("does not call the Edge Function when parsing is aborted", async () => {
+    const abortController = new AbortController();
+    abortController.abort();
+
+    await expect(
+      parseSmsWithAi(
+        [candidate("nbe_debit_purchase")],
+        context,
+        undefined,
+        abortController.signal
+      )
+    ).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("passes the abort signal into the Edge Function request", async () => {
+    const abortController = new AbortController();
+    mockInvoke.mockResolvedValueOnce({
+      data: { transactions: [] },
+      error: null,
+    });
+
+    await parseSmsWithAi(
+      [candidate("nbe_debit_purchase")],
+      context,
+      undefined,
+      abortController.signal
+    );
+
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "parse-sms",
+      expect.objectContaining({ signal: abortController.signal })
+    );
+  });
+
+  it("returns a distinct consent-required error when the Edge Function requires AI consent", async () => {
+    const error = Object.assign(new Error("FunctionsHttpError"), {
+      context: new Response("AI processing consent required", { status: 403 }),
+    });
+    mockInvoke.mockResolvedValueOnce({
+      data: null,
+      error,
+    });
+
+    try {
+      await parseSmsWithAi([candidate("nbe_debit_purchase")], context);
+      throw new Error("Expected consent-required error");
+    } catch (error: unknown) {
+      expect(isAiConsentRequiredError(error)).toBe(true);
+    }
   });
 });

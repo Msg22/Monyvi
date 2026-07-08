@@ -79,6 +79,71 @@ describe("sync transforms", () => {
     expect(transformed).not.toHaveProperty("sms_body_hash");
   });
 
+  it("omits unchanged AI processing consent from profile update payloads", () => {
+    const transformed = transformToSupabase(
+      "profiles",
+      {
+        id: "profile-1",
+        ai_processing_consent:
+          '{"version":"2026-07-ai-processing-v1","consentedAt":"2026-07-04T10:00:00.000Z"}',
+        onboarding_flags: '{"cash_account_tooltip_dismissed":true}',
+        notification_settings: null,
+        _status: "updated",
+        _changed: "onboarding_flags",
+      },
+      "current-user"
+    );
+
+    expect(transformed).not.toHaveProperty("ai_processing_consent");
+  });
+
+  it("does not parse unchanged AI processing consent before omitting it", () => {
+    const transformed = transformToSupabase(
+      "profiles",
+      {
+        id: "profile-1",
+        ai_processing_consent: "legacy-invalid-json",
+        onboarding_flags: '{"cash_account_tooltip_dismissed":true}',
+        notification_settings: null,
+        _status: "updated",
+        _changed: "onboarding_flags",
+      },
+      "current-user"
+    );
+
+    expect(transformed).not.toHaveProperty("ai_processing_consent");
+    expect(transformed).toEqual(
+      expect.objectContaining({
+        onboarding_flags: { cash_account_tooltip_dismissed: true },
+      })
+    );
+  });
+
+  it("keeps AI processing consent when the consent column changed", () => {
+    const transformed = transformToSupabase(
+      "profiles",
+      {
+        id: "profile-1",
+        ai_processing_consent:
+          '{"version":"2026-07-ai-processing-v1","consentedAt":"2026-07-04T10:00:00.000Z"}',
+        onboarding_flags: "{}",
+        notification_settings: null,
+        _status: "updated",
+        _changed: "ai_processing_consent",
+      },
+      "current-user"
+    );
+
+    expect(transformed).toEqual(
+      expect.objectContaining({
+        ai_processing_consent: {
+          version: "2026-07-ai-processing-v1",
+          consentedAt: "2026-07-04T10:00:00.000Z",
+        },
+      })
+    );
+  });
+
   it("leaves child-table records without forced user_id during Supabase transforms", () => {
     const transformed = transformToSupabase(
       "asset_metals",

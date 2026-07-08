@@ -115,7 +115,8 @@ describe("e2e-seed script helpers", () => {
 
   it("resets and seeds only rows scoped to the E2E user", async () => {
     const operations: string[] = [];
-    const client = createMockClient(operations);
+    const profileRows: unknown[] = [];
+    const client = createMockClient(operations, { profileRows });
 
     await seedE2eData(client, {
       ...getE2eSeedConfig({
@@ -140,6 +141,21 @@ describe("e2e-seed script helpers", () => {
       )
     ).toHaveLength(8);
     expect(operations).toContain("upsert:profiles:user-e2e");
+    const profileRow = profileRows[0] as {
+      readonly ai_processing_consent?: {
+        readonly consentedAt?: unknown;
+        readonly revokedAt?: unknown;
+        readonly version?: unknown;
+      };
+    };
+    expect(profileRow).toMatchObject({
+      user_id: "user-e2e",
+      ai_processing_consent: {
+        version: "2026-07-ai-processing-v1",
+        revokedAt: null,
+      },
+    });
+    expect(typeof profileRow.ai_processing_consent?.consentedAt).toBe("string");
     expect(operations).toContain("upsert:accounts:4");
     expect(operations).toContain("upsert:account_sms_senders:3");
     expect(operations).toContain("upsert:transactions:2");
@@ -363,6 +379,7 @@ interface MockUser {
 interface MockClientOptions {
   readonly authPages?: readonly (readonly MockUser[])[];
   readonly marketRateRows?: unknown[];
+  readonly profileRows?: unknown[];
   readonly transactionRows?: unknown[];
   readonly transferRows?: unknown[];
 }
@@ -425,6 +442,9 @@ function createMockClient(
         operations.push(`upsert:${table}:${marker}`);
         if (table === "market_rates") {
           options.marketRateRows?.push(rows);
+        }
+        if (table === "profiles") {
+          options.profileRows?.push(rows);
         }
         if (table === "transactions" && Array.isArray(rows)) {
           options.transactionRows?.push(...rows);

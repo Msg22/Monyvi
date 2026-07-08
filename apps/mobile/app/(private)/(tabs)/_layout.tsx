@@ -1,4 +1,5 @@
 import { QuickActionFab } from "@/components/fab";
+import { AiProcessingConsentSheet } from "@/components/ai-consent/AiProcessingConsentSheet";
 import { CustomBottomTabBar } from "@/components/tab-bar/CustomBottomTabBar";
 import { VoiceRecordingOverlay } from "@/components/voice/VoiceRecordingOverlay";
 import { darkTheme, lightTheme } from "@/constants/colors";
@@ -11,15 +12,29 @@ import { useTheme } from "@/context/ThemeContext";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories } from "@/hooks/useCategories";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
+import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
 import { useVoiceTransactionFlow } from "@/hooks/useVoiceTransactionFlow";
 import {
   registerVoiceEntry,
   unregisterVoiceEntry,
 } from "@/services/voice-entry-service";
+import { getAiProcessingConsentStatus } from "@/services/profile-service";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
+import { logger } from "@/utils/logger";
 import { buildCategoryTree } from "@monyvi/logic";
-import { Tabs, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo } from "react";
+import {
+  Tabs,
+  useFocusEffect,
+  useLocalSearchParams,
+  useRouter,
+} from "expo-router";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { View } from "react-native";
 import { useTranslation } from "react-i18next";
 
@@ -41,6 +56,9 @@ function TabLayoutInner(): React.ReactElement {
   const { accounts } = useAccounts();
   const router = useRouter();
   const micButtonRef = useMicButtonRef();
+  const aiConsent = useAiProcessingConsent();
+  const [isVoiceConsentVisible, setIsVoiceConsentVisible] = useState(false);
+  const shouldResumeVoiceConsentAfterPrivacyDetails = useRef(false);
 
   const categoryTree = useMemo(
     () => buildCategoryTree(toCategoryTreeSources(allCategories)),
@@ -55,12 +73,27 @@ function TabLayoutInner(): React.ReactElement {
 
   const { retry } = useLocalSearchParams<{ retry?: string }>();
   const autoStart = retry === "true";
+  const canAutoStart = !aiConsent.isLoading;
+
+  const ensureAiProcessingConsent = useCallback(async (): Promise<boolean> => {
+    if (aiConsent.isLoading) return false;
+
+    try {
+      const status = await getAiProcessingConsentStatus();
+      if (status.isConsented) return true;
+    } catch (error: unknown) {
+      logger.error("voice.aiConsentFreshStatus.failed", error);
+    }
+
+    setIsVoiceConsentVisible(true);
+    return false;
+  }, [aiConsent.isLoading]);
 
   useEffect(() => {
-    if (autoStart) {
+    if (autoStart && canAutoStart) {
       router.setParams({ retry: undefined });
     }
-  }, [autoStart, router]);
+  }, [autoStart, canAutoStart, router]);
 
   const voiceFlow = useVoiceTransactionFlow({
     preferredCurrency,
@@ -68,6 +101,9 @@ function TabLayoutInner(): React.ReactElement {
     accounts: accountInputs,
     categoryRecords: allCategories,
     autoStart,
+    canAutoStart,
+    ensureAiProcessingConsent,
+    onAiProcessingConsentRequired: () => setIsVoiceConsentVisible(true),
   });
   const startVoiceFlow = voiceFlow.startFlow;
 
@@ -83,6 +119,19 @@ function TabLayoutInner(): React.ReactElement {
       unregisterVoiceEntry();
     };
   }, [startVoiceFlow]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!shouldResumeVoiceConsentAfterPrivacyDetails.current) {
+        return;
+      }
+
+      shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
+      if (!aiConsent.isLoading && !aiConsent.isConsented) {
+        setIsVoiceConsentVisible(true);
+      }
+    }, [aiConsent.isConsented, aiConsent.isLoading])
+  );
 
   return (
     <View className="flex-1 bg-background dark:bg-background-dark">
@@ -155,6 +204,31 @@ function TabLayoutInner(): React.ReactElement {
             ? tCommon("open_settings")
             : undefined
         }
+      />
+      <AiProcessingConsentSheet
+        visible={isVoiceConsentVisible}
+        onContinue={async () => {
+          let didGrantConsent = false;
+          try {
+            await aiConsent.grantConsent();
+            didGrantConsent = true;
+            shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
+            setIsVoiceConsentVisible(false);
+            await voiceFlow.startFlow({ skipAiProcessingConsent: true });
+          } catch {
+            shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
+            setIsVoiceConsentVisible(didGrantConsent ? false : true);
+          }
+        }}
+        onNotNow={() => {
+          shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
+          setIsVoiceConsentVisible(false);
+        }}
+        onPrivacyDetails={() => {
+          shouldResumeVoiceConsentAfterPrivacyDetails.current = true;
+          setIsVoiceConsentVisible(false);
+          router.push("/ai-privacy-details");
+        }}
       />
     </View>
   );

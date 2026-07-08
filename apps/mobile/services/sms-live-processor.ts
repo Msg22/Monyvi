@@ -8,12 +8,21 @@ import {
 import { Q } from "@nozbe/watermelondb";
 import {
   type AiParseResult,
+  isAiConsentRequiredError,
   parseSmsWithAi,
   type ParseSmsContext,
   type SmsCandidate,
 } from "./ai-sms-parser-service";
-import { reconcileLiveDetectionPreference } from "./sms-live-detection-handler";
+import {
+  reconcileLiveDetectionPreference,
+  setAutoConfirm,
+  setLiveDetectionEnabled,
+} from "./sms-live-detection-handler";
 import { hasExistingSmsFingerprint } from "./sms-dedup-service";
+import {
+  getAiProcessingConsentStatus,
+  revokeAiProcessingConsent,
+} from "./profile-service";
 import { getCurrentUserDataScope } from "./user-data-access";
 import { logger } from "@/utils/logger";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
@@ -47,6 +56,13 @@ interface LiveSmsProcessingOptions {
   readonly markRecentlyProcessed?: (smsFingerprint: string) => void;
 }
 
+type LiveSmsConsentCheckResult =
+  | { readonly canProcess: true }
+  | {
+      readonly canProcess: false;
+      readonly result: LiveSmsProcessingResult;
+    };
+
 const EMPTY_TRANSACTIONS: readonly ParsedSmsTransaction[] = [];
 const inFlightSmsFingerprints = new Set<string>();
 
@@ -74,17 +90,88 @@ async function loadAiContext(): Promise<ParseSmsContext> {
   };
 }
 
+async function hasLiveSmsAiConsent(): Promise<boolean> {
+  const aiConsentStatus = await getAiProcessingConsentStatus();
+  if (aiConsentStatus.isConsented) {
+    return true;
+  }
+
+  await setLiveDetectionEnabled(false);
+  await setAutoConfirm(false);
+  return false;
+}
+
+async function checkLiveSmsAiConsent({
+  logTag,
+  deliveryMode,
+  smsFingerprint,
+}: {
+  readonly logTag: string;
+  readonly deliveryMode: LiveSmsDeliveryMode;
+  readonly smsFingerprint?: string;
+}): Promise<LiveSmsConsentCheckResult> {
+  try {
+    if (!(await hasLiveSmsAiConsent())) {
+      return {
+        canProcess: false,
+        result: createResult("disabled", smsFingerprint),
+      };
+    }
+  } catch (error: unknown) {
+    logger.error(logTag, error, { deliveryMode });
+    return {
+      canProcess: false,
+      result: createResult("infrastructure_error", smsFingerprint),
+    };
+  }
+
+  return { canProcess: true };
+}
+
+async function disableLiveSmsAfterConsentRequired({
+  deliveryMode,
+  smsFingerprint,
+}: {
+  readonly deliveryMode: LiveSmsDeliveryMode;
+  readonly smsFingerprint: string;
+}): Promise<LiveSmsProcessingResult> {
+  try {
+    await revokeAiProcessingConsent();
+    await setLiveDetectionEnabled(false);
+    await setAutoConfirm(false);
+  } catch (settingsError: unknown) {
+    logger.error("liveSms.consentRequiredDisable.failed", settingsError, {
+      deliveryMode,
+    });
+  }
+
+  return createResult("disabled", smsFingerprint);
+}
+
 export async function processLiveSmsEvent(
   event: LiveSmsEvent,
   options: LiveSmsProcessingOptions = {}
 ): Promise<LiveSmsProcessingResult> {
-  if (!isLikelyFinancialSms(event.body)) {
-    return createResult("ignored");
+  try {
+    const canRun = await reconcileLiveDetectionPreference();
+    if (!canRun) {
+      return createResult("disabled");
+    }
+
+    const consentCheck = await checkLiveSmsAiConsent({
+      logTag: "liveSms.consentCheck.failed",
+      deliveryMode: event.deliveryMode,
+    });
+    if (!consentCheck.canProcess) return consentCheck.result;
+  } catch (error: unknown) {
+    logger.error("liveSms.consentCheck.failed", error, {
+      deliveryMode: event.deliveryMode,
+    });
+    return createResult("infrastructure_error", undefined);
   }
 
-  const canRun = await reconcileLiveDetectionPreference();
-  if (!canRun) {
-    return createResult("disabled");
+  if (!isLikelyFinancialSms(event.body)) {
+    return createResult("ignored");
   }
 
   let smsFingerprint: string | undefined;
@@ -135,6 +222,15 @@ export async function processLiveSmsEvent(
       return createResult("infrastructure_error", confirmedSmsFingerprint);
     }
 
+    const preParseConsentCheck = await checkLiveSmsAiConsent({
+      logTag: "liveSms.consentPreParseCheck.failed",
+      deliveryMode: event.deliveryMode,
+      smsFingerprint: confirmedSmsFingerprint,
+    });
+    if (!preParseConsentCheck.canProcess) {
+      return preParseConsentCheck.result;
+    }
+
     const candidate: SmsCandidate = {
       message: {
         id: `live-${event.deliveryMode}-${event.timestamp}`,
@@ -150,6 +246,13 @@ export async function processLiveSmsEvent(
     try {
       aiResult = await parseSmsWithAi([candidate], context);
     } catch (error: unknown) {
+      if (isAiConsentRequiredError(error)) {
+        return disableLiveSmsAfterConsentRequired({
+          deliveryMode: event.deliveryMode,
+          smsFingerprint: confirmedSmsFingerprint,
+        });
+      }
+
       logger.error("liveSms.aiParse.failed", error, {
         deliveryMode: event.deliveryMode,
       });
@@ -159,6 +262,15 @@ export async function processLiveSmsEvent(
         EMPTY_TRANSACTIONS,
         true
       );
+    }
+
+    const consentRecheck = await checkLiveSmsAiConsent({
+      logTag: "liveSms.consentRecheck.failed",
+      deliveryMode: event.deliveryMode,
+      smsFingerprint: confirmedSmsFingerprint,
+    });
+    if (!consentRecheck.canProcess) {
+      return consentRecheck.result;
     }
 
     if (aiResult.hasError === true) {

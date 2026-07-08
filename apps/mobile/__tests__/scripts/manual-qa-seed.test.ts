@@ -250,8 +250,7 @@ describe("manual-qa-seed script helpers", () => {
     expectRowsStampedForIncrementalPull(budgetRows);
     expect(
       budgetRows.every(
-        (row) =>
-          typeof (row as BudgetSeedRow).pause_intervals === "string"
+        (row) => typeof (row as BudgetSeedRow).pause_intervals === "string"
       )
     ).toBe(true);
     const pausedBudget = budgetRows.find(

@@ -81,6 +81,7 @@ export default function PrivateLayout(): React.ReactNode {
                           title: tCommon("settings"),
                         }}
                       />
+                      <Stack.Screen name="ai-privacy-details" />
                       <Stack.Screen
                         name="recurring-payments"
                         options={{

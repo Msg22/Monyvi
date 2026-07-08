@@ -17,6 +17,7 @@ import type {
 export abstract class BaseProfile extends Model {
   static table = "profiles";
 
+  @field("ai_processing_consent") aiProcessingConsentRaw?: string;
   @field("avatar_url") avatarUrl?: string;
   @readonly @date("created_at") createdAt!: Date;
   @field("deleted") deleted!: boolean;

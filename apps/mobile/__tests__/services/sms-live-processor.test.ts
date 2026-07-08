@@ -6,6 +6,13 @@ import type {
 } from "@/services/ai-sms-parser-service";
 
 const mockReconcileLiveDetectionPreference = jest.fn<Promise<boolean>, []>();
+const mockSetLiveDetectionEnabled = jest.fn<Promise<void>, [boolean]>();
+const mockSetAutoConfirm = jest.fn<Promise<void>, [boolean]>();
+const mockGetAiProcessingConsentStatus = jest.fn<
+  Promise<{ isConsented: boolean }>,
+  []
+>();
+const mockRevokeAiProcessingConsent = jest.fn<Promise<void>, []>();
 const mockHasExistingSmsFingerprint = jest.fn<Promise<boolean>, [string]>();
 const mockParseSmsWithAi = jest.fn<
   Promise<AiParseResult>,
@@ -28,6 +35,17 @@ jest.mock("@monyvi/logic", () => ({
 jest.mock("@/services/sms-live-detection-handler", () => ({
   reconcileLiveDetectionPreference: (): Promise<boolean> =>
     mockReconcileLiveDetectionPreference(),
+  setLiveDetectionEnabled: (enabled: boolean): Promise<void> =>
+    mockSetLiveDetectionEnabled(enabled),
+  setAutoConfirm: (enabled: boolean): Promise<void> =>
+    mockSetAutoConfirm(enabled),
+}));
+
+jest.mock("@/services/profile-service", () => ({
+  getAiProcessingConsentStatus: (): Promise<{ isConsented: boolean }> =>
+    mockGetAiProcessingConsentStatus(),
+  revokeAiProcessingConsent: (): Promise<void> =>
+    mockRevokeAiProcessingConsent(),
 }));
 
 jest.mock("@/services/sms-dedup-service", () => ({
@@ -39,6 +57,8 @@ jest.mock("@/services/ai-sms-parser-service", () => ({
   parseSmsWithAi: (
     ...args: [readonly SmsCandidate[], ParseSmsContext]
   ): Promise<AiParseResult> => mockParseSmsWithAi(...args),
+  isAiConsentRequiredError: (error: unknown): boolean =>
+    error instanceof Error && error.name === "AiConsentRequiredError",
 }));
 
 jest.mock("@monyvi/db", () => ({
@@ -90,6 +110,10 @@ describe("sms-live-processor", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockReconcileLiveDetectionPreference.mockResolvedValue(true);
+    mockSetLiveDetectionEnabled.mockResolvedValue(undefined);
+    mockSetAutoConfirm.mockResolvedValue(undefined);
+    mockGetAiProcessingConsentStatus.mockResolvedValue({ isConsented: true });
+    mockRevokeAiProcessingConsent.mockResolvedValue(undefined);
     mockHasExistingSmsFingerprint.mockResolvedValue(false);
     mockComputeSmsFingerprint.mockResolvedValue("hash-live");
     mockIsLikelyFinancialSms.mockReturnValue(true);
@@ -147,11 +171,11 @@ describe("sms-live-processor", () => {
   });
 
   it("deduplicates concurrent events with the same SMS fingerprint before AI parsing", async () => {
-    let releaseDedupCheck: (() => void) | undefined;
+    const releaseDedupChecks: Array<() => void> = [];
     mockHasExistingSmsFingerprint.mockImplementation(
       () =>
         new Promise<boolean>((resolve) => {
-          releaseDedupCheck = () => resolve(false);
+          releaseDedupChecks.push(() => resolve(false));
         })
     );
 
@@ -168,9 +192,13 @@ describe("sms-live-processor", () => {
       deliveryMode: "foreground",
     });
 
-    await Promise.resolve();
-    await Promise.resolve();
-    releaseDedupCheck?.();
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      if (releaseDedupChecks.length > 0) break;
+      await Promise.resolve();
+    }
+    for (const releaseDedupCheck of releaseDedupChecks) {
+      releaseDedupCheck();
+    }
 
     const results = await Promise.all([first, second]);
 
@@ -195,6 +223,47 @@ describe("sms-live-processor", () => {
     });
 
     expect(result.status).toBe("ai_failed");
+  });
+
+  it("disables live detection when the Edge parser rejects for missing AI consent", async () => {
+    const consentError = new Error("AI processing consent required");
+    consentError.name = "AiConsentRequiredError";
+    mockParseSmsWithAi.mockRejectedValueOnce(consentError);
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("disabled");
+    expect(result.isRetryable).toBeUndefined();
+    expect(mockRevokeAiProcessingConsent).toHaveBeenCalledTimes(1);
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
+    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
+  });
+
+  it("returns disabled when consent-required cleanup fails", async () => {
+    const consentError = new Error("AI processing consent required");
+    consentError.name = "AiConsentRequiredError";
+    mockParseSmsWithAi.mockRejectedValueOnce(consentError);
+    mockSetLiveDetectionEnabled.mockRejectedValueOnce(
+      new Error("settings write failed")
+    );
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("disabled");
+    expect(result.smsFingerprint).toBe("hash-live");
+    expect(mockRevokeAiProcessingConsent).toHaveBeenCalledTimes(1);
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
+    expect(mockSetAutoConfirm).not.toHaveBeenCalledWith(false);
   });
 
   it("returns infrastructure_error when local deduplication fails", async () => {
@@ -224,6 +293,117 @@ describe("sms-live-processor", () => {
     });
 
     expect(result.status).toBe("disabled");
+    expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+  });
+
+  it("ignores non-financial SMS only after live detection consent is valid", async () => {
+    mockIsLikelyFinancialSms.mockReturnValue(false);
+
+    const result = await processLiveSmsEvent({
+      sender: "FRIEND",
+      body: "Dinner tonight?",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("ignored");
+    expect(mockReconcileLiveDetectionPreference).toHaveBeenCalledTimes(1);
+    expect(mockGetAiProcessingConsentStatus).toHaveBeenCalledTimes(1);
+    expect(mockIsLikelyFinancialSms).toHaveBeenCalledWith("Dinner tonight?");
+    expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+  });
+
+  it("disables stale live detection before filtering SMS bodies after consent revocation", async () => {
+    mockGetAiProcessingConsentStatus.mockResolvedValue({ isConsented: false });
+    mockIsLikelyFinancialSms.mockReturnValue(false);
+
+    const result = await processLiveSmsEvent({
+      sender: "FRIEND",
+      body: "Dinner tonight?",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("disabled");
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
+    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
+    expect(mockIsLikelyFinancialSms).not.toHaveBeenCalled();
+    expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+  });
+
+  it("does not parse and disables live detection when AI consent is revoked", async () => {
+    mockGetAiProcessingConsentStatus.mockResolvedValue({ isConsented: false });
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "headless",
+    });
+
+    expect(result.status).toBe("disabled");
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
+    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
+    expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+  });
+
+  it("rechecks AI consent before parsing the SMS body", async () => {
+    mockGetAiProcessingConsentStatus
+      .mockResolvedValueOnce({ isConsented: true })
+      .mockResolvedValueOnce({ isConsented: false });
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("disabled");
+    expect(result.smsFingerprint).toBe("hash-live");
+    expect(mockGetAiProcessingConsentStatus).toHaveBeenCalledTimes(2);
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
+    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+  });
+
+  it("does not return parsed live SMS when AI consent is revoked during parsing", async () => {
+    mockGetAiProcessingConsentStatus
+      .mockResolvedValueOnce({ isConsented: true })
+      .mockResolvedValueOnce({ isConsented: true })
+      .mockResolvedValueOnce({ isConsented: false });
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("disabled");
+    expect(result.transactions).toEqual([]);
+    expect(mockParseSmsWithAi).toHaveBeenCalledTimes(1);
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
+    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
+  });
+
+  it("returns infrastructure_error when AI consent lookup fails", async () => {
+    mockGetAiProcessingConsentStatus.mockRejectedValue(
+      new Error("profile unavailable")
+    );
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "headless",
+    });
+
+    expect(result.status).toBe("infrastructure_error");
     expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
     expect(mockParseSmsWithAi).not.toHaveBeenCalled();
   });

@@ -13,6 +13,7 @@
 import {
   Account,
   Profile,
+  type AiProcessingConsent,
   type CurrencyType,
   type OnboardingFlags,
   type PreferredLanguageCode,
@@ -25,11 +26,13 @@ import {
   getCurrentLanguage,
   type SupportedLanguage,
 } from "@/i18n/changeLanguage";
+import aiProcessingConsentConfig from "@/config/ai-processing-consent.json";
 import {
   createCashAccountWithinWriter,
   getDefaultCashAccountName,
 } from "@/services/account-service";
 import { clearOnboardingStep } from "@/services/onboarding-cursor-service";
+import { supabase } from "@/services/supabase";
 import { getCurrentUserDataScope } from "@/services/user-data-access";
 import { logger } from "@/utils/logger";
 
@@ -42,6 +45,13 @@ import { logger } from "@/utils/logger";
 const SUPPORTED_CURRENCY_CODES: ReadonlySet<CurrencyType> = new Set(
   SUPPORTED_CURRENCIES.map((c) => c.code)
 );
+
+export const AI_PROCESSING_CONSENT_VERSION = aiProcessingConsentConfig.version;
+
+export interface AiProcessingConsentStatus {
+  readonly isConsented: boolean;
+  readonly consent: AiProcessingConsent | null;
+}
 
 // =============================================================================
 // Helpers
@@ -71,6 +81,106 @@ async function getProfile(): Promise<Profile> {
     );
   }
   return profile;
+}
+
+function normalizeAiProcessingConsent(
+  consent: unknown
+): AiProcessingConsent | null {
+  if (typeof consent !== "object" || consent === null) {
+    return null;
+  }
+
+  const candidate = consent as Partial<AiProcessingConsent>;
+  const hasValidRevocation =
+    candidate.revokedAt === null || typeof candidate.revokedAt === "string";
+
+  if (
+    typeof candidate.version !== "string" ||
+    candidate.version !== AI_PROCESSING_CONSENT_VERSION ||
+    typeof candidate.consentedAt !== "string" ||
+    !hasValidRevocation
+  ) {
+    return null;
+  }
+
+  return {
+    version: candidate.version,
+    consentedAt: candidate.consentedAt,
+    revokedAt: candidate.revokedAt,
+  };
+}
+
+export function parseAiProcessingConsentRaw(
+  rawConsent: string | null | undefined
+): AiProcessingConsent | null {
+  if (!rawConsent) {
+    return null;
+  }
+
+  try {
+    return normalizeAiProcessingConsent(JSON.parse(rawConsent) as unknown);
+  } catch {
+    return null;
+  }
+}
+
+export function isActiveAiProcessingConsent(consent: unknown): boolean {
+  const normalizedConsent = normalizeAiProcessingConsent(consent);
+
+  return (
+    normalizedConsent !== null &&
+    normalizedConsent.version === AI_PROCESSING_CONSENT_VERSION &&
+    normalizedConsent.consentedAt.trim().length > 0 &&
+    normalizedConsent.revokedAt === null
+  );
+}
+
+function createAiProcessingConsent(now: Date): AiProcessingConsent {
+  return {
+    version: AI_PROCESSING_CONSENT_VERSION,
+    consentedAt: now.toISOString(),
+    revokedAt: null,
+  };
+}
+
+function serializeAiProcessingConsent(
+  consent: AiProcessingConsent
+): Record<string, string | null> {
+  return {
+    version: consent.version,
+    consentedAt: consent.consentedAt,
+    revokedAt: consent.revokedAt,
+  };
+}
+
+async function updateRemoteAiProcessingConsent(
+  userId: string,
+  consent: AiProcessingConsent,
+  now: Date
+): Promise<void> {
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      ai_processing_consent: serializeAiProcessingConsent(consent),
+      updated_at: now.toISOString(),
+    })
+    .eq("user_id", userId)
+    .eq("deleted", false);
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function writeLocalAiProcessingConsent(
+  profile: Profile,
+  rawConsent: string | null
+): Promise<void> {
+  await database.write(async () => {
+    await profile.update((p) => {
+      p.aiProcessingConsentRaw = rawConsent ?? undefined;
+    });
+  });
 }
 
 // =============================================================================
@@ -117,6 +227,54 @@ export async function setPreferredCurrency(
       p.preferredCurrency = currency;
     });
   });
+}
+
+export async function getAiProcessingConsentStatus(): Promise<AiProcessingConsentStatus> {
+  const profile = await getProfile();
+  const consent = parseAiProcessingConsentRaw(profile.aiProcessingConsentRaw);
+  return {
+    consent,
+    isConsented: isActiveAiProcessingConsent(consent),
+  };
+}
+
+export async function grantAiProcessingConsent(
+  now: Date = new Date()
+): Promise<void> {
+  const profile = await getProfile();
+  const consent = createAiProcessingConsent(now);
+  const consentRaw = JSON.stringify(consent);
+
+  await updateRemoteAiProcessingConsent(profile.userId, consent, now);
+  await writeLocalAiProcessingConsent(profile, consentRaw);
+}
+
+export async function revokeAiProcessingConsent(
+  now: Date = new Date()
+): Promise<void> {
+  const profile = await getProfile();
+  const currentConsent = parseAiProcessingConsentRaw(
+    profile.aiProcessingConsentRaw
+  );
+  if (!currentConsent) {
+    return;
+  }
+
+  const revokedConsent: AiProcessingConsent = {
+    version: currentConsent.version,
+    consentedAt: currentConsent.consentedAt,
+    revokedAt: now.toISOString(),
+  };
+
+  await writeLocalAiProcessingConsent(profile, JSON.stringify(revokedConsent));
+  try {
+    await updateRemoteAiProcessingConsent(profile.userId, revokedConsent, now);
+  } catch (error: unknown) {
+    logger.warn(
+      "profile.revokeAiProcessingConsent.remoteUpdate.failed",
+      error instanceof Error ? { message: error.message } : { error }
+    );
+  }
 }
 
 /**

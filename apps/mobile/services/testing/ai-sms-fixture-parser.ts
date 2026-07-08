@@ -8,6 +8,7 @@ import {
 } from "@monyvi/logic";
 
 import { SMS_FIXTURES, type SmsFixture } from "@/services/dev/sms-fixtures";
+import { assertNotAborted } from "@/services/abort-utils";
 
 import type {
   AiParseProgress,
@@ -95,15 +96,17 @@ function pushUniqueTransactions(
   }
 }
 
-export function parseSmsWithFixtureAi(
+export async function parseSmsWithFixtureAi(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
-  onProgress?: (progress: AiParseProgress) => void
+  onProgress?: (progress: AiParseProgress) => void,
+  abortSignal?: AbortSignal
 ): Promise<AiParseResult> {
   const transactions: ParsedSmsTransaction[] = [];
   const seenTransactions = new Set<string>();
 
   for (const candidate of candidates) {
+    assertNotAborted(abortSignal, "SMS parse aborted");
     const fixture = findFixture(candidate);
     if (!fixture) continue;
 
@@ -122,6 +125,7 @@ export function parseSmsWithFixtureAi(
     );
   }
 
+  assertNotAborted(abortSignal, "SMS parse aborted");
   onProgress?.({
     chunksCompleted: candidates.length > 0 ? 1 : 0,
     totalChunks: candidates.length > 0 ? 1 : 0,

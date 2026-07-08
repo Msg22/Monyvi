@@ -293,6 +293,70 @@ export function LiveDetectionSettingsSection({
   );
 }
 
+export function AiProcessingSettingsSection({
+  t,
+  isConsented,
+  isUpdating,
+  onToggleConsent,
+  onPrivacyDetailsPress,
+}: {
+  readonly t: TranslateFn;
+  readonly isConsented: boolean;
+  readonly isUpdating: boolean;
+  readonly onToggleConsent: (value: boolean) => void;
+  readonly onPrivacyDetailsPress: () => void;
+}): React.JSX.Element {
+  return (
+    <View className="mb-8">
+      <SectionLabel>{t("ai_features")}</SectionLabel>
+
+      <View className="flex-row items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-800">
+        <View className="flex-row items-center gap-3 flex-1">
+          <SettingsIconTile
+            name="sparkles"
+            className="bg-nileGreen-600 dark:bg-nileGreen-500"
+          />
+          <View className="flex-1">
+            <Text className="text-base font-medium text-slate-900 dark:text-slate-50">
+              {t("ai_processing")}
+            </Text>
+            <Text className="text-xs text-slate-500 dark:text-slate-400">
+              {t("ai_processing_description")}
+            </Text>
+          </View>
+        </View>
+        <Switch
+          testID="ai-processing-consent-switch"
+          value={isConsented}
+          onValueChange={onToggleConsent}
+          disabled={isUpdating}
+          trackColor={{
+            false: palette.slate[400],
+            true: palette.nileGreen[500],
+          }}
+          thumbColor={isConsented ? palette.slate[25] : palette.slate[100]}
+        />
+      </View>
+
+      <TouchableOpacity
+        onPress={onPrivacyDetailsPress}
+        className="mt-0.5 flex-row items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-800"
+      >
+        <View className="flex-row items-center gap-3">
+          <SettingsIconTile
+            name="shield-checkmark"
+            className="bg-blue-600 dark:bg-blue-500"
+          />
+          <Text className="text-base font-medium text-slate-900 dark:text-slate-50">
+            {t("ai_privacy_details")}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={palette.slate[400]} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export function ProfileNotificationsSection({
   t,
   userEmail,

@@ -11,7 +11,7 @@
  * - Why: Coordinates multiple concerns (recording, AI submission,
  *   navigation, error handling) behind a single interface. Components
  *   consume one hook instead of managing three.
- * - SOLID: SRP — orchestration only. DIP — depends on abstractions
+ * - SOLID: SRP - orchestration only. DIP - depends on abstractions
  *   (service functions, hook interfaces), not concrete implementations.
  *
  * @module useVoiceTransactionFlow
@@ -26,6 +26,8 @@ import {
   parseVoiceWithAi,
   isVoiceParserError,
 } from "@/services/ai-voice-parser-service";
+import { getAiProcessingConsentStatus } from "@/services/profile-service";
+import { logger } from "@/utils/logger";
 import type { Category } from "@monyvi/db";
 
 // ---------------------------------------------------------------------------
@@ -59,7 +61,7 @@ interface VoiceTransactionFlowResult {
 
   // Actions
   /** Open overlay and start recording */
-  readonly startFlow: () => Promise<void>;
+  readonly startFlow: (options?: StartFlowOptions) => Promise<void>;
   /** Pause recording */
   readonly pauseRecording: () => void;
   /** Resume recording */
@@ -73,7 +75,6 @@ interface VoiceTransactionFlowResult {
   /** Open device app settings for microphone permission recovery. */
   readonly openMicrophoneSettings: () => Promise<void>;
 }
-
 interface FlowConfig {
   /** User's preferred currency code */
   readonly preferredCurrency: string;
@@ -85,12 +86,24 @@ interface FlowConfig {
     name: string;
     currency: string;
   }>;
-  /** User's categories from the database — used for AI category → ID resolution */
+  /** User's categories from the database - used for AI category to ID resolution */
   readonly categoryRecords: readonly Category[];
   /** Origin tab index (for post-save navigation) */
   readonly originTabIndex?: number;
   /** When true, automatically starts the voice recording on mount */
   readonly autoStart?: boolean;
+  /** When false, auto-start waits without consuming the one-shot request. */
+  readonly canAutoStart?: boolean;
+  /** Ensure AI processing consent before recording starts. */
+  readonly ensureAiProcessingConsent?: () => boolean | Promise<boolean>;
+  /** Re-check current AI processing consent before/after upload. */
+  readonly hasFreshAiProcessingConsent?: () => boolean | Promise<boolean>;
+  /** Open consent recovery when the AI provider rejects stale local consent. */
+  readonly onAiProcessingConsentRequired?: () => void | Promise<void>;
+}
+
+interface StartFlowOptions {
+  readonly skipAiProcessingConsent?: boolean;
 }
 
 function getMicrophonePermissionError(): string {
@@ -124,6 +137,7 @@ export function useVoiceTransactionFlow(
 
   // Track flow status in a ref to avoid stale closure in startFlow guard
   const flowStatusRef = useRef<FlowStatus>("idle");
+  const isStartFlowPendingRef = useRef(false);
 
   /** Update both React state and ref to keep concurrency guard in sync */
   const updateFlowStatus = useCallback((next: FlowStatus): void => {
@@ -150,44 +164,112 @@ export function useVoiceTransactionFlow(
   // Auto-start support (for retry flow from voice-review page)
   // ---------------------------------------------------------------------------
   const autoStartFiredRef = useRef(false);
-  const startFlowRef = useRef<(() => Promise<void>) | null>(null);
+  const startFlowRef = useRef<
+    ((options?: StartFlowOptions) => Promise<void>) | null
+  >(null);
+
+  const hasFreshAiProcessingConsent =
+    useCallback(async (): Promise<boolean> => {
+      if (config.hasFreshAiProcessingConsent) {
+        return config.hasFreshAiProcessingConsent();
+      }
+
+      try {
+        const status = await getAiProcessingConsentStatus();
+        return status.isConsented;
+      } catch (error: unknown) {
+        logger.error("voice.aiConsentStatus.failed", error);
+        return false;
+      }
+    }, [config.hasFreshAiProcessingConsent]);
+
+  const stopAfterConsentLoss = useCallback(
+    async (options?: {
+      readonly discardRecording?: boolean;
+    }): Promise<boolean> => {
+      if (!config.ensureAiProcessingConsent) {
+        return false;
+      }
+
+      const canUseAi = await hasFreshAiProcessingConsent();
+      if (canUseAi) {
+        return false;
+      }
+
+      if (options?.discardRecording !== false) {
+        await recorder.discard();
+      }
+      setIsOverlayVisible(false);
+      updateFlowStatus("idle");
+      return true;
+    },
+    [
+      config.ensureAiProcessingConsent,
+      hasFreshAiProcessingConsent,
+      recorder,
+      updateFlowStatus,
+    ]
+  );
 
   // ---------------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------------
 
-  const startFlow = useCallback(async (): Promise<void> => {
-    // Concurrency guard — prevent overlapping recording sessions (FR-017)
-    if (flowStatusRef.current !== "idle") return;
-
-    // Request permission first if needed
-    if (!recorder.hasPermission) {
-      const granted = await recorder.requestPermission();
-      if (!granted) {
-        setErrorMessage(getMicrophonePermissionError());
-        setErrorKind("microphone-permission");
-        updateFlowStatus("error");
-        setIsOverlayVisible(true);
+  const startFlow = useCallback(
+    async (options?: StartFlowOptions): Promise<void> => {
+      // Concurrency guard - prevent overlapping recording sessions (FR-017)
+      if (flowStatusRef.current !== "idle" || isStartFlowPendingRef.current) {
         return;
       }
-    }
 
-    // Reset state and start recording
-    setErrorMessage(null);
-    setErrorKind(null);
-    setIsOverlayVisible(true);
-    updateFlowStatus("recording");
-    originTabIndexRef.current = config.originTabIndex ?? 0;
+      isStartFlowPendingRef.current = true;
+      try {
+        if (
+          !options?.skipAiProcessingConsent &&
+          config.ensureAiProcessingConsent
+        ) {
+          const canUseAi = await config.ensureAiProcessingConsent();
+          if (!canUseAi) return;
+        }
 
-    try {
-      await recorder.start();
-    } catch {
-      setErrorMessage(getRecordingStartError());
-      setErrorKind("generic");
-      updateFlowStatus("error");
-      setIsOverlayVisible(true);
-    }
-  }, [recorder, config.originTabIndex, updateFlowStatus]);
+        // Request permission first if needed
+        if (!recorder.hasPermission) {
+          const granted = await recorder.requestPermission();
+          if (!granted) {
+            setErrorMessage(getMicrophonePermissionError());
+            setErrorKind("microphone-permission");
+            updateFlowStatus("error");
+            setIsOverlayVisible(true);
+            return;
+          }
+        }
+
+        // Reset state and start recording
+        setErrorMessage(null);
+        setErrorKind(null);
+        setIsOverlayVisible(true);
+        updateFlowStatus("recording");
+        originTabIndexRef.current = config.originTabIndex ?? 0;
+
+        try {
+          await recorder.start();
+        } catch {
+          setErrorMessage(getRecordingStartError());
+          setErrorKind("generic");
+          updateFlowStatus("error");
+          setIsOverlayVisible(true);
+        }
+      } finally {
+        isStartFlowPendingRef.current = false;
+      }
+    },
+    [
+      recorder,
+      config.ensureAiProcessingConsent,
+      config.originTabIndex,
+      updateFlowStatus,
+    ]
+  );
 
   // Keep ref in sync so the auto-start effect can call it
   startFlowRef.current = startFlow;
@@ -198,6 +280,9 @@ export function useVoiceTransactionFlow(
       autoStartFiredRef.current = false;
       return;
     }
+    if (config.canAutoStart === false) {
+      return;
+    }
     if (
       !autoStartFiredRef.current &&
       flowStatusRef.current === "idle" &&
@@ -206,7 +291,7 @@ export function useVoiceTransactionFlow(
       autoStartFiredRef.current = true;
       void startFlowRef.current();
     }
-  }, [config.autoStart]);
+  }, [config.autoStart, config.canAutoStart]);
 
   const pauseRecording = useCallback((): void => {
     recorder.pause();
@@ -233,12 +318,12 @@ export function useVoiceTransactionFlow(
       return;
     }
 
-    // Resolve audio URI — either from an already-completed auto-stop (FR-004)
+    // Resolve audio URI - either from an already-completed auto-stop (FR-004)
     // or by explicitly stopping the recorder now.
     let audioUri: string;
 
     if (recorder.status === "completed" && recorder.audioUri) {
-      // Recorder already auto-stopped at 60s — use the finalized URI directly
+      // Recorder already auto-stopped at 60s - use the finalized URI directly
       audioUri = recorder.audioUri;
     } else {
       // Normal path: stop recording and get the finalized URI
@@ -256,6 +341,10 @@ export function useVoiceTransactionFlow(
     setErrorKind(null);
     updateFlowStatus("analyzing");
 
+    if (await stopAfterConsentLoss()) {
+      return;
+    }
+
     // Submit to AI
     const aiResult = await parseVoiceWithAi({
       audioUri,
@@ -268,8 +357,19 @@ export function useVoiceTransactionFlow(
     // Clean up temp audio file (FR-021)
     await recorder.discard();
 
+    if (await stopAfterConsentLoss({ discardRecording: false })) {
+      return;
+    }
+
     // Handle result
     if (isVoiceParserError(aiResult)) {
+      if (aiResult.kind === "consent_required") {
+        setIsOverlayVisible(false);
+        updateFlowStatus("idle");
+        await config.onAiProcessingConsentRequired?.();
+        return;
+      }
+
       setErrorMessage(aiResult.message);
       setErrorKind("generic");
       updateFlowStatus("error");
@@ -286,7 +386,7 @@ export function useVoiceTransactionFlow(
       return;
     }
 
-    // Success — navigate to review screen
+    // Success - navigate to review screen
     setErrorKind(null);
     updateFlowStatus("success");
     setIsOverlayVisible(false);
@@ -312,6 +412,9 @@ export function useVoiceTransactionFlow(
     config.categories,
     config.accounts,
     config.categoryRecords,
+    config.ensureAiProcessingConsent,
+    config.onAiProcessingConsentRequired,
+    stopAfterConsentLoss,
     updateFlowStatus,
   ]);
 

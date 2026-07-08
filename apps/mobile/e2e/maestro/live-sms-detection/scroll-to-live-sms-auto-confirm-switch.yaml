@@ -1,0 +1,9 @@
+appId: com.monyvi.app
+---
+# Helper: reveal the Live SMS Auto Confirm switch in Settings.
+
+- scrollUntilVisible:
+    element:
+      id: "live-sms-auto-confirm-switch"
+    direction: DOWN
+    centerElement: true

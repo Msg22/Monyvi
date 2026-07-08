@@ -20,10 +20,11 @@ import React, {
 } from "react";
 import { Platform, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { SUPPORTED_CURRENCIES, type ParsedSmsTransaction } from "@monyvi/logic";
+import { AiProcessingConsentSheet } from "@/components/ai-consent/AiProcessingConsentSheet";
 import { PermissionRecoveryModal } from "@/components/permissions/PermissionRecoveryModal";
 import {
   getPermissionRecoveryContent,
@@ -36,6 +37,7 @@ import { useSmsScanContext } from "@/context/SmsScanContext";
 import { useSmsScan } from "@/hooks/useSmsScan";
 import { useSmsPermission } from "@/hooks/useSmsPermission";
 import { useSmsSync } from "@/hooks/useSmsSync";
+import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
 import { loadExistingSmsFingerprints } from "@/services/sms-sync-service";
 import { palette } from "@/constants/colors";
 import { logger } from "@/utils/logger";
@@ -199,8 +201,23 @@ export default function SmsScanScreen(): React.JSX.Element {
   } = useSmsPermission();
   const [isPermissionRecoveryVisible, setIsPermissionRecoveryVisible] =
     useState(true);
-  const { status, progress, result, transactions, error, startScan } =
+  const { status, progress, result, transactions, error, startScan, reset } =
     useSmsScan();
+  const {
+    grantConsent,
+    isConsented: isAiConsented,
+    isLoading: isAiConsentLoading,
+    revokeConsent,
+  } = useAiProcessingConsent();
+  const [isConsentSheetVisible, setIsConsentSheetVisible] =
+    React.useState(false);
+  const [scanRestartNonce, setScanRestartNonce] = React.useState(0);
+  const shouldResumeConsentAfterPrivacyDetails = useRef(false);
+  const scanInitiated = useRef(false);
+  const previousPermissionStatusRef = useRef(permissionStatus);
+  const pendingScanAfterAbortRef = useRef(false);
+  const scanAbortControllerRef = useRef<AbortController | null>(null);
+  const staleConsentRevokePromiseRef = useRef<Promise<void> | null>(null);
 
   const { setTransactions, scanMode } = useSmsScanContext();
   const { lastSyncTimestamp } = useSmsSync();
@@ -219,10 +236,20 @@ export default function SmsScanScreen(): React.JSX.Element {
 
   // Shared scan initiation logic (used by both auto-start and retry)
   const initiateScan = useCallback(async (): Promise<void> => {
+    if (scanAbortControllerRef.current) {
+      scanAbortControllerRef.current.abort();
+      pendingScanAfterAbortRef.current = true;
+      scanInitiated.current = false;
+      return;
+    }
+
     const minDate =
       scanMode === "incremental" && lastSyncTimestamp
         ? lastSyncTimestamp
         : undefined;
+
+    const abortController = new AbortController();
+    scanAbortControllerRef.current = abortController;
 
     let existingFingerprints: ReadonlySet<string> = new Set();
     try {
@@ -233,20 +260,51 @@ export default function SmsScanScreen(): React.JSX.Element {
       });
     }
 
-    startScan({ minDate, existingFingerprints, aiContext }).catch(
-      (err: unknown) => {
-        logger.error("smsScan.startFailed", err);
+    if (abortController.signal.aborted) {
+      if (scanAbortControllerRef.current === abortController) {
+        scanAbortControllerRef.current = null;
+        if (pendingScanAfterAbortRef.current) {
+          pendingScanAfterAbortRef.current = false;
+          setScanRestartNonce((value) => value + 1);
+        }
       }
-    );
-  }, [startScan, scanMode, lastSyncTimestamp, aiContext]);
+      return;
+    }
 
-  // Track whether scan has been initiated to prevent double-start
-  const scanInitiated = useRef(false);
-  const previousPermissionStatusRef = useRef(permissionStatus);
+    startScan({
+      minDate,
+      existingFingerprints,
+      aiContext,
+      abortSignal: abortController.signal,
+    })
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === "AbortError") {
+          return;
+        }
+        logger.error("smsScan.startFailed", err);
+      })
+      .finally(() => {
+        if (scanAbortControllerRef.current === abortController) {
+          scanAbortControllerRef.current = null;
+          if (pendingScanAfterAbortRef.current) {
+            pendingScanAfterAbortRef.current = false;
+            setScanRestartNonce((value) => value + 1);
+          }
+        }
+      });
+  }, [startScan, scanMode, lastSyncTimestamp, aiContext]);
 
   // Auto-start scan on mount — waits until permission is granted and categories loaded
   useEffect(() => {
+    if (status === "consent_required") return;
     if (permissionStatus !== "granted") return;
+    if (isAiConsentLoading) return;
+    if (!isAiConsented) {
+      scanAbortControllerRef.current?.abort();
+      scanInitiated.current = false;
+      setIsConsentSheetVisible(true);
+      return;
+    }
     if (!isAiContextReady) return;
     if (!scanInitiated.current) {
       scanInitiated.current = true;
@@ -254,7 +312,54 @@ export default function SmsScanScreen(): React.JSX.Element {
         logger.error("smsScan.autoStartFailed", err);
       });
     }
-  }, [initiateScan, isAiContextReady, permissionStatus]);
+  }, [
+    isAiConsented,
+    isAiConsentLoading,
+    initiateScan,
+    isAiContextReady,
+    permissionStatus,
+    scanRestartNonce,
+    status,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      scanAbortControllerRef.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (status !== "consent_required") {
+      return;
+    }
+
+    let isActive = true;
+    scanAbortControllerRef.current?.abort();
+    scanAbortControllerRef.current = null;
+    pendingScanAfterAbortRef.current = false;
+    scanInitiated.current = false;
+    setIsConsentSheetVisible(true);
+
+    const staleConsentRevokePromise = revokeConsent()
+      .catch((err: unknown) => {
+        logger.error("smsScan.revokeStaleAiConsentFailed", err);
+      })
+      .finally(() => {
+        if (
+          staleConsentRevokePromiseRef.current === staleConsentRevokePromise
+        ) {
+          staleConsentRevokePromiseRef.current = null;
+        }
+        if (isActive) {
+          reset();
+        }
+      });
+    staleConsentRevokePromiseRef.current = staleConsentRevokePromise;
+
+    return () => {
+      isActive = false;
+    };
+  }, [reset, revokeConsent, status]);
 
   useEffect(() => {
     if (previousPermissionStatusRef.current === permissionStatus) {
@@ -278,6 +383,19 @@ export default function SmsScanScreen(): React.JSX.Element {
   const handleBackPress = (): void => {
     router.back();
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!shouldResumeConsentAfterPrivacyDetails.current) {
+        return;
+      }
+
+      shouldResumeConsentAfterPrivacyDetails.current = false;
+      if (!isAiConsentLoading && !isAiConsented) {
+        setIsConsentSheetVisible(true);
+      }
+    }, [isAiConsented, isAiConsentLoading])
+  );
 
   const handleRetryPress = (): void => {
     initiateScan().catch((err: unknown) => {
@@ -348,6 +466,35 @@ export default function SmsScanScreen(): React.JSX.Element {
       });
   };
 
+  const handleConsentContinue = async (): Promise<void> => {
+    try {
+      await staleConsentRevokePromiseRef.current;
+      await grantConsent();
+      setIsConsentSheetVisible(false);
+      scanInitiated.current = false;
+      setScanRestartNonce((value) => value + 1);
+    } catch (err: unknown) {
+      logger.error("smsScan.aiConsentGrantFailed", err);
+      setIsConsentSheetVisible(true);
+    }
+  };
+
+  const consentSheet = (
+    <AiProcessingConsentSheet
+      visible={isConsentSheetVisible}
+      onContinue={handleConsentContinue}
+      onNotNow={(): void => {
+        setIsConsentSheetVisible(false);
+        router.back();
+      }}
+      onPrivacyDetails={(): void => {
+        shouldResumeConsentAfterPrivacyDetails.current = true;
+        setIsConsentSheetVisible(false);
+        router.push("/ai-privacy-details");
+      }}
+    />
+  );
+
   const permissionRecoveryContent = getPermissionRecoveryContent(
     {
       kind: "sms-sync",
@@ -387,28 +534,52 @@ export default function SmsScanScreen(): React.JSX.Element {
             cancelLabel={tSettings("permission_not_now")}
           />
         )}
+        {consentSheet}
       </>
     );
   }
 
-  return (
-    <SafeAreaView
-      className="flex-1 bg-slate-50 dark:bg-slate-900"
-      edges={["top", "bottom"]}
-    >
-      <SmsScanProgress
-        status={status}
-        progress={progress}
-        transactionsFound={result?.totalFound ?? 0}
-        totalScanned={result?.totalScanned ?? 0}
-        durationMs={result?.durationMs ?? 0}
-        topCategories={topCategories}
-        categoryNameMap={categoryNameMap}
-        error={error}
-        onReviewPress={handleReviewPress}
-        onBackPress={handleBackPress}
-        onRetryPress={handleRetryPress}
+  if (isAiConsentLoading) {
+    return (
+      <SmsPermissionGate
+        status="undetermined"
+        isLoading={true}
+        onRequest={handleShowPermissionRecovery}
+        onOpenSettings={handleShowPermissionRecovery}
+        onBack={handleBackPress}
       />
-    </SafeAreaView>
+    );
+  }
+
+  if (!isAiConsented) {
+    return consentSheet;
+  }
+
+  if (status === "consent_required") {
+    return consentSheet;
+  }
+
+  return (
+    <>
+      <SafeAreaView
+        className="flex-1 bg-slate-50 dark:bg-slate-900"
+        edges={["top", "bottom"]}
+      >
+        <SmsScanProgress
+          status={status}
+          progress={progress}
+          transactionsFound={result?.totalFound ?? 0}
+          totalScanned={result?.totalScanned ?? 0}
+          durationMs={result?.durationMs ?? 0}
+          topCategories={topCategories}
+          categoryNameMap={categoryNameMap}
+          error={error}
+          onReviewPress={handleReviewPress}
+          onBackPress={handleBackPress}
+          onRetryPress={handleRetryPress}
+        />
+      </SafeAreaView>
+      {consentSheet}
+    </>
   );
 }

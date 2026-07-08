@@ -28,6 +28,9 @@ interface RunCiE2eModule {
     readonly prepareRetry?: () => Promise<void>;
     readonly retryOnDeviceFailure: boolean;
   };
+  getSmsSyncJourneyOptions(): {
+    readonly retryOnDeviceFailure: boolean;
+  };
   isDeviceOfflineFailure(output: string): boolean;
   shouldResetMaestroFlowBeforeRetry(
     flow: string,
@@ -163,6 +166,12 @@ describe("run-ci-e2e helpers", () => {
         { retryOnDeviceFailure: false }
       )
     ).toBe(false);
+  });
+
+  it("retries aggregate SMS sync journeys when the emulator transport drops", () => {
+    expect(runCiE2e.getSmsSyncJourneyOptions()).toEqual({
+      retryOnDeviceFailure: true,
+    });
   });
 
   it("retries only explicitly safe Maestro suite flows when the emulator disconnects", () => {

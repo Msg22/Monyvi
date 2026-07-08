@@ -1,6 +1,7 @@
 import {
   ALL_DATE_COLUMNS,
   DATE_ONLY_COLUMNS,
+  PROFILE_AI_PROCESSING_CONSENT_COLUMN,
   PROFILE_NOTIFICATION_SETTINGS_COLUMN,
   PROFILE_ONBOARDING_FLAGS_COLUMN,
   TIMESTAMP_COLUMNS,
@@ -59,6 +60,9 @@ function normalizeProfileFromSupabase(
     [PROFILE_NOTIFICATION_SETTINGS_COLUMN]: stringifyJsonForWatermelon(
       record[PROFILE_NOTIFICATION_SETTINGS_COLUMN]
     ),
+    [PROFILE_AI_PROCESSING_CONSENT_COLUMN]: stringifyJsonForWatermelon(
+      record[PROFILE_AI_PROCESSING_CONSENT_COLUMN]
+    ),
     [PROFILE_ONBOARDING_FLAGS_COLUMN]:
       stringifyJsonForWatermelon(record[PROFILE_ONBOARDING_FLAGS_COLUMN]) ??
       "{}",
@@ -68,19 +72,41 @@ function normalizeProfileFromSupabase(
 function normalizeProfileToSupabase(
   record: Record<string, unknown>
 ): Record<string, unknown> {
-  return {
-    ...record,
+  const shouldOmitUnchangedAiConsent =
+    record["_status"] === "updated" &&
+    typeof record["_changed"] === "string" &&
+    !record["_changed"]
+      .split(",")
+      .includes(PROFILE_AI_PROCESSING_CONSENT_COLUMN);
+  const {
+    [PROFILE_AI_PROCESSING_CONSENT_COLUMN]: aiProcessingConsent,
+    ...rest
+  } = record;
+
+  const transformed = {
+    ...rest,
     [PROFILE_NOTIFICATION_SETTINGS_COLUMN]: parseJsonForSupabase(
       record[PROFILE_NOTIFICATION_SETTINGS_COLUMN],
       null,
       PROFILE_NOTIFICATION_SETTINGS_COLUMN
     ),
+    ...(shouldOmitUnchangedAiConsent
+      ? {}
+      : {
+          [PROFILE_AI_PROCESSING_CONSENT_COLUMN]: parseJsonForSupabase(
+            aiProcessingConsent,
+            null,
+            PROFILE_AI_PROCESSING_CONSENT_COLUMN
+          ),
+        }),
     [PROFILE_ONBOARDING_FLAGS_COLUMN]: parseJsonForSupabase(
       record[PROFILE_ONBOARDING_FLAGS_COLUMN],
       {},
       PROFILE_ONBOARDING_FLAGS_COLUMN
     ),
   };
+
+  return transformed;
 }
 
 function assertValidSyncedAmount(

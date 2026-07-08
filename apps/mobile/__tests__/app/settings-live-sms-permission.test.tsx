@@ -1,5 +1,6 @@
+/* eslint-disable max-lines -- Settings permission regression tests share one screen-level mock harness. */
 import React, { type ReactNode } from "react";
-import { AppState, type AppStateStatus } from "react-native";
+import { AppState, ScrollView, type AppStateStatus } from "react-native";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 type SmsPermissionStatus = "undetermined" | "granted" | "denied" | "blocked";
@@ -30,9 +31,16 @@ const mockGetNotificationPermissionStatus = jest.fn<
   []
 >();
 const mockRouterPush = jest.fn<void, [string]>();
+const mockGrantAiConsent = jest.fn<Promise<void>, []>();
+const mockRevokeAiConsent = jest.fn<Promise<void>, []>();
+const SAFE_AREA_BOTTOM = 24;
 
 let mockSmsPermissionStatus: SmsPermissionStatus = "denied";
 let mockLiveDetectionPermissionStatus: SmsPermissionStatus = "denied";
+let mockIsAiConsented = true;
+let mockHasRevokedAiConsentRecord = false;
+let mockIsAiConsentLoading = false;
+let mockHasSynced = false;
 let appStateChangeHandlers: Array<(status: AppStateStatus) => void> = [];
 
 jest.mock("react-native/Libraries/Modal/Modal", () => {
@@ -52,6 +60,7 @@ jest.mock("react-native/Libraries/Modal/Modal", () => {
 });
 
 jest.mock("expo-router", () => ({
+  useFocusEffect: jest.fn(),
   router: {
     back: jest.fn(),
     push: (path: string) => mockRouterPush(path),
@@ -88,6 +97,25 @@ jest.mock("@/hooks/usePreferredCurrency", () => ({
   }),
 }));
 
+jest.mock("@/hooks/useAiProcessingConsent", () => ({
+  useAiProcessingConsent: () => ({
+    consent:
+      mockIsAiConsented || mockHasRevokedAiConsentRecord
+        ? {
+            consentedAt: "2026-07-04T10:00:00.000Z",
+            revokedAt: mockIsAiConsented
+              ? undefined
+              : "2026-07-05T10:00:00.000Z",
+            version: "2026-07-ai-processing-v1",
+          }
+        : null,
+    isConsented: mockIsAiConsented,
+    isLoading: mockIsAiConsentLoading,
+    grantConsent: mockGrantAiConsent,
+    revokeConsent: mockRevokeAiConsent,
+  }),
+}));
+
 jest.mock("@/providers/DatabaseProvider", () => ({
   useDatabase: () => ({}),
 }));
@@ -119,7 +147,7 @@ jest.mock("@/hooks/useSmsPermission", () => ({
 
 jest.mock("@/hooks/useSmsSync", () => ({
   useSmsSync: () => ({
-    hasSynced: false,
+    hasSynced: mockHasSynced,
     lastSyncTimestamp: null,
   }),
 }));
@@ -150,6 +178,12 @@ jest.mock("@/services/notification-service", () => ({
   requestNotificationPermissionStatus: () =>
     mockRequestNotificationPermissionStatus(),
   openNotificationSettings: () => mockOpenNotificationSettings(),
+}));
+
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: (): { readonly bottom: number } => ({
+    bottom: SAFE_AREA_BOTTOM,
+  }),
 }));
 
 jest.mock("@/components/ui/Toast", () => ({
@@ -272,6 +306,12 @@ describe("Settings live SMS permission recovery", () => {
     mockGetNotificationPermissionStatus.mockResolvedValue("granted");
     mockRequestNotificationPermissionStatus.mockResolvedValue("granted");
     mockOpenNotificationSettings.mockResolvedValue();
+    mockIsAiConsented = true;
+    mockHasRevokedAiConsentRecord = false;
+    mockIsAiConsentLoading = false;
+    mockHasSynced = false;
+    mockGrantAiConsent.mockResolvedValue();
+    mockRevokeAiConsent.mockResolvedValue();
   });
 
   it("waits for stored live detection state before rendering the switch", async () => {
@@ -290,6 +330,20 @@ describe("Settings live SMS permission recovery", () => {
 
     await screen.findByTestId("live-sms-detection-switch");
     expect(getLiveDetectionSwitchValue(screen)).toBe(true);
+  });
+
+  it("adds bottom safe-area padding to keep lower settings rows scrollable", async () => {
+    const screen = await renderReadySettings();
+
+    const scrollView = screen.UNSAFE_getByType(ScrollView) as unknown as {
+      readonly props: {
+        readonly contentContainerStyle?: { readonly paddingBottom?: number };
+      };
+    };
+
+    expect(
+      scrollView.props.contentContainerStyle?.paddingBottom
+    ).toBeGreaterThan(SAFE_AREA_BOTTOM);
   });
 
   it("opens the custom SMS permission modal instead of enabling live detection immediately", async () => {
@@ -319,6 +373,18 @@ describe("Settings live SMS permission recovery", () => {
 
     expect(getLiveDetectionSwitchValue(screen)).toBe(false);
     expect(mockStopSmsListener).toHaveBeenCalledTimes(1);
+  });
+
+  it("turns off stored live detection when AI consent is absent", async () => {
+    mockIsAiConsented = false;
+    mockReconcileLiveDetectionPreference.mockResolvedValue(true);
+    const screen = await renderReadySettings();
+    await waitFor(() =>
+      expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false)
+    );
+    expect(getLiveDetectionSwitchValue(screen)).toBe(false);
+    expect(mockReconcileLiveDetectionPreference).not.toHaveBeenCalled();
+    expect(mockStopSmsListener).toHaveBeenCalled();
   });
 
   it("opens the custom SMS sync permission modal before requesting Android permission", async () => {
@@ -351,6 +417,171 @@ describe("Settings live SMS permission recovery", () => {
     });
     expect(mockRequestPermission).toHaveBeenCalledTimes(1);
     expect(mockRequestLiveDetectionPermission).not.toHaveBeenCalled();
+  });
+
+  it("does not replay a dismissed AI consent SMS action when enabling AI later", async () => {
+    mockIsAiConsented = false;
+    mockSmsPermissionStatus = "granted";
+    const screen = await renderReadySettings();
+
+    fireEvent.press(screen.getByText("sync_new"));
+    fireEvent.press(await screen.findByTestId("ai-consent-not-now"));
+
+    expect(mockRouterPush).not.toHaveBeenCalledWith("/sms-scan");
+
+    fireEvent(
+      screen.getByTestId("ai-processing-consent-switch"),
+      "valueChange",
+      true
+    );
+    fireEvent.press(await screen.findByTestId("ai-consent-continue"));
+
+    await waitFor(() => {
+      expect(mockGrantAiConsent).toHaveBeenCalledTimes(1);
+    });
+    expect(mockRouterPush).not.toHaveBeenCalledWith("/sms-scan");
+  });
+
+  it("does not ask for AI consent again when live SMS is enabled after consenting in Settings", async () => {
+    mockIsAiConsented = false;
+    mockSmsPermissionStatus = "granted";
+    mockLiveDetectionPermissionStatus = "undetermined";
+    const screen = await renderReadySettings();
+    mockReconcileLiveDetectionPreference.mockReturnValue(
+      new Promise<boolean>(() => undefined)
+    );
+    fireEvent(
+      screen.getByTestId("ai-processing-consent-switch"),
+      "valueChange",
+      true
+    );
+    await act(async () => {
+      fireEvent.press(await screen.findByTestId("ai-consent-continue"));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(mockGrantAiConsent).toHaveBeenCalledTimes(1));
+    fireEvent(
+      screen.getByTestId("live-sms-detection-switch"),
+      "valueChange",
+      true
+    );
+    expect(screen.queryByText("ai_consent_title")).toBeNull();
+    expect(
+      await screen.findByText("sms_permission_request_title")
+    ).toBeTruthy();
+  });
+
+  it("re-enables AI consent directly after the user has already accepted the current consent", async () => {
+    mockIsAiConsented = false;
+    const screen = await renderReadySettings();
+
+    fireEvent(
+      screen.getByTestId("ai-processing-consent-switch"),
+      "valueChange",
+      true
+    );
+    await act(async () => {
+      fireEvent.press(await screen.findByTestId("ai-consent-continue"));
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(mockGrantAiConsent).toHaveBeenCalledTimes(1));
+
+    mockIsAiConsented = true;
+    screen.rerender(<SettingsScreen />);
+    fireEvent(
+      screen.getByTestId("ai-processing-consent-switch"),
+      "valueChange",
+      false
+    );
+    fireEvent.press(await screen.findByTestId("modal-confirm"));
+    await waitFor(() => expect(mockRevokeAiConsent).toHaveBeenCalledTimes(1));
+
+    mockIsAiConsented = false;
+    mockHasRevokedAiConsentRecord = true;
+    screen.rerender(<SettingsScreen />);
+    fireEvent(
+      screen.getByTestId("ai-processing-consent-switch"),
+      "valueChange",
+      true
+    );
+
+    await waitFor(() => expect(mockGrantAiConsent).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText("ai_consent_title")).toBeNull();
+  });
+
+  it("uses the general AI consent sheet for SMS sync when AI consent is missing", async () => {
+    mockIsAiConsented = false;
+    mockSmsPermissionStatus = "granted";
+    const screen = await renderReadySettings();
+    fireEvent.press(screen.getByText("sync_new"));
+    expect(await screen.findByText("ai_consent_title")).toBeTruthy();
+    expect(screen.getByText("ai_consent_privacy_details")).toBeTruthy();
+    expect(await screen.findByTestId("ai-consent-continue")).toBeTruthy();
+  });
+
+  it("waits for AI consent to load before gating SMS sync", async () => {
+    mockIsAiConsented = false;
+    mockIsAiConsentLoading = true;
+    mockSmsPermissionStatus = "granted";
+    const screen = renderSettings();
+
+    fireEvent.press(await screen.findByText("sync_new"));
+
+    expect(screen.queryByText("ai_consent_title")).toBeNull();
+    expect(mockRouterPush).not.toHaveBeenCalledWith("/sms-scan");
+  });
+
+  it("dismisses the full rescan confirmation before opening AI consent", async () => {
+    mockHasSynced = true;
+    mockIsAiConsented = false;
+    mockSmsPermissionStatus = "granted";
+    const screen = await renderReadySettings();
+
+    fireEvent.press(screen.getByText("full_rescan"));
+    expect(await screen.findByText("rescan_title")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("modal-confirm"));
+
+    expect(screen.queryByText("rescan_title")).toBeNull();
+    expect(await screen.findByText("ai_consent_title")).toBeTruthy();
+  });
+
+  it("shows SMS permission recovery after general AI consent for SMS sync", async () => {
+    mockIsAiConsented = false;
+    mockSmsPermissionStatus = "undetermined";
+    const screen = await renderReadySettings();
+    fireEvent.press(screen.getByText("sync_new"));
+    fireEvent.press(await screen.findByTestId("ai-consent-continue"));
+    await waitFor(() => expect(mockGrantAiConsent).toHaveBeenCalledTimes(1));
+    expect(
+      await screen.findByText("sms_sync_permission_request_title")
+    ).toBeTruthy();
+    expect(mockRequestPermission).not.toHaveBeenCalled();
+    expect(mockRouterPush).not.toHaveBeenCalledWith("/sms-scan");
+  });
+
+  it("preserves pending SMS sync consent while live detection cleanup runs", async () => {
+    mockIsAiConsented = false;
+    mockSmsPermissionStatus = "granted";
+    const screen = await renderReadySettings();
+
+    fireEvent.press(screen.getByText("sync_new"));
+    expect(await screen.findByTestId("ai-consent-continue")).toBeTruthy();
+
+    emitAppStateChange("background");
+    emitAppStateChange("active");
+    fireEvent.press(screen.getByTestId("ai-consent-continue"));
+
+    await waitFor(() => {
+      expect(mockGrantAiConsent).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(mockRouterPush).toHaveBeenCalledWith("/sms-scan");
+    });
   });
 
   it("keeps SMS sync recovery actionable when SMS permission can still be requested", async () => {
@@ -681,6 +912,96 @@ describe("Settings live SMS permission recovery", () => {
     await waitFor(() => {
       expect(getLiveDetectionSwitchValue(screen)).toBe(false);
     });
+  });
+
+  it("cancels pending live detection enable work when AI consent is revoked", async () => {
+    const notificationCheck = createDeferred<NotificationPermissionStatus>();
+    mockSmsPermissionStatus = "granted";
+    mockLiveDetectionPermissionStatus = "granted";
+    mockGetNotificationPermissionStatus.mockReturnValue(
+      notificationCheck.promise
+    );
+    const screen = await renderReadySettings();
+    fireEvent(
+      screen.getByTestId("live-sms-detection-switch"),
+      "valueChange",
+      true
+    );
+    fireEvent(
+      screen.getByTestId("ai-processing-consent-switch"),
+      "valueChange",
+      false
+    );
+    expect(await screen.findByText("ai_disable_confirm_title")).toBeTruthy();
+    expect(mockRevokeAiConsent).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByTestId("modal-confirm"));
+    await waitFor(() => expect(mockRevokeAiConsent).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      notificationCheck.resolve("granted");
+      await Promise.resolve();
+    });
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
+    expect(mockSetLiveDetectionEnabled).not.toHaveBeenCalledWith(true);
+    expect(mockStartSmsListener).not.toHaveBeenCalled();
+    expect(getLiveDetectionSwitchValue(screen)).toBe(false);
+  });
+
+  it("cancels pending live detection settings return when AI consent syncs off", async () => {
+    mockLiveDetectionPermissionStatus = "blocked";
+    const screen = await renderReadySettings();
+
+    fireEvent(
+      screen.getByTestId("live-sms-detection-switch"),
+      "valueChange",
+      true
+    );
+    fireEvent.press(await screen.findByTestId("permission-modal-primary"));
+
+    await waitFor(() => {
+      expect(mockOpenSettings).toHaveBeenCalledTimes(1);
+    });
+
+    const enableCallCountBeforeConsentLoss =
+      mockSetLiveDetectionEnabled.mock.calls.filter(
+        ([value]) => value === true
+      ).length;
+
+    mockIsAiConsented = false;
+    mockLiveDetectionPermissionStatus = "granted";
+    await act(async () => {
+      screen.rerender(<SettingsScreen />);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
+    });
+
+    emitAppStateChange("background");
+    emitAppStateChange("active");
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      mockSetLiveDetectionEnabled.mock.calls.filter(([value]) => value === true)
+    ).toHaveLength(enableCallCountBeforeConsentLoss);
+    expect(mockStartSmsListener).not.toHaveBeenCalled();
+    expect(getLiveDetectionSwitchValue(screen)).toBe(false);
+  });
+
+  it("keeps AI consent enabled when disable confirmation is cancelled", async () => {
+    const screen = await renderReadySettings();
+    fireEvent(
+      screen.getByTestId("ai-processing-consent-switch"),
+      "valueChange",
+      false
+    );
+    expect(await screen.findByText("ai_disable_confirm_title")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("modal-cancel"));
+    expect(mockRevokeAiConsent).not.toHaveBeenCalled();
+    expect(screen.queryByText("ai_disable_confirm_title")).toBeNull();
   });
 
   it("keeps SMS recovery actionable when SMS permission is denied but can be requested again", async () => {

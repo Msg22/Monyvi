@@ -29,6 +29,7 @@ export const ALL_DATE_COLUMNS = [
 
 export const PROFILE_NOTIFICATION_SETTINGS_COLUMN = "notification_settings";
 export const PROFILE_ONBOARDING_FLAGS_COLUMN = "onboarding_flags";
+export const PROFILE_AI_PROCESSING_CONSENT_COLUMN = "ai_processing_consent";
 
 export const EXCLUDED_TABLES = ["__InternalSupabase"] as const;
 export const SNAPSHOT_TABLES = [

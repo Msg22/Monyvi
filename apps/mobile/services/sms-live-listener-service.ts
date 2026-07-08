@@ -120,6 +120,11 @@ async function processNativeSmsEvent(event: NativeSmsEvent): Promise<void> {
       }
     );
 
+    if (result.status === "disabled") {
+      stopSmsListener();
+      return;
+    }
+
     // Step 4: Emit parsed transactions to all registered handlers
     for (const parsed of result.transactions) {
       for (const handler of handlers) {

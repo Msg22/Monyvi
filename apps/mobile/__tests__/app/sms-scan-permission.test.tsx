@@ -10,8 +10,11 @@ const mockRouterBack = jest.fn<void, []>();
 const mockRouterReplace = jest.fn<void, [string]>();
 const mockStartScan = jest.fn<void, [unknown]>();
 const mockSetTransactions = jest.fn<void, [readonly unknown[]]>();
+const mockGrantAiConsent = jest.fn<Promise<void>, []>();
 
 let mockPermissionStatus: SmsPermissionStatus = "undetermined";
+let mockIsAiConsented = true;
+let mockIsAiConsentLoading = false;
 
 jest.mock("react-native/Libraries/Modal/Modal", () => {
   function MockModal({
@@ -30,6 +33,7 @@ jest.mock("react-native/Libraries/Modal/Modal", () => {
 });
 
 jest.mock("expo-router", () => ({
+  useFocusEffect: jest.fn(),
   useRouter: () => ({
     back: mockRouterBack,
     canGoBack: () => true,
@@ -68,6 +72,42 @@ jest.mock("@/hooks/useSmsSync", () => ({
   useSmsSync: () => ({
     lastSyncTimestamp: null,
   }),
+}));
+
+jest.mock("@/hooks/useAiProcessingConsent", () => ({
+  useAiProcessingConsent: () => ({
+    isConsented: mockIsAiConsented,
+    isLoading: mockIsAiConsentLoading,
+    grantConsent: mockGrantAiConsent,
+  }),
+}));
+
+jest.mock("@/components/ai-consent/AiProcessingConsentSheet", () => ({
+  AiProcessingConsentSheet: ({
+    visible,
+    onContinue,
+  }: {
+    readonly visible: boolean;
+    readonly onContinue: () => void | Promise<void>;
+  }): ReactNode => {
+    const ReactNative =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    const { Text, TouchableOpacity } = ReactNative;
+
+    return visible ? (
+      <>
+        <Text>ai-consent</Text>
+        <TouchableOpacity
+          testID="ai-consent-continue"
+          onPress={() => {
+            void onContinue();
+          }}
+        >
+          <Text>Continue</Text>
+        </TouchableOpacity>
+      </>
+    ) : null;
+  },
 }));
 
 jest.mock("@/context/SmsScanContext", () => ({
@@ -113,6 +153,9 @@ describe("SmsScanScreen permission rationale", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPermissionStatus = "undetermined";
+    mockIsAiConsented = true;
+    mockIsAiConsentLoading = false;
+    mockGrantAiConsent.mockResolvedValue();
     mockRequestPermission.mockResolvedValue("granted");
     mockOpenSettings.mockResolvedValue();
   });
@@ -148,5 +191,34 @@ describe("SmsScanScreen permission rationale", () => {
       expect(mockOpenSettings).toHaveBeenCalledTimes(1);
     });
     expect(mockRequestPermission).not.toHaveBeenCalled();
+  });
+
+  it("shows SMS permission before general AI consent on first-time import", async () => {
+    mockIsAiConsented = false;
+    mockPermissionStatus = "undetermined";
+
+    const screen = render(<SmsScanScreen />);
+
+    expect(
+      await screen.findByText("sms_sync_permission_request_title")
+    ).toBeTruthy();
+    expect(screen.queryByText("ai-consent")).toBeNull();
+
+    expect(mockRequestPermission).not.toHaveBeenCalled();
+    expect(mockGrantAiConsent).not.toHaveBeenCalled();
+    expect(mockStartScan).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByTestId("permission-modal-primary"));
+
+    await waitFor(() => {
+      expect(mockRequestPermission).toHaveBeenCalledTimes(1);
+    });
+
+    mockPermissionStatus = "granted";
+    screen.rerender(<SmsScanScreen />);
+
+    expect(await screen.findByText("ai-consent")).toBeTruthy();
+    expect(mockGrantAiConsent).not.toHaveBeenCalled();
+    expect(mockStartScan).not.toHaveBeenCalled();
   });
 });

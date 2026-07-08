@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 interface ImportMarketRatesModule {
-  parseImportMarketRatesArgs(
-    argv?: readonly string[]
-  ): { readonly bestEffort: boolean };
+  parseImportMarketRatesArgs(argv?: readonly string[]): {
+    readonly bestEffort: boolean;
+  };
   parseSupabaseQueryRows(output: string): readonly unknown[];
 }
 

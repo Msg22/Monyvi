@@ -876,7 +876,9 @@ const journeys = {
         "✓ Confirm"
       );
       await ensureE2eAppReady();
-      await runVerificationFlow("live-sms-journey-09-confirm-verification.yaml");
+      await runVerificationFlow(
+        "live-sms-journey-09-confirm-verification.yaml"
+      );
     },
   },
   10: {
@@ -893,7 +895,9 @@ const journeys = {
         "✗ Discard"
       );
       await ensureE2eAppReady();
-      await runVerificationFlow("live-sms-journey-10-discard-verification.yaml");
+      await runVerificationFlow(
+        "live-sms-journey-10-discard-verification.yaml"
+      );
     },
   },
   11: {
