@@ -48,8 +48,11 @@ export function TransactionReview({
   const accountDisplayNames = useAccountDisplayNames();
 
   const hasActiveFilters =
+    state.period !== "all_time" ||
     state.searchQuery.trim().length > 0 ||
     !(state.selectedTypes.length === 1 && state.selectedTypes[0] === "All");
+  const isSelectionScopedToShown =
+    state.reviewMode !== "all" || hasActiveFilters;
   const reviewModeOptions: ReadonlyArray<{
     readonly mode: TransactionReviewMode;
     readonly label: string;
@@ -72,12 +75,12 @@ export function TransactionReview({
     },
   ];
   const selectToggleLabel = state.allSelected
-    ? state.reviewMode === "all"
-      ? t("deselect_all")
-      : tTransactions("deselect_shown")
-    : state.reviewMode === "all"
-      ? t("select_all")
-      : tTransactions("select_shown");
+    ? isSelectionScopedToShown
+      ? tTransactions("deselect_shown")
+      : t("deselect_all")
+    : isSelectionScopedToShown
+      ? tTransactions("select_shown")
+      : t("select_all");
   const emptyStateLabel =
     state.reviewMode === "needs_review"
       ? tTransactions("review_empty_needs_review")

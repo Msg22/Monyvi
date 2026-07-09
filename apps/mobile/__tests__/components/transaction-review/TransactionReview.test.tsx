@@ -1,0 +1,180 @@
+import { render, screen } from "@testing-library/react-native";
+import type { ReviewableTransaction } from "@monyvi/logic";
+import { TransactionReview } from "@/components/transaction-review/TransactionReview";
+import {
+  type UseTransactionReviewStateResult,
+  useTransactionReviewState,
+} from "@/hooks/useTransactionReviewState";
+
+jest.mock("@/context/ThemeContext", () => ({
+  useTheme: (): { readonly isDark: boolean } => ({ isDark: false }),
+}));
+
+jest.mock("@/hooks/useAccountDisplayNames", () => ({
+  useAccountDisplayNames: (): ReadonlyMap<string, string> => new Map(),
+}));
+
+jest.mock("@/hooks/useTransactionReviewState", () => ({
+  useTransactionReviewState: jest.fn(),
+}));
+
+jest.mock("@/components/modals/PeriodFilterModal", () => ({
+  PeriodFilterModal: (): null => null,
+}));
+
+jest.mock("@/components/modals/TypeFilterModal", () => ({
+  TypeFilterModal: (): null => null,
+}));
+
+jest.mock("@/components/transactions/TransactionFiltersBar", () => ({
+  TransactionFiltersBar: (): null => null,
+}));
+
+jest.mock("@/components/transaction-review/ReviewActionBar", () => ({
+  ReviewActionBar: (): null => null,
+}));
+
+jest.mock("@/components/transaction-review/TransactionItem", () => ({
+  TransactionItem: (): null => null,
+}));
+
+jest.mock(
+  "@/components/transaction-review/edit-modal/TransactionEditModal",
+  () => ({
+    TransactionEditModal: (): null => null,
+  })
+);
+
+jest.mock("react-i18next", () => ({
+  useTranslation: (): {
+    readonly t: (key: string, options?: Record<string, unknown>) => string;
+  } => ({
+    t: (key: string, options?: Record<string, unknown>): string => {
+      const count =
+        typeof options?.count === "number" || typeof options?.count === "string"
+          ? options.count
+          : 0;
+      const countText = String(count);
+      const translations: Record<string, string> = {
+        deselect_all: "Deselect All",
+        deselect_shown: "Deselect shown",
+        no_matching_filters: "No transactions match your filters",
+        review_empty_auto_selected: "No transactions were auto-selected.",
+        review_empty_needs_review: "All visible transactions are selected.",
+        review_items_count: `Review ${countText} items`,
+        review_mode_all: "All",
+        review_mode_auto_selected: "Auto-selected",
+        review_mode_needs_review: "Needs review",
+        review_summary_auto_selected: `${countText} auto-selected`,
+        review_summary_found: `${countText} found`,
+        review_summary_needs_review: `${countText} need review`,
+        review_summary_title: "Review suggestions",
+        review_trust_copy: "Nothing is saved until you tap Save.",
+        select_all: "Select All",
+        select_shown: "Select shown",
+        show_all: "Show all",
+      };
+      return translations[key] ?? key;
+    },
+  }),
+}));
+
+const mockUseTransactionReviewState =
+  useTransactionReviewState as jest.MockedFunction<
+    typeof useTransactionReviewState
+  >;
+
+function createTransaction(): ReviewableTransaction {
+  return {
+    amount: 100,
+    currency: "EGP",
+    type: "EXPENSE",
+    date: new Date("2026-07-09T10:00:00.000Z"),
+    categoryId: "cat-food",
+    categoryDisplayName: "Food",
+    confidence: 0.95,
+    originLabel: "BANK",
+    source: "SMS",
+  };
+}
+
+function createReviewState(
+  overrides: Partial<UseTransactionReviewStateResult>
+): UseTransactionReviewStateResult {
+  const transaction = createTransaction();
+  return {
+    accountMatches: new Map(),
+    allSelected: false,
+    autoSelectedCount: 0,
+    categoryMap: new Map(),
+    editModalIndex: null,
+    effectiveTransactions: [transaction],
+    expenseCategories: [],
+    filteredTransactions: [transaction],
+    handleCreatePendingAccount: jest.fn(),
+    handleEditModalSave: jest.fn(),
+    handleOpenEditModal: jest.fn(),
+    handleReviewNeeds: jest.fn(),
+    handleSave: jest.fn(),
+    handleShowAll: jest.fn(),
+    handleToggleAll: jest.fn(),
+    handleToggleItem: jest.fn(),
+    handleTypeToggle: jest.fn(),
+    incomeCategories: [],
+    invalidIndices: new Set(),
+    latestRates: null,
+    listItems: [],
+    needsReviewCount: 0,
+    pendingAccounts: [],
+    period: "all_time",
+    periodModalVisible: false,
+    reviewMetaByIndex: new Map(),
+    reviewMode: "all",
+    searchQuery: "",
+    selectedCount: 0,
+    selectedIndices: new Set(),
+    selectedIndicesRef: { current: new Set() },
+    selectedTypes: ["All"],
+    setEditModalIndex: jest.fn(),
+    setPeriod: jest.fn(),
+    setPeriodModalVisible: jest.fn(),
+    setReviewMode: jest.fn(),
+    setSearchQuery: jest.fn(),
+    setTypeModalVisible: jest.fn(),
+    transactionOverrides: new Map(),
+    typeModalVisible: false,
+    userAccounts: [],
+    ...overrides,
+  };
+}
+
+function renderReview(state: Partial<UseTransactionReviewStateResult>): void {
+  mockUseTransactionReviewState.mockReturnValue(createReviewState(state));
+  render(
+    <TransactionReview
+      transactions={[createTransaction()]}
+      onSave={jest.fn()}
+      onDiscard={jest.fn()}
+      isSaving={false}
+    />
+  );
+}
+
+describe("TransactionReview", () => {
+  beforeEach(() => {
+    mockUseTransactionReviewState.mockReset();
+  });
+
+  it("uses all-copy when the all view is unfiltered", () => {
+    renderReview({});
+
+    expect(screen.getByText("Select All")).toBeTruthy();
+  });
+
+  it("uses shown-copy when filters scope the all view", () => {
+    renderReview({ allSelected: true, searchQuery: "bank" });
+
+    expect(screen.getByText("Deselect shown")).toBeTruthy();
+    expect(screen.queryByText("Deselect All")).toBeNull();
+  });
+});
