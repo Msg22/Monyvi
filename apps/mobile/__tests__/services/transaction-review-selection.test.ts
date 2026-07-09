@@ -76,6 +76,20 @@ describe("transaction-review-selection", () => {
     });
   });
 
+  it("does not auto-select rows that only fell back to a default account", () => {
+    const transaction = createTransaction({ confidence: 0.99 });
+    const defaultMatch = {
+      accountId: "acc-default",
+      accountName: "Default bank",
+      matchReason: "default",
+    };
+
+    expect(getTransactionReviewMeta(transaction, defaultMatch)).toEqual({
+      isAutoSelectable: false,
+      reasons: ["account_needed"],
+    });
+  });
+
   it("returns all review reasons when more than one safety condition fails", () => {
     const transaction = {
       ...createTransaction({ confidence: 0.4 }),

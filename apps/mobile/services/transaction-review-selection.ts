@@ -8,6 +8,7 @@ export type TransactionReviewReason =
 
 export interface TransactionReviewAccountMatch {
   readonly accountId: string | null;
+  readonly matchReason?: string;
 }
 
 export interface TransactionReviewMeta {
@@ -31,7 +32,7 @@ export function getTransactionReviewMeta(
     reasons.push("low_confidence");
   }
 
-  if (!accountMatch?.accountId) {
+  if (!isResolvedAccountMatch(accountMatch)) {
     reasons.push("account_needed");
   }
 
@@ -61,6 +62,16 @@ export function buildAutoSelectedIndices(
   });
 
   return selected;
+}
+
+function isResolvedAccountMatch(
+  accountMatch: TransactionReviewAccountMatch | undefined
+): boolean {
+  if (!accountMatch?.accountId) return false;
+
+  return !["default", "first_bank", "none"].includes(
+    accountMatch.matchReason ?? "none"
+  );
 }
 
 function isAtmWithdrawal(transaction: ReviewableTransaction): boolean {

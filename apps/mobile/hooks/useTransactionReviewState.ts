@@ -166,6 +166,29 @@ export interface UseTransactionReviewStateResult {
   readonly latestRates: MarketRate | null;
 }
 
+interface AccountMatchState {
+  readonly identity: string;
+  readonly matches: ReadonlyMap<number, AccountMatch>;
+}
+
+function getTransactionRiskIdentity(
+  transaction: ReviewableTransaction
+): string {
+  const reviewFields = transaction as {
+    readonly accountId?: string | null;
+    readonly isAtmWithdrawal?: boolean;
+    readonly toAccountId?: string | null;
+  };
+
+  return [
+    transaction.confidence,
+    transaction.categoryId ?? "",
+    reviewFields.accountId ?? "",
+    reviewFields.toAccountId ?? "",
+    reviewFields.isAtmWithdrawal === true ? "atm" : "not-atm",
+  ].join(":");
+}
+
 export function useTransactionReviewState({
   transactions,
   onSave,
@@ -196,9 +219,13 @@ export function useTransactionReviewState({
   >(new Map());
 
   // ── Account matching state ────────────────────────────────────────
-  const [accountMatches, setAccountMatches] = useState<
-    ReadonlyMap<number, AccountMatch>
-  >(new Map());
+  const [accountMatchState, setAccountMatchState] = useState<AccountMatchState>(
+    () => ({
+      identity: "",
+      matches: new Map(),
+    })
+  );
+  const accountMatches = accountMatchState.matches;
   const [userAccounts, setUserAccounts] = useState<
     readonly AccountWithBankDetails[]
   >([]);
@@ -237,6 +264,7 @@ export function useTransactionReviewState({
             tx.currency,
             tx.type,
             tx.date.getTime(),
+            getTransactionRiskIdentity(tx),
           ].join(":")
         )
         .join("|"),
@@ -248,7 +276,10 @@ export function useTransactionReviewState({
     userTouchedSelectionRef.current = false;
     setSelectedIndices(new Set());
     setTransactionOverrides(new Map());
-    setAccountMatches(new Map());
+    setAccountMatchState({
+      identity: transactionIdentity,
+      matches: new Map(),
+    });
     setPendingAccounts([]);
     setInvalidIndices(new Set());
     setEditModalIndex(null);
@@ -272,20 +303,27 @@ export function useTransactionReviewState({
           batchSize,
           (batchResults) => {
             if (cancelled) return;
-            setAccountMatches((prev) => {
-              const next = new Map(prev);
+            setAccountMatchState((prev) => {
+              const next =
+                prev.identity === transactionIdentity
+                  ? new Map(prev.matches)
+                  : new Map<number, AccountMatch>();
               for (const [idx, match] of batchResults) {
                 next.set(idx, match);
               }
-              return next;
+              return {
+                identity: transactionIdentity,
+                matches: next,
+              };
             });
           },
           accounts
         );
       } catch (err: unknown) {
         if (cancelled) return;
-        setAccountMatches(
-          new Map(
+        setAccountMatchState({
+          identity: transactionIdentity,
+          matches: new Map(
             transactions.map((_, index) => [
               index,
               {
@@ -294,8 +332,8 @@ export function useTransactionReviewState({
                 matchReason: "none",
               } satisfies AccountMatch,
             ])
-          )
-        );
+          ),
+        });
         console.warn("[TransactionReview] Account matching failed:", err);
         showToast({
           type: "warning",
@@ -310,7 +348,7 @@ export function useTransactionReviewState({
     return () => {
       cancelled = true;
     };
-  }, [transactions, showToast, userId, isResolvingUser]);
+  }, [transactions, showToast, userId, isResolvingUser, transactionIdentity]);
 
   const effectiveTransactions =
     useMemo((): readonly ReviewableTransaction[] => {
@@ -350,7 +388,9 @@ export function useTransactionReviewState({
       next.set(index, {
         accountId: edits.accountId,
         accountName: edits.accountName,
-        matchReason: accountMatches.get(index)?.matchReason ?? "none",
+        matchReason: edits.accountId
+          ? "account_name"
+          : (accountMatches.get(index)?.matchReason ?? "none"),
       });
     });
     return next;
@@ -387,8 +427,9 @@ export function useTransactionReviewState({
   }, [effectiveTransactions, autoSelectedOriginalIndices]);
 
   const hasCompleteAccountMatches =
-    effectiveTransactions.length === 0 ||
-    accountMatches.size >= effectiveTransactions.length;
+    accountMatchState.identity === transactionIdentity &&
+    (effectiveTransactions.length === 0 ||
+      accountMatches.size >= effectiveTransactions.length);
 
   useEffect(() => {
     if (seededSelectionIdentityRef.current === transactionIdentity) return;

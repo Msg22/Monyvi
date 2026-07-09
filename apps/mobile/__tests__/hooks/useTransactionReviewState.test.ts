@@ -117,16 +117,18 @@ describe("useTransactionReviewState", () => {
         _batchSize: number,
         onBatchComplete: (batch: ReadonlyMap<number, AccountMatch>) => void
       ): Promise<void> => {
-        onBatchComplete(
-          new Map(
-            transactions.map((transaction, index) => [
-              index,
-              accountMatch(
-                transaction.originLabel === "NO_ACCOUNT" ? null : "acc-1"
-              ),
-            ])
-          )
-        );
+        act(() => {
+          onBatchComplete(
+            new Map(
+              transactions.map((transaction, index) => [
+                index,
+                accountMatch(
+                  transaction.originLabel === "NO_ACCOUNT" ? null : "acc-1"
+                ),
+              ])
+            )
+          );
+        });
         return Promise.resolve();
       }
     );
@@ -222,6 +224,106 @@ describe("useTransactionReviewState", () => {
     expect(Array.from(result.current.selectedIndices)).toEqual([0]);
   });
 
+  it("re-seeds when review risk fields change for the same parsed transaction", async () => {
+    const firstScan = [createTransaction({ confidence: 0.95 })];
+    const secondScan = [createTransaction({ confidence: 0.7 })];
+
+    const { result, rerender } = renderHook<
+      UseTransactionReviewStateResult,
+      { readonly transactions: readonly ReviewableTransaction[] }
+    >(
+      ({ transactions }) =>
+        useTransactionReviewState({ transactions, onSave: jest.fn() }),
+      { initialProps: { transactions: firstScan } }
+    );
+
+    await waitFor(() => expect(result.current.selectedIndices.size).toBe(1));
+
+    act(() => {
+      rerender({ transactions: secondScan });
+    });
+
+    await waitFor(() => expect(result.current.selectedIndices.size).toBe(0));
+    expect(result.current.needsReviewCount).toBe(1);
+  });
+
+  it("does not seed a retry scan from stale account matches", async () => {
+    const firstScan = [
+      createTransaction({ originLabel: "SAFE", confidence: 0.95 }),
+    ];
+    const secondScan = [
+      createTransaction({
+        originLabel: "NO_ACCOUNT",
+        confidence: 0.99,
+        deduplicationHash: "sms-fingerprint-2",
+      }),
+    ];
+    let pendingBatch:
+      | ((batch: ReadonlyMap<number, AccountMatch>) => void)
+      | null = null;
+
+    mockMatchTransactionsBatched
+      .mockImplementationOnce(
+        (
+          transactions: readonly ReviewableTransaction[],
+          _userId: string,
+          _batchSize: number,
+          onBatchComplete: (batch: ReadonlyMap<number, AccountMatch>) => void
+        ): Promise<void> => {
+          act(() => {
+            onBatchComplete(
+              new Map(
+                transactions.map((transaction, index) => [
+                  index,
+                  accountMatch(
+                    transaction.originLabel === "NO_ACCOUNT" ? null : "acc-1"
+                  ),
+                ])
+              )
+            );
+          });
+          return Promise.resolve();
+        }
+      )
+      .mockImplementationOnce(
+        (
+          _transactions: readonly ReviewableTransaction[],
+          _userId: string,
+          _batchSize: number,
+          onBatchComplete: (batch: ReadonlyMap<number, AccountMatch>) => void
+        ): Promise<void> => {
+          pendingBatch = onBatchComplete;
+          return new Promise(() => undefined);
+        }
+      );
+
+    const { result, rerender } = renderHook<
+      UseTransactionReviewStateResult,
+      { readonly transactions: readonly ReviewableTransaction[] }
+    >(
+      ({ transactions }) =>
+        useTransactionReviewState({ transactions, onSave: jest.fn() }),
+      { initialProps: { transactions: firstScan } }
+    );
+
+    await waitFor(() => expect(result.current.selectedIndices.size).toBe(1));
+
+    act(() => {
+      rerender({ transactions: secondScan });
+    });
+
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(0));
+    expect(result.current.selectedIndices.size).toBe(0);
+
+    act(() => {
+      pendingBatch?.(new Map([[0, accountMatch(null)]]));
+    });
+
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(1));
+    expect(result.current.selectedIndices.size).toBe(0);
+    expect(result.current.needsReviewCount).toBe(1);
+  });
+
   it("re-seeds selection when retry scan results replace the transaction array", async () => {
     const firstScan = [
       createTransaction({ originLabel: "SAFE", confidence: 0.95 }),
@@ -252,7 +354,9 @@ describe("useTransactionReviewState", () => {
     });
     expect(result.current.reviewMode).toBe("needs_review");
 
-    rerender({ transactions: secondScan });
+    act(() => {
+      rerender({ transactions: secondScan });
+    });
 
     await waitFor(() => expect(result.current.accountMatches.size).toBe(1));
     expect(Array.from(result.current.selectedIndices)).toEqual([0]);
