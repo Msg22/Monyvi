@@ -41,39 +41,20 @@ function groupByDate(
   transactions: readonly ReviewableTransaction[],
   originalTransactions: readonly ReviewableTransaction[]
 ): readonly ReviewListItem[] {
-  const items: ReviewListItem[] = [];
-  let lastDate = "";
-
   const originalIndexMap = new Map<ReviewableTransaction, number>();
   originalTransactions.forEach((tx, i) => originalIndexMap.set(tx, i));
 
-  const sorted = [...transactions].sort(
-    (a, b) => b.date.getTime() - a.date.getTime()
-  );
-
-  sorted.forEach((tx) => {
-    const dateKey = tx.date.toLocaleDateString("en-EG", {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-      year: "numeric",
+  return [...transactions]
+    .sort((a, b) => b.date.getTime() - a.date.getTime())
+    .map((tx) => {
+      const originalIndex = originalIndexMap.get(tx) ?? 0;
+      return {
+        kind: "transaction",
+        originalIndex,
+        tx,
+        key: `tx-${originalIndex}`,
+      };
     });
-
-    if (dateKey !== lastDate) {
-      items.push({ kind: "header", date: dateKey, key: `h-${dateKey}` });
-      lastDate = dateKey;
-    }
-
-    const originalIndex = originalIndexMap.get(tx) ?? 0;
-    items.push({
-      kind: "transaction",
-      originalIndex,
-      tx,
-      key: `tx-${originalIndex}`,
-    });
-  });
-
-  return items;
 }
 
 function applyFilters(

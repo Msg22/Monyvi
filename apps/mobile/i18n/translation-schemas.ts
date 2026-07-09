@@ -163,6 +163,8 @@ const PLURAL_BASES: Record<string, readonly string[]> = {
     "delete_success_message",
     "save_selected_button_count",
     "review_items_count",
+    "review_sms_source_summary",
+    "review_needs_check_count",
   ],
   accounts: ["account_count"],
   budgets: ["budget_count", "days_remaining"],

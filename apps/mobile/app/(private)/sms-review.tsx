@@ -23,7 +23,6 @@ import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
 import { useSmsScanContext } from "@/context/SmsScanContext";
 import { useSmsSync } from "@/hooks/useSmsSync";
-import { PageHeader } from "@/components/navigation/PageHeader";
 import { batchCreateTransactions } from "@/services/batch-create-transactions";
 import {
   flushQueuedTransactions,
@@ -36,6 +35,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Text, TouchableOpacity } from "react-native";
 import { useTranslation } from "react-i18next";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -155,13 +155,8 @@ export default function SmsReviewScreen(): React.JSX.Element {
   // ── Transaction Review (direct — no setup step) ─────────────────────
 
   return (
-    <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
-      {/* Header */}
-      <PageHeader
-        title={t("sms_review_title")}
-        showDrawer={false}
-        showBackButton={true}
-      />
+    <SafeAreaView className="flex-1 bg-slate-950">
+      <StatusBar style="light" />
 
       {/* Transaction review list */}
       <TransactionReview
@@ -169,6 +164,11 @@ export default function SmsReviewScreen(): React.JSX.Element {
         onSave={handleSave}
         onDiscard={handleDiscard}
         isSaving={isSaving}
+        title={t("review_transactions_title")}
+        subtitle={t("review_sms_source_summary", {
+          count: transactions.length,
+        })}
+        onBack={() => router.back()}
       />
 
       {/* Discard confirmation */}

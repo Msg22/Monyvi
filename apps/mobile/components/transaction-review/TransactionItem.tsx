@@ -25,7 +25,7 @@
 
 import { palette } from "@/constants/colors";
 import type { MatchReason } from "@/services/sms-account-matcher";
-import { formatDate as formatDateHelper } from "@/utils/dateHelpers";
+import { isSameDay } from "@/utils/dateHelpers";
 import { useLocale } from "@/context/LocaleContext";
 import { formatCurrency, type ReviewableTransaction } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
@@ -71,20 +71,15 @@ interface TransactionItemProps {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Format a Date as "dd MMM" using locale-aware helper */
-function formatDate(date: Date): string {
-  return formatDateHelper(date, "MMM d");
-}
-
 const BADGE_BG_COLORS: Record<BadgeColor, string> = {
-  amber: "bg-amber-500/20",
+  amber: "bg-gold-600/20 border border-gold-600/50",
   red: "bg-red-500/20",
   emerald: "bg-emerald-500/20",
   blue: "bg-blue-500/20",
 };
 
 const BADGE_TEXT_COLORS: Record<BadgeColor, string> = {
-  amber: "text-amber-400",
+  amber: "text-gold-400",
   red: "text-red-400",
   emerald: "text-emerald-400",
   blue: "text-blue-400",
@@ -98,16 +93,87 @@ function TransactionBadge({
   readonly label: string;
 }): React.JSX.Element {
   return (
-    <View
-      className={`${BADGE_BG_COLORS[data.color]} px-1.5 py-0.5 rounded ms-2`}
-    >
+    <View className={`${BADGE_BG_COLORS[data.color]} rounded-lg px-3 py-1`}>
       <Text
-        className={`text-[10px] font-bold ${BADGE_TEXT_COLORS[data.color]}`}
+        className={`text-sm font-semibold ${BADGE_TEXT_COLORS[data.color]}`}
       >
         {label}
       </Text>
     </View>
   );
+}
+
+function formatReviewDateTime(
+  date: Date,
+  todayLabel: string,
+  yesterdayLabel: string
+): string {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const dayLabel = isSameDay(date, today)
+    ? todayLabel
+    : isSameDay(date, yesterday)
+      ? yesterdayLabel
+      : date.toLocaleDateString("en-EG", {
+          month: "short",
+          day: "numeric",
+        });
+  const timeLabel = date.toLocaleTimeString("en-EG", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return `${dayLabel} · ${timeLabel}`;
+}
+
+function getReviewIcon(
+  reviewMeta: TransactionReviewMeta | undefined,
+  isSelected: boolean
+): {
+  readonly name: keyof typeof Ionicons.glyphMap;
+  readonly circleClassName: string;
+  readonly color: string;
+} {
+  if (reviewMeta?.isAutoSelectable && isSelected) {
+    return {
+      name: "checkmark",
+      circleClassName: "border-nileGreen-500/50 bg-nileGreen-500/15",
+      color: palette.nileGreen[400],
+    };
+  }
+  if (reviewMeta?.reasons.includes("account_needed")) {
+    return {
+      name: "business-outline",
+      circleClassName: "border-red-500/50 bg-red-500/10",
+      color: palette.red[500],
+    };
+  }
+  if (reviewMeta?.reasons.includes("cash_transfer")) {
+    return {
+      name: "receipt-outline",
+      circleClassName: "border-gold-600/50 bg-gold-600/10",
+      color: palette.gold[400],
+    };
+  }
+  if (reviewMeta?.reasons.includes("category_needed")) {
+    return {
+      name: "pricetag-outline",
+      circleClassName: "border-red-500/50 bg-red-500/10",
+      color: palette.red[500],
+    };
+  }
+  if (reviewMeta?.reasons.includes("low_confidence")) {
+    return {
+      name: "help-outline",
+      circleClassName: "border-gold-600/50 bg-gold-600/10",
+      color: palette.gold[400],
+    };
+  }
+  return {
+    name: "card-outline",
+    circleClassName: "border-slate-600 bg-slate-800",
+    color: palette.slate[400],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -133,6 +199,7 @@ function TransactionItemInner({
   const hasExpandableContent = !isVoice && !!expandedContent;
 
   const badges = getTransactionBadges(hasMissingInfo, reviewMeta, isSelected);
+  const reviewIcon = getReviewIcon(reviewMeta, isSelected);
 
   const handleToggleExpand = useCallback(() => {
     setIsExpanded((prev) => !prev);
@@ -151,10 +218,10 @@ function TransactionItemInner({
     : transaction.counterparty || "Unknown";
 
   return (
-    <View className="bg-white dark:bg-slate-800/60 rounded-2xl mb-3 overflow-hidden border border-slate-200 dark:border-transparent">
+    <View className="overflow-hidden border-b border-slate-800 bg-slate-950">
       <TouchableOpacity
         onPress={handlePress}
-        className="flex-row items-center p-4"
+        className="flex-row items-center px-7 py-5"
         activeOpacity={0.7}
         accessible
         accessibilityRole="button"
@@ -167,7 +234,7 @@ function TransactionItemInner({
         <TouchableOpacity
           onPress={handleToggle}
           hitSlop={8}
-          className="me-3"
+          className="me-5"
           activeOpacity={0.7}
           accessible={false}
           importantForAccessibility="no"
@@ -176,7 +243,7 @@ function TransactionItemInner({
             className={`w-6 h-6 rounded-lg items-center justify-center border-2 ${
               isSelected
                 ? "bg-emerald-500 border-emerald-500"
-                : "border-slate-300 dark:border-slate-500"
+                : "border-slate-500"
             }`}
           >
             {isSelected && (
@@ -185,90 +252,83 @@ function TransactionItemInner({
           </View>
         </TouchableOpacity>
 
+        <View
+          className={`me-5 h-16 w-16 items-center justify-center rounded-full border ${reviewIcon.circleClassName}`}
+        >
+          <Ionicons name={reviewIcon.name} size={30} color={reviewIcon.color} />
+        </View>
+
         {/* Content */}
-        <View className="flex-1 me-3">
+        <View className="flex-1 me-4">
           {/* Top row: origin label + amount */}
-          <View className="flex-row items-center justify-between mb-1">
-            <View className="flex-row items-center flex-shrink">
-              <Text
-                className="text-sm font-semibold text-slate-800 dark:text-white flex-shrink"
-                numberOfLines={1}
-              >
-                {isVoice && "note" in transaction
-                  ? (transaction as { note: string }).note ||
-                    transaction.counterparty ||
-                    transaction.originLabel
-                  : transaction.originLabel}
-              </Text>
-              {badges.map((badge, idx) => (
-                <TransactionBadge
-                  key={`${badge.labelKey}-${idx}`}
-                  data={badge}
-                  label={t(badge.labelKey)}
-                />
-              ))}
-            </View>
-            <Text
-              className={`text-base font-bold ${
-                isExpense ? "text-red-400" : "text-emerald-400"
-              }`}
-            >
-              {isExpense ? "-" : "+"}
-              {formatCurrency({
-                amount: transaction.amount,
-                currency: transaction.currency,
-              })}
-            </Text>
-          </View>
+          <Text className="text-xl font-extrabold text-white" numberOfLines={1}>
+            {isVoice && "note" in transaction
+              ? (transaction as { note: string }).note ||
+                transaction.counterparty ||
+                transaction.originLabel
+              : transaction.originLabel}
+          </Text>
 
           {/* Middle row: counterparty + date */}
-          <View className="flex-row items-center justify-between mb-1">
-            {counterpartyText ? (
-              <Text
-                className="text-xs text-slate-400 flex-shrink"
-                numberOfLines={1}
-              >
-                {counterpartyText}
-              </Text>
-            ) : (
-              <View />
+          <Text className="mt-1 text-base text-slate-400" numberOfLines={1}>
+            {formatReviewDateTime(
+              transaction.date,
+              t("review_date_today"),
+              t("review_date_yesterday")
             )}
-            <Text className="text-xs text-slate-500">
-              {formatDate(transaction.date)}
-            </Text>
-          </View>
+          </Text>
 
           {/* Bottom row: category + account chips */}
-          <View className="flex-row items-center flex-wrap gap-1.5">
-            <View className="bg-slate-200 dark:bg-slate-700/60 px-2.5 py-1 rounded-lg">
-              <Text className="text-xs text-slate-600 dark:text-slate-300">
+          <View className="mt-2 flex-row items-center flex-wrap gap-2">
+            <View className="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1">
+              <Text className="text-base text-slate-300">
                 {transaction.categoryDisplayName}
               </Text>
             </View>
 
             {accountName && (
-              <View className="bg-blue-100 dark:bg-blue-900/40 px-2.5 py-1 rounded-lg">
-                <Text className="text-xs text-blue-600 dark:text-blue-300">
-                  {accountName}
-                </Text>
+              <View className="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1">
+                <Text className="text-base text-slate-300">{accountName}</Text>
               </View>
             )}
-
-            {hasExpandableContent && (
-              <TouchableOpacity
-                onPress={handleToggleExpand}
-                hitSlop={14}
-                className="flex-row items-center ms-auto p-1"
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={isExpanded ? "chevron-up" : "chevron-down"}
-                  size={16}
-                  color={palette.slate[500]}
-                />
-              </TouchableOpacity>
-            )}
           </View>
+        </View>
+
+        <View className="items-end">
+          <Text
+            className={`text-xl font-semibold ${
+              isExpense ? "text-slate-100" : "text-nileGreen-400"
+            }`}
+          >
+            {isExpense ? "-" : "+"}
+            {formatCurrency({
+              amount: transaction.amount,
+              currency: transaction.currency,
+            })}
+          </Text>
+          <View className="mt-3 items-end gap-2">
+            {badges.map((badge, idx) => (
+              <TransactionBadge
+                key={`${badge.labelKey}-${idx}`}
+                data={badge}
+                label={t(badge.labelKey)}
+              />
+            ))}
+          </View>
+          {hasExpandableContent && (
+            <TouchableOpacity
+              onPress={handleToggleExpand}
+              hitSlop={14}
+              className="mt-2 p-1"
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={isExpanded ? "chevron-up" : "chevron-down"}
+                size={18}
+                color={palette.slate[500]}
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </TouchableOpacity>
 
@@ -277,7 +337,7 @@ function TransactionItemInner({
         <Animated.View
           entering={FadeIn.duration(200)}
           exiting={FadeOut.duration(150)}
-          className="px-4 pb-4 pt-0"
+          className="px-7 pb-5 pt-0"
         >
           {expandedContent}
         </Animated.View>

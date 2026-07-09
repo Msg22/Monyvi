@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import React, { useCallback, useState } from "react";
 import { FlatList, Text, TouchableOpacity, View } from "react-native";
@@ -32,6 +33,9 @@ export interface TransactionReviewProps {
   ) => Promise<void>;
   readonly onDiscard: () => void;
   readonly isSaving: boolean;
+  readonly title?: string;
+  readonly subtitle?: string;
+  readonly onBack?: () => void;
 }
 
 export function TransactionReview({
@@ -39,6 +43,9 @@ export function TransactionReview({
   onSave,
   onDiscard,
   isSaving,
+  title,
+  subtitle,
+  onBack,
 }: TransactionReviewProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { t } = useTranslation("common");
@@ -145,7 +152,35 @@ export function TransactionReview({
   const keyExtractor = useCallback((item: ReviewListItem) => item.key, []);
 
   return (
-    <View className="flex-1">
+    <View className="flex-1 bg-slate-950">
+      {title && (
+        <View className="px-7 pb-5 pt-8">
+          <View className="flex-row items-center">
+            {onBack && (
+              <TouchableOpacity
+                onPress={onBack}
+                activeOpacity={0.75}
+                className="me-5 h-11 w-11 items-center justify-center rounded-full"
+                accessibilityRole="button"
+                accessibilityLabel={t("back")}
+              >
+                <Ionicons name="arrow-back" size={34} color="white" />
+              </TouchableOpacity>
+            )}
+            <View className="flex-1">
+              <Text className="text-[28px] font-extrabold text-white">
+                {title}
+              </Text>
+              {subtitle && (
+                <Text className="mt-1 text-lg font-medium text-slate-300">
+                  {subtitle}
+                </Text>
+              )}
+            </View>
+          </View>
+        </View>
+      )}
+
       {isFiltersVisible && (
         <Animated.View
           entering={FadeIn.duration(200)}
@@ -165,48 +200,127 @@ export function TransactionReview({
         </Animated.View>
       )}
 
-      <Animated.View
-        entering={FadeInDown.delay(100)}
-        className="px-5 py-4 bg-slate-50 dark:bg-slate-950/90 border-b border-slate-200 dark:border-slate-800"
-      >
-        <View className="flex-row items-start justify-between gap-3">
-          <View className="flex-1">
-            <Text className="text-[11px] font-semibold uppercase text-slate-500 dark:text-slate-400">
-              {tTransactions("review_summary_title")}
-            </Text>
-            <Text className="mt-1 text-sm text-slate-700 dark:text-slate-200">
-              <Text className="font-bold text-slate-950 dark:text-white">
-                {tTransactions("review_summary_found", {
-                  count: state.effectiveTransactions.length,
-                })}
-              </Text>
-              {"  "}
-              <Text className="font-semibold text-nileGreen-700 dark:text-nileGreen-300">
-                {tTransactions("review_summary_auto_selected", {
-                  count: state.autoSelectedCount,
-                })}
-              </Text>
-              {"  "}
-              <Text className="font-semibold text-amber-600 dark:text-amber-300">
-                {tTransactions("review_summary_needs_review", {
-                  count: state.needsReviewCount,
-                })}
-              </Text>
-            </Text>
-            <Text className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+      <Animated.View entering={FadeInDown.delay(100)} className="px-7 pb-4">
+        <LinearGradient
+          colors={[palette.slate[950], palette.slate[900]]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          className="overflow-hidden rounded-[22px] border border-slate-700/80 px-6 py-5"
+        >
+          <View className="flex-row items-center">
+            <View className="flex-1 flex-row items-center justify-center">
+              <View className="h-12 w-12 items-center justify-center rounded-full border border-nileGreen-400 bg-nileGreen-600">
+                <Ionicons name="checkmark" size={28} color="white" />
+              </View>
+              <View className="ms-4">
+                <Text className="text-[40px] font-extrabold leading-[44px] text-nileGreen-400">
+                  {state.autoSelectedCount}
+                </Text>
+                <Text className="text-base text-slate-300">
+                  {tTransactions("review_auto_selected_label")}
+                </Text>
+              </View>
+            </View>
+
+            <View className="mx-6 h-20 w-px bg-slate-700" />
+
+            <View className="flex-1 flex-row items-center justify-center">
+              <View className="h-12 w-12 items-center justify-center rounded-2xl border border-gold-400 bg-gold-600/30">
+                <Ionicons
+                  name="warning-outline"
+                  size={28}
+                  color={palette.gold[400]}
+                />
+              </View>
+              <View className="ms-4">
+                <Text className="text-[40px] font-extrabold leading-[44px] text-gold-400">
+                  {state.needsReviewCount}
+                </Text>
+                <Text className="text-base text-slate-300">
+                  {tTransactions("review_need_review_label")}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View className="mt-5 flex-row items-center justify-center">
+            <Ionicons
+              name="lock-closed-outline"
+              size={20}
+              color={palette.nileGreen[400]}
+            />
+            <Text className="ms-3 text-base font-medium text-slate-300">
               {tTransactions("review_trust_copy")}
             </Text>
           </View>
+        </LinearGradient>
 
-          <View className="flex-row items-center gap-3 pt-0.5">
+        <View className="mt-5 flex-row rounded-[18px] border border-slate-700/90 bg-slate-800/70 p-1">
+          {reviewModeOptions.map((option) => {
+            const isActive = state.reviewMode === option.mode;
+            return (
+              <TouchableOpacity
+                key={option.mode}
+                onPress={() => state.setReviewMode(option.mode)}
+                activeOpacity={0.8}
+                className={`flex-1 min-h-14 items-center justify-center rounded-2xl border px-2 ${
+                  isActive
+                    ? "border-gold-400 bg-slate-800"
+                    : "border-transparent"
+                }`}
+              >
+                <Text
+                  className={`text-base font-semibold text-center ${
+                    isActive ? "text-gold-400" : "text-slate-300"
+                  }`}
+                  numberOfLines={1}
+                >
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <View className="mt-5 flex-row items-center justify-between gap-3">
+          <Text className="flex-1 text-lg font-semibold text-slate-300">
+            {state.reviewMode === "needs_review"
+              ? tTransactions("review_needs_check_count", {
+                  count: state.needsReviewCount,
+                })
+              : tTransactions("review_items_count", {
+                  count: state.filteredTransactions.length,
+                })}
+          </Text>
+          <TouchableOpacity
+            onPress={state.handleToggleAll}
+            activeOpacity={0.7}
+            className="h-11 flex-row items-center rounded-full px-2"
+          >
+            <View
+              className={`h-8 w-8 rounded-lg border-2 ${
+                state.allSelected
+                  ? "border-nileGreen-400 bg-nileGreen-500"
+                  : "border-nileGreen-400"
+              } items-center justify-center`}
+            >
+              {state.allSelected && (
+                <Ionicons name="checkmark" size={20} color="white" />
+              )}
+            </View>
+            <Text className="ms-3 text-lg font-semibold text-nileGreen-400">
+              {selectToggleLabel}
+            </Text>
+          </TouchableOpacity>
+          <View className="flex-row items-center gap-3">
             <TouchableOpacity
               onPress={() => setIsFiltersVisible((prev) => !prev)}
               activeOpacity={0.7}
-              className="relative h-9 w-9 items-center justify-center rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
+              className="relative h-12 w-12 items-center justify-center rounded-2xl border border-slate-700 bg-slate-800"
             >
               <Ionicons
                 name={isFiltersVisible ? "funnel" : "funnel-outline"}
-                size={18}
+                size={24}
                 color={
                   hasActiveFilters ? palette.nileGreen[400] : palette.slate[400]
                 }
@@ -215,76 +329,8 @@ export function TransactionReview({
                 <View className="absolute top-1 end-1 w-2.5 h-2.5 rounded-full bg-nileGreen-400" />
               )}
             </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={state.handleToggleAll}
-              activeOpacity={0.7}
-              className="h-9 flex-row items-center rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3"
-            >
-              <Ionicons
-                name={state.allSelected ? "checkbox" : "square-outline"}
-                size={18}
-                color={
-                  state.allSelected
-                    ? palette.nileGreen[400]
-                    : palette.slate[400]
-                }
-              />
-              <Text className="text-xs font-semibold text-slate-500 dark:text-slate-300 ms-1.5">
-                {selectToggleLabel}
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
-
-        <View className="mt-4 flex-row gap-2">
-          {reviewModeOptions.map((option) => {
-            const isActive = state.reviewMode === option.mode;
-            return (
-              <TouchableOpacity
-                key={option.mode}
-                onPress={() => state.setReviewMode(option.mode)}
-                activeOpacity={0.8}
-                className={`flex-1 min-h-10 items-center justify-center rounded-full border px-2 ${
-                  isActive
-                    ? "bg-nileGreen-600 border-nileGreen-600"
-                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700"
-                }`}
-              >
-                <Text
-                  className={`text-[11px] font-bold text-center ${
-                    isActive
-                      ? "text-white"
-                      : "text-slate-600 dark:text-slate-300"
-                  }`}
-                  numberOfLines={1}
-                >
-                  {option.label} ({option.count})
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {state.needsReviewCount > 0 && (
-          <TouchableOpacity
-            onPress={
-              state.reviewMode === "needs_review"
-                ? state.handleShowAll
-                : state.handleReviewNeeds
-            }
-            activeOpacity={0.8}
-            className="mt-3 min-h-11 items-center justify-center rounded-xl bg-slate-900 dark:bg-white"
-          >
-            <Text className="text-sm font-bold text-white dark:text-slate-950">
-              {state.reviewMode === "needs_review"
-                ? tTransactions("show_all")
-                : tTransactions("review_items_count", {
-                    count: state.needsReviewCount,
-                  })}
-            </Text>
-          </TouchableOpacity>
-        )}
       </Animated.View>
 
       {state.filteredTransactions.length === 0 ? (
@@ -308,7 +354,7 @@ export function TransactionReview({
             reviewMode: state.reviewMode,
             reviewMetaByIndex: state.reviewMetaByIndex,
           }}
-          contentContainerClassName="px-4 pb-36"
+          contentContainerClassName="px-0 pb-52"
           showsVerticalScrollIndicator={false}
           removeClippedSubviews
           maxToRenderPerBatch={15}
@@ -318,9 +364,13 @@ export function TransactionReview({
 
       <ReviewActionBar
         selectedCount={state.selectedCount}
+        needsReviewCount={state.needsReviewCount}
+        reviewMode={state.reviewMode}
         isSaving={isSaving}
         onSave={state.handleSave}
         onDiscard={onDiscard}
+        onReviewNeeds={state.handleReviewNeeds}
+        onShowAll={state.handleShowAll}
       />
 
       <PeriodFilterModal
