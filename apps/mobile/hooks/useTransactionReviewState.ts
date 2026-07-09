@@ -379,12 +379,12 @@ export function useTransactionReviewState({
   const needsReviewOriginalIndices = useMemo((): ReadonlySet<number> => {
     const needsReview = new Set<number>();
     effectiveTransactions.forEach((_, index) => {
-      if (!selectedIndices.has(index)) {
+      if (!autoSelectedOriginalIndices.has(index)) {
         needsReview.add(index);
       }
     });
     return needsReview;
-  }, [effectiveTransactions, selectedIndices]);
+  }, [effectiveTransactions, autoSelectedOriginalIndices]);
 
   const hasCompleteAccountMatches =
     effectiveTransactions.length === 0 ||

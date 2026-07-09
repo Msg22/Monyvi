@@ -183,6 +183,10 @@ describe("useTransactionReviewState", () => {
     expect(Array.from(result.current.selectedIndices).sort()).toEqual([
       0, 1, 2,
     ]);
+    expect(result.current.needsReviewCount).toBe(2);
+    expect(
+      result.current.filteredTransactions.map((tx) => tx.originLabel)
+    ).toEqual(["LOW", "NO_ACCOUNT"]);
   });
 
   it("updates review reasons when editing a row resolves the missing account", async () => {
