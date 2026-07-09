@@ -33,6 +33,7 @@ import { useTranslation } from "react-i18next";
 import React, { memo, useCallback, useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import type { TransactionReviewMeta } from "@/services/transaction-review-selection";
 import {
   type BadgeColor,
   getTransactionBadges,
@@ -62,6 +63,8 @@ interface TransactionItemProps {
   readonly onPress: (index: number) => void;
   /** Whether this item has missing required info (no account, etc.) */
   readonly hasMissingInfo?: boolean;
+  /** Auto-selection status and reasons for rows that need review */
+  readonly reviewMeta?: TransactionReviewMeta;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,8 +92,10 @@ const BADGE_TEXT_COLORS: Record<BadgeColor, string> = {
 
 function TransactionBadge({
   data,
+  label,
 }: {
   readonly data: TransactionBadgeData;
+  readonly label: string;
 }): React.JSX.Element {
   return (
     <View
@@ -99,7 +104,7 @@ function TransactionBadge({
       <Text
         className={`text-[10px] font-bold ${BADGE_TEXT_COLORS[data.color]}`}
       >
-        {data.label}
+        {label}
       </Text>
     </View>
   );
@@ -118,6 +123,7 @@ function TransactionItemInner({
   onToggleSelect,
   onPress,
   hasMissingInfo = false,
+  reviewMeta,
 }: TransactionItemProps): React.JSX.Element {
   const [isExpanded, setIsExpanded] = useState(false);
   const { language } = useLocale();
@@ -126,7 +132,7 @@ function TransactionItemInner({
   const isVoice = transaction.source === "VOICE";
   const hasExpandableContent = !isVoice && !!expandedContent;
 
-  const badges = getTransactionBadges(transaction, hasMissingInfo);
+  const badges = getTransactionBadges(hasMissingInfo, reviewMeta, isSelected);
 
   const handleToggleExpand = useCallback(() => {
     setIsExpanded((prev) => !prev);
@@ -195,7 +201,11 @@ function TransactionItemInner({
                   : transaction.originLabel}
               </Text>
               {badges.map((badge, idx) => (
-                <TransactionBadge key={idx} data={badge} />
+                <TransactionBadge
+                  key={`${badge.labelKey}-${idx}`}
+                  data={badge}
+                  label={t(badge.labelKey)}
+                />
               ))}
             </View>
             <Text

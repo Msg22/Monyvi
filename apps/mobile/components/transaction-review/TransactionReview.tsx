@@ -1,71 +1,38 @@
-/**
- * TransactionReview Component
- *
- * Full-screen review UI for parsed SMS transactions. Provides:
- * - Filter pills (Period + Type) reusing existing filter modals
- * - Search bar for counterparty/sender text filtering
- * - Date-grouped FlatList of TransactionItem rows
- * - "Select All / Deselect All" toggle
- * - Summary bar showing counts
- * - "Save Selected" and "Discard All" actions
- * - Category correction via CategorySelectorModal
- *
- * Architecture & Design Rationale:
- * - Pattern: Container Component (owns selection + filter state + callbacks)
- * - Why: Encapsulates review logic while delegating each row to
- *   the presentational TransactionItem component (SRP).
- * - SOLID: Open/Closed — reuses PeriodFilterModal and TypeFilterModal
- *   without modifying them. Client-side filtering avoids DB coupling.
- *
- * @module TransactionReview
- */
-
+import { Ionicons } from "@expo/vector-icons";
+import type { ReviewableTransaction } from "@monyvi/logic";
+import React, { useCallback, useState } from "react";
+import { FlatList, Text, TouchableOpacity, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import Animated, { FadeIn, FadeInDown, FadeOut } from "react-native-reanimated";
 import { PeriodFilterModal } from "@/components/modals/PeriodFilterModal";
 import { TypeFilterModal } from "@/components/modals/TypeFilterModal";
+import { TransactionFiltersBar } from "@/components/transactions/TransactionFiltersBar";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useAccountDisplayNames } from "@/hooks/useAccountDisplayNames";
-import type { ReviewableTransaction } from "@monyvi/logic";
-import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback, useState } from "react";
-import { FlatList, Text, TouchableOpacity, View } from "react-native";
-import Animated, { FadeIn, FadeInDown, FadeOut } from "react-native-reanimated";
-import { useTranslation } from "react-i18next";
+import {
+  type ReviewListItem,
+  type TransactionReviewMode,
+  useTransactionReviewState,
+} from "@/hooks/useTransactionReviewState";
 import { TransactionEditModal } from "./edit-modal/TransactionEditModal";
-import { TransactionItem } from "./TransactionItem";
-import { TransactionFiltersBar } from "@/components/transactions/TransactionFiltersBar";
 import {
   getExpandedContent,
   OriginalContentBlock,
 } from "./get-expanded-content";
 import { ReviewActionBar } from "./ReviewActionBar";
-import {
-  type ReviewListItem,
-  useTransactionReviewState,
-} from "@/hooks/useTransactionReviewState";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+import { TransactionItem } from "./TransactionItem";
 
 export interface TransactionReviewProps {
-  /** All parsed transactions from the scan */
   readonly transactions: readonly ReviewableTransaction[];
-  /** Called when user saves selected transactions with their account mappings */
   readonly onSave: (
     selected: readonly ReviewableTransaction[],
     transactionAccountMap: ReadonlyMap<number, string>,
     toAccountMap: ReadonlyMap<number, string>
   ) => Promise<void>;
-  /** Called when user discards all */
   readonly onDiscard: () => void;
-  /** Whether save is in progress */
   readonly isSaving: boolean;
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export function TransactionReview({
   transactions,
@@ -75,20 +42,49 @@ export function TransactionReview({
 }: TransactionReviewProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { t } = useTranslation("common");
-
+  const { t: tTransactions } = useTranslation("transactions");
   const state = useTransactionReviewState({ transactions, onSave });
   const [isFiltersVisible, setIsFiltersVisible] = useState(false);
-
-  // Resolve display names for matched accounts so duplicate-named accounts
-  // (e.g. two "Cash" accounts in different currencies) are visually
-  // disambiguated in SMS / voice review rows. Per spec 026-followup.
   const accountDisplayNames = useAccountDisplayNames();
 
   const hasActiveFilters =
     state.searchQuery.trim().length > 0 ||
     !(state.selectedTypes.length === 1 && state.selectedTypes[0] === "All");
+  const reviewModeOptions: ReadonlyArray<{
+    readonly mode: TransactionReviewMode;
+    readonly label: string;
+    readonly count: number;
+  }> = [
+    {
+      mode: "all",
+      label: tTransactions("review_mode_all"),
+      count: state.effectiveTransactions.length,
+    },
+    {
+      mode: "needs_review",
+      label: tTransactions("review_mode_needs_review"),
+      count: state.needsReviewCount,
+    },
+    {
+      mode: "auto_selected",
+      label: tTransactions("review_mode_auto_selected"),
+      count: state.autoSelectedCount,
+    },
+  ];
+  const selectToggleLabel = state.allSelected
+    ? state.reviewMode === "all"
+      ? t("deselect_all")
+      : tTransactions("deselect_shown")
+    : state.reviewMode === "all"
+      ? t("select_all")
+      : tTransactions("select_shown");
+  const emptyStateLabel =
+    state.reviewMode === "needs_review"
+      ? tTransactions("review_empty_needs_review")
+      : state.reviewMode === "auto_selected"
+        ? tTransactions("review_empty_auto_selected")
+        : t("no_matching_filters");
 
-  // ── Render ────────────────────────────────────────────────────────
   const renderItem = useCallback(
     ({ item }: { item: ReviewListItem }) => {
       if (item.kind === "header") {
@@ -100,13 +96,6 @@ export function TransactionReview({
       }
 
       const tx = item.tx;
-      if (!tx) return null;
-
-      // Prefer the resolved display name (with currency suffix on dup
-      // names) by looking up the account ID in the global accounts map.
-      // Fall back to the literal accountName (override or matched value)
-      // when the ID isn't resolvable — e.g. for a "create new account"
-      // override that hasn't been persisted yet.
       const accountId =
         state.transactionOverrides.get(item.originalIndex)?.accountId ??
         state.accountMatches.get(item.originalIndex)?.accountId ??
@@ -118,7 +107,6 @@ export function TransactionReview({
       const accountName =
         (accountId ? accountDisplayNames.get(accountId) : null) ??
         rawAccountName;
-
       const content = getExpandedContent(tx);
 
       return (
@@ -135,17 +123,19 @@ export function TransactionReview({
           onToggleSelect={state.handleToggleItem}
           onPress={state.handleOpenEditModal}
           hasMissingInfo={state.invalidIndices.has(item.originalIndex)}
+          reviewMeta={state.reviewMetaByIndex.get(item.originalIndex)}
         />
       );
     },
     [
-      state.accountMatches,
-      state.transactionOverrides,
       accountDisplayNames,
-      state.invalidIndices,
-      state.handleToggleItem,
+      state.accountMatches,
       state.handleOpenEditModal,
+      state.handleToggleItem,
+      state.invalidIndices,
+      state.reviewMetaByIndex,
       state.selectedIndicesRef,
+      state.transactionOverrides,
     ]
   );
 
@@ -153,7 +143,6 @@ export function TransactionReview({
 
   return (
     <View className="flex-1">
-      {/* ── Filters & Search (collapsible) ────────────────────── */}
       {isFiltersVisible && (
         <Animated.View
           entering={FadeIn.duration(200)}
@@ -173,62 +162,128 @@ export function TransactionReview({
         </Animated.View>
       )}
 
-      {/* ── Summary bar ─────────────────────────────────────────── */}
       <Animated.View
         entering={FadeInDown.delay(100)}
-        className="flex-row items-center justify-between px-5 py-3 bg-slate-100 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800"
+        className="px-5 py-4 bg-slate-50 dark:bg-slate-950/90 border-b border-slate-200 dark:border-slate-800"
       >
-        <Text className="text-sm text-slate-600 dark:text-slate-300">
-          <Text className="font-bold text-slate-900 dark:text-white">
-            {state.filteredTransactions.length}
-          </Text>{" "}
-          {t("found")} ·{" "}
-          <Text className="font-bold text-nileGreen-600 dark:text-nileGreen-400">
-            {state.selectedCount}
-          </Text>{" "}
-          {t("selected")}
-        </Text>
+        <View className="flex-row items-start justify-between gap-3">
+          <View className="flex-1">
+            <Text className="text-[11px] font-semibold uppercase text-slate-500 dark:text-slate-400">
+              {tTransactions("review_summary_title")}
+            </Text>
+            <Text className="mt-1 text-sm text-slate-700 dark:text-slate-200">
+              <Text className="font-bold text-slate-950 dark:text-white">
+                {tTransactions("review_summary_found", {
+                  count: state.effectiveTransactions.length,
+                })}
+              </Text>
+              {"  "}
+              <Text className="font-semibold text-nileGreen-700 dark:text-nileGreen-300">
+                {tTransactions("review_summary_auto_selected", {
+                  count: state.autoSelectedCount,
+                })}
+              </Text>
+              {"  "}
+              <Text className="font-semibold text-amber-600 dark:text-amber-300">
+                {tTransactions("review_summary_needs_review", {
+                  count: state.needsReviewCount,
+                })}
+              </Text>
+            </Text>
+            <Text className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {tTransactions("review_trust_copy")}
+            </Text>
+          </View>
 
-        <View className="flex-row items-center gap-3">
-          {/* Filter toggle */}
-          <TouchableOpacity
-            onPress={() => setIsFiltersVisible((prev) => !prev)}
-            activeOpacity={0.7}
-            className="relative"
-          >
-            <Ionicons
-              name={isFiltersVisible ? "funnel" : "funnel-outline"}
-              size={18}
-              color={
-                hasActiveFilters ? palette.nileGreen[400] : palette.slate[400]
-              }
-            />
-            {hasActiveFilters && !isFiltersVisible && (
-              <View className="absolute -top-1 -end-1 w-2.5 h-2.5 rounded-full bg-nileGreen-400" />
-            )}
-          </TouchableOpacity>
+          <View className="flex-row items-center gap-3 pt-0.5">
+            <TouchableOpacity
+              onPress={() => setIsFiltersVisible((prev) => !prev)}
+              activeOpacity={0.7}
+              className="relative h-9 w-9 items-center justify-center rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
+            >
+              <Ionicons
+                name={isFiltersVisible ? "funnel" : "funnel-outline"}
+                size={18}
+                color={
+                  hasActiveFilters ? palette.nileGreen[400] : palette.slate[400]
+                }
+              />
+              {hasActiveFilters && !isFiltersVisible && (
+                <View className="absolute top-1 end-1 w-2.5 h-2.5 rounded-full bg-nileGreen-400" />
+              )}
+            </TouchableOpacity>
 
-          {/* Select All toggle */}
+            <TouchableOpacity
+              onPress={state.handleToggleAll}
+              activeOpacity={0.7}
+              className="h-9 flex-row items-center rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3"
+            >
+              <Ionicons
+                name={state.allSelected ? "checkbox" : "square-outline"}
+                size={18}
+                color={
+                  state.allSelected
+                    ? palette.nileGreen[400]
+                    : palette.slate[400]
+                }
+              />
+              <Text className="text-xs font-semibold text-slate-500 dark:text-slate-300 ms-1.5">
+                {selectToggleLabel}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View className="mt-4 flex-row gap-2">
+          {reviewModeOptions.map((option) => {
+            const isActive = state.reviewMode === option.mode;
+            return (
+              <TouchableOpacity
+                key={option.mode}
+                onPress={() => state.setReviewMode(option.mode)}
+                activeOpacity={0.8}
+                className={`flex-1 min-h-10 items-center justify-center rounded-full border px-2 ${
+                  isActive
+                    ? "bg-nileGreen-600 border-nileGreen-600"
+                    : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700"
+                }`}
+              >
+                <Text
+                  className={`text-[11px] font-bold text-center ${
+                    isActive
+                      ? "text-white"
+                      : "text-slate-600 dark:text-slate-300"
+                  }`}
+                  numberOfLines={1}
+                >
+                  {option.label} ({option.count})
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {state.needsReviewCount > 0 && (
           <TouchableOpacity
-            onPress={state.handleToggleAll}
-            className="flex-row items-center"
-            activeOpacity={0.7}
+            onPress={
+              state.reviewMode === "needs_review"
+                ? state.handleShowAll
+                : state.handleReviewNeeds
+            }
+            activeOpacity={0.8}
+            className="mt-3 min-h-11 items-center justify-center rounded-xl bg-slate-900 dark:bg-white"
           >
-            <Ionicons
-              name={state.allSelected ? "checkbox" : "square-outline"}
-              size={18}
-              color={
-                state.allSelected ? palette.nileGreen[400] : palette.slate[400]
-              }
-            />
-            <Text className="text-xs text-slate-400 ms-1.5">
-              {state.allSelected ? t("deselect_all") : t("select_all")}
+            <Text className="text-sm font-bold text-white dark:text-slate-950">
+              {state.reviewMode === "needs_review"
+                ? tTransactions("show_all")
+                : tTransactions("review_items_count", {
+                    count: state.needsReviewCount,
+                  })}
             </Text>
           </TouchableOpacity>
-        </View>
+        )}
       </Animated.View>
 
-      {/* ── Transaction list ────────────────────────────────────── */}
       {state.filteredTransactions.length === 0 ? (
         <View className="flex-1 items-center justify-center px-6">
           <Ionicons
@@ -237,7 +292,7 @@ export function TransactionReview({
             color={isDark ? palette.slate[600] : palette.slate[400]}
           />
           <Text className="text-slate-500 dark:text-slate-400 mt-3 text-center text-sm">
-            {t("no_matching_filters")}
+            {emptyStateLabel}
           </Text>
         </View>
       ) : (
@@ -245,8 +300,12 @@ export function TransactionReview({
           data={state.listItems}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
-          extraData={state.selectedIndices}
-          contentContainerClassName="px-4 pb-32"
+          extraData={{
+            selectedIndices: state.selectedIndices,
+            reviewMode: state.reviewMode,
+            reviewMetaByIndex: state.reviewMetaByIndex,
+          }}
+          contentContainerClassName="px-4 pb-36"
           showsVerticalScrollIndicator={false}
           removeClippedSubviews
           maxToRenderPerBatch={15}
@@ -254,7 +313,6 @@ export function TransactionReview({
         />
       )}
 
-      {/* ── Bottom action bar ───────────────────────────────────── */}
       <ReviewActionBar
         selectedCount={state.selectedCount}
         isSaving={isSaving}
@@ -262,7 +320,6 @@ export function TransactionReview({
         onDiscard={onDiscard}
       />
 
-      {/* ── Filter modals ────────────────────────────────────────── */}
       <PeriodFilterModal
         visible={state.periodModalVisible}
         selectedPeriod={state.period}
@@ -277,7 +334,6 @@ export function TransactionReview({
         onClose={() => state.setTypeModalVisible(false)}
       />
 
-      {/* ── Inline edit modal ──────────────────────────────────── */}
       {state.editModalIndex !== null &&
         state.effectiveTransactions[state.editModalIndex] && (
           <TransactionEditModal

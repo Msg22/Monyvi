@@ -1,13 +1,24 @@
-import type { ReviewableTransaction } from "@monyvi/logic";
+import type {
+  TransactionReviewMeta,
+  TransactionReviewReason,
+} from "@/services/transaction-review-selection";
 
 export type BadgeColor = "amber" | "red" | "blue" | "emerald";
 
 export interface TransactionBadgeData {
-  readonly label: string;
+  readonly labelKey: string;
   readonly color: BadgeColor;
 }
 
-const CONFIDENCE_REVIEW_THRESHOLD = 0.8;
+const REVIEW_REASON_BADGES: Record<
+  TransactionReviewReason,
+  TransactionBadgeData
+> = {
+  cash_transfer: { labelKey: "review_badge_cash_transfer", color: "amber" },
+  low_confidence: { labelKey: "review_badge_low_confidence", color: "amber" },
+  account_needed: { labelKey: "review_badge_account_needed", color: "red" },
+  category_needed: { labelKey: "review_badge_category_needed", color: "red" },
+};
 
 /**
  * Derives presentation badges (tags) for a transaction.
@@ -17,27 +28,23 @@ const CONFIDENCE_REVIEW_THRESHOLD = 0.8;
  * without modifying standard UI rendering loops.
  */
 export function getTransactionBadges(
-  transaction: ReviewableTransaction,
-  hasMissingInfo: boolean
+  hasMissingInfo: boolean,
+  reviewMeta: TransactionReviewMeta | undefined,
+  isSelected: boolean
 ): readonly TransactionBadgeData[] {
   const badges: TransactionBadgeData[] = [];
 
-  // 1. Source-specific transaction tags (e.g., SMS parser metadata)
-  if (
-    "isAtmWithdrawal" in transaction &&
-    transaction.isAtmWithdrawal === true
-  ) {
-    badges.push({ label: "Cash Withdrawal", color: "amber" });
+  if (reviewMeta?.isAutoSelectable && isSelected) {
+    badges.push({ labelKey: "review_badge_auto_selected", color: "emerald" });
+    return badges;
   }
 
-  // 2. Generic AI Confidence Review
-  if (transaction.confidence <= CONFIDENCE_REVIEW_THRESHOLD) {
-    badges.push({ label: "Needs Review", color: "amber" });
+  for (const reason of reviewMeta?.reasons ?? []) {
+    badges.push(REVIEW_REASON_BADGES[reason]);
   }
 
-  // 3. User-Action Required (Missing core constraints like Account/Category)
   if (hasMissingInfo) {
-    badges.push({ label: "Missing Info", color: "red" });
+    badges.push({ labelKey: "review_badge_missing_info", color: "red" });
   }
 
   return badges;

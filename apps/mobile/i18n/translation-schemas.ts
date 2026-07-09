@@ -158,7 +158,12 @@ const PLURAL_BASES: Record<string, readonly string[]> = {
     "due_overdue",
     "due_in_days",
   ],
-  transactions: ["transaction_count", "delete_success_message"],
+  transactions: [
+    "transaction_count",
+    "delete_success_message",
+    "save_selected_button_count",
+    "review_items_count",
+  ],
   accounts: ["account_count"],
   budgets: ["budget_count", "days_remaining"],
   metals: ["holding"],

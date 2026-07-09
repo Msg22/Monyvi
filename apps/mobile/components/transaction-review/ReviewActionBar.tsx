@@ -3,6 +3,7 @@ import React from "react";
 import { ActivityIndicator, Text, TouchableOpacity } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export interface ReviewActionBarProps {
   readonly selectedCount: number;
@@ -19,6 +20,8 @@ export function ReviewActionBar({
 }: ReviewActionBarProps): React.JSX.Element {
   const { showToast } = useToast();
   const { t } = useTranslation("transactions");
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(insets.bottom, 16);
 
   const handleSaveWrapper = (): void => {
     onSave().catch((err: unknown) => {
@@ -34,7 +37,8 @@ export function ReviewActionBar({
   return (
     <Animated.View
       entering={FadeInDown.delay(200)}
-      className="px-5 pb-8 pt-4 bg-white/95 dark:bg-background-dark border-t border-slate-200 dark:border-slate-800 flex-row gap-4 items-center"
+      className="px-5 pt-4 bg-white/95 dark:bg-background-dark border-t border-slate-200 dark:border-slate-800 flex-row gap-4 items-center"
+      style={{ paddingBottom: bottomPadding }}
     >
       {/* Discard All */}
       <TouchableOpacity
@@ -63,7 +67,7 @@ export function ReviewActionBar({
           <ActivityIndicator color="white" />
         ) : (
           <Text className="text-white text-base font-bold">
-            {t("save_button_count", { count: selectedCount })}
+            {t("save_selected_button_count", { count: selectedCount })}
           </Text>
         )}
       </TouchableOpacity>

@@ -70,6 +70,13 @@ Automation should reduce entry effort without silently corrupting financial
 records. Voice and SMS parsing produce reviewable transactions unless the user
 has explicitly opted into an auto-confirm mode.
 
+AI-parsed review screens may pre-select only low-risk transactions: confidence
+greater than 0.8, a resolved account match, and not an ATM withdrawal. Any row
+with lower confidence, no account match, ATM-withdrawal transfer behavior, or
+missing required information must stay unchecked until the user explicitly
+reviews or selects it. "Select all" remains an explicit user action, and when a
+focused review filter is active it should select only the shown rows.
+
 ### AI Processing Consent
 
 AI transaction suggestions are controlled by one global consent setting. The
@@ -390,6 +397,8 @@ Business rules:
 - The client resolves category IDs, account IDs, dates, currencies, and
   confidence before review.
 - Users review parsed transactions before saving.
+- Voice review uses the shared AI-parsed transaction review selection rule: only
+  high-confidence rows with a resolved account match are pre-selected.
 
 ## 7. SMS Import And Live Detection
 
@@ -413,6 +422,9 @@ Business rules:
 - Deduplication must check both `transactions.sms_fingerprint` and
   `transfers.sms_fingerprint`.
 - ATM withdrawals should be saved as transfers when an account can be resolved.
+- Batch SMS review uses the shared AI-parsed transaction review selection rule:
+  high-confidence matched rows may be pre-selected, but ATM withdrawals and rows
+  needing account/category/user review must remain unchecked.
 - Live detection has foreground/background JS paths and killed-app HeadlessJS
   paths on Android.
 - If the SMS review page is active, live-detected messages are queued and

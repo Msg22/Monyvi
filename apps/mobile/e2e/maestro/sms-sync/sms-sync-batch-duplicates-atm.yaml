@@ -28,12 +28,19 @@ appId: com.monyvi.app
 
 - assertVisible: "PR622 BATCH DUPLICATE SHOP"
 - assertVisible: "QNB ATM"
-- assertVisible: "Cash Withdrawal"
+- assertVisible: "2 auto-selected"
+- assertVisible: "1 need review"
+- assertVisible: "Cash transfer"
 - extendedWaitUntil:
     visible: "E2E NBE Bank"
     timeout: 30000
 
-- tapOn: "Save 3 Transactions"
+- tapOn: "Review 1 item"
+
+- assertVisible: "QNB ATM"
+- tapOn: "Select shown"
+
+- tapOn: "Save 3 selected"
 
 - extendedWaitUntil:
     visible: "Transactions"
