@@ -10,6 +10,12 @@ The developer (Mohamed) is a Senior Front-end engineer with 8 years of Angular
 expertise, new to React/React Native/Expo. When explaining concepts, compare
 with Angular equivalents in chat (never in code comments).
 
+<!-- SPECKIT START -->
+
+Active Speckit plan: `specs/028-local-intelligent-parser/plan.md`
+
+<!-- SPECKIT END -->
+
 ## Architecture & Design Principles
 
 - Act as a world-class software architect. Engineer solutions, don't just write

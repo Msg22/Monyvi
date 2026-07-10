@@ -15,9 +15,17 @@
  */
 
 import { Platform } from "react-native";
-import type { SmsMessage } from "@monyvi/logic";
-import { shouldUseFixtureSmsParser } from "@/config/e2e-test-config";
+import {
+  LOCAL_SMS_FIXTURE_CORPUS,
+  type LocalSmsFixture,
+  type SmsMessage,
+} from "@monyvi/logic";
+import {
+  getAiSmsParserMode,
+  shouldUseFixtureSmsInbox,
+} from "@/config/e2e-test-config";
 import { getFixtureById } from "@/services/dev/sms-fixtures";
+import { logger } from "@/utils/logger";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -76,6 +84,12 @@ const E2E_SMS_INBOX_FIXTURE_IDS = [
   "qnb_atm_withdrawal",
 ] as const;
 
+const E2E_LOCAL_PARSER_SAVEABLE_PROVIDER_IDS = new Set([
+  "nbe",
+  "qnb-egypt",
+  "vodafone-cash",
+]);
+
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const E2E_DUPLICATE_SECOND_OFFSET_MS = 60_000;
 const INVALID_SMS_DATE_FALLBACK_BASE_MS = Date.UTC(2024, 0, 1);
@@ -119,7 +133,25 @@ function toRollingFixtureInboxTimestamp(timestamp: number): number {
   );
 }
 
-function readFixtureSmsInbox(
+function filterFixtureMessages(
+  messages: readonly FixtureInboxMessage[],
+  options?: SmsReaderOptions
+): readonly SmsMessage[] {
+  const minDate = options?.minDate;
+  const filteredByAddress =
+    options?.address === undefined
+      ? messages
+      : messages.filter((message) => message.address === options.address);
+  const filtered =
+    minDate === undefined
+      ? filteredByAddress
+      : filteredByAddress.filter((message) => message.date >= minDate);
+  const newestFirst = [...filtered].sort((a, b) => b.date - a.date);
+
+  return newestFirst.slice(0, options?.maxCount ?? 1000);
+}
+
+function readLegacyFixtureSmsInbox(
   options?: SmsReaderOptions
 ): readonly SmsMessage[] {
   const fixtureMessages = E2E_SMS_INBOX_FIXTURE_IDS.map((fixtureId, index) => {
@@ -148,20 +180,33 @@ function readFixtureSmsInbox(
     return message;
   });
 
-  const minDate = options?.minDate;
-  const filteredByAddress =
-    options?.address === undefined
-      ? fixtureMessages
-      : fixtureMessages.filter(
-          (message) => message.address === options.address
-        );
-  const filtered =
-    minDate === undefined
-      ? filteredByAddress
-      : filteredByAddress.filter((message) => message.date >= minDate);
-  const newestFirst = [...filtered].sort((a, b) => b.date - a.date);
+  return filterFixtureMessages(fixtureMessages, options);
+}
 
-  return newestFirst.slice(0, options?.maxCount ?? 1000);
+function mapLocalParserFixture(
+  fixture: LocalSmsFixture,
+  index: number
+): FixtureInboxMessage {
+  return {
+    id: `e2e-local-${fixture.id}`,
+    address: fixture.sender,
+    body: fixture.body,
+    date: toRollingFixtureInboxTimestamp(fixture.receivedAtMs) + index,
+    read: true,
+  };
+}
+
+function readLocalParserFixtureSmsInbox(
+  options?: SmsReaderOptions
+): readonly SmsMessage[] {
+  const saveableFixtures = LOCAL_SMS_FIXTURE_CORPUS.filter((fixture) =>
+    E2E_LOCAL_PARSER_SAVEABLE_PROVIDER_IDS.has(fixture.providerId)
+  );
+
+  return filterFixtureMessages(
+    saveableFixtures.map(mapLocalParserFixture),
+    options
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -181,8 +226,19 @@ export async function readSmsInbox(
     return [];
   }
 
-  if (shouldUseFixtureSmsParser()) {
-    return readFixtureSmsInbox(options);
+  if (shouldUseFixtureSmsInbox()) {
+    const parserMode = getAiSmsParserMode();
+    const messages =
+      parserMode === "local"
+        ? readLocalParserFixtureSmsInbox(options)
+        : readLegacyFixtureSmsInbox(options);
+
+    logger.info("smsReader.fixtureInbox.used", {
+      parserMode,
+      messageCount: messages.length,
+    });
+
+    return messages;
   }
 
   try {

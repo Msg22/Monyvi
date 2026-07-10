@@ -55,8 +55,8 @@ export interface UseSmsScanResult {
 interface StartScanOptions {
   /** Only scan messages after this timestamp (incremental sync). */
   readonly minDate?: number;
-  /** Set of existing fingerprints for dedup. */
-  readonly existingFingerprints: ReadonlySet<string>;
+  /** Set of existing fingerprints for dedup. Omit to let the scan service load them. */
+  readonly existingFingerprints?: ReadonlySet<string>;
   /** Context to pass to AI for better account suggestions. */
   readonly aiContext: ParseSmsContext;
   /** Cancels the scan before more SMS candidates are sent to AI. */

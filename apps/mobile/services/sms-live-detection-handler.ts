@@ -306,11 +306,11 @@ async function saveDetectedTransactionWithoutLock(
  * Flow:
  * 1. Resolve target account via bank_details chain
  * 2. Check auto-confirm preference
- * 3. Auto-confirm → save directly
- * 4. Ask me → show notification with Confirm/Discard actions
+ * 3. Auto-confirm safe suggestions → save directly
+ * 4. Ask me or needs-review → show notification with Confirm/Discard actions
  * 5. If no account resolved → show notification asking to configure
  *
- * @param parsed - The AI-parsed SMS transaction
+ * @param parsed - The parser-produced SMS transaction
  */
 export async function handleDetectedSms(
   parsed: ParsedSmsTransaction
@@ -326,11 +326,12 @@ export async function handleDetectedSms(
   }
 
   try {
-    // Step 1: Resolve account using senderDisplayName + rawSmsBody
+    // Step 1: Resolve account using sender, parser hints, and raw SMS fallback
     const resolved = await resolveAccountForSms(
       parsed.senderDisplayName,
       parsed.rawSmsBody,
-      parsed.currency
+      parsed.currency,
+      parsed.cardLast4
     );
 
     if (!resolved) {
@@ -346,8 +347,11 @@ export async function handleDetectedSms(
 
     // Step 2: Check preference
     const autoConfirm = await isAutoConfirmEnabled();
+    const requiresReview =
+      parsed.reviewStatus === "needs_review" ||
+      (parsed.reviewReasons?.length ?? 0) > 0;
 
-    if (autoConfirm) {
+    if (autoConfirm && !requiresReview) {
       // Step 3: Auto-confirm — save directly
       const didSave = await saveDetectedTransaction(parsed, resolved.accountId);
       if (didSave) {

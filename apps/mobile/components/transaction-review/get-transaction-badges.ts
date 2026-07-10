@@ -30,8 +30,15 @@ export function getTransactionBadges(
     badges.push({ label: "Cash Withdrawal", color: "amber" });
   }
 
-  // 2. Generic AI Confidence Review
-  if (transaction.confidence <= CONFIDENCE_REVIEW_THRESHOLD) {
+  const hasParserReviewSignal =
+    transaction.reviewStatus === "needs_review" ||
+    (transaction.reviewReasons?.length ?? 0) > 0;
+
+  // 2. Generic parser confidence / review metadata
+  if (
+    transaction.confidence <= CONFIDENCE_REVIEW_THRESHOLD ||
+    hasParserReviewSignal
+  ) {
     badges.push({ label: "Needs Review", color: "amber" });
   }
 

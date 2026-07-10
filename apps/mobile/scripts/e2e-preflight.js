@@ -5,7 +5,7 @@ const { delimiter, join } = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 const appId = process.env.E2E_APP_ID || "com.monyvi.app";
-const deviceId = process.env.ANDROID_SERIAL || "emulator-5554";
+const deviceId = resolveAndroidDeviceId(process.env);
 const { hostMetroUrl, metroUrl } = resolveMetroUrls(process.env);
 const isReleaseBuild = process.env.E2E_RELEASE_BUILD === "1";
 const preflightLaunchAttempts = parsePositiveInt(
@@ -23,6 +23,7 @@ const androidDeviceReconnectTimeoutMs = parsePositiveInt(
 const devClientUrl = buildDevClientUrl(metroUrl);
 const devMenuPreferencesPath =
   "shared_prefs/expo.modules.devmenu.sharedpreferences.xml";
+const introSeenStorageKey = "@monyvi/intro-seen";
 const privateShellMarkers = [
   "fab-button",
   "search-input",
@@ -149,6 +150,19 @@ function resolveMaestroBin() {
   return findOnPath("maestro");
 }
 
+function getConfiguredAndroidDeviceId(env = process.env) {
+  return env.MAESTRO_DEVICE_ID || env.DEVICE || env.ANDROID_SERIAL || null;
+}
+
+function resolveAndroidDeviceId(env = process.env) {
+  return getConfiguredAndroidDeviceId(env) || "emulator-5554";
+}
+
+function getMaestroDeviceArgs(env = process.env) {
+  const device = getConfiguredAndroidDeviceId(env);
+  return device ? ["--device", device] : [];
+}
+
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     encoding: "utf8",
@@ -252,6 +266,57 @@ function buildDevMenuPreferencesXml() {
     "</map>",
     "",
   ].join("\n");
+}
+
+function sqlString(value) {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+function buildIntroSeenFlagSql() {
+  return [
+    "create table if not exists catalystLocalStorage (key TEXT PRIMARY KEY, value TEXT NOT NULL);",
+    `insert or replace into catalystLocalStorage (key, value) values (${sqlString(
+      introSeenStorageKey
+    )}, 'true');`,
+  ].join("\n");
+}
+
+function isMissingDeviceSqliteError(output) {
+  return /exec failed for sqlite3|sqlite3: No such file or directory/i.test(
+    output
+  );
+}
+
+function seedIntroSeenFlagForE2e() {
+  if (isReleaseBuild) return;
+
+  adb(["shell", "run-as", appId, "mkdir", "-p", "databases"], {
+    capture: true,
+    allowFailure: true,
+  });
+  const output = adb(
+    ["shell", "run-as", appId, "sqlite3", "databases/RKStorage"],
+    {
+      allowFailure: true,
+      capture: true,
+      input: buildIntroSeenFlagSql(),
+    }
+  ).trim();
+
+  if (!output) {
+    return;
+  }
+
+  if (isMissingDeviceSqliteError(output)) {
+    console.warn(
+      "Skipping E2E intro flag seed because this Android device does not expose sqlite3 through adb shell."
+    );
+    return;
+  }
+
+  console.warn(
+    `Skipping E2E intro flag seed after adb sqlite3 output: ${output}`
+  );
 }
 
 function disableExpoDevMenuFabForE2e() {
@@ -686,9 +751,7 @@ function visibleTextShowsDevMenu(uiXml) {
 }
 
 async function ensureE2eAppReady() {
-  if (!isReleaseBuild) {
-    await waitForHttpOk(new URL("/status", hostMetroUrl).toString(), 120000);
-  }
+  await ensureE2eMetroReady();
 
   let lastError = null;
   for (let attempt = 1; attempt <= preflightLaunchAttempts; attempt += 1) {
@@ -718,6 +781,12 @@ async function ensureE2eAppReady() {
     : new Error("E2E preflight failed to open Monyvi.");
 }
 
+async function ensureE2eMetroReady() {
+  if (!isReleaseBuild) {
+    await waitForHttpOk(new URL("/status", hostMetroUrl).toString(), 120000);
+  }
+}
+
 module.exports = {
   adb,
   appId,
@@ -725,17 +794,21 @@ module.exports = {
   deviceId,
   dumpVisibleText,
   ensureE2eAppReady,
+  ensureE2eMetroReady,
   forceStopApp,
   appendAndroidPlatform,
   currentFocusShowsDevMenu,
   currentFocusShowsLauncher,
   buildDevMenuPreferencesXml,
+  buildIntroSeenFlagSql,
   buildDevClientUrl,
   didDumpUiHierarchy,
   disableExpoDevMenuFabForE2e,
   getHttpClientNameForUrl,
+  getMaestroDeviceArgs,
   androidDeviceReconnectTimeoutMs,
   isAppReady,
+  isMissingDeviceSqliteError,
   isNativeRootMounted,
   isReleaseBuild,
   shouldRestoreFromDevLauncher,
@@ -743,9 +816,11 @@ module.exports = {
   metroUrl,
   isRetryableMaestroTransportFailure,
   reconnectAndroidDevice,
+  resolveAndroidDeviceId,
   resolveMetroUrls,
   resolveMaestroBin,
   run,
+  seedIntroSeenFlagForE2e,
   stabilizeAndroidDevice,
   startAppWithoutChangingPermissions,
   wait,

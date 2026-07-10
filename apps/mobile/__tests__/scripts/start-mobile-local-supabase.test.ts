@@ -18,10 +18,16 @@ interface StartMobileLocalSupabaseModule {
   ): Record<string, string | undefined>;
   buildLocalSupabaseExpoEnv(
     anonKey: string,
-    baseEnv?: Readonly<Record<string, string | undefined>>
+    baseEnv?: Readonly<Record<string, string | undefined>>,
+    options?: {
+      readonly shouldUseLocalParser?: boolean;
+      readonly shouldUseFixtureSmsInbox?: boolean;
+    }
   ): Record<string, string | undefined>;
   parseCliArgs(args: readonly string[]): {
     readonly shouldUseWirelessDeviceTunnel: boolean;
+    readonly shouldUseLocalParser: boolean;
+    readonly shouldUseFixtureSmsInbox: boolean;
     readonly password: string | null;
     readonly expoArgs: readonly string[];
   };
@@ -104,12 +110,16 @@ describe("start-mobile-local-supabase script helpers", () => {
     expect(
       startMobileLocalSupabase.parseCliArgs([
         "--wireless-device",
+        "--local-parser",
+        "--fixture-sms",
         "--password",
         "LocalOnlyPassword123!",
         "--clear",
       ])
     ).toEqual({
       shouldUseWirelessDeviceTunnel: true,
+      shouldUseLocalParser: true,
+      shouldUseFixtureSmsInbox: true,
       password: "LocalOnlyPassword123!",
       expoArgs: ["--clear"],
     });
@@ -175,7 +185,19 @@ describe("start-mobile-local-supabase script helpers", () => {
       ])
     ).toEqual({
       shouldUseWirelessDeviceTunnel: true,
+      shouldUseLocalParser: false,
+      shouldUseFixtureSmsInbox: false,
       password: "LocalOnlyPassword123!",
+      expoArgs: [],
+    });
+  });
+
+  it("treats fixture SMS mode as local-parser dev mode", () => {
+    expect(startMobileLocalSupabase.parseCliArgs(["--fixture-sms"])).toEqual({
+      shouldUseWirelessDeviceTunnel: false,
+      shouldUseLocalParser: true,
+      shouldUseFixtureSmsInbox: true,
+      password: null,
       expoArgs: [],
     });
   });
@@ -309,6 +331,45 @@ describe("start-mobile-local-supabase script helpers", () => {
     expect(env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY).toBe(
       "custom-publishable-key"
     );
+  });
+
+  it("keeps normal dev mode on edge parser and device inbox by default", () => {
+    const env = startMobileLocalSupabase.buildLocalSupabaseExpoEnv(
+      "local-anon-key",
+      {}
+    );
+
+    expect(env.EXPO_PUBLIC_MONYVI_TEST_MODE).toBe("off");
+    expect(env.EXPO_PUBLIC_AI_SMS_PARSER_MODE).toBe("edge");
+    expect(env.EXPO_PUBLIC_SMS_INBOX_MODE).toBe("device");
+  });
+
+  it("can opt normal dev mode into local parser and fixture SMS inbox", () => {
+    const env = startMobileLocalSupabase.buildLocalSupabaseExpoEnv(
+      "local-anon-key",
+      {},
+      {
+        shouldUseLocalParser: true,
+        shouldUseFixtureSmsInbox: true,
+      }
+    );
+
+    expect(env.EXPO_PUBLIC_MONYVI_TEST_MODE).toBe("off");
+    expect(env.EXPO_PUBLIC_AI_SMS_PARSER_MODE).toBe("local");
+    expect(env.EXPO_PUBLIC_SMS_INBOX_MODE).toBe("fixture");
+  });
+
+  it("allows environment opt-in to local parser for normal dev mode", () => {
+    const env = startMobileLocalSupabase.buildLocalSupabaseExpoEnv(
+      "local-anon-key",
+      {
+        EXPO_PUBLIC_AI_SMS_PARSER_MODE: "local",
+        EXPO_PUBLIC_SMS_INBOX_MODE: "fixture",
+      }
+    );
+
+    expect(env.EXPO_PUBLIC_AI_SMS_PARSER_MODE).toBe("local");
+    expect(env.EXPO_PUBLIC_SMS_INBOX_MODE).toBe("fixture");
   });
 
   it("does not opt out of Expo monorepo root detection", () => {

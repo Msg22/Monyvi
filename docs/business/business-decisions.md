@@ -101,6 +101,10 @@ Business rules:
 - Disabling AI transaction suggestions also makes AI-dependent entry points
   unavailable. Live SMS detection and auto-confirm must be disabled or prevented
   from running when consent is not active.
+- For phase 1 of the local parser, deterministic local transaction parsing
+  follows the same AI transaction suggestions setting even though local parsing
+  does not send content to an external provider. This avoids changing feature
+  access and consent semantics while the dev/test local parser is introduced.
 
 ### Authenticated By Default
 
@@ -417,6 +421,49 @@ Business rules:
   paths on Android.
 - If the SMS review page is active, live-detected messages are queued and
   flushed after review is dismissed.
+
+### Local SMS Parser
+
+Monyvi may use a deterministic local SMS parser for supported financial SMS
+templates. Phase 1 is a development/testing capability only; production fallback
+and trusted real-message promotion are deferred to a later issue.
+
+Business rules:
+
+- Phase 1 local parser behavior is dev/test-only. It may use fixture, synthetic,
+  internet, or unknown-source SMS examples, but those patterns must be
+  explicitly marked as development/testing data and must not be treated as
+  trusted production parsing rules.
+- The local parser is a declared-template parser, not a broad financial-keyword
+  parser. Keywords may help filter candidates or match inside a declared
+  provider/template rule, but keywords alone must never create a transaction
+  suggestion.
+- Every local parser pattern must include runtime scope, source type, source
+  confidence, sanitized example shape, expected outcome, review expectation,
+  auto-select policy, promotion eligibility, and edge cases.
+- Dev/test-only patterns must not be marked production-trusted or production
+  auto-selectable.
+- Future production-supported local parser templates must come from trusted
+  real-message sources, such as sanitized QA-device SMS, sanitized consented
+  user SMS, provider-published examples, or controlled small-value real
+  transactions. Raw real user SMS must not be committed to source control.
+- Negative classification must run before extraction. OTPs, promotions, offers,
+  activation notices, failed transactions, reminders, and informational-only SMS
+  must be ignored even when they contain words such as card, wallet, transfer,
+  balance, cashback, amount, or currency.
+- In phase 1, production/default behavior remains AI-primary. Local fallback
+  must not run in production.
+- Phase 2 must re-specify and approve production fallback trigger rules, trusted
+  provenance requirements, real SMS consent/sanitization flow, and any
+  production auto-selection rules before production fallback is enabled.
+- ATM withdrawals, low-confidence matches, partial template matches, missing
+  account/category context, ambiguous amounts, unsupported templates, and
+  non-exact templates must require review or produce no suggestion.
+- Parser source labels such as local parser, AI parser, or fixture parser are
+  diagnostics-only and must not be shown in the regular transaction review UI.
+- Local audio transcription and voice-flow integration are out of scope for the
+  first local-parser release. Future reuse may handle already-transcribed text
+  only after a separate product decision.
 
 ## 8. Notifications
 

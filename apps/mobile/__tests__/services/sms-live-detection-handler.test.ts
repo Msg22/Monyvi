@@ -289,6 +289,41 @@ describe("sms-live-detection-handler notification actions", () => {
     expect(mockShowTransactionNotification).not.toHaveBeenCalled();
   });
 
+  it("passes the parser card hint into live account resolution", async () => {
+    const parsed = {
+      ...createParsedSmsTransaction(),
+      cardLast4: "4321",
+    };
+
+    await handleDetectedSms(parsed);
+
+    expect(mockResolveAccountForSms).toHaveBeenCalledWith(
+      "NBE",
+      parsed.rawSmsBody,
+      "EGP",
+      "4321"
+    );
+  });
+
+  it("keeps needs-review live suggestions out of auto-confirm", async () => {
+    await setAutoConfirm(true);
+    const parsed = {
+      ...createParsedSmsTransaction(),
+      reviewStatus: "needs_review" as const,
+      reviewReasons: ["account_needed" as const],
+    };
+
+    await handleDetectedSms(parsed);
+
+    expect(mockCreateTransaction).not.toHaveBeenCalled();
+    expect(mockShowTransactionCreatedNotification).not.toHaveBeenCalled();
+    expect(mockShowTransactionNotification).toHaveBeenCalledWith(
+      parsed,
+      "account-1",
+      "MainCIBAccount"
+    );
+  });
+
   it("auto-disables stored live detection when required SMS permission is missing", async () => {
     await setLiveDetectionEnabled(true);
     await setAutoConfirm(true);

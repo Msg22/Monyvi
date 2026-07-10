@@ -1,6 +1,8 @@
 interface RunSmsSyncJourneysModule {
   buildSmsSyncProbeCleanupSql(): string;
-  buildBatchSmsSavedVerificationQueries(): readonly string[];
+  buildBatchSmsSavedVerificationQueries(): readonly SmsVerificationQuery[];
+  buildFixtureSmsSavedVerificationQueries(): readonly SmsVerificationQuery[];
+  buildLocalParserSmsSavedVerificationQueries(): readonly SmsVerificationQuery[];
   getAuthBootstrapFlow(
     env?: Readonly<Record<string, string | undefined>>
   ):
@@ -17,9 +19,19 @@ interface RunSmsSyncJourneysModule {
     flow: string,
     env?: Readonly<Record<string, string | undefined>>
   ): boolean;
+  shouldRetrySmsSyncFlowAttempt(
+    flow: string,
+    result: { readonly didTimeout: boolean; readonly output: string }
+  ): boolean;
   shouldRelaunchBetweenSmsSyncJourneys(
     env?: Readonly<Record<string, string | undefined>>
   ): boolean;
+}
+
+interface SmsVerificationQuery {
+  readonly label: string;
+  readonly sql: string;
+  readonly expected: string;
 }
 
 const smsSyncJourneys = jest.requireActual(
@@ -33,25 +45,43 @@ describe("run-sms-sync-journeys helpers", () => {
 
   afterEach(() => {
     delete process.env.E2E_USER_ID;
+    delete process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE;
   });
 
   it("cleans only current-user SMS sync probe rows and fails on SQL errors", () => {
     const sql = smsSyncJourneys.buildSmsSyncProbeCleanupSql();
 
     expect(sql).toContain("delete from transactions where");
-    expect(sql).toContain("counterparty = 'PR622 BATCH DUPLICATE SHOP'");
+    expect(sql).toContain("source = 'SMS'");
     expect(sql).toContain("delete from transfers where");
-    expect(sql).toContain("notes = 'ATM Withdrawal'");
-    expect(sql).toContain("amount = 2000");
     expect(sql).toContain("sms_fingerprint is not null");
     expect(sql).toContain("user_id = 'e2e-user-1'");
   });
 
-  it("verifies saved SMS sync rows only for the current E2E user", () => {
+  it("verifies fixture saved SMS sync rows only for the current E2E user", () => {
     const queries = smsSyncJourneys.buildBatchSmsSavedVerificationQueries();
 
     expect(queries).toHaveLength(3);
-    for (const query of queries) {
+    expect(queries.map((query) => query.expected)).toEqual(["2", "2", "1"]);
+    expect(queries.map((query) => query.sql).join("\n")).toContain(
+      "counterparty = 'PR622 BATCH DUPLICATE SHOP'"
+    );
+    for (const query of queries.map((item) => item.sql)) {
+      expect(query).toContain("user_id = 'e2e-user-1'");
+    }
+  });
+
+  it("verifies local-parser saved SMS sync rows with corpus-level invariants", () => {
+    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "local";
+
+    const queries = smsSyncJourneys.buildBatchSmsSavedVerificationQueries();
+
+    expect(queries).toHaveLength(3);
+    expect(queries.map((query) => query.expected)).toEqual(["1", "1", "1"]);
+    expect(queries[0]?.sql).toContain(">= 10");
+    expect(queries[1]?.sql).toContain("count(distinct sms_fingerprint)");
+    expect(queries[2]?.sql).toContain("notes = 'ATM Withdrawal'");
+    for (const query of queries.map((item) => item.sql)) {
       expect(query).toContain("user_id = 'e2e-user-1'");
     }
   });
@@ -172,5 +202,47 @@ describe("run-sms-sync-journeys helpers", () => {
         { E2E_SUPABASE_MODE: "remote" }
       )
     ).toBe(true);
+    expect(
+      smsSyncJourneys.shouldRetrySmsSyncFlowAfterTransportFailure(
+        "../helpers/ci-auth-deeplink-bootstrap.yaml",
+        { E2E_SUPABASE_MODE: "local" }
+      )
+    ).toBe(false);
+  });
+
+  it("does not retry timeouts because they may be app-flow failures", () => {
+    expect(
+      smsSyncJourneys.shouldRetrySmsSyncFlowAttempt(
+        "sms-sync-batch-duplicates-atm.yaml",
+        {
+          didTimeout: true,
+          output:
+            "io.grpc.StatusRuntimeException: UNAVAILABLE: End of stream or IOException",
+        }
+      )
+    ).toBe(false);
+  });
+
+  it("retries only known SMS journey flows after real transport failures", () => {
+    expect(
+      smsSyncJourneys.shouldRetrySmsSyncFlowAttempt(
+        "sms-sync-batch-duplicates-atm.yaml",
+        {
+          didTimeout: false,
+          output:
+            "io.grpc.StatusRuntimeException: UNAVAILABLE: End of stream or IOException",
+        }
+      )
+    ).toBe(true);
+    expect(
+      smsSyncJourneys.shouldRetrySmsSyncFlowAttempt(
+        "../helpers/ci-auth-deeplink-bootstrap.yaml",
+        {
+          didTimeout: false,
+          output:
+            "io.grpc.StatusRuntimeException: UNAVAILABLE: End of stream or IOException",
+        }
+      )
+    ).toBe(false);
   });
 });
