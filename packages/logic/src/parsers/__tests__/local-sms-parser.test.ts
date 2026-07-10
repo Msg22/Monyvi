@@ -167,6 +167,24 @@ describe("parseSmsWithLocalParser", () => {
     expect(result.transactions[0]?.date).toEqual(new Date(2026, 3, 8, 14, 23));
   });
 
+  it("keeps broad bank purchases without account evidence in review", () => {
+    const result = parseSmsWithLocalParser(
+      request([
+        candidate("Purchase EGP 100.00 at TEST MART on 08/04 14:23", {
+          sender: "QNB",
+        }),
+      ])
+    );
+
+    expect(result.transactions[0]).toMatchObject({
+      amount: 100,
+      counterparty: "TEST MART",
+      reviewStatus: "needs_review",
+      reviewReasons: ["account_needed"],
+      patternId: "egypt-bank-card-purchase",
+    });
+  });
+
   it("keeps the live fixture merchant separate from card hints", () => {
     const result = parseSmsWithLocalParser(
       request([

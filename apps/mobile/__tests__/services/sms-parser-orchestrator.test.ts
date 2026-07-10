@@ -304,6 +304,28 @@ describe("sms-parser-orchestrator", () => {
     });
   });
 
+  it("marks local-parser configuration failures as non-retryable", async () => {
+    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "local";
+
+    const result = await parseSmsWithOrchestrator([candidate()], {
+      ...context,
+      categories: [],
+    });
+
+    expect(result).toMatchObject({
+      transactions: [],
+      hasError: true,
+      isRetryable: false,
+    });
+    expect(result.diagnostics).toMatchObject({
+      mode: "local-primary",
+      attemptedAi: false,
+      attemptedLocal: true,
+      candidateCount: 1,
+      resultCount: 0,
+    });
+  });
+
   it("blocks local-parser mode when AI transaction suggestions are disabled", async () => {
     process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "local";
     mockGetAiProcessingConsentStatus.mockResolvedValueOnce({

@@ -135,6 +135,7 @@ function matchBankPurchase(
         type: "EXPENSE",
         counterparty: merchant,
         categorySystemName: "shopping",
+        reviewReasons: extractCardLast4(body) ? [] : ["account_needed"],
       })
     : null;
 }

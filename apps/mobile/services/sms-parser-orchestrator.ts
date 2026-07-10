@@ -145,7 +145,7 @@ function createLocalResult(
   return {
     transactions: local.transactions,
     hasError: local.hasError,
-    isRetryable: local.hasError ? true : undefined,
+    isRetryable: local.hasError ? false : undefined,
     diagnostics: createDiagnostics({
       mode: "local-primary",
       attemptedAi: false,
