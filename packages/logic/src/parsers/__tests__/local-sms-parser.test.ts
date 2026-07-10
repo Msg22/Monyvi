@@ -185,6 +185,24 @@ describe("parseSmsWithLocalParser", () => {
     });
   });
 
+  it("keeps wallet templates without account-specific evidence in review", () => {
+    const result = parseSmsWithLocalParser(
+      request([
+        candidate(
+          "VF-CASH: You received EGP 1475.00 from 01000000200 to your wallet. Balance EGP 900.00",
+          { sender: "VodafoneCash" }
+        ),
+      ])
+    );
+
+    expect(result.transactions[0]).toMatchObject({
+      amount: 1475,
+      reviewStatus: "needs_review",
+      reviewReasons: ["account_needed"],
+      patternId: "egypt-wallet-transfer-in",
+    });
+  });
+
   it("keeps the live fixture merchant separate from card hints", () => {
     const result = parseSmsWithLocalParser(
       request([
@@ -343,6 +361,20 @@ describe("parseSmsWithLocalParser", () => {
       request([
         candidate(
           "Purchase EGP 63.21 at BACKGROUND LIVE SMS TEST using card ending 1234",
+          { sender: "PROMO" }
+        ),
+      ])
+    );
+
+    expect(result.transactions).toEqual([]);
+    expect(result.unsupportedCount).toBe(1);
+  });
+
+  it("does not parse QNB ATM templates from unknown senders", () => {
+    const result = parseSmsWithLocalParser(
+      request([
+        candidate(
+          "QNB Alahli: ATM cash withdrawal EGP 2,000.00 from card **** 5566 on 08/04/2026 15:02. Avail bal EGP 8,000.00",
           { sender: "PROMO" }
         ),
       ])

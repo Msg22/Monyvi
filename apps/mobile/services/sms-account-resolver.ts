@@ -45,18 +45,20 @@ export interface ResolvedAccount {
  * This is a thin wrapper that:
  * 1. Gets the current user ID
  * 2. Fetches all accounts with bank details
- * 3. Extracts cardLast4 from the raw SMS body
+ * 3. Uses the parser's cardLast4 hint or extracts it from the raw SMS body
  * 4. Delegates to `matchAccountCore` for the 5-step resolution chain
  *
  * @param senderDisplayName - The SMS sender display name (e.g., "CIB", "NBE")
  * @param smsBody           - The raw SMS body text
  * @param currency          - Optional transaction currency for name+currency matching
+ * @param parsedCardLast4   - Optional card hint already extracted by the parser
  * @returns Resolved account with match details, or null if no match
  */
 export async function resolveAccountForSms(
   senderDisplayName: string,
   smsBody: string,
-  currency?: CurrencyType
+  currency?: CurrencyType,
+  parsedCardLast4?: string
 ): Promise<ResolvedAccount | null> {
   const userId = await getCurrentUserId();
   if (!userId) {
@@ -71,7 +73,7 @@ export async function resolveAccountForSms(
   );
 
   // Extract card last 4 from raw SMS body for Step 1 matching
-  const cardFromSms = extractCardLast4(smsBody);
+  const cardFromSms = parsedCardLast4 ?? extractCardLast4(smsBody);
 
   const input: MatchInput = {
     senderDisplayName,

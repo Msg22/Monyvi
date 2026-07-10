@@ -9,6 +9,9 @@ import type {
 } from "./local-sms-parser-types";
 
 const VERY_HIGH_CONFIDENCE = 0.96;
+const ACCOUNT_NEEDED_REVIEW_REASONS: readonly LocalReviewReason[] = [
+  "account_needed",
+];
 const CURRENCY_CODES = [
   "EGP",
   "USD",
@@ -203,6 +206,7 @@ function matchWalletTransfer(
         type,
         counterparty: phone,
         categorySystemName: isIncoming ? "salary" : "other",
+        reviewReasons: ACCOUNT_NEEDED_REVIEW_REASONS,
       })
     : null;
 }
@@ -223,6 +227,7 @@ function matchWalletCash(
         type,
         counterparty: `${agent} agent`,
         categorySystemName: "other",
+        reviewReasons: ACCOUNT_NEEDED_REVIEW_REASONS,
       })
     : null;
 }
@@ -241,6 +246,7 @@ function matchWalletBill(
         type: "EXPENSE",
         counterparty: biller,
         categorySystemName: "other",
+        reviewReasons: ACCOUNT_NEEDED_REVIEW_REASONS,
       })
     : null;
 }
@@ -260,6 +266,7 @@ function matchWalletMerchant(
         type: "EXPENSE",
         counterparty: merchant,
         categorySystemName: "shopping",
+        reviewReasons: ACCOUNT_NEEDED_REVIEW_REASONS,
       })
     : null;
 }
@@ -402,12 +409,12 @@ export const LOCAL_SMS_BROAD_DEV_TEST_PATTERNS: readonly LocalSmsPattern[] = [
       counterparty: "01000000200",
       categorySystemName: "salary",
       confidence: VERY_HIGH_CONFIDENCE,
-      reviewStatus: "auto_selectable",
-      reviewReasons: [],
+      reviewStatus: "needs_review",
+      reviewReasons: ACCOUNT_NEEDED_REVIEW_REASONS,
     },
     confidence: VERY_HIGH_CONFIDENCE,
-    reviewExpectation: "auto_selectable",
-    reviewReasons: [],
+    reviewExpectation: "needs_review",
+    reviewReasons: ACCOUNT_NEEDED_REVIEW_REASONS,
     edgeCases: ["known wallet sender required"],
     match: (input) => matchWalletTransfer(input, "INCOME"),
   }),
@@ -426,12 +433,12 @@ export const LOCAL_SMS_BROAD_DEV_TEST_PATTERNS: readonly LocalSmsPattern[] = [
       counterparty: "01000000201",
       categorySystemName: "other",
       confidence: VERY_HIGH_CONFIDENCE,
-      reviewStatus: "auto_selectable",
-      reviewReasons: [],
+      reviewStatus: "needs_review",
+      reviewReasons: ACCOUNT_NEEDED_REVIEW_REASONS,
     },
     confidence: VERY_HIGH_CONFIDENCE,
-    reviewExpectation: "auto_selectable",
-    reviewReasons: [],
+    reviewExpectation: "needs_review",
+    reviewReasons: ACCOUNT_NEEDED_REVIEW_REASONS,
     edgeCases: ["known wallet sender required"],
     match: (input) => matchWalletTransfer(input, "EXPENSE"),
   }),
@@ -450,12 +457,12 @@ export const LOCAL_SMS_BROAD_DEV_TEST_PATTERNS: readonly LocalSmsPattern[] = [
       counterparty: "Vodafone Cash agent",
       categorySystemName: "other",
       confidence: VERY_HIGH_CONFIDENCE,
-      reviewStatus: "auto_selectable",
-      reviewReasons: [],
+      reviewStatus: "needs_review",
+      reviewReasons: ACCOUNT_NEEDED_REVIEW_REASONS,
     },
     confidence: VERY_HIGH_CONFIDENCE,
-    reviewExpectation: "auto_selectable",
-    reviewReasons: [],
+    reviewExpectation: "needs_review",
+    reviewReasons: ACCOUNT_NEEDED_REVIEW_REASONS,
     edgeCases: ["cash in should not parse the balance as amount"],
     match: (input) => matchWalletCash(input, "INCOME"),
   }),
@@ -474,12 +481,12 @@ export const LOCAL_SMS_BROAD_DEV_TEST_PATTERNS: readonly LocalSmsPattern[] = [
       counterparty: "Vodafone Cash agent",
       categorySystemName: "other",
       confidence: VERY_HIGH_CONFIDENCE,
-      reviewStatus: "auto_selectable",
-      reviewReasons: [],
+      reviewStatus: "needs_review",
+      reviewReasons: ACCOUNT_NEEDED_REVIEW_REASONS,
     },
     confidence: VERY_HIGH_CONFIDENCE,
-    reviewExpectation: "auto_selectable",
-    reviewReasons: [],
+    reviewExpectation: "needs_review",
+    reviewReasons: ACCOUNT_NEEDED_REVIEW_REASONS,
     edgeCases: ["cash out should not parse the balance as amount"],
     match: (input) => matchWalletCash(input, "EXPENSE"),
   }),
@@ -498,12 +505,12 @@ export const LOCAL_SMS_BROAD_DEV_TEST_PATTERNS: readonly LocalSmsPattern[] = [
       counterparty: "TEST UTILITY",
       categorySystemName: "other",
       confidence: VERY_HIGH_CONFIDENCE,
-      reviewStatus: "auto_selectable",
-      reviewReasons: [],
+      reviewStatus: "needs_review",
+      reviewReasons: ACCOUNT_NEEDED_REVIEW_REASONS,
     },
     confidence: VERY_HIGH_CONFIDENCE,
-    reviewExpectation: "auto_selectable",
-    reviewReasons: [],
+    reviewExpectation: "needs_review",
+    reviewReasons: ACCOUNT_NEEDED_REVIEW_REASONS,
     edgeCases: ["bill payment should keep biller as counterparty"],
     match: matchWalletBill,
   }),
@@ -522,12 +529,12 @@ export const LOCAL_SMS_BROAD_DEV_TEST_PATTERNS: readonly LocalSmsPattern[] = [
       counterparty: "Vodafone Cash TEST MART 200",
       categorySystemName: "shopping",
       confidence: VERY_HIGH_CONFIDENCE,
-      reviewStatus: "auto_selectable",
-      reviewReasons: [],
+      reviewStatus: "needs_review",
+      reviewReasons: ACCOUNT_NEEDED_REVIEW_REASONS,
     },
     confidence: VERY_HIGH_CONFIDENCE,
-    reviewExpectation: "auto_selectable",
-    reviewReasons: [],
+    reviewExpectation: "needs_review",
+    reviewReasons: ACCOUNT_NEEDED_REVIEW_REASONS,
     edgeCases: ["merchant payment should keep merchant as counterparty"],
     match: matchWalletMerchant,
   }),

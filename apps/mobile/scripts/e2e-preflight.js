@@ -5,7 +5,7 @@ const { delimiter, join } = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 const appId = process.env.E2E_APP_ID || "com.monyvi.app";
-const deviceId = process.env.ANDROID_SERIAL || "emulator-5554";
+const deviceId = resolveAndroidDeviceId(process.env);
 const { hostMetroUrl, metroUrl } = resolveMetroUrls(process.env);
 const isReleaseBuild = process.env.E2E_RELEASE_BUILD === "1";
 const preflightLaunchAttempts = parsePositiveInt(
@@ -150,8 +150,16 @@ function resolveMaestroBin() {
   return findOnPath("maestro");
 }
 
+function getConfiguredAndroidDeviceId(env = process.env) {
+  return env.MAESTRO_DEVICE_ID || env.DEVICE || env.ANDROID_SERIAL || null;
+}
+
+function resolveAndroidDeviceId(env = process.env) {
+  return getConfiguredAndroidDeviceId(env) || "emulator-5554";
+}
+
 function getMaestroDeviceArgs(env = process.env) {
-  const device = env.MAESTRO_DEVICE_ID || env.DEVICE || env.ANDROID_SERIAL;
+  const device = getConfiguredAndroidDeviceId(env);
   return device ? ["--device", device] : [];
 }
 
@@ -808,6 +816,7 @@ module.exports = {
   metroUrl,
   isRetryableMaestroTransportFailure,
   reconnectAndroidDevice,
+  resolveAndroidDeviceId,
   resolveMetroUrls,
   resolveMaestroBin,
   run,

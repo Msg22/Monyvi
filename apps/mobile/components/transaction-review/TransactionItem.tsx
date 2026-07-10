@@ -237,7 +237,10 @@ function TransactionItemInner({
             </View>
 
             {accountName && (
-              <View className="bg-blue-100 dark:bg-blue-900/40 px-2.5 py-1 rounded-lg">
+              <View
+                testID="transaction-account-match"
+                className="bg-blue-100 dark:bg-blue-900/40 px-2.5 py-1 rounded-lg"
+              >
                 <Text className="text-xs text-blue-600 dark:text-blue-300">
                   {accountName}
                 </Text>

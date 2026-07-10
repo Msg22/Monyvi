@@ -27,7 +27,8 @@ appId: com.monyvi.app
     timeout: 30000
 
 - extendedWaitUntil:
-    visible: "QNB Savings Account|NBE Salary Account|Vodafone Cash Wallet"
+    visible:
+      id: transaction-account-match
     timeout: 30000
 
 - assertVisible: "Save [0-9]+ Transactions"

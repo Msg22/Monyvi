@@ -10,6 +10,9 @@ interface E2ePreflightModule {
   getMaestroDeviceArgs(
     env?: Readonly<Record<string, string | undefined>>
   ): readonly string[];
+  resolveAndroidDeviceId(
+    env?: Readonly<Record<string, string | undefined>>
+  ): string;
   isAppReady(uiXml: string): boolean;
   isNativeRootMounted(uiXml: string): boolean;
   isMissingDeviceSqliteError(output: string): boolean;
@@ -92,6 +95,24 @@ describe("e2e-preflight", () => {
       })
     ).toEqual(["--device", "adb-device"]);
     expect(preflight.getMaestroDeviceArgs({})).toEqual([]);
+  });
+
+  it("uses the same environment precedence for adb and Maestro", () => {
+    const env = {
+      ANDROID_SERIAL: "adb-device",
+      DEVICE: "device-env",
+      MAESTRO_DEVICE_ID: "maestro-device",
+    };
+
+    expect(preflight.resolveAndroidDeviceId(env)).toBe("maestro-device");
+    expect(preflight.getMaestroDeviceArgs(env)).toEqual([
+      "--device",
+      "maestro-device",
+    ]);
+    expect(
+      preflight.resolveAndroidDeviceId({ DEVICE: "physical-device" })
+    ).toBe("physical-device");
+    expect(preflight.resolveAndroidDeviceId({})).toBe("emulator-5554");
   });
 
   it("builds AsyncStorage SQL that skips pitch screens after pm clear", () => {

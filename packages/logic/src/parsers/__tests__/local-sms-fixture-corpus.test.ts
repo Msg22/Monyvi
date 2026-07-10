@@ -58,6 +58,20 @@ describe("local SMS fixture corpus", () => {
     }
   });
 
+  it("keeps wallet fixtures without account identifiers in review", () => {
+    const walletFixtures = LOCAL_SMS_FIXTURE_CORPUS.filter((fixture) =>
+      fixture.scenario.startsWith("wallet_")
+    );
+
+    expect(walletFixtures.length).toBeGreaterThan(0);
+    for (const fixture of walletFixtures) {
+      expect(fixture.expectedOutcome).toMatchObject({
+        reviewStatus: "needs_review",
+        reviewReasons: ["account_needed"],
+      });
+    }
+  });
+
   it("parses financial corpus fixtures through declared local patterns", () => {
     const financialFixtures = LOCAL_SMS_FIXTURE_CORPUS.filter(
       (fixture) => fixture.isFinancialTransaction

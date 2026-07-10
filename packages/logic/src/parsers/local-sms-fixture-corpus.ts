@@ -203,6 +203,7 @@ function expectedOutcomeOverridesFor(
 ): Partial<LocalSmsFixtureExpectedOutcome> {
   const isTransfer =
     scenario === "bank_transfer_in" || scenario === "bank_transfer_out";
+  const isWalletScenario = scenario.startsWith("wallet_");
   const usesOtherCategory =
     scenario === "bank_atm_withdrawal" ||
     scenario === "bank_transfer_out" ||
@@ -214,15 +215,17 @@ function expectedOutcomeOverridesFor(
   return {
     categorySystemName: usesOtherCategory ? "other" : undefined,
     reviewStatus:
-      scenario === "bank_atm_withdrawal" || isTransfer
+      scenario === "bank_atm_withdrawal" || isTransfer || isWalletScenario
         ? "needs_review"
         : undefined,
     reviewReasons:
       scenario === "bank_atm_withdrawal"
         ? ["cash_transfer_review"]
-        : isTransfer
-          ? ["low_confidence"]
-          : undefined,
+        : isWalletScenario
+          ? ["account_needed"]
+          : isTransfer
+            ? ["low_confidence"]
+            : undefined,
     confidence: isTransfer ? 0.94 : undefined,
   };
 }

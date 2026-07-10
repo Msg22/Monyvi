@@ -325,7 +325,7 @@ export const LOCAL_SMS_PATTERNS: readonly LocalSmsPattern[] = [
     matchRules: {
       description: "QNB ATM withdrawal confirmation",
       match: (input) =>
-        /^QNB$/i.test(input.sender) || /^QNB/i.test(input.body)
+        isKnownFinancialSender(input.sender)?.id === "qnb-egypt"
           ? matchAtmWithdrawal(input)
           : null,
     },
