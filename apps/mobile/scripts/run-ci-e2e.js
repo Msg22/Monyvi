@@ -8,6 +8,7 @@ const {
   stabilizeAndroidDevice,
 } = require("./e2e-preflight");
 const { getE2eSeedConfig, seedE2eData } = require("./e2e-seed");
+const { logE2eDuration } = require("./e2e-timing");
 
 const mobileRoot = join(__dirname, "..");
 const maxCapturedOutputLength = 256 * 1024;
@@ -234,9 +235,11 @@ function reconnectAdb(attempt, maxAttempts) {
 
 function runNodeScriptOnce(script, args, options = {}) {
   return new Promise((resolve) => {
+    const startedAt = Date.now();
+    const childLabel = `${script} ${args.join(" ")}`.trim();
     const child = spawn(process.execPath, [script, ...args], {
       cwd: mobileRoot,
-      env: process.env,
+      env: { ...process.env, ...(options.env ?? {}) },
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -274,6 +277,7 @@ function runNodeScriptOnce(script, args, options = {}) {
 
     child.on("close", (code) => {
       clearTimeout(timeout);
+      logE2eDuration(childLabel, startedAt);
       resolve({ output, status: didTimeout ? 124 : (code ?? 1) });
     });
   });
@@ -319,6 +323,7 @@ async function runNodeScript(script, args, options = {}) {
 async function maybeSeedE2eData() {
   if (process.env.E2E_SKIP_SEED === "1") return;
 
+  const startedAt = Date.now();
   const config = getE2eSeedConfig();
   const client = createClient(config.supabaseUrl, config.serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -328,6 +333,7 @@ async function maybeSeedE2eData() {
   console.log(
     `Seeded E2E data for ${config.email} (${result.userId}) on ${config.mode} Supabase`
   );
+  logE2eDuration("seed E2E data", startedAt);
 }
 
 async function prepareCleanMaestroFlowRetry() {
@@ -377,7 +383,10 @@ async function maybeRunSmsSyncJourneys() {
 
 function getSmsSyncJourneyOptions() {
   return {
-    retryOnDeviceFailure: true,
+    env: {
+      E2E_SKIP_AUTH_BOOTSTRAP: "1",
+    },
+    retryOnDeviceFailure: false,
   };
 }
 

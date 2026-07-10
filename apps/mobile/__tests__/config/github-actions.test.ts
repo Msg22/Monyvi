@@ -29,4 +29,44 @@ describe("GitHub Actions Android E2E workflow", () => {
 
     expect(emulatorRunnerBlock).toContain("disk-size: 4096M");
   });
+
+  it("cancels superseded runs and executes selected E2E suites in parallel", () => {
+    const workflow = readCiWorkflow();
+
+    expect(workflow).toContain("cancel-in-progress: true");
+    expect(workflow).toContain(
+      "matrix: ${{ fromJSON(needs.e2e-scope.outputs.matrix) }}"
+    );
+    expect(workflow).toContain("E2E_CI_SUITES: ${{ matrix.suite }}");
+    expect(workflow).toContain("needs: [e2e-scope, quality, android-build]");
+    expect(workflow).not.toContain(
+      "android-build:\n    name: Android Build Verification\n    runs-on: ubuntu-latest\n    timeout-minutes: 60\n    needs: quality"
+    );
+  });
+
+  it("caches Gradle and the Android emulator while failing E2E once", () => {
+    const workflow = readCiWorkflow();
+
+    expect(workflow).toContain("uses: gradle/actions/setup-gradle@v4");
+    expect(workflow).toContain("id: avd-cache");
+    expect(workflow).toContain("force-avd-creation: false");
+    expect(workflow).toContain("-no-snapshot-save");
+    expect(workflow).toContain('E2E_DEVICE_OFFLINE_RETRY_COUNT: "1"');
+    expect(workflow).toContain('E2E_SMS_SYNC_FLOW_ATTEMPT_COUNT: "1"');
+    expect(workflow).toContain("android-e2e-logs-${{ matrix.suite }}");
+  });
+
+  it("reuses the dev-client APK when native build inputs are unchanged", () => {
+    const workflow = readCiWorkflow();
+
+    expect(workflow).toContain("id: apk-cache");
+    expect(workflow).toContain("monyvi-debug-apk-v1-${{ runner.os }}-${{");
+    expect(workflow).toContain("hashFiles('package-lock.json'");
+    expect(workflow).toContain("'apps/mobile/app.json'");
+    expect(workflow).toContain("'apps/mobile/plugins/**'");
+    expect(workflow).toContain("'apps/mobile/assets/**'");
+    expect(workflow).toContain(
+      "if: steps.apk-cache.outputs.cache-hit != 'true'"
+    );
+  });
 });

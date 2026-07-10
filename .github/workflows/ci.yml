@@ -6,7 +6,29 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  e2e-scope:
+    name: Resolve Android E2E Scope
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.resolve.outputs.should_run }}
+      matrix: ${{ steps.resolve.outputs.matrix }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve Android E2E scope
+        id: resolve
+        env:
+          E2E_PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: node apps/mobile/scripts/resolve-ci-e2e-scope.js
+
   quality:
     name: Code Quality & Tests
     runs-on: ubuntu-latest
@@ -54,34 +76,56 @@ jobs:
     name: Android Build Verification
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    needs: quality
     env:
       SENTRYCLI_SKIP_DOWNLOAD: "1"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # The dev client loads JavaScript from Metro, so only native inputs key this APK.
+      - name: Cache Android debug APK
+        id: apk-cache
+        uses: actions/cache@v4
+        with:
+          path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          key:
+            monyvi-debug-apk-v1-${{ runner.os }}-${{
+            hashFiles('package-lock.json', 'apps/mobile/package.json',
+            'apps/mobile/app.json', 'apps/mobile/plugins/**',
+            'apps/mobile/assets/**', 'patches/**', 'apps/mobile/android/**') }}
+
       - name: Setup Node.js
+        if: steps.apk-cache.outputs.cache-hit != 'true'
         uses: actions/setup-node@v4
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
 
       - name: Setup Java
+        if: steps.apk-cache.outputs.cache-hit != 'true'
         uses: actions/setup-java@v4
         with:
           distribution: "zulu"
           java-version: "17"
 
+      - name: Setup Gradle cache
+        if: steps.apk-cache.outputs.cache-hit != 'true'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
       - name: Install dependencies
+        if: steps.apk-cache.outputs.cache-hit != 'true'
         run: npm ci
         timeout-minutes: 10
 
       - name: Prebuild Expo Android
+        if: steps.apk-cache.outputs.cache-hit != 'true'
         working-directory: apps/mobile
         run: npx expo prebuild --platform android
 
       - name: Configure Gradle memory
+        if: steps.apk-cache.outputs.cache-hit != 'true'
         working-directory: apps/mobile/android
         run: |
           {
@@ -91,6 +135,7 @@ jobs:
           } >> gradle.properties
 
       - name: Build Debug APK
+        if: steps.apk-cache.outputs.cache-hit != 'true'
         working-directory: apps/mobile/android
         run:
           ./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --no-daemon
@@ -103,10 +148,14 @@ jobs:
           retention-days: 7
 
   android-e2e:
-    name: Android E2E Tests
+    name: Android E2E Tests (${{ matrix.suite }})
     runs-on: ubuntu-latest
     timeout-minutes: 180
-    needs: android-build
+    needs: [e2e-scope, quality, android-build]
+    if: needs.e2e-scope.outputs.should_run == 'true'
+    strategy:
+      fail-fast: true
+      matrix: ${{ fromJSON(needs.e2e-scope.outputs.matrix) }}
     env:
       CI: "true"
       SENTRYCLI_SKIP_DOWNLOAD: "1"
@@ -117,6 +166,9 @@ jobs:
       EXPO_PUBLIC_AI_SMS_PARSER_MODE: fixture
       E2E_PREFLIGHT_ATTEMPT_TIMEOUT_MS: 600000
       E2E_LIVE_SMS_TIMEOUT_MS: 5400000
+      E2E_CI_SUITES: ${{ matrix.suite }}
+      E2E_DEVICE_OFFLINE_RETRY_COUNT: "1"
+      E2E_SMS_SYNC_FLOW_ATTEMPT_COUNT: "1"
       ANDROID_SERIAL: emulator-5554
     steps:
       - name: Checkout code
@@ -130,35 +182,25 @@ jobs:
           node-version-file: ".nvmrc"
           cache: "npm"
 
-      - name: Resolve Android E2E scope
-        id: e2e-scope
-        env:
-          E2E_PUSH_BEFORE_SHA: ${{ github.event.before }}
-        run: node apps/mobile/scripts/resolve-ci-e2e-scope.js
-
       - name: Setup Java
-        if: steps.e2e-scope.outputs.should_run == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: "zulu"
           java-version: "17"
 
       - name: Install dependencies
-        if: steps.e2e-scope.outputs.should_run == 'true'
         run: npm ci
         timeout-minutes: 30
 
       - name: Start local Supabase
-        if: steps.e2e-scope.outputs.should_run == 'true'
         run: npm run supabase:start:local
         timeout-minutes: 10
 
       - name: Prepare local E2E environment
-        if: steps.e2e-scope.outputs.should_run == 'true'
         run: |
           npx supabase status -o env | grep -E '^(ANON_KEY|SERVICE_ROLE_KEY)=' > supabase.env
           . ./supabase.env
-          MAESTRO_E2E_EMAIL="e2e-${GITHUB_RUN_ID}@monyvi.test"
+          MAESTRO_E2E_EMAIL="e2e-${GITHUB_RUN_ID}-${{ matrix.suite }}@monyvi.test"
           MAESTRO_E2E_PASSWORD="$(node -e "console.log(require('node:crypto').randomBytes(24).toString('base64url'))")"
           EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$ANON_KEY"
           SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
@@ -180,40 +222,38 @@ jobs:
           NODE
 
       - name: Download Android debug APK
-        if: steps.e2e-scope.outputs.should_run == 'true'
         uses: actions/download-artifact@v4
         with:
           name: monyvi-android-debug
           path: monyvi-android-debug
 
       - name: Install Maestro CLI
-        if: steps.e2e-scope.outputs.should_run == 'true'
         run: |
           curl -fsSL "https://get.maestro.mobile.dev" | bash
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
       - name: Enable KVM
-        if: steps.e2e-scope.outputs.should_run == 'true'
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
       - name: Free Android E2E disk space
-        if: steps.e2e-scope.outputs.should_run == 'true'
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/.ghcup /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h
 
-      - name: Start Metro
-        if: steps.e2e-scope.outputs.should_run == 'true'
-        working-directory: apps/mobile
-        run: |
-          npx expo start --clear --dev-client --port 8081 > ../../metro.log 2>&1 &
-          echo $! > ../../metro.pid
+      - name: Cache Android emulator
+        id: avd-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ runner.os }}-api35-google-apis-x86-64-pixel-7-v1
 
-      - name: Run Maestro E2E on Android emulator
-        if: steps.e2e-scope.outputs.should_run == 'true'
+      - name: Create cached Android emulator
+        if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -221,21 +261,46 @@ jobs:
           arch: x86_64
           profile: pixel_7
           disk-size: 4096M
+          force-avd-creation: false
+          emulator-options:
+            -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+            -camera-back none
+          disable-animations: false
+          script: echo "Generated clean Android emulator snapshot."
+
+      - name: Start Metro
+        working-directory: apps/mobile
+        run: |
+          npx expo start --clear --dev-client --port 8081 > ../../metro.log 2>&1 &
+          echo $! > ../../metro.pid
+
+      - name: Run Maestro E2E on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disk-size: 4096M
+          force-avd-creation: false
+          emulator-options:
+            -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio
+            -no-boot-anim -camera-back none
           disable-animations: true
           script: bash apps/mobile/scripts/run-android-e2e-ci.sh
 
       - name: Stop Metro
-        if: always() && steps.e2e-scope.outputs.should_run == 'true'
+        if: always()
         run: |
           if [ -f metro.pid ]; then
             kill "$(cat metro.pid)" || true
           fi
 
       - name: Upload E2E logs
-        if: always() && steps.e2e-scope.outputs.should_run == 'true'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-e2e-logs
+          name: android-e2e-logs-${{ matrix.suite }}
           path: |
             metro.log
             android-e2e-output.log

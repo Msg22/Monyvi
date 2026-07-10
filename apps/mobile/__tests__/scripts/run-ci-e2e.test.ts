@@ -29,6 +29,7 @@ interface RunCiE2eModule {
     readonly retryOnDeviceFailure: boolean;
   };
   getSmsSyncJourneyOptions(): {
+    readonly env: Readonly<Record<string, string>>;
     readonly retryOnDeviceFailure: boolean;
   };
   isDeviceOfflineFailure(output: string): boolean;
@@ -168,9 +169,12 @@ describe("run-ci-e2e helpers", () => {
     ).toBe(false);
   });
 
-  it("retries aggregate SMS sync journeys when the emulator transport drops", () => {
+  it("reuses the authenticated session for aggregate SMS sync journeys", () => {
     expect(runCiE2e.getSmsSyncJourneyOptions()).toEqual({
-      retryOnDeviceFailure: true,
+      retryOnDeviceFailure: false,
+      env: {
+        E2E_SKIP_AUTH_BOOTSTRAP: "1",
+      },
     });
   });
 

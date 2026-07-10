@@ -19,10 +19,12 @@ const {
 } = require("./e2e-preflight");
 const { applyE2eAuthDeepLink } = require("./e2e-auth-deeplink");
 const { getE2eSeedConfig, seedE2eData } = require("./e2e-seed");
+const { logE2eDuration } = require("./e2e-timing");
 
 const mobileRoot = join(__dirname, "..");
 const flowDir = join("e2e", "maestro", "sms-sync");
 const defaultMaestroFlowTimeoutMs = 10 * 60 * 1000;
+const defaultSmsSyncFlowAttemptCount = 2;
 const uiAuthBootstrapFlow = "../helpers/ci-auth-bootstrap.yaml";
 const deeplinkAuthBootstrapFlow = "../helpers/ci-auth-deeplink-bootstrap.yaml";
 const retryableSmsSyncFlowSet = new Set([
@@ -80,14 +82,15 @@ async function runFlow(flow) {
     throw new Error("Maestro was not found. Install it or set MAESTRO_BIN.");
   }
 
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
+  const maxAttempts = getSmsSyncFlowAttemptCount();
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const result = runMaestroFlowOnce(maestroBin, flow);
     if (result.status === 0) {
       return;
     }
 
     if (
-      attempt === 1 &&
+      attempt < maxAttempts &&
       shouldRetrySmsSyncFlowAttempt(flow, result) &&
       shouldRetrySmsSyncFlowAfterTransportFailure(flow)
     ) {
@@ -148,7 +151,16 @@ function getMaestroFlowTimeoutMs(env = process.env) {
     : defaultMaestroFlowTimeoutMs;
 }
 
+function getSmsSyncFlowAttemptCount(env = process.env) {
+  const parsed = Number(env.E2E_SMS_SYNC_FLOW_ATTEMPT_COUNT);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return defaultSmsSyncFlowAttemptCount;
+  }
+  return Math.min(parsed, defaultSmsSyncFlowAttemptCount);
+}
+
 function runMaestroFlowOnce(maestroBin, flow) {
+  const startedAt = Date.now();
   const result = spawnSync(
     maestroBin,
     [...getMaestroDeviceArgs(), "test", join(flowDir, flow)],
@@ -171,6 +183,7 @@ function runMaestroFlowOnce(maestroBin, flow) {
   if (stderr) {
     process.stderr.write(stderr);
   }
+  logE2eDuration(`SMS flow ${flow}`, startedAt);
 
   return {
     didTimeout:
@@ -529,6 +542,7 @@ module.exports = {
   buildSmsSyncProbeCleanupSql,
   getAuthBootstrapFlow,
   getMaestroFlowTimeoutMs,
+  getSmsSyncFlowAttemptCount,
   getActiveUserFilter,
   isFixtureParserE2eMode,
   isLocalParserE2eMode,
