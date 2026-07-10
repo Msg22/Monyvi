@@ -101,4 +101,40 @@ describe("transaction-review-selection", () => {
       reasons: ["cash_transfer", "low_confidence", "account_needed"],
     });
   });
+
+  it("preserves parser review reasons even when account matching succeeds", () => {
+    const transaction = createTransaction({
+      confidence: 0.99,
+      reviewStatus: "needs_review",
+      reviewReasons: ["account_needed"],
+    });
+    const accountMatch = {
+      accountId: "acc-1",
+      accountName: "Bank",
+      matchReason: "sms_sender",
+    };
+
+    expect(getTransactionReviewMeta(transaction, accountMatch)).toEqual({
+      isAutoSelectable: false,
+      reasons: ["account_needed"],
+    });
+  });
+
+  it("uses a generic review reason for parser signals without a UI mapping", () => {
+    const transaction = createTransaction({
+      confidence: 0.99,
+      reviewStatus: "needs_review",
+      reviewReasons: ["ambiguous_amount"],
+    });
+    const accountMatch = {
+      accountId: "acc-1",
+      accountName: "Bank",
+      matchReason: "sms_sender",
+    };
+
+    expect(getTransactionReviewMeta(transaction, accountMatch)).toEqual({
+      isAutoSelectable: false,
+      reasons: ["parser_review"],
+    });
+  });
 });

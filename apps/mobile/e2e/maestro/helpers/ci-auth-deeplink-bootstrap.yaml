@@ -7,6 +7,23 @@ appId: com.monyvi.app
 
 - extendedWaitUntil:
     visible:
+      "Signing in for E2E|E2E auth failed|Skip|Choose your primary
+      currency|Auto-Track Transactions|Transactions|Accounts|Open menu|Good
+      Morning|Good Afternoon|Good Evening|Welcome to Monyvi|Email address"
+    timeout: 60000
+
+- runFlow:
+    when:
+      visible: "Skip"
+    commands:
+      - tapOn: "Skip"
+      - waitForAnimationToEnd
+
+- assertNotVisible: "E2E auth failed"
+- assertNotVisible: "Welcome to Monyvi|Email address"
+
+- extendedWaitUntil:
+    visible:
       "Choose your primary currency|Auto-Track Transactions|Transactions|Accounts|Open menu|Good
       Morning|Good Afternoon|Good Evening"
     timeout: 180000

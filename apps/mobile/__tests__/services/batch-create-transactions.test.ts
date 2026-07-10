@@ -162,6 +162,35 @@ describe("batchCreateTransactions", () => {
     expect(account.balance).toBe(900);
   });
 
+  it("persists the SMS fingerprint without persisting the raw SMS body", async () => {
+    const account = createAccount("acc-1", 1000);
+    mockQueryOwned.mockReturnValue({
+      fetch: jest.fn<Promise<readonly MockAccount[]>, []>(() =>
+        Promise.resolve([account])
+      ),
+    });
+    const smsReviewTransaction = {
+      ...createReviewableTransaction({
+        deduplicationHash: "sms-hash-1",
+      }),
+      rawSmsBody: "Purchase of EGP 100.00 at Private Merchant",
+    };
+
+    const result = await batchCreateTransactions(
+      [smsReviewTransaction],
+      new Map([[0, "acc-1"]])
+    );
+
+    const persistedRecord = mockPrepareTransactionCreate.mock.results[0]
+      ?.value as Record<string, unknown> | undefined;
+
+    expect(result).toEqual({ savedCount: 1, failedCount: 0, errors: [] });
+    expect(persistedRecord).toMatchObject({
+      smsFingerprint: "sms-hash-1",
+    });
+    expect(persistedRecord).not.toHaveProperty("rawSmsBody");
+  });
+
   it("does not mark a fingerprint as seen until the SMS transaction is valid", async () => {
     const account = createAccount("acc-1", 1000);
     mockQueryOwned.mockReturnValue({

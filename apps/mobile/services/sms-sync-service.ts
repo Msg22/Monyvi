@@ -26,10 +26,10 @@ import { Q } from "@nozbe/watermelondb";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { InteractionManager } from "react-native";
 import {
-  parseSmsWithAi,
   type ParseSmsContext,
   type SmsCandidate,
 } from "./ai-sms-parser-service";
+import { parseSmsWithOrchestrator } from "./sms-parser-orchestrator";
 import { getCurrentUserDataScope } from "./user-data-access";
 import { readSmsInbox } from "./sms-reader-service";
 import { logger } from "@/utils/logger";
@@ -391,7 +391,7 @@ async function executeScanPipeline(
   // Track per-chunk durations for estimated time remaining calculation
   const chunkDurations: number[] = [];
 
-  const aiResult = await parseSmsWithAi(
+  const aiResult = await parseSmsWithOrchestrator(
     candidates,
     options.aiContext,
     (aiProgress) => {
@@ -428,6 +428,16 @@ async function executeScanPipeline(
     },
     abortSignal
   );
+
+  logger.info("smsSync.parserDiagnostics", {
+    mode: aiResult.diagnostics.mode,
+    attemptedAi: aiResult.diagnostics.attemptedAi,
+    attemptedLocal: aiResult.diagnostics.attemptedLocal,
+    candidateCount: aiResult.diagnostics.candidateCount,
+    resultCount: aiResult.diagnostics.resultCount,
+    matchedPatternIds: aiResult.diagnostics.matchedPatternIds,
+    runtimeScopeCounts: aiResult.diagnostics.runtimeScopeCounts,
+  });
 
   if (aiResult.hasError && aiResult.isRetryable === false) {
     throw new Error("SMS AI parsing failed");

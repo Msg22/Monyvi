@@ -108,6 +108,8 @@ function warnIfMissingWatchman(env = process.env) {
 
 function parseCliArgs(args) {
   let shouldUseWirelessDeviceTunnel = false;
+  let shouldUseLocalParser = false;
+  let shouldUseFixtureSmsInbox = false;
   let password = null;
   const expoArgs = [];
 
@@ -116,6 +118,17 @@ function parseCliArgs(args) {
 
     if (arg === "--wireless-device" || arg === "--physical-device") {
       shouldUseWirelessDeviceTunnel = true;
+      continue;
+    }
+
+    if (arg === "--local-parser") {
+      shouldUseLocalParser = true;
+      continue;
+    }
+
+    if (arg === "--fixture-sms") {
+      shouldUseLocalParser = true;
+      shouldUseFixtureSmsInbox = true;
       continue;
     }
 
@@ -137,7 +150,13 @@ function parseCliArgs(args) {
     expoArgs.push(arg);
   }
 
-  return { shouldUseWirelessDeviceTunnel, password, expoArgs };
+  return {
+    shouldUseWirelessDeviceTunnel,
+    shouldUseLocalParser,
+    shouldUseFixtureSmsInbox,
+    password,
+    expoArgs,
+  };
 }
 
 function parseSupabaseEnv(output) {
@@ -292,9 +311,27 @@ function resolveLocalSupabaseDeviceConfig(env = process.env) {
   };
 }
 
-function buildLocalSupabaseExpoEnv(anonKey, baseEnv = process.env) {
+function resolveAiSmsParserMode(baseEnv, options) {
+  if (options.shouldUseLocalParser) return "local";
+  return baseEnv.EXPO_PUBLIC_AI_SMS_PARSER_MODE === "local" ? "local" : "edge";
+}
+
+function resolveSmsInboxMode(baseEnv, options) {
+  if (options.shouldUseFixtureSmsInbox) return "fixture";
+  return baseEnv.EXPO_PUBLIC_SMS_INBOX_MODE === "fixture"
+    ? "fixture"
+    : "device";
+}
+
+function buildLocalSupabaseExpoEnv(
+  anonKey,
+  baseEnv = process.env,
+  options = {}
+) {
   const config = resolveLocalSupabaseDeviceConfig(baseEnv);
   const { EXPO_NO_METRO_WORKSPACE_ROOT, ...metroEnv } = baseEnv;
+  const parserMode = resolveAiSmsParserMode(baseEnv, options);
+  const inboxMode = resolveSmsInboxMode(baseEnv, options);
 
   return {
     ...metroEnv,
@@ -303,7 +340,8 @@ function buildLocalSupabaseExpoEnv(anonKey, baseEnv = process.env) {
     EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
       baseEnv.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? anonKey,
     EXPO_PUBLIC_MONYVI_TEST_MODE: "off",
-    EXPO_PUBLIC_AI_SMS_PARSER_MODE: "edge",
+    EXPO_PUBLIC_AI_SMS_PARSER_MODE: parserMode,
+    EXPO_PUBLIC_SMS_INBOX_MODE: inboxMode,
     EXPO_PUBLIC_SENTRY_DSN: baseEnv.EXPO_PUBLIC_SENTRY_DSN ?? "",
     EXPO_NO_TELEMETRY: "1",
   };
@@ -493,7 +531,7 @@ function startExpoProcess(env, expoArgs) {
   });
 }
 
-function startDefaultLocalSupabase(expoArgs) {
+function startDefaultLocalSupabase(expoArgs, options) {
   const { anonKey } = getLocalSupabaseEnv();
   const deviceConfig = resolveLocalSupabaseDeviceConfig();
 
@@ -501,12 +539,12 @@ function startDefaultLocalSupabase(expoArgs) {
     reverseLocalSupabasePort();
   }
 
-  const env = buildLocalSupabaseExpoEnv(anonKey);
+  const env = buildLocalSupabaseExpoEnv(anonKey, process.env, options);
   warnIfMissingWatchman(env);
   runExpoSync(env, expoArgs);
 }
 
-async function startWirelessDeviceLocalSupabase(password, expoArgs) {
+async function startWirelessDeviceLocalSupabase(password, expoArgs, options) {
   runRequiredCommand("Starting local Supabase", resolveNpmCommand(), [
     "run",
     "supabase:start:local",
@@ -574,10 +612,14 @@ async function startWirelessDeviceLocalSupabase(password, expoArgs) {
   }
 
   const { anonKey } = getLocalSupabaseEnv();
-  const env = buildLocalSupabaseExpoEnv(anonKey, {
-    ...process.env,
-    MONYVI_LOCAL_SUPABASE_DEVICE_URL: tunnelUrl,
-  });
+  const env = buildLocalSupabaseExpoEnv(
+    anonKey,
+    {
+      ...process.env,
+      MONYVI_LOCAL_SUPABASE_DEVICE_URL: tunnelUrl,
+    },
+    options
+  );
   warnIfMissingWatchman(env);
   const expo = startExpoProcess(env, expoArgs);
   expo.once("exit", (code) => {
@@ -587,16 +629,24 @@ async function startWirelessDeviceLocalSupabase(password, expoArgs) {
 }
 
 async function main() {
-  const { shouldUseWirelessDeviceTunnel, password, expoArgs } = parseCliArgs(
-    process.argv.slice(2)
-  );
+  const {
+    shouldUseWirelessDeviceTunnel,
+    shouldUseLocalParser,
+    shouldUseFixtureSmsInbox,
+    password,
+    expoArgs,
+  } = parseCliArgs(process.argv.slice(2));
+  const parserOptions = {
+    shouldUseLocalParser,
+    shouldUseFixtureSmsInbox,
+  };
 
   if (shouldUseWirelessDeviceTunnel) {
-    await startWirelessDeviceLocalSupabase(password, expoArgs);
+    await startWirelessDeviceLocalSupabase(password, expoArgs, parserOptions);
     return;
   }
 
-  startDefaultLocalSupabase(expoArgs);
+  startDefaultLocalSupabase(expoArgs, parserOptions);
 }
 
 if (require.main === module) {

@@ -80,6 +80,20 @@ export interface SmsMessage {
 /** Origin source of a parsed transaction. */
 export type TransactionSource = "SMS" | "VOICE" | "MANUAL";
 
+/** Parser-level review status used before the user saves a suggestion. */
+export type TransactionReviewStatus = "auto_selectable" | "needs_review";
+
+/** Stable parser reasons that explain why a suggestion needs human review. */
+export type TransactionReviewReason =
+  | "low_confidence"
+  | "account_needed"
+  | "category_needed"
+  | "cash_transfer_review"
+  | "unsupported_template"
+  | "ambiguous_amount"
+  | "partial_template"
+  | "non_transactional";
+
 /**
  * Source-agnostic parsed transaction ready for user review.
  *
@@ -108,6 +122,10 @@ export interface ReviewableTransaction {
   readonly accountId?: string;
   /** AI-extracted merchant name (may differ from counterparty) */
   readonly merchant?: Transaction["counterparty"];
+  /** Parser review status. Omitted for older parsers that only provide confidence. */
+  readonly reviewStatus?: TransactionReviewStatus;
+  /** Stable parser reasons that should keep a suggestion in the review path. */
+  readonly reviewReasons?: readonly TransactionReviewReason[];
 }
 
 /**

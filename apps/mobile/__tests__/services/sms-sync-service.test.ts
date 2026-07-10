@@ -7,7 +7,7 @@
  * Mock Strategy:
  *   - `sms-reader-service` is mocked to return controlled SMS messages
  *   - `@monyvi/logic` is partially mocked (isKnownFinancialSender + computeSmsFingerprint)
- *   - `ai-sms-parser-service` is mocked to return controlled AI parse results
+ *   - `sms-parser-orchestrator` is mocked to return controlled parse results
  *   - `@react-native-async-storage/async-storage` is mocked for scan guard
  *   - `InteractionManager` is mocked via react-native
  *   - `@monyvi/db` is mocked to provide loadExistingSmsFingerprints support
@@ -22,6 +22,7 @@ import type {
   AiParseResult,
   ParseSmsContext,
 } from "@/services/ai-sms-parser-service";
+import type { SmsParserOrchestratorResult } from "@/services/sms-parser-orchestrator";
 
 // ---------------------------------------------------------------------------
 // Mock: AsyncStorage (inline factory to avoid hoisting issues)
@@ -126,15 +127,37 @@ jest.mock("@nozbe/watermelondb", () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Mock: ai-sms-parser-service (parseSmsWithAi)
+// Mock: sms-parser-orchestrator (parseSmsWithOrchestrator)
 // ---------------------------------------------------------------------------
 
-const mockParseSmsWithAi = jest.fn<Promise<AiParseResult>, unknown[]>(() =>
-  Promise.resolve({ transactions: [] })
+const mockParseSmsWithOrchestrator = jest.fn<Promise<AiParseResult>, unknown[]>(
+  () => Promise.resolve({ transactions: [] })
 );
 
-jest.mock("@/services/ai-sms-parser-service", () => ({
-  parseSmsWithAi: (...args: unknown[]) => mockParseSmsWithAi(...args),
+function mockWithParserDiagnostics(
+  result: AiParseResult
+): SmsParserOrchestratorResult {
+  const resultWithDiagnostics = result as SmsParserOrchestratorResult;
+  return {
+    ...result,
+    transactions: result.transactions,
+    diagnostics: resultWithDiagnostics.diagnostics ?? {
+      mode: "ai-primary",
+      attemptedAi: true,
+      attemptedLocal: false,
+      candidateCount: 0,
+      resultCount: result.transactions.length,
+      matchedPatternIds: [],
+      runtimeScopeCounts: {},
+    },
+  };
+}
+
+jest.mock("@/services/sms-parser-orchestrator", () => ({
+  parseSmsWithOrchestrator: async (
+    ...args: unknown[]
+  ): Promise<SmsParserOrchestratorResult> =>
+    mockWithParserDiagnostics(await mockParseSmsWithOrchestrator(...args)),
 }));
 
 // ---------------------------------------------------------------------------
@@ -245,7 +268,7 @@ describe("sms-sync-service", () => {
         `hash-${input.sender}-${input.receivedAtMs}-${input.body.slice(0, 10)}`
       )
     );
-    mockParseSmsWithAi.mockResolvedValue({ transactions: [] });
+    mockParseSmsWithOrchestrator.mockResolvedValue({ transactions: [] });
   });
 
   // =========================================================================
@@ -288,7 +311,7 @@ describe("sms-sync-service", () => {
         smsFingerprint: "hash-vf",
         deduplicationHash: "hash-vf",
       });
-      mockParseSmsWithAi.mockResolvedValue({
+      mockParseSmsWithOrchestrator.mockResolvedValue({
         transactions: [parsed1, parsed2],
       });
 
@@ -297,6 +320,19 @@ describe("sms-sync-service", () => {
       expect(result.totalScanned).toBe(2);
       expect(result.totalFound).toBe(2);
       expect(result.transactions).toHaveLength(2);
+    });
+
+    it("should stop when local parser mode is blocked by AI transaction suggestions", async () => {
+      mockReadSmsInbox.mockResolvedValue([createSmsMessage()]);
+      mockParseSmsWithOrchestrator.mockResolvedValue({
+        transactions: [],
+        hasError: true,
+        isRetryable: false,
+      });
+
+      await expect(scanAndParseSms(defaultOptions())).rejects.toThrow(
+        "SMS AI parsing failed"
+      );
     });
 
     it("should skip SMS from non-financial senders", async () => {
@@ -316,7 +352,9 @@ describe("sms-sync-service", () => {
         .mockReturnValueOnce(false); // promo → filtered out
 
       const parsed = createParsedTransaction({ amount: 200 });
-      mockParseSmsWithAi.mockResolvedValue({ transactions: [parsed] });
+      mockParseSmsWithOrchestrator.mockResolvedValue({
+        transactions: [parsed],
+      });
 
       const result = await scanAndParseSms(defaultOptions());
 
@@ -339,14 +377,16 @@ describe("sms-sync-service", () => {
 
       // Only sms2 should reach AI (sms1 was deduped)
       const parsed = createParsedTransaction({ amount: 200 });
-      mockParseSmsWithAi.mockResolvedValue({ transactions: [parsed] });
+      mockParseSmsWithOrchestrator.mockResolvedValue({
+        transactions: [parsed],
+      });
 
       const result = await scanAndParseSms(
         defaultOptions({ existingFingerprints })
       );
 
       // Only 1 candidate should have been sent to AI
-      expect(mockParseSmsWithAi).toHaveBeenCalledTimes(1);
+      expect(mockParseSmsWithOrchestrator).toHaveBeenCalledTimes(1);
       expect(result.totalFound).toBe(1);
       expect(result.transactions).toHaveLength(1);
     });
@@ -379,7 +419,7 @@ describe("sms-sync-service", () => {
         receivedAtMs: 1778418000000,
       });
 
-      const candidates = mockParseSmsWithAi.mock.calls[0]?.[0] as
+      const candidates = mockParseSmsWithOrchestrator.mock.calls[0]?.[0] as
         | ReadonlyArray<{ readonly smsFingerprint: string }>
         | undefined;
 
@@ -404,7 +444,7 @@ describe("sms-sync-service", () => {
 
       await scanAndParseSms(defaultOptions());
 
-      const candidates = mockParseSmsWithAi.mock.calls[0]?.[0] as
+      const candidates = mockParseSmsWithOrchestrator.mock.calls[0]?.[0] as
         | ReadonlyArray<{ readonly smsFingerprint: string }>
         | undefined;
 
@@ -422,13 +462,11 @@ describe("sms-sync-service", () => {
       abortController.abort();
 
       await expect(
-        scanAndParseSms(
-          defaultOptions({ abortSignal: abortController.signal })
-        )
+        scanAndParseSms(defaultOptions({ abortSignal: abortController.signal }))
       ).rejects.toThrow("SMS scan aborted");
 
       expect(mockReadSmsInbox).not.toHaveBeenCalled();
-      expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+      expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
     });
 
     it("does not complete the scan when AI parsing returns a non-retryable error", async () => {
@@ -437,7 +475,7 @@ describe("sms-sync-service", () => {
         body: "Debit EGP 100 at Shop",
       });
       mockReadSmsInbox.mockResolvedValue([sms]);
-      mockParseSmsWithAi.mockResolvedValue({
+      mockParseSmsWithOrchestrator.mockResolvedValue({
         transactions: [],
         hasError: true,
         isRetryable: false,
@@ -469,7 +507,7 @@ describe("sms-sync-service", () => {
         smsFingerprint: "same-sms-hash",
         deduplicationHash: "same-sms-hash",
       });
-      mockParseSmsWithAi.mockResolvedValue({
+      mockParseSmsWithOrchestrator.mockResolvedValue({
         transactions: [parsed, parsed],
       });
 
@@ -500,7 +538,7 @@ describe("sms-sync-service", () => {
         smsFingerprint: "same-sms-hash",
         deduplicationHash: "same-sms-hash",
       });
-      mockParseSmsWithAi.mockResolvedValue({
+      mockParseSmsWithOrchestrator.mockResolvedValue({
         transactions: [purchase, fee],
       });
 
@@ -579,7 +617,9 @@ describe("sms-sync-service", () => {
       mockReadSmsInbox.mockResolvedValue([sms1, sms2]);
 
       const parsed = createParsedTransaction({ amount: 100 });
-      mockParseSmsWithAi.mockResolvedValue({ transactions: [parsed] });
+      mockParseSmsWithOrchestrator.mockResolvedValue({
+        transactions: [parsed],
+      });
 
       const onProgress = jest.fn();
       await scanAndParseSms(defaultOptions({ batchSize: 2 }), onProgress);
@@ -695,7 +735,9 @@ describe("sms-sync-service", () => {
     it("should return readonly transactions array", async () => {
       const parsed = createParsedTransaction();
       mockReadSmsInbox.mockResolvedValue([createSmsMessage()]);
-      mockParseSmsWithAi.mockResolvedValue({ transactions: [parsed] });
+      mockParseSmsWithOrchestrator.mockResolvedValue({
+        transactions: [parsed],
+      });
 
       const result = await scanAndParseSms(defaultOptions());
 

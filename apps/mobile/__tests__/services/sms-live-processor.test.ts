@@ -4,6 +4,7 @@ import type {
   ParseSmsContext,
   SmsCandidate,
 } from "@/services/ai-sms-parser-service";
+import type { SmsParserOrchestratorResult } from "@/services/sms-parser-orchestrator";
 
 const mockReconcileLiveDetectionPreference = jest.fn<Promise<boolean>, []>();
 const mockSetLiveDetectionEnabled = jest.fn<Promise<void>, [boolean]>();
@@ -14,7 +15,7 @@ const mockGetAiProcessingConsentStatus = jest.fn<
 >();
 const mockRevokeAiProcessingConsent = jest.fn<Promise<void>, []>();
 const mockHasExistingSmsFingerprint = jest.fn<Promise<boolean>, [string]>();
-const mockParseSmsWithAi = jest.fn<
+const mockParseSmsWithOrchestrator = jest.fn<
   Promise<AiParseResult>,
   [readonly SmsCandidate[], ParseSmsContext]
 >();
@@ -54,12 +55,35 @@ jest.mock("@/services/sms-dedup-service", () => ({
 }));
 
 jest.mock("@/services/ai-sms-parser-service", () => ({
-  parseSmsWithAi: (
-    ...args: [readonly SmsCandidate[], ParseSmsContext]
-  ): Promise<AiParseResult> => mockParseSmsWithAi(...args),
   isAiConsentRequiredError: (error: unknown): boolean =>
     error instanceof Error && error.name === "AiConsentRequiredError",
 }));
+
+jest.mock("@/services/sms-parser-orchestrator", () => ({
+  parseSmsWithOrchestrator: (
+    ...args: [readonly SmsCandidate[], ParseSmsContext]
+  ): Promise<SmsParserOrchestratorResult> =>
+    mockParseSmsWithOrchestrator(...args).then(mockWithParserDiagnostics),
+}));
+
+function mockWithParserDiagnostics(
+  result: AiParseResult
+): SmsParserOrchestratorResult {
+  const resultWithDiagnostics = result as SmsParserOrchestratorResult;
+  return {
+    ...result,
+    transactions: result.transactions,
+    diagnostics: resultWithDiagnostics.diagnostics ?? {
+      mode: "ai-primary",
+      attemptedAi: true,
+      attemptedLocal: false,
+      candidateCount: 1,
+      resultCount: result.transactions.length,
+      matchedPatternIds: [],
+      runtimeScopeCounts: {},
+    },
+  };
+}
 
 jest.mock("@monyvi/db", () => ({
   database: {
@@ -117,7 +141,7 @@ describe("sms-live-processor", () => {
     mockHasExistingSmsFingerprint.mockResolvedValue(false);
     mockComputeSmsFingerprint.mockResolvedValue("hash-live");
     mockIsLikelyFinancialSms.mockReturnValue(true);
-    mockParseSmsWithAi.mockResolvedValue({
+    mockParseSmsWithOrchestrator.mockResolvedValue({
       transactions: [createParsedTransaction()],
       hasError: false,
     });
@@ -141,7 +165,7 @@ describe("sms-live-processor", () => {
       body: "Purchase EGP 850 at Hyper Market using card ending 1234",
       receivedAtMs: 1778414400000,
     });
-    const parseCall = mockParseSmsWithAi.mock.calls[0];
+    const parseCall = mockParseSmsWithOrchestrator.mock.calls[0];
     expect(parseCall).toBeDefined();
 
     const [candidates, context] = parseCall;
@@ -167,7 +191,7 @@ describe("sms-live-processor", () => {
     });
 
     expect(result.status).toBe("duplicate");
-    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
 
   it("deduplicates concurrent events with the same SMS fingerprint before AI parsing", async () => {
@@ -206,11 +230,11 @@ describe("sms-live-processor", () => {
       "duplicate",
       "parsed",
     ]);
-    expect(mockParseSmsWithAi).toHaveBeenCalledTimes(1);
+    expect(mockParseSmsWithOrchestrator).toHaveBeenCalledTimes(1);
   });
 
   it("returns ai_failed when the AI parser reports a recoverable failure", async () => {
-    mockParseSmsWithAi.mockResolvedValue({
+    mockParseSmsWithOrchestrator.mockResolvedValue({
       transactions: [],
       hasError: true,
     });
@@ -228,7 +252,7 @@ describe("sms-live-processor", () => {
   it("disables live detection when the Edge parser rejects for missing AI consent", async () => {
     const consentError = new Error("AI processing consent required");
     consentError.name = "AiConsentRequiredError";
-    mockParseSmsWithAi.mockRejectedValueOnce(consentError);
+    mockParseSmsWithOrchestrator.mockRejectedValueOnce(consentError);
 
     const result = await processLiveSmsEvent({
       sender: "QNB",
@@ -247,7 +271,7 @@ describe("sms-live-processor", () => {
   it("returns disabled when consent-required cleanup fails", async () => {
     const consentError = new Error("AI processing consent required");
     consentError.name = "AiConsentRequiredError";
-    mockParseSmsWithAi.mockRejectedValueOnce(consentError);
+    mockParseSmsWithOrchestrator.mockRejectedValueOnce(consentError);
     mockSetLiveDetectionEnabled.mockRejectedValueOnce(
       new Error("settings write failed")
     );
@@ -279,7 +303,7 @@ describe("sms-live-processor", () => {
     });
 
     expect(result.status).toBe("infrastructure_error");
-    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
 
   it("does not parse when live detection is no longer enabled", async () => {
@@ -294,7 +318,7 @@ describe("sms-live-processor", () => {
 
     expect(result.status).toBe("disabled");
     expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
-    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
 
   it("ignores non-financial SMS only after live detection consent is valid", async () => {
@@ -312,7 +336,7 @@ describe("sms-live-processor", () => {
     expect(mockGetAiProcessingConsentStatus).toHaveBeenCalledTimes(1);
     expect(mockIsLikelyFinancialSms).toHaveBeenCalledWith("Dinner tonight?");
     expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
-    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
 
   it("disables stale live detection before filtering SMS bodies after consent revocation", async () => {
@@ -331,7 +355,7 @@ describe("sms-live-processor", () => {
     expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
     expect(mockIsLikelyFinancialSms).not.toHaveBeenCalled();
     expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
-    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
 
   it("does not parse and disables live detection when AI consent is revoked", async () => {
@@ -348,7 +372,7 @@ describe("sms-live-processor", () => {
     expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
     expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
     expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
-    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
 
   it("rechecks AI consent before parsing the SMS body", async () => {
@@ -368,7 +392,7 @@ describe("sms-live-processor", () => {
     expect(mockGetAiProcessingConsentStatus).toHaveBeenCalledTimes(2);
     expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
     expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
-    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
 
   it("does not return parsed live SMS when AI consent is revoked during parsing", async () => {
@@ -386,7 +410,7 @@ describe("sms-live-processor", () => {
 
     expect(result.status).toBe("disabled");
     expect(result.transactions).toEqual([]);
-    expect(mockParseSmsWithAi).toHaveBeenCalledTimes(1);
+    expect(mockParseSmsWithOrchestrator).toHaveBeenCalledTimes(1);
     expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
     expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
   });
@@ -405,6 +429,6 @@ describe("sms-live-processor", () => {
 
     expect(result.status).toBe("infrastructure_error");
     expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
-    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
 });

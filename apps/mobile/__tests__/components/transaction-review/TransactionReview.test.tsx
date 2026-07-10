@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react-native";
 import type { ReviewableTransaction } from "@monyvi/logic";
+import React from "react";
 import { TransactionReview } from "@/components/transaction-review/TransactionReview";
 import {
   type UseTransactionReviewStateResult,
@@ -34,16 +35,34 @@ jest.mock("@/components/transaction-review/ReviewActionBar", () => ({
   ReviewActionBar: (): null => null,
 }));
 
-jest.mock("@/components/transaction-review/TransactionItem", () => ({
-  TransactionItem: (): null => null,
-}));
-
 jest.mock(
   "@/components/transaction-review/edit-modal/TransactionEditModal",
   () => ({
     TransactionEditModal: (): null => null,
   })
 );
+
+jest.mock("@/components/transaction-review/get-expanded-content", () => ({
+  getExpandedContent: (): null => null,
+  OriginalContentBlock: (): null => null,
+}));
+
+jest.mock("@/components/transaction-review/TransactionItem", () => ({
+  TransactionItem: ({
+    transaction,
+  }: {
+    readonly transaction: ReviewableTransaction;
+  }): React.JSX.Element => {
+    const ReactActual = jest.requireActual<typeof import("react")>("react");
+    const ReactNative =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return ReactActual.createElement(
+      ReactNative.Text,
+      null,
+      transaction.counterparty
+    );
+  },
+}));
 
 jest.mock("react-i18next", () => ({
   useTranslation: (): {
@@ -84,11 +103,16 @@ const mockUseTransactionReviewState =
     typeof useTransactionReviewState
   >;
 
+interface ParserTaggedTransaction extends ReviewableTransaction {
+  readonly parserSource: string;
+}
+
 function createTransaction(): ReviewableTransaction {
   return {
     amount: 100,
     currency: "EGP",
     type: "EXPENSE",
+    counterparty: "Shop",
     date: new Date("2026-07-09T10:00:00.000Z"),
     categoryId: "cat-food",
     categoryDisplayName: "Food",
@@ -176,5 +200,37 @@ describe("TransactionReview", () => {
 
     expect(screen.getByText("Deselect shown")).toBeTruthy();
     expect(screen.queryByText("Deselect All")).toBeNull();
+  });
+
+  it("does not show parser-source implementation labels in regular UI", () => {
+    const parserTaggedTransaction: ParserTaggedTransaction = {
+      ...createTransaction(),
+      counterparty: "CARREFOUR CAIRO",
+      parserSource: "local parser",
+    };
+
+    renderReview({
+      effectiveTransactions: [parserTaggedTransaction],
+      filteredTransactions: [parserTaggedTransaction],
+      listItems: [
+        {
+          kind: "transaction",
+          key: "tx-0",
+          tx: parserTaggedTransaction,
+          originalIndex: 0,
+        },
+      ],
+    });
+
+    expect(screen.getByText("CARREFOUR CAIRO")).toBeTruthy();
+    expect(screen.queryByText(/local parser/i)).toBeNull();
+    expect(screen.queryByText(/AI parser/i)).toBeNull();
+    expect(screen.queryByText(/fixture parser/i)).toBeNull();
+  });
+
+  it("exposes a stable review-screen readiness signal for E2E", () => {
+    renderReview({});
+
+    expect(screen.getByTestId("transaction-review-screen")).toBeTruthy();
   });
 });

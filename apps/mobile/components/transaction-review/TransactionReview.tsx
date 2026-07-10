@@ -152,7 +152,7 @@ export function TransactionReview({
   const keyExtractor = useCallback((item: ReviewListItem) => item.key, []);
 
   return (
-    <View className="flex-1 bg-slate-950">
+    <View testID="transaction-review-screen" className="flex-1 bg-slate-950">
       {title && (
         <View className="px-7 pb-5 pt-8">
           <View className="flex-row items-center">

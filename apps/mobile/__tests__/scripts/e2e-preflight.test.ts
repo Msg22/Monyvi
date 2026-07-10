@@ -2,12 +2,20 @@ interface E2ePreflightModule {
   appendAndroidPlatform(url: string): string;
   buildDevClientUrl(url: string): string;
   buildDevMenuPreferencesXml(): string;
+  buildIntroSeenFlagSql(): string;
   currentFocusShowsDevMenu(currentFocus: string): boolean;
   currentFocusShowsLauncher(currentFocus: string): boolean;
   didDumpUiHierarchy(dumpOutput: string): boolean;
   getHttpClientNameForUrl(url: string): "http" | "https";
+  getMaestroDeviceArgs(
+    env?: Readonly<Record<string, string | undefined>>
+  ): readonly string[];
+  resolveAndroidDeviceId(
+    env?: Readonly<Record<string, string | undefined>>
+  ): string;
   isAppReady(uiXml: string): boolean;
   isNativeRootMounted(uiXml: string): boolean;
+  isMissingDeviceSqliteError(output: string): boolean;
   isRetryableMaestroTransportFailure(output: string): boolean;
   androidDeviceReconnectTimeoutMs: number;
   shouldRestoreFromDevLauncher(uiXml: string, currentFocus: string): boolean;
@@ -72,6 +80,57 @@ describe("e2e-preflight", () => {
     expect(preflight.buildDevMenuPreferencesXml()).toContain(
       '<boolean name="isOnboardingFinished" value="true" />'
     );
+  });
+
+  it("builds Maestro device args from explicit device env", () => {
+    expect(
+      preflight.getMaestroDeviceArgs({
+        ANDROID_SERIAL: "adb-device",
+        MAESTRO_DEVICE_ID: "maestro-device",
+      })
+    ).toEqual(["--device", "maestro-device"]);
+    expect(
+      preflight.getMaestroDeviceArgs({
+        ANDROID_SERIAL: "adb-device",
+      })
+    ).toEqual(["--device", "adb-device"]);
+    expect(preflight.getMaestroDeviceArgs({})).toEqual([]);
+  });
+
+  it("uses the same environment precedence for adb and Maestro", () => {
+    const env = {
+      ANDROID_SERIAL: "adb-device",
+      DEVICE: "device-env",
+      MAESTRO_DEVICE_ID: "maestro-device",
+    };
+
+    expect(preflight.resolveAndroidDeviceId(env)).toBe("maestro-device");
+    expect(preflight.getMaestroDeviceArgs(env)).toEqual([
+      "--device",
+      "maestro-device",
+    ]);
+    expect(
+      preflight.resolveAndroidDeviceId({ DEVICE: "physical-device" })
+    ).toBe("physical-device");
+    expect(preflight.resolveAndroidDeviceId({})).toBe("emulator-5554");
+  });
+
+  it("builds AsyncStorage SQL that skips pitch screens after pm clear", () => {
+    const sql = preflight.buildIntroSeenFlagSql();
+
+    expect(sql).toContain("create table if not exists catalystLocalStorage");
+    expect(sql).toContain("'@monyvi/intro-seen'");
+    expect(sql).toContain("'true'");
+    expect(sql).toContain("insert or replace");
+  });
+
+  it("detects Android devices without a sqlite3 shell binary", () => {
+    expect(
+      preflight.isMissingDeviceSqliteError(
+        "run-as: exec failed for sqlite3: No such file or directory"
+      )
+    ).toBe(true);
+    expect(preflight.isMissingDeviceSqliteError("")).toBe(false);
   });
 
   it("treats the pre-auth pitch carousel as loaded product UI", () => {

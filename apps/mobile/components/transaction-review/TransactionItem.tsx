@@ -169,6 +169,13 @@ function getReviewIcon(
       color: palette.gold[400],
     };
   }
+  if (reviewMeta?.reasons.includes("parser_review")) {
+    return {
+      name: "alert-circle-outline",
+      circleClassName: "border-gold-600/50 bg-gold-600/10",
+      color: palette.gold[400],
+    };
+  }
   return {
     name: "card-outline",
     circleClassName: "border-slate-600 bg-slate-800",
@@ -287,7 +294,10 @@ function TransactionItemInner({
             </View>
 
             {accountName && (
-              <View className="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1">
+              <View
+                testID="transaction-account-match"
+                className="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1"
+              >
                 <Text className="text-base text-slate-300">{accountName}</Text>
               </View>
             )}

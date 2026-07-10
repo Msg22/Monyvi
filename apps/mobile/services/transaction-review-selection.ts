@@ -1,10 +1,14 @@
-import type { ReviewableTransaction } from "@monyvi/logic";
+import type {
+  ReviewableTransaction,
+  TransactionReviewReason as ParserReviewReason,
+} from "@monyvi/logic";
 
 export type TransactionReviewReason =
   | "cash_transfer"
   | "low_confidence"
   | "account_needed"
-  | "category_needed";
+  | "category_needed"
+  | "parser_review";
 
 export interface TransactionReviewAccountMatch {
   readonly accountId: string | null;
@@ -17,6 +21,27 @@ export interface TransactionReviewMeta {
 }
 
 const AUTO_SELECT_CONFIDENCE_THRESHOLD = 0.8;
+const PARSER_REASON_MAP: Readonly<
+  Record<ParserReviewReason, TransactionReviewReason>
+> = {
+  low_confidence: "low_confidence",
+  account_needed: "account_needed",
+  category_needed: "category_needed",
+  cash_transfer_review: "cash_transfer",
+  unsupported_template: "parser_review",
+  ambiguous_amount: "parser_review",
+  partial_template: "parser_review",
+  non_transactional: "parser_review",
+};
+
+function addReviewReason(
+  reasons: TransactionReviewReason[],
+  reason: TransactionReviewReason
+): void {
+  if (!reasons.includes(reason)) {
+    reasons.push(reason);
+  }
+}
 
 export function getTransactionReviewMeta(
   transaction: ReviewableTransaction,
@@ -25,19 +50,27 @@ export function getTransactionReviewMeta(
   const reasons: TransactionReviewReason[] = [];
 
   if (isAtmWithdrawal(transaction)) {
-    reasons.push("cash_transfer");
+    addReviewReason(reasons, "cash_transfer");
   }
 
   if (transaction.confidence <= AUTO_SELECT_CONFIDENCE_THRESHOLD) {
-    reasons.push("low_confidence");
+    addReviewReason(reasons, "low_confidence");
   }
 
   if (!isResolvedAccountMatch(accountMatch)) {
-    reasons.push("account_needed");
+    addReviewReason(reasons, "account_needed");
   }
 
   if (!transaction.categoryId) {
-    reasons.push("category_needed");
+    addReviewReason(reasons, "category_needed");
+  }
+
+  for (const parserReason of transaction.reviewReasons ?? []) {
+    addReviewReason(reasons, PARSER_REASON_MAP[parserReason]);
+  }
+
+  if (transaction.reviewStatus === "needs_review" && reasons.length === 0) {
+    addReviewReason(reasons, "parser_review");
   }
 
   return {

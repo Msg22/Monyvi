@@ -280,6 +280,20 @@ describe("SmsScanScreen AI consent", () => {
     expect(await screen.findByTestId("ai-consent-continue")).toBeTruthy();
   });
 
+  it("lets the scan service load fingerprints when screen preload fails", async () => {
+    mockIsAiConsented = true;
+    mockLoadExistingSmsFingerprints.mockRejectedValueOnce(
+      new Error("fingerprint preload failed")
+    );
+
+    render(<SmsScanScreen />);
+
+    await waitFor(() => expect(mockStartScan).toHaveBeenCalledTimes(1));
+    expect(mockStartScan).toHaveBeenCalledWith(
+      expect.objectContaining({ existingFingerprints: undefined })
+    );
+  });
+
   it("reopens consent when the server rejects SMS parsing for missing consent", async () => {
     mockIsAiConsented = true;
     mockScanStatus = "consent_required";

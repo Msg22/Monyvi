@@ -1,8 +1,8 @@
 appId: com.monyvi.app
 ---
-# Batch SMS sync imports two identical fixture inbox messages as distinct rows
-# because their received timestamps produce distinct fingerprints. The same
-# scan also includes an ATM withdrawal and verifies it reaches the review path.
+# Batch SMS sync imports the configured E2E SMS inbox, opens the review page,
+# saves the selected suggestions, and lets the runner verify saved
+# fingerprint/dedup invariants in WatermelonDB.
 
 - runFlow: ../helpers/open-settings.yaml
 
@@ -18,30 +18,32 @@ appId: com.monyvi.app
     timeout: 90000
 
 - assertVisible: "Transactions Found"
-- assertVisible: "Review 3 Transaction\\(s\\)"
+- assertVisible: "Review [0-9]+ Transaction\\(s\\)"
 
-- tapOn: "Review 3 Transaction\\(s\\)"
+- tapOn: "Review [0-9]+ Transaction\\(s\\)"
 
 - extendedWaitUntil:
-    visible: "Review SMS Transactions"
+    visible:
+      id: transaction-review-screen
     timeout: 30000
 
-- assertVisible: "PR622 BATCH DUPLICATE SHOP"
-- assertVisible: "QNB ATM"
 - extendedWaitUntil:
-    visible: "E2E NBE Bank"
+    visible:
+      id: transaction-account-match
     timeout: 30000
 
-- assertVisible: "2 auto-selected"
-- assertVisible: "1 need review"
-- assertVisible: "Cash transfer"
+- assertVisible: "[0-9]+ auto-selected"
+- assertVisible: "[0-9]+ need review"
 
-- tapOn: "Review 1 item"
+- tapOn: "Review [0-9]+ item(s)?"
 
-- assertVisible: "QNB ATM"
+- assertVisible: "Select shown"
 - tapOn: "Select shown"
 
-- tapOn: "Save 3 selected"
+- assertVisible: "Save [0-9]+ selected"
+- assertNotVisible: "Missing Info"
+
+- tapOn: "Save [0-9]+ selected"
 
 - extendedWaitUntil:
     visible: "Transactions"

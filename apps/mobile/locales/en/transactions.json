@@ -384,6 +384,7 @@
   "review_badge_low_confidence": "Low confidence",
   "review_badge_account_needed": "Account needed",
   "review_badge_category_needed": "Category needed",
+  "review_badge_needs_review": "Needs review",
   "review_badge_auto_selected": "Auto-selected",
   "review_badge_missing_info": "Missing info",
   "save_error_title": "Save Error"

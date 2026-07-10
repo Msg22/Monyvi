@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { LOCAL_SMS_FIXTURE_CORPUS } from "@monyvi/logic";
 
 const mockNativeSmsList = jest.fn();
 
@@ -12,10 +13,26 @@ const originalPlatformOS = Platform.OS;
 const TEST_NOW_MS = Date.parse("2026-07-07T16:18:00.000Z");
 const JULY_6_2026_16_10 = Date.parse("2026-07-06T16:10:00.000Z");
 const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
+const E2E_LOCAL_PARSER_SAVEABLE_PROVIDER_IDS = new Set([
+  "nbe",
+  "qnb-egypt",
+  "vodafone-cash",
+]);
 
 function enableFixtureSmsInbox(): void {
   process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
   process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "fixture";
+}
+
+function enableLocalParserFixtureSmsInbox(): void {
+  process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
+  process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "local";
+}
+
+function enableDevLocalParserFixtureSmsInbox(): void {
+  process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "off";
+  process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "local";
+  process.env.EXPO_PUBLIC_SMS_INBOX_MODE = "fixture";
 }
 
 function freezeFixtureInboxClock(nowMs: number = TEST_NOW_MS): void {
@@ -27,6 +44,7 @@ describe("sms-reader-service", (): void => {
     jest.clearAllMocks();
     delete process.env.EXPO_PUBLIC_MONYVI_TEST_MODE;
     delete process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE;
+    delete process.env.EXPO_PUBLIC_SMS_INBOX_MODE;
     Object.defineProperty(Platform, "OS", {
       configurable: true,
       value: "android",
@@ -98,6 +116,52 @@ describe("sms-reader-service", (): void => {
     expect(messages[1]?.date).toBeGreaterThan(messages[2]?.date ?? 0);
   });
 
+  it("uses deterministic fixture inbox messages in E2E local parser mode", async (): Promise<void> => {
+    enableLocalParserFixtureSmsInbox();
+    freezeFixtureInboxClock();
+
+    const messages = await readSmsInbox();
+
+    expect(mockNativeSmsList).not.toHaveBeenCalled();
+    const expectedSaveableCount = LOCAL_SMS_FIXTURE_CORPUS.filter((fixture) =>
+      E2E_LOCAL_PARSER_SAVEABLE_PROVIDER_IDS.has(fixture.providerId)
+    ).length;
+    expect(messages.length).toBeGreaterThan(3);
+    expect(messages).toHaveLength(expectedSaveableCount);
+    expect(
+      messages.every((message) => message.id.startsWith("e2e-local-"))
+    ).toBe(true);
+    expect(messages[0]?.id).not.toBe("e2e-pr622_batch_duplicate_shop-1");
+  });
+
+  it("uses local parser fixture inbox in normal dev mode when explicitly requested", async (): Promise<void> => {
+    enableDevLocalParserFixtureSmsInbox();
+    freezeFixtureInboxClock();
+
+    const messages = await readSmsInbox();
+
+    expect(mockNativeSmsList).not.toHaveBeenCalled();
+    expect(messages.length).toBeGreaterThan(3);
+    expect(
+      messages.every((message) => message.id.startsWith("e2e-local-"))
+    ).toBe(true);
+  });
+
+  it("keeps local parser fixture inbox timestamps stable for fingerprint dedup", async (): Promise<void> => {
+    enableLocalParserFixtureSmsInbox();
+    freezeFixtureInboxClock();
+
+    const firstScan = await readSmsInbox();
+    const secondScan = await readSmsInbox();
+
+    expect(secondScan.map((message) => message.id)).toEqual(
+      firstScan.map((message) => message.id)
+    );
+    expect(secondScan.map((message) => message.date)).toEqual(
+      firstScan.map((message) => message.date)
+    );
+  });
+
   it("keeps all fixture inbox messages inside the default rolling scan window", async (): Promise<void> => {
     enableFixtureSmsInbox();
     freezeFixtureInboxClock();
@@ -107,8 +171,9 @@ describe("sms-reader-service", (): void => {
     });
 
     expect(messages).toHaveLength(3);
-    expect(messages.some((message) => message.id === "e2e-qnb_atm_withdrawal-2"))
-      .toBe(true);
+    expect(
+      messages.some((message) => message.id === "e2e-qnb_atm_withdrawal-2")
+    ).toBe(true);
   });
 
   it("applies fixture inbox maxCount after native-like newest-first ordering", async (): Promise<void> => {
@@ -149,9 +214,9 @@ describe("sms-reader-service", (): void => {
 
     expect(messages).toHaveLength(2);
     expect(messages.every((message) => message.address === "NBE")).toBe(true);
-    expect(
-      messages.every((message) => message.date >= JULY_6_2026_16_10)
-    ).toBe(true);
+    expect(messages.every((message) => message.date >= JULY_6_2026_16_10)).toBe(
+      true
+    );
   });
 
   it("keeps fixture timestamps stable when scans use minDate filters", async (): Promise<void> => {

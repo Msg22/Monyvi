@@ -18,6 +18,7 @@ const REVIEW_REASON_BADGES: Record<
   low_confidence: { labelKey: "review_badge_low_confidence", color: "amber" },
   account_needed: { labelKey: "review_badge_account_needed", color: "red" },
   category_needed: { labelKey: "review_badge_category_needed", color: "red" },
+  parser_review: { labelKey: "review_badge_needs_review", color: "amber" },
 };
 
 /**
