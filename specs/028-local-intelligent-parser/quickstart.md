@@ -56,6 +56,18 @@ npm run e2e:live-sms:local-parser
 
 Existing fixture-mode journeys should remain available separately.
 
+For normal dev-client testing on a wireless Android device, local Supabase, the
+local parser, and the synthetic fixture SMS inbox can be enabled without turning
+on E2E mode:
+
+```powershell
+npm run mobile:local-supabase:wireless-device -- --local-parser --fixture-sms
+```
+
+`--fixture-sms` implies local-parser dev mode. This keeps
+`EXPO_PUBLIC_MONYVI_TEST_MODE=off`, so the app behaves like a normal manual dev
+session while SMS scan reads the local fixture inbox instead of real device SMS.
+
 ## Implementation Notes
 
 - Removed the draft `ai-with-local-fallback` path from the mobile SMS parser

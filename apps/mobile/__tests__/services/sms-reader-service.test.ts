@@ -29,6 +29,12 @@ function enableLocalParserFixtureSmsInbox(): void {
   process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "local";
 }
 
+function enableDevLocalParserFixtureSmsInbox(): void {
+  process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "off";
+  process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "local";
+  process.env.EXPO_PUBLIC_SMS_INBOX_MODE = "fixture";
+}
+
 function freezeFixtureInboxClock(nowMs: number = TEST_NOW_MS): void {
   jest.spyOn(Date, "now").mockReturnValue(nowMs);
 }
@@ -38,6 +44,7 @@ describe("sms-reader-service", (): void => {
     jest.clearAllMocks();
     delete process.env.EXPO_PUBLIC_MONYVI_TEST_MODE;
     delete process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE;
+    delete process.env.EXPO_PUBLIC_SMS_INBOX_MODE;
     Object.defineProperty(Platform, "OS", {
       configurable: true,
       value: "android",
@@ -125,6 +132,19 @@ describe("sms-reader-service", (): void => {
       messages.every((message) => message.id.startsWith("e2e-local-"))
     ).toBe(true);
     expect(messages[0]?.id).not.toBe("e2e-pr622_batch_duplicate_shop-1");
+  });
+
+  it("uses local parser fixture inbox in normal dev mode when explicitly requested", async (): Promise<void> => {
+    enableDevLocalParserFixtureSmsInbox();
+    freezeFixtureInboxClock();
+
+    const messages = await readSmsInbox();
+
+    expect(mockNativeSmsList).not.toHaveBeenCalled();
+    expect(messages.length).toBeGreaterThan(3);
+    expect(
+      messages.every((message) => message.id.startsWith("e2e-local-"))
+    ).toBe(true);
   });
 
   it("keeps local parser fixture inbox timestamps stable for fingerprint dedup", async (): Promise<void> => {
