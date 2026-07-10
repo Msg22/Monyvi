@@ -198,6 +198,35 @@ function counterpartyFor(
   return `${institution.shortName} TEST MART ${index}`;
 }
 
+function expectedOutcomeOverridesFor(
+  scenario: LocalSmsFixtureScenario
+): Partial<LocalSmsFixtureExpectedOutcome> {
+  const isTransfer =
+    scenario === "bank_transfer_in" || scenario === "bank_transfer_out";
+  const usesOtherCategory =
+    scenario === "bank_atm_withdrawal" ||
+    scenario === "bank_transfer_out" ||
+    scenario === "wallet_transfer_out" ||
+    scenario === "wallet_bill_payment" ||
+    scenario === "wallet_cash_in" ||
+    scenario === "wallet_cash_out";
+
+  return {
+    categorySystemName: usesOtherCategory ? "other" : undefined,
+    reviewStatus:
+      scenario === "bank_atm_withdrawal" || isTransfer
+        ? "needs_review"
+        : undefined,
+    reviewReasons:
+      scenario === "bank_atm_withdrawal"
+        ? ["cash_transfer_review"]
+        : isTransfer
+          ? ["low_confidence"]
+          : undefined,
+    confidence: isTransfer ? 0.94 : undefined,
+  };
+}
+
 function createFixture(
   institution: EgyptianFinancialInstitution,
   scenario: LocalSmsFixtureScenario,
@@ -214,34 +243,7 @@ function createFixture(
         amount,
         counterpartyFor(institution, scenario, index),
         patternId,
-        {
-          categorySystemName:
-            scenario === "bank_atm_withdrawal" ||
-            scenario === "bank_transfer_out" ||
-            scenario === "wallet_transfer_out" ||
-            scenario === "wallet_bill_payment" ||
-            scenario === "wallet_cash_in" ||
-            scenario === "wallet_cash_out"
-              ? "other"
-              : undefined,
-          reviewStatus:
-            scenario === "bank_atm_withdrawal" ||
-            scenario === "bank_transfer_in" ||
-            scenario === "bank_transfer_out"
-              ? "needs_review"
-              : undefined,
-          reviewReasons:
-            scenario === "bank_atm_withdrawal"
-              ? ["cash_transfer_review"]
-              : scenario === "bank_transfer_in" ||
-                  scenario === "bank_transfer_out"
-                ? ["low_confidence"]
-                : undefined,
-          confidence:
-            scenario === "bank_transfer_in" || scenario === "bank_transfer_out"
-              ? 0.94
-              : undefined,
-        }
+        expectedOutcomeOverridesFor(scenario)
       )
     : undefined;
 
@@ -317,7 +319,11 @@ function buildNegativeFixtures(): readonly LocalSmsFixture[] {
   const wallet = EGYPTIAN_FINANCIAL_INSTITUTIONS.find(
     (institution) => institution.id === "vodafone-cash"
   );
-  if (!wallet) return [];
+  if (!wallet) {
+    throw new Error(
+      "vodafone-cash not found in EGYPTIAN_FINANCIAL_INSTITUTIONS; cannot build negative fixtures"
+    );
+  }
 
   return Array.from({ length: 8 }, (_, index) =>
     createFixture(wallet, "non_transactional", index + 400)

@@ -227,6 +227,46 @@ describe("sms-parser-orchestrator", () => {
     );
   });
 
+  it("honors aborts before local-parser mode emits progress or transactions", async () => {
+    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "local";
+    const abortController = new AbortController();
+    const onProgress = jest.fn();
+    abortController.abort();
+
+    await expect(
+      parseSmsWithOrchestrator(
+        [candidate()],
+        context,
+        onProgress,
+        abortController.signal
+      )
+    ).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(onProgress).not.toHaveBeenCalled();
+  });
+
+  it("honors aborts that happen during local-parser consent checks", async () => {
+    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "local";
+    const abortController = new AbortController();
+    const onProgress = jest.fn();
+    mockGetAiProcessingConsentStatus.mockImplementationOnce(() => {
+      abortController.abort();
+      return Promise.resolve({ isConsented: true });
+    });
+
+    await expect(
+      parseSmsWithOrchestrator(
+        [candidate()],
+        context,
+        onProgress,
+        abortController.signal
+      )
+    ).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(onProgress).not.toHaveBeenCalled();
+  });
+
   it("does not expose raw payload values through diagnostics", async () => {
     process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "local";
 

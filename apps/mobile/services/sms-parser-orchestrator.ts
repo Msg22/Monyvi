@@ -183,6 +183,14 @@ function getAiDiagnosticsMode(): SmsParserMode {
   return shouldUseFixtureSmsParser() ? "fixture" : "ai-primary";
 }
 
+function throwIfAborted(abortSignal?: AbortSignal): void {
+  if (!abortSignal?.aborted) return;
+
+  const error = new Error("SMS parse aborted");
+  error.name = "AbortError";
+  throw error;
+}
+
 export async function parseSmsWithOrchestrator(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
@@ -190,17 +198,25 @@ export async function parseSmsWithOrchestrator(
   abortSignal?: AbortSignal
 ): Promise<SmsParserOrchestratorResult> {
   if (shouldUseLocalSmsParser()) {
+    throwIfAborted(abortSignal);
+
     if (!(await canUseLocalParser())) {
+      throwIfAborted(abortSignal);
       return createBlockedLocalResult(candidates);
     }
 
+    throwIfAborted(abortSignal);
     const result = createLocalResult(candidates, context);
+    throwIfAborted(abortSignal);
+
     onProgress?.({
       chunksCompleted: candidates.length > 0 ? 1 : 0,
       totalChunks: candidates.length > 0 ? 1 : 0,
       transactionsSoFar: result.transactions.length,
       chunkDurationMs: 0,
     });
+    throwIfAborted(abortSignal);
+
     return result;
   }
 

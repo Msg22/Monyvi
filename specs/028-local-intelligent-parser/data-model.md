@@ -70,10 +70,11 @@ Result returned by the local parser before mobile mapping into review/save flow.
 States:
 
 - `no_suggestion`: message is unsupported or non-financial.
-- `suggestion`: one or more reviewable transaction candidates.
+- `suggestion`: one reviewable transaction candidate. A parser request can
+  return multiple `suggestion` outcomes, one per candidate SMS transaction.
 - `error`: parser could not safely complete due to invalid configuration.
 
-Fields for `suggestion`:
+Fields for one `suggestion` candidate:
 
 - `messageId`
 - `smsFingerprint`
@@ -133,8 +134,9 @@ Local parser suggestions must map to the existing `ParsedSmsTransaction` /
 Relationships:
 
 - A `Parsing Request` can produce zero, one, or multiple `Parser Outcome`
-  suggestions.
-- A `Parser Outcome` maps to existing review/save contracts.
+  records.
+- Each `suggestion` `Parser Outcome` maps to one existing review/save
+  transaction contract.
 - Existing account matching can enrich suggestions after parsing.
 - Existing deduplication prevents the same `smsFingerprint` from being saved
   twice across transactions and transfers.

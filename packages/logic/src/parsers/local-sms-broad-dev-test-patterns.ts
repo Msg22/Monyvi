@@ -17,6 +17,10 @@ const CURRENCY_CODES = [
   "AED",
   "KWD",
 ] as const;
+const AMOUNT_PATTERN = new RegExp(
+  `(?<currency>${CURRENCY_CODES.join("|")})\\s*(?<amount>\\d[\\d,.]*)`,
+  "i"
+);
 
 interface ParsedAmount {
   readonly amount: number;
@@ -65,11 +69,7 @@ function toCurrency(value: string): CurrencyType | null {
 }
 
 function extractAmount(body: string): ParsedAmount | null {
-  const currencyPattern = CURRENCY_CODES.join("|");
-  const match = new RegExp(
-    `(?<currency>${currencyPattern})\\s*(?<amount>\\d[\\d,.]*)`,
-    "i"
-  ).exec(body);
+  const match = AMOUNT_PATTERN.exec(body);
   const amountText = match?.groups?.amount;
   const currencyText = match?.groups?.currency;
   if (!amountText || !currencyText) return null;

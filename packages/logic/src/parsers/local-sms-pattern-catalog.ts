@@ -1,4 +1,5 @@
 import type { CurrencyType, TransactionType } from "@monyvi/db";
+import { isKnownFinancialSender } from "./egyptian-bank-registry";
 import { LOCAL_SMS_BROAD_DEV_TEST_PATTERNS } from "./local-sms-broad-dev-test-patterns";
 import type {
   LocalReviewReason,
@@ -124,6 +125,19 @@ function extractCardLast4(body: string): string | undefined {
   return match?.groups?.last4;
 }
 
+function isValidDateParts(
+  date: Date,
+  year: number,
+  month: number,
+  day: number
+): boolean {
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month &&
+    date.getDate() === day
+  );
+}
+
 function parseMessageDate(body: string, receivedAtMs: number): Date {
   const received = new Date(receivedAtMs);
   const slashMatch =
@@ -141,7 +155,12 @@ function parseMessageDate(body: string, receivedAtMs: number): Date {
       ? Number(slashMatch.groups.minute)
       : 0;
     const parsed = new Date(year, month, day, hour, minute);
-    if (!Number.isNaN(parsed.getTime())) return parsed;
+    if (
+      !Number.isNaN(parsed.getTime()) &&
+      isValidDateParts(parsed, year, month, day)
+    ) {
+      return parsed;
+    }
   }
 
   const monthMatch = /(?<day>\d{1,2})-(?<month>[A-Z]{3})-(?<year>\d{4})/i.exec(
@@ -163,11 +182,15 @@ function parseMessageDate(body: string, receivedAtMs: number): Date {
       "DEC",
     ].indexOf(monthMatch.groups.month.toUpperCase());
     if (monthIndex >= 0) {
-      return new Date(
-        Number(monthMatch.groups.year),
-        monthIndex,
-        Number(monthMatch.groups.day)
-      );
+      const day = Number(monthMatch.groups.day);
+      const year = Number(monthMatch.groups.year);
+      const parsed = new Date(year, monthIndex, day);
+      if (
+        !Number.isNaN(parsed.getTime()) &&
+        isValidDateParts(parsed, year, monthIndex, day)
+      ) {
+        return parsed;
+      }
     }
   }
 
@@ -447,6 +470,7 @@ export const LOCAL_SMS_PATTERNS: readonly LocalSmsPattern[] = [
     matchRules: {
       description: "Controlled live-SMS fixture card purchase confirmation",
       match: (input) =>
+        isKnownFinancialSender(input.sender) &&
         /\bpurchase\b/i.test(input.body) &&
         /\busing card ending\b/i.test(input.body)
           ? matchDebitPurchase(input)

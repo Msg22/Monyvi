@@ -1,4 +1,4 @@
-import { buildCategoryMap, clampConfidence } from "../utils/ai-parser-utils";
+import { clampConfidence } from "../utils/ai-parser-utils";
 import { MAX_TRANSACTION_AMOUNT } from "../utils/amount-helpers";
 import {
   LOCAL_SMS_PATTERNS,
@@ -190,8 +190,6 @@ export function parseSmsWithLocalParser(
   if (validationError) {
     return createErrorResult(validationError);
   }
-
-  buildCategoryMap(request.categories);
 
   const transactions: LocalParsedSmsTransaction[] = [];
   let unsupportedCount = 0;

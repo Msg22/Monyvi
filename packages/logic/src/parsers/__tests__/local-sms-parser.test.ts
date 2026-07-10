@@ -124,6 +124,31 @@ describe("parseSmsWithLocalParser", () => {
     });
   });
 
+  it("falls back to the received timestamp when slash dates are invalid", () => {
+    const result = parseSmsWithLocalParser(
+      request([
+        candidate(
+          "Purchase EGP 250.00 on card **** 4321 at CARREFOUR CAIRO on 31/02 14:23. Avail bal EGP 12,430.55"
+        ),
+      ])
+    );
+
+    expect(result.transactions[0]?.date).toEqual(new Date(RECEIVED_AT_MS));
+  });
+
+  it("falls back to the received timestamp when month-name dates are invalid", () => {
+    const result = parseSmsWithLocalParser(
+      request([
+        candidate(
+          "CIB: EGP 1,299.00 charged on your credit card ending 9988 at AMAZON.EG on 31-FEB-2026. Bal: EGP 4,201.00",
+          { sender: "CIB" }
+        ),
+      ])
+    );
+
+    expect(result.transactions[0]?.date).toEqual(new Date(RECEIVED_AT_MS));
+  });
+
   it("returns deterministic results for repeated parses", () => {
     const sms = candidate(
       "Purchase EGP 250.00 on card **** 4321 at CARREFOUR CAIRO on 08/04 14:23. Avail bal EGP 12,430.55"
@@ -258,6 +283,20 @@ describe("parseSmsWithLocalParser", () => {
     );
 
     expect(result.transactions).toEqual([]);
+  });
+
+  it("does not parse the generic live fixture shape from unknown senders", () => {
+    const result = parseSmsWithLocalParser(
+      request([
+        candidate(
+          "Purchase EGP 63.21 at BACKGROUND LIVE SMS TEST using card ending 1234",
+          { sender: "PROMO" }
+        ),
+      ])
+    );
+
+    expect(result.transactions).toEqual([]);
+    expect(result.unsupportedCount).toBe(1);
   });
 
   it("keeps requests text-only without audio payload fields", () => {
