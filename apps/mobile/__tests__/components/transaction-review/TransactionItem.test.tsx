@@ -28,7 +28,7 @@ function createTransaction(): ReviewableTransaction {
   };
 }
 
-function renderItem(): void {
+function renderItem(isSmsWorkspace = false): void {
   render(
     <TransactionItem
       transaction={createTransaction()}
@@ -37,6 +37,7 @@ function renderItem(): void {
       accountName="QNB Account"
       onToggleSelect={jest.fn()}
       onPress={jest.fn()}
+      isSmsWorkspace={isSmsWorkspace}
     />
   );
 }
@@ -74,5 +75,27 @@ describe("TransactionItem", () => {
 
     dateSpy.mockRestore();
     timeSpy.mockRestore();
+  });
+
+  it("keeps the shared row theme-aware outside the SMS workspace", () => {
+    renderItem();
+
+    expect(screen.getByTestId("transaction-review-row")).toHaveProp(
+      "className",
+      expect.stringContaining("bg-white")
+    );
+    expect(screen.getByTestId("transaction-review-row")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:bg-slate-950")
+    );
+  });
+
+  it("uses the approved dark row surface in the SMS workspace", () => {
+    renderItem(true);
+
+    expect(screen.getByTestId("transaction-review-row")).toHaveProp(
+      "className",
+      expect.stringContaining("bg-slate-950")
+    );
   });
 });

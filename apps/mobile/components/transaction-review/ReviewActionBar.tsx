@@ -17,6 +17,7 @@ export interface ReviewActionBarProps {
   readonly onDiscard: () => void;
   readonly onReviewNeeds: () => void;
   readonly onShowAll: () => void;
+  readonly isSmsWorkspace?: boolean;
 }
 
 export function ReviewActionBar({
@@ -28,6 +29,7 @@ export function ReviewActionBar({
   onDiscard,
   onReviewNeeds,
   onShowAll,
+  isSmsWorkspace = false,
 }: ReviewActionBarProps): React.JSX.Element {
   const { showToast } = useToast();
   const { t } = useTranslation("transactions");
@@ -45,8 +47,13 @@ export function ReviewActionBar({
 
   return (
     <Animated.View
+      testID="review-action-bar"
       entering={FadeInDown.delay(200)}
-      className="border-t border-slate-800 bg-slate-950/95 px-7 pb-4 pt-5"
+      className={`border-t px-7 pb-4 pt-5 ${
+        isSmsWorkspace
+          ? "border-slate-800 bg-slate-950/95"
+          : "border-slate-200 bg-white/95 dark:border-slate-800 dark:bg-slate-950/95"
+      }`}
     >
       <View className="mb-5 flex-row items-center">
         <Ionicons
@@ -54,7 +61,13 @@ export function ReviewActionBar({
           size={24}
           color={palette.nileGreen[400]}
         />
-        <Text className="ms-3 flex-1 text-sm text-slate-400">
+        <Text
+          className={`ms-3 flex-1 text-sm ${
+            isSmsWorkspace
+              ? "text-slate-400"
+              : "text-slate-600 dark:text-slate-400"
+          }`}
+        >
           {t("review_ai_accuracy_notice")}
         </Text>
       </View>

@@ -65,6 +65,7 @@ interface TransactionItemProps {
   readonly hasMissingInfo?: boolean;
   /** Auto-selection status and reasons for rows that need review */
   readonly reviewMeta?: TransactionReviewMeta;
+  readonly isSmsWorkspace?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,7 +136,8 @@ function formatReviewDateTime(
 
 function getReviewIcon(
   reviewMeta: TransactionReviewMeta | undefined,
-  isSelected: boolean
+  isSelected: boolean,
+  isSmsWorkspace: boolean
 ): {
   readonly name: keyof typeof Ionicons.glyphMap;
   readonly circleClassName: string;
@@ -185,7 +187,9 @@ function getReviewIcon(
   }
   return {
     name: "card-outline",
-    circleClassName: "border-slate-600 bg-slate-800",
+    circleClassName: isSmsWorkspace
+      ? "border-slate-600 bg-slate-800"
+      : "border-slate-300 bg-slate-100 dark:border-slate-600 dark:bg-slate-800",
     color: palette.slate[400],
   };
 }
@@ -204,6 +208,7 @@ function TransactionItemInner({
   onPress,
   hasMissingInfo = false,
   reviewMeta,
+  isSmsWorkspace = false,
 }: TransactionItemProps): React.JSX.Element {
   const [isExpanded, setIsExpanded] = useState(false);
   const { language } = useLocale();
@@ -213,7 +218,7 @@ function TransactionItemInner({
   const hasExpandableContent = !isVoice && !!expandedContent;
 
   const badges = getTransactionBadges(hasMissingInfo, reviewMeta, isSelected);
-  const reviewIcon = getReviewIcon(reviewMeta, isSelected);
+  const reviewIcon = getReviewIcon(reviewMeta, isSelected, isSmsWorkspace);
 
   const handleToggleExpand = useCallback(() => {
     setIsExpanded((prev) => !prev);
@@ -232,7 +237,14 @@ function TransactionItemInner({
     : transaction.counterparty || "Unknown";
 
   return (
-    <View className="overflow-hidden border-b border-slate-800 bg-slate-950">
+    <View
+      testID="transaction-review-row"
+      className={`overflow-hidden border-b ${
+        isSmsWorkspace
+          ? "border-slate-800 bg-slate-950"
+          : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
+      }`}
+    >
       <TouchableOpacity
         onPress={handlePress}
         className="flex-row items-center px-7 py-5"
@@ -275,7 +287,12 @@ function TransactionItemInner({
         {/* Content */}
         <View className="flex-1 me-4">
           {/* Top row: origin label + amount */}
-          <Text className="text-xl font-extrabold text-white" numberOfLines={1}>
+          <Text
+            className={`text-xl font-extrabold ${
+              isSmsWorkspace ? "text-white" : "text-slate-900 dark:text-white"
+            }`}
+            numberOfLines={1}
+          >
             {isVoice && "note" in transaction
               ? (transaction as { note: string }).note ||
                 transaction.counterparty ||
@@ -287,7 +304,11 @@ function TransactionItemInner({
           <View className="mt-1 flex-row items-center justify-between gap-3">
             {counterpartyText ? (
               <Text
-                className="flex-1 text-base text-slate-400"
+                className={`flex-1 text-base ${
+                  isSmsWorkspace
+                    ? "text-slate-400"
+                    : "text-slate-600 dark:text-slate-400"
+                }`}
                 numberOfLines={1}
               >
                 {counterpartyText}
@@ -295,7 +316,14 @@ function TransactionItemInner({
             ) : (
               <View className="flex-1" />
             )}
-            <Text className="text-base text-slate-400" numberOfLines={1}>
+            <Text
+              className={`text-base ${
+                isSmsWorkspace
+                  ? "text-slate-400"
+                  : "text-slate-600 dark:text-slate-400"
+              }`}
+              numberOfLines={1}
+            >
               {formatReviewDateTime(
                 transaction.date,
                 t("review_date_today"),
@@ -307,8 +335,20 @@ function TransactionItemInner({
 
           {/* Bottom row: category + account chips */}
           <View className="mt-2 flex-row items-center flex-wrap gap-2">
-            <View className="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1">
-              <Text className="text-base text-slate-300">
+            <View
+              className={`rounded-lg border px-3 py-1 ${
+                isSmsWorkspace
+                  ? "border-slate-700 bg-slate-800/80"
+                  : "border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800/80"
+              }`}
+            >
+              <Text
+                className={`text-base ${
+                  isSmsWorkspace
+                    ? "text-slate-300"
+                    : "text-slate-700 dark:text-slate-300"
+                }`}
+              >
                 {transaction.categoryDisplayName}
               </Text>
             </View>
@@ -316,9 +356,21 @@ function TransactionItemInner({
             {accountName && (
               <View
                 testID="transaction-account-match"
-                className="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1"
+                className={`rounded-lg border px-3 py-1 ${
+                  isSmsWorkspace
+                    ? "border-slate-700 bg-slate-800/80"
+                    : "border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800/80"
+                }`}
               >
-                <Text className="text-base text-slate-300">{accountName}</Text>
+                <Text
+                  className={`text-base ${
+                    isSmsWorkspace
+                      ? "text-slate-300"
+                      : "text-slate-700 dark:text-slate-300"
+                  }`}
+                >
+                  {accountName}
+                </Text>
               </View>
             )}
           </View>

@@ -273,7 +273,29 @@ describe("TransactionReview", () => {
   it("exposes a stable review-screen readiness signal for E2E", () => {
     renderReview({});
 
-    expect(screen.getByTestId("transaction-review-screen")).toBeTruthy();
+    expect(screen.getByTestId("transaction-review-screen")).toHaveProp(
+      "className",
+      expect.stringContaining("bg-background dark:bg-background-dark")
+    );
+  });
+
+  it("uses the approved dark workspace only when explicitly requested", () => {
+    mockUseTransactionReviewState.mockReturnValue(createReviewState({}));
+
+    render(
+      <TransactionReview
+        transactions={[createTransaction()]}
+        onSave={jest.fn()}
+        onDiscard={jest.fn()}
+        isSaving={false}
+        workspaceVariant="sms"
+      />
+    );
+
+    expect(screen.getByTestId("transaction-review-screen")).toHaveProp(
+      "className",
+      expect.stringContaining("bg-slate-950")
+    );
   });
 
   it("exposes each summary count as one accessible E2E signal", () => {

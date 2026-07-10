@@ -37,6 +37,7 @@ export interface TransactionReviewProps {
   readonly title?: string;
   readonly subtitle?: string;
   readonly onBack?: () => void;
+  readonly workspaceVariant?: "default" | "sms";
 }
 
 export function TransactionReview({
@@ -47,6 +48,7 @@ export function TransactionReview({
   title,
   subtitle,
   onBack,
+  workspaceVariant = "default",
 }: TransactionReviewProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { t } = useTranslation("common");
@@ -54,6 +56,7 @@ export function TransactionReview({
   const state = useTransactionReviewState({ transactions, onSave });
   const [isFiltersVisible, setIsFiltersVisible] = useState(false);
   const accountDisplayNames = useAccountDisplayNames();
+  const isSmsWorkspace = workspaceVariant === "sms";
 
   const hasActiveFilters =
     state.period !== "all_time" ||
@@ -135,6 +138,7 @@ export function TransactionReview({
           onPress={state.handleOpenEditModal}
           hasMissingInfo={state.invalidIndices.has(item.originalIndex)}
           reviewMeta={state.reviewMetaByIndex.get(item.originalIndex)}
+          isSmsWorkspace={isSmsWorkspace}
         />
       );
     },
@@ -147,13 +151,21 @@ export function TransactionReview({
       state.reviewMetaByIndex,
       state.selectedIndicesRef,
       state.transactionOverrides,
+      isSmsWorkspace,
     ]
   );
 
   const keyExtractor = useCallback((item: ReviewListItem) => item.key, []);
 
   return (
-    <View testID="transaction-review-screen" className="flex-1 bg-slate-950">
+    <View
+      testID="transaction-review-screen"
+      className={
+        isSmsWorkspace
+          ? "flex-1 bg-slate-950"
+          : "flex-1 bg-background dark:bg-background-dark"
+      }
+    >
       {title && (
         <PageHeader
           title={title}
@@ -187,10 +199,18 @@ export function TransactionReview({
 
       <Animated.View entering={FadeInDown.delay(100)} className="px-7 pb-4">
         <LinearGradient
-          colors={[palette.slate[950], palette.slate[900]]}
+          colors={
+            isSmsWorkspace || isDark
+              ? [palette.slate[950], palette.slate[900]]
+              : [palette.slate[25], palette.slate[50]]
+          }
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          className="overflow-hidden rounded-[22px] border border-slate-700/80 px-6 py-5"
+          className={`overflow-hidden rounded-[22px] border px-6 py-5 ${
+            isSmsWorkspace
+              ? "border-slate-700/80"
+              : "border-slate-200 dark:border-slate-700/80"
+          }`}
         >
           <View className="flex-row items-center">
             <View
@@ -209,7 +229,13 @@ export function TransactionReview({
                 <Text className="text-[40px] font-extrabold leading-[44px] text-nileGreen-400">
                   {state.autoSelectedCount}
                 </Text>
-                <Text className="text-base text-slate-300">
+                <Text
+                  className={`text-base ${
+                    isSmsWorkspace
+                      ? "text-slate-300"
+                      : "text-slate-600 dark:text-slate-300"
+                  }`}
+                >
                   {tTransactions("review_auto_selected_label")}
                 </Text>
               </View>
@@ -236,7 +262,13 @@ export function TransactionReview({
                 <Text className="text-[40px] font-extrabold leading-[44px] text-gold-400">
                   {state.needsReviewCount}
                 </Text>
-                <Text className="text-base text-slate-300">
+                <Text
+                  className={`text-base ${
+                    isSmsWorkspace
+                      ? "text-slate-300"
+                      : "text-slate-600 dark:text-slate-300"
+                  }`}
+                >
                   {tTransactions("review_need_review_label")}
                 </Text>
               </View>
@@ -249,13 +281,25 @@ export function TransactionReview({
               size={20}
               color={palette.nileGreen[400]}
             />
-            <Text className="ms-3 text-base font-medium text-slate-300">
+            <Text
+              className={`ms-3 text-base font-medium ${
+                isSmsWorkspace
+                  ? "text-slate-300"
+                  : "text-slate-600 dark:text-slate-300"
+              }`}
+            >
               {tTransactions("review_trust_copy")}
             </Text>
           </View>
         </LinearGradient>
 
-        <View className="mt-5 flex-row rounded-[18px] border border-slate-700/90 bg-slate-800/70 p-1">
+        <View
+          className={`mt-5 flex-row rounded-[18px] border p-1 ${
+            isSmsWorkspace
+              ? "border-slate-700/90 bg-slate-800/70"
+              : "border-slate-200 bg-slate-100 dark:border-slate-700/90 dark:bg-slate-800/70"
+          }`}
+        >
           {reviewModeOptions.map((option) => {
             const isActive = state.reviewMode === option.mode;
             return (
@@ -265,13 +309,19 @@ export function TransactionReview({
                 activeOpacity={0.8}
                 className={`flex-1 min-h-14 items-center justify-center rounded-2xl border px-2 ${
                   isActive
-                    ? "border-gold-400 bg-slate-800"
+                    ? isSmsWorkspace
+                      ? "border-gold-400 bg-slate-800"
+                      : "border-gold-400 bg-white dark:bg-slate-800"
                     : "border-transparent"
                 }`}
               >
                 <Text
                   className={`text-base font-semibold text-center ${
-                    isActive ? "text-gold-400" : "text-slate-300"
+                    isActive
+                      ? "text-gold-400"
+                      : isSmsWorkspace
+                        ? "text-slate-300"
+                        : "text-slate-600 dark:text-slate-300"
                   }`}
                   numberOfLines={1}
                 >
@@ -283,7 +333,13 @@ export function TransactionReview({
         </View>
 
         <View className="mt-5 flex-row items-center justify-between gap-3">
-          <Text className="flex-1 text-lg font-semibold text-slate-300">
+          <Text
+            className={`flex-1 text-lg font-semibold ${
+              isSmsWorkspace
+                ? "text-slate-300"
+                : "text-slate-700 dark:text-slate-300"
+            }`}
+          >
             {state.reviewMode === "needs_review"
               ? tTransactions("review_needs_check_count", {
                   count: state.needsReviewCount,
@@ -316,7 +372,11 @@ export function TransactionReview({
             <TouchableOpacity
               onPress={() => setIsFiltersVisible((prev) => !prev)}
               activeOpacity={0.7}
-              className="relative h-12 w-12 items-center justify-center rounded-2xl border border-slate-700 bg-slate-800"
+              className={`relative h-12 w-12 items-center justify-center rounded-2xl border ${
+                isSmsWorkspace
+                  ? "border-slate-700 bg-slate-800"
+                  : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
+              }`}
             >
               <Ionicons
                 name={isFiltersVisible ? "funnel" : "funnel-outline"}
@@ -371,6 +431,7 @@ export function TransactionReview({
         onDiscard={onDiscard}
         onReviewNeeds={state.handleReviewNeeds}
         onShowAll={state.handleShowAll}
+        isSmsWorkspace={isSmsWorkspace}
       />
 
       <PeriodFilterModal

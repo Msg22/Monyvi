@@ -20,6 +20,10 @@ export interface TransactionReviewMeta {
   readonly reasons: readonly TransactionReviewReason[];
 }
 
+export interface TransactionReviewResolutionContext {
+  readonly hasCategoryOverride?: boolean;
+}
+
 const AUTO_SELECT_CONFIDENCE_THRESHOLD = 0.8;
 const PARSER_REASON_MAP: Readonly<
   Record<ParserReviewReason, TransactionReviewReason>
@@ -45,7 +49,8 @@ function addReviewReason(
 
 export function getTransactionReviewMeta(
   transaction: ReviewableTransaction,
-  accountMatch: TransactionReviewAccountMatch | undefined
+  accountMatch: TransactionReviewAccountMatch | undefined,
+  resolutionContext: TransactionReviewResolutionContext = {}
 ): TransactionReviewMeta {
   const reasons: TransactionReviewReason[] = [];
 
@@ -66,7 +71,7 @@ export function getTransactionReviewMeta(
   }
 
   for (const parserReason of transaction.reviewReasons ?? []) {
-    if (isResolvedParserReason(parserReason, transaction, accountMatch)) {
+    if (isResolvedParserReason(parserReason, accountMatch, resolutionContext)) {
       continue;
     }
     addReviewReason(reasons, PARSER_REASON_MAP[parserReason]);
@@ -88,14 +93,14 @@ export function getTransactionReviewMeta(
 
 function isResolvedParserReason(
   parserReason: ParserReviewReason,
-  transaction: ReviewableTransaction,
-  accountMatch: TransactionReviewAccountMatch | undefined
+  accountMatch: TransactionReviewAccountMatch | undefined,
+  resolutionContext: TransactionReviewResolutionContext
 ): boolean {
   if (parserReason === "account_needed") {
     return isResolvedAccountMatch(accountMatch);
   }
   if (parserReason === "category_needed") {
-    return Boolean(transaction.categoryId);
+    return resolutionContext.hasCategoryOverride === true;
   }
   return false;
 }
@@ -118,9 +123,11 @@ export function buildAutoSelectedIndices(
   return selected;
 }
 
-function isResolvedAccountMatch(
+export function isResolvedAccountMatch(
   accountMatch: TransactionReviewAccountMatch | undefined
-): boolean {
+): accountMatch is TransactionReviewAccountMatch & {
+  readonly accountId: string;
+} {
   if (!accountMatch?.accountId) return false;
 
   return !["default", "first_bank", "none"].includes(

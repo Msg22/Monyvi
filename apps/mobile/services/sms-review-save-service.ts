@@ -26,6 +26,7 @@ import type { TransactionEdits } from "@/services/sms-edit-modal-service";
 import { ensureCashAccount } from "@/services/account-service";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import type { CurrencyType } from "@monyvi/db";
+import { isResolvedAccountMatch } from "@/services/transaction-review-selection";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -116,7 +117,9 @@ async function prepareSavePayload(
   for (const i of selectedOriginalIndices) {
     const override = transactionOverrides.get(i);
     const match = accountMatches.get(i);
-    const accountId = override?.accountId ?? match?.accountId;
+    const accountId =
+      override?.accountId ??
+      (isResolvedAccountMatch(match) ? match.accountId : null);
     if (accountId) {
       originalIndexToAccountId.set(i, accountId);
     } else {

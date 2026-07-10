@@ -400,11 +400,22 @@ export function useTransactionReviewState({
     effectiveTransactions.forEach((tx, index) => {
       meta.set(
         index,
-        getTransactionReviewMeta(tx, effectiveAccountMatches.get(index))
+        getTransactionReviewMeta(tx, effectiveAccountMatches.get(index), {
+          hasCategoryOverride: Boolean(
+            transactionOverrides.has(index) &&
+            transactionOverrides.get(index)?.categoryId !==
+              transactions[index]?.categoryId
+          ),
+        })
       );
     });
     return meta;
-  }, [effectiveTransactions, effectiveAccountMatches]);
+  }, [
+    effectiveTransactions,
+    effectiveAccountMatches,
+    transactionOverrides,
+    transactions,
+  ]);
 
   const autoSelectedOriginalIndices = useMemo(
     () =>

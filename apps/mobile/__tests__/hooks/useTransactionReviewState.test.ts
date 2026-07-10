@@ -247,6 +247,52 @@ describe("useTransactionReviewState", () => {
     expect(Array.from(result.current.selectedIndices)).toEqual([0]);
   });
 
+  it("keeps parser category review after an account-only edit", async () => {
+    const transactions = [
+      createTransaction({
+        confidence: 0.99,
+        reviewStatus: "needs_review",
+        reviewReasons: ["category_needed"],
+      }),
+    ];
+
+    const { result } = renderHook(() =>
+      useTransactionReviewState({ transactions, onSave: jest.fn() })
+    );
+
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(1));
+
+    act(() => result.current.handleOpenEditModal(0));
+    act(() => {
+      result.current.handleEditModalSave({
+        amount: 100,
+        type: "EXPENSE",
+        categoryId: "cat-food",
+        accountId: "acc-manual",
+        accountName: "Manual account",
+      });
+    });
+
+    expect(result.current.reviewMetaByIndex.get(0)?.reasons).toContain(
+      "category_needed"
+    );
+
+    act(() => result.current.handleOpenEditModal(0));
+    act(() => {
+      result.current.handleEditModalSave({
+        amount: 100,
+        type: "EXPENSE",
+        categoryId: "cat-shopping",
+        accountId: "acc-manual",
+        accountName: "Manual account",
+      });
+    });
+
+    expect(result.current.reviewMetaByIndex.get(0)?.reasons).not.toContain(
+      "category_needed"
+    );
+  });
+
   it("re-seeds when review risk fields change for the same parsed transaction", async () => {
     const firstScan = [createTransaction({ confidence: 0.95 })];
     const secondScan = [createTransaction({ confidence: 0.7 })];

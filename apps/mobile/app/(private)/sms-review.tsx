@@ -169,6 +169,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
           count: transactions.length,
         })}
         onBack={() => router.back()}
+        workspaceVariant="sms"
       />
 
       {/* Discard confirmation */}

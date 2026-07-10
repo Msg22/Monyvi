@@ -17,6 +17,19 @@ jest.mock("react-i18next", () => ({
 }));
 
 describe("ReviewActionBar", () => {
+  function createProps(): React.ComponentProps<typeof ReviewActionBar> {
+    return {
+      selectedCount: 1,
+      needsReviewCount: 0,
+      reviewMode: "all",
+      isSaving: false,
+      onSave: jest.fn().mockResolvedValue(undefined),
+      onDiscard: jest.fn(),
+      onReviewNeeds: jest.fn(),
+      onShowAll: jest.fn(),
+    };
+  }
+
   it("exposes an unambiguous review-needed action for E2E", () => {
     const onReviewNeeds = jest.fn();
 
@@ -57,5 +70,27 @@ describe("ReviewActionBar", () => {
     fireEvent.press(screen.getByText("discard_all"));
 
     expect(onDiscard).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the shared action bar theme-aware outside the SMS workspace", () => {
+    render(<ReviewActionBar {...createProps()} />);
+
+    expect(screen.getByTestId("review-action-bar")).toHaveProp(
+      "className",
+      expect.stringContaining("bg-white/95")
+    );
+    expect(screen.getByTestId("review-action-bar")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:bg-slate-950/95")
+    );
+  });
+
+  it("uses the approved dark action surface in the SMS workspace", () => {
+    render(<ReviewActionBar {...createProps()} isSmsWorkspace />);
+
+    expect(screen.getByTestId("review-action-bar")).toHaveProp(
+      "className",
+      expect.stringContaining("bg-slate-950/95")
+    );
   });
 });

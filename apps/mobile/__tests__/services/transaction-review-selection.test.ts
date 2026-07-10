@@ -114,9 +114,31 @@ describe("transaction-review-selection", () => {
       matchReason: "sms_sender",
     };
 
-    expect(getTransactionReviewMeta(transaction, accountMatch)).toEqual({
+    expect(
+      getTransactionReviewMeta(transaction, accountMatch, {
+        hasCategoryOverride: true,
+      })
+    ).toEqual({
       isAutoSelectable: true,
       reasons: [],
+    });
+  });
+
+  it("keeps parser category-needed reasons until the user chooses a category", () => {
+    const transaction = createTransaction({
+      confidence: 0.99,
+      reviewStatus: "needs_review",
+      reviewReasons: ["category_needed"],
+    });
+    const accountMatch = {
+      accountId: "acc-1",
+      accountName: "Bank",
+      matchReason: "sms_sender",
+    };
+
+    expect(getTransactionReviewMeta(transaction, accountMatch)).toEqual({
+      isAutoSelectable: false,
+      reasons: ["category_needed"],
     });
   });
 
