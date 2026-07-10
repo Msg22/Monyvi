@@ -32,8 +32,10 @@ appId: com.monyvi.app
       id: transaction-account-match
     timeout: 30000
 
-- assertVisible: "[0-9]+ auto-selected"
-- assertVisible: "[0-9]+ need review"
+- assertVisible:
+    id: review-summary-auto-selected
+- assertVisible:
+    id: review-summary-needs-review
 
 - tapOn: "Review [0-9]+ item(s)?"
 
