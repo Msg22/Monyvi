@@ -1,5 +1,6 @@
 import type { CurrencyType, TransactionType } from "@monyvi/db";
 import { isKnownFinancialSender } from "./egyptian-bank-registry";
+import { parseLocalSmsMessageDate } from "./local-sms-date-parser";
 import type {
   LocalReviewReason,
   LocalSmsMatchInput,
@@ -104,7 +105,7 @@ function createMatch(
     type: values.type,
     counterparty: normalizeText(values.counterparty),
     categorySystemName: values.categorySystemName,
-    date: new Date(input.receivedAtMs),
+    date: parseLocalSmsMessageDate(input.body, input.receivedAtMs),
     cardLast4: extractCardLast4(input.body),
     isAtmWithdrawal: values.isAtmWithdrawal,
     reviewReasons: values.reviewReasons,
@@ -125,7 +126,7 @@ function matchBankPurchase(
   const body = normalizeText(input.body);
   const amount = extractAmount(body);
   const merchant =
-    /\bat\s+(?<merchant>.+?)(?:\s+on\s+\d{1,2}[/-]|\.\s*Avail|\s+Avail|\s*$)/i.exec(
+    /\bat\s+(?<merchant>.+?)(?:\s+on\s+\d{1,2}[/-]|\s+using\s+card|\.\s*Avail|\s+Avail|\s*$)/i.exec(
       body
     )?.groups?.merchant;
   return amount && /\bpurchase\b/i.test(body) && merchant

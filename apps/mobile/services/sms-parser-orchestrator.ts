@@ -13,6 +13,7 @@ import {
 } from "@/config/e2e-test-config";
 import { logger } from "@/utils/logger";
 import {
+  createAiConsentRequiredError,
   isAiConsentRequiredError,
   parseSmsWithAi,
   type AiParseProgress,
@@ -130,7 +131,7 @@ function mapLocalTransactions(
         cardLast4: transaction.cardLast4,
       };
     }),
-    matchedPatternIds: localResult.matchedPatternIds,
+    matchedPatternIds: [],
     runtimeScopeCounts,
     hasError: false,
   };
@@ -151,7 +152,7 @@ function createLocalResult(
       attemptedLocal: true,
       candidateCount: candidates.length,
       resultCount: local.transactions.length,
-      matchedPatternIds: local.matchedPatternIds,
+      matchedPatternIds: [],
       runtimeScopeCounts: local.runtimeScopeCounts,
     }),
   };
@@ -160,23 +161,6 @@ function createLocalResult(
 async function canUseLocalParser(): Promise<boolean> {
   const consentStatus = await getAiProcessingConsentStatus();
   return consentStatus.isConsented;
-}
-
-function createBlockedLocalResult(
-  candidates: readonly SmsCandidate[]
-): SmsParserOrchestratorResult {
-  return {
-    transactions: [],
-    hasError: true,
-    isRetryable: false,
-    diagnostics: createDiagnostics({
-      mode: "local-primary",
-      attemptedAi: false,
-      attemptedLocal: false,
-      candidateCount: candidates.length,
-      resultCount: 0,
-    }),
-  };
 }
 
 function getAiDiagnosticsMode(): SmsParserMode {
@@ -202,7 +186,7 @@ export async function parseSmsWithOrchestrator(
 
     if (!(await canUseLocalParser())) {
       throwIfAborted(abortSignal);
-      return createBlockedLocalResult(candidates);
+      throw createAiConsentRequiredError();
     }
 
     throwIfAborted(abortSignal);

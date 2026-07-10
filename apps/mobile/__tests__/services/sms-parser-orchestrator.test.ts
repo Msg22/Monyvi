@@ -9,6 +9,11 @@ const mockGetAiProcessingConsentStatus = jest.fn();
 
 jest.mock("@/services/ai-sms-parser-service", () => ({
   parseSmsWithAi: (...args: unknown[]) => mockParseSmsWithAi(...args),
+  createAiConsentRequiredError: (): Error => {
+    const error = new Error("AI processing consent required");
+    error.name = "AiConsentRequiredError";
+    return error;
+  },
   isAiConsentRequiredError: (error: unknown): boolean =>
     error instanceof Error && error.name === "AiConsentRequiredError",
 }));
@@ -275,6 +280,12 @@ describe("sms-parser-orchestrator", () => {
     expect(JSON.stringify(result.diagnostics)).not.toContain("CARREFOUR");
     expect(JSON.stringify(result.diagnostics)).not.toContain("250");
     expect(JSON.stringify(result.diagnostics)).not.toContain("NBE");
+    expect(JSON.stringify(result.diagnostics).toLowerCase()).not.toContain(
+      "nbe"
+    );
+    expect(JSON.stringify(result.diagnostics).toLowerCase()).not.toContain(
+      "debit"
+    );
   });
 
   it("returns safe aggregate diagnostics for local-parser mode", async () => {
@@ -288,7 +299,7 @@ describe("sms-parser-orchestrator", () => {
       attemptedLocal: true,
       candidateCount: 1,
       resultCount: 1,
-      matchedPatternIds: ["nbe-debit-purchase"],
+      matchedPatternIds: [],
       runtimeScopeCounts: { dev_test: 1 },
     });
   });
@@ -299,18 +310,10 @@ describe("sms-parser-orchestrator", () => {
       isConsented: false,
     });
 
-    const result = await parseSmsWithOrchestrator([candidate()], context);
+    await expect(
+      parseSmsWithOrchestrator([candidate()], context)
+    ).rejects.toMatchObject({ name: "AiConsentRequiredError" });
 
     expect(mockParseSmsWithAi).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      transactions: [],
-      hasError: true,
-      isRetryable: false,
-    });
-    expect(result.diagnostics).toMatchObject({
-      mode: "local-primary",
-      attemptedAi: false,
-      attemptedLocal: false,
-    });
   });
 });

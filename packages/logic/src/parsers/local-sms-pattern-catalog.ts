@@ -1,6 +1,7 @@
 import type { CurrencyType, TransactionType } from "@monyvi/db";
 import { isKnownFinancialSender } from "./egyptian-bank-registry";
 import { LOCAL_SMS_BROAD_DEV_TEST_PATTERNS } from "./local-sms-broad-dev-test-patterns";
+import { parseLocalSmsMessageDate } from "./local-sms-date-parser";
 import type {
   LocalReviewReason,
   LocalSmsMatchInput,
@@ -125,78 +126,6 @@ function extractCardLast4(body: string): string | undefined {
   return match?.groups?.last4;
 }
 
-function isValidDateParts(
-  date: Date,
-  year: number,
-  month: number,
-  day: number
-): boolean {
-  return (
-    date.getFullYear() === year &&
-    date.getMonth() === month &&
-    date.getDate() === day
-  );
-}
-
-function parseMessageDate(body: string, receivedAtMs: number): Date {
-  const received = new Date(receivedAtMs);
-  const slashMatch =
-    /(?:on\s+)?(?<day>\d{1,2})\/(?<month>\d{1,2})(?:\/(?<year>\d{4}))?(?:\s+(?<hour>\d{1,2}):(?<minute>\d{2}))?/i.exec(
-      body
-    );
-  if (slashMatch?.groups) {
-    const day = Number(slashMatch.groups.day);
-    const month = Number(slashMatch.groups.month) - 1;
-    const year = slashMatch.groups.year
-      ? Number(slashMatch.groups.year)
-      : received.getFullYear();
-    const hour = slashMatch.groups.hour ? Number(slashMatch.groups.hour) : 0;
-    const minute = slashMatch.groups.minute
-      ? Number(slashMatch.groups.minute)
-      : 0;
-    const parsed = new Date(year, month, day, hour, minute);
-    if (
-      !Number.isNaN(parsed.getTime()) &&
-      isValidDateParts(parsed, year, month, day)
-    ) {
-      return parsed;
-    }
-  }
-
-  const monthMatch = /(?<day>\d{1,2})-(?<month>[A-Z]{3})-(?<year>\d{4})/i.exec(
-    body
-  );
-  if (monthMatch?.groups) {
-    const monthIndex = [
-      "JAN",
-      "FEB",
-      "MAR",
-      "APR",
-      "MAY",
-      "JUN",
-      "JUL",
-      "AUG",
-      "SEP",
-      "OCT",
-      "NOV",
-      "DEC",
-    ].indexOf(monthMatch.groups.month.toUpperCase());
-    if (monthIndex >= 0) {
-      const day = Number(monthMatch.groups.day);
-      const year = Number(monthMatch.groups.year);
-      const parsed = new Date(year, monthIndex, day);
-      if (
-        !Number.isNaN(parsed.getTime()) &&
-        isValidDateParts(parsed, year, monthIndex, day)
-      ) {
-        return parsed;
-      }
-    }
-  }
-
-  return received;
-}
-
 function createMatch(
   input: LocalSmsMatchInput,
   values: {
@@ -214,7 +143,7 @@ function createMatch(
     type: values.type,
     counterparty: normalizeText(values.counterparty),
     categorySystemName: values.categorySystemName,
-    date: parseMessageDate(input.body, input.receivedAtMs),
+    date: parseLocalSmsMessageDate(input.body, input.receivedAtMs),
     cardLast4: extractCardLast4(input.body),
     isAtmWithdrawal: values.isAtmWithdrawal,
     reviewReasons: values.reviewReasons,

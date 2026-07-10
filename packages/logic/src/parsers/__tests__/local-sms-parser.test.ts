@@ -149,6 +149,41 @@ describe("parseSmsWithLocalParser", () => {
     expect(result.transactions[0]?.date).toEqual(new Date(RECEIVED_AT_MS));
   });
 
+  it("parses dates from broad dev/test bank patterns", () => {
+    const result = parseSmsWithLocalParser(
+      request([
+        candidate(
+          "Purchase EGP 100.00 on card **** 4321 at TEST MART on 08/04 14:23. Avail bal EGP 2,000.00",
+          { sender: "QNB" }
+        ),
+      ])
+    );
+
+    expect(result.transactions[0]).toMatchObject({
+      amount: 100,
+      counterparty: "TEST MART",
+      patternId: "egypt-bank-card-purchase",
+    });
+    expect(result.transactions[0]?.date).toEqual(new Date(2026, 3, 8, 14, 23));
+  });
+
+  it("keeps the live fixture merchant separate from card hints", () => {
+    const result = parseSmsWithLocalParser(
+      request([
+        candidate(
+          "Purchase EGP 63.21 at BACKGROUND LIVE SMS TEST using card ending 1234",
+          { sender: "QNB" }
+        ),
+      ])
+    );
+
+    expect(result.transactions[0]).toMatchObject({
+      amount: 63.21,
+      counterparty: "BACKGROUND LIVE SMS TEST",
+      cardLast4: "1234",
+    });
+  });
+
   it("returns deterministic results for repeated parses", () => {
     const sms = candidate(
       "Purchase EGP 250.00 on card **** 4321 at CARREFOUR CAIRO on 08/04 14:23. Avail bal EGP 12,430.55"

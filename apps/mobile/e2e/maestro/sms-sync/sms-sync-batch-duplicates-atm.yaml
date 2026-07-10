@@ -26,6 +26,10 @@ appId: com.monyvi.app
     visible: "Review SMS Transactions"
     timeout: 30000
 
+- extendedWaitUntil:
+    visible: "QNB Savings Account|NBE Salary Account|Vodafone Cash Wallet"
+    timeout: 30000
+
 - assertVisible: "Save [0-9]+ Transactions"
 - assertNotVisible: "Missing Info"
 
