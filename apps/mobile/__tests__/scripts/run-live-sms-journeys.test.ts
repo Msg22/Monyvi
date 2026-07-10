@@ -24,6 +24,11 @@ interface RunLiveSmsJourneysModule {
     flow: string,
     env?: Readonly<Record<string, string | undefined>>
   ): boolean;
+  prepareLiveSmsJourneyStart(dependencies: {
+    readonly stopApp: () => void;
+    readonly startApp: () => void;
+    readonly waitForLaunch: (durationMs: number) => void;
+  }): void;
 }
 
 const liveSmsJourneys = jest.requireActual(
@@ -177,5 +182,17 @@ describe("run-live-sms-journeys helpers", () => {
         { E2E_SUPABASE_MODE: "local" }
       )
     ).toBe(false);
+  });
+
+  it("restarts a prepared journey without waiting on the generic app preflight", () => {
+    const operations: string[] = [];
+
+    liveSmsJourneys.prepareLiveSmsJourneyStart({
+      stopApp: () => operations.push("stop"),
+      startApp: () => operations.push("start"),
+      waitForLaunch: (durationMs) => operations.push(`wait:${durationMs}`),
+    });
+
+    expect(operations).toEqual(["stop", "start", "wait:3000"]);
   });
 });

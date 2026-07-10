@@ -13,6 +13,7 @@ const {
   reconnectAndroidDevice,
   resolveMaestroBin,
   seedIntroSeenFlagForE2e,
+  startAppWithoutChangingPermissions,
   wait,
 } = require("./e2e-preflight");
 const { applyE2eAuthDeepLink } = require("./e2e-auth-deeplink");
@@ -1031,12 +1032,23 @@ function logInfo(event, fields) {
   );
 }
 
+function prepareLiveSmsJourneyStart(
+  dependencies = {
+    stopApp: forceStopApp,
+    startApp: startAppWithoutChangingPermissions,
+    waitForLaunch: wait,
+  }
+) {
+  dependencies.stopApp();
+  dependencies.startApp();
+  dependencies.waitForLaunch(3000);
+}
+
 async function prepareLiveSmsJourneyRetry(journey) {
   await bootstrapCleanAuthenticatedSession();
   clearDeliveredNotifications();
   journey.prepare();
-  forceStopApp();
-  await ensureE2eAppReady();
+  prepareLiveSmsJourneyStart();
 }
 
 async function main() {
@@ -1058,8 +1070,7 @@ async function main() {
 
     logInfo("liveSmsJourney.started", { id, flow: journey.flow });
     journey.prepare();
-    forceStopApp();
-    await ensureE2eAppReady();
+    prepareLiveSmsJourneyStart();
     const canResetSideEffects = shouldResetLiveSmsSideEffectsBeforeRetry(
       journey.flow
     );
@@ -1091,6 +1102,7 @@ module.exports = {
   getMaestroTransportRetryAttempts,
   getActiveUserFilter,
   isRetryableMaestroTransportFailure,
+  prepareLiveSmsJourneyStart,
   shouldPrepareLiveSmsFlowBeforeRetry,
   shouldRetryLiveSmsVerificationFlow,
   shouldResetLiveSmsSideEffectsBeforeRetry,
