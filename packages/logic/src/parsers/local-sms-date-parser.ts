@@ -12,6 +12,7 @@ const MONTH_NAMES = [
   "NOV",
   "DEC",
 ] as const;
+const MAX_YEARLESS_DATE_FUTURE_MS = 24 * 60 * 60 * 1000;
 
 function isValidDateParts(
   date: Date,
@@ -39,14 +40,22 @@ export function parseLocalSmsMessageDate(
   if (slashMatch?.groups) {
     const day = Number(slashMatch.groups.day);
     const month = Number(slashMatch.groups.month) - 1;
-    const year = slashMatch.groups.year
+    let year = slashMatch.groups.year
       ? Number(slashMatch.groups.year)
       : received.getFullYear();
     const hour = slashMatch.groups.hour ? Number(slashMatch.groups.hour) : 0;
     const minute = slashMatch.groups.minute
       ? Number(slashMatch.groups.minute)
       : 0;
-    const parsed = new Date(year, month, day, hour, minute);
+    let parsed = new Date(year, month, day, hour, minute);
+
+    if (
+      !slashMatch.groups.year &&
+      parsed.getTime() > receivedAtMs + MAX_YEARLESS_DATE_FUTURE_MS
+    ) {
+      year -= 1;
+      parsed = new Date(year, month, day, hour, minute);
+    }
 
     if (
       !Number.isNaN(parsed.getTime()) &&

@@ -11,6 +11,10 @@ import type {
 
 const BASE_RECEIVED_AT_MS = new Date(2026, 3, 8, 12, 0).getTime();
 const HOUR_MS = 60 * 60 * 1000;
+const DEFAULT_BANK_CARD_LAST_4 = "4321";
+const BANK_CARD_LAST_4_BY_PROVIDER_ID: Readonly<Record<string, string>> = {
+  "qnb-egypt": "5566",
+};
 
 const BANK_SCENARIOS: readonly LocalSmsFixtureScenario[] = [
   "bank_purchase",
@@ -54,6 +58,12 @@ function getPrimarySender(institution: EgyptianFinancialInstitution): string {
   return institution.senderPatterns[0]?.toUpperCase() ?? institution.shortName;
 }
 
+function getBankCardLast4(institution: EgyptianFinancialInstitution): string {
+  return (
+    BANK_CARD_LAST_4_BY_PROVIDER_ID[institution.id] ?? DEFAULT_BANK_CARD_LAST_4
+  );
+}
+
 function amountFor(index: number, scenario: LocalSmsFixtureScenario): number {
   const baseByScenario: Record<LocalSmsFixtureScenario, number> = {
     bank_purchase: 100,
@@ -92,6 +102,7 @@ function expected(
   amount: number,
   counterparty: string,
   patternId: string,
+  cardLast4: string,
   overrides: Partial<LocalSmsFixtureExpectedOutcome> = {}
 ): LocalSmsFixtureExpectedOutcome {
   const isIncome =
@@ -111,7 +122,7 @@ function expected(
     reviewStatus: isAtmWithdrawal ? "needs_review" : "auto_selectable",
     reviewReasons: isAtmWithdrawal ? ["cash_transfer_review"] : [],
     isAtmWithdrawal: isAtmWithdrawal || undefined,
-    cardLast4: hasCardHint ? "4321" : undefined,
+    cardLast4: hasCardHint ? cardLast4 : undefined,
     patternId,
   };
 
@@ -126,6 +137,7 @@ function bodyFor(
   sender: string,
   scenario: LocalSmsFixtureScenario,
   amount: number,
+  cardLast4: string,
   index: number
 ): string {
   const merchant = `${institution.shortName} TEST MART ${index}`;
@@ -133,13 +145,13 @@ function bodyFor(
 
   switch (scenario) {
     case "bank_purchase":
-      return `${sender}: Purchase EGP ${amount.toFixed(2)} on card **** 4321 at ${merchant} on 08/04 14:${String(index % 60).padStart(2, "0")}. Avail bal EGP 12,000.00`;
+      return `${sender}: Purchase EGP ${amount.toFixed(2)} on card **** ${cardLast4} at ${merchant} on 08/04 14:${String(index % 60).padStart(2, "0")}. Avail bal EGP 12,000.00`;
     case "bank_atm_withdrawal":
-      return `${sender}: ATM cash withdrawal EGP ${amount.toFixed(2)} from card **** 4321 on 08/04/2026 15:${String(index % 60).padStart(2, "0")}. Avail bal EGP 8,000.00`;
+      return `${sender}: ATM cash withdrawal EGP ${amount.toFixed(2)} from card **** ${cardLast4} on 08/04/2026 15:${String(index % 60).padStart(2, "0")}. Avail bal EGP 8,000.00`;
     case "bank_transfer_in":
-      return `${sender}: Credit EGP ${amount.toFixed(2)} to account **** 4321 via transfer from ${counterparty} on 08/04. New bal EGP 15,000.00`;
+      return `${sender}: Credit EGP ${amount.toFixed(2)} to account **** ${cardLast4} via transfer from ${counterparty} on 08/04. New bal EGP 15,000.00`;
     case "bank_transfer_out":
-      return `${sender}: Transfer EGP ${amount.toFixed(2)} from account **** 4321 to ${counterparty} on 08/04. Avail bal EGP 9,000.00`;
+      return `${sender}: Transfer EGP ${amount.toFixed(2)} from account **** ${cardLast4} to ${counterparty} on 08/04. Avail bal EGP 9,000.00`;
     case "wallet_transfer_in":
       return `${sender}: You received EGP ${amount.toFixed(2)} from 0100000${String(index).padStart(4, "0")} to your wallet. Balance EGP 900.00`;
     case "wallet_transfer_out":
@@ -238,6 +250,7 @@ function createFixture(
   const sender = getPrimarySender(institution);
   const amount = amountFor(index, scenario);
   const patternId = patternIdFor(scenario);
+  const cardLast4 = getBankCardLast4(institution);
   const isFinancialTransaction =
     scenario !== "payment_reference" && scenario !== "non_transactional";
   const outcome = isFinancialTransaction
@@ -246,6 +259,7 @@ function createFixture(
         amount,
         counterpartyFor(institution, scenario, index),
         patternId,
+        cardLast4,
         expectedOutcomeOverridesFor(scenario)
       )
     : undefined;
@@ -255,7 +269,7 @@ function createFixture(
     providerId: institution.id,
     providerName: institution.shortName,
     sender,
-    body: bodyFor(institution, sender, scenario, amount, index),
+    body: bodyFor(institution, sender, scenario, amount, cardLast4, index),
     receivedAtMs: BASE_RECEIVED_AT_MS + index * HOUR_MS,
     sourceType: "synthetic",
     sourceConfidence: "unknown",

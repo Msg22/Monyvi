@@ -147,7 +147,9 @@ function matchBankAtm(input: LocalSmsMatchInput): LocalSmsPatternMatch | null {
   if (!isKnownType(input, "bank")) return null;
   const body = normalizeText(input.body);
   const amount = extractAmount(body);
-  return amount && /\bATM\b/i.test(body) && /\bwithdrawal\b/i.test(body)
+  return amount &&
+    /\b(?:ATM\s+)?cash\s+withdrawal\b/i.test(body) &&
+    extractCardLast4(body)
     ? createMatch(input, {
         amount,
         type: "EXPENSE",

@@ -72,6 +72,20 @@ describe("local SMS fixture corpus", () => {
     }
   });
 
+  it("aligns QNB bank fixture card hints with the seeded QNB account", () => {
+    const qnbBankFixtures = LOCAL_SMS_FIXTURE_CORPUS.filter(
+      (fixture) =>
+        fixture.providerId === "qnb-egypt" &&
+        fixture.scenario.startsWith("bank_")
+    );
+
+    expect(qnbBankFixtures.length).toBeGreaterThan(0);
+    for (const fixture of qnbBankFixtures) {
+      expect(fixture.body).toContain("**** 5566");
+      expect(fixture.expectedOutcome?.cardLast4).toBe("5566");
+    }
+  });
+
   it("parses financial corpus fixtures through declared local patterns", () => {
     const financialFixtures = LOCAL_SMS_FIXTURE_CORPUS.filter(
       (fixture) => fixture.isFinancialTransaction

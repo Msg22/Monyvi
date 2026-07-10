@@ -171,6 +171,7 @@ function matchDebitPurchase(
     type: "EXPENSE",
     counterparty: merchant,
     categorySystemName: "shopping",
+    reviewReasons: extractCardLast4(body) ? [] : ["account_needed"],
   });
 }
 
@@ -200,7 +201,12 @@ function matchAtmWithdrawal(
   input: LocalSmsMatchInput
 ): LocalSmsPatternMatch | null {
   const body = normalizeText(input.body);
-  if (!/\bATM\b/i.test(body) || !/\bwithdrawal\b/i.test(body)) return null;
+  if (
+    !/\b(?:ATM\s+)?cash\s+withdrawal\b/i.test(body) ||
+    !extractCardLast4(body)
+  ) {
+    return null;
+  }
   const amount =
     extractAmount(body, "currency-first") ??
     extractAmount(body, "amount-first");

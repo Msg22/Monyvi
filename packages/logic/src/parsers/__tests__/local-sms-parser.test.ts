@@ -185,6 +185,24 @@ describe("parseSmsWithLocalParser", () => {
     });
   });
 
+  it("keeps NBE purchases without card evidence in review", () => {
+    const result = parseSmsWithLocalParser(
+      request([
+        candidate(
+          "Purchase EGP 250.00 at CARREFOUR CAIRO on 08/04 14:23. Avail bal EGP 12,430.55",
+          { sender: "NBE" }
+        ),
+      ])
+    );
+
+    expect(result.transactions[0]).toMatchObject({
+      amount: 250,
+      reviewStatus: "needs_review",
+      reviewReasons: ["account_needed"],
+      patternId: "nbe-debit-purchase",
+    });
+  });
+
   it("keeps wallet templates without account-specific evidence in review", () => {
     const result = parseSmsWithLocalParser(
       request([
@@ -252,6 +270,24 @@ describe("parseSmsWithLocalParser", () => {
       isAtmWithdrawal: true,
       cardLast4: "5566",
     });
+  });
+
+  it("does not parse ATM text without cash-withdrawal and card evidence", () => {
+    const result = parseSmsWithLocalParser(
+      request([
+        candidate("QNB: ATM withdrawal limit EGP 5,000.00 per day", {
+          sender: "QNB",
+        }),
+        candidate("QNB: ATM cash withdrawal EGP 500.00 is unavailable", {
+          sender: "QNB",
+          messageId: "sms-atm-without-card",
+          smsFingerprint: "fp-atm-without-card",
+        }),
+      ])
+    );
+
+    expect(result.transactions).toEqual([]);
+    expect(result.unsupportedCount).toBe(2);
   });
 
   it("meets the phase-1 fixture acceptance metrics", () => {
