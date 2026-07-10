@@ -208,7 +208,15 @@ export function TransactionReview({
           className="overflow-hidden rounded-[22px] border border-slate-700/80 px-6 py-5"
         >
           <View className="flex-row items-center">
-            <View className="flex-1 flex-row items-center justify-center">
+            <View
+              testID="review-summary-auto-selected"
+              accessible
+              accessibilityLabel={tTransactions(
+                "review_summary_auto_selected",
+                { count: state.autoSelectedCount }
+              )}
+              className="flex-1 flex-row items-center justify-center"
+            >
               <View className="h-12 w-12 items-center justify-center rounded-full border border-nileGreen-400 bg-nileGreen-600">
                 <Ionicons name="checkmark" size={28} color="white" />
               </View>
@@ -224,7 +232,14 @@ export function TransactionReview({
 
             <View className="mx-6 h-20 w-px bg-slate-700" />
 
-            <View className="flex-1 flex-row items-center justify-center">
+            <View
+              testID="review-summary-needs-review"
+              accessible
+              accessibilityLabel={tTransactions("review_summary_needs_review", {
+                count: state.needsReviewCount,
+              })}
+              className="flex-1 flex-row items-center justify-center"
+            >
               <View className="h-12 w-12 items-center justify-center rounded-2xl border border-gold-400 bg-gold-600/30">
                 <Ionicons
                   name="warning-outline"

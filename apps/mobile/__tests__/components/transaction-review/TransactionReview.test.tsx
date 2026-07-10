@@ -233,4 +233,11 @@ describe("TransactionReview", () => {
 
     expect(screen.getByTestId("transaction-review-screen")).toBeTruthy();
   });
+
+  it("exposes each summary count as one accessible E2E signal", () => {
+    renderReview({ autoSelectedCount: 2, needsReviewCount: 1 });
+
+    expect(screen.getByLabelText("2 auto-selected")).toBeTruthy();
+    expect(screen.getByLabelText("1 need review")).toBeTruthy();
+  });
 });

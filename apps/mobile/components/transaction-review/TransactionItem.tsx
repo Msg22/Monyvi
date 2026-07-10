@@ -106,7 +106,8 @@ function TransactionBadge({
 function formatReviewDateTime(
   date: Date,
   todayLabel: string,
-  yesterdayLabel: string
+  yesterdayLabel: string,
+  language: "en" | "ar"
 ): string {
   const today = new Date();
   const yesterday = new Date(today);
@@ -115,14 +116,20 @@ function formatReviewDateTime(
     ? todayLabel
     : isSameDay(date, yesterday)
       ? yesterdayLabel
-      : date.toLocaleDateString("en-EG", {
-          month: "short",
-          day: "numeric",
-        });
-  const timeLabel = date.toLocaleTimeString("en-EG", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+      : date.toLocaleDateString(
+          language === "ar" ? "ar-EG-u-nu-latn" : "en-EG",
+          {
+            month: "short",
+            day: "numeric",
+          }
+        );
+  const timeLabel = date.toLocaleTimeString(
+    language === "ar" ? "ar-EG-u-nu-latn" : "en-EG",
+    {
+      hour: "2-digit",
+      minute: "2-digit",
+    }
+  );
   return `${dayLabel} · ${timeLabel}`;
 }
 
@@ -277,13 +284,26 @@ function TransactionItemInner({
           </Text>
 
           {/* Middle row: counterparty + date */}
-          <Text className="mt-1 text-base text-slate-400" numberOfLines={1}>
-            {formatReviewDateTime(
-              transaction.date,
-              t("review_date_today"),
-              t("review_date_yesterday")
+          <View className="mt-1 flex-row items-center justify-between gap-3">
+            {counterpartyText ? (
+              <Text
+                className="flex-1 text-base text-slate-400"
+                numberOfLines={1}
+              >
+                {counterpartyText}
+              </Text>
+            ) : (
+              <View className="flex-1" />
             )}
-          </Text>
+            <Text className="text-base text-slate-400" numberOfLines={1}>
+              {formatReviewDateTime(
+                transaction.date,
+                t("review_date_today"),
+                t("review_date_yesterday"),
+                language
+              )}
+            </Text>
+          </View>
 
           {/* Bottom row: category + account chips */}
           <View className="mt-2 flex-row items-center flex-wrap gap-2">
@@ -306,8 +326,9 @@ function TransactionItemInner({
 
         <View className="items-end">
           <Text
+            testID="transaction-review-amount"
             className={`text-xl font-semibold ${
-              isExpense ? "text-slate-100" : "text-nileGreen-400"
+              isExpense ? "text-red-400" : "text-nileGreen-400"
             }`}
           >
             {isExpense ? "-" : "+"}

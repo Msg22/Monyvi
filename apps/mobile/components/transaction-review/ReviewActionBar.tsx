@@ -26,6 +26,7 @@ export function ReviewActionBar({
   reviewMode,
   isSaving,
   onSave,
+  onDiscard,
   onReviewNeeds,
   onShowAll,
 }: ReviewActionBarProps): React.JSX.Element {
@@ -90,20 +91,33 @@ export function ReviewActionBar({
         </LinearGradient>
       </TouchableOpacity>
 
-      {needsReviewCount > 0 && (
+      <View className="mt-5 flex-row items-center justify-center gap-8">
+        {needsReviewCount > 0 && (
+          <TouchableOpacity
+            onPress={reviewMode === "needs_review" ? onShowAll : onReviewNeeds}
+            disabled={isSaving}
+            activeOpacity={0.8}
+            className="min-h-9 items-center justify-center"
+          >
+            <Text className="text-lg font-bold text-nileGreen-400">
+              {reviewMode === "needs_review"
+                ? t("show_all")
+                : t("review_items_count", { count: needsReviewCount })}
+            </Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
-          onPress={reviewMode === "needs_review" ? onShowAll : onReviewNeeds}
+          onPress={onDiscard}
           disabled={isSaving}
           activeOpacity={0.8}
-          className="mt-5 min-h-9 items-center justify-center"
+          className="min-h-9 flex-row items-center justify-center"
         >
-          <Text className="text-xl font-bold text-nileGreen-400">
-            {reviewMode === "needs_review"
-              ? t("show_all")
-              : t("review_items_count", { count: needsReviewCount })}
+          <Ionicons name="trash-outline" size={18} color={palette.red[400]} />
+          <Text className="ms-2 text-lg font-semibold text-red-400">
+            {t("discard_all")}
           </Text>
         </TouchableOpacity>
-      )}
+      </View>
     </Animated.View>
   );
 }

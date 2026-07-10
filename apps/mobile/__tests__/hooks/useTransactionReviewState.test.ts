@@ -191,6 +191,29 @@ describe("useTransactionReviewState", () => {
     ).toEqual(["LOW", "NO_ACCOUNT"]);
   });
 
+  it("groups review rows under a header for each transaction date", async () => {
+    const transactions = [
+      createTransaction({
+        date: new Date("2026-07-02T12:00:00.000Z"),
+        deduplicationHash: "sms-fingerprint-2",
+      }),
+      createTransaction({ date: new Date("2026-07-01T12:00:00.000Z") }),
+    ];
+
+    const { result } = renderHook(() =>
+      useTransactionReviewState({ transactions, onSave: jest.fn() })
+    );
+
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(2));
+
+    expect(
+      result.current.listItems.filter((item) => item.kind === "header")
+    ).toHaveLength(2);
+    expect(
+      result.current.listItems.filter((item) => item.kind === "transaction")
+    ).toHaveLength(2);
+  });
+
   it("updates review reasons when editing a row resolves the missing account", async () => {
     const transactions = [
       createTransaction({ originLabel: "NO_ACCOUNT", confidence: 0.99 }),

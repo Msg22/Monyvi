@@ -25,6 +25,7 @@ import {
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import type { TransactionEdits } from "@/services/sms-edit-modal-service";
+import { formatToLocalDateString } from "@/utils/dateHelpers";
 
 export type ReviewListItem =
   | { readonly kind: "header"; readonly date: string; readonly key: string }
@@ -41,20 +42,32 @@ function groupByDate(
   transactions: readonly ReviewableTransaction[],
   originalTransactions: readonly ReviewableTransaction[]
 ): readonly ReviewListItem[] {
+  const items: ReviewListItem[] = [];
+  let lastDate = "";
   const originalIndexMap = new Map<ReviewableTransaction, number>();
   originalTransactions.forEach((tx, i) => originalIndexMap.set(tx, i));
 
-  return [...transactions]
-    .sort((a, b) => b.date.getTime() - a.date.getTime())
-    .map((tx) => {
-      const originalIndex = originalIndexMap.get(tx) ?? 0;
-      return {
-        kind: "transaction",
-        originalIndex,
-        tx,
-        key: `tx-${originalIndex}`,
-      };
+  const sortedTransactions = [...transactions].sort(
+    (a, b) => b.date.getTime() - a.date.getTime()
+  );
+
+  sortedTransactions.forEach((tx) => {
+    const dateKey = formatToLocalDateString(tx.date);
+    if (dateKey !== lastDate) {
+      items.push({ kind: "header", date: dateKey, key: `h-${dateKey}` });
+      lastDate = dateKey;
+    }
+
+    const originalIndex = originalIndexMap.get(tx) ?? 0;
+    items.push({
+      kind: "transaction",
+      originalIndex,
+      tx,
+      key: `tx-${originalIndex}`,
     });
+  });
+
+  return items;
 }
 
 function applyFilters(
