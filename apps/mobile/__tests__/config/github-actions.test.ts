@@ -34,6 +34,8 @@ describe("GitHub Actions Android E2E workflow", () => {
     const workflow = readCiWorkflow();
 
     expect(workflow).toContain("cancel-in-progress: true");
+    expect(workflow).toContain("permissions:\n  contents: read");
+    expect(workflow).toContain("fail-fast: false");
     expect(workflow).toContain(
       "matrix: ${{ fromJSON(needs.e2e-scope.outputs.matrix) }}"
     );
@@ -41,6 +43,18 @@ describe("GitHub Actions Android E2E workflow", () => {
     expect(workflow).toContain("needs: [e2e-scope, quality, android-build]");
     expect(workflow).not.toContain(
       "android-build:\n    name: Android Build Verification\n    runs-on: ubuntu-latest\n    timeout-minutes: 60\n    needs: quality"
+    );
+  });
+
+  it("passes the matrix suite to shell through the step environment", () => {
+    const workflow = readCiWorkflow();
+
+    expect(workflow).toContain("MATRIX_SUITE: ${{ matrix.suite }}");
+    expect(workflow).toContain(
+      'MAESTRO_E2E_EMAIL="e2e-${GITHUB_RUN_ID}-${MATRIX_SUITE}@monyvi.test"'
+    );
+    expect(workflow).not.toContain(
+      'MAESTRO_E2E_EMAIL="e2e-${GITHUB_RUN_ID}-${{ matrix.suite }}@monyvi.test"'
     );
   });
 

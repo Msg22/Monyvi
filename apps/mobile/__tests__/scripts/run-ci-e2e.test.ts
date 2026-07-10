@@ -169,11 +169,12 @@ describe("run-ci-e2e helpers", () => {
     ).toBe(false);
   });
 
-  it("reuses the authenticated session for aggregate SMS sync journeys", () => {
+  it("reuses and refreshes the authenticated session for SMS sync journeys", () => {
     expect(runCiE2e.getSmsSyncJourneyOptions()).toEqual({
       retryOnDeviceFailure: false,
       env: {
         E2E_SKIP_AUTH_BOOTSTRAP: "1",
+        E2E_SMS_SYNC_RELAUNCH_BETWEEN_JOURNEYS: "1",
       },
     });
   });

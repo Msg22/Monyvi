@@ -10,6 +10,9 @@ concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   e2e-scope:
     name: Resolve Android E2E Scope
@@ -154,7 +157,7 @@ jobs:
     needs: [e2e-scope, quality, android-build]
     if: needs.e2e-scope.outputs.should_run == 'true'
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix: ${{ fromJSON(needs.e2e-scope.outputs.matrix) }}
     env:
       CI: "true"
@@ -197,10 +200,12 @@ jobs:
         timeout-minutes: 10
 
       - name: Prepare local E2E environment
+        env:
+          MATRIX_SUITE: ${{ matrix.suite }}
         run: |
           npx supabase status -o env | grep -E '^(ANON_KEY|SERVICE_ROLE_KEY)=' > supabase.env
           . ./supabase.env
-          MAESTRO_E2E_EMAIL="e2e-${GITHUB_RUN_ID}-${{ matrix.suite }}@monyvi.test"
+          MAESTRO_E2E_EMAIL="e2e-${GITHUB_RUN_ID}-${MATRIX_SUITE}@monyvi.test"
           MAESTRO_E2E_PASSWORD="$(node -e "console.log(require('node:crypto').randomBytes(24).toString('base64url'))")"
           EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$ANON_KEY"
           SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
