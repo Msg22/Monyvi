@@ -37,7 +37,8 @@ appId: com.monyvi.app
 - assertVisible:
     id: review-summary-needs-review
 
-- tapOn: "Review [0-9]+ item(s)?"
+- tapOn:
+    id: review-needs-action
 
 - assertVisible: "Select shown"
 - tapOn: "Select shown"

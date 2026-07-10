@@ -17,6 +17,27 @@ jest.mock("react-i18next", () => ({
 }));
 
 describe("ReviewActionBar", () => {
+  it("exposes an unambiguous review-needed action for E2E", () => {
+    const onReviewNeeds = jest.fn();
+
+    render(
+      <ReviewActionBar
+        selectedCount={2}
+        needsReviewCount={1}
+        reviewMode="all"
+        isSaving={false}
+        onSave={jest.fn().mockResolvedValue(undefined)}
+        onDiscard={jest.fn()}
+        onReviewNeeds={onReviewNeeds}
+        onShowAll={jest.fn()}
+      />
+    );
+
+    fireEvent.press(screen.getByTestId("review-needs-action"));
+
+    expect(onReviewNeeds).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps discard wired without applying a second safe-area inset", () => {
     const onDiscard = jest.fn();
 

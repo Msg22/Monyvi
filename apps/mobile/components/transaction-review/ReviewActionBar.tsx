@@ -90,6 +90,7 @@ export function ReviewActionBar({
       <View className="mt-5 flex-row items-center justify-center gap-8">
         {needsReviewCount > 0 && (
           <TouchableOpacity
+            testID="review-needs-action"
             onPress={reviewMode === "needs_review" ? onShowAll : onReviewNeeds}
             disabled={isSaving}
             activeOpacity={0.8}

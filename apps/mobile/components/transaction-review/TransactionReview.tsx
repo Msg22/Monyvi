@@ -6,6 +6,7 @@ import { FlatList, Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import Animated, { FadeIn, FadeInDown, FadeOut } from "react-native-reanimated";
 import { PeriodFilterModal } from "@/components/modals/PeriodFilterModal";
+import { PageHeader } from "@/components/navigation/PageHeader";
 import { TypeFilterModal } from "@/components/modals/TypeFilterModal";
 import { TransactionFiltersBar } from "@/components/transactions/TransactionFiltersBar";
 import { palette } from "@/constants/colors";
@@ -154,31 +155,15 @@ export function TransactionReview({
   return (
     <View testID="transaction-review-screen" className="flex-1 bg-slate-950">
       {title && (
-        <View className="px-7 pb-5 pt-8">
-          <View className="flex-row items-center">
-            {onBack && (
-              <TouchableOpacity
-                onPress={onBack}
-                activeOpacity={0.75}
-                className="me-5 h-11 w-11 items-center justify-center rounded-full"
-                accessibilityRole="button"
-                accessibilityLabel={t("back")}
-              >
-                <Ionicons name="arrow-back" size={34} color="white" />
-              </TouchableOpacity>
-            )}
-            <View className="flex-1">
-              <Text className="text-[28px] font-extrabold text-white">
-                {title}
-              </Text>
-              {subtitle && (
-                <Text className="mt-1 text-lg font-medium text-slate-300">
-                  {subtitle}
-                </Text>
-              )}
-            </View>
-          </View>
-        </View>
+        <PageHeader
+          title={title}
+          subtitle={subtitle}
+          variant="review"
+          showDrawer={false}
+          showBackButton={Boolean(onBack)}
+          onBack={onBack}
+          backAccessibilityLabel={t("back")}
+        />
       )}
 
       {isFiltersVisible && (

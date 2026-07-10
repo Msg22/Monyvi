@@ -7,6 +7,20 @@ import {
   useTransactionReviewState,
 } from "@/hooks/useTransactionReviewState";
 
+const mockPageHeader = jest.fn();
+
+jest.mock("@/components/navigation/PageHeader", () => ({
+  PageHeader: (props: Record<string, unknown>): React.JSX.Element => {
+    const ReactActual = jest.requireActual<typeof import("react")>("react");
+    const ReactNative =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    mockPageHeader(props);
+    return ReactActual.createElement(ReactNative.View, {
+      testID: "page-header",
+    });
+  },
+}));
+
 jest.mock("@/context/ThemeContext", () => ({
   useTheme: (): { readonly isDark: boolean } => ({ isDark: false }),
 }));
@@ -187,6 +201,34 @@ function renderReview(state: Partial<UseTransactionReviewStateResult>): void {
 describe("TransactionReview", () => {
   beforeEach(() => {
     mockUseTransactionReviewState.mockReset();
+    mockPageHeader.mockReset();
+  });
+
+  it("delegates the approved review header to PageHeader", () => {
+    mockUseTransactionReviewState.mockReturnValue(createReviewState({}));
+    const onBack = jest.fn();
+
+    render(
+      <TransactionReview
+        transactions={[createTransaction()]}
+        onSave={jest.fn()}
+        onDiscard={jest.fn()}
+        isSaving={false}
+        title="Review transactions"
+        subtitle="3 found from SMS scan"
+        onBack={onBack}
+      />
+    );
+
+    expect(mockPageHeader).toHaveBeenCalledWith(
+      expect.objectContaining({
+        onBack,
+        showBackButton: true,
+        subtitle: "3 found from SMS scan",
+        title: "Review transactions",
+        variant: "review",
+      })
+    );
   });
 
   it("uses all-copy when the all view is unfiltered", () => {
