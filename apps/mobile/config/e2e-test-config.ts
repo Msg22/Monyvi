@@ -1,5 +1,5 @@
 export type MonyviTestMode = "off" | "e2e";
-export type AiSmsParserMode = "edge" | "fixture";
+export type AiSmsParserMode = "edge" | "fixture" | "local";
 
 interface E2eProcessEnv {
   readonly EXPO_PUBLIC_MONYVI_TEST_MODE?: unknown;
@@ -50,7 +50,8 @@ export function getMonyviTestMode(): MonyviTestMode {
 }
 
 export function getAiSmsParserMode(): AiSmsParserMode {
-  return getPublicAiSmsParserModeEnv() === "fixture" ? "fixture" : "edge";
+  const value = getPublicAiSmsParserModeEnv();
+  return value === "fixture" || value === "local" ? value : "edge";
 }
 
 export function isE2eTestMode(): boolean {
@@ -63,4 +64,18 @@ export function shouldUseFixtureSmsParser(): boolean {
     isE2eTestMode() &&
     getAiSmsParserMode() === "fixture"
   );
+}
+
+export function shouldUseFixtureSmsInbox(): boolean {
+  const parserMode = getAiSmsParserMode();
+
+  return (
+    getNodeEnv() !== "production" &&
+    isE2eTestMode() &&
+    (parserMode === "fixture" || parserMode === "local")
+  );
+}
+
+export function shouldUseLocalSmsParser(): boolean {
+  return getNodeEnv() !== "production" && getAiSmsParserMode() === "local";
 }

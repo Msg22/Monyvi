@@ -1,4 +1,8 @@
 interface StartE2eFixtureModule {
+  buildE2eMetroEnv(
+    parserMode: "fixture" | "local",
+    baseEnv?: Readonly<Record<string, string | undefined>>
+  ): Record<string, string | undefined>;
   buildE2eFixtureEnv(
     baseEnv?: Readonly<Record<string, string | undefined>>
   ): Record<string, string | undefined>;
@@ -17,6 +21,18 @@ describe("start-e2e-fixture script helpers", () => {
     expect(env.E2E_SUPABASE_MODE).toBe("local");
     expect(env.EXPO_PUBLIC_MONYVI_TEST_MODE).toBe("e2e");
     expect(env.EXPO_PUBLIC_AI_SMS_PARSER_MODE).toBe("fixture");
+    expect(env.EXPO_PUBLIC_SUPABASE_URL).toBe("http://10.0.2.2:54321");
+    expect(env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY).toContain("eyJ");
+  });
+
+  it("derives local Supabase env for Metro local parser startup", () => {
+    const env = startE2eFixture.buildE2eMetroEnv("local", {
+      E2E_LOCAL_JWT_SECRET: "local-test-jwt-secret-with-enough-length",
+    });
+
+    expect(env.E2E_SUPABASE_MODE).toBe("local");
+    expect(env.EXPO_PUBLIC_MONYVI_TEST_MODE).toBe("e2e");
+    expect(env.EXPO_PUBLIC_AI_SMS_PARSER_MODE).toBe("local");
     expect(env.EXPO_PUBLIC_SUPABASE_URL).toBe("http://10.0.2.2:54321");
     expect(env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY).toContain("eyJ");
   });

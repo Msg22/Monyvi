@@ -114,6 +114,47 @@ SMS sync:
 npm run e2e:sms-sync:local -w @monyvi/mobile
 ```
 
+SMS sync with the local parser on a connected Android device:
+
+```powershell
+# Terminal 1: starts Metro, sets local-parser E2E mode, and reverses 8081/54321
+npm run mobile:e2e-local-parser:device
+
+# Terminal 2: runs the SMS sync local-parser journeys against that device
+npm run e2e:sms-sync:local-parser:device
+
+# Optional: pass one or more journey numbers to run a focused subset
+npm run e2e:sms-sync:local-parser:device -- 01
+npm run e2e:sms-sync:local-parser:device -- 01 02
+```
+
+When no journey number is provided, the SMS sync runner executes the full
+local-parser SMS sync journey set. Journey numbers are simple pass-through
+arguments to `scripts/run-sms-sync-journeys.js`.
+
+In local-parser mode the fake SMS inbox is populated from a saveable subset of
+the synthetic dev/test corpus, limited to providers represented by the E2E seed
+accounts. The full 100+ corpus remains covered by parser/unit tests. The older
+`fixture` parser mode remains the narrow exact fixture harness for legacy
+fixture-parser checks.
+
+The device wrapper automatically:
+
+- uses `ANDROID_SERIAL`, `DEVICE`, or `MAESTRO_DEVICE_ID` when one is set
+- otherwise uses the only online device from `adb devices`
+- fails with a clear message when no device or multiple devices are connected
+- runs `adb reverse tcp:8081 tcp:8081` for Metro
+- runs `adb reverse tcp:54321 tcp:54321` for local Supabase
+- sets `EXPO_PUBLIC_AI_SMS_PARSER_MODE=local`
+- sets `E2E_AUTH_DEEPLINK_BOOTSTRAP=1` for the SMS sync runner
+
+If more than one Android device is connected, choose one explicitly:
+
+```powershell
+$env:ANDROID_SERIAL = "RZCWA1KBNVL"
+npm run mobile:e2e-local-parser:device
+```
+
 Live SMS, all default dev-client journeys:
 
 ```powershell

@@ -8,9 +8,11 @@ const {
   dumpVisibleText,
   ensureE2eAppReady,
   forceStopApp,
+  getMaestroDeviceArgs,
   isRetryableMaestroTransportFailure,
   reconnectAndroidDevice,
   resolveMaestroBin,
+  seedIntroSeenFlagForE2e,
   wait,
 } = require("./e2e-preflight");
 const { applyE2eAuthDeepLink } = require("./e2e-auth-deeplink");
@@ -189,14 +191,18 @@ function reconnectMaestroTransport() {
 }
 
 function runMaestroFlowOnce(maestroBin, flow) {
-  const result = spawnSync(maestroBin, ["test", join(flowDir, flow)], {
-    encoding: "utf8",
-    cwd: mobileRoot,
-    maxBuffer: 16 * 1024 * 1024,
-    shell: process.platform === "win32" && maestroBin.endsWith(".bat"),
-    stdio: ["ignore", "pipe", "pipe"],
-    timeout: getMaestroFlowTimeoutMs(),
-  });
+  const result = spawnSync(
+    maestroBin,
+    [...getMaestroDeviceArgs(), "test", join(flowDir, flow)],
+    {
+      encoding: "utf8",
+      cwd: mobileRoot,
+      maxBuffer: 16 * 1024 * 1024,
+      shell: process.platform === "win32" && maestroBin.endsWith(".bat"),
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: getMaestroFlowTimeoutMs(),
+    }
+  );
   const stdout = result.stdout || "";
   const stderr = result.stderr || "";
   const errorMessage = result.error?.message ?? "";
@@ -235,13 +241,14 @@ async function runFlow(flow, prepareRetry, retryOnTransportFailure = false) {
     if (
       retryOnTransportFailure &&
       attempt < maxAttempts &&
-      (result.didTimeout || isRetryableMaestroTransportFailure(result.output))
+      !result.didTimeout &&
+      isRetryableMaestroTransportFailure(result.output)
     ) {
       logInfo("liveSmsJourney.maestroTransportRetry", {
         flow,
         attempt,
         maxAttempts,
-        reason: result.didTimeout ? "timeout" : "transport-unavailable",
+        reason: "transport-unavailable",
       });
       reconnectMaestroTransport();
       await prepareRetry?.();
@@ -297,6 +304,7 @@ async function bootstrapCleanAuthenticatedSession() {
   const result = await seedE2eData(client, config);
   process.env.E2E_USER_ID = result.userId;
   adb(["shell", "pm", "clear", appId]);
+  seedIntroSeenFlagForE2e();
   await ensureE2eAppReady();
   await runFlow(getAuthBootstrapFlow(), undefined, true);
 }

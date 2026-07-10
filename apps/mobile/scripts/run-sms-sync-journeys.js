@@ -1,3 +1,5 @@
+const { mkdtempSync, rmSync, writeFileSync } = require("node:fs");
+const { tmpdir } = require("node:os");
 const { join } = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { createClient } = require("@supabase/supabase-js");
@@ -7,9 +9,13 @@ const {
   collapseSystemUi,
   ensureE2eAppReady,
   forceStopApp,
+  getMaestroDeviceArgs,
   isRetryableMaestroTransportFailure,
+  isMissingDeviceSqliteError,
   reconnectAndroidDevice,
   resolveMaestroBin,
+  seedIntroSeenFlagForE2e,
+  deviceId,
 } = require("./e2e-preflight");
 const { applyE2eAuthDeepLink } = require("./e2e-auth-deeplink");
 const { getE2eSeedConfig, seedE2eData } = require("./e2e-seed");
@@ -19,6 +25,10 @@ const flowDir = join("e2e", "maestro", "sms-sync");
 const defaultMaestroFlowTimeoutMs = 10 * 60 * 1000;
 const uiAuthBootstrapFlow = "../helpers/ci-auth-bootstrap.yaml";
 const deeplinkAuthBootstrapFlow = "../helpers/ci-auth-deeplink-bootstrap.yaml";
+const retryableSmsSyncFlowSet = new Set([
+  "sms-sync-batch-duplicates-atm.yaml",
+  "sms-sync-rescan-skips-saved.yaml",
+]);
 
 const readSmsPermission = "android.permission.READ_SMS";
 
@@ -32,6 +42,14 @@ function getActiveUserFilter(env = process.env) {
   }
 
   return `user_id = ${sqlString(env.E2E_USER_ID)}`;
+}
+
+function isFixtureParserE2eMode(env = process.env) {
+  return env.EXPO_PUBLIC_AI_SMS_PARSER_MODE !== "local";
+}
+
+function isLocalParserE2eMode(env = process.env) {
+  return env.EXPO_PUBLIC_AI_SMS_PARSER_MODE === "local";
 }
 
 function clearPermissionFlags(permission) {
@@ -70,12 +88,11 @@ async function runFlow(flow) {
 
     if (
       attempt === 1 &&
-      (result.didTimeout ||
-        isRetryableMaestroTransportFailure(result.output)) &&
+      shouldRetrySmsSyncFlowAttempt(flow, result) &&
       shouldRetrySmsSyncFlowAfterTransportFailure(flow)
     ) {
       console.warn(
-        `Retrying SMS sync Maestro flow after ${result.didTimeout ? "timeout" : "transport failure"}: ${flow}`
+        `Retrying SMS sync Maestro flow after transport failure: ${flow}`
       );
       await prepareSmsSyncFlowRetry(flow);
       continue;
@@ -106,9 +123,21 @@ function shouldResetSmsSyncAppStateBeforeRetry(flow, env = process.env) {
 }
 
 function shouldRetrySmsSyncFlowAfterTransportFailure(flow, env = process.env) {
+  if (!retryableSmsSyncFlowSet.has(flow)) {
+    return false;
+  }
+
   return (
     flow !== "sms-sync-batch-duplicates-atm.yaml" ||
     shouldResetSmsSyncAppStateBeforeRetry(flow, env)
+  );
+}
+
+function shouldRetrySmsSyncFlowAttempt(flow, result) {
+  return (
+    !result.didTimeout &&
+    retryableSmsSyncFlowSet.has(flow) &&
+    isRetryableMaestroTransportFailure(result.output)
   );
 }
 
@@ -120,14 +149,18 @@ function getMaestroFlowTimeoutMs(env = process.env) {
 }
 
 function runMaestroFlowOnce(maestroBin, flow) {
-  const result = spawnSync(maestroBin, ["test", join(flowDir, flow)], {
-    encoding: "utf8",
-    cwd: mobileRoot,
-    maxBuffer: 16 * 1024 * 1024,
-    shell: process.platform === "win32" && maestroBin.endsWith(".bat"),
-    stdio: ["ignore", "pipe", "pipe"],
-    timeout: getMaestroFlowTimeoutMs(),
-  });
+  const result = spawnSync(
+    maestroBin,
+    [...getMaestroDeviceArgs(), "test", join(flowDir, flow)],
+    {
+      encoding: "utf8",
+      cwd: mobileRoot,
+      maxBuffer: 16 * 1024 * 1024,
+      shell: process.platform === "win32" && maestroBin.endsWith(".bat"),
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: getMaestroFlowTimeoutMs(),
+    }
+  );
   const stdout = result.stdout || "";
   const stderr = result.stderr || "";
   const errorMessage = result.error?.message ?? "";
@@ -190,16 +223,26 @@ async function bootstrapCleanAuthenticatedSession() {
   const result = await seedE2eData(client, config);
   process.env.E2E_USER_ID = result.userId;
   adb(["shell", "pm", "clear", appId]);
+  seedIntroSeenFlagForE2e();
   await ensureE2eAppReady();
   await runFlow(getAuthBootstrapFlow());
 }
 
 function queryWatermelonScalar(sql) {
-  return adb(["shell", "run-as", appId, "sqlite3", "watermelon.db"], {
-    allowFailure: false,
-    capture: true,
-    input: sql,
-  }).trim();
+  try {
+    return adb(["shell", "run-as", appId, "sqlite3", "watermelon.db"], {
+      allowFailure: false,
+      capture: true,
+      input: sql,
+    }).trim();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!isMissingDeviceSqliteError(message)) {
+      throw error;
+    }
+
+    return queryWatermelonScalarFromHostSnapshot(sql);
+  }
 }
 
 function expectWatermelonScalar(sql, expected, label) {
@@ -215,15 +258,13 @@ function buildSmsSyncProbeCleanupSql() {
   return [
     [
       "delete from transactions",
-      "where counterparty = 'PR622 BATCH DUPLICATE SHOP'",
+      "where source = 'SMS'",
       "and sms_fingerprint is not null",
       `and ${activeUserFilter};`,
     ].join(" "),
     [
       "delete from transfers",
-      "where notes = 'ATM Withdrawal'",
-      "and amount = 2000",
-      "and sms_fingerprint is not null",
+      "where sms_fingerprint is not null",
       `and ${activeUserFilter};`,
     ].join(" "),
   ].join(" ");
@@ -232,62 +273,180 @@ function buildSmsSyncProbeCleanupSql() {
 function clearSmsSyncProbeRows() {
   const sql = buildSmsSyncProbeCleanupSql();
 
-  adb(["shell", "run-as", appId, "sqlite3", "watermelon.db"], {
+  const output = adb(["shell", "run-as", appId, "sqlite3", "watermelon.db"], {
+    allowFailure: true,
     capture: true,
     input: sql,
-  });
+  }).trim();
+
+  if (isMissingDeviceSqliteError(output)) {
+    console.warn(
+      "Skipping SMS sync probe cleanup because this Android device does not expose sqlite3 through adb shell."
+    );
+    return;
+  }
+
+  if (output) {
+    throw new Error(`SMS sync probe cleanup failed: ${output}`);
+  }
+}
+
+function queryWatermelonScalarFromHostSnapshot(sql) {
+  const snapshotDir = mkdtempSync(join(tmpdir(), "monyvi-watermelon-"));
+  const dbPath = join(snapshotDir, "watermelon.db");
+
+  try {
+    copyWatermelonFileToHost("watermelon.db", dbPath, false);
+    copyWatermelonFileToHost("watermelon.db-wal", `${dbPath}-wal`, true);
+    copyWatermelonFileToHost("watermelon.db-shm", `${dbPath}-shm`, true);
+
+    const result = spawnSync("sqlite3", [dbPath], {
+      encoding: "utf8",
+      input: sql,
+      maxBuffer: 16 * 1024 * 1024,
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 30000,
+    });
+
+    if (result.status !== 0) {
+      throw new Error(
+        `Host sqlite3 query failed: ${result.stderr || result.stdout}`
+      );
+    }
+
+    return (result.stdout || "").trim();
+  } finally {
+    rmSync(snapshotDir, { force: true, recursive: true });
+  }
+}
+
+function copyWatermelonFileToHost(remotePath, localPath, optional) {
+  const result = spawnSync(
+    "adb",
+    ["-s", deviceId, "exec-out", "run-as", appId, "cat", remotePath],
+    {
+      encoding: "buffer",
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 30000,
+    }
+  );
+
+  if (result.status !== 0) {
+    if (optional) {
+      return;
+    }
+
+    throw new Error(
+      `Could not copy ${remotePath} from Android app data: ${result.stderr.toString(
+        "utf8"
+      )}`
+    );
+  }
+
+  writeFileSync(localPath, result.stdout);
 }
 
 function verifyBatchSmsSaved() {
-  const [
-    duplicateTransactionCountQuery,
-    distinctFingerprintCountQuery,
-    atmWithdrawalTransferCountQuery,
-  ] = buildBatchSmsSavedVerificationQueries();
-
-  expectWatermelonScalar(
-    duplicateTransactionCountQuery,
-    "2",
-    "Duplicate batch SMS transaction count"
-  );
-  expectWatermelonScalar(
-    distinctFingerprintCountQuery,
-    "2",
-    "Duplicate batch SMS distinct fingerprint count"
-  );
-  expectWatermelonScalar(
-    atmWithdrawalTransferCountQuery,
-    "1",
-    "ATM withdrawal transfer count"
-  );
+  for (const {
+    label,
+    sql,
+    expected,
+  } of buildBatchSmsSavedVerificationQueries()) {
+    expectWatermelonScalar(sql, expected, label);
+  }
 }
 
 function buildBatchSmsSavedVerificationQueries() {
+  return isLocalParserE2eMode()
+    ? buildLocalParserSmsSavedVerificationQueries()
+    : buildFixtureSmsSavedVerificationQueries();
+}
+
+function buildFixtureSmsSavedVerificationQueries() {
   const activeUserFilter = getActiveUserFilter();
 
   return [
-    [
-      "select count(*) from transactions",
-      "where counterparty = 'PR622 BATCH DUPLICATE SHOP'",
-      "and deleted = 0",
-      "and sms_fingerprint is not null",
-      `and ${activeUserFilter};`,
-    ].join(" "),
-    [
-      "select count(distinct sms_fingerprint) from transactions",
-      "where counterparty = 'PR622 BATCH DUPLICATE SHOP'",
-      "and deleted = 0",
-      "and sms_fingerprint is not null",
-      `and ${activeUserFilter};`,
-    ].join(" "),
-    [
-      "select count(*) from transfers",
-      "where notes = 'ATM Withdrawal'",
-      "and amount = 2000",
-      "and deleted = 0",
-      "and sms_fingerprint is not null",
-      `and ${activeUserFilter};`,
-    ].join(" "),
+    {
+      label: "Duplicate batch SMS transaction count",
+      expected: "2",
+      sql: [
+        "select count(*) from transactions",
+        "where counterparty = 'PR622 BATCH DUPLICATE SHOP'",
+        "and deleted = 0",
+        "and sms_fingerprint is not null",
+        `and ${activeUserFilter};`,
+      ].join(" "),
+    },
+    {
+      label: "Duplicate batch SMS distinct fingerprint count",
+      expected: "2",
+      sql: [
+        "select count(distinct sms_fingerprint) from transactions",
+        "where counterparty = 'PR622 BATCH DUPLICATE SHOP'",
+        "and deleted = 0",
+        "and sms_fingerprint is not null",
+        `and ${activeUserFilter};`,
+      ].join(" "),
+    },
+    {
+      label: "ATM withdrawal transfer count",
+      expected: "1",
+      sql: [
+        "select count(*) from transfers",
+        "where notes = 'ATM Withdrawal'",
+        "and amount = 2000",
+        "and deleted = 0",
+        "and sms_fingerprint is not null",
+        `and ${activeUserFilter};`,
+      ].join(" "),
+    },
+  ];
+}
+
+function buildSavedSmsRowsUnionSql() {
+  const activeUserFilter = getActiveUserFilter();
+
+  return [
+    "select sms_fingerprint from transactions",
+    "where source = 'SMS'",
+    "and deleted = 0",
+    "and sms_fingerprint is not null",
+    `and ${activeUserFilter}`,
+    "union all",
+    "select sms_fingerprint from transfers",
+    "where deleted = 0",
+    "and sms_fingerprint is not null",
+    `and ${activeUserFilter}`,
+  ].join(" ");
+}
+
+function buildLocalParserSmsSavedVerificationQueries() {
+  const activeUserFilter = getActiveUserFilter();
+  const savedRowsUnion = buildSavedSmsRowsUnionSql();
+
+  return [
+    {
+      label: "Local parser saved at least 10 SMS-derived records",
+      expected: "1",
+      sql: `select case when (select count(*) from (${savedRowsUnion})) >= 10 then 1 else 0 end;`,
+    },
+    {
+      label: "Local parser saved SMS fingerprints are unique",
+      expected: "1",
+      sql: `select case when (select count(*) from (${savedRowsUnion})) = (select count(distinct sms_fingerprint) from (${savedRowsUnion})) then 1 else 0 end;`,
+    },
+    {
+      label: "Local parser saved at least one ATM withdrawal transfer",
+      expected: "1",
+      sql: [
+        "select case when count(*) >= 1 then 1 else 0 end from transfers",
+        "where notes = 'ATM Withdrawal'",
+        "and deleted = 0",
+        "and sms_fingerprint is not null",
+        `and ${activeUserFilter};`,
+      ].join(" "),
+    },
   ];
 }
 
@@ -365,11 +524,16 @@ if (require.main === module) {
 
 module.exports = {
   buildBatchSmsSavedVerificationQueries,
+  buildFixtureSmsSavedVerificationQueries,
+  buildLocalParserSmsSavedVerificationQueries,
   buildSmsSyncProbeCleanupSql,
   getAuthBootstrapFlow,
   getMaestroFlowTimeoutMs,
   getActiveUserFilter,
+  isFixtureParserE2eMode,
+  isLocalParserE2eMode,
   shouldResetSmsSyncAppStateBeforeRetry,
+  shouldRetrySmsSyncFlowAttempt,
   shouldRetrySmsSyncFlowAfterTransportFailure,
   shouldRelaunchBetweenSmsSyncJourneys,
 };

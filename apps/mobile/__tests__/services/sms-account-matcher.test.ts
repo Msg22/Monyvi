@@ -7,11 +7,27 @@ import {
   type AccountWithBankDetails,
   type MatchInput,
 } from "../../services/sms-account-matcher";
-import type { ReviewableTransaction } from "@monyvi/logic";
+import {
+  LOCAL_SMS_FIXTURE_CORPUS,
+  parseSmsWithLocalParser,
+  type ReviewableTransaction,
+} from "@monyvi/logic";
 
 type TestTransaction = ReviewableTransaction & {
   readonly cardLast4?: string;
 };
+
+const E2E_LOCAL_PARSER_SAVEABLE_PROVIDER_IDS = new Set([
+  "nbe",
+  "qnb-egypt",
+  "vodafone-cash",
+]);
+
+const E2E_PARSER_CATEGORIES = [
+  { id: "cat-shopping", systemName: "shopping", displayName: "Shopping" },
+  { id: "cat-salary", systemName: "salary", displayName: "Salary" },
+  { id: "cat-other", systemName: "other", displayName: "Other" },
+] as const;
 
 const mockQueryOwned = jest.fn();
 const mockQueryChildrenOfOwnedParents = jest.fn();
@@ -462,6 +478,95 @@ describe("sms-account-matcher - source-aware transaction matching", () => {
       ...overrides,
     };
   }
+
+  it("matches every local-parser E2E inbox suggestion to a seeded account", () => {
+    const fixtures = LOCAL_SMS_FIXTURE_CORPUS.filter((fixture) =>
+      E2E_LOCAL_PARSER_SAVEABLE_PROVIDER_IDS.has(fixture.providerId)
+    );
+    const candidatesByMessageId = new Map(
+      fixtures.map((fixture) => [fixture.id, fixture])
+    );
+    const parserResult = parseSmsWithLocalParser({
+      candidates: fixtures.map((fixture) => ({
+        messageId: fixture.id,
+        sender: fixture.sender,
+        body: fixture.body,
+        receivedAtMs: fixture.receivedAtMs,
+        smsFingerprint: `sms-${fixture.id}`,
+      })),
+      categories: E2E_PARSER_CATEGORIES,
+      supportedCurrencies: ["EGP"],
+    });
+    const seededAccounts: readonly AccountWithBankDetails[] = [
+      cashDefault,
+      {
+        id: "acc_nbe",
+        name: "E2E NBE Bank",
+        currency: "EGP",
+        isDefault: false,
+        createdAt: baseDate,
+        type: "BANK",
+        institutionId: "nbe",
+        smsSenderNames: ["NBE"],
+        bankName: "NBE",
+        cardLast4: 4321,
+      },
+      {
+        id: "acc_qnb",
+        name: "E2E QNB Bank",
+        currency: "EGP",
+        isDefault: false,
+        createdAt: baseDate,
+        type: "BANK",
+        institutionId: "qnb-egypt",
+        smsSenderNames: ["QNB"],
+        bankName: "QNB",
+        cardLast4: 5566,
+      },
+      {
+        id: "acc_vodafone_cash",
+        name: "Vodafone Cash Wallet",
+        currency: "EGP",
+        isDefault: false,
+        createdAt: baseDate,
+        type: "DIGITAL_WALLET",
+        institutionId: "vodafone-cash",
+        smsSenderNames: ["VodafoneCash"],
+        bankName: "Vodafone Cash",
+      },
+    ];
+
+    expect(parserResult.error).toBeUndefined();
+    expect(parserResult.transactions.length).toBeGreaterThan(3);
+
+    const missingAccountRows = parserResult.transactions.flatMap(
+      (transaction) => {
+        const fixture = candidatesByMessageId.get(transaction.messageId);
+        const match = matchTransaction(
+          tx({
+            originLabel: fixture?.sender ?? "",
+            cardLast4: transaction.cardLast4,
+            currency: transaction.currency,
+            type: transaction.type,
+          }),
+          seededAccounts
+        );
+
+        return match.accountId
+          ? []
+          : [
+              {
+                fixtureId: fixture?.id,
+                sender: fixture?.sender,
+                cardLast4: transaction.cardLast4,
+                counterparty: transaction.counterparty,
+              },
+            ];
+      }
+    );
+
+    expect(missingAccountRows).toEqual([]);
+  });
 
   it("keeps SMS fallback bank-scoped and ignores a default cash account", () => {
     const result = matchTransaction(tx(), [cashDefault, bankRegular]);

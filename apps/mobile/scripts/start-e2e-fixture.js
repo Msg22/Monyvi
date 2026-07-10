@@ -12,7 +12,7 @@ function hasExplicitSupabaseAppEnv(baseEnv) {
   );
 }
 
-function buildE2eFixtureEnv(baseEnv = process.env) {
+function buildE2eMetroEnv(parserMode, baseEnv = process.env) {
   const config = hasExplicitSupabaseAppEnv(baseEnv)
     ? null
     : getE2eSeedConfig({
@@ -25,7 +25,7 @@ function buildE2eFixtureEnv(baseEnv = process.env) {
     ...metroEnv,
     E2E_SUPABASE_MODE: "local",
     EXPO_PUBLIC_MONYVI_TEST_MODE: "e2e",
-    EXPO_PUBLIC_AI_SMS_PARSER_MODE: "fixture",
+    EXPO_PUBLIC_AI_SMS_PARSER_MODE: parserMode,
     EXPO_PUBLIC_SUPABASE_URL:
       baseEnv.EXPO_PUBLIC_SUPABASE_URL ?? config.appSupabaseUrl,
     EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
@@ -36,9 +36,20 @@ function buildE2eFixtureEnv(baseEnv = process.env) {
   };
 }
 
+function buildE2eFixtureEnv(baseEnv = process.env) {
+  return buildE2eMetroEnv("fixture", baseEnv);
+}
+
+function getParserModeFromEnv(baseEnv = process.env) {
+  return baseEnv.EXPO_PUBLIC_AI_SMS_PARSER_MODE === "local"
+    ? "local"
+    : "fixture";
+}
+
 function main() {
+  const parserMode = getParserModeFromEnv();
   const env = {
-    ...buildE2eFixtureEnv(),
+    ...buildE2eMetroEnv(parserMode),
   };
 
   const shouldClearCache = process.env.E2E_METRO_CLEAR_CACHE === "1";
@@ -51,6 +62,12 @@ function main() {
     process.argv.length > 2
       ? ["expo", "start", ...process.argv.slice(2)]
       : defaultArgs;
+
+  console.log(
+    `Starting E2E Metro with SMS parser mode "${parserMode}"${
+      shouldClearCache ? " and cleared cache" : ""
+    }.`
+  );
 
   const result = spawnSync(resolveNpxCommand(), args, {
     env,
@@ -66,5 +83,6 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildE2eMetroEnv,
   buildE2eFixtureEnv,
 };

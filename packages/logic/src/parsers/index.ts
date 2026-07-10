@@ -13,6 +13,40 @@ export {
   type SmsFingerprintInput,
 } from "./sms-hash";
 export { isLikelyFinancialSms } from "./sms-keyword-filter";
+export { parseSmsWithLocalParser } from "./local-sms-parser";
+export {
+  LOCAL_SMS_PATTERNS,
+  LOCAL_SMS_VERY_HIGH_CONFIDENCE,
+  validateLocalSmsPatternCatalog,
+  type LocalSmsCatalogValidationResult,
+} from "./local-sms-pattern-catalog";
+export {
+  LOCAL_SMS_FIXTURE_CORPUS,
+  LOCAL_SMS_FIXTURE_CORPUS_MINIMUM_SIZE,
+} from "./local-sms-fixture-corpus";
+export type {
+  LocalSmsFixture,
+  LocalSmsFixtureExpectedOutcome,
+  LocalSmsFixtureScenario,
+  LocalParsedSmsTransaction,
+  LocalReviewReason,
+  LocalReviewStatus,
+  LocalSmsCandidate,
+  LocalSmsExpectedOutcome,
+  LocalSmsMatchInput,
+  LocalSmsMatchRules,
+  LocalSmsParserError,
+  LocalSmsParserErrorKind,
+  LocalSmsParserRequest,
+  LocalSmsParserResult,
+  LocalSmsPattern,
+  LocalSmsPatternMatch,
+  PatternAutoSelectPolicy,
+  PatternPromotionEligibility,
+  PatternRuntimeScope,
+  PatternSourceConfidence,
+  PatternSourceType,
+} from "./local-sms-parser-types";
 export { evaluateAmountExpression } from "./expression-evaluator";
 export {
   EGYPTIAN_FINANCIAL_INSTITUTIONS,

@@ -2,7 +2,9 @@ import {
   getAiSmsParserMode,
   getMonyviTestMode,
   isE2eTestMode,
+  shouldUseFixtureSmsInbox,
   shouldUseFixtureSmsParser,
+  shouldUseLocalSmsParser,
 } from "@/config/e2e-test-config";
 
 const originalEnv = process.env;
@@ -23,7 +25,9 @@ describe("e2e-test-config", () => {
     expect(getMonyviTestMode()).toBe("off");
     expect(getAiSmsParserMode()).toBe("edge");
     expect(isE2eTestMode()).toBe(false);
+    expect(shouldUseFixtureSmsInbox()).toBe(false);
     expect(shouldUseFixtureSmsParser()).toBe(false);
+    expect(shouldUseLocalSmsParser()).toBe(false);
   });
 
   it("enables fixture parser only inside explicit E2E mode", () => {
@@ -33,13 +37,24 @@ describe("e2e-test-config", () => {
     expect(getMonyviTestMode()).toBe("e2e");
     expect(getAiSmsParserMode()).toBe("fixture");
     expect(isE2eTestMode()).toBe(true);
+    expect(shouldUseFixtureSmsInbox()).toBe(true);
     expect(shouldUseFixtureSmsParser()).toBe(true);
+  });
+
+  it("uses fixture inbox but not fixture parser in local-parser E2E mode", () => {
+    process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
+    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "local";
+
+    expect(shouldUseFixtureSmsInbox()).toBe(true);
+    expect(shouldUseFixtureSmsParser()).toBe(false);
+    expect(shouldUseLocalSmsParser()).toBe(true);
   });
 
   it("fails closed when fixture parser is requested outside E2E mode", () => {
     process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "off";
     process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "fixture";
 
+    expect(shouldUseFixtureSmsInbox()).toBe(false);
     expect(shouldUseFixtureSmsParser()).toBe(false);
   });
 
@@ -51,6 +66,7 @@ describe("e2e-test-config", () => {
       EXPO_PUBLIC_AI_SMS_PARSER_MODE: "fixture",
     };
 
+    expect(shouldUseFixtureSmsInbox()).toBe(false);
     expect(shouldUseFixtureSmsParser()).toBe(false);
   });
 
@@ -60,5 +76,23 @@ describe("e2e-test-config", () => {
 
     expect(getMonyviTestMode()).toBe("off");
     expect(getAiSmsParserMode()).toBe("edge");
+  });
+
+  it("enables local parser mode outside production", () => {
+    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "local";
+
+    expect(getAiSmsParserMode()).toBe("local");
+    expect(shouldUseLocalSmsParser()).toBe(true);
+  });
+
+  it("fails closed for local parser mode in production", () => {
+    process.env = {
+      ...process.env,
+      NODE_ENV: "production",
+      EXPO_PUBLIC_AI_SMS_PARSER_MODE: "local",
+    };
+
+    expect(getAiSmsParserMode()).toBe("edge");
+    expect(shouldUseLocalSmsParser()).toBe(false);
   });
 });

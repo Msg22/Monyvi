@@ -7,12 +7,11 @@ import {
 } from "@monyvi/logic";
 import { Q } from "@nozbe/watermelondb";
 import {
-  type AiParseResult,
   isAiConsentRequiredError,
-  parseSmsWithAi,
   type ParseSmsContext,
   type SmsCandidate,
 } from "./ai-sms-parser-service";
+import { parseSmsWithOrchestrator } from "./sms-parser-orchestrator";
 import {
   reconcileLiveDetectionPreference,
   setAutoConfirm,
@@ -242,9 +241,9 @@ export async function processLiveSmsEvent(
       smsFingerprint: confirmedSmsFingerprint,
     };
 
-    let aiResult: AiParseResult;
+    let aiResult: Awaited<ReturnType<typeof parseSmsWithOrchestrator>>;
     try {
-      aiResult = await parseSmsWithAi([candidate], context);
+      aiResult = await parseSmsWithOrchestrator([candidate], context);
     } catch (error: unknown) {
       if (isAiConsentRequiredError(error)) {
         return disableLiveSmsAfterConsentRequired({
@@ -263,6 +262,17 @@ export async function processLiveSmsEvent(
         true
       );
     }
+
+    logger.info("liveSms.parserDiagnostics", {
+      deliveryMode: event.deliveryMode,
+      mode: aiResult.diagnostics.mode,
+      attemptedAi: aiResult.diagnostics.attemptedAi,
+      attemptedLocal: aiResult.diagnostics.attemptedLocal,
+      candidateCount: aiResult.diagnostics.candidateCount,
+      resultCount: aiResult.diagnostics.resultCount,
+      matchedPatternIds: aiResult.diagnostics.matchedPatternIds,
+      runtimeScopeCounts: aiResult.diagnostics.runtimeScopeCounts,
+    });
 
     const consentRecheck = await checkLiveSmsAiConsent({
       logTag: "liveSms.consentRecheck.failed",

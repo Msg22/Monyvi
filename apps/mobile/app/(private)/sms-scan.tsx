@@ -251,7 +251,7 @@ export default function SmsScanScreen(): React.JSX.Element {
     const abortController = new AbortController();
     scanAbortControllerRef.current = abortController;
 
-    let existingFingerprints: ReadonlySet<string> = new Set();
+    let existingFingerprints: ReadonlySet<string> | undefined;
     try {
       existingFingerprints = await loadExistingSmsFingerprints();
     } catch (err: unknown) {

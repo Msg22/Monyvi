@@ -17,4 +17,4 @@ appId: com.monyvi.app
     timeout: 90000
 
 - assertNotVisible: "Review SMS Transactions"
-- assertNotVisible: "PR622 BATCH DUPLICATE SHOP"
+- assertNotVisible: "Review [0-9]+ Transaction\\(s\\)"
