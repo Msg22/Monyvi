@@ -270,6 +270,39 @@ describe("useTransactionReviewState", () => {
     expect(result.current.needsReviewCount).toBe(1);
   });
 
+  it("re-seeds when parser review state changes for the same transaction", async () => {
+    const firstScan = [
+      createTransaction({ confidence: 0.95, reviewStatus: "auto_selectable" }),
+    ];
+    const secondScan = [
+      createTransaction({
+        confidence: 0.95,
+        reviewStatus: "needs_review",
+        reviewReasons: ["ambiguous_amount"],
+      }),
+    ];
+
+    const { result, rerender } = renderHook<
+      UseTransactionReviewStateResult,
+      { readonly transactions: readonly ReviewableTransaction[] }
+    >(
+      ({ transactions }) =>
+        useTransactionReviewState({ transactions, onSave: jest.fn() }),
+      { initialProps: { transactions: firstScan } }
+    );
+
+    await waitFor(() => expect(result.current.selectedIndices.size).toBe(1));
+
+    act(() => {
+      rerender({ transactions: secondScan });
+    });
+
+    await waitFor(() => expect(result.current.selectedIndices.size).toBe(0));
+    expect(result.current.reviewMetaByIndex.get(0)?.reasons).toEqual([
+      "parser_review",
+    ]);
+  });
+
   it("does not seed a retry scan from stale account matches", async () => {
     const firstScan = [
       createTransaction({ originLabel: "SAFE", confidence: 0.95 }),

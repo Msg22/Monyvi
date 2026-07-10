@@ -177,6 +177,8 @@ function getTransactionRiskIdentity(
   return [
     transaction.confidence,
     transaction.categoryId ?? "",
+    transaction.reviewStatus ?? "",
+    [...(transaction.reviewReasons ?? [])].sort().join(","),
     reviewFields.accountId ?? "",
     reviewFields.toAccountId ?? "",
     reviewFields.isAtmWithdrawal === true ? "atm" : "not-atm",

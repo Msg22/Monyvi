@@ -6,7 +6,6 @@ import React from "react";
 import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { TransactionReviewMode } from "@/hooks/useTransactionReviewState";
 
 export interface ReviewActionBarProps {
@@ -32,8 +31,6 @@ export function ReviewActionBar({
 }: ReviewActionBarProps): React.JSX.Element {
   const { showToast } = useToast();
   const { t } = useTranslation("transactions");
-  const insets = useSafeAreaInsets();
-  const bottomPadding = Math.max(insets.bottom, 16);
 
   const handleSaveWrapper = (): void => {
     onSave().catch((err: unknown) => {
@@ -49,8 +46,7 @@ export function ReviewActionBar({
   return (
     <Animated.View
       entering={FadeInDown.delay(200)}
-      className="border-t border-slate-800 bg-slate-950/95 px-7 pt-5"
-      style={{ paddingBottom: bottomPadding }}
+      className="border-t border-slate-800 bg-slate-950/95 px-7 pb-4 pt-5"
     >
       <View className="mb-5 flex-row items-center">
         <Ionicons

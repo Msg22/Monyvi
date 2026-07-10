@@ -16,17 +16,8 @@ jest.mock("react-i18next", () => ({
   }),
 }));
 
-jest.mock("react-native-safe-area-context", () => ({
-  useSafeAreaInsets: (): {
-    readonly top: number;
-    readonly right: number;
-    readonly bottom: number;
-    readonly left: number;
-  } => ({ top: 0, right: 0, bottom: 24, left: 0 }),
-}));
-
 describe("ReviewActionBar", () => {
-  it("keeps the discard-all action visible and wired", () => {
+  it("keeps discard wired without applying a second safe-area inset", () => {
     const onDiscard = jest.fn();
 
     render(

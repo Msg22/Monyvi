@@ -66,10 +66,17 @@ export function getTransactionReviewMeta(
   }
 
   for (const parserReason of transaction.reviewReasons ?? []) {
+    if (isResolvedParserReason(parserReason, transaction, accountMatch)) {
+      continue;
+    }
     addReviewReason(reasons, PARSER_REASON_MAP[parserReason]);
   }
 
-  if (transaction.reviewStatus === "needs_review" && reasons.length === 0) {
+  if (
+    transaction.reviewStatus === "needs_review" &&
+    (transaction.reviewReasons?.length ?? 0) === 0 &&
+    reasons.length === 0
+  ) {
     addReviewReason(reasons, "parser_review");
   }
 
@@ -77,6 +84,20 @@ export function getTransactionReviewMeta(
     isAutoSelectable: reasons.length === 0,
     reasons,
   };
+}
+
+function isResolvedParserReason(
+  parserReason: ParserReviewReason,
+  transaction: ReviewableTransaction,
+  accountMatch: TransactionReviewAccountMatch | undefined
+): boolean {
+  if (parserReason === "account_needed") {
+    return isResolvedAccountMatch(accountMatch);
+  }
+  if (parserReason === "category_needed") {
+    return Boolean(transaction.categoryId);
+  }
+  return false;
 }
 
 export function buildAutoSelectedIndices(

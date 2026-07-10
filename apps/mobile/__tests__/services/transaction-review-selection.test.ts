@@ -102,11 +102,11 @@ describe("transaction-review-selection", () => {
     });
   });
 
-  it("preserves parser review reasons even when account matching succeeds", () => {
+  it("clears parser reasons for missing fields after the user resolves them", () => {
     const transaction = createTransaction({
       confidence: 0.99,
       reviewStatus: "needs_review",
-      reviewReasons: ["account_needed"],
+      reviewReasons: ["account_needed", "category_needed"],
     });
     const accountMatch = {
       accountId: "acc-1",
@@ -115,8 +115,8 @@ describe("transaction-review-selection", () => {
     };
 
     expect(getTransactionReviewMeta(transaction, accountMatch)).toEqual({
-      isAutoSelectable: false,
-      reasons: ["account_needed"],
+      isAutoSelectable: true,
+      reasons: [],
     });
   });
 
