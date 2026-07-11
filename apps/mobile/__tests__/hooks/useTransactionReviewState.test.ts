@@ -191,6 +191,46 @@ describe("useTransactionReviewState", () => {
     ).toEqual(["LOW", "NO_ACCOUNT"]);
   });
 
+  it("clears active filters when focusing all needs-review rows", async () => {
+    const transactions = [
+      createTransaction({ originLabel: "SAFE", confidence: 0.95 }),
+      createTransaction({ originLabel: "LOW", confidence: 0.7 }),
+      createTransaction({
+        originLabel: "INCOME_REVIEW",
+        confidence: 0.7,
+        type: "INCOME",
+      }),
+    ];
+
+    const { result } = renderHook(() =>
+      useTransactionReviewState({ transactions, onSave: jest.fn() })
+    );
+
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(3));
+
+    act(() => {
+      result.current.setSearchQuery("safe");
+      result.current.handleTypeToggle("Expense");
+      result.current.setPeriod("this_month");
+    });
+
+    expect(
+      result.current.filteredTransactions.map((tx) => tx.originLabel)
+    ).toEqual(["SAFE"]);
+
+    act(() => {
+      result.current.handleReviewNeeds();
+    });
+
+    expect(result.current.reviewMode).toBe("needs_review");
+    expect(result.current.searchQuery).toBe("");
+    expect(result.current.selectedTypes).toEqual(["All"]);
+    expect(result.current.period).toBe("all_time");
+    expect(
+      result.current.filteredTransactions.map((tx) => tx.originLabel)
+    ).toEqual(["LOW", "INCOME_REVIEW"]);
+  });
+
   it("groups review rows under a header for each transaction date", async () => {
     const transactions = [
       createTransaction({

@@ -605,6 +605,9 @@ export function useTransactionReviewState({
   );
 
   const handleReviewNeeds = useCallback(() => {
+    setPeriod("all_time");
+    setSelectedTypes(["All"]);
+    setSearchQuery("");
     setReviewMode("needs_review");
   }, []);
 

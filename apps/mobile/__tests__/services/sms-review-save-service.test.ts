@@ -90,4 +90,32 @@ describe("prepareSavePayload", () => {
       );
     }
   });
+
+  it("rejects an unchanged fallback account override", async () => {
+    const result = await prepareSavePayload({
+      selectedIndices: new Set([0]),
+      transactionOverrides: new Map([[0, createOverride("acc-default")]]),
+      accountMatches: new Map([
+        [
+          0,
+          {
+            accountId: "acc-default",
+            accountName: "Default account",
+            matchReason: "default",
+          },
+        ],
+      ]),
+      pendingAccounts: [],
+      effectiveTransactions: [createTransaction()],
+      userId: "user-1",
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        success: false,
+        reason: "missing_accounts",
+        missingIndices: new Set([0]),
+      })
+    );
+  });
 });

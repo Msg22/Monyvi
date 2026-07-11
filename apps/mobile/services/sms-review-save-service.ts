@@ -117,9 +117,7 @@ async function prepareSavePayload(
   for (const i of selectedOriginalIndices) {
     const override = transactionOverrides.get(i);
     const match = accountMatches.get(i);
-    const accountId =
-      override?.accountId ??
-      (isResolvedAccountMatch(match) ? match.accountId : null);
+    const accountId = resolveSaveAccountId(override, match);
     if (accountId) {
       originalIndexToAccountId.set(i, accountId);
     } else {
@@ -289,6 +287,28 @@ async function prepareSavePayload(
     transactionAccountMap,
     toAccountMap,
   };
+}
+
+function resolveSaveAccountId(
+  override: TransactionEdits | undefined,
+  match: AccountMatch | undefined
+): string | null {
+  if (!override) {
+    return isResolvedAccountMatch(match) ? match.accountId : null;
+  }
+
+  if (!override.accountId) {
+    return null;
+  }
+
+  if (
+    !isResolvedAccountMatch(match) &&
+    override.accountId === match?.accountId
+  ) {
+    return null;
+  }
+
+  return override.accountId;
 }
 
 export { prepareSavePayload };
