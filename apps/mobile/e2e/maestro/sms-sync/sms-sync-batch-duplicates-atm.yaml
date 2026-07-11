@@ -22,10 +22,6 @@ appId: com.monyvi.app
     commands:
       - tapOn:
           id: "permission-modal-primary"
-      - extendedWaitUntil:
-          visible: "Allow"
-          timeout: 10000
-      - tapOn: "Allow"
 
 - extendedWaitUntil:
     visible: "Scan Complete!"
