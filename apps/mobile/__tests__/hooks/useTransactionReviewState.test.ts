@@ -355,6 +355,50 @@ describe("useTransactionReviewState", () => {
     ]);
   });
 
+  it("clears stale edits when a retry changes parsed content", async () => {
+    const firstScan = [
+      createTransaction({ counterparty: "Original merchant" }),
+    ];
+    const correctedScan = [
+      createTransaction({ counterparty: "Corrected merchant" }),
+    ];
+
+    const { result, rerender } = renderHook<
+      UseTransactionReviewStateResult,
+      { readonly transactions: readonly ReviewableTransaction[] }
+    >(
+      ({ transactions }) =>
+        useTransactionReviewState({ transactions, onSave: jest.fn() }),
+      { initialProps: { transactions: firstScan } }
+    );
+
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(1));
+
+    act(() => result.current.handleOpenEditModal(0));
+    act(() => {
+      result.current.handleEditModalSave({
+        amount: 100,
+        type: "EXPENSE",
+        categoryId: "cat-food",
+        accountId: "acc-1",
+        accountName: "Bank",
+        counterparty: "User override",
+      });
+    });
+    expect(result.current.effectiveTransactions[0]?.counterparty).toBe(
+      "User override"
+    );
+
+    act(() => rerender({ transactions: correctedScan }));
+
+    await waitFor(() =>
+      expect(result.current.transactionOverrides.size).toBe(0)
+    );
+    expect(result.current.effectiveTransactions[0]?.counterparty).toBe(
+      "Corrected merchant"
+    );
+  });
+
   it("does not seed a retry scan from stale account matches", async () => {
     const firstScan = [
       createTransaction({ originLabel: "SAFE", confidence: 0.95 }),

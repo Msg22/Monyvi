@@ -186,6 +186,43 @@ function getTransactionRiskIdentity(
   ].join(":");
 }
 
+function getTransactionParsedContentIdentity(
+  transaction: ReviewableTransaction
+): string {
+  const sourceFields = transaction as ReviewableTransaction & {
+    readonly smsFingerprint?: string;
+    readonly senderDisplayName?: string;
+    readonly rawSmsBody?: string;
+    readonly cardLast4?: string;
+    readonly note?: string;
+    readonly originalTranscript?: string;
+    readonly detectedLanguage?: string;
+    readonly aiDetectedCurrency?: string | null;
+  };
+
+  return JSON.stringify({
+    accountAndRisk: getTransactionRiskIdentity(transaction),
+    amount: transaction.amount,
+    cardLast4: sourceFields.cardLast4 ?? null,
+    categoryDisplayName: transaction.categoryDisplayName,
+    counterparty: transaction.counterparty ?? null,
+    currency: transaction.currency,
+    date: transaction.date.getTime(),
+    deduplicationHash: transaction.deduplicationHash ?? null,
+    detectedLanguage: sourceFields.detectedLanguage ?? null,
+    aiDetectedCurrency: sourceFields.aiDetectedCurrency ?? null,
+    merchant: transaction.merchant ?? null,
+    note: sourceFields.note ?? null,
+    originalTranscript: sourceFields.originalTranscript ?? null,
+    originLabel: transaction.originLabel,
+    rawSmsBody: sourceFields.rawSmsBody ?? null,
+    senderDisplayName: sourceFields.senderDisplayName ?? null,
+    smsFingerprint: sourceFields.smsFingerprint ?? null,
+    source: transaction.source,
+    type: transaction.type,
+  });
+}
+
 export function useTransactionReviewState({
   transactions,
   onSave,
@@ -251,20 +288,7 @@ export function useTransactionReviewState({
 
   const batchSize = 20;
   const transactionIdentity = useMemo(
-    () =>
-      transactions
-        .map((tx) =>
-          [
-            tx.deduplicationHash ?? "",
-            tx.originLabel,
-            tx.amount,
-            tx.currency,
-            tx.type,
-            tx.date.getTime(),
-            getTransactionRiskIdentity(tx),
-          ].join(":")
-        )
-        .join("|"),
+    () => JSON.stringify(transactions.map(getTransactionParsedContentIdentity)),
     [transactions]
   );
 
