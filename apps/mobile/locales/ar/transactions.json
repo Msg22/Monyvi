@@ -340,7 +340,7 @@
   "review_summary_found": "{{count}} مكتشفة",
   "review_summary_auto_selected": "{{count}} محددة تلقائياً",
   "review_summary_needs_review": "{{count}} تحتاج مراجعة",
-  "review_trust_copy": "لن يتم حفظ أي شيء حتى تضغط حفظ.",
+  "review_trust_copy": "يتم الحفظ فقط بعد الضغط على حفظ",
   "review_auto_selected_label": "محددة تلقائياً",
   "review_need_review_label": "تحتاج مراجعة",
   "review_date_today": "اليوم",

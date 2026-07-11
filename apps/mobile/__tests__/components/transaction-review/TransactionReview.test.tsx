@@ -102,7 +102,7 @@ jest.mock("react-i18next", () => ({
         review_summary_found: `${countText} found`,
         review_summary_needs_review: `${countText} need review`,
         review_summary_title: "Review suggestions",
-        review_trust_copy: "Nothing is saved until you tap Save.",
+        review_trust_copy: "Saved only after you tap Save",
         select_all: "Select All",
         select_shown: "Select shown",
         show_all: "Show all",
@@ -279,7 +279,7 @@ describe("TransactionReview", () => {
     );
   });
 
-  it("uses the approved dark workspace only when explicitly requested", () => {
+  it("keeps the approved SMS workspace compatible with light and dark themes", () => {
     mockUseTransactionReviewState.mockReturnValue(createReviewState({}));
 
     render(
@@ -294,7 +294,34 @@ describe("TransactionReview", () => {
 
     expect(screen.getByTestId("transaction-review-screen")).toHaveProp(
       "className",
-      expect.stringContaining("bg-slate-950")
+      expect.stringContaining("bg-background dark:bg-background-dark")
+    );
+  });
+
+  it("uses the compact proportions from the approved SMS review mockup", () => {
+    mockUseTransactionReviewState.mockReturnValue(createReviewState({}));
+
+    render(
+      <TransactionReview
+        transactions={[createTransaction()]}
+        onSave={jest.fn()}
+        onDiscard={jest.fn()}
+        isSaving={false}
+        workspaceVariant="sms"
+      />
+    );
+
+    expect(screen.getByTestId("review-summary-card")).toHaveProp(
+      "className",
+      expect.stringContaining("py-3")
+    );
+    expect(screen.getByTestId("review-mode-control")).toHaveProp(
+      "className",
+      expect.stringContaining("min-h-10")
+    );
+    expect(screen.getByTestId("review-selection-row")).toHaveProp(
+      "className",
+      expect.stringContaining("mt-3")
     );
   });
 

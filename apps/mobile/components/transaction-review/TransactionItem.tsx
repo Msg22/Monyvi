@@ -73,17 +73,18 @@ interface TransactionItemProps {
 // ---------------------------------------------------------------------------
 
 const BADGE_BG_COLORS: Record<BadgeColor, string> = {
-  amber: "bg-gold-600/20 border border-gold-600/50",
-  red: "bg-red-500/20",
-  emerald: "bg-emerald-500/20",
-  blue: "bg-blue-500/20",
+  amber:
+    "border border-gold-100 bg-gold-50 dark:border-gold-600/50 dark:bg-gold-600/20",
+  red: "bg-red-100 dark:bg-red-500/20",
+  emerald: "bg-nileGreen-100 dark:bg-emerald-500/20",
+  blue: "bg-blue-100 dark:bg-blue-500/20",
 };
 
 const BADGE_TEXT_COLORS: Record<BadgeColor, string> = {
-  amber: "text-gold-400",
-  red: "text-red-400",
-  emerald: "text-emerald-400",
-  blue: "text-blue-400",
+  amber: "text-gold-800 dark:text-gold-400",
+  red: "text-red-600 dark:text-red-400",
+  emerald: "text-nileGreen-700 dark:text-emerald-400",
+  blue: "text-blue-600 dark:text-blue-400",
 };
 
 function TransactionBadge({
@@ -94,9 +95,9 @@ function TransactionBadge({
   readonly label: string;
 }): React.JSX.Element {
   return (
-    <View className={`${BADGE_BG_COLORS[data.color]} rounded-lg px-3 py-1`}>
+    <View className={`${BADGE_BG_COLORS[data.color]} rounded-md px-2 py-1`}>
       <Text
-        className={`text-sm font-semibold ${BADGE_TEXT_COLORS[data.color]}`}
+        className={`text-xs font-semibold ${BADGE_TEXT_COLORS[data.color]}`}
       >
         {label}
       </Text>
@@ -136,8 +137,7 @@ function formatReviewDateTime(
 
 function getReviewIcon(
   reviewMeta: TransactionReviewMeta | undefined,
-  isSelected: boolean,
-  isSmsWorkspace: boolean
+  isSelected: boolean
 ): {
   readonly name: keyof typeof Ionicons.glyphMap;
   readonly circleClassName: string;
@@ -187,9 +187,8 @@ function getReviewIcon(
   }
   return {
     name: "card-outline",
-    circleClassName: isSmsWorkspace
-      ? "border-slate-600 bg-slate-800"
-      : "border-slate-300 bg-slate-100 dark:border-slate-600 dark:bg-slate-800",
+    circleClassName:
+      "border-slate-300 bg-slate-100 dark:border-slate-600 dark:bg-slate-800",
     color: palette.slate[400],
   };
 }
@@ -208,7 +207,6 @@ function TransactionItemInner({
   onPress,
   hasMissingInfo = false,
   reviewMeta,
-  isSmsWorkspace = false,
 }: TransactionItemProps): React.JSX.Element {
   const [isExpanded, setIsExpanded] = useState(false);
   const { language } = useLocale();
@@ -218,7 +216,7 @@ function TransactionItemInner({
   const hasExpandableContent = !isVoice && !!expandedContent;
 
   const badges = getTransactionBadges(hasMissingInfo, reviewMeta, isSelected);
-  const reviewIcon = getReviewIcon(reviewMeta, isSelected, isSmsWorkspace);
+  const reviewIcon = getReviewIcon(reviewMeta, isSelected);
 
   const handleToggleExpand = useCallback(() => {
     setIsExpanded((prev) => !prev);
@@ -239,15 +237,11 @@ function TransactionItemInner({
   return (
     <View
       testID="transaction-review-row"
-      className={`overflow-hidden border-b ${
-        isSmsWorkspace
-          ? "border-slate-800 bg-slate-950"
-          : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
-      }`}
+      className="overflow-hidden border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
     >
       <TouchableOpacity
         onPress={handlePress}
-        className="flex-row items-center px-7 py-5"
+        className="flex-row items-center px-5 py-2"
         activeOpacity={0.7}
         accessible
         accessibilityRole="button"
@@ -260,13 +254,13 @@ function TransactionItemInner({
         <TouchableOpacity
           onPress={handleToggle}
           hitSlop={8}
-          className="me-5"
+          className="me-3"
           activeOpacity={0.7}
           accessible={false}
           importantForAccessibility="no"
         >
           <View
-            className={`w-6 h-6 rounded-lg items-center justify-center border-2 ${
+            className={`h-6 w-6 items-center justify-center rounded-md border-2 ${
               isSelected
                 ? "bg-emerald-500 border-emerald-500"
                 : "border-slate-500"
@@ -279,18 +273,16 @@ function TransactionItemInner({
         </TouchableOpacity>
 
         <View
-          className={`me-5 h-16 w-16 items-center justify-center rounded-full border ${reviewIcon.circleClassName}`}
+          className={`me-3 h-12 w-12 items-center justify-center rounded-full border ${reviewIcon.circleClassName}`}
         >
-          <Ionicons name={reviewIcon.name} size={30} color={reviewIcon.color} />
+          <Ionicons name={reviewIcon.name} size={24} color={reviewIcon.color} />
         </View>
 
         {/* Content */}
-        <View className="flex-1 me-4">
+        <View className="me-3 flex-1">
           {/* Top row: origin label + amount */}
           <Text
-            className={`text-xl font-extrabold ${
-              isSmsWorkspace ? "text-white" : "text-slate-900 dark:text-white"
-            }`}
+            className="text-base font-bold text-slate-900 dark:text-white"
             numberOfLines={1}
           >
             {isVoice && "note" in transaction
@@ -304,11 +296,7 @@ function TransactionItemInner({
           <View className="mt-1 flex-row items-center justify-between gap-3">
             {counterpartyText ? (
               <Text
-                className={`flex-1 text-base ${
-                  isSmsWorkspace
-                    ? "text-slate-400"
-                    : "text-slate-600 dark:text-slate-400"
-                }`}
+                className="flex-1 text-sm text-slate-600 dark:text-slate-400"
                 numberOfLines={1}
               >
                 {counterpartyText}
@@ -317,11 +305,7 @@ function TransactionItemInner({
               <View className="flex-1" />
             )}
             <Text
-              className={`text-base ${
-                isSmsWorkspace
-                  ? "text-slate-400"
-                  : "text-slate-600 dark:text-slate-400"
-              }`}
+              className="text-sm text-slate-600 dark:text-slate-400"
               numberOfLines={1}
             >
               {formatReviewDateTime(
@@ -334,21 +318,9 @@ function TransactionItemInner({
           </View>
 
           {/* Bottom row: category + account chips */}
-          <View className="mt-2 flex-row items-center flex-wrap gap-2">
-            <View
-              className={`rounded-lg border px-3 py-1 ${
-                isSmsWorkspace
-                  ? "border-slate-700 bg-slate-800/80"
-                  : "border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800/80"
-              }`}
-            >
-              <Text
-                className={`text-base ${
-                  isSmsWorkspace
-                    ? "text-slate-300"
-                    : "text-slate-700 dark:text-slate-300"
-                }`}
-              >
+          <View className="mt-1.5 flex-row flex-wrap items-center gap-1.5">
+            <View className="rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 dark:border-slate-700 dark:bg-slate-800/80">
+              <Text className="text-sm text-slate-700 dark:text-slate-300">
                 {transaction.categoryDisplayName}
               </Text>
             </View>
@@ -356,19 +328,9 @@ function TransactionItemInner({
             {accountName && (
               <View
                 testID="transaction-account-match"
-                className={`rounded-lg border px-3 py-1 ${
-                  isSmsWorkspace
-                    ? "border-slate-700 bg-slate-800/80"
-                    : "border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800/80"
-                }`}
+                className="rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 dark:border-slate-700 dark:bg-slate-800/80"
               >
-                <Text
-                  className={`text-base ${
-                    isSmsWorkspace
-                      ? "text-slate-300"
-                      : "text-slate-700 dark:text-slate-300"
-                  }`}
-                >
+                <Text className="text-sm text-slate-700 dark:text-slate-300">
                   {accountName}
                 </Text>
               </View>
@@ -379,8 +341,10 @@ function TransactionItemInner({
         <View className="items-end">
           <Text
             testID="transaction-review-amount"
-            className={`text-xl font-semibold ${
-              isExpense ? "text-red-400" : "text-nileGreen-400"
+            className={`text-lg font-semibold ${
+              isExpense
+                ? "text-red-600 dark:text-red-400"
+                : "text-nileGreen-600 dark:text-nileGreen-400"
             }`}
           >
             {isExpense ? "-" : "+"}
@@ -389,7 +353,7 @@ function TransactionItemInner({
               currency: transaction.currency,
             })}
           </Text>
-          <View className="mt-3 items-end gap-2">
+          <View className="mt-2 items-end gap-1.5">
             {badges.map((badge, idx) => (
               <TransactionBadge
                 key={`${badge.labelKey}-${idx}`}
@@ -402,7 +366,7 @@ function TransactionItemInner({
             <TouchableOpacity
               onPress={handleToggleExpand}
               hitSlop={14}
-              className="mt-2 p-1"
+              className="mt-1 p-1"
               activeOpacity={0.7}
             >
               <Ionicons
@@ -420,7 +384,7 @@ function TransactionItemInner({
         <Animated.View
           entering={FadeIn.duration(200)}
           exiting={FadeOut.duration(150)}
-          className="px-7 pb-5 pt-0"
+          className="px-5 pb-3 pt-0"
         >
           {expandedContent}
         </Animated.View>

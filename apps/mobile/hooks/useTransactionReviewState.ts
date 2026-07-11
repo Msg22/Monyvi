@@ -27,6 +27,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import type { TransactionEdits } from "@/services/sms-edit-modal-service";
 import { formatToLocalDateString } from "@/utils/dateHelpers";
+import { toggleTransactionTypeFilter } from "@/utils/transaction-review-filters";
 
 export type ReviewListItem =
   | { readonly kind: "header"; readonly date: string; readonly key: string }
@@ -663,12 +664,9 @@ export function useTransactionReviewState({
   ]);
 
   const handleTypeToggle = useCallback((type: TransactionTypeFilter) => {
-    setSelectedTypes((prev) => {
-      if (prev.includes(type)) {
-        return prev.filter((t) => t !== type);
-      }
-      return [...prev, type];
-    });
+    setSelectedTypes((previousTypes) =>
+      toggleTransactionTypeFilter(previousTypes, type)
+    );
   }, []);
 
   return {

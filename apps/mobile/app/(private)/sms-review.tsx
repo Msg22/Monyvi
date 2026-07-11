@@ -22,6 +22,7 @@ import { TransactionReview } from "@/components/transaction-review/TransactionRe
 import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
 import { useSmsScanContext } from "@/context/SmsScanContext";
+import { useTheme } from "@/context/ThemeContext";
 import { useSmsSync } from "@/hooks/useSmsSync";
 import { batchCreateTransactions } from "@/services/batch-create-transactions";
 import {
@@ -47,6 +48,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
   const { transactions, clearTransactions } = useSmsScanContext();
   const { markSyncComplete } = useSmsSync();
   const { showToast } = useToast();
+  const { isDark } = useTheme();
 
   const [isSaving, setIsSaving] = useState(false);
   const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
@@ -155,8 +157,8 @@ export default function SmsReviewScreen(): React.JSX.Element {
   // ── Transaction Review (direct — no setup step) ─────────────────────
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-950">
-      <StatusBar style="light" />
+    <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
+      <StatusBar style={isDark ? "light" : "dark"} />
 
       {/* Transaction review list */}
       <TransactionReview

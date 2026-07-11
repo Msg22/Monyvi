@@ -85,12 +85,21 @@ describe("ReviewActionBar", () => {
     );
   });
 
-  it("uses the approved dark action surface in the SMS workspace", () => {
+  it("keeps the SMS action surface compatible with light and dark themes", () => {
     render(<ReviewActionBar {...createProps()} isSmsWorkspace />);
 
     expect(screen.getByTestId("review-action-bar")).toHaveProp(
       "className",
-      expect.stringContaining("bg-slate-950/95")
+      expect.stringContaining("bg-white/95")
     );
+    expect(screen.getByTestId("review-action-bar")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:bg-slate-950/95")
+    );
+    expect(screen.getByTestId("review-action-bar")).toHaveProp(
+      "className",
+      expect.stringContaining("px-5 pb-3 pt-3")
+    );
+    expect(screen.queryByText("discard_all")).toBeNull();
   });
 });

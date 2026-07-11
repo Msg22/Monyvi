@@ -54,31 +54,39 @@ function ReviewPageHeader({
   "title" | "subtitle" | "showBackButton" | "onBack" | "backAccessibilityLabel"
 >): React.ReactElement {
   const router = useRouter();
+  const { isDark } = useTheme();
 
   return (
-    <View className="px-7 pb-5 pt-8 bg-slate-950">
+    <View
+      testID="review-page-header"
+      className="bg-slate-50 px-5 pb-3 pt-3 dark:bg-slate-950"
+    >
       <View className="flex-row items-center">
         {showBackButton && (
           <TouchableOpacity
             testID="header-back"
             onPress={onBack ?? router.back}
             activeOpacity={0.75}
-            className="me-5 h-11 w-11 items-center justify-center rounded-full"
+            className="me-3 h-10 w-10 items-center justify-center rounded-full"
             accessibilityRole="button"
             accessibilityLabel={backAccessibilityLabel}
           >
-            <Ionicons name="arrow-back" size={34} color="white" />
+            <Ionicons
+              name="arrow-back"
+              size={28}
+              color={isDark ? palette.slate[25] : palette.slate[900]}
+            />
           </TouchableOpacity>
         )}
         <View className="flex-1">
           <Text
-            className="text-[28px] font-extrabold text-white"
+            className="text-2xl font-bold text-slate-950 dark:text-white"
             accessibilityRole="header"
           >
             {title}
           </Text>
           {subtitle && (
-            <Text className="mt-1 text-lg font-medium text-slate-300">
+            <Text className="text-sm font-medium text-slate-600 dark:text-slate-300">
               {subtitle}
             </Text>
           )}

@@ -90,12 +90,16 @@ describe("TransactionItem", () => {
     );
   });
 
-  it("uses the approved dark row surface in the SMS workspace", () => {
+  it("keeps the SMS row surface compatible with light and dark themes", () => {
     renderItem(true);
 
     expect(screen.getByTestId("transaction-review-row")).toHaveProp(
       "className",
-      expect.stringContaining("bg-slate-950")
+      expect.stringContaining("bg-white")
+    );
+    expect(screen.getByTestId("transaction-review-row")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:bg-slate-950")
     );
   });
 });

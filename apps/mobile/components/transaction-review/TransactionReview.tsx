@@ -114,7 +114,7 @@ export function TransactionReview({
     ({ item }: { item: ReviewListItem }) => {
       if (item.kind === "header") {
         return (
-          <Text className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1 pt-4 pb-2">
+          <Text className="px-5 pb-2 pt-3 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             {item.date}
           </Text>
         );
@@ -171,11 +171,7 @@ export function TransactionReview({
   return (
     <View
       testID="transaction-review-screen"
-      className={
-        isSmsWorkspace
-          ? "flex-1 bg-slate-950"
-          : "flex-1 bg-background dark:bg-background-dark"
-      }
+      className="flex-1 bg-background dark:bg-background-dark"
     >
       {title && (
         <PageHeader
@@ -208,20 +204,17 @@ export function TransactionReview({
         </Animated.View>
       )}
 
-      <Animated.View entering={FadeInDown.delay(100)} className="px-7 pb-4">
+      <Animated.View entering={FadeInDown.delay(100)} className="px-5 pb-3">
         <LinearGradient
+          testID="review-summary-card"
           colors={
-            isSmsWorkspace || isDark
+            isDark
               ? [palette.slate[950], palette.slate[900]]
               : [palette.slate[25], palette.slate[50]]
           }
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          className={`overflow-hidden rounded-[22px] border px-6 py-5 ${
-            isSmsWorkspace
-              ? "border-slate-700/80"
-              : "border-slate-200 dark:border-slate-700/80"
-          }`}
+          className="overflow-hidden rounded-xl border border-slate-200 px-4 py-3 dark:border-slate-700/80"
         >
           <View className="flex-row items-center">
             <View
@@ -233,26 +226,20 @@ export function TransactionReview({
               )}
               className="flex-1 flex-row items-center justify-center"
             >
-              <View className="h-12 w-12 items-center justify-center rounded-full border border-nileGreen-400 bg-nileGreen-600">
-                <Ionicons name="checkmark" size={28} color="white" />
+              <View className="h-10 w-10 items-center justify-center rounded-full border border-nileGreen-400 bg-nileGreen-600">
+                <Ionicons name="checkmark" size={22} color="white" />
               </View>
-              <View className="ms-4">
-                <Text className="text-[40px] font-extrabold leading-[44px] text-nileGreen-400">
+              <View className="ms-3">
+                <Text className="text-[30px] font-extrabold leading-[34px] text-nileGreen-600 dark:text-nileGreen-400">
                   {state.autoSelectedCount}
                 </Text>
-                <Text
-                  className={`text-base ${
-                    isSmsWorkspace
-                      ? "text-slate-300"
-                      : "text-slate-600 dark:text-slate-300"
-                  }`}
-                >
+                <Text className="text-sm text-slate-600 dark:text-slate-300">
                   {tTransactions("review_auto_selected_label")}
                 </Text>
               </View>
             </View>
 
-            <View className="mx-6 h-20 w-px bg-slate-700" />
+            <View className="mx-4 h-16 w-px bg-slate-700" />
 
             <View
               testID="review-summary-needs-review"
@@ -262,54 +249,39 @@ export function TransactionReview({
               })}
               className="flex-1 flex-row items-center justify-center"
             >
-              <View className="h-12 w-12 items-center justify-center rounded-2xl border border-gold-400 bg-gold-600/30">
+              <View className="h-10 w-10 items-center justify-center rounded-xl border border-gold-400 bg-gold-600/30">
                 <Ionicons
                   name="warning-outline"
-                  size={28}
+                  size={22}
                   color={palette.gold[400]}
                 />
               </View>
-              <View className="ms-4">
-                <Text className="text-[40px] font-extrabold leading-[44px] text-gold-400">
+              <View className="ms-3">
+                <Text className="text-[30px] font-extrabold leading-[34px] text-gold-800 dark:text-gold-400">
                   {state.needsReviewCount}
                 </Text>
-                <Text
-                  className={`text-base ${
-                    isSmsWorkspace
-                      ? "text-slate-300"
-                      : "text-slate-600 dark:text-slate-300"
-                  }`}
-                >
+                <Text className="text-sm text-slate-600 dark:text-slate-300">
                   {tTransactions("review_need_review_label")}
                 </Text>
               </View>
             </View>
           </View>
 
-          <View className="mt-5 flex-row items-center justify-center">
+          <View className="mt-3 flex-row items-center justify-center">
             <Ionicons
               name="lock-closed-outline"
-              size={20}
+              size={16}
               color={palette.nileGreen[400]}
             />
-            <Text
-              className={`ms-3 text-base font-medium ${
-                isSmsWorkspace
-                  ? "text-slate-300"
-                  : "text-slate-600 dark:text-slate-300"
-              }`}
-            >
+            <Text className="ms-2 text-sm font-medium text-slate-600 dark:text-slate-300">
               {tTransactions("review_trust_copy")}
             </Text>
           </View>
         </LinearGradient>
 
         <View
-          className={`mt-5 flex-row rounded-[18px] border p-1 ${
-            isSmsWorkspace
-              ? "border-slate-700/90 bg-slate-800/70"
-              : "border-slate-200 bg-slate-100 dark:border-slate-700/90 dark:bg-slate-800/70"
-          }`}
+          testID="review-mode-control"
+          className="mt-4 min-h-10 flex-row rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-700/90 dark:bg-slate-800/70"
         >
           {reviewModeOptions.map((option) => {
             const isActive = state.reviewMode === option.mode;
@@ -318,21 +290,17 @@ export function TransactionReview({
                 key={option.mode}
                 onPress={() => handleReviewModePress(option.mode)}
                 activeOpacity={0.8}
-                className={`flex-1 min-h-14 items-center justify-center rounded-2xl border px-2 ${
+                className={`flex-1 items-center justify-center rounded-lg border px-2 ${
                   isActive
-                    ? isSmsWorkspace
-                      ? "border-gold-400 bg-slate-800"
-                      : "border-gold-400 bg-white dark:bg-slate-800"
+                    ? "border-gold-600 bg-white dark:border-gold-400 dark:bg-slate-800"
                     : "border-transparent"
                 }`}
               >
                 <Text
-                  className={`text-base font-semibold text-center ${
+                  className={`text-center text-sm font-semibold ${
                     isActive
-                      ? "text-gold-400"
-                      : isSmsWorkspace
-                        ? "text-slate-300"
-                        : "text-slate-600 dark:text-slate-300"
+                      ? "text-gold-800 dark:text-gold-400"
+                      : "text-slate-600 dark:text-slate-300"
                   }`}
                   numberOfLines={1}
                 >
@@ -343,14 +311,11 @@ export function TransactionReview({
           })}
         </View>
 
-        <View className="mt-5 flex-row items-center justify-between gap-3">
-          <Text
-            className={`flex-1 text-lg font-semibold ${
-              isSmsWorkspace
-                ? "text-slate-300"
-                : "text-slate-700 dark:text-slate-300"
-            }`}
-          >
+        <View
+          testID="review-selection-row"
+          className="mt-3 flex-row items-center justify-between gap-2"
+        >
+          <Text className="flex-1 text-base font-semibold text-slate-700 dark:text-slate-300">
             {state.reviewMode === "needs_review"
               ? tTransactions("review_needs_check_count", {
                   count: state.needsReviewCount,
@@ -362,20 +327,20 @@ export function TransactionReview({
           <TouchableOpacity
             onPress={state.handleToggleAll}
             activeOpacity={0.7}
-            className="h-11 flex-row items-center rounded-full px-2"
+            className="h-10 flex-row items-center rounded-full px-1"
           >
             <View
-              className={`h-8 w-8 rounded-lg border-2 ${
+              className={`h-7 w-7 rounded-lg border-2 ${
                 state.allSelected
-                  ? "border-nileGreen-400 bg-nileGreen-500"
-                  : "border-nileGreen-400"
+                  ? "border-nileGreen-600 bg-nileGreen-500 dark:border-nileGreen-400"
+                  : "border-nileGreen-600 dark:border-nileGreen-400"
               } items-center justify-center`}
             >
               {state.allSelected && (
-                <Ionicons name="checkmark" size={20} color="white" />
+                <Ionicons name="checkmark" size={18} color="white" />
               )}
             </View>
-            <Text className="ms-3 text-lg font-semibold text-nileGreen-400">
+            <Text className="ms-2 text-base font-semibold text-nileGreen-600 dark:text-nileGreen-400">
               {selectToggleLabel}
             </Text>
           </TouchableOpacity>
@@ -383,15 +348,11 @@ export function TransactionReview({
             <TouchableOpacity
               onPress={() => setIsFiltersVisible((prev) => !prev)}
               activeOpacity={0.7}
-              className={`relative h-12 w-12 items-center justify-center rounded-2xl border ${
-                isSmsWorkspace
-                  ? "border-slate-700 bg-slate-800"
-                  : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
-              }`}
+              className="relative h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
             >
               <Ionicons
                 name={isFiltersVisible ? "funnel" : "funnel-outline"}
-                size={24}
+                size={20}
                 color={
                   hasActiveFilters ? palette.nileGreen[400] : palette.slate[400]
                 }
@@ -425,7 +386,7 @@ export function TransactionReview({
             reviewMode: state.reviewMode,
             reviewMetaByIndex: state.reviewMetaByIndex,
           }}
-          contentContainerClassName="px-0 pb-52"
+          contentContainerClassName="px-0 pb-40"
           showsVerticalScrollIndicator={false}
           removeClippedSubviews
           maxToRenderPerBatch={15}

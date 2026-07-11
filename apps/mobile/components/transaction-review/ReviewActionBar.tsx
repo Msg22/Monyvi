@@ -49,25 +49,15 @@ export function ReviewActionBar({
     <Animated.View
       testID="review-action-bar"
       entering={FadeInDown.delay(200)}
-      className={`border-t px-7 pb-4 pt-5 ${
-        isSmsWorkspace
-          ? "border-slate-800 bg-slate-950/95"
-          : "border-slate-200 bg-white/95 dark:border-slate-800 dark:bg-slate-950/95"
-      }`}
+      className="border-t border-slate-200 bg-white/95 px-5 pb-3 pt-3 dark:border-slate-800 dark:bg-slate-950/95"
     >
-      <View className="mb-5 flex-row items-center">
+      <View className="mb-3 flex-row items-center">
         <Ionicons
           name="information-circle-outline"
-          size={24}
+          size={18}
           color={palette.nileGreen[400]}
         />
-        <Text
-          className={`ms-3 flex-1 text-sm ${
-            isSmsWorkspace
-              ? "text-slate-400"
-              : "text-slate-600 dark:text-slate-400"
-          }`}
-        >
+        <Text className="ms-2 flex-1 text-xs text-slate-600 dark:text-slate-400">
           {t("review_ai_accuracy_notice")}
         </Text>
       </View>
@@ -86,47 +76,49 @@ export function ReviewActionBar({
           }
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          className="min-h-[72px] flex-row items-center justify-between px-7"
+          className="min-h-14 flex-row items-center justify-between px-5"
         >
-          <Ionicons name="lock-closed-outline" size={24} color="white" />
+          <Ionicons name="lock-closed-outline" size={20} color="white" />
           {isSaving ? (
             <ActivityIndicator color="white" />
           ) : (
-            <Text className="text-xl font-extrabold text-white">
+            <Text className="text-lg font-bold text-white">
               {t("save_selected_button_count", { count: selectedCount })}
             </Text>
           )}
-          <Ionicons name="chevron-forward" size={30} color="white" />
+          <Ionicons name="chevron-forward" size={24} color="white" />
         </LinearGradient>
       </TouchableOpacity>
 
-      <View className="mt-5 flex-row items-center justify-center gap-8">
+      <View className="mt-3 flex-row items-center justify-center gap-8">
         {needsReviewCount > 0 && (
           <TouchableOpacity
             testID="review-needs-action"
             onPress={reviewMode === "needs_review" ? onShowAll : onReviewNeeds}
             disabled={isSaving}
             activeOpacity={0.8}
-            className="min-h-9 items-center justify-center"
+            className="min-h-8 items-center justify-center"
           >
-            <Text className="text-lg font-bold text-nileGreen-400">
+            <Text className="text-base font-bold text-nileGreen-600 dark:text-nileGreen-400">
               {reviewMode === "needs_review"
                 ? t("show_all")
                 : t("review_items_count", { count: needsReviewCount })}
             </Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity
-          onPress={onDiscard}
-          disabled={isSaving}
-          activeOpacity={0.8}
-          className="min-h-9 flex-row items-center justify-center"
-        >
-          <Ionicons name="trash-outline" size={18} color={palette.red[400]} />
-          <Text className="ms-2 text-lg font-semibold text-red-400">
-            {t("discard_all")}
-          </Text>
-        </TouchableOpacity>
+        {!isSmsWorkspace && (
+          <TouchableOpacity
+            onPress={onDiscard}
+            disabled={isSaving}
+            activeOpacity={0.8}
+            className="min-h-8 flex-row items-center justify-center"
+          >
+            <Ionicons name="trash-outline" size={18} color={palette.red[400]} />
+            <Text className="ms-2 text-base font-semibold text-red-400">
+              {t("discard_all")}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </Animated.View>
   );
