@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import React from "react";
 import { TransactionReview } from "@/components/transaction-review/TransactionReview";
@@ -305,5 +305,22 @@ describe("TransactionReview", () => {
     expect(screen.getByTestId("review-summary-needs-review")).toBeTruthy();
     expect(screen.getByLabelText("2 auto-selected")).toBeTruthy();
     expect(screen.getByLabelText("1 need review")).toBeTruthy();
+  });
+
+  it("uses the filter-clearing needs-review handler from the segmented tab", () => {
+    const handleReviewNeeds = jest.fn();
+    const setReviewMode = jest.fn();
+
+    renderReview({
+      handleReviewNeeds,
+      needsReviewCount: 1,
+      searchQuery: "hidden",
+      setReviewMode,
+    });
+
+    fireEvent.press(screen.getByText("Needs review"));
+
+    expect(handleReviewNeeds).toHaveBeenCalledTimes(1);
+    expect(setReviewMode).not.toHaveBeenCalledWith("needs_review");
   });
 });

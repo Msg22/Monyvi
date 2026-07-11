@@ -303,7 +303,8 @@ function resolveSaveAccountId(
 
   if (
     !isResolvedAccountMatch(match) &&
-    override.accountId === match?.accountId
+    override.accountId === match?.accountId &&
+    override.accountConfirmed !== true
   ) {
     return null;
   }

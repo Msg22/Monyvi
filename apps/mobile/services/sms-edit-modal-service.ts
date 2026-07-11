@@ -34,6 +34,7 @@ interface TransactionEdits {
   readonly type: TransactionType;
   readonly accountId: string | null;
   readonly accountName: string | null;
+  readonly accountConfirmed?: boolean;
   /** Cash account ID for ATM withdrawal destination (optional) */
   readonly toAccountId?: string | null;
   /** Cash account name for ATM withdrawal destination (optional) */
@@ -147,6 +148,7 @@ function buildTransactionEdits(
   return {
     accountId: input.accountId,
     accountName: input.accountName,
+    accountConfirmed: true,
     counterparty: input.counterparty,
     type: input.type,
     categoryId: input.categoryId,

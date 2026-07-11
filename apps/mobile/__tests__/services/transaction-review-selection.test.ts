@@ -108,6 +108,21 @@ describe("transaction-review-selection", () => {
     });
   });
 
+  it("treats an explicitly confirmed fallback account as resolved", () => {
+    const defaultMatch = {
+      accountId: "acc-default",
+      accountName: "Default bank",
+      matchReason: "default",
+    };
+
+    expect(
+      resolveEditedAccountMatch(defaultMatch, "acc-default", true)
+    ).toEqual({
+      accountId: "acc-default",
+      matchReason: "account_name",
+    });
+  });
+
   it("returns all review reasons when more than one safety condition fails", () => {
     const transaction = {
       ...createTransaction({ confidence: 0.4 }),

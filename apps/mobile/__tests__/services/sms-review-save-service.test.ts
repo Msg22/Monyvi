@@ -25,13 +25,18 @@ function createTransaction(): ReviewableTransaction {
   };
 }
 
-function createOverride(accountId: string): TransactionEdits {
+function createOverride(
+  accountId: string,
+  overrides: Partial<TransactionEdits> = {}
+): TransactionEdits {
   return {
     accountId,
     accountName: "Chosen account",
+    accountConfirmed: true,
     amount: 100,
     categoryId: "cat-food",
     type: "EXPENSE",
+    ...overrides,
   };
 }
 
@@ -91,10 +96,12 @@ describe("prepareSavePayload", () => {
     }
   });
 
-  it("rejects an unchanged fallback account override", async () => {
+  it("rejects an unchanged fallback account override without confirmation", async () => {
     const result = await prepareSavePayload({
       selectedIndices: new Set([0]),
-      transactionOverrides: new Map([[0, createOverride("acc-default")]]),
+      transactionOverrides: new Map([
+        [0, createOverride("acc-default", { accountConfirmed: false })],
+      ]),
       accountMatches: new Map([
         [
           0,
@@ -117,5 +124,32 @@ describe("prepareSavePayload", () => {
         missingIndices: new Set([0]),
       })
     );
+  });
+
+  it("accepts an explicitly confirmed fallback account override", async () => {
+    const result = await prepareSavePayload({
+      selectedIndices: new Set([0]),
+      transactionOverrides: new Map([[0, createOverride("acc-default")]]),
+      accountMatches: new Map([
+        [
+          0,
+          {
+            accountId: "acc-default",
+            accountName: "Default account",
+            matchReason: "default",
+          },
+        ],
+      ]),
+      pendingAccounts: [],
+      effectiveTransactions: [createTransaction()],
+      userId: "user-1",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.transactionAccountMap).toEqual(
+        new Map([[0, "acc-default"]])
+      );
+    }
   });
 });

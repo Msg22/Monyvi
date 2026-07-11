@@ -98,6 +98,17 @@ export function TransactionReview({
       : state.reviewMode === "auto_selected"
         ? tTransactions("review_empty_auto_selected")
         : t("no_matching_filters");
+  const handleReviewModePress = useCallback(
+    (mode: TransactionReviewMode) => {
+      if (mode === "needs_review") {
+        state.handleReviewNeeds();
+        return;
+      }
+
+      state.setReviewMode(mode);
+    },
+    [state.handleReviewNeeds, state.setReviewMode]
+  );
 
   const renderItem = useCallback(
     ({ item }: { item: ReviewListItem }) => {
@@ -305,7 +316,7 @@ export function TransactionReview({
             return (
               <TouchableOpacity
                 key={option.mode}
-                onPress={() => state.setReviewMode(option.mode)}
+                onPress={() => handleReviewModePress(option.mode)}
                 activeOpacity={0.8}
                 className={`flex-1 min-h-14 items-center justify-center rounded-2xl border px-2 ${
                   isActive

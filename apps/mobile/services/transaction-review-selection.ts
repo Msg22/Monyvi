@@ -28,19 +28,26 @@ export function resolveEditedAccountMatch<
   TMatch extends TransactionReviewAccountMatch,
 >(
   currentMatch: TMatch | undefined,
-  editedAccountId: string | null
+  editedAccountId: string | null,
+  isAccountConfirmed = false
 ): {
   readonly accountId: string | null;
   readonly matchReason: TMatch["matchReason"] | "account_name" | "none";
 } {
   const hasChangedAccount =
     Boolean(editedAccountId) && editedAccountId !== currentMatch?.accountId;
+  const hasConfirmedFallback =
+    isAccountConfirmed &&
+    Boolean(editedAccountId) &&
+    editedAccountId === currentMatch?.accountId &&
+    !isResolvedAccountMatch(currentMatch);
 
   return {
     accountId: editedAccountId,
-    matchReason: hasChangedAccount
-      ? "account_name"
-      : (currentMatch?.matchReason ?? "none"),
+    matchReason:
+      hasChangedAccount || hasConfirmedFallback
+        ? "account_name"
+        : (currentMatch?.matchReason ?? "none"),
   };
 }
 
@@ -52,6 +59,7 @@ export function getEditedTransactionReviewMeta<
   currentAccountMatch: TMatch | undefined,
   edits: Pick<ReviewableTransaction, "amount" | "categoryId" | "type"> & {
     readonly accountId: string | null;
+    readonly accountConfirmed?: boolean;
   }
 ): TransactionReviewMeta {
   return getTransactionReviewMeta(
@@ -61,7 +69,11 @@ export function getEditedTransactionReviewMeta<
       categoryId: edits.categoryId,
       type: edits.type,
     },
-    resolveEditedAccountMatch(currentAccountMatch, edits.accountId),
+    resolveEditedAccountMatch(
+      currentAccountMatch,
+      edits.accountId,
+      edits.accountConfirmed === true
+    ),
     {
       hasCategoryOverride: edits.categoryId !== originalTransaction?.categoryId,
     }

@@ -408,7 +408,8 @@ export function useTransactionReviewState({
     transactionOverrides.forEach((edits, index) => {
       const editedMatch = resolveEditedAccountMatch(
         accountMatches.get(index),
-        edits.accountId
+        edits.accountId,
+        edits.accountConfirmed === true
       );
       next.set(index, {
         accountId: editedMatch.accountId,
