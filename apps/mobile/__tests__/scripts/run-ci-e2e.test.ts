@@ -21,6 +21,10 @@ interface RunCiE2eModule {
   ):
     | "helpers/ci-auth-bootstrap.yaml"
     | "helpers/ci-auth-deeplink-bootstrap.yaml";
+  getInitialAuthBootstrapOptions(): {
+    readonly env: Readonly<Record<string, string>>;
+    readonly retryOnDeviceFailure: boolean;
+  };
   getMaestroSuiteFlowOptions(
     flow: string,
     env?: Readonly<Record<string, string | undefined>>
@@ -29,6 +33,7 @@ interface RunCiE2eModule {
     readonly retryOnDeviceFailure: boolean;
   };
   getSmsSyncJourneyOptions(): {
+    readonly env: Readonly<Record<string, string>>;
     readonly retryOnDeviceFailure: boolean;
   };
   isDeviceOfflineFailure(output: string): boolean;
@@ -117,6 +122,13 @@ describe("run-ci-e2e helpers", () => {
     ).toBe("helpers/ci-auth-deeplink-bootstrap.yaml");
   });
 
+  it("clears cached emulator app data before the initial auth bootstrap", () => {
+    expect(runCiE2e.getInitialAuthBootstrapOptions()).toEqual({
+      env: { E2E_CLEAR_APP_STATE: "1" },
+      retryOnDeviceFailure: true,
+    });
+  });
+
   it("detects ADB device-offline failures for infrastructure-only retry", () => {
     expect(
       runCiE2e.isDeviceOfflineFailure(
@@ -168,9 +180,13 @@ describe("run-ci-e2e helpers", () => {
     ).toBe(false);
   });
 
-  it("retries aggregate SMS sync journeys when the emulator transport drops", () => {
+  it("reuses and refreshes the authenticated session for SMS sync journeys", () => {
     expect(runCiE2e.getSmsSyncJourneyOptions()).toEqual({
-      retryOnDeviceFailure: true,
+      retryOnDeviceFailure: false,
+      env: {
+        E2E_SKIP_AUTH_BOOTSTRAP: "1",
+        E2E_SMS_SYNC_RELAUNCH_BETWEEN_JOURNEYS: "1",
+      },
     });
   });
 

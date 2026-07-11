@@ -13,6 +13,7 @@ const {
   reconnectAndroidDevice,
   resolveMaestroBin,
   seedIntroSeenFlagForE2e,
+  startAppWithoutChangingPermissions,
   wait,
 } = require("./e2e-preflight");
 const { applyE2eAuthDeepLink } = require("./e2e-auth-deeplink");
@@ -22,6 +23,7 @@ const mobileRoot = join(__dirname, "..");
 const flowDir = join("e2e", "maestro", "live-sms-detection");
 const defaultMaestroFlowTimeoutMs = 10 * 60 * 1000;
 const defaultMaestroTransportRetryAttempts = 4;
+const liveSmsJourneyLaunchSettleMs = 3000;
 const uiAuthBootstrapFlow = "../helpers/ci-auth-bootstrap.yaml";
 const deeplinkAuthBootstrapFlow = "../helpers/ci-auth-deeplink-bootstrap.yaml";
 
@@ -1031,12 +1033,23 @@ function logInfo(event, fields) {
   );
 }
 
+function prepareLiveSmsJourneyStart(
+  dependencies = {
+    stopApp: forceStopApp,
+    startApp: startAppWithoutChangingPermissions,
+    waitForLaunch: wait,
+  }
+) {
+  dependencies.stopApp();
+  dependencies.startApp();
+  dependencies.waitForLaunch(liveSmsJourneyLaunchSettleMs);
+}
+
 async function prepareLiveSmsJourneyRetry(journey) {
   await bootstrapCleanAuthenticatedSession();
   clearDeliveredNotifications();
   journey.prepare();
-  forceStopApp();
-  await ensureE2eAppReady();
+  prepareLiveSmsJourneyStart();
 }
 
 async function main() {
@@ -1058,8 +1071,7 @@ async function main() {
 
     logInfo("liveSmsJourney.started", { id, flow: journey.flow });
     journey.prepare();
-    forceStopApp();
-    await ensureE2eAppReady();
+    prepareLiveSmsJourneyStart();
     const canResetSideEffects = shouldResetLiveSmsSideEffectsBeforeRetry(
       journey.flow
     );
@@ -1091,6 +1103,7 @@ module.exports = {
   getMaestroTransportRetryAttempts,
   getActiveUserFilter,
   isRetryableMaestroTransportFailure,
+  prepareLiveSmsJourneyStart,
   shouldPrepareLiveSmsFlowBeforeRetry,
   shouldRetryLiveSmsVerificationFlow,
   shouldResetLiveSmsSideEffectsBeforeRetry,

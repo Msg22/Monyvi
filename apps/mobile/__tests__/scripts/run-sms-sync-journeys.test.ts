@@ -11,6 +11,9 @@ interface RunSmsSyncJourneysModule {
   getMaestroFlowTimeoutMs(
     env?: Readonly<Record<string, string | undefined>>
   ): number;
+  getSmsSyncFlowAttemptCount(
+    env?: Readonly<Record<string, string | undefined>>
+  ): number;
   shouldResetSmsSyncAppStateBeforeRetry(
     flow: string,
     env?: Readonly<Record<string, string | undefined>>
@@ -130,6 +133,15 @@ describe("run-sms-sync-journeys helpers", () => {
         E2E_MAESTRO_FLOW_TIMEOUT_MS: "-1",
       })
     ).toBe(10 * 60 * 1000);
+  });
+
+  it("allows CI to fail on the first SMS flow attempt", () => {
+    expect(smsSyncJourneys.getSmsSyncFlowAttemptCount({})).toBe(2);
+    expect(
+      smsSyncJourneys.getSmsSyncFlowAttemptCount({
+        E2E_SMS_SYNC_FLOW_ATTEMPT_COUNT: "1",
+      })
+    ).toBe(1);
   });
 
   it("resets the seeded app state before retrying side-effecting SMS saves", () => {
