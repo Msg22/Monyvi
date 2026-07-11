@@ -1,4 +1,7 @@
 interface ResolveCiE2eScopeModule {
+  buildCiE2eMatrix(suites: readonly string[]): {
+    readonly suite: readonly string[];
+  };
   getGitDiffArgs(
     env?: Readonly<Record<string, string | undefined>>
   ): readonly string[];
@@ -13,6 +16,19 @@ const scopeResolver = jest.requireActual(
 ) as ResolveCiE2eScopeModule;
 
 describe("resolve-ci-e2e-scope", () => {
+  it("builds one independent CI matrix entry per selected suite", () => {
+    expect(
+      scopeResolver.buildCiE2eMatrix([
+        "transactions",
+        "recurring-payments",
+        "sms-sync",
+      ])
+    ).toEqual({
+      suite: ["transactions", "recurring-payments", "sms-sync"],
+    });
+    expect(scopeResolver.buildCiE2eMatrix([])).toEqual({ suite: ["skip"] });
+  });
+
   it("skips Android E2E for docs-only changes", () => {
     expect(scopeResolver.resolveCiE2eScope(["README.md"])).toEqual({
       shouldRun: false,

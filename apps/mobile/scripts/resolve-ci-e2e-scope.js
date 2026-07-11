@@ -37,6 +37,7 @@ function isFullE2eMobileHarnessFile(filePath) {
     filePath === "apps/mobile/scripts/run-maestro.js" ||
     filePath === "apps/mobile/scripts/e2e-preflight.js" ||
     filePath === "apps/mobile/scripts/e2e-seed.js" ||
+    filePath === "apps/mobile/scripts/e2e-timing.js" ||
     filePath === "apps/mobile/scripts/e2e-auth-deeplink.js" ||
     filePath === "apps/mobile/scripts/run-android-e2e-ci.sh" ||
     filePath === "apps/mobile/e2e/maestro/config.yaml" ||
@@ -212,6 +213,12 @@ function resolveCiE2eScope(files) {
   };
 }
 
+function buildCiE2eMatrix(suites) {
+  return {
+    suite: suites.length > 0 ? [...suites] : ["skip"],
+  };
+}
+
 function isUsableCommitSha(value) {
   return Boolean(value) && !/^0+$/.test(value);
 }
@@ -274,10 +281,12 @@ function main() {
   const files = getChangedFilesFromGit();
   const scope = resolveCiE2eScope(files);
   const suitesValue = scope.shouldRun ? scope.suites.join(",") : "skip";
+  const matrixValue = JSON.stringify(buildCiE2eMatrix(scope.suites));
 
   appendGitHubEnv("E2E_CI_SUITES", suitesValue);
   appendGitHubOutput("should_run", scope.shouldRun ? "true" : "false");
   appendGitHubOutput("suites", suitesValue);
+  appendGitHubOutput("matrix", matrixValue);
 
   console.log(`Android E2E suites: ${suitesValue}`);
 }
@@ -292,6 +301,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildCiE2eMatrix,
   getGitDiffArgs,
   resolveCiE2eScope,
 };
