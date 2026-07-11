@@ -29,7 +29,6 @@ export function ReviewActionBar({
   onDiscard,
   onReviewNeeds,
   onShowAll,
-  isSmsWorkspace = false,
 }: ReviewActionBarProps): React.JSX.Element {
   const { showToast } = useToast();
   const { t } = useTranslation("transactions");
@@ -106,19 +105,17 @@ export function ReviewActionBar({
             </Text>
           </TouchableOpacity>
         )}
-        {!isSmsWorkspace && (
-          <TouchableOpacity
-            onPress={onDiscard}
-            disabled={isSaving}
-            activeOpacity={0.8}
-            className="min-h-8 flex-row items-center justify-center"
-          >
-            <Ionicons name="trash-outline" size={18} color={palette.red[400]} />
-            <Text className="ms-2 text-base font-semibold text-red-400">
-              {t("discard_all")}
-            </Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          onPress={onDiscard}
+          disabled={isSaving}
+          activeOpacity={0.8}
+          className="min-h-8 flex-row items-center justify-center"
+        >
+          <Ionicons name="trash-outline" size={18} color={palette.red[400]} />
+          <Text className="ms-2 text-base font-semibold text-red-400">
+            {t("discard_all")}
+          </Text>
+        </TouchableOpacity>
       </View>
     </Animated.View>
   );

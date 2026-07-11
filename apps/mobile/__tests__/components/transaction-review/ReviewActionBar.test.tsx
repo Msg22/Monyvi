@@ -86,7 +86,14 @@ describe("ReviewActionBar", () => {
   });
 
   it("keeps the SMS action surface compatible with light and dark themes", () => {
-    render(<ReviewActionBar {...createProps()} isSmsWorkspace />);
+    const onDiscard = jest.fn();
+    render(
+      <ReviewActionBar
+        {...createProps()}
+        onDiscard={onDiscard}
+        isSmsWorkspace
+      />
+    );
 
     expect(screen.getByTestId("review-action-bar")).toHaveProp(
       "className",
@@ -100,6 +107,7 @@ describe("ReviewActionBar", () => {
       "className",
       expect.stringContaining("px-5 pb-3 pt-3")
     );
-    expect(screen.queryByText("discard_all")).toBeNull();
+    fireEvent.press(screen.getByText("discard_all"));
+    expect(onDiscard).toHaveBeenCalledTimes(1);
   });
 });
