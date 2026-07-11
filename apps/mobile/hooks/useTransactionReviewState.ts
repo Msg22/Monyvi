@@ -18,8 +18,9 @@ import {
 } from "@/services/sms-account-matcher";
 import { prepareSavePayload } from "@/services/sms-review-save-service";
 import {
-  buildAutoSelectedIndices,
+  getEditedTransactionReviewMeta,
   getTransactionReviewMeta,
+  resolveEditedAccountMatch,
   type TransactionReviewMeta,
 } from "@/services/transaction-review-selection";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -381,12 +382,14 @@ export function useTransactionReviewState({
   > => {
     const next = new Map(accountMatches);
     transactionOverrides.forEach((edits, index) => {
+      const editedMatch = resolveEditedAccountMatch(
+        accountMatches.get(index),
+        edits.accountId
+      );
       next.set(index, {
-        accountId: edits.accountId,
+        accountId: editedMatch.accountId,
         accountName: edits.accountName,
-        matchReason: edits.accountId
-          ? "account_name"
-          : (accountMatches.get(index)?.matchReason ?? "none"),
+        matchReason: editedMatch.matchReason,
       });
     });
     return next;
@@ -417,11 +420,15 @@ export function useTransactionReviewState({
     transactions,
   ]);
 
-  const autoSelectedOriginalIndices = useMemo(
-    () =>
-      buildAutoSelectedIndices(effectiveTransactions, effectiveAccountMatches),
-    [effectiveTransactions, effectiveAccountMatches]
-  );
+  const autoSelectedOriginalIndices = useMemo((): ReadonlySet<number> => {
+    const autoSelected = new Set<number>();
+    reviewMetaByIndex.forEach((meta, index) => {
+      if (meta.isAutoSelectable) {
+        autoSelected.add(index);
+      }
+    });
+    return autoSelected;
+  }, [reviewMetaByIndex]);
 
   const needsReviewOriginalIndices = useMemo((): ReadonlySet<number> => {
     const needsReview = new Set<number>();
@@ -529,6 +536,17 @@ export function useTransactionReviewState({
     (edits: TransactionEdits) => {
       if (editModalIndex === null) return;
 
+      const originalTransaction = transactions[editModalIndex];
+      const currentTransaction = effectiveTransactions[editModalIndex];
+      const editedMeta = currentTransaction
+        ? getEditedTransactionReviewMeta(
+            originalTransaction,
+            currentTransaction,
+            accountMatches.get(editModalIndex),
+            edits
+          )
+        : null;
+
       setTransactionOverrides((prev) => {
         const next = new Map(prev);
         const existing = next.get(editModalIndex);
@@ -547,7 +565,9 @@ export function useTransactionReviewState({
       userTouchedSelectionRef.current = true;
       setSelectedIndices((prev) => {
         const next = new Set(prev);
-        next.add(editModalIndex);
+        if (editedMeta?.isAutoSelectable) {
+          next.add(editModalIndex);
+        }
         return next;
       });
       setInvalidIndices((prev) => {
@@ -557,7 +577,7 @@ export function useTransactionReviewState({
       });
       setEditModalIndex(null);
     },
-    [editModalIndex]
+    [accountMatches, editModalIndex, effectiveTransactions, transactions]
   );
 
   const handleReviewNeeds = useCallback(() => {

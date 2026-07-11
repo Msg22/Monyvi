@@ -24,6 +24,50 @@ export interface TransactionReviewResolutionContext {
   readonly hasCategoryOverride?: boolean;
 }
 
+export function resolveEditedAccountMatch<
+  TMatch extends TransactionReviewAccountMatch,
+>(
+  currentMatch: TMatch | undefined,
+  editedAccountId: string | null
+): {
+  readonly accountId: string | null;
+  readonly matchReason: TMatch["matchReason"] | "account_name" | "none";
+} {
+  const hasChangedAccount =
+    Boolean(editedAccountId) && editedAccountId !== currentMatch?.accountId;
+
+  return {
+    accountId: editedAccountId,
+    matchReason: hasChangedAccount
+      ? "account_name"
+      : (currentMatch?.matchReason ?? "none"),
+  };
+}
+
+export function getEditedTransactionReviewMeta<
+  TMatch extends TransactionReviewAccountMatch,
+>(
+  originalTransaction: ReviewableTransaction | undefined,
+  currentTransaction: ReviewableTransaction,
+  currentAccountMatch: TMatch | undefined,
+  edits: Pick<ReviewableTransaction, "amount" | "categoryId" | "type"> & {
+    readonly accountId: string | null;
+  }
+): TransactionReviewMeta {
+  return getTransactionReviewMeta(
+    {
+      ...currentTransaction,
+      amount: edits.amount,
+      categoryId: edits.categoryId,
+      type: edits.type,
+    },
+    resolveEditedAccountMatch(currentAccountMatch, edits.accountId),
+    {
+      hasCategoryOverride: edits.categoryId !== originalTransaction?.categoryId,
+    }
+  );
+}
+
 const AUTO_SELECT_CONFIDENCE_THRESHOLD = 0.8;
 const PARSER_REASON_MAP: Readonly<
   Record<ParserReviewReason, TransactionReviewReason>

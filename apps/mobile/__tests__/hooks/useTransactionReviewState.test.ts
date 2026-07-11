@@ -276,6 +276,9 @@ describe("useTransactionReviewState", () => {
     expect(result.current.reviewMetaByIndex.get(0)?.reasons).toContain(
       "category_needed"
     );
+    expect(Array.from(result.current.selectedIndices)).toEqual([]);
+    expect(result.current.autoSelectedCount).toBe(0);
+    expect(result.current.needsReviewCount).toBe(1);
 
     act(() => result.current.handleOpenEditModal(0));
     act(() => {
@@ -291,6 +294,9 @@ describe("useTransactionReviewState", () => {
     expect(result.current.reviewMetaByIndex.get(0)?.reasons).not.toContain(
       "category_needed"
     );
+    expect(Array.from(result.current.selectedIndices)).toEqual([0]);
+    expect(result.current.autoSelectedCount).toBe(1);
+    expect(result.current.needsReviewCount).toBe(0);
   });
 
   it("re-seeds when review risk fields change for the same parsed transaction", async () => {

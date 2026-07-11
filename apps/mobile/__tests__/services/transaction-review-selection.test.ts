@@ -1,6 +1,7 @@
 import {
   buildAutoSelectedIndices,
   getTransactionReviewMeta,
+  resolveEditedAccountMatch,
 } from "@/services/transaction-review-selection";
 import type { ReviewableTransaction } from "@monyvi/logic";
 
@@ -87,6 +88,23 @@ describe("transaction-review-selection", () => {
     expect(getTransactionReviewMeta(transaction, defaultMatch)).toEqual({
       isAutoSelectable: false,
       reasons: ["account_needed"],
+    });
+  });
+
+  it("keeps an unchanged fallback account unresolved after another field is edited", () => {
+    const defaultMatch = {
+      accountId: "acc-default",
+      accountName: "Default bank",
+      matchReason: "default",
+    };
+
+    expect(resolveEditedAccountMatch(defaultMatch, "acc-default")).toEqual({
+      accountId: "acc-default",
+      matchReason: "default",
+    });
+    expect(resolveEditedAccountMatch(defaultMatch, "acc-chosen")).toEqual({
+      accountId: "acc-chosen",
+      matchReason: "account_name",
     });
   });
 
