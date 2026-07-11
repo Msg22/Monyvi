@@ -410,7 +410,7 @@ async function maybeRunAuthBootstrap() {
     await runNodeScript(
       "scripts/run-maestro.js",
       ["test", join("e2e", "maestro", getAuthBootstrapFlow())],
-      { retryOnDeviceFailure: true }
+      getInitialAuthBootstrapOptions()
     );
     hasRunAuthBootstrap = true;
   }
@@ -420,6 +420,13 @@ function getAuthBootstrapFlow(env = process.env) {
   return env.E2E_AUTH_DEEPLINK_BOOTSTRAP === "1"
     ? deeplinkAuthBootstrapFlow
     : uiAuthBootstrapFlow;
+}
+
+function getInitialAuthBootstrapOptions() {
+  return {
+    env: { E2E_CLEAR_APP_STATE: "1" },
+    retryOnDeviceFailure: true,
+  };
 }
 
 async function runMaestroFlows(flows) {
@@ -493,6 +500,7 @@ module.exports = {
   getLiveSmsTimeoutMs,
   getRequestedCiSuites,
   getAuthBootstrapFlow,
+  getInitialAuthBootstrapOptions,
   getMaestroSuiteFlowOptions,
   getSmsSyncJourneyOptions,
   isDeviceOfflineFailure,

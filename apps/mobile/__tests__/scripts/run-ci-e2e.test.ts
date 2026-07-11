@@ -21,6 +21,10 @@ interface RunCiE2eModule {
   ):
     | "helpers/ci-auth-bootstrap.yaml"
     | "helpers/ci-auth-deeplink-bootstrap.yaml";
+  getInitialAuthBootstrapOptions(): {
+    readonly env: Readonly<Record<string, string>>;
+    readonly retryOnDeviceFailure: boolean;
+  };
   getMaestroSuiteFlowOptions(
     flow: string,
     env?: Readonly<Record<string, string | undefined>>
@@ -116,6 +120,13 @@ describe("run-ci-e2e helpers", () => {
     expect(
       runCiE2e.getAuthBootstrapFlow({ E2E_AUTH_DEEPLINK_BOOTSTRAP: "1" })
     ).toBe("helpers/ci-auth-deeplink-bootstrap.yaml");
+  });
+
+  it("clears cached emulator app data before the initial auth bootstrap", () => {
+    expect(runCiE2e.getInitialAuthBootstrapOptions()).toEqual({
+      env: { E2E_CLEAR_APP_STATE: "1" },
+      retryOnDeviceFailure: true,
+    });
   });
 
   it("detects ADB device-offline failures for infrastructure-only retry", () => {
