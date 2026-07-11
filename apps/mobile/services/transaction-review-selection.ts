@@ -54,12 +54,12 @@ export function resolveEditedAccountMatch<
 export function getEditedTransactionReviewMeta<
   TMatch extends TransactionReviewAccountMatch,
 >(
-  originalTransaction: ReviewableTransaction | undefined,
   currentTransaction: ReviewableTransaction,
   currentAccountMatch: TMatch | undefined,
   edits: Pick<ReviewableTransaction, "amount" | "categoryId" | "type"> & {
     readonly accountId: string | null;
     readonly accountConfirmed?: boolean;
+    readonly categoryConfirmed?: boolean;
   }
 ): TransactionReviewMeta {
   return getTransactionReviewMeta(
@@ -75,7 +75,7 @@ export function getEditedTransactionReviewMeta<
       edits.accountConfirmed === true
     ),
     {
-      hasCategoryOverride: edits.categoryId !== originalTransaction?.categoryId,
+      hasCategoryOverride: edits.categoryConfirmed === true,
     }
   );
 }

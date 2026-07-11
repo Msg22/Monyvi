@@ -35,6 +35,7 @@ interface TransactionEdits {
   readonly accountId: string | null;
   readonly accountName: string | null;
   readonly accountConfirmed?: boolean;
+  readonly categoryConfirmed?: boolean;
   /** Cash account ID for ATM withdrawal destination (optional) */
   readonly toAccountId?: string | null;
   /** Cash account name for ATM withdrawal destination (optional) */
@@ -53,9 +54,11 @@ interface BuildPendingAccountInput {
 interface BuildTransactionEditsInput {
   readonly accountId: string | null;
   readonly accountName: string | null;
+  readonly accountConfirmed?: boolean;
   readonly counterparty?: string;
   readonly type: TransactionType;
   readonly categoryId: string;
+  readonly categoryConfirmed: boolean;
   readonly amount: number;
   /** Cash account ID for ATM withdrawal destination (optional) */
   readonly toAccountId?: string | null;
@@ -148,10 +151,11 @@ function buildTransactionEdits(
   return {
     accountId: input.accountId,
     accountName: input.accountName,
-    accountConfirmed: true,
+    accountConfirmed: input.accountConfirmed === true ? true : undefined,
     counterparty: input.counterparty,
     type: input.type,
     categoryId: input.categoryId,
+    categoryConfirmed: input.categoryConfirmed === true ? true : undefined,
     amount: input.amount,
     toAccountId: input.toAccountId,
     toAccountName: input.toAccountName,

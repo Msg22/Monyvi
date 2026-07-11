@@ -1,5 +1,6 @@
 import {
   buildPendingAccount,
+  buildTransactionEdits,
   isDuplicateAccount,
 } from "@/services/sms-edit-modal-service";
 import type { AccountWithBankDetails } from "@/services/sms-account-matcher";
@@ -71,31 +72,19 @@ describe("sms-edit-modal-service", () => {
 
   it("allows SMS-created accounts with the same name and currency for different known providers", () => {
     expect(
-      isDuplicateAccount(
-        "Main",
-        "EGP",
-        [buildAccount()],
-        [],
-        {
-          institutionId: "nbe",
-          providerDisplayName: "NBE",
-        }
-      )
+      isDuplicateAccount("Main", "EGP", [buildAccount()], [], {
+        institutionId: "nbe",
+        providerDisplayName: "NBE",
+      })
     ).toBe(false);
   });
 
   it("rejects SMS-created accounts with the same provider-aware uniqueness key", () => {
     expect(
-      isDuplicateAccount(
-        " Main ",
-        "EGP",
-        [buildAccount()],
-        [],
-        {
-          institutionId: "cib",
-          providerDisplayName: "CIB",
-        }
-      )
+      isDuplicateAccount(" Main ", "EGP", [buildAccount()], [], {
+        institutionId: "cib",
+        providerDisplayName: "CIB",
+      })
     ).toBe(true);
   });
 
@@ -116,5 +105,35 @@ describe("sms-edit-modal-service", () => {
         }
       )
     ).toBe(true);
+  });
+
+  it("preserves explicit account and category confirmations in edits", () => {
+    expect(
+      buildTransactionEdits({
+        accountId: "account-1",
+        accountName: "Main",
+        accountConfirmed: true,
+        categoryId: "cat-food",
+        categoryConfirmed: true,
+        amount: 100,
+        type: "EXPENSE",
+      })
+    ).toMatchObject({
+      accountConfirmed: true,
+      categoryConfirmed: true,
+    });
+  });
+
+  it("does not confirm an untouched account field", () => {
+    expect(
+      buildTransactionEdits({
+        accountId: "account-1",
+        accountName: "Main",
+        categoryId: "cat-food",
+        categoryConfirmed: false,
+        amount: 100,
+        type: "EXPENSE",
+      }).accountConfirmed
+    ).toBeUndefined();
   });
 });

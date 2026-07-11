@@ -326,6 +326,7 @@ describe("useTransactionReviewState", () => {
         amount: 100,
         type: "EXPENSE",
         categoryId: "cat-shopping",
+        categoryConfirmed: true,
         accountId: "acc-manual",
         accountName: "Manual account",
       });
@@ -337,6 +338,22 @@ describe("useTransactionReviewState", () => {
     expect(Array.from(result.current.selectedIndices)).toEqual([0]);
     expect(result.current.autoSelectedCount).toBe(1);
     expect(result.current.needsReviewCount).toBe(0);
+
+    act(() => result.current.handleOpenEditModal(0));
+    act(() => {
+      result.current.handleEditModalSave({
+        amount: 120,
+        type: "EXPENSE",
+        categoryId: "cat-shopping",
+        accountId: "acc-manual",
+        accountName: "Manual account",
+      });
+    });
+
+    expect(result.current.reviewMetaByIndex.get(0)?.reasons).not.toContain(
+      "category_needed"
+    );
+    expect(result.current.autoSelectedCount).toBe(1);
   });
 
   it("re-seeds when review risk fields change for the same parsed transaction", async () => {

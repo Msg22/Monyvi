@@ -429,21 +429,13 @@ export function useTransactionReviewState({
       meta.set(
         index,
         getTransactionReviewMeta(tx, effectiveAccountMatches.get(index), {
-          hasCategoryOverride: Boolean(
-            transactionOverrides.has(index) &&
-            transactionOverrides.get(index)?.categoryId !==
-              transactions[index]?.categoryId
-          ),
+          hasCategoryOverride:
+            transactionOverrides.get(index)?.categoryConfirmed === true,
         })
       );
     });
     return meta;
-  }, [
-    effectiveTransactions,
-    effectiveAccountMatches,
-    transactionOverrides,
-    transactions,
-  ]);
+  }, [effectiveTransactions, effectiveAccountMatches, transactionOverrides]);
 
   const autoSelectedOriginalIndices = useMemo((): ReadonlySet<number> => {
     const autoSelected = new Set<number>();
@@ -561,11 +553,9 @@ export function useTransactionReviewState({
     (edits: TransactionEdits) => {
       if (editModalIndex === null) return;
 
-      const originalTransaction = transactions[editModalIndex];
       const currentTransaction = effectiveTransactions[editModalIndex];
       const editedMeta = currentTransaction
         ? getEditedTransactionReviewMeta(
-            originalTransaction,
             currentTransaction,
             accountMatches.get(editModalIndex),
             edits
@@ -602,7 +592,7 @@ export function useTransactionReviewState({
       });
       setEditModalIndex(null);
     },
-    [accountMatches, editModalIndex, effectiveTransactions, transactions]
+    [accountMatches, editModalIndex, effectiveTransactions]
   );
 
   const handleReviewNeeds = useCallback(() => {

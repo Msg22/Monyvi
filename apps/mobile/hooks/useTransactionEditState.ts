@@ -69,9 +69,7 @@ export interface UseTransactionEditStateReturn {
     readonly setIsCategoryPickerOpen: React.Dispatch<
       React.SetStateAction<boolean>
     >;
-    readonly setSelectedCategoryId: React.Dispatch<
-      React.SetStateAction<string>
-    >;
+    readonly setSelectedCategoryId: (categoryId: string) => void;
     readonly setSelectedToAccountId: React.Dispatch<
       React.SetStateAction<string | null>
     >;
@@ -148,6 +146,7 @@ export function useTransactionEditState({
   const [selectedAccountName, setSelectedAccountName] = useState(
     currentAccountName ?? ""
   );
+  const [isAccountConfirmed, setIsAccountConfirmed] = useState(false);
   const [isAccountPickerOpen, setIsAccountPickerOpen] = useState(false);
   const [formErrors, setFormErrors] = useState<TransactionValidationErrors>({});
 
@@ -176,6 +175,7 @@ export function useTransactionEditState({
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(
     transaction.categoryId
   );
+  const [isCategoryConfirmed, setIsCategoryConfirmed] = useState(false);
 
   // Currency picker state (for "Create New Account" mode)
   const [isCurrencyPickerOpen, setIsCurrencyPickerOpen] = useState(false);
@@ -293,6 +293,9 @@ export function useTransactionEditState({
     setNote(readTransactionNote(transaction));
     setCounterparty(transaction.counterparty || "");
     setTxType(transaction.type);
+    setSelectedCategoryId(transaction.categoryId);
+    setIsCategoryConfirmed(false);
+    setIsAccountConfirmed(false);
 
     const matchedOption = currentAccountId
       ? accountOptions.find((o) => o.id === currentAccountId)
@@ -355,8 +358,14 @@ export function useTransactionEditState({
 
     if (!selectedCategoryId || typeChanged) {
       setSelectedCategoryId(relevantCategories[0].id);
+      setIsCategoryConfirmed(false);
     }
   }, [relevantCategories, selectedCategoryId, txType]);
+
+  const handleSelectCategory = useCallback((categoryId: string): void => {
+    setSelectedCategoryId(categoryId);
+    setIsCategoryConfirmed(true);
+  }, []);
 
   // Handlers
 
@@ -366,6 +375,7 @@ export function useTransactionEditState({
       name: selectedAccountName,
     };
     setIsCreatingNew(true);
+    setIsAccountConfirmed(false);
     setIsAccountPickerOpen(false);
     setNewAccountName(transaction.originLabel);
     setNewAccountCurrency(transaction.currency);
@@ -380,6 +390,7 @@ export function useTransactionEditState({
 
   const handleCancelNew = useCallback(() => {
     setIsCreatingNew(false);
+    setIsAccountConfirmed(false);
     setNewAccountError(null);
     setNewAccountCurrency(transaction.currency);
 
@@ -484,9 +495,11 @@ export function useTransactionEditState({
     const edits = buildTransactionEdits({
       accountId: resolvedAccountId,
       accountName: resolvedAccountName,
+      accountConfirmed: isCreatingNewAccount || isAccountConfirmed,
       counterparty,
       type: txType,
       categoryId: selectedCategoryId,
+      categoryConfirmed: isCategoryConfirmed,
       amount: parseFloat(parseAmountInput(amount)),
       note: note.trim() || undefined,
       toAccountId: formConfig.showToAccount
@@ -511,11 +524,13 @@ export function useTransactionEditState({
     selectedAccountName,
     transaction,
     isCreatingNew,
+    isAccountConfirmed,
     hasBankAccounts,
     newAccountName,
     accounts,
     pendingAccounts,
     selectedCategoryId,
+    isCategoryConfirmed,
     onSave,
     onCreatePendingAccount,
     formConfig.showToAccount,
@@ -570,7 +585,7 @@ export function useTransactionEditState({
       setIsAccountPickerOpen,
       setNewAccountName,
       setIsCategoryPickerOpen,
-      setSelectedCategoryId,
+      setSelectedCategoryId: handleSelectCategory,
       setSelectedToAccountId,
       setSelectedToAccountName,
       setIsToAccountPickerOpen,
@@ -595,6 +610,7 @@ export function useTransactionEditState({
       handleSelectAccount: useCallback((opt: AccountOption) => {
         setSelectedAccountId(opt.id);
         setSelectedAccountName(opt.name);
+        setIsAccountConfirmed(true);
         setIsAccountPickerOpen(false);
         // Exit create-new mode if user selects an existing account
         setIsCreatingNew(false);

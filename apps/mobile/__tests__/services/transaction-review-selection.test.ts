@@ -1,5 +1,6 @@
 import {
   buildAutoSelectedIndices,
+  getEditedTransactionReviewMeta,
   getTransactionReviewMeta,
   resolveEditedAccountMatch,
 } from "@/services/transaction-review-selection";
@@ -172,6 +173,60 @@ describe("transaction-review-selection", () => {
     expect(getTransactionReviewMeta(transaction, accountMatch)).toEqual({
       isAutoSelectable: false,
       reasons: ["category_needed"],
+    });
+  });
+
+  it("does not treat a prefilled category as an explicit category choice", () => {
+    const currentTransaction = createTransaction({
+      categoryId: "cat-food",
+      reviewStatus: "needs_review",
+      reviewReasons: ["category_needed"],
+    });
+    const accountMatch = {
+      accountId: "acc-1",
+      accountName: "Bank",
+      matchReason: "sms_sender",
+    };
+
+    expect(
+      getEditedTransactionReviewMeta(currentTransaction, accountMatch, {
+        amount: 100,
+        categoryId: "cat-food",
+        type: "EXPENSE",
+        accountId: "acc-1",
+        accountConfirmed: true,
+        categoryConfirmed: false,
+      })
+    ).toEqual({
+      isAutoSelectable: false,
+      reasons: ["category_needed"],
+    });
+  });
+
+  it("clears category-needed only after an explicit category choice", () => {
+    const currentTransaction = createTransaction({
+      categoryId: "cat-food",
+      reviewStatus: "needs_review",
+      reviewReasons: ["category_needed"],
+    });
+    const accountMatch = {
+      accountId: "acc-1",
+      accountName: "Bank",
+      matchReason: "sms_sender",
+    };
+
+    expect(
+      getEditedTransactionReviewMeta(currentTransaction, accountMatch, {
+        amount: 100,
+        categoryId: "cat-food",
+        type: "EXPENSE",
+        accountId: "acc-1",
+        accountConfirmed: true,
+        categoryConfirmed: true,
+      })
+    ).toEqual({
+      isAutoSelectable: true,
+      reasons: [],
     });
   });
 

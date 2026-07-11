@@ -13,6 +13,20 @@ appId: com.monyvi.app
 
 - tapOn: "Sync New SMS"
 
+# The preceding permission scenario intentionally dismisses this prompt. Make
+# the batch journey establish its own SMS permission instead of depending on
+# state left by another flow.
+- runFlow:
+    when:
+      visible: "Allow SMS sync?"
+    commands:
+      - tapOn:
+          id: "permission-modal-primary"
+      - extendedWaitUntil:
+          visible: "Allow"
+          timeout: 10000
+      - tapOn: "Allow"
+
 - extendedWaitUntil:
     visible: "Scan Complete!"
     timeout: 90000
