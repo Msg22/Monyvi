@@ -139,6 +139,7 @@ export default function SettingsScreen(): React.JSX.Element {
   const [pendingSmsScanMode, setPendingSmsScanMode] = useState<
     "incremental" | "full" | null
   >(null);
+  const isRequestingSmsSyncPermissionRef = useRef(false);
   const [pendingAiConsentAction, setPendingAiConsentAction] =
     useState<PendingAiAction | null>(null);
   const shouldResumeAiConsentAfterPrivacyDetails = useRef(false);
@@ -356,6 +357,7 @@ export default function SettingsScreen(): React.JSX.Element {
   useEffect(() => {
     if (pendingSmsScanMode === null) return;
     if (smsPermissionStatus !== "granted") return;
+    if (isRequestingSmsSyncPermissionRef.current) return;
 
     setPendingSmsScanMode(null);
     setPermissionRecovery(null);
@@ -454,19 +456,24 @@ export default function SettingsScreen(): React.JSX.Element {
           return;
         }
 
-        const result = await requestPermission();
-        if (result === "granted") {
-          const mode = pendingSmsScanMode ?? "incremental";
-          setPendingSmsScanMode(null);
-          setPermissionRecovery(null);
-          setScanMode(mode);
-          router.push("/sms-scan");
-          return;
-        }
+        isRequestingSmsSyncPermissionRef.current = true;
+        try {
+          const result = await requestPermission();
+          if (result === "granted") {
+            const mode = pendingSmsScanMode ?? "incremental";
+            setPendingSmsScanMode(null);
+            setPermissionRecovery(null);
+            setScanMode(mode);
+            router.push("/sms-scan");
+            return;
+          }
 
-        setPermissionRecovery(
-          createPermissionRecoveryState("sms-sync", result)
-        );
+          setPermissionRecovery(
+            createPermissionRecoveryState("sms-sync", result)
+          );
+        } finally {
+          isRequestingSmsSyncPermissionRef.current = false;
+        }
         return;
       }
 

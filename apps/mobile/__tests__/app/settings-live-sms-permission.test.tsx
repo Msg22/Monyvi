@@ -419,6 +419,36 @@ describe("Settings live SMS permission recovery", () => {
     expect(mockRequestLiveDetectionPermission).not.toHaveBeenCalled();
   });
 
+  it("opens SMS scan only once when permission state updates before the request resolves", async () => {
+    let resolvePermissionRequest: (status: "granted") => void = () => {};
+    mockSmsPermissionStatus = "undetermined";
+    mockRequestPermission.mockReturnValueOnce(
+      new Promise<"granted">((resolve) => {
+        resolvePermissionRequest = resolve;
+      })
+    );
+    const screen = await renderReadySettings();
+
+    fireEvent.press(screen.getByText("sync_new"));
+    fireEvent.press(await screen.findByTestId("permission-modal-primary"));
+    await waitFor(() => expect(mockRequestPermission).toHaveBeenCalledTimes(1));
+
+    mockSmsPermissionStatus = "granted";
+    screen.rerender(<SettingsScreen />);
+
+    await act(async () => {
+      resolvePermissionRequest("granted");
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(mockRouterPush).toHaveBeenCalledWith("/sms-scan");
+    });
+    expect(
+      mockRouterPush.mock.calls.filter(([route]) => route === "/sms-scan")
+    ).toHaveLength(1);
+  });
+
   it("does not replay a dismissed AI consent SMS action when enabling AI later", async () => {
     mockIsAiConsented = false;
     mockSmsPermissionStatus = "granted";
