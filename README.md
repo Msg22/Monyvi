@@ -249,6 +249,26 @@ start Metro with `MONYVI_LOCAL_SUPABASE_DEVICE_URL` set:
 npm run mobile:local-supabase:wireless-device
 ```
 
+For normal development with the local SMS parser, use one of these explicit
+commands instead of passing parser and inbox flags manually:
+
+| Purpose                                                               | Command                                                 |
+| --------------------------------------------------------------------- | ------------------------------------------------------- |
+| Dev app + local Supabase + local parser + deterministic fixture SMS   | `npm run mobile:dev:local-parser:fixture-sms`           |
+| Dev app + local Supabase + local parser + the device's real SMS inbox | `npm run mobile:dev:local-parser:device-sms`            |
+| E2E Metro for a physical device + local parser                        | `npm run mobile:e2e:local-parser:metro:physical-device` |
+| Run the SMS-sync E2E journey on a physical device + local parser      | `npm run e2e:sms-sync:local-parser:physical-device`     |
+
+The `dev` commands keep `EXPO_PUBLIC_MONYVI_TEST_MODE=off`. The `e2e` commands
+prepare the test harness and may reset or replace app state, so do not use them
+for ordinary manual development.
+
+Both quick dev commands pass Expo's `--lan` option. This makes Metro advertise
+the computer's local Wi-Fi address in the development-client QR code so a phone
+on the same network can reach it. It does not expose Metro to the public
+internet. The wireless local Supabase script separately uses ngrok for the
+Supabase endpoint.
+
 By default, the script preserves the existing manual QA password while
 refreshing the seeded local data. Sign in with:
 
