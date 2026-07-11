@@ -578,7 +578,6 @@ export function useTransactionReviewState({
         return next;
       });
 
-      userTouchedSelectionRef.current = true;
       setSelectedIndices((prev) => {
         const next = new Set(prev);
         if (editedMeta?.isAutoSelectable) {

@@ -33,7 +33,7 @@ import { useTranslation } from "react-i18next";
 import React, { memo, useCallback, useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-import type { TransactionReviewMeta } from "@/services/transaction-review-selection";
+import type { TransactionReviewMeta } from "@/contracts/transaction-review";
 import {
   type BadgeColor,
   getTransactionBadges,

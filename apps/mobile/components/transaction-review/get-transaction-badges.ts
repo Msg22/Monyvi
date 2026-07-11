@@ -1,7 +1,7 @@
 import type {
   TransactionReviewMeta,
   TransactionReviewReason,
-} from "@/services/transaction-review-selection";
+} from "@/contracts/transaction-review";
 
 export type BadgeColor = "amber" | "red" | "blue" | "emerald";
 

@@ -156,6 +156,55 @@ describe("useTransactionReviewState", () => {
     expect(result.current.needsReviewCount).toBe(3);
   });
 
+  it("still seeds later safe rows when a row is edited during account matching", async () => {
+    const transactions = [
+      createTransaction({ originLabel: "FIRST_SAFE", confidence: 0.95 }),
+      createTransaction({ originLabel: "SECOND_SAFE", confidence: 0.95 }),
+    ];
+    let completeMatching: (() => void) | undefined;
+
+    mockMatchTransactionsBatched.mockImplementationOnce(
+      (
+        _transactions: readonly ReviewableTransaction[],
+        _userId: string,
+        _batchSize: number,
+        onBatchComplete: (batch: ReadonlyMap<number, AccountMatch>) => void
+      ): Promise<void> =>
+        new Promise((resolve) => {
+          act(() => {
+            onBatchComplete(new Map([[0, accountMatch("acc-1")]]));
+          });
+          completeMatching = () => {
+            act(() => {
+              onBatchComplete(new Map([[1, accountMatch("acc-1")]]));
+            });
+            resolve();
+          };
+        })
+    );
+
+    const { result } = renderHook(() =>
+      useTransactionReviewState({ transactions, onSave: jest.fn() })
+    );
+
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(1));
+    act(() => result.current.handleOpenEditModal(0));
+    act(() => {
+      result.current.handleEditModalSave({
+        amount: 125,
+        type: "EXPENSE",
+        categoryId: "cat-food",
+        accountId: "acc-1",
+        accountName: "Bank",
+      });
+    });
+
+    completeMatching?.();
+
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(2));
+    expect(Array.from(result.current.selectedIndices).sort()).toEqual([0, 1]);
+  });
+
   it("focuses needs-review rows and selects only shown rows", async () => {
     const transactions = [
       createTransaction({ originLabel: "SAFE", confidence: 0.95 }),

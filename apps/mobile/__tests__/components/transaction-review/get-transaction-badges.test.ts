@@ -1,5 +1,5 @@
 import { getTransactionBadges } from "@/components/transaction-review/get-transaction-badges";
-import type { TransactionReviewMeta } from "@/services/transaction-review-selection";
+import type { TransactionReviewMeta } from "@/contracts/transaction-review";
 
 function reviewMeta(
   overrides: Partial<TransactionReviewMeta>

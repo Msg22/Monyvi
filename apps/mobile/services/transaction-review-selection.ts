@@ -2,22 +2,19 @@ import type {
   ReviewableTransaction,
   TransactionReviewReason as ParserReviewReason,
 } from "@monyvi/logic";
+import type {
+  TransactionReviewMeta,
+  TransactionReviewReason,
+} from "@/contracts/transaction-review";
 
-export type TransactionReviewReason =
-  | "cash_transfer"
-  | "low_confidence"
-  | "account_needed"
-  | "category_needed"
-  | "parser_review";
+export type {
+  TransactionReviewMeta,
+  TransactionReviewReason,
+} from "@/contracts/transaction-review";
 
 export interface TransactionReviewAccountMatch {
   readonly accountId: string | null;
   readonly matchReason?: string;
-}
-
-export interface TransactionReviewMeta {
-  readonly isAutoSelectable: boolean;
-  readonly reasons: readonly TransactionReviewReason[];
 }
 
 export interface TransactionReviewResolutionContext {
