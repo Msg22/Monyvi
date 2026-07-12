@@ -2,8 +2,7 @@ appId: com.monyvi.app
 ---
 # Journey 03: User denies live SMS permission, then tries again and recovers.
 
-- runFlow: ../helpers/open-settings.yaml
-- runFlow: scroll-to-live-sms-switch.yaml
+- runFlow: ensure-live-sms-disabled.yaml
 
 - tapOn:
     id: "live-sms-detection-switch"

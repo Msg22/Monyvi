@@ -370,6 +370,30 @@ function normalizeNotificationPatterns(patterns) {
   return Array.isArray(patterns) ? patterns : [patterns];
 }
 
+function hasMatchingAppNotification(
+  notificationDump,
+  patterns,
+  applicationId = appId
+) {
+  const records = notificationDump
+    .split(/(?=\s*NotificationRecord\()/)
+    .filter((record) => record.includes(`pkg=${applicationId} `));
+  const regexes = normalizeNotificationPatterns(patterns).map(
+    (pattern) => new RegExp(pattern, "i")
+  );
+
+  return records.some((record) =>
+    regexes.every((regex) => regex.test(record))
+  );
+}
+
+function readNotificationServiceState() {
+  return adb(["shell", "dumpsys", "notification", "--noredact"], {
+    allowFailure: true,
+    capture: true,
+  });
+}
+
 function findNotificationMatch(nodes, patterns) {
   const regexes = normalizeNotificationPatterns(patterns).map(
     (pattern) => new RegExp(pattern, "i")
@@ -460,23 +484,31 @@ function waitForNotificationText(patterns, timeoutMs = 60000) {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < timeoutMs) {
-    adb(["shell", "cmd", "statusbar", "expand-notifications"], {
-      allowFailure: true,
-    });
-    wait(1000);
-    const uiXml = dumpVisibleText();
-    const nodes = parseUiNodes(uiXml);
-    if (findNotificationMatch(nodes, patterns)) {
+    if (hasMatchingAppNotification(readNotificationServiceState(), patterns)) {
       return;
     }
-    collapseSystemUi();
-    wait(2000);
+    wait(1000);
   }
 
+  const nativeDeliveryDiagnostics = adb(
+    [
+      "logcat",
+      "-d",
+      "-v",
+      "brief",
+      "-s",
+      "SmsBroadcastReceiver:D",
+      "SmsHeadlessTaskService:D",
+      "*:S",
+    ],
+    { allowFailure: true, capture: true }
+  ).trim();
   throw new Error(
     `Timed out waiting for notification text: ${normalizeNotificationPatterns(
       patterns
-    ).join(", ")}`
+    ).join(", ")}\nNative SMS delivery diagnostics:\n${
+      nativeDeliveryDiagnostics || "(no receiver or headless-service logs)"
+    }`
   );
 }
 
@@ -546,13 +578,7 @@ function waitForNotificationDismissed(patterns, timeoutMs = 30000) {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < timeoutMs) {
-    adb(["shell", "cmd", "statusbar", "expand-notifications"], {
-      allowFailure: true,
-    });
-    wait(1000);
-    const uiXml = dumpVisibleText();
-    const nodes = parseUiNodes(uiXml);
-    if (!findNotificationMatch(nodes, patterns)) {
+    if (!hasMatchingAppNotification(readNotificationServiceState(), patterns)) {
       return;
     }
     wait(1000);
@@ -1133,6 +1159,7 @@ module.exports = {
   getAuthBootstrapFlow,
   getMaestroFlowTimeoutMs,
   getMaestroTransportRetryAttempts,
+  hasMatchingAppNotification,
   getActiveUserFilter,
   isRetryableMaestroTransportFailure,
   prepareLiveSmsJourneyStart,

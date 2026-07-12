@@ -38,6 +38,11 @@ interface RunLiveSmsJourneysModule {
     readonly startApp: () => void;
     readonly waitForLaunch: (durationMs: number) => void;
   }): void;
+  hasMatchingAppNotification(
+    notificationDump: string,
+    patterns: readonly string[],
+    applicationId?: string
+  ): boolean;
 }
 
 const liveSmsJourneys = jest.requireActual(
@@ -276,5 +281,48 @@ describe("run-live-sms-journeys helpers", () => {
     });
 
     expect(operations).toEqual(["stop", "start", "wait:3000"]);
+  });
+
+  it("matches notification text only inside Monyvi notification records", () => {
+    const messagesRecord = `
+      NotificationRecord(0x1: pkg=com.google.android.apps.messaging user=0)
+        android.title=String (QNB)
+        android.text=String (BACKGROUND LIVE SMS TEST 63.21)
+    `;
+    const monyviRecord = `
+      NotificationRecord(0x2: pkg=com.monyvi.app user=0)
+        android.title=String (Expense Detected)
+        android.text=String (EGP 63.21 from QNB To: BACKGROUND LIVE SMS TEST)
+    `;
+    const patterns = [
+      "Expense Detected",
+      "BACKGROUND LIVE SMS TEST",
+      "63\\.21",
+    ];
+
+    expect(
+      liveSmsJourneys.hasMatchingAppNotification(messagesRecord, patterns)
+    ).toBe(false);
+    expect(
+      liveSmsJourneys.hasMatchingAppNotification(
+        `${messagesRecord}\n${monyviRecord}`,
+        patterns
+      )
+    ).toBe(true);
+  });
+
+  it("establishes a disabled live-SMS state before the denied-permission journey", () => {
+    const flow = readFileSync(
+      resolve(
+        process.cwd(),
+        "e2e/maestro/live-sms-detection/live-sms-journey-03-sms-deny-then-recover.yaml"
+      ),
+      "utf8"
+    );
+
+    expect(flow).toContain("- runFlow: ensure-live-sms-disabled.yaml");
+    expect(flow.indexOf("ensure-live-sms-disabled.yaml")).toBeLessThan(
+      flow.indexOf('id: "live-sms-detection-switch"')
+    );
   });
 });
