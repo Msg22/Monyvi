@@ -3,6 +3,7 @@ interface E2ePreflightModule {
   buildDevClientUrl(url: string): string;
   buildDevMenuPreferencesXml(): string;
   buildIntroSeenFlagSql(): string;
+  currentFocusShowsDevLauncherError(currentFocus: string): boolean;
   currentFocusShowsDevMenu(currentFocus: string): boolean;
   currentFocusShowsLauncher(currentFocus: string): boolean;
   didDumpUiHierarchy(dumpOutput: string): boolean;
@@ -23,6 +24,18 @@ interface E2ePreflightModule {
     hostMetroUrl: string;
     metroUrl: string;
   };
+  shouldRetryDevLauncherWithLoopback(
+    currentFocus: string,
+    deviceMetroUrl: string,
+    hasRetried: boolean
+  ): boolean;
+  shouldRetryUnreadyNativeRootWithLoopback(
+    uiXml: string,
+    deviceMetroUrl: string,
+    hasRetried: boolean,
+    nativeRootWaitMs: number
+  ): boolean;
+  toLoopbackMetroUrl(deviceMetroUrl: string): string;
 }
 
 const preflight = jest.requireActual(
@@ -71,6 +84,92 @@ describe("e2e-preflight", () => {
     ).toBe(
       "monyvi://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8081%2F%3Fplatform%3Dandroid"
     );
+  });
+
+  it("recognizes the Expo development launcher error activity", () => {
+    expect(
+      preflight.currentFocusShowsDevLauncherError(
+        "mCurrentFocus=Window{7d940e6 u0 com.monyvi.app/expo.modules.devlauncher.launcher.errors.DevLauncherErrorActivity}"
+      )
+    ).toBe(true);
+    expect(
+      preflight.currentFocusShowsDevLauncherError(
+        "mCurrentFocus=Window{31b944f u0 com.monyvi.app/com.monyvi.app.MainActivity}"
+      )
+    ).toBe(false);
+  });
+
+  it("falls back to adb-reverse loopback once after a CI host-alias launch error", () => {
+    const errorFocus =
+      "mCurrentFocus=Window{7d940e6 u0 com.monyvi.app/expo.modules.devlauncher.launcher.errors.DevLauncherErrorActivity}";
+    const hostAliasUrl = "http://10.0.2.2:8081/?platform=android";
+
+    expect(
+      preflight.shouldRetryDevLauncherWithLoopback(
+        errorFocus,
+        hostAliasUrl,
+        false
+      )
+    ).toBe(true);
+    expect(preflight.toLoopbackMetroUrl(hostAliasUrl)).toBe(
+      "http://127.0.0.1:8081/?platform=android"
+    );
+    expect(
+      preflight.shouldRetryDevLauncherWithLoopback(
+        errorFocus,
+        hostAliasUrl,
+        true
+      )
+    ).toBe(false);
+    expect(
+      preflight.shouldRetryDevLauncherWithLoopback(
+        errorFocus,
+        "http://127.0.0.1:8081/?platform=android",
+        false
+      )
+    ).toBe(false);
+  });
+
+  it("falls back once when a mounted native root never reaches product UI", () => {
+    const nativeRootOnlyXml = `
+      <hierarchy>
+        <node package="com.monyvi.app" class="android.view.View" />
+      </hierarchy>
+    `;
+    const hostAliasUrl = "http://10.0.2.2:8081/?platform=android";
+
+    expect(
+      preflight.shouldRetryUnreadyNativeRootWithLoopback(
+        nativeRootOnlyXml,
+        hostAliasUrl,
+        false,
+        14_999
+      )
+    ).toBe(false);
+    expect(
+      preflight.shouldRetryUnreadyNativeRootWithLoopback(
+        nativeRootOnlyXml,
+        hostAliasUrl,
+        false,
+        15_000
+      )
+    ).toBe(true);
+    expect(
+      preflight.shouldRetryUnreadyNativeRootWithLoopback(
+        '<node text="Skip" />',
+        hostAliasUrl,
+        false,
+        15_000
+      )
+    ).toBe(false);
+    expect(
+      preflight.shouldRetryUnreadyNativeRootWithLoopback(
+        nativeRootOnlyXml,
+        hostAliasUrl,
+        true,
+        15_000
+      )
+    ).toBe(false);
   });
 
   it("builds dev menu preferences that hide the Expo tools button", () => {

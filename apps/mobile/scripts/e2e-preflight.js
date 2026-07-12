@@ -20,7 +20,7 @@ const androidDeviceReconnectTimeoutMs = parsePositiveInt(
   process.env.E2E_ADB_RECONNECT_TIMEOUT_MS,
   180000
 );
-const devClientUrl = buildDevClientUrl(metroUrl);
+const nativeRootLoopbackFallbackDelayMs = 15000;
 const devMenuPreferencesPath =
   "shared_prefs/expo.modules.devmenu.sharedpreferences.xml";
 const introSeenStorageKey = "@monyvi/intro-seen";
@@ -92,6 +92,37 @@ function resolveMetroUrls(env = process.env) {
     hostMetroUrl: hostUrl,
     metroUrl: appendAndroidPlatform(deviceUrl),
   };
+}
+
+function toLoopbackMetroUrl(deviceMetroUrl) {
+  return deviceMetroUrl.replace("://10.0.2.2", "://127.0.0.1");
+}
+
+function shouldRetryDevLauncherWithLoopback(
+  currentFocus,
+  deviceMetroUrl,
+  hasRetried
+) {
+  return (
+    !hasRetried &&
+    toLoopbackMetroUrl(deviceMetroUrl) !== deviceMetroUrl &&
+    currentFocusShowsDevLauncherError(currentFocus)
+  );
+}
+
+function shouldRetryUnreadyNativeRootWithLoopback(
+  uiXml,
+  deviceMetroUrl,
+  hasRetried,
+  nativeRootWaitMs
+) {
+  return (
+    !hasRetried &&
+    toLoopbackMetroUrl(deviceMetroUrl) !== deviceMetroUrl &&
+    nativeRootWaitMs >= nativeRootLoopbackFallbackDelayMs &&
+    isNativeRootMounted(uiXml) &&
+    !isAppReady(uiXml)
+  );
 }
 
 function parsePositiveInt(value, fallback) {
@@ -340,7 +371,7 @@ function forceStopApp() {
   adb(["shell", "am", "force-stop", appId], { allowFailure: true });
 }
 
-function startAppWithoutChangingPermissions() {
+function startAppWithoutChangingPermissions(deviceMetroUrl = metroUrl) {
   if (isReleaseBuild) {
     adb([
       "shell",
@@ -363,7 +394,7 @@ function startAppWithoutChangingPermissions() {
     "-a",
     "android.intent.action.VIEW",
     "-d",
-    devClientUrl,
+    buildDevClientUrl(deviceMetroUrl),
     appId,
   ]);
 }
@@ -606,6 +637,8 @@ function waitForProductUi(timeoutMs = 240000) {
   let anrWaitAttempts = 0;
   let launcherRestoreAttempts = 0;
   let devLauncherRestoreAttempts = 0;
+  let hasRetriedWithLoopback = false;
+  let unreadyNativeRootSince = null;
 
   while (Date.now() - startedAt < timeoutMs) {
     collapseSystemUi();
@@ -614,6 +647,40 @@ function waitForProductUi(timeoutMs = 240000) {
     lastUiXml = dumpVisibleText();
 
     assertNotWrongShell(lastFocus);
+
+    const hasUnreadyNativeRoot =
+      lastFocus.includes(appId) &&
+      isNativeRootMounted(lastUiXml) &&
+      !isAppReady(lastUiXml);
+    if (hasUnreadyNativeRoot) {
+      unreadyNativeRootSince ??= Date.now();
+    } else {
+      unreadyNativeRootSince = null;
+    }
+    const unreadyNativeRootWaitMs =
+      unreadyNativeRootSince === null ? 0 : Date.now() - unreadyNativeRootSince;
+
+    if (
+      shouldRetryDevLauncherWithLoopback(
+        lastFocus,
+        metroUrl,
+        hasRetriedWithLoopback
+      ) ||
+      shouldRetryUnreadyNativeRootWithLoopback(
+        lastUiXml,
+        metroUrl,
+        hasRetriedWithLoopback,
+        unreadyNativeRootWaitMs
+      )
+    ) {
+      hasRetriedWithLoopback = true;
+      unreadyNativeRootSince = null;
+      forceStopApp();
+      wait(2000);
+      startAppWithoutChangingPermissions(toLoopbackMetroUrl(metroUrl));
+      wait(5000);
+      continue;
+    }
 
     if (dismissDevMenuIfVisible(lastUiXml)) {
       continue;
@@ -679,6 +746,7 @@ function waitForProductUi(timeoutMs = 240000) {
   const isAccountLoading = lastUiXml.includes("account-loading-screen");
   const isDevLauncher =
     currentFocusShowsWrongShell(lastFocus) ||
+    currentFocusShowsDevLauncherError(lastFocus) ||
     visibleTextShowsWrongShell(lastUiXml);
   const hint = isDevLauncher
     ? `The app stayed in the Expo Dev Launcher. Metro URL: ${metroUrl}`
@@ -696,6 +764,13 @@ function currentFocusShowsWrongShell(currentFocus) {
   return (
     currentWindowState.includes("host.exp.exponent") ||
     currentWindowState.includes("DevLauncherActivity")
+  );
+}
+
+function currentFocusShowsDevLauncherError(currentFocus) {
+  const currentWindowState = withoutLastAnrSection(currentFocus);
+  return /(?:mCurrentFocus|currentFocus)=Window\{[^}]*com\.monyvi\.app\/expo\.modules\.devlauncher\.launcher\.errors\.DevLauncherErrorActivity|(?:mFocusedApp|focusedApp)=ActivityRecord\{[^}]*com\.monyvi\.app\/expo\.modules\.devlauncher\.launcher\.errors\.DevLauncherErrorActivity/.test(
+    currentWindowState
   );
 }
 
@@ -797,6 +872,7 @@ module.exports = {
   ensureE2eMetroReady,
   forceStopApp,
   appendAndroidPlatform,
+  currentFocusShowsDevLauncherError,
   currentFocusShowsDevMenu,
   currentFocusShowsLauncher,
   buildDevMenuPreferencesXml,
@@ -812,6 +888,8 @@ module.exports = {
   isNativeRootMounted,
   isReleaseBuild,
   shouldRestoreFromDevLauncher,
+  shouldRetryDevLauncherWithLoopback,
+  shouldRetryUnreadyNativeRootWithLoopback,
   hostMetroUrl,
   metroUrl,
   isRetryableMaestroTransportFailure,
@@ -823,6 +901,7 @@ module.exports = {
   seedIntroSeenFlagForE2e,
   stabilizeAndroidDevice,
   startAppWithoutChangingPermissions,
+  toLoopbackMetroUrl,
   wait,
   waitForProductUi,
 };
