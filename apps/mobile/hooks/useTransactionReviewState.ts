@@ -17,56 +17,48 @@ import {
   matchTransactionsBatched,
 } from "@/services/sms-account-matcher";
 import { prepareSavePayload } from "@/services/sms-review-save-service";
+import {
+  getEditedTransactionReviewMeta,
+  getTransactionReviewMeta,
+  resolveEditedAccountMatch,
+  type TransactionReviewMeta,
+} from "@/services/transaction-review-selection";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import type { TransactionEdits } from "@/services/sms-edit-modal-service";
+import { toggleTransactionTypeFilter } from "@/utils/transaction-review-filters";
 
-export type ReviewListItem =
-  | { readonly kind: "header"; readonly date: string; readonly key: string }
-  | {
-      readonly kind: "transaction";
-      readonly originalIndex: number;
-      readonly tx: ReviewableTransaction;
-      readonly key: string;
-    };
+export interface ReviewListItem {
+  readonly originalIndex: number;
+  readonly tx: ReviewableTransaction;
+  readonly key: string;
+}
 
-function groupByDate(
+export type TransactionReviewMode = "all" | "needs_review" | "auto_selected";
+
+export interface TransactionReviewFilters {
+  readonly period: GroupingPeriod;
+  readonly selectedTypes: readonly TransactionTypeFilter[];
+  readonly searchQuery: string;
+}
+
+function buildFlatReviewList(
   transactions: readonly ReviewableTransaction[],
   originalTransactions: readonly ReviewableTransaction[]
 ): readonly ReviewListItem[] {
-  const items: ReviewListItem[] = [];
-  let lastDate = "";
-
   const originalIndexMap = new Map<ReviewableTransaction, number>();
   originalTransactions.forEach((tx, i) => originalIndexMap.set(tx, i));
 
-  const sorted = [...transactions].sort(
-    (a, b) => b.date.getTime() - a.date.getTime()
-  );
-
-  sorted.forEach((tx) => {
-    const dateKey = tx.date.toLocaleDateString("en-EG", {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-      year: "numeric",
+  return [...transactions]
+    .sort((a, b) => b.date.getTime() - a.date.getTime())
+    .map((tx) => {
+      const originalIndex = originalIndexMap.get(tx) ?? 0;
+      return {
+        originalIndex,
+        tx,
+        key: `tx-${originalIndex}`,
+      };
     });
-
-    if (dateKey !== lastDate) {
-      items.push({ kind: "header", date: dateKey, key: `h-${dateKey}` });
-      lastDate = dateKey;
-    }
-
-    const originalIndex = originalIndexMap.get(tx) ?? 0;
-    items.push({
-      kind: "transaction",
-      originalIndex,
-      tx,
-      key: `tx-${originalIndex}`,
-    });
-  });
-
-  return items;
 }
 
 function applyFilters(
@@ -88,7 +80,14 @@ function applyFilters(
   const includesAll = selectedTypes.includes("All");
   if (!includesAll && selectedTypes.length > 0) {
     filtered = filtered.filter((tx) => {
-      const txType = tx.type === "INCOME" ? "Income" : "Expense";
+      const isAtmWithdrawal =
+        (tx as ReviewableTransaction & { readonly isAtmWithdrawal?: boolean })
+          .isAtmWithdrawal === true;
+      const txType: TransactionTypeFilter = isAtmWithdrawal
+        ? "Transfer"
+        : tx.type === "INCOME"
+          ? "Income"
+          : "Expense";
       return selectedTypes.includes(txType);
     });
   }
@@ -122,14 +121,21 @@ export interface UseTransactionReviewStateResult {
   readonly handleTypeToggle: (t: TransactionTypeFilter) => void;
   readonly searchQuery: string;
   readonly setSearchQuery: (q: string) => void;
-  readonly periodModalVisible: boolean;
-  readonly setPeriodModalVisible: (v: boolean) => void;
-  readonly typeModalVisible: boolean;
-  readonly setTypeModalVisible: (v: boolean) => void;
+  readonly applyReviewFilters: (filters: TransactionReviewFilters) => void;
+  readonly getFilteredTransactionCount: (
+    filters: TransactionReviewFilters
+  ) => number;
   readonly selectedIndices: ReadonlySet<number>;
   readonly selectedIndicesRef: React.MutableRefObject<ReadonlySet<number>>;
   readonly allSelected: boolean;
   readonly selectedCount: number;
+  readonly autoSelectedCount: number;
+  readonly needsReviewCount: number;
+  readonly reviewMode: TransactionReviewMode;
+  readonly setReviewMode: (mode: TransactionReviewMode) => void;
+  readonly handleReviewNeeds: () => void;
+  readonly handleShowAutoSelected: () => void;
+  readonly handleShowAll: () => void;
   readonly handleToggleAll: () => void;
   readonly handleToggleItem: (index: number) => void;
   readonly listItems: readonly ReviewListItem[];
@@ -139,6 +145,9 @@ export interface UseTransactionReviewStateResult {
   readonly userAccounts: readonly AccountWithBankDetails[];
   readonly pendingAccounts: readonly PendingAccount[];
   readonly accountMatches: ReadonlyMap<number, AccountMatch>;
+  readonly resolvedAccountMatchIndices: ReadonlySet<number>;
+  readonly isReviewMetadataReady: boolean;
+  readonly reviewMetaByIndex: ReadonlyMap<number, TransactionReviewMeta>;
   readonly transactionOverrides: ReadonlyMap<number, TransactionEdits>;
   readonly editModalIndex: number | null;
   readonly setEditModalIndex: (i: number | null) => void;
@@ -152,6 +161,68 @@ export interface UseTransactionReviewStateResult {
   readonly latestRates: MarketRate | null;
 }
 
+interface AccountMatchState {
+  readonly identity: string;
+  readonly matches: ReadonlyMap<number, AccountMatch>;
+}
+
+function getTransactionRiskIdentity(
+  transaction: ReviewableTransaction
+): string {
+  const reviewFields = transaction as {
+    readonly accountId?: string | null;
+    readonly isAtmWithdrawal?: boolean;
+    readonly toAccountId?: string | null;
+  };
+
+  return [
+    transaction.confidence,
+    transaction.categoryId ?? "",
+    transaction.reviewStatus ?? "",
+    [...(transaction.reviewReasons ?? [])].sort().join(","),
+    reviewFields.accountId ?? "",
+    reviewFields.toAccountId ?? "",
+    reviewFields.isAtmWithdrawal === true ? "atm" : "not-atm",
+  ].join(":");
+}
+
+function getTransactionParsedContentIdentity(
+  transaction: ReviewableTransaction
+): string {
+  const sourceFields = transaction as ReviewableTransaction & {
+    readonly smsFingerprint?: string;
+    readonly senderDisplayName?: string;
+    readonly rawSmsBody?: string;
+    readonly cardLast4?: string;
+    readonly note?: string;
+    readonly originalTranscript?: string;
+    readonly detectedLanguage?: string;
+    readonly aiDetectedCurrency?: string | null;
+  };
+
+  return JSON.stringify({
+    accountAndRisk: getTransactionRiskIdentity(transaction),
+    amount: transaction.amount,
+    cardLast4: sourceFields.cardLast4 ?? null,
+    categoryDisplayName: transaction.categoryDisplayName,
+    counterparty: transaction.counterparty ?? null,
+    currency: transaction.currency,
+    date: transaction.date.getTime(),
+    deduplicationHash: transaction.deduplicationHash ?? null,
+    detectedLanguage: sourceFields.detectedLanguage ?? null,
+    aiDetectedCurrency: sourceFields.aiDetectedCurrency ?? null,
+    merchant: transaction.merchant ?? null,
+    note: sourceFields.note ?? null,
+    originalTranscript: sourceFields.originalTranscript ?? null,
+    originLabel: transaction.originLabel,
+    rawSmsBody: sourceFields.rawSmsBody ?? null,
+    senderDisplayName: sourceFields.senderDisplayName ?? null,
+    smsFingerprint: sourceFields.smsFingerprint ?? null,
+    source: transaction.source,
+    type: transaction.type,
+  });
+}
+
 export function useTransactionReviewState({
   transactions,
   onSave,
@@ -162,16 +233,18 @@ export function useTransactionReviewState({
     "All",
   ]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [periodModalVisible, setPeriodModalVisible] = useState(false);
-  const [typeModalVisible, setTypeModalVisible] = useState(false);
+  const [reviewMode, setReviewMode] = useState<TransactionReviewMode>("all");
 
   // ── Selection state ─────────────────────────────────────────────────
   const [selectedIndices, setSelectedIndices] = useState<ReadonlySet<number>>(
-    () => new Set(transactions.map((_, i) => i))
+    () => new Set()
   );
 
   const selectedIndicesRef = useRef(selectedIndices);
   selectedIndicesRef.current = selectedIndices;
+  const seededSelectionIdentityRef = useRef<string | null>(null);
+  const userTouchedSelectionRef = useRef(false);
+  const manuallyDeselectedIndicesRef = useRef<Set<number>>(new Set());
 
   // ── Unified transaction overrides ─────────────────────────────────
   const [transactionOverrides, setTransactionOverrides] = useState<
@@ -179,9 +252,13 @@ export function useTransactionReviewState({
   >(new Map());
 
   // ── Account matching state ────────────────────────────────────────
-  const [accountMatches, setAccountMatches] = useState<
-    ReadonlyMap<number, AccountMatch>
-  >(new Map());
+  const [accountMatchState, setAccountMatchState] = useState<AccountMatchState>(
+    () => ({
+      identity: "",
+      matches: new Map(),
+    })
+  );
+  const accountMatches = accountMatchState.matches;
   const [userAccounts, setUserAccounts] = useState<
     readonly AccountWithBankDetails[]
   >([]);
@@ -209,6 +286,26 @@ export function useTransactionReviewState({
   const { userId, isResolvingUser } = useCurrentUser();
 
   const batchSize = 20;
+  const transactionIdentity = useMemo(
+    () => JSON.stringify(transactions.map(getTransactionParsedContentIdentity)),
+    [transactions]
+  );
+
+  useEffect(() => {
+    seededSelectionIdentityRef.current = null;
+    userTouchedSelectionRef.current = false;
+    manuallyDeselectedIndicesRef.current = new Set();
+    setSelectedIndices(new Set());
+    setTransactionOverrides(new Map());
+    setAccountMatchState({
+      identity: transactionIdentity,
+      matches: new Map(),
+    });
+    setPendingAccounts([]);
+    setInvalidIndices(new Set());
+    setEditModalIndex(null);
+    setReviewMode("all");
+  }, [transactionIdentity]);
 
   useEffect(() => {
     let cancelled = false;
@@ -227,18 +324,37 @@ export function useTransactionReviewState({
           batchSize,
           (batchResults) => {
             if (cancelled) return;
-            setAccountMatches((prev) => {
-              const next = new Map(prev);
+            setAccountMatchState((prev) => {
+              const next =
+                prev.identity === transactionIdentity
+                  ? new Map(prev.matches)
+                  : new Map<number, AccountMatch>();
               for (const [idx, match] of batchResults) {
                 next.set(idx, match);
               }
-              return next;
+              return {
+                identity: transactionIdentity,
+                matches: next,
+              };
             });
           },
           accounts
         );
       } catch (err: unknown) {
         if (cancelled) return;
+        setAccountMatchState({
+          identity: transactionIdentity,
+          matches: new Map(
+            transactions.map((_, index) => [
+              index,
+              {
+                accountId: null,
+                accountName: null,
+                matchReason: "none",
+              } satisfies AccountMatch,
+            ])
+          ),
+        });
         console.warn("[TransactionReview] Account matching failed:", err);
         showToast({
           type: "warning",
@@ -253,7 +369,7 @@ export function useTransactionReviewState({
     return () => {
       cancelled = true;
     };
-  }, [transactions, showToast, userId, isResolvingUser]);
+  }, [transactions, showToast, userId, isResolvingUser, transactionIdentity]);
 
   const effectiveTransactions =
     useMemo((): readonly ReviewableTransaction[] => {
@@ -284,37 +400,163 @@ export function useTransactionReviewState({
     [effectiveTransactions, period, selectedTypes, searchQuery]
   );
 
-  const listItems = useMemo(
-    () => groupByDate(filteredTransactions, effectiveTransactions),
-    [filteredTransactions, effectiveTransactions]
+  const effectiveAccountMatches = useMemo((): ReadonlyMap<
+    number,
+    AccountMatch
+  > => {
+    const next = new Map(accountMatches);
+    transactionOverrides.forEach((edits, index) => {
+      const editedMatch = resolveEditedAccountMatch(
+        accountMatches.get(index),
+        edits.accountId,
+        edits.accountConfirmed === true
+      );
+      next.set(index, {
+        accountId: editedMatch.accountId,
+        accountName: edits.accountName,
+        matchReason: editedMatch.matchReason,
+      });
+    });
+    return next;
+  }, [accountMatches, transactionOverrides]);
+
+  const reviewMetaByIndex = useMemo((): ReadonlyMap<
+    number,
+    TransactionReviewMeta
+  > => {
+    const meta = new Map<number, TransactionReviewMeta>();
+    effectiveTransactions.forEach((tx, index) => {
+      meta.set(
+        index,
+        getTransactionReviewMeta(tx, effectiveAccountMatches.get(index), {
+          hasCategoryOverride:
+            transactionOverrides.get(index)?.categoryConfirmed === true,
+          hasCashDestinationOverride:
+            transactionOverrides.get(index)?.toAccountConfirmed === true,
+        })
+      );
+    });
+    return meta;
+  }, [effectiveTransactions, effectiveAccountMatches, transactionOverrides]);
+
+  const autoSelectedOriginalIndices = useMemo((): ReadonlySet<number> => {
+    const autoSelected = new Set<number>();
+    reviewMetaByIndex.forEach((meta, index) => {
+      if (meta.isAutoSelectable) {
+        autoSelected.add(index);
+      }
+    });
+    return autoSelected;
+  }, [reviewMetaByIndex]);
+
+  const needsReviewOriginalIndices = useMemo((): ReadonlySet<number> => {
+    const needsReview = new Set<number>();
+    effectiveTransactions.forEach((_, index) => {
+      if (!autoSelectedOriginalIndices.has(index)) {
+        needsReview.add(index);
+      }
+    });
+    return needsReview;
+  }, [effectiveTransactions, autoSelectedOriginalIndices]);
+
+  const hasCompleteAccountMatches =
+    accountMatchState.identity === transactionIdentity &&
+    (effectiveTransactions.length === 0 ||
+      accountMatches.size >= effectiveTransactions.length);
+  const resolvedAccountMatchIndices = useMemo<ReadonlySet<number>>(
+    () =>
+      accountMatchState.identity === transactionIdentity
+        ? new Set(accountMatchState.matches.keys())
+        : new Set(),
+    [accountMatchState, transactionIdentity]
   );
 
-  const filteredOriginalIndices = useMemo(() => {
+  useEffect(() => {
+    if (seededSelectionIdentityRef.current === transactionIdentity) return;
+    if (userTouchedSelectionRef.current) return;
+    if (!hasCompleteAccountMatches) return;
+
+    setSelectedIndices(autoSelectedOriginalIndices);
+    seededSelectionIdentityRef.current = transactionIdentity;
+  }, [
+    autoSelectedOriginalIndices,
+    hasCompleteAccountMatches,
+    transactionIdentity,
+  ]);
+
+  const filteredOriginalIndicesBeforeReviewMode = useMemo(() => {
     const indexMap = new Map<ReviewableTransaction, number>();
     effectiveTransactions.forEach((tx, i) => indexMap.set(tx, i));
     return filteredTransactions.map((tx) => indexMap.get(tx) ?? 0);
   }, [filteredTransactions, effectiveTransactions]);
 
+  const visibleTransactions = useMemo((): readonly ReviewableTransaction[] => {
+    if (reviewMode === "all") {
+      return filteredTransactions;
+    }
+
+    return filteredTransactions.filter((_, index) => {
+      const originalIndex = filteredOriginalIndicesBeforeReviewMode[index];
+      if (reviewMode === "needs_review") {
+        return needsReviewOriginalIndices.has(originalIndex);
+      }
+      return autoSelectedOriginalIndices.has(originalIndex);
+    });
+  }, [
+    autoSelectedOriginalIndices,
+    filteredOriginalIndicesBeforeReviewMode,
+    filteredTransactions,
+    needsReviewOriginalIndices,
+    reviewMode,
+  ]);
+
+  const listItems = useMemo(
+    () => buildFlatReviewList(visibleTransactions, effectiveTransactions),
+    [visibleTransactions, effectiveTransactions]
+  );
+
+  const filteredOriginalIndices = useMemo(() => {
+    const indexMap = new Map<ReviewableTransaction, number>();
+    effectiveTransactions.forEach((tx, i) => indexMap.set(tx, i));
+    return visibleTransactions.map((tx) => indexMap.get(tx) ?? 0);
+  }, [visibleTransactions, effectiveTransactions]);
+
   const allSelected =
-    filteredTransactions.length > 0 &&
+    visibleTransactions.length > 0 &&
     filteredOriginalIndices.every((i) => selectedIndices.has(i));
   const selectedCount = selectedIndices.size;
+  const autoSelectedCount = autoSelectedOriginalIndices.size;
+  const needsReviewCount = needsReviewOriginalIndices.size;
 
   const handleToggleAll = useCallback(() => {
-    if (allSelected) {
-      setSelectedIndices(new Set());
-    } else {
-      setSelectedIndices(new Set(transactions.map((_, i) => i)));
-    }
-  }, [allSelected, transactions]);
+    userTouchedSelectionRef.current = true;
+    setSelectedIndices((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        filteredOriginalIndices.forEach((index) => {
+          next.delete(index);
+          manuallyDeselectedIndicesRef.current.add(index);
+        });
+      } else {
+        filteredOriginalIndices.forEach((index) => {
+          next.add(index);
+          manuallyDeselectedIndicesRef.current.delete(index);
+        });
+      }
+      return next;
+    });
+  }, [allSelected, filteredOriginalIndices]);
 
   const handleToggleItem = useCallback((index: number) => {
+    userTouchedSelectionRef.current = true;
     setSelectedIndices((prev) => {
       const next = new Set(prev);
       if (next.has(index)) {
         next.delete(index);
+        manuallyDeselectedIndicesRef.current.add(index);
       } else {
         next.add(index);
+        manuallyDeselectedIndicesRef.current.delete(index);
       }
       return next;
     });
@@ -327,6 +569,15 @@ export function useTransactionReviewState({
   const handleEditModalSave = useCallback(
     (edits: TransactionEdits) => {
       if (editModalIndex === null) return;
+
+      const currentTransaction = effectiveTransactions[editModalIndex];
+      const editedMeta = currentTransaction
+        ? getEditedTransactionReviewMeta(
+            currentTransaction,
+            accountMatches.get(editModalIndex),
+            edits
+          )
+        : null;
 
       setTransactionOverrides((prev) => {
         const next = new Map(prev);
@@ -343,10 +594,43 @@ export function useTransactionReviewState({
         return next;
       });
 
+      setSelectedIndices((prev) => {
+        const next = new Set(prev);
+        if (
+          editedMeta?.isAutoSelectable &&
+          !manuallyDeselectedIndicesRef.current.has(editModalIndex)
+        ) {
+          next.add(editModalIndex);
+        }
+        return next;
+      });
+      setInvalidIndices((prev) => {
+        const next = new Set(prev);
+        next.delete(editModalIndex);
+        return next;
+      });
       setEditModalIndex(null);
     },
-    [editModalIndex]
+    [accountMatches, editModalIndex, effectiveTransactions]
   );
+
+  const handleReviewNeeds = useCallback(() => {
+    setPeriod("all_time");
+    setSelectedTypes(["All"]);
+    setSearchQuery("");
+    setReviewMode("needs_review");
+  }, []);
+
+  const handleShowAutoSelected = useCallback(() => {
+    setPeriod("all_time");
+    setSelectedTypes(["All"]);
+    setSearchQuery("");
+    setReviewMode("auto_selected");
+  }, []);
+
+  const handleShowAll = useCallback(() => {
+    setReviewMode("all");
+  }, []);
 
   const handleSave = useCallback(async (): Promise<void> => {
     if (!userId) {
@@ -405,13 +689,54 @@ export function useTransactionReviewState({
   ]);
 
   const handleTypeToggle = useCallback((type: TransactionTypeFilter) => {
-    setSelectedTypes((prev) => {
-      if (prev.includes(type)) {
-        return prev.filter((t) => t !== type);
-      }
-      return [...prev, type];
-    });
+    setSelectedTypes((previousTypes) =>
+      toggleTransactionTypeFilter(previousTypes, type)
+    );
   }, []);
+
+  const applyReviewFilters = useCallback(
+    (filters: TransactionReviewFilters): void => {
+      setPeriod(filters.period);
+      setSelectedTypes([...filters.selectedTypes]);
+      setSearchQuery(filters.searchQuery);
+    },
+    []
+  );
+
+  const getFilteredTransactionCount = useCallback(
+    (filters: TransactionReviewFilters): number => {
+      const nextFilteredTransactions = applyFilters(
+        effectiveTransactions,
+        filters.period,
+        filters.selectedTypes,
+        filters.searchQuery
+      );
+
+      if (reviewMode === "all") {
+        return nextFilteredTransactions.length;
+      }
+
+      const indexMap = new Map<ReviewableTransaction, number>();
+      effectiveTransactions.forEach((tx, index) => indexMap.set(tx, index));
+      const expectedIndices =
+        reviewMode === "needs_review"
+          ? needsReviewOriginalIndices
+          : autoSelectedOriginalIndices;
+
+      return nextFilteredTransactions.filter((tx) => {
+        const originalIndex = indexMap.get(tx);
+        return (
+          originalIndex !== undefined && expectedIndices.has(originalIndex)
+        );
+      }).length;
+    },
+    [
+      autoSelectedOriginalIndices,
+      effectiveTransactions,
+      needsReviewOriginalIndices,
+      reviewMode,
+    ]
+  );
 
   return {
     period,
@@ -420,23 +745,31 @@ export function useTransactionReviewState({
     handleTypeToggle,
     searchQuery,
     setSearchQuery,
-    periodModalVisible,
-    setPeriodModalVisible,
-    typeModalVisible,
-    setTypeModalVisible,
+    applyReviewFilters,
+    getFilteredTransactionCount,
     selectedIndices,
     selectedIndicesRef,
     allSelected,
     selectedCount,
+    autoSelectedCount,
+    needsReviewCount,
+    reviewMode,
+    setReviewMode,
+    handleReviewNeeds,
+    handleShowAutoSelected,
+    handleShowAll,
     handleToggleAll,
     handleToggleItem,
     listItems,
-    filteredTransactions,
+    filteredTransactions: visibleTransactions,
     effectiveTransactions,
     invalidIndices,
     userAccounts,
     pendingAccounts,
     accountMatches,
+    resolvedAccountMatchIndices,
+    isReviewMetadataReady: hasCompleteAccountMatches,
+    reviewMetaByIndex,
     transactionOverrides,
     editModalIndex,
     setEditModalIndex,

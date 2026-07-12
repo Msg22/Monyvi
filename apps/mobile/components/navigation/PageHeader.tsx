@@ -10,9 +10,13 @@ import { AppDrawer } from "./AppDrawer";
 
 interface PageHeaderProps {
   title: string;
+  subtitle?: string;
+  variant?: "default" | "review";
   centerTitle?: boolean;
   showDrawer?: boolean;
   showBackButton?: boolean;
+  onBack?: () => void;
+  backAccessibilityLabel?: string;
   selectionMode?: {
     count: number;
     totalCount: number;
@@ -37,6 +41,65 @@ interface PageHeaderProps {
     color?: string;
   };
   children?: React.ReactNode;
+}
+
+function ReviewPageHeader({
+  title,
+  subtitle,
+  showBackButton,
+  onBack,
+  backAccessibilityLabel,
+}: Pick<
+  PageHeaderProps,
+  "title" | "subtitle" | "showBackButton" | "onBack" | "backAccessibilityLabel"
+>): React.ReactElement {
+  const router = useRouter();
+  const { isDark } = useTheme();
+
+  return (
+    <View
+      testID="review-page-header"
+      className="bg-background px-5 py-2 dark:bg-background-dark"
+    >
+      <View className="flex-row items-center">
+        {showBackButton && (
+          <TouchableOpacity
+            testID="header-back"
+            onPress={onBack ?? router.back}
+            activeOpacity={0.75}
+            className="me-2 h-9 w-9 items-center justify-center rounded-full"
+            accessibilityRole="button"
+            accessibilityLabel={backAccessibilityLabel}
+          >
+            <Ionicons
+              name="arrow-back"
+              size={24}
+              color={isDark ? palette.slate[25] : palette.slate[900]}
+            />
+          </TouchableOpacity>
+        )}
+        <View className="flex-1">
+          <Text
+            className="text-xl font-bold text-text-primary dark:text-text-primary-dark"
+            accessibilityRole="header"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
+          >
+            {title}
+          </Text>
+          {subtitle && (
+            <Text
+              numberOfLines={1}
+              className="text-xs font-medium text-text-secondary dark:text-text-secondary-dark"
+            >
+              {subtitle}
+            </Text>
+          )}
+        </View>
+      </View>
+    </View>
+  );
 }
 
 function ActiveSelection({
@@ -177,9 +240,13 @@ function RightAction({
 
 export function PageHeader({
   title,
+  subtitle,
+  variant = "default",
   centerTitle = false,
   showDrawer = true,
   showBackButton = false,
+  onBack,
+  backAccessibilityLabel,
   selectionMode,
   backIcon = "arrow",
   rightAction,
@@ -194,6 +261,18 @@ export function PageHeader({
   const shouldShowSelectionMode = selectionMode && selectionMode.count > 0;
   const shouldShowRightAction = rightAction && !shouldShowSelectionMode;
   const shouldShowDrawerButton = showDrawer && !showBackButton;
+
+  if (variant === "review") {
+    return (
+      <ReviewPageHeader
+        title={title}
+        subtitle={subtitle}
+        showBackButton={showBackButton}
+        onBack={onBack}
+        backAccessibilityLabel={backAccessibilityLabel}
+      />
+    );
+  }
 
   return (
     <>

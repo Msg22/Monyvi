@@ -22,8 +22,8 @@ import { TransactionReview } from "@/components/transaction-review/TransactionRe
 import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
 import { useSmsScanContext } from "@/context/SmsScanContext";
+import { useTheme } from "@/context/ThemeContext";
 import { useSmsSync } from "@/hooks/useSmsSync";
-import { PageHeader } from "@/components/navigation/PageHeader";
 import { batchCreateTransactions } from "@/services/batch-create-transactions";
 import {
   flushQueuedTransactions,
@@ -36,6 +36,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Text, TouchableOpacity } from "react-native";
 import { useTranslation } from "react-i18next";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -47,6 +48,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
   const { transactions, clearTransactions } = useSmsScanContext();
   const { markSyncComplete } = useSmsSync();
   const { showToast } = useToast();
+  const { isDark } = useTheme();
 
   const [isSaving, setIsSaving] = useState(false);
   const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
@@ -156,12 +158,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
 
   return (
     <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
-      {/* Header */}
-      <PageHeader
-        title={t("sms_review_title")}
-        showDrawer={false}
-        showBackButton={true}
-      />
+      <StatusBar style={isDark ? "light" : "dark"} />
 
       {/* Transaction review list */}
       <TransactionReview
@@ -169,6 +166,12 @@ export default function SmsReviewScreen(): React.JSX.Element {
         onSave={handleSave}
         onDiscard={handleDiscard}
         isSaving={isSaving}
+        title={t("review_transactions_title")}
+        subtitle={t("review_sms_source_summary", {
+          count: transactions.length,
+        })}
+        onBack={() => router.back()}
+        workspaceVariant="sms"
       />
 
       {/* Discard confirmation */}

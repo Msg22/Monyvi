@@ -24,8 +24,11 @@
  */
 
 import { palette } from "@/constants/colors";
+import type { InstitutionLogo } from "@/constants/egyptian-institution-assets";
+import { InstitutionLogoMark } from "@/components/institutions/InstitutionLogoMark";
+import { Skeleton } from "@/components/ui/Skeleton";
 import type { MatchReason } from "@/services/sms-account-matcher";
-import { formatDate as formatDateHelper } from "@/utils/dateHelpers";
+import { isSameDay } from "@/utils/dateHelpers";
 import { useLocale } from "@/context/LocaleContext";
 import { formatCurrency, type ReviewableTransaction } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
@@ -33,9 +36,10 @@ import { useTranslation } from "react-i18next";
 import React, { memo, useCallback, useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import type { TransactionReviewMeta } from "@/contracts/transaction-review";
 import {
   type BadgeColor,
-  getTransactionBadges,
+  getPrimaryTransactionBadge,
   type TransactionBadgeData,
 } from "./get-transaction-badges";
 
@@ -62,52 +66,119 @@ interface TransactionItemProps {
   readonly onPress: (index: number) => void;
   /** Whether this item has missing required info (no account, etc.) */
   readonly hasMissingInfo?: boolean;
+  /** Auto-selection status and reasons for rows that need review */
+  readonly reviewMeta?: TransactionReviewMeta;
+  readonly isSmsWorkspace?: boolean;
+  readonly institutionLogo?: InstitutionLogo | null;
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Format a Date as "dd MMM" using locale-aware helper */
-function formatDate(date: Date): string {
-  return formatDateHelper(date, "MMM d");
-}
-
 const BADGE_BG_COLORS: Record<BadgeColor, string> = {
-  amber: "bg-amber-500/20",
-  red: "bg-red-500/20",
-  emerald: "bg-emerald-500/20",
-  blue: "bg-blue-500/20",
+  amber:
+    "border border-gold-100 bg-gold-50 dark:border-gold-600/50 dark:bg-gold-600/20",
+  red: "bg-red-100 dark:bg-red-500/20",
+  emerald: "bg-nileGreen-100 dark:bg-emerald-500/20",
+  blue: "bg-blue-100 dark:bg-blue-500/20",
 };
 
 const BADGE_TEXT_COLORS: Record<BadgeColor, string> = {
-  amber: "text-amber-400",
-  red: "text-red-400",
-  emerald: "text-emerald-400",
-  blue: "text-blue-400",
+  amber: "text-gold-800 dark:text-gold-400",
+  red: "text-red-600 dark:text-red-400",
+  emerald: "text-nileGreen-700 dark:text-emerald-400",
+  blue: "text-blue-600 dark:text-blue-400",
 };
 
 function TransactionBadge({
   data,
+  label,
 }: {
   readonly data: TransactionBadgeData;
+  readonly label: string;
 }): React.JSX.Element {
   return (
     <View
-      className={`${BADGE_BG_COLORS[data.color]} px-1.5 py-0.5 rounded ms-2`}
+      className={`${BADGE_BG_COLORS[data.color]} max-w-32 rounded-md px-2 py-1`}
     >
       <Text
-        className={`text-[10px] font-bold ${BADGE_TEXT_COLORS[data.color]}`}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
+        className={`text-xs font-semibold ${BADGE_TEXT_COLORS[data.color]}`}
       >
-        {data.label}
+        {label}
       </Text>
     </View>
   );
 }
 
+function formatReviewDateTime(
+  date: Date,
+  todayLabel: string,
+  yesterdayLabel: string,
+  language: "en" | "ar"
+): string {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const dayLabel = isSameDay(date, today)
+    ? todayLabel
+    : isSameDay(date, yesterday)
+      ? yesterdayLabel
+      : date.toLocaleDateString(
+          language === "ar" ? "ar-EG-u-nu-latn" : "en-EG",
+          {
+            month: "short",
+            day: "numeric",
+          }
+        );
+  const timeLabel = date.toLocaleTimeString(
+    language === "ar" ? "ar-EG-u-nu-latn" : "en-EG",
+    {
+      hour: "2-digit",
+      minute: "2-digit",
+    }
+  );
+  return `${dayLabel} · ${timeLabel}`;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
+
+export function ReviewTransactionItemSkeleton(): React.JSX.Element {
+  return (
+    <View
+      testID="transaction-review-row-skeleton"
+      className="h-20 flex-row items-center border-b border-border bg-background px-4 dark:border-border-dark dark:bg-background-dark"
+    >
+      <View className="me-2">
+        <Skeleton width={24} height={24} borderRadius={6} />
+      </View>
+      <View className="me-2">
+        <Skeleton width={44} height={44} borderRadius={12} />
+      </View>
+      <View className="flex-1">
+        <Skeleton width="55%" height={16} borderRadius={4} />
+        <View className="mt-1.5">
+          <Skeleton width="42%" height={10} borderRadius={4} />
+        </View>
+        <View className="mt-1.5 flex-row gap-1.5">
+          <Skeleton width={58} height={18} borderRadius={5} />
+          <Skeleton width={88} height={18} borderRadius={5} />
+        </View>
+      </View>
+      <View className="ms-2 items-end">
+        <Skeleton width={76} height={16} borderRadius={4} />
+        <View className="mt-2">
+          <Skeleton width={72} height={20} borderRadius={5} />
+        </View>
+      </View>
+    </View>
+  );
+}
 
 function TransactionItemInner({
   transaction,
@@ -118,6 +189,8 @@ function TransactionItemInner({
   onToggleSelect,
   onPress,
   hasMissingInfo = false,
+  reviewMeta,
+  institutionLogo = null,
 }: TransactionItemProps): React.JSX.Element {
   const [isExpanded, setIsExpanded] = useState(false);
   const { language } = useLocale();
@@ -126,7 +199,11 @@ function TransactionItemInner({
   const isVoice = transaction.source === "VOICE";
   const hasExpandableContent = !isVoice && !!expandedContent;
 
-  const badges = getTransactionBadges(transaction, hasMissingInfo);
+  const primaryBadge = getPrimaryTransactionBadge(
+    hasMissingInfo,
+    reviewMeta,
+    isSelected
+  );
 
   const handleToggleExpand = useCallback(() => {
     setIsExpanded((prev) => !prev);
@@ -145,10 +222,13 @@ function TransactionItemInner({
     : transaction.counterparty || "Unknown";
 
   return (
-    <View className="bg-white dark:bg-slate-800/60 rounded-2xl mb-3 overflow-hidden border border-slate-200 dark:border-transparent">
+    <View
+      testID="transaction-review-row"
+      className="overflow-hidden border-b border-border bg-background dark:border-border-dark dark:bg-background-dark"
+    >
       <TouchableOpacity
         onPress={handlePress}
-        className="flex-row items-center p-4"
+        className="flex-row items-center px-4 py-2"
         activeOpacity={0.7}
         accessible
         accessibilityRole="button"
@@ -161,16 +241,16 @@ function TransactionItemInner({
         <TouchableOpacity
           onPress={handleToggle}
           hitSlop={8}
-          className="me-3"
+          className="me-2"
           activeOpacity={0.7}
           accessible={false}
           importantForAccessibility="no"
         >
           <View
-            className={`w-6 h-6 rounded-lg items-center justify-center border-2 ${
+            className={`h-6 w-6 items-center justify-center rounded-md border-2 ${
               isSelected
                 ? "bg-emerald-500 border-emerald-500"
-                : "border-slate-300 dark:border-slate-500"
+                : "border-slate-500"
             }`}
           >
             {isSelected && (
@@ -179,13 +259,30 @@ function TransactionItemInner({
           </View>
         </TouchableOpacity>
 
+        <InstitutionLogoMark
+          logo={institutionLogo}
+          size="compact"
+          testID="transaction-review-provider-logo"
+          accessibilityLabel={`${transaction.originLabel} logo`}
+          containerClassName="me-2"
+          defaultSurfaceClassName="border-border bg-surface dark:border-border-dark dark:bg-surface-dark"
+          fallback={
+            <Ionicons
+              name={
+                transaction.source === "VOICE" ? "mic-outline" : "card-outline"
+              }
+              size={22}
+              color={palette.slate[400]}
+            />
+          }
+        />
+
         {/* Content */}
-        <View className="flex-1 me-3">
-          {/* Top row: origin label + amount */}
-          <View className="flex-row items-center justify-between mb-1">
-            <View className="flex-row items-center flex-shrink">
+        <View className="flex-1">
+          <View className="flex-row items-start gap-2">
+            <View className="min-w-0 flex-1">
               <Text
-                className="text-sm font-semibold text-slate-800 dark:text-white flex-shrink"
+                className="text-base font-bold text-slate-900 dark:text-white"
                 numberOfLines={1}
               >
                 {isVoice && "note" in transaction
@@ -194,44 +291,55 @@ function TransactionItemInner({
                     transaction.originLabel
                   : transaction.originLabel}
               </Text>
-              {badges.map((badge, idx) => (
-                <TransactionBadge key={idx} data={badge} />
-              ))}
-            </View>
-            <Text
-              className={`text-base font-bold ${
-                isExpense ? "text-red-400" : "text-emerald-400"
-              }`}
-            >
-              {isExpense ? "-" : "+"}
-              {formatCurrency({
-                amount: transaction.amount,
-                currency: transaction.currency,
-              })}
-            </Text>
-          </View>
 
-          {/* Middle row: counterparty + date */}
-          <View className="flex-row items-center justify-between mb-1">
-            {counterpartyText ? (
               <Text
-                className="text-xs text-slate-400 flex-shrink"
+                className="mt-0.5 text-xs text-text-secondary dark:text-text-secondary-dark"
                 numberOfLines={1}
               >
-                {counterpartyText}
+                {formatReviewDateTime(
+                  transaction.date,
+                  t("review_date_today"),
+                  t("review_date_yesterday"),
+                  language
+                )}
               </Text>
-            ) : (
-              <View />
-            )}
-            <Text className="text-xs text-slate-500">
-              {formatDate(transaction.date)}
-            </Text>
+            </View>
+
+            <View className="max-w-32 items-end">
+              <Text
+                testID="transaction-review-amount"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+                className={`text-base font-semibold ${
+                  isExpense
+                    ? "text-red-600 dark:text-red-400"
+                    : "text-nileGreen-600 dark:text-nileGreen-400"
+                }`}
+              >
+                {isExpense ? "-" : "+"}
+                {formatCurrency({
+                  amount: transaction.amount,
+                  currency: transaction.currency,
+                })}
+              </Text>
+              {primaryBadge && (
+                <View className="mt-1.5 items-end">
+                  <TransactionBadge
+                    data={primaryBadge}
+                    label={t(primaryBadge.labelKey)}
+                  />
+                </View>
+              )}
+            </View>
           </View>
 
-          {/* Bottom row: category + account chips */}
-          <View className="flex-row items-center flex-wrap gap-1.5">
-            <View className="bg-slate-200 dark:bg-slate-700/60 px-2.5 py-1 rounded-lg">
-              <Text className="text-xs text-slate-600 dark:text-slate-300">
+          <View className="mt-1.5 flex-row items-center gap-1.5 overflow-hidden">
+            <View className="max-w-24 shrink-0 rounded-md border border-border bg-surface px-2 py-0.5 dark:border-border-dark dark:bg-surface-dark">
+              <Text
+                numberOfLines={1}
+                className="text-xs text-text-secondary dark:text-text-secondary-dark"
+              >
                 {transaction.categoryDisplayName}
               </Text>
             </View>
@@ -239,27 +347,39 @@ function TransactionItemInner({
             {accountName && (
               <View
                 testID="transaction-account-match"
-                className="bg-blue-100 dark:bg-blue-900/40 px-2.5 py-1 rounded-lg"
+                className="min-w-0 shrink rounded-md border border-border bg-surface px-2 py-0.5 dark:border-border-dark dark:bg-surface-dark"
               >
-                <Text className="text-xs text-blue-600 dark:text-blue-300">
+                <Text
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
+                  className="text-xs text-text-secondary dark:text-text-secondary-dark"
+                >
                   {accountName}
                 </Text>
               </View>
             )}
 
             {hasExpandableContent && (
-              <TouchableOpacity
-                onPress={handleToggleExpand}
-                hitSlop={14}
-                className="flex-row items-center ms-auto p-1"
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={isExpanded ? "chevron-up" : "chevron-down"}
-                  size={16}
-                  color={palette.slate[500]}
+              <>
+                <View
+                  testID="transaction-review-chevron-spacer"
+                  className="flex-1"
                 />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  testID="transaction-review-expand-toggle"
+                  onPress={handleToggleExpand}
+                  hitSlop={14}
+                  className="h-6 w-6 shrink-0 items-center justify-center"
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={isExpanded ? "chevron-up" : "chevron-down"}
+                    size={18}
+                    color={palette.slate[500]}
+                  />
+                </TouchableOpacity>
+              </>
             )}
           </View>
         </View>
@@ -270,7 +390,7 @@ function TransactionItemInner({
         <Animated.View
           entering={FadeIn.duration(200)}
           exiting={FadeOut.duration(150)}
-          className="px-4 pb-4 pt-0"
+          className="px-5 pb-3 pt-0"
         >
           {expandedContent}
         </Animated.View>

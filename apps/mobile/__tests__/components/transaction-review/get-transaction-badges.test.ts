@@ -1,46 +1,99 @@
-import type { ReviewableTransaction } from "@monyvi/logic";
-import { getTransactionBadges } from "@/components/transaction-review/get-transaction-badges";
+import {
+  getPrimaryTransactionBadge,
+  getTransactionBadges,
+} from "@/components/transaction-review/get-transaction-badges";
+import type { TransactionReviewMeta } from "@/contracts/transaction-review";
 
-const baseTransaction: ReviewableTransaction = {
-  amount: 1299,
-  currency: "EGP",
-  type: "EXPENSE",
-  counterparty: "AMAZON.EG",
-  date: new Date(2026, 3, 8),
-  categoryId: "cat-shopping",
-  categoryDisplayName: "Shopping",
-  confidence: 0.94,
-  originLabel: "CIB",
-  source: "SMS",
-};
+function reviewMeta(
+  overrides: Partial<TransactionReviewMeta>
+): TransactionReviewMeta {
+  return {
+    isAutoSelectable: false,
+    reasons: [],
+    ...overrides,
+  };
+}
 
 describe("getTransactionBadges", () => {
-  it("shows needs-review for explicit parser review metadata even with high confidence", () => {
+  it("shows the localized parser review reason", () => {
     const badges = getTransactionBadges(
-      {
-        ...baseTransaction,
-        reviewStatus: "needs_review",
-        reviewReasons: ["low_confidence"],
-      },
+      false,
+      reviewMeta({ reasons: ["low_confidence"] }),
       false
     );
 
     expect(badges).toContainEqual({
-      label: "Needs Review",
+      labelKey: "review_badge_low_confidence",
       color: "amber",
     });
   });
 
-  it("keeps high-confidence auto-selectable rows unbadged when no review signal exists", () => {
+  it("shows a generic badge for parser review signals without a specific mapping", () => {
     const badges = getTransactionBadges(
-      {
-        ...baseTransaction,
-        reviewStatus: "auto_selectable",
-        reviewReasons: [],
-      },
+      false,
+      reviewMeta({ reasons: ["parser_review"] }),
       false
     );
 
-    expect(badges).toEqual([]);
+    expect(badges).toContainEqual({
+      labelKey: "review_badge_needs_review",
+      color: "amber",
+    });
+  });
+
+  it("describes the cash-account confirmation needed for ATM withdrawals", () => {
+    expect(
+      getPrimaryTransactionBadge(
+        false,
+        reviewMeta({ reasons: ["cash_transfer"] }),
+        false
+      )
+    ).toEqual({
+      labelKey: "review_badge_confirm_cash_account",
+      color: "amber",
+    });
+  });
+
+  it("marks selected safe rows as auto-selected", () => {
+    const badges = getTransactionBadges(
+      false,
+      reviewMeta({ isAutoSelectable: true }),
+      true
+    );
+
+    expect(badges).toEqual([
+      {
+        labelKey: "review_badge_auto_selected",
+        color: "emerald",
+      },
+    ]);
+  });
+
+  it("prioritizes missing account or category blockers over advisory reasons", () => {
+    expect(
+      getPrimaryTransactionBadge(
+        false,
+        reviewMeta({
+          reasons: ["cash_transfer", "low_confidence", "account_needed"],
+        }),
+        false
+      )
+    ).toEqual({
+      labelKey: "review_badge_account_needed",
+      color: "red",
+    });
+  });
+
+  it("prioritizes save-blocking missing information over parser reasons", () => {
+    expect(
+      getPrimaryTransactionBadge(
+        true,
+        reviewMeta({ reasons: ["low_confidence"] }),
+        false
+      )
+    ).toEqual({
+      labelKey: "review_badge_missing_info",
+      color: "red",
+    });
   });
 });

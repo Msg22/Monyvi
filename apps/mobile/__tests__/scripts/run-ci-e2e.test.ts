@@ -185,6 +185,7 @@ describe("run-ci-e2e helpers", () => {
       retryOnDeviceFailure: false,
       env: {
         E2E_SKIP_AUTH_BOOTSTRAP: "1",
+        E2E_SMS_SYNC_RELAUNCH_BEFORE_FIRST_JOURNEY: "1",
         E2E_SMS_SYNC_RELAUNCH_BETWEEN_JOURNEYS: "1",
       },
     });

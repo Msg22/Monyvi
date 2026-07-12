@@ -469,8 +469,19 @@ function shouldRelaunchBetweenSmsSyncJourneys(env = process.env) {
   return env.E2E_SMS_SYNC_RELAUNCH_BETWEEN_JOURNEYS === "1";
 }
 
+function shouldRelaunchBeforeSmsSyncJourney(
+  hasSavedBaseline,
+  env = process.env
+) {
+  if (!hasSavedBaseline) {
+    return env.E2E_SMS_SYNC_RELAUNCH_BEFORE_FIRST_JOURNEY === "1";
+  }
+
+  return shouldRelaunchBetweenSmsSyncJourneys(env);
+}
+
 async function maybeRelaunchBeforeSmsSyncJourney() {
-  if (!shouldRelaunchBetweenSmsSyncJourneys()) {
+  if (!shouldRelaunchBeforeSmsSyncJourney(hasSavedSmsSyncBaseline)) {
     return;
   }
 
@@ -549,5 +560,6 @@ module.exports = {
   shouldResetSmsSyncAppStateBeforeRetry,
   shouldRetrySmsSyncFlowAttempt,
   shouldRetrySmsSyncFlowAfterTransportFailure,
+  shouldRelaunchBeforeSmsSyncJourney,
   shouldRelaunchBetweenSmsSyncJourneys,
 };

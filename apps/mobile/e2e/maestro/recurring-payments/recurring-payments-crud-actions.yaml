@@ -21,7 +21,9 @@ appId: com.monyvi.app
 
 - tapOn:
     id: "recurring-payment-name-input"
-- inputText: "E2E Subscription"
+- inputText: "E2E "
+- inputText: "Subscription"
+- assertVisible: "E2E Subscription"
 - hideKeyboard
 
 - tapOn:
@@ -77,7 +79,10 @@ appId: com.monyvi.app
 - tapOn:
     id: "recurring-payment-name-input"
 - eraseText: 40
-- inputText: "E2E Subscription Updated"
+- inputText: "E2E "
+- inputText: "Subscription "
+- inputText: "Updated"
+- assertVisible: "E2E Subscription Updated"
 - hideKeyboard
 
 - tapOn:

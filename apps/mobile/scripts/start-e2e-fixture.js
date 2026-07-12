@@ -32,6 +32,7 @@ function buildE2eMetroEnv(parserMode, baseEnv = process.env) {
       baseEnv.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? config.anonKey,
     EXPO_PUBLIC_SENTRY_DSN: baseEnv.EXPO_PUBLIC_SENTRY_DSN ?? "",
     EXPO_NO_TELEMETRY: "1",
+    EXPO_UNSTABLE_HEADLESS: "1",
     CI: baseEnv.CI ?? "1",
   };
 }

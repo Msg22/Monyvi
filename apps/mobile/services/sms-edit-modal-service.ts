@@ -34,10 +34,13 @@ interface TransactionEdits {
   readonly type: TransactionType;
   readonly accountId: string | null;
   readonly accountName: string | null;
+  readonly accountConfirmed?: boolean;
+  readonly categoryConfirmed?: boolean;
   /** Cash account ID for ATM withdrawal destination (optional) */
   readonly toAccountId?: string | null;
   /** Cash account name for ATM withdrawal destination (optional) */
   readonly toAccountName?: string | null;
+  readonly toAccountConfirmed?: boolean;
   /** User-edited note (e.g. itemized voice description) */
   readonly note?: string;
 }
@@ -52,14 +55,18 @@ interface BuildPendingAccountInput {
 interface BuildTransactionEditsInput {
   readonly accountId: string | null;
   readonly accountName: string | null;
+  readonly accountConfirmed?: boolean;
   readonly counterparty?: string;
   readonly type: TransactionType;
   readonly categoryId: string;
+  readonly categoryConfirmed: boolean;
+  readonly shouldClearCategoryConfirmation?: boolean;
   readonly amount: number;
   /** Cash account ID for ATM withdrawal destination (optional) */
   readonly toAccountId?: string | null;
   /** Cash account name for ATM withdrawal destination (optional) */
   readonly toAccountName?: string | null;
+  readonly toAccountConfirmed?: boolean;
   /** User-edited note (e.g. itemized voice description) */
   readonly note?: string;
 }
@@ -147,12 +154,20 @@ function buildTransactionEdits(
   return {
     accountId: input.accountId,
     accountName: input.accountName,
+    accountConfirmed: input.accountConfirmed === true ? true : undefined,
     counterparty: input.counterparty,
     type: input.type,
     categoryId: input.categoryId,
+    categoryConfirmed:
+      input.categoryConfirmed === true
+        ? true
+        : input.shouldClearCategoryConfirmation === true
+          ? false
+          : undefined,
     amount: input.amount,
     toAccountId: input.toAccountId,
     toAccountName: input.toAccountName,
+    toAccountConfirmed: input.toAccountConfirmed === true ? true : undefined,
     note: input.note,
   };
 }

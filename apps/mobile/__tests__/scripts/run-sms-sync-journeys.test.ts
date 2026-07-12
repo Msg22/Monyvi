@@ -29,6 +29,10 @@ interface RunSmsSyncJourneysModule {
   shouldRelaunchBetweenSmsSyncJourneys(
     env?: Readonly<Record<string, string | undefined>>
   ): boolean;
+  shouldRelaunchBeforeSmsSyncJourney(
+    hasSavedBaseline: boolean,
+    env?: Readonly<Record<string, string | undefined>>
+  ): boolean;
 }
 
 interface SmsVerificationQuery {
@@ -98,6 +102,26 @@ describe("run-sms-sync-journeys helpers", () => {
         E2E_SMS_SYNC_RELAUNCH_BETWEEN_JOURNEYS: "1",
       })
     ).toBe(true);
+  });
+
+  it("relaunches before the first journey when native permission state changed", () => {
+    expect(
+      smsSyncJourneys.shouldRelaunchBeforeSmsSyncJourney(false, {
+        E2E_SMS_SYNC_RELAUNCH_BEFORE_FIRST_JOURNEY: "1",
+        E2E_SMS_SYNC_RELAUNCH_BETWEEN_JOURNEYS: "1",
+      })
+    ).toBe(true);
+    expect(
+      smsSyncJourneys.shouldRelaunchBeforeSmsSyncJourney(true, {
+        E2E_SMS_SYNC_RELAUNCH_BETWEEN_JOURNEYS: "1",
+      })
+    ).toBe(true);
+    expect(smsSyncJourneys.shouldRelaunchBeforeSmsSyncJourney(true, {})).toBe(
+      false
+    );
+    expect(smsSyncJourneys.shouldRelaunchBeforeSmsSyncJourney(false, {})).toBe(
+      false
+    );
   });
 
   it("uses the guarded deep-link auth bootstrap when CI opts in", () => {

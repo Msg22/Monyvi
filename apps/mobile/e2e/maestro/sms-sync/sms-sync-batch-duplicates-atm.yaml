@@ -13,6 +13,16 @@ appId: com.monyvi.app
 
 - tapOn: "Sync New SMS"
 
+# The preceding permission scenario intentionally dismisses this prompt. Make
+# the batch journey establish its own SMS permission instead of depending on
+# state left by another flow.
+- runFlow:
+    when:
+      visible: "Allow SMS sync?"
+    commands:
+      - tapOn:
+          id: "permission-modal-primary"
+
 - extendedWaitUntil:
     visible: "Scan Complete!"
     timeout: 90000
@@ -23,7 +33,8 @@ appId: com.monyvi.app
 - tapOn: "Review [0-9]+ Transaction\\(s\\)"
 
 - extendedWaitUntil:
-    visible: "Review SMS Transactions"
+    visible:
+      id: transaction-review-screen
     timeout: 30000
 
 - extendedWaitUntil:
@@ -31,10 +42,21 @@ appId: com.monyvi.app
       id: transaction-account-match
     timeout: 30000
 
-- assertVisible: "Save [0-9]+ Transactions"
+- assertVisible:
+    id: review-summary-auto-selected
+- assertVisible:
+    id: review-summary-needs-review
+
+- tapOn:
+    id: review-mode-needs_review
+
+- assertVisible: "Select shown"
+- tapOn: "Select shown"
+
+- assertVisible: "Save [0-9]+ selected"
 - assertNotVisible: "Missing Info"
 
-- tapOn: "Save [0-9]+ Transactions"
+- tapOn: "Save [0-9]+ selected"
 
 - extendedWaitUntil:
     visible: "Transactions"

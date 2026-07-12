@@ -23,6 +23,7 @@ describe("start-e2e-fixture script helpers", () => {
     expect(env.EXPO_PUBLIC_AI_SMS_PARSER_MODE).toBe("fixture");
     expect(env.EXPO_PUBLIC_SUPABASE_URL).toBe("http://10.0.2.2:54321");
     expect(env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY).toContain("eyJ");
+    expect(env.EXPO_UNSTABLE_HEADLESS).toBe("1");
   });
 
   it("derives local Supabase env for Metro local parser startup", () => {

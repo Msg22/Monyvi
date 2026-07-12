@@ -1,0 +1,11 @@
+appId: com.monyvi.app
+---
+# Target the visible Android permission action by resource ID. A text-only
+# "Allow" selector can match Monyvi controls obscured behind the OS dialog.
+- extendedWaitUntil:
+    visible:
+      id: "com.android.permissioncontroller:id/permission_allow_button"
+    timeout: 10000
+
+- tapOn:
+    id: "com.android.permissioncontroller:id/permission_allow_button"

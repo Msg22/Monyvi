@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 interface StartMobileLocalSupabaseModule {
   buildExpoStartArgs(expoArgs: readonly string[]): readonly string[];
   buildExpoStartCommand(
@@ -63,6 +66,25 @@ const startMobileLocalSupabase = jest.requireActual(
 ) as StartMobileLocalSupabaseModule;
 
 describe("start-mobile-local-supabase script helpers", () => {
+  it("provides explicit dev commands for fixture and device SMS inboxes", () => {
+    const rootPackage = JSON.parse(
+      readFileSync(resolve(__dirname, "../../../..", "package.json"), "utf8")
+    ) as { readonly scripts: Readonly<Record<string, string>> };
+
+    expect(
+      rootPackage.scripts["mobile:dev:local-parser:fixture-sms"]
+    ).toContain("--local-parser --fixture-sms --lan");
+    expect(rootPackage.scripts["mobile:dev:local-parser:device-sms"]).toContain(
+      "--local-parser --lan"
+    );
+    expect(
+      rootPackage.scripts["mobile:e2e:local-parser:metro:physical-device"]
+    ).toBe("npm run start:e2e-local-parser:device -w @monyvi/mobile");
+    expect(
+      rootPackage.scripts["e2e:sms-sync:local-parser:physical-device"]
+    ).toContain("e2e:sms-sync:local-parser:device");
+  });
+
   it("uses loopback plus adb reverse by default so Google auth is available", () => {
     expect(
       startMobileLocalSupabase.resolveLocalSupabaseDeviceConfig({})

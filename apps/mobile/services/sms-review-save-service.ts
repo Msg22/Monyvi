@@ -26,6 +26,7 @@ import type { TransactionEdits } from "@/services/sms-edit-modal-service";
 import { ensureCashAccount } from "@/services/account-service";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import type { CurrencyType } from "@monyvi/db";
+import { isResolvedAccountMatch } from "@/services/transaction-review-selection";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -116,7 +117,7 @@ async function prepareSavePayload(
   for (const i of selectedOriginalIndices) {
     const override = transactionOverrides.get(i);
     const match = accountMatches.get(i);
-    const accountId = override?.accountId ?? match?.accountId;
+    const accountId = resolveSaveAccountId(override, match);
     if (accountId) {
       originalIndexToAccountId.set(i, accountId);
     } else {
@@ -286,6 +287,29 @@ async function prepareSavePayload(
     transactionAccountMap,
     toAccountMap,
   };
+}
+
+function resolveSaveAccountId(
+  override: TransactionEdits | undefined,
+  match: AccountMatch | undefined
+): string | null {
+  if (!override) {
+    return isResolvedAccountMatch(match) ? match.accountId : null;
+  }
+
+  if (!override.accountId) {
+    return null;
+  }
+
+  if (
+    !isResolvedAccountMatch(match) &&
+    override.accountId === match?.accountId &&
+    override.accountConfirmed !== true
+  ) {
+    return null;
+  }
+
+  return override.accountId;
 }
 
 export { prepareSavePayload };

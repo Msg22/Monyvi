@@ -17,10 +17,7 @@ env:
 - tapOn:
     id: "permission-modal-primary"
 
-- extendedWaitUntil:
-    visible: "Allow"
-    timeout: 10000
-- tapOn: "Allow"
+- runFlow: ../helpers/allow-native-android-permission.yaml
 
 - extendedWaitUntil:
     visible: "Allow notifications?"
@@ -29,10 +26,7 @@ env:
 - tapOn:
     id: "permission-modal-primary"
 
-- extendedWaitUntil:
-    visible: "Allow"
-    timeout: 10000
-- tapOn: "Allow"
+- runFlow: ../helpers/allow-native-android-permission.yaml
 
 - extendedWaitUntil:
     visible:

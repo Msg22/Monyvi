@@ -67,6 +67,7 @@ describe("GitHub Actions Android E2E workflow", () => {
     expect(workflow).toContain("-no-snapshot-save");
     expect(workflow).toContain('E2E_DEVICE_OFFLINE_RETRY_COUNT: "1"');
     expect(workflow).toContain('E2E_SMS_SYNC_FLOW_ATTEMPT_COUNT: "1"');
+    expect(workflow).toContain('EXPO_UNSTABLE_HEADLESS: "1"');
     expect(workflow).toContain("android-e2e-logs-${{ matrix.suite }}");
   });
 

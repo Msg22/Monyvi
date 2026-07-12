@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 interface RunLiveSmsJourneysModule {
   buildLiveSmsActionProbeCleanupSql(): string;
   shouldSkipRunAsProbeCleanup(
@@ -23,6 +26,12 @@ interface RunLiveSmsJourneysModule {
   shouldResetLiveSmsSideEffectsBeforeRetry(
     flow: string,
     env?: Readonly<Record<string, string | undefined>>
+  ): boolean;
+  shouldRetryLiveSmsFlowFailure(
+    output: string,
+    isAppProcessAlive: boolean,
+    attempt: number,
+    maxAttempts: number
   ): boolean;
   prepareLiveSmsJourneyStart(dependencies: {
     readonly stopApp: () => void;
@@ -182,6 +191,79 @@ describe("run-live-sms-journeys helpers", () => {
         { E2E_SUPABASE_MODE: "local" }
       )
     ).toBe(false);
+  });
+
+  it("retries only transport failures or confirmed app-process crashes", () => {
+    expect(
+      liveSmsJourneys.shouldRetryLiveSmsFlowFailure(
+        "Assertion is false: Settings is visible",
+        false,
+        1,
+        4
+      )
+    ).toBe(true);
+    expect(
+      liveSmsJourneys.shouldRetryLiveSmsFlowFailure(
+        "io.grpc.StatusRuntimeException: UNAVAILABLE",
+        true,
+        2,
+        4
+      )
+    ).toBe(true);
+    expect(
+      liveSmsJourneys.shouldRetryLiveSmsFlowFailure(
+        "Assertion is false: Settings is visible",
+        true,
+        1,
+        4
+      )
+    ).toBe(false);
+    expect(
+      liveSmsJourneys.shouldRetryLiveSmsFlowFailure(
+        "Assertion is false: Settings is visible",
+        false,
+        2,
+        4
+      )
+    ).toBe(false);
+    expect(
+      liveSmsJourneys.shouldRetryLiveSmsFlowFailure(
+        "Assertion is false: Settings is visible",
+        false,
+        1,
+        1
+      )
+    ).toBe(false);
+  });
+
+  it("targets the visible Android permission button instead of ambiguous Allow text", () => {
+    const helper = readFileSync(
+      resolve(
+        process.cwd(),
+        "e2e/maestro/helpers/allow-native-android-permission.yaml"
+      ),
+      "utf8"
+    );
+
+    expect(helper).toContain(
+      'id: "com.android.permissioncontroller:id/permission_allow_button"'
+    );
+
+    for (const flow of [
+      "live-sms-journey-01-first-time-enable.yaml",
+      "live-sms-journey-02-sms-sync-then-live-detection.yaml",
+      "live-sms-journey-03-sms-deny-then-recover.yaml",
+      "live-sms-journey-04-notification-deny-then-recover.yaml",
+    ]) {
+      const contents = readFileSync(
+        resolve(process.cwd(), "e2e/maestro/live-sms-detection", flow),
+        "utf8"
+      );
+      expect(contents).not.toContain('- tapOn: "Allow"');
+      expect(contents).toContain(
+        "../helpers/allow-native-android-permission.yaml"
+      );
+    }
   });
 
   it("restarts a prepared journey without waiting on the generic app preflight", () => {

@@ -1,13 +1,38 @@
-import type { ReviewableTransaction } from "@monyvi/logic";
+import type {
+  TransactionReviewMeta,
+  TransactionReviewReason,
+} from "@/contracts/transaction-review";
 
 export type BadgeColor = "amber" | "red" | "blue" | "emerald";
 
 export interface TransactionBadgeData {
-  readonly label: string;
+  readonly labelKey: string;
   readonly color: BadgeColor;
 }
 
-const CONFIDENCE_REVIEW_THRESHOLD = 0.8;
+const BADGE_PRIORITY: Readonly<Record<string, number>> = {
+  review_badge_missing_info: 0,
+  review_badge_account_needed: 1,
+  review_badge_category_needed: 2,
+  review_badge_confirm_cash_account: 3,
+  review_badge_low_confidence: 4,
+  review_badge_needs_review: 5,
+  review_badge_auto_selected: 6,
+};
+
+const REVIEW_REASON_BADGES: Record<
+  TransactionReviewReason,
+  TransactionBadgeData
+> = {
+  cash_transfer: {
+    labelKey: "review_badge_confirm_cash_account",
+    color: "amber",
+  },
+  low_confidence: { labelKey: "review_badge_low_confidence", color: "amber" },
+  account_needed: { labelKey: "review_badge_account_needed", color: "red" },
+  category_needed: { labelKey: "review_badge_category_needed", color: "red" },
+  parser_review: { labelKey: "review_badge_needs_review", color: "amber" },
+};
 
 /**
  * Derives presentation badges (tags) for a transaction.
@@ -17,35 +42,36 @@ const CONFIDENCE_REVIEW_THRESHOLD = 0.8;
  * without modifying standard UI rendering loops.
  */
 export function getTransactionBadges(
-  transaction: ReviewableTransaction,
-  hasMissingInfo: boolean
+  hasMissingInfo: boolean,
+  reviewMeta: TransactionReviewMeta | undefined,
+  isSelected: boolean
 ): readonly TransactionBadgeData[] {
   const badges: TransactionBadgeData[] = [];
 
-  // 1. Source-specific transaction tags (e.g., SMS parser metadata)
-  if (
-    "isAtmWithdrawal" in transaction &&
-    transaction.isAtmWithdrawal === true
-  ) {
-    badges.push({ label: "Cash Withdrawal", color: "amber" });
+  if (reviewMeta?.isAutoSelectable && isSelected) {
+    badges.push({ labelKey: "review_badge_auto_selected", color: "emerald" });
+    return badges;
   }
 
-  const hasParserReviewSignal =
-    transaction.reviewStatus === "needs_review" ||
-    (transaction.reviewReasons?.length ?? 0) > 0;
-
-  // 2. Generic parser confidence / review metadata
-  if (
-    transaction.confidence <= CONFIDENCE_REVIEW_THRESHOLD ||
-    hasParserReviewSignal
-  ) {
-    badges.push({ label: "Needs Review", color: "amber" });
+  for (const reason of reviewMeta?.reasons ?? []) {
+    badges.push(REVIEW_REASON_BADGES[reason]);
   }
 
-  // 3. User-Action Required (Missing core constraints like Account/Category)
   if (hasMissingInfo) {
-    badges.push({ label: "Missing Info", color: "red" });
+    badges.push({ labelKey: "review_badge_missing_info", color: "red" });
   }
 
   return badges;
+}
+
+export function getPrimaryTransactionBadge(
+  hasMissingInfo: boolean,
+  reviewMeta: TransactionReviewMeta | undefined,
+  isSelected: boolean
+): TransactionBadgeData | undefined {
+  return [...getTransactionBadges(hasMissingInfo, reviewMeta, isSelected)].sort(
+    (left, right) =>
+      (BADGE_PRIORITY[left.labelKey] ?? Number.MAX_SAFE_INTEGER) -
+      (BADGE_PRIORITY[right.labelKey] ?? Number.MAX_SAFE_INTEGER)
+  )[0];
 }
