@@ -292,6 +292,18 @@ describe("TransactionReview", () => {
     expect(screen.queryByText(/fixture parser/i)).toBeNull();
   });
 
+  it("keeps the safety notice readable above the footer in dark mode", () => {
+    const transaction = createTransaction();
+    renderReview({
+      listItems: [{ key: "tx-0", tx: transaction, originalIndex: 0 }],
+    });
+
+    expect(screen.getByText("review_ai_accuracy_notice")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:text-text-secondary-dark")
+    );
+  });
+
   it("reveals matched rows progressively while unresolved rows stay skeletons", () => {
     const readyTransaction = {
       ...createTransaction(),

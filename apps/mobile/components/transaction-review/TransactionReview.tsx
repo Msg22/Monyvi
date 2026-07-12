@@ -445,7 +445,7 @@ export function TransactionReview({
                 size={17}
                 color={palette.nileGreen[400]}
               />
-              <Text className="ms-2 flex-1 text-xs text-text-muted dark:text-text-muted-dark">
+              <Text className="ms-2 flex-1 text-xs text-text-secondary dark:text-text-secondary-dark">
                 {tTransactions("review_ai_accuracy_notice")}
               </Text>
             </View>

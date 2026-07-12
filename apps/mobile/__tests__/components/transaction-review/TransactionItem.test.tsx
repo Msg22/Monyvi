@@ -132,6 +132,23 @@ describe("TransactionItem", () => {
     timeSpy.mockRestore();
   });
 
+  it("uses the remaining metadata width to show the full account name", () => {
+    renderItem();
+
+    expect(screen.getByTestId("transaction-account-match")).toHaveProp(
+      "className",
+      expect.stringContaining("shrink")
+    );
+    expect(screen.getByTestId("transaction-account-match")).not.toHaveProp(
+      "className",
+      expect.stringContaining("flex-1")
+    );
+    expect(screen.getByText("QNB Account")).toHaveProp(
+      "adjustsFontSizeToFit",
+      true
+    );
+  });
+
   it("keeps the shared row theme-aware outside the SMS workspace", () => {
     renderItem();
 

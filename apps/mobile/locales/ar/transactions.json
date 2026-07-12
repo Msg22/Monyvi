@@ -373,7 +373,7 @@
   "deselect_shown": "إلغاء تحديد الظاهر",
   "review_empty_needs_review": "كل المعاملات الظاهرة محددة.",
   "review_empty_auto_selected": "لا توجد معاملات محددة تلقائياً.",
-  "review_badge_cash_transfer": "تحويل نقدي",
+  "review_badge_confirm_cash_account": "تأكيد حساب النقدية",
   "review_badge_low_confidence": "ثقة منخفضة",
   "review_badge_account_needed": "الحساب مطلوب",
   "review_badge_category_needed": "الفئة مطلوبة",

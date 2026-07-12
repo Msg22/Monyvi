@@ -100,10 +100,12 @@ function TransactionBadge({
 }): React.JSX.Element {
   return (
     <View
-      className={`${BADGE_BG_COLORS[data.color]} max-w-28 rounded-md px-2 py-1`}
+      className={`${BADGE_BG_COLORS[data.color]} max-w-32 rounded-md px-2 py-1`}
     >
       <Text
         numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
         className={`text-xs font-semibold ${BADGE_TEXT_COLORS[data.color]}`}
       >
         {label}
@@ -276,34 +278,64 @@ function TransactionItemInner({
         />
 
         {/* Content */}
-        <View className="me-2 flex-1">
-          {/* Top row: origin label + amount */}
-          <Text
-            className="text-base font-bold text-slate-900 dark:text-white"
-            numberOfLines={1}
-          >
-            {isVoice && "note" in transaction
-              ? (transaction as { note: string }).note ||
-                transaction.counterparty ||
-                transaction.originLabel
-              : transaction.originLabel}
-          </Text>
+        <View className="flex-1">
+          <View className="flex-row items-start gap-2">
+            <View className="min-w-0 flex-1">
+              <Text
+                className="text-base font-bold text-slate-900 dark:text-white"
+                numberOfLines={1}
+              >
+                {isVoice && "note" in transaction
+                  ? (transaction as { note: string }).note ||
+                    transaction.counterparty ||
+                    transaction.originLabel
+                  : transaction.originLabel}
+              </Text>
 
-          <Text
-            className="mt-0.5 text-xs text-text-secondary dark:text-text-secondary-dark"
-            numberOfLines={1}
-          >
-            {formatReviewDateTime(
-              transaction.date,
-              t("review_date_today"),
-              t("review_date_yesterday"),
-              language
-            )}
-          </Text>
+              <Text
+                className="mt-0.5 text-xs text-text-secondary dark:text-text-secondary-dark"
+                numberOfLines={1}
+              >
+                {formatReviewDateTime(
+                  transaction.date,
+                  t("review_date_today"),
+                  t("review_date_yesterday"),
+                  language
+                )}
+              </Text>
+            </View>
 
-          {/* Bottom row: category + account chips */}
+            <View className="max-w-32 items-end">
+              <Text
+                testID="transaction-review-amount"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+                className={`text-base font-semibold ${
+                  isExpense
+                    ? "text-red-600 dark:text-red-400"
+                    : "text-nileGreen-600 dark:text-nileGreen-400"
+                }`}
+              >
+                {isExpense ? "-" : "+"}
+                {formatCurrency({
+                  amount: transaction.amount,
+                  currency: transaction.currency,
+                })}
+              </Text>
+              {primaryBadge && (
+                <View className="mt-1.5 items-end">
+                  <TransactionBadge
+                    data={primaryBadge}
+                    label={t(primaryBadge.labelKey)}
+                  />
+                </View>
+              )}
+            </View>
+          </View>
+
           <View className="mt-1.5 flex-row items-center gap-1.5 overflow-hidden">
-            <View className="max-w-24 shrink rounded-md border border-border bg-surface px-2 py-0.5 dark:border-border-dark dark:bg-surface-dark">
+            <View className="max-w-24 shrink-0 rounded-md border border-border bg-surface px-2 py-0.5 dark:border-border-dark dark:bg-surface-dark">
               <Text
                 numberOfLines={1}
                 className="text-xs text-text-secondary dark:text-text-secondary-dark"
@@ -315,59 +347,34 @@ function TransactionItemInner({
             {accountName && (
               <View
                 testID="transaction-account-match"
-                className="max-w-28 shrink rounded-md border border-border bg-surface px-2 py-0.5 dark:border-border-dark dark:bg-surface-dark"
+                className="min-w-0 shrink rounded-md border border-border bg-surface px-2 py-0.5 dark:border-border-dark dark:bg-surface-dark"
               >
                 <Text
                   numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
                   className="text-xs text-text-secondary dark:text-text-secondary-dark"
                 >
                   {accountName}
                 </Text>
               </View>
             )}
-          </View>
-        </View>
 
-        <View className="max-w-28 items-end">
-          <Text
-            testID="transaction-review-amount"
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.75}
-            className={`text-base font-semibold ${
-              isExpense
-                ? "text-red-600 dark:text-red-400"
-                : "text-nileGreen-600 dark:text-nileGreen-400"
-            }`}
-          >
-            {isExpense ? "-" : "+"}
-            {formatCurrency({
-              amount: transaction.amount,
-              currency: transaction.currency,
-            })}
-          </Text>
-          {primaryBadge && (
-            <View className="mt-1.5 items-end">
-              <TransactionBadge
-                data={primaryBadge}
-                label={t(primaryBadge.labelKey)}
-              />
-            </View>
-          )}
-          {hasExpandableContent && (
-            <TouchableOpacity
-              onPress={handleToggleExpand}
-              hitSlop={14}
-              className="mt-1 p-1"
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={isExpanded ? "chevron-up" : "chevron-down"}
-                size={18}
-                color={palette.slate[500]}
-              />
-            </TouchableOpacity>
-          )}
+            {hasExpandableContent && (
+              <TouchableOpacity
+                onPress={handleToggleExpand}
+                hitSlop={14}
+                className="h-6 w-6 items-center justify-center"
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={isExpanded ? "chevron-up" : "chevron-down"}
+                  size={18}
+                  color={palette.slate[500]}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </TouchableOpacity>
 

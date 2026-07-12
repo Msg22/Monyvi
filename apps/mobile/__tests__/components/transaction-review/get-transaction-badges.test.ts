@@ -41,6 +41,19 @@ describe("getTransactionBadges", () => {
     });
   });
 
+  it("describes the cash-account confirmation needed for ATM withdrawals", () => {
+    expect(
+      getPrimaryTransactionBadge(
+        false,
+        reviewMeta({ reasons: ["cash_transfer"] }),
+        false
+      )
+    ).toEqual({
+      labelKey: "review_badge_confirm_cash_account",
+      color: "amber",
+    });
+  });
+
   it("marks selected safe rows as auto-selected", () => {
     const badges = getTransactionBadges(
       false,
