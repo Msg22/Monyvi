@@ -1,4 +1,7 @@
-import { getTransactionBadges } from "@/components/transaction-review/get-transaction-badges";
+import {
+  getPrimaryTransactionBadge,
+  getTransactionBadges,
+} from "@/components/transaction-review/get-transaction-badges";
 import type { TransactionReviewMeta } from "@/contracts/transaction-review";
 
 function reviewMeta(
@@ -51,5 +54,33 @@ describe("getTransactionBadges", () => {
         color: "emerald",
       },
     ]);
+  });
+
+  it("prioritizes missing account or category blockers over advisory reasons", () => {
+    expect(
+      getPrimaryTransactionBadge(
+        false,
+        reviewMeta({
+          reasons: ["cash_transfer", "low_confidence", "account_needed"],
+        }),
+        false
+      )
+    ).toEqual({
+      labelKey: "review_badge_account_needed",
+      color: "red",
+    });
+  });
+
+  it("prioritizes save-blocking missing information over parser reasons", () => {
+    expect(
+      getPrimaryTransactionBadge(
+        true,
+        reviewMeta({ reasons: ["low_confidence"] }),
+        false
+      )
+    ).toEqual({
+      labelKey: "review_badge_missing_info",
+      color: "red",
+    });
   });
 });

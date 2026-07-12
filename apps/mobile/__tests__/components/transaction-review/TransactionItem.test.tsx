@@ -1,7 +1,35 @@
 import { render, screen } from "@testing-library/react-native";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import React from "react";
-import { TransactionItem } from "@/components/transaction-review/TransactionItem";
+import {
+  ReviewTransactionItemSkeleton,
+  TransactionItem,
+} from "@/components/transaction-review/TransactionItem";
+
+const mockInstitutionLogoMark = jest.fn();
+
+jest.mock("@/components/institutions/InstitutionLogoMark", () => ({
+  InstitutionLogoMark: (props: Record<string, unknown>): React.JSX.Element => {
+    const ReactActual = jest.requireActual<typeof import("react")>("react");
+    const ReactNative =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    mockInstitutionLogoMark(props);
+    return ReactActual.createElement(ReactNative.View, {
+      testID: typeof props.testID === "string" ? props.testID : undefined,
+    });
+  },
+}));
+
+jest.mock("@/components/ui/Skeleton", () => ({
+  Skeleton: (): React.JSX.Element => {
+    const ReactActual = jest.requireActual<typeof import("react")>("react");
+    const ReactNative =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return ReactActual.createElement(ReactNative.View, {
+      testID: "skeleton-block",
+    });
+  },
+}));
 
 jest.mock("@/context/LocaleContext", () => ({
   useLocale: (): { readonly language: string } => ({ language: "ar" }),
@@ -38,15 +66,42 @@ function renderItem(isSmsWorkspace = false): void {
       onToggleSelect={jest.fn()}
       onPress={jest.fn()}
       isSmsWorkspace={isSmsWorkspace}
+      institutionLogo={{ format: "image", source: 1 }}
     />
   );
 }
 
 describe("TransactionItem", () => {
-  it("shows the parsed counterparty in an SMS review row", () => {
+  beforeEach(() => {
+    mockInstitutionLogoMark.mockClear();
+  });
+
+  it("keeps merchant details out of the compact SMS review row", () => {
     renderItem();
 
-    expect(screen.getByText("Fixture Shop")).toBeTruthy();
+    expect(screen.queryByText("Fixture Shop")).toBeNull();
+  });
+
+  it("keeps the provider logo visible when the row is selected", () => {
+    renderItem();
+
+    expect(screen.getByTestId("transaction-review-provider-logo")).toBeTruthy();
+    expect(mockInstitutionLogoMark).toHaveBeenCalledWith(
+      expect.objectContaining({
+        size: "compact",
+        testID: "transaction-review-provider-logo",
+      })
+    );
+  });
+
+  it("provides a compact row skeleton with the same themed surface", () => {
+    render(<ReviewTransactionItemSkeleton />);
+
+    expect(screen.getByTestId("transaction-review-row-skeleton")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:bg-background-dark")
+    );
+    expect(screen.getAllByTestId("skeleton-block").length).toBeGreaterThan(3);
   });
 
   it("uses the debit color for an expense amount", () => {
@@ -82,11 +137,11 @@ describe("TransactionItem", () => {
 
     expect(screen.getByTestId("transaction-review-row")).toHaveProp(
       "className",
-      expect.stringContaining("bg-white")
+      expect.stringContaining("bg-background")
     );
     expect(screen.getByTestId("transaction-review-row")).toHaveProp(
       "className",
-      expect.stringContaining("dark:bg-slate-950")
+      expect.stringContaining("dark:bg-background-dark")
     );
   });
 
@@ -95,11 +150,11 @@ describe("TransactionItem", () => {
 
     expect(screen.getByTestId("transaction-review-row")).toHaveProp(
       "className",
-      expect.stringContaining("bg-white")
+      expect.stringContaining("bg-background")
     );
     expect(screen.getByTestId("transaction-review-row")).toHaveProp(
       "className",
-      expect.stringContaining("dark:bg-slate-950")
+      expect.stringContaining("dark:bg-background-dark")
     );
   });
 });

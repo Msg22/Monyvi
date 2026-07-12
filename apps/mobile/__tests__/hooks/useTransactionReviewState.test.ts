@@ -76,7 +76,9 @@ jest.mock("@/services/sms-review-save-service", () => ({
 }));
 
 function createTransaction(
-  overrides: Partial<ReviewableTransaction> = {}
+  overrides: Partial<ReviewableTransaction> & {
+    readonly isAtmWithdrawal?: boolean;
+  } = {}
 ): ReviewableTransaction {
   return {
     amount: 100,
@@ -188,6 +190,8 @@ describe("useTransactionReviewState", () => {
     );
 
     await waitFor(() => expect(result.current.accountMatches.size).toBe(1));
+    expect(Array.from(result.current.resolvedAccountMatchIndices)).toEqual([0]);
+    expect(result.current.isReviewMetadataReady).toBe(false);
     act(() => result.current.handleOpenEditModal(0));
     act(() => {
       result.current.handleEditModalSave({
@@ -202,7 +206,39 @@ describe("useTransactionReviewState", () => {
     completeMatching?.();
 
     await waitFor(() => expect(result.current.accountMatches.size).toBe(2));
+    expect(Array.from(result.current.resolvedAccountMatchIndices)).toEqual([
+      0, 1,
+    ]);
+    expect(result.current.isReviewMetadataReady).toBe(true);
     expect(Array.from(result.current.selectedIndices).sort()).toEqual([0, 1]);
+  });
+
+  it("resolves every skeleton into review state when account matching fails", async () => {
+    const warningSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    mockMatchTransactionsBatched.mockRejectedValueOnce(
+      new Error("matching unavailable")
+    );
+    const transactions = [createTransaction(), createTransaction()];
+
+    const { result } = renderHook(() =>
+      useTransactionReviewState({ transactions, onSave: jest.fn() })
+    );
+
+    await waitFor(() =>
+      expect(result.current.isReviewMetadataReady).toBe(true)
+    );
+
+    expect(Array.from(result.current.resolvedAccountMatchIndices)).toEqual([
+      0, 1,
+    ]);
+    expect(result.current.needsReviewCount).toBe(2);
+    expect(mockShowToast).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "warning" })
+    );
+
+    warningSpy.mockRestore();
   });
 
   it("focuses needs-review rows and selects only shown rows", async () => {
@@ -280,7 +316,7 @@ describe("useTransactionReviewState", () => {
     ).toEqual(["LOW", "INCOME_REVIEW"]);
   });
 
-  it("groups review rows under a header for each transaction date", async () => {
+  it("returns one continuous newest-first list without date headers", async () => {
     const transactions = [
       createTransaction({
         date: new Date("2026-07-02T12:00:00.000Z"),
@@ -295,12 +331,38 @@ describe("useTransactionReviewState", () => {
 
     await waitFor(() => expect(result.current.accountMatches.size).toBe(2));
 
+    expect(result.current.listItems).toHaveLength(2);
+    expect(result.current.listItems.map((item) => item.tx.date)).toEqual([
+      new Date("2026-07-02T12:00:00.000Z"),
+      new Date("2026-07-01T12:00:00.000Z"),
+    ]);
+  });
+
+  it("treats ATM withdrawal suggestions as transfers when filtering", async () => {
+    const transactions = [
+      createTransaction({
+        originLabel: "ATM",
+        isAtmWithdrawal: true,
+      }),
+      createTransaction({
+        originLabel: "CARD",
+        deduplicationHash: "sms-fingerprint-card",
+      }),
+    ];
+
+    const { result } = renderHook(() =>
+      useTransactionReviewState({ transactions, onSave: jest.fn() })
+    );
+
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(2));
+
+    act(() => {
+      result.current.handleTypeToggle("Transfer");
+    });
+
     expect(
-      result.current.listItems.filter((item) => item.kind === "header")
-    ).toHaveLength(2);
-    expect(
-      result.current.listItems.filter((item) => item.kind === "transaction")
-    ).toHaveLength(2);
+      result.current.filteredTransactions.map((tx) => tx.originLabel)
+    ).toEqual(["ATM"]);
   });
 
   it("updates review reasons when editing a row resolves the missing account", async () => {

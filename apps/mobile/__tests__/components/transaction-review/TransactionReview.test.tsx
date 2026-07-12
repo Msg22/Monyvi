@@ -29,6 +29,10 @@ jest.mock("@/hooks/useAccountDisplayNames", () => ({
   useAccountDisplayNames: (): ReadonlyMap<string, string> => new Map(),
 }));
 
+jest.mock("@/utils/transaction-review-provider", () => ({
+  resolveTransactionReviewProvider: (): null => null,
+}));
+
 jest.mock("@/hooks/useTransactionReviewState", () => ({
   useTransactionReviewState: jest.fn(),
 }));
@@ -43,6 +47,15 @@ jest.mock("@/components/modals/TypeFilterModal", () => ({
 
 jest.mock("@/components/transactions/TransactionFiltersBar", () => ({
   TransactionFiltersBar: (): null => null,
+}));
+
+const mockReviewFiltersSheet = jest.fn();
+
+jest.mock("@/components/transaction-review/ReviewFiltersSheet", () => ({
+  ReviewFiltersSheet: (props: Record<string, unknown>): null => {
+    mockReviewFiltersSheet(props);
+    return null;
+  },
 }));
 
 jest.mock("@/components/transaction-review/ReviewActionBar", () => ({
@@ -62,6 +75,14 @@ jest.mock("@/components/transaction-review/get-expanded-content", () => ({
 }));
 
 jest.mock("@/components/transaction-review/TransactionItem", () => ({
+  ReviewTransactionItemSkeleton: (): React.JSX.Element => {
+    const ReactActual = jest.requireActual<typeof import("react")>("react");
+    const ReactNative =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return ReactActual.createElement(ReactNative.View, {
+      testID: "transaction-review-row-skeleton",
+    });
+  },
   TransactionItem: ({
     transaction,
   }: {
@@ -142,6 +163,7 @@ function createReviewState(
   const transaction = createTransaction();
   return {
     accountMatches: new Map(),
+    applyReviewFilters: jest.fn(),
     allSelected: false,
     autoSelectedCount: 0,
     categoryMap: new Map(),
@@ -149,6 +171,7 @@ function createReviewState(
     effectiveTransactions: [transaction],
     expenseCategories: [],
     filteredTransactions: [transaction],
+    getFilteredTransactionCount: jest.fn(() => 1),
     handleCreatePendingAccount: jest.fn(),
     handleEditModalSave: jest.fn(),
     handleOpenEditModal: jest.fn(),
@@ -161,14 +184,15 @@ function createReviewState(
     handleTypeToggle: jest.fn(),
     incomeCategories: [],
     invalidIndices: new Set(),
+    isReviewMetadataReady: true,
     latestRates: null,
     listItems: [],
     needsReviewCount: 0,
     pendingAccounts: [],
     period: "all_time",
-    periodModalVisible: false,
     reviewMetaByIndex: new Map(),
     reviewMode: "all",
+    resolvedAccountMatchIndices: new Set([0]),
     searchQuery: "",
     selectedCount: 0,
     selectedIndices: new Set(),
@@ -176,12 +200,9 @@ function createReviewState(
     selectedTypes: ["All"],
     setEditModalIndex: jest.fn(),
     setPeriod: jest.fn(),
-    setPeriodModalVisible: jest.fn(),
     setReviewMode: jest.fn(),
     setSearchQuery: jest.fn(),
-    setTypeModalVisible: jest.fn(),
     transactionOverrides: new Map(),
-    typeModalVisible: false,
     userAccounts: [],
     ...overrides,
   };
@@ -203,6 +224,7 @@ describe("TransactionReview", () => {
   beforeEach(() => {
     mockUseTransactionReviewState.mockReset();
     mockPageHeader.mockReset();
+    mockReviewFiltersSheet.mockReset();
   });
 
   it("delegates the approved review header to PageHeader", () => {
@@ -257,7 +279,6 @@ describe("TransactionReview", () => {
       filteredTransactions: [parserTaggedTransaction],
       listItems: [
         {
-          kind: "transaction",
           key: "tx-0",
           tx: parserTaggedTransaction,
           originalIndex: 0,
@@ -269,6 +290,53 @@ describe("TransactionReview", () => {
     expect(screen.queryByText(/local parser/i)).toBeNull();
     expect(screen.queryByText(/AI parser/i)).toBeNull();
     expect(screen.queryByText(/fixture parser/i)).toBeNull();
+  });
+
+  it("reveals matched rows progressively while unresolved rows stay skeletons", () => {
+    const readyTransaction = {
+      ...createTransaction(),
+      counterparty: "Ready Shop",
+    };
+    const pendingTransaction = {
+      ...createTransaction(),
+      counterparty: "Pending Shop",
+    };
+
+    renderReview({
+      effectiveTransactions: [readyTransaction, pendingTransaction],
+      filteredTransactions: [readyTransaction, pendingTransaction],
+      isReviewMetadataReady: false,
+      listItems: [
+        { key: "tx-0", tx: readyTransaction, originalIndex: 0 },
+        { key: "tx-1", tx: pendingTransaction, originalIndex: 1 },
+      ],
+      resolvedAccountMatchIndices: new Set([0]),
+    });
+
+    expect(screen.getByText("Ready Shop")).toBeTruthy();
+    expect(screen.queryByText("Pending Shop")).toBeNull();
+    expect(
+      screen.getAllByTestId("transaction-review-row-skeleton")
+    ).toHaveLength(1);
+  });
+
+  it("keeps provisional summary counts behind skeletons until matching finishes", () => {
+    renderReview({ isReviewMetadataReady: false });
+
+    expect(
+      screen.getByTestId("review-summary-auto-selected-count-skeleton")
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId("review-summary-needs-review-count-skeleton")
+    ).toBeTruthy();
+    expect(screen.getByTestId("review-mode-needs_review")).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: true })
+    );
+    expect(screen.getByTestId("review-select-toggle")).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: true })
+    );
   });
 
   it("exposes a stable review-screen readiness signal for E2E", () => {
@@ -314,15 +382,31 @@ describe("TransactionReview", () => {
 
     expect(screen.getByTestId("review-summary-card")).toHaveProp(
       "className",
-      expect.stringContaining("py-3")
+      expect.stringContaining("py-2")
     );
     expect(screen.getByTestId("review-mode-control")).toHaveProp(
       "className",
-      expect.stringContaining("min-h-10")
+      expect.stringContaining("h-10")
     );
     expect(screen.getByTestId("review-selection-row")).toHaveProp(
       "className",
-      expect.stringContaining("mt-3")
+      expect.stringContaining("mt-2")
+    );
+  });
+
+  it("opens one consolidated filter sheet from the filter trigger", () => {
+    const applyReviewFilters = jest.fn();
+    const getFilteredTransactionCount = jest.fn(() => 1);
+    renderReview({ applyReviewFilters, getFilteredTransactionCount });
+
+    fireEvent.press(screen.getByTestId("review-filter-trigger"));
+
+    expect(mockReviewFiltersSheet).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        getResultCount: getFilteredTransactionCount,
+        onApply: applyReviewFilters,
+        visible: true,
+      })
     );
   });
 
@@ -346,7 +430,7 @@ describe("TransactionReview", () => {
       setReviewMode,
     });
 
-    fireEvent.press(screen.getByText("Needs review"));
+    fireEvent.press(screen.getByTestId("review-mode-needs_review"));
 
     expect(handleReviewNeeds).toHaveBeenCalledTimes(1);
     expect(setReviewMode).not.toHaveBeenCalledWith("needs_review");

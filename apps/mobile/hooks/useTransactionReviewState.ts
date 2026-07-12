@@ -26,50 +26,39 @@ import {
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import type { TransactionEdits } from "@/services/sms-edit-modal-service";
-import { formatToLocalDateString } from "@/utils/dateHelpers";
 import { toggleTransactionTypeFilter } from "@/utils/transaction-review-filters";
 
-export type ReviewListItem =
-  | { readonly kind: "header"; readonly date: string; readonly key: string }
-  | {
-      readonly kind: "transaction";
-      readonly originalIndex: number;
-      readonly tx: ReviewableTransaction;
-      readonly key: string;
-    };
+export interface ReviewListItem {
+  readonly originalIndex: number;
+  readonly tx: ReviewableTransaction;
+  readonly key: string;
+}
 
 export type TransactionReviewMode = "all" | "needs_review" | "auto_selected";
 
-function groupByDate(
+export interface TransactionReviewFilters {
+  readonly period: GroupingPeriod;
+  readonly selectedTypes: readonly TransactionTypeFilter[];
+  readonly searchQuery: string;
+}
+
+function buildFlatReviewList(
   transactions: readonly ReviewableTransaction[],
   originalTransactions: readonly ReviewableTransaction[]
 ): readonly ReviewListItem[] {
-  const items: ReviewListItem[] = [];
-  let lastDate = "";
   const originalIndexMap = new Map<ReviewableTransaction, number>();
   originalTransactions.forEach((tx, i) => originalIndexMap.set(tx, i));
 
-  const sortedTransactions = [...transactions].sort(
-    (a, b) => b.date.getTime() - a.date.getTime()
-  );
-
-  sortedTransactions.forEach((tx) => {
-    const dateKey = formatToLocalDateString(tx.date);
-    if (dateKey !== lastDate) {
-      items.push({ kind: "header", date: dateKey, key: `h-${dateKey}` });
-      lastDate = dateKey;
-    }
-
-    const originalIndex = originalIndexMap.get(tx) ?? 0;
-    items.push({
-      kind: "transaction",
-      originalIndex,
-      tx,
-      key: `tx-${originalIndex}`,
+  return [...transactions]
+    .sort((a, b) => b.date.getTime() - a.date.getTime())
+    .map((tx) => {
+      const originalIndex = originalIndexMap.get(tx) ?? 0;
+      return {
+        originalIndex,
+        tx,
+        key: `tx-${originalIndex}`,
+      };
     });
-  });
-
-  return items;
 }
 
 function applyFilters(
@@ -91,7 +80,14 @@ function applyFilters(
   const includesAll = selectedTypes.includes("All");
   if (!includesAll && selectedTypes.length > 0) {
     filtered = filtered.filter((tx) => {
-      const txType = tx.type === "INCOME" ? "Income" : "Expense";
+      const isAtmWithdrawal =
+        (tx as ReviewableTransaction & { readonly isAtmWithdrawal?: boolean })
+          .isAtmWithdrawal === true;
+      const txType: TransactionTypeFilter = isAtmWithdrawal
+        ? "Transfer"
+        : tx.type === "INCOME"
+          ? "Income"
+          : "Expense";
       return selectedTypes.includes(txType);
     });
   }
@@ -125,10 +121,10 @@ export interface UseTransactionReviewStateResult {
   readonly handleTypeToggle: (t: TransactionTypeFilter) => void;
   readonly searchQuery: string;
   readonly setSearchQuery: (q: string) => void;
-  readonly periodModalVisible: boolean;
-  readonly setPeriodModalVisible: (v: boolean) => void;
-  readonly typeModalVisible: boolean;
-  readonly setTypeModalVisible: (v: boolean) => void;
+  readonly applyReviewFilters: (filters: TransactionReviewFilters) => void;
+  readonly getFilteredTransactionCount: (
+    filters: TransactionReviewFilters
+  ) => number;
   readonly selectedIndices: ReadonlySet<number>;
   readonly selectedIndicesRef: React.MutableRefObject<ReadonlySet<number>>;
   readonly allSelected: boolean;
@@ -149,6 +145,8 @@ export interface UseTransactionReviewStateResult {
   readonly userAccounts: readonly AccountWithBankDetails[];
   readonly pendingAccounts: readonly PendingAccount[];
   readonly accountMatches: ReadonlyMap<number, AccountMatch>;
+  readonly resolvedAccountMatchIndices: ReadonlySet<number>;
+  readonly isReviewMetadataReady: boolean;
   readonly reviewMetaByIndex: ReadonlyMap<number, TransactionReviewMeta>;
   readonly transactionOverrides: ReadonlyMap<number, TransactionEdits>;
   readonly editModalIndex: number | null;
@@ -235,8 +233,6 @@ export function useTransactionReviewState({
     "All",
   ]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [periodModalVisible, setPeriodModalVisible] = useState(false);
-  const [typeModalVisible, setTypeModalVisible] = useState(false);
   const [reviewMode, setReviewMode] = useState<TransactionReviewMode>("all");
 
   // ── Selection state ─────────────────────────────────────────────────
@@ -465,6 +461,13 @@ export function useTransactionReviewState({
     accountMatchState.identity === transactionIdentity &&
     (effectiveTransactions.length === 0 ||
       accountMatches.size >= effectiveTransactions.length);
+  const resolvedAccountMatchIndices = useMemo<ReadonlySet<number>>(
+    () =>
+      accountMatchState.identity === transactionIdentity
+        ? new Set(accountMatchState.matches.keys())
+        : new Set(),
+    [accountMatchState, transactionIdentity]
+  );
 
   useEffect(() => {
     if (seededSelectionIdentityRef.current === transactionIdentity) return;
@@ -506,7 +509,7 @@ export function useTransactionReviewState({
   ]);
 
   const listItems = useMemo(
-    () => groupByDate(visibleTransactions, effectiveTransactions),
+    () => buildFlatReviewList(visibleTransactions, effectiveTransactions),
     [visibleTransactions, effectiveTransactions]
   );
 
@@ -689,6 +692,50 @@ export function useTransactionReviewState({
     );
   }, []);
 
+  const applyReviewFilters = useCallback(
+    (filters: TransactionReviewFilters): void => {
+      setPeriod(filters.period);
+      setSelectedTypes([...filters.selectedTypes]);
+      setSearchQuery(filters.searchQuery);
+    },
+    []
+  );
+
+  const getFilteredTransactionCount = useCallback(
+    (filters: TransactionReviewFilters): number => {
+      const nextFilteredTransactions = applyFilters(
+        effectiveTransactions,
+        filters.period,
+        filters.selectedTypes,
+        filters.searchQuery
+      );
+
+      if (reviewMode === "all") {
+        return nextFilteredTransactions.length;
+      }
+
+      const indexMap = new Map<ReviewableTransaction, number>();
+      effectiveTransactions.forEach((tx, index) => indexMap.set(tx, index));
+      const expectedIndices =
+        reviewMode === "needs_review"
+          ? needsReviewOriginalIndices
+          : autoSelectedOriginalIndices;
+
+      return nextFilteredTransactions.filter((tx) => {
+        const originalIndex = indexMap.get(tx);
+        return (
+          originalIndex !== undefined && expectedIndices.has(originalIndex)
+        );
+      }).length;
+    },
+    [
+      autoSelectedOriginalIndices,
+      effectiveTransactions,
+      needsReviewOriginalIndices,
+      reviewMode,
+    ]
+  );
+
   return {
     period,
     setPeriod,
@@ -696,10 +743,8 @@ export function useTransactionReviewState({
     handleTypeToggle,
     searchQuery,
     setSearchQuery,
-    periodModalVisible,
-    setPeriodModalVisible,
-    typeModalVisible,
-    setTypeModalVisible,
+    applyReviewFilters,
+    getFilteredTransactionCount,
     selectedIndices,
     selectedIndicesRef,
     allSelected,
@@ -720,6 +765,8 @@ export function useTransactionReviewState({
     userAccounts,
     pendingAccounts,
     accountMatches,
+    resolvedAccountMatchIndices,
+    isReviewMetadataReady: hasCompleteAccountMatches,
     reviewMetaByIndex,
     transactionOverrides,
     editModalIndex,

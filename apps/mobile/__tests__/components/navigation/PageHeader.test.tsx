@@ -56,11 +56,11 @@ describe("PageHeader review variant", () => {
     expect(screen.getByLabelText("Back")).toBeTruthy();
     expect(screen.getByTestId("review-page-header")).toHaveProp(
       "className",
-      expect.stringContaining("bg-slate-50")
+      expect.stringContaining("bg-background")
     );
     expect(screen.getByTestId("review-page-header")).toHaveProp(
       "className",
-      expect.stringContaining("dark:bg-slate-950")
+      expect.stringContaining("dark:bg-background-dark")
     );
 
     fireEvent.press(screen.getByTestId("header-back"));

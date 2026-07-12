@@ -59,7 +59,7 @@ function ReviewPageHeader({
   return (
     <View
       testID="review-page-header"
-      className="bg-slate-50 px-5 pb-3 pt-3 dark:bg-slate-950"
+      className="bg-background px-5 py-2 dark:bg-background-dark"
     >
       <View className="flex-row items-center">
         {showBackButton && (
@@ -67,26 +67,32 @@ function ReviewPageHeader({
             testID="header-back"
             onPress={onBack ?? router.back}
             activeOpacity={0.75}
-            className="me-3 h-10 w-10 items-center justify-center rounded-full"
+            className="me-2 h-9 w-9 items-center justify-center rounded-full"
             accessibilityRole="button"
             accessibilityLabel={backAccessibilityLabel}
           >
             <Ionicons
               name="arrow-back"
-              size={28}
+              size={24}
               color={isDark ? palette.slate[25] : palette.slate[900]}
             />
           </TouchableOpacity>
         )}
         <View className="flex-1">
           <Text
-            className="text-2xl font-bold text-slate-950 dark:text-white"
+            className="text-xl font-bold text-text-primary dark:text-text-primary-dark"
             accessibilityRole="header"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
           >
             {title}
           </Text>
           {subtitle && (
-            <Text className="text-sm font-medium text-slate-600 dark:text-slate-300">
+            <Text
+              numberOfLines={1}
+              className="text-xs font-medium text-text-secondary dark:text-text-secondary-dark"
+            >
               {subtitle}
             </Text>
           )}

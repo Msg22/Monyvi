@@ -165,6 +165,7 @@ const PLURAL_BASES: Record<string, readonly string[]> = {
     "review_items_count",
     "review_sms_source_summary",
     "review_needs_check_count",
+    "review_filters_show_count",
   ],
   accounts: ["account_count"],
   budgets: ["budget_count", "days_remaining"],

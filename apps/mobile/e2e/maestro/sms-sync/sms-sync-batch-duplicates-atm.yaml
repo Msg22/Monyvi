@@ -48,7 +48,7 @@ appId: com.monyvi.app
     id: review-summary-needs-review
 
 - tapOn:
-    id: review-needs-action
+    id: review-mode-needs_review
 
 - assertVisible: "Select shown"
 - tapOn: "Select shown"

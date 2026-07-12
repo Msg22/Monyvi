@@ -1,34 +1,24 @@
 import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
-import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
-import type { TransactionReviewMode } from "@/hooks/useTransactionReviewState";
 
 export interface ReviewActionBarProps {
   readonly selectedCount: number;
-  readonly needsReviewCount: number;
-  readonly reviewMode: TransactionReviewMode;
   readonly isSaving: boolean;
   readonly onSave: () => Promise<void>;
   readonly onDiscard: () => void;
-  readonly onReviewNeeds: () => void;
-  readonly onShowAll: () => void;
   readonly isSmsWorkspace?: boolean;
 }
 
 export function ReviewActionBar({
   selectedCount,
-  needsReviewCount,
-  reviewMode,
   isSaving,
   onSave,
   onDiscard,
-  onReviewNeeds,
-  onShowAll,
 }: ReviewActionBarProps): React.JSX.Element {
   const { showToast } = useToast();
   const { t } = useTranslation("transactions");
@@ -48,72 +38,45 @@ export function ReviewActionBar({
     <Animated.View
       testID="review-action-bar"
       entering={FadeInDown.delay(200)}
-      className="border-t border-slate-200 bg-white/95 px-5 pb-3 pt-3 dark:border-slate-800 dark:bg-slate-950/95"
+      className="border-t border-border bg-background px-5 py-2 dark:border-border-dark dark:bg-background-dark"
     >
-      <View className="mb-3 flex-row items-center">
-        <Ionicons
-          name="information-circle-outline"
-          size={18}
-          color={palette.nileGreen[400]}
-        />
-        <Text className="ms-2 flex-1 text-xs text-slate-600 dark:text-slate-400">
-          {t("review_ai_accuracy_notice")}
-        </Text>
-      </View>
-
-      <TouchableOpacity
-        onPress={handleSaveWrapper}
-        disabled={selectedCount === 0 || isSaving}
-        activeOpacity={0.85}
-        className="overflow-hidden rounded-2xl"
-      >
-        <LinearGradient
-          colors={
-            selectedCount === 0 || isSaving
-              ? [palette.slate[700], palette.slate[700]]
-              : [palette.nileGreen[400], palette.nileGreen[600]]
-          }
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          className="min-h-14 flex-row items-center justify-between px-5"
-        >
-          <Ionicons name="lock-closed-outline" size={20} color="white" />
-          {isSaving ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text className="text-lg font-bold text-white">
-              {t("save_selected_button_count", { count: selectedCount })}
-            </Text>
-          )}
-          <Ionicons name="chevron-forward" size={24} color="white" />
-        </LinearGradient>
-      </TouchableOpacity>
-
-      <View className="mt-3 flex-row items-center justify-center gap-8">
-        {needsReviewCount > 0 && (
-          <TouchableOpacity
-            testID="review-needs-action"
-            onPress={reviewMode === "needs_review" ? onShowAll : onReviewNeeds}
-            disabled={isSaving}
-            activeOpacity={0.8}
-            className="min-h-8 items-center justify-center"
-          >
-            <Text className="text-base font-bold text-nileGreen-600 dark:text-nileGreen-400">
-              {reviewMode === "needs_review"
-                ? t("show_all")
-                : t("review_items_count", { count: needsReviewCount })}
-            </Text>
-          </TouchableOpacity>
-        )}
+      <View testID="review-actions-row" className="h-12 flex-row gap-3">
         <TouchableOpacity
           onPress={onDiscard}
           disabled={isSaving}
           activeOpacity={0.8}
-          className="min-h-8 flex-row items-center justify-center"
+          className="min-w-28 flex-row items-center justify-center rounded-lg border border-border px-3 dark:border-border-dark"
         >
-          <Ionicons name="trash-outline" size={18} color={palette.red[400]} />
-          <Text className="ms-2 text-base font-semibold text-red-400">
+          <Ionicons name="trash-outline" size={18} color={palette.red[500]} />
+          <Text
+            numberOfLines={1}
+            className="ms-2 text-sm font-semibold text-red-600 dark:text-red-400"
+          >
             {t("discard_all")}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={handleSaveWrapper}
+          disabled={selectedCount === 0 || isSaving}
+          activeOpacity={0.85}
+          className={`flex-1 flex-row items-center justify-center rounded-lg px-4 ${
+            selectedCount === 0 || isSaving
+              ? "bg-slate-700"
+              : "bg-nileGreen-600"
+          }`}
+        >
+          <Ionicons
+            name="lock-closed-outline"
+            size={18}
+            color={palette.slate[25]}
+          />
+          <Text
+            className="ms-2 text-base font-bold text-white"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+          >
+            {t("save_selected_button_count", { count: selectedCount })}
           </Text>
         </TouchableOpacity>
       </View>

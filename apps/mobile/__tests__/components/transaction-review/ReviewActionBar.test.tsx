@@ -20,36 +20,11 @@ describe("ReviewActionBar", () => {
   function createProps(): React.ComponentProps<typeof ReviewActionBar> {
     return {
       selectedCount: 1,
-      needsReviewCount: 0,
-      reviewMode: "all",
       isSaving: false,
       onSave: jest.fn().mockResolvedValue(undefined),
       onDiscard: jest.fn(),
-      onReviewNeeds: jest.fn(),
-      onShowAll: jest.fn(),
     };
   }
-
-  it("exposes an unambiguous review-needed action for E2E", () => {
-    const onReviewNeeds = jest.fn();
-
-    render(
-      <ReviewActionBar
-        selectedCount={2}
-        needsReviewCount={1}
-        reviewMode="all"
-        isSaving={false}
-        onSave={jest.fn().mockResolvedValue(undefined)}
-        onDiscard={jest.fn()}
-        onReviewNeeds={onReviewNeeds}
-        onShowAll={jest.fn()}
-      />
-    );
-
-    fireEvent.press(screen.getByTestId("review-needs-action"));
-
-    expect(onReviewNeeds).toHaveBeenCalledTimes(1);
-  });
 
   it("keeps discard wired without applying a second safe-area inset", () => {
     const onDiscard = jest.fn();
@@ -57,13 +32,9 @@ describe("ReviewActionBar", () => {
     render(
       <ReviewActionBar
         selectedCount={1}
-        needsReviewCount={0}
-        reviewMode="all"
         isSaving={false}
         onSave={jest.fn().mockResolvedValue(undefined)}
         onDiscard={onDiscard}
-        onReviewNeeds={jest.fn()}
-        onShowAll={jest.fn()}
       />
     );
 
@@ -77,12 +48,13 @@ describe("ReviewActionBar", () => {
 
     expect(screen.getByTestId("review-action-bar")).toHaveProp(
       "className",
-      expect.stringContaining("bg-white/95")
+      expect.stringContaining("bg-background")
     );
     expect(screen.getByTestId("review-action-bar")).toHaveProp(
       "className",
-      expect.stringContaining("dark:bg-slate-950/95")
+      expect.stringContaining("dark:bg-background-dark")
     );
+    expect(screen.queryByText("review_ai_accuracy_notice")).toBeNull();
   });
 
   it("keeps the SMS action surface compatible with light and dark themes", () => {
@@ -97,15 +69,15 @@ describe("ReviewActionBar", () => {
 
     expect(screen.getByTestId("review-action-bar")).toHaveProp(
       "className",
-      expect.stringContaining("bg-white/95")
+      expect.stringContaining("bg-background")
     );
     expect(screen.getByTestId("review-action-bar")).toHaveProp(
       "className",
-      expect.stringContaining("dark:bg-slate-950/95")
+      expect.stringContaining("dark:bg-background-dark")
     );
     expect(screen.getByTestId("review-action-bar")).toHaveProp(
       "className",
-      expect.stringContaining("px-5 pb-3 pt-3")
+      expect.stringContaining("px-5 py-2")
     );
     fireEvent.press(screen.getByText("discard_all"));
     expect(onDiscard).toHaveBeenCalledTimes(1);
