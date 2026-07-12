@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 interface RunSmsSyncJourneysModule {
   buildSmsSyncProbeCleanupSql(): string;
   buildBatchSmsSavedVerificationQueries(): readonly SmsVerificationQuery[];
@@ -280,5 +283,28 @@ describe("run-sms-sync-journeys helpers", () => {
         }
       )
     ).toBe(false);
+  });
+
+  it("grants Android SMS permission before waiting for the batch scan", () => {
+    const flow = readFileSync(
+      resolve(
+        process.cwd(),
+        "e2e/maestro/sms-sync/sms-sync-batch-duplicates-atm.yaml"
+      ),
+      "utf8"
+    );
+    const customPermissionActionIndex = flow.indexOf(
+      'id: "permission-modal-primary"'
+    );
+    const nativePermissionActionIndex = flow.indexOf(
+      "../helpers/allow-native-android-permission.yaml"
+    );
+    const scanCompleteIndex = flow.indexOf('visible: "Scan Complete!"');
+
+    expect(customPermissionActionIndex).toBeGreaterThan(-1);
+    expect(nativePermissionActionIndex).toBeGreaterThan(
+      customPermissionActionIndex
+    );
+    expect(scanCompleteIndex).toBeGreaterThan(nativePermissionActionIndex);
   });
 });

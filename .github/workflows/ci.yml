@@ -143,13 +143,6 @@ jobs:
         run:
           ./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --no-daemon
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: monyvi-android-debug
-          path: apps/mobile/android/app/build/outputs/apk/debug/*.apk
-          retention-days: 7
-
   android-e2e:
     name: Android E2E Tests (${{ matrix.suite }})
     runs-on: ubuntu-latest
@@ -227,11 +220,16 @@ jobs:
           console.log(`MAESTRO_E2E_PASSWORD=${config.password}`);
           NODE
 
-      - name: Download Android debug APK
-        uses: actions/download-artifact@v4
+      - name: Restore Android debug APK
+        uses: actions/cache/restore@v4
         with:
-          name: monyvi-android-debug
-          path: monyvi-android-debug
+          path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          key:
+            monyvi-debug-apk-v1-${{ runner.os }}-${{
+            hashFiles('package-lock.json', 'apps/mobile/package.json',
+            'apps/mobile/app.json', 'apps/mobile/plugins/**',
+            'apps/mobile/assets/**', 'patches/**', 'apps/mobile/android/**') }}
+          fail-on-cache-miss: true
 
       - name: Install Maestro CLI
         run: |
@@ -303,7 +301,8 @@ jobs:
           fi
 
       - name: Upload E2E logs
-        if: always()
+        if: failure()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: android-e2e-logs-${{ matrix.suite }}
