@@ -161,6 +161,7 @@ jobs:
       matrix: ${{ fromJSON(needs.e2e-scope.outputs.matrix) }}
     env:
       CI: "true"
+      EXPO_UNSTABLE_HEADLESS: "1"
       SENTRYCLI_SKIP_DOWNLOAD: "1"
       EXPO_PUBLIC_SENTRY_DSN: ""
       E2E_SUPABASE_MODE: local

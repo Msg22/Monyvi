@@ -24,6 +24,12 @@ interface RunLiveSmsJourneysModule {
     flow: string,
     env?: Readonly<Record<string, string | undefined>>
   ): boolean;
+  shouldRetryLiveSmsFlowFailure(
+    output: string,
+    isAppProcessAlive: boolean,
+    attempt: number,
+    maxAttempts: number
+  ): boolean;
   prepareLiveSmsJourneyStart(dependencies: {
     readonly stopApp: () => void;
     readonly startApp: () => void;
@@ -180,6 +186,41 @@ describe("run-live-sms-journeys helpers", () => {
       liveSmsJourneys.shouldResetLiveSmsSideEffectsBeforeRetry(
         "live-sms-journey-09-confirm-verification.yaml",
         { E2E_SUPABASE_MODE: "local" }
+      )
+    ).toBe(false);
+  });
+
+  it("retries only transport failures or confirmed app-process crashes", () => {
+    expect(
+      liveSmsJourneys.shouldRetryLiveSmsFlowFailure(
+        "Assertion is false: Settings is visible",
+        false,
+        1,
+        4
+      )
+    ).toBe(true);
+    expect(
+      liveSmsJourneys.shouldRetryLiveSmsFlowFailure(
+        "io.grpc.StatusRuntimeException: UNAVAILABLE",
+        true,
+        2,
+        4
+      )
+    ).toBe(true);
+    expect(
+      liveSmsJourneys.shouldRetryLiveSmsFlowFailure(
+        "Assertion is false: Settings is visible",
+        true,
+        1,
+        4
+      )
+    ).toBe(false);
+    expect(
+      liveSmsJourneys.shouldRetryLiveSmsFlowFailure(
+        "Assertion is false: Settings is visible",
+        false,
+        2,
+        4
       )
     ).toBe(false);
   });

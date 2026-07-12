@@ -224,13 +224,13 @@ function runMaestroFlowOnce(maestroBin, flow) {
   };
 }
 
-async function runFlow(flow, prepareRetry, retryOnTransportFailure = false) {
+async function runFlow(flow, prepareRetry, retryOnRecoverableFailure = false) {
   const maestroBin = resolveMaestroBin();
   if (!maestroBin) {
     throw new Error("Maestro was not found. Install it or set MAESTRO_BIN.");
   }
 
-  const maxAttempts = retryOnTransportFailure
+  const maxAttempts = retryOnRecoverableFailure
     ? getMaestroTransportRetryAttempts()
     : 1;
 
@@ -240,19 +240,29 @@ async function runFlow(flow, prepareRetry, retryOnTransportFailure = false) {
       return;
     }
 
+    const appProcessAlive = isAppProcessAlive();
+    const isTransportFailure = isRetryableMaestroTransportFailure(
+      result.output
+    );
     if (
-      retryOnTransportFailure &&
-      attempt < maxAttempts &&
+      retryOnRecoverableFailure &&
       !result.didTimeout &&
-      isRetryableMaestroTransportFailure(result.output)
+      shouldRetryLiveSmsFlowFailure(
+        result.output,
+        appProcessAlive,
+        attempt,
+        maxAttempts
+      )
     ) {
-      logInfo("liveSmsJourney.maestroTransportRetry", {
+      logInfo("liveSmsJourney.recoverableRetry", {
         flow,
         attempt,
         maxAttempts,
-        reason: "transport-unavailable",
+        reason: isTransportFailure ? "transport-unavailable" : "app-crashed",
       });
-      reconnectMaestroTransport();
+      if (isTransportFailure) {
+        reconnectMaestroTransport();
+      }
       await prepareRetry?.();
       continue;
     }
@@ -1027,6 +1037,28 @@ function shouldRetryLiveSmsVerificationFlow(flow) {
   return flow.endsWith("-verification.yaml");
 }
 
+function isAppProcessAlive() {
+  return Boolean(
+    adb(["shell", "pidof", appId], {
+      allowFailure: true,
+      capture: true,
+    }).trim()
+  );
+}
+
+function shouldRetryLiveSmsFlowFailure(
+  output,
+  appProcessAlive,
+  attempt,
+  maxAttempts
+) {
+  if (isRetryableMaestroTransportFailure(output)) {
+    return attempt < maxAttempts;
+  }
+
+  return !appProcessAlive && attempt === 1;
+}
+
 function logInfo(event, fields) {
   process.stdout.write(
     `${JSON.stringify({ level: "info", event, ...fields })}\n`
@@ -1105,6 +1137,7 @@ module.exports = {
   isRetryableMaestroTransportFailure,
   prepareLiveSmsJourneyStart,
   shouldPrepareLiveSmsFlowBeforeRetry,
+  shouldRetryLiveSmsFlowFailure,
   shouldRetryLiveSmsVerificationFlow,
   shouldResetLiveSmsSideEffectsBeforeRetry,
   shouldSkipRunAsProbeCleanup,
