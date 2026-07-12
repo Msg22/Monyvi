@@ -9,7 +9,12 @@ if [ "$device_state" != "device" ]; then
 fi
 
 adb logcat -c
-adb install -r monyvi-android-debug/app-debug.apk
+apk_path="${E2E_ANDROID_APK_PATH:-apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk}"
+if [ ! -f "$apk_path" ]; then
+  echo "Android debug APK not found at ${apk_path}." >&2
+  exit 1
+fi
+adb install -r "$apk_path"
 adb reverse tcp:8081 tcp:8081
 
 metro_url="${E2E_HOST_METRO_URL:-http://127.0.0.1:8081}"

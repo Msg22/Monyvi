@@ -8,6 +8,13 @@ function readCiWorkflow(): string {
   );
 }
 
+function readAndroidE2eRunner(): string {
+  return fs.readFileSync(
+    path.resolve(__dirname, "../..", "scripts/run-android-e2e-ci.sh"),
+    "utf8"
+  );
+}
+
 function getAndroidE2eEmulatorRunnerBlock(workflow: string): string {
   const marker = "uses: reactivecircus/android-emulator-runner@v2";
   const markerIndex = workflow.indexOf(marker);
@@ -83,5 +90,27 @@ describe("GitHub Actions Android E2E workflow", () => {
     expect(workflow).toContain(
       "if: steps.apk-cache.outputs.cache-hit != 'true'"
     );
+  });
+
+  it("restores the APK cache directly in E2E jobs without artifact storage", () => {
+    const workflow = readCiWorkflow();
+    const runner = readAndroidE2eRunner();
+
+    expect(workflow).toContain("uses: actions/cache/restore@v4");
+    expect(workflow).not.toContain("name: Download Android debug APK");
+    expect(workflow).not.toContain("name: Upload APK");
+    expect(runner).toContain(
+      "apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk"
+    );
+  });
+
+  it("uploads E2E failure logs without making artifact quota a test failure", () => {
+    const workflow = readCiWorkflow();
+    const uploadLogsIndex = workflow.indexOf("- name: Upload E2E logs");
+    const uploadLogsBlock = workflow.slice(uploadLogsIndex);
+
+    expect(uploadLogsIndex).toBeGreaterThan(-1);
+    expect(uploadLogsBlock).toContain("if: failure()");
+    expect(uploadLogsBlock).toContain("continue-on-error: true");
   });
 });
