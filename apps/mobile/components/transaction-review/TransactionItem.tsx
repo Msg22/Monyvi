@@ -361,18 +361,25 @@ function TransactionItemInner({
             )}
 
             {hasExpandableContent && (
-              <TouchableOpacity
-                onPress={handleToggleExpand}
-                hitSlop={14}
-                className="h-6 w-6 items-center justify-center"
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={isExpanded ? "chevron-up" : "chevron-down"}
-                  size={18}
-                  color={palette.slate[500]}
+              <>
+                <View
+                  testID="transaction-review-chevron-spacer"
+                  className="flex-1"
                 />
-              </TouchableOpacity>
+                <TouchableOpacity
+                  testID="transaction-review-expand-toggle"
+                  onPress={handleToggleExpand}
+                  hitSlop={14}
+                  className="h-6 w-6 shrink-0 items-center justify-center"
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={isExpanded ? "chevron-up" : "chevron-down"}
+                    size={18}
+                    color={palette.slate[500]}
+                  />
+                </TouchableOpacity>
+              </>
             )}
           </View>
         </View>

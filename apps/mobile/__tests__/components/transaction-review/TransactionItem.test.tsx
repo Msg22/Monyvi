@@ -67,6 +67,7 @@ function renderItem(isSmsWorkspace = false): void {
       onPress={jest.fn()}
       isSmsWorkspace={isSmsWorkspace}
       institutionLogo={{ format: "image", source: 1 }}
+      expandedContent={<React.Fragment />}
     />
   );
 }
@@ -147,6 +148,16 @@ describe("TransactionItem", () => {
       "adjustsFontSizeToFit",
       true
     );
+  });
+
+  it("anchors the expand chevron to the trailing edge of the metadata row", () => {
+    renderItem();
+
+    expect(screen.getByTestId("transaction-review-chevron-spacer")).toHaveProp(
+      "className",
+      expect.stringContaining("flex-1")
+    );
+    expect(screen.getByTestId("transaction-review-expand-toggle")).toBeTruthy();
   });
 
   it("keeps the shared row theme-aware outside the SMS workspace", () => {
