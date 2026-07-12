@@ -431,6 +431,8 @@ export function useTransactionReviewState({
         getTransactionReviewMeta(tx, effectiveAccountMatches.get(index), {
           hasCategoryOverride:
             transactionOverrides.get(index)?.categoryConfirmed === true,
+          hasCashDestinationOverride:
+            transactionOverrides.get(index)?.toAccountConfirmed === true,
         })
       );
     });

@@ -124,6 +124,25 @@ describe("sms-edit-modal-service", () => {
     });
   });
 
+  it("preserves explicit cash-destination confirmation in ATM edits", () => {
+    expect(
+      buildTransactionEdits({
+        accountId: "bank-1",
+        accountName: "Main bank",
+        categoryId: "cat-cash",
+        categoryConfirmed: false,
+        amount: 100,
+        type: "EXPENSE",
+        toAccountId: "cash-1",
+        toAccountName: "Cash",
+        toAccountConfirmed: true,
+      })
+    ).toMatchObject({
+      toAccountId: "cash-1",
+      toAccountConfirmed: true,
+    });
+  });
+
   it("does not confirm an untouched account field", () => {
     expect(
       buildTransactionEdits({

@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 export interface ReviewActionBarProps {
   readonly selectedCount: number;
   readonly isSaving: boolean;
+  readonly isReviewMetadataReady: boolean;
   readonly onSave: () => Promise<void>;
   readonly onDiscard: () => void;
   readonly isSmsWorkspace?: boolean;
@@ -17,11 +18,14 @@ export interface ReviewActionBarProps {
 export function ReviewActionBar({
   selectedCount,
   isSaving,
+  isReviewMetadataReady,
   onSave,
   onDiscard,
 }: ReviewActionBarProps): React.JSX.Element {
   const { showToast } = useToast();
   const { t } = useTranslation("transactions");
+  const isSaveDisabled =
+    selectedCount === 0 || isSaving || !isReviewMetadataReady;
 
   const handleSaveWrapper = (): void => {
     onSave().catch((err: unknown) => {
@@ -56,13 +60,13 @@ export function ReviewActionBar({
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
+          testID="review-save-button"
           onPress={handleSaveWrapper}
-          disabled={selectedCount === 0 || isSaving}
+          disabled={isSaveDisabled}
+          accessibilityState={{ disabled: isSaveDisabled }}
           activeOpacity={0.85}
           className={`flex-1 flex-row items-center justify-center rounded-lg px-4 ${
-            selectedCount === 0 || isSaving
-              ? "bg-slate-700"
-              : "bg-nileGreen-600"
+            isSaveDisabled ? "bg-slate-700" : "bg-nileGreen-600"
           }`}
         >
           <Ionicons

@@ -22,10 +22,7 @@ appId: com.monyvi.app
 - tapOn:
     id: "permission-modal-primary"
 
-- extendedWaitUntil:
-    visible: "Allow"
-    timeout: 10000
-- tapOn: "Allow"
+- runFlow: ../helpers/allow-native-android-permission.yaml
 
 - runFlow: ../helpers/open-settings.yaml
 - runFlow: scroll-to-live-sms-switch.yaml
@@ -50,10 +47,7 @@ appId: com.monyvi.app
 - tapOn:
     id: "permission-modal-primary"
 
-- extendedWaitUntil:
-    visible: "Allow"
-    timeout: 10000
-- tapOn: "Allow"
+- runFlow: ../helpers/allow-native-android-permission.yaml
 
 - extendedWaitUntil:
     visible:

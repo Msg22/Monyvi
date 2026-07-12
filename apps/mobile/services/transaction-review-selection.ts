@@ -19,6 +19,7 @@ export interface TransactionReviewAccountMatch {
 
 export interface TransactionReviewResolutionContext {
   readonly hasCategoryOverride?: boolean;
+  readonly hasCashDestinationOverride?: boolean;
 }
 
 export function resolveEditedAccountMatch<
@@ -57,6 +58,7 @@ export function getEditedTransactionReviewMeta<
     readonly accountId: string | null;
     readonly accountConfirmed?: boolean;
     readonly categoryConfirmed?: boolean;
+    readonly toAccountConfirmed?: boolean;
   }
 ): TransactionReviewMeta {
   return getTransactionReviewMeta(
@@ -73,6 +75,7 @@ export function getEditedTransactionReviewMeta<
     ),
     {
       hasCategoryOverride: edits.categoryConfirmed === true,
+      hasCashDestinationOverride: edits.toAccountConfirmed === true,
     }
   );
 }
@@ -107,7 +110,10 @@ export function getTransactionReviewMeta(
 ): TransactionReviewMeta {
   const reasons: TransactionReviewReason[] = [];
 
-  if (isAtmWithdrawal(transaction)) {
+  if (
+    isAtmWithdrawal(transaction) &&
+    resolutionContext.hasCashDestinationOverride !== true
+  ) {
     addReviewReason(reasons, "cash_transfer");
   }
 
@@ -154,6 +160,9 @@ function isResolvedParserReason(
   }
   if (parserReason === "category_needed") {
     return resolutionContext.hasCategoryOverride === true;
+  }
+  if (parserReason === "cash_transfer_review") {
+    return resolutionContext.hasCashDestinationOverride === true;
   }
   return false;
 }

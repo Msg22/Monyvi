@@ -40,6 +40,7 @@ interface TransactionEdits {
   readonly toAccountId?: string | null;
   /** Cash account name for ATM withdrawal destination (optional) */
   readonly toAccountName?: string | null;
+  readonly toAccountConfirmed?: boolean;
   /** User-edited note (e.g. itemized voice description) */
   readonly note?: string;
 }
@@ -65,6 +66,7 @@ interface BuildTransactionEditsInput {
   readonly toAccountId?: string | null;
   /** Cash account name for ATM withdrawal destination (optional) */
   readonly toAccountName?: string | null;
+  readonly toAccountConfirmed?: boolean;
   /** User-edited note (e.g. itemized voice description) */
   readonly note?: string;
 }
@@ -165,6 +167,7 @@ function buildTransactionEdits(
     amount: input.amount,
     toAccountId: input.toAccountId,
     toAccountName: input.toAccountName,
+    toAccountConfirmed: input.toAccountConfirmed === true ? true : undefined,
     note: input.note,
   };
 }

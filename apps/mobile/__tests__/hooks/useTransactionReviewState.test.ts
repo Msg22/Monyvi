@@ -398,6 +398,46 @@ describe("useTransactionReviewState", () => {
     expect(Array.from(result.current.selectedIndices)).toEqual([0]);
   });
 
+  it("selects an ATM row after the user explicitly confirms its cash destination", async () => {
+    const transactions = [
+      {
+        ...createTransaction({
+          confidence: 0.99,
+          reviewStatus: "needs_review",
+          reviewReasons: ["cash_transfer_review"],
+        }),
+        isAtmWithdrawal: true,
+      },
+    ];
+
+    const { result } = renderHook(() =>
+      useTransactionReviewState({ transactions, onSave: jest.fn() })
+    );
+
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(1));
+    expect(result.current.selectedIndices.has(0)).toBe(false);
+
+    act(() => result.current.handleOpenEditModal(0));
+    act(() => {
+      result.current.handleEditModalSave({
+        amount: 100,
+        type: "EXPENSE",
+        categoryId: "cat-food",
+        accountId: "acc-1",
+        accountName: "Bank",
+        toAccountId: "cash-1",
+        toAccountName: "Cash",
+        toAccountConfirmed: true,
+      });
+    });
+
+    expect(result.current.reviewMetaByIndex.get(0)).toEqual({
+      isAutoSelectable: true,
+      reasons: [],
+    });
+    expect(result.current.selectedIndices.has(0)).toBe(true);
+  });
+
   it("preserves an explicit deselection when a safe row is edited", async () => {
     const transactions = [createTransaction({ confidence: 0.99 })];
     const { result } = renderHook(() =>

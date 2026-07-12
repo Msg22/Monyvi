@@ -78,6 +78,33 @@ describe("transaction-review-selection", () => {
     });
   });
 
+  it("resolves ATM review only after the cash destination is explicitly confirmed", () => {
+    const atmWithdrawal: ReviewableTransaction & {
+      readonly isAtmWithdrawal: true;
+    } = {
+      ...createTransaction({
+        confidence: 0.99,
+        reviewStatus: "needs_review",
+        reviewReasons: ["cash_transfer_review"],
+      }),
+      isAtmWithdrawal: true,
+    };
+    const accountMatch = {
+      accountId: "bank-1",
+      matchReason: "sms_sender",
+    };
+
+    expect(
+      getEditedTransactionReviewMeta(atmWithdrawal, accountMatch, {
+        amount: 100,
+        categoryId: "cat-food",
+        type: "EXPENSE",
+        accountId: "bank-1",
+        toAccountConfirmed: true,
+      })
+    ).toEqual({ isAutoSelectable: true, reasons: [] });
+  });
+
   it("does not auto-select rows that only fell back to a default account", () => {
     const transaction = createTransaction({ confidence: 0.99 });
     const defaultMatch = {

@@ -520,6 +520,7 @@ export function useTransactionEditState({
           ? newToAccountName.trim() || "Cash"
           : selectedToAccountName
         : undefined,
+      toAccountConfirmed: formConfig.showToAccount ? true : undefined,
     });
 
     onSave(edits);

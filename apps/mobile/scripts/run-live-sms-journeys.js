@@ -1056,7 +1056,7 @@ function shouldRetryLiveSmsFlowFailure(
     return attempt < maxAttempts;
   }
 
-  return !appProcessAlive && attempt === 1;
+  return !appProcessAlive && attempt === 1 && attempt < maxAttempts;
 }
 
 function logInfo(event, fields) {

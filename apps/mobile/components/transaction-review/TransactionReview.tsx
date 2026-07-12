@@ -461,6 +461,7 @@ export function TransactionReview({
       <ReviewActionBar
         selectedCount={state.selectedCount}
         isSaving={isSaving}
+        isReviewMetadataReady={state.isReviewMetadataReady}
         onSave={state.handleSave}
         onDiscard={onDiscard}
         isSmsWorkspace={isSmsWorkspace}

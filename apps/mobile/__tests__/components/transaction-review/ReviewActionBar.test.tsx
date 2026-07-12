@@ -21,6 +21,7 @@ describe("ReviewActionBar", () => {
     return {
       selectedCount: 1,
       isSaving: false,
+      isReviewMetadataReady: true,
       onSave: jest.fn().mockResolvedValue(undefined),
       onDiscard: jest.fn(),
     };
@@ -33,6 +34,7 @@ describe("ReviewActionBar", () => {
       <ReviewActionBar
         selectedCount={1}
         isSaving={false}
+        isReviewMetadataReady
         onSave={jest.fn().mockResolvedValue(undefined)}
         onDiscard={onDiscard}
       />
@@ -81,5 +83,24 @@ describe("ReviewActionBar", () => {
     );
     fireEvent.press(screen.getByText("discard_all"));
     expect(onDiscard).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Save disabled until every row has review metadata", () => {
+    const onSave = jest.fn().mockResolvedValue(undefined);
+    render(
+      <ReviewActionBar
+        {...createProps()}
+        isReviewMetadataReady={false}
+        onSave={onSave}
+      />
+    );
+
+    fireEvent.press(screen.getByTestId("review-save-button"));
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByTestId("review-save-button")).toHaveProp(
+      "accessibilityState",
+      { disabled: true }
+    );
   });
 });

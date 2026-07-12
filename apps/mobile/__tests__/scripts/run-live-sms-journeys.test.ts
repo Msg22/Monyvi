@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 interface RunLiveSmsJourneysModule {
   buildLiveSmsActionProbeCleanupSql(): string;
   shouldSkipRunAsProbeCleanup(
@@ -223,6 +226,44 @@ describe("run-live-sms-journeys helpers", () => {
         4
       )
     ).toBe(false);
+    expect(
+      liveSmsJourneys.shouldRetryLiveSmsFlowFailure(
+        "Assertion is false: Settings is visible",
+        false,
+        1,
+        1
+      )
+    ).toBe(false);
+  });
+
+  it("targets the visible Android permission button instead of ambiguous Allow text", () => {
+    const helper = readFileSync(
+      resolve(
+        process.cwd(),
+        "e2e/maestro/helpers/allow-native-android-permission.yaml"
+      ),
+      "utf8"
+    );
+
+    expect(helper).toContain(
+      'id: "com.android.permissioncontroller:id/permission_allow_button"'
+    );
+
+    for (const flow of [
+      "live-sms-journey-01-first-time-enable.yaml",
+      "live-sms-journey-02-sms-sync-then-live-detection.yaml",
+      "live-sms-journey-03-sms-deny-then-recover.yaml",
+      "live-sms-journey-04-notification-deny-then-recover.yaml",
+    ]) {
+      const contents = readFileSync(
+        resolve(process.cwd(), "e2e/maestro/live-sms-detection", flow),
+        "utf8"
+      );
+      expect(contents).not.toContain('- tapOn: "Allow"');
+      expect(contents).toContain(
+        "../helpers/allow-native-android-permission.yaml"
+      );
+    }
   });
 
   it("restarts a prepared journey without waiting on the generic app preflight", () => {
