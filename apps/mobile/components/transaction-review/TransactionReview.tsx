@@ -105,9 +105,14 @@ export function TransactionReview({
         return;
       }
 
+      if (mode === "auto_selected") {
+        state.handleShowAutoSelected();
+        return;
+      }
+
       state.setReviewMode(mode);
     },
-    [state.handleReviewNeeds, state.setReviewMode]
+    [state.handleReviewNeeds, state.handleShowAutoSelected, state.setReviewMode]
   );
 
   const renderItem = useCallback(

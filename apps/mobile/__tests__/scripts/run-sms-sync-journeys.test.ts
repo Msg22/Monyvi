@@ -104,18 +104,22 @@ describe("run-sms-sync-journeys helpers", () => {
     ).toBe(true);
   });
 
-  it("relaunches only between SMS sync journeys after a saved baseline exists", () => {
+  it("relaunches before the first journey when native permission state changed", () => {
     expect(
       smsSyncJourneys.shouldRelaunchBeforeSmsSyncJourney(false, {
+        E2E_SMS_SYNC_RELAUNCH_BEFORE_FIRST_JOURNEY: "1",
         E2E_SMS_SYNC_RELAUNCH_BETWEEN_JOURNEYS: "1",
       })
-    ).toBe(false);
+    ).toBe(true);
     expect(
       smsSyncJourneys.shouldRelaunchBeforeSmsSyncJourney(true, {
         E2E_SMS_SYNC_RELAUNCH_BETWEEN_JOURNEYS: "1",
       })
     ).toBe(true);
     expect(smsSyncJourneys.shouldRelaunchBeforeSmsSyncJourney(true, {})).toBe(
+      false
+    );
+    expect(smsSyncJourneys.shouldRelaunchBeforeSmsSyncJourney(false, {})).toBe(
       false
     );
   });

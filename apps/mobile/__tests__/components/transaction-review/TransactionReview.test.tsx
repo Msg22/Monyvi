@@ -153,6 +153,7 @@ function createReviewState(
     handleEditModalSave: jest.fn(),
     handleOpenEditModal: jest.fn(),
     handleReviewNeeds: jest.fn(),
+    handleShowAutoSelected: jest.fn(),
     handleSave: jest.fn(),
     handleShowAll: jest.fn(),
     handleToggleAll: jest.fn(),
@@ -349,5 +350,22 @@ describe("TransactionReview", () => {
 
     expect(handleReviewNeeds).toHaveBeenCalledTimes(1);
     expect(setReviewMode).not.toHaveBeenCalledWith("needs_review");
+  });
+
+  it("uses the filter-clearing auto-selected handler from the segmented tab", () => {
+    const handleShowAutoSelected = jest.fn();
+    const setReviewMode = jest.fn();
+
+    renderReview({
+      autoSelectedCount: 1,
+      handleShowAutoSelected,
+      searchQuery: "hidden",
+      setReviewMode,
+    });
+
+    fireEvent.press(screen.getByText("Auto-selected"));
+
+    expect(handleShowAutoSelected).toHaveBeenCalledTimes(1);
+    expect(setReviewMode).not.toHaveBeenCalledWith("auto_selected");
   });
 });

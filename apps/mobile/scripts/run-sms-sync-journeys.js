@@ -473,7 +473,11 @@ function shouldRelaunchBeforeSmsSyncJourney(
   hasSavedBaseline,
   env = process.env
 ) {
-  return hasSavedBaseline && shouldRelaunchBetweenSmsSyncJourneys(env);
+  if (!hasSavedBaseline) {
+    return env.E2E_SMS_SYNC_RELAUNCH_BEFORE_FIRST_JOURNEY === "1";
+  }
+
+  return shouldRelaunchBetweenSmsSyncJourneys(env);
 }
 
 async function maybeRelaunchBeforeSmsSyncJourney() {

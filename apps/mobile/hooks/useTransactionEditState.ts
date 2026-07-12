@@ -176,6 +176,8 @@ export function useTransactionEditState({
     transaction.categoryId
   );
   const [isCategoryConfirmed, setIsCategoryConfirmed] = useState(false);
+  const [shouldClearCategoryConfirmation, setShouldClearCategoryConfirmation] =
+    useState(false);
 
   // Currency picker state (for "Create New Account" mode)
   const [isCurrencyPickerOpen, setIsCurrencyPickerOpen] = useState(false);
@@ -295,6 +297,7 @@ export function useTransactionEditState({
     setTxType(transaction.type);
     setSelectedCategoryId(transaction.categoryId);
     setIsCategoryConfirmed(false);
+    setShouldClearCategoryConfirmation(false);
     setIsAccountConfirmed(false);
 
     const matchedOption = currentAccountId
@@ -359,12 +362,16 @@ export function useTransactionEditState({
     if (!selectedCategoryId || typeChanged) {
       setSelectedCategoryId(relevantCategories[0].id);
       setIsCategoryConfirmed(false);
+      if (typeChanged) {
+        setShouldClearCategoryConfirmation(true);
+      }
     }
   }, [relevantCategories, selectedCategoryId, txType]);
 
   const handleSelectCategory = useCallback((categoryId: string): void => {
     setSelectedCategoryId(categoryId);
     setIsCategoryConfirmed(true);
+    setShouldClearCategoryConfirmation(false);
   }, []);
 
   // Handlers
@@ -500,6 +507,7 @@ export function useTransactionEditState({
       type: txType,
       categoryId: selectedCategoryId,
       categoryConfirmed: isCategoryConfirmed,
+      shouldClearCategoryConfirmation,
       amount: parseFloat(parseAmountInput(amount)),
       note: note.trim() || undefined,
       toAccountId: formConfig.showToAccount
@@ -531,6 +539,7 @@ export function useTransactionEditState({
     pendingAccounts,
     selectedCategoryId,
     isCategoryConfirmed,
+    shouldClearCategoryConfirmation,
     onSave,
     onCreatePendingAccount,
     formConfig.showToAccount,

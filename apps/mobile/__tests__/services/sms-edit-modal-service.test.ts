@@ -136,4 +136,30 @@ describe("sms-edit-modal-service", () => {
       }).accountConfirmed
     ).toBeUndefined();
   });
+
+  it("clears a stale category confirmation only after an automatic category reset", () => {
+    expect(
+      buildTransactionEdits({
+        accountId: "account-1",
+        accountName: "Main",
+        categoryId: "cat-income",
+        categoryConfirmed: false,
+        shouldClearCategoryConfirmation: true,
+        amount: 100,
+        type: "INCOME",
+      }).categoryConfirmed
+    ).toBe(false);
+
+    expect(
+      buildTransactionEdits({
+        accountId: "account-1",
+        accountName: "Main",
+        categoryId: "cat-food",
+        categoryConfirmed: false,
+        shouldClearCategoryConfirmation: false,
+        amount: 100,
+        type: "EXPENSE",
+      }).categoryConfirmed
+    ).toBeUndefined();
+  });
 });

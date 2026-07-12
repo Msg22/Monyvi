@@ -336,6 +336,36 @@ describe("useTransactionReviewState", () => {
     expect(Array.from(result.current.selectedIndices)).toEqual([0]);
   });
 
+  it("preserves an explicit deselection when a safe row is edited", async () => {
+    const transactions = [createTransaction({ confidence: 0.99 })];
+    const { result } = renderHook(() =>
+      useTransactionReviewState({ transactions, onSave: jest.fn() })
+    );
+
+    await waitFor(() =>
+      expect(result.current.selectedIndices.has(0)).toBe(true)
+    );
+
+    act(() => result.current.handleToggleItem(0));
+    expect(result.current.selectedIndices.has(0)).toBe(false);
+
+    act(() => result.current.handleOpenEditModal(0));
+    act(() => {
+      result.current.handleEditModalSave({
+        amount: 125,
+        type: "EXPENSE",
+        categoryId: "cat-food",
+        accountId: "acc-1",
+        accountName: "Bank",
+      });
+    });
+
+    expect(result.current.reviewMetaByIndex.get(0)?.isAutoSelectable).toBe(
+      true
+    );
+    expect(result.current.selectedIndices.has(0)).toBe(false);
+  });
+
   it("keeps parser category review after an account-only edit", async () => {
     const transactions = [
       createTransaction({

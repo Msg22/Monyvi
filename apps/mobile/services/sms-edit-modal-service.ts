@@ -59,6 +59,7 @@ interface BuildTransactionEditsInput {
   readonly type: TransactionType;
   readonly categoryId: string;
   readonly categoryConfirmed: boolean;
+  readonly shouldClearCategoryConfirmation?: boolean;
   readonly amount: number;
   /** Cash account ID for ATM withdrawal destination (optional) */
   readonly toAccountId?: string | null;
@@ -155,7 +156,12 @@ function buildTransactionEdits(
     counterparty: input.counterparty,
     type: input.type,
     categoryId: input.categoryId,
-    categoryConfirmed: input.categoryConfirmed === true ? true : undefined,
+    categoryConfirmed:
+      input.categoryConfirmed === true
+        ? true
+        : input.shouldClearCategoryConfirmation === true
+          ? false
+          : undefined,
     amount: input.amount,
     toAccountId: input.toAccountId,
     toAccountName: input.toAccountName,

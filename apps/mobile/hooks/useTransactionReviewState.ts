@@ -138,6 +138,7 @@ export interface UseTransactionReviewStateResult {
   readonly reviewMode: TransactionReviewMode;
   readonly setReviewMode: (mode: TransactionReviewMode) => void;
   readonly handleReviewNeeds: () => void;
+  readonly handleShowAutoSelected: () => void;
   readonly handleShowAll: () => void;
   readonly handleToggleAll: () => void;
   readonly handleToggleItem: (index: number) => void;
@@ -247,6 +248,7 @@ export function useTransactionReviewState({
   selectedIndicesRef.current = selectedIndices;
   const seededSelectionIdentityRef = useRef<string | null>(null);
   const userTouchedSelectionRef = useRef(false);
+  const manuallyDeselectedIndicesRef = useRef<Set<number>>(new Set());
 
   // ── Unified transaction overrides ─────────────────────────────────
   const [transactionOverrides, setTransactionOverrides] = useState<
@@ -296,6 +298,7 @@ export function useTransactionReviewState({
   useEffect(() => {
     seededSelectionIdentityRef.current = null;
     userTouchedSelectionRef.current = false;
+    manuallyDeselectedIndicesRef.current = new Set();
     setSelectedIndices(new Set());
     setTransactionOverrides(new Map());
     setAccountMatchState({
@@ -525,9 +528,15 @@ export function useTransactionReviewState({
     setSelectedIndices((prev) => {
       const next = new Set(prev);
       if (allSelected) {
-        filteredOriginalIndices.forEach((index) => next.delete(index));
+        filteredOriginalIndices.forEach((index) => {
+          next.delete(index);
+          manuallyDeselectedIndicesRef.current.add(index);
+        });
       } else {
-        filteredOriginalIndices.forEach((index) => next.add(index));
+        filteredOriginalIndices.forEach((index) => {
+          next.add(index);
+          manuallyDeselectedIndicesRef.current.delete(index);
+        });
       }
       return next;
     });
@@ -539,8 +548,10 @@ export function useTransactionReviewState({
       const next = new Set(prev);
       if (next.has(index)) {
         next.delete(index);
+        manuallyDeselectedIndicesRef.current.add(index);
       } else {
         next.add(index);
+        manuallyDeselectedIndicesRef.current.delete(index);
       }
       return next;
     });
@@ -580,7 +591,10 @@ export function useTransactionReviewState({
 
       setSelectedIndices((prev) => {
         const next = new Set(prev);
-        if (editedMeta?.isAutoSelectable) {
+        if (
+          editedMeta?.isAutoSelectable &&
+          !manuallyDeselectedIndicesRef.current.has(editModalIndex)
+        ) {
           next.add(editModalIndex);
         }
         return next;
@@ -600,6 +614,13 @@ export function useTransactionReviewState({
     setSelectedTypes(["All"]);
     setSearchQuery("");
     setReviewMode("needs_review");
+  }, []);
+
+  const handleShowAutoSelected = useCallback(() => {
+    setPeriod("all_time");
+    setSelectedTypes(["All"]);
+    setSearchQuery("");
+    setReviewMode("auto_selected");
   }, []);
 
   const handleShowAll = useCallback(() => {
@@ -688,6 +709,7 @@ export function useTransactionReviewState({
     reviewMode,
     setReviewMode,
     handleReviewNeeds,
+    handleShowAutoSelected,
     handleShowAll,
     handleToggleAll,
     handleToggleItem,
