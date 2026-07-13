@@ -10,6 +10,7 @@ import { ThisMonth } from "@/components/dashboard/ThisMonth";
 import { TopNav } from "@/components/dashboard/TopNav";
 import { TotalNetWorthCard } from "@/components/dashboard/TotalNetWorthCard";
 import { UpcomingPayments } from "@/components/dashboard/UpcomingPayments";
+import { PayNowModal } from "@/components/dashboard/upcoming-payments";
 import { AppDrawer } from "@/components/navigation/AppDrawer";
 import { SmsPermissionPrompt } from "@/components/sms-sync/SmsPermissionPrompt";
 import { SectionErrorBoundary } from "@/components/ui/SectionErrorBoundary";
@@ -31,8 +32,8 @@ import { useDatabaseReady } from "@/providers/DatabaseProvider";
 import { useSync } from "@/providers/SyncProvider";
 import { resolveAccountInstitutionPresentation } from "@/utils/account-institution-presentation";
 import { logger } from "@/utils/logger";
-import type { CurrencyType } from "@monyvi/db";
-import { CURRENCY_INFO_MAP } from "@monyvi/logic";
+import type { CurrencyType, RecurringPayment } from "@monyvi/db";
+import { CURRENCY_INFO_MAP, formatCurrency } from "@monyvi/logic";
 import { useRouter } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { RefreshControl, ScrollView, Text, View } from "react-native";
@@ -46,6 +47,7 @@ const SCROLL_CONTENT_STYLE = {
 
 const REFRESH_TINT_COLOR = palette.nileGreen[500];
 const REFRESH_COLORS: string[] = [REFRESH_TINT_COLOR];
+const PAYMENT_TOAST_DURATION_MS = 3500;
 
 /**
  * Returns a time-based greeting key for i18n.
@@ -66,6 +68,9 @@ export default function DashboardScreen(): React.JSX.Element {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isCurrencyPickerOpen, setIsCurrencyPickerOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedPayment, setSelectedPayment] =
+    useState<RecurringPayment | null>(null);
+  const [isPayNowVisible, setIsPayNowVisible] = useState(false);
   const cashAccountRef = useRef<View>(null);
   // Forwarded to CashAccountTooltip so it can scroll the cash-account
   // card into view before showing — otherwise on first-run the user is
@@ -120,6 +125,16 @@ export default function DashboardScreen(): React.JSX.Element {
     []
   );
 
+  const handlePayNow = useCallback((payment: RecurringPayment): void => {
+    setSelectedPayment(payment);
+    setIsPayNowVisible(true);
+  }, []);
+
+  const handlePayNowClose = useCallback((): void => {
+    setIsPayNowVisible(false);
+    setSelectedPayment(null);
+  }, []);
+
   const handleSmsPermissionGranted = useCallback(() => {
     dismissPrompt().catch((error: unknown) => {
       logger.warn("dismissPrompt failed in handleSmsPermissionGranted", {
@@ -148,6 +163,25 @@ export default function DashboardScreen(): React.JSX.Element {
   );
 
   const { showToast } = useToast();
+
+  const handlePaymentSuccess = useCallback(
+    (
+      amount: number,
+      paymentName: string,
+      paymentCurrency: CurrencyType
+    ): void => {
+      showToast({
+        type: "success",
+        title: t("payment_recorded"),
+        message: `${paymentName} - ${formatCurrency({
+          amount,
+          currency: paymentCurrency,
+        })}`,
+        duration: PAYMENT_TOAST_DURATION_MS,
+      });
+    },
+    [showToast, t]
+  );
 
   const handleRefresh = useCallback(async (): Promise<void> => {
     setIsRefreshing(true);
@@ -257,7 +291,7 @@ export default function DashboardScreen(): React.JSX.Element {
             <ThisMonth />
           </SectionErrorBoundary>
           <SectionErrorBoundary name={t("section_upcoming_payments")}>
-            <UpcomingPayments />
+            <UpcomingPayments onPayNow={handlePayNow} />
           </SectionErrorBoundary>
           <SectionErrorBoundary name={t("section_recent_transactions")}>
             <RecentTransactions
@@ -267,6 +301,12 @@ export default function DashboardScreen(): React.JSX.Element {
           </SectionErrorBoundary>
         </View>
       </ScrollView>
+      <PayNowModal
+        payment={selectedPayment}
+        visible={isPayNowVisible}
+        onClose={handlePayNowClose}
+        onSuccess={handlePaymentSuccess}
+      />
       <AppDrawer visible={isDrawerOpen} onClose={handleDrawerClose} />
       <CurrencyPicker
         visible={!isCurrencyLoading && isCurrencyPickerOpen}

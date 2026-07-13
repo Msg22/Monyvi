@@ -6,7 +6,6 @@
  * The section does not render when there are no upcoming payments.
  */
 
-import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
 import { UpcomingPaymentsSkeleton } from "@/components/dashboard/skeletons/UpcomingPaymentsSkeleton";
 import {
@@ -15,7 +14,7 @@ import {
   BILLS_PERIOD_LABELS,
   type BillsPeriodFilter,
 } from "@/hooks/useRecurringPayments";
-import type { CurrencyType, RecurringPayment } from "@monyvi/db";
+import type { RecurringPayment } from "@monyvi/db";
 import { formatCurrency } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -24,17 +23,12 @@ import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useTranslation } from "react-i18next";
-import {
-  FeaturedPaymentCard,
-  MiniPaymentItem,
-  PayNowModal,
-} from "./upcoming-payments";
+import { FeaturedPaymentCard, MiniPaymentItem } from "./upcoming-payments";
 
 // Constants
 
 const PAYMENT_LIMIT = 5;
 const SIDE_PAYMENTS_COUNT = 3;
-const TOAST_DURATION_MS = 3500;
 const DEFAULT_PERIOD: BillsPeriodFilter = "this_month";
 const PERIOD_OPTIONS: readonly BillsPeriodFilter[] = [
   "this_week",
@@ -51,8 +45,13 @@ const PERIOD_OPTIONS: readonly BillsPeriodFilter[] = [
  * @returns The JSX element for the Upcoming Bills UI, or an empty fragment when there are no upcoming payments.
  */
 
-function UpcomingPaymentsComponent(): React.JSX.Element {
-  const { showToast } = useToast();
+interface UpcomingPaymentsProps {
+  readonly onPayNow: (payment: RecurringPayment) => void;
+}
+
+function UpcomingPaymentsComponent({
+  onPayNow,
+}: UpcomingPaymentsProps): React.JSX.Element {
   const { preferredCurrency } = usePreferredCurrency();
   const { t } = useTranslation("common");
 
@@ -75,40 +74,8 @@ function UpcomingPaymentsComponent(): React.JSX.Element {
     type: "EXPENSE",
     dateRange,
   });
-  const [selectedPayment, setSelectedPayment] =
-    useState<RecurringPayment | null>(null);
-  const [modalVisible, setModalVisible] = useState(false);
-
-  const handlePayNow = useCallback((payment: RecurringPayment): void => {
-    setSelectedPayment(payment);
-    setModalVisible(true);
-  }, []);
-
-  const handleSuccess = useCallback(
-    (
-      amount: number,
-      paymentName: string,
-      paymentCurrency: CurrencyType
-    ): void => {
-      showToast({
-        type: "success",
-        title: t("payment_recorded"),
-        message: `${paymentName} - ${formatCurrency({
-          amount,
-          currency: paymentCurrency,
-        })}`,
-        duration: TOAST_DURATION_MS,
-      });
-    },
-    [showToast, t]
-  );
-
   const handleSeeAll = useCallback((): void => {
     router.push("/recurring-payments");
-  }, []);
-
-  const handleModalClose = useCallback((): void => {
-    setModalVisible(false);
   }, []);
 
   const handlePeriodSelect = useCallback((period: BillsPeriodFilter): void => {
@@ -206,7 +173,7 @@ function UpcomingPaymentsComponent(): React.JSX.Element {
             {featuredPayment && (
               <FeaturedPaymentCard
                 payment={featuredPayment}
-                onPayNow={() => handlePayNow(featuredPayment)}
+                onPayNow={() => onPayNow(featuredPayment)}
               />
             )}
 
@@ -232,14 +199,6 @@ function UpcomingPaymentsComponent(): React.JSX.Element {
           </View>
         </>
       )}
-
-      {/* Pay Now Modal */}
-      <PayNowModal
-        payment={selectedPayment}
-        visible={modalVisible}
-        onClose={handleModalClose}
-        onSuccess={handleSuccess}
-      />
     </View>
   );
 }
