@@ -58,8 +58,7 @@ function createMockAssetMetal(input: MockAssetMetalInput): AssetMetal {
 }
 
 /**
- * Create a mock MarketRate that supports getRate and metal price fields.
- * For simplicity, USD-to-USD = 1, EGP-to-USD uses egpUsd rate.
+ * Create a mock MarketRate with currency and metal price fields.
  */
 function createMockMarketRates(overrides?: {
   egpUsd?: number;
@@ -69,25 +68,15 @@ function createMockMarketRates(overrides?: {
   palladiumUsdPerGram?: number;
 }): MarketRate {
   const egpUsd = overrides?.egpUsd ?? 0.02;
-  const rates: Record<string, number> = {
-    egpUsd,
-  };
-
-  return {
+  const rates: Partial<MarketRate> = {
     egpUsd,
     goldUsdPerGram: overrides?.goldUsdPerGram ?? 90,
     silverUsdPerGram: overrides?.silverUsdPerGram ?? 1,
     platinumUsdPerGram: overrides?.platinumUsdPerGram ?? 30,
     palladiumUsdPerGram: overrides?.palladiumUsdPerGram ?? 35,
-    getRate(from: CurrencyType, to: CurrencyType): number {
-      if (from === to) return 1;
-      // EGP -> USD: multiply by egpUsd rate
-      if (from === "EGP" && to === "USD") return rates.egpUsd;
-      // USD -> EGP: inverse
-      if (from === "USD" && to === "EGP") return 1 / rates.egpUsd;
-      return 1;
-    },
-  } as unknown as MarketRate;
+  };
+
+  return rates as MarketRate;
 }
 
 // =============================================================================
@@ -112,16 +101,14 @@ describe("calculateAssetBreakdown", () => {
     expect(result.total).toBe(6500);
   });
 
-  it("returns all zeros when marketRates is null", () => {
-    const accounts = [createMockAccount({ balance: 5000, type: "BANK" })];
+  it("fails loudly when a caller bypasses the non-null rate contract", () => {
+    const accounts = [
+      createMockAccount({ balance: 5000, currency: "EGP", type: "BANK" }),
+    ];
 
-    const result = calculateAssetBreakdown(accounts, [], null);
-
-    expect(result.bank).toBe(0);
-    expect(result.cash).toBe(0);
-    expect(result.wallet).toBe(0);
-    expect(result.metals).toBe(0);
-    expect(result.total).toBe(0);
+    expect(() =>
+      calculateAssetBreakdown(accounts, [], null as unknown as MarketRate)
+    ).toThrow();
   });
 
   it("returns all zeros for empty accounts and metals", () => {

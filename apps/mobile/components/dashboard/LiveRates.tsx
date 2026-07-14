@@ -1,5 +1,9 @@
 import type { CurrencyType, MarketRate } from "@monyvi/db";
-import { CURRENCY_INFO_MAP, getMetalPrice } from "@monyvi/logic";
+import {
+  CURRENCY_INFO_MAP,
+  getCurrencyRate,
+  getMetalPrice,
+} from "@monyvi/logic";
 import { FontAwesome5, Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useCallback, useMemo } from "react";
@@ -75,9 +79,9 @@ function buildCurrencyRate(
 ): Rate {
   const displayCurrency: CurrencyType =
     preferredCurrency === "USD" ? "EUR" : preferredCurrency;
-  const currencyRate = latestRates.getRate("USD", displayCurrency);
+  const currencyRate = getCurrencyRate(latestRates, "USD", displayCurrency);
   const previousRate = previousDayRate
-    ? previousDayRate.getRate("USD", displayCurrency)
+    ? getCurrencyRate(previousDayRate, "USD", displayCurrency)
     : null;
 
   return {

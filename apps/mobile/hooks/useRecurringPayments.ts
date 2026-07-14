@@ -146,7 +146,7 @@ export function useRecurringPayments(
   const [statusFilter, setStatusFilter] = useState<RecurringStatus>(
     status || "ACTIVE"
   );
-  const { latestRates } = useMarketRates();
+  const { latestRates, isLoading: isRatesLoading } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { userId, isResolvingUser } = useCurrentUser();
 
@@ -234,6 +234,9 @@ export function useRecurringPayments(
   /** Convert a payment amount to the user's preferred currency. */
   const toPreferred = useCallback(
     (amount: number, currency: CurrencyType): number => {
+      if (!latestRates) {
+        throw new Error("MARKET_RATES_NOT_READY");
+      }
       return convertCurrency(amount, currency, preferredCurrency, latestRates);
     },
     [latestRates, preferredCurrency]
@@ -241,6 +244,13 @@ export function useRecurringPayments(
 
   const { next7DaysTotal, totalDueThisMonth, totalIncomeThisMonth } =
     useMemo(() => {
+      if (!latestRates) {
+        return {
+          next7DaysTotal: 0,
+          totalDueThisMonth: 0,
+          totalIncomeThisMonth: 0,
+        };
+      }
       const activeExpenses = allPayments.filter(
         (p) => p.isActive && p.isExpense
       );
@@ -255,15 +265,22 @@ export function useRecurringPayments(
         totalDueThisMonth: dueThisMonth,
         totalIncomeThisMonth: incomeThisMonth,
       };
-    }, [allPayments, toPreferred]);
+    }, [allPayments, latestRates, toPreferred]);
 
   /** Total due for filtered period, computed from the FULL matching set (not limit-truncated). */
   const totalDueFiltered = useMemo((): number => {
+    if (!latestRates) return 0;
     if (!dateRange) return totalDueThisMonth;
     return matchingPayments
       .filter((p) => p.isExpense)
       .reduce((sum, p) => sum + toPreferred(p.amount, p.currency), 0);
-  }, [matchingPayments, dateRange, totalDueThisMonth, toPreferred]);
+  }, [
+    matchingPayments,
+    dateRange,
+    latestRates,
+    totalDueThisMonth,
+    toPreferred,
+  ]);
 
   return {
     allPayments,
@@ -273,7 +290,7 @@ export function useRecurringPayments(
     totalDueThisMonth,
     totalDueFiltered,
     totalIncomeThisMonth,
-    isLoading,
+    isLoading: isLoading || isRatesLoading,
     statusFilter,
     setStatusFilter,
   };

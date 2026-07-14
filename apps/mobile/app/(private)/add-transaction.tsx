@@ -42,6 +42,7 @@ import type {
 import {
   evaluateAmountExpression,
   formatAmountInput,
+  getCurrencyRate,
   parsePositiveFiniteAmountInput,
 } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
@@ -261,11 +262,12 @@ export default function AddTransaction(): React.ReactNode {
     ) {
       const numAmount = calculateResult(amount);
       if (numAmount !== null && numAmount > 0) {
-        const rate = latestRates?.getRate(
-          selectedAccount.currency,
-          toAccount.currency
-        );
-        if (rate) {
+        if (latestRates) {
+          const rate = getCurrencyRate(
+            latestRates,
+            selectedAccount.currency,
+            toAccount.currency
+          );
           setTargetAmount((numAmount * rate).toFixed(2));
         }
       }
@@ -572,10 +574,13 @@ export default function AddTransaction(): React.ReactNode {
                 toAccountError={formErrors.toAccountId}
                 exchangeRate={
                   selectedAccount && toAccount
-                    ? latestRates?.getRate(
-                        selectedAccount.currency,
-                        toAccount.currency
-                      )
+                    ? latestRates
+                      ? getCurrencyRate(
+                          latestRates,
+                          selectedAccount.currency,
+                          toAccount.currency
+                        )
+                      : undefined
                     : undefined
                 }
                 isTargetAmountActive={activeAmountField === "targetAmount"}

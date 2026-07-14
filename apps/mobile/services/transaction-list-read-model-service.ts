@@ -199,17 +199,13 @@ export async function getTransactionListReadModel(
 export function buildTransactionGroups(
   input: BuildTransactionGroupsInput
 ): GroupedTransaction[] {
-  if (input.totalNetWorth === null) {
+  const latestRates = input.latestRates;
+  if (input.totalNetWorth === null || latestRates === null) {
     return [];
   }
 
   const toPreferred = (amount: number, currency: CurrencyType): number =>
-    convertCurrency(
-      amount,
-      currency,
-      input.preferredCurrency,
-      input.latestRates
-    );
+    convertCurrency(amount, currency, input.preferredCurrency, latestRates);
   const getSignedAmount = (item: DisplayListItem): number => {
     if (item._type !== "transaction") {
       return 0;
@@ -245,7 +241,7 @@ export function buildTransactionGroups(
     return itemWithNetWorth;
   });
 
-  return groupDisplayItems(processedItems, input);
+  return groupDisplayItems(processedItems, input, latestRates);
 }
 
 function transactionsCollection(): ReturnType<
@@ -546,7 +542,8 @@ function createTransferDisplayItem(
 
 function groupDisplayItems(
   items: readonly DisplayTransaction[],
-  input: BuildTransactionGroupsInput
+  input: BuildTransactionGroupsInput,
+  latestRates: MarketRate
 ): GroupedTransaction[] {
   const groups: GroupedTransaction[] = [];
   let currentGroup: {
@@ -577,7 +574,7 @@ function groupDisplayItems(
         item.amount,
         item.currency,
         input.preferredCurrency,
-        input.latestRates
+        latestRates
       );
       if (item.isIncome) {
         currentGroup.groupTotalIncome += preferredAmount;

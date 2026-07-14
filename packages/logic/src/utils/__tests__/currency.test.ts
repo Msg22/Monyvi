@@ -18,50 +18,27 @@ import {
   roundCurrency,
   roundForCurrency,
 } from "../currency";
-import type { CurrencyType, MarketRate } from "@monyvi/db";
+import type { MarketRate } from "@monyvi/db";
 
 // =============================================================================
 // Helpers
 // =============================================================================
 
-/**
- * Creates a mock MarketRate object with a configurable getRate implementation.
- */
-function createMockRates(
-  getRateImpl: (from: CurrencyType, to: CurrencyType) => number
-): MarketRate {
-  return { getRate: getRateImpl } as unknown as MarketRate;
+function createMockRates(overrides: Partial<MarketRate> = {}): MarketRate {
+  return overrides as MarketRate;
 }
 
 /** A standard mock where 1 USD = 49.70 EGP */
-const standardRates = createMockRates(
-  (from: CurrencyType, to: CurrencyType): number => {
-    if (from === to) return 1;
-    if (from === "USD" && to === "EGP") return 49.7;
-    if (from === "EGP" && to === "USD") return 1 / 49.7;
-    if (from === "USD" && to === "EUR") return 0.92;
-    if (from === "EUR" && to === "USD") return 1 / 0.92;
-    if (from === "EGP" && to === "EUR") return (1 / 49.7) * 0.92;
-    if (from === "EUR" && to === "EGP") return 49.7 / 0.92;
-    return 1; // fallback identity
-  }
-);
+const standardRates = createMockRates({
+  egpUsd: 1 / 49.7,
+  eurUsd: 1 / 0.92,
+});
 
 /** A mock that returns NaN for any cross-currency conversion */
-const nanRates = createMockRates(
-  (from: CurrencyType, to: CurrencyType): number => {
-    if (from === to) return 1;
-    return NaN;
-  }
-);
+const nanRates = createMockRates({ egpUsd: Number.NaN });
 
 /** A mock that returns Infinity for any cross-currency conversion */
-const infinityRates = createMockRates(
-  (from: CurrencyType, to: CurrencyType): number => {
-    if (from === to) return 1;
-    return Infinity;
-  }
-);
+const infinityRates = createMockRates({ egpUsd: Number.POSITIVE_INFINITY });
 
 // =============================================================================
 // convertCurrency
@@ -76,8 +53,10 @@ describe("convertCurrency", () => {
     expect(convertCurrency(0, "USD", "EGP", standardRates)).toBe(0);
   });
 
-  it("returns the original amount when marketRates is null", () => {
-    expect(convertCurrency(100, "USD", "EGP", null)).toBe(100);
+  it("fails loudly when a caller bypasses the non-null rate contract", () => {
+    expect(() =>
+      convertCurrency(100, "USD", "EGP", null as unknown as MarketRate)
+    ).toThrow();
   });
 
   it("converts USD to EGP correctly", () => {
@@ -100,14 +79,16 @@ describe("convertCurrency", () => {
     expect(result).toBeCloseTo(0.497, 3);
   });
 
-  it("returns 0 when rate produces NaN", () => {
-    const result = convertCurrency(100, "USD", "EGP", nanRates);
-    expect(result).toBe(0);
+  it("throws when a persisted rate is NaN", () => {
+    expect(() => convertCurrency(100, "USD", "EGP", nanRates)).toThrow(
+      "Invalid USD market rate for EGP"
+    );
   });
 
-  it("returns 0 when rate produces Infinity", () => {
-    const result = convertCurrency(100, "USD", "EGP", infinityRates);
-    expect(result).toBe(0);
+  it("throws when a persisted rate is Infinity", () => {
+    expect(() => convertCurrency(100, "USD", "EGP", infinityRates)).toThrow(
+      "Invalid USD market rate for EGP"
+    );
   });
 
   it("returns -0 as 0 when amount is -0 (short-circuits on amount === 0)", () => {
@@ -345,21 +326,14 @@ describe("formatExchangeRate", () => {
 
   it("uses up to 4 decimal places for the secondary direction", () => {
     // Create a rate where the flipped direction has significant decimals
-    const customRates = createMockRates(
-      (from: CurrencyType, to: CurrencyType): number => {
-        if (from === to) return 1;
-        if (from === "EGP" && to === "EUR") return 0.018; // < 1, will flip
-        if (from === "EUR" && to === "EGP") return 55.5556;
-        return 1;
-      }
-    );
+    const customRates = createMockRates({ egpUsd: 0.018, eurUsd: 1 });
     const result = formatExchangeRate("EGP", "EUR", customRates);
     // maximumFractionDigits is 4 for the secondary direction
     expect(result).toBe("1 EUR = 55.5556 EGP");
   });
 
   it("formats exactly rate = 1 with base currencyA", () => {
-    const oneToOneRates = createMockRates((): number => 1);
+    const oneToOneRates = createMockRates({ eurUsd: 1 });
     expect(formatExchangeRate("USD", "EUR", oneToOneRates)).toBe(
       "1 USD = 1.00 EUR"
     );

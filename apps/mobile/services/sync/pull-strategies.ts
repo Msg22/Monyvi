@@ -36,7 +36,7 @@ export async function pullMarketRates(
     }
 
     if (!data || data.length === 0) {
-      return { created: [], updated: [], deleted: [] };
+      throw new Error("No recent market rates were returned");
     }
 
     const activeRecords = data.map((record) =>

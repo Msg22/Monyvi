@@ -4,12 +4,20 @@ jest.mock("@monyvi/db", () => ({
   },
 }));
 
+import { MARKET_RATE_VALUE_COLUMNS } from "@monyvi/logic";
+
 import {
   transformFromSupabase,
   transformToSupabase,
 } from "../../services/sync/transforms";
 
 describe("sync transforms", () => {
+  function createValidMarketRateRecord(): Record<string, unknown> {
+    return Object.fromEntries(
+      MARKET_RATE_VALUE_COLUMNS.map((column) => [column, 1])
+    );
+  }
+
   it("serializes profile JSON fields for WatermelonDB and converts date fields to timestamps", () => {
     const transformed = transformFromSupabase("profiles", {
       id: "profile-1",
@@ -45,6 +53,21 @@ describe("sync transforms", () => {
         amount: Number.POSITIVE_INFINITY,
       })
     ).toThrow("INVALID_TRANSACTION_AMOUNT");
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["zero", 0],
+    ["negative", -1],
+    ["NaN", Number.NaN],
+    ["infinite", Number.POSITIVE_INFINITY],
+  ])("rejects a market-rate row with a %s value", (_label, value) => {
+    const record = createValidMarketRateRecord();
+    record.egp_usd = value;
+
+    expect(() => transformFromSupabase("market_rates", record)).toThrow(
+      "INVALID_MARKET_RATE:egp_usd"
+    );
   });
 
   it("parses profile JSON fields for Supabase and removes local-only sync fields", () => {

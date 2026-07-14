@@ -8,7 +8,7 @@ import { convertCurrency } from "./currency";
 export class MetalPriceUnavailableError extends Error {
   constructor(metalType: MetalType, rawValue: unknown) {
     super(
-      `Metal price unavailable for ${metalType}: expected a finite number, got ${String(rawValue)}`
+      `Metal price unavailable for ${metalType}: expected a positive finite number, got ${String(rawValue)}`
     );
     this.name = "MetalPriceUnavailableError";
   }
@@ -39,11 +39,11 @@ export function getMetalPriceUsd(
       price = marketRates.palladiumUsdPerGram;
       break;
     default:
-      return 0;
+      throw new MetalPriceUnavailableError(metalType, undefined);
   }
   // Fail explicitly when rate data is missing — callers should handle the error
   // rather than silently propagating a zero price through net worth calculations.
-  if (!Number.isFinite(price)) {
+  if (!Number.isFinite(price) || price <= 0) {
     throw new MetalPriceUnavailableError(metalType, price);
   }
   return price;

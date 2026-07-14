@@ -139,25 +139,25 @@ describe("calculateTotalAssets", () => {
   });
 
   describe("null / missing market rates", () => {
-    it("should return 0 when marketRates is null", () => {
+    it("should fail loudly when marketRates is null", () => {
       const assets = [createMockAssetMetal("GOLD", 10, 1.0)];
       // @ts-expect-error — testing runtime guard for null input
-      const result = calculateTotalAssets(assets, null);
-      expect(result).toBe(0);
+      expect(() => calculateTotalAssets(assets, null)).toThrow();
     });
 
-    it("should skip a metal whose price is undefined (MetalPriceUnavailableError)", () => {
+    it("should fail when a metal price is undefined", () => {
       // Gold has no price → its entry contributes 0 but silver still contributes.
       const rates = createMockRates({ silver: 0.95 /* gold undefined */ });
       const assets = [
         createMockAssetMetal("GOLD", 10, 1.0), // skipped
         createMockAssetMetal("SILVER", 100, 0.925), // 87.875
       ];
-      const result = calculateTotalAssets(assets, rates);
-      expect(result).toBeCloseTo(87.875);
+      expect(() => calculateTotalAssets(assets, rates)).toThrow(
+        "Metal price unavailable for GOLD"
+      );
     });
 
-    it("should skip a metal whose price is NaN", () => {
+    it("should fail when a metal price is NaN", () => {
       const rates = createMockRates({
         gold: Number.NaN,
         silver: 0.95,
@@ -166,11 +166,12 @@ describe("calculateTotalAssets", () => {
         createMockAssetMetal("GOLD", 10, 1.0), // skipped
         createMockAssetMetal("SILVER", 100, 0.925), // 87.875
       ];
-      const result = calculateTotalAssets(assets, rates);
-      expect(result).toBeCloseTo(87.875);
+      expect(() => calculateTotalAssets(assets, rates)).toThrow(
+        "Metal price unavailable for GOLD"
+      );
     });
 
-    it("should skip a metal whose price is Infinity", () => {
+    it("should fail when a metal price is Infinity", () => {
       const rates = createMockRates({
         gold: Number.POSITIVE_INFINITY,
         silver: 0.95,
@@ -179,19 +180,21 @@ describe("calculateTotalAssets", () => {
         createMockAssetMetal("GOLD", 10, 1.0),
         createMockAssetMetal("SILVER", 100, 0.925),
       ];
-      const result = calculateTotalAssets(assets, rates);
-      expect(result).toBeCloseTo(87.875);
+      expect(() => calculateTotalAssets(assets, rates)).toThrow(
+        "Metal price unavailable for GOLD"
+      );
     });
 
-    it("should return 0 when every metal price is unavailable", () => {
+    it("should fail when every metal price is unavailable", () => {
       const rates = createMockRates({}); // all undefined
       const assets = [
         createMockAssetMetal("GOLD", 10, 1.0),
         createMockAssetMetal("SILVER", 100, 0.925),
         createMockAssetMetal("PLATINUM", 5, 0.95),
       ];
-      const result = calculateTotalAssets(assets, rates);
-      expect(result).toBe(0);
+      expect(() => calculateTotalAssets(assets, rates)).toThrow(
+        "Metal price unavailable for GOLD"
+      );
     });
 
     it("should catch MetalPriceUnavailableError specifically and re-throw other errors", () => {
@@ -215,7 +218,7 @@ describe("calculateTotalAssets", () => {
   });
 
   describe("unsupported metal types", () => {
-    it("should contribute 0 for an unknown metal type", () => {
+    it("should fail for an unknown metal type", () => {
       // getMetalPriceUsd returns 0 for unknown types (not an error), so the
       // asset simply evaluates to 0 without affecting other holdings.
       const unknownMetal = createMockAssetMetal(
@@ -227,8 +230,9 @@ describe("calculateTotalAssets", () => {
         unknownMetal,
         createMockAssetMetal("SILVER", 100, 0.925), // 87.875
       ];
-      const result = calculateTotalAssets(assets, standardRates);
-      expect(result).toBeCloseTo(87.875);
+      expect(() => calculateTotalAssets(assets, standardRates)).toThrow(
+        "Metal price unavailable for UNOBTAINIUM"
+      );
     });
   });
 

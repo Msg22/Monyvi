@@ -3,7 +3,8 @@
  * Provides sync status and functions to the app with smart sync intervals
  */
 
-import { database, type Profile } from "@monyvi/db";
+import { database, type MarketRate, type Profile } from "@monyvi/db";
+import { assertValidMarketRateModel } from "@monyvi/logic";
 import { Q } from "@nozbe/watermelondb";
 import {
   createContext,
@@ -261,17 +262,27 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
       }
 
       const profilesCollection = database.get<Profile>("profiles");
-      const currentUserProfileCount = await queryOwned(
-        profilesCollection,
-        userId,
-        Q.where("deleted", false)
-      ).fetchCount();
+      const marketRatesCollection = database.get<MarketRate>("market_rates");
+      const [currentUserProfileCount, cachedMarketRates] = await Promise.all([
+        queryOwned(
+          profilesCollection,
+          userId,
+          Q.where("deleted", false)
+        ).fetchCount(),
+        marketRatesCollection
+          .query(Q.sortBy("created_at", Q.desc), Q.take(1))
+          .fetch(),
+      ]);
 
       if (!shouldContinue()) {
         return;
       }
 
-      if (currentUserProfileCount === 0) {
+      const hasValidCachedMarketRate = isValidCachedMarketRate(
+        cachedMarketRates.at(0)
+      );
+
+      if (currentUserProfileCount === 0 || !hasValidCachedMarketRate) {
         setIsInitialSync(true);
         await runInitialSync(shouldContinue);
         if (shouldContinue()) {
@@ -372,4 +383,18 @@ function getSafeThrownLog(error: unknown): {
     message: "non-error thrown",
     type: typeof error,
   };
+}
+
+function isValidCachedMarketRate(rate: MarketRate | undefined): boolean {
+  if (!rate) {
+    return false;
+  }
+
+  try {
+    assertValidMarketRateModel(rate);
+    return true;
+  } catch (error: unknown) {
+    logger.error("sync.cachedMarketRate.invalid", error);
+    return false;
+  }
 }

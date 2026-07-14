@@ -51,7 +51,7 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
   const { latestRates } = useMarketRates();
 
   const sortOptions = useMemo(
-    () => ({ preferredCurrency, latestRates }),
+    () => (latestRates ? { preferredCurrency, latestRates } : {}),
     [latestRates, preferredCurrency]
   );
 

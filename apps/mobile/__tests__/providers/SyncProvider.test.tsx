@@ -4,11 +4,13 @@
  */
 
 import { act, render, waitFor } from "@testing-library/react-native";
+import { MARKET_RATE_MODEL_VALUE_FIELDS } from "@monyvi/logic";
 import React from "react";
 
 const mockSyncDatabase = jest.fn();
 const mockCheckIsAuthenticated = jest.fn();
 const mockFetchProfileCount = jest.fn();
+const mockFetchMarketRates = jest.fn();
 const mockDbGet = jest.fn();
 
 interface MockAuthState {
@@ -24,6 +26,11 @@ const mockWhere = jest.fn((column: string, value: unknown) => ({
   column,
   value,
 }));
+const mockSortBy = jest.fn((column: string, order: unknown) => ({
+  column,
+  order,
+}));
+const mockTake = jest.fn((count: number) => ({ count }));
 
 jest.mock("@/services/sync", () => ({
   syncDatabase: (...args: unknown[]): Promise<unknown> =>
@@ -45,10 +52,21 @@ jest.mock("@/context/AuthContext", () => ({
   useAuth: () => mockUseAuth(),
 }));
 
+jest.mock("@/utils/logger", () => ({
+  logger: {
+    error: jest.fn(),
+    warn: jest.fn(),
+  },
+}));
+
 jest.mock("@nozbe/watermelondb", () => ({
   Q: {
     where: (column: string, value: unknown): unknown =>
       mockWhere(column, value),
+    sortBy: (column: string, order: unknown): unknown =>
+      mockSortBy(column, order),
+    take: (count: number): unknown => mockTake(count),
+    desc: "desc",
   },
 }));
 
@@ -91,13 +109,22 @@ describe("SyncProvider initialSyncState", () => {
     jest.useFakeTimers();
     mockCheckIsAuthenticated.mockResolvedValue(true);
     mockFetchProfileCount.mockResolvedValue(0);
+    mockFetchMarketRates.mockResolvedValue([
+      Object.fromEntries(
+        MARKET_RATE_MODEL_VALUE_FIELDS.map((field) => [field, 1])
+      ),
+    ]);
     mockUseAuth.mockReturnValue({
       isAuthenticated: true,
       user: { id: "current-user" },
     });
-    mockDbGet.mockReturnValue({
-      query: jest.fn(() => ({ fetchCount: mockFetchProfileCount })),
-    });
+    mockDbGet.mockImplementation((table: string) => ({
+      query: jest.fn(() =>
+        table === "market_rates"
+          ? { fetch: mockFetchMarketRates }
+          : { fetchCount: mockFetchProfileCount }
+      ),
+    }));
   });
 
   afterEach((): void => {
@@ -147,10 +174,50 @@ describe("SyncProvider initialSyncState", () => {
     await waitForInitialSyncState(result, "success");
 
     expect(mockDbGet).toHaveBeenCalledWith("profiles");
+    expect(mockDbGet).toHaveBeenCalledWith("market_rates");
     expect(mockWhere).toHaveBeenCalledWith("user_id", "current-user");
     expect(mockWhere).toHaveBeenCalledWith("deleted", false);
     expect(mockSyncDatabase).toHaveBeenCalledWith(expect.anything(), false);
     expect(result.current.initialSyncState).toBe("success");
+  });
+
+  it("forces the blocking startup sync when the profile exists but cached market rates are missing", async (): Promise<void> => {
+    mockFetchProfileCount.mockResolvedValue(1);
+    mockFetchMarketRates.mockResolvedValue([]);
+    mockSyncDatabase.mockResolvedValue(undefined);
+    const { result } = renderAndCapture();
+
+    await waitForInitialSyncState(result, "success");
+
+    expect(mockSyncDatabase).toHaveBeenCalledWith(expect.anything(), true);
+    expect(result.current.initialSyncState).toBe("success");
+  });
+
+  it("allows offline startup when both the profile and a cached rate exist", async (): Promise<void> => {
+    mockFetchProfileCount.mockResolvedValue(1);
+    mockSyncDatabase.mockRejectedValue(new Error("Network unavailable"));
+    const { result } = renderAndCapture();
+
+    await waitForInitialSyncState(result, "success");
+
+    expect(mockSyncDatabase).toHaveBeenCalledWith(expect.anything(), false);
+    expect(result.current.initialSyncState).toBe("success");
+  });
+
+  it("forces the blocking startup sync when the cached market rate is invalid", async (): Promise<void> => {
+    const validRate = Object.fromEntries(
+      MARKET_RATE_MODEL_VALUE_FIELDS.map((field) => [field, 1])
+    );
+    mockFetchProfileCount.mockResolvedValue(1);
+    mockFetchMarketRates.mockResolvedValue([
+      { ...validRate, goldUsdPerGram: 0 },
+    ]);
+    mockSyncDatabase.mockResolvedValue(undefined);
+    const { result } = renderAndCapture();
+
+    await waitForInitialSyncState(result, "success");
+
+    expect(mockSyncDatabase).toHaveBeenCalledWith(expect.anything(), true);
   });
 
   it('transitions to "failed" when auth is true but the user id is missing', async (): Promise<void> => {
