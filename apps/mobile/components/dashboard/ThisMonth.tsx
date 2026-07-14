@@ -15,12 +15,9 @@ import Svg, { Circle } from "react-native-svg";
 import { palette } from "@/constants/colors";
 import { ThisMonthSkeleton } from "@/components/dashboard/skeletons/ThisMonthSkeleton";
 import { useTheme } from "@/context/ThemeContext";
-import {
-  PERIOD_LABELS,
-  PeriodFilter,
-  usePeriodSummary,
-} from "@/hooks/usePeriodSummary";
+import { usePeriodSummary, type PeriodFilter } from "@/hooks/usePeriodSummary";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
+import { translatePeriod } from "@/utils/period-translation";
 import { useTranslation } from "react-i18next";
 
 // =============================================================================
@@ -167,7 +164,7 @@ function ThisMonthComponent(): React.JSX.Element {
     setSelectedPeriod(filter);
   }, []);
 
-  const title = PERIOD_LABELS[selectedPeriod];
+  const title = translatePeriod(t, selectedPeriod);
 
   if (isLoading) {
     return <ThisMonthSkeleton />;
@@ -260,7 +257,7 @@ function ThisMonthComponent(): React.JSX.Element {
         {FILTER_OPTIONS.map((filter) => (
           <FilterChip
             key={filter}
-            label={PERIOD_LABELS[filter]}
+            label={translatePeriod(t, filter)}
             isSelected={selectedPeriod === filter}
             onPress={() => handlePeriodSelect(filter)}
           />

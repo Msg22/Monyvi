@@ -12,7 +12,6 @@ import { UpcomingPaymentsSkeleton } from "@/components/dashboard/skeletons/Upcom
 import {
   useRecurringPayments,
   getBillsPeriodDateRange,
-  BILLS_PERIOD_LABELS,
   type BillsPeriodFilter,
 } from "@/hooks/useRecurringPayments";
 import type { CurrencyType, RecurringPayment } from "@monyvi/db";
@@ -23,6 +22,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
+import { translatePeriod } from "@/utils/period-translation";
 import { useTranslation } from "react-i18next";
 import {
   FeaturedPaymentCard,
@@ -180,7 +180,7 @@ function UpcomingPaymentsComponent(): React.JSX.Element {
                   : "text-slate-600 dark:text-slate-300"
               }`}
             >
-              {BILLS_PERIOD_LABELS[period]}
+              {translatePeriod(t, period)}
             </Text>
           </TouchableOpacity>
         ))}
