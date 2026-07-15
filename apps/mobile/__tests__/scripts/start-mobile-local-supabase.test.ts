@@ -31,6 +31,7 @@ interface StartMobileLocalSupabaseModule {
     readonly shouldUseWirelessDeviceTunnel: boolean;
     readonly shouldUseLocalParser: boolean;
     readonly shouldUseFixtureSmsInbox: boolean;
+    readonly shouldEnableQaSmsPatternIntake: boolean;
     readonly password: string | null;
     readonly expoArgs: readonly string[];
   };
@@ -142,6 +143,7 @@ describe("start-mobile-local-supabase script helpers", () => {
       shouldUseWirelessDeviceTunnel: true,
       shouldUseLocalParser: true,
       shouldUseFixtureSmsInbox: true,
+      shouldEnableQaSmsPatternIntake: false,
       password: "LocalOnlyPassword123!",
       expoArgs: ["--clear"],
     });
@@ -209,6 +211,7 @@ describe("start-mobile-local-supabase script helpers", () => {
       shouldUseWirelessDeviceTunnel: true,
       shouldUseLocalParser: false,
       shouldUseFixtureSmsInbox: false,
+      shouldEnableQaSmsPatternIntake: false,
       password: "LocalOnlyPassword123!",
       expoArgs: [],
     });
@@ -219,6 +222,7 @@ describe("start-mobile-local-supabase script helpers", () => {
       shouldUseWirelessDeviceTunnel: false,
       shouldUseLocalParser: true,
       shouldUseFixtureSmsInbox: true,
+      shouldEnableQaSmsPatternIntake: false,
       password: null,
       expoArgs: [],
     });

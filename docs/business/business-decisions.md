@@ -477,6 +477,173 @@ Business rules:
   first local-parser release. Future reuse may handle already-transcribed text
   only after a separate product decision.
 
+#### Phase 2A: Trusted QA SMS Pattern Intake
+
+Phase 2A builds review-only template evidence from real QNB messages on
+Mohamed's explicitly authorized QA device. It does not enable production local
+parsing or collect messages from general users.
+
+Business rules:
+
+- The QA intake tool is available only in an explicitly enabled Android
+  development build. It must remain unavailable in release builds and ordinary
+  development sessions.
+- The operator must authorize a bounded QA session before QNB inbox messages are
+  listed. Only messages the operator explicitly selects may be sanitized or
+  exported.
+- Phase 2A inbox access is allowlisted to the verified QNB sender aliases `QNB`,
+  `QNB EGYPT`, and `QNB ALAHLI`. The tool merges and deduplicates those bounded
+  results, sorts them newest first, and never scans arbitrary senders to infer
+  provider support. New aliases or providers require explicit verification and
+  an approved scope update.
+- Authorization copy remains provider-neutral so the safety promise stays
+  accurate as verified providers are added later. The selection state must show
+  the currently verified provider and a retryable empty state when that bounded
+  provider query returns no messages.
+- Raw sender/body values, native message IDs, source timestamps, account/card
+  values, amounts, balances, references, merchant/person names, phone numbers,
+  and app SMS fingerprints must remain in memory only. They must never enter
+  logs, analytics, AsyncStorage, WatermelonDB, Supabase, test snapshots, issues,
+  PRs, source control, clipboard, share sheets, or exported artifacts.
+- Sanitized templates use structured fixed-text segments and the canonical
+  placeholders `AMOUNT`, `BALANCE`, `LAST4`, `ACCOUNT`, `REFERENCE`, `MERCHANT`,
+  `PERSON`, `PHONE`, `DATE`, `TIME`, `PERCENTAGE`, and `URL`.
+- Canonical tokens may carry narrower semantic roles. Contextually labeled
+  four-to-eight-digit OTP, verification-code, security-code, or PIN values use
+  `REFERENCE` with role `otp_code`. Contextually labeled four-to-seven-digit
+  provider call, contact, or hotline numbers use `PHONE` with role
+  `provider_hotline`; raw hotline numbers are not allowlisted into fixed text.
+  Unlabeled short numeric values remain blocked and require operator review.
+- Changing public promotion values are not user-private values. Offer amounts,
+  rates, campaign years, public URLs, and public references use explicit
+  `promotional_amount`, `promotional_rate`, `campaign_year`, `public_url`, or
+  `public_reference` roles so they are variable without being mislabeled as a
+  person, account, or transaction value.
+- Automatic sanitization is fail-closed. The operator may correct placeholder
+  boundaries and types locally, but every correction invalidates prior approval
+  and requires complete privacy revalidation.
+- Placeholder corrections are cumulative within the in-memory intake session.
+  Correcting a different non-overlapping range must preserve earlier
+  corrections; correcting the same raw range replaces only that correction.
+  Partially overlapping ranges are rejected so the operator must resolve the
+  ambiguous boundary explicitly. Correction history contains offsets and
+  placeholder roles only, never raw values, and is cleared with the sensitive
+  workflow state.
+- The placeholder editor may stage several non-overlapping corrections before
+  applying them once. The live sanitized preview and pending list remain local,
+  the batch applies atomically, and one invalid or overlapping range must not
+  partially commit other pending changes.
+- Missing-placeholder validation names the missing semantic role with safe,
+  actionable copy and never includes the raw value. IPN transfer candidates
+  require a transaction amount only; balance and counterparty placeholders are
+  optional because valid provider templates may omit them. Transfer account
+  resolution remains required later when a runtime transaction is reviewed.
+- A bank-account suffix in a reviewed IPN template is sanitized as `ACCOUNT`
+  with role `source_account_suffix`, distinct from the card `LAST4` role. Phase
+  2A does not persist or use the raw suffix. Runtime storage and account
+  matching are deferred to issue #759.
+- A QA-operator-confirmed QNB debit-card template may delimit the merchant with
+  `@` and compact the available balance as `available bal.<currency><amount>`.
+  The intake sanitizer must emit separate `MERCHANT` and `BALANCE` placeholders
+  for this reviewed structure. Repository tests must use synthetic values and
+  must not copy the raw reviewed message.
+- A normalized QNB sender alias may be preserved only after the operator
+  verifies it as provider-controlled metadata. Personal phone-number senders and
+  unverified aliases must be removed.
+- The initial scope is QNB messages in EGP and USD: card purchases, ATM
+  withdrawals, incoming IPN transfers, outgoing IPN transfers, refunds or
+  reversals, failed transactions, OTP messages, informational messages, and
+  promotional messages, plus EGP bank-account-to-wallet transfers.
+  Bank-account-to-wallet messages are a distinct review-only transfer family;
+  they require source and destination account resolution and are never
+  auto-selected. InstaPay-related transfers in this scope are messages sent by
+  QNB, not messages sent by InstaPay.
+- EGP and USD examples may share a family only when fixed wording, placeholder
+  roles, transaction direction, and meaning are identical. Each supported
+  currency still requires its own evidence and positive, near-match, and
+  negative validation cases.
+- One sanitized sample remains candidate-only. At least three matching,
+  non-duplicate samples, human approval, and passing positive, near-match, and
+  negative tests are required for `review_ready`.
+- Repetition from the current QA device is not independent production
+  corroboration. Production trust additionally requires evidence governed by
+  Phase 2B or Phase 2C.
+- Evidence duplicate detection uses a domain-separated digest protected by a
+  device-local secret. The secret and the app's `smsFingerprint` must never be
+  exported.
+- The candidate catalog and coverage manifest are physically separate from
+  `LOCAL_SMS_PATTERNS`. Candidate records always use `runtimeScope: candidate`
+  and `autoSelectPolicy: never`, and no Phase 2A API may execute them.
+- Every required family/currency combination must be candidate-backed or
+  explicitly recorded as unavailable in the QA dataset before Phase 2A is
+  complete. Pending coverage blocks final acceptance.
+- Selection filters may use only literal EGP/USD content and selected/unselected
+  state. Message family and transaction type remain unknown until explicit
+  operator classification and must not be inferred for filtering.
+- The selection screen shows the bounded loaded count and selected count. A bulk
+  action fills remaining selection capacity with the newest currently matching
+  messages, never exceeding 50 and never clearing existing selections.
+- Inbox merge deduplication removes repeated native records with the same device
+  message ID only. Distinct device messages remain available even when their
+  content or sanitized structure is similar; duplicate evidence digests do not
+  increase independent evidence.
+- A blocked sanitized candidate must show privacy-safe validation reasons and
+  offer correction or discard. Discard affects only the in-memory QA candidate
+  and selection, never the SMS stored on the device.
+- Phase 2A header navigation moves to the previous workflow step before exiting
+  the tool. Candidate arrows paginate within sanitized review only.
+- The full-screen placeholder-correction header applies the Android top inset
+  exactly once, and sanitized-review pagination/actions use the same
+  fallback-aware bottom inset as other Phase 2A fixed actions.
+- Coverage may be summarized as nine compact expandable groups, including one
+  visual OTP/informational group, only while all ten semantic families and every
+  required currency scope remain independent and directly editable.
+- The final coverage step may mark all currently pending scopes unavailable in
+  one action. The operation must not modify candidate-backed or previously
+  resolved declarations.
+- Approved candidates leave the device only as a validated local JSON artifact
+  written through the Android document picker. The operator inspects and
+  manually transfers the file; there is no clipboard, share sheet, or automatic
+  upload path.
+- ATM names, terminal descriptors, and terminal identifiers are sanitized as
+  `ATM_TERMINAL` with `atm_terminal` semantics, never as a merchant. This
+  semantic placeholder does not infer the ATM-withdrawal family and is not
+  persisted as a transaction merchant.
+- Transferred bundles must be placed under the ignored `.local/qa-sms-intake/`
+  staging directory. Only importer-validated candidate outputs may enter
+  `packages/logic` source control.
+- Repository ingestion may be orchestrated through one explicit host command
+  that validates the selected export before staging, performs dry-run and atomic
+  import, updates coverage, and runs privacy/governance checks. The mobile app
+  must not write repository files or automatically transfer the artifact to the
+  host.
+- Every bundle includes a SHA-256 digest over canonical sanitized content, and
+  export, staging validation, and import recompute it. This is tamper evidence
+  for accidental or stale edits, not proof of authenticity or authorship.
+- Candidate templates may be matched only inside an isolated QA validation
+  evaluator. That evaluator is not exported through application runtime barrels,
+  cannot return app transaction contracts, and must remain unreachable from
+  batch scan, live SMS, AI fallback, review, and save workflows.
+- Transaction candidate metadata includes a numeric `confidenceCeiling` and a
+  review reason from a closed, versioned candidate-review reason set.
+- Structural family revisions preserve the complete prior evidence, expected
+  outcome, review decision, validation coverage, runtime policy, invalidation
+  time, and superseding version in immutable history.
+- SMS permission denial, blocking, and runtime revocation reuse the existing
+  Monyvi custom permission explanation/recovery flow and must clear raw intake
+  state before recovery.
+- Evidence-secret read loss or corruption blocks export. Starting a new evidence
+  domain requires explicit operator acknowledgment and manual duplicate review
+  against the existing candidate catalog.
+- The intake tool lists at most 3,000 messages and accepts at most 50 selections
+  per session. The synthetic 50-message sanitizer/validator benchmark target is
+  one second.
+- The QA privacy scanner is a required root verification, pre-push, and CI gate.
+- The approved dev-tool layout is stored under
+  `specs/029-trusted-qa-sms-patterns/mockups/`. Implementation must preserve its
+  information architecture and interaction sequence while using Monyvi's
+  existing theme colors, typography, safe areas, and light/dark behavior.
+
 ## 8. Notifications
 
 Current notification scope:

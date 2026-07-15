@@ -35,6 +35,10 @@ interface SmsPermissionPromptProps {
   readonly visible: boolean;
   /** Callback when user taps "Allow" and permission is granted */
   readonly onPermissionGranted: () => void;
+  /** Optional recovery callback when permission remains unavailable. */
+  readonly onPermissionNotGranted?: (
+    status: "undetermined" | "denied" | "blocked"
+  ) => void;
   /** Callback when user taps "Not Now" or permission is denied */
   readonly onDismiss: () => void;
   /** Function to request the permission (from useSmsPermission) */
@@ -87,6 +91,7 @@ function FeatureBullet({
 export function SmsPermissionPrompt({
   visible,
   onPermissionGranted,
+  onPermissionNotGranted,
   onDismiss,
   requestPermission,
 }: SmsPermissionPromptProps): React.JSX.Element {
@@ -97,10 +102,17 @@ export function SmsPermissionPrompt({
     const result = await requestPermission();
     if (result === "granted") {
       onPermissionGranted();
+    } else if (onPermissionNotGranted) {
+      onPermissionNotGranted(result);
     } else {
       onDismiss();
     }
-  }, [requestPermission, onPermissionGranted, onDismiss]);
+  }, [
+    requestPermission,
+    onPermissionGranted,
+    onPermissionNotGranted,
+    onDismiss,
+  ]);
 
   return (
     <Modal

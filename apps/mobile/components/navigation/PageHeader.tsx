@@ -12,6 +12,7 @@ interface PageHeaderProps {
   title: string;
   subtitle?: string;
   variant?: "default" | "review";
+  includeTopSafeAreaInset?: boolean;
   centerTitle?: boolean;
   showDrawer?: boolean;
   showBackButton?: boolean;
@@ -43,23 +44,27 @@ interface PageHeaderProps {
   children?: React.ReactNode;
 }
 
+const REVIEW_HEADER_VERTICAL_PADDING = 8;
+
 function ReviewPageHeader({
   title,
   subtitle,
   showBackButton,
   onBack,
   backAccessibilityLabel,
+  topInset,
 }: Pick<
   PageHeaderProps,
   "title" | "subtitle" | "showBackButton" | "onBack" | "backAccessibilityLabel"
->): React.ReactElement {
+> & { readonly topInset: number }): React.ReactElement {
   const router = useRouter();
   const { isDark } = useTheme();
 
   return (
     <View
       testID="review-page-header"
-      className="bg-background px-5 py-2 dark:bg-background-dark"
+      className="bg-background px-5 pb-2 dark:bg-background-dark"
+      style={{ paddingTop: topInset + REVIEW_HEADER_VERTICAL_PADDING }}
     >
       <View className="flex-row items-center">
         {showBackButton && (
@@ -242,6 +247,7 @@ export function PageHeader({
   title,
   subtitle,
   variant = "default",
+  includeTopSafeAreaInset = false,
   centerTitle = false,
   showDrawer = true,
   showBackButton = false,
@@ -270,6 +276,7 @@ export function PageHeader({
         showBackButton={showBackButton}
         onBack={onBack}
         backAccessibilityLabel={backAccessibilityLabel}
+        topInset={includeTopSafeAreaInset ? insets.top : 0}
       />
     );
   }

@@ -52,6 +52,9 @@ supabase/.temp
 # Testing
 coverage/
 
+# Device-local QA SMS intake staging
+.local/
+
 # Misc
 tmp/
 temp/

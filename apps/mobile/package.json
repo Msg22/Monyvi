@@ -14,6 +14,8 @@
     "prebuild": "npx expo prebuild",
     "start:local-supabase": "node scripts/start-mobile-local-supabase.js",
     "start:local-supabase:wireless-device": "node scripts/start-mobile-local-supabase.js --wireless-device",
+    "start:qa-sms-pattern-intake:wireless-device": "node scripts/start-mobile-local-supabase.js --wireless-device --qa-sms-pattern-intake",
+    "open:qa-sms-pattern-intake": "node scripts/open-qa-sms-pattern-intake.js",
     "start:e2e-fixture": "node scripts/start-e2e-fixture.js",
     "start:e2e-local-parser": "cross-env EXPO_PUBLIC_AI_SMS_PARSER_MODE=local node scripts/start-e2e-fixture.js",
     "start:e2e-local-parser:device": "node scripts/e2e-device-local-parser.js metro",

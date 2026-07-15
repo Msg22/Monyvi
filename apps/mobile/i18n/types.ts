@@ -9,6 +9,7 @@ import type {
   CategoriesTranslations,
   AuthTranslations,
   MetalsTranslations,
+  QaSmsPatternIntakeTranslations,
 } from "./translation-schema";
 
 /**
@@ -65,4 +66,5 @@ export type {
   CategoriesTranslations,
   AuthTranslations,
   MetalsTranslations,
+  QaSmsPatternIntakeTranslations,
 };

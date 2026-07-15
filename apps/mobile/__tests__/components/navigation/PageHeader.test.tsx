@@ -24,7 +24,7 @@ jest.mock("react-native-safe-area-context", () => ({
     readonly right: number;
     readonly bottom: number;
     readonly left: number;
-  } => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  } => ({ top: 24, right: 0, bottom: 0, left: 0 }),
 }));
 
 jest.mock("@/components/navigation/AppDrawer", () => ({
@@ -44,6 +44,7 @@ describe("PageHeader review variant", () => {
         title="Review transactions"
         subtitle="3 found from SMS scan"
         variant="review"
+        includeTopSafeAreaInset
         showDrawer={false}
         showBackButton
         onBack={onBack}
@@ -62,10 +63,27 @@ describe("PageHeader review variant", () => {
       "className",
       expect.stringContaining("dark:bg-background-dark")
     );
+    expect(screen.getByTestId("review-page-header")).toHaveStyle({
+      paddingTop: 32,
+    });
 
     fireEvent.press(screen.getByTestId("header-back"));
 
     expect(onBack).toHaveBeenCalledTimes(1);
     expect(mockRouterBack).not.toHaveBeenCalled();
+  });
+
+  it("does not double-apply the top inset when its parent owns the safe area", () => {
+    render(
+      <PageHeader
+        title="Review transactions"
+        variant="review"
+        showDrawer={false}
+      />
+    );
+
+    expect(screen.getByTestId("review-page-header")).toHaveStyle({
+      paddingTop: 8,
+    });
   });
 });

@@ -1,0 +1,1481 @@
+{
+  "schemaVersion": 1,
+  "sourceExportId": "fe11b9b9-ee44-443c-bdf9-8b9c5ad2c4f6",
+  "evidenceDomainStatus": "stable",
+  "candidates": [
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-0364a81c-58aa-46a8-ac41-3a2a3b531844",
+      "evidenceDigest": "9620b3f0a461683d4d1ffa8c73a03d6398181ba65d8bc8a1035d9598c25e61d8",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "card_purchase",
+      "currency": "USD",
+      "expectedOutcome": {
+        "kind": "transaction",
+        "direction": "expense",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "Your Debit Card **"
+        },
+        {
+          "kind": "placeholder",
+          "token": "LAST4",
+          "semanticRole": "card_last4",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " had a Successful transaction of "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " @"
+        },
+        {
+          "kind": "placeholder",
+          "token": "MERCHANT",
+          "semanticRole": "merchant_name",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": ",your available bal."
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "BALANCE",
+          "semanticRole": "available_balance",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " for lost/stolen card call "
+        },
+        {
+          "kind": "placeholder",
+          "token": "PHONE",
+          "semanticRole": "provider_hotline",
+          "wasOperatorCorrected": false
+        }
+      ],
+      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<MERCHANT>,your available bal.<CURRENCY> <BALANCE> for lost/stolen card call <PHONE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.005Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-0af584eb-f5bf-44ef-aa1e-0bd0abbd91b1",
+      "evidenceDigest": "a72afe6d175700be69b891fa277efe110ec6214f04c09052f252f75fc6e78d43",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "card_purchase",
+      "currency": "USD",
+      "expectedOutcome": {
+        "kind": "transaction",
+        "direction": "expense",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "Your Debit Card **"
+        },
+        {
+          "kind": "placeholder",
+          "token": "LAST4",
+          "semanticRole": "card_last4",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " had a Successful transaction of "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " @"
+        },
+        {
+          "kind": "placeholder",
+          "token": "MERCHANT",
+          "semanticRole": "merchant_name",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": ",your available bal."
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "BALANCE",
+          "semanticRole": "available_balance",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " for lost/stolen card call "
+        },
+        {
+          "kind": "placeholder",
+          "token": "PHONE",
+          "semanticRole": "provider_hotline",
+          "wasOperatorCorrected": false
+        }
+      ],
+      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<MERCHANT>,your available bal.<CURRENCY> <BALANCE> for lost/stolen card call <PHONE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.008Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-24ef875d-926d-4a4a-8235-718447f34286",
+      "evidenceDigest": "b352cc5e0ea99171c1164955a862c7d28720cd9df6ad87282a0f753f1168bb22",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "otp",
+      "currency": null,
+      "expectedOutcome": {
+        "kind": "rejection",
+        "reason": "otp"
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "QNB OTP:"
+        },
+        {
+          "kind": "placeholder",
+          "token": "REFERENCE",
+          "semanticRole": "otp_code",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " at "
+        },
+        {
+          "kind": "placeholder",
+          "token": "MERCHANT",
+          "semanticRole": "merchant_name",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " for "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " الرقم السرى مخصص لعملية الشراء اونلاين برجاء عدم الافصاح عنه"
+        }
+      ],
+      "sanitizedShape": "QNB OTP:<REFERENCE> at <MERCHANT> for <CURRENCY> <AMOUNT> الرقم السرى مخصص لعملية الشراء اونلاين برجاء عدم الافصاح عنه",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.004Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-39622c2a-46f6-4825-8218-1e47427b20fc",
+      "evidenceDigest": "39f9f6362c0e1e4500e6a90ffc354cbcd770a26a9930c81b1428aa19558ad781",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "atm_withdrawal",
+      "currency": "EGP",
+      "expectedOutcome": {
+        "kind": "transaction",
+        "direction": "expense",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern", "account_context_required"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "Your Debit Card **"
+        },
+        {
+          "kind": "placeholder",
+          "token": "LAST4",
+          "semanticRole": "card_last4",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " had a Successful transaction of "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " @"
+        },
+        {
+          "kind": "placeholder",
+          "token": "ATM_TERMINAL",
+          "semanticRole": "atm_terminal",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": ",your available bal."
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "BALANCE",
+          "semanticRole": "available_balance",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " for lost/stolen card call "
+        },
+        {
+          "kind": "placeholder",
+          "token": "PHONE",
+          "semanticRole": "provider_hotline",
+          "wasOperatorCorrected": false
+        }
+      ],
+      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<ATM_TERMINAL>,your available bal.<CURRENCY> <BALANCE> for lost/stolen card call <PHONE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.006Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-3ff3b9f0-d7d8-4127-9deb-00b3a4e22533",
+      "evidenceDigest": "ba532ea0a0c47e456705cf80f79854b42ef0ae2e279f1a5dc3eef2bf7f5b4c51",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "card_purchase",
+      "currency": "USD",
+      "expectedOutcome": {
+        "kind": "transaction",
+        "direction": "expense",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "Your Debit Card **"
+        },
+        {
+          "kind": "placeholder",
+          "token": "LAST4",
+          "semanticRole": "card_last4",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " had a Successful transaction of "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " @"
+        },
+        {
+          "kind": "placeholder",
+          "token": "MERCHANT",
+          "semanticRole": "merchant_name",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": ",your available bal."
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "BALANCE",
+          "semanticRole": "available_balance",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " for lost/stolen card call "
+        },
+        {
+          "kind": "placeholder",
+          "token": "PHONE",
+          "semanticRole": "provider_hotline",
+          "wasOperatorCorrected": false
+        }
+      ],
+      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<MERCHANT>,your available bal.<CURRENCY> <BALANCE> for lost/stolen card call <PHONE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.004Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-424c7a74-bf72-4f7b-a229-afa4ff6d40c6",
+      "evidenceDigest": "9acea832b33e37093a016d06d7150b6506f575e1e1cc3935d7d1e95bca820b56",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "atm_withdrawal",
+      "currency": "EGP",
+      "expectedOutcome": {
+        "kind": "transaction",
+        "direction": "expense",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern", "account_context_required"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "Dear Client, Amount of "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " was debited from your account for cash withdrawal based on your request. For more information, please call "
+        },
+        {
+          "kind": "placeholder",
+          "token": "PHONE",
+          "semanticRole": "provider_hotline",
+          "wasOperatorCorrected": false
+        }
+      ],
+      "sanitizedShape": "Dear Client, Amount of <CURRENCY> <AMOUNT> was debited from your account for cash withdrawal based on your request. For more information, please call <PHONE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.007Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-47a803d3-d53a-493a-9f2f-df3be4d52b6b",
+      "evidenceDigest": "0f83ad6d6e39cfa61a2915b710845491e2fbe3707f504366e9f49a791aa30e3c",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "incoming_ipn_transfer",
+      "currency": "EGP",
+      "expectedOutcome": {
+        "kind": "transaction",
+        "direction": "income",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern", "transfer_accounts_required"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "IPN transfer received with amount of "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " on "
+        },
+        {
+          "kind": "placeholder",
+          "token": "ACCOUNT",
+          "semanticRole": "source_account_suffix",
+          "wasOperatorCorrected": true
+        },
+        {
+          "kind": "fixed",
+          "text": " on "
+        },
+        {
+          "kind": "placeholder",
+          "token": "DATE",
+          "semanticRole": "transaction_date",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " at "
+        },
+        {
+          "kind": "placeholder",
+          "token": "TIME",
+          "semanticRole": "transaction_time",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": ". Ref# "
+        },
+        {
+          "kind": "placeholder",
+          "token": "REFERENCE",
+          "semanticRole": "transaction_reference",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": ". For more details call "
+        },
+        {
+          "kind": "placeholder",
+          "token": "PHONE",
+          "semanticRole": "provider_hotline",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": "."
+        }
+      ],
+      "sanitizedShape": "IPN transfer received with amount of <CURRENCY> <AMOUNT> on <ACCOUNT> on <DATE> at <TIME>. Ref# <REFERENCE>. For more details call <PHONE>.",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.005Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-5cf80076-3200-474f-bc3e-a1ef1618f839",
+      "evidenceDigest": "80f1920b0f6137bfb023ab26a89c80c85d78d57be2d166321136349cddf6a4c7",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "atm_withdrawal",
+      "currency": "EGP",
+      "expectedOutcome": {
+        "kind": "transaction",
+        "direction": "expense",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern", "account_context_required"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "Your Debit Card **"
+        },
+        {
+          "kind": "placeholder",
+          "token": "LAST4",
+          "semanticRole": "card_last4",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " had a Successful transaction of "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " @"
+        },
+        {
+          "kind": "placeholder",
+          "token": "ATM_TERMINAL",
+          "semanticRole": "atm_terminal",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": ",your available bal."
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "BALANCE",
+          "semanticRole": "available_balance",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " for lost/stolen card call "
+        },
+        {
+          "kind": "placeholder",
+          "token": "PHONE",
+          "semanticRole": "provider_hotline",
+          "wasOperatorCorrected": false
+        }
+      ],
+      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<ATM_TERMINAL>,your available bal.<CURRENCY> <BALANCE> for lost/stolen card call <PHONE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.009Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-70de6a29-7493-4249-ac3f-972a9e03817d",
+      "evidenceDigest": "60c109a1240ca33d107214dfaa79836ecded05aad2dc7c69f0ea13a0671e1e8b",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "atm_withdrawal",
+      "currency": "EGP",
+      "expectedOutcome": {
+        "kind": "transaction",
+        "direction": "expense",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern", "account_context_required"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "Your Debit Card **"
+        },
+        {
+          "kind": "placeholder",
+          "token": "LAST4",
+          "semanticRole": "card_last4",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " had a Successful transaction of "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " @"
+        },
+        {
+          "kind": "placeholder",
+          "token": "ATM_TERMINAL",
+          "semanticRole": "atm_terminal",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": ",your available bal."
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "BALANCE",
+          "semanticRole": "available_balance",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " for lost/stolen card call "
+        },
+        {
+          "kind": "placeholder",
+          "token": "PHONE",
+          "semanticRole": "provider_hotline",
+          "wasOperatorCorrected": false
+        }
+      ],
+      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<ATM_TERMINAL>,your available bal.<CURRENCY> <BALANCE> for lost/stolen card call <PHONE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.008Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-84a8444f-2ea5-4682-9734-5b4736f63a1a",
+      "evidenceDigest": "b997c98dcf8a20b8a1f329bb4944ae8743dac524de9252159bf14b09111e020e",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "atm_withdrawal",
+      "currency": "EGP",
+      "expectedOutcome": {
+        "kind": "transaction",
+        "direction": "expense",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern", "account_context_required"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "Your Debit Card **"
+        },
+        {
+          "kind": "placeholder",
+          "token": "LAST4",
+          "semanticRole": "card_last4",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " had a Successful transaction of "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " @"
+        },
+        {
+          "kind": "placeholder",
+          "token": "ATM_TERMINAL",
+          "semanticRole": "atm_terminal",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": ",your available bal."
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "BALANCE",
+          "semanticRole": "available_balance",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " for lost/stolen card call "
+        },
+        {
+          "kind": "placeholder",
+          "token": "PHONE",
+          "semanticRole": "provider_hotline",
+          "wasOperatorCorrected": false
+        }
+      ],
+      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<ATM_TERMINAL>,your available bal.<CURRENCY> <BALANCE> for lost/stolen card call <PHONE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.006Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-8761d4df-2d73-4760-b8dc-03ad11b85c0e",
+      "evidenceDigest": "465e2652dd69bccc04203433705ed54e0f27d9c400e358f1074e1c7a5c828d6a",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "outgoing_ipn_transfer",
+      "currency": "EGP",
+      "expectedOutcome": {
+        "kind": "transaction",
+        "direction": "expense",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern", "transfer_accounts_required"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "IPN transfer sent with amount of "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " from "
+        },
+        {
+          "kind": "placeholder",
+          "token": "ACCOUNT",
+          "semanticRole": "source_account_suffix",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " on "
+        },
+        {
+          "kind": "placeholder",
+          "token": "DATE",
+          "semanticRole": "transaction_date",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " at "
+        },
+        {
+          "kind": "placeholder",
+          "token": "TIME",
+          "semanticRole": "transaction_time",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": ". Ref# "
+        },
+        {
+          "kind": "placeholder",
+          "token": "REFERENCE",
+          "semanticRole": "transaction_reference",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": ". For more details call "
+        },
+        {
+          "kind": "placeholder",
+          "token": "PHONE",
+          "semanticRole": "provider_hotline",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": "."
+        }
+      ],
+      "sanitizedShape": "IPN transfer sent with amount of <CURRENCY> <AMOUNT> from <ACCOUNT> on <DATE> at <TIME>. Ref# <REFERENCE>. For more details call <PHONE>.",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.002Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-a975715d-6d1d-4d4a-bdf7-cd409afe3ed4",
+      "evidenceDigest": "e4266bdf45d8bd4edc90c5c60a63c08177a713baa1d9b105cf88b4f361bd9050",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "informational",
+      "currency": null,
+      "expectedOutcome": {
+        "kind": "rejection",
+        "reason": "informational"
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "عزيزى العميل نذكركم بإستلام بطاقه الخصم المباشر حيث ستلغي بعد 45 يوم"
+        }
+      ],
+      "sanitizedShape": "عزيزى العميل نذكركم بإستلام بطاقه الخصم المباشر حيث ستلغي بعد 45 يوم",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.007Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-ad840bba-cb45-4d03-8bd3-263bc600389d",
+      "evidenceDigest": "7d24925f28878b2d61cec89d9c0cee537705918c631c6a755001b5af0165b93d",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "informational",
+      "currency": null,
+      "expectedOutcome": {
+        "kind": "rejection",
+        "reason": "informational"
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "عزيزي العميل، يرجي الحضور للفرع لاستلام بطاقه الخصم المباشر المصدرة حديثا حيث ستلغي بعد 60 يوم"
+        }
+      ],
+      "sanitizedShape": "عزيزي العميل، يرجي الحضور للفرع لاستلام بطاقه الخصم المباشر المصدرة حديثا حيث ستلغي بعد 60 يوم",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.008Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-bbbafa20-4d75-4d30-9ee6-e5e42a25adaa",
+      "evidenceDigest": "677645b6c0f381c7ff604dd27c9eb9086bda7090b8be8ff45cb633482383ff23",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "otp",
+      "currency": null,
+      "expectedOutcome": {
+        "kind": "rejection",
+        "reason": "otp"
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "QNB OTP:"
+        },
+        {
+          "kind": "placeholder",
+          "token": "REFERENCE",
+          "semanticRole": "otp_code",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " at "
+        },
+        {
+          "kind": "placeholder",
+          "token": "MERCHANT",
+          "semanticRole": "merchant_name",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " for "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " الرقم السرى مخصص لعملية الشراء اونلاين برجاء عدم الافصاح عنه"
+        }
+      ],
+      "sanitizedShape": "QNB OTP:<REFERENCE> at <MERCHANT> for <CURRENCY> <AMOUNT> الرقم السرى مخصص لعملية الشراء اونلاين برجاء عدم الافصاح عنه",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.007Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-c925d4ba-4409-48fb-b619-647860e0eb24",
+      "evidenceDigest": "51eeb3cebc359f1b3a0819e34164102f60c4da5bc39423d347bd3704db649157",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "card_purchase",
+      "currency": "EGP",
+      "expectedOutcome": {
+        "kind": "transaction",
+        "direction": "expense",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "Your Debit Card **"
+        },
+        {
+          "kind": "placeholder",
+          "token": "LAST4",
+          "semanticRole": "card_last4",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " had a Successful transaction of "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " @"
+        },
+        {
+          "kind": "placeholder",
+          "token": "MERCHANT",
+          "semanticRole": "merchant_name",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": ",your available bal."
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "BALANCE",
+          "semanticRole": "available_balance",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " for lost/stolen card call "
+        },
+        {
+          "kind": "placeholder",
+          "token": "PHONE",
+          "semanticRole": "provider_hotline",
+          "wasOperatorCorrected": false
+        }
+      ],
+      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<MERCHANT>,your available bal.<CURRENCY> <BALANCE> for lost/stolen card call <PHONE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.003Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-e6628fd6-26db-42d4-a71c-a53676a3bc85",
+      "evidenceDigest": "9cb96b6c7eaafee903476bbc5a45bc6cedb23e1da417dec92520fdad6151a162",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "informational",
+      "currency": null,
+      "expectedOutcome": {
+        "kind": "rejection",
+        "reason": "informational"
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "برجاء تجاهل وعدم الضغط على أي رابط في رسالة نصية خاصة بعروض او طلب معلومات مصرفية من جهة مجهولة حفاظا على حساباتكم البنكية حيث ان هذه الرسائل ليست صادرة من QNB مصر"
+        }
+      ],
+      "sanitizedShape": "برجاء تجاهل وعدم الضغط على أي رابط في رسالة نصية خاصة بعروض او طلب معلومات مصرفية من جهة مجهولة حفاظا على حساباتكم البنكية حيث ان هذه الرسائل ليست صادرة من QNB مصر",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.008Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-fda5e682-a1a3-4739-b4e4-2b57b98ccbd9",
+      "evidenceDigest": "9b98972dc9b7651abc983bef5244ff4325a9f1fbe511c4c1ae7b7d215861c9bd",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "informational",
+      "currency": null,
+      "expectedOutcome": {
+        "kind": "rejection",
+        "reason": "informational"
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "يرجى العلم ان البنك لا يقدم أي هدايا عن طريق روابط غير موثوق بها كما يُحظر مشاركة البيانات الخاصة مع أي شخص. ت. ض:"
+        },
+        {
+          "kind": "placeholder",
+          "token": "PHONE",
+          "semanticRole": "provider_hotline",
+          "wasOperatorCorrected": true
+        }
+      ],
+      "sanitizedShape": "يرجى العلم ان البنك لا يقدم أي هدايا عن طريق روابط غير موثوق بها كما يُحظر مشاركة البيانات الخاصة مع أي شخص. ت. ض:<PHONE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.006Z"
+    }
+  ],
+  "coverageDeclarations": [
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "atm_withdrawal",
+      "currency": "EGP",
+      "status": "candidate_collected",
+      "candidateIds": [
+        "qa-candidate-39622c2a-46f6-4825-8218-1e47427b20fc",
+        "qa-candidate-424c7a74-bf72-4f7b-a229-afa4ff6d40c6",
+        "qa-candidate-5cf80076-3200-474f-bc3e-a1ef1618f839",
+        "qa-candidate-70de6a29-7493-4249-ac3f-972a9e03817d",
+        "qa-candidate-84a8444f-2ea5-4682-9734-5b4736f63a1a"
+      ],
+      "recordedAt": "2026-07-15T09:41:51.009Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "atm_withdrawal",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:41:59.703Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "card_purchase",
+      "currency": "EGP",
+      "status": "candidate_collected",
+      "candidateIds": ["qa-candidate-c925d4ba-4409-48fb-b619-647860e0eb24"],
+      "recordedAt": "2026-07-15T09:41:51.009Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "card_purchase",
+      "currency": "USD",
+      "status": "candidate_collected",
+      "candidateIds": [
+        "qa-candidate-0364a81c-58aa-46a8-ac41-3a2a3b531844",
+        "qa-candidate-0af584eb-f5bf-44ef-aa1e-0bd0abbd91b1",
+        "qa-candidate-3ff3b9f0-d7d8-4127-9deb-00b3a4e22533"
+      ],
+      "recordedAt": "2026-07-15T09:41:51.009Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "failed_transaction",
+      "currency": "EGP",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:42:27.363Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "failed_transaction",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:42:29.611Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "incoming_ipn_transfer",
+      "currency": "EGP",
+      "status": "candidate_collected",
+      "candidateIds": ["qa-candidate-47a803d3-d53a-493a-9f2f-df3be4d52b6b"],
+      "recordedAt": "2026-07-15T09:41:51.009Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "incoming_ipn_transfer",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:42:07.165Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "informational",
+      "currency": null,
+      "status": "candidate_collected",
+      "candidateIds": [
+        "qa-candidate-a975715d-6d1d-4d4a-bdf7-cd409afe3ed4",
+        "qa-candidate-ad840bba-cb45-4d03-8bd3-263bc600389d",
+        "qa-candidate-e6628fd6-26db-42d4-a71c-a53676a3bc85",
+        "qa-candidate-fda5e682-a1a3-4739-b4e4-2b57b98ccbd9"
+      ],
+      "recordedAt": "2026-07-15T09:41:51.009Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "otp",
+      "currency": null,
+      "status": "candidate_collected",
+      "candidateIds": [
+        "qa-candidate-24ef875d-926d-4a4a-8235-718447f34286",
+        "qa-candidate-bbbafa20-4d75-4d30-9ee6-e5e42a25adaa"
+      ],
+      "recordedAt": "2026-07-15T09:41:51.009Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "outgoing_ipn_transfer",
+      "currency": "EGP",
+      "status": "candidate_collected",
+      "candidateIds": ["qa-candidate-8761d4df-2d73-4760-b8dc-03ad11b85c0e"],
+      "recordedAt": "2026-07-15T09:41:51.009Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "outgoing_ipn_transfer",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:42:13.964Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "promotional",
+      "currency": null,
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:42:40.643Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "refund_or_reversal",
+      "currency": "EGP",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:42:20.713Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "refund_or_reversal",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:42:23.379Z"
+    }
+  ]
+}

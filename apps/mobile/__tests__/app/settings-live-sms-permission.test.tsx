@@ -41,6 +41,7 @@ let mockIsAiConsented = true;
 let mockHasRevokedAiConsentRecord = false;
 let mockIsAiConsentLoading = false;
 let mockHasSynced = false;
+let mockQaSmsPatternIntakeAvailable = false;
 let appStateChangeHandlers: Array<(status: AppStateStatus) => void> = [];
 
 jest.mock("react-native/Libraries/Modal/Modal", () => {
@@ -190,6 +191,13 @@ jest.mock("@/components/ui/Toast", () => ({
   useToast: () => ({ showToast: jest.fn() }),
 }));
 
+jest.mock("@/config/qa-sms-pattern-intake-config", () => ({
+  getQaSmsPatternIntakeAvailability: () =>
+    mockQaSmsPatternIntakeAvailable
+      ? { isAvailable: true }
+      : { isAvailable: false, reason: "release_build" },
+}));
+
 jest.mock("@/components/ui/GradientBackground", () => {
   return {
     GradientBackground: ({
@@ -310,8 +318,26 @@ describe("Settings live SMS permission recovery", () => {
     mockHasRevokedAiConsentRecord = false;
     mockIsAiConsentLoading = false;
     mockHasSynced = false;
+    mockQaSmsPatternIntakeAvailable = false;
     mockGrantAiConsent.mockResolvedValue();
     mockRevokeAiConsent.mockResolvedValue();
+  });
+
+  it("opens QA SMS pattern intake from Settings when the dev tool is available", async () => {
+    mockQaSmsPatternIntakeAvailable = true;
+    const screen = await renderReadySettings();
+
+    fireEvent.press(screen.getByTestId("qa-sms-pattern-intake-settings-link"));
+
+    expect(mockRouterPush).toHaveBeenCalledWith("/qa-sms-pattern-intake");
+  });
+
+  it("does not expose QA SMS pattern intake when the dev tool is unavailable", async () => {
+    const screen = await renderReadySettings();
+
+    expect(
+      screen.queryByTestId("qa-sms-pattern-intake-settings-link")
+    ).toBeNull();
   });
 
   it("waits for stored live detection state before rendering the switch", async () => {

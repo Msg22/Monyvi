@@ -81,7 +81,9 @@ another unauthorized
 
       jest.doMock("node:child_process", () => ({ spawnSync }));
 
+      // The module must load after the process mock is installed for this case.
       const isolatedModule =
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         require("../../scripts/e2e-device-local-parser") as DeviceLocalParserModule;
 
       expect(

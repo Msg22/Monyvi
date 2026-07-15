@@ -41,10 +41,11 @@ cause is verified.
 ## 3. UI And Design Mockups
 
 Before coding, create a scoped visual mockup and get Mohamed's approval when the
-issue or feature:
+issue or feature meaningfully changes the UI by doing any of the following:
 
 - adds a new page or screen,
-- adds a new visible UI item to an existing page,
+- adds a new visible UI item to an existing page, except for the micro-UI
+  exception below,
 - changes the layout, visual design, hierarchy, or interaction design of an
   existing UI item,
 - changes a user-facing flow where the screen structure or component behavior
@@ -53,6 +54,30 @@ issue or feature:
 Mock only the affected UI area, not the whole page, unless the whole page is
 changing. A mockup is not required for backend-only, logic-only, copy-only,
 configuration-only, or non-visual bug fixes.
+
+### Micro-UI Exception
+
+A mockup is not required for a tiny, localized, and unambiguous UI change when
+all of these conditions are true:
+
+- it stays inside an existing component or established UI region,
+- it uses an existing design-system pattern and existing theme tokens,
+- it does not introduce a new interaction, modal, screen, navigation path, or
+  user-flow step,
+- it does not change business behavior or the meaning of a user action,
+- it does not materially change layout, information hierarchy, component size,
+  or surrounding content placement, and
+- its placement and expected behavior are clear from the current UI and request.
+
+Examples include adding a compact currency/status chip beside an existing
+heading, adding a short supporting label, replacing an icon with the correct
+existing icon, or making a small spacing, contrast, or alignment correction.
+
+Before using this exception, briefly state the intended UI change and why it is
+micro-UI. Then proceed without waiting for mockup approval. If the change grows
+beyond these boundaries, has multiple credible designs, or creates uncertainty
+about hierarchy or interaction, stop and use the mockup approval gate. A direct
+request from Mohamed for a mockup always overrides this exception.
 
 After mockup approval, implement the approved direction. If coding reveals a
 meaningful design change, stop and ask for approval again before continuing.

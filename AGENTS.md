@@ -12,7 +12,7 @@ with Angular equivalents in chat (never in code comments).
 
 <!-- SPECKIT START -->
 
-Active Speckit plan: `specs/028-local-intelligent-parser/plan.md`
+Active Speckit plan: `specs/029-trusted-qa-sms-patterns/plan.md`
 
 <!-- SPECKIT END -->
 
@@ -293,8 +293,11 @@ the true domain model.
 
 ## Styling Rules
 
-- For GitHub sprint issues that affect visible UI or design, follow the visual
-  mockup approval gate in `.agent/workflows/sprint-issue.md` before coding.
+- For GitHub sprint issues that meaningfully affect visible UI or design, follow
+  the visual mockup approval gate in `.agent/workflows/sprint-issue.md` before
+  coding. The workflow's narrowly defined micro-UI exception may be used for
+  small, unambiguous changes that preserve the existing layout, interaction,
+  flow, and design-system pattern.
 - **NativeWind classes only**: Use `className` for ALL styling. Do NOT use
   `StyleSheet.create()` or inline `style` unless there is no NativeWind
   equivalent (e.g., dynamic computed values like `` width: `${percent}%` ``).
@@ -669,3 +672,19 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it
 work") require constant clarification.
+
+## Active Technologies
+
+- TypeScript 5.9 strict mode, React 19.2, React Native 0.83, and Expo SDK 55
+  (codex/phase-2a-trusted-qa-sms-patterns-750)
+- Existing `react-native-get-sms-android`, `expo-file-system/legacy`,
+  `expo-crypto`, and `expo-secure-store`; explicit `zod` boundary validation
+  (codex/phase-2a-trusted-qa-sms-patterns-750)
+- Raw messages and drafts remain memory-only; approved artifacts use local
+  Android document storage with no database persistence
+  (codex/phase-2a-trusted-qa-sms-patterns-750)
+
+## Recent Changes
+
+- codex/phase-2a-trusted-qa-sms-patterns-750: Added guarded, development-only
+  QNB SMS candidate intake, sanitization, export, and review-only governance.

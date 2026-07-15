@@ -102,27 +102,27 @@ describe("manual-qa-seed script helpers", () => {
     );
   });
 
-  it("passes a local password after resetting before manual QA seeding", () => {
+  it("uses the manual seed default after resetting local Supabase", () => {
     const rootPackageJson = JSON.parse(
       readFileSync(resolve(__dirname, "../../../../package.json"), "utf8")
     ) as { readonly scripts?: Record<string, string> };
 
-    expect(rootPackageJson.scripts?.["local:reset-and-seed"]).toContain(
-      "MANUAL_QA_PASSWORD=MonyviLocalQA123"
+    expect(rootPackageJson.scripts?.["local:reset-and-seed"]).not.toContain(
+      "MANUAL_QA_PASSWORD"
     );
     expect(rootPackageJson.scripts?.["local:reset-and-seed"]).toContain(
       "manual:seed-user"
     );
   });
 
-  it("preserves the existing manual QA password when no password is provided", () => {
+  it("preserves an existing password and carries a local creation fallback", () => {
     const config = getManualQaSeedConfig({
       E2E_SUPABASE_MODE: "local",
       E2E_LOCAL_JWT_SECRET: "local-test-jwt-secret-with-enough-length",
     });
 
     expect(config.email).toBe("manual-qa@monyvi.test");
-    expect(config.password).toBeNull();
+    expect(config.password).toBe("123456");
     expect(config.preserveExistingPassword).toBe(true);
   });
 

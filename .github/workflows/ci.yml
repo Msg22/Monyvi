@@ -44,6 +44,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -62,6 +64,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: QA SMS Privacy Check
+        env:
+          QA_SMS_PRIVACY_BASE_SHA:
+            ${{ github.event.pull_request.base.sha || github.event.before }}
+          QA_SMS_PRIVACY_HEAD_SHA:
+            ${{ github.event.pull_request.head.sha || github.sha }}
+        run: npm run qa-sms:privacy-check
+
       - name: i18n Coverage Check
         working-directory: apps/mobile
         run: npm run i18n:check
@@ -71,6 +81,15 @@ jobs:
 
       - name: Test Repository Scripts
         run: npm run test:scripts
+
+      - name: Test QA SMS Privacy Check
+        run: npm run test:qa-sms-privacy-check
+
+      - name: Test QA SMS Import Command
+        run: npm run test:qa-sms-import-command
+
+      - name: Test QA SMS Ingest Command
+        run: npm run test:qa-sms-ingest-command
 
       - name: Test Mobile App
         run: npm test -w @monyvi/mobile

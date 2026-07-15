@@ -52,6 +52,47 @@ export const NamespaceSchema = StringDict;
  * `validateTranslationResources()` throws.
  */
 const REQUIRED_SCALAR_KEYS: Record<string, readonly string[]> = {
+  "qa-sms-pattern-intake": [
+    "development_badge",
+    "authorization_title",
+    "authorization_description",
+    "scope_selected_only",
+    "scope_currencies",
+    "scope_local_export",
+    "authorization_acknowledgement",
+    "authorize_action",
+    "cancel",
+    "step_capture",
+    "selection_title",
+    "verified_provider",
+    "empty_title",
+    "empty_description",
+    "retry",
+    "sanitize_selected",
+    "export_title",
+    "local_json_file",
+    "export_privacy_note",
+    "choose_folder_export",
+    "back_to_review",
+    "inspect_file_note",
+    "classify_title",
+    "classify_description",
+    "currency_not_applicable",
+    "currency_not_applicable_help",
+    "save_classification",
+    "screen_title",
+    "step_coverage",
+    "coverage_description",
+    "coverage_update_title",
+    "coverage_candidate_collected",
+    "coverage_candidate_collected_help",
+    "coverage_unavailable_in_qa_dataset",
+    "coverage_unavailable_in_qa_dataset_help",
+    "coverage_pending",
+    "coverage_pending_help",
+    "coverage_save",
+    "continue_to_export",
+  ],
   common: [
     "save",
     "cancel",
@@ -151,6 +192,12 @@ const REQUIRED_SCALAR_KEYS: Record<string, readonly string[]> = {
  * in AR.
  */
 const PLURAL_BASES: Record<string, readonly string[]> = {
+  "qa-sms-pattern-intake": [
+    "selected_count",
+    "approved_candidates",
+    "reviewed_families",
+    "coverage_pending_warning",
+  ],
   common: [
     "minutes_ago",
     "hours_ago",

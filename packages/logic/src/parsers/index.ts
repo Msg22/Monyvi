@@ -56,6 +56,7 @@ export {
   getSenderPatternsForInstitution,
   isKnownFinancialSender,
 } from "./egyptian-bank-registry";
+export * from "./qa-sms-pattern-intake";
 export type {
   BankInfo,
   EgyptianFinancialInstitution,

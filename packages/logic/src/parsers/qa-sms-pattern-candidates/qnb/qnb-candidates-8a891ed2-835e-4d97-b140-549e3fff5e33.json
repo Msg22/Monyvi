@@ -1,0 +1,439 @@
+{
+  "schemaVersion": 1,
+  "sourceExportId": "8a891ed2-835e-4d97-b140-549e3fff5e33",
+  "evidenceDomainStatus": "stable",
+  "candidates": [
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-060abe17-ca2c-4aae-a182-d2300566b76b",
+      "evidenceDigest": "7ad513f740117a8837c7ac63b5a63eae070b4c69131050d184e90f29941aea4d",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "refund_or_reversal",
+      "currency": "EGP",
+      "expectedOutcome": {
+        "kind": "transaction",
+        "direction": "income",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "Your transaction with Debit Card **"
+        },
+        {
+          "kind": "placeholder",
+          "token": "LAST4",
+          "semanticRole": "card_last4",
+          "wasOperatorCorrected": true
+        },
+        {
+          "kind": "fixed",
+          "text": " @"
+        },
+        {
+          "kind": "placeholder",
+          "token": "MERCHANT",
+          "semanticRole": "merchant_name",
+          "wasOperatorCorrected": true
+        },
+        {
+          "kind": "fixed",
+          "text": " with "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " has been reversed"
+        }
+      ],
+      "sanitizedShape": "Your transaction with Debit Card **<LAST4> @<MERCHANT> with <CURRENCY> <AMOUNT> has been reversed",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:43:46.254Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:49:05.694Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-146599e9-eb01-49fb-a6ed-91f91954bf9a",
+      "evidenceDigest": "f9f1382de3f2254d0b6e106beff8723fe5ba129f79c2454ca60bc424c0635d5f",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "refund_or_reversal",
+      "currency": "EGP",
+      "expectedOutcome": {
+        "kind": "transaction",
+        "direction": "income",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "IPN transfer debited from "
+        },
+        {
+          "kind": "placeholder",
+          "token": "ACCOUNT",
+          "semanticRole": "source_account_suffix",
+          "wasOperatorCorrected": true
+        },
+        {
+          "kind": "fixed",
+          "text": " with amount "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " has been reversed. Ref# "
+        },
+        {
+          "kind": "placeholder",
+          "token": "REFERENCE",
+          "semanticRole": "transaction_reference",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": ". For more details call "
+        },
+        {
+          "kind": "placeholder",
+          "token": "PHONE",
+          "semanticRole": "provider_hotline",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": "."
+        }
+      ],
+      "sanitizedShape": "IPN transfer debited from <ACCOUNT> with amount <CURRENCY> <AMOUNT> has been reversed. Ref# <REFERENCE>. For more details call <PHONE>.",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:43:46.254Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:49:05.695Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-3f9a8589-0545-4f29-aaf3-36c86dce39c1",
+      "evidenceDigest": "96b8bb6622c3f06277439eeea5799d098934b1392342f47285196cd7dc635f42",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "refund_or_reversal",
+      "currency": "USD",
+      "expectedOutcome": {
+        "kind": "transaction",
+        "direction": "income",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "Your transaction with Debit Card **"
+        },
+        {
+          "kind": "placeholder",
+          "token": "LAST4",
+          "semanticRole": "card_last4",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " @"
+        },
+        {
+          "kind": "placeholder",
+          "token": "MERCHANT",
+          "semanticRole": "merchant_name",
+          "wasOperatorCorrected": true
+        },
+        {
+          "kind": "fixed",
+          "text": " with "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " has been reversed"
+        }
+      ],
+      "sanitizedShape": "Your transaction with Debit Card **<LAST4> @<MERCHANT> with <CURRENCY> <AMOUNT> has been reversed",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:43:46.254Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:49:05.694Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-8d286fee-cee6-4f94-b46f-0e41935ac84a",
+      "evidenceDigest": "01c6d5baafe3176fde0943957b30bd515563d9c529b18327ab29ec677bd1ef24",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "refund_or_reversal",
+      "currency": "EGP",
+      "expectedOutcome": {
+        "kind": "transaction",
+        "direction": "income",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "Your transaction with Debit Card **"
+        },
+        {
+          "kind": "placeholder",
+          "token": "LAST4",
+          "semanticRole": "card_last4",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " @"
+        },
+        {
+          "kind": "placeholder",
+          "token": "MERCHANT",
+          "semanticRole": "merchant_name",
+          "wasOperatorCorrected": true
+        },
+        {
+          "kind": "fixed",
+          "text": " with "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " has been reversed"
+        }
+      ],
+      "sanitizedShape": "Your transaction with Debit Card **<LAST4> @<MERCHANT> with <CURRENCY> <AMOUNT> has been reversed",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:43:46.254Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:49:05.694Z"
+    }
+  ],
+  "coverageDeclarations": [
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "atm_withdrawal",
+      "currency": "EGP",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:53:14.226Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "atm_withdrawal",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:53:16.869Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "card_purchase",
+      "currency": "EGP",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:53:07.332Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "card_purchase",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:53:09.394Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "failed_transaction",
+      "currency": "EGP",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:53:34.236Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "failed_transaction",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:53:37.117Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "incoming_ipn_transfer",
+      "currency": "EGP",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:53:21.876Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "incoming_ipn_transfer",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:53:24.046Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "informational",
+      "currency": null,
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:53:42.601Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "otp",
+      "currency": null,
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:53:40.644Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "outgoing_ipn_transfer",
+      "currency": "EGP",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:53:28.535Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "outgoing_ipn_transfer",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:53:30.642Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "promotional",
+      "currency": null,
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T09:53:46.139Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "refund_or_reversal",
+      "currency": "EGP",
+      "status": "candidate_collected",
+      "candidateIds": [
+        "qa-candidate-060abe17-ca2c-4aae-a182-d2300566b76b",
+        "qa-candidate-146599e9-eb01-49fb-a6ed-91f91954bf9a",
+        "qa-candidate-8d286fee-cee6-4f94-b46f-0e41935ac84a"
+      ],
+      "recordedAt": "2026-07-15T09:49:05.695Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "refund_or_reversal",
+      "currency": "USD",
+      "status": "candidate_collected",
+      "candidateIds": ["qa-candidate-3f9a8589-0545-4f29-aaf3-36c86dce39c1"],
+      "recordedAt": "2026-07-15T09:49:05.695Z"
+    }
+  ]
+}

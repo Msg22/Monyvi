@@ -110,6 +110,7 @@ function parseCliArgs(args) {
   let shouldUseWirelessDeviceTunnel = false;
   let shouldUseLocalParser = false;
   let shouldUseFixtureSmsInbox = false;
+  let shouldEnableQaSmsPatternIntake = false;
   let password = null;
   const expoArgs = [];
 
@@ -129,6 +130,11 @@ function parseCliArgs(args) {
     if (arg === "--fixture-sms") {
       shouldUseLocalParser = true;
       shouldUseFixtureSmsInbox = true;
+      continue;
+    }
+
+    if (arg === "--qa-sms-pattern-intake") {
+      shouldEnableQaSmsPatternIntake = true;
       continue;
     }
 
@@ -154,6 +160,7 @@ function parseCliArgs(args) {
     shouldUseWirelessDeviceTunnel,
     shouldUseLocalParser,
     shouldUseFixtureSmsInbox,
+    shouldEnableQaSmsPatternIntake,
     password,
     expoArgs,
   };
@@ -342,6 +349,8 @@ function buildLocalSupabaseExpoEnv(
     EXPO_PUBLIC_MONYVI_TEST_MODE: "off",
     EXPO_PUBLIC_AI_SMS_PARSER_MODE: parserMode,
     EXPO_PUBLIC_SMS_INBOX_MODE: inboxMode,
+    EXPO_PUBLIC_ENABLE_QA_SMS_PATTERN_INTAKE:
+      options.shouldEnableQaSmsPatternIntake === true ? "true" : "false",
     EXPO_PUBLIC_SENTRY_DSN: baseEnv.EXPO_PUBLIC_SENTRY_DSN ?? "",
     EXPO_NO_TELEMETRY: "1",
   };
@@ -633,12 +642,14 @@ async function main() {
     shouldUseWirelessDeviceTunnel,
     shouldUseLocalParser,
     shouldUseFixtureSmsInbox,
+    shouldEnableQaSmsPatternIntake,
     password,
     expoArgs,
   } = parseCliArgs(process.argv.slice(2));
   const parserOptions = {
     shouldUseLocalParser,
     shouldUseFixtureSmsInbox,
+    shouldEnableQaSmsPatternIntake,
   };
 
   if (shouldUseWirelessDeviceTunnel) {

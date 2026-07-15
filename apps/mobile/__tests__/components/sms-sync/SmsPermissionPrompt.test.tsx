@@ -1,11 +1,17 @@
-import { render, screen } from "@testing-library/react-native";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react-native";
 import React from "react";
 
 import { SmsPermissionPrompt } from "@/components/sms-sync/SmsPermissionPrompt";
 
 jest.mock("react-native-safe-area-context", () => ({
-  SafeAreaInsetsContext:
-    jest.requireActual<typeof import("react")>("react").createContext({
+  SafeAreaInsetsContext: jest
+    .requireActual<typeof import("react")>("react")
+    .createContext({
       top: 0,
       right: 0,
       bottom: 24,
@@ -44,5 +50,25 @@ describe("SmsPermissionPrompt", () => {
     expect(screen.getByTestId("sms-permission-prompt-sheet")).toHaveStyle({
       paddingBottom: 64,
     });
+  });
+
+  it("lets recovery flows handle blocked permission without dismissing", async () => {
+    const onDismiss = jest.fn();
+    const onPermissionNotGranted = jest.fn();
+    render(
+      <SmsPermissionPrompt
+        visible
+        onPermissionGranted={jest.fn()}
+        onPermissionNotGranted={onPermissionNotGranted}
+        onDismiss={onDismiss}
+        requestPermission={jest.fn(() => Promise.resolve("blocked"))}
+      />
+    );
+
+    fireEvent.press(screen.getByText("allow_sms_access"));
+    await waitFor(() =>
+      expect(onPermissionNotGranted).toHaveBeenCalledWith("blocked")
+    );
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 });
