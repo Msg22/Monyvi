@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   qaCandidateArtifactSchema,
   qaCandidateBundleSchema,
+  qaCoverageDeclarationSchema,
 } from "../packages/logic/src/parsers/qa-sms-pattern-intake/qa-sms-artifact-schema";
 import { serializeQaCandidateBundleIntegrityPayload } from "../packages/logic/src/parsers/qa-sms-pattern-intake/qa-sms-bundle-builder";
 import { QA_SMS_CANDIDATE_REVIEW_REASONS } from "../packages/logic/src/parsers/qa-sms-pattern-intake/qa-sms-pattern-types";
@@ -31,6 +32,7 @@ export interface QaSmsPrivacyFinding {
     | "invalid_confidence_ceiling"
     | "invalid_review_reason"
     | "invalid_runtime_scope"
+    | "raw_numeric_value"
     | "raw_string_value"
     | "raw_value_canary"
     | "tracked_staging_artifact"
@@ -61,6 +63,9 @@ const FORBIDDEN_RAW_KEYS = new Set([
   "sourceMessage",
   "sourceTimestamp",
 ]);
+const NORMALIZED_FORBIDDEN_RAW_KEYS = new Set(
+  [...FORBIDDEN_RAW_KEYS].map(normalizeMetadataKey)
+);
 const ALLOWED_REVIEW_REASONS = new Set<string>(QA_SMS_CANDIDATE_REVIEW_REASONS);
 const QA_CANDIDATE_ID_PATTERN =
   /^qa-candidate-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -81,6 +86,14 @@ const TIMESTAMP_KEYS = new Set([
   "reviewedAt",
 ]);
 const VERIFIED_QNB_ALIASES = new Set(["QNB", "QNB ALAHLI", "QNB EGYPT"]);
+
+function normalizeMetadataKey(key: string): string {
+  return key.replaceAll("_", "").toLowerCase();
+}
+
+function isForbiddenRawKey(key: string): boolean {
+  return NORMALIZED_FORBIDDEN_RAW_KEYS.has(normalizeMetadataKey(key));
+}
 
 function isSafeStructuredString(
   value: string,
@@ -119,6 +132,66 @@ function isSafeStructuredString(
   return false;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isValidatedCoverageManifest(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (
+    Object.keys(value).sort().join(",") !==
+    "declarations,providerId,schemaVersion"
+  ) {
+    return false;
+  }
+  return (
+    value.schemaVersion === 1 &&
+    value.providerId === "qnb-egypt" &&
+    Array.isArray(value.declarations) &&
+    value.declarations.every(
+      (declaration) =>
+        qaCoverageDeclarationSchema.safeParse(declaration).success
+    )
+  );
+}
+
+function isValidatedImportedCandidateCatalog(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (
+    Object.keys(value).sort().join(",") !==
+    "candidates,coverageDeclarations,evidenceDomainStatus,schemaVersion,sourceExportId"
+  ) {
+    return false;
+  }
+  return (
+    value.schemaVersion === 1 &&
+    typeof value.sourceExportId === "string" &&
+    UUID_PATTERN.test(value.sourceExportId) &&
+    (value.evidenceDomainStatus === "stable" ||
+      value.evidenceDomainStatus ===
+        "reset_requires_manual_duplicate_review") &&
+    Array.isArray(value.candidates) &&
+    value.candidates.length > 0 &&
+    value.candidates.every(
+      (candidate) => qaCandidateArtifactSchema.safeParse(candidate).success
+    ) &&
+    Array.isArray(value.coverageDeclarations) &&
+    value.coverageDeclarations.every(
+      (declaration) =>
+        qaCoverageDeclarationSchema.safeParse(declaration).success
+    )
+  );
+}
+
+function hasValidatedNumericContext(value: unknown): boolean {
+  return (
+    qaCandidateArtifactSchema.safeParse(value).success ||
+    qaCandidateBundleSchema.safeParse(value).success ||
+    isValidatedImportedCandidateCatalog(value) ||
+    isValidatedCoverageManifest(value)
+  );
+}
+
 function normalizePath(filePath: string): string {
   return filePath.replaceAll("\\", "/").replace(/^\.\//, "");
 }
@@ -142,11 +215,18 @@ function collectObjectFindings(
   value: unknown,
   filePath: string,
   findings: QaSmsPrivacyFinding[],
-  keyPath: readonly string[] = []
+  keyPath: readonly string[] = [],
+  hasSafeNumericContext: boolean = false
 ): void {
   if (Array.isArray(value)) {
     for (const item of value) {
-      collectObjectFindings(item, filePath, findings, keyPath);
+      collectObjectFindings(
+        item,
+        filePath,
+        findings,
+        keyPath,
+        hasSafeNumericContext
+      );
     }
     return;
   }
@@ -159,12 +239,18 @@ function collectObjectFindings(
     }
     return;
   }
+  if (typeof value === "number") {
+    if (!hasSafeNumericContext) {
+      findings.push({ code: "raw_numeric_value", path: filePath });
+    }
+    return;
+  }
   if (value === null || typeof value !== "object") {
     return;
   }
 
   for (const [key, child] of Object.entries(value)) {
-    if (FORBIDDEN_RAW_KEYS.has(key)) {
+    if (isForbiddenRawKey(key)) {
       findings.push({ code: "forbidden_raw_key", path: filePath });
     }
     if (
@@ -192,7 +278,13 @@ function collectObjectFindings(
     if (key === "autoSelectPolicy" && child !== "never") {
       findings.push({ code: "invalid_auto_select_policy", path: filePath });
     }
-    collectObjectFindings(child, filePath, findings, [...keyPath, key]);
+    collectObjectFindings(
+      child,
+      filePath,
+      findings,
+      [...keyPath, key],
+      hasSafeNumericContext
+    );
   }
 }
 
@@ -216,7 +308,13 @@ function scanCandidateFile(
 
   try {
     const parsedJson = JSON.parse(file.content) as unknown;
-    collectObjectFindings(parsedJson, file.path, findings);
+    collectObjectFindings(
+      parsedJson,
+      file.path,
+      findings,
+      [],
+      hasValidatedNumericContext(parsedJson)
+    );
     scanCandidateArtifacts(parsedJson, file.path, findings);
   } catch {
     findings.push({ code: "candidate_json_invalid", path: file.path });

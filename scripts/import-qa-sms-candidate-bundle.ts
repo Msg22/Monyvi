@@ -58,10 +58,23 @@ type ImportFileSystem = Pick<
 function parseImportCommandOptions(
   args: readonly string[]
 ): ImportCommandOptions {
-  const inputPath = args.find((argument) => !argument.startsWith("--"));
-  if (!inputPath) throw new Error("input_path_required");
+  const allowedOptions = new Set([
+    "--dry-run",
+    "--acknowledge-new-evidence-domain",
+  ]);
+  const unknownOption = args.find(
+    (argument) => argument.startsWith("--") && !allowedOptions.has(argument)
+  );
+  if (unknownOption !== undefined) {
+    throw new Error(`unknown_import_option:${unknownOption}`);
+  }
+
+  const inputPaths = args.filter((argument) => !argument.startsWith("--"));
+  if (inputPaths.length === 0) throw new Error("input_path_required");
+  if (inputPaths.length !== 1) throw new Error("single_input_path_required");
+
   return {
-    inputPath,
+    inputPath: inputPaths[0],
     isDryRun: args.includes("--dry-run"),
     acknowledgeNewEvidenceDomain: args.includes(
       "--acknowledge-new-evidence-domain"

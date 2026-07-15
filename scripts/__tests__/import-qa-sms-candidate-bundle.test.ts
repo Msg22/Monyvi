@@ -107,6 +107,28 @@ test("parses dry-run and evidence-domain acknowledgement flags", () => {
   );
 });
 
+test("rejects unknown import flags before any import can run", () => {
+  assert.throws(
+    () =>
+      parseImportCommandOptions([
+        ".local/qa-sms-intake/bundle.json",
+        "--dryrun",
+      ]),
+    /unknown_import_option:--dryrun/
+  );
+});
+
+test("rejects multiple positional bundle paths", () => {
+  assert.throws(
+    () =>
+      parseImportCommandOptions([
+        ".local/qa-sms-intake/bundle.json",
+        ".local/qa-sms-intake/other.json",
+      ]),
+    /single_input_path_required/
+  );
+});
+
 test("rejects malformed candidate catalog wrappers instead of skipping them", () => {
   assert.throws(
     () => parseCandidateCatalogRecord({ schemaVersion: 1 }),

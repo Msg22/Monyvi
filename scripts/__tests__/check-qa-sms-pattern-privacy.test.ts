@@ -48,6 +48,55 @@ test("rejects common raw inbox keys in candidate files", () => {
   assert.equal(codes.filter((code) => code === "forbidden_raw_key").length, 4);
 });
 
+test("rejects case-insensitive snake-case aliases of forbidden raw inbox keys", () => {
+  const codes = scan([
+    {
+      path: "packages/logic/src/parsers/qa-sms-pattern-candidates/qnb/raw.json",
+      content: JSON.stringify({
+        SMS_FINGERPRINT: "a".repeat(64),
+        Raw_Sms_Body: "hidden",
+        NATIVE_MESSAGE_ID: "hidden",
+      }),
+    },
+  ]);
+
+  assert.equal(codes.filter((code) => code === "forbidden_raw_key").length, 3);
+});
+
+test("rejects raw numeric leaves in malformed candidate wrappers", () => {
+  const codes = scan([
+    {
+      path: "packages/logic/src/parsers/qa-sms-pattern-candidates/qnb/qnb-candidates-test.json",
+      content: JSON.stringify({
+        candidates: [],
+        operatorAmount: 12_345.67,
+      }),
+    },
+  ]);
+
+  assert.ok(codes.includes("raw_numeric_value"));
+});
+
+test("rejects schema-looking numeric fields outside a validated artifact", () => {
+  const codes = scan([
+    {
+      path: "packages/logic/src/parsers/qa-sms-pattern-candidates/qnb/qnb-candidates-test.json",
+      content: JSON.stringify({
+        schemaVersion: 1,
+        candidates: [
+          {
+            schemaVersion: 1,
+            authorization: { version: 1 },
+            expectedOutcome: { confidenceCeiling: 0.8 },
+          },
+        ],
+      }),
+    },
+  ]);
+
+  assert.ok(codes.includes("raw_numeric_value"));
+});
+
 test("rejects native Android SMS metadata keys in candidate files", () => {
   const codes = scan([
     {
@@ -488,7 +537,7 @@ test("rejects candidate artifacts with executable runtime metadata", () => {
   assert.ok(codes.includes("invalid_auto_select_policy"));
 });
 
-test("accepts isolated candidate metadata without raw values", () => {
+test("rejects isolated candidate metadata without validated artifact context", () => {
   const codes = scan([
     {
       path: "packages/logic/src/parsers/qa-sms-pattern-candidates/qnb/safe.json",
@@ -504,7 +553,7 @@ test("accepts isolated candidate metadata without raw values", () => {
     },
   ]);
 
-  assert.deepEqual(codes, []);
+  assert.ok(codes.includes("raw_numeric_value"));
 });
 
 test("rejects raw financial values hidden inside candidate fixed text", () => {
