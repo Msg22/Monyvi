@@ -140,6 +140,14 @@ describe("sms-parser-orchestrator", () => {
     ).toBe(false);
   });
 
+  it("does not bypass broad prefilters for trusted rejections when hybrid is disabled", () => {
+    process.env.EXPO_PUBLIC_HYBRID_SMS_PARSER_ENABLED = "false";
+
+    expect(
+      shouldRouteTrustedRejection(trustedOtpCandidate(), ["EGP", "USD"])
+    ).toBe(false);
+  });
+
   it("routes exact trusted candidates locally and sends only unresolved candidates to AI", async () => {
     const unresolved = candidate();
     const aiTransaction = parsedTransaction({

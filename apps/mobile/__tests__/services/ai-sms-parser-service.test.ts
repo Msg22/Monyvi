@@ -147,6 +147,37 @@ describe("ai-sms-parser-service parser strategy", () => {
     expect(result.transactions[0]?.smsFingerprint).toBe("edge-fingerprint");
   });
 
+  it("accepts currencies supported by the app beyond EGP and USD", async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        transactions: [
+          {
+            messageId: "nbe_debit_purchase",
+            amount: 25,
+            currency: "SAR",
+            type: "EXPENSE",
+            counterparty: "Shop",
+            date: "2026-04-08T12:00:00.000Z",
+            categorySystemName: "shopping",
+            confidenceScore: 0.9,
+            isTrusted: true,
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await parseSmsWithAi([candidate("nbe_debit_purchase")], {
+      ...context,
+      supportedCurrencies: ["EGP", "USD", "SAR"],
+    });
+
+    expect(result.transactions).toEqual([
+      expect.objectContaining({ currency: "SAR" }),
+    ]);
+    expect(result.hasError).toBe(false);
+  });
+
   it("keeps malformed non-finite results unresolved", async () => {
     mockInvoke.mockResolvedValueOnce({
       data: {
@@ -631,6 +662,64 @@ describe("ai-sms-parser-service parser strategy", () => {
         {
           candidate: candidates[50],
           reason: "response_invalid",
+          isRetryable: true,
+        },
+      ]);
+    } finally {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
+  });
+
+  it("preserves earlier chunks when a later Edge Function invocation throws", async () => {
+    jest.useFakeTimers();
+    try {
+      const candidates: SmsCandidate[] = Array.from(
+        { length: 51 },
+        (_, index) => ({
+          message: {
+            id: `sms-thrown-${index}`,
+            address: "NBE",
+            body: `Purchase message ${index}`,
+            date: 1775658180000 + index,
+            read: false,
+          },
+          smsFingerprint: `thrown-fingerprint-${index}`,
+        })
+      );
+      mockInvoke
+        .mockResolvedValueOnce({
+          data: {
+            transactions: [
+              {
+                messageId: "sms-thrown-0",
+                amount: 25,
+                currency: "EGP",
+                type: "EXPENSE",
+                counterparty: "Shop",
+                date: "2026-04-08T12:00:00.000Z",
+                categorySystemName: "shopping",
+                confidenceScore: 0.9,
+                isTrusted: true,
+              },
+            ],
+          },
+          error: null,
+        })
+        .mockRejectedValueOnce(new Error("network failure"));
+
+      const parsePromise = parseSmsWithAi(candidates, context);
+      await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(2000);
+      const result = await parsePromise;
+
+      expect(result.transactions).toEqual([
+        expect.objectContaining({ smsFingerprint: "thrown-fingerprint-0" }),
+      ]);
+      expect(result.unresolvedCandidates).toEqual([
+        {
+          candidate: candidates[50],
+          reason: "unexpected_failure",
           isRetryable: true,
         },
       ]);

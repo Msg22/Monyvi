@@ -34,7 +34,7 @@ import {
 } from "@/services/sms-live-detection-handler";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { Text, TouchableOpacity } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -65,22 +65,14 @@ export default function SmsReviewScreen(): React.JSX.Element {
 
     return () => {
       setReviewingActive(false);
+      clearTransactions();
       flushQueuedTransactions().catch((err) => {
         logger.warn("smsReview.flushQueuedTransactions.failed", {
           errorName: err instanceof Error ? err.name : "unknown",
         });
       });
     };
-  }, []);
-
-  useFocusEffect(
-    useCallback(
-      () => () => {
-        clearTransactions();
-      },
-      [clearTransactions]
-    )
-  );
+  }, [clearTransactions]);
 
   // ── Save ────────────────────────────────────────────────────────────
 

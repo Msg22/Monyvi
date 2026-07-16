@@ -236,6 +236,8 @@ export function shouldRouteTrustedRejection(
   candidate: SmsCandidate,
   supportedCurrencies: readonly string[]
 ): boolean {
+  if (!shouldUseHybridSmsParser()) return false;
+
   const result = parseSmsWithTrustedCatalog({
     candidates: [
       {

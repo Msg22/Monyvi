@@ -34,10 +34,22 @@ import {
 // Schemas — AI response validation
 // ---------------------------------------------------------------------------
 
+const AiCurrencySchema = z.string().transform((value, context) => {
+  try {
+    return normalizeCurrency(value);
+  } catch {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Unsupported currency",
+    });
+    return z.NEVER;
+  }
+});
+
 const AiSmsTransactionSchema = z.object({
   messageId: z.string(),
   amount: z.number().finite().positive().max(MAX_TRANSACTION_AMOUNT),
-  currency: z.enum(["EGP", "USD"]),
+  currency: AiCurrencySchema,
   type: z.enum(["EXPENSE", "INCOME"]),
   counterparty: z.string(),
   date: z.string(),
@@ -140,6 +152,34 @@ interface ChunkAiResult {
   readonly invalidMessageIds?: readonly string[];
   readonly hasUncorrelatedFailure?: boolean;
   readonly failureReason?: AiUnresolvedCandidate["reason"];
+}
+
+function isParserControlFlowError(error: unknown): boolean {
+  return (
+    (error instanceof Error && error.name === "AbortError") ||
+    isAiConsentRequiredError(error)
+  );
+}
+
+function createUnexpectedChunkFailure(
+  error: unknown,
+  candidateCount: number
+): ChunkAiResult {
+  logger.error(
+    "[ai-sms-parser] Unexpected error during parseSmsWithAi",
+    new Error("SMS AI parser unexpected failure"),
+    {
+      candidateCount,
+      errorName: error instanceof Error ? error.name : "unknown",
+    }
+  );
+  return {
+    transactions: [],
+    hasError: true,
+    isRetryable: true,
+    hasUncorrelatedFailure: true,
+    failureReason: "unexpected_failure",
+  };
 }
 
 /**
@@ -562,11 +602,20 @@ export async function parseSmsWithAi(
       const currentChunk = chunkQueue[chunkIndex];
       const chunkStartMs = Date.now();
 
-      const chunkResult = await invokeParseChunk(
-        currentChunk.messages,
-        context,
-        abortSignal
-      );
+      let chunkResult: ChunkAiResult;
+      try {
+        chunkResult = await invokeParseChunk(
+          currentChunk.messages,
+          context,
+          abortSignal
+        );
+      } catch (error: unknown) {
+        if (isParserControlFlowError(error)) throw error;
+        chunkResult = createUnexpectedChunkFailure(
+          error,
+          currentChunk.messages.length
+        );
+      }
       throwIfAborted(abortSignal);
       const chunkDurationMs = Date.now() - chunkStartMs;
 
@@ -676,10 +725,7 @@ export async function parseSmsWithAi(
       unresolvedCandidates,
     };
   } catch (err: unknown) {
-    if (
-      (err instanceof Error && err.name === "AbortError") ||
-      isAiConsentRequiredError(err)
-    ) {
+    if (isParserControlFlowError(err)) {
       throw err;
     }
 

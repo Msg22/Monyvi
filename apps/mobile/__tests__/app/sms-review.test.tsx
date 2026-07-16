@@ -25,11 +25,13 @@ interface MockConsentSheetProps {
   readonly visible: boolean;
   readonly onContinue: () => Promise<void>;
   readonly onNotNow: () => void;
+  readonly onPrivacyDetails: () => void;
 }
 
 const mockClearTransactions = jest.fn();
 const mockRetry = jest.fn<Promise<void>, []>();
 const mockRouterBack = jest.fn();
+const mockRouterPush = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockMarkSyncComplete = jest.fn<Promise<void>, []>();
 const mockShowToast = jest.fn();
@@ -75,7 +77,11 @@ jest.mock("expo-router", () => ({
   useFocusEffect: (callback: () => (() => void) | undefined): void => {
     focusCleanup = callback();
   },
-  useRouter: () => ({ back: mockRouterBack, replace: mockRouterReplace }),
+  useRouter: () => ({
+    back: mockRouterBack,
+    push: mockRouterPush,
+    replace: mockRouterReplace,
+  }),
 }));
 
 jest.mock("@/context/SmsScanContext", () => ({
@@ -180,7 +186,7 @@ describe("SMS review route", () => {
     });
   });
 
-  it("connects partial retry and clears transient state on Back or abandonment", () => {
+  it("connects partial retry and clears transient state on Back", () => {
     render(<SmsReviewScreen />);
     const props = mockTransactionReview.mock.calls[0]?.[0];
     if (!props) throw new Error("TransactionReview was not rendered");
@@ -192,9 +198,27 @@ describe("SMS review route", () => {
     props.onBack();
     expect(mockClearTransactions).toHaveBeenCalledTimes(1);
     expect(mockRouterBack).toHaveBeenCalledTimes(1);
+  });
 
+  it("preserves transient state while opening privacy details", () => {
+    render(<SmsReviewScreen />);
+    const consentProps = mockConsentSheet.mock.calls.at(-1)?.[0];
+    if (!consentProps) throw new Error("Consent sheet was not rendered");
+
+    act(() => consentProps.onPrivacyDetails());
     focusCleanup?.();
-    expect(mockClearTransactions).toHaveBeenCalledTimes(2);
+
+    expect(mockDismissConsentRequired).toHaveBeenCalledTimes(1);
+    expect(mockRouterPush).toHaveBeenCalledWith("/ai-privacy-details");
+    expect(mockClearTransactions).not.toHaveBeenCalled();
+  });
+
+  it("clears transient state when the review route unmounts", () => {
+    const { unmount } = render(<SmsReviewScreen />);
+
+    unmount();
+
+    expect(mockClearTransactions).toHaveBeenCalledTimes(1);
   });
 
   it("clears transient state after discard and successful save", async () => {
