@@ -46,6 +46,11 @@ export type HybridSmsUnresolvedReason =
   | AiUnresolvedCandidate["reason"]
   | "ai_failed";
 
+export type TrustedRejectionDisposition =
+  | "not_trusted_rejection"
+  | "route_to_hybrid"
+  | "filter_before_ai";
+
 export interface SmsParserDiagnostics {
   readonly mode: SmsParserMode;
   readonly attemptedAi: boolean;
@@ -232,12 +237,10 @@ const trustedCatalogProvider = createBundledTrustedSmsCatalogProvider(
   QNB_EGYPT_TRUSTED_SMS_CATALOG
 );
 
-export function shouldRouteTrustedRejection(
+export function getTrustedRejectionDisposition(
   candidate: SmsCandidate,
   supportedCurrencies: readonly string[]
-): boolean {
-  if (!shouldUseHybridSmsParser()) return false;
-
+): TrustedRejectionDisposition {
   const result = parseSmsWithTrustedCatalog({
     candidates: [
       {
@@ -251,7 +254,11 @@ export function shouldRouteTrustedRejection(
     activation: trustedCatalogProvider.getActivation(),
     supportedCurrencies,
   });
-  return result.outcomes[0]?.status === "rejected";
+  if (result.outcomes[0]?.status !== "rejected") {
+    return "not_trusted_rejection";
+  }
+
+  return shouldUseHybridSmsParser() ? "route_to_hybrid" : "filter_before_ai";
 }
 
 function mapTrustedTransaction(
@@ -505,6 +512,21 @@ export async function parseSmsWithOrchestrator(
 
   if (shouldUseHybridSmsParser()) {
     return parseHybrid(candidates, context, onProgress, abortSignal);
+  }
+
+  if (candidates.length === 0) {
+    return {
+      transactions: [],
+      hasError: false,
+      unresolvedCandidates: [],
+      diagnostics: createDiagnostics({
+        mode: getAiDiagnosticsMode(),
+        attemptedAi: false,
+        attemptedLocal: false,
+        candidateCount: 0,
+        resultCount: 0,
+      }),
+    };
   }
 
   try {

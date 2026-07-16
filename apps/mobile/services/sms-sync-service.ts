@@ -30,8 +30,8 @@ import {
   type SmsCandidate,
 } from "./ai-sms-parser-service";
 import {
+  getTrustedRejectionDisposition,
   parseSmsWithOrchestrator,
-  shouldRouteTrustedRejection,
   toSmsParserDiagnosticsLogContext,
   type HybridSmsUnresolvedCandidate,
   type SmsParserDiagnostics,
@@ -349,12 +349,16 @@ async function executeScanPipeline(
       });
 
       const candidate = { message: sms, smsFingerprint: fingerprint };
+      const trustedRejectionDisposition = getTrustedRejectionDisposition(
+        candidate,
+        options.aiContext.supportedCurrencies
+      );
+      if (trustedRejectionDisposition === "filter_before_ai") {
+        continue;
+      }
       if (
         isNonTransactionalSms(sms.body) &&
-        !shouldRouteTrustedRejection(
-          candidate,
-          options.aiContext.supportedCurrencies
-        )
+        trustedRejectionDisposition !== "route_to_hybrid"
       ) {
         continue;
       }

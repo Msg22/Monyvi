@@ -276,8 +276,12 @@ trusted template and verify messages return to the unresolved path.
   date/time values, transcript, or AI response body.
 - **FR-030**: Parser-source and failure-reason values MUST be stable codes, not
   translated display text.
-- **FR-031**: The hybrid capability MUST support staged enablement and complete
-  disablement without activating candidate-only patterns.
+- **FR-031**: The hybrid transaction-parsing capability MUST support staged
+  enablement and complete disablement without activating candidate-only
+  patterns. Complete disablement MUST route eligible transaction candidates to
+  the existing AI path, while exact active trusted rejection templates (such as
+  OTP or promotional messages) remain pre-AI eligibility filters and MUST NOT be
+  sent to AI.
 - **FR-032**: Existing explicit development modes for fixture-only and
   local-development parsing MUST remain available and must not be confused with
   the production hybrid policy.

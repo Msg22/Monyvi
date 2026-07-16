@@ -137,8 +137,8 @@ const mockParseSmsWithOrchestrator = jest.fn<
   Promise<MockParserResult>,
   unknown[]
 >(() => Promise.resolve({ transactions: [] }));
-const mockShouldRouteTrustedRejection = jest.fn<boolean, [unknown]>(
-  () => false
+const mockGetTrustedRejectionDisposition = jest.fn<string, [unknown]>(
+  () => "not_trusted_rejection"
 );
 
 function mockWithParserDiagnostics(
@@ -169,8 +169,8 @@ jest.mock("@/services/sms-parser-orchestrator", () => ({
   toSmsParserDiagnosticsLogContext: (
     diagnostics: SmsParserOrchestratorResult["diagnostics"]
   ): Readonly<Record<string, unknown>> => ({ ...diagnostics }),
-  shouldRouteTrustedRejection: (candidate: unknown): boolean =>
-    mockShouldRouteTrustedRejection(candidate),
+  getTrustedRejectionDisposition: (candidate: unknown): string =>
+    mockGetTrustedRejectionDisposition(candidate),
 }));
 
 // ---------------------------------------------------------------------------
@@ -282,6 +282,7 @@ describe("sms-sync-service", () => {
       )
     );
     mockParseSmsWithOrchestrator.mockResolvedValue({ transactions: [] });
+    mockGetTrustedRejectionDisposition.mockReturnValue("not_trusted_rejection");
   });
 
   // =========================================================================
@@ -408,7 +409,7 @@ describe("sms-sync-service", () => {
         body: "QNB OTP:369154 at Orange for EGP 1572 الرقم السرى مخصص لعملية الشراء اونلاين برجاء عدم الافصاح عنه",
       });
       mockReadSmsInbox.mockResolvedValue([sms]);
-      mockShouldRouteTrustedRejection.mockReturnValueOnce(true);
+      mockGetTrustedRejectionDisposition.mockReturnValueOnce("route_to_hybrid");
 
       await scanAndParseSms(defaultOptions());
 
@@ -417,6 +418,25 @@ describe("sms-sync-service", () => {
         | undefined;
       expect(candidates).toHaveLength(1);
       expect(candidates?.[0]?.message.id).toBe("sms-trusted-otp");
+    });
+
+    it("filters an exact trusted rejection before AI when hybrid is disabled", async () => {
+      const sms = createSmsMessage({
+        id: "sms-trusted-promotion",
+        address: "QNB ALAHLI",
+        body: "trusted promotional template",
+      });
+      mockReadSmsInbox.mockResolvedValue([sms]);
+      mockGetTrustedRejectionDisposition.mockReturnValueOnce(
+        "filter_before_ai"
+      );
+
+      await scanAndParseSms(defaultOptions());
+
+      const candidates = mockParseSmsWithOrchestrator.mock.calls[0]?.[0] as
+        | readonly SmsCandidate[]
+        | undefined;
+      expect(candidates).toEqual([]);
     });
 
     it("should stop when local parser mode is blocked by AI transaction suggestions", async () => {

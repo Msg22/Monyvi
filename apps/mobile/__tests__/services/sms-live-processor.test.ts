@@ -26,6 +26,9 @@ const mockComputeSmsFingerprint = jest.fn<
   [SmsFingerprintInput]
 >();
 const mockIsLikelyFinancialSms = jest.fn<boolean, [string]>();
+const mockGetTrustedRejectionDisposition = jest.fn<string, [SmsCandidate]>(
+  () => "not_trusted_rejection"
+);
 
 jest.mock("@monyvi/logic", () => ({
   computeSmsFingerprint: (input: SmsFingerprintInput): Promise<string> =>
@@ -69,6 +72,8 @@ jest.mock("@/services/sms-parser-orchestrator", () => ({
   toSmsParserDiagnosticsLogContext: (
     diagnostics: SmsParserOrchestratorResult["diagnostics"]
   ): Readonly<Record<string, unknown>> => ({ ...diagnostics }),
+  getTrustedRejectionDisposition: (candidate: SmsCandidate): string =>
+    mockGetTrustedRejectionDisposition(candidate),
 }));
 
 function mockWithParserDiagnostics(
@@ -147,6 +152,7 @@ describe("sms-live-processor", () => {
     mockHasExistingSmsFingerprint.mockResolvedValue(false);
     mockComputeSmsFingerprint.mockResolvedValue("hash-live");
     mockIsLikelyFinancialSms.mockReturnValue(true);
+    mockGetTrustedRejectionDisposition.mockReturnValue("not_trusted_rejection");
     mockParseSmsWithOrchestrator.mockResolvedValue({
       transactions: [createParsedTransaction()],
       hasError: false,
@@ -371,6 +377,20 @@ describe("sms-live-processor", () => {
     expect(mockGetAiProcessingConsentStatus).toHaveBeenCalledTimes(1);
     expect(mockIsLikelyFinancialSms).toHaveBeenCalledWith("Dinner tonight?");
     expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
+    expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
+  });
+
+  it("filters an exact trusted rejection before live AI parsing", async () => {
+    mockGetTrustedRejectionDisposition.mockReturnValueOnce("filter_before_ai");
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB ALAHLI",
+      body: "trusted promotional template",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("ignored");
     expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
 

@@ -12,6 +12,7 @@ import {
   type SmsCandidate,
 } from "./ai-sms-parser-service";
 import {
+  getTrustedRejectionDisposition,
   parseSmsWithOrchestrator,
   toSmsParserDiagnosticsLogContext,
 } from "./sms-parser-orchestrator";
@@ -243,6 +244,13 @@ export async function processLiveSmsEvent(
       },
       smsFingerprint: confirmedSmsFingerprint,
     };
+
+    if (
+      getTrustedRejectionDisposition(candidate, context.supportedCurrencies) ===
+      "filter_before_ai"
+    ) {
+      return createResult("ignored", confirmedSmsFingerprint);
+    }
 
     let aiResult: Awaited<ReturnType<typeof parseSmsWithOrchestrator>>;
     try {

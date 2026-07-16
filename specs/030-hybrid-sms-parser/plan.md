@@ -224,8 +224,9 @@ retry unresolved messages, while the notice remains a presentational component.
 1. Run targeted Jest suites, typecheck, lint, i18n, privacy checks, and affected
    SMS E2E journeys.
 2. Benchmark a 1,000-candidate batch and record safe aggregate metrics only.
-3. Verify feature disablement routes every candidate to existing AI behavior and
-   that invalid catalog state fails closed.
+3. Verify feature disablement routes every eligible transaction candidate to
+   existing AI behavior, keeps exact active trusted rejection templates out of
+   AI, and ensures invalid catalog state fails closed.
 4. Complete the manual QA/automation coverage matrix in the PR description.
 
 ## Complexity Tracking

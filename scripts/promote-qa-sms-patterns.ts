@@ -188,7 +188,7 @@ function validatePromotion(
 
 function mutateFixedText(text: string): string {
   const characterIndex = [...text].findIndex((character) => character.trim());
-  if (characterIndex < 0) return `${text}!`;
+  if (characterIndex < 0) return "";
   const characters = [...text];
   characters[characterIndex] = characters[characterIndex] === "!" ? "?" : "!";
   return characters.join("");

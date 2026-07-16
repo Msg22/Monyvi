@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { qaCandidateArtifactSchema } from "../../packages/logic/src/parsers/qa-sms-pattern-intake/qa-sms-artifact-schema";
 import type { QaCandidateArtifact } from "../../packages/logic/src/parsers/qa-sms-pattern-intake/qa-sms-pattern-types";
 import type { TrustedSmsPromotionRecord } from "../../packages/logic/src/parsers/trusted-sms-pattern-types";
 import { QNB_EGYPT_TRUSTED_SMS_CATALOG } from "../../packages/logic/src/parsers/trusted-sms-patterns";
+import {
+  TRUSTED_SMS_CATALOG_VERSION,
+  TRUSTED_SMS_DISABLED_PATTERN_IDS,
+  TRUSTED_SMS_PROMOTION_RECORDS,
+} from "../../packages/logic/src/parsers/trusted-sms-patterns/promotion-manifest";
 import {
   promoteQaSmsPatterns,
   serializeTrustedSmsCatalogSources,
@@ -26,6 +31,17 @@ function readCandidates(
   return catalog.candidates.map((candidate) =>
     qaCandidateArtifactSchema.parse(candidate)
   );
+}
+
+function readAllCommittedCandidates(): readonly QaCandidateArtifact[] {
+  const directory = path.resolve(
+    process.cwd(),
+    "packages/logic/src/parsers/qa-sms-pattern-candidates/qnb"
+  );
+  return readdirSync(directory)
+    .filter((fileName) => fileName.endsWith(".json"))
+    .sort()
+    .flatMap((fileName) => readCandidates(fileName));
 }
 
 function buildRecord(
@@ -109,6 +125,22 @@ test("applies explicit bundled per-pattern disablement during regeneration", () 
   });
 
   assert.equal(catalog.patterns[0]?.enabled, false);
+});
+
+test("regenerates the complete committed promotion manifest", () => {
+  const catalog = promoteQaSmsPatterns({
+    candidates: readAllCommittedCandidates(),
+    promotionRecords: TRUSTED_SMS_PROMOTION_RECORDS,
+    catalogVersion: TRUSTED_SMS_CATALOG_VERSION,
+    disabledPatternIds: TRUSTED_SMS_DISABLED_PATTERN_IDS,
+  });
+
+  assert.equal(
+    catalog.patterns.length,
+    TRUSTED_SMS_PROMOTION_RECORDS.filter(
+      (record) => record.decision === "promote"
+    ).length
+  );
 });
 
 test("rejects unknown bundled disablement identities", () => {

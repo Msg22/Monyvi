@@ -25,8 +25,8 @@ jest.mock("@/services/profile-service", () => ({
 
 import type { ParsedSmsTransaction } from "@monyvi/logic";
 import {
+  getTrustedRejectionDisposition,
   parseSmsWithOrchestrator,
-  shouldRouteTrustedRejection,
 } from "@/services/sms-parser-orchestrator";
 
 const originalEnv = process.env;
@@ -133,19 +133,28 @@ describe("sms-parser-orchestrator", () => {
 
   it("routes only an exact active trusted rejection around broad prefilters", () => {
     expect(
-      shouldRouteTrustedRejection(trustedOtpCandidate(), ["EGP", "USD"])
-    ).toBe(true);
+      getTrustedRejectionDisposition(trustedOtpCandidate(), ["EGP", "USD"])
+    ).toBe("route_to_hybrid");
     expect(
-      shouldRouteTrustedRejection(trustedOtpCandidate(" extra"), ["EGP", "USD"])
-    ).toBe(false);
+      getTrustedRejectionDisposition(trustedOtpCandidate(" extra"), [
+        "EGP",
+        "USD",
+      ])
+    ).toBe("not_trusted_rejection");
   });
 
-  it("does not bypass broad prefilters for trusted rejections when hybrid is disabled", () => {
+  it("filters trusted rejections before AI when hybrid is disabled", () => {
     process.env.EXPO_PUBLIC_HYBRID_SMS_PARSER_ENABLED = "false";
 
     expect(
-      shouldRouteTrustedRejection(trustedOtpCandidate(), ["EGP", "USD"])
-    ).toBe(false);
+      getTrustedRejectionDisposition(trustedOtpCandidate(), ["EGP", "USD"])
+    ).toBe("filter_before_ai");
+    expect(
+      getTrustedRejectionDisposition(trustedOtpCandidate(" extra"), [
+        "EGP",
+        "USD",
+      ])
+    ).toBe("not_trusted_rejection");
   });
 
   it("routes exact trusted candidates locally and sends only unresolved candidates to AI", async () => {
@@ -229,6 +238,21 @@ describe("sms-parser-orchestrator", () => {
     expect(result.diagnostics).toMatchObject({
       mode: "ai-primary",
       attemptedLocal: false,
+    });
+  });
+
+  it("does not invoke AI when the disabled hybrid path has no candidates", async () => {
+    process.env.EXPO_PUBLIC_HYBRID_SMS_PARSER_ENABLED = "false";
+
+    const result = await parseSmsWithOrchestrator([], context);
+
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(result.transactions).toEqual([]);
+    expect(result.diagnostics).toMatchObject({
+      mode: "ai-primary",
+      attemptedAi: false,
+      candidateCount: 0,
+      resultCount: 0,
     });
   });
 
