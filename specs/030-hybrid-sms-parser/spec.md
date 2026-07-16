@@ -176,6 +176,8 @@ trusted template and verify messages return to the unresolved path.
   can understand.
 - The same SMS arrives through foreground, background, and killed-app paths.
 - A local parser result is received after the consuming screen unmounts.
+- An emulator or platform boundary replaces unsupported Unicode SMS text with
+  repeated question marks or replacement characters.
 
 ## Approved UI Direction
 
@@ -316,6 +318,11 @@ trusted template and verify messages return to the unresolved path.
   memory-only and MUST be cleared on save, discard, explicit reset, review Back
   navigation, route replacement that abandons review, logout, and private
   runtime unmount.
+- **FR-041**: SMS text that is conservatively identified as corrupted by a
+  platform boundary MUST be excluded before local or AI parsing. The mobile
+  batch/live paths and the `parse-sms` Edge Function MUST enforce this rule, and
+  deterministic E2E mode MUST fail closed rather than defaulting to the real
+  Edge parser.
 
 ### Key Entities
 

@@ -65,6 +65,13 @@ Maestro attempt so an app-flow failure is surfaced rather than hidden by a
 retry. `hybrid-fixture` is accepted only in explicit non-production E2E mode and
 is not a production or normal-development parser option.
 
+Do not inject Arabic or other non-ASCII fixture messages with
+`adb emu sms send`; the emulator console can replace unsupported characters with
+literal `?` values. Use the guarded fixture inbox for deterministic Unicode
+parser coverage, or a physical device when validating the real inbox. E2E runs
+must always select `fixture`, `hybrid-fixture`, or `local` parser mode
+explicitly so test configuration cannot invoke the paid Edge parser.
+
 The benchmark prints only catalog version, aggregate counts, elapsed time, the
 one-second budget, and pass/fail. It never prints message or extracted values.
 

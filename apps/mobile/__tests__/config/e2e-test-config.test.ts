@@ -7,6 +7,7 @@ import {
   shouldUseFixtureSmsParser,
   shouldUseHybridSmsParser,
   shouldUseLocalSmsParser,
+  shouldBlockEdgeSmsParserInE2e,
 } from "@/config/e2e-test-config";
 
 const originalEnv = process.env;
@@ -63,6 +64,14 @@ describe("e2e-test-config", () => {
     expect(shouldUseFixtureSmsParser()).toBe(true);
     expect(shouldUseHybridSmsParser()).toBe(true);
     expect(shouldUseLocalSmsParser()).toBe(false);
+    expect(shouldBlockEdgeSmsParserInE2e()).toBe(false);
+  });
+
+  it("blocks the real Edge SMS parser in E2E mode", () => {
+    process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
+
+    expect(getAiSmsParserMode()).toBe("edge");
+    expect(shouldBlockEdgeSmsParserInE2e()).toBe(true);
   });
 
   it("fails closed when hybrid fixture mode is requested outside E2E", () => {

@@ -2,6 +2,7 @@ import { database, type Category } from "@monyvi/db";
 import {
   type ParsedSmsTransaction,
   computeSmsFingerprint,
+  isLikelyCorruptedSmsText,
   isLikelyFinancialSms,
   SUPPORTED_CURRENCIES,
 } from "@monyvi/logic";
@@ -173,7 +174,10 @@ export async function processLiveSmsEvent(
     return createResult("infrastructure_error", undefined);
   }
 
-  if (!isLikelyFinancialSms(event.body)) {
+  if (
+    isLikelyCorruptedSmsText(event.body) ||
+    !isLikelyFinancialSms(event.body)
+  ) {
     return createResult("ignored");
   }
 

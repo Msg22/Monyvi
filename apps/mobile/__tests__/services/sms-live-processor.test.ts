@@ -26,6 +26,7 @@ const mockComputeSmsFingerprint = jest.fn<
   [SmsFingerprintInput]
 >();
 const mockIsLikelyFinancialSms = jest.fn<boolean, [string]>();
+const mockIsLikelyCorruptedSmsText = jest.fn<boolean, [string]>();
 const mockGetTrustedRejectionDisposition = jest.fn<string, [SmsCandidate]>(
   () => "not_trusted_rejection"
 );
@@ -35,6 +36,8 @@ jest.mock("@monyvi/logic", () => ({
     mockComputeSmsFingerprint(input),
   isLikelyFinancialSms: (body: string): boolean =>
     mockIsLikelyFinancialSms(body),
+  isLikelyCorruptedSmsText: (body: string): boolean =>
+    mockIsLikelyCorruptedSmsText(body),
   SUPPORTED_CURRENCIES: [{ code: "EGP" }],
 }));
 
@@ -152,6 +155,7 @@ describe("sms-live-processor", () => {
     mockHasExistingSmsFingerprint.mockResolvedValue(false);
     mockComputeSmsFingerprint.mockResolvedValue("hash-live");
     mockIsLikelyFinancialSms.mockReturnValue(true);
+    mockIsLikelyCorruptedSmsText.mockReturnValue(false);
     mockGetTrustedRejectionDisposition.mockReturnValue("not_trusted_rejection");
     mockParseSmsWithOrchestrator.mockResolvedValue({
       transactions: [createParsedTransaction()],
@@ -190,6 +194,23 @@ describe("sms-live-processor", () => {
       },
     });
     expect(context.supportedCurrencies).toEqual(["EGP"]);
+  });
+
+  it("ignores garbled SMS text before fingerprinting or parsing", async () => {
+    const body = "??? QNB ?????? ???? 13.5% ??? 1000EGP ???????";
+    mockIsLikelyCorruptedSmsText.mockReturnValueOnce(true);
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB ALAHLI",
+      body,
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("ignored");
+    expect(mockIsLikelyCorruptedSmsText).toHaveBeenCalledWith(body);
+    expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
+    expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
 
   it("accepts the shared hybrid parser result in foreground delivery", async () => {

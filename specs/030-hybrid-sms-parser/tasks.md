@@ -406,6 +406,9 @@ and all affected delivery modes before PR handoff.
 - [x] T069 Update `specs/030-hybrid-sms-parser/tasks.md` checkboxes and prepare
       the PR coverage matrix mapping every manual scenario to unit, integration,
       E2E, or manual-only evidence
+- [x] T070 Add conservative corrupted-SMS rejection before batch, live, and Edge
+      parsing; block accidental real Edge parser use in E2E mode; and document
+      Unicode-safe emulator QA (FR-041)
 
 ---
 

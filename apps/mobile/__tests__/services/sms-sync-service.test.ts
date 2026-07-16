@@ -97,6 +97,7 @@ jest.mock("@/services/sms-reader-service", () => ({
 // ---------------------------------------------------------------------------
 
 const mockIsKnownFinancialSender = jest.fn<boolean, [string]>(() => true);
+const mockIsLikelyCorruptedSmsText = jest.fn<boolean, [string]>(() => false);
 const mockComputeSmsFingerprint = jest.fn<
   Promise<string>,
   [SmsFingerprintInput]
@@ -115,6 +116,8 @@ jest.mock("@monyvi/logic", () => {
     ...transactionKeyModule,
     isKnownFinancialSender: (...args: unknown[]) =>
       mockIsKnownFinancialSender(...(args as [string])),
+    isLikelyCorruptedSmsText: (body: string): boolean =>
+      mockIsLikelyCorruptedSmsText(body),
     computeSmsFingerprint: (...args: unknown[]) =>
       mockComputeSmsFingerprint(...(args as [SmsFingerprintInput])),
   };
@@ -283,6 +286,7 @@ describe("sms-sync-service", () => {
     jest.clearAllMocks();
     mockReadSmsInbox.mockResolvedValue([]);
     mockIsKnownFinancialSender.mockReturnValue(true);
+    mockIsLikelyCorruptedSmsText.mockReturnValue(false);
     mockComputeSmsFingerprint.mockImplementation((input: SmsFingerprintInput) =>
       Promise.resolve(
         `hash-${input.sender}-${input.receivedAtMs}-${input.body.slice(0, 10)}`
@@ -485,6 +489,27 @@ describe("sms-sync-service", () => {
       expect(result.totalScanned).toBe(2);
       expect(result.totalFound).toBe(1);
       expect(result.transactions).toHaveLength(1);
+    });
+
+    it("does not send a garbled known-sender SMS to the parser", async () => {
+      const garbled = createSmsMessage({
+        address: "QNB ALAHLI",
+        body: "??? QNB ?????? ???? 13.5% ??? 1000EGP ???????",
+      });
+      mockReadSmsInbox.mockResolvedValue([garbled]);
+      mockIsLikelyCorruptedSmsText.mockReturnValueOnce(true);
+
+      const result = await scanAndParseSms(defaultOptions());
+
+      expect(mockIsLikelyCorruptedSmsText).toHaveBeenCalledWith(garbled.body);
+      expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
+      expect(mockParseSmsWithOrchestrator).toHaveBeenCalledWith(
+        [],
+        stubAiContext,
+        expect.any(Function),
+        undefined
+      );
+      expect(result.totalFound).toBe(0);
     });
 
     it("should deduplicate against existing fingerprints", async () => {

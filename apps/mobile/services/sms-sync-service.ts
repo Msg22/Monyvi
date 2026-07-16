@@ -19,6 +19,7 @@ import { database, Transaction, Transfer } from "@monyvi/db";
 import {
   computeSmsFingerprint,
   getParsedSmsTransactionKey,
+  isLikelyCorruptedSmsText,
   isKnownFinancialSender,
   type ParsedSmsTransaction,
   type SmsMessage,
@@ -324,6 +325,10 @@ async function executeScanPipeline(
 
       // Filter by known Egyptian bank/fintech sender names
       if (!isKnownFinancialSender(sms.address)) {
+        continue;
+      }
+
+      if (isLikelyCorruptedSmsText(sms.body)) {
         continue;
       }
 

@@ -96,6 +96,14 @@ export function shouldUseFixtureSmsParser(): boolean {
   );
 }
 
+export function shouldBlockEdgeSmsParserInE2e(): boolean {
+  return (
+    getNodeEnv() !== "production" &&
+    isE2eTestMode() &&
+    getAiSmsParserMode() === "edge"
+  );
+}
+
 export function shouldUseFixtureSmsInbox(): boolean {
   const parserMode = getAiSmsParserMode();
   const isE2eFixtureInbox =

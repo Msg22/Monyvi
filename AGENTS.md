@@ -488,6 +488,12 @@ chore, perf, ci.
   use `adb` directly.
 - For Pixel emulator SMS testing, use:
   `adb -s emulator-5554 emu sms send <sender> "<message>"`.
+- Use emulator-console SMS injection only for ASCII/GSM-safe payloads. It can
+  replace Arabic and other unsupported Unicode characters with literal `?`
+  characters, which no longer represent the original message.
+- For Unicode SMS parser QA, use the guarded fixture inbox or a physical device.
+  Deterministic SMS E2E runs MUST explicitly use `fixture`, `hybrid-fixture`, or
+  `local` parser mode; never let an E2E run default to the real `edge` parser.
 - Before judging app behavior in an Expo dev-client emulator, confirm Metro is
   reachable: run `adb -s emulator-5554 reverse tcp:8081 tcp:8081`, verify the
   app focus with `adb -s emulator-5554 shell dumpsys window`, and inspect Metro

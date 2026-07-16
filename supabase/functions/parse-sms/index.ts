@@ -19,6 +19,7 @@ import "edge-runtime";
 import { GoogleGenAI } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 import { hasActiveAiProcessingConsent } from "../_shared/ai-consent.ts";
+import { isLikelyCorruptedSmsText } from "../_shared/sms-text-quality.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -480,6 +481,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return jsonResponse({ transactions: [] });
     }
 
+    const processableMessages = body.messages.filter(
+      (message) => !isLikelyCorruptedSmsText(message.body)
+    );
+    const corruptedMessageCount =
+      body.messages.length - processableMessages.length;
+
+    if (corruptedMessageCount > 0) {
+      console.warn("[parse-sms] Skipped corrupted SMS input", {
+        corruptedMessageCount,
+      });
+    }
+
+    if (processableMessages.length === 0) {
+      return jsonResponse({ transactions: [] });
+    }
+
     // 3. Init Gemini
     const apiKey = Deno.env.get("GEMINI_API_KEY");
     if (!apiKey) {
@@ -497,13 +514,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
     //    Client-side chunking ensures each call stays under the ~150s limit.
     const result = await processWithRetry(
       ai,
-      body.messages,
+      processableMessages,
       systemPrompt,
       responseSchema
     );
 
     console.log(
-      `[parse-sms] Parsed ${result.transactions.length} transactions from ${body.messages.length} messages`
+      `[parse-sms] Parsed ${result.transactions.length} transactions from ${processableMessages.length} messages`
     );
 
     // 6. Return results
