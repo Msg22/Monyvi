@@ -11,6 +11,7 @@ interface MatchTrustedSmsTemplateInput {
   readonly candidate: TrustedSmsTemplateCandidate;
   readonly patterns: readonly TrustedSmsPattern[];
   readonly supportedCurrencies: readonly string[];
+  readonly includeDisabledPatterns?: boolean;
 }
 
 interface StructuralMatch {
@@ -69,10 +70,11 @@ function senderMatches(sender: string, aliases: readonly string[]): boolean {
 
 function structuralMatch(
   candidate: TrustedSmsTemplateCandidate,
-  pattern: TrustedSmsPattern
+  pattern: TrustedSmsPattern,
+  includeDisabledPatterns: boolean
 ): StructuralMatch | null {
   if (
-    !pattern.enabled ||
+    (!pattern.enabled && !includeDisabledPatterns) ||
     !senderMatches(candidate.sender, pattern.verifiedSenderAliases)
   ) {
     return null;
@@ -218,7 +220,11 @@ export function matchTrustedSmsTemplate(
     input.supportedCurrencies.map((currency) => currency.toUpperCase())
   );
   const evaluated = input.patterns.flatMap((pattern) => {
-    const structural = structuralMatch(input.candidate, pattern);
+    const structural = structuralMatch(
+      input.candidate,
+      pattern,
+      input.includeDisabledPatterns === true
+    );
     if (structural === null) return [];
     const result = evaluateMatch(structural, supportedCurrencies);
     return result === null ? [] : [result];

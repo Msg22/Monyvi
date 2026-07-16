@@ -13,6 +13,7 @@ export {
   type SmsFingerprintInput,
 } from "./sms-hash";
 export { isLikelyFinancialSms } from "./sms-keyword-filter";
+export { getParsedSmsTransactionKey } from "./parsed-sms-transaction-key";
 export { parseSmsWithLocalParser } from "./local-sms-parser";
 export { parseSmsWithTrustedCatalog } from "./trusted-sms-parser";
 export { matchTrustedSmsTemplate } from "./trusted-sms-template-matcher";

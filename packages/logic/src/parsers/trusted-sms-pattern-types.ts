@@ -159,7 +159,7 @@ export interface TrustedSmsParsedTransaction {
   readonly type: "EXPENSE" | "INCOME";
   readonly counterparty: string;
   readonly date: Date;
-  readonly categorySystemName: "other";
+  readonly categorySystemName: "other" | "income_other";
   readonly confidence: number;
   readonly reviewStatus: "needs_review";
   readonly reviewReasons: ReadonlyArray<

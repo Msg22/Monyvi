@@ -51,6 +51,9 @@ describe("useSmsReviewRetry", () => {
     );
     const { result } = renderHook(() => useSmsReviewRetry());
 
+    expect(result.current.unresolvedCount).toBe(1);
+    expect(result.current.retryableCount).toBe(1);
+
     act(() => {
       void result.current.retry();
       void result.current.retry();
@@ -58,7 +61,11 @@ describe("useSmsReviewRetry", () => {
     expect(mockRetrySmsReviewCandidates).toHaveBeenCalledTimes(1);
 
     act(() => {
-      resolveRetry?.({ transactions: [], unresolvedCandidates: [] });
+      resolveRetry?.({
+        transactions: [],
+        unresolvedCandidates: [],
+        hasRetryError: false,
+      });
     });
     await waitFor(() => expect(result.current.isRetrying).toBe(false));
     expect(mockUpdateReviewSession).toHaveBeenCalledWith(
@@ -97,6 +104,37 @@ describe("useSmsReviewRetry", () => {
 
     expect(result.current.hasRetryError).toBe(true);
     expect(mockUpdateReviewSession).not.toHaveBeenCalled();
+  });
+
+  it("commits successful rows and surfaces a retryable partial failure", async () => {
+    mockRetrySmsReviewCandidates.mockResolvedValueOnce({
+      transactions: [],
+      unresolvedCandidates: [
+        {
+          candidate: {
+            message: {
+              id: "1",
+              address: "NBE",
+              body: "raw",
+              date: 1,
+              read: false,
+            },
+            smsFingerprint: "fp-1",
+          },
+          reason: "ai_failed",
+          isRetryable: true,
+        },
+      ],
+      hasRetryError: true,
+    });
+    const { result } = renderHook(() => useSmsReviewRetry());
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(result.current.hasRetryError).toBe(true);
+    expect(mockUpdateReviewSession).toHaveBeenCalledTimes(1);
   });
 
   it("routes stale consent failures to consent recovery instead of generic retry error", async () => {

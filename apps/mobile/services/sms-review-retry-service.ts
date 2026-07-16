@@ -15,6 +15,7 @@ interface RetrySmsReviewCandidatesInput {
 export interface SmsReviewRetryResult {
   readonly transactions: readonly ParsedSmsTransaction[];
   readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
+  readonly hasRetryError: boolean;
 }
 
 function mergeTransactions(
@@ -40,6 +41,7 @@ export async function retrySmsReviewCandidates(
     return {
       transactions: input.transactions,
       unresolvedCandidates: input.unresolvedCandidates,
+      hasRetryError: false,
     };
   }
   const result = await parseSmsWithOrchestrator(
@@ -48,14 +50,15 @@ export async function retrySmsReviewCandidates(
     undefined,
     input.abortSignal
   );
-  if (result.hasError && result.isRetryable === false) {
-    throw new Error("SMS review retry failed");
-  }
+  const unresolvedCandidates = [
+    ...input.unresolvedCandidates.filter(({ isRetryable }) => !isRetryable),
+    ...result.unresolvedCandidates,
+  ];
   return {
     transactions: mergeTransactions(input.transactions, result.transactions),
-    unresolvedCandidates: [
-      ...input.unresolvedCandidates.filter(({ isRetryable }) => !isRetryable),
-      ...result.unresolvedCandidates,
-    ],
+    unresolvedCandidates,
+    hasRetryError:
+      result.hasError === true &&
+      unresolvedCandidates.some(({ isRetryable }) => isRetryable),
   };
 }

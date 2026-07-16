@@ -6,6 +6,7 @@ import { palette } from "@/constants/colors";
 
 interface PartialSmsResultsNoticeProps {
   readonly unresolvedCount: number;
+  readonly canRetry: boolean;
   readonly isRetrying: boolean;
   readonly hasRetryError: boolean;
   readonly onRetry: () => void;
@@ -13,6 +14,7 @@ interface PartialSmsResultsNoticeProps {
 
 export function PartialSmsResultsNotice({
   unresolvedCount,
+  canRetry,
   isRetrying,
   hasRetryError,
   onRetry,
@@ -33,29 +35,35 @@ export function PartialSmsResultsNotice({
         </Text>
         <Text className="mt-0.5 text-xs text-text-secondary dark:text-text-secondary-dark">
           {t(
-            hasRetryError
-              ? "partial_sms_retry_error"
-              : "partial_sms_description"
+            !canRetry
+              ? "partial_sms_try_later"
+              : hasRetryError
+                ? "partial_sms_retry_error"
+                : "partial_sms_description"
           )}
         </Text>
       </View>
-      <View className="mx-3 h-10 w-px bg-gold-600/50" />
-      <TouchableOpacity
-        testID="partial-sms-retry"
-        accessibilityRole="button"
-        accessibilityState={{ disabled: isRetrying, busy: isRetrying }}
-        disabled={isRetrying}
-        activeOpacity={0.7}
-        onPress={onRetry}
-        className="h-10 flex-row items-center justify-center"
-      >
-        <Ionicons name="sync" size={20} color={palette.nileGreen[600]} />
-        <Text className="ms-1.5 text-sm font-semibold text-nileGreen-700 dark:text-nileGreen-400">
-          {isRetrying
-            ? t("partial_sms_retrying")
-            : t("partial_sms_retry", { count: unresolvedCount })}
-        </Text>
-      </TouchableOpacity>
+      {canRetry && (
+        <>
+          <View className="mx-3 h-10 w-px bg-gold-600/50" />
+          <TouchableOpacity
+            testID="partial-sms-retry"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isRetrying, busy: isRetrying }}
+            disabled={isRetrying}
+            activeOpacity={0.7}
+            onPress={onRetry}
+            className="h-10 flex-row items-center justify-center"
+          >
+            <Ionicons name="sync" size={20} color={palette.nileGreen[600]} />
+            <Text className="ms-1.5 text-sm font-semibold text-nileGreen-700 dark:text-nileGreen-400">
+              {isRetrying
+                ? t("partial_sms_retrying")
+                : t("partial_sms_retry", { count: unresolvedCount })}
+            </Text>
+          </TouchableOpacity>
+        </>
+      )}
     </View>
   );
 }

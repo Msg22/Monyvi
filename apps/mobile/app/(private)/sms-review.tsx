@@ -49,7 +49,8 @@ import { logger } from "@/utils/logger";
 export default function SmsReviewScreen(): React.JSX.Element {
   const { t } = useTranslation("transactions");
   const router = useRouter();
-  const { transactions, clearTransactions } = useSmsScanContext();
+  const { transactions, unresolvedCandidates, clearTransactions } =
+    useSmsScanContext();
   const { markSyncComplete } = useSmsSync();
   const { showToast } = useToast();
   const { isDark } = useTheme();
@@ -109,11 +110,13 @@ export default function SmsReviewScreen(): React.JSX.Element {
           message: t("saved_from_sms", { count: result.savedCount }),
         });
 
-        markSyncComplete().catch((error: unknown) => {
-          logger.warn("smsReview.markSyncComplete.failed", {
-            errorName: error instanceof Error ? error.name : "unknown",
+        if (unresolvedCandidates.length === 0) {
+          markSyncComplete().catch((error: unknown) => {
+            logger.warn("smsReview.markSyncComplete.failed", {
+              errorName: error instanceof Error ? error.name : "unknown",
+            });
           });
-        });
+        }
         clearTransactions();
         router.replace("/(private)/(tabs)/transactions");
       } catch (err) {
@@ -127,7 +130,14 @@ export default function SmsReviewScreen(): React.JSX.Element {
         setIsSaving(false);
       }
     },
-    [clearTransactions, router, markSyncComplete, showToast, t]
+    [
+      clearTransactions,
+      router,
+      markSyncComplete,
+      showToast,
+      t,
+      unresolvedCandidates.length,
+    ]
   );
 
   // ── Discard ─────────────────────────────────────────────────────────
@@ -197,9 +207,10 @@ export default function SmsReviewScreen(): React.JSX.Element {
         })}
         workspaceVariant="sms"
         partialResults={
-          smsRetry.retryableCount > 0
+          smsRetry.unresolvedCount > 0
             ? {
-                unresolvedCount: smsRetry.retryableCount,
+                unresolvedCount: smsRetry.unresolvedCount,
+                canRetry: smsRetry.retryableCount > 0,
                 isRetrying: smsRetry.isRetrying,
                 hasRetryError: smsRetry.hasRetryError,
                 onRetry: () => void smsRetry.retry(),

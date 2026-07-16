@@ -82,6 +82,7 @@ describe("sms review retry service", () => {
     );
     expect(result.transactions).toEqual([existing, retried]);
     expect(result.unresolvedCandidates).toEqual([nonRetryable]);
+    expect(result.hasRetryError).toBe(false);
   });
 
   it("leaves the session unchanged when retry is cancelled", async () => {
@@ -100,14 +101,16 @@ describe("sms review retry service", () => {
     ).rejects.toBe(abort);
   });
 
-  it("does not commit a permanent retry failure as a completed session", async () => {
+  it("preserves successful retry results when another candidate fails permanently", async () => {
     const existing = transaction("existing");
+    const retried = transaction("retried");
     const pending = unresolved("retryable");
+    const permanent = unresolved("retryable", false);
     mockParseSmsWithOrchestrator.mockResolvedValueOnce({
-      transactions: [],
+      transactions: [retried],
       hasError: true,
       isRetryable: false,
-      unresolvedCandidates: [unresolved("retryable", false)],
+      unresolvedCandidates: [permanent],
     });
 
     await expect(
@@ -116,6 +119,34 @@ describe("sms review retry service", () => {
         unresolvedCandidates: [pending],
         parseContext: context,
       })
-    ).rejects.toThrow("SMS review retry failed");
+    ).resolves.toEqual({
+      transactions: [existing, retried],
+      unresolvedCandidates: [permanent],
+      hasRetryError: false,
+    });
+  });
+
+  it("surfaces retryable failures while preserving successful retry results", async () => {
+    const existing = transaction("existing");
+    const retried = transaction("retried");
+    const stillRetryable = unresolved("retryable");
+    mockParseSmsWithOrchestrator.mockResolvedValueOnce({
+      transactions: [retried],
+      hasError: true,
+      isRetryable: true,
+      unresolvedCandidates: [stillRetryable],
+    });
+
+    await expect(
+      retrySmsReviewCandidates({
+        transactions: [existing],
+        unresolvedCandidates: [unresolved("retryable")],
+        parseContext: context,
+      })
+    ).resolves.toEqual({
+      transactions: [existing, retried],
+      unresolvedCandidates: [stillRetryable],
+      hasRetryError: true,
+    });
   });
 });

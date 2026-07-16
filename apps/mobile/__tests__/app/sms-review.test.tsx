@@ -5,6 +5,7 @@ import React from "react";
 interface MockTransactionReviewProps {
   readonly partialResults: {
     readonly unresolvedCount: number;
+    readonly canRetry: boolean;
     readonly hasRetryError: boolean;
     readonly onRetry: () => void;
   };
@@ -49,6 +50,7 @@ const mockConsentSheet = jest.fn<void, [props: MockConsentSheetProps]>();
 const mockGrantConsent = jest.fn<Promise<void>, []>();
 const mockDismissConsentRequired = jest.fn();
 let mockRetryState = {
+  unresolvedCount: 2,
   retryableCount: 2,
   isRetrying: false,
   hasRetryError: false,
@@ -88,6 +90,7 @@ jest.mock("expo-router", () => ({
 jest.mock("@/context/SmsScanContext", () => ({
   useSmsScanContext: () => ({
     transactions: [mockTransaction],
+    unresolvedCandidates: mockRetryState.unresolvedCount > 0 ? [{}] : [],
     clearTransactions: mockClearTransactions,
   }),
 }));
@@ -173,6 +176,7 @@ describe("SMS review route", () => {
     mockMarkSyncComplete.mockResolvedValue(undefined);
     mockGrantConsent.mockResolvedValue(undefined);
     mockRetryState = {
+      unresolvedCount: 2,
       retryableCount: 2,
       isRetrying: false,
       hasRetryError: false,
@@ -193,6 +197,7 @@ describe("SMS review route", () => {
     if (!props) throw new Error("TransactionReview was not rendered");
 
     expect(props.partialResults.unresolvedCount).toBe(2);
+    expect(props.partialResults.canRetry).toBe(true);
     props.partialResults.onRetry();
     expect(mockRetry).toHaveBeenCalledTimes(1);
 
@@ -258,6 +263,30 @@ describe("SMS review route", () => {
     render(<SmsReviewScreen />);
 
     expect(mockTransactionReview.mock.calls[0]?.[0].isSaving).toBe(true);
+  });
+
+  it("keeps Save enabled and does not advance the sync checkpoint for a permanent remainder", async () => {
+    mockRetryState = {
+      ...mockRetryState,
+      unresolvedCount: 1,
+      retryableCount: 0,
+    };
+
+    render(<SmsReviewScreen />);
+    const reviewProps = mockTransactionReview.mock.calls[0]?.[0];
+    if (!reviewProps) throw new Error("TransactionReview was not rendered");
+
+    expect(reviewProps.partialResults).toEqual(
+      expect.objectContaining({ unresolvedCount: 1, canRetry: false })
+    );
+    expect(reviewProps.isSaving).toBe(false);
+
+    await act(async () => {
+      await reviewProps.onSave([mockTransaction], new Map(), new Map());
+    });
+
+    expect(mockMarkSyncComplete).not.toHaveBeenCalled();
+    expect(mockClearTransactions).toHaveBeenCalledTimes(1);
   });
 
   it("re-consents and retries unresolved messages after consent expires", async () => {

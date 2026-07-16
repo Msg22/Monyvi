@@ -623,6 +623,7 @@ export async function parseSmsWithAi(
       if (
         chunkResult.hasError &&
         chunkResult.isRetryable !== false &&
+        chunkResult.transactions.length === 0 &&
         currentChunk.messages.length > 0 &&
         !currentChunk.isRetry &&
         currentChunk.messages.length > MIN_CHUNK_SIZE_FOR_SPLIT

@@ -43,6 +43,7 @@ export interface TransactionReviewProps {
   readonly workspaceVariant?: "default" | "sms";
   readonly partialResults?: {
     readonly unresolvedCount: number;
+    readonly canRetry: boolean;
     readonly isRetrying: boolean;
     readonly hasRetryError: boolean;
     readonly onRetry: () => void;
@@ -435,6 +436,7 @@ export function TransactionReview({
             {partialResults && (
               <PartialSmsResultsNotice
                 unresolvedCount={partialResults.unresolvedCount}
+                canRetry={partialResults.canRetry}
                 isRetrying={partialResults.isRetrying}
                 hasRetryError={partialResults.hasRetryError}
                 onRetry={partialResults.onRetry}

@@ -106,12 +106,19 @@ const mockComputeSmsFingerprint = jest.fn<
   )
 );
 
-jest.mock("@monyvi/logic", () => ({
-  isKnownFinancialSender: (...args: unknown[]) =>
-    mockIsKnownFinancialSender(...(args as [string])),
-  computeSmsFingerprint: (...args: unknown[]) =>
-    mockComputeSmsFingerprint(...(args as [SmsFingerprintInput])),
-}));
+jest.mock("@monyvi/logic", () => {
+  const transactionKeyModule = jest.requireActual<
+    typeof import("../../../../packages/logic/src/parsers/parsed-sms-transaction-key")
+  >("../../../../packages/logic/src/parsers/parsed-sms-transaction-key");
+
+  return {
+    ...transactionKeyModule,
+    isKnownFinancialSender: (...args: unknown[]) =>
+      mockIsKnownFinancialSender(...(args as [string])),
+    computeSmsFingerprint: (...args: unknown[]) =>
+      mockComputeSmsFingerprint(...(args as [SmsFingerprintInput])),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Mock: @nozbe/watermelondb

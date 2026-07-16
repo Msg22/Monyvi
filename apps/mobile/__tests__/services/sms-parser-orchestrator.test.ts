@@ -196,6 +196,18 @@ describe("sms-parser-orchestrator", () => {
     });
   });
 
+  it("rechecks consent immediately before sending unresolved candidates to AI", async () => {
+    mockGetAiProcessingConsentStatus
+      .mockResolvedValueOnce({ isConsented: true })
+      .mockResolvedValueOnce({ isConsented: false });
+
+    await expect(
+      parseSmsWithOrchestrator([candidate()], context)
+    ).rejects.toMatchObject({ name: "AiConsentRequiredError" });
+
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+  });
+
   it("resolves exact trusted rejection templates without sending them to AI", async () => {
     const otp = candidate({
       message: {
@@ -372,6 +384,29 @@ describe("sms-parser-orchestrator", () => {
 
     expect(result.transactions).toEqual([duplicate]);
     expect(result.diagnostics.duplicateDiscardedCount).toBe(1);
+  });
+
+  it("preserves distinct AI transactions that originate from the same SMS", async () => {
+    const purchase = parsedTransaction({
+      amount: 100,
+      smsFingerprint: "shared-fingerprint",
+      deduplicationHash: "shared-fingerprint",
+    });
+    const fee = parsedTransaction({
+      amount: 5,
+      counterparty: "Card fee",
+      smsFingerprint: "shared-fingerprint",
+      deduplicationHash: "shared-fingerprint",
+    });
+    mockParseSmsWithAi.mockResolvedValueOnce({
+      transactions: [purchase, fee],
+      hasError: false,
+    });
+
+    const result = await parseSmsWithOrchestrator([candidate()], context);
+
+    expect(result.transactions).toEqual([purchase, fee]);
+    expect(result.diagnostics.duplicateDiscardedCount).toBe(0);
   });
 
   it("preserves retryable unresolved candidates when AI returns an error", async () => {

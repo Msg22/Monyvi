@@ -229,6 +229,36 @@ describe("trusted SMS exact template matcher", () => {
     ).toEqual({ status: "unresolved", reason: "no_match", patternIds: [] });
   });
 
+  it("can identify an exact disabled rejection for fallback routing", () => {
+    const source = findPattern("qnb-egypt-otp-card-purchase-v1");
+    const disabled = {
+      ...source,
+      enabled: false,
+      integrityDigest: "",
+    };
+    const signedPattern = {
+      ...disabled,
+      integrityDigest: createTrustedSmsPatternIntegrityDigest(disabled),
+    };
+
+    expect(
+      matchTrustedSmsTemplate({
+        candidate: {
+          sender: source.verifiedSenderAliases[0] ?? "QNB EGYPT",
+          body: renderTrustedPattern(source),
+          receivedAtMs: Date.now(),
+        },
+        patterns: [signedPattern],
+        supportedCurrencies: ["EGP", "USD"],
+        includeDisabledPatterns: true,
+      })
+    ).toEqual({
+      status: "rejected",
+      patternId: source.patternId,
+      reason: "otp",
+    });
+  });
+
   it("fails closed when more than one pattern resolves", () => {
     const first = buildTrustedPattern();
     const secondBase = {

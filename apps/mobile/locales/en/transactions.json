@@ -1,6 +1,9 @@
 {
   "partial_sms_title": "{{count}} messages couldn't be processed",
+  "partial_sms_title_one": "1 message couldn't be processed",
+  "partial_sms_title_other": "{{count}} messages couldn't be processed",
   "partial_sms_description": "Your other suggestions are ready to review.",
+  "partial_sms_try_later": "Your other suggestions are ready to review. You can try the remaining messages in a later sync.",
   "partial_sms_retry": "Retry {{count}}",
   "partial_sms_retrying": "Retrying",
   "partial_sms_retry_error": "We couldn't retry these messages. Please try again in a moment.",

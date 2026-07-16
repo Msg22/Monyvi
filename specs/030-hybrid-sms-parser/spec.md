@@ -268,7 +268,12 @@ trusted template and verify messages return to the unresolved path.
   session.
 - **FR-027**: Retrying a partial result MUST process only unresolved candidates,
   preserve existing successful suggestions, prevent duplicate suggestions, and
-  update or dismiss the notice when the retry completes.
+  update or dismiss the notice when the retry completes. If a mixed retry adds
+  successful suggestions but leaves only non-retryable candidates, the system
+  MUST preserve those successes, keep Save enabled, and show the unresolved
+  count without an acknowledgment or retry action. The remaining messages MUST
+  stay uncommitted, and saving the successful suggestions MUST NOT advance the
+  incremental SMS checkpoint so those messages can be attempted by a later sync.
 - **FR-028**: Diagnostics MUST expose only safe counts, parser source, reason
   codes, catalog version, and pattern IDs.
 - **FR-029**: Diagnostics and logs MUST NOT include raw or sanitized SMS text,

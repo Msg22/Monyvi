@@ -1,6 +1,8 @@
 import {
   buildCategoryMap,
   clampConfidence,
+  getParsedSmsTransactionKey,
+  matchTrustedSmsTemplate,
   normalizeCurrency,
   normalizeType,
   createBundledTrustedSmsCatalogProvider,
@@ -241,24 +243,36 @@ export function getTrustedRejectionDisposition(
   candidate: SmsCandidate,
   supportedCurrencies: readonly string[]
 ): TrustedRejectionDisposition {
+  const activation = trustedCatalogProvider.getActivation();
+  const parserCandidate = {
+    candidateId: candidate.message.id,
+    smsFingerprint: candidate.smsFingerprint,
+    sender: candidate.message.address,
+    body: candidate.message.body,
+    receivedAtMs: candidate.message.date,
+  };
   const result = parseSmsWithTrustedCatalog({
-    candidates: [
-      {
-        candidateId: candidate.message.id,
-        smsFingerprint: candidate.smsFingerprint,
-        sender: candidate.message.address,
-        body: candidate.message.body,
-        receivedAtMs: candidate.message.date,
-      },
-    ],
-    activation: trustedCatalogProvider.getActivation(),
+    candidates: [parserCandidate],
+    activation,
     supportedCurrencies,
   });
-  if (result.outcomes[0]?.status !== "rejected") {
-    return "not_trusted_rejection";
+  if (result.outcomes[0]?.status === "rejected") {
+    return shouldUseHybridSmsParser() ? "route_to_hybrid" : "filter_before_ai";
   }
 
-  return shouldUseHybridSmsParser() ? "route_to_hybrid" : "filter_before_ai";
+  if (activation.status !== "active") return "not_trusted_rejection";
+  const disabledRejection = matchTrustedSmsTemplate({
+    candidate: parserCandidate,
+    patterns: QNB_EGYPT_TRUSTED_SMS_CATALOG.patterns.filter(
+      (pattern) =>
+        !pattern.enabled && pattern.expectedOutcome.kind === "rejection"
+    ),
+    supportedCurrencies,
+    includeDisabledPatterns: true,
+  });
+  return disabledRejection.status === "rejected"
+    ? "route_to_hybrid"
+    : "not_trusted_rejection";
 }
 
 function mapTrustedTransaction(
@@ -324,7 +338,7 @@ function createHybridReasonCounts(
   );
 }
 
-function mergeByFingerprint(
+function mergeDistinctTransactions(
   local: readonly ParsedSmsTransaction[],
   ai: readonly ParsedSmsTransaction[]
 ): {
@@ -334,11 +348,12 @@ function mergeByFingerprint(
   const merged = new Map<string, ParsedSmsTransaction>();
   let duplicateDiscardedCount = 0;
   for (const transaction of [...local, ...ai]) {
-    if (merged.has(transaction.smsFingerprint)) {
+    const transactionKey = getParsedSmsTransactionKey(transaction);
+    if (merged.has(transactionKey)) {
       duplicateDiscardedCount += 1;
       continue;
     }
-    merged.set(transaction.smsFingerprint, transaction);
+    merged.set(transactionKey, transaction);
   }
   return {
     transactions: [...merged.values()],
@@ -388,6 +403,12 @@ async function parseHybrid(
   });
   let aiResult: AiParseResult = { transactions: [], hasError: false };
   if (aiCandidates.length > 0) {
+    throwIfAborted(abortSignal);
+    if (!(await hasAiTransactionConsent())) {
+      throwIfAborted(abortSignal);
+      throw createAiConsentRequiredError();
+    }
+    throwIfAborted(abortSignal);
     try {
       aiResult = await parseSmsWithAi(
         aiCandidates,
@@ -426,7 +447,7 @@ async function parseHybrid(
           isRetryable: aiResult.isRetryable !== false,
         })))
       : [];
-  const mergedResult = mergeByFingerprint(
+  const mergedResult = mergeDistinctTransactions(
     localTransactions,
     aiResult.transactions
   );

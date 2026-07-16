@@ -15,6 +15,7 @@ describe("PartialSmsResultsNotice", () => {
     render(
       <PartialSmsResultsNotice
         unresolvedCount={3}
+        canRetry
         isRetrying={false}
         hasRetryError={false}
         onRetry={onRetry}
@@ -44,6 +45,7 @@ describe("PartialSmsResultsNotice", () => {
     render(
       <RetryAwareNotice
         unresolvedCount={2}
+        canRetry
         isRetrying={false}
         hasRetryError
         onRetry={jest.fn()}
@@ -58,6 +60,7 @@ describe("PartialSmsResultsNotice", () => {
     const { rerender } = render(
       <PartialSmsResultsNotice
         unresolvedCount={2}
+        canRetry
         isRetrying
         hasRetryError={false}
         onRetry={onRetry}
@@ -77,11 +80,27 @@ describe("PartialSmsResultsNotice", () => {
     rerender(
       <PartialSmsResultsNotice
         unresolvedCount={0}
+        canRetry={false}
         isRetrying={false}
         hasRetryError={false}
         onRetry={onRetry}
       />
     );
     expect(screen.queryByTestId("partial-sms-results-notice")).toBeNull();
+  });
+
+  it("keeps successful results actionable when remaining messages must wait for a later sync", () => {
+    render(
+      <PartialSmsResultsNotice
+        unresolvedCount={1}
+        canRetry={false}
+        isRetrying={false}
+        hasRetryError={false}
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("partial_sms_try_later:")).toBeTruthy();
+    expect(screen.queryByTestId("partial-sms-retry")).toBeNull();
   });
 });

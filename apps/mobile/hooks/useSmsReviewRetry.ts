@@ -5,6 +5,7 @@ import { isAiConsentRequiredError } from "@/services/ai-sms-parser-service";
 import { logger } from "@/utils/logger";
 
 export interface UseSmsReviewRetryResult {
+  readonly unresolvedCount: number;
   readonly retryableCount: number;
   readonly isRetrying: boolean;
   readonly hasRetryError: boolean;
@@ -57,7 +58,14 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
         abortSignal: abortController.signal,
       });
       if (generationRef.current !== generation) return;
-      updateReviewSession(result, reviewSessionId);
+      updateReviewSession(
+        {
+          transactions: result.transactions,
+          unresolvedCandidates: result.unresolvedCandidates,
+        },
+        reviewSessionId
+      );
+      setHasRetryError(result.hasRetryError);
     } catch (error: unknown) {
       if (error instanceof Error && error.name === "AbortError") return;
       if (generationRef.current !== generation) return;
@@ -89,6 +97,7 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
   }, []);
 
   return {
+    unresolvedCount: unresolvedCandidates.length,
     retryableCount: unresolvedCandidates.filter(
       ({ isRetryable }) => isRetryable
     ).length,

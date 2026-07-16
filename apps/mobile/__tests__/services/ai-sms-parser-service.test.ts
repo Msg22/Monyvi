@@ -671,6 +671,58 @@ describe("ai-sms-parser-service parser strategy", () => {
     }
   });
 
+  it("preserves usable rows instead of retry-splitting a partially malformed chunk", async () => {
+    const candidates: SmsCandidate[] = Array.from(
+      { length: 11 },
+      (_, index) => ({
+        message: {
+          id: `sms-partial-${index}`,
+          address: "NBE",
+          body: `Purchase message ${index}`,
+          date: 1775658180000 + index,
+          read: false,
+        },
+        smsFingerprint: `partial-fingerprint-${index}`,
+      })
+    );
+    const validTransactions = candidates.slice(0, 10).map((value, index) => ({
+      messageId: value.message.id,
+      amount: 25 + index,
+      currency: "EGP",
+      type: "EXPENSE",
+      counterparty: `Shop ${index}`,
+      date: "2026-04-08T12:00:00.000Z",
+      categorySystemName: "shopping",
+      confidenceScore: 0.9,
+      isTrusted: true,
+    }));
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        transactions: [
+          ...validTransactions,
+          {
+            messageId: "sms-partial-10",
+            currency: "EGP",
+            type: "EXPENSE",
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await parseSmsWithAi(candidates, context);
+
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(result.transactions).toHaveLength(10);
+    expect(result.unresolvedCandidates).toEqual([
+      {
+        candidate: candidates[10],
+        reason: "response_invalid",
+        isRetryable: true,
+      },
+    ]);
+  });
+
   it("preserves earlier chunks when a later Edge Function invocation throws", async () => {
     jest.useFakeTimers();
     try {
