@@ -684,20 +684,21 @@ export async function parseSmsWithAi(
 
       const appendUnresolved = (
         values: readonly AiUnresolvedCandidate[]
-      ): void => {
+      ): number => {
+        let appendedCount = 0;
         for (const value of values) {
           if (unresolvedFingerprints.has(value.candidate.smsFingerprint))
             continue;
           unresolvedFingerprints.add(value.candidate.smsFingerprint);
           unresolvedCandidates.push(value);
+          appendedCount++;
         }
+        return appendedCount;
       };
 
       if (chunkResult.hasError) {
-        hasError = true;
         const isRetryable = chunkResult.isRetryable !== false;
-        if (!isRetryable) hasNonRetryableError = true;
-        appendUnresolved(
+        const appendedCount = appendUnresolved(
           collectUnresolvedCandidates({
             messages: currentChunk.messages,
             candidateMap,
@@ -708,12 +709,14 @@ export async function parseSmsWithAi(
             isRetryable,
           })
         );
+        if (appendedCount > 0) {
+          hasError = true;
+          if (!isRetryable) hasNonRetryableError = true;
+        }
       }
 
       if (mapped.failedMessageIds.size > 0 || mapped.hasUncorrelatedFailure) {
-        hasError = true;
-        hasNonRetryableError = true;
-        appendUnresolved(
+        const appendedCount = appendUnresolved(
           collectUnresolvedCandidates({
             messages: currentChunk.messages,
             candidateMap,
@@ -724,6 +727,10 @@ export async function parseSmsWithAi(
             isRetryable: false,
           })
         );
+        if (appendedCount > 0) {
+          hasError = true;
+          hasNonRetryableError = true;
+        }
       }
 
       chunksCompleted++;

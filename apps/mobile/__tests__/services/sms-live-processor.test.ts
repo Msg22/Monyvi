@@ -242,6 +242,26 @@ describe("sms-live-processor", () => {
     expect(mockParseSmsWithOrchestrator).toHaveBeenCalledTimes(1);
   });
 
+  it("preserves a resolved live transaction when extra AI output is ignored", async () => {
+    const parsed = createParsedTransaction();
+    mockParseSmsWithOrchestrator.mockResolvedValueOnce({
+      transactions: [parsed],
+      hasError: true,
+      isRetryable: false,
+      unresolvedCandidates: [],
+    });
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("parsed");
+    expect(result.transactions).toEqual([parsed]);
+  });
+
   it("skips AI when the SMS fingerprint already exists locally", async () => {
     mockHasExistingSmsFingerprint.mockResolvedValue(true);
 

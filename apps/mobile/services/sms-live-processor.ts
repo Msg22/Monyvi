@@ -292,7 +292,11 @@ export async function processLiveSmsEvent(
       return consentRecheck.result;
     }
 
-    if (aiResult.hasError === true) {
+    const hasUnresolvedFailure =
+      aiResult.hasError === true &&
+      (aiResult.transactions.length === 0 ||
+        aiResult.unresolvedCandidates.length > 0);
+    if (hasUnresolvedFailure) {
       return createResult(
         "ai_failed",
         confirmedSmsFingerprint,

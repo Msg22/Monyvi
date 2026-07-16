@@ -1,6 +1,12 @@
 import React, { type ReactNode } from "react";
 import { Platform } from "react-native";
-import { act, render, screen, waitFor } from "@testing-library/react-native";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react-native";
 
 const mockGrantAiConsent = jest.fn<Promise<void>, []>();
 const mockRevokeAiConsent = jest.fn<Promise<void>, []>();
@@ -14,8 +20,12 @@ const mockLoadExistingSmsFingerprints = jest.fn<
 const mockRouterBack = jest.fn();
 const mockRouterPush = jest.fn<void, [string]>();
 const mockRouterReplace = jest.fn<void, [string]>();
+const mockSetReviewSession = jest.fn();
+const mockFocusEffects: Array<() => void | (() => void)> = [];
 let mockAiConsentContinue: (() => Promise<void>) | null = null;
 let mockIsAiConsented = false;
+let mockScanResult: Record<string, unknown> | null = null;
+let mockScanTransactions: ReadonlyArray<Record<string, unknown>> = [];
 let mockScanStatus:
   | "idle"
   | "scanning"
@@ -48,7 +58,9 @@ jest.mock("@expo/vector-icons", () => ({
 }));
 
 jest.mock("expo-router", () => ({
-  useFocusEffect: jest.fn(),
+  useFocusEffect: (effect: () => void | (() => void)): void => {
+    mockFocusEffects.push(effect);
+  },
   useRouter: () => ({
     back: mockRouterBack,
     canGoBack: () => true,
@@ -69,11 +81,17 @@ jest.mock("react-native-safe-area-context", () => ({
 }));
 
 jest.mock("@/components/sms-sync/SmsScanProgress", () => ({
-  SmsScanProgress: (): React.JSX.Element => {
+  SmsScanProgress: ({
+    onReviewPress,
+  }: {
+    readonly onReviewPress: () => void;
+  }): React.JSX.Element => {
     const ReactNative =
       jest.requireActual<typeof import("react-native")>("react-native");
     return (
-      <ReactNative.Text testID="sms-scan-progress">progress</ReactNative.Text>
+      <ReactNative.Pressable testID="sms-scan-review" onPress={onReviewPress}>
+        <ReactNative.Text>Review</ReactNative.Text>
+      </ReactNative.Pressable>
     );
   },
 }));
@@ -111,7 +129,7 @@ jest.mock("@/context/CategoriesContext", () => ({
 jest.mock("@/context/SmsScanContext", () => ({
   useSmsScanContext: () => ({
     scanMode: "incremental",
-    setTransactions: jest.fn(),
+    setReviewSession: mockSetReviewSession,
   }),
 }));
 
@@ -119,11 +137,11 @@ jest.mock("@/hooks/useSmsScan", () => ({
   useSmsScan: () => ({
     error: null,
     progress: 0,
-    result: null,
+    result: mockScanResult,
     reset: mockResetScan,
     startScan: mockStartScan,
     status: mockScanStatus,
-    transactions: [],
+    transactions: mockScanTransactions,
   }),
 }));
 
@@ -197,7 +215,10 @@ describe("SmsScanScreen AI consent", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAiConsentContinue = null;
+    mockFocusEffects.length = 0;
     mockIsAiConsented = false;
+    mockScanResult = null;
+    mockScanTransactions = [];
     mockScanStatus = "idle";
     mockRequestPermission.mockResolvedValue("granted");
     mockRevokeAiConsent.mockResolvedValue();
@@ -335,5 +356,28 @@ describe("SmsScanScreen AI consent", () => {
     });
 
     await waitFor(() => expect(mockGrantAiConsent).toHaveBeenCalledTimes(1));
+  });
+
+  it("clears the completed scan after returning from transaction review", () => {
+    mockIsAiConsented = true;
+    mockScanStatus = "complete";
+    mockScanTransactions = [{ smsFingerprint: "fp-1" }];
+    mockScanResult = {
+      transactions: mockScanTransactions,
+      unresolvedCandidates: [{ candidate: { message: { body: "private" } } }],
+      parseContext: { categories: [], supportedCurrencies: ["EGP"] },
+    };
+
+    render(<SmsScanScreen />);
+    fireEvent.press(screen.getByTestId("sms-scan-review"));
+
+    expect(mockSetReviewSession).toHaveBeenCalledWith(mockScanResult);
+    expect(mockRouterPush).toHaveBeenCalledWith("/sms-review");
+
+    act(() => {
+      for (const focusEffect of mockFocusEffects) focusEffect();
+    });
+
+    expect(mockResetScan).toHaveBeenCalledTimes(1);
   });
 });

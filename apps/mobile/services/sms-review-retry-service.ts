@@ -1,4 +1,7 @@
-import type { ParsedSmsTransaction } from "@monyvi/logic";
+import {
+  getParsedSmsTransactionKey,
+  type ParsedSmsTransaction,
+} from "@monyvi/logic";
 import type { ParseSmsContext } from "./ai-sms-parser-service";
 import {
   parseSmsWithOrchestrator,
@@ -22,13 +25,14 @@ function mergeTransactions(
   existing: readonly ParsedSmsTransaction[],
   appended: readonly ParsedSmsTransaction[]
 ): readonly ParsedSmsTransaction[] {
-  const byFingerprint = new Map<string, ParsedSmsTransaction>();
+  const byTransactionKey = new Map<string, ParsedSmsTransaction>();
   for (const transaction of [...existing, ...appended]) {
-    if (!byFingerprint.has(transaction.smsFingerprint)) {
-      byFingerprint.set(transaction.smsFingerprint, transaction);
+    const transactionKey = getParsedSmsTransactionKey(transaction);
+    if (!byTransactionKey.has(transactionKey)) {
+      byTransactionKey.set(transactionKey, transaction);
     }
   }
-  return [...byFingerprint.values()];
+  return [...byTransactionKey.values()];
 }
 
 export async function retrySmsReviewCandidates(

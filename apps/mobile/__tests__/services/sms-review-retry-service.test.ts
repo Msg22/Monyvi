@@ -85,6 +85,29 @@ describe("sms review retry service", () => {
     expect(result.hasRetryError).toBe(false);
   });
 
+  it("preserves distinct retry transactions from the same SMS", async () => {
+    const purchase = transaction("retryable");
+    const fee: ParsedSmsTransaction = {
+      ...purchase,
+      amount: 2,
+      counterparty: "Transfer fee",
+      categoryId: "fees",
+      categoryDisplayName: "Fees",
+    };
+    mockParseSmsWithOrchestrator.mockResolvedValueOnce({
+      transactions: [purchase, fee],
+      unresolvedCandidates: [],
+    });
+
+    const result = await retrySmsReviewCandidates({
+      transactions: [],
+      unresolvedCandidates: [unresolved("retryable")],
+      parseContext: context,
+    });
+
+    expect(result.transactions).toEqual([purchase, fee]);
+  });
+
   it("leaves the session unchanged when retry is cancelled", async () => {
     const abort = new Error("aborted");
     abort.name = "AbortError";

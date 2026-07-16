@@ -376,6 +376,79 @@ describe("ai-sms-parser-service parser strategy", () => {
     expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
   });
 
+  it("ignores an extra foreign AI row when every input candidate resolved", async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        transactions: [
+          {
+            messageId: "nbe_debit_purchase",
+            amount: 25,
+            currency: "EGP",
+            type: "EXPENSE",
+            counterparty: "Shop",
+            date: "2026-04-08T12:00:00.000Z",
+            categorySystemName: "shopping",
+            confidenceScore: 0.9,
+            isTrusted: true,
+          },
+          {
+            messageId: "hallucinated-message-id",
+            amount: 99,
+            currency: "EGP",
+            type: "EXPENSE",
+            counterparty: "Unknown",
+            date: "2026-04-08T12:00:00.000Z",
+            categorySystemName: "shopping",
+            confidenceScore: 0.5,
+            isTrusted: true,
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await parseSmsWithAi(
+      [candidate("nbe_debit_purchase")],
+      context
+    );
+
+    expect(result.transactions).toHaveLength(1);
+    expect(result.transactions[0]?.counterparty).toBe("Shop");
+    expect(result.hasError).toBe(false);
+    expect(result.unresolvedCandidates).toEqual([]);
+  });
+
+  it("ignores a malformed extra AI row when every input candidate resolved", async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        transactions: [
+          {
+            messageId: "nbe_debit_purchase",
+            amount: 25,
+            currency: "EGP",
+            type: "EXPENSE",
+            counterparty: "Shop",
+            date: "2026-04-08T12:00:00.000Z",
+            categorySystemName: "shopping",
+            confidenceScore: 0.9,
+            isTrusted: true,
+          },
+          { amount: "not-a-number" },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await parseSmsWithAi(
+      [candidate("nbe_debit_purchase")],
+      context
+    );
+
+    expect(result.transactions).toHaveLength(1);
+    expect(result.hasError).toBe(false);
+    expect(result.unresolvedCandidates).toEqual([]);
+  });
+
   it("uses the fixture parser only when E2E fixture mode is explicit", async () => {
     process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
     process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "fixture";
