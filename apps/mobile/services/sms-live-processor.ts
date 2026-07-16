@@ -11,7 +11,10 @@ import {
   type ParseSmsContext,
   type SmsCandidate,
 } from "./ai-sms-parser-service";
-import { parseSmsWithOrchestrator } from "./sms-parser-orchestrator";
+import {
+  parseSmsWithOrchestrator,
+  toSmsParserDiagnosticsLogContext,
+} from "./sms-parser-orchestrator";
 import {
   reconcileLiveDetectionPreference,
   setAutoConfirm,
@@ -265,13 +268,7 @@ export async function processLiveSmsEvent(
 
     logger.info("liveSms.parserDiagnostics", {
       deliveryMode: event.deliveryMode,
-      mode: aiResult.diagnostics.mode,
-      attemptedAi: aiResult.diagnostics.attemptedAi,
-      attemptedLocal: aiResult.diagnostics.attemptedLocal,
-      candidateCount: aiResult.diagnostics.candidateCount,
-      resultCount: aiResult.diagnostics.resultCount,
-      matchedPatternIds: aiResult.diagnostics.matchedPatternIds,
-      runtimeScopeCounts: aiResult.diagnostics.runtimeScopeCounts,
+      ...toSmsParserDiagnosticsLogContext(aiResult.diagnostics),
     });
 
     const consentRecheck = await checkLiveSmsAiConsent({

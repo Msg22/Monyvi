@@ -219,7 +219,7 @@ export default function SmsScanScreen(): React.JSX.Element {
   const scanAbortControllerRef = useRef<AbortController | null>(null);
   const staleConsentRevokePromiseRef = useRef<Promise<void> | null>(null);
 
-  const { setTransactions, scanMode } = useSmsScanContext();
+  const { setReviewSession, scanMode } = useSmsScanContext();
   const { lastSyncTimestamp } = useSmsSync();
   const { categories: allCategories, isLoading: isCategoriesLoading } =
     useAllCategories();
@@ -374,8 +374,8 @@ export default function SmsScanScreen(): React.JSX.Element {
   }, [isPermissionLoading, permissionStatus]);
 
   const handleReviewPress = (): void => {
-    if (transactions.length > 0) {
-      setTransactions(transactions);
+    if (transactions.length > 0 && result) {
+      setReviewSession(result);
       router.push("/sms-review");
     }
   };

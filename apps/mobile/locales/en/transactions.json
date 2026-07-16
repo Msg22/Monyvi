@@ -1,4 +1,8 @@
 {
+  "partial_sms_title": "{{count}} messages couldn't be processed",
+  "partial_sms_description": "Your other suggestions are ready to review.",
+  "partial_sms_retry": "Retry {{count}}",
+  "partial_sms_retrying": "Retrying",
   "add_transaction": "Add Transaction",
   "edit_transaction": "Edit Transaction",
   "edit_transfer": "Edit Transfer",

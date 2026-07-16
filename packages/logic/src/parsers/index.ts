@@ -14,6 +14,23 @@ export {
 } from "./sms-hash";
 export { isLikelyFinancialSms } from "./sms-keyword-filter";
 export { parseSmsWithLocalParser } from "./local-sms-parser";
+export { parseSmsWithTrustedCatalog } from "./trusted-sms-parser";
+export { matchTrustedSmsTemplate } from "./trusted-sms-template-matcher";
+export {
+  activateTrustedSmsCatalog,
+  createBundledTrustedSmsCatalogProvider,
+} from "./trusted-sms-catalog-activation";
+export { QNB_EGYPT_TRUSTED_SMS_CATALOG } from "./trusted-sms-patterns";
+export type {
+  TrustedSmsCatalogActivation,
+  TrustedSmsCatalogProvider,
+  TrustedSmsParsedTransaction,
+  TrustedSmsParserCandidate,
+  TrustedSmsParserOutcome,
+  TrustedSmsParserRequest,
+  TrustedSmsParserResult,
+  TrustedSmsTemplateResult,
+} from "./trusted-sms-pattern-types";
 export {
   LOCAL_SMS_PATTERNS,
   LOCAL_SMS_VERY_HIGH_CONFIDENCE,

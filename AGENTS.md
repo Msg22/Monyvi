@@ -12,7 +12,7 @@ with Angular equivalents in chat (never in code comments).
 
 <!-- SPECKIT START -->
 
-Active Speckit plan: `specs/029-trusted-qa-sms-patterns/plan.md`
+Active Speckit plan: `specs/030-hybrid-sms-parser/plan.md`
 
 <!-- SPECKIT END -->
 

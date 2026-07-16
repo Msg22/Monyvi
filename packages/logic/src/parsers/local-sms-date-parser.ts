@@ -33,7 +33,7 @@ export function parseLocalSmsMessageDate(
 ): Date {
   const received = new Date(receivedAtMs);
   const slashMatch =
-    /(?:on\s+)?(?<day>\d{1,2})\/(?<month>\d{1,2})(?:\/(?<year>\d{4}))?(?:\s+(?<hour>\d{1,2}):(?<minute>\d{2}))?/i.exec(
+    /(?:on\s+)?(?<day>\d{1,2})\/(?<month>\d{1,2})(?:\/(?<year>\d{4}))?(?:\s+(?:at\s+)?(?<hour>\d{1,2}):(?<minute>\d{2})(?:\s*(?<meridiem>AM|PM))?)?/i.exec(
       body
     );
 
@@ -43,7 +43,16 @@ export function parseLocalSmsMessageDate(
     let year = slashMatch.groups.year
       ? Number(slashMatch.groups.year)
       : received.getFullYear();
-    const hour = slashMatch.groups.hour ? Number(slashMatch.groups.hour) : 0;
+    const parsedHour = slashMatch.groups.hour
+      ? Number(slashMatch.groups.hour)
+      : 0;
+    const meridiem = slashMatch.groups.meridiem?.toUpperCase();
+    const hour =
+      meridiem === "AM"
+        ? parsedHour % 12
+        : meridiem === "PM"
+          ? (parsedHour % 12) + 12
+          : parsedHour;
     const minute = slashMatch.groups.minute
       ? Number(slashMatch.groups.minute)
       : 0;

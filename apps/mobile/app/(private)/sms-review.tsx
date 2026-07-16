@@ -24,6 +24,7 @@ import { palette } from "@/constants/colors";
 import { useSmsScanContext } from "@/context/SmsScanContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useSmsSync } from "@/hooks/useSmsSync";
+import { useSmsReviewRetry } from "@/hooks/useSmsReviewRetry";
 import { batchCreateTransactions } from "@/services/batch-create-transactions";
 import {
   flushQueuedTransactions,
@@ -31,12 +32,13 @@ import {
 } from "@/services/sms-live-detection-handler";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import { Text, TouchableOpacity } from "react-native";
 import { useTranslation } from "react-i18next";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import { logger } from "@/utils/logger";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -49,6 +51,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
   const { markSyncComplete } = useSmsSync();
   const { showToast } = useToast();
   const { isDark } = useTheme();
+  const smsRetry = useSmsReviewRetry();
 
   const [isSaving, setIsSaving] = useState(false);
   const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
@@ -60,11 +63,21 @@ export default function SmsReviewScreen(): React.JSX.Element {
     return () => {
       setReviewingActive(false);
       flushQueuedTransactions().catch((err) => {
-        // Non-critical: queued transactions will be processed on next app launch
-        console.warn("[sms-review] Failed to flush queued transactions:", err);
+        logger.warn("smsReview.flushQueuedTransactions.failed", {
+          errorName: err instanceof Error ? err.name : "unknown",
+        });
       });
     };
   }, []);
+
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        clearTransactions();
+      },
+      [clearTransactions]
+    )
+  );
 
   // ── Save ────────────────────────────────────────────────────────────
 
@@ -101,7 +114,11 @@ export default function SmsReviewScreen(): React.JSX.Element {
           message: t("saved_from_sms", { count: result.savedCount }),
         });
 
-        markSyncComplete().catch(console.error);
+        markSyncComplete().catch((error: unknown) => {
+          logger.warn("smsReview.markSyncComplete.failed", {
+            errorName: error instanceof Error ? error.name : "unknown",
+          });
+        });
         clearTransactions();
         router.replace("/(private)/(tabs)/transactions");
       } catch (err) {
@@ -170,8 +187,20 @@ export default function SmsReviewScreen(): React.JSX.Element {
         subtitle={t("review_sms_source_summary", {
           count: transactions.length,
         })}
-        onBack={() => router.back()}
         workspaceVariant="sms"
+        partialResults={
+          smsRetry.retryableCount > 0
+            ? {
+                unresolvedCount: smsRetry.retryableCount,
+                isRetrying: smsRetry.isRetrying,
+                onRetry: () => void smsRetry.retry(),
+              }
+            : undefined
+        }
+        onBack={() => {
+          clearTransactions();
+          router.back();
+        }}
       />
 
       {/* Discard confirmation */}

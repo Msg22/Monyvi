@@ -1,0 +1,50 @@
+appId: com.monyvi.app
+---
+# Exercises the production hybrid partition with a deterministic fixture inbox:
+# one trusted local match, one successful fixture-AI fallback, and one AI
+# candidate that fails once before succeeding through unresolved-only retry.
+
+- runFlow: ../helpers/open-settings.yaml
+
+- scrollUntilVisible:
+    element: "Sync New SMS"
+    direction: DOWN
+    centerElement: true
+
+- tapOn: "Sync New SMS"
+
+- runFlow:
+    when:
+      visible: "Allow SMS sync?"
+    commands:
+      - tapOn:
+          id: "permission-modal-primary"
+      - runFlow: ../helpers/allow-native-android-permission.yaml
+
+- extendedWaitUntil:
+    visible: "Scan Complete!"
+    timeout: 90000
+
+- tapOn: "Review [0-9]+ Transaction\\(s\\)"
+
+- extendedWaitUntil:
+    visible:
+      id: transaction-review-screen
+    timeout: 30000
+
+- assertVisible:
+    id: partial-sms-results-notice
+
+- assertVisible:
+    id: transaction-review-row
+
+- tapOn:
+    id: partial-sms-retry
+
+- extendedWaitUntil:
+    notVisible:
+      id: partial-sms-results-notice
+    timeout: 30000
+
+- assertVisible:
+    id: transaction-review-row

@@ -36,6 +36,7 @@ export interface QaSmsPrivacyFinding {
     | "raw_string_value"
     | "raw_value_canary"
     | "tracked_staging_artifact"
+    | "trusted_runtime_private_metadata"
     | "unexpected_candidate_file";
   readonly path: string;
 }
@@ -208,6 +209,18 @@ function isRuntimeParserFile(filePath: string): boolean {
     !normalizedPath.includes("/qa-sms-pattern-intake/") &&
     !normalizedPath.includes("/__tests__/") &&
     !normalizedPath.includes("/testing/")
+  );
+}
+
+function isTrustedRuntimeCatalogFile(filePath: string): boolean {
+  const normalizedPath = normalizePath(filePath);
+  return (
+    normalizedPath.startsWith(
+      "packages/logic/src/parsers/trusted-sms-patterns/"
+    ) &&
+    normalizedPath.endsWith(".ts") &&
+    !normalizedPath.endsWith("/index.ts") &&
+    !normalizedPath.endsWith("/promotion-manifest.ts")
   );
 }
 
@@ -402,6 +415,17 @@ export function scanQaSmsPatternPrivacy(
       )
     ) {
       findings.push({ code: "candidate_runtime_import", path: normalizedPath });
+    }
+    if (
+      isTrustedRuntimeCatalogFile(normalizedPath) &&
+      /\b(?:candidateId|evidenceDigest|rawSmsBody|smsFingerprint|receivedAtMs|nativeMessageId|sourceTimestamp)\b/.test(
+        file.content
+      )
+    ) {
+      findings.push({
+        code: "trusted_runtime_private_metadata",
+        path: normalizedPath,
+      });
     }
   }
 

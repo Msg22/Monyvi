@@ -644,6 +644,46 @@ Business rules:
   information architecture and interaction sequence while using Monyvi's
   existing theme colors, typography, safe areas, and light/dark behavior.
 
+#### Phase 2C: Trusted Hybrid Local-First SMS Parsing
+
+- Every eligible candidate is evaluated against active `trusted_production`
+  templates first. Exact unambiguous local matches are not sent to AI; only
+  unresolved, disabled, malformed, unsupported, or ambiguous candidates may use
+  AI under the existing AI transaction-feature consent gate.
+- One explicitly reviewer-approved real sanitized candidate is enough for
+  promotion, but only for that exact structure. Promotion requires an immutable
+  privacy-safe record and passing schema, privacy, positive, near-match,
+  negative, ambiguity, and integrity validation.
+- Sender aliases normalize trim and case only. Bodies normalize line breaks and
+  repeated whitespace only. Fixed wording, case, punctuation, and segment order
+  remain exact; fuzzy or keyword-only production matching is prohibited.
+- The initial QNB allowlist includes exact approved card-purchase, ATM,
+  incoming/outgoing IPN, refund/reversal, OTP, informational, and promotional
+  structures. ATM remains the existing review-required transfer-on-save path;
+  IPN maps to external-counterparty income/expense.
+- `bank_to_wallet_transfer` remains AI-only even when Phase 2A evidence exists.
+  The current parsed-SMS result cannot safely represent both owned account
+  endpoints; changing that behavior requires a separate approved decision.
+- Placeholder semantics follow
+  `specs/030-hybrid-sms-parser/contracts/placeholder-role-contract.md`. Unknown
+  roles block promotion. Account suffixes remain match-only until issue #759.
+- Production local suggestions are always review-required. Existing account,
+  category, amount, currency, ATM destination, save, and fingerprint validation
+  remain authoritative.
+- The first release uses a versioned bundled catalog. Failed OTA/app activation
+  retains the prior installed valid bundle. Runtime-invalid installed catalogs
+  activate no local patterns and route candidates to AI. The activation
+  interface remains replaceable by a future cached remote manifest.
+- Partial AI failures preserve successful local/AI results. Review shows the
+  approved inline unresolved-count notice and retries only retryable unresolved
+  candidates. Consent revocation and cancellation use their existing flows.
+- Raw unresolved candidates and retry context are memory-only and are cleared on
+  save, discard, reset, review Back, abandonment route replacement, logout, and
+  private-runtime unmount.
+- User-contributed template collection (#751), remote manifest fetching,
+  production auto-selection, voice changes, and database schema changes remain
+  out of scope.
+
 ## 8. Notifications
 
 Current notification scope:

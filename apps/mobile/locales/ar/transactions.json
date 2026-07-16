@@ -1,4 +1,8 @@
 {
+  "partial_sms_title": "تعذرت معالجة {{count}} رسائل",
+  "partial_sms_description": "اقتراحاتك الأخرى جاهزة للمراجعة.",
+  "partial_sms_retry": "إعادة محاولة {{count}}",
+  "partial_sms_retrying": "جارٍ إعادة المحاولة",
   "add_transaction": "إضافة معاملة",
   "edit_transaction": "تعديل المعاملة",
   "edit_transfer": "تعديل التحويل",

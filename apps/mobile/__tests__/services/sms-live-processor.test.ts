@@ -15,8 +15,10 @@ const mockGetAiProcessingConsentStatus = jest.fn<
 >();
 const mockRevokeAiProcessingConsent = jest.fn<Promise<void>, []>();
 const mockHasExistingSmsFingerprint = jest.fn<Promise<boolean>, [string]>();
+type MockParserResult = AiParseResult | SmsParserOrchestratorResult;
+
 const mockParseSmsWithOrchestrator = jest.fn<
-  Promise<AiParseResult>,
+  Promise<MockParserResult>,
   [readonly SmsCandidate[], ParseSmsContext]
 >();
 const mockComputeSmsFingerprint = jest.fn<
@@ -64,15 +66,19 @@ jest.mock("@/services/sms-parser-orchestrator", () => ({
     ...args: [readonly SmsCandidate[], ParseSmsContext]
   ): Promise<SmsParserOrchestratorResult> =>
     mockParseSmsWithOrchestrator(...args).then(mockWithParserDiagnostics),
+  toSmsParserDiagnosticsLogContext: (
+    diagnostics: SmsParserOrchestratorResult["diagnostics"]
+  ): Readonly<Record<string, unknown>> => ({ ...diagnostics }),
 }));
 
 function mockWithParserDiagnostics(
-  result: AiParseResult
+  result: MockParserResult
 ): SmsParserOrchestratorResult {
   const resultWithDiagnostics = result as SmsParserOrchestratorResult;
   return {
     ...result,
     transactions: result.transactions,
+    unresolvedCandidates: resultWithDiagnostics.unresolvedCandidates ?? [],
     diagnostics: resultWithDiagnostics.diagnostics ?? {
       mode: "ai-primary",
       attemptedAi: true,
@@ -178,6 +184,35 @@ describe("sms-live-processor", () => {
       },
     });
     expect(context.supportedCurrencies).toEqual(["EGP"]);
+  });
+
+  it("accepts the shared hybrid parser result in foreground delivery", async () => {
+    const hybridResult: SmsParserOrchestratorResult = {
+      transactions: [createParsedTransaction()],
+      hasError: false,
+      unresolvedCandidates: [],
+      diagnostics: {
+        mode: "hybrid",
+        attemptedAi: false,
+        attemptedLocal: true,
+        candidateCount: 1,
+        resultCount: 1,
+        matchedPatternIds: ["qnb-egypt-card-purchase-egp-v1"],
+        runtimeScopeCounts: { trusted_production: 1 },
+      },
+    };
+    mockParseSmsWithOrchestrator.mockResolvedValueOnce(hybridResult);
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB EGYPT",
+      body: "reviewed-template-shape",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("parsed");
+    expect(result.transactions).toHaveLength(1);
+    expect(mockParseSmsWithOrchestrator).toHaveBeenCalledTimes(1);
   });
 
   it("skips AI when the SMS fingerprint already exists locally", async () => {

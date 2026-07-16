@@ -29,7 +29,12 @@ import {
   type ParseSmsContext,
   type SmsCandidate,
 } from "./ai-sms-parser-service";
-import { parseSmsWithOrchestrator } from "./sms-parser-orchestrator";
+import {
+  parseSmsWithOrchestrator,
+  toSmsParserDiagnosticsLogContext,
+  type HybridSmsUnresolvedCandidate,
+  type SmsParserDiagnostics,
+} from "./sms-parser-orchestrator";
 import { getCurrentUserDataScope } from "./user-data-access";
 import { readSmsInbox } from "./sms-reader-service";
 import { logger } from "@/utils/logger";
@@ -69,6 +74,9 @@ export interface SmsScanResult {
   readonly totalFound: number;
   readonly totalFilteredCandidates: number;
   readonly durationMs: number;
+  readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
+  readonly parseContext: ParseSmsContext;
+  readonly parserDiagnostics: SmsParserDiagnostics;
 }
 
 /** Options for the scan pipeline. */
@@ -429,17 +437,16 @@ async function executeScanPipeline(
     abortSignal
   );
 
-  logger.info("smsSync.parserDiagnostics", {
-    mode: aiResult.diagnostics.mode,
-    attemptedAi: aiResult.diagnostics.attemptedAi,
-    attemptedLocal: aiResult.diagnostics.attemptedLocal,
-    candidateCount: aiResult.diagnostics.candidateCount,
-    resultCount: aiResult.diagnostics.resultCount,
-    matchedPatternIds: aiResult.diagnostics.matchedPatternIds,
-    runtimeScopeCounts: aiResult.diagnostics.runtimeScopeCounts,
-  });
+  logger.info(
+    "smsSync.parserDiagnostics",
+    toSmsParserDiagnosticsLogContext(aiResult.diagnostics)
+  );
 
-  if (aiResult.hasError && aiResult.isRetryable === false) {
+  if (
+    aiResult.hasError &&
+    aiResult.isRetryable === false &&
+    aiResult.transactions.length === 0
+  ) {
     throw new Error("SMS AI parsing failed");
   }
 
@@ -472,5 +479,8 @@ async function executeScanPipeline(
     totalFound: deduplicatedTransactions.length,
     totalFilteredCandidates: candidates.length,
     durationMs,
+    unresolvedCandidates: aiResult.unresolvedCandidates ?? [],
+    parseContext: options.aiContext,
+    parserDiagnostics: aiResult.diagnostics,
   };
 }

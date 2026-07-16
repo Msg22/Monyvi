@@ -1,10 +1,45 @@
 const mockInvoke = jest.fn();
+const mockLoggerWarn = jest.fn<
+  void,
+  [message: string, context?: Readonly<Record<string, unknown>>]
+>();
+const mockLoggerInfo = jest.fn<
+  void,
+  [message: string, context?: Readonly<Record<string, unknown>>]
+>();
+const mockLoggerError = jest.fn<
+  void,
+  [
+    message: string,
+    error?: unknown,
+    context?: Readonly<Record<string, unknown>>,
+  ]
+>();
 
 jest.mock("@/services/supabase", () => ({
   supabase: {
     functions: {
       invoke: (...args: readonly unknown[]): unknown => mockInvoke(...args),
     },
+  },
+}));
+
+jest.mock("@/utils/logger", () => ({
+  logger: {
+    error: (
+      message: string,
+      error?: unknown,
+      context?: Readonly<Record<string, unknown>>
+    ): void => mockLoggerError(message, error, context),
+    warn: (
+      message: string,
+      context?: Readonly<Record<string, unknown>>
+    ): void => mockLoggerWarn(message, context),
+    info: (
+      message: string,
+      context?: Readonly<Record<string, unknown>>
+    ): void => mockLoggerInfo(message, context),
+    debug: jest.fn(),
   },
 }));
 
@@ -266,10 +301,16 @@ describe("ai-sms-parser-service parser strategy", () => {
     });
 
     expect(mockInvoke).not.toHaveBeenCalled();
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       transactions: [],
       hasError: true,
       isRetryable: true,
+      unresolvedCandidates: [
+        expect.objectContaining({
+          reason: "unexpected_failure",
+          isRetryable: true,
+        }),
+      ],
     });
   });
 
@@ -322,6 +363,64 @@ describe("ai-sms-parser-service parser strategy", () => {
     );
   });
 
+  it("cancels an inter-chunk delay without waiting for its timer", async () => {
+    jest.useFakeTimers();
+    try {
+      const candidates: SmsCandidate[] = Array.from(
+        { length: 51 },
+        (_, index) => ({
+          message: {
+            id: `sms-delay-${index}`,
+            address: "NBE",
+            body: `Purchase message ${index}`,
+            date: 1775658180000 + index,
+            read: false,
+          },
+          smsFingerprint: `delay-fingerprint-${index}`,
+        })
+      );
+      const abortController = new AbortController();
+      mockInvoke.mockResolvedValue({
+        data: { transactions: [] },
+        error: null,
+      });
+      const parsePromise = parseSmsWithAi(
+        candidates,
+        context,
+        undefined,
+        abortController.signal
+      );
+      for (
+        let attempt = 0;
+        attempt < 10 && jest.getTimerCount() === 0;
+        attempt++
+      ) {
+        await Promise.resolve();
+      }
+      expect(jest.getTimerCount()).toBe(1);
+
+      let outcome = "pending";
+      void parsePromise.then(
+        () => {
+          outcome = "resolved";
+        },
+        (error: unknown) => {
+          outcome = error instanceof Error ? error.name : "unknown";
+        }
+      );
+      abortController.abort();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(outcome).toBe("AbortError");
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
+  });
+
   it("returns a distinct consent-required error when the Edge Function requires AI consent", async () => {
     const error = Object.assign(new Error("FunctionsHttpError"), {
       context: new Response("AI processing consent required", { status: 403 }),
@@ -337,5 +436,147 @@ describe("ai-sms-parser-service parser strategy", () => {
     } catch (error: unknown) {
       expect(isAiConsentRequiredError(error)).toBe(true);
     }
+  });
+
+  it("preserves successful chunks and correlates only failed chunk candidates", async () => {
+    jest.useFakeTimers();
+    const candidates: SmsCandidate[] = Array.from(
+      { length: 60 },
+      (_, index) => ({
+        message: {
+          id: `sms-${index}`,
+          address: "NBE",
+          body: `Purchase message ${index}`,
+          date: 1775658180000 + index,
+          read: false,
+        },
+        smsFingerprint: `fingerprint-${index}`,
+      })
+    );
+    mockInvoke
+      .mockResolvedValueOnce({
+        data: {
+          transactions: [
+            {
+              messageId: "sms-0",
+              amount: 25,
+              currency: "EGP",
+              type: "EXPENSE",
+              counterparty: "Shop",
+              date: "2026-04-08T12:00:00.000Z",
+              categorySystemName: "shopping",
+              confidenceScore: 0.9,
+              isTrusted: true,
+            },
+          ],
+        },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: null,
+        error: Object.assign(new Error("FunctionsHttpError"), {
+          context: new Response("temporary", { status: 500 }),
+        }),
+      });
+
+    const parsePromise = parseSmsWithAi(candidates, context);
+    await Promise.resolve();
+    await jest.advanceTimersByTimeAsync(2000);
+    const result = await parsePromise;
+
+    expect(result.transactions).toHaveLength(1);
+    expect(result.unresolvedCandidates).toEqual(
+      candidates.slice(50).map((failedCandidate) => ({
+        candidate: failedCandidate,
+        reason: "chunk_failed",
+        isRetryable: true,
+      }))
+    );
+    const loggedError = mockLoggerError.mock.calls.find(
+      ([message]) => message === "[ai-sms-parser] parse-sms chunk failed"
+    )?.[1] as { readonly context?: unknown } | undefined;
+    expect(loggedError?.context).toBeUndefined();
+    jest.useRealTimers();
+  });
+
+  it("does not forward payload-bearing unexpected errors to the logger", async () => {
+    const privateBody = "PRIVATE SMS BODY EGP 999";
+    mockInvoke.mockRejectedValueOnce(new Error(privateBody));
+
+    await parseSmsWithAi([candidate("nbe_debit_purchase")], context);
+
+    const logged = JSON.stringify(mockLoggerError.mock.calls);
+    expect(logged).not.toContain(privateBody);
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      "[ai-sms-parser] Unexpected error during parseSmsWithAi",
+      expect.objectContaining({ message: "SMS AI parser unexpected failure" }),
+      expect.objectContaining({ errorName: "Error", candidateCount: 1 })
+    );
+  });
+
+  it("logs only safe reason codes for malformed and untrusted AI results", async () => {
+    mockInvoke
+      .mockResolvedValueOnce({
+        data: { privateResponseKey: "secret" },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: {
+          transactions: [
+            {
+              messageId: "private-missing-message-id",
+              amount: 25,
+              currency: "EGP",
+              type: "EXPENSE",
+              counterparty: "Private Merchant",
+              date: "2026-04-08T12:00:00.000Z",
+              categorySystemName: "shopping",
+              confidenceScore: 0.9,
+              isTrusted: true,
+            },
+            {
+              messageId: "sms-1",
+              amount: 25,
+              currency: "USD",
+              type: "EXPENSE",
+              counterparty: "Private Merchant",
+              date: "2026-04-08T12:00:00.000Z",
+              categorySystemName: "shopping",
+              confidenceScore: 0.9,
+              isTrusted: false,
+            },
+          ],
+        },
+        error: null,
+      });
+
+    await parseSmsWithAi([candidate("nbe_debit_purchase")], context);
+    await parseSmsWithAi(
+      [
+        {
+          message: {
+            id: "sms-1",
+            address: "NBE",
+            body: "Private SMS body",
+            date: 1775658180000,
+            read: false,
+          },
+          smsFingerprint: "private-fingerprint",
+        },
+      ],
+      context
+    );
+
+    const logs = JSON.stringify([
+      ...mockLoggerWarn.mock.calls,
+      ...mockLoggerInfo.mock.calls,
+    ]);
+    expect(logs).toContain("transactions_array_missing");
+    expect(logs).toContain("candidate_identity_unknown");
+    expect(logs).toContain("ai_result_untrusted");
+    expect(logs).not.toContain("privateResponseKey");
+    expect(logs).not.toContain("private-missing-message-id");
+    expect(logs).not.toContain("Private Merchant");
+    expect(logs).not.toContain("USD");
   });
 });

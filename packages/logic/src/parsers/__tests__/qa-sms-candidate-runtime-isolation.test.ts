@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { LOCAL_SMS_PATTERNS } from "../local-sms-pattern-catalog";
+import { QNB_EGYPT_TRUSTED_SMS_CATALOG } from "../trusted-sms-patterns";
 
 const parsersDirectory = resolve(__dirname, "..");
 
@@ -24,6 +25,17 @@ describe("QA SMS candidate runtime isolation", () => {
     for (const pattern of LOCAL_SMS_PATTERNS) {
       expect(pattern.id).not.toMatch(/^qa-|candidate/i);
       expect(pattern.runtimeScope).not.toBe("candidate");
+    }
+  });
+
+  it("keeps evidence identities and candidate scope out of trusted runtime entries", () => {
+    expect(QNB_EGYPT_TRUSTED_SMS_CATALOG.patterns.length).toBeGreaterThan(0);
+    for (const pattern of QNB_EGYPT_TRUSTED_SMS_CATALOG.patterns) {
+      expect(JSON.stringify(pattern)).not.toMatch(
+        /candidateId|evidenceDigest|rawSmsBody|receivedAtMs|smsFingerprint/
+      );
+      expect(pattern.runtimeScope).toBe("trusted_production");
+      expect(pattern.autoSelectPolicy).toBe("never");
     }
   });
 

@@ -15,11 +15,15 @@
  */
 
 import type { ParsedSmsTransaction } from "@monyvi/logic";
+import type { ParseSmsContext } from "@/services/ai-sms-parser-service";
+import type { HybridSmsUnresolvedCandidate } from "@/services/sms-parser-orchestrator";
+import type { SmsScanResult } from "@/services/sms-sync-service";
 import React, {
   createContext,
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -34,6 +38,17 @@ interface SmsScanContextValue {
   readonly transactions: readonly ParsedSmsTransaction[];
   /** Set parsed transactions (called by scan page on completion) */
   readonly setTransactions: (txns: readonly ParsedSmsTransaction[]) => void;
+  readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
+  readonly parseContext: ParseSmsContext | null;
+  readonly reviewSessionId: number;
+  readonly setReviewSession: (result: SmsScanResult) => void;
+  readonly updateReviewSession: (
+    input: {
+      readonly transactions: readonly ParsedSmsTransaction[];
+      readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
+    },
+    expectedSessionId: number
+  ) => void;
   /** Clear transactions (called after save or discard) */
   readonly clearTransactions: () => void;
   /** Whether the next scan should be incremental or full */
@@ -63,17 +78,61 @@ export function SmsScanProvider({
     readonly ParsedSmsTransaction[]
   >([]);
   const [scanMode, setScanModeState] = useState<SmsScanMode>("incremental");
+  const [unresolvedCandidates, setUnresolvedCandidates] = useState<
+    readonly HybridSmsUnresolvedCandidate[]
+  >([]);
+  const [parseContext, setParseContext] = useState<ParseSmsContext | null>(
+    null
+  );
+  const reviewSessionIdRef = useRef(0);
+  const [reviewSessionId, setReviewSessionId] = useState(0);
+
+  const advanceReviewSession = useCallback((): void => {
+    reviewSessionIdRef.current += 1;
+    setReviewSessionId(reviewSessionIdRef.current);
+  }, []);
 
   const setTransactions = useCallback(
     (txns: readonly ParsedSmsTransaction[]) => {
+      advanceReviewSession();
       setTransactionsState(txns);
+      setUnresolvedCandidates([]);
+      setParseContext(null);
     },
-    []
+    [advanceReviewSession]
   );
 
   const clearTransactions = useCallback(() => {
+    advanceReviewSession();
     setTransactionsState([]);
-  }, []);
+    setUnresolvedCandidates([]);
+    setParseContext(null);
+  }, [advanceReviewSession]);
+
+  const setReviewSession = useCallback(
+    (result: SmsScanResult): void => {
+      advanceReviewSession();
+      setTransactionsState(result.transactions);
+      setUnresolvedCandidates(result.unresolvedCandidates);
+      setParseContext(result.parseContext);
+    },
+    [advanceReviewSession]
+  );
+
+  const updateReviewSession = useCallback(
+    (
+      input: {
+        readonly transactions: readonly ParsedSmsTransaction[];
+        readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
+      },
+      expectedSessionId: number
+    ): void => {
+      if (reviewSessionIdRef.current !== expectedSessionId) return;
+      setTransactionsState(input.transactions);
+      setUnresolvedCandidates(input.unresolvedCandidates);
+    },
+    []
+  );
 
   const setScanMode = useCallback((mode: SmsScanMode) => {
     setScanModeState(mode);
@@ -83,11 +142,27 @@ export function SmsScanProvider({
     () => ({
       transactions,
       setTransactions,
+      unresolvedCandidates,
+      parseContext,
+      reviewSessionId,
+      setReviewSession,
+      updateReviewSession,
       clearTransactions,
       scanMode,
       setScanMode,
     }),
-    [transactions, setTransactions, clearTransactions, scanMode, setScanMode]
+    [
+      transactions,
+      setTransactions,
+      unresolvedCandidates,
+      parseContext,
+      reviewSessionId,
+      setReviewSession,
+      updateReviewSession,
+      clearTransactions,
+      scanMode,
+      setScanMode,
+    ]
   );
 
   return (

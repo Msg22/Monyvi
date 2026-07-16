@@ -5,6 +5,7 @@ import {
   isE2eTestMode,
   shouldUseFixtureSmsInbox,
   shouldUseFixtureSmsParser,
+  shouldUseHybridSmsParser,
   shouldUseLocalSmsParser,
 } from "@/config/e2e-test-config";
 
@@ -51,6 +52,26 @@ describe("e2e-test-config", () => {
     expect(shouldUseFixtureSmsInbox()).toBe(true);
     expect(shouldUseFixtureSmsParser()).toBe(false);
     expect(shouldUseLocalSmsParser()).toBe(true);
+  });
+
+  it("uses the fixture AI behind real hybrid routing only in explicit E2E mode", () => {
+    process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
+    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "hybrid-fixture";
+
+    expect(getAiSmsParserMode()).toBe("hybrid-fixture");
+    expect(shouldUseFixtureSmsInbox()).toBe(true);
+    expect(shouldUseFixtureSmsParser()).toBe(true);
+    expect(shouldUseHybridSmsParser()).toBe(true);
+    expect(shouldUseLocalSmsParser()).toBe(false);
+  });
+
+  it("fails closed when hybrid fixture mode is requested outside E2E", () => {
+    process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "off";
+    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "hybrid-fixture";
+
+    expect(shouldUseFixtureSmsInbox()).toBe(false);
+    expect(shouldUseFixtureSmsParser()).toBe(false);
+    expect(shouldUseHybridSmsParser()).toBe(false);
   });
 
   it("fails closed when fixture parser is requested outside E2E mode", () => {

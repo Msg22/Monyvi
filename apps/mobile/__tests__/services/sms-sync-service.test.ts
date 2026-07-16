@@ -130,17 +130,21 @@ jest.mock("@nozbe/watermelondb", () => ({
 // Mock: sms-parser-orchestrator (parseSmsWithOrchestrator)
 // ---------------------------------------------------------------------------
 
-const mockParseSmsWithOrchestrator = jest.fn<Promise<AiParseResult>, unknown[]>(
-  () => Promise.resolve({ transactions: [] })
-);
+type MockParserResult = AiParseResult | SmsParserOrchestratorResult;
+
+const mockParseSmsWithOrchestrator = jest.fn<
+  Promise<MockParserResult>,
+  unknown[]
+>(() => Promise.resolve({ transactions: [] }));
 
 function mockWithParserDiagnostics(
-  result: AiParseResult
+  result: MockParserResult
 ): SmsParserOrchestratorResult {
   const resultWithDiagnostics = result as SmsParserOrchestratorResult;
   return {
     ...result,
     transactions: result.transactions,
+    unresolvedCandidates: resultWithDiagnostics.unresolvedCandidates ?? [],
     diagnostics: resultWithDiagnostics.diagnostics ?? {
       mode: "ai-primary",
       attemptedAi: true,
@@ -158,6 +162,9 @@ jest.mock("@/services/sms-parser-orchestrator", () => ({
     ...args: unknown[]
   ): Promise<SmsParserOrchestratorResult> =>
     mockWithParserDiagnostics(await mockParseSmsWithOrchestrator(...args)),
+  toSmsParserDiagnosticsLogContext: (
+    diagnostics: SmsParserOrchestratorResult["diagnostics"]
+  ): Readonly<Record<string, unknown>> => ({ ...diagnostics }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -320,6 +327,51 @@ describe("sms-sync-service", () => {
       expect(result.totalScanned).toBe(2);
       expect(result.totalFound).toBe(2);
       expect(result.transactions).toHaveLength(2);
+    });
+
+    it("preserves successful transactions and retryable unresolved candidates", async () => {
+      const sms = createSmsMessage({ id: "sms-partial" });
+      const parsed = createParsedTransaction({ smsFingerprint: "parsed-fp" });
+      const pendingCandidate = {
+        message: sms,
+        smsFingerprint: "pending-fp",
+      };
+      mockReadSmsInbox.mockResolvedValue([sms]);
+      const orchestratorResult: SmsParserOrchestratorResult = {
+        transactions: [parsed],
+        hasError: true,
+        isRetryable: true,
+        unresolvedCandidates: [
+          {
+            candidate: pendingCandidate,
+            reason: "chunk_failed",
+            isRetryable: true,
+          },
+        ],
+        diagnostics: {
+          mode: "hybrid",
+          attemptedAi: true,
+          attemptedLocal: true,
+          candidateCount: 2,
+          resultCount: 1,
+          matchedPatternIds: ["qnb-egypt-card-purchase-egp-v1"],
+          runtimeScopeCounts: { trusted_production: 1 },
+        },
+      };
+      mockParseSmsWithOrchestrator.mockResolvedValue(orchestratorResult);
+
+      const result = await scanAndParseSms(defaultOptions());
+
+      expect(result.transactions).toEqual([parsed]);
+      expect(result.unresolvedCandidates).toEqual([
+        {
+          candidate: pendingCandidate,
+          reason: "chunk_failed",
+          isRetryable: true,
+        },
+      ]);
+      expect(result.parseContext).toBe(stubAiContext);
+      expect(result.parserDiagnostics.mode).toBe("hybrid");
     });
 
     it("should stop when local parser mode is blocked by AI transaction suggestions", async () => {

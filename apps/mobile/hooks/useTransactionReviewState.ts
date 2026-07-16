@@ -290,8 +290,29 @@ export function useTransactionReviewState({
     () => JSON.stringify(transactions.map(getTransactionParsedContentIdentity)),
     [transactions]
   );
+  const previousTransactionsRef = useRef<readonly ReviewableTransaction[]>([]);
+  const currentTransactionsRef = useRef(transactions);
+  currentTransactionsRef.current = transactions;
 
   useEffect(() => {
+    const currentTransactions = currentTransactionsRef.current;
+    const previousTransactions = previousTransactionsRef.current;
+    const isAppendOnly =
+      previousTransactions.length > 0 &&
+      currentTransactions.length >= previousTransactions.length &&
+      previousTransactions.every(
+        (transaction, index) =>
+          getTransactionParsedContentIdentity(transaction) ===
+          getTransactionParsedContentIdentity(currentTransactions[index])
+      );
+    previousTransactionsRef.current = currentTransactions;
+    if (isAppendOnly) {
+      setAccountMatchState((previous) => ({
+        identity: transactionIdentity,
+        matches: previous.matches,
+      }));
+      return;
+    }
     seededSelectionIdentityRef.current = null;
     userTouchedSelectionRef.current = false;
     manuallyDeselectedIndicesRef.current = new Set();

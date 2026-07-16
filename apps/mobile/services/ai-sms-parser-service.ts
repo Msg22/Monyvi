@@ -14,7 +14,7 @@ import { z } from "zod";
 import { supabase } from "./supabase";
 import { logger } from "@/utils/logger";
 import { shouldUseFixtureSmsParser } from "@/config/e2e-test-config";
-import { assertNotAborted } from "./abort-utils";
+import { assertNotAborted, createAbortError } from "./abort-utils";
 
 import {
   buildCategoryMap,
@@ -55,6 +55,13 @@ export interface AiParseResult {
   readonly transactions: readonly ParsedSmsTransaction[];
   readonly hasError?: boolean;
   readonly isRetryable?: boolean;
+  readonly unresolvedCandidates?: readonly AiUnresolvedCandidate[];
+}
+
+export interface AiUnresolvedCandidate {
+  readonly candidate: SmsCandidate;
+  readonly reason: "chunk_failed" | "unexpected_failure";
+  readonly isRetryable: boolean;
 }
 
 /** Context sent alongside SMS messages to the Edge Function. */
@@ -150,10 +157,9 @@ function parseAiResponse(data: unknown): ChunkAiResult {
 
   const obj = data as Record<string, unknown>;
   if (!Array.isArray(obj.transactions)) {
-    logger.warn(
-      "[ai-sms-parser] parseAiResponse: no 'transactions' array in response",
-      { keys: Object.keys(obj) }
-    );
+    logger.warn("[ai-sms-parser] parseAiResponse: invalid response envelope", {
+      reasonCode: "transactions_array_missing",
+    });
     return errorResult;
   }
 
@@ -220,8 +226,8 @@ function mapAiTransactions(
 
     const currency = normalizeCurrency(aiTx.currency);
     if (!candidate) {
-      logger.warn("[ai-sms-parser] Unknown messageId, skipping", {
-        messageId: aiTx.messageId,
+      logger.warn("[ai-sms-parser] Unknown message identity, skipping", {
+        reasonCode: "candidate_identity_unknown",
       });
       continue;
     }
@@ -232,8 +238,7 @@ function mapAiTransactions(
       // financial identifiers. Log only the parsed messageId and currency
       // enum for correlation and debugging.
       logger.info("[ai-sms-parser] Untrusted transaction, skipping", {
-        messageId: aiTx.messageId,
-        currency,
+        reasonCode: "ai_result_untrusted",
       });
       continue;
     }
@@ -291,11 +296,6 @@ async function invokeParseChunk(
   });
 
   if (response.error) {
-    const errorMsg =
-      response.error instanceof Error
-        ? response.error.message
-        : String(response.error);
-
     // supabase-js wraps non-2xx responses in FunctionsHttpError with a
     // generic message. The actual status + body live on `error.context`
     // (a Response). Read them so we can tell auth (401) apart from
@@ -321,7 +321,7 @@ async function invokeParseChunk(
     // the HTTP status, body length, and chunk size for diagnostics.
     logger.error(
       "[ai-sms-parser] parse-sms chunk failed",
-      response.error instanceof Error ? response.error : new Error(errorMsg),
+      new Error("SMS AI parser request failed"),
       {
         status,
         bodyLength,
@@ -378,6 +378,24 @@ function throwIfAborted(abortSignal?: AbortSignal): void {
   assertNotAborted(abortSignal, "SMS parse aborted");
 }
 
+function waitForInterChunkDelay(abortSignal?: AbortSignal): Promise<void> {
+  throwIfAborted(abortSignal);
+  if (abortSignal === undefined) {
+    return new Promise((resolve) => setTimeout(resolve, INTER_CHUNK_DELAY_MS));
+  }
+  return new Promise((resolve, reject) => {
+    const handleAbort = (): void => {
+      clearTimeout(timerId);
+      reject(createAbortError("SMS parse aborted"));
+    };
+    const timerId = setTimeout(() => {
+      abortSignal.removeEventListener("abort", handleAbort);
+      resolve();
+    }, INTER_CHUNK_DELAY_MS);
+    abortSignal.addEventListener("abort", handleAbort, { once: true });
+  });
+}
+
 /**
  * Parse SMS candidates through the AI Edge Function.
  *
@@ -393,7 +411,8 @@ function throwIfAborted(abortSignal?: AbortSignal): void {
  * @param context - Client context (categories, currencies)
  * @param onProgress - Optional callback invoked after each chunk completes
  * @returns Parsed transactions only (account suggestions derived separately)
- * @throws Never — returns empty array on total failure
+ * @throws AbortError when the caller cancels, or AiConsentRequiredError when
+ * the existing AI consent gate rejects the request.
  */
 export async function parseSmsWithAi(
   candidates: readonly SmsCandidate[],
@@ -448,6 +467,7 @@ export async function parseSmsWithAi(
     let hasError = false;
     let hasRetryableError = false;
     const allResults: ParsedSmsTransaction[] = [];
+    const unresolvedCandidates: AiUnresolvedCandidate[] = [];
 
     let chunkIndex = 0;
     while (chunkIndex < chunkQueue.length) {
@@ -455,9 +475,7 @@ export async function parseSmsWithAi(
 
       // Delay between chunks to avoid Gemini rate limits (skip for first chunk)
       if (chunkIndex > 0) {
-        await new Promise<void>((resolve) =>
-          setTimeout(resolve, INTER_CHUNK_DELAY_MS)
-        );
+        await waitForInterChunkDelay(abortSignal);
       }
       throwIfAborted(abortSignal);
 
@@ -513,6 +531,16 @@ export async function parseSmsWithAi(
         if (chunkResult.isRetryable !== false) {
           hasRetryableError = true;
         }
+        for (const message of currentChunk.messages) {
+          const failedCandidate = candidateMap.get(message.id);
+          if (failedCandidate !== undefined) {
+            unresolvedCandidates.push({
+              candidate: failedCandidate,
+              reason: "chunk_failed",
+              isRetryable: chunkResult.isRetryable !== false,
+            });
+          }
+        }
       }
 
       // Chunk succeeded (or it's a retry that returned no results — we accept that)
@@ -539,6 +567,7 @@ export async function parseSmsWithAi(
       transactions: allResults,
       hasError,
       isRetryable: hasError ? hasRetryableError : undefined,
+      unresolvedCandidates,
     };
   } catch (err: unknown) {
     if (
@@ -550,9 +579,21 @@ export async function parseSmsWithAi(
 
     logger.error(
       "[ai-sms-parser] Unexpected error during parseSmsWithAi",
-      err,
-      { candidateCount: candidates.length }
+      new Error("SMS AI parser unexpected failure"),
+      {
+        candidateCount: candidates.length,
+        errorName: err instanceof Error ? err.name : "unknown",
+      }
     );
-    return { transactions: [], hasError: true, isRetryable: true };
+    return {
+      transactions: [],
+      hasError: true,
+      isRetryable: true,
+      unresolvedCandidates: candidates.map((candidate) => ({
+        candidate,
+        reason: "unexpected_failure",
+        isRetryable: true,
+      })),
+    };
   }
 }

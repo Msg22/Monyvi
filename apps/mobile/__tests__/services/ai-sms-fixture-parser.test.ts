@@ -1,6 +1,9 @@
 import type { CategoryTreeSource } from "@monyvi/logic";
 import type { SmsCandidate } from "@/services/ai-sms-parser-service";
-import { parseSmsWithFixtureAi } from "@/services/testing/ai-sms-fixture-parser";
+import {
+  parseSmsWithFixtureAi,
+  resetFixtureAiParserStateForTests,
+} from "@/services/testing/ai-sms-fixture-parser";
 import { getFixtureById } from "@/services/dev/sms-fixtures";
 
 function category(
@@ -64,6 +67,10 @@ const context = {
 };
 
 describe("ai-sms-fixture-parser", () => {
+  beforeEach(() => {
+    resetFixtureAiParserStateForTests();
+  });
+
   it("maps a known fixture to a deterministic parsed SMS transaction", async () => {
     const result = await parseSmsWithFixtureAi(
       [candidateFromFixture("nbe_debit_purchase")],
@@ -210,6 +217,50 @@ describe("ai-sms-fixture-parser", () => {
     expect(result.isRetryable).toBe(true);
     expect(result.transactions).toHaveLength(1);
     expect(result.transactions[0]?.counterparty).toBe("CARREFOUR CAIRO");
+  });
+
+  it("continues parsing candidates after a fixture failure", async () => {
+    const failed = candidateFromFixture("retryable_ai_failure");
+    const successful = candidateFromFixture("nbe_debit_purchase");
+
+    const result = await parseSmsWithFixtureAi([failed, successful], context);
+
+    expect(result.transactions).toEqual([
+      expect.objectContaining({ counterparty: "CARREFOUR CAIRO" }),
+    ]);
+    expect(result.unresolvedCandidates).toEqual([
+      {
+        candidate: failed,
+        reason: "chunk_failed",
+        isRetryable: true,
+      },
+    ]);
+  });
+
+  it("correlates a temporary failure and resolves only that candidate on retry", async () => {
+    const successful = candidateFromFixture("nbe_debit_purchase");
+    const retryable = candidateFromFixture("hybrid_retryable_once");
+
+    const first = await parseSmsWithFixtureAi([successful, retryable], context);
+
+    expect(first.transactions).toHaveLength(1);
+    expect(first.unresolvedCandidates).toEqual([
+      {
+        candidate: retryable,
+        reason: "chunk_failed",
+        isRetryable: true,
+      },
+    ]);
+
+    const retry = await parseSmsWithFixtureAi([retryable], context);
+
+    expect(retry.hasError).toBe(false);
+    expect(retry.transactions).toEqual([
+      expect.objectContaining({
+        smsFingerprint: retryable.smsFingerprint,
+        amount: 44.44,
+      }),
+    ]);
   });
 
   it("covers real emulator SMS bodies used by live and batch SMS E2E journeys", async () => {

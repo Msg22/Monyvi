@@ -510,6 +510,18 @@ test("rejects dynamic candidate imports from runtime parser entry points", () =>
   assert.deepEqual(codes, ["candidate_runtime_import"]);
 });
 
+test("rejects private candidate metadata from trusted runtime catalogs", () => {
+  const codes = scan([
+    {
+      path: "packages/logic/src/parsers/trusted-sms-patterns/qnb-egypt.ts",
+      content:
+        'export const catalog = { candidateId: "qa-candidate-123e4567-e89b-42d3-a456-426614174000", evidenceDigest: "abc", rawSmsBody: "hidden" };',
+    },
+  ]);
+
+  assert.ok(codes.includes("trusted_runtime_private_metadata"));
+});
+
 test("allows evaluator imports inside the isolated QA validation runner", () => {
   const codes = scan([
     {

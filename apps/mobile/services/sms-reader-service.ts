@@ -84,6 +84,12 @@ const E2E_SMS_INBOX_FIXTURE_IDS = [
   "qnb_atm_withdrawal",
 ] as const;
 
+const E2E_HYBRID_SMS_INBOX_FIXTURE_IDS = [
+  "hybrid_ai_purchase",
+  "hybrid_retryable_once",
+  "hybrid_trusted_qnb_purchase",
+] as const;
+
 const E2E_LOCAL_PARSER_SAVEABLE_PROVIDER_IDS = new Set([
   "nbe",
   "qnb-egypt",
@@ -183,6 +189,31 @@ function readLegacyFixtureSmsInbox(
   return filterFixtureMessages(fixtureMessages, options);
 }
 
+function readHybridFixtureSmsInbox(
+  options?: SmsReaderOptions
+): readonly SmsMessage[] {
+  const fixtureMessages = E2E_HYBRID_SMS_INBOX_FIXTURE_IDS.map(
+    (fixtureId, index) => {
+      const fixture = getFixtureById(fixtureId);
+      if (!fixture) {
+        throw new Error(`Missing hybrid E2E SMS fixture: ${fixtureId}`);
+      }
+
+      return {
+        id: `e2e-hybrid-${fixtureId}-${index}`,
+        address: fixture.sender,
+        body: fixture.body,
+        date: toRollingFixtureInboxTimestamp(
+          resolveFixtureTimestamp(fixtureId, index, fixture.timestamp)
+        ),
+        read: true,
+      } satisfies FixtureInboxMessage;
+    }
+  );
+
+  return filterFixtureMessages(fixtureMessages, options);
+}
+
 function mapLocalParserFixture(
   fixture: LocalSmsFixture,
   index: number
@@ -231,7 +262,9 @@ export async function readSmsInbox(
     const messages =
       parserMode === "local"
         ? readLocalParserFixtureSmsInbox(options)
-        : readLegacyFixtureSmsInbox(options);
+        : parserMode === "hybrid-fixture"
+          ? readHybridFixtureSmsInbox(options)
+          : readLegacyFixtureSmsInbox(options);
 
     logger.info("smsReader.fixtureInbox.used", {
       parserMode,
