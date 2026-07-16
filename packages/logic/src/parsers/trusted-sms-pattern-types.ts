@@ -267,6 +267,12 @@ export interface TrustedSmsPromotionValidation {
   readonly integrity: "passed" | "failed";
 }
 
+export interface TrustedSmsPromotionValidationEvidence {
+  readonly exactPositive: "rendered_candidate";
+  readonly nearMatch: "mutate_each_fixed_segment";
+  readonly intentionalNegative: "unverified_sender";
+}
+
 export interface TrustedSmsPromotionRecord {
   readonly schemaVersion: 1;
   readonly promotionId: string;
@@ -279,6 +285,7 @@ export interface TrustedSmsPromotionRecord {
   readonly approvedAt: string;
   readonly decision: "promote" | "reject";
   readonly validation: TrustedSmsPromotionValidation;
+  readonly validationEvidence: TrustedSmsPromotionValidationEvidence;
 }
 
 export type TrustedSmsPlaceholderPolicy = Readonly<

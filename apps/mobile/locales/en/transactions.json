@@ -3,6 +3,8 @@
   "partial_sms_description": "Your other suggestions are ready to review.",
   "partial_sms_retry": "Retry {{count}}",
   "partial_sms_retrying": "Retrying",
+  "partial_sms_retry_error": "We couldn't retry these messages. Please try again in a moment.",
+  "ai_consent_retry_error": "We couldn't update AI access. Please try again.",
   "add_transaction": "Add Transaction",
   "edit_transaction": "Edit Transaction",
   "edit_transfer": "Edit Transfer",

@@ -12,6 +12,11 @@ const PASSED_VALIDATION = {
   ambiguity: "passed",
   integrity: "passed",
 } as const;
+const EXECUTABLE_VALIDATION_EVIDENCE = {
+  exactPositive: "rendered_candidate",
+  nearMatch: "mutate_each_fixed_segment",
+  intentionalNegative: "unverified_sender",
+} as const;
 
 interface PromotionIdentity {
   readonly candidateId: string;
@@ -32,6 +37,7 @@ function promote(identity: PromotionIdentity): TrustedSmsPromotionRecord {
     approvedAt: APPROVED_AT,
     decision: "promote",
     validation: PASSED_VALIDATION,
+    validationEvidence: EXECUTABLE_VALIDATION_EVIDENCE,
   };
 }
 

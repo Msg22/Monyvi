@@ -172,6 +172,13 @@ function validatePromotion(
     throw new Error("promotion_validation_incomplete");
   }
   if (
+    record.validationEvidence?.exactPositive !== "rendered_candidate" ||
+    record.validationEvidence.nearMatch !== "mutate_each_fixed_segment" ||
+    record.validationEvidence.intentionalNegative !== "unverified_sender"
+  ) {
+    throw new Error("promotion_validation_evidence_missing");
+  }
+  if (
     record.reviewerId.trim().length === 0 ||
     Number.isNaN(Date.parse(record.approvedAt))
   ) {
@@ -179,10 +186,25 @@ function validatePromotion(
   }
 }
 
-function renderPattern(pattern: TrustedSmsPattern): string {
+function mutateFixedText(text: string): string {
+  const characterIndex = [...text].findIndex((character) => character.trim());
+  if (characterIndex < 0) return `${text}!`;
+  const characters = [...text];
+  characters[characterIndex] = characters[characterIndex] === "!" ? "?" : "!";
+  return characters.join("");
+}
+
+function renderPattern(
+  pattern: TrustedSmsPattern,
+  mutatedFixedSegmentIndex?: number
+): string {
   return pattern.segments
-    .map((segment) => {
-      if (segment.kind === "fixed") return segment.text;
+    .map((segment, segmentIndex) => {
+      if (segment.kind === "fixed") {
+        return segmentIndex === mutatedFixedSegmentIndex
+          ? mutateFixedText(segment.text)
+          : segment.text;
+      }
       if (
         segment.semanticRole === "transaction_currency" &&
         pattern.currency !== null
@@ -195,13 +217,16 @@ function renderPattern(pattern: TrustedSmsPattern): string {
 }
 
 function validatePromotedPatternBehavior(
-  patterns: readonly TrustedSmsPattern[]
+  patterns: readonly TrustedSmsPattern[],
+  recordsByPatternId: ReadonlyMap<string, TrustedSmsPromotionRecord>
 ): void {
   const validationPatterns = patterns.map((pattern) => ({
     ...pattern,
     enabled: true,
   }));
   for (const pattern of validationPatterns) {
+    const record = recordsByPatternId.get(pattern.patternId);
+    if (record === undefined) throw new Error("promotion_record_missing");
     const body = renderPattern(pattern);
     const candidate = {
       sender: pattern.verifiedSenderAliases[0] ?? "",
@@ -230,10 +255,20 @@ function validatePromotedPatternBehavior(
     ) {
       throw new Error("promotion_exact_validation_failed");
     }
-    for (const nonMatchCandidate of [
-      { ...candidate, body: `!${body}` },
+    const fixedSegmentIndices = pattern.segments.flatMap(
+      (segment, segmentIndex) =>
+        segment.kind === "fixed" && segment.text.length > 0
+          ? [segmentIndex]
+          : []
+    );
+    const nonMatchCandidates = [
+      ...fixedSegmentIndices.map((segmentIndex) => ({
+        ...candidate,
+        body: renderPattern(pattern, segmentIndex),
+      })),
       { ...candidate, sender: "unreviewed-sender" },
-    ]) {
+    ];
+    for (const nonMatchCandidate of nonMatchCandidates) {
       const nonMatch = matchTrustedSmsTemplate({
         candidate: nonMatchCandidate,
         patterns: validationPatterns,
@@ -259,6 +294,7 @@ export function promoteQaSmsPatterns(
   const identities = new Set<string>();
   const patternIds = new Set<string>();
   const promotionIds = new Set<string>();
+  const recordsByPatternId = new Map<string, TrustedSmsPromotionRecord>();
   const patterns = input.promotionRecords.flatMap((record) => {
     if (record.decision === "reject") return [];
     const candidate = candidatesById.get(record.candidateId);
@@ -276,6 +312,7 @@ export function promoteQaSmsPatterns(
     identities.add(identity);
     patternIds.add(record.patternId);
     promotionIds.add(record.promotionId);
+    recordsByPatternId.set(record.patternId, record);
     return [
       createPattern(
         candidate,
@@ -287,7 +324,7 @@ export function promoteQaSmsPatterns(
   if ([...disabledPatternIds].some((patternId) => !patternIds.has(patternId))) {
     throw new Error("promotion_disabled_pattern_missing");
   }
-  validatePromotedPatternBehavior(patterns);
+  validatePromotedPatternBehavior(patterns, recordsByPatternId);
   const provisional = {
     schemaVersion: 1 as const,
     catalogVersion: input.catalogVersion,

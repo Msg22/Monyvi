@@ -122,6 +122,12 @@ interface CommonTranslations {
 
 /** Transactions namespace */
 interface TransactionsTranslations {
+  readonly partial_sms_title: string;
+  readonly partial_sms_description: string;
+  readonly partial_sms_retry: string;
+  readonly partial_sms_retrying: string;
+  readonly partial_sms_retry_error: string;
+  readonly ai_consent_retry_error: string;
   readonly add_transaction: string;
   readonly edit_transaction: string;
   readonly edit_transfer: string;

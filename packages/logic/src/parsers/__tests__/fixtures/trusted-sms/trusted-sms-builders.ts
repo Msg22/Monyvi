@@ -131,6 +131,11 @@ export function buildPromotionRecord(
     approvedAt: "2026-07-16T00:00:00.000Z",
     decision: "promote",
     validation: PASSED_VALIDATION,
+    validationEvidence: {
+      exactPositive: "rendered_candidate",
+      nearMatch: "mutate_each_fixed_segment",
+      intentionalNegative: "unverified_sender",
+    },
     ...overrides,
   };
 }

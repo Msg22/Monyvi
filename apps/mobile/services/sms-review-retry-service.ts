@@ -48,6 +48,9 @@ export async function retrySmsReviewCandidates(
     undefined,
     input.abortSignal
   );
+  if (result.hasError && result.isRetryable === false) {
+    throw new Error("SMS review retry failed");
+  }
   return {
     transactions: mergeTransactions(input.transactions, result.transactions),
     unresolvedCandidates: [

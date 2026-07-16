@@ -24,7 +24,10 @@ jest.mock("@/services/profile-service", () => ({
 }));
 
 import type { ParsedSmsTransaction } from "@monyvi/logic";
-import { parseSmsWithOrchestrator } from "@/services/sms-parser-orchestrator";
+import {
+  parseSmsWithOrchestrator,
+  shouldRouteTrustedRejection,
+} from "@/services/sms-parser-orchestrator";
 
 const originalEnv = process.env;
 const RECEIVED_AT_MS = new Date(2026, 3, 8, 14, 30).getTime();
@@ -83,6 +86,19 @@ function trustedPurchaseCandidate(): SmsCandidate {
   });
 }
 
+function trustedOtpCandidate(bodySuffix = ""): SmsCandidate {
+  return candidate({
+    message: {
+      id: "sms-trusted-otp",
+      address: "QNB EGYPT",
+      body: `QNB OTP:369154 at Orange for EGP 1572 الرقم السرى مخصص لعملية الشراء اونلاين برجاء عدم الافصاح عنه${bodySuffix}`,
+      date: RECEIVED_AT_MS,
+      read: false,
+    },
+    smsFingerprint: "fingerprint-trusted-otp",
+  });
+}
+
 function parsedTransaction(
   overrides: Partial<ParsedSmsTransaction> = {}
 ): ParsedSmsTransaction {
@@ -113,6 +129,15 @@ describe("sms-parser-orchestrator", () => {
     delete process.env.EXPO_PUBLIC_MONYVI_TEST_MODE;
     delete process.env.EXPO_PUBLIC_HYBRID_SMS_PARSER_ENABLED;
     mockGetAiProcessingConsentStatus.mockResolvedValue({ isConsented: true });
+  });
+
+  it("routes only an exact active trusted rejection around broad prefilters", () => {
+    expect(
+      shouldRouteTrustedRejection(trustedOtpCandidate(), ["EGP", "USD"])
+    ).toBe(true);
+    expect(
+      shouldRouteTrustedRejection(trustedOtpCandidate(" extra"), ["EGP", "USD"])
+    ).toBe(false);
   });
 
   it("routes exact trusted candidates locally and sends only unresolved candidates to AI", async () => {

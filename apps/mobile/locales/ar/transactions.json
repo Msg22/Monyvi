@@ -3,6 +3,8 @@
   "partial_sms_description": "اقتراحاتك الأخرى جاهزة للمراجعة.",
   "partial_sms_retry": "إعادة محاولة {{count}}",
   "partial_sms_retrying": "جارٍ إعادة المحاولة",
+  "partial_sms_retry_error": "تعذرت إعادة محاولة معالجة هذه الرسائل. حاول مرة أخرى بعد قليل.",
+  "ai_consent_retry_error": "تعذر تحديث الوصول إلى ميزات الذكاء الاصطناعي. حاول مرة أخرى.",
   "add_transaction": "إضافة معاملة",
   "edit_transaction": "تعديل المعاملة",
   "edit_transfer": "تعديل التحويل",

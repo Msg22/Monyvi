@@ -54,6 +54,8 @@ No database schema is introduced. All models below are pure or in-memory.
 - `approvedAt`: ISO timestamp supplied explicitly by the promotion manifest.
 - `validationStatus`: schema, privacy, positive, near-match, negative,
   ambiguity, and integrity pass codes.
+- `validationEvidence`: privacy-safe executable recipes for rendering the exact
+  candidate, mutating every fixed segment, and testing an unverified sender.
 - `decision`: promoted or rejected.
 
 Promotion records never contain template text, sender aliases, placeholder

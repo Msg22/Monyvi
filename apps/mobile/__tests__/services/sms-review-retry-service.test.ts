@@ -99,4 +99,23 @@ describe("sms review retry service", () => {
       })
     ).rejects.toBe(abort);
   });
+
+  it("does not commit a permanent retry failure as a completed session", async () => {
+    const existing = transaction("existing");
+    const pending = unresolved("retryable");
+    mockParseSmsWithOrchestrator.mockResolvedValueOnce({
+      transactions: [],
+      hasError: true,
+      isRetryable: false,
+      unresolvedCandidates: [unresolved("retryable", false)],
+    });
+
+    await expect(
+      retrySmsReviewCandidates({
+        transactions: [existing],
+        unresolvedCandidates: [pending],
+        parseContext: context,
+      })
+    ).rejects.toThrow("SMS review retry failed");
+  });
 });

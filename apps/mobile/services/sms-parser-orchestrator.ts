@@ -232,6 +232,26 @@ const trustedCatalogProvider = createBundledTrustedSmsCatalogProvider(
   QNB_EGYPT_TRUSTED_SMS_CATALOG
 );
 
+export function shouldRouteTrustedRejection(
+  candidate: SmsCandidate,
+  supportedCurrencies: readonly string[]
+): boolean {
+  const result = parseSmsWithTrustedCatalog({
+    candidates: [
+      {
+        candidateId: candidate.message.id,
+        smsFingerprint: candidate.smsFingerprint,
+        sender: candidate.message.address,
+        body: candidate.message.body,
+        receivedAtMs: candidate.message.date,
+      },
+    ],
+    activation: trustedCatalogProvider.getActivation(),
+    supportedCurrencies,
+  });
+  return result.outcomes[0]?.status === "rejected";
+}
+
 function mapTrustedTransaction(
   transaction: TrustedSmsParsedTransaction,
   candidate: SmsCandidate,

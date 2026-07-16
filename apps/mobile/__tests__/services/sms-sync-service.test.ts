@@ -21,6 +21,7 @@ import type {
 import type {
   AiParseResult,
   ParseSmsContext,
+  SmsCandidate,
 } from "@/services/ai-sms-parser-service";
 import type { SmsParserOrchestratorResult } from "@/services/sms-parser-orchestrator";
 
@@ -136,6 +137,9 @@ const mockParseSmsWithOrchestrator = jest.fn<
   Promise<MockParserResult>,
   unknown[]
 >(() => Promise.resolve({ transactions: [] }));
+const mockShouldRouteTrustedRejection = jest.fn<boolean, [unknown]>(
+  () => false
+);
 
 function mockWithParserDiagnostics(
   result: MockParserResult
@@ -165,6 +169,8 @@ jest.mock("@/services/sms-parser-orchestrator", () => ({
   toSmsParserDiagnosticsLogContext: (
     diagnostics: SmsParserOrchestratorResult["diagnostics"]
   ): Readonly<Record<string, unknown>> => ({ ...diagnostics }),
+  shouldRouteTrustedRejection: (candidate: unknown): boolean =>
+    mockShouldRouteTrustedRejection(candidate),
 }));
 
 // ---------------------------------------------------------------------------
@@ -372,6 +378,45 @@ describe("sms-sync-service", () => {
       ]);
       expect(result.parseContext).toBe(stubAiContext);
       expect(result.parserDiagnostics.mode).toBe("hybrid");
+    });
+
+    it("does not complete a mixed scan with a non-retryable parser failure", async () => {
+      const sms = createSmsMessage({ id: "sms-permanent-partial" });
+      mockReadSmsInbox.mockResolvedValue([sms]);
+      mockParseSmsWithOrchestrator.mockResolvedValue({
+        transactions: [createParsedTransaction()],
+        hasError: true,
+        isRetryable: false,
+        unresolvedCandidates: [
+          {
+            candidate: { message: sms, smsFingerprint: "permanent-fp" },
+            reason: "chunk_failed",
+            isRetryable: false,
+          },
+        ],
+      });
+
+      await expect(scanAndParseSms(defaultOptions())).rejects.toThrow(
+        "SMS AI parsing failed"
+      );
+    });
+
+    it("routes an exact trusted OTP rejection through the catalog", async () => {
+      const sms = createSmsMessage({
+        id: "sms-trusted-otp",
+        address: "QNB EGYPT",
+        body: "QNB OTP:369154 at Orange for EGP 1572 الرقم السرى مخصص لعملية الشراء اونلاين برجاء عدم الافصاح عنه",
+      });
+      mockReadSmsInbox.mockResolvedValue([sms]);
+      mockShouldRouteTrustedRejection.mockReturnValueOnce(true);
+
+      await scanAndParseSms(defaultOptions());
+
+      const candidates = mockParseSmsWithOrchestrator.mock.calls[0]?.[0] as
+        | readonly SmsCandidate[]
+        | undefined;
+      expect(candidates).toHaveLength(1);
+      expect(candidates?.[0]?.message.id).toBe("sms-trusted-otp");
     });
 
     it("should stop when local parser mode is blocked by AI transaction suggestions", async () => {

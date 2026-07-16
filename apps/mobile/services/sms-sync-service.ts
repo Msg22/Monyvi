@@ -31,6 +31,7 @@ import {
 } from "./ai-sms-parser-service";
 import {
   parseSmsWithOrchestrator,
+  shouldRouteTrustedRejection,
   toSmsParserDiagnosticsLogContext,
   type HybridSmsUnresolvedCandidate,
   type SmsParserDiagnostics,
@@ -340,11 +341,6 @@ async function executeScanPipeline(
         continue;
       }
 
-      // Skip OTPs, promotions, PIN resets, etc.
-      if (isNonTransactionalSms(sms.body)) {
-        continue;
-      }
-
       // Compute fingerprint for deduplication
       const fingerprint = await computeSmsFingerprint({
         sender: sms.address,
@@ -352,13 +348,24 @@ async function executeScanPipeline(
         receivedAtMs: sms.date,
       });
 
+      const candidate = { message: sms, smsFingerprint: fingerprint };
+      if (
+        isNonTransactionalSms(sms.body) &&
+        !shouldRouteTrustedRejection(
+          candidate,
+          options.aiContext.supportedCurrencies
+        )
+      ) {
+        continue;
+      }
+
       // Skip if already exists in local DB
       if (seenFingerprints.has(fingerprint)) {
         continue;
       }
 
       seenFingerprints.add(fingerprint);
-      candidates.push({ message: sms, smsFingerprint: fingerprint });
+      candidates.push(candidate);
     }
 
     // Emit progress after each batch
@@ -442,11 +449,7 @@ async function executeScanPipeline(
     toSmsParserDiagnosticsLogContext(aiResult.diagnostics)
   );
 
-  if (
-    aiResult.hasError &&
-    aiResult.isRetryable === false &&
-    aiResult.transactions.length === 0
-  ) {
+  if (aiResult.hasError && aiResult.isRetryable === false) {
     throw new Error("SMS AI parsing failed");
   }
 

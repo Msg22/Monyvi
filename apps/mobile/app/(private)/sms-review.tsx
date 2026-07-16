@@ -18,6 +18,7 @@
  */
 
 import { ConfirmationModal } from "@/components/modals/ConfirmationModal";
+import { AiProcessingConsentSheet } from "@/components/ai-consent/AiProcessingConsentSheet";
 import { TransactionReview } from "@/components/transaction-review/TransactionReview";
 import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
@@ -25,6 +26,7 @@ import { useSmsScanContext } from "@/context/SmsScanContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useSmsSync } from "@/hooks/useSmsSync";
 import { useSmsReviewRetry } from "@/hooks/useSmsReviewRetry";
+import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
 import { batchCreateTransactions } from "@/services/batch-create-transactions";
 import {
   flushQueuedTransactions,
@@ -52,6 +54,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
   const { showToast } = useToast();
   const { isDark } = useTheme();
   const smsRetry = useSmsReviewRetry();
+  const aiConsent = useAiProcessingConsent();
 
   const [isSaving, setIsSaving] = useState(false);
   const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
@@ -146,6 +149,19 @@ export default function SmsReviewScreen(): React.JSX.Element {
     router.replace("/(private)/(tabs)");
   }, [clearTransactions, router]);
 
+  const handleRetryConsentContinue = useCallback(async (): Promise<void> => {
+    try {
+      await aiConsent.grantConsent();
+      smsRetry.dismissConsentRequired();
+      await smsRetry.retry();
+    } catch (error: unknown) {
+      logger.warn("smsReview.retryConsent.failed", {
+        errorName: error instanceof Error ? error.name : "unknown",
+      });
+      showToast({ type: "error", title: t("ai_consent_retry_error") });
+    }
+  }, [aiConsent, showToast, smsRetry, t]);
+
   // ── No transactions guard ───────────────────────────────────────────
 
   if (transactions.length === 0) {
@@ -193,6 +209,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
             ? {
                 unresolvedCount: smsRetry.retryableCount,
                 isRetrying: smsRetry.isRetrying,
+                hasRetryError: smsRetry.hasRetryError,
                 onRetry: () => void smsRetry.retry(),
               }
             : undefined
@@ -213,6 +230,15 @@ export default function SmsReviewScreen(): React.JSX.Element {
         cancelLabel={t("cancel")}
         onConfirm={handleConfirmDiscard}
         onCancel={() => setDiscardConfirmVisible(false)}
+      />
+      <AiProcessingConsentSheet
+        visible={smsRetry.isConsentRequired}
+        onContinue={handleRetryConsentContinue}
+        onNotNow={smsRetry.dismissConsentRequired}
+        onPrivacyDetails={() => {
+          smsRetry.dismissConsentRequired();
+          router.push("/ai-privacy-details");
+        }}
       />
     </SafeAreaView>
   );

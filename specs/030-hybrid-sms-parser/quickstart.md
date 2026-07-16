@@ -121,15 +121,15 @@ device only.
 
 ## Coverage matrix
 
-| Scenario                                             | Automated evidence                                 | Manual evidence             |
-| ---------------------------------------------------- | -------------------------------------------------- | --------------------------- |
-| Exact trusted local match and trusted rejection      | Matcher/parser Jest suites                         | Offline scan                |
-| Mixed local and AI routing                           | Orchestrator/scan Jest plus hybrid fixture Maestro | Mixed physical-device scan  |
-| Partial AI result and unresolved-only retry          | AI/retry Jest plus hybrid fixture Maestro          | Inline notice and retry     |
-| Consent and global disablement                       | Orchestrator Jest suite                            | Settings consent revocation |
-| Review-only validation and fingerprint deduplication | Review/save/live/headless service Jest suites      | Repeated batch/live SMS     |
-| Light/dark notice fidelity                           | Component Jest suite                               | Screenshot comparison       |
-| Background and killed-app delivery                   | Existing service/headless unit coverage            | Physical device only        |
+| Scenario                                             | Automated evidence                            | Manual evidence             |
+| ---------------------------------------------------- | --------------------------------------------- | --------------------------- |
+| Exact trusted local match and trusted rejection      | Matcher/parser Jest suites                    | Offline scan                |
+| Mixed local and AI routing                           | Orchestrator/scan Jest; Maestro not run (ANR) | Mixed physical-device scan  |
+| Partial AI result and unresolved-only retry          | AI/retry Jest; Maestro not run (ANR)          | Inline notice and retry     |
+| Consent and global disablement                       | Orchestrator Jest suite                       | Settings consent revocation |
+| Review-only validation and fingerprint deduplication | Review/save/live/headless service Jest suites | Repeated batch/live SMS     |
+| Light/dark notice structure                          | Component Jest suite                          | Screenshot comparison open  |
+| Background and killed-app delivery                   | Existing service/headless unit coverage       | Physical device only        |
 
 ## Required PR evidence
 

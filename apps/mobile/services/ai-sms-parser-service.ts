@@ -37,8 +37,8 @@ import {
 const AiSmsTransactionSchema = z.object({
   messageId: z.string(),
   amount: z.number().finite().positive().max(MAX_TRANSACTION_AMOUNT),
-  currency: z.string(),
-  type: z.string(),
+  currency: z.enum(["EGP", "USD"]),
+  type: z.enum(["EXPENSE", "INCOME"]),
   counterparty: z.string(),
   date: z.string(),
   categorySystemName: z.string(),
@@ -60,7 +60,11 @@ export interface AiParseResult {
 
 export interface AiUnresolvedCandidate {
   readonly candidate: SmsCandidate;
-  readonly reason: "chunk_failed" | "unexpected_failure";
+  readonly reason:
+    | "chunk_failed"
+    | "mapping_failed"
+    | "response_invalid"
+    | "unexpected_failure";
   readonly isRetryable: boolean;
 }
 
@@ -133,6 +137,9 @@ interface ChunkAiResult {
   readonly hasError: boolean;
   /** False for permanent failures such as auth/config 4xx responses. */
   readonly isRetryable?: boolean;
+  readonly invalidMessageIds?: readonly string[];
+  readonly hasUncorrelatedFailure?: boolean;
+  readonly failureReason?: AiUnresolvedCandidate["reason"];
 }
 
 /**
@@ -146,6 +153,8 @@ function parseAiResponse(data: unknown): ChunkAiResult {
     transactions: [],
     hasError: true,
     isRetryable: true,
+    hasUncorrelatedFailure: true,
+    failureReason: "response_invalid",
   };
 
   if (typeof data !== "object" || data === null) {
@@ -164,6 +173,8 @@ function parseAiResponse(data: unknown): ChunkAiResult {
   }
 
   const transactions: AiSmsTransaction[] = [];
+  const invalidMessageIds = new Set<string>();
+  let hasUncorrelatedFailure = false;
   let invalidCount = 0;
 
   for (const raw of obj.transactions) {
@@ -172,6 +183,17 @@ function parseAiResponse(data: unknown): ChunkAiResult {
       transactions.push(parsed.data);
     } else {
       invalidCount++;
+      const invalidMessageId =
+        typeof raw === "object" &&
+        raw !== null &&
+        typeof (raw as Record<string, unknown>).messageId === "string"
+          ? (raw as Record<string, string>).messageId.trim()
+          : "";
+      if (invalidMessageId.length > 0) {
+        invalidMessageIds.add(invalidMessageId);
+      } else {
+        hasUncorrelatedFailure = true;
+      }
       // PII/privacy: do NOT log `raw` or full `issues` — they include amounts,
       // senders, counterparties, etc. Log only aggregate diagnostics so Sentry
       // doesn't retain user financial data.
@@ -192,7 +214,14 @@ function parseAiResponse(data: unknown): ChunkAiResult {
     });
   }
 
-  return { transactions, hasError: false };
+  return {
+    transactions,
+    hasError: invalidCount > 0,
+    isRetryable: invalidCount > 0 ? true : undefined,
+    invalidMessageIds: [...invalidMessageIds],
+    hasUncorrelatedFailure,
+    failureReason: invalidCount > 0 ? "response_invalid" : undefined,
+  };
 }
 
 function isRetryableAiFailure(status: number | undefined): boolean {
@@ -211,69 +240,90 @@ function parseDate(dateStr: string, fallbackMs: number): Date {
   return parsed;
 }
 
-/**
- * Map a batch of validated AI transactions to ParsedSmsTransaction objects.
- */
+interface AiMappingResult {
+  readonly transactions: readonly ParsedSmsTransaction[];
+  readonly resolvedMessageIds: ReadonlySet<string>;
+  readonly failedMessageIds: ReadonlySet<string>;
+  readonly hasUncorrelatedFailure: boolean;
+}
+
+function mapAiTransaction(
+  aiTx: AiSmsTransaction,
+  candidate: SmsCandidate,
+  validCategoryMap: CategoryMap
+): ParsedSmsTransaction {
+  const counterparty =
+    candidate.message.address &&
+    aiTx.counterparty.toLowerCase().trim() ===
+      candidate.message.address.toLowerCase().trim()
+      ? ""
+      : aiTx.counterparty;
+  const category = parseCategory(aiTx.categorySystemName, validCategoryMap);
+
+  return {
+    amount: aiTx.amount,
+    currency: normalizeCurrency(aiTx.currency),
+    type: normalizeType(aiTx.type),
+    counterparty,
+    date: parseDate(aiTx.date, candidate.message.date),
+    source: "SMS",
+    originLabel: candidate.message.address,
+    deduplicationHash: candidate.smsFingerprint,
+    smsFingerprint: candidate.smsFingerprint,
+    senderDisplayName: candidate.message.address,
+    categoryId: category.id,
+    categoryDisplayName: category.displayName,
+    rawSmsBody: candidate.message.body,
+    confidence: clampConfidence(aiTx.confidenceScore),
+    isAtmWithdrawal: aiTx.isAtmWithdrawal ?? false,
+    cardLast4: aiTx.cardLast4,
+  };
+}
+
 function mapAiTransactions(
   aiTransactions: readonly AiSmsTransaction[],
   candidateMap: ReadonlyMap<string, SmsCandidate>,
   validCategoryMap: CategoryMap
-): ParsedSmsTransaction[] {
-  const results: ParsedSmsTransaction[] = [];
+): AiMappingResult {
+  const transactions: ParsedSmsTransaction[] = [];
+  const resolvedMessageIds = new Set<string>();
+  const failedMessageIds = new Set<string>();
+  let hasUncorrelatedFailure = false;
 
   for (const aiTx of aiTransactions) {
     const candidate = candidateMap.get(aiTx.messageId);
-
-    const currency = normalizeCurrency(aiTx.currency);
     if (!candidate) {
       logger.warn("[ai-sms-parser] Unknown message identity, skipping", {
         reasonCode: "candidate_identity_unknown",
       });
+      hasUncorrelatedFailure = true;
       continue;
     }
-
-    // Filter out untrusted transactions (promotional offers, ambiguous messages)
     if (!aiTx.isTrusted) {
-      // PII/privacy: do NOT log the sender address or amount — those are
-      // financial identifiers. Log only the parsed messageId and currency
-      // enum for correlation and debugging.
       logger.info("[ai-sms-parser] Untrusted transaction, skipping", {
         reasonCode: "ai_result_untrusted",
       });
+      resolvedMessageIds.add(aiTx.messageId);
       continue;
     }
-
-    // Counterparty guard: must never equal the financial entity
-    const counterparty =
-      candidate.message.address &&
-      aiTx.counterparty.toLowerCase().trim() ===
-        candidate.message.address.toLowerCase().trim()
-        ? ""
-        : aiTx.counterparty;
-
-    const category = parseCategory(aiTx.categorySystemName, validCategoryMap);
-
-    results.push({
-      amount: aiTx.amount,
-      currency,
-      type: normalizeType(aiTx.type),
-      counterparty,
-      date: parseDate(aiTx.date, candidate.message.date),
-      source: "SMS",
-      originLabel: candidate.message.address,
-      deduplicationHash: candidate.smsFingerprint,
-      smsFingerprint: candidate.smsFingerprint,
-      senderDisplayName: candidate.message.address,
-      categoryId: category.id,
-      categoryDisplayName: category.displayName,
-      rawSmsBody: candidate.message.body,
-      confidence: clampConfidence(aiTx.confidenceScore),
-      isAtmWithdrawal: aiTx.isAtmWithdrawal ?? false,
-      cardLast4: aiTx.cardLast4,
-    });
+    try {
+      transactions.push(mapAiTransaction(aiTx, candidate, validCategoryMap));
+      resolvedMessageIds.add(aiTx.messageId);
+    } catch (error: unknown) {
+      failedMessageIds.add(aiTx.messageId);
+      logger.warn("[ai-sms-parser] Transaction mapping failed", {
+        reasonCode: "transaction_mapping_failed",
+        errorName: error instanceof Error ? error.name : "unknown",
+      });
+    }
   }
 
-  return results;
+  return {
+    transactions,
+    resolvedMessageIds,
+    failedMessageIds,
+    hasUncorrelatedFailure,
+  };
 }
 
 /**
@@ -332,6 +382,8 @@ async function invokeParseChunk(
       transactions: [],
       hasError: true,
       isRetryable: isRetryableAiFailure(status),
+      hasUncorrelatedFailure: true,
+      failureReason: "chunk_failed",
     };
   }
 
@@ -362,6 +414,33 @@ interface ChunkWork {
   readonly messages: readonly MessagePayload[];
   /** True if this chunk is already a retry sub-chunk (no further splitting). */
   readonly isRetry: boolean;
+}
+
+function collectUnresolvedCandidates(input: {
+  readonly messages: readonly MessagePayload[];
+  readonly candidateMap: ReadonlyMap<string, SmsCandidate>;
+  readonly resolvedMessageIds: ReadonlySet<string>;
+  readonly failedMessageIds: ReadonlySet<string>;
+  readonly hasUncorrelatedFailure: boolean;
+  readonly reason: AiUnresolvedCandidate["reason"];
+  readonly isRetryable: boolean;
+}): readonly AiUnresolvedCandidate[] {
+  const currentMessageIds = new Set(input.messages.map(({ id }) => id));
+  const hasForeignFailureIdentity = [...input.failedMessageIds].some(
+    (messageId) => !currentMessageIds.has(messageId)
+  );
+  const failedIds =
+    input.hasUncorrelatedFailure || hasForeignFailureIdentity
+      ? currentMessageIds
+      : input.failedMessageIds;
+
+  return [...failedIds].flatMap((messageId) => {
+    if (input.resolvedMessageIds.has(messageId)) return [];
+    const candidate = input.candidateMap.get(messageId);
+    return candidate
+      ? [{ candidate, reason: input.reason, isRetryable: input.isRetryable }]
+      : [];
+  });
 }
 
 function loadFixtureSmsParser(): typeof import("./testing/ai-sms-fixture-parser").parseSmsWithFixtureAi {
@@ -465,9 +544,10 @@ export async function parseSmsWithAi(
     let totalChunks = chunkQueue.length;
     let chunksCompleted = 0;
     let hasError = false;
-    let hasRetryableError = false;
+    let hasNonRetryableError = false;
     const allResults: ParsedSmsTransaction[] = [];
     const unresolvedCandidates: AiUnresolvedCandidate[] = [];
+    const unresolvedFingerprints = new Set<string>();
 
     let chunkIndex = 0;
     while (chunkIndex < chunkQueue.length) {
@@ -526,30 +606,56 @@ export async function parseSmsWithAi(
         continue;
       }
 
-      if (chunkResult.hasError) {
-        hasError = true;
-        if (chunkResult.isRetryable !== false) {
-          hasRetryableError = true;
-        }
-        for (const message of currentChunk.messages) {
-          const failedCandidate = candidateMap.get(message.id);
-          if (failedCandidate !== undefined) {
-            unresolvedCandidates.push({
-              candidate: failedCandidate,
-              reason: "chunk_failed",
-              isRetryable: chunkResult.isRetryable !== false,
-            });
-          }
-        }
-      }
-
-      // Chunk succeeded (or it's a retry that returned no results — we accept that)
       const mapped = mapAiTransactions(
         chunkResult.transactions,
         candidateMap,
         validCategoryMap
       );
-      allResults.push(...mapped);
+      allResults.push(...mapped.transactions);
+
+      const appendUnresolved = (
+        values: readonly AiUnresolvedCandidate[]
+      ): void => {
+        for (const value of values) {
+          if (unresolvedFingerprints.has(value.candidate.smsFingerprint))
+            continue;
+          unresolvedFingerprints.add(value.candidate.smsFingerprint);
+          unresolvedCandidates.push(value);
+        }
+      };
+
+      if (chunkResult.hasError) {
+        hasError = true;
+        const isRetryable = chunkResult.isRetryable !== false;
+        if (!isRetryable) hasNonRetryableError = true;
+        appendUnresolved(
+          collectUnresolvedCandidates({
+            messages: currentChunk.messages,
+            candidateMap,
+            resolvedMessageIds: mapped.resolvedMessageIds,
+            failedMessageIds: new Set(chunkResult.invalidMessageIds ?? []),
+            hasUncorrelatedFailure: chunkResult.hasUncorrelatedFailure === true,
+            reason: chunkResult.failureReason ?? "chunk_failed",
+            isRetryable,
+          })
+        );
+      }
+
+      if (mapped.failedMessageIds.size > 0 || mapped.hasUncorrelatedFailure) {
+        hasError = true;
+        hasNonRetryableError = true;
+        appendUnresolved(
+          collectUnresolvedCandidates({
+            messages: currentChunk.messages,
+            candidateMap,
+            resolvedMessageIds: mapped.resolvedMessageIds,
+            failedMessageIds: mapped.failedMessageIds,
+            hasUncorrelatedFailure: mapped.hasUncorrelatedFailure,
+            reason: "mapping_failed",
+            isRetryable: false,
+          })
+        );
+      }
 
       chunksCompleted++;
 
@@ -566,7 +672,7 @@ export async function parseSmsWithAi(
     return {
       transactions: allResults,
       hasError,
-      isRetryable: hasError ? hasRetryableError : undefined,
+      isRetryable: hasError ? !hasNonRetryableError : undefined,
       unresolvedCandidates,
     };
   } catch (err: unknown) {

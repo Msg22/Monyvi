@@ -654,6 +654,8 @@ Business rules:
   promotion, but only for that exact structure. Promotion requires an immutable
   privacy-safe record and passing schema, privacy, positive, near-match,
   negative, ambiguity, and integrity validation.
+- Near-match and negative approval is backed by executable, candidate-bound
+  checks rather than source-authored status flags alone.
 - Sender aliases normalize trim and case only. Bodies normalize line breaks and
   repeated whitespace only. Fixed wording, case, punctuation, and segment order
   remain exact; fuzzy or keyword-only production matching is prohibited.

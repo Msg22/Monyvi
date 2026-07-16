@@ -16,13 +16,14 @@ describe("PartialSmsResultsNotice", () => {
       <PartialSmsResultsNotice
         unresolvedCount={3}
         isRetrying={false}
+        hasRetryError={false}
         onRetry={onRetry}
       />
     );
 
     expect(screen.getByTestId("partial-sms-results-notice")).toHaveProp(
       "className",
-      expect.stringContaining("border-gold-500")
+      expect.stringContaining("border-gold-600/50")
     );
     expect(screen.getByTestId("partial-sms-results-notice")).toHaveProp(
       "className",
@@ -33,12 +34,32 @@ describe("PartialSmsResultsNotice", () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
+  it("shows actionable feedback when retry fails", () => {
+    const RetryAwareNotice = PartialSmsResultsNotice as React.ComponentType<
+      React.ComponentProps<typeof PartialSmsResultsNotice> & {
+        readonly hasRetryError: boolean;
+      }
+    >;
+
+    render(
+      <RetryAwareNotice
+        unresolvedCount={2}
+        isRetrying={false}
+        hasRetryError
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("partial_sms_retry_error:")).toBeTruthy();
+  });
+
   it("disables repeated retry while busy and disappears at zero", () => {
     const onRetry = jest.fn();
     const { rerender } = render(
       <PartialSmsResultsNotice
         unresolvedCount={2}
         isRetrying
+        hasRetryError={false}
         onRetry={onRetry}
       />
     );
@@ -57,6 +78,7 @@ describe("PartialSmsResultsNotice", () => {
       <PartialSmsResultsNotice
         unresolvedCount={0}
         isRetrying={false}
+        hasRetryError={false}
         onRetry={onRetry}
       />
     );

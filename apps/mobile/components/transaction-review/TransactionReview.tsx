@@ -44,6 +44,7 @@ export interface TransactionReviewProps {
   readonly partialResults?: {
     readonly unresolvedCount: number;
     readonly isRetrying: boolean;
+    readonly hasRetryError: boolean;
     readonly onRetry: () => void;
   };
 }
@@ -435,6 +436,7 @@ export function TransactionReview({
               <PartialSmsResultsNotice
                 unresolvedCount={partialResults.unresolvedCount}
                 isRetrying={partialResults.isRetrying}
+                hasRetryError={partialResults.hasRetryError}
                 onRetry={partialResults.onRetry}
               />
             )}

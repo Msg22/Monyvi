@@ -147,7 +147,7 @@ describe("ai-sms-parser-service parser strategy", () => {
     expect(result.transactions[0]?.smsFingerprint).toBe("edge-fingerprint");
   });
 
-  it("skips AI transactions with non-finite amounts", async () => {
+  it("keeps malformed non-finite results unresolved", async () => {
     mockInvoke.mockResolvedValueOnce({
       data: {
         transactions: [
@@ -184,10 +184,17 @@ describe("ai-sms-parser-service parser strategy", () => {
     );
 
     expect(result.transactions).toEqual([]);
-    expect(result.hasError).toBe(false);
+    expect(result.hasError).toBe(true);
+    const unresolvedCandidates = result.unresolvedCandidates ?? [];
+    expect(unresolvedCandidates).toHaveLength(1);
+    expect(unresolvedCandidates[0]?.candidate.smsFingerprint).toBe(
+      "edge-fingerprint"
+    );
+    expect(unresolvedCandidates[0]?.reason).toBe("response_invalid");
+    expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
   });
 
-  it("skips AI transactions with non-positive amounts", async () => {
+  it("keeps malformed non-positive results unresolved", async () => {
     mockInvoke.mockResolvedValueOnce({
       data: {
         transactions: [
@@ -235,10 +242,17 @@ describe("ai-sms-parser-service parser strategy", () => {
     );
 
     expect(result.transactions).toEqual([]);
-    expect(result.hasError).toBe(false);
+    expect(result.hasError).toBe(true);
+    const unresolvedCandidates = result.unresolvedCandidates ?? [];
+    expect(unresolvedCandidates).toHaveLength(1);
+    expect(unresolvedCandidates[0]?.candidate.smsFingerprint).toBe(
+      "edge-fingerprint"
+    );
+    expect(unresolvedCandidates[0]?.reason).toBe("response_invalid");
+    expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
   });
 
-  it("skips AI transactions with amounts exceeding the maximum", async () => {
+  it("keeps over-limit AI results unresolved", async () => {
     mockInvoke.mockResolvedValueOnce({
       data: {
         transactions: [
@@ -275,7 +289,60 @@ describe("ai-sms-parser-service parser strategy", () => {
     );
 
     expect(result.transactions).toEqual([]);
-    expect(result.hasError).toBe(false);
+    expect(result.hasError).toBe(true);
+    const unresolvedCandidates = result.unresolvedCandidates ?? [];
+    expect(unresolvedCandidates).toHaveLength(1);
+    expect(unresolvedCandidates[0]?.candidate.smsFingerprint).toBe(
+      "edge-fingerprint"
+    );
+    expect(unresolvedCandidates[0]?.reason).toBe("response_invalid");
+    expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
+  });
+
+  it("keeps the current candidate unresolved for a malformed foreign message identity", async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        transactions: [
+          {
+            messageId: "sms-from-another-chunk",
+            amount: Number.NaN,
+            currency: "EGP",
+            type: "EXPENSE",
+            counterparty: "Shop",
+            date: "2026-04-08T12:00:00.000Z",
+            categorySystemName: "shopping",
+            confidenceScore: 0.9,
+            isTrusted: true,
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await parseSmsWithAi(
+      [
+        {
+          message: {
+            id: "sms-current-chunk",
+            address: "NBE",
+            body: "Purchase EGP 25 at Shop",
+            date: 1775658180000,
+            read: false,
+          },
+          smsFingerprint: "current-chunk-fingerprint",
+        },
+      ],
+      context
+    );
+
+    expect(result.transactions).toEqual([]);
+    const unresolvedCandidates = result.unresolvedCandidates ?? [];
+    expect(unresolvedCandidates).toHaveLength(1);
+    expect(unresolvedCandidates[0]?.candidate.smsFingerprint).toBe(
+      "current-chunk-fingerprint"
+    );
+    expect(unresolvedCandidates[0]?.reason).toBe("response_invalid");
+    expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
   });
 
   it("uses the fixture parser only when E2E fixture mode is explicit", async () => {
@@ -497,6 +564,80 @@ describe("ai-sms-parser-service parser strategy", () => {
     )?.[1] as { readonly context?: unknown } | undefined;
     expect(loggedError?.context).toBeUndefined();
     jest.useRealTimers();
+  });
+
+  it("preserves earlier chunk results when a later AI entry has an unsupported enum", async () => {
+    jest.useFakeTimers();
+    try {
+      const candidates: SmsCandidate[] = Array.from(
+        { length: 51 },
+        (_, index) => ({
+          message: {
+            id: `sms-enum-${index}`,
+            address: "NBE",
+            body: `Purchase message ${index}`,
+            date: 1775658180000 + index,
+            read: false,
+          },
+          smsFingerprint: `enum-fingerprint-${index}`,
+        })
+      );
+      mockInvoke
+        .mockResolvedValueOnce({
+          data: {
+            transactions: [
+              {
+                messageId: "sms-enum-0",
+                amount: 25,
+                currency: "EGP",
+                type: "EXPENSE",
+                counterparty: "Shop",
+                date: "2026-04-08T12:00:00.000Z",
+                categorySystemName: "shopping",
+                confidenceScore: 0.9,
+                isTrusted: true,
+              },
+            ],
+          },
+          error: null,
+        })
+        .mockResolvedValueOnce({
+          data: {
+            transactions: [
+              {
+                messageId: "sms-enum-50",
+                amount: 40,
+                currency: "BTC",
+                type: "PURCHASE",
+                counterparty: "Shop",
+                date: "2026-04-08T12:00:00.000Z",
+                categorySystemName: "shopping",
+                confidenceScore: 0.9,
+                isTrusted: true,
+              },
+            ],
+          },
+          error: null,
+        });
+
+      const parsePromise = parseSmsWithAi(candidates, context);
+      await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(2000);
+      const result = await parsePromise;
+
+      expect(result.transactions).toHaveLength(1);
+      expect(result.transactions[0]?.smsFingerprint).toBe("enum-fingerprint-0");
+      expect(result.unresolvedCandidates).toEqual([
+        {
+          candidate: candidates[50],
+          reason: "response_invalid",
+          isRetryable: true,
+        },
+      ]);
+    } finally {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
   });
 
   it("does not forward payload-bearing unexpected errors to the logger", async () => {

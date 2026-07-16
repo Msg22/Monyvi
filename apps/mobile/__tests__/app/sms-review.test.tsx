@@ -5,6 +5,7 @@ import React from "react";
 interface MockTransactionReviewProps {
   readonly partialResults: {
     readonly unresolvedCount: number;
+    readonly hasRetryError: boolean;
     readonly onRetry: () => void;
   };
   readonly onBack: () => void;
@@ -18,6 +19,12 @@ interface MockTransactionReviewProps {
 
 interface MockConfirmationModalProps {
   readonly onConfirm: () => void;
+}
+
+interface MockConsentSheetProps {
+  readonly visible: boolean;
+  readonly onContinue: () => Promise<void>;
+  readonly onNotNow: () => void;
 }
 
 const mockClearTransactions = jest.fn();
@@ -35,6 +42,17 @@ const mockConfirmationModal = jest.fn<
   void,
   [props: MockConfirmationModalProps]
 >();
+const mockConsentSheet = jest.fn<void, [props: MockConsentSheetProps]>();
+const mockGrantConsent = jest.fn<Promise<void>, []>();
+const mockDismissConsentRequired = jest.fn();
+let mockRetryState = {
+  retryableCount: 2,
+  isRetrying: false,
+  hasRetryError: false,
+  isConsentRequired: false,
+  dismissConsentRequired: mockDismissConsentRequired,
+  retry: mockRetry,
+};
 let focusCleanup: (() => void) | undefined;
 
 const mockTransaction: ParsedSmsTransaction = {
@@ -68,12 +86,18 @@ jest.mock("@/context/SmsScanContext", () => ({
 }));
 
 jest.mock("@/hooks/useSmsReviewRetry", () => ({
-  useSmsReviewRetry: () => ({
-    retryableCount: 2,
-    isRetrying: false,
-    hasRetryError: false,
-    retry: mockRetry,
-  }),
+  useSmsReviewRetry: () => mockRetryState,
+}));
+
+jest.mock("@/hooks/useAiProcessingConsent", () => ({
+  useAiProcessingConsent: () => ({ grantConsent: mockGrantConsent }),
+}));
+
+jest.mock("@/components/ai-consent/AiProcessingConsentSheet", () => ({
+  AiProcessingConsentSheet: (props: MockConsentSheetProps): null => {
+    mockConsentSheet(props);
+    return null;
+  },
 }));
 
 jest.mock("@/components/transaction-review/TransactionReview", () => ({
@@ -140,6 +164,15 @@ describe("SMS review route", () => {
     focusCleanup = undefined;
     mockRetry.mockResolvedValue(undefined);
     mockMarkSyncComplete.mockResolvedValue(undefined);
+    mockGrantConsent.mockResolvedValue(undefined);
+    mockRetryState = {
+      retryableCount: 2,
+      isRetrying: false,
+      hasRetryError: false,
+      isConsentRequired: false,
+      dismissConsentRequired: mockDismissConsentRequired,
+      retry: mockRetry,
+    };
     mockBatchCreateTransactions.mockResolvedValue({
       savedCount: 1,
       failedCount: 0,
@@ -182,5 +215,50 @@ describe("SMS review route", () => {
       "/(private)/(tabs)/transactions"
     );
     expect(mockClearTransactions).toHaveBeenCalledTimes(2);
+  });
+
+  it("passes retry errors to the inline notice", () => {
+    mockRetryState = { ...mockRetryState, hasRetryError: true };
+
+    render(<SmsReviewScreen />);
+
+    expect(
+      mockTransactionReview.mock.calls[0]?.[0].partialResults.hasRetryError
+    ).toBe(true);
+  });
+
+  it("re-consents and retries unresolved messages after consent expires", async () => {
+    mockRetryState = { ...mockRetryState, isConsentRequired: true };
+    render(<SmsReviewScreen />);
+    const consentProps = mockConsentSheet.mock.calls.at(-1)?.[0];
+    if (!consentProps) throw new Error("Consent sheet was not rendered");
+
+    expect(consentProps.visible).toBe(true);
+    await act(async () => {
+      await consentProps.onContinue();
+    });
+
+    expect(mockGrantConsent).toHaveBeenCalledTimes(1);
+    expect(mockDismissConsentRequired).toHaveBeenCalledTimes(1);
+    expect(mockRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps consent recovery open when granting consent fails", async () => {
+    mockRetryState = { ...mockRetryState, isConsentRequired: true };
+    mockGrantConsent.mockRejectedValueOnce(new Error("offline"));
+    render(<SmsReviewScreen />);
+    const consentProps = mockConsentSheet.mock.calls.at(-1)?.[0];
+    if (!consentProps) throw new Error("Consent sheet was not rendered");
+
+    await act(async () => {
+      await consentProps.onContinue();
+    });
+
+    expect(mockDismissConsentRequired).not.toHaveBeenCalled();
+    expect(mockRetry).not.toHaveBeenCalled();
+    expect(mockShowToast).toHaveBeenCalledWith({
+      type: "error",
+      title: "ai_consent_retry_error",
+    });
   });
 });

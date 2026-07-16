@@ -16,6 +16,9 @@ exported.
 - decision: `promote` or `reject`;
 - closed validation results for schema, privacy, exact positive, near-match,
   intentional negative, ambiguity, and integrity.
+- executable evidence recipes that bind the approved candidate to a rendered
+  exact-positive check, mutation of every fixed segment, and an unverified
+  sender negative check.
 
 ## Invariants
 
@@ -24,5 +27,7 @@ exported.
 - Changing structure, semantic role, sender family, expected outcome, or pattern
   version requires a new record.
 - Records contain no raw/sanitized template text or concrete placeholder values.
+- Promotion fails when executable evidence recipes are absent, unsupported, or
+  do not pass against the candidate structure bound by the evidence digest.
 - `bank_to_wallet_transfer` records are rejected for this release even if the
   source candidate is otherwise valid.

@@ -53,8 +53,13 @@ function buildRecord(
       ambiguity: "passed",
       integrity: "passed",
     },
+    validationEvidence: {
+      exactPositive: "rendered_candidate",
+      nearMatch: "mutate_each_fixed_segment",
+      intentionalNegative: "unverified_sender",
+    },
     ...overrides,
-  };
+  } as TrustedSmsPromotionRecord;
 }
 
 test("promotes only explicitly approved eligible candidates", () => {
@@ -174,6 +179,25 @@ test("rejects an incomplete promotion validation", () => {
         catalogVersion: 1,
       }),
     /promotion_validation_incomplete/
+  );
+});
+
+test("rejects promotion approval without bound executable evidence", () => {
+  const candidate = readCandidates()[0];
+  const record = buildRecord(candidate) as TrustedSmsPromotionRecord & {
+    readonly validationEvidence: Readonly<Record<string, string>>;
+  };
+  const { validationEvidence: _validationEvidence, ...recordWithoutEvidence } =
+    record;
+
+  assert.throws(
+    () =>
+      promoteQaSmsPatterns({
+        candidates: [candidate],
+        promotionRecords: [recordWithoutEvidence as TrustedSmsPromotionRecord],
+        catalogVersion: 1,
+      }),
+    /promotion_validation_evidence_missing/
   );
 });
 

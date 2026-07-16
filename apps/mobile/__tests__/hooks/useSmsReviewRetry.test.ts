@@ -34,6 +34,11 @@ jest.mock("@/services/sms-review-retry-service", () => ({
     mockRetrySmsReviewCandidates(...args),
 }));
 
+jest.mock("@/services/ai-sms-parser-service", () => ({
+  isAiConsentRequiredError: (error: unknown): boolean =>
+    error instanceof Error && error.name === "AiConsentRequiredError",
+}));
+
 describe("useSmsReviewRetry", () => {
   beforeEach(() => jest.clearAllMocks());
 
@@ -80,5 +85,44 @@ describe("useSmsReviewRetry", () => {
 
     expect(capturedSignal?.aborted).toBe(true);
     expect(mockUpdateReviewSession).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a generic retry failure without clearing pending candidates", async () => {
+    mockRetrySmsReviewCandidates.mockRejectedValueOnce(new Error("network"));
+    const { result } = renderHook(() => useSmsReviewRetry());
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(result.current.hasRetryError).toBe(true);
+    expect(mockUpdateReviewSession).not.toHaveBeenCalled();
+  });
+
+  it("routes stale consent failures to consent recovery instead of generic retry error", async () => {
+    const error = new Error("consent");
+    error.name = "AiConsentRequiredError";
+    mockRetrySmsReviewCandidates.mockRejectedValueOnce(error);
+    const { result } = renderHook(() => useSmsReviewRetry());
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    const consentState = result.current as typeof result.current & {
+      readonly isConsentRequired: boolean;
+      readonly dismissConsentRequired: () => void;
+    };
+    expect(consentState.isConsentRequired).toBe(true);
+    expect(result.current.hasRetryError).toBe(false);
+
+    act(() => consentState.dismissConsentRequired());
+    expect(
+      (
+        result.current as typeof result.current & {
+          readonly isConsentRequired: boolean;
+        }
+      ).isConsentRequired
+    ).toBe(false);
   });
 });

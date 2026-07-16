@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSmsScanContext } from "@/context/SmsScanContext";
 import { retrySmsReviewCandidates } from "@/services/sms-review-retry-service";
+import { isAiConsentRequiredError } from "@/services/ai-sms-parser-service";
 import { logger } from "@/utils/logger";
 
 export interface UseSmsReviewRetryResult {
   readonly retryableCount: number;
   readonly isRetrying: boolean;
   readonly hasRetryError: boolean;
+  readonly isConsentRequired: boolean;
+  readonly dismissConsentRequired: () => void;
   readonly retry: () => Promise<void>;
 }
 
@@ -20,10 +23,13 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
   } = useSmsScanContext();
   const [isRetrying, setIsRetrying] = useState(false);
   const [hasRetryError, setHasRetryError] = useState(false);
+  const [isConsentRequired, setIsConsentRequired] = useState(false);
   const activeRequestRef = useRef<AbortController | null>(null);
   const generationRef = useRef(0);
 
   useEffect(() => {
+    setHasRetryError(false);
+    setIsConsentRequired(false);
     return () => {
       generationRef.current += 1;
       activeRequestRef.current?.abort();
@@ -41,6 +47,7 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
     activeRequestRef.current = abortController;
     setIsRetrying(true);
     setHasRetryError(false);
+    setIsConsentRequired(false);
 
     try {
       const result = await retrySmsReviewCandidates({
@@ -54,6 +61,10 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
     } catch (error: unknown) {
       if (error instanceof Error && error.name === "AbortError") return;
       if (generationRef.current !== generation) return;
+      if (isAiConsentRequiredError(error)) {
+        setIsConsentRequired(true);
+        return;
+      }
       setHasRetryError(true);
       logger.warn("smsReview.retry.failed", {
         unresolvedCount: unresolvedCandidates.length,
@@ -73,12 +84,18 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
     updateReviewSession,
   ]);
 
+  const dismissConsentRequired = useCallback((): void => {
+    setIsConsentRequired(false);
+  }, []);
+
   return {
     retryableCount: unresolvedCandidates.filter(
       ({ isRetryable }) => isRetryable
     ).length,
     isRetrying,
     hasRetryError,
+    isConsentRequired,
+    dismissConsentRequired,
     retry,
   };
 }
