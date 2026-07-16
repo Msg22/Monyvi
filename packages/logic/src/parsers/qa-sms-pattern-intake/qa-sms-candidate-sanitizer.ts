@@ -164,20 +164,20 @@ const REPLACEMENT_RULES: readonly ReplacementRule[] = [
   },
   {
     pattern:
-      /(\b(?:available\s+)?bal(?:ance)?\.?\s*)(?:(EGP|USD)\s*)?((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)\b/gi,
-    replace: (_match, prefix, currency) =>
-      `${prefix}${currency ? `${marker("CURRENCY", "transaction_currency")} ` : ""}${marker("BALANCE", "available_balance")}`,
+      /(\b(?:available\s+)?bal(?:ance)?\.?\s*)(?:(EGP|USD)(\s*))?((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)\b/gi,
+    replace: (_match, prefix, currency, currencySeparator) =>
+      `${prefix}${currency ? `${marker("CURRENCY", "transaction_currency")}${currencySeparator}` : ""}${marker("BALANCE", "available_balance")}`,
   },
   {
     pattern:
-      /((?:\u0645\u0628\u0644\u063a)\s*[:#-]?\s*)((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)\s*(\u062c\.?\s*\u0645|\u062c\u0645|\u062c\u0646\u064a\u0647)(?=$|\s|[.,])/gu,
-    replace: (_match, prefix) =>
-      `${prefix}${marker("AMOUNT", "transaction_amount")} ${marker("CURRENCY", "transaction_currency")}`,
+      /((?:\u0645\u0628\u0644\u063a)\s*[:#-]?\s*)((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)(\s*)(\u062c\.?\s*\u0645|\u062c\u0645|\u062c\u0646\u064a\u0647)(?=$|\s|[.,])/gu,
+    replace: (_match, prefix, _amount, currencySeparator) =>
+      `${prefix}${marker("AMOUNT", "transaction_amount")}${currencySeparator}${marker("CURRENCY", "transaction_currency")}`,
   },
   {
-    pattern: /\b(EGP|USD)\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)\b/g,
-    replace: () =>
-      `${marker("CURRENCY", "transaction_currency")} ${marker("AMOUNT", "transaction_amount")}`,
+    pattern: /\b(EGP|USD)(\s*)((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)\b/g,
+    replace: (_match, _currency, amountSeparator) =>
+      `${marker("CURRENCY", "transaction_currency")}${amountSeparator}${marker("AMOUNT", "transaction_amount")}`,
   },
   {
     pattern:
@@ -240,6 +240,24 @@ function toSegments(value: string): readonly QaSanitizedSegment[] {
   return segments;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function assertSanitizedTemplateFidelity(
+  normalizedBody: string,
+  segments: readonly QaSanitizedSegment[]
+): void {
+  const source = segments
+    .map((segment) =>
+      segment.kind === "fixed" ? escapeRegExp(segment.text) : ".+?"
+    )
+    .join("");
+  if (!new RegExp(`^${source}$`, "u").test(normalizedBody)) {
+    throw new Error("qa_sms_sanitized_template_drift");
+  }
+}
+
 export function findQaSmsResidualDynamicFindings(
   value: string
 ): readonly QaDraftValidationFinding[] {
@@ -269,10 +287,15 @@ export function sanitizeQaSmsCandidate(
     (input.messageFamily === null
       ? detectUnambiguousCurrency(input.body)
       : null);
-  let sanitized = normalizeDigits(input.body).replace(/\s+/g, " ").trim();
+  const normalizedBody = normalizeDigits(input.body)
+    .replace(/\s+/g, " ")
+    .trim();
+  let sanitized = normalizedBody;
   for (const rule of REPLACEMENT_RULES) {
     sanitized = sanitized.replace(rule.pattern, rule.replace);
   }
+  const segments = toSegments(sanitized);
+  assertSanitizedTemplateFidelity(normalizedBody, segments);
   const findings = findQaSmsResidualDynamicFindings(
     sanitized.replace(/\{\{[^}]+\}\}/g, "")
   );
@@ -286,7 +309,7 @@ export function sanitizeQaSmsCandidate(
     expectedOutcome: input.expectedOutcome,
     classificationStatus:
       input.messageFamily === null ? "pending" : "confirmed",
-    segments: toSegments(sanitized),
+    segments,
     evidenceDigest: input.evidenceDigest,
     authorization: input.authorization,
     validationFindings: findings,

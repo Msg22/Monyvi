@@ -78,7 +78,7 @@ function trustedPurchaseCandidate(): SmsCandidate {
     message: {
       id: "sms-trusted",
       address: "QNB EGYPT",
-      body: "Your Debit Card **2132 had a Successful transaction of EGP 16.79 @myfawry,your available bal.EGP 59900.84 for lost/stolen card call 19700",
+      body: "Your Debit Card **2132 had a Successful transaction of EGP 490.00 @GEIDEAE*BASHAYER LIBAYE,your available bal.EGP10853.15 for lost/stolen card call 19700",
       date: RECEIVED_AT_MS,
       read: false,
     },
@@ -182,7 +182,7 @@ describe("sms-parser-orchestrator", () => {
     expect(result.transactions).toEqual([
       expect.objectContaining({
         smsFingerprint: "fingerprint-trusted",
-        amount: 16.79,
+        amount: 490,
         reviewStatus: "needs_review",
       }),
       aiTransaction,

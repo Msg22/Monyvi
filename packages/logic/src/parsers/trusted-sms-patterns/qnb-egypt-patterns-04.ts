@@ -100,10 +100,6 @@ export const QNB_EGYPT_TRUSTED_SMS_PATTERNS_04 = [
         semanticRole: "transaction_currency",
       },
       {
-        kind: "fixed",
-        text: " ",
-      },
-      {
         kind: "placeholder",
         token: "BALANCE",
         semanticRole: "available_balance",
@@ -135,7 +131,7 @@ export const QNB_EGYPT_TRUSTED_SMS_PATTERNS_04 = [
       integrity: "passed",
     },
     integrityDigest:
-      "a16c4512021632414310905a46f7bb1385046c7387b45385a373e55ac54925fa",
+      "3d39ba2f1670852e090ccd648c99199498f9aab6ca7880c22ae469261c7ed4e3",
   },
   {
     schemaVersion: 1,

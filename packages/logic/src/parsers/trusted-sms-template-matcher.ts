@@ -25,6 +25,11 @@ interface EvaluatedMatch extends StructuralMatch {
 
 const COMPILED_PATTERN_CACHE = new WeakMap<TrustedSmsPattern, RegExp>();
 
+interface CompiledPlaceholderMarker {
+  readonly marker: string;
+  readonly captureSource: string;
+}
+
 function normalizeBody(body: string): string {
   return body
     .replace(/\r\n|\r|\n/g, " ")
@@ -44,19 +49,24 @@ function getCompiledPattern(pattern: TrustedSmsPattern): RegExp {
   const cached = COMPILED_PATTERN_CACHE.get(pattern);
   if (cached !== undefined) return cached;
   let placeholderIndex = 0;
-  const markers: string[] = [];
+  const markers: CompiledPlaceholderMarker[] = [];
   const template = pattern.segments
     .map((segment) => {
       if (segment.kind === "fixed") return segment.text;
       const marker = `\uE000${placeholderIndex}\uE001`;
       placeholderIndex += 1;
-      markers.push(marker);
+      const captureSource =
+        segment.semanticRole === "transaction_currency" &&
+        pattern.currency !== null
+          ? `(${escapeRegExp(pattern.currency)})`
+          : "(.+?)";
+      markers.push({ marker, captureSource });
       return marker;
     })
     .join("");
   let source = escapeRegExp(normalizeBody(template));
-  for (const marker of markers) {
-    source = source.replace(marker, "(.+?)");
+  for (const { marker, captureSource } of markers) {
+    source = source.replace(marker, captureSource);
   }
   const compiled = new RegExp(`^${source}$`);
   COMPILED_PATTERN_CACHE.set(pattern, compiled);

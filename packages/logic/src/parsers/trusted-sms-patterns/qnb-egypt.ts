@@ -14,5 +14,5 @@ export const QNB_EGYPT_TRUSTED_SMS_CATALOG = {
     ...QNB_EGYPT_TRUSTED_SMS_PATTERNS_04,
   ],
   integrityDigest:
-    "ecec633daf1f1ee214a3744687d17e0ca029f5cfd9b48ce4a6661812f7db4e61",
+    "bec032a722ae69baacd57334d2b201d4627fe9d4f20e6c9fe3603db3a83fdc71",
 } as const satisfies TrustedSmsCatalog;

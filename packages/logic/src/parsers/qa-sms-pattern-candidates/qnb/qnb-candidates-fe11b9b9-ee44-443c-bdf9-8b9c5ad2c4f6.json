@@ -71,10 +71,6 @@
           "wasOperatorCorrected": false
         },
         {
-          "kind": "fixed",
-          "text": " "
-        },
-        {
           "kind": "placeholder",
           "token": "BALANCE",
           "semanticRole": "available_balance",
@@ -91,7 +87,7 @@
           "wasOperatorCorrected": false
         }
       ],
-      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<MERCHANT>,your available bal.<CURRENCY> <BALANCE> for lost/stolen card call <PHONE>",
+      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<MERCHANT>,your available bal.<CURRENCY><BALANCE> for lost/stolen card call <PHONE>",
       "sourceType": "qa-real-sms",
       "runtimeScope": "candidate",
       "autoSelectPolicy": "never",
@@ -171,10 +167,6 @@
           "wasOperatorCorrected": false
         },
         {
-          "kind": "fixed",
-          "text": " "
-        },
-        {
           "kind": "placeholder",
           "token": "BALANCE",
           "semanticRole": "available_balance",
@@ -191,7 +183,7 @@
           "wasOperatorCorrected": false
         }
       ],
-      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<MERCHANT>,your available bal.<CURRENCY> <BALANCE> for lost/stolen card call <PHONE>",
+      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<MERCHANT>,your available bal.<CURRENCY><BALANCE> for lost/stolen card call <PHONE>",
       "sourceType": "qa-real-sms",
       "runtimeScope": "candidate",
       "autoSelectPolicy": "never",
@@ -341,10 +333,6 @@
           "wasOperatorCorrected": false
         },
         {
-          "kind": "fixed",
-          "text": " "
-        },
-        {
           "kind": "placeholder",
           "token": "BALANCE",
           "semanticRole": "available_balance",
@@ -361,7 +349,7 @@
           "wasOperatorCorrected": false
         }
       ],
-      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<ATM_TERMINAL>,your available bal.<CURRENCY> <BALANCE> for lost/stolen card call <PHONE>",
+      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<ATM_TERMINAL>,your available bal.<CURRENCY><BALANCE> for lost/stolen card call <PHONE>",
       "sourceType": "qa-real-sms",
       "runtimeScope": "candidate",
       "autoSelectPolicy": "never",
@@ -441,10 +429,6 @@
           "wasOperatorCorrected": false
         },
         {
-          "kind": "fixed",
-          "text": " "
-        },
-        {
           "kind": "placeholder",
           "token": "BALANCE",
           "semanticRole": "available_balance",
@@ -461,7 +445,7 @@
           "wasOperatorCorrected": false
         }
       ],
-      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<MERCHANT>,your available bal.<CURRENCY> <BALANCE> for lost/stolen card call <PHONE>",
+      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<MERCHANT>,your available bal.<CURRENCY><BALANCE> for lost/stolen card call <PHONE>",
       "sourceType": "qa-real-sms",
       "runtimeScope": "candidate",
       "autoSelectPolicy": "never",
@@ -501,10 +485,6 @@
           "wasOperatorCorrected": false
         },
         {
-          "kind": "fixed",
-          "text": " "
-        },
-        {
           "kind": "placeholder",
           "token": "AMOUNT",
           "semanticRole": "transaction_amount",
@@ -521,7 +501,7 @@
           "wasOperatorCorrected": false
         }
       ],
-      "sanitizedShape": "Dear Client, Amount of <CURRENCY> <AMOUNT> was debited from your account for cash withdrawal based on your request. For more information, please call <PHONE>",
+      "sanitizedShape": "Dear Client, Amount of <CURRENCY><AMOUNT> was debited from your account for cash withdrawal based on your request. For more information, please call <PHONE>",
       "sourceType": "qa-real-sms",
       "runtimeScope": "candidate",
       "autoSelectPolicy": "never",
@@ -705,10 +685,6 @@
           "wasOperatorCorrected": false
         },
         {
-          "kind": "fixed",
-          "text": " "
-        },
-        {
           "kind": "placeholder",
           "token": "BALANCE",
           "semanticRole": "available_balance",
@@ -725,7 +701,7 @@
           "wasOperatorCorrected": false
         }
       ],
-      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<ATM_TERMINAL>,your available bal.<CURRENCY> <BALANCE> for lost/stolen card call <PHONE>",
+      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<ATM_TERMINAL>,your available bal.<CURRENCY><BALANCE> for lost/stolen card call <PHONE>",
       "sourceType": "qa-real-sms",
       "runtimeScope": "candidate",
       "autoSelectPolicy": "never",
@@ -805,10 +781,6 @@
           "wasOperatorCorrected": false
         },
         {
-          "kind": "fixed",
-          "text": " "
-        },
-        {
           "kind": "placeholder",
           "token": "BALANCE",
           "semanticRole": "available_balance",
@@ -825,7 +797,7 @@
           "wasOperatorCorrected": false
         }
       ],
-      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<ATM_TERMINAL>,your available bal.<CURRENCY> <BALANCE> for lost/stolen card call <PHONE>",
+      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<ATM_TERMINAL>,your available bal.<CURRENCY><BALANCE> for lost/stolen card call <PHONE>",
       "sourceType": "qa-real-sms",
       "runtimeScope": "candidate",
       "autoSelectPolicy": "never",
@@ -905,10 +877,6 @@
           "wasOperatorCorrected": false
         },
         {
-          "kind": "fixed",
-          "text": " "
-        },
-        {
           "kind": "placeholder",
           "token": "BALANCE",
           "semanticRole": "available_balance",
@@ -925,7 +893,7 @@
           "wasOperatorCorrected": false
         }
       ],
-      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<ATM_TERMINAL>,your available bal.<CURRENCY> <BALANCE> for lost/stolen card call <PHONE>",
+      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<ATM_TERMINAL>,your available bal.<CURRENCY><BALANCE> for lost/stolen card call <PHONE>",
       "sourceType": "qa-real-sms",
       "runtimeScope": "candidate",
       "autoSelectPolicy": "never",
@@ -1239,10 +1207,6 @@
           "wasOperatorCorrected": false
         },
         {
-          "kind": "fixed",
-          "text": " "
-        },
-        {
           "kind": "placeholder",
           "token": "BALANCE",
           "semanticRole": "available_balance",
@@ -1259,7 +1223,7 @@
           "wasOperatorCorrected": false
         }
       ],
-      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<MERCHANT>,your available bal.<CURRENCY> <BALANCE> for lost/stolen card call <PHONE>",
+      "sanitizedShape": "Your Debit Card **<LAST4> had a Successful transaction of <CURRENCY> <AMOUNT> @<MERCHANT>,your available bal.<CURRENCY><BALANCE> for lost/stolen card call <PHONE>",
       "sourceType": "qa-real-sms",
       "runtimeScope": "candidate",
       "autoSelectPolicy": "never",

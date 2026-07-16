@@ -61,6 +61,34 @@ describe("trusted SMS exact template matcher", () => {
     );
   });
 
+  it.each([
+    [
+      "qnb-egypt-card-purchase-egp-v1",
+      "Your Debit Card **2132 had a Successful transaction of EGP 490.00 @GEIDEAE*BASHAYER LIBAYE,your available bal.EGP10853.15 for lost/stolen card call 19700",
+    ],
+    [
+      "qnb-egypt-card-purchase-usd-v1",
+      "Your Debit Card **2132 had a Successful transaction of USD 12.50 @TEST MERCHANT,your available bal.USD108.75 for lost/stolen card call 19700",
+    ],
+    [
+      "qnb-egypt-atm-card-egp-v1",
+      "Your Debit Card **2132 had a Successful transaction of EGP 4000.00 @ATM-Zayed Dunes-Giza-F84,your available bal.EGP18408.31 for lost/stolen card call 19700",
+    ],
+    [
+      "qnb-egypt-atm-account-egp-v1",
+      "Dear Client, Amount of EGP250000 was debited from your account for cash withdrawal based on your request. For more information, please call 19700",
+    ],
+  ])(
+    "matches the real QNB compact placeholder shape for %s",
+    (patternId, body) => {
+      const result = match(findPattern(patternId), body);
+
+      expect(result.status).toBe("matched");
+      if (result.status !== "matched") return;
+      expect(result.pattern.patternId).toBe(patternId);
+    }
+  );
+
   it("matches an approved ATM terminal as an ATM withdrawal only", () => {
     const pattern = findPattern("qnb-egypt-atm-card-egp-v1");
     const result = match(

@@ -136,10 +136,6 @@ export const QNB_EGYPT_TRUSTED_SMS_PATTERNS_03 = [
         semanticRole: "transaction_currency",
       },
       {
-        kind: "fixed",
-        text: " ",
-      },
-      {
         kind: "placeholder",
         token: "BALANCE",
         semanticRole: "available_balance",
@@ -171,7 +167,7 @@ export const QNB_EGYPT_TRUSTED_SMS_PATTERNS_03 = [
       integrity: "passed",
     },
     integrityDigest:
-      "78ca8c26b714862c65317eb383d0921566da25be380008f1afcd12bbd2ea5a33",
+      "f7292411ae810e94af1df63157b6b83012e2db90a7fa15c18d4975814f5240e6",
   },
   {
     schemaVersion: 1,
@@ -197,10 +193,6 @@ export const QNB_EGYPT_TRUSTED_SMS_PATTERNS_03 = [
         kind: "placeholder",
         token: "CURRENCY",
         semanticRole: "transaction_currency",
-      },
-      {
-        kind: "fixed",
-        text: " ",
       },
       {
         kind: "placeholder",
@@ -234,7 +226,7 @@ export const QNB_EGYPT_TRUSTED_SMS_PATTERNS_03 = [
       integrity: "passed",
     },
     integrityDigest:
-      "e74983fab7442b079445ab1c973bd4540ac6859310fcb822315dedeb84b2e4ec",
+      "e4ce06e8258f2901c25a51b8c49306b4a04d21b6a3c111d8c3de5136a446bef5",
   },
   {
     schemaVersion: 1,
