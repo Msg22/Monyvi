@@ -101,7 +101,11 @@ describe("trusted SMS parser", () => {
 
     expect(result.outcomes[0]).toMatchObject({
       status: "matched",
-      transaction: { date: new Date(2026, 6, 13, 13, 5) },
+      transaction: {
+        categorySystemName: "income_other",
+        date: new Date(2026, 6, 13, 13, 5),
+        type: "INCOME",
+      },
     });
   });
 

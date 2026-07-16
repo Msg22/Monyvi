@@ -48,6 +48,7 @@ function mapTransaction(
     throw new Error("trusted_sms_invalid_transaction_outcome");
   }
   const isAtmWithdrawal = pattern.messageFamily === "atm_withdrawal";
+  const isIncome = pattern.expectedOutcome.direction === "income";
   const currency = requireValue(values, "transaction_currency");
   if (currency !== "EGP" && currency !== "USD") {
     throw new Error("trusted_sms_invalid_currency");
@@ -59,14 +60,14 @@ function mapTransaction(
       requireValue(values, "transaction_amount").replaceAll(",", "")
     ),
     currency,
-    type: pattern.expectedOutcome.direction === "income" ? "INCOME" : "EXPENSE",
+    type: isIncome ? "INCOME" : "EXPENSE",
     counterparty: isAtmWithdrawal
       ? ""
       : (findValue(values, "merchant_name") ??
         findValue(values, "counterparty_person") ??
         ""),
     date: parseTransactionDate(candidate, values),
-    categorySystemName: "other",
+    categorySystemName: isIncome ? "income_other" : "other",
     confidence: Math.min(pattern.expectedOutcome.confidenceCeiling, 0.8),
     reviewStatus: "needs_review",
     reviewReasons: pattern.expectedOutcome.reviewReasons,

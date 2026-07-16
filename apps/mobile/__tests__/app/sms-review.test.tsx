@@ -10,6 +10,7 @@ interface MockTransactionReviewProps {
   };
   readonly onBack: () => void;
   readonly onDiscard: () => void;
+  readonly isSaving: boolean;
   readonly onSave: (
     selected: readonly ParsedSmsTransaction[],
     accountMap: ReadonlyMap<number, string>,
@@ -249,6 +250,14 @@ describe("SMS review route", () => {
     expect(
       mockTransactionReview.mock.calls[0]?.[0].partialResults.hasRetryError
     ).toBe(true);
+  });
+
+  it("disables review actions while unresolved messages are retrying", () => {
+    mockRetryState = { ...mockRetryState, isRetrying: true };
+
+    render(<SmsReviewScreen />);
+
+    expect(mockTransactionReview.mock.calls[0]?.[0].isSaving).toBe(true);
   });
 
   it("re-consents and retries unresolved messages after consent expires", async () => {

@@ -190,7 +190,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
         transactions={transactions}
         onSave={handleSave}
         onDiscard={handleDiscard}
-        isSaving={isSaving}
+        isSaving={isSaving || smsRetry.isRetrying}
         title={t("review_transactions_title")}
         subtitle={t("review_sms_source_summary", {
           count: transactions.length,

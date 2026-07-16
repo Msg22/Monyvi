@@ -539,13 +539,14 @@ export async function parseSmsWithOrchestrator(
 
     return {
       ...aiResult,
-      unresolvedCandidates: [],
+      unresolvedCandidates: aiResult.unresolvedCandidates ?? [],
       diagnostics: createDiagnostics({
         mode: getAiDiagnosticsMode(),
         attemptedAi: !shouldUseFixtureSmsParser(),
         attemptedLocal: false,
         candidateCount: candidates.length,
         resultCount: aiResult.transactions.length,
+        unresolvedCount: aiResult.unresolvedCandidates?.length ?? 0,
       }),
     };
   } catch (error: unknown) {

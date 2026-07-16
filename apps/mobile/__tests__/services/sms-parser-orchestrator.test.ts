@@ -256,6 +256,26 @@ describe("sms-parser-orchestrator", () => {
     });
   });
 
+  it("preserves AI-primary unresolved candidates when hybrid is disabled", async () => {
+    process.env.EXPO_PUBLIC_HYBRID_SMS_PARSER_ENABLED = "false";
+    const pending = candidate();
+    const unresolvedCandidate = {
+      candidate: pending,
+      reason: "chunk_failed" as const,
+      isRetryable: true,
+    };
+    mockParseSmsWithAi.mockResolvedValueOnce({
+      transactions: [],
+      hasError: true,
+      isRetryable: true,
+      unresolvedCandidates: [unresolvedCandidate],
+    });
+
+    const result = await parseSmsWithOrchestrator([pending], context);
+
+    expect(result.unresolvedCandidates).toEqual([unresolvedCandidate]);
+  });
+
   afterEach(() => {
     process.env = originalEnv;
   });
