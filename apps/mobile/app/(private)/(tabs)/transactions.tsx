@@ -12,6 +12,7 @@ import { TransferCard } from "@/components/transactions/TransferCard";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { TAB_BAR_HEIGHT } from "@/constants/ui";
 import { useTheme } from "@/context/ThemeContext";
 import { batchDeleteDisplayTransactions } from "@/services/transaction-service";
@@ -589,7 +590,7 @@ export default function TransactionsPlaceholder(): React.JSX.Element {
             refreshing={isRefreshing}
             renderItem={renderItem}
             stickySectionHeadersEnabled={false}
-            removeClippedSubviews
+            {...ANDROID_SAFE_LIST_PROPS}
             maxToRenderPerBatch={15}
             windowSize={7}
             initialNumToRender={15}
