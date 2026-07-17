@@ -449,6 +449,47 @@ describe("ai-sms-parser-service parser strategy", () => {
     expect(result.unresolvedCandidates).toEqual([]);
   });
 
+  it("keeps an SMS retryable when one of its correlated AI rows is malformed", async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        transactions: [
+          {
+            messageId: "nbe_debit_purchase",
+            amount: 25,
+            currency: "EGP",
+            type: "EXPENSE",
+            counterparty: "Shop",
+            date: "2026-04-08T12:00:00.000Z",
+            categorySystemName: "shopping",
+            confidenceScore: 0.9,
+            isTrusted: true,
+          },
+          {
+            messageId: "nbe_debit_purchase",
+            amount: "not-a-number",
+            currency: "EGP",
+            type: "EXPENSE",
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await parseSmsWithAi(
+      [candidate("nbe_debit_purchase")],
+      context
+    );
+
+    expect(result.transactions).toHaveLength(1);
+    expect(result.hasError).toBe(true);
+    expect(result.unresolvedCandidates).toEqual([
+      expect.objectContaining({
+        reason: "response_invalid",
+        isRetryable: true,
+      }),
+    ]);
+  });
+
   it("uses the fixture parser only when E2E fixture mode is explicit", async () => {
     process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
     process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "fixture";

@@ -11,6 +11,7 @@ import {
   parseSmsWithTrustedCatalog,
   QNB_EGYPT_TRUSTED_SMS_CATALOG,
   type ParsedSmsTransaction,
+  type TrustedSmsCatalogActivation,
   type TrustedSmsParsedTransaction,
   type TrustedSmsParserOutcome,
 } from "@monyvi/logic";
@@ -241,9 +242,9 @@ const trustedCatalogProvider = createBundledTrustedSmsCatalogProvider(
 
 export function getTrustedRejectionDisposition(
   candidate: SmsCandidate,
-  supportedCurrencies: readonly string[]
+  supportedCurrencies: readonly string[],
+  activation: TrustedSmsCatalogActivation = trustedCatalogProvider.getActivation()
 ): TrustedRejectionDisposition {
-  const activation = trustedCatalogProvider.getActivation();
   const parserCandidate = {
     candidateId: candidate.message.id,
     smsFingerprint: candidate.smsFingerprint,
@@ -260,7 +261,11 @@ export function getTrustedRejectionDisposition(
     return shouldUseHybridSmsParser() ? "route_to_hybrid" : "filter_before_ai";
   }
 
-  if (activation.status !== "active") return "not_trusted_rejection";
+  if (activation.status !== "active") {
+    return shouldUseHybridSmsParser()
+      ? "route_to_hybrid"
+      : "not_trusted_rejection";
+  }
   const disabledRejection = matchTrustedSmsTemplate({
     candidate: parserCandidate,
     patterns: QNB_EGYPT_TRUSTED_SMS_CATALOG.patterns.filter(

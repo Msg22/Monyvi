@@ -478,7 +478,9 @@ function collectUnresolvedCandidates(input: {
       : input.failedMessageIds;
 
   return [...failedIds].flatMap((messageId) => {
-    if (input.resolvedMessageIds.has(messageId)) return [];
+    const isExplicitlyFailed = input.failedMessageIds.has(messageId);
+    if (input.resolvedMessageIds.has(messageId) && !isExplicitlyFailed)
+      return [];
     const candidate = input.candidateMap.get(messageId);
     return candidate
       ? [{ candidate, reason: input.reason, isRetryable: input.isRetryable }]
