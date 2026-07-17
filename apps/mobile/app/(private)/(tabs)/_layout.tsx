@@ -1,6 +1,8 @@
 import { QuickActionFab } from "@/components/fab";
 import { AiProcessingConsentSheet } from "@/components/ai-consent/AiProcessingConsentSheet";
+import { PayNowModal } from "@/components/dashboard/upcoming-payments";
 import { CustomBottomTabBar } from "@/components/tab-bar/CustomBottomTabBar";
+import { useToast } from "@/components/ui/Toast";
 import { VoiceRecordingOverlay } from "@/components/voice/VoiceRecordingOverlay";
 import { darkTheme, lightTheme } from "@/constants/colors";
 import {
@@ -9,6 +11,10 @@ import {
 } from "@/context/MicButtonRefContext";
 import { MicTooltipProvider } from "@/context/MicTooltipContext";
 import { useTheme } from "@/context/ThemeContext";
+import {
+  PayNowOverlayProvider,
+  usePayNowOverlay,
+} from "@/context/PayNowOverlayContext";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories } from "@/hooks/useCategories";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
@@ -21,7 +27,8 @@ import {
 import { getAiProcessingConsentStatus } from "@/services/profile-service";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
 import { logger } from "@/utils/logger";
-import { buildCategoryTree } from "@monyvi/logic";
+import type { CurrencyType } from "@monyvi/db";
+import { buildCategoryTree, formatCurrency } from "@monyvi/logic";
 import {
   Tabs,
   useFocusEffect,
@@ -38,11 +45,15 @@ import React, {
 import { View } from "react-native";
 import { useTranslation } from "react-i18next";
 
+const PAYMENT_TOAST_DURATION_MS = 3500;
+
 export default function TabLayout(): React.ReactElement {
   return (
     <MicButtonRefProvider>
       <MicTooltipProvider>
-        <TabLayoutInner />
+        <PayNowOverlayProvider>
+          <TabLayoutInner />
+        </PayNowOverlayProvider>
       </MicTooltipProvider>
     </MicButtonRefProvider>
   );
@@ -57,6 +68,8 @@ function TabLayoutInner(): React.ReactElement {
   const router = useRouter();
   const micButtonRef = useMicButtonRef();
   const aiConsent = useAiProcessingConsent();
+  const { selectedPayment, isPayNowVisible, closePayNow } = usePayNowOverlay();
+  const { showToast } = useToast();
   const [isVoiceConsentVisible, setIsVoiceConsentVisible] = useState(false);
   const shouldResumeVoiceConsentAfterPrivacyDetails = useRef(false);
 
@@ -106,6 +119,25 @@ function TabLayoutInner(): React.ReactElement {
     onAiProcessingConsentRequired: () => setIsVoiceConsentVisible(true),
   });
   const startVoiceFlow = voiceFlow.startFlow;
+
+  const handlePaymentSuccess = useCallback(
+    (
+      amount: number,
+      paymentName: string,
+      paymentCurrency: CurrencyType
+    ): void => {
+      showToast({
+        type: "success",
+        title: tCommon("payment_recorded"),
+        message: `${paymentName} - ${formatCurrency({
+          amount,
+          currency: paymentCurrency,
+        })}`,
+        duration: PAYMENT_TOAST_DURATION_MS,
+      });
+    },
+    [showToast, tCommon]
+  );
 
   // Register the voice entry handler so the onboarding guide's mic tooltip
   // can trigger the voice flow via openVoiceEntry(). Unregister on unmount
@@ -229,6 +261,12 @@ function TabLayoutInner(): React.ReactElement {
           setIsVoiceConsentVisible(false);
           router.push("/ai-privacy-details");
         }}
+      />
+      <PayNowModal
+        payment={selectedPayment}
+        visible={isPayNowVisible}
+        onClose={closePayNow}
+        onSuccess={handlePaymentSuccess}
       />
     </View>
   );
