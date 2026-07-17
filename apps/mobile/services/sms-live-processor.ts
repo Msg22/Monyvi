@@ -174,20 +174,39 @@ export async function processLiveSmsEvent(
     return createResult("infrastructure_error", undefined);
   }
 
-  if (
-    isLikelyCorruptedSmsText(event.body) ||
-    !isLikelyFinancialSms(event.body)
-  ) {
+  if (isLikelyCorruptedSmsText(event.body)) {
     return createResult("ignored");
   }
 
   let smsFingerprint: string | undefined;
+  let candidate: SmsCandidate | undefined;
   try {
     smsFingerprint = await computeSmsFingerprint({
       sender: event.sender,
       body: event.body,
       receivedAtMs: event.timestamp,
     });
+    candidate = {
+      message: {
+        id: `live-${event.deliveryMode}-${event.timestamp}`,
+        address: event.sender,
+        body: event.body,
+        date: event.timestamp,
+        read: false,
+      },
+      smsFingerprint,
+    };
+    const trustedRejectionDisposition = getTrustedRejectionDisposition(
+      candidate,
+      SUPPORTED_CURRENCIES.map(({ code }) => code)
+    );
+    if (
+      trustedRejectionDisposition === "filter_before_ai" ||
+      (!isLikelyFinancialSms(event.body) &&
+        trustedRejectionDisposition !== "route_to_hybrid")
+    ) {
+      return createResult("ignored", smsFingerprint);
+    }
 
     if (inFlightSmsFingerprints.has(smsFingerprint)) {
       return createResult("duplicate", smsFingerprint);
@@ -217,6 +236,9 @@ export async function processLiveSmsEvent(
   if (confirmedSmsFingerprint === undefined) {
     return createResult("infrastructure_error", undefined);
   }
+  if (candidate === undefined) {
+    return createResult("infrastructure_error", confirmedSmsFingerprint);
+  }
 
   try {
     let context: ParseSmsContext;
@@ -236,24 +258,6 @@ export async function processLiveSmsEvent(
     });
     if (!preParseConsentCheck.canProcess) {
       return preParseConsentCheck.result;
-    }
-
-    const candidate: SmsCandidate = {
-      message: {
-        id: `live-${event.deliveryMode}-${event.timestamp}`,
-        address: event.sender,
-        body: event.body,
-        date: event.timestamp,
-        read: false,
-      },
-      smsFingerprint: confirmedSmsFingerprint,
-    };
-
-    if (
-      getTrustedRejectionDisposition(candidate, context.supportedCurrencies) ===
-      "filter_before_ai"
-    ) {
-      return createResult("ignored", confirmedSmsFingerprint);
     }
 
     let aiResult: Awaited<ReturnType<typeof parseSmsWithOrchestrator>>;
