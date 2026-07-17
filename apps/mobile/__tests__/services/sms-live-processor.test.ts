@@ -448,7 +448,8 @@ describe("sms-live-processor", () => {
     expect(mockReconcileLiveDetectionPreference).toHaveBeenCalledTimes(1);
     expect(mockGetAiProcessingConsentStatus).toHaveBeenCalledTimes(1);
     expect(mockIsLikelyFinancialSms).toHaveBeenCalledWith("Dinner tonight?");
-    expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
+    expect(mockComputeSmsFingerprint).toHaveBeenCalledTimes(1);
+    expect(mockGetTrustedRejectionDisposition).toHaveBeenCalledTimes(1);
     expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
 
@@ -480,6 +481,28 @@ describe("sms-live-processor", () => {
     expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
     expect(mockGetTrustedRejectionDisposition).not.toHaveBeenCalled();
     expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
+  });
+
+  it("routes affected trusted rejections before the broad financial heuristic", async () => {
+    mockIsLikelyFinancialSms.mockReturnValueOnce(false);
+    mockGetTrustedRejectionDisposition.mockReturnValueOnce("route_to_hybrid");
+    mockParseSmsWithOrchestrator.mockResolvedValueOnce({
+      transactions: [],
+      hasError: true,
+      isRetryable: true,
+      unresolvedCandidates: [],
+    });
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB ALAHLI",
+      body: "trusted OTP template affected by catalog state",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("ai_failed");
+    expect(mockGetTrustedRejectionDisposition).toHaveBeenCalledTimes(1);
+    expect(mockParseSmsWithOrchestrator).toHaveBeenCalledTimes(1);
   });
 
   it("disables stale live detection before filtering SMS bodies after consent revocation", async () => {

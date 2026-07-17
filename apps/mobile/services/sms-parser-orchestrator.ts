@@ -292,7 +292,16 @@ export function getTrustedRejectionDisposition(
   }
 
   if (activation.status !== "active") {
-    return shouldUseHybridSmsParser()
+    const bundledRejection = matchTrustedSmsTemplate({
+      candidate: parserCandidate,
+      patterns: QNB_EGYPT_TRUSTED_SMS_CATALOG.patterns.filter(
+        (pattern) => pattern.expectedOutcome.kind === "rejection"
+      ),
+      supportedCurrencies,
+      includeDisabledPatterns: true,
+    });
+    return shouldUseHybridSmsParser() &&
+      bundledRejection.status !== "unresolved"
       ? "route_to_hybrid"
       : "not_trusted_rejection";
   }

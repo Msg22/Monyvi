@@ -222,6 +222,17 @@ describe("sms-parser-orchestrator", () => {
     ).toBe("route_to_hybrid");
   });
 
+  it("does not bypass broad filters for unrelated SMS when the catalog is invalid", () => {
+    expect(
+      getTrustedRejectionDisposition(candidate(), ["EGP", "USD"], {
+        status: "invalid",
+        catalogVersion: null,
+        patterns: [],
+        issues: [{ code: "integrity_digest_mismatch" }],
+      })
+    ).toBe("not_trusted_rejection");
+  });
+
   it("routes exact trusted candidates locally and sends only unresolved candidates to AI", async () => {
     const unresolved = candidate();
     const aiTransaction = parsedTransaction({
