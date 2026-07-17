@@ -65,7 +65,7 @@ describe("QA SMS bundle builder", () => {
       [candidate("qa-candidate-1", "card_purchase", "EGP")],
       "2026-07-13T02:00:00.000Z"
     );
-    expect(declarations).toHaveLength(16);
+    expect(declarations).toHaveLength(18);
     expect(declarations).toContainEqual(
       expect.objectContaining({
         messageFamily: "card_purchase",

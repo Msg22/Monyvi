@@ -20,6 +20,7 @@ const TRANSACTION_DIRECTIONS = {
   atm_withdrawal: "expense",
   incoming_ipn_transfer: "income",
   outgoing_ipn_transfer: "expense",
+  outgoing_bank_transfer: "expense",
   refund_or_reversal: "income",
 } as const;
 
@@ -133,7 +134,11 @@ function validatePattern(
   if (pattern.schemaVersion !== TRUSTED_SMS_CATALOG_SCHEMA_VERSION) {
     addPatternIssue(issues, pattern, "pattern_schema_version_invalid");
   }
-  if (pattern.catalogVersion !== catalogVersion) {
+  if (
+    !Number.isInteger(pattern.catalogVersion) ||
+    pattern.catalogVersion < 1 ||
+    pattern.catalogVersion > catalogVersion
+  ) {
     addPatternIssue(issues, pattern, "pattern_catalog_version_invalid");
   }
   if (pattern.runtimeScope !== "trusted_production") {

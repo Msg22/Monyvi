@@ -277,19 +277,24 @@ theme-compatible recovery path.
 
 ---
 
-## Phase 6: User Story 4 - Keep Every Local Suggestion Reviewable (Priority: P2)
+## Phase 6: User Story 4 - Keep Every Local Suggestion Financially Guarded (Priority: P2)
 
-**Goal**: Ensure trusted local suggestions cannot bypass review, financial
-validation, account/category/transfer resolution, or fingerprint deduplication.
+**Goal**: Ensure trusted local suggestions cannot bypass financial validation,
+account/category/transfer resolution, or fingerprint deduplication. Results are
+review-required by default; only the FR-052 through FR-054 enriched exact
+purchase path may become auto-selectable.
 
-**Independent Test**: Produce a trusted local suggestion with missing financial
-references and repeated delivery; verify it is not auto-selected, cannot save
-until corrected, and creates at most one financial record.
+**Independent Test**: Produce trusted local suggestions with missing financial
+references, repeated delivery, and a fully eligible enriched purchase; verify
+the unsafe suggestions are not auto-selected or saveable, only the eligible
+purchase is auto-selected, and every source creates at most one financial
+record.
 
 ### Tests for User Story 4
 
-- [x] T049 [P] [US4] Write failing review-selection tests proving every trusted
-      production result is `needs_review` regardless of confidence in
+- [x] T049 [P] [US4] Write failing review-selection tests proving trusted
+      production results remain `needs_review` unless every FR-052 through
+      FR-054 enriched-purchase gate succeeds in
       `apps/mobile/__tests__/services/transaction-review-selection.test.ts`
       (FR-012)
 - [x] T050 [P] [US4] Write failing account, category, transfer-endpoint, amount,
@@ -305,8 +310,9 @@ until corrected, and creates at most one financial record.
 
 ### Implementation for User Story 4
 
-- [x] T052 [US4] Enforce review-only status and stable local review reasons
-      while mapping trusted parser results in
+- [x] T052 [US4] Enforce review-required-by-default status, the sole guarded
+      FR-052 through FR-054 enriched-purchase exception, and stable local review
+      reasons while mapping trusted parser results in
       `apps/mobile/services/sms-parser-orchestrator.ts` (FR-012)
 - [x] T053 [US4] Preserve existing account/category/transfer/save validation for
       trusted results in `apps/mobile/services/transaction-review-selection.ts`,
@@ -409,6 +415,60 @@ and all affected delivery modes before PR handoff.
 - [x] T070 Add conservative corrupted-SMS rejection before batch, live, and Edge
       parsing; block accidental real Edge parser use in E2E mode; and document
       Unicode-safe emulator QA (FR-041)
+
+---
+
+## Phase 9: Issue #763 - Minimal AI Category Enrichment
+
+**Goal**: Preserve trusted local financial extraction while enriching eligible
+card-purchase categories through a minimal consent-gated AI contract, then allow
+auto-selection only through existing account and review safeguards.
+
+- [x] T071 Update issue #752, the Phase 2C specification, implementation plan,
+      business decisions, and QA guidance with the approved enrichment boundary
+      (FR-003, FR-042-FR-051)
+- [x] T072 [P] Write failing pure eligibility, merchant normalization, duplicate
+      batching, 20-item chunking, two-request concurrency, partial-chunk
+      preservation, and payload-minimization tests without production
+      implementation (FR-042-FR-044, SC-011, SC-013)
+- [x] T073 [P] Write failing merge-invariant tests proving enrichment can change
+      only category and preserves merchant plus every protected trusted field
+      (FR-045, FR-047, FR-048, SC-012, SC-014)
+- [x] T074 [P] Write failing endpoint contract tests for consent, strict request
+      validation, category allowlisting, partial/malformed/duplicate response,
+      cancellation, and privacy-safe diagnostics (FR-043, FR-045-FR-050)
+- [x] T075 Extend trusted parser result contracts with message family while
+      preserving exact parser behavior and runtime-catalog isolation
+- [x] T076 Implement the mobile category-enrichment port, production AI adapter,
+      strict schemas, per-session deduplication, and validated outcome mapping
+- [x] T077 Implement the dedicated category-enrichment Edge Function with
+      server-side consent validation, compact prompt/schema, strict allowlists,
+      and payload-safe error handling
+- [x] T078 Integrate eligible trusted enrichment into the hybrid orchestrator,
+      run it concurrently with unresolved full parsing, and preserve local
+      results on every enrichment failure
+- [x] T078A Implement exact trusted-card confidence and guarded auto-selection
+      without bypassing account, transfer, parser, or category review gates
+- [x] T079 Add mixed-batch, consent, offline, timeout, cancellation, invalid
+      category, low-confidence, missing/duplicate outcome, and no-full-parser
+      regression coverage across batch and live callers
+- [x] T080 Extend privacy/static checks and operator documentation for the new
+      endpoint and forbidden-field contract
+- [x] T080A Add the approved Arabic hard-exclusion policy before batch/live
+      fingerprinting and both parser engines, retain an orchestrator-level
+      defense, and cover normalization and trusted-sender bypass regressions
+- [x] T081 Run focused Jest, Edge contract, typecheck, lint, formatting,
+      privacy, and affected integration checks; update the PR QA/coverage matrix
+- [x] T081A Add fail-closed regressions for non-informative categories,
+      malformed duplicate response identities, ambiguous sender/card account
+      matches, and unexpected local Edge Function watcher exits
+- [x] T081B Pin live SMS processing to the initiating authenticated user, make
+      explicit card evidence fail closed, enforce the 20-second bounded-
+      concurrency enrichment deadline, isolate malformed Edge outcomes per
+      merchant identity, and supervise the local Expo/Edge process pair
+      (FR-057-FR-061)
+- [x] T082 Perform a final spec/issue implementation gap analysis and paranoid
+      financial-boundary review before marking the stacked PR ready
 
 ---
 

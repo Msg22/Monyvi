@@ -14,6 +14,7 @@ interface TransactionNotificationPayload {
   readonly transactionData: NotificationParsedSmsTransaction;
   readonly resolvedAccountId: string;
   readonly resolvedAccountName: string;
+  readonly initiatingUserId: string;
 }
 
 type NotificationParsedSmsTransaction = Omit<
@@ -32,7 +33,7 @@ interface SmsAtmTransferResult {
   readonly success: boolean;
 }
 
-const mockCreateTransaction = jest.fn<Promise<unknown>, [unknown]>();
+const mockCreateTransaction = jest.fn<Promise<unknown>, [unknown, string?]>();
 const mockCreateSmsAtmTransfer = jest.fn<
   Promise<SmsAtmTransferResult>,
   [unknown]
@@ -76,8 +77,10 @@ jest.mock("@/services/sms-dedup-service", () => ({
 }));
 
 jest.mock("@/services/transaction-service", () => ({
-  createTransaction: (input: unknown): Promise<unknown> =>
-    mockCreateTransaction(input),
+  createTransaction: (
+    input: unknown,
+    expectedUserId?: string
+  ): Promise<unknown> => mockCreateTransaction(input, expectedUserId),
 }));
 
 jest.mock("@/services/transfer-service", () => ({
@@ -125,6 +128,7 @@ function createPayload(
     transactionData,
     resolvedAccountId: "account-1",
     resolvedAccountName: "MainCIBAccount",
+    initiatingUserId: "user-1",
   };
 }
 
@@ -161,6 +165,7 @@ describe("sms-live-detection-handler notification actions", () => {
     mockResolveAccountForSms.mockResolvedValue({
       accountId: "account-1",
       accountName: "MainCIBAccount",
+      matchReason: "sms_sender",
     });
     mockShowTransactionNotification.mockReset();
     mockShowTransactionNotification.mockResolvedValue();
@@ -185,7 +190,8 @@ describe("sms-live-detection-handler notification actions", () => {
       expect.objectContaining({
         source: "SMS",
         smsFingerprint: "hash-1",
-      })
+      }),
+      "user-1"
     );
   });
 
@@ -198,7 +204,8 @@ describe("sms-live-detection-handler notification actions", () => {
       expect.objectContaining({
         source: "SMS",
         smsFingerprint: "hash-1",
-      })
+      }),
+      "user-1"
     );
   });
 
@@ -215,7 +222,8 @@ describe("sms-live-detection-handler notification actions", () => {
     expect(mockCreateTransaction).toHaveBeenCalledWith(
       expect.objectContaining({
         date: new Date("2026-05-03T12:00:00.000Z"),
-      })
+      }),
+      "user-1"
     );
   });
 
@@ -241,6 +249,17 @@ describe("sms-live-detection-handler notification actions", () => {
     initializeDetectionActionHandler();
 
     await getRegisteredHandler()("DISCARD", createPayload());
+
+    expect(mockCreateTransaction).not.toHaveBeenCalled();
+    expect(mockCreateSmsAtmTransfer).not.toHaveBeenCalled();
+    expect(mockHasExistingSmsFingerprint).not.toHaveBeenCalled();
+  });
+
+  it("does not confirm a notification created for another user", async () => {
+    initializeDetectionActionHandler();
+    mockGetCurrentUserId.mockResolvedValue("user-2");
+
+    await getRegisteredHandler()("CONFIRM", createPayload());
 
     expect(mockCreateTransaction).not.toHaveBeenCalled();
     expect(mockCreateSmsAtmTransfer).not.toHaveBeenCalled();
@@ -277,10 +296,11 @@ describe("sms-live-detection-handler notification actions", () => {
     await setAutoConfirm(true);
     const parsed = createParsedSmsTransaction();
 
-    await handleDetectedSms(parsed);
+    await handleDetectedSms(parsed, "user-1");
 
     expect(mockCreateTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ smsFingerprint: "hash-1" })
+      expect.objectContaining({ smsFingerprint: "hash-1" }),
+      "user-1"
     );
     expect(mockShowTransactionCreatedNotification).toHaveBeenCalledWith(
       parsed,
@@ -289,19 +309,63 @@ describe("sms-live-detection-handler notification actions", () => {
     expect(mockShowTransactionNotification).not.toHaveBeenCalled();
   });
 
+  it("drops live work pinned to a different authenticated user", async () => {
+    mockGetCurrentUserId.mockResolvedValue("user-2");
+
+    await handleDetectedSms(createParsedSmsTransaction(), "user-1");
+
+    expect(mockResolveAccountForSms).not.toHaveBeenCalled();
+    expect(mockCreateTransaction).not.toHaveBeenCalled();
+    expect(mockShowTransactionNotification).not.toHaveBeenCalled();
+  });
+
+  it("does not write when the user changes during fingerprint lookup", async () => {
+    await setAutoConfirm(true);
+    mockGetCurrentUserId
+      .mockResolvedValueOnce("user-1")
+      .mockResolvedValueOnce("user-1")
+      .mockResolvedValueOnce("user-1")
+      .mockResolvedValueOnce("user-1")
+      .mockResolvedValueOnce("user-1")
+      .mockResolvedValue("user-2");
+
+    await handleDetectedSms(createParsedSmsTransaction(), "user-1");
+
+    expect(mockCreateTransaction).not.toHaveBeenCalled();
+    expect(mockShowTransactionCreatedNotification).not.toHaveBeenCalled();
+  });
+
+  it("does not notify the next user after the initiating user's save", async () => {
+    await setAutoConfirm(true);
+    mockGetCurrentUserId
+      .mockResolvedValueOnce("user-1")
+      .mockResolvedValueOnce("user-1")
+      .mockResolvedValueOnce("user-1")
+      .mockResolvedValueOnce("user-1")
+      .mockResolvedValueOnce("user-1")
+      .mockResolvedValueOnce("user-1")
+      .mockResolvedValue("user-2");
+
+    await handleDetectedSms(createParsedSmsTransaction(), "user-1");
+
+    expect(mockCreateTransaction).toHaveBeenCalledTimes(1);
+    expect(mockShowTransactionCreatedNotification).not.toHaveBeenCalled();
+  });
+
   it("passes the parser card hint into live account resolution", async () => {
     const parsed = {
       ...createParsedSmsTransaction(),
       cardLast4: "4321",
     };
 
-    await handleDetectedSms(parsed);
+    await handleDetectedSms(parsed, "user-1");
 
     expect(mockResolveAccountForSms).toHaveBeenCalledWith(
       "NBE",
       parsed.rawSmsBody,
       "EGP",
-      "4321"
+      "4321",
+      "user-1"
     );
   });
 
@@ -310,17 +374,64 @@ describe("sms-live-detection-handler notification actions", () => {
     const parsed = {
       ...createParsedSmsTransaction(),
       reviewStatus: "needs_review" as const,
-      reviewReasons: ["account_needed" as const],
+      reviewReasons: ["low_confidence" as const],
     };
 
-    await handleDetectedSms(parsed);
+    await handleDetectedSms(parsed, "user-1");
 
     expect(mockCreateTransaction).not.toHaveBeenCalled();
     expect(mockShowTransactionCreatedNotification).not.toHaveBeenCalled();
     expect(mockShowTransactionNotification).toHaveBeenCalledWith(
       parsed,
       "account-1",
-      "MainCIBAccount"
+      "MainCIBAccount",
+      "user-1"
+    );
+  });
+
+  it("keeps default-account fallbacks out of live auto-confirm", async () => {
+    await setAutoConfirm(true);
+    mockResolveAccountForSms.mockResolvedValueOnce({
+      accountId: "account-1",
+      accountName: "MainCIBAccount",
+      matchReason: "default",
+    });
+    const parsed = {
+      ...createParsedSmsTransaction(),
+      reviewStatus: "auto_selectable" as const,
+      reviewReasons: [],
+    };
+
+    await handleDetectedSms(parsed, "user-1");
+
+    expect(mockCreateTransaction).not.toHaveBeenCalled();
+    expect(mockShowTransactionCreatedNotification).not.toHaveBeenCalled();
+    expect(mockShowTransactionNotification).toHaveBeenCalledWith(
+      parsed,
+      "account-1",
+      "MainCIBAccount",
+      "user-1"
+    );
+  });
+
+  it("keeps low-confidence AI suggestions out of live auto-confirm", async () => {
+    await setAutoConfirm(true);
+    const parsed = {
+      ...createParsedSmsTransaction(),
+      confidence: 0.3,
+      reviewStatus: undefined,
+      reviewReasons: undefined,
+    };
+
+    await handleDetectedSms(parsed, "user-1");
+
+    expect(mockCreateTransaction).not.toHaveBeenCalled();
+    expect(mockShowTransactionCreatedNotification).not.toHaveBeenCalled();
+    expect(mockShowTransactionNotification).toHaveBeenCalledWith(
+      parsed,
+      "account-1",
+      "MainCIBAccount",
+      "user-1"
     );
   });
 

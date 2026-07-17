@@ -46,6 +46,7 @@ export interface TransactionNotificationPayload {
   readonly transactionData: NotificationParsedSmsTransaction;
   readonly resolvedAccountId: string;
   readonly resolvedAccountName: string;
+  readonly initiatingUserId: string;
 }
 
 interface TransactionInfoNotificationPayload {
@@ -425,11 +426,13 @@ function serializeTransactionData(
  * @param parsed         - The parsed SMS transaction
  * @param resolvedAccountId   - ID of the resolved target account
  * @param resolvedAccountName - Display name of the resolved account
+ * @param initiatingUserId    - Authenticated user who initiated live parsing
  */
 export async function showTransactionNotification(
   parsed: ParsedSmsTransaction,
   resolvedAccountId: string,
-  resolvedAccountName: string
+  resolvedAccountName: string,
+  initiatingUserId: string
 ): Promise<void> {
   await initializeNotifications();
 
@@ -459,6 +462,7 @@ export async function showTransactionNotification(
     transactionData: serializeTransactionData(parsed),
     resolvedAccountId,
     resolvedAccountName,
+    initiatingUserId,
   };
 
   await getNotifications().scheduleNotificationAsync({

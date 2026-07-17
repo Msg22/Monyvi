@@ -162,6 +162,7 @@ function createNotificationResponse(
             },
             resolvedAccountId: "account-1",
             resolvedAccountName: "MainCIBAccount",
+            initiatingUserId: "user-1",
           },
         },
       },
@@ -290,7 +291,8 @@ describe("notification-service", () => {
     await showTransactionNotification(
       createParsedSmsTransaction(),
       "account-1",
-      "MainCIBAccount"
+      "MainCIBAccount",
+      "user-1"
     );
 
     expect(mockScheduleNotificationAsync).not.toHaveBeenCalled();
@@ -312,7 +314,8 @@ describe("notification-service", () => {
       await showTransactionNotification(
         createParsedSmsTransaction(),
         "account-1",
-        "MainCIBAccount"
+        "MainCIBAccount",
+        "user-1"
       );
 
       expect(mockScheduleNotificationAsync).toHaveBeenCalledWith(
@@ -331,7 +334,8 @@ describe("notification-service", () => {
       await showTransactionNotification(
         createParsedSmsTransaction(),
         "account-1",
-        "MainCIBAccount"
+        "MainCIBAccount",
+        "user-1"
       );
 
       expect(mockSetNotificationChannelAsync).toHaveBeenCalledWith(
@@ -349,7 +353,8 @@ describe("notification-service", () => {
       await showTransactionNotification(
         createParsedSmsTransaction(),
         "account-1",
-        "MainCIBAccount"
+        "MainCIBAccount",
+        "user-1"
       );
 
       const actions = getNotificationCategoryActions();
@@ -399,7 +404,8 @@ describe("notification-service", () => {
       await showTransactionNotification(
         createParsedSmsTransaction(),
         "account-1",
-        "MainCIBAccount"
+        "MainCIBAccount",
+        "user-1"
       );
 
       expect(getScheduledNotificationData().transactionData).not.toHaveProperty(

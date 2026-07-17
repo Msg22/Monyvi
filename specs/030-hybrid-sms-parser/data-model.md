@@ -29,7 +29,10 @@ No database schema is introduced. All models below are pure or in-memory.
 - `expectedOutcome`: income/expense extraction contract, ATM-withdrawal
   extraction contract, or explicit rejection. Internal transfer outcomes are
   unsupported in this release.
-- `reviewPolicy`: always `needs_review` for transaction outcomes.
+- `reviewPolicy`: always `needs_review` for transaction outcomes at the trusted
+  pattern boundary. A pattern can never request auto-selection itself; the
+  mobile orchestrator may independently derive the sole FR-052 through FR-054
+  enriched-purchase exception after category and account resolution.
 - `validationEvidence`: positive, near-match, negative, privacy, and ambiguity
   validation status codes.
 
@@ -38,7 +41,9 @@ No database schema is introduced. All models below are pure or in-memory.
 - No raw evidence message or concrete placeholder value is stored.
 - One pattern version represents one exact structure.
 - `enabled=false` never drops a candidate; it makes the candidate unresolved.
-- Transaction patterns cannot request production auto-selection.
+- Transaction patterns cannot request production auto-selection. Any eventual
+  auto-selection is derived outside the catalog and must pass every approved
+  post-parse financial gate.
 - `bank_to_wallet_transfer` cannot enter this catalog until a separately
   approved result contract represents both owned account endpoints.
 
@@ -108,6 +113,45 @@ identity and fingerprint.
 - `hasRetryableUnresolved`
 
 No source text, sender, amount, or extracted value may appear.
+
+## CategoryEnrichmentRequest
+
+- `merchants`: at most 20 unique normalized merchant identities per request.
+- `merchant.id`: opaque session-scoped correlation ID.
+- `merchant.merchant`: the locally extracted merchant text.
+- `merchant.transactionType`: fixed to `EXPENSE` in this release.
+- `merchant.messageFamily`: fixed to `card_purchase` in this release.
+
+**Invariants**:
+
+- Equal normalized merchants are transported once and map back to all matching
+  local candidate IDs in memory.
+- The request contains no raw SMS, sender/provider, amount, currency, balance,
+  account/card data, reference, phone, date/time, fingerprint, or custom
+  category data.
+- The client sends no category allowlist; the Edge Function owns the immutable
+  enrichment-safe taxonomy.
+- Requests execute in chunks of at most 20, with at most two chunks in flight
+  and one 20-second client deadline for the complete enrichment operation.
+
+## CategoryEnrichmentOutcome
+
+- `merchantId`: opaque request identity.
+- `categorySystemName`: exact server-allowlisted system category name.
+- `confidence`: finite value from 0 through 1.
+- `status`: accepted, rejected, missing, failed, consent-required, timed-out, or
+  cancelled at the mobile boundary.
+
+**Invariants**:
+
+- Duplicate response identities poison every sibling for that identity.
+- Malformed or unallowlisted outcomes fail per identity; a malformed envelope
+  fails the whole response.
+- Accepted outcomes can update only `categoryId` and category display data.
+  Merchant and every other trusted local field remain immutable.
+- Previously accepted chunk outcomes survive a later chunk failure or timeout.
+- Auto-selection is recomputed locally only after category confidence,
+  current-category visibility, account resolution, and review-reason checks.
 
 ## SmsReviewSession
 

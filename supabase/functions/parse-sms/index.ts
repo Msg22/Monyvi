@@ -19,6 +19,7 @@ import "edge-runtime";
 import { GoogleGenAI } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 import { hasActiveAiProcessingConsent } from "../_shared/ai-consent.ts";
+import { buildSmsParserSpecialCaseRules } from "../_shared/sms-parser-special-cases.ts";
 import { isLikelyCorruptedSmsText } from "../_shared/sms-text-quality.ts";
 
 // ---------------------------------------------------------------------------
@@ -208,6 +209,8 @@ RED FLAGS — Do NOT include if ANY of these are true:
 - The message mentions a DATE IN THE FUTURE as a deadline ("before 2026-02-19")
 - There is NO confirmation of actual money movement — just an offer or advertisement
 - The message is about account activation, deactivation, or security (OTP, PIN reset)
+
+${buildSmsParserSpecialCaseRules()}
 
 EXAMPLES OF NON-TRANSACTIONS (DO NOT INCLUDE):
 - "افتح محفظة فودافون كاش وإستمتع بكاش باك مضمون لحد 100 جنيه" → promotional offer, NOT a transaction

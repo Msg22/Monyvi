@@ -32,6 +32,7 @@ export const TRUSTED_SMS_ELIGIBLE_FAMILIES = [
   "atm_withdrawal",
   "incoming_ipn_transfer",
   "outgoing_ipn_transfer",
+  "outgoing_bank_transfer",
   "refund_or_reversal",
   "failed_transaction",
   "otp",
@@ -73,7 +74,7 @@ export interface TrustedSmsTransactionOutcome {
   readonly direction: "expense" | "income";
   readonly reviewStatus: "needs_review";
   readonly reviewReasons: ReadonlyArray<
-    "low_confidence" | "cash_transfer_review"
+    "low_confidence" | "category_needed" | "cash_transfer_review"
   >;
   readonly confidenceCeiling: number;
 }
@@ -163,10 +164,11 @@ export interface TrustedSmsParsedTransaction {
   readonly confidence: number;
   readonly reviewStatus: "needs_review";
   readonly reviewReasons: ReadonlyArray<
-    "low_confidence" | "cash_transfer_review"
+    "low_confidence" | "category_needed" | "cash_transfer_review"
   >;
   readonly isAtmWithdrawal?: boolean;
   readonly cardLast4?: string;
+  readonly messageFamily: TrustedSmsEligibleFamily;
   readonly parserSource: "trusted_local";
   readonly patternId: string;
   readonly patternVersion: number;
@@ -284,6 +286,7 @@ export interface TrustedSmsPromotionRecord {
   readonly reviewerId: string;
   readonly approvedAt: string;
   readonly decision: "promote" | "reject";
+  readonly reviewedMessageFamilyOverride?: TrustedSmsEligibleFamily;
   readonly validation: TrustedSmsPromotionValidation;
   readonly validationEvidence: TrustedSmsPromotionValidationEvidence;
 }

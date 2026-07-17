@@ -89,6 +89,8 @@ interface SmsAtmTransferInput {
   readonly smsFingerprint?: string;
   /** Sender display name for notes */
   readonly senderDisplayName?: string;
+  /** Authenticated user who initiated live parsing */
+  readonly expectedUserId: string;
 }
 
 interface SmsAtmTransferResult {
@@ -113,7 +115,7 @@ export async function createSmsAtmTransfer(
   input: SmsAtmTransferInput
 ): Promise<SmsAtmTransferResult> {
   const userId = await getCurrentUserId();
-  if (!userId) {
+  if (!userId || userId !== input.expectedUserId) {
     return { success: false, error: "User not authenticated" };
   }
 
@@ -126,15 +128,18 @@ export async function createSmsAtmTransfer(
   }
 
   try {
-    await createTransfer({
-      fromAccountId: input.bankAccountId,
-      toAccountId: cashResult.accountId,
-      amount: input.amount,
-      currency: input.currency,
-      date: input.date,
-      notes: `${ATM_WITHDRAWAL_NOTE_PREFIX}${input.senderDisplayName ? ` — ${input.senderDisplayName}` : ""}`,
-      smsFingerprint: input.smsFingerprint,
-    });
+    await createTransfer(
+      {
+        fromAccountId: input.bankAccountId,
+        toAccountId: cashResult.accountId,
+        amount: input.amount,
+        currency: input.currency,
+        date: input.date,
+        notes: `${ATM_WITHDRAWAL_NOTE_PREFIX}${input.senderDisplayName ? ` — ${input.senderDisplayName}` : ""}`,
+        smsFingerprint: input.smsFingerprint,
+      },
+      input.expectedUserId
+    );
 
     return { success: true };
   } catch (error: unknown) {
@@ -150,13 +155,19 @@ export async function createSmsAtmTransfer(
  * Create a new transfer between accounts.
  * Atomically creates the Transfer record and updates both account balances.
  */
-export async function createTransfer(data: TransferData): Promise<void> {
+export async function createTransfer(
+  data: TransferData,
+  expectedUserId?: string
+): Promise<void> {
   assertValidTransferAmount(data.amount);
   if (data.convertedAmount !== undefined) {
     assertValidTransferAmount(data.convertedAmount);
   }
 
   const scope = await getCurrentUserDataScope();
+  if (expectedUserId !== undefined && scope.userId !== expectedUserId) {
+    throw new Error("AUTH_SCOPE_CHANGED");
+  }
 
   const transferCollection = transfersCollection();
 

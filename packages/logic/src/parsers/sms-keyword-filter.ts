@@ -91,6 +91,29 @@ const FINANCIAL_KEYWORDS_PATTERN = new RegExp(
   "i"
 );
 
+const PRE_PARSER_EXCLUDED_ARABIC_PHRASES = [
+  "اكسب",
+  "حجز",
+  "ادفع",
+  "اتبرع",
+  "كاش باك",
+  "موعد",
+  "كهرباء",
+  "غاز",
+  "مياه",
+] as const;
+
+function normalizeArabicForFiltering(value: string): string {
+  return value
+    .normalize("NFKC")
+    .replace(/[\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06ed]/g, "")
+    .replace(/\u0640/g, "")
+    .replace(/[إأآٱ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -123,4 +146,15 @@ export function isLikelyFinancialSms(body: string): boolean {
   }
 
   return false;
+}
+
+/**
+ * Returns true for explicit hard exclusions that must never reach either the
+ * trusted local parser or the AI parser, regardless of sender trust.
+ */
+export function isExcludedBeforeSmsParsing(body: string): boolean {
+  const normalizedBody = normalizeArabicForFiltering(body);
+  return PRE_PARSER_EXCLUDED_ARABIC_PHRASES.some((phrase) =>
+    normalizedBody.includes(phrase)
+  );
 }

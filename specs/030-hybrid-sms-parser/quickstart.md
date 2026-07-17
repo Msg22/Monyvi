@@ -96,6 +96,40 @@ one-second budget, and pass/fail. It never prints message or extracted values.
 
 See `docs/development/sms-parser.md` for the complete operator runbook.
 
+## Category enrichment and catalog version 2
+
+- Exact trusted card purchases send one deduplicated merchant-only request to
+  `enrich-sms-categories`; the Edge Function owns the safe category allowlist.
+- The provider response schema is bounded independently of merchant count:
+  merchant IDs use a compact structural pattern and are then strictly checked
+  against the current request. This avoids Gemini's generated-constraint limit
+  without weakening response correlation.
+- The client excludes custom, hidden, internal, deleted, and non-expense
+  categories from accepted outcomes. Category confidence below `0.90` preserves
+  `other` and review-required state.
+- Mobile category enrichment uses chunks of at most 20, no more than two
+  concurrent requests, and one 20-second deadline for the complete operation.
+  Each provider attempt times out after 8 seconds and uses the bounded Edge
+  retry policy. Earlier successful chunks survive later timeout, network,
+  malformed-response, or stale-consent failures.
+- A late server consent rejection revokes stale local consent but preserves
+  completed trusted local suggestions. Explicit caller cancellation remains a
+  control-flow boundary and emits no late result.
+- Live foreground, background, and killed-app processing share the same
+  transaction-review selection gate before auto-confirm. Default/first-bank
+  account fallbacks and low-confidence AI suggestions remain review-only.
+- Catalog version 2 adds the approved exact `QNB EGYPT` online-banking
+  transfer-request structure as a low-confidence, review-required `EXPENSE`
+  suggestion with category `other` and no inferred counterparty. Near matches
+  continue to the full AI parser.
+
+Deploy the two affected functions after validation:
+
+```powershell
+npm run fn:deploy:parse-sms
+npm run fn:deploy:enrich-sms-categories
+```
+
 ## Manual QA outline
 
 1. Scan a mixed trusted/unknown fixture set with AI available; verify both
@@ -128,15 +162,17 @@ device only.
 
 ## Coverage matrix
 
-| Scenario                                             | Automated evidence                            | Manual evidence             |
-| ---------------------------------------------------- | --------------------------------------------- | --------------------------- |
-| Exact trusted local match and trusted rejection      | Matcher/parser Jest suites                    | Offline scan                |
-| Mixed local and AI routing                           | Orchestrator/scan Jest; Maestro not run (ANR) | Mixed physical-device scan  |
-| Partial AI result and unresolved-only retry          | AI/retry Jest; Maestro not run (ANR)          | Inline notice and retry     |
-| Consent and global disablement                       | Orchestrator Jest suite                       | Settings consent revocation |
-| Review-only validation and fingerprint deduplication | Review/save/live/headless service Jest suites | Repeated batch/live SMS     |
-| Light/dark notice structure                          | Component Jest suite                          | Screenshot comparison open  |
-| Background and killed-app delivery                   | Existing service/headless unit coverage       | Physical device only        |
+| Scenario                                                                         | Automated evidence                            | Manual evidence             |
+| -------------------------------------------------------------------------------- | --------------------------------------------- | --------------------------- |
+| Exact trusted local match and trusted rejection                                  | Matcher/parser Jest suites                    | Offline scan                |
+| Mixed local and AI routing                                                       | Orchestrator/scan Jest; Maestro not run (ANR) | Mixed physical-device scan  |
+| Partial AI result and unresolved-only retry                                      | AI/retry Jest; Maestro not run (ANR)          | Inline notice and retry     |
+| Consent and global disablement                                                   | Orchestrator Jest suite                       | Settings consent revocation |
+| Default review gates, enriched purchase exception, and fingerprint deduplication | Review/save/live/headless service Jest suites | Repeated batch/live SMS     |
+| Light/dark notice structure                                                      | Component Jest suite                          | Screenshot comparison open  |
+| Background and killed-app delivery                                               | Existing service/headless unit coverage       | Physical device only        |
+| Minimal category endpoint auth/consent/timeout                                   | Edge handler/contract tests                   | Device hybrid scan          |
+| QNB transfer-request exact and near-match behavior                               | Trusted matcher/parser and prompt tests       | QNB EGYPT inbox scan        |
 
 ## Required PR evidence
 
@@ -148,15 +184,32 @@ device only.
 
 ## Latest validation evidence
 
-- Catalog promotion, activation, privacy, and all 22 promoted-pattern staged
-  checks passed on 2026-07-16.
-- The 1,000-candidate trusted matcher benchmark completed in 470.87 ms against
+- The final full mobile regression run passed 194 suites and 1,660 tests; the
+  final full shared-logic run passed 44 suites and 747 tests on 2026-07-17.
+- Catalog promotion, regeneration stability, activation, privacy, and all 23
+  promoted-pattern staged checks passed on 2026-07-17.
+- The 1,000-candidate trusted matcher benchmark completed in 474.8 ms against
   the 1,000 ms budget on the development machine.
-- The focused mobile regression run passed 21 suites and 199 tests, including
-  scan, live/background/headless processing, review, retry, save validation, and
-  fingerprint deduplication.
-- Logic/mobile TypeScript, i18n, changed-file ESLint, formatting, and diff
-  checks passed.
+- The focused mobile regression run passed 10 suites and 188 tests covering
+  category enrichment, hybrid routing, account matching, batch processing, and
+  foreground/background/headless live processing.
+- The focused parser/logic run passed 6 suites and 67 tests; the promotion
+  ledger run passed 13 tests; and the Edge contract/handler/special-case run
+  passed 15 tests.
+- The repository `verify` gate, logic/mobile TypeScript, changed-file ESLint,
+  formatting, privacy scanning, and diff checks passed.
+- Catalog regeneration followed by repository formatting was byte-stable across
+  all 8 generated catalog modules and produced catalog version 2 with 23
+  patterns.
+- Enrichment rejects generic fallback categories, every outcome belonging to a
+  duplicated response identity, and ambiguous sender/card account matches.
+- Explicit card evidence fails closed, live processing is pinned to the
+  initiating authenticated user through the final write, enrichment uses
+  20-merchant chunks with at most two requests in flight under one 20-second
+  deadline, malformed Edge outcomes are isolated per merchant identity, and
+  local Expo/Edge child processes are stopped together.
+- Arabic pre-parser exclusions are covered at the pure filter, batch, live, and
+  orchestrator boundaries, including normalization and trusted-sender bypass.
 - The deterministic Maestro run was attempted against a dedicated hybrid Metro
   harness on port 8082, but the emulator entered Android system and app ANR
   states before Maestro could begin. T048, T066, and T067 therefore remain

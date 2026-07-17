@@ -61,6 +61,36 @@ describe("trusted SMS parser", () => {
         reviewStatus: "needs_review",
         reviewReasons: ["low_confidence"],
         cardLast4: "2132",
+        messageFamily: "card_purchase",
+        parserSource: "trusted_local",
+      },
+    });
+  });
+
+  it("maps the approved online-banking transfer request to a review-only expense", () => {
+    const { value } = candidate(
+      "qnb-egypt-outgoing-online-banking-transfer-egp-v1",
+      { transaction_amount: "125.50" }
+    );
+
+    const result = parseSmsWithTrustedCatalog({
+      candidates: [value],
+      activation,
+      supportedCurrencies: ["EGP"],
+    });
+
+    expect(result.outcomes[0]).toMatchObject({
+      status: "matched",
+      transaction: {
+        amount: 125.5,
+        currency: "EGP",
+        type: "EXPENSE",
+        counterparty: "",
+        categorySystemName: "other",
+        confidence: 0.8,
+        reviewStatus: "needs_review",
+        reviewReasons: ["low_confidence"],
+        messageFamily: "outgoing_bank_transfer",
         parserSource: "trusted_local",
       },
     });
@@ -82,6 +112,7 @@ describe("trusted SMS parser", () => {
       transaction: {
         counterparty: "",
         isAtmWithdrawal: true,
+        messageFamily: "atm_withdrawal",
         reviewReasons: ["low_confidence", "cash_transfer_review"],
       },
     });

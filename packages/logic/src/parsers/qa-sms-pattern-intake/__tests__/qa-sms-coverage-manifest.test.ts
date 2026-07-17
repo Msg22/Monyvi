@@ -40,14 +40,14 @@ describe("QA SMS coverage manifest", () => {
       loadCandidates(),
       false
     );
-    expect(result.declarations).toHaveLength(16);
+    expect(result.declarations).toHaveLength(18);
     expect(
       new Set(
         result.declarations.map(
           (row) => `${row.messageFamily}:${row.currency ?? "N/A"}`
         )
       ).size
-    ).toBe(16);
+    ).toBe(18);
   });
 
   it("accepts the completed source-controlled coverage manifest", () => {

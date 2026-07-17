@@ -34,6 +34,10 @@ export interface CategoryTreeSource extends CategoryMapSource {
   readonly level: Category["level"];
   readonly parentId?: Category["parentId"];
   readonly type: Category["type"];
+  readonly isSystem?: Category["isSystem"];
+  readonly isHidden?: Category["isHidden"];
+  readonly isInternal?: Category["isInternal"];
+  readonly deleted?: Category["deleted"];
 }
 
 /**

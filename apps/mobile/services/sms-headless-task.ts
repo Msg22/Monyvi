@@ -50,12 +50,12 @@ async function smsDetectionTask(taskData: SmsTaskData): Promise<void> {
     throw createHeadlessJsRetryError();
   }
 
-  if (result.status !== "parsed") {
+  if (result.status !== "parsed" || result.userId === undefined) {
     return;
   }
 
   for (const parsed of result.transactions) {
-    await handleDetectedSms(parsed);
+    await handleDetectedSms(parsed, result.userId);
   }
 }
 

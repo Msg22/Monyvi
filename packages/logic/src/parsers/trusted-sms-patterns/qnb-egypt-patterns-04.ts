@@ -3,9 +3,46 @@ import type { TrustedSmsPattern } from "../trusted-sms-pattern-types";
 export const QNB_EGYPT_TRUSTED_SMS_PATTERNS_04 = [
   {
     schemaVersion: 1,
+    patternId: "qnb-egypt-informational-card-pickup-45d-ar-v1",
+    patternVersion: 1,
+    catalogVersion: 2,
+    providerId: "qnb-egypt",
+    verifiedSenderAliases: ["QNB EGYPT"],
+    messageFamily: "informational",
+    currency: null,
+    enabled: true,
+    runtimeScope: "trusted_production",
+    sourceType: "qa-real-sms",
+    autoSelectPolicy: "never",
+    provenanceCode: "qa_operator_promoted",
+    promotionId: "promotion-qnb-egypt-informational-card-pickup-45d-ar-v1",
+    segments: [
+      {
+        kind: "fixed",
+        text: "عزيزى العميل نذكركم بإستلام بطاقه الخصم المباشر حيث ستلغي بعد 45 يوم",
+      },
+    ],
+    expectedOutcome: {
+      kind: "rejection",
+      reason: "informational",
+    },
+    validationStatus: {
+      schema: "passed",
+      privacy: "passed",
+      exactPositive: "passed",
+      nearMatch: "passed",
+      intentionalNegative: "passed",
+      ambiguity: "passed",
+      integrity: "passed",
+    },
+    integrityDigest:
+      "c65967c87609cf03214f7cae39867f1441c8acba08b5da9cd7ad979a563ac1e7",
+  },
+  {
+    schemaVersion: 1,
     patternId: "qnb-egypt-informational-card-pickup-60d-ar-v1",
     patternVersion: 1,
-    catalogVersion: 1,
+    catalogVersion: 2,
     providerId: "qnb-egypt",
     verifiedSenderAliases: ["QNB EGYPT"],
     messageFamily: "informational",
@@ -36,13 +73,13 @@ export const QNB_EGYPT_TRUSTED_SMS_PATTERNS_04 = [
       integrity: "passed",
     },
     integrityDigest:
-      "1a4ceca41f23aa6abc4cae01d81dfcd085cacf9e853dac64d898b6ca4ec8d41b",
+      "a17c0e5d9a77c52c351cdf6da2cd9a634f1de7c37913adcf5966116835b00398",
   },
   {
     schemaVersion: 1,
     patternId: "qnb-egypt-card-purchase-egp-v1",
     patternVersion: 1,
-    catalogVersion: 1,
+    catalogVersion: 2,
     providerId: "qnb-egypt",
     verifiedSenderAliases: ["QNB EGYPT"],
     messageFamily: "card_purchase",
@@ -131,13 +168,13 @@ export const QNB_EGYPT_TRUSTED_SMS_PATTERNS_04 = [
       integrity: "passed",
     },
     integrityDigest:
-      "3d39ba2f1670852e090ccd648c99199498f9aab6ca7880c22ae469261c7ed4e3",
+      "fcf007a3f18974dd1eab1a3cf44a4a66399187e546cc295a1594d737b544b1a1",
   },
   {
     schemaVersion: 1,
     patternId: "qnb-egypt-informational-phishing-warning-ar-v1",
     patternVersion: 1,
-    catalogVersion: 1,
+    catalogVersion: 2,
     providerId: "qnb-egypt",
     verifiedSenderAliases: ["QNB EGYPT"],
     messageFamily: "informational",
@@ -168,13 +205,13 @@ export const QNB_EGYPT_TRUSTED_SMS_PATTERNS_04 = [
       integrity: "passed",
     },
     integrityDigest:
-      "5fbc6cac5ac32fe822a4a8afa35cbed029d916fb69ea363b25e5268a30762610",
+      "0c22c9dfe45e2b8b3c80a260cf622b19a20de523f694c4b9e3c796d788e7cae7",
   },
   {
     schemaVersion: 1,
     patternId: "qnb-egypt-informational-scam-warning-ar-v1",
     patternVersion: 1,
-    catalogVersion: 1,
+    catalogVersion: 2,
     providerId: "qnb-egypt",
     verifiedSenderAliases: ["QNB EGYPT"],
     messageFamily: "informational",
@@ -210,6 +247,6 @@ export const QNB_EGYPT_TRUSTED_SMS_PATTERNS_04 = [
       integrity: "passed",
     },
     integrityDigest:
-      "0e6d80a82d3ff6f25ffa627adea04b449ed558dde3990bd521b3c4cd2ea5ef6c",
+      "e5bcafee9632feff242e46fb89989fdec646c7c259cf14ce2e9d4234cb796df6",
   },
 ] as const satisfies readonly TrustedSmsPattern[];

@@ -70,7 +70,8 @@ function hasClosedValidation(record: TrustedSmsPromotionRecord): boolean {
 }
 
 function mapExpectedOutcome(
-  candidate: QaCandidateArtifact
+  candidate: QaCandidateArtifact,
+  messageFamily: TrustedSmsPattern["messageFamily"]
 ): TrustedSmsExpectedOutcome {
   if (candidate.expectedOutcome.kind === "rejection") {
     return candidate.expectedOutcome;
@@ -83,7 +84,7 @@ function mapExpectedOutcome(
     direction: candidate.expectedOutcome.direction,
     reviewStatus: "needs_review",
     reviewReasons:
-      candidate.messageFamily === "atm_withdrawal"
+      messageFamily === "atm_withdrawal"
         ? ["low_confidence", "cash_transfer_review"]
         : ["low_confidence"],
     confidenceCeiling: candidate.expectedOutcome.confidenceCeiling,
@@ -109,6 +110,8 @@ function createPattern(
   record: TrustedSmsPromotionRecord,
   enabled: boolean
 ): TrustedSmsPattern {
+  const messageFamily =
+    record.reviewedMessageFamilyOverride ?? candidate.messageFamily;
   const patternWithoutDigest = {
     schemaVersion: 1 as const,
     patternId: record.patternId,
@@ -116,7 +119,7 @@ function createPattern(
     catalogVersion: record.catalogVersion,
     providerId: candidate.providerId,
     verifiedSenderAliases: [candidate.verifiedSenderAlias],
-    messageFamily: candidate.messageFamily,
+    messageFamily,
     currency: candidate.currency,
     enabled,
     runtimeScope: "trusted_production" as const,
@@ -125,7 +128,7 @@ function createPattern(
     provenanceCode: "qa_operator_promoted" as const,
     promotionId: record.promotionId,
     segments: mapSegments(candidate),
-    expectedOutcome: mapExpectedOutcome(candidate),
+    expectedOutcome: mapExpectedOutcome(candidate, messageFamily),
     validationStatus: record.validation,
   };
   const provisional = {
@@ -161,6 +164,12 @@ function validatePromotion(
   }
   if (!ELIGIBLE_FAMILIES.has(candidate.messageFamily)) {
     throw new Error("promotion_family_not_eligible");
+  }
+  if (
+    record.reviewedMessageFamilyOverride !== undefined &&
+    !ELIGIBLE_FAMILIES.has(record.reviewedMessageFamilyOverride)
+  ) {
+    throw new Error("promotion_family_override_not_eligible");
   }
   if (record.evidenceDigest !== candidate.evidenceDigest) {
     throw new Error("promotion_evidence_digest_mismatch");

@@ -1,0 +1,92 @@
+/**
+ * Server-owned categories that the minimal SMS enrichment endpoint may return.
+ *
+ * The client may have a subset of these categories locally, but it cannot add
+ * categories to this list. Internal bookkeeping categories and broad
+ * `*_other` buckets are intentionally excluded.
+ */
+export const SMS_ENRICHMENT_CATEGORY_SYSTEM_NAMES = [
+  "food_drinks",
+  "groceries",
+  "restaurant",
+  "coffee_tea",
+  "snacks",
+  "drinks",
+  "transportation",
+  "public_transport",
+  "private_transport",
+  "vehicle",
+  "fuel",
+  "parking",
+  "rental",
+  "license_fees",
+  "vehicle_tax",
+  "traffic_fine",
+  "vehicle_buy",
+  "vehicle_sell",
+  "vehicle_maintenance",
+  "shopping",
+  "clothes",
+  "electronics_appliances",
+  "accessories",
+  "footwear",
+  "bags",
+  "kids_baby",
+  "beauty",
+  "home_garden",
+  "pets",
+  "sports_fitness",
+  "toys_games",
+  "wedding",
+  "detergents",
+  "decorations",
+  "personal_care",
+  "health_medical",
+  "doctor",
+  "medicine",
+  "surgery",
+  "dental",
+  "utilities_bills",
+  "electricity",
+  "water",
+  "internet",
+  "phone",
+  "gas",
+  "trash",
+  "online_subscription",
+  "streaming",
+  "taxes",
+  "entertainment",
+  "events",
+  "tickets",
+  "trips_holidays",
+  "charity",
+  "donations",
+  "fundraising",
+  "charity_gifts",
+  "education",
+  "books",
+  "tuition",
+  "education_fees",
+  "housing",
+  "rent",
+  "housing_maintenance",
+  "housing_tax",
+  "housing_buy",
+  "housing_sell",
+  "travel",
+  "vacation",
+  "business_travel",
+  "holiday",
+  "debt_loans",
+  "lent_money",
+  "debt_repayment_paid",
+] as const;
+
+const SMS_ENRICHMENT_CATEGORY_SET: ReadonlySet<string> = new Set(
+  SMS_ENRICHMENT_CATEGORY_SYSTEM_NAMES
+);
+
+export function isSmsEnrichmentCategorySystemName(value: string): boolean {
+  return SMS_ENRICHMENT_CATEGORY_SET.has(value);
+}
