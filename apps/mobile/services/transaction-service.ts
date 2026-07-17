@@ -10,9 +10,11 @@ import {
 import { Q, type Model } from "@nozbe/watermelondb";
 import type { DisplayTransaction } from "@/hooks/useTransactionsGrouping";
 import {
+  assertExpectedCurrentUser,
   getCurrentUserDataScope,
   type CurrentUserDataScope,
 } from "@/services/user-data-access";
+import { USER_DATA_ACCESS_ERROR_CODES } from "@/services/user-data-access-error-codes";
 import { isValidTransactionAmount } from "@monyvi/logic";
 
 export const INVALID_ACCOUNT_BALANCE_ERROR_CODE = "INVALID_ACCOUNT_BALANCE";
@@ -74,7 +76,7 @@ export async function createTransaction(
   assertValidTransactionAmount(data.amount);
   const scope = await getCurrentUserDataScope();
   if (expectedUserId !== undefined && scope.userId !== expectedUserId) {
-    throw new Error("AUTH_SCOPE_CHANGED");
+    throw new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
   }
 
   const transactionCollection = transactionsCollection();
@@ -82,6 +84,9 @@ export async function createTransaction(
   // Combine transaction creation and balance update in a single atomic write
   const newTransaction = await database.write(async () => {
     const account = await getOwnedAccount(data.accountId, scope);
+    if (expectedUserId !== undefined) {
+      await assertExpectedCurrentUser(expectedUserId);
+    }
 
     // Create the transaction
     const transaction = await transactionCollection.create((tx) => {

@@ -7,6 +7,7 @@ import { logger } from "@/utils/logger";
 import { isE2eTestMode } from "@/config/e2e-test-config";
 import { assertNotAborted } from "./abort-utils";
 import { supabase } from "./supabase";
+import { assertExpectedCurrentUser } from "./user-data-access";
 
 const CATEGORY_ENRICHMENT_FUNCTION = "enrich-sms-categories";
 const AI_CONSENT_REQUIRED_STATUS = 403;
@@ -321,9 +322,13 @@ function createTimedRequestSignal(
 async function invokeCategoryChunk(
   prepared: PreparedCategoryRequest,
   timedSignal: TimedRequestSignal,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  expectedUserId?: string
 ): Promise<TrustedSmsCategoryEnrichmentResult> {
   const attemptedMerchantCount = prepared.body.merchants.length;
+  if (expectedUserId !== undefined) {
+    await assertExpectedCurrentUser(expectedUserId);
+  }
   try {
     const response = await Promise.race([
       supabase.functions.invoke(CATEGORY_ENRICHMENT_FUNCTION, {
@@ -403,7 +408,8 @@ function mergeCategoryResults(
 async function invokeCategoryChunks(
   chunks: readonly PreparedCategoryRequest[],
   timedSignal: TimedRequestSignal,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  expectedUserId?: string
 ): Promise<readonly TrustedSmsCategoryEnrichmentResult[]> {
   let results: readonly TrustedSmsCategoryEnrichmentResult[] = [];
   for (
@@ -417,7 +423,9 @@ async function invokeCategoryChunks(
       start + CATEGORY_ENRICHMENT_MAX_CONCURRENCY
     );
     const waveResults = await Promise.all(
-      wave.map((chunk) => invokeCategoryChunk(chunk, timedSignal, abortSignal))
+      wave.map((chunk) =>
+        invokeCategoryChunk(chunk, timedSignal, abortSignal, expectedUserId)
+      )
     );
     results = [...results, ...waveResults];
     if (
@@ -435,7 +443,8 @@ async function invokeCategoryChunks(
 export async function enrichTrustedSmsCategories(
   candidates: readonly TrustedSmsCategoryCandidate[],
   categories: readonly CategoryTreeSource[],
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  expectedUserId?: string
 ): Promise<TrustedSmsCategoryEnrichmentResult> {
   assertNotAborted(abortSignal, "SMS category enrichment aborted");
   const prepared = prepareCategoryRequest(candidates, categories);
@@ -459,7 +468,8 @@ export async function enrichTrustedSmsCategories(
     const chunkResults = await invokeCategoryChunks(
       chunks,
       timedSignal,
-      abortSignal
+      abortSignal,
+      expectedUserId
     );
     return mergeCategoryResults(chunkResults);
   } finally {

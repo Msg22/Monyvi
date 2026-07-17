@@ -322,6 +322,33 @@ describe("transfer-service", () => {
       expect(mockDb.write).toHaveBeenCalledTimes(1);
     });
 
+    it("does not create an SMS transfer after the authenticated user changes", async () => {
+      const supabaseMock = jest.requireMock<{ getCurrentUserId: jest.Mock }>(
+        "@/services/supabase"
+      );
+      supabaseMock.getCurrentUserId
+        .mockResolvedValueOnce("test-user-id")
+        .mockResolvedValueOnce("next-user-id");
+      const from = seedAccount("acc-from", 1000);
+      const to = seedAccount("acc-to", 500);
+
+      await expect(
+        createTransfer(
+          {
+            amount: 100,
+            currency: "EGP",
+            fromAccountId: "acc-from",
+            toAccountId: "acc-to",
+            smsFingerprint: "sms-hash-1",
+          },
+          "test-user-id"
+        )
+      ).rejects.toThrow("AUTH_SCOPE_CHANGED");
+
+      expect(from.balance).toBe(1000);
+      expect(to.balance).toBe(500);
+    });
+
     it("rejects a foreign account without mutating balances", async () => {
       const foreignFrom = seedForeignAccount("acc-foreign", 1000);
       const to = seedAccount("acc-to", 500);

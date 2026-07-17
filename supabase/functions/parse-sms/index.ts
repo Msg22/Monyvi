@@ -21,6 +21,7 @@ import { createClient } from "@supabase/supabase-js";
 import { hasActiveAiProcessingConsent } from "../_shared/ai-consent.ts";
 import { buildSmsParserSpecialCaseRules } from "../_shared/sms-parser-special-cases.ts";
 import { isLikelyCorruptedSmsText } from "../_shared/sms-text-quality.ts";
+import { isExcludedBeforeSmsParsingAtEdge } from "../_shared/sms-hard-exclusions.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -485,10 +486,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     const processableMessages = body.messages.filter(
-      (message) => !isLikelyCorruptedSmsText(message.body)
+      (message) =>
+        !isExcludedBeforeSmsParsingAtEdge(message.body) &&
+        !isLikelyCorruptedSmsText(message.body)
     );
+    const hardExcludedMessageCount = body.messages.filter((message) =>
+      isExcludedBeforeSmsParsingAtEdge(message.body)
+    ).length;
     const corruptedMessageCount =
-      body.messages.length - processableMessages.length;
+      body.messages.length -
+      hardExcludedMessageCount -
+      processableMessages.length;
+
+    if (hardExcludedMessageCount > 0) {
+      console.info("[parse-sms] Skipped hard-excluded SMS input", {
+        hardExcludedMessageCount,
+      });
+    }
 
     if (corruptedMessageCount > 0) {
       console.warn("[parse-sms] Skipped corrupted SMS input", {

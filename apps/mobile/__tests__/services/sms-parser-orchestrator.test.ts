@@ -296,7 +296,8 @@ describe("sms-parser-orchestrator", () => {
         },
       ],
       context.categories,
-      undefined
+      undefined,
+      "user-1"
     );
     expect(mockParseSmsWithAi).not.toHaveBeenCalled();
     expect(result.transactions).toEqual([
@@ -390,7 +391,17 @@ describe("sms-parser-orchestrator", () => {
     ]);
   });
 
-  it("preserves trusted local suggestions and reconciles stale remote consent", async () => {
+  it("abandons hybrid parsing when category enrichment detects a user switch", async () => {
+    mockEnrichTrustedSmsCategories.mockRejectedValueOnce(
+      new Error("AUTH_SCOPE_CHANGED")
+    );
+
+    await expect(
+      parseSmsWithOrchestrator([trustedPurchaseCandidate()], context)
+    ).rejects.toThrow("AUTH_SCOPE_CHANGED");
+  });
+
+  it("re-enters consent flow when category enrichment rejects stale consent", async () => {
     mockEnrichTrustedSmsCategories.mockResolvedValueOnce({
       outcomesByCandidateId: new Map(),
       attemptedMerchantCount: 1,
@@ -401,25 +412,16 @@ describe("sms-parser-orchestrator", () => {
       isConsentRequired: true,
     });
 
-    const result = await parseSmsWithOrchestrator(
-      [trustedPurchaseCandidate()],
-      context
-    );
-
-    expect(result.transactions).toEqual([
-      expect.objectContaining({
-        smsFingerprint: "fingerprint-trusted",
-        categoryId: "cat-other",
-        reviewStatus: "needs_review",
-      }),
-    ]);
+    await expect(
+      parseSmsWithOrchestrator([trustedPurchaseCandidate()], context)
+    ).rejects.toMatchObject({ name: "AiConsentRequiredError" });
     expect(mockRevokeAiProcessingConsent).toHaveBeenCalledTimes(1);
     expect(mockRevokeAiProcessingConsent).toHaveBeenCalledWith({
       expectedUserId: "user-1",
     });
   });
 
-  it("does not delay trusted local results while stale consent is reconciled", async () => {
+  it("waits for stale-consent reconciliation before re-entering consent flow", async () => {
     mockEnrichTrustedSmsCategories.mockResolvedValueOnce({
       outcomesByCandidateId: new Map(),
       attemptedMerchantCount: 1,
@@ -429,39 +431,47 @@ describe("sms-parser-orchestrator", () => {
       hasError: true,
       isConsentRequired: true,
     });
+    let finishReconciliation: (() => void) | undefined;
     mockRevokeAiProcessingConsent.mockReturnValueOnce(
-      new Promise<void>(() => undefined)
+      new Promise<void>((resolve) => {
+        finishReconciliation = resolve;
+      })
     );
 
-    const result = await Promise.race([
-      parseSmsWithOrchestrator([trustedPurchaseCandidate()], context),
-      new Promise<never>((_resolve, reject) => {
-        setTimeout(
-          () => reject(new Error("consent reconciliation blocked")),
-          50
-        );
-      }),
-    ]);
+    const parsePromise = parseSmsWithOrchestrator(
+      [trustedPurchaseCandidate()],
+      context
+    );
+    let hasSettled = false;
+    void parsePromise.then(
+      () => {
+        hasSettled = true;
+      },
+      () => {
+        hasSettled = true;
+      }
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-    expect(result.transactions).toHaveLength(1);
+    expect(hasSettled).toBe(false);
     expect(mockRevokeAiProcessingConsent).toHaveBeenCalledTimes(1);
+    finishReconciliation?.();
+    await expect(parsePromise).rejects.toMatchObject({
+      name: "AiConsentRequiredError",
+    });
   });
 
-  it("preserves trusted local suggestions when full AI fallback rejects stale consent", async () => {
+  it("re-enters consent flow when full AI fallback rejects stale consent", async () => {
     const consentError = new Error("AI processing consent required");
     consentError.name = "AiConsentRequiredError";
     mockParseSmsWithAi.mockRejectedValueOnce(consentError);
 
-    const result = await parseSmsWithOrchestrator(
-      [trustedPurchaseCandidate(), candidate()],
-      context
-    );
-
-    expect(result.transactions).toEqual([
-      expect.objectContaining({ smsFingerprint: "fingerprint-trusted" }),
-    ]);
-    expect(result).toMatchObject({ hasError: true, isRetryable: false });
-    expect(result.unresolvedCandidates).toHaveLength(1);
+    await expect(
+      parseSmsWithOrchestrator(
+        [trustedPurchaseCandidate(), candidate()],
+        context
+      )
+    ).rejects.toMatchObject({ name: "AiConsentRequiredError" });
     expect(mockRevokeAiProcessingConsent).toHaveBeenCalledTimes(1);
   });
 

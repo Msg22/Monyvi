@@ -15,6 +15,7 @@ const mockInvoke = jest.fn<
   [functionName: string, options: MockFunctionOptions]
 >();
 const mockLoggerWarn = jest.fn();
+const mockAssertExpectedCurrentUser = jest.fn<Promise<void>, [string]>();
 
 jest.mock("@/services/supabase", () => ({
   supabase: {
@@ -34,6 +35,11 @@ jest.mock("@/utils/logger", () => ({
     info: jest.fn(),
     warn: (...args: readonly unknown[]): unknown => mockLoggerWarn(...args),
   },
+}));
+
+jest.mock("@/services/user-data-access", () => ({
+  assertExpectedCurrentUser: (expectedUserId: string): Promise<void> =>
+    mockAssertExpectedCurrentUser(expectedUserId),
 }));
 
 import type {
@@ -100,6 +106,25 @@ describe("ai-sms-category-enrichment-service", () => {
   beforeEach(() => {
     mockInvoke.mockReset();
     mockLoggerWarn.mockReset();
+    mockAssertExpectedCurrentUser.mockReset();
+    mockAssertExpectedCurrentUser.mockResolvedValue();
+  });
+
+  it("does not invoke category enrichment after the initiating user changes", async () => {
+    mockAssertExpectedCurrentUser.mockRejectedValueOnce(
+      new Error("AUTH_SCOPE_CHANGED")
+    );
+
+    await expect(
+      enrichTrustedSmsCategories(
+        [candidate("candidate-1", "Shop")],
+        categories,
+        undefined,
+        "user-1"
+      )
+    ).rejects.toThrow("AUTH_SCOPE_CHANGED");
+
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   it("sends one minimal system-category request for duplicate eligible merchants", async () => {

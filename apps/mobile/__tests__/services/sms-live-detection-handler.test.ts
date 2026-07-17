@@ -49,6 +49,10 @@ const mockShowTransactionCreatedNotification = jest.fn<
   Promise<void>,
   unknown[]
 >();
+const mockShowTransactionNeedsAccountNotification = jest.fn<
+  Promise<void>,
+  unknown[]
+>();
 const mockGetCurrentUserId = jest.fn<Promise<string | null>, []>();
 
 jest.mock("@/services/notification-service", () => ({
@@ -64,6 +68,8 @@ jest.mock("@/services/notification-service", () => ({
     mockShowTransactionNotification(...args),
   showTransactionCreatedNotification: (...args: unknown[]) =>
     mockShowTransactionCreatedNotification(...args),
+  showTransactionNeedsAccountNotification: (...args: unknown[]) =>
+    mockShowTransactionNeedsAccountNotification(...args),
 }));
 
 jest.mock("@/services/sms-account-resolver", () => ({
@@ -171,6 +177,8 @@ describe("sms-live-detection-handler notification actions", () => {
     mockShowTransactionNotification.mockResolvedValue();
     mockShowTransactionCreatedNotification.mockReset();
     mockShowTransactionCreatedNotification.mockResolvedValue();
+    mockShowTransactionNeedsAccountNotification.mockReset();
+    mockShowTransactionNeedsAccountNotification.mockResolvedValue();
     mockGetCurrentUserId.mockReset();
     mockGetCurrentUserId.mockResolvedValue("user-1");
     mockHasExistingSmsFingerprint.mockReset();
@@ -304,9 +312,22 @@ describe("sms-live-detection-handler notification actions", () => {
     );
     expect(mockShowTransactionCreatedNotification).toHaveBeenCalledWith(
       parsed,
-      "MainCIBAccount"
+      "MainCIBAccount",
+      "user-1"
     );
     expect(mockShowTransactionNotification).not.toHaveBeenCalled();
+  });
+
+  it("pins no-account notifications to the initiating user", async () => {
+    const parsed = createParsedSmsTransaction();
+    mockResolveAccountForSms.mockResolvedValueOnce(null);
+
+    await handleDetectedSms(parsed, "user-1");
+
+    expect(mockShowTransactionNeedsAccountNotification).toHaveBeenCalledWith(
+      parsed,
+      "user-1"
+    );
   });
 
   it("drops live work pinned to a different authenticated user", async () => {

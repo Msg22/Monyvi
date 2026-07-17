@@ -9,9 +9,11 @@ import {
 } from "@monyvi/db";
 import { ensureCashAccount } from "./account-service";
 import {
+  assertExpectedCurrentUser,
   getCurrentUserDataScope,
   type CurrentUserDataScope,
 } from "@/services/user-data-access";
+import { USER_DATA_ACCESS_ERROR_CODES } from "@/services/user-data-access-error-codes";
 import { isValidTransactionAmount } from "@monyvi/logic";
 
 export interface TransferData {
@@ -119,7 +121,12 @@ export async function createSmsAtmTransfer(
     return { success: false, error: "User not authenticated" };
   }
 
-  const cashResult = await ensureCashAccount(userId, input.currency);
+  const cashResult = await ensureCashAccount(
+    userId,
+    input.currency,
+    undefined,
+    input.expectedUserId
+  );
   if (!cashResult.accountId) {
     return {
       success: false,
@@ -166,7 +173,7 @@ export async function createTransfer(
 
   const scope = await getCurrentUserDataScope();
   if (expectedUserId !== undefined && scope.userId !== expectedUserId) {
-    throw new Error("AUTH_SCOPE_CHANGED");
+    throw new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
   }
 
   const transferCollection = transfersCollection();
@@ -174,6 +181,9 @@ export async function createTransfer(
   await database.write(async () => {
     const fromAccount = await getOwnedAccount(data.fromAccountId, scope);
     const toAccount = await getOwnedAccount(data.toAccountId, scope);
+    if (expectedUserId !== undefined) {
+      await assertExpectedCurrentUser(expectedUserId);
+    }
 
     // 1. Create Transfer Record
     await transferCollection.create((transfer: Transfer) => {

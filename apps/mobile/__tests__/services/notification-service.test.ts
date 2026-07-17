@@ -403,7 +403,8 @@ describe("notification-service", () => {
 
       await showTransactionCreatedNotification(
         createParsedSmsTransaction(),
-        "MainCIBAccount"
+        "MainCIBAccount",
+        "user-1"
       );
 
       const scheduledNotification = getScheduledNotificationInput();
@@ -443,7 +444,8 @@ describe("notification-service", () => {
 
       await showTransactionCreatedNotification(
         createParsedSmsTransaction(),
-        "MainCIBAccount"
+        "MainCIBAccount",
+        "user-1"
       );
 
       expect(getScheduledNotificationData().transactionData).not.toHaveProperty(
@@ -457,12 +459,27 @@ describe("notification-service", () => {
       );
 
       await showTransactionNeedsAccountNotification(
-        createParsedSmsTransaction()
+        createParsedSmsTransaction(),
+        "user-1"
       );
 
       expect(getScheduledNotificationData().transactionData).not.toHaveProperty(
         "rawSmsBody"
       );
+    });
+
+    it("does not schedule an info-only SMS notification for the next user", async () => {
+      mockGetPermissionsAsync.mockResolvedValueOnce(
+        createPermissionStatus({ granted: true })
+      );
+      mockGetRequiredCurrentUserId.mockResolvedValueOnce("user-2");
+
+      await showTransactionNeedsAccountNotification(
+        createParsedSmsTransaction(),
+        "user-1"
+      );
+
+      expect(mockScheduleNotificationAsync).not.toHaveBeenCalled();
     });
   });
 

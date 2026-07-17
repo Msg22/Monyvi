@@ -490,11 +490,13 @@ export async function showTransactionNotification(
  */
 export async function showTransactionCreatedNotification(
   parsed: ParsedSmsTransaction,
-  resolvedAccountName: string
+  resolvedAccountName: string,
+  initiatingUserId: string
 ): Promise<void> {
   await showInfoOnlySmsTransactionNotification({
     parsed,
     resolvedAccountName,
+    initiatingUserId,
     identifierPrefix: "sms-transaction-created",
     title: "Transaction created",
     type: "sms_transaction_created",
@@ -506,11 +508,13 @@ export async function showTransactionCreatedNotification(
  * be matched safely.
  */
 export async function showTransactionNeedsAccountNotification(
-  parsed: ParsedSmsTransaction
+  parsed: ParsedSmsTransaction,
+  initiatingUserId: string
 ): Promise<void> {
   await showInfoOnlySmsTransactionNotification({
     parsed,
     resolvedAccountName: "No Account Configured",
+    initiatingUserId,
     identifierPrefix: "sms-transaction-info",
     title: "Transaction needs an account",
     type: "sms_transaction_info",
@@ -520,12 +524,14 @@ export async function showTransactionNeedsAccountNotification(
 async function showInfoOnlySmsTransactionNotification({
   parsed,
   resolvedAccountName,
+  initiatingUserId,
   identifierPrefix,
   title,
   type,
 }: {
   readonly parsed: ParsedSmsTransaction;
   readonly resolvedAccountName: string;
+  readonly initiatingUserId: string;
   readonly identifierPrefix: string;
   readonly title: string;
   readonly type: TransactionInfoNotificationPayload["type"];
@@ -552,6 +558,12 @@ async function showInfoOnlySmsTransactionNotification({
     transactionData: serializeTransactionData(parsed),
     resolvedAccountName,
   };
+
+  try {
+    if ((await getRequiredCurrentUserId()) !== initiatingUserId) return;
+  } catch {
+    return;
+  }
 
   await getNotifications().scheduleNotificationAsync({
     identifier: `${identifierPrefix}-${parsed.smsFingerprint}`,

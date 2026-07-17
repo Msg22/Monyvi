@@ -22,6 +22,7 @@ import {
   shouldUseLocalSmsParser,
 } from "@/config/e2e-test-config";
 import { logger } from "@/utils/logger";
+import { USER_DATA_ACCESS_ERROR_CODES } from "./user-data-access-error-codes";
 import {
   createAiConsentRequiredError,
   isAiConsentRequiredError,
@@ -508,21 +509,25 @@ function collectAiCandidates(
 function isParserControlFlowError(error: unknown): boolean {
   return (
     (error instanceof Error && error.name === "AbortError") ||
-    isAiConsentRequiredError(error)
+    isAiConsentRequiredError(error) ||
+    (error instanceof Error &&
+      error.message === USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED)
   );
 }
 
 async function runCategoryEnrichment(
   candidates: readonly TrustedSmsCategoryCandidate[],
   context: ParseSmsContext,
-  abortSignal?: AbortSignal
+  abortSignal: AbortSignal | undefined,
+  expectedUserId: string
 ): Promise<TrustedSmsCategoryEnrichmentResult> {
   if (candidates.length === 0) return createEmptyCategoryEnrichmentResult();
   try {
     return await enrichTrustedSmsCategories(
       candidates,
       context.categories,
-      abortSignal
+      abortSignal,
+      expectedUserId
     );
   } catch (error: unknown) {
     if (isParserControlFlowError(error)) throw error;
@@ -584,17 +589,20 @@ async function runFullAiFallback(
   }
 }
 
-function reconcileLateRemoteConsentRejection(
+async function reconcileLateRemoteConsentRejection(
   isConsentRequired: boolean,
   expectedUserId: string
-): void {
+): Promise<void> {
   if (!isConsentRequired) return;
 
-  void revokeAiProcessingConsent({ expectedUserId }).catch((error: unknown) => {
-    logger.warn("smsParser.hybrid.consentReconciliationFailed", {
-      errorName: error instanceof Error ? error.name : "unknown",
-    });
-  });
+  await revokeAiProcessingConsent({ expectedUserId }).catch(
+    (error: unknown) => {
+      if (isParserControlFlowError(error)) throw error;
+      logger.warn("smsParser.hybrid.consentReconciliationFailed", {
+        errorName: error instanceof Error ? error.name : "unknown",
+      });
+    }
+  );
 }
 
 async function parseHybrid(
@@ -650,7 +658,12 @@ async function parseHybrid(
   throwIfAborted(abortSignal);
 
   const [categoryResult, aiResult] = await Promise.all([
-    runCategoryEnrichment(categoryCandidates, context, abortSignal),
+    runCategoryEnrichment(
+      categoryCandidates,
+      context,
+      abortSignal,
+      consentStatus.userId
+    ),
     runFullAiFallback(
       aiCandidates,
       context,
@@ -663,7 +676,11 @@ async function parseHybrid(
   const isConsentRequired =
     categoryResult.isConsentRequired === true ||
     aiResult.isConsentRequired === true;
-  reconcileLateRemoteConsentRejection(isConsentRequired, consentStatus.userId);
+  await reconcileLateRemoteConsentRejection(
+    isConsentRequired,
+    consentStatus.userId
+  );
+  if (isConsentRequired) throw createAiConsentRequiredError();
   throwIfAborted(abortSignal);
 
   const localTransactions = trustedMatches.map(({ transaction, candidate }) =>
@@ -692,7 +709,6 @@ async function parseHybrid(
     transactions,
     hasError: aiResult.hasError,
     isRetryable: aiResult.isRetryable,
-    isConsentRequired: isConsentRequired || undefined,
     unresolvedCandidates,
     diagnostics: createDiagnostics({
       mode: "hybrid",

@@ -367,7 +367,7 @@ export async function handleDetectedSms(
         hasSenderDisplayName: parsed.senderDisplayName.trim().length > 0,
         redactedSmsFingerprint: redactIdentifierForLog(parsed.smsFingerprint),
       });
-      await showTransactionNeedsAccountNotification(parsed);
+      await showTransactionNeedsAccountNotification(parsed, expectedUserId);
       return;
     }
 
@@ -384,7 +384,11 @@ export async function handleDetectedSms(
         expectedUserId
       );
       if (didSave && (await isExpectedUserCurrent(expectedUserId))) {
-        await showTransactionCreatedNotification(parsed, resolved.accountName);
+        await showTransactionCreatedNotification(
+          parsed,
+          resolved.accountName,
+          expectedUserId
+        );
       }
     } else {
       // Step 4: Ask me — show notification
