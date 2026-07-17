@@ -9,6 +9,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { FlatList, Modal, Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { QaSmsStickyFooter } from "./QaSmsStickyFooter";
 
@@ -238,6 +239,7 @@ export function QaSmsCoverageReview({
       </Text>
 
       <FlatList
+        {...ANDROID_SAFE_LIST_PROPS}
         testID="qa-sms-coverage-list"
         className="mt-4 flex-1 rounded-lg border border-slate-200 dark:border-slate-700"
         data={groups}

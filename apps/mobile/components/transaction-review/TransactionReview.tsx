@@ -7,6 +7,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { useTheme } from "@/context/ThemeContext";
 import { useAccountDisplayNames } from "@/hooks/useAccountDisplayNames";
 import {
@@ -453,7 +454,7 @@ export function TransactionReview({
         }
         contentContainerClassName="pb-2"
         showsVerticalScrollIndicator={false}
-        removeClippedSubviews
+        {...ANDROID_SAFE_LIST_PROPS}
         maxToRenderPerBatch={15}
         windowSize={7}
       />

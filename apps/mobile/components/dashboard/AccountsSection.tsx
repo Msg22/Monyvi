@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { AccountsSectionSkeleton } from "@/components/dashboard/skeletons/AccountsSectionSkeleton";
 import type { InstitutionLogo } from "@/constants/egyptian-institution-assets";
 import { InstitutionLogoMark } from "@/components/institutions/InstitutionLogoMark";
@@ -415,6 +416,7 @@ function AccountsSectionComponent({
       ) : (
         <View>
           <FlatList
+            {...ANDROID_SAFE_LIST_PROPS}
             data={cardData}
             horizontal
             nestedScrollEnabled

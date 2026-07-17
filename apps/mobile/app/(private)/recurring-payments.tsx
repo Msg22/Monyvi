@@ -15,6 +15,7 @@ import {
 import { EmptyStateCard } from "@/components/ui/EmptyStateCard";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { useMarketRates } from "@/hooks/useMarketRates";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useRecurringPayments } from "@/hooks/useRecurringPayments";
@@ -192,7 +193,7 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: insets.bottom + 88 }}
             stickySectionHeadersEnabled={false}
-            removeClippedSubviews
+            {...ANDROID_SAFE_LIST_PROPS}
           />
         )}
 

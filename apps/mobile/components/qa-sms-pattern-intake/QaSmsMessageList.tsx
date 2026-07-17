@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useTranslation } from "react-i18next";
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { QaSmsBottomSheetModal } from "./QaSmsBottomSheetModal";
 import { QaSmsMessageEmptyState } from "./QaSmsMessageEmptyState";
@@ -474,7 +475,7 @@ export function QaSmsMessageList({
             maxToRenderPerBatch={10}
             updateCellsBatchingPeriod={50}
             windowSize={5}
-            removeClippedSubviews
+            {...ANDROID_SAFE_LIST_PROPS}
           />
         )}
       </View>

@@ -9,6 +9,7 @@
  */
 
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { Ionicons } from "@expo/vector-icons";
 import type { CurrencyType } from "@monyvi/db";
 import { SORTED_SUPPORTED_CURRENCIES, type CurrencyInfo } from "@monyvi/logic";
@@ -213,7 +214,7 @@ export function CurrencyPicker({
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
                 ItemSeparatorComponent={CurrencyListSeparator}
-                removeClippedSubviews
+                {...ANDROID_SAFE_LIST_PROPS}
                 maxToRenderPerBatch={15}
                 windowSize={7}
               />

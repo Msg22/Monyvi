@@ -14,6 +14,7 @@
 
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import {
   injectBurst,
   injectFakeSms,
@@ -200,6 +201,7 @@ export default function SmsSimulatorScreen(): React.JSX.Element | null {
           </Text>
         ) : null}
         <FlatList
+          {...ANDROID_SAFE_LIST_PROPS}
           data={SMS_FIXTURES}
           keyExtractor={(f) => f.id}
           renderItem={({ item }) => (
