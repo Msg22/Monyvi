@@ -204,6 +204,17 @@ describe("sms-parser-orchestrator", () => {
     });
   });
 
+  it("routes rejection candidates through hybrid fallback when the catalog is invalid", () => {
+    expect(
+      getTrustedRejectionDisposition(trustedOtpCandidate(), ["EGP", "USD"], {
+        status: "invalid",
+        catalogVersion: null,
+        patterns: [],
+        issues: [{ code: "integrity_digest_mismatch" }],
+      })
+    ).toBe("route_to_hybrid");
+  });
+
   it("routes exact trusted candidates locally and sends only unresolved candidates to AI", async () => {
     const unresolved = candidate();
     const aiTransaction = parsedTransaction({

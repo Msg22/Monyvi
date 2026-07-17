@@ -210,7 +210,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
           smsRetry.unresolvedCount > 0
             ? {
                 unresolvedCount: smsRetry.unresolvedCount,
-                canRetry: smsRetry.retryableCount > 0,
+                canRetry: smsRetry.retryableCount > 0 && !isSaving,
                 isRetrying: smsRetry.isRetrying,
                 hasRetryError: smsRetry.hasRetryError,
                 onRetry: () => void smsRetry.retry(),

@@ -265,6 +265,39 @@ describe("SMS review route", () => {
     expect(mockTransactionReview.mock.calls[0]?.[0].isSaving).toBe(true);
   });
 
+  it("disables unresolved-message retry while transactions are saving", async () => {
+    let finishSave: (() => void) | undefined;
+    mockBatchCreateTransactions.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishSave = () =>
+            resolve({ savedCount: 1, failedCount: 0, errors: [] });
+        })
+    );
+
+    const { rerender } = render(<SmsReviewScreen />);
+    const initialProps = mockTransactionReview.mock.calls.at(-1)?.[0];
+    if (!initialProps) throw new Error("TransactionReview was not rendered");
+
+    let savePromise: Promise<void> | undefined;
+    act(() => {
+      savePromise = initialProps.onSave(
+        [mockTransaction],
+        new Map(),
+        new Map()
+      );
+    });
+    rerender(<SmsReviewScreen />);
+
+    const savingProps = mockTransactionReview.mock.calls.at(-1)?.[0];
+    expect(savingProps?.partialResults.canRetry).toBe(false);
+
+    await act(async () => {
+      finishSave?.();
+      await savePromise;
+    });
+  });
+
   it("keeps Save enabled and does not advance the sync checkpoint for a permanent remainder", async () => {
     mockRetryState = {
       ...mockRetryState,
