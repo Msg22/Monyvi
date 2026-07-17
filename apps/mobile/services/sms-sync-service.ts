@@ -175,10 +175,8 @@ function collectFingerprints(
 }
 
 /**
- * Remove exact duplicate parsed SMS transactions from the same scan result.
- * Different transactions can legitimately come from the same SMS.
- *
- * This protects the save path from duplicate AI entries for one SMS.
+ * Keep at most one parsed transaction per SMS fingerprint.
+ * This matches the persistence and review-session deduplication invariant.
  */
 function deduplicateParsedSmsTransactions(
   transactions: readonly ParsedSmsTransaction[]

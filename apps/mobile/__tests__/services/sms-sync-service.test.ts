@@ -695,7 +695,7 @@ describe("sms-sync-service", () => {
       expect(result.transactions[0]?.counterparty).toBe("TestShop");
     });
 
-    it("should keep distinct AI results from the same SMS fingerprint", async () => {
+    it("should keep at most one AI result for each SMS fingerprint", async () => {
       const sms = createSmsMessage({
         id: "sms-1",
         body: "Debit EGP 100 at Shop plus EGP 5 fee",
@@ -721,11 +721,11 @@ describe("sms-sync-service", () => {
 
       const result = await scanAndParseSms(defaultOptions());
 
-      expect(result.transactions).toHaveLength(2);
-      expect(result.totalFound).toBe(2);
+      expect(result.transactions).toHaveLength(1);
+      expect(result.totalFound).toBe(1);
       expect(
         result.transactions.map((transaction) => transaction.amount)
-      ).toEqual([100, 5]);
+      ).toEqual([100]);
     });
 
     it("loads current-user fingerprints when existing fingerprints are not supplied", async () => {

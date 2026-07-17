@@ -104,6 +104,17 @@ export function shouldBlockEdgeSmsParserInE2e(): boolean {
   );
 }
 
+export function shouldBlockUnsafeSmsParserConfiguration(): boolean {
+  const parserMode = getAiSmsParserMode();
+  const isFixtureMode =
+    parserMode === "fixture" || parserMode === "hybrid-fixture";
+
+  return (
+    shouldBlockEdgeSmsParserInE2e() ||
+    (isFixtureMode && !shouldUseFixtureSmsParser())
+  );
+}
+
 export function shouldUseFixtureSmsInbox(): boolean {
   const parserMode = getAiSmsParserMode();
   const isE2eFixtureInbox =

@@ -8,6 +8,7 @@ import {
   shouldUseHybridSmsParser,
   shouldUseLocalSmsParser,
   shouldBlockEdgeSmsParserInE2e,
+  shouldBlockUnsafeSmsParserConfiguration,
 } from "@/config/e2e-test-config";
 
 const originalEnv = process.env;
@@ -81,6 +82,7 @@ describe("e2e-test-config", () => {
     expect(shouldUseFixtureSmsInbox()).toBe(false);
     expect(shouldUseFixtureSmsParser()).toBe(false);
     expect(shouldUseHybridSmsParser()).toBe(false);
+    expect(shouldBlockUnsafeSmsParserConfiguration()).toBe(true);
   });
 
   it("fails closed when fixture parser is requested outside E2E mode", () => {
@@ -89,6 +91,7 @@ describe("e2e-test-config", () => {
 
     expect(shouldUseFixtureSmsInbox()).toBe(false);
     expect(shouldUseFixtureSmsParser()).toBe(false);
+    expect(shouldBlockUnsafeSmsParserConfiguration()).toBe(true);
   });
 
   it("allows fixture inbox in normal dev only with local parser mode", () => {

@@ -730,6 +730,12 @@ function getAiDiagnosticsMode(): SmsParserMode {
   return shouldUseFixtureSmsParser() ? "fixture" : "ai-primary";
 }
 
+function getConfiguredDiagnosticsMode(): SmsParserMode {
+  if (shouldUseLocalSmsParser()) return "local-primary";
+  if (shouldUseHybridSmsParser()) return "hybrid";
+  return getAiDiagnosticsMode();
+}
+
 function throwIfAborted(abortSignal?: AbortSignal): void {
   if (!abortSignal?.aborted) return;
 
@@ -754,11 +760,7 @@ export async function parseSmsWithOrchestrator(
       hasError: false,
       unresolvedCandidates: [],
       diagnostics: createDiagnostics({
-        mode: shouldUseLocalSmsParser()
-          ? "local-primary"
-          : shouldUseHybridSmsParser()
-            ? "hybrid"
-            : getAiDiagnosticsMode(),
+        mode: getConfiguredDiagnosticsMode(),
         attemptedAi: false,
         attemptedLocal: false,
         candidateCount: 0,

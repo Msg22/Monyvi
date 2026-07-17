@@ -697,7 +697,7 @@ describe("sms-parser-orchestrator", () => {
     expect(result.diagnostics.duplicateDiscardedCount).toBe(1);
   });
 
-  it("preserves distinct AI transactions that originate from the same SMS", async () => {
+  it("keeps at most one AI transaction for each SMS fingerprint", async () => {
     const purchase = parsedTransaction({
       amount: 100,
       smsFingerprint: "shared-fingerprint",
@@ -716,8 +716,27 @@ describe("sms-parser-orchestrator", () => {
 
     const result = await parseSmsWithOrchestrator([candidate()], context);
 
-    expect(result.transactions).toEqual([purchase, fee]);
-    expect(result.diagnostics.duplicateDiscardedCount).toBe(0);
+    expect(result.transactions).toEqual([purchase]);
+    expect(result.diagnostics.duplicateDiscardedCount).toBe(1);
+  });
+
+  it("returns an empty hybrid result without reading consent", async () => {
+    const result = await parseSmsWithOrchestrator([], context);
+
+    expect(mockGetAiProcessingConsentStatus).not.toHaveBeenCalled();
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      transactions: [],
+      hasError: false,
+      unresolvedCandidates: [],
+      diagnostics: {
+        mode: "hybrid",
+        attemptedAi: false,
+        attemptedLocal: false,
+        candidateCount: 0,
+        resultCount: 0,
+      },
+    });
   });
 
   it("preserves retryable unresolved candidates when AI returns an error", async () => {
