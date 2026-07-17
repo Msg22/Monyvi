@@ -13,8 +13,14 @@ const mockGetAiProcessingConsentStatus = jest.fn<
   Promise<{ isConsented: boolean }>,
   []
 >();
-const mockRevokeAiProcessingConsent = jest.fn<Promise<void>, []>();
-const mockHasExistingSmsFingerprint = jest.fn<Promise<boolean>, [string]>();
+const mockRevokeAiProcessingConsent = jest.fn<
+  Promise<void>,
+  [{ readonly expectedUserId?: string }?]
+>();
+const mockHasExistingSmsFingerprint = jest.fn<
+  Promise<boolean>,
+  [string, string?]
+>();
 type MockParserResult = AiParseResult | SmsParserOrchestratorResult;
 
 const mockParseSmsWithOrchestrator = jest.fn<
@@ -65,13 +71,17 @@ jest.mock("@/services/sms-live-detection-handler", () => ({
 jest.mock("@/services/profile-service", () => ({
   getAiProcessingConsentStatus: (): Promise<{ isConsented: boolean }> =>
     mockGetAiProcessingConsentStatus(),
-  revokeAiProcessingConsent: (): Promise<void> =>
-    mockRevokeAiProcessingConsent(),
+  revokeAiProcessingConsent: (options?: {
+    readonly expectedUserId?: string;
+  }): Promise<void> => mockRevokeAiProcessingConsent(options),
 }));
 
 jest.mock("@/services/sms-dedup-service", () => ({
-  hasExistingSmsFingerprint: (smsFingerprint: string): Promise<boolean> =>
-    mockHasExistingSmsFingerprint(smsFingerprint),
+  hasExistingSmsFingerprint: (
+    smsFingerprint: string,
+    expectedUserId?: string
+  ): Promise<boolean> =>
+    mockHasExistingSmsFingerprint(smsFingerprint, expectedUserId),
 }));
 
 jest.mock("@/services/ai-sms-parser-service", () => ({
@@ -561,6 +571,50 @@ describe("sms-live-processor", () => {
     expect(result.status).toBe("stale_user");
     expect(result.transactions).toEqual([]);
     expect(result.userId).toBeUndefined();
+  });
+
+  it("pins the initiating user before asynchronous live-SMS preprocessing", async () => {
+    mockGetCurrentUserDataScope.mockResolvedValueOnce(
+      createMockUserScope("user-b")
+    );
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("stale_user");
+    expect(mockHasExistingSmsFingerprint).toHaveBeenCalledWith(
+      "hash-live",
+      "user-a"
+    );
+    expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
+  });
+
+  it("disables live detection when hybrid parsing reports stale consent", async () => {
+    mockParseSmsWithOrchestrator.mockResolvedValueOnce({
+      transactions: [createParsedTransaction()],
+      hasError: true,
+      isRetryable: false,
+      isConsentRequired: true,
+      unresolvedCandidates: [],
+    });
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("disabled");
+    expect(mockRevokeAiProcessingConsent).toHaveBeenCalledWith({
+      expectedUserId: "user-a",
+    });
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
+    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
   });
 
   it("discards parsed work when the user signs out during parsing", async () => {

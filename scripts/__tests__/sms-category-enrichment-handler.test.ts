@@ -147,6 +147,18 @@ test("bounds a provider operation with a real timeout", async () => {
   assert.equal(wasAborted, true);
 });
 
+test(
+  "rejects on timeout even when the provider ignores abort",
+  { timeout: 100 },
+  async () => {
+    await assert.rejects(
+      withTimeout(() => new Promise<never>(() => undefined), 1),
+      (error: unknown) =>
+        error instanceof Error && error.name === "TimeoutError"
+    );
+  }
+);
+
 test("passes the request cancellation signal to classification", async () => {
   let receivedSignal: AbortSignal | undefined;
   const incomingRequest = request();

@@ -7,6 +7,7 @@ interface MockCollection {
 }
 
 let mockFetchCounts: number[] = [];
+let mockScopeUserId = "user-1";
 const mockQueryOwned = jest.fn<MockQuery, unknown[]>();
 const mockGet = jest.fn<MockCollection, [string]>();
 
@@ -26,6 +27,7 @@ jest.mock("@nozbe/watermelondb", () => ({
 jest.mock("@/services/user-data-access", () => ({
   getCurrentUserDataScope: jest.fn(() =>
     Promise.resolve({
+      userId: mockScopeUserId,
       queryOwned: mockQueryOwned,
     })
   ),
@@ -36,6 +38,7 @@ import { hasExistingSmsFingerprint } from "@/services/sms-dedup-service";
 describe("sms-dedup-service", () => {
   beforeEach(() => {
     mockFetchCounts = [];
+    mockScopeUserId = "user-1";
     mockQueryOwned.mockReset();
     mockQueryOwned.mockImplementation(() => ({
       fetchCount: jest.fn(() => Promise.resolve(mockFetchCounts.shift() ?? 0)),
@@ -60,5 +63,14 @@ describe("sms-dedup-service", () => {
     mockFetchCounts = [0, 1];
 
     await expect(hasExistingSmsFingerprint("hash-1")).resolves.toBe(true);
+  });
+
+  it("does not query another user's scope for a pinned live-SMS event", async () => {
+    mockScopeUserId = "user-2";
+
+    await expect(hasExistingSmsFingerprint("hash-1", "user-1")).resolves.toBe(
+      false
+    );
+    expect(mockQueryOwned).not.toHaveBeenCalled();
   });
 });

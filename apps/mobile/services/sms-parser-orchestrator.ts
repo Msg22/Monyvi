@@ -128,6 +128,7 @@ export interface SmsParserOrchestratorResult extends Omit<
 > {
   readonly diagnostics: SmsParserDiagnostics;
   readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
+  readonly isConsentRequired?: boolean;
 }
 
 function createDiagnostics(input: {
@@ -574,10 +575,13 @@ async function runFullAiFallback(
   }
 }
 
-function reconcileLateRemoteConsentRejection(isConsentRequired: boolean): void {
+function reconcileLateRemoteConsentRejection(
+  isConsentRequired: boolean,
+  expectedUserId: string
+): void {
   if (!isConsentRequired) return;
 
-  void revokeAiProcessingConsent().catch((error: unknown) => {
+  void revokeAiProcessingConsent({ expectedUserId }).catch((error: unknown) => {
     logger.warn("smsParser.hybrid.consentReconciliationFailed", {
       errorName: error instanceof Error ? error.name : "unknown",
     });
@@ -591,7 +595,8 @@ async function parseHybrid(
   abortSignal?: AbortSignal
 ): Promise<SmsParserOrchestratorResult> {
   throwIfAborted(abortSignal);
-  if (!(await hasAiTransactionConsent())) throw createAiConsentRequiredError();
+  const consentStatus = await getAiProcessingConsentStatus();
+  if (!consentStatus.isConsented) throw createAiConsentRequiredError();
   throwIfAborted(abortSignal);
 
   const trustedCatalogActivation = trustedCatalogProvider.getActivation();
@@ -624,7 +629,11 @@ async function parseHybrid(
     candidatesById
   );
   if (categoryCandidates.length > 0 || aiCandidates.length > 0) {
-    if (!(await hasAiTransactionConsent())) {
+    const refreshedConsentStatus = await getAiProcessingConsentStatus();
+    if (
+      !refreshedConsentStatus.isConsented ||
+      refreshedConsentStatus.userId !== consentStatus.userId
+    ) {
       throwIfAborted(abortSignal);
       throw createAiConsentRequiredError();
     }
@@ -642,10 +651,10 @@ async function parseHybrid(
     ),
   ]);
   throwIfAborted(abortSignal);
-  reconcileLateRemoteConsentRejection(
+  const isConsentRequired =
     categoryResult.isConsentRequired === true ||
-      aiResult.isConsentRequired === true
-  );
+    aiResult.isConsentRequired === true;
+  reconcileLateRemoteConsentRejection(isConsentRequired, consentStatus.userId);
   throwIfAborted(abortSignal);
 
   const localTransactions = trustedMatches.map(({ transaction, candidate }) =>
@@ -674,6 +683,7 @@ async function parseHybrid(
     transactions,
     hasError: aiResult.hasError,
     isRetryable: aiResult.isRetryable,
+    isConsentRequired: isConsentRequired || undefined,
     unresolvedCandidates,
     diagnostics: createDiagnostics({
       mode: "hybrid",
@@ -705,11 +715,6 @@ async function parseHybrid(
       ),
     }),
   };
-}
-
-async function hasAiTransactionConsent(): Promise<boolean> {
-  const consentStatus = await getAiProcessingConsentStatus();
-  return consentStatus.isConsented;
 }
 
 function getAiDiagnosticsMode(): SmsParserMode {
@@ -756,7 +761,8 @@ export async function parseSmsWithOrchestrator(
   if (shouldUseLocalSmsParser()) {
     throwIfAborted(abortSignal);
 
-    if (!(await hasAiTransactionConsent())) {
+    const consentStatus = await getAiProcessingConsentStatus();
+    if (!consentStatus.isConsented) {
       throwIfAborted(abortSignal);
       throw createAiConsentRequiredError();
     }

@@ -7,7 +7,10 @@ import type {
 const mockParseSmsWithAi = jest.fn<Promise<AiParseResult>, unknown[]>();
 const mockEnrichTrustedSmsCategories = jest.fn();
 const mockGetAiProcessingConsentStatus = jest.fn();
-const mockRevokeAiProcessingConsent = jest.fn<Promise<void>, []>();
+const mockRevokeAiProcessingConsent = jest.fn<
+  Promise<void>,
+  [{ readonly expectedUserId?: string }?]
+>();
 
 jest.mock("@/services/ai-sms-parser-service", () => ({
   parseSmsWithAi: (...args: unknown[]) => mockParseSmsWithAi(...args),
@@ -23,8 +26,9 @@ jest.mock("@/services/ai-sms-parser-service", () => ({
 jest.mock("@/services/profile-service", () => ({
   getAiProcessingConsentStatus: (): unknown =>
     mockGetAiProcessingConsentStatus(),
-  revokeAiProcessingConsent: (): Promise<void> =>
-    mockRevokeAiProcessingConsent(),
+  revokeAiProcessingConsent: (options?: {
+    readonly expectedUserId?: string;
+  }): Promise<void> => mockRevokeAiProcessingConsent(options),
 }));
 
 jest.mock("@/services/ai-sms-category-enrichment-service", () => ({
@@ -143,7 +147,10 @@ describe("sms-parser-orchestrator", () => {
     delete process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE;
     delete process.env.EXPO_PUBLIC_MONYVI_TEST_MODE;
     delete process.env.EXPO_PUBLIC_HYBRID_SMS_PARSER_ENABLED;
-    mockGetAiProcessingConsentStatus.mockResolvedValue({ isConsented: true });
+    mockGetAiProcessingConsentStatus.mockResolvedValue({
+      isConsented: true,
+      userId: "user-1",
+    });
     mockRevokeAiProcessingConsent.mockResolvedValue(undefined);
     mockEnrichTrustedSmsCategories.mockResolvedValue({
       outcomesByCandidateId: new Map(),
@@ -396,6 +403,9 @@ describe("sms-parser-orchestrator", () => {
       }),
     ]);
     expect(mockRevokeAiProcessingConsent).toHaveBeenCalledTimes(1);
+    expect(mockRevokeAiProcessingConsent).toHaveBeenCalledWith({
+      expectedUserId: "user-1",
+    });
   });
 
   it("does not delay trusted local results while stale consent is reconciled", async () => {

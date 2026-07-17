@@ -19,6 +19,7 @@
 import type * as ExpoNotifications from "expo-notifications";
 import { Linking, Platform } from "react-native";
 import type { ParsedSmsTransaction } from "@monyvi/logic";
+import { getRequiredCurrentUserId } from "@/services/user-data-access";
 import { logger } from "@/utils/logger";
 import { redactIdentifierForLog } from "@/utils/logger-redaction";
 
@@ -464,6 +465,12 @@ export async function showTransactionNotification(
     resolvedAccountName,
     initiatingUserId,
   };
+
+  try {
+    if ((await getRequiredCurrentUserId()) !== initiatingUserId) return;
+  } catch {
+    return;
+  }
 
   await getNotifications().scheduleNotificationAsync({
     identifier: `sms-transaction-${parsed.smsFingerprint}`,
