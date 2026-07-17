@@ -183,6 +183,23 @@ describe("trusted SMS exact template matcher", () => {
     );
   });
 
+  it.each([
+    ["merchant", (body: string) => body.replace("@GEIDEAE", "@ GEIDEAE")],
+    [
+      "balance",
+      (body: string) => body.replace("bal.EGP10853.15", "bal.EGP 10853.15"),
+    ],
+  ])(
+    "does not absorb unapproved separator whitespace into the %s placeholder",
+    (_label, mutate) => {
+      const pattern = findPattern("qnb-egypt-card-purchase-egp-v1");
+      const body =
+        "Your Debit Card **2132 had a Successful transaction of EGP 490.00 @GEIDEAE*BASHAYER LIBAYE,your available bal.EGP10853.15 for lost/stolen card call 19700";
+
+      expect(match(pattern, mutate(body)).status).toBe("unresolved");
+    }
+  );
+
   it("leaves malformed transaction values unresolved", () => {
     const pattern = findPattern("qnb-egypt-card-purchase-egp-v1");
     const body = renderTrustedPattern(pattern, {

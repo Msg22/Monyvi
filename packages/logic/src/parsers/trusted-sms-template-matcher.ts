@@ -91,11 +91,13 @@ function structuralMatch(
   }
   const match = getCompiledPattern(pattern).exec(normalizeBody(candidate.body));
   if (match === null) return null;
+  const captures = match.slice(1);
+  if (captures.some((value) => value !== value.trim())) return null;
   let captureIndex = 1;
   const extractedValues = pattern.segments.flatMap<TrustedSmsExtractedValue>(
     (segment) => {
       if (segment.kind === "fixed") return [];
-      const value = match[captureIndex]?.trim() ?? "";
+      const value = match[captureIndex] ?? "";
       captureIndex += 1;
       return [
         { token: segment.token, semanticRole: segment.semanticRole, value },
