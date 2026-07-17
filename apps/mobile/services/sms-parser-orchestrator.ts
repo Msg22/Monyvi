@@ -508,6 +508,12 @@ function getAiDiagnosticsMode(): SmsParserMode {
   return shouldUseFixtureSmsParser() ? "fixture" : "ai-primary";
 }
 
+function getConfiguredDiagnosticsMode(): SmsParserMode {
+  if (shouldUseLocalSmsParser()) return "local-primary";
+  if (shouldUseHybridSmsParser()) return "hybrid";
+  return getAiDiagnosticsMode();
+}
+
 function throwIfAborted(abortSignal?: AbortSignal): void {
   if (!abortSignal?.aborted) return;
 
@@ -522,6 +528,21 @@ export async function parseSmsWithOrchestrator(
   onProgress?: (progress: AiParseProgress) => void,
   abortSignal?: AbortSignal
 ): Promise<SmsParserOrchestratorResult> {
+  if (candidates.length === 0) {
+    return {
+      transactions: [],
+      hasError: false,
+      unresolvedCandidates: [],
+      diagnostics: createDiagnostics({
+        mode: getConfiguredDiagnosticsMode(),
+        attemptedAi: false,
+        attemptedLocal: false,
+        candidateCount: 0,
+        resultCount: 0,
+      }),
+    };
+  }
+
   if (shouldUseLocalSmsParser()) {
     throwIfAborted(abortSignal);
 
@@ -547,21 +568,6 @@ export async function parseSmsWithOrchestrator(
 
   if (shouldUseHybridSmsParser()) {
     return parseHybrid(candidates, context, onProgress, abortSignal);
-  }
-
-  if (candidates.length === 0) {
-    return {
-      transactions: [],
-      hasError: false,
-      unresolvedCandidates: [],
-      diagnostics: createDiagnostics({
-        mode: getAiDiagnosticsMode(),
-        attemptedAi: false,
-        attemptedLocal: false,
-        candidateCount: 0,
-        resultCount: 0,
-      }),
-    };
   }
 
   try {

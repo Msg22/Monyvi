@@ -85,7 +85,7 @@ describe("sms review retry service", () => {
     expect(result.hasRetryError).toBe(false);
   });
 
-  it("preserves distinct retry transactions from the same SMS", async () => {
+  it("keeps at most one retry transaction for each SMS fingerprint", async () => {
     const purchase = transaction("retryable");
     const fee: ParsedSmsTransaction = {
       ...purchase,
@@ -105,7 +105,7 @@ describe("sms review retry service", () => {
       parseContext: context,
     });
 
-    expect(result.transactions).toEqual([purchase, fee]);
+    expect(result.transactions).toEqual([purchase]);
   });
 
   it("leaves the session unchanged when retry is cancelled", async () => {

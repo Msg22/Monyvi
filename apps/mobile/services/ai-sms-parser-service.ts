@@ -14,7 +14,7 @@ import { z } from "zod";
 import { supabase } from "./supabase";
 import { logger } from "@/utils/logger";
 import {
-  shouldBlockEdgeSmsParserInE2e,
+  shouldBlockUnsafeSmsParserConfiguration,
   shouldUseFixtureSmsParser,
 } from "@/config/e2e-test-config";
 import { assertNotAborted, createAbortError } from "./abort-utils";
@@ -548,8 +548,8 @@ export async function parseSmsWithAi(
   if (candidates.length === 0) return emptyResult;
   throwIfAborted(abortSignal);
 
-  if (shouldBlockEdgeSmsParserInE2e()) {
-    logger.warn("aiSmsParser.edgeBlockedInE2e", {
+  if (shouldBlockUnsafeSmsParserConfiguration()) {
+    logger.warn("aiSmsParser.unsafeConfigurationBlocked", {
       candidateCount: candidates.length,
     });
     return {

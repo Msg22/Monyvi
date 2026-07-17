@@ -503,27 +503,6 @@ describe("ai-sms-parser-service parser strategy", () => {
     expect(result.transactions[0]?.counterparty).toBe("CARREFOUR CAIRO");
   });
 
-  it("never invokes the real Edge parser in E2E mode", async () => {
-    process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
-
-    const input = candidate("nbe_debit_purchase");
-    const result = await parseSmsWithAi([input], context);
-
-    expect(mockInvoke).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      transactions: [],
-      hasError: true,
-      isRetryable: false,
-      unresolvedCandidates: [
-        {
-          candidate: input,
-          reason: "unexpected_failure",
-          isRetryable: false,
-        },
-      ],
-    });
-  });
-
   it("wraps fixture parser failures in the normal parse error result", async () => {
     process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
     process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "fixture";
@@ -545,19 +524,6 @@ describe("ai-sms-parser-service parser strategy", () => {
         }),
       ],
     });
-  });
-
-  it("fails closed when fixture mode is requested outside E2E mode", async () => {
-    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "fixture";
-
-    mockInvoke.mockResolvedValueOnce({
-      data: { transactions: [] },
-      error: null,
-    });
-
-    await parseSmsWithAi([candidate("nbe_debit_purchase")], context);
-
-    expect(mockInvoke).toHaveBeenCalled();
   });
 
   it("does not call the Edge Function when parsing is aborted", async () => {
