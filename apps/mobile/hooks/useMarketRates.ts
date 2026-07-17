@@ -1,8 +1,10 @@
 import type { MarketRate } from "@monyvi/db";
+import { assertValidMarketRateModel } from "@monyvi/logic";
 import { Q } from "@nozbe/watermelondb";
 import { useEffect, useMemo, useState } from "react";
 import { useDatabase } from "../providers/DatabaseProvider";
 import { useMarketRatesRealtime } from "../providers/MarketRatesRealtimeProvider";
+import { logger } from "../utils/logger";
 
 interface UseMarketRatesResult {
   readonly latestRates: MarketRate | null;
@@ -11,6 +13,22 @@ interface UseMarketRatesResult {
   readonly isConnected: boolean;
   readonly lastUpdated: Date | null;
   readonly isStale: boolean;
+}
+
+function getValidPreviousDayRate(
+  rate: MarketRate | undefined
+): MarketRate | null {
+  if (!rate) {
+    return null;
+  }
+
+  try {
+    assertValidMarketRateModel(rate);
+    return rate;
+  } catch (error: unknown) {
+    logger.error("Invalid cached previous-day market rate", error);
+    return null;
+  }
 }
 
 /**
@@ -62,13 +80,14 @@ export function useMarketRates(): UseMarketRatesResult {
           )
           .fetch();
 
-        setPreviousDayRate(rates.at(0) ?? null);
-      } catch (err) {
-        console.error("Error fetching previous day rate:", err);
+        setPreviousDayRate(getValidPreviousDayRate(rates.at(0)));
+      } catch (error: unknown) {
+        logger.error("Failed to fetch previous-day market rate", error);
+        setPreviousDayRate(null);
       }
     };
 
-    fetchPreviousDay().catch(console.error);
+    void fetchPreviousDay();
   }, [database, latestRates]); // Re-fetch when latest rate changes
 
   const memoized = useMemo(
