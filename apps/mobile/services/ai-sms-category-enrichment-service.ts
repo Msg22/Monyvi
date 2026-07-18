@@ -1,7 +1,8 @@
 import { z } from "zod";
-import type {
-  CategoryTreeSource,
-  TrustedSmsEligibleFamily,
+import {
+  isSmsEnrichmentCategorySystemName,
+  type CategoryTreeSource,
+  type TrustedSmsEligibleFamily,
 } from "@monyvi/logic";
 import { logger } from "@/utils/logger";
 import { isE2eTestMode } from "@/config/e2e-test-config";
@@ -112,6 +113,7 @@ function getAllowedCategorySystemNames(
       category.isInternal !== true &&
       category.deleted !== true &&
       !NON_INFORMATIVE_CATEGORY_SYSTEM_NAMES.has(category.systemName) &&
+      isSmsEnrichmentCategorySystemName(category.systemName) &&
       category.systemName.trim().length > 0
     ) {
       names.add(category.systemName);
@@ -326,10 +328,20 @@ async function invokeCategoryChunk(
   expectedUserId?: string
 ): Promise<TrustedSmsCategoryEnrichmentResult> {
   const attemptedMerchantCount = prepared.body.merchants.length;
-  if (expectedUserId !== undefined) {
-    await assertExpectedCurrentUser(expectedUserId);
-  }
+  let isCheckingUserScope = false;
   try {
+    if (expectedUserId !== undefined) {
+      isCheckingUserScope = true;
+      await Promise.race([
+        assertExpectedCurrentUser(expectedUserId),
+        timedSignal.deadline,
+      ]);
+      isCheckingUserScope = false;
+    }
+    if (timedSignal.signal.aborted) {
+      assertNotAborted(abortSignal, "SMS category enrichment aborted");
+      return emptyResult(attemptedMerchantCount, true, { isTimedOut: true });
+    }
     const response = await Promise.race([
       supabase.functions.invoke(CATEGORY_ENRICHMENT_FUNCTION, {
         body: prepared.body,
@@ -356,6 +368,7 @@ async function invokeCategoryChunk(
     return mapCategoryResponse(response.data, prepared);
   } catch (error: unknown) {
     assertNotAborted(abortSignal, "SMS category enrichment aborted");
+    if (isCheckingUserScope && !timedSignal.didTimeOut()) throw error;
     if (timedSignal.didTimeOut()) {
       logger.warn("smsCategoryEnrichment.requestTimedOut", {
         attemptedMerchantCount,
@@ -418,6 +431,10 @@ async function invokeCategoryChunks(
     start += CATEGORY_ENRICHMENT_MAX_CONCURRENCY
   ) {
     assertNotAborted(abortSignal, "SMS category enrichment aborted");
+    if (timedSignal.didTimeOut()) {
+      results = [...results, emptyResult(0, true, { isTimedOut: true })];
+      break;
+    }
     const wave = chunks.slice(
       start,
       start + CATEGORY_ENRICHMENT_MAX_CONCURRENCY

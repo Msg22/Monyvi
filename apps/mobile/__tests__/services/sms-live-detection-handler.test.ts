@@ -485,6 +485,25 @@ describe("sms-live-detection-handler notification actions", () => {
     await expect(isAutoConfirmEnabled()).resolves.toBe(true);
   });
 
+  it("writes cleanup preferences to the pinned user after the session changes", async () => {
+    mockGetCurrentUserId.mockResolvedValue("user-1");
+    await setLiveDetectionEnabled(true);
+    await setAutoConfirm(true);
+
+    mockGetCurrentUserId.mockResolvedValue("user-2");
+    await setLiveDetectionEnabled(true);
+    await setAutoConfirm(true);
+    await setLiveDetectionEnabled(false, "user-1");
+    await setAutoConfirm(false, "user-1");
+
+    await expect(isLiveDetectionEnabled()).resolves.toBe(true);
+    await expect(isAutoConfirmEnabled()).resolves.toBe(true);
+
+    mockGetCurrentUserId.mockResolvedValue("user-1");
+    await expect(isLiveDetectionEnabled()).resolves.toBe(false);
+    await expect(isAutoConfirmEnabled()).resolves.toBe(false);
+  });
+
   it("keeps stored live detection enabled when SMS and notification permissions are granted", async () => {
     jest.spyOn(PermissionsAndroid, "check").mockResolvedValue(true);
     await setLiveDetectionEnabled(true);

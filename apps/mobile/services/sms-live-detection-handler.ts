@@ -92,9 +92,13 @@ function restoreNotificationTransactionDate(
 }
 
 async function getUserScopedPreferenceKey(
-  keyPrefix: string
+  keyPrefix: string,
+  expectedUserId?: string
 ): Promise<string | null> {
-  const userId = (await getCurrentUserId())?.trim();
+  const userId =
+    expectedUserId !== undefined
+      ? expectedUserId.trim()
+      : (await getCurrentUserId())?.trim();
   return userId ? `${keyPrefix}:${userId}` : null;
 }
 
@@ -147,8 +151,14 @@ export async function isAutoConfirmEnabled(): Promise<boolean> {
 /**
  * Set the auto-confirm preference.
  */
-export async function setAutoConfirm(enabled: boolean): Promise<void> {
-  const key = await getUserScopedPreferenceKey(AUTO_CONFIRM_KEY_PREFIX);
+export async function setAutoConfirm(
+  enabled: boolean,
+  expectedUserId?: string
+): Promise<void> {
+  const key = await getUserScopedPreferenceKey(
+    AUTO_CONFIRM_KEY_PREFIX,
+    expectedUserId
+  );
   if (!key) {
     return;
   }
@@ -173,8 +183,14 @@ export async function isLiveDetectionEnabled(): Promise<boolean> {
 /**
  * Set the live detection enabled preference.
  */
-export async function setLiveDetectionEnabled(enabled: boolean): Promise<void> {
-  const key = await getUserScopedPreferenceKey(LIVE_DETECTION_KEY_PREFIX);
+export async function setLiveDetectionEnabled(
+  enabled: boolean,
+  expectedUserId?: string
+): Promise<void> {
+  const key = await getUserScopedPreferenceKey(
+    LIVE_DETECTION_KEY_PREFIX,
+    expectedUserId
+  );
   if (!key) {
     return;
   }

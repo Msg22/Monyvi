@@ -122,14 +122,14 @@ async function loadAiContext(
   };
 }
 
-async function hasLiveSmsAiConsent(): Promise<boolean> {
+async function hasLiveSmsAiConsent(expectedUserId: string): Promise<boolean> {
   const aiConsentStatus = await getAiProcessingConsentStatus();
   if (aiConsentStatus.isConsented) {
     return true;
   }
 
-  await setLiveDetectionEnabled(false);
-  await setAutoConfirm(false);
+  await setLiveDetectionEnabled(false, expectedUserId);
+  await setAutoConfirm(false, expectedUserId);
   return false;
 }
 
@@ -137,13 +137,15 @@ async function checkLiveSmsAiConsent({
   logTag,
   deliveryMode,
   smsFingerprint,
+  expectedUserId,
 }: {
   readonly logTag: string;
   readonly deliveryMode: LiveSmsDeliveryMode;
   readonly smsFingerprint?: string;
+  readonly expectedUserId: string;
 }): Promise<LiveSmsConsentCheckResult> {
   try {
-    if (!(await hasLiveSmsAiConsent())) {
+    if (!(await hasLiveSmsAiConsent(expectedUserId))) {
       return {
         canProcess: false,
         result: createResult("disabled", smsFingerprint),
@@ -177,11 +179,11 @@ async function disableLiveSmsAfterConsentRequired({
     if (!(await isInitiatingUserCurrent(expectedUserId))) {
       return createResult("stale_user", smsFingerprint);
     }
-    await setLiveDetectionEnabled(false);
+    await setLiveDetectionEnabled(false, expectedUserId);
     if (!(await isInitiatingUserCurrent(expectedUserId))) {
       return createResult("stale_user", smsFingerprint);
     }
-    await setAutoConfirm(false);
+    await setAutoConfirm(false, expectedUserId);
   } catch (settingsError: unknown) {
     logger.error("liveSms.consentRequiredDisable.failed", settingsError, {
       deliveryMode,
@@ -211,6 +213,7 @@ export async function processLiveSmsEvent(
     const consentCheck = await checkLiveSmsAiConsent({
       logTag: "liveSms.consentCheck.failed",
       deliveryMode: event.deliveryMode,
+      expectedUserId: initiatingUserId,
     });
     if (!consentCheck.canProcess) return consentCheck.result;
     if (!(await isInitiatingUserCurrent(initiatingUserId))) {
@@ -315,6 +318,7 @@ export async function processLiveSmsEvent(
       logTag: "liveSms.consentPreParseCheck.failed",
       deliveryMode: event.deliveryMode,
       smsFingerprint: confirmedSmsFingerprint,
+      expectedUserId: initiatingUserId,
     });
     if (!preParseConsentCheck.canProcess) {
       return preParseConsentCheck.result;
@@ -360,6 +364,7 @@ export async function processLiveSmsEvent(
       logTag: "liveSms.consentRecheck.failed",
       deliveryMode: event.deliveryMode,
       smsFingerprint: confirmedSmsFingerprint,
+      expectedUserId: initiatingUserId,
     });
     if (!consentRecheck.canProcess) {
       return consentRecheck.result;

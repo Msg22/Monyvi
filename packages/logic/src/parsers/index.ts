@@ -72,6 +72,10 @@ export type {
 } from "./local-sms-parser-types";
 export { evaluateAmountExpression } from "./expression-evaluator";
 export {
+  SMS_ENRICHMENT_CATEGORY_SYSTEM_NAMES,
+  isSmsEnrichmentCategorySystemName,
+} from "./sms-category-taxonomy";
+export {
   EGYPTIAN_FINANCIAL_INSTITUTIONS,
   getAllFinancialSenders,
   getInstitutionById,

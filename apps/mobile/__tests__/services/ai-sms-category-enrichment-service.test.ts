@@ -286,6 +286,29 @@ describe("ai-sms-category-enrichment-service", () => {
     }
   );
 
+  it("rejects a locally available category outside the enrichment-safe taxonomy", async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        categories: [
+          {
+            merchantId: "merchant-1",
+            categorySystemName: "shopping_other",
+            confidence: 0.99,
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await enrichTrustedSmsCategories(
+      [candidate("candidate-1", "Shop")],
+      [...categories, category("shopping_other")]
+    );
+
+    expect(result.outcomesByCandidateId.size).toBe(0);
+    expect(result.rejectedResultCount).toBe(1);
+  });
+
   it("accepts valid partial results and reports missing merchant outcomes", async () => {
     mockInvoke.mockResolvedValueOnce({
       data: {
@@ -507,6 +530,28 @@ describe("ai-sms-category-enrichment-service", () => {
       attemptedMerchantCount: 40,
     });
     expect(mockInvoke).toHaveBeenCalledTimes(2);
+    jest.useRealTimers();
+  });
+
+  it("does not invoke a category chunk after the shared deadline expires", async () => {
+    jest.useFakeTimers();
+    mockAssertExpectedCurrentUser.mockImplementationOnce(
+      () => new Promise((resolve) => setTimeout(resolve, 20001))
+    );
+
+    const pending = enrichTrustedSmsCategories(
+      [candidate("candidate-1", "Shop")],
+      categories,
+      undefined,
+      "user-1"
+    );
+    await jest.advanceTimersByTimeAsync(20001);
+
+    await expect(pending).resolves.toMatchObject({
+      hasError: true,
+      isTimedOut: true,
+    });
+    expect(mockInvoke).not.toHaveBeenCalled();
     jest.useRealTimers();
   });
 

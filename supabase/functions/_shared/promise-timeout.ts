@@ -3,6 +3,13 @@ export async function withTimeout<T>(
   timeoutMs: number,
   externalSignal?: AbortSignal
 ): Promise<T> {
+  if (externalSignal?.aborted) {
+    throw (
+      externalSignal.reason ??
+      Object.assign(new Error("Operation aborted"), { name: "AbortError" })
+    );
+  }
+
   const controller = new AbortController();
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   let rejectCancellation: (reason: unknown) => void = () => undefined;
@@ -19,13 +26,9 @@ export async function withTimeout<T>(
     rejectCancellation(reason);
   };
 
-  if (externalSignal?.aborted) {
-    abortFromExternalSignal();
-  } else {
-    externalSignal?.addEventListener("abort", abortFromExternalSignal, {
-      once: true,
-    });
-  }
+  externalSignal?.addEventListener("abort", abortFromExternalSignal, {
+    once: true,
+  });
 
   timeoutId = setTimeout(() => {
     const timeoutError = new Error("Operation timed out");

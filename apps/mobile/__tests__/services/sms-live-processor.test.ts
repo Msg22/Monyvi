@@ -7,8 +7,11 @@ import type {
 import type { SmsParserOrchestratorResult } from "@/services/sms-parser-orchestrator";
 
 const mockReconcileLiveDetectionPreference = jest.fn<Promise<boolean>, []>();
-const mockSetLiveDetectionEnabled = jest.fn<Promise<void>, [boolean]>();
-const mockSetAutoConfirm = jest.fn<Promise<void>, [boolean]>();
+const mockSetLiveDetectionEnabled = jest.fn<
+  Promise<void>,
+  [boolean, string?]
+>();
+const mockSetAutoConfirm = jest.fn<Promise<void>, [boolean, string?]>();
 const mockGetAiProcessingConsentStatus = jest.fn<
   Promise<{ isConsented: boolean }>,
   []
@@ -62,10 +65,12 @@ jest.mock("@monyvi/logic", () => ({
 jest.mock("@/services/sms-live-detection-handler", () => ({
   reconcileLiveDetectionPreference: (): Promise<boolean> =>
     mockReconcileLiveDetectionPreference(),
-  setLiveDetectionEnabled: (enabled: boolean): Promise<void> =>
-    mockSetLiveDetectionEnabled(enabled),
-  setAutoConfirm: (enabled: boolean): Promise<void> =>
-    mockSetAutoConfirm(enabled),
+  setLiveDetectionEnabled: (
+    enabled: boolean,
+    expectedUserId?: string
+  ): Promise<void> => mockSetLiveDetectionEnabled(enabled, expectedUserId),
+  setAutoConfirm: (enabled: boolean, expectedUserId?: string): Promise<void> =>
+    mockSetAutoConfirm(enabled, expectedUserId),
 }));
 
 jest.mock("@/services/profile-service", () => ({
@@ -377,8 +382,8 @@ describe("sms-live-processor", () => {
     expect(result.status).toBe("disabled");
     expect(result.isRetryable).toBeUndefined();
     expect(mockRevokeAiProcessingConsent).toHaveBeenCalledTimes(1);
-    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
-    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false, "user-a");
+    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false, "user-a");
   });
 
   it("returns disabled when consent-required cleanup fails", async () => {
@@ -399,8 +404,8 @@ describe("sms-live-processor", () => {
     expect(result.status).toBe("disabled");
     expect(result.smsFingerprint).toBe("hash-live");
     expect(mockRevokeAiProcessingConsent).toHaveBeenCalledTimes(1);
-    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
-    expect(mockSetAutoConfirm).not.toHaveBeenCalledWith(false);
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false, "user-a");
+    expect(mockSetAutoConfirm).not.toHaveBeenCalledWith(false, "user-a");
   });
 
   it("returns infrastructure_error when local deduplication fails", async () => {
@@ -517,8 +522,8 @@ describe("sms-live-processor", () => {
     });
 
     expect(result.status).toBe("disabled");
-    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
-    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false, "user-a");
+    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false, "user-a");
     expect(mockIsLikelyFinancialSms).not.toHaveBeenCalled();
     expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
     expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
@@ -535,8 +540,8 @@ describe("sms-live-processor", () => {
     });
 
     expect(result.status).toBe("disabled");
-    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
-    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false, "user-a");
+    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false, "user-a");
     expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
     expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
@@ -556,8 +561,8 @@ describe("sms-live-processor", () => {
     expect(result.status).toBe("disabled");
     expect(result.smsFingerprint).toBe("hash-live");
     expect(mockGetAiProcessingConsentStatus).toHaveBeenCalledTimes(2);
-    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
-    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false, "user-a");
+    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false, "user-a");
     expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
 
@@ -577,8 +582,8 @@ describe("sms-live-processor", () => {
     expect(result.status).toBe("disabled");
     expect(result.transactions).toEqual([]);
     expect(mockParseSmsWithOrchestrator).toHaveBeenCalledTimes(1);
-    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
-    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false, "user-a");
+    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false, "user-a");
   });
 
   it("discards parsed work when the authenticated user changes during parsing", async () => {
@@ -636,8 +641,8 @@ describe("sms-live-processor", () => {
     expect(mockRevokeAiProcessingConsent).toHaveBeenCalledWith({
       expectedUserId: "user-a",
     });
-    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false);
-    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false);
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false, "user-a");
+    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false, "user-a");
   });
 
   it("discards parsed work when the user signs out during parsing", async () => {
