@@ -32,6 +32,7 @@ import {
   getCurrentUserDataScope,
   getRequiredCurrentUserId,
 } from "./user-data-access";
+import { USER_DATA_ACCESS_ERROR_CODES } from "./user-data-access-error-codes";
 import { logger } from "@/utils/logger";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
 
@@ -122,15 +123,20 @@ async function loadAiContext(
   };
 }
 
-async function hasLiveSmsAiConsent(expectedUserId: string): Promise<boolean> {
+type LiveSmsConsentState = "consented" | "disabled" | "stale_user";
+
+async function getLiveSmsConsentState(
+  expectedUserId: string
+): Promise<LiveSmsConsentState> {
   const aiConsentStatus = await getAiProcessingConsentStatus();
+  if (aiConsentStatus.userId !== expectedUserId) return "stale_user";
   if (aiConsentStatus.isConsented) {
-    return true;
+    return "consented";
   }
 
   await setLiveDetectionEnabled(false, expectedUserId);
   await setAutoConfirm(false, expectedUserId);
-  return false;
+  return "disabled";
 }
 
 async function checkLiveSmsAiConsent({
@@ -145,10 +151,11 @@ async function checkLiveSmsAiConsent({
   readonly expectedUserId: string;
 }): Promise<LiveSmsConsentCheckResult> {
   try {
-    if (!(await hasLiveSmsAiConsent(expectedUserId))) {
+    const consentState = await getLiveSmsConsentState(expectedUserId);
+    if (consentState !== "consented") {
       return {
         canProcess: false,
-        result: createResult("disabled", smsFingerprint),
+        result: createResult(consentState, smsFingerprint),
       };
     }
   } catch (error: unknown) {
@@ -328,6 +335,12 @@ export async function processLiveSmsEvent(
     try {
       aiResult = await parseSmsWithOrchestrator([candidate], context);
     } catch (error: unknown) {
+      if (
+        error instanceof Error &&
+        error.message === USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED
+      ) {
+        return createResult("stale_user", confirmedSmsFingerprint);
+      }
       if (isAiConsentRequiredError(error)) {
         return disableLiveSmsAfterConsentRequired({
           deliveryMode: event.deliveryMode,

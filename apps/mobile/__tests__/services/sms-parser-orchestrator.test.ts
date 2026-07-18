@@ -401,7 +401,7 @@ describe("sms-parser-orchestrator", () => {
     ).rejects.toThrow("AUTH_SCOPE_CHANGED");
   });
 
-  it("re-enters consent flow when category enrichment rejects stale consent", async () => {
+  it("preserves trusted local results when category enrichment rejects stale consent", async () => {
     mockEnrichTrustedSmsCategories.mockResolvedValueOnce({
       outcomesByCandidateId: new Map(),
       attemptedMerchantCount: 1,
@@ -412,16 +412,29 @@ describe("sms-parser-orchestrator", () => {
       isConsentRequired: true,
     });
 
-    await expect(
-      parseSmsWithOrchestrator([trustedPurchaseCandidate()], context)
-    ).rejects.toMatchObject({ name: "AiConsentRequiredError" });
+    const result = await parseSmsWithOrchestrator(
+      [trustedPurchaseCandidate()],
+      context
+    );
+
+    expect(result).toMatchObject({
+      isConsentRequired: true,
+      hasError: false,
+      transactions: [
+        expect.objectContaining({
+          categoryId: "cat-other",
+          confidence: 0.8,
+          reviewStatus: "needs_review",
+        }),
+      ],
+    });
     expect(mockRevokeAiProcessingConsent).toHaveBeenCalledTimes(1);
     expect(mockRevokeAiProcessingConsent).toHaveBeenCalledWith({
       expectedUserId: "user-1",
     });
   });
 
-  it("waits for stale-consent reconciliation before re-entering consent flow", async () => {
+  it("waits for stale-consent reconciliation before returning trusted results", async () => {
     mockEnrichTrustedSmsCategories.mockResolvedValueOnce({
       outcomesByCandidateId: new Map(),
       attemptedMerchantCount: 1,
@@ -456,8 +469,9 @@ describe("sms-parser-orchestrator", () => {
     expect(hasSettled).toBe(false);
     expect(mockRevokeAiProcessingConsent).toHaveBeenCalledTimes(1);
     finishReconciliation?.();
-    await expect(parsePromise).rejects.toMatchObject({
-      name: "AiConsentRequiredError",
+    await expect(parsePromise).resolves.toMatchObject({
+      isConsentRequired: true,
+      transactions: [expect.objectContaining({ categoryId: "cat-other" })],
     });
   });
 

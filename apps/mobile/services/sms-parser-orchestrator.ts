@@ -673,14 +673,14 @@ async function parseHybrid(
     ),
   ]);
   throwIfAborted(abortSignal);
-  const isConsentRequired =
-    categoryResult.isConsentRequired === true ||
-    aiResult.isConsentRequired === true;
+  const isCategoryConsentRequired = categoryResult.isConsentRequired === true;
+  const isAiConsentRequired = aiResult.isConsentRequired === true;
+  const isConsentRequired = isCategoryConsentRequired || isAiConsentRequired;
   await reconcileLateRemoteConsentRejection(
     isConsentRequired,
     consentStatus.userId
   );
-  if (isConsentRequired) throw createAiConsentRequiredError();
+  if (isAiConsentRequired) throw createAiConsentRequiredError();
   throwIfAborted(abortSignal);
 
   const localTransactions = trustedMatches.map(({ transaction, candidate }) =>
@@ -709,6 +709,7 @@ async function parseHybrid(
     transactions,
     hasError: aiResult.hasError,
     isRetryable: aiResult.isRetryable,
+    isConsentRequired: isCategoryConsentRequired || undefined,
     unresolvedCandidates,
     diagnostics: createDiagnostics({
       mode: "hybrid",

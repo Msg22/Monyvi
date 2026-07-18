@@ -13,7 +13,7 @@ const mockSetLiveDetectionEnabled = jest.fn<
 >();
 const mockSetAutoConfirm = jest.fn<Promise<void>, [boolean, string?]>();
 const mockGetAiProcessingConsentStatus = jest.fn<
-  Promise<{ isConsented: boolean }>,
+  Promise<{ isConsented: boolean; userId: string }>,
   []
 >();
 const mockRevokeAiProcessingConsent = jest.fn<
@@ -74,8 +74,10 @@ jest.mock("@/services/sms-live-detection-handler", () => ({
 }));
 
 jest.mock("@/services/profile-service", () => ({
-  getAiProcessingConsentStatus: (): Promise<{ isConsented: boolean }> =>
-    mockGetAiProcessingConsentStatus(),
+  getAiProcessingConsentStatus: (): Promise<{
+    isConsented: boolean;
+    userId: string;
+  }> => mockGetAiProcessingConsentStatus(),
   revokeAiProcessingConsent: (options?: {
     readonly expectedUserId?: string;
   }): Promise<void> => mockRevokeAiProcessingConsent(options),
@@ -183,7 +185,10 @@ describe("sms-live-processor", () => {
     mockReconcileLiveDetectionPreference.mockResolvedValue(true);
     mockSetLiveDetectionEnabled.mockResolvedValue(undefined);
     mockSetAutoConfirm.mockResolvedValue(undefined);
-    mockGetAiProcessingConsentStatus.mockResolvedValue({ isConsented: true });
+    mockGetAiProcessingConsentStatus.mockResolvedValue({
+      isConsented: true,
+      userId: "user-a",
+    });
     mockRevokeAiProcessingConsent.mockResolvedValue(undefined);
     mockHasExistingSmsFingerprint.mockResolvedValue(false);
     mockComputeSmsFingerprint.mockResolvedValue("hash-live");
@@ -511,7 +516,10 @@ describe("sms-live-processor", () => {
   });
 
   it("disables stale live detection before filtering SMS bodies after consent revocation", async () => {
-    mockGetAiProcessingConsentStatus.mockResolvedValue({ isConsented: false });
+    mockGetAiProcessingConsentStatus.mockResolvedValue({
+      isConsented: false,
+      userId: "user-a",
+    });
     mockIsLikelyFinancialSms.mockReturnValue(false);
 
     const result = await processLiveSmsEvent({
@@ -530,7 +538,10 @@ describe("sms-live-processor", () => {
   });
 
   it("does not parse and disables live detection when AI consent is revoked", async () => {
-    mockGetAiProcessingConsentStatus.mockResolvedValue({ isConsented: false });
+    mockGetAiProcessingConsentStatus.mockResolvedValue({
+      isConsented: false,
+      userId: "user-a",
+    });
 
     const result = await processLiveSmsEvent({
       sender: "QNB",
@@ -548,8 +559,8 @@ describe("sms-live-processor", () => {
 
   it("rechecks AI consent before parsing the SMS body", async () => {
     mockGetAiProcessingConsentStatus
-      .mockResolvedValueOnce({ isConsented: true })
-      .mockResolvedValueOnce({ isConsented: false });
+      .mockResolvedValueOnce({ isConsented: true, userId: "user-a" })
+      .mockResolvedValueOnce({ isConsented: false, userId: "user-a" });
 
     const result = await processLiveSmsEvent({
       sender: "QNB",
@@ -568,9 +579,9 @@ describe("sms-live-processor", () => {
 
   it("does not return parsed live SMS when AI consent is revoked during parsing", async () => {
     mockGetAiProcessingConsentStatus
-      .mockResolvedValueOnce({ isConsented: true })
-      .mockResolvedValueOnce({ isConsented: true })
-      .mockResolvedValueOnce({ isConsented: false });
+      .mockResolvedValueOnce({ isConsented: true, userId: "user-a" })
+      .mockResolvedValueOnce({ isConsented: true, userId: "user-a" })
+      .mockResolvedValueOnce({ isConsented: false, userId: "user-a" });
 
     const result = await processLiveSmsEvent({
       sender: "QNB",
@@ -584,6 +595,42 @@ describe("sms-live-processor", () => {
     expect(mockParseSmsWithOrchestrator).toHaveBeenCalledTimes(1);
     expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false, "user-a");
     expect(mockSetAutoConfirm).toHaveBeenCalledWith(false, "user-a");
+  });
+
+  it("discards live SMS when the consent status belongs to another user", async () => {
+    mockGetAiProcessingConsentStatus.mockResolvedValueOnce({
+      isConsented: true,
+      userId: "user-b",
+    });
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("stale_user");
+    expect(result.transactions).toEqual([]);
+    expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
+    expect(mockSetLiveDetectionEnabled).not.toHaveBeenCalled();
+    expect(mockSetAutoConfirm).not.toHaveBeenCalled();
+  });
+
+  it("returns stale_user when scoped parsing detects an authenticated-user change", async () => {
+    mockParseSmsWithOrchestrator.mockRejectedValueOnce(
+      new Error("AUTH_SCOPE_CHANGED")
+    );
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "headless",
+    });
+
+    expect(result.status).toBe("stale_user");
+    expect(result.transactions).toEqual([]);
   });
 
   it("discards parsed work when the authenticated user changes during parsing", async () => {

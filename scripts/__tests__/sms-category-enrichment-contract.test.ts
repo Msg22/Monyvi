@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
+import { SMS_ENRICHMENT_CATEGORY_SYSTEM_NAMES as MOBILE_CATEGORY_NAMES } from "../../packages/logic/src/parsers/sms-category-taxonomy";
 import {
   buildSmsCategoryPrompt,
   buildSmsCategoryResponseSchema,
   parseSmsCategoryRequest,
   parseSmsCategoryResponse,
 } from "../../supabase/functions/_shared/sms-category-enrichment-contract";
+import { SMS_ENRICHMENT_CATEGORY_SYSTEM_NAMES as EDGE_CATEGORY_NAMES } from "../../supabase/functions/_shared/sms-category-taxonomy";
 
 const validRequest = {
   merchants: [
@@ -17,6 +20,19 @@ const validRequest = {
     },
   ],
 };
+
+test("keeps the Edge taxonomy self-contained and equal to mobile", () => {
+  const edgeSource = readFileSync(
+    new URL(
+      "../../supabase/functions/_shared/sms-category-taxonomy.ts",
+      import.meta.url
+    ),
+    "utf8"
+  );
+
+  assert.doesNotMatch(edgeSource, /from\s+["'][^"']*packages\/logic[^"']*["']/);
+  assert.deepEqual(EDGE_CATEGORY_NAMES, MOBILE_CATEGORY_NAMES);
+});
 
 test("accepts only the minimal category request contract", () => {
   assert.deepEqual(parseSmsCategoryRequest(validRequest), validRequest);
