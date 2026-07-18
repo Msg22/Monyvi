@@ -13,7 +13,7 @@ import {
   type SmsCandidate,
 } from "./ai-sms-parser-service";
 import {
-  getTrustedRejectionDisposition,
+  getTrustedPrefilterDisposition,
   parseSmsWithOrchestrator,
   toSmsParserDiagnosticsLogContext,
 } from "./sms-parser-orchestrator";
@@ -196,14 +196,14 @@ export async function processLiveSmsEvent(
       },
       smsFingerprint,
     };
-    const trustedRejectionDisposition = getTrustedRejectionDisposition(
+    const trustedPrefilterDisposition = getTrustedPrefilterDisposition(
       candidate,
       SUPPORTED_CURRENCIES.map(({ code }) => code)
     );
     if (
-      trustedRejectionDisposition === "filter_before_ai" ||
+      trustedPrefilterDisposition === "filter_before_ai" ||
       (!isLikelyFinancialSms(event.body) &&
-        trustedRejectionDisposition !== "route_to_hybrid")
+        trustedPrefilterDisposition !== "route_to_parser")
     ) {
       return createResult("ignored", smsFingerprint);
     }

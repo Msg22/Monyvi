@@ -57,9 +57,10 @@ function getCompiledPattern(pattern: TrustedSmsPattern): RegExp {
       const marker = `\uE000${placeholderIndex}\uE001`;
       placeholderIndex += 1;
       const captureSource =
-        segment.semanticRole === "transaction_currency" &&
-        pattern.currency !== null
-          ? `(${escapeRegExp(pattern.currency)})`
+        segment.semanticRole === "transaction_currency"
+          ? pattern.currency === null
+            ? "(EGP|USD)"
+            : `(${escapeRegExp(pattern.currency)})`
           : "(.+?)";
       markers.push({ marker, captureSource });
       return marker;
@@ -192,17 +193,6 @@ function evaluateMatch(
   supportedCurrencies: ReadonlySet<string>,
   receivedAtMs: number
 ): EvaluatedMatch | null {
-  if (match.pattern.expectedOutcome.kind === "rejection") {
-    return { ...match, validation: "valid" };
-  }
-  const currencyValues = valuesForRole(match, "transaction_currency");
-  if (
-    currencyValues.length === 0 ||
-    new Set(currencyValues).size !== 1 ||
-    currencyValues[0] !== match.pattern.currency
-  ) {
-    return null;
-  }
   const groupedValues = new Map<TrustedSmsPlaceholderRole, string[]>();
   for (const extracted of match.extractedValues) {
     const values = groupedValues.get(extracted.semanticRole) ?? [];
@@ -214,6 +204,17 @@ function evaluateMatch(
     )
   ) {
     return { ...match, validation: "malformed" };
+  }
+  if (match.pattern.expectedOutcome.kind === "rejection") {
+    return { ...match, validation: "valid" };
+  }
+  const currencyValues = valuesForRole(match, "transaction_currency");
+  if (
+    currencyValues.length === 0 ||
+    new Set(currencyValues).size !== 1 ||
+    currencyValues[0] !== match.pattern.currency
+  ) {
+    return null;
   }
   if (currencyValues.some((currency) => !supportedCurrencies.has(currency))) {
     return { ...match, validation: "unsupported_currency" };

@@ -131,12 +131,14 @@ describe("trusted SMS exact template matcher", () => {
     });
   });
 
-  it("rejects an exact reviewed promotion without transaction-value validation", () => {
+  it("rejects an exact reviewed promotion with valid privacy placeholders", () => {
     const pattern = findPattern("qnb-alahli-promotional-certificate-ar-v1");
     const result = matchTrustedSmsTemplate({
       candidate: {
         sender: pattern.verifiedSenderAliases[0] ?? "QNB ALAHLI",
-        body: renderTrustedPattern(pattern),
+        body: renderTrustedPattern(pattern, {
+          public_url: "https://example.com/certificate",
+        }),
         receivedAtMs: 1_750_000_000_000,
       },
       patterns: QNB_EGYPT_TRUSTED_SMS_CATALOG.patterns,
@@ -147,6 +149,21 @@ describe("trusted SMS exact template matcher", () => {
       status: "rejected",
       patternId: pattern.patternId,
       reason: "promotional",
+    });
+  });
+
+  it("leaves a rejection template with a malformed public URL unresolved", () => {
+    const pattern = findPattern("qnb-alahli-promotional-certificate-ar-v1");
+
+    expect(
+      match(
+        pattern,
+        renderTrustedPattern(pattern, { public_url: "not-a-public-url" })
+      )
+    ).toEqual({
+      status: "unresolved",
+      reason: "malformed_value",
+      patternIds: [pattern.patternId],
     });
   });
 

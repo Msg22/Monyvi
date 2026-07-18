@@ -48,7 +48,7 @@
     "qa-sms:validate-trusted": "npm test -w @monyvi/logic -- --runInBand trusted-sms-pattern-catalog trusted-sms-catalog-activation trusted-sms-template-matcher",
     "qa-sms:benchmark-trusted": "tsx scripts/benchmark-trusted-sms-parser.ts",
     "test:qa-sms-promotion": "tsx --test scripts/__tests__/promote-qa-sms-patterns.test.ts",
-    "verify": "npm run test:qa-sms-privacy-check && npm run test:qa-sms-ingest-command && npm run qa-sms:privacy-check",
+    "verify": "npm run test:qa-sms-privacy-check && npm run test:qa-sms-ingest-command && npm run test:qa-sms-promotion && npm run qa-sms:privacy-check",
     "android": "expo run:android",
     "start:android": "npm run start -w @monyvi/mobile",
     "ios": "expo run:ios",
