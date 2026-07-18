@@ -139,6 +139,8 @@ export function shouldUseLocalSmsParser(): boolean {
 
 export function shouldUseHybridSmsParser(): boolean {
   const parserMode = getAiSmsParserMode();
+  if (shouldBlockUnsafeSmsParserConfiguration()) return false;
+
   const isHybridFixtureMode =
     getNodeEnv() !== "production" &&
     isE2eTestMode() &&

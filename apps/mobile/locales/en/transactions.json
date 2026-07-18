@@ -397,12 +397,12 @@
   "deselect_shown": "Deselect shown",
   "review_empty_needs_review": "All visible transactions are selected.",
   "review_empty_auto_selected": "No transactions were auto-selected.",
-  "review_badge_confirm_cash_account": "Confirm cash account",
-  "review_badge_low_confidence": "Low confidence",
-  "review_badge_account_needed": "Account needed",
-  "review_badge_category_needed": "Category needed",
-  "review_badge_needs_review": "Needs review",
+  "review_badge_review_cash_account": "Review cash account",
+  "review_badge_review_details": "Review details",
+  "review_badge_review_account": "Review account",
+  "review_badge_review_category": "Review category",
+  "review_badge_review_amount": "Review amount",
   "review_badge_auto_selected": "Auto-selected",
-  "review_badge_missing_info": "Missing info",
+  "review_badge_missing_info": "Review details",
   "save_error_title": "Save Error"
 }
