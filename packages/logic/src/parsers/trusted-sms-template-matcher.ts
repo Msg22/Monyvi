@@ -1,4 +1,5 @@
 import { MAX_TRANSACTION_AMOUNT } from "../utils/amount-helpers";
+import { isValidLocalSmsTransactionDate } from "./local-sms-date-parser";
 import type {
   TrustedSmsExtractedValue,
   TrustedSmsPattern,
@@ -135,17 +136,6 @@ function isNumeric(value: string, allowNegative: boolean = false): boolean {
   return numberPattern.test(normalized) && Number.isFinite(Number(normalized));
 }
 
-function isValidTransactionDate(value: string): boolean {
-  const match = /^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/.exec(value);
-  if (match === null) return false;
-  const day = Number(match[1]);
-  const month = Number(match[2]);
-  const year = match[3] === undefined ? 2000 : Number(match[3]);
-  if (month < 1 || month > 12 || day < 1) return false;
-  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  return day <= daysInMonth;
-}
-
 function isValidTransactionTime(value: string): boolean {
   const match = /^(\d{1,2}):(\d{2})(?:\s(AM|PM))?$/.exec(value);
   if (match === null) return false;
@@ -159,7 +149,8 @@ function isValidTransactionTime(value: string): boolean {
 
 function areValuesValid(
   role: TrustedSmsPlaceholderRole,
-  values: readonly string[]
+  values: readonly string[],
+  receivedAtMs: number
 ): boolean {
   if (values.some((value) => value.length === 0)) return false;
   switch (role) {
@@ -177,7 +168,9 @@ function areValuesValid(
     case "card_last4":
       return values.every((value) => /^\d{4}$/.test(value));
     case "transaction_date":
-      return values.every(isValidTransactionDate);
+      return values.every((value) =>
+        isValidLocalSmsTransactionDate(value, receivedAtMs)
+      );
     case "transaction_time":
       return values.every(isValidTransactionTime);
     case "phone_number":
@@ -196,7 +189,8 @@ function areValuesValid(
 
 function evaluateMatch(
   match: StructuralMatch,
-  supportedCurrencies: ReadonlySet<string>
+  supportedCurrencies: ReadonlySet<string>,
+  receivedAtMs: number
 ): EvaluatedMatch | null {
   if (match.pattern.expectedOutcome.kind === "rejection") {
     return { ...match, validation: "valid" };
@@ -215,7 +209,9 @@ function evaluateMatch(
     groupedValues.set(extracted.semanticRole, [...values, extracted.value]);
   }
   if (
-    [...groupedValues].some(([role, values]) => !areValuesValid(role, values))
+    [...groupedValues].some(
+      ([role, values]) => !areValuesValid(role, values, receivedAtMs)
+    )
   ) {
     return { ...match, validation: "malformed" };
   }
@@ -238,7 +234,11 @@ export function matchTrustedSmsTemplate(
       input.includeDisabledPatterns === true
     );
     if (structural === null) return [];
-    const result = evaluateMatch(structural, supportedCurrencies);
+    const result = evaluateMatch(
+      structural,
+      supportedCurrencies,
+      input.candidate.receivedAtMs
+    );
     return result === null ? [] : [result];
   });
   const valid = evaluated.filter(({ validation }) => validation === "valid");

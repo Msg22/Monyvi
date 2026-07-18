@@ -26,13 +26,14 @@ function findPattern(patternId: string): TrustedSmsPattern {
 function match(
   pattern: TrustedSmsPattern,
   body: string = renderTrustedPattern(pattern),
-  supportedCurrencies: readonly string[] = ["EGP", "USD"]
+  supportedCurrencies: readonly string[] = ["EGP", "USD"],
+  receivedAtMs: number = new Date("2026-07-16T12:00:00Z").getTime()
 ): TrustedSmsTemplateResult {
   return matchTrustedSmsTemplate({
     candidate: {
       sender: pattern.verifiedSenderAliases[0] ?? "QNB EGYPT",
       body,
-      receivedAtMs: new Date("2026-07-16T12:00:00Z").getTime(),
+      receivedAtMs,
     },
     patterns: QNB_EGYPT_TRUSTED_SMS_CATALOG.patterns,
     supportedCurrencies,
@@ -224,6 +225,36 @@ describe("trusted SMS exact template matcher", () => {
       reason: "malformed_value",
       patternIds: [pattern.patternId],
     });
+  });
+
+  it("rejects a yearless leap day received during a non-leap year", () => {
+    const pattern = findPattern("qnb-egypt-outgoing-ipn-egp-v1");
+
+    expect(
+      match(
+        pattern,
+        renderTrustedPattern(pattern, { transaction_date: "29/02" }),
+        ["EGP", "USD"],
+        new Date("2025-03-01T12:00:00Z").getTime()
+      )
+    ).toEqual({
+      status: "unresolved",
+      reason: "malformed_value",
+      patternIds: [pattern.patternId],
+    });
+  });
+
+  it("accepts a yearless leap day received during a leap year", () => {
+    const pattern = findPattern("qnb-egypt-outgoing-ipn-egp-v1");
+
+    expect(
+      match(
+        pattern,
+        renderTrustedPattern(pattern, { transaction_date: "29/02" }),
+        ["EGP", "USD"],
+        new Date("2024-03-01T12:00:00Z").getTime()
+      ).status
+    ).toBe("matched");
   });
 
   it("leaves an unsupported currency unresolved", () => {

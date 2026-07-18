@@ -156,4 +156,26 @@ describe("e2e-test-config", () => {
     expect(getAiSmsParserMode()).toBe("edge");
     expect(shouldUseLocalSmsParser()).toBe(false);
   });
+
+  it("blocks a production build compiled with local parser mode", () => {
+    process.env = {
+      ...process.env,
+      NODE_ENV: "production",
+      EXPO_PUBLIC_AI_SMS_PARSER_MODE: "local",
+    };
+
+    jest.isolateModules(() => {
+      // Re-evaluate the module so its Expo public env constants model a production build.
+      const productionConfig = jest.requireActual<
+        typeof import("@/config/e2e-test-config")
+      >("@/config/e2e-test-config");
+
+      expect(productionConfig.getAiSmsParserMode()).toBe("local");
+      expect(productionConfig.shouldUseLocalSmsParser()).toBe(false);
+      expect(productionConfig.shouldBlockUnsafeSmsParserConfiguration()).toBe(
+        true
+      );
+      expect(productionConfig.shouldUseHybridSmsParser()).toBe(false);
+    });
+  });
 });

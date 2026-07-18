@@ -108,10 +108,13 @@ export function shouldBlockUnsafeSmsParserConfiguration(): boolean {
   const parserMode = getAiSmsParserMode();
   const isFixtureMode =
     parserMode === "fixture" || parserMode === "hybrid-fixture";
+  const isUnsafeLocalMode =
+    parserMode === "local" && !shouldUseLocalSmsParser();
 
   return (
     shouldBlockEdgeSmsParserInE2e() ||
-    (isFixtureMode && !shouldUseFixtureSmsParser())
+    (isFixtureMode && !shouldUseFixtureSmsParser()) ||
+    isUnsafeLocalMode
   );
 }
 
