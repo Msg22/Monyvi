@@ -228,6 +228,7 @@ jest.mock("@/services/user-data-access", () => ({
 import {
   scanAndParseSms,
   cleanupStaleScanState,
+  type SmsScanProgress,
 } from "@/services/sms-sync-service";
 
 // ---------------------------------------------------------------------------
@@ -394,6 +395,34 @@ describe("sms-sync-service", () => {
       ]);
       expect(result.parseContext).toBe(stubAiContext);
       expect(result.parserDiagnostics.mode).toBe("hybrid");
+    });
+
+    it("does not report an empty successful scan when every parser candidate failed retryably", async () => {
+      const sms = createSmsMessage({ id: "sms-retryable-failure" });
+      mockReadSmsInbox.mockResolvedValue([sms]);
+      mockParseSmsWithOrchestrator.mockResolvedValue({
+        transactions: [],
+        hasError: true,
+        isRetryable: true,
+        unresolvedCandidates: [
+          {
+            candidate: { message: sms, smsFingerprint: "retryable-fp" },
+            reason: "chunk_failed",
+            isRetryable: true,
+          },
+        ],
+      });
+
+      const onProgress = jest.fn<void, [SmsScanProgress]>();
+      await expect(
+        scanAndParseSms(defaultOptions(), onProgress)
+      ).rejects.toThrow("SMS AI parsing failed");
+
+      expect(
+        onProgress.mock.calls.some(
+          ([progress]) => progress.currentPhase === "complete"
+        )
+      ).toBe(false);
     });
 
     it("does not complete a mixed scan with a non-retryable parser failure", async () => {

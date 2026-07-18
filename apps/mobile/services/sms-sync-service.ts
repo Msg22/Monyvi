@@ -447,7 +447,10 @@ async function executeScanPipeline(
     toSmsParserDiagnosticsLogContext(aiResult.diagnostics)
   );
 
-  if (aiResult.hasError && aiResult.isRetryable === false) {
+  if (
+    aiResult.hasError &&
+    (aiResult.isRetryable === false || aiResult.transactions.length === 0)
+  ) {
     throw new Error("SMS AI parsing failed");
   }
 
