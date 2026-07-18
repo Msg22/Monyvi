@@ -46,8 +46,8 @@ interface MockUserScope {
 }
 
 const mockGetCurrentUserDataScope = jest.fn<Promise<MockUserScope>, []>();
-const mockGetTrustedRejectionDisposition = jest.fn<string, [SmsCandidate]>(
-  () => "not_trusted_rejection"
+const mockGetTrustedPrefilterDisposition = jest.fn<string, [SmsCandidate]>(
+  () => "not_trusted_candidate"
 );
 
 jest.mock("@monyvi/logic", () => ({
@@ -104,8 +104,8 @@ jest.mock("@/services/sms-parser-orchestrator", () => ({
   toSmsParserDiagnosticsLogContext: (
     diagnostics: SmsParserOrchestratorResult["diagnostics"]
   ): Readonly<Record<string, unknown>> => ({ ...diagnostics }),
-  getTrustedRejectionDisposition: (candidate: SmsCandidate): string =>
-    mockGetTrustedRejectionDisposition(candidate),
+  getTrustedPrefilterDisposition: (candidate: SmsCandidate): string =>
+    mockGetTrustedPrefilterDisposition(candidate),
 }));
 
 function mockWithParserDiagnostics(
@@ -195,9 +195,9 @@ describe("sms-live-processor", () => {
     mockIsLikelyFinancialSms.mockReturnValue(true);
     mockIsLikelyCorruptedSmsText.mockReturnValue(false);
     mockIsExcludedBeforeSmsParsing.mockReturnValue(false);
-    mockGetTrustedRejectionDisposition.mockReturnValue("not_trusted_rejection");
     mockGetCurrentUserDataScope.mockResolvedValue(createMockUserScope());
     mockGetRequiredCurrentUserId.mockResolvedValue("user-a");
+    mockGetTrustedPrefilterDisposition.mockReturnValue("not_trusted_candidate");
     mockParseSmsWithOrchestrator.mockResolvedValue({
       transactions: [createParsedTransaction()],
       hasError: false,
@@ -459,12 +459,12 @@ describe("sms-live-processor", () => {
     expect(mockGetAiProcessingConsentStatus).toHaveBeenCalledTimes(1);
     expect(mockIsLikelyFinancialSms).toHaveBeenCalledWith("Dinner tonight?");
     expect(mockComputeSmsFingerprint).toHaveBeenCalledTimes(1);
-    expect(mockGetTrustedRejectionDisposition).toHaveBeenCalledTimes(1);
+    expect(mockGetTrustedPrefilterDisposition).toHaveBeenCalledTimes(1);
     expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
 
   it("filters an exact trusted rejection before live AI parsing", async () => {
-    mockGetTrustedRejectionDisposition.mockReturnValueOnce("filter_before_ai");
+    mockGetTrustedPrefilterDisposition.mockReturnValueOnce("filter_before_ai");
 
     const result = await processLiveSmsEvent({
       sender: "QNB ALAHLI",
@@ -489,13 +489,13 @@ describe("sms-live-processor", () => {
 
     expect(result.status).toBe("ignored");
     expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
-    expect(mockGetTrustedRejectionDisposition).not.toHaveBeenCalled();
+    expect(mockGetTrustedPrefilterDisposition).not.toHaveBeenCalled();
     expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
 
   it("routes affected trusted rejections before the broad financial heuristic", async () => {
     mockIsLikelyFinancialSms.mockReturnValueOnce(false);
-    mockGetTrustedRejectionDisposition.mockReturnValueOnce("route_to_hybrid");
+    mockGetTrustedPrefilterDisposition.mockReturnValueOnce("route_to_parser");
     mockParseSmsWithOrchestrator.mockResolvedValueOnce({
       transactions: [],
       hasError: true,
@@ -511,7 +511,22 @@ describe("sms-live-processor", () => {
     });
 
     expect(result.status).toBe("ai_failed");
-    expect(mockGetTrustedRejectionDisposition).toHaveBeenCalledTimes(1);
+    expect(mockGetTrustedPrefilterDisposition).toHaveBeenCalledTimes(1);
+    expect(mockParseSmsWithOrchestrator).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes exact trusted transactions before the broad financial heuristic", async () => {
+    mockIsLikelyFinancialSms.mockReturnValueOnce(false);
+    mockGetTrustedPrefilterDisposition.mockReturnValueOnce("route_to_parser");
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB EGYPT",
+      body: "Your Debit Card **2132 had a Successful transaction of EGP 490.00 @OTP STORE,your available bal.EGP10853.15 for lost/stolen card call 19700",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("parsed");
     expect(mockParseSmsWithOrchestrator).toHaveBeenCalledTimes(1);
   });
 

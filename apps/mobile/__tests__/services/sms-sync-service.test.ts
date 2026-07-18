@@ -150,8 +150,8 @@ const mockParseSmsWithOrchestrator = jest.fn<
   Promise<MockParserResult>,
   unknown[]
 >(() => Promise.resolve({ transactions: [] }));
-const mockGetTrustedRejectionDisposition = jest.fn<string, [unknown]>(
-  () => "not_trusted_rejection"
+const mockGetTrustedPrefilterDisposition = jest.fn<string, [unknown]>(
+  () => "not_trusted_candidate"
 );
 
 function mockWithParserDiagnostics(
@@ -182,8 +182,8 @@ jest.mock("@/services/sms-parser-orchestrator", () => ({
   toSmsParserDiagnosticsLogContext: (
     diagnostics: SmsParserOrchestratorResult["diagnostics"]
   ): Readonly<Record<string, unknown>> => ({ ...diagnostics }),
-  getTrustedRejectionDisposition: (candidate: unknown): string =>
-    mockGetTrustedRejectionDisposition(candidate),
+  getTrustedPrefilterDisposition: (candidate: unknown): string =>
+    mockGetTrustedPrefilterDisposition(candidate),
 }));
 
 // ---------------------------------------------------------------------------
@@ -298,7 +298,7 @@ describe("sms-sync-service", () => {
       )
     );
     mockParseSmsWithOrchestrator.mockResolvedValue({ transactions: [] });
-    mockGetTrustedRejectionDisposition.mockReturnValue("not_trusted_rejection");
+    mockGetTrustedPrefilterDisposition.mockReturnValue("not_trusted_candidate");
   });
 
   // =========================================================================
@@ -425,11 +425,12 @@ describe("sms-sync-service", () => {
       ).toBe(false);
     });
 
-    it("does not complete a mixed scan with a non-retryable parser failure", async () => {
+    it("preserves successful transactions from a mixed non-retryable parser result", async () => {
       const sms = createSmsMessage({ id: "sms-permanent-partial" });
+      const parsed = createParsedTransaction();
       mockReadSmsInbox.mockResolvedValue([sms]);
       mockParseSmsWithOrchestrator.mockResolvedValue({
-        transactions: [createParsedTransaction()],
+        transactions: [parsed],
         hasError: true,
         isRetryable: false,
         unresolvedCandidates: [
@@ -441,9 +442,33 @@ describe("sms-sync-service", () => {
         ],
       });
 
-      await expect(scanAndParseSms(defaultOptions())).rejects.toThrow(
-        "SMS AI parsing failed"
-      );
+      const result = await scanAndParseSms(defaultOptions());
+
+      expect(result.transactions).toEqual([parsed]);
+      expect(result.unresolvedCandidates).toEqual([
+        expect.objectContaining({
+          reason: "chunk_failed",
+          isRetryable: false,
+        }),
+      ]);
+    });
+
+    it("routes an exact trusted transaction before legacy OTP filtering", async () => {
+      const sms = createSmsMessage({
+        id: "sms-trusted-purchase",
+        address: "QNB EGYPT",
+        body: "Your Debit Card **2132 had a Successful transaction of EGP 490.00 @OTP STORE,your available bal.EGP10853.15 for lost/stolen card call 19700",
+      });
+      mockReadSmsInbox.mockResolvedValue([sms]);
+      mockGetTrustedPrefilterDisposition.mockReturnValueOnce("route_to_parser");
+
+      await scanAndParseSms(defaultOptions());
+
+      const candidates = mockParseSmsWithOrchestrator.mock.calls[0]?.[0] as
+        | readonly SmsCandidate[]
+        | undefined;
+      expect(candidates).toHaveLength(1);
+      expect(candidates?.[0]?.message.id).toBe("sms-trusted-purchase");
     });
 
     it("routes an exact trusted OTP rejection through the catalog", async () => {
@@ -453,7 +478,7 @@ describe("sms-sync-service", () => {
         body: "QNB OTP:369154 at Orange for EGP 1572 الرقم السرى مخصص لعملية الشراء اونلاين برجاء عدم الافصاح عنه",
       });
       mockReadSmsInbox.mockResolvedValue([sms]);
-      mockGetTrustedRejectionDisposition.mockReturnValueOnce("route_to_hybrid");
+      mockGetTrustedPrefilterDisposition.mockReturnValueOnce("route_to_parser");
 
       await scanAndParseSms(defaultOptions());
 
@@ -471,7 +496,7 @@ describe("sms-sync-service", () => {
         body: "trusted promotional template",
       });
       mockReadSmsInbox.mockResolvedValue([sms]);
-      mockGetTrustedRejectionDisposition.mockReturnValueOnce(
+      mockGetTrustedPrefilterDisposition.mockReturnValueOnce(
         "filter_before_ai"
       );
 
@@ -504,7 +529,7 @@ describe("sms-sync-service", () => {
         "sms-eligible",
       ]);
       expect(mockComputeSmsFingerprint).toHaveBeenCalledTimes(1);
-      expect(mockGetTrustedRejectionDisposition).toHaveBeenCalledTimes(1);
+      expect(mockGetTrustedPrefilterDisposition).toHaveBeenCalledTimes(1);
     });
 
     it("should stop when local parser mode is blocked by AI transaction suggestions", async () => {

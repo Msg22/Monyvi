@@ -40,7 +40,7 @@ jest.mock("@/services/ai-sms-category-enrichment-service", () => ({
 
 import type { ParsedSmsTransaction } from "@monyvi/logic";
 import {
-  getTrustedRejectionDisposition,
+  getTrustedPrefilterDisposition,
   parseSmsWithOrchestrator,
 } from "@/services/sms-parser-orchestrator";
 import { getTransactionReviewMeta } from "@/services/transaction-review-selection";
@@ -163,28 +163,46 @@ describe("sms-parser-orchestrator", () => {
 
   it("routes only an exact active trusted rejection around broad prefilters", () => {
     expect(
-      getTrustedRejectionDisposition(trustedOtpCandidate(), ["EGP", "USD"])
-    ).toBe("route_to_hybrid");
+      getTrustedPrefilterDisposition(trustedOtpCandidate(), ["EGP", "USD"])
+    ).toBe("route_to_parser");
     expect(
-      getTrustedRejectionDisposition(trustedOtpCandidate(" extra"), [
+      getTrustedPrefilterDisposition(trustedOtpCandidate(" extra"), [
         "EGP",
         "USD",
       ])
-    ).toBe("not_trusted_rejection");
+    ).toBe("not_trusted_candidate");
+  });
+
+  it("routes an exact trusted transaction around broad prefilters", () => {
+    const trustedPurchase = trustedPurchaseCandidate();
+    const trustedTransactionWithOtpMerchant: SmsCandidate = {
+      ...trustedPurchase,
+      message: {
+        ...trustedPurchase.message,
+        body: "Your Debit Card **2132 had a Successful transaction of EGP 490.00 @OTP STORE,your available bal.EGP10853.15 for lost/stolen card call 19700",
+      },
+    };
+
+    expect(
+      getTrustedPrefilterDisposition(trustedTransactionWithOtpMerchant, [
+        "EGP",
+        "USD",
+      ])
+    ).toBe("route_to_parser");
   });
 
   it("filters trusted rejections before AI when hybrid is disabled", () => {
     process.env.EXPO_PUBLIC_HYBRID_SMS_PARSER_ENABLED = "false";
 
     expect(
-      getTrustedRejectionDisposition(trustedOtpCandidate(), ["EGP", "USD"])
+      getTrustedPrefilterDisposition(trustedOtpCandidate(), ["EGP", "USD"])
     ).toBe("filter_before_ai");
     expect(
-      getTrustedRejectionDisposition(trustedOtpCandidate(" extra"), [
+      getTrustedPrefilterDisposition(trustedOtpCandidate(" extra"), [
         "EGP",
         "USD",
       ])
-    ).toBe("not_trusted_rejection");
+    ).toBe("not_trusted_candidate");
   });
 
   it("hard-excludes candidates before either parser at the orchestrator boundary", async () => {
@@ -213,24 +231,24 @@ describe("sms-parser-orchestrator", () => {
 
   it("routes rejection candidates through hybrid fallback when the catalog is invalid", () => {
     expect(
-      getTrustedRejectionDisposition(trustedOtpCandidate(), ["EGP", "USD"], {
+      getTrustedPrefilterDisposition(trustedOtpCandidate(), ["EGP", "USD"], {
         status: "invalid",
         catalogVersion: null,
         patterns: [],
         issues: [{ code: "integrity_digest_mismatch" }],
       })
-    ).toBe("route_to_hybrid");
+    ).toBe("route_to_parser");
   });
 
   it("does not bypass broad filters for unrelated SMS when the catalog is invalid", () => {
     expect(
-      getTrustedRejectionDisposition(candidate(), ["EGP", "USD"], {
+      getTrustedPrefilterDisposition(candidate(), ["EGP", "USD"], {
         status: "invalid",
         catalogVersion: null,
         patterns: [],
         issues: [{ code: "integrity_digest_mismatch" }],
       })
-    ).toBe("not_trusted_rejection");
+    ).toBe("not_trusted_candidate");
   });
 
   it("routes exact trusted candidates locally and sends only unresolved candidates to AI", async () => {

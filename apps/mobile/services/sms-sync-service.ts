@@ -33,7 +33,7 @@ import {
   type SmsCandidate,
 } from "./ai-sms-parser-service";
 import {
-  getTrustedRejectionDisposition,
+  getTrustedPrefilterDisposition,
   parseSmsWithOrchestrator,
   toSmsParserDiagnosticsLogContext,
   type HybridSmsUnresolvedCandidate,
@@ -343,16 +343,16 @@ async function executeScanPipeline(
       });
 
       const candidate = { message: sms, smsFingerprint: fingerprint };
-      const trustedRejectionDisposition = getTrustedRejectionDisposition(
+      const trustedPrefilterDisposition = getTrustedPrefilterDisposition(
         candidate,
         options.aiContext.supportedCurrencies
       );
-      if (trustedRejectionDisposition === "filter_before_ai") {
+      if (trustedPrefilterDisposition === "filter_before_ai") {
         continue;
       }
       if (
         isNonTransactionalSms(sms.body) &&
-        trustedRejectionDisposition !== "route_to_hybrid"
+        trustedPrefilterDisposition !== "route_to_parser"
       ) {
         continue;
       }
@@ -447,10 +447,7 @@ async function executeScanPipeline(
     toSmsParserDiagnosticsLogContext(aiResult.diagnostics)
   );
 
-  if (
-    aiResult.hasError &&
-    (aiResult.isRetryable === false || aiResult.transactions.length === 0)
-  ) {
+  if (aiResult.hasError && aiResult.transactions.length === 0) {
     throw new Error("SMS AI parsing failed");
   }
 

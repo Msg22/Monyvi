@@ -62,9 +62,9 @@ export type HybridSmsUnresolvedReason =
   | AiUnresolvedCandidate["reason"]
   | "ai_failed";
 
-export type TrustedRejectionDisposition =
-  | "not_trusted_rejection"
-  | "route_to_hybrid"
+export type TrustedPrefilterDisposition =
+  | "not_trusted_candidate"
+  | "route_to_parser"
   | "filter_before_ai";
 
 export interface SmsParserDiagnostics {
@@ -271,11 +271,22 @@ const trustedCatalogProvider = createBundledTrustedSmsCatalogProvider(
   QNB_EGYPT_TRUSTED_SMS_CATALOG
 );
 
-export function getTrustedRejectionDisposition(
+function hasTrustedPatternEvidence(
+  result: TrustedSmsParserOutcome | ReturnType<typeof matchTrustedSmsTemplate>
+): boolean {
+  return (
+    result.status === "matched" ||
+    result.status === "rejected" ||
+    result.status === "ambiguous" ||
+    (result.status === "unresolved" && result.patternIds.length > 0)
+  );
+}
+
+export function getTrustedPrefilterDisposition(
   candidate: SmsCandidate,
   supportedCurrencies: readonly string[],
   activation: TrustedSmsCatalogActivation = trustedCatalogProvider.getActivation()
-): TrustedRejectionDisposition {
+): TrustedPrefilterDisposition {
   const parserCandidate = {
     candidateId: candidate.message.id,
     smsFingerprint: candidate.smsFingerprint,
@@ -288,36 +299,36 @@ export function getTrustedRejectionDisposition(
     activation,
     supportedCurrencies,
   });
-  if (result.outcomes[0]?.status === "rejected") {
-    return shouldUseHybridSmsParser() ? "route_to_hybrid" : "filter_before_ai";
+  const outcome = result.outcomes[0];
+  if (outcome?.status === "rejected") {
+    return shouldUseHybridSmsParser() ? "route_to_parser" : "filter_before_ai";
+  }
+  if (outcome !== undefined && hasTrustedPatternEvidence(outcome)) {
+    return "route_to_parser";
   }
 
   if (activation.status !== "active") {
-    const bundledRejection = matchTrustedSmsTemplate({
+    const bundledMatch = matchTrustedSmsTemplate({
       candidate: parserCandidate,
-      patterns: QNB_EGYPT_TRUSTED_SMS_CATALOG.patterns.filter(
-        (pattern) => pattern.expectedOutcome.kind === "rejection"
-      ),
+      patterns: QNB_EGYPT_TRUSTED_SMS_CATALOG.patterns,
       supportedCurrencies,
       includeDisabledPatterns: true,
     });
-    return shouldUseHybridSmsParser() &&
-      bundledRejection.status !== "unresolved"
-      ? "route_to_hybrid"
-      : "not_trusted_rejection";
+    return hasTrustedPatternEvidence(bundledMatch)
+      ? "route_to_parser"
+      : "not_trusted_candidate";
   }
-  const disabledRejection = matchTrustedSmsTemplate({
+  const disabledMatch = matchTrustedSmsTemplate({
     candidate: parserCandidate,
     patterns: QNB_EGYPT_TRUSTED_SMS_CATALOG.patterns.filter(
-      (pattern) =>
-        !pattern.enabled && pattern.expectedOutcome.kind === "rejection"
+      (pattern) => !pattern.enabled
     ),
     supportedCurrencies,
     includeDisabledPatterns: true,
   });
-  return disabledRejection.status === "rejected"
-    ? "route_to_hybrid"
-    : "not_trusted_rejection";
+  return hasTrustedPatternEvidence(disabledMatch)
+    ? "route_to_parser"
+    : "not_trusted_candidate";
 }
 
 function mapTrustedTransaction(
