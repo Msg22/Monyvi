@@ -11,12 +11,12 @@ export interface TransactionBadgeData {
 }
 
 const BADGE_PRIORITY: Readonly<Record<string, number>> = {
-  review_badge_missing_info: 0,
-  review_badge_account_needed: 1,
-  review_badge_category_needed: 2,
-  review_badge_confirm_cash_account: 3,
-  review_badge_low_confidence: 4,
-  review_badge_needs_review: 5,
+  review_badge_review_account: 0,
+  review_badge_review_category: 1,
+  review_badge_review_amount: 2,
+  review_badge_review_cash_account: 3,
+  review_badge_missing_info: 4,
+  review_badge_review_details: 5,
   review_badge_auto_selected: 6,
 };
 
@@ -25,13 +25,29 @@ const REVIEW_REASON_BADGES: Record<
   TransactionBadgeData
 > = {
   cash_transfer: {
-    labelKey: "review_badge_confirm_cash_account",
+    labelKey: "review_badge_review_cash_account",
     color: "amber",
   },
-  low_confidence: { labelKey: "review_badge_low_confidence", color: "amber" },
-  account_needed: { labelKey: "review_badge_account_needed", color: "red" },
-  category_needed: { labelKey: "review_badge_category_needed", color: "red" },
-  parser_review: { labelKey: "review_badge_needs_review", color: "amber" },
+  low_confidence: {
+    labelKey: "review_badge_review_details",
+    color: "amber",
+  },
+  account_needed: {
+    labelKey: "review_badge_review_account",
+    color: "red",
+  },
+  category_needed: {
+    labelKey: "review_badge_review_category",
+    color: "red",
+  },
+  amount_review: {
+    labelKey: "review_badge_review_amount",
+    color: "amber",
+  },
+  parser_review: {
+    labelKey: "review_badge_review_details",
+    color: "amber",
+  },
 };
 
 /**

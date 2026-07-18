@@ -89,7 +89,7 @@ const PARSER_REASON_MAP: Readonly<
   category_needed: "category_needed",
   cash_transfer_review: "cash_transfer",
   unsupported_template: "parser_review",
-  ambiguous_amount: "parser_review",
+  ambiguous_amount: "amount_review",
   partial_template: "parser_review",
   non_transactional: "parser_review",
 };

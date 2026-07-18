@@ -3,6 +3,7 @@ export type TransactionReviewReason =
   | "low_confidence"
   | "account_needed"
   | "category_needed"
+  | "amount_review"
   | "parser_review";
 
 export interface TransactionReviewMeta {

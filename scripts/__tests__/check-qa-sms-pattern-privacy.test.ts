@@ -522,6 +522,38 @@ test("rejects private candidate metadata from trusted runtime catalogs", () => {
   assert.ok(codes.includes("trusted_runtime_private_metadata"));
 });
 
+test("rejects private fixed text from trusted runtime catalogs", () => {
+  const codes = scan([
+    {
+      path: "packages/logic/src/parsers/trusted-sms-patterns/qnb-egypt.ts",
+      content: `export const catalog = {
+        segments: [
+          { kind: "fixed", text: "Purchase for EGP 1234.56" },
+          { kind: "placeholder", token: "AMOUNT" },
+        ],
+      };`,
+    },
+  ]);
+
+  assert.ok(codes.includes("trusted_runtime_private_value"));
+});
+
+test("allows sanitized fixed text in trusted runtime catalogs", () => {
+  const codes = scan([
+    {
+      path: "packages/logic/src/parsers/trusted-sms-patterns/qnb-egypt.ts",
+      content: `export const catalog = {
+        segments: [
+          { kind: "fixed", text: "Purchase for " },
+          { kind: "placeholder", token: "AMOUNT" },
+        ],
+      };`,
+    },
+  ]);
+
+  assert.deepEqual(codes, []);
+});
+
 test("allows evaluator imports inside the isolated QA validation runner", () => {
   const codes = scan([
     {
