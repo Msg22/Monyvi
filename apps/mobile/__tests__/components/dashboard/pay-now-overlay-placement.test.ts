@@ -18,6 +18,12 @@ describe("Pay Now overlay placement", () => {
 
     expect(modalPosition).toBeGreaterThan(tabsEnd);
     expect(dashboardSource).not.toContain("<PayNowModal");
+    expect(tabLayoutSource).toContain(
+      "accessibilityElementsHidden={isPayNowVisible}"
+    );
+    expect(tabLayoutSource).toContain(
+      'isPayNowVisible ? "no-hide-descendants" : "auto"'
+    );
   });
 
   it("does not bury the overlay inside UpcomingPayments' clipped card", () => {
@@ -27,5 +33,23 @@ describe("Pay Now overlay placement", () => {
     );
 
     expect(upcomingPaymentsSource).not.toContain("<PayNowModal");
+  });
+
+  it("uses NativeWind for static overlay and backdrop styling", () => {
+    const payNowModalSource = fs.readFileSync(
+      path.join(
+        mobileRoot,
+        "components/dashboard/upcoming-payments/PayNowModal.tsx"
+      ),
+      "utf8"
+    );
+
+    expect(payNowModalSource).not.toContain("StyleSheet");
+    expect(payNowModalSource).toContain(
+      'className="absolute inset-0 z-[999] items-center justify-center px-5"'
+    );
+    expect(payNowModalSource).toContain(
+      'className="absolute inset-0 bg-black/60"'
+    );
   });
 });

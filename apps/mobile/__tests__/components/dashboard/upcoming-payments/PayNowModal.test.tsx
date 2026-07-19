@@ -100,14 +100,18 @@ describe("PayNowModal", () => {
     );
 
     expect(screen.UNSAFE_queryByType(Modal)).toBeNull();
-    expect(screen.getByTestId("pay-now-overlay")).toHaveStyle({
-      bottom: 0,
-      left: 0,
-      position: "absolute",
-      right: 0,
-      top: 0,
-      zIndex: 999,
-    });
+    expect(screen.getByTestId("pay-now-overlay")).toHaveProp(
+      "className",
+      "absolute inset-0 z-[999] items-center justify-center px-5"
+    );
+    expect(screen.getByTestId("pay-now-overlay")).toHaveProp(
+      "accessibilityViewIsModal",
+      true
+    );
+    expect(screen.getByTestId("pay-now-overlay")).toHaveProp(
+      "importantForAccessibility",
+      "yes"
+    );
   });
 
   it("disables confirmation when the payment has no account ID", () => {
@@ -122,6 +126,51 @@ describe("PayNowModal", () => {
 
     expect(screen.getByTestId("pay-now-confirm")).toBeDisabled();
     expect(mockUsePaymentSubmission).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: null })
+    );
+  });
+
+  it("disables confirmation when the linked account no longer exists", () => {
+    mockAccounts = [account];
+    const paymentWithStaleAccount = {
+      ...payment,
+      accountId: "deleted-account",
+    } as unknown as RecurringPayment;
+
+    const screen = render(
+      <PayNowModal
+        payment={paymentWithStaleAccount}
+        visible
+        onClose={jest.fn()}
+        onSuccess={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("pay-now-confirm")).toBeDisabled();
+    expect(mockUsePaymentSubmission).toHaveBeenLastCalledWith(
+      expect.objectContaining({ accountId: null })
+    );
+  });
+
+  it("disables confirmation when the linked account uses another currency", () => {
+    mockAccounts = [
+      {
+        ...account,
+        currency: "USD",
+      } as unknown as Account,
+    ];
+
+    const screen = render(
+      <PayNowModal
+        payment={validPayment}
+        visible
+        onClose={jest.fn()}
+        onSuccess={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("pay-now-confirm")).toBeDisabled();
+    expect(mockUsePaymentSubmission).toHaveBeenLastCalledWith(
       expect.objectContaining({ accountId: null })
     );
   });

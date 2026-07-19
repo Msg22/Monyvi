@@ -167,101 +167,109 @@ function TabLayoutInner(): React.ReactElement {
 
   return (
     <View className="flex-1 bg-background dark:bg-background-dark">
-      <Tabs
-        tabBar={(props) => (
-          <CustomBottomTabBar
-            {...props}
-            micButtonRef={micButtonRef ?? undefined}
-            onMicPress={() => void voiceFlow.startFlow()}
-            isRecording={
-              voiceFlow.flowStatus === "recording" ||
-              voiceFlow.flowStatus === "paused"
-            }
-          />
-        )}
-        screenOptions={{
-          headerShown: false,
-          sceneStyle: {
-            backgroundColor: isDark
-              ? darkTheme.background
-              : lightTheme.background,
-          },
-        }}
+      <View
+        className="flex-1"
+        accessibilityElementsHidden={isPayNowVisible}
+        importantForAccessibility={
+          isPayNowVisible ? "no-hide-descendants" : "auto"
+        }
       >
-        <Tabs.Screen
-          name="index"
-          options={{
-            title: "Home",
+        <Tabs
+          tabBar={(props) => (
+            <CustomBottomTabBar
+              {...props}
+              micButtonRef={micButtonRef ?? undefined}
+              onMicPress={() => void voiceFlow.startFlow()}
+              isRecording={
+                voiceFlow.flowStatus === "recording" ||
+                voiceFlow.flowStatus === "paused"
+              }
+            />
+          )}
+          screenOptions={{
+            headerShown: false,
+            sceneStyle: {
+              backgroundColor: isDark
+                ? darkTheme.background
+                : lightTheme.background,
+            },
           }}
-        />
-        <Tabs.Screen
-          name="accounts"
-          options={{
-            title: "Accounts",
-          }}
-        />
-        <Tabs.Screen
-          name="transactions"
-          options={{
-            title: "Transactions",
-          }}
-        />
-        <Tabs.Screen
-          name="metals"
-          options={{
-            title: "Metals",
-          }}
-        />
-      </Tabs>
+        >
+          <Tabs.Screen
+            name="index"
+            options={{
+              title: "Home",
+            }}
+          />
+          <Tabs.Screen
+            name="accounts"
+            options={{
+              title: "Accounts",
+            }}
+          />
+          <Tabs.Screen
+            name="transactions"
+            options={{
+              title: "Transactions",
+            }}
+          />
+          <Tabs.Screen
+            name="metals"
+            options={{
+              title: "Metals",
+            }}
+          />
+        </Tabs>
 
-      <QuickActionFab isRecordingActive={voiceFlow.flowStatus !== "idle"} />
+        <QuickActionFab isRecordingActive={voiceFlow.flowStatus !== "idle"} />
 
-      {/* Voice Recording Overlay — renders above tab bar */}
-      <VoiceRecordingOverlay
-        visible={voiceFlow.isOverlayVisible}
-        status={voiceFlow.flowStatus}
-        durationMs={voiceFlow.durationMs}
-        errorMessage={voiceFlow.errorMessage ?? undefined}
-        onSubmit={voiceFlow.submitRecording}
-        onDiscard={voiceFlow.discardRecording}
-        onPause={voiceFlow.pauseRecording}
-        onResume={voiceFlow.resumeRecording}
-        onRetry={
-          voiceFlow.isMicrophonePermissionError
-            ? voiceFlow.openMicrophoneSettings
-            : voiceFlow.retryRecording
-        }
-        errorActionLabel={
-          voiceFlow.isMicrophonePermissionError
-            ? tCommon("open_settings")
-            : undefined
-        }
-      />
-      <AiProcessingConsentSheet
-        visible={isVoiceConsentVisible}
-        onContinue={async () => {
-          let didGrantConsent = false;
-          try {
-            await aiConsent.grantConsent();
-            didGrantConsent = true;
+        {/* Voice Recording Overlay — renders above tab bar */}
+        <VoiceRecordingOverlay
+          visible={voiceFlow.isOverlayVisible}
+          status={voiceFlow.flowStatus}
+          durationMs={voiceFlow.durationMs}
+          errorMessage={voiceFlow.errorMessage ?? undefined}
+          onSubmit={voiceFlow.submitRecording}
+          onDiscard={voiceFlow.discardRecording}
+          onPause={voiceFlow.pauseRecording}
+          onResume={voiceFlow.resumeRecording}
+          onRetry={
+            voiceFlow.isMicrophonePermissionError
+              ? voiceFlow.openMicrophoneSettings
+              : voiceFlow.retryRecording
+          }
+          errorActionLabel={
+            voiceFlow.isMicrophonePermissionError
+              ? tCommon("open_settings")
+              : undefined
+          }
+        />
+        <AiProcessingConsentSheet
+          visible={isVoiceConsentVisible}
+          onContinue={async () => {
+            let didGrantConsent = false;
+            try {
+              await aiConsent.grantConsent();
+              didGrantConsent = true;
+              shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
+              setIsVoiceConsentVisible(false);
+              await voiceFlow.startFlow({ skipAiProcessingConsent: true });
+            } catch {
+              shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
+              setIsVoiceConsentVisible(didGrantConsent ? false : true);
+            }
+          }}
+          onNotNow={() => {
             shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
             setIsVoiceConsentVisible(false);
-            await voiceFlow.startFlow({ skipAiProcessingConsent: true });
-          } catch {
-            shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
-            setIsVoiceConsentVisible(didGrantConsent ? false : true);
-          }
-        }}
-        onNotNow={() => {
-          shouldResumeVoiceConsentAfterPrivacyDetails.current = false;
-          setIsVoiceConsentVisible(false);
-        }}
-        onPrivacyDetails={() => {
-          shouldResumeVoiceConsentAfterPrivacyDetails.current = true;
-          setIsVoiceConsentVisible(false);
-          router.push("/ai-privacy-details");
-        }}
-      />
+          }}
+          onPrivacyDetails={() => {
+            shouldResumeVoiceConsentAfterPrivacyDetails.current = true;
+            setIsVoiceConsentVisible(false);
+            router.push("/ai-privacy-details");
+          }}
+        />
+      </View>
       <PayNowModal
         payment={selectedPayment}
         visible={isPayNowVisible}

@@ -16,7 +16,6 @@ import {
   BackHandler,
   Keyboard,
   ScrollView,
-  StyleSheet,
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
@@ -32,20 +31,6 @@ import { usePaymentSubmission } from "@/hooks/usePaymentSubmission";
 import { getDueText } from "@/utils/dateHelpers";
 
 import type { PayNowModalProps } from "./types";
-
-const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 999,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 20,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-  },
-});
 
 function normalizeEntityId(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -87,11 +72,20 @@ export function PayNowModal({
     null
   );
   const [showAccountPicker, setShowAccountPicker] = useState(false);
+  const selectedAccount = useMemo(
+    () =>
+      accounts.find(
+        (account) =>
+          account.id === selectedAccountId &&
+          account.currency === payment?.currency
+      ),
+    [accounts, payment?.currency, selectedAccountId]
+  );
 
   const { isSubmitting, amountError, clearAmountError, submit } =
     usePaymentSubmission({
       payment,
-      accountId: selectedAccountId,
+      accountId: selectedAccount?.id ?? null,
       onSuccess,
       onClose,
     });
@@ -122,9 +116,7 @@ export function PayNowModal({
 
   if (!visible || !payment) return null;
 
-  const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
-
-  const isConfirmDisabled = isSubmitting || selectedAccountId === null;
+  const isConfirmDisabled = isSubmitting || !selectedAccount;
 
   const handleAmountChange = (text: string): void => {
     setAmount(text);
@@ -139,16 +131,16 @@ export function PayNowModal({
   return (
     <View
       testID="pay-now-overlay"
-      style={[
-        styles.overlay,
-        {
-          paddingTop: insets.top,
-          paddingBottom: Math.max(bottomInset, 16),
-        },
-      ]}
+      accessibilityViewIsModal
+      importantForAccessibility="yes"
+      className="absolute inset-0 z-[999] items-center justify-center px-5"
+      style={{
+        paddingTop: insets.top,
+        paddingBottom: Math.max(bottomInset, 16),
+      }}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={styles.backdrop} />
+        <View className="absolute inset-0 bg-black/60" />
       </TouchableWithoutFeedback>
 
       <View className="w-full max-w-[340px] rounded-[20px] border p-6 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
@@ -313,7 +305,7 @@ export function PayNowModal({
             className={`flex-1 py-3 rounded-xl items-center ${
               isSubmitting
                 ? "bg-nileGreen-600"
-                : selectedAccountId === null
+                : !selectedAccount
                   ? "bg-slate-300 dark:bg-slate-700"
                   : "bg-nileGreen-500"
             }`}
