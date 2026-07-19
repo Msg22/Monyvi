@@ -22,7 +22,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
-import { translatePeriod } from "@/utils/period-translation";
+import { translateBillsPeriod } from "@/utils/period-translation";
 import { useTranslation } from "react-i18next";
 import {
   FeaturedPaymentCard,
@@ -180,7 +180,7 @@ function UpcomingPaymentsComponent(): React.JSX.Element {
                   : "text-slate-600 dark:text-slate-300"
               }`}
             >
-              {translatePeriod(t, period)}
+              {translateBillsPeriod(t, period)}
             </Text>
           </TouchableOpacity>
         ))}

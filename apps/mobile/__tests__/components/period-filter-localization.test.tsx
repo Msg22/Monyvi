@@ -148,17 +148,20 @@ describe("period filter localization", () => {
     );
 
     expect(screen.getByText(enCommon.period_one_year)).toBeTruthy();
+    expect(screen.getByText("6 Months")).toBeTruthy();
+    expect(screen.queryByText(enCommon.period_six_months)).toBeNull();
 
     await switchToArabic(instance);
 
     for (const key of [
       "period_this_week",
       "period_this_month",
-      "period_six_months",
       "period_one_year",
     ] as const) {
       expect(screen.getByText(arCommon[key])).toBeTruthy();
     }
+    expect(screen.getByText("6 أشهر")).toBeTruthy();
+    expect(screen.queryByText(arCommon.period_six_months)).toBeNull();
     expect(screen.queryByText(enCommon.period_one_year)).toBeNull();
   });
 
