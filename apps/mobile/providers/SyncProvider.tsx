@@ -133,8 +133,24 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
       let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
       try {
+        const syncAndValidateRequiredData = async (): Promise<void> => {
+          await sync(true, shouldApplyState);
+
+          if (
+            !shouldApplyState() ||
+            failureReasonOnFailure !== "market-rates-unavailable"
+          ) {
+            return;
+          }
+
+          const latestCachedMarketRate = await fetchLatestCachedMarketRate();
+          if (!isValidCachedMarketRate(latestCachedMarketRate)) {
+            throw new Error("market-rates-unavailable-after-sync");
+          }
+        };
+
         await Promise.race([
-          sync(true, shouldApplyState),
+          syncAndValidateRequiredData(),
           new Promise<never>((_resolve, reject) => {
             timeoutHandle = setTimeout(
               () => reject(new Error("initial-sync-timeout")),
@@ -279,24 +295,22 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
       }
 
       const profilesCollection = database.get<Profile>("profiles");
-      const marketRatesCollection = database.get<MarketRate>("market_rates");
-      const [currentUserProfileCount, cachedMarketRates] = await Promise.all([
-        queryOwned(
-          profilesCollection,
-          userId,
-          Q.where("deleted", false)
-        ).fetchCount(),
-        marketRatesCollection
-          .query(Q.sortBy("created_at", Q.desc), Q.take(1))
-          .fetch(),
-      ]);
+      const [currentUserProfileCount, latestCachedMarketRate] =
+        await Promise.all([
+          queryOwned(
+            profilesCollection,
+            userId,
+            Q.where("deleted", false)
+          ).fetchCount(),
+          fetchLatestCachedMarketRate(),
+        ]);
 
       if (!shouldContinue()) {
         return;
       }
 
       const hasValidCachedMarketRate = isValidCachedMarketRate(
-        cachedMarketRates.at(0)
+        latestCachedMarketRate
       );
 
       if (currentUserProfileCount === 0 || !hasValidCachedMarketRate) {
@@ -421,4 +435,13 @@ function isValidCachedMarketRate(rate: MarketRate | undefined): boolean {
     logger.error("sync.cachedMarketRate.invalid", error);
     return false;
   }
+}
+
+async function fetchLatestCachedMarketRate(): Promise<MarketRate | undefined> {
+  const cachedMarketRates = await database
+    .get<MarketRate>("market_rates")
+    .query(Q.sortBy("created_at", Q.desc), Q.take(1))
+    .fetch();
+
+  return cachedMarketRates.at(0);
 }

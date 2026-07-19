@@ -1,14 +1,21 @@
 import { AppReadyGate } from "@/components/AppReadyGate";
+import { StartupLoadingView } from "@/components/ui/StartupLoadingView";
 import { CategoriesProvider } from "@/context/CategoriesContext";
 import { FirstRunTooltipProvider } from "@/context/FirstRunTooltipContext";
 import { SmsScanProvider } from "@/context/SmsScanContext";
 import { useAuth } from "@/context/AuthContext";
+import { useProfile } from "@/hooks/useProfile";
 import { DatabaseProvider } from "@/providers/DatabaseProvider";
 import { MarketRatesRealtimeProvider } from "@/providers/MarketRatesRealtimeProvider";
 import { PrivateDataBoundary } from "@/providers/PrivateDataBoundary";
 import { QueryProvider } from "@/providers/QueryProvider";
-import { SyncProvider } from "@/providers/SyncProvider";
-import { router, Stack, useRootNavigationState } from "expo-router";
+import { SyncProvider, useSync } from "@/providers/SyncProvider";
+import {
+  router,
+  Stack,
+  usePathname,
+  useRootNavigationState,
+} from "expo-router";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -42,76 +49,111 @@ export default function PrivateLayout(): React.ReactNode {
       <DatabaseProvider>
         <PrivateDataBoundary>
           <SyncProvider>
-            <MarketRatesRealtimeProvider>
-              <CategoriesProvider>
-                <SmsScanProvider>
-                  <FirstRunTooltipProvider>
-                    <Stack
-                      screenOptions={{
-                        headerShown: false,
-                      }}
-                    >
-                      <Stack.Screen name="startup" />
-                      <Stack.Screen name="onboarding" />
-                      <Stack.Screen name="(tabs)" />
-                      <Stack.Screen
-                        name="add-account"
-                        options={{
-                          presentation: "modal",
-                        }}
-                      />
-                      <Stack.Screen name="voice-review" />
-                      <Stack.Screen
-                        name="add-transaction"
-                        options={{
-                          title: tTransactions("add_transaction"),
-                        }}
-                      />
-                      <Stack.Screen name="edit-account" />
-                      <Stack.Screen
-                        name="edit-transaction"
-                        options={{
-                          title: tTransactions("edit_transaction"),
-                        }}
-                      />
-                      <Stack.Screen name="edit-transfer" />
-                      <Stack.Screen
-                        name="settings"
-                        options={{
-                          title: tCommon("settings"),
-                        }}
-                      />
-                      <Stack.Screen name="ai-privacy-details" />
-                      <Stack.Screen
-                        name="recurring-payments"
-                        options={{
+            <PrivateStartupBoundary>
+              <MarketRatesRealtimeProvider>
+                <CategoriesProvider>
+                  <SmsScanProvider>
+                    <FirstRunTooltipProvider>
+                      <Stack
+                        screenOptions={{
                           headerShown: false,
                         }}
-                      />
-                      <Stack.Screen
-                        name="create-recurring-payment"
-                        options={{
-                          presentation: "modal",
-                        }}
-                      />
-                      <Stack.Screen name="create-budget" />
-                      <Stack.Screen name="budget-detail" />
-                      <Stack.Screen name="budgets" />
-                      <Stack.Screen name="charts" />
-                      <Stack.Screen name="live-rates" />
-                      <Stack.Screen name="sms-scan" />
-                      <Stack.Screen name="sms-review" />
-                      <Stack.Screen name="sms-simulator" />
-                      <Stack.Screen name="qa-sms-pattern-intake" />
-                    </Stack>
-                    <AppReadyGate />
-                  </FirstRunTooltipProvider>
-                </SmsScanProvider>
-              </CategoriesProvider>
-            </MarketRatesRealtimeProvider>
+                      >
+                        <Stack.Screen name="startup" />
+                        <Stack.Screen name="onboarding" />
+                        <Stack.Screen name="(tabs)" />
+                        <Stack.Screen
+                          name="add-account"
+                          options={{
+                            presentation: "modal",
+                          }}
+                        />
+                        <Stack.Screen name="voice-review" />
+                        <Stack.Screen
+                          name="add-transaction"
+                          options={{
+                            title: tTransactions("add_transaction"),
+                          }}
+                        />
+                        <Stack.Screen name="edit-account" />
+                        <Stack.Screen
+                          name="edit-transaction"
+                          options={{
+                            title: tTransactions("edit_transaction"),
+                          }}
+                        />
+                        <Stack.Screen name="edit-transfer" />
+                        <Stack.Screen
+                          name="settings"
+                          options={{
+                            title: tCommon("settings"),
+                          }}
+                        />
+                        <Stack.Screen name="ai-privacy-details" />
+                        <Stack.Screen
+                          name="recurring-payments"
+                          options={{
+                            headerShown: false,
+                          }}
+                        />
+                        <Stack.Screen
+                          name="create-recurring-payment"
+                          options={{
+                            presentation: "modal",
+                          }}
+                        />
+                        <Stack.Screen name="create-budget" />
+                        <Stack.Screen name="budget-detail" />
+                        <Stack.Screen name="budgets" />
+                        <Stack.Screen name="charts" />
+                        <Stack.Screen name="live-rates" />
+                        <Stack.Screen name="sms-scan" />
+                        <Stack.Screen name="sms-review" />
+                        <Stack.Screen name="sms-simulator" />
+                        <Stack.Screen name="qa-sms-pattern-intake" />
+                      </Stack>
+                      <AppReadyGate />
+                    </FirstRunTooltipProvider>
+                  </SmsScanProvider>
+                </CategoriesProvider>
+              </MarketRatesRealtimeProvider>
+            </PrivateStartupBoundary>
           </SyncProvider>
         </PrivateDataBoundary>
       </DatabaseProvider>
     </QueryProvider>
   );
+}
+
+interface PrivateStartupBoundaryProps {
+  readonly children: React.ReactNode;
+}
+
+function PrivateStartupBoundary({
+  children,
+}: PrivateStartupBoundaryProps): React.ReactNode {
+  const { initialSyncState, initialSyncFailureReason } = useSync();
+  const { profile, isLoading: isProfileLoading } = useProfile();
+  const pathname = usePathname();
+  const isStartupRoute = pathname === "/startup";
+  const isStartupLoading =
+    initialSyncState === "in-progress" || isProfileLoading;
+  const isStartupReady =
+    initialSyncState === "success" &&
+    initialSyncFailureReason === null &&
+    profile !== null;
+  const shouldRedirectToStartup =
+    !isStartupLoading && !isStartupReady && !isStartupRoute;
+
+  useEffect(() => {
+    if (shouldRedirectToStartup) {
+      router.replace("/startup");
+    }
+  }, [shouldRedirectToStartup]);
+
+  if (isStartupLoading || shouldRedirectToStartup) {
+    return <StartupLoadingView />;
+  }
+
+  return children;
 }

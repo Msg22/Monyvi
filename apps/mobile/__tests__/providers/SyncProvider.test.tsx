@@ -32,6 +32,12 @@ const mockSortBy = jest.fn((column: string, order: unknown) => ({
 }));
 const mockTake = jest.fn((count: number) => ({ count }));
 
+function createValidMarketRate(): Record<string, number> {
+  return Object.fromEntries(
+    MARKET_RATE_MODEL_VALUE_FIELDS.map((field) => [field, 1])
+  );
+}
+
 jest.mock("@/services/sync", () => ({
   syncDatabase: (...args: unknown[]): Promise<unknown> =>
     mockSyncDatabase(...args) as Promise<unknown>,
@@ -115,11 +121,7 @@ describe("SyncProvider initialSyncState", () => {
     jest.useFakeTimers();
     mockCheckIsAuthenticated.mockResolvedValue(true);
     mockFetchProfileCount.mockResolvedValue(0);
-    mockFetchMarketRates.mockResolvedValue([
-      Object.fromEntries(
-        MARKET_RATE_MODEL_VALUE_FIELDS.map((field) => [field, 1])
-      ),
-    ]);
+    mockFetchMarketRates.mockResolvedValue([createValidMarketRate()]);
     mockUseAuth.mockReturnValue({
       isAuthenticated: true,
       user: { id: "current-user" },
@@ -189,7 +191,9 @@ describe("SyncProvider initialSyncState", () => {
 
   it("forces the blocking startup sync when the profile exists but cached market rates are missing", async (): Promise<void> => {
     mockFetchProfileCount.mockResolvedValue(1);
-    mockFetchMarketRates.mockResolvedValue([]);
+    mockFetchMarketRates
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([createValidMarketRate()]);
     mockSyncDatabase.mockResolvedValue(undefined);
     const { result } = renderAndCapture();
 
@@ -226,19 +230,36 @@ describe("SyncProvider initialSyncState", () => {
   });
 
   it("forces the blocking startup sync when the cached market rate is invalid", async (): Promise<void> => {
-    const validRate = Object.fromEntries(
-      MARKET_RATE_MODEL_VALUE_FIELDS.map((field) => [field, 1])
-    );
+    const validRate = createValidMarketRate();
     mockFetchProfileCount.mockResolvedValue(1);
-    mockFetchMarketRates.mockResolvedValue([
-      { ...validRate, goldUsdPerGram: 0 },
-    ]);
+    mockFetchMarketRates
+      .mockResolvedValueOnce([{ ...validRate, goldUsdPerGram: 0 }])
+      .mockResolvedValue([validRate]);
     mockSyncDatabase.mockResolvedValue(undefined);
     const { result } = renderAndCapture();
 
     await waitForInitialSyncState(result, "success");
 
     expect(mockSyncDatabase).toHaveBeenCalledWith(expect.anything(), true);
+  });
+
+  it("keeps startup blocked when recovery sync leaves the latest cached rate invalid", async (): Promise<void> => {
+    const invalidRate = {
+      ...createValidMarketRate(),
+      goldUsdPerGram: 0,
+    };
+    mockFetchProfileCount.mockResolvedValue(1);
+    mockFetchMarketRates.mockResolvedValue([invalidRate]);
+    mockSyncDatabase.mockResolvedValue(undefined);
+    const { result } = renderAndCapture();
+
+    await waitForInitialSyncState(result, "failed");
+
+    expect(mockSyncDatabase).toHaveBeenCalledWith(expect.anything(), true);
+    expect(mockFetchMarketRates).toHaveBeenCalledTimes(2);
+    expect(result.current.initialSyncFailureReason).toBe(
+      "market-rates-unavailable"
+    );
   });
 
   it('transitions to "failed" when auth is true but the user id is missing', async (): Promise<void> => {
@@ -295,6 +316,7 @@ describe("SyncProvider initialSyncState", () => {
       "market-rates-unavailable"
     );
 
+    mockFetchMarketRates.mockResolvedValue([createValidMarketRate()]);
     mockSyncDatabase.mockResolvedValueOnce(undefined);
     await act(async () => {
       await result.current.retryInitialSync();

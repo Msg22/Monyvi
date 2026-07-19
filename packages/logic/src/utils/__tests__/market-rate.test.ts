@@ -90,6 +90,17 @@ describe("market-rate calculations", () => {
   });
 
   it.each([
+    ["overflow", Number.MAX_VALUE, Number.MIN_VALUE],
+    ["underflow", Number.MIN_VALUE, Number.MAX_VALUE],
+  ])("rejects a derived exchange-rate %s", (_label, fromUsd, toUsd) => {
+    const rates = createRates({ egpUsd: fromUsd, eurUsd: toUsd });
+
+    expect(() => getCurrencyRate(rates, "EGP", "EUR")).toThrow(
+      InvalidMarketRateError
+    );
+  });
+
+  it.each([
     ["missing", undefined],
     ["zero", 0],
     ["negative", -0.5],

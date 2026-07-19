@@ -102,7 +102,13 @@ export function getCurrencyRate(
 
   const fromUsd = getCurrencyUsdValue(rates, fromCurrency);
   const toUsd = getCurrencyUsdValue(rates, toCurrency);
-  return fromUsd / toUsd;
+  const derivedRate = fromUsd / toUsd;
+
+  if (!Number.isFinite(derivedRate) || derivedRate <= 0) {
+    throw new InvalidMarketRateError(fromCurrency, derivedRate);
+  }
+
+  return derivedRate;
 }
 
 export function assertValidMarketRateRecord(
