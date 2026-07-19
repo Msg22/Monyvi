@@ -16,7 +16,7 @@ export interface PaymentSection {
 
 interface SortPaymentsOptions {
   readonly preferredCurrency?: CurrencyType;
-  readonly latestRates?: MarketRate | null;
+  readonly latestRates?: MarketRate;
 }
 
 export function sortPayments(
@@ -65,18 +65,14 @@ export function groupPaymentsByDueDate(
 function getDueGroupKey(payment: RecurringPayment): string {
   const date = payment.nextDueDate;
 
-  return [
-    date.getFullYear(),
-    date.getMonth() + 1,
-    date.getDate(),
-  ].join("-");
+  return [date.getFullYear(), date.getMonth() + 1, date.getDate()].join("-");
 }
 
 function getComparableAmount(
   payment: RecurringPayment,
   options: SortPaymentsOptions
 ): number {
-  if (!options.preferredCurrency) {
+  if (!options.preferredCurrency || !options.latestRates) {
     return payment.amount;
   }
 
@@ -84,6 +80,6 @@ function getComparableAmount(
     payment.amount,
     payment.currency,
     options.preferredCurrency,
-    options.latestRates ?? null
+    options.latestRates
   );
 }

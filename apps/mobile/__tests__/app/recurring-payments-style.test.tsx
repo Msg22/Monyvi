@@ -164,13 +164,10 @@ jest.mock("@/hooks/usePreferredCurrency", () => ({
 
 jest.mock("@/hooks/useMarketRates", () => ({
   useMarketRates: (): {
-    readonly latestRates: { readonly getRate: jest.Mock };
+    readonly latestRates: { readonly egpUsd: number };
   } => ({
     latestRates: {
-      getRate: jest.fn(
-        (fromCurrency: CurrencyType, toCurrency: CurrencyType) =>
-          fromCurrency === "USD" && toCurrency === "EGP" ? 50 : 1
-      ),
+      egpUsd: 0.02,
     },
   }),
 }));

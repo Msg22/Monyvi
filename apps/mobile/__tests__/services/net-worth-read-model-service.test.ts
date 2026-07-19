@@ -3,6 +3,7 @@ import type {
   Asset,
   AssetMetal,
   DailySnapshotNetWorth,
+  MarketRate,
 } from "@monyvi/db";
 import { getSameDayLastMonth } from "@monyvi/logic";
 
@@ -78,15 +79,12 @@ function createAssetMetal(valueUsd: number): AssetMetal {
   } as unknown as AssetMetal;
 }
 
-function createRates(): { getRate: jest.Mock<number, [string, string]> } {
-  return {
+function createRates(): MarketRate {
+  const rates: Partial<MarketRate> = {
     goldUsdPerGram: 1,
-    getRate: jest.fn((from: string, to: string): number => {
-      if (from === "EGP" && to === "USD") return 0.02;
-      if (from === "USD" && to === "EGP") return 50;
-      return 1;
-    }),
-  } as unknown as { getRate: jest.Mock<number, [string, string]> };
+    egpUsd: 0.02,
+  };
+  return rates as MarketRate;
 }
 
 function createSnapshot(

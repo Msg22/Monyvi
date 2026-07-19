@@ -1,5 +1,5 @@
 import type { AssetMetal, MarketRate } from "@monyvi/db";
-import { MetalPriceUnavailableError, getMetalPriceUsd } from "../utils/metal";
+import { getMetalPriceUsd } from "../utils/metal";
 
 /**
  * Calculates the total USD value of the provided metal assets.
@@ -18,20 +18,9 @@ export function calculateTotalAssets(
   assetMetals: AssetMetal[],
   marketRates: MarketRate
 ): number {
-  if (!marketRates) {
-    return 0;
-  }
-
   return assetMetals.reduce((total, metal) => {
-    try {
-      const pricePerGram = getMetalPriceUsd(metal.metalType, marketRates);
-      const value = metal.calculateValue(pricePerGram);
-      return total + value;
-    } catch (error: unknown) {
-      if (error instanceof MetalPriceUnavailableError) {
-        return total;
-      }
-      throw error;
-    }
+    const pricePerGram = getMetalPriceUsd(metal.metalType, marketRates);
+    const value = metal.calculateValue(pricePerGram);
+    return total + value;
   }, 0);
 }

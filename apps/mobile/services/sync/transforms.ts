@@ -7,7 +7,10 @@ import {
   TIMESTAMP_COLUMNS,
 } from "./config";
 import type { SupabaseTablesNames, WritableSupabaseTablesNames } from "./types";
-import { isValidTransactionAmount } from "@monyvi/logic";
+import {
+  assertValidMarketRateRecord,
+  isValidTransactionAmount,
+} from "@monyvi/logic";
 
 const INVALID_SYNC_AMOUNT_ERROR_CODE = "INVALID_TRANSACTION_AMOUNT";
 
@@ -128,6 +131,9 @@ export function transformFromSupabase(
   record: Record<string, unknown>
 ): Record<string, unknown> {
   assertValidSyncedAmount(table, record);
+  if (table === "market_rates") {
+    assertValidMarketRateRecord(record);
+  }
 
   const transformed: Record<string, unknown> =
     table === "profiles" ? normalizeProfileFromSupabase(record) : { ...record };

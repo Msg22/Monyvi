@@ -24,51 +24,25 @@ function createMockAccount(balance: number, currency: CurrencyType): Account {
   return { balance, currency } as unknown as Account;
 }
 
-/**
- * Creates a mock MarketRate with a configurable getRate implementation
- * and optional metal price fields.
- */
-function createMockRates(
-  getRateImpl: (from: CurrencyType, to: CurrencyType) => number
-): MarketRate {
-  return { getRate: getRateImpl } as unknown as MarketRate;
+function createMockRates(overrides: Partial<MarketRate> = {}): MarketRate {
+  return overrides as MarketRate;
 }
 
 /** Standard rates: 1 EGP = ~0.02 USD, 1 EUR = ~1.08 USD, 1 GBP = ~1.27 USD */
-const standardRates = createMockRates(
-  (from: CurrencyType, to: CurrencyType): number => {
-    if (from === to) return 1;
-    // All rates express "1 FROM = X TO"
-    const toUsd: Partial<Record<CurrencyType, number>> = {
-      USD: 1,
-      EGP: 1 / 49.7, // 1 EGP = ~0.0201 USD
-      EUR: 1.08, // 1 EUR = 1.08 USD
-      GBP: 1.27, // 1 GBP = 1.27 USD
-      SAR: 1 / 3.75, // 1 SAR = ~0.267 USD
-    };
-
-    if (to === "USD") return toUsd[from] ?? 1;
-    if (from === "USD") return 1 / (toUsd[to] ?? 1);
-    // Cross-rate via USD
-    return (toUsd[from] ?? 1) / (toUsd[to] ?? 1);
-  }
-);
+const standardRates = createMockRates({
+  egpUsd: 1 / 49.7,
+  eurUsd: 1.08,
+  gbpUsd: 1.27,
+  sarUsd: 1 / 3.75,
+});
 
 /** Rates that return NaN for cross-currency */
-const nanRates = createMockRates(
-  (from: CurrencyType, to: CurrencyType): number => {
-    if (from === to) return 1;
-    return NaN;
-  }
-);
+const nanRates = createMockRates({ egpUsd: Number.NaN, eurUsd: Number.NaN });
 
 /** Rates that return Infinity for cross-currency */
-const infinityRates = createMockRates(
-  (from: CurrencyType, to: CurrencyType): number => {
-    if (from === to) return 1;
-    return Infinity;
-  }
-);
+const infinityRates = createMockRates({
+  egpUsd: Number.POSITIVE_INFINITY,
+});
 
 // =============================================================================
 // calculateAccountsTotalBalance
@@ -221,52 +195,36 @@ describe("calculateAccountsTotalBalance", () => {
   // ---------------------------------------------------------------------------
 
   describe("currency conversion edge cases", () => {
-    it("should return 0 when rates produce NaN (convertCurrency guards against NaN)", () => {
+    it("should fail the whole calculation when a rate is NaN", () => {
       const accounts = [
         createMockAccount(1000, "EGP"),
         createMockAccount(500, "EUR"),
       ];
 
-      // convertCurrency returns 0 when result is NaN
-      const result = calculateAccountsTotalBalance(accounts, nanRates);
-
-      // When NaN, convertCurrency returns 0 for both accounts
-      expect(result).toBe(0);
+      expect(() => calculateAccountsTotalBalance(accounts, nanRates)).toThrow(
+        "Invalid USD market rate"
+      );
     });
 
-    it("should return 0 when rates return Infinity (convertCurrency guards against Infinity)", () => {
+    it("should fail the whole calculation when a rate is Infinity", () => {
       const accounts = [createMockAccount(1000, "EGP")];
 
-      // convertCurrency returns 0 when result is Infinity
-      const result = calculateAccountsTotalBalance(accounts, infinityRates);
-
-      expect(result).toBe(0);
+      expect(() =>
+        calculateAccountsTotalBalance(accounts, infinityRates)
+      ).toThrow("Invalid USD market rate for EGP");
     });
 
-    it("should return 0 for unknown currency pairs (conversion failure)", () => {
-      const failingRates = createMockRates(
-        (from: CurrencyType, to: CurrencyType): number => {
-          if (from === to) return 1;
-          if (from === "USD" || to === "USD") {
-            if (from === "EGP" || to === "EGP") {
-              return from === "EGP" ? 1 / 49.7 : 49.7;
-            }
-          }
-          // Unknown pair returns 0 (conversion failure)
-          return 0;
-        }
-      );
+    it("should fail instead of returning a partial total for a missing currency rate", () => {
+      const failingRates = createMockRates({ egpUsd: 1 / 49.7 });
 
       const accounts = [
         createMockAccount(1000, "EGP"), // known rate
         createMockAccount(500, "KWD"), // unknown rate -> 0
       ];
 
-      const result = calculateAccountsTotalBalance(accounts, failingRates);
-
-      // EGP: 1000 * (1/49.7) ~= 20.12 USD
-      // KWD: 500 * 0 = 0 (conversion failure)
-      expect(result).toBeCloseTo(1000 / 49.7, 1);
+      expect(() =>
+        calculateAccountsTotalBalance(accounts, failingRates)
+      ).toThrow("Invalid USD market rate for KWD");
     });
   });
 

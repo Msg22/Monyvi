@@ -75,9 +75,11 @@ describe("getMetalPriceUsd", () => {
     expect(getMetalPriceUsd("PALLADIUM", rates)).toBe(30.5);
   });
 
-  it("returns 0 for an unrecognized metal type", () => {
+  it("throws for an unrecognized metal type", () => {
     const rates = createMockRates();
-    expect(getMetalPriceUsd("COPPER" as MetalType, rates)).toBe(0);
+    expect(() => getMetalPriceUsd("COPPER" as MetalType, rates)).toThrow(
+      "Metal price unavailable for COPPER"
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -145,9 +147,11 @@ describe("getMetalPriceUsd", () => {
   // Zero and boundary values
   // -------------------------------------------------------------------------
 
-  it("returns 0 when the price is explicitly zero", () => {
+  it("throws when the price is explicitly zero", () => {
     const rates = createMockRates({ goldUsdPerGram: 0 });
-    expect(getMetalPriceUsd("GOLD", rates)).toBe(0);
+    expect(() => getMetalPriceUsd("GOLD", rates)).toThrow(
+      "Metal price unavailable for GOLD"
+    );
   });
 
   it("handles very small fractional prices", () => {
@@ -160,9 +164,11 @@ describe("getMetalPriceUsd", () => {
     expect(getMetalPriceUsd("GOLD", rates)).toBe(999_999.99);
   });
 
-  it("handles negative prices (valid finite number)", () => {
+  it("throws for negative prices", () => {
     const rates = createMockRates({ palladiumUsdPerGram: -5 });
-    expect(getMetalPriceUsd("PALLADIUM", rates)).toBe(-5);
+    expect(() => getMetalPriceUsd("PALLADIUM", rates)).toThrow(
+      "Metal price unavailable for PALLADIUM"
+    );
   });
 });
 

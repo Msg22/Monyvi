@@ -1,5 +1,6 @@
 const mockGetCurrentUserId = jest.fn();
 const mockFrom = jest.fn();
+const mockLoggerError = jest.fn();
 
 interface SupabaseResult {
   readonly data: ReadonlyArray<Record<string, unknown>> | null;
@@ -44,11 +45,22 @@ jest.mock("@/services/supabase", () => ({
 jest.mock("@/utils/logger", () => ({
   logger: {
     debug: jest.fn(),
-    error: jest.fn(),
+    error: (...args: unknown[]): unknown => mockLoggerError(...args),
   },
 }));
 
-import { pullChanges } from "../../services/sync/pull-strategies";
+import {
+  pullChanges,
+  pullMarketRates,
+} from "../../services/sync/pull-strategies";
+import { MARKET_RATE_VALUE_COLUMNS } from "@monyvi/logic";
+
+const VALID_MARKET_RATE = {
+  ...Object.fromEntries(MARKET_RATE_VALUE_COLUMNS.map((column) => [column, 1])),
+  id: "rate-1",
+  created_at: "2026-05-18T08:00:00.000Z",
+  updated_at: "2026-05-18T08:00:00.000Z",
+};
 
 function makeSelectChain(
   result: SupabaseResult = { data: [], error: null }
@@ -86,7 +98,9 @@ beforeEach(() => {
     const result =
       table === "assets"
         ? { data: [{ id: "asset-1" }], error: null }
-        : { data: [], error: null };
+        : table === "market_rates"
+          ? { data: [VALID_MARKET_RATE], error: null }
+          : { data: [], error: null };
     const chain = makeSelectChain(result);
     const chains = tableChains.get(table) ?? [];
     chains.push(chain);
@@ -159,5 +173,18 @@ describe("pullChanges", () => {
     }
     expect(result.changes).toEqual({});
     expect(mockFrom).not.toHaveBeenCalled();
+  });
+});
+
+describe("pullMarketRates", () => {
+  it("returns an empty changeset when the server has no recent market rates", async () => {
+    mockFrom.mockReturnValue(makeSelectChain({ data: [], error: null }));
+
+    await expect(pullMarketRates()).resolves.toEqual({
+      created: [],
+      updated: [],
+      deleted: [],
+    });
+    expect(mockLoggerError).not.toHaveBeenCalled();
   });
 });

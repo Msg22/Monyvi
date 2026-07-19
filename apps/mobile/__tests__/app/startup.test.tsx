@@ -2,8 +2,9 @@
  * Integration tests for the post-auth routing gate (T020) at app/(private)/startup.tsx.
  *
  * FR-012: runs on every post-auth entry — no caching of outcome.
- * Offline-first corollary: an onboarded user routes to the dashboard even
- * when the current sync state is "failed" or "timeout".
+ * Offline-first corollary: an onboarded user with valid cached startup data
+ * routes to the dashboard even when sync is "failed" or "timeout". Missing
+ * required market rates remain a blocking recovery state.
  *
  * Tests:
  * - loading state (sync in-progress OR profile loading) renders null.
@@ -97,7 +98,10 @@ jest.mock("@/components/ui/StartupRecoveryScreen", () => {
   const RN = require("react-native");
   return {
     StartupRecoveryScreen: (props: {
-      reason: "profile-loading" | "startup-loading";
+      reason:
+        | "profile-loading"
+        | "startup-loading"
+        | "market-rates-unavailable";
       onRetry: () => void;
       onSignOut: () => void;
     }): React.ReactElement =>
@@ -146,6 +150,7 @@ const Index = IndexModule.default;
 
 function setState(opts: {
   syncState: "in-progress" | "success" | "failed" | "timeout";
+  initialSyncFailureReason?: "market-rates-unavailable" | null;
   isProfileLoading?: boolean;
   onboardingCompleted?: boolean;
   /**
@@ -157,6 +162,7 @@ function setState(opts: {
 }): void {
   mockUseSync.mockReturnValue({
     initialSyncState: opts.syncState,
+    initialSyncFailureReason: opts.initialSyncFailureReason ?? null,
     retryInitialSync: jest.fn().mockResolvedValue(opts.syncState),
   });
   mockUseProfile.mockReturnValue({
@@ -185,12 +191,18 @@ function findRedirectHref(renderResult: RenderAPI): string | undefined {
 
 function findRetryReason(
   renderResult: RenderAPI
-): "profile-loading" | "startup-loading" | undefined {
+):
+  | "profile-loading"
+  | "startup-loading"
+  | "market-rates-unavailable"
+  | undefined {
   const retryScreen = renderResult.queryByTestId("retry-screen") as {
     readonly props: Record<string, unknown>;
   } | null;
   const reason = retryScreen?.props["data-reason"];
-  return reason === "profile-loading" || reason === "startup-loading"
+  return reason === "profile-loading" ||
+    reason === "startup-loading" ||
+    reason === "market-rates-unavailable"
     ? reason
     : undefined;
 }
@@ -286,6 +298,19 @@ describe("(private)/startup.tsx routing gate", () => {
     expect(mockRouterReplace).toHaveBeenCalledWith("/(private)/(tabs)");
   });
 
+  it("keeps the recovery screen visible for an onboarded user when required market rates are unavailable", () => {
+    setState({
+      syncState: "failed",
+      onboardingCompleted: true,
+      initialSyncFailureReason: "market-rates-unavailable",
+    });
+
+    const renderer = renderGate();
+
+    expect(findRetryReason(renderer)).toBe("market-rates-unavailable");
+    expect(mockRouterReplace).not.toHaveBeenCalledWith("/(private)/(tabs)");
+  });
+
   // Race-condition guards — `useProfile.isLoading` flips false on the FIRST
   // observation emission, even if that emission is empty (no profile row in
   // local DB yet). The gate MUST NOT route to /onboarding while sync is
@@ -329,6 +354,18 @@ describe("(private)/startup.tsx routing gate", () => {
     const hits = renderer.queryAllByTestId("retry-screen");
     expect(hits.length).toBeGreaterThan(0);
     expect(findRetryReason(renderer)).toBe("profile-loading");
+  });
+
+  it("shows the market-rate recovery reason when an empty rate pull also prevents the profile from loading", () => {
+    setState({
+      syncState: "failed",
+      profileNull: true,
+      initialSyncFailureReason: "market-rates-unavailable",
+    });
+
+    const renderer = renderGate();
+
+    expect(findRetryReason(renderer)).toBe("market-rates-unavailable");
   });
 
   // Bounded escape hatch — the post-sync race-guard MUST NOT trap the user on
@@ -408,6 +445,7 @@ describe("(private)/startup.tsx routing gate", () => {
     const retrySpy = jest.fn().mockResolvedValue("success");
     mockUseSync.mockReturnValue({
       initialSyncState: "failed",
+      initialSyncFailureReason: null,
       retryInitialSync: retrySpy,
     });
     mockUseProfile.mockReturnValue({

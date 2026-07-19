@@ -6,9 +6,22 @@ interface MockAuthState {
   readonly isLoading: boolean;
 }
 
+interface MockSyncState {
+  readonly initialSyncState: "in-progress" | "success" | "failed" | "timeout";
+  readonly initialSyncFailureReason: "market-rates-unavailable" | null;
+}
+
+interface MockProfileState {
+  readonly profile: { readonly onboardingCompleted: boolean } | null;
+  readonly isLoading: boolean;
+}
+
 const mockUseAuth = jest.fn<MockAuthState, []>();
+const mockUseSync = jest.fn<MockSyncState, []>();
+const mockUseProfile = jest.fn<MockProfileState, []>();
 const mockReplace = jest.fn();
 let mockRootNavigationReady = true;
+let mockPathname = "/(tabs)";
 
 function mockCreatePassThroughProvider(testID: string): React.ComponentType<{
   readonly children: React.ReactNode;
@@ -48,6 +61,7 @@ jest.mock("expo-router", () => {
     },
     useRootNavigationState: (): { key: string } | undefined =>
       mockRootNavigationReady ? { key: "root" } : undefined,
+    usePathname: (): string => mockPathname,
   };
   /* eslint-enable @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 });
@@ -62,6 +76,10 @@ jest.mock("@/context/AuthContext", () => ({
   useAuth: (): MockAuthState => mockUseAuth(),
 }));
 
+jest.mock("@/hooks/useProfile", () => ({
+  useProfile: (): MockProfileState => mockUseProfile(),
+}));
+
 jest.mock("@/components/AppReadyGate", () => ({
   AppReadyGate: (): React.ReactElement => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -69,6 +87,16 @@ jest.mock("@/components/AppReadyGate", () => ({
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const RN = require("react-native") as typeof import("react-native");
     return ReactMod.createElement(RN.View, { testID: "app-ready-gate" });
+  },
+}));
+
+jest.mock("@/components/ui/StartupLoadingView", () => ({
+  StartupLoadingView: (): React.ReactElement => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ReactMod = require("react") as typeof React;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const RN = require("react-native") as typeof import("react-native");
+    return ReactMod.createElement(RN.View, { testID: "startup-loading" });
   },
 }));
 
@@ -86,6 +114,7 @@ jest.mock("@/providers/PrivateDataBoundary", () => ({
 
 jest.mock("@/providers/SyncProvider", () => ({
   SyncProvider: mockCreatePassThroughProvider("sync-provider"),
+  useSync: (): MockSyncState => mockUseSync(),
 }));
 
 jest.mock("@/providers/MarketRatesRealtimeProvider", () => ({
@@ -120,6 +149,15 @@ describe("private route layout", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockRootNavigationReady = true;
+    mockPathname = "/(tabs)";
+    mockUseSync.mockReturnValue({
+      initialSyncState: "success",
+      initialSyncFailureReason: null,
+    });
+    mockUseProfile.mockReturnValue({
+      profile: { onboardingCompleted: true },
+      isLoading: false,
+    });
   });
 
   it("renders nothing while auth is still resolving", () => {
@@ -157,6 +195,95 @@ describe("private route layout", () => {
     expect(queryAllByTestId("sync-provider").length).toBeGreaterThan(0);
     expect(queryAllByTestId("categories-provider").length).toBeGreaterThan(0);
     expect(queryAllByTestId("private-stack").length).toBeGreaterThan(0);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("keeps deep-linked private screens hidden while startup sync is in progress", () => {
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    mockUseSync.mockReturnValue({
+      initialSyncState: "in-progress",
+      initialSyncFailureReason: null,
+    });
+    mockPathname = "/add-transaction";
+
+    const { queryAllByTestId } = renderLayout();
+
+    expect(queryAllByTestId("startup-loading")).not.toHaveLength(0);
+    expect(queryAllByTestId("private-stack")).toHaveLength(0);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("keeps deep-linked private screens hidden while the profile is loading", () => {
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    mockUseProfile.mockReturnValue({
+      profile: null,
+      isLoading: true,
+    });
+    mockPathname = "/add-transaction";
+
+    const { queryAllByTestId } = renderLayout();
+
+    expect(queryAllByTestId("startup-loading")).not.toHaveLength(0);
+    expect(queryAllByTestId("private-stack")).toHaveLength(0);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("redirects a deep link when the scoped profile is still missing", () => {
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    mockUseProfile.mockReturnValue({
+      profile: null,
+      isLoading: false,
+    });
+    mockPathname = "/add-transaction";
+
+    const { queryAllByTestId } = renderLayout();
+
+    expect(queryAllByTestId("startup-loading")).not.toHaveLength(0);
+    expect(queryAllByTestId("private-stack")).toHaveLength(0);
+    expect(mockReplace).toHaveBeenCalledWith("/startup");
+  });
+
+  it("redirects a failed deep-linked startup to the recovery route", () => {
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    mockUseSync.mockReturnValue({
+      initialSyncState: "failed",
+      initialSyncFailureReason: "market-rates-unavailable",
+    });
+    mockPathname = "/add-transaction";
+
+    const { queryAllByTestId } = renderLayout();
+
+    expect(queryAllByTestId("startup-loading")).not.toHaveLength(0);
+    expect(queryAllByTestId("private-stack")).toHaveLength(0);
+    expect(mockReplace).toHaveBeenCalledWith("/startup");
+  });
+
+  it("allows the startup route to render its recovery state", () => {
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+    });
+    mockUseSync.mockReturnValue({
+      initialSyncState: "failed",
+      initialSyncFailureReason: "market-rates-unavailable",
+    });
+    mockPathname = "/startup";
+
+    const { queryAllByTestId } = renderLayout();
+
+    expect(queryAllByTestId("private-stack")).not.toHaveLength(0);
     expect(mockReplace).not.toHaveBeenCalled();
   });
 });

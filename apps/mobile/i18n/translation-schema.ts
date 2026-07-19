@@ -109,10 +109,15 @@ interface CommonTranslations {
   readonly startup_loading_failed_title: string;
   readonly startup_loading_failed_chip: string;
   readonly startup_loading_failed_description: string;
+  readonly market_rates_unavailable_title: string;
+  readonly market_rates_unavailable_chip: string;
+  readonly market_rates_unavailable_description: string;
   readonly retry_loading_profile: string;
   readonly retry_startup_loading: string;
+  readonly retry_market_rates: string;
   readonly profile_loading_helper_text: string;
   readonly startup_loading_helper_text: string;
+  readonly market_rates_unavailable_helper_text: string;
   readonly sign_out: string;
   readonly cash_account_creation_failed: string;
   readonly voice_microphone_permission_error: string;

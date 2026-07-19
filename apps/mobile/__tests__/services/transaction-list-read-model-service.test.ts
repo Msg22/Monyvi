@@ -1,4 +1,13 @@
-import type { Account, Category, Transaction, Transfer } from "@monyvi/db";
+import type {
+  Account,
+  Category,
+  MarketRate,
+  Transaction,
+  Transfer,
+} from "@monyvi/db";
+
+const LOADED_MARKET_RATES_PARTIAL: Partial<MarketRate> = {};
+const LOADED_MARKET_RATES = LOADED_MARKET_RATES_PARTIAL as MarketRate;
 
 const mockTransactionsCollection = { table: "transactions" };
 const mockTransfersCollection = { table: "transfers" };
@@ -501,7 +510,7 @@ describe("transaction-list-read-model-service", () => {
       displayedItems: [expense, income],
       totalNetWorth: 1000,
       preferredCurrency: "EGP",
-      latestRates: null,
+      latestRates: LOADED_MARKET_RATES,
       period: "this_month",
       searchQuery: "",
     });
@@ -581,7 +590,7 @@ describe("transaction-list-read-model-service", () => {
       displayedItems: [food, rent],
       totalNetWorth: 5000,
       preferredCurrency: "EGP",
-      latestRates: null,
+      latestRates: LOADED_MARKET_RATES,
       period: "this_month",
       searchQuery: "rent",
     });

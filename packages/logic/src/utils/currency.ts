@@ -1,4 +1,5 @@
 import type { CurrencyType, MarketRate } from "@monyvi/db";
+import { getCurrencyRate } from "./market-rate";
 
 const EXCHANGE_RATE_UNAVAILABLE_MESSAGE = "Exchange rate unavailable";
 const CONVERSION_UNAVAILABLE_MESSAGE = "Conversion unavailable";
@@ -8,14 +9,9 @@ const SECONDARY_RATE_MAX_FRACTION_DIGITS = 4;
 /**
  * Converts an amount from one currency to another.
  *
- * If `marketRates` is `null`, `amount` is `0`, or `fromCurrency` equals `toCurrency`,
- * the original `amount` is returned unchanged. Otherwise the function uses `marketRates`
- * to compute the converted value.
- *
- * **Offline-first behavior**: When a specific currency pair rate is unavailable,
- * `MarketRate.getRate()` returns 1 (identity) so the unconverted amount is shown
- * rather than crashing. The UI should display staleness warnings (via `isStale`)
- * to alert the user that rates may be outdated.
+ * Zero amounts and same-currency conversions are returned unchanged. Every
+ * cross-currency conversion requires a valid positive persisted rate and throws
+ * when that invariant is violated.
  *
  * @param amount - The amount in the source currency
  * @param fromCurrency - Source currency code
@@ -27,15 +23,17 @@ export function convertCurrency(
   amount: number,
   fromCurrency: CurrencyType,
   toCurrency: CurrencyType,
-  marketRates: MarketRate | null
+  marketRates: MarketRate
 ): number {
-  if (!marketRates || amount === 0 || fromCurrency === toCurrency)
-    return amount;
-  const rate = marketRates.getRate(fromCurrency, toCurrency);
-  const result = amount * rate;
-  // Guard against NaN / missing rates — return 0 to signal conversion failure
-  // rather than silently returning the unconverted source amount.
-  return Number.isFinite(result) ? result : 0;
+  if (amount === 0 || fromCurrency === toCurrency) return amount;
+  const rate = getCurrencyRate(marketRates, fromCurrency, toCurrency);
+  const convertedAmount = amount * rate;
+
+  if (!Number.isFinite(convertedAmount)) {
+    throw new Error("Currency conversion produced a non-finite result");
+  }
+
+  return convertedAmount;
 }
 
 /**
@@ -55,7 +53,7 @@ export function formatExchangeRate(
   if (!rates) return EXCHANGE_RATE_UNAVAILABLE_MESSAGE;
   if (currencyA === currencyB) return `1 ${currencyA} = 1 ${currencyA}`;
 
-  const rateAToB = rates.getRate(currencyA, currencyB);
+  const rateAToB = getCurrencyRate(rates, currencyA, currencyB);
 
   if (rateAToB >= 1) {
     // 1 currencyA = rateAToB currencyB
@@ -66,7 +64,7 @@ export function formatExchangeRate(
     return `1 ${currencyA} = ${formatted} ${currencyB}`;
   } else {
     // 1 currencyB = rateBToA currencyA
-    const rateBToA = rates.getRate(currencyB, currencyA);
+    const rateBToA = getCurrencyRate(rates, currencyB, currencyA);
     const formatted = new Intl.NumberFormat("en-US", {
       maximumFractionDigits: SECONDARY_RATE_MAX_FRACTION_DIGITS,
       minimumFractionDigits: PRIMARY_RATE_FRACTION_DIGITS,
@@ -187,7 +185,6 @@ function hasNonZeroFractionAtPrecision(
   amount: number,
   precision: number
 ): boolean {
-  if (precision <= 0) return false;
   const factor = 10 ** precision;
   const roundedMinorUnits = Math.round(Math.abs(amount) * factor);
   return roundedMinorUnits % factor !== 0;

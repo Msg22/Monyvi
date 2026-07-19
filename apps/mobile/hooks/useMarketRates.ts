@@ -1,8 +1,10 @@
 import type { MarketRate } from "@monyvi/db";
+import { assertValidMarketRateModel } from "@monyvi/logic";
 import { Q } from "@nozbe/watermelondb";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useDatabase } from "../providers/DatabaseProvider";
 import { useMarketRatesRealtime } from "../providers/MarketRatesRealtimeProvider";
+import { logger } from "../utils/logger";
 
 interface UseMarketRatesResult {
   readonly latestRates: MarketRate | null;
@@ -11,6 +13,22 @@ interface UseMarketRatesResult {
   readonly isConnected: boolean;
   readonly lastUpdated: Date | null;
   readonly isStale: boolean;
+}
+
+function getValidPreviousDayRate(
+  rate: MarketRate | undefined
+): MarketRate | null {
+  if (!rate) {
+    return null;
+  }
+
+  try {
+    assertValidMarketRateModel(rate);
+    return rate;
+  } catch (error: unknown) {
+    logger.error("Invalid cached previous-day market rate", error);
+    return null;
+  }
 }
 
 /**
@@ -25,11 +43,14 @@ interface UseMarketRatesResult {
 export function useMarketRates(): UseMarketRatesResult {
   const database = useDatabase();
   const { isConnected } = useMarketRatesRealtime();
-  const [latestRates, setLatestRates] = useState<MarketRate | null>(null);
+  const [observedLatestRates, setObservedLatestRates] = useState<
+    readonly MarketRate[]
+  >([]);
   const [previousDayRate, setPreviousDayRate] = useState<MarketRate | null>(
     null
   );
   const [isLoading, setIsLoading] = useState(true);
+  const latestRates = observedLatestRates.at(0) ?? null;
 
   // Query latest market rate from local DB
   useEffect(() => {
@@ -38,8 +59,9 @@ export function useMarketRates(): UseMarketRatesResult {
       .query(Q.sortBy("created_at", Q.desc), Q.take(1))
       .observe()
       .subscribe((rates) => {
-        const latest = rates.at(0) ?? null;
-        setLatestRates(latest);
+        // Watermelon mutates cached model instances in place. Preserve the
+        // emitted result array so same-model updates still trigger a render.
+        setObservedLatestRates(rates);
         setIsLoading(false);
       });
 
@@ -62,28 +84,22 @@ export function useMarketRates(): UseMarketRatesResult {
           )
           .fetch();
 
-        setPreviousDayRate(rates.at(0) ?? null);
-      } catch (err) {
-        console.error("Error fetching previous day rate:", err);
+        setPreviousDayRate(getValidPreviousDayRate(rates.at(0)));
+      } catch (error: unknown) {
+        logger.error("Failed to fetch previous-day market rate", error);
+        setPreviousDayRate(null);
       }
     };
 
-    fetchPreviousDay().catch(console.error);
-  }, [database, latestRates]); // Re-fetch when latest rate changes
-
-  const memoized = useMemo(
-    () => ({
-      latestRates,
-      previousDayRate,
-      isLoading,
-      isConnected,
-      lastUpdated: latestRates?.createdAt ?? null,
-    }),
-    [latestRates, previousDayRate, isLoading, isConnected]
-  );
+    void fetchPreviousDay();
+  }, [database, observedLatestRates]); // Re-fetch when the observed result changes
 
   return {
-    ...memoized,
+    latestRates,
+    previousDayRate,
+    isLoading,
+    isConnected,
+    lastUpdated: latestRates?.createdAt ?? null,
     isStale: latestRates?.isStale() ?? false,
   };
 }

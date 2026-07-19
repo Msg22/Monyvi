@@ -21,6 +21,7 @@ function makeInputs(overrides: Partial<RoutingInputs> = {}): RoutingInputs {
   return {
     syncState: "success",
     onboardingCompleted: false,
+    initialSyncFailureReason: null,
     ...overrides,
   };
 }
@@ -75,6 +76,18 @@ describe("buildRoutingDecisionLog", () => {
     expect(logFalse.onboardingCompleted).toBe(false);
   });
 
+  it("includes the startup failure reason without technical details", () => {
+    const log = buildRoutingDecisionLog(
+      makeInputs({
+        syncState: "failed",
+        initialSyncFailureReason: "market-rates-unavailable",
+      }),
+      "retry"
+    );
+
+    expect(log.initialSyncFailureReason).toBe("market-rates-unavailable");
+  });
+
   it("contains no PII fields (no userId, email, or preference values)", () => {
     const log = buildRoutingDecisionLog(makeInputs(), "onboarding");
     const serialized = JSON.stringify(log);
@@ -88,6 +101,11 @@ describe("buildRoutingDecisionLog", () => {
   it("has exactly the expected top-level keys — nothing more, nothing less", () => {
     const log = buildRoutingDecisionLog(makeInputs(), "loading");
     const keys = Object.keys(log).sort();
-    expect(keys).toEqual(["onboardingCompleted", "outcome", "syncState"]);
+    expect(keys).toEqual([
+      "initialSyncFailureReason",
+      "onboardingCompleted",
+      "outcome",
+      "syncState",
+    ]);
   });
 });

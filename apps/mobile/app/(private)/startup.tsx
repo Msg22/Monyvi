@@ -23,7 +23,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 const PROFILE_OBSERVATION_GRACE_MS = 4_000;
 
 export default function Index(): React.ReactNode {
-  const { initialSyncState, retryInitialSync } = useSync();
+  const { initialSyncState, initialSyncFailureReason, retryInitialSync } =
+    useSync();
   const { profile, isLoading: isProfileLoading } = useProfile();
   const onboardingCompleted = profile?.onboardingCompleted ?? false;
   const hasProfileGraceElapsed = useProfileGrace({
@@ -34,6 +35,7 @@ export default function Index(): React.ReactNode {
   const routingInputs = {
     syncState: initialSyncState,
     onboardingCompleted,
+    initialSyncFailureReason,
   };
   const outcome = getRoutingDecision(routingInputs);
 
@@ -41,6 +43,7 @@ export default function Index(): React.ReactNode {
     initialSyncState,
     isProfileLoading,
     onboardingCompleted,
+    initialSyncFailureReason,
   });
 
   const handleSignOut = useCallback((): void => {
@@ -87,7 +90,7 @@ export default function Index(): React.ReactNode {
     ) {
       return (
         <StartupRecoveryScreen
-          reason="profile-loading"
+          reason={initialSyncFailureReason ?? "profile-loading"}
           onRetry={handleRetry}
           onSignOut={handleSignOut}
         />
@@ -103,7 +106,7 @@ export default function Index(): React.ReactNode {
     case "retry":
       return (
         <StartupRecoveryScreen
-          reason="startup-loading"
+          reason={initialSyncFailureReason ?? "startup-loading"}
           onRetry={handleRetry}
           onSignOut={handleSignOut}
         />
@@ -153,12 +156,14 @@ interface StartupRoutingTelemetryInput {
   readonly initialSyncState: InitialSyncState;
   readonly isProfileLoading: boolean;
   readonly onboardingCompleted: boolean;
+  readonly initialSyncFailureReason: "market-rates-unavailable" | null;
 }
 
 function useStartupRoutingTelemetry({
   initialSyncState,
   isProfileLoading,
   onboardingCompleted,
+  initialSyncFailureReason,
 }: StartupRoutingTelemetryInput): void {
   const hasLoggedRef = useRef(false);
 
@@ -168,11 +173,20 @@ function useStartupRoutingTelemetry({
     if (hasLoggedRef.current || !syncSettled || !profileSettled) return;
 
     hasLoggedRef.current = true;
-    const inputs = { syncState: initialSyncState, onboardingCompleted };
+    const inputs = {
+      syncState: initialSyncState,
+      onboardingCompleted,
+      initialSyncFailureReason,
+    };
     logger.info("onboarding.routing.decision", {
       ...buildRoutingDecisionLog(inputs, getRoutingDecision(inputs)),
     });
-  }, [initialSyncState, isProfileLoading, onboardingCompleted]);
+  }, [
+    initialSyncState,
+    isProfileLoading,
+    onboardingCompleted,
+    initialSyncFailureReason,
+  ]);
 }
 
 interface RedirectWithTransitionFallbackProps {

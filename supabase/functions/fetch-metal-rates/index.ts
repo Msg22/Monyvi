@@ -1,5 +1,6 @@
 import "edge-runtime";
 import { createClient } from "@supabase/supabase-js";
+import { assertPositiveFiniteRateValues } from "../_shared/market-rate-validation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -212,6 +213,8 @@ Deno.serve(async (req) => {
       timestamp_currency: data.timestamps.currency,
       created_at: new Date().toISOString(),
     };
+
+    assertPositiveFiniteRateValues(marketRates);
 
     // Create Supabase client with service role for database access
     const supabaseUrl = Deno.env.get("SUPABASE_URL");

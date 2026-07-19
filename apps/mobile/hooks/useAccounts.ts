@@ -76,7 +76,7 @@ export function useAccounts(): UseAccountsResult {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const { latestRates } = useMarketRates();
+  const { latestRates, isLoading: isRatesLoading } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { userId, isResolvingUser } = useCurrentUser();
 
@@ -134,7 +134,7 @@ export function useAccounts(): UseAccountsResult {
 
   return {
     accounts,
-    isLoading,
+    isLoading: isLoading || isRatesLoading,
     error,
     totalAccountsBalance,
     refetch,

@@ -61,6 +61,24 @@ describe("StartupRecoveryScreen", () => {
     expect(onSignOut).not.toHaveBeenCalled();
   });
 
+  it("invokes onRetry when the market-rate recovery action is pressed", () => {
+    const onRetry = jest.fn();
+    const onSignOut = jest.fn();
+
+    render(
+      <StartupRecoveryScreen
+        reason="market-rates-unavailable"
+        onRetry={onRetry}
+        onSignOut={onSignOut}
+      />
+    );
+
+    fireEvent.press(screen.getByLabelText("retry_market_rates"));
+
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onSignOut).not.toHaveBeenCalled();
+  });
+
   it("invokes onSignOut when the Sign out button is pressed", () => {
     const onRetry = jest.fn();
     const onSignOut = jest.fn();
@@ -107,5 +125,24 @@ describe("StartupRecoveryScreen", () => {
     expect(screen.getByText("startup_loading_failed_title")).toBeTruthy();
     expect(screen.getByText("startup_loading_failed_description")).toBeTruthy();
     expect(screen.getByText("startup_loading_helper_text")).toBeTruthy();
+  });
+
+  it("renders dedicated market-rate recovery copy", () => {
+    render(
+      <StartupRecoveryScreen
+        reason="market-rates-unavailable"
+        onRetry={jest.fn()}
+        onSignOut={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("market_rates_unavailable_chip")).toBeTruthy();
+    expect(screen.getByText("market_rates_unavailable_title")).toBeTruthy();
+    expect(
+      screen.getByText("market_rates_unavailable_description")
+    ).toBeTruthy();
+    expect(
+      screen.getByText("market_rates_unavailable_helper_text")
+    ).toBeTruthy();
   });
 });

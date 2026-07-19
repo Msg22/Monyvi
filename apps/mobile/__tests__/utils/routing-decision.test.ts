@@ -20,6 +20,7 @@ function makeInputs(overrides: Partial<RoutingInputs> = {}): RoutingInputs {
   return {
     syncState: "success",
     onboardingCompleted: false,
+    initialSyncFailureReason: null,
     ...overrides,
   };
 }
@@ -63,40 +64,57 @@ describe("getRoutingDecision", () => {
       );
     });
 
+    describe("required startup data gating", () => {
+      it.each(["failed", "timeout"] as SyncState[])(
+        'returns "retry" when syncState is "%s" and onboardingCompleted=false',
+        (syncState) => {
+          expect(
+            getRoutingDecision(
+              makeInputs({ syncState, onboardingCompleted: false })
+            )
+          ).toBe("retry");
+        }
+      );
+
+      it("still renders the loading backdrop when sync is in-progress even if onboardingCompleted=true", () => {
+        expect(
+          getRoutingDecision(
+            makeInputs({ syncState: "in-progress", onboardingCompleted: true })
+          )
+        ).toBe("loading");
+      });
+
+      it("routes the already-onboarded user to dashboard when sync failed — WatermelonDB is authoritative offline (Constitution I; CR review on routing-decision.ts)", () => {
+        expect(
+          getRoutingDecision(
+            makeInputs({ syncState: "failed", onboardingCompleted: true })
+          )
+        ).toBe("dashboard");
+      });
+
+      it("routes the already-onboarded user to dashboard when sync timed out — same rationale, offline-first", () => {
+        expect(
+          getRoutingDecision(
+            makeInputs({ syncState: "timeout", onboardingCompleted: true })
+          )
+        ).toBe("dashboard");
+      });
+    });
+
     it.each(["failed", "timeout"] as SyncState[])(
-      'returns "retry" when syncState is "%s" and onboardingCompleted=false',
+      'returns "retry" for an onboarded user when required market rates remain unavailable after sync %s',
       (syncState) => {
         expect(
           getRoutingDecision(
-            makeInputs({ syncState, onboardingCompleted: false })
+            makeInputs({
+              syncState,
+              onboardingCompleted: true,
+              initialSyncFailureReason: "market-rates-unavailable",
+            })
           )
         ).toBe("retry");
       }
     );
-
-    it("still renders the loading backdrop when sync is in-progress even if onboardingCompleted=true", () => {
-      expect(
-        getRoutingDecision(
-          makeInputs({ syncState: "in-progress", onboardingCompleted: true })
-        )
-      ).toBe("loading");
-    });
-
-    it("routes the already-onboarded user to dashboard when sync failed — WatermelonDB is authoritative offline (Constitution I; CR review on routing-decision.ts)", () => {
-      expect(
-        getRoutingDecision(
-          makeInputs({ syncState: "failed", onboardingCompleted: true })
-        )
-      ).toBe("dashboard");
-    });
-
-    it("routes the already-onboarded user to dashboard when sync timed out — same rationale, offline-first", () => {
-      expect(
-        getRoutingDecision(
-          makeInputs({ syncState: "timeout", onboardingCompleted: true })
-        )
-      ).toBe("dashboard");
-    });
   });
 
   // =========================================================================

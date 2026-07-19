@@ -27,7 +27,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 // Types
 // ---------------------------------------------------------------------------
 
-type StartupRecoveryReason = "profile-loading" | "startup-loading";
+type StartupRecoveryReason =
+  | "profile-loading"
+  | "startup-loading"
+  | "market-rates-unavailable";
 
 interface StartupRecoveryCopy {
   readonly chip: string;
@@ -54,6 +57,13 @@ const RECOVERY_COPY_BY_REASON: Record<
     description: "startup_loading_failed_description",
     retry: "retry_startup_loading",
     helper: "startup_loading_helper_text",
+  },
+  "market-rates-unavailable": {
+    chip: "market_rates_unavailable_chip",
+    title: "market_rates_unavailable_title",
+    description: "market_rates_unavailable_description",
+    retry: "retry_market_rates",
+    helper: "market_rates_unavailable_helper_text",
   },
 };
 
@@ -120,7 +130,7 @@ export function StartupRecoveryScreen({
             accessibilityLabel={t("sign_out")}
             className="flex-1 h-12 items-center justify-center rounded-xl border border-slate-300 dark:border-slate-700"
           >
-            <Text className="text-[15px] font-medium text-text-primary dark:text-text-primary-dark">
+            <Text className="text-[14px] font-medium text-text-primary dark:text-text-primary-dark">
               {t("sign_out")}
             </Text>
           </TouchableOpacity>
@@ -131,7 +141,7 @@ export function StartupRecoveryScreen({
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel={t(copy.retry)}
-            className="flex-1 h-12 items-center justify-center rounded-xl bg-nileGreen-500"
+            className="h-12 px-2 items-center justify-center rounded-xl bg-nileGreen-500"
             // NativeWind v4 crash: shadow on TouchableOpacity must use inline style
             // eslint-disable-next-line react-native/no-inline-styles
             style={{
@@ -142,7 +152,7 @@ export function StartupRecoveryScreen({
               shadowRadius: 8,
             }}
           >
-            <Text className="text-[15px] font-semibold text-white">
+            <Text className="text-[14px] font-semibold text-white">
               {t(copy.retry)}
             </Text>
           </TouchableOpacity>

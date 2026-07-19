@@ -6,7 +6,7 @@
 
 import type { Account, AssetMetal, MarketRate } from "@monyvi/db";
 import { convertCurrency } from "../utils/currency";
-import { MetalPriceUnavailableError, getMetalPriceUsd } from "../utils/metal";
+import { getMetalPriceUsd } from "../utils/metal";
 
 export interface AssetBreakdown {
   bank: number;
@@ -31,13 +31,13 @@ export interface AssetBreakdownPercentage {
  *
  * @param accounts - List of accounts whose balances will be converted and aggregated by type
  * @param assetMetals - List of metal holdings; each will be valued in USD per gram
- * @param marketRates - Market rate data used for currency conversion and metal pricing; if `null`, returns zeros for all categories
+ * @param marketRates - Market rate data used for currency conversion and metal pricing
  * @returns The computed AssetBreakdown containing `bank`, `cash`, `wallet`, `metals`, and `total`, all expressed in USD
  */
 export function calculateAssetBreakdown(
   accounts: Account[],
   assetMetals: AssetMetal[],
-  marketRates: MarketRate | null
+  marketRates: MarketRate
 ): AssetBreakdown {
   const breakdown: AssetBreakdown = {
     bank: 0,
@@ -46,10 +46,6 @@ export function calculateAssetBreakdown(
     wallet: 0,
     total: 0,
   };
-
-  if (!marketRates) {
-    return breakdown;
-  }
 
   // Calculate account balances by type, converting to USD
   accounts.forEach((account) => {
@@ -76,15 +72,8 @@ export function calculateAssetBreakdown(
 
   // Calculate metals value (already in USD per gram)
   assetMetals.forEach((metal) => {
-    try {
-      const pricePerGram = getMetalPriceUsd(metal.metalType, marketRates);
-      breakdown.metals += metal.calculateValue(pricePerGram);
-    } catch (error: unknown) {
-      if (error instanceof MetalPriceUnavailableError) {
-        return;
-      }
-      throw error;
-    }
+    const pricePerGram = getMetalPriceUsd(metal.metalType, marketRates);
+    breakdown.metals += metal.calculateValue(pricePerGram);
   });
 
   // Total = bank + cash + wallet + metals

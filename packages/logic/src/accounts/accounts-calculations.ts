@@ -4,8 +4,8 @@ import { convertCurrency } from "../utils/currency";
 /**
  * Calculate total balance across all accounts in USD.
  * Converts each account's balance from its native currency to USD
- * using market rates. Returns 0 if conversion is not possible
- * (e.g., missing rates).
+ * using market rates. Invalid or missing rates throw instead of returning a
+ * partial or unconverted financial total.
  *
  * @param accounts - The accounts whose balances will be converted and summed
  * @param latestMarketRates - Market rates used for currency conversion to USD

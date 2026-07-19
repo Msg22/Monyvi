@@ -8,10 +8,15 @@
  * @module useHistoricalRates
  */
 
-import { database, type CurrencyType, MarketRate } from "@monyvi/db";
-import { convertCurrency, formatCurrency } from "@monyvi/logic";
+import { database, type CurrencyType, type MarketRate } from "@monyvi/db";
+import {
+  assertValidMarketRateModel,
+  convertCurrency,
+  formatCurrency,
+} from "@monyvi/logic";
 import { Q } from "@nozbe/watermelondb";
 import { useEffect, useMemo, useState } from "react";
+import { logger } from "../utils/logger";
 
 // =============================================================================
 // Types
@@ -48,6 +53,25 @@ function toDateKey(date: Date): string {
 function dateKeyToEndOfDayTimestamp(dateKey: string): number {
   const [year, month, day] = dateKey.split("-").map(Number);
   return Date.UTC(year, month - 1, day, 23, 59, 59, 999);
+}
+
+function getValidHistoricalMarketRate(
+  rate: MarketRate | undefined,
+  dateKey: string
+): MarketRate | null {
+  if (!rate) {
+    return null;
+  }
+
+  try {
+    assertValidMarketRateModel(rate);
+    return rate;
+  } catch (error: unknown) {
+    logger.error("Invalid cached historical market rate", error, {
+      date: dateKey,
+    });
+    return null;
+  }
 }
 
 /**
@@ -122,7 +146,7 @@ function useHistoricalRates(dates: readonly Date[]): UseHistoricalRatesResult {
 
         results.push({
           date: dateKey,
-          rate: matched[0] ?? null,
+          rate: getValidHistoricalMarketRate(matched.at(0), dateKey),
         });
       }
 
@@ -139,8 +163,8 @@ function useHistoricalRates(dates: readonly Date[]): UseHistoricalRatesResult {
     }
 
     setIsLoading(true);
-    fetchRates().catch((err) => {
-      console.error("Error fetching historical rates:", err);
+    fetchRates().catch((error: unknown) => {
+      logger.error("Failed to fetch historical market rates", error);
       if (!cancelled) setIsLoading(false);
     });
 

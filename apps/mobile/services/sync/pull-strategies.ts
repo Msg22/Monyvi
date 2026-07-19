@@ -21,37 +21,32 @@ import type {
 export async function pullMarketRates(
   daysToKeep = 7
 ): Promise<SyncTableChangeSet> {
-  try {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
 
-    const { data, error } = await supabase
-      .from("market_rates")
-      .select("*")
-      .gt("created_at", cutoffDate.toISOString())
-      .order("created_at", { ascending: false });
+  const { data, error } = await supabase
+    .from("market_rates")
+    .select("*")
+    .gt("created_at", cutoffDate.toISOString())
+    .order("created_at", { ascending: false });
 
-    if (error) {
-      throw createSyncTableError("pull", "market_rates", error);
-    }
-
-    if (!data || data.length === 0) {
-      return { created: [], updated: [], deleted: [] };
-    }
-
-    const activeRecords = data.map((record) =>
-      transformFromSupabase("market_rates", record)
-    );
-
-    return {
-      created: [],
-      updated: activeRecords,
-      deleted: [],
-    };
-  } catch (err) {
-    logger.error("sync.pull.marketRates.failed", err);
-    throw err;
+  if (error) {
+    throw createSyncTableError("pull", "market_rates", error);
   }
+
+  if (!data || data.length === 0) {
+    return { created: [], updated: [], deleted: [] };
+  }
+
+  const activeRecords = data.map((record) =>
+    transformFromSupabase("market_rates", record)
+  );
+
+  return {
+    created: [],
+    updated: activeRecords,
+    deleted: [],
+  };
 }
 
 export async function pullSnapshotTable(

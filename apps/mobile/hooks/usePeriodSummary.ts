@@ -182,7 +182,7 @@ export function usePeriodSummary(
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const { latestRates } = useMarketRates();
+  const { latestRates, isLoading: isRatesLoading } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { userId, isResolvingUser } = useCurrentUser();
 
@@ -245,17 +245,25 @@ export function usePeriodSummary(
 
   // Calculate summary — convert each transaction to preferred currency first
   const data = useMemo((): PeriodSummary => {
+    if (!latestRates) {
+      return {
+        totalIncome: 0,
+        totalExpenses: 0,
+        savings: 0,
+        savingsPercentage: 0,
+        spentPercentage: 0,
+      };
+    }
+
     // Sum amounts after converting each transaction to preferred currency
     const totals = transactions.reduce(
       (acc, t) => {
-        const convertedAmount = latestRates
-          ? convertCurrency(
-              t.amount,
-              t.currency,
-              preferredCurrency,
-              latestRates
-            )
-          : t.amount;
+        const convertedAmount = convertCurrency(
+          t.amount,
+          t.currency,
+          preferredCurrency,
+          latestRates
+        );
 
         if (t.type === "EXPENSE") {
           acc.totalExpenses += convertedAmount;
@@ -287,5 +295,5 @@ export function usePeriodSummary(
     };
   }, [transactions, latestRates, preferredCurrency]);
 
-  return { data, isLoading, error, refetch };
+  return { data, isLoading: isLoading || isRatesLoading, error, refetch };
 }

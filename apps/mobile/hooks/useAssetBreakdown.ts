@@ -143,6 +143,9 @@ export function useAssetBreakdown(): UseAssetBreakdownResult {
   }, [assets, assetIdsKey, userId, isResolvingUser]);
 
   const breakdown = useMemo((): AssetBreakdownPercentage[] => {
+    if (!latestRates) {
+      return [];
+    }
     const rawBreakdown = calculateAssetBreakdown(
       accounts,
       assetMetals,
