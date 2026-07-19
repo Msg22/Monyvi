@@ -552,6 +552,29 @@ describe("sms-live-processor", () => {
     expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
 
+  it("returns stale_user when the account changes during consent cleanup", async () => {
+    mockGetAiProcessingConsentStatus.mockResolvedValue({
+      isConsented: false,
+      userId: "user-a",
+    });
+    mockSetAutoConfirm.mockImplementationOnce(() => {
+      mockGetRequiredCurrentUserId.mockResolvedValue("user-b");
+      return Promise.resolve();
+    });
+
+    const result = await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(result.status).toBe("stale_user");
+    expect(mockSetLiveDetectionEnabled).toHaveBeenCalledWith(false, "user-a");
+    expect(mockSetAutoConfirm).toHaveBeenCalledWith(false, "user-a");
+    expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
+  });
+
   it("does not parse and disables live detection when AI consent is revoked", async () => {
     mockGetAiProcessingConsentStatus.mockResolvedValue({
       isConsented: false,

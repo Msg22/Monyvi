@@ -136,7 +136,9 @@ async function getLiveSmsConsentState(
 
   await setLiveDetectionEnabled(false, expectedUserId);
   await setAutoConfirm(false, expectedUserId);
-  return "disabled";
+  return (await isInitiatingUserCurrent(expectedUserId))
+    ? "disabled"
+    : "stale_user";
 }
 
 async function checkLiveSmsAiConsent({
