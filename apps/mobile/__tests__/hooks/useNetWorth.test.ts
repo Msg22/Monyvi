@@ -208,19 +208,85 @@ describe("useNetWorth", () => {
     expect(mockObserveNetWorthAccounts).not.toHaveBeenCalled();
   });
 
-  it("logs account observation failures and exposes the error", async () => {
+  it("settles loading on an empty local database", async () => {
+    mockObserveNetWorthAssetMetals.mockReturnValue(null);
+    const { result } = renderHook(() => useNetWorth());
+
+    act(() => {
+      accountsQuery.observerRef.current?.next([]);
+      assetsQuery.observerRef.current?.next([]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+    expect(result.current.error).toBeNull();
+  });
+
+  it("settles loading when asset metals emit before accounts fail", async () => {
     const error = new Error("accounts failed");
     const { result } = renderHook(() => useNetWorth());
 
     act(() => {
+      assetsQuery.observerRef.current?.next([
+        { id: "asset-1" } as unknown as Asset,
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(mockObserveNetWorthAssetMetals).toHaveBeenCalledWith({
+        userId: "user-1",
+        assets: [{ id: "asset-1" }],
+      });
+    });
+
+    act(() => {
+      assetMetalsQuery.observerRef.current?.next([
+        { id: "metal-1" } as unknown as AssetMetal,
+      ]);
       accountsQuery.observerRef.current?.error(error);
     });
 
     await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
       expect(result.current.error).toBe(error);
     });
     expect(mockLoggerError).toHaveBeenCalledWith(
       "netWorth.accounts.observe.failed",
+      error
+    );
+  });
+
+  it("settles loading when accounts emit before asset metals fail", async () => {
+    const error = new Error("asset metals failed");
+    const { result } = renderHook(() => useNetWorth());
+
+    act(() => {
+      accountsQuery.observerRef.current?.next([
+        { id: "account-1" } as unknown as Account,
+      ]);
+      assetsQuery.observerRef.current?.next([
+        { id: "asset-1" } as unknown as Asset,
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(mockObserveNetWorthAssetMetals).toHaveBeenCalledWith({
+        userId: "user-1",
+        assets: [{ id: "asset-1" }],
+      });
+    });
+
+    act(() => {
+      assetMetalsQuery.observerRef.current?.error(error);
+    });
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.error).toBe(error);
+    });
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      "netWorth.assetMetals.observe.failed",
       error
     );
   });

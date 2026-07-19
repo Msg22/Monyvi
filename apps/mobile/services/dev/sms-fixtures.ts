@@ -11,7 +11,10 @@
 
 import type { CurrencyType, TransactionType } from "@monyvi/db";
 
-export type SmsFixtureParserFailure = "retryable" | "permanent";
+export type SmsFixtureParserFailure =
+  | "retryable"
+  | "retryable_once"
+  | "permanent";
 
 export interface SmsFixtureParsedTransaction {
   readonly amount: number;
@@ -43,8 +46,61 @@ const APRIL_8_2026_16_10 = 1775664600000;
 const APRIL_8_2026_16_20 = 1775665200000;
 const APRIL_8_2026_17_01 = 1775667660000;
 const APRIL_8_2026_17_12 = 1775668320000;
+const APRIL_8_2026_17_10 = 1775668200000;
+const APRIL_8_2026_17_20 = 1775668800000;
 
 export const SMS_FIXTURES: readonly SmsFixture[] = [
+  {
+    id: "hybrid_ai_purchase",
+    label: "Hybrid E2E - AI fallback purchase",
+    description: "Unknown-provider transaction resolved by fixture AI",
+    sender: "NBE",
+    body: "Purchase EGP 55.55 on card **** 4321 at HYBRID AI MARKET on 08/04 17:20. Avail bal EGP 12,374.99",
+    timestamp: APRIL_8_2026_17_20,
+    expectedTransactions: [
+      {
+        amount: 55.55,
+        currency: "EGP",
+        type: "EXPENSE",
+        counterparty: "HYBRID AI MARKET",
+        categorySystemName: "shopping",
+        date: "2026-04-08T15:20:00.000Z",
+        confidenceScore: 0.96,
+        isTrusted: true,
+        cardLast4: "4321",
+      },
+    ],
+  },
+  {
+    id: "hybrid_retryable_once",
+    label: "Hybrid E2E - retryable AI purchase",
+    description: "Fails once so partial-result retry can be verified",
+    sender: "NBE",
+    body: "Purchase EGP 44.44 on card **** 4321 at HYBRID RETRY MARKET on 08/04 17:10. Avail bal EGP 12,330.55",
+    timestamp: APRIL_8_2026_17_10,
+    parserFailure: "retryable_once",
+    expectedTransactions: [
+      {
+        amount: 44.44,
+        currency: "EGP",
+        type: "EXPENSE",
+        counterparty: "HYBRID RETRY MARKET",
+        categorySystemName: "shopping",
+        date: "2026-04-08T15:10:00.000Z",
+        confidenceScore: 0.96,
+        isTrusted: true,
+        cardLast4: "4321",
+      },
+    ],
+  },
+  {
+    id: "hybrid_trusted_qnb_purchase",
+    label: "Hybrid E2E - trusted QNB purchase",
+    description: "Exact approved template resolved by the trusted matcher",
+    sender: "QNB EGYPT",
+    body: "Your Debit Card **2132 had a Successful transaction of EGP 16.79 @myfawry,your available bal.EGP 59900.84 for lost/stolen card call 19700",
+    timestamp: APRIL_8_2026_17_01,
+  },
   {
     id: "nbe_debit_purchase",
     label: "NBE — Debit purchase (EGP)",

@@ -15,6 +15,20 @@ function readAndroidE2eRunner(): string {
   );
 }
 
+function getWorkflowJobBlock(workflow: string, jobName: string): string {
+  const marker = `\n  ${jobName}:\n`;
+  const markerIndex = workflow.indexOf(marker);
+
+  expect(markerIndex).toBeGreaterThanOrEqual(0);
+
+  const remainingWorkflow = workflow.slice(markerIndex + 1);
+  const nextJobIndex = remainingWorkflow.search(/\n {2}\S/);
+
+  return nextJobIndex === -1
+    ? remainingWorkflow
+    : remainingWorkflow.slice(0, nextJobIndex);
+}
+
 function getAndroidE2eEmulatorRunnerBlock(workflow: string): string {
   const marker = "uses: reactivecircus/android-emulator-runner@v2";
   const markerIndex = workflow.indexOf(marker);
@@ -30,6 +44,19 @@ function getAndroidE2eEmulatorRunnerBlock(workflow: string): string {
 }
 
 describe("GitHub Actions Android E2E workflow", () => {
+  it("runs E2E scope resolution and Android E2E only on the main branch", () => {
+    const workflow = readCiWorkflow();
+    const e2eScopeJob = getWorkflowJobBlock(workflow, "e2e-scope");
+    const androidE2eJob = getWorkflowJobBlock(workflow, "android-e2e");
+    const mainBranchGuard = "github.ref == 'refs/heads/main'";
+
+    expect(e2eScopeJob).toContain(`if: ${mainBranchGuard}`);
+    expect(androidE2eJob).toContain(mainBranchGuard);
+    expect(androidE2eJob).toContain(
+      "needs.e2e-scope.outputs.should_run ==\n      'true'"
+    );
+  });
+
   it("uses an explicit emulator data partition that fits hosted runner disk space", () => {
     const workflow = readCiWorkflow();
     const emulatorRunnerBlock = getAndroidE2eEmulatorRunnerBlock(workflow);

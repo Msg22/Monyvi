@@ -389,6 +389,37 @@ describe("ensureCashAccount - localized seed name", () => {
     mockDatabaseWrite.mockImplementation((writer: () => Promise<void>) =>
       writer()
     );
+    const supabaseMock = jest.requireMock<{ getCurrentUserId: jest.Mock }>(
+      "@/services/supabase"
+    );
+    supabaseMock.getCurrentUserId.mockResolvedValue("user-1");
+  });
+
+  it("does not create an ATM cash account after the authenticated user changes", async () => {
+    const { collection, createCalls } = buildCollectionStub([]);
+    collection.query.mockReturnValue({
+      fetch: jest.fn().mockResolvedValue([]),
+      fetchCount: jest.fn().mockResolvedValue(0),
+    });
+    mockDatabaseGet.mockReturnValue(collection);
+    const supabaseMock = jest.requireMock<{ getCurrentUserId: jest.Mock }>(
+      "@/services/supabase"
+    );
+    supabaseMock.getCurrentUserId.mockResolvedValueOnce("next-user-id");
+
+    const result = await ensureCashAccount(
+      "user-1",
+      "EGP",
+      undefined,
+      "user-1"
+    );
+
+    expect(result).toMatchObject({
+      created: false,
+      accountId: null,
+      error: "AUTH_SCOPE_CHANGED",
+    });
+    expect(createCalls).toHaveLength(0);
   });
 
   it("stores the default Cash account name using the user's preferred language", async () => {

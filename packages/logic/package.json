@@ -6,13 +6,16 @@
   "types": "src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "jest --passWithNoTests"
+    "test": "jest --passWithNoTests",
+    "test:trusted-sms": "jest --runInBand trusted-sms"
   },
   "dependencies": {
-    "@monyvi/db": "*"
+    "@monyvi/db": "*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
+    "@types/node": "^25.9.5",
     "jest": "^29.7.0",
     "ts-jest": "^29.4.6",
     "typescript": "^5.4.0"

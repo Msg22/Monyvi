@@ -67,7 +67,8 @@ function renderItem(isSmsWorkspace = false): void {
       onPress={jest.fn()}
       isSmsWorkspace={isSmsWorkspace}
       institutionLogo={{ format: "image", source: 1 }}
-      expandedContent={<React.Fragment />}
+      expandedContentTitle="Original SMS"
+      expandedContentBody="Raw message"
     />
   );
 }
@@ -93,6 +94,29 @@ describe("TransactionItem", () => {
         testID: "transaction-review-provider-logo",
       })
     );
+  });
+
+  it("does not rerender a row when stable expanded-content values are unchanged", () => {
+    const transaction = createTransaction();
+    const onToggleSelect = jest.fn();
+    const onPress = jest.fn();
+    const createRow = (): React.JSX.Element => (
+      <TransactionItem
+        transaction={transaction}
+        index={0}
+        isSelected
+        accountName="QNB Account"
+        onToggleSelect={onToggleSelect}
+        onPress={onPress}
+        expandedContentTitle="Original SMS"
+        expandedContentBody="Raw message"
+      />
+    );
+    const view = render(createRow());
+
+    view.rerender(createRow());
+
+    expect(mockInstitutionLogoMark).toHaveBeenCalledTimes(1);
   });
 
   it("provides a compact row skeleton with the same themed surface", () => {

@@ -12,7 +12,7 @@ with Angular equivalents in chat (never in code comments).
 
 <!-- SPECKIT START -->
 
-Active Speckit plan: `specs/028-local-intelligent-parser/plan.md`
+Active Speckit plan: `specs/030-hybrid-sms-parser/plan.md`
 
 <!-- SPECKIT END -->
 
@@ -293,8 +293,11 @@ the true domain model.
 
 ## Styling Rules
 
-- For GitHub sprint issues that affect visible UI or design, follow the visual
-  mockup approval gate in `.agent/workflows/sprint-issue.md` before coding.
+- For GitHub sprint issues that meaningfully affect visible UI or design, follow
+  the visual mockup approval gate in `.agent/workflows/sprint-issue.md` before
+  coding. The workflow's narrowly defined micro-UI exception may be used for
+  small, unambiguous changes that preserve the existing layout, interaction,
+  flow, and design-system pattern.
 - **NativeWind classes only**: Use `className` for ALL styling. Do NOT use
   `StyleSheet.create()` or inline `style` unless there is no NativeWind
   equivalent (e.g., dynamic computed values like `` width: `${percent}%` ``).
@@ -485,6 +488,12 @@ chore, perf, ci.
   use `adb` directly.
 - For Pixel emulator SMS testing, use:
   `adb -s emulator-5554 emu sms send <sender> "<message>"`.
+- Use emulator-console SMS injection only for ASCII/GSM-safe payloads. It can
+  replace Arabic and other unsupported Unicode characters with literal `?`
+  characters, which no longer represent the original message.
+- For Unicode SMS parser QA, use the guarded fixture inbox or a physical device.
+  Deterministic SMS E2E runs MUST explicitly use `fixture`, `hybrid-fixture`, or
+  `local` parser mode; never let an E2E run default to the real `edge` parser.
 - Before judging app behavior in an Expo dev-client emulator, confirm Metro is
   reachable: run `adb -s emulator-5554 reverse tcp:8081 tcp:8081`, verify the
   app focus with `adb -s emulator-5554 shell dumpsys window`, and inspect Metro
@@ -669,3 +678,19 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it
 work") require constant clarification.
+
+## Active Technologies
+
+- TypeScript 5.9 strict mode, React 19.2, React Native 0.83, and Expo SDK 55
+  (codex/phase-2a-trusted-qa-sms-patterns-750)
+- Existing `react-native-get-sms-android`, `expo-file-system/legacy`,
+  `expo-crypto`, and `expo-secure-store`; explicit `zod` boundary validation
+  (codex/phase-2a-trusted-qa-sms-patterns-750)
+- Raw messages and drafts remain memory-only; approved artifacts use local
+  Android document storage with no database persistence
+  (codex/phase-2a-trusted-qa-sms-patterns-750)
+
+## Recent Changes
+
+- codex/phase-2a-trusted-qa-sms-patterns-750: Added guarded, development-only
+  QNB SMS candidate intake, sanitization, export, and review-only governance.

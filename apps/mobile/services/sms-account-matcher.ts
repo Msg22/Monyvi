@@ -405,30 +405,45 @@ function matchAccountCore(
 
   // Step 1: Card last 4 + sender match (highest confidence)
   if (normalizedCardLast4 !== undefined) {
-    const matchedAccount = accounts.find(
+    const cardAndSenderMatches = accounts.filter(
       (acc) =>
         acc.cardLast4 === normalizedCardLast4 &&
         doesAccountMatchSender(senderDisplayName, acc)
     );
-    if (matchedAccount) {
+    if (cardAndSenderMatches.length === 1) {
+      const [matchedAccount] = cardAndSenderMatches;
       return {
         accountId: matchedAccount.id,
         accountName: matchedAccount.name,
         matchReason: "card_last4",
       };
     }
+    if (cardAndSenderMatches.length > 1) {
+      return { accountId: null, accountName: null, matchReason: "none" };
+    }
+
+    // A stored card suffix can be stale or represent another card from the same
+    // provider. Fall through to sender-only matching, which is still safe only
+    // when it identifies exactly one accessible account.
   }
 
   // Step 2: Sender match alone against bank_details / account name
-  const matchedAccount = accounts.find((acc) =>
-    doesAccountMatchSender(senderDisplayName, acc)
+  const senderMatches = accounts.filter((account) =>
+    doesAccountMatchSender(senderDisplayName, account)
   );
-  if (matchedAccount) {
+  if (senderMatches.length === 1) {
+    const [matchedAccount] = senderMatches;
     return {
       accountId: matchedAccount.id,
       accountName: matchedAccount.name,
       matchReason: "sms_sender",
     };
+  }
+  if (senderMatches.length > 1) {
+    return { accountId: null, accountName: null, matchReason: "none" };
+  }
+  if (normalizedCardLast4 !== undefined) {
+    return { accountId: null, accountName: null, matchReason: "none" };
   }
 
   const senderInstitution = isKnownFinancialSender(senderDisplayName);

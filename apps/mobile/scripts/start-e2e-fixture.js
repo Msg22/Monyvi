@@ -42,8 +42,9 @@ function buildE2eFixtureEnv(baseEnv = process.env) {
 }
 
 function getParserModeFromEnv(baseEnv = process.env) {
-  return baseEnv.EXPO_PUBLIC_AI_SMS_PARSER_MODE === "local"
-    ? "local"
+  const requestedMode = baseEnv.EXPO_PUBLIC_AI_SMS_PARSER_MODE;
+  return requestedMode === "local" || requestedMode === "hybrid-fixture"
+    ? requestedMode
     : "fixture";
 }
 
@@ -86,4 +87,5 @@ if (require.main === module) {
 module.exports = {
   buildE2eMetroEnv,
   buildE2eFixtureEnv,
+  getParserModeFromEnv,
 };

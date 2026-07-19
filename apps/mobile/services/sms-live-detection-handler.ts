@@ -34,6 +34,7 @@ import { hasExistingSmsFingerprint } from "./sms-dedup-service";
 import { getCurrentUserId } from "./supabase";
 import { createTransaction } from "./transaction-service";
 import { createSmsAtmTransfer } from "./transfer-service";
+import { getTransactionReviewMeta } from "./transaction-review-selection";
 import { logger } from "@/utils/logger";
 import { redactIdentifierForLog } from "@/utils/logger-redaction";
 
@@ -63,7 +64,12 @@ type SaveableDetectedSmsTransaction = Omit<ParsedSmsTransaction, "rawSmsBody">;
  * queued here instead of triggering notifications.
  */
 let reviewingActive = false;
-const transactionQueue: ParsedSmsTransaction[] = [];
+interface QueuedDetectedSmsTransaction {
+  readonly parsed: ParsedSmsTransaction;
+  readonly userId: string;
+}
+
+const transactionQueue: QueuedDetectedSmsTransaction[] = [];
 const smsSaveLocks = new Map<string, Promise<void>>();
 
 function restoreNotificationTransactionDate(
@@ -86,9 +92,13 @@ function restoreNotificationTransactionDate(
 }
 
 async function getUserScopedPreferenceKey(
-  keyPrefix: string
+  keyPrefix: string,
+  expectedUserId?: string
 ): Promise<string | null> {
-  const userId = (await getCurrentUserId())?.trim();
+  const userId =
+    expectedUserId !== undefined
+      ? expectedUserId.trim()
+      : (await getCurrentUserId())?.trim();
   return userId ? `${keyPrefix}:${userId}` : null;
 }
 
@@ -141,8 +151,14 @@ export async function isAutoConfirmEnabled(): Promise<boolean> {
 /**
  * Set the auto-confirm preference.
  */
-export async function setAutoConfirm(enabled: boolean): Promise<void> {
-  const key = await getUserScopedPreferenceKey(AUTO_CONFIRM_KEY_PREFIX);
+export async function setAutoConfirm(
+  enabled: boolean,
+  expectedUserId?: string
+): Promise<void> {
+  const key = await getUserScopedPreferenceKey(
+    AUTO_CONFIRM_KEY_PREFIX,
+    expectedUserId
+  );
   if (!key) {
     return;
   }
@@ -167,8 +183,14 @@ export async function isLiveDetectionEnabled(): Promise<boolean> {
 /**
  * Set the live detection enabled preference.
  */
-export async function setLiveDetectionEnabled(enabled: boolean): Promise<void> {
-  const key = await getUserScopedPreferenceKey(LIVE_DETECTION_KEY_PREFIX);
+export async function setLiveDetectionEnabled(
+  enabled: boolean,
+  expectedUserId?: string
+): Promise<void> {
+  const key = await getUserScopedPreferenceKey(
+    LIVE_DETECTION_KEY_PREFIX,
+    expectedUserId
+  );
   if (!key) {
     return;
   }
@@ -230,23 +252,29 @@ export async function reconcileLiveDetectionPreference(): Promise<boolean> {
  */
 async function saveDetectedTransaction(
   parsed: SaveableDetectedSmsTransaction,
-  accountId: string
+  accountId: string,
+  expectedUserId: string
 ): Promise<boolean> {
   return withSmsSaveLock(parsed.smsFingerprint, () =>
-    saveDetectedTransactionWithoutLock(parsed, accountId)
+    saveDetectedTransactionWithoutLock(parsed, accountId, expectedUserId)
   );
 }
 
 async function saveDetectedTransactionWithoutLock(
   parsed: SaveableDetectedSmsTransaction,
-  accountId: string
+  accountId: string,
+  expectedUserId: string
 ): Promise<boolean> {
+  if (!(await isExpectedUserCurrent(expectedUserId))) return false;
+
   if (await hasExistingSmsFingerprint(parsed.smsFingerprint)) {
     logger.info("smsDetection.duplicateSkipped", {
       redactedSmsFingerprint: redactIdentifierForLog(parsed.smsFingerprint),
     });
     return false;
   }
+
+  if (!(await isExpectedUserCurrent(expectedUserId))) return false;
 
   // ATM withdrawals: route as bank → cash transfer
   if (parsed.isAtmWithdrawal) {
@@ -257,6 +285,7 @@ async function saveDetectedTransactionWithoutLock(
       date: parsed.date,
       smsFingerprint: parsed.smsFingerprint,
       senderDisplayName: parsed.senderDisplayName,
+      expectedUserId,
     });
 
     if (!result.success) {
@@ -273,18 +302,21 @@ async function saveDetectedTransactionWithoutLock(
   }
 
   // Regular transactions
-  await createTransaction({
-    amount: parsed.amount,
-    currency: parsed.currency,
-    categoryId: parsed.categoryId,
-    counterparty: parsed.counterparty || undefined,
-    accountId,
-    note: `[SMS] ${parsed.merchant ?? parsed.senderDisplayName}`,
-    type: parsed.type,
-    date: parsed.date,
-    source: "SMS",
-    smsFingerprint: parsed.smsFingerprint,
-  });
+  await createTransaction(
+    {
+      amount: parsed.amount,
+      currency: parsed.currency,
+      categoryId: parsed.categoryId,
+      counterparty: parsed.counterparty || undefined,
+      accountId,
+      note: `[SMS] ${parsed.merchant ?? parsed.senderDisplayName}`,
+      type: parsed.type,
+      date: parsed.date,
+      source: "SMS",
+      smsFingerprint: parsed.smsFingerprint,
+    },
+    expectedUserId
+  );
 
   logger.info("smsDetection.transactionSaved", {
     currency: parsed.currency,
@@ -292,6 +324,10 @@ async function saveDetectedTransactionWithoutLock(
     redactedSmsFingerprint: redactIdentifierForLog(parsed.smsFingerprint),
   });
   return true;
+}
+
+async function isExpectedUserCurrent(expectedUserId: string): Promise<boolean> {
+  return (await getCurrentUserId())?.trim() === expectedUserId;
 }
 
 // ---------------------------------------------------------------------------
@@ -313,11 +349,14 @@ async function saveDetectedTransactionWithoutLock(
  * @param parsed - The parser-produced SMS transaction
  */
 export async function handleDetectedSms(
-  parsed: ParsedSmsTransaction
+  parsed: ParsedSmsTransaction,
+  expectedUserId: string
 ): Promise<void> {
+  if (!(await isExpectedUserCurrent(expectedUserId))) return;
+
   // T046: Queue if the user is on the review page
   if (reviewingActive) {
-    transactionQueue.push(parsed);
+    transactionQueue.push({ parsed, userId: expectedUserId });
     logger.info("smsDetection.transactionQueued", {
       type: parsed.type,
       redactedSmsFingerprint: redactIdentifierForLog(parsed.smsFingerprint),
@@ -331,8 +370,11 @@ export async function handleDetectedSms(
       parsed.senderDisplayName,
       parsed.rawSmsBody,
       parsed.currency,
-      parsed.cardLast4
+      parsed.cardLast4,
+      expectedUserId
     );
+
+    if (!(await isExpectedUserCurrent(expectedUserId))) return;
 
     if (!resolved) {
       // No account configured: show notification asking to set up.
@@ -341,28 +383,36 @@ export async function handleDetectedSms(
         hasSenderDisplayName: parsed.senderDisplayName.trim().length > 0,
         redactedSmsFingerprint: redactIdentifierForLog(parsed.smsFingerprint),
       });
-      await showTransactionNeedsAccountNotification(parsed);
+      await showTransactionNeedsAccountNotification(parsed, expectedUserId);
       return;
     }
 
     // Step 2: Check preference
     const autoConfirm = await isAutoConfirmEnabled();
-    const requiresReview =
-      parsed.reviewStatus === "needs_review" ||
-      (parsed.reviewReasons?.length ?? 0) > 0;
+    if (!(await isExpectedUserCurrent(expectedUserId))) return;
+    const reviewMeta = getTransactionReviewMeta(parsed, resolved);
 
-    if (autoConfirm && !requiresReview) {
+    if (autoConfirm && reviewMeta.isAutoSelectable) {
       // Step 3: Auto-confirm — save directly
-      const didSave = await saveDetectedTransaction(parsed, resolved.accountId);
-      if (didSave) {
-        await showTransactionCreatedNotification(parsed, resolved.accountName);
+      const didSave = await saveDetectedTransaction(
+        parsed,
+        resolved.accountId,
+        expectedUserId
+      );
+      if (didSave && (await isExpectedUserCurrent(expectedUserId))) {
+        await showTransactionCreatedNotification(
+          parsed,
+          resolved.accountName,
+          expectedUserId
+        );
       }
     } else {
       // Step 4: Ask me — show notification
       await showTransactionNotification(
         parsed,
         resolved.accountId,
-        resolved.accountName
+        resolved.accountName,
+        expectedUserId
       );
     }
   } catch (err) {
@@ -383,10 +433,15 @@ export async function handleDetectedSms(
  */
 export function initializeDetectionActionHandler(): () => void {
   return registerNotificationActionHandler(async (actionId, payload) => {
-    if (actionId === ACTION_CONFIRM && payload.resolvedAccountId) {
+    if (
+      actionId === ACTION_CONFIRM &&
+      payload.resolvedAccountId &&
+      payload.initiatingUserId
+    ) {
       await saveDetectedTransaction(
         restoreNotificationTransactionDate(payload.transactionData),
-        payload.resolvedAccountId
+        payload.resolvedAccountId,
+        payload.initiatingUserId
       );
     }
     // ACTION_DISCARD is a no-op — notification is auto-dismissed
@@ -424,8 +479,8 @@ export async function flushQueuedTransactions(): Promise<number> {
     count: queued.length,
   });
 
-  for (const parsed of queued) {
-    await handleDetectedSms(parsed);
+  for (const { parsed, userId } of queued) {
+    await handleDetectedSms(parsed, userId);
   }
 
   return queued.length;

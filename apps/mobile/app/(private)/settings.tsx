@@ -21,6 +21,7 @@ import {
   AiProcessingSettingsSection,
   AppearanceSettingsSection,
   CurrencySettingsSection,
+  DevelopmentToolsSettingsSection,
   LanguageSettingsSection,
   LiveDetectionSettingsSection,
   LogoutSettingsRow,
@@ -66,6 +67,7 @@ import {
 } from "@/services/notification-service";
 import { logger } from "@/utils/logger";
 import type { PendingAiAction } from "@/components/settings/settings-types";
+import { getQaSmsPatternIntakeAvailability } from "@/config/qa-sms-pattern-intake-config";
 
 const SETTINGS_SCROLL_BOTTOM_GAP = 32;
 
@@ -77,6 +79,7 @@ export default function SettingsScreen(): React.JSX.Element {
   const { t } = useTranslation("settings");
   const { t: tCommon } = useTranslation("common");
   const { language } = useLocale();
+  const qaSmsPatternIntakeAvailability = getQaSmsPatternIntakeAvailability();
   const aiConsent = useAiProcessingConsent();
   const [isCurrencyPickerVisible, setIsCurrencyPickerVisible] = useState(false);
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
@@ -862,6 +865,15 @@ export default function SettingsScreen(): React.JSX.Element {
             }}
           />
         )}
+
+        <DevelopmentToolsSettingsSection
+          t={t}
+          isVisible={qaSmsPatternIntakeAvailability.isAvailable}
+          chevronColor={theme.text.secondary}
+          onQaSmsPatternIntakePress={() =>
+            router.push("/qa-sms-pattern-intake")
+          }
+        />
 
         <ProfileNotificationsSection
           t={t}

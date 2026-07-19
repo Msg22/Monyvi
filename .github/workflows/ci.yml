@@ -16,6 +16,7 @@ permissions:
 jobs:
   e2e-scope:
     name: Resolve Android E2E Scope
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.resolve.outputs.should_run }}
@@ -44,6 +45,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -62,6 +65,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: QA SMS Privacy Check
+        env:
+          QA_SMS_PRIVACY_BASE_SHA:
+            ${{ github.event.pull_request.base.sha || github.event.before }}
+          QA_SMS_PRIVACY_HEAD_SHA:
+            ${{ github.event.pull_request.head.sha || github.sha }}
+        run: npm run qa-sms:privacy-check
+
       - name: i18n Coverage Check
         working-directory: apps/mobile
         run: npm run i18n:check
@@ -71,6 +82,18 @@ jobs:
 
       - name: Test Repository Scripts
         run: npm run test:scripts
+
+      - name: Test QA SMS Privacy Check
+        run: npm run test:qa-sms-privacy-check
+
+      - name: Test QA SMS Import Command
+        run: npm run test:qa-sms-import-command
+
+      - name: Test QA SMS Ingest Command
+        run: npm run test:qa-sms-ingest-command
+
+      - name: Test QA SMS Promotion
+        run: npm run test:qa-sms-promotion
 
       - name: Test Mobile App
         run: npm test -w @monyvi/mobile
@@ -148,7 +171,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     needs: [e2e-scope, quality, android-build]
-    if: needs.e2e-scope.outputs.should_run == 'true'
+    if:
+      github.ref == 'refs/heads/main' && needs.e2e-scope.outputs.should_run ==
+      'true'
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.e2e-scope.outputs.matrix) }}

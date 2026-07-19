@@ -408,6 +408,50 @@ export function ProfileNotificationsSection({
   );
 }
 
+export function DevelopmentToolsSettingsSection({
+  t,
+  isVisible,
+  chevronColor,
+  onQaSmsPatternIntakePress,
+}: {
+  readonly t: TranslateFn;
+  readonly isVisible: boolean;
+  readonly chevronColor: string;
+  readonly onQaSmsPatternIntakePress: () => void;
+}): React.JSX.Element | null {
+  if (!isVisible) {
+    return null;
+  }
+
+  return (
+    <View className="mb-8">
+      <SectionLabel>{t("development_tools")}</SectionLabel>
+
+      <TouchableOpacity
+        testID="qa-sms-pattern-intake-settings-link"
+        onPress={onQaSmsPatternIntakePress}
+        className="flex-row items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-800"
+      >
+        <View className="flex-1 flex-row items-center gap-3">
+          <SettingsIconTile
+            name="flask-outline"
+            className="bg-teal-600 dark:bg-teal-500"
+          />
+          <View className="flex-1">
+            <Text className="text-base font-medium text-slate-900 dark:text-slate-50">
+              {t("qa_sms_pattern_intake")}
+            </Text>
+            <Text className="text-xs text-slate-500 dark:text-slate-400">
+              {t("qa_sms_pattern_intake_description")}
+            </Text>
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={chevronColor} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export function LogoutSettingsRow({
   t,
   tCommon,

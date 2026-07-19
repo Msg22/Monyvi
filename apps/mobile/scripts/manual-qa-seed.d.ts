@@ -1,7 +1,7 @@
 export interface ManualQaSeedConfig {
   readonly mode: "local" | "remote";
   readonly email: string;
-  readonly password: string | null;
+  readonly password: string;
   readonly supabaseUrl: string;
   readonly appSupabaseUrl: string;
   readonly anonKey: string;
@@ -10,6 +10,7 @@ export interface ManualQaSeedConfig {
 }
 
 export declare const DEFAULT_MANUAL_QA_EMAIL: "manual-qa@monyvi.test";
+export declare const DEFAULT_MANUAL_QA_PASSWORD: "123456";
 
 export declare function getManualQaSeedConfig(
   env?: Record<string, string | undefined>

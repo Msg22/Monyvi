@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "providerId": "qnb-egypt",
+  "declarations": [
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "card_purchase",
+      "currency": "EGP",
+      "status": "candidate_collected",
+      "candidateIds": ["qa-candidate-c925d4ba-4409-48fb-b619-647860e0eb24"],
+      "recordedAt": "2026-07-15T09:41:51.009Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "card_purchase",
+      "currency": "USD",
+      "status": "candidate_collected",
+      "candidateIds": [
+        "qa-candidate-0364a81c-58aa-46a8-ac41-3a2a3b531844",
+        "qa-candidate-0af584eb-f5bf-44ef-aa1e-0bd0abbd91b1",
+        "qa-candidate-3ff3b9f0-d7d8-4127-9deb-00b3a4e22533"
+      ],
+      "recordedAt": "2026-07-15T09:41:51.009Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "atm_withdrawal",
+      "currency": "EGP",
+      "status": "candidate_collected",
+      "candidateIds": [
+        "qa-candidate-19979a04-9144-4975-bea6-07fbea143df1",
+        "qa-candidate-39622c2a-46f6-4825-8218-1e47427b20fc",
+        "qa-candidate-424c7a74-bf72-4f7b-a229-afa4ff6d40c6",
+        "qa-candidate-5cf80076-3200-474f-bc3e-a1ef1618f839",
+        "qa-candidate-70de6a29-7493-4249-ac3f-972a9e03817d",
+        "qa-candidate-84a8444f-2ea5-4682-9734-5b4736f63a1a"
+      ],
+      "recordedAt": "2026-07-15T09:41:51.009Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "atm_withdrawal",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T14:21:10.022Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "incoming_ipn_transfer",
+      "currency": "EGP",
+      "status": "candidate_collected",
+      "candidateIds": ["qa-candidate-47a803d3-d53a-493a-9f2f-df3be4d52b6b"],
+      "recordedAt": "2026-07-15T09:41:51.009Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "incoming_ipn_transfer",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T14:21:10.022Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "outgoing_ipn_transfer",
+      "currency": "EGP",
+      "status": "candidate_collected",
+      "candidateIds": ["qa-candidate-8761d4df-2d73-4760-b8dc-03ad11b85c0e"],
+      "recordedAt": "2026-07-15T09:41:51.009Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "outgoing_ipn_transfer",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T14:21:10.022Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "outgoing_bank_transfer",
+      "currency": "EGP",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-17T18:00:00.000Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "outgoing_bank_transfer",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-17T18:00:00.000Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "bank_to_wallet_transfer",
+      "currency": "EGP",
+      "status": "candidate_collected",
+      "candidateIds": [
+        "qa-candidate-46ad723d-e451-42a6-814c-2c3ab530c4cd",
+        "qa-candidate-fcd93729-9053-4377-b595-7067833b42e5"
+      ],
+      "recordedAt": "2026-07-15T14:20:59.525Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "refund_or_reversal",
+      "currency": "EGP",
+      "status": "candidate_collected",
+      "candidateIds": [
+        "qa-candidate-060abe17-ca2c-4aae-a182-d2300566b76b",
+        "qa-candidate-146599e9-eb01-49fb-a6ed-91f91954bf9a",
+        "qa-candidate-8d286fee-cee6-4f94-b46f-0e41935ac84a"
+      ],
+      "recordedAt": "2026-07-15T09:49:05.695Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "refund_or_reversal",
+      "currency": "USD",
+      "status": "candidate_collected",
+      "candidateIds": ["qa-candidate-3f9a8589-0545-4f29-aaf3-36c86dce39c1"],
+      "recordedAt": "2026-07-15T09:49:05.695Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "failed_transaction",
+      "currency": "EGP",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T14:21:10.022Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "failed_transaction",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T14:21:10.022Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "otp",
+      "currency": null,
+      "status": "candidate_collected",
+      "candidateIds": [
+        "qa-candidate-24ef875d-926d-4a4a-8235-718447f34286",
+        "qa-candidate-4cbe015c-95cf-4329-8c12-6a937a4dafda",
+        "qa-candidate-bbbafa20-4d75-4d30-9ee6-e5e42a25adaa"
+      ],
+      "recordedAt": "2026-07-15T14:20:59.525Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "informational",
+      "currency": null,
+      "status": "candidate_collected",
+      "candidateIds": [
+        "qa-candidate-1ee8ac52-d4fc-4999-b3b2-b50955ed1167",
+        "qa-candidate-8a046f19-54ec-4526-a29b-b578420e1eaf",
+        "qa-candidate-8db97c52-d4b4-4aac-a731-f5026e31023c",
+        "qa-candidate-9fde9e32-30ef-493a-af41-95ecd516d39f",
+        "qa-candidate-a975715d-6d1d-4d4a-bdf7-cd409afe3ed4",
+        "qa-candidate-ad840bba-cb45-4d03-8bd3-263bc600389d",
+        "qa-candidate-e6628fd6-26db-42d4-a71c-a53676a3bc85",
+        "qa-candidate-fda5e682-a1a3-4739-b4e4-2b57b98ccbd9"
+      ],
+      "recordedAt": "2026-07-15T14:20:59.525Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "promotional",
+      "currency": null,
+      "status": "candidate_collected",
+      "candidateIds": [
+        "qa-candidate-066dcd38-edf0-4ba9-ba99-adad420f3066",
+        "qa-candidate-4820cfcf-4987-4739-948d-ca51fd636af4",
+        "qa-candidate-f0757622-b9dd-467f-80b4-cd6dddb1370e"
+      ],
+      "recordedAt": "2026-07-15T14:20:59.525Z"
+    }
+  ]
+}

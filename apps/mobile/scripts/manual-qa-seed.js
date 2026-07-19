@@ -8,19 +8,24 @@ const {
 const { MANUAL_QA_SEED_FIXTURE } = require("./seed-fixtures/manual-qa-fixture");
 
 const DEFAULT_MANUAL_QA_EMAIL = "manual-qa@monyvi.test";
+const DEFAULT_MANUAL_QA_PASSWORD = "123456";
 
 function getManualQaSeedConfig(env = process.env) {
   const password = env.MANUAL_QA_PASSWORD;
   const preserveExistingPassword =
     !password || env.MANUAL_QA_PRESERVE_PASSWORD === "1";
 
-  return getSeedConfig({
+  const config = getSeedConfig({
     ...env,
     E2E_SUPABASE_MODE: "local",
     E2E_PRESERVE_EXISTING_PASSWORD: preserveExistingPassword ? "1" : undefined,
     MAESTRO_E2E_EMAIL: env.MANUAL_QA_EMAIL ?? DEFAULT_MANUAL_QA_EMAIL,
     MAESTRO_E2E_PASSWORD: password,
   });
+  return {
+    ...config,
+    password: config.password ?? DEFAULT_MANUAL_QA_PASSWORD,
+  };
 }
 
 async function seedManualQaData(client, config) {
@@ -65,6 +70,7 @@ if (require.main === module) {
 
 module.exports = {
   DEFAULT_MANUAL_QA_EMAIL,
+  DEFAULT_MANUAL_QA_PASSWORD,
   getManualQaSeedConfig,
   resetManualQaData,
   seedManualQaData,

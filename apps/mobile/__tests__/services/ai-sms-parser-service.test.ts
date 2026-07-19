@@ -1,10 +1,51 @@
 const mockInvoke = jest.fn();
+const mockAssertExpectedCurrentUser = jest.fn<Promise<void>, [string]>();
+const mockLoggerWarn = jest.fn<
+  void,
+  [message: string, context?: Readonly<Record<string, unknown>>]
+>();
+const mockLoggerInfo = jest.fn<
+  void,
+  [message: string, context?: Readonly<Record<string, unknown>>]
+>();
+const mockLoggerError = jest.fn<
+  void,
+  [
+    message: string,
+    error?: unknown,
+    context?: Readonly<Record<string, unknown>>,
+  ]
+>();
 
 jest.mock("@/services/supabase", () => ({
   supabase: {
     functions: {
       invoke: (...args: readonly unknown[]): unknown => mockInvoke(...args),
     },
+  },
+}));
+
+jest.mock("@/services/user-data-access", () => ({
+  assertExpectedCurrentUser: (expectedUserId: string): Promise<void> =>
+    mockAssertExpectedCurrentUser(expectedUserId),
+}));
+
+jest.mock("@/utils/logger", () => ({
+  logger: {
+    error: (
+      message: string,
+      error?: unknown,
+      context?: Readonly<Record<string, unknown>>
+    ): void => mockLoggerError(message, error, context),
+    warn: (
+      message: string,
+      context?: Readonly<Record<string, unknown>>
+    ): void => mockLoggerWarn(message, context),
+    info: (
+      message: string,
+      context?: Readonly<Record<string, unknown>>
+    ): void => mockLoggerInfo(message, context),
+    debug: jest.fn(),
   },
 }));
 
@@ -63,9 +104,29 @@ function candidate(fixtureId: string): SmsCandidate {
 describe("ai-sms-parser-service parser strategy", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAssertExpectedCurrentUser.mockResolvedValue(undefined);
     process.env = { ...originalEnv };
     delete process.env.EXPO_PUBLIC_MONYVI_TEST_MODE;
     delete process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE;
+  });
+
+  it("rejects a stale expected user before invoking the Edge Function", async () => {
+    mockAssertExpectedCurrentUser.mockRejectedValueOnce(
+      new Error("AUTH_SCOPE_CHANGED")
+    );
+
+    await expect(
+      parseSmsWithAi(
+        [candidate("nbe_debit_purchase")],
+        context,
+        undefined,
+        undefined,
+        "user-a"
+      )
+    ).rejects.toThrow("AUTH_SCOPE_CHANGED");
+
+    expect(mockAssertExpectedCurrentUser).toHaveBeenCalledWith("user-a");
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   afterEach(() => {
@@ -112,7 +173,38 @@ describe("ai-sms-parser-service parser strategy", () => {
     expect(result.transactions[0]?.smsFingerprint).toBe("edge-fingerprint");
   });
 
-  it("skips AI transactions with non-finite amounts", async () => {
+  it("accepts currencies supported by the app beyond EGP and USD", async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        transactions: [
+          {
+            messageId: "nbe_debit_purchase",
+            amount: 25,
+            currency: "SAR",
+            type: "EXPENSE",
+            counterparty: "Shop",
+            date: "2026-04-08T12:00:00.000Z",
+            categorySystemName: "shopping",
+            confidenceScore: 0.9,
+            isTrusted: true,
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await parseSmsWithAi([candidate("nbe_debit_purchase")], {
+      ...context,
+      supportedCurrencies: ["EGP", "USD", "SAR"],
+    });
+
+    expect(result.transactions).toEqual([
+      expect.objectContaining({ currency: "SAR" }),
+    ]);
+    expect(result.hasError).toBe(false);
+  });
+
+  it("keeps malformed non-finite results unresolved", async () => {
     mockInvoke.mockResolvedValueOnce({
       data: {
         transactions: [
@@ -149,10 +241,17 @@ describe("ai-sms-parser-service parser strategy", () => {
     );
 
     expect(result.transactions).toEqual([]);
-    expect(result.hasError).toBe(false);
+    expect(result.hasError).toBe(true);
+    const unresolvedCandidates = result.unresolvedCandidates ?? [];
+    expect(unresolvedCandidates).toHaveLength(1);
+    expect(unresolvedCandidates[0]?.candidate.smsFingerprint).toBe(
+      "edge-fingerprint"
+    );
+    expect(unresolvedCandidates[0]?.reason).toBe("response_invalid");
+    expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
   });
 
-  it("skips AI transactions with non-positive amounts", async () => {
+  it("keeps malformed non-positive results unresolved", async () => {
     mockInvoke.mockResolvedValueOnce({
       data: {
         transactions: [
@@ -200,10 +299,17 @@ describe("ai-sms-parser-service parser strategy", () => {
     );
 
     expect(result.transactions).toEqual([]);
-    expect(result.hasError).toBe(false);
+    expect(result.hasError).toBe(true);
+    const unresolvedCandidates = result.unresolvedCandidates ?? [];
+    expect(unresolvedCandidates).toHaveLength(1);
+    expect(unresolvedCandidates[0]?.candidate.smsFingerprint).toBe(
+      "edge-fingerprint"
+    );
+    expect(unresolvedCandidates[0]?.reason).toBe("response_invalid");
+    expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
   });
 
-  it("skips AI transactions with amounts exceeding the maximum", async () => {
+  it("keeps over-limit AI results unresolved", async () => {
     mockInvoke.mockResolvedValueOnce({
       data: {
         transactions: [
@@ -240,7 +346,174 @@ describe("ai-sms-parser-service parser strategy", () => {
     );
 
     expect(result.transactions).toEqual([]);
+    expect(result.hasError).toBe(true);
+    const unresolvedCandidates = result.unresolvedCandidates ?? [];
+    expect(unresolvedCandidates).toHaveLength(1);
+    expect(unresolvedCandidates[0]?.candidate.smsFingerprint).toBe(
+      "edge-fingerprint"
+    );
+    expect(unresolvedCandidates[0]?.reason).toBe("response_invalid");
+    expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
+  });
+
+  it("keeps the current candidate unresolved for a malformed foreign message identity", async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        transactions: [
+          {
+            messageId: "sms-from-another-chunk",
+            amount: Number.NaN,
+            currency: "EGP",
+            type: "EXPENSE",
+            counterparty: "Shop",
+            date: "2026-04-08T12:00:00.000Z",
+            categorySystemName: "shopping",
+            confidenceScore: 0.9,
+            isTrusted: true,
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await parseSmsWithAi(
+      [
+        {
+          message: {
+            id: "sms-current-chunk",
+            address: "NBE",
+            body: "Purchase EGP 25 at Shop",
+            date: 1775658180000,
+            read: false,
+          },
+          smsFingerprint: "current-chunk-fingerprint",
+        },
+      ],
+      context
+    );
+
+    expect(result.transactions).toEqual([]);
+    const unresolvedCandidates = result.unresolvedCandidates ?? [];
+    expect(unresolvedCandidates).toHaveLength(1);
+    expect(unresolvedCandidates[0]?.candidate.smsFingerprint).toBe(
+      "current-chunk-fingerprint"
+    );
+    expect(unresolvedCandidates[0]?.reason).toBe("response_invalid");
+    expect(unresolvedCandidates[0]?.isRetryable).toBe(true);
+  });
+
+  it("ignores an extra foreign AI row when every input candidate resolved", async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        transactions: [
+          {
+            messageId: "nbe_debit_purchase",
+            amount: 25,
+            currency: "EGP",
+            type: "EXPENSE",
+            counterparty: "Shop",
+            date: "2026-04-08T12:00:00.000Z",
+            categorySystemName: "shopping",
+            confidenceScore: 0.9,
+            isTrusted: true,
+          },
+          {
+            messageId: "hallucinated-message-id",
+            amount: 99,
+            currency: "EGP",
+            type: "EXPENSE",
+            counterparty: "Unknown",
+            date: "2026-04-08T12:00:00.000Z",
+            categorySystemName: "shopping",
+            confidenceScore: 0.5,
+            isTrusted: true,
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await parseSmsWithAi(
+      [candidate("nbe_debit_purchase")],
+      context
+    );
+
+    expect(result.transactions).toHaveLength(1);
+    expect(result.transactions[0]?.counterparty).toBe("Shop");
     expect(result.hasError).toBe(false);
+    expect(result.unresolvedCandidates).toEqual([]);
+  });
+
+  it("ignores a malformed extra AI row when every input candidate resolved", async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        transactions: [
+          {
+            messageId: "nbe_debit_purchase",
+            amount: 25,
+            currency: "EGP",
+            type: "EXPENSE",
+            counterparty: "Shop",
+            date: "2026-04-08T12:00:00.000Z",
+            categorySystemName: "shopping",
+            confidenceScore: 0.9,
+            isTrusted: true,
+          },
+          { amount: "not-a-number" },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await parseSmsWithAi(
+      [candidate("nbe_debit_purchase")],
+      context
+    );
+
+    expect(result.transactions).toHaveLength(1);
+    expect(result.hasError).toBe(false);
+    expect(result.unresolvedCandidates).toEqual([]);
+  });
+
+  it("keeps an SMS retryable when one of its correlated AI rows is malformed", async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        transactions: [
+          {
+            messageId: "nbe_debit_purchase",
+            amount: 25,
+            currency: "EGP",
+            type: "EXPENSE",
+            counterparty: "Shop",
+            date: "2026-04-08T12:00:00.000Z",
+            categorySystemName: "shopping",
+            confidenceScore: 0.9,
+            isTrusted: true,
+          },
+          {
+            messageId: "nbe_debit_purchase",
+            amount: "not-a-number",
+            currency: "EGP",
+            type: "EXPENSE",
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await parseSmsWithAi(
+      [candidate("nbe_debit_purchase")],
+      context
+    );
+
+    expect(result.transactions).toHaveLength(1);
+    expect(result.hasError).toBe(true);
+    expect(result.unresolvedCandidates).toEqual([
+      expect.objectContaining({
+        reason: "response_invalid",
+        isRetryable: true,
+      }),
+    ]);
   });
 
   it("uses the fixture parser only when E2E fixture mode is explicit", async () => {
@@ -266,24 +539,17 @@ describe("ai-sms-parser-service parser strategy", () => {
     });
 
     expect(mockInvoke).not.toHaveBeenCalled();
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       transactions: [],
       hasError: true,
       isRetryable: true,
+      unresolvedCandidates: [
+        expect.objectContaining({
+          reason: "unexpected_failure",
+          isRetryable: true,
+        }),
+      ],
     });
-  });
-
-  it("fails closed when fixture mode is requested outside E2E mode", async () => {
-    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "fixture";
-
-    mockInvoke.mockResolvedValueOnce({
-      data: { transactions: [] },
-      error: null,
-    });
-
-    await parseSmsWithAi([candidate("nbe_debit_purchase")], context);
-
-    expect(mockInvoke).toHaveBeenCalled();
   });
 
   it("does not call the Edge Function when parsing is aborted", async () => {
@@ -322,6 +588,64 @@ describe("ai-sms-parser-service parser strategy", () => {
     );
   });
 
+  it("cancels an inter-chunk delay without waiting for its timer", async () => {
+    jest.useFakeTimers();
+    try {
+      const candidates: SmsCandidate[] = Array.from(
+        { length: 51 },
+        (_, index) => ({
+          message: {
+            id: `sms-delay-${index}`,
+            address: "NBE",
+            body: `Purchase message ${index}`,
+            date: 1775658180000 + index,
+            read: false,
+          },
+          smsFingerprint: `delay-fingerprint-${index}`,
+        })
+      );
+      const abortController = new AbortController();
+      mockInvoke.mockResolvedValue({
+        data: { transactions: [] },
+        error: null,
+      });
+      const parsePromise = parseSmsWithAi(
+        candidates,
+        context,
+        undefined,
+        abortController.signal
+      );
+      for (
+        let attempt = 0;
+        attempt < 10 && jest.getTimerCount() === 0;
+        attempt++
+      ) {
+        await Promise.resolve();
+      }
+      expect(jest.getTimerCount()).toBe(1);
+
+      let outcome = "pending";
+      void parsePromise.then(
+        () => {
+          outcome = "resolved";
+        },
+        (error: unknown) => {
+          outcome = error instanceof Error ? error.name : "unknown";
+        }
+      );
+      abortController.abort();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(outcome).toBe("AbortError");
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
+  });
+
   it("returns a distinct consent-required error when the Edge Function requires AI consent", async () => {
     const error = Object.assign(new Error("FunctionsHttpError"), {
       context: new Response("AI processing consent required", { status: 403 }),
@@ -336,6 +660,251 @@ describe("ai-sms-parser-service parser strategy", () => {
       throw new Error("Expected consent-required error");
     } catch (error: unknown) {
       expect(isAiConsentRequiredError(error)).toBe(true);
+    }
+  });
+
+  it("preserves successful chunks and correlates only failed chunk candidates", async () => {
+    jest.useFakeTimers();
+    const candidates: SmsCandidate[] = Array.from(
+      { length: 60 },
+      (_, index) => ({
+        message: {
+          id: `sms-${index}`,
+          address: "NBE",
+          body: `Purchase message ${index}`,
+          date: 1775658180000 + index,
+          read: false,
+        },
+        smsFingerprint: `fingerprint-${index}`,
+      })
+    );
+    mockInvoke
+      .mockResolvedValueOnce({
+        data: {
+          transactions: [
+            {
+              messageId: "sms-0",
+              amount: 25,
+              currency: "EGP",
+              type: "EXPENSE",
+              counterparty: "Shop",
+              date: "2026-04-08T12:00:00.000Z",
+              categorySystemName: "shopping",
+              confidenceScore: 0.9,
+              isTrusted: true,
+            },
+          ],
+        },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: null,
+        error: Object.assign(new Error("FunctionsHttpError"), {
+          context: new Response("temporary", { status: 500 }),
+        }),
+      });
+
+    const parsePromise = parseSmsWithAi(candidates, context);
+    await Promise.resolve();
+    await jest.advanceTimersByTimeAsync(2000);
+    const result = await parsePromise;
+
+    expect(result.transactions).toHaveLength(1);
+    expect(result.unresolvedCandidates).toEqual(
+      candidates.slice(50).map((failedCandidate) => ({
+        candidate: failedCandidate,
+        reason: "chunk_failed",
+        isRetryable: true,
+      }))
+    );
+    const loggedError = mockLoggerError.mock.calls.find(
+      ([message]) => message === "[ai-sms-parser] parse-sms chunk failed"
+    )?.[1] as { readonly context?: unknown } | undefined;
+    expect(loggedError?.context).toBeUndefined();
+    jest.useRealTimers();
+  });
+
+  it("preserves earlier chunk results when a later AI entry has an unsupported enum", async () => {
+    jest.useFakeTimers();
+    try {
+      const candidates: SmsCandidate[] = Array.from(
+        { length: 51 },
+        (_, index) => ({
+          message: {
+            id: `sms-enum-${index}`,
+            address: "NBE",
+            body: `Purchase message ${index}`,
+            date: 1775658180000 + index,
+            read: false,
+          },
+          smsFingerprint: `enum-fingerprint-${index}`,
+        })
+      );
+      mockInvoke
+        .mockResolvedValueOnce({
+          data: {
+            transactions: [
+              {
+                messageId: "sms-enum-0",
+                amount: 25,
+                currency: "EGP",
+                type: "EXPENSE",
+                counterparty: "Shop",
+                date: "2026-04-08T12:00:00.000Z",
+                categorySystemName: "shopping",
+                confidenceScore: 0.9,
+                isTrusted: true,
+              },
+            ],
+          },
+          error: null,
+        })
+        .mockResolvedValueOnce({
+          data: {
+            transactions: [
+              {
+                messageId: "sms-enum-50",
+                amount: 40,
+                currency: "BTC",
+                type: "PURCHASE",
+                counterparty: "Shop",
+                date: "2026-04-08T12:00:00.000Z",
+                categorySystemName: "shopping",
+                confidenceScore: 0.9,
+                isTrusted: true,
+              },
+            ],
+          },
+          error: null,
+        });
+
+      const parsePromise = parseSmsWithAi(candidates, context);
+      await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(2000);
+      const result = await parsePromise;
+
+      expect(result.transactions).toHaveLength(1);
+      expect(result.transactions[0]?.smsFingerprint).toBe("enum-fingerprint-0");
+      expect(result.unresolvedCandidates).toEqual([
+        {
+          candidate: candidates[50],
+          reason: "response_invalid",
+          isRetryable: true,
+        },
+      ]);
+    } finally {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
+  });
+
+  it("preserves usable rows instead of retry-splitting a partially malformed chunk", async () => {
+    const candidates: SmsCandidate[] = Array.from(
+      { length: 11 },
+      (_, index) => ({
+        message: {
+          id: `sms-partial-${index}`,
+          address: "NBE",
+          body: `Purchase message ${index}`,
+          date: 1775658180000 + index,
+          read: false,
+        },
+        smsFingerprint: `partial-fingerprint-${index}`,
+      })
+    );
+    const validTransactions = candidates.slice(0, 10).map((value, index) => ({
+      messageId: value.message.id,
+      amount: 25 + index,
+      currency: "EGP",
+      type: "EXPENSE",
+      counterparty: `Shop ${index}`,
+      date: "2026-04-08T12:00:00.000Z",
+      categorySystemName: "shopping",
+      confidenceScore: 0.9,
+      isTrusted: true,
+    }));
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        transactions: [
+          ...validTransactions,
+          {
+            messageId: "sms-partial-10",
+            currency: "EGP",
+            type: "EXPENSE",
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await parseSmsWithAi(candidates, context);
+
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(result.transactions).toHaveLength(10);
+    expect(result.unresolvedCandidates).toEqual([
+      {
+        candidate: candidates[10],
+        reason: "response_invalid",
+        isRetryable: true,
+      },
+    ]);
+  });
+
+  it("preserves earlier chunks when a later Edge Function invocation throws", async () => {
+    jest.useFakeTimers();
+    try {
+      const candidates: SmsCandidate[] = Array.from(
+        { length: 51 },
+        (_, index) => ({
+          message: {
+            id: `sms-thrown-${index}`,
+            address: "NBE",
+            body: `Purchase message ${index}`,
+            date: 1775658180000 + index,
+            read: false,
+          },
+          smsFingerprint: `thrown-fingerprint-${index}`,
+        })
+      );
+      mockInvoke
+        .mockResolvedValueOnce({
+          data: {
+            transactions: [
+              {
+                messageId: "sms-thrown-0",
+                amount: 25,
+                currency: "EGP",
+                type: "EXPENSE",
+                counterparty: "Shop",
+                date: "2026-04-08T12:00:00.000Z",
+                categorySystemName: "shopping",
+                confidenceScore: 0.9,
+                isTrusted: true,
+              },
+            ],
+          },
+          error: null,
+        })
+        .mockRejectedValueOnce(new Error("network failure"));
+
+      const parsePromise = parseSmsWithAi(candidates, context);
+      await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(2000);
+      const result = await parsePromise;
+
+      expect(result.transactions).toEqual([
+        expect.objectContaining({ smsFingerprint: "thrown-fingerprint-0" }),
+      ]);
+      expect(result.unresolvedCandidates).toEqual([
+        {
+          candidate: candidates[50],
+          reason: "unexpected_failure",
+          isRetryable: true,
+        },
+      ]);
+    } finally {
+      jest.clearAllTimers();
+      jest.useRealTimers();
     }
   });
 });

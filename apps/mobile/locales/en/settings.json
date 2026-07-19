@@ -62,5 +62,8 @@
   "ai_disable_confirm_message": "Voice entry, SMS import, and Live SMS detection won't be available until you turn AI transaction tools back on. If Live SMS detection is on, it will be turned off too.",
   "ai_disable_confirm_keep_on": "Keep on",
   "ai_disable_confirm_turn_off": "Turn off",
-  "ai_privacy_details": "AI privacy details"
+  "ai_privacy_details": "AI privacy details",
+  "development_tools": "Development tools",
+  "qa_sms_pattern_intake": "QA SMS pattern intake",
+  "qa_sms_pattern_intake_description": "Review and sanitize verified SMS samples"
 }

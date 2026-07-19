@@ -5,7 +5,10 @@ import {
   isE2eTestMode,
   shouldUseFixtureSmsInbox,
   shouldUseFixtureSmsParser,
+  shouldUseHybridSmsParser,
   shouldUseLocalSmsParser,
+  shouldBlockEdgeSmsParserInE2e,
+  shouldBlockUnsafeSmsParserConfiguration,
 } from "@/config/e2e-test-config";
 
 const originalEnv = process.env;
@@ -53,12 +56,45 @@ describe("e2e-test-config", () => {
     expect(shouldUseLocalSmsParser()).toBe(true);
   });
 
+  it("uses the fixture AI behind real hybrid routing only in explicit E2E mode", () => {
+    process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
+    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "hybrid-fixture";
+
+    expect(getAiSmsParserMode()).toBe("hybrid-fixture");
+    expect(shouldUseFixtureSmsInbox()).toBe(true);
+    expect(shouldUseFixtureSmsParser()).toBe(true);
+    expect(shouldUseHybridSmsParser()).toBe(true);
+    expect(shouldUseLocalSmsParser()).toBe(false);
+    expect(shouldBlockEdgeSmsParserInE2e()).toBe(false);
+  });
+
+  it("blocks the real Edge SMS parser in E2E mode", () => {
+    process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
+
+    expect(getAiSmsParserMode()).toBe("edge");
+    expect(shouldBlockEdgeSmsParserInE2e()).toBe(true);
+    expect(shouldBlockUnsafeSmsParserConfiguration()).toBe(true);
+    expect(shouldUseHybridSmsParser()).toBe(false);
+  });
+
+  it("fails closed when hybrid fixture mode is requested outside E2E", () => {
+    process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "off";
+    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "hybrid-fixture";
+
+    expect(shouldUseFixtureSmsInbox()).toBe(false);
+    expect(shouldUseFixtureSmsParser()).toBe(false);
+    expect(shouldUseHybridSmsParser()).toBe(false);
+    expect(shouldBlockUnsafeSmsParserConfiguration()).toBe(true);
+  });
+
   it("fails closed when fixture parser is requested outside E2E mode", () => {
     process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "off";
     process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "fixture";
 
     expect(shouldUseFixtureSmsInbox()).toBe(false);
     expect(shouldUseFixtureSmsParser()).toBe(false);
+    expect(shouldBlockUnsafeSmsParserConfiguration()).toBe(true);
+    expect(shouldUseHybridSmsParser()).toBe(false);
   });
 
   it("allows fixture inbox in normal dev only with local parser mode", () => {
@@ -119,5 +155,27 @@ describe("e2e-test-config", () => {
 
     expect(getAiSmsParserMode()).toBe("edge");
     expect(shouldUseLocalSmsParser()).toBe(false);
+  });
+
+  it("blocks a production build compiled with local parser mode", () => {
+    process.env = {
+      ...process.env,
+      NODE_ENV: "production",
+      EXPO_PUBLIC_AI_SMS_PARSER_MODE: "local",
+    };
+
+    jest.isolateModules(() => {
+      // Re-evaluate the module so its Expo public env constants model a production build.
+      const productionConfig = jest.requireActual<
+        typeof import("@/config/e2e-test-config")
+      >("@/config/e2e-test-config");
+
+      expect(productionConfig.getAiSmsParserMode()).toBe("local");
+      expect(productionConfig.shouldUseLocalSmsParser()).toBe(false);
+      expect(productionConfig.shouldBlockUnsafeSmsParserConfiguration()).toBe(
+        true
+      );
+      expect(productionConfig.shouldUseHybridSmsParser()).toBe(false);
+    });
   });
 });

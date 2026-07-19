@@ -23,9 +23,16 @@ while read local_ref local_oid remote_ref remote_oid; do
     fi
   fi
 
+  echo "Running QA SMS privacy check for pushed commits..."
+  if ! QA_SMS_PRIVACY_BASE_SHA="$remote_oid" QA_SMS_PRIVACY_HEAD_SHA="$local_oid" npm run qa-sms:privacy-check; then
+    echo ""
+    echo "Push aborted: QA SMS privacy check failed."
+    echo ""
+    exit 1
+  fi
+
   if git diff --name-only "$remote_oid" "$local_oid" | grep -qE "^(supabase/migrations/|packages/db/src/(schema|migrations)\.ts|scripts/(transform-schema|sql-to-watermelon-migration)\.js)"; then
     SYNC_NEEDED=true
-    break
   fi
 done
 

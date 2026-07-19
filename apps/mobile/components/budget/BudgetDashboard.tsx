@@ -30,6 +30,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useBudgets } from "@/hooks/useBudgets";
 import { pauseExpiredCustomBudgets } from "@/services/budget-service";
@@ -168,7 +169,7 @@ export function BudgetDashboard(): React.JSX.Element {
           contentContainerStyle={{
             paddingBottom: insets.bottom + 80,
           }}
-          removeClippedSubviews
+          {...ANDROID_SAFE_LIST_PROPS}
           maxToRenderPerBatch={10}
           windowSize={5}
           ListHeaderComponent={

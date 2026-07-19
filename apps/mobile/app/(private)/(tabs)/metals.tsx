@@ -33,6 +33,7 @@ import {
 } from "@/components/metals";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { useMarketRates } from "@/hooks/useMarketRates";
 import { useMetalHoldings, type MetalHolding } from "@/hooks/useMetalHoldings";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
@@ -289,7 +290,7 @@ export default function MyMetalsScreen(): React.JSX.Element {
           contentContainerStyle={FLAT_LIST_CONTENT_STYLE}
           showsVerticalScrollIndicator={false}
           // Performance optimizations
-          removeClippedSubviews
+          {...ANDROID_SAFE_LIST_PROPS}
           maxToRenderPerBatch={10}
           windowSize={5}
           initialNumToRender={8}

@@ -269,16 +269,16 @@ on the same network can reach it. It does not expose Metro to the public
 internet. The wireless local Supabase script separately uses ngrok for the
 Supabase endpoint.
 
-By default, the script preserves the existing manual QA password while
-refreshing the seeded local data. Sign in with:
+By default, the script preserves the password when the manual QA user already
+exists. If the local Auth user is missing, it creates the user with the
+local-only default password. Sign in with:
 
 ```text
 Email: manual-qa@monyvi.test
-Password: the current manual QA password
+Password: 123456 (unless you previously set a custom password)
 ```
 
-To create the manual QA user for the first time, or to update its password, pass
-a password once:
+To create or update the manual QA user with a custom password, pass it once:
 
 ```powershell
 npm run mobile:local-supabase:wireless-device -- --password "LocalOnlyPassword123!"

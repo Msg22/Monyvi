@@ -29,6 +29,11 @@ function enableLocalParserFixtureSmsInbox(): void {
   process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "local";
 }
 
+function enableHybridFixtureSmsInbox(): void {
+  process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "e2e";
+  process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "hybrid-fixture";
+}
+
 function enableDevLocalParserFixtureSmsInbox(): void {
   process.env.EXPO_PUBLIC_MONYVI_TEST_MODE = "off";
   process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "local";
@@ -132,6 +137,20 @@ describe("sms-reader-service", (): void => {
       messages.every((message) => message.id.startsWith("e2e-local-"))
     ).toBe(true);
     expect(messages[0]?.id).not.toBe("e2e-pr622_batch_duplicate_shop-1");
+  });
+
+  it("uses a mixed trusted and AI fallback inbox in hybrid fixture mode", async (): Promise<void> => {
+    enableHybridFixtureSmsInbox();
+    freezeFixtureInboxClock();
+
+    const messages = await readSmsInbox();
+
+    expect(mockNativeSmsList).not.toHaveBeenCalled();
+    expect(messages.map((message) => message.id)).toEqual([
+      "e2e-hybrid-hybrid_ai_purchase-0",
+      "e2e-hybrid-hybrid_retryable_once-1",
+      "e2e-hybrid-hybrid_trusted_qnb_purchase-2",
+    ]);
   });
 
   it("uses local parser fixture inbox in normal dev mode when explicitly requested", async (): Promise<void> => {

@@ -452,7 +452,7 @@ async function ensureSeedUser(client, config, fixture = BASE_SEED_FIXTURE) {
 
   if (!config.password) {
     throw new Error(
-      `Cannot create ${config.email} without a password. Set MAESTRO_E2E_PASSWORD once, then rerun with E2E_PRESERVE_EXISTING_PASSWORD=1 to preserve the current password.`
+      `Cannot create ${config.email} without a password. Provide a password for this seed workflow before creating the user; password-preservation mode only works for an existing user.`
     );
   }
 

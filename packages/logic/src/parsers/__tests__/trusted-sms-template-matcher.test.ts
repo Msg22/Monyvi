@@ -1,0 +1,399 @@
+import {
+  createTrustedSmsCatalogIntegrityDigest,
+  createTrustedSmsPatternIntegrityDigest,
+} from "../trusted-sms-pattern-catalog";
+import { matchTrustedSmsTemplate } from "../trusted-sms-template-matcher";
+import type {
+  TrustedSmsPattern,
+  TrustedSmsTemplateResult,
+} from "../trusted-sms-pattern-types";
+import { QNB_EGYPT_TRUSTED_SMS_CATALOG } from "../trusted-sms-patterns";
+import {
+  buildTrustedCatalog,
+  buildTrustedPattern,
+  renderTrustedPattern,
+} from "./fixtures/trusted-sms/trusted-sms-builders";
+
+function findPattern(patternId: string): TrustedSmsPattern {
+  const pattern = QNB_EGYPT_TRUSTED_SMS_CATALOG.patterns.find(
+    ({ patternId: candidateId }) => candidateId === patternId
+  );
+  if (pattern === undefined)
+    throw new Error(`missing_test_pattern:${patternId}`);
+  return pattern;
+}
+
+function match(
+  pattern: TrustedSmsPattern,
+  body: string = renderTrustedPattern(pattern),
+  supportedCurrencies: readonly string[] = ["EGP", "USD"],
+  receivedAtMs: number = new Date("2026-07-16T12:00:00Z").getTime()
+): TrustedSmsTemplateResult {
+  return matchTrustedSmsTemplate({
+    candidate: {
+      sender: pattern.verifiedSenderAliases[0] ?? "QNB EGYPT",
+      body,
+      receivedAtMs,
+    },
+    patterns: QNB_EGYPT_TRUSTED_SMS_CATALOG.patterns,
+    supportedCurrencies,
+  });
+}
+
+describe("trusted SMS exact template matcher", () => {
+  it("matches an exact reviewed QNB transaction template", () => {
+    const pattern = findPattern("qnb-egypt-card-purchase-egp-v1");
+    const result = match(pattern);
+
+    expect(result.status).toBe("matched");
+    if (result.status !== "matched") return;
+    expect(result.pattern.patternId).toBe(pattern.patternId);
+    expect(result.extractedValues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          semanticRole: "transaction_amount",
+          value: "125.50",
+        }),
+        expect.objectContaining({
+          semanticRole: "merchant_name",
+          value: "TEST MERCHANT",
+        }),
+      ])
+    );
+  });
+
+  it.each([
+    [
+      "qnb-egypt-card-purchase-egp-v1",
+      "Your Debit Card **2132 had a Successful transaction of EGP 490.00 @GEIDEAE*BASHAYER LIBAYE,your available bal.EGP10853.15 for lost/stolen card call 19700",
+    ],
+    [
+      "qnb-egypt-card-purchase-usd-v1",
+      "Your Debit Card **2132 had a Successful transaction of USD 12.50 @TEST MERCHANT,your available bal.USD108.75 for lost/stolen card call 19700",
+    ],
+    [
+      "qnb-egypt-atm-card-egp-v1",
+      "Your Debit Card **2132 had a Successful transaction of EGP 4000.00 @ATM-Zayed Dunes-Giza-F84,your available bal.EGP18408.31 for lost/stolen card call 19700",
+    ],
+    [
+      "qnb-egypt-atm-account-egp-v1",
+      "Dear Client, Amount of EGP250000 was debited from your account for cash withdrawal based on your request. For more information, please call 19700",
+    ],
+    [
+      "qnb-egypt-outgoing-online-banking-transfer-egp-v1",
+      "You have requested a transfer of : 125.50 EGP ,Please follow up on the transfer status through Online Banking",
+    ],
+  ])(
+    "matches the real QNB compact placeholder shape for %s",
+    (patternId, body) => {
+      const result = match(findPattern(patternId), body);
+
+      expect(result.status).toBe("matched");
+      if (result.status !== "matched") return;
+      expect(result.pattern.patternId).toBe(patternId);
+    }
+  );
+
+  it("does not broaden the approved online-banking transfer wording", () => {
+    const pattern = findPattern(
+      "qnb-egypt-outgoing-online-banking-transfer-egp-v1"
+    );
+    const body = renderTrustedPattern(pattern).replace(
+      "follow up on the transfer status",
+      "complete the transfer"
+    );
+
+    expect(match(pattern, body).status).toBe("unresolved");
+  });
+
+  it("matches an approved ATM terminal as an ATM withdrawal only", () => {
+    const pattern = findPattern("qnb-egypt-atm-card-egp-v1");
+    const result = match(
+      pattern,
+      renderTrustedPattern(pattern, {
+        atm_terminal: "ATM-Zayed Dunes-Giza-F84",
+      })
+    );
+
+    expect(result.status).toBe("matched");
+    if (result.status !== "matched") return;
+    expect(result.pattern.messageFamily).toBe("atm_withdrawal");
+    expect(result.extractedValues).toContainEqual({
+      token: "ATM_TERMINAL",
+      semanticRole: "atm_terminal",
+      value: "ATM-Zayed Dunes-Giza-F84",
+    });
+  });
+
+  it("does not classify an ATM terminal as a purchase merchant", () => {
+    const pattern = findPattern("qnb-egypt-card-purchase-egp-v1");
+    const result = match(
+      pattern,
+      renderTrustedPattern(pattern, { merchant_name: "NBE ATM296" })
+    );
+
+    expect(result.status).toBe("matched");
+    if (result.status !== "matched") return;
+    expect(result.pattern.messageFamily).toBe("atm_withdrawal");
+  });
+
+  it("rejects an exact reviewed OTP template without a transaction", () => {
+    const pattern = findPattern("qnb-egypt-otp-card-purchase-v1");
+
+    expect(match(pattern)).toEqual({
+      status: "rejected",
+      patternId: pattern.patternId,
+      reason: "otp",
+    });
+  });
+
+  it("rejects an exact reviewed promotion with valid privacy placeholders", () => {
+    const pattern = findPattern("qnb-alahli-promotional-certificate-ar-v1");
+    const result = matchTrustedSmsTemplate({
+      candidate: {
+        sender: pattern.verifiedSenderAliases[0] ?? "QNB ALAHLI",
+        body: renderTrustedPattern(pattern, {
+          public_url: "https://example.com/certificate",
+        }),
+        receivedAtMs: 1_750_000_000_000,
+      },
+      patterns: QNB_EGYPT_TRUSTED_SMS_CATALOG.patterns,
+      supportedCurrencies: ["EGP", "USD"],
+    });
+
+    expect(result).toEqual({
+      status: "rejected",
+      patternId: pattern.patternId,
+      reason: "promotional",
+    });
+  });
+
+  it("leaves a rejection template with a malformed public URL unresolved", () => {
+    const pattern = findPattern("qnb-alahli-promotional-certificate-ar-v1");
+
+    expect(
+      match(
+        pattern,
+        renderTrustedPattern(pattern, { public_url: "not-a-public-url" })
+      )
+    ).toEqual({
+      status: "unresolved",
+      reason: "malformed_value",
+      patternIds: [pattern.patternId],
+    });
+  });
+
+  it("normalizes sender casing and surrounding whitespace only", () => {
+    const pattern = findPattern("qnb-egypt-card-purchase-egp-v1");
+    const result = matchTrustedSmsTemplate({
+      candidate: {
+        sender: "  qnb egypt  ",
+        body: renderTrustedPattern(pattern),
+        receivedAtMs: Date.now(),
+      },
+      patterns: QNB_EGYPT_TRUSTED_SMS_CATALOG.patterns,
+      supportedCurrencies: ["EGP", "USD"],
+    });
+
+    expect(result.status).toBe("matched");
+  });
+
+  it("normalizes line breaks and repeated body whitespace", () => {
+    const pattern = findPattern("qnb-egypt-outgoing-ipn-egp-v1");
+    const body = renderTrustedPattern(pattern).replaceAll(" ", "  \r\n");
+
+    expect(match(pattern, body).status).toBe("matched");
+  });
+
+  it.each([
+    ["letter case", (body: string) => body.replace("Your", "your")],
+    ["punctuation", (body: string) => body.replace(",your", " your")],
+    ["fixed wording", (body: string) => body.replace("Successful", "Approved")],
+  ])("does not broaden exact matching for %s", (_label, mutate) => {
+    const pattern = findPattern("qnb-egypt-card-purchase-egp-v1");
+
+    expect(match(pattern, mutate(renderTrustedPattern(pattern))).status).toBe(
+      "unresolved"
+    );
+  });
+
+  it.each([
+    ["merchant", (body: string) => body.replace("@GEIDEAE", "@ GEIDEAE")],
+    [
+      "balance",
+      (body: string) => body.replace("bal.EGP10853.15", "bal.EGP 10853.15"),
+    ],
+  ])(
+    "does not absorb unapproved separator whitespace into the %s placeholder",
+    (_label, mutate) => {
+      const pattern = findPattern("qnb-egypt-card-purchase-egp-v1");
+      const body =
+        "Your Debit Card **2132 had a Successful transaction of EGP 490.00 @GEIDEAE*BASHAYER LIBAYE,your available bal.EGP10853.15 for lost/stolen card call 19700";
+
+      expect(match(pattern, mutate(body)).status).toBe("unresolved");
+    }
+  );
+
+  it("leaves malformed transaction values unresolved", () => {
+    const pattern = findPattern("qnb-egypt-card-purchase-egp-v1");
+    const body = renderTrustedPattern(pattern, {
+      transaction_amount: "not-an-amount",
+    });
+
+    expect(match(pattern, body)).toEqual({
+      status: "unresolved",
+      reason: "malformed_value",
+      patternIds: [pattern.patternId],
+    });
+  });
+
+  it.each([
+    ["calendar date", { transaction_date: "31/02" }],
+    ["12-hour time", { transaction_time: "13:70 PM" }],
+  ])("leaves an invalid %s unresolved", (_label, roleValues) => {
+    const pattern = findPattern("qnb-egypt-outgoing-ipn-egp-v1");
+
+    expect(match(pattern, renderTrustedPattern(pattern, roleValues))).toEqual({
+      status: "unresolved",
+      reason: "malformed_value",
+      patternIds: [pattern.patternId],
+    });
+  });
+
+  it("rejects a yearless leap day received during a non-leap year", () => {
+    const pattern = findPattern("qnb-egypt-outgoing-ipn-egp-v1");
+
+    expect(
+      match(
+        pattern,
+        renderTrustedPattern(pattern, { transaction_date: "29/02" }),
+        ["EGP", "USD"],
+        new Date("2025-03-01T12:00:00Z").getTime()
+      )
+    ).toEqual({
+      status: "unresolved",
+      reason: "malformed_value",
+      patternIds: [pattern.patternId],
+    });
+  });
+
+  it("accepts a yearless leap day received during a leap year", () => {
+    const pattern = findPattern("qnb-egypt-outgoing-ipn-egp-v1");
+
+    expect(
+      match(
+        pattern,
+        renderTrustedPattern(pattern, { transaction_date: "29/02" }),
+        ["EGP", "USD"],
+        new Date("2024-03-01T12:00:00Z").getTime()
+      ).status
+    ).toBe("matched");
+  });
+
+  it("leaves an unsupported currency unresolved", () => {
+    const pattern = findPattern("qnb-egypt-card-purchase-usd-v1");
+
+    expect(
+      match(
+        pattern,
+        renderTrustedPattern(pattern, {
+          transaction_currency: "USD",
+        }),
+        ["EGP"]
+      )
+    ).toEqual({
+      status: "unresolved",
+      reason: "unsupported_currency",
+      patternIds: [pattern.patternId],
+    });
+  });
+
+  it("does not match disabled patterns", () => {
+    const base = buildTrustedPattern();
+    const disabled = {
+      ...base,
+      enabled: false,
+      integrityDigest: "",
+    };
+    const signedPattern = {
+      ...disabled,
+      integrityDigest: createTrustedSmsPatternIntegrityDigest(disabled),
+    };
+    const catalog = buildTrustedCatalog([signedPattern]);
+    const signedCatalog = {
+      ...catalog,
+      integrityDigest: createTrustedSmsCatalogIntegrityDigest(catalog),
+    };
+
+    expect(
+      matchTrustedSmsTemplate({
+        candidate: {
+          sender: "QNB EGYPT",
+          body: renderTrustedPattern(signedPattern),
+          receivedAtMs: Date.now(),
+        },
+        patterns: signedCatalog.patterns.filter(({ enabled }) => enabled),
+        supportedCurrencies: ["EGP"],
+      })
+    ).toEqual({ status: "unresolved", reason: "no_match", patternIds: [] });
+  });
+
+  it("can identify an exact disabled rejection for fallback routing", () => {
+    const source = findPattern("qnb-egypt-otp-card-purchase-v1");
+    const disabled = {
+      ...source,
+      enabled: false,
+      integrityDigest: "",
+    };
+    const signedPattern = {
+      ...disabled,
+      integrityDigest: createTrustedSmsPatternIntegrityDigest(disabled),
+    };
+
+    expect(
+      matchTrustedSmsTemplate({
+        candidate: {
+          sender: source.verifiedSenderAliases[0] ?? "QNB EGYPT",
+          body: renderTrustedPattern(source),
+          receivedAtMs: Date.now(),
+        },
+        patterns: [signedPattern],
+        supportedCurrencies: ["EGP", "USD"],
+        includeDisabledPatterns: true,
+      })
+    ).toEqual({
+      status: "rejected",
+      patternId: source.patternId,
+      reason: "otp",
+    });
+  });
+
+  it("fails closed when more than one pattern resolves", () => {
+    const first = buildTrustedPattern();
+    const secondBase = {
+      ...first,
+      patternId: "qnb-egypt-card-purchase-duplicate-v1",
+      promotionId: "promotion-qnb-egypt-card-purchase-duplicate-v1",
+      integrityDigest: "",
+    };
+    const second = {
+      ...secondBase,
+      integrityDigest: createTrustedSmsPatternIntegrityDigest(secondBase),
+    };
+
+    expect(
+      matchTrustedSmsTemplate({
+        candidate: {
+          sender: "QNB EGYPT",
+          body: renderTrustedPattern(first),
+          receivedAtMs: Date.now(),
+        },
+        patterns: [second, first],
+        supportedCurrencies: ["EGP"],
+      })
+    ).toEqual({
+      status: "ambiguous",
+      patternIds: [first.patternId, second.patternId].sort(),
+    });
+  });
+});

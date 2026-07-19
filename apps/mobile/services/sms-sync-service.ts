@@ -18,6 +18,9 @@
 import { database, Transaction, Transfer } from "@monyvi/db";
 import {
   computeSmsFingerprint,
+  getParsedSmsTransactionKey,
+  isExcludedBeforeSmsParsing,
+  isLikelyCorruptedSmsText,
   isKnownFinancialSender,
   type ParsedSmsTransaction,
   type SmsMessage,
@@ -29,8 +32,18 @@ import {
   type ParseSmsContext,
   type SmsCandidate,
 } from "./ai-sms-parser-service";
-import { parseSmsWithOrchestrator } from "./sms-parser-orchestrator";
-import { getCurrentUserDataScope } from "./user-data-access";
+import {
+  getTrustedPrefilterDisposition,
+  parseSmsWithOrchestrator,
+  toSmsParserDiagnosticsLogContext,
+  type HybridSmsUnresolvedCandidate,
+  type SmsParserDiagnostics,
+} from "./sms-parser-orchestrator";
+import {
+  assertExpectedCurrentUser,
+  getCurrentUserDataScope,
+  type CurrentUserDataScope,
+} from "./user-data-access";
 import { readSmsInbox } from "./sms-reader-service";
 import { logger } from "@/utils/logger";
 import { assertNotAborted } from "./abort-utils";
@@ -69,6 +82,9 @@ export interface SmsScanResult {
   readonly totalFound: number;
   readonly totalFilteredCandidates: number;
   readonly durationMs: number;
+  readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
+  readonly parseContext: ParseSmsContext;
+  readonly parserDiagnostics: SmsParserDiagnostics;
 }
 
 /** Options for the scan pipeline. */
@@ -163,10 +179,8 @@ function collectFingerprints(
 }
 
 /**
- * Remove exact duplicate parsed SMS transactions from the same scan result.
- * Different transactions can legitimately come from the same SMS.
- *
- * This protects the save path from duplicate AI entries for one SMS.
+ * Keep at most one parsed transaction per SMS fingerprint.
+ * This matches the persistence and review-session deduplication invariant.
  */
 function deduplicateParsedSmsTransactions(
   transactions: readonly ParsedSmsTransaction[]
@@ -187,21 +201,6 @@ function deduplicateParsedSmsTransactions(
   return deduplicated;
 }
 
-function getParsedSmsTransactionKey(transaction: ParsedSmsTransaction): string {
-  return JSON.stringify({
-    smsFingerprint: transaction.smsFingerprint,
-    amount: transaction.amount,
-    currency: transaction.currency,
-    type: transaction.type,
-    counterparty: transaction.counterparty ?? null,
-    date: transaction.date.getTime(),
-    categoryId: transaction.categoryId,
-    categoryDisplayName: transaction.categoryDisplayName,
-    isAtmWithdrawal: transaction.isAtmWithdrawal === true,
-    cardLast4: transaction.cardLast4 ?? null,
-  });
-}
-
 /**
  * Query all existing SMS fingerprints from the transactions AND transfers tables.
  * Used for deduplication before scanning so saved SMS records are skipped.
@@ -213,6 +212,12 @@ export async function loadExistingSmsFingerprints(): Promise<
   ReadonlySet<string>
 > {
   const scope = await getCurrentUserDataScope();
+  return loadExistingSmsFingerprintsForScope(scope);
+}
+
+async function loadExistingSmsFingerprintsForScope(
+  scope: CurrentUserDataScope
+): Promise<ReadonlySet<string>> {
   const fingerprints = new Set<string>();
 
   // ── Transactions ──────────────────────────────────────────────────────
@@ -260,11 +265,12 @@ export async function scanAndParseSms(
   options: ScanOptions,
   onProgress?: (progress: SmsScanProgress) => void
 ): Promise<SmsScanResult> {
+  const initiatingScope = await getCurrentUserDataScope();
   // Guard against interrupted scans — clean up stale flags
   await AsyncStorage.setItem(SCAN_IN_PROGRESS_KEY, "true");
 
   try {
-    return await executeScanPipeline(options, onProgress);
+    return await executeScanPipeline(options, initiatingScope, onProgress);
   } finally {
     // Always clear the flag, even on error/abort
     await AsyncStorage.removeItem(SCAN_IN_PROGRESS_KEY);
@@ -292,6 +298,7 @@ export async function cleanupStaleScanState(): Promise<boolean> {
  */
 async function executeScanPipeline(
   options: ScanOptions,
+  initiatingScope: CurrentUserDataScope,
   onProgress?: (progress: SmsScanProgress) => void
 ): Promise<SmsScanResult> {
   const startTime = Date.now();
@@ -300,7 +307,8 @@ async function executeScanPipeline(
   const yieldInterval = options?.yieldInterval ?? DEFAULT_YIELD_INTERVAL;
   const abortSignal = options?.abortSignal;
   const existingFingerprints =
-    options?.existingFingerprints ?? (await loadExistingSmsFingerprints());
+    options?.existingFingerprints ??
+    (await loadExistingSmsFingerprintsForScope(initiatingScope));
   // Default to 3 months ago when no minDate is provided
   const effectiveMinDate = options?.minDate ?? Date.now() - THREE_MONTHS_MS;
 
@@ -327,13 +335,16 @@ async function executeScanPipeline(
     for (const sms of batch) {
       messagesScanned++;
 
+      if (isExcludedBeforeSmsParsing(sms.body)) {
+        continue;
+      }
+
       // Filter by known Egyptian bank/fintech sender names
       if (!isKnownFinancialSender(sms.address)) {
         continue;
       }
 
-      // Skip OTPs, promotions, PIN resets, etc.
-      if (isNonTransactionalSms(sms.body)) {
+      if (isLikelyCorruptedSmsText(sms.body)) {
         continue;
       }
 
@@ -344,13 +355,28 @@ async function executeScanPipeline(
         receivedAtMs: sms.date,
       });
 
+      const candidate = { message: sms, smsFingerprint: fingerprint };
+      const trustedPrefilterDisposition = getTrustedPrefilterDisposition(
+        candidate,
+        options.aiContext.supportedCurrencies
+      );
+      if (trustedPrefilterDisposition === "filter_before_ai") {
+        continue;
+      }
+      if (
+        isNonTransactionalSms(sms.body) &&
+        trustedPrefilterDisposition !== "route_to_parser"
+      ) {
+        continue;
+      }
+
       // Skip if already exists in local DB
       if (seenFingerprints.has(fingerprint)) {
         continue;
       }
 
       seenFingerprints.add(fingerprint);
-      candidates.push({ message: sms, smsFingerprint: fingerprint });
+      candidates.push(candidate);
     }
 
     // Emit progress after each batch
@@ -377,6 +403,7 @@ async function executeScanPipeline(
 
   // ─── Step 3: Send candidates to AI for parsing ────────────────────────
   assertScanNotAborted(abortSignal);
+  await assertExpectedCurrentUser(initiatingScope.userId);
   onProgress?.({
     totalMessages,
     messagesScanned: totalMessages,
@@ -426,20 +453,17 @@ async function executeScanPipeline(
         estimatedRemainingMs,
       });
     },
-    abortSignal
+    abortSignal,
+    { expectedUserId: initiatingScope.userId }
+  );
+  await assertExpectedCurrentUser(initiatingScope.userId);
+
+  logger.info(
+    "smsSync.parserDiagnostics",
+    toSmsParserDiagnosticsLogContext(aiResult.diagnostics)
   );
 
-  logger.info("smsSync.parserDiagnostics", {
-    mode: aiResult.diagnostics.mode,
-    attemptedAi: aiResult.diagnostics.attemptedAi,
-    attemptedLocal: aiResult.diagnostics.attemptedLocal,
-    candidateCount: aiResult.diagnostics.candidateCount,
-    resultCount: aiResult.diagnostics.resultCount,
-    matchedPatternIds: aiResult.diagnostics.matchedPatternIds,
-    runtimeScopeCounts: aiResult.diagnostics.runtimeScopeCounts,
-  });
-
-  if (aiResult.hasError && aiResult.isRetryable === false) {
+  if (aiResult.hasError && aiResult.transactions.length === 0) {
     throw new Error("SMS AI parsing failed");
   }
 
@@ -472,5 +496,8 @@ async function executeScanPipeline(
     totalFound: deduplicatedTransactions.length,
     totalFilteredCandidates: candidates.length,
     durationMs,
+    unresolvedCandidates: aiResult.unresolvedCandidates ?? [],
+    parseContext: options.aiContext,
+    parserDiagnostics: aiResult.diagnostics,
   };
 }

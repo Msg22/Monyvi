@@ -1,0 +1,683 @@
+{
+  "schemaVersion": 1,
+  "sourceExportId": "a171a1e8-5caf-4b8b-91f0-3f21ebda75a4",
+  "evidenceDomainStatus": "stable",
+  "candidates": [
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-066dcd38-edf0-4ba9-ba99-adad420f3066",
+      "evidenceDigest": "ba1525640e3d1e97ed15883d150c9956519eb417e3456d792c296f7e01f9ffb6",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB ALAHLI",
+      "messageFamily": "promotional",
+      "currency": null,
+      "expectedOutcome": {
+        "kind": "rejection",
+        "reason": "promotional"
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "بنك QNB الأهلي يقدم اعلى عائد ثابت شهري "
+        },
+        {
+          "kind": "placeholder",
+          "token": "PERCENTAGE",
+          "semanticRole": "promotional_rate",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " و ربع سنوي "
+        },
+        {
+          "kind": "placeholder",
+          "token": "PERCENTAGE",
+          "semanticRole": "promotional_rate",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " على شهادات الادخار لمدة 3 سنوات و باقل حد ادنى "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "promotional_amount",
+          "wasOperatorCorrected": true
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": true
+        },
+        {
+          "kind": "fixed",
+          "text": " و مضاعفاتها لربط الشهادة: "
+        },
+        {
+          "kind": "placeholder",
+          "token": "URL",
+          "semanticRole": "public_url",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " لمعرفة التفاصيل: "
+        },
+        {
+          "kind": "placeholder",
+          "token": "URL",
+          "semanticRole": "public_url",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " تطبق الشروط والأحكام رقم ت.ض: "
+        },
+        {
+          "kind": "placeholder",
+          "token": "REFERENCE",
+          "semanticRole": "public_reference",
+          "wasOperatorCorrected": false
+        }
+      ],
+      "sanitizedShape": "بنك QNB الأهلي يقدم اعلى عائد ثابت شهري <PERCENTAGE> و ربع سنوي <PERCENTAGE> على شهادات الادخار لمدة 3 سنوات و باقل حد ادنى <AMOUNT><CURRENCY> و مضاعفاتها لربط الشهادة: <URL> لمعرفة التفاصيل: <URL> تطبق الشروط والأحكام رقم ت.ض: <REFERENCE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T14:13:15.116Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T14:20:59.525Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-1ee8ac52-d4fc-4999-b3b2-b50955ed1167",
+      "evidenceDigest": "1e3390069af72aac80ba52503d509e753f26949469983b28384e2cddfeab120a",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "informational",
+      "currency": null,
+      "expectedOutcome": {
+        "kind": "rejection",
+        "reason": "informational"
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "عزيزى العميل نذكركم بضرورة استلام بطاقه الخصم المباشر حيث ستلغي بعد 30 يوم"
+        }
+      ],
+      "sanitizedShape": "عزيزى العميل نذكركم بضرورة استلام بطاقه الخصم المباشر حيث ستلغي بعد 30 يوم",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T14:13:15.116Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T14:20:59.522Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-46ad723d-e451-42a6-814c-2c3ab530c4cd",
+      "evidenceDigest": "b48c589dc78775e03153407d136bfb1f3b42d6f15b6102d668ca202bc3ffbc15",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "bank_to_wallet_transfer",
+      "currency": "EGP",
+      "expectedOutcome": {
+        "kind": "transfer",
+        "direction": "bank_to_wallet",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern", "transfer_accounts_required"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "تم تحويل مبلغ: "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " من حسابك و اضافته لمحفظتك الإلكترونية اذا لم تقم بهذه المعاملة يرجى الاتصال على "
+        },
+        {
+          "kind": "placeholder",
+          "token": "PHONE",
+          "semanticRole": "provider_hotline",
+          "wasOperatorCorrected": false
+        }
+      ],
+      "sanitizedShape": "تم تحويل مبلغ: <AMOUNT> <CURRENCY> من حسابك و اضافته لمحفظتك الإلكترونية اذا لم تقم بهذه المعاملة يرجى الاتصال على <PHONE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T14:13:15.116Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T14:20:59.523Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-4820cfcf-4987-4739-948d-ca51fd636af4",
+      "evidenceDigest": "9e8150f19ee462e0120173b9b5850809d6e3654ce84573fde71d8e3596f8b850",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB ALAHLI",
+      "messageFamily": "promotional",
+      "currency": null,
+      "expectedOutcome": {
+        "kind": "rejection",
+        "reason": "promotional"
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "حساب QNB bebasata بمزايا وعروض كتير اوى ! خطوات قليلة علشان تكمل إجراءات فتح حسابك مع QNB bebasata دوس هنا: "
+        },
+        {
+          "kind": "placeholder",
+          "token": "URL",
+          "semanticRole": "public_url",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " تطبق الشروط ت.ض "
+        },
+        {
+          "kind": "placeholder",
+          "token": "REFERENCE",
+          "semanticRole": "public_reference",
+          "wasOperatorCorrected": false
+        }
+      ],
+      "sanitizedShape": "حساب QNB bebasata بمزايا وعروض كتير اوى ! خطوات قليلة علشان تكمل إجراءات فتح حسابك مع QNB bebasata دوس هنا: <URL> تطبق الشروط ت.ض <REFERENCE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T14:13:15.116Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T14:20:59.523Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-4cbe015c-95cf-4329-8c12-6a937a4dafda",
+      "evidenceDigest": "8df967c4a5fc8ae0130ef9d73622d3a6f36a86d875ccae273d351d807cf58623",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB ALAHLI",
+      "messageFamily": "otp",
+      "currency": null,
+      "expectedOutcome": {
+        "kind": "rejection",
+        "reason": "otp"
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "QNB Bebasata onetime password: "
+        },
+        {
+          "kind": "placeholder",
+          "token": "REFERENCE",
+          "semanticRole": "otp_code",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " , إدخل هذا الرقم بنفسك ولا تفصح عنه لأي شخص"
+        }
+      ],
+      "sanitizedShape": "QNB Bebasata onetime password: <REFERENCE> , إدخل هذا الرقم بنفسك ولا تفصح عنه لأي شخص",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T14:13:15.116Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T14:20:59.523Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-8a046f19-54ec-4526-a29b-b578420e1eaf",
+      "evidenceDigest": "3e0179ac3ee6b7aad698bc25ac556f1b5cffa6c6f49d837a32e31bdc77bb03f8",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB ALAHLI",
+      "messageFamily": "informational",
+      "currency": null,
+      "expectedOutcome": {
+        "kind": "rejection",
+        "reason": "informational"
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "عميلنا العزيز ,من اليوم وحتي نهاية السنة سيتم رد مصاريف اصدار بطاقة QNBالأهلي الائتمانية الأساسية والتابعة مع اول استخدام تطبق الشروط "
+        },
+        {
+          "kind": "placeholder",
+          "token": "URL",
+          "semanticRole": "public_url",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " ت.ض "
+        },
+        {
+          "kind": "placeholder",
+          "token": "REFERENCE",
+          "semanticRole": "public_reference",
+          "wasOperatorCorrected": false
+        }
+      ],
+      "sanitizedShape": "عميلنا العزيز ,من اليوم وحتي نهاية السنة سيتم رد مصاريف اصدار بطاقة QNBالأهلي الائتمانية الأساسية والتابعة مع اول استخدام تطبق الشروط <URL> ت.ض <REFERENCE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T14:13:15.116Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T14:20:59.524Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-8db97c52-d4b4-4aac-a731-f5026e31023c",
+      "evidenceDigest": "acb3ef0899efa5ca2a0bca1090b9544e0e18d07f6f6c1da9e6e224be677b4d98",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB ALAHLI",
+      "messageFamily": "informational",
+      "currency": null,
+      "expectedOutcome": {
+        "kind": "rejection",
+        "reason": "informational"
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "عميلنا العزيز، برجاء العلم ان معاملات الدفع بالعملات الأجنبية محلياً او دولياً على بطاقات الخصم المباشر المصدرة على حساباتكم بالجنيه المصري متوقفة حالياً، ويتم استخدام البطاقة بالجنيه المصري فقط تطبق الشروط ت ض "
+        },
+        {
+          "kind": "placeholder",
+          "token": "REFERENCE",
+          "semanticRole": "public_reference",
+          "wasOperatorCorrected": true
+        }
+      ],
+      "sanitizedShape": "عميلنا العزيز، برجاء العلم ان معاملات الدفع بالعملات الأجنبية محلياً او دولياً على بطاقات الخصم المباشر المصدرة على حساباتكم بالجنيه المصري متوقفة حالياً، ويتم استخدام البطاقة بالجنيه المصري فقط تطبق الشروط ت ض <REFERENCE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T14:13:15.116Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T14:20:59.524Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-9fde9e32-30ef-493a-af41-95ecd516d39f",
+      "evidenceDigest": "21405ec2605c25916a78ca59454f6a71a9de316c2140d3f3dff3442ba648ecdc",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "informational",
+      "currency": null,
+      "expectedOutcome": {
+        "kind": "rejection",
+        "reason": "informational"
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "عميلنا العزيز، يرجي العلم بأنه تم تعديل المصاريف الخاصة بالخدمات والمنتجات المصرفية. لمزيد من المعلومات برجاء زيارة: "
+        },
+        {
+          "kind": "placeholder",
+          "token": "URL",
+          "semanticRole": "public_url",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " تطبق الشروط والاحكام ت.ض:"
+        },
+        {
+          "kind": "placeholder",
+          "token": "REFERENCE",
+          "semanticRole": "public_reference",
+          "wasOperatorCorrected": false
+        }
+      ],
+      "sanitizedShape": "عميلنا العزيز، يرجي العلم بأنه تم تعديل المصاريف الخاصة بالخدمات والمنتجات المصرفية. لمزيد من المعلومات برجاء زيارة: <URL> تطبق الشروط والاحكام ت.ض:<REFERENCE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T14:13:15.116Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T14:20:59.522Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-f0757622-b9dd-467f-80b4-cd6dddb1370e",
+      "evidenceDigest": "f9eefc89c8d13b597c0b7fb4f0408f59298d263d4c509dddbeee3e16206595f4",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "promotional",
+      "currency": null,
+      "expectedOutcome": {
+        "kind": "rejection",
+        "reason": "promotional"
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "اصدر، فعل واستخدم بطاقاتQNB Visa الائتمانية خلال فاعليات الألعاب الأولمبية باريس "
+        },
+        {
+          "kind": "placeholder",
+          "token": "DATE",
+          "semanticRole": "campaign_year",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " وأحصل على نقاط ولاء إضافية تصل الي "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "promotional_amount",
+          "wasOperatorCorrected": true
+        },
+        {
+          "kind": "fixed",
+          "text": " نقطة لطلب بطاقة ائتمانية:"
+        },
+        {
+          "kind": "placeholder",
+          "token": "URL",
+          "semanticRole": "public_url",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " للمزيد:"
+        },
+        {
+          "kind": "placeholder",
+          "token": "URL",
+          "semanticRole": "public_url",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " تطبق الشروط ت ض "
+        },
+        {
+          "kind": "placeholder",
+          "token": "REFERENCE",
+          "semanticRole": "public_reference",
+          "wasOperatorCorrected": true
+        }
+      ],
+      "sanitizedShape": "اصدر، فعل واستخدم بطاقاتQNB Visa الائتمانية خلال فاعليات الألعاب الأولمبية باريس <DATE> وأحصل على نقاط ولاء إضافية تصل الي <AMOUNT> نقطة لطلب بطاقة ائتمانية:<URL> للمزيد:<URL> تطبق الشروط ت ض <REFERENCE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T14:13:15.116Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T14:20:59.523Z"
+    },
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-fcd93729-9053-4377-b595-7067833b42e5",
+      "evidenceDigest": "8fb0d00c0699a094c286e473c0cccb57575ac64670ecccad378e83a060799d78",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB ALAHLI",
+      "messageFamily": "bank_to_wallet_transfer",
+      "currency": "EGP",
+      "expectedOutcome": {
+        "kind": "transfer",
+        "direction": "bank_to_wallet",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern", "transfer_accounts_required"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "تم تحويل مبلغ: "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": false
+        },
+        {
+          "kind": "fixed",
+          "text": " من حسابك و إضافته لمحفظتك الاليكترونية اذا لم تقم بهذه المعاملة يرجى الاتصال على "
+        },
+        {
+          "kind": "placeholder",
+          "token": "PHONE",
+          "semanticRole": "provider_hotline",
+          "wasOperatorCorrected": false
+        }
+      ],
+      "sanitizedShape": "تم تحويل مبلغ: <AMOUNT> <CURRENCY> من حسابك و إضافته لمحفظتك الاليكترونية اذا لم تقم بهذه المعاملة يرجى الاتصال على <PHONE>",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T14:13:15.116Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T14:20:59.524Z"
+    }
+  ],
+  "coverageDeclarations": [
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "atm_withdrawal",
+      "currency": "EGP",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T14:21:10.022Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "atm_withdrawal",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T14:21:10.022Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "bank_to_wallet_transfer",
+      "currency": "EGP",
+      "status": "candidate_collected",
+      "candidateIds": [
+        "qa-candidate-46ad723d-e451-42a6-814c-2c3ab530c4cd",
+        "qa-candidate-fcd93729-9053-4377-b595-7067833b42e5"
+      ],
+      "recordedAt": "2026-07-15T14:20:59.525Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "card_purchase",
+      "currency": "EGP",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T14:21:10.022Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "card_purchase",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T14:21:10.022Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "failed_transaction",
+      "currency": "EGP",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T14:21:10.022Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "failed_transaction",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T14:21:10.022Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "incoming_ipn_transfer",
+      "currency": "EGP",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T14:21:10.022Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "incoming_ipn_transfer",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T14:21:10.022Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "informational",
+      "currency": null,
+      "status": "candidate_collected",
+      "candidateIds": [
+        "qa-candidate-1ee8ac52-d4fc-4999-b3b2-b50955ed1167",
+        "qa-candidate-8a046f19-54ec-4526-a29b-b578420e1eaf",
+        "qa-candidate-8db97c52-d4b4-4aac-a731-f5026e31023c",
+        "qa-candidate-9fde9e32-30ef-493a-af41-95ecd516d39f",
+        "qa-candidate-a975715d-6d1d-4d4a-bdf7-cd409afe3ed4",
+        "qa-candidate-ad840bba-cb45-4d03-8bd3-263bc600389d"
+      ],
+      "recordedAt": "2026-07-15T14:20:59.525Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "otp",
+      "currency": null,
+      "status": "candidate_collected",
+      "candidateIds": ["qa-candidate-4cbe015c-95cf-4329-8c12-6a937a4dafda"],
+      "recordedAt": "2026-07-15T14:20:59.525Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "outgoing_ipn_transfer",
+      "currency": "EGP",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T14:21:10.022Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "outgoing_ipn_transfer",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T14:21:10.022Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "promotional",
+      "currency": null,
+      "status": "candidate_collected",
+      "candidateIds": [
+        "qa-candidate-066dcd38-edf0-4ba9-ba99-adad420f3066",
+        "qa-candidate-4820cfcf-4987-4739-948d-ca51fd636af4",
+        "qa-candidate-f0757622-b9dd-467f-80b4-cd6dddb1370e"
+      ],
+      "recordedAt": "2026-07-15T14:20:59.525Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "refund_or_reversal",
+      "currency": "EGP",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T14:21:10.022Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "refund_or_reversal",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-15T14:21:10.022Z"
+    }
+  ]
+}

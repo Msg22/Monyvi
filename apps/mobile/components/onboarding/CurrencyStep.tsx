@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
 import { useFirstRunTooltip } from "@/context/FirstRunTooltipContext";
@@ -253,6 +254,7 @@ export function CurrencyStep(): React.ReactElement {
 
       {/* Currency list */}
       <FlatList
+        {...ANDROID_SAFE_LIST_PROPS}
         data={filteredCurrencies}
         renderItem={({ item, index }): React.ReactElement => (
           <CurrencyItemRow

@@ -127,14 +127,69 @@ describe("sms-account-matcher - matchAccountCore", () => {
     expect(result.matchReason).toBe("card_last4");
   });
 
-  it("Step 1b: Does not trust card last 4 when sender doesn't match", () => {
+  it("Step 1: Leaves duplicate card and sender matches unresolved", () => {
+    const duplicateCardAccount: AccountWithBankDetails = {
+      ...accBank1,
+      id: "acc_bank1_duplicate_card",
+      name: "CIB Secondary Card",
+      createdAt: new Date(baseDate.getTime() + 1000),
+    };
+
+    const result = matchAccountCore(
+      { senderDisplayName: "CIB-EGYPT", cardLast4: "1234" },
+      [accBank1, duplicateCardAccount]
+    );
+
+    expect(result).toEqual({
+      accountId: null,
+      accountName: null,
+      matchReason: "none",
+    });
+  });
+
+  it("Step 1b: Leaves explicit card evidence unresolved when sender doesn't match", () => {
     const input: MatchInput = {
       senderDisplayName: "UNKNOWN SENDER xyz",
       cardLast4: "1234",
     };
     const result = matchAccountCore(input, accounts);
-    expect(result.accountId).toBe("acc_bank2");
-    expect(result.matchReason).toBe("default");
+    expect(result).toEqual({
+      accountId: null,
+      accountName: null,
+      matchReason: "none",
+    });
+  });
+
+  it("Step 1b: Falls back to a unique sender when the stored card suffix differs", () => {
+    const result = matchAccountCore(
+      { senderDisplayName: "NBE", cardLast4: "9999" },
+      accounts
+    );
+
+    expect(result).toMatchObject({
+      accountId: "acc_bank2",
+      matchReason: "sms_sender",
+    });
+  });
+
+  it("Step 1b: Leaves a mismatched card unresolved when the sender is ambiguous", () => {
+    const duplicateSenderAccount: AccountWithBankDetails = {
+      ...accBank2,
+      id: "acc_bank2_secondary",
+      name: "NBE Secondary",
+      cardLast4: 4321,
+    };
+
+    const result = matchAccountCore(
+      { senderDisplayName: "NBE", cardLast4: "9999" },
+      [accBank2, duplicateSenderAccount]
+    );
+
+    expect(result).toEqual({
+      accountId: null,
+      accountName: null,
+      matchReason: "none",
+    });
   });
 
   it("Step 2: Matches based on sender alone (bank_details / account name)", () => {
@@ -145,6 +200,27 @@ describe("sms-account-matcher - matchAccountCore", () => {
     const result = matchAccountCore(input, accounts);
     expect(result.accountId).toBe("acc_bank2");
     expect(result.matchReason).toBe("sms_sender");
+  });
+
+  it("Step 2: Leaves the account unresolved when a sender matches multiple accounts", () => {
+    const duplicateSenderAccount: AccountWithBankDetails = {
+      ...accBank2,
+      id: "acc_bank2_usd_secondary",
+      name: "NBE Secondary",
+      isDefault: false,
+      cardLast4: 9012,
+    };
+
+    const result = matchAccountCore({ senderDisplayName: "NBE" }, [
+      accBank2,
+      duplicateSenderAccount,
+    ]);
+
+    expect(result).toEqual({
+      accountId: null,
+      accountName: null,
+      matchReason: "none",
+    });
   });
 
   it("Step 2b: falls back to provider and account names when no sender rows are saved", () => {

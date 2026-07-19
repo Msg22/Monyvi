@@ -267,7 +267,7 @@ describe("e2e-seed script helpers", () => {
     expect(operations).not.toContain("update-user-password:user-e2e");
   });
 
-  it("guides missing-password recovery with the supported E2E env vars", async () => {
+  it("describes missing-password recovery without workflow-specific variables", async () => {
     const operations: string[] = [];
     const client = createMockClient(operations, { authPages: [[]] });
 
@@ -281,7 +281,7 @@ describe("e2e-seed script helpers", () => {
         }),
       })
     ).rejects.toThrow(
-      "Set MAESTRO_E2E_PASSWORD once, then rerun with E2E_PRESERVE_EXISTING_PASSWORD=1"
+      "Provide a password for this seed workflow before creating the user"
     );
     expect(operations).not.toContain("create-user:e2e@monyvi.test");
   });

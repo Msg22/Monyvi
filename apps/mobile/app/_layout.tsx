@@ -114,8 +114,8 @@ function RootLayout(): React.ReactNode {
     });
     const cleanupActions = initializeDetectionActionHandler();
 
-    const cleanupDetection = onTransactionDetected((parsed) => {
-      handleDetectedSms(parsed).catch((error: unknown) => {
+    const cleanupDetection = onTransactionDetected((parsed, userId) => {
+      handleDetectedSms(parsed, userId).catch((error: unknown) => {
         logger.error("Failed to handle detected SMS", error);
       });
     });

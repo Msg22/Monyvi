@@ -62,5 +62,8 @@
   "ai_disable_confirm_message": "لن تتوفر ميزة الإدخال الصوتي واستيراد رسائل SMS والكشف المباشر عن الرسائل حتى تعيد تشغيل أدوات المعاملات بالذكاء الاصطناعي. وإذا كان الكشف المباشر عن الرسائل مفعلاً، فسيتم إيقافه أيضاً.",
   "ai_disable_confirm_keep_on": "إبقاؤها مفعلة",
   "ai_disable_confirm_turn_off": "إيقاف",
-  "ai_privacy_details": "تفاصيل خصوصية الذكاء الاصطناعي"
+  "ai_privacy_details": "تفاصيل خصوصية الذكاء الاصطناعي",
+  "development_tools": "أدوات التطوير",
+  "qa_sms_pattern_intake": "إدخال أنماط رسائل الاختبار",
+  "qa_sms_pattern_intake_description": "راجع ونقّح نماذج الرسائل الموثقة"
 }

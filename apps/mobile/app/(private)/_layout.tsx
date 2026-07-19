@@ -102,6 +102,7 @@ export default function PrivateLayout(): React.ReactNode {
                       <Stack.Screen name="sms-scan" />
                       <Stack.Screen name="sms-review" />
                       <Stack.Screen name="sms-simulator" />
+                      <Stack.Screen name="qa-sms-pattern-intake" />
                     </Stack>
                     <AppReadyGate />
                   </FirstRunTooltipProvider>

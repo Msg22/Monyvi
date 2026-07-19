@@ -27,6 +27,7 @@ import {
   type IconOption,
 } from "@/constants/category-icons";
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { CategoryIcon } from "../common/CategoryIcon";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
@@ -157,7 +158,7 @@ export function IconPicker({
       // eslint-disable-next-line react-native/no-inline-styles
       contentContainerStyle={{ paddingBottom: bottomInset + 20 }}
       renderItem={renderSearchItem}
-      removeClippedSubviews
+      {...ANDROID_SAFE_LIST_PROPS}
       maxToRenderPerBatch={20}
       windowSize={5}
       ListEmptyComponent={

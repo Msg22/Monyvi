@@ -320,6 +320,33 @@ describe("transaction-service", () => {
       expect(result.smsFingerprint).toBe("sms-hash-1");
     });
 
+    it("does not create an SMS transaction after the authenticated user changes", async () => {
+      const supabaseMock = jest.requireMock<{ getCurrentUserId: jest.Mock }>(
+        "@/services/supabase"
+      );
+      supabaseMock.getCurrentUserId
+        .mockResolvedValueOnce("test-user-id")
+        .mockResolvedValueOnce("next-user-id");
+      const account = seedAccount("acc-1", 1000);
+
+      await expect(
+        createTransaction(
+          {
+            amount: 125,
+            currency: "EGP",
+            categoryId: "cat-1",
+            accountId: "acc-1",
+            type: "EXPENSE",
+            source: "SMS",
+            smsFingerprint: "sms-hash-1",
+          },
+          "test-user-id"
+        )
+      ).rejects.toThrow("AUTH_SCOPE_CHANGED");
+
+      expect(account.balance).toBe(1000);
+    });
+
     it("should throw when user is not authenticated", async () => {
       const supabaseMock = jest.requireMock<{ getCurrentUserId: jest.Mock }>(
         "@/services/supabase"
@@ -396,12 +423,7 @@ describe("transaction-service", () => {
         type: "EXPENSE",
       });
 
-      for (const amount of [
-        Number.NaN,
-        -1,
-        0,
-        MAX_TRANSACTION_AMOUNT + 1,
-      ]) {
+      for (const amount of [Number.NaN, -1, 0, MAX_TRANSACTION_AMOUNT + 1]) {
         await expect(updateTransaction("tx-1", { amount })).rejects.toThrow(
           INVALID_TRANSACTION_AMOUNT_ERROR_CODE
         );

@@ -9,6 +9,7 @@ import { resolveAccountInstitutionPresentation } from "@/utils/account-instituti
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { Button, ButtonVariant } from "@/components/ui/Button";
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { TAB_BAR_HEIGHT } from "@/constants/ui";
 import { useAccounts } from "@/hooks";
 import { useMarketRates } from "@/hooks/useMarketRates";
@@ -246,7 +247,7 @@ export default function Accounts(): ReactElement {
               flexGrow: 1,
               paddingBottom: listBottomPadding,
             }}
-            removeClippedSubviews
+            {...ANDROID_SAFE_LIST_PROPS}
             maxToRenderPerBatch={10}
             windowSize={5}
           />

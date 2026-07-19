@@ -753,4 +753,39 @@ describe("useTransactionReviewState", () => {
     expect(result.current.reviewMode).toBe("all");
     expect(result.current.needsReviewCount).toBe(0);
   });
+
+  it("preserves existing edits and selection when retry appends transactions", async () => {
+    const original = createTransaction({ deduplicationHash: "fp-original" });
+    const appended = createTransaction({
+      counterparty: "Appended",
+      deduplicationHash: "fp-appended",
+    });
+    const { result, rerender } = renderHook<
+      UseTransactionReviewStateResult,
+      { readonly transactions: readonly ReviewableTransaction[] }
+    >(
+      ({ transactions }) =>
+        useTransactionReviewState({ transactions, onSave: jest.fn() }),
+      { initialProps: { transactions: [original] } }
+    );
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(1));
+    act(() => result.current.handleOpenEditModal(0));
+    act(() =>
+      result.current.handleEditModalSave({
+        amount: 125,
+        type: "EXPENSE",
+        categoryId: "cat-food",
+        accountId: "acc-1",
+        accountName: "Bank",
+      })
+    );
+    act(() => result.current.handleToggleItem(0));
+    const wasSelected = result.current.selectedIndices.has(0);
+
+    act(() => rerender({ transactions: [original, appended] }));
+
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(2));
+    expect(result.current.effectiveTransactions[0]?.amount).toBe(125);
+    expect(result.current.selectedIndices.has(0)).toBe(wasSelected);
+  });
 });

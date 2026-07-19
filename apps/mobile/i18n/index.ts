@@ -16,6 +16,7 @@ import enAuth from "../locales/en/auth.json";
 import enMetals from "../locales/en/metals.json";
 import enCategories from "../locales/en/categories.json";
 import enDrawer from "../locales/en/drawer.json";
+import enQaSmsPatternIntake from "../locales/en/qa-sms-pattern-intake.json";
 
 import arCommon from "../locales/ar/common.json";
 import arTransactions from "../locales/ar/transactions.json";
@@ -27,6 +28,7 @@ import arAuth from "../locales/ar/auth.json";
 import arMetals from "../locales/ar/metals.json";
 import arCategories from "../locales/ar/categories.json";
 import arDrawer from "../locales/ar/drawer.json";
+import arQaSmsPatternIntake from "../locales/ar/qa-sms-pattern-intake.json";
 
 /**
  * Translation resources organized by language and namespace.
@@ -48,6 +50,7 @@ const resources: Resource = {
     metals: enMetals,
     categories: enCategories,
     drawer: enDrawer,
+    "qa-sms-pattern-intake": enQaSmsPatternIntake,
   },
   ar: {
     common: arCommon,
@@ -60,6 +63,7 @@ const resources: Resource = {
     metals: arMetals,
     categories: arCategories,
     drawer: arDrawer,
+    "qa-sms-pattern-intake": arQaSmsPatternIntake,
   },
 };
 

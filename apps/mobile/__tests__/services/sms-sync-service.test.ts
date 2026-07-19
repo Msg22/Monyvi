@@ -21,6 +21,7 @@ import type {
 import type {
   AiParseResult,
   ParseSmsContext,
+  SmsCandidate,
 } from "@/services/ai-sms-parser-service";
 import type { SmsParserOrchestratorResult } from "@/services/sms-parser-orchestrator";
 
@@ -96,6 +97,8 @@ jest.mock("@/services/sms-reader-service", () => ({
 // ---------------------------------------------------------------------------
 
 const mockIsKnownFinancialSender = jest.fn<boolean, [string]>(() => true);
+const mockIsLikelyCorruptedSmsText = jest.fn<boolean, [string]>(() => false);
+const mockIsExcludedBeforeSmsParsing = jest.fn<boolean, [string]>(() => false);
 const mockComputeSmsFingerprint = jest.fn<
   Promise<string>,
   [SmsFingerprintInput]
@@ -105,12 +108,23 @@ const mockComputeSmsFingerprint = jest.fn<
   )
 );
 
-jest.mock("@monyvi/logic", () => ({
-  isKnownFinancialSender: (...args: unknown[]) =>
-    mockIsKnownFinancialSender(...(args as [string])),
-  computeSmsFingerprint: (...args: unknown[]) =>
-    mockComputeSmsFingerprint(...(args as [SmsFingerprintInput])),
-}));
+jest.mock("@monyvi/logic", () => {
+  const transactionKeyModule = jest.requireActual<
+    typeof import("../../../../packages/logic/src/parsers/parsed-sms-transaction-key")
+  >("../../../../packages/logic/src/parsers/parsed-sms-transaction-key");
+
+  return {
+    ...transactionKeyModule,
+    isKnownFinancialSender: (...args: unknown[]) =>
+      mockIsKnownFinancialSender(...(args as [string])),
+    isLikelyCorruptedSmsText: (body: string): boolean =>
+      mockIsLikelyCorruptedSmsText(body),
+    isExcludedBeforeSmsParsing: (body: string): boolean =>
+      mockIsExcludedBeforeSmsParsing(body),
+    computeSmsFingerprint: (...args: unknown[]) =>
+      mockComputeSmsFingerprint(...(args as [SmsFingerprintInput])),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Mock: @nozbe/watermelondb
@@ -130,17 +144,24 @@ jest.mock("@nozbe/watermelondb", () => ({
 // Mock: sms-parser-orchestrator (parseSmsWithOrchestrator)
 // ---------------------------------------------------------------------------
 
-const mockParseSmsWithOrchestrator = jest.fn<Promise<AiParseResult>, unknown[]>(
-  () => Promise.resolve({ transactions: [] })
+type MockParserResult = AiParseResult | SmsParserOrchestratorResult;
+
+const mockParseSmsWithOrchestrator = jest.fn<
+  Promise<MockParserResult>,
+  unknown[]
+>(() => Promise.resolve({ transactions: [] }));
+const mockGetTrustedPrefilterDisposition = jest.fn<string, [unknown]>(
+  () => "not_trusted_candidate"
 );
 
 function mockWithParserDiagnostics(
-  result: AiParseResult
+  result: MockParserResult
 ): SmsParserOrchestratorResult {
   const resultWithDiagnostics = result as SmsParserOrchestratorResult;
   return {
     ...result,
     transactions: result.transactions,
+    unresolvedCandidates: resultWithDiagnostics.unresolvedCandidates ?? [],
     diagnostics: resultWithDiagnostics.diagnostics ?? {
       mode: "ai-primary",
       attemptedAi: true,
@@ -158,6 +179,11 @@ jest.mock("@/services/sms-parser-orchestrator", () => ({
     ...args: unknown[]
   ): Promise<SmsParserOrchestratorResult> =>
     mockWithParserDiagnostics(await mockParseSmsWithOrchestrator(...args)),
+  toSmsParserDiagnosticsLogContext: (
+    diagnostics: SmsParserOrchestratorResult["diagnostics"]
+  ): Readonly<Record<string, unknown>> => ({ ...diagnostics }),
+  getTrustedPrefilterDisposition: (candidate: unknown): string =>
+    mockGetTrustedPrefilterDisposition(candidate),
 }));
 
 // ---------------------------------------------------------------------------
@@ -179,6 +205,7 @@ jest.mock("@monyvi/db", () => ({
 jest.mock("@/services/user-data-access", () => ({
   getCurrentUserDataScope: jest.fn(() =>
     Promise.resolve({
+      userId: "user-a",
       queryOwned: (
         collection: {
           query: (...conditions: readonly unknown[]) => {
@@ -193,6 +220,7 @@ jest.mock("@/services/user-data-access", () => ({
       } => collection.query(...conditions),
     })
   ),
+  assertExpectedCurrentUser: jest.fn(() => Promise.resolve()),
 }));
 
 // ---------------------------------------------------------------------------
@@ -202,6 +230,7 @@ jest.mock("@/services/user-data-access", () => ({
 import {
   scanAndParseSms,
   cleanupStaleScanState,
+  type SmsScanProgress,
 } from "@/services/sms-sync-service";
 
 // ---------------------------------------------------------------------------
@@ -263,12 +292,15 @@ describe("sms-sync-service", () => {
     jest.clearAllMocks();
     mockReadSmsInbox.mockResolvedValue([]);
     mockIsKnownFinancialSender.mockReturnValue(true);
+    mockIsLikelyCorruptedSmsText.mockReturnValue(false);
+    mockIsExcludedBeforeSmsParsing.mockReturnValue(false);
     mockComputeSmsFingerprint.mockImplementation((input: SmsFingerprintInput) =>
       Promise.resolve(
         `hash-${input.sender}-${input.receivedAtMs}-${input.body.slice(0, 10)}`
       )
     );
     mockParseSmsWithOrchestrator.mockResolvedValue({ transactions: [] });
+    mockGetTrustedPrefilterDisposition.mockReturnValue("not_trusted_candidate");
   });
 
   // =========================================================================
@@ -284,6 +316,33 @@ describe("sms-sync-service", () => {
       expect(result.totalScanned).toBe(0);
       expect(result.totalFound).toBe(0);
       expect(result.durationMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it("pins the initiating user through batch parser requests", async () => {
+      await scanAndParseSms(defaultOptions());
+
+      expect(mockParseSmsWithOrchestrator).toHaveBeenCalledWith(
+        [],
+        stubAiContext,
+        expect.any(Function),
+        undefined,
+        { expectedUserId: "user-a" }
+      );
+    });
+
+    it("aborts before parsing when the authenticated user changes", async () => {
+      const userDataAccessMock = jest.requireMock<{
+        assertExpectedCurrentUser: jest.Mock;
+      }>("@/services/user-data-access");
+      userDataAccessMock.assertExpectedCurrentUser.mockRejectedValueOnce(
+        new Error("AUTH_SCOPE_CHANGED")
+      );
+
+      await expect(scanAndParseSms(defaultOptions())).rejects.toThrow(
+        "AUTH_SCOPE_CHANGED"
+      );
+
+      expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
     });
 
     it("should parse financial SMS and include in results", async () => {
@@ -320,6 +379,186 @@ describe("sms-sync-service", () => {
       expect(result.totalScanned).toBe(2);
       expect(result.totalFound).toBe(2);
       expect(result.transactions).toHaveLength(2);
+    });
+
+    it("preserves successful transactions and retryable unresolved candidates", async () => {
+      const sms = createSmsMessage({ id: "sms-partial" });
+      const parsed = createParsedTransaction({ smsFingerprint: "parsed-fp" });
+      const pendingCandidate = {
+        message: sms,
+        smsFingerprint: "pending-fp",
+      };
+      mockReadSmsInbox.mockResolvedValue([sms]);
+      const orchestratorResult: SmsParserOrchestratorResult = {
+        transactions: [parsed],
+        hasError: true,
+        isRetryable: true,
+        unresolvedCandidates: [
+          {
+            candidate: pendingCandidate,
+            reason: "chunk_failed",
+            isRetryable: true,
+          },
+        ],
+        diagnostics: {
+          mode: "hybrid",
+          attemptedAi: true,
+          attemptedLocal: true,
+          candidateCount: 2,
+          resultCount: 1,
+          matchedPatternIds: ["qnb-egypt-card-purchase-egp-v1"],
+          runtimeScopeCounts: { trusted_production: 1 },
+        },
+      };
+      mockParseSmsWithOrchestrator.mockResolvedValue(orchestratorResult);
+
+      const result = await scanAndParseSms(defaultOptions());
+
+      expect(result.transactions).toEqual([parsed]);
+      expect(result.unresolvedCandidates).toEqual([
+        {
+          candidate: pendingCandidate,
+          reason: "chunk_failed",
+          isRetryable: true,
+        },
+      ]);
+      expect(result.parseContext).toBe(stubAiContext);
+      expect(result.parserDiagnostics.mode).toBe("hybrid");
+    });
+
+    it("does not report an empty successful scan when every parser candidate failed retryably", async () => {
+      const sms = createSmsMessage({ id: "sms-retryable-failure" });
+      mockReadSmsInbox.mockResolvedValue([sms]);
+      mockParseSmsWithOrchestrator.mockResolvedValue({
+        transactions: [],
+        hasError: true,
+        isRetryable: true,
+        unresolvedCandidates: [
+          {
+            candidate: { message: sms, smsFingerprint: "retryable-fp" },
+            reason: "chunk_failed",
+            isRetryable: true,
+          },
+        ],
+      });
+
+      const onProgress = jest.fn<void, [SmsScanProgress]>();
+      await expect(
+        scanAndParseSms(defaultOptions(), onProgress)
+      ).rejects.toThrow("SMS AI parsing failed");
+
+      expect(
+        onProgress.mock.calls.some(
+          ([progress]) => progress.currentPhase === "complete"
+        )
+      ).toBe(false);
+    });
+
+    it("preserves successful transactions from a mixed non-retryable parser result", async () => {
+      const sms = createSmsMessage({ id: "sms-permanent-partial" });
+      const parsed = createParsedTransaction();
+      mockReadSmsInbox.mockResolvedValue([sms]);
+      mockParseSmsWithOrchestrator.mockResolvedValue({
+        transactions: [parsed],
+        hasError: true,
+        isRetryable: false,
+        unresolvedCandidates: [
+          {
+            candidate: { message: sms, smsFingerprint: "permanent-fp" },
+            reason: "chunk_failed",
+            isRetryable: false,
+          },
+        ],
+      });
+
+      const result = await scanAndParseSms(defaultOptions());
+
+      expect(result.transactions).toEqual([parsed]);
+      expect(result.unresolvedCandidates).toEqual([
+        expect.objectContaining({
+          reason: "chunk_failed",
+          isRetryable: false,
+        }),
+      ]);
+    });
+
+    it("routes an exact trusted transaction before legacy OTP filtering", async () => {
+      const sms = createSmsMessage({
+        id: "sms-trusted-purchase",
+        address: "QNB EGYPT",
+        body: "Your Debit Card **2132 had a Successful transaction of EGP 490.00 @OTP STORE,your available bal.EGP10853.15 for lost/stolen card call 19700",
+      });
+      mockReadSmsInbox.mockResolvedValue([sms]);
+      mockGetTrustedPrefilterDisposition.mockReturnValueOnce("route_to_parser");
+
+      await scanAndParseSms(defaultOptions());
+
+      const candidates = mockParseSmsWithOrchestrator.mock.calls[0]?.[0] as
+        | readonly SmsCandidate[]
+        | undefined;
+      expect(candidates).toHaveLength(1);
+      expect(candidates?.[0]?.message.id).toBe("sms-trusted-purchase");
+    });
+
+    it("routes an exact trusted OTP rejection through the catalog", async () => {
+      const sms = createSmsMessage({
+        id: "sms-trusted-otp",
+        address: "QNB EGYPT",
+        body: "QNB OTP:369154 at Orange for EGP 1572 الرقم السرى مخصص لعملية الشراء اونلاين برجاء عدم الافصاح عنه",
+      });
+      mockReadSmsInbox.mockResolvedValue([sms]);
+      mockGetTrustedPrefilterDisposition.mockReturnValueOnce("route_to_parser");
+
+      await scanAndParseSms(defaultOptions());
+
+      const candidates = mockParseSmsWithOrchestrator.mock.calls[0]?.[0] as
+        | readonly SmsCandidate[]
+        | undefined;
+      expect(candidates).toHaveLength(1);
+      expect(candidates?.[0]?.message.id).toBe("sms-trusted-otp");
+    });
+
+    it("filters an exact trusted rejection before AI when hybrid is disabled", async () => {
+      const sms = createSmsMessage({
+        id: "sms-trusted-promotion",
+        address: "QNB ALAHLI",
+        body: "trusted promotional template",
+      });
+      mockReadSmsInbox.mockResolvedValue([sms]);
+      mockGetTrustedPrefilterDisposition.mockReturnValueOnce(
+        "filter_before_ai"
+      );
+
+      await scanAndParseSms(defaultOptions());
+
+      const candidates = mockParseSmsWithOrchestrator.mock.calls[0]?.[0] as
+        | readonly SmsCandidate[]
+        | undefined;
+      expect(candidates).toEqual([]);
+    });
+
+    it("hard-excludes configured Arabic phrases before trusted or AI parsing", async () => {
+      const excluded = createSmsMessage({
+        id: "sms-hard-excluded",
+        address: "QNB EGYPT",
+        body: "اكسب كاش باك بقيمة EGP 125.50",
+      });
+      const eligible = createSmsMessage({ id: "sms-eligible" });
+      mockReadSmsInbox.mockResolvedValue([excluded, eligible]);
+      mockIsExcludedBeforeSmsParsing.mockImplementation(
+        (body) => body === excluded.body
+      );
+
+      await scanAndParseSms(defaultOptions());
+
+      const candidates = mockParseSmsWithOrchestrator.mock.calls[0]?.[0] as
+        | readonly SmsCandidate[]
+        | undefined;
+      expect(candidates?.map(({ message }) => message.id)).toEqual([
+        "sms-eligible",
+      ]);
+      expect(mockComputeSmsFingerprint).toHaveBeenCalledTimes(1);
+      expect(mockGetTrustedPrefilterDisposition).toHaveBeenCalledTimes(1);
     });
 
     it("should stop when local parser mode is blocked by AI transaction suggestions", async () => {
@@ -361,6 +600,28 @@ describe("sms-sync-service", () => {
       expect(result.totalScanned).toBe(2);
       expect(result.totalFound).toBe(1);
       expect(result.transactions).toHaveLength(1);
+    });
+
+    it("does not send a garbled known-sender SMS to the parser", async () => {
+      const garbled = createSmsMessage({
+        address: "QNB ALAHLI",
+        body: "??? QNB ?????? ???? 13.5% ??? 1000EGP ???????",
+      });
+      mockReadSmsInbox.mockResolvedValue([garbled]);
+      mockIsLikelyCorruptedSmsText.mockReturnValueOnce(true);
+
+      const result = await scanAndParseSms(defaultOptions());
+
+      expect(mockIsLikelyCorruptedSmsText).toHaveBeenCalledWith(garbled.body);
+      expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
+      expect(mockParseSmsWithOrchestrator).toHaveBeenCalledWith(
+        [],
+        stubAiContext,
+        expect.any(Function),
+        undefined,
+        { expectedUserId: "user-a" }
+      );
+      expect(result.totalFound).toBe(0);
     });
 
     it("should deduplicate against existing fingerprints", async () => {
@@ -518,7 +779,7 @@ describe("sms-sync-service", () => {
       expect(result.transactions[0]?.counterparty).toBe("TestShop");
     });
 
-    it("should keep distinct AI results from the same SMS fingerprint", async () => {
+    it("should keep at most one AI result for each SMS fingerprint", async () => {
       const sms = createSmsMessage({
         id: "sms-1",
         body: "Debit EGP 100 at Shop plus EGP 5 fee",
@@ -544,11 +805,11 @@ describe("sms-sync-service", () => {
 
       const result = await scanAndParseSms(defaultOptions());
 
-      expect(result.transactions).toHaveLength(2);
-      expect(result.totalFound).toBe(2);
+      expect(result.transactions).toHaveLength(1);
+      expect(result.totalFound).toBe(1);
       expect(
         result.transactions.map((transaction) => transaction.amount)
-      ).toEqual([100, 5]);
+      ).toEqual([100]);
     });
 
     it("loads current-user fingerprints when existing fingerprints are not supplied", async () => {

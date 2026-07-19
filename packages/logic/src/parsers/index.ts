@@ -12,8 +12,31 @@ export {
   normalizeSmsBody,
   type SmsFingerprintInput,
 } from "./sms-hash";
-export { isLikelyFinancialSms } from "./sms-keyword-filter";
+export {
+  isExcludedBeforeSmsParsing,
+  isLikelyFinancialSms,
+} from "./sms-keyword-filter";
+export { isLikelyCorruptedSmsText } from "./sms-text-quality";
+export { getParsedSmsTransactionKey } from "./parsed-sms-transaction-key";
 export { parseSmsWithLocalParser } from "./local-sms-parser";
+export { parseSmsWithTrustedCatalog } from "./trusted-sms-parser";
+export { matchTrustedSmsTemplate } from "./trusted-sms-template-matcher";
+export {
+  activateTrustedSmsCatalog,
+  createBundledTrustedSmsCatalogProvider,
+} from "./trusted-sms-catalog-activation";
+export { QNB_EGYPT_TRUSTED_SMS_CATALOG } from "./trusted-sms-patterns";
+export type {
+  TrustedSmsCatalogActivation,
+  TrustedSmsCatalogProvider,
+  TrustedSmsEligibleFamily,
+  TrustedSmsParsedTransaction,
+  TrustedSmsParserCandidate,
+  TrustedSmsParserOutcome,
+  TrustedSmsParserRequest,
+  TrustedSmsParserResult,
+  TrustedSmsTemplateResult,
+} from "./trusted-sms-pattern-types";
 export {
   LOCAL_SMS_PATTERNS,
   LOCAL_SMS_VERY_HIGH_CONFIDENCE,
@@ -49,6 +72,10 @@ export type {
 } from "./local-sms-parser-types";
 export { evaluateAmountExpression } from "./expression-evaluator";
 export {
+  SMS_ENRICHMENT_CATEGORY_SYSTEM_NAMES,
+  isSmsEnrichmentCategorySystemName,
+} from "./sms-category-taxonomy";
+export {
   EGYPTIAN_FINANCIAL_INSTITUTIONS,
   getAllFinancialSenders,
   getInstitutionById,
@@ -56,6 +83,7 @@ export {
   getSenderPatternsForInstitution,
   isKnownFinancialSender,
 } from "./egyptian-bank-registry";
+export * from "./qa-sms-pattern-intake";
 export type {
   BankInfo,
   EgyptianFinancialInstitution,

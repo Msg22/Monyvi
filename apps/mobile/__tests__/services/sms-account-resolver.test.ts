@@ -91,6 +91,7 @@ describe("sms-account-resolver", () => {
     expect(result).toEqual({
       accountId: "wallet-1",
       accountName: "Vodafone wallet",
+      matchReason: "sms_sender",
     });
   });
 

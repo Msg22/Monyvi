@@ -15,7 +15,7 @@ function reviewMeta(
 }
 
 describe("getTransactionBadges", () => {
-  it("shows the localized parser review reason", () => {
+  it("uses review-details copy for non-specific low confidence", () => {
     const badges = getTransactionBadges(
       false,
       reviewMeta({ reasons: ["low_confidence"] }),
@@ -23,7 +23,7 @@ describe("getTransactionBadges", () => {
     );
 
     expect(badges).toContainEqual({
-      labelKey: "review_badge_low_confidence",
+      labelKey: "review_badge_review_details",
       color: "amber",
     });
   });
@@ -36,7 +36,7 @@ describe("getTransactionBadges", () => {
     );
 
     expect(badges).toContainEqual({
-      labelKey: "review_badge_needs_review",
+      labelKey: "review_badge_review_details",
       color: "amber",
     });
   });
@@ -49,7 +49,20 @@ describe("getTransactionBadges", () => {
         false
       )
     ).toEqual({
-      labelKey: "review_badge_confirm_cash_account",
+      labelKey: "review_badge_review_cash_account",
+      color: "amber",
+    });
+  });
+
+  it("describes an ambiguous amount without a generic warning", () => {
+    expect(
+      getPrimaryTransactionBadge(
+        false,
+        reviewMeta({ reasons: ["amount_review"] }),
+        false
+      )
+    ).toEqual({
+      labelKey: "review_badge_review_amount",
       color: "amber",
     });
   });
@@ -69,17 +82,17 @@ describe("getTransactionBadges", () => {
     ]);
   });
 
-  it("prioritizes missing account or category blockers over advisory reasons", () => {
+  it("prioritizes concrete account guidance over generic missing information", () => {
     expect(
       getPrimaryTransactionBadge(
-        false,
+        true,
         reviewMeta({
           reasons: ["cash_transfer", "low_confidence", "account_needed"],
         }),
         false
       )
     ).toEqual({
-      labelKey: "review_badge_account_needed",
+      labelKey: "review_badge_review_account",
       color: "red",
     });
   });

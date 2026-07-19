@@ -7,6 +7,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { useTheme } from "@/context/ThemeContext";
 import { useAccountDisplayNames } from "@/hooks/useAccountDisplayNames";
 import {
@@ -15,10 +16,7 @@ import {
   useTransactionReviewState,
 } from "@/hooks/useTransactionReviewState";
 import { TransactionEditModal } from "./edit-modal/TransactionEditModal";
-import {
-  getExpandedContent,
-  OriginalContentBlock,
-} from "./get-expanded-content";
+import { getExpandedContent } from "./get-expanded-content";
 import { ReviewActionBar } from "./ReviewActionBar";
 import { ReviewFiltersSheet } from "./ReviewFiltersSheet";
 import {
@@ -26,6 +24,7 @@ import {
   TransactionItem,
 } from "./TransactionItem";
 import { resolveTransactionReviewProvider } from "@/utils/transaction-review-provider";
+import { PartialSmsResultsNotice } from "./PartialSmsResultsNotice";
 
 export interface TransactionReviewProps {
   readonly transactions: readonly ReviewableTransaction[];
@@ -40,7 +39,21 @@ export interface TransactionReviewProps {
   readonly subtitle?: string;
   readonly onBack?: () => void;
   readonly workspaceVariant?: "default" | "sms";
+  readonly partialResults?: {
+    readonly unresolvedCount: number;
+    readonly canRetry: boolean;
+    readonly isRetrying: boolean;
+    readonly hasRetryError: boolean;
+    readonly onRetry: () => void;
+  };
 }
+
+export const TRANSACTION_REVIEW_LIST_RENDER_CONFIG = {
+  initialNumToRender: 8,
+  maxToRenderPerBatch: 8,
+  updateCellsBatchingPeriod: 50,
+  windowSize: 5,
+} as const;
 
 export function TransactionReview({
   transactions,
@@ -51,6 +64,7 @@ export function TransactionReview({
   subtitle,
   onBack,
   workspaceVariant = "default",
+  partialResults,
 }: TransactionReviewProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { t } = useTranslation("common");
@@ -164,11 +178,8 @@ export function TransactionReview({
           index={item.originalIndex}
           isSelected={selectedIndicesRef.current.has(item.originalIndex)}
           accountName={accountName}
-          expandedContent={
-            content ? (
-              <OriginalContentBlock title={content.title} body={content.body} />
-            ) : undefined
-          }
+          expandedContentTitle={content?.title}
+          expandedContentBody={content?.body}
           onToggleSelect={handleToggleItem}
           onPress={handleOpenEditModal}
           hasMissingInfo={invalidIndices.has(item.originalIndex)}
@@ -215,12 +226,7 @@ export function TransactionReview({
         data={state.listItems}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        extraData={{
-          selectedIndices: state.selectedIndices,
-          reviewMode: state.reviewMode,
-          reviewMetaByIndex: state.reviewMetaByIndex,
-          resolvedAccountMatchIndices: state.resolvedAccountMatchIndices,
-        }}
+        extraData={state.selectedIndices}
         ListHeaderComponent={
           <Animated.View
             entering={FadeInDown.delay(100)}
@@ -423,6 +429,16 @@ export function TransactionReview({
                 )}
               </TouchableOpacity>
             </View>
+
+            {partialResults && (
+              <PartialSmsResultsNotice
+                unresolvedCount={partialResults.unresolvedCount}
+                canRetry={partialResults.canRetry}
+                isRetrying={partialResults.isRetrying}
+                hasRetryError={partialResults.hasRetryError}
+                onRetry={partialResults.onRetry}
+              />
+            )}
           </Animated.View>
         }
         ListEmptyComponent={
@@ -453,9 +469,17 @@ export function TransactionReview({
         }
         contentContainerClassName="pb-2"
         showsVerticalScrollIndicator={false}
-        removeClippedSubviews
-        maxToRenderPerBatch={15}
-        windowSize={7}
+        {...ANDROID_SAFE_LIST_PROPS}
+        initialNumToRender={
+          TRANSACTION_REVIEW_LIST_RENDER_CONFIG.initialNumToRender
+        }
+        maxToRenderPerBatch={
+          TRANSACTION_REVIEW_LIST_RENDER_CONFIG.maxToRenderPerBatch
+        }
+        updateCellsBatchingPeriod={
+          TRANSACTION_REVIEW_LIST_RENDER_CONFIG.updateCellsBatchingPeriod
+        }
+        windowSize={TRANSACTION_REVIEW_LIST_RENDER_CONFIG.windowSize}
       />
 
       <ReviewActionBar
