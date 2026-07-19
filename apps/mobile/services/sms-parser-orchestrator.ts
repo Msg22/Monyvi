@@ -132,6 +132,10 @@ export interface SmsParserOrchestratorResult extends Omit<
   readonly isConsentRequired?: boolean;
 }
 
+export interface SmsParserOrchestratorOptions {
+  readonly expectedUserId?: string;
+}
+
 function createDiagnostics(input: {
   readonly mode: SmsParserMode;
   readonly attemptedAi: boolean;
@@ -560,11 +564,12 @@ async function runFullAiFallback(
   context: ParseSmsContext,
   localTransactionCount: number,
   onProgress?: (progress: AiParseProgress) => void,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  expectedUserId?: string
 ): Promise<HybridAiFallbackResult> {
   if (candidates.length === 0) return { transactions: [], hasError: false };
   try {
-    return await parseSmsWithAi(
+    return await parseSmsWithPinnedUser(
       candidates,
       context,
       onProgress
@@ -575,10 +580,17 @@ async function runFullAiFallback(
                 localTransactionCount + progress.transactionsSoFar,
             })
         : undefined,
-      abortSignal
+      abortSignal,
+      expectedUserId
     );
   } catch (error: unknown) {
-    if (error instanceof Error && error.name === "AbortError") throw error;
+    if (
+      (error instanceof Error && error.name === "AbortError") ||
+      (error instanceof Error &&
+        error.message === USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED)
+    ) {
+      throw error;
+    }
     if (isAiConsentRequiredError(error)) {
       return {
         transactions: [],
@@ -598,6 +610,25 @@ async function runFullAiFallback(
     });
     return { transactions: [], hasError: true, isRetryable: true };
   }
+}
+
+function parseSmsWithPinnedUser(
+  candidates: readonly SmsCandidate[],
+  context: ParseSmsContext,
+  onProgress?: (progress: AiParseProgress) => void,
+  abortSignal?: AbortSignal,
+  expectedUserId?: string
+): Promise<AiParseResult> {
+  if (expectedUserId === undefined) {
+    return parseSmsWithAi(candidates, context, onProgress, abortSignal);
+  }
+  return parseSmsWithAi(
+    candidates,
+    context,
+    onProgress,
+    abortSignal,
+    expectedUserId
+  );
 }
 
 async function reconcileLateRemoteConsentRejection(
@@ -620,10 +651,12 @@ async function parseHybrid(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
   onProgress?: (progress: AiParseProgress) => void,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  expectedUserId?: string
 ): Promise<SmsParserOrchestratorResult> {
   throwIfAborted(abortSignal);
   const consentStatus = await getAiProcessingConsentStatus();
+  assertExpectedUserId(consentStatus.userId, expectedUserId);
   if (!consentStatus.isConsented) throw createAiConsentRequiredError();
   throwIfAborted(abortSignal);
 
@@ -658,6 +691,7 @@ async function parseHybrid(
   );
   if (categoryCandidates.length > 0 || aiCandidates.length > 0) {
     const refreshedConsentStatus = await getAiProcessingConsentStatus();
+    assertExpectedUserId(refreshedConsentStatus.userId, expectedUserId);
     if (
       !refreshedConsentStatus.isConsented ||
       refreshedConsentStatus.userId !== consentStatus.userId
@@ -680,7 +714,8 @@ async function parseHybrid(
       context,
       trustedMatches.length,
       onProgress,
-      abortSignal
+      abortSignal,
+      expectedUserId
     ),
   ]);
   throwIfAborted(abortSignal);
@@ -772,11 +807,21 @@ function throwIfAborted(abortSignal?: AbortSignal): void {
   throw error;
 }
 
+function assertExpectedUserId(
+  actualUserId: string,
+  expectedUserId?: string
+): void {
+  if (expectedUserId !== undefined && actualUserId !== expectedUserId) {
+    throw new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
+  }
+}
+
 export async function parseSmsWithOrchestrator(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
   onProgress?: (progress: AiParseProgress) => void,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  options: SmsParserOrchestratorOptions = {}
 ): Promise<SmsParserOrchestratorResult> {
   const parserCandidates = candidates.filter(
     (candidate) => !isExcludedBeforeSmsParsing(candidate.message.body)
@@ -801,6 +846,7 @@ export async function parseSmsWithOrchestrator(
     throwIfAborted(abortSignal);
 
     const consentStatus = await getAiProcessingConsentStatus();
+    assertExpectedUserId(consentStatus.userId, options.expectedUserId);
     if (!consentStatus.isConsented) {
       throwIfAborted(abortSignal);
       throw createAiConsentRequiredError();
@@ -822,15 +868,22 @@ export async function parseSmsWithOrchestrator(
   }
 
   if (shouldUseHybridSmsParser()) {
-    return parseHybrid(parserCandidates, context, onProgress, abortSignal);
-  }
-
-  try {
-    const aiResult = await parseSmsWithAi(
+    return parseHybrid(
       parserCandidates,
       context,
       onProgress,
-      abortSignal
+      abortSignal,
+      options.expectedUserId
+    );
+  }
+
+  try {
+    const aiResult = await parseSmsWithPinnedUser(
+      parserCandidates,
+      context,
+      onProgress,
+      abortSignal,
+      options.expectedUserId
     );
 
     return {
@@ -846,10 +899,7 @@ export async function parseSmsWithOrchestrator(
       }),
     };
   } catch (error: unknown) {
-    if (
-      (error instanceof Error && error.name === "AbortError") ||
-      isAiConsentRequiredError(error)
-    ) {
+    if (isParserControlFlowError(error)) {
       throw error;
     }
 

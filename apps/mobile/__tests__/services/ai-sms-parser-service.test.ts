@@ -1,4 +1,5 @@
 const mockInvoke = jest.fn();
+const mockAssertExpectedCurrentUser = jest.fn<Promise<void>, [string]>();
 const mockLoggerWarn = jest.fn<
   void,
   [message: string, context?: Readonly<Record<string, unknown>>]
@@ -22,6 +23,11 @@ jest.mock("@/services/supabase", () => ({
       invoke: (...args: readonly unknown[]): unknown => mockInvoke(...args),
     },
   },
+}));
+
+jest.mock("@/services/user-data-access", () => ({
+  assertExpectedCurrentUser: (expectedUserId: string): Promise<void> =>
+    mockAssertExpectedCurrentUser(expectedUserId),
 }));
 
 jest.mock("@/utils/logger", () => ({
@@ -98,9 +104,29 @@ function candidate(fixtureId: string): SmsCandidate {
 describe("ai-sms-parser-service parser strategy", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAssertExpectedCurrentUser.mockResolvedValue(undefined);
     process.env = { ...originalEnv };
     delete process.env.EXPO_PUBLIC_MONYVI_TEST_MODE;
     delete process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE;
+  });
+
+  it("rejects a stale expected user before invoking the Edge Function", async () => {
+    mockAssertExpectedCurrentUser.mockRejectedValueOnce(
+      new Error("AUTH_SCOPE_CHANGED")
+    );
+
+    await expect(
+      parseSmsWithAi(
+        [candidate("nbe_debit_purchase")],
+        context,
+        undefined,
+        undefined,
+        "user-a"
+      )
+    ).rejects.toThrow("AUTH_SCOPE_CHANGED");
+
+    expect(mockAssertExpectedCurrentUser).toHaveBeenCalledWith("user-a");
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   afterEach(() => {

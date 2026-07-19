@@ -671,6 +671,23 @@ describe("sms-live-processor", () => {
     expect(result.transactions).toEqual([]);
   });
 
+  it("pins the initiating user through the parser orchestrator boundary", async () => {
+    await processLiveSmsEvent({
+      sender: "QNB",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(mockParseSmsWithOrchestrator).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(Object),
+      undefined,
+      undefined,
+      { expectedUserId: "user-a" }
+    );
+  });
+
   it("discards parsed work when the authenticated user changes during parsing", async () => {
     mockGetRequiredCurrentUserId.mockResolvedValueOnce("user-b");
 

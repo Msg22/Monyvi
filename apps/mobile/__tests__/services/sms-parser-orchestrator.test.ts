@@ -419,6 +419,26 @@ describe("sms-parser-orchestrator", () => {
     ).rejects.toThrow("AUTH_SCOPE_CHANGED");
   });
 
+  it("rejects a stale initiating user before hybrid outbound requests", async () => {
+    mockGetAiProcessingConsentStatus.mockResolvedValue({
+      isConsented: true,
+      userId: "user-b",
+    });
+
+    await expect(
+      parseSmsWithOrchestrator(
+        [trustedPurchaseCandidate(), candidate()],
+        context,
+        undefined,
+        undefined,
+        { expectedUserId: "user-a" }
+      )
+    ).rejects.toThrow("AUTH_SCOPE_CHANGED");
+
+    expect(mockEnrichTrustedSmsCategories).not.toHaveBeenCalled();
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+  });
+
   it("preserves trusted local results when category enrichment rejects stale consent", async () => {
     mockEnrichTrustedSmsCategories.mockResolvedValueOnce({
       outcomesByCandidateId: new Map(),

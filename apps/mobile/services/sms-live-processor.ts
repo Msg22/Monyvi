@@ -335,7 +335,13 @@ export async function processLiveSmsEvent(
 
     let aiResult: Awaited<ReturnType<typeof parseSmsWithOrchestrator>>;
     try {
-      aiResult = await parseSmsWithOrchestrator([candidate], context);
+      aiResult = await parseSmsWithOrchestrator(
+        [candidate],
+        context,
+        undefined,
+        undefined,
+        { expectedUserId: initiatingUserId }
+      );
     } catch (error: unknown) {
       if (
         error instanceof Error &&
