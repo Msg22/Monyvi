@@ -190,10 +190,15 @@
   "startup_loading_failed_title": "تعذر إكمال التحميل",
   "startup_loading_failed_chip": "فشل التحميل",
   "startup_loading_failed_description": "تعذر تحميل ما تحتاجه للمتابعة الآن.",
+  "market_rates_unavailable_title": "لا يمكننا تحميل أرصدتك الآن",
+  "market_rates_unavailable_chip": "الأسعار غير متاحة",
+  "market_rates_unavailable_description": "تعذر تحميل الأسعار اللازمة لحساب أرصدتك بدقة.",
   "sign_out": "تسجيل الخروج",
   "retry_loading_profile": "إعادة تحميل الملف الشخصي",
   "retry_startup_loading": "حاول مرة أخرى",
+  "retry_market_rates": "حاول مرة أخرى",
   "profile_loading_helper_text": "لا يزال لا يعمل؟ تحقق من اتصالك بالإنترنت، ثم حاول مرة أخرى.",
   "startup_loading_helper_text": "لا يزال لا يعمل؟ تحقق من اتصالك بالإنترنت، ثم حاول مرة أخرى.",
+  "market_rates_unavailable_helper_text": "تحقق من اتصالك بالإنترنت وحاول مرة أخرى. إذا كنت متصلاً بالفعل، فحاول بعد بضع دقائق.",
   "cash_account_creation_failed": "فشل إنشاء الحساب النقدي"
 }

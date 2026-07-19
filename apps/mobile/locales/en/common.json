@@ -175,10 +175,15 @@
   "startup_loading_failed_title": "Couldn't finish loading",
   "startup_loading_failed_chip": "LOADING FAILED",
   "startup_loading_failed_description": "We couldn't finish loading what you need to continue.",
+  "market_rates_unavailable_title": "We can't load your balances yet",
+  "market_rates_unavailable_chip": "RATES UNAVAILABLE",
+  "market_rates_unavailable_description": "We couldn't load the rates needed to calculate your balances accurately.",
   "sign_out": "Sign out",
   "retry_loading_profile": "Retry loading profile",
   "retry_startup_loading": "Try again",
+  "retry_market_rates": "Try again",
   "profile_loading_helper_text": "Still not working? Check your internet connection, then try again.",
   "startup_loading_helper_text": "Still not working? Check your internet connection, then try again.",
+  "market_rates_unavailable_helper_text": "Check your connection and try again. If you're already online, try again in a few minutes.",
   "cash_account_creation_failed": "Cash account creation failed"
 }

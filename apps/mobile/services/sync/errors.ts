@@ -15,6 +15,16 @@ export function getSyncErrorMessage(error: unknown): string {
   return String(error);
 }
 
+/** Stable error for a successful rate query that returned no usable rows. */
+export class MarketRatesUnavailableError extends Error {
+  constructor() {
+    super("No recent market rates were returned");
+    this.name = "MarketRatesUnavailableError";
+  }
+
+  readonly code = "market-rates-unavailable";
+}
+
 export function createSyncTableError(
   operation: "pull" | "insert" | "upsert" | "delete",
   table: string,

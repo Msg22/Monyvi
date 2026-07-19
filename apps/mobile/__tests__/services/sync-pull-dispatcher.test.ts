@@ -1,5 +1,6 @@
 const mockGetCurrentUserId = jest.fn();
 const mockFrom = jest.fn();
+const mockLoggerError = jest.fn();
 
 interface SupabaseResult {
   readonly data: ReadonlyArray<Record<string, unknown>> | null;
@@ -44,7 +45,7 @@ jest.mock("@/services/supabase", () => ({
 jest.mock("@/utils/logger", () => ({
   logger: {
     debug: jest.fn(),
-    error: jest.fn(),
+    error: (...args: unknown[]): unknown => mockLoggerError(...args),
   },
 }));
 
@@ -182,5 +183,10 @@ describe("pullMarketRates", () => {
     await expect(pullMarketRates()).rejects.toThrow(
       "No recent market rates were returned"
     );
+    await expect(pullMarketRates()).rejects.toMatchObject({
+      name: "MarketRatesUnavailableError",
+      code: "market-rates-unavailable",
+    });
+    expect(mockLoggerError).not.toHaveBeenCalled();
   });
 });
