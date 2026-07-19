@@ -1,6 +1,7 @@
-import type {
-  QaIntakeAuthorization,
-  QaSanitizedCandidateDraft,
+import {
+  buildQaSanitizedShape,
+  type QaIntakeAuthorization,
+  type QaSanitizedCandidateDraft,
 } from "../qa-sms-pattern-types";
 import {
   applyQaPlaceholderCorrection,
@@ -321,6 +322,52 @@ describe("sanitizeQaSmsCandidate", () => {
         .join("")
     ).not.toContain("bal.EGP");
   });
+
+  it.each([
+    ["EGP12345.67", "<CURRENCY><BALANCE>"],
+    ["EGP 12345.67", "<CURRENCY> <BALANCE>"],
+  ])(
+    "preserves the balance currency separator in %s",
+    (balanceValue, expectedShape) => {
+      const draft = sanitize(`Available bal.${balanceValue}`);
+
+      expect(buildQaSanitizedShape(draft.segments)).toBe(
+        `Available bal.${expectedShape}`
+      );
+    }
+  );
+
+  it.each([
+    ["EGP250000", "<CURRENCY><AMOUNT>"],
+    ["EGP 250000", "<CURRENCY> <AMOUNT>"],
+  ])(
+    "preserves the transaction amount currency separator in %s",
+    (amountValue, expectedShape) => {
+      const draft = sanitize(`Amount of ${amountValue} was debited`);
+
+      expect(buildQaSanitizedShape(draft.segments)).toBe(
+        `Amount of ${expectedShape} was debited`
+      );
+    }
+  );
+
+  it.each([
+    [
+      "\u0645\u0628\u0644\u063a:250\u062c\u0645",
+      "\u0645\u0628\u0644\u063a:<AMOUNT><CURRENCY>",
+    ],
+    [
+      "\u0645\u0628\u0644\u063a:250 \u062c\u0645",
+      "\u0645\u0628\u0644\u063a:<AMOUNT> <CURRENCY>",
+    ],
+  ])(
+    "preserves the Arabic amount currency separator in %s",
+    (body, expectedShape) => {
+      const draft = sanitize(body);
+
+      expect(buildQaSanitizedShape(draft.segments)).toBe(expectedShape);
+    }
+  );
 
   it("sanitizes a card-style ATM withdrawal without retaining terminal values", () => {
     const draft = sanitize(

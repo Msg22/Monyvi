@@ -27,42 +27,91 @@ function isValidDateParts(
   );
 }
 
+function parseSlashDate(
+  day: number,
+  month: number,
+  explicitYear: number | null,
+  hour: number,
+  minute: number,
+  receivedAtMs: number
+): Date | null {
+  const received = new Date(receivedAtMs);
+  let year = explicitYear ?? received.getFullYear();
+  let parsed = new Date(year, month, day, hour, minute);
+
+  if (
+    explicitYear === null &&
+    parsed.getTime() > receivedAtMs + MAX_YEARLESS_DATE_FUTURE_MS
+  ) {
+    year -= 1;
+    parsed = new Date(year, month, day, hour, minute);
+  }
+
+  return !Number.isNaN(parsed.getTime()) &&
+    isValidDateParts(parsed, year, month, day)
+    ? parsed
+    : null;
+}
+
+export function isValidLocalSmsTransactionDate(
+  value: string,
+  receivedAtMs: number
+): boolean {
+  const match =
+    /^(?<day>\d{1,2})\/(?<month>\d{1,2})(?:\/(?<year>\d{4}))?$/.exec(value);
+  if (match?.groups === undefined) return false;
+
+  return (
+    parseSlashDate(
+      Number(match.groups.day),
+      Number(match.groups.month) - 1,
+      match.groups.year === undefined ? null : Number(match.groups.year),
+      0,
+      0,
+      receivedAtMs
+    ) !== null
+  );
+}
+
 export function parseLocalSmsMessageDate(
   body: string,
   receivedAtMs: number
 ): Date {
   const received = new Date(receivedAtMs);
   const slashMatch =
-    /(?:on\s+)?(?<day>\d{1,2})\/(?<month>\d{1,2})(?:\/(?<year>\d{4}))?(?:\s+(?<hour>\d{1,2}):(?<minute>\d{2}))?/i.exec(
+    /(?:on\s+)?(?<day>\d{1,2})\/(?<month>\d{1,2})(?:\/(?<year>\d{4}))?(?:\s+(?:at\s+)?(?<hour>\d{1,2}):(?<minute>\d{2})(?:\s*(?<meridiem>AM|PM))?)?/i.exec(
       body
     );
 
   if (slashMatch?.groups) {
     const day = Number(slashMatch.groups.day);
     const month = Number(slashMatch.groups.month) - 1;
-    let year = slashMatch.groups.year
+    const explicitYear = slashMatch.groups.year
       ? Number(slashMatch.groups.year)
-      : received.getFullYear();
-    const hour = slashMatch.groups.hour ? Number(slashMatch.groups.hour) : 0;
+      : null;
+    const parsedHour = slashMatch.groups.hour
+      ? Number(slashMatch.groups.hour)
+      : 0;
+    const meridiem = slashMatch.groups.meridiem?.toUpperCase();
+    const hour =
+      meridiem === "AM"
+        ? parsedHour % 12
+        : meridiem === "PM"
+          ? (parsedHour % 12) + 12
+          : parsedHour;
     const minute = slashMatch.groups.minute
       ? Number(slashMatch.groups.minute)
       : 0;
-    let parsed = new Date(year, month, day, hour, minute);
+    const parsed = parseSlashDate(
+      day,
+      month,
+      explicitYear,
+      hour,
+      minute,
+      receivedAtMs
+    );
 
-    if (
-      !slashMatch.groups.year &&
-      parsed.getTime() > receivedAtMs + MAX_YEARLESS_DATE_FUTURE_MS
-    ) {
-      year -= 1;
-      parsed = new Date(year, month, day, hour, minute);
-    }
-
-    if (
-      !Number.isNaN(parsed.getTime()) &&
-      isValidDateParts(parsed, year, month, day)
-    ) {
-      return parsed;
-    }
+    if (parsed !== null) return parsed;
   }
 
   const monthMatch = /(?<day>\d{1,2})-(?<month>[A-Z]{3})-(?<year>\d{4})/i.exec(

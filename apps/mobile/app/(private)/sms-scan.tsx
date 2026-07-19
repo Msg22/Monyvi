@@ -217,9 +217,10 @@ export default function SmsScanScreen(): React.JSX.Element {
   const previousPermissionStatusRef = useRef(permissionStatus);
   const pendingScanAfterAbortRef = useRef(false);
   const scanAbortControllerRef = useRef<AbortController | null>(null);
+  const shouldResetAfterReviewRef = useRef(false);
   const staleConsentRevokePromiseRef = useRef<Promise<void> | null>(null);
 
-  const { setTransactions, scanMode } = useSmsScanContext();
+  const { setReviewSession, scanMode } = useSmsScanContext();
   const { lastSyncTimestamp } = useSmsSync();
   const { categories: allCategories, isLoading: isCategoriesLoading } =
     useAllCategories();
@@ -374,8 +375,9 @@ export default function SmsScanScreen(): React.JSX.Element {
   }, [isPermissionLoading, permissionStatus]);
 
   const handleReviewPress = (): void => {
-    if (transactions.length > 0) {
-      setTransactions(transactions);
+    if (transactions.length > 0 && result) {
+      setReviewSession(result);
+      shouldResetAfterReviewRef.current = true;
       router.push("/sms-review");
     }
   };
@@ -395,6 +397,16 @@ export default function SmsScanScreen(): React.JSX.Element {
         setIsConsentSheetVisible(true);
       }
     }, [isAiConsented, isAiConsentLoading])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!shouldResetAfterReviewRef.current) return;
+
+      shouldResetAfterReviewRef.current = false;
+      scanInitiated.current = true;
+      reset();
+    }, [reset])
   );
 
   const handleRetryPress = (): void => {

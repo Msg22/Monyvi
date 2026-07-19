@@ -13,9 +13,16 @@ import { assertNotAborted } from "@/services/abort-utils";
 import type {
   AiParseProgress,
   AiParseResult,
+  AiUnresolvedCandidate,
   ParseSmsContext,
   SmsCandidate,
 } from "@/services/ai-sms-parser-service";
+
+const retryableOnceAttempts = new Set<string>();
+
+export function resetFixtureAiParserStateForTests(): void {
+  retryableOnceAttempts.clear();
+}
 
 function findFixture(candidate: SmsCandidate): SmsFixture | null {
   return (
@@ -104,18 +111,34 @@ export async function parseSmsWithFixtureAi(
 ): Promise<AiParseResult> {
   const transactions: ParsedSmsTransaction[] = [];
   const seenTransactions = new Set<string>();
+  const unresolvedCandidates: AiUnresolvedCandidate[] = [];
+  let areAllFailuresRetryable = true;
 
   for (const candidate of candidates) {
     assertNotAborted(abortSignal, "SMS parse aborted");
     const fixture = findFixture(candidate);
     if (!fixture) continue;
 
-    if (fixture.parserFailure) {
-      return Promise.resolve({
-        transactions,
-        hasError: true,
-        isRetryable: fixture.parserFailure === "retryable",
+    const shouldFailOnce =
+      fixture.parserFailure === "retryable_once" &&
+      !retryableOnceAttempts.has(candidate.smsFingerprint);
+    if (shouldFailOnce) {
+      retryableOnceAttempts.add(candidate.smsFingerprint);
+    }
+
+    if (
+      fixture.parserFailure === "retryable" ||
+      fixture.parserFailure === "permanent" ||
+      shouldFailOnce
+    ) {
+      const isRetryable = fixture.parserFailure !== "permanent";
+      areAllFailuresRetryable = areAllFailuresRetryable && isRetryable;
+      unresolvedCandidates.push({
+        candidate,
+        reason: isRetryable ? "chunk_failed" : "unexpected_failure",
+        isRetryable,
       });
+      continue;
     }
 
     pushUniqueTransactions(
@@ -132,6 +155,15 @@ export async function parseSmsWithFixtureAi(
     transactionsSoFar: transactions.length,
     chunkDurationMs: 0,
   });
+
+  if (unresolvedCandidates.length > 0) {
+    return Promise.resolve({
+      transactions,
+      hasError: true,
+      isRetryable: areAllFailuresRetryable,
+      unresolvedCandidates,
+    });
+  }
 
   return Promise.resolve({ transactions, hasError: false });
 }

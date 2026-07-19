@@ -1,0 +1,68 @@
+import {
+  getParsedSmsTransactionKey,
+  type ParsedSmsTransaction,
+} from "@monyvi/logic";
+import type { ParseSmsContext } from "./ai-sms-parser-service";
+import {
+  parseSmsWithOrchestrator,
+  type HybridSmsUnresolvedCandidate,
+} from "./sms-parser-orchestrator";
+
+interface RetrySmsReviewCandidatesInput {
+  readonly transactions: readonly ParsedSmsTransaction[];
+  readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
+  readonly parseContext: ParseSmsContext;
+  readonly abortSignal?: AbortSignal;
+}
+
+export interface SmsReviewRetryResult {
+  readonly transactions: readonly ParsedSmsTransaction[];
+  readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
+  readonly hasRetryError: boolean;
+}
+
+function mergeTransactions(
+  existing: readonly ParsedSmsTransaction[],
+  appended: readonly ParsedSmsTransaction[]
+): readonly ParsedSmsTransaction[] {
+  const byTransactionKey = new Map<string, ParsedSmsTransaction>();
+  for (const transaction of [...existing, ...appended]) {
+    const transactionKey = getParsedSmsTransactionKey(transaction);
+    if (!byTransactionKey.has(transactionKey)) {
+      byTransactionKey.set(transactionKey, transaction);
+    }
+  }
+  return [...byTransactionKey.values()];
+}
+
+export async function retrySmsReviewCandidates(
+  input: RetrySmsReviewCandidatesInput
+): Promise<SmsReviewRetryResult> {
+  const retryable = input.unresolvedCandidates.filter(
+    ({ isRetryable }) => isRetryable
+  );
+  if (retryable.length === 0) {
+    return {
+      transactions: input.transactions,
+      unresolvedCandidates: input.unresolvedCandidates,
+      hasRetryError: false,
+    };
+  }
+  const result = await parseSmsWithOrchestrator(
+    retryable.map(({ candidate }) => candidate),
+    input.parseContext,
+    undefined,
+    input.abortSignal
+  );
+  const unresolvedCandidates = [
+    ...input.unresolvedCandidates.filter(({ isRetryable }) => !isRetryable),
+    ...result.unresolvedCandidates,
+  ];
+  return {
+    transactions: mergeTransactions(input.transactions, result.transactions),
+    unresolvedCandidates,
+    hasRetryError:
+      result.hasError === true &&
+      unresolvedCandidates.some(({ isRetryable }) => isRetryable),
+  };
+}

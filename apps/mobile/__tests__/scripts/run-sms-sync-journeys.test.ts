@@ -17,6 +17,9 @@ interface RunSmsSyncJourneysModule {
   getSmsSyncFlowAttemptCount(
     env?: Readonly<Record<string, string | undefined>>
   ): number;
+  getDefaultJourneyIds(
+    env?: Readonly<Record<string, string | undefined>>
+  ): readonly string[];
   shouldResetSmsSyncAppStateBeforeRetry(
     flow: string,
     env?: Readonly<Record<string, string | undefined>>
@@ -105,6 +108,15 @@ describe("run-sms-sync-journeys helpers", () => {
         E2E_SMS_SYNC_RELAUNCH_BETWEEN_JOURNEYS: "1",
       })
     ).toBe(true);
+  });
+
+  it("selects only the partial retry journey in hybrid fixture mode", () => {
+    expect(smsSyncJourneys.getDefaultJourneyIds({})).toEqual(["01", "02"]);
+    expect(
+      smsSyncJourneys.getDefaultJourneyIds({
+        EXPO_PUBLIC_AI_SMS_PARSER_MODE: "hybrid-fixture",
+      })
+    ).toEqual(["03"]);
   });
 
   it("relaunches before the first journey when native permission state changed", () => {

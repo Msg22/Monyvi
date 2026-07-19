@@ -92,6 +92,9 @@ jobs:
       - name: Test QA SMS Ingest Command
         run: npm run test:qa-sms-ingest-command
 
+      - name: Test QA SMS Promotion
+        run: npm run test:qa-sms-promotion
+
       - name: Test Mobile App
         run: npm test -w @monyvi/mobile
 

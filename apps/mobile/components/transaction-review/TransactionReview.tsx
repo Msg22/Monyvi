@@ -27,6 +27,7 @@ import {
   TransactionItem,
 } from "./TransactionItem";
 import { resolveTransactionReviewProvider } from "@/utils/transaction-review-provider";
+import { PartialSmsResultsNotice } from "./PartialSmsResultsNotice";
 
 export interface TransactionReviewProps {
   readonly transactions: readonly ReviewableTransaction[];
@@ -41,6 +42,13 @@ export interface TransactionReviewProps {
   readonly subtitle?: string;
   readonly onBack?: () => void;
   readonly workspaceVariant?: "default" | "sms";
+  readonly partialResults?: {
+    readonly unresolvedCount: number;
+    readonly canRetry: boolean;
+    readonly isRetrying: boolean;
+    readonly hasRetryError: boolean;
+    readonly onRetry: () => void;
+  };
 }
 
 export function TransactionReview({
@@ -52,6 +60,7 @@ export function TransactionReview({
   subtitle,
   onBack,
   workspaceVariant = "default",
+  partialResults,
 }: TransactionReviewProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { t } = useTranslation("common");
@@ -424,6 +433,16 @@ export function TransactionReview({
                 )}
               </TouchableOpacity>
             </View>
+
+            {partialResults && (
+              <PartialSmsResultsNotice
+                unresolvedCount={partialResults.unresolvedCount}
+                canRetry={partialResults.canRetry}
+                isRetrying={partialResults.isRetrying}
+                hasRetryError={partialResults.hasRetryError}
+                onRetry={partialResults.onRetry}
+              />
+            )}
           </Animated.View>
         }
         ListEmptyComponent={

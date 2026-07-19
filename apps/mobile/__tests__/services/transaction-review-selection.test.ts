@@ -257,7 +257,7 @@ describe("transaction-review-selection", () => {
     });
   });
 
-  it("uses a generic review reason for parser signals without a UI mapping", () => {
+  it("preserves ambiguous amounts as a field-specific review reason", () => {
     const transaction = createTransaction({
       confidence: 0.99,
       reviewStatus: "needs_review",
@@ -271,7 +271,7 @@ describe("transaction-review-selection", () => {
 
     expect(getTransactionReviewMeta(transaction, accountMatch)).toEqual({
       isAutoSelectable: false,
-      reasons: ["parser_review"],
+      reasons: ["amount_review"],
     });
   });
 });

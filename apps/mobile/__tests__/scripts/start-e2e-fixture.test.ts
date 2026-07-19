@@ -1,11 +1,14 @@
 interface StartE2eFixtureModule {
   buildE2eMetroEnv(
-    parserMode: "fixture" | "local",
+    parserMode: "fixture" | "local" | "hybrid-fixture",
     baseEnv?: Readonly<Record<string, string | undefined>>
   ): Record<string, string | undefined>;
   buildE2eFixtureEnv(
     baseEnv?: Readonly<Record<string, string | undefined>>
   ): Record<string, string | undefined>;
+  getParserModeFromEnv(
+    baseEnv?: Readonly<Record<string, string | undefined>>
+  ): "fixture" | "local" | "hybrid-fixture";
 }
 
 const startE2eFixture = jest.requireActual(
@@ -36,6 +39,14 @@ describe("start-e2e-fixture script helpers", () => {
     expect(env.EXPO_PUBLIC_AI_SMS_PARSER_MODE).toBe("local");
     expect(env.EXPO_PUBLIC_SUPABASE_URL).toBe("http://10.0.2.2:54321");
     expect(env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY).toContain("eyJ");
+  });
+
+  it("preserves explicit hybrid fixture mode for deterministic E2E", () => {
+    expect(
+      startE2eFixture.getParserModeFromEnv({
+        EXPO_PUBLIC_AI_SMS_PARSER_MODE: "hybrid-fixture",
+      })
+    ).toBe("hybrid-fixture");
   });
 
   it("keeps explicitly provided Supabase env values", () => {

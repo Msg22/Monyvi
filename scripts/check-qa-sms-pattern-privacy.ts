@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 import {
   qaCandidateArtifactSchema,
   qaCandidateBundleSchema,
@@ -36,6 +37,8 @@ export interface QaSmsPrivacyFinding {
     | "raw_string_value"
     | "raw_value_canary"
     | "tracked_staging_artifact"
+    | "trusted_runtime_private_metadata"
+    | "trusted_runtime_private_value"
     | "unexpected_candidate_file";
   readonly path: string;
 }
@@ -209,6 +212,50 @@ function isRuntimeParserFile(filePath: string): boolean {
     !normalizedPath.includes("/__tests__/") &&
     !normalizedPath.includes("/testing/")
   );
+}
+
+function isTrustedRuntimeCatalogFile(filePath: string): boolean {
+  const normalizedPath = normalizePath(filePath);
+  return (
+    normalizedPath.startsWith(
+      "packages/logic/src/parsers/trusted-sms-patterns/"
+    ) &&
+    normalizedPath.endsWith(".ts") &&
+    !normalizedPath.endsWith("/index.ts") &&
+    !normalizedPath.endsWith("/promotion-manifest.ts")
+  );
+}
+
+function scanTrustedRuntimeFixedText(
+  file: QaSmsPrivacyScanFile,
+  findings: QaSmsPrivacyFinding[]
+): void {
+  const sourceFile = ts.createSourceFile(
+    file.path,
+    file.content,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS
+  );
+
+  function visit(node: ts.Node): void {
+    if (
+      ts.isPropertyAssignment(node) &&
+      ((ts.isIdentifier(node.name) && node.name.text === "text") ||
+        (ts.isStringLiteral(node.name) && node.name.text === "text")) &&
+      (ts.isStringLiteral(node.initializer) ||
+        ts.isNoSubstitutionTemplateLiteral(node.initializer)) &&
+      findQaSmsFixedTextPrivacyFindings(node.initializer.text).length > 0
+    ) {
+      findings.push({
+        code: "trusted_runtime_private_value",
+        path: file.path,
+      });
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
 }
 
 function collectObjectFindings(
@@ -402,6 +449,23 @@ export function scanQaSmsPatternPrivacy(
       )
     ) {
       findings.push({ code: "candidate_runtime_import", path: normalizedPath });
+    }
+    if (
+      isTrustedRuntimeCatalogFile(normalizedPath) &&
+      /\b(?:candidateId|evidenceDigest|rawSmsBody|smsFingerprint|receivedAtMs|nativeMessageId|sourceTimestamp)\b/.test(
+        file.content
+      )
+    ) {
+      findings.push({
+        code: "trusted_runtime_private_metadata",
+        path: normalizedPath,
+      });
+    }
+    if (isTrustedRuntimeCatalogFile(normalizedPath)) {
+      scanTrustedRuntimeFixedText(
+        { ...file, path: normalizedPath },
+        findings
+      );
     }
   }
 

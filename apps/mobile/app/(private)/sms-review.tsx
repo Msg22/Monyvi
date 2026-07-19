@@ -18,12 +18,15 @@
  */
 
 import { ConfirmationModal } from "@/components/modals/ConfirmationModal";
+import { AiProcessingConsentSheet } from "@/components/ai-consent/AiProcessingConsentSheet";
 import { TransactionReview } from "@/components/transaction-review/TransactionReview";
 import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
 import { useSmsScanContext } from "@/context/SmsScanContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useSmsSync } from "@/hooks/useSmsSync";
+import { useSmsReviewRetry } from "@/hooks/useSmsReviewRetry";
+import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
 import { batchCreateTransactions } from "@/services/batch-create-transactions";
 import {
   flushQueuedTransactions,
@@ -37,6 +40,7 @@ import { Text, TouchableOpacity } from "react-native";
 import { useTranslation } from "react-i18next";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import { logger } from "@/utils/logger";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -45,10 +49,13 @@ import { StatusBar } from "expo-status-bar";
 export default function SmsReviewScreen(): React.JSX.Element {
   const { t } = useTranslation("transactions");
   const router = useRouter();
-  const { transactions, clearTransactions } = useSmsScanContext();
+  const { transactions, unresolvedCandidates, clearTransactions } =
+    useSmsScanContext();
   const { markSyncComplete } = useSmsSync();
   const { showToast } = useToast();
   const { isDark } = useTheme();
+  const smsRetry = useSmsReviewRetry();
+  const aiConsent = useAiProcessingConsent();
 
   const [isSaving, setIsSaving] = useState(false);
   const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
@@ -59,12 +66,14 @@ export default function SmsReviewScreen(): React.JSX.Element {
 
     return () => {
       setReviewingActive(false);
+      clearTransactions();
       flushQueuedTransactions().catch((err) => {
-        // Non-critical: queued transactions will be processed on next app launch
-        console.warn("[sms-review] Failed to flush queued transactions:", err);
+        logger.warn("smsReview.flushQueuedTransactions.failed", {
+          errorName: err instanceof Error ? err.name : "unknown",
+        });
       });
     };
-  }, []);
+  }, [clearTransactions]);
 
   // ── Save ────────────────────────────────────────────────────────────
 
@@ -101,7 +110,13 @@ export default function SmsReviewScreen(): React.JSX.Element {
           message: t("saved_from_sms", { count: result.savedCount }),
         });
 
-        markSyncComplete().catch(console.error);
+        if (unresolvedCandidates.length === 0) {
+          markSyncComplete().catch((error: unknown) => {
+            logger.warn("smsReview.markSyncComplete.failed", {
+              errorName: error instanceof Error ? error.name : "unknown",
+            });
+          });
+        }
         clearTransactions();
         router.replace("/(private)/(tabs)/transactions");
       } catch (err) {
@@ -115,7 +130,14 @@ export default function SmsReviewScreen(): React.JSX.Element {
         setIsSaving(false);
       }
     },
-    [clearTransactions, router, markSyncComplete, showToast, t]
+    [
+      clearTransactions,
+      router,
+      markSyncComplete,
+      showToast,
+      t,
+      unresolvedCandidates.length,
+    ]
   );
 
   // ── Discard ─────────────────────────────────────────────────────────
@@ -128,6 +150,19 @@ export default function SmsReviewScreen(): React.JSX.Element {
     clearTransactions();
     router.replace("/(private)/(tabs)");
   }, [clearTransactions, router]);
+
+  const handleRetryConsentContinue = useCallback(async (): Promise<void> => {
+    try {
+      await aiConsent.grantConsent();
+      smsRetry.dismissConsentRequired();
+      await smsRetry.retry();
+    } catch (error: unknown) {
+      logger.warn("smsReview.retryConsent.failed", {
+        errorName: error instanceof Error ? error.name : "unknown",
+      });
+      showToast({ type: "error", title: t("ai_consent_retry_error") });
+    }
+  }, [aiConsent, showToast, smsRetry, t]);
 
   // ── No transactions guard ───────────────────────────────────────────
 
@@ -165,13 +200,27 @@ export default function SmsReviewScreen(): React.JSX.Element {
         transactions={transactions}
         onSave={handleSave}
         onDiscard={handleDiscard}
-        isSaving={isSaving}
+        isSaving={isSaving || smsRetry.isRetrying}
         title={t("review_transactions_title")}
         subtitle={t("review_sms_source_summary", {
           count: transactions.length,
         })}
-        onBack={() => router.back()}
         workspaceVariant="sms"
+        partialResults={
+          smsRetry.unresolvedCount > 0
+            ? {
+                unresolvedCount: smsRetry.unresolvedCount,
+                canRetry: smsRetry.retryableCount > 0 && !isSaving,
+                isRetrying: smsRetry.isRetrying,
+                hasRetryError: smsRetry.hasRetryError,
+                onRetry: () => void smsRetry.retry(),
+              }
+            : undefined
+        }
+        onBack={() => {
+          clearTransactions();
+          router.back();
+        }}
       />
 
       {/* Discard confirmation */}
@@ -184,6 +233,15 @@ export default function SmsReviewScreen(): React.JSX.Element {
         cancelLabel={t("cancel")}
         onConfirm={handleConfirmDiscard}
         onCancel={() => setDiscardConfirmVisible(false)}
+      />
+      <AiProcessingConsentSheet
+        visible={smsRetry.isConsentRequired}
+        onContinue={handleRetryConsentContinue}
+        onNotNow={smsRetry.dismissConsentRequired}
+        onPrivacyDetails={() => {
+          smsRetry.dismissConsentRequired();
+          router.push("/ai-privacy-details");
+        }}
       />
     </SafeAreaView>
   );

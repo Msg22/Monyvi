@@ -509,10 +509,24 @@ async function runRescanSkipsSaved() {
   verifyBatchSmsSaved();
 }
 
+async function runHybridPartialRetry() {
+  grantReadSmsPermission();
+  clearSmsSyncProbeRows();
+  await maybeRelaunchBeforeSmsSyncJourney();
+  await runFlow("sms-sync-hybrid-partial-retry.yaml");
+}
+
 const journeys = {
   "01": runBatchDuplicatesAndAtm,
   "02": runRescanSkipsSaved,
+  "03": runHybridPartialRetry,
 };
+
+function getDefaultJourneyIds(env = process.env) {
+  return env.EXPO_PUBLIC_AI_SMS_PARSER_MODE === "hybrid-fixture"
+    ? ["03"]
+    : ["01", "02"];
+}
 
 async function main() {
   applyLocalE2eDefaults();
@@ -521,7 +535,7 @@ async function main() {
   const selected =
     requested.length > 0
       ? requested.map((id) => id.padStart(2, "0"))
-      : Object.keys(journeys);
+      : getDefaultJourneyIds();
 
   await bootstrapCleanAuthenticatedSession();
 
@@ -552,6 +566,7 @@ module.exports = {
   buildLocalParserSmsSavedVerificationQueries,
   buildSmsSyncProbeCleanupSql,
   getAuthBootstrapFlow,
+  getDefaultJourneyIds,
   getMaestroFlowTimeoutMs,
   getSmsSyncFlowAttemptCount,
   getActiveUserFilter,

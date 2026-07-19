@@ -2,6 +2,7 @@ import { database, type Category } from "@monyvi/db";
 import {
   type ParsedSmsTransaction,
   computeSmsFingerprint,
+  isLikelyCorruptedSmsText,
   isLikelyFinancialSms,
   SUPPORTED_CURRENCIES,
 } from "@monyvi/logic";
@@ -11,7 +12,11 @@ import {
   type ParseSmsContext,
   type SmsCandidate,
 } from "./ai-sms-parser-service";
-import { parseSmsWithOrchestrator } from "./sms-parser-orchestrator";
+import {
+  getTrustedPrefilterDisposition,
+  parseSmsWithOrchestrator,
+  toSmsParserDiagnosticsLogContext,
+} from "./sms-parser-orchestrator";
 import {
   reconcileLiveDetectionPreference,
   setAutoConfirm,
@@ -169,17 +174,39 @@ export async function processLiveSmsEvent(
     return createResult("infrastructure_error", undefined);
   }
 
-  if (!isLikelyFinancialSms(event.body)) {
+  if (isLikelyCorruptedSmsText(event.body)) {
     return createResult("ignored");
   }
 
   let smsFingerprint: string | undefined;
+  let candidate: SmsCandidate | undefined;
   try {
     smsFingerprint = await computeSmsFingerprint({
       sender: event.sender,
       body: event.body,
       receivedAtMs: event.timestamp,
     });
+    candidate = {
+      message: {
+        id: `live-${event.deliveryMode}-${event.timestamp}`,
+        address: event.sender,
+        body: event.body,
+        date: event.timestamp,
+        read: false,
+      },
+      smsFingerprint,
+    };
+    const trustedPrefilterDisposition = getTrustedPrefilterDisposition(
+      candidate,
+      SUPPORTED_CURRENCIES.map(({ code }) => code)
+    );
+    if (
+      trustedPrefilterDisposition === "filter_before_ai" ||
+      (!isLikelyFinancialSms(event.body) &&
+        trustedPrefilterDisposition !== "route_to_parser")
+    ) {
+      return createResult("ignored", smsFingerprint);
+    }
 
     if (inFlightSmsFingerprints.has(smsFingerprint)) {
       return createResult("duplicate", smsFingerprint);
@@ -209,6 +236,9 @@ export async function processLiveSmsEvent(
   if (confirmedSmsFingerprint === undefined) {
     return createResult("infrastructure_error", undefined);
   }
+  if (candidate === undefined) {
+    return createResult("infrastructure_error", confirmedSmsFingerprint);
+  }
 
   try {
     let context: ParseSmsContext;
@@ -229,17 +259,6 @@ export async function processLiveSmsEvent(
     if (!preParseConsentCheck.canProcess) {
       return preParseConsentCheck.result;
     }
-
-    const candidate: SmsCandidate = {
-      message: {
-        id: `live-${event.deliveryMode}-${event.timestamp}`,
-        address: event.sender,
-        body: event.body,
-        date: event.timestamp,
-        read: false,
-      },
-      smsFingerprint: confirmedSmsFingerprint,
-    };
 
     let aiResult: Awaited<ReturnType<typeof parseSmsWithOrchestrator>>;
     try {
@@ -265,13 +284,7 @@ export async function processLiveSmsEvent(
 
     logger.info("liveSms.parserDiagnostics", {
       deliveryMode: event.deliveryMode,
-      mode: aiResult.diagnostics.mode,
-      attemptedAi: aiResult.diagnostics.attemptedAi,
-      attemptedLocal: aiResult.diagnostics.attemptedLocal,
-      candidateCount: aiResult.diagnostics.candidateCount,
-      resultCount: aiResult.diagnostics.resultCount,
-      matchedPatternIds: aiResult.diagnostics.matchedPatternIds,
-      runtimeScopeCounts: aiResult.diagnostics.runtimeScopeCounts,
+      ...toSmsParserDiagnosticsLogContext(aiResult.diagnostics),
     });
 
     const consentRecheck = await checkLiveSmsAiConsent({
@@ -283,7 +296,11 @@ export async function processLiveSmsEvent(
       return consentRecheck.result;
     }
 
-    if (aiResult.hasError === true) {
+    const hasUnresolvedFailure =
+      aiResult.hasError === true &&
+      (aiResult.transactions.length === 0 ||
+        aiResult.unresolvedCandidates.length > 0);
+    if (hasUnresolvedFailure) {
       return createResult(
         "ai_failed",
         confirmedSmsFingerprint,

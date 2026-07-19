@@ -18,6 +18,8 @@
 import { database, Transaction, Transfer } from "@monyvi/db";
 import {
   computeSmsFingerprint,
+  getParsedSmsTransactionKey,
+  isLikelyCorruptedSmsText,
   isKnownFinancialSender,
   type ParsedSmsTransaction,
   type SmsMessage,
@@ -29,7 +31,13 @@ import {
   type ParseSmsContext,
   type SmsCandidate,
 } from "./ai-sms-parser-service";
-import { parseSmsWithOrchestrator } from "./sms-parser-orchestrator";
+import {
+  getTrustedPrefilterDisposition,
+  parseSmsWithOrchestrator,
+  toSmsParserDiagnosticsLogContext,
+  type HybridSmsUnresolvedCandidate,
+  type SmsParserDiagnostics,
+} from "./sms-parser-orchestrator";
 import { getCurrentUserDataScope } from "./user-data-access";
 import { readSmsInbox } from "./sms-reader-service";
 import { logger } from "@/utils/logger";
@@ -69,6 +77,9 @@ export interface SmsScanResult {
   readonly totalFound: number;
   readonly totalFilteredCandidates: number;
   readonly durationMs: number;
+  readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
+  readonly parseContext: ParseSmsContext;
+  readonly parserDiagnostics: SmsParserDiagnostics;
 }
 
 /** Options for the scan pipeline. */
@@ -163,10 +174,8 @@ function collectFingerprints(
 }
 
 /**
- * Remove exact duplicate parsed SMS transactions from the same scan result.
- * Different transactions can legitimately come from the same SMS.
- *
- * This protects the save path from duplicate AI entries for one SMS.
+ * Keep at most one parsed transaction per SMS fingerprint.
+ * This matches the persistence and review-session deduplication invariant.
  */
 function deduplicateParsedSmsTransactions(
   transactions: readonly ParsedSmsTransaction[]
@@ -185,21 +194,6 @@ function deduplicateParsedSmsTransactions(
   }
 
   return deduplicated;
-}
-
-function getParsedSmsTransactionKey(transaction: ParsedSmsTransaction): string {
-  return JSON.stringify({
-    smsFingerprint: transaction.smsFingerprint,
-    amount: transaction.amount,
-    currency: transaction.currency,
-    type: transaction.type,
-    counterparty: transaction.counterparty ?? null,
-    date: transaction.date.getTime(),
-    categoryId: transaction.categoryId,
-    categoryDisplayName: transaction.categoryDisplayName,
-    isAtmWithdrawal: transaction.isAtmWithdrawal === true,
-    cardLast4: transaction.cardLast4 ?? null,
-  });
 }
 
 /**
@@ -332,8 +326,7 @@ async function executeScanPipeline(
         continue;
       }
 
-      // Skip OTPs, promotions, PIN resets, etc.
-      if (isNonTransactionalSms(sms.body)) {
+      if (isLikelyCorruptedSmsText(sms.body)) {
         continue;
       }
 
@@ -344,13 +337,28 @@ async function executeScanPipeline(
         receivedAtMs: sms.date,
       });
 
+      const candidate = { message: sms, smsFingerprint: fingerprint };
+      const trustedPrefilterDisposition = getTrustedPrefilterDisposition(
+        candidate,
+        options.aiContext.supportedCurrencies
+      );
+      if (trustedPrefilterDisposition === "filter_before_ai") {
+        continue;
+      }
+      if (
+        isNonTransactionalSms(sms.body) &&
+        trustedPrefilterDisposition !== "route_to_parser"
+      ) {
+        continue;
+      }
+
       // Skip if already exists in local DB
       if (seenFingerprints.has(fingerprint)) {
         continue;
       }
 
       seenFingerprints.add(fingerprint);
-      candidates.push({ message: sms, smsFingerprint: fingerprint });
+      candidates.push(candidate);
     }
 
     // Emit progress after each batch
@@ -429,17 +437,12 @@ async function executeScanPipeline(
     abortSignal
   );
 
-  logger.info("smsSync.parserDiagnostics", {
-    mode: aiResult.diagnostics.mode,
-    attemptedAi: aiResult.diagnostics.attemptedAi,
-    attemptedLocal: aiResult.diagnostics.attemptedLocal,
-    candidateCount: aiResult.diagnostics.candidateCount,
-    resultCount: aiResult.diagnostics.resultCount,
-    matchedPatternIds: aiResult.diagnostics.matchedPatternIds,
-    runtimeScopeCounts: aiResult.diagnostics.runtimeScopeCounts,
-  });
+  logger.info(
+    "smsSync.parserDiagnostics",
+    toSmsParserDiagnosticsLogContext(aiResult.diagnostics)
+  );
 
-  if (aiResult.hasError && aiResult.isRetryable === false) {
+  if (aiResult.hasError && aiResult.transactions.length === 0) {
     throw new Error("SMS AI parsing failed");
   }
 
@@ -472,5 +475,8 @@ async function executeScanPipeline(
     totalFound: deduplicatedTransactions.length,
     totalFilteredCandidates: candidates.length,
     durationMs,
+    unresolvedCandidates: aiResult.unresolvedCandidates ?? [],
+    parseContext: options.aiContext,
+    parserDiagnostics: aiResult.diagnostics,
   };
 }

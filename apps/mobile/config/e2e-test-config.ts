@@ -1,11 +1,12 @@
 export type MonyviTestMode = "off" | "e2e";
-export type AiSmsParserMode = "edge" | "fixture" | "local";
+export type AiSmsParserMode = "edge" | "fixture" | "hybrid-fixture" | "local";
 export type SmsInboxMode = "device" | "fixture";
 
 interface E2eProcessEnv {
   readonly EXPO_PUBLIC_MONYVI_TEST_MODE?: unknown;
   readonly EXPO_PUBLIC_AI_SMS_PARSER_MODE?: unknown;
   readonly EXPO_PUBLIC_SMS_INBOX_MODE?: unknown;
+  readonly EXPO_PUBLIC_HYBRID_SMS_PARSER_ENABLED?: unknown;
 }
 
 interface E2eProcess {
@@ -27,6 +28,9 @@ const publicAiSmsParserModeEnv = stringEnv(
   process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE
 );
 const publicSmsInboxModeEnv = stringEnv(process.env.EXPO_PUBLIC_SMS_INBOX_MODE);
+const publicHybridSmsParserEnabledEnv = stringEnv(
+  process.env.EXPO_PUBLIC_HYBRID_SMS_PARSER_ENABLED
+);
 
 function getNodeEnv(): string | undefined {
   return stringEnv(process.env.NODE_ENV);
@@ -56,13 +60,23 @@ function getPublicSmsInboxModeEnv(): string | undefined {
   return publicSmsInboxModeEnv;
 }
 
+function getPublicHybridSmsParserEnabledEnv(): string | undefined {
+  if (getNodeEnv() === "test") {
+    return stringEnv(getProcessEnv()?.EXPO_PUBLIC_HYBRID_SMS_PARSER_ENABLED);
+  }
+
+  return publicHybridSmsParserEnabledEnv;
+}
+
 export function getMonyviTestMode(): MonyviTestMode {
   return getPublicMonyviTestModeEnv() === "e2e" ? "e2e" : "off";
 }
 
 export function getAiSmsParserMode(): AiSmsParserMode {
   const value = getPublicAiSmsParserModeEnv();
-  return value === "fixture" || value === "local" ? value : "edge";
+  return value === "fixture" || value === "hybrid-fixture" || value === "local"
+    ? value
+    : "edge";
 }
 
 export function getSmsInboxMode(): SmsInboxMode {
@@ -74,17 +88,43 @@ export function isE2eTestMode(): boolean {
 }
 
 export function shouldUseFixtureSmsParser(): boolean {
+  const parserMode = getAiSmsParserMode();
   return (
     getNodeEnv() !== "production" &&
     isE2eTestMode() &&
-    getAiSmsParserMode() === "fixture"
+    (parserMode === "fixture" || parserMode === "hybrid-fixture")
+  );
+}
+
+export function shouldBlockEdgeSmsParserInE2e(): boolean {
+  return (
+    getNodeEnv() !== "production" &&
+    isE2eTestMode() &&
+    getAiSmsParserMode() === "edge"
+  );
+}
+
+export function shouldBlockUnsafeSmsParserConfiguration(): boolean {
+  const parserMode = getAiSmsParserMode();
+  const isFixtureMode =
+    parserMode === "fixture" || parserMode === "hybrid-fixture";
+  const isUnsafeLocalMode =
+    parserMode === "local" && !shouldUseLocalSmsParser();
+
+  return (
+    shouldBlockEdgeSmsParserInE2e() ||
+    (isFixtureMode && !shouldUseFixtureSmsParser()) ||
+    isUnsafeLocalMode
   );
 }
 
 export function shouldUseFixtureSmsInbox(): boolean {
   const parserMode = getAiSmsParserMode();
   const isE2eFixtureInbox =
-    isE2eTestMode() && (parserMode === "fixture" || parserMode === "local");
+    isE2eTestMode() &&
+    (parserMode === "fixture" ||
+      parserMode === "hybrid-fixture" ||
+      parserMode === "local");
   const isDevLocalParserFixtureInbox =
     getMonyviTestMode() === "off" &&
     parserMode === "local" &&
@@ -98,4 +138,23 @@ export function shouldUseFixtureSmsInbox(): boolean {
 
 export function shouldUseLocalSmsParser(): boolean {
   return getNodeEnv() !== "production" && getAiSmsParserMode() === "local";
+}
+
+export function shouldUseHybridSmsParser(): boolean {
+  const parserMode = getAiSmsParserMode();
+  if (shouldBlockUnsafeSmsParserConfiguration()) return false;
+
+  const isHybridFixtureMode =
+    getNodeEnv() !== "production" &&
+    isE2eTestMode() &&
+    parserMode === "hybrid-fixture";
+
+  if (isHybridFixtureMode) return true;
+  if (parserMode === "hybrid-fixture") return false;
+
+  return (
+    !shouldUseFixtureSmsParser() &&
+    !shouldUseLocalSmsParser() &&
+    getPublicHybridSmsParserEnabledEnv() !== "false"
+  );
 }

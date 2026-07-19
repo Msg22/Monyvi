@@ -24,7 +24,10 @@ jest.mock("@/services/profile-service", () => ({
 }));
 
 import type { ParsedSmsTransaction } from "@monyvi/logic";
-import { parseSmsWithOrchestrator } from "@/services/sms-parser-orchestrator";
+import {
+  getTrustedPrefilterDisposition,
+  parseSmsWithOrchestrator,
+} from "@/services/sms-parser-orchestrator";
 
 const originalEnv = process.env;
 const RECEIVED_AT_MS = new Date(2026, 3, 8, 14, 30).getTime();
@@ -70,6 +73,32 @@ function candidate(overrides: Partial<SmsCandidate> = {}): SmsCandidate {
   };
 }
 
+function trustedPurchaseCandidate(): SmsCandidate {
+  return candidate({
+    message: {
+      id: "sms-trusted",
+      address: "QNB EGYPT",
+      body: "Your Debit Card **2132 had a Successful transaction of EGP 490.00 @GEIDEAE*BASHAYER LIBAYE,your available bal.EGP10853.15 for lost/stolen card call 19700",
+      date: RECEIVED_AT_MS,
+      read: false,
+    },
+    smsFingerprint: "fingerprint-trusted",
+  });
+}
+
+function trustedOtpCandidate(bodySuffix = ""): SmsCandidate {
+  return candidate({
+    message: {
+      id: "sms-trusted-otp",
+      address: "QNB EGYPT",
+      body: `QNB OTP:369154 at Orange for EGP 1572 الرقم السرى مخصص لعملية الشراء اونلاين برجاء عدم الافصاح عنه${bodySuffix}`,
+      date: RECEIVED_AT_MS,
+      read: false,
+    },
+    smsFingerprint: "fingerprint-trusted-otp",
+  });
+}
+
 function parsedTransaction(
   overrides: Partial<ParsedSmsTransaction> = {}
 ): ParsedSmsTransaction {
@@ -98,7 +127,205 @@ describe("sms-parser-orchestrator", () => {
     process.env = { ...originalEnv, NODE_ENV: "test" };
     delete process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE;
     delete process.env.EXPO_PUBLIC_MONYVI_TEST_MODE;
+    delete process.env.EXPO_PUBLIC_HYBRID_SMS_PARSER_ENABLED;
     mockGetAiProcessingConsentStatus.mockResolvedValue({ isConsented: true });
+  });
+
+  it("routes only an exact active trusted rejection around broad prefilters", () => {
+    expect(
+      getTrustedPrefilterDisposition(trustedOtpCandidate(), ["EGP", "USD"])
+    ).toBe("route_to_parser");
+    expect(
+      getTrustedPrefilterDisposition(trustedOtpCandidate(" extra"), [
+        "EGP",
+        "USD",
+      ])
+    ).toBe("not_trusted_candidate");
+  });
+
+  it("routes an exact trusted transaction around broad prefilters", () => {
+    const trustedPurchase = trustedPurchaseCandidate();
+    const trustedTransactionWithOtpMerchant: SmsCandidate = {
+      ...trustedPurchase,
+      message: {
+        ...trustedPurchase.message,
+        body: "Your Debit Card **2132 had a Successful transaction of EGP 490.00 @OTP STORE,your available bal.EGP10853.15 for lost/stolen card call 19700",
+      },
+    };
+
+    expect(
+      getTrustedPrefilterDisposition(trustedTransactionWithOtpMerchant, [
+        "EGP",
+        "USD",
+      ])
+    ).toBe("route_to_parser");
+  });
+
+  it("filters trusted rejections before AI when hybrid is disabled", () => {
+    process.env.EXPO_PUBLIC_HYBRID_SMS_PARSER_ENABLED = "false";
+
+    expect(
+      getTrustedPrefilterDisposition(trustedOtpCandidate(), ["EGP", "USD"])
+    ).toBe("filter_before_ai");
+    expect(
+      getTrustedPrefilterDisposition(trustedOtpCandidate(" extra"), [
+        "EGP",
+        "USD",
+      ])
+    ).toBe("not_trusted_candidate");
+  });
+
+  it("routes rejection candidates through hybrid fallback when the catalog is invalid", () => {
+    expect(
+      getTrustedPrefilterDisposition(trustedOtpCandidate(), ["EGP", "USD"], {
+        status: "invalid",
+        catalogVersion: null,
+        patterns: [],
+        issues: [{ code: "integrity_digest_mismatch" }],
+      })
+    ).toBe("route_to_parser");
+  });
+
+  it("does not bypass broad filters for unrelated SMS when the catalog is invalid", () => {
+    expect(
+      getTrustedPrefilterDisposition(candidate(), ["EGP", "USD"], {
+        status: "invalid",
+        catalogVersion: null,
+        patterns: [],
+        issues: [{ code: "integrity_digest_mismatch" }],
+      })
+    ).toBe("not_trusted_candidate");
+  });
+
+  it("routes exact trusted candidates locally and sends only unresolved candidates to AI", async () => {
+    const unresolved = candidate();
+    const aiTransaction = parsedTransaction({
+      smsFingerprint: unresolved.smsFingerprint,
+      deduplicationHash: unresolved.smsFingerprint,
+    });
+    mockParseSmsWithAi.mockResolvedValueOnce({
+      transactions: [aiTransaction],
+      hasError: false,
+    });
+
+    const result = await parseSmsWithOrchestrator(
+      [trustedPurchaseCandidate(), unresolved],
+      context
+    );
+
+    expect(mockParseSmsWithAi).toHaveBeenCalledWith(
+      [unresolved],
+      context,
+      undefined,
+      undefined
+    );
+    expect(result.transactions).toEqual([
+      expect.objectContaining({
+        smsFingerprint: "fingerprint-trusted",
+        amount: 490,
+        reviewStatus: "needs_review",
+      }),
+      aiTransaction,
+    ]);
+    expect(result.diagnostics).toMatchObject({
+      mode: "hybrid",
+      attemptedAi: true,
+      attemptedLocal: true,
+      localMatchedCount: 1,
+      aiAttemptedCount: 1,
+    });
+  });
+
+  it("rechecks consent immediately before sending unresolved candidates to AI", async () => {
+    mockGetAiProcessingConsentStatus
+      .mockResolvedValueOnce({ isConsented: true })
+      .mockResolvedValueOnce({ isConsented: false });
+
+    await expect(
+      parseSmsWithOrchestrator([candidate()], context)
+    ).rejects.toMatchObject({ name: "AiConsentRequiredError" });
+
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+  });
+
+  it("resolves exact trusted rejection templates without sending them to AI", async () => {
+    const otp = candidate({
+      message: {
+        id: "sms-otp",
+        address: "QNB EGYPT",
+        body: "QNB OTP:369154 at Orange for EGP 1572 الرقم السرى مخصص لعملية الشراء اونلاين برجاء عدم الافصاح عنه",
+        date: RECEIVED_AT_MS,
+        read: false,
+      },
+      smsFingerprint: "fingerprint-otp",
+    });
+
+    const result = await parseSmsWithOrchestrator([otp], context);
+
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(result.transactions).toEqual([]);
+    expect(result.diagnostics).toMatchObject({
+      mode: "hybrid",
+      localRejectedCount: 1,
+      aiAttemptedCount: 0,
+    });
+  });
+
+  it("routes every candidate through existing AI behavior when hybrid is disabled", async () => {
+    process.env.EXPO_PUBLIC_HYBRID_SMS_PARSER_ENABLED = "false";
+    mockParseSmsWithAi.mockResolvedValueOnce({
+      transactions: [],
+      hasError: false,
+    });
+    const trusted = trustedPurchaseCandidate();
+
+    const result = await parseSmsWithOrchestrator([trusted], context);
+
+    expect(mockParseSmsWithAi).toHaveBeenCalledWith(
+      [trusted],
+      context,
+      undefined,
+      undefined
+    );
+    expect(result.diagnostics).toMatchObject({
+      mode: "ai-primary",
+      attemptedLocal: false,
+    });
+  });
+
+  it("does not invoke AI when the disabled hybrid path has no candidates", async () => {
+    process.env.EXPO_PUBLIC_HYBRID_SMS_PARSER_ENABLED = "false";
+
+    const result = await parseSmsWithOrchestrator([], context);
+
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(result.transactions).toEqual([]);
+    expect(result.diagnostics).toMatchObject({
+      mode: "ai-primary",
+      attemptedAi: false,
+      candidateCount: 0,
+      resultCount: 0,
+    });
+  });
+
+  it("preserves AI-primary unresolved candidates when hybrid is disabled", async () => {
+    process.env.EXPO_PUBLIC_HYBRID_SMS_PARSER_ENABLED = "false";
+    const pending = candidate();
+    const unresolvedCandidate = {
+      candidate: pending,
+      reason: "chunk_failed" as const,
+      isRetryable: true,
+    };
+    mockParseSmsWithAi.mockResolvedValueOnce({
+      transactions: [],
+      hasError: true,
+      isRetryable: true,
+      unresolvedCandidates: [unresolvedCandidate],
+    });
+
+    const result = await parseSmsWithOrchestrator([pending], context);
+
+    expect(result.unresolvedCandidates).toEqual([unresolvedCandidate]);
   });
 
   afterEach(() => {
@@ -151,7 +378,7 @@ describe("sms-parser-orchestrator", () => {
     });
   });
 
-  it("keeps production/default mode AI-primary and does not call the local parser", async () => {
+  it("uses hybrid routing in production/default mode", async () => {
     const aiTransaction = parsedTransaction({ confidence: 0.2 });
     mockParseSmsWithAi.mockResolvedValueOnce({
       transactions: [aiTransaction],
@@ -163,14 +390,14 @@ describe("sms-parser-orchestrator", () => {
     expect(mockParseSmsWithAi).toHaveBeenCalledTimes(1);
     expect(result.transactions).toEqual([aiTransaction]);
     expect(result.diagnostics).toMatchObject({
-      mode: "ai-primary",
+      mode: "hybrid",
       attemptedAi: true,
-      attemptedLocal: false,
+      attemptedLocal: true,
     });
     expect(result.diagnostics.matchedPatternIds).toEqual([]);
   });
 
-  it("does not fall back when AI returns usable low-confidence results", async () => {
+  it("preserves usable low-confidence AI results after local routing", async () => {
     const aiTransaction = parsedTransaction({ confidence: 0.2 });
     mockParseSmsWithAi.mockResolvedValueOnce({
       transactions: [aiTransaction],
@@ -181,12 +408,67 @@ describe("sms-parser-orchestrator", () => {
 
     expect(result.transactions).toEqual([aiTransaction]);
     expect(result.diagnostics).toMatchObject({
-      mode: "ai-primary",
-      attemptedLocal: false,
+      mode: "hybrid",
+      attemptedLocal: true,
     });
   });
 
-  it("does not use local fallback for retryable unusable AI results in phase 1", async () => {
+  it("reports defensively discarded duplicate results as a safe count", async () => {
+    const duplicate = parsedTransaction();
+    mockParseSmsWithAi.mockResolvedValueOnce({
+      transactions: [duplicate, duplicate],
+      hasError: false,
+    });
+
+    const result = await parseSmsWithOrchestrator([candidate()], context);
+
+    expect(result.transactions).toEqual([duplicate]);
+    expect(result.diagnostics.duplicateDiscardedCount).toBe(1);
+  });
+
+  it("keeps at most one AI transaction for each SMS fingerprint", async () => {
+    const purchase = parsedTransaction({
+      amount: 100,
+      smsFingerprint: "shared-fingerprint",
+      deduplicationHash: "shared-fingerprint",
+    });
+    const fee = parsedTransaction({
+      amount: 5,
+      counterparty: "Card fee",
+      smsFingerprint: "shared-fingerprint",
+      deduplicationHash: "shared-fingerprint",
+    });
+    mockParseSmsWithAi.mockResolvedValueOnce({
+      transactions: [purchase, fee],
+      hasError: false,
+    });
+
+    const result = await parseSmsWithOrchestrator([candidate()], context);
+
+    expect(result.transactions).toEqual([purchase]);
+    expect(result.diagnostics.duplicateDiscardedCount).toBe(1);
+  });
+
+  it("returns an empty hybrid result without reading consent", async () => {
+    const result = await parseSmsWithOrchestrator([], context);
+
+    expect(mockGetAiProcessingConsentStatus).not.toHaveBeenCalled();
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      transactions: [],
+      hasError: false,
+      unresolvedCandidates: [],
+      diagnostics: {
+        mode: "hybrid",
+        attemptedAi: false,
+        attemptedLocal: false,
+        candidateCount: 0,
+        resultCount: 0,
+      },
+    });
+  });
+
+  it("preserves retryable unresolved candidates when AI returns an error", async () => {
     mockParseSmsWithAi.mockResolvedValueOnce({
       transactions: [],
       hasError: true,
@@ -199,13 +481,42 @@ describe("sms-parser-orchestrator", () => {
     expect(result.hasError).toBe(true);
     expect(result.isRetryable).toBe(true);
     expect(result.diagnostics).toMatchObject({
-      mode: "ai-primary",
+      mode: "hybrid",
       attemptedAi: true,
-      attemptedLocal: false,
+      attemptedLocal: true,
     });
+    expect(result.unresolvedCandidates).toHaveLength(1);
+    expect(result.diagnostics.reasonCounts).toMatchObject({ ai_failed: 1 });
   });
 
-  it("does not use local fallback when the AI call throws in phase 1", async () => {
+  it("includes stable per-candidate AI failure reasons in safe diagnostics", async () => {
+    const unresolved = candidate();
+    mockParseSmsWithAi.mockResolvedValueOnce({
+      transactions: [],
+      hasError: true,
+      isRetryable: true,
+      unresolvedCandidates: [
+        {
+          candidate: unresolved,
+          reason: "chunk_failed",
+          isRetryable: true,
+        },
+      ],
+    });
+
+    const result = await parseSmsWithOrchestrator([unresolved], context);
+
+    expect(result.unresolvedCandidates).toEqual([
+      {
+        candidate: unresolved,
+        reason: "chunk_failed",
+        isRetryable: true,
+      },
+    ]);
+    expect(result.diagnostics.reasonCounts).toMatchObject({ chunk_failed: 1 });
+  });
+
+  it("converts thrown AI failures into retryable hybrid partial state", async () => {
     mockParseSmsWithAi.mockRejectedValueOnce(
       new Error("Network request failed")
     );
@@ -216,10 +527,11 @@ describe("sms-parser-orchestrator", () => {
     expect(result.hasError).toBe(true);
     expect(result.isRetryable).toBe(true);
     expect(result.diagnostics).toMatchObject({
-      mode: "ai-primary",
+      mode: "hybrid",
       attemptedAi: true,
-      attemptedLocal: false,
+      attemptedLocal: true,
     });
+    expect(result.unresolvedCandidates).toHaveLength(1);
   });
 
   it("preserves abort errors without fallback", async () => {

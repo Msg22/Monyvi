@@ -6,7 +6,8 @@
   "types": "src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "jest --passWithNoTests"
+    "test": "jest --passWithNoTests",
+    "test:trusted-sms": "jest --runInBand trusted-sms"
   },
   "dependencies": {
     "@monyvi/db": "*",
