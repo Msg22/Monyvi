@@ -12,7 +12,6 @@ import { logger } from "@/utils/logger";
 
 import { pullChanges } from "./sync/pull-strategies";
 import { pushChanges } from "./sync/push-service";
-import { MarketRatesUnavailableError } from "./sync/errors";
 import { getCurrentUserId } from "./supabase";
 
 // Module-level sync lock tracks in-flight sync to prevent concurrent synchronize() calls.
@@ -74,13 +73,7 @@ export async function syncDatabase(
           logger.warn("sync.concurrentSyncAborted");
           return;
         }
-        if (error instanceof MarketRatesUnavailableError) {
-          logger.error("sync.failed", error, {
-            failureReason: error.code,
-          });
-        } else {
-          logger.error("sync.failed", error);
-        }
+        logger.error("sync.failed", error);
         throw error;
       }
     };

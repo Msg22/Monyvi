@@ -7,7 +7,7 @@ import { logger } from "@/utils/logger";
 
 import { getCurrentUserId, supabase } from "../supabase";
 import { SNAPSHOT_RETENTION_DAYS, SYNCABLE_TABLES } from "./config";
-import { createSyncTableError, MarketRatesUnavailableError } from "./errors";
+import { createSyncTableError } from "./errors";
 import { getChildTableConfig, isSnapshotTable } from "./table-predicates";
 import { transformFromSupabase } from "./transforms";
 import type {
@@ -35,7 +35,7 @@ export async function pullMarketRates(
   }
 
   if (!data || data.length === 0) {
-    throw new MarketRatesUnavailableError();
+    return { created: [], updated: [], deleted: [] };
   }
 
   const activeRecords = data.map((record) =>

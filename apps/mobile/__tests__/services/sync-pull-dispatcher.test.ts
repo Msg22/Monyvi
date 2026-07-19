@@ -177,15 +177,13 @@ describe("pullChanges", () => {
 });
 
 describe("pullMarketRates", () => {
-  it("fails the sync when the server returns no recent market rates", async () => {
+  it("returns an empty changeset when the server has no recent market rates", async () => {
     mockFrom.mockReturnValue(makeSelectChain({ data: [], error: null }));
 
-    await expect(pullMarketRates()).rejects.toThrow(
-      "No recent market rates were returned"
-    );
-    await expect(pullMarketRates()).rejects.toMatchObject({
-      name: "MarketRatesUnavailableError",
-      code: "market-rates-unavailable",
+    await expect(pullMarketRates()).resolves.toEqual({
+      created: [],
+      updated: [],
+      deleted: [],
     });
     expect(mockLoggerError).not.toHaveBeenCalled();
   });

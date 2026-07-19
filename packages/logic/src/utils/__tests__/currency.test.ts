@@ -91,6 +91,16 @@ describe("convertCurrency", () => {
     );
   });
 
+  it("throws when a valid rate produces a non-finite converted amount", () => {
+    const overflowingRates = createMockRates({
+      eurUsd: Number.MAX_VALUE,
+    });
+
+    expect(() => convertCurrency(2, "EUR", "USD", overflowingRates)).toThrow(
+      "Currency conversion produced a non-finite result"
+    );
+  });
+
   it("returns -0 as 0 when amount is -0 (short-circuits on amount === 0)", () => {
     // -0 === 0 is true in JavaScript, so convertCurrency returns -0 directly
     const result = convertCurrency(-0, "USD", "EGP", standardRates);
@@ -145,9 +155,8 @@ describe("formatCurrency", () => {
     });
 
     it("uses DEFAULT_PRECISION (2) for unlisted currencies", () => {
-      // MAD is in CURRENCY_SYMBOLS but not in CURRENCY_PRECISION
-      expect(formatCurrency({ amount: 100.75, currency: "MAD" })).toBe(
-        "100.75 MAD"
+      expect(formatCurrency({ amount: 100.75, currency: "ISK" })).toBe(
+        "100.75 ISK"
       );
     });
   });
@@ -412,6 +421,16 @@ describe("formatConversionPreview", () => {
     // convertCurrency returns 0 for amount === 0 (short circuit)
     expect(result).toContain("\u2248");
     expect(result).toContain("0.00 EGP");
+  });
+
+  it("returns unavailable when conversion overflows", () => {
+    const overflowingRates = createMockRates({
+      eurUsd: Number.MAX_VALUE,
+    });
+
+    expect(formatConversionPreview(2, "EUR", "USD", overflowingRates)).toBe(
+      "Conversion unavailable"
+    );
   });
 });
 

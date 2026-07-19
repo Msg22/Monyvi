@@ -2,8 +2,9 @@
  * Unit tests for the Supabase <-> WatermelonDB sync adapter.
  *
  * These tests cover the failure semantics that protect WatermelonDB's sync
- * cursor. A failed pull or push must reject the sync so WatermelonDB does not
- * treat missing remote data as a successful empty changeset.
+ * cursor. Remote pull and push errors must reject the sync so WatermelonDB does
+ * not advance metadata after a failed operation, while successful empty table
+ * responses remain valid changesets.
  */
 
 const mockSynchronize = jest.fn();
@@ -166,30 +167,25 @@ describe("syncDatabase", () => {
     );
   });
 
-  it("reports an empty market-rate pull once with a stable failure reason", async () => {
+  it("continues user-data sync when the server has no recent market rates", async () => {
+    let pullResult: unknown;
     mockSynchronize.mockImplementation(
       async (args: {
         pullChanges: (input: {
           lastPulledAt: number | null;
         }) => Promise<unknown>;
       }) => {
-        await args.pullChanges({ lastPulledAt: null });
+        pullResult = await args.pullChanges({ lastPulledAt: null });
       }
     );
 
-    await expect(syncDatabase(mockDatabase, true)).rejects.toThrow(
-      "No recent market rates were returned"
-    );
-
-    expect(mockLoggerError).toHaveBeenCalledTimes(1);
-    expect(mockLoggerError).toHaveBeenCalledWith(
-      "sync.failed",
-      expect.objectContaining({
-        name: "MarketRatesUnavailableError",
-        code: "market-rates-unavailable",
-      }),
-      { failureReason: "market-rates-unavailable" }
-    );
+    await expect(syncDatabase(mockDatabase, true)).resolves.toBeUndefined();
+    expect(pullResult).toMatchObject({
+      changes: {
+        market_rates: { created: [], updated: [], deleted: [] },
+      },
+    });
+    expect(mockLoggerError).not.toHaveBeenCalled();
   });
 
   it("rejects push created-row upsert errors so WatermelonDB keeps the local change dirty", async () => {

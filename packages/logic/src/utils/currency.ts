@@ -27,7 +27,13 @@ export function convertCurrency(
 ): number {
   if (amount === 0 || fromCurrency === toCurrency) return amount;
   const rate = getCurrencyRate(marketRates, fromCurrency, toCurrency);
-  return amount * rate;
+  const convertedAmount = amount * rate;
+
+  if (!Number.isFinite(convertedAmount)) {
+    throw new Error("Currency conversion produced a non-finite result");
+  }
+
+  return convertedAmount;
 }
 
 /**
@@ -179,7 +185,6 @@ function hasNonZeroFractionAtPrecision(
   amount: number,
   precision: number
 ): boolean {
-  if (precision <= 0) return false;
   const factor = 10 ** precision;
   const roundedMinorUnits = Math.round(Math.abs(amount) * factor);
   return roundedMinorUnits % factor !== 0;
