@@ -23,6 +23,7 @@ import { isAuthenticated as checkIsAuthenticated } from "../services/supabase";
 import { syncDatabase } from "../services/sync";
 import { queryOwned } from "../services/user-data-access";
 import { logger } from "../utils/logger";
+import type { InitialSyncFailureReason } from "../utils/routing-decision";
 
 // Sync intervals in milliseconds
 const SYNC_INTERVAL_ACTIVE = 15 * 60 * 1000; // 15 minutes when app is active
@@ -44,6 +45,8 @@ interface SyncContextValue {
   sync: (forceFullSync?: boolean) => Promise<void>;
   /** Resolved after the initial pull-sync completes or times out. */
   readonly initialSyncState: InitialSyncState;
+  /** Essential local data that still blocks safe startup after sync settles. */
+  readonly initialSyncFailureReason: InitialSyncFailureReason;
   /** Re-trigger the initial sync. Returns the new state when resolved. */
   readonly retryInitialSync: () => Promise<InitialSyncState>;
 }
@@ -67,9 +70,12 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
   );
   const [initialSyncState, setInitialSyncState] =
     useState<InitialSyncState>("in-progress");
+  const [initialSyncFailureReason, setInitialSyncFailureReason] =
+    useState<InitialSyncFailureReason>(null);
 
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const bootRunIdRef = useRef(0);
+  const initialSyncFailureReasonRef = useRef<InitialSyncFailureReason>(null);
 
   const sync = useCallback(
     async (
@@ -114,10 +120,13 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
    */
   const runInitialSync = useCallback(
     async (
+      failureReasonOnFailure: InitialSyncFailureReason,
       shouldApplyState: ShouldApplyState = shouldAlwaysApplyState
     ): Promise<InitialSyncState> => {
+      initialSyncFailureReasonRef.current = failureReasonOnFailure;
       if (shouldApplyState()) {
         setInitialSyncState("in-progress");
+        setInitialSyncFailureReason(null);
       }
 
       let syncResult: InitialSyncState = "success";
@@ -149,6 +158,10 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
 
       if (shouldApplyState()) {
         setInitialSyncState(syncResult);
+        const settledFailureReason =
+          syncResult === "success" ? null : failureReasonOnFailure;
+        initialSyncFailureReasonRef.current = settledFailureReason;
+        setInitialSyncFailureReason(settledFailureReason);
       }
       return syncResult;
     },
@@ -157,7 +170,7 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
 
   /** Re-trigger the initial sync from the retry screen. */
   const retryInitialSync = useCallback(async (): Promise<InitialSyncState> => {
-    return runInitialSync();
+    return runInitialSync(initialSyncFailureReasonRef.current);
   }, [runInitialSync]);
 
   /**
@@ -246,6 +259,8 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
       // Check user is authenticated before syncing
       if (!isAuthenticated) {
         if (shouldContinue()) {
+          initialSyncFailureReasonRef.current = null;
+          setInitialSyncFailureReason(null);
           setupSyncInterval(true);
           setInitialSyncState("success");
         }
@@ -256,6 +271,8 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
       const userId = bootUserId;
       if (!userId) {
         if (shouldContinue()) {
+          initialSyncFailureReasonRef.current = null;
+          setInitialSyncFailureReason(null);
           setInitialSyncState("failed");
         }
         return;
@@ -284,7 +301,10 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
 
       if (currentUserProfileCount === 0 || !hasValidCachedMarketRate) {
         setIsInitialSync(true);
-        await runInitialSync(shouldContinue);
+        await runInitialSync(
+          hasValidCachedMarketRate ? null : "market-rates-unavailable",
+          shouldContinue
+        );
         if (shouldContinue()) {
           setIsInitialSync(false);
         }
@@ -292,6 +312,8 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
         // Current-user profile exists locally, so the route gate can decide
         // offline. Mark the initial-sync gate as "success" immediately and
         // refresh the rest of the user's data in the background.
+        initialSyncFailureReasonRef.current = null;
+        setInitialSyncFailureReason(null);
         setInitialSyncState("success");
         sync(false, shouldContinue).catch((error: unknown) => {
           if (!shouldContinue()) {
@@ -335,6 +357,7 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
       syncError,
       sync,
       initialSyncState,
+      initialSyncFailureReason,
       retryInitialSync,
     }),
     [
@@ -344,6 +367,7 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
       syncError,
       sync,
       initialSyncState,
+      initialSyncFailureReason,
       retryInitialSync,
     ]
   );

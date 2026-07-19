@@ -24,6 +24,7 @@ const mockForeignProfilesFetch = jest.fn();
 const mockProfileQuery = jest.fn();
 const mockDatabaseGet = jest.fn();
 const mockDatabaseWrite = jest.fn();
+const mockLoggerError = jest.fn();
 
 interface SupabaseError {
   readonly message: string;
@@ -45,6 +46,7 @@ jest.mock("@monyvi/db", () => ({
       asset_metals: {},
       assets: {},
       categories: {},
+      market_rates: {},
       profiles: {},
       transactions: {},
       transfers: {},
@@ -76,13 +78,14 @@ jest.mock("@/services/supabase", () => ({
 jest.mock("@/utils/logger", () => ({
   logger: {
     debug: jest.fn(),
-    error: jest.fn(),
+    error: (...args: unknown[]): unknown => mockLoggerError(...args),
     info: jest.fn(),
     warn: jest.fn(),
   },
 }));
 
 import { syncDatabase } from "../../services/sync";
+import { MARKET_RATE_VALUE_COLUMNS } from "@monyvi/logic";
 
 function getSelectResult(table?: string): SupabaseResult {
   return (table ? selectResultsByTable[table] : undefined) ?? selectResult;
@@ -155,6 +158,37 @@ describe("syncDatabase", () => {
 
     await expect(syncDatabase(mockDatabase, true)).rejects.toThrow(
       "profiles pull failed"
+    );
+    expect(mockLoggerError).toHaveBeenCalledTimes(1);
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      "sync.failed",
+      expect.any(Error)
+    );
+  });
+
+  it("reports an empty market-rate pull once with a stable failure reason", async () => {
+    mockSynchronize.mockImplementation(
+      async (args: {
+        pullChanges: (input: {
+          lastPulledAt: number | null;
+        }) => Promise<unknown>;
+      }) => {
+        await args.pullChanges({ lastPulledAt: null });
+      }
+    );
+
+    await expect(syncDatabase(mockDatabase, true)).rejects.toThrow(
+      "No recent market rates were returned"
+    );
+
+    expect(mockLoggerError).toHaveBeenCalledTimes(1);
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      "sync.failed",
+      expect.objectContaining({
+        name: "MarketRatesUnavailableError",
+        code: "market-rates-unavailable",
+      }),
+      { failureReason: "market-rates-unavailable" }
     );
   });
 
@@ -343,6 +377,18 @@ describe("syncDatabase", () => {
 
   it("pulls profile JSON fields as WatermelonDB string fields", async () => {
     selectResultsByTable = {
+      market_rates: {
+        data: [
+          {
+            ...Object.fromEntries(
+              MARKET_RATE_VALUE_COLUMNS.map((column) => [column, 1])
+            ),
+            id: "market-rate-1",
+            created_at: "2026-05-18T08:00:00.000Z",
+          },
+        ],
+        error: null,
+      },
       profiles: {
         data: [
           {

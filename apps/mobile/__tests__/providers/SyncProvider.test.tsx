@@ -74,6 +74,7 @@ import { SyncProvider, useSync } from "../../providers/SyncProvider";
 
 interface SyncContextSnapshot {
   initialSyncState: string;
+  initialSyncFailureReason: string | null;
   retryInitialSync: () => Promise<string>;
 }
 
@@ -85,8 +86,13 @@ function renderAndCapture(): {
     React.createRef() as React.MutableRefObject<SyncContextSnapshot>;
 
   function CaptureComponent(): null {
-    const { initialSyncState, retryInitialSync } = useSync();
-    resultRef.current = { initialSyncState, retryInitialSync };
+    const { initialSyncState, initialSyncFailureReason, retryInitialSync } =
+      useSync();
+    resultRef.current = {
+      initialSyncState,
+      initialSyncFailureReason,
+      retryInitialSync,
+    };
     return null;
   }
 
@@ -191,6 +197,20 @@ describe("SyncProvider initialSyncState", () => {
 
     expect(mockSyncDatabase).toHaveBeenCalledWith(expect.anything(), true);
     expect(result.current.initialSyncState).toBe("success");
+    expect(result.current.initialSyncFailureReason).toBeNull();
+  });
+
+  it("preserves a typed market-rate failure when required local rates are missing offline", async (): Promise<void> => {
+    mockFetchProfileCount.mockResolvedValue(1);
+    mockFetchMarketRates.mockResolvedValue([]);
+    mockSyncDatabase.mockRejectedValue(new Error("Network unavailable"));
+    const { result } = renderAndCapture();
+
+    await waitForInitialSyncState(result, "failed");
+
+    expect(result.current.initialSyncFailureReason).toBe(
+      "market-rates-unavailable"
+    );
   });
 
   it("allows offline startup when both the profile and a cached rate exist", async (): Promise<void> => {
@@ -202,6 +222,7 @@ describe("SyncProvider initialSyncState", () => {
 
     expect(mockSyncDatabase).toHaveBeenCalledWith(expect.anything(), false);
     expect(result.current.initialSyncState).toBe("success");
+    expect(result.current.initialSyncFailureReason).toBeNull();
   });
 
   it("forces the blocking startup sync when the cached market rate is invalid", async (): Promise<void> => {
@@ -261,5 +282,25 @@ describe("SyncProvider initialSyncState", () => {
     const { result, unmount } = renderAndCapture();
     lastUnmount = unmount;
     expect(typeof result.current.retryInitialSync).toBe("function");
+  });
+
+  it("keeps the market-rate failure reason during retry and clears it after recovery", async (): Promise<void> => {
+    mockFetchProfileCount.mockResolvedValue(1);
+    mockFetchMarketRates.mockResolvedValue([]);
+    mockSyncDatabase.mockRejectedValueOnce(new Error("Network unavailable"));
+    const { result } = renderAndCapture();
+
+    await waitForInitialSyncState(result, "failed");
+    expect(result.current.initialSyncFailureReason).toBe(
+      "market-rates-unavailable"
+    );
+
+    mockSyncDatabase.mockResolvedValueOnce(undefined);
+    await act(async () => {
+      await result.current.retryInitialSync();
+    });
+
+    await waitForInitialSyncState(result, "success");
+    expect(result.current.initialSyncFailureReason).toBeNull();
   });
 });

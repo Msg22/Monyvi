@@ -27,7 +27,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 // Types
 // ---------------------------------------------------------------------------
 
-type StartupRecoveryReason = "profile-loading" | "startup-loading";
+type StartupRecoveryReason =
+  | "profile-loading"
+  | "startup-loading"
+  | "market-rates-unavailable";
 
 interface StartupRecoveryCopy {
   readonly chip: string;
@@ -54,6 +57,13 @@ const RECOVERY_COPY_BY_REASON: Record<
     description: "startup_loading_failed_description",
     retry: "retry_startup_loading",
     helper: "startup_loading_helper_text",
+  },
+  "market-rates-unavailable": {
+    chip: "market_rates_unavailable_chip",
+    title: "market_rates_unavailable_title",
+    description: "market_rates_unavailable_description",
+    retry: "retry_market_rates",
+    helper: "market_rates_unavailable_helper_text",
   },
 };
 

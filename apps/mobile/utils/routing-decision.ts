@@ -19,6 +19,9 @@
 /** The sync state owned by SyncProvider, read by the gate. */
 export type InitialSyncState = "in-progress" | "success" | "failed" | "timeout";
 
+/** Essential startup data that remains unavailable after a blocking sync. */
+export type InitialSyncFailureReason = "market-rates-unavailable" | null;
+
 /** Possible outcomes of the routing decision. */
 export type RoutingOutcome = "loading" | "dashboard" | "onboarding" | "retry";
 
@@ -26,6 +29,7 @@ export type RoutingOutcome = "loading" | "dashboard" | "onboarding" | "retry";
 export interface RoutingInputs {
   readonly syncState: InitialSyncState;
   readonly onboardingCompleted: boolean;
+  readonly initialSyncFailureReason: InitialSyncFailureReason;
 }
 
 /** Log payload emitted per routing-gate evaluation (FR-014). No PII. */
@@ -33,6 +37,7 @@ export interface RoutingDecisionLog {
   readonly outcome: RoutingOutcome;
   readonly onboardingCompleted: boolean;
   readonly syncState: InitialSyncState;
+  readonly initialSyncFailureReason: InitialSyncFailureReason;
 }
 
 // =============================================================================
@@ -44,18 +49,22 @@ export interface RoutingDecisionLog {
  *
  * Priority order:
  * 1. Sync still in progress → loading (splash / neutral backdrop)
- * 2. Already-onboarded user (flag = true) → dashboard regardless of sync
- *    state. Per Constitution I, WatermelonDB is the authoritative local
- *    source; an onboarded user with valid local state doesn't need the
- *    network to use the app. Background retries recover sync.
- * 3. Sync succeeded AND flag = false → onboarding (the onboarding screen
+ * 2. Required market rates still unavailable → retry. Financial totals
+ *    cannot render safely without one valid cached rate row.
+ * 3. Already-onboarded user (flag = true) → dashboard for generic sync
+ *    failures. Per Constitution I, valid WatermelonDB state remains the
+ *    offline source of truth and background retries recover sync.
+ * 4. Sync succeeded AND flag = false → onboarding (the onboarding screen
  *    resolves the exact phase from its per-user AsyncStorage cursor).
- * 4. Sync failed/timeout AND flag = false → retry. A not-yet-onboarded
+ * 5. Sync failed/timeout AND flag = false → retry. A not-yet-onboarded
  *    user has no local state yet, and without a successful initial pull
  *    we can't route them safely into the onboarding flow.
  */
 export function getRoutingDecision(inputs: RoutingInputs): RoutingOutcome {
   if (inputs.syncState === "in-progress") return "loading";
+  if (inputs.initialSyncFailureReason === "market-rates-unavailable") {
+    return "retry";
+  }
   if (inputs.onboardingCompleted) return "dashboard";
   if (inputs.syncState !== "success") return "retry";
   return "onboarding";
@@ -77,5 +86,6 @@ export function buildRoutingDecisionLog(
     outcome,
     onboardingCompleted: inputs.onboardingCompleted,
     syncState: inputs.syncState,
+    initialSyncFailureReason: inputs.initialSyncFailureReason,
   };
 }
