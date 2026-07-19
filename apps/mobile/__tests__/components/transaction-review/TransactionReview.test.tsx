@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import React from "react";
+import { FlatList, type FlatListProps } from "react-native";
 import {
   TRANSACTION_REVIEW_LIST_RENDER_CONFIG,
   TransactionReview,
@@ -369,6 +370,21 @@ describe("TransactionReview", () => {
       "className",
       expect.stringContaining("bg-background dark:bg-background-dark")
     );
+  });
+
+  it("disables native clipped-subview removal for dynamic review rows", () => {
+    renderReview({});
+
+    const listInstance: unknown = screen.UNSAFE_getByType(FlatList);
+    if (typeof listInstance !== "object" || listInstance === null) {
+      throw new Error("transaction_review_list_missing");
+    }
+    const listProps = Reflect.get(
+      listInstance,
+      "props"
+    ) as unknown as FlatListProps<unknown>;
+
+    expect(listProps.removeClippedSubviews).toBe(false);
   });
 
   it("keeps the approved SMS workspace compatible with light and dark themes", () => {

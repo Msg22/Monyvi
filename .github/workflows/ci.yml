@@ -16,6 +16,7 @@ permissions:
 jobs:
   e2e-scope:
     name: Resolve Android E2E Scope
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.resolve.outputs.should_run }}
@@ -170,7 +171,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     needs: [e2e-scope, quality, android-build]
-    if: needs.e2e-scope.outputs.should_run == 'true'
+    if:
+      github.ref == 'refs/heads/main' && needs.e2e-scope.outputs.should_run ==
+      'true'
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.e2e-scope.outputs.matrix) }}

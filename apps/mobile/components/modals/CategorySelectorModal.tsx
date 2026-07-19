@@ -4,6 +4,7 @@ import {
   CategorySearchBar,
 } from "@/components/category-selector";
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { useTheme } from "@/context/ThemeContext";
 import { useCategoryChildren } from "@/hooks/useCategoryChildren";
 import { useCategoriesWithChildren } from "@/hooks/useCategoriesWithChildren";
@@ -294,7 +295,7 @@ export function CategorySelectorModal({
                       paddingTop: 4,
                     }}
                     showsVerticalScrollIndicator={false}
-                    removeClippedSubviews={false}
+                    {...ANDROID_SAFE_LIST_PROPS}
                     maxToRenderPerBatch={15}
                     windowSize={5}
                   />

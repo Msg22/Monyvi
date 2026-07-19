@@ -23,6 +23,7 @@ import { useTranslation } from "react-i18next";
 import { getEgyptianInstitutionAsset } from "@/constants/egyptian-institution-assets";
 import { InstitutionLogoMark } from "@/components/institutions/InstitutionLogoMark";
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
 type InstitutionPickerType = "bank" | "wallet";
@@ -413,6 +414,7 @@ export function InstitutionPicker({
                   />
 
                   <FlatList
+                    {...ANDROID_SAFE_LIST_PROPS}
                     data={filteredInstitutions}
                     keyExtractor={institutionKeyExtractor}
                     keyboardShouldPersistTaps="handled"

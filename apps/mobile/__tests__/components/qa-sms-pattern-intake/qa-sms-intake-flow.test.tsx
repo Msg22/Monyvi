@@ -187,7 +187,7 @@ describe("QA SMS intake approved flow states", () => {
       maxToRenderPerBatch: 10,
       updateCellsBatchingPeriod: 50,
       windowSize: 5,
-      removeClippedSubviews: true,
+      removeClippedSubviews: false,
     });
     expect(screen.getByTestId("qa-sms-selection-footer")).toHaveStyle({
       paddingBottom: 20,

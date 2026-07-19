@@ -17,6 +17,7 @@
 
 import type { CurrencyType } from "@monyvi/db";
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useRef, useState } from "react";
 import {
@@ -192,12 +193,12 @@ export function CurrencySection({
         </View>
       ) : (
         <FlatList
-          data={currencies as CurrencyDisplayItem[]}
+          data={currencies}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
           getItemLayout={getItemLayout}
           scrollEnabled={false}
-          removeClippedSubviews
+          {...ANDROID_SAFE_LIST_PROPS}
         />
       )}
 

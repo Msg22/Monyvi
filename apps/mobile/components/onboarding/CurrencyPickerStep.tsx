@@ -17,6 +17,7 @@
  */
 
 import { palette } from "@/constants/colors";
+import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { useTheme } from "@/context/ThemeContext";
 import { detectCurrencyFromTimezone } from "@/utils/currency-detection";
 import type { CurrencyType } from "@monyvi/db";
@@ -235,6 +236,7 @@ export function CurrencyPickerStep({
 
       {/* Currency list */}
       <FlatList
+        {...ANDROID_SAFE_LIST_PROPS}
         data={filteredCurrencies}
         renderItem={renderCurrencyItem}
         keyExtractor={keyExtractor}
