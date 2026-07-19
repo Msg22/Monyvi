@@ -120,7 +120,7 @@ export function StartupRecoveryScreen({
             accessibilityLabel={t("sign_out")}
             className="flex-1 h-12 items-center justify-center rounded-xl border border-slate-300 dark:border-slate-700"
           >
-            <Text className="text-[15px] font-medium text-text-primary dark:text-text-primary-dark">
+            <Text className="text-[14px] font-medium text-text-primary dark:text-text-primary-dark">
               {t("sign_out")}
             </Text>
           </TouchableOpacity>
@@ -131,7 +131,7 @@ export function StartupRecoveryScreen({
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel={t(copy.retry)}
-            className="flex-1 h-12 items-center justify-center rounded-xl bg-nileGreen-500"
+            className="h-12 px-2 items-center justify-center rounded-xl bg-nileGreen-500"
             // NativeWind v4 crash: shadow on TouchableOpacity must use inline style
             // eslint-disable-next-line react-native/no-inline-styles
             style={{
@@ -142,7 +142,7 @@ export function StartupRecoveryScreen({
               shadowRadius: 8,
             }}
           >
-            <Text className="text-[15px] font-semibold text-white">
+            <Text className="text-[14px] font-semibold text-white">
               {t(copy.retry)}
             </Text>
           </TouchableOpacity>
