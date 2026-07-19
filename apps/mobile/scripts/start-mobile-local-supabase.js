@@ -479,6 +479,49 @@ function stopChildProcess(child) {
   child.kill();
 }
 
+function stopDevelopmentChildProcesses(children) {
+  for (const child of children) {
+    if (child) stopChildProcess(child);
+  }
+}
+
+function buildLocalFunctionsServeCommand(options = {}) {
+  const platform = options.platform ?? process.platform;
+  return {
+    command: options.npxCommand ?? resolveNpxCommand(),
+    args: ["supabase", "functions", "serve"],
+    shell: platform === "win32",
+  };
+}
+
+function startLocalFunctionsServe() {
+  const functionsServe = buildLocalFunctionsServeCommand();
+  return spawn(functionsServe.command, functionsServe.args, {
+    cwd: repoRoot,
+    stdio: shouldShowSetupOutput() ? "inherit" : "ignore",
+    shell: functionsServe.shell,
+  });
+}
+
+function monitorRequiredChildProcess(child, serviceName, onFailure) {
+  let hasFailed = false;
+  const failOnce = (message, exitCode) => {
+    if (hasFailed) return;
+    hasFailed = true;
+    onFailure(message, exitCode);
+  };
+
+  child.once("error", (error) => {
+    failOnce(`Could not start ${serviceName}: ${error.message}`, 1);
+  });
+  child.once("exit", (code) => {
+    failOnce(
+      `${serviceName} exited unexpectedly with code ${code ?? 1}.`,
+      code && code !== 0 ? code : 1
+    );
+  });
+}
+
 function hasExpoOption(expoArgs, option) {
   return expoArgs.some((arg) => arg === option || arg.startsWith(`${option}=`));
 }
@@ -518,18 +561,6 @@ function buildExpoStartCommand(expoArgs, options = {}) {
   };
 }
 
-function runExpoSync(env, expoArgs) {
-  const expoStart = buildExpoStartCommand(expoArgs);
-  const result = spawnSync(expoStart.command, expoStart.args, {
-    cwd: mobileRoot,
-    env,
-    stdio: "inherit",
-    shell: expoStart.shell,
-  });
-
-  process.exit(result.status ?? 1);
-}
-
 function startExpoProcess(env, expoArgs) {
   const expoStart = buildExpoStartCommand(expoArgs);
   return spawn(expoStart.command, expoStart.args, {
@@ -550,7 +581,44 @@ function startDefaultLocalSupabase(expoArgs, options) {
 
   const env = buildLocalSupabaseExpoEnv(anonKey, process.env, options);
   warnIfMissingWatchman(env);
-  runExpoSync(env, expoArgs);
+  const functionsServe = startLocalFunctionsServe();
+  let expo = null;
+  let isShuttingDown = false;
+  const stopDevelopmentServices = () => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    stopDevelopmentChildProcesses([functionsServe, expo]);
+  };
+  const failDevelopmentServices = (message, exitCode) => {
+    if (isShuttingDown) return;
+    stopDevelopmentServices();
+    console.error(message);
+    process.exit(exitCode);
+  };
+
+  monitorRequiredChildProcess(
+    functionsServe,
+    "Local Edge Functions",
+    failDevelopmentServices
+  );
+  process.once("SIGINT", () => {
+    stopDevelopmentServices();
+    process.exit(130);
+  });
+  process.once("SIGTERM", () => {
+    stopDevelopmentServices();
+    process.exit(143);
+  });
+  process.once("exit", stopDevelopmentServices);
+
+  expo = startExpoProcess(env, expoArgs);
+  expo.once("error", (error) => {
+    failDevelopmentServices(`Could not start Expo: ${error.message}`, 1);
+  });
+  expo.once("exit", (code) => {
+    stopDevelopmentServices();
+    process.exit(code ?? 0);
+  });
 }
 
 async function startWirelessDeviceLocalSupabase(password, expoArgs, options) {
@@ -567,49 +635,65 @@ async function startWirelessDeviceLocalSupabase(password, expoArgs, options) {
     { env: seedEnv }
   );
 
+  const functionsServe = startLocalFunctionsServe();
+
   if (shouldShowSetupOutput()) {
     console.log("\nStarting ngrok tunnel for local Supabase");
   }
   const ngrok = startNgrok();
+  let expo = null;
   let isShuttingDown = false;
   let ngrokStartError = null;
 
-  const stopNgrok = () => {
+  const stopDevelopmentServices = () => {
     if (isShuttingDown) return;
     isShuttingDown = true;
-    stopChildProcess(ngrok);
+    stopDevelopmentChildProcesses([functionsServe, ngrok, expo]);
+  };
+  const failDevelopmentServices = (message, exitCode) => {
+    if (isShuttingDown) return;
+    stopDevelopmentServices();
+    console.error(message);
+    process.exit(exitCode);
   };
 
   process.once("SIGINT", () => {
-    stopNgrok();
+    stopDevelopmentServices();
     process.exit(130);
   });
   process.once("SIGTERM", () => {
-    stopNgrok();
+    stopDevelopmentServices();
     process.exit(143);
   });
+  process.once("exit", stopDevelopmentServices);
+
+  monitorRequiredChildProcess(
+    functionsServe,
+    "Local Edge Functions",
+    failDevelopmentServices
+  );
 
   ngrok.once("error", (error) => {
     ngrokStartError = error;
+    failDevelopmentServices(`Could not start ngrok: ${error.message}`, 1);
   });
 
   ngrok.once("exit", (code) => {
-    if (!isShuttingDown && code !== 0) {
-      console.error(
-        [
-          `ngrok exited before Metro started with code ${code ?? 1}.`,
-          "If ngrok is installed but not on PATH, set NGROK_COMMAND to the full ngrok.exe path.",
-        ].join("\n")
-      );
-      process.exit(code ?? 1);
-    }
+    if (isShuttingDown) return;
+    failDevelopmentServices(
+      [
+        `ngrok exited unexpectedly with code ${code ?? 1}.`,
+        "If ngrok is installed but not on PATH, set NGROK_COMMAND to the full ngrok.exe path.",
+      ].join("\n"),
+      code && code !== 0 ? code : 1
+    );
   });
 
   let tunnelUrl;
   try {
     tunnelUrl = await waitForNgrokTunnelUrl();
   } catch (error) {
-    stopNgrok();
+    stopDevelopmentServices();
     if (ngrokStartError instanceof Error) {
       throw new Error(`Could not start ngrok: ${ngrokStartError.message}`);
     }
@@ -630,9 +714,12 @@ async function startWirelessDeviceLocalSupabase(password, expoArgs, options) {
     options
   );
   warnIfMissingWatchman(env);
-  const expo = startExpoProcess(env, expoArgs);
+  expo = startExpoProcess(env, expoArgs);
+  expo.once("error", (error) => {
+    failDevelopmentServices(`Could not start Expo: ${error.message}`, 1);
+  });
   expo.once("exit", (code) => {
-    stopNgrok();
+    stopDevelopmentServices();
     process.exit(code ?? 0);
   });
 }
@@ -670,8 +757,10 @@ if (require.main === module) {
 module.exports = {
   buildExpoStartCommand,
   buildExpoStartArgs,
+  buildLocalFunctionsServeCommand,
   buildManualQaSeedEnv,
   buildLocalSupabaseExpoEnv,
+  monitorRequiredChildProcess,
   parseCliArgs,
   parseSupabaseEnv,
   resolveLocalSupabaseDeviceConfig,
@@ -679,4 +768,5 @@ module.exports = {
   resolveNgrokTunnelUrl,
   shouldWarnAboutMissingWatchman,
   shouldShowSetupOutput,
+  stopDevelopmentChildProcesses,
 };

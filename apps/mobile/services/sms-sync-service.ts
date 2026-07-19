@@ -19,6 +19,7 @@ import { database, Transaction, Transfer } from "@monyvi/db";
 import {
   computeSmsFingerprint,
   getParsedSmsTransactionKey,
+  isExcludedBeforeSmsParsing,
   isLikelyCorruptedSmsText,
   isKnownFinancialSender,
   type ParsedSmsTransaction,
@@ -38,7 +39,11 @@ import {
   type HybridSmsUnresolvedCandidate,
   type SmsParserDiagnostics,
 } from "./sms-parser-orchestrator";
-import { getCurrentUserDataScope } from "./user-data-access";
+import {
+  assertExpectedCurrentUser,
+  getCurrentUserDataScope,
+  type CurrentUserDataScope,
+} from "./user-data-access";
 import { readSmsInbox } from "./sms-reader-service";
 import { logger } from "@/utils/logger";
 import { assertNotAborted } from "./abort-utils";
@@ -207,6 +212,12 @@ export async function loadExistingSmsFingerprints(): Promise<
   ReadonlySet<string>
 > {
   const scope = await getCurrentUserDataScope();
+  return loadExistingSmsFingerprintsForScope(scope);
+}
+
+async function loadExistingSmsFingerprintsForScope(
+  scope: CurrentUserDataScope
+): Promise<ReadonlySet<string>> {
   const fingerprints = new Set<string>();
 
   // ── Transactions ──────────────────────────────────────────────────────
@@ -254,11 +265,12 @@ export async function scanAndParseSms(
   options: ScanOptions,
   onProgress?: (progress: SmsScanProgress) => void
 ): Promise<SmsScanResult> {
+  const initiatingScope = await getCurrentUserDataScope();
   // Guard against interrupted scans — clean up stale flags
   await AsyncStorage.setItem(SCAN_IN_PROGRESS_KEY, "true");
 
   try {
-    return await executeScanPipeline(options, onProgress);
+    return await executeScanPipeline(options, initiatingScope, onProgress);
   } finally {
     // Always clear the flag, even on error/abort
     await AsyncStorage.removeItem(SCAN_IN_PROGRESS_KEY);
@@ -286,6 +298,7 @@ export async function cleanupStaleScanState(): Promise<boolean> {
  */
 async function executeScanPipeline(
   options: ScanOptions,
+  initiatingScope: CurrentUserDataScope,
   onProgress?: (progress: SmsScanProgress) => void
 ): Promise<SmsScanResult> {
   const startTime = Date.now();
@@ -294,7 +307,8 @@ async function executeScanPipeline(
   const yieldInterval = options?.yieldInterval ?? DEFAULT_YIELD_INTERVAL;
   const abortSignal = options?.abortSignal;
   const existingFingerprints =
-    options?.existingFingerprints ?? (await loadExistingSmsFingerprints());
+    options?.existingFingerprints ??
+    (await loadExistingSmsFingerprintsForScope(initiatingScope));
   // Default to 3 months ago when no minDate is provided
   const effectiveMinDate = options?.minDate ?? Date.now() - THREE_MONTHS_MS;
 
@@ -320,6 +334,10 @@ async function executeScanPipeline(
 
     for (const sms of batch) {
       messagesScanned++;
+
+      if (isExcludedBeforeSmsParsing(sms.body)) {
+        continue;
+      }
 
       // Filter by known Egyptian bank/fintech sender names
       if (!isKnownFinancialSender(sms.address)) {
@@ -385,6 +403,7 @@ async function executeScanPipeline(
 
   // ─── Step 3: Send candidates to AI for parsing ────────────────────────
   assertScanNotAborted(abortSignal);
+  await assertExpectedCurrentUser(initiatingScope.userId);
   onProgress?.({
     totalMessages,
     messagesScanned: totalMessages,
@@ -434,8 +453,10 @@ async function executeScanPipeline(
         estimatedRemainingMs,
       });
     },
-    abortSignal
+    abortSignal,
+    { expectedUserId: initiatingScope.userId }
   );
+  await assertExpectedCurrentUser(initiatingScope.userId);
 
   logger.info(
     "smsSync.parserDiagnostics",

@@ -12,7 +12,10 @@ export {
   normalizeSmsBody,
   type SmsFingerprintInput,
 } from "./sms-hash";
-export { isLikelyFinancialSms } from "./sms-keyword-filter";
+export {
+  isExcludedBeforeSmsParsing,
+  isLikelyFinancialSms,
+} from "./sms-keyword-filter";
 export { isLikelyCorruptedSmsText } from "./sms-text-quality";
 export { getParsedSmsTransactionKey } from "./parsed-sms-transaction-key";
 export { parseSmsWithLocalParser } from "./local-sms-parser";
@@ -26,6 +29,7 @@ export { QNB_EGYPT_TRUSTED_SMS_CATALOG } from "./trusted-sms-patterns";
 export type {
   TrustedSmsCatalogActivation,
   TrustedSmsCatalogProvider,
+  TrustedSmsEligibleFamily,
   TrustedSmsParsedTransaction,
   TrustedSmsParserCandidate,
   TrustedSmsParserOutcome,
@@ -67,6 +71,10 @@ export type {
   PatternSourceType,
 } from "./local-sms-parser-types";
 export { evaluateAmountExpression } from "./expression-evaluator";
+export {
+  SMS_ENRICHMENT_CATEGORY_SYSTEM_NAMES,
+  isSmsEnrichmentCategorySystemName,
+} from "./sms-category-taxonomy";
 export {
   EGYPTIAN_FINANCIAL_INSTITUTIONS,
   getAllFinancialSenders,

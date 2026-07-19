@@ -19,6 +19,7 @@
 import type * as ExpoNotifications from "expo-notifications";
 import { Linking, Platform } from "react-native";
 import type { ParsedSmsTransaction } from "@monyvi/logic";
+import { getRequiredCurrentUserId } from "@/services/user-data-access";
 import { logger } from "@/utils/logger";
 import { redactIdentifierForLog } from "@/utils/logger-redaction";
 
@@ -46,6 +47,7 @@ export interface TransactionNotificationPayload {
   readonly transactionData: NotificationParsedSmsTransaction;
   readonly resolvedAccountId: string;
   readonly resolvedAccountName: string;
+  readonly initiatingUserId: string;
 }
 
 interface TransactionInfoNotificationPayload {
@@ -425,11 +427,13 @@ function serializeTransactionData(
  * @param parsed         - The parsed SMS transaction
  * @param resolvedAccountId   - ID of the resolved target account
  * @param resolvedAccountName - Display name of the resolved account
+ * @param initiatingUserId    - Authenticated user who initiated live parsing
  */
 export async function showTransactionNotification(
   parsed: ParsedSmsTransaction,
   resolvedAccountId: string,
-  resolvedAccountName: string
+  resolvedAccountName: string,
+  initiatingUserId: string
 ): Promise<void> {
   await initializeNotifications();
 
@@ -459,7 +463,14 @@ export async function showTransactionNotification(
     transactionData: serializeTransactionData(parsed),
     resolvedAccountId,
     resolvedAccountName,
+    initiatingUserId,
   };
+
+  try {
+    if ((await getRequiredCurrentUserId()) !== initiatingUserId) return;
+  } catch {
+    return;
+  }
 
   await getNotifications().scheduleNotificationAsync({
     identifier: `sms-transaction-${parsed.smsFingerprint}`,
@@ -479,11 +490,13 @@ export async function showTransactionNotification(
  */
 export async function showTransactionCreatedNotification(
   parsed: ParsedSmsTransaction,
-  resolvedAccountName: string
+  resolvedAccountName: string,
+  initiatingUserId: string
 ): Promise<void> {
   await showInfoOnlySmsTransactionNotification({
     parsed,
     resolvedAccountName,
+    initiatingUserId,
     identifierPrefix: "sms-transaction-created",
     title: "Transaction created",
     type: "sms_transaction_created",
@@ -495,11 +508,13 @@ export async function showTransactionCreatedNotification(
  * be matched safely.
  */
 export async function showTransactionNeedsAccountNotification(
-  parsed: ParsedSmsTransaction
+  parsed: ParsedSmsTransaction,
+  initiatingUserId: string
 ): Promise<void> {
   await showInfoOnlySmsTransactionNotification({
     parsed,
     resolvedAccountName: "No Account Configured",
+    initiatingUserId,
     identifierPrefix: "sms-transaction-info",
     title: "Transaction needs an account",
     type: "sms_transaction_info",
@@ -509,12 +524,14 @@ export async function showTransactionNeedsAccountNotification(
 async function showInfoOnlySmsTransactionNotification({
   parsed,
   resolvedAccountName,
+  initiatingUserId,
   identifierPrefix,
   title,
   type,
 }: {
   readonly parsed: ParsedSmsTransaction;
   readonly resolvedAccountName: string;
+  readonly initiatingUserId: string;
   readonly identifierPrefix: string;
   readonly title: string;
   readonly type: TransactionInfoNotificationPayload["type"];
@@ -541,6 +558,12 @@ async function showInfoOnlySmsTransactionNotification({
     transactionData: serializeTransactionData(parsed),
     resolvedAccountName,
   };
+
+  try {
+    if ((await getRequiredCurrentUserId()) !== initiatingUserId) return;
+  } catch {
+    return;
+  }
 
   await getNotifications().scheduleNotificationAsync({
     identifier: `${identifierPrefix}-${parsed.smsFingerprint}`,

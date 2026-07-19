@@ -97,6 +97,34 @@ test("promotes only explicitly approved eligible candidates", () => {
   assert.equal(catalog.patterns[0].expectedOutcome.kind, "transaction");
 });
 
+test("applies an explicit reviewer family correction without rewriting evidence", () => {
+  const candidate = readCandidates(
+    "qnb-candidates-reviewed-transfer-request.json"
+  )[0];
+  assert.ok(candidate);
+  const record = buildRecord(candidate, {
+    patternId: "qnb-egypt-outgoing-online-banking-transfer-egp-v1",
+    promotionId: "promotion-qnb-egypt-outgoing-online-banking-transfer-egp-v1",
+    catalogVersion: 2,
+    reviewedMessageFamilyOverride: "outgoing_bank_transfer",
+  } as Partial<TrustedSmsPromotionRecord>);
+
+  const catalog = promoteQaSmsPatterns({
+    candidates: [candidate],
+    promotionRecords: [record],
+    catalogVersion: 2,
+  });
+
+  assert.equal(catalog.patterns[0]?.messageFamily, "outgoing_bank_transfer");
+  assert.deepEqual(catalog.patterns[0]?.expectedOutcome, {
+    kind: "transaction",
+    direction: "expense",
+    reviewStatus: "needs_review",
+    reviewReasons: ["low_confidence"],
+    confidenceCeiling: 0.8,
+  });
+});
+
 test("does not infer approval from an exported candidate", () => {
   const candidate = readCandidates()[0];
 

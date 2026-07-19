@@ -5,7 +5,12 @@ import type {
 } from "@/services/ai-sms-parser-service";
 
 const mockParseSmsWithAi = jest.fn<Promise<AiParseResult>, unknown[]>();
+const mockEnrichTrustedSmsCategories = jest.fn();
 const mockGetAiProcessingConsentStatus = jest.fn();
+const mockRevokeAiProcessingConsent = jest.fn<
+  Promise<void>,
+  [{ readonly expectedUserId?: string }?]
+>();
 
 jest.mock("@/services/ai-sms-parser-service", () => ({
   parseSmsWithAi: (...args: unknown[]) => mockParseSmsWithAi(...args),
@@ -21,6 +26,16 @@ jest.mock("@/services/ai-sms-parser-service", () => ({
 jest.mock("@/services/profile-service", () => ({
   getAiProcessingConsentStatus: (): unknown =>
     mockGetAiProcessingConsentStatus(),
+  revokeAiProcessingConsent: (options?: {
+    readonly expectedUserId?: string;
+  }): Promise<void> => mockRevokeAiProcessingConsent(options),
+}));
+
+jest.mock("@/services/ai-sms-category-enrichment-service", () => ({
+  MIN_TRUSTED_CATEGORY_CONFIDENCE: 0.9,
+  TRUSTED_ENRICHED_PURCHASE_CONFIDENCE: 0.98,
+  enrichTrustedSmsCategories: (...args: readonly unknown[]): unknown =>
+    mockEnrichTrustedSmsCategories(...args),
 }));
 
 import type { ParsedSmsTransaction } from "@monyvi/logic";
@@ -28,6 +43,7 @@ import {
   getTrustedPrefilterDisposition,
   parseSmsWithOrchestrator,
 } from "@/services/sms-parser-orchestrator";
+import { getTransactionReviewMeta } from "@/services/transaction-review-selection";
 
 const originalEnv = process.env;
 const RECEIVED_AT_MS = new Date(2026, 3, 8, 14, 30).getTime();
@@ -40,6 +56,7 @@ const context: ParseSmsContext = {
       displayName: "Other",
       level: 1,
       type: "EXPENSE",
+      isSystem: true,
     },
     {
       id: "cat-shopping",
@@ -47,6 +64,7 @@ const context: ParseSmsContext = {
       displayName: "Shopping",
       level: 1,
       type: "EXPENSE",
+      isSystem: true,
     },
     {
       id: "cat-salary",
@@ -54,6 +72,7 @@ const context: ParseSmsContext = {
       displayName: "Salary",
       level: 1,
       type: "INCOME",
+      isSystem: true,
     },
   ],
   supportedCurrencies: ["EGP", "USD"],
@@ -128,7 +147,18 @@ describe("sms-parser-orchestrator", () => {
     delete process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE;
     delete process.env.EXPO_PUBLIC_MONYVI_TEST_MODE;
     delete process.env.EXPO_PUBLIC_HYBRID_SMS_PARSER_ENABLED;
-    mockGetAiProcessingConsentStatus.mockResolvedValue({ isConsented: true });
+    mockGetAiProcessingConsentStatus.mockResolvedValue({
+      isConsented: true,
+      userId: "user-1",
+    });
+    mockRevokeAiProcessingConsent.mockResolvedValue(undefined);
+    mockEnrichTrustedSmsCategories.mockResolvedValue({
+      outcomesByCandidateId: new Map(),
+      attemptedMerchantCount: 0,
+      acceptedCandidateCount: 0,
+      rejectedResultCount: 0,
+      hasError: false,
+    });
   });
 
   it("routes only an exact active trusted rejection around broad prefilters", () => {
@@ -173,6 +203,30 @@ describe("sms-parser-orchestrator", () => {
         "USD",
       ])
     ).toBe("not_trusted_candidate");
+  });
+
+  it("hard-excludes candidates before either parser at the orchestrator boundary", async () => {
+    const excluded = candidate({
+      message: {
+        id: "sms-hard-excluded",
+        address: "QNB EGYPT",
+        body: "ادفع الآن واحصل على عرض بقيمة EGP 250.00",
+        date: RECEIVED_AT_MS,
+        read: false,
+      },
+      smsFingerprint: "fingerprint-hard-excluded",
+    });
+
+    const result = await parseSmsWithOrchestrator([excluded], context);
+
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(mockEnrichTrustedSmsCategories).not.toHaveBeenCalled();
+    expect(result.transactions).toEqual([]);
+    expect(result.unresolvedCandidates).toEqual([]);
+    expect(result.diagnostics).toMatchObject({
+      candidateCount: 0,
+      resultCount: 0,
+    });
   });
 
   it("routes rejection candidates through hybrid fallback when the catalog is invalid", () => {
@@ -233,6 +287,285 @@ describe("sms-parser-orchestrator", () => {
       attemptedLocal: true,
       localMatchedCount: 1,
       aiAttemptedCount: 1,
+    });
+  });
+
+  it("changes only category fields and unlocks existing auto-selection gates after confident enrichment", async () => {
+    mockEnrichTrustedSmsCategories.mockResolvedValueOnce({
+      outcomesByCandidateId: new Map([
+        ["sms-trusted", { categorySystemName: "shopping", confidence: 0.95 }],
+      ]),
+      attemptedMerchantCount: 1,
+      acceptedCandidateCount: 1,
+      rejectedResultCount: 0,
+      hasError: false,
+    });
+    const trusted = trustedPurchaseCandidate();
+
+    const result = await parseSmsWithOrchestrator([trusted], context);
+
+    expect(mockEnrichTrustedSmsCategories).toHaveBeenCalledWith(
+      [
+        {
+          candidateId: "sms-trusted",
+          merchant: "GEIDEAE*BASHAYER LIBAYE",
+          transactionType: "EXPENSE",
+          messageFamily: "card_purchase",
+        },
+      ],
+      context.categories,
+      undefined,
+      "user-1"
+    );
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(result.transactions).toEqual([
+      expect.objectContaining({
+        amount: 490,
+        currency: "EGP",
+        counterparty: "GEIDEAE*BASHAYER LIBAYE",
+        categoryId: "cat-shopping",
+        categoryDisplayName: "Shopping",
+        confidence: 0.95,
+        reviewStatus: "auto_selectable",
+        reviewReasons: [],
+        smsFingerprint: "fingerprint-trusted",
+      }),
+    ]);
+
+    const enriched = result.transactions[0];
+    expect(
+      getTransactionReviewMeta(enriched, {
+        accountId: "account-1",
+        matchReason: "card_last4",
+      }).isAutoSelectable
+    ).toBe(true);
+    expect(
+      getTransactionReviewMeta(enriched, {
+        accountId: "default-account",
+        matchReason: "default",
+      }).isAutoSelectable
+    ).toBe(false);
+  });
+
+  it("uses the validated visible system category when duplicate names exist", async () => {
+    mockEnrichTrustedSmsCategories.mockResolvedValueOnce({
+      outcomesByCandidateId: new Map([
+        ["sms-trusted", { categorySystemName: "shopping", confidence: 0.95 }],
+      ]),
+      attemptedMerchantCount: 1,
+      acceptedCandidateCount: 1,
+      rejectedResultCount: 0,
+      hasError: false,
+    });
+    const duplicateCategoryContext: ParseSmsContext = {
+      ...context,
+      categories: [
+        ...context.categories,
+        {
+          id: "custom-hidden-shopping",
+          systemName: "shopping",
+          displayName: "Hidden custom shopping",
+          level: 1,
+          type: "EXPENSE",
+          isSystem: false,
+          isHidden: true,
+        },
+      ],
+    };
+
+    const result = await parseSmsWithOrchestrator(
+      [trustedPurchaseCandidate()],
+      duplicateCategoryContext
+    );
+
+    expect(result.transactions[0]).toEqual(
+      expect.objectContaining({
+        categoryId: "cat-shopping",
+        categoryDisplayName: "Shopping",
+        reviewStatus: "auto_selectable",
+      })
+    );
+  });
+
+  it("preserves the trusted local purchase when category enrichment fails", async () => {
+    mockEnrichTrustedSmsCategories.mockRejectedValueOnce(
+      new Error("Network request failed")
+    );
+
+    const result = await parseSmsWithOrchestrator(
+      [trustedPurchaseCandidate()],
+      context
+    );
+
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(result.transactions).toEqual([
+      expect.objectContaining({
+        counterparty: "GEIDEAE*BASHAYER LIBAYE",
+        categoryId: "cat-other",
+        confidence: 0.8,
+        reviewStatus: "needs_review",
+        reviewReasons: ["low_confidence"],
+      }),
+    ]);
+  });
+
+  it("abandons hybrid parsing when category enrichment detects a user switch", async () => {
+    mockEnrichTrustedSmsCategories.mockRejectedValueOnce(
+      new Error("AUTH_SCOPE_CHANGED")
+    );
+
+    await expect(
+      parseSmsWithOrchestrator([trustedPurchaseCandidate()], context)
+    ).rejects.toThrow("AUTH_SCOPE_CHANGED");
+  });
+
+  it("rejects a stale initiating user before hybrid outbound requests", async () => {
+    mockGetAiProcessingConsentStatus.mockResolvedValue({
+      isConsented: true,
+      userId: "user-b",
+    });
+
+    await expect(
+      parseSmsWithOrchestrator(
+        [trustedPurchaseCandidate(), candidate()],
+        context,
+        undefined,
+        undefined,
+        { expectedUserId: "user-a" }
+      )
+    ).rejects.toThrow("AUTH_SCOPE_CHANGED");
+
+    expect(mockEnrichTrustedSmsCategories).not.toHaveBeenCalled();
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+  });
+
+  it("preserves trusted local results when category enrichment rejects stale consent", async () => {
+    mockEnrichTrustedSmsCategories.mockResolvedValueOnce({
+      outcomesByCandidateId: new Map(),
+      attemptedMerchantCount: 1,
+      acceptedCandidateCount: 0,
+      rejectedResultCount: 0,
+      missingResultCount: 1,
+      hasError: true,
+      isConsentRequired: true,
+    });
+
+    const result = await parseSmsWithOrchestrator(
+      [trustedPurchaseCandidate()],
+      context
+    );
+
+    expect(result).toMatchObject({
+      isConsentRequired: true,
+      hasError: false,
+      transactions: [
+        expect.objectContaining({
+          categoryId: "cat-other",
+          confidence: 0.8,
+          reviewStatus: "needs_review",
+        }),
+      ],
+    });
+    expect(mockRevokeAiProcessingConsent).toHaveBeenCalledTimes(1);
+    expect(mockRevokeAiProcessingConsent).toHaveBeenCalledWith({
+      expectedUserId: "user-1",
+    });
+  });
+
+  it("waits for stale-consent reconciliation before returning trusted results", async () => {
+    mockEnrichTrustedSmsCategories.mockResolvedValueOnce({
+      outcomesByCandidateId: new Map(),
+      attemptedMerchantCount: 1,
+      acceptedCandidateCount: 0,
+      rejectedResultCount: 0,
+      missingResultCount: 1,
+      hasError: true,
+      isConsentRequired: true,
+    });
+    let finishReconciliation: (() => void) | undefined;
+    mockRevokeAiProcessingConsent.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishReconciliation = resolve;
+      })
+    );
+
+    const parsePromise = parseSmsWithOrchestrator(
+      [trustedPurchaseCandidate()],
+      context
+    );
+    let hasSettled = false;
+    void parsePromise.then(
+      () => {
+        hasSettled = true;
+      },
+      () => {
+        hasSettled = true;
+      }
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(hasSettled).toBe(false);
+    expect(mockRevokeAiProcessingConsent).toHaveBeenCalledTimes(1);
+    finishReconciliation?.();
+    await expect(parsePromise).resolves.toMatchObject({
+      isConsentRequired: true,
+      transactions: [expect.objectContaining({ categoryId: "cat-other" })],
+    });
+  });
+
+  it("re-enters consent flow when full AI fallback rejects stale consent", async () => {
+    const consentError = new Error("AI processing consent required");
+    consentError.name = "AiConsentRequiredError";
+    mockParseSmsWithAi.mockRejectedValueOnce(consentError);
+
+    await expect(
+      parseSmsWithOrchestrator(
+        [trustedPurchaseCandidate(), candidate()],
+        context
+      )
+    ).rejects.toMatchObject({ name: "AiConsentRequiredError" });
+    expect(mockRevokeAiProcessingConsent).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts category enrichment and unresolved full parsing concurrently", async () => {
+    let resolveCategory: ((value: unknown) => void) | undefined;
+    let resolveAi: ((value: AiParseResult) => void) | undefined;
+    mockEnrichTrustedSmsCategories.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCategory = resolve;
+        })
+    );
+    mockParseSmsWithAi.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveAi = resolve;
+        })
+    );
+
+    const parsePromise = parseSmsWithOrchestrator(
+      [trustedPurchaseCandidate(), candidate()],
+      context
+    );
+    for (let index = 0; index < 8; index++) await Promise.resolve();
+
+    expect(mockEnrichTrustedSmsCategories).toHaveBeenCalledTimes(1);
+    expect(mockParseSmsWithAi).toHaveBeenCalledTimes(1);
+
+    resolveCategory?.({
+      outcomesByCandidateId: new Map(),
+      attemptedMerchantCount: 1,
+      acceptedCandidateCount: 0,
+      rejectedResultCount: 0,
+      missingResultCount: 1,
+      hasError: false,
+    });
+    resolveAi?.({ transactions: [], hasError: false });
+    await expect(parsePromise).resolves.toMatchObject({
+      diagnostics: {
+        categoryEnrichmentAttemptedCount: 1,
+        aiAttemptedCount: 1,
+      },
     });
   });
 

@@ -1,6 +1,6 @@
 import type { TrustedSmsPromotionRecord } from "../trusted-sms-pattern-types";
 
-const CATALOG_VERSION = 1;
+const CATALOG_VERSION = 2;
 const REVIEWER_ID = "mohamed";
 const APPROVED_AT = "2026-07-16T00:00:00.000Z";
 const PASSED_VALIDATION = {
@@ -22,6 +22,7 @@ interface PromotionIdentity {
   readonly candidateId: string;
   readonly evidenceDigest: string;
   readonly patternId: string;
+  readonly reviewedMessageFamilyOverride?: TrustedSmsPromotionRecord["reviewedMessageFamilyOverride"];
 }
 
 function promote(identity: PromotionIdentity): TrustedSmsPromotionRecord {
@@ -36,12 +37,20 @@ function promote(identity: PromotionIdentity): TrustedSmsPromotionRecord {
     reviewerId: REVIEWER_ID,
     approvedAt: APPROVED_AT,
     decision: "promote",
+    reviewedMessageFamilyOverride: identity.reviewedMessageFamilyOverride,
     validation: PASSED_VALIDATION,
     validationEvidence: EXECUTABLE_VALIDATION_EVIDENCE,
   };
 }
 
 export const TRUSTED_SMS_PROMOTION_RECORDS = [
+  promote({
+    candidateId: "qa-candidate-19979a04-9144-4975-bea6-07fbea143df1",
+    evidenceDigest:
+      "a868b251e3fe733a041cb6fe8f9c1ea0ee8e75aceeae894d9b021b0c260d4978",
+    patternId: "qnb-egypt-outgoing-online-banking-transfer-egp-v1",
+    reviewedMessageFamilyOverride: "outgoing_bank_transfer",
+  }),
   promote({
     candidateId: "qa-candidate-060abe17-ca2c-4aae-a182-d2300566b76b",
     evidenceDigest:

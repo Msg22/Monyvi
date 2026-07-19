@@ -9,9 +9,11 @@
 Promote explicitly approved Phase 2A QNB templates into an isolated, versioned
 production catalog and route every eligible SMS candidate through that catalog
 before AI. Exact, unambiguous trusted matches are resolved locally; all other
-candidates retain their identity and are sent to the existing AI parser. The
-orchestrator combines both result sets by SMS fingerprint, preserves safe local
-results when AI fails, and exposes only privacy-safe routing metadata.
+candidates retain their identity and are sent to the existing full AI parser.
+Eligible trusted card purchases may additionally send a deduplicated
+merchant-only payload to a dedicated AI category endpoint. The orchestrator
+combines result sets by SMS fingerprint, preserves safe local results when
+either AI path fails, and exposes only privacy-safe routing metadata.
 
 For mixed-result batch scans, carry unresolved candidates in an in-memory SMS
 review session and show the approved compact inline notice on the review page.
@@ -41,12 +43,13 @@ catalog tooling.
 within one second on the supported QA device profile; only unresolved candidates
 consume AI chunks.  
 **Constraints**: Offline exact matching, no production access to candidate or
-dev/test patterns, no production auto-selection, no raw SMS data in logs or
-persisted retry state, stable fingerprint deduplication, cancellable work, and
-no change to the existing AI transaction-consent gate.  
-**Scale/Scope**: Initial trusted production scope is explicitly promoted QNB
-Egypt templates. The activation interface must support a future cached remote
-manifest without changing matcher or orchestrator contracts.
+dev/test patterns, auto-selection only for the approved enriched-card exception,
+no raw SMS data in logs or persisted retry state, stable fingerprint
+deduplication, cancellable work, and no change to the existing AI
+transaction-consent gate. **Scale/Scope**: Initial trusted production scope is
+explicitly promoted QNB Egypt templates. The activation interface must support a
+future cached remote manifest without changing matcher or orchestrator
+contracts.
 
 ## Constitution Check
 
@@ -79,7 +82,8 @@ _GATE: Must pass before Phase 0 research. Re-checked after Phase 1 design._
   coverage.
 
 **Post-Design Re-check**: PASS. Contracts preserve package boundaries, keep raw
-retry data in memory only, retain the AI consent gate, and fail closed when the
+retry data in memory only, retain the AI consent gate, prevent the enrichment
+contract from expressing protected financial fields, and fail closed when the
 trusted catalog is invalid or a candidate is ambiguous.
 
 ## Project Structure
@@ -188,7 +192,7 @@ retry unresolved messages, while the notice remains a presentational component.
 1. Implement explicit promotion from reviewer-approved Phase 2A artifacts and a
    source-controlled immutable promotion manifest.
 2. Validate catalog version, source provenance, fixed fragments, placeholder
-   roles, expected outcome, enabled state, and review-only policy.
+   roles, expected outcome, enabled state, and conservative review policy.
 3. Implement exact structural matching that evaluates all eligible trusted
    patterns and returns `matched`, `rejected`, `unresolved`, or `ambiguous` per
    fingerprint. Never accept the first match without ambiguity detection.
@@ -206,6 +210,61 @@ retry unresolved messages, while the notice remains a presentational component.
 4. Propagate abort signals through local, AI, combination, and retry paths.
 5. Apply the same orchestration to batch, foreground live, background native,
    and killed-app callers without changing notification contracts.
+
+### Phase 3A - Minimal category enrichment and guarded auto-selection
+
+1. Extend trusted parser results with their trusted message family while keeping
+   all financial extraction pure in `packages/logic`.
+2. Define a mobile category-enrichment port whose request can express only the
+   approved minimal fields and whose response can express only system category
+   and confidence.
+3. Add a dedicated consent-validating Edge Function with a strict request and
+   response schema, compact system-category allowlist, and privacy-safe logs.
+4. Select only trusted card purchases with non-empty merchants, normalize only
+   for session deduplication, and correlate valid category outcomes back to
+   every eligible trusted result without changing merchant display text.
+5. Run category enrichment and unresolved full parsing concurrently for mixed
+   batches. Merge through field-specific adapters so enrichment cannot overwrite
+   locally owned financial facts.
+6. Split category inputs into endpoint-safe chunks of at most 20 unique
+   merchants, run at most two requests concurrently, and bound the operation by
+   one 20-second deadline. Preserve successful prior chunks plus the original
+   local merchant and direction-correct fallback category for every per-
+   merchant or endpoint failure. Do not route failed trusted enrichment inputs
+   through `parse-sms`.
+7. Assign exact trusted card purchases local extraction confidence `0.98`, then
+   make them auto-selectable only after category confidence reaches `0.90`, the
+   account is resolved, and the existing review service finds no other reason.
+   Exclude generic fallback categories from acceptance, reject every outcome for
+   duplicated response identities, and require account evidence to satisfy the
+   exact-card or unique-sender rule in FR-057.
+8. Keep persistent merchant history behind the port as a deferred strategy; do
+   not add storage or sync in this phase.
+9. Keep the enrichment category taxonomy server-owned, exclude hidden/internal
+   categories on mobile, bound every mobile and provider request with a real
+   timeout, and preserve completed local work when remote consent becomes stale.
+10. Apply the existing review-selection service to live foreground, background,
+    and killed-app auto-confirm so weak account matches and low-confidence AI
+    output cannot save silently.
+11. Add the approved exact `QNB EGYPT` online-banking transfer-request structure
+    to catalog version 2 as a low-confidence `EXPENSE` suggestion, and mirror
+    that narrow sanitized exception in the full-AI prompt without generalizing
+    other requested or pending transfer wording.
+12. Treat an explicit card suffix as the strongest matching evidence. Resolve
+    one exact sender-plus-card match; when none exists, permit only a unique
+    sender-only match. Keep multiple exact matches, multiple sender matches, and
+    registry/default fallbacks unresolved for card-bearing SMS.
+13. Pin the initiating authenticated user through live parse, account
+    resolution, notification handling, and the fingerprint-guarded write;
+    discard stale work after any user switch.
+14. Process category enrichment in chunks of at most 20 with no more than two
+    requests in flight, sharing one 20-second total deadline and preserving
+    local suggestions plus previously accepted outcomes when it expires.
+15. Validate Edge enrichment outcomes independently per opaque merchant identity
+    so one malformed or duplicated identity cannot discard unrelated valid
+    outcomes.
+16. Supervise the local Expo and Edge Function processes as one development
+    stack and terminate both when either required child exits unexpectedly.
 
 ### Phase 4 - Partial-result review UX
 
@@ -228,6 +287,8 @@ retry unresolved messages, while the notice remains a presentational component.
    existing AI behavior, keeps exact active trusted rejection templates out of
    AI, and ensures invalid catalog state fails closed.
 4. Complete the manual QA/automation coverage matrix in the PR description.
+5. Record category-enrichment payload/privacy checks, invariant-preservation
+   results, duplicate-merchant batching, and safe-failure evidence.
 
 ## Complexity Tracking
 

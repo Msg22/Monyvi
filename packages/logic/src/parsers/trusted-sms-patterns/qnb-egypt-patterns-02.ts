@@ -3,9 +3,60 @@ import type { TrustedSmsPattern } from "../trusted-sms-pattern-types";
 export const QNB_EGYPT_TRUSTED_SMS_PATTERNS_02 = [
   {
     schemaVersion: 1,
+    patternId: "qnb-alahli-promotional-bebasata-ar-v1",
+    patternVersion: 1,
+    catalogVersion: 2,
+    providerId: "qnb-egypt",
+    verifiedSenderAliases: ["QNB ALAHLI"],
+    messageFamily: "promotional",
+    currency: null,
+    enabled: true,
+    runtimeScope: "trusted_production",
+    sourceType: "qa-real-sms",
+    autoSelectPolicy: "never",
+    provenanceCode: "qa_operator_promoted",
+    promotionId: "promotion-qnb-alahli-promotional-bebasata-ar-v1",
+    segments: [
+      {
+        kind: "fixed",
+        text: "حساب QNB bebasata بمزايا وعروض كتير اوى ! خطوات قليلة علشان تكمل إجراءات فتح حسابك مع QNB bebasata دوس هنا: ",
+      },
+      {
+        kind: "placeholder",
+        token: "URL",
+        semanticRole: "public_url",
+      },
+      {
+        kind: "fixed",
+        text: " تطبق الشروط ت.ض ",
+      },
+      {
+        kind: "placeholder",
+        token: "REFERENCE",
+        semanticRole: "public_reference",
+      },
+    ],
+    expectedOutcome: {
+      kind: "rejection",
+      reason: "promotional",
+    },
+    validationStatus: {
+      schema: "passed",
+      privacy: "passed",
+      exactPositive: "passed",
+      nearMatch: "passed",
+      intentionalNegative: "passed",
+      ambiguity: "passed",
+      integrity: "passed",
+    },
+    integrityDigest:
+      "75d1c4281b7a6bf08deb2ebcb6502ad6f158eb5d8944d1392590b84ba27bab87",
+  },
+  {
+    schemaVersion: 1,
     patternId: "qnb-alahli-otp-bebasata-v1",
     patternVersion: 1,
-    catalogVersion: 1,
+    catalogVersion: 2,
     providerId: "qnb-egypt",
     verifiedSenderAliases: ["QNB ALAHLI"],
     messageFamily: "otp",
@@ -45,13 +96,13 @@ export const QNB_EGYPT_TRUSTED_SMS_PATTERNS_02 = [
       integrity: "passed",
     },
     integrityDigest:
-      "236cb60a491ff737c063da9c624e9b3bdb2ad16f0dae0c342f353d43ccd3080f",
+      "f556b5af915af2f8755f4ada4cf21b0badbad290b4d53146620cbcfa8a726ab9",
   },
   {
     schemaVersion: 1,
     patternId: "qnb-alahli-informational-card-fee-refund-ar-v1",
     patternVersion: 1,
-    catalogVersion: 1,
+    catalogVersion: 2,
     providerId: "qnb-egypt",
     verifiedSenderAliases: ["QNB ALAHLI"],
     messageFamily: "informational",
@@ -96,13 +147,13 @@ export const QNB_EGYPT_TRUSTED_SMS_PATTERNS_02 = [
       integrity: "passed",
     },
     integrityDigest:
-      "99a215b0d9769c0545a5c6b454b974aec2c60db21b05d4093f1cd878b899a2f9",
+      "b3c98f9c36494d0c58cda18d298495ecb9175e9165b58729e0621dd81e254d6e",
   },
   {
     schemaVersion: 1,
     patternId: "qnb-alahli-informational-foreign-currency-ar-v1",
     patternVersion: 1,
-    catalogVersion: 1,
+    catalogVersion: 2,
     providerId: "qnb-egypt",
     verifiedSenderAliases: ["QNB ALAHLI"],
     messageFamily: "informational",
@@ -138,13 +189,13 @@ export const QNB_EGYPT_TRUSTED_SMS_PATTERNS_02 = [
       integrity: "passed",
     },
     integrityDigest:
-      "748f531a97ebc5972df5432f8f4c851f4b9aa25fe5ef86d585bc4efc078f24e6",
+      "01eee7858a49f30582b11f52459d1dd9a102ad9db1e8a2afb048b70717f18656",
   },
   {
     schemaVersion: 1,
     patternId: "qnb-egypt-informational-fees-ar-v1",
     patternVersion: 1,
-    catalogVersion: 1,
+    catalogVersion: 2,
     providerId: "qnb-egypt",
     verifiedSenderAliases: ["QNB EGYPT"],
     messageFamily: "informational",
@@ -189,13 +240,13 @@ export const QNB_EGYPT_TRUSTED_SMS_PATTERNS_02 = [
       integrity: "passed",
     },
     integrityDigest:
-      "acca9e0976f9caf455a5b8fb2f6321b1cd05e1c60a54f6b74487a7acc4a91d7d",
+      "7d902d18784324821d340f5e040c2a398b3c366e6a59cd93a96709009d5dec07",
   },
   {
     schemaVersion: 1,
     patternId: "qnb-egypt-promotional-olympics-ar-v1",
     patternVersion: 1,
-    catalogVersion: 1,
+    catalogVersion: 2,
     providerId: "qnb-egypt",
     verifiedSenderAliases: ["QNB EGYPT"],
     messageFamily: "promotional",
@@ -267,101 +318,6 @@ export const QNB_EGYPT_TRUSTED_SMS_PATTERNS_02 = [
       integrity: "passed",
     },
     integrityDigest:
-      "42c03b577b2cf6407166783dfc61e4569106c01b0ad0c6927ac9edce61346aea",
-  },
-  {
-    schemaVersion: 1,
-    patternId: "qnb-egypt-card-purchase-usd-v1",
-    patternVersion: 1,
-    catalogVersion: 1,
-    providerId: "qnb-egypt",
-    verifiedSenderAliases: ["QNB EGYPT"],
-    messageFamily: "card_purchase",
-    currency: "USD",
-    enabled: true,
-    runtimeScope: "trusted_production",
-    sourceType: "qa-real-sms",
-    autoSelectPolicy: "never",
-    provenanceCode: "qa_operator_promoted",
-    promotionId: "promotion-qnb-egypt-card-purchase-usd-v1",
-    segments: [
-      {
-        kind: "fixed",
-        text: "Your Debit Card **",
-      },
-      {
-        kind: "placeholder",
-        token: "LAST4",
-        semanticRole: "card_last4",
-      },
-      {
-        kind: "fixed",
-        text: " had a Successful transaction of ",
-      },
-      {
-        kind: "placeholder",
-        token: "CURRENCY",
-        semanticRole: "transaction_currency",
-      },
-      {
-        kind: "fixed",
-        text: " ",
-      },
-      {
-        kind: "placeholder",
-        token: "AMOUNT",
-        semanticRole: "transaction_amount",
-      },
-      {
-        kind: "fixed",
-        text: " @",
-      },
-      {
-        kind: "placeholder",
-        token: "MERCHANT",
-        semanticRole: "merchant_name",
-      },
-      {
-        kind: "fixed",
-        text: ",your available bal.",
-      },
-      {
-        kind: "placeholder",
-        token: "CURRENCY",
-        semanticRole: "transaction_currency",
-      },
-      {
-        kind: "placeholder",
-        token: "BALANCE",
-        semanticRole: "available_balance",
-      },
-      {
-        kind: "fixed",
-        text: " for lost/stolen card call ",
-      },
-      {
-        kind: "placeholder",
-        token: "PHONE",
-        semanticRole: "provider_hotline",
-      },
-    ],
-    expectedOutcome: {
-      kind: "transaction",
-      direction: "expense",
-      reviewStatus: "needs_review",
-      reviewReasons: ["low_confidence"],
-      confidenceCeiling: 0.8,
-    },
-    validationStatus: {
-      schema: "passed",
-      privacy: "passed",
-      exactPositive: "passed",
-      nearMatch: "passed",
-      intentionalNegative: "passed",
-      ambiguity: "passed",
-      integrity: "passed",
-    },
-    integrityDigest:
-      "c8d4cd3803e95e963e5d6f15c889f70dfe1f4100cdf47c5fcaf6d289af8d3b90",
+      "6079ee722e966b7b0b05a21577c87a197a0775f81c8e77dc5aafbc1477fe675f",
   },
 ] as const satisfies readonly TrustedSmsPattern[];

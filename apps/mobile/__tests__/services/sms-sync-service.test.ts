@@ -98,6 +98,7 @@ jest.mock("@/services/sms-reader-service", () => ({
 
 const mockIsKnownFinancialSender = jest.fn<boolean, [string]>(() => true);
 const mockIsLikelyCorruptedSmsText = jest.fn<boolean, [string]>(() => false);
+const mockIsExcludedBeforeSmsParsing = jest.fn<boolean, [string]>(() => false);
 const mockComputeSmsFingerprint = jest.fn<
   Promise<string>,
   [SmsFingerprintInput]
@@ -118,6 +119,8 @@ jest.mock("@monyvi/logic", () => {
       mockIsKnownFinancialSender(...(args as [string])),
     isLikelyCorruptedSmsText: (body: string): boolean =>
       mockIsLikelyCorruptedSmsText(body),
+    isExcludedBeforeSmsParsing: (body: string): boolean =>
+      mockIsExcludedBeforeSmsParsing(body),
     computeSmsFingerprint: (...args: unknown[]) =>
       mockComputeSmsFingerprint(...(args as [SmsFingerprintInput])),
   };
@@ -202,6 +205,7 @@ jest.mock("@monyvi/db", () => ({
 jest.mock("@/services/user-data-access", () => ({
   getCurrentUserDataScope: jest.fn(() =>
     Promise.resolve({
+      userId: "user-a",
       queryOwned: (
         collection: {
           query: (...conditions: readonly unknown[]) => {
@@ -216,6 +220,7 @@ jest.mock("@/services/user-data-access", () => ({
       } => collection.query(...conditions),
     })
   ),
+  assertExpectedCurrentUser: jest.fn(() => Promise.resolve()),
 }));
 
 // ---------------------------------------------------------------------------
@@ -288,6 +293,7 @@ describe("sms-sync-service", () => {
     mockReadSmsInbox.mockResolvedValue([]);
     mockIsKnownFinancialSender.mockReturnValue(true);
     mockIsLikelyCorruptedSmsText.mockReturnValue(false);
+    mockIsExcludedBeforeSmsParsing.mockReturnValue(false);
     mockComputeSmsFingerprint.mockImplementation((input: SmsFingerprintInput) =>
       Promise.resolve(
         `hash-${input.sender}-${input.receivedAtMs}-${input.body.slice(0, 10)}`
@@ -310,6 +316,33 @@ describe("sms-sync-service", () => {
       expect(result.totalScanned).toBe(0);
       expect(result.totalFound).toBe(0);
       expect(result.durationMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it("pins the initiating user through batch parser requests", async () => {
+      await scanAndParseSms(defaultOptions());
+
+      expect(mockParseSmsWithOrchestrator).toHaveBeenCalledWith(
+        [],
+        stubAiContext,
+        expect.any(Function),
+        undefined,
+        { expectedUserId: "user-a" }
+      );
+    });
+
+    it("aborts before parsing when the authenticated user changes", async () => {
+      const userDataAccessMock = jest.requireMock<{
+        assertExpectedCurrentUser: jest.Mock;
+      }>("@/services/user-data-access");
+      userDataAccessMock.assertExpectedCurrentUser.mockRejectedValueOnce(
+        new Error("AUTH_SCOPE_CHANGED")
+      );
+
+      await expect(scanAndParseSms(defaultOptions())).rejects.toThrow(
+        "AUTH_SCOPE_CHANGED"
+      );
+
+      expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
     });
 
     it("should parse financial SMS and include in results", async () => {
@@ -504,6 +537,30 @@ describe("sms-sync-service", () => {
       expect(candidates).toEqual([]);
     });
 
+    it("hard-excludes configured Arabic phrases before trusted or AI parsing", async () => {
+      const excluded = createSmsMessage({
+        id: "sms-hard-excluded",
+        address: "QNB EGYPT",
+        body: "اكسب كاش باك بقيمة EGP 125.50",
+      });
+      const eligible = createSmsMessage({ id: "sms-eligible" });
+      mockReadSmsInbox.mockResolvedValue([excluded, eligible]);
+      mockIsExcludedBeforeSmsParsing.mockImplementation(
+        (body) => body === excluded.body
+      );
+
+      await scanAndParseSms(defaultOptions());
+
+      const candidates = mockParseSmsWithOrchestrator.mock.calls[0]?.[0] as
+        | readonly SmsCandidate[]
+        | undefined;
+      expect(candidates?.map(({ message }) => message.id)).toEqual([
+        "sms-eligible",
+      ]);
+      expect(mockComputeSmsFingerprint).toHaveBeenCalledTimes(1);
+      expect(mockGetTrustedPrefilterDisposition).toHaveBeenCalledTimes(1);
+    });
+
     it("should stop when local parser mode is blocked by AI transaction suggestions", async () => {
       mockReadSmsInbox.mockResolvedValue([createSmsMessage()]);
       mockParseSmsWithOrchestrator.mockResolvedValue({
@@ -561,7 +618,8 @@ describe("sms-sync-service", () => {
         [],
         stubAiContext,
         expect.any(Function),
-        undefined
+        undefined,
+        { expectedUserId: "user-a" }
       );
       expect(result.totalFound).toBe(0);
     });

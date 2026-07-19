@@ -449,7 +449,7 @@ describe("QA SMS intake approved flow states", () => {
     );
     fireEvent.press(screen.getByTestId("qa-sms-classification-summary"));
     expect(screen.getByTestId("qa-sms-classification-sheet")).toBeTruthy();
-    expect(screen.getAllByTestId(/^qa-sms-family-/)).toHaveLength(10);
+    expect(screen.getAllByTestId(/^qa-sms-family-/)).toHaveLength(11);
     expect(
       screen.getByTestId("qa-sms-currency-egp-selected-background")
     ).toBeTruthy();

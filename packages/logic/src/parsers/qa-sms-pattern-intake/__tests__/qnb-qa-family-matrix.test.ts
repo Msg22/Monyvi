@@ -111,7 +111,7 @@ function candidate(
 }
 
 describe("QNB QA family matrix", () => {
-  it("covers all ten families with explicit currency applicability", () => {
+  it("covers every supported family with explicit currency applicability", () => {
     const candidates = QA_SMS_MESSAGE_FAMILIES.flatMap((family) =>
       getQaSmsCoverageCurrencies(family).map((currency) =>
         candidate(family, currency)

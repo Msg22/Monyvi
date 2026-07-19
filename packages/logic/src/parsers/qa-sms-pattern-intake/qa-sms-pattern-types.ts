@@ -8,6 +8,7 @@ export const QA_SMS_MESSAGE_FAMILIES = [
   "atm_withdrawal",
   "incoming_ipn_transfer",
   "outgoing_ipn_transfer",
+  "outgoing_bank_transfer",
   "bank_to_wallet_transfer",
   "refund_or_reversal",
   "failed_transaction",
@@ -68,6 +69,7 @@ export const QA_SMS_TRANSACTION_DIRECTION_BY_FAMILY = {
   atm_withdrawal: "expense",
   incoming_ipn_transfer: "income",
   outgoing_ipn_transfer: "expense",
+  outgoing_bank_transfer: "expense",
   refund_or_reversal: "income",
 } as const;
 

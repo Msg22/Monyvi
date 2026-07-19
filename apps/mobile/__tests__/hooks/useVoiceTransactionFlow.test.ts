@@ -104,6 +104,7 @@ function mockActiveAiConsent(): void {
       version: "2026-07-ai-processing-v1",
     },
     isConsented: true,
+    userId: "user-1",
   });
 }
 

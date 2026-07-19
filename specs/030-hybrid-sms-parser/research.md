@@ -161,3 +161,66 @@ private runtime unmount.
 **Rationale**: `SmsScanProvider` lives at the private layout and does not
 unmount when the review route changes, so provider unmount alone is not a
 sufficient privacy or stale-state boundary.
+
+## Decision 13: Enrich only the category through a minimal replaceable port
+
+**Decision**: Preserve every field extracted by an exact trusted template,
+including merchant text. Send only an opaque merchant ID, merchant text,
+`EXPENSE` direction, and `card_purchase` family to a dedicated consent-gated
+category endpoint. The server owns the enrichment-safe system-category
+allowlist, and the mobile orchestrator depends on a replaceable enrichment
+interface.
+
+**Rationale**: Physical-device validation showed that trusted templates already
+extract merchants accurately, while assigning every purchase to `other`
+materially weakens the review experience. Minimal category enrichment restores
+that value without resending the financial SMS or allowing AI to overwrite
+locally authoritative fields. The port preserves a future transition to local
+merchant history or another classifier without changing orchestration.
+
+**Rejected alternatives**:
+
+- Resend the complete trusted SMS to the full parser: defeats the privacy and
+  cost benefit of the trusted local match.
+- Ask AI to normalize merchant and category: unnecessarily weakens local field
+  ownership and could alter a correctly extracted merchant.
+- Implement persistent merchant/category history immediately: there is not yet
+  enough production evidence to measure useful precision and coverage.
+
+## Decision 14: Bound enrichment by payload, concurrency, and one deadline
+
+**Decision**: Deduplicate merchants per parse session, send at most 20 merchants
+per Edge request, execute no more than two requests concurrently, and enforce
+one 20-second mobile deadline across the entire enrichment operation. The Edge
+provider call uses an 8-second timeout and at most one retry. Accepted earlier
+chunk outcomes are retained when a later chunk fails or times out.
+
+**Rationale**: A 50-merchant constrained response exceeded the provider's
+schema/constraint limit on a physical device. Smaller requests avoid that
+failure, bounded concurrency prevents large scans from becoming serially slow,
+and one operation deadline keeps optional enrichment from blocking trusted local
+results. Wave-based scheduling also stops unstarted work cleanly after a timeout
+or consent failure without mutable worker state.
+
+**Rejected alternatives**:
+
+- 50 merchants per request: reproduced provider constraint failures.
+- Fully sequential requests: makes large scans exceed a reasonable optional
+  enrichment budget.
+- Unbounded parallel requests: risks provider throttling and unnecessary load.
+- Per-chunk 20-second deadlines: allows total parse latency to grow with the
+  number of chunks.
+
+## Decision 15: Derive auto-selection after all financial gates
+
+**Decision**: Trusted patterns remain review-required and cannot request
+auto-selection. An exact trusted `card_purchase` may become auto-selectable only
+after a valid enrichment-safe category at confidence `>= 0.90`, fixed local
+extraction confidence `0.98`, a resolved account under FR-057, and zero
+remaining review reasons. Every other family and every failed or uncertain
+enrichment remains review-required.
+
+**Rationale**: Trusting an SMS structure is not enough to trust category or
+account assignment. Keeping selection derivation in mobile orchestration after
+all dependent evidence is available prevents catalog definitions or AI output
+from bypassing financial validation.

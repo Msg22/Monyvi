@@ -23,6 +23,7 @@ import {
   fetchAccountsWithDetails,
   extractCardLast4,
   type MatchInput,
+  type MatchReason,
 } from "./sms-account-matcher";
 
 // ---------------------------------------------------------------------------
@@ -33,6 +34,7 @@ import {
 export interface ResolvedAccount {
   readonly accountId: string;
   readonly accountName: string;
+  readonly matchReason: MatchReason;
 }
 
 // ---------------------------------------------------------------------------
@@ -58,10 +60,11 @@ export async function resolveAccountForSms(
   senderDisplayName: string,
   smsBody: string,
   currency?: CurrencyType,
-  parsedCardLast4?: string
+  parsedCardLast4?: string,
+  expectedUserId?: string
 ): Promise<ResolvedAccount | null> {
   const userId = await getCurrentUserId();
-  if (!userId) {
+  if (!userId || (expectedUserId !== undefined && userId !== expectedUserId)) {
     console.warn(
       "[sms-resolver] No authenticated user — cannot resolve account"
     );
@@ -95,5 +98,6 @@ export async function resolveAccountForSms(
   return {
     accountId: result.accountId,
     accountName: result.accountName,
+    matchReason: result.matchReason,
   };
 }

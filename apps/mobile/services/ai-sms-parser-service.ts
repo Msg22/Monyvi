@@ -18,6 +18,8 @@ import {
   shouldUseFixtureSmsParser,
 } from "@/config/e2e-test-config";
 import { assertNotAborted, createAbortError } from "./abort-utils";
+import { assertExpectedCurrentUser } from "./user-data-access";
+import { USER_DATA_ACCESS_ERROR_CODES } from "./user-data-access-error-codes";
 
 import {
   buildCategoryMap,
@@ -160,7 +162,9 @@ interface ChunkAiResult {
 function isParserControlFlowError(error: unknown): boolean {
   return (
     (error instanceof Error && error.name === "AbortError") ||
-    isAiConsentRequiredError(error)
+    isAiConsentRequiredError(error) ||
+    (error instanceof Error &&
+      error.message === USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED)
   );
 }
 
@@ -376,9 +380,14 @@ function mapAiTransactions(
 async function invokeParseChunk(
   messagesPayload: readonly MessagePayload[],
   context: ParseSmsContext,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  expectedUserId?: string
 ): Promise<ChunkAiResult> {
   throwIfAborted(abortSignal);
+  if (expectedUserId !== undefined) {
+    await assertExpectedCurrentUser(expectedUserId);
+    throwIfAborted(abortSignal);
+  }
   const response = await supabase.functions.invoke("parse-sms", {
     body: {
       messages: messagesPayload,
@@ -534,6 +543,7 @@ function waitForInterChunkDelay(abortSignal?: AbortSignal): Promise<void> {
  * @param candidates - SMS messages that passed the keyword filter
  * @param context - Client context (categories, currencies)
  * @param onProgress - Optional callback invoked after each chunk completes
+ * @param expectedUserId - Optional user scope that must still own each request
  * @returns Parsed transactions only (account suggestions derived separately)
  * @throws AbortError when the caller cancels, or AiConsentRequiredError when
  * the existing AI consent gate rejects the request.
@@ -542,7 +552,8 @@ export async function parseSmsWithAi(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
   onProgress?: (progress: AiParseProgress) => void,
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  expectedUserId?: string
 ): Promise<AiParseResult> {
   const emptyResult: AiParseResult = { transactions: [], hasError: false };
   if (candidates.length === 0) return emptyResult;
@@ -628,7 +639,8 @@ export async function parseSmsWithAi(
         chunkResult = await invokeParseChunk(
           currentChunk.messages,
           context,
-          abortSignal
+          abortSignal,
+          expectedUserId
         );
       } catch (error: unknown) {
         if (isParserControlFlowError(error)) throw error;

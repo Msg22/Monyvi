@@ -32,7 +32,10 @@ import { logger } from "@/utils/logger";
 // ---------------------------------------------------------------------------
 
 /** Callback for detected financial SMS transactions */
-type LiveSmsEventHandler = (parsed: ParsedSmsTransaction) => void;
+type LiveSmsEventHandler = (
+  parsed: ParsedSmsTransaction,
+  userId: string
+) => void;
 
 /** SMS data shape emitted by native SmsEventModule */
 interface NativeSmsEvent {
@@ -126,9 +129,11 @@ async function processNativeSmsEvent(event: NativeSmsEvent): Promise<void> {
     }
 
     // Step 4: Emit parsed transactions to all registered handlers
+    if (result.status !== "parsed" || result.userId === undefined) return;
+
     for (const parsed of result.transactions) {
       for (const handler of handlers) {
-        handler(parsed);
+        handler(parsed, result.userId);
       }
     }
   } catch (err) {

@@ -42,6 +42,7 @@ import {
   getPrimaryTransactionBadge,
   type TransactionBadgeData,
 } from "./get-transaction-badges";
+import { OriginalContentBlock } from "./get-expanded-content";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,7 +60,8 @@ interface TransactionItemProps {
   /** How the match was determined (used for fallback display) */
   readonly matchReason?: MatchReason;
   /** Optional expanded content (SMS body, voice note, etc.) */
-  readonly expandedContent?: React.ReactNode;
+  readonly expandedContentTitle?: string;
+  readonly expandedContentBody?: string;
   /** Toggle selection — receives index so parent can use a stable ref */
   readonly onToggleSelect: (index: number) => void;
   /** Called when user taps the item to edit — receives index */
@@ -185,7 +187,8 @@ function TransactionItemInner({
   index,
   isSelected,
   accountName,
-  expandedContent,
+  expandedContentTitle,
+  expandedContentBody,
   onToggleSelect,
   onPress,
   hasMissingInfo = false,
@@ -197,7 +200,7 @@ function TransactionItemInner({
   const { t } = useTranslation("transactions");
   const isExpense = transaction.type === "EXPENSE";
   const isVoice = transaction.source === "VOICE";
-  const hasExpandableContent = !isVoice && !!expandedContent;
+  const hasExpandableContent = !isVoice && !!expandedContentBody;
 
   const primaryBadge = getPrimaryTransactionBadge(
     hasMissingInfo,
@@ -392,7 +395,10 @@ function TransactionItemInner({
           exiting={FadeOut.duration(150)}
           className="px-5 pb-3 pt-0"
         >
-          {expandedContent}
+          <OriginalContentBlock
+            title={expandedContentTitle ?? ""}
+            body={expandedContentBody ?? ""}
+          />
         </Animated.View>
       )}
     </View>

@@ -6,9 +6,13 @@ import { getCurrentUserDataScope } from "./user-data-access";
  * Check whether an SMS has already produced a transaction or transfer.
  */
 export async function hasExistingSmsFingerprint(
-  smsFingerprint: string
+  smsFingerprint: string,
+  expectedUserId?: string
 ): Promise<boolean> {
   const scope = await getCurrentUserDataScope();
+  if (expectedUserId !== undefined && scope.userId !== expectedUserId) {
+    return false;
+  }
 
   const [transactionCount, transferCount] = await Promise.all([
     scope

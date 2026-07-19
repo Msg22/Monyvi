@@ -16,10 +16,7 @@ import {
   useTransactionReviewState,
 } from "@/hooks/useTransactionReviewState";
 import { TransactionEditModal } from "./edit-modal/TransactionEditModal";
-import {
-  getExpandedContent,
-  OriginalContentBlock,
-} from "./get-expanded-content";
+import { getExpandedContent } from "./get-expanded-content";
 import { ReviewActionBar } from "./ReviewActionBar";
 import { ReviewFiltersSheet } from "./ReviewFiltersSheet";
 import {
@@ -50,6 +47,13 @@ export interface TransactionReviewProps {
     readonly onRetry: () => void;
   };
 }
+
+export const TRANSACTION_REVIEW_LIST_RENDER_CONFIG = {
+  initialNumToRender: 8,
+  maxToRenderPerBatch: 8,
+  updateCellsBatchingPeriod: 50,
+  windowSize: 5,
+} as const;
 
 export function TransactionReview({
   transactions,
@@ -174,11 +178,8 @@ export function TransactionReview({
           index={item.originalIndex}
           isSelected={selectedIndicesRef.current.has(item.originalIndex)}
           accountName={accountName}
-          expandedContent={
-            content ? (
-              <OriginalContentBlock title={content.title} body={content.body} />
-            ) : undefined
-          }
+          expandedContentTitle={content?.title}
+          expandedContentBody={content?.body}
           onToggleSelect={handleToggleItem}
           onPress={handleOpenEditModal}
           hasMissingInfo={invalidIndices.has(item.originalIndex)}
@@ -225,12 +226,7 @@ export function TransactionReview({
         data={state.listItems}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
-        extraData={{
-          selectedIndices: state.selectedIndices,
-          reviewMode: state.reviewMode,
-          reviewMetaByIndex: state.reviewMetaByIndex,
-          resolvedAccountMatchIndices: state.resolvedAccountMatchIndices,
-        }}
+        extraData={state.selectedIndices}
         ListHeaderComponent={
           <Animated.View
             entering={FadeInDown.delay(100)}
@@ -474,8 +470,16 @@ export function TransactionReview({
         contentContainerClassName="pb-2"
         showsVerticalScrollIndicator={false}
         {...ANDROID_SAFE_LIST_PROPS}
-        maxToRenderPerBatch={15}
-        windowSize={7}
+        initialNumToRender={
+          TRANSACTION_REVIEW_LIST_RENDER_CONFIG.initialNumToRender
+        }
+        maxToRenderPerBatch={
+          TRANSACTION_REVIEW_LIST_RENDER_CONFIG.maxToRenderPerBatch
+        }
+        updateCellsBatchingPeriod={
+          TRANSACTION_REVIEW_LIST_RENDER_CONFIG.updateCellsBatchingPeriod
+        }
+        windowSize={TRANSACTION_REVIEW_LIST_RENDER_CONFIG.windowSize}
       />
 
       <ReviewActionBar

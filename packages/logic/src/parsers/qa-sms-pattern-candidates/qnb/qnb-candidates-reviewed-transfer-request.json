@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "sourceExportId": "fe11b9b9-ee44-443c-bdf9-8b9c5ad2c4f6",
+  "evidenceDomainStatus": "stable",
+  "candidates": [
+    {
+      "schemaVersion": 1,
+      "candidateId": "qa-candidate-19979a04-9144-4975-bea6-07fbea143df1",
+      "evidenceDigest": "a868b251e3fe733a041cb6fe8f9c1ea0ee8e75aceeae894d9b021b0c260d4978",
+      "providerId": "qnb-egypt",
+      "verifiedSenderAlias": "QNB EGYPT",
+      "messageFamily": "atm_withdrawal",
+      "currency": "EGP",
+      "expectedOutcome": {
+        "kind": "transaction",
+        "direction": "expense",
+        "requiredPlaceholderRoles": ["transaction_amount"],
+        "confidenceCeiling": 0.8,
+        "reviewStatus": "needs_review",
+        "reviewReasons": ["candidate_pattern", "account_context_required"]
+      },
+      "segments": [
+        {
+          "kind": "fixed",
+          "text": "You have requested a transfer of : "
+        },
+        {
+          "kind": "placeholder",
+          "token": "AMOUNT",
+          "semanticRole": "transaction_amount",
+          "wasOperatorCorrected": true
+        },
+        {
+          "kind": "fixed",
+          "text": " "
+        },
+        {
+          "kind": "placeholder",
+          "token": "CURRENCY",
+          "semanticRole": "transaction_currency",
+          "wasOperatorCorrected": true
+        },
+        {
+          "kind": "fixed",
+          "text": " ,Please follow up on the transfer status through Online Banking"
+        }
+      ],
+      "sanitizedShape": "You have requested a transfer of : <AMOUNT> <CURRENCY> ,Please follow up on the transfer status through Online Banking",
+      "sourceType": "qa-real-sms",
+      "runtimeScope": "candidate",
+      "autoSelectPolicy": "never",
+      "authorization": {
+        "version": 1,
+        "authorizationClass": "qa_operator_explicit",
+        "authorizedAt": "2026-07-15T09:30:29.312Z",
+        "providerScope": "qnb-egypt"
+      },
+      "createdAt": "2026-07-15T09:41:51.004Z"
+    }
+  ],
+  "coverageDeclarations": []
+}

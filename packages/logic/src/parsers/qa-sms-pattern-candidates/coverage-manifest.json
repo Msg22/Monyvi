@@ -28,6 +28,7 @@
       "currency": "EGP",
       "status": "candidate_collected",
       "candidateIds": [
+        "qa-candidate-19979a04-9144-4975-bea6-07fbea143df1",
         "qa-candidate-39622c2a-46f6-4825-8218-1e47427b20fc",
         "qa-candidate-424c7a74-bf72-4f7b-a229-afa4ff6d40c6",
         "qa-candidate-5cf80076-3200-474f-bc3e-a1ef1618f839",
@@ -75,6 +76,22 @@
       "status": "unavailable_in_qa_dataset",
       "candidateIds": [],
       "recordedAt": "2026-07-15T14:21:10.022Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "outgoing_bank_transfer",
+      "currency": "EGP",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-17T18:00:00.000Z"
+    },
+    {
+      "providerId": "qnb-egypt",
+      "messageFamily": "outgoing_bank_transfer",
+      "currency": "USD",
+      "status": "unavailable_in_qa_dataset",
+      "candidateIds": [],
+      "recordedAt": "2026-07-17T18:00:00.000Z"
     },
     {
       "providerId": "qnb-egypt",

@@ -12,16 +12,13 @@ import { Q, type Collection, type Model } from "@nozbe/watermelondb";
 import type { Clause } from "@nozbe/watermelondb/QueryDescription";
 import type Query from "@nozbe/watermelondb/Query";
 import { getCurrentUserId } from "./supabase";
+import { USER_DATA_ACCESS_ERROR_CODES } from "./user-data-access-error-codes";
+
+export { USER_DATA_ACCESS_ERROR_CODES } from "./user-data-access-error-codes";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-export const USER_DATA_ACCESS_ERROR_CODES = {
-  USER_REQUIRED: "USER_REQUIRED",
-  OWNERSHIP_FAILED: "OWNERSHIP_FAILED",
-  INVALID_PARENT_REFERENCE: "INVALID_PARENT_REFERENCE",
-} as const;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -130,6 +127,14 @@ export async function getRequiredCurrentUserId(): Promise<string> {
   }
 
   return normalizedUserId;
+}
+
+export async function assertExpectedCurrentUser(
+  expectedUserId: string
+): Promise<void> {
+  if ((await getRequiredCurrentUserId()) !== expectedUserId) {
+    throw new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
+  }
 }
 
 /**

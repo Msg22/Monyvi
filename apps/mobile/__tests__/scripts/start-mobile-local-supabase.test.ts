@@ -1,7 +1,16 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { EventEmitter } from "node:events";
 
 interface StartMobileLocalSupabaseModule {
+  buildLocalFunctionsServeCommand(options?: {
+    readonly npxCommand?: string;
+    readonly platform?: NodeJS.Platform;
+  }): {
+    readonly command: string;
+    readonly args: readonly string[];
+    readonly shell: boolean;
+  };
   buildExpoStartArgs(expoArgs: readonly string[]): readonly string[];
   buildExpoStartCommand(
     expoArgs: readonly string[],
@@ -27,6 +36,17 @@ interface StartMobileLocalSupabaseModule {
       readonly shouldUseFixtureSmsInbox?: boolean;
     }
   ): Record<string, string | undefined>;
+  monitorRequiredChildProcess(
+    child: EventEmitter,
+    serviceName: string,
+    onFailure: (message: string, exitCode: number) => void
+  ): void;
+  stopDevelopmentChildProcesses(
+    children: readonly {
+      readonly killed: boolean;
+      readonly kill: () => void;
+    }[]
+  ): void;
   parseCliArgs(args: readonly string[]): {
     readonly shouldUseWirelessDeviceTunnel: boolean;
     readonly shouldUseLocalParser: boolean;
@@ -67,6 +87,53 @@ const startMobileLocalSupabase = jest.requireActual(
 ) as StartMobileLocalSupabaseModule;
 
 describe("start-mobile-local-supabase script helpers", () => {
+  it("starts the local Edge Function watcher so newly added functions are registered", () => {
+    expect(
+      startMobileLocalSupabase.buildLocalFunctionsServeCommand({
+        npxCommand: "npx.cmd",
+        platform: "win32",
+      })
+    ).toEqual({
+      command: "npx.cmd",
+      args: ["supabase", "functions", "serve"],
+      shell: true,
+    });
+  });
+
+  it("surfaces a local Edge Function watcher failure instead of leaving Metro running", () => {
+    const child = new EventEmitter();
+    const onFailure = jest.fn();
+
+    startMobileLocalSupabase.monitorRequiredChildProcess(
+      child,
+      "Local Edge Functions",
+      onFailure
+    );
+    child.emit("exit", 1);
+
+    expect(onFailure).toHaveBeenCalledWith(
+      "Local Edge Functions exited unexpectedly with code 1.",
+      1
+    );
+  });
+
+  it("treats a clean required-service exit as an unexpected stack failure", () => {
+    const child = new EventEmitter();
+    const onFailure = jest.fn();
+
+    startMobileLocalSupabase.monitorRequiredChildProcess(
+      child,
+      "Local Edge Functions",
+      onFailure
+    );
+    child.emit("exit", 0);
+
+    expect(onFailure).toHaveBeenCalledWith(
+      "Local Edge Functions exited unexpectedly with code 0.",
+      1
+    );
+  });
+
   it("provides explicit dev commands for fixture and device SMS inboxes", () => {
     const rootPackage = JSON.parse(
       readFileSync(resolve(__dirname, "../../../..", "package.json"), "utf8")
@@ -226,6 +293,22 @@ describe("start-mobile-local-supabase script helpers", () => {
       password: null,
       expoArgs: [],
     });
+  });
+
+  it("stops Edge Functions, the tunnel, and Expo when the development stack fails", () => {
+    const functionsServe = { killed: false, kill: jest.fn() };
+    const ngrok = { killed: false, kill: jest.fn() };
+    const expo = { killed: false, kill: jest.fn() };
+
+    startMobileLocalSupabase.stopDevelopmentChildProcesses([
+      functionsServe,
+      ngrok,
+      expo,
+    ]);
+
+    expect(functionsServe.kill).toHaveBeenCalledTimes(1);
+    expect(ngrok.kill).toHaveBeenCalledTimes(1);
+    expect(expo.kill).toHaveBeenCalledTimes(1);
   });
 
   it("rejects a password flag without a value", () => {

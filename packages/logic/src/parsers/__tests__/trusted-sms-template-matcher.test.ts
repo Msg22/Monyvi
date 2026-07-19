@@ -79,6 +79,10 @@ describe("trusted SMS exact template matcher", () => {
       "qnb-egypt-atm-account-egp-v1",
       "Dear Client, Amount of EGP250000 was debited from your account for cash withdrawal based on your request. For more information, please call 19700",
     ],
+    [
+      "qnb-egypt-outgoing-online-banking-transfer-egp-v1",
+      "You have requested a transfer of : 125.50 EGP ,Please follow up on the transfer status through Online Banking",
+    ],
   ])(
     "matches the real QNB compact placeholder shape for %s",
     (patternId, body) => {
@@ -89,6 +93,18 @@ describe("trusted SMS exact template matcher", () => {
       expect(result.pattern.patternId).toBe(patternId);
     }
   );
+
+  it("does not broaden the approved online-banking transfer wording", () => {
+    const pattern = findPattern(
+      "qnb-egypt-outgoing-online-banking-transfer-egp-v1"
+    );
+    const body = renderTrustedPattern(pattern).replace(
+      "follow up on the transfer status",
+      "complete the transfer"
+    );
+
+    expect(match(pattern, body).status).toBe("unresolved");
+  });
 
   it("matches an approved ATM terminal as an ATM withdrawal only", () => {
     const pattern = findPattern("qnb-egypt-atm-card-egp-v1");

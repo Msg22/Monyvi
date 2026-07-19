@@ -33,7 +33,7 @@ describe("trusted SMS catalog", () => {
     const validation = validateTrustedSmsCatalog(QNB_EGYPT_TRUSTED_SMS_CATALOG);
 
     expect(validation).toEqual({ isValid: true, issues: [] });
-    expect(QNB_EGYPT_TRUSTED_SMS_CATALOG.patterns).toHaveLength(22);
+    expect(QNB_EGYPT_TRUSTED_SMS_CATALOG.patterns).toHaveLength(23);
     expect(
       QNB_EGYPT_TRUSTED_SMS_CATALOG.patterns.some(
         ({ messageFamily }) =>
@@ -49,6 +49,32 @@ describe("trusted SMS catalog", () => {
       issues: [],
     });
     expect(activateTrustedSmsCatalog(catalog).patterns).toHaveLength(1);
+  });
+
+  it("keeps earlier reviewed patterns valid in a newer append-only catalog", () => {
+    const previousPattern = buildTrustedPattern({ catalogVersion: 1 });
+    const catalog = resignCatalog(
+      buildTrustedCatalog([previousPattern], { catalogVersion: 2 })
+    );
+
+    expect(validateTrustedSmsCatalog(catalog)).toEqual({
+      isValid: true,
+      issues: [],
+    });
+  });
+
+  it("rejects a pattern promoted for a future catalog version", () => {
+    const futurePattern = resignPattern(
+      buildTrustedPattern({ catalogVersion: 3 })
+    );
+    const catalog = resignCatalog(
+      buildTrustedCatalog([futurePattern], { catalogVersion: 2 })
+    );
+
+    expect(validateTrustedSmsCatalog(catalog).issues).toContainEqual({
+      code: "pattern_catalog_version_invalid",
+      patternId: futurePattern.patternId,
+    });
   });
 
   it.each([

@@ -2,7 +2,10 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import React from "react";
 import { FlatList, type FlatListProps } from "react-native";
-import { TransactionReview } from "@/components/transaction-review/TransactionReview";
+import {
+  TRANSACTION_REVIEW_LIST_RENDER_CONFIG,
+  TransactionReview,
+} from "@/components/transaction-review/TransactionReview";
 import {
   type UseTransactionReviewStateResult,
   useTransactionReviewState,
@@ -51,6 +54,8 @@ jest.mock("@/components/transactions/TransactionFiltersBar", () => ({
 }));
 
 const mockReviewFiltersSheet = jest.fn();
+const mockGetExpandedContent = jest.fn();
+const mockTransactionItem = jest.fn();
 
 jest.mock("@/components/transaction-review/ReviewFiltersSheet", () => ({
   ReviewFiltersSheet: (props: Record<string, unknown>): null => {
@@ -71,7 +76,8 @@ jest.mock(
 );
 
 jest.mock("@/components/transaction-review/get-expanded-content", () => ({
-  getExpandedContent: (): null => null,
+  getExpandedContent: (...args: readonly unknown[]): unknown =>
+    mockGetExpandedContent(...args),
   OriginalContentBlock: (): null => null,
 }));
 
@@ -86,12 +92,14 @@ jest.mock("@/components/transaction-review/TransactionItem", () => ({
   },
   TransactionItem: ({
     transaction,
-  }: {
+    ...props
+  }: Record<string, unknown> & {
     readonly transaction: ReviewableTransaction;
   }): React.JSX.Element => {
     const ReactActual = jest.requireActual<typeof import("react")>("react");
     const ReactNative =
       jest.requireActual<typeof import("react-native")>("react-native");
+    mockTransactionItem({ transaction, ...props });
     return ReactActual.createElement(
       ReactNative.Text,
       null,
@@ -226,6 +234,9 @@ describe("TransactionReview", () => {
     mockUseTransactionReviewState.mockReset();
     mockPageHeader.mockReset();
     mockReviewFiltersSheet.mockReset();
+    mockGetExpandedContent.mockReset();
+    mockGetExpandedContent.mockReturnValue(null);
+    mockTransactionItem.mockReset();
   });
 
   it("delegates the approved review header to PageHeader", () => {
@@ -436,6 +447,34 @@ describe("TransactionReview", () => {
         visible: true,
       })
     );
+  });
+
+  it("passes expanded content as stable row data instead of a new React node", () => {
+    const transaction = createTransaction();
+    mockGetExpandedContent.mockReturnValue({
+      title: "Original SMS",
+      body: "Raw message",
+    });
+
+    renderReview({
+      listItems: [{ key: "tx-0", tx: transaction, originalIndex: 0 }],
+    });
+
+    expect(mockTransactionItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expandedContentTitle: "Original SMS",
+        expandedContentBody: "Raw message",
+      })
+    );
+  });
+
+  it("uses smaller render batches for long transaction lists", () => {
+    expect(TRANSACTION_REVIEW_LIST_RENDER_CONFIG).toEqual({
+      initialNumToRender: 8,
+      maxToRenderPerBatch: 8,
+      updateCellsBatchingPeriod: 50,
+      windowSize: 5,
+    });
   });
 
   it("exposes each summary count as one accessible E2E signal", () => {

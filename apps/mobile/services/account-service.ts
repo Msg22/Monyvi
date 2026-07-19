@@ -32,7 +32,7 @@ import {
 import { roundForCurrency } from "@monyvi/logic";
 import { Q } from "@nozbe/watermelondb";
 import { readIntroLocaleOverride } from "./intro-flag-service";
-import { queryOwned } from "./user-data-access";
+import { assertExpectedCurrentUser, queryOwned } from "./user-data-access";
 import { createAccountSmsSendersWithinWriter } from "./account-sms-sender-service";
 import { normalizeCardLast4ForStorage } from "./card-last4-normalizer";
 
@@ -149,7 +149,8 @@ export async function createCashAccountWithinWriter(
   userId: string,
   currency: CurrencyType,
   accountsCollection: ReturnType<typeof database.get<Account>>,
-  name?: string
+  name?: string,
+  expectedUserId?: string
 ): Promise<{ readonly accountId: string; readonly created: boolean }> {
   const normalizedUserId = userId.trim();
 
@@ -172,6 +173,9 @@ export async function createCashAccountWithinWriter(
     Q.where("deleted", Q.notEq(true))
   ).fetchCount();
   const isFirstAccount = activeAccountCount === 0;
+  if (expectedUserId !== undefined) {
+    await assertExpectedCurrentUser(expectedUserId);
+  }
 
   const record = await accountsCollection.create((acc) => {
     acc.userId = normalizedUserId;
@@ -381,7 +385,8 @@ export async function createAccountForUser(
 export async function ensureCashAccount(
   userId: string,
   currency?: CurrencyType | null,
-  name?: string
+  name?: string,
+  expectedUserId?: string
 ): Promise<EnsureCashAccountResult> {
   try {
     const normalizedUserId = userId.trim();
@@ -411,7 +416,8 @@ export async function ensureCashAccount(
         normalizedUserId,
         resolvedCurrency,
         accountsCollection,
-        accountName
+        accountName,
+        expectedUserId
       );
       accountId = result.accountId;
       created = result.created;

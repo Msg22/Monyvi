@@ -75,6 +75,7 @@ function mapTransaction(
     ...(findValue(values, "card_last4")
       ? { cardLast4: findValue(values, "card_last4") }
       : {}),
+    messageFamily: pattern.messageFamily,
     parserSource: "trusted_local",
     patternId: pattern.patternId,
     patternVersion: pattern.patternVersion,

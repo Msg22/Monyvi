@@ -646,10 +646,19 @@ Business rules:
 
 #### Phase 2C: Trusted Hybrid Local-First SMS Parsing
 
+- SMS bodies containing any of these Arabic phrases are hard-excluded before
+  fingerprinting, trusted-template matching, category enrichment, or full AI
+  parsing, even when the sender is trusted: `اكسب`, `حجز`, `ادفع`, `اتبرع`,
+  `كاش باك`, `موعد`, `كهرباء`, `غاز`, and `مياه`. Matching ignores Arabic
+  diacritics, tatweel, common alef variants, and repeated whitespace. This
+  intentionally favors excluding promotional/action-oriented messages over
+  recall; a legitimate transaction containing one of these phrases, including an
+  authorization-hold message that uses `حجز`, will also be excluded.
 - Every eligible candidate is evaluated against active `trusted_production`
-  templates first. Exact unambiguous local matches are not sent to AI; only
-  unresolved, disabled, malformed, unsupported, or ambiguous candidates may use
-  AI under the existing AI transaction-feature consent gate.
+  templates first. Exact unambiguous local matches never send their raw SMS or
+  financial payload to the full AI parser; only unresolved, disabled, malformed,
+  unsupported, or ambiguous candidates may use full AI parsing under the
+  existing AI transaction-feature consent gate.
 - One explicitly reviewer-approved real sanitized candidate is enough for
   promotion, but only for that exact structure. Promotion requires an immutable
   privacy-safe record and passing schema, privacy, positive, near-match,
@@ -669,9 +678,12 @@ Business rules:
 - Placeholder semantics follow
   `specs/030-hybrid-sms-parser/contracts/placeholder-role-contract.md`. Unknown
   roles block promotion. Account suffixes remain match-only until issue #759.
-- Production local suggestions are always review-required. Existing account,
-  category, amount, currency, ATM destination, save, and fingerprint validation
-  remain authoritative.
+- Production local suggestions are review-required by default. The only initial
+  auto-selection exception is an exact trusted card purchase with accepted
+  category enrichment, a strong resolved account match, and zero reasons from
+  the authoritative transaction-review selection service. Existing amount,
+  currency, ATM destination, save, and fingerprint validation remain
+  authoritative.
 - The first release uses a versioned bundled catalog. Failed OTA/app activation
   retains the prior installed valid bundle. Runtime-invalid installed catalogs
   activate no local patterns and route candidates to AI. The activation
@@ -683,8 +695,75 @@ Business rules:
   save, discard, reset, review Back, abandonment route replacement, logout, and
   private-runtime unmount.
 - User-contributed template collection (#751), remote manifest fetching,
-  production auto-selection, voice changes, and database schema changes remain
-  out of scope.
+  auto-selection for any family other than the approved enriched card-purchase
+  exception, voice changes, and database schema changes remain out of scope.
+
+##### Trusted Purchase Category Enrichment
+
+- A trusted local card purchase with a non-empty merchant may use a dedicated
+  consent-gated AI enrichment request because a generic `other` category is not
+  sufficient production review quality. The trusted parser's merchant remains
+  authoritative and is not normalized by AI.
+- The enrichment request is not a second full parse. It may contain only an
+  opaque per-merchant ID, locally extracted merchant text, transaction
+  direction, and trusted message family. The server owns the immutable safe
+  system-category allowlist; the client cannot expand it.
+- Raw SMS body, sender/provider, amount, balance, currency, card/account data,
+  reference, phone, date/time, fingerprint, transcript, custom category names,
+  and unrelated messages are forbidden from the enrichment payload and logs.
+- The AI response may supply only the category and category confidence after
+  strict validation. Merchant, amount, currency, direction, date, card/account
+  hints, transfer semantics, fingerprint, and trusted provenance remain locally
+  authoritative. Local code may deterministically recompute confidence and
+  review metadata only through the exact enriched-card gate below.
+- Equal merchant inputs are deduplicated within one parse session. Valid results
+  may update all correlated trusted purchases without creating duplicate review
+  items. If the provider returns multiple entries for one opaque merchant ID,
+  all entries for that ID are rejected, including malformed siblings.
+- ATM withdrawals, IPN/person transfers, trusted rejections, refunds/reversals,
+  merchant-free results, and locally unresolved candidates do not use this
+  enrichment endpoint in the first release.
+- Exact trusted card purchases use a fixed local extraction confidence of
+  `0.98`. A category result is accepted only at confidence `0.90` or greater.
+  Generic fallback categories such as `other` and `uncategorized` are never
+  accepted as enrichment outcomes even if the provider reports high confidence.
+  After acceptance, auto-selection still requires a resolved account and zero
+  remaining reasons from the existing transaction-review selection service.
+  Account evidence follows the exact-card or unique-sender rule below; ambiguous
+  matches remain review-required.
+- ATM withdrawals, transfers, unresolved templates, uncertain categories, and
+  failed enrichment remain review-required regardless of local confidence.
+- Missing, malformed, low-confidence, invented-category, timeout, cancellation,
+  offline, consent, and server failures preserve the original trusted local
+  suggestion and direction-correct fallback category. A failed enrichment must
+  never send the trusted SMS to the full parser.
+- Category enrichment sends at most 20 unique merchants per request, permits no
+  more than two requests in flight, and shares one 20-second total client
+  deadline per parse operation. Expiry stops remaining enrichment while
+  preserving trusted local suggestions and already accepted outcomes.
+- Malformed, duplicated, or invalid enrichment outcomes invalidate only their
+  opaque merchant identity. Unrelated valid merchant outcomes remain usable;
+  only a malformed response envelope invalidates the complete response.
+- When an SMS contains an explicit card-last-four value, account matching first
+  resolves exactly one accessible sender-plus-card match. If no exact card match
+  exists, it may use sender-only evidence only when that sender identifies one
+  accessible account. Duplicate exact matches, duplicate sender matches, and
+  registry/default fallbacks remain unresolved for card-bearing SMS.
+- Live SMS parsing and saving are pinned to the authenticated user who started
+  the operation. A user change before notification or the final
+  fingerprint-guarded write discards the stale result without creating a
+  financial record.
+- Persistent merchant/category history and automatic learning are deferred until
+  reviewed production history can demonstrate useful precision and coverage. The
+  mobile enrichment boundary remains replaceable so that strategy can be added
+  later without changing trusted extraction.
+- One manually approved exact `QNB EGYPT` online-banking transfer-request
+  structure is included in catalog version 2. It emits an `EXPENSE` transaction
+  suggestion in the `outgoing_bank_transfer` family with category `other`, no
+  invented counterparty, conservative confidence, and mandatory review. It is
+  not modeled as an owned-account Transfer. The full AI prompt contains the same
+  narrow sanitized exception and must not generalize it to other pending or
+  requested-transfer wording.
 
 ## 8. Notifications
 

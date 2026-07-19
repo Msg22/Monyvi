@@ -9,9 +9,11 @@ import {
 } from "@monyvi/db";
 import { ensureCashAccount } from "./account-service";
 import {
+  assertExpectedCurrentUser,
   getCurrentUserDataScope,
   type CurrentUserDataScope,
 } from "@/services/user-data-access";
+import { USER_DATA_ACCESS_ERROR_CODES } from "@/services/user-data-access-error-codes";
 import { isValidTransactionAmount } from "@monyvi/logic";
 
 export interface TransferData {
@@ -89,6 +91,8 @@ interface SmsAtmTransferInput {
   readonly smsFingerprint?: string;
   /** Sender display name for notes */
   readonly senderDisplayName?: string;
+  /** Authenticated user who initiated live parsing */
+  readonly expectedUserId: string;
 }
 
 interface SmsAtmTransferResult {
@@ -113,11 +117,16 @@ export async function createSmsAtmTransfer(
   input: SmsAtmTransferInput
 ): Promise<SmsAtmTransferResult> {
   const userId = await getCurrentUserId();
-  if (!userId) {
+  if (!userId || userId !== input.expectedUserId) {
     return { success: false, error: "User not authenticated" };
   }
 
-  const cashResult = await ensureCashAccount(userId, input.currency);
+  const cashResult = await ensureCashAccount(
+    userId,
+    input.currency,
+    undefined,
+    input.expectedUserId
+  );
   if (!cashResult.accountId) {
     return {
       success: false,
@@ -126,15 +135,18 @@ export async function createSmsAtmTransfer(
   }
 
   try {
-    await createTransfer({
-      fromAccountId: input.bankAccountId,
-      toAccountId: cashResult.accountId,
-      amount: input.amount,
-      currency: input.currency,
-      date: input.date,
-      notes: `${ATM_WITHDRAWAL_NOTE_PREFIX}${input.senderDisplayName ? ` — ${input.senderDisplayName}` : ""}`,
-      smsFingerprint: input.smsFingerprint,
-    });
+    await createTransfer(
+      {
+        fromAccountId: input.bankAccountId,
+        toAccountId: cashResult.accountId,
+        amount: input.amount,
+        currency: input.currency,
+        date: input.date,
+        notes: `${ATM_WITHDRAWAL_NOTE_PREFIX}${input.senderDisplayName ? ` — ${input.senderDisplayName}` : ""}`,
+        smsFingerprint: input.smsFingerprint,
+      },
+      input.expectedUserId
+    );
 
     return { success: true };
   } catch (error: unknown) {
@@ -150,19 +162,28 @@ export async function createSmsAtmTransfer(
  * Create a new transfer between accounts.
  * Atomically creates the Transfer record and updates both account balances.
  */
-export async function createTransfer(data: TransferData): Promise<void> {
+export async function createTransfer(
+  data: TransferData,
+  expectedUserId?: string
+): Promise<void> {
   assertValidTransferAmount(data.amount);
   if (data.convertedAmount !== undefined) {
     assertValidTransferAmount(data.convertedAmount);
   }
 
   const scope = await getCurrentUserDataScope();
+  if (expectedUserId !== undefined && scope.userId !== expectedUserId) {
+    throw new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
+  }
 
   const transferCollection = transfersCollection();
 
   await database.write(async () => {
     const fromAccount = await getOwnedAccount(data.fromAccountId, scope);
     const toAccount = await getOwnedAccount(data.toAccountId, scope);
+    if (expectedUserId !== undefined) {
+      await assertExpectedCurrentUser(expectedUserId);
+    }
 
     // 1. Create Transfer Record
     await transferCollection.create((transfer: Transfer) => {

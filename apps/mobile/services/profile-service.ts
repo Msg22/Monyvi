@@ -51,6 +51,12 @@ export const AI_PROCESSING_CONSENT_VERSION = aiProcessingConsentConfig.version;
 export interface AiProcessingConsentStatus {
   readonly isConsented: boolean;
   readonly consent: AiProcessingConsent | null;
+  readonly userId: string;
+}
+
+export interface RevokeAiProcessingConsentOptions {
+  readonly expectedUserId?: string;
+  readonly now?: Date;
 }
 
 // =============================================================================
@@ -235,6 +241,7 @@ export async function getAiProcessingConsentStatus(): Promise<AiProcessingConsen
   return {
     consent,
     isConsented: isActiveAiProcessingConsent(consent),
+    userId: profile.userId,
   };
 }
 
@@ -250,9 +257,16 @@ export async function grantAiProcessingConsent(
 }
 
 export async function revokeAiProcessingConsent(
-  now: Date = new Date()
+  options: RevokeAiProcessingConsentOptions = {}
 ): Promise<void> {
   const profile = await getProfile();
+  if (
+    options.expectedUserId !== undefined &&
+    profile.userId !== options.expectedUserId
+  ) {
+    return;
+  }
+  const now = options.now ?? new Date();
   const currentConsent = parseAiProcessingConsentRaw(
     profile.aiProcessingConsentRaw
   );

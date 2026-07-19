@@ -128,6 +128,6 @@ describe("trusted SMS staged validation metrics", () => {
     }
 
     expect(outcomes).toHaveLength(patterns.length);
-    expect(outcomes).toHaveLength(22);
+    expect(outcomes).toHaveLength(23);
   });
 });

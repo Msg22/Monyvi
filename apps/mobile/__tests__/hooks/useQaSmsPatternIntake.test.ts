@@ -502,8 +502,8 @@ describe("useQaSmsPatternIntake", () => {
     expect(result.current.step).toBe("coverage_review");
     expect(service.buildCandidateArtifact).toHaveBeenCalledTimes(1);
     expect(service.clearRawState).toHaveBeenCalledTimes(1);
-    expect(result.current.coverageDeclarations).toHaveLength(16);
-    expect(result.current.pendingCoverageCount).toBe(15);
+    expect(result.current.coverageDeclarations).toHaveLength(18);
+    expect(result.current.pendingCoverageCount).toBe(17);
     act(() => result.current.goToExport());
     expect(result.current.step).toBe("coverage_review");
     expect(result.current.errorCode).toBe("coverage_pending");
@@ -518,7 +518,7 @@ describe("useQaSmsPatternIntake", () => {
     const exported = exportBundle.mock.calls[0]?.[0];
     expect(exported?.evidenceDomainStatus).toBe("stable");
     expect(exported?.candidates).toHaveLength(1);
-    expect(exported?.coverageDeclarations).toHaveLength(16);
+    expect(exported?.coverageDeclarations).toHaveLength(18);
 
     const evidenceError = Object.assign(
       new Error("evidence_secret_unavailable"),

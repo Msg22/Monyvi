@@ -404,6 +404,7 @@ describe("AI processing consent", () => {
     await expect(getAiProcessingConsentStatus()).resolves.toEqual({
       isConsented: false,
       consent: null,
+      userId: "user-1",
     });
   });
 
@@ -420,6 +421,7 @@ describe("AI processing consent", () => {
     await expect(getAiProcessingConsentStatus()).resolves.toEqual({
       isConsented: false,
       consent: null,
+      userId: "user-1",
     });
   });
 
@@ -446,6 +448,7 @@ describe("AI processing consent", () => {
         consentedAt: "2026-07-04T09:00:00.000Z",
         revokedAt: null,
       },
+      userId: "user-1",
     });
   });
 
@@ -533,6 +536,27 @@ describe("AI processing consent", () => {
       consentedAt: "2026-07-04T09:00:00.000Z",
       revokedAt: "2026-07-04T10:00:00.000Z",
     });
+  });
+
+  it("does not revoke consent when the current profile is not the expected user", async (): Promise<void> => {
+    const profile = createMockProfile({
+      userId: "user-2",
+      aiProcessingConsentRaw: JSON.stringify({
+        version: "2026-07-ai-processing-v1",
+        consentedAt: "2026-07-04T09:00:00.000Z",
+        revokedAt: null,
+      }),
+    });
+    setupProfileFound(profile);
+
+    await revokeAiProcessingConsent({ expectedUserId: "user-1" });
+
+    expect(JSON.parse(String(profile.aiProcessingConsentRaw))).toEqual({
+      version: "2026-07-ai-processing-v1",
+      consentedAt: "2026-07-04T09:00:00.000Z",
+      revokedAt: null,
+    });
+    expect(mockSupabaseProfileUpdate).not.toHaveBeenCalled();
   });
 
   it("pushes revoked AI processing consent to Supabase immediately", async (): Promise<void> => {

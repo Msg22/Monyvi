@@ -7,7 +7,10 @@ const mockRegisterHeadlessTask = jest.fn<
   [string, () => () => Promise<void>]
 >();
 const mockProcessLiveSmsEvent = jest.fn<Promise<unknown>, unknown[]>();
-const mockHandleDetectedSms = jest.fn<Promise<void>, [ParsedSmsTransaction]>();
+const mockHandleDetectedSms = jest.fn<
+  Promise<void>,
+  [ParsedSmsTransaction, string]
+>();
 
 jest.mock("react-native", () => ({
   AppRegistry: {
@@ -24,8 +27,10 @@ jest.mock("@/services/sms-live-processor", () => ({
 }));
 
 jest.mock("@/services/sms-live-detection-handler", () => ({
-  handleDetectedSms: (parsed: ParsedSmsTransaction): Promise<void> =>
-    mockHandleDetectedSms(parsed),
+  handleDetectedSms: (
+    parsed: ParsedSmsTransaction,
+    userId: string
+  ): Promise<void> => mockHandleDetectedSms(parsed, userId),
 }));
 
 import { registerSmsHeadlessTask } from "@/services/sms-headless-task";
@@ -68,6 +73,7 @@ describe("sms-headless-task", () => {
     mockProcessLiveSmsEvent.mockResolvedValue({
       status: "parsed",
       smsFingerprint: "hash-headless",
+      userId: "user-1",
       transactions: [parsed],
     });
     const task = getRegisteredTask();
@@ -84,7 +90,7 @@ describe("sms-headless-task", () => {
       timestamp: 1778414400000,
       deliveryMode: "headless",
     });
-    expect(mockHandleDetectedSms).toHaveBeenCalledWith(parsed);
+    expect(mockHandleDetectedSms).toHaveBeenCalledWith(parsed, "user-1");
   });
 
   it("throws a HeadlessJsTaskError when AI parsing should be retried", async () => {

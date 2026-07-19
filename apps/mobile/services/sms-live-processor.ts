@@ -2,6 +2,7 @@ import { database, type Category } from "@monyvi/db";
 import {
   type ParsedSmsTransaction,
   computeSmsFingerprint,
+  isExcludedBeforeSmsParsing,
   isLikelyCorruptedSmsText,
   isLikelyFinancialSms,
   SUPPORTED_CURRENCIES,
@@ -27,7 +28,11 @@ import {
   getAiProcessingConsentStatus,
   revokeAiProcessingConsent,
 } from "./profile-service";
-import { getCurrentUserDataScope } from "./user-data-access";
+import {
+  getCurrentUserDataScope,
+  getRequiredCurrentUserId,
+} from "./user-data-access";
+import { USER_DATA_ACCESS_ERROR_CODES } from "./user-data-access-error-codes";
 import { logger } from "@/utils/logger";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
 
@@ -39,6 +44,7 @@ type LiveSmsProcessingStatus =
   | "duplicate"
   | "infrastructure_error"
   | "ai_failed"
+  | "stale_user"
   | "parsed";
 
 export interface LiveSmsEvent {
@@ -52,6 +58,7 @@ export interface LiveSmsProcessingResult {
   readonly status: LiveSmsProcessingStatus;
   readonly smsFingerprint?: string;
   readonly isRetryable?: boolean;
+  readonly userId?: string;
   readonly transactions: readonly ParsedSmsTransaction[];
 }
 
@@ -74,13 +81,30 @@ function createResult(
   status: LiveSmsProcessingStatus,
   smsFingerprint?: string,
   transactions: readonly ParsedSmsTransaction[] = EMPTY_TRANSACTIONS,
-  isRetryable?: boolean
+  isRetryable?: boolean,
+  userId?: string
 ): LiveSmsProcessingResult {
-  return { status, smsFingerprint, isRetryable, transactions };
+  return { status, smsFingerprint, isRetryable, userId, transactions };
 }
 
-async function loadAiContext(): Promise<ParseSmsContext> {
+interface ScopedParseSmsContext {
+  readonly context: ParseSmsContext;
+  readonly userId: string;
+}
+
+async function isInitiatingUserCurrent(userId: string): Promise<boolean> {
+  try {
+    return (await getRequiredCurrentUserId()) === userId;
+  } catch {
+    return false;
+  }
+}
+
+async function loadAiContext(
+  expectedUserId: string
+): Promise<ScopedParseSmsContext | null> {
   const scope = await getCurrentUserDataScope();
+  if (scope.userId !== expectedUserId) return null;
   const categories = await scope
     .queryAccessibleCategories(
       database.get<Category>("categories"),
@@ -89,36 +113,51 @@ async function loadAiContext(): Promise<ParseSmsContext> {
     .fetch();
 
   return {
-    categories: toCategoryTreeSources(categories),
-    supportedCurrencies: SUPPORTED_CURRENCIES.map((currency) => currency.code),
+    userId: scope.userId,
+    context: {
+      categories: toCategoryTreeSources(categories),
+      supportedCurrencies: SUPPORTED_CURRENCIES.map(
+        (currency) => currency.code
+      ),
+    },
   };
 }
 
-async function hasLiveSmsAiConsent(): Promise<boolean> {
+type LiveSmsConsentState = "consented" | "disabled" | "stale_user";
+
+async function getLiveSmsConsentState(
+  expectedUserId: string
+): Promise<LiveSmsConsentState> {
   const aiConsentStatus = await getAiProcessingConsentStatus();
+  if (aiConsentStatus.userId !== expectedUserId) return "stale_user";
   if (aiConsentStatus.isConsented) {
-    return true;
+    return "consented";
   }
 
-  await setLiveDetectionEnabled(false);
-  await setAutoConfirm(false);
-  return false;
+  await setLiveDetectionEnabled(false, expectedUserId);
+  await setAutoConfirm(false, expectedUserId);
+  return (await isInitiatingUserCurrent(expectedUserId))
+    ? "disabled"
+    : "stale_user";
 }
 
 async function checkLiveSmsAiConsent({
   logTag,
   deliveryMode,
   smsFingerprint,
+  expectedUserId,
 }: {
   readonly logTag: string;
   readonly deliveryMode: LiveSmsDeliveryMode;
   readonly smsFingerprint?: string;
+  readonly expectedUserId: string;
 }): Promise<LiveSmsConsentCheckResult> {
   try {
-    if (!(await hasLiveSmsAiConsent())) {
+    const consentState = await getLiveSmsConsentState(expectedUserId);
+    if (consentState !== "consented") {
       return {
         canProcess: false,
-        result: createResult("disabled", smsFingerprint),
+        result: createResult(consentState, smsFingerprint),
       };
     }
   } catch (error: unknown) {
@@ -135,14 +174,25 @@ async function checkLiveSmsAiConsent({
 async function disableLiveSmsAfterConsentRequired({
   deliveryMode,
   smsFingerprint,
+  expectedUserId,
 }: {
   readonly deliveryMode: LiveSmsDeliveryMode;
   readonly smsFingerprint: string;
+  readonly expectedUserId: string;
 }): Promise<LiveSmsProcessingResult> {
   try {
-    await revokeAiProcessingConsent();
-    await setLiveDetectionEnabled(false);
-    await setAutoConfirm(false);
+    if (!(await isInitiatingUserCurrent(expectedUserId))) {
+      return createResult("stale_user", smsFingerprint);
+    }
+    await revokeAiProcessingConsent({ expectedUserId });
+    if (!(await isInitiatingUserCurrent(expectedUserId))) {
+      return createResult("stale_user", smsFingerprint);
+    }
+    await setLiveDetectionEnabled(false, expectedUserId);
+    if (!(await isInitiatingUserCurrent(expectedUserId))) {
+      return createResult("stale_user", smsFingerprint);
+    }
+    await setAutoConfirm(false, expectedUserId);
   } catch (settingsError: unknown) {
     logger.error("liveSms.consentRequiredDisable.failed", settingsError, {
       deliveryMode,
@@ -156,6 +206,13 @@ export async function processLiveSmsEvent(
   event: LiveSmsEvent,
   options: LiveSmsProcessingOptions = {}
 ): Promise<LiveSmsProcessingResult> {
+  let initiatingUserId: string;
+  try {
+    initiatingUserId = await getRequiredCurrentUserId();
+  } catch {
+    return createResult("stale_user");
+  }
+
   try {
     const canRun = await reconcileLiveDetectionPreference();
     if (!canRun) {
@@ -165,8 +222,12 @@ export async function processLiveSmsEvent(
     const consentCheck = await checkLiveSmsAiConsent({
       logTag: "liveSms.consentCheck.failed",
       deliveryMode: event.deliveryMode,
+      expectedUserId: initiatingUserId,
     });
     if (!consentCheck.canProcess) return consentCheck.result;
+    if (!(await isInitiatingUserCurrent(initiatingUserId))) {
+      return createResult("stale_user");
+    }
   } catch (error: unknown) {
     logger.error("liveSms.consentCheck.failed", error, {
       deliveryMode: event.deliveryMode,
@@ -174,7 +235,10 @@ export async function processLiveSmsEvent(
     return createResult("infrastructure_error", undefined);
   }
 
-  if (isLikelyCorruptedSmsText(event.body)) {
+  if (
+    isExcludedBeforeSmsParsing(event.body) ||
+    isLikelyCorruptedSmsText(event.body)
+  ) {
     return createResult("ignored");
   }
 
@@ -218,9 +282,13 @@ export async function processLiveSmsEvent(
 
     inFlightSmsFingerprints.add(smsFingerprint);
 
-    if (await hasExistingSmsFingerprint(smsFingerprint)) {
+    if (await hasExistingSmsFingerprint(smsFingerprint, initiatingUserId)) {
       inFlightSmsFingerprints.delete(smsFingerprint);
       return createResult("duplicate", smsFingerprint);
+    }
+    if (!(await isInitiatingUserCurrent(initiatingUserId))) {
+      inFlightSmsFingerprints.delete(smsFingerprint);
+      return createResult("stale_user", smsFingerprint);
     }
   } catch (error: unknown) {
     if (smsFingerprint !== undefined) {
@@ -241,20 +309,25 @@ export async function processLiveSmsEvent(
   }
 
   try {
-    let context: ParseSmsContext;
+    let scopedContext: ScopedParseSmsContext | null;
     try {
-      context = await loadAiContext();
+      scopedContext = await loadAiContext(initiatingUserId);
     } catch (error: unknown) {
       logger.error("liveSms.context.failed", error, {
         deliveryMode: event.deliveryMode,
       });
       return createResult("infrastructure_error", confirmedSmsFingerprint);
     }
+    if (scopedContext === null) {
+      return createResult("stale_user", confirmedSmsFingerprint);
+    }
+    const { context } = scopedContext;
 
     const preParseConsentCheck = await checkLiveSmsAiConsent({
       logTag: "liveSms.consentPreParseCheck.failed",
       deliveryMode: event.deliveryMode,
       smsFingerprint: confirmedSmsFingerprint,
+      expectedUserId: initiatingUserId,
     });
     if (!preParseConsentCheck.canProcess) {
       return preParseConsentCheck.result;
@@ -262,12 +335,25 @@ export async function processLiveSmsEvent(
 
     let aiResult: Awaited<ReturnType<typeof parseSmsWithOrchestrator>>;
     try {
-      aiResult = await parseSmsWithOrchestrator([candidate], context);
+      aiResult = await parseSmsWithOrchestrator(
+        [candidate],
+        context,
+        undefined,
+        undefined,
+        { expectedUserId: initiatingUserId }
+      );
     } catch (error: unknown) {
+      if (
+        error instanceof Error &&
+        error.message === USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED
+      ) {
+        return createResult("stale_user", confirmedSmsFingerprint);
+      }
       if (isAiConsentRequiredError(error)) {
         return disableLiveSmsAfterConsentRequired({
           deliveryMode: event.deliveryMode,
           smsFingerprint: confirmedSmsFingerprint,
+          expectedUserId: initiatingUserId,
         });
       }
 
@@ -287,13 +373,29 @@ export async function processLiveSmsEvent(
       ...toSmsParserDiagnosticsLogContext(aiResult.diagnostics),
     });
 
+    if (aiResult.isConsentRequired === true) {
+      return disableLiveSmsAfterConsentRequired({
+        deliveryMode: event.deliveryMode,
+        smsFingerprint: confirmedSmsFingerprint,
+        expectedUserId: initiatingUserId,
+      });
+    }
+
     const consentRecheck = await checkLiveSmsAiConsent({
       logTag: "liveSms.consentRecheck.failed",
       deliveryMode: event.deliveryMode,
       smsFingerprint: confirmedSmsFingerprint,
+      expectedUserId: initiatingUserId,
     });
     if (!consentRecheck.canProcess) {
       return consentRecheck.result;
+    }
+
+    if (!(await isInitiatingUserCurrent(initiatingUserId))) {
+      logger.info("liveSms.authScopeChanged", {
+        deliveryMode: event.deliveryMode,
+      });
+      return createResult("stale_user", confirmedSmsFingerprint);
     }
 
     const hasUnresolvedFailure =
@@ -318,7 +420,9 @@ export async function processLiveSmsEvent(
     return createResult(
       "parsed",
       confirmedSmsFingerprint,
-      aiResult.transactions
+      aiResult.transactions,
+      undefined,
+      initiatingUserId
     );
   } finally {
     inFlightSmsFingerprints.delete(confirmedSmsFingerprint);
