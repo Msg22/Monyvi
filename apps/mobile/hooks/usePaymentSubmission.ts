@@ -25,7 +25,7 @@ interface UsePaymentSubmissionParams {
   /** The recurring payment to pay */
   payment: RecurringPayment | null;
   /** The account to deduct from */
-  accountId: string;
+  accountId: string | null;
   /** Callback after successful payment — receives amount, payment name, and currency */
   onSuccess: (
     amount: number,
@@ -78,6 +78,7 @@ export function usePaymentSubmission({
   const submit = useCallback(
     (amountStr: string): void => {
       if (!payment) return;
+      if (accountId === null) return;
 
       const numericAmount = Number(amountStr.trim());
       if (!Number.isFinite(numericAmount) || numericAmount <= 0) {

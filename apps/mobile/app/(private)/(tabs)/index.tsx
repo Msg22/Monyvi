@@ -16,6 +16,7 @@ import { SectionErrorBoundary } from "@/components/ui/SectionErrorBoundary";
 import { StarryBackground } from "@/components/ui/StarryBackground";
 import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
+import { usePayNowOverlay } from "@/context/PayNowOverlayContext";
 import type { InstitutionLogo } from "@/constants/egyptian-institution-assets";
 import { TAB_BAR_HEIGHT } from "@/constants/ui";
 
@@ -105,6 +106,7 @@ export default function DashboardScreen(): React.JSX.Element {
   const router = useRouter();
   const { shouldShowPrompt, dismissPrompt } = useSmsSync();
   const { requestPermission } = useSmsPermission();
+  const { openPayNow } = usePayNowOverlay();
 
   // Greeting row — use first name for a personal touch, fallback to display name
   const greetingName = profile?.firstName || profile?.displayName || "";
@@ -257,7 +259,7 @@ export default function DashboardScreen(): React.JSX.Element {
             <ThisMonth />
           </SectionErrorBoundary>
           <SectionErrorBoundary name={t("section_upcoming_payments")}>
-            <UpcomingPayments />
+            <UpcomingPayments onPayNow={openPayNow} />
           </SectionErrorBoundary>
           <SectionErrorBoundary name={t("section_recent_transactions")}>
             <RecentTransactions
