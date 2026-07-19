@@ -205,6 +205,7 @@ jest.mock("@monyvi/db", () => ({
 jest.mock("@/services/user-data-access", () => ({
   getCurrentUserDataScope: jest.fn(() =>
     Promise.resolve({
+      userId: "user-a",
       queryOwned: (
         collection: {
           query: (...conditions: readonly unknown[]) => {
@@ -219,6 +220,7 @@ jest.mock("@/services/user-data-access", () => ({
       } => collection.query(...conditions),
     })
   ),
+  assertExpectedCurrentUser: jest.fn(() => Promise.resolve()),
 }));
 
 // ---------------------------------------------------------------------------
@@ -314,6 +316,33 @@ describe("sms-sync-service", () => {
       expect(result.totalScanned).toBe(0);
       expect(result.totalFound).toBe(0);
       expect(result.durationMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it("pins the initiating user through batch parser requests", async () => {
+      await scanAndParseSms(defaultOptions());
+
+      expect(mockParseSmsWithOrchestrator).toHaveBeenCalledWith(
+        [],
+        stubAiContext,
+        expect.any(Function),
+        undefined,
+        { expectedUserId: "user-a" }
+      );
+    });
+
+    it("aborts before parsing when the authenticated user changes", async () => {
+      const userDataAccessMock = jest.requireMock<{
+        assertExpectedCurrentUser: jest.Mock;
+      }>("@/services/user-data-access");
+      userDataAccessMock.assertExpectedCurrentUser.mockRejectedValueOnce(
+        new Error("AUTH_SCOPE_CHANGED")
+      );
+
+      await expect(scanAndParseSms(defaultOptions())).rejects.toThrow(
+        "AUTH_SCOPE_CHANGED"
+      );
+
+      expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
     });
 
     it("should parse financial SMS and include in results", async () => {
@@ -589,7 +618,8 @@ describe("sms-sync-service", () => {
         [],
         stubAiContext,
         expect.any(Function),
-        undefined
+        undefined,
+        { expectedUserId: "user-a" }
       );
       expect(result.totalFound).toBe(0);
     });
