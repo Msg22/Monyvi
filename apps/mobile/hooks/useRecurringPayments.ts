@@ -56,13 +56,6 @@ export type { UseRecurringPaymentsOptions, UseRecurringPaymentsResult };
 
 type BillsPeriodFilter = "this_week" | "this_month" | "six_months" | "one_year";
 
-const BILLS_PERIOD_LABELS: Record<BillsPeriodFilter, string> = {
-  this_week: "This Week",
-  this_month: "This Month",
-  six_months: "6 Months",
-  one_year: "1 Year",
-};
-
 const RECURRING_PAYMENT_LIST_OBSERVED_COLUMNS = [
   "name",
   "amount",
@@ -112,7 +105,7 @@ function getBillsPeriodDateRange(period: BillsPeriodFilter): {
   return { start, end };
 }
 
-export { getBillsPeriodDateRange, BILLS_PERIOD_LABELS };
+export { getBillsPeriodDateRange };
 export type { BillsPeriodFilter };
 
 // ---------------------------------------------------------------------------

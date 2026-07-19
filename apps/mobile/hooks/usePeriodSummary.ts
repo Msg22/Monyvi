@@ -47,21 +47,6 @@ export interface UsePeriodSummaryResult {
 }
 
 // =============================================================================
-// Period Labels
-// =============================================================================
-
-export const PERIOD_LABELS: Record<PeriodFilter, string> = {
-  today: "Today",
-  this_week: "This Week",
-  last_week: "Last Week",
-  this_month: "This Month",
-  last_month: "Last Month",
-  six_months: "6 Months",
-  this_year: "This Year",
-  all_time: "All Time",
-};
-
-// =============================================================================
 // Helper Functions
 // =============================================================================
 

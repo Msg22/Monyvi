@@ -3,11 +3,12 @@ import { Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
-import { PERIOD_LABELS } from "@/hooks/usePeriodSummary";
 import type {
   GroupingPeriod,
   TransactionTypeFilter,
 } from "@/hooks/useTransactionsGrouping";
+import { translatePeriod } from "@/utils/period-translation";
+import { useTranslation } from "react-i18next";
 
 interface TransactionFiltersBarProps {
   period: GroupingPeriod;
@@ -33,6 +34,7 @@ export function TransactionFiltersBar({
   containerClassName = "px-5 pb-4",
 }: TransactionFiltersBarProps): React.JSX.Element {
   const { isDark } = useTheme();
+  const { t } = useTranslation("common");
 
   return (
     <View className={containerClassName}>
@@ -58,7 +60,7 @@ export function TransactionFiltersBar({
             color={isDark ? palette.nileGreen[400] : palette.nileGreen[600]}
           />
           <Text className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex-1">
-            {PERIOD_LABELS[period]}
+            {translatePeriod(t, period)}
           </Text>
           <Ionicons
             name="chevron-down"
