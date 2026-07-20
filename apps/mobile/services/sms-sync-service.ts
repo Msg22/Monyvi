@@ -147,7 +147,7 @@ function isExpectedSafeguardPartialResult(
   result: SmsParserOrchestratorResult
 ): boolean {
   const summary = result.safeguardSummary;
-  if (summary.completionStatus !== "partial" || summary.unresolvedCount <= 0) {
+  if (summary.completionStatus !== "partial") {
     return false;
   }
   return (
@@ -614,9 +614,6 @@ async function executeScanPipeline(
   const transactionFingerprints = new Set(
     deduplicatedTransactions.map((transaction) => transaction.smsFingerprint)
   );
-  const durableLocalFingerprints = new Set(
-    aiResult.durableLocalFingerprints ?? []
-  );
   const durableNegativeFingerprints = new Set([
     ...(aiResult.durableNegativeFingerprints ?? []),
     ...(aiResult.terminalFingerprints ?? []),
@@ -642,15 +639,13 @@ async function executeScanPipeline(
       ...state,
       outcome:
         state.outcome ??
-        (durableLocalFingerprints.has(state.fingerprint)
-          ? "trusted_local_match"
-          : transactionFingerprints.has(state.fingerprint)
-            ? "memory_suggestion"
-            : oversizedFingerprints.has(state.fingerprint)
-              ? "candidate_too_large"
-              : durableNegativeFingerprints.has(state.fingerprint)
-                ? "ai_negative"
-                : "unresolved"),
+        (transactionFingerprints.has(state.fingerprint)
+          ? "memory_suggestion"
+          : oversizedFingerprints.has(state.fingerprint)
+            ? "candidate_too_large"
+            : durableNegativeFingerprints.has(state.fingerprint)
+              ? "ai_negative"
+              : "unresolved"),
     }));
 
   await assertPinnedScanContext(initiatingScope.userId, abortSignal);

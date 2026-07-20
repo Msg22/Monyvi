@@ -141,7 +141,7 @@ describe("SMS parser orchestrator safeguards", () => {
     expect(result.transactions).toEqual([
       expect.objectContaining({ smsFingerprint: trusted.smsFingerprint }),
     ]);
-    expect(result.durableLocalFingerprints).toEqual([trusted.smsFingerprint]);
+    expect(result).not.toHaveProperty("durableLocalFingerprints");
     expect(result.terminalFingerprints).toEqual([trusted.smsFingerprint]);
   });
 

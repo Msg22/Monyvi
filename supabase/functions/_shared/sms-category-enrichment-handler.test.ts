@@ -117,7 +117,11 @@ function createDependencies(
     },
     markProviderStarted: async () => {
       state.start += 1;
-      return { started: true, decisionCode: "provider_started" };
+      return {
+        started: true,
+        decisionCode: "provider_started",
+        terminalFingerprints: [],
+      };
     },
     classify: async (body) => {
       state.provider += 1;
@@ -321,6 +325,7 @@ test("provider-start replay refusal never calls or releases provider work", asyn
         return {
           started: false,
           decisionCode: "already_processed_result_unavailable",
+          terminalFingerprints: [],
         };
       },
     })

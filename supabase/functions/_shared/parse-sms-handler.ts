@@ -23,7 +23,8 @@ const CORS_HEADERS: Readonly<Record<string, string>> = {
     "authorization, x-client-info, apikey, content-type",
 };
 const MAX_FUTURE_MESSAGE_SKEW_MS = 5 * 60 * 1000;
-const MAX_SCAN_START_DRIFT_MS = 5 * 60 * 1000;
+const MAX_SCAN_START_FUTURE_SKEW_MS = 5 * 60 * 1000;
+const MAX_ROLLING_WINDOW_EDGE_GRACE_MS = 5 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface ParseSmsMessage {
@@ -265,13 +266,16 @@ async function hasValidCanonicalMessages(
   dependencies: ParseSmsHandlerDependencies
 ): Promise<boolean> {
   const nowMs = dependencies.getServerNowMs();
-  if (
-    scanStartedAtMs < nowMs - MAX_SCAN_START_DRIFT_MS ||
-    scanStartedAtMs > nowMs + MAX_SCAN_START_DRIFT_MS
-  ) {
+  if (scanStartedAtMs > nowMs + MAX_SCAN_START_FUTURE_SKEW_MS) {
     return false;
   }
-  const minimumReceivedAtMs = scanStartedAtMs - lookbackDays * DAY_MS;
+  const clientMinimumReceivedAtMs = scanStartedAtMs - lookbackDays * DAY_MS;
+  const serverMinimumReceivedAtMs =
+    nowMs - lookbackDays * DAY_MS - MAX_ROLLING_WINDOW_EDGE_GRACE_MS;
+  const minimumReceivedAtMs = Math.max(
+    clientMinimumReceivedAtMs,
+    serverMinimumReceivedAtMs
+  );
   const maximumReceivedAtMs = nowMs + MAX_FUTURE_MESSAGE_SKEW_MS;
 
   for (const message of messages) {

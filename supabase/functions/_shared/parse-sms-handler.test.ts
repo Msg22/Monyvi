@@ -221,20 +221,63 @@ test("preserves the inclusive client scan-start cutoff across Edge transit delay
   assert.equal(state.provider, 1);
 });
 
-test("rejects stale or implausibly future scan-start clocks before paid work", async () => {
-  for (const scanStartedAt of [
-    "2026-07-20T11:54:59.999Z",
-    "2026-07-20T12:05:00.001Z",
-  ]) {
-    const state = createState();
-    const handler = createParseSmsHandler(createDependencies(state));
+test("accepts a later chunk from an established client scan clock", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      getServerNowMs: () => Date.parse("2026-07-20T12:30:00.000Z"),
+    })
+  );
 
-    const response = await handler(post({ ...requestBody(), scanStartedAt }));
+  const response = await handler(
+    post({
+      ...requestBody(),
+      scanStartedAt: "2026-07-20T12:00:00.000Z",
+    })
+  );
 
-    assert.equal(response.status, 400);
-    assert.equal(state.reserve, 0);
-    assert.equal(state.provider, 0);
-  }
+  assert.equal(response.status, 200);
+  assert.equal(state.provider, 1);
+});
+
+test("keeps the server rolling cutoff authoritative for later chunks", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      getServerNowMs: () => Date.parse("2026-07-20T12:30:00.000Z"),
+    })
+  );
+  const outsideServerWindow = {
+    ...message(),
+    date: "2026-06-20T12:24:59.999Z",
+  };
+
+  const response = await handler(
+    post({
+      ...requestBody([outsideServerWindow]),
+      scanStartedAt: "2026-07-20T12:00:00.000Z",
+    })
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal(state.reserve, 0);
+  assert.equal(state.provider, 0);
+});
+
+test("rejects an implausibly future scan-start clock before paid work", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(createDependencies(state));
+
+  const response = await handler(
+    post({
+      ...requestBody(),
+      scanStartedAt: "2026-07-20T12:05:00.001Z",
+    })
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal(state.reserve, 0);
+  assert.equal(state.provider, 0);
 });
 
 async function readJson(response: Response): Promise<Record<string, unknown>> {

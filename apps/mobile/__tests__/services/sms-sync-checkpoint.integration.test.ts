@@ -429,7 +429,7 @@ describe("SMS sync checkpoint integration", () => {
         admittedAiCount: 0,
         deferredAiCount: 1,
         oversizedCount: 0,
-        unresolvedCount: 1,
+        unresolvedCount: 0,
         completionStatus: "partial",
         availability: {
           reason: "rolling_limit",
@@ -562,7 +562,32 @@ describe("SMS sync checkpoint integration", () => {
     expect(mockFinalizeSmsScanCheckpoint).not.toHaveBeenCalled();
   });
 
-  it("checkpoints trusted local recovery durably for a terminal fingerprint", async () => {
+  it("does not publish results when the authenticated user changes during checkpoint persistence", async () => {
+    const message = createSmsMessage();
+    mockReadSmsInbox.mockResolvedValue([message]);
+    mockComputeSmsFingerprint.mockResolvedValue("fp-stale-after-checkpoint");
+    mockParseSmsWithOrchestrator.mockResolvedValue({
+      transactions: [
+        createParsedTransaction({
+          smsFingerprint: "fp-stale-after-checkpoint",
+        }),
+      ],
+    });
+    mockFinalizeSmsScanCheckpoint.mockImplementationOnce(() => {
+      mockAssertExpectedCurrentUser.mockRejectedValue(
+        new Error("AUTH_SCOPE_CHANGED")
+      );
+      return Promise.resolve(null);
+    });
+
+    await expect(scanAndParseSms(options())).rejects.toThrow(
+      "AUTH_SCOPE_CHANGED"
+    );
+
+    expect(mockFinalizeSmsScanCheckpoint).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps unsaved trusted local recovery non-durable for a terminal fingerprint", async () => {
     mockReadSmsInbox.mockResolvedValue([createSmsMessage()]);
     mockComputeSmsFingerprint.mockResolvedValue("fp-terminal");
     mockLoadSmsScanSafeguardState
@@ -582,13 +607,12 @@ describe("SMS sync checkpoint integration", () => {
         createParsedTransaction({ smsFingerprint: "fp-terminal" }),
       ],
       durableNegativeFingerprints: ["fp-terminal"],
-      durableLocalFingerprints: ["fp-terminal"],
       terminalFingerprints: ["fp-terminal"],
     });
 
     await scanAndParseSms(options());
 
     const finalizeInput = mockFinalizeSmsScanCheckpoint.mock.calls[0]?.[0];
-    expect(finalizeInput?.states[0]?.outcome).toBe("trusted_local_match");
+    expect(finalizeInput?.states[0]?.outcome).toBe("memory_suggestion");
   });
 });
