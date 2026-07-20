@@ -578,6 +578,15 @@ export default function SmsScanScreen(): React.JSX.Element {
           durationMs={result?.durationMs ?? 0}
           topCategories={topCategories}
           categoryNameMap={categoryNameMap}
+          safeguardSummary={
+            result?.safeguardSummary ?? {
+              admittedAiCount: 0,
+              deferredAiCount: 0,
+              oversizedCount: 0,
+              unresolvedCount: 0,
+              completionStatus: "complete",
+            }
+          }
           error={error}
           onReviewPress={handleReviewPress}
           onBackPress={handleBackPress}

@@ -487,9 +487,16 @@ function stopDevelopmentChildProcesses(children) {
 
 function buildLocalFunctionsServeCommand(options = {}) {
   const platform = options.platform ?? process.platform;
+  const isSafeguardQaEnabled =
+    options.isSafeguardQaEnabled ??
+    process.env.SMS_SAFEGUARD_QA_ENABLED === "true";
+  const args = ["supabase", "functions", "serve"];
+  if (isSafeguardQaEnabled) {
+    args.push("--env-file", "supabase/functions/sms-safeguard-qa.local.env");
+  }
   return {
     command: options.npxCommand ?? resolveNpxCommand(),
-    args: ["supabase", "functions", "serve"],
+    args,
     shell: platform === "win32",
   };
 }

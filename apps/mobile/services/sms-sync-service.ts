@@ -41,6 +41,7 @@ import {
   toSmsParserDiagnosticsLogContext,
   type HybridSmsUnresolvedCandidate,
   type SmsParserDiagnostics,
+  type SmsParserOrchestratorResult,
   type SmsScanSafeguardSummary,
 } from "./sms-parser-orchestrator";
 import {
@@ -140,6 +141,20 @@ function resolveSmsInboxPageSize(value: number | undefined): number {
     return DEFAULT_MAX_COUNT;
   }
   return Math.max(1, Math.floor(value));
+}
+
+function isExpectedSafeguardPartialResult(
+  result: SmsParserOrchestratorResult
+): boolean {
+  const summary = result.safeguardSummary;
+  if (summary.completionStatus !== "partial" || summary.unresolvedCount <= 0) {
+    return false;
+  }
+  return (
+    summary.deferredAiCount > 0 ||
+    summary.oversizedCount > 0 ||
+    summary.availability !== undefined
+  );
 }
 
 async function readBoundedSmsInbox(input: {
@@ -583,7 +598,11 @@ async function executeScanPipeline(
     toSmsParserDiagnosticsLogContext(aiResult.diagnostics)
   );
 
-  if (aiResult.hasError && aiResult.transactions.length === 0) {
+  if (
+    aiResult.hasError &&
+    aiResult.transactions.length === 0 &&
+    !isExpectedSafeguardPartialResult(aiResult)
+  ) {
     throw new Error("SMS AI parsing failed");
   }
 

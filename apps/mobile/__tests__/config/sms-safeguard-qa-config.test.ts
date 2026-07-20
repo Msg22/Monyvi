@@ -18,6 +18,7 @@ describe("SMS safeguard QA runtime configuration", () => {
         EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER: "simulated",
         EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX: "fixture",
         EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE: "partial-quota-v1",
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID: "run-1",
       })
     ).toMatchObject({
       enabled: true,
@@ -34,6 +35,7 @@ describe("SMS safeguard QA runtime configuration", () => {
       EXPO_PUBLIC_SMS_SAFEGUARD_QA: "true",
       EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER: "simulated",
       EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX: "fixture",
+      EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID: "run-1",
     } as const;
 
     expect(() => requireSmsSafeguardQaConfig(baseEnvironment)).toThrow(
@@ -71,6 +73,53 @@ describe("SMS safeguard QA runtime configuration", () => {
         EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX: "device",
       })
     ).toThrow(/simulated provider and fixture inbox/i);
+
+    expect(() =>
+      getSmsSafeguardQaConfig({
+        NODE_ENV: "production",
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA: "true",
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER: "simulated",
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX: "fixture",
+      })
+    ).toThrow(/release mode/i);
+    expect(() =>
+      getSmsSafeguardQaConfig({
+        NODE_ENV: "development",
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA: "true",
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER: "production",
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX: "device",
+      })
+    ).toThrow(/simulated provider and fixture inbox/i);
+  });
+
+  test("fails closed when an explicitly enabled QA run omits required dependencies", () => {
+    const baseEnvironment = {
+      NODE_ENV: "development",
+      EXPO_PUBLIC_SMS_SAFEGUARD_QA: "true",
+      EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE: "partial-quota-v1",
+    } as const;
+
+    expect(() =>
+      getSmsSafeguardQaConfig({
+        ...baseEnvironment,
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX: "fixture",
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID: "run-1",
+      })
+    ).toThrow(/simulated provider and fixture inbox/i);
+    expect(() =>
+      getSmsSafeguardQaConfig({
+        ...baseEnvironment,
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER: "simulated",
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID: "run-1",
+      })
+    ).toThrow(/simulated provider and fixture inbox/i);
+    expect(() =>
+      getSmsSafeguardQaConfig({
+        ...baseEnvironment,
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER: "simulated",
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX: "fixture",
+      })
+    ).toThrow(/run identity/i);
   });
 
   test("does not import or reference production inbox/provider access", () => {

@@ -58,9 +58,8 @@ function hasSafeQaDependencies(
   environment: SmsSafeguardQaEnvironment
 ): boolean {
   return (
-    (environment.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER ?? "simulated") ===
-      "simulated" &&
-    (environment.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX ?? "fixture") === "fixture"
+    environment.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER === "simulated" &&
+    environment.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX === "fixture"
   );
 }
 
@@ -90,45 +89,20 @@ export function getSmsSafeguardQaNowMs(
 }
 
 export function getSmsSafeguardQaConfig(
-  environment: SmsSafeguardQaEnvironment = process.env
-): SmsSafeguardQaConfig {
-  const isReleaseBuild = isSmsSafeguardQaReleaseBuild(environment);
-  if (
-    !hasExplicitQaRequest(environment) ||
-    isReleaseBuild ||
-    !hasSafeQaDependencies(environment)
-  ) {
-    return Object.freeze({ ...DISABLED_CONFIG, isReleaseBuild });
-  }
-
-  return Object.freeze({
-    ...DISABLED_CONFIG,
-    enabled: true,
-    isReleaseBuild: false,
-    profileId: getSmsSafeguardQaProfile(environment),
-    runId: environment.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID?.trim() || null,
-  });
-}
-
-interface RequireSmsSafeguardQaConfigOptions {
-  readonly requireProfile?: boolean;
-}
-
-export function requireSmsSafeguardQaConfig(
   environment: SmsSafeguardQaEnvironment = process.env,
   options: RequireSmsSafeguardQaConfigOptions = {}
 ): SmsSafeguardQaConfig {
   const isReleaseBuild = isSmsSafeguardQaReleaseBuild(environment);
-  if (isReleaseBuild && hasExplicitQaRequest(environment)) {
+  if (!hasExplicitQaRequest(environment)) {
+    return Object.freeze({ ...DISABLED_CONFIG, isReleaseBuild });
+  }
+
+  if (isReleaseBuild) {
     throw new Error(
       "SMS safeguard QA is unavailable in release mode; refusing to activate."
     );
   }
-
-  if (
-    hasExplicitQaRequest(environment) &&
-    !hasSafeQaDependencies(environment)
-  ) {
+  if (!hasSafeQaDependencies(environment)) {
     throw new Error(
       "SMS safeguard QA requires a simulated provider and fixture inbox."
     );
@@ -145,7 +119,29 @@ export function requireSmsSafeguardQaConfig(
     );
   }
 
-  const config = getSmsSafeguardQaConfig(environment);
+  const runId = environment.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID?.trim();
+  if (!runId || runId.length > 160) {
+    throw new Error("SMS safeguard QA requires a bounded run identity.");
+  }
+
+  return Object.freeze({
+    ...DISABLED_CONFIG,
+    enabled: true,
+    isReleaseBuild: false,
+    profileId,
+    runId,
+  });
+}
+
+interface RequireSmsSafeguardQaConfigOptions {
+  readonly requireProfile?: boolean;
+}
+
+export function requireSmsSafeguardQaConfig(
+  environment: SmsSafeguardQaEnvironment = process.env,
+  options: RequireSmsSafeguardQaConfigOptions = {}
+): SmsSafeguardQaConfig {
+  const config = getSmsSafeguardQaConfig(environment, options);
   if (!config.enabled) {
     throw new Error(
       "SMS safeguard QA is disabled; enable it explicitly for a development or test run."

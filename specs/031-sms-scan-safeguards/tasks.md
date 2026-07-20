@@ -467,8 +467,8 @@ zero.
 - [x] T070 [P] [US6] Write failing simulated provider tests for trusted,
       low-confidence, explicit-negative, omission, retryable/permanent failure,
       malformed/incomplete, invalid identity, and delay outcomes in
-      `apps/mobile/__tests__/services/sms-safeguard-provider-simulator.test.ts`
-      (FR-040, US6-3)
+      `supabase/functions/_shared/sms-safeguard-qa-provider.test.ts` (FR-040,
+      US6-3)
 - [x] T071 [P] [US6] Write failing scenario integration tests for cutoff,
       checkpoint, newest-first partial quota, rolling expiry, shared batch/live,
       burst, cooldown, oversized, three strikes, fresh installation, trusted
@@ -494,8 +494,13 @@ zero.
 - [x] T075 [US6] Implement development-only isolated fixture inbox, provider,
       local/remote outcome, allowance, cooldown, request-identity, checkpoint,
       and reset adapters in
-      `apps/mobile/services/testing/sms-safeguard-provider-simulator.ts` and
-      `apps/mobile/services/testing/sms-safeguard-qa-runner.ts` (FR-039-FR-048)
+      `supabase/functions/_shared/sms-safeguard-qa-provider.ts`,
+      `supabase/functions/_shared/sms-safeguard-qa-runtime.ts`,
+      `supabase/functions/sms-safeguard-qa/index.ts`, and
+      `apps/mobile/services/testing/sms-safeguard-qa-runner.ts`. Keep the
+      provider double behind the local-only Edge boundary so the production
+      handler, admission service, and migration RPCs remain under test
+      (FR-039-FR-048)
 - [x] T076 [US6] Wire an explicit safeguard QA runtime mode and descriptive root
       commands through `apps/mobile/config/sms-safeguard-qa-config.ts`,
       `apps/mobile/scripts/sms-safeguard-qa.js`, `apps/mobile/package.json`, and
@@ -503,8 +508,8 @@ zero.
       FR-045)
 - [x] T077 [US6] Add privacy-safe scenario diagnostics with profile/version,
       effective limits, aggregate outcomes, and explicit zero production call/
-      charge counters in `apps/mobile/utils/logger.ts` adapters and the QA
-      service (FR-047)
+      charge counters in `apps/mobile/scripts/sms-safeguard-qa-support.js`, the
+      QA launcher, and the local-only Edge response (FR-047)
 - [x] T078 [US6] Implement `scripts/evaluate-sms-parser-prompt.ts` to report
       fixed prompt, categories, schema, and candidate estimates separately,
       compare the approved corpus before any optimization is accepted, and

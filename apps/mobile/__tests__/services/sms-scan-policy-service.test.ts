@@ -11,6 +11,7 @@ describe("sms-scan-policy-service", (): void => {
     delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER;
     delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX;
     delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE;
+    delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID;
   });
 
   it.each(["initial", "history"] as const)(
@@ -54,6 +55,7 @@ describe("sms-scan-policy-service", (): void => {
     process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER = "simulated";
     process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX = "fixture";
     process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE = "partial-quota-v1";
+    process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID = "scan-policy-run";
 
     expect(getEffectiveSmsScanPolicy().fullParser.maxUnitsPerScan).toBe(3);
     expect(

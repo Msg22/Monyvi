@@ -68,13 +68,50 @@ describe("sms-processing-outcome-service", () => {
 
   it("returns terminal fingerprints as an immutable lookup set", async () => {
     mockFetch.mockResolvedValue([
-      { smsFingerprint: "a", isTerminal: true, deleted: false },
-      { smsFingerprint: "b", isTerminal: false, deleted: false },
+      {
+        smsFingerprint: "a",
+        isTerminal: true,
+        deleted: false,
+        originalReceivedAt: "2020-01-01T00:00:00.000Z",
+      },
+      {
+        smsFingerprint: "b",
+        isTerminal: false,
+        deleted: false,
+        originalReceivedAt: new Date().toISOString(),
+      },
     ]);
 
     await expect(getTerminalSmsFingerprints(["a", "b"])).resolves.toEqual(
       new Set(["a"])
     );
+  });
+
+  it("ignores expired non-terminal outcomes while preserving terminal history", async () => {
+    mockFetch.mockResolvedValue([
+      {
+        smsFingerprint: "expired-non-terminal",
+        strikeCount: 2,
+        isTerminal: false,
+        deleted: false,
+        originalReceivedAt: "2020-01-01T00:00:00.000Z",
+        lastClassifiedAt: "2020-01-02T00:00:00.000Z",
+      },
+      {
+        smsFingerprint: "terminal",
+        strikeCount: 3,
+        isTerminal: true,
+        deleted: false,
+        originalReceivedAt: "2020-01-01T00:00:00.000Z",
+        lastClassifiedAt: "2020-01-03T00:00:00.000Z",
+      },
+    ]);
+
+    await expect(
+      getSmsProcessingOutcomes(["expired-non-terminal", "terminal"])
+    ).resolves.toEqual([
+      expect.objectContaining({ smsFingerprint: "terminal", isTerminal: true }),
+    ]);
   });
 
   it("refreshes synchronized server outcomes before reading", async () => {

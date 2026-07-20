@@ -6,6 +6,7 @@ interface StartMobileLocalSupabaseModule {
   buildLocalFunctionsServeCommand(options?: {
     readonly npxCommand?: string;
     readonly platform?: NodeJS.Platform;
+    readonly isSafeguardQaEnabled?: boolean;
   }): {
     readonly command: string;
     readonly args: readonly string[];
@@ -96,6 +97,26 @@ describe("start-mobile-local-supabase script helpers", () => {
     ).toEqual({
       command: "npx.cmd",
       args: ["supabase", "functions", "serve"],
+      shell: true,
+    });
+  });
+
+  it("loads the local-only safeguard QA flag only for safeguard QA launches", () => {
+    expect(
+      startMobileLocalSupabase.buildLocalFunctionsServeCommand({
+        npxCommand: "npx.cmd",
+        platform: "win32",
+        isSafeguardQaEnabled: true,
+      })
+    ).toEqual({
+      command: "npx.cmd",
+      args: [
+        "supabase",
+        "functions",
+        "serve",
+        "--env-file",
+        "supabase/functions/sms-safeguard-qa.local.env",
+      ],
       shell: true,
     });
   });

@@ -22,6 +22,16 @@ Run every deterministic safeguard profile without a real inbox or Gemini call:
 npm run test:sms-safeguards
 ```
 
+The command starts the local-only QA Edge runtime, resets only the current QA
+user's safeguard ledgers for each server-owned profile, executes the shared
+production handler and migration RPCs, and stops the temporary function watcher
+afterward. Cutoff/checkpoint/local-only profiles remain pure client preflights.
+The response-validity profile exercises trusted and low-confidence success,
+explicit negative, omission, retryable and permanent failure, malformed and
+incomplete output, invalid and duplicate identities, delay, and cancellation.
+The provider double replaces only Gemini; request validation, admission,
+reconciliation, usage accounting, and outcome persistence use production code.
+
 Run one named profile:
 
 ```powershell
@@ -36,9 +46,13 @@ npm run mobile:dev:sms-safeguards:wireless-device -- --scenario partial-quota-v1
 
 The launcher requires a named/versioned profile, validates it before Metro
 starts, and gives that launch an isolated QA namespace. The app then uses the
-profile's fixture inbox, fixed clock, reduced policy, and simulated provider. It
-fails closed instead of reading the device inbox or calling Gemini. Do not lower
-production limits or use a real inbox to manufacture quota states.
+profile's fixture inbox, fixed clock, reduced policy, and simulated provider.
+Server admission, usage, request identity, cooldown, and synchronized outcomes
+still run through local Supabase. The local-only Edge function requires the
+secret-free `supabase/functions/sms-safeguard-qa.local.env` enablement file and
+also rejects non-local Supabase URLs. It fails closed instead of reading the
+device inbox or calling Gemini. Do not lower production limits or use a real
+inbox to manufacture quota states.
 
 ## TDD Verification Order
 
@@ -86,23 +100,23 @@ production limits or use a real inbox to manufacture quota states.
 
 ## Coverage Matrix
 
-| Scenario                                                      | Automated coverage                                                                                                                  | Device coverage                                                                              |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| 1. Inclusive 30-day boundary                                  | `sms-scan-boundary.test.ts`, `sms-sync-service.test.ts`, profile `cutoff-boundary-v1`                                               | Maestro safeguard journey plus manual inbox-boundary confirmation                            |
-| 2. Incremental overlap and deduplication                      | `sms-sync-checkpoint.integration.test.ts`, `sms-scan-checkpoint-coordinator.test.ts`, profile `checkpoint-overlap-v1`               | Maestro safeguard journey plus manual repeat scan                                            |
-| 3. History rescan and cooldown start                          | `sms-history-cooldown.test.ts`, `sms-sync-safeguards.integration.test.ts`, profile `history-cooldown-v1`                            | Maestro safeguard journey plus manual settings action                                        |
-| 4. Cooldown UI and incremental availability                   | `SettingsSections.test.ts`, `useSmsAiAvailability.test.ts`, `sms-ai-availability-handler.test.ts`                                   | Maestro safeguard journey; manual locale/timezone confirmation                               |
-| 5. Partial quota preserves successes and Save                 | `sms-parser-orchestrator-safeguards.test.ts`, `sms-review.test.tsx`, `PartialSmsResultsNotice.test.tsx`, profile `partial-quota-v1` | Maestro safeguard journey plus manual Save verification                                      |
-| 6. Shared batch/live allowance and voice isolation            | `sms-ai-safeguard-rpc.test.ts`, `sms-live-processor.test.ts`, `ai-voice-parser-service.test.ts`, profile `shared-batch-live-v1`     | Concurrency is service-level; manually confirm voice remains available                       |
-| 7. Enrichment refusal preserves local suggestions             | `ai-sms-category-enrichment-service.test.ts`, `sms-parser-orchestrator-safeguards.test.ts`                                          | Manual review-card category fallback confirmation                                            |
-| 8. Newest-first stable admission                              | `sms-ai-work-selector.test.ts`, profile `partial-quota-v1`                                                                          | Service-level automation; no additional device control required                              |
-| 9. Three-strike negative lifecycle                            | `sms-negative-outcome-handler.test.ts`, `sms-processing-outcome-service.test.ts`, profile `negative-three-strikes-v1`               | Service-level automation because production outcomes cannot be safely manufactured on device |
-| 10. Fresh install terminal suppression and local recovery     | `sms-sync-safeguards.integration.test.ts`, profiles `terminal-fresh-install-v1` and `trusted-local-recovery-v1`                     | Manual reinstall/reset confirmation on physical Android                                      |
-| 11. Oversized candidate handling                              | `sms-input-estimator.test.ts`, `sms-oversized-outcome-service.test.ts`, profile `oversized-candidate-v1`                            | Manual aggregate notice confirmation                                                         |
-| 12. Cancellation, invalid response, and account switch safety | `parse-sms-handler.test.ts`, `sms-sync-safeguards.integration.test.ts`, profiles `response-validity-v1` and `account-switch-v1`     | Account switching remains manual-only on device                                              |
-| 13. Approved light/dark, English/Arabic, and safe-area layout | Component and route tests cover state/copy lookup                                                                                   | Manual-only visual comparison on emulator and physical Android                               |
-| 14. Zero production calls and quota charges                   | `sms-safeguard-qa.integration.test.ts`, every deterministic QA profile                                                              | Confirm diagnostics on emulator and physical-device runs                                     |
-| 15. Plain-language comprehension                              | Copy lookup/component tests prevent missing text                                                                                    | Manual-only tester comprehension check                                                       |
+| Scenario                                                      | Automated coverage                                                                                                                                                   | Device coverage                                                                              |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 1. Inclusive 30-day boundary                                  | `sms-scan-boundary.test.ts`, `sms-sync-service.test.ts`, profile `cutoff-boundary-v1`                                                                                | Maestro safeguard journey plus manual inbox-boundary confirmation                            |
+| 2. Incremental overlap and deduplication                      | `sms-sync-checkpoint.integration.test.ts`, `sms-scan-checkpoint-coordinator.test.ts`, profile `checkpoint-overlap-v1`                                                | Maestro safeguard journey plus manual repeat scan                                            |
+| 3. History rescan and cooldown start                          | `sms-history-cooldown.test.ts`, `sms-sync-safeguards.integration.test.ts`, profile `history-cooldown-v1`                                                             | Maestro safeguard journey plus manual settings action                                        |
+| 4. Cooldown UI and incremental availability                   | `SettingsSections.test.ts`, `useSmsAiAvailability.test.ts`, `sms-ai-availability-handler.test.ts`                                                                    | Maestro safeguard journey; manual locale/timezone confirmation                               |
+| 5. Partial quota preserves successes and Save                 | `sms-parser-orchestrator-safeguards.test.ts`, `sms-review.test.tsx`, `PartialSmsResultsNotice.test.tsx`, profile `partial-quota-v1`                                  | Maestro safeguard journey plus manual Save verification                                      |
+| 6. Shared batch/live allowance and voice isolation            | `sms-ai-safeguard-rpc.test.ts`, `sms-live-processor.test.ts`, `ai-voice-parser-service.test.ts`, profile `shared-batch-live-v1`                                      | Concurrency is service-level; manually confirm voice remains available                       |
+| 7. Enrichment refusal preserves local suggestions             | `ai-sms-category-enrichment-service.test.ts`, `sms-parser-orchestrator-safeguards.test.ts`                                                                           | Manual review-card category fallback confirmation                                            |
+| 8. Newest-first stable admission                              | `sms-ai-work-selector.test.ts`, profile `partial-quota-v1`                                                                                                           | Service-level automation; no additional device control required                              |
+| 9. Three-strike negative lifecycle                            | `sms-negative-outcome-handler.test.ts`, `sms-processing-outcome-service.test.ts`, profile `negative-three-strikes-v1`                                                | Service-level automation because production outcomes cannot be safely manufactured on device |
+| 10. Fresh install terminal suppression and local recovery     | `sms-sync-safeguards.integration.test.ts`, profiles `terminal-fresh-install-v1` and `trusted-local-recovery-v1`                                                      | Manual reinstall/reset confirmation on physical Android                                      |
+| 11. Oversized candidate handling                              | `sms-input-estimator.test.ts`, `sms-oversized-outcome-service.test.ts`, profile `oversized-candidate-v1`                                                             | Manual aggregate notice confirmation                                                         |
+| 12. Cancellation, invalid response, and account switch safety | `parse-sms-handler.test.ts`, `sms-safeguard-qa-provider.test.ts`, `sms-sync-safeguards.integration.test.ts`, profiles `response-validity-v1` and `account-switch-v1` | Account switching remains manual-only on device                                              |
+| 13. Approved light/dark, English/Arabic, and safe-area layout | Component and route tests cover state/copy lookup                                                                                                                    | Manual-only visual comparison on emulator and physical Android                               |
+| 14. Zero production calls and quota charges                   | `sms-safeguard-qa.integration.test.ts`, every deterministic QA profile                                                                                               | Confirm diagnostics on emulator and physical-device runs                                     |
+| 15. Plain-language comprehension                              | Copy lookup/component tests prevent missing text                                                                                                                     | Manual-only tester comprehension check                                                       |
 
 ## Prompt Token Evaluation
 

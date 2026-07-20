@@ -109,6 +109,9 @@ function createDependencies(
     buildResponseSchema: (supportedCurrencies) =>
       JSON.stringify({ supportedCurrencies }),
     shouldExclude: () => false,
+    computeFingerprint: async (value) => value.smsFingerprint,
+    computeRequestDigest: async () => "request-digest",
+    getServerNowMs: () => Date.UTC(2026, 6, 20, 12, 0, 0),
     getProcessingOutcomes: async () => {
       state.terminal++;
       return [];
@@ -125,7 +128,11 @@ function createDependencies(
     },
     markProviderStarted: async () => {
       state.start++;
-      return { started: true, decisionCode: "provider_started" };
+      return {
+        started: true,
+        decisionCode: "provider_started",
+        terminalFingerprints: [],
+      };
     },
     executeProvider: async () => {
       state.provider++;
@@ -152,6 +159,44 @@ function createDependencies(
     ...overrides,
   };
 }
+
+test("rejects a fingerprint that does not match the canonical message", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      computeFingerprint: async () => "canonical-fingerprint",
+    })
+  );
+
+  const response = await handler(post(requestBody()));
+
+  assert.equal(response.status, 400);
+  assert.equal((await readJson(response)).reason, "malformed_request");
+  assert.equal(state.reserve, 0);
+});
+
+test("rejects messages outside the rolling window or implausibly in the future", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(createDependencies(state));
+  const oldMessage = {
+    ...message(),
+    date: "2026-06-19T12:00:00.000Z",
+  };
+  const futureMessage = {
+    ...message(),
+    date: "2026-07-20T12:06:00.000Z",
+  };
+
+  assert.equal(
+    await handler(post(requestBody([oldMessage]))).then((r) => r.status),
+    400
+  );
+  assert.equal(
+    await handler(post(requestBody([futureMessage]))).then((r) => r.status),
+    400
+  );
+  assert.equal(state.reserve, 0);
+});
 
 async function readJson(response: Response): Promise<Record<string, unknown>> {
   return (await response.json()) as Record<string, unknown>;
@@ -362,6 +407,7 @@ test("never calls the provider when admission or provider-start is refused", asy
         return {
           started: false,
           decisionCode: "already_processed_result_unavailable",
+          terminalFingerprints: [],
         };
       },
     }),

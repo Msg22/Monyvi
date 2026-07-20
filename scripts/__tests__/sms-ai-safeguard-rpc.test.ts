@@ -18,7 +18,7 @@ function readReserveFunction(): string {
     "CREATE OR REPLACE FUNCTION public.sms_ai_reserve_work"
   );
   const end = sql.indexOf(
-    "CREATE OR REPLACE FUNCTION public.sms_ai_mark_provider_started"
+    "CREATE OR REPLACE FUNCTION public.sms_ai_get_availability"
   );
   assert.notEqual(start, -1);
   assert.notEqual(end, -1);
@@ -102,6 +102,23 @@ test("uses server time and returns the latest combined availability blocker", ()
   );
   assert.match(sql, /SELECT min\(event\.started_at\)/);
   assert.doesNotMatch(sql, /v_active_history_expiry/);
+});
+
+test("history cooldown excludes provider work from the current scan session", () => {
+  const sql = readReserveFunction();
+  const historyCooldownQueries = [
+    ...sql.matchAll(
+      /SELECT min\(event\.started_at\)[\s\S]*?work\.scan_kind = 'history'[\s\S]*?;/g
+    ),
+  ];
+
+  assert.ok(historyCooldownQueries.length >= 2);
+  for (const [query] of historyCooldownQueries) {
+    assert.match(
+      query,
+      /work\.scan_session_id IS DISTINCT FROM p_scan_session_id/
+    );
+  }
 });
 
 test("keeps safeguard SQL private to trusted Edge service role", () => {

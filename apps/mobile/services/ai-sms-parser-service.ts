@@ -29,6 +29,7 @@ import {
   normalizeCurrency,
   normalizeType,
   parseCategory,
+  SAFEGUARD_QA_SCENARIOS,
   type CategoryMap,
   type CategoryTreeSource,
   type ParsedSmsTransaction,
@@ -280,6 +281,7 @@ async function invokeParseChunk(
   context: ParseSmsContext,
   requestContext: SmsAiRequestContext,
   requestKey: string,
+  transport: SmsParseTransport,
   abortSignal?: AbortSignal,
   expectedUserId?: string
 ): Promise<ChunkAiResult> {
@@ -288,7 +290,7 @@ async function invokeParseChunk(
     await assertExpectedCurrentUser(expectedUserId);
     throwIfAborted(abortSignal);
   }
-  const response = await supabase.functions.invoke("parse-sms", {
+  const response = await supabase.functions.invoke(transport.functionName, {
     body: {
       requestKey,
       scanSessionId: requestContext.scanSessionId,
@@ -296,7 +298,14 @@ async function invokeParseChunk(
       messages: messagesPayload,
       categories: buildCategoryTree(context.categories),
       supportedCurrencies: context.supportedCurrencies,
+      ...(transport.qaProfileId === undefined
+        ? {}
+        : {
+            qaProfileId: transport.qaProfileId,
+            qaRunId: transport.qaRunId,
+          }),
     },
+    headers: transport.headers,
     signal: abortSignal,
   });
 
@@ -411,6 +420,14 @@ interface MessagePayload {
   readonly smsFingerprint: string;
 }
 
+interface SmsParseTransport {
+  readonly functionName: "parse-sms" | "sms-safeguard-qa";
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly qaProfileId?: string;
+  readonly qaRunId?: string;
+  readonly chunkSize: number;
+}
+
 interface ChunkWork {
   readonly messages: readonly MessagePayload[];
   readonly requestKey: string;
@@ -453,15 +470,6 @@ function loadFixtureSmsParser(): typeof import("./testing/ai-sms-fixture-parser"
     require("./testing/ai-sms-fixture-parser") as typeof import("./testing/ai-sms-fixture-parser");
   /* eslint-enable @typescript-eslint/no-require-imports */
   return fixtureParser.parseSmsWithFixtureAi;
-}
-
-function loadSafeguardQaParser(): typeof import("./testing/sms-safeguard-qa-parser").parseSmsWithSafeguardQa {
-  // Keep QA-only provider doubles out of the normal parser path.
-  /* eslint-disable @typescript-eslint/no-require-imports */
-  const qaParser =
-    require("./testing/sms-safeguard-qa-parser") as typeof import("./testing/sms-safeguard-qa-parser");
-  /* eslint-enable @typescript-eslint/no-require-imports */
-  return qaParser.parseSmsWithSafeguardQa;
 }
 
 function throwIfAborted(abortSignal?: AbortSignal): void {
@@ -535,21 +543,7 @@ export async function parseSmsWithAi(
 
   try {
     const safeguardQaConfig = getSmsSafeguardQaConfig();
-    if (safeguardQaConfig.enabled) {
-      if (safeguardQaConfig.profileId === null) {
-        throw new Error("SMS safeguard QA requires a selected profile.");
-      }
-      const parseSmsWithSafeguardQa = loadSafeguardQaParser();
-      return await parseSmsWithSafeguardQa(
-        safeguardQaConfig.profileId,
-        candidates,
-        context,
-        onProgress,
-        abortSignal
-      );
-    }
-
-    if (shouldUseFixtureSmsParser()) {
+    if (!safeguardQaConfig.enabled && shouldUseFixtureSmsParser()) {
       const parseSmsWithFixtureAi = loadFixtureSmsParser();
       return await parseSmsWithFixtureAi(
         candidates,
@@ -557,6 +551,32 @@ export async function parseSmsWithAi(
         onProgress,
         abortSignal
       );
+    }
+
+    let transport: SmsParseTransport = {
+      functionName: "parse-sms",
+      chunkSize: CLIENT_CHUNK_SIZE,
+    };
+    if (safeguardQaConfig.enabled) {
+      if (
+        safeguardQaConfig.profileId === null ||
+        safeguardQaConfig.runId === null
+      ) {
+        throw new Error(
+          "SMS safeguard QA requires a selected profile and run identity."
+        );
+      }
+      transport = {
+        functionName: "sms-safeguard-qa",
+        headers: {
+          "x-sms-safeguard-qa-run-id": safeguardQaConfig.runId,
+        },
+        qaProfileId: safeguardQaConfig.profileId,
+        qaRunId: safeguardQaConfig.runId,
+        chunkSize:
+          SAFEGUARD_QA_SCENARIOS[safeguardQaConfig.profileId].policyOverrides
+            .fullParser.maxUnitsPerRequest,
+      };
     }
 
     // Build validation set once for the entire parse session
@@ -586,9 +606,9 @@ export async function parseSmsWithAi(
 
     // Initial chunking
     const chunkQueue: ChunkWork[] = [];
-    for (let i = 0; i < allMessages.length; i += CLIENT_CHUNK_SIZE) {
+    for (let i = 0; i < allMessages.length; i += transport.chunkSize) {
       chunkQueue.push({
-        messages: allMessages.slice(i, i + CLIENT_CHUNK_SIZE),
+        messages: allMessages.slice(i, i + transport.chunkSize),
         requestKey: Crypto.randomUUID(),
       });
     }
@@ -625,6 +645,7 @@ export async function parseSmsWithAi(
           context,
           resolvedRequestContext,
           currentChunk.requestKey,
+          transport,
           abortSignal,
           expectedUserId
         );

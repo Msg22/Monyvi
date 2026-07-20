@@ -339,6 +339,7 @@ BEGIN
       WHERE event.user_id = p_user_id
         AND event.capability = p_capability
         AND work.scan_kind = 'history'
+        AND work.scan_session_id IS DISTINCT FROM p_scan_session_id
         AND event.started_at > v_now - make_interval(secs => p_history_cooldown_seconds);
 
       IF v_first_history_start IS NOT NULL THEN
@@ -420,6 +421,7 @@ BEGIN
       WHERE event.user_id = p_user_id
         AND event.capability = p_capability
         AND work.scan_kind = 'history'
+        AND work.scan_session_id IS DISTINCT FROM p_scan_session_id
         AND event.started_at > v_now - make_interval(secs => p_history_cooldown_seconds);
 
       IF v_first_history_start IS NOT NULL THEN
@@ -466,6 +468,7 @@ BEGIN
     WHERE event.user_id = p_user_id
       AND event.capability = p_capability
       AND work.scan_kind = 'history'
+      AND work.scan_session_id IS DISTINCT FROM p_scan_session_id
       AND event.started_at > v_now - make_interval(secs => p_history_cooldown_seconds);
 
     IF v_first_history_start IS NOT NULL THEN
@@ -863,7 +866,7 @@ AS $function$
 DECLARE
   v_now timestamptz := clock_timestamp();
 BEGIN
-  IF COALESCE(auth.role(), '') <> 'service_role' THEN
+  IF COALESCE(auth.role(), '') <> 'service_role' AND session_user <> 'postgres' THEN
     RAISE EXCEPTION 'sms_ai_cleanup_safeguards is service-role only';
   END IF;
   UPDATE public.sms_ai_negative_outcomes
@@ -914,3 +917,12 @@ REVOKE ALL ON FUNCTION public.sms_ai_cleanup_safeguards(integer, integer)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.sms_ai_cleanup_safeguards(integer, integer)
   TO service_role;
+
+SELECT cron.unschedule('sms-ai-safeguard-cleanup') WHERE EXISTS (
+  SELECT 1 FROM cron.job WHERE jobname = 'sms-ai-safeguard-cleanup'
+);
+SELECT cron.schedule(
+  'sms-ai-safeguard-cleanup',
+  '17 3 * * *',
+  'SELECT public.sms_ai_cleanup_safeguards(30, 35)'
+);

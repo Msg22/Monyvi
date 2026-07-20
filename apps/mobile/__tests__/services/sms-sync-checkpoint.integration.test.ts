@@ -391,6 +391,51 @@ describe("SMS sync checkpoint integration", () => {
     );
   });
 
+  it("returns typed safeguard guidance when every AI candidate is capacity-deferred", async () => {
+    const message = createSmsMessage();
+    const candidate = { message, smsFingerprint: "fp-capacity" };
+    mockReadSmsInbox.mockResolvedValue([message]);
+    mockComputeSmsFingerprint.mockResolvedValue("fp-capacity");
+    mockParseSmsWithOrchestrator.mockResolvedValue({
+      transactions: [],
+      hasError: true,
+      isRetryable: false,
+      unresolvedCandidates: [
+        {
+          candidate,
+          reason: "capacity_limited",
+          isRetryable: false,
+        },
+      ],
+      safeguardSummary: {
+        admittedAiCount: 0,
+        deferredAiCount: 1,
+        oversizedCount: 0,
+        unresolvedCount: 1,
+        completionStatus: "partial",
+        availability: {
+          reason: "rolling_limit",
+          availableAt: "2026-07-21T10:00:00.000Z",
+        },
+      },
+    });
+
+    const result = await scanAndParseSms(options());
+
+    expect(result.transactions).toEqual([]);
+    expect(result.unresolvedCandidates).toEqual([
+      expect.objectContaining({ reason: "capacity_limited" }),
+    ]);
+    expect(result.safeguardSummary).toEqual(
+      expect.objectContaining({
+        deferredAiCount: 1,
+        completionStatus: "partial",
+      })
+    );
+    const finalizeInput = mockFinalizeSmsScanCheckpoint.mock.calls[0]?.[0];
+    expect(finalizeInput?.states[0]?.outcome).toBe("unresolved");
+  });
+
   it("passes scan identity and terminal fingerprints to the parser", async () => {
     mockReadSmsInbox.mockResolvedValue([createSmsMessage()]);
     mockComputeSmsFingerprint.mockResolvedValue("fp-terminal");

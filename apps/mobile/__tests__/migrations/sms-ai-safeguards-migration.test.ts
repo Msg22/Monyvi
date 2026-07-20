@@ -11,6 +11,16 @@ function readMigrationSql(): string {
   );
 }
 
+function readReconciliationFixSql(): string {
+  return readFileSync(
+    path.resolve(
+      __dirname,
+      "../../../../supabase/migrations/062_fix_sms_ai_outcome_reconciliation.sql"
+    ),
+    "utf8"
+  );
+}
+
 describe("SMS AI safeguards migration", () => {
   it("creates only privacy-safe synchronized negative outcomes", () => {
     const sql = readMigrationSql();
@@ -72,6 +82,53 @@ describe("SMS AI safeguards migration", () => {
     expect(sql).toMatch(/reservation_expires_at <= v_now/i);
     expect(sql).toMatch(/LEAST\([^;]*3\)/i);
     expect(sql).toMatch(/ON CONFLICT \(request_id\) DO NOTHING/i);
+  });
+
+  it("disambiguates outcome return variables from persisted columns", () => {
+    const sql = readReconciliationFixSql();
+
+    expect(sql).toContain(
+      "CREATE OR REPLACE FUNCTION public.sms_ai_reconcile_outcomes"
+    );
+    expect(sql).toMatch(/#variable_conflict use_column/i);
+  });
+
+  it("hardens deployed safeguard ledgers with payload identity and provider-start checks", () => {
+    const sql = readReconciliationFixSql();
+
+    expect(sql).toMatch(/ADD COLUMN IF NOT EXISTS request_digest text/i);
+    expect(sql).toMatch(
+      /ADD COLUMN IF NOT EXISTS candidate_fingerprints text\[\]/i
+    );
+    expect(sql).toContain("FUNCTION public.sms_ai_reserve_work_v2");
+    expect(sql).toContain("FUNCTION public.sms_ai_mark_provider_started_v2");
+    expect(sql).toMatch(/idempotency_conflict/i);
+    expect(sql).toMatch(/sms_ai_negative_outcomes[\s\S]*is_terminal = true/i);
+    expect(sql).toMatch(/pg_advisory_xact_lock/i);
+  });
+
+  it("adds lifecycle indexes and a self-contained updated-at trigger", () => {
+    const sql = readReconciliationFixSql();
+
+    expect(sql).toMatch(/sms_ai_negative_outcomes_cleanup/i);
+    expect(sql).toMatch(/sms_ai_work_requests_cleanup/i);
+    expect(sql).toContain(
+      "FUNCTION public.set_sms_ai_negative_outcome_updated_at"
+    );
+    expect(sql).toMatch(
+      /EXECUTE FUNCTION public\.set_sms_ai_negative_outcome_updated_at\(\)/i
+    );
+  });
+
+  it("schedules trusted cleanup without expiring terminal outcomes", () => {
+    const sql = readMigrationSql();
+
+    expect(sql).toMatch(
+      /UPDATE public\.sms_ai_negative_outcomes[\s\S]*is_terminal = false[\s\S]*original_received_at < v_now - make_interval\(days => p_lookback_days\)/i
+    );
+    expect(sql).toMatch(
+      /cron\.schedule\([\s\S]*sms-ai-safeguard-cleanup[\s\S]*sms_ai_cleanup_safeguards\(30, 35\)/i
+    );
   });
 
   it("restricts safeguard RPC execution to the service role", () => {

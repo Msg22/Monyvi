@@ -1,6 +1,6 @@
-import { REQUIRED_SAFEGUARD_QA_PROFILE_IDS } from "@monyvi/logic";
 import {
-  SmsSafeguardQaRunner,
+  CLIENT_PREFLIGHT_SAFEGUARD_QA_PROFILE_IDS,
+  SmsSafeguardQaPreflightRunner,
   type SmsSafeguardQaRunResult,
 } from "@/services/testing/sms-safeguard-qa-runner";
 
@@ -9,16 +9,19 @@ const QA_ENVIRONMENT = {
   EXPO_PUBLIC_SMS_SAFEGUARD_QA: "true",
   EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER: "simulated",
   EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX: "fixture",
+  EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID: "safeguard-preflight-run",
 } as const;
 
-describe("deterministic SMS safeguard QA", () => {
-  test("runs all 14 versioned profiles with a fixed clock and no production usage", async () => {
-    const runner = new SmsSafeguardQaRunner({ environment: QA_ENVIRONMENT });
+describe("deterministic SMS safeguard client preflight", () => {
+  test("runs only client-owned profiles with a fixed clock and no production usage", async () => {
+    const runner = new SmsSafeguardQaPreflightRunner({
+      environment: QA_ENVIRONMENT,
+    });
 
     const results = await runner.runAll();
 
     expect(results.map(({ diagnostics }) => diagnostics.profileId)).toEqual(
-      REQUIRED_SAFEGUARD_QA_PROFILE_IDS
+      CLIENT_PREFLIGHT_SAFEGUARD_QA_PROFILE_IDS
     );
     expect(results.every(({ status }) => status === "passed")).toBe(true);
     expect(
@@ -31,21 +34,34 @@ describe("deterministic SMS safeguard QA", () => {
     ).toBe(true);
   });
 
-  test("uses shared policy/reconciliation behavior for representative boundaries", async () => {
-    const runner = new SmsSafeguardQaRunner({ environment: QA_ENVIRONMENT });
+  test("uses shared boundary behavior for representative client profiles", async () => {
+    const runner = new SmsSafeguardQaPreflightRunner({
+      environment: QA_ENVIRONMENT,
+    });
 
     const cutoff = await runner.run("cutoff-boundary-v1");
-    const partial = await runner.run("partial-quota-v1");
-    const response = await runner.run("response-validity-v1");
+    const checkpoint = await runner.run("checkpoint-overlap-v1");
 
     expect(cutoff.diagnostics.filteredOutCount).toBeGreaterThan(0);
-    expect(partial.diagnostics.deferredCount).toBeGreaterThan(0);
-    expect(response.diagnostics.invalidResponseCount).toBeGreaterThan(0);
-    expect(response.diagnostics.checkpointCount).toBe(0);
+    expect(checkpoint.diagnostics.effectiveMinDate).toBeLessThan(
+      checkpoint.diagnostics.fixedNowMs
+    );
+  });
+
+  test("requires server-owned profiles to use local Supabase", async () => {
+    const runner = new SmsSafeguardQaPreflightRunner({
+      environment: QA_ENVIRONMENT,
+    });
+
+    await expect(runner.run("partial-quota-v1")).rejects.toThrow(
+      /local Supabase safeguard QA endpoint/i
+    );
   });
 
   test("reset clears only the selected namespace and keeps other QA state", () => {
-    const runner = new SmsSafeguardQaRunner({ environment: QA_ENVIRONMENT });
+    const runner = new SmsSafeguardQaPreflightRunner({
+      environment: QA_ENVIRONMENT,
+    });
     runner.setNamespaceMarker("sms-safeguard-qa:unrelated", "keep-me");
     runner.setNamespaceMarker(
       "sms-safeguard-qa:cutoff-boundary-v1",
@@ -63,11 +79,13 @@ describe("deterministic SMS safeguard QA", () => {
   });
 
   test("is repeatable after a namespace reset and exposes aggregate diagnostics only", async () => {
-    const runner = new SmsSafeguardQaRunner({ environment: QA_ENVIRONMENT });
+    const runner = new SmsSafeguardQaPreflightRunner({
+      environment: QA_ENVIRONMENT,
+    });
 
-    const first = await runner.run("shared-batch-live-v1");
-    runner.reset("shared-batch-live-v1");
-    const second = await runner.run("shared-batch-live-v1");
+    const first = await runner.run("trusted-local-recovery-v1");
+    runner.reset("trusted-local-recovery-v1");
+    const second = await runner.run("trusted-local-recovery-v1");
 
     expect(second).toEqual(first);
     expect(JSON.stringify(first)).not.toMatch(
@@ -76,10 +94,13 @@ describe("deterministic SMS safeguard QA", () => {
   });
 
   test("returns a stable result contract for every run", async () => {
-    const runner = new SmsSafeguardQaRunner({ environment: QA_ENVIRONMENT });
+    const runner = new SmsSafeguardQaPreflightRunner({
+      environment: QA_ENVIRONMENT,
+    });
 
-    const result: SmsSafeguardQaRunResult =
-      await runner.run("account-switch-v1");
+    const result: SmsSafeguardQaRunResult = await runner.run(
+      "prompt-token-baseline-v1"
+    );
 
     expect(result.status).toBe("passed");
     expect(result.diagnostics.profileVersion).toBe(1);

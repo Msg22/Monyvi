@@ -1,4 +1,5 @@
 import { database, type SmsAiNegativeOutcome } from "@monyvi/db";
+import { DEFAULT_SMS_SCAN_POLICY } from "@monyvi/logic";
 import { Q } from "@nozbe/watermelondb";
 
 import { syncDatabase } from "./sync";
@@ -37,6 +38,18 @@ function normalizeFingerprints(
   ];
 }
 
+function isActiveProcessingOutcome(
+  outcome: SmsAiNegativeOutcome,
+  nowMs: number
+): boolean {
+  if (outcome.deleted) return false;
+  if (outcome.isTerminal) return true;
+  const receivedAtMs = Date.parse(outcome.originalReceivedAt);
+  const cutoffMs =
+    nowMs - DEFAULT_SMS_SCAN_POLICY.lookbackDays * 24 * 60 * 60 * 1000;
+  return Number.isFinite(receivedAtMs) && receivedAtMs >= cutoffMs;
+}
+
 export async function getSmsProcessingOutcomes(
   fingerprints: readonly string[],
   expectedUserId?: string
@@ -57,7 +70,7 @@ export async function getSmsProcessingOutcomes(
     .fetch();
 
   return outcomes
-    .filter((outcome) => !outcome.deleted)
+    .filter((outcome) => isActiveProcessingOutcome(outcome, Date.now()))
     .map(toProcessingOutcome);
 }
 

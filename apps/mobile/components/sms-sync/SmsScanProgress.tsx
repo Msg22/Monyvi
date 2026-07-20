@@ -21,6 +21,8 @@ import {
   SuccessState,
 } from "./SmsScanProgressParts";
 import { SmsScanScopeNotice } from "./SmsScanScopeNotice";
+import { PartialSmsResultsNotice } from "@/components/transaction-review/PartialSmsResultsNotice";
+import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator";
 
 interface SmsScanProgressProps {
   /** Current scan status */
@@ -37,6 +39,7 @@ interface SmsScanProgressProps {
   readonly topCategories: readonly string[];
   /** System category name to display label mapping */
   readonly categoryNameMap: ReadonlyMap<string, string>;
+  readonly safeguardSummary: SmsScanSafeguardSummary;
   /** Error message if scan failed */
   readonly error: string | null;
   /** Called when user taps "Review Transactions" */
@@ -55,6 +58,7 @@ export function SmsScanProgress({
   durationMs,
   topCategories,
   categoryNameMap,
+  safeguardSummary,
   error,
   onReviewPress,
   onBackPress,
@@ -104,13 +108,39 @@ export function SmsScanProgress({
             />
           )}
 
-          {status === "complete" && transactionsFound === 0 && (
-            <EmptyState
-              totalScanned={totalScanned}
-              onBackPress={onBackPress}
-              t={translate}
-            />
-          )}
+          {status === "complete" &&
+            transactionsFound === 0 &&
+            safeguardSummary.completionStatus === "complete" && (
+              <EmptyState
+                totalScanned={totalScanned}
+                onBackPress={onBackPress}
+                t={translate}
+              />
+            )}
+
+          {status === "complete" &&
+            transactionsFound === 0 &&
+            safeguardSummary.completionStatus === "partial" && (
+              <View className="flex-1 justify-center pb-6">
+                <PartialSmsResultsNotice
+                  safeguardSummary={safeguardSummary}
+                  retryableCount={0}
+                  canRetry={false}
+                  isRetrying={false}
+                  hasRetryError={false}
+                  onRetry={onRetryPress}
+                />
+                <TouchableOpacity
+                  onPress={onBackPress}
+                  activeOpacity={0.85}
+                  className="mt-6 w-full items-center rounded-2xl bg-slate-100 py-4 dark:bg-slate-800"
+                >
+                  <Text className="text-sm font-semibold text-slate-800 dark:text-white">
+                    {translate("back_to_dashboard")}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
           {status === "error" && (
             <ErrorState

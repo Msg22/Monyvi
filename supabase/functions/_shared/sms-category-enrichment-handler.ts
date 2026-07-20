@@ -12,6 +12,7 @@ import {
   type SmsCategoryResponse,
 } from "./sms-category-enrichment-contract.ts";
 import { getUtf8ByteLengthAtEdge } from "./sms-input-estimator.ts";
+import { computeRequestDigestAtEdge } from "./sms-fingerprint-at-edge.ts";
 import {
   parseSmsSafeguardPolicy,
   type SmsSafeguardPolicy,
@@ -325,6 +326,7 @@ async function handlePost(
   const metrics = calculateRequestMetrics(rawBody, body.categoryRequest);
   let admission: SmsAiAdmissionDecision;
   try {
+    const requestDigest = await computeRequestDigestAtEdge(rawBody);
     admission = await dependencies.reserveWork({
       userId: auth.userId,
       requestKey: body.requestKey,
@@ -334,6 +336,8 @@ async function handlePost(
       unitCount: body.categoryRequest.merchants.length,
       payloadBytes: metrics.payloadBytes,
       estimatedInputTokens: metrics.estimatedInputTokens,
+      requestDigest,
+      candidateFingerprints: [],
       policy,
     });
   } catch {

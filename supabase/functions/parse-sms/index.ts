@@ -26,7 +26,6 @@ import {
   createParseSmsHandler,
   type ExecuteSmsProviderInput,
   type ParseSmsMessage,
-  type ParseSmsProviderTransaction,
   type SmsProviderExecutionResult,
 } from "../_shared/parse-sms-handler.ts";
 import {
@@ -38,6 +37,11 @@ import {
 import { logSmsAiOperationalResponse } from "../_shared/sms-ai-operational-telemetry.ts";
 import { reconcileSmsNegativeOutcomes } from "../_shared/sms-negative-outcome-handler.ts";
 import { readSmsSafeguardPolicyFromEnvironment } from "../_shared/sms-safeguard-policy.ts";
+import { parseSmsProviderTransactions } from "../_shared/sms-provider-transaction-validator.ts";
+import {
+  computeRequestDigestAtEdge,
+  computeSmsFingerprintAtEdge,
+} from "../_shared/sms-fingerprint-at-edge.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -341,7 +345,8 @@ function createServiceClient(): ReturnType<typeof createClient> {
 
 async function getProcessingOutcomes(
   userId: string,
-  fingerprints: readonly string[]
+  fingerprints: readonly string[],
+  lookbackDays: number
 ): Promise<
   readonly { readonly smsFingerprint: string; readonly isTerminal: boolean }[]
 > {
@@ -352,6 +357,11 @@ async function getProcessingOutcomes(
     .select("sms_fingerprint,is_terminal")
     .eq("user_id", userId)
     .eq("deleted", false)
+    .or(
+      `is_terminal.eq.true,original_received_at.gte.${new Date(
+        Date.now() - lookbackDays * 24 * 60 * 60 * 1000
+      ).toISOString()}`
+    )
     .in("sms_fingerprint", [...new Set(fingerprints)]);
 
   if (error) throw error;
@@ -379,52 +389,6 @@ function sleep(ms: number): Promise<void> {
  * Process messages through Gemini with retry and exponential backoff.
  * Retries up to MAX_RETRIES times on failure (2s → 4s → 8s delays).
  */
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function parseProviderTransaction(
-  value: unknown
-): ParseSmsProviderTransaction | null {
-  if (!isRecord(value)) return null;
-  if (
-    typeof value.messageId !== "string" ||
-    typeof value.amount !== "number" ||
-    !Number.isFinite(value.amount) ||
-    typeof value.currency !== "string" ||
-    typeof value.type !== "string" ||
-    typeof value.counterparty !== "string" ||
-    typeof value.date !== "string" ||
-    typeof value.categorySystemName !== "string" ||
-    typeof value.confidenceScore !== "number" ||
-    !Number.isFinite(value.confidenceScore) ||
-    typeof value.isTrusted !== "boolean" ||
-    (value.isAtmWithdrawal !== undefined &&
-      typeof value.isAtmWithdrawal !== "boolean") ||
-    (value.cardLast4 !== undefined && typeof value.cardLast4 !== "string")
-  ) {
-    return null;
-  }
-  return value as unknown as ParseSmsProviderTransaction;
-}
-
-function parseProviderTransactions(value: unknown): {
-  readonly isValid: boolean;
-  readonly transactions: readonly ParseSmsProviderTransaction[];
-} {
-  if (!isRecord(value) || !Array.isArray(value.transactions)) {
-    return { isValid: false, transactions: [] };
-  }
-  const transactions = value.transactions.map(parseProviderTransaction);
-  if (transactions.some((transaction) => transaction === null)) {
-    return { isValid: false, transactions: [] };
-  }
-  return {
-    isValid: true,
-    transactions: transactions as ParseSmsProviderTransaction[],
-  };
-}
-
 function getCompletionStatus(response: {
   readonly candidates?: readonly { readonly finishReason?: unknown }[];
   readonly promptFeedback?: { readonly blockReason?: unknown };
@@ -447,7 +411,11 @@ async function processWithRetry(
   ai: GoogleGenAI,
   messages: readonly ParseSmsMessage[],
   systemPrompt: string,
-  responseSchema: Record<string, unknown>
+  responseSchema: Record<string, unknown>,
+  validationContext: {
+    readonly supportedCurrencies: readonly string[];
+    readonly categoryTree: string;
+  }
 ): Promise<SmsProviderExecutionResult> {
   const userPrompt = `Parse the following ${messages.length} SMS messages into transactions:
 
@@ -505,7 +473,10 @@ Body: ${m.body}
           transactions: [],
         };
       }
-      const parsedTransactions = parseProviderTransactions(parsed);
+      const parsedTransactions = parseSmsProviderTransactions(
+        parsed,
+        validationContext
+      );
       return {
         completionStatus,
         isResponseSchemaValid: parsedTransactions.isValid,
@@ -556,6 +527,14 @@ const parseSmsHandler = createParseSmsHandler({
   shouldExclude: (message) =>
     isExcludedBeforeSmsParsingAtEdge(message.body) ||
     isLikelyCorruptedSmsText(message.body),
+  computeFingerprint: (message) =>
+    computeSmsFingerprintAtEdge({
+      sender: message.sender,
+      body: message.body,
+      receivedAtMs: Date.parse(message.date),
+    }),
+  computeRequestDigest: computeRequestDigestAtEdge,
+  getServerNowMs: Date.now,
   getProcessingOutcomes,
   reserveWork: (input) => reserveSmsAiWork(createServiceClient(), input),
   markProviderStarted: (requestId) =>
@@ -566,11 +545,19 @@ const parseSmsHandler = createParseSmsHandler({
     const apiKey = Deno.env.get("GEMINI_API_KEY");
     if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
     const ai = new GoogleGenAI({ apiKey });
+    const categoryTree = input.categories || CATEGORY_TREE;
     return processWithRetry(
       ai,
       input.messages,
-      buildSystemPrompt(input.categories || CATEGORY_TREE),
-      buildResponseSchema(input.supportedCurrencies)
+      buildSystemPrompt(categoryTree),
+      buildResponseSchema(input.supportedCurrencies),
+      {
+        supportedCurrencies:
+          input.supportedCurrencies.length > 0
+            ? input.supportedCurrencies
+            : DEFAULT_CURRENCY_ENUM,
+        categoryTree,
+      }
     );
   },
   completeWork: (input) => completeSmsAiWork(createServiceClient(), input),

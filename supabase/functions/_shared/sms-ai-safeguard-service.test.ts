@@ -63,11 +63,15 @@ test("reserves full-parser work with only server-policy limits", async () => {
     unitCount: 12,
     payloadBytes: 2048,
     estimatedInputTokens: 500,
+    requestDigest: "a".repeat(64),
+    candidateFingerprints: ["b".repeat(64)],
     policy: DEFAULT_SMS_SAFEGUARD_POLICY,
   });
 
   assert.equal(decision.accepted, true);
-  assert.equal(calls[0]?.name, "sms_ai_reserve_work");
+  assert.equal(calls[0]?.name, "sms_ai_reserve_work_v2");
+  assert.equal(calls[0]?.params.p_request_digest, "a".repeat(64));
+  assert.deepEqual(calls[0]?.params.p_candidate_fingerprints, ["b".repeat(64)]);
   assert.equal(calls[0]?.params.p_max_units_per_scan, 200);
   assert.equal(calls[0]?.params.p_max_units_per_rolling_window, 200);
   assert.equal(calls[0]?.params.p_reservation_lease_seconds, 300);
@@ -95,6 +99,8 @@ test("uses independent enrichment allowance and no history cooldown claim", asyn
     unitCount: 20,
     payloadBytes: 100,
     estimatedInputTokens: 50,
+    requestDigest: "c".repeat(64),
+    candidateFingerprints: [],
     policy: DEFAULT_SMS_SAFEGUARD_POLICY,
   });
 
@@ -161,7 +167,13 @@ test("reads aggregate availability through the service-role RPC", async () => {
 
 test("maps provider lifecycle and privacy-safe outcome RPCs", async () => {
   const { client, calls } = createClient([
-    [{ started: true, decision_code: "provider_started" }],
+    [
+      {
+        started: true,
+        decision_code: "provider_started",
+        terminal_fingerprints: [],
+      },
+    ],
     true,
     true,
     [],
@@ -185,10 +197,12 @@ test("maps provider lifecycle and privacy-safe outcome RPCs", async () => {
     ],
   });
 
+  assert.equal(calls[0]?.name, "sms_ai_mark_provider_started_v2");
+
   assert.deepEqual(
     calls.map(({ name }) => name),
     [
-      "sms_ai_mark_provider_started",
+      "sms_ai_mark_provider_started_v2",
       "sms_ai_complete_work",
       "sms_ai_release_work",
       "sms_ai_reconcile_outcomes",

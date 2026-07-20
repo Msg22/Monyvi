@@ -13,7 +13,6 @@ import {
 import { reconcileProviderCompletion } from "../../../../packages/logic/src/sms-safeguards/sms-provider-response-reconciler";
 import { selectSmsAiWork } from "../../../../packages/logic/src/sms-safeguards/sms-ai-work-selector";
 import {
-  REQUIRED_SAFEGUARD_QA_PROFILE_IDS,
   SAFEGUARD_QA_FIXED_NOW_MS,
   SAFEGUARD_QA_SCENARIOS,
   type SafeguardQaProfileId,
@@ -80,10 +79,21 @@ export interface SmsSafeguardQaRunResult {
   readonly diagnostics: SmsSafeguardQaDiagnostics;
 }
 
-export interface SmsSafeguardQaRunnerOptions {
+export interface SmsSafeguardQaPreflightRunnerOptions {
   readonly environment?: SmsSafeguardQaEnvironment;
   readonly config?: SmsSafeguardQaConfig;
 }
+
+export const CLIENT_PREFLIGHT_SAFEGUARD_QA_PROFILE_IDS = Object.freeze([
+  "cutoff-boundary-v1",
+  "checkpoint-overlap-v1",
+  "trusted-local-recovery-v1",
+  "prompt-token-baseline-v1",
+] as const satisfies readonly SafeguardQaProfileId[]);
+
+const CLIENT_PREFLIGHT_PROFILE_SET: ReadonlySet<SafeguardQaProfileId> = new Set(
+  CLIENT_PREFLIGHT_SAFEGUARD_QA_PROFILE_IDS
+);
 
 interface MutableCounts {
   filteredOutCount: number;
@@ -136,7 +146,13 @@ export function createSafeguardQaFixtureStates(
       ? [-DAY_MS - 1, -DAY_MS, -DAY_MS + 1]
       : profileId === "partial-quota-v1"
         ? [0, -60_000, -120_000, -180_000, -240_000, -300_000, -360_000]
-        : [0, -60_000, -120_000, -180_000, -240_000];
+        : [
+              "shared-batch-live-v1",
+              "burst-limit-v1",
+              "history-cooldown-v1",
+            ].includes(profileId)
+          ? [0, -60_000, -120_000, -180_000, -240_000, -300_000]
+          : [0, -60_000, -120_000, -180_000, -240_000];
 
   return offsets.map((offset, index) => ({
     fingerprint: `qa-${profileId}-${index}`,
@@ -148,12 +164,15 @@ export function createSafeguardQaFixtureStates(
 const TRUSTED_QNB_PURCHASE =
   "Your Debit Card **2132 had a Successful transaction of EGP 49.00 @QA LOCAL SHOP,your available bal.EGP10853.15 for lost/stolen card call 19700";
 
-function getQaFixtureBody(index: number): string {
+function getQaFixtureBody(
+  profileId: SafeguardQaProfileId,
+  index: number
+): string {
   if (index === 0) return TRUSTED_QNB_PURCHASE;
   if (index === 4) {
     return "QNB rewards: اكسب كاش باك when you use your card this week.";
   }
-  return `QNB account alert: completed payment of EGP ${100 + index}.00 to QA SCENARIO ${index}. Reference QA-${index}.`;
+  return `QNB account alert: completed payment of EGP ${100 + index}.00 to QA ${profileId} scenario ${index}. Reference QA-${profileId}-${index}.`;
 }
 
 export function createSafeguardQaInboxMessages(
@@ -166,7 +185,10 @@ export function createSafeguardQaInboxMessages(
   return states.map((state, index) => ({
     id: `sms-safeguard-qa:${profileId}:${index}`,
     address: "QNB EGYPT",
-    body: getQaFixtureBody(index),
+    body:
+      profileId === "oversized-candidate-v1" && index > 0
+        ? `QNB account alert: ${"x".repeat(512)}`
+        : getQaFixtureBody(profileId, index),
     date: state.receivedAtMs,
     read: true,
   }));
@@ -238,8 +260,8 @@ function pruneWindow(
   return values.filter((value) => value > nowMs - windowMs);
 }
 
-export class SmsSafeguardQaRunner {
-  public constructor(options: SmsSafeguardQaRunnerOptions = {}) {
+export class SmsSafeguardQaPreflightRunner {
+  public constructor(options: SmsSafeguardQaPreflightRunnerOptions = {}) {
     this.config =
       options.config ??
       requireSmsSafeguardQaConfig(options.environment ?? process.env, {
@@ -266,6 +288,11 @@ export class SmsSafeguardQaRunner {
   public async run(
     profileId: SafeguardQaProfileId
   ): Promise<SmsSafeguardQaRunResult> {
+    if (!CLIENT_PREFLIGHT_PROFILE_SET.has(profileId)) {
+      throw new Error(
+        `${profileId} must run through the local Supabase safeguard QA endpoint.`
+      );
+    }
     const scenario = SAFEGUARD_QA_SCENARIOS[profileId];
     if (scenario === undefined) {
       throw new Error(`Unknown safeguard QA profile: ${profileId}`);
@@ -390,7 +417,9 @@ export class SmsSafeguardQaRunner {
 
   public async runAll(): Promise<readonly SmsSafeguardQaRunResult[]> {
     return Promise.all(
-      REQUIRED_SAFEGUARD_QA_PROFILE_IDS.map((profileId) => this.run(profileId))
+      CLIENT_PREFLIGHT_SAFEGUARD_QA_PROFILE_IDS.map((profileId) =>
+        this.run(profileId)
+      )
     );
   }
 
@@ -531,7 +560,7 @@ export async function runSmsSafeguardQaScenario(
   profileId: SafeguardQaProfileId,
   environment: SmsSafeguardQaEnvironment = process.env
 ): Promise<SmsSafeguardQaRunResult> {
-  return new SmsSafeguardQaRunner({
-    config: getSmsSafeguardQaConfig(environment),
+  return new SmsSafeguardQaPreflightRunner({
+    config: getSmsSafeguardQaConfig(environment, { requireProfile: false }),
   }).run(profileId);
 }

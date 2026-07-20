@@ -172,7 +172,6 @@ apps/mobile/services/
 |-- sms-oversized-outcome-service.ts
 |-- sms-ai-availability-service.ts
 `-- testing/
-    |-- sms-safeguard-provider-simulator.ts
     `-- sms-safeguard-qa-runner.ts
 
 apps/mobile/hooks/
@@ -196,15 +195,20 @@ supabase/functions/_shared/
 |-- sms-ai-safeguard-contract.ts
 |-- sms-ai-safeguard-service.ts
 |-- sms-provider-completion.ts
-`-- sms-safeguard-policy.ts
+|-- sms-safeguard-policy.ts
+|-- sms-safeguard-qa-policy.ts
+|-- sms-safeguard-qa-provider.ts
+`-- sms-safeguard-qa-runtime.ts
 
 supabase/functions/
 |-- parse-sms/index.ts
 |-- enrich-sms-categories/index.ts
-`-- sms-ai-availability/index.ts
+|-- sms-ai-availability/index.ts
+`-- sms-safeguard-qa/index.ts
 
 supabase/migrations/
-`-- 061_sms_ai_safeguards.sql
+|-- 061_sms_ai_safeguards.sql
+`-- 062_fix_sms_ai_outcome_reconciliation.sql
 
 scripts/
 `-- evaluate-sms-parser-prompt.ts

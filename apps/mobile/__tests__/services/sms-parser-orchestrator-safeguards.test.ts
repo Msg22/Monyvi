@@ -95,6 +95,7 @@ describe("SMS parser orchestrator safeguards", () => {
     delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER;
     delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX;
     delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE;
+    delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID;
     mockGetAiProcessingConsentStatus.mockResolvedValue({
       isConsented: true,
       userId: "user-1",
@@ -191,9 +192,33 @@ describe("SMS parser orchestrator safeguards", () => {
       admittedAiCount: 200,
       deferredAiCount: 1,
       oversizedCount: 0,
-      unresolvedCount: 1,
+      unresolvedCount: 0,
       completionStatus: "partial",
       availability: { reason: "scan_limit", availableAt: null },
+    });
+  });
+
+  it("counts provider capacity refusals once as deferred work", async () => {
+    mockParseSmsWithAi.mockResolvedValueOnce({
+      transactions: [],
+      hasError: true,
+      isRetryable: false,
+      unresolvedCandidates: [
+        {
+          candidate: candidate(),
+          reason: "capacity_limited",
+          isRetryable: false,
+        },
+      ],
+      availability: { reason: "rolling_limit", availableAt: null },
+    });
+
+    const result = await parseSmsWithOrchestrator([candidate()], context);
+
+    expect(result.safeguardSummary).toMatchObject({
+      deferredAiCount: 1,
+      unresolvedCount: 0,
+      completionStatus: "partial",
     });
   });
 
@@ -202,6 +227,7 @@ describe("SMS parser orchestrator safeguards", () => {
     process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER = "simulated";
     process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX = "fixture";
     process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE = "partial-quota-v1";
+    process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID = "orchestrator-run-1";
     const unresolvedCandidates = Array.from({ length: 5 }, (_, index) =>
       candidate({
         message: {

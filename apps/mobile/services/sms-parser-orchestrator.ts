@@ -485,6 +485,19 @@ function createScanLimitedCandidates(
   }));
 }
 
+function countCapacityLimitedCandidates(
+  candidates: readonly HybridSmsUnresolvedCandidate[]
+): number {
+  return candidates.filter(({ reason }) => reason === "capacity_limited")
+    .length;
+}
+
+function countOtherUnresolvedCandidates(
+  candidates: readonly HybridSmsUnresolvedCandidate[]
+): number {
+  return candidates.length - countCapacityLimitedCandidates(candidates);
+}
+
 async function reconcileLateRemoteConsentRejection(
   isConsentRequired: boolean,
   expectedUserId: string
@@ -619,6 +632,9 @@ async function parseHybrid(
     (deferredCandidates.length > 0
       ? { reason: "scan_limit" as const, availableAt: null }
       : undefined);
+  const capacityLimitedCount = countCapacityLimitedCandidates(
+    aiUnresolvedCandidates
+  );
   return {
     transactions,
     hasError: aiResult.hasError || deferredCandidates.length > 0,
@@ -632,9 +648,9 @@ async function parseHybrid(
     availability,
     safeguardSummary: createSafeguardSummary({
       admittedAiCount: aiSelection.admitted.length,
-      deferredAiCount: aiSelection.deferred.length,
+      deferredAiCount: aiSelection.deferred.length + capacityLimitedCount,
       oversizedCount: aiResult.oversizedCandidates?.length ?? 0,
-      unresolvedCount: unresolvedCandidates.length,
+      unresolvedCount: countOtherUnresolvedCandidates(unresolvedCandidates),
       availability,
     }),
     terminalFingerprints: [
@@ -787,7 +803,7 @@ export async function parseSmsWithOrchestrator(
         availability,
         safeguardSummary: createSafeguardSummary({
           deferredAiCount: aiSelection.deferred.length,
-          unresolvedCount: deferredCandidates.length,
+          unresolvedCount: 0,
           availability,
         }),
         terminalFingerprints: [...terminalFingerprints],
@@ -822,6 +838,9 @@ export async function parseSmsWithOrchestrator(
       (deferredCandidates.length > 0
         ? { reason: "scan_limit" as const, availableAt: null }
         : undefined);
+    const capacityLimitedCount = countCapacityLimitedCandidates(
+      aiResult.unresolvedCandidates ?? []
+    );
     return {
       ...aiResult,
       hasError: aiResult.hasError || deferredCandidates.length > 0,
@@ -832,9 +851,9 @@ export async function parseSmsWithOrchestrator(
       availability,
       safeguardSummary: createSafeguardSummary({
         admittedAiCount: aiSelection.admitted.length,
-        deferredAiCount: aiSelection.deferred.length,
+        deferredAiCount: aiSelection.deferred.length + capacityLimitedCount,
         oversizedCount: aiResult.oversizedCandidates?.length ?? 0,
-        unresolvedCount: unresolvedCandidates.length,
+        unresolvedCount: countOtherUnresolvedCandidates(unresolvedCandidates),
         availability,
       }),
       diagnostics: createDiagnostics({
@@ -866,11 +885,14 @@ export async function parseSmsWithOrchestrator(
           )
       )
     );
-    const unresolvedCandidates = parserCandidates.map((candidate) => ({
-      candidate,
-      reason: "ai_failed" as const,
-      isRetryable: true,
-    }));
+    const unresolvedCandidates = [
+      ...fallbackSelection.admitted.map((candidate) => ({
+        candidate,
+        reason: "ai_failed" as const,
+        isRetryable: true,
+      })),
+      ...createScanLimitedCandidates(fallbackSelection.deferred),
+    ];
     return {
       transactions: [],
       hasError: true,
@@ -879,7 +901,7 @@ export async function parseSmsWithOrchestrator(
       safeguardSummary: createSafeguardSummary({
         admittedAiCount: fallbackSelection.admitted.length,
         deferredAiCount: fallbackSelection.deferred.length,
-        unresolvedCount: unresolvedCandidates.length,
+        unresolvedCount: fallbackSelection.admitted.length,
       }),
       diagnostics: createDiagnostics({
         mode: "ai-primary",

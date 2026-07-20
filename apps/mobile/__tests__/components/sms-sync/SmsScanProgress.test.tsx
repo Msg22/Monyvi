@@ -30,6 +30,14 @@ jest.mock("react-i18next", () => ({
 
 import { SmsScanProgress } from "@/components/sms-sync/SmsScanProgress";
 
+const completeSummary = {
+  admittedAiCount: 0,
+  deferredAiCount: 0,
+  oversizedCount: 0,
+  unresolvedCount: 0,
+  completionStatus: "complete" as const,
+};
+
 describe("SmsScanProgress", () => {
   it("renders scanning progress state from props", () => {
     const { getByText } = render(
@@ -52,6 +60,7 @@ describe("SmsScanProgress", () => {
         durationMs={0}
         topCategories={[]}
         categoryNameMap={new Map<string, string>()}
+        safeguardSummary={completeSummary}
         error={null}
         onReviewPress={jest.fn()}
         onBackPress={jest.fn()}
@@ -79,6 +88,7 @@ describe("SmsScanProgress", () => {
         durationMs={3000}
         topCategories={["food_drinks"]}
         categoryNameMap={categoryNameMap}
+        safeguardSummary={completeSummary}
         error={null}
         onReviewPress={jest.fn()}
         onBackPress={jest.fn()}
@@ -90,7 +100,7 @@ describe("SmsScanProgress", () => {
   });
 
   it("renders empty and error states from props", () => {
-    const { getByText, rerender } = render(
+    const { getByText, queryByText, rerender } = render(
       <SmsScanProgress
         status="complete"
         progress={null}
@@ -99,6 +109,12 @@ describe("SmsScanProgress", () => {
         durationMs={0}
         topCategories={[]}
         categoryNameMap={new Map<string, string>()}
+        safeguardSummary={{
+          ...completeSummary,
+          deferredAiCount: 2,
+          completionStatus: "partial",
+          availability: { reason: "rolling_limit", availableAt: null },
+        }}
         error={null}
         onReviewPress={jest.fn()}
         onBackPress={jest.fn()}
@@ -106,8 +122,10 @@ describe("SmsScanProgress", () => {
       />
     );
 
-    expect(getByText("no_transactions_found")).toBeTruthy();
-    expect(getByText("Scanned 8")).toBeTruthy();
+    expect(getByText("partial_sms_title")).toBeTruthy();
+    expect(getByText("partial_sms_try_later")).toBeTruthy();
+    expect(queryByText("no_transactions_found")).toBeNull();
+    expect(getByText("back_to_dashboard")).toBeTruthy();
 
     rerender(
       <SmsScanProgress
@@ -118,6 +136,7 @@ describe("SmsScanProgress", () => {
         durationMs={0}
         topCategories={[]}
         categoryNameMap={new Map<string, string>()}
+        safeguardSummary={completeSummary}
         error="Could not read messages"
         onReviewPress={jest.fn()}
         onBackPress={jest.fn()}

@@ -22,6 +22,8 @@ const CORS_HEADERS: Readonly<Record<string, string>> = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
+const MAX_FUTURE_MESSAGE_SKEW_MS = 5 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface ParseSmsMessage {
   readonly id: string;
@@ -88,9 +90,13 @@ export interface ParseSmsHandlerDependencies {
     supportedCurrencies: readonly string[]
   ) => string;
   readonly shouldExclude: (message: ParseSmsMessage) => boolean;
+  readonly computeFingerprint: (message: ParseSmsMessage) => Promise<string>;
+  readonly computeRequestDigest: (body: unknown) => Promise<string>;
+  readonly getServerNowMs: () => number;
   readonly getProcessingOutcomes: (
     userId: string,
-    fingerprints: readonly string[]
+    fingerprints: readonly string[],
+    lookbackDays: number
   ) => Promise<readonly SmsAiProcessingOutcomeAtEdge[]>;
   readonly reserveWork: (
     input: SmsAiAdmissionInput
@@ -247,6 +253,29 @@ function calculateRequestMetrics(
   return { payloadBytes, estimatedInputTokens: estimate.totalTokens };
 }
 
+async function hasValidCanonicalMessages(
+  messages: readonly ParseSmsMessage[],
+  lookbackDays: number,
+  dependencies: ParseSmsHandlerDependencies
+): Promise<boolean> {
+  const nowMs = dependencies.getServerNowMs();
+  const minimumReceivedAtMs = nowMs - lookbackDays * DAY_MS;
+  const maximumReceivedAtMs = nowMs + MAX_FUTURE_MESSAGE_SKEW_MS;
+
+  for (const message of messages) {
+    const receivedAtMs = Date.parse(message.date);
+    if (
+      receivedAtMs < minimumReceivedAtMs ||
+      receivedAtMs > maximumReceivedAtMs ||
+      (await dependencies.computeFingerprint(message)) !==
+        message.smsFingerprint
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function toNegativeCandidates(
   messages: readonly ParseSmsMessage[]
 ): readonly SmsNegativeOutcomeCandidate[] {
@@ -317,6 +346,17 @@ async function executeAdmittedWork(input: {
     return refusal("dependency_unavailable", 503);
   }
   if (!startDecision.started) {
+    if (
+      startDecision.decisionCode === "terminal_outcome" &&
+      startDecision.terminalFingerprints.length > 0
+    ) {
+      return completedWithoutProvider([
+        ...new Set([
+          ...input.terminalFingerprints,
+          ...startDecision.terminalFingerprints,
+        ]),
+      ]);
+    }
     return refusal(startDecision.decisionCode, 429);
   }
 
@@ -443,6 +483,15 @@ async function handlePost(
   if (!policy.fullParser.isEnabled) {
     return refusal("capability_disabled", 503);
   }
+  if (
+    !(await hasValidCanonicalMessages(
+      body.messages,
+      policy.lookbackDays,
+      dependencies
+    ))
+  ) {
+    return refusal("malformed_request", 400);
+  }
   if (body.messages.length > policy.fullParser.maxUnitsPerRequest) {
     return refusal("request_limit", 400);
   }
@@ -466,7 +515,8 @@ async function handlePost(
   try {
     processingOutcomes = await dependencies.getProcessingOutcomes(
       userId,
-      locallyEligibleMessages.map((message) => message.smsFingerprint)
+      locallyEligibleMessages.map((message) => message.smsFingerprint),
+      policy.lookbackDays
     );
   } catch {
     return refusal("dependency_unavailable", 503);
@@ -500,6 +550,7 @@ async function handlePost(
 
   let admission: SmsAiAdmissionDecision;
   try {
+    const requestDigest = await dependencies.computeRequestDigest(rawBody);
     admission = await dependencies.reserveWork({
       userId,
       requestKey: body.requestKey,
@@ -509,6 +560,8 @@ async function handlePost(
       unitCount: messages.length,
       payloadBytes: metrics.payloadBytes,
       estimatedInputTokens: metrics.estimatedInputTokens,
+      requestDigest,
+      candidateFingerprints: messages.map((message) => message.smsFingerprint),
       policy,
     });
   } catch {

@@ -7,6 +7,7 @@ import {
 } from "@monyvi/logic";
 import { logger } from "@/utils/logger";
 import { isE2eTestMode } from "@/config/e2e-test-config";
+import { getSmsSafeguardQaConfig } from "@/config/sms-safeguard-qa-config";
 import { assertNotAborted } from "./abort-utils";
 import { supabase } from "./supabase";
 import { assertExpectedCurrentUser } from "./user-data-access";
@@ -476,14 +477,28 @@ async function invokeCategoryChunk(
       assertNotAborted(abortSignal, "SMS category enrichment aborted");
       return emptyResult(attemptedMerchantCount, true, { isTimedOut: true });
     }
+    const qaConfig = getSmsSafeguardQaConfig();
+    const functionName = qaConfig.enabled
+      ? "sms-safeguard-qa"
+      : CATEGORY_ENRICHMENT_FUNCTION;
     const response = await Promise.race([
-      supabase.functions.invoke(CATEGORY_ENRICHMENT_FUNCTION, {
+      supabase.functions.invoke(functionName, {
         body: {
           requestKey: prepared.requestKey,
           scanSessionId: requestContext.scanSessionId,
           scanKind: requestContext.scanKind,
           ...prepared.body,
+          ...(qaConfig.enabled
+            ? {
+                qaCapability: "category_enrichment",
+                qaProfileId: qaConfig.profileId,
+                qaRunId: qaConfig.runId,
+              }
+            : {}),
         },
+        ...(qaConfig.enabled
+          ? { headers: { "x-sms-safeguard-qa-run-id": qaConfig.runId ?? "" } }
+          : {}),
         signal: timedSignal.signal,
       }),
       timedSignal.deadline,

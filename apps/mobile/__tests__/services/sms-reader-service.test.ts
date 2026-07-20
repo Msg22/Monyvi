@@ -45,6 +45,7 @@ function enableSafeguardQaFixtureInbox(): void {
   process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER = "simulated";
   process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX = "fixture";
   process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE = "partial-quota-v1";
+  process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID = "sms-reader-run";
 }
 
 function freezeFixtureInboxClock(nowMs: number = TEST_NOW_MS): void {
@@ -61,6 +62,7 @@ describe("sms-reader-service", (): void => {
     delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER;
     delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX;
     delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE;
+    delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID;
     Object.defineProperty(Platform, "OS", {
       configurable: true,
       value: "android",

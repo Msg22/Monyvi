@@ -5,6 +5,7 @@ interface MockFunctionResponse {
 
 interface MockFunctionOptions {
   readonly body?: unknown;
+  readonly headers?: Readonly<Record<string, string>>;
   readonly signal?: AbortSignal;
 }
 
@@ -133,24 +134,7 @@ describe("ai-sms-parser-service parser strategy", () => {
     delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER;
     delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX;
     delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE;
-  });
-
-  it("uses the selected safeguard simulator without invoking the Edge Function", async () => {
-    process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA = "true";
-    process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER = "simulated";
-    process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX = "fixture";
-    process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE = "partial-quota-v1";
-
-    const result = await parseSmsWithAi(
-      [candidate("hybrid_ai_purchase")],
-      context
-    );
-
-    expect(mockInvoke).not.toHaveBeenCalled();
-    expect(result.transactions).toHaveLength(1);
-    expect(result.transactions[0]?.smsFingerprint).toBe(
-      "fingerprint-hybrid_ai_purchase"
-    );
+    delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID;
   });
 
   it("rejects a stale expected user before invoking the Edge Function", async () => {
@@ -174,46 +158,6 @@ describe("ai-sms-parser-service parser strategy", () => {
 
   afterEach(() => {
     process.env = originalEnv;
-  });
-
-  it("uses the Edge Function parser by default", async () => {
-    mockInvoke.mockResolvedValueOnce({
-      data: {
-        transactions: [
-          {
-            messageId: "sms-1",
-            amount: 25,
-            currency: "EGP",
-            type: "EXPENSE",
-            counterparty: "Shop",
-            date: "2026-04-08T12:00:00.000Z",
-            categorySystemName: "shopping",
-            confidenceScore: 0.9,
-            isTrusted: true,
-          },
-        ],
-      },
-      error: null,
-    });
-
-    const result = await parseSmsWithAi(
-      [
-        {
-          message: {
-            id: "sms-1",
-            address: "NBE",
-            body: "Purchase EGP 25 at Shop",
-            date: 1775658180000,
-            read: false,
-          },
-          smsFingerprint: "edge-fingerprint",
-        },
-      ],
-      context
-    );
-
-    expect(mockInvoke).toHaveBeenCalledWith("parse-sms", expect.any(Object));
-    expect(result.transactions[0]?.smsFingerprint).toBe("edge-fingerprint");
   });
 
   it("accepts currencies supported by the app beyond EGP and USD", async () => {

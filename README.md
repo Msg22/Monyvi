@@ -141,7 +141,9 @@ You do not need to run it every time you start the mobile app.
 ## SMS Safeguard QA
 
 SMS cost and retry safeguards have a deterministic QA mode that never reads a
-personal inbox, calls Gemini, or consumes production allowances.
+personal inbox, calls Gemini, or consumes production allowances. Server-owned
+profiles use local Supabase auth, the shared Edge handler, and the real local
+admission/outcome RPCs; only the inbox and Gemini provider are substituted.
 
 ```powershell
 # Run all named safeguard profiles
@@ -150,7 +152,8 @@ npm run test:sms-safeguards
 # Run one profile
 npm run test:sms-safeguards -- --scenario partial-quota-v1
 
-# Start the fixture/simulated-provider development mode on a wireless device
+# Start the fixture/simulated-provider development mode on a wireless device.
+# The launcher also serves the local-only safeguard QA Edge Function.
 npm run mobile:dev:sms-safeguards:wireless-device -- --scenario partial-quota-v1
 ```
 

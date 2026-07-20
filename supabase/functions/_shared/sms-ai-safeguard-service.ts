@@ -132,7 +132,7 @@ export async function reserveSmsAiWork(
     input.capability === "sms_full_parse"
       ? input.policy.fullParser
       : input.policy.categoryEnrichment;
-  const data = await callRpc(client, "sms_ai_reserve_work", {
+  const data = await callRpc(client, "sms_ai_reserve_work_v2", {
     p_user_id: input.userId,
     p_request_key: input.requestKey,
     p_capability: input.capability,
@@ -141,6 +141,8 @@ export async function reserveSmsAiWork(
     p_unit_count: input.unitCount,
     p_payload_bytes: input.payloadBytes,
     p_estimated_input_tokens: input.estimatedInputTokens,
+    p_request_digest: input.requestDigest,
+    p_candidate_fingerprints: [...new Set(input.candidateFingerprints)],
     p_max_units_per_scan:
       input.capability === "sms_full_parse"
         ? input.policy.fullParser.maxUnitsPerScan
@@ -162,7 +164,7 @@ export async function markSmsAiProviderStarted(
   client: SmsSafeguardRpcClient,
   requestId: string
 ): Promise<SmsAiProviderStartDecision> {
-  const data = await callRpc(client, "sms_ai_mark_provider_started", {
+  const data = await callRpc(client, "sms_ai_mark_provider_started_v2", {
     p_request_id: requestId,
   });
   return parseSmsAiProviderStartDecision(data);

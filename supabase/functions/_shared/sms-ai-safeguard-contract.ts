@@ -12,6 +12,8 @@ export interface SmsAiAdmissionInput {
   readonly unitCount: number;
   readonly payloadBytes: number;
   readonly estimatedInputTokens: number;
+  readonly requestDigest: string;
+  readonly candidateFingerprints: readonly string[];
   readonly policy: SmsSafeguardPolicy;
 }
 
@@ -26,6 +28,7 @@ export interface SmsAiAdmissionDecision {
 export interface SmsAiProviderStartDecision {
   readonly started: boolean;
   readonly decisionCode: string;
+  readonly terminalFingerprints: readonly string[];
 }
 
 export interface SmsAiNegativeOutcomeInput {
@@ -87,11 +90,19 @@ export function parseSmsAiProviderStartDecision(
   const row = getSingleRpcRow(value);
   if (
     typeof row.started !== "boolean" ||
-    typeof row.decision_code !== "string"
+    typeof row.decision_code !== "string" ||
+    !Array.isArray(row.terminal_fingerprints) ||
+    row.terminal_fingerprints.some(
+      (fingerprint) => typeof fingerprint !== "string"
+    )
   ) {
     throw new Error("Invalid SMS safeguard provider-start response");
   }
-  return { started: row.started, decisionCode: row.decision_code };
+  return {
+    started: row.started,
+    decisionCode: row.decision_code,
+    terminalFingerprints: row.terminal_fingerprints as string[],
+  };
 }
 
 export function assertSmsAiAdmissionInput(input: SmsAiAdmissionInput): void {
@@ -109,7 +120,11 @@ export function assertSmsAiAdmissionInput(input: SmsAiAdmissionInput): void {
     !Number.isSafeInteger(input.payloadBytes) ||
     input.payloadBytes < 0 ||
     !Number.isSafeInteger(input.estimatedInputTokens) ||
-    input.estimatedInputTokens < 0
+    input.estimatedInputTokens < 0 ||
+    !/^[0-9a-f]{64}$/.test(input.requestDigest) ||
+    input.candidateFingerprints.some(
+      (fingerprint) => !/^[0-9a-f]{64}$/.test(fingerprint)
+    )
   ) {
     throw new Error("Invalid SMS safeguard admission input");
   }

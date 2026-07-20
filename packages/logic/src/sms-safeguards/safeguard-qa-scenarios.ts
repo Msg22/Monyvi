@@ -50,6 +50,15 @@ const safeguardQaPolicyOverridesSchema = z
         burstWindowMs: z.number().int().positive(),
       })
       .strict(),
+    categoryEnrichment: z
+      .object({
+        maxUnitsPerRequest: z.number().int().positive(),
+        maxUnitsPerRollingWindow: z.number().int().positive(),
+        rollingWindowMs: z.number().int().positive(),
+        maxProviderStartsPerBurst: z.number().int().positive(),
+        burstWindowMs: z.number().int().positive(),
+      })
+      .strict(),
   })
   .strict()
   .refine(
@@ -126,6 +135,13 @@ interface PolicyOverrideInput {
   readonly historyCooldownMs?: number;
   readonly negativeStrikeThreshold?: number;
   readonly fullParser?: FullParserPolicyOverrideInput;
+  readonly categoryEnrichment?: Readonly<{
+    readonly maxUnitsPerRequest?: number;
+    readonly maxUnitsPerRollingWindow?: number;
+    readonly rollingWindowMs?: number;
+    readonly maxProviderStartsPerBurst?: number;
+    readonly burstWindowMs?: number;
+  }>;
 }
 
 const BASE_POLICY_OVERRIDES = {
@@ -138,8 +154,15 @@ const BASE_POLICY_OVERRIDES = {
     maxUnitsPerScan: 4,
     maxUnitsPerRollingWindow: 4,
     rollingWindowMs: 300_000,
-    maxPayloadBytes: 256,
-    maxEstimatedInputTokens: 64,
+    maxPayloadBytes: 4_096,
+    maxEstimatedInputTokens: 1_024,
+    maxProviderStartsPerBurst: 2,
+    burstWindowMs: 60_000,
+  },
+  categoryEnrichment: {
+    maxUnitsPerRequest: 2,
+    maxUnitsPerRollingWindow: 3,
+    rollingWindowMs: 300_000,
     maxProviderStartsPerBurst: 2,
     burstWindowMs: 60_000,
   },
@@ -164,6 +187,10 @@ function createPolicyOverrides(
     fullParser: {
       ...BASE_POLICY_OVERRIDES.fullParser,
       ...overrides.fullParser,
+    },
+    categoryEnrichment: {
+      ...BASE_POLICY_OVERRIDES.categoryEnrichment,
+      ...overrides.categoryEnrichment,
     },
   });
 }
@@ -217,6 +244,11 @@ export const SAFEGUARD_QA_SCENARIOS: Readonly<
   }),
   "history-cooldown-v1": createScenario("history-cooldown-v1", {
     historyCooldownMs: 120_000,
+    fullParser: {
+      maxUnitsPerScan: 8,
+      maxUnitsPerRollingWindow: 8,
+      maxProviderStartsPerBurst: 8,
+    },
   }),
   "oversized-candidate-v1": createScenario("oversized-candidate-v1", {
     fullParser: {
@@ -224,7 +256,13 @@ export const SAFEGUARD_QA_SCENARIOS: Readonly<
       maxEstimatedInputTokens: 16,
     },
   }),
-  "response-validity-v1": createScenario("response-validity-v1"),
+  "response-validity-v1": createScenario("response-validity-v1", {
+    fullParser: {
+      maxUnitsPerScan: 16,
+      maxUnitsPerRollingWindow: 16,
+      maxProviderStartsPerBurst: 16,
+    },
+  }),
   "negative-three-strikes-v1": createScenario("negative-three-strikes-v1", {
     negativeStrikeThreshold: 3,
   }),
