@@ -139,20 +139,20 @@ export function SmsScanProvider({
       if (reviewSessionIdRef.current !== expectedSessionId) return;
       setTransactionsState(input.transactions);
       setUnresolvedCandidates(input.unresolvedCandidates);
-      if (input.unresolvedCandidates.length === 0) {
-        setSafeguardSummary((current) =>
-          current === null
-            ? null
-            : {
-                ...current,
-                unresolvedCount: 0,
-                completionStatus:
-                  current.deferredAiCount > 0 || current.oversizedCount > 0
-                    ? "partial"
-                    : "complete",
-              }
-        );
-      }
+      setSafeguardSummary((current) =>
+        current === null
+          ? null
+          : {
+              ...current,
+              unresolvedCount: input.unresolvedCandidates.length,
+              completionStatus:
+                input.unresolvedCandidates.length > 0 ||
+                current.deferredAiCount > 0 ||
+                current.oversizedCount > 0
+                  ? "partial"
+                  : "complete",
+            }
+      );
     },
     []
   );

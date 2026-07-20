@@ -37,6 +37,12 @@ interface SmsReaderOptions {
   readonly maxCount?: number;
   /** Only read messages after this timestamp (ms since epoch). */
   readonly minDate?: number;
+  /** Only read messages at or before this timestamp (ms since epoch). */
+  readonly maxDate?: number;
+  /** Zero-based offset used for stable inbox pagination. */
+  readonly indexFrom?: number;
+  /** Explicit native ordering used to keep paged reads deterministic. */
+  readonly sortOrder?: "date DESC, _id DESC";
 
   readonly address?: string;
 }
@@ -53,6 +59,9 @@ interface SmsFilter {
   box: "inbox";
   maxCount?: number;
   minDate?: number;
+  maxDate?: number;
+  indexFrom?: number;
+  sortOrder?: "date DESC, _id DESC";
   address?: string;
 }
 
@@ -145,17 +154,25 @@ function filterFixtureMessages(
   options?: SmsReaderOptions
 ): readonly SmsMessage[] {
   const minDate = options?.minDate;
+  const maxDate = options?.maxDate;
   const filteredByAddress =
     options?.address === undefined
       ? messages
       : messages.filter((message) => message.address === options.address);
-  const filtered =
+  const filteredByMinDate =
     minDate === undefined
       ? filteredByAddress
       : filteredByAddress.filter((message) => message.date >= minDate);
-  const newestFirst = [...filtered].sort((a, b) => b.date - a.date);
+  const filtered =
+    maxDate === undefined
+      ? filteredByMinDate
+      : filteredByMinDate.filter((message) => message.date <= maxDate);
+  const newestFirst = [...filtered].sort(
+    (a, b) => b.date - a.date || b.id.localeCompare(a.id)
+  );
+  const indexFrom = options?.indexFrom ?? 0;
 
-  return newestFirst.slice(0, options?.maxCount ?? 1000);
+  return newestFirst.slice(indexFrom, indexFrom + (options?.maxCount ?? 1000));
 }
 
 function readLegacyFixtureSmsInbox(
@@ -313,8 +330,13 @@ export async function readSmsInbox(
     const filter: SmsFilter = {
       box: "inbox",
       maxCount: options?.maxCount ?? 1000,
+      ...(options?.indexFrom !== undefined
+        ? { indexFrom: options.indexFrom }
+        : {}),
       ...(options?.address ? { address: options.address } : {}),
-      ...(options?.minDate ? { minDate: options.minDate } : {}),
+      ...(options?.minDate !== undefined ? { minDate: options.minDate } : {}),
+      ...(options?.maxDate !== undefined ? { maxDate: options.maxDate } : {}),
+      ...(options?.sortOrder ? { sortOrder: options.sortOrder } : {}),
     };
 
     return new Promise<readonly SmsMessage[]>((resolve, reject) => {
@@ -326,11 +348,9 @@ export async function readSmsInbox(
         (_count: number, smsList: string) => {
           try {
             const rawMessages = JSON.parse(smsList) as readonly RawNativeSms[];
-            const messages: SmsMessage[] = rawMessages
-              .filter(
-                (message) => message.body !== "" && message.address !== ""
-              )
-              .map(mapNativeSms);
+            // Preserve the native page length so empty/corrupt rows cannot
+            // terminate pagination before later valid messages are read.
+            const messages = rawMessages.map(mapNativeSms);
             resolve(messages);
           } catch (parseError) {
             reject(

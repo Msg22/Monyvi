@@ -106,7 +106,8 @@ function createDependencies(
     },
     getPolicy: () => DEFAULT_SMS_SAFEGUARD_POLICY,
     fixedPrompt: "prompt",
-    responseSchema: "schema",
+    buildResponseSchema: (supportedCurrencies) =>
+      JSON.stringify({ supportedCurrencies }),
     shouldExclude: () => false,
     getProcessingOutcomes: async () => {
       state.terminal++;
@@ -461,6 +462,41 @@ test("passes immutable session identity, metrics, and validated policy into admi
   assert.deepEqual(input.policy, DEFAULT_SMS_SAFEGUARD_POLICY);
 });
 
+test("estimates admission tokens from the same dynamic currency schema sent to the provider", async () => {
+  const state = createState();
+  const schemaCurrencies: string[][] = [];
+  let estimatedInputTokens = 0;
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      buildResponseSchema: (supportedCurrencies) => {
+        schemaCurrencies.push([...supportedCurrencies]);
+        return JSON.stringify({ supportedCurrencies });
+      },
+      reserveWork: async (input) => {
+        state.reserve++;
+        estimatedInputTokens = input.estimatedInputTokens;
+        return {
+          requestId: "work-request-id",
+          accepted: false,
+          decisionCode: "scan_limit",
+          availableAt: null,
+          isReplay: false,
+        };
+      },
+    })
+  );
+
+  await handler(
+    post({
+      ...requestBody(),
+      supportedCurrencies: ["EGP", "USD", "LONG_TEST_CCY"],
+    })
+  );
+
+  assert.deepEqual(schemaCurrencies, [["EGP", "USD", "LONG_TEST_CCY"]]);
+  assert.ok(estimatedInputTokens > 0);
+});
+
 test("starts, reconciles, and completes one accepted provider request", async () => {
   const state = createState();
   const handler = createParseSmsHandler(createDependencies(state));
@@ -476,6 +512,42 @@ test("starts, reconciles, and completes one accepted provider request", async ()
   assert.equal(state.complete, 1);
   assert.equal(state.release, 0);
   assert.equal((data.transactions as readonly unknown[]).length, 1);
+});
+
+test("finalizes provider-started work when outcome reconciliation fails", async () => {
+  const state = createState();
+  const completions: Array<{
+    readonly completedWithProviderError: boolean;
+    readonly decisionCode: string;
+  }> = [];
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      reconcileOutcomes: async () => {
+        state.reconcile++;
+        throw new Error("outcome store unavailable");
+      },
+      completeWork: async (input) => {
+        state.complete++;
+        completions.push(input);
+        return true;
+      },
+    })
+  );
+
+  const response = await handler(post(requestBody()));
+  const data = await readJson(response);
+
+  assert.equal(response.status, 503);
+  assert.equal(data.reason, "dependency_unavailable");
+  assert.equal(state.provider, 1);
+  assert.equal(state.reconcile, 1);
+  assert.deepEqual(completions, [
+    {
+      requestId: "work-request-id",
+      completedWithProviderError: true,
+      decisionCode: "outcome_reconciliation_failed",
+    },
+  ]);
 });
 
 test("incomplete provider output creates no negative strike and remains unresolved", async () => {

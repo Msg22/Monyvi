@@ -104,7 +104,7 @@ export interface SmsScanResult {
 export interface ScanOptions {
   /** Explicit intent used to select the bounded scan policy. */
   readonly scanKind: Exclude<SmsScanKind, "live">;
-  /** Maximum messages to read from inbox. Defaults to 5000. */
+  /** Inbox page size. Every page in the bounded window is read. Defaults to 2000. */
   readonly maxCount?: number;
   /** Set of existing SMS fingerprints for dedup. */
   readonly existingFingerprints?: ReadonlySet<string>;
@@ -133,6 +133,40 @@ const SCAN_IN_PROGRESS_KEY = "@monyvi/sms_scan_in_progress";
 
 function assertScanNotAborted(signal: AbortSignal | undefined): void {
   assertNotAborted(signal, "SMS scan aborted");
+}
+
+function resolveSmsInboxPageSize(value: number | undefined): number {
+  if (value === undefined || !Number.isFinite(value) || value <= 0) {
+    return DEFAULT_MAX_COUNT;
+  }
+  return Math.max(1, Math.floor(value));
+}
+
+async function readBoundedSmsInbox(input: {
+  readonly pageSize: number;
+  readonly minDate: number;
+  readonly maxDate: number;
+  readonly abortSignal?: AbortSignal;
+}): Promise<readonly SmsMessage[]> {
+  const messages: SmsMessage[] = [];
+  let indexFrom = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    assertScanNotAborted(input.abortSignal);
+    const page = await readSmsInbox({
+      maxCount: input.pageSize,
+      minDate: input.minDate,
+      maxDate: input.maxDate,
+      indexFrom,
+      sortOrder: "date DESC, _id DESC",
+    });
+    messages.push(...page);
+    hasMore = page.length === input.pageSize;
+    indexFrom += page.length;
+  }
+
+  return messages;
 }
 
 /**
@@ -320,7 +354,7 @@ async function executeScanPipeline(
   onProgress?: (progress: SmsScanProgress) => void
 ): Promise<SmsScanResult> {
   const startTime = scanStartedAtMs;
-  const maxCount = options?.maxCount ?? DEFAULT_MAX_COUNT;
+  const pageSize = resolveSmsInboxPageSize(options?.maxCount);
   const batchSize = options?.batchSize ?? DEFAULT_BATCH_SIZE;
   const yieldInterval = options?.yieldInterval ?? DEFAULT_YIELD_INTERVAL;
   const abortSignal = options?.abortSignal;
@@ -342,9 +376,11 @@ async function executeScanPipeline(
 
   // ─── Step 1: Read SMS inbox ───────────────────────────────────────────
   assertScanNotAborted(abortSignal);
-  const inboxMessages: readonly SmsMessage[] = await readSmsInbox({
-    maxCount,
+  const inboxMessages = await readBoundedSmsInbox({
+    pageSize,
     minDate: effectiveMinDate,
+    maxDate: scanStartedAtMs,
+    abortSignal,
   });
   assertScanNotAborted(abortSignal);
 

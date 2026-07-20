@@ -84,7 +84,9 @@ export interface ParseSmsHandlerDependencies {
   readonly hasConsent: (userId: string) => Promise<boolean>;
   readonly getPolicy: () => unknown;
   readonly fixedPrompt: string;
-  readonly responseSchema: string;
+  readonly buildResponseSchema: (
+    supportedCurrencies: readonly string[]
+  ) => string;
   readonly shouldExclude: (message: ParseSmsMessage) => boolean;
   readonly getProcessingOutcomes: (
     userId: string,
@@ -239,7 +241,7 @@ function calculateRequestMetrics(
   const estimate = estimateSmsRequestInputTokensAtEdge({
     prompt: dependencies.fixedPrompt,
     categories: body.categories,
-    schema: dependencies.responseSchema,
+    schema: dependencies.buildResponseSchema(body.supportedCurrencies),
     messages: body.messages.map((message) => JSON.stringify(message)),
   });
   return { payloadBytes, estimatedInputTokens: estimate.totalTokens };
@@ -281,6 +283,17 @@ async function safelyReleaseReservation(
   }
 }
 
+async function safelyCompleteWork(
+  dependencies: ParseSmsHandlerDependencies,
+  input: CompleteWorkInput
+): Promise<boolean> {
+  try {
+    return await dependencies.completeWork(input);
+  } catch {
+    return false;
+  }
+}
+
 async function executeAdmittedWork(input: {
   readonly body: ParseSmsRequestBody;
   readonly userId: string;
@@ -315,7 +328,7 @@ async function executeAdmittedWork(input: {
       supportedCurrencies: input.body.supportedCurrencies,
     });
   } catch {
-    await input.dependencies.completeWork({
+    await safelyCompleteWork(input.dependencies, {
       requestId: input.admission.requestId,
       completedWithProviderError: true,
       decisionCode: "provider_failed",
@@ -324,7 +337,7 @@ async function executeAdmittedWork(input: {
   }
 
   if (!providerResult.isResponseSchemaValid) {
-    await input.dependencies.completeWork({
+    await safelyCompleteWork(input.dependencies, {
       requestId: input.admission.requestId,
       completedWithProviderError: true,
       decisionCode: "response_invalid",
@@ -334,7 +347,7 @@ async function executeAdmittedWork(input: {
 
   const submittedCandidates = toNegativeCandidates(input.messages);
   if (providerResult.completionStatus !== "complete") {
-    await input.dependencies.completeWork({
+    await safelyCompleteWork(input.dependencies, {
       requestId: input.admission.requestId,
       completedWithProviderError: true,
       decisionCode: providerResult.completionStatus,
@@ -350,18 +363,28 @@ async function executeAdmittedWork(input: {
     });
   }
 
-  const reconciliation = await input.dependencies.reconcileOutcomes({
-    userId: input.userId,
-    submittedCandidates,
-    requestId: input.admission.requestId,
-    completionStatus: providerResult.completionStatus,
-    transactions: providerResult.transactions.map((transaction) => ({
-      messageId: transaction.messageId,
-      isTrusted: transaction.isTrusted,
-    })),
-  });
+  let reconciliation: SmsNegativeOutcomeReconciliation;
+  try {
+    reconciliation = await input.dependencies.reconcileOutcomes({
+      userId: input.userId,
+      submittedCandidates,
+      requestId: input.admission.requestId,
+      completionStatus: providerResult.completionStatus,
+      transactions: providerResult.transactions.map((transaction) => ({
+        messageId: transaction.messageId,
+        isTrusted: transaction.isTrusted,
+      })),
+    });
+  } catch {
+    await safelyCompleteWork(input.dependencies, {
+      requestId: input.admission.requestId,
+      completedWithProviderError: true,
+      decisionCode: "outcome_reconciliation_failed",
+    });
+    return refusal("dependency_unavailable", 503);
+  }
   if (reconciliation.status === "ignored") {
-    await input.dependencies.completeWork({
+    await safelyCompleteWork(input.dependencies, {
       requestId: input.admission.requestId,
       completedWithProviderError: true,
       decisionCode: reconciliation.reason,
@@ -369,7 +392,7 @@ async function executeAdmittedWork(input: {
     return refusal("response_invalid", 502);
   }
 
-  const didComplete = await input.dependencies.completeWork({
+  const didComplete = await safelyCompleteWork(input.dependencies, {
     requestId: input.admission.requestId,
     completedWithProviderError: false,
     decisionCode: "complete",

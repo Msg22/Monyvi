@@ -32,7 +32,15 @@ jest.mock("react-native", () => ({
 const mockRandomUuid = jest.fn(() => "scan-session-id");
 const mockReadSmsInbox = jest.fn<
   Promise<readonly SmsMessage[]>,
-  [{ readonly maxCount?: number; readonly minDate?: number }?]
+  [
+    {
+      readonly maxCount?: number;
+      readonly minDate?: number;
+      readonly maxDate?: number;
+      readonly indexFrom?: number;
+      readonly sortOrder?: "date DESC, _id DESC";
+    }?,
+  ]
 >();
 const mockLoadSmsScanSafeguardState = jest.fn();
 interface MockCheckpointState {
@@ -78,6 +86,9 @@ jest.mock("@/services/sms-reader-service", () => ({
   readSmsInbox: (options?: {
     readonly maxCount?: number;
     readonly minDate?: number;
+    readonly maxDate?: number;
+    readonly indexFrom?: number;
+    readonly sortOrder?: "date DESC, _id DESC";
   }): Promise<readonly SmsMessage[]> => mockReadSmsInbox(options),
 }));
 
@@ -269,7 +280,43 @@ describe("SMS sync checkpoint integration", () => {
     expect(mockReadSmsInbox).toHaveBeenCalledWith({
       maxCount: 100,
       minDate: scanStartedAtMs - 30 * 24 * 60 * 60 * 1000,
+      maxDate: scanStartedAtMs,
+      indexFrom: 0,
+      sortOrder: "date DESC, _id DESC",
     });
+  });
+
+  it("pages through the complete bounded inbox window before checkpointing", async () => {
+    const scanStartedAtMs = Date.parse("2026-07-20T12:00:00.000Z");
+    jest.spyOn(Date, "now").mockReturnValue(scanStartedAtMs);
+    const newest = createSmsMessage({ id: "newest", date: scanStartedAtMs });
+    const middle = createSmsMessage({
+      id: "middle",
+      date: scanStartedAtMs - 1,
+    });
+    const oldest = createSmsMessage({
+      id: "oldest",
+      date: scanStartedAtMs - 2,
+    });
+    mockReadSmsInbox.mockImplementation((readerOptions) => {
+      const offset = readerOptions?.indexFrom ?? 0;
+      return Promise.resolve(
+        [newest, middle, oldest].slice(offset, offset + 2)
+      );
+    });
+    mockComputeSmsFingerprint.mockImplementation((input) =>
+      Promise.resolve(`fp-${input.receivedAtMs}`)
+    );
+
+    await scanAndParseSms(options({ maxCount: 2 }));
+
+    expect(mockReadSmsInbox).toHaveBeenCalledTimes(2);
+    expect(mockReadSmsInbox).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ indexFrom: 2, maxCount: 2 })
+    );
+    const finalizeInput = mockFinalizeSmsScanCheckpoint.mock.calls[0]?.[0];
+    expect(finalizeInput?.states).toHaveLength(3);
   });
 
   it("excludes rows before the exact cutoff before progress or parsing", async () => {

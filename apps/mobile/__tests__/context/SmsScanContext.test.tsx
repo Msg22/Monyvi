@@ -102,6 +102,40 @@ describe("SmsScanContext review session", () => {
     expect(second.result.current.safeguardSummary).toBeNull();
   });
 
+  it("refreshes the safeguard unresolved count after a partial retry", () => {
+    const { result } = renderHook(() => useSmsScanContext(), { wrapper });
+    const firstCandidate = scanResult().unresolvedCandidates[0];
+    if (!firstCandidate) throw new Error("Expected retry fixture candidate");
+    const secondCandidate = {
+      ...firstCandidate,
+      candidate: {
+        ...firstCandidate.candidate,
+        message: { ...firstCandidate.candidate.message, id: "2" },
+        smsFingerprint: "fp-2",
+      },
+    };
+    act(() =>
+      result.current.setReviewSession({
+        ...scanResult(),
+        unresolvedCandidates: [firstCandidate, secondCandidate],
+        safeguardSummary: { ...safeguardSummary, unresolvedCount: 2 },
+      })
+    );
+
+    act(() =>
+      result.current.updateReviewSession(
+        {
+          transactions: [],
+          unresolvedCandidates: [secondCandidate],
+        },
+        result.current.reviewSessionId
+      )
+    );
+
+    expect(result.current.safeguardSummary?.unresolvedCount).toBe(1);
+    expect(result.current.safeguardSummary?.completionStatus).toBe("partial");
+  });
+
   it("rejects a stale retry result after the review session is cleared", () => {
     const { result } = renderHook(() => useSmsScanContext(), { wrapper });
     act(() => result.current.setReviewSession(scanResult()));

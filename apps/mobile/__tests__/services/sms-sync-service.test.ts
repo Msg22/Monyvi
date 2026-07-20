@@ -92,7 +92,15 @@ jest.mock("expo-crypto", () => ({
 
 const mockReadSmsInbox = jest.fn<
   Promise<readonly SmsMessage[]>,
-  [{ readonly maxCount?: number; readonly minDate?: number }?]
+  [
+    {
+      readonly maxCount?: number;
+      readonly minDate?: number;
+      readonly maxDate?: number;
+      readonly indexFrom?: number;
+      readonly sortOrder?: "date DESC, _id DESC";
+    }?,
+  ]
 >(() => Promise.resolve([]));
 const mockLoadSmsScanSafeguardState = jest.fn();
 const mockFinalizeSmsScanCheckpoint = jest.fn();
@@ -101,7 +109,15 @@ const mockRecordOversizedSmsOutcome = jest.fn();
 jest.mock("@/services/sms-reader-service", () => ({
   readSmsInbox: (...args: unknown[]) =>
     mockReadSmsInbox(
-      ...(args as [{ readonly maxCount?: number; readonly minDate?: number }?])
+      ...(args as [
+        {
+          readonly maxCount?: number;
+          readonly minDate?: number;
+          readonly maxDate?: number;
+          readonly indexFrom?: number;
+          readonly sortOrder?: "date DESC, _id DESC";
+        }?,
+      ])
     ),
 }));
 

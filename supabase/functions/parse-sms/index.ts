@@ -551,7 +551,8 @@ const parseSmsHandler = createParseSmsHandler({
   hasConsent: hasActiveAiProcessingConsent,
   getPolicy: () => readSmsSafeguardPolicyFromEnvironment(Deno.env.get),
   fixedPrompt: buildSystemPrompt(""),
-  responseSchema: JSON.stringify(buildResponseSchema([])),
+  buildResponseSchema: (supportedCurrencies) =>
+    JSON.stringify(buildResponseSchema(supportedCurrencies)),
   shouldExclude: (message) =>
     isExcludedBeforeSmsParsingAtEdge(message.body) ||
     isLikelyCorruptedSmsText(message.body),
