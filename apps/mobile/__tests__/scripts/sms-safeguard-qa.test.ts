@@ -12,6 +12,9 @@ interface SmsSafeguardQaScript {
     options?: { readonly required?: boolean }
   ) => string | null;
   readonly assertKnownSafeguardQaProfile: (profileId: string) => void;
+  readonly buildSafeguardDevelopmentStartArgs: (
+    args: readonly string[]
+  ) => readonly string[];
   readonly buildQaRequestKeyResetFilter: () => string;
   readonly buildServerSafeguardDiagnostics: (input: {
     readonly profileId: string;
@@ -87,6 +90,23 @@ describe("SMS safeguard QA launcher", () => {
     expect(typeof environment.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID).toBe(
       "string"
     );
+  });
+
+  test("clears Metro cache for app-facing safeguard profiles", () => {
+    expect(
+      script.buildSafeguardDevelopmentStartArgs([
+        "--wireless-device",
+        "--scenario",
+        "partial-quota-v1",
+      ])
+    ).toEqual(["--wireless-device", "--clear"]);
+
+    expect(
+      script.buildSafeguardDevelopmentStartArgs([
+        "--wireless-device",
+        "--clear",
+      ])
+    ).toEqual(["--wireless-device", "--clear"]);
   });
 
   test("creates one bounded run identity for a full-suite launch", () => {

@@ -946,12 +946,19 @@ async function runTestsWithLocalEdge(args, environment) {
   }
 }
 
-function startDevelopmentServer(args, environment, profileId) {
+function buildSafeguardDevelopmentStartArgs(args) {
   const startArgs = args.filter(
     (arg, index) => arg !== "--scenario" && args[index - 1] !== "--scenario"
   );
   const resolvedStartArgs =
     startArgs.length > 0 ? startArgs : ["--wireless-device"];
+  return resolvedStartArgs.includes("--clear")
+    ? resolvedStartArgs
+    : [...resolvedStartArgs, "--clear"];
+}
+
+function startDevelopmentServer(args, environment, profileId) {
+  const resolvedStartArgs = buildSafeguardDevelopmentStartArgs(args);
   const result = spawnSync(
     process.execPath,
     [startScript, "--fixture-sms", ...resolvedStartArgs],
@@ -999,6 +1006,7 @@ if (require.main === module) {
 module.exports = {
   QA_PROVIDER_OUTCOME_MATRIX,
   assertKnownSafeguardQaProfile,
+  buildSafeguardDevelopmentStartArgs,
   buildQaRequestKeyResetFilter,
   buildServerSafeguardDiagnostics,
   buildSafeguardQaEnvironment,
