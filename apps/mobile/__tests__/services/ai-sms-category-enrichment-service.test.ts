@@ -287,7 +287,7 @@ describe("ai-sms-category-enrichment-service", () => {
           JSON.stringify({
             categories: [],
             reason: "rolling_limit",
-            availableAt: "2026-07-21T10:00:00.000Z",
+            availableAt: "2026-07-21T12:00:00.000000+02:00",
           }),
           { status: 429, headers: { "content-type": "application/json" } }
         ),
@@ -305,7 +305,7 @@ describe("ai-sms-category-enrichment-service", () => {
       refusalReason: "rolling_limit",
       availability: {
         reason: "rolling_limit",
-        availableAt: "2026-07-21T10:00:00.000Z",
+        availableAt: "2026-07-21T12:00:00.000000+02:00",
       },
     });
     expect(result.outcomesByCandidateId.size).toBe(0);

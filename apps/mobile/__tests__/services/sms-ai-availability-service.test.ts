@@ -40,6 +40,24 @@ describe("sms-ai-availability-service", () => {
     });
   });
 
+  it("accepts PostgreSQL timestamptz offsets", async () => {
+    mockInvoke.mockResolvedValue({
+      data: {
+        serverNow: "2026-07-20T14:01:48.335842+00:00",
+        blockers: {},
+        reason: "rolling_limit",
+        availableAt: "2026-07-21T14:01:48.335842+00:00",
+      },
+      error: null,
+    });
+
+    await expect(getSmsAiAvailability()).resolves.toEqual({
+      serverNow: "2026-07-20T14:01:48.335842+00:00",
+      reason: "rolling_limit",
+      availableAt: "2026-07-21T14:01:48.335842+00:00",
+    });
+  });
+
   it("fails closed at the adapter boundary for malformed or unavailable responses", async () => {
     mockInvoke.mockResolvedValueOnce({
       data: { availableAt: "tomorrow" },

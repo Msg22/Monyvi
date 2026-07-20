@@ -62,6 +62,11 @@ type SmsAiAdmissionDecision =
   provider call.
 - `provider_started` is recorded immediately before the provider call and
   creates the rolling usage/burst event exactly once.
+- A provider-start recheck that discovers terminal fingerprints MUST return
+  those fingerprints and keep every non-terminal peer explicitly unresolved; it
+  MUST NOT report the whole request as complete or silently omit peers.
+- A provider-start capacity refusal carries the authoritative server
+  `availableAt` value through the Edge refusal envelope when one is known.
 - Internal retries made by the provider adapter belong to that same admitted
   work request. They create no additional user units or burst events; aggregate
   provider-attempt telemetry may count them separately without payload data.

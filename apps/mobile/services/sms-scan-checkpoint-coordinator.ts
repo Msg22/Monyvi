@@ -19,6 +19,7 @@ export type SmsCheckpointOutcome =
   | "ai_negative"
   | "candidate_too_large"
   | "future_durable"
+  | "trusted_local_match"
   | "memory_suggestion"
   | "unresolved"
   | "cancelled"
@@ -58,6 +59,7 @@ const DURABLE_OUTCOMES: ReadonlySet<SmsCheckpointOutcome> = new Set([
   "ai_negative",
   "candidate_too_large",
   "future_durable",
+  "trusted_local_match",
 ]);
 
 export async function loadSmsScanSafeguardState(

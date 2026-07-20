@@ -49,6 +49,7 @@ describe("deterministic SMS safeguard QA scenarios", () => {
         "historyCooldownMs",
         "negativeStrikeThreshold",
         "fullParser",
+        "categoryEnrichment",
       ]);
       expect(Object.keys(scenario.policyOverrides.fullParser)).toEqual([
         "maxUnitsPerRequest",
@@ -67,6 +68,11 @@ describe("deterministic SMS safeguard QA scenarios", () => {
       ).toBe(true);
       expect(
         Object.values(scenario.policyOverrides.fullParser).every(
+          Number.isInteger
+        )
+      ).toBe(true);
+      expect(
+        Object.values(scenario.policyOverrides.categoryEnrichment).every(
           Number.isInteger
         )
       ).toBe(true);

@@ -129,7 +129,7 @@ const CategoryRefusalEnvelopeSchema = z
   .object({
     categories: z.array(z.unknown()),
     reason: z.string().trim().min(1),
-    availableAt: z.string().datetime().nullable(),
+    availableAt: z.string().datetime({ offset: true }).nullable(),
   })
   .strict();
 

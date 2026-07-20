@@ -4,9 +4,9 @@ import { supabase } from "./supabase";
 
 const SmsAiAvailabilityResponseSchema = z
   .object({
-    serverNow: z.string().datetime(),
+    serverNow: z.string().datetime({ offset: true }),
     reason: z.string().nullable(),
-    availableAt: z.string().datetime().nullable(),
+    availableAt: z.string().datetime({ offset: true }).nullable(),
     blockers: z.unknown(),
   })
   .strict();

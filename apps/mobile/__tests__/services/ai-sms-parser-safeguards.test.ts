@@ -131,7 +131,11 @@ describe("AI SMS client safeguards", () => {
       undefined,
       undefined,
       "user-a",
-      { scanSessionId: "scan-session", scanKind: "history" }
+      {
+        scanSessionId: "scan-session",
+        scanKind: "history",
+        scanStartedAtMs: Date.parse("2026-07-20T12:00:00.000Z"),
+      }
     );
 
     const body = mockInvoke.mock.calls[0]?.[1].body as Record<string, unknown>;
@@ -139,6 +143,7 @@ describe("AI SMS client safeguards", () => {
     expect(typeof body.requestKey).toBe("string");
     expect(body.scanSessionId).toBe("scan-session");
     expect(body.scanKind).toBe("history");
+    expect(body.scanStartedAt).toBe("2026-07-20T12:00:00.000Z");
     expect(body.messages).toEqual([
       expect.objectContaining({
         id: "nbe_debit_purchase",
@@ -211,6 +216,10 @@ describe("AI SMS client safeguards", () => {
         return body.messages.length;
       });
       expect(chunkSizes).toEqual([2, 1]);
+      const scanStartedAtValues = mockInvoke.mock.calls.map(
+        ([, options]) => (options.body as Record<string, unknown>).scanStartedAt
+      );
+      expect(new Set(scanStartedAtValues).size).toBe(1);
     } finally {
       jest.clearAllTimers();
       jest.useRealTimers();
@@ -250,7 +259,7 @@ describe("AI SMS client safeguards", () => {
         context: new Response(
           JSON.stringify({
             reason: "rolling_limit",
-            availableAt: "2026-07-21T10:00:00.000Z",
+            availableAt: "2026-07-21T12:00:00.000000+02:00",
           }),
           { status: 429, headers: { "content-type": "application/json" } }
         ),
@@ -261,7 +270,7 @@ describe("AI SMS client safeguards", () => {
 
     expect(result.availability).toEqual({
       reason: "rolling_limit",
-      availableAt: "2026-07-21T10:00:00.000Z",
+      availableAt: "2026-07-21T12:00:00.000000+02:00",
     });
     expect(result.unresolvedCandidates).toEqual([
       expect.objectContaining({

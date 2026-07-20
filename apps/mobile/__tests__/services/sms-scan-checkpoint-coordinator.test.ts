@@ -30,6 +30,7 @@ const durableOutcomes = [
   "ai_negative",
   "candidate_too_large",
   "future_durable",
+  "trusted_local_match",
 ] as const;
 const nonDurableOutcomes = [
   "memory_suggestion",

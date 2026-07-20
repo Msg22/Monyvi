@@ -101,7 +101,10 @@ jest.mock("../../hooks/useCurrentUser", () => ({
 }));
 
 jest.mock("../../hooks/useMarketRates", () => ({
-  useMarketRates: (): { latestRates: null } => ({ latestRates: null }),
+  useMarketRates: (): { latestRates: null; isLoading: false } => ({
+    latestRates: null,
+    isLoading: false,
+  }),
 }));
 
 jest.mock("../../hooks/useNetWorth", () => ({

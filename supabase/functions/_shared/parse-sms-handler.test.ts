@@ -51,6 +51,7 @@ function requestBody(
     requestKey: "request-key",
     scanSessionId: "scan-session",
     scanKind: "incremental",
+    scanStartedAt: "2026-07-20T12:00:00.000Z",
     messages,
     categories: "category tree",
     supportedCurrencies: ["EGP"],
@@ -132,6 +133,7 @@ function createDependencies(
         started: true,
         decisionCode: "provider_started",
         terminalFingerprints: [],
+        availableAt: null,
       };
     },
     executeProvider: async () => {
@@ -196,6 +198,43 @@ test("rejects messages outside the rolling window or implausibly in the future",
     400
   );
   assert.equal(state.reserve, 0);
+});
+
+test("preserves the inclusive client scan-start cutoff across Edge transit delay", async () => {
+  const state = createState();
+  const scanStartedAt = "2026-07-20T12:00:00.000Z";
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      getServerNowMs: () => Date.parse("2026-07-20T12:00:05.000Z"),
+    })
+  );
+  const boundaryMessage = {
+    ...message(),
+    date: "2026-06-20T12:00:00.000Z",
+  };
+
+  const response = await handler(
+    post({ ...requestBody([boundaryMessage]), scanStartedAt })
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(state.provider, 1);
+});
+
+test("rejects stale or implausibly future scan-start clocks before paid work", async () => {
+  for (const scanStartedAt of [
+    "2026-07-20T11:54:59.999Z",
+    "2026-07-20T12:05:00.001Z",
+  ]) {
+    const state = createState();
+    const handler = createParseSmsHandler(createDependencies(state));
+
+    const response = await handler(post({ ...requestBody(), scanStartedAt }));
+
+    assert.equal(response.status, 400);
+    assert.equal(state.reserve, 0);
+    assert.equal(state.provider, 0);
+  }
 });
 
 async function readJson(response: Response): Promise<Record<string, unknown>> {
@@ -360,6 +399,55 @@ test("returns without reservation when every candidate is already terminal", asy
   assert.equal(state.provider, 0);
   assert.deepEqual(data.transactions, []);
   assert.deepEqual(data.terminalFingerprints, ["fingerprint-1"]);
+});
+
+test("keeps non-terminal peers retryable when a terminal outcome wins the provider-start race", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      markProviderStarted: async () => {
+        state.start++;
+        return {
+          started: false,
+          decisionCode: "terminal_outcome",
+          terminalFingerprints: ["fingerprint-1"],
+          availableAt: null,
+        };
+      },
+    })
+  );
+
+  const response = await handler(post(requestBody([message(1), message(2)])));
+  const data = await readJson(response);
+
+  assert.equal(response.status, 200);
+  assert.equal(state.provider, 0);
+  assert.equal(data.completionStatus, "truncated");
+  assert.deepEqual(data.terminalFingerprints, ["fingerprint-1"]);
+  assert.deepEqual(data.unresolvedFingerprints, ["fingerprint-2"]);
+});
+
+test("preserves provider-start cooldown availability in the refusal envelope", async () => {
+  const state = createState();
+  const availableAt = "2026-07-21T12:00:00.000+00:00";
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      markProviderStarted: async () => ({
+        started: false,
+        decisionCode: "history_cooldown",
+        terminalFingerprints: [],
+        availableAt,
+      }),
+    })
+  );
+
+  const response = await handler(post(requestBody()));
+  const data = await readJson(response);
+
+  assert.equal(response.status, 429);
+  assert.equal(data.reason, "history_cooldown");
+  assert.equal(data.availableAt, availableAt);
+  assert.equal(state.provider, 0);
 });
 
 test("suppresses non-terminal strikes for ordinary scans but permits history retry", async () => {

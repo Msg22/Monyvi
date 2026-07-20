@@ -42,8 +42,8 @@ interface SmsSafeguardQaScript {
   }) => Readonly<Record<string, unknown>>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const script =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   require("../../scripts/sms-safeguard-qa.js") as SmsSafeguardQaScript;
 
 describe("SMS safeguard QA launcher", () => {
@@ -63,20 +63,22 @@ describe("SMS safeguard QA launcher", () => {
   });
 
   test("passes the selected profile to Metro without enabling a real provider or inbox", () => {
-    expect(
-      script.buildSafeguardQaEnvironment(
-        { NODE_ENV: "development" },
-        "partial-quota-v1"
-      )
-    ).toMatchObject({
+    const environment = script.buildSafeguardQaEnvironment(
+      { NODE_ENV: "development" },
+      "partial-quota-v1"
+    );
+
+    expect(environment).toMatchObject({
       EXPO_PUBLIC_SMS_SAFEGUARD_QA: "true",
       EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE: "partial-quota-v1",
       EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER: "simulated",
       EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX: "fixture",
-      EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID: expect.any(String),
       EXPO_PUBLIC_SMS_INBOX_MODE: "fixture",
       SMS_SAFEGUARD_QA_ENABLED: "true",
     });
+    expect(typeof environment.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID).toBe(
+      "string"
+    );
   });
 
   test("creates one bounded run identity for a full-suite launch", () => {

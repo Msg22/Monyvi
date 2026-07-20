@@ -23,6 +23,7 @@ const CORS_HEADERS: Readonly<Record<string, string>> = {
     "authorization, x-client-info, apikey, content-type",
 };
 const MAX_FUTURE_MESSAGE_SKEW_MS = 5 * 60 * 1000;
+const MAX_SCAN_START_DRIFT_MS = 5 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface ParseSmsMessage {
@@ -123,6 +124,7 @@ interface ParseSmsRequestBody {
   readonly requestKey: string;
   readonly scanSessionId: string | null;
   readonly scanKind: SmsScanKind;
+  readonly scanStartedAtMs: number;
   readonly messages: readonly ParseSmsMessage[];
   readonly categories: string;
   readonly supportedCurrencies: readonly string[];
@@ -206,12 +208,14 @@ function parseRequestBody(value: unknown): ParseSmsRequestBody | null {
   }
   const scanKind = value.scanKind as SmsScanKind;
   const scanSessionId = value.scanSessionId;
+  const scanStartedAtMs = Date.parse(String(value.scanStartedAt));
   if (
     !(
       (scanKind === "live" &&
         (scanSessionId === null || isNonEmptyString(scanSessionId, 160))) ||
       (scanKind !== "live" && isNonEmptyString(scanSessionId, 160))
-    )
+    ) ||
+    !Number.isFinite(scanStartedAtMs)
   ) {
     return null;
   }
@@ -232,6 +236,7 @@ function parseRequestBody(value: unknown): ParseSmsRequestBody | null {
     requestKey: value.requestKey,
     scanSessionId: scanSessionId as string | null,
     scanKind,
+    scanStartedAtMs,
     messages: parsedMessages,
     categories: value.categories,
     supportedCurrencies: value.supportedCurrencies as string[],
@@ -256,10 +261,17 @@ function calculateRequestMetrics(
 async function hasValidCanonicalMessages(
   messages: readonly ParseSmsMessage[],
   lookbackDays: number,
+  scanStartedAtMs: number,
   dependencies: ParseSmsHandlerDependencies
 ): Promise<boolean> {
   const nowMs = dependencies.getServerNowMs();
-  const minimumReceivedAtMs = nowMs - lookbackDays * DAY_MS;
+  if (
+    scanStartedAtMs < nowMs - MAX_SCAN_START_DRIFT_MS ||
+    scanStartedAtMs > nowMs + MAX_SCAN_START_DRIFT_MS
+  ) {
+    return false;
+  }
+  const minimumReceivedAtMs = scanStartedAtMs - lookbackDays * DAY_MS;
   const maximumReceivedAtMs = nowMs + MAX_FUTURE_MESSAGE_SKEW_MS;
 
   for (const message of messages) {
@@ -296,6 +308,19 @@ function completedWithoutProvider(
     negativeFingerprints,
     terminalFingerprints,
     unresolvedFingerprints: [],
+  });
+}
+
+function partialWithoutProvider(
+  terminalFingerprints: readonly string[],
+  unresolvedFingerprints: readonly string[]
+): Response {
+  return jsonResponse({
+    transactions: [],
+    completionStatus: "truncated",
+    negativeFingerprints: [],
+    terminalFingerprints,
+    unresolvedFingerprints,
   });
 }
 
@@ -350,14 +375,21 @@ async function executeAdmittedWork(input: {
       startDecision.decisionCode === "terminal_outcome" &&
       startDecision.terminalFingerprints.length > 0
     ) {
-      return completedWithoutProvider([
+      const terminalFingerprints = [
         ...new Set([
           ...input.terminalFingerprints,
           ...startDecision.terminalFingerprints,
         ]),
-      ]);
+      ];
+      const terminalSet = new Set(terminalFingerprints);
+      return partialWithoutProvider(
+        terminalFingerprints,
+        input.messages
+          .filter((message) => !terminalSet.has(message.smsFingerprint))
+          .map((message) => message.smsFingerprint)
+      );
     }
-    return refusal(startDecision.decisionCode, 429);
+    return refusal(startDecision.decisionCode, 429, startDecision.availableAt);
   }
 
   let providerResult: SmsProviderExecutionResult;
@@ -487,6 +519,7 @@ async function handlePost(
     !(await hasValidCanonicalMessages(
       body.messages,
       policy.lookbackDays,
+      body.scanStartedAtMs,
       dependencies
     ))
   ) {

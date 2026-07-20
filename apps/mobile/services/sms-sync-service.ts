@@ -368,7 +368,7 @@ async function executeScanPipeline(
   scanStartedAtMs: number,
   onProgress?: (progress: SmsScanProgress) => void
 ): Promise<SmsScanResult> {
-  const startTime = scanStartedAtMs;
+  const durationStartedAtMs = performance.now();
   const pageSize = resolveSmsInboxPageSize(options?.maxCount);
   const batchSize = options?.batchSize ?? DEFAULT_BATCH_SIZE;
   const yieldInterval = options?.yieldInterval ?? DEFAULT_YIELD_INTERVAL;
@@ -402,7 +402,8 @@ async function executeScanPipeline(
   // Keep the orchestration boundary authoritative even if a platform adapter
   // returns an out-of-window row despite receiving minDate.
   const messages = inboxMessages.filter(
-    (message) => message.date >= effectiveMinDate
+    (message) =>
+      message.date >= effectiveMinDate && message.date <= scanStartedAtMs
   );
   const fingerprintedMessages = await Promise.all(
     messages.map(async (message) => ({
@@ -514,7 +515,7 @@ async function executeScanPipeline(
       candidatesFound: candidates.length,
       currentPhase: "filtering",
       currentSender: batch[batch.length - 1]?.message.address ?? "",
-      scanStartedAt: startTime,
+      scanStartedAt: scanStartedAtMs,
     });
 
     // Yield to UI thread periodically
@@ -539,7 +540,7 @@ async function executeScanPipeline(
     currentPhase: "ai-parsing",
     currentSender: "",
     aiChunksCompleted: 0,
-    scanStartedAt: startTime,
+    scanStartedAt: scanStartedAtMs,
   });
 
   // Track per-chunk durations for estimated time remaining calculation
@@ -577,7 +578,7 @@ async function executeScanPipeline(
         currentSender: "",
         aiChunksCompleted: aiProgress.chunksCompleted,
         aiChunksTotal: aiProgress.totalChunks,
-        scanStartedAt: startTime,
+        scanStartedAt: scanStartedAtMs,
         estimatedRemainingMs,
       });
     },
@@ -588,10 +589,11 @@ async function executeScanPipeline(
       requestContext: {
         scanSessionId,
         scanKind: options.scanKind,
+        scanStartedAtMs,
       },
     }
   );
-  await assertExpectedCurrentUser(initiatingScope.userId);
+  await assertPinnedScanContext(initiatingScope.userId, abortSignal);
 
   logger.info(
     "smsSync.parserDiagnostics",
@@ -612,6 +614,9 @@ async function executeScanPipeline(
   const transactionFingerprints = new Set(
     deduplicatedTransactions.map((transaction) => transaction.smsFingerprint)
   );
+  const durableLocalFingerprints = new Set(
+    aiResult.durableLocalFingerprints ?? []
+  );
   const durableNegativeFingerprints = new Set([
     ...(aiResult.durableNegativeFingerprints ?? []),
     ...(aiResult.terminalFingerprints ?? []),
@@ -621,40 +626,47 @@ async function executeScanPipeline(
       (candidate) => candidate.smsFingerprint
     )
   );
-  await Promise.all(
-    (aiResult.oversizedCandidates ?? []).map((candidate) =>
-      recordOversizedSmsOutcome({
-        userId: initiatingScope.userId,
-        smsFingerprint: candidate.smsFingerprint,
-        originalReceivedAtMs: candidate.message.date,
-        nowMs: Date.now(),
-        lookbackDays: DEFAULT_SMS_SCAN_POLICY.lookbackDays,
-      })
-    )
-  );
+  await assertPinnedScanContext(initiatingScope.userId, abortSignal);
+  for (const candidate of aiResult.oversizedCandidates ?? []) {
+    await recordOversizedSmsOutcome({
+      userId: initiatingScope.userId,
+      smsFingerprint: candidate.smsFingerprint,
+      originalReceivedAtMs: candidate.message.date,
+      nowMs: scanStartedAtMs,
+      lookbackDays: DEFAULT_SMS_SCAN_POLICY.lookbackDays,
+    });
+    await assertPinnedScanContext(initiatingScope.userId, abortSignal);
+  }
   const finalizedCheckpointStates: readonly SmsCheckpointMessageState[] =
     checkpointStates.map((state) => ({
       ...state,
       outcome:
         state.outcome ??
-        (transactionFingerprints.has(state.fingerprint)
-          ? "memory_suggestion"
-          : oversizedFingerprints.has(state.fingerprint)
-            ? "candidate_too_large"
-            : durableNegativeFingerprints.has(state.fingerprint)
-              ? "ai_negative"
-              : "unresolved"),
+        (durableLocalFingerprints.has(state.fingerprint)
+          ? "trusted_local_match"
+          : transactionFingerprints.has(state.fingerprint)
+            ? "memory_suggestion"
+            : oversizedFingerprints.has(state.fingerprint)
+              ? "candidate_too_large"
+              : durableNegativeFingerprints.has(state.fingerprint)
+                ? "ai_negative"
+                : "unresolved"),
     }));
 
+  await assertPinnedScanContext(initiatingScope.userId, abortSignal);
   await finalizeSmsScanCheckpoint({
     userId: initiatingScope.userId,
     processingPolicyVersion,
-    nowMs: Date.now(),
+    nowMs: scanStartedAtMs,
     states: finalizedCheckpointStates,
   });
+  await assertPinnedScanContext(initiatingScope.userId, abortSignal);
 
   // ─── Step 4: Return results ───────────────────────────────────────────
-  const durationMs = Date.now() - startTime;
+  const durationMs = Math.max(
+    0,
+    Math.round(performance.now() - durationStartedAtMs)
+  );
 
   onProgress?.({
     totalMessages,
@@ -663,7 +675,7 @@ async function executeScanPipeline(
     candidatesFound: candidates.length,
     currentPhase: "complete",
     currentSender: "",
-    scanStartedAt: startTime,
+    scanStartedAt: scanStartedAtMs,
   });
 
   logger.info("smsSync.aiParsing.complete", {
@@ -683,4 +695,13 @@ async function executeScanPipeline(
     parserDiagnostics: aiResult.diagnostics,
     safeguardSummary: aiResult.safeguardSummary,
   };
+}
+
+async function assertPinnedScanContext(
+  expectedUserId: string,
+  abortSignal: AbortSignal | undefined
+): Promise<void> {
+  assertScanNotAborted(abortSignal);
+  await assertExpectedCurrentUser(expectedUserId);
+  assertScanNotAborted(abortSignal);
 }

@@ -76,6 +76,7 @@ export interface SmsAiAvailability {
 export interface SmsAiRequestContext {
   readonly scanSessionId: string | null;
   readonly scanKind: "initial" | "incremental" | "history" | "live";
+  readonly scanStartedAtMs?: number;
 }
 
 export interface AiUnresolvedCandidate {
@@ -295,6 +296,9 @@ async function invokeParseChunk(
       requestKey,
       scanSessionId: requestContext.scanSessionId,
       scanKind: requestContext.scanKind,
+      scanStartedAt: new Date(
+        requestContext.scanStartedAtMs ?? Date.now()
+      ).toISOString(),
       messages: messagesPayload,
       categories: buildCategoryTree(context.categories),
       supportedCurrencies: context.supportedCurrencies,
@@ -596,9 +600,13 @@ export async function parseSmsWithAi(
         smsFingerprint: c.smsFingerprint,
       };
     });
-    const resolvedRequestContext: SmsAiRequestContext = requestContext ?? {
-      scanSessionId: Crypto.randomUUID(),
-      scanKind: "incremental",
+    const resolvedRequestContext: SmsAiRequestContext = {
+      scanSessionId:
+        requestContext === undefined
+          ? Crypto.randomUUID()
+          : requestContext.scanSessionId,
+      scanKind: requestContext?.scanKind ?? "incremental",
+      scanStartedAtMs: requestContext?.scanStartedAtMs ?? Date.now(),
     };
 
     // Build a queue of chunks to process. Retry-with-split may add

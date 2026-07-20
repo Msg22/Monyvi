@@ -261,7 +261,8 @@ function buildQaRequestBody(
   messages,
   scanKind,
   scanSessionId,
-  providerOutcome
+  providerOutcome,
+  scanStartedAtMs
 ) {
   return {
     qaProfileId: profileId,
@@ -269,6 +270,7 @@ function buildQaRequestBody(
     requestKey: `${runId}:${randomUUID()}`,
     scanSessionId,
     scanKind,
+    scanStartedAt: new Date(scanStartedAtMs ?? Date.now()).toISOString(),
     messages: messages.map((message) => ({
       id: message.id,
       body: message.body,
@@ -289,7 +291,8 @@ async function invokeQaChunk(
   messages,
   scanKind,
   session,
-  providerOutcome
+  providerOutcome,
+  scanStartedAtMs
 ) {
   const response = await client.functions.invoke("sms-safeguard-qa", {
     body: buildQaRequestBody(
@@ -298,7 +301,8 @@ async function invokeQaChunk(
       messages,
       scanKind,
       session,
-      providerOutcome
+      providerOutcome,
+      scanStartedAtMs
     ),
     headers: { "x-sms-safeguard-qa-run-id": runId },
   });
@@ -634,6 +638,7 @@ async function runServerProfile(profileId, environment, helpers) {
       ? createProviderOutcomeMessages(messages)
       : [];
   const runId = `${profileId}-${Date.now()}`;
+  const scanStartedAtMs = Date.now();
   await resetServerSafeguardState(
     service,
     userId,
@@ -660,7 +665,8 @@ async function runServerProfile(profileId, environment, helpers) {
           [outcomeMessage],
           scanKind,
           `${runId}:provider:${providerOutcome}`,
-          providerOutcome
+          providerOutcome,
+          scanStartedAtMs
         )
       );
     }
@@ -680,7 +686,9 @@ async function runServerProfile(profileId, environment, helpers) {
             runId,
             chunk,
             currentScanKind,
-            session
+            session,
+            undefined,
+            scanStartedAtMs
           )
         );
       }
@@ -716,7 +724,9 @@ async function runServerProfile(profileId, environment, helpers) {
         runId,
         chunks[0],
         "history",
-        `${runId}:second-history-session`
+        `${runId}:second-history-session`,
+        undefined,
+        scanStartedAtMs
       )
     );
   }
@@ -741,7 +751,9 @@ async function runServerProfile(profileId, environment, helpers) {
         runId,
         chunks[0],
         scanKind,
-        `${runId}:after-expiry`
+        `${runId}:after-expiry`,
+        undefined,
+        scanStartedAtMs
       )
     );
   }

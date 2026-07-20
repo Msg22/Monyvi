@@ -1183,6 +1183,15 @@ export type Database = {
           started: boolean;
         }[];
       };
+      sms_ai_mark_provider_started_v2: {
+        Args: { p_request_id: string };
+        Returns: {
+          available_at: string;
+          decision_code: string;
+          started: boolean;
+          terminal_fingerprints: string[];
+        }[];
+      };
       sms_ai_reconcile_outcomes: {
         Args: {
           p_negative_outcomes: Json;

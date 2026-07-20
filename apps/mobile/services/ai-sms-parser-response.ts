@@ -57,7 +57,7 @@ const SmsSafeguardRefusalSchema = z.object({
     "payload_limit",
     "input_token_limit",
   ]),
-  availableAt: z.string().datetime().nullable().optional(),
+  availableAt: z.string().datetime({ offset: true }).nullable().optional(),
 });
 
 export type AiSmsTransaction = z.infer<typeof AiSmsTransactionSchema>;

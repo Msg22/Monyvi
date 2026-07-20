@@ -95,7 +95,10 @@ jest.mock("@/services/user-data-access", () => ({
 }));
 
 jest.mock("@/hooks/useMarketRates", () => ({
-  useMarketRates: (): { readonly latestRates: null } => ({ latestRates: null }),
+  useMarketRates: (): {
+    readonly latestRates: null;
+    readonly isLoading: false;
+  } => ({ latestRates: null, isLoading: false }),
 }));
 
 jest.mock("@/hooks/usePreferredCurrency", () => ({

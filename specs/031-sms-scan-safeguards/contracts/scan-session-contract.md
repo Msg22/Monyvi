@@ -14,7 +14,17 @@
 
 Each scan has an opaque unique `scanSessionId`, fixed `startedAtMs`, pinned
 `userId`, current `installationId`, and stable scan kind. Every async stage must
-verify the pinned user before persistence or visible result publication.
+verify the pinned user before persistence or visible result publication. Final
+oversized-outcome/checkpoint writes use the same fixed `startedAtMs` and
+revalidate both cancellation and the pinned user before and after asynchronous
+persistence. Rows returned outside the inclusive lower and upper scan bounds are
+ignored even when a platform reader returns them.
+
+Batch parser requests carry the fixed scan-start clock to the authenticated Edge
+boundary. The Edge validates that clock against a bounded five-minute
+transport/session drift and uses it, rather than a later request clock, for the
+inclusive rolling lookback cutoff. Server time remains authoritative for future
+message rejection and usage/cooldown accounting.
 
 ## Candidate Ordering
 

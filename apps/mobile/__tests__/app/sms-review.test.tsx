@@ -372,6 +372,18 @@ describe("SMS review route", () => {
     expect(mockRetry).toHaveBeenCalledTimes(1);
   });
 
+  it("renders consent recovery when a partial review has no transactions", () => {
+    mockReviewTransactions = [];
+    mockRetryState = { ...mockRetryState, isConsentRequired: true };
+
+    render(<SmsReviewScreen />);
+
+    expect(screen.getByText("no_transactions_to_review")).toBeTruthy();
+    expect(mockConsentSheet).toHaveBeenCalledWith(
+      expect.objectContaining({ visible: true })
+    );
+  });
+
   it("keeps consent recovery open when granting consent fails", async () => {
     mockRetryState = { ...mockRetryState, isConsentRequired: true };
     mockGrantConsent.mockRejectedValueOnce(new Error("offline"));

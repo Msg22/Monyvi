@@ -188,6 +188,18 @@ export default function SmsReviewScreen(): React.JSX.Element {
     }
   }, [aiConsent, showToast, smsRetry, t]);
 
+  const retryConsentSheet = (
+    <AiProcessingConsentSheet
+      visible={smsRetry.isConsentRequired}
+      onContinue={handleRetryConsentContinue}
+      onNotNow={smsRetry.dismissConsentRequired}
+      onPrivacyDetails={() => {
+        smsRetry.dismissConsentRequired();
+        router.push("/ai-privacy-details");
+      }}
+    />
+  );
+
   // ── No transactions guard ───────────────────────────────────────────
 
   if (transactions.length === 0) {
@@ -214,6 +226,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
             {t("back_to_dashboard")}
           </Text>
         </TouchableOpacity>
+        {retryConsentSheet}
       </SafeAreaView>
     );
   }
@@ -253,15 +266,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
         onConfirm={handleConfirmDiscard}
         onCancel={() => setDiscardConfirmVisible(false)}
       />
-      <AiProcessingConsentSheet
-        visible={smsRetry.isConsentRequired}
-        onContinue={handleRetryConsentContinue}
-        onNotNow={smsRetry.dismissConsentRequired}
-        onPrivacyDetails={() => {
-          smsRetry.dismissConsentRequired();
-          router.push("/ai-privacy-details");
-        }}
-      />
+      {retryConsentSheet}
     </SafeAreaView>
   );
 }

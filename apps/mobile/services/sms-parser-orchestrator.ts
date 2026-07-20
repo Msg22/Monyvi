@@ -643,6 +643,9 @@ async function parseHybrid(
       (deferredCandidates.length > 0 ? false : undefined),
     isConsentRequired: isCategoryConsentRequired || undefined,
     unresolvedCandidates,
+    durableLocalFingerprints: trustedMatches.map(
+      ({ candidate }) => candidate.smsFingerprint
+    ),
     durableNegativeFingerprints: aiResult.durableNegativeFingerprints,
     oversizedCandidates: aiResult.oversizedCandidates,
     availability,

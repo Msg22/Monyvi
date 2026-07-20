@@ -172,6 +172,7 @@ test("maps provider lifecycle and privacy-safe outcome RPCs", async () => {
         started: true,
         decision_code: "provider_started",
         terminal_fingerprints: [],
+        available_at: "2026-07-21T12:00:00.000+00:00",
       },
     ],
     true,
@@ -179,7 +180,8 @@ test("maps provider lifecycle and privacy-safe outcome RPCs", async () => {
     [],
   ]);
 
-  await markSmsAiProviderStarted(client, "request-id");
+  const startDecision = await markSmsAiProviderStarted(client, "request-id");
+  assert.equal(startDecision.availableAt, "2026-07-21T12:00:00.000+00:00");
   await completeSmsAiWork(client, {
     requestId: "request-id",
     completedWithProviderError: false,

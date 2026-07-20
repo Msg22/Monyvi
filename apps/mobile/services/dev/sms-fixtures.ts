@@ -98,7 +98,7 @@ export const SMS_FIXTURES: readonly SmsFixture[] = [
     label: "Hybrid E2E - trusted QNB purchase",
     description: "Exact approved template resolved by the trusted matcher",
     sender: "QNB EGYPT",
-    body: "Your Debit Card **2132 had a Successful transaction of EGP 16.79 @myfawry,your available bal.EGP 59900.84 for lost/stolen card call 19700",
+    body: "Your Debit Card **2132 had a Successful transaction of EGP 16.79 @myfawry,your available bal.EGP59900.84 for lost/stolen card call 19700",
     timestamp: APRIL_8_2026_17_01,
   },
   {

@@ -589,7 +589,7 @@ describe("useTransactionReviewState", () => {
 
     await waitFor(() => expect(result.current.selectedIndices.size).toBe(0));
     expect(result.current.reviewMetaByIndex.get(0)?.reasons).toEqual([
-      "parser_review",
+      "amount_review",
     ]);
   });
 

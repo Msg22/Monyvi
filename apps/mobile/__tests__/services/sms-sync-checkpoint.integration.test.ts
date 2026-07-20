@@ -77,6 +77,7 @@ const mockParseSmsWithOrchestrator = jest.fn<
   unknown[]
 >();
 const mockGetTrustedPrefilterDisposition = jest.fn<string, [unknown]>();
+const mockAssertExpectedCurrentUser = jest.fn<Promise<void>, [string]>();
 
 jest.mock("expo-crypto", () => ({
   randomUUID: (): string => mockRandomUuid(),
@@ -201,7 +202,8 @@ jest.mock("@/services/user-data-access", () => ({
       ): unknown => collection.query(...conditions),
     })
   ),
-  assertExpectedCurrentUser: jest.fn(() => Promise.resolve()),
+  assertExpectedCurrentUser: (expectedUserId: string): Promise<void> =>
+    mockAssertExpectedCurrentUser(expectedUserId),
 }));
 
 function createSmsMessage(overrides: Partial<SmsMessage> = {}): SmsMessage {
@@ -269,6 +271,8 @@ describe("SMS sync checkpoint integration", () => {
     mockFinalizeSmsScanCheckpoint.mockResolvedValue(null);
     mockRecordOversizedSmsOutcome.mockResolvedValue(undefined);
     mockRandomUuid.mockReturnValue("scan-session-id");
+    mockAssertExpectedCurrentUser.mockReset();
+    mockAssertExpectedCurrentUser.mockResolvedValue(undefined);
   });
 
   it("uses one fixed scan clock for the inclusive rolling 30-day boundary", async () => {
@@ -337,6 +341,20 @@ describe("SMS sync checkpoint integration", () => {
     expect(
       onProgress.mock.calls.every(([progress]) => progress.totalMessages === 2)
     ).toBe(true);
+  });
+
+  it("excludes rows received after the immutable scan-start boundary", async () => {
+    const scanStartedAtMs = Date.parse("2026-07-20T12:00:00.000Z");
+    jest.spyOn(Date, "now").mockReturnValue(scanStartedAtMs);
+    mockReadSmsInbox.mockResolvedValue([
+      createSmsMessage({ id: "at", date: scanStartedAtMs }),
+      createSmsMessage({ id: "future", date: scanStartedAtMs + 1 }),
+    ]);
+
+    const result = await scanAndParseSms(options());
+
+    expect(result.totalScanned).toBe(1);
+    expect(mockComputeSmsFingerprint).toHaveBeenCalledTimes(1);
   });
 
   it("uses the five-minute checkpoint overlap for an incremental scan", async () => {
@@ -437,6 +455,8 @@ describe("SMS sync checkpoint integration", () => {
   });
 
   it("passes scan identity and terminal fingerprints to the parser", async () => {
+    const scanStartedAtMs = Date.parse("2026-07-20T12:00:00.000Z");
+    jest.spyOn(Date, "now").mockReturnValue(scanStartedAtMs);
     mockReadSmsInbox.mockResolvedValue([createSmsMessage()]);
     mockComputeSmsFingerprint.mockResolvedValue("fp-terminal");
     mockLoadSmsScanSafeguardState
@@ -465,6 +485,7 @@ describe("SMS sync checkpoint integration", () => {
         requestContext: {
           scanSessionId: "scan-session-id",
           scanKind: "history",
+          scanStartedAtMs,
         },
       }
     );
@@ -496,6 +517,8 @@ describe("SMS sync checkpoint integration", () => {
   );
 
   it("persists and checkpoints an oversized candidate without raw content", async () => {
+    const scanStartedAtMs = Date.parse("2026-07-20T12:00:00.000Z");
+    jest.spyOn(Date, "now").mockReturnValue(scanStartedAtMs);
     const message = createSmsMessage();
     mockReadSmsInbox.mockResolvedValue([message]);
     mockComputeSmsFingerprint.mockResolvedValue("fp-oversized");
@@ -510,14 +533,36 @@ describe("SMS sync checkpoint integration", () => {
       userId: "user-a",
       smsFingerprint: "fp-oversized",
       originalReceivedAtMs: message.date,
-      nowMs: expect.any(Number) as number,
+      nowMs: scanStartedAtMs,
       lookbackDays: 30,
     });
     const finalizeInput = mockFinalizeSmsScanCheckpoint.mock.calls[0]?.[0];
     expect(finalizeInput?.states[0]?.outcome).toBe("candidate_too_large");
   });
 
-  it("keeps trusted local recovery in memory for a terminal fingerprint", async () => {
+  it("aborts before local finalization when the authenticated user changes", async () => {
+    const message = createSmsMessage();
+    mockReadSmsInbox.mockResolvedValue([message]);
+    mockComputeSmsFingerprint.mockResolvedValue("fp-stale-user");
+    mockParseSmsWithOrchestrator.mockResolvedValue({
+      transactions: [
+        createParsedTransaction({ smsFingerprint: "fp-stale-user" }),
+      ],
+    });
+    mockAssertExpectedCurrentUser
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("AUTH_SCOPE_CHANGED"));
+
+    await expect(scanAndParseSms(options())).rejects.toThrow(
+      "AUTH_SCOPE_CHANGED"
+    );
+
+    expect(mockRecordOversizedSmsOutcome).not.toHaveBeenCalled();
+    expect(mockFinalizeSmsScanCheckpoint).not.toHaveBeenCalled();
+  });
+
+  it("checkpoints trusted local recovery durably for a terminal fingerprint", async () => {
     mockReadSmsInbox.mockResolvedValue([createSmsMessage()]);
     mockComputeSmsFingerprint.mockResolvedValue("fp-terminal");
     mockLoadSmsScanSafeguardState
@@ -537,12 +582,13 @@ describe("SMS sync checkpoint integration", () => {
         createParsedTransaction({ smsFingerprint: "fp-terminal" }),
       ],
       durableNegativeFingerprints: ["fp-terminal"],
+      durableLocalFingerprints: ["fp-terminal"],
       terminalFingerprints: ["fp-terminal"],
     });
 
     await scanAndParseSms(options());
 
     const finalizeInput = mockFinalizeSmsScanCheckpoint.mock.calls[0]?.[0];
-    expect(finalizeInput?.states[0]?.outcome).toBe("memory_suggestion");
+    expect(finalizeInput?.states[0]?.outcome).toBe("trusted_local_match");
   });
 });

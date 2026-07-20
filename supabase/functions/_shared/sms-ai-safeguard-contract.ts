@@ -29,6 +29,7 @@ export interface SmsAiProviderStartDecision {
   readonly started: boolean;
   readonly decisionCode: string;
   readonly terminalFingerprints: readonly string[];
+  readonly availableAt?: string | null;
 }
 
 export interface SmsAiNegativeOutcomeInput {
@@ -92,6 +93,9 @@ export function parseSmsAiProviderStartDecision(
     typeof row.started !== "boolean" ||
     typeof row.decision_code !== "string" ||
     !Array.isArray(row.terminal_fingerprints) ||
+    (row.available_at !== undefined &&
+      row.available_at !== null &&
+      typeof row.available_at !== "string") ||
     row.terminal_fingerprints.some(
       (fingerprint) => typeof fingerprint !== "string"
     )
@@ -102,6 +106,7 @@ export function parseSmsAiProviderStartDecision(
     started: row.started,
     decisionCode: row.decision_code,
     terminalFingerprints: row.terminal_fingerprints as string[],
+    availableAt: typeof row.available_at === "string" ? row.available_at : null,
   };
 }
 

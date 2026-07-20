@@ -7,6 +7,10 @@ const migrationPath = path.resolve(
   __dirname,
   "../../supabase/migrations/061_sms_ai_safeguards.sql"
 );
+const providerStartRepairMigrationPath = path.resolve(
+  __dirname,
+  "../../supabase/migrations/063_fix_sms_ai_provider_start_outcomes.sql"
+);
 
 function readMigration(): string {
   return readFileSync(migrationPath, "utf8");
@@ -177,5 +181,24 @@ test("provides a read-only server-time availability RPC for full-parser blockers
   assert.doesNotMatch(
     availabilitySql,
     /rawBody|sms_body|sender|merchant|amount|currency|category|account_id|fingerprint/i
+  );
+});
+
+test("provider-start repair returns terminal peers and authoritative availability", () => {
+  const sql = readFileSync(providerStartRepairMigrationPath, "utf8");
+
+  assert.match(
+    sql,
+    /RETURNS TABLE[\s\S]*started boolean[\s\S]*decision_code text[\s\S]*terminal_fingerprints text\[\][\s\S]*available_at timestamptz/i
+  );
+  assert.match(sql, /'terminal_outcome'::text[\s\S]*v_terminal_fingerprints/i);
+  assert.match(sql, /'history_cooldown'::text[\s\S]*v_available_at/i);
+  assert.match(
+    sql,
+    /REVOKE ALL ON FUNCTION public\.sms_ai_mark_provider_started_v2[\s\S]*FROM PUBLIC, anon, authenticated/i
+  );
+  assert.match(
+    sql,
+    /GRANT EXECUTE ON FUNCTION public\.sms_ai_mark_provider_started_v2[\s\S]*TO service_role/i
   );
 });
