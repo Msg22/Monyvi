@@ -807,6 +807,140 @@ export type Database = {
           },
         ];
       };
+      sms_ai_negative_outcomes: {
+        Row: {
+          created_at: string;
+          deleted: boolean;
+          id: string;
+          is_terminal: boolean;
+          last_classified_at: string;
+          original_received_at: string;
+          sms_fingerprint: string;
+          strike_count: number;
+          terminal_at: string | null;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          deleted?: boolean;
+          id?: string;
+          is_terminal?: boolean;
+          last_classified_at?: string;
+          original_received_at: string;
+          sms_fingerprint: string;
+          strike_count?: number;
+          terminal_at?: string | null;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          deleted?: boolean;
+          id?: string;
+          is_terminal?: boolean;
+          last_classified_at?: string;
+          original_received_at?: string;
+          sms_fingerprint?: string;
+          strike_count?: number;
+          terminal_at?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      sms_ai_usage_events: {
+        Row: {
+          capability: string;
+          id: string;
+          request_id: string;
+          started_at: string;
+          unit_count: number;
+          user_id: string;
+        };
+        Insert: {
+          capability: string;
+          id?: string;
+          request_id: string;
+          started_at?: string;
+          unit_count: number;
+          user_id: string;
+        };
+        Update: {
+          capability?: string;
+          id?: string;
+          request_id?: string;
+          started_at?: string;
+          unit_count?: number;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "sms_ai_usage_events_request_id_fkey";
+            columns: ["request_id"];
+            isOneToOne: true;
+            referencedRelation: "sms_ai_work_requests";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      sms_ai_work_requests: {
+        Row: {
+          available_at: string | null;
+          capability: string;
+          created_at: string;
+          decision_code: string;
+          estimated_input_tokens: number;
+          id: string;
+          payload_bytes: number;
+          provider_started_at: string | null;
+          request_key: string;
+          reservation_expires_at: string | null;
+          scan_kind: string | null;
+          scan_session_id: string | null;
+          status: string;
+          unit_count: number;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          available_at?: string | null;
+          capability: string;
+          created_at?: string;
+          decision_code: string;
+          estimated_input_tokens: number;
+          id?: string;
+          payload_bytes: number;
+          provider_started_at?: string | null;
+          request_key: string;
+          reservation_expires_at?: string | null;
+          scan_kind?: string | null;
+          scan_session_id?: string | null;
+          status: string;
+          unit_count: number;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          available_at?: string | null;
+          capability?: string;
+          created_at?: string;
+          decision_code?: string;
+          estimated_input_tokens?: number;
+          id?: string;
+          payload_bytes?: number;
+          provider_started_at?: string | null;
+          request_key?: string;
+          reservation_expires_at?: string | null;
+          scan_kind?: string | null;
+          scan_session_id?: string | null;
+          status?: string;
+          unit_count?: number;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       transactions: {
         Row: {
           account_id: string;
@@ -1030,6 +1164,68 @@ export type Database = {
       recalculate_daily_snapshot_balance: { Args: never; Returns: undefined };
       recalculate_daily_snapshot_net_worth: { Args: never; Returns: undefined };
       run_daily_snapshots: { Args: never; Returns: undefined };
+      sms_ai_cleanup_safeguards: {
+        Args: { p_ledger_retention_days?: number; p_lookback_days?: number };
+        Returns: undefined;
+      };
+      sms_ai_complete_work: {
+        Args: {
+          p_completed_with_provider_error: boolean;
+          p_decision_code: string;
+          p_request_id: string;
+        };
+        Returns: boolean;
+      };
+      sms_ai_mark_provider_started: {
+        Args: { p_request_id: string };
+        Returns: {
+          decision_code: string;
+          started: boolean;
+        }[];
+      };
+      sms_ai_reconcile_outcomes: {
+        Args: {
+          p_negative_outcomes: Json;
+          p_positive_fingerprints: string[];
+          p_strike_threshold?: number;
+          p_user_id: string;
+        };
+        Returns: {
+          is_terminal: boolean;
+          sms_fingerprint: string;
+          strike_count: number;
+        }[];
+      };
+      sms_ai_release_work: {
+        Args: { p_decision_code?: string; p_request_id: string };
+        Returns: boolean;
+      };
+      sms_ai_reserve_work: {
+        Args: {
+          p_burst_window_seconds: number;
+          p_capability: string;
+          p_estimated_input_tokens: number;
+          p_history_cooldown_seconds: number;
+          p_max_provider_starts_per_burst: number;
+          p_max_units_per_rolling_window: number;
+          p_max_units_per_scan: number;
+          p_payload_bytes: number;
+          p_request_key: string;
+          p_reservation_lease_seconds: number;
+          p_rolling_window_seconds: number;
+          p_scan_kind: string;
+          p_scan_session_id: string;
+          p_unit_count: number;
+          p_user_id: string;
+        };
+        Returns: {
+          accepted: boolean;
+          available_at: string;
+          decision_code: string;
+          is_replay: boolean;
+          request_id: string;
+        }[];
+      };
     };
     Enums: {
       account_type: "CASH" | "BANK" | "DIGITAL_WALLET";

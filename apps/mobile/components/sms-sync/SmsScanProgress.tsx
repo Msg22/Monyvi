@@ -20,6 +20,7 @@ import {
   ScanningState,
   SuccessState,
 } from "./SmsScanProgressParts";
+import { SmsScanScopeNotice } from "./SmsScanScopeNotice";
 
 interface SmsScanProgressProps {
   /** Current scan status */
@@ -78,6 +79,8 @@ export function SmsScanProgress({
           {translate("sms_scan_header")}
         </Text>
       </View>
+
+      <SmsScanScopeNotice label={translate("sms_scan_scope_last_30_days")} />
 
       {status === "scanning" ? (
         <ScrollView

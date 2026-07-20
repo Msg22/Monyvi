@@ -60,6 +60,7 @@ describe("SmsScanProgress", () => {
     );
 
     expect(getByText("scanning_analyzing")).toBeTruthy();
+    expect(getByText("sms_scan_scope_last_30_days")).toBeTruthy();
     expect(getByText("cancel_scan")).toBeTruthy();
     expect(getByText("2")).toBeTruthy();
   });

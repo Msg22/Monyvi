@@ -8,14 +8,18 @@ import { logger } from "@/utils/logger";
 import { getCurrentUserId, supabase } from "../supabase";
 import { SNAPSHOT_RETENTION_DAYS, SYNCABLE_TABLES } from "./config";
 import { createSyncTableError } from "./errors";
-import { getChildTableConfig, isSnapshotTable } from "./table-predicates";
+import {
+  getChildTableConfig,
+  isServerOwnedUserTable,
+  isSnapshotTable,
+} from "./table-predicates";
 import { transformFromSupabase } from "./transforms";
 import type {
   AppSyncDatabaseChangeSet,
   ChildTableConfig,
   ChildTableName,
   SnapshotTableName,
-  UserOwnedWritableTableName,
+  UserOwnedPullTableName,
 } from "./types";
 
 export async function pullMarketRates(
@@ -95,7 +99,7 @@ export async function pullSnapshotTable(
 }
 
 export async function pullUserTable(
-  table: UserOwnedWritableTableName,
+  table: UserOwnedPullTableName,
   userId: string,
   lastSyncDate: string | null
 ): Promise<SyncTableChangeSet> {
@@ -244,6 +248,8 @@ export async function pullChanges(
       changes[table] = await pullMarketRates();
     } else if (isSnapshotTable(table)) {
       changes[table] = await pullSnapshotTable(table, userId, lastSyncDate);
+    } else if (isServerOwnedUserTable(table)) {
+      changes[table] = await pullUserTable(table, userId, lastSyncDate);
     } else if (table === "categories") {
       changes[table] = await pullCategories(userId, lastSyncDate);
     } else if (childConfig) {
@@ -255,7 +261,7 @@ export async function pullChanges(
       );
     } else {
       changes[table] = await pullUserTable(
-        table as UserOwnedWritableTableName,
+        table as UserOwnedPullTableName,
         userId,
         lastSyncDate
       );

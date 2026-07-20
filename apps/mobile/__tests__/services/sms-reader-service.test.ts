@@ -12,7 +12,7 @@ import { readSmsInbox } from "@/services/sms-reader-service";
 const originalPlatformOS = Platform.OS;
 const TEST_NOW_MS = Date.parse("2026-07-07T16:18:00.000Z");
 const JULY_6_2026_16_10 = Date.parse("2026-07-06T16:10:00.000Z");
-const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 const E2E_LOCAL_PARSER_SAVEABLE_PROVIDER_IDS = new Set([
   "nbe",
   "qnb-egypt",
@@ -40,6 +40,13 @@ function enableDevLocalParserFixtureSmsInbox(): void {
   process.env.EXPO_PUBLIC_SMS_INBOX_MODE = "fixture";
 }
 
+function enableSafeguardQaFixtureInbox(): void {
+  process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA = "true";
+  process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER = "simulated";
+  process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX = "fixture";
+  process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE = "partial-quota-v1";
+}
+
 function freezeFixtureInboxClock(nowMs: number = TEST_NOW_MS): void {
   jest.spyOn(Date, "now").mockReturnValue(nowMs);
 }
@@ -50,6 +57,10 @@ describe("sms-reader-service", (): void => {
     delete process.env.EXPO_PUBLIC_MONYVI_TEST_MODE;
     delete process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE;
     delete process.env.EXPO_PUBLIC_SMS_INBOX_MODE;
+    delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA;
+    delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER;
+    delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX;
+    delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE;
     Object.defineProperty(Platform, "OS", {
       configurable: true,
       value: "android",
@@ -166,6 +177,20 @@ describe("sms-reader-service", (): void => {
     ).toBe(true);
   });
 
+  it("uses the selected safeguard profile inbox without reading the device inbox", async (): Promise<void> => {
+    enableSafeguardQaFixtureInbox();
+
+    const messages = await readSmsInbox();
+
+    expect(mockNativeSmsList).not.toHaveBeenCalled();
+    expect(messages.length).toBeGreaterThan(3);
+    expect(
+      messages.every((message) =>
+        message.id.startsWith("sms-safeguard-qa:partial-quota-v1:")
+      )
+    ).toBe(true);
+  });
+
   it("keeps local parser fixture inbox timestamps stable for fingerprint dedup", async (): Promise<void> => {
     enableLocalParserFixtureSmsInbox();
     freezeFixtureInboxClock();
@@ -181,17 +206,56 @@ describe("sms-reader-service", (): void => {
     );
   });
 
-  it("keeps all fixture inbox messages inside the default rolling scan window", async (): Promise<void> => {
+  it("keeps all fixture inbox messages inside the rolling 30-day scan window", async (): Promise<void> => {
     enableFixtureSmsInbox();
     freezeFixtureInboxClock();
 
     const messages = await readSmsInbox({
-      minDate: TEST_NOW_MS - THREE_MONTHS_MS,
+      minDate: TEST_NOW_MS - THIRTY_DAYS_MS,
     });
 
     expect(messages).toHaveLength(3);
     expect(
       messages.some((message) => message.id === "e2e-qnb_atm_withdrawal-2")
+    ).toBe(true);
+  });
+
+  it("passes the inclusive minimum date to the Android inbox adapter", async (): Promise<void> => {
+    const minDate = Date.parse("2026-06-20T09:00:00.000Z");
+    mockNativeSmsList.mockImplementation(
+      (
+        filter: string,
+        _onFail: (error: string) => void,
+        onSuccess: (count: number, smsList: string) => void
+      ) => {
+        expect(JSON.parse(filter)).toEqual({
+          box: "inbox",
+          maxCount: 321,
+          minDate,
+        });
+        onSuccess(0, "[]");
+      }
+    );
+
+    await readSmsInbox({ maxCount: 321, minDate });
+
+    expect(mockNativeSmsList).toHaveBeenCalledTimes(1);
+  });
+
+  it("includes fixture messages exactly at minDate and excludes older rows", async (): Promise<void> => {
+    enableFixtureSmsInbox();
+    freezeFixtureInboxClock();
+    const allMessages = await readSmsInbox();
+    const boundaryMessage = allMessages[1];
+    expect(boundaryMessage).toBeDefined();
+
+    const messages = await readSmsInbox({ minDate: boundaryMessage?.date });
+
+    expect(messages.map((message) => message.id)).toContain(
+      boundaryMessage?.id
+    );
+    expect(
+      messages.every((message) => message.date >= (boundaryMessage?.date ?? 0))
     ).toBe(true);
   });
 

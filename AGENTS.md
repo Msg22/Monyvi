@@ -12,7 +12,7 @@ with Angular equivalents in chat (never in code comments).
 
 <!-- SPECKIT START -->
 
-Active Speckit plan: `specs/030-hybrid-sms-parser/plan.md`
+Active Speckit plan: `specs/031-sms-scan-safeguards/plan.md`
 
 <!-- SPECKIT END -->
 
@@ -680,6 +680,11 @@ Strong success criteria let you loop independently. Weak criteria ("make it
 work") require constant clarification.
 
 ## Active Technologies
+
+- TypeScript 5.9 strict mode, Expo 55, React Native 0.83, WatermelonDB 0.28, and
+  PostgreSQL migrations (031-sms-scan-safeguards)
+- WatermelonDB with synchronized Supabase PostgreSQL for privacy-safe SMS AI
+  outcome state (031-sms-scan-safeguards)
 
 - TypeScript 5.9 strict mode, React 19.2, React Native 0.83, and Expo SDK 55
   (codex/phase-2a-trusted-qa-sms-patterns-750)

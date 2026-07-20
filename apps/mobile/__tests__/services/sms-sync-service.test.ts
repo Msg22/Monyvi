@@ -80,16 +80,41 @@ jest.mock("react-native", () => ({
   Platform: { OS: "android" },
 }));
 
+const mockRandomUuid = jest.fn(() => "scan-session-id");
+
+jest.mock("expo-crypto", () => ({
+  randomUUID: (): string => mockRandomUuid(),
+}));
+
 // ---------------------------------------------------------------------------
 // Mock: sms-reader-service
 // ---------------------------------------------------------------------------
 
-const mockReadSmsInbox = jest.fn<Promise<readonly SmsMessage[]>, []>(() =>
-  Promise.resolve([])
-);
+const mockReadSmsInbox = jest.fn<
+  Promise<readonly SmsMessage[]>,
+  [{ readonly maxCount?: number; readonly minDate?: number }?]
+>(() => Promise.resolve([]));
+const mockLoadSmsScanSafeguardState = jest.fn();
+const mockFinalizeSmsScanCheckpoint = jest.fn();
+const mockRecordOversizedSmsOutcome = jest.fn();
 
 jest.mock("@/services/sms-reader-service", () => ({
-  readSmsInbox: (...args: unknown[]) => mockReadSmsInbox(...(args as [])),
+  readSmsInbox: (...args: unknown[]) =>
+    mockReadSmsInbox(
+      ...(args as [{ readonly maxCount?: number; readonly minDate?: number }?])
+    ),
+}));
+
+jest.mock("@/services/sms-scan-checkpoint-coordinator", () => ({
+  loadSmsScanSafeguardState: (...args: readonly unknown[]): unknown =>
+    mockLoadSmsScanSafeguardState(...args),
+  finalizeSmsScanCheckpoint: (...args: readonly unknown[]): unknown =>
+    mockFinalizeSmsScanCheckpoint(...args),
+}));
+
+jest.mock("@/services/sms-oversized-outcome-service", () => ({
+  recordOversizedSmsOutcome: (...args: readonly unknown[]): unknown =>
+    mockRecordOversizedSmsOutcome(...args),
 }));
 
 // ---------------------------------------------------------------------------
@@ -115,6 +140,16 @@ jest.mock("@monyvi/logic", () => {
 
   return {
     ...transactionKeyModule,
+    DEFAULT_SMS_SCAN_POLICY: {
+      version: 1,
+      processingPolicyVersion: 1,
+      lookbackDays: 30,
+      checkpointOverlapMs: 5 * 60 * 1000,
+    },
+    calculateEffectiveScanBoundary: jest.requireActual<
+      typeof import("../../../../packages/logic/src/sms-safeguards/sms-scan-boundary")
+    >("../../../../packages/logic/src/sms-safeguards/sms-scan-boundary")
+      .calculateEffectiveScanBoundary,
     isKnownFinancialSender: (...args: unknown[]) =>
       mockIsKnownFinancialSender(...(args as [string])),
     isLikelyCorruptedSmsText: (body: string): boolean =>
@@ -162,6 +197,16 @@ function mockWithParserDiagnostics(
     ...result,
     transactions: result.transactions,
     unresolvedCandidates: resultWithDiagnostics.unresolvedCandidates ?? [],
+    safeguardSummary: resultWithDiagnostics.safeguardSummary ?? {
+      admittedAiCount: 0,
+      deferredAiCount: 0,
+      oversizedCount: 0,
+      unresolvedCount: resultWithDiagnostics.unresolvedCandidates?.length ?? 0,
+      completionStatus:
+        (resultWithDiagnostics.unresolvedCandidates?.length ?? 0) > 0
+          ? "partial"
+          : "complete",
+    },
     diagnostics: resultWithDiagnostics.diagnostics ?? {
       mode: "ai-primary",
       attemptedAi: true,
@@ -278,9 +323,10 @@ const stubAiContext: ParseSmsContext = {
 /** Default ScanOptions with required aiContext */
 function defaultOptions(overrides: Record<string, unknown> = {}): {
   aiContext: ParseSmsContext;
+  scanKind: "initial" | "incremental" | "history";
   [key: string]: unknown;
 } {
-  return { aiContext: stubAiContext, ...overrides };
+  return { aiContext: stubAiContext, scanKind: "initial", ...overrides };
 }
 
 // ---------------------------------------------------------------------------
@@ -301,6 +347,17 @@ describe("sms-sync-service", () => {
     );
     mockParseSmsWithOrchestrator.mockResolvedValue({ transactions: [] });
     mockGetTrustedPrefilterDisposition.mockReturnValue("not_trusted_candidate");
+    mockLoadSmsScanSafeguardState.mockImplementation(
+      (input: { readonly savedFingerprints?: ReadonlySet<string> }) =>
+        Promise.resolve({
+          checkpoint: null,
+          durableKnownFingerprints: new Set(input.savedFingerprints ?? []),
+          terminalFingerprints: new Set(),
+        })
+    );
+    mockFinalizeSmsScanCheckpoint.mockResolvedValue(null);
+    mockRecordOversizedSmsOutcome.mockResolvedValue(undefined);
+    mockRandomUuid.mockReturnValue("scan-session-id");
   });
 
   // =========================================================================
@@ -326,7 +383,7 @@ describe("sms-sync-service", () => {
         stubAiContext,
         expect.any(Function),
         undefined,
-        { expectedUserId: "user-a" }
+        expect.objectContaining({ expectedUserId: "user-a" })
       );
     });
 
@@ -409,6 +466,17 @@ describe("sms-sync-service", () => {
           matchedPatternIds: ["qnb-egypt-card-purchase-egp-v1"],
           runtimeScopeCounts: { trusted_production: 1 },
         },
+        safeguardSummary: {
+          admittedAiCount: 1,
+          deferredAiCount: 1,
+          oversizedCount: 0,
+          unresolvedCount: 1,
+          completionStatus: "partial",
+          availability: {
+            reason: "rolling_limit",
+            availableAt: "2026-07-21T10:00:00.000Z",
+          },
+        },
       };
       mockParseSmsWithOrchestrator.mockResolvedValue(orchestratorResult);
 
@@ -424,6 +492,9 @@ describe("sms-sync-service", () => {
       ]);
       expect(result.parseContext).toBe(stubAiContext);
       expect(result.parserDiagnostics.mode).toBe("hybrid");
+      expect(result.safeguardSummary).toEqual(
+        orchestratorResult.safeguardSummary
+      );
     });
 
     it("does not report an empty successful scan when every parser candidate failed retryably", async () => {
@@ -557,7 +628,9 @@ describe("sms-sync-service", () => {
       expect(candidates?.map(({ message }) => message.id)).toEqual([
         "sms-eligible",
       ]);
-      expect(mockComputeSmsFingerprint).toHaveBeenCalledTimes(1);
+      // Local-only fingerprinting is required so an excluded message can form
+      // part of a durable checkpoint without exposing or parsing its body.
+      expect(mockComputeSmsFingerprint).toHaveBeenCalledTimes(2);
       expect(mockGetTrustedPrefilterDisposition).toHaveBeenCalledTimes(1);
     });
 
@@ -613,13 +686,13 @@ describe("sms-sync-service", () => {
       const result = await scanAndParseSms(defaultOptions());
 
       expect(mockIsLikelyCorruptedSmsText).toHaveBeenCalledWith(garbled.body);
-      expect(mockComputeSmsFingerprint).not.toHaveBeenCalled();
+      expect(mockComputeSmsFingerprint).toHaveBeenCalledTimes(1);
       expect(mockParseSmsWithOrchestrator).toHaveBeenCalledWith(
         [],
         stubAiContext,
         expect.any(Function),
         undefined,
-        { expectedUserId: "user-a" }
+        expect.objectContaining({ expectedUserId: "user-a" })
       );
       expect(result.totalFound).toBe(0);
     });
@@ -653,6 +726,7 @@ describe("sms-sync-service", () => {
     });
 
     it("includes sender, body, and received timestamp when fingerprinting SMS", async () => {
+      jest.spyOn(Date, "now").mockReturnValue(1778418000000 + 86_400_000);
       const sms1 = createSmsMessage({
         id: "sms-1",
         address: "NBE",
@@ -823,18 +897,6 @@ describe("sms-sync-service", () => {
       expect(userDataAccessMock.getCurrentUserDataScope).toHaveBeenCalledTimes(
         1
       );
-    });
-
-    it("should pass maxCount and minDate to readSmsInbox", async () => {
-      mockReadSmsInbox.mockResolvedValue([]);
-
-      const minDate = Date.now() - 86_400_000;
-      await scanAndParseSms(defaultOptions({ maxCount: 100, minDate }));
-
-      expect(mockReadSmsInbox).toHaveBeenCalledWith({
-        maxCount: 100,
-        minDate,
-      });
     });
 
     it("should use default maxCount (2000) when not specified", async () => {

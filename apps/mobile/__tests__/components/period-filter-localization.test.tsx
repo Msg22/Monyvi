@@ -143,7 +143,7 @@ describe("period filter localization", () => {
     const instance = await createTestI18n();
     render(
       <I18nextProvider i18n={instance}>
-        <UpcomingPayments />
+        <UpcomingPayments onPayNow={jest.fn()} />
       </I18nextProvider>
     );
 

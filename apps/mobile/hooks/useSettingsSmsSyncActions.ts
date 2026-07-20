@@ -5,7 +5,7 @@ import {
 } from "@/components/settings/permission-recovery-content";
 
 type SmsPermissionStatus = "undetermined" | "granted" | "denied" | "blocked";
-type SmsScanMode = "incremental" | "full";
+type SmsScanMode = "incremental" | "history";
 
 interface UseSettingsSmsSyncActionsParams {
   readonly onOpenSmsScan: () => void;

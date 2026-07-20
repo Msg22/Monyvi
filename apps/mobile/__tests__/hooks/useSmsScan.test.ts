@@ -27,6 +27,7 @@ jest.mock("@/utils/logger", () => ({
 }));
 
 const smsScanOptions = {
+  scanKind: "initial" as const,
   aiContext: {
     categories: [],
     supportedCurrencies: ["EGP"],

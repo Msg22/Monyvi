@@ -1,11 +1,27 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 import { PartialSmsResultsNotice } from "@/components/transaction-review/PartialSmsResultsNotice";
+import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator";
+
+const summary: SmsScanSafeguardSummary = {
+  admittedAiCount: 2,
+  deferredAiCount: 1,
+  oversizedCount: 1,
+  unresolvedCount: 1,
+  availability: {
+    reason: "scan_limit",
+    availableAt: "2026-07-21T16:30:00.000Z",
+  },
+  completionStatus: "partial",
+};
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string, values?: { readonly count?: number }): string =>
-      `${key}:${values?.count ?? ""}`,
+    i18n: { language: "en" },
+    t: (
+      key: string,
+      values?: { readonly count?: number; readonly availability?: string }
+    ): string => `${key}:${values?.count ?? ""}:${values?.availability ?? ""}`,
   }),
 }));
 
@@ -14,7 +30,8 @@ describe("PartialSmsResultsNotice", () => {
     const onRetry = jest.fn();
     render(
       <PartialSmsResultsNotice
-        unresolvedCount={3}
+        safeguardSummary={summary}
+        retryableCount={1}
         canRetry
         isRetrying={false}
         hasRetryError={false}
@@ -30,7 +47,7 @@ describe("PartialSmsResultsNotice", () => {
       "className",
       expect.stringContaining("dark:")
     );
-    expect(screen.getByText("partial_sms_title:3")).toBeTruthy();
+    expect(screen.getByText("partial_sms_title:3:")).toBeTruthy();
     fireEvent.press(screen.getByTestId("partial-sms-retry"));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
@@ -44,7 +61,14 @@ describe("PartialSmsResultsNotice", () => {
 
     render(
       <RetryAwareNotice
-        unresolvedCount={2}
+        safeguardSummary={{
+          ...summary,
+          deferredAiCount: 0,
+          oversizedCount: 0,
+          unresolvedCount: 2,
+          availability: undefined,
+        }}
+        retryableCount={2}
         canRetry
         isRetrying={false}
         hasRetryError
@@ -52,14 +76,20 @@ describe("PartialSmsResultsNotice", () => {
       />
     );
 
-    expect(screen.getByText("partial_sms_retry_error:")).toBeTruthy();
+    expect(screen.getByText("partial_sms_retry_error::")).toBeTruthy();
   });
 
   it("disables repeated retry while busy and disappears at zero", () => {
     const onRetry = jest.fn();
     const { rerender } = render(
       <PartialSmsResultsNotice
-        unresolvedCount={2}
+        safeguardSummary={{
+          ...summary,
+          deferredAiCount: 0,
+          oversizedCount: 0,
+          unresolvedCount: 2,
+        }}
+        retryableCount={2}
         canRetry
         isRetrying
         hasRetryError={false}
@@ -79,7 +109,15 @@ describe("PartialSmsResultsNotice", () => {
 
     rerender(
       <PartialSmsResultsNotice
-        unresolvedCount={0}
+        safeguardSummary={{
+          ...summary,
+          deferredAiCount: 0,
+          oversizedCount: 0,
+          unresolvedCount: 0,
+          availability: undefined,
+          completionStatus: "complete",
+        }}
+        retryableCount={0}
         canRetry={false}
         isRetrying={false}
         hasRetryError={false}
@@ -92,7 +130,14 @@ describe("PartialSmsResultsNotice", () => {
   it("keeps successful results actionable when remaining messages must wait for a later sync", () => {
     render(
       <PartialSmsResultsNotice
-        unresolvedCount={1}
+        safeguardSummary={{
+          ...summary,
+          deferredAiCount: 1,
+          oversizedCount: 1,
+          unresolvedCount: 0,
+          availability: undefined,
+        }}
+        retryableCount={0}
         canRetry={false}
         isRetrying={false}
         hasRetryError={false}
@@ -100,7 +145,23 @@ describe("PartialSmsResultsNotice", () => {
       />
     );
 
-    expect(screen.getByText("partial_sms_try_later:")).toBeTruthy();
+    expect(screen.getByText("partial_sms_try_later::")).toBeTruthy();
     expect(screen.queryByTestId("partial-sms-retry")).toBeNull();
+  });
+
+  it("shows one localized absolute availability time without exposing raw message data", () => {
+    render(
+      <PartialSmsResultsNotice
+        safeguardSummary={summary}
+        retryableCount={0}
+        canRetry={false}
+        isRetrying={false}
+        hasRetryError={false}
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText(/partial_sms_try_later_at::.+/)).toBeTruthy();
+    expect(screen.queryByText(/raw|sender|merchant/i)).toBeNull();
   });
 });

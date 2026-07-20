@@ -138,6 +138,29 @@ Run `npm run supabase:runtime:setup-local` after:
 
 You do not need to run it every time you start the mobile app.
 
+## SMS Safeguard QA
+
+SMS cost and retry safeguards have a deterministic QA mode that never reads a
+personal inbox, calls Gemini, or consumes production allowances.
+
+```powershell
+# Run all named safeguard profiles
+npm run test:sms-safeguards
+
+# Run one profile
+npm run test:sms-safeguards -- --scenario partial-quota-v1
+
+# Start the fixture/simulated-provider development mode on a wireless device
+npm run mobile:dev:sms-safeguards:wireless-device -- --scenario partial-quota-v1
+```
+
+The device launcher requires a named profile, validates it before Metro starts,
+and gives each launch an isolated QA namespace.
+
+The complete scenario list, prompt evaluator, manual QA plan, and deployment
+commands are documented in
+[`specs/031-sms-scan-safeguards/quickstart.md`](specs/031-sms-scan-safeguards/quickstart.md).
+
 ## Local E2E Tests
 
 The mobile E2E suite uses Maestro, a local Supabase stack, seeded test data, and

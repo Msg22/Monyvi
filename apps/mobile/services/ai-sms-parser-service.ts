@@ -10,13 +10,14 @@
  * @module ai-sms-parser-service
  */
 
-import { z } from "zod";
+import * as Crypto from "expo-crypto";
 import { supabase } from "./supabase";
 import { logger } from "@/utils/logger";
 import {
   shouldBlockUnsafeSmsParserConfiguration,
   shouldUseFixtureSmsParser,
 } from "@/config/e2e-test-config";
+import { getSmsSafeguardQaConfig } from "@/config/sms-safeguard-qa-config";
 import { assertNotAborted, createAbortError } from "./abort-utils";
 import { assertExpectedCurrentUser } from "./user-data-access";
 import { USER_DATA_ACCESS_ERROR_CODES } from "./user-data-access-error-codes";
@@ -25,7 +26,6 @@ import {
   buildCategoryMap,
   buildCategoryTree,
   clampConfidence,
-  MAX_TRANSACTION_AMOUNT,
   normalizeCurrency,
   normalizeType,
   parseCategory,
@@ -34,38 +34,19 @@ import {
   type ParsedSmsTransaction,
   type SmsMessage,
 } from "@monyvi/logic";
+import {
+  isCapacityRefusalReason,
+  isRetryableAiFailure,
+  parseAiResponse,
+  parseSmsSafeguardRefusal,
+  type AiSmsTransaction,
+  type ChunkAiResult,
+  type SmsSafeguardRefusal,
+} from "./ai-sms-parser-response";
 
 // ---------------------------------------------------------------------------
 // Schemas — AI response validation
 // ---------------------------------------------------------------------------
-
-const AiCurrencySchema = z.string().transform((value, context) => {
-  try {
-    return normalizeCurrency(value);
-  } catch {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Unsupported currency",
-    });
-    return z.NEVER;
-  }
-});
-
-const AiSmsTransactionSchema = z.object({
-  messageId: z.string(),
-  amount: z.number().finite().positive().max(MAX_TRANSACTION_AMOUNT),
-  currency: AiCurrencySchema,
-  type: z.enum(["EXPENSE", "INCOME"]),
-  counterparty: z.string(),
-  date: z.string(),
-  categorySystemName: z.string(),
-  isAtmWithdrawal: z.boolean().optional().default(false),
-  cardLast4: z.string().optional(),
-  confidenceScore: z.number(),
-  isTrusted: z.boolean(),
-});
-
-type AiSmsTransaction = z.infer<typeof AiSmsTransactionSchema>;
 
 /** Result from AI parsing */
 export interface AiParseResult {
@@ -73,6 +54,27 @@ export interface AiParseResult {
   readonly hasError?: boolean;
   readonly isRetryable?: boolean;
   readonly unresolvedCandidates?: readonly AiUnresolvedCandidate[];
+  readonly durableNegativeFingerprints?: readonly string[];
+  readonly terminalFingerprints?: readonly string[];
+  readonly oversizedCandidates?: readonly SmsCandidate[];
+  readonly availability?: SmsAiAvailability;
+}
+
+export type SmsAiAvailabilityReason =
+  | "scan_limit"
+  | "rolling_limit"
+  | "burst_limit"
+  | "history_cooldown"
+  | "already_processed_result_unavailable";
+
+export interface SmsAiAvailability {
+  readonly reason: SmsAiAvailabilityReason;
+  readonly availableAt: string | null;
+}
+
+export interface SmsAiRequestContext {
+  readonly scanSessionId: string | null;
+  readonly scanKind: "initial" | "incremental" | "history" | "live";
 }
 
 export interface AiUnresolvedCandidate {
@@ -81,7 +83,8 @@ export interface AiUnresolvedCandidate {
     | "chunk_failed"
     | "mapping_failed"
     | "response_invalid"
-    | "unexpected_failure";
+    | "unexpected_failure"
+    | "capacity_limited";
   readonly isRetryable: boolean;
 }
 
@@ -117,13 +120,6 @@ export interface SmsCandidate {
  */
 const CLIENT_CHUNK_SIZE = 50;
 
-/**
- * Minimum chunk size for retry-with-split. Chunks at or below this size
- * will NOT be split further on failure — they are treated as permanently failed.
- * This prevents infinite bisection.
- */
-const MIN_CHUNK_SIZE_FOR_SPLIT = 10;
-
 /** Delay between chunks (ms) to avoid Gemini rate limits. */
 const INTER_CHUNK_DELAY_MS = 2000;
 const AI_CONSENT_REQUIRED_STATUS = 403;
@@ -143,20 +139,6 @@ export function isAiConsentRequiredError(error: unknown): boolean {
   return (
     error instanceof Error && error.name === AI_CONSENT_REQUIRED_ERROR_NAME
   );
-}
-
-/**
- * Parsed edge function response.
- */
-interface ChunkAiResult {
-  readonly transactions: readonly AiSmsTransaction[];
-  /** True if the Edge Function call failed (not a legitimate empty result). */
-  readonly hasError: boolean;
-  /** False for permanent failures such as auth/config 4xx responses. */
-  readonly isRetryable?: boolean;
-  readonly invalidMessageIds?: readonly string[];
-  readonly hasUncorrelatedFailure?: boolean;
-  readonly failureReason?: AiUnresolvedCandidate["reason"];
 }
 
 function isParserControlFlowError(error: unknown): boolean {
@@ -195,90 +177,6 @@ function createUnexpectedChunkFailure(
  * Marks unexpected response shapes as errors so retry-capable callers can
  * recover instead of treating malformed responses as legitimate empty results.
  */
-function parseAiResponse(data: unknown): ChunkAiResult {
-  const errorResult: ChunkAiResult = {
-    transactions: [],
-    hasError: true,
-    isRetryable: true,
-    hasUncorrelatedFailure: true,
-    failureReason: "response_invalid",
-  };
-
-  if (typeof data !== "object" || data === null) {
-    logger.warn("[ai-sms-parser] parseAiResponse: data is not an object", {
-      dataType: typeof data,
-    });
-    return errorResult;
-  }
-
-  const obj = data as Record<string, unknown>;
-  if (!Array.isArray(obj.transactions)) {
-    logger.warn("[ai-sms-parser] parseAiResponse: invalid response envelope", {
-      reasonCode: "transactions_array_missing",
-    });
-    return errorResult;
-  }
-
-  const transactions: AiSmsTransaction[] = [];
-  const invalidMessageIds = new Set<string>();
-  let hasUncorrelatedFailure = false;
-  let invalidCount = 0;
-
-  for (const raw of obj.transactions) {
-    const parsed = AiSmsTransactionSchema.safeParse(raw);
-    if (parsed.success) {
-      transactions.push(parsed.data);
-    } else {
-      invalidCount++;
-      const invalidMessageId =
-        typeof raw === "object" &&
-        raw !== null &&
-        typeof (raw as Record<string, unknown>).messageId === "string"
-          ? (raw as Record<string, string>).messageId.trim()
-          : "";
-      if (invalidMessageId.length > 0) {
-        invalidMessageIds.add(invalidMessageId);
-      } else {
-        hasUncorrelatedFailure = true;
-      }
-      // PII/privacy: do NOT log `raw` or full `issues` — they include amounts,
-      // senders, counterparties, etc. Log only aggregate diagnostics so Sentry
-      // doesn't retain user financial data.
-      logger.warn("[ai-sms-parser] Skipping malformed transaction entry", {
-        issueCount: parsed.error.issues.length,
-        issuePaths: parsed.error.issues
-          .map((i) => i.path.join("."))
-          .slice(0, 5),
-        issueCodes: Array.from(new Set(parsed.error.issues.map((i) => i.code))),
-      });
-    }
-  }
-
-  if (invalidCount > 0) {
-    logger.warn("[ai-sms-parser] parseAiResponse: validation failures", {
-      invalidCount,
-      total: obj.transactions.length,
-    });
-  }
-
-  return {
-    transactions,
-    hasError: invalidCount > 0,
-    isRetryable: invalidCount > 0 ? true : undefined,
-    invalidMessageIds: [...invalidMessageIds],
-    hasUncorrelatedFailure,
-    failureReason: invalidCount > 0 ? "response_invalid" : undefined,
-  };
-}
-
-function isRetryableAiFailure(status: number | undefined): boolean {
-  if (status === undefined) {
-    return true;
-  }
-
-  return status === 408 || status === 429 || status >= 500;
-}
-
 function parseDate(dateStr: string, fallbackMs: number): Date {
   const parsed = new Date(dateStr);
   if (isNaN(parsed.getTime())) {
@@ -380,6 +278,8 @@ function mapAiTransactions(
 async function invokeParseChunk(
   messagesPayload: readonly MessagePayload[],
   context: ParseSmsContext,
+  requestContext: SmsAiRequestContext,
+  requestKey: string,
   abortSignal?: AbortSignal,
   expectedUserId?: string
 ): Promise<ChunkAiResult> {
@@ -390,6 +290,9 @@ async function invokeParseChunk(
   }
   const response = await supabase.functions.invoke("parse-sms", {
     body: {
+      requestKey,
+      scanSessionId: requestContext.scanSessionId,
+      scanKind: requestContext.scanKind,
       messages: messagesPayload,
       categories: buildCategoryTree(context.categories),
       supportedCurrencies: context.supportedCurrencies,
@@ -404,11 +307,14 @@ async function invokeParseChunk(
     // payload/runtime errors (4xx/5xx) without guessing.
     let status: number | undefined;
     let bodyLength: number | undefined;
+    let refusalMetadata: SmsSafeguardRefusal | undefined;
     const ctx = (response.error as { context?: unknown }).context;
     if (ctx instanceof Response) {
       status = ctx.status;
       try {
-        bodyLength = (await ctx.clone().text()).length;
+        const responseText = await ctx.clone().text();
+        bodyLength = responseText.length;
+        refusalMetadata = parseSmsSafeguardRefusal(JSON.parse(responseText));
       } catch {
         bodyLength = undefined;
       }
@@ -416,6 +322,45 @@ async function invokeParseChunk(
 
     if (status === AI_CONSENT_REQUIRED_STATUS) {
       throw createAiConsentRequiredError();
+    }
+
+    if (
+      status === 413 &&
+      refusalMetadata !== undefined &&
+      !isCapacityRefusalReason(refusalMetadata.reason)
+    ) {
+      if (messagesPayload.length > 1) {
+        return {
+          transactions: [],
+          hasError: false,
+          isRetryable: false,
+          shouldSplitForSize: true,
+        };
+      }
+      return {
+        transactions: [],
+        hasError: false,
+        isRetryable: false,
+        oversizedFingerprints: [messagesPayload[0].smsFingerprint],
+      };
+    }
+
+    if (
+      status === 429 &&
+      refusalMetadata !== undefined &&
+      isCapacityRefusalReason(refusalMetadata.reason)
+    ) {
+      return {
+        transactions: [],
+        hasError: true,
+        isRetryable: false,
+        hasUncorrelatedFailure: true,
+        failureReason: "capacity_limited",
+        availability: {
+          reason: refusalMetadata.reason,
+          availableAt: refusalMetadata.availableAt ?? null,
+        },
+      };
     }
 
     // PII/privacy: do NOT include the response body. Upstream providers
@@ -439,7 +384,10 @@ async function invokeParseChunk(
     };
   }
 
-  return parseAiResponse(response.data);
+  return parseAiResponse(
+    response.data,
+    new Set(messagesPayload.map((message) => message.smsFingerprint))
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -460,12 +408,12 @@ interface MessagePayload {
   readonly body: string;
   readonly sender: string;
   readonly date: string; // not neede to be send to the AI.
+  readonly smsFingerprint: string;
 }
 
 interface ChunkWork {
   readonly messages: readonly MessagePayload[];
-  /** True if this chunk is already a retry sub-chunk (no further splitting). */
-  readonly isRetry: boolean;
+  readonly requestKey: string;
 }
 
 function collectUnresolvedCandidates(input: {
@@ -505,6 +453,15 @@ function loadFixtureSmsParser(): typeof import("./testing/ai-sms-fixture-parser"
     require("./testing/ai-sms-fixture-parser") as typeof import("./testing/ai-sms-fixture-parser");
   /* eslint-enable @typescript-eslint/no-require-imports */
   return fixtureParser.parseSmsWithFixtureAi;
+}
+
+function loadSafeguardQaParser(): typeof import("./testing/sms-safeguard-qa-parser").parseSmsWithSafeguardQa {
+  // Keep QA-only provider doubles out of the normal parser path.
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const qaParser =
+    require("./testing/sms-safeguard-qa-parser") as typeof import("./testing/sms-safeguard-qa-parser");
+  /* eslint-enable @typescript-eslint/no-require-imports */
+  return qaParser.parseSmsWithSafeguardQa;
 }
 
 function throwIfAborted(abortSignal?: AbortSignal): void {
@@ -553,7 +510,8 @@ export async function parseSmsWithAi(
   context: ParseSmsContext,
   onProgress?: (progress: AiParseProgress) => void,
   abortSignal?: AbortSignal,
-  expectedUserId?: string
+  expectedUserId?: string,
+  requestContext?: SmsAiRequestContext
 ): Promise<AiParseResult> {
   const emptyResult: AiParseResult = { transactions: [], hasError: false };
   if (candidates.length === 0) return emptyResult;
@@ -576,6 +534,21 @@ export async function parseSmsWithAi(
   }
 
   try {
+    const safeguardQaConfig = getSmsSafeguardQaConfig();
+    if (safeguardQaConfig.enabled) {
+      if (safeguardQaConfig.profileId === null) {
+        throw new Error("SMS safeguard QA requires a selected profile.");
+      }
+      const parseSmsWithSafeguardQa = loadSafeguardQaParser();
+      return await parseSmsWithSafeguardQa(
+        safeguardQaConfig.profileId,
+        candidates,
+        context,
+        onProgress,
+        abortSignal
+      );
+    }
+
     if (shouldUseFixtureSmsParser()) {
       const parseSmsWithFixtureAi = loadFixtureSmsParser();
       return await parseSmsWithFixtureAi(
@@ -591,15 +564,22 @@ export async function parseSmsWithAi(
 
     // Build the lookup map: messageId → candidate
     const candidateMap = new Map<string, SmsCandidate>();
+    const candidatesByFingerprint = new Map<string, SmsCandidate>();
     const allMessages: readonly MessagePayload[] = candidates.map((c) => {
       candidateMap.set(c.message.id, c);
+      candidatesByFingerprint.set(c.smsFingerprint, c);
       return {
         id: c.message.id,
         body: c.message.body,
         sender: c.message.address,
         date: new Date(c.message.date).toISOString(),
+        smsFingerprint: c.smsFingerprint,
       };
     });
+    const resolvedRequestContext: SmsAiRequestContext = requestContext ?? {
+      scanSessionId: Crypto.randomUUID(),
+      scanKind: "incremental",
+    };
 
     // Build a queue of chunks to process. Retry-with-split may add
     // sub-chunks dynamically, so we use a queue instead of index-based loop.
@@ -609,7 +589,7 @@ export async function parseSmsWithAi(
     for (let i = 0; i < allMessages.length; i += CLIENT_CHUNK_SIZE) {
       chunkQueue.push({
         messages: allMessages.slice(i, i + CLIENT_CHUNK_SIZE),
-        isRetry: false,
+        requestKey: Crypto.randomUUID(),
       });
     }
 
@@ -620,6 +600,10 @@ export async function parseSmsWithAi(
     const allResults: ParsedSmsTransaction[] = [];
     const unresolvedCandidates: AiUnresolvedCandidate[] = [];
     const unresolvedFingerprints = new Set<string>();
+    const durableNegativeFingerprints = new Set<string>();
+    const terminalFingerprints = new Set<string>();
+    const oversizedCandidates = new Map<string, SmsCandidate>();
+    let availability: SmsAiAvailability | undefined;
 
     let chunkIndex = 0;
     while (chunkIndex < chunkQueue.length) {
@@ -639,6 +623,8 @@ export async function parseSmsWithAi(
         chunkResult = await invokeParseChunk(
           currentChunk.messages,
           context,
+          resolvedRequestContext,
+          currentChunk.requestKey,
           abortSignal,
           expectedUserId
         );
@@ -652,40 +638,17 @@ export async function parseSmsWithAi(
       throwIfAborted(abortSignal);
       const chunkDurationMs = Date.now() - chunkStartMs;
 
-      // Only retry-with-split on actual errors, not legitimate empty results
-      if (
-        chunkResult.hasError &&
-        chunkResult.isRetryable !== false &&
-        chunkResult.transactions.length === 0 &&
-        currentChunk.messages.length > 0 &&
-        !currentChunk.isRetry &&
-        currentChunk.messages.length > MIN_CHUNK_SIZE_FOR_SPLIT
-      ) {
-        // Retry-with-split: bisect the failed chunk and enqueue sub-chunks
-        const midpoint = Math.ceil(currentChunk.messages.length / 2);
-        const firstHalf = currentChunk.messages.slice(0, midpoint);
-        const secondHalf = currentChunk.messages.slice(midpoint);
-
-        logger.warn("[ai-sms-parser] Chunk failed, splitting for retry", {
-          failedSize: currentChunk.messages.length,
-          firstHalfSize: firstHalf.length,
-          secondHalfSize: secondHalf.length,
-        });
-
-        // Replace the failed chunk's slot with 2 retry sub-chunks.
-        // We splice them right after the current index so they're processed next.
+      if (chunkResult.shouldSplitForSize === true) {
+        const splitIndex = Math.ceil(currentChunk.messages.length / 2);
+        const leftMessages = currentChunk.messages.slice(0, splitIndex);
+        const rightMessages = currentChunk.messages.slice(splitIndex);
         chunkQueue.splice(
-          chunkIndex + 1,
-          0,
-          { messages: firstHalf, isRetry: true },
-          { messages: secondHalf, isRetry: true }
+          chunkIndex,
+          1,
+          { messages: leftMessages, requestKey: Crypto.randomUUID() },
+          { messages: rightMessages, requestKey: Crypto.randomUUID() }
         );
-
-        // Adjust total: we're replacing 1 failed chunk with 2 sub-chunks (+1 net)
-        totalChunks += 1;
-
-        // Move past the failed chunk (don't count it as completed)
-        chunkIndex++;
+        totalChunks++;
         continue;
       }
 
@@ -695,6 +658,32 @@ export async function parseSmsWithAi(
         validCategoryMap
       );
       allResults.push(...mapped.transactions);
+      for (const fingerprint of chunkResult.durableNegativeFingerprints ?? []) {
+        durableNegativeFingerprints.add(fingerprint);
+      }
+      for (const fingerprint of chunkResult.terminalFingerprints ?? []) {
+        terminalFingerprints.add(fingerprint);
+      }
+      for (const fingerprint of chunkResult.oversizedFingerprints ?? []) {
+        const oversizedCandidate = candidatesByFingerprint.get(fingerprint);
+        if (oversizedCandidate) {
+          oversizedCandidates.set(fingerprint, oversizedCandidate);
+        }
+      }
+      if (chunkResult.availability !== undefined) {
+        const currentAvailableAt = availability?.availableAt
+          ? Date.parse(availability.availableAt)
+          : Number.NEGATIVE_INFINITY;
+        const nextAvailableAt = chunkResult.availability.availableAt
+          ? Date.parse(chunkResult.availability.availableAt)
+          : Number.NEGATIVE_INFINITY;
+        if (
+          availability === undefined ||
+          nextAvailableAt > currentAvailableAt
+        ) {
+          availability = chunkResult.availability;
+        }
+      }
 
       const appendUnresolved = (
         values: readonly AiUnresolvedCandidate[]
@@ -710,13 +699,36 @@ export async function parseSmsWithAi(
         return appendedCount;
       };
 
+      const metadataUnresolved = (
+        chunkResult.unresolvedFingerprints ?? []
+      ).flatMap((fingerprint) => {
+        const candidate = candidatesByFingerprint.get(fingerprint);
+        return candidate
+          ? [
+              {
+                candidate,
+                reason: "chunk_failed" as const,
+                isRetryable: true,
+              },
+            ]
+          : [];
+      });
+      if (appendUnresolved(metadataUnresolved) > 0) {
+        hasError = true;
+      }
+
       if (chunkResult.hasError) {
         const isRetryable = chunkResult.isRetryable !== false;
+        const handledMessageIds = new Set(mapped.resolvedMessageIds);
+        for (const fingerprint of chunkResult.oversizedFingerprints ?? []) {
+          const candidate = candidatesByFingerprint.get(fingerprint);
+          if (candidate) handledMessageIds.add(candidate.message.id);
+        }
         const appendedCount = appendUnresolved(
           collectUnresolvedCandidates({
             messages: currentChunk.messages,
             candidateMap,
-            resolvedMessageIds: mapped.resolvedMessageIds,
+            resolvedMessageIds: handledMessageIds,
             failedMessageIds: new Set(chunkResult.invalidMessageIds ?? []),
             hasUncorrelatedFailure: chunkResult.hasUncorrelatedFailure === true,
             reason: chunkResult.failureReason ?? "chunk_failed",
@@ -762,8 +774,15 @@ export async function parseSmsWithAi(
     return {
       transactions: allResults,
       hasError,
-      isRetryable: hasError ? !hasNonRetryableError : undefined,
+      isRetryable:
+        hasError || oversizedCandidates.size > 0
+          ? hasError && !hasNonRetryableError
+          : undefined,
       unresolvedCandidates,
+      durableNegativeFingerprints: [...durableNegativeFingerprints],
+      terminalFingerprints: [...terminalFingerprints],
+      oversizedCandidates: [...oversizedCandidates.values()],
+      availability,
     };
   } catch (err: unknown) {
     if (isParserControlFlowError(err)) {

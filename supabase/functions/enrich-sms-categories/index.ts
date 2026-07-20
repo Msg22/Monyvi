@@ -5,12 +5,20 @@ import { hasActiveAiProcessingConsent } from "../_shared/ai-consent.ts";
 import { withTimeout } from "../_shared/promise-timeout.ts";
 import { handleSmsCategoryEnrichmentRequest } from "../_shared/sms-category-enrichment-handler.ts";
 import {
+  completeSmsAiWork,
+  markSmsAiProviderStarted,
+  releaseSmsAiWork,
+  reserveSmsAiWork,
+} from "../_shared/sms-ai-safeguard-service.ts";
+import { readSmsSafeguardPolicyFromEnvironment } from "../_shared/sms-safeguard-policy.ts";
+import {
   buildSmsCategoryResponseSchema,
   buildSmsCategoryPrompt,
   parseSmsCategoryResponse,
   type SmsCategoryRequest,
   type SmsCategoryResponse,
 } from "../_shared/sms-category-enrichment-contract.ts";
+import { logSmsAiOperationalResponse } from "../_shared/sms-ai-operational-telemetry.ts";
 
 const MAX_RETRIES = 1;
 const BASE_RETRY_DELAY_MS = 1000;
@@ -20,16 +28,21 @@ function getSafeErrorType(error: unknown): string {
   return error instanceof Error ? error.name || "Error" : typeof error;
 }
 
+function createServiceClient(): ReturnType<typeof createClient> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceKey) {
+    throw new Error("Supabase environment is not configured");
+  }
+  return createClient(supabaseUrl, serviceKey);
+}
+
 async function verifyAuth(
   authHeader: string | null
 ): Promise<{ readonly userId: string } | null> {
   if (!authHeader) return null;
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceKey) return null;
-  const supabase = createClient(supabaseUrl, serviceKey);
   const token = authHeader.replace("Bearer ", "");
-  const { data, error } = await supabase.auth.getUser(token);
+  const { data, error } = await createServiceClient().auth.getUser(token);
   return error || !data.user ? null : { userId: data.user.id };
 }
 
@@ -108,17 +121,30 @@ async function classifyWithRetry(
   return null;
 }
 
-Deno.serve((request: Request): Promise<Response> => {
+Deno.serve(async (request: Request): Promise<Response> => {
   const apiKey = Deno.env.get("GEMINI_API_KEY");
-  return handleSmsCategoryEnrichmentRequest(request, {
+  const response = await handleSmsCategoryEnrichmentRequest(request, {
     authenticate: verifyAuth,
     hasConsent: hasActiveAiProcessingConsent,
+    getPolicy: () => readSmsSafeguardPolicyFromEnvironment(Deno.env.get),
     isProviderConfigured: Boolean(apiKey),
+    reserveWork: (input) => reserveSmsAiWork(createServiceClient(), input),
+    markProviderStarted: (requestId) =>
+      markSmsAiProviderStarted(createServiceClient(), requestId),
     classify: (body, signal) =>
       apiKey
         ? classifyWithRetry(new GoogleGenAI({ apiKey }), body, signal)
         : Promise.resolve(null),
+    completeWork: (input) => completeSmsAiWork(createServiceClient(), input),
+    releaseWork: (requestId, decisionCode) =>
+      releaseSmsAiWork(createServiceClient(), requestId, decisionCode),
     logInfo: (...values) => console.log(...values),
     logError: (...values) => console.error(...values),
   });
+  await logSmsAiOperationalResponse(
+    "sms_category_enrichment",
+    response,
+    (...values) => console.log(...values)
+  );
+  return response;
 });

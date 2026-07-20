@@ -34,7 +34,11 @@ const MODELS_DIR = path.join(OUTPUT_DIR, "models");
 const BASE_MODELS_DIR = path.join(MODELS_DIR, "base");
 
 // Tables to exclude (cloud-only, computed data, or internal)
-const EXCLUDED_TABLES = ["__InternalSupabase"];
+const EXCLUDED_TABLES = [
+  "__InternalSupabase",
+  "sms_ai_work_requests",
+  "sms_ai_usage_events",
+];
 
 // Mapping from table names to class names (for irregular plurals)
 const TABLE_TO_CLASS = {

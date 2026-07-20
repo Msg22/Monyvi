@@ -24,11 +24,21 @@ const mockHasExistingSmsFingerprint = jest.fn<
   Promise<boolean>,
   [string, string?]
 >();
+const mockGetTerminalSmsFingerprints = jest.fn<
+  Promise<ReadonlySet<string>>,
+  [readonly string[], string?]
+>();
 type MockParserResult = AiParseResult | SmsParserOrchestratorResult;
 
 const mockParseSmsWithOrchestrator = jest.fn<
   Promise<MockParserResult>,
-  [readonly SmsCandidate[], ParseSmsContext]
+  [
+    readonly SmsCandidate[],
+    ParseSmsContext,
+    unknown?,
+    unknown?,
+    Readonly<Record<string, unknown>>?,
+  ]
 >();
 const mockComputeSmsFingerprint = jest.fn<
   Promise<string>,
@@ -91,6 +101,14 @@ jest.mock("@/services/sms-dedup-service", () => ({
     mockHasExistingSmsFingerprint(smsFingerprint, expectedUserId),
 }));
 
+jest.mock("@/services/sms-processing-outcome-service", () => ({
+  getTerminalSmsFingerprints: (
+    fingerprints: readonly string[],
+    expectedUserId?: string
+  ): Promise<ReadonlySet<string>> =>
+    mockGetTerminalSmsFingerprints(fingerprints, expectedUserId),
+}));
+
 jest.mock("@/services/ai-sms-parser-service", () => ({
   isAiConsentRequiredError: (error: unknown): boolean =>
     error instanceof Error && error.name === "AiConsentRequiredError",
@@ -98,7 +116,13 @@ jest.mock("@/services/ai-sms-parser-service", () => ({
 
 jest.mock("@/services/sms-parser-orchestrator", () => ({
   parseSmsWithOrchestrator: (
-    ...args: [readonly SmsCandidate[], ParseSmsContext]
+    ...args: [
+      readonly SmsCandidate[],
+      ParseSmsContext,
+      unknown?,
+      unknown?,
+      Readonly<Record<string, unknown>>?,
+    ]
   ): Promise<SmsParserOrchestratorResult> =>
     mockParseSmsWithOrchestrator(...args).then(mockWithParserDiagnostics),
   toSmsParserDiagnosticsLogContext: (
@@ -116,6 +140,16 @@ function mockWithParserDiagnostics(
     ...result,
     transactions: result.transactions,
     unresolvedCandidates: resultWithDiagnostics.unresolvedCandidates ?? [],
+    safeguardSummary: resultWithDiagnostics.safeguardSummary ?? {
+      admittedAiCount: 0,
+      deferredAiCount: 0,
+      oversizedCount: 0,
+      unresolvedCount: resultWithDiagnostics.unresolvedCandidates?.length ?? 0,
+      completionStatus:
+        (resultWithDiagnostics.unresolvedCandidates?.length ?? 0) > 0
+          ? "partial"
+          : "complete",
+    },
     diagnostics: resultWithDiagnostics.diagnostics ?? {
       mode: "ai-primary",
       attemptedAi: true,
@@ -191,6 +225,7 @@ describe("sms-live-processor", () => {
     });
     mockRevokeAiProcessingConsent.mockResolvedValue(undefined);
     mockHasExistingSmsFingerprint.mockResolvedValue(false);
+    mockGetTerminalSmsFingerprints.mockResolvedValue(new Set());
     mockComputeSmsFingerprint.mockResolvedValue("hash-live");
     mockIsLikelyFinancialSms.mockReturnValue(true);
     mockIsLikelyCorruptedSmsText.mockReturnValue(false);
@@ -237,6 +272,35 @@ describe("sms-live-processor", () => {
     expect(context.supportedCurrencies).toEqual(["EGP"]);
   });
 
+  it("pins live parsing to the shared terminal state and live request identity", async () => {
+    mockGetTerminalSmsFingerprints.mockResolvedValueOnce(
+      new Set(["hash-live"])
+    );
+
+    await processLiveSmsEvent({
+      sender: "QNB EGYPT",
+      body: "Purchase EGP 850 at Hyper Market using card ending 1234",
+      timestamp: 1778414400000,
+      deliveryMode: "foreground",
+    });
+
+    expect(mockGetTerminalSmsFingerprints).toHaveBeenCalledWith(
+      ["hash-live"],
+      "user-a"
+    );
+    expect(mockParseSmsWithOrchestrator).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(Object),
+      undefined,
+      undefined,
+      {
+        expectedUserId: "user-a",
+        terminalFingerprints: new Set(["hash-live"]),
+        requestContext: { scanSessionId: null, scanKind: "live" },
+      }
+    );
+  });
+
   it("ignores garbled SMS text before fingerprinting or parsing", async () => {
     const body = "??? QNB ?????? ???? 13.5% ??? 1000EGP ???????";
     mockIsLikelyCorruptedSmsText.mockReturnValueOnce(true);
@@ -259,6 +323,13 @@ describe("sms-live-processor", () => {
       transactions: [createParsedTransaction()],
       hasError: false,
       unresolvedCandidates: [],
+      safeguardSummary: {
+        admittedAiCount: 0,
+        deferredAiCount: 0,
+        oversizedCount: 0,
+        unresolvedCount: 0,
+        completionStatus: "complete",
+      },
       diagnostics: {
         mode: "hybrid",
         attemptedAi: false,
@@ -684,7 +755,7 @@ describe("sms-live-processor", () => {
       expect.any(Object),
       undefined,
       undefined,
-      { expectedUserId: "user-a" }
+      expect.objectContaining({ expectedUserId: "user-a" })
     );
   });
 

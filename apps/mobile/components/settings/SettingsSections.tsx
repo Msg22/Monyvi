@@ -182,20 +182,25 @@ export function CurrencySettingsSection({
 export function SmsSyncSettingsSection({
   t,
   hasSynced,
-  lastSyncTimestamp,
-  smsPermissionStatus,
   chevronColor,
   onIncrementalSync,
-  onFullRescanPress,
+  onHistoryRescanPress,
+  historyRescanAvailableAt,
+  language = "en",
 }: {
   readonly t: TranslateFn;
   readonly hasSynced: boolean;
-  readonly lastSyncTimestamp: number | null;
-  readonly smsPermissionStatus: SmsPermissionStatus;
   readonly chevronColor: string;
   readonly onIncrementalSync: () => void;
-  readonly onFullRescanPress: () => void;
+  readonly onHistoryRescanPress: () => void;
+  readonly historyRescanAvailableAt?: string | null;
+  readonly language?: string;
 }): React.JSX.Element {
+  const historyRescanAvailability = historyRescanAvailableAt
+    ? formatSmsAvailabilityTime(historyRescanAvailableAt, language)
+    : null;
+  const isHistoryRescanDisabled = historyRescanAvailability !== null;
+
   return (
     <View className="mb-8">
       <SectionLabel>{t("sms_sync")}</SectionLabel>
@@ -203,23 +208,19 @@ export function SmsSyncSettingsSection({
       <TouchableOpacity
         testID="sms-sync-button"
         onPress={onIncrementalSync}
-        className="flex-row items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-800"
+        className="mb-3 flex-row items-center justify-between rounded-2xl bg-white p-4 dark:bg-slate-800"
       >
-        <View className="flex-row items-center gap-3">
+        <View className="flex-1 flex-row items-center gap-3">
           <SettingsIconTile
             name="chatbubble-ellipses"
             className="bg-emerald-600 dark:bg-emerald-500"
           />
-          <View>
+          <View className="flex-1">
             <Text className="text-base font-medium text-slate-900 dark:text-slate-50">
               {t("sync_new")}
             </Text>
             <Text className="text-xs text-slate-500 dark:text-slate-400">
-              {getSmsSyncDescription(t, {
-                hasSynced,
-                lastSyncTimestamp,
-                smsPermissionStatus,
-              })}
+              {t("sync_new_description")}
             </Text>
           </View>
         </View>
@@ -228,23 +229,56 @@ export function SmsSyncSettingsSection({
 
       {hasSynced && (
         <TouchableOpacity
-          onPress={onFullRescanPress}
+          testID="sms-history-rescan-button"
+          onPress={onHistoryRescanPress}
+          disabled={isHistoryRescanDisabled}
+          accessibilityState={{ disabled: isHistoryRescanDisabled }}
+          accessibilityHint={
+            historyRescanAvailability === null
+              ? undefined
+              : t("rescan_recent_available_at", {
+                  date: historyRescanAvailability,
+                })
+          }
+          style={isHistoryRescanDisabled ? { opacity: 0.62 } : undefined}
           className="flex-row items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-800"
         >
-          <View className="flex-row items-center gap-3">
+          <View className="flex-1 flex-row items-center gap-3">
             <SettingsIconTile
               name="refresh"
               className="bg-orange-600 dark:bg-orange-500"
             />
-            <Text className="text-base font-medium text-slate-900 dark:text-slate-50">
-              {t("full_rescan")}
-            </Text>
+            <View className="flex-1">
+              <Text className="text-base font-medium text-slate-900 dark:text-slate-50">
+                {t("rescan_recent")}
+              </Text>
+              <Text className="text-xs text-slate-500 dark:text-slate-400">
+                {historyRescanAvailability === null
+                  ? t("rescan_recent_description")
+                  : t("rescan_recent_available_at", {
+                      date: historyRescanAvailability,
+                    })}
+              </Text>
+            </View>
           </View>
           <Ionicons name="chevron-forward" size={20} color={chevronColor} />
         </TouchableOpacity>
       )}
     </View>
   );
+}
+
+export function formatSmsAvailabilityTime(
+  availableAt: string,
+  language: string
+): string | null {
+  const timestamp = Date.parse(availableAt);
+  if (!Number.isFinite(timestamp)) return null;
+
+  return new Intl.DateTimeFormat(language, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(timestamp));
 }
 
 export function LiveDetectionSettingsSection({

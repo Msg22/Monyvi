@@ -1,3 +1,3 @@
 export type PendingAiAction =
-  | { kind: "sms"; mode: "incremental" | "full" }
+  | { kind: "sms"; mode: "incremental" | "history" }
   | { kind: "live" };

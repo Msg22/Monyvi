@@ -31,6 +31,7 @@ const mockGetNotificationPermissionStatus = jest.fn<
   []
 >();
 const mockRouterPush = jest.fn<void, [string]>();
+const mockSetScanMode = jest.fn<void, ["incremental" | "history"]>();
 const mockGrantAiConsent = jest.fn<Promise<void>, []>();
 const mockRevokeAiConsent = jest.fn<Promise<void>, []>();
 const SAFE_AREA_BOTTOM = 24;
@@ -153,9 +154,16 @@ jest.mock("@/hooks/useSmsSync", () => ({
   }),
 }));
 
+jest.mock("@/hooks/useSmsAiAvailability", () => ({
+  useSmsAiAvailability: () => ({
+    availability: null,
+    refresh: jest.fn(() => Promise.resolve()),
+  }),
+}));
+
 jest.mock("@/context/SmsScanContext", () => ({
   useSmsScanContext: () => ({
-    setScanMode: jest.fn(),
+    setScanMode: mockSetScanMode,
   }),
 }));
 
@@ -591,13 +599,29 @@ describe("Settings live SMS permission recovery", () => {
     expect(mockRouterPush).not.toHaveBeenCalledWith("/sms-scan");
   });
 
-  it("dismisses the full rescan confirmation before opening AI consent", async () => {
+  it("uses separate incremental and history scan intents", async () => {
+    mockHasSynced = true;
+    mockSmsPermissionStatus = "granted";
+    const screen = await renderReadySettings();
+
+    fireEvent.press(screen.getByText("sync_new"));
+    expect(mockSetScanMode).toHaveBeenLastCalledWith("incremental");
+    expect(mockRouterPush).toHaveBeenLastCalledWith("/sms-scan");
+
+    fireEvent.press(screen.getByText("rescan_recent"));
+    fireEvent.press(await screen.findByTestId("modal-confirm"));
+
+    expect(mockSetScanMode).toHaveBeenLastCalledWith("history");
+    expect(mockRouterPush).toHaveBeenLastCalledWith("/sms-scan");
+  });
+
+  it("dismisses the history rescan confirmation before opening AI consent", async () => {
     mockHasSynced = true;
     mockIsAiConsented = false;
     mockSmsPermissionStatus = "granted";
     const screen = await renderReadySettings();
 
-    fireEvent.press(screen.getByText("full_rescan"));
+    fireEvent.press(screen.getByText("rescan_recent"));
     expect(await screen.findByText("rescan_title")).toBeTruthy();
 
     fireEvent.press(screen.getByTestId("modal-confirm"));

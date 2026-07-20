@@ -1,8 +1,14 @@
-import { CHILD_TABLE_NAMES, CHILD_TABLES_MAP, SNAPSHOT_TABLES } from "./config";
+import {
+  CHILD_TABLE_NAMES,
+  CHILD_TABLES_MAP,
+  SERVER_OWNED_USER_TABLES,
+  SNAPSHOT_TABLES,
+} from "./config";
 import type {
   ChildTableConfig,
   ChildTableName,
   ReadOnlyTableName,
+  ServerOwnedUserTableName,
   SnapshotTableName,
   SupabaseTablesNames,
   WritableSupabaseTablesNames,
@@ -17,7 +23,19 @@ export function isSnapshotTable(
 export function isReadOnlyTable(
   table: SupabaseTablesNames
 ): table is ReadOnlyTableName {
-  return table === "market_rates" || isSnapshotTable(table);
+  return (
+    table === "market_rates" ||
+    isSnapshotTable(table) ||
+    isServerOwnedUserTable(table)
+  );
+}
+
+export function isServerOwnedUserTable(
+  table: SupabaseTablesNames
+): table is ServerOwnedUserTableName {
+  return (SERVER_OWNED_USER_TABLES as readonly SupabaseTablesNames[]).includes(
+    table
+  );
 }
 
 export function isWritableTable(

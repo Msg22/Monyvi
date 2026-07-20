@@ -22,6 +22,7 @@ import { Debt } from "./models/Debt";
 import { MarketRate } from "./models/MarketRate";
 import { Profile } from "./models/Profile";
 import { RecurringPayment } from "./models/RecurringPayment";
+import { SmsAiNegativeOutcome } from "./models/SmsAiNegativeOutcome";
 import { Transaction } from "./models/Transaction";
 import { Transfer } from "./models/Transfer";
 import { UserCategorySettings } from "./models/UserCategorySettings";
@@ -113,6 +114,7 @@ export const database = new Database({
     UserCategorySettings,
     Debt,
     RecurringPayment,
+    SmsAiNegativeOutcome,
     Transaction,
     Transfer,
     Budget,

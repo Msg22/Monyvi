@@ -23,6 +23,7 @@ import { TransactionReview } from "@/components/transaction-review/TransactionRe
 import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
 import { useSmsScanContext } from "@/context/SmsScanContext";
+import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator";
 import { useTheme } from "@/context/ThemeContext";
 import { useSmsSync } from "@/hooks/useSmsSync";
 import { useSmsReviewRetry } from "@/hooks/useSmsReviewRetry";
@@ -36,11 +37,12 @@ import type { ReviewableTransaction } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
-import { Text, TouchableOpacity } from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { logger } from "@/utils/logger";
+import { PartialSmsResultsNotice } from "@/components/transaction-review/PartialSmsResultsNotice";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -49,8 +51,12 @@ import { logger } from "@/utils/logger";
 export default function SmsReviewScreen(): React.JSX.Element {
   const { t } = useTranslation("transactions");
   const router = useRouter();
-  const { transactions, unresolvedCandidates, clearTransactions } =
-    useSmsScanContext();
+  const {
+    transactions,
+    unresolvedCandidates,
+    safeguardSummary,
+    clearTransactions,
+  } = useSmsScanContext();
   const { markSyncComplete } = useSmsSync();
   const { showToast } = useToast();
   const { isDark } = useTheme();
@@ -59,6 +65,24 @@ export default function SmsReviewScreen(): React.JSX.Element {
 
   const [isSaving, setIsSaving] = useState(false);
   const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
+  const activeSafeguardSummary: SmsScanSafeguardSummary | null =
+    safeguardSummary;
+
+  const partialResults =
+    activeSafeguardSummary !== null &&
+    activeSafeguardSummary.deferredAiCount +
+      activeSafeguardSummary.oversizedCount +
+      activeSafeguardSummary.unresolvedCount >
+      0
+      ? {
+          safeguardSummary: activeSafeguardSummary,
+          retryableCount: smsRetry.retryableCount,
+          canRetry: smsRetry.retryableCount > 0 && !isSaving,
+          isRetrying: smsRetry.isRetrying,
+          hasRetryError: smsRetry.hasRetryError,
+          onRetry: () => void smsRetry.retry(),
+        }
+      : undefined;
 
   // Mark review as active to queue incoming live transactions
   useEffect(() => {
@@ -177,6 +201,11 @@ export default function SmsReviewScreen(): React.JSX.Element {
         <Text className="text-lg text-slate-400 mt-4 text-center">
           {t("no_transactions_to_review")}
         </Text>
+        {partialResults && (
+          <View className="mt-6 w-full">
+            <PartialSmsResultsNotice {...partialResults} />
+          </View>
+        )}
         <TouchableOpacity
           onPress={() => router.replace("/(private)/(tabs)")}
           className="mt-6 px-6 py-3 bg-slate-800 rounded-2xl"
@@ -206,17 +235,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
           count: transactions.length,
         })}
         workspaceVariant="sms"
-        partialResults={
-          smsRetry.unresolvedCount > 0
-            ? {
-                unresolvedCount: smsRetry.unresolvedCount,
-                canRetry: smsRetry.retryableCount > 0 && !isSaving,
-                isRetrying: smsRetry.isRetrying,
-                hasRetryError: smsRetry.hasRetryError,
-                onRetry: () => void smsRetry.retry(),
-              }
-            : undefined
-        }
+        partialResults={partialResults}
         onBack={() => {
           clearTransactions();
           router.back();

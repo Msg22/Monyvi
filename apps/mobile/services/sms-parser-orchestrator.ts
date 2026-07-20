@@ -8,9 +8,9 @@ import {
   normalizeType,
   createBundledTrustedSmsCatalogProvider,
   parseCategory,
-  parseSmsWithLocalParser,
   parseSmsWithTrustedCatalog,
   QNB_EGYPT_TRUSTED_SMS_CATALOG,
+  selectSmsAiWork,
   type ParsedSmsTransaction,
   type TrustedSmsCatalogActivation,
   type TrustedSmsParsedTransaction,
@@ -27,10 +27,10 @@ import {
   createAiConsentRequiredError,
   isAiConsentRequiredError,
   parseSmsWithAi,
-  type AiUnresolvedCandidate,
   type AiParseProgress,
   type AiParseResult,
   type ParseSmsContext,
+  type SmsAiRequestContext,
   type SmsCandidate,
 } from "./ai-sms-parser-service";
 import {
@@ -40,236 +40,39 @@ import {
   type TrustedSmsCategoryCandidate,
   type TrustedSmsCategoryEnrichmentResult,
   type TrustedSmsCategoryOutcome,
+  type SmsCategoryEnrichmentRequestContext,
 } from "./ai-sms-category-enrichment-service";
 import {
   getAiProcessingConsentStatus,
   revokeAiProcessingConsent,
 } from "./profile-service";
+import { createLocalParserResult } from "./sms-local-parser-adapter";
 
-export type SmsParserMode =
-  | "hybrid"
-  | "ai-primary"
-  | "local-primary"
-  | "fixture";
+import {
+  createSmsParserDiagnostics as createDiagnostics,
+  createSmsScanSafeguardSummary as createSafeguardSummary,
+  type HybridSmsUnresolvedCandidate,
+  type SmsParserMode,
+  type SmsParserOrchestratorOptions,
+  type SmsParserOrchestratorResult,
+} from "./sms-parser-result-contract";
+import { getEffectiveSmsScanPolicy } from "./sms-scan-policy-service";
 
-export interface HybridSmsUnresolvedCandidate {
-  readonly candidate: SmsCandidate;
-  readonly reason: HybridSmsUnresolvedReason;
-  readonly isRetryable: boolean;
-}
-
-export type HybridSmsUnresolvedReason =
-  | AiUnresolvedCandidate["reason"]
-  | "ai_failed";
+export {
+  toSmsParserDiagnosticsLogContext,
+  type HybridSmsUnresolvedCandidate,
+  type HybridSmsUnresolvedReason,
+  type SmsParserDiagnostics,
+  type SmsParserMode,
+  type SmsParserOrchestratorOptions,
+  type SmsParserOrchestratorResult,
+  type SmsScanSafeguardSummary,
+} from "./sms-parser-result-contract";
 
 export type TrustedPrefilterDisposition =
   | "not_trusted_candidate"
   | "route_to_parser"
   | "filter_before_ai";
-
-export interface SmsParserDiagnostics {
-  readonly mode: SmsParserMode;
-  readonly attemptedAi: boolean;
-  readonly attemptedLocal: boolean;
-  readonly candidateCount: number;
-  readonly resultCount: number;
-  readonly matchedPatternIds: readonly string[];
-  readonly runtimeScopeCounts: Readonly<Record<string, number>>;
-  readonly catalogVersion?: number;
-  readonly localMatchedCount?: number;
-  readonly localRejectedCount?: number;
-  readonly localUnresolvedCount?: number;
-  readonly localAmbiguousCount?: number;
-  readonly aiAttemptedCount?: number;
-  readonly aiMatchedCount?: number;
-  readonly categoryEnrichmentAttemptedCount?: number;
-  readonly categoryEnrichedCount?: number;
-  readonly categoryEnrichmentRejectedCount?: number;
-  readonly categoryEnrichmentMissingCount?: number;
-  readonly categoryEnrichmentFailed?: boolean;
-  readonly unresolvedCount?: number;
-  readonly duplicateDiscardedCount?: number;
-  readonly reasonCounts?: Readonly<Record<string, number>>;
-}
-
-export function toSmsParserDiagnosticsLogContext(
-  diagnostics: SmsParserDiagnostics
-): Readonly<Record<string, unknown>> {
-  return {
-    mode: diagnostics.mode,
-    attemptedAi: diagnostics.attemptedAi,
-    attemptedLocal: diagnostics.attemptedLocal,
-    candidateCount: diagnostics.candidateCount,
-    resultCount: diagnostics.resultCount,
-    matchedPatternIds: diagnostics.matchedPatternIds,
-    runtimeScopeCounts: diagnostics.runtimeScopeCounts,
-    catalogVersion: diagnostics.catalogVersion,
-    localMatchedCount: diagnostics.localMatchedCount,
-    localRejectedCount: diagnostics.localRejectedCount,
-    localUnresolvedCount: diagnostics.localUnresolvedCount,
-    localAmbiguousCount: diagnostics.localAmbiguousCount,
-    aiAttemptedCount: diagnostics.aiAttemptedCount,
-    aiMatchedCount: diagnostics.aiMatchedCount,
-    categoryEnrichmentAttemptedCount:
-      diagnostics.categoryEnrichmentAttemptedCount,
-    categoryEnrichedCount: diagnostics.categoryEnrichedCount,
-    categoryEnrichmentRejectedCount:
-      diagnostics.categoryEnrichmentRejectedCount,
-    categoryEnrichmentMissingCount: diagnostics.categoryEnrichmentMissingCount,
-    categoryEnrichmentFailed: diagnostics.categoryEnrichmentFailed,
-    unresolvedCount: diagnostics.unresolvedCount,
-    duplicateDiscardedCount: diagnostics.duplicateDiscardedCount,
-    reasonCounts: diagnostics.reasonCounts,
-  };
-}
-
-export interface SmsParserOrchestratorResult extends Omit<
-  AiParseResult,
-  "unresolvedCandidates"
-> {
-  readonly diagnostics: SmsParserDiagnostics;
-  readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
-  readonly isConsentRequired?: boolean;
-}
-
-export interface SmsParserOrchestratorOptions {
-  readonly expectedUserId?: string;
-}
-
-function createDiagnostics(input: {
-  readonly mode: SmsParserMode;
-  readonly attemptedAi: boolean;
-  readonly attemptedLocal: boolean;
-  readonly candidateCount: number;
-  readonly resultCount: number;
-  readonly matchedPatternIds?: readonly string[];
-  readonly runtimeScopeCounts?: Readonly<Record<string, number>>;
-  readonly catalogVersion?: number;
-  readonly localMatchedCount?: number;
-  readonly localRejectedCount?: number;
-  readonly localUnresolvedCount?: number;
-  readonly localAmbiguousCount?: number;
-  readonly aiAttemptedCount?: number;
-  readonly aiMatchedCount?: number;
-  readonly categoryEnrichmentAttemptedCount?: number;
-  readonly categoryEnrichedCount?: number;
-  readonly categoryEnrichmentRejectedCount?: number;
-  readonly categoryEnrichmentMissingCount?: number;
-  readonly categoryEnrichmentFailed?: boolean;
-  readonly unresolvedCount?: number;
-  readonly duplicateDiscardedCount?: number;
-  readonly reasonCounts?: Readonly<Record<string, number>>;
-}): SmsParserDiagnostics {
-  return {
-    matchedPatternIds: [],
-    runtimeScopeCounts: {},
-    ...input,
-  };
-}
-
-function mapLocalTransactions(
-  candidates: readonly SmsCandidate[],
-  context: ParseSmsContext
-): {
-  readonly transactions: readonly ParsedSmsTransaction[];
-  readonly matchedPatternIds: readonly string[];
-  readonly runtimeScopeCounts: Readonly<Record<string, number>>;
-  readonly hasError: boolean;
-} {
-  const localResult = parseSmsWithLocalParser({
-    candidates: candidates.map((candidate) => ({
-      messageId: candidate.message.id,
-      sender: candidate.message.address,
-      body: candidate.message.body,
-      receivedAtMs: candidate.message.date,
-      smsFingerprint: candidate.smsFingerprint,
-    })),
-    categories: context.categories,
-    supportedCurrencies: context.supportedCurrencies,
-  });
-
-  if (localResult.error) {
-    logger.warn("smsParser.local.failed", {
-      errorKind: localResult.error.kind,
-      candidateCount: candidates.length,
-    });
-    return {
-      transactions: [],
-      matchedPatternIds: localResult.matchedPatternIds,
-      runtimeScopeCounts: {},
-      hasError: true,
-    };
-  }
-
-  const validCategoryMap = buildCategoryMap(context.categories);
-  const candidatesById = new Map(
-    candidates.map((candidate) => [candidate.message.id, candidate])
-  );
-  const runtimeScopeCounts = localResult.transactions.reduce<
-    Record<string, number>
-  >((counts, transaction) => {
-    const currentCount = counts[transaction.patternRuntimeScope] ?? 0;
-    return {
-      ...counts,
-      [transaction.patternRuntimeScope]: currentCount + 1,
-    };
-  }, {});
-
-  return {
-    transactions: localResult.transactions.map((transaction) => {
-      const candidate = candidatesById.get(transaction.messageId);
-      const category = parseCategory(
-        transaction.categorySystemName,
-        validCategoryMap
-      );
-      return {
-        amount: transaction.amount,
-        currency: normalizeCurrency(transaction.currency),
-        type: normalizeType(transaction.type),
-        counterparty: transaction.counterparty,
-        date: transaction.date,
-        source: "SMS",
-        originLabel: candidate?.message.address ?? "",
-        deduplicationHash: transaction.smsFingerprint,
-        smsFingerprint: transaction.smsFingerprint,
-        senderDisplayName: candidate?.message.address ?? "",
-        categoryId: category.id,
-        categoryDisplayName: category.displayName,
-        rawSmsBody: candidate?.message.body ?? "",
-        confidence: clampConfidence(transaction.confidence),
-        reviewStatus: transaction.reviewStatus,
-        reviewReasons: transaction.reviewReasons,
-        isAtmWithdrawal: transaction.isAtmWithdrawal,
-        cardLast4: transaction.cardLast4,
-      };
-    }),
-    matchedPatternIds: [],
-    runtimeScopeCounts,
-    hasError: false,
-  };
-}
-
-function createLocalResult(
-  candidates: readonly SmsCandidate[],
-  context: ParseSmsContext
-): SmsParserOrchestratorResult {
-  const local = mapLocalTransactions(candidates, context);
-  return {
-    transactions: local.transactions,
-    hasError: local.hasError,
-    isRetryable: local.hasError ? false : undefined,
-    unresolvedCandidates: [],
-    diagnostics: createDiagnostics({
-      mode: "local-primary",
-      attemptedAi: false,
-      attemptedLocal: true,
-      candidateCount: candidates.length,
-      resultCount: local.transactions.length,
-      matchedPatternIds: [],
-      runtimeScopeCounts: local.runtimeScopeCounts,
-    }),
-  };
-}
 
 const trustedCatalogProvider = createBundledTrustedSmsCatalogProvider(
   QNB_EGYPT_TRUSTED_SMS_CATALOG
@@ -511,13 +314,17 @@ function collectTrustedMatches(
 
 function collectAiCandidates(
   outcomes: readonly TrustedSmsParserOutcome[],
-  candidatesById: ReadonlyMap<string, SmsCandidate>
+  candidatesById: ReadonlyMap<string, SmsCandidate>,
+  terminalFingerprints: ReadonlySet<string>
 ): readonly SmsCandidate[] {
   return outcomes.flatMap((outcome) => {
     if (outcome.status === "matched" || outcome.status === "rejected")
       return [];
     const candidate = candidatesById.get(outcome.candidateId);
-    return candidate ? [candidate] : [];
+    return candidate !== undefined &&
+      !terminalFingerprints.has(candidate.smsFingerprint)
+      ? [candidate]
+      : [];
   });
 }
 
@@ -534,7 +341,8 @@ async function runCategoryEnrichment(
   candidates: readonly TrustedSmsCategoryCandidate[],
   context: ParseSmsContext,
   abortSignal: AbortSignal | undefined,
-  expectedUserId: string
+  expectedUserId: string,
+  requestContext?: SmsAiRequestContext
 ): Promise<TrustedSmsCategoryEnrichmentResult> {
   if (candidates.length === 0) return createEmptyCategoryEnrichmentResult();
   try {
@@ -542,7 +350,8 @@ async function runCategoryEnrichment(
       candidates,
       context.categories,
       abortSignal,
-      expectedUserId
+      expectedUserId,
+      toCategoryEnrichmentRequestContext(requestContext)
     );
   } catch (error: unknown) {
     if (isParserControlFlowError(error)) throw error;
@@ -559,13 +368,27 @@ async function runCategoryEnrichment(
   }
 }
 
+function toCategoryEnrichmentRequestContext(
+  requestContext?: SmsAiRequestContext
+): SmsCategoryEnrichmentRequestContext | undefined {
+  if (requestContext?.scanSessionId === null || requestContext === undefined) {
+    return undefined;
+  }
+
+  return {
+    scanSessionId: requestContext.scanSessionId,
+    scanKind: requestContext.scanKind,
+  };
+}
+
 async function runFullAiFallback(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
   localTransactionCount: number,
   onProgress?: (progress: AiParseProgress) => void,
   abortSignal?: AbortSignal,
-  expectedUserId?: string
+  expectedUserId?: string,
+  requestContext?: SmsAiRequestContext
 ): Promise<HybridAiFallbackResult> {
   if (candidates.length === 0) return { transactions: [], hasError: false };
   try {
@@ -581,7 +404,8 @@ async function runFullAiFallback(
             })
         : undefined,
       abortSignal,
-      expectedUserId
+      expectedUserId,
+      requestContext
     );
   } catch (error: unknown) {
     if (
@@ -617,9 +441,10 @@ function parseSmsWithPinnedUser(
   context: ParseSmsContext,
   onProgress?: (progress: AiParseProgress) => void,
   abortSignal?: AbortSignal,
-  expectedUserId?: string
+  expectedUserId?: string,
+  requestContext?: SmsAiRequestContext
 ): Promise<AiParseResult> {
-  if (expectedUserId === undefined) {
+  if (expectedUserId === undefined && requestContext === undefined) {
     return parseSmsWithAi(candidates, context, onProgress, abortSignal);
   }
   return parseSmsWithAi(
@@ -627,8 +452,37 @@ function parseSmsWithPinnedUser(
     context,
     onProgress,
     abortSignal,
-    expectedUserId
+    expectedUserId,
+    requestContext
   );
+}
+
+function selectFullAiWork(candidates: readonly SmsCandidate[]): {
+  readonly admitted: readonly SmsCandidate[];
+  readonly deferred: readonly SmsCandidate[];
+} {
+  const selection = selectSmsAiWork(
+    candidates.map((candidate) => ({
+      candidate,
+      fingerprint: candidate.smsFingerprint,
+      receivedAtMs: candidate.message.date,
+    })),
+    getEffectiveSmsScanPolicy().fullParser.maxUnitsPerScan
+  );
+  return {
+    admitted: selection.admitted.map(({ candidate }) => candidate),
+    deferred: selection.deferred.map(({ candidate }) => candidate),
+  };
+}
+
+function createScanLimitedCandidates(
+  candidates: readonly SmsCandidate[]
+): readonly HybridSmsUnresolvedCandidate[] {
+  return candidates.map((candidate) => ({
+    candidate,
+    reason: "capacity_limited",
+    isRetryable: false,
+  }));
 }
 
 async function reconcileLateRemoteConsentRejection(
@@ -652,11 +506,11 @@ async function parseHybrid(
   context: ParseSmsContext,
   onProgress?: (progress: AiParseProgress) => void,
   abortSignal?: AbortSignal,
-  expectedUserId?: string
+  options: SmsParserOrchestratorOptions = {}
 ): Promise<SmsParserOrchestratorResult> {
   throwIfAborted(abortSignal);
   const consentStatus = await getAiProcessingConsentStatus();
-  assertExpectedUserId(consentStatus.userId, expectedUserId);
+  assertExpectedUserId(consentStatus.userId, options.expectedUserId);
   if (!consentStatus.isConsented) throw createAiConsentRequiredError();
   throwIfAborted(abortSignal);
 
@@ -687,11 +541,13 @@ async function parseHybrid(
   });
   const aiCandidates = collectAiCandidates(
     localResult.outcomes,
-    candidatesById
+    candidatesById,
+    options.terminalFingerprints ?? new Set()
   );
+  const aiSelection = selectFullAiWork(aiCandidates);
   if (categoryCandidates.length > 0 || aiCandidates.length > 0) {
     const refreshedConsentStatus = await getAiProcessingConsentStatus();
-    assertExpectedUserId(refreshedConsentStatus.userId, expectedUserId);
+    assertExpectedUserId(refreshedConsentStatus.userId, options.expectedUserId);
     if (
       !refreshedConsentStatus.isConsented ||
       refreshedConsentStatus.userId !== consentStatus.userId
@@ -707,15 +563,17 @@ async function parseHybrid(
       categoryCandidates,
       context,
       abortSignal,
-      consentStatus.userId
+      consentStatus.userId,
+      options.requestContext
     ),
     runFullAiFallback(
-      aiCandidates,
+      aiSelection.admitted,
       context,
       trustedMatches.length,
       onProgress,
       abortSignal,
-      expectedUserId
+      options.expectedUserId,
+      options.requestContext
     ),
   ]);
   throwIfAborted(abortSignal);
@@ -737,29 +595,57 @@ async function parseHybrid(
       categoryResult.outcomesByCandidateId.get(transaction.messageId)
     )
   );
-  const unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[] =
+  const aiUnresolvedCandidates: readonly HybridSmsUnresolvedCandidate[] =
     aiResult.hasError
       ? (aiResult.unresolvedCandidates ??
-        aiCandidates.map((candidate) => ({
+        aiSelection.admitted.map((candidate) => ({
           candidate,
           reason: "ai_failed",
           isRetryable: aiResult.isRetryable !== false,
         })))
       : [];
+  const deferredCandidates = createScanLimitedCandidates(aiSelection.deferred);
+  const unresolvedCandidates = [
+    ...aiUnresolvedCandidates,
+    ...deferredCandidates,
+  ];
   const mergedResult = mergeDistinctTransactions(
     localTransactions,
     aiResult.transactions
   );
   const transactions = mergedResult.transactions;
+  const availability =
+    aiResult.availability ??
+    (deferredCandidates.length > 0
+      ? { reason: "scan_limit" as const, availableAt: null }
+      : undefined);
   return {
     transactions,
-    hasError: aiResult.hasError,
-    isRetryable: aiResult.isRetryable,
+    hasError: aiResult.hasError || deferredCandidates.length > 0,
+    isRetryable:
+      aiResult.isRetryable ??
+      (deferredCandidates.length > 0 ? false : undefined),
     isConsentRequired: isCategoryConsentRequired || undefined,
     unresolvedCandidates,
+    durableNegativeFingerprints: aiResult.durableNegativeFingerprints,
+    oversizedCandidates: aiResult.oversizedCandidates,
+    availability,
+    safeguardSummary: createSafeguardSummary({
+      admittedAiCount: aiSelection.admitted.length,
+      deferredAiCount: aiSelection.deferred.length,
+      oversizedCount: aiResult.oversizedCandidates?.length ?? 0,
+      unresolvedCount: unresolvedCandidates.length,
+      availability,
+    }),
+    terminalFingerprints: [
+      ...new Set([
+        ...(options.terminalFingerprints ?? []),
+        ...(aiResult.terminalFingerprints ?? []),
+      ]),
+    ],
     diagnostics: createDiagnostics({
       mode: "hybrid",
-      attemptedAi: aiCandidates.length > 0,
+      attemptedAi: aiSelection.admitted.length > 0,
       attemptedLocal: true,
       candidateCount: candidates.length,
       resultCount: transactions.length,
@@ -772,8 +658,9 @@ async function parseHybrid(
       localRejectedCount: countOutcomes(localResult.outcomes, "rejected"),
       localUnresolvedCount: countOutcomes(localResult.outcomes, "unresolved"),
       localAmbiguousCount: countOutcomes(localResult.outcomes, "ambiguous"),
-      aiAttemptedCount: aiCandidates.length,
+      aiAttemptedCount: aiSelection.admitted.length,
       aiMatchedCount: aiResult.transactions.length,
+      aiDeferredCount: aiSelection.deferred.length,
       categoryEnrichmentAttemptedCount: categoryResult.attemptedMerchantCount,
       categoryEnrichedCount: categoryResult.acceptedCandidateCount,
       categoryEnrichmentRejectedCount: categoryResult.rejectedResultCount,
@@ -832,6 +719,7 @@ export async function parseSmsWithOrchestrator(
       transactions: [],
       hasError: false,
       unresolvedCandidates: [],
+      safeguardSummary: createSafeguardSummary({}),
       diagnostics: createDiagnostics({
         mode: getConfiguredDiagnosticsMode(),
         attemptedAi: false,
@@ -853,7 +741,7 @@ export async function parseSmsWithOrchestrator(
     }
 
     throwIfAborted(abortSignal);
-    const result = createLocalResult(parserCandidates, context);
+    const result = createLocalParserResult(parserCandidates, context);
     throwIfAborted(abortSignal);
 
     onProgress?.({
@@ -873,29 +761,91 @@ export async function parseSmsWithOrchestrator(
       context,
       onProgress,
       abortSignal,
-      options.expectedUserId
+      options
     );
   }
 
   try {
+    const terminalFingerprints = options.terminalFingerprints ?? new Set();
+    const aiCandidates = parserCandidates.filter(
+      (candidate) => !terminalFingerprints.has(candidate.smsFingerprint)
+    );
+    const aiSelection = selectFullAiWork(aiCandidates);
+    if (aiSelection.admitted.length === 0) {
+      const deferredCandidates = createScanLimitedCandidates(
+        aiSelection.deferred
+      );
+      const availability =
+        deferredCandidates.length > 0
+          ? { reason: "scan_limit" as const, availableAt: null }
+          : undefined;
+      return {
+        transactions: [],
+        hasError: deferredCandidates.length > 0,
+        isRetryable: deferredCandidates.length > 0 ? false : undefined,
+        unresolvedCandidates: deferredCandidates,
+        availability,
+        safeguardSummary: createSafeguardSummary({
+          deferredAiCount: aiSelection.deferred.length,
+          unresolvedCount: deferredCandidates.length,
+          availability,
+        }),
+        terminalFingerprints: [...terminalFingerprints],
+        diagnostics: createDiagnostics({
+          mode: getAiDiagnosticsMode(),
+          attemptedAi: false,
+          attemptedLocal: false,
+          candidateCount: parserCandidates.length,
+          resultCount: 0,
+          aiDeferredCount: deferredCandidates.length,
+        }),
+      };
+    }
     const aiResult = await parseSmsWithPinnedUser(
-      parserCandidates,
+      aiSelection.admitted,
       context,
       onProgress,
       abortSignal,
-      options.expectedUserId
+      options.expectedUserId,
+      options.requestContext
     );
 
+    const deferredCandidates = createScanLimitedCandidates(
+      aiSelection.deferred
+    );
+    const unresolvedCandidates = [
+      ...(aiResult.unresolvedCandidates ?? []),
+      ...deferredCandidates,
+    ];
+    const availability =
+      aiResult.availability ??
+      (deferredCandidates.length > 0
+        ? { reason: "scan_limit" as const, availableAt: null }
+        : undefined);
     return {
       ...aiResult,
-      unresolvedCandidates: aiResult.unresolvedCandidates ?? [],
+      hasError: aiResult.hasError || deferredCandidates.length > 0,
+      isRetryable:
+        aiResult.isRetryable ??
+        (deferredCandidates.length > 0 ? false : undefined),
+      unresolvedCandidates,
+      availability,
+      safeguardSummary: createSafeguardSummary({
+        admittedAiCount: aiSelection.admitted.length,
+        deferredAiCount: aiSelection.deferred.length,
+        oversizedCount: aiResult.oversizedCandidates?.length ?? 0,
+        unresolvedCount: unresolvedCandidates.length,
+        availability,
+      }),
       diagnostics: createDiagnostics({
         mode: getAiDiagnosticsMode(),
         attemptedAi: !shouldUseFixtureSmsParser(),
         attemptedLocal: false,
         candidateCount: parserCandidates.length,
         resultCount: aiResult.transactions.length,
-        unresolvedCount: aiResult.unresolvedCandidates?.length ?? 0,
+        aiAttemptedCount: aiSelection.admitted.length,
+        aiDeferredCount: aiSelection.deferred.length,
+        unresolvedCount: unresolvedCandidates.length,
       }),
     };
   } catch (error: unknown) {
@@ -908,15 +858,29 @@ export async function parseSmsWithOrchestrator(
       errorName: error instanceof Error ? error.name : "unknown",
     });
 
+    const fallbackSelection = selectFullAiWork(
+      parserCandidates.filter(
+        (candidate) =>
+          !(options.terminalFingerprints ?? new Set()).has(
+            candidate.smsFingerprint
+          )
+      )
+    );
+    const unresolvedCandidates = parserCandidates.map((candidate) => ({
+      candidate,
+      reason: "ai_failed" as const,
+      isRetryable: true,
+    }));
     return {
       transactions: [],
       hasError: true,
       isRetryable: true,
-      unresolvedCandidates: parserCandidates.map((candidate) => ({
-        candidate,
-        reason: "ai_failed",
-        isRetryable: true,
-      })),
+      unresolvedCandidates,
+      safeguardSummary: createSafeguardSummary({
+        admittedAiCount: fallbackSelection.admitted.length,
+        deferredAiCount: fallbackSelection.deferred.length,
+        unresolvedCount: unresolvedCandidates.length,
+      }),
       diagnostics: createDiagnostics({
         mode: "ai-primary",
         attemptedAi: true,

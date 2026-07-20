@@ -16,7 +16,10 @@
 
 import type { ParsedSmsTransaction } from "@monyvi/logic";
 import type { ParseSmsContext } from "@/services/ai-sms-parser-service";
-import type { HybridSmsUnresolvedCandidate } from "@/services/sms-parser-orchestrator";
+import type {
+  HybridSmsUnresolvedCandidate,
+  SmsScanSafeguardSummary,
+} from "@/services/sms-parser-orchestrator";
 import type { SmsScanResult } from "@/services/sms-sync-service";
 import React, {
   createContext,
@@ -27,7 +30,7 @@ import React, {
   useState,
 } from "react";
 
-export type SmsScanMode = "incremental" | "full";
+export type SmsScanMode = "incremental" | "history";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,6 +43,7 @@ interface SmsScanContextValue {
   readonly setTransactions: (txns: readonly ParsedSmsTransaction[]) => void;
   readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
   readonly parseContext: ParseSmsContext | null;
+  readonly safeguardSummary: SmsScanSafeguardSummary | null;
   readonly reviewSessionId: number;
   readonly setReviewSession: (result: SmsScanResult) => void;
   readonly updateReviewSession: (
@@ -51,7 +55,7 @@ interface SmsScanContextValue {
   ) => void;
   /** Clear transactions (called after save or discard) */
   readonly clearTransactions: () => void;
-  /** Whether the next scan should be incremental or full */
+  /** Whether the next scan should be incremental or a deliberate history scan. */
   readonly scanMode: SmsScanMode;
   /** Set the scan mode before navigating to scan page */
   readonly setScanMode: (mode: SmsScanMode) => void;
@@ -84,6 +88,8 @@ export function SmsScanProvider({
   const [parseContext, setParseContext] = useState<ParseSmsContext | null>(
     null
   );
+  const [safeguardSummary, setSafeguardSummary] =
+    useState<SmsScanSafeguardSummary | null>(null);
   const reviewSessionIdRef = useRef(0);
   const [reviewSessionId, setReviewSessionId] = useState(0);
 
@@ -98,6 +104,7 @@ export function SmsScanProvider({
       setTransactionsState(txns);
       setUnresolvedCandidates([]);
       setParseContext(null);
+      setSafeguardSummary(null);
     },
     [advanceReviewSession]
   );
@@ -107,6 +114,7 @@ export function SmsScanProvider({
     setTransactionsState([]);
     setUnresolvedCandidates([]);
     setParseContext(null);
+    setSafeguardSummary(null);
   }, [advanceReviewSession]);
 
   const setReviewSession = useCallback(
@@ -115,6 +123,7 @@ export function SmsScanProvider({
       setTransactionsState(result.transactions);
       setUnresolvedCandidates(result.unresolvedCandidates);
       setParseContext(result.parseContext);
+      setSafeguardSummary(result.safeguardSummary);
     },
     [advanceReviewSession]
   );
@@ -130,6 +139,20 @@ export function SmsScanProvider({
       if (reviewSessionIdRef.current !== expectedSessionId) return;
       setTransactionsState(input.transactions);
       setUnresolvedCandidates(input.unresolvedCandidates);
+      if (input.unresolvedCandidates.length === 0) {
+        setSafeguardSummary((current) =>
+          current === null
+            ? null
+            : {
+                ...current,
+                unresolvedCount: 0,
+                completionStatus:
+                  current.deferredAiCount > 0 || current.oversizedCount > 0
+                    ? "partial"
+                    : "complete",
+              }
+        );
+      }
     },
     []
   );
@@ -144,6 +167,7 @@ export function SmsScanProvider({
       setTransactions,
       unresolvedCandidates,
       parseContext,
+      safeguardSummary,
       reviewSessionId,
       setReviewSession,
       updateReviewSession,
@@ -156,6 +180,7 @@ export function SmsScanProvider({
       setTransactions,
       unresolvedCandidates,
       parseContext,
+      safeguardSummary,
       reviewSessionId,
       setReviewSession,
       updateReviewSession,

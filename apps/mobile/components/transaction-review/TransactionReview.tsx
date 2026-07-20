@@ -25,6 +25,7 @@ import {
 } from "./TransactionItem";
 import { resolveTransactionReviewProvider } from "@/utils/transaction-review-provider";
 import { PartialSmsResultsNotice } from "./PartialSmsResultsNotice";
+import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator";
 
 export interface TransactionReviewProps {
   readonly transactions: readonly ReviewableTransaction[];
@@ -40,7 +41,8 @@ export interface TransactionReviewProps {
   readonly onBack?: () => void;
   readonly workspaceVariant?: "default" | "sms";
   readonly partialResults?: {
-    readonly unresolvedCount: number;
+    readonly safeguardSummary: SmsScanSafeguardSummary;
+    readonly retryableCount: number;
     readonly canRetry: boolean;
     readonly isRetrying: boolean;
     readonly hasRetryError: boolean;
@@ -432,7 +434,8 @@ export function TransactionReview({
 
             {partialResults && (
               <PartialSmsResultsNotice
-                unresolvedCount={partialResults.unresolvedCount}
+                safeguardSummary={partialResults.safeguardSummary}
+                retryableCount={partialResults.retryableCount}
                 canRetry={partialResults.canRetry}
                 isRetrying={partialResults.isRetrying}
                 hasRetryError={partialResults.hasRetryError}

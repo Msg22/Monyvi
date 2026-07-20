@@ -5,8 +5,8 @@
  * Auto-starts scanning on mount and navigates to review on completion.
  *
  * Supports two scan modes (set via SmsScanContext):
- *   - "incremental" (default): passes lastSyncTimestamp as minDate
- *   - "full": scans all messages (no minDate)
+ *   - "incremental" (default): checks new messages within the policy boundary
+ *   - "history": deliberately rescans the rolling recent-history window
  *
  * @module sms-scan
  */
@@ -36,7 +36,6 @@ import { useAllCategories } from "@/context/CategoriesContext";
 import { useSmsScanContext } from "@/context/SmsScanContext";
 import { useSmsScan } from "@/hooks/useSmsScan";
 import { useSmsPermission } from "@/hooks/useSmsPermission";
-import { useSmsSync } from "@/hooks/useSmsSync";
 import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
 import { loadExistingSmsFingerprints } from "@/services/sms-sync-service";
 import { palette } from "@/constants/colors";
@@ -187,8 +186,8 @@ function SmsPermissionGate({
  * navigates to the review page. Empty or error states provide
  * back/retry options.
  *
- * When scanMode is "incremental" and lastSyncTimestamp exists, only messages
- * newer than that timestamp are scanned. "full" scans all messages.
+ * The scan service owns the effective rolling/checkpoint boundary so every
+ * caller receives the same policy.
  */
 export default function SmsScanScreen(): React.JSX.Element {
   const router = useRouter();
@@ -221,7 +220,6 @@ export default function SmsScanScreen(): React.JSX.Element {
   const staleConsentRevokePromiseRef = useRef<Promise<void> | null>(null);
 
   const { setReviewSession, scanMode } = useSmsScanContext();
-  const { lastSyncTimestamp } = useSmsSync();
   const { categories: allCategories, isLoading: isCategoriesLoading } =
     useAllCategories();
   const isAiContextReady = !isCategoriesLoading;
@@ -243,11 +241,6 @@ export default function SmsScanScreen(): React.JSX.Element {
       scanInitiated.current = false;
       return;
     }
-
-    const minDate =
-      scanMode === "incremental" && lastSyncTimestamp
-        ? lastSyncTimestamp
-        : undefined;
 
     const abortController = new AbortController();
     scanAbortControllerRef.current = abortController;
@@ -273,7 +266,7 @@ export default function SmsScanScreen(): React.JSX.Element {
     }
 
     startScan({
-      minDate,
+      scanKind: scanMode,
       existingFingerprints,
       aiContext,
       abortSignal: abortController.signal,
@@ -293,7 +286,7 @@ export default function SmsScanScreen(): React.JSX.Element {
           }
         }
       });
-  }, [startScan, scanMode, lastSyncTimestamp, aiContext]);
+  }, [startScan, scanMode, aiContext]);
 
   // Auto-start scan on mount — waits until permission is granted and categories loaded
   useEffect(() => {

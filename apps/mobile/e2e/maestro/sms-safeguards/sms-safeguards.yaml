@@ -1,0 +1,32 @@
+appId: com.monyvi.app
+---
+# Start Metro with one named profile through the documented safeguard QA
+# command before running this flow. The selected fixture inbox, fixed clock,
+# reduced policy, and simulated provider then travel through the app scan path.
+# Concurrency, account-switch, and cross-install assertions remain service-level
+# because Maestro cannot control those dependencies honestly.
+
+- runFlow: ../helpers/ci-auth-bootstrap.yaml
+
+- runFlow: ../helpers/open-settings.yaml
+
+- scrollUntilVisible:
+    element: "Sync New SMS"
+    direction: DOWN
+    centerElement: true
+
+- assertVisible: "Sync New SMS"
+- assertVisible: "Rescan Recent Messages"
+
+# Repeat this flow with the cutoff, partial-limit, and cooldown profiles to
+# verify their user-visible states without a personal inbox or Gemini call.
+- tapOn: "Sync New SMS"
+- extendedWaitUntil:
+    visible:
+      "No Transactions Found|Review SMS Transactions|Review [0-9]+
+      Transaction\\(s\\)"
+    timeout: 90000
+
+- pressKey: Back
+- waitForAnimationToEnd
+- assertVisible: "Rescan Recent Messages"

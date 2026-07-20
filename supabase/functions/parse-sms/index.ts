@@ -22,16 +22,26 @@ import { hasActiveAiProcessingConsent } from "../_shared/ai-consent.ts";
 import { buildSmsParserSpecialCaseRules } from "../_shared/sms-parser-special-cases.ts";
 import { isLikelyCorruptedSmsText } from "../_shared/sms-text-quality.ts";
 import { isExcludedBeforeSmsParsingAtEdge } from "../_shared/sms-hard-exclusions.ts";
+import {
+  createParseSmsHandler,
+  type ExecuteSmsProviderInput,
+  type ParseSmsMessage,
+  type ParseSmsProviderTransaction,
+  type SmsProviderExecutionResult,
+} from "../_shared/parse-sms-handler.ts";
+import {
+  completeSmsAiWork,
+  markSmsAiProviderStarted,
+  releaseSmsAiWork,
+  reserveSmsAiWork,
+} from "../_shared/sms-ai-safeguard-service.ts";
+import { logSmsAiOperationalResponse } from "../_shared/sms-ai-operational-telemetry.ts";
+import { reconcileSmsNegativeOutcomes } from "../_shared/sms-negative-outcome-handler.ts";
+import { readSmsSafeguardPolicyFromEnvironment } from "../_shared/sms-safeguard-policy.ts";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
 
 /** Max retries for Gemini API calls. */
 const MAX_RETRIES = 3;
@@ -286,51 +296,9 @@ If the message contains "IPN transfer" and you can't extract the counterparty fr
 // Types
 // ---------------------------------------------------------------------------
 
-interface SmsInput {
-  readonly id: string;
-  readonly body: string;
-  readonly sender: string;
-  readonly date: string;
-}
-
-interface ParseSmsRequest {
-  readonly messages: ReadonlyArray<SmsInput>;
-  readonly categories?: string;
-  readonly supportedCurrencies?: ReadonlyArray<string>;
-}
-
-interface AiTransaction {
-  readonly messageId: string;
-  readonly amount: number;
-  readonly currency: string;
-  readonly type: string;
-  readonly counterparty: string;
-  readonly date: string;
-  readonly categorySystemName: string;
-  readonly isAtmWithdrawal?: boolean;
-  readonly cardLast4?: string;
-  readonly confidenceScore: number;
-  readonly isTrusted: boolean;
-}
-
-interface AiResponse {
-  readonly transactions: ReadonlyArray<AiTransaction>;
-}
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-  });
-}
-
-function errorResponse(message: string, status = 400): Response {
-  return jsonResponse({ error: message, code: status }, status);
-}
 
 function getSafeErrorType(error: unknown): string {
   if (error instanceof Error) {
@@ -353,16 +321,51 @@ async function verifyAuth(
   if (!authHeader) return null;
 
   const token = authHeader.replace("Bearer ", "");
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-  if (!supabaseUrl || !supabaseServiceKey) return null;
-
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const supabase = createServiceClient();
   const { data, error } = await supabase.auth.getUser(token);
 
   if (error || !data.user) return null;
   return { userId: data.user.id };
+}
+
+function createServiceClient(): ReturnType<typeof createClient> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error("Supabase environment is not configured");
+  }
+
+  return createClient(supabaseUrl, supabaseServiceKey);
+}
+
+async function getProcessingOutcomes(
+  userId: string,
+  fingerprints: readonly string[]
+): Promise<
+  readonly { readonly smsFingerprint: string; readonly isTerminal: boolean }[]
+> {
+  if (fingerprints.length === 0) return [];
+
+  const { data, error } = await createServiceClient()
+    .from("sms_ai_negative_outcomes")
+    .select("sms_fingerprint,is_terminal")
+    .eq("user_id", userId)
+    .eq("deleted", false)
+    .in("sms_fingerprint", [...new Set(fingerprints)]);
+
+  if (error) throw error;
+  return (data ?? []).flatMap((row) =>
+    typeof row.sms_fingerprint === "string" &&
+    typeof row.is_terminal === "boolean"
+      ? [
+          {
+            smsFingerprint: row.sms_fingerprint,
+            isTerminal: row.is_terminal,
+          },
+        ]
+      : []
+  );
 }
 
 /**
@@ -376,12 +379,76 @@ function sleep(ms: number): Promise<void> {
  * Process messages through Gemini with retry and exponential backoff.
  * Retries up to MAX_RETRIES times on failure (2s → 4s → 8s delays).
  */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseProviderTransaction(
+  value: unknown
+): ParseSmsProviderTransaction | null {
+  if (!isRecord(value)) return null;
+  if (
+    typeof value.messageId !== "string" ||
+    typeof value.amount !== "number" ||
+    !Number.isFinite(value.amount) ||
+    typeof value.currency !== "string" ||
+    typeof value.type !== "string" ||
+    typeof value.counterparty !== "string" ||
+    typeof value.date !== "string" ||
+    typeof value.categorySystemName !== "string" ||
+    typeof value.confidenceScore !== "number" ||
+    !Number.isFinite(value.confidenceScore) ||
+    typeof value.isTrusted !== "boolean" ||
+    (value.isAtmWithdrawal !== undefined &&
+      typeof value.isAtmWithdrawal !== "boolean") ||
+    (value.cardLast4 !== undefined && typeof value.cardLast4 !== "string")
+  ) {
+    return null;
+  }
+  return value as unknown as ParseSmsProviderTransaction;
+}
+
+function parseProviderTransactions(value: unknown): {
+  readonly isValid: boolean;
+  readonly transactions: readonly ParseSmsProviderTransaction[];
+} {
+  if (!isRecord(value) || !Array.isArray(value.transactions)) {
+    return { isValid: false, transactions: [] };
+  }
+  const transactions = value.transactions.map(parseProviderTransaction);
+  if (transactions.some((transaction) => transaction === null)) {
+    return { isValid: false, transactions: [] };
+  }
+  return {
+    isValid: true,
+    transactions: transactions as ParseSmsProviderTransaction[],
+  };
+}
+
+function getCompletionStatus(response: {
+  readonly candidates?: readonly { readonly finishReason?: unknown }[];
+  readonly promptFeedback?: { readonly blockReason?: unknown };
+}): SmsProviderExecutionResult["completionStatus"] {
+  const finishReason = String(response.candidates?.[0]?.finishReason ?? "");
+  if (finishReason === "STOP") return "complete";
+  if (finishReason === "MAX_TOKENS") return "truncated";
+  if (
+    finishReason === "SAFETY" ||
+    finishReason === "RECITATION" ||
+    finishReason === "PROHIBITED_CONTENT" ||
+    response.promptFeedback?.blockReason !== undefined
+  ) {
+    return "safety_stopped";
+  }
+  return "failed";
+}
+
 async function processWithRetry(
   ai: GoogleGenAI,
-  messages: ReadonlyArray<SmsInput>,
+  messages: readonly ParseSmsMessage[],
   systemPrompt: string,
   responseSchema: Record<string, unknown>
-): Promise<AiResponse> {
+): Promise<SmsProviderExecutionResult> {
   const userPrompt = `Parse the following ${messages.length} SMS messages into transactions:
 
 ${messages
@@ -418,12 +485,31 @@ Body: ${m.body}
         },
       });
 
+      const completionStatus = getCompletionStatus(response);
       const text = response.text ?? "";
-      if (!text) return { transactions: [] };
+      if (text.length === 0) {
+        return {
+          completionStatus,
+          isResponseSchemaValid: false,
+          transactions: [],
+        };
+      }
 
-      const parsed: AiResponse = JSON.parse(text);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        return {
+          completionStatus,
+          isResponseSchemaValid: false,
+          transactions: [],
+        };
+      }
+      const parsedTransactions = parseProviderTransactions(parsed);
       return {
-        transactions: parsed.transactions ?? [],
+        completionStatus,
+        isResponseSchemaValid: parsedTransactions.isValid,
+        transactions: parsedTransactions.transactions,
       };
     } catch (err: unknown) {
       lastError = err;
@@ -448,106 +534,83 @@ Body: ${m.body}
   console.error("[parse-sms] All retries exhausted", {
     errorType: getSafeErrorType(lastError),
   });
-  return { transactions: [] };
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("SMS provider execution failed");
 }
 
 // ---------------------------------------------------------------------------
 // Main handler
 // ---------------------------------------------------------------------------
 
-Deno.serve(async (req: Request): Promise<Response> => {
-  // CORS preflight
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
-  }
-
-  // Only accept POST
-  if (req.method !== "POST") {
-    return errorResponse("Method not allowed", 405);
-  }
-
-  try {
-    // 1. Auth
-    const auth = await verifyAuth(req.headers.get("authorization"));
-    if (!auth) {
-      return errorResponse("Unauthorized", 401);
-    }
-    if (!(await hasActiveAiProcessingConsent(auth.userId))) {
-      return errorResponse("AI processing consent required", 403);
-    }
-
-    // 2. Parse input
-    const body: ParseSmsRequest = await req.json();
-    if (!body.messages || !Array.isArray(body.messages)) {
-      return errorResponse("'messages' array is required");
-    }
-    if (body.messages.length === 0) {
-      return jsonResponse({ transactions: [] });
-    }
-
-    const processableMessages = body.messages.filter(
-      (message) =>
-        !isExcludedBeforeSmsParsingAtEdge(message.body) &&
-        !isLikelyCorruptedSmsText(message.body)
-    );
-    const hardExcludedMessageCount = body.messages.filter((message) =>
-      isExcludedBeforeSmsParsingAtEdge(message.body)
-    ).length;
-    const corruptedMessageCount =
-      body.messages.length -
-      hardExcludedMessageCount -
-      processableMessages.length;
-
-    if (hardExcludedMessageCount > 0) {
-      console.info("[parse-sms] Skipped hard-excluded SMS input", {
-        hardExcludedMessageCount,
-      });
-    }
-
-    if (corruptedMessageCount > 0) {
-      console.warn("[parse-sms] Skipped corrupted SMS input", {
-        corruptedMessageCount,
-      });
-    }
-
-    if (processableMessages.length === 0) {
-      return jsonResponse({ transactions: [] });
-    }
-
-    // 3. Init Gemini
+const parseSmsHandler = createParseSmsHandler({
+  authenticate: async (request) => {
+    const auth = await verifyAuth(request.headers.get("authorization"));
+    return auth?.userId ?? null;
+  },
+  hasConsent: hasActiveAiProcessingConsent,
+  getPolicy: () => readSmsSafeguardPolicyFromEnvironment(Deno.env.get),
+  fixedPrompt: buildSystemPrompt(""),
+  responseSchema: JSON.stringify(buildResponseSchema([])),
+  shouldExclude: (message) =>
+    isExcludedBeforeSmsParsingAtEdge(message.body) ||
+    isLikelyCorruptedSmsText(message.body),
+  getProcessingOutcomes,
+  reserveWork: (input) => reserveSmsAiWork(createServiceClient(), input),
+  markProviderStarted: (requestId) =>
+    markSmsAiProviderStarted(createServiceClient(), requestId),
+  executeProvider: async (
+    input: ExecuteSmsProviderInput
+  ): Promise<SmsProviderExecutionResult> => {
     const apiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!apiKey) {
-      return errorResponse("GEMINI_API_KEY not configured", 500);
-    }
+    if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
     const ai = new GoogleGenAI({ apiKey });
-
-    // 4. Build dynamic schema and prompt from client context.
-    const categoryTree = body.categories ?? CATEGORY_TREE;
-    const currencies = body.supportedCurrencies ?? [];
-    const responseSchema = buildResponseSchema(currencies);
-    const systemPrompt = buildSystemPrompt(categoryTree);
-
-    // 5. Process all messages in a single Gemini call (with retry).
-    //    Client-side chunking ensures each call stays under the ~150s limit.
-    const result = await processWithRetry(
+    return processWithRetry(
       ai,
-      processableMessages,
-      systemPrompt,
-      responseSchema
+      input.messages,
+      buildSystemPrompt(input.categories || CATEGORY_TREE),
+      buildResponseSchema(input.supportedCurrencies)
     );
+  },
+  completeWork: (input) => completeSmsAiWork(createServiceClient(), input),
+  releaseWork: (requestId, decisionCode) =>
+    releaseSmsAiWork(createServiceClient(), requestId, decisionCode),
+  reconcileOutcomes: (input) =>
+    reconcileSmsNegativeOutcomes({
+      client: createServiceClient(),
+      userId: input.userId,
+      submittedCandidates: input.submittedCandidates,
+      envelope: {
+        requestId: input.requestId,
+        completionStatus: input.completionStatus,
+        transactions: input.transactions,
+      },
+    }),
+});
 
-    console.log(
-      `[parse-sms] Parsed ${result.transactions.length} transactions from ${processableMessages.length} messages`
+Deno.serve(async (request: Request): Promise<Response> => {
+  try {
+    const response = await parseSmsHandler(request);
+    await logSmsAiOperationalResponse("sms_full_parse", response, (...values) =>
+      console.log(...values)
     );
-
-    // 6. Return results
-    return jsonResponse({
-      transactions: result.transactions,
-    });
+    return response;
   } catch (error: unknown) {
     console.error("[parse-sms] Error", {
       errorType: getSafeErrorType(error),
     });
-    return errorResponse("Internal server error", 500);
+    return new Response(
+      JSON.stringify({
+        transactions: [],
+        reason: "dependency_unavailable",
+        negativeFingerprints: [],
+        terminalFingerprints: [],
+        unresolvedFingerprints: [],
+      }),
+      {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
   }
 });

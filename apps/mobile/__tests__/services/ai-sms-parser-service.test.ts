@@ -1,4 +1,17 @@
-const mockInvoke = jest.fn();
+interface MockFunctionResponse {
+  readonly data: unknown;
+  readonly error: unknown;
+}
+
+interface MockFunctionOptions {
+  readonly body?: unknown;
+  readonly signal?: AbortSignal;
+}
+
+const mockInvoke = jest.fn<
+  Promise<MockFunctionResponse>,
+  [name: string, options: MockFunctionOptions]
+>();
 const mockAssertExpectedCurrentUser = jest.fn<Promise<void>, [string]>();
 const mockLoggerWarn = jest.fn<
   void,
@@ -16,11 +29,19 @@ const mockLoggerError = jest.fn<
     context?: Readonly<Record<string, unknown>>,
   ]
 >();
+let mockGeneratedId = 0;
+
+jest.mock("expo-crypto", () => ({
+  randomUUID: (): string => `generated-id-${++mockGeneratedId}`,
+}));
 
 jest.mock("@/services/supabase", () => ({
   supabase: {
     functions: {
-      invoke: (...args: readonly unknown[]): unknown => mockInvoke(...args),
+      invoke: (
+        name: string,
+        options: MockFunctionOptions
+      ): Promise<MockFunctionResponse> => mockInvoke(name, options),
     },
   },
 }));
@@ -108,6 +129,28 @@ describe("ai-sms-parser-service parser strategy", () => {
     process.env = { ...originalEnv };
     delete process.env.EXPO_PUBLIC_MONYVI_TEST_MODE;
     delete process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE;
+    delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA;
+    delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER;
+    delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX;
+    delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE;
+  });
+
+  it("uses the selected safeguard simulator without invoking the Edge Function", async () => {
+    process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA = "true";
+    process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER = "simulated";
+    process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX = "fixture";
+    process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE = "partial-quota-v1";
+
+    const result = await parseSmsWithAi(
+      [candidate("hybrid_ai_purchase")],
+      context
+    );
+
+    expect(mockInvoke).not.toHaveBeenCalled();
+    expect(result.transactions).toHaveLength(1);
+    expect(result.transactions[0]?.smsFingerprint).toBe(
+      "fingerprint-hybrid_ai_purchase"
+    );
   });
 
   it("rejects a stale expected user before invoking the Edge Function", async () => {

@@ -18,15 +18,18 @@
 import { database, Transaction, Transfer } from "@monyvi/db";
 import {
   computeSmsFingerprint,
+  DEFAULT_SMS_SCAN_POLICY,
   getParsedSmsTransactionKey,
   isExcludedBeforeSmsParsing,
   isLikelyCorruptedSmsText,
   isKnownFinancialSender,
   type ParsedSmsTransaction,
+  type SmsScanKind,
   type SmsMessage,
 } from "@monyvi/logic";
 import { Q } from "@nozbe/watermelondb";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Crypto from "expo-crypto";
 import { InteractionManager } from "react-native";
 import {
   type ParseSmsContext,
@@ -38,6 +41,7 @@ import {
   toSmsParserDiagnosticsLogContext,
   type HybridSmsUnresolvedCandidate,
   type SmsParserDiagnostics,
+  type SmsScanSafeguardSummary,
 } from "./sms-parser-orchestrator";
 import {
   assertExpectedCurrentUser,
@@ -47,6 +51,14 @@ import {
 import { readSmsInbox } from "./sms-reader-service";
 import { logger } from "@/utils/logger";
 import { assertNotAborted } from "./abort-utils";
+import { resolveSmsScanPolicy } from "./sms-scan-policy-service";
+import {
+  finalizeSmsScanCheckpoint,
+  loadSmsScanSafeguardState,
+  type SmsCheckpointMessageState,
+} from "./sms-scan-checkpoint-coordinator";
+import { recordOversizedSmsOutcome } from "./sms-oversized-outcome-service";
+import { getSmsSafeguardQaNowMs } from "@/config/sms-safeguard-qa-config";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -85,12 +97,13 @@ export interface SmsScanResult {
   readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
   readonly parseContext: ParseSmsContext;
   readonly parserDiagnostics: SmsParserDiagnostics;
+  readonly safeguardSummary: SmsScanSafeguardSummary;
 }
 
 /** Options for the scan pipeline. */
-interface ScanOptions {
-  /** Only process SMS after this timestamp (ms since epoch). */
-  readonly minDate?: number;
+export interface ScanOptions {
+  /** Explicit intent used to select the bounded scan policy. */
+  readonly scanKind: Exclude<SmsScanKind, "live">;
   /** Maximum messages to read from inbox. Defaults to 5000. */
   readonly maxCount?: number;
   /** Set of existing SMS fingerprints for dedup. */
@@ -117,8 +130,6 @@ const DEFAULT_MAX_COUNT = 2000;
 const DEFAULT_BATCH_SIZE = 50;
 const DEFAULT_YIELD_INTERVAL = 3;
 const SCAN_IN_PROGRESS_KEY = "@monyvi/sms_scan_in_progress";
-/** Default to 3 months ago for both initial and full resync. */
-const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
 
 function assertScanNotAborted(signal: AbortSignal | undefined): void {
   assertNotAborted(signal, "SMS scan aborted");
@@ -258,19 +269,25 @@ async function loadExistingSmsFingerprintsForScope(
  * 6. Return AI-parsed transactions
  *
  * @param onProgress - Callback invoked after each batch with scan progress
- * @param options    - Optional filters (minDate, maxCount, existingFingerprints)
+ * @param options    - Scan intent, limits, dedup state, and parser context
  * @returns Parsed, deduplicated transactions ready for review
  */
 export async function scanAndParseSms(
   options: ScanOptions,
   onProgress?: (progress: SmsScanProgress) => void
 ): Promise<SmsScanResult> {
+  const scanStartedAtMs = getSmsSafeguardQaNowMs(Date.now());
   const initiatingScope = await getCurrentUserDataScope();
   // Guard against interrupted scans — clean up stale flags
   await AsyncStorage.setItem(SCAN_IN_PROGRESS_KEY, "true");
 
   try {
-    return await executeScanPipeline(options, initiatingScope, onProgress);
+    return await executeScanPipeline(
+      options,
+      initiatingScope,
+      scanStartedAtMs,
+      onProgress
+    );
   } finally {
     // Always clear the flag, even on error/abort
     await AsyncStorage.removeItem(SCAN_IN_PROGRESS_KEY);
@@ -299,9 +316,10 @@ export async function cleanupStaleScanState(): Promise<boolean> {
 async function executeScanPipeline(
   options: ScanOptions,
   initiatingScope: CurrentUserDataScope,
+  scanStartedAtMs: number,
   onProgress?: (progress: SmsScanProgress) => void
 ): Promise<SmsScanResult> {
-  const startTime = Date.now();
+  const startTime = scanStartedAtMs;
   const maxCount = options?.maxCount ?? DEFAULT_MAX_COUNT;
   const batchSize = options?.batchSize ?? DEFAULT_BATCH_SIZE;
   const yieldInterval = options?.yieldInterval ?? DEFAULT_YIELD_INTERVAL;
@@ -309,16 +327,49 @@ async function executeScanPipeline(
   const existingFingerprints =
     options?.existingFingerprints ??
     (await loadExistingSmsFingerprintsForScope(initiatingScope));
-  // Default to 3 months ago when no minDate is provided
-  const effectiveMinDate = options?.minDate ?? Date.now() - THREE_MONTHS_MS;
+  const initialSafeguardState = await loadSmsScanSafeguardState({
+    userId: initiatingScope.userId,
+    scanKind: options.scanKind,
+    scanStartedAtMs,
+    fingerprints: [],
+    savedFingerprints: existingFingerprints,
+  });
+  const { effectiveMinDate, processingPolicyVersion } = resolveSmsScanPolicy({
+    scanKind: options.scanKind,
+    scanStartedAtMs,
+    checkpoint: initialSafeguardState.checkpoint,
+  });
 
   // ─── Step 1: Read SMS inbox ───────────────────────────────────────────
   assertScanNotAborted(abortSignal);
-  const messages: readonly SmsMessage[] = await readSmsInbox({
+  const inboxMessages: readonly SmsMessage[] = await readSmsInbox({
     maxCount,
     minDate: effectiveMinDate,
   });
   assertScanNotAborted(abortSignal);
+
+  // Keep the orchestration boundary authoritative even if a platform adapter
+  // returns an out-of-window row despite receiving minDate.
+  const messages = inboxMessages.filter(
+    (message) => message.date >= effectiveMinDate
+  );
+  const fingerprintedMessages = await Promise.all(
+    messages.map(async (message) => ({
+      message,
+      fingerprint: await computeSmsFingerprint({
+        sender: message.address,
+        body: message.body,
+        receivedAtMs: message.date,
+      }),
+    }))
+  );
+  const safeguardState = await loadSmsScanSafeguardState({
+    userId: initiatingScope.userId,
+    scanKind: options.scanKind,
+    scanStartedAtMs,
+    fingerprints: fingerprintedMessages.map(({ fingerprint }) => fingerprint),
+    savedFingerprints: existingFingerprints,
+  });
 
   const totalMessages = messages.length;
   let messagesScanned = 0;
@@ -327,33 +378,44 @@ async function executeScanPipeline(
   // ─── Step 2: On-device keyword filter + fingerprint + dedup ───────────
   const candidates: SmsCandidate[] = [];
   const seenFingerprints = new Set(existingFingerprints);
+  const checkpointStates: Array<
+    Omit<SmsCheckpointMessageState, "outcome"> & {
+      outcome: SmsCheckpointMessageState["outcome"] | null;
+    }
+  > = [];
 
   for (let i = 0; i < totalMessages; i += batchSize) {
     assertScanNotAborted(abortSignal);
-    const batch = messages.slice(i, i + batchSize);
+    const batch = fingerprintedMessages.slice(i, i + batchSize);
 
-    for (const sms of batch) {
+    for (const { message: sms, fingerprint } of batch) {
       messagesScanned++;
 
+      const addCheckpointState = (
+        outcome: SmsCheckpointMessageState["outcome"] | null
+      ): void => {
+        checkpointStates.push({
+          fingerprint,
+          receivedAtMs: sms.date,
+          outcome,
+        });
+      };
+
       if (isExcludedBeforeSmsParsing(sms.body)) {
+        addCheckpointState("local_excluded");
         continue;
       }
 
       // Filter by known Egyptian bank/fintech sender names
       if (!isKnownFinancialSender(sms.address)) {
+        addCheckpointState("local_excluded");
         continue;
       }
 
       if (isLikelyCorruptedSmsText(sms.body)) {
+        addCheckpointState("local_excluded");
         continue;
       }
-
-      // Compute fingerprint for deduplication
-      const fingerprint = await computeSmsFingerprint({
-        sender: sms.address,
-        body: sms.body,
-        receivedAtMs: sms.date,
-      });
 
       const candidate = { message: sms, smsFingerprint: fingerprint };
       const trustedPrefilterDisposition = getTrustedPrefilterDisposition(
@@ -361,22 +423,36 @@ async function executeScanPipeline(
         options.aiContext.supportedCurrencies
       );
       if (trustedPrefilterDisposition === "filter_before_ai") {
+        addCheckpointState("local_excluded");
         continue;
       }
       if (
         isNonTransactionalSms(sms.body) &&
         trustedPrefilterDisposition !== "route_to_parser"
       ) {
+        addCheckpointState("local_excluded");
         continue;
       }
 
       // Skip if already exists in local DB
       if (seenFingerprints.has(fingerprint)) {
+        addCheckpointState(
+          existingFingerprints.has(fingerprint) ? "saved" : null
+        );
+        continue;
+      }
+
+      if (
+        trustedPrefilterDisposition !== "route_to_parser" &&
+        safeguardState.durableKnownFingerprints.has(fingerprint)
+      ) {
+        addCheckpointState("future_durable");
         continue;
       }
 
       seenFingerprints.add(fingerprint);
       candidates.push(candidate);
+      addCheckpointState(null);
     }
 
     // Emit progress after each batch
@@ -386,7 +462,7 @@ async function executeScanPipeline(
       transactionsFound: 0,
       candidatesFound: candidates.length,
       currentPhase: "filtering",
-      currentSender: batch[batch.length - 1]?.address ?? "",
+      currentSender: batch[batch.length - 1]?.message.address ?? "",
       scanStartedAt: startTime,
     });
 
@@ -417,6 +493,7 @@ async function executeScanPipeline(
 
   // Track per-chunk durations for estimated time remaining calculation
   const chunkDurations: number[] = [];
+  const scanSessionId = Crypto.randomUUID();
 
   const aiResult = await parseSmsWithOrchestrator(
     candidates,
@@ -454,7 +531,14 @@ async function executeScanPipeline(
       });
     },
     abortSignal,
-    { expectedUserId: initiatingScope.userId }
+    {
+      expectedUserId: initiatingScope.userId,
+      terminalFingerprints: safeguardState.terminalFingerprints,
+      requestContext: {
+        scanSessionId,
+        scanKind: options.scanKind,
+      },
+    }
   );
   await assertExpectedCurrentUser(initiatingScope.userId);
 
@@ -470,6 +554,49 @@ async function executeScanPipeline(
   const deduplicatedTransactions = deduplicateParsedSmsTransactions(
     aiResult.transactions
   );
+  const transactionFingerprints = new Set(
+    deduplicatedTransactions.map((transaction) => transaction.smsFingerprint)
+  );
+  const durableNegativeFingerprints = new Set([
+    ...(aiResult.durableNegativeFingerprints ?? []),
+    ...(aiResult.terminalFingerprints ?? []),
+  ]);
+  const oversizedFingerprints = new Set(
+    (aiResult.oversizedCandidates ?? []).map(
+      (candidate) => candidate.smsFingerprint
+    )
+  );
+  await Promise.all(
+    (aiResult.oversizedCandidates ?? []).map((candidate) =>
+      recordOversizedSmsOutcome({
+        userId: initiatingScope.userId,
+        smsFingerprint: candidate.smsFingerprint,
+        originalReceivedAtMs: candidate.message.date,
+        nowMs: Date.now(),
+        lookbackDays: DEFAULT_SMS_SCAN_POLICY.lookbackDays,
+      })
+    )
+  );
+  const finalizedCheckpointStates: readonly SmsCheckpointMessageState[] =
+    checkpointStates.map((state) => ({
+      ...state,
+      outcome:
+        state.outcome ??
+        (transactionFingerprints.has(state.fingerprint)
+          ? "memory_suggestion"
+          : oversizedFingerprints.has(state.fingerprint)
+            ? "candidate_too_large"
+            : durableNegativeFingerprints.has(state.fingerprint)
+              ? "ai_negative"
+              : "unresolved"),
+    }));
+
+  await finalizeSmsScanCheckpoint({
+    userId: initiatingScope.userId,
+    processingPolicyVersion,
+    nowMs: Date.now(),
+    states: finalizedCheckpointStates,
+  });
 
   // ─── Step 4: Return results ───────────────────────────────────────────
   const durationMs = Date.now() - startTime;
@@ -499,5 +626,6 @@ async function executeScanPipeline(
     unresolvedCandidates: aiResult.unresolvedCandidates ?? [],
     parseContext: options.aiContext,
     parserDiagnostics: aiResult.diagnostics,
+    safeguardSummary: aiResult.safeguardSummary,
   };
 }

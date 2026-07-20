@@ -129,6 +129,8 @@ interface CommonTranslations {
 interface TransactionsTranslations {
   readonly partial_sms_title: string;
   readonly partial_sms_description: string;
+  readonly partial_sms_try_later_at: string;
+  readonly partial_sms_oversized: string;
   readonly partial_sms_retry: string;
   readonly partial_sms_retrying: string;
   readonly partial_sms_retry_error: string;
@@ -165,6 +167,7 @@ interface TransactionsTranslations {
   readonly sms_review_title: string;
   readonly sms_scan_title: string;
   readonly sms_scan_instructions: string;
+  readonly sms_scan_scope_last_30_days: string;
 
   // Transfers
   readonly transfer_from: string;
@@ -412,6 +415,10 @@ interface SettingsTranslations {
   readonly logout: string;
   readonly sms_sync: string;
   readonly sync_new: string;
+  readonly sync_new_description: string;
+  readonly rescan_recent: string;
+  readonly rescan_recent_description: string;
+  readonly rescan_recent_available_at: string;
   readonly full_rescan: string;
   readonly live_detection: string;
   readonly auto_confirm: string;

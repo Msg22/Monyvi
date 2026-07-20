@@ -24,6 +24,7 @@ import {
   getAiSmsParserMode,
   shouldUseFixtureSmsInbox,
 } from "@/config/e2e-test-config";
+import { getSmsSafeguardQaConfig } from "@/config/sms-safeguard-qa-config";
 import { getFixtureById } from "@/services/dev/sms-fixtures";
 import { logger } from "@/utils/logger";
 
@@ -240,6 +241,23 @@ function readLocalParserFixtureSmsInbox(
   );
 }
 
+function readSafeguardQaFixtureSmsInbox(
+  profileId: NonNullable<
+    ReturnType<typeof getSmsSafeguardQaConfig>["profileId"]
+  >,
+  options?: SmsReaderOptions
+): readonly SmsMessage[] {
+  // Development-only module stays behind the explicit, fail-closed QA flag.
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const qaRuntime =
+    require("./testing/sms-safeguard-qa-runner") as typeof import("./testing/sms-safeguard-qa-runner");
+  /* eslint-enable @typescript-eslint/no-require-imports */
+  return filterFixtureMessages(
+    qaRuntime.createSafeguardQaInboxMessages(profileId),
+    options
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -255,6 +273,14 @@ export async function readSmsInbox(
 ): Promise<readonly SmsMessage[]> {
   if (Platform.OS !== "android") {
     return [];
+  }
+
+  const safeguardQaConfig = getSmsSafeguardQaConfig();
+  if (safeguardQaConfig.enabled) {
+    if (safeguardQaConfig.profileId === null) {
+      throw new Error("SMS safeguard QA requires a selected profile.");
+    }
+    return readSafeguardQaFixtureSmsInbox(safeguardQaConfig.profileId, options);
   }
 
   if (shouldUseFixtureSmsInbox()) {

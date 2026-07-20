@@ -1,0 +1,519 @@
+import type {
+  SmsAiAdmissionDecision,
+  SmsAiAdmissionInput,
+  SmsAiProviderStartDecision,
+} from "./sms-ai-safeguard-contract.ts";
+import {
+  estimateSmsRequestInputTokensAtEdge,
+  getUtf8ByteLengthAtEdge,
+} from "./sms-input-estimator.ts";
+import type {
+  SmsNegativeOutcomeCandidate,
+  SmsNegativeOutcomeReconciliation,
+} from "./sms-negative-outcome-handler.ts";
+import {
+  parseSmsSafeguardPolicy,
+  type SmsSafeguardPolicy,
+} from "./sms-safeguard-policy.ts";
+import type { SmsProviderCompletionStatusAtEdge } from "./sms-provider-completion.ts";
+
+const CORS_HEADERS: Readonly<Record<string, string>> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
+
+export interface ParseSmsMessage {
+  readonly id: string;
+  readonly body: string;
+  readonly sender: string;
+  readonly date: string;
+  readonly smsFingerprint: string;
+}
+
+export interface ParseSmsProviderTransaction {
+  readonly messageId: string;
+  readonly amount: number;
+  readonly currency: string;
+  readonly type: string;
+  readonly counterparty: string;
+  readonly date: string;
+  readonly categorySystemName: string;
+  readonly isAtmWithdrawal?: boolean;
+  readonly cardLast4?: string;
+  readonly confidenceScore: number;
+  readonly isTrusted: boolean;
+}
+
+export interface SmsProviderExecutionResult {
+  readonly completionStatus: SmsProviderCompletionStatusAtEdge;
+  readonly isResponseSchemaValid: boolean;
+  readonly transactions: readonly ParseSmsProviderTransaction[];
+}
+
+export interface ExecuteSmsProviderInput {
+  readonly messages: readonly ParseSmsMessage[];
+  readonly categories: string;
+  readonly supportedCurrencies: readonly string[];
+}
+
+export interface SmsAiProcessingOutcomeAtEdge {
+  readonly smsFingerprint: string;
+  readonly isTerminal: boolean;
+}
+
+interface ReconcileOutcomesInput {
+  readonly userId: string;
+  readonly submittedCandidates: readonly SmsNegativeOutcomeCandidate[];
+  readonly requestId: string;
+  readonly completionStatus: SmsProviderCompletionStatusAtEdge;
+  readonly transactions: readonly {
+    readonly messageId: string;
+    readonly isTrusted: boolean;
+  }[];
+}
+
+interface CompleteWorkInput {
+  readonly requestId: string;
+  readonly completedWithProviderError: boolean;
+  readonly decisionCode: string;
+}
+
+export interface ParseSmsHandlerDependencies {
+  readonly authenticate: (request: Request) => Promise<string | null>;
+  readonly hasConsent: (userId: string) => Promise<boolean>;
+  readonly getPolicy: () => unknown;
+  readonly fixedPrompt: string;
+  readonly responseSchema: string;
+  readonly shouldExclude: (message: ParseSmsMessage) => boolean;
+  readonly getProcessingOutcomes: (
+    userId: string,
+    fingerprints: readonly string[]
+  ) => Promise<readonly SmsAiProcessingOutcomeAtEdge[]>;
+  readonly reserveWork: (
+    input: SmsAiAdmissionInput
+  ) => Promise<SmsAiAdmissionDecision>;
+  readonly markProviderStarted: (
+    requestId: string
+  ) => Promise<SmsAiProviderStartDecision>;
+  readonly executeProvider: (
+    input: ExecuteSmsProviderInput
+  ) => Promise<SmsProviderExecutionResult>;
+  readonly completeWork: (input: CompleteWorkInput) => Promise<boolean>;
+  readonly releaseWork: (
+    requestId: string,
+    decisionCode: string
+  ) => Promise<boolean>;
+  readonly reconcileOutcomes: (
+    input: ReconcileOutcomesInput
+  ) => Promise<SmsNegativeOutcomeReconciliation>;
+}
+
+type SmsScanKind = "initial" | "incremental" | "history" | "live";
+
+interface ParseSmsRequestBody {
+  readonly requestKey: string;
+  readonly scanSessionId: string | null;
+  readonly scanKind: SmsScanKind;
+  readonly messages: readonly ParseSmsMessage[];
+  readonly categories: string;
+  readonly supportedCurrencies: readonly string[];
+}
+
+function jsonResponse(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+  });
+}
+
+function refusal(
+  reason: string,
+  status: number,
+  availableAt?: string | null
+): Response {
+  return jsonResponse(
+    {
+      transactions: [],
+      reason,
+      availableAt: availableAt ?? null,
+      negativeFingerprints: [],
+      terminalFingerprints: [],
+      unresolvedFingerprints: [],
+    },
+    status
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNonEmptyString(
+  value: unknown,
+  maxLength = 100_000
+): value is string {
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    value.length <= maxLength
+  );
+}
+
+function parseMessage(value: unknown): ParseSmsMessage | null {
+  if (!isRecord(value)) return null;
+  if (
+    !isNonEmptyString(value.id, 160) ||
+    !isNonEmptyString(value.body) ||
+    !isNonEmptyString(value.sender, 500) ||
+    !isNonEmptyString(value.date, 100) ||
+    !Number.isFinite(Date.parse(value.date)) ||
+    !isNonEmptyString(value.smsFingerprint, 256)
+  ) {
+    return null;
+  }
+  return {
+    id: value.id,
+    body: value.body,
+    sender: value.sender,
+    date: value.date,
+    smsFingerprint: value.smsFingerprint,
+  };
+}
+
+function parseRequestBody(value: unknown): ParseSmsRequestBody | null {
+  if (!isRecord(value) || !Array.isArray(value.messages)) return null;
+  if (
+    !isNonEmptyString(value.requestKey, 160) ||
+    !["initial", "incremental", "history", "live"].includes(
+      String(value.scanKind)
+    ) ||
+    !isNonEmptyString(value.categories) ||
+    !Array.isArray(value.supportedCurrencies) ||
+    value.supportedCurrencies.some(
+      (currency) => !isNonEmptyString(currency, 16)
+    )
+  ) {
+    return null;
+  }
+  const scanKind = value.scanKind as SmsScanKind;
+  const scanSessionId = value.scanSessionId;
+  if (
+    !(
+      (scanKind === "live" &&
+        (scanSessionId === null || isNonEmptyString(scanSessionId, 160))) ||
+      (scanKind !== "live" && isNonEmptyString(scanSessionId, 160))
+    )
+  ) {
+    return null;
+  }
+  const messages = value.messages.map(parseMessage);
+  if (messages.some((message) => message === null)) return null;
+  const parsedMessages = messages as ParseSmsMessage[];
+  const messageIds = new Set(parsedMessages.map((message) => message.id));
+  const fingerprints = new Set(
+    parsedMessages.map((message) => message.smsFingerprint)
+  );
+  if (
+    messageIds.size !== parsedMessages.length ||
+    fingerprints.size !== parsedMessages.length
+  ) {
+    return null;
+  }
+  return {
+    requestKey: value.requestKey,
+    scanSessionId: scanSessionId as string | null,
+    scanKind,
+    messages: parsedMessages,
+    categories: value.categories,
+    supportedCurrencies: value.supportedCurrencies as string[],
+  };
+}
+
+function calculateRequestMetrics(
+  rawBody: unknown,
+  body: ParseSmsRequestBody,
+  dependencies: ParseSmsHandlerDependencies
+): { readonly payloadBytes: number; readonly estimatedInputTokens: number } {
+  const payloadBytes = getUtf8ByteLengthAtEdge(JSON.stringify(rawBody));
+  const estimate = estimateSmsRequestInputTokensAtEdge({
+    prompt: dependencies.fixedPrompt,
+    categories: body.categories,
+    schema: dependencies.responseSchema,
+    messages: body.messages.map((message) => JSON.stringify(message)),
+  });
+  return { payloadBytes, estimatedInputTokens: estimate.totalTokens };
+}
+
+function toNegativeCandidates(
+  messages: readonly ParseSmsMessage[]
+): readonly SmsNegativeOutcomeCandidate[] {
+  return messages.map((message) => ({
+    messageId: message.id,
+    smsFingerprint: message.smsFingerprint,
+    originalReceivedAt: message.date,
+  }));
+}
+
+function completedWithoutProvider(
+  terminalFingerprints: readonly string[],
+  negativeFingerprints: readonly string[] = []
+): Response {
+  return jsonResponse({
+    transactions: [],
+    completionStatus: "complete",
+    negativeFingerprints,
+    terminalFingerprints,
+    unresolvedFingerprints: [],
+  });
+}
+
+async function safelyReleaseReservation(
+  dependencies: ParseSmsHandlerDependencies,
+  requestId: string,
+  decisionCode: string
+): Promise<void> {
+  try {
+    await dependencies.releaseWork(requestId, decisionCode);
+  } catch {
+    // Provider execution never started. The reservation lease is the final
+    // fallback if the explicit release dependency is unavailable.
+  }
+}
+
+async function executeAdmittedWork(input: {
+  readonly body: ParseSmsRequestBody;
+  readonly userId: string;
+  readonly messages: readonly ParseSmsMessage[];
+  readonly terminalFingerprints: readonly string[];
+  readonly suppressedNegativeFingerprints: readonly string[];
+  readonly admission: SmsAiAdmissionDecision;
+  readonly dependencies: ParseSmsHandlerDependencies;
+}): Promise<Response> {
+  let startDecision: SmsAiProviderStartDecision;
+  try {
+    startDecision = await input.dependencies.markProviderStarted(
+      input.admission.requestId
+    );
+  } catch {
+    await safelyReleaseReservation(
+      input.dependencies,
+      input.admission.requestId,
+      "provider_start_failed"
+    );
+    return refusal("dependency_unavailable", 503);
+  }
+  if (!startDecision.started) {
+    return refusal(startDecision.decisionCode, 429);
+  }
+
+  let providerResult: SmsProviderExecutionResult;
+  try {
+    providerResult = await input.dependencies.executeProvider({
+      messages: input.messages,
+      categories: input.body.categories,
+      supportedCurrencies: input.body.supportedCurrencies,
+    });
+  } catch {
+    await input.dependencies.completeWork({
+      requestId: input.admission.requestId,
+      completedWithProviderError: true,
+      decisionCode: "provider_failed",
+    });
+    return refusal("provider_failed", 502);
+  }
+
+  if (!providerResult.isResponseSchemaValid) {
+    await input.dependencies.completeWork({
+      requestId: input.admission.requestId,
+      completedWithProviderError: true,
+      decisionCode: "response_invalid",
+    });
+    return refusal("response_invalid", 502);
+  }
+
+  const submittedCandidates = toNegativeCandidates(input.messages);
+  if (providerResult.completionStatus !== "complete") {
+    await input.dependencies.completeWork({
+      requestId: input.admission.requestId,
+      completedWithProviderError: true,
+      decisionCode: providerResult.completionStatus,
+    });
+    return jsonResponse({
+      transactions: providerResult.transactions,
+      completionStatus: providerResult.completionStatus,
+      negativeFingerprints: input.suppressedNegativeFingerprints,
+      terminalFingerprints: input.terminalFingerprints,
+      unresolvedFingerprints: submittedCandidates.map(
+        (candidate) => candidate.smsFingerprint
+      ),
+    });
+  }
+
+  const reconciliation = await input.dependencies.reconcileOutcomes({
+    userId: input.userId,
+    submittedCandidates,
+    requestId: input.admission.requestId,
+    completionStatus: providerResult.completionStatus,
+    transactions: providerResult.transactions.map((transaction) => ({
+      messageId: transaction.messageId,
+      isTrusted: transaction.isTrusted,
+    })),
+  });
+  if (reconciliation.status === "ignored") {
+    await input.dependencies.completeWork({
+      requestId: input.admission.requestId,
+      completedWithProviderError: true,
+      decisionCode: reconciliation.reason,
+    });
+    return refusal("response_invalid", 502);
+  }
+
+  const didComplete = await input.dependencies.completeWork({
+    requestId: input.admission.requestId,
+    completedWithProviderError: false,
+    decisionCode: "complete",
+  });
+  if (!didComplete) return refusal("dependency_unavailable", 503);
+
+  return jsonResponse({
+    transactions: providerResult.transactions,
+    completionStatus: "complete",
+    negativeFingerprints: [
+      ...new Set([
+        ...input.suppressedNegativeFingerprints,
+        ...reconciliation.negativeFingerprints,
+      ]),
+    ],
+    terminalFingerprints: input.terminalFingerprints,
+    unresolvedFingerprints: [],
+  });
+}
+
+async function handlePost(
+  request: Request,
+  dependencies: ParseSmsHandlerDependencies
+): Promise<Response> {
+  const userId = await dependencies.authenticate(request);
+  if (userId === null) return refusal("unauthenticated", 401);
+  if (!(await dependencies.hasConsent(userId))) {
+    return refusal("consent_required", 403);
+  }
+
+  let rawBody: unknown;
+  try {
+    rawBody = await request.json();
+  } catch {
+    return refusal("malformed_request", 400);
+  }
+  const body = parseRequestBody(rawBody);
+  if (body === null || body.messages.length === 0) {
+    return refusal("malformed_request", 400);
+  }
+
+  let policy: SmsSafeguardPolicy;
+  try {
+    policy = parseSmsSafeguardPolicy(dependencies.getPolicy());
+  } catch {
+    return refusal("dependency_unavailable", 503);
+  }
+  if (!policy.fullParser.isEnabled) {
+    return refusal("capability_disabled", 503);
+  }
+  if (body.messages.length > policy.fullParser.maxUnitsPerRequest) {
+    return refusal("request_limit", 400);
+  }
+
+  const metrics = calculateRequestMetrics(rawBody, body, dependencies);
+  if (metrics.payloadBytes > policy.fullParser.maxPayloadBytes) {
+    return refusal("payload_limit", 413);
+  }
+  if (
+    metrics.estimatedInputTokens > policy.fullParser.maxEstimatedInputTokens
+  ) {
+    return refusal("input_token_limit", 413);
+  }
+
+  const locallyEligibleMessages = body.messages.filter(
+    (message) => !dependencies.shouldExclude(message)
+  );
+  if (locallyEligibleMessages.length === 0) return completedWithoutProvider([]);
+
+  let processingOutcomes: readonly SmsAiProcessingOutcomeAtEdge[];
+  try {
+    processingOutcomes = await dependencies.getProcessingOutcomes(
+      userId,
+      locallyEligibleMessages.map((message) => message.smsFingerprint)
+    );
+  } catch {
+    return refusal("dependency_unavailable", 503);
+  }
+  const terminalFingerprints = new Set(
+    processingOutcomes
+      .filter((outcome) => outcome.isTerminal)
+      .map((outcome) => outcome.smsFingerprint)
+  );
+  const blockedFingerprints = new Set(
+    processingOutcomes
+      .filter((outcome) => body.scanKind !== "history" || outcome.isTerminal)
+      .map((outcome) => outcome.smsFingerprint)
+  );
+  const messages = locallyEligibleMessages.filter(
+    (message) => !blockedFingerprints.has(message.smsFingerprint)
+  );
+  const terminal = locallyEligibleMessages
+    .filter((message) => terminalFingerprints.has(message.smsFingerprint))
+    .map((message) => message.smsFingerprint);
+  const suppressedNegativeFingerprints = locallyEligibleMessages
+    .filter(
+      (message) =>
+        blockedFingerprints.has(message.smsFingerprint) &&
+        !terminalFingerprints.has(message.smsFingerprint)
+    )
+    .map((message) => message.smsFingerprint);
+  if (messages.length === 0) {
+    return completedWithoutProvider(terminal, suppressedNegativeFingerprints);
+  }
+
+  let admission: SmsAiAdmissionDecision;
+  try {
+    admission = await dependencies.reserveWork({
+      userId,
+      requestKey: body.requestKey,
+      capability: "sms_full_parse",
+      scanSessionId: body.scanSessionId,
+      scanKind: body.scanKind,
+      unitCount: messages.length,
+      payloadBytes: metrics.payloadBytes,
+      estimatedInputTokens: metrics.estimatedInputTokens,
+      policy,
+    });
+  } catch {
+    return refusal("dependency_unavailable", 503);
+  }
+  if (!admission.accepted) {
+    return refusal(admission.decisionCode, 429, admission.availableAt);
+  }
+
+  return executeAdmittedWork({
+    body,
+    userId,
+    messages,
+    terminalFingerprints: terminal,
+    suppressedNegativeFingerprints,
+    admission,
+    dependencies,
+  });
+}
+
+export function createParseSmsHandler(
+  dependencies: ParseSmsHandlerDependencies
+): (request: Request) => Promise<Response> {
+  return async (request: Request): Promise<Response> => {
+    if (request.method === "OPTIONS") {
+      return new Response("ok", { headers: CORS_HEADERS });
+    }
+    if (request.method !== "POST") return refusal("method_not_allowed", 405);
+    return handlePost(request, dependencies);
+  };
+}

@@ -1,6 +1,6 @@
 # Monyvi Business Decisions
 
-**Status:** Active product source of truth **Last updated:** 2026-07-08
+**Status:** Active product source of truth **Last updated:** 2026-07-20
 **Scope:** Business and product rules confirmed by the current codebase and
 implementation history.
 
@@ -764,6 +764,65 @@ Business rules:
   not modeled as an owned-account Transfer. The full AI prompt contains the same
   narrow sanitized exception and must not generalize it to other pending or
   requested-transfer wording.
+
+#### Launch SMS Scan Safeguards
+
+- Initial scans and deliberate history rescans consider only messages received
+  during the inclusive rolling 30 days before one immutable scan-start instant.
+  The cutoff applies before local exclusion, trusted-template matching,
+  enrichment, or full AI parsing. Launch users cannot select a custom range and
+  do not see subscription or paywall UI.
+- Ordinary `Sync new SMS` operations use an installation-local, user-scoped,
+  policy-versioned safe checkpoint with a five-minute overlap. The existing
+  canonical SMS fingerprint remains authoritative for deduplication. The
+  checkpoint advances only over one contiguous prefix of durably classified work
+  and never over memory-only suggestions, quota-deferred candidates,
+  cancellation, malformed responses, or other unresolved work.
+- Full SMS parsing accepts at most 50 unresolved candidates per request, 200 per
+  scan session, and 200 per authenticated user in a rolling 24-hour period. One
+  request is also limited to 128 KiB, a conservative 32,000 input-token
+  estimate, and 30 provider-starting requests per rolling minute.
+- Category enrichment has an independent allowance: at most 20 normalized unique
+  merchants per request, 100 merchant attempts per authenticated user in a
+  rolling 24-hour period, and 30 provider-starting requests per rolling minute.
+  Enrichment refusal never sends a trusted local message to the full parser.
+- A deliberate `Rescan recent messages` operation has a 24-hour cooldown that
+  starts only when its first full-parser provider request actually begins.
+  Local-only rescans do not start the cooldown, and cooldown never blocks
+  ordinary incremental sync.
+- Edge Functions independently enforce authentication, active AI consent,
+  candidate/request shape, payload/token boundaries, per-session and rolling
+  allowances, burst limits, terminal negative outcomes, and request idempotency.
+  Capacity is reserved atomically and consumed exactly once at provider start. A
+  request that never reaches the provider releases its reservation; failures
+  after provider start remain consumed.
+- AI usage ledgers are server-only and contain aggregate identity/accounting
+  metadata, never message or financial content. A server-authored AI-negative
+  outcome stores only user scope, canonical fingerprint, original received
+  timestamp, strike metadata, and sync metadata; mobile may pull but never push
+  these rows.
+- A complete, identity-valid AI response may add one non-transaction strike for
+  an explicitly untrusted or omitted candidate. Ordinary scans suppress the
+  first and second strike while the message remains in the rolling window;
+  deliberate history rescans may produce the next strike. Strike three
+  permanently blocks further full-AI submission for that user, including after
+  reinstall. Failed, cancelled, malformed, truncated, safety-stopped, or
+  identity-invalid responses add no strike. An exact active trusted local
+  template may still produce a local review result without clearing the terminal
+  AI block.
+- Capacity, cooldown, or oversized-input failures preserve all accepted local
+  and earlier AI suggestions and keep Save available. Guidance is aggregate,
+  friendly, and may show one localized absolute availability time. It does not
+  create a retry modal, mandatory decision, raw retry queue, or persistent
+  draft.
+- Deterministic safeguard QA uses named fixture/provider/policy profiles with a
+  fixed clock and isolated reset namespace. Routine QA must prove zero
+  production Gemini calls and zero production allowance consumption. Any
+  selected-model count-token calibration is a separately named explicit opt-in
+  operation and never generates content.
+- These safeguards are SMS-specific. Voice consent, parsing, request contracts,
+  and usage accounting remain unchanged. Persistent review drafts and dismissed
+  fingerprints remain owned by issue #770.
 
 ## 8. Notifications
 

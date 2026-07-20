@@ -1,10 +1,12 @@
-import { act, render } from "@testing-library/react-native";
+import { act, render, screen } from "@testing-library/react-native";
 import type { ParsedSmsTransaction } from "@monyvi/logic";
 import React from "react";
+import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator";
 
 interface MockTransactionReviewProps {
   readonly partialResults: {
-    readonly unresolvedCount: number;
+    readonly safeguardSummary: SmsScanSafeguardSummary;
+    readonly retryableCount: number;
     readonly canRetry: boolean;
     readonly hasRetryError: boolean;
     readonly onRetry: () => void;
@@ -58,6 +60,17 @@ let mockRetryState = {
   dismissConsentRequired: mockDismissConsentRequired,
   retry: mockRetry,
 };
+const mockSafeguardSummary: SmsScanSafeguardSummary = {
+  admittedAiCount: 1,
+  deferredAiCount: 1,
+  oversizedCount: 0,
+  unresolvedCount: 1,
+  availability: {
+    reason: "scan_limit",
+    availableAt: "2026-07-21T16:30:00.000Z",
+  },
+  completionStatus: "partial",
+};
 let focusCleanup: (() => void) | undefined;
 
 const mockTransaction: ParsedSmsTransaction = {
@@ -75,6 +88,7 @@ const mockTransaction: ParsedSmsTransaction = {
   senderDisplayName: "QNB EGYPT",
   rawSmsBody: "raw",
 };
+let mockReviewTransactions: readonly ParsedSmsTransaction[] = [mockTransaction];
 
 jest.mock("expo-router", () => ({
   useFocusEffect: (callback: () => (() => void) | undefined): void => {
@@ -89,8 +103,9 @@ jest.mock("expo-router", () => ({
 
 jest.mock("@/context/SmsScanContext", () => ({
   useSmsScanContext: () => ({
-    transactions: [mockTransaction],
+    transactions: mockReviewTransactions,
     unresolvedCandidates: mockRetryState.unresolvedCount > 0 ? [{}] : [],
+    safeguardSummary: mockSafeguardSummary,
     clearTransactions: mockClearTransactions,
   }),
 }));
@@ -184,6 +199,7 @@ describe("SMS review route", () => {
       dismissConsentRequired: mockDismissConsentRequired,
       retry: mockRetry,
     };
+    mockReviewTransactions = [mockTransaction];
     mockBatchCreateTransactions.mockResolvedValue({
       savedCount: 1,
       failedCount: 0,
@@ -196,7 +212,8 @@ describe("SMS review route", () => {
     const props = mockTransactionReview.mock.calls[0]?.[0];
     if (!props) throw new Error("TransactionReview was not rendered");
 
-    expect(props.partialResults.unresolvedCount).toBe(2);
+    expect(props.partialResults.safeguardSummary).toEqual(mockSafeguardSummary);
+    expect(props.partialResults.retryableCount).toBe(2);
     expect(props.partialResults.canRetry).toBe(true);
     props.partialResults.onRetry();
     expect(mockRetry).toHaveBeenCalledTimes(1);
@@ -310,7 +327,10 @@ describe("SMS review route", () => {
     if (!reviewProps) throw new Error("TransactionReview was not rendered");
 
     expect(reviewProps.partialResults).toEqual(
-      expect.objectContaining({ unresolvedCount: 1, canRetry: false })
+      expect.objectContaining({
+        safeguardSummary: mockSafeguardSummary,
+        canRetry: false,
+      })
     );
     expect(reviewProps.isSaving).toBe(false);
 
@@ -320,6 +340,20 @@ describe("SMS review route", () => {
 
     expect(mockMarkSyncComplete).not.toHaveBeenCalled();
     expect(mockClearTransactions).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an honest partial-result notice when no transactions were accepted", () => {
+    mockReviewTransactions = [];
+    mockRetryState = {
+      ...mockRetryState,
+      unresolvedCount: 2,
+      retryableCount: 0,
+    };
+
+    render(<SmsReviewScreen />);
+
+    expect(screen.getByTestId("partial-sms-results-notice")).toBeTruthy();
+    expect(screen.getByText("no_transactions_to_review")).toBeTruthy();
   });
 
   it("re-consents and retries unresolved messages after consent expires", async () => {

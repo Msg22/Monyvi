@@ -1,6 +1,9 @@
 interface MockFunctionOptions {
   readonly body: {
     readonly merchants: readonly unknown[];
+    readonly requestKey?: string;
+    readonly scanSessionId?: string;
+    readonly scanKind?: string;
   };
   readonly signal?: AbortSignal;
 }
@@ -14,8 +17,13 @@ const mockInvoke = jest.fn<
   Promise<MockFunctionResponse>,
   [functionName: string, options: MockFunctionOptions]
 >();
+let mockGeneratedId = 0;
 const mockLoggerWarn = jest.fn();
 const mockAssertExpectedCurrentUser = jest.fn<Promise<void>, [string]>();
+
+jest.mock("expo-crypto", () => ({
+  randomUUID: (): string => `generated-id-${++mockGeneratedId}`,
+}));
 
 jest.mock("@/services/supabase", () => ({
   supabase: {
@@ -49,6 +57,7 @@ import type {
 import {
   enrichTrustedSmsCategories,
   MIN_TRUSTED_CATEGORY_CONFIDENCE,
+  type SmsCategoryEnrichmentRequestContext,
   type TrustedSmsCategoryCandidate,
 } from "@/services/ai-sms-category-enrichment-service";
 
@@ -151,17 +160,23 @@ describe("ai-sms-category-enrichment-service", () => {
     );
 
     expect(mockInvoke).toHaveBeenCalledTimes(1);
-    const [, invokeOptions] = mockInvoke.mock.calls[0];
-    expect(invokeOptions.body).toEqual({
-      merchants: [
-        {
-          id: "merchant-1",
-          merchant: "MYFAWRY  EXPRESS",
-          transactionType: "EXPENSE",
-          messageFamily: "card_purchase",
-        },
-      ],
-    });
+    const firstInvoke = mockInvoke.mock.calls[0];
+    const invokeOptions = firstInvoke[1];
+    expect(invokeOptions.body).toEqual(
+      expect.objectContaining({
+        merchants: [
+          {
+            id: "merchant-1",
+            merchant: "MYFAWRY  EXPRESS",
+            transactionType: "EXPENSE",
+            messageFamily: "card_purchase",
+          },
+        ],
+        scanKind: "incremental",
+      })
+    );
+    expect(typeof invokeOptions.body.requestKey).toBe("string");
+    expect(typeof invokeOptions.body.scanSessionId).toBe("string");
     expect(invokeOptions.signal).toBeInstanceOf(AbortSignal);
     expect(result.outcomesByCandidateId.get("candidate-1")).toEqual({
       categorySystemName: "shopping",
@@ -172,6 +187,129 @@ describe("ai-sms-category-enrichment-service", () => {
       confidence: 0.96,
     });
     expect(result.outcomesByCandidateId.has("candidate-atm")).toBe(false);
+  });
+
+  it("sends the safeguard envelope with stable scan and request identities", async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: { categories: [] },
+      error: null,
+    });
+
+    const requestContext: SmsCategoryEnrichmentRequestContext = {
+      requestKey: "category-request-key",
+      scanSessionId: "scan-session",
+      scanKind: "history",
+    };
+
+    await enrichTrustedSmsCategories(
+      [candidate("candidate-1", "Shop")],
+      categories,
+      undefined,
+      "user-1",
+      requestContext
+    );
+
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "enrich-sms-categories",
+      expect.objectContaining({
+        body: {
+          requestKey: "category-request-key",
+          scanSessionId: "scan-session",
+          scanKind: "history",
+          merchants: [
+            {
+              id: "merchant-1",
+              merchant: "Shop",
+              transactionType: "EXPENSE",
+              messageFamily: "card_purchase",
+            },
+          ],
+        },
+      })
+    );
+  });
+
+  it("preserves the supplied request identity across a safe retry", async () => {
+    mockInvoke
+      .mockResolvedValueOnce({
+        data: { categories: [] },
+        error: Object.assign(new Error("temporary"), {
+          context: new Response("temporary", { status: 503 }),
+        }),
+      })
+      .mockResolvedValueOnce({
+        data: { categories: [] },
+        error: null,
+      });
+
+    const requestContext: SmsCategoryEnrichmentRequestContext = {
+      requestKey: "retry-stable-request-key",
+      scanSessionId: "retry-stable-session",
+      scanKind: "incremental",
+    };
+
+    await enrichTrustedSmsCategories(
+      [candidate("candidate-1", "Shop")],
+      categories,
+      undefined,
+      "user-1",
+      requestContext
+    );
+    await enrichTrustedSmsCategories(
+      [candidate("candidate-1", "Shop")],
+      categories,
+      undefined,
+      "user-1",
+      requestContext
+    );
+
+    const requestBodies = (
+      mockInvoke.mock.calls as ReadonlyArray<[string, MockFunctionOptions]>
+    ).map(([, options]) => options.body);
+    expect(requestBodies).toHaveLength(2);
+    expect(requestBodies[0]).toMatchObject({
+      requestKey: "retry-stable-request-key",
+      scanSessionId: "retry-stable-session",
+      scanKind: "incremental",
+    });
+    expect(requestBodies[1]).toMatchObject({
+      requestKey: "retry-stable-request-key",
+      scanSessionId: "retry-stable-session",
+      scanKind: "incremental",
+    });
+  });
+
+  it("returns typed availability for an admission refusal without discarding local work", async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: null,
+      error: {
+        context: new Response(
+          JSON.stringify({
+            categories: [],
+            reason: "rolling_limit",
+            availableAt: "2026-07-21T10:00:00.000Z",
+          }),
+          { status: 429, headers: { "content-type": "application/json" } }
+        ),
+      },
+    });
+
+    const result = await enrichTrustedSmsCategories(
+      [candidate("candidate-1", "Private Merchant")],
+      categories
+    );
+
+    expect(result).toMatchObject({
+      hasError: true,
+      isRetryable: false,
+      refusalReason: "rolling_limit",
+      availability: {
+        reason: "rolling_limit",
+        availableAt: "2026-07-21T10:00:00.000Z",
+      },
+    });
+    expect(result.outcomesByCandidateId.size).toBe(0);
+    expect(result.missingResultCount).toBe(1);
   });
 
   it("rejects low-confidence and invented categories without exposing them as outcomes", async () => {
