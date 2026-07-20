@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 interface ParsedSchema {
@@ -37,4 +38,18 @@ export type Database = {
 
   assert.deepEqual(Object.keys(parsed.tables), ["accounts"]);
   assert.deepEqual(parsed.enums.account_type, ["CASH", "BANK"]);
+});
+
+test("generated-file formatting uses the local Prettier binary and fails closed", () => {
+  const source = readFileSync(
+    new URL("../transform-schema.js", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /PRETTIER_BIN/);
+  assert.match(source, /execFileSync\([\s\S]*PRETTIER_BIN/);
+  assert.doesNotMatch(
+    source,
+    /Prettier formatting (?:failed|of schema\/types skipped)/
+  );
 });

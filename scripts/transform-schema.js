@@ -10,7 +10,7 @@
  * Usage: node scripts/transform-schema.js
  */
 
-const { execFileSync, execSync } = require("child_process");
+const { execFileSync } = require("child_process");
 
 const fs = require("fs");
 const path = require("path");
@@ -20,6 +20,17 @@ const ESLINT_BIN = path.join(
   "bin",
   "eslint.js"
 );
+const PRETTIER_BIN = path.join(
+  path.dirname(require.resolve("prettier/package.json")),
+  "bin",
+  "prettier.cjs"
+);
+
+function formatWithPrettier(paths) {
+  execFileSync(process.execPath, [PRETTIER_BIN, "--write", ...paths], {
+    stdio: "inherit",
+  });
+}
 
 // =============================================================================
 // CONFIGURATION
@@ -666,13 +677,7 @@ function main() {
 
   // Format schema.ts and types.ts with Prettier so the output matches
   // the editor / pre-commit formatter and avoids phantom git diffs.
-  try {
-    execSync(`npx prettier --write "${schemaPath}" "${typesPath}"`, {
-      stdio: "inherit",
-    });
-  } catch {
-    console.warn("   ⚠️  Prettier formatting of schema/types skipped");
-  }
+  formatWithPrettier([schemaPath, typesPath]);
 
   // Generate base model files (always overwritten)
   console.log("📝 Generating base model files...");
@@ -711,14 +716,8 @@ function main() {
   // Format the generated base model files with Prettier
   console.log("\n🎨 Formatting base model files...");
 
-  try {
-    execSync(`npx prettier --write "${BASE_MODELS_DIR}/**/*.ts"`, {
-      stdio: "inherit",
-    });
-    console.log("   ✅ Base models formatted");
-  } catch (error) {
-    console.warn("Prettier formatting failed:", error.message);
-  }
+  formatWithPrettier([`${BASE_MODELS_DIR}/**/*.ts`]);
+  console.log("   ✅ Base models formatted");
 
   console.log("\nLinting base model files...");
   try {

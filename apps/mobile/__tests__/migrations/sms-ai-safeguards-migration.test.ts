@@ -31,6 +31,16 @@ function readPrivacyAndScanSessionFixSql(): string {
   );
 }
 
+function readLedgerFingerprintRemovalSql(): string {
+  return readFileSync(
+    path.resolve(
+      __dirname,
+      "../../../../supabase/migrations/065_remove_sms_ai_work_request_fingerprints.sql"
+    ),
+    "utf8"
+  );
+}
+
 describe("SMS AI safeguards migration", () => {
   it("creates only privacy-safe synchronized negative outcomes", () => {
     const sql = readMigrationSql();
@@ -145,6 +155,18 @@ describe("SMS AI safeguards migration", () => {
     );
     expect(sql).toMatch(
       /sms_ai_mark_provider_started_v3\([\s\S]*p_candidate_fingerprints text\[\]/i
+    );
+  });
+
+  it("removes the preview compatibility fingerprint column after replacing its writer", () => {
+    const sql = readLedgerFingerprintRemovalSql();
+
+    expect(sql).toContain("FUNCTION public.sms_ai_reserve_work_v2");
+    expect(sql).not.toMatch(
+      /SET[\s\S]{0,200}candidate_fingerprints\s*=\s*p_candidate_fingerprints/i
+    );
+    expect(sql).toMatch(
+      /DROP TRIGGER IF EXISTS scrub_sms_ai_work_request_fingerprints[\s\S]*DROP COLUMN IF EXISTS candidate_fingerprints/i
     );
   });
 
