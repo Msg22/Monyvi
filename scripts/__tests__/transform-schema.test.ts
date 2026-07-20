@@ -48,6 +48,11 @@ test("generated-file formatting uses the local Prettier binary and fails closed"
 
   assert.match(source, /PRETTIER_BIN/);
   assert.match(source, /execFileSync\([\s\S]*PRETTIER_BIN/);
+  assert.match(
+    source,
+    /for \(const generatedPath of generatedBaseModelPaths\)/
+  );
+  assert.doesNotMatch(source, /BASE_MODELS_DIR}\/\*\*\/\*\.ts/);
   assert.doesNotMatch(
     source,
     /Prettier formatting (?:failed|of schema\/types skipped)/

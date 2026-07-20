@@ -681,19 +681,19 @@ function main() {
 
   // Generate base model files (always overwritten)
   console.log("📝 Generating base model files...");
+  const generatedBaseModelPaths = [];
   for (const [tableName, { columns }] of Object.entries(tables)) {
     const className = tableToClassName(tableName);
     const baseFileName = `base-${pascalToKebab(className)}.ts`;
+    const baseModelPath = path.join(BASE_MODELS_DIR, baseFileName);
     const baseModelContent = generateBaseModel(
       tableName,
       columns,
       relationships,
       tables
     );
-    fs.writeFileSync(
-      path.join(BASE_MODELS_DIR, baseFileName),
-      baseModelContent
-    );
+    fs.writeFileSync(baseModelPath, baseModelContent);
+    generatedBaseModelPaths.push(baseModelPath);
     console.log(`   ✅ base/${baseFileName}`);
   }
 
@@ -716,7 +716,9 @@ function main() {
   // Format the generated base model files with Prettier
   console.log("\n🎨 Formatting base model files...");
 
-  formatWithPrettier([`${BASE_MODELS_DIR}/**/*.ts`]);
+  for (const generatedPath of generatedBaseModelPaths) {
+    formatWithPrettier([generatedPath]);
+  }
   console.log("   ✅ Base models formatted");
 
   console.log("\nLinting base model files...");
