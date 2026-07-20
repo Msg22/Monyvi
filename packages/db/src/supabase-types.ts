@@ -849,6 +849,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      sms_ai_scan_sessions: {
+        Row: {
+          accepted_scan_started_at: string;
+          client_scan_started_at: string;
+          created_at: string;
+          scan_kind: string;
+          scan_session_id: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          accepted_scan_started_at: string;
+          client_scan_started_at: string;
+          created_at?: string;
+          scan_kind: string;
+          scan_session_id: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          accepted_scan_started_at?: string;
+          client_scan_started_at?: string;
+          created_at?: string;
+          scan_kind?: string;
+          scan_session_id?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       sms_ai_usage_events: {
         Row: {
           capability: string;
@@ -891,9 +921,11 @@ export type Database = {
           created_at: string;
           decision_code: string;
           estimated_input_tokens: number;
+          history_cooldown_seconds: number;
           id: string;
           payload_bytes: number;
           provider_started_at: string | null;
+          request_digest: string | null;
           request_key: string;
           reservation_expires_at: string | null;
           scan_kind: string | null;
@@ -909,9 +941,11 @@ export type Database = {
           created_at?: string;
           decision_code: string;
           estimated_input_tokens: number;
+          history_cooldown_seconds?: number;
           id?: string;
           payload_bytes: number;
           provider_started_at?: string | null;
+          request_digest?: string | null;
           request_key: string;
           reservation_expires_at?: string | null;
           scan_kind?: string | null;
@@ -927,9 +961,11 @@ export type Database = {
           created_at?: string;
           decision_code?: string;
           estimated_input_tokens?: number;
+          history_cooldown_seconds?: number;
           id?: string;
           payload_bytes?: number;
           provider_started_at?: string | null;
+          request_digest?: string | null;
           request_key?: string;
           reservation_expires_at?: string | null;
           scan_kind?: string | null;
@@ -1176,6 +1212,24 @@ export type Database = {
         };
         Returns: boolean;
       };
+      sms_ai_get_availability: {
+        Args: {
+          p_burst_window_seconds: number;
+          p_history_cooldown_seconds: number;
+          p_max_provider_starts_per_burst: number;
+          p_max_units_per_rolling_window: number;
+          p_rolling_window_seconds: number;
+          p_user_id: string;
+        };
+        Returns: {
+          available_at: string;
+          burst_available_at: string;
+          history_cooldown_available_at: string;
+          reason: string;
+          rolling_available_at: string;
+          server_now: string;
+        }[];
+      };
       sms_ai_mark_provider_started: {
         Args: { p_request_id: string };
         Returns: {
@@ -1183,8 +1237,8 @@ export type Database = {
           started: boolean;
         }[];
       };
-      sms_ai_mark_provider_started_v2: {
-        Args: { p_request_id: string };
+      sms_ai_mark_provider_started_v3: {
+        Args: { p_candidate_fingerprints: string[]; p_request_id: string };
         Returns: {
           available_at: string;
           decision_code: string;
@@ -1233,6 +1287,47 @@ export type Database = {
           decision_code: string;
           is_replay: boolean;
           request_id: string;
+        }[];
+      };
+      sms_ai_reserve_work_v2: {
+        Args: {
+          p_burst_window_seconds: number;
+          p_candidate_fingerprints: string[];
+          p_capability: string;
+          p_estimated_input_tokens: number;
+          p_history_cooldown_seconds: number;
+          p_max_provider_starts_per_burst: number;
+          p_max_units_per_rolling_window: number;
+          p_max_units_per_scan: number;
+          p_payload_bytes: number;
+          p_request_digest: string;
+          p_request_key: string;
+          p_reservation_lease_seconds: number;
+          p_rolling_window_seconds: number;
+          p_scan_kind: string;
+          p_scan_session_id: string;
+          p_unit_count: number;
+          p_user_id: string;
+        };
+        Returns: {
+          accepted: boolean;
+          available_at: string;
+          decision_code: string;
+          is_replay: boolean;
+          request_id: string;
+        }[];
+      };
+      sms_ai_resolve_scan_window: {
+        Args: {
+          p_client_scan_started_at: string;
+          p_edge_grace_seconds: number;
+          p_max_future_skew_seconds: number;
+          p_scan_kind: string;
+          p_scan_session_id: string;
+          p_user_id: string;
+        };
+        Returns: {
+          accepted_scan_started_at: string;
         }[];
       };
     };

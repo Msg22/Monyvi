@@ -60,7 +60,8 @@ export interface SmsCategoryHandlerDependencies {
     input: SmsAiAdmissionInput
   ) => Promise<SmsAiAdmissionDecision>;
   readonly markProviderStarted: (
-    requestId: string
+    requestId: string,
+    candidateFingerprints: readonly string[]
   ) => Promise<SmsAiProviderStartDecision>;
   readonly classify: (
     request: SmsCategoryRequest,
@@ -226,7 +227,8 @@ async function executeAdmittedWork(input: {
   let startDecision: SmsAiProviderStartDecision;
   try {
     startDecision = await input.dependencies.markProviderStarted(
-      input.admission.requestId
+      input.admission.requestId,
+      []
     );
   } catch {
     await safelyReleaseReservation(

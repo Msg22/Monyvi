@@ -471,8 +471,8 @@ zero.
       US6-3)
 - [x] T071 [P] [US6] Write failing scenario integration tests for cutoff,
       checkpoint, newest-first partial quota, rolling expiry, shared batch/live,
-      burst, cooldown, oversized, three strikes, fresh installation, trusted
-      recovery, and account switch in
+      burst, cooldown, oversized, consent denial, three strikes, fresh
+      installation, trusted recovery, and account switch in
       `apps/mobile/__tests__/services/sms-safeguard-qa.integration.test.ts`
       (FR-041-FR-048)
 - [x] T072 [P] [US6] Write failing production-isolation/static tests proving QA

@@ -113,6 +113,7 @@ function createDependencies(
     computeFingerprint: async (value) => value.smsFingerprint,
     computeRequestDigest: async () => "request-digest",
     getServerNowMs: () => Date.UTC(2026, 6, 20, 12, 0, 0),
+    resolveScanWindowStart: async (input) => input.requestedScanStartedAtMs,
     getProcessingOutcomes: async () => {
       state.terminal++;
       return [];
@@ -226,6 +227,8 @@ test("accepts a later chunk from an established client scan clock", async () => 
   const handler = createParseSmsHandler(
     createDependencies(state, {
       getServerNowMs: () => Date.parse("2026-07-20T12:30:00.000Z"),
+      resolveScanWindowStart: async () =>
+        Date.parse("2026-07-20T12:00:00.000Z"),
     })
   );
 
@@ -240,11 +243,13 @@ test("accepts a later chunk from an established client scan clock", async () => 
   assert.equal(state.provider, 1);
 });
 
-test("keeps the server rolling cutoff authoritative for later chunks", async () => {
+test("keeps the first server-accepted cutoff authoritative for later chunks", async () => {
   const state = createState();
   const handler = createParseSmsHandler(
     createDependencies(state, {
       getServerNowMs: () => Date.parse("2026-07-20T12:30:00.000Z"),
+      resolveScanWindowStart: async () =>
+        Date.parse("2026-07-20T12:25:00.000Z"),
     })
   );
   const outsideServerWindow = {
@@ -260,6 +265,22 @@ test("keeps the server rolling cutoff authoritative for later chunks", async () 
   );
 
   assert.equal(response.status, 400);
+  assert.equal(state.reserve, 0);
+  assert.equal(state.provider, 0);
+});
+
+test("refuses a conflicting scan-session anchor before paid work", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      resolveScanWindowStart: async () => null,
+    })
+  );
+
+  const response = await handler(post(requestBody()));
+
+  assert.equal(response.status, 400);
+  assert.equal((await readJson(response)).reason, "malformed_request");
   assert.equal(state.reserve, 0);
   assert.equal(state.provider, 0);
 });

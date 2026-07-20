@@ -21,12 +21,14 @@ persistence. Rows returned outside the inclusive lower and upper scan bounds are
 ignored even when a platform reader returns them.
 
 Batch parser requests carry the fixed scan-start clock to the authenticated Edge
-boundary. The Edge rejects implausibly future scan clocks, but permits later
-chunks from a long-running or resumed scan. The client clock establishes the
-session cutoff while the current server clock caps it to the rolling lookback
-plus a bounded five-minute Edge/transit grace, so an old or forged client clock
-cannot expand the historical window. Server time remains authoritative for
-future-message rejection and usage/cooldown accounting.
+boundary. On the first request, Edge binds the client clock and a bounded
+server-accepted anchor to the authenticated user and scan-session identity. The
+accepted anchor is the later of the client start and server receipt time minus
+the five-minute Edge/transit grace. Every later chunk MUST reuse that persisted
+anchor and MUST present the same client clock and scan kind. Current server time
+may reject an implausibly future first clock, but MUST NOT move an established
+session's lower boundary as a long-running scan continues. Server time remains
+authoritative for future-message rejection and usage/cooldown accounting.
 
 ## Candidate Ordering
 

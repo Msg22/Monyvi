@@ -31,6 +31,7 @@ import {
 import {
   completeSmsAiWork,
   markSmsAiProviderStarted,
+  resolveSmsScanWindowStart,
   releaseSmsAiWork,
   reserveSmsAiWork,
 } from "../_shared/sms-ai-safeguard-service.ts";
@@ -535,10 +536,16 @@ const parseSmsHandler = createParseSmsHandler({
     }),
   computeRequestDigest: computeRequestDigestAtEdge,
   getServerNowMs: Date.now,
+  resolveScanWindowStart: (input) =>
+    resolveSmsScanWindowStart(createServiceClient(), input),
   getProcessingOutcomes,
   reserveWork: (input) => reserveSmsAiWork(createServiceClient(), input),
-  markProviderStarted: (requestId) =>
-    markSmsAiProviderStarted(createServiceClient(), requestId),
+  markProviderStarted: (requestId, candidateFingerprints) =>
+    markSmsAiProviderStarted(
+      createServiceClient(),
+      requestId,
+      candidateFingerprints
+    ),
   executeProvider: async (
     input: ExecuteSmsProviderInput
   ): Promise<SmsProviderExecutionResult> => {

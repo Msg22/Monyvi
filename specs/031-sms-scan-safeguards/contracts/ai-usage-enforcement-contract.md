@@ -24,8 +24,9 @@ interface SmsAiAdmissionRequest {
 }
 ```
 
-Fingerprints are permitted only for terminal-outcome checks and must never be
-logged. Merchant text, raw SMS, and financial values are forbidden in the
+Fingerprints are permitted only as transient RPC input for terminal-outcome
+checks. They must never be stored in the request or usage ledger or written to
+logs. Merchant text, raw SMS, and financial values are also forbidden in the
 ledger.
 
 ## Admission Response

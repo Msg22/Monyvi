@@ -62,7 +62,9 @@ Idempotency and state machine for one provider-bound request.
 Constraints:
 
 - Unique `(user_id, capability, request_key)`.
-- No raw SMS, merchant text, or extracted financial values.
+- No raw SMS, merchant text, extracted financial values, or candidate
+  fingerprints. Candidate fingerprints used by the terminal-outcome recheck are
+  transient RPC input and are never persisted in this ledger.
 - Replays return the existing decision identity and do not reserve, consume, or
   invoke the provider twice. If provider work started but its response was lost,
   the replay returns `already_processed_result_unavailable`; no financial
@@ -94,6 +96,30 @@ Constraints:
 - Rolling one-minute burst counts events by user/capability.
 - Retention/cleanup must preserve the longest active enforcement and audit
   window; old operational rows may be pruned by a documented server job.
+
+### SMS AI Scan Anchor (Supabase server-only)
+
+Immutable server-accepted time boundary for one non-live scan session.
+
+| Field                      | Type      | Rules                                                     |
+| -------------------------- | --------- | --------------------------------------------------------- |
+| `user_id`                  | UUID      | Authenticated owner; part of the primary key              |
+| `scan_session_id`          | string    | Opaque client identity; part of the primary key           |
+| `scan_kind`                | string    | `initial`, `incremental`, or `history`                    |
+| `client_scan_started_at`   | timestamp | Fixed client clock supplied by the first accepted request |
+| `accepted_scan_started_at` | timestamp | Immutable server-clamped scan boundary                    |
+| `created_at`               | timestamp | Server time                                               |
+| `updated_at`               | timestamp | Last successful reuse time                                |
+
+Constraints:
+
+- No direct client CRUD policy; the service-role resolver is the only writer.
+- Reuse requires the same user, session identity, scan kind, and client clock.
+- The accepted anchor is the later of the client clock and server receipt time
+  minus the approved edge grace, and is reused for every request in the scan.
+- Live SMS resolves a bounded timestamp without persisting a scan-anchor row.
+- No candidate fingerprint, SMS content, sender, or financial value is stored.
+- Rows older than the documented retention window may be pruned.
 
 ## Installation-Local Records
 

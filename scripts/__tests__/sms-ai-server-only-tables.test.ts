@@ -9,12 +9,12 @@ for (const scriptPath of [
   "scripts/sql-to-watermelon-migration.js",
   "scripts/transform-schema.js",
 ]) {
-  test(`${scriptPath} excludes both server-only SMS AI ledgers`, () => {
+  test(`${scriptPath} excludes every server-only SMS AI ledger`, () => {
     const source = readFileSync(path.join(root, scriptPath), "utf8");
 
     assert.match(
       source,
-      /EXCLUDED_TABLES[\s\S]*sms_ai_work_requests[\s\S]*sms_ai_usage_events/
+      /EXCLUDED_TABLES[\s\S]*sms_ai_work_requests[\s\S]*sms_ai_usage_events[\s\S]*sms_ai_scan_sessions/
     );
   });
 }

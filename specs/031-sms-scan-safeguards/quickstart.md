@@ -29,8 +29,11 @@ afterward. Cutoff/checkpoint/local-only profiles remain pure client preflights.
 The response-validity profile exercises trusted and low-confidence success,
 explicit negative, omission, retryable and permanent failure, malformed and
 incomplete output, invalid and duplicate identities, delay, and cancellation.
-The provider double replaces only Gemini; request validation, admission,
-reconciliation, usage accounting, and outcome persistence use production code.
+The consent-required profile uses the real shared consent lookup and proves a
+missing consent record creates no reservation, usage event, provider start, or
+processing outcome. The provider double replaces only Gemini; request
+validation, admission, reconciliation, usage accounting, and outcome persistence
+use production code.
 
 Run one named profile:
 
@@ -89,11 +92,13 @@ inbox to manufacture quota states.
     aggregate friendly guidance.
 12. Cancellation, invalid responses, and account switches create no unsafe
     checkpoint, usage, outcome, or visible-result mutation.
-13. Light/dark and English/Arabic layouts match the approved focused mockup and
+13. Missing AI processing consent is refused before reservation or provider
+    start and creates no usage or processing outcome.
+14. Light/dark and English/Arabic layouts match the approved focused mockup and
     respect Android safe areas.
-14. Diagnostics prove zero production provider calls and zero production quota
+15. Diagnostics prove zero production provider calls and zero production quota
     consumption in every safeguard QA profile.
-15. Ask the tester to explain, without technical prompting, the difference
+16. Ask the tester to explain, without technical prompting, the difference
     between Sync new SMS and Rescan recent messages, why rescan may be
     temporarily unavailable, and whether accepted suggestions can still be saved
     after a partial result.
@@ -114,9 +119,10 @@ inbox to manufacture quota states.
 | 10. Fresh install terminal suppression and local recovery     | `sms-sync-safeguards.integration.test.ts`, profiles `terminal-fresh-install-v1` and `trusted-local-recovery-v1`                                                      | Manual reinstall/reset confirmation on physical Android                                      |
 | 11. Oversized candidate handling                              | `sms-input-estimator.test.ts`, `sms-oversized-outcome-service.test.ts`, profile `oversized-candidate-v1`                                                             | Manual aggregate notice confirmation                                                         |
 | 12. Cancellation, invalid response, and account switch safety | `parse-sms-handler.test.ts`, `sms-safeguard-qa-provider.test.ts`, `sms-sync-safeguards.integration.test.ts`, profiles `response-validity-v1` and `account-switch-v1` | Account switching remains manual-only on device                                              |
-| 13. Approved light/dark, English/Arabic, and safe-area layout | Component and route tests cover state/copy lookup                                                                                                                    | Manual-only visual comparison on emulator and physical Android                               |
-| 14. Zero production calls and quota charges                   | `sms-safeguard-qa.integration.test.ts`, every deterministic QA profile                                                                                               | Confirm diagnostics on emulator and physical-device runs                                     |
-| 15. Plain-language comprehension                              | Copy lookup/component tests prevent missing text                                                                                                                     | Manual-only tester comprehension check                                                       |
+| 13. Consent denial before paid work                           | `parse-sms-handler.test.ts`, `sms-safeguard-qa-runtime.test.ts`, profile `consent-required-v1`                                                                       | Manually confirm the existing consent recovery flow remains available                        |
+| 14. Approved light/dark, English/Arabic, and safe-area layout | Component and route tests cover state/copy lookup                                                                                                                    | Manual-only visual comparison on emulator and physical Android                               |
+| 15. Zero production calls and quota charges                   | `sms-safeguard-qa.integration.test.ts`, every deterministic QA profile                                                                                               | Confirm diagnostics on emulator and physical-device runs                                     |
+| 16. Plain-language comprehension                              | Copy lookup/component tests prevent missing text                                                                                                                     | Manual-only tester comprehension check                                                       |
 
 ## Prompt Token Evaluation
 

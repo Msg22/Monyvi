@@ -11,6 +11,10 @@ const providerStartRepairMigrationPath = path.resolve(
   __dirname,
   "../../supabase/migrations/063_fix_sms_ai_provider_start_outcomes.sql"
 );
+const scanAnchorAndPrivacyMigrationPath = path.resolve(
+  __dirname,
+  "../../supabase/migrations/064_fix_sms_scan_anchor_and_ledger_privacy.sql"
+);
 
 function readMigration(): string {
   return readFileSync(migrationPath, "utf8");
@@ -185,7 +189,8 @@ test("provides a read-only server-time availability RPC for full-parser blockers
 });
 
 test("provider-start repair returns terminal peers and authoritative availability", () => {
-  const sql = readFileSync(providerStartRepairMigrationPath, "utf8");
+  const repairSql = readFileSync(providerStartRepairMigrationPath, "utf8");
+  const sql = readFileSync(scanAnchorAndPrivacyMigrationPath, "utf8");
 
   assert.match(
     sql,
@@ -193,12 +198,17 @@ test("provider-start repair returns terminal peers and authoritative availabilit
   );
   assert.match(sql, /'terminal_outcome'::text[\s\S]*v_terminal_fingerprints/i);
   assert.match(sql, /'history_cooldown'::text[\s\S]*v_available_at/i);
+  assert.match(repairSql, /sms_ai_mark_provider_started_v3/i);
   assert.match(
     sql,
-    /REVOKE ALL ON FUNCTION public\.sms_ai_mark_provider_started_v2[\s\S]*FROM PUBLIC, anon, authenticated/i
+    /DROP FUNCTION IF EXISTS public\.sms_ai_mark_provider_started_v2/i
   );
   assert.match(
     sql,
-    /GRANT EXECUTE ON FUNCTION public\.sms_ai_mark_provider_started_v2[\s\S]*TO service_role/i
+    /REVOKE ALL ON FUNCTION public\.sms_ai_mark_provider_started_v3[\s\S]*FROM PUBLIC, anon, authenticated/i
+  );
+  assert.match(
+    sql,
+    /GRANT EXECUTE ON FUNCTION public\.sms_ai_mark_provider_started_v3[\s\S]*TO service_role/i
   );
 });

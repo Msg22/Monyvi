@@ -1,9 +1,11 @@
 -- Preserve provider-start race metadata so Edge can return truthful partial results.
 
 DROP FUNCTION IF EXISTS public.sms_ai_mark_provider_started_v2(uuid);
+DROP FUNCTION IF EXISTS public.sms_ai_mark_provider_started_v2(uuid, text[]);
 
-CREATE FUNCTION public.sms_ai_mark_provider_started_v2(
-  p_request_id uuid
+CREATE FUNCTION public.sms_ai_mark_provider_started_v3(
+  p_request_id uuid,
+  p_candidate_fingerprints text[]
 )
 RETURNS TABLE (
   started boolean,
@@ -24,7 +26,16 @@ DECLARE
   v_available_at timestamptz;
 BEGIN
   IF COALESCE(auth.role(), '') <> 'service_role' THEN
-    RAISE EXCEPTION 'sms_ai_mark_provider_started_v2 is service-role only';
+    RAISE EXCEPTION 'sms_ai_mark_provider_started_v3 is service-role only';
+  END IF;
+  IF p_candidate_fingerprints IS NULL
+    OR cardinality(p_candidate_fingerprints) > 50
+    OR EXISTS (
+      SELECT 1 FROM unnest(p_candidate_fingerprints) AS fingerprint
+      WHERE fingerprint !~ '^[0-9a-f]{64}$'
+    )
+  THEN
+    RAISE EXCEPTION 'Invalid SMS AI provider-start fingerprints';
   END IF;
 
   SELECT * INTO v_work
@@ -51,7 +62,7 @@ BEGIN
     WHERE outcome.user_id = v_work.user_id
       AND outcome.deleted = false
       AND outcome.is_terminal = true
-      AND outcome.sms_fingerprint = ANY(v_work.candidate_fingerprints);
+      AND outcome.sms_fingerprint = ANY(p_candidate_fingerprints);
 
     IF cardinality(v_terminal_fingerprints) > 0 THEN
       UPDATE public.sms_ai_work_requests
@@ -100,7 +111,7 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.sms_ai_mark_provider_started_v2(uuid)
+REVOKE ALL ON FUNCTION public.sms_ai_mark_provider_started_v3(uuid, text[])
 FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.sms_ai_mark_provider_started_v2(uuid)
+GRANT EXECUTE ON FUNCTION public.sms_ai_mark_provider_started_v3(uuid, text[])
 TO service_role;

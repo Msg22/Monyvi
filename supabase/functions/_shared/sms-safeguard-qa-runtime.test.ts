@@ -68,6 +68,20 @@ test("requires matching named profile and per-launch run identity", () => {
   );
 });
 
+test("accepts the deterministic consent-refusal profile", () => {
+  const metadata = parseSafeguardQaRequestMetadata(
+    new Request("http://localhost", {
+      headers: { "x-sms-safeguard-qa-run-id": "consent-run" },
+    }),
+    {
+      qaProfileId: "consent-required-v1",
+      qaRunId: "consent-run",
+    }
+  );
+
+  assert.equal(metadata.profileId, "consent-required-v1");
+});
+
 test("the local QA endpoint cannot import or configure a production AI provider", () => {
   const source = readFileSync(
     new URL("../sms-safeguard-qa/index.ts", import.meta.url),
@@ -80,4 +94,16 @@ test("the local QA endpoint cannot import or configure a production AI provider"
   );
   assert.match(source, /executeSafeguardQaProvider/);
   assert.match(source, /assertLocalSafeguardQaRuntime/);
+});
+
+test("the local QA endpoint exercises the production consent lookup", () => {
+  const source = readFileSync(
+    new URL("../sms-safeguard-qa/index.ts", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /hasActiveAiProcessingConsent/);
+  assert.doesNotMatch(source, /hasConsent:\s*async \(\) => true/);
+  assert.doesNotMatch(source, /function hasQaConsent/);
+  assert.match(source, /hasConsent:\s*hasActiveAiProcessingConsent/g);
 });

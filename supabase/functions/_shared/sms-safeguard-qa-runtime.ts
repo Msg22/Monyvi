@@ -12,6 +12,7 @@ const SAFEGUARD_QA_PROFILE_IDS = new Set([
   "terminal-fresh-install-v1",
   "trusted-local-recovery-v1",
   "account-switch-v1",
+  "consent-required-v1",
   "prompt-token-baseline-v1",
 ]);
 

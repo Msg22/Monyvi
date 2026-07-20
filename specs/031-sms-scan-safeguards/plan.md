@@ -16,10 +16,10 @@ exclusions and exact trusted templates before paid work; orders unresolved work
 newest-first; preserves successful partial results; and records only
 privacy-safe durable outcomes. A new server-authored, pull-only user-owned
 AI-negative outcome table carries the approved three-strike lifecycle across
-devices. Server-only usage and request ledgers atomically enforce rolling
-candidate, burst, payload, token-estimate, cooldown, and idempotency boundaries
-before Gemini starts. A bounded reservation lease prevents a crash before
-provider start from consuming capacity forever.
+devices. Server-only usage, request, and scan-anchor records atomically enforce
+rolling candidate, burst, payload, token-estimate, cooldown, idempotency, and
+immutable scan-window boundaries before Gemini starts. A bounded reservation
+lease prevents a crash before provider start from consuming capacity forever.
 
 Development QA receives named, versioned safeguard scenarios that exercise the
 same policy evaluator and response reconciliation with a fixture inbox and
@@ -36,12 +36,13 @@ Supabase JS 2.106, Zod 4, `@monyvi/logic`, AsyncStorage, NativeWind, Gemini via
 `@google/genai`.  
 **Storage**: WatermelonDB plus synchronized Supabase PostgreSQL for privacy-safe
 AI-negative outcomes; installation-local AsyncStorage for checkpoint and
-oversized-candidate metadata; server-only PostgreSQL ledgers for provider usage,
-idempotency, and history-rescan cooldown. No raw SMS is added to persistent
-storage by this feature.  
-**Testing**: Jest, React Native Testing Library, SQL/migration checks, Edge
-Function handler tests, deterministic safeguard scenario tests, existing SMS
-Maestro journeys, and physical-device manual QA.  
+oversized-candidate metadata; server-only PostgreSQL records for provider usage,
+idempotency, history-rescan cooldown, and immutable scan anchors. No raw SMS or
+candidate fingerprint is added to an allowance or scan-anchor record. No raw SMS
+is added to persistent storage by this feature. **Testing**: Jest, React Native
+Testing Library, SQL/migration checks, Edge Function handler tests,
+deterministic safeguard scenario tests, existing SMS Maestro journeys, and
+physical-device manual QA.  
 **Target Platform**: Expo React Native Android app and Supabase Edge/PostgreSQL;
 pure policy/reconciliation logic remains platform independent.  
 **Project Type**: Mobile app plus shared logic package, local database package,
@@ -58,7 +59,7 @@ starts/capability/rolling minute, 20 merchants/enrichment request, 100 merchant
 attempts/rolling 24 hours, 24-hour history cooldown, and no voice behavior
 changes.  
 **Scale/Scope**: Batch inbox scan, foreground/background/killed-app live SMS,
-two SMS Edge Functions, one syncable outcome entity, two server-only ledgers,
+two SMS Edge Functions, one syncable outcome entity, three server-only tables,
 installation-local scan metadata, focused settings/scan/review states, and a
 development-only scenario harness.
 
@@ -100,10 +101,12 @@ _GATE: Must pass before Phase 0 research. Re-checked after Phase 1 design._
   branch gets a failing test first. Batch/live sharing, concurrency,
   idempotency, malformed responses, user switches, partial results, checkpoint
   safety, and QA isolation require explicit coverage.
-- **Privacy and consent**: PASS. Existing AI consent remains required. New
-  synchronized and operational records contain fingerprints, timestamps, counts,
-  codes, and identities only; no sender, body, amount, merchant, category, or
-  extracted financial fields.
+- **Privacy and consent**: PASS. Existing AI consent remains required and is
+  exercised by the deterministic QA boundary. Synchronized negative outcomes may
+  contain canonical fingerprints, timestamps, counts, codes, and identities.
+  Allowance, request, usage, and scan-anchor records MUST NOT persist candidate
+  fingerprints. No new server record contains sender, body, amount, merchant,
+  category, or extracted financial fields.
 
 **Post-Design Re-check**: PASS. Contracts keep financial data local, make the
 server the final paid-work boundary, preserve current hybrid routing, isolate
@@ -255,7 +258,7 @@ adapters so parse and enrichment cannot drift.
    response reconciliation, and outcome lifecycle.
 3. Add the numbered SQL migration, RLS, service-role-only atomic RPCs, generated
    Supabase types, Watermelon schema/migration/model, pull-only sync strategy,
-   and scoped outcome service. Exclude the two server-only ledger tables from
+   and scoped outcome service. Exclude the three server-only tables from
    Watermelon migration generation.
 4. Add installation-local checkpoint and oversized-outcome service with strict
    validation, user scoping, monotonic writes, and bounded cleanup.
@@ -305,8 +308,9 @@ adapters so parse and enrichment cannot drift.
 ### Phase 6 - Deterministic safeguard QA
 
 1. Add named/versioned fixture profiles for cutoff, checkpoint, partial quota,
-   burst, cooldown, oversized input, response validity, three strikes,
-   cross-install terminal state, trusted-local recovery, and user switch.
+   burst, cooldown, oversized input, response validity, consent denial, three
+   strikes, cross-install terminal state, trusted-local recovery, and user
+   switch.
 2. Route QA through the production policy/reconciliation code with isolated
    simulated stores/provider and a fixed clock.
 3. Add reset and diagnostics proving zero production provider calls and zero

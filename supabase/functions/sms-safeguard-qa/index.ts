@@ -1,6 +1,7 @@
 import "edge-runtime";
 import { createClient } from "@supabase/supabase-js";
 
+import { hasActiveAiProcessingConsent } from "../_shared/ai-consent.ts";
 import { isExcludedBeforeSmsParsingAtEdge } from "../_shared/sms-hard-exclusions.ts";
 import {
   createParseSmsHandler,
@@ -11,6 +12,7 @@ import {
 import {
   completeSmsAiWork,
   markSmsAiProviderStarted,
+  resolveSmsScanWindowStart,
   releaseSmsAiWork,
   reserveSmsAiWork,
 } from "../_shared/sms-ai-safeguard-service.ts";
@@ -162,12 +164,16 @@ async function handleRequest(request: Request): Promise<Response> {
     });
     return handleSmsCategoryEnrichmentRequest(categoryRequest, {
       authenticate: authenticateHeader,
-      hasConsent: async () => true,
+      hasConsent: hasActiveAiProcessingConsent,
       getPolicy: () => policy,
       isProviderConfigured: true,
       reserveWork: (input) => reserveSmsAiWork(createServiceClient(), input),
-      markProviderStarted: (requestId) =>
-        markSmsAiProviderStarted(createServiceClient(), requestId),
+      markProviderStarted: (requestId, candidateFingerprints) =>
+        markSmsAiProviderStarted(
+          createServiceClient(),
+          requestId,
+          candidateFingerprints
+        ),
       classify: async (input: SmsCategoryRequest) => ({
         categories: input.merchants.map((merchant) => ({
           merchantId: merchant.id,
@@ -184,7 +190,7 @@ async function handleRequest(request: Request): Promise<Response> {
   }
   const handler = createParseSmsHandler({
     authenticate,
-    hasConsent: async () => true,
+    hasConsent: hasActiveAiProcessingConsent,
     getPolicy: () => policy,
     fixedPrompt: "SMS safeguard QA deterministic provider",
     buildResponseSchema: (currencies) => JSON.stringify({ currencies }),
@@ -199,10 +205,16 @@ async function handleRequest(request: Request): Promise<Response> {
       }),
     computeRequestDigest: computeRequestDigestAtEdge,
     getServerNowMs: Date.now,
+    resolveScanWindowStart: (input) =>
+      resolveSmsScanWindowStart(createServiceClient(), input),
     getProcessingOutcomes,
     reserveWork: (input) => reserveSmsAiWork(createServiceClient(), input),
-    markProviderStarted: (requestId) =>
-      markSmsAiProviderStarted(createServiceClient(), requestId),
+    markProviderStarted: (requestId, candidateFingerprints) =>
+      markSmsAiProviderStarted(
+        createServiceClient(),
+        requestId,
+        candidateFingerprints
+      ),
     executeProvider: (
       input: ExecuteSmsProviderInput
     ): Promise<SmsProviderExecutionResult> =>

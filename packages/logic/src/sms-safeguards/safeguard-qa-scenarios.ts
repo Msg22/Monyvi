@@ -14,6 +14,7 @@ export const REQUIRED_SAFEGUARD_QA_PROFILE_IDS = Object.freeze([
   "terminal-fresh-install-v1",
   "trusted-local-recovery-v1",
   "account-switch-v1",
+  "consent-required-v1",
   "prompt-token-baseline-v1",
 ] as const);
 
@@ -269,6 +270,7 @@ export const SAFEGUARD_QA_SCENARIOS: Readonly<
   "terminal-fresh-install-v1": createScenario("terminal-fresh-install-v1"),
   "trusted-local-recovery-v1": createScenario("trusted-local-recovery-v1"),
   "account-switch-v1": createScenario("account-switch-v1"),
+  "consent-required-v1": createScenario("consent-required-v1"),
   "prompt-token-baseline-v1": createScenario("prompt-token-baseline-v1", {
     fullParser: {
       maxPayloadBytes: 128,

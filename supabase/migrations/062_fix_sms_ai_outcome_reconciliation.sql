@@ -79,20 +79,16 @@ GRANT EXECUTE ON FUNCTION public.sms_ai_reconcile_outcomes(
   uuid, text[], jsonb, integer
 ) TO service_role;
 
--- Bind retries to the exact admitted payload and retain only canonical hashes
--- needed for the final terminal-outcome check before provider execution.
+-- Bind retries to the exact admitted payload without persisting per-message
+-- fingerprints in the allowance ledger.
 ALTER TABLE public.sms_ai_work_requests
   ADD COLUMN IF NOT EXISTS request_digest text,
-  ADD COLUMN IF NOT EXISTS candidate_fingerprints text[] NOT NULL DEFAULT ARRAY[]::text[],
   ADD COLUMN IF NOT EXISTS history_cooldown_seconds integer NOT NULL DEFAULT 0;
 
 ALTER TABLE public.sms_ai_work_requests
   DROP CONSTRAINT IF EXISTS sms_ai_work_requests_request_digest_shape,
   ADD CONSTRAINT sms_ai_work_requests_request_digest_shape
     CHECK (request_digest IS NULL OR request_digest ~ '^[0-9a-f]{64}$'),
-  DROP CONSTRAINT IF EXISTS sms_ai_work_requests_candidate_fingerprints_shape,
-  ADD CONSTRAINT sms_ai_work_requests_candidate_fingerprints_shape
-    CHECK (cardinality(candidate_fingerprints) <= 50),
   DROP CONSTRAINT IF EXISTS sms_ai_work_requests_history_cooldown_nonnegative,
   ADD CONSTRAINT sms_ai_work_requests_history_cooldown_nonnegative
     CHECK (history_cooldown_seconds >= 0);
@@ -234,7 +230,6 @@ BEGIN
 
   UPDATE public.sms_ai_work_requests
   SET request_digest = p_request_digest,
-      candidate_fingerprints = p_candidate_fingerprints,
       history_cooldown_seconds = p_history_cooldown_seconds,
       updated_at = clock_timestamp()
   WHERE id = v_decision.request_id;
@@ -267,7 +262,8 @@ END;
 $function$;
 
 CREATE OR REPLACE FUNCTION public.sms_ai_mark_provider_started_v2(
-  p_request_id uuid
+  p_request_id uuid,
+  p_candidate_fingerprints text[]
 )
 RETURNS TABLE (
   started boolean,
@@ -287,6 +283,15 @@ DECLARE
 BEGIN
   IF COALESCE(auth.role(), '') <> 'service_role' THEN
     RAISE EXCEPTION 'sms_ai_mark_provider_started_v2 is service-role only';
+  END IF;
+  IF p_candidate_fingerprints IS NULL
+    OR cardinality(p_candidate_fingerprints) > 50
+    OR EXISTS (
+      SELECT 1 FROM unnest(p_candidate_fingerprints) AS fingerprint
+      WHERE fingerprint !~ '^[0-9a-f]{64}$'
+    )
+  THEN
+    RAISE EXCEPTION 'Invalid SMS AI provider-start fingerprints';
   END IF;
 
   SELECT * INTO v_work
@@ -312,7 +317,7 @@ BEGIN
     WHERE outcome.user_id = v_work.user_id
       AND outcome.deleted = false
       AND outcome.is_terminal = true
-      AND outcome.sms_fingerprint = ANY(v_work.candidate_fingerprints);
+      AND outcome.sms_fingerprint = ANY(p_candidate_fingerprints);
 
     IF cardinality(v_terminal_fingerprints) > 0 THEN
       UPDATE public.sms_ai_work_requests
@@ -368,9 +373,9 @@ GRANT EXECUTE ON FUNCTION public.sms_ai_reserve_work_v2(
   uuid, text, text, text, text, integer, integer, integer, text, text[],
   integer, integer, integer, integer, integer, integer, integer
 ) TO service_role;
-REVOKE ALL ON FUNCTION public.sms_ai_mark_provider_started_v2(uuid)
+REVOKE ALL ON FUNCTION public.sms_ai_mark_provider_started_v2(uuid, text[])
   FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.sms_ai_mark_provider_started_v2(uuid)
+GRANT EXECUTE ON FUNCTION public.sms_ai_mark_provider_started_v2(uuid, text[])
   TO service_role;
 
 CREATE OR REPLACE FUNCTION public.sms_ai_cleanup_safeguards(

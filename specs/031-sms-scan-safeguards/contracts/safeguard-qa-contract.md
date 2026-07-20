@@ -43,6 +43,7 @@ must not delete unrelated development user data.
 - `terminal-fresh-install-v1`
 - `trusted-local-recovery-v1`
 - `account-switch-v1`
+- `consent-required-v1`
 - `prompt-token-baseline-v1`
 
 The prompt-token profile uses the local estimator. A separate explicit opt-in

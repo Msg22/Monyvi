@@ -20,6 +20,7 @@ const REQUIRED_PROFILE_IDS = [
   "terminal-fresh-install-v1",
   "trusted-local-recovery-v1",
   "account-switch-v1",
+  "consent-required-v1",
   "prompt-token-baseline-v1",
 ] as const;
 
@@ -121,6 +122,7 @@ describe("deterministic SMS safeguard QA scenarios", () => {
       "terminal-fresh-install-v1",
       "trusted-local-recovery-v1",
       "account-switch-v1",
+      "consent-required-v1",
     ] as const) {
       expect(SAFEGUARD_QA_SCENARIOS[id].policyOverrides).toBeDefined();
     }

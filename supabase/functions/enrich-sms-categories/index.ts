@@ -129,8 +129,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
     getPolicy: () => readSmsSafeguardPolicyFromEnvironment(Deno.env.get),
     isProviderConfigured: Boolean(apiKey),
     reserveWork: (input) => reserveSmsAiWork(createServiceClient(), input),
-    markProviderStarted: (requestId) =>
-      markSmsAiProviderStarted(createServiceClient(), requestId),
+    markProviderStarted: (requestId, candidateFingerprints) =>
+      markSmsAiProviderStarted(
+        createServiceClient(),
+        requestId,
+        candidateFingerprints
+      ),
     classify: (body, signal) =>
       apiKey
         ? classifyWithRetry(new GoogleGenAI({ apiKey }), body, signal)

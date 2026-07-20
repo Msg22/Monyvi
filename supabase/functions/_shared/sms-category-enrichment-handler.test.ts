@@ -483,7 +483,10 @@ test("Edge entry point uses the service-role safeguard adapter", () => {
   );
 
   assert.match(source, /reserveSmsAiWork\(createServiceClient\(\),\s*input\)/);
-  assert.match(source, /markSmsAiProviderStarted\(createServiceClient\(\),/);
+  assert.match(
+    source,
+    /markSmsAiProviderStarted\(\s*createServiceClient\(\),\s*requestId,\s*candidateFingerprints/
+  );
   assert.match(source, /completeSmsAiWork\(createServiceClient\(\),/);
   assert.match(source, /releaseSmsAiWork\(createServiceClient\(\),/);
 });

@@ -5,6 +5,9 @@ const { randomUUID } = require("node:crypto");
 const { spawn, spawnSync } = require("node:child_process");
 const { createClient } = require("@supabase/supabase-js");
 const {
+  version: AI_PROCESSING_CONSENT_VERSION,
+} = require("../config/ai-processing-consent.json");
+const {
   QA_PROVIDER_OUTCOME_MATRIX,
   buildQaRequestKeyResetFilter: buildQaRequestKeyResetFilterForProfiles,
   buildServerSafeguardDiagnostics,
@@ -72,6 +75,7 @@ const SERVER_PROFILE_IDS = new Set([
   "negative-three-strikes-v1",
   "terminal-fresh-install-v1",
   "account-switch-v1",
+  "consent-required-v1",
 ]);
 
 const ALL_PROFILE_IDS = Object.freeze([
@@ -88,6 +92,7 @@ const ALL_PROFILE_IDS = Object.freeze([
   "terminal-fresh-install-v1",
   "trusted-local-recovery-v1",
   "account-switch-v1",
+  "consent-required-v1",
   "prompt-token-baseline-v1",
 ]);
 
@@ -221,6 +226,14 @@ function buildQaRequestKeyResetFilter() {
 }
 
 async function resetServerSafeguardState(service, userId, messages) {
+  const { error: scanSessionError } = await service
+    .from("sms_ai_scan_sessions")
+    .delete()
+    .eq("user_id", userId);
+  if (scanSessionError) {
+    throw new Error("Could not reset namespaced QA scan sessions.");
+  }
+
   const { data: work, error: readError } = await service
     .from("sms_ai_work_requests")
     .select("id")
@@ -503,6 +516,20 @@ function assertServerProfileResult(
     throw new Error("Account-scoped safeguard state was not isolated.");
   }
   if (
+    profileId === "consent-required-v1" &&
+    (responses.some(({ status }) => status !== 403) ||
+      providerStartedCount !== 0 ||
+      snapshot.work.length !== 0)
+  ) {
+    throw new Error(
+      `Revoked consent profile failed: ${JSON.stringify({
+        responseStatuses: responses.map(({ status }) => status),
+        providerStartedCount,
+        workCount: snapshot.work.length,
+      })}`
+    );
+  }
+  if (
     profileId === "partial-quota-v1" &&
     !categoryResponses.some(({ status }) => status === 429)
   ) {
@@ -593,6 +620,24 @@ async function runAccountSwitchProof(input) {
   }
 
   try {
+    const consentedAt = new Date().toISOString();
+    const { error: profileError } = await input.service.from("profiles").upsert(
+      {
+        user_id: data.user.id,
+        ai_processing_consent: {
+          version: AI_PROCESSING_CONSENT_VERSION,
+          consentedAt,
+          revokedAt: null,
+        },
+      },
+      { onConflict: "user_id" }
+    );
+    if (profileError) {
+      throw new Error(
+        "Could not grant consent to the isolated local QA account."
+      );
+    }
+
     const secondaryClient = createQaSupabaseClient(
       input.runtime.API_URL,
       input.runtime.ANON_KEY
@@ -623,9 +668,43 @@ async function runAccountSwitchProof(input) {
   }
 }
 
-async function runServerProfile(profileId, environment, helpers) {
-  const { authenticated, service, userId, runtime } =
-    await getQaClients(environment);
+async function withQaConsentState(service, userId, profileId, execute) {
+  if (profileId !== "consent-required-v1") {
+    return execute();
+  }
+
+  const { data, error: readError } = await service
+    .from("profiles")
+    .select("ai_processing_consent")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (readError || !data) {
+    throw new Error("Could not read the local QA user's consent state.");
+  }
+  const originalConsent = data.ai_processing_consent ?? null;
+  const { error: revokeError } = await service
+    .from("profiles")
+    .update({ ai_processing_consent: null })
+    .eq("user_id", userId);
+  if (revokeError) {
+    throw new Error("Could not revoke consent for the consent QA profile.");
+  }
+
+  try {
+    return await execute();
+  } finally {
+    const { error: restoreError } = await service
+      .from("profiles")
+      .update({ ai_processing_consent: originalConsent })
+      .eq("user_id", userId);
+    if (restoreError) {
+      throw new Error("Could not restore the local QA user's consent state.");
+    }
+  }
+}
+
+async function executeServerProfile(profileId, environment, helpers, clients) {
+  const { authenticated, service, userId, runtime } = clients;
   const policy = helpers.getSafeguardQaPolicy(profileId);
   let messages = getUnresolvedQaMessages(
     helpers.createSafeguardQaInboxMessages(profileId)
@@ -811,6 +890,13 @@ async function runServerProfile(profileId, environment, helpers) {
       categoryEnrichmentProviderCallCount: categoryProviderStartedCount,
     },
   };
+}
+
+async function runServerProfile(profileId, environment, helpers) {
+  const clients = await getQaClients(environment);
+  return withQaConsentState(clients.service, clients.userId, profileId, () =>
+    executeServerProfile(profileId, environment, helpers, clients)
+  );
 }
 
 async function runTests(args, environment) {

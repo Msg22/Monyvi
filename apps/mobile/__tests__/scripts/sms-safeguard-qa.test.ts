@@ -1,3 +1,6 @@
+import { readFileSync } from "fs";
+import path from "path";
+
 interface SmsSafeguardQaScript {
   readonly QA_PROVIDER_OUTCOME_MATRIX: readonly string[];
   readonly buildSafeguardQaEnvironment: (
@@ -47,6 +50,11 @@ const script =
   require("../../scripts/sms-safeguard-qa.js") as SmsSafeguardQaScript;
 
 describe("SMS safeguard QA launcher", () => {
+  const launcherSource = readFileSync(
+    path.resolve(__dirname, "../../scripts/sms-safeguard-qa.js"),
+    "utf8"
+  );
+
   test("requires an explicit scenario for app-facing runs", () => {
     expect(() =>
       script.resolveSafeguardQaProfileArgument([], { required: true })
@@ -93,7 +101,20 @@ describe("SMS safeguard QA launcher", () => {
 
     expect(filter).toContain("request_key.like.cutoff-boundary-v1-%");
     expect(filter).toContain("request_key.like.negative-three-strikes-v1-%");
+    expect(filter).toContain("request_key.like.consent-required-v1-%");
     expect(filter).not.toContain("request_key.like.%");
+  });
+
+  test("resets scan sessions and exercises real profile consent state", () => {
+    expect(launcherSource).toMatch(
+      /from\("sms_ai_scan_sessions"\)[\s\S]*\.delete\(\)[\s\S]*\.eq\("user_id", userId\)/
+    );
+    expect(launcherSource).toMatch(
+      /from\("profiles"\)[\s\S]*\.upsert\([\s\S]*user_id: data\.user\.id[\s\S]*ai_processing_consent:/
+    );
+    expect(launcherSource).toMatch(
+      /withQaConsentState[\s\S]*ai_processing_consent: null[\s\S]*finally[\s\S]*ai_processing_consent: originalConsent/
+    );
   });
 
   test("runs the complete provider validity matrix through the local QA endpoint", () => {

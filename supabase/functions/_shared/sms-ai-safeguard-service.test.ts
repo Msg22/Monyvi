@@ -6,6 +6,7 @@ import {
   getSmsAiAvailability,
   readSmsAiAvailability,
   markSmsAiProviderStarted,
+  resolveSmsScanWindowStart,
   reconcileSmsAiOutcomes,
   releaseSmsAiWork,
   reserveSmsAiWork,
@@ -180,7 +181,9 @@ test("maps provider lifecycle and privacy-safe outcome RPCs", async () => {
     [],
   ]);
 
-  const startDecision = await markSmsAiProviderStarted(client, "request-id");
+  const startDecision = await markSmsAiProviderStarted(client, "request-id", [
+    "f".repeat(64),
+  ]);
   assert.equal(startDecision.availableAt, "2026-07-21T12:00:00.000+00:00");
   await completeSmsAiWork(client, {
     requestId: "request-id",
@@ -199,16 +202,40 @@ test("maps provider lifecycle and privacy-safe outcome RPCs", async () => {
     ],
   });
 
-  assert.equal(calls[0]?.name, "sms_ai_mark_provider_started_v2");
+  assert.equal(calls[0]?.name, "sms_ai_mark_provider_started_v3");
+  assert.deepEqual(calls[0]?.params.p_candidate_fingerprints, ["f".repeat(64)]);
 
   assert.deepEqual(
     calls.map(({ name }) => name),
     [
-      "sms_ai_mark_provider_started_v2",
+      "sms_ai_mark_provider_started_v3",
       "sms_ai_complete_work",
       "sms_ai_release_work",
       "sms_ai_reconcile_outcomes",
     ]
   );
   assert.equal(JSON.stringify(calls).includes("rawBody"), false);
+});
+
+test("resolves one immutable server scan-window anchor", async () => {
+  const { client, calls } = createClient([
+    [{ accepted_scan_started_at: "2026-07-20T12:00:00.000+00:00" }],
+  ]);
+
+  const resolved = await resolveSmsScanWindowStart(client, {
+    userId: "user-id",
+    scanSessionId: "scan-id",
+    scanKind: "incremental",
+    requestedScanStartedAtMs: Date.parse("2026-07-20T12:00:00.000Z"),
+    maxFutureSkewMs: 300_000,
+    edgeGraceMs: 300_000,
+  });
+
+  assert.equal(resolved, Date.parse("2026-07-20T12:00:00.000Z"));
+  assert.equal(calls[0]?.name, "sms_ai_resolve_scan_window");
+  assert.equal(calls[0]?.params.p_scan_session_id, "scan-id");
+  assert.equal(
+    calls[0]?.params.p_client_scan_started_at,
+    "2026-07-20T12:00:00.000Z"
+  );
 });

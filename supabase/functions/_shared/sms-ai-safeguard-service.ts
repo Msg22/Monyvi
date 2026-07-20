@@ -162,12 +162,49 @@ export async function reserveSmsAiWork(
 
 export async function markSmsAiProviderStarted(
   client: SmsSafeguardRpcClient,
-  requestId: string
+  requestId: string,
+  candidateFingerprints: readonly string[]
 ): Promise<SmsAiProviderStartDecision> {
-  const data = await callRpc(client, "sms_ai_mark_provider_started_v2", {
+  const data = await callRpc(client, "sms_ai_mark_provider_started_v3", {
     p_request_id: requestId,
+    p_candidate_fingerprints: [...new Set(candidateFingerprints)],
   });
   return parseSmsAiProviderStartDecision(data);
+}
+
+export interface ResolveSmsScanWindowStartInput {
+  readonly userId: string;
+  readonly scanSessionId: string | null;
+  readonly scanKind: "initial" | "incremental" | "history" | "live";
+  readonly requestedScanStartedAtMs: number;
+  readonly maxFutureSkewMs: number;
+  readonly edgeGraceMs: number;
+}
+
+export async function resolveSmsScanWindowStart(
+  client: SmsSafeguardRpcClient,
+  input: ResolveSmsScanWindowStartInput
+): Promise<number | null> {
+  const data = await callRpc(client, "sms_ai_resolve_scan_window", {
+    p_user_id: input.userId,
+    p_scan_session_id: input.scanSessionId,
+    p_scan_kind: input.scanKind,
+    p_client_scan_started_at: new Date(
+      input.requestedScanStartedAtMs
+    ).toISOString(),
+    p_max_future_skew_seconds: toSeconds(input.maxFutureSkewMs),
+    p_edge_grace_seconds: toSeconds(input.edgeGraceMs),
+  });
+  const row = getSingleRpcRow(data);
+  if (row.accepted_scan_started_at === null) return null;
+  if (typeof row.accepted_scan_started_at !== "string") {
+    throw new Error("Invalid SMS scan-window response");
+  }
+  const value = Date.parse(row.accepted_scan_started_at);
+  if (!Number.isFinite(value)) {
+    throw new Error("Invalid SMS scan-window timestamp");
+  }
+  return value;
 }
 
 export async function releaseSmsAiWork(

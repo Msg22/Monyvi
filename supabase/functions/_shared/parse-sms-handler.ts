@@ -66,6 +66,15 @@ export interface SmsAiProcessingOutcomeAtEdge {
   readonly isTerminal: boolean;
 }
 
+export interface ResolveSmsScanWindowInput {
+  readonly userId: string;
+  readonly scanSessionId: string | null;
+  readonly scanKind: SmsScanKind;
+  readonly requestedScanStartedAtMs: number;
+  readonly maxFutureSkewMs: number;
+  readonly edgeGraceMs: number;
+}
+
 interface ReconcileOutcomesInput {
   readonly userId: string;
   readonly submittedCandidates: readonly SmsNegativeOutcomeCandidate[];
@@ -95,6 +104,9 @@ export interface ParseSmsHandlerDependencies {
   readonly computeFingerprint: (message: ParseSmsMessage) => Promise<string>;
   readonly computeRequestDigest: (body: unknown) => Promise<string>;
   readonly getServerNowMs: () => number;
+  readonly resolveScanWindowStart: (
+    input: ResolveSmsScanWindowInput
+  ) => Promise<number | null>;
   readonly getProcessingOutcomes: (
     userId: string,
     fingerprints: readonly string[],
@@ -104,7 +116,8 @@ export interface ParseSmsHandlerDependencies {
     input: SmsAiAdmissionInput
   ) => Promise<SmsAiAdmissionDecision>;
   readonly markProviderStarted: (
-    requestId: string
+    requestId: string,
+    candidateFingerprints: readonly string[]
   ) => Promise<SmsAiProviderStartDecision>;
   readonly executeProvider: (
     input: ExecuteSmsProviderInput
@@ -262,20 +275,11 @@ function calculateRequestMetrics(
 async function hasValidCanonicalMessages(
   messages: readonly ParseSmsMessage[],
   lookbackDays: number,
-  scanStartedAtMs: number,
+  acceptedScanStartedAtMs: number,
   dependencies: ParseSmsHandlerDependencies
 ): Promise<boolean> {
   const nowMs = dependencies.getServerNowMs();
-  if (scanStartedAtMs > nowMs + MAX_SCAN_START_FUTURE_SKEW_MS) {
-    return false;
-  }
-  const clientMinimumReceivedAtMs = scanStartedAtMs - lookbackDays * DAY_MS;
-  const serverMinimumReceivedAtMs =
-    nowMs - lookbackDays * DAY_MS - MAX_ROLLING_WINDOW_EDGE_GRACE_MS;
-  const minimumReceivedAtMs = Math.max(
-    clientMinimumReceivedAtMs,
-    serverMinimumReceivedAtMs
-  );
+  const minimumReceivedAtMs = acceptedScanStartedAtMs - lookbackDays * DAY_MS;
   const maximumReceivedAtMs = nowMs + MAX_FUTURE_MESSAGE_SKEW_MS;
 
   for (const message of messages) {
@@ -364,7 +368,8 @@ async function executeAdmittedWork(input: {
   let startDecision: SmsAiProviderStartDecision;
   try {
     startDecision = await input.dependencies.markProviderStarted(
-      input.admission.requestId
+      input.admission.requestId,
+      input.messages.map((message) => message.smsFingerprint)
     );
   } catch {
     await safelyReleaseReservation(
@@ -520,10 +525,32 @@ async function handlePost(
     return refusal("capability_disabled", 503);
   }
   if (
+    body.scanStartedAtMs >
+    dependencies.getServerNowMs() + MAX_SCAN_START_FUTURE_SKEW_MS
+  ) {
+    return refusal("malformed_request", 400);
+  }
+  let acceptedScanStartedAtMs: number | null;
+  try {
+    acceptedScanStartedAtMs = await dependencies.resolveScanWindowStart({
+      userId,
+      scanSessionId: body.scanSessionId,
+      scanKind: body.scanKind,
+      requestedScanStartedAtMs: body.scanStartedAtMs,
+      maxFutureSkewMs: MAX_SCAN_START_FUTURE_SKEW_MS,
+      edgeGraceMs: MAX_ROLLING_WINDOW_EDGE_GRACE_MS,
+    });
+  } catch {
+    return refusal("dependency_unavailable", 503);
+  }
+  if (acceptedScanStartedAtMs === null) {
+    return refusal("malformed_request", 400);
+  }
+  if (
     !(await hasValidCanonicalMessages(
       body.messages,
       policy.lookbackDays,
-      body.scanStartedAtMs,
+      acceptedScanStartedAtMs,
       dependencies
     ))
   ) {

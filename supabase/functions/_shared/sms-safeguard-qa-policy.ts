@@ -82,6 +82,7 @@ const PROFILE_OVERRIDES: Readonly<Record<string, QaPolicyOverride>> =
     "terminal-fresh-install-v1": {},
     "trusted-local-recovery-v1": {},
     "account-switch-v1": {},
+    "consent-required-v1": {},
     "prompt-token-baseline-v1": {
       fullParser: { maxPayloadBytes: 128, maxEstimatedInputTokens: 32 },
     },

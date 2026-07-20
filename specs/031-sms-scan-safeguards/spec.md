@@ -440,6 +440,11 @@ consumption.
     separately and the approved corpus expectations are compared without
     silently invoking the production provider; any separately approved
     live-provider evaluation uses an explicitly named non-default workflow.
+19. **Given** the QA user does not have active AI processing consent, **When**
+    any full-parser safeguard request is attempted, **Then** the shared consent
+    boundary refuses it before reservation or provider start, records no usage
+    or processing outcome, and the consent profile reports zero production
+    provider calls and zero production allowance charges.
 
 ### Edge Cases
 
@@ -673,11 +678,11 @@ consumption.
   scenario profiles, including cutoff/checkpoint, quota exhaustion, partial
   results, history cooldown, request burst, AI-negative lifecycle,
   cross-installation synchronization, trusted-local recovery, and oversized
-  request, plus a deterministic prompt-boundary evaluation profile. Each profile
-  MUST define the reduced request, scan, rolling-allowance, payload,
-  estimated-input, cooldown, and burst boundaries needed to reproduce its
-  behavior with a small fixture set. Profile selection MUST be explicit and MUST
-  NOT depend on state left by another scenario.
+  request, authenticated consent denial, plus a deterministic prompt-boundary
+  evaluation profile. Each profile MUST define the reduced request, scan,
+  rolling-allowance, payload, estimated-input, cooldown, and burst boundaries
+  needed to reproduce its behavior with a small fixture set. Profile selection
+  MUST be explicit and MUST NOT depend on state left by another scenario.
 - **FR-042**: Test policy values MUST exercise the same policy interpretation,
   enforcement decisions, accounting rules, partial-result handling, and
   user-visible states as the release policy; the test harness MUST NOT replace

@@ -38,6 +38,7 @@ const EXCLUDED_TABLES = [
   "__InternalSupabase",
   "sms_ai_work_requests",
   "sms_ai_usage_events",
+  "sms_ai_scan_sessions",
 ];
 
 // Mapping from table names to class names (for irregular plurals)
@@ -120,52 +121,53 @@ function getSchemaVersion() {
 /**
  * Parse the supabase-types.ts file and extract table definitions and enums
  */
+function extractSchemaBlock(content, schemaName) {
+  const schemaMatch = new RegExp(`\\b${schemaName}:\\s*\\{`).exec(content);
+  if (!schemaMatch) return null;
+
+  const openingBrace = content.indexOf("{", schemaMatch.index);
+  let braceDepth = 0;
+  for (let index = openingBrace; index < content.length; index += 1) {
+    if (content[index] === "{") braceDepth += 1;
+    if (content[index] !== "}") continue;
+    braceDepth -= 1;
+    if (braceDepth === 0) {
+      return content.slice(openingBrace + 1, index);
+    }
+  }
+
+  throw new Error(
+    `Malformed supabase-types.ts: ${schemaName} schema is unclosed`
+  );
+}
+
 function parseSupabaseTypes(content) {
   const tables = {};
   const enums = {};
   const relationships = {};
+  const publicSchema = extractSchemaBlock(content, "public");
+  if (publicSchema === null) {
+    throw new Error("Could not find public schema in supabase-types.ts");
+  }
 
   // Extract enums using brace-counting (handles multi-line enum values)
-  const enumsStartIdx = content.indexOf("Enums: {");
-  if (enumsStartIdx !== -1) {
-    let braceDepth = 0;
-    let start = -1;
-    let end = -1;
-    for (let i = enumsStartIdx; i < content.length; i++) {
-      if (content[i] === "{") {
-        if (braceDepth === 0) start = i + 1;
-        braceDepth++;
-      } else if (content[i] === "}") {
-        braceDepth--;
-        if (braceDepth === 0) {
-          end = i;
-          break;
-        }
-      }
-    }
-    if (start !== -1 && end === -1) {
-      throw new Error(
-        "Malformed supabase-types.ts: Enums block has unmatched opening brace"
-      );
-    }
-    if (start !== -1 && end !== -1) {
-      const enumsBlock = content.substring(start, end);
-      const enumRegex = /(\w+):\s*([^;]+);/g;
-      let match;
-      while ((match = enumRegex.exec(enumsBlock)) !== null) {
-        const enumName = match[1];
-        const enumValues = match[2]
-          .split("|")
-          .map((v) => v.trim().replace(/"/g, ""))
-          .filter((v) => v);
-        enums[enumName] = enumValues;
-      }
+  const enumsBlock = extractSchemaBlock(publicSchema, "Enums");
+  if (enumsBlock !== null) {
+    const enumRegex = /(\w+):\s*([^;]+);/g;
+    let match;
+    while ((match = enumRegex.exec(enumsBlock)) !== null) {
+      const enumName = match[1];
+      const enumValues = match[2]
+        .split("|")
+        .map((v) => v.trim().replace(/"/g, ""))
+        .filter((v) => v);
+      enums[enumName] = enumValues;
     }
   }
 
   // Extract tables from the Tables block
-  const tablesMatch = content.match(/Tables:\s*\{([\s\S]*?)\n\s{4}\};/);
-  if (!tablesMatch) {
+  const tablesBlock = extractSchemaBlock(publicSchema, "Tables");
+  if (tablesBlock === null) {
     console.error("Could not find Tables block in supabase-types.ts");
     return { tables, enums, relationships };
   }
@@ -175,7 +177,7 @@ function parseSupabaseTypes(content) {
     /(\w+):\s*\{\s*Row:\s*\{([\s\S]*?)\};\s*Insert:[\s\S]*?Update:[\s\S]*?Relationships:\s*\[([\s\S]*?)\];\s*\};/g;
   let tableMatch;
 
-  while ((tableMatch = tableRegex.exec(content)) !== null) {
+  while ((tableMatch = tableRegex.exec(tablesBlock)) !== null) {
     const tableName = tableMatch[1];
 
     if (EXCLUDED_TABLES.includes(tableName)) {
@@ -747,4 +749,8 @@ function main() {
   console.log("   Extended models (*.ts) are only created if missing.");
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = { parseSupabaseTypes };

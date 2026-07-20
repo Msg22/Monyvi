@@ -21,6 +21,16 @@ function readReconciliationFixSql(): string {
   );
 }
 
+function readPrivacyAndScanSessionFixSql(): string {
+  return readFileSync(
+    path.resolve(
+      __dirname,
+      "../../../../supabase/migrations/064_fix_sms_scan_anchor_and_ledger_privacy.sql"
+    ),
+    "utf8"
+  );
+}
+
 describe("SMS AI safeguards migration", () => {
   it("creates only privacy-safe synchronized negative outcomes", () => {
     const sql = readMigrationSql();
@@ -93,13 +103,11 @@ describe("SMS AI safeguards migration", () => {
     expect(sql).toMatch(/#variable_conflict use_column/i);
   });
 
-  it("hardens deployed safeguard ledgers with payload identity and provider-start checks", () => {
+  it("hardens deployed safeguard ledgers with digest identity and provider-start checks", () => {
     const sql = readReconciliationFixSql();
 
     expect(sql).toMatch(/ADD COLUMN IF NOT EXISTS request_digest text/i);
-    expect(sql).toMatch(
-      /ADD COLUMN IF NOT EXISTS candidate_fingerprints text\[\]/i
-    );
+    expect(sql).not.toMatch(/ADD COLUMN IF NOT EXISTS candidate_fingerprints/i);
     expect(sql).toContain("FUNCTION public.sms_ai_reserve_work_v2");
     expect(sql).toContain("FUNCTION public.sms_ai_mark_provider_started_v2");
     expect(sql).toMatch(/idempotency_conflict/i);
@@ -117,6 +125,26 @@ describe("SMS AI safeguards migration", () => {
     );
     expect(sql).toMatch(
       /EXECUTE FUNCTION public\.set_sms_ai_negative_outcome_updated_at\(\)/i
+    );
+  });
+
+  it("binds an immutable scan window and removes raw fingerprints from allowance rows", () => {
+    const sql = readPrivacyAndScanSessionFixSql();
+
+    expect(sql).toMatch(
+      /CREATE TABLE IF NOT EXISTS public\.sms_ai_scan_sessions/i
+    );
+    expect(sql).toContain("FUNCTION public.sms_ai_resolve_scan_window");
+    expect(sql).toMatch(/accepted_scan_started_at timestamptz NOT NULL/i);
+    expect(sql).toMatch(
+      /UPDATE public\.sms_ai_work_requests[\s\S]*candidate_fingerprints = ARRAY\[\]::text\[\][\s\S]*CREATE TRIGGER scrub_sms_ai_work_request_fingerprints/i
+    );
+    expect(sql).toContain("FUNCTION public.sms_ai_mark_provider_started_v3");
+    expect(sql).toMatch(
+      /ALTER TABLE public\.sms_ai_scan_sessions ENABLE ROW LEVEL SECURITY[\s\S]*REVOKE ALL ON public\.sms_ai_scan_sessions FROM PUBLIC, anon, authenticated/i
+    );
+    expect(sql).toMatch(
+      /sms_ai_mark_provider_started_v3\([\s\S]*p_candidate_fingerprints text\[\]/i
     );
   });
 
