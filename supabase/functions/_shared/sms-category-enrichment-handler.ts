@@ -14,6 +14,10 @@ import {
 import { getUtf8ByteLengthAtEdge } from "./sms-input-estimator.ts";
 import { computeRequestDigestAtEdge } from "./sms-fingerprint-at-edge.ts";
 import {
+  completeSmsAiWorkWithRetry,
+  type CompleteSmsAiWorkInput,
+} from "./sms-ai-work-completion.ts";
+import {
   parseSmsSafeguardPolicy,
   type SmsSafeguardPolicy,
 } from "./sms-safeguard-policy.ts";
@@ -28,12 +32,6 @@ const CONSERVATIVE_BYTES_PER_TOKEN = 3;
 
 interface AuthenticatedUser {
   readonly userId: string;
-}
-
-interface CompleteWorkInput {
-  readonly requestId: string;
-  readonly completedWithProviderError: boolean;
-  readonly decisionCode: string;
 }
 
 interface SmsCategoryHandlerRequest {
@@ -67,7 +65,7 @@ export interface SmsCategoryHandlerDependencies {
     request: SmsCategoryRequest,
     signal: AbortSignal
   ) => Promise<SmsCategoryResponse | null>;
-  readonly completeWork: (input: CompleteWorkInput) => Promise<boolean>;
+  readonly completeWork: (input: CompleteSmsAiWorkInput) => Promise<boolean>;
   readonly releaseWork: (
     requestId: string,
     decisionCode: string
@@ -207,17 +205,6 @@ async function safelyReleaseReservation(
   }
 }
 
-async function safelyCompleteWork(
-  dependencies: SmsCategoryHandlerDependencies,
-  input: CompleteWorkInput
-): Promise<boolean> {
-  try {
-    return await dependencies.completeWork(input);
-  } catch {
-    return false;
-  }
-}
-
 async function executeAdmittedWork(input: {
   readonly request: Request;
   readonly body: SmsCategoryHandlerRequest;
@@ -254,21 +241,27 @@ async function executeAdmittedWork(input: {
   }
 
   if (result === null) {
-    const didComplete = await safelyCompleteWork(input.dependencies, {
-      requestId: input.admission.requestId,
-      completedWithProviderError: true,
-      decisionCode: "provider_failed",
-    });
+    const didComplete = await completeSmsAiWorkWithRetry(
+      input.dependencies.completeWork,
+      {
+        requestId: input.admission.requestId,
+        completedWithProviderError: true,
+        decisionCode: "provider_failed",
+      }
+    );
     return didComplete
       ? refusal("provider_failed", 502)
       : refusal("dependency_unavailable", 503);
   }
 
-  const didComplete = await safelyCompleteWork(input.dependencies, {
-    requestId: input.admission.requestId,
-    completedWithProviderError: false,
-    decisionCode: "complete",
-  });
+  const didComplete = await completeSmsAiWorkWithRetry(
+    input.dependencies.completeWork,
+    {
+      requestId: input.admission.requestId,
+      completedWithProviderError: false,
+      decisionCode: "complete",
+    }
+  );
   if (!didComplete) return refusal("dependency_unavailable", 503);
 
   input.dependencies.logInfo(

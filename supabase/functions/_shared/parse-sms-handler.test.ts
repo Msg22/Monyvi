@@ -712,6 +712,32 @@ test("starts, reconciles, and completes one accepted provider request", async ()
   assert.equal((data.transactions as readonly unknown[]).length, 1);
 });
 
+test("retries finalization after a transient completion failure", async () => {
+  for (const firstFailure of ["false", "throw"] as const) {
+    const state = createState();
+    const handler = createParseSmsHandler(
+      createDependencies(state, {
+        completeWork: async () => {
+          state.complete++;
+          if (state.complete > 1) return true;
+          if (firstFailure === "throw") {
+            throw new Error("completion RPC unavailable");
+          }
+          return false;
+        },
+      })
+    );
+
+    const response = await handler(post(requestBody()));
+    const data = await readJson(response);
+
+    assert.equal(response.status, 200);
+    assert.equal(state.provider, 1);
+    assert.equal(state.complete, 2);
+    assert.equal((data.transactions as readonly unknown[]).length, 1);
+  }
+});
+
 test("finalizes provider-started work when outcome reconciliation fails", async () => {
   const state = createState();
   const completions: Array<{
@@ -749,28 +775,32 @@ test("finalizes provider-started work when outcome reconciliation fails", async 
 });
 
 test("incomplete provider output creates no negative strike and remains unresolved", async () => {
-  const state = createState();
-  const handler = createParseSmsHandler(
-    createDependencies(state, {
-      executeProvider: async () => {
-        state.provider++;
-        return providerResult({
-          completionStatus: "truncated",
-          transactions: [],
-        });
-      },
-    })
-  );
+  for (const completionStatus of [
+    "truncated",
+    "safety_stopped",
+    "failed",
+  ] as const) {
+    const state = createState();
+    const handler = createParseSmsHandler(
+      createDependencies(state, {
+        executeProvider: async () => {
+          state.provider++;
+          return providerResult({ completionStatus });
+        },
+      })
+    );
 
-  const response = await handler(post(requestBody()));
-  const data = await readJson(response);
+    const response = await handler(post(requestBody()));
+    const data = await readJson(response);
 
-  assert.equal(response.status, 200);
-  assert.equal(state.reconcile, 0);
-  assert.equal(state.complete, 1);
-  assert.equal(data.completionStatus, "truncated");
-  assert.deepEqual(data.negativeFingerprints, []);
-  assert.deepEqual(data.unresolvedFingerprints, ["fingerprint-1"]);
+    assert.equal(response.status, 200);
+    assert.equal(state.reconcile, 0);
+    assert.equal(state.complete, 1);
+    assert.equal(data.completionStatus, completionStatus);
+    assert.deepEqual(data.transactions, []);
+    assert.deepEqual(data.negativeFingerprints, []);
+    assert.deepEqual(data.unresolvedFingerprints, ["fingerprint-1"]);
+  }
 });
 
 test("provider failure is consumed and never reported as an empty success", async () => {

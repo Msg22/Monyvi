@@ -397,6 +397,33 @@ test("starts and completes exactly one accepted provider request", async () => {
   });
 });
 
+test("retries finalization after a transient completion failure", async () => {
+  for (const firstFailure of ["false", "throw"] as const) {
+    const state = createState();
+    const response = await handleSmsCategoryEnrichmentRequest(
+      post(),
+      createDependencies(state, {
+        completeWork: async () => {
+          state.complete += 1;
+          if (state.complete > 1) return true;
+          if (firstFailure === "throw") {
+            throw new Error("completion RPC unavailable");
+          }
+          return false;
+        },
+      })
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(state.provider, 1);
+    assert.equal(state.complete, 2);
+    assert.equal(
+      ((await readJson(response)).categories as readonly unknown[]).length,
+      1
+    );
+  }
+});
+
 test("releases only when provider start definitely did not occur", async () => {
   const state = createState();
   const response = await handleSmsCategoryEnrichmentRequest(

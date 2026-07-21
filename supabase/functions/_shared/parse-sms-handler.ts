@@ -16,6 +16,10 @@ import {
   type SmsSafeguardPolicy,
 } from "./sms-safeguard-policy.ts";
 import type { SmsProviderCompletionStatusAtEdge } from "./sms-provider-completion.ts";
+import {
+  completeSmsAiWorkWithRetry,
+  type CompleteSmsAiWorkInput,
+} from "./sms-ai-work-completion.ts";
 
 const CORS_HEADERS: Readonly<Record<string, string>> = {
   "Access-Control-Allow-Origin": "*",
@@ -86,12 +90,6 @@ interface ReconcileOutcomesInput {
   }[];
 }
 
-interface CompleteWorkInput {
-  readonly requestId: string;
-  readonly completedWithProviderError: boolean;
-  readonly decisionCode: string;
-}
-
 export interface ParseSmsHandlerDependencies {
   readonly authenticate: (request: Request) => Promise<string | null>;
   readonly hasConsent: (userId: string) => Promise<boolean>;
@@ -122,7 +120,7 @@ export interface ParseSmsHandlerDependencies {
   readonly executeProvider: (
     input: ExecuteSmsProviderInput
   ) => Promise<SmsProviderExecutionResult>;
-  readonly completeWork: (input: CompleteWorkInput) => Promise<boolean>;
+  readonly completeWork: (input: CompleteSmsAiWorkInput) => Promise<boolean>;
   readonly releaseWork: (
     requestId: string,
     decisionCode: string
@@ -345,17 +343,6 @@ async function safelyReleaseReservation(
   }
 }
 
-async function safelyCompleteWork(
-  dependencies: ParseSmsHandlerDependencies,
-  input: CompleteWorkInput
-): Promise<boolean> {
-  try {
-    return await dependencies.completeWork(input);
-  } catch {
-    return false;
-  }
-}
-
 async function executeAdmittedWork(input: {
   readonly body: ParseSmsRequestBody;
   readonly userId: string;
@@ -409,7 +396,7 @@ async function executeAdmittedWork(input: {
       supportedCurrencies: input.body.supportedCurrencies,
     });
   } catch {
-    await safelyCompleteWork(input.dependencies, {
+    await completeSmsAiWorkWithRetry(input.dependencies.completeWork, {
       requestId: input.admission.requestId,
       completedWithProviderError: true,
       decisionCode: "provider_failed",
@@ -418,7 +405,7 @@ async function executeAdmittedWork(input: {
   }
 
   if (!providerResult.isResponseSchemaValid) {
-    await safelyCompleteWork(input.dependencies, {
+    await completeSmsAiWorkWithRetry(input.dependencies.completeWork, {
       requestId: input.admission.requestId,
       completedWithProviderError: true,
       decisionCode: "response_invalid",
@@ -428,13 +415,13 @@ async function executeAdmittedWork(input: {
 
   const submittedCandidates = toNegativeCandidates(input.messages);
   if (providerResult.completionStatus !== "complete") {
-    await safelyCompleteWork(input.dependencies, {
+    await completeSmsAiWorkWithRetry(input.dependencies.completeWork, {
       requestId: input.admission.requestId,
       completedWithProviderError: true,
       decisionCode: providerResult.completionStatus,
     });
     return jsonResponse({
-      transactions: providerResult.transactions,
+      transactions: [],
       completionStatus: providerResult.completionStatus,
       negativeFingerprints: input.suppressedNegativeFingerprints,
       terminalFingerprints: input.terminalFingerprints,
@@ -457,7 +444,7 @@ async function executeAdmittedWork(input: {
       })),
     });
   } catch {
-    await safelyCompleteWork(input.dependencies, {
+    await completeSmsAiWorkWithRetry(input.dependencies.completeWork, {
       requestId: input.admission.requestId,
       completedWithProviderError: true,
       decisionCode: "outcome_reconciliation_failed",
@@ -465,7 +452,7 @@ async function executeAdmittedWork(input: {
     return refusal("dependency_unavailable", 503);
   }
   if (reconciliation.status === "ignored") {
-    await safelyCompleteWork(input.dependencies, {
+    await completeSmsAiWorkWithRetry(input.dependencies.completeWork, {
       requestId: input.admission.requestId,
       completedWithProviderError: true,
       decisionCode: reconciliation.reason,
@@ -473,11 +460,14 @@ async function executeAdmittedWork(input: {
     return refusal("response_invalid", 502);
   }
 
-  const didComplete = await safelyCompleteWork(input.dependencies, {
-    requestId: input.admission.requestId,
-    completedWithProviderError: false,
-    decisionCode: "complete",
-  });
+  const didComplete = await completeSmsAiWorkWithRetry(
+    input.dependencies.completeWork,
+    {
+      requestId: input.admission.requestId,
+      completedWithProviderError: false,
+      decisionCode: "complete",
+    }
+  );
   if (!didComplete) return refusal("dependency_unavailable", 503);
 
   return jsonResponse({
