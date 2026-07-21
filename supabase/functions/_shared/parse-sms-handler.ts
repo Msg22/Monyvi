@@ -4,6 +4,7 @@ import type {
   SmsAiProviderStartDecision,
 } from "./sms-ai-safeguard-contract.ts";
 import {
+  buildSmsProviderUserPromptAtEdge,
   estimateSmsRequestInputTokensAtEdge,
   getUtf8ByteLengthAtEdge,
 } from "./sms-input-estimator.ts";
@@ -30,6 +31,8 @@ const MAX_FUTURE_MESSAGE_SKEW_MS = 5 * 60 * 1000;
 const MAX_SCAN_START_FUTURE_SKEW_MS = 5 * 60 * 1000;
 const MAX_ROLLING_WINDOW_EDGE_GRACE_MS = 5 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_SUPPORTED_CURRENCIES = 32;
+const MAX_MESSAGES_BEFORE_POLICY_EVALUATION = 50;
 
 export interface ParseSmsMessage {
   readonly id: string;
@@ -204,7 +207,13 @@ function parseMessage(value: unknown): ParseSmsMessage | null {
 }
 
 function parseRequestBody(value: unknown): ParseSmsRequestBody | null {
-  if (!isRecord(value) || !Array.isArray(value.messages)) return null;
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value.messages) ||
+    value.messages.length > MAX_MESSAGES_BEFORE_POLICY_EVALUATION
+  ) {
+    return null;
+  }
   if (
     !isNonEmptyString(value.requestKey, 160) ||
     !["initial", "incremental", "history", "live"].includes(
@@ -212,6 +221,7 @@ function parseRequestBody(value: unknown): ParseSmsRequestBody | null {
     ) ||
     !isNonEmptyString(value.categories) ||
     !Array.isArray(value.supportedCurrencies) ||
+    value.supportedCurrencies.length > MAX_SUPPORTED_CURRENCIES ||
     value.supportedCurrencies.some(
       (currency) => !isNonEmptyString(currency, 16)
     )
@@ -265,7 +275,7 @@ function calculateRequestMetrics(
     prompt: dependencies.fixedPrompt,
     categories: body.categories,
     schema: dependencies.buildResponseSchema(body.supportedCurrencies),
-    messages: body.messages.map((message) => JSON.stringify(message)),
+    messages: [buildSmsProviderUserPromptAtEdge(body.messages)],
   });
   return { payloadBytes, estimatedInputTokens: estimate.totalTokens };
 }
@@ -343,6 +353,27 @@ async function safelyReleaseReservation(
   }
 }
 
+async function reconcileAmbiguousProviderStart(
+  dependencies: ParseSmsHandlerDependencies,
+  requestId: string
+): Promise<void> {
+  const didComplete = await completeSmsAiWorkWithRetry(
+    dependencies.completeWork,
+    {
+      requestId,
+      completedWithProviderError: true,
+      decisionCode: "provider_start_response_unknown",
+    }
+  );
+  if (!didComplete) {
+    await safelyReleaseReservation(
+      dependencies,
+      requestId,
+      "provider_start_failed"
+    );
+  }
+}
+
 async function executeAdmittedWork(input: {
   readonly body: ParseSmsRequestBody;
   readonly userId: string;
@@ -359,10 +390,9 @@ async function executeAdmittedWork(input: {
       input.messages.map((message) => message.smsFingerprint)
     );
   } catch {
-    await safelyReleaseReservation(
+    await reconcileAmbiguousProviderStart(
       input.dependencies,
-      input.admission.requestId,
-      "provider_start_failed"
+      input.admission.requestId
     );
     return refusal("dependency_unavailable", 503);
   }

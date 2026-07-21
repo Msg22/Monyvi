@@ -13,6 +13,13 @@ interface EstimateSmsRequestInputAtEdge {
   readonly messages: readonly string[];
 }
 
+export interface SmsProviderPromptMessage {
+  readonly id: string;
+  readonly sender: string;
+  readonly date: string;
+  readonly body: string;
+}
+
 interface CanFitSmsCandidateAtEdgeInput {
   readonly candidatePayload: string;
   readonly fixedPayloadBytes: number;
@@ -29,6 +36,17 @@ const CONSERVATIVE_BYTES_PER_TOKEN = 3;
 
 export function getUtf8ByteLengthAtEdge(value: string): number {
   return new TextEncoder().encode(value).length;
+}
+
+export function buildSmsProviderUserPromptAtEdge(
+  messages: readonly SmsProviderPromptMessage[]
+): string {
+  return `Parse the following ${messages.length} SMS messages into transactions:\n\n${messages
+    .map(
+      (message) =>
+        `--- MESSAGE ID: ${message.id} ---\nSender: ${message.sender}\nDate: ${message.date}\nBody: ${message.body}\n`
+    )
+    .join("\n")}`;
 }
 
 function estimateTokensAtEdge(value: string): number {

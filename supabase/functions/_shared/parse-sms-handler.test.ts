@@ -6,6 +6,10 @@ import {
   type ParseSmsHandlerDependencies,
   type SmsProviderExecutionResult,
 } from "./parse-sms-handler.ts";
+import {
+  buildSmsProviderUserPromptAtEdge,
+  estimateSmsRequestInputTokensAtEdge,
+} from "./sms-input-estimator.ts";
 import { DEFAULT_SMS_SAFEGUARD_POLICY } from "./sms-safeguard-policy.ts";
 
 interface CallState {
@@ -358,6 +362,28 @@ test("refuses malformed identities and request count before paid work", async ()
   }
 });
 
+test("rejects oversized request arrays before canonical message work", async () => {
+  for (const body of [
+    requestBody(Array.from({ length: 51 }, (_, index) => message(index + 1))),
+    {
+      ...requestBody(),
+      supportedCurrencies: Array.from(
+        { length: 33 },
+        (_, index) => `CCY${index}`
+      ),
+    },
+  ]) {
+    const state = createState();
+    const handler = createParseSmsHandler(createDependencies(state));
+
+    const response = await handler(post(body));
+
+    assert.equal(response.status, 400);
+    assert.equal(state.reserve, 0);
+    assert.equal(state.provider, 0);
+  }
+});
+
 test("enforces Monyvi payload and conservative token boundaries before reservation", async () => {
   const tooLargePolicy = {
     ...DEFAULT_SMS_SAFEGUARD_POLICY,
@@ -381,6 +407,49 @@ test("enforces Monyvi payload and conservative token boundaries before reservati
   );
   assert.equal(state.reserve, 0);
   assert.equal(state.provider, 0);
+});
+
+test("counts provider user-prompt framing before admitting a token-bound request", async () => {
+  const providerPrompt = buildSmsProviderUserPromptAtEdge([
+    message() as {
+      readonly id: string;
+      readonly sender: string;
+      readonly date: string;
+      readonly body: string;
+    },
+  ]);
+  const withoutFraming = estimateSmsRequestInputTokensAtEdge({
+    prompt: "prompt",
+    categories: "category tree",
+    schema: JSON.stringify({ supportedCurrencies: ["EGP"] }),
+    messages: [JSON.stringify(message())],
+  }).totalTokens;
+  const withFraming = estimateSmsRequestInputTokensAtEdge({
+    prompt: "prompt",
+    categories: "category tree",
+    schema: JSON.stringify({ supportedCurrencies: ["EGP"] }),
+    messages: [providerPrompt],
+  }).totalTokens;
+  const state = createState();
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      getPolicy: () => ({
+        ...DEFAULT_SMS_SAFEGUARD_POLICY,
+        fullParser: {
+          ...DEFAULT_SMS_SAFEGUARD_POLICY.fullParser,
+          maxEstimatedInputTokens: withoutFraming,
+        },
+      }),
+    })
+  );
+
+  const response = await handler(post(requestBody()));
+  const data = await readJson(response);
+
+  assert.ok(withFraming > withoutFraming);
+  assert.equal(response.status, 413);
+  assert.equal(data.reason, "input_token_limit");
+  assert.equal(state.reserve, 0);
 });
 
 test("fails closed when the runtime policy is malformed", async () => {
@@ -824,13 +893,19 @@ test("provider failure is consumed and never reported as an empty success", asyn
   assert.equal(state.reconcile, 0);
 });
 
-test("releases a reservation when provider start definitely fails before execution", async () => {
+test("reconciles an ambiguous provider-start response as consumed work", async () => {
   const state = createState();
+  const completions: CompleteSmsAiWorkInput[] = [];
   const handler = createParseSmsHandler(
     createDependencies(state, {
       markProviderStarted: async () => {
         state.start++;
         throw new Error("ledger unavailable");
+      },
+      completeWork: async (input) => {
+        state.complete++;
+        completions.push(input);
+        return true;
       },
     })
   );
@@ -838,6 +913,37 @@ test("releases a reservation when provider start definitely fails before executi
   const response = await handler(post(requestBody()));
 
   assert.equal(response.status, 503);
+  assert.equal(state.complete, 1);
+  assert.equal(state.release, 0);
+  assert.equal(state.provider, 0);
+  assert.deepEqual(completions, [
+    {
+      requestId: "work-request-id",
+      completedWithProviderError: true,
+      decisionCode: "provider_start_response_unknown",
+    },
+  ]);
+});
+
+test("releases a reservation when provider start definitely did not complete", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      markProviderStarted: async () => {
+        state.start++;
+        throw new Error("ledger unavailable");
+      },
+      completeWork: async () => {
+        state.complete++;
+        return false;
+      },
+    })
+  );
+
+  const response = await handler(post(requestBody()));
+
+  assert.equal(response.status, 503);
+  assert.equal(state.complete, 3);
   assert.equal(state.release, 1);
   assert.equal(state.provider, 0);
 });

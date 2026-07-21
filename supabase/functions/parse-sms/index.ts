@@ -22,6 +22,7 @@ import { hasActiveAiProcessingConsent } from "../_shared/ai-consent.ts";
 import { buildSmsParserSpecialCaseRules } from "../_shared/sms-parser-special-cases.ts";
 import { isLikelyCorruptedSmsText } from "../_shared/sms-text-quality.ts";
 import { isExcludedBeforeSmsParsingAtEdge } from "../_shared/sms-hard-exclusions.ts";
+import { buildSmsProviderUserPromptAtEdge } from "../_shared/sms-input-estimator.ts";
 import {
   createParseSmsHandler,
   type ExecuteSmsProviderInput,
@@ -418,18 +419,7 @@ async function processWithRetry(
     readonly categoryTree: string;
   }
 ): Promise<SmsProviderExecutionResult> {
-  const userPrompt = `Parse the following ${messages.length} SMS messages into transactions:
-
-${messages
-  .map(
-    (m) =>
-      `--- MESSAGE ID: ${m.id} ---
-Sender: ${m.sender}
-Date: ${m.date}
-Body: ${m.body}
-`
-  )
-  .join("\n")}`;
+  const userPrompt = buildSmsProviderUserPromptAtEdge(messages);
 
   let lastError: unknown = null;
 
