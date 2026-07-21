@@ -23,7 +23,7 @@ describe("deterministic SMS safeguard client preflight", () => {
     ).toHaveLength(1);
     expect(
       messages.filter(({ body }) => body.includes("completed payment"))
-    ).toHaveLength(2);
+    ).toHaveLength(3);
     expect(
       messages.filter(({ body }) => body.includes("QNB rewards"))
     ).toHaveLength(1);

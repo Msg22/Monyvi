@@ -189,7 +189,7 @@ export function createSafeguardQaInboxMessages(
     address: "QNB EGYPT",
     body:
       profileId === "oversized-candidate-v1" && index === 3
-        ? `QNB account alert: ${"x".repeat(16_384)}`
+        ? `QNB account alert: completed payment of EGP 103.00 to QA oversized scenario 3. ${"x".repeat(16_384)}`
         : getQaFixtureBody(profileId, index),
     date: state.receivedAtMs,
     read: true,
