@@ -31,7 +31,10 @@ const MAX_FUTURE_MESSAGE_SKEW_MS = 5 * 60 * 1000;
 const MAX_SCAN_START_FUTURE_SKEW_MS = 5 * 60 * 1000;
 const MAX_ROLLING_WINDOW_EDGE_GRACE_MS = 5 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const MAX_SUPPORTED_CURRENCIES = 32;
+// The mobile catalogue currently contains 35 currencies. Keep the structural
+// request bound above it so valid app requests are accepted without allowing
+// an unbounded dynamic response schema.
+const MAX_SUPPORTED_CURRENCIES = 64;
 const MAX_MESSAGES_BEFORE_POLICY_EVALUATION = 50;
 
 export interface ParseSmsMessage {

@@ -368,7 +368,7 @@ test("rejects oversized request arrays before canonical message work", async () 
     {
       ...requestBody(),
       supportedCurrencies: Array.from(
-        { length: 33 },
+        { length: 65 },
         (_, index) => `CCY${index}`
       ),
     },
@@ -382,6 +382,24 @@ test("rejects oversized request arrays before canonical message work", async () 
     assert.equal(state.reserve, 0);
     assert.equal(state.provider, 0);
   }
+});
+
+test("accepts the complete supported-currency catalogue", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(createDependencies(state));
+
+  const response = await handler(
+    post({
+      ...requestBody(),
+      supportedCurrencies: Array.from(
+        { length: 35 },
+        (_, index) => `CCY${index}`
+      ),
+    })
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(state.provider, 1);
 });
 
 test("enforces Monyvi payload and conservative token boundaries before reservation", async () => {
