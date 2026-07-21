@@ -316,6 +316,19 @@ describe("start-mobile-local-supabase script helpers", () => {
     });
   });
 
+  it("can use the fixture SMS inbox without forcing the local parser", () => {
+    expect(
+      startMobileLocalSupabase.parseCliArgs(["--fixture-sms-inbox"])
+    ).toEqual({
+      shouldUseWirelessDeviceTunnel: false,
+      shouldUseLocalParser: false,
+      shouldUseFixtureSmsInbox: true,
+      shouldEnableQaSmsPatternIntake: false,
+      password: null,
+      expoArgs: [],
+    });
+  });
+
   it("stops Edge Functions, the tunnel, and Expo when the development stack fails", () => {
     const functionsServe = { killed: false, kill: jest.fn() };
     const ngrok = { killed: false, kill: jest.fn() };
@@ -500,6 +513,19 @@ describe("start-mobile-local-supabase script helpers", () => {
 
     expect(env.EXPO_PUBLIC_AI_SMS_PARSER_MODE).toBe("local");
     expect(env.EXPO_PUBLIC_SMS_INBOX_MODE).toBe("fixture");
+  });
+
+  it("fails when a specialized launcher resolves an unexpected parser mode", () => {
+    expect(() =>
+      startMobileLocalSupabase.buildLocalSupabaseExpoEnv(
+        "local-anon-key",
+        {
+          EXPO_PUBLIC_AI_SMS_PARSER_MODE: "edge",
+          MONYVI_EXPECTED_AI_SMS_PARSER_MODE: "edge",
+        },
+        { shouldUseLocalParser: true }
+      )
+    ).toThrow(/expected parser mode edge.*resolved local/i);
   });
 
   it("does not opt out of Expo monorepo root detection", () => {

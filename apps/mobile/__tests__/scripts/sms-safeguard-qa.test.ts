@@ -15,6 +15,9 @@ interface SmsSafeguardQaScript {
   readonly buildSafeguardDevelopmentStartArgs: (
     args: readonly string[]
   ) => readonly string[];
+  readonly buildSafeguardDevelopmentCommandArgs: (
+    args: readonly string[]
+  ) => readonly string[];
   readonly buildQaRequestKeyResetFilter: () => string;
   readonly buildServerSafeguardDiagnostics: (input: {
     readonly profileId: string;
@@ -48,9 +51,27 @@ interface SmsSafeguardQaScript {
   }) => Readonly<Record<string, unknown>>;
 }
 
+interface StartMobileLocalSupabaseScript {
+  readonly parseCliArgs: (args: readonly string[]) => {
+    readonly shouldUseLocalParser: boolean;
+    readonly shouldUseFixtureSmsInbox: boolean;
+  };
+  readonly buildLocalSupabaseExpoEnv: (
+    anonKey: string,
+    baseEnvironment: NodeJS.ProcessEnv,
+    options: {
+      readonly shouldUseLocalParser: boolean;
+      readonly shouldUseFixtureSmsInbox: boolean;
+    }
+  ) => NodeJS.ProcessEnv;
+}
+
 const script =
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   require("../../scripts/sms-safeguard-qa.js") as SmsSafeguardQaScript;
+const localSupabaseScript =
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require("../../scripts/start-mobile-local-supabase.js") as StartMobileLocalSupabaseScript;
 
 describe("SMS safeguard QA launcher", () => {
   const launcherSource = readFileSync(
@@ -86,6 +107,7 @@ describe("SMS safeguard QA launcher", () => {
       EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX: "fixture",
       EXPO_PUBLIC_SMS_INBOX_MODE: "fixture",
       SMS_SAFEGUARD_QA_ENABLED: "true",
+      MONYVI_EXPECTED_AI_SMS_PARSER_MODE: "edge",
     });
     expect(typeof environment.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID).toBe(
       "string"
@@ -107,6 +129,40 @@ describe("SMS safeguard QA launcher", () => {
         "--clear",
       ])
     ).toEqual(["--wireless-device", "--clear"]);
+  });
+
+  test("uses a fixture inbox without forcing the local parser", () => {
+    const commandArgs = script.buildSafeguardDevelopmentCommandArgs([
+      "--wireless-device",
+    ]);
+
+    expect(commandArgs.slice(1)).toEqual([
+      "--fixture-sms-inbox",
+      "--wireless-device",
+      "--clear",
+    ]);
+  });
+
+  test("composes the app-facing profile as Edge parser with fixture inbox", () => {
+    const baseEnvironment = script.buildSafeguardQaEnvironment(
+      { NODE_ENV: "development" },
+      "partial-quota-v1"
+    );
+    const commandArgs = script.buildSafeguardDevelopmentCommandArgs([
+      "--wireless-device",
+    ]);
+    const options = localSupabaseScript.parseCliArgs(commandArgs.slice(1));
+    const expoEnvironment = localSupabaseScript.buildLocalSupabaseExpoEnv(
+      "local-key",
+      baseEnvironment,
+      options
+    );
+
+    expect(expoEnvironment).toMatchObject({
+      EXPO_PUBLIC_AI_SMS_PARSER_MODE: "edge",
+      EXPO_PUBLIC_SMS_INBOX_MODE: "fixture",
+      EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE: "partial-quota-v1",
+    });
   });
 
   test("creates one bounded run identity for a full-suite launch", () => {

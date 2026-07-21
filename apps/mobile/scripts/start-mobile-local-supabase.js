@@ -133,6 +133,11 @@ function parseCliArgs(args) {
       continue;
     }
 
+    if (arg === "--fixture-sms-inbox") {
+      shouldUseFixtureSmsInbox = true;
+      continue;
+    }
+
     if (arg === "--qa-sms-pattern-intake") {
       shouldEnableQaSmsPatternIntake = true;
       continue;
@@ -336,9 +341,19 @@ function buildLocalSupabaseExpoEnv(
   options = {}
 ) {
   const config = resolveLocalSupabaseDeviceConfig(baseEnv);
-  const { EXPO_NO_METRO_WORKSPACE_ROOT, ...metroEnv } = baseEnv;
+  const {
+    EXPO_NO_METRO_WORKSPACE_ROOT,
+    MONYVI_EXPECTED_AI_SMS_PARSER_MODE: expectedParserMode,
+    ...metroEnv
+  } = baseEnv;
   const parserMode = resolveAiSmsParserMode(baseEnv, options);
   const inboxMode = resolveSmsInboxMode(baseEnv, options);
+
+  if (expectedParserMode && expectedParserMode !== parserMode) {
+    throw new Error(
+      `Expected parser mode ${expectedParserMode}, but resolved ${parserMode}.`
+    );
+  }
 
   return {
     ...metroEnv,

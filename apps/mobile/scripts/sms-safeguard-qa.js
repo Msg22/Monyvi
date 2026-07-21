@@ -47,6 +47,7 @@ function buildSafeguardQaEnvironment(
         }),
     EXPO_PUBLIC_AI_SMS_PARSER_MODE: "edge",
     EXPO_PUBLIC_SMS_INBOX_MODE: "fixture",
+    MONYVI_EXPECTED_AI_SMS_PARSER_MODE: "edge",
   };
 }
 
@@ -957,11 +958,18 @@ function buildSafeguardDevelopmentStartArgs(args) {
     : [...resolvedStartArgs, "--clear"];
 }
 
+function buildSafeguardDevelopmentCommandArgs(args) {
+  return [
+    startScript,
+    "--fixture-sms-inbox",
+    ...buildSafeguardDevelopmentStartArgs(args),
+  ];
+}
+
 function startDevelopmentServer(args, environment, profileId) {
-  const resolvedStartArgs = buildSafeguardDevelopmentStartArgs(args);
   const result = spawnSync(
     process.execPath,
-    [startScript, "--fixture-sms", ...resolvedStartArgs],
+    buildSafeguardDevelopmentCommandArgs(args),
     {
       cwd: mobileRoot,
       env: buildSafeguardQaEnvironment(environment, profileId),
@@ -1006,6 +1014,7 @@ if (require.main === module) {
 module.exports = {
   QA_PROVIDER_OUTCOME_MATRIX,
   assertKnownSafeguardQaProfile,
+  buildSafeguardDevelopmentCommandArgs,
   buildSafeguardDevelopmentStartArgs,
   buildQaRequestKeyResetFilter,
   buildServerSafeguardDiagnostics,
