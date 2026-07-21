@@ -69,7 +69,7 @@ const PROFILE_OVERRIDES: Readonly<Record<string, QaPolicyOverride>> =
       },
     },
     "oversized-candidate-v1": {
-      fullParser: { maxPayloadBytes: 64, maxEstimatedInputTokens: 16 },
+      fullParser: { maxPayloadBytes: 512, maxEstimatedInputTokens: 128 },
     },
     "response-validity-v1": {
       fullParser: {
