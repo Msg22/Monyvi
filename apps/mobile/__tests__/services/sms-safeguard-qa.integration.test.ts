@@ -17,7 +17,7 @@ describe("deterministic SMS safeguard client preflight", () => {
   test("keeps reviewable suggestions alongside one oversized candidate", () => {
     const messages = createSafeguardQaInboxMessages("oversized-candidate-v1");
 
-    expect(messages.filter(({ body }) => body.length > 512)).toHaveLength(1);
+    expect(messages.filter(({ body }) => body.length > 8_192)).toHaveLength(1);
     expect(
       messages.filter(({ body }) => body.includes("Successful transaction"))
     ).toHaveLength(1);

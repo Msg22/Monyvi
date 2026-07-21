@@ -253,8 +253,8 @@ export const SAFEGUARD_QA_SCENARIOS: Readonly<
   }),
   "oversized-candidate-v1": createScenario("oversized-candidate-v1", {
     fullParser: {
-      maxPayloadBytes: 512,
-      maxEstimatedInputTokens: 128,
+      maxPayloadBytes: 8_192,
+      maxEstimatedInputTokens: 4_096,
     },
   }),
   "response-validity-v1": createScenario("response-validity-v1", {

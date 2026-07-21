@@ -189,7 +189,7 @@ export function createSafeguardQaInboxMessages(
     address: "QNB EGYPT",
     body:
       profileId === "oversized-candidate-v1" && index === 3
-        ? `QNB account alert: ${"x".repeat(2_048)}`
+        ? `QNB account alert: ${"x".repeat(16_384)}`
         : getQaFixtureBody(profileId, index),
     date: state.receivedAtMs,
     read: true,
@@ -249,7 +249,7 @@ function getCandidatePayload(
   candidate: FixtureMessage
 ): string {
   if (profileId === "oversized-candidate-v1" && candidate.isOversized) {
-    return "x".repeat(2_048);
+    return "x".repeat(16_384);
   }
   return `fixture-candidate-${candidate.fingerprint}`;
 }
