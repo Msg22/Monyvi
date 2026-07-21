@@ -114,6 +114,29 @@ describe("sms-processing-outcome-service", () => {
     ]);
   });
 
+  it("evaluates non-terminal outcome expiry against the supplied scan boundary", async () => {
+    mockFetch.mockResolvedValue([
+      {
+        smsFingerprint: "at-boundary",
+        strikeCount: 1,
+        isTerminal: false,
+        deleted: false,
+        originalReceivedAt: "2026-05-25T12:00:00.000Z",
+        lastClassifiedAt: "2026-05-25T12:00:00.000Z",
+      },
+    ]);
+
+    await expect(
+      getSmsProcessingOutcomes(
+        ["at-boundary"],
+        undefined,
+        Date.parse("2026-06-21T12:00:00.000Z")
+      )
+    ).resolves.toEqual([
+      expect.objectContaining({ smsFingerprint: "at-boundary" }),
+    ]);
+  });
+
   it("refreshes synchronized server outcomes before reading", async () => {
     await refreshSmsProcessingOutcomes(["a"]);
 

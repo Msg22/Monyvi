@@ -244,7 +244,7 @@ describe("SMS review route", () => {
     expect(mockClearTransactions).toHaveBeenCalledTimes(1);
   });
 
-  it("clears transient state after discard and successful save", async () => {
+  it("clears transient state after discard and only after the successful save route unmounts", async () => {
     render(<SmsReviewScreen />);
     const reviewProps = mockTransactionReview.mock.calls[0]?.[0];
     if (!reviewProps) throw new Error("TransactionReview was not rendered");
@@ -261,7 +261,7 @@ describe("SMS review route", () => {
     expect(mockRouterReplace).toHaveBeenCalledWith(
       "/(private)/(tabs)/transactions"
     );
-    expect(mockClearTransactions).toHaveBeenCalledTimes(2);
+    expect(mockClearTransactions).toHaveBeenCalledTimes(1);
   });
 
   it("passes retry errors to the inline notice", () => {
@@ -339,7 +339,7 @@ describe("SMS review route", () => {
     });
 
     expect(mockMarkSyncComplete).not.toHaveBeenCalled();
-    expect(mockClearTransactions).toHaveBeenCalledTimes(1);
+    expect(mockClearTransactions).not.toHaveBeenCalled();
   });
 
   it("shows an honest partial-result notice when no transactions were accepted", () => {

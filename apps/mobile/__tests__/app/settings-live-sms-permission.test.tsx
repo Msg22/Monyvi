@@ -43,6 +43,10 @@ let mockHasRevokedAiConsentRecord = false;
 let mockIsAiConsentLoading = false;
 let mockHasSynced = false;
 let mockQaSmsPatternIntakeAvailable = false;
+let mockSmsAiAvailability: {
+  readonly reason: "rolling_limit" | "history_cooldown";
+  readonly availableAt: string;
+} | null = null;
 let appStateChangeHandlers: Array<(status: AppStateStatus) => void> = [];
 
 jest.mock("react-native/Libraries/Modal/Modal", () => {
@@ -156,7 +160,7 @@ jest.mock("@/hooks/useSmsSync", () => ({
 
 jest.mock("@/hooks/useSmsAiAvailability", () => ({
   useSmsAiAvailability: () => ({
-    availability: null,
+    availability: mockSmsAiAvailability,
     refresh: jest.fn(() => Promise.resolve()),
   }),
 }));
@@ -327,6 +331,7 @@ describe("Settings live SMS permission recovery", () => {
     mockIsAiConsentLoading = false;
     mockHasSynced = false;
     mockQaSmsPatternIntakeAvailable = false;
+    mockSmsAiAvailability = null;
     mockGrantAiConsent.mockResolvedValue();
     mockRevokeAiConsent.mockResolvedValue();
   });
@@ -346,6 +351,20 @@ describe("Settings live SMS permission recovery", () => {
     expect(
       screen.queryByTestId("qa-sms-pattern-intake-settings-link")
     ).toBeNull();
+  });
+
+  it("keeps history rescan available when only the ordinary AI allowance is limited", async () => {
+    mockHasSynced = true;
+    mockSmsAiAvailability = {
+      reason: "rolling_limit",
+      availableAt: "2026-07-24T12:00:00.000Z",
+    };
+    const screen = await renderReadySettings();
+    const historyRescan = screen.getByTestId(
+      "sms-history-rescan-button"
+    ) as unknown as { readonly props: { readonly disabled?: boolean } };
+
+    expect(historyRescan.props.disabled).not.toBe(true);
   });
 
   it("waits for stored live detection state before rendering the switch", async () => {

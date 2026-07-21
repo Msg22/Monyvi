@@ -16,7 +16,8 @@ interface SmsSafeguardQaScript {
     args: readonly string[]
   ) => readonly string[];
   readonly buildSafeguardDevelopmentCommandArgs: (
-    args: readonly string[]
+    args: readonly string[],
+    profileId: string
   ) => readonly string[];
   readonly buildQaRequestKeyResetFilter: () => string;
   readonly buildServerSafeguardDiagnostics: (input: {
@@ -132,12 +133,15 @@ describe("SMS safeguard QA launcher", () => {
   });
 
   test("uses a fixture inbox without forcing the local parser", () => {
-    const commandArgs = script.buildSafeguardDevelopmentCommandArgs([
-      "--wireless-device",
-    ]);
+    const commandArgs = script.buildSafeguardDevelopmentCommandArgs(
+      ["--wireless-device"],
+      "partial-quota-v1"
+    );
 
     expect(commandArgs.slice(1)).toEqual([
       "--fixture-sms-inbox",
+      "--sms-safeguard-profile",
+      "partial-quota-v1",
       "--wireless-device",
       "--clear",
     ]);
@@ -148,9 +152,10 @@ describe("SMS safeguard QA launcher", () => {
       { NODE_ENV: "development" },
       "partial-quota-v1"
     );
-    const commandArgs = script.buildSafeguardDevelopmentCommandArgs([
-      "--wireless-device",
-    ]);
+    const commandArgs = script.buildSafeguardDevelopmentCommandArgs(
+      ["--wireless-device"],
+      "partial-quota-v1"
+    );
     const options = localSupabaseScript.parseCliArgs(commandArgs.slice(1));
     const expoEnvironment = localSupabaseScript.buildLocalSupabaseExpoEnv(
       "local-key",

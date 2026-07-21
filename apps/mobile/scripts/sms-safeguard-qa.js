@@ -919,6 +919,24 @@ async function runTests(args, environment) {
   );
 }
 
+async function resetQaProfile(profileId, environment) {
+  require("tsx/cjs");
+  const helpers = require(runnerPath);
+  const clients = await getQaClients(environment);
+  const fixtureMessages = helpers.createSafeguardQaInboxMessages(profileId);
+  const messages =
+    profileId === "response-validity-v1"
+      ? createProviderOutcomeMessages(fixtureMessages)
+      : fixtureMessages;
+
+  await resetServerSafeguardState(
+    clients.service,
+    clients.userId,
+    profileId === "terminal-fresh-install-v1" ? messages.slice(0, 1) : messages
+  );
+  process.stdout.write(`Reset safeguard QA state for ${profileId}.\n`);
+}
+
 async function runTestsWithLocalEdge(args, environment) {
   const profileId = resolveSafeguardQaProfileArgument(args);
   const needsServer = profileId === null || SERVER_PROFILE_IDS.has(profileId);
@@ -958,10 +976,12 @@ function buildSafeguardDevelopmentStartArgs(args) {
     : [...resolvedStartArgs, "--clear"];
 }
 
-function buildSafeguardDevelopmentCommandArgs(args) {
+function buildSafeguardDevelopmentCommandArgs(args, profileId) {
   return [
     startScript,
     "--fixture-sms-inbox",
+    "--sms-safeguard-profile",
+    profileId,
     ...buildSafeguardDevelopmentStartArgs(args),
   ];
 }
@@ -969,7 +989,7 @@ function buildSafeguardDevelopmentCommandArgs(args) {
 function startDevelopmentServer(args, environment, profileId) {
   const result = spawnSync(
     process.execPath,
-    buildSafeguardDevelopmentCommandArgs(args),
+    buildSafeguardDevelopmentCommandArgs(args, profileId),
     {
       cwd: mobileRoot,
       env: buildSafeguardQaEnvironment(environment, profileId),
@@ -996,9 +1016,17 @@ async function main() {
     startDevelopmentServer(args, environment, profileId);
     return;
   }
+  if (command === "reset") {
+    const profileId = resolveSafeguardQaProfileArgument(args, {
+      required: true,
+    });
+    assertKnownSafeguardQaProfile(profileId);
+    await resetQaProfile(profileId, environment);
+    return;
+  }
 
   throw new Error(
-    `Unknown SMS safeguard QA command: ${command}. Use test or start.`
+    `Unknown SMS safeguard QA command: ${command}. Use test, start, or reset.`
   );
 }
 
@@ -1018,6 +1046,7 @@ module.exports = {
   buildSafeguardDevelopmentStartArgs,
   buildQaRequestKeyResetFilter,
   buildServerSafeguardDiagnostics,
+  resetQaProfile,
   buildSafeguardQaEnvironment,
   resolveSafeguardQaProfileArgument,
   startDevelopmentServer,

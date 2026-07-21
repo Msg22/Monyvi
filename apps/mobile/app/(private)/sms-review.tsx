@@ -141,7 +141,6 @@ export default function SmsReviewScreen(): React.JSX.Element {
             });
           });
         }
-        clearTransactions();
         router.replace("/(private)/(tabs)/transactions");
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -154,14 +153,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
         setIsSaving(false);
       }
     },
-    [
-      clearTransactions,
-      router,
-      markSyncComplete,
-      showToast,
-      t,
-      unresolvedCandidates.length,
-    ]
+    [router, markSyncComplete, showToast, t, unresolvedCandidates.length]
   );
 
   // ── Discard ─────────────────────────────────────────────────────────

@@ -126,6 +126,31 @@ describe("SMS parser orchestrator safeguards", () => {
     expect(result.unresolvedCandidates).toEqual([]);
   });
 
+  it("preserves terminal fingerprints returned by an AI-only parser result", async () => {
+    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "edge";
+    const unresolved = candidate();
+    mockParseSmsWithAi.mockResolvedValueOnce({
+      transactions: [],
+      hasError: false,
+      terminalFingerprints: ["terminal-from-response"],
+    });
+
+    const result = await parseSmsWithOrchestrator(
+      [unresolved],
+      context,
+      undefined,
+      undefined,
+      { terminalFingerprints: new Set(["terminal-from-request"]) }
+    );
+
+    expect(result.terminalFingerprints).toEqual(
+      expect.arrayContaining([
+        "terminal-from-request",
+        "terminal-from-response",
+      ])
+    );
+  });
+
   it("allows an exact trusted local match to recover a terminal fingerprint", async () => {
     const trusted = trustedPurchaseCandidate();
 

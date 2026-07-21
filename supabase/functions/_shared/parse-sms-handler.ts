@@ -114,7 +114,8 @@ export interface ParseSmsHandlerDependencies {
   readonly getProcessingOutcomes: (
     userId: string,
     fingerprints: readonly string[],
-    lookbackDays: number
+    lookbackDays: number,
+    referenceNowMs: number
   ) => Promise<readonly SmsAiProcessingOutcomeAtEdge[]>;
   readonly reserveWork: (
     input: SmsAiAdmissionInput
@@ -603,7 +604,8 @@ async function handlePost(
     processingOutcomes = await dependencies.getProcessingOutcomes(
       userId,
       locallyEligibleMessages.map((message) => message.smsFingerprint),
-      policy.lookbackDays
+      policy.lookbackDays,
+      acceptedScanStartedAtMs
     );
   } catch {
     return refusal("dependency_unavailable", 503);

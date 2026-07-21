@@ -626,6 +626,31 @@ test("suppresses non-terminal strikes for ordinary scans but permits history ret
   }
 });
 
+test("uses the immutable accepted scan boundary for negative-outcome lookup", async () => {
+  const state = createState();
+  let receivedReferenceNowMs: number | null = null;
+  const acceptedScanStartedAtMs = Date.parse("2026-07-20T12:00:00.000Z");
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      resolveScanWindowStart: async () => acceptedScanStartedAtMs,
+      getProcessingOutcomes: async (
+        _userId,
+        _fingerprints,
+        _lookbackDays,
+        referenceNowMs
+      ) => {
+        receivedReferenceNowMs = referenceNowMs;
+        return [];
+      },
+    })
+  );
+
+  const response = await handler(post(requestBody()));
+
+  assert.equal(response.status, 200);
+  assert.equal(receivedReferenceNowMs, acceptedScanStartedAtMs);
+});
+
 test("never calls the provider when admission or provider-start is refused", async () => {
   for (const dependencies of [
     (state: CallState): Partial<ParseSmsHandlerDependencies> => ({

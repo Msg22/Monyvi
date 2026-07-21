@@ -849,6 +849,12 @@ export async function parseSmsWithOrchestrator(
         (deferredCandidates.length > 0 ? false : undefined),
       unresolvedCandidates,
       availability,
+      terminalFingerprints: [
+        ...new Set([
+          ...(terminalFingerprints ?? []),
+          ...(aiResult.terminalFingerprints ?? []),
+        ]),
+      ],
       safeguardSummary: createSafeguardSummary({
         admittedAiCount: aiSelection.admitted.length,
         deferredAiCount: aiSelection.deferred.length + capacityLimitedCount,

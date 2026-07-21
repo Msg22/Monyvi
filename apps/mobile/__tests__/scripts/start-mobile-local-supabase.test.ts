@@ -53,6 +53,7 @@ interface StartMobileLocalSupabaseModule {
     readonly shouldUseLocalParser: boolean;
     readonly shouldUseFixtureSmsInbox: boolean;
     readonly shouldEnableQaSmsPatternIntake: boolean;
+    readonly smsSafeguardProfile: string | null;
     readonly password: string | null;
     readonly expoArgs: readonly string[];
   };
@@ -232,6 +233,7 @@ describe("start-mobile-local-supabase script helpers", () => {
       shouldUseLocalParser: true,
       shouldUseFixtureSmsInbox: true,
       shouldEnableQaSmsPatternIntake: false,
+      smsSafeguardProfile: null,
       password: "LocalOnlyPassword123!",
       expoArgs: ["--clear"],
     });
@@ -300,6 +302,7 @@ describe("start-mobile-local-supabase script helpers", () => {
       shouldUseLocalParser: false,
       shouldUseFixtureSmsInbox: false,
       shouldEnableQaSmsPatternIntake: false,
+      smsSafeguardProfile: null,
       password: "LocalOnlyPassword123!",
       expoArgs: [],
     });
@@ -311,6 +314,7 @@ describe("start-mobile-local-supabase script helpers", () => {
       shouldUseLocalParser: true,
       shouldUseFixtureSmsInbox: true,
       shouldEnableQaSmsPatternIntake: false,
+      smsSafeguardProfile: null,
       password: null,
       expoArgs: [],
     });
@@ -324,8 +328,22 @@ describe("start-mobile-local-supabase script helpers", () => {
       shouldUseLocalParser: false,
       shouldUseFixtureSmsInbox: true,
       shouldEnableQaSmsPatternIntake: false,
+      smsSafeguardProfile: null,
       password: null,
       expoArgs: [],
+    });
+  });
+
+  it("keeps a named safeguard profile out of forwarded Expo arguments", () => {
+    expect(
+      startMobileLocalSupabase.parseCliArgs([
+        "--sms-safeguard-profile",
+        "partial-quota-v1",
+        "--clear",
+      ])
+    ).toMatchObject({
+      smsSafeguardProfile: "partial-quota-v1",
+      expoArgs: ["--clear"],
     });
   });
 

@@ -76,7 +76,11 @@ export async function loadSmsScanSafeguardState(
       }),
       qaConfig.enabled
         ? Promise.resolve([])
-        : getSmsProcessingOutcomes(input.fingerprints, input.userId),
+        : getSmsProcessingOutcomes(
+            input.fingerprints,
+            input.userId,
+            input.scanStartedAtMs
+          ),
       getOversizedSmsFingerprints({
         userId: input.userId,
         nowMs: input.scanStartedAtMs,

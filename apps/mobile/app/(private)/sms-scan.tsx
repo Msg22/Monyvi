@@ -216,10 +216,14 @@ export default function SmsScanScreen(): React.JSX.Element {
   const previousPermissionStatusRef = useRef(permissionStatus);
   const pendingScanAfterAbortRef = useRef(false);
   const scanAbortControllerRef = useRef<AbortController | null>(null);
-  const shouldResetAfterReviewRef = useRef(false);
   const staleConsentRevokePromiseRef = useRef<Promise<void> | null>(null);
 
-  const { setReviewSession, scanMode } = useSmsScanContext();
+  const { setReviewSession, setScanMode, scanMode } = useSmsScanContext();
+  const [scanKind] = useState(scanMode);
+
+  useEffect(() => {
+    setScanMode("incremental");
+  }, [setScanMode]);
   const { categories: allCategories, isLoading: isCategoriesLoading } =
     useAllCategories();
   const isAiContextReady = !isCategoriesLoading;
@@ -266,7 +270,7 @@ export default function SmsScanScreen(): React.JSX.Element {
     }
 
     startScan({
-      scanKind: scanMode,
+      scanKind,
       existingFingerprints,
       aiContext,
       abortSignal: abortController.signal,
@@ -286,7 +290,7 @@ export default function SmsScanScreen(): React.JSX.Element {
           }
         }
       });
-  }, [startScan, scanMode, aiContext]);
+  }, [startScan, scanKind, aiContext]);
 
   // Auto-start scan on mount — waits until permission is granted and categories loaded
   useEffect(() => {
@@ -370,7 +374,6 @@ export default function SmsScanScreen(): React.JSX.Element {
   const handleReviewPress = (): void => {
     if (transactions.length > 0 && result) {
       setReviewSession(result);
-      shouldResetAfterReviewRef.current = true;
       router.push("/sms-review");
     }
   };
@@ -390,16 +393,6 @@ export default function SmsScanScreen(): React.JSX.Element {
         setIsConsentSheetVisible(true);
       }
     }, [isAiConsented, isAiConsentLoading])
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!shouldResetAfterReviewRef.current) return;
-
-      shouldResetAfterReviewRef.current = false;
-      scanInitiated.current = true;
-      reset();
-    }, [reset])
   );
 
   const handleRetryPress = (): void => {

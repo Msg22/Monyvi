@@ -348,7 +348,8 @@ function createServiceClient(): ReturnType<typeof createClient> {
 async function getProcessingOutcomes(
   userId: string,
   fingerprints: readonly string[],
-  lookbackDays: number
+  lookbackDays: number,
+  referenceNowMs: number
 ): Promise<
   readonly { readonly smsFingerprint: string; readonly isTerminal: boolean }[]
 > {
@@ -361,7 +362,7 @@ async function getProcessingOutcomes(
     .eq("deleted", false)
     .or(
       `is_terminal.eq.true,original_received_at.gte.${new Date(
-        Date.now() - lookbackDays * 24 * 60 * 60 * 1000
+        referenceNowMs - lookbackDays * 24 * 60 * 60 * 1000
       ).toISOString()}`
     )
     .in("sms_fingerprint", [...new Set(fingerprints)]);

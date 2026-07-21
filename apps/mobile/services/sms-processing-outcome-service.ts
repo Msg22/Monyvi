@@ -52,7 +52,8 @@ function isActiveProcessingOutcome(
 
 export async function getSmsProcessingOutcomes(
   fingerprints: readonly string[],
-  expectedUserId?: string
+  expectedUserId?: string,
+  referenceNowMs = Date.now()
 ): Promise<readonly SmsProcessingOutcome[]> {
   const normalizedFingerprints = normalizeFingerprints(fingerprints);
   if (normalizedFingerprints.length === 0) return [];
@@ -70,15 +71,20 @@ export async function getSmsProcessingOutcomes(
     .fetch();
 
   return outcomes
-    .filter((outcome) => isActiveProcessingOutcome(outcome, Date.now()))
+    .filter((outcome) => isActiveProcessingOutcome(outcome, referenceNowMs))
     .map(toProcessingOutcome);
 }
 
 export async function getTerminalSmsFingerprints(
   fingerprints: readonly string[],
-  expectedUserId?: string
+  expectedUserId?: string,
+  referenceNowMs?: number
 ): Promise<ReadonlySet<string>> {
-  const outcomes = await getSmsProcessingOutcomes(fingerprints, expectedUserId);
+  const outcomes = await getSmsProcessingOutcomes(
+    fingerprints,
+    expectedUserId,
+    referenceNowMs
+  );
   return new Set(
     outcomes
       .filter((outcome) => outcome.isTerminal)
@@ -88,8 +94,9 @@ export async function getTerminalSmsFingerprints(
 
 export async function refreshSmsProcessingOutcomes(
   fingerprints: readonly string[],
-  expectedUserId?: string
+  expectedUserId?: string,
+  referenceNowMs?: number
 ): Promise<readonly SmsProcessingOutcome[]> {
   await syncDatabase(database);
-  return getSmsProcessingOutcomes(fingerprints, expectedUserId);
+  return getSmsProcessingOutcomes(fingerprints, expectedUserId, referenceNowMs);
 }

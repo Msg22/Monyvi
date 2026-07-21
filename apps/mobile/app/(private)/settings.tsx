@@ -843,7 +843,11 @@ export default function SettingsScreen(): React.JSX.Element {
             chevronColor={theme.text.secondary}
             onIncrementalSync={handleIncrementalSync}
             onHistoryRescanPress={() => setIsFullRescanModalOpen(true)}
-            historyRescanAvailableAt={smsAiAvailability?.availableAt ?? null}
+            historyRescanAvailableAt={
+              smsAiAvailability?.reason === "history_cooldown"
+                ? smsAiAvailability.availableAt
+                : null
+            }
             language={language}
           />
         )}

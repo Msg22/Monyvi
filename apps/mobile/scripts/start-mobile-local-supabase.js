@@ -111,6 +111,7 @@ function parseCliArgs(args) {
   let shouldUseLocalParser = false;
   let shouldUseFixtureSmsInbox = false;
   let shouldEnableQaSmsPatternIntake = false;
+  let smsSafeguardProfile = null;
   let password = null;
   const expoArgs = [];
 
@@ -143,6 +144,16 @@ function parseCliArgs(args) {
       continue;
     }
 
+    if (arg === "--sms-safeguard-profile") {
+      const nextArg = args[index + 1] ?? null;
+      if (!nextArg || nextArg.startsWith("--")) {
+        throw new Error("--sms-safeguard-profile requires a value");
+      }
+      smsSafeguardProfile = nextArg;
+      index += 1;
+      continue;
+    }
+
     if (arg === "--password") {
       const nextArg = args[index + 1] ?? null;
       if (!nextArg || nextArg.startsWith("--")) {
@@ -166,6 +177,7 @@ function parseCliArgs(args) {
     shouldUseLocalParser,
     shouldUseFixtureSmsInbox,
     shouldEnableQaSmsPatternIntake,
+    smsSafeguardProfile,
     password,
     expoArgs,
   };
@@ -657,6 +669,15 @@ async function startWirelessDeviceLocalSupabase(password, expoArgs, options) {
     { env: seedEnv }
   );
 
+  if (options.smsSafeguardProfile) {
+    runRequiredCommand("Resetting SMS safeguard QA state", process.execPath, [
+      join(__dirname, "sms-safeguard-qa.js"),
+      "reset",
+      "--scenario",
+      options.smsSafeguardProfile,
+    ]);
+  }
+
   const functionsServe = startLocalFunctionsServe();
 
   if (shouldShowSetupOutput()) {
@@ -752,6 +773,7 @@ async function main() {
     shouldUseLocalParser,
     shouldUseFixtureSmsInbox,
     shouldEnableQaSmsPatternIntake,
+    smsSafeguardProfile,
     password,
     expoArgs,
   } = parseCliArgs(process.argv.slice(2));
@@ -759,6 +781,7 @@ async function main() {
     shouldUseLocalParser,
     shouldUseFixtureSmsInbox,
     shouldEnableQaSmsPatternIntake,
+    smsSafeguardProfile,
   };
 
   if (shouldUseWirelessDeviceTunnel) {
