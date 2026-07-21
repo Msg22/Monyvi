@@ -30,6 +30,10 @@ function resolveNpmCommand() {
   return process.platform === "win32" ? "npm.cmd" : "npm";
 }
 
+function shouldUseCommandShell(command, platform = process.platform) {
+  return platform === "win32" && /\.(cmd|bat)$/i.test(command);
+}
+
 function findOnPath(command) {
   const pathValue = process.env.PATH || "";
   const extensions =
@@ -395,7 +399,7 @@ function runRequiredCommand(label, command, args, options = {}) {
     env,
     encoding: "utf8",
     stdio: isVerbose ? "inherit" : "pipe",
-    shell: process.platform === "win32",
+    shell: options.shell ?? shouldUseCommandShell(command),
   });
 
   if (result.status !== 0) {
@@ -811,6 +815,7 @@ module.exports = {
   resolveLocalSupabaseDeviceConfig,
   resolveNgrokCommand,
   resolveNgrokTunnelUrl,
+  shouldUseCommandShell,
   shouldWarnAboutMissingWatchman,
   shouldShowSetupOutput,
   stopDevelopmentChildProcesses,

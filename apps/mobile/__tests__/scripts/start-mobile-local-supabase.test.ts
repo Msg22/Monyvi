@@ -71,6 +71,7 @@ interface StartMobileLocalSupabaseModule {
       readonly pathExists?: (path: string) => boolean;
     }
   ): string;
+  shouldUseCommandShell(command: string, platform?: NodeJS.Platform): boolean;
   resolveNgrokTunnelUrl(apiResponse: string): string;
   shouldShowSetupOutput(
     env?: Readonly<Record<string, string | undefined>>
@@ -270,6 +271,18 @@ describe("start-mobile-local-supabase script helpers", () => {
       ],
       shell: false,
     });
+  });
+
+  it("uses the Windows shell only for command shims, never direct Node paths", () => {
+    expect(
+      startMobileLocalSupabase.shouldUseCommandShell(
+        "C:\\Program Files\\nodejs\\node.exe",
+        "win32"
+      )
+    ).toBe(false);
+    expect(
+      startMobileLocalSupabase.shouldUseCommandShell("npm.cmd", "win32")
+    ).toBe(true);
   });
 
   it("falls back to npx Expo resolution when the package CLI is unavailable", () => {
