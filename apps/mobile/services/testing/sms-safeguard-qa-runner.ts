@@ -34,6 +34,7 @@ interface FixtureMessage {
   readonly fingerprint: string;
   readonly receivedAtMs: number;
   readonly isTrustedLocal: boolean;
+  readonly isOversized: boolean;
 }
 
 export interface SmsSafeguardQaInboxMessage {
@@ -158,6 +159,7 @@ export function createSafeguardQaFixtureStates(
     fingerprint: `qa-${profileId}-${index}`,
     receivedAtMs: fixedNowMs + offset,
     isTrustedLocal: index === 0,
+    isOversized: profileId === "oversized-candidate-v1" && index === 3,
   }));
 }
 
@@ -186,8 +188,8 @@ export function createSafeguardQaInboxMessages(
     id: `sms-safeguard-qa:${profileId}:${index}`,
     address: "QNB EGYPT",
     body:
-      profileId === "oversized-candidate-v1" && index > 0
-        ? `QNB account alert: ${"x".repeat(512)}`
+      profileId === "oversized-candidate-v1" && index === 3
+        ? `QNB account alert: ${"x".repeat(2_048)}`
         : getQaFixtureBody(profileId, index),
     date: state.receivedAtMs,
     read: true,
@@ -246,8 +248,8 @@ function getCandidatePayload(
   profileId: SafeguardQaProfileId,
   candidate: FixtureMessage
 ): string {
-  if (profileId === "oversized-candidate-v1") {
-    return "x".repeat(512);
+  if (profileId === "oversized-candidate-v1" && candidate.isOversized) {
+    return "x".repeat(2_048);
   }
   return `fixture-candidate-${candidate.fingerprint}`;
 }

@@ -149,6 +149,29 @@ describe("PartialSmsResultsNotice", () => {
     expect(screen.queryByTestId("partial-sms-retry")).toBeNull();
   });
 
+  it("uses truthful copy when no suggestions are available after oversized messages are skipped", () => {
+    render(
+      <PartialSmsResultsNotice
+        safeguardSummary={{
+          ...summary,
+          deferredAiCount: 0,
+          oversizedCount: 4,
+          unresolvedCount: 0,
+          availability: undefined,
+        }}
+        retryableCount={0}
+        canRetry={false}
+        isRetrying={false}
+        hasRetryError={false}
+        hasReviewableSuggestions={false}
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("partial_sms_oversized_empty::")).toBeTruthy();
+    expect(screen.queryByText("partial_sms_oversized::")).toBeNull();
+  });
+
   it("shows one localized absolute availability time without exposing raw message data", () => {
     render(
       <PartialSmsResultsNotice

@@ -1,5 +1,6 @@
 import {
   CLIENT_PREFLIGHT_SAFEGUARD_QA_PROFILE_IDS,
+  createSafeguardQaInboxMessages,
   SmsSafeguardQaPreflightRunner,
   type SmsSafeguardQaRunResult,
 } from "@/services/testing/sms-safeguard-qa-runner";
@@ -13,6 +14,21 @@ const QA_ENVIRONMENT = {
 } as const;
 
 describe("deterministic SMS safeguard client preflight", () => {
+  test("keeps reviewable suggestions alongside one oversized candidate", () => {
+    const messages = createSafeguardQaInboxMessages("oversized-candidate-v1");
+
+    expect(messages.filter(({ body }) => body.length > 512)).toHaveLength(1);
+    expect(
+      messages.filter(({ body }) => body.includes("Successful transaction"))
+    ).toHaveLength(1);
+    expect(
+      messages.filter(({ body }) => body.includes("completed payment"))
+    ).toHaveLength(2);
+    expect(
+      messages.filter(({ body }) => body.includes("QNB rewards"))
+    ).toHaveLength(1);
+  });
+
   test("runs only client-owned profiles with a fixed clock and no production usage", async () => {
     const runner = new SmsSafeguardQaPreflightRunner({
       environment: QA_ENVIRONMENT,

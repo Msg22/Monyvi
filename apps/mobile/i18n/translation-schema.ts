@@ -131,6 +131,8 @@ interface TransactionsTranslations {
   readonly partial_sms_description: string;
   readonly partial_sms_try_later_at: string;
   readonly partial_sms_oversized: string;
+  readonly partial_sms_oversized_empty: string;
+  readonly partial_sms_empty_try_later: string;
   readonly partial_sms_retry: string;
   readonly partial_sms_retrying: string;
   readonly partial_sms_retry_error: string;

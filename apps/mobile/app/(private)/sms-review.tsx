@@ -215,7 +215,10 @@ export default function SmsReviewScreen(): React.JSX.Element {
         </Text>
         {partialResults && (
           <View className="mt-6 w-full">
-            <PartialSmsResultsNotice {...partialResults} />
+            <PartialSmsResultsNotice
+              {...partialResults}
+              hasReviewableSuggestions={false}
+            />
           </View>
         )}
         <TouchableOpacity

@@ -12,6 +12,7 @@ interface PartialSmsResultsNoticeProps {
   readonly canRetry: boolean;
   readonly isRetrying: boolean;
   readonly hasRetryError: boolean;
+  readonly hasReviewableSuggestions?: boolean;
   readonly onRetry: () => void;
 }
 
@@ -36,6 +37,7 @@ export function PartialSmsResultsNotice({
   canRetry,
   isRetrying,
   hasRetryError,
+  hasReviewableSuggestions = true,
   onRetry,
 }: PartialSmsResultsNoticeProps): React.JSX.Element | null {
   const { t, i18n } = useTranslation("transactions");
@@ -51,14 +53,19 @@ export function PartialSmsResultsNotice({
   );
   const hasCapacityLimitedResults =
     safeguardSummary.deferredAiCount > 0 || safeguardSummary.oversizedCount > 0;
-  const messageKey =
-    hasRetryError && canRetry && !hasCapacityLimitedResults
+  const isOnlyOversized =
+    safeguardSummary.oversizedCount > 0 &&
+    safeguardSummary.deferredAiCount === 0 &&
+    safeguardSummary.unresolvedCount === 0;
+  const messageKey = !hasReviewableSuggestions
+    ? isOnlyOversized
+      ? "partial_sms_oversized_empty"
+      : "partial_sms_empty_try_later"
+    : hasRetryError && canRetry && !hasCapacityLimitedResults
       ? "partial_sms_retry_error"
       : availability
         ? "partial_sms_try_later_at"
-        : safeguardSummary.oversizedCount > 0 &&
-            safeguardSummary.deferredAiCount === 0 &&
-            safeguardSummary.unresolvedCount === 0
+        : isOnlyOversized
           ? "partial_sms_oversized"
           : hasCapacityLimitedResults || !canRetry
             ? "partial_sms_try_later"
