@@ -47,6 +47,17 @@ Start the dedicated physical-device development mode:
 npm run mobile:dev:sms-safeguards:wireless-device -- --scenario partial-quota-v1
 ```
 
+Reset one server-backed scenario without starting Metro:
+
+```powershell
+node apps/mobile/scripts/sms-safeguard-qa.js reset --scenario partial-quota-v1
+```
+
+The reset is intentionally narrow: it clears only the selected scenario's QA
+scan session, namespaced work/usage records, and matching fixture outcomes for
+the local manual-QA user. It does not reset the local database or delete normal
+manual-QA transactions, accounts, budgets, or categories.
+
 The launcher requires a named/versioned profile, validates it before Metro
 starts, and gives that launch an isolated QA namespace. The app then uses the
 profile's fixture inbox, fixed clock, reduced policy, and simulated provider.
@@ -56,6 +67,10 @@ secret-free `supabase/functions/sms-safeguard-qa.local.env` enablement file and
 also rejects non-local Supabase URLs. It fails closed instead of reading the
 device inbox or calling Gemini. Do not lower production limits or use a real
 inbox to manufacture quota states.
+
+For the complete command reference and a step-by-step guide for every profile,
+including which scenarios are honestly device-testable versus automation-only,
+see [Manual Device And Profile QA](manual-device-qa.md).
 
 ## TDD Verification Order
 
