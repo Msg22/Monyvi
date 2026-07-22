@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   getSmsSafeguardQaConfig,
+  getSmsSafeguardQaNowMs,
   getSmsSafeguardQaProfile,
   requireSmsSafeguardQaConfig,
 } from "@/config/sms-safeguard-qa-config";
@@ -53,6 +54,21 @@ describe("SMS safeguard QA runtime configuration", () => {
         EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE: "partial-quota-v1",
       })
     ).toBe("partial-quota-v1");
+  });
+
+  test("keeps an app-facing QA scan anchored to the current scan start", () => {
+    const scanStartedAtMs = Date.UTC(2030, 0, 1, 12, 0, 0);
+
+    expect(
+      getSmsSafeguardQaNowMs(scanStartedAtMs, {
+        NODE_ENV: "development",
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA: "true",
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER: "simulated",
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX: "fixture",
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE: "cutoff-boundary-v1",
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID: "run-1",
+      })
+    ).toBe(scanStartedAtMs);
   });
 
   test("fails closed in release mode and for non-simulated dependencies", () => {

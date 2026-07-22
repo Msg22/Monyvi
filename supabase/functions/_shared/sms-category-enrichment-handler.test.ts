@@ -424,8 +424,9 @@ test("retries finalization after a transient completion failure", async () => {
   }
 });
 
-test("releases only when provider start definitely did not occur", async () => {
+test("reconciles an ambiguous category provider-start response as consumed work", async () => {
   const state = createState();
+  let completion: CompleteWorkInput | undefined;
   const response = await handleSmsCategoryEnrichmentRequest(
     post(),
     createDependencies(state, {
@@ -433,13 +434,20 @@ test("releases only when provider start definitely did not occur", async () => {
         state.start += 1;
         throw new Error("ledger unavailable");
       },
+      completeWork: async (input) => {
+        state.complete += 1;
+        completion = input;
+        return true;
+      },
     })
   );
 
   assert.equal(response.status, 503);
-  assert.equal(state.release, 1);
+  assert.equal(completion?.decisionCode, "provider_start_response_unknown");
+  assert.equal(completion?.completedWithProviderError, true);
+  assert.equal(state.release, 0);
   assert.equal(state.provider, 0);
-  assert.equal(state.complete, 0);
+  assert.equal(state.complete, 1);
 });
 
 test("provider failures are consumed and never released as unused capacity", async () => {

@@ -29,6 +29,20 @@ describe("deterministic SMS safeguard client preflight", () => {
     ).toHaveLength(1);
   });
 
+  test("anchors device fixtures to the active scan start", () => {
+    const scanStartedAtMs = Date.UTC(2030, 0, 1, 12, 0, 0);
+    const messages = createSafeguardQaInboxMessages(
+      "cutoff-boundary-v1",
+      scanStartedAtMs
+    );
+
+    expect(messages.map(({ date }) => date)).toEqual([
+      scanStartedAtMs - 24 * 60 * 60 * 1000 - 1,
+      scanStartedAtMs - 24 * 60 * 60 * 1000,
+      scanStartedAtMs - 24 * 60 * 60 * 1000 + 1,
+    ]);
+  });
+
   test("runs only client-owned profiles with a fixed clock and no production usage", async () => {
     const runner = new SmsSafeguardQaPreflightRunner({
       environment: QA_ENVIRONMENT,

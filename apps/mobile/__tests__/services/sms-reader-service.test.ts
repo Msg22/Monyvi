@@ -40,11 +40,11 @@ function enableDevLocalParserFixtureSmsInbox(): void {
   process.env.EXPO_PUBLIC_SMS_INBOX_MODE = "fixture";
 }
 
-function enableSafeguardQaFixtureInbox(): void {
+function enableSafeguardQaFixtureInbox(profileId = "partial-quota-v1"): void {
   process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA = "true";
   process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER = "simulated";
   process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX = "fixture";
-  process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE = "partial-quota-v1";
+  process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE = profileId;
   process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID = "sms-reader-run";
 }
 
@@ -191,6 +191,22 @@ describe("sms-reader-service", (): void => {
         message.id.startsWith("sms-safeguard-qa:partial-quota-v1:")
       )
     ).toBe(true);
+  });
+
+  it("anchors safeguard cutoff fixtures to the active scan start", async (): Promise<void> => {
+    const scanStartedAtMs = Date.UTC(2030, 0, 1, 12, 0, 0);
+    enableSafeguardQaFixtureInbox("cutoff-boundary-v1");
+
+    const messages = await readSmsInbox({
+      minDate: scanStartedAtMs - 24 * 60 * 60 * 1000,
+      maxDate: scanStartedAtMs,
+    });
+
+    expect(mockNativeSmsList).not.toHaveBeenCalled();
+    expect(messages.map(({ date }) => date)).toEqual([
+      scanStartedAtMs - 24 * 60 * 60 * 1000 + 1,
+      scanStartedAtMs - 24 * 60 * 60 * 1000,
+    ]);
   });
 
   it("keeps local parser fixture inbox timestamps stable for fingerprint dedup", async (): Promise<void> => {

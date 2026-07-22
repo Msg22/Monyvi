@@ -1,6 +1,5 @@
 import {
   REQUIRED_SAFEGUARD_QA_PROFILE_IDS,
-  SAFEGUARD_QA_SCENARIOS,
   type SafeguardQaProfileId,
 } from "../../../packages/logic/src/sms-safeguards/safeguard-qa-scenarios";
 
@@ -85,7 +84,10 @@ export function getSmsSafeguardQaNowMs(
 ): number {
   const config = getSmsSafeguardQaConfig(environment);
   if (!config.enabled || config.profileId === null) return fallbackNowMs;
-  return SAFEGUARD_QA_SCENARIOS[config.profileId].fixedNowMs;
+  // The device-facing fixture must share the current scan anchor accepted by
+  // the local Edge Function. The deterministic preflight runner continues to
+  // use the scenario's fixed clock independently.
+  return fallbackNowMs;
 }
 
 export function getSmsSafeguardQaConfig(

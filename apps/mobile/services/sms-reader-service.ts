@@ -270,7 +270,7 @@ function readSafeguardQaFixtureSmsInbox(
     require("./testing/sms-safeguard-qa-runner") as typeof import("./testing/sms-safeguard-qa-runner");
   /* eslint-enable @typescript-eslint/no-require-imports */
   return filterFixtureMessages(
-    qaRuntime.createSafeguardQaInboxMessages(profileId),
+    qaRuntime.createSafeguardQaInboxMessages(profileId, options?.maxDate),
     options
   );
 }

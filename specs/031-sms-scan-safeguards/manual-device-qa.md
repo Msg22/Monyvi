@@ -79,17 +79,18 @@ Use these steps for every profile that has a device-visible journey.
 
 ### 1. `cutoff-boundary-v1`
 
-**Primary verification:** deterministic automated profile.
+**Primary verification:** physical device and deterministic automated profile.
 
 ```powershell
 npm run test:sms-safeguards -- --scenario cutoff-boundary-v1
 ```
 
-Expected result: the command exits successfully with `status: "passed"`. It
-proves that a message immediately before the fixed rolling-window cutoff is
-excluded, a message exactly at the cutoff is included, and a message immediately
-after it is included. The precise timestamps are intentionally fixed in the
-fixture, so this is not a reliable visual device test.
+Expected result: the command exits successfully with `status: "passed"`. On a
+device, run **Sync new SMS** and confirm two reviewable simulated suggestions
+are returned: the message immediately before the cutoff is excluded, while the
+messages exactly at and immediately after the active scan cutoff are included.
+The fixture preserves these relative offsets against the scan start so the local
+Edge Function accepts the same authenticated window.
 
 ### 2. `checkpoint-overlap-v1`
 

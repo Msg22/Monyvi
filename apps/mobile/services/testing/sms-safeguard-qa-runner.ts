@@ -178,12 +178,10 @@ function getQaFixtureBody(
 }
 
 export function createSafeguardQaInboxMessages(
-  profileId: SafeguardQaProfileId
+  profileId: SafeguardQaProfileId,
+  scanStartedAtMs: number = SAFEGUARD_QA_FIXED_NOW_MS
 ): readonly SmsSafeguardQaInboxMessage[] {
-  const states = createSafeguardQaFixtureStates(
-    profileId,
-    SAFEGUARD_QA_FIXED_NOW_MS
-  );
+  const states = createSafeguardQaFixtureStates(profileId, scanStartedAtMs);
   return states.map((state, index) => ({
     id: `sms-safeguard-qa:${profileId}:${index}`,
     address: "QNB EGYPT",

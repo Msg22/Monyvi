@@ -362,8 +362,11 @@ consumption.
    without modifying the real inbox.
 2. **Given** a tester explicitly selects a named and versioned safeguard
    profile, **When** the scenario starts, **Then** its reduced limits, simulated
-   outcomes, fixture clock, and expected results are loaded independently of
-   state left by any other profile.
+   outcomes, fixture-relative clock, and expected results are loaded
+   independently of state left by any other profile. Device-facing fixtures MUST
+   anchor their relative timestamps to that scan's current start time so
+   authenticated Edge scan-window validation accepts the same boundary;
+   deterministic preflight may retain a fixed clock.
 3. **Given** an unresolved fixture candidate reaches the full-parser stage,
    **When** the configured scenario requests a trusted success, low-confidence
    trusted success, explicit `isTrusted: false`, omitted identity, retryable

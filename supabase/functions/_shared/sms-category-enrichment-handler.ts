@@ -205,6 +205,27 @@ async function safelyReleaseReservation(
   }
 }
 
+async function reconcileAmbiguousProviderStart(
+  dependencies: SmsCategoryHandlerDependencies,
+  requestId: string
+): Promise<void> {
+  const didComplete = await completeSmsAiWorkWithRetry(
+    dependencies.completeWork,
+    {
+      requestId,
+      completedWithProviderError: true,
+      decisionCode: "provider_start_response_unknown",
+    }
+  );
+  if (!didComplete) {
+    await safelyReleaseReservation(
+      dependencies,
+      requestId,
+      "provider_start_failed"
+    );
+  }
+}
+
 async function executeAdmittedWork(input: {
   readonly request: Request;
   readonly body: SmsCategoryHandlerRequest;
@@ -218,10 +239,9 @@ async function executeAdmittedWork(input: {
       []
     );
   } catch {
-    await safelyReleaseReservation(
+    await reconcileAmbiguousProviderStart(
       input.dependencies,
-      input.admission.requestId,
-      "provider_start_failed"
+      input.admission.requestId
     );
     return refusal("dependency_unavailable", 503);
   }
