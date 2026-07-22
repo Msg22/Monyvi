@@ -33,6 +33,7 @@
   "qa_safeguard_boundary_burst_limit": "تم الوصول للحد: حد الدفعة.",
   "qa_safeguard_boundary_history_cooldown": "تم الوصول للحد: مهلة فحص السجل.",
   "qa_safeguard_boundary_input_token_limit": "تم الوصول للحد: رموز الإدخال.",
+  "qa_safeguard_boundary_input_token_baseline": "تم الوصول للحد: خط أساس رموز الإدخال.",
   "qa_safeguard_boundary_response_validity": "تم الوصول للحد: التحقق من الاستجابة.",
   "qa_safeguard_boundary_negative_three_strikes": "تم الوصول للحد: نتيجة سلبية نهائية.",
   "qa_safeguard_boundary_terminal_outcome": "تم الوصول للحد: نتيجة نهائية.",

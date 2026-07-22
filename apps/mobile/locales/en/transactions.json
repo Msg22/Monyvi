@@ -29,6 +29,7 @@
   "qa_safeguard_boundary_burst_limit": "Boundary reached: burst limit.",
   "qa_safeguard_boundary_history_cooldown": "Boundary reached: history cooldown.",
   "qa_safeguard_boundary_input_token_limit": "Boundary reached: input token limit.",
+  "qa_safeguard_boundary_input_token_baseline": "Boundary reached: input token baseline.",
   "qa_safeguard_boundary_response_validity": "Boundary reached: response validation.",
   "qa_safeguard_boundary_negative_three_strikes": "Boundary reached: terminal negative outcome.",
   "qa_safeguard_boundary_terminal_outcome": "Boundary reached: terminal outcome.",
