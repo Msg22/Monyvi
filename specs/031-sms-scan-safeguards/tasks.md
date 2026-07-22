@@ -585,6 +585,34 @@ gates.
 
 ---
 
+## Phase 10A: Approved QA Diagnostics Surface
+
+**Purpose**: Make deterministic safeguard boundaries visible to developers on a
+physical device without exposing fixture content or changing the product flow.
+
+- [x] T092 [US7] After focused mockup approval, add failing view-model and
+      component tests for QA activation/release exclusion, profile metadata
+      coverage, aggregate-only projection, collapse state, translations, and
+      scan/review route preservation (FR-061-FR-065, SC-030-SC-031).
+- [x] T093 [US7] Add privacy-safe `diagnostic` metadata to every scenario in
+      `packages/logic/src/sms-safeguards/safeguard-qa-scenarios.ts` and enforce
+      complete profile coverage in focused tests (FR-063).
+- [x] T094 [US7] Implement a shaped diagnostic view-model service/hook and the
+      presentational
+      `apps/mobile/components/sms-sync/SafeguardQaDiagnosticsPanel.tsx`; source
+      limits/outcomes from the active runtime contracts, show it collapsed by
+      default on scan completion and review, and return `null` outside explicit
+      non-release QA mode (FR-061-FR-065).
+- [x] T095 [US7] Add English/Arabic diagnostic labels and update
+      `manual-device-qa.md` with profile-by-profile expected panel verification
+      and production-exclusion checks (FR-064, SC-030-SC-031).
+- [ ] T096 [US7] Run focused component/service tests, theme/safe-area checks,
+      and representative device QA profiles; verify that no diagnostic prop,
+      translation, accessibility label, or log contains raw SMS or financial
+      values (SC-030-SC-031).
+
+---
+
 ## Dependencies And Execution Order
 
 ### Phase Dependencies
@@ -600,6 +628,9 @@ gates.
 - **US6** depends on production evaluators and adapters being stable.
 - **Phase 9 UI** depends on T006 and the shaped runtime state from US1/US3/US4.
 - **Phase 10** depends on every selected story and approved UX being complete.
+- **Phase 10A** depends on explicit mockup approval and the existing QA runtime
+  contracts; it is isolated from production parsing and may proceed without
+  changing the completed safeguard policy.
 
 ### Parallel Opportunities
 

@@ -9,6 +9,7 @@ from the generated images:
 
 - `../mockups/sms-scan-settings-safeguards-light-dark.png`
 - `../mockups/sms-scan-scope-partial-results-light-dark.png`
+- `../mockups/sms-safeguard-qa-diagnostics-dark.png`
 
 ## Scope
 
@@ -52,3 +53,13 @@ transaction-review information architecture and Monyvi light/dark tokens.
 - No overlap with sticky header/footer or transaction list.
 - Disabled actions remain legible and expose accessibility state/reason.
 - Focused mockup approval is mandatory before implementation.
+
+## Development-Only QA Diagnostics
+
+- The approved compact `QA ONLY` panel appears only for an explicit, non-release
+  safeguard QA profile using the fixture inbox and simulated provider.
+- It is collapsed by default and identifies the profile/version, purpose,
+  aggregate result counts, active limits, and any reached boundary.
+- It never renders raw SMS content, sender data, fingerprints, template IDs,
+  request keys, or user information.
+- Production and ordinary development SMS scans render no QA panel.

@@ -1,6 +1,7 @@
 import type {
   AiParseResult,
   AiUnresolvedCandidate,
+  SmsAiRetryRequest,
   SmsAiRequestContext,
   SmsCandidate,
 } from "./ai-sms-parser-service";
@@ -19,6 +20,7 @@ export interface HybridSmsUnresolvedCandidate {
   readonly candidate: SmsCandidate;
   readonly reason: HybridSmsUnresolvedReason;
   readonly isRetryable: boolean;
+  readonly retryRequest?: SmsAiRetryRequest;
 }
 
 export interface SmsParserDiagnostics {
@@ -70,6 +72,7 @@ export interface SmsParserOrchestratorOptions {
   readonly expectedUserId?: string;
   readonly terminalFingerprints?: ReadonlySet<string>;
   readonly requestContext?: SmsAiRequestContext;
+  readonly requestKey?: string;
 }
 
 export function createSmsParserDiagnostics(

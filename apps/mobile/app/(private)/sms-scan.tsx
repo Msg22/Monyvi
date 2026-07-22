@@ -42,6 +42,7 @@ import { palette } from "@/constants/colors";
 import { logger } from "@/utils/logger";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
 import type { ParseSmsContext } from "@/services/ai-sms-parser-service";
+import { createSmsSafeguardQaDiagnostics } from "@/services/sms-safeguard-qa-diagnostics-service";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -235,6 +236,16 @@ export default function SmsScanScreen(): React.JSX.Element {
       supportedCurrencies: SUPPORTED_CURRENCIES.map((c) => c.code),
     }),
     [allCategories]
+  );
+  const qaDiagnostics = useMemo(
+    () =>
+      result === null
+        ? null
+        : createSmsSafeguardQaDiagnostics({
+            parserDiagnostics: result.parserDiagnostics,
+            safeguardSummary: result.safeguardSummary,
+          }),
+    [result]
   );
 
   // Shared scan initiation logic (used by both auto-start and retry)
@@ -580,6 +591,7 @@ export default function SmsScanScreen(): React.JSX.Element {
               completionStatus: "complete",
             }
           }
+          qaDiagnostics={qaDiagnostics}
           error={error}
           onReviewPress={handleReviewPress}
           onBackPress={handleBackPress}

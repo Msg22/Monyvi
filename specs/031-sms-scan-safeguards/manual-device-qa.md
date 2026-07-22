@@ -67,7 +67,11 @@ Use these steps for every profile that has a device-visible journey.
 6. When checking Metro diagnostics, confirm `mode: "hybrid"` and that no real
    device inbox or Gemini provider is used. Safeguard QA uses a fixture inbox
    and simulated provider by design.
-7. To repeat a profile from a clean state, stop Metro and rerun the same start
+7. Confirm the collapsed **QA only** panel identifies the selected profile and
+   version. Expand it only to compare aggregate counts and active test
+   boundaries with the profile expectation; it must never show an SMS, sender,
+   merchant, financial value, fingerprint, prompt, or provider response.
+8. To repeat a profile from a clean state, stop Metro and rerun the same start
    command. Do not clear the app's data unless the profile explicitly says to
    test an installation boundary.
 

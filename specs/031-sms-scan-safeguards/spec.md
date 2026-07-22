@@ -446,6 +446,59 @@ consumption.
     or processing outcome, and the consent profile reports zero production
     provider calls and zero production allowance charges.
 
+---
+
+### User Story 7 - Understand Deterministic QA Outcomes On Device (Priority: P1)
+
+As a developer or QA tester running an explicit safeguard profile, I want a
+compact in-app explanation of the active test boundaries and this scan's
+aggregate outcome so that I can distinguish an intentional safeguard refusal
+from a regression without inspecting private message data or production logs.
+
+**Why this priority**: Named fixture scenarios deliberately reach small limits.
+Without visible, privacy-safe context, a correct capacity, cooldown, oversized,
+or negative-outcome result can look like a missing transaction or parser defect
+and make physical-device verification unreliable.
+
+**Independent Test**: Start each named profile on a physical development device,
+complete its device-visible scan, and verify that the scan and review surfaces
+identify the active profile, real effective boundaries, aggregate processing
+outcomes, and the next availability state without showing fixture contents or
+appearing in an ordinary development or release build.
+
+**Acceptance Scenarios**:
+
+1. **Given** explicit safeguard QA mode is enabled in a non-release build,
+   **When** a profile reaches a scan completion or review state, **Then** a
+   compact, collapsed-by-default QA-only panel identifies the profile and
+   version and can be expanded to show safe aggregate diagnostics.
+2. **Given** no profile is explicitly enabled, configuration is incomplete, or
+   the build is a release build, **When** SMS scan or review UI renders,
+   **Then** the QA-only panel is absent and no fixture, simulated-provider, or
+   test-limit information is exposed.
+3. **Given** a tester expands the panel, **When** its values are displayed,
+   **Then** active limits come from the same effective policy used by admission,
+   and current-scan counts come from the actual parser and safeguard result; the
+   UI MUST NOT duplicate numeric limits or infer outcomes independently.
+4. **Given** a scenario reaches an allowance, cooldown, burst, candidate-size,
+   response-validity, consent, negative-outcome, or checkpoint boundary,
+   **When** the panel is displayed, **Then** it gives a short human-readable
+   explanation of the boundary, its aggregate affected count, and the next
+   availability time when one exists.
+5. **Given** any named QA profile is selected, **When** it is inspected in the
+   panel, **Then** it declares its scenario purpose and expected limiting
+   condition; automated coverage fails if a supported profile lacks that
+   diagnostic metadata.
+6. **Given** QA diagnostics render, **When** their props, translations, logs, or
+   accessibility labels are inspected, **Then** they contain only profile
+   metadata, policy boundaries, aggregate counts, stable reason codes, and
+   availability instants; they MUST NOT contain SMS body, sender, fingerprint,
+   merchant, financial value, provider prompt, or provider response content.
+7. **Given** a partial scan produces reviewable suggestions and deferred work,
+   **When** the tester opens the review route, **Then** the same aggregate QA
+   state remains available there without changing the normal partial-results
+   notice, review selection, save, or back-navigation behavior.
+
 ### Edge Cases
 
 - The device clock, time zone, or daylight-saving offset changes near the
@@ -786,6 +839,27 @@ consumption.
   inbox dates or scan kind. User-wide rolling candidate and request-burst
   allowances MUST remain the authoritative server cost boundaries even when a
   modified client mislabels a history request as incremental.
+- **FR-061**: An in-app safeguard QA diagnostics panel MUST render only when an
+  explicitly named safeguard profile is active in a non-release build. It MUST
+  be absent when QA configuration is disabled, incomplete, contradictory, or
+  release-bound, and it MUST not change scan, parser, review, or save behavior.
+- **FR-062**: The QA diagnostics panel MUST identify its profile and version;
+  show only the active scenario's purpose, effective policy boundaries,
+  aggregate current-scan outcomes, stable refusal reason, and earliest relevant
+  availability instant; and source those values from the same policy/result
+  contracts used by the runtime rather than duplicated UI constants.
+- **FR-063**: Every named safeguard QA scenario MUST declare privacy-safe
+  diagnostic metadata describing the expected limiting condition and verifier
+  intent. A focused test MUST fail if a registered scenario has no such
+  metadata.
+- **FR-064**: QA diagnostics MUST appear on both the scan completion and active
+  review surfaces, remain collapsed by default, use translated plain-language
+  labels, respect the existing safe areas and themes, and expose no raw SMS,
+  sender, fingerprint, merchant, financial value, prompt, or provider response.
+- **FR-065**: The QA diagnostics component MUST consume a shaped safe diagnostic
+  view model. It MUST NOT access the inbox, raw parser candidates, WatermelonDB,
+  Edge responses, or runtime environment directly from a presentational UI
+  component.
 
 ### Key Entities
 
@@ -822,6 +896,9 @@ consumption.
   profile with deliberately small boundaries that exercises the release policy
   evaluator and enforcement path without modifying production policy or
   inheriting another scenario's mutable state.
+- **Safeguard QA Diagnostic View Model**: A presentation-safe projection of the
+  active scenario metadata, effective policy, aggregate scan outcomes, and next
+  availability state. It excludes all raw SMS and extracted financial content.
 
 ## Success Criteria
 
@@ -918,6 +995,13 @@ consumption.
 - **SC-029**: In 100% of modified-client tests, mislabeling history work as an
   incremental request never permits the user to exceed rolling candidate or
   request-burst allowances.
+- **SC-030**: In 100% of named safeguard QA profile tests, the expanded
+  development-only panel reports the selected profile/version, declared scenario
+  purpose, active runtime boundaries, and actual aggregate scan outcomes without
+  exposing prohibited content or altering scan behavior.
+- **SC-031**: In 100% of production, release, disabled, and malformed-QA
+  configuration tests, neither scan nor review UI renders safeguard QA
+  diagnostics.
 
 ## Assumptions
 
@@ -974,6 +1058,10 @@ consumption.
   rejection quality remain unchanged.
 - Focused mockups will cover only the affected scope, partial-result, and
   cooldown states rather than redesigning the review page.
+- The proposed safeguard QA diagnostic panel is an internal development aid, not
+  a production-facing product surface. Its mockup governs only the compact
+  layout, hierarchy, and disclosure behavior; existing light/dark theme tokens
+  govern its colors.
 - Existing fixture, local-parser, and hybrid-fixture modes are the foundation
   for safeguard QA, but the feature requires scenario-level policy controls,
   simulated refusal outcomes, reset behavior, and explicit production-call proof

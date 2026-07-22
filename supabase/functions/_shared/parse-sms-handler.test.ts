@@ -205,6 +205,28 @@ test("rejects messages outside the rolling window or implausibly in the future",
   assert.equal(state.reserve, 0);
 });
 
+test("rejects messages received after the immutable scan start", async () => {
+  const state = createState();
+  const scanStartedAt = "2026-07-20T12:00:00.000Z";
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      getServerNowMs: () => Date.parse("2026-07-20T12:04:00.000Z"),
+      resolveScanWindowStart: async () => Date.parse(scanStartedAt),
+    })
+  );
+  const postStartMessage = {
+    ...message(),
+    date: "2026-07-20T12:02:00.000Z",
+  };
+
+  const response = await handler(post(requestBody([postStartMessage])));
+
+  assert.equal(response.status, 400);
+  assert.equal((await readJson(response)).reason, "malformed_request");
+  assert.equal(state.reserve, 0);
+  assert.equal(state.provider, 0);
+});
+
 test("preserves the inclusive client scan-start cutoff across Edge transit delay", async () => {
   const state = createState();
   const scanStartedAt = "2026-07-20T12:00:00.000Z";

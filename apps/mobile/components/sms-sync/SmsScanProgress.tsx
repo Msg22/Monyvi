@@ -23,6 +23,8 @@ import {
 import { SmsScanScopeNotice } from "./SmsScanScopeNotice";
 import { PartialSmsResultsNotice } from "@/components/transaction-review/PartialSmsResultsNotice";
 import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator";
+import type { SmsSafeguardQaDiagnosticsViewModel } from "@/services/sms-safeguard-qa-diagnostics-service";
+import { SafeguardQaDiagnosticsPanel } from "./SafeguardQaDiagnosticsPanel";
 
 interface SmsScanProgressProps {
   /** Current scan status */
@@ -40,6 +42,7 @@ interface SmsScanProgressProps {
   /** System category name to display label mapping */
   readonly categoryNameMap: ReadonlyMap<string, string>;
   readonly safeguardSummary: SmsScanSafeguardSummary;
+  readonly qaDiagnostics?: SmsSafeguardQaDiagnosticsViewModel | null;
   /** Error message if scan failed */
   readonly error: string | null;
   /** Called when user taps "Review Transactions" */
@@ -59,6 +62,7 @@ export function SmsScanProgress({
   topCategories,
   categoryNameMap,
   safeguardSummary,
+  qaDiagnostics = null,
   error,
   onReviewPress,
   onBackPress,
@@ -96,16 +100,19 @@ export function SmsScanProgress({
       ) : (
         <View className="flex-1 px-4">
           {status === "complete" && transactionsFound > 0 && (
-            <SuccessState
-              transactionsFound={transactionsFound}
-              totalScanned={totalScanned}
-              durationMs={durationMs}
-              topCategories={topCategories}
-              categoryNameMap={categoryNameMap}
-              onReviewPress={onReviewPress}
-              onBackPress={onBackPress}
-              t={translate}
-            />
+            <>
+              <SuccessState
+                transactionsFound={transactionsFound}
+                totalScanned={totalScanned}
+                durationMs={durationMs}
+                topCategories={topCategories}
+                categoryNameMap={categoryNameMap}
+                onReviewPress={onReviewPress}
+                onBackPress={onBackPress}
+                t={translate}
+              />
+              <SafeguardQaDiagnosticsPanel diagnostics={qaDiagnostics} />
+            </>
           )}
 
           {status === "complete" &&
@@ -139,6 +146,7 @@ export function SmsScanProgress({
                     {translate("back_to_dashboard")}
                   </Text>
                 </TouchableOpacity>
+                <SafeguardQaDiagnosticsPanel diagnostics={qaDiagnostics} />
               </View>
             )}
 

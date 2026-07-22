@@ -24,8 +24,12 @@ lease prevents a crash before provider start from consuming capacity forever.
 Development QA receives named, versioned safeguard scenarios that exercise the
 same policy evaluator and response reconciliation with a fixture inbox and
 simulated provider. Focused UI work covers the 30-day scope, incremental versus
-history-rescan actions, cooldown availability, and partial-limit guidance; no
-review-page redesign or subscription UX is introduced.
+history-rescan actions, cooldown availability, partial-limit guidance, and a
+development-only collapsed QA diagnostics panel that explains the selected
+profile's active boundaries and aggregate outcome. The panel reuses shaped
+runtime policy/result data, exposes no private SMS data, and is excluded from
+normal development and release builds; no review-page redesign or subscription
+UX is introduced.
 
 ## Technical Context
 
@@ -187,7 +191,8 @@ apps/mobile/context/
 apps/mobile/components/
 |-- settings/SettingsSections.tsx
 |-- sms-sync/SmsScanScopeNotice.tsx
-`-- transaction-review/PartialSmsResultsNotice.tsx
+|-- transaction-review/PartialSmsResultsNotice.tsx
+`-- sms-sync/SafeguardQaDiagnosticsPanel.tsx
 
 apps/mobile/app/(private)/
 |-- settings.tsx
@@ -319,6 +324,10 @@ adapters so parse and enrichment cannot drift.
    candidate payload. Use the conservative local estimator by default and a
    separately named opt-in selected-model count-tokens workflow for calibrated
    measurement; do not optimize prompt text without corpus parity.
+5. After mockup approval, project the active QA profile, effective policy, and
+   aggregate scan/review outcome into a development-only diagnostic view model;
+   render it collapsed by default on scan completion and review without exposing
+   raw SMS data or duplicating policy limits.
 
 ### Phase 7 - Verification and rollout readiness
 

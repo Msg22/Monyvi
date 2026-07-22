@@ -36,6 +36,12 @@ describe("deterministic SMS safeguard QA scenarios", () => {
         providerMode: "simulated",
         inboxMode: "fixture",
       });
+      expect(typeof SAFEGUARD_QA_SCENARIOS[id].diagnostic.purpose).toBe(
+        "string"
+      );
+      expect(
+        typeof SAFEGUARD_QA_SCENARIOS[id].diagnostic.expectedBoundary
+      ).toBe("string");
     }
   });
 
@@ -111,8 +117,8 @@ describe("deterministic SMS safeguard QA scenarios", () => {
       SAFEGUARD_QA_SCENARIOS["oversized-candidate-v1"].policyOverrides
     ).toMatchObject({
       fullParser: {
-        maxPayloadBytes: 64,
-        maxEstimatedInputTokens: 16,
+        maxPayloadBytes: 8_192,
+        maxEstimatedInputTokens: 4_096,
       },
     });
 

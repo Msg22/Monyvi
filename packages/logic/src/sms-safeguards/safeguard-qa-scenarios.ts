@@ -87,6 +87,12 @@ export const safeguardQaScenarioSchema = z
     fixedNowMs: z.literal(SAFEGUARD_QA_FIXED_NOW_MS),
     providerMode: z.literal("simulated"),
     inboxMode: z.literal("fixture"),
+    diagnostic: z
+      .object({
+        purpose: z.string().min(1),
+        expectedBoundary: z.string().min(1),
+      })
+      .strict(),
     reset: safeguardQaResetSchema,
     policyOverrides: safeguardQaPolicyOverridesSchema,
   })
@@ -144,6 +150,71 @@ interface PolicyOverrideInput {
     readonly burstWindowMs?: number;
   }>;
 }
+
+const QA_SCENARIO_DIAGNOSTICS: Readonly<
+  Record<
+    SafeguardQaProfileId,
+    Readonly<{ purpose: string; expectedBoundary: string }>
+  >
+> = Object.freeze({
+  "cutoff-boundary-v1": {
+    purpose: "cutoff_boundary",
+    expectedBoundary: "cutoff_boundary",
+  },
+  "checkpoint-overlap-v1": {
+    purpose: "checkpoint_overlap",
+    expectedBoundary: "checkpoint_overlap",
+  },
+  "partial-quota-v1": {
+    purpose: "partial_quota",
+    expectedBoundary: "scan_limit",
+  },
+  "rolling-expiry-v1": {
+    purpose: "rolling_expiry",
+    expectedBoundary: "rolling_limit",
+  },
+  "shared-batch-live-v1": {
+    purpose: "shared_batch_live",
+    expectedBoundary: "rolling_limit",
+  },
+  "burst-limit-v1": { purpose: "burst_limit", expectedBoundary: "burst_limit" },
+  "history-cooldown-v1": {
+    purpose: "history_cooldown",
+    expectedBoundary: "history_cooldown",
+  },
+  "oversized-candidate-v1": {
+    purpose: "oversized_candidate",
+    expectedBoundary: "candidate_too_large",
+  },
+  "response-validity-v1": {
+    purpose: "response_validity",
+    expectedBoundary: "response_validity",
+  },
+  "negative-three-strikes-v1": {
+    purpose: "negative_three_strikes",
+    expectedBoundary: "negative_three_strikes",
+  },
+  "terminal-fresh-install-v1": {
+    purpose: "terminal_fresh_install",
+    expectedBoundary: "terminal_outcome",
+  },
+  "trusted-local-recovery-v1": {
+    purpose: "trusted_local_recovery",
+    expectedBoundary: "trusted_local_recovery",
+  },
+  "account-switch-v1": {
+    purpose: "account_switch",
+    expectedBoundary: "account_switch",
+  },
+  "consent-required-v1": {
+    purpose: "consent_required",
+    expectedBoundary: "consent_required",
+  },
+  "prompt-token-baseline-v1": {
+    purpose: "prompt_token_baseline",
+    expectedBoundary: "input_token_baseline",
+  },
+});
 
 const BASE_POLICY_OVERRIDES = {
   lookbackDays: 2,
@@ -206,6 +277,7 @@ function createScenario(
     fixedNowMs: SAFEGUARD_QA_FIXED_NOW_MS,
     providerMode: "simulated",
     inboxMode: "fixture",
+    diagnostic: QA_SCENARIO_DIAGNOSTICS[id],
     reset: {
       mode: "scenario-namespace-only",
       namespace: `sms-safeguard-qa:${id}`,

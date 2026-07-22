@@ -88,6 +88,13 @@ export interface AiUnresolvedCandidate {
     | "unexpected_failure"
     | "capacity_limited";
   readonly isRetryable: boolean;
+  readonly retryRequest?: SmsAiRetryRequest;
+}
+
+export interface SmsAiRetryRequest {
+  readonly requestKey: string;
+  readonly requestContext: SmsAiRequestContext;
+  readonly candidates: readonly SmsCandidate[];
 }
 
 /** Context sent alongside SMS messages to the Edge Function. */
@@ -445,6 +452,7 @@ function collectUnresolvedCandidates(input: {
   readonly hasUncorrelatedFailure: boolean;
   readonly reason: AiUnresolvedCandidate["reason"];
   readonly isRetryable: boolean;
+  readonly retryRequest?: SmsAiRetryRequest;
 }): readonly AiUnresolvedCandidate[] {
   const currentMessageIds = new Set(input.messages.map(({ id }) => id));
   const hasForeignFailureIdentity = [...input.failedMessageIds].some(
@@ -461,7 +469,16 @@ function collectUnresolvedCandidates(input: {
       return [];
     const candidate = input.candidateMap.get(messageId);
     return candidate
-      ? [{ candidate, reason: input.reason, isRetryable: input.isRetryable }]
+      ? [
+          {
+            candidate,
+            reason: input.reason,
+            isRetryable: input.isRetryable,
+            ...(input.isRetryable && input.retryRequest !== undefined
+              ? { retryRequest: input.retryRequest }
+              : {}),
+          },
+        ]
       : [];
   });
 }
@@ -523,7 +540,8 @@ export async function parseSmsWithAi(
   onProgress?: (progress: AiParseProgress) => void,
   abortSignal?: AbortSignal,
   expectedUserId?: string,
-  requestContext?: SmsAiRequestContext
+  requestContext?: SmsAiRequestContext,
+  requestKey?: string
 ): Promise<AiParseResult> {
   const emptyResult: AiParseResult = { transactions: [], hasError: false };
   if (candidates.length === 0) return emptyResult;
@@ -617,7 +635,10 @@ export async function parseSmsWithAi(
     for (let i = 0; i < allMessages.length; i += transport.chunkSize) {
       chunkQueue.push({
         messages: allMessages.slice(i, i + transport.chunkSize),
-        requestKey: Crypto.randomUUID(),
+        requestKey:
+          requestKey !== undefined && allMessages.length <= transport.chunkSize
+            ? requestKey
+            : Crypto.randomUUID(),
       });
     }
 
@@ -644,6 +665,14 @@ export async function parseSmsWithAi(
       throwIfAborted(abortSignal);
 
       const currentChunk = chunkQueue[chunkIndex];
+      const retryRequest: SmsAiRetryRequest = {
+        requestKey: currentChunk.requestKey,
+        requestContext: resolvedRequestContext,
+        candidates: currentChunk.messages.flatMap((message) => {
+          const candidate = candidateMap.get(message.id);
+          return candidate ? [candidate] : [];
+        }),
+      };
       const chunkStartMs = Date.now();
 
       let chunkResult: ChunkAiResult;
@@ -738,6 +767,7 @@ export async function parseSmsWithAi(
                 candidate,
                 reason: "chunk_failed" as const,
                 isRetryable: true,
+                retryRequest,
               },
             ]
           : [];
@@ -762,6 +792,7 @@ export async function parseSmsWithAi(
             hasUncorrelatedFailure: chunkResult.hasUncorrelatedFailure === true,
             reason: chunkResult.failureReason ?? "chunk_failed",
             isRetryable,
+            retryRequest,
           })
         );
         if (appendedCount > 0) {

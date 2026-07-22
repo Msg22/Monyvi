@@ -108,6 +108,47 @@ describe("sms review retry service", () => {
     expect(result.transactions).toEqual([purchase]);
   });
 
+  it("reuses the original stable request identity for an uncertain provider retry", async () => {
+    const retried = transaction("retryable");
+    const originalCandidate = candidate("retryable");
+    const retryRequest = {
+      requestKey: "original-request-key",
+      requestContext: {
+        scanSessionId: "scan-session-id",
+        scanKind: "incremental" as const,
+        scanStartedAtMs: 123,
+      },
+      candidates: [originalCandidate],
+    };
+    const pending: HybridSmsUnresolvedCandidate = {
+      candidate: originalCandidate,
+      reason: "chunk_failed",
+      isRetryable: true,
+      retryRequest,
+    };
+    mockParseSmsWithOrchestrator.mockResolvedValueOnce({
+      transactions: [retried],
+      unresolvedCandidates: [],
+    });
+
+    await retrySmsReviewCandidates({
+      transactions: [],
+      unresolvedCandidates: [pending],
+      parseContext: context,
+    });
+
+    expect(mockParseSmsWithOrchestrator).toHaveBeenCalledWith(
+      [originalCandidate],
+      context,
+      undefined,
+      undefined,
+      {
+        requestContext: retryRequest.requestContext,
+        requestKey: retryRequest.requestKey,
+      }
+    );
+  });
+
   it("leaves the session unchanged when retry is cancelled", async () => {
     const abort = new Error("aborted");
     abort.name = "AbortError";

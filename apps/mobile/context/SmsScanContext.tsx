@@ -18,6 +18,7 @@ import type { ParsedSmsTransaction } from "@monyvi/logic";
 import type { ParseSmsContext } from "@/services/ai-sms-parser-service";
 import type {
   HybridSmsUnresolvedCandidate,
+  SmsParserDiagnostics,
   SmsScanSafeguardSummary,
 } from "@/services/sms-parser-orchestrator";
 import type { SmsScanResult } from "@/services/sms-sync-service";
@@ -44,6 +45,7 @@ interface SmsScanContextValue {
   readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
   readonly parseContext: ParseSmsContext | null;
   readonly safeguardSummary: SmsScanSafeguardSummary | null;
+  readonly parserDiagnostics: SmsParserDiagnostics | null;
   readonly reviewSessionId: number;
   readonly setReviewSession: (result: SmsScanResult) => void;
   readonly updateReviewSession: (
@@ -90,6 +92,8 @@ export function SmsScanProvider({
   );
   const [safeguardSummary, setSafeguardSummary] =
     useState<SmsScanSafeguardSummary | null>(null);
+  const [parserDiagnostics, setParserDiagnostics] =
+    useState<SmsParserDiagnostics | null>(null);
   const reviewSessionIdRef = useRef(0);
   const [reviewSessionId, setReviewSessionId] = useState(0);
 
@@ -105,6 +109,7 @@ export function SmsScanProvider({
       setUnresolvedCandidates([]);
       setParseContext(null);
       setSafeguardSummary(null);
+      setParserDiagnostics(null);
     },
     [advanceReviewSession]
   );
@@ -115,6 +120,7 @@ export function SmsScanProvider({
     setUnresolvedCandidates([]);
     setParseContext(null);
     setSafeguardSummary(null);
+    setParserDiagnostics(null);
   }, [advanceReviewSession]);
 
   const setReviewSession = useCallback(
@@ -124,6 +130,7 @@ export function SmsScanProvider({
       setUnresolvedCandidates(result.unresolvedCandidates);
       setParseContext(result.parseContext);
       setSafeguardSummary(result.safeguardSummary);
+      setParserDiagnostics(result.parserDiagnostics);
     },
     [advanceReviewSession]
   );
@@ -168,6 +175,7 @@ export function SmsScanProvider({
       unresolvedCandidates,
       parseContext,
       safeguardSummary,
+      parserDiagnostics,
       reviewSessionId,
       setReviewSession,
       updateReviewSession,
@@ -181,6 +189,7 @@ export function SmsScanProvider({
       unresolvedCandidates,
       parseContext,
       safeguardSummary,
+      parserDiagnostics,
       reviewSessionId,
       setReviewSession,
       updateReviewSession,

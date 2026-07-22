@@ -36,13 +36,15 @@ import {
 import type { ReviewableTransaction } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { logger } from "@/utils/logger";
 import { PartialSmsResultsNotice } from "@/components/transaction-review/PartialSmsResultsNotice";
+import { SafeguardQaDiagnosticsPanel } from "@/components/sms-sync/SafeguardQaDiagnosticsPanel";
+import { createSmsSafeguardQaDiagnostics } from "@/services/sms-safeguard-qa-diagnostics-service";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -55,6 +57,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
     transactions,
     unresolvedCandidates,
     safeguardSummary,
+    parserDiagnostics,
     clearTransactions,
   } = useSmsScanContext();
   const { markSyncComplete } = useSmsSync();
@@ -83,6 +86,14 @@ export default function SmsReviewScreen(): React.JSX.Element {
           onRetry: () => void smsRetry.retry(),
         }
       : undefined;
+  const qaDiagnostics = useMemo(
+    () =>
+      createSmsSafeguardQaDiagnostics({
+        parserDiagnostics,
+        safeguardSummary: activeSafeguardSummary,
+      }),
+    [activeSafeguardSummary, parserDiagnostics]
+  );
 
   // Mark review as active to queue incoming live transactions
   useEffect(() => {
@@ -213,6 +224,9 @@ export default function SmsReviewScreen(): React.JSX.Element {
             />
           </View>
         )}
+        <View className="w-full">
+          <SafeguardQaDiagnosticsPanel diagnostics={qaDiagnostics} />
+        </View>
         <TouchableOpacity
           onPress={() => router.replace("/(private)/(tabs)")}
           className="mt-6 px-6 py-3 bg-slate-800 rounded-2xl"
@@ -244,6 +258,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
         })}
         workspaceVariant="sms"
         partialResults={partialResults}
+        qaDiagnostics={qaDiagnostics}
         onBack={() => {
           clearTransactions();
           router.back();

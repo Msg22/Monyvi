@@ -21,6 +21,16 @@ export interface SmsReviewRetryResult {
   readonly hasRetryError: boolean;
 }
 
+interface RetryGroup {
+  readonly candidates: ReadonlyArray<HybridSmsUnresolvedCandidate["candidate"]>;
+  readonly options?: {
+    readonly requestContext: NonNullable<
+      HybridSmsUnresolvedCandidate["retryRequest"]
+    >["requestContext"];
+    readonly requestKey: string;
+  };
+}
+
 function mergeTransactions(
   existing: readonly ParsedSmsTransaction[],
   appended: readonly ParsedSmsTransaction[]
@@ -48,21 +58,67 @@ export async function retrySmsReviewCandidates(
       hasRetryError: false,
     };
   }
-  const result = await parseSmsWithOrchestrator(
-    retryable.map(({ candidate }) => candidate),
-    input.parseContext,
-    undefined,
-    input.abortSignal
-  );
+  const retryGroups = new Map<string, RetryGroup>();
+  const legacyCandidates = retryable
+    .filter(({ retryRequest }) => retryRequest === undefined)
+    .map(({ candidate }) => candidate);
+  for (const { retryRequest } of retryable) {
+    if (
+      retryRequest === undefined ||
+      retryGroups.has(retryRequest.requestKey)
+    ) {
+      continue;
+    }
+    retryGroups.set(retryRequest.requestKey, {
+      candidates: retryRequest.candidates,
+      options: {
+        requestContext: retryRequest.requestContext,
+        requestKey: retryRequest.requestKey,
+      },
+    });
+  }
+  if (legacyCandidates.length > 0) {
+    retryGroups.set("legacy", { candidates: legacyCandidates });
+  }
+
+  let retriedTransactions: readonly ParsedSmsTransaction[] = [];
+  let retriedUnresolvedCandidates: readonly HybridSmsUnresolvedCandidate[] = [];
+  let hasRetryError = false;
+  for (const retryGroup of retryGroups.values()) {
+    const result =
+      retryGroup.options === undefined
+        ? await parseSmsWithOrchestrator(
+            retryGroup.candidates,
+            input.parseContext,
+            undefined,
+            input.abortSignal
+          )
+        : await parseSmsWithOrchestrator(
+            retryGroup.candidates,
+            input.parseContext,
+            undefined,
+            input.abortSignal,
+            retryGroup.options
+          );
+    retriedTransactions = mergeTransactions(
+      retriedTransactions,
+      result.transactions
+    );
+    retriedUnresolvedCandidates = [
+      ...retriedUnresolvedCandidates,
+      ...result.unresolvedCandidates,
+    ];
+    hasRetryError ||= result.hasError === true;
+  }
   const unresolvedCandidates = [
     ...input.unresolvedCandidates.filter(({ isRetryable }) => !isRetryable),
-    ...result.unresolvedCandidates,
+    ...retriedUnresolvedCandidates,
   ];
   return {
-    transactions: mergeTransactions(input.transactions, result.transactions),
+    transactions: mergeTransactions(input.transactions, retriedTransactions),
     unresolvedCandidates,
     hasRetryError:
-      result.hasError === true &&
+      hasRetryError &&
       unresolvedCandidates.some(({ isRetryable }) => isRetryable),
   };
 }

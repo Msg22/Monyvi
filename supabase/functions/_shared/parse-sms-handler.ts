@@ -290,9 +290,8 @@ async function hasValidCanonicalMessages(
   acceptedScanStartedAtMs: number,
   dependencies: ParseSmsHandlerDependencies
 ): Promise<boolean> {
-  const nowMs = dependencies.getServerNowMs();
   const minimumReceivedAtMs = acceptedScanStartedAtMs - lookbackDays * DAY_MS;
-  const maximumReceivedAtMs = nowMs + MAX_FUTURE_MESSAGE_SKEW_MS;
+  const maximumReceivedAtMs = acceptedScanStartedAtMs;
 
   for (const message of messages) {
     const receivedAtMs = Date.parse(message.date);

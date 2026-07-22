@@ -15,6 +15,10 @@
 interface SmsSafeguardQaScenario {
   readonly id: string;
   readonly version: number;
+  readonly diagnostic: {
+    readonly purpose: string;
+    readonly expectedBoundary: string | null;
+  };
   readonly fixedNowMs: number;
   readonly policyOverrides: Readonly<Record<string, number>>;
   readonly inboxFixtureId: string;
@@ -68,3 +72,19 @@ Expose only profile ID/version, effective boundaries, aggregate admitted,
 consumed, refused, local, AI, negative, oversized, and checkpoint counts, plus
 `productionProviderCallCount` and `productionAllowanceChargeCount`, both of
 which must be zero.
+
+## In-App QA Diagnostics
+
+- The in-app panel is available only after explicit QA activation in a
+  non-release build. It must return `null` for normal development, malformed QA
+  configuration, and release builds.
+- It is collapsed by default and renders on both completed scan and active
+  review surfaces.
+- Its shaped view model contains the selected profile/version, declared
+  `diagnostic` metadata, effective runtime policy boundaries, aggregate scan
+  counts, stable reason codes, and an availability instant when applicable.
+- The component receives the shaped view model as props. It must not query the
+  inbox, database, Edge Function, environment, raw candidates, or provider
+  response itself.
+- It must never render or log SMS body, sender, fingerprint, merchant, financial
+  values, extracted fields, prompt content, or provider response content.

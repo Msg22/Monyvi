@@ -388,7 +388,8 @@ async function runFullAiFallback(
   onProgress?: (progress: AiParseProgress) => void,
   abortSignal?: AbortSignal,
   expectedUserId?: string,
-  requestContext?: SmsAiRequestContext
+  requestContext?: SmsAiRequestContext,
+  requestKey?: string
 ): Promise<HybridAiFallbackResult> {
   if (candidates.length === 0) return { transactions: [], hasError: false };
   try {
@@ -405,7 +406,8 @@ async function runFullAiFallback(
         : undefined,
       abortSignal,
       expectedUserId,
-      requestContext
+      requestContext,
+      requestKey
     );
   } catch (error: unknown) {
     if (
@@ -442,9 +444,14 @@ function parseSmsWithPinnedUser(
   onProgress?: (progress: AiParseProgress) => void,
   abortSignal?: AbortSignal,
   expectedUserId?: string,
-  requestContext?: SmsAiRequestContext
+  requestContext?: SmsAiRequestContext,
+  requestKey?: string
 ): Promise<AiParseResult> {
-  if (expectedUserId === undefined && requestContext === undefined) {
+  if (
+    expectedUserId === undefined &&
+    requestContext === undefined &&
+    requestKey === undefined
+  ) {
     return parseSmsWithAi(candidates, context, onProgress, abortSignal);
   }
   return parseSmsWithAi(
@@ -453,7 +460,8 @@ function parseSmsWithPinnedUser(
     onProgress,
     abortSignal,
     expectedUserId,
-    requestContext
+    requestContext,
+    requestKey
   );
 }
 
@@ -586,7 +594,8 @@ async function parseHybrid(
       onProgress,
       abortSignal,
       options.expectedUserId,
-      options.requestContext
+      options.requestContext,
+      options.requestKey
     ),
   ]);
   throwIfAborted(abortSignal);

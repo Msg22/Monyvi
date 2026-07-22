@@ -69,6 +69,9 @@ describe("SmsScanContext review session", () => {
     expect(result.current.unresolvedCandidates).toHaveLength(1);
     expect(result.current.parseContext?.supportedCurrencies).toEqual(["EGP"]);
     expect(result.current.safeguardSummary).toEqual(safeguardSummary);
+    expect(result.current.parserDiagnostics).toEqual(
+      scanResult().parserDiagnostics
+    );
 
     act(() =>
       result.current.updateReviewSession(
@@ -87,6 +90,7 @@ describe("SmsScanContext review session", () => {
     expect(result.current.unresolvedCandidates).toEqual([]);
     expect(result.current.parseContext).toBeNull();
     expect(result.current.safeguardSummary).toBeNull();
+    expect(result.current.parserDiagnostics).toBeNull();
   });
 
   it("does not retain raw retry state after the private provider unmounts", () => {
