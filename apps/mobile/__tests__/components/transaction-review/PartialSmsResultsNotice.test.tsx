@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 import { PartialSmsResultsNotice } from "@/components/transaction-review/PartialSmsResultsNotice";
+import arTransactions from "@/locales/ar/transactions.json";
+import enTransactions from "@/locales/en/transactions.json";
 import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator";
 
 const summary: SmsScanSafeguardSummary = {
@@ -26,6 +28,15 @@ jest.mock("react-i18next", () => ({
 }));
 
 describe("PartialSmsResultsNotice", () => {
+  it("explains why oversized messages were skipped without repeating the title", () => {
+    expect(enTransactions.partial_sms_oversized).toBe(
+      "Messages that are too long cannot be processed. Your other suggestions are ready to review."
+    );
+    expect(arTransactions.partial_sms_oversized).toBe(
+      "لا يمكن معالجة الرسائل الطويلة جدًا. اقتراحاتك الأخرى جاهزة للمراجعة."
+    );
+  });
+
   it("matches the approved compact light/dark token structure and retries", () => {
     const onRetry = jest.fn();
     render(

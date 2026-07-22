@@ -5,7 +5,7 @@
   "partial_sms_description": "Your other suggestions are ready to review.",
   "partial_sms_try_later": "Your other suggestions are ready to review. You can try the remaining messages in a later sync.",
   "partial_sms_try_later_at": "Your other suggestions are ready to review. Try the remaining messages after {{availability}}.",
-  "partial_sms_oversized": "Your other suggestions are ready to review. Some messages could not be processed.",
+  "partial_sms_oversized": "Messages that are too long cannot be processed. Your other suggestions are ready to review.",
   "partial_sms_oversized_empty": "No transactions are ready to review. The messages were too long to process.",
   "partial_sms_empty_try_later": "No transactions are ready to review. You can try the remaining messages in a later sync.",
   "partial_sms_retry": "Retry {{count}}",
