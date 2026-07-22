@@ -132,6 +132,25 @@ describe("SMS safeguard QA launcher", () => {
     ).toEqual(["--wireless-device", "--clear"]);
   });
 
+  test("exposes a root command for resetting one safeguard QA profile", () => {
+    const rootPackage = JSON.parse(
+      readFileSync(
+        path.resolve(__dirname, "../../../..", "package.json"),
+        "utf8"
+      )
+    ) as { readonly scripts: Readonly<Record<string, string>> };
+    const mobilePackage = JSON.parse(
+      readFileSync(path.resolve(__dirname, "../..", "package.json"), "utf8")
+    ) as { readonly scripts: Readonly<Record<string, string>> };
+
+    expect(rootPackage.scripts["mobile:dev:sms-safeguards:reset"]).toBe(
+      "npm run reset:sms-safeguards -w @monyvi/mobile --"
+    );
+    expect(mobilePackage.scripts["reset:sms-safeguards"]).toBe(
+      "node scripts/sms-safeguard-qa.js reset"
+    );
+  });
+
   test("uses a fixture inbox without forcing the local parser", () => {
     const commandArgs = script.buildSafeguardDevelopmentCommandArgs(
       ["--wireless-device"],

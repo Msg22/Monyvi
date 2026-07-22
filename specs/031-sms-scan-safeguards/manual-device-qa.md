@@ -38,7 +38,7 @@ before switching profiles.
 | Run every profile deterministically           | `npm run test:sms-safeguards`                                                  |
 | Run one profile deterministically             | `npm run test:sms-safeguards -- --scenario <profile-id>`                       |
 | Start a physical-device QA session            | `npm run mobile:dev:sms-safeguards:wireless-device -- --scenario <profile-id>` |
-| Reset one server-backed profile without Metro | `node apps/mobile/scripts/sms-safeguard-qa.js reset --scenario <profile-id>`   |
+| Reset one server-backed profile without Metro | `npm run mobile:dev:sms-safeguards:reset -- --scenario <profile-id>`           |
 | Inspect the profile list and policy source    | `packages/logic/src/sms-safeguards/safeguard-qa-scenarios.ts`                  |
 
 The device launcher automatically resets the selected profile before Metro

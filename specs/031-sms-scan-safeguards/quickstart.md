@@ -50,7 +50,7 @@ npm run mobile:dev:sms-safeguards:wireless-device -- --scenario partial-quota-v1
 Reset one server-backed scenario without starting Metro:
 
 ```powershell
-node apps/mobile/scripts/sms-safeguard-qa.js reset --scenario partial-quota-v1
+npm run mobile:dev:sms-safeguards:reset -- --scenario partial-quota-v1
 ```
 
 The reset is intentionally narrow: it clears only the selected scenario's QA
