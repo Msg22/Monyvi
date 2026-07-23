@@ -97,22 +97,42 @@ export function SmsScanProgress({
         >
           <ScanningState progress={progress} t={translate} />
         </ScrollView>
+      ) : status === "complete" &&
+        transactionsFound > 0 &&
+        qaDiagnostics !== null ? (
+        <ScrollView
+          testID="sms-scan-complete-scroll"
+          className="flex-1"
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="px-4 pb-6">
+            <SuccessState
+              transactionsFound={transactionsFound}
+              totalScanned={totalScanned}
+              durationMs={durationMs}
+              topCategories={topCategories}
+              categoryNameMap={categoryNameMap}
+              onReviewPress={onReviewPress}
+              onBackPress={onBackPress}
+              t={translate}
+              isScrollable
+            />
+            <SafeguardQaDiagnosticsPanel diagnostics={qaDiagnostics} />
+          </View>
+        </ScrollView>
       ) : (
         <View className="flex-1 px-4">
           {status === "complete" && transactionsFound > 0 && (
-            <>
-              <SuccessState
-                transactionsFound={transactionsFound}
-                totalScanned={totalScanned}
-                durationMs={durationMs}
-                topCategories={topCategories}
-                categoryNameMap={categoryNameMap}
-                onReviewPress={onReviewPress}
-                onBackPress={onBackPress}
-                t={translate}
-              />
-              <SafeguardQaDiagnosticsPanel diagnostics={qaDiagnostics} />
-            </>
+            <SuccessState
+              transactionsFound={transactionsFound}
+              totalScanned={totalScanned}
+              durationMs={durationMs}
+              topCategories={topCategories}
+              categoryNameMap={categoryNameMap}
+              onReviewPress={onReviewPress}
+              onBackPress={onBackPress}
+              t={translate}
+            />
           )}
 
           {status === "complete" &&

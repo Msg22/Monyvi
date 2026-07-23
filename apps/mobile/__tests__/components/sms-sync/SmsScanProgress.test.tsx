@@ -29,6 +29,7 @@ jest.mock("react-i18next", () => ({
 }));
 
 import { SmsScanProgress } from "@/components/sms-sync/SmsScanProgress";
+import type { SmsSafeguardQaDiagnosticsViewModel } from "@/services/sms-safeguard-qa-diagnostics-service";
 
 const completeSummary = {
   admittedAiCount: 0,
@@ -36,6 +37,32 @@ const completeSummary = {
   oversizedCount: 0,
   unresolvedCount: 0,
   completionStatus: "complete" as const,
+};
+
+const qaDiagnostics: SmsSafeguardQaDiagnosticsViewModel = {
+  profileId: "history-cooldown-v1",
+  profileVersion: 1,
+  purpose: "history_cooldown",
+  expectedBoundary: "history_cooldown",
+  expected: {
+    guidance: "history_cooldown",
+    mustNotHappen: "history_cooldown",
+  },
+  observedBoundary: null,
+  availability: null,
+  limits: {
+    maxCandidatesPerRequest: 2,
+    maxCandidatesPerScan: 8,
+    maxCandidatesPerRollingWindow: 24,
+    maxPayloadBytes: 4_096,
+    maxEstimatedInputTokens: 1_024,
+  },
+  currentScan: {
+    localResultCount: 1,
+    aiResultCount: 4,
+    deferredAiCount: 0,
+    oversizedCount: 0,
+  },
 };
 
 describe("SmsScanProgress", () => {
@@ -97,6 +124,29 @@ describe("SmsScanProgress", () => {
     );
 
     expect(getByText("Food & Drinks")).toBeTruthy();
+  });
+
+  it("renders QA diagnostics below completed results in independent scroll flow", () => {
+    const { getByTestId, getByText } = render(
+      <SmsScanProgress
+        status="complete"
+        progress={null}
+        transactionsFound={3}
+        totalScanned={20}
+        durationMs={3000}
+        topCategories={[]}
+        categoryNameMap={new Map<string, string>()}
+        safeguardSummary={completeSummary}
+        qaDiagnostics={qaDiagnostics}
+        error={null}
+        onReviewPress={jest.fn()}
+        onBackPress={jest.fn()}
+        onRetryPress={jest.fn()}
+      />
+    );
+
+    expect(getByTestId("sms-scan-complete-scroll")).toBeTruthy();
+    expect(getByText("qa_safeguard_panel_title")).toBeTruthy();
   });
 
   it("renders empty and error states from props", () => {
