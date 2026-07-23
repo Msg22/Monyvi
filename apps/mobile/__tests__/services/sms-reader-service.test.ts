@@ -209,6 +209,24 @@ describe("sms-reader-service", (): void => {
     ]);
   });
 
+  it("keeps safeguard fixture timestamps stable across scans in one QA run", async (): Promise<void> => {
+    const firstScanStartedAtMs = Date.UTC(2030, 0, 1, 12, 0, 0);
+    const secondScanStartedAtMs = firstScanStartedAtMs + 60_000;
+    enableSafeguardQaFixtureInbox("checkpoint-overlap-v1");
+    process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID =
+      "checkpoint-reader-anchor";
+
+    const firstScan = await readSmsInbox({ maxDate: firstScanStartedAtMs });
+    const secondScan = await readSmsInbox({ maxDate: secondScanStartedAtMs });
+
+    expect(secondScan.map((message) => message.id)).toEqual(
+      firstScan.map((message) => message.id)
+    );
+    expect(secondScan.map((message) => message.date)).toEqual(
+      firstScan.map((message) => message.date)
+    );
+  });
+
   it("keeps local parser fixture inbox timestamps stable for fingerprint dedup", async (): Promise<void> => {
     enableLocalParserFixtureSmsInbox();
     freezeFixtureInboxClock();

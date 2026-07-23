@@ -295,6 +295,11 @@ export const SAFEGUARD_QA_SCENARIOS: Readonly<
   }),
   "checkpoint-overlap-v1": createScenario("checkpoint-overlap-v1", {
     checkpointOverlapMs: 60_000,
+    fullParser: {
+      maxUnitsPerScan: 8,
+      maxUnitsPerRollingWindow: 8,
+      maxProviderStartsPerBurst: 4,
+    },
   }),
   "partial-quota-v1": createScenario("partial-quota-v1", {
     fullParser: {

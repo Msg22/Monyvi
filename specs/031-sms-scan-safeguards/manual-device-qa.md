@@ -89,8 +89,9 @@ Expected result: the command exits successfully with `status: "passed"`. On a
 device, run **Sync new SMS** and confirm two reviewable simulated suggestions
 are returned: the message immediately before the cutoff is excluded, while the
 messages exactly at and immediately after the active scan cutoff are included.
-The fixture preserves these relative offsets against the scan start so the local
-Edge Function accepts the same authenticated window.
+The fixture preserves these relative offsets against the first scan in this
+Metro QA run so the local Edge Function accepts the same authenticated window
+and later scans retain stable fingerprints.
 
 ### 2. `checkpoint-overlap-v1`
 
@@ -103,6 +104,12 @@ npm run test:sms-safeguards -- --scenario checkpoint-overlap-v1
 Expected result: `status: "passed"`. It proves that an ordinary incremental scan
 starts from the stored checkpoint overlap, still checks fingerprints, and does
 not treat a checkpoint as permission to ignore unknown messages.
+
+Device follow-up: start a fresh `checkpoint-overlap-v1` session, save two
+simulated-AI suggestions, leave one simulated-AI suggestion and the trusted
+local suggestion unselected, then scan again. Only the two saved suggestions
+must stay absent. Both unsaved suggestions must return, without a QA capacity
+warning.
 
 ### 3. `partial-quota-v1`
 

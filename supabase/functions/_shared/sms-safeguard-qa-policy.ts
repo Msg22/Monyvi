@@ -42,7 +42,14 @@ const BASE_QA_POLICY_OVERRIDE = {
 const PROFILE_OVERRIDES: Readonly<Record<string, QaPolicyOverride>> =
   Object.freeze({
     "cutoff-boundary-v1": { lookbackDays: 1 },
-    "checkpoint-overlap-v1": { checkpointOverlapMs: 60_000 },
+    "checkpoint-overlap-v1": {
+      checkpointOverlapMs: 60_000,
+      fullParser: {
+        maxUnitsPerScan: 8,
+        maxUnitsPerRollingWindow: 8,
+        maxProviderStartsPerBurst: 4,
+      },
+    },
     "partial-quota-v1": {
       fullParser: {
         maxUnitsPerRequest: 2,

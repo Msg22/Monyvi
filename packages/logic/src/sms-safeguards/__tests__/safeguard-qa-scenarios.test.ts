@@ -92,7 +92,14 @@ describe("deterministic SMS safeguard QA scenarios", () => {
     ).toMatchObject({ lookbackDays: 1 });
     expect(
       SAFEGUARD_QA_SCENARIOS["checkpoint-overlap-v1"].policyOverrides
-    ).toMatchObject({ checkpointOverlapMs: 60_000 });
+    ).toMatchObject({
+      checkpointOverlapMs: 60_000,
+      fullParser: {
+        maxUnitsPerScan: 8,
+        maxUnitsPerRollingWindow: 8,
+        maxProviderStartsPerBurst: 4,
+      },
+    });
     expect(
       SAFEGUARD_QA_SCENARIOS["partial-quota-v1"].policyOverrides
     ).toMatchObject({

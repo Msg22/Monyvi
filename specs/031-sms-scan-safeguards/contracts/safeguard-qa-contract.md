@@ -32,10 +32,12 @@ interface SmsSafeguardQaScenario {
 Each profile owns an isolated namespace. Reset removes only that namespace and
 must not delete unrelated development user data.
 
-The deterministic preflight runner uses `fixedNowMs`. Device-facing fixture
-inboxes instead use the active scan start as their anchor, while preserving the
-same profile-relative offsets. This keeps the exact cutoff scenarios compatible
-with the local Edge Function's authenticated scan-window validation.
+The deterministic preflight runner uses `fixedNowMs`. A device-facing fixture
+run captures its anchor at its first scan, then reuses those exact fixture
+timestamps for later scans in that Metro run. Each later scan still uses its
+current start for the authenticated Edge Function window. This preserves
+fingerprints for deduplication while keeping the first cutoff scan compatible
+with authenticated scan-window validation.
 
 ## Required Profiles
 

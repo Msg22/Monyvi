@@ -24,7 +24,10 @@ import {
   getAiSmsParserMode,
   shouldUseFixtureSmsInbox,
 } from "@/config/e2e-test-config";
-import { getSmsSafeguardQaConfig } from "@/config/sms-safeguard-qa-config";
+import {
+  getSmsSafeguardQaConfig,
+  getSmsSafeguardQaFixtureAnchorMs,
+} from "@/config/sms-safeguard-qa-config";
 import { getFixtureById } from "@/services/dev/sms-fixtures";
 import { logger } from "@/utils/logger";
 
@@ -269,8 +272,11 @@ function readSafeguardQaFixtureSmsInbox(
   const qaRuntime =
     require("./testing/sms-safeguard-qa-runner") as typeof import("./testing/sms-safeguard-qa-runner");
   /* eslint-enable @typescript-eslint/no-require-imports */
+  const fixtureAnchorMs = getSmsSafeguardQaFixtureAnchorMs(
+    options?.maxDate ?? Date.now()
+  );
   return filterFixtureMessages(
-    qaRuntime.createSafeguardQaInboxMessages(profileId, options?.maxDate),
+    qaRuntime.createSafeguardQaInboxMessages(profileId, fixtureAnchorMs),
     options
   );
 }

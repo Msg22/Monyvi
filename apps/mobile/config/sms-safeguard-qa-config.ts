@@ -38,6 +38,8 @@ const DISABLED_CONFIG: SmsSafeguardQaConfig = Object.freeze({
   namespacePrefix: "sms-safeguard-qa:",
 });
 
+const fixtureAnchorByRun = new Map<string, number>();
+
 export function isSmsSafeguardQaReleaseBuild(
   environment: SmsSafeguardQaEnvironment = process.env
 ): boolean {
@@ -87,6 +89,28 @@ export function getSmsSafeguardQaNowMs(
   // The device-facing fixture must share the current scan anchor accepted by
   // the local Edge Function. The deterministic preflight runner continues to
   // use the scenario's fixed clock independently.
+  return fallbackNowMs;
+}
+
+/**
+ * Fixture SMS timestamps must not change between scans in one QA run. Real
+ * fingerprint deduplication includes the received time, so regenerating them
+ * from each scan start would make already-saved fixture messages look new.
+ */
+export function getSmsSafeguardQaFixtureAnchorMs(
+  fallbackNowMs: number,
+  environment: SmsSafeguardQaEnvironment = process.env
+): number {
+  const config = getSmsSafeguardQaConfig(environment);
+  if (!config.enabled || config.profileId === null || config.runId === null) {
+    return fallbackNowMs;
+  }
+
+  const cacheKey = `${config.profileId}:${config.runId}`;
+  const existingAnchorMs = fixtureAnchorByRun.get(cacheKey);
+  if (existingAnchorMs !== undefined) return existingAnchorMs;
+
+  fixtureAnchorByRun.set(cacheKey, fallbackNowMs);
   return fallbackNowMs;
 }
 
