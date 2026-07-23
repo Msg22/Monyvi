@@ -151,6 +151,45 @@ describe("SMS parser orchestrator safeguards", () => {
     );
   });
 
+  it("preserves a stable retry request key in AI-primary mode", async () => {
+    process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE = "edge";
+    const unresolved = candidate();
+    mockParseSmsWithAi.mockResolvedValueOnce({
+      transactions: [],
+      hasError: false,
+    });
+
+    await parseSmsWithOrchestrator(
+      [unresolved],
+      context,
+      undefined,
+      undefined,
+      {
+        expectedUserId: "user-1",
+        requestContext: {
+          scanSessionId: "scan-session",
+          scanKind: "incremental",
+          scanStartedAtMs: 123,
+        },
+        requestKey: "stable-retry-key",
+      }
+    );
+
+    expect(mockParseSmsWithAi).toHaveBeenCalledWith(
+      [unresolved],
+      context,
+      undefined,
+      undefined,
+      "user-1",
+      {
+        scanSessionId: "scan-session",
+        scanKind: "incremental",
+        scanStartedAtMs: 123,
+      },
+      "stable-retry-key"
+    );
+  });
+
   it("allows an exact trusted local match to recover a terminal fingerprint", async () => {
     const trusted = trustedPurchaseCandidate();
 

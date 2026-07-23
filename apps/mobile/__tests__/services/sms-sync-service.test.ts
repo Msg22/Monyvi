@@ -201,6 +201,9 @@ const mockParseSmsWithOrchestrator = jest.fn<
   Promise<MockParserResult>,
   unknown[]
 >(() => Promise.resolve({ transactions: [] }));
+const mockInitializeSmsParserScanSession = jest.fn<Promise<void>, unknown[]>(
+  () => Promise.resolve()
+);
 const mockGetTrustedPrefilterDisposition = jest.fn<string, [unknown]>(
   () => "not_trusted_candidate"
 );
@@ -236,6 +239,8 @@ function mockWithParserDiagnostics(
 }
 
 jest.mock("@/services/sms-parser-orchestrator", () => ({
+  initializeSmsParserScanSession: (...args: unknown[]): Promise<void> =>
+    mockInitializeSmsParserScanSession(...args),
   parseSmsWithOrchestrator: async (
     ...args: unknown[]
   ): Promise<SmsParserOrchestratorResult> =>

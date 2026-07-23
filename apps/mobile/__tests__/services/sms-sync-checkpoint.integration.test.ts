@@ -76,6 +76,7 @@ const mockParseSmsWithOrchestrator = jest.fn<
   Promise<Partial<SmsParserOrchestratorResult>>,
   unknown[]
 >();
+const mockInitializeSmsParserScanSession = jest.fn<Promise<void>, unknown[]>();
 const mockGetTrustedPrefilterDisposition = jest.fn<string, [unknown]>();
 const mockAssertExpectedCurrentUser = jest.fn<Promise<void>, [string]>();
 
@@ -169,6 +170,8 @@ function mockWithParserDiagnostics(
 }
 
 jest.mock("@/services/sms-parser-orchestrator", () => ({
+  initializeSmsParserScanSession: (...args: unknown[]): Promise<void> =>
+    mockInitializeSmsParserScanSession(...args),
   parseSmsWithOrchestrator: async (
     ...args: unknown[]
   ): Promise<SmsParserOrchestratorResult> =>
@@ -259,6 +262,7 @@ describe("SMS sync checkpoint integration", () => {
       Promise.resolve(`hash-${input.sender}-${input.receivedAtMs}`)
     );
     mockParseSmsWithOrchestrator.mockResolvedValue({ transactions: [] });
+    mockInitializeSmsParserScanSession.mockResolvedValue(undefined);
     mockGetTrustedPrefilterDisposition.mockReturnValue("not_trusted_candidate");
     mockLoadSmsScanSafeguardState.mockImplementation(
       (input: { readonly savedFingerprints?: ReadonlySet<string> }) =>
@@ -288,6 +292,27 @@ describe("SMS sync checkpoint integration", () => {
       indexFrom: 0,
       sortOrder: "date DESC, _id DESC",
     });
+  });
+
+  it("binds the fixed server scan session before reading the inbox", async () => {
+    const scanStartedAtMs = Date.parse("2026-07-20T12:00:00.000Z");
+    jest.spyOn(Date, "now").mockReturnValue(scanStartedAtMs);
+
+    await scanAndParseSms(options());
+
+    expect(mockInitializeSmsParserScanSession).toHaveBeenCalledWith(
+      context,
+      {
+        scanSessionId: "scan-session-id",
+        scanKind: "initial",
+        scanStartedAtMs,
+      },
+      undefined,
+      "user-a"
+    );
+    expect(
+      mockInitializeSmsParserScanSession.mock.invocationCallOrder[0]
+    ).toBeLessThan(mockReadSmsInbox.mock.invocationCallOrder[0]);
   });
 
   it("pages through the complete bounded inbox window before checkpointing", async () => {

@@ -1,5 +1,6 @@
 import type { CategoryTreeSource } from "@monyvi/logic";
 import {
+  initializeSmsAiScanSession,
   parseSmsWithAi,
   type SmsCandidate,
 } from "@/services/ai-sms-parser-service";
@@ -152,6 +153,40 @@ describe("AI SMS client safeguards", () => {
     ]);
   });
 
+  it("initializes the scan session before any candidate work", async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        transactions: [],
+        completionStatus: "complete",
+        negativeFingerprints: [],
+        terminalFingerprints: [],
+        unresolvedFingerprints: [],
+      },
+      error: null,
+    });
+
+    await initializeSmsAiScanSession(
+      context,
+      {
+        scanSessionId: "scan-session",
+        scanKind: "incremental",
+        scanStartedAtMs: Date.parse("2026-07-20T12:00:00.000Z"),
+      },
+      undefined,
+      "user-a"
+    );
+
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "parse-sms",
+      expect.objectContaining({
+        body: expect.objectContaining({
+          scanSessionId: "scan-session",
+          messages: [],
+        }) as Record<string, unknown>,
+      })
+    );
+  });
+
   it("routes safeguard QA through the production client pipeline and local-only Edge transport", async () => {
     enableSafeguardQa("partial-quota-v1");
     const input = candidate("nbe_debit_purchase");
@@ -287,7 +322,11 @@ describe("AI SMS client safeguards", () => {
       data: null,
       error: {
         context: new Response(
-          JSON.stringify({ reason: "input_token_limit", availableAt: null }),
+          JSON.stringify({
+            reason: "input_token_limit",
+            availableAt: null,
+            sizeScope: "candidate",
+          }),
           { status: 413, headers: { "content-type": "application/json" } }
         ),
       },
@@ -300,6 +339,33 @@ describe("AI SMS client safeguards", () => {
     expect(result.isRetryable).toBe(false);
   });
 
+  it("keeps shared request-size failures unresolved instead of marking the SMS oversized", async () => {
+    const candidateWithValidSize = candidate("nbe_debit_purchase");
+    mockInvoke.mockResolvedValueOnce({
+      data: null,
+      error: {
+        context: new Response(
+          JSON.stringify({
+            reason: "input_token_limit",
+            availableAt: null,
+            sizeScope: "shared_request",
+          }),
+          { status: 413, headers: { "content-type": "application/json" } }
+        ),
+      },
+    });
+
+    const result = await parseSmsWithAi([candidateWithValidSize], context);
+
+    expect(result.oversizedCandidates).toEqual([]);
+    expect(result.unresolvedCandidates).toEqual([
+      expect.objectContaining({
+        candidate: candidateWithValidSize,
+        isRetryable: false,
+      }),
+    ]);
+  });
+
   it("bisects only an explicit pre-provider size refusal", async () => {
     jest.useFakeTimers();
     try {
@@ -309,7 +375,11 @@ describe("AI SMS client safeguards", () => {
         data: null,
         error: {
           context: new Response(
-            JSON.stringify({ reason: "input_token_limit", availableAt: null }),
+            JSON.stringify({
+              reason: "input_token_limit",
+              availableAt: null,
+              sizeScope: "batch",
+            }),
             { status: 413, headers: { "content-type": "application/json" } }
           ),
         },
@@ -317,7 +387,22 @@ describe("AI SMS client safeguards", () => {
       mockInvoke
         .mockResolvedValueOnce(sizeRefusal)
         .mockResolvedValueOnce({ data: { transactions: [] }, error: null })
-        .mockResolvedValueOnce(sizeRefusal);
+        .mockResolvedValueOnce({
+          data: null,
+          error: {
+            context: new Response(
+              JSON.stringify({
+                reason: "input_token_limit",
+                availableAt: null,
+                sizeScope: "candidate",
+              }),
+              {
+                status: 413,
+                headers: { "content-type": "application/json" },
+              }
+            ),
+          },
+        });
 
       const resultPromise = parseSmsWithAi(
         [acceptedCandidate, oversizedCandidate],
@@ -340,5 +425,45 @@ describe("AI SMS client safeguards", () => {
       jest.clearAllTimers();
       jest.useRealTimers();
     }
+  });
+
+  it("creates a fresh filtered retry request when a terminal outcome wins before provider start", async () => {
+    const terminalCandidate = candidate("nbe_debit_purchase");
+    const retryableCandidate = candidate("cib_credit_payment");
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        transactions: [],
+        completionStatus: "truncated",
+        negativeFingerprints: [],
+        terminalFingerprints: [terminalCandidate.smsFingerprint],
+        unresolvedFingerprints: [retryableCandidate.smsFingerprint],
+        retryRequestMode: "fresh",
+      },
+      error: null,
+    });
+
+    const result = await parseSmsWithAi(
+      [terminalCandidate, retryableCandidate],
+      context,
+      undefined,
+      undefined,
+      "user-a",
+      {
+        scanSessionId: "scan-session",
+        scanKind: "incremental",
+        scanStartedAtMs: 123,
+      },
+      "original-request-key"
+    );
+
+    expect(result.unresolvedCandidates).toHaveLength(1);
+    const [unresolvedCandidate] = result.unresolvedCandidates ?? [];
+    expect(unresolvedCandidate?.candidate).toBe(retryableCandidate);
+    expect(unresolvedCandidate?.retryRequest?.candidates).toEqual([
+      retryableCandidate,
+    ]);
+    expect(unresolvedCandidate?.retryRequest?.requestKey).not.toBe(
+      "original-request-key"
+    );
   });
 });

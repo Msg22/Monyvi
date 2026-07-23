@@ -45,6 +45,7 @@ const SmsSafeguardResponseSchema = z.object({
   negativeFingerprints: z.array(z.string().min(1)),
   terminalFingerprints: z.array(z.string().min(1)),
   unresolvedFingerprints: z.array(z.string().min(1)),
+  retryRequestMode: z.enum(["fresh"]).optional(),
 });
 
 const SmsSafeguardRefusalSchema = z.object({
@@ -58,6 +59,7 @@ const SmsSafeguardRefusalSchema = z.object({
     "input_token_limit",
   ]),
   availableAt: z.string().datetime({ offset: true }).nullable().optional(),
+  sizeScope: z.enum(["batch", "candidate", "shared_request"]).optional(),
 });
 
 export type AiSmsTransaction = z.infer<typeof AiSmsTransactionSchema>;
@@ -72,6 +74,7 @@ export interface ChunkAiResult {
   readonly durableNegativeFingerprints?: readonly string[];
   readonly terminalFingerprints?: readonly string[];
   readonly unresolvedFingerprints?: readonly string[];
+  readonly retryRequestMode?: "fresh";
   readonly oversizedFingerprints?: readonly string[];
   readonly shouldSplitForSize?: boolean;
   readonly availability?: SmsAiAvailability;
@@ -80,6 +83,7 @@ export interface ChunkAiResult {
 export interface SmsSafeguardRefusal {
   readonly reason: z.infer<typeof SmsSafeguardRefusalSchema>["reason"];
   readonly availableAt?: string | null;
+  readonly sizeScope?: "batch" | "candidate" | "shared_request";
 }
 
 export function parseSmsSafeguardRefusal(
@@ -177,6 +181,7 @@ export function parseAiResponse(
     durableNegativeFingerprints: metadata.durableNegativeFingerprints,
     terminalFingerprints: metadata.terminalFingerprints,
     unresolvedFingerprints: metadata.unresolvedFingerprints,
+    retryRequestMode: metadata.retryRequestMode,
   };
 }
 
@@ -190,6 +195,7 @@ interface SafeguardMetadata {
   readonly durableNegativeFingerprints: readonly string[];
   readonly terminalFingerprints: readonly string[];
   readonly unresolvedFingerprints: readonly string[];
+  readonly retryRequestMode?: "fresh";
   readonly isInvalid: boolean;
 }
 
@@ -226,6 +232,7 @@ function parseSafeguardMetadata(
     durableNegativeFingerprints: parsed.data.negativeFingerprints,
     terminalFingerprints: parsed.data.terminalFingerprints,
     unresolvedFingerprints: parsed.data.unresolvedFingerprints,
+    retryRequestMode: parsed.data.retryRequestMode,
     isInvalid: false,
   };
 }

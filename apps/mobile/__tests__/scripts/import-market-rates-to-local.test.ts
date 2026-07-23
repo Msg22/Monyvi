@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 interface ImportMarketRatesModule {
+  getLinkedMarketRatesQueryArgs(): readonly string[];
+  getSupabaseSpawnArgs(args: readonly string[]): readonly string[];
   parseImportMarketRatesArgs(argv?: readonly string[]): {
     readonly bestEffort: boolean;
   };
@@ -13,6 +15,27 @@ const marketRatesImporter = jest.requireActual(
 ) as ImportMarketRatesModule;
 
 describe("import-market-rates-to-local helpers", () => {
+  it("runs the local Supabase CLI shim without Windows shell argument parsing", () => {
+    expect(marketRatesImporter.getSupabaseSpawnArgs(["db", "query"])).toEqual([
+      process.execPath,
+      expect.stringMatching(/supabase[\\/]dist[\\/]supabase\.js$/),
+      "db",
+      "query",
+    ]);
+  });
+
+  it("passes the remote market-rate query directly to the CLI", () => {
+    expect(marketRatesImporter.getLinkedMarketRatesQueryArgs()).toEqual([
+      "db",
+      "query",
+      "--agent=no",
+      "--linked",
+      "-o",
+      "json",
+      "select * from public.market_rates order by created_at asc;",
+    ]);
+  });
+
   it("ignores temporary SQL files created during market-rate import", () => {
     const gitignore = readFileSync(
       resolve(__dirname, "../../../../.gitignore"),

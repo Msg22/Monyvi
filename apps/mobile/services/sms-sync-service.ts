@@ -37,6 +37,7 @@ import {
 } from "./ai-sms-parser-service";
 import {
   getTrustedPrefilterDisposition,
+  initializeSmsParserScanSession,
   parseSmsWithOrchestrator,
   toSmsParserDiagnosticsLogContext,
   type HybridSmsUnresolvedCandidate,
@@ -327,14 +328,27 @@ export async function scanAndParseSms(
 ): Promise<SmsScanResult> {
   const scanStartedAtMs = getSmsSafeguardQaNowMs(Date.now());
   const initiatingScope = await getCurrentUserDataScope();
+  const scanSessionId = Crypto.randomUUID();
+  const requestContext = {
+    scanSessionId,
+    scanKind: options.scanKind,
+    scanStartedAtMs,
+  } as const;
   // Guard against interrupted scans — clean up stale flags
   await AsyncStorage.setItem(SCAN_IN_PROGRESS_KEY, "true");
 
   try {
+    await initializeSmsParserScanSession(
+      options.aiContext,
+      requestContext,
+      options.abortSignal,
+      initiatingScope.userId
+    );
     return await executeScanPipeline(
       options,
       initiatingScope,
       scanStartedAtMs,
+      scanSessionId,
       onProgress
     );
   } finally {
@@ -366,6 +380,7 @@ async function executeScanPipeline(
   options: ScanOptions,
   initiatingScope: CurrentUserDataScope,
   scanStartedAtMs: number,
+  scanSessionId: string,
   onProgress?: (progress: SmsScanProgress) => void
 ): Promise<SmsScanResult> {
   const durationStartedAtMs = performance.now();
@@ -545,8 +560,6 @@ async function executeScanPipeline(
 
   // Track per-chunk durations for estimated time remaining calculation
   const chunkDurations: number[] = [];
-  const scanSessionId = Crypto.randomUUID();
-
   const aiResult = await parseSmsWithOrchestrator(
     candidates,
     options.aiContext,

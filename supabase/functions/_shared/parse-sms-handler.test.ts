@@ -449,6 +449,56 @@ test("enforces Monyvi payload and conservative token boundaries before reservati
   assert.equal(state.provider, 0);
 });
 
+test("identifies shared request overhead without blaming a single candidate", async () => {
+  const state = createState();
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      getPolicy: () => ({
+        ...DEFAULT_SMS_SAFEGUARD_POLICY,
+        fullParser: {
+          ...DEFAULT_SMS_SAFEGUARD_POLICY.fullParser,
+          maxPayloadBytes: 1,
+        },
+      }),
+    })
+  );
+
+  const response = await handler(post(requestBody()));
+  const data = await readJson(response);
+
+  assert.equal(response.status, 413);
+  assert.equal(data.reason, "payload_limit");
+  assert.equal(data.sizeScope, "shared_request");
+  assert.equal(state.reserve, 0);
+});
+
+test("identifies a single candidate that cannot fit in an otherwise valid request", async () => {
+  const state = createState();
+  const baselineBody = requestBody([]);
+  const baselineBytes = new TextEncoder().encode(
+    JSON.stringify(baselineBody)
+  ).length;
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      getPolicy: () => ({
+        ...DEFAULT_SMS_SAFEGUARD_POLICY,
+        fullParser: {
+          ...DEFAULT_SMS_SAFEGUARD_POLICY.fullParser,
+          maxPayloadBytes: baselineBytes,
+        },
+      }),
+    })
+  );
+
+  const response = await handler(post(requestBody()));
+  const data = await readJson(response);
+
+  assert.equal(response.status, 413);
+  assert.equal(data.reason, "payload_limit");
+  assert.equal(data.sizeScope, "candidate");
+  assert.equal(state.reserve, 0);
+});
+
 test("counts provider user-prompt framing before admitting a token-bound request", async () => {
   const providerPrompt = buildSmsProviderUserPromptAtEdge([
     message() as {
@@ -598,6 +648,30 @@ test("keeps non-terminal peers retryable when a terminal outcome wins the provid
   assert.equal(data.completionStatus, "truncated");
   assert.deepEqual(data.terminalFingerprints, ["fingerprint-1"]);
   assert.deepEqual(data.unresolvedFingerprints, ["fingerprint-2"]);
+  assert.equal(data.retryRequestMode, "fresh");
+});
+
+test("initializes a fixed scan session without reserving provider work", async () => {
+  const state = createState();
+  let resolvedScanSessionId: string | null = null;
+  const handler = createParseSmsHandler(
+    createDependencies(state, {
+      resolveScanWindowStart: async (input) => {
+        resolvedScanSessionId = input.scanSessionId;
+        return input.requestedScanStartedAtMs;
+      },
+    })
+  );
+
+  const response = await handler(post(requestBody([])));
+  const data = await readJson(response);
+
+  assert.equal(response.status, 200);
+  assert.equal(resolvedScanSessionId, "scan-session");
+  assert.equal(data.completionStatus, "complete");
+  assert.equal(state.terminal, 0);
+  assert.equal(state.reserve, 0);
+  assert.equal(state.provider, 0);
 });
 
 test("preserves provider-start cooldown availability in the refusal envelope", async () => {

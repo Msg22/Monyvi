@@ -159,7 +159,8 @@ function jsonResponse(data: unknown, status = 200): Response {
 function refusal(
   reason: string,
   status: number,
-  availableAt?: string | null
+  availableAt?: string | null,
+  metadata: Readonly<Record<string, unknown>> = {}
 ): Response {
   return jsonResponse(
     {
@@ -169,6 +170,7 @@ function refusal(
       negativeFingerprints: [],
       terminalFingerprints: [],
       unresolvedFingerprints: [],
+      ...metadata,
     },
     status
   );
@@ -284,6 +286,31 @@ function calculateRequestMetrics(
   return { payloadBytes, estimatedInputTokens: estimate.totalTokens };
 }
 
+function getSizeScope(
+  reason: "payload_limit" | "input_token_limit",
+  rawBody: unknown,
+  body: ParseSmsRequestBody,
+  policy: SmsSafeguardPolicy,
+  dependencies: ParseSmsHandlerDependencies
+): "batch" | "candidate" | "shared_request" {
+  if (body.messages.length > 1) return "batch";
+  const emptyBody = { ...body, messages: [] };
+  const emptyRawBody = isRecord(rawBody)
+    ? { ...rawBody, messages: [] }
+    : rawBody;
+  const emptyMetrics = calculateRequestMetrics(
+    emptyRawBody,
+    emptyBody,
+    dependencies
+  );
+  const sharedRequestExceedsLimit =
+    reason === "payload_limit"
+      ? emptyMetrics.payloadBytes > policy.fullParser.maxPayloadBytes
+      : emptyMetrics.estimatedInputTokens >
+        policy.fullParser.maxEstimatedInputTokens;
+  return sharedRequestExceedsLimit ? "shared_request" : "candidate";
+}
+
 async function hasValidCanonicalMessages(
   messages: readonly ParseSmsMessage[],
   lookbackDays: number,
@@ -340,6 +367,7 @@ function partialWithoutProvider(
     negativeFingerprints: [],
     terminalFingerprints,
     unresolvedFingerprints,
+    retryRequestMode: "fresh",
   });
 }
 
@@ -534,7 +562,7 @@ async function handlePost(
     return refusal("malformed_request", 400);
   }
   const body = parseRequestBody(rawBody);
-  if (body === null || body.messages.length === 0) {
+  if (body === null) {
     return refusal("malformed_request", 400);
   }
 
@@ -569,6 +597,9 @@ async function handlePost(
   if (acceptedScanStartedAtMs === null) {
     return refusal("malformed_request", 400);
   }
+  if (body.messages.length === 0) {
+    return completedWithoutProvider([]);
+  }
   if (
     !(await hasValidCanonicalMessages(
       body.messages,
@@ -585,12 +616,28 @@ async function handlePost(
 
   const metrics = calculateRequestMetrics(rawBody, body, dependencies);
   if (metrics.payloadBytes > policy.fullParser.maxPayloadBytes) {
-    return refusal("payload_limit", 413);
+    return refusal("payload_limit", 413, null, {
+      sizeScope: getSizeScope(
+        "payload_limit",
+        rawBody,
+        body,
+        policy,
+        dependencies
+      ),
+    });
   }
   if (
     metrics.estimatedInputTokens > policy.fullParser.maxEstimatedInputTokens
   ) {
-    return refusal("input_token_limit", 413);
+    return refusal("input_token_limit", 413, null, {
+      sizeScope: getSizeScope(
+        "input_token_limit",
+        rawBody,
+        body,
+        policy,
+        dependencies
+      ),
+    });
   }
 
   const locallyEligibleMessages = body.messages.filter(

@@ -389,7 +389,10 @@ export const SAFEGUARD_QA_SCENARIOS: Readonly<
     },
   }),
   "rolling-expiry-v1": createScenario("rolling-expiry-v1", {
-    fullParser: { rollingWindowMs: 120_000 },
+    fullParser: {
+      rollingWindowMs: 120_000,
+      maxProviderStartsPerBurst: 8,
+    },
   }),
   "shared-batch-live-v1": createScenario("shared-batch-live-v1", {
     fullParser: { maxUnitsPerRollingWindow: 3 },

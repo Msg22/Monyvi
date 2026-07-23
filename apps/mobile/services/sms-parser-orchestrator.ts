@@ -25,6 +25,7 @@ import { logger } from "@/utils/logger";
 import { USER_DATA_ACCESS_ERROR_CODES } from "./user-data-access-error-codes";
 import {
   createAiConsentRequiredError,
+  initializeSmsAiScanSession,
   isAiConsentRequiredError,
   parseSmsWithAi,
   type AiParseProgress,
@@ -832,7 +833,8 @@ export async function parseSmsWithOrchestrator(
       onProgress,
       abortSignal,
       options.expectedUserId,
-      options.requestContext
+      options.requestContext,
+      options.requestKey
     );
 
     const deferredCandidates = createScanLimitedCandidates(
@@ -927,4 +929,19 @@ export async function parseSmsWithOrchestrator(
       }),
     };
   }
+}
+
+export async function initializeSmsParserScanSession(
+  context: ParseSmsContext,
+  requestContext: SmsAiRequestContext,
+  abortSignal?: AbortSignal,
+  expectedUserId?: string
+): Promise<void> {
+  if (shouldUseLocalSmsParser() || shouldUseFixtureSmsParser()) return;
+  await initializeSmsAiScanSession(
+    context,
+    requestContext,
+    abortSignal,
+    expectedUserId
+  );
 }

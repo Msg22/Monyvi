@@ -329,9 +329,17 @@ async function invokeQaChunk(
         : response.error
           ? 500
           : 200;
+  let data = response.data ?? null;
+  if (data === null && errorContext instanceof Response) {
+    try {
+      data = await errorContext.clone().json();
+    } catch {
+      data = null;
+    }
+  }
   return {
     status,
-    data: response.data ?? null,
+    data,
     providerOutcome: providerOutcome ?? null,
   };
 }
@@ -370,14 +378,7 @@ async function waitForQaEdgeRuntime(client, profileId, runId) {
       client,
       profileId,
       runId,
-      [
-        {
-          id: "qa-readiness",
-          address: "QA",
-          body: "QA readiness probe",
-          date: Date.now(),
-        },
-      ],
+      [],
       "initial",
       `${runId}:readiness`
     );
@@ -484,8 +485,16 @@ function assertServerProfileResult(
   ) {
     throw new Error(`${profileId} did not exercise its server refusal.`);
   }
-  if (profileId === "oversized-candidate-v1" && providerStartedCount !== 0) {
-    throw new Error("Oversized work reached the simulated provider.");
+  if (profileId === "oversized-candidate-v1") {
+    const oversizedRefusal = responses.find(
+      ({ status, data }) =>
+        status === 413 &&
+        data?.sizeScope === "candidate" &&
+        ["payload_limit", "input_token_limit"].includes(data?.reason)
+    );
+    if (!oversizedRefusal || providerStartedCount !== acceptedCount) {
+      throw new Error("Oversized work reached the simulated provider.");
+    }
   }
   if (
     profileId === "response-validity-v1" &&
@@ -511,7 +520,16 @@ function assertServerProfileResult(
     throw new Error("A synchronized terminal outcome reached the provider.");
   }
   if (profileId === "rolling-expiry-v1" && acceptedCount < 2) {
-    throw new Error("Expired rolling usage did not restore capacity.");
+    throw new Error(
+      `Expired rolling usage did not restore capacity: ${JSON.stringify(
+        responses.map(({ status, data }) => ({
+          status,
+          reason: data?.reason ?? null,
+          error: data?.error ?? null,
+          availableAt: data?.availableAt ?? null,
+        }))
+      )}`
+    );
   }
   if (profileId === "account-switch-v1" && !accountSwitchProof) {
     throw new Error("Account-scoped safeguard state was not isolated.");
@@ -707,8 +725,9 @@ async function withQaConsentState(service, userId, profileId, execute) {
 async function executeServerProfile(profileId, environment, helpers, clients) {
   const { authenticated, service, userId, runtime } = clients;
   const policy = helpers.getSafeguardQaPolicy(profileId);
+  const scanStartedAtMs = Date.now();
   let messages = getUnresolvedQaMessages(
-    helpers.createSafeguardQaInboxMessages(profileId)
+    helpers.createSafeguardQaInboxMessages(profileId, scanStartedAtMs)
   );
   if (profileId === "terminal-fresh-install-v1") {
     messages = messages.slice(0, 1);
@@ -718,7 +737,6 @@ async function executeServerProfile(profileId, environment, helpers, clients) {
       ? createProviderOutcomeMessages(messages)
       : [];
   const runId = `${profileId}-${Date.now()}`;
-  const scanStartedAtMs = Date.now();
   await resetServerSafeguardState(
     service,
     userId,

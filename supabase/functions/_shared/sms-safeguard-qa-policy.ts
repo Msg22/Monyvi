@@ -57,7 +57,12 @@ const PROFILE_OVERRIDES: Readonly<Record<string, QaPolicyOverride>> =
         maxUnitsPerRollingWindow: 3,
       },
     },
-    "rolling-expiry-v1": { fullParser: { rollingWindowMs: 120_000 } },
+    "rolling-expiry-v1": {
+      fullParser: {
+        rollingWindowMs: 120_000,
+        maxProviderStartsPerBurst: 8,
+      },
+    },
     "shared-batch-live-v1": {
       fullParser: { maxUnitsPerRollingWindow: 3 },
     },

@@ -29,7 +29,6 @@ import {
   normalizeCurrency,
   normalizeType,
   parseCategory,
-  SAFEGUARD_QA_SCENARIOS,
   type CategoryMap,
   type CategoryTreeSource,
   type ParsedSmsTransaction,
@@ -44,6 +43,10 @@ import {
   type ChunkAiResult,
   type SmsSafeguardRefusal,
 } from "./ai-sms-parser-response";
+import {
+  resolveSmsParseTransport,
+  type SmsParseTransport,
+} from "./sms-parse-transport";
 
 // ---------------------------------------------------------------------------
 // Schemas — AI response validation
@@ -357,6 +360,15 @@ async function invokeParseChunk(
           shouldSplitForSize: true,
         };
       }
+      if (refusalMetadata.sizeScope !== "candidate") {
+        return {
+          transactions: [],
+          hasError: true,
+          isRetryable: false,
+          hasUncorrelatedFailure: true,
+          failureReason: "unexpected_failure",
+        };
+      }
       return {
         transactions: [],
         hasError: false,
@@ -429,14 +441,6 @@ interface MessagePayload {
   readonly sender: string;
   readonly date: string; // not neede to be send to the AI.
   readonly smsFingerprint: string;
-}
-
-interface SmsParseTransport {
-  readonly functionName: "parse-sms" | "sms-safeguard-qa";
-  readonly headers?: Readonly<Record<string, string>>;
-  readonly qaProfileId?: string;
-  readonly qaRunId?: string;
-  readonly chunkSize: number;
 }
 
 interface ChunkWork {
@@ -575,31 +579,7 @@ export async function parseSmsWithAi(
       );
     }
 
-    let transport: SmsParseTransport = {
-      functionName: "parse-sms",
-      chunkSize: CLIENT_CHUNK_SIZE,
-    };
-    if (safeguardQaConfig.enabled) {
-      if (
-        safeguardQaConfig.profileId === null ||
-        safeguardQaConfig.runId === null
-      ) {
-        throw new Error(
-          "SMS safeguard QA requires a selected profile and run identity."
-        );
-      }
-      transport = {
-        functionName: "sms-safeguard-qa",
-        headers: {
-          "x-sms-safeguard-qa-run-id": safeguardQaConfig.runId,
-        },
-        qaProfileId: safeguardQaConfig.profileId,
-        qaRunId: safeguardQaConfig.runId,
-        chunkSize:
-          SAFEGUARD_QA_SCENARIOS[safeguardQaConfig.profileId].policyOverrides
-            .fullParser.maxUnitsPerRequest,
-      };
-    }
+    const transport = resolveSmsParseTransport(CLIENT_CHUNK_SIZE);
 
     // Build validation set once for the entire parse session
     const validCategoryMap = buildCategoryMap(context.categories);
@@ -757,6 +737,19 @@ export async function parseSmsWithAi(
         return appendedCount;
       };
 
+      const metadataRetryRequest =
+        chunkResult.retryRequestMode === "fresh"
+          ? {
+              requestKey: Crypto.randomUUID(),
+              requestContext: resolvedRequestContext,
+              candidates: (chunkResult.unresolvedFingerprints ?? []).flatMap(
+                (fingerprint) => {
+                  const candidate = candidatesByFingerprint.get(fingerprint);
+                  return candidate ? [candidate] : [];
+                }
+              ),
+            }
+          : retryRequest;
       const metadataUnresolved = (
         chunkResult.unresolvedFingerprints ?? []
       ).flatMap((fingerprint) => {
@@ -767,7 +760,7 @@ export async function parseSmsWithAi(
                 candidate,
                 reason: "chunk_failed" as const,
                 isRetryable: true,
-                retryRequest,
+                retryRequest: metadataRetryRequest,
               },
             ]
           : [];
@@ -867,5 +860,26 @@ export async function parseSmsWithAi(
         isRetryable: true,
       })),
     };
+  }
+}
+
+export async function initializeSmsAiScanSession(
+  context: ParseSmsContext,
+  requestContext: SmsAiRequestContext,
+  abortSignal?: AbortSignal,
+  expectedUserId?: string
+): Promise<void> {
+  if (requestContext.scanSessionId === null) return;
+  const result = await invokeParseChunk(
+    [],
+    context,
+    requestContext,
+    Crypto.randomUUID(),
+    resolveSmsParseTransport(CLIENT_CHUNK_SIZE),
+    abortSignal,
+    expectedUserId
+  );
+  if (result.hasError) {
+    throw new Error("SMS scan session initialization failed");
   }
 }
