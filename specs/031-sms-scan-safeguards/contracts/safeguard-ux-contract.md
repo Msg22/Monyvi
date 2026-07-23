@@ -10,6 +10,7 @@ from the generated images:
 - `../mockups/sms-scan-settings-safeguards-light-dark.png`
 - `../mockups/sms-scan-scope-partial-results-light-dark.png`
 - `../mockups/sms-safeguard-qa-diagnostics-dark.png`
+- `../mockups/sms-safeguard-qa-diagnostics-expanded-dark.png`
 
 ## Scope
 
@@ -60,6 +61,12 @@ transaction-review information architecture and Monyvi light/dark tokens.
   safeguard QA profile using the fixture inbox and simulated provider.
 - It is collapsed by default and identifies the profile/version, purpose,
   aggregate result counts, active limits, and any reached boundary.
+- Expanded state explains what the selected profile tests, its expected
+  first-scan aggregate conditions where deterministic, a profile-specific
+  outcome that must not occur, and actual aggregate scan counts.
+- Expected conditions are QA-profile metadata, not a production feature flag or
+  an assertion that a repeated user action must reproduce first-scan counts.
+- The panel always reiterates that raw SMS details must never render there.
 - It never renders raw SMS content, sender data, fingerprints, template IDs,
   request keys, or user information.
 - Production and ordinary development SMS scans render no QA panel.

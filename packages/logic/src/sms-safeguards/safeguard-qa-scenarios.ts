@@ -80,6 +80,15 @@ const safeguardQaResetSchema = z
   })
   .strict();
 
+const safeguardQaExpectedFirstScanSchema = z
+  .object({
+    localResultCount: z.number().int().nonnegative(),
+    aiResultCount: z.number().int().nonnegative(),
+    deferredAiCount: z.number().int().nonnegative(),
+    oversizedCount: z.number().int().nonnegative(),
+  })
+  .strict();
+
 export const safeguardQaScenarioSchema = z
   .object({
     id: z.enum(REQUIRED_SAFEGUARD_QA_PROFILE_IDS),
@@ -91,6 +100,9 @@ export const safeguardQaScenarioSchema = z
       .object({
         purpose: z.string().min(1),
         expectedBoundary: z.string().min(1),
+        expectedGuidance: z.string().min(1),
+        mustNotHappen: z.string().min(1),
+        expectedFirstScan: safeguardQaExpectedFirstScanSchema.optional(),
       })
       .strict(),
     reset: safeguardQaResetSchema,
@@ -154,65 +166,133 @@ interface PolicyOverrideInput {
 const QA_SCENARIO_DIAGNOSTICS: Readonly<
   Record<
     SafeguardQaProfileId,
-    Readonly<{ purpose: string; expectedBoundary: string }>
+    Readonly<{
+      purpose: string;
+      expectedBoundary: string;
+      expectedGuidance: string;
+      mustNotHappen: string;
+      expectedFirstScan?: Readonly<{
+        localResultCount: number;
+        aiResultCount: number;
+        deferredAiCount: number;
+        oversizedCount: number;
+      }>;
+    }>
   >
 > = Object.freeze({
   "cutoff-boundary-v1": {
     purpose: "cutoff_boundary",
     expectedBoundary: "cutoff_boundary",
+    expectedGuidance: "cutoff_boundary",
+    mustNotHappen: "cutoff_boundary",
+    expectedFirstScan: {
+      localResultCount: 0,
+      aiResultCount: 2,
+      deferredAiCount: 0,
+      oversizedCount: 0,
+    },
   },
   "checkpoint-overlap-v1": {
     purpose: "checkpoint_overlap",
     expectedBoundary: "checkpoint_overlap",
+    expectedGuidance: "checkpoint_overlap",
+    mustNotHappen: "checkpoint_overlap",
+    expectedFirstScan: {
+      localResultCount: 1,
+      aiResultCount: 3,
+      deferredAiCount: 0,
+      oversizedCount: 0,
+    },
   },
   "partial-quota-v1": {
     purpose: "partial_quota",
     expectedBoundary: "scan_limit",
+    expectedGuidance: "partial_quota",
+    mustNotHappen: "partial_quota",
+    expectedFirstScan: {
+      localResultCount: 1,
+      aiResultCount: 2,
+      deferredAiCount: 2,
+      oversizedCount: 0,
+    },
   },
   "rolling-expiry-v1": {
     purpose: "rolling_expiry",
     expectedBoundary: "rolling_limit",
+    expectedGuidance: "rolling_expiry",
+    mustNotHappen: "rolling_expiry",
   },
   "shared-batch-live-v1": {
     purpose: "shared_batch_live",
     expectedBoundary: "rolling_limit",
+    expectedGuidance: "shared_batch_live",
+    mustNotHappen: "shared_batch_live",
   },
-  "burst-limit-v1": { purpose: "burst_limit", expectedBoundary: "burst_limit" },
+  "burst-limit-v1": {
+    purpose: "burst_limit",
+    expectedBoundary: "burst_limit",
+    expectedGuidance: "burst_limit",
+    mustNotHappen: "burst_limit",
+  },
   "history-cooldown-v1": {
     purpose: "history_cooldown",
     expectedBoundary: "history_cooldown",
+    expectedGuidance: "history_cooldown",
+    mustNotHappen: "history_cooldown",
   },
   "oversized-candidate-v1": {
     purpose: "oversized_candidate",
     expectedBoundary: "candidate_too_large",
+    expectedGuidance: "oversized_candidate",
+    mustNotHappen: "oversized_candidate",
+    expectedFirstScan: {
+      localResultCount: 1,
+      aiResultCount: 2,
+      deferredAiCount: 0,
+      oversizedCount: 1,
+    },
   },
   "response-validity-v1": {
     purpose: "response_validity",
     expectedBoundary: "response_validity",
+    expectedGuidance: "response_validity",
+    mustNotHappen: "response_validity",
   },
   "negative-three-strikes-v1": {
     purpose: "negative_three_strikes",
     expectedBoundary: "negative_three_strikes",
+    expectedGuidance: "negative_three_strikes",
+    mustNotHappen: "negative_three_strikes",
   },
   "terminal-fresh-install-v1": {
     purpose: "terminal_fresh_install",
     expectedBoundary: "terminal_outcome",
+    expectedGuidance: "terminal_fresh_install",
+    mustNotHappen: "terminal_fresh_install",
   },
   "trusted-local-recovery-v1": {
     purpose: "trusted_local_recovery",
     expectedBoundary: "trusted_local_recovery",
+    expectedGuidance: "trusted_local_recovery",
+    mustNotHappen: "trusted_local_recovery",
   },
   "account-switch-v1": {
     purpose: "account_switch",
     expectedBoundary: "account_switch",
+    expectedGuidance: "account_switch",
+    mustNotHappen: "account_switch",
   },
   "consent-required-v1": {
     purpose: "consent_required",
     expectedBoundary: "consent_required",
+    expectedGuidance: "consent_required",
+    mustNotHappen: "consent_required",
   },
   "prompt-token-baseline-v1": {
     purpose: "prompt_token_baseline",
     expectedBoundary: "input_token_baseline",
+    expectedGuidance: "prompt_token_baseline",
+    mustNotHappen: "prompt_token_baseline",
   },
 });
 

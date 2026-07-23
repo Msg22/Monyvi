@@ -9,8 +9,38 @@ interface SafeguardQaDiagnosticsPanelProps {
   readonly diagnostics: SmsSafeguardQaDiagnosticsViewModel | null;
 }
 
+interface ScanCountsProps {
+  readonly counts: SmsSafeguardQaDiagnosticsViewModel["currentScan"];
+  readonly t: (key: string, options?: Record<string, unknown>) => string;
+}
+
 function formatBytes(bytes: number): string {
   return `${Math.ceil(bytes / 1024)} KiB`;
+}
+
+function ScanCounts({ counts, t }: ScanCountsProps): React.JSX.Element {
+  return (
+    <View className="gap-1.5">
+      <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
+        {t("qa_safeguard_local_results", {
+          count: counts.localResultCount,
+        })}
+      </Text>
+      <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
+        {t("qa_safeguard_ai_results", { count: counts.aiResultCount })}
+      </Text>
+      <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
+        {t("qa_safeguard_deferred_results", {
+          count: counts.deferredAiCount,
+        })}
+      </Text>
+      <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
+        {t("qa_safeguard_oversized_results", {
+          count: counts.oversizedCount,
+        })}
+      </Text>
+    </View>
+  );
 }
 
 export function SafeguardQaDiagnosticsPanel({
@@ -48,38 +78,43 @@ export function SafeguardQaDiagnosticsPanel({
       {isExpanded && (
         <View className="mt-3 gap-2 border-t border-nileGreen-500/30 pt-3">
           <Text className="text-xs font-semibold text-text-primary dark:text-text-primary-dark">
-            {t(`qa_safeguard_purpose_${diagnostics.purpose}`)}
+            {t("qa_safeguard_tests_title")}
           </Text>
           <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
-            {t(
-              `qa_safeguard_boundary_${diagnostics.observedBoundary ?? diagnostics.expectedBoundary}`
-            )}
+            {t(`qa_safeguard_purpose_${diagnostics.purpose}`)}
           </Text>
           <Text className="pt-1 text-xs font-bold text-text-primary dark:text-text-primary-dark">
-            {t("qa_safeguard_scan_title")}
+            {t("qa_safeguard_expected_title")}
           </Text>
-          <View className="flex-row flex-wrap gap-x-3 gap-y-1">
-            <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
-              {t("qa_safeguard_local_results", {
-                count: diagnostics.currentScan.localResultCount,
-              })}
-            </Text>
-            <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
-              {t("qa_safeguard_ai_results", {
-                count: diagnostics.currentScan.aiResultCount,
-              })}
-            </Text>
-            <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
-              {t("qa_safeguard_deferred_results", {
-                count: diagnostics.currentScan.deferredAiCount,
-              })}
-            </Text>
-            <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
-              {t("qa_safeguard_oversized_results", {
-                count: diagnostics.currentScan.oversizedCount,
-              })}
-            </Text>
-          </View>
+          <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
+            {t(`qa_safeguard_expected_${diagnostics.expected.guidance}`)}
+          </Text>
+          {diagnostics.expected.firstScan !== undefined && (
+            <ScanCounts counts={diagnostics.expected.firstScan} t={t} />
+          )}
+          <Text className="pt-1 text-xs font-bold text-text-primary dark:text-text-primary-dark">
+            {t("qa_safeguard_must_not_title")}
+          </Text>
+          <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
+            {t(`qa_safeguard_must_not_${diagnostics.expected.mustNotHappen}`)}
+          </Text>
+          <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
+            {t("qa_safeguard_privacy_guardrail")}
+          </Text>
+          <Text className="pt-1 text-xs font-bold text-text-primary dark:text-text-primary-dark">
+            {t("qa_safeguard_observed_title")}
+          </Text>
+          <ScanCounts counts={diagnostics.currentScan} t={t} />
+          {diagnostics.observedBoundary !== undefined &&
+            diagnostics.observedBoundary !== null && (
+              <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
+                {t("qa_safeguard_observed_boundary", {
+                  boundary: t(
+                    `qa_safeguard_boundary_${diagnostics.observedBoundary}`
+                  ),
+                })}
+              </Text>
+            )}
           <Text className="pt-1 text-xs font-bold text-text-primary dark:text-text-primary-dark">
             {t("qa_safeguard_limits_title")}
           </Text>

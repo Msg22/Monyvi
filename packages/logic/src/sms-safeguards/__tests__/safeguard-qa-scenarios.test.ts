@@ -42,6 +42,12 @@ describe("deterministic SMS safeguard QA scenarios", () => {
       expect(
         typeof SAFEGUARD_QA_SCENARIOS[id].diagnostic.expectedBoundary
       ).toBe("string");
+      expect(
+        typeof SAFEGUARD_QA_SCENARIOS[id].diagnostic.expectedGuidance
+      ).toBe("string");
+      expect(typeof SAFEGUARD_QA_SCENARIOS[id].diagnostic.mustNotHappen).toBe(
+        "string"
+      );
     }
   });
 
@@ -87,6 +93,15 @@ describe("deterministic SMS safeguard QA scenarios", () => {
   });
 
   it("defines targeted overrides for each deterministic safeguard family", () => {
+    expect(
+      SAFEGUARD_QA_SCENARIOS["oversized-candidate-v1"].diagnostic
+        .expectedFirstScan
+    ).toEqual({
+      localResultCount: 1,
+      aiResultCount: 2,
+      deferredAiCount: 0,
+      oversizedCount: 1,
+    });
     expect(
       SAFEGUARD_QA_SCENARIOS["cutoff-boundary-v1"].policyOverrides
     ).toMatchObject({ lookbackDays: 1 });

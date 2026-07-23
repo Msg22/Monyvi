@@ -364,8 +364,9 @@ consumption.
    profile, **When** the scenario starts, **Then** its reduced limits, simulated
    outcomes, fixture-relative clock, and expected results are loaded
    independently of state left by any other profile. Device-facing fixtures MUST
-   anchor their relative timestamps to that scan's current start time so
-   authenticated Edge scan-window validation accepts the same boundary;
+   capture their relative timestamp anchor at the first scan in one explicit QA
+   run, retain it for later scans in that run so fingerprints remain stable, and
+   use each current scan start for authenticated Edge scan-window validation;
    deterministic preflight may retain a fixed clock.
 3. **Given** an unresolved fixture candidate reaches the full-parser stage,
    **When** the configured scenario requests a trusted success, low-confidence
@@ -492,12 +493,16 @@ appearing in an ordinary development or release build.
    panel, **Then** it declares its scenario purpose and expected limiting
    condition; automated coverage fails if a supported profile lacks that
    diagnostic metadata.
-6. **Given** QA diagnostics render, **When** their props, translations, logs, or
+6. **Given** a tester expands the panel, **When** profile-specific guidance is
+   shown, **Then** it states what the profile expects, any deterministic
+   first-scan aggregate counts, and one profile-specific outcome that must not
+   occur; later scans may differ after saved fingerprints are deduplicated.
+7. **Given** QA diagnostics render, **When** their props, translations, logs, or
    accessibility labels are inspected, **Then** they contain only profile
    metadata, policy boundaries, aggregate counts, stable reason codes, and
    availability instants; they MUST NOT contain SMS body, sender, fingerprint,
    merchant, financial value, provider prompt, or provider response content.
-7. **Given** a partial scan produces reviewable suggestions and deferred work,
+8. **Given** a partial scan produces reviewable suggestions and deferred work,
    **When** the tester opens the review route, **Then** the same aggregate QA
    state remains available there without changing the normal partial-results
    notice, review selection, save, or back-navigation behavior.
@@ -847,10 +852,12 @@ appearing in an ordinary development or release build.
   be absent when QA configuration is disabled, incomplete, contradictory, or
   release-bound, and it MUST not change scan, parser, review, or save behavior.
 - **FR-062**: The QA diagnostics panel MUST identify its profile and version;
-  show only the active scenario's purpose, effective policy boundaries,
-  aggregate current-scan outcomes, stable refusal reason, and earliest relevant
-  availability instant; and source those values from the same policy/result
-  contracts used by the runtime rather than duplicated UI constants.
+  show only active scenario metadata including purpose, expected conditions,
+  deterministic first-scan aggregate counts when defined, profile-specific
+  prohibited outcome, effective policy boundaries, aggregate current-scan
+  outcomes, stable refusal reason, and earliest relevant availability instant;
+  and source those values from the same policy/result contracts used by the
+  runtime rather than duplicated UI constants.
 - **FR-063**: Every named safeguard QA scenario MUST declare privacy-safe
   diagnostic metadata describing the expected limiting condition and verifier
   intent. A focused test MUST fail if a registered scenario has no such
@@ -999,9 +1006,10 @@ appearing in an ordinary development or release build.
   incremental request never permits the user to exceed rolling candidate or
   request-burst allowances.
 - **SC-030**: In 100% of named safeguard QA profile tests, the expanded
-  development-only panel reports the selected profile/version, declared scenario
-  purpose, active runtime boundaries, and actual aggregate scan outcomes without
-  exposing prohibited content or altering scan behavior.
+  development-only panel reports selected profile/version, declared scenario
+  purpose, expected conditions, profile-specific prohibited outcome, active
+  runtime boundaries, and actual aggregate scan outcomes without exposing
+  prohibited content or altering scan behavior.
 - **SC-031**: In 100% of production, release, disabled, and malformed-QA
   configuration tests, neither scan nor review UI renders safeguard QA
   diagnostics.

@@ -48,6 +48,16 @@ describe("createSmsSafeguardQaDiagnostics", () => {
       profileVersion: 1,
       purpose: "oversized_candidate",
       expectedBoundary: "candidate_too_large",
+      expected: {
+        guidance: "oversized_candidate",
+        mustNotHappen: "oversized_candidate",
+        firstScan: {
+          localResultCount: 1,
+          aiResultCount: 2,
+          deferredAiCount: 0,
+          oversizedCount: 1,
+        },
+      },
       currentScan: {
         localResultCount: 1,
         aiResultCount: 0,

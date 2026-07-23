@@ -13,6 +13,16 @@ export interface SmsSafeguardQaDiagnosticsViewModel {
   readonly profileVersion: number;
   readonly purpose: string;
   readonly expectedBoundary: string;
+  readonly expected: {
+    readonly guidance: string;
+    readonly mustNotHappen: string;
+    readonly firstScan?: {
+      readonly localResultCount: number;
+      readonly aiResultCount: number;
+      readonly deferredAiCount: number;
+      readonly oversizedCount: number;
+    };
+  };
   readonly observedBoundary?: string | null;
   readonly availability?: string | null;
   readonly limits: {
@@ -76,6 +86,11 @@ export function createSmsSafeguardQaDiagnostics(
     profileVersion: scenario.version,
     purpose: scenario.diagnostic.purpose,
     expectedBoundary: scenario.diagnostic.expectedBoundary,
+    expected: {
+      guidance: scenario.diagnostic.expectedGuidance,
+      mustNotHappen: scenario.diagnostic.mustNotHappen,
+      firstScan: scenario.diagnostic.expectedFirstScan,
+    },
     observedBoundary: resolveObservedBoundary(
       input.parserDiagnostics,
       input.safeguardSummary
