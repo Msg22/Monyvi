@@ -15,6 +15,7 @@ import {
   isAiConsentRequiredError,
   type ParseSmsContext,
 } from "@/services/ai-sms-parser-service";
+import { isEdgeFunctionAuthenticationError } from "@/services/authenticated-edge-function-service";
 import {
   scanAndParseSms,
   type SmsScanProgress,
@@ -121,6 +122,11 @@ export function useSmsScan(): UseSmsScanResult {
         if (isAiConsentRequiredError(err)) {
           setError(null);
           setStatus("consent_required");
+          return;
+        }
+
+        if (isEdgeFunctionAuthenticationError(err)) {
+          setStatus("idle");
           return;
         }
 

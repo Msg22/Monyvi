@@ -2,7 +2,7 @@ const { createClient } = require("@supabase/supabase-js");
 
 const {
   E2E_MARKET_RATE_ID,
-  SEED_TABLE_DELETE_ORDER,
+  RESET_TABLE_DELETE_ORDER,
   createLocalSupabaseJwt,
   getSeedConfig,
   resetFixtureData: resetFixtureDataWithFixture,
@@ -10,7 +10,7 @@ const {
 } = require("./seed-fixtures/seed-engine");
 const { E2E_SEED_FIXTURE } = require("./seed-fixtures/e2e-fixture");
 
-const E2E_TABLE_DELETE_ORDER = SEED_TABLE_DELETE_ORDER;
+const E2E_TABLE_DELETE_ORDER = RESET_TABLE_DELETE_ORDER;
 
 function getE2eSeedConfig(env = process.env, options = {}) {
   return getSeedConfig(env, options);

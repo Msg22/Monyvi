@@ -14,17 +14,24 @@ interface SeedConfig {
 }
 
 interface ManualQaSeedModule {
+  readonly ACCOUNT_SWITCH_QA_EMAIL: string;
+  readonly ACCOUNT_SWITCH_QA_PASSWORD: string;
   readonly getManualQaSeedConfig: (
     env?: Record<string, string | undefined>
   ) => SeedConfig;
   readonly seedManualQaData: (
     client: unknown,
-    config: SeedConfig
+    config: SeedConfig,
+    options?: { readonly includeAccountSwitchUser?: boolean }
   ) => Promise<unknown>;
 }
 
-const { getManualQaSeedConfig, seedManualQaData } =
-  jest.requireActual<ManualQaSeedModule>("../../scripts/manual-qa-seed");
+const {
+  ACCOUNT_SWITCH_QA_EMAIL,
+  ACCOUNT_SWITCH_QA_PASSWORD,
+  getManualQaSeedConfig,
+  seedManualQaData,
+} = jest.requireActual<ManualQaSeedModule>("../../scripts/manual-qa-seed");
 
 interface BudgetSeedRow {
   readonly name?: string;
@@ -177,6 +184,9 @@ describe("manual-qa-seed script helpers", () => {
         debtRows,
         marketRateRows,
         profileRows,
+        existingProfileIds: {
+          "user-manual-qa": "existing-profile-id",
+        },
         recurringPaymentRows,
         transactionRows,
         transferRows,
@@ -191,6 +201,7 @@ describe("manual-qa-seed script helpers", () => {
     );
 
     expect(operations).toContain("upsert:profiles:user-manual-qa");
+    expect(operations).not.toContain("delete:profiles:user_id:user-manual-qa");
     expect(accountRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: "Cash Wallet" }),
@@ -291,7 +302,10 @@ describe("manual-qa-seed script helpers", () => {
           getStringField(row, "linked_debt_id") !== undefined
       )
     ).toBe(true);
-    expect(profileRows[0]).toMatchObject({ display_name: "Monyvi Manual QA" });
+    expect(profileRows[0]).toMatchObject({
+      id: "existing-profile-id",
+      display_name: "Monyvi Manual QA",
+    });
     expect(transactionRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ counterparty: "Metro Market" }),
@@ -339,7 +353,50 @@ describe("manual-qa-seed script helpers", () => {
     );
     expect(marketRateRows).toHaveLength(0);
   });
+
+  it("seeds a persistent secondary user only for account-switch device QA", async () => {
+    const operations: string[] = [];
+    const createdAuthUsers: AuthUserSeedInput[] = [];
+
+    const result = (await seedManualQaData(
+      createMockClient(operations, { createdAuthUsers }),
+      {
+        ...getManualQaSeedConfig({
+          E2E_LOCAL_JWT_SECRET:
+            "super-secret-jwt-token-with-at-least-32-characters-long",
+          MANUAL_QA_PASSWORD: "PrimaryPassword123!",
+        }),
+        userId: "user-manual-qa",
+      },
+      { includeAccountSwitchUser: true }
+    )) as { readonly userId: string; readonly secondaryUserId?: string };
+
+    expect(ACCOUNT_SWITCH_QA_EMAIL).toBe("manual-qa-secondary@monyvi.test");
+    expect(ACCOUNT_SWITCH_QA_PASSWORD).toBe("123456");
+    expect(createdAuthUsers).toContainEqual({
+      email: ACCOUNT_SWITCH_QA_EMAIL,
+      password: ACCOUNT_SWITCH_QA_PASSWORD,
+      email_confirm: true,
+      user_metadata: {
+        full_name: "Monyvi Account Switch QA",
+      },
+    });
+    expect(result).toEqual({
+      userId: "user-manual-qa",
+      secondaryUserId: "user-manual-qa-secondary",
+    });
+  });
 });
+
+interface AuthUserSeedInput {
+  readonly email: string;
+  readonly password: string;
+  readonly email_confirm: boolean;
+  readonly user_metadata: {
+    readonly full_name: string;
+    readonly seed: string;
+  };
+}
 
 interface MockClientOptions {
   readonly accountBalanceUpdates?: AccountBalanceUpdate[];
@@ -353,6 +410,8 @@ interface MockClientOptions {
   readonly recurringPaymentRows?: unknown[];
   readonly transactionRows?: unknown[];
   readonly transferRows?: unknown[];
+  readonly createdAuthUsers?: AuthUserSeedInput[];
+  readonly existingProfileIds?: Readonly<Record<string, string>>;
 }
 
 function createMockClient(
@@ -370,16 +429,34 @@ function createMockClient(
             error: null,
           }),
         updateUserById: () => Promise.resolve({ error: null }),
-        createUser: () =>
-          Promise.resolve({
+        createUser: (input: AuthUserSeedInput) => {
+          options.createdAuthUsers?.push(input);
+          const isSecondary = input.email === ACCOUNT_SWITCH_QA_EMAIL;
+          return Promise.resolve({
             data: {
-              user: { id: "user-manual-qa", email: "manual-qa@monyvi.test" },
+              user: {
+                id: isSecondary ? "user-manual-qa-secondary" : "user-manual-qa",
+                email: input.email,
+              },
             },
             error: null,
-          }),
+          });
+        },
       },
     },
     from: (table: string) => ({
+      select: () => ({
+        eq: (_column: string, value: string) => ({
+          maybeSingle: () =>
+            Promise.resolve({
+              data:
+                table === "profiles" && options.existingProfileIds?.[value]
+                  ? { id: options.existingProfileIds[value] }
+                  : null,
+              error: null,
+            }),
+        }),
+      }),
       delete: () => ({
         eq: (column: string, value: string) => {
           operations.push(`delete:${table}:${column}:${value}`);

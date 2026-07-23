@@ -27,7 +27,8 @@ interface StartMobileLocalSupabaseModule {
   };
   buildManualQaSeedEnv(
     cliPassword: string | null,
-    baseEnv?: Readonly<Record<string, string | undefined>>
+    baseEnv?: Readonly<Record<string, string | undefined>>,
+    smsSafeguardProfile?: string | null
   ): Record<string, string | undefined>;
   buildLocalSupabaseExpoEnv(
     anonKey: string,
@@ -405,6 +406,20 @@ describe("start-mobile-local-supabase script helpers", () => {
     });
   });
 
+  it("seeds both account-switch users with the known device QA password", () => {
+    expect(
+      startMobileLocalSupabase.buildManualQaSeedEnv(
+        null,
+        {},
+        "account-switch-v1"
+      )
+    ).toMatchObject({
+      MANUAL_QA_PASSWORD: "123456",
+      MANUAL_QA_PRESERVE_PASSWORD: undefined,
+      SMS_SAFEGUARD_QA_PROFILE: "account-switch-v1",
+    });
+  });
+
   it("extracts the public HTTPS ngrok tunnel URL", () => {
     expect(
       startMobileLocalSupabase.resolveNgrokTunnelUrl(
@@ -516,6 +531,22 @@ describe("start-mobile-local-supabase script helpers", () => {
     expect(env.EXPO_PUBLIC_MONYVI_TEST_MODE).toBe("off");
     expect(env.EXPO_PUBLIC_AI_SMS_PARSER_MODE).toBe("edge");
     expect(env.EXPO_PUBLIC_SMS_INBOX_MODE).toBe("device");
+    expect(env.EXPO_PUBLIC_SUPABASE_AUTH_STORAGE_KEY).toBe(
+      "sb-monyvi-local-auth-token"
+    );
+  });
+
+  it("preserves an explicitly selected local auth storage key", () => {
+    const env = startMobileLocalSupabase.buildLocalSupabaseExpoEnv(
+      "local-anon-key",
+      {
+        EXPO_PUBLIC_SUPABASE_AUTH_STORAGE_KEY: "custom-local-auth-key",
+      }
+    );
+
+    expect(env.EXPO_PUBLIC_SUPABASE_AUTH_STORAGE_KEY).toBe(
+      "custom-local-auth-key"
+    );
   });
 
   it("can opt normal dev mode into local parser and fixture SMS inbox", () => {

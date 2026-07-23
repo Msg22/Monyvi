@@ -11,6 +11,10 @@ const http = require("node:http");
 const { existsSync } = require("node:fs");
 const { delimiter, join, resolve } = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
+const {
+  ACCOUNT_SWITCH_QA_PASSWORD,
+  ACCOUNT_SWITCH_QA_PROFILE,
+} = require("./manual-qa-seed");
 
 const LOCAL_ANDROID_SUPABASE_URL = "http://10.0.2.2:54321";
 const LOCAL_LOOPBACK_SUPABASE_URL = "http://127.0.0.1:54321";
@@ -18,6 +22,7 @@ const LOCAL_SUPABASE_PORT = "54321";
 const NGROK_API_URL = "http://127.0.0.1:4040/api/tunnels";
 const NGROK_START_TIMEOUT_MS = 30_000;
 const NGROK_POLL_INTERVAL_MS = 500;
+const LOCAL_SUPABASE_AUTH_STORAGE_KEY = "sb-monyvi-local-auth-token";
 const repoRoot = resolve(__dirname, "..", "..", "..");
 const mobileRoot = join(repoRoot, "apps", "mobile");
 const expoCliPath = join(repoRoot, "node_modules", "expo", "bin", "cli");
@@ -302,19 +307,30 @@ function reverseLocalSupabasePort() {
   }
 }
 
-function buildManualQaSeedEnv(cliPassword, baseEnv = process.env) {
-  const password = cliPassword ?? baseEnv.MANUAL_QA_PASSWORD;
+function buildManualQaSeedEnv(
+  cliPassword,
+  baseEnv = process.env,
+  smsSafeguardProfile = null
+) {
+  const isAccountSwitchProfile =
+    smsSafeguardProfile === ACCOUNT_SWITCH_QA_PROFILE;
+  const password =
+    cliPassword ??
+    baseEnv.MANUAL_QA_PASSWORD ??
+    (isAccountSwitchProfile ? ACCOUNT_SWITCH_QA_PASSWORD : null);
   if (password) {
     return {
       ...baseEnv,
       MANUAL_QA_PASSWORD: password,
       MANUAL_QA_PRESERVE_PASSWORD: undefined,
+      SMS_SAFEGUARD_QA_PROFILE: smsSafeguardProfile ?? undefined,
     };
   }
 
   return {
     ...baseEnv,
     MANUAL_QA_PRESERVE_PASSWORD: "1",
+    SMS_SAFEGUARD_QA_PROFILE: smsSafeguardProfile ?? undefined,
   };
 }
 
@@ -377,6 +393,9 @@ function buildLocalSupabaseExpoEnv(
       baseEnv.EXPO_PUBLIC_SUPABASE_URL ?? config.supabaseUrl,
     EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
       baseEnv.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? anonKey,
+    EXPO_PUBLIC_SUPABASE_AUTH_STORAGE_KEY:
+      baseEnv.EXPO_PUBLIC_SUPABASE_AUTH_STORAGE_KEY ??
+      LOCAL_SUPABASE_AUTH_STORAGE_KEY,
     EXPO_PUBLIC_MONYVI_TEST_MODE: "off",
     EXPO_PUBLIC_AI_SMS_PARSER_MODE: parserMode,
     EXPO_PUBLIC_SMS_INBOX_MODE: inboxMode,
@@ -665,7 +684,11 @@ async function startWirelessDeviceLocalSupabase(password, expoArgs, options) {
     "supabase:start:local",
   ]);
 
-  const seedEnv = buildManualQaSeedEnv(password);
+  const seedEnv = buildManualQaSeedEnv(
+    password,
+    process.env,
+    options.smsSafeguardProfile
+  );
   runRequiredCommand(
     "Seeding manual QA user",
     resolveNpmCommand(),

@@ -54,6 +54,10 @@ function isPushableRecord(
   return !isSharedSystemCategoryPushRecord(table, record);
 }
 
+function getUpsertConflictColumn(table: SyncableTable): "id" | "user_id" {
+  return table === "profiles" ? "user_id" : "id";
+}
+
 export async function pushChanges(
   database: Database,
   pushArgs: SyncPushArgs
@@ -123,17 +127,12 @@ export async function pushChanges(
             childConfig,
             isDeletedRecord(record) ? deleteParentIds : activeParentIds
           );
-          return transformToSupabase(
-            table,
-            record,
-            userId,
-            isChildTable
-          );
+          return transformToSupabase(table, record, userId, isChildTable);
         });
 
         const { error } = await getSupabaseWriteTable(table).upsert(
           transformedRecords,
-          { onConflict: "id" }
+          { onConflict: getUpsertConflictColumn(table) }
         );
         if (error) {
           throw createSyncTableError("upsert", table, error);

@@ -22,6 +22,8 @@ const mockInvoke = jest.fn<
   [name: string, options: MockFunctionOptions]
 >();
 const mockAssertExpectedCurrentUser = jest.fn<Promise<void>, [string]>();
+const mockRefreshSession = jest.fn();
+const mockSignOut = jest.fn();
 let mockGeneratedId = 0;
 const originalEnv = process.env;
 
@@ -35,7 +37,13 @@ jest.mock("@/config/e2e-test-config", () => ({
 }));
 
 jest.mock("@/services/supabase", () => ({
+  clearPersistedAuthSession: jest.fn(),
   supabase: {
+    auth: {
+      refreshSession: (...args: readonly unknown[]): unknown =>
+        mockRefreshSession(...args),
+      signOut: (...args: readonly unknown[]): unknown => mockSignOut(...args),
+    },
     functions: {
       invoke: (
         name: string,
@@ -100,6 +108,7 @@ describe("AI SMS client safeguards", () => {
     jest.clearAllMocks();
     mockGeneratedId = 0;
     mockAssertExpectedCurrentUser.mockResolvedValue(undefined);
+    mockSignOut.mockResolvedValue({ error: null });
     process.env = { ...originalEnv };
     delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA;
     delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER;
@@ -183,6 +192,54 @@ describe("AI SMS client safeguards", () => {
           scanSessionId: "scan-session",
           messages: [],
         }) as Record<string, unknown>,
+      })
+    );
+  });
+
+  it("revalidates user scope before retrying an authenticated 401", async () => {
+    enableSafeguardQa("negative-three-strikes-v1");
+    mockInvoke
+      .mockResolvedValueOnce({
+        data: null,
+        error: Object.assign(new Error("unauthenticated"), {
+          context: new Response(null, { status: 401 }),
+        }),
+      })
+      .mockResolvedValueOnce({
+        data: {
+          transactions: [],
+          completionStatus: "complete",
+          negativeFingerprints: [],
+          terminalFingerprints: [],
+          unresolvedFingerprints: [],
+        },
+        error: null,
+      });
+    mockRefreshSession.mockResolvedValue({
+      data: { session: { access_token: "refreshed-token" } },
+      error: null,
+    });
+
+    await initializeSmsAiScanSession(
+      context,
+      {
+        scanSessionId: "scan-session",
+        scanKind: "history",
+        scanStartedAtMs: Date.parse("2026-07-20T12:00:00.000Z"),
+      },
+      undefined,
+      "user-a"
+    );
+
+    expect(mockAssertExpectedCurrentUser).toHaveBeenCalledTimes(2);
+    expect(mockInvoke).toHaveBeenNthCalledWith(
+      2,
+      "sms-safeguard-qa",
+      expect.objectContaining({
+        headers: {
+          Authorization: "Bearer refreshed-token",
+          "x-sms-safeguard-qa-run-id": "unit-test-run",
+        },
       })
     );
   });

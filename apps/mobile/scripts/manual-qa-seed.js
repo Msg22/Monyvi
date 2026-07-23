@@ -9,6 +9,15 @@ const { MANUAL_QA_SEED_FIXTURE } = require("./seed-fixtures/manual-qa-fixture");
 
 const DEFAULT_MANUAL_QA_EMAIL = "manual-qa@monyvi.test";
 const DEFAULT_MANUAL_QA_PASSWORD = "123456";
+const ACCOUNT_SWITCH_QA_EMAIL = "manual-qa-secondary@monyvi.test";
+const ACCOUNT_SWITCH_QA_PASSWORD = DEFAULT_MANUAL_QA_PASSWORD;
+const ACCOUNT_SWITCH_QA_PROFILE = "account-switch-v1";
+const ACCOUNT_SWITCH_QA_SEED_FIXTURE = {
+  ...MANUAL_QA_SEED_FIXTURE,
+  seedScope: "manual-qa-account-switch",
+  userFullName: "Monyvi Account Switch QA",
+  authLabel: "manual QA account switch",
+};
 
 function getManualQaSeedConfig(env = process.env) {
   const password = env.MANUAL_QA_PASSWORD;
@@ -28,8 +37,31 @@ function getManualQaSeedConfig(env = process.env) {
   };
 }
 
-async function seedManualQaData(client, config) {
-  return seedFixtureData(client, config, MANUAL_QA_SEED_FIXTURE);
+async function seedManualQaData(client, config, options = {}) {
+  const primaryResult = await seedFixtureData(
+    client,
+    config,
+    MANUAL_QA_SEED_FIXTURE
+  );
+  if (!options.includeAccountSwitchUser) {
+    return primaryResult;
+  }
+
+  const secondaryResult = await seedFixtureData(
+    client,
+    {
+      ...config,
+      email: ACCOUNT_SWITCH_QA_EMAIL,
+      password: ACCOUNT_SWITCH_QA_PASSWORD,
+      preserveExistingPassword: false,
+      userId: undefined,
+    },
+    ACCOUNT_SWITCH_QA_SEED_FIXTURE
+  );
+  return {
+    ...primaryResult,
+    secondaryUserId: secondaryResult.userId,
+  };
 }
 
 async function resetManualQaData(client, config) {
@@ -55,10 +87,19 @@ async function main() {
     return;
   }
 
-  const result = await seedManualQaData(client, config);
+  const shouldSeedAccountSwitchUser =
+    process.env.SMS_SAFEGUARD_QA_PROFILE === ACCOUNT_SWITCH_QA_PROFILE;
+  const result = await seedManualQaData(client, config, {
+    includeAccountSwitchUser: shouldSeedAccountSwitchUser,
+  });
   console.log(
     `Seeded manual QA data for ${config.email} (${result.userId}) on local Supabase`
   );
+  if (result.secondaryUserId) {
+    console.log(
+      `Seeded account-switch QA user ${ACCOUNT_SWITCH_QA_EMAIL} (${result.secondaryUserId}) on local Supabase`
+    );
+  }
 }
 
 if (require.main === module) {
@@ -69,6 +110,9 @@ if (require.main === module) {
 }
 
 module.exports = {
+  ACCOUNT_SWITCH_QA_EMAIL,
+  ACCOUNT_SWITCH_QA_PASSWORD,
+  ACCOUNT_SWITCH_QA_PROFILE,
   DEFAULT_MANUAL_QA_EMAIL,
   DEFAULT_MANUAL_QA_PASSWORD,
   getManualQaSeedConfig,

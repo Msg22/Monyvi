@@ -613,6 +613,9 @@ describe("sms-parser-orchestrator", () => {
 
     expect(mockParseSmsWithAi).not.toHaveBeenCalled();
     expect(result.transactions).toEqual([]);
+    expect(result.durableLocalRejectionFingerprints).toEqual([
+      "fingerprint-otp",
+    ]);
     expect(result.diagnostics).toMatchObject({
       mode: "hybrid",
       localRejectedCount: 1,

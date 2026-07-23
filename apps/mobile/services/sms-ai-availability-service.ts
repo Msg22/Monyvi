@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { supabase } from "./supabase";
+import { invokeAuthenticatedEdgeFunction } from "./authenticated-edge-function-service";
 
 const SmsAiAvailabilityResponseSchema = z
   .object({
@@ -18,9 +18,12 @@ export interface SmsAiAvailabilitySnapshot {
 }
 
 export async function getSmsAiAvailability(): Promise<SmsAiAvailabilitySnapshot> {
-  const response = await supabase.functions.invoke("sms-ai-availability", {
-    method: "GET",
-  });
+  const response = await invokeAuthenticatedEdgeFunction<unknown>(
+    "sms-ai-availability",
+    {
+      method: "GET",
+    }
+  );
   if (response.error) {
     throw new Error("SMS AI availability request failed");
   }

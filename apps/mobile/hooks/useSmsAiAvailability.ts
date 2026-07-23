@@ -6,6 +6,7 @@ import {
   getSmsAiAvailability,
   type SmsAiAvailabilitySnapshot,
 } from "@/services/sms-ai-availability-service";
+import { isEdgeFunctionAuthenticationError } from "@/services/authenticated-edge-function-service";
 import { logger } from "@/utils/logger";
 
 interface UseSmsAiAvailabilityResult {
@@ -25,6 +26,7 @@ export function useSmsAiAvailability(
       const nextAvailability = await getSmsAiAvailability();
       if (isMountedRef.current) setAvailability(nextAvailability);
     } catch (error: unknown) {
+      if (isEdgeFunctionAuthenticationError(error)) return;
       logger.warn("smsAiAvailability.refreshFailed", {
         errorName: error instanceof Error ? error.name : "unknown",
       });

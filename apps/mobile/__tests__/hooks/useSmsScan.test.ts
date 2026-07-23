@@ -15,6 +15,12 @@ jest.mock("@/services/ai-sms-parser-service", () => ({
     error instanceof Error && error.name === "AiConsentRequiredError",
 }));
 
+jest.mock("@/services/authenticated-edge-function-service", () => ({
+  isEdgeFunctionAuthenticationError: (error: unknown): boolean =>
+    error instanceof Error &&
+    error.name === "EdgeFunctionAuthenticationRequiredError",
+}));
+
 jest.mock("@/utils/logger", () => ({
   logger: {
     debug: jest.fn(),
@@ -38,6 +44,12 @@ const smsScanOptions = {
 function createAiConsentRequiredError(): Error {
   const error = new Error("AI processing consent required");
   error.name = "AiConsentRequiredError";
+  return error;
+}
+
+function createEdgeFunctionAuthenticationError(): Error {
+  const error = new Error("Authenticated Edge Function session required");
+  error.name = "EdgeFunctionAuthenticationRequiredError";
   return error;
 }
 
@@ -84,6 +96,21 @@ describe("useSmsScan", () => {
 
     expect(mockLoggerError).not.toHaveBeenCalled();
     expect(result.current.status).toBe("consent_required");
+    expect(result.current.error).toBeNull();
+  });
+
+  it("lets the auth shell recover an invalid Edge session without a scan error", async () => {
+    mockScanAndParseSms.mockRejectedValueOnce(
+      createEdgeFunctionAuthenticationError()
+    );
+    const { result } = renderHook(() => useSmsScan());
+
+    await act(async () => {
+      await result.current.startScan(smsScanOptions);
+    });
+
+    expect(mockLoggerError).not.toHaveBeenCalled();
+    expect(result.current.status).toBe("idle");
     expect(result.current.error).toBeNull();
   });
 });

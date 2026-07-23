@@ -21,7 +21,12 @@ consumes a production allowance.
    exercise the SMS-native flow.
 5. Keep the phone and computer on the same network. Wireless mode starts an
    ngrok tunnel for local Supabase and uses Metro LAN access.
-6. Sign in with the local manual QA account when the app opens:
+6. Local wireless launchers use one stable local-only auth storage key even when
+   ngrok assigns a new URL. After first using a build with this behavior, sign
+   in once; later profile launches preserve that local session. If local auth
+   data was reset, the app returns to sign-in instead of continuing with an
+   invalid Edge Function session.
+7. Sign in with the local manual QA account when the app opens:
 
    ```text
    Email: manual-qa@monyvi.test
@@ -375,7 +380,7 @@ Only exact trusted template recovery is allowed.
 **Purpose:** proves safeguard state belongs to one authenticated user and never
 leaks through local rows, cache, or server allowance.
 
-**Best verification:** deterministic automated profile.
+**Automated verification:**
 
 ```powershell
 npm run test:sms-safeguards -- --scenario account-switch-v1
@@ -384,8 +389,37 @@ npm run test:sms-safeguards -- --scenario account-switch-v1
 Expected: `status: "passed"`. Second user starts with independent state; cleanup
 removes test user after verification.
 
+**Physical-device verification:**
+
+```powershell
+npm run mobile:dev:sms-safeguards:wireless-device -- --scenario account-switch-v1
+```
+
+This profile seeds two persistent local-only users:
+
+| User      | Email                             | Password |
+| --------- | --------------------------------- | -------- |
+| Primary   | `manual-qa@monyvi.test`           | `123456` |
+| Secondary | `manual-qa-secondary@monyvi.test` | `123456` |
+
+1. Sign in as the primary user.
+2. Run SMS Scan and open Review Transactions. Record suggestion count and any
+   QA-only allowance/checkpoint diagnostics.
+3. Leave at least one suggestion unsaved so user-local review state exists.
+4. Sign out from Settings.
+5. Sign in as the secondary user.
+6. Open SMS Scan. Confirm primary user's unsaved suggestions, checkpoint,
+   negative outcomes, and consumed allowance do not appear or restrict this
+   user.
+7. Run a scan as the secondary user and record its diagnostics.
+8. Sign out, then sign back in as the primary user.
+9. Confirm primary user's own state remains intact and secondary user's state
+   does not appear.
+
 Edge cases: no checkpoint, negative outcome, allowance, review suggestion, or
-profile marker from first user may influence second user.
+profile marker from first user may influence second user. Re-running the launch
+command must update seeded data without replacing either remote profile ID or
+causing a `profiles_user_id_key` sync conflict.
 
 ### 14. `consent-required-v1`
 

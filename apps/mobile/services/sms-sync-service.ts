@@ -631,6 +631,9 @@ async function executeScanPipeline(
     ...(aiResult.durableNegativeFingerprints ?? []),
     ...(aiResult.terminalFingerprints ?? []),
   ]);
+  const durableLocalRejectionFingerprints = new Set(
+    aiResult.durableLocalRejectionFingerprints ?? []
+  );
   const oversizedFingerprints = new Set(
     (aiResult.oversizedCandidates ?? []).map(
       (candidate) => candidate.smsFingerprint
@@ -654,11 +657,13 @@ async function executeScanPipeline(
         state.outcome ??
         (transactionFingerprints.has(state.fingerprint)
           ? "memory_suggestion"
-          : oversizedFingerprints.has(state.fingerprint)
-            ? "candidate_too_large"
-            : durableNegativeFingerprints.has(state.fingerprint)
-              ? "ai_negative"
-              : "unresolved"),
+          : durableLocalRejectionFingerprints.has(state.fingerprint)
+            ? "local_excluded"
+            : oversizedFingerprints.has(state.fingerprint)
+              ? "candidate_too_large"
+              : durableNegativeFingerprints.has(state.fingerprint)
+                ? "ai_negative"
+                : "unresolved"),
     }));
 
   await assertPinnedScanContext(initiatingScope.userId, abortSignal);

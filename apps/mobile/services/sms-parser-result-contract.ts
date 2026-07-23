@@ -63,6 +63,7 @@ export interface SmsParserOrchestratorResult extends Omit<
   "unresolvedCandidates"
 > {
   readonly diagnostics: SmsParserDiagnostics;
+  readonly durableLocalRejectionFingerprints?: readonly string[];
   readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
   readonly safeguardSummary: SmsScanSafeguardSummary;
   readonly isConsentRequired?: boolean;

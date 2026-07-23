@@ -11,7 +11,6 @@
  */
 
 import * as Crypto from "expo-crypto";
-import { supabase } from "./supabase";
 import { logger } from "@/utils/logger";
 import {
   shouldBlockUnsafeSmsParserConfiguration,
@@ -21,6 +20,10 @@ import { getSmsSafeguardQaConfig } from "@/config/sms-safeguard-qa-config";
 import { assertNotAborted, createAbortError } from "./abort-utils";
 import { assertExpectedCurrentUser } from "./user-data-access";
 import { USER_DATA_ACCESS_ERROR_CODES } from "./user-data-access-error-codes";
+import {
+  invokeAuthenticatedEdgeFunction,
+  isEdgeFunctionAuthenticationError,
+} from "./authenticated-edge-function-service";
 
 import {
   buildCategoryMap,
@@ -157,6 +160,7 @@ function isParserControlFlowError(error: unknown): boolean {
   return (
     (error instanceof Error && error.name === "AbortError") ||
     isAiConsentRequiredError(error) ||
+    isEdgeFunctionAuthenticationError(error) ||
     (error instanceof Error &&
       error.message === USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED)
   );
@@ -301,27 +305,35 @@ async function invokeParseChunk(
     await assertExpectedCurrentUser(expectedUserId);
     throwIfAborted(abortSignal);
   }
-  const response = await supabase.functions.invoke(transport.functionName, {
-    body: {
-      requestKey,
-      scanSessionId: requestContext.scanSessionId,
-      scanKind: requestContext.scanKind,
-      scanStartedAt: new Date(
-        requestContext.scanStartedAtMs ?? Date.now()
-      ).toISOString(),
-      messages: messagesPayload,
-      categories: buildCategoryTree(context.categories),
-      supportedCurrencies: context.supportedCurrencies,
-      ...(transport.qaProfileId === undefined
-        ? {}
-        : {
-            qaProfileId: transport.qaProfileId,
-            qaRunId: transport.qaRunId,
-          }),
+  const response = await invokeAuthenticatedEdgeFunction<unknown>(
+    transport.functionName,
+    {
+      body: {
+        requestKey,
+        scanSessionId: requestContext.scanSessionId,
+        scanKind: requestContext.scanKind,
+        scanStartedAt: new Date(
+          requestContext.scanStartedAtMs ?? Date.now()
+        ).toISOString(),
+        messages: messagesPayload,
+        categories: buildCategoryTree(context.categories),
+        supportedCurrencies: context.supportedCurrencies,
+        ...(transport.qaProfileId === undefined
+          ? {}
+          : {
+              qaProfileId: transport.qaProfileId,
+              qaRunId: transport.qaRunId,
+            }),
+      },
+      headers: transport.headers,
+      signal: abortSignal,
     },
-    headers: transport.headers,
-    signal: abortSignal,
-  });
+    expectedUserId === undefined
+      ? undefined
+      : {
+          beforeRetry: () => assertExpectedCurrentUser(expectedUserId),
+        }
+  );
 
   if (response.error) {
     // supabase-js wraps non-2xx responses in FunctionsHttpError with a

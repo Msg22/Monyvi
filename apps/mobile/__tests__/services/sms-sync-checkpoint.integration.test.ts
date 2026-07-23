@@ -541,6 +541,25 @@ describe("SMS sync checkpoint integration", () => {
     }
   );
 
+  it("checkpoints an exact trusted local rejection as locally excluded", async () => {
+    mockReadSmsInbox.mockResolvedValue([createSmsMessage()]);
+    mockComputeSmsFingerprint.mockResolvedValue("fp-local-rejection");
+    mockParseSmsWithOrchestrator.mockResolvedValue({
+      transactions: [],
+      durableLocalRejectionFingerprints: ["fp-local-rejection"],
+    });
+
+    await scanAndParseSms(options());
+
+    const finalizeInput = mockFinalizeSmsScanCheckpoint.mock.calls[0]?.[0];
+    expect(finalizeInput?.states).toEqual([
+      expect.objectContaining({
+        fingerprint: "fp-local-rejection",
+        outcome: "local_excluded",
+      }),
+    ]);
+  });
+
   it("persists and checkpoints an oversized candidate without raw content", async () => {
     const scanStartedAtMs = Date.parse("2026-07-20T12:00:00.000Z");
     jest.spyOn(Date, "now").mockReturnValue(scanStartedAtMs);

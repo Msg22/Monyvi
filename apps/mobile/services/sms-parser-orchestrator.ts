@@ -557,6 +557,9 @@ async function parseHybrid(
     localResult.outcomes,
     candidatesById
   );
+  const durableLocalRejectionFingerprints = localResult.outcomes.flatMap(
+    (outcome) => (outcome.status === "rejected" ? [outcome.smsFingerprint] : [])
+  );
   const categoryCandidates = trustedMatches.flatMap(({ transaction }) => {
     const categoryCandidate = toCategoryCandidate(transaction);
     return categoryCandidate ? [categoryCandidate] : [];
@@ -653,6 +656,7 @@ async function parseHybrid(
       (deferredCandidates.length > 0 ? false : undefined),
     isConsentRequired: isCategoryConsentRequired || undefined,
     unresolvedCandidates,
+    durableLocalRejectionFingerprints,
     durableNegativeFingerprints: aiResult.durableNegativeFingerprints,
     oversizedCandidates: aiResult.oversizedCandidates,
     availability,

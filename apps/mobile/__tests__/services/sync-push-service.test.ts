@@ -6,6 +6,7 @@ jest.mock("@monyvi/db", () => ({
   schema: {
     tables: {
       categories: {},
+      profiles: {},
     },
   },
 }));
@@ -61,11 +62,39 @@ describe("pushChanges", () => {
       lastPulledAt: 0,
     };
 
-    await expect(
-      pushChanges(database, pushArgs)
-    ).resolves.toBeUndefined();
+    await expect(pushChanges(database, pushArgs)).resolves.toBeUndefined();
 
     expect(mockFrom).not.toHaveBeenCalledWith("categories");
     expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it("upserts profiles by their unique user identity", async () => {
+    const database = Object.create(null) as PushChangesDatabase;
+    const profile = {
+      id: "local-profile-id",
+      user_id: "current-user",
+      display_name: "Manual QA",
+      deleted: false,
+    };
+    const pushArgs: PushChangesArgs = {
+      changes: {
+        profiles: {
+          created: [profile],
+          updated: [],
+          deleted: [],
+        },
+      },
+      lastPulledAt: 0,
+    };
+
+    await expect(pushChanges(database, pushArgs)).resolves.toBeUndefined();
+
+    expect(mockFrom).toHaveBeenCalledWith("profiles");
+    expect(mockUpsert).toHaveBeenCalledWith(
+      [expect.objectContaining(profile)],
+      {
+        onConflict: "user_id",
+      }
+    );
   });
 });
