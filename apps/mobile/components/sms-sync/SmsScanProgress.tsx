@@ -42,6 +42,7 @@ interface SmsScanProgressProps {
   /** System category name to display label mapping */
   readonly categoryNameMap: ReadonlyMap<string, string>;
   readonly safeguardSummary: SmsScanSafeguardSummary;
+  readonly retryableCount?: number;
   readonly qaDiagnostics?: SmsSafeguardQaDiagnosticsViewModel | null;
   /** Error message if scan failed */
   readonly error: string | null;
@@ -62,6 +63,7 @@ export function SmsScanProgress({
   topCategories,
   categoryNameMap,
   safeguardSummary,
+  retryableCount = 0,
   qaDiagnostics = null,
   error,
   onReviewPress,
@@ -151,11 +153,11 @@ export function SmsScanProgress({
               <View className="flex-1 justify-center pb-6">
                 <PartialSmsResultsNotice
                   safeguardSummary={safeguardSummary}
-                  retryableCount={0}
-                  canRetry={false}
+                  retryableCount={retryableCount}
+                  canRetry={retryableCount > 0}
                   isRetrying={false}
                   hasRetryError={false}
-                  onRetry={onRetryPress}
+                  onRetry={onReviewPress}
                 />
                 <TouchableOpacity
                   onPress={onBackPress}

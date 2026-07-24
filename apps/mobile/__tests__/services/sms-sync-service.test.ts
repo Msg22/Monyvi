@@ -518,32 +518,35 @@ describe("sms-sync-service", () => {
       );
     });
 
-    it("does not report an empty successful scan when every parser candidate failed retryably", async () => {
+    it("preserves retryable incomplete results as a partial scan", async () => {
       const sms = createSmsMessage({ id: "sms-retryable-failure" });
+      const unresolvedCandidate = {
+        candidate: { message: sms, smsFingerprint: "retryable-fp" },
+        reason: "chunk_failed" as const,
+        isRetryable: true,
+      };
       mockReadSmsInbox.mockResolvedValue([sms]);
       mockParseSmsWithOrchestrator.mockResolvedValue({
         transactions: [],
         hasError: true,
         isRetryable: true,
-        unresolvedCandidates: [
-          {
-            candidate: { message: sms, smsFingerprint: "retryable-fp" },
-            reason: "chunk_failed",
-            isRetryable: true,
-          },
-        ],
+        unresolvedCandidates: [unresolvedCandidate],
       });
 
       const onProgress = jest.fn<void, [SmsScanProgress]>();
-      await expect(
-        scanAndParseSms(defaultOptions(), onProgress)
-      ).rejects.toThrow("SMS AI parsing failed");
+      const result = await scanAndParseSms(defaultOptions(), onProgress);
 
+      expect(result.transactions).toEqual([]);
+      expect(result.unresolvedCandidates).toEqual([unresolvedCandidate]);
+      expect(result.safeguardSummary).toMatchObject({
+        unresolvedCount: 1,
+        completionStatus: "partial",
+      });
       expect(
         onProgress.mock.calls.some(
           ([progress]) => progress.currentPhase === "complete"
         )
-      ).toBe(false);
+      ).toBe(true);
     });
 
     it("preserves successful transactions from a mixed non-retryable parser result", async () => {

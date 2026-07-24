@@ -384,4 +384,26 @@ describe("SmsScanScreen AI consent", () => {
 
     expect(mockResetScan).not.toHaveBeenCalled();
   });
+
+  it("opens review for a partial scan that has only retryable candidates", () => {
+    mockIsAiConsented = true;
+    mockScanStatus = "complete";
+    mockScanTransactions = [];
+    mockScanResult = {
+      transactions: [],
+      unresolvedCandidates: [
+        {
+          candidate: { message: { body: "private" } },
+          isRetryable: true,
+        },
+      ],
+      parseContext: { categories: [], supportedCurrencies: ["EGP"] },
+    };
+
+    render(<SmsScanScreen />);
+    fireEvent.press(screen.getByTestId("sms-scan-review"));
+
+    expect(mockSetReviewSession).toHaveBeenCalledWith(mockScanResult);
+    expect(mockRouterPush).toHaveBeenCalledWith("/sms-review");
+  });
 });

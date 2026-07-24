@@ -152,6 +152,7 @@ function isExpectedSafeguardPartialResult(
     return false;
   }
   return (
+    summary.unresolvedCount > 0 ||
     summary.deferredAiCount > 0 ||
     summary.oversizedCount > 0 ||
     summary.availability !== undefined

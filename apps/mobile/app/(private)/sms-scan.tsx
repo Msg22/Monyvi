@@ -382,8 +382,12 @@ export default function SmsScanScreen(): React.JSX.Element {
     }
   }, [isPermissionLoading, permissionStatus]);
 
+  const retryableCandidateCount =
+    result?.unresolvedCandidates.filter((candidate) => candidate.isRetryable)
+      .length ?? 0;
+
   const handleReviewPress = (): void => {
-    if (transactions.length > 0 && result) {
+    if (result && (transactions.length > 0 || retryableCandidateCount > 0)) {
       setReviewSession(result);
       router.push("/sms-review");
     }
@@ -591,6 +595,7 @@ export default function SmsScanScreen(): React.JSX.Element {
               completionStatus: "complete",
             }
           }
+          retryableCount={retryableCandidateCount}
           qaDiagnostics={qaDiagnostics}
           error={error}
           onReviewPress={handleReviewPress}

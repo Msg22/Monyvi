@@ -25,7 +25,6 @@ import { logger } from "@/utils/logger";
 import { USER_DATA_ACCESS_ERROR_CODES } from "./user-data-access-error-codes";
 import {
   createAiConsentRequiredError,
-  initializeSmsAiScanSession,
   isAiConsentRequiredError,
   parseSmsWithAi,
   type AiParseProgress,
@@ -69,6 +68,7 @@ export {
   type SmsParserOrchestratorResult,
   type SmsScanSafeguardSummary,
 } from "./sms-parser-result-contract";
+export { initializeSmsParserScanSession } from "./sms-parser-scan-session-service";
 
 export type TrustedPrefilterDisposition =
   | "not_trusted_candidate"
@@ -933,19 +933,4 @@ export async function parseSmsWithOrchestrator(
       }),
     };
   }
-}
-
-export async function initializeSmsParserScanSession(
-  context: ParseSmsContext,
-  requestContext: SmsAiRequestContext,
-  abortSignal?: AbortSignal,
-  expectedUserId?: string
-): Promise<void> {
-  if (shouldUseLocalSmsParser() || shouldUseFixtureSmsParser()) return;
-  await initializeSmsAiScanSession(
-    context,
-    requestContext,
-    abortSignal,
-    expectedUserId
-  );
 }

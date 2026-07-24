@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
 import React from "react";
 
 jest.mock("@/hooks/useCategories", () => ({
@@ -147,6 +147,35 @@ describe("SmsScanProgress", () => {
 
     expect(getByTestId("sms-scan-complete-scroll")).toBeTruthy();
     expect(getByText("qa_safeguard_panel_title")).toBeTruthy();
+  });
+
+  it("opens the stable retry session for a zero-suggestion partial scan", () => {
+    const onReviewPress = jest.fn();
+    const { getByTestId } = render(
+      <SmsScanProgress
+        status="complete"
+        progress={null}
+        transactionsFound={0}
+        totalScanned={4}
+        durationMs={1000}
+        topCategories={[]}
+        categoryNameMap={new Map<string, string>()}
+        safeguardSummary={{
+          ...completeSummary,
+          unresolvedCount: 1,
+          completionStatus: "partial",
+        }}
+        retryableCount={1}
+        error={null}
+        onReviewPress={onReviewPress}
+        onBackPress={jest.fn()}
+        onRetryPress={jest.fn()}
+      />
+    );
+
+    fireEvent.press(getByTestId("partial-sms-retry"));
+
+    expect(onReviewPress).toHaveBeenCalledTimes(1);
   });
 
   it("renders empty and error states from props", () => {
