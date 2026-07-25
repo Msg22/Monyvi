@@ -57,6 +57,29 @@ describe("SMS safeguard QA runtime configuration", () => {
     ).toBe("partial-quota-v1");
   });
 
+  test("rejects run identities that cannot fit inside namespaced Edge request keys", () => {
+    const environment = {
+      NODE_ENV: "development",
+      EXPO_PUBLIC_SMS_SAFEGUARD_QA: "true",
+      EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER: "simulated",
+      EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX: "fixture",
+      EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE: "partial-quota-v1",
+    } as const;
+
+    expect(
+      getSmsSafeguardQaConfig({
+        ...environment,
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID: "r".repeat(96),
+      }).enabled
+    ).toBe(true);
+    expect(() =>
+      getSmsSafeguardQaConfig({
+        ...environment,
+        EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID: "r".repeat(97),
+      })
+    ).toThrow(/bounded run identity/i);
+  });
+
   test("keeps an app-facing QA scan anchored to the current scan start", () => {
     const scanStartedAtMs = Date.UTC(2030, 0, 1, 12, 0, 0);
 

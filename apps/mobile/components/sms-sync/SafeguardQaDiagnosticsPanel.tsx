@@ -39,6 +39,11 @@ function ScanCounts({ counts, t }: ScanCountsProps): React.JSX.Element {
           count: counts.oversizedCount,
         })}
       </Text>
+      <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
+        {t("qa_safeguard_unresolved_results", {
+          count: counts.unresolvedCount,
+        })}
+      </Text>
     </View>
   );
 }

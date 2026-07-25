@@ -521,9 +521,10 @@ zero.
       `apps/mobile/e2e/maestro/sms-safeguards/`, documenting concurrency and
       cross-install cases as service-level automation where Maestro cannot
       honestly control them
-- [ ] T080 [US6] Run every profile twice with reset on emulator and the
-      supported physical-device command; record identical aggregate results and
-      zero production calls/charges (SC-013-SC-016, SC-023-SC-029)
+- [ ] T080 [US6] Launch gate: run every profile twice with reset on emulator and
+      the supported physical-device command; record identical aggregate results
+      and zero production calls/charges in `launch-readiness-evidence.md`
+      (SC-013-SC-016, SC-023-SC-029)
 
 **Checkpoint**: Every story is reproducible without a personal inbox or paid AI
 call.
@@ -548,11 +549,11 @@ is testable through shaped state.
       `apps/mobile/locales/ar/settings.json`,
       `apps/mobile/locales/en/transactions.json`, and
       `apps/mobile/locales/ar/transactions.json` (FR-025, FR-036)
-- [ ] T084 Verify approved structure and plain-language comprehension in
-      light/dark themes, English/Arabic, font scale, Android status/navigation
-      safe areas, disabled accessibility state, and sticky review header/footer
-      with no overlap; capture comparison images beside the PR QA evidence
-      (SC-010)
+- [ ] T084 Launch gate: verify approved structure and plain-language
+      comprehension in light/dark themes, English/Arabic, font scale, Android
+      status/navigation safe areas, disabled accessibility state, and sticky
+      review header/footer with no overlap; record comparison images and
+      sign-off through `launch-readiness-evidence.md` (SC-010)
 
 ---
 
@@ -563,9 +564,12 @@ gates.
 
 - [x] T085 [P] Update developer/local Supabase and safeguard QA documentation in
       `README.md` and `specs/031-sms-scan-safeguards/quickstart.md`
-- [ ] T086 [P] Document and verify Gemini project spending caps, billing alerts,
-      emergency full-parser disablement, and incident owner/runbook without
-      committing secrets (FR-033, FR-034, SC-012)
+- [x] T086 [P] Document Gemini project spending caps, billing alerts, emergency
+      full-parser disablement, and the incident owner/runbook without committing
+      secrets (FR-033, FR-034, SC-012)
+- [ ] T086A Launch gate: verify provider-console budget alerts, alert
+      recipients, and authenticated emergency-disable refusal using the
+      checklist in `launch-readiness-evidence.md` (FR-033, FR-034, SC-012)
 - [x] T087 Run targeted Jest suites, TypeScript checks, ESLint with repository
       rules, Prettier, privacy checks, SQL/schema tests, and package boundary
       checks; fix implementation rather than weakening valid tests
@@ -573,9 +577,10 @@ gates.
       foreground/background/killed-app, consent, account matching, category
       enrichment, review selection/save, sync, logout, and voice regression
       suites
-- [ ] T089 Execute the manual QA plan in
+- [ ] T089 Launch gate: execute the manual QA plan in
       `specs/031-sms-scan-safeguards/quickstart.md` on emulator and physical
-      Android device and record pass/fail evidence for every point
+      Android device and record pass/fail evidence for every point in
+      `launch-readiness-evidence.md`
 - [x] T090 Add the PR coverage matrix mapping every manual scenario to unit,
       integration, Maestro, or explicit manual-only validation; call out any
       honest harness limitation
@@ -606,10 +611,11 @@ physical device without exposing fixture content or changing the product flow.
 - [x] T095 [US7] Add English/Arabic diagnostic labels and update
       `manual-device-qa.md` with profile-by-profile expected panel verification
       and production-exclusion checks (FR-064, SC-030-SC-031).
-- [ ] T096 [US7] Run focused component/service tests, theme/safe-area checks,
-      and representative device QA profiles; verify that no diagnostic prop,
-      translation, accessibility label, or log contains raw SMS or financial
-      values (SC-030-SC-031).
+- [ ] T096 [US7] Launch gate: run focused component/service tests,
+      theme/safe-area checks, and representative device QA profiles; verify that
+      no diagnostic prop, translation, accessibility label, or log contains raw
+      SMS or financial values, then record sign-off in
+      `launch-readiness-evidence.md` (SC-030-SC-031).
 
 ---
 

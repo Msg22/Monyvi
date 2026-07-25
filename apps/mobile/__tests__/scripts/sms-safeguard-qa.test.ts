@@ -196,6 +196,23 @@ describe("SMS safeguard QA launcher", () => {
     ).toEqual(expect.any(String));
   });
 
+  test("replaces a suite identity with the selected profile namespace for app starts", () => {
+    const suiteEnvironment = script.buildSafeguardQaEnvironment({
+      NODE_ENV: "development",
+    });
+    const profileEnvironment = script.buildSafeguardQaEnvironment(
+      suiteEnvironment,
+      "partial-quota-v1"
+    );
+
+    expect(profileEnvironment.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID).toMatch(
+      /^partial-quota-v1-/
+    );
+    expect(profileEnvironment.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID).not.toBe(
+      suiteEnvironment.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID
+    );
+  });
+
   test("resets every recognized QA request namespace without matching ordinary work", () => {
     const filter = script.buildQaRequestKeyResetFilter();
 

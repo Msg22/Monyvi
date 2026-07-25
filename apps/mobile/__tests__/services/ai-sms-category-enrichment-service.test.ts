@@ -274,6 +274,33 @@ describe("ai-sms-category-enrichment-service", () => {
     );
   });
 
+  it("namespaces generated QA request keys so profile reset can remove category usage", async () => {
+    const runId = "partial-quota-v1-qa-category-run";
+    process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA = "true";
+    process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER = "simulated";
+    process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX = "fixture";
+    process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE = "partial-quota-v1";
+    process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID = runId;
+    mockInvoke.mockResolvedValueOnce({ data: { categories: [] }, error: null });
+
+    try {
+      await enrichTrustedSmsCategories(
+        [candidate("candidate-1", "Shop")],
+        categories
+      );
+
+      const requestKey = mockInvoke.mock.calls[0]?.[1].body.requestKey;
+      expect(requestKey?.startsWith(`${runId}:app:`)).toBe(true);
+      expect(requestKey?.length).toBeLessThanOrEqual(160);
+    } finally {
+      delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA;
+      delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER;
+      delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX;
+      delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE;
+      delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID;
+    }
+  });
+
   it("preserves the supplied request identity across a safe retry", async () => {
     mockInvoke
       .mockResolvedValueOnce({

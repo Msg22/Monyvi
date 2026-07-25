@@ -47,7 +47,9 @@ import {
   type SmsSafeguardRefusal,
 } from "./ai-sms-parser-response";
 import {
+  createSmsAiRequestKey,
   resolveSmsParseTransport,
+  scopeSmsAiRequestKey,
   type SmsParseTransport,
 } from "./sms-parse-transport";
 
@@ -460,6 +462,26 @@ interface ChunkWork {
   readonly requestKey: string;
 }
 
+function createCapacityLimitedCandidates(
+  chunks: readonly ChunkWork[],
+  candidateMap: ReadonlyMap<string, SmsCandidate>
+): readonly AiUnresolvedCandidate[] {
+  return chunks.flatMap(({ messages }) =>
+    messages.flatMap(({ id }) => {
+      const candidate = candidateMap.get(id);
+      return candidate === undefined
+        ? []
+        : [
+            {
+              candidate,
+              reason: "capacity_limited" as const,
+              isRetryable: false,
+            },
+          ];
+    })
+  );
+}
+
 function collectUnresolvedCandidates(input: {
   readonly messages: readonly MessagePayload[];
   readonly candidateMap: ReadonlyMap<string, SmsCandidate>;
@@ -629,8 +651,8 @@ export async function parseSmsWithAi(
         messages: allMessages.slice(i, i + transport.chunkSize),
         requestKey:
           requestKey !== undefined && allMessages.length <= transport.chunkSize
-            ? requestKey
-            : Crypto.randomUUID(),
+            ? scopeSmsAiRequestKey(requestKey, transport.qaRunId)
+            : createSmsAiRequestKey(transport.qaRunId),
       });
     }
 
@@ -695,8 +717,35 @@ export async function parseSmsWithAi(
         chunkQueue.splice(
           chunkIndex,
           1,
-          { messages: leftMessages, requestKey: Crypto.randomUUID() },
-          { messages: rightMessages, requestKey: Crypto.randomUUID() }
+          {
+            messages: leftMessages,
+            requestKey: createSmsAiRequestKey(transport.qaRunId),
+          },
+          {
+            messages: rightMessages,
+            requestKey: createSmsAiRequestKey(transport.qaRunId),
+          }
+        );
+        totalChunks++;
+        continue;
+      }
+
+      const isRollingCapacityRefusal =
+        chunkResult.failureReason === "capacity_limited" &&
+        chunkResult.availability?.reason === "rolling_limit";
+      if (isRollingCapacityRefusal && currentChunk.messages.length > 1) {
+        const splitIndex = Math.ceil(currentChunk.messages.length / 2);
+        chunkQueue.splice(
+          chunkIndex,
+          1,
+          {
+            messages: currentChunk.messages.slice(0, splitIndex),
+            requestKey: createSmsAiRequestKey(transport.qaRunId),
+          },
+          {
+            messages: currentChunk.messages.slice(splitIndex),
+            requestKey: createSmsAiRequestKey(transport.qaRunId),
+          }
         );
         totalChunks++;
         continue;
@@ -749,10 +798,29 @@ export async function parseSmsWithAi(
         return appendedCount;
       };
 
+      if (chunkResult.failureReason === "capacity_limited") {
+        appendUnresolved(
+          createCapacityLimitedCandidates(
+            chunkQueue.slice(chunkIndex),
+            candidateMap
+          )
+        );
+        hasError = true;
+        hasNonRetryableError = true;
+        chunksCompleted++;
+        onProgress?.({
+          chunksCompleted,
+          totalChunks,
+          transactionsSoFar: allResults.length,
+          chunkDurationMs,
+        });
+        break;
+      }
+
       const metadataRetryRequest =
         chunkResult.retryRequestMode === "fresh"
           ? {
-              requestKey: Crypto.randomUUID(),
+              requestKey: createSmsAiRequestKey(transport.qaRunId),
               requestContext: resolvedRequestContext,
               candidates: (chunkResult.unresolvedFingerprints ?? []).flatMap(
                 (fingerprint) => {
@@ -882,12 +950,13 @@ export async function initializeSmsAiScanSession(
   expectedUserId?: string
 ): Promise<void> {
   if (requestContext.scanSessionId === null) return;
+  const transport = resolveSmsParseTransport(CLIENT_CHUNK_SIZE);
   const result = await invokeParseChunk(
     [],
     context,
     requestContext,
-    Crypto.randomUUID(),
-    resolveSmsParseTransport(CLIENT_CHUNK_SIZE),
+    createSmsAiRequestKey(transport.qaRunId),
+    transport,
     abortSignal,
     expectedUserId
   );

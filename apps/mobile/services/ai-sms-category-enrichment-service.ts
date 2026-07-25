@@ -10,6 +10,10 @@ import { isE2eTestMode } from "@/config/e2e-test-config";
 import { getSmsSafeguardQaConfig } from "@/config/sms-safeguard-qa-config";
 import { assertNotAborted } from "./abort-utils";
 import { invokeAuthenticatedEdgeFunction } from "./authenticated-edge-function-service";
+import {
+  createSmsAiRequestKey,
+  scopeSmsAiRequestKey,
+} from "./sms-parse-transport";
 import { assertExpectedCurrentUser } from "./user-data-access";
 
 const CATEGORY_ENRICHMENT_FUNCTION = "enrich-sms-categories";
@@ -691,16 +695,19 @@ export async function enrichTrustedSmsCategories(
     return emptyResult(attemptedMerchantCount, true);
   }
 
-  const resolvedRequestContext =
-    requestContext ??
-    ({
-      requestKey: Crypto.randomUUID(),
-      scanSessionId: Crypto.randomUUID(),
-      scanKind: "incremental",
-    } satisfies SmsCategoryEnrichmentRequestContext);
+  const qaConfig = getSmsSafeguardQaConfig();
+  const qaRunId = qaConfig.enabled ? (qaConfig.runId ?? undefined) : undefined;
+  const resolvedRequestContext = {
+    requestKey:
+      requestContext?.requestKey === undefined
+        ? createSmsAiRequestKey(qaRunId)
+        : scopeSmsAiRequestKey(requestContext.requestKey, qaRunId),
+    scanSessionId: requestContext?.scanSessionId ?? Crypto.randomUUID(),
+    scanKind: requestContext?.scanKind ?? "incremental",
+  } satisfies SmsCategoryEnrichmentRequestContext;
   const chunks = splitPreparedRequest(
     prepared,
-    resolvedRequestContext.requestKey ?? Crypto.randomUUID()
+    resolvedRequestContext.requestKey
   );
   const timedSignal = createTimedRequestSignal(abortSignal);
   try {

@@ -107,3 +107,19 @@ test("the local QA endpoint exercises the production consent lookup", () => {
   assert.doesNotMatch(source, /function hasQaConsent/);
   assert.match(source, /hasConsent:\s*hasActiveAiProcessingConsent/g);
 });
+
+test("the local QA endpoint anchors outcome expiry to the accepted scan start", () => {
+  const source = readFileSync(
+    new URL("../sms-safeguard-qa/index.ts", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(
+    source,
+    /getProcessingOutcomes\([\s\S]*referenceNowMs:[\s\S]*referenceNowMs - lookbackDays \* DAY_MS/
+  );
+  assert.doesNotMatch(
+    source,
+    /getProcessingOutcomes\([\s\S]*const cutoff = new Date\(Date\.now\(\)/
+  );
+});

@@ -373,6 +373,67 @@ describe("AI SMS client safeguards", () => {
     ]);
   });
 
+  it("uses QA-namespaced keys and preserves newest-first order at partial rolling capacity", async () => {
+    jest.useFakeTimers();
+    try {
+      enableSafeguardQa("partial-quota-v1");
+      const newest = candidate("nbe_debit_purchase");
+      const next = candidate("cib_credit_payment");
+      const oldest = candidate("qnb_atm_withdrawal");
+      const rollingRefusal: MockFunctionResponse = {
+        data: null,
+        error: {
+          context: new Response(
+            JSON.stringify({ reason: "rolling_limit", availableAt: null }),
+            { status: 429, headers: { "content-type": "application/json" } }
+          ),
+        },
+      };
+      mockInvoke
+        .mockResolvedValueOnce(rollingRefusal)
+        .mockResolvedValueOnce({
+          data: {
+            transactions: [
+              {
+                messageId: newest.message.id,
+                amount: 100,
+                currency: "EGP",
+                type: "EXPENSE",
+                counterparty: "Newest merchant",
+                date: "2026-07-20T10:00:00.000Z",
+                categorySystemName: "shopping",
+                confidenceScore: 0.9,
+                isTrusted: true,
+              },
+            ],
+          },
+          error: null,
+        })
+        .mockResolvedValueOnce(rollingRefusal);
+
+      const resultPromise = parseSmsWithAi([newest, next, oldest], context);
+      await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(2_000);
+      const result = await resultPromise;
+
+      expect(mockInvoke).toHaveBeenCalledTimes(3);
+      expect(result.transactions).toEqual([
+        expect.objectContaining({ smsFingerprint: newest.smsFingerprint }),
+      ]);
+      expect(result.unresolvedCandidates).toEqual([
+        expect.objectContaining({ candidate: next, reason: "capacity_limited" }),
+        expect.objectContaining({ candidate: oldest, reason: "capacity_limited" }),
+      ]);
+      const requestKeys = mockInvoke.mock.calls.map(([, options]) =>
+        String((options.body as Record<string, unknown>).requestKey)
+      );
+      expect(requestKeys.every((key) => key.startsWith("unit-test-run:"))).toBe(true);
+    } finally {
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    }
+  });
+
   it("classifies an explicit single-candidate size refusal as oversized", async () => {
     const oversizedCandidate = candidate("nbe_debit_purchase");
     mockInvoke.mockResolvedValueOnce({

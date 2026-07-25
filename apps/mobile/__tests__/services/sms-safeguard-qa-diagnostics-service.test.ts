@@ -36,7 +36,7 @@ describe("createSmsSafeguardQaDiagnostics", () => {
           admittedAiCount: 0,
           deferredAiCount: 0,
           oversizedCount: 3,
-          unresolvedCount: 0,
+          unresolvedCount: 2,
           completionStatus: "partial",
         },
       },
@@ -63,6 +63,7 @@ describe("createSmsSafeguardQaDiagnostics", () => {
         aiResultCount: 0,
         deferredAiCount: 0,
         oversizedCount: 3,
+        unresolvedCount: 2,
       },
       limits: {
         maxCandidatesPerRequest: 2,

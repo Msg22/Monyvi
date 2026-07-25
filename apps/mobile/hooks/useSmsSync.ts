@@ -11,6 +11,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
 import { Platform } from "react-native";
+import { useCurrentUser } from "./useCurrentUser";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -19,6 +20,32 @@ import { Platform } from "react-native";
 const SMS_PROMPT_SHOWN_KEY = "@monyvi/sms-prompt-shown";
 const SMS_LAST_SYNC_KEY = "@monyvi/sms-last-sync";
 const SMS_HAS_SYNCED_KEY = "@monyvi/sms-has-synced";
+
+interface StoredSmsSyncState {
+  readonly wasPromptShown: boolean;
+  readonly hasSynced: boolean;
+  readonly lastSyncTimestamp: number | null;
+}
+
+function getUserScopedKey(baseKey: string, userId: string): string {
+  return `${baseKey}:${userId}`;
+}
+
+async function readStoredSmsSyncState(
+  userId: string
+): Promise<StoredSmsSyncState> {
+  const [promptShown, hasSyncedValue, lastSync] = await AsyncStorage.multiGet([
+    getUserScopedKey(SMS_PROMPT_SHOWN_KEY, userId),
+    getUserScopedKey(SMS_HAS_SYNCED_KEY, userId),
+    getUserScopedKey(SMS_LAST_SYNC_KEY, userId),
+  ]);
+
+  return {
+    wasPromptShown: promptShown[1] === "true",
+    hasSynced: hasSyncedValue[1] === "true",
+    lastSyncTimestamp: lastSync[1] ? parseInt(lastSync[1], 10) : null,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,69 +71,84 @@ interface UseSmsSyncResult {
 // ---------------------------------------------------------------------------
 
 export function useSmsSync(): UseSmsSyncResult {
+  const { userId, isResolvingUser } = useCurrentUser();
   const [shouldShowPrompt, setShouldShowPrompt] = useState(false);
   const [hasSynced, setHasSynced] = useState(false);
   const [lastSyncTimestamp, setLastSyncTimestamp] = useState<number | null>(
     null
   );
   const [isLoading, setIsLoading] = useState(true);
+  const [loadedUserId, setLoadedUserId] = useState<string | null | undefined>(
+    undefined
+  );
 
-  // Load state from AsyncStorage on mount
   useEffect(() => {
+    let isCancelled = false;
+
+    setShouldShowPrompt(false);
+    setHasSynced(false);
+    setLastSyncTimestamp(null);
+    setIsLoading(true);
+    setLoadedUserId(undefined);
+
     async function loadState(): Promise<void> {
-      try {
-        // Only show on Android
-        if (Platform.OS !== "android") {
-          setShouldShowPrompt(false);
+      if (isResolvingUser) return;
+      if (Platform.OS !== "android" || userId === null) {
+        if (!isCancelled) {
+          setLoadedUserId(userId);
           setIsLoading(false);
-          return;
         }
+        return;
+      }
 
-        const [promptShown, hasSyncedValue, lastSync] =
-          await AsyncStorage.multiGet([
-            SMS_PROMPT_SHOWN_KEY,
-            SMS_HAS_SYNCED_KEY,
-            SMS_LAST_SYNC_KEY,
-          ]);
+      try {
+        const storedState = await readStoredSmsSyncState(userId);
+        if (isCancelled) return;
 
-        const wasPromptShown = promptShown[1] === "true";
-        const syncedBefore = hasSyncedValue[1] === "true";
-        const syncTimestamp = lastSync[1] ? parseInt(lastSync[1], 10) : null;
-
-        setHasSynced(syncedBefore);
-        setLastSyncTimestamp(syncTimestamp);
-
-        // Show prompt only if never shown before and never synced
-        setShouldShowPrompt(!wasPromptShown && !syncedBefore);
+        setHasSynced(storedState.hasSynced);
+        setLastSyncTimestamp(storedState.lastSyncTimestamp);
+        setShouldShowPrompt(
+          !storedState.wasPromptShown && !storedState.hasSynced
+        );
       } catch {
-        // Fail silently — don't show prompt on error
-        setShouldShowPrompt(false);
+        if (!isCancelled) setShouldShowPrompt(false);
       } finally {
-        setIsLoading(false);
+        if (!isCancelled) {
+          setLoadedUserId(userId);
+          setIsLoading(false);
+        }
       }
     }
 
     loadState().catch(() => {
-      // Silently handle — state defaults are safe
+      if (!isCancelled) {
+        setLoadedUserId(userId);
+        setIsLoading(false);
+      }
     });
-  }, []);
 
-  /**
-   * Dismiss the prompt and mark it as shown.
-   */
+    return () => {
+      isCancelled = true;
+    };
+  }, [isResolvingUser, userId]);
+
   const dismissPrompt = useCallback(async (): Promise<void> => {
+    if (userId === null) return;
+
     setShouldShowPrompt(false);
     try {
-      await AsyncStorage.setItem(SMS_PROMPT_SHOWN_KEY, "true");
+      await AsyncStorage.setItem(
+        getUserScopedKey(SMS_PROMPT_SHOWN_KEY, userId),
+        "true"
+      );
     } catch {
-      // Silently fail — prompt will just show again next time
+      // The prompt may appear again next time if local persistence fails.
     }
-  }, []);
+  }, [userId]);
 
-  /**
-   * Mark sync as complete and store the timestamp.
-   */
   const markSyncComplete = useCallback(async (): Promise<void> => {
+    if (userId === null) return;
+
     const now = Date.now();
     setHasSynced(true);
     setLastSyncTimestamp(now);
@@ -114,21 +156,24 @@ export function useSmsSync(): UseSmsSyncResult {
 
     try {
       await AsyncStorage.multiSet([
-        [SMS_PROMPT_SHOWN_KEY, "true"],
-        [SMS_HAS_SYNCED_KEY, "true"],
-        [SMS_LAST_SYNC_KEY, String(now)],
+        [getUserScopedKey(SMS_PROMPT_SHOWN_KEY, userId), "true"],
+        [getUserScopedKey(SMS_HAS_SYNCED_KEY, userId), "true"],
+        [getUserScopedKey(SMS_LAST_SYNC_KEY, userId), String(now)],
       ]);
     } catch {
-      // Silently fail
+      // In-memory state remains valid for the current session.
     }
-  }, []);
+  }, [userId]);
+
+  const isLoadedForCurrentUser =
+    !isResolvingUser && loadedUserId !== undefined && loadedUserId === userId;
 
   return {
-    shouldShowPrompt,
-    hasSynced,
-    lastSyncTimestamp,
+    shouldShowPrompt: isLoadedForCurrentUser ? shouldShowPrompt : false,
+    hasSynced: isLoadedForCurrentUser ? hasSynced : false,
+    lastSyncTimestamp: isLoadedForCurrentUser ? lastSyncTimestamp : null,
     dismissPrompt,
     markSyncComplete,
-    isLoading,
+    isLoading: !isLoadedForCurrentUser || isLoading,
   };
 }

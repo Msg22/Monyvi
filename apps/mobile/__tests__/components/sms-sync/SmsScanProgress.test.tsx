@@ -62,6 +62,7 @@ const qaDiagnostics: SmsSafeguardQaDiagnosticsViewModel = {
     aiResultCount: 4,
     deferredAiCount: 0,
     oversizedCount: 0,
+    unresolvedCount: 0,
   },
 };
 
@@ -149,9 +150,43 @@ describe("SmsScanProgress", () => {
     expect(getByText("qa_safeguard_panel_title")).toBeTruthy();
   });
 
+  it("keeps the partial-results notice visible when suggestions are ready", () => {
+    const { getByText, queryByTestId, toJSON } = render(
+      <SmsScanProgress
+        status="complete"
+        progress={null}
+        transactionsFound={2}
+        totalScanned={4}
+        durationMs={1000}
+        topCategories={[]}
+        categoryNameMap={new Map<string, string>()}
+        safeguardSummary={{
+          ...completeSummary,
+          deferredAiCount: 2,
+          unresolvedCount: 2,
+          completionStatus: "partial",
+          availability: { reason: "rolling_limit", availableAt: null },
+        }}
+        retryableCount={2}
+        error={null}
+        onReviewPress={jest.fn()}
+        onBackPress={jest.fn()}
+        onRetryPress={jest.fn()}
+      />
+    );
+
+    expect(getByText("partial_sms_title")).toBeTruthy();
+    expect(getByText("Review 2")).toBeTruthy();
+    expect(queryByTestId("partial-sms-retry")).toBeNull();
+    const renderedTree = JSON.stringify(toJSON());
+    expect(renderedTree.indexOf("partial-sms-results-notice")).toBeLessThan(
+      renderedTree.indexOf("Review 2")
+    );
+  });
+
   it("opens the stable retry session for a zero-suggestion partial scan", () => {
     const onReviewPress = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId, getByText } = render(
       <SmsScanProgress
         status="complete"
         progress={null}
@@ -173,8 +208,9 @@ describe("SmsScanProgress", () => {
       />
     );
 
+    expect(getByText("partial_sms_title")).toBeTruthy();
+    expect(getByText("back_to_dashboard")).toBeTruthy();
     fireEvent.press(getByTestId("partial-sms-retry"));
-
     expect(onReviewPress).toHaveBeenCalledTimes(1);
   });
 

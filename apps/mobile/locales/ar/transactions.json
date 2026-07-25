@@ -30,6 +30,7 @@
   "qa_safeguard_ai_results": "ذكاء اصطناعي محاكى: {{count}}",
   "qa_safeguard_deferred_results": "مؤجل: {{count}}",
   "qa_safeguard_oversized_results": "تخطي لطول الرسالة: {{count}}",
+  "qa_safeguard_unresolved_results": "غير محلولة: {{count}}",
   "qa_safeguard_expected_cutoff_boundary": "يتضمن الرسائل عند الحد ويستبعد الأقدم.",
   "qa_safeguard_expected_checkpoint_overlap": "يعيد فقط الاقتراحات غير المحفوظة عند تكرار الفحص.",
   "qa_safeguard_expected_partial_quota": "يبقي النتائج المقبولة ويؤجل باقي عمل الذكاء الاصطناعي.",

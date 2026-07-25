@@ -320,8 +320,8 @@ here must not mean an ordinary quota consumption or destroy earlier results.
 
 ### 7. `history-cooldown-v1`
 
-**Purpose:** proves **Rescan recent messages** has a cooldown after admitted
-full-parser work, while ordinary incremental sync remains usable.
+**Purpose:** proves **Rescan recent messages** has a cooldown after full-parser
+provider execution starts, while ordinary incremental sync remains usable.
 
 **Best verification:** physical device and automated profile.
 
@@ -355,14 +355,15 @@ npm run test:sms-safeguards -- --scenario history-cooldown-v1
 ```
 
 1. Confirm `status: "passed"`.
-2. Confirm admitted full-parser work starts the reduced two-minute cooldown.
+2. Confirm provider-started full-parser work starts the reduced two-minute
+   cooldown.
 3. Confirm a later history attempt is refused while the ordinary incremental
    capability remains separate.
 4. Confirm production provider and production allowance counts remain zero.
 
-**Pass criteria:** cooldown begins only after full-parser work is admitted,
-history rescan shows an absolute retry time, and ordinary incremental sync
-remains usable.
+**Pass criteria:** cooldown begins only after full-parser provider execution
+starts, history rescan shows an absolute retry time, and ordinary incremental
+sync remains usable.
 
 **Edge cases:** force a local-only scan if available, then confirm no history
 cooldown appears. Do not expect live countdown text; only localized absolute
