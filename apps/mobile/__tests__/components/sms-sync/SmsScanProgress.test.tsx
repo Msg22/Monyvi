@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
 import React from "react";
 
 jest.mock("@/hooks/useCategories", () => ({
@@ -184,9 +184,9 @@ describe("SmsScanProgress", () => {
     );
   });
 
-  it("does not offer a fake retry action for a zero-suggestion partial scan", () => {
+  it("opens the stable retry session for a zero-suggestion partial scan", () => {
     const onReviewPress = jest.fn();
-    const { getByText, queryByTestId } = render(
+    const { getByTestId, getByText } = render(
       <SmsScanProgress
         status="complete"
         progress={null}
@@ -210,8 +210,8 @@ describe("SmsScanProgress", () => {
 
     expect(getByText("partial_sms_title")).toBeTruthy();
     expect(getByText("back_to_dashboard")).toBeTruthy();
-    expect(queryByTestId("partial-sms-retry")).toBeNull();
-    expect(onReviewPress).not.toHaveBeenCalled();
+    fireEvent.press(getByTestId("partial-sms-retry"));
+    expect(onReviewPress).toHaveBeenCalledTimes(1);
   });
 
   it("renders empty and error states from props", () => {

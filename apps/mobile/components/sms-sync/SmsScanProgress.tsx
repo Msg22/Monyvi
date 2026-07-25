@@ -166,7 +166,7 @@ export function SmsScanProgress({
                 <PartialSmsResultsNotice
                   safeguardSummary={safeguardSummary}
                   retryableCount={retryableCount}
-                  canRetry={false}
+                  canRetry={retryableCount > 0}
                   isRetrying={false}
                   hasRetryError={false}
                   onRetry={onReviewPress}
