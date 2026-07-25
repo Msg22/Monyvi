@@ -36,6 +36,7 @@ import { useAllCategories } from "@/context/CategoriesContext";
 import { useSmsScanContext } from "@/context/SmsScanContext";
 import { useSmsScan } from "@/hooks/useSmsScan";
 import { useSmsPermission } from "@/hooks/useSmsPermission";
+import { useSmsSync } from "@/hooks/useSmsSync";
 import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
 import { loadExistingSmsFingerprints } from "@/services/sms-sync-service";
 import { palette } from "@/constants/colors";
@@ -218,8 +219,10 @@ export default function SmsScanScreen(): React.JSX.Element {
   const pendingScanAfterAbortRef = useRef(false);
   const scanAbortControllerRef = useRef<AbortController | null>(null);
   const staleConsentRevokePromiseRef = useRef<Promise<void> | null>(null);
+  const hasRecordedCleanCompletionRef = useRef(false);
 
   const { setReviewSession, setScanMode, scanMode } = useSmsScanContext();
+  const { markSyncComplete } = useSmsSync();
   const [scanKind] = useState(scanMode);
 
   useEffect(() => {
@@ -381,6 +384,27 @@ export default function SmsScanScreen(): React.JSX.Element {
       setIsPermissionRecoveryVisible(true);
     }
   }, [isPermissionLoading, permissionStatus]);
+
+  useEffect(() => {
+    const hasCleanEmptyCompletion =
+      status === "complete" &&
+      result !== null &&
+      transactions.length === 0 &&
+      result.unresolvedCandidates.length === 0 &&
+      result.safeguardSummary.completionStatus === "complete";
+
+    if (!hasCleanEmptyCompletion || hasRecordedCleanCompletionRef.current) {
+      return;
+    }
+
+    hasRecordedCleanCompletionRef.current = true;
+    markSyncComplete().catch((err: unknown) => {
+      hasRecordedCleanCompletionRef.current = false;
+      logger.warn("smsScan.markCleanCompletionFailed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }, [markSyncComplete, result, status, transactions.length]);
 
   const retryableCandidateCount =
     result?.unresolvedCandidates.filter((candidate) => candidate.isRetryable)

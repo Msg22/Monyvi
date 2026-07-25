@@ -11,12 +11,26 @@ jest.mock("@/services/sms-parser-orchestrator", () => ({
     mockParseSmsWithOrchestrator(...args),
 }));
 
+const mockRecordOversizedSmsOutcome = jest.fn();
+jest.mock("@/services/sms-oversized-outcome-service", () => ({
+  recordOversizedSmsOutcome: (...args: readonly unknown[]): unknown =>
+    mockRecordOversizedSmsOutcome(...args),
+}));
+
+const mockAssertExpectedCurrentUser = jest.fn();
+jest.mock("@/services/user-data-access", () => ({
+  assertExpectedCurrentUser: (...args: readonly unknown[]): unknown =>
+    mockAssertExpectedCurrentUser(...args),
+}));
+
 import { retrySmsReviewCandidates } from "@/services/sms-review-retry-service";
 
 const context: ParseSmsContext = {
   categories: [],
   supportedCurrencies: ["EGP"],
 };
+
+const EXPECTED_USER_ID = "user-a";
 
 function candidate(id: string): SmsCandidate {
   return {
@@ -58,6 +72,7 @@ function transaction(id: string): ParsedSmsTransaction {
 
 describe("sms review retry service", () => {
   beforeEach(() => jest.clearAllMocks());
+  afterEach(() => jest.restoreAllMocks());
 
   it("retries only retryable unresolved candidates and atomically merges by fingerprint", async () => {
     const existing = transaction("existing");
@@ -72,13 +87,15 @@ describe("sms review retry service", () => {
       transactions: [existing],
       unresolvedCandidates: [unresolved("retryable"), nonRetryable],
       parseContext: context,
+      expectedUserId: EXPECTED_USER_ID,
     });
 
     expect(mockParseSmsWithOrchestrator).toHaveBeenCalledWith(
       [candidate("retryable")],
       context,
       undefined,
-      undefined
+      undefined,
+      { expectedUserId: EXPECTED_USER_ID }
     );
     expect(result.transactions).toEqual([existing, retried]);
     expect(result.unresolvedCandidates).toEqual([nonRetryable]);
@@ -103,6 +120,7 @@ describe("sms review retry service", () => {
       transactions: [],
       unresolvedCandidates: [unresolved("retryable")],
       parseContext: context,
+      expectedUserId: EXPECTED_USER_ID,
     });
 
     expect(result.transactions).toEqual([purchase]);
@@ -135,6 +153,7 @@ describe("sms review retry service", () => {
       transactions: [],
       unresolvedCandidates: [pending],
       parseContext: context,
+      expectedUserId: EXPECTED_USER_ID,
     });
 
     expect(mockParseSmsWithOrchestrator).toHaveBeenCalledWith(
@@ -145,8 +164,35 @@ describe("sms review retry service", () => {
       {
         requestContext: retryRequest.requestContext,
         requestKey: retryRequest.requestKey,
+        expectedUserId: EXPECTED_USER_ID,
       }
     );
+  });
+
+  it("persists oversized outcomes returned by a review retry", async () => {
+    const oversizedCandidate = candidate("oversized");
+    mockParseSmsWithOrchestrator.mockResolvedValueOnce({
+      transactions: [],
+      unresolvedCandidates: [],
+      oversizedCandidates: [oversizedCandidate],
+    });
+    jest.spyOn(Date, "now").mockReturnValue(1_000);
+
+    const result = await retrySmsReviewCandidates({
+      transactions: [],
+      unresolvedCandidates: [unresolved("oversized")],
+      parseContext: context,
+      expectedUserId: EXPECTED_USER_ID,
+    });
+
+    expect(mockRecordOversizedSmsOutcome).toHaveBeenCalledWith({
+      userId: EXPECTED_USER_ID,
+      smsFingerprint: "fp-oversized",
+      originalReceivedAtMs: 1,
+      nowMs: 1_000,
+      lookbackDays: 30,
+    });
+    expect(result.unresolvedCandidates).toEqual([]);
   });
 
   it("leaves the session unchanged when retry is cancelled", async () => {
@@ -161,6 +207,7 @@ describe("sms review retry service", () => {
         transactions: [existing],
         unresolvedCandidates: [pending],
         parseContext: context,
+        expectedUserId: EXPECTED_USER_ID,
       })
     ).rejects.toBe(abort);
   });
@@ -182,6 +229,7 @@ describe("sms review retry service", () => {
         transactions: [existing],
         unresolvedCandidates: [pending],
         parseContext: context,
+        expectedUserId: EXPECTED_USER_ID,
       })
     ).resolves.toEqual({
       transactions: [existing, retried],
@@ -206,6 +254,7 @@ describe("sms review retry service", () => {
         transactions: [existing],
         unresolvedCandidates: [unresolved("retryable")],
         parseContext: context,
+        expectedUserId: EXPECTED_USER_ID,
       })
     ).resolves.toEqual({
       transactions: [existing, retried],

@@ -1,4 +1,5 @@
 import {
+  DEFAULT_SMS_SCAN_POLICY,
   getParsedSmsTransactionKey,
   type ParsedSmsTransaction,
 } from "@monyvi/logic";
@@ -7,12 +8,15 @@ import {
   parseSmsWithOrchestrator,
   type HybridSmsUnresolvedCandidate,
 } from "./sms-parser-orchestrator";
+import { recordOversizedSmsOutcome } from "./sms-oversized-outcome-service";
+import { assertExpectedCurrentUser } from "./user-data-access";
 
 interface RetrySmsReviewCandidatesInput {
   readonly transactions: readonly ParsedSmsTransaction[];
   readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
   readonly parseContext: ParseSmsContext;
   readonly abortSignal?: AbortSignal;
+  readonly expectedUserId: string;
 }
 
 export interface SmsReviewRetryResult {
@@ -91,15 +95,30 @@ export async function retrySmsReviewCandidates(
             retryGroup.candidates,
             input.parseContext,
             undefined,
-            input.abortSignal
+            input.abortSignal,
+            { expectedUserId: input.expectedUserId }
           )
         : await parseSmsWithOrchestrator(
             retryGroup.candidates,
             input.parseContext,
             undefined,
             input.abortSignal,
-            retryGroup.options
+            {
+              ...retryGroup.options,
+              expectedUserId: input.expectedUserId,
+            }
           );
+    await assertExpectedCurrentUser(input.expectedUserId);
+    for (const candidate of result.oversizedCandidates ?? []) {
+      await recordOversizedSmsOutcome({
+        userId: input.expectedUserId,
+        smsFingerprint: candidate.smsFingerprint,
+        originalReceivedAtMs: candidate.message.date,
+        nowMs: Math.max(Date.now(), candidate.message.date),
+        lookbackDays: DEFAULT_SMS_SCAN_POLICY.lookbackDays,
+      });
+      await assertExpectedCurrentUser(input.expectedUserId);
+    }
     retriedTransactions = mergeTransactions(
       retriedTransactions,
       result.transactions

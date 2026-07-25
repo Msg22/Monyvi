@@ -26,6 +26,7 @@ const safeguardSummary: SmsScanSafeguardSummary = {
 
 function scanResult(): SmsScanResult {
   return {
+    initiatingUserId: "user-a",
     transactions: [],
     unresolvedCandidates: [
       {
@@ -68,6 +69,7 @@ describe("SmsScanContext review session", () => {
     act(() => result.current.setReviewSession(scanResult()));
     expect(result.current.unresolvedCandidates).toHaveLength(1);
     expect(result.current.parseContext?.supportedCurrencies).toEqual(["EGP"]);
+    expect(result.current.initiatingUserId).toBe("user-a");
     expect(result.current.safeguardSummary).toEqual(safeguardSummary);
     expect(result.current.parserDiagnostics).toEqual(
       scanResult().parserDiagnostics
@@ -91,6 +93,7 @@ describe("SmsScanContext review session", () => {
     expect(result.current.parseContext).toBeNull();
     expect(result.current.safeguardSummary).toBeNull();
     expect(result.current.parserDiagnostics).toBeNull();
+    expect(result.current.initiatingUserId).toBeNull();
   });
 
   it("does not retain raw retry state after the private provider unmounts", () => {

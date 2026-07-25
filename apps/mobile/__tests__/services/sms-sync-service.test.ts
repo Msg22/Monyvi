@@ -12,6 +12,7 @@
  *   - `InteractionManager` is mocked via react-native
  *   - `@monyvi/db` is mocked to provide loadExistingSmsFingerprints support
  */
+/* eslint-disable max-lines -- SMS sync pipeline regressions share one service-level mock harness. */
 
 import type {
   ParsedSmsTransaction,
@@ -828,6 +829,30 @@ describe("sms-sync-service", () => {
       expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
     });
 
+    it("stops fingerprinting a large inbox after the active bounded batch is aborted", async () => {
+      const abortController = new AbortController();
+      const messages = Array.from({ length: 60 }, (_, index) =>
+        createSmsMessage({
+          id: `sms-${index}`,
+          body: `Debit EGP ${index + 1} at Shop`,
+        })
+      );
+      mockReadSmsInbox.mockResolvedValue(messages);
+      mockComputeSmsFingerprint.mockImplementation((input) => {
+        abortController.abort();
+        return Promise.resolve(`hash-${input.receivedAtMs}`);
+      });
+
+      await expect(
+        scanAndParseSms(
+          defaultOptions({ abortSignal: abortController.signal, batchSize: 10 })
+        )
+      ).rejects.toThrow("SMS scan aborted");
+
+      expect(mockComputeSmsFingerprint).toHaveBeenCalledTimes(10);
+      expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
+    });
+
     it("does not complete the scan when AI parsing returns a non-retryable error", async () => {
       const sms = createSmsMessage({
         id: "sms-1",
@@ -1009,7 +1034,7 @@ describe("sms-sync-service", () => {
 
       await scanAndParseSms(defaultOptions({ batchSize: 1, yieldInterval: 2 }));
 
-      expect(InteractionManager.runAfterInteractions).toHaveBeenCalledTimes(3);
+      expect(InteractionManager.runAfterInteractions).toHaveBeenCalledTimes(8);
     });
   });
 

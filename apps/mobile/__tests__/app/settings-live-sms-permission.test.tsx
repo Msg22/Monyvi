@@ -46,6 +46,7 @@ let mockQaSmsPatternIntakeAvailable = false;
 let mockSmsAiAvailability: {
   readonly reason: "rolling_limit" | "history_cooldown";
   readonly availableAt: string;
+  readonly historyCooldownAvailableAt: string | null;
 } | null = null;
 let appStateChangeHandlers: Array<(status: AppStateStatus) => void> = [];
 
@@ -358,6 +359,7 @@ describe("Settings live SMS permission recovery", () => {
     mockSmsAiAvailability = {
       reason: "rolling_limit",
       availableAt: "2026-07-24T12:00:00.000Z",
+      historyCooldownAvailableAt: null,
     };
     const screen = await renderReadySettings();
     const historyRescan = screen.getByTestId(
@@ -365,6 +367,18 @@ describe("Settings live SMS permission recovery", () => {
     ) as unknown as { readonly props: { readonly disabled?: boolean } };
 
     expect(historyRescan.props.disabled).not.toBe(true);
+  });
+
+  it("disables history rescan when cooldown remains active behind a later rolling limit", async () => {
+    mockHasSynced = true;
+    mockSmsAiAvailability = {
+      reason: "rolling_limit",
+      availableAt: "2026-08-02T12:00:00.000Z",
+      historyCooldownAvailableAt: "2026-08-01T12:00:00.000Z",
+    };
+    const screen = await renderReadySettings();
+
+    expect(screen.getByTestId("sms-history-rescan-button")).toBeDisabled();
   });
 
   it("waits for stored live detection state before rendering the switch", async () => {

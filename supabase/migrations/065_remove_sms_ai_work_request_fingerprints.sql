@@ -77,15 +77,19 @@ BEGIN
     AND p_scan_kind = 'history'
     AND p_history_cooldown_seconds > 0
   THEN
-    SELECT min(event.started_at) INTO v_history_start
-    FROM public.sms_ai_usage_events AS event
-    JOIN public.sms_ai_work_requests AS work ON work.id = event.request_id
-    WHERE event.user_id = p_user_id
-      AND event.capability = p_capability
-      AND work.scan_kind = 'history'
-      AND work.scan_session_id IS DISTINCT FROM p_scan_session_id
-      AND event.started_at > v_now
-        - make_interval(secs => p_history_cooldown_seconds);
+    SELECT min(history_scan.first_started_at) INTO v_history_start
+    FROM (
+      SELECT min(event.started_at) AS first_started_at
+      FROM public.sms_ai_usage_events AS event
+      JOIN public.sms_ai_work_requests AS work ON work.id = event.request_id
+      WHERE event.user_id = p_user_id
+        AND event.capability = p_capability
+        AND work.scan_kind = 'history'
+        AND work.scan_session_id IS DISTINCT FROM p_scan_session_id
+      GROUP BY COALESCE(work.scan_session_id, work.id::text)
+    ) AS history_scan
+    WHERE history_scan.first_started_at > v_now
+      - make_interval(secs => p_history_cooldown_seconds);
     IF v_history_start IS NOT NULL THEN
       v_history_available_at := v_history_start
         + make_interval(secs => p_history_cooldown_seconds);

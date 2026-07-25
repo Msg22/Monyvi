@@ -100,6 +100,7 @@ export interface SmsScanResult {
   readonly parseContext: ParseSmsContext;
   readonly parserDiagnostics: SmsParserDiagnostics;
   readonly safeguardSummary: SmsScanSafeguardSummary;
+  readonly initiatingUserId: string;
 }
 
 /** Options for the scan pipeline. */
@@ -142,6 +143,52 @@ function resolveSmsInboxPageSize(value: number | undefined): number {
     return DEFAULT_MAX_COUNT;
   }
   return Math.max(1, Math.floor(value));
+}
+
+async function yieldToUiThread(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    InteractionManager.runAfterInteractions(resolve);
+  });
+}
+
+async function fingerprintSmsMessages(input: {
+  readonly messages: readonly SmsMessage[];
+  readonly batchSize: number;
+  readonly abortSignal?: AbortSignal;
+}): Promise<
+  ReadonlyArray<{
+    readonly message: SmsMessage;
+    readonly fingerprint: string;
+  }>
+> {
+  const fingerprintedMessages: Array<{
+    readonly message: SmsMessage;
+    readonly fingerprint: string;
+  }> = [];
+
+  for (let index = 0; index < input.messages.length; index += input.batchSize) {
+    assertScanNotAborted(input.abortSignal);
+    const batch = await Promise.all(
+      input.messages
+        .slice(index, index + input.batchSize)
+        .map(async (message) => ({
+          message,
+          fingerprint: await computeSmsFingerprint({
+            sender: message.address,
+            body: message.body,
+            receivedAtMs: message.date,
+          }),
+        }))
+    );
+    fingerprintedMessages.push(...batch);
+    assertScanNotAborted(input.abortSignal);
+
+    if (index + input.batchSize < input.messages.length) {
+      await yieldToUiThread();
+    }
+  }
+
+  return fingerprintedMessages;
 }
 
 function isExpectedSafeguardPartialResult(
@@ -386,8 +433,14 @@ async function executeScanPipeline(
 ): Promise<SmsScanResult> {
   const durationStartedAtMs = performance.now();
   const pageSize = resolveSmsInboxPageSize(options?.maxCount);
-  const batchSize = options?.batchSize ?? DEFAULT_BATCH_SIZE;
-  const yieldInterval = options?.yieldInterval ?? DEFAULT_YIELD_INTERVAL;
+  const batchSize = Math.max(
+    1,
+    Math.floor(options?.batchSize ?? DEFAULT_BATCH_SIZE)
+  );
+  const yieldInterval = Math.max(
+    1,
+    Math.floor(options?.yieldInterval ?? DEFAULT_YIELD_INTERVAL)
+  );
   const abortSignal = options?.abortSignal;
   const existingFingerprints =
     options?.existingFingerprints ??
@@ -421,16 +474,11 @@ async function executeScanPipeline(
     (message) =>
       message.date >= effectiveMinDate && message.date <= scanStartedAtMs
   );
-  const fingerprintedMessages = await Promise.all(
-    messages.map(async (message) => ({
-      message,
-      fingerprint: await computeSmsFingerprint({
-        sender: message.address,
-        body: message.body,
-        receivedAtMs: message.date,
-      }),
-    }))
-  );
+  const fingerprintedMessages = await fingerprintSmsMessages({
+    messages,
+    batchSize,
+    abortSignal,
+  });
   const safeguardState = await loadSmsScanSafeguardState({
     userId: initiatingScope.userId,
     scanKind: options.scanKind,
@@ -537,11 +585,7 @@ async function executeScanPipeline(
     // Yield to UI thread periodically
     batchCount++;
     if (batchCount % yieldInterval === 0) {
-      await new Promise<void>((resolve) => {
-        InteractionManager.runAfterInteractions(() => {
-          resolve();
-        });
-      });
+      await yieldToUiThread();
     }
   }
 
@@ -708,6 +752,7 @@ async function executeScanPipeline(
     parseContext: options.aiContext,
     parserDiagnostics: aiResult.diagnostics,
     safeguardSummary: aiResult.safeguardSummary,
+    initiatingUserId: initiatingScope.userId,
   };
 }
 

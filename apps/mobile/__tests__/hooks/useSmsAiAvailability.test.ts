@@ -55,6 +55,7 @@ describe("useSmsAiAvailability", () => {
       serverNow: "2026-07-20T12:00:00.000Z",
       reason: "history_cooldown",
       availableAt: "2026-07-21T12:00:00.000Z",
+      historyCooldownAvailableAt: "2026-07-21T12:00:00.000Z",
     });
   });
 

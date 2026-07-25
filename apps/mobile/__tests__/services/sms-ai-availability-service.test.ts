@@ -34,6 +34,7 @@ describe("sms-ai-availability-service", () => {
       serverNow: "2026-07-20T12:00:00.000Z",
       reason: "history_cooldown",
       availableAt: "2026-07-21T12:00:00.000Z",
+      historyCooldownAvailableAt: "2026-07-21T12:00:00.000Z",
     });
     expect(mockInvoke).toHaveBeenCalledWith("sms-ai-availability", {
       method: "GET",
@@ -44,7 +45,7 @@ describe("sms-ai-availability-service", () => {
     mockInvoke.mockResolvedValue({
       data: {
         serverNow: "2026-07-20T14:01:48.335842+00:00",
-        blockers: {},
+        blockers: { historyCooldown: { availableAt: null } },
         reason: "rolling_limit",
         availableAt: "2026-07-21T14:01:48.335842+00:00",
       },
@@ -55,6 +56,7 @@ describe("sms-ai-availability-service", () => {
       serverNow: "2026-07-20T14:01:48.335842+00:00",
       reason: "rolling_limit",
       availableAt: "2026-07-21T14:01:48.335842+00:00",
+      historyCooldownAvailableAt: null,
     });
   });
 

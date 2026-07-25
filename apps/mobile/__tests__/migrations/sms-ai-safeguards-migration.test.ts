@@ -158,6 +158,18 @@ describe("SMS AI safeguards migration", () => {
     );
   });
 
+  it("anchors active history cooldowns to each scan session's first provider start", () => {
+    for (const sql of [
+      readMigrationSql(),
+      readPrivacyAndScanSessionFixSql(),
+      readLedgerFingerprintRemovalSql(),
+    ]) {
+      expect(sql).toMatch(
+        /SELECT min\(history_scan\.first_started_at\)[\s\S]*GROUP BY COALESCE\(work\.scan_session_id, work\.id::text\)[\s\S]*WHERE history_scan\.first_started_at >[\s\S]*make_interval/i
+      );
+    }
+  });
+
   it("removes the preview compatibility fingerprint column after replacing its writer", () => {
     const sql = readLedgerFingerprintRemovalSql();
 

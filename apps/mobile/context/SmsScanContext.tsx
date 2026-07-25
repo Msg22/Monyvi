@@ -46,6 +46,7 @@ interface SmsScanContextValue {
   readonly parseContext: ParseSmsContext | null;
   readonly safeguardSummary: SmsScanSafeguardSummary | null;
   readonly parserDiagnostics: SmsParserDiagnostics | null;
+  readonly initiatingUserId: string | null;
   readonly reviewSessionId: number;
   readonly setReviewSession: (result: SmsScanResult) => void;
   readonly updateReviewSession: (
@@ -94,6 +95,7 @@ export function SmsScanProvider({
     useState<SmsScanSafeguardSummary | null>(null);
   const [parserDiagnostics, setParserDiagnostics] =
     useState<SmsParserDiagnostics | null>(null);
+  const [initiatingUserId, setInitiatingUserId] = useState<string | null>(null);
   const reviewSessionIdRef = useRef(0);
   const [reviewSessionId, setReviewSessionId] = useState(0);
 
@@ -110,6 +112,7 @@ export function SmsScanProvider({
       setParseContext(null);
       setSafeguardSummary(null);
       setParserDiagnostics(null);
+      setInitiatingUserId(null);
     },
     [advanceReviewSession]
   );
@@ -121,6 +124,7 @@ export function SmsScanProvider({
     setParseContext(null);
     setSafeguardSummary(null);
     setParserDiagnostics(null);
+    setInitiatingUserId(null);
   }, [advanceReviewSession]);
 
   const setReviewSession = useCallback(
@@ -131,6 +135,7 @@ export function SmsScanProvider({
       setParseContext(result.parseContext);
       setSafeguardSummary(result.safeguardSummary);
       setParserDiagnostics(result.parserDiagnostics);
+      setInitiatingUserId(result.initiatingUserId);
     },
     [advanceReviewSession]
   );
@@ -176,6 +181,7 @@ export function SmsScanProvider({
       parseContext,
       safeguardSummary,
       parserDiagnostics,
+      initiatingUserId,
       reviewSessionId,
       setReviewSession,
       updateReviewSession,
@@ -190,6 +196,7 @@ export function SmsScanProvider({
       parseContext,
       safeguardSummary,
       parserDiagnostics,
+      initiatingUserId,
       reviewSessionId,
       setReviewSession,
       updateReviewSession,

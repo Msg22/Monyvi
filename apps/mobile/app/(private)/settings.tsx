@@ -844,9 +844,7 @@ export default function SettingsScreen(): React.JSX.Element {
             onIncrementalSync={handleIncrementalSync}
             onHistoryRescanPress={() => setIsFullRescanModalOpen(true)}
             historyRescanAvailableAt={
-              smsAiAvailability?.reason === "history_cooldown"
-                ? smsAiAvailability.availableAt
-                : null
+              smsAiAvailability?.historyCooldownAvailableAt ?? null
             }
             language={language}
           />
