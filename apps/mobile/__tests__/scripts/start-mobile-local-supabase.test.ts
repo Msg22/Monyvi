@@ -6,6 +6,7 @@ interface StartMobileLocalSupabaseModule {
   buildLocalFunctionsServeCommand(options?: {
     readonly npxCommand?: string;
     readonly platform?: NodeJS.Platform;
+    readonly isSafeguardQaEnabled?: boolean;
   }): {
     readonly command: string;
     readonly args: readonly string[];
@@ -26,7 +27,8 @@ interface StartMobileLocalSupabaseModule {
   };
   buildManualQaSeedEnv(
     cliPassword: string | null,
-    baseEnv?: Readonly<Record<string, string | undefined>>
+    baseEnv?: Readonly<Record<string, string | undefined>>,
+    smsSafeguardProfile?: string | null
   ): Record<string, string | undefined>;
   buildLocalSupabaseExpoEnv(
     anonKey: string,
@@ -52,6 +54,7 @@ interface StartMobileLocalSupabaseModule {
     readonly shouldUseLocalParser: boolean;
     readonly shouldUseFixtureSmsInbox: boolean;
     readonly shouldEnableQaSmsPatternIntake: boolean;
+    readonly smsSafeguardProfile: string | null;
     readonly password: string | null;
     readonly expoArgs: readonly string[];
   };
@@ -69,6 +72,7 @@ interface StartMobileLocalSupabaseModule {
       readonly pathExists?: (path: string) => boolean;
     }
   ): string;
+  shouldUseCommandShell(command: string, platform?: NodeJS.Platform): boolean;
   resolveNgrokTunnelUrl(apiResponse: string): string;
   shouldShowSetupOutput(
     env?: Readonly<Record<string, string | undefined>>
@@ -96,6 +100,26 @@ describe("start-mobile-local-supabase script helpers", () => {
     ).toEqual({
       command: "npx.cmd",
       args: ["supabase", "functions", "serve"],
+      shell: true,
+    });
+  });
+
+  it("loads the local-only safeguard QA flag only for safeguard QA launches", () => {
+    expect(
+      startMobileLocalSupabase.buildLocalFunctionsServeCommand({
+        npxCommand: "npx.cmd",
+        platform: "win32",
+        isSafeguardQaEnabled: true,
+      })
+    ).toEqual({
+      command: "npx.cmd",
+      args: [
+        "supabase",
+        "functions",
+        "serve",
+        "--env-file",
+        "supabase/functions/sms-safeguard-qa.local.env",
+      ],
       shell: true,
     });
   });
@@ -211,6 +235,7 @@ describe("start-mobile-local-supabase script helpers", () => {
       shouldUseLocalParser: true,
       shouldUseFixtureSmsInbox: true,
       shouldEnableQaSmsPatternIntake: false,
+      smsSafeguardProfile: null,
       password: "LocalOnlyPassword123!",
       expoArgs: ["--clear"],
     });
@@ -249,6 +274,18 @@ describe("start-mobile-local-supabase script helpers", () => {
     });
   });
 
+  it("uses the Windows shell only for command shims, never direct Node paths", () => {
+    expect(
+      startMobileLocalSupabase.shouldUseCommandShell(
+        "C:\\Program Files\\nodejs\\node.exe",
+        "win32"
+      )
+    ).toBe(false);
+    expect(
+      startMobileLocalSupabase.shouldUseCommandShell("npm.cmd", "win32")
+    ).toBe(true);
+  });
+
   it("falls back to npx Expo resolution when the package CLI is unavailable", () => {
     expect(
       startMobileLocalSupabase.buildExpoStartCommand([], {
@@ -279,6 +316,7 @@ describe("start-mobile-local-supabase script helpers", () => {
       shouldUseLocalParser: false,
       shouldUseFixtureSmsInbox: false,
       shouldEnableQaSmsPatternIntake: false,
+      smsSafeguardProfile: null,
       password: "LocalOnlyPassword123!",
       expoArgs: [],
     });
@@ -290,8 +328,36 @@ describe("start-mobile-local-supabase script helpers", () => {
       shouldUseLocalParser: true,
       shouldUseFixtureSmsInbox: true,
       shouldEnableQaSmsPatternIntake: false,
+      smsSafeguardProfile: null,
       password: null,
       expoArgs: [],
+    });
+  });
+
+  it("can use the fixture SMS inbox without forcing the local parser", () => {
+    expect(
+      startMobileLocalSupabase.parseCliArgs(["--fixture-sms-inbox"])
+    ).toEqual({
+      shouldUseWirelessDeviceTunnel: false,
+      shouldUseLocalParser: false,
+      shouldUseFixtureSmsInbox: true,
+      shouldEnableQaSmsPatternIntake: false,
+      smsSafeguardProfile: null,
+      password: null,
+      expoArgs: [],
+    });
+  });
+
+  it("keeps a named safeguard profile out of forwarded Expo arguments", () => {
+    expect(
+      startMobileLocalSupabase.parseCliArgs([
+        "--sms-safeguard-profile",
+        "partial-quota-v1",
+        "--clear",
+      ])
+    ).toMatchObject({
+      smsSafeguardProfile: "partial-quota-v1",
+      expoArgs: ["--clear"],
     });
   });
 
@@ -337,6 +403,20 @@ describe("start-mobile-local-supabase script helpers", () => {
     ).toMatchObject({
       MANUAL_QA_PASSWORD: "from-cli",
       MANUAL_QA_PRESERVE_PASSWORD: undefined,
+    });
+  });
+
+  it("seeds both account-switch users with the known device QA password", () => {
+    expect(
+      startMobileLocalSupabase.buildManualQaSeedEnv(
+        null,
+        {},
+        "account-switch-v1"
+      )
+    ).toMatchObject({
+      MANUAL_QA_PASSWORD: "123456",
+      MANUAL_QA_PRESERVE_PASSWORD: undefined,
+      SMS_SAFEGUARD_QA_PROFILE: "account-switch-v1",
     });
   });
 
@@ -451,6 +531,22 @@ describe("start-mobile-local-supabase script helpers", () => {
     expect(env.EXPO_PUBLIC_MONYVI_TEST_MODE).toBe("off");
     expect(env.EXPO_PUBLIC_AI_SMS_PARSER_MODE).toBe("edge");
     expect(env.EXPO_PUBLIC_SMS_INBOX_MODE).toBe("device");
+    expect(env.EXPO_PUBLIC_SUPABASE_AUTH_STORAGE_KEY).toBe(
+      "sb-monyvi-local-auth-token"
+    );
+  });
+
+  it("preserves an explicitly selected local auth storage key", () => {
+    const env = startMobileLocalSupabase.buildLocalSupabaseExpoEnv(
+      "local-anon-key",
+      {
+        EXPO_PUBLIC_SUPABASE_AUTH_STORAGE_KEY: "custom-local-auth-key",
+      }
+    );
+
+    expect(env.EXPO_PUBLIC_SUPABASE_AUTH_STORAGE_KEY).toBe(
+      "custom-local-auth-key"
+    );
   });
 
   it("can opt normal dev mode into local parser and fixture SMS inbox", () => {
@@ -479,6 +575,19 @@ describe("start-mobile-local-supabase script helpers", () => {
 
     expect(env.EXPO_PUBLIC_AI_SMS_PARSER_MODE).toBe("local");
     expect(env.EXPO_PUBLIC_SMS_INBOX_MODE).toBe("fixture");
+  });
+
+  it("fails when a specialized launcher resolves an unexpected parser mode", () => {
+    expect(() =>
+      startMobileLocalSupabase.buildLocalSupabaseExpoEnv(
+        "local-anon-key",
+        {
+          EXPO_PUBLIC_AI_SMS_PARSER_MODE: "edge",
+          MONYVI_EXPECTED_AI_SMS_PARSER_MODE: "edge",
+        },
+        { shouldUseLocalParser: true }
+      )
+    ).toThrow(/expected parser mode edge.*resolved local/i);
   });
 
   it("does not opt out of Expo monorepo root detection", () => {

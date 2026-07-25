@@ -41,6 +41,7 @@ import { setIntroLocaleOverride } from "@/services/intro-flag-service";
 import { setPreferredLanguage } from "@/services/profile-service";
 import { useSmsPermission } from "@/hooks/useSmsPermission";
 import { useSmsSync } from "@/hooks/useSmsSync";
+import { useSmsAiAvailability } from "@/hooks/useSmsAiAvailability";
 import { useSmsScanContext } from "@/context/SmsScanContext";
 import {
   reconcileLiveDetectionPreference,
@@ -95,7 +96,7 @@ export default function SettingsScreen(): React.JSX.Element {
     openSettings,
     recheckPermission,
   } = useSmsPermission();
-  const { hasSynced, lastSyncTimestamp } = useSmsSync();
+  const { hasSynced } = useSmsSync();
   const { setScanMode } = useSmsScanContext();
   const [isFullRescanModalOpen, setIsFullRescanModalOpen] = useState(false);
   const { showToast } = useToast();
@@ -140,7 +141,7 @@ export default function SettingsScreen(): React.JSX.Element {
   const [hasPendingNotificationEnable, setHasPendingNotificationEnable] =
     useState(false);
   const [pendingSmsScanMode, setPendingSmsScanMode] = useState<
-    "incremental" | "full" | null
+    "incremental" | "history" | null
   >(null);
   const isRequestingSmsSyncPermissionRef = useRef(false);
   const [pendingAiConsentAction, setPendingAiConsentAction] =
@@ -156,6 +157,8 @@ export default function SettingsScreen(): React.JSX.Element {
     isPersistedConsented: aiConsent.isConsented,
     revokePersistedConsent: aiConsent.revokeConsent,
   });
+  const { availability: smsAiAvailability } =
+    useSmsAiAvailability(isAiConsentEnabled);
   const liveDetectionSwitchValue = liveDetection || isLiveDetectionEnabling;
   const previousNotificationAppState = useRef<AppStateStatus>(
     AppState.currentState
@@ -712,7 +715,7 @@ export default function SettingsScreen(): React.JSX.Element {
    * Sets the scan mode before navigation.
    */
   const navigateToScan = useCallback(
-    (mode: "incremental" | "full"): void => {
+    (mode: "incremental" | "history"): void => {
       if (!isAndroid) {
         showToast({
           type: "info",
@@ -837,11 +840,13 @@ export default function SettingsScreen(): React.JSX.Element {
           <SmsSyncSettingsSection
             t={t}
             hasSynced={hasSynced}
-            lastSyncTimestamp={lastSyncTimestamp}
-            smsPermissionStatus={smsPermissionStatus}
             chevronColor={theme.text.secondary}
             onIncrementalSync={handleIncrementalSync}
-            onFullRescanPress={() => setIsFullRescanModalOpen(true)}
+            onHistoryRescanPress={() => setIsFullRescanModalOpen(true)}
+            historyRescanAvailableAt={
+              smsAiAvailability?.historyCooldownAvailableAt ?? null
+            }
+            language={language}
           />
         )}
 
@@ -906,7 +911,7 @@ export default function SettingsScreen(): React.JSX.Element {
         }}
         onConfirmFullRescan={() => {
           setIsFullRescanModalOpen(false);
-          navigateToScan("full");
+          navigateToScan("history");
         }}
         showForceLogoutError={showForceLogoutError}
         showSyncWarning={showSyncWarning}

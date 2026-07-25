@@ -378,6 +378,7 @@ interface MockUser {
 
 interface MockClientOptions {
   readonly authPages?: readonly (readonly MockUser[])[];
+  readonly existingProfileIds?: Readonly<Record<string, string>>;
   readonly marketRateRows?: unknown[];
   readonly profileRows?: unknown[];
   readonly transactionRows?: unknown[];
@@ -421,6 +422,18 @@ function createMockClient(
       },
     },
     from: (table: string) => ({
+      select: () => ({
+        eq: (_column: string, value: string) => ({
+          maybeSingle: () =>
+            Promise.resolve({
+              data:
+                table === "profiles" && options.existingProfileIds?.[value]
+                  ? { id: options.existingProfileIds[value] }
+                  : null,
+              error: null,
+            }),
+        }),
+      }),
       delete: () => ({
         eq: (column: string, value: string) => {
           operations.push(`delete:${table}:${column}:${value}`);

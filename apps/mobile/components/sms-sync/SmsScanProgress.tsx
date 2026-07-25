@@ -20,6 +20,11 @@ import {
   ScanningState,
   SuccessState,
 } from "./SmsScanProgressParts";
+import { SmsScanScopeNotice } from "./SmsScanScopeNotice";
+import { PartialSmsResultsNotice } from "@/components/transaction-review/PartialSmsResultsNotice";
+import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator";
+import type { SmsSafeguardQaDiagnosticsViewModel } from "@/services/sms-safeguard-qa-diagnostics-service";
+import { SafeguardQaDiagnosticsPanel } from "./SafeguardQaDiagnosticsPanel";
 
 interface SmsScanProgressProps {
   /** Current scan status */
@@ -36,6 +41,9 @@ interface SmsScanProgressProps {
   readonly topCategories: readonly string[];
   /** System category name to display label mapping */
   readonly categoryNameMap: ReadonlyMap<string, string>;
+  readonly safeguardSummary: SmsScanSafeguardSummary;
+  readonly retryableCount?: number;
+  readonly qaDiagnostics?: SmsSafeguardQaDiagnosticsViewModel | null;
   /** Error message if scan failed */
   readonly error: string | null;
   /** Called when user taps "Review Transactions" */
@@ -54,6 +62,9 @@ export function SmsScanProgress({
   durationMs,
   topCategories,
   categoryNameMap,
+  safeguardSummary,
+  retryableCount = 0,
+  qaDiagnostics = null,
   error,
   onReviewPress,
   onBackPress,
@@ -79,12 +90,37 @@ export function SmsScanProgress({
         </Text>
       </View>
 
+      <SmsScanScopeNotice label={translate("sms_scan_scope_last_30_days")} />
+
       {status === "scanning" ? (
         <ScrollView
           className="flex-1 px-4"
           showsVerticalScrollIndicator={false}
         >
           <ScanningState progress={progress} t={translate} />
+        </ScrollView>
+      ) : status === "complete" &&
+        transactionsFound > 0 &&
+        qaDiagnostics !== null ? (
+        <ScrollView
+          testID="sms-scan-complete-scroll"
+          className="flex-1"
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="px-4 pb-6">
+            <SuccessState
+              transactionsFound={transactionsFound}
+              totalScanned={totalScanned}
+              durationMs={durationMs}
+              topCategories={topCategories}
+              categoryNameMap={categoryNameMap}
+              onReviewPress={onReviewPress}
+              onBackPress={onBackPress}
+              t={translate}
+              isScrollable
+            />
+            <SafeguardQaDiagnosticsPanel diagnostics={qaDiagnostics} />
+          </View>
         </ScrollView>
       ) : (
         <View className="flex-1 px-4">
@@ -101,13 +137,40 @@ export function SmsScanProgress({
             />
           )}
 
-          {status === "complete" && transactionsFound === 0 && (
-            <EmptyState
-              totalScanned={totalScanned}
-              onBackPress={onBackPress}
-              t={translate}
-            />
-          )}
+          {status === "complete" &&
+            transactionsFound === 0 &&
+            safeguardSummary.completionStatus === "complete" && (
+              <EmptyState
+                totalScanned={totalScanned}
+                onBackPress={onBackPress}
+                t={translate}
+              />
+            )}
+
+          {status === "complete" &&
+            transactionsFound === 0 &&
+            safeguardSummary.completionStatus === "partial" && (
+              <View className="flex-1 justify-center pb-6">
+                <PartialSmsResultsNotice
+                  safeguardSummary={safeguardSummary}
+                  retryableCount={retryableCount}
+                  canRetry={retryableCount > 0}
+                  isRetrying={false}
+                  hasRetryError={false}
+                  onRetry={onReviewPress}
+                />
+                <TouchableOpacity
+                  onPress={onBackPress}
+                  activeOpacity={0.85}
+                  className="mt-6 w-full items-center rounded-2xl bg-slate-100 py-4 dark:bg-slate-800"
+                >
+                  <Text className="text-sm font-semibold text-slate-800 dark:text-white">
+                    {translate("back_to_dashboard")}
+                  </Text>
+                </TouchableOpacity>
+                <SafeguardQaDiagnosticsPanel diagnostics={qaDiagnostics} />
+              </View>
+            )}
 
           {status === "error" && (
             <ErrorState

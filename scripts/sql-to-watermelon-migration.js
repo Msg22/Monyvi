@@ -35,7 +35,12 @@ const SCHEMA_TS_PATH = path.join(__dirname, "../packages/db/src/schema.ts");
 const SUPABASE_MIGRATIONS_DIR = path.join(__dirname, "../supabase/migrations");
 
 // Tables excluded from WatermelonDB
-const EXCLUDED_TABLES = ["__InternalSupabase"];
+const EXCLUDED_TABLES = [
+  "__InternalSupabase",
+  "sms_ai_work_requests",
+  "sms_ai_usage_events",
+  "sms_ai_scan_sessions",
+];
 
 // Timestamp fields — these use WatermelonDB type "number" regardless of SQL type
 const TIMESTAMP_FIELDS = [
@@ -375,12 +380,14 @@ function getCurrentVersion() {
  *
  * @param {boolean} hasAddColumns
  * @param {boolean} hasCreateTables
+ * @param {boolean} hasUnsafeExecuteSql
  * @returns {string}
  */
-function generateImports(hasAddColumns, hasCreateTables) {
+function generateImports(hasAddColumns, hasCreateTables, hasUnsafeExecuteSql) {
   const imports = ["schemaMigrations"];
   if (hasAddColumns) imports.unshift("addColumns");
   if (hasCreateTables) imports.unshift("createTable");
+  if (hasUnsafeExecuteSql) imports.unshift("unsafeExecuteSql");
 
   return `import {\n  ${imports.join(",\n  ")},\n} from "@nozbe/watermelondb/Schema/migrations";`;
 }
@@ -442,14 +449,20 @@ function generateMigrationStep(toVersion, addColumnsData, createTablesData) {
  * @param {string[]} allMigrationSteps - Array of migration step code strings
  * @param {boolean} hasAddColumns
  * @param {boolean} hasCreateTables
+ * @param {boolean} hasUnsafeExecuteSql
  * @returns {string}
  */
 function generateMigrationsFile(
   allMigrationSteps,
   hasAddColumns,
-  hasCreateTables
+  hasCreateTables,
+  hasUnsafeExecuteSql
 ) {
-  const imports = generateImports(hasAddColumns, hasCreateTables);
+  const imports = generateImports(
+    hasAddColumns,
+    hasCreateTables,
+    hasUnsafeExecuteSql
+  );
 
   return `/**
  * WatermelonDB Schema Migrations
@@ -474,11 +487,16 @@ ${allMigrationSteps.join(",\n")},
 /**
  * Parse existing migration steps from the current migrations.ts file.
  *
- * @returns {{ steps: string[], hasAddColumns: boolean, hasCreateTables: boolean }}
+ * @returns {{ steps: string[], hasAddColumns: boolean, hasCreateTables: boolean, hasUnsafeExecuteSql: boolean }}
  */
 function parseExistingMigrations() {
   if (!fs.existsSync(MIGRATIONS_TS_PATH)) {
-    return { steps: [], hasAddColumns: false, hasCreateTables: false };
+    return {
+      steps: [],
+      hasAddColumns: false,
+      hasCreateTables: false,
+      hasUnsafeExecuteSql: false,
+    };
   }
 
   const content = fs.readFileSync(MIGRATIONS_TS_PATH, "utf-8");
@@ -486,6 +504,7 @@ function parseExistingMigrations() {
   // Check what functions are used
   const hasAddColumns = content.includes("addColumns(");
   const hasCreateTables = content.includes("createTable(");
+  const hasUnsafeExecuteSql = content.includes("unsafeExecuteSql(");
 
   // Extract individual migration objects from the migrations array
   // Each migration object is { toVersion: N, steps: [...] }
@@ -493,7 +512,12 @@ function parseExistingMigrations() {
     /migrations:\s*\[([\s\S]*?)\],\s*\}\);/
   );
   if (!migrationsArrayMatch) {
-    return { steps: [], hasAddColumns, hasCreateTables };
+    return {
+      steps: [],
+      hasAddColumns,
+      hasCreateTables,
+      hasUnsafeExecuteSql,
+    };
   }
 
   const migrationsArray = migrationsArrayMatch[1];
@@ -537,7 +561,12 @@ function parseExistingMigrations() {
     );
   });
 
-  return { steps: indentedSteps, hasAddColumns, hasCreateTables };
+  return {
+    steps: indentedSteps,
+    hasAddColumns,
+    hasCreateTables,
+    hasUnsafeExecuteSql,
+  };
 }
 
 // =============================================================================
@@ -895,12 +924,14 @@ function main() {
   // Determine all imports needed
   const needsAddColumns = hasNewAddColumns || existing.hasAddColumns;
   const needsCreateTable = hasNewCreateTables || existing.hasCreateTables;
+  const needsUnsafeExecuteSql = existing.hasUnsafeExecuteSql;
 
   // Generate the full file
   const output = generateMigrationsFile(
     allSteps,
     needsAddColumns,
-    needsCreateTable
+    needsCreateTable,
+    needsUnsafeExecuteSql
   );
 
   // Write migrations.ts

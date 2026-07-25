@@ -1,4 +1,5 @@
 import { z } from "zod";
+import * as Crypto from "expo-crypto";
 import {
   isSmsEnrichmentCategorySystemName,
   type CategoryTreeSource,
@@ -6,8 +7,9 @@ import {
 } from "@monyvi/logic";
 import { logger } from "@/utils/logger";
 import { isE2eTestMode } from "@/config/e2e-test-config";
+import { getSmsSafeguardQaConfig } from "@/config/sms-safeguard-qa-config";
 import { assertNotAborted } from "./abort-utils";
-import { supabase } from "./supabase";
+import { invokeAuthenticatedEdgeFunction } from "./authenticated-edge-function-service";
 import { assertExpectedCurrentUser } from "./user-data-access";
 
 const CATEGORY_ENRICHMENT_FUNCTION = "enrich-sms-categories";
@@ -35,6 +37,44 @@ export interface TrustedSmsCategoryOutcome {
   readonly confidence: number;
 }
 
+export type SmsCategoryEnrichmentScanKind =
+  | "initial"
+  | "incremental"
+  | "history"
+  | "live";
+
+export interface SmsCategoryEnrichmentRequestContext {
+  readonly requestKey?: string;
+  readonly scanSessionId: string;
+  readonly scanKind: SmsCategoryEnrichmentScanKind;
+}
+
+export type SmsCategoryEnrichmentRefusalReason =
+  | "unauthenticated"
+  | "consent_required"
+  | "malformed_request"
+  | "capability_disabled"
+  | "dependency_unavailable"
+  | "provider_failed"
+  | "scan_limit"
+  | "rolling_limit"
+  | "burst_limit"
+  | "history_cooldown"
+  | "already_processed_result_unavailable"
+  | "unknown";
+
+export type SmsCategoryEnrichmentAvailabilityReason =
+  | "scan_limit"
+  | "rolling_limit"
+  | "burst_limit"
+  | "history_cooldown"
+  | "already_processed_result_unavailable";
+
+export interface SmsCategoryEnrichmentAvailability {
+  readonly reason: SmsCategoryEnrichmentAvailabilityReason;
+  readonly availableAt: string | null;
+}
+
 export interface TrustedSmsCategoryEnrichmentResult {
   readonly outcomesByCandidateId: ReadonlyMap<
     string,
@@ -47,6 +87,9 @@ export interface TrustedSmsCategoryEnrichmentResult {
   readonly hasError: boolean;
   readonly isConsentRequired?: boolean;
   readonly isTimedOut?: boolean;
+  readonly isRetryable?: boolean;
+  readonly refusalReason?: SmsCategoryEnrichmentRefusalReason;
+  readonly availability?: SmsCategoryEnrichmentAvailability;
 }
 
 interface CategoryRequestMerchant {
@@ -66,6 +109,10 @@ interface PreparedCategoryRequest {
   readonly allowedCategorySystemNames: readonly string[];
 }
 
+interface CategoryChunkRequest extends PreparedCategoryRequest {
+  readonly requestKey: string;
+}
+
 const CategoryResponseItemSchema = z
   .object({
     merchantId: z.string().regex(/^merchant-[1-9]\d*$/),
@@ -78,12 +125,46 @@ const CategoryResponseEnvelopeSchema = z
   .object({ categories: z.array(z.unknown()) })
   .strict();
 
+const CategoryRefusalEnvelopeSchema = z
+  .object({
+    categories: z.array(z.unknown()),
+    reason: z.string().trim().min(1),
+    availableAt: z.string().datetime({ offset: true }).nullable(),
+  })
+  .strict();
+
+const CATEGORY_AVAILABILITY_REASONS: ReadonlySet<string> = new Set([
+  "scan_limit",
+  "rolling_limit",
+  "burst_limit",
+  "history_cooldown",
+  "already_processed_result_unavailable",
+]);
+
+const CATEGORY_REFUSAL_REASONS: ReadonlySet<string> = new Set([
+  "unauthenticated",
+  "consent_required",
+  "malformed_request",
+  "capability_disabled",
+  "dependency_unavailable",
+  "provider_failed",
+  "scan_limit",
+  "rolling_limit",
+  "burst_limit",
+  "history_cooldown",
+  "already_processed_result_unavailable",
+]);
+
 function emptyResult(
   attemptedMerchantCount = 0,
   hasError = false,
   flags: Pick<
     TrustedSmsCategoryEnrichmentResult,
-    "isConsentRequired" | "isTimedOut"
+    | "isConsentRequired"
+    | "isTimedOut"
+    | "isRetryable"
+    | "refusalReason"
+    | "availability"
   > = {}
 ): TrustedSmsCategoryEnrichmentResult {
   return {
@@ -245,10 +326,60 @@ function getHttpStatus(error: unknown): number | undefined {
   return context instanceof Response ? context.status : undefined;
 }
 
+interface CategoryRefusalMetadata {
+  readonly reason: SmsCategoryEnrichmentRefusalReason;
+  readonly availableAt: string | null;
+  readonly availabilityReason?: SmsCategoryEnrichmentAvailabilityReason;
+  readonly bodyLength: number;
+}
+
+async function getRefusalMetadata(
+  error: unknown
+): Promise<CategoryRefusalMetadata | undefined> {
+  const context = (error as { readonly context?: unknown })?.context;
+  if (!(context instanceof Response)) return undefined;
+
+  let responseText: string;
+  try {
+    responseText = await context.clone().text();
+  } catch {
+    return undefined;
+  }
+
+  let parsedBody: z.infer<typeof CategoryRefusalEnvelopeSchema>;
+  try {
+    const parsed = CategoryRefusalEnvelopeSchema.safeParse(
+      JSON.parse(responseText)
+    );
+    if (!parsed.success) return undefined;
+    parsedBody = parsed.data;
+  } catch {
+    return undefined;
+  }
+
+  const reason: SmsCategoryEnrichmentRefusalReason =
+    CATEGORY_REFUSAL_REASONS.has(parsedBody.reason)
+      ? (parsedBody.reason as SmsCategoryEnrichmentRefusalReason)
+      : "unknown";
+  const availabilityReason = CATEGORY_AVAILABILITY_REASONS.has(
+    parsedBody.reason
+  )
+    ? (parsedBody.reason as SmsCategoryEnrichmentAvailabilityReason)
+    : undefined;
+  return {
+    reason,
+    availableAt: parsedBody.availableAt,
+    availabilityReason,
+    bodyLength: responseText.length,
+  };
+}
+
 function splitPreparedRequest(
-  prepared: PreparedCategoryRequest
-): readonly PreparedCategoryRequest[] {
-  const chunks: PreparedCategoryRequest[] = [];
+  prepared: PreparedCategoryRequest,
+  requestKey: string
+): readonly CategoryChunkRequest[] {
+  const chunks: CategoryChunkRequest[] = [];
+  let chunkNumber = 0;
   for (
     let start = 0;
     start < prepared.body.merchants.length;
@@ -258,7 +389,10 @@ function splitPreparedRequest(
       start,
       start + CATEGORY_ENRICHMENT_CHUNK_SIZE
     );
+    chunkNumber += 1;
     chunks.push({
+      requestKey:
+        chunkNumber === 1 ? requestKey : `${requestKey}:${chunkNumber}`,
       body: {
         merchants,
       },
@@ -322,8 +456,9 @@ function createTimedRequestSignal(
 }
 
 async function invokeCategoryChunk(
-  prepared: PreparedCategoryRequest,
+  prepared: CategoryChunkRequest,
   timedSignal: TimedRequestSignal,
+  requestContext: SmsCategoryEnrichmentRequestContext,
   abortSignal?: AbortSignal,
   expectedUserId?: string
 ): Promise<TrustedSmsCategoryEnrichmentResult> {
@@ -342,27 +477,73 @@ async function invokeCategoryChunk(
       assertNotAborted(abortSignal, "SMS category enrichment aborted");
       return emptyResult(attemptedMerchantCount, true, { isTimedOut: true });
     }
+    const qaConfig = getSmsSafeguardQaConfig();
+    const functionName = qaConfig.enabled
+      ? "sms-safeguard-qa"
+      : CATEGORY_ENRICHMENT_FUNCTION;
     const response = await Promise.race([
-      supabase.functions.invoke(CATEGORY_ENRICHMENT_FUNCTION, {
-        body: prepared.body,
-        signal: timedSignal.signal,
-      }),
+      invokeAuthenticatedEdgeFunction(
+        functionName,
+        {
+          body: {
+            requestKey: prepared.requestKey,
+            scanSessionId: requestContext.scanSessionId,
+            scanKind: requestContext.scanKind,
+            ...prepared.body,
+            ...(qaConfig.enabled
+              ? {
+                  qaCapability: "category_enrichment",
+                  qaProfileId: qaConfig.profileId,
+                  qaRunId: qaConfig.runId,
+                }
+              : {}),
+          },
+          ...(qaConfig.enabled
+            ? {
+                headers: {
+                  "x-sms-safeguard-qa-run-id": qaConfig.runId ?? "",
+                },
+              }
+            : {}),
+          signal: timedSignal.signal,
+        },
+        expectedUserId === undefined
+          ? undefined
+          : {
+              beforeRetry: () => assertExpectedCurrentUser(expectedUserId),
+            }
+      ),
       timedSignal.deadline,
     ]);
     assertNotAborted(abortSignal, "SMS category enrichment aborted");
 
     if (response.error) {
       const status = getHttpStatus(response.error);
+      const refusal = await getRefusalMetadata(response.error);
       if (status === AI_CONSENT_REQUIRED_STATUS) {
         return emptyResult(attemptedMerchantCount, true, {
           isConsentRequired: true,
+          isRetryable: false,
+          refusalReason: refusal?.reason ?? "consent_required",
         });
       }
       logger.warn("smsCategoryEnrichment.requestFailed", {
         attemptedMerchantCount,
         status,
+        bodyLength: refusal?.bodyLength,
+        reason: refusal?.reason,
       });
-      return emptyResult(attemptedMerchantCount, true);
+      return emptyResult(attemptedMerchantCount, true, {
+        isRetryable: false,
+        refusalReason: refusal?.reason,
+        availability:
+          refusal?.availabilityReason === undefined
+            ? undefined
+            : {
+                reason: refusal.availabilityReason,
+                availableAt: refusal.availableAt,
+              },
+      });
     }
 
     return mapCategoryResponse(response.data, prepared);
@@ -393,6 +574,9 @@ function mergeCategoryResults(
   let hasError = false;
   let isConsentRequired = false;
   let isTimedOut = false;
+  let isRetryable: boolean | undefined;
+  let refusalReason: SmsCategoryEnrichmentRefusalReason | undefined;
+  let availability: SmsCategoryEnrichmentAvailability | undefined;
 
   for (const result of results) {
     for (const [candidateId, outcome] of result.outcomesByCandidateId) {
@@ -404,6 +588,21 @@ function mergeCategoryResults(
     hasError ||= result.hasError;
     isConsentRequired ||= result.isConsentRequired === true;
     isTimedOut ||= result.isTimedOut === true;
+    if (result.isRetryable === false) isRetryable = false;
+    else if (result.isRetryable === true && isRetryable === undefined)
+      isRetryable = true;
+    refusalReason ??= result.refusalReason;
+    if (result.availability !== undefined) {
+      const currentAvailableAt = availability?.availableAt
+        ? Date.parse(availability.availableAt)
+        : Number.NEGATIVE_INFINITY;
+      const nextAvailableAt = result.availability.availableAt
+        ? Date.parse(result.availability.availableAt)
+        : Number.NEGATIVE_INFINITY;
+      if (availability === undefined || nextAvailableAt > currentAvailableAt) {
+        availability = result.availability;
+      }
+    }
   }
 
   return {
@@ -415,12 +614,16 @@ function mergeCategoryResults(
     hasError,
     isConsentRequired,
     isTimedOut,
+    isRetryable,
+    refusalReason,
+    availability,
   };
 }
 
 async function invokeCategoryChunks(
-  chunks: readonly PreparedCategoryRequest[],
+  chunks: readonly CategoryChunkRequest[],
   timedSignal: TimedRequestSignal,
+  requestContext: SmsCategoryEnrichmentRequestContext,
   abortSignal?: AbortSignal,
   expectedUserId?: string
 ): Promise<readonly TrustedSmsCategoryEnrichmentResult[]> {
@@ -441,14 +644,22 @@ async function invokeCategoryChunks(
     );
     const waveResults = await Promise.all(
       wave.map((chunk) =>
-        invokeCategoryChunk(chunk, timedSignal, abortSignal, expectedUserId)
+        invokeCategoryChunk(
+          chunk,
+          timedSignal,
+          requestContext,
+          abortSignal,
+          expectedUserId
+        )
       )
     );
     results = [...results, ...waveResults];
     if (
       waveResults.some(
         (result) =>
-          result.isConsentRequired === true || result.isTimedOut === true
+          result.isConsentRequired === true ||
+          result.isTimedOut === true ||
+          result.availability !== undefined
       )
     ) {
       break;
@@ -461,7 +672,8 @@ export async function enrichTrustedSmsCategories(
   candidates: readonly TrustedSmsCategoryCandidate[],
   categories: readonly CategoryTreeSource[],
   abortSignal?: AbortSignal,
-  expectedUserId?: string
+  expectedUserId?: string,
+  requestContext?: SmsCategoryEnrichmentRequestContext
 ): Promise<TrustedSmsCategoryEnrichmentResult> {
   assertNotAborted(abortSignal, "SMS category enrichment aborted");
   const prepared = prepareCategoryRequest(candidates, categories);
@@ -479,12 +691,23 @@ export async function enrichTrustedSmsCategories(
     return emptyResult(attemptedMerchantCount, true);
   }
 
-  const chunks = splitPreparedRequest(prepared);
+  const resolvedRequestContext =
+    requestContext ??
+    ({
+      requestKey: Crypto.randomUUID(),
+      scanSessionId: Crypto.randomUUID(),
+      scanKind: "incremental",
+    } satisfies SmsCategoryEnrichmentRequestContext);
+  const chunks = splitPreparedRequest(
+    prepared,
+    resolvedRequestContext.requestKey ?? Crypto.randomUUID()
+  );
   const timedSignal = createTimedRequestSignal(abortSignal);
   try {
     const chunkResults = await invokeCategoryChunks(
       chunks,
       timedSignal,
+      resolvedRequestContext,
       abortSignal,
       expectedUserId
     );

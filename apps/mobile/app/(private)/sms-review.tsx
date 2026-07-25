@@ -23,6 +23,7 @@ import { TransactionReview } from "@/components/transaction-review/TransactionRe
 import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
 import { useSmsScanContext } from "@/context/SmsScanContext";
+import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator";
 import { useTheme } from "@/context/ThemeContext";
 import { useSmsSync } from "@/hooks/useSmsSync";
 import { useSmsReviewRetry } from "@/hooks/useSmsReviewRetry";
@@ -35,12 +36,15 @@ import {
 import type { ReviewableTransaction } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
-import { Text, TouchableOpacity } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { logger } from "@/utils/logger";
+import { PartialSmsResultsNotice } from "@/components/transaction-review/PartialSmsResultsNotice";
+import { SafeguardQaDiagnosticsPanel } from "@/components/sms-sync/SafeguardQaDiagnosticsPanel";
+import { createSmsSafeguardQaDiagnostics } from "@/services/sms-safeguard-qa-diagnostics-service";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -49,8 +53,13 @@ import { logger } from "@/utils/logger";
 export default function SmsReviewScreen(): React.JSX.Element {
   const { t } = useTranslation("transactions");
   const router = useRouter();
-  const { transactions, unresolvedCandidates, clearTransactions } =
-    useSmsScanContext();
+  const {
+    transactions,
+    unresolvedCandidates,
+    safeguardSummary,
+    parserDiagnostics,
+    clearTransactions,
+  } = useSmsScanContext();
   const { markSyncComplete } = useSmsSync();
   const { showToast } = useToast();
   const { isDark } = useTheme();
@@ -59,6 +68,32 @@ export default function SmsReviewScreen(): React.JSX.Element {
 
   const [isSaving, setIsSaving] = useState(false);
   const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
+  const activeSafeguardSummary: SmsScanSafeguardSummary | null =
+    safeguardSummary;
+
+  const partialResults =
+    activeSafeguardSummary !== null &&
+    activeSafeguardSummary.deferredAiCount +
+      activeSafeguardSummary.oversizedCount +
+      activeSafeguardSummary.unresolvedCount >
+      0
+      ? {
+          safeguardSummary: activeSafeguardSummary,
+          retryableCount: smsRetry.retryableCount,
+          canRetry: smsRetry.retryableCount > 0 && !isSaving,
+          isRetrying: smsRetry.isRetrying,
+          hasRetryError: smsRetry.hasRetryError,
+          onRetry: () => void smsRetry.retry(),
+        }
+      : undefined;
+  const qaDiagnostics = useMemo(
+    () =>
+      createSmsSafeguardQaDiagnostics({
+        parserDiagnostics,
+        safeguardSummary: activeSafeguardSummary,
+      }),
+    [activeSafeguardSummary, parserDiagnostics]
+  );
 
   // Mark review as active to queue incoming live transactions
   useEffect(() => {
@@ -117,7 +152,6 @@ export default function SmsReviewScreen(): React.JSX.Element {
             });
           });
         }
-        clearTransactions();
         router.replace("/(private)/(tabs)/transactions");
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -130,14 +164,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
         setIsSaving(false);
       }
     },
-    [
-      clearTransactions,
-      router,
-      markSyncComplete,
-      showToast,
-      t,
-      unresolvedCandidates.length,
-    ]
+    [router, markSyncComplete, showToast, t, unresolvedCandidates.length]
   );
 
   // ── Discard ─────────────────────────────────────────────────────────
@@ -164,6 +191,18 @@ export default function SmsReviewScreen(): React.JSX.Element {
     }
   }, [aiConsent, showToast, smsRetry, t]);
 
+  const retryConsentSheet = (
+    <AiProcessingConsentSheet
+      visible={smsRetry.isConsentRequired}
+      onContinue={handleRetryConsentContinue}
+      onNotNow={smsRetry.dismissConsentRequired}
+      onPrivacyDetails={() => {
+        smsRetry.dismissConsentRequired();
+        router.push("/ai-privacy-details");
+      }}
+    />
+  );
+
   // ── No transactions guard ───────────────────────────────────────────
 
   if (transactions.length === 0) {
@@ -177,6 +216,17 @@ export default function SmsReviewScreen(): React.JSX.Element {
         <Text className="text-lg text-slate-400 mt-4 text-center">
           {t("no_transactions_to_review")}
         </Text>
+        {partialResults && (
+          <View className="mt-6 w-full">
+            <PartialSmsResultsNotice
+              {...partialResults}
+              hasReviewableSuggestions={false}
+            />
+          </View>
+        )}
+        <View className="w-full">
+          <SafeguardQaDiagnosticsPanel diagnostics={qaDiagnostics} />
+        </View>
         <TouchableOpacity
           onPress={() => router.replace("/(private)/(tabs)")}
           className="mt-6 px-6 py-3 bg-slate-800 rounded-2xl"
@@ -185,6 +235,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
             {t("back_to_dashboard")}
           </Text>
         </TouchableOpacity>
+        {retryConsentSheet}
       </SafeAreaView>
     );
   }
@@ -206,17 +257,8 @@ export default function SmsReviewScreen(): React.JSX.Element {
           count: transactions.length,
         })}
         workspaceVariant="sms"
-        partialResults={
-          smsRetry.unresolvedCount > 0
-            ? {
-                unresolvedCount: smsRetry.unresolvedCount,
-                canRetry: smsRetry.retryableCount > 0 && !isSaving,
-                isRetrying: smsRetry.isRetrying,
-                hasRetryError: smsRetry.hasRetryError,
-                onRetry: () => void smsRetry.retry(),
-              }
-            : undefined
-        }
+        partialResults={partialResults}
+        qaDiagnostics={qaDiagnostics}
         onBack={() => {
           clearTransactions();
           router.back();
@@ -234,15 +276,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
         onConfirm={handleConfirmDiscard}
         onCancel={() => setDiscardConfirmVisible(false)}
       />
-      <AiProcessingConsentSheet
-        visible={smsRetry.isConsentRequired}
-        onContinue={handleRetryConsentContinue}
-        onNotNow={smsRetry.dismissConsentRequired}
-        onPrivacyDetails={() => {
-          smsRetry.dismissConsentRequired();
-          router.push("/ai-privacy-details");
-        }}
-      />
+      {retryConsentSheet}
     </SafeAreaView>
   );
 }

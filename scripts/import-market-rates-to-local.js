@@ -12,17 +12,23 @@ const { writeFileSync, unlinkSync } = require("node:fs");
 const { join, resolve } = require("node:path");
 
 const repoRoot = resolve(__dirname, "..");
+const linkedMarketRatesQuery =
+  "select * from public.market_rates order by created_at asc;";
 
-function resolveNpxCommand() {
-  return process.platform === "win32" ? "npx.cmd" : "npx";
+function getSupabaseSpawnArgs(args) {
+  return [
+    process.execPath,
+    require.resolve("supabase/dist/supabase.js"),
+    ...args,
+  ];
 }
 
 function runSupabase(args) {
-  const result = spawnSync(resolveNpxCommand(), ["supabase", ...args], {
+  const [command, ...commandArgs] = getSupabaseSpawnArgs(args);
+  const result = spawnSync(command, commandArgs, {
     cwd: repoRoot,
     encoding: "utf8",
     maxBuffer: 50 * 1024 * 1024,
-    shell: process.platform === "win32",
   });
 
   if (result.status !== 0) {
@@ -40,29 +46,21 @@ function runSupabase(args) {
   return result.stdout;
 }
 
-function queryLinkedMarketRates() {
-  const selectPath = join(repoRoot, ".tmp-market-rates-select.sql");
-  writeFileSync(
-    selectPath,
-    "select * from public.market_rates order by created_at asc;\n",
-    "utf8"
-  );
+function getLinkedMarketRatesQueryArgs() {
+  return [
+    "db",
+    "query",
+    "--agent=no",
+    "--linked",
+    "-o",
+    "json",
+    linkedMarketRatesQuery,
+  ];
+}
 
-  try {
-    const output = runSupabase([
-      "db",
-      "query",
-      "--agent=no",
-      "--linked",
-      "-o",
-      "json",
-      "-f",
-      selectPath,
-    ]);
-    return parseSupabaseQueryRows(output);
-  } finally {
-    unlinkSync(selectPath);
-  }
+function queryLinkedMarketRates() {
+  const output = runSupabase(getLinkedMarketRatesQueryArgs());
+  return parseSupabaseQueryRows(output);
 }
 
 function parseSupabaseQueryRows(output) {
@@ -157,6 +155,8 @@ if (require.main === module) {
 }
 
 module.exports = {
+  getLinkedMarketRatesQueryArgs,
+  getSupabaseSpawnArgs,
   parseImportMarketRatesArgs,
   parseSupabaseQueryRows,
 };

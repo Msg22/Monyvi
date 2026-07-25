@@ -25,6 +25,9 @@ import {
 } from "./TransactionItem";
 import { resolveTransactionReviewProvider } from "@/utils/transaction-review-provider";
 import { PartialSmsResultsNotice } from "./PartialSmsResultsNotice";
+import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator";
+import type { SmsSafeguardQaDiagnosticsViewModel } from "@/services/sms-safeguard-qa-diagnostics-service";
+import { SafeguardQaDiagnosticsPanel } from "@/components/sms-sync/SafeguardQaDiagnosticsPanel";
 
 export interface TransactionReviewProps {
   readonly transactions: readonly ReviewableTransaction[];
@@ -40,12 +43,14 @@ export interface TransactionReviewProps {
   readonly onBack?: () => void;
   readonly workspaceVariant?: "default" | "sms";
   readonly partialResults?: {
-    readonly unresolvedCount: number;
+    readonly safeguardSummary: SmsScanSafeguardSummary;
+    readonly retryableCount: number;
     readonly canRetry: boolean;
     readonly isRetrying: boolean;
     readonly hasRetryError: boolean;
     readonly onRetry: () => void;
   };
+  readonly qaDiagnostics?: SmsSafeguardQaDiagnosticsViewModel | null;
 }
 
 export const TRANSACTION_REVIEW_LIST_RENDER_CONFIG = {
@@ -65,6 +70,7 @@ export function TransactionReview({
   onBack,
   workspaceVariant = "default",
   partialResults,
+  qaDiagnostics = null,
 }: TransactionReviewProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { t } = useTranslation("common");
@@ -432,13 +438,15 @@ export function TransactionReview({
 
             {partialResults && (
               <PartialSmsResultsNotice
-                unresolvedCount={partialResults.unresolvedCount}
+                safeguardSummary={partialResults.safeguardSummary}
+                retryableCount={partialResults.retryableCount}
                 canRetry={partialResults.canRetry}
                 isRetrying={partialResults.isRetrying}
                 hasRetryError={partialResults.hasRetryError}
                 onRetry={partialResults.onRetry}
               />
             )}
+            <SafeguardQaDiagnosticsPanel diagnostics={qaDiagnostics} />
           </Animated.View>
         }
         ListEmptyComponent={

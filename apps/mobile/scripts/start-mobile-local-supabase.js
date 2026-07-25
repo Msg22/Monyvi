@@ -11,6 +11,10 @@ const http = require("node:http");
 const { existsSync } = require("node:fs");
 const { delimiter, join, resolve } = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
+const {
+  ACCOUNT_SWITCH_QA_PASSWORD,
+  ACCOUNT_SWITCH_QA_PROFILE,
+} = require("./manual-qa-seed");
 
 const LOCAL_ANDROID_SUPABASE_URL = "http://10.0.2.2:54321";
 const LOCAL_LOOPBACK_SUPABASE_URL = "http://127.0.0.1:54321";
@@ -18,6 +22,7 @@ const LOCAL_SUPABASE_PORT = "54321";
 const NGROK_API_URL = "http://127.0.0.1:4040/api/tunnels";
 const NGROK_START_TIMEOUT_MS = 30_000;
 const NGROK_POLL_INTERVAL_MS = 500;
+const LOCAL_SUPABASE_AUTH_STORAGE_KEY = "sb-monyvi-local-auth-token";
 const repoRoot = resolve(__dirname, "..", "..", "..");
 const mobileRoot = join(repoRoot, "apps", "mobile");
 const expoCliPath = join(repoRoot, "node_modules", "expo", "bin", "cli");
@@ -28,6 +33,10 @@ function resolveNpxCommand() {
 
 function resolveNpmCommand() {
   return process.platform === "win32" ? "npm.cmd" : "npm";
+}
+
+function shouldUseCommandShell(command, platform = process.platform) {
+  return platform === "win32" && /\.(cmd|bat)$/i.test(command);
 }
 
 function findOnPath(command) {
@@ -111,6 +120,7 @@ function parseCliArgs(args) {
   let shouldUseLocalParser = false;
   let shouldUseFixtureSmsInbox = false;
   let shouldEnableQaSmsPatternIntake = false;
+  let smsSafeguardProfile = null;
   let password = null;
   const expoArgs = [];
 
@@ -133,8 +143,23 @@ function parseCliArgs(args) {
       continue;
     }
 
+    if (arg === "--fixture-sms-inbox") {
+      shouldUseFixtureSmsInbox = true;
+      continue;
+    }
+
     if (arg === "--qa-sms-pattern-intake") {
       shouldEnableQaSmsPatternIntake = true;
+      continue;
+    }
+
+    if (arg === "--sms-safeguard-profile") {
+      const nextArg = args[index + 1] ?? null;
+      if (!nextArg || nextArg.startsWith("--")) {
+        throw new Error("--sms-safeguard-profile requires a value");
+      }
+      smsSafeguardProfile = nextArg;
+      index += 1;
       continue;
     }
 
@@ -161,6 +186,7 @@ function parseCliArgs(args) {
     shouldUseLocalParser,
     shouldUseFixtureSmsInbox,
     shouldEnableQaSmsPatternIntake,
+    smsSafeguardProfile,
     password,
     expoArgs,
   };
@@ -281,19 +307,30 @@ function reverseLocalSupabasePort() {
   }
 }
 
-function buildManualQaSeedEnv(cliPassword, baseEnv = process.env) {
-  const password = cliPassword ?? baseEnv.MANUAL_QA_PASSWORD;
+function buildManualQaSeedEnv(
+  cliPassword,
+  baseEnv = process.env,
+  smsSafeguardProfile = null
+) {
+  const isAccountSwitchProfile =
+    smsSafeguardProfile === ACCOUNT_SWITCH_QA_PROFILE;
+  const password =
+    cliPassword ??
+    baseEnv.MANUAL_QA_PASSWORD ??
+    (isAccountSwitchProfile ? ACCOUNT_SWITCH_QA_PASSWORD : null);
   if (password) {
     return {
       ...baseEnv,
       MANUAL_QA_PASSWORD: password,
       MANUAL_QA_PRESERVE_PASSWORD: undefined,
+      SMS_SAFEGUARD_QA_PROFILE: smsSafeguardProfile ?? undefined,
     };
   }
 
   return {
     ...baseEnv,
     MANUAL_QA_PRESERVE_PASSWORD: "1",
+    SMS_SAFEGUARD_QA_PROFILE: smsSafeguardProfile ?? undefined,
   };
 }
 
@@ -336,9 +373,19 @@ function buildLocalSupabaseExpoEnv(
   options = {}
 ) {
   const config = resolveLocalSupabaseDeviceConfig(baseEnv);
-  const { EXPO_NO_METRO_WORKSPACE_ROOT, ...metroEnv } = baseEnv;
+  const {
+    EXPO_NO_METRO_WORKSPACE_ROOT,
+    MONYVI_EXPECTED_AI_SMS_PARSER_MODE: expectedParserMode,
+    ...metroEnv
+  } = baseEnv;
   const parserMode = resolveAiSmsParserMode(baseEnv, options);
   const inboxMode = resolveSmsInboxMode(baseEnv, options);
+
+  if (expectedParserMode && expectedParserMode !== parserMode) {
+    throw new Error(
+      `Expected parser mode ${expectedParserMode}, but resolved ${parserMode}.`
+    );
+  }
 
   return {
     ...metroEnv,
@@ -346,6 +393,9 @@ function buildLocalSupabaseExpoEnv(
       baseEnv.EXPO_PUBLIC_SUPABASE_URL ?? config.supabaseUrl,
     EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
       baseEnv.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? anonKey,
+    EXPO_PUBLIC_SUPABASE_AUTH_STORAGE_KEY:
+      baseEnv.EXPO_PUBLIC_SUPABASE_AUTH_STORAGE_KEY ??
+      LOCAL_SUPABASE_AUTH_STORAGE_KEY,
     EXPO_PUBLIC_MONYVI_TEST_MODE: "off",
     EXPO_PUBLIC_AI_SMS_PARSER_MODE: parserMode,
     EXPO_PUBLIC_SMS_INBOX_MODE: inboxMode,
@@ -368,7 +418,7 @@ function runRequiredCommand(label, command, args, options = {}) {
     env,
     encoding: "utf8",
     stdio: isVerbose ? "inherit" : "pipe",
-    shell: process.platform === "win32",
+    shell: options.shell ?? shouldUseCommandShell(command),
   });
 
   if (result.status !== 0) {
@@ -487,9 +537,16 @@ function stopDevelopmentChildProcesses(children) {
 
 function buildLocalFunctionsServeCommand(options = {}) {
   const platform = options.platform ?? process.platform;
+  const isSafeguardQaEnabled =
+    options.isSafeguardQaEnabled ??
+    process.env.SMS_SAFEGUARD_QA_ENABLED === "true";
+  const args = ["supabase", "functions", "serve"];
+  if (isSafeguardQaEnabled) {
+    args.push("--env-file", "supabase/functions/sms-safeguard-qa.local.env");
+  }
   return {
     command: options.npxCommand ?? resolveNpxCommand(),
-    args: ["supabase", "functions", "serve"],
+    args,
     shell: platform === "win32",
   };
 }
@@ -627,13 +684,26 @@ async function startWirelessDeviceLocalSupabase(password, expoArgs, options) {
     "supabase:start:local",
   ]);
 
-  const seedEnv = buildManualQaSeedEnv(password);
+  const seedEnv = buildManualQaSeedEnv(
+    password,
+    process.env,
+    options.smsSafeguardProfile
+  );
   runRequiredCommand(
     "Seeding manual QA user",
     resolveNpmCommand(),
     ["run", "manual:seed-user", "-w", "@monyvi/mobile"],
     { env: seedEnv }
   );
+
+  if (options.smsSafeguardProfile) {
+    runRequiredCommand("Resetting SMS safeguard QA state", process.execPath, [
+      join(__dirname, "sms-safeguard-qa.js"),
+      "reset",
+      "--scenario",
+      options.smsSafeguardProfile,
+    ]);
+  }
 
   const functionsServe = startLocalFunctionsServe();
 
@@ -730,6 +800,7 @@ async function main() {
     shouldUseLocalParser,
     shouldUseFixtureSmsInbox,
     shouldEnableQaSmsPatternIntake,
+    smsSafeguardProfile,
     password,
     expoArgs,
   } = parseCliArgs(process.argv.slice(2));
@@ -737,6 +808,7 @@ async function main() {
     shouldUseLocalParser,
     shouldUseFixtureSmsInbox,
     shouldEnableQaSmsPatternIntake,
+    smsSafeguardProfile,
   };
 
   if (shouldUseWirelessDeviceTunnel) {
@@ -766,6 +838,7 @@ module.exports = {
   resolveLocalSupabaseDeviceConfig,
   resolveNgrokCommand,
   resolveNgrokTunnelUrl,
+  shouldUseCommandShell,
   shouldWarnAboutMissingWatchman,
   shouldShowSetupOutput,
   stopDevelopmentChildProcesses,

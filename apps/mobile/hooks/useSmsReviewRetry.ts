@@ -19,6 +19,7 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
     transactions,
     unresolvedCandidates,
     parseContext,
+    initiatingUserId,
     reviewSessionId,
     updateReviewSession,
   } = useSmsScanContext();
@@ -39,7 +40,13 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
   }, [reviewSessionId]);
 
   const retry = useCallback(async (): Promise<void> => {
-    if (activeRequestRef.current !== null || parseContext === null) return;
+    if (
+      activeRequestRef.current !== null ||
+      parseContext === null ||
+      initiatingUserId === null
+    ) {
+      return;
+    }
     if (!unresolvedCandidates.some(({ isRetryable }) => isRetryable)) return;
 
     const abortController = new AbortController();
@@ -56,6 +63,7 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
         unresolvedCandidates,
         parseContext,
         abortSignal: abortController.signal,
+        expectedUserId: initiatingUserId,
       });
       if (generationRef.current !== generation) return;
       updateReviewSession(
@@ -86,6 +94,7 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
     }
   }, [
     parseContext,
+    initiatingUserId,
     reviewSessionId,
     transactions,
     unresolvedCandidates,

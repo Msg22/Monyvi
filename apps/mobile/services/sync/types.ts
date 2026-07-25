@@ -16,7 +16,11 @@ export type SnapshotTableName =
   | "daily_snapshot_assets"
   | "daily_snapshot_balance"
   | "daily_snapshot_net_worth";
-export type ReadOnlyTableName = "market_rates" | SnapshotTableName;
+export type ServerOwnedUserTableName = "sms_ai_negative_outcomes";
+export type ReadOnlyTableName =
+  | "market_rates"
+  | SnapshotTableName
+  | ServerOwnedUserTableName;
 export type WritableSupabaseTablesNames = Exclude<
   SupabaseTablesNames,
   ReadOnlyTableName
@@ -58,6 +62,9 @@ export type UserOwnedWritableTableName = Exclude<
   WritableSupabaseTablesNames,
   ChildTableName
 >;
+export type UserOwnedPullTableName =
+  | UserOwnedWritableTableName
+  | ServerOwnedUserTableName;
 
 export type AppSyncDatabaseChangeSet = SyncDatabaseChangeSet & {
   [TableName in SupabaseTablesNames]?: SyncTableChangeSet;

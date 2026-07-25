@@ -302,7 +302,19 @@ describe("sms-parser-orchestrator", () => {
     });
     const trusted = trustedPurchaseCandidate();
 
-    const result = await parseSmsWithOrchestrator([trusted], context);
+    const result = await parseSmsWithOrchestrator(
+      [trusted],
+      context,
+      undefined,
+      undefined,
+      {
+        expectedUserId: "user-1",
+        requestContext: {
+          scanSessionId: "scan-session-1",
+          scanKind: "history",
+        },
+      }
+    );
 
     expect(mockEnrichTrustedSmsCategories).toHaveBeenCalledWith(
       [
@@ -315,7 +327,11 @@ describe("sms-parser-orchestrator", () => {
       ],
       context.categories,
       undefined,
-      "user-1"
+      "user-1",
+      {
+        scanSessionId: "scan-session-1",
+        scanKind: "history",
+      }
     );
     expect(mockParseSmsWithAi).not.toHaveBeenCalled();
     expect(result.transactions).toEqual([
@@ -597,6 +613,9 @@ describe("sms-parser-orchestrator", () => {
 
     expect(mockParseSmsWithAi).not.toHaveBeenCalled();
     expect(result.transactions).toEqual([]);
+    expect(result.durableLocalRejectionFingerprints).toEqual([
+      "fingerprint-otp",
+    ]);
     expect(result.diagnostics).toMatchObject({
       mode: "hybrid",
       localRejectedCount: 1,

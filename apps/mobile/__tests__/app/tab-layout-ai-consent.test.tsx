@@ -69,6 +69,14 @@ jest.mock("@/components/fab", () => ({
   QuickActionFab: () => null,
 }));
 
+jest.mock("@/components/dashboard/upcoming-payments", () => ({
+  PayNowModal: () => null,
+}));
+
+jest.mock("@/components/ui/Toast", () => ({
+  useToast: () => ({ showToast: jest.fn() }),
+}));
+
 jest.mock("@/components/tab-bar/CustomBottomTabBar", () => ({
   CustomBottomTabBar: ({ onMicPress }: { readonly onMicPress: () => void }) => {
     return (

@@ -19,6 +19,7 @@ export { Debt } from "./models/Debt";
 export { MarketRate } from "./models/MarketRate";
 export { Profile } from "./models/Profile";
 export { RecurringPayment } from "./models/RecurringPayment";
+export { SmsAiNegativeOutcome } from "./models/SmsAiNegativeOutcome";
 export { Transaction } from "./models/Transaction";
 export { Transfer } from "./models/Transfer";
 export { UserCategorySettings } from "./models/UserCategorySettings";

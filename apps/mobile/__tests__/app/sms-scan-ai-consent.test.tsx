@@ -21,6 +21,8 @@ const mockRouterBack = jest.fn();
 const mockRouterPush = jest.fn<void, [string]>();
 const mockRouterReplace = jest.fn<void, [string]>();
 const mockSetReviewSession = jest.fn();
+const mockSetScanMode = jest.fn();
+const mockMarkSyncComplete = jest.fn<Promise<void>, []>();
 const mockFocusEffects: Array<() => void | (() => void)> = [];
 let mockAiConsentContinue: (() => Promise<void>) | null = null;
 let mockIsAiConsented = false;
@@ -130,6 +132,7 @@ jest.mock("@/context/SmsScanContext", () => ({
   useSmsScanContext: () => ({
     scanMode: "incremental",
     setReviewSession: mockSetReviewSession,
+    setScanMode: mockSetScanMode,
   }),
 }));
 
@@ -155,7 +158,10 @@ jest.mock("@/hooks/useSmsPermission", () => ({
 }));
 
 jest.mock("@/hooks/useSmsSync", () => ({
-  useSmsSync: () => ({ lastSyncTimestamp: null }),
+  useSmsSync: () => ({
+    lastSyncTimestamp: null,
+    markSyncComplete: mockMarkSyncComplete,
+  }),
 }));
 
 jest.mock("@/hooks/useAiProcessingConsent", () => ({
@@ -215,6 +221,7 @@ describe("SmsScanScreen AI consent", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAiConsentContinue = null;
+    mockSetScanMode.mockClear();
     mockFocusEffects.length = 0;
     mockIsAiConsented = false;
     mockScanResult = null;
@@ -224,6 +231,7 @@ describe("SmsScanScreen AI consent", () => {
     mockRevokeAiConsent.mockResolvedValue();
     mockStartScan.mockResolvedValue();
     mockLoadExistingSmsFingerprints.mockResolvedValue(new Set());
+    mockMarkSyncComplete.mockResolvedValue();
   });
 
   it("keeps consent visible so the user can retry when granting consent fails", async () => {
@@ -358,7 +366,7 @@ describe("SmsScanScreen AI consent", () => {
     await waitFor(() => expect(mockGrantAiConsent).toHaveBeenCalledTimes(1));
   });
 
-  it("clears the completed scan after returning from transaction review", () => {
+  it("keeps the completed scan available after returning from transaction review", () => {
     mockIsAiConsented = true;
     mockScanStatus = "complete";
     mockScanTransactions = [{ smsFingerprint: "fp-1" }];
@@ -369,6 +377,7 @@ describe("SmsScanScreen AI consent", () => {
     };
 
     render(<SmsScanScreen />);
+    expect(mockSetScanMode).toHaveBeenCalledWith("incremental");
     fireEvent.press(screen.getByTestId("sms-scan-review"));
 
     expect(mockSetReviewSession).toHaveBeenCalledWith(mockScanResult);
@@ -378,6 +387,49 @@ describe("SmsScanScreen AI consent", () => {
       for (const focusEffect of mockFocusEffects) focusEffect();
     });
 
-    expect(mockResetScan).toHaveBeenCalledTimes(1);
+    expect(mockResetScan).not.toHaveBeenCalled();
+  });
+
+  it("opens review for a partial scan that has only retryable candidates", () => {
+    mockIsAiConsented = true;
+    mockScanStatus = "complete";
+    mockScanTransactions = [];
+    mockScanResult = {
+      transactions: [],
+      unresolvedCandidates: [
+        {
+          candidate: { message: { body: "private" } },
+          isRetryable: true,
+        },
+      ],
+      parseContext: { categories: [], supportedCurrencies: ["EGP"] },
+    };
+
+    render(<SmsScanScreen />);
+    fireEvent.press(screen.getByTestId("sms-scan-review"));
+
+    expect(mockSetReviewSession).toHaveBeenCalledWith(mockScanResult);
+    expect(mockRouterPush).toHaveBeenCalledWith("/sms-review");
+  });
+
+  it("records a successful clean scan even when it produces no review suggestions", async () => {
+    mockIsAiConsented = true;
+    mockScanStatus = "complete";
+    mockScanTransactions = [];
+    mockScanResult = {
+      transactions: [],
+      unresolvedCandidates: [],
+      parseContext: { categories: [], supportedCurrencies: ["EGP"] },
+      safeguardSummary: {
+        completionStatus: "complete",
+        deferredAiCount: 0,
+        oversizedCount: 0,
+        unresolvedCount: 0,
+      },
+    };
+
+    render(<SmsScanScreen />);
+
+    await waitFor(() => expect(mockMarkSyncComplete).toHaveBeenCalledTimes(1));
   });
 });

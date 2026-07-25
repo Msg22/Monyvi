@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react-native";
 import React from "react";
 import { SmsScanProvider, useSmsScanContext } from "@/context/SmsScanContext";
+import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator";
 import type { SmsScanResult } from "@/services/sms-sync-service";
 
 function wrapper({
@@ -11,8 +12,21 @@ function wrapper({
   return <SmsScanProvider>{children}</SmsScanProvider>;
 }
 
+const safeguardSummary: SmsScanSafeguardSummary = {
+  admittedAiCount: 2,
+  deferredAiCount: 1,
+  oversizedCount: 1,
+  unresolvedCount: 1,
+  availability: {
+    reason: "scan_limit",
+    availableAt: "2026-07-21T16:30:00.000Z",
+  },
+  completionStatus: "partial",
+};
+
 function scanResult(): SmsScanResult {
   return {
+    initiatingUserId: "user-a",
     transactions: [],
     unresolvedCandidates: [
       {
@@ -44,6 +58,7 @@ function scanResult(): SmsScanResult {
     totalFound: 0,
     totalFilteredCandidates: 1,
     durationMs: 1,
+    safeguardSummary,
   };
 }
 
@@ -54,6 +69,11 @@ describe("SmsScanContext review session", () => {
     act(() => result.current.setReviewSession(scanResult()));
     expect(result.current.unresolvedCandidates).toHaveLength(1);
     expect(result.current.parseContext?.supportedCurrencies).toEqual(["EGP"]);
+    expect(result.current.initiatingUserId).toBe("user-a");
+    expect(result.current.safeguardSummary).toEqual(safeguardSummary);
+    expect(result.current.parserDiagnostics).toEqual(
+      scanResult().parserDiagnostics
+    );
 
     act(() =>
       result.current.updateReviewSession(
@@ -71,6 +91,9 @@ describe("SmsScanContext review session", () => {
     expect(result.current.transactions).toEqual([]);
     expect(result.current.unresolvedCandidates).toEqual([]);
     expect(result.current.parseContext).toBeNull();
+    expect(result.current.safeguardSummary).toBeNull();
+    expect(result.current.parserDiagnostics).toBeNull();
+    expect(result.current.initiatingUserId).toBeNull();
   });
 
   it("does not retain raw retry state after the private provider unmounts", () => {
@@ -83,6 +106,41 @@ describe("SmsScanContext review session", () => {
     expect(second.result.current.transactions).toEqual([]);
     expect(second.result.current.unresolvedCandidates).toEqual([]);
     expect(second.result.current.parseContext).toBeNull();
+    expect(second.result.current.safeguardSummary).toBeNull();
+  });
+
+  it("refreshes the safeguard unresolved count after a partial retry", () => {
+    const { result } = renderHook(() => useSmsScanContext(), { wrapper });
+    const firstCandidate = scanResult().unresolvedCandidates[0];
+    if (!firstCandidate) throw new Error("Expected retry fixture candidate");
+    const secondCandidate = {
+      ...firstCandidate,
+      candidate: {
+        ...firstCandidate.candidate,
+        message: { ...firstCandidate.candidate.message, id: "2" },
+        smsFingerprint: "fp-2",
+      },
+    };
+    act(() =>
+      result.current.setReviewSession({
+        ...scanResult(),
+        unresolvedCandidates: [firstCandidate, secondCandidate],
+        safeguardSummary: { ...safeguardSummary, unresolvedCount: 2 },
+      })
+    );
+
+    act(() =>
+      result.current.updateReviewSession(
+        {
+          transactions: [],
+          unresolvedCandidates: [secondCandidate],
+        },
+        result.current.reviewSessionId
+      )
+    );
+
+    expect(result.current.safeguardSummary?.unresolvedCount).toBe(1);
+    expect(result.current.safeguardSummary?.completionStatus).toBe("partial");
   });
 
   it("rejects a stale retry result after the review session is cleared", () => {

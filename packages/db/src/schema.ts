@@ -7,7 +7,7 @@
 import { appSchema, tableSchema } from "@nozbe/watermelondb";
 
 export const schema = appSchema({
-  version: 23,
+  version: 24,
   tables: [
     tableSchema({
       name: "account_sms_senders",
@@ -291,6 +291,22 @@ export const schema = appSchema({
         { name: "start_date", type: "number" },
         { name: "status", type: "string" },
         { name: "type", type: "string" },
+        { name: "updated_at", type: "number" },
+        { name: "user_id", type: "string", isIndexed: true },
+      ],
+    }),
+
+    tableSchema({
+      name: "sms_ai_negative_outcomes",
+      columns: [
+        { name: "created_at", type: "number" },
+        { name: "deleted", type: "boolean" },
+        { name: "is_terminal", type: "boolean" },
+        { name: "last_classified_at", type: "string" },
+        { name: "original_received_at", type: "string" },
+        { name: "sms_fingerprint", type: "string", isIndexed: true },
+        { name: "strike_count", type: "number" },
+        { name: "terminal_at", type: "string", isOptional: true },
         { name: "updated_at", type: "number" },
         { name: "user_id", type: "string", isIndexed: true },
       ],

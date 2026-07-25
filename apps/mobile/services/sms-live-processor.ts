@@ -24,6 +24,7 @@ import {
   setLiveDetectionEnabled,
 } from "./sms-live-detection-handler";
 import { hasExistingSmsFingerprint } from "./sms-dedup-service";
+import { getTerminalSmsFingerprints } from "./sms-processing-outcome-service";
 import {
   getAiProcessingConsentStatus,
   revokeAiProcessingConsent,
@@ -335,12 +336,20 @@ export async function processLiveSmsEvent(
 
     let aiResult: Awaited<ReturnType<typeof parseSmsWithOrchestrator>>;
     try {
+      const terminalFingerprints = await getTerminalSmsFingerprints(
+        [confirmedSmsFingerprint],
+        initiatingUserId
+      );
       aiResult = await parseSmsWithOrchestrator(
         [candidate],
         context,
         undefined,
         undefined,
-        { expectedUserId: initiatingUserId }
+        {
+          expectedUserId: initiatingUserId,
+          terminalFingerprints,
+          requestContext: { scanSessionId: null, scanKind: "live" },
+        }
       );
     } catch (error: unknown) {
       if (

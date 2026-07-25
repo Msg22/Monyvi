@@ -5,8 +5,8 @@
  * Auto-starts scanning on mount and navigates to review on completion.
  *
  * Supports two scan modes (set via SmsScanContext):
- *   - "incremental" (default): passes lastSyncTimestamp as minDate
- *   - "full": scans all messages (no minDate)
+ *   - "incremental" (default): checks new messages within the policy boundary
+ *   - "history": deliberately rescans the rolling recent-history window
  *
  * @module sms-scan
  */
@@ -43,6 +43,7 @@ import { palette } from "@/constants/colors";
 import { logger } from "@/utils/logger";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
 import type { ParseSmsContext } from "@/services/ai-sms-parser-service";
+import { createSmsSafeguardQaDiagnostics } from "@/services/sms-safeguard-qa-diagnostics-service";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -187,8 +188,8 @@ function SmsPermissionGate({
  * navigates to the review page. Empty or error states provide
  * back/retry options.
  *
- * When scanMode is "incremental" and lastSyncTimestamp exists, only messages
- * newer than that timestamp are scanned. "full" scans all messages.
+ * The scan service owns the effective rolling/checkpoint boundary so every
+ * caller receives the same policy.
  */
 export default function SmsScanScreen(): React.JSX.Element {
   const router = useRouter();
@@ -217,11 +218,16 @@ export default function SmsScanScreen(): React.JSX.Element {
   const previousPermissionStatusRef = useRef(permissionStatus);
   const pendingScanAfterAbortRef = useRef(false);
   const scanAbortControllerRef = useRef<AbortController | null>(null);
-  const shouldResetAfterReviewRef = useRef(false);
   const staleConsentRevokePromiseRef = useRef<Promise<void> | null>(null);
+  const hasRecordedCleanCompletionRef = useRef(false);
 
-  const { setReviewSession, scanMode } = useSmsScanContext();
-  const { lastSyncTimestamp } = useSmsSync();
+  const { setReviewSession, setScanMode, scanMode } = useSmsScanContext();
+  const { markSyncComplete } = useSmsSync();
+  const [scanKind] = useState(scanMode);
+
+  useEffect(() => {
+    setScanMode("incremental");
+  }, [setScanMode]);
   const { categories: allCategories, isLoading: isCategoriesLoading } =
     useAllCategories();
   const isAiContextReady = !isCategoriesLoading;
@@ -234,6 +240,16 @@ export default function SmsScanScreen(): React.JSX.Element {
     }),
     [allCategories]
   );
+  const qaDiagnostics = useMemo(
+    () =>
+      result === null
+        ? null
+        : createSmsSafeguardQaDiagnostics({
+            parserDiagnostics: result.parserDiagnostics,
+            safeguardSummary: result.safeguardSummary,
+          }),
+    [result]
+  );
 
   // Shared scan initiation logic (used by both auto-start and retry)
   const initiateScan = useCallback(async (): Promise<void> => {
@@ -243,11 +259,6 @@ export default function SmsScanScreen(): React.JSX.Element {
       scanInitiated.current = false;
       return;
     }
-
-    const minDate =
-      scanMode === "incremental" && lastSyncTimestamp
-        ? lastSyncTimestamp
-        : undefined;
 
     const abortController = new AbortController();
     scanAbortControllerRef.current = abortController;
@@ -273,7 +284,7 @@ export default function SmsScanScreen(): React.JSX.Element {
     }
 
     startScan({
-      minDate,
+      scanKind,
       existingFingerprints,
       aiContext,
       abortSignal: abortController.signal,
@@ -293,7 +304,7 @@ export default function SmsScanScreen(): React.JSX.Element {
           }
         }
       });
-  }, [startScan, scanMode, lastSyncTimestamp, aiContext]);
+  }, [startScan, scanKind, aiContext]);
 
   // Auto-start scan on mount — waits until permission is granted and categories loaded
   useEffect(() => {
@@ -374,10 +385,34 @@ export default function SmsScanScreen(): React.JSX.Element {
     }
   }, [isPermissionLoading, permissionStatus]);
 
+  useEffect(() => {
+    const hasCleanEmptyCompletion =
+      status === "complete" &&
+      result !== null &&
+      transactions.length === 0 &&
+      result.unresolvedCandidates.length === 0 &&
+      result.safeguardSummary.completionStatus === "complete";
+
+    if (!hasCleanEmptyCompletion || hasRecordedCleanCompletionRef.current) {
+      return;
+    }
+
+    hasRecordedCleanCompletionRef.current = true;
+    markSyncComplete().catch((err: unknown) => {
+      hasRecordedCleanCompletionRef.current = false;
+      logger.warn("smsScan.markCleanCompletionFailed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  }, [markSyncComplete, result, status, transactions.length]);
+
+  const retryableCandidateCount =
+    result?.unresolvedCandidates.filter((candidate) => candidate.isRetryable)
+      .length ?? 0;
+
   const handleReviewPress = (): void => {
-    if (transactions.length > 0 && result) {
+    if (result && (transactions.length > 0 || retryableCandidateCount > 0)) {
       setReviewSession(result);
-      shouldResetAfterReviewRef.current = true;
       router.push("/sms-review");
     }
   };
@@ -397,16 +432,6 @@ export default function SmsScanScreen(): React.JSX.Element {
         setIsConsentSheetVisible(true);
       }
     }, [isAiConsented, isAiConsentLoading])
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!shouldResetAfterReviewRef.current) return;
-
-      shouldResetAfterReviewRef.current = false;
-      scanInitiated.current = true;
-      reset();
-    }, [reset])
   );
 
   const handleRetryPress = (): void => {
@@ -585,6 +610,17 @@ export default function SmsScanScreen(): React.JSX.Element {
           durationMs={result?.durationMs ?? 0}
           topCategories={topCategories}
           categoryNameMap={categoryNameMap}
+          safeguardSummary={
+            result?.safeguardSummary ?? {
+              admittedAiCount: 0,
+              deferredAiCount: 0,
+              oversizedCount: 0,
+              unresolvedCount: 0,
+              completionStatus: "complete",
+            }
+          }
+          retryableCount={retryableCandidateCount}
+          qaDiagnostics={qaDiagnostics}
           error={error}
           onReviewPress={handleReviewPress}
           onBackPress={handleBackPress}

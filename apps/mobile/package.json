@@ -16,6 +16,8 @@
     "start:local-supabase:wireless-device": "node scripts/start-mobile-local-supabase.js --wireless-device",
     "start:qa-sms-pattern-intake:wireless-device": "node scripts/start-mobile-local-supabase.js --wireless-device --qa-sms-pattern-intake",
     "open:qa-sms-pattern-intake": "node scripts/open-qa-sms-pattern-intake.js",
+    "start:sms-safeguards:wireless-device": "node scripts/sms-safeguard-qa.js start --wireless-device",
+    "reset:sms-safeguards": "node scripts/sms-safeguard-qa.js reset",
     "start:e2e-fixture": "node scripts/start-e2e-fixture.js",
     "start:e2e-local-parser": "cross-env EXPO_PUBLIC_AI_SMS_PARSER_MODE=local node scripts/start-e2e-fixture.js",
     "start:e2e-hybrid-fixture": "cross-env EXPO_PUBLIC_AI_SMS_PARSER_MODE=hybrid-fixture node scripts/start-e2e-fixture.js",
@@ -49,6 +51,7 @@
     "manual:reset-user": "node scripts/manual-qa-seed.js reset",
     "test": "jest",
     "test:coverage": "jest --coverage",
+    "test:sms-safeguards": "node scripts/sms-safeguard-qa.js test",
     "i18n:check": "tsx scripts/check-i18n-coverage.ts",
     "i18n:update-baseline": "tsx scripts/check-i18n-coverage.ts --update-baseline"
   },

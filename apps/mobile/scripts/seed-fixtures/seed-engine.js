@@ -43,7 +43,7 @@ const CATEGORY_IDS = {
   other: "00000000-0000-0000-0001-000000000013",
 };
 
-const SEED_TABLE_DELETE_ORDER = [
+const RESET_TABLE_DELETE_ORDER = [
   "transactions",
   "transfers",
   "recurring_payments",
@@ -60,6 +60,9 @@ const SEED_TABLE_DELETE_ORDER = [
   "categories",
   "profiles",
 ];
+const SEED_TABLE_DELETE_ORDER = RESET_TABLE_DELETE_ORDER.filter(
+  (table) => table !== "profiles"
+);
 const AUTH_USER_PAGE_SIZE = 1000;
 
 function deterministicUuid(seedScope, namespace, label) {
@@ -82,6 +85,7 @@ function deterministicUuid(seedScope, namespace, label) {
 
 function buildSeedIds(userId, seedScope = BASE_SEED_FIXTURE.seedScope) {
   return {
+    profile: deterministicUuid(seedScope, userId, "profile"),
     accounts: {
       cash: deterministicUuid(seedScope, userId, "account:cash"),
       bank: deterministicUuid(seedScope, userId, "account:bank"),
@@ -560,6 +564,18 @@ async function upsertRowsIfAny(client, table, rows, options) {
   await upsertRows(client, table, rows, options);
 }
 
+async function resolveSeedProfileId(client, userId, fallbackProfileId) {
+  const result = await assertNoError(
+    await client
+      .from("profiles")
+      .select("id")
+      .eq("user_id", userId)
+      .maybeSingle(),
+    "read existing profile identity"
+  );
+  return result.data?.id ?? fallbackProfileId;
+}
+
 async function restoreSeededAccountBalances(client, accountRows) {
   await Promise.all(
     accountRows.map(async (account) =>
@@ -648,6 +664,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
       created_at: currentTimestamp,
     },
     profile: {
+      id: seedIds.profile,
       user_id: userId,
       display_name: fixture.userFullName,
       preferred_currency: "EGP",
@@ -846,7 +863,15 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
   const fixture = resolveSeedFixture(fixtureOverrides);
   const userId =
     config.userId ?? (await ensureSeedUser(client, config, fixture));
-  const seedIds = buildSeedIds(userId, fixture.seedScope);
+  const generatedSeedIds = buildSeedIds(userId, fixture.seedScope);
+  const seedIds = {
+    ...generatedSeedIds,
+    profile: await resolveSeedProfileId(
+      client,
+      userId,
+      generatedSeedIds.profile
+    ),
+  };
   const rows = buildSeedRows(userId, seedIds, fixture);
 
   for (const table of SEED_TABLE_DELETE_ORDER) {
@@ -896,7 +921,7 @@ async function resetFixtureData(client, config, fixtureOverrides = {}) {
     config.userId ?? (await ensureSeedUser(client, config, fixture));
   const seedIds = buildSeedIds(userId, fixture.seedScope);
 
-  for (const table of SEED_TABLE_DELETE_ORDER) {
+  for (const table of RESET_TABLE_DELETE_ORDER) {
     await deleteScopedRows(client, table, userId, seedIds);
   }
 
@@ -904,6 +929,7 @@ async function resetFixtureData(client, config, fixtureOverrides = {}) {
 }
 
 module.exports = {
+  RESET_TABLE_DELETE_ORDER,
   SEED_TABLE_DELETE_ORDER,
   E2E_MARKET_RATE_ID,
   createLocalSupabaseJwt,

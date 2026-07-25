@@ -15,12 +15,13 @@ import {
   isAiConsentRequiredError,
   type ParseSmsContext,
 } from "@/services/ai-sms-parser-service";
+import { isEdgeFunctionAuthenticationError } from "@/services/authenticated-edge-function-service";
 import {
   scanAndParseSms,
   type SmsScanProgress,
   type SmsScanResult,
 } from "@/services/sms-sync-service";
-import type { ParsedSmsTransaction } from "@monyvi/logic";
+import type { ParsedSmsTransaction, SmsScanKind } from "@monyvi/logic";
 import { useCallback, useRef, useState } from "react";
 import { logger } from "@/utils/logger";
 
@@ -53,8 +54,8 @@ export interface UseSmsScanResult {
 }
 
 interface StartScanOptions {
-  /** Only scan messages after this timestamp (incremental sync). */
-  readonly minDate?: number;
+  /** Explicit bounded scan intent. */
+  readonly scanKind: Exclude<SmsScanKind, "live">;
   /** Set of existing fingerprints for dedup. Omit to let the scan service load them. */
   readonly existingFingerprints?: ReadonlySet<string>;
   /** Context to pass to AI for better account suggestions. */
@@ -99,7 +100,7 @@ export function useSmsScan(): UseSmsScanResult {
       try {
         const scanResult = await scanAndParseSms(
           {
-            minDate: options.minDate,
+            scanKind: options.scanKind,
             existingFingerprints: options.existingFingerprints,
             aiContext: options.aiContext,
             abortSignal: options.abortSignal,
@@ -121,6 +122,11 @@ export function useSmsScan(): UseSmsScanResult {
         if (isAiConsentRequiredError(err)) {
           setError(null);
           setStatus("consent_required");
+          return;
+        }
+
+        if (isEdgeFunctionAuthenticationError(err)) {
+          setStatus("idle");
           return;
         }
 

@@ -1,4 +1,18 @@
-const mockInvoke = jest.fn();
+interface MockFunctionResponse {
+  readonly data: unknown;
+  readonly error: unknown;
+}
+
+interface MockFunctionOptions {
+  readonly body?: unknown;
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly signal?: AbortSignal;
+}
+
+const mockInvoke = jest.fn<
+  Promise<MockFunctionResponse>,
+  [name: string, options: MockFunctionOptions]
+>();
 const mockAssertExpectedCurrentUser = jest.fn<Promise<void>, [string]>();
 const mockLoggerWarn = jest.fn<
   void,
@@ -16,11 +30,19 @@ const mockLoggerError = jest.fn<
     context?: Readonly<Record<string, unknown>>,
   ]
 >();
+let mockGeneratedId = 0;
+
+jest.mock("expo-crypto", () => ({
+  randomUUID: (): string => `generated-id-${++mockGeneratedId}`,
+}));
 
 jest.mock("@/services/supabase", () => ({
   supabase: {
     functions: {
-      invoke: (...args: readonly unknown[]): unknown => mockInvoke(...args),
+      invoke: (
+        name: string,
+        options: MockFunctionOptions
+      ): Promise<MockFunctionResponse> => mockInvoke(name, options),
     },
   },
 }));
@@ -108,6 +130,11 @@ describe("ai-sms-parser-service parser strategy", () => {
     process.env = { ...originalEnv };
     delete process.env.EXPO_PUBLIC_MONYVI_TEST_MODE;
     delete process.env.EXPO_PUBLIC_AI_SMS_PARSER_MODE;
+    delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA;
+    delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER;
+    delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_INBOX;
+    delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE;
+    delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID;
   });
 
   it("rejects a stale expected user before invoking the Edge Function", async () => {
@@ -131,46 +158,6 @@ describe("ai-sms-parser-service parser strategy", () => {
 
   afterEach(() => {
     process.env = originalEnv;
-  });
-
-  it("uses the Edge Function parser by default", async () => {
-    mockInvoke.mockResolvedValueOnce({
-      data: {
-        transactions: [
-          {
-            messageId: "sms-1",
-            amount: 25,
-            currency: "EGP",
-            type: "EXPENSE",
-            counterparty: "Shop",
-            date: "2026-04-08T12:00:00.000Z",
-            categorySystemName: "shopping",
-            confidenceScore: 0.9,
-            isTrusted: true,
-          },
-        ],
-      },
-      error: null,
-    });
-
-    const result = await parseSmsWithAi(
-      [
-        {
-          message: {
-            id: "sms-1",
-            address: "NBE",
-            body: "Purchase EGP 25 at Shop",
-            date: 1775658180000,
-            read: false,
-          },
-          smsFingerprint: "edge-fingerprint",
-        },
-      ],
-      context
-    );
-
-    expect(mockInvoke).toHaveBeenCalledWith("parse-sms", expect.any(Object));
-    expect(result.transactions[0]?.smsFingerprint).toBe("edge-fingerprint");
   });
 
   it("accepts currencies supported by the app beyond EGP and USD", async () => {

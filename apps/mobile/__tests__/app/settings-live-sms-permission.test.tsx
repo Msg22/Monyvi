@@ -31,6 +31,7 @@ const mockGetNotificationPermissionStatus = jest.fn<
   []
 >();
 const mockRouterPush = jest.fn<void, [string]>();
+const mockSetScanMode = jest.fn<void, ["incremental" | "history"]>();
 const mockGrantAiConsent = jest.fn<Promise<void>, []>();
 const mockRevokeAiConsent = jest.fn<Promise<void>, []>();
 const SAFE_AREA_BOTTOM = 24;
@@ -42,6 +43,11 @@ let mockHasRevokedAiConsentRecord = false;
 let mockIsAiConsentLoading = false;
 let mockHasSynced = false;
 let mockQaSmsPatternIntakeAvailable = false;
+let mockSmsAiAvailability: {
+  readonly reason: "rolling_limit" | "history_cooldown";
+  readonly availableAt: string;
+  readonly historyCooldownAvailableAt: string | null;
+} | null = null;
 let appStateChangeHandlers: Array<(status: AppStateStatus) => void> = [];
 
 jest.mock("react-native/Libraries/Modal/Modal", () => {
@@ -153,9 +159,16 @@ jest.mock("@/hooks/useSmsSync", () => ({
   }),
 }));
 
+jest.mock("@/hooks/useSmsAiAvailability", () => ({
+  useSmsAiAvailability: () => ({
+    availability: mockSmsAiAvailability,
+    refresh: jest.fn(() => Promise.resolve()),
+  }),
+}));
+
 jest.mock("@/context/SmsScanContext", () => ({
   useSmsScanContext: () => ({
-    setScanMode: jest.fn(),
+    setScanMode: mockSetScanMode,
   }),
 }));
 
@@ -319,6 +332,7 @@ describe("Settings live SMS permission recovery", () => {
     mockIsAiConsentLoading = false;
     mockHasSynced = false;
     mockQaSmsPatternIntakeAvailable = false;
+    mockSmsAiAvailability = null;
     mockGrantAiConsent.mockResolvedValue();
     mockRevokeAiConsent.mockResolvedValue();
   });
@@ -338,6 +352,33 @@ describe("Settings live SMS permission recovery", () => {
     expect(
       screen.queryByTestId("qa-sms-pattern-intake-settings-link")
     ).toBeNull();
+  });
+
+  it("keeps history rescan available when only the ordinary AI allowance is limited", async () => {
+    mockHasSynced = true;
+    mockSmsAiAvailability = {
+      reason: "rolling_limit",
+      availableAt: "2026-07-24T12:00:00.000Z",
+      historyCooldownAvailableAt: null,
+    };
+    const screen = await renderReadySettings();
+    const historyRescan = screen.getByTestId(
+      "sms-history-rescan-button"
+    ) as unknown as { readonly props: { readonly disabled?: boolean } };
+
+    expect(historyRescan.props.disabled).not.toBe(true);
+  });
+
+  it("disables history rescan when cooldown remains active behind a later rolling limit", async () => {
+    mockHasSynced = true;
+    mockSmsAiAvailability = {
+      reason: "rolling_limit",
+      availableAt: "2026-08-02T12:00:00.000Z",
+      historyCooldownAvailableAt: "2026-08-01T12:00:00.000Z",
+    };
+    const screen = await renderReadySettings();
+
+    expect(screen.getByTestId("sms-history-rescan-button")).toBeDisabled();
   });
 
   it("waits for stored live detection state before rendering the switch", async () => {
@@ -591,13 +632,29 @@ describe("Settings live SMS permission recovery", () => {
     expect(mockRouterPush).not.toHaveBeenCalledWith("/sms-scan");
   });
 
-  it("dismisses the full rescan confirmation before opening AI consent", async () => {
+  it("uses separate incremental and history scan intents", async () => {
+    mockHasSynced = true;
+    mockSmsPermissionStatus = "granted";
+    const screen = await renderReadySettings();
+
+    fireEvent.press(screen.getByText("sync_new"));
+    expect(mockSetScanMode).toHaveBeenLastCalledWith("incremental");
+    expect(mockRouterPush).toHaveBeenLastCalledWith("/sms-scan");
+
+    fireEvent.press(screen.getByText("rescan_recent"));
+    fireEvent.press(await screen.findByTestId("modal-confirm"));
+
+    expect(mockSetScanMode).toHaveBeenLastCalledWith("history");
+    expect(mockRouterPush).toHaveBeenLastCalledWith("/sms-scan");
+  });
+
+  it("dismisses the history rescan confirmation before opening AI consent", async () => {
     mockHasSynced = true;
     mockIsAiConsented = false;
     mockSmsPermissionStatus = "granted";
     const screen = await renderReadySettings();
 
-    fireEvent.press(screen.getByText("full_rescan"));
+    fireEvent.press(screen.getByText("rescan_recent"));
     expect(await screen.findByText("rescan_title")).toBeTruthy();
 
     fireEvent.press(screen.getByTestId("modal-confirm"));

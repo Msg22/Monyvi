@@ -240,6 +240,7 @@ export function SuccessState({
   onReviewPress,
   onBackPress,
   t,
+  isScrollable = false,
 }: {
   readonly transactionsFound: number;
   readonly totalScanned: number;
@@ -249,11 +250,15 @@ export function SuccessState({
   readonly onReviewPress: () => void;
   readonly onBackPress: () => void;
   readonly t: TranslationFn;
+  readonly isScrollable?: boolean;
 }): React.JSX.Element {
   const durationLabel = formatDuration(durationMs, t);
 
   return (
-    <Animated.View entering={ZoomIn.springify()} className="flex-1">
+    <Animated.View
+      entering={ZoomIn.springify()}
+      className={isScrollable ? undefined : "flex-1"}
+    >
       <View className="items-center mt-6">
         <View
           className="w-24 h-24 rounded-full items-center justify-center"
@@ -311,7 +316,7 @@ export function SuccessState({
         </Animated.View>
       )}
 
-      <View className="flex-1 justify-end pb-6">
+      <View className={isScrollable ? "mt-6 pb-2" : "flex-1 justify-end pb-6"}>
         <TouchableOpacity
           onPress={onReviewPress}
           activeOpacity={0.85}

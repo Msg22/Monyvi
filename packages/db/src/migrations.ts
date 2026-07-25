@@ -11,8 +11,8 @@
 import {
   createTable,
   addColumns,
-  schemaMigrations,
   unsafeExecuteSql,
+  schemaMigrations,
 } from "@nozbe/watermelondb/Schema/migrations";
 
 export const migrations = schemaMigrations({
@@ -414,6 +414,26 @@ end;`
               type: "string",
               isOptional: true,
             },
+          ],
+        }),
+      ],
+    },
+    {
+      toVersion: 24,
+      steps: [
+        createTable({
+          name: "sms_ai_negative_outcomes",
+          columns: [
+            { name: "user_id", type: "string", isIndexed: true },
+            { name: "sms_fingerprint", type: "string", isIndexed: true },
+            { name: "original_received_at", type: "string" },
+            { name: "strike_count", type: "number" },
+            { name: "is_terminal", type: "boolean" },
+            { name: "terminal_at", type: "string", isOptional: true },
+            { name: "last_classified_at", type: "string" },
+            { name: "created_at", type: "number" },
+            { name: "updated_at", type: "number" },
+            { name: "deleted", type: "boolean" },
           ],
         }),
       ],

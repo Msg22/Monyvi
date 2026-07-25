@@ -14,7 +14,19 @@
 // Mocks — must be declared before imports (Jest hoisting)
 // ---------------------------------------------------------------------------
 
-const mockInvoke = jest.fn();
+interface MockVoiceFunctionResponse {
+  readonly data: unknown;
+  readonly error: unknown;
+}
+
+interface MockVoiceFunctionOptions {
+  readonly body: unknown;
+}
+
+const mockInvoke = jest.fn<
+  Promise<MockVoiceFunctionResponse>,
+  [name: string, options: MockVoiceFunctionOptions]
+>();
 const mockLoggerError = jest.fn<
   void,
   [message: string, error?: unknown, context?: Record<string, unknown>]
@@ -23,7 +35,10 @@ const mockLoggerError = jest.fn<
 jest.mock("@/services/supabase", () => ({
   supabase: {
     functions: {
-      invoke: (...args: unknown[]): unknown => mockInvoke(...args) as unknown,
+      invoke: (
+        name: string,
+        options: MockVoiceFunctionOptions
+      ): Promise<MockVoiceFunctionResponse> => mockInvoke(name, options),
     },
   },
 }));
@@ -196,6 +211,47 @@ describe("ai-voice-parser-service", () => {
         expect(result.transactions[0].type).toBe("EXPENSE");
         expect(result.transactions[0].counterparty).toBe("Coffee Shop");
         expect(result.transcript).toBe("test transcript");
+      }
+    });
+
+    it("keeps voice parsing available when every SMS AI capability is disabled", async () => {
+      const originalFullParserFlag =
+        process.env.EXPO_PUBLIC_SMS_FULL_PARSER_ENABLED;
+      const originalEnrichmentFlag =
+        process.env.EXPO_PUBLIC_SMS_CATEGORY_ENRICHMENT_ENABLED;
+      const originalQaProfile =
+        process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE;
+      process.env.EXPO_PUBLIC_SMS_FULL_PARSER_ENABLED = "false";
+      process.env.EXPO_PUBLIC_SMS_CATEGORY_ENRICHMENT_ENABLED = "false";
+      process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE = "quota-exhaustion-v1";
+      mockInvoke.mockResolvedValueOnce(
+        makeSuccessResponse([makeValidTransaction()])
+      );
+
+      try {
+        const result = await parseVoiceWithAi(makeDefaultOptions());
+
+        expect(isVoiceParserError(result)).toBe(false);
+        expect(mockInvoke.mock.calls[0]?.[0]).toBe("parse-voice");
+        expect(mockInvoke.mock.calls[0]?.[1].body).toBeInstanceOf(FormData);
+      } finally {
+        if (originalFullParserFlag === undefined) {
+          delete process.env.EXPO_PUBLIC_SMS_FULL_PARSER_ENABLED;
+        } else {
+          process.env.EXPO_PUBLIC_SMS_FULL_PARSER_ENABLED =
+            originalFullParserFlag;
+        }
+        if (originalEnrichmentFlag === undefined) {
+          delete process.env.EXPO_PUBLIC_SMS_CATEGORY_ENRICHMENT_ENABLED;
+        } else {
+          process.env.EXPO_PUBLIC_SMS_CATEGORY_ENRICHMENT_ENABLED =
+            originalEnrichmentFlag;
+        }
+        if (originalQaProfile === undefined) {
+          delete process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE;
+        } else {
+          process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE = originalQaProfile;
+        }
       }
     });
 

@@ -10,7 +10,7 @@
  * Usage: node scripts/transform-schema.js
  */
 
-const { execFileSync, execSync } = require("child_process");
+const { execFileSync } = require("child_process");
 
 const fs = require("fs");
 const path = require("path");
@@ -20,6 +20,17 @@ const ESLINT_BIN = path.join(
   "bin",
   "eslint.js"
 );
+const PRETTIER_BIN = path.join(
+  path.dirname(require.resolve("prettier/package.json")),
+  "bin",
+  "prettier.cjs"
+);
+
+function formatWithPrettier(paths) {
+  execFileSync(process.execPath, [PRETTIER_BIN, "--write", ...paths], {
+    stdio: "inherit",
+  });
+}
 
 // =============================================================================
 // CONFIGURATION
@@ -34,7 +45,12 @@ const MODELS_DIR = path.join(OUTPUT_DIR, "models");
 const BASE_MODELS_DIR = path.join(MODELS_DIR, "base");
 
 // Tables to exclude (cloud-only, computed data, or internal)
-const EXCLUDED_TABLES = ["__InternalSupabase"];
+const EXCLUDED_TABLES = [
+  "__InternalSupabase",
+  "sms_ai_work_requests",
+  "sms_ai_usage_events",
+  "sms_ai_scan_sessions",
+];
 
 // Mapping from table names to class names (for irregular plurals)
 const TABLE_TO_CLASS = {
@@ -116,52 +132,53 @@ function getSchemaVersion() {
 /**
  * Parse the supabase-types.ts file and extract table definitions and enums
  */
+function extractSchemaBlock(content, schemaName) {
+  const schemaMatch = new RegExp(`\\b${schemaName}:\\s*\\{`).exec(content);
+  if (!schemaMatch) return null;
+
+  const openingBrace = content.indexOf("{", schemaMatch.index);
+  let braceDepth = 0;
+  for (let index = openingBrace; index < content.length; index += 1) {
+    if (content[index] === "{") braceDepth += 1;
+    if (content[index] !== "}") continue;
+    braceDepth -= 1;
+    if (braceDepth === 0) {
+      return content.slice(openingBrace + 1, index);
+    }
+  }
+
+  throw new Error(
+    `Malformed supabase-types.ts: ${schemaName} schema is unclosed`
+  );
+}
+
 function parseSupabaseTypes(content) {
   const tables = {};
   const enums = {};
   const relationships = {};
+  const publicSchema = extractSchemaBlock(content, "public");
+  if (publicSchema === null) {
+    throw new Error("Could not find public schema in supabase-types.ts");
+  }
 
   // Extract enums using brace-counting (handles multi-line enum values)
-  const enumsStartIdx = content.indexOf("Enums: {");
-  if (enumsStartIdx !== -1) {
-    let braceDepth = 0;
-    let start = -1;
-    let end = -1;
-    for (let i = enumsStartIdx; i < content.length; i++) {
-      if (content[i] === "{") {
-        if (braceDepth === 0) start = i + 1;
-        braceDepth++;
-      } else if (content[i] === "}") {
-        braceDepth--;
-        if (braceDepth === 0) {
-          end = i;
-          break;
-        }
-      }
-    }
-    if (start !== -1 && end === -1) {
-      throw new Error(
-        "Malformed supabase-types.ts: Enums block has unmatched opening brace"
-      );
-    }
-    if (start !== -1 && end !== -1) {
-      const enumsBlock = content.substring(start, end);
-      const enumRegex = /(\w+):\s*([^;]+);/g;
-      let match;
-      while ((match = enumRegex.exec(enumsBlock)) !== null) {
-        const enumName = match[1];
-        const enumValues = match[2]
-          .split("|")
-          .map((v) => v.trim().replace(/"/g, ""))
-          .filter((v) => v);
-        enums[enumName] = enumValues;
-      }
+  const enumsBlock = extractSchemaBlock(publicSchema, "Enums");
+  if (enumsBlock !== null) {
+    const enumRegex = /(\w+):\s*([^;]+);/g;
+    let match;
+    while ((match = enumRegex.exec(enumsBlock)) !== null) {
+      const enumName = match[1];
+      const enumValues = match[2]
+        .split("|")
+        .map((v) => v.trim().replace(/"/g, ""))
+        .filter((v) => v);
+      enums[enumName] = enumValues;
     }
   }
 
   // Extract tables from the Tables block
-  const tablesMatch = content.match(/Tables:\s*\{([\s\S]*?)\n\s{4}\};/);
-  if (!tablesMatch) {
+  const tablesBlock = extractSchemaBlock(publicSchema, "Tables");
+  if (tablesBlock === null) {
     console.error("Could not find Tables block in supabase-types.ts");
     return { tables, enums, relationships };
   }
@@ -171,7 +188,7 @@ function parseSupabaseTypes(content) {
     /(\w+):\s*\{\s*Row:\s*\{([\s\S]*?)\};\s*Insert:[\s\S]*?Update:[\s\S]*?Relationships:\s*\[([\s\S]*?)\];\s*\};/g;
   let tableMatch;
 
-  while ((tableMatch = tableRegex.exec(content)) !== null) {
+  while ((tableMatch = tableRegex.exec(tablesBlock)) !== null) {
     const tableName = tableMatch[1];
 
     if (EXCLUDED_TABLES.includes(tableName)) {
@@ -660,29 +677,23 @@ function main() {
 
   // Format schema.ts and types.ts with Prettier so the output matches
   // the editor / pre-commit formatter and avoids phantom git diffs.
-  try {
-    execSync(`npx prettier --write "${schemaPath}" "${typesPath}"`, {
-      stdio: "inherit",
-    });
-  } catch {
-    console.warn("   ⚠️  Prettier formatting of schema/types skipped");
-  }
+  formatWithPrettier([schemaPath, typesPath]);
 
   // Generate base model files (always overwritten)
   console.log("📝 Generating base model files...");
+  const generatedBaseModelPaths = [];
   for (const [tableName, { columns }] of Object.entries(tables)) {
     const className = tableToClassName(tableName);
     const baseFileName = `base-${pascalToKebab(className)}.ts`;
+    const baseModelPath = path.join(BASE_MODELS_DIR, baseFileName);
     const baseModelContent = generateBaseModel(
       tableName,
       columns,
       relationships,
       tables
     );
-    fs.writeFileSync(
-      path.join(BASE_MODELS_DIR, baseFileName),
-      baseModelContent
-    );
+    fs.writeFileSync(baseModelPath, baseModelContent);
+    generatedBaseModelPaths.push(baseModelPath);
     console.log(`   ✅ base/${baseFileName}`);
   }
 
@@ -705,14 +716,10 @@ function main() {
   // Format the generated base model files with Prettier
   console.log("\n🎨 Formatting base model files...");
 
-  try {
-    execSync(`npx prettier --write "${BASE_MODELS_DIR}/**/*.ts"`, {
-      stdio: "inherit",
-    });
-    console.log("   ✅ Base models formatted");
-  } catch (error) {
-    console.warn("Prettier formatting failed:", error.message);
+  for (const generatedPath of generatedBaseModelPaths) {
+    formatWithPrettier([generatedPath]);
   }
+  console.log("   ✅ Base models formatted");
 
   console.log("\nLinting base model files...");
   try {
@@ -743,4 +750,8 @@ function main() {
   console.log("   Extended models (*.ts) are only created if missing.");
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = { parseSupabaseTypes };

@@ -31,7 +31,18 @@ export function getSupabaseStorageKey(url: string): string {
   return `sb-${projectRef}-auth-token`;
 }
 
-const AUTH_STORAGE_KEY = getSupabaseStorageKey(supabaseUrl);
+export function resolveSupabaseStorageKey(
+  url: string,
+  explicitKey?: string
+): string {
+  const normalizedExplicitKey = explicitKey?.trim();
+  return normalizedExplicitKey || getSupabaseStorageKey(url);
+}
+
+const AUTH_STORAGE_KEY = resolveSupabaseStorageKey(
+  supabaseUrl,
+  process.env.EXPO_PUBLIC_SUPABASE_AUTH_STORAGE_KEY
+);
 
 /**
  * Chunked SecureStore adapter for Supabase Auth.
