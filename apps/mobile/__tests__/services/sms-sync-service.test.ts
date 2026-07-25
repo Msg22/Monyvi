@@ -202,9 +202,10 @@ const mockParseSmsWithOrchestrator = jest.fn<
   Promise<MockParserResult>,
   unknown[]
 >(() => Promise.resolve({ transactions: [] }));
-const mockInitializeSmsParserScanSession = jest.fn<Promise<void>, unknown[]>(
-  () => Promise.resolve()
-);
+const mockInitializeSmsParserScanSession = jest.fn<
+  Promise<(() => Promise<void>) | undefined>,
+  unknown[]
+>(() => Promise.resolve(undefined));
 const mockGetTrustedPrefilterDisposition = jest.fn<string, [unknown]>(
   () => "not_trusted_candidate"
 );
@@ -240,7 +241,9 @@ function mockWithParserDiagnostics(
 }
 
 jest.mock("@/services/sms-parser-orchestrator", () => ({
-  initializeSmsParserScanSession: (...args: unknown[]): Promise<void> =>
+  initializeSmsParserScanSession: (
+    ...args: unknown[]
+  ): Promise<(() => Promise<void>) | undefined> =>
     mockInitializeSmsParserScanSession(...args),
   parseSmsWithOrchestrator: async (
     ...args: unknown[]
@@ -368,6 +371,7 @@ describe("sms-sync-service", () => {
       )
     );
     mockParseSmsWithOrchestrator.mockResolvedValue({ transactions: [] });
+    mockInitializeSmsParserScanSession.mockResolvedValue(undefined);
     mockGetTrustedPrefilterDisposition.mockReturnValue("not_trusted_candidate");
     mockLoadSmsScanSafeguardState.mockImplementation(
       (input: { readonly savedFingerprints?: ReadonlySet<string> }) =>
@@ -406,6 +410,25 @@ describe("sms-sync-service", () => {
         expect.any(Function),
         undefined,
         expect.objectContaining({ expectedUserId: "user-a" })
+      );
+    });
+
+    it("carries a deferred scan-session recovery guard into remote parsing", async () => {
+      const ensureRemoteScanSession = jest.fn<Promise<void>, []>(() =>
+        Promise.resolve()
+      );
+      mockInitializeSmsParserScanSession.mockResolvedValueOnce(
+        ensureRemoteScanSession
+      );
+
+      await scanAndParseSms(defaultOptions());
+
+      expect(mockParseSmsWithOrchestrator).toHaveBeenCalledWith(
+        [],
+        stubAiContext,
+        expect.any(Function),
+        undefined,
+        expect.objectContaining({ ensureRemoteScanSession })
       );
     });
 

@@ -343,10 +343,12 @@ async function runCategoryEnrichment(
   context: ParseSmsContext,
   abortSignal: AbortSignal | undefined,
   expectedUserId: string,
-  requestContext?: SmsAiRequestContext
+  requestContext?: SmsAiRequestContext,
+  remoteScanSessionReady?: Promise<void>
 ): Promise<TrustedSmsCategoryEnrichmentResult> {
   if (candidates.length === 0) return createEmptyCategoryEnrichmentResult();
   try {
+    await remoteScanSessionReady;
     return await enrichTrustedSmsCategories(
       candidates,
       context.categories,
@@ -390,10 +392,12 @@ async function runFullAiFallback(
   abortSignal?: AbortSignal,
   expectedUserId?: string,
   requestContext?: SmsAiRequestContext,
-  requestKey?: string
+  requestKey?: string,
+  remoteScanSessionReady?: Promise<void>
 ): Promise<HybridAiFallbackResult> {
   if (candidates.length === 0) return { transactions: [], hasError: false };
   try {
+    await remoteScanSessionReady;
     return await parseSmsWithPinnedUser(
       candidates,
       context,
@@ -583,13 +587,20 @@ async function parseHybrid(
   }
   throwIfAborted(abortSignal);
 
+  const hasRemoteWork =
+    categoryCandidates.length > 0 || aiSelection.admitted.length > 0;
+  const remoteScanSessionReady =
+    hasRemoteWork && options.ensureRemoteScanSession !== undefined
+      ? Promise.resolve().then(options.ensureRemoteScanSession)
+      : undefined;
   const [categoryResult, aiResult] = await Promise.all([
     runCategoryEnrichment(
       categoryCandidates,
       context,
       abortSignal,
       consentStatus.userId,
-      options.requestContext
+      options.requestContext,
+      remoteScanSessionReady
     ),
     runFullAiFallback(
       aiSelection.admitted,
@@ -599,7 +610,8 @@ async function parseHybrid(
       abortSignal,
       options.expectedUserId,
       options.requestContext,
-      options.requestKey
+      options.requestKey,
+      remoteScanSessionReady
     ),
   ]);
   throwIfAborted(abortSignal);
@@ -831,6 +843,7 @@ export async function parseSmsWithOrchestrator(
         }),
       };
     }
+    await options.ensureRemoteScanSession?.();
     const aiResult = await parseSmsWithPinnedUser(
       aiSelection.admitted,
       context,

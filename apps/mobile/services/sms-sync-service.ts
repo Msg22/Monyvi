@@ -45,6 +45,7 @@ import {
   type SmsParserOrchestratorResult,
   type SmsScanSafeguardSummary,
 } from "./sms-parser-orchestrator";
+import type { EnsureRemoteSmsScanSession } from "./sms-parser-scan-session-service";
 import {
   assertExpectedCurrentUser,
   getCurrentUserDataScope,
@@ -386,7 +387,7 @@ export async function scanAndParseSms(
   await AsyncStorage.setItem(SCAN_IN_PROGRESS_KEY, "true");
 
   try {
-    await initializeSmsParserScanSession(
+    const ensureRemoteScanSession = await initializeSmsParserScanSession(
       options.aiContext,
       requestContext,
       options.abortSignal,
@@ -397,6 +398,7 @@ export async function scanAndParseSms(
       initiatingScope,
       scanStartedAtMs,
       scanSessionId,
+      ensureRemoteScanSession,
       onProgress
     );
   } finally {
@@ -429,6 +431,7 @@ async function executeScanPipeline(
   initiatingScope: CurrentUserDataScope,
   scanStartedAtMs: number,
   scanSessionId: string,
+  ensureRemoteScanSession?: EnsureRemoteSmsScanSession,
   onProgress?: (progress: SmsScanProgress) => void
 ): Promise<SmsScanResult> {
   const durationStartedAtMs = performance.now();
@@ -649,6 +652,7 @@ async function executeScanPipeline(
         scanKind: options.scanKind,
         scanStartedAtMs,
       },
+      ensureRemoteScanSession,
     }
   );
   await assertPinnedScanContext(initiatingScope.userId, abortSignal);

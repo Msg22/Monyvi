@@ -36,6 +36,20 @@ jest.mock("@/utils/logger", () => ({
 
 import { useSmsAiAvailability } from "@/hooks/useSmsAiAvailability";
 
+function createDeferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolvePromise: ((value: T) => void) | undefined;
+  const promise = new Promise<T>((resolve) => {
+    resolvePromise = resolve;
+  });
+  return {
+    promise,
+    resolve: (value: T): void => resolvePromise?.(value),
+  };
+}
+
 describe("useSmsAiAvailability", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -96,5 +110,75 @@ describe("useSmsAiAvailability", () => {
       expect(mockGetSmsAiAvailability).toHaveBeenCalledTimes(1)
     );
     expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  it("ignores an older refresh that resolves after a newer response", async () => {
+    const older = createDeferred<SmsAiAvailabilitySnapshot>();
+    const newer = createDeferred<SmsAiAvailabilitySnapshot>();
+    mockGetSmsAiAvailability
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise);
+    const { result } = renderHook(() => useSmsAiAvailability(true));
+
+    act(() => {
+      focusEffect?.();
+      appStateListener?.("active");
+    });
+
+    await act(async () => {
+      newer.resolve({
+        serverNow: "2026-07-20T13:00:00.000Z",
+        reason: null,
+        availableAt: null,
+        historyCooldownAvailableAt: null,
+      });
+      await newer.promise;
+    });
+    await act(async () => {
+      older.resolve({
+        serverNow: "2026-07-20T12:00:00.000Z",
+        reason: "history_cooldown",
+        availableAt: "2026-07-21T12:00:00.000Z",
+        historyCooldownAvailableAt: "2026-07-21T12:00:00.000Z",
+      });
+      await older.promise;
+    });
+
+    expect(result.current.availability).toMatchObject({
+      serverNow: "2026-07-20T13:00:00.000Z",
+      historyCooldownAvailableAt: null,
+    });
+  });
+
+  it("refreshes and clears the history blocker when its server-relative cooldown expires", async () => {
+    jest.useFakeTimers();
+    mockGetSmsAiAvailability
+      .mockResolvedValueOnce({
+        serverNow: "2026-07-20T12:00:00.000Z",
+        reason: "history_cooldown",
+        availableAt: "2026-07-20T12:00:01.000Z",
+        historyCooldownAvailableAt: "2026-07-20T12:00:01.000Z",
+      })
+      .mockResolvedValueOnce({
+        serverNow: "2026-07-20T12:00:01.001Z",
+        reason: null,
+        availableAt: null,
+        historyCooldownAvailableAt: null,
+      });
+    const { result } = renderHook(() => useSmsAiAvailability(true));
+
+    act(() => {
+      focusEffect?.();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(1001);
+    });
+
+    expect(mockGetSmsAiAvailability).toHaveBeenCalledTimes(2);
+    expect(result.current.availability?.historyCooldownAvailableAt).toBeNull();
+    jest.useRealTimers();
   });
 });

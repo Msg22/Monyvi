@@ -287,6 +287,36 @@ describe("SMS parser orchestrator safeguards", () => {
     });
   });
 
+  it("preserves local results when the deferred scan-session handshake still fails", async () => {
+    const trusted = trustedPurchaseCandidate();
+    const unresolved = candidate();
+    const ensureRemoteScanSession = jest
+      .fn<Promise<void>, []>()
+      .mockRejectedValue(new Error("scan session unavailable"));
+
+    const result = await parseSmsWithOrchestrator(
+      [trusted, unresolved],
+      context,
+      undefined,
+      undefined,
+      { ensureRemoteScanSession }
+    );
+
+    expect(ensureRemoteScanSession).toHaveBeenCalledTimes(1);
+    expect(mockParseSmsWithAi).not.toHaveBeenCalled();
+    expect(mockEnrichTrustedSmsCategories).not.toHaveBeenCalled();
+    expect(result.transactions).toEqual([
+      expect.objectContaining({ smsFingerprint: trusted.smsFingerprint }),
+    ]);
+    expect(result.unresolvedCandidates).toEqual([
+      expect.objectContaining({
+        candidate: unresolved,
+        reason: "ai_failed",
+        isRetryable: true,
+      }),
+    ]);
+  });
+
   it("uses a selected QA profile's reduced admission limit in the app orchestrator", async () => {
     process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA = "true";
     process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROVIDER = "simulated";

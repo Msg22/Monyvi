@@ -74,6 +74,7 @@ export interface SmsParserOrchestratorOptions {
   readonly terminalFingerprints?: ReadonlySet<string>;
   readonly requestContext?: SmsAiRequestContext;
   readonly requestKey?: string;
+  readonly ensureRemoteScanSession?: () => Promise<void>;
 }
 
 export function createSmsParserDiagnostics(

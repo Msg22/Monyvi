@@ -41,6 +41,16 @@ function readLedgerFingerprintRemovalSql(): string {
   );
 }
 
+function readCompletionReplayFixSql(): string {
+  return readFileSync(
+    path.resolve(
+      __dirname,
+      "../../../../supabase/migrations/066_make_sms_ai_completion_idempotent.sql"
+    ),
+    "utf8"
+  );
+}
+
 describe("SMS AI safeguards migration", () => {
   it("creates only privacy-safe synchronized negative outcomes", () => {
     const sql = readMigrationSql();
@@ -180,6 +190,17 @@ describe("SMS AI safeguards migration", () => {
     expect(sql).toMatch(
       /DROP TRIGGER IF EXISTS scrub_sms_ai_work_request_fingerprints[\s\S]*DROP COLUMN IF EXISTS candidate_fingerprints/i
     );
+  });
+
+  it("treats an exact completion replay as success without accepting conflicting outcomes", () => {
+    const sql = readCompletionReplayFixSql();
+
+    expect(sql).toContain(
+      "CREATE OR REPLACE FUNCTION public.sms_ai_complete_work"
+    );
+    expect(sql).toMatch(/status = v_target_status/i);
+    expect(sql).toMatch(/decision_code IS NOT DISTINCT FROM p_decision_code/i);
+    expect(sql).toMatch(/IF FOUND THEN[\s\S]*RETURN true/i);
   });
 
   it("schedules trusted cleanup without expiring terminal outcomes", () => {

@@ -36,19 +36,22 @@ describe("sms-parser-scan-session-service", () => {
     mockInitializeSmsAiScanSession.mockResolvedValue(undefined);
   });
 
-  it("continues local parsing when remote scan-session initialization is unavailable", async () => {
+  it("returns a recovery guard when remote scan-session initialization is unavailable", async () => {
     mockInitializeSmsAiScanSession.mockRejectedValueOnce(
       new Error("SMS scan session initialization failed")
     );
 
-    await expect(
-      initializeSmsParserScanSession(
-        context,
-        requestContext,
-        undefined,
-        "user-1"
-      )
-    ).resolves.toBeUndefined();
+    const ensureRemoteScanSession = await initializeSmsParserScanSession(
+      context,
+      requestContext,
+      undefined,
+      "user-1"
+    );
+
+    expect(ensureRemoteScanSession).toEqual(expect.any(Function));
+
+    await expect(ensureRemoteScanSession?.()).resolves.toBeUndefined();
+    expect(mockInitializeSmsAiScanSession).toHaveBeenCalledTimes(2);
   });
 
   it("does not swallow scan-session consent control flow", async () => {

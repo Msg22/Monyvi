@@ -9,7 +9,7 @@ import { logger } from "@/utils/logger";
 import { isE2eTestMode } from "@/config/e2e-test-config";
 import { getSmsSafeguardQaConfig } from "@/config/sms-safeguard-qa-config";
 import { assertNotAborted } from "./abort-utils";
-import { supabase } from "./supabase";
+import { invokeAuthenticatedEdgeFunction } from "./authenticated-edge-function-service";
 import { assertExpectedCurrentUser } from "./user-data-access";
 
 const CATEGORY_ENRICHMENT_FUNCTION = "enrich-sms-categories";
@@ -482,25 +482,37 @@ async function invokeCategoryChunk(
       ? "sms-safeguard-qa"
       : CATEGORY_ENRICHMENT_FUNCTION;
     const response = await Promise.race([
-      supabase.functions.invoke(functionName, {
-        body: {
-          requestKey: prepared.requestKey,
-          scanSessionId: requestContext.scanSessionId,
-          scanKind: requestContext.scanKind,
-          ...prepared.body,
+      invokeAuthenticatedEdgeFunction(
+        functionName,
+        {
+          body: {
+            requestKey: prepared.requestKey,
+            scanSessionId: requestContext.scanSessionId,
+            scanKind: requestContext.scanKind,
+            ...prepared.body,
+            ...(qaConfig.enabled
+              ? {
+                  qaCapability: "category_enrichment",
+                  qaProfileId: qaConfig.profileId,
+                  qaRunId: qaConfig.runId,
+                }
+              : {}),
+          },
           ...(qaConfig.enabled
             ? {
-                qaCapability: "category_enrichment",
-                qaProfileId: qaConfig.profileId,
-                qaRunId: qaConfig.runId,
+                headers: {
+                  "x-sms-safeguard-qa-run-id": qaConfig.runId ?? "",
+                },
               }
             : {}),
+          signal: timedSignal.signal,
         },
-        ...(qaConfig.enabled
-          ? { headers: { "x-sms-safeguard-qa-run-id": qaConfig.runId ?? "" } }
-          : {}),
-        signal: timedSignal.signal,
-      }),
+        expectedUserId === undefined
+          ? undefined
+          : {
+              beforeRetry: () => assertExpectedCurrentUser(expectedUserId),
+            }
+      ),
       timedSignal.deadline,
     ]);
     assertNotAborted(abortSignal, "SMS category enrichment aborted");

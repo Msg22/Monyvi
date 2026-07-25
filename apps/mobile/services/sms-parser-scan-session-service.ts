@@ -20,12 +20,14 @@ function isScanSessionControlFlowError(error: unknown): boolean {
   );
 }
 
+export type EnsureRemoteSmsScanSession = () => Promise<void>;
+
 export async function initializeSmsParserScanSession(
   context: ParseSmsContext,
   requestContext: SmsAiRequestContext,
   abortSignal?: AbortSignal,
   expectedUserId?: string
-): Promise<void> {
+): Promise<EnsureRemoteSmsScanSession | undefined> {
   if (shouldUseLocalSmsParser() || shouldUseFixtureSmsParser()) return;
 
   try {
@@ -35,11 +37,19 @@ export async function initializeSmsParserScanSession(
       abortSignal,
       expectedUserId
     );
+    return undefined;
   } catch (error: unknown) {
     if (isScanSessionControlFlowError(error)) throw error;
 
     logger.warn("smsParser.scanSessionInitializationFailed", {
       errorName: error instanceof Error ? error.name : "unknown",
     });
+    return async (): Promise<void> =>
+      initializeSmsAiScanSession(
+        context,
+        requestContext,
+        abortSignal,
+        expectedUserId
+      );
   }
 }

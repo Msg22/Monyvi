@@ -13,9 +13,21 @@ interface MockFunctionResponse {
   readonly error: unknown;
 }
 
+interface MockAuthenticatedRecovery {
+  readonly beforeRetry?: () => Promise<void>;
+}
+
 const mockInvoke = jest.fn<
   Promise<MockFunctionResponse>,
   [functionName: string, options: MockFunctionOptions]
+>();
+const mockInvokeAuthenticated = jest.fn<
+  Promise<MockFunctionResponse>,
+  [
+    functionName: string,
+    options: MockFunctionOptions,
+    recovery?: MockAuthenticatedRecovery,
+  ]
 >();
 let mockGeneratedId = 0;
 const mockLoggerWarn = jest.fn();
@@ -34,6 +46,15 @@ jest.mock("@/services/supabase", () => ({
       ): Promise<MockFunctionResponse> => mockInvoke(functionName, options),
     },
   },
+}));
+
+jest.mock("@/services/authenticated-edge-function-service", () => ({
+  invokeAuthenticatedEdgeFunction: (
+    functionName: string,
+    options: MockFunctionOptions,
+    recovery?: MockAuthenticatedRecovery
+  ): Promise<MockFunctionResponse> =>
+    mockInvokeAuthenticated(functionName, options, recovery),
 }));
 
 jest.mock("@/utils/logger", () => ({
@@ -114,6 +135,10 @@ const categories: readonly TestCategory[] = [
 describe("ai-sms-category-enrichment-service", () => {
   beforeEach(() => {
     mockInvoke.mockReset();
+    mockInvokeAuthenticated.mockReset();
+    mockInvokeAuthenticated.mockImplementation((functionName, options) =>
+      mockInvoke(functionName, options)
+    );
     mockLoggerWarn.mockReset();
     mockAssertExpectedCurrentUser.mockReset();
     mockAssertExpectedCurrentUser.mockResolvedValue();
@@ -134,6 +159,26 @@ describe("ai-sms-category-enrichment-service", () => {
     ).rejects.toThrow("AUTH_SCOPE_CHANGED");
 
     expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("pins the initiating user again before an authenticated retry", async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: { categories: [] },
+      error: null,
+    });
+
+    await enrichTrustedSmsCategories(
+      [candidate("candidate-1", "Shop")],
+      categories,
+      undefined,
+      "user-1"
+    );
+
+    const recovery = mockInvokeAuthenticated.mock.calls[0]?.[2];
+    expect(recovery?.beforeRetry).toEqual(expect.any(Function));
+    await recovery?.beforeRetry?.();
+    expect(mockAssertExpectedCurrentUser).toHaveBeenCalledTimes(2);
+    expect(mockAssertExpectedCurrentUser).toHaveBeenLastCalledWith("user-1");
   });
 
   it("sends one minimal system-category request for duplicate eligible merchants", async () => {

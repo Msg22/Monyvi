@@ -20,12 +20,20 @@ export function useSmsAiAvailability(
   const [availability, setAvailability] =
     useState<SmsAiAvailabilitySnapshot | null>(null);
   const isMountedRef = useRef(true);
+  const refreshGenerationRef = useRef(0);
 
   const refresh = useCallback(async (): Promise<void> => {
+    const refreshGeneration = ++refreshGenerationRef.current;
     try {
       const nextAvailability = await getSmsAiAvailability();
-      if (isMountedRef.current) setAvailability(nextAvailability);
+      if (
+        isMountedRef.current &&
+        refreshGeneration === refreshGenerationRef.current
+      ) {
+        setAvailability(nextAvailability);
+      }
     } catch (error: unknown) {
+      if (refreshGeneration !== refreshGenerationRef.current) return;
       if (isEdgeFunctionAuthenticationError(error)) return;
       logger.warn("smsAiAvailability.refreshFailed", {
         errorName: error instanceof Error ? error.name : "unknown",
@@ -40,8 +48,53 @@ export function useSmsAiAvailability(
   );
 
   useEffect(() => {
-    if (!isEnabled) setAvailability(null);
+    if (!isEnabled) {
+      refreshGenerationRef.current += 1;
+      setAvailability(null);
+    }
   }, [isEnabled]);
+
+  useEffect(() => {
+    if (availability === null) return;
+    const historyAvailableAt = availability.historyCooldownAvailableAt;
+    if (historyAvailableAt === null) return;
+
+    const serverNowMs = Date.parse(availability.serverNow);
+    const historyAvailableAtMs = Date.parse(historyAvailableAt);
+    if (
+      !Number.isFinite(serverNowMs) ||
+      !Number.isFinite(historyAvailableAtMs)
+    ) {
+      return;
+    }
+
+    const timeoutId = setTimeout(
+      () => {
+        setAvailability((currentAvailability) => {
+          if (
+            currentAvailability?.historyCooldownAvailableAt !==
+            historyAvailableAt
+          ) {
+            return currentAvailability;
+          }
+          const wasPrimaryBlocker =
+            currentAvailability.reason === "history_cooldown";
+          return {
+            ...currentAvailability,
+            reason: wasPrimaryBlocker ? null : currentAvailability.reason,
+            availableAt: wasPrimaryBlocker
+              ? null
+              : currentAvailability.availableAt,
+            historyCooldownAvailableAt: null,
+          };
+        });
+        void refresh();
+      },
+      Math.max(0, historyAvailableAtMs - serverNowMs) + 1
+    );
+
+    return () => clearTimeout(timeoutId);
+  }, [availability, refresh]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -54,6 +107,7 @@ export function useSmsAiAvailability(
 
     return () => {
       isMountedRef.current = false;
+      refreshGenerationRef.current += 1;
       subscription.remove();
     };
   }, [isEnabled, refresh]);
