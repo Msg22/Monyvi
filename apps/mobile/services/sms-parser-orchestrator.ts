@@ -343,12 +343,10 @@ async function runCategoryEnrichment(
   context: ParseSmsContext,
   abortSignal: AbortSignal | undefined,
   expectedUserId: string,
-  requestContext?: SmsAiRequestContext,
-  remoteScanSessionReady?: Promise<void>
+  requestContext?: SmsAiRequestContext
 ): Promise<TrustedSmsCategoryEnrichmentResult> {
   if (candidates.length === 0) return createEmptyCategoryEnrichmentResult();
   try {
-    await remoteScanSessionReady;
     return await enrichTrustedSmsCategories(
       candidates,
       context.categories,
@@ -587,10 +585,8 @@ async function parseHybrid(
   }
   throwIfAborted(abortSignal);
 
-  const hasRemoteWork =
-    categoryCandidates.length > 0 || aiSelection.admitted.length > 0;
   const remoteScanSessionReady =
-    hasRemoteWork && options.ensureRemoteScanSession !== undefined
+    aiSelection.admitted.length > 0 && options.ensureRemoteScanSession !== undefined
       ? Promise.resolve().then(options.ensureRemoteScanSession)
       : undefined;
   const [categoryResult, aiResult] = await Promise.all([
@@ -599,8 +595,7 @@ async function parseHybrid(
       context,
       abortSignal,
       consentStatus.userId,
-      options.requestContext,
-      remoteScanSessionReady
+      options.requestContext
     ),
     runFullAiFallback(
       aiSelection.admitted,

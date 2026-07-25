@@ -287,7 +287,7 @@ describe("SMS parser orchestrator safeguards", () => {
     });
   });
 
-  it("preserves local results when the deferred scan-session handshake still fails", async () => {
+  it("keeps category enrichment independent when the full-parser handshake fails", async () => {
     const trusted = trustedPurchaseCandidate();
     const unresolved = candidate();
     const ensureRemoteScanSession = jest
@@ -304,7 +304,7 @@ describe("SMS parser orchestrator safeguards", () => {
 
     expect(ensureRemoteScanSession).toHaveBeenCalledTimes(1);
     expect(mockParseSmsWithAi).not.toHaveBeenCalled();
-    expect(mockEnrichTrustedSmsCategories).not.toHaveBeenCalled();
+    expect(mockEnrichTrustedSmsCategories).toHaveBeenCalledTimes(1);
     expect(result.transactions).toEqual([
       expect.objectContaining({ smsFingerprint: trusted.smsFingerprint }),
     ]);

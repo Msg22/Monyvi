@@ -68,12 +68,15 @@ async function authenticateHeader(
 async function getProcessingOutcomes(
   userId: string,
   fingerprints: readonly string[],
-  lookbackDays: number
+  lookbackDays: number,
+  referenceNowMs: number
 ): Promise<
   readonly { readonly smsFingerprint: string; readonly isTerminal: boolean }[]
 > {
   if (fingerprints.length === 0) return [];
-  const cutoff = new Date(Date.now() - lookbackDays * DAY_MS).toISOString();
+  const cutoff = new Date(
+    referenceNowMs - lookbackDays * DAY_MS
+  ).toISOString();
   const { data, error } = await createServiceClient()
     .from("sms_ai_negative_outcomes")
     .select("sms_fingerprint,is_terminal")

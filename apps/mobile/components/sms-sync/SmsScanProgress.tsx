@@ -73,6 +73,10 @@ export function SmsScanProgress({
   const { t } = useTranslation("transactions");
   const translate = (key: string, opts?: Record<string, unknown>): string =>
     t(key, opts);
+  const shouldUseScrollableCompleteState =
+    status === "complete" &&
+    transactionsFound > 0 &&
+    (qaDiagnostics !== null || safeguardSummary.completionStatus === "partial");
 
   return (
     <View className="flex-1 bg-slate-50 dark:bg-slate-900">
@@ -99,9 +103,7 @@ export function SmsScanProgress({
         >
           <ScanningState progress={progress} t={translate} />
         </ScrollView>
-      ) : status === "complete" &&
-        transactionsFound > 0 &&
-        qaDiagnostics !== null ? (
+      ) : shouldUseScrollableCompleteState ? (
         <ScrollView
           testID="sms-scan-complete-scroll"
           className="flex-1"
@@ -119,6 +121,16 @@ export function SmsScanProgress({
               t={translate}
               isScrollable
             />
+            {safeguardSummary.completionStatus === "partial" && (
+              <PartialSmsResultsNotice
+                safeguardSummary={safeguardSummary}
+                retryableCount={retryableCount}
+                canRetry={retryableCount > 0}
+                isRetrying={false}
+                hasRetryError={false}
+                onRetry={onReviewPress}
+              />
+            )}
             <SafeguardQaDiagnosticsPanel diagnostics={qaDiagnostics} />
           </View>
         </ScrollView>

@@ -37,6 +37,7 @@ export interface SmsSafeguardQaDiagnosticsViewModel {
     readonly aiResultCount: number;
     readonly deferredAiCount: number;
     readonly oversizedCount: number;
+    readonly unresolvedCount: number;
   };
 }
 
@@ -108,6 +109,7 @@ export function createSmsSafeguardQaDiagnostics(
       aiResultCount: input.parserDiagnostics.aiMatchedCount ?? 0,
       deferredAiCount: input.safeguardSummary.deferredAiCount,
       oversizedCount: input.safeguardSummary.oversizedCount,
+      unresolvedCount: input.safeguardSummary.unresolvedCount,
     },
   };
 }

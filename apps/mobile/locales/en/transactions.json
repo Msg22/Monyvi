@@ -26,6 +26,7 @@
   "qa_safeguard_ai_results": "Simulated AI: {{count}}",
   "qa_safeguard_deferred_results": "Deferred: {{count}}",
   "qa_safeguard_oversized_results": "Skipped too large: {{count}}",
+  "qa_safeguard_unresolved_results": "Unresolved: {{count}}",
   "qa_safeguard_expected_cutoff_boundary": "Includes messages at the cutoff and excludes older ones.",
   "qa_safeguard_expected_checkpoint_overlap": "Returns only unsaved suggestions on a repeat scan.",
   "qa_safeguard_expected_partial_quota": "Keeps accepted results and defers remaining AI work.",
