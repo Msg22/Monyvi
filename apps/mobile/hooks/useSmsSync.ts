@@ -74,8 +74,13 @@ export function useSmsSync(): UseSmsSyncResult {
   const { userId, isResolvingUser } = useCurrentUser();
   const [shouldShowPrompt, setShouldShowPrompt] = useState(false);
   const [hasSynced, setHasSynced] = useState(false);
-  const [lastSyncTimestamp, setLastSyncTimestamp] = useState<number | null>(null);
+  const [lastSyncTimestamp, setLastSyncTimestamp] = useState<number | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState(true);
+  const [loadedUserId, setLoadedUserId] = useState<string | null | undefined>(
+    undefined
+  );
 
   useEffect(() => {
     let isCancelled = false;
@@ -84,11 +89,15 @@ export function useSmsSync(): UseSmsSyncResult {
     setHasSynced(false);
     setLastSyncTimestamp(null);
     setIsLoading(true);
+    setLoadedUserId(undefined);
 
     async function loadState(): Promise<void> {
       if (isResolvingUser) return;
       if (Platform.OS !== "android" || userId === null) {
-        if (!isCancelled) setIsLoading(false);
+        if (!isCancelled) {
+          setLoadedUserId(userId);
+          setIsLoading(false);
+        }
         return;
       }
 
@@ -104,12 +113,18 @@ export function useSmsSync(): UseSmsSyncResult {
       } catch {
         if (!isCancelled) setShouldShowPrompt(false);
       } finally {
-        if (!isCancelled) setIsLoading(false);
+        if (!isCancelled) {
+          setLoadedUserId(userId);
+          setIsLoading(false);
+        }
       }
     }
 
     loadState().catch(() => {
-      if (!isCancelled) setIsLoading(false);
+      if (!isCancelled) {
+        setLoadedUserId(userId);
+        setIsLoading(false);
+      }
     });
 
     return () => {
@@ -150,12 +165,15 @@ export function useSmsSync(): UseSmsSyncResult {
     }
   }, [userId]);
 
+  const isLoadedForCurrentUser =
+    !isResolvingUser && loadedUserId !== undefined && loadedUserId === userId;
+
   return {
-    shouldShowPrompt,
-    hasSynced,
-    lastSyncTimestamp,
+    shouldShowPrompt: isLoadedForCurrentUser ? shouldShowPrompt : false,
+    hasSynced: isLoadedForCurrentUser ? hasSynced : false,
+    lastSyncTimestamp: isLoadedForCurrentUser ? lastSyncTimestamp : null,
     dismissPrompt,
     markSyncComplete,
-    isLoading,
+    isLoading: !isLoadedForCurrentUser || isLoading,
   };
 }

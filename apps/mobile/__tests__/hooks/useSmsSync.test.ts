@@ -30,7 +30,7 @@ const mockMultiSet = AsyncStorage.multiSet as jest.MockedFunction<
 
 function valuesForKeys(
   keys: readonly string[]
-): readonly (readonly [string, string | null])[] {
+): ReadonlyArray<readonly [string, string | null]> {
   return keys.map((key) => {
     if (key.endsWith(":user-a")) {
       if (key.includes("sms-last-sync")) return [key, "123"];
@@ -48,7 +48,9 @@ describe("useSmsSync", () => {
       value: "android",
     });
     mockCurrentUser = { userId: "user-a", isResolvingUser: false };
-    mockMultiGet.mockImplementation(async (keys) => valuesForKeys(keys));
+    mockMultiGet.mockImplementation((keys) =>
+      Promise.resolve(valuesForKeys(keys))
+    );
     mockMultiSet.mockResolvedValue(undefined);
   });
 
@@ -60,14 +62,37 @@ describe("useSmsSync", () => {
   });
 
   it("isolates prompt and sync state across authenticated users", async () => {
-    const { result, rerender } = renderHook(() => useSmsSync());
+    const renderedStates: Array<{
+      readonly userId: string | null;
+      readonly shouldShowPrompt: boolean;
+      readonly hasSynced: boolean;
+      readonly lastSyncTimestamp: number | null;
+      readonly isLoading: boolean;
+    }> = [];
+    const { result, rerender } = renderHook(() => {
+      const syncState = useSmsSync();
+      renderedStates.push({ userId: mockCurrentUser.userId, ...syncState });
+      return syncState;
+    });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.hasSynced).toBe(true);
     expect(result.current.lastSyncTimestamp).toBe(123);
 
+    const renderCountBeforeSwitch = renderedStates.length;
     mockCurrentUser = { userId: "user-b", isResolvingUser: false };
     rerender(undefined);
+
+    expect(
+      renderedStates
+        .slice(renderCountBeforeSwitch)
+        .find(({ userId }) => userId === "user-b")
+    ).toMatchObject({
+      shouldShowPrompt: false,
+      hasSynced: false,
+      lastSyncTimestamp: null,
+      isLoading: true,
+    });
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);

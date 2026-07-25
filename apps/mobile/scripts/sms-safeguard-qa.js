@@ -28,11 +28,13 @@ function buildSafeguardQaEnvironment(
   baseEnvironment = process.env,
   profileId = null
 ) {
+  const existingRunId = baseEnvironment.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID;
   const qaRunId =
-    baseEnvironment.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID ??
-    (profileId === null
-      ? `sms-safeguard-suite-${Date.now()}`
-      : `${profileId}-${Date.now()}`);
+    profileId === null
+      ? (existingRunId ?? `sms-safeguard-suite-${Date.now()}`)
+      : existingRunId?.startsWith(`${profileId}-`)
+        ? existingRunId
+        : `${profileId}-${Date.now()}`;
   return {
     ...baseEnvironment,
     EXPO_PUBLIC_SMS_SAFEGUARD_QA: "true",
