@@ -1,4 +1,4 @@
-import { fireEvent, render } from "@testing-library/react-native";
+import { render } from "@testing-library/react-native";
 import React from "react";
 
 jest.mock("@/hooks/useCategories", () => ({
@@ -151,7 +151,7 @@ describe("SmsScanProgress", () => {
   });
 
   it("keeps the partial-results notice visible when suggestions are ready", () => {
-    const { getByText } = render(
+    const { getByText, queryByTestId, toJSON } = render(
       <SmsScanProgress
         status="complete"
         progress={null}
@@ -167,6 +167,7 @@ describe("SmsScanProgress", () => {
           completionStatus: "partial",
           availability: { reason: "rolling_limit", availableAt: null },
         }}
+        retryableCount={2}
         error={null}
         onReviewPress={jest.fn()}
         onBackPress={jest.fn()}
@@ -176,11 +177,16 @@ describe("SmsScanProgress", () => {
 
     expect(getByText("partial_sms_title")).toBeTruthy();
     expect(getByText("Review 2")).toBeTruthy();
+    expect(queryByTestId("partial-sms-retry")).toBeNull();
+    const renderedTree = JSON.stringify(toJSON());
+    expect(renderedTree.indexOf("partial-sms-results-notice")).toBeLessThan(
+      renderedTree.indexOf("Review 2")
+    );
   });
 
-  it("opens the stable retry session for a zero-suggestion partial scan", () => {
+  it("does not offer a fake retry action for a zero-suggestion partial scan", () => {
     const onReviewPress = jest.fn();
-    const { getByTestId } = render(
+    const { getByText, queryByTestId } = render(
       <SmsScanProgress
         status="complete"
         progress={null}
@@ -202,9 +208,10 @@ describe("SmsScanProgress", () => {
       />
     );
 
-    fireEvent.press(getByTestId("partial-sms-retry"));
-
-    expect(onReviewPress).toHaveBeenCalledTimes(1);
+    expect(getByText("partial_sms_title")).toBeTruthy();
+    expect(getByText("back_to_dashboard")).toBeTruthy();
+    expect(queryByTestId("partial-sms-retry")).toBeNull();
+    expect(onReviewPress).not.toHaveBeenCalled();
   });
 
   it("renders empty and error states from props", () => {

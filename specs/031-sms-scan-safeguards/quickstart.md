@@ -167,6 +167,9 @@ generates content; routine safeguard QA does not require credentials or paid AI.
   build.
 - Complete the PR coverage matrix mapping every manual scenario to automated or
   explicit manual-only validation.
+- Record every provider, device, visual, and privacy sign-off in
+  [Launch Readiness Evidence](launch-readiness-evidence.md); unchecked gates
+  block production enablement but do not imply missing implementation.
 
 ## SMS AI Incident Runbook
 

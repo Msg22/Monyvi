@@ -4,6 +4,7 @@ import {
 } from "../../../packages/logic/src/sms-safeguards/safeguard-qa-scenarios";
 
 export const SMS_SAFEGUARD_QA_FLAG = "EXPO_PUBLIC_SMS_SAFEGUARD_QA";
+export const SMS_SAFEGUARD_QA_RUN_ID_MAX_LENGTH = 96;
 
 export interface SmsSafeguardQaEnvironment {
   readonly NODE_ENV?: string;
@@ -146,7 +147,7 @@ export function getSmsSafeguardQaConfig(
   }
 
   const runId = environment.EXPO_PUBLIC_SMS_SAFEGUARD_QA_RUN_ID?.trim();
-  if (!runId || runId.length > 160) {
+  if (!runId || runId.length > SMS_SAFEGUARD_QA_RUN_ID_MAX_LENGTH) {
     throw new Error("SMS safeguard QA requires a bounded run identity.");
   }
 

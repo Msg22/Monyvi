@@ -110,6 +110,16 @@ export function SmsScanProgress({
           showsVerticalScrollIndicator={false}
         >
           <View className="px-4 pb-6">
+            {safeguardSummary.completionStatus === "partial" && (
+              <PartialSmsResultsNotice
+                safeguardSummary={safeguardSummary}
+                retryableCount={retryableCount}
+                canRetry={false}
+                isRetrying={false}
+                hasRetryError={false}
+                onRetry={onReviewPress}
+              />
+            )}
             <SuccessState
               transactionsFound={transactionsFound}
               totalScanned={totalScanned}
@@ -121,16 +131,6 @@ export function SmsScanProgress({
               t={translate}
               isScrollable
             />
-            {safeguardSummary.completionStatus === "partial" && (
-              <PartialSmsResultsNotice
-                safeguardSummary={safeguardSummary}
-                retryableCount={retryableCount}
-                canRetry={retryableCount > 0}
-                isRetrying={false}
-                hasRetryError={false}
-                onRetry={onReviewPress}
-              />
-            )}
             <SafeguardQaDiagnosticsPanel diagnostics={qaDiagnostics} />
           </View>
         </ScrollView>
@@ -166,7 +166,7 @@ export function SmsScanProgress({
                 <PartialSmsResultsNotice
                   safeguardSummary={safeguardSummary}
                   retryableCount={retryableCount}
-                  canRetry={retryableCount > 0}
+                  canRetry={false}
                   isRetrying={false}
                   hasRetryError={false}
                   onRetry={onReviewPress}

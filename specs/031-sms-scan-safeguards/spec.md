@@ -2,10 +2,10 @@
 
 **Feature Branch**: `codex/limit-launch-sms-scans-769`  
 **Created**: 2026-07-20  
-**Status**: Draft  
-**Input**: GitHub issue #769 and the approved direction to limit launch SMS
-history scans to a rolling 30-day window while enforcing authenticated AI cost
-safeguards without introducing subscriptions.
+**Status**: Implemented; launch verification gates remain tracked **Input**:
+GitHub issue #769 and the approved direction to limit launch SMS history scans
+to a rolling 30-day window while enforcing authenticated AI cost safeguards
+without introducing subscriptions.
 
 ## Clarifications
 
@@ -22,9 +22,9 @@ safeguards without introducing subscriptions.
   definitely never reached the provider.
 - Q: When does the history-rescan cooldown begin, and are ordinary incremental
   scans still available? → A: The cooldown lasts 24 hours and begins when the
-  first full-AI history request is admitted. Cancellation before AI and entirely
-  local scans do not start it. Incremental scans remain available within the
-  user's remaining AI allowance.
+  first full-AI provider execution from that history scan begins. Cancellation
+  or failure before provider execution and entirely local scans do not start it.
+  Incremental scans remain available within the user's remaining AI allowance.
 - Q: When does full SMS parser work consume the user's rolling allowance? → A:
   Reserve allowance after authentication and request validation, consume it
   immediately before provider execution, and release it only when execution
@@ -390,9 +390,9 @@ consumption.
    absolute time when at least one candidate becomes available, combines it with
    any later blocker, and proves that trusted local processing remains usable.
 7. **Given** a history-cooldown profile runs, **When** a scan completes locally,
-   is cancelled before AI admission, or admits its first full-AI request,
-   **Then** only the admitted full-AI case starts the cooldown and ordinary
-   incremental scanning remains available.
+   is cancelled before provider execution, or starts its first full-AI provider
+   execution, **Then** only the provider-starting case starts the cooldown and
+   ordinary incremental scanning remains available.
 8. **Given** available full-parser capacity cannot cover every unresolved
    fixture candidate, **When** the policy selects work, **Then** it always
    admits the newest received timestamps first and uses the same stable
@@ -629,12 +629,13 @@ appearing in an ordinary development or release build.
   and MAY be released only when execution definitely never reached the provider.
   Batch and live SMS enrichment MUST share this user-wide allowance.
 - **FR-017**: Historical rescans MUST use a 24-hour cooldown that begins when
-  the first full-AI request from that history scan is admitted. Cancellation or
-  failure before any full-AI request is admitted and scans completed entirely
-  through local exclusion or trusted local parsing MUST NOT start the cooldown.
-  Once provider execution may have begun, later cancellation or failure MUST NOT
-  remove the cooldown. Ordinary incremental scans MUST remain available during
-  the cooldown subject to the user's remaining rolling AI allowance.
+  provider execution starts for the first full-AI request from that history
+  scan. Cancellation or failure before any full-AI provider execution starts,
+  and scans completed entirely through local exclusion or trusted local parsing,
+  MUST NOT start the cooldown. Once provider execution may have begun, later
+  cancellation or failure MUST NOT remove the cooldown. Ordinary incremental
+  scans MUST remain available during the cooldown subject to the user's
+  remaining rolling AI allowance.
 - **FR-018**: The server-side boundary MUST independently enforce
   authentication, request candidate count, aggregate payload size, bounded input
   estimate, per-user usage, and request frequency before additional AI provider
@@ -834,7 +835,7 @@ appearing in an ordinary development or release build.
   only an aggregate, friendly explanation to the user. The outcome MUST expire
   after the original message leaves that window.
 - **FR-058**: Server-authoritative time MUST govern rolling AI allowances,
-  request-burst windows, admitted history cooldowns, strike transitions, and
+  request-burst windows, provider-started history cooldowns, strike transitions,
   returned availability instants. One immutable scan-start instant MUST govern a
   client's rolling 30-day cutoff and checkpoint calculation for the complete
   scan so a long-running scan cannot move its own boundary.

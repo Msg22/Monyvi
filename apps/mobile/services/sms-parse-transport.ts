@@ -1,5 +1,32 @@
 import { getSmsSafeguardQaConfig } from "@/config/sms-safeguard-qa-config";
 import { SAFEGUARD_QA_SCENARIOS } from "@monyvi/logic";
+import * as Crypto from "expo-crypto";
+
+const SMS_AI_BASE_REQUEST_KEY_MAX_LENGTH = 156;
+
+export function createSmsAiRequestKey(qaRunId?: string): string {
+  const requestKey = Crypto.randomUUID();
+  const scopedRequestKey =
+    qaRunId === undefined ? requestKey : `${qaRunId}:app:${requestKey}`;
+  if (scopedRequestKey.length > SMS_AI_BASE_REQUEST_KEY_MAX_LENGTH) {
+    throw new Error("SMS AI request identity exceeds the supported boundary.");
+  }
+  return scopedRequestKey;
+}
+
+export function scopeSmsAiRequestKey(
+  requestKey: string,
+  qaRunId?: string
+): string {
+  const scopedRequestKey =
+    qaRunId === undefined || requestKey.startsWith(`${qaRunId}:`)
+      ? requestKey
+      : `${qaRunId}:app:${requestKey}`;
+  if (scopedRequestKey.length > SMS_AI_BASE_REQUEST_KEY_MAX_LENGTH) {
+    throw new Error("SMS AI request identity exceeds the supported boundary.");
+  }
+  return scopedRequestKey;
+}
 
 export interface SmsParseTransport {
   readonly functionName: "parse-sms" | "sms-safeguard-qa";

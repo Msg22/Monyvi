@@ -47,7 +47,9 @@ import {
   type SmsSafeguardRefusal,
 } from "./ai-sms-parser-response";
 import {
+  createSmsAiRequestKey,
   resolveSmsParseTransport,
+  scopeSmsAiRequestKey,
   type SmsParseTransport,
 } from "./sms-parse-transport";
 
@@ -164,18 +166,6 @@ function isParserControlFlowError(error: unknown): boolean {
     (error instanceof Error &&
       error.message === USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED)
   );
-}
-
-function createSmsAiRequestKey(qaRunId?: string): string {
-  const requestKey = Crypto.randomUUID();
-  return qaRunId === undefined ? requestKey : `${qaRunId}:app:${requestKey}`;
-}
-
-function scopeSmsAiRequestKey(requestKey: string, qaRunId?: string): string {
-  if (qaRunId === undefined || requestKey.startsWith(`${qaRunId}:`)) {
-    return requestKey;
-  }
-  return `${qaRunId}:app:${requestKey}`;
 }
 
 function createUnexpectedChunkFailure(
@@ -481,7 +471,13 @@ function createCapacityLimitedCandidates(
       const candidate = candidateMap.get(id);
       return candidate === undefined
         ? []
-        : [{ candidate, reason: "capacity_limited" as const, isRetryable: false }];
+        : [
+            {
+              candidate,
+              reason: "capacity_limited" as const,
+              isRetryable: false,
+            },
+          ];
     })
   );
 }
