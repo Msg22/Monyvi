@@ -106,7 +106,7 @@ function pushUniqueTransactions(
 export async function parseSmsWithFixtureAi(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
-  onProgress?: (progress: AiParseProgress) => void,
+  onProgress?: (progress: AiParseProgress) => void | Promise<void>,
   abortSignal?: AbortSignal
 ): Promise<AiParseResult> {
   const transactions: ParsedSmsTransaction[] = [];
@@ -149,10 +149,11 @@ export async function parseSmsWithFixtureAi(
   }
 
   assertNotAborted(abortSignal, "SMS parse aborted");
-  onProgress?.({
+  await onProgress?.({
     chunksCompleted: candidates.length > 0 ? 1 : 0,
     totalChunks: candidates.length > 0 ? 1 : 0,
     transactionsSoFar: transactions.length,
+    completedTransactions: transactions,
     chunkDurationMs: 0,
   });
 

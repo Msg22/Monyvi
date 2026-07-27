@@ -35,6 +35,7 @@ class FakeRecord {
   public position = 0;
   public parsedAt = new Date(0);
   public updatedAt = new Date(0);
+  public deleted = false;
   public operation: "create" | "update" | "destroy" = "create";
 
   public prepareUpdate(updater: (record: FakeRecord) => void): FakeRecord {
@@ -126,6 +127,8 @@ jest.mock("@monyvi/db", () => ({
   SmsReviewQueue: class SmsReviewQueue {},
   SmsReviewDraftItem: class SmsReviewDraftItem {},
   DismissedSmsFingerprint: class DismissedSmsFingerprint {},
+  Transaction: class Transaction {},
+  Transfer: class Transfer {},
 }));
 
 jest.mock("@nozbe/watermelondb", () => ({
@@ -213,6 +216,8 @@ describe("sms-review-draft-repository", () => {
       "dismissed_sms_fingerprints",
       new FakeCollection("dismissed_sms_fingerprints")
     );
+    mockCollections.set("transactions", new FakeCollection("transactions"));
+    mockCollections.set("transfers", new FakeCollection("transfers"));
   });
 
   it("merges only unique unsuppressed fingerprints into one stable queue", async () => {
@@ -233,7 +238,12 @@ describe("sms-review-draft-repository", () => {
 
     const queues = mockCollections.get("sms_review_queues")?.records ?? [];
     const items = mockCollections.get("sms_review_draft_items")?.records ?? [];
-    expect(result).toEqual({ insertedCount: 1, existingCount: 2 });
+    expect(result).toEqual({
+      insertedCount: 1,
+      existingCount: 2,
+      rejectedCount: 0,
+      reviewableFingerprints: ["fp-new"],
+    });
     expect(queues).toHaveLength(1);
     expect(items.map((item) => item.smsFingerprint)).toEqual(["fp-new"]);
     expect(items.map((item) => item.position)).toEqual([0]);
@@ -262,13 +272,70 @@ describe("sms-review-draft-repository", () => {
     });
 
     const items = mockCollections.get("sms_review_draft_items")?.records ?? [];
-    expect(result).toEqual({ insertedCount: 1, existingCount: 1 });
+    expect(result).toEqual({
+      insertedCount: 1,
+      existingCount: 1,
+      rejectedCount: 0,
+      reviewableFingerprints: ["fp-existing", "fp-next"],
+    });
     expect(
       items.find((item) => item.smsFingerprint === "fp-existing")?.payloadJson
     ).toBe("edited-payload");
     expect(
       items.find((item) => item.smsFingerprint === "fp-next")?.position
     ).toBe(5);
+  });
+
+  it("keeps valid siblings when one parser result cannot be encoded", async () => {
+    const invalid = {
+      ...createTransaction("fp-invalid"),
+      date: new Date("invalid"),
+    };
+
+    const result = await mergeSmsReviewDrafts({
+      expectedUserId: "user-1",
+      transactions: [createTransaction("fp-valid"), invalid],
+    });
+
+    expect(result).toEqual({
+      insertedCount: 1,
+      existingCount: 0,
+      rejectedCount: 1,
+      reviewableFingerprints: ["fp-valid"],
+    });
+    expect(
+      mockCollections
+        .get("sms_review_draft_items")
+        ?.records.map((item) => item.smsFingerprint)
+    ).toEqual(["fp-valid"]);
+  });
+
+  it("rechecks saved fingerprints inside the writer before creating drafts", async () => {
+    seedRecord("transactions", {
+      userId: "user-1",
+      smsFingerprint: "fp-saved",
+      deleted: false,
+    });
+
+    const result = await mergeSmsReviewDrafts({
+      expectedUserId: "user-1",
+      transactions: [
+        createTransaction("fp-saved"),
+        createTransaction("fp-new"),
+      ],
+    });
+
+    expect(result).toEqual({
+      insertedCount: 1,
+      existingCount: 1,
+      rejectedCount: 0,
+      reviewableFingerprints: ["fp-new"],
+    });
+    expect(
+      mockCollections
+        .get("sms_review_draft_items")
+        ?.records.map((item) => item.smsFingerprint)
+    ).toEqual(["fp-new"]);
   });
 
   it("reads handled metadata without decoding payload JSON", async () => {

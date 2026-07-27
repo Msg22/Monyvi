@@ -328,6 +328,9 @@ describe("sms-live-detection-handler notification actions", () => {
       parsed,
       "user-1"
     );
+    expect(mockCreateTransaction).not.toHaveBeenCalled();
+    expect(mockShowTransactionNotification).not.toHaveBeenCalled();
+    expect(mockShowTransactionCreatedNotification).not.toHaveBeenCalled();
   });
 
   it("drops live work pinned to a different authenticated user", async () => {

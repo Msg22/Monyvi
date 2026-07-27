@@ -19,6 +19,7 @@ import {
 import { prepareSavePayload } from "@/services/sms-review-save-service";
 import {
   getEditedTransactionReviewMeta,
+  getDurableTransactionOverrides,
   getTransactionReviewMeta,
   resolveEditedAccountMatch,
   type TransactionReviewMeta,
@@ -167,8 +168,8 @@ export interface UseTransactionReviewStateResult {
   readonly handleReviewNeeds: () => void;
   readonly handleShowAutoSelected: () => void;
   readonly handleShowAll: () => void;
-  readonly handleToggleAll: () => void;
-  readonly handleToggleItem: (index: number) => void;
+  readonly handleToggleAll: () => Promise<void>;
+  readonly handleToggleItem: (index: number) => Promise<void>;
   readonly listItems: readonly ReviewListItem[];
   readonly filteredTransactions: readonly ReviewableTransaction[];
   readonly effectiveTransactions: readonly ReviewableTransaction[];
@@ -300,34 +301,6 @@ function getDurablePendingAccounts(
     }
   }
   return [...accountsByTempId.values()];
-}
-
-function getDurableTransactionOverrides(
-  transactions: readonly ReviewableTransaction[]
-): ReadonlyMap<number, TransactionEdits> {
-  const overrides = new Map<number, TransactionEdits>();
-  transactions.forEach((transaction, index) => {
-    if (transaction.source !== "SMS") return;
-    const smsTransaction = transaction as ParsedSmsTransaction;
-    if (!smsTransaction.pendingAccount && !smsTransaction.toAccountId) return;
-
-    overrides.set(index, {
-      amount: transaction.amount,
-      currency: transaction.currency,
-      counterparty: transaction.counterparty,
-      categoryId: transaction.categoryId,
-      type: transaction.type,
-      accountId:
-        smsTransaction.pendingAccount?.tempId ?? transaction.accountId ?? null,
-      accountName: smsTransaction.pendingAccount?.name ?? null,
-      accountConfirmed: smsTransaction.pendingAccount ? true : undefined,
-      toAccountId: smsTransaction.toAccountId,
-      toAccountName: smsTransaction.toAccountName,
-      toAccountConfirmed: smsTransaction.toAccountId ? true : undefined,
-      pendingAccount: smsTransaction.pendingAccount,
-    });
-  });
-  return overrides;
 }
 
 export function useTransactionReviewState({
@@ -684,12 +657,42 @@ export function useTransactionReviewState({
   const autoSelectedCount = autoSelectedOriginalIndices.size;
   const needsReviewCount = needsReviewOriginalIndices.size;
 
-  const handleToggleAll = useCallback(() => {
+  const persistSelection = useCallback(
+    async (index: number, selected: boolean): Promise<boolean> => {
+      try {
+        await onSelectionChange?.(index, selected);
+        return true;
+      } catch {
+        showToast({
+          type: "error",
+          title: t("save_error"),
+          message: t("sms_review_save_failed_message"),
+        });
+        return false;
+      }
+    },
+    [onSelectionChange, showToast, t]
+  );
+
+  const handleToggleAll = useCallback(async (): Promise<void> => {
+    const selected = !allSelected;
+    const persisted = await Promise.all(
+      filteredOriginalIndices.map(async (index) => ({
+        index,
+        succeeded: await persistSelection(index, selected),
+      }))
+    );
+    const succeededIndices = new Set(
+      persisted
+        .filter((result) => result.succeeded)
+        .map((result) => result.index)
+    );
+    if (succeededIndices.size === 0) return;
+
     userTouchedSelectionRef.current = true;
     setSelectedIndices((previous) => {
       const next = new Set(previous);
-      filteredOriginalIndices.forEach((index) => {
-        const selected = !allSelected;
+      succeededIndices.forEach((index) => {
         if (selected) {
           next.add(index);
           manuallyDeselectedIndicesRef.current.delete(index);
@@ -697,18 +700,19 @@ export function useTransactionReviewState({
           next.delete(index);
           manuallyDeselectedIndicesRef.current.add(index);
         }
-        void onSelectionChange?.(index, selected);
       });
       return next;
     });
-  }, [allSelected, filteredOriginalIndices, onSelectionChange]);
+  }, [allSelected, filteredOriginalIndices, persistSelection]);
 
   const handleToggleItem = useCallback(
-    (index: number): void => {
+    async (index: number): Promise<void> => {
+      const selected = !selectedIndicesRef.current.has(index);
+      if (!(await persistSelection(index, selected))) return;
+
       userTouchedSelectionRef.current = true;
       setSelectedIndices((previous) => {
         const next = new Set(previous);
-        const selected = !next.has(index);
         if (selected) {
           next.add(index);
           manuallyDeselectedIndicesRef.current.delete(index);
@@ -716,11 +720,10 @@ export function useTransactionReviewState({
           next.delete(index);
           manuallyDeselectedIndicesRef.current.add(index);
         }
-        void onSelectionChange?.(index, selected);
         return next;
       });
     },
-    [onSelectionChange]
+    [persistSelection]
   );
 
   const handleOpenEditModal = useCallback((index: number) => {
@@ -770,18 +773,17 @@ export function useTransactionReviewState({
         return next;
       });
 
-      setSelectedIndices((prev) => {
-        const next = new Set(prev);
-        if (
-          editedMeta.isAutoSelectable &&
-          selectionOverrides.get(editModalIndex) !== false &&
-          !manuallyDeselectedIndicesRef.current.has(editModalIndex)
-        ) {
+      const shouldAutoSelect =
+        editedMeta.isAutoSelectable &&
+        selectionOverrides.get(editModalIndex) !== false &&
+        !manuallyDeselectedIndicesRef.current.has(editModalIndex);
+      if (shouldAutoSelect && (await persistSelection(editModalIndex, true))) {
+        setSelectedIndices((previous) => {
+          const next = new Set(previous);
           next.add(editModalIndex);
-          void onSelectionChange?.(editModalIndex, true);
-        }
-        return next;
-      });
+          return next;
+        });
+      }
       setInvalidIndices((prev) => {
         const next = new Set(prev);
         next.delete(editModalIndex);
@@ -795,7 +797,7 @@ export function useTransactionReviewState({
       categoryMap,
       editModalIndex,
       effectiveTransactions,
-      onSelectionChange,
+      persistSelection,
       onTransactionChange,
       selectionOverrides,
       showToast,

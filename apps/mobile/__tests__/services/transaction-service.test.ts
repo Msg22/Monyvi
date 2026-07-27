@@ -25,11 +25,19 @@ interface MockModelRecord {
   prepareUpdate: jest.Mock;
 }
 
+type MockUnsafeQueryRaw = jest.Mock<Promise<unknown[]>, []>;
+type MockBatch = jest.Mock<Promise<void>, [readonly MockModelRecord[]]>;
+type MockAdapterBatch = jest.Mock<Promise<void>, [readonly unknown[]]>;
+
 interface MockDbApi {
   readonly __mockDb: {
     write: jest.Mock;
     get: jest.Mock;
-    batch: jest.Mock;
+    batch: MockBatch;
+    adapter: {
+      batch: MockAdapterBatch;
+      unsafeQueryRaw: MockUnsafeQueryRaw;
+    };
   };
   readonly __model: (
     id: string,
@@ -43,6 +51,21 @@ interface MockDbApi {
 // ---------------------------------------------------------------------------
 // jest.mock declarations — factory is hoisted, so everything must be inline
 // ---------------------------------------------------------------------------
+
+jest.mock("@/services/watermelon-cache-snapshot", () => ({
+  captureCachedModelSnapshot: jest.fn((model: Record<string, unknown>) => ({
+    model,
+    raw: { ...model },
+  })),
+  restoreCachedModelSnapshot: jest.fn(
+    (snapshot: {
+      readonly model: Record<string, unknown>;
+      readonly raw: Record<string, unknown>;
+    }): void => {
+      Object.assign(snapshot.model, snapshot.raw);
+    }
+  ),
+}));
 
 jest.mock("@monyvi/db", () => {
   /** Mutable model: .update(builder) mutates fields in place */
@@ -71,6 +94,11 @@ jest.mock("@monyvi/db", () => {
     return stores[t];
   }
 
+  const adapter = {
+    batch: jest.fn<Promise<void>, [readonly unknown[]]>(),
+    unsafeQueryRaw: jest.fn<Promise<unknown[]>, []>(),
+  };
+
   function createCollection(tableName: string): Record<string, jest.Mock> {
     return {
       find: jest.fn((id: string) => {
@@ -85,10 +113,19 @@ jest.mock("@monyvi/db", () => {
         getStore(tableName).set(m.id, m);
         return Promise.resolve(m);
       }),
+      prepareCreate: jest.fn(
+        (builder: (r: Record<string, unknown>) => void) => {
+          const m = createModel(`new-${tableName}-${Date.now()}`);
+          builder(m);
+          getStore(tableName).set(m.id, m);
+          return m;
+        }
+      ),
       query: jest.fn(() => ({
         fetch: jest.fn(() =>
           Promise.resolve(Array.from(getStore(tableName).values()))
         ),
+        unsafeFetchRaw: jest.fn(() => adapter.unsafeQueryRaw()),
       })),
     };
   }
@@ -97,6 +134,7 @@ jest.mock("@monyvi/db", () => {
     write: jest.fn((cb: () => Promise<unknown>) => cb()),
     get: jest.fn((t: string) => createCollection(t)),
     batch: jest.fn(),
+    adapter,
   };
 
   return {
@@ -117,6 +155,9 @@ jest.mock("@monyvi/db", () => {
     __rewireMocks: () => {
       db.write.mockImplementation((cb: () => Promise<unknown>) => cb());
       db.get.mockImplementation((t: string) => createCollection(t));
+      db.batch.mockResolvedValue(undefined);
+      db.adapter.batch.mockResolvedValue(undefined);
+      db.adapter.unsafeQueryRaw.mockResolvedValue([]);
     },
   };
 });
@@ -137,6 +178,7 @@ import {
   batchDeleteDisplayTransactions,
   BALANCE_REVERSAL_ACCOUNT_NOT_FOUND_ERROR_CODE,
   INVALID_TRANSACTION_AMOUNT_ERROR_CODE,
+  TRANSACTION_ACCOUNT_CURRENCY_MISMATCH_ERROR_CODE,
 } from "@/services/transaction-service";
 import { USER_DATA_ACCESS_ERROR_CODES } from "@/services/user-data-access";
 import { MAX_TRANSACTION_AMOUNT } from "@monyvi/logic";
@@ -160,7 +202,11 @@ const {
 // ---------------------------------------------------------------------------
 
 function seedAccount(id: string, balance: number): MockModelRecord {
-  const acc = mockModel(id, { balance, userId: "test-user-id" });
+  const acc = mockModel(id, {
+    balance,
+    currency: "EGP",
+    userId: "test-user-id",
+  });
   mockSeed("accounts", acc);
   return acc;
 }
@@ -205,6 +251,8 @@ describe("transaction-service", () => {
     mockDb.write.mockClear();
     mockDb.get.mockClear();
     mockDb.batch.mockClear();
+    mockDb.adapter.batch.mockClear();
+    mockDb.adapter.unsafeQueryRaw.mockClear();
     mockRewire();
 
     const supabaseMock = jest.requireMock<{ getCurrentUserId: jest.Mock }>(
@@ -243,6 +291,97 @@ describe("transaction-service", () => {
         source: "MANUAL",
       });
       expect(acc.balance).toBe(1500);
+    });
+
+    it("commits transaction creation and balance update in one prepared batch", async () => {
+      const account = seedAccount("acc-1", 1000);
+
+      const transaction = await createTransaction({
+        amount: 200,
+        currency: "EGP",
+        categoryId: "cat-food",
+        accountId: "acc-1",
+        type: "EXPENSE",
+        source: "MANUAL",
+      });
+
+      expect(mockDb.write).toHaveBeenCalledTimes(1);
+      expect(account.prepareUpdate).toHaveBeenCalledTimes(1);
+      expect(mockDb.batch).toHaveBeenCalledTimes(1);
+      expect(mockDb.batch).toHaveBeenCalledWith([transaction, account]);
+    });
+
+    it("restores the cached balance immediately after an adapter rollback", async () => {
+      const account = seedAccount("acc-1", 1000);
+      const data = {
+        amount: 200,
+        currency: "EGP" as const,
+        categoryId: "cat-food",
+        accountId: "acc-1",
+        type: "EXPENSE" as const,
+        source: "MANUAL" as const,
+      };
+      const adapterError = new Error("atomic adapter batch failed");
+      mockDb.adapter.batch.mockRejectedValueOnce(adapterError);
+      mockDb.batch.mockImplementationOnce(async (records) => {
+        await mockDb.adapter.batch(records);
+      });
+
+      await expect(createTransaction(data)).rejects.toThrow(adapterError);
+      expect(account.balance).toBe(1000);
+      expect(mockDb.adapter.unsafeQueryRaw).not.toHaveBeenCalled();
+
+      await createTransaction(data);
+
+      expect(account.balance).toBe(800);
+      expect(account.prepareUpdate).toHaveBeenCalledTimes(2);
+      expect(mockDb.batch).toHaveBeenCalledTimes(2);
+    });
+
+    it("treats a cache publication failure after adapter commit as success", async () => {
+      const account = seedAccount("acc-1", 1000);
+      const notificationError = new Error("observer failed after commit");
+      mockDb.batch.mockImplementationOnce(async (records) => {
+        await mockDb.adapter.batch(records);
+        throw notificationError;
+      });
+      mockDb.adapter.unsafeQueryRaw.mockRejectedValue(
+        new Error("persistence query unavailable")
+      );
+
+      await expect(
+        createTransaction({
+          amount: 200,
+          currency: "EGP",
+          categoryId: "cat-food",
+          accountId: "acc-1",
+          type: "EXPENSE",
+          source: "MANUAL",
+        })
+      ).resolves.toBeDefined();
+
+      expect(account.balance).toBe(800);
+      expect(account.prepareUpdate).toHaveBeenCalledTimes(1);
+      expect(mockDb.batch).toHaveBeenCalledTimes(1);
+      expect(mockDb.adapter.unsafeQueryRaw).not.toHaveBeenCalled();
+    });
+
+    it("rejects a transaction whose currency differs from the selected account", async () => {
+      const account = seedAccount("acc-1", 1000);
+
+      await expect(
+        createTransaction({
+          amount: 200,
+          currency: "USD",
+          categoryId: "cat-food",
+          accountId: "acc-1",
+          type: "EXPENSE",
+          source: "MANUAL",
+        })
+      ).rejects.toThrow(TRANSACTION_ACCOUNT_CURRENCY_MISMATCH_ERROR_CODE);
+
+      expect(account.balance).toBe(1000);
+      expect(mockDb.batch).not.toHaveBeenCalled();
     });
 
     it("should reject negative input without mutating the account", async () => {
@@ -380,6 +519,29 @@ describe("transaction-service", () => {
       ).rejects.toThrow(USER_DATA_ACCESS_ERROR_CODES.OWNERSHIP_FAILED);
 
       expect(foreignAccount.balance).toBe(1000);
+    });
+
+    it("rejects a deleted account without preparing or committing", async () => {
+      const deletedAccount = mockModel("acc-deleted", {
+        balance: 1000,
+        userId: "test-user-id",
+        deleted: true,
+      });
+      mockSeed("accounts", deletedAccount);
+
+      await expect(
+        createTransaction({
+          amount: 100,
+          currency: "EGP",
+          categoryId: "cat-1",
+          accountId: "acc-deleted",
+          type: "EXPENSE",
+          source: "MANUAL",
+        })
+      ).rejects.toThrow("TRANSACTION_ACCOUNT_UNAVAILABLE");
+
+      expect(deletedAccount.prepareUpdate).not.toHaveBeenCalled();
+      expect(mockDb.batch).not.toHaveBeenCalled();
     });
   });
 

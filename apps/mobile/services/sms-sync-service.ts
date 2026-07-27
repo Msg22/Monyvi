@@ -622,10 +622,25 @@ async function executeScanPipeline(
 
   // Track per-chunk durations for estimated time remaining calculation
   const chunkDurations: number[] = [];
+  const parsedAt = new Date(scanStartedAtMs);
   const aiResult = await parseSmsWithOrchestrator(
     candidates,
     options.aiContext,
-    (aiProgress) => {
+    async (aiProgress) => {
+      if (aiProgress.completedTransactions.length > 0) {
+        await assertPinnedScanContext(initiatingScope.userId, abortSignal);
+        const chunkMerge = await mergeSmsReviewDrafts({
+          transactions: aiProgress.completedTransactions,
+          expectedUserId: initiatingScope.userId,
+          parsedAt,
+        });
+        if (chunkMerge.rejectedCount > 0) {
+          logger.warn("smsReviewDraft.chunkRejected", {
+            rejectedCount: chunkMerge.rejectedCount,
+          });
+        }
+        await assertPinnedScanContext(initiatingScope.userId, abortSignal);
+      }
       // Accumulate chunk durations for rolling average
       chunkDurations.push(aiProgress.chunkDurationMs);
 
@@ -687,15 +702,24 @@ async function executeScanPipeline(
   const deduplicatedTransactions = deduplicateParsedSmsTransactions(
     aiResult.transactions
   );
-  const transactionFingerprints = new Set(
-    deduplicatedTransactions.map((transaction) => transaction.smsFingerprint)
-  );
   await assertPinnedScanContext(initiatingScope.userId, abortSignal);
-  await mergeSmsReviewDrafts({
+  const mergeResult = await mergeSmsReviewDrafts({
     transactions: deduplicatedTransactions,
     expectedUserId: initiatingScope.userId,
-    parsedAt: new Date(scanStartedAtMs),
+    parsedAt,
   });
+  if (mergeResult.rejectedCount > 0) {
+    logger.warn("smsReviewDraft.resultRejected", {
+      rejectedCount: mergeResult.rejectedCount,
+    });
+  }
+  const reviewableFingerprintSet = new Set(mergeResult.reviewableFingerprints);
+  const reviewableTransactions = deduplicatedTransactions.filter(
+    (transaction) => reviewableFingerprintSet.has(transaction.smsFingerprint)
+  );
+  const transactionFingerprints = new Set(
+    reviewableTransactions.map((transaction) => transaction.smsFingerprint)
+  );
   await assertPinnedScanContext(initiatingScope.userId, abortSignal);
   const durableNegativeFingerprints = new Set([
     ...(aiResult.durableNegativeFingerprints ?? []),
@@ -754,7 +778,7 @@ async function executeScanPipeline(
   onProgress?.({
     totalMessages,
     messagesScanned: totalMessages,
-    transactionsFound: deduplicatedTransactions.length,
+    transactionsFound: reviewableTransactions.length,
     candidatesFound: candidates.length,
     currentPhase: "complete",
     currentSender: "",
@@ -762,15 +786,15 @@ async function executeScanPipeline(
   });
 
   logger.info("smsSync.aiParsing.complete", {
-    transactionCount: deduplicatedTransactions.length,
+    transactionCount: reviewableTransactions.length,
     candidateCount: candidates.length,
     durationMs,
   });
 
   return {
-    transactions: deduplicatedTransactions,
+    transactions: reviewableTransactions,
     totalScanned: messagesScanned,
-    totalFound: deduplicatedTransactions.length,
+    totalFound: reviewableTransactions.length,
     totalFilteredCandidates: candidates.length,
     durationMs,
     unresolvedCandidates: aiResult.unresolvedCandidates ?? [],

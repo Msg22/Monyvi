@@ -67,6 +67,7 @@ describe("SafeguardQaDiagnosticsPanel", () => {
     expect(getByText("qa_safeguard_ai_results:2")).toBeTruthy();
     expect(getAllByText("qa_safeguard_local_results:1")).toHaveLength(2);
     expect(getByText("qa_safeguard_oversized_results:3")).toBeTruthy();
+    expect(getAllByText("qa_safeguard_unresolved_results:0")).toHaveLength(1);
   });
 
   it("does not render when no explicit QA diagnostic model exists", () => {

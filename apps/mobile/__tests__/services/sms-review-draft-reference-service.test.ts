@@ -102,6 +102,25 @@ describe("revalidateSmsReviewDraftReferences", () => {
     ]);
   });
 
+  it("rejects an inaccessible ATM destination account", async () => {
+    const [result] = await revalidateSmsReviewDraftReferences(
+      [
+        createItem(
+          createTransaction({
+            accountId: "account-1",
+            isAtmWithdrawal: true,
+            toAccountId: "deleted-cash-account",
+          })
+        ),
+      ],
+      "user-1"
+    );
+
+    expect(result?.hardValidationReasons).toEqual([
+      "destination_account_unavailable",
+    ]);
+  });
+
   it("fails closed when the current-user scope changes", async () => {
     mockGetCurrentUserDataScope.mockResolvedValue({
       userId: "user-2",

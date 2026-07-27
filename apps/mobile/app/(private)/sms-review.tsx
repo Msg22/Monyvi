@@ -27,6 +27,7 @@ import {
   setReviewingActive,
 } from "@/services/sms-live-detection-handler";
 import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator";
+import type { SmsReviewDraftHardValidationReason } from "@/services/sms-review-draft-reference-service";
 import { logger } from "@/utils/logger";
 import { Ionicons } from "@expo/vector-icons";
 import type {
@@ -45,6 +46,29 @@ function getSmsFingerprint(transaction: ReviewableTransaction): string | null {
     transaction as ReviewableTransaction & { readonly smsFingerprint?: string }
   ).smsFingerprint;
   return fingerprint && fingerprint.trim().length > 0 ? fingerprint : null;
+}
+
+function applyHardValidationReasons(
+  transaction: ParsedSmsTransaction,
+  hardValidationReasons: readonly SmsReviewDraftHardValidationReason[]
+): ParsedSmsTransaction {
+  if (hardValidationReasons.length === 0) return transaction;
+
+  const mappedReasons = hardValidationReasons.map((reason) => {
+    if (reason === "category_unavailable") return "category_needed" as const;
+    if (reason === "destination_account_unavailable") {
+      return "cash_transfer_review" as const;
+    }
+    return "account_needed" as const;
+  });
+
+  return {
+    ...transaction,
+    reviewStatus: "needs_review",
+    reviewReasons: [
+      ...new Set([...(transaction.reviewReasons ?? []), ...mappedReasons]),
+    ],
+  };
 }
 
 function SmsReviewLoadingState(): React.JSX.Element {
@@ -80,7 +104,10 @@ export default function SmsReviewScreen(): React.JSX.Element {
   const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
 
   const transactions = useMemo(
-    () => queue.items.map((item) => item.transaction),
+    () =>
+      queue.items.map((item) =>
+        applyHardValidationReasons(item.transaction, item.hardValidationReasons)
+      ),
     [queue.items]
   );
   const itemByFingerprint = useMemo(

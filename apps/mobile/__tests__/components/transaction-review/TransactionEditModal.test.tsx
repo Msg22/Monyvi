@@ -166,6 +166,29 @@ describe("TransactionEditModal SMS workspace", () => {
     expect(view.queryByTestId("legacy-account-selector")).toBeNull();
   });
 
+  it("keeps SMS field labels and values readable in dark mode", () => {
+    const view = render(
+      <TransactionEditModal {...baseProps} sourceVariant="sms" />
+    );
+
+    expect(view.getByDisplayValue("490")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:text-text-primary-dark")
+    );
+    expect(view.getByDisplayValue("Fawry Market")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:text-text-primary-dark")
+    );
+    expect(view.getByText("Shopping")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:text-text-primary-dark")
+    );
+    expect(view.getAllByText("amount")[0]).toHaveProp(
+      "className",
+      expect.stringContaining("dark:text-text-muted-dark")
+    );
+  });
+
   it("opens selector sheets from the visible grouped rows", () => {
     const view = render(
       <TransactionEditModal {...baseProps} sourceVariant="sms" />

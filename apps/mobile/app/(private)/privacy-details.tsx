@@ -36,6 +36,11 @@ export default function PrivacyDetailsScreen(): React.JSX.Element {
           rows={[t("ai_privacy_sms_payload"), t("ai_privacy_voice_payload")]}
         />
         <PrivacySection
+          icon="information-circle-outline"
+          title={t("ai_privacy_why_title")}
+          body={t("ai_privacy_why_body")}
+        />
+        <PrivacySection
           icon="shield-checkmark-outline"
           title={t("ai_privacy_do_not_title")}
           rows={[
@@ -49,7 +54,7 @@ export default function PrivacyDetailsScreen(): React.JSX.Element {
           title={t("ai_privacy_provider_title")}
           body={t("ai_privacy_provider_body")}
         />
-        <Text className="mt-1 text-sm leading-5 text-text-muted">
+        <Text className="mt-1 text-sm leading-5 text-text-muted dark:text-text-muted-dark">
           {t("privacy_details_footer")}
         </Text>
       </ScrollView>
@@ -76,12 +81,12 @@ function PrivacySection({
         <View className="h-10 w-10 items-center justify-center rounded-xl bg-nileGreen-500/15">
           <Ionicons name={icon} size={21} color={palette.nileGreen[500]} />
         </View>
-        <Text className="flex-1 text-lg font-bold text-text-primary">
+        <Text className="flex-1 text-lg font-bold text-text-primary dark:text-text-primary-dark">
           {title}
         </Text>
       </View>
       {body ? (
-        <Text className="mb-3 text-base leading-6 text-text-secondary">
+        <Text className="mb-3 text-base leading-6 text-text-secondary dark:text-text-secondary-dark">
           {body}
         </Text>
       ) : null}
@@ -92,7 +97,7 @@ function PrivacySection({
             size={18}
             color={palette.nileGreen[500]}
           />
-          <Text className="flex-1 text-base leading-6 text-text-secondary">
+          <Text className="flex-1 text-base leading-6 text-text-secondary dark:text-text-secondary-dark">
             {row}
           </Text>
         </View>

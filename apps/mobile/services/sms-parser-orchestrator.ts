@@ -386,7 +386,7 @@ async function runFullAiFallback(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
   localTransactionCount: number,
-  onProgress?: (progress: AiParseProgress) => void,
+  onProgress?: (progress: AiParseProgress) => void | Promise<void>,
   abortSignal?: AbortSignal,
   expectedUserId?: string,
   requestContext?: SmsAiRequestContext,
@@ -444,7 +444,7 @@ async function runFullAiFallback(
 function parseSmsWithPinnedUser(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
-  onProgress?: (progress: AiParseProgress) => void,
+  onProgress?: (progress: AiParseProgress) => void | Promise<void>,
   abortSignal?: AbortSignal,
   expectedUserId?: string,
   requestContext?: SmsAiRequestContext,
@@ -528,7 +528,7 @@ async function reconcileLateRemoteConsentRejection(
 async function parseHybrid(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
-  onProgress?: (progress: AiParseProgress) => void,
+  onProgress?: (progress: AiParseProgress) => void | Promise<void>,
   abortSignal?: AbortSignal,
   options: SmsParserOrchestratorOptions = {}
 ): Promise<SmsParserOrchestratorResult> {
@@ -586,7 +586,8 @@ async function parseHybrid(
   throwIfAborted(abortSignal);
 
   const remoteScanSessionReady =
-    aiSelection.admitted.length > 0 && options.ensureRemoteScanSession !== undefined
+    aiSelection.admitted.length > 0 &&
+    options.ensureRemoteScanSession !== undefined
       ? Promise.resolve().then(options.ensureRemoteScanSession)
       : undefined;
   const [categoryResult, aiResult] = await Promise.all([
@@ -743,7 +744,7 @@ function assertExpectedUserId(
 export async function parseSmsWithOrchestrator(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
-  onProgress?: (progress: AiParseProgress) => void,
+  onProgress?: (progress: AiParseProgress) => void | Promise<void>,
   abortSignal?: AbortSignal,
   options: SmsParserOrchestratorOptions = {}
 ): Promise<SmsParserOrchestratorResult> {
@@ -781,10 +782,11 @@ export async function parseSmsWithOrchestrator(
     const result = createLocalParserResult(parserCandidates, context);
     throwIfAborted(abortSignal);
 
-    onProgress?.({
+    await onProgress?.({
       chunksCompleted: 1,
       totalChunks: 1,
       transactionsSoFar: result.transactions.length,
+      completedTransactions: result.transactions,
       chunkDurationMs: 0,
     });
     throwIfAborted(abortSignal);

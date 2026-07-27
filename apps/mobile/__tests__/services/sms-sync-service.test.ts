@@ -21,6 +21,7 @@ import type {
 } from "@monyvi/logic";
 import type {
   AiParseResult,
+  AiParseProgress,
   ParseSmsContext,
   SmsCandidate,
 } from "@/services/ai-sms-parser-service";
@@ -139,12 +140,21 @@ const mockGetHandledSmsReviewFingerprints = jest.fn<
   []
 >(() => Promise.resolve(new Set()));
 const mockMergeSmsReviewDrafts = jest.fn<
-  Promise<{ readonly insertedCount: number; readonly existingCount: number }>,
+  Promise<{
+    readonly insertedCount: number;
+    readonly existingCount: number;
+    readonly rejectedCount: number;
+    readonly reviewableFingerprints: readonly string[];
+  }>,
   [{ readonly transactions: readonly ParsedSmsTransaction[] }]
 >((input) =>
   Promise.resolve({
     insertedCount: input.transactions.length,
     existingCount: 0,
+    rejectedCount: 0,
+    reviewableFingerprints: input.transactions.map(
+      (transaction) => transaction.smsFingerprint
+    ),
   })
 );
 
@@ -156,6 +166,8 @@ jest.mock("@/services/sms-review-draft-repository", () => ({
   }): Promise<{
     readonly insertedCount: number;
     readonly existingCount: number;
+    readonly rejectedCount: number;
+    readonly reviewableFingerprints: readonly string[];
   }> => mockMergeSmsReviewDrafts(input),
 }));
 
@@ -391,6 +403,10 @@ describe("sms-sync-service", () => {
       Promise.resolve({
         insertedCount: input.transactions.length,
         existingCount: 0,
+        rejectedCount: 0,
+        reviewableFingerprints: input.transactions.map(
+          (transaction) => transaction.smsFingerprint
+        ),
       })
     );
     mockReadSmsInbox.mockResolvedValue([]);
@@ -1123,6 +1139,35 @@ describe("sms-sync-service", () => {
       const { removeItem } = getAsyncStorageMocks();
       expect(removeItem).toHaveBeenCalledWith("@monyvi/sms_scan_in_progress");
     });
+  });
+
+  it("persists a completed AI chunk before a later parser abort", async () => {
+    const completedTransaction = createParsedTransaction({
+      smsFingerprint: "fp-completed-chunk",
+    });
+    mockReadSmsInbox.mockResolvedValue([createSmsMessage()]);
+    mockParseSmsWithOrchestrator.mockImplementationOnce(async (...args) => {
+      const onProgress = args[2] as
+        | ((progress: AiParseProgress) => void | Promise<void>)
+        | undefined;
+      await onProgress?.({
+        chunksCompleted: 1,
+        totalChunks: 2,
+        transactionsSoFar: 1,
+        completedTransactions: [completedTransaction],
+        chunkDurationMs: 10,
+      });
+      const abortError = new Error("aborted after one chunk");
+      abortError.name = "AbortError";
+      throw abortError;
+    });
+
+    await expect(scanAndParseSms(defaultOptions())).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(mockMergeSmsReviewDrafts).toHaveBeenCalledWith(
+      expect.objectContaining({ transactions: [completedTransaction] })
+    );
   });
 
   // =========================================================================

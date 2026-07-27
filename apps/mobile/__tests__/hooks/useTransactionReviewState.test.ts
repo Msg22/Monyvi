@@ -266,8 +266,8 @@ describe("useTransactionReviewState", () => {
       result.current.filteredTransactions.map((tx) => tx.originLabel)
     ).toEqual(["LOW", "NO_ACCOUNT"]);
 
-    act(() => {
-      result.current.handleToggleAll();
+    await act(async () => {
+      await result.current.handleToggleAll();
     });
 
     expect(Array.from(result.current.selectedIndices).sort()).toEqual([
@@ -491,6 +491,33 @@ describe("useTransactionReviewState", () => {
     );
   });
 
+  it("hydrates a persisted existing source-account edit as a durable override", async () => {
+    const transaction: ParsedSmsTransaction = {
+      ...createTransaction({ accountId: "account-manual" }),
+      source: "SMS",
+      smsFingerprint: "sms-fingerprint-1",
+      senderDisplayName: "QNB EGYPT",
+      rawSmsBody: "Private SMS body",
+    };
+    const transactions = [transaction];
+
+    const { result } = renderHook(() =>
+      useTransactionReviewState({
+        transactions,
+        onSave: jest.fn(),
+      })
+    );
+
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(1));
+
+    expect(result.current.transactionOverrides.get(0)).toEqual(
+      expect.objectContaining({
+        accountId: "account-manual",
+        accountConfirmed: true,
+      })
+    );
+  });
+
   it("keeps the edit modal and local state unchanged when durable persistence fails", async () => {
     const persistEdit = jest.fn().mockRejectedValue(new Error("write failed"));
     const transactions = [createTransaction()];
@@ -522,6 +549,34 @@ describe("useTransactionReviewState", () => {
     );
   });
 
+  it("keeps selection unchanged when durable selection persistence fails", async () => {
+    const persistSelection = jest
+      .fn<Promise<void>, [number, boolean]>()
+      .mockRejectedValue(new Error("write failed"));
+    const transactions = [createTransaction({ confidence: 0.99 })];
+    const { result } = renderHook(() =>
+      useTransactionReviewState({
+        transactions,
+        onSave: jest.fn(),
+        onSelectionChange: persistSelection,
+      })
+    );
+
+    await waitFor(() =>
+      expect(result.current.selectedIndices.has(0)).toBe(true)
+    );
+
+    await act(async () => {
+      await result.current.handleToggleItem(0);
+    });
+
+    expect(persistSelection).toHaveBeenCalledWith(0, false);
+    expect(result.current.selectedIndices.has(0)).toBe(true);
+    expect(mockShowToast).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "error" })
+    );
+  });
+
   it("preserves an explicit deselection when a safe row is edited", async () => {
     const transactions = [createTransaction({ confidence: 0.99 })];
     const { result } = renderHook(() =>
@@ -532,7 +587,7 @@ describe("useTransactionReviewState", () => {
       expect(result.current.selectedIndices.has(0)).toBe(true)
     );
 
-    act(() => result.current.handleToggleItem(0));
+    await act(async () => result.current.handleToggleItem(0));
     expect(result.current.selectedIndices.has(0)).toBe(false);
 
     act(() => result.current.handleOpenEditModal(0));
@@ -863,7 +918,7 @@ describe("useTransactionReviewState", () => {
         accountName: "Bank",
       });
     });
-    act(() => result.current.handleToggleItem(0));
+    await act(async () => result.current.handleToggleItem(0));
     const wasSelected = result.current.selectedIndices.has(0);
 
     act(() => rerender({ transactions: [original, appended] }));

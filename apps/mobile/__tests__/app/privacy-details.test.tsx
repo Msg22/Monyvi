@@ -29,5 +29,7 @@ describe("PrivacyDetailsScreen", () => {
     expect(screen.getByText("privacy_sms_drafts_retention")).toBeTruthy();
     expect(screen.getByText("privacy_sms_drafts_not_synced")).toBeTruthy();
     expect(screen.getByText("privacy_ai_title")).toBeTruthy();
+    expect(screen.getByText("ai_privacy_why_title")).toBeTruthy();
+    expect(screen.getByText("ai_privacy_why_body")).toBeTruthy();
   });
 });

@@ -11,6 +11,7 @@ import {
 export type SmsReviewDraftHardValidationReason =
   | "account_required"
   | "account_unavailable"
+  | "destination_account_unavailable"
   | "category_unavailable";
 
 export interface RevalidatedSmsReviewDraftItem extends SmsReviewDraftReadItem {
@@ -49,6 +50,12 @@ export async function revalidateSmsReviewDraftReferences(
       !accountIds.has(item.transaction.accountId)
     ) {
       reasons.push("account_unavailable");
+    }
+    if (
+      item.transaction.toAccountId &&
+      !accountIds.has(item.transaction.toAccountId)
+    ) {
+      reasons.push("destination_account_unavailable");
     }
     if (!categoryIds.has(item.transaction.categoryId)) {
       reasons.push("category_unavailable");

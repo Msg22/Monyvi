@@ -445,6 +445,7 @@ export interface AiParseProgress {
   readonly chunksCompleted: number;
   readonly totalChunks: number;
   readonly transactionsSoFar: number;
+  readonly completedTransactions: readonly ParsedSmsTransaction[];
   /** Duration of the just-completed chunk in milliseconds. Used for time estimation. */
   readonly chunkDurationMs: number;
 }
@@ -575,7 +576,7 @@ function waitForInterChunkDelay(abortSignal?: AbortSignal): Promise<void> {
 export async function parseSmsWithAi(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
-  onProgress?: (progress: AiParseProgress) => void,
+  onProgress?: (progress: AiParseProgress) => void | Promise<void>,
   abortSignal?: AbortSignal,
   expectedUserId?: string,
   requestContext?: SmsAiRequestContext,
@@ -808,10 +809,11 @@ export async function parseSmsWithAi(
         hasError = true;
         hasNonRetryableError = true;
         chunksCompleted++;
-        onProgress?.({
+        await onProgress?.({
           chunksCompleted,
           totalChunks,
           transactionsSoFar: allResults.length,
+          completedTransactions: mapped.transactions,
           chunkDurationMs,
         });
         break;
@@ -894,10 +896,11 @@ export async function parseSmsWithAi(
 
       chunksCompleted++;
 
-      onProgress?.({
+      await onProgress?.({
         chunksCompleted,
         totalChunks,
         transactionsSoFar: allResults.length,
+        completedTransactions: mapped.transactions,
         chunkDurationMs,
       });
 

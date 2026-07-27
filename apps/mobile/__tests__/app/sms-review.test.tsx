@@ -279,7 +279,8 @@ describe("SMS review route", () => {
     render(<SmsReviewScreen />);
 
     const props = mockTransactionReview.mock.calls[0]?.[0];
-    expect(props?.transactions).toEqual([mockTransaction]);
+    expect(props?.transactions[0]?.reviewStatus).toBe("needs_review");
+    expect(props?.transactions[0]?.reviewReasons).toContain("account_needed");
     expect(props?.selectionOverrides.get(0)).toBe(false);
     expect(props?.partialResults?.canRetry).toBe(true);
   });

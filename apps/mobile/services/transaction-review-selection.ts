@@ -1,4 +1,5 @@
 import type {
+  ParsedSmsTransaction,
   ReviewableTransaction,
   TransactionReviewReason as ParserReviewReason,
 } from "@monyvi/logic";
@@ -6,6 +7,7 @@ import type {
   TransactionReviewMeta,
   TransactionReviewReason,
 } from "@/contracts/transaction-review";
+import type { TransactionEdits } from "@/services/sms-edit-modal-service";
 
 export type {
   TransactionReviewMeta,
@@ -20,6 +22,43 @@ export interface TransactionReviewAccountMatch {
 export interface TransactionReviewResolutionContext {
   readonly hasCategoryOverride?: boolean;
   readonly hasCashDestinationOverride?: boolean;
+}
+
+export function getDurableTransactionOverrides(
+  transactions: readonly ReviewableTransaction[]
+): ReadonlyMap<number, TransactionEdits> {
+  const overrides = new Map<number, TransactionEdits>();
+  transactions.forEach((transaction, index) => {
+    if (transaction.source !== "SMS") return;
+    const smsTransaction = transaction as ParsedSmsTransaction;
+    if (
+      !transaction.accountId &&
+      !smsTransaction.pendingAccount &&
+      !smsTransaction.toAccountId
+    ) {
+      return;
+    }
+
+    overrides.set(index, {
+      amount: transaction.amount,
+      currency: transaction.currency,
+      counterparty: transaction.counterparty,
+      categoryId: transaction.categoryId,
+      type: transaction.type,
+      accountId:
+        smsTransaction.pendingAccount?.tempId ?? transaction.accountId ?? null,
+      accountName: smsTransaction.pendingAccount?.name ?? null,
+      accountConfirmed:
+        smsTransaction.pendingAccount || transaction.accountId
+          ? true
+          : undefined,
+      toAccountId: smsTransaction.toAccountId,
+      toAccountName: smsTransaction.toAccountName,
+      toAccountConfirmed: smsTransaction.toAccountId ? true : undefined,
+      pendingAccount: smsTransaction.pendingAccount,
+    });
+  });
+  return overrides;
 }
 
 export function resolveEditedAccountMatch<

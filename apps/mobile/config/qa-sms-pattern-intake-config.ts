@@ -23,6 +23,10 @@ interface QaSmsPatternIntakeFixtureRuntime {
   readonly fixtureFlag: string | undefined;
 }
 
+function readPublicEnvironmentVariable(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
 function readPlatform(): string {
   const platform: unknown = Platform.OS;
   return typeof platform === "string" ? platform : "unsupported";
@@ -33,8 +37,9 @@ function readDevelopmentMode(): boolean {
   return isDevelopment === true;
 }
 
-const publicQaSmsPatternIntakeFlag =
-  process.env.EXPO_PUBLIC_ENABLE_QA_SMS_PATTERN_INTAKE;
+const publicQaSmsPatternIntakeFlag = readPublicEnvironmentVariable(
+  process.env.EXPO_PUBLIC_ENABLE_QA_SMS_PATTERN_INTAKE
+);
 
 function getDefaultRuntime(): QaSmsPatternIntakeRuntime {
   return {
@@ -61,8 +66,12 @@ export function getQaSmsPatternIntakeAvailability(
 
 export function isQaSmsPatternIntakeFixtureMode(
   runtime: QaSmsPatternIntakeFixtureRuntime = {
-    testMode: process.env.EXPO_PUBLIC_MONYVI_TEST_MODE,
-    fixtureFlag: process.env.EXPO_PUBLIC_QA_SMS_PATTERN_INTAKE_FIXTURES,
+    testMode: readPublicEnvironmentVariable(
+      process.env.EXPO_PUBLIC_MONYVI_TEST_MODE
+    ),
+    fixtureFlag: readPublicEnvironmentVariable(
+      process.env.EXPO_PUBLIC_QA_SMS_PATTERN_INTAKE_FIXTURES
+    ),
   }
 ): boolean {
   return runtime.testMode === "e2e" && runtime.fixtureFlag === "true";

@@ -3,6 +3,8 @@ import {
   DismissedSmsFingerprint,
   SmsReviewDraftItem,
   SmsReviewQueue,
+  Transaction,
+  Transfer,
 } from "@monyvi/db";
 import {
   decodeSmsReviewDraft,
@@ -54,6 +56,8 @@ export interface MergeSmsReviewDraftsInput {
 export interface MergeSmsReviewDraftsResult {
   readonly insertedCount: number;
   readonly existingCount: number;
+  readonly rejectedCount: number;
+  readonly reviewableFingerprints: readonly string[];
 }
 
 export interface VolatileSmsReviewUndoItem {
@@ -251,49 +255,110 @@ export async function mergeSmsReviewDrafts(
   input: MergeSmsReviewDraftsInput
 ): Promise<MergeSmsReviewDraftsResult> {
   if (input.transactions.length === 0) {
-    return { insertedCount: 0, existingCount: 0 };
+    return {
+      insertedCount: 0,
+      existingCount: 0,
+      rejectedCount: 0,
+      reviewableFingerprints: [],
+    };
   }
 
   const scope = await getCurrentUserDataScope();
   if (scope.userId !== input.expectedUserId) {
     await assertExpectedCurrentUser(input.expectedUserId);
   }
-  const encoded = input.transactions.map((transaction) => ({
-    transaction,
-    payload: encodeSmsReviewDraft(transaction),
-  }));
-  const parsedAt = input.parsedAt ?? new Date();
 
+  const encoded: Array<{
+    readonly transaction: ParsedSmsTransaction;
+    readonly payload: ReturnType<typeof encodeSmsReviewDraft>;
+  }> = [];
+  let rejectedCount = 0;
+  for (const transaction of input.transactions) {
+    try {
+      encoded.push({
+        transaction,
+        payload: encodeSmsReviewDraft(transaction),
+      });
+    } catch (error) {
+      if (error instanceof SmsReviewDraftCodecError) {
+        rejectedCount += 1;
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (encoded.length === 0) {
+    return {
+      insertedCount: 0,
+      existingCount: 0,
+      rejectedCount,
+      reviewableFingerprints: [],
+    };
+  }
+
+  const parsedAt = input.parsedAt ?? new Date();
   return database.write(async (): Promise<MergeSmsReviewDraftsResult> => {
     await assertExpectedCurrentUser(input.expectedUserId);
     const queues = await fetchOwnedQueues(input.expectedUserId);
     let queue = assertSingleQueue(queues);
-    const [existingItems, dismissedItems] = await Promise.all([
-      fetchOwnedItems(input.expectedUserId, queue?.id),
-      dismissedCollection()
-        .query(Q.where("user_id", input.expectedUserId))
-        .fetch(),
-    ]);
+    const [existingItems, dismissedItems, savedTransactions, savedTransfers] =
+      await Promise.all([
+        fetchOwnedItems(input.expectedUserId, queue?.id),
+        dismissedCollection()
+          .query(Q.where("user_id", input.expectedUserId))
+          .fetch(),
+        scope
+          .queryOwned(
+            database.get<Transaction>("transactions"),
+            Q.where("deleted", false)
+          )
+          .fetch(),
+        scope
+          .queryOwned(
+            database.get<Transfer>("transfers"),
+            Q.where("deleted", false)
+          )
+          .fetch(),
+      ]);
     const existingFingerprints = new Set(
       existingItems.map((item) => item.smsFingerprint)
     );
     const dismissedFingerprints = new Set(
       dismissedItems.map((item) => item.smsFingerprint)
     );
-    const uniqueNew = encoded.filter(
+    const savedFingerprints = new Set(
+      [...savedTransactions, ...savedTransfers]
+        .map((record) => record.smsFingerprint)
+        .filter((fingerprint): fingerprint is string => Boolean(fingerprint))
+    );
+    const uniqueEncoded = encoded.filter(
       ({ transaction }, index, all) =>
-        !existingFingerprints.has(transaction.smsFingerprint) &&
-        !dismissedFingerprints.has(transaction.smsFingerprint) &&
         all.findIndex(
           (candidate) =>
             candidate.transaction.smsFingerprint === transaction.smsFingerprint
         ) === index
+    );
+    const reviewableFingerprints = uniqueEncoded
+      .map(({ transaction }) => transaction.smsFingerprint)
+      .filter(
+        (fingerprint) =>
+          !dismissedFingerprints.has(fingerprint) &&
+          !savedFingerprints.has(fingerprint)
+      );
+    const reviewableSet = new Set(reviewableFingerprints);
+    const uniqueNew = uniqueEncoded.filter(
+      ({ transaction }) =>
+        reviewableSet.has(transaction.smsFingerprint) &&
+        !existingFingerprints.has(transaction.smsFingerprint)
     );
 
     if (uniqueNew.length === 0) {
       return {
         insertedCount: 0,
         existingCount: encoded.length,
+        rejectedCount,
+        reviewableFingerprints,
       };
     }
 
@@ -335,6 +400,8 @@ export async function mergeSmsReviewDrafts(
     return {
       insertedCount: uniqueNew.length,
       existingCount: encoded.length - uniqueNew.length,
+      rejectedCount,
+      reviewableFingerprints,
     };
   });
 }

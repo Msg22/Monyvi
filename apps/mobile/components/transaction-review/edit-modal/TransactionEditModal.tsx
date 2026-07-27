@@ -605,11 +605,11 @@ function SmsReviewEditFields({
         >
           <SmsEditIcon name="cash-outline" color={palette.nileGreen[500]} />
           <View className="ms-3 flex-1">
-            <Text className="text-xs font-medium text-text-muted">
+            <Text className="text-xs font-medium text-text-muted dark:text-text-muted-dark">
               {t("amount")}
             </Text>
             <View className="flex-row items-center">
-              <Text className="me-1 text-base font-semibold text-text-primary">
+              <Text className="me-1 text-base font-semibold text-text-primary dark:text-text-primary-dark">
                 {transaction.currency}
               </Text>
               <TextInput
@@ -619,7 +619,7 @@ function SmsReviewEditFields({
                 onBlur={() => setFocusedField(null)}
                 keyboardType="numeric"
                 returnKeyType="next"
-                className="min-h-8 flex-1 p-0 text-base font-semibold text-text-primary"
+                className="min-h-8 flex-1 p-0 text-base font-semibold text-text-primary dark:text-text-primary-dark"
                 placeholder="0.00"
                 placeholderTextColor={palette.slate[500]}
               />
@@ -638,7 +638,7 @@ function SmsReviewEditFields({
           >
             <SmsEditIcon name="storefront-outline" color={palette.blue[500]} />
             <View className="ms-3 flex-1">
-              <Text className="text-xs font-medium text-text-muted">
+              <Text className="text-xs font-medium text-text-muted dark:text-text-muted-dark">
                 {state.txType === "EXPENSE" ? t("merchant") : t("payee")}
               </Text>
               <TextInput
@@ -647,7 +647,7 @@ function SmsReviewEditFields({
                 onFocus={() => setFocusedField("merchant")}
                 onBlur={() => setFocusedField(null)}
                 returnKeyType="done"
-                className="min-h-8 p-0 text-base font-semibold text-text-primary"
+                className="min-h-8 p-0 text-base font-semibold text-text-primary dark:text-text-primary-dark"
                 placeholder={t("counterparty_placeholder")}
                 placeholderTextColor={palette.slate[500]}
               />
@@ -664,11 +664,11 @@ function SmsReviewEditFields({
           >
             <SmsEditIcon name="pricetag-outline" color={palette.violet[500]} />
             <View className="ms-3 flex-1">
-              <Text className="text-xs font-medium text-text-muted">
+              <Text className="text-xs font-medium text-text-muted dark:text-text-muted-dark">
                 {t("category")}
               </Text>
               <Text
-                className="text-base font-semibold text-text-primary"
+                className="text-base font-semibold text-text-primary dark:text-text-primary-dark"
                 numberOfLines={1}
               >
                 {state.selectedCategoryDisplayName ??
@@ -691,13 +691,13 @@ function SmsReviewEditFields({
         >
           <SmsEditIcon name="business-outline" color={palette.blue[500]} />
           <View className="ms-3 flex-1">
-            <Text className="text-xs font-medium text-text-muted">
+            <Text className="text-xs font-medium text-text-muted dark:text-text-muted-dark">
               {state.formConfig.showToAccount
                 ? t("from_account_label")
                 : t("account_label")}
             </Text>
             <Text
-              className="text-base font-semibold text-text-primary"
+              className="text-base font-semibold text-text-primary dark:text-text-primary-dark"
               numberOfLines={1}
             >
               {state.selectedAccountName || t("select_an_account")}
@@ -719,10 +719,10 @@ function SmsReviewEditFields({
         >
           <SmsEditIcon name="globe-outline" color={palette.gold[500]} />
           <View className="ms-3 flex-1">
-            <Text className="text-xs font-medium text-text-muted">
+            <Text className="text-xs font-medium text-text-muted dark:text-text-muted-dark">
               {t("currency")}
             </Text>
-            <Text className="text-base font-semibold text-text-primary">
+            <Text className="text-base font-semibold text-text-primary dark:text-text-primary-dark">
               {state.selectedAccountCurrency}
             </Text>
           </View>
@@ -754,13 +754,13 @@ function SmsReviewEditFields({
 
       {(state.isCreatingNew || !state.hasBankAccounts) && (
         <View className="mt-3 rounded-xl border border-nileGreen-500 bg-nileGreen-50 p-3 dark:bg-nileGreen-900">
-          <Text className="mb-1 text-xs font-medium text-text-muted">
+          <Text className="mb-1 text-xs font-medium text-text-muted dark:text-text-muted-dark">
             {t("account_name")}
           </Text>
           <TextInput
             value={state.newAccountName}
             onChangeText={setters.setNewAccountName}
-            className="min-h-9 p-0 text-base font-semibold text-text-primary"
+            className="min-h-9 p-0 text-base font-semibold text-text-primary dark:text-text-primary-dark"
             placeholder={t("account_name")}
             placeholderTextColor={palette.slate[500]}
           />
