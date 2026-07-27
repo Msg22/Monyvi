@@ -18,6 +18,12 @@ import {
   captureCachedModelSnapshot,
   restoreCachedModelSnapshot,
 } from "./watermelon-cache-snapshot";
+import {
+  createTransactionAccountScopeKey,
+  createTransactionOperationKey,
+  rememberIndeterminateTransactionCommit,
+  resolvePendingTransactionCommit,
+} from "./transaction-commit-recovery";
 
 export interface RecurringPaymentData {
   name: string;
@@ -240,18 +246,32 @@ export async function submitRecurringPayment(params: {
       );
     }
 
+    const transactionData = {
+      amount,
+      currency: persistedPayment.currency,
+      categoryId: persistedPayment.categoryId,
+      accountId,
+      note,
+      type: persistedPayment.type,
+      source: "MANUAL" as const,
+      date: new Date(),
+      linkedRecurringId: persistedPayment.id,
+    };
+    const accountScopeKey = createTransactionAccountScopeKey(
+      scope.userId,
+      accountId
+    );
+    const operationKey = createTransactionOperationKey(transactionData);
+    const recoveredTransaction = await resolvePendingTransactionCommit(
+      accountScopeKey,
+      operationKey
+    );
+    if (recoveredTransaction) {
+      return;
+    }
+
     const preparedTransaction = await prepareTransactionCreateWithBalance(
-      {
-        amount,
-        currency: persistedPayment.currency,
-        categoryId: persistedPayment.categoryId,
-        accountId,
-        note,
-        type: persistedPayment.type,
-        source: "MANUAL",
-        date: new Date(),
-        linkedRecurringId: persistedPayment.id,
-      },
+      transactionData,
       scope,
       scope.userId
     );
@@ -274,6 +294,17 @@ export async function submitRecurringPayment(params: {
       if (wasTransactionPersisted === false) {
         preparedTransaction.restoreCachedAccount();
         restoreCachedModelSnapshot(paymentSnapshot);
+      } else {
+        rememberIndeterminateTransactionCommit({
+          accountScopeKey,
+          operationKey,
+          transaction: preparedTransaction.transaction,
+          wasTransactionPersisted: preparedTransaction.wasTransactionPersisted,
+          restoreCachedState: (): void => {
+            preparedTransaction.restoreCachedAccount();
+            restoreCachedModelSnapshot(paymentSnapshot);
+          },
+        });
       }
       throw error;
     }

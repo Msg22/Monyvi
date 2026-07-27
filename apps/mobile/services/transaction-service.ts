@@ -20,6 +20,12 @@ import {
   captureCachedModelSnapshot,
   restoreCachedModelSnapshot,
 } from "@/services/watermelon-cache-snapshot";
+import {
+  createTransactionAccountScopeKey,
+  createTransactionOperationKey,
+  rememberIndeterminateTransactionCommit,
+  resolvePendingTransactionCommit,
+} from "@/services/transaction-commit-recovery";
 
 export const INVALID_ACCOUNT_BALANCE_ERROR_CODE = "INVALID_ACCOUNT_BALANCE";
 export const BALANCE_REVERSAL_ACCOUNT_NOT_FOUND_ERROR_CODE =
@@ -158,7 +164,21 @@ export async function createTransaction(
     throw new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
   }
 
+  const accountScopeKey = createTransactionAccountScopeKey(
+    scope.userId,
+    data.accountId
+  );
+  const operationKey = createTransactionOperationKey(data);
+
   return await database.write(async () => {
+    const recoveredTransaction = await resolvePendingTransactionCommit(
+      accountScopeKey,
+      operationKey
+    );
+    if (recoveredTransaction) {
+      return recoveredTransaction;
+    }
+
     const prepared = await prepareTransactionCreateWithBalance(
       data,
       scope,
@@ -174,6 +194,14 @@ export async function createTransaction(
       }
       if (wasTransactionPersisted === false) {
         prepared.restoreCachedAccount();
+      } else {
+        rememberIndeterminateTransactionCommit({
+          accountScopeKey,
+          operationKey,
+          transaction: prepared.transaction,
+          wasTransactionPersisted: prepared.wasTransactionPersisted,
+          restoreCachedState: prepared.restoreCachedAccount,
+        });
       }
       throw error;
     }

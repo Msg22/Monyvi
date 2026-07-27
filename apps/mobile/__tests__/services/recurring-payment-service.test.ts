@@ -738,6 +738,80 @@ describe("recurring-payment-service", () => {
       expect(mockWrite).not.toHaveBeenCalled();
       expect(mockBatch).not.toHaveBeenCalled();
     });
+
+    it("restores cached state before retrying after a later rollback verification", async () => {
+      const payment = createRecurringRecord();
+      const batchError = new Error("atomic batch outcome unknown");
+      const params = {
+        payment: payment as never,
+        accountId: "account-1",
+        amount: 250,
+      };
+      mockFindOwned.mockResolvedValue(payment);
+      mockBatch.mockRejectedValueOnce(batchError);
+      mockWasTransactionPersisted
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(false);
+
+      await expect(submitRecurringPayment(params)).rejects.toThrow(batchError);
+      await expect(submitRecurringPayment(params)).resolves.toBeUndefined();
+
+      expect(mockWasTransactionPersisted).toHaveBeenCalledTimes(2);
+      expect(mockRestoreCachedAccount).toHaveBeenCalledTimes(1);
+      expect(mockPrepareTransactionCreateWithBalance).toHaveBeenCalledTimes(2);
+      expect(payment.prepareUpdate).toHaveBeenCalledTimes(2);
+      expect(mockBatch).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not duplicate a recurring submission later confirmed as committed", async () => {
+      const payment = createRecurringRecord();
+      const batchError = new Error("atomic batch outcome unknown");
+      const params = {
+        payment: payment as never,
+        accountId: "account-1",
+        amount: 250,
+      };
+      mockFindOwned.mockResolvedValue(payment);
+      mockBatch.mockRejectedValueOnce(batchError);
+      mockWasTransactionPersisted
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(true);
+
+      await expect(submitRecurringPayment(params)).rejects.toThrow(batchError);
+      await expect(submitRecurringPayment(params)).resolves.toBeUndefined();
+
+      expect(mockWasTransactionPersisted).toHaveBeenCalledTimes(2);
+      expect(mockRestoreCachedAccount).not.toHaveBeenCalled();
+      expect(mockPrepareTransactionCreateWithBalance).toHaveBeenCalledTimes(1);
+      expect(payment.prepareUpdate).toHaveBeenCalledTimes(1);
+      expect(mockBatch).toHaveBeenCalledTimes(1);
+    });
+
+    it("blocks a retry while the previous commit state remains unavailable", async () => {
+      const payment = createRecurringRecord();
+      const batchError = new Error("atomic batch outcome unknown");
+      const params = {
+        payment: payment as never,
+        accountId: "account-1",
+        amount: 250,
+      };
+      mockFindOwned.mockResolvedValue(payment);
+      mockBatch.mockRejectedValueOnce(batchError);
+      mockWasTransactionPersisted.mockResolvedValue(null);
+
+      await expect(submitRecurringPayment(params)).rejects.toThrow(batchError);
+      await expect(submitRecurringPayment(params)).rejects.toThrow(
+        "TRANSACTION_COMMIT_STATE_UNAVAILABLE"
+      );
+
+      expect(mockPrepareTransactionCreateWithBalance).toHaveBeenCalledTimes(1);
+      expect(payment.prepareUpdate).toHaveBeenCalledTimes(1);
+      expect(mockBatch).toHaveBeenCalledTimes(1);
+      expect(mockRestoreCachedAccount).not.toHaveBeenCalled();
+
+      mockWasTransactionPersisted.mockResolvedValueOnce(false);
+      await expect(submitRecurringPayment(params)).resolves.toBeUndefined();
+    });
   });
 
   it("pauses, resumes, and soft-deletes an owned recurring payment", async () => {
