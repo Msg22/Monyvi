@@ -1,76 +1,114 @@
-/**
- * SMS Review Route
- *
- * Expo Router page that shows the transaction review list directly.
- * Account matching is done per-transaction via `matchTransactionsBatched`
- * on the review component (no separate account setup step).
- *
- * Flow: sms-scan.tsx → setTransactions → navigate here → review → save
- *
- * Architecture & Design Rationale:
- * - Pattern: Single-Step Flow (direct review)
- * - Why: Account setup was removed (US1) — matching is now automatic
- *   per-transaction, making a separate setup step unnecessary.
- * - SOLID: SRP — this route only orchestrates navigation and save.
- *   Business logic (matching, persistence) lives in services.
- *
- * @module sms-review
- */
-
-import { ConfirmationModal } from "@/components/modals/ConfirmationModal";
 import { AiProcessingConsentSheet } from "@/components/ai-consent/AiProcessingConsentSheet";
+import { ConfirmationModal } from "@/components/modals/ConfirmationModal";
+import { SafeguardQaDiagnosticsPanel } from "@/components/sms-sync/SafeguardQaDiagnosticsPanel";
 import { TransactionReview } from "@/components/transaction-review/TransactionReview";
+import { PartialSmsResultsNotice } from "@/components/transaction-review/PartialSmsResultsNotice";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
 import { useSmsScanContext } from "@/context/SmsScanContext";
-import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator";
-import { useTheme } from "@/context/ThemeContext";
-import { useSmsSync } from "@/hooks/useSmsSync";
-import { useSmsReviewRetry } from "@/hooks/useSmsReviewRetry";
 import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
-import { batchCreateTransactions } from "@/services/batch-create-transactions";
+import { useSmsReviewDraftQueue } from "@/hooks/useSmsReviewDraftQueue";
+import { useSmsReviewRetry } from "@/hooks/useSmsReviewRetry";
+import { useSmsReviewUndo } from "@/hooks/useSmsReviewUndo";
+import { useSmsSync } from "@/hooks/useSmsSync";
+import {
+  discardEverySmsReviewDraft,
+  editSmsReviewDraft,
+  setSmsReviewDraftSelection,
+} from "@/services/sms-review-draft-command-service";
+import {
+  saveSelectedSmsReviewDrafts,
+  SmsReviewDraftSaveValidationError,
+} from "@/services/sms-review-save-service";
+import { createSmsSafeguardQaDiagnostics } from "@/services/sms-safeguard-qa-diagnostics-service";
 import {
   flushQueuedTransactions,
   setReviewingActive,
 } from "@/services/sms-live-detection-handler";
-import type { ReviewableTransaction } from "@monyvi/logic";
+import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator";
+import { logger } from "@/utils/logger";
 import { Ionicons } from "@expo/vector-icons";
+import type {
+  ParsedSmsTransaction,
+  ReviewableTransaction,
+} from "@monyvi/logic";
+import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { StatusBar } from "expo-status-bar";
-import { logger } from "@/utils/logger";
-import { PartialSmsResultsNotice } from "@/components/transaction-review/PartialSmsResultsNotice";
-import { SafeguardQaDiagnosticsPanel } from "@/components/sms-sync/SafeguardQaDiagnosticsPanel";
-import { createSmsSafeguardQaDiagnostics } from "@/services/sms-safeguard-qa-diagnostics-service";
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+function getSmsFingerprint(transaction: ReviewableTransaction): string | null {
+  const fingerprint = (
+    transaction as ReviewableTransaction & { readonly smsFingerprint?: string }
+  ).smsFingerprint;
+  return fingerprint && fingerprint.trim().length > 0 ? fingerprint : null;
+}
+
+function SmsReviewLoadingState(): React.JSX.Element {
+  return (
+    <SafeAreaView className="flex-1 bg-background px-5 pt-4 dark:bg-background-dark">
+      <Skeleton width="65%" height={34} borderRadius={6} />
+      <View className="mt-5 gap-3">
+        <Skeleton width="100%" height={92} borderRadius={8} />
+        <Skeleton width="100%" height={132} borderRadius={8} />
+        <Skeleton width="100%" height={132} borderRadius={8} />
+      </View>
+    </SafeAreaView>
+  );
+}
 
 export default function SmsReviewScreen(): React.JSX.Element {
   const { t } = useTranslation("transactions");
   const router = useRouter();
   const {
-    transactions,
     unresolvedCandidates,
     safeguardSummary,
     parserDiagnostics,
     clearTransactions,
   } = useSmsScanContext();
+  const queue = useSmsReviewDraftQueue();
+  const undo = useSmsReviewUndo();
   const { markSyncComplete } = useSmsSync();
   const { showToast } = useToast();
-  const { isDark } = useTheme();
   const smsRetry = useSmsReviewRetry();
   const aiConsent = useAiProcessingConsent();
-
   const [isSaving, setIsSaving] = useState(false);
+  const [isLeavingAfterSave, setIsLeavingAfterSave] = useState(false);
   const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
+
+  const transactions = useMemo(
+    () => queue.items.map((item) => item.transaction),
+    [queue.items]
+  );
+  const itemByFingerprint = useMemo(
+    () =>
+      new Map(
+        queue.items.map(
+          (item) => [item.transaction.smsFingerprint, item] as const
+        )
+      ),
+    [queue.items]
+  );
+  const selectionOverrides = useMemo(
+    () =>
+      new Map(
+        queue.items.map(
+          (item, index) =>
+            [
+              index,
+              item.hardValidationReasons.length > 0
+                ? false
+                : item.selectionOverride,
+            ] as const
+        )
+      ),
+    [queue.items]
+  );
   const activeSafeguardSummary: SmsScanSafeguardSummary | null =
     safeguardSummary;
-
   const partialResults =
     activeSafeguardSummary !== null &&
     activeSafeguardSummary.deferredAiCount +
@@ -95,88 +133,147 @@ export default function SmsReviewScreen(): React.JSX.Element {
     [activeSafeguardSummary, parserDiagnostics]
   );
 
-  // Mark review as active to queue incoming live transactions
   useEffect(() => {
     setReviewingActive(true);
-
     return () => {
       setReviewingActive(false);
-      clearTransactions();
-      flushQueuedTransactions().catch((err) => {
+      void flushQueuedTransactions().catch((error: unknown) => {
         logger.warn("smsReview.flushQueuedTransactions.failed", {
-          errorName: err instanceof Error ? err.name : "unknown",
+          errorName: error instanceof Error ? error.name : "unknown",
         });
       });
     };
-  }, [clearTransactions]);
-
-  // ── Save ────────────────────────────────────────────────────────────
+  }, []);
 
   const handleSave = useCallback(
     async (
       selected: readonly ReviewableTransaction[],
       transactionAccountMap: ReadonlyMap<number, string>,
       toAccountMap: ReadonlyMap<number, string>
-    ) => {
+    ): Promise<void> => {
+      if (!queue.userId) return;
+      const selectedItems = selected.map((transaction) => {
+        const fingerprint = getSmsFingerprint(transaction);
+        const item = fingerprint
+          ? itemByFingerprint.get(fingerprint)
+          : undefined;
+        if (!item) throw new Error("sms_review_draft_item_not_found");
+        return {
+          ...item,
+          transaction: transaction as ParsedSmsTransaction,
+        };
+      });
+
       setIsSaving(true);
       try {
-        const result = await batchCreateTransactions(
-          selected,
+        const result = await saveSelectedSmsReviewDrafts({
+          selectedItems,
+          expectedUserId: queue.userId,
           transactionAccountMap,
-          toAccountMap
-        );
-
-        if (result.failedCount > 0) {
-          showToast({
-            type: "error",
-            title: t("save_error"),
-            message: t("save_partial", {
-              saved: result.savedCount,
-              failed: result.failedCount,
-              errors: result.errors.join(", "),
-            }),
-          });
-          return;
-        }
-
+          toAccountMap,
+        });
         showToast({
           type: "success",
-          title: t("saved"),
-          message: t("saved_from_sms", { count: result.savedCount }),
+          title: t("sms_review_saved", { count: result.savedCount }),
         });
-
         if (unresolvedCandidates.length === 0) {
-          markSyncComplete().catch((error: unknown) => {
+          void markSyncComplete().catch((error: unknown) => {
             logger.warn("smsReview.markSyncComplete.failed", {
               errorName: error instanceof Error ? error.name : "unknown",
             });
           });
         }
+        clearTransactions();
+        setIsLeavingAfterSave(true);
         router.replace("/(private)/(tabs)/transactions");
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        if (result.savedCount === 0) setIsLeavingAfterSave(false);
+      } catch (error: unknown) {
+        const isValidationError =
+          error instanceof SmsReviewDraftSaveValidationError;
+        logger.warn("smsReview.save.failed", {
+          errorName: error instanceof Error ? error.name : "unknown",
+          isValidationError,
+        });
         showToast({
-          message: t("failed_to_save_transactions", { message }),
-          title: t("save_error"),
-          type: "error",
+          type: isValidationError ? "warning" : "error",
+          title: isValidationError
+            ? t("sms_review_fix_selected")
+            : t("save_error"),
+          message: isValidationError
+            ? t("sms_review_fix_selected_message")
+            : t("sms_review_save_failed_message"),
         });
       } finally {
         setIsSaving(false);
       }
     },
-    [router, markSyncComplete, showToast, t, unresolvedCandidates.length]
+    [
+      clearTransactions,
+      itemByFingerprint,
+      markSyncComplete,
+      queue.userId,
+      router,
+      showToast,
+      t,
+      unresolvedCandidates.length,
+    ]
   );
 
-  // ── Discard ─────────────────────────────────────────────────────────
+  const handleSelectionChange = useCallback(
+    async (index: number, selected: boolean): Promise<void> => {
+      const item = queue.items[index];
+      if (!item || !queue.userId) return;
+      await setSmsReviewDraftSelection(item.draftId, queue.userId, selected);
+    },
+    [queue.items, queue.userId]
+  );
 
-  const handleDiscard = useCallback(() => {
-    setDiscardConfirmVisible(true);
-  }, []);
+  const handleTransactionChange = useCallback(
+    async (
+      index: number,
+      transaction: ReviewableTransaction
+    ): Promise<void> => {
+      const item = queue.items[index];
+      if (!item || !queue.userId || transaction.source !== "SMS") return;
+      await editSmsReviewDraft(
+        item.draftId,
+        queue.userId,
+        transaction as ParsedSmsTransaction
+      );
+    },
+    [queue.items, queue.userId]
+  );
 
-  const handleConfirmDiscard = useCallback(() => {
-    clearTransactions();
-    router.replace("/(private)/(tabs)");
-  }, [clearTransactions, router]);
+  const handleDiscardItem = useCallback(
+    async (index: number): Promise<void> => {
+      const item = queue.items[index];
+      if (!item || !queue.userId) return;
+      try {
+        await undo.discard(item.draftId, queue.userId);
+      } catch (error: unknown) {
+        logger.warn("smsReview.discard.failed", {
+          errorName: error instanceof Error ? error.name : "unknown",
+        });
+        showToast({ type: "error", title: t("sms_review_discard_failed") });
+      }
+    },
+    [queue.items, queue.userId, showToast, t, undo]
+  );
+
+  const handleConfirmDiscard = useCallback(async (): Promise<void> => {
+    if (!queue.userId) return;
+    try {
+      await discardEverySmsReviewDraft(queue.userId);
+      clearTransactions();
+      setDiscardConfirmVisible(false);
+      router.replace("/(private)/(tabs)");
+    } catch (error: unknown) {
+      logger.warn("smsReview.discardAll.failed", {
+        errorName: error instanceof Error ? error.name : "unknown",
+      });
+      showToast({ type: "error", title: t("sms_review_discard_failed") });
+    }
+  }, [clearTransactions, queue.userId, router, showToast, t]);
 
   const handleRetryConsentContinue = useCallback(async (): Promise<void> => {
     try {
@@ -198,23 +295,25 @@ export default function SmsReviewScreen(): React.JSX.Element {
       onNotNow={smsRetry.dismissConsentRequired}
       onPrivacyDetails={() => {
         smsRetry.dismissConsentRequired();
-        router.push("/ai-privacy-details");
+        router.push("/privacy-details");
       }}
     />
   );
 
-  // ── No transactions guard ───────────────────────────────────────────
+  if (queue.isLoading || isLeavingAfterSave) return <SmsReviewLoadingState />;
 
   if (transactions.length === 0) {
     return (
-      <SafeAreaView className="flex-1 bg-background dark:bg-background-dark items-center justify-center px-6">
+      <SafeAreaView className="flex-1 items-center justify-center bg-background px-6 dark:bg-background-dark">
         <Ionicons
-          name="alert-circle-outline"
+          name={queue.error ? "warning-outline" : "checkmark-circle-outline"}
           size={48}
           color={palette.slate[400]}
         />
-        <Text className="text-lg text-slate-400 mt-4 text-center">
-          {t("no_transactions_to_review")}
+        <Text className="mt-4 text-center text-lg text-text-secondary dark:text-text-secondary-dark">
+          {queue.error
+            ? t("sms_review_load_failed")
+            : t("no_transactions_to_review")}
         </Text>
         {partialResults && (
           <View className="mt-6 w-full">
@@ -229,9 +328,9 @@ export default function SmsReviewScreen(): React.JSX.Element {
         </View>
         <TouchableOpacity
           onPress={() => router.replace("/(private)/(tabs)")}
-          className="mt-6 px-6 py-3 bg-slate-800 rounded-2xl"
+          className="mt-6 rounded-lg bg-slate-800 px-6 py-3"
         >
-          <Text className="text-white font-semibold">
+          <Text className="font-semibold text-white">
             {t("back_to_dashboard")}
           </Text>
         </TouchableOpacity>
@@ -240,17 +339,29 @@ export default function SmsReviewScreen(): React.JSX.Element {
     );
   }
 
-  // ── Transaction Review (direct — no setup step) ─────────────────────
-
   return (
     <SafeAreaView className="flex-1 bg-background dark:bg-background-dark">
-      <StatusBar style={isDark ? "light" : "dark"} />
-
-      {/* Transaction review list */}
+      <StatusBar style="auto" />
       <TransactionReview
         transactions={transactions}
+        selectionOverrides={selectionOverrides}
+        onSelectionChange={handleSelectionChange}
+        onTransactionChange={handleTransactionChange}
+        onDiscardItem={handleDiscardItem}
         onSave={handleSave}
-        onDiscard={handleDiscard}
+        onDiscard={() => setDiscardConfirmVisible(true)}
+        onReviewLater={() => router.replace("/(private)/(tabs)")}
+        undoBanner={
+          undo.undoItem && undo.discardedName
+            ? {
+                discardedName: undo.discardedName,
+                onUndo: async (): Promise<void> => {
+                  await undo.undo();
+                },
+                onClose: undo.close,
+              }
+            : undefined
+        }
         isSaving={isSaving || smsRetry.isRetrying}
         title={t("review_transactions_title")}
         subtitle={t("review_sms_source_summary", {
@@ -259,21 +370,18 @@ export default function SmsReviewScreen(): React.JSX.Element {
         workspaceVariant="sms"
         partialResults={partialResults}
         qaDiagnostics={qaDiagnostics}
-        onBack={() => {
-          clearTransactions();
-          router.back();
-        }}
+        onBack={() => router.back()}
       />
-
-      {/* Discard confirmation */}
       <ConfirmationModal
         visible={discardConfirmVisible}
         variant="danger"
-        title={t("discard_all")}
-        message={t("discard_all_confirm")}
+        title={t("sms_review_discard_all_title")}
+        message={t("sms_review_discard_all_message", {
+          count: transactions.length,
+        })}
         confirmLabel={t("discard")}
         cancelLabel={t("cancel")}
-        onConfirm={handleConfirmDiscard}
+        onConfirm={() => void handleConfirmDiscard()}
         onCancel={() => setDiscardConfirmVisible(false)}
       />
       {retryConsentSheet}

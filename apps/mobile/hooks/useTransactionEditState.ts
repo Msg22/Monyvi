@@ -109,6 +109,7 @@ export interface UseTransactionEditStateProps {
   readonly incomeCategories: readonly Category[];
   readonly onSave: (edits: TransactionEdits) => void;
   readonly onCreatePendingAccount: (account: PendingAccount) => void;
+  readonly allowTransactionCurrencyEdit?: boolean;
 }
 
 export function useTransactionEditState({
@@ -122,6 +123,7 @@ export function useTransactionEditState({
   incomeCategories,
   onSave,
   onCreatePendingAccount,
+  allowTransactionCurrencyEdit = false,
 }: UseTransactionEditStateProps): UseTransactionEditStateReturn {
   // Config
   const formConfig = useMemo(
@@ -258,16 +260,16 @@ export function useTransactionEditState({
 
   const hasCashAccounts = cashAccountOptions.length > 0;
 
-  // Determine selected account's currency for conversion notice.
-  // During "Create New" mode, use the user-selected newAccountCurrency.
+  // SMS review may edit transaction currency independently from account currency.
   const selectedAccountCurrency = useMemo((): CurrencyType => {
-    if (isCreatingNew) {
+    if (allowTransactionCurrencyEdit || isCreatingNew) {
       return newAccountCurrency;
     }
     const found = accountOptions.find((opt) => opt.id === selectedAccountId);
     return found?.currency ?? transaction.currency;
   }, [
     accountOptions,
+    allowTransactionCurrencyEdit,
     selectedAccountId,
     transaction.currency,
     isCreatingNew,
@@ -276,10 +278,11 @@ export function useTransactionEditState({
 
   const hasCurrencyMismatch = selectedAccountCurrency !== transaction.currency;
 
-  // Currency is locked (disabled) when an existing account is selected.
-  // It is editable only during "Create New" mode or when no account exists.
+  // Existing non-SMS flows keep currency tied to the selected account.
   const isCurrencyLocked =
-    !isCreatingNew && (hasBankAccounts || selectedAccountId !== null);
+    !allowTransactionCurrencyEdit &&
+    !isCreatingNew &&
+    (hasBankAccounts || selectedAccountId !== null);
 
   // Track which transaction identity has been initialized
   const initializedForIdentityRef = useRef<string | null>(null);
@@ -509,6 +512,7 @@ export function useTransactionEditState({
       categoryConfirmed: isCategoryConfirmed,
       shouldClearCategoryConfirmation,
       amount: parseFloat(parseAmountInput(amount)),
+      currency: allowTransactionCurrencyEdit ? newAccountCurrency : undefined,
       note: note.trim() || undefined,
       toAccountId: formConfig.showToAccount
         ? isCreatingNewToAccount
@@ -549,6 +553,7 @@ export function useTransactionEditState({
     newToAccountName,
     isCreatingNewToAccount,
     newAccountCurrency,
+    allowTransactionCurrencyEdit,
   ]);
 
   return {

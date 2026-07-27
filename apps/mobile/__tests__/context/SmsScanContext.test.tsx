@@ -78,7 +78,6 @@ describe("SmsScanContext review session", () => {
     act(() =>
       result.current.updateReviewSession(
         {
-          transactions: [],
           unresolvedCandidates: [],
         },
         result.current.reviewSessionId
@@ -88,7 +87,6 @@ describe("SmsScanContext review session", () => {
     expect(result.current.parseContext).not.toBeNull();
 
     act(() => result.current.clearTransactions());
-    expect(result.current.transactions).toEqual([]);
     expect(result.current.unresolvedCandidates).toEqual([]);
     expect(result.current.parseContext).toBeNull();
     expect(result.current.safeguardSummary).toBeNull();
@@ -103,7 +101,6 @@ describe("SmsScanContext review session", () => {
     first.unmount();
 
     const second = renderHook(() => useSmsScanContext(), { wrapper });
-    expect(second.result.current.transactions).toEqual([]);
     expect(second.result.current.unresolvedCandidates).toEqual([]);
     expect(second.result.current.parseContext).toBeNull();
     expect(second.result.current.safeguardSummary).toBeNull();
@@ -132,7 +129,6 @@ describe("SmsScanContext review session", () => {
     act(() =>
       result.current.updateReviewSession(
         {
-          transactions: [],
           unresolvedCandidates: [secondCandidate],
         },
         result.current.reviewSessionId
@@ -152,7 +148,6 @@ describe("SmsScanContext review session", () => {
     act(() =>
       result.current.updateReviewSession(
         {
-          transactions: [],
           unresolvedCandidates: scanResult().unresolvedCandidates,
         },
         sessionId

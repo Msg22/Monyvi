@@ -3,6 +3,23 @@ import { useSmsReviewRetry } from "@/hooks/useSmsReviewRetry";
 
 const mockUpdateReviewSession = jest.fn();
 const mockRetrySmsReviewCandidates = jest.fn();
+const mockMergeSmsReviewDrafts = jest.fn();
+
+const parsedTransaction = {
+  amount: 100,
+  currency: "EGP",
+  type: "EXPENSE",
+  counterparty: "Retry Merchant",
+  date: new Date("2026-07-20T11:00:00.000Z"),
+  smsFingerprint: "fp-retry",
+  senderDisplayName: "NBE",
+  categoryId: "cat-other",
+  categoryDisplayName: "Other",
+  rawSmsBody: "Purchase of EGP 100 at Retry Merchant",
+  confidence: 0.85,
+  source: "SMS",
+  originLabel: "NBE",
+} as const;
 
 jest.mock("@/context/SmsScanContext", () => ({
   useSmsScanContext: () => ({
@@ -25,6 +42,7 @@ jest.mock("@/context/SmsScanContext", () => ({
     ],
     parseContext: { categories: [], supportedCurrencies: ["EGP"] },
     reviewSessionId: 1,
+    initiatingUserId: "user-1",
     updateReviewSession: mockUpdateReviewSession,
   }),
 }));
@@ -34,13 +52,24 @@ jest.mock("@/services/sms-review-retry-service", () => ({
     mockRetrySmsReviewCandidates(...args),
 }));
 
+jest.mock("@/services/sms-review-draft-repository", () => ({
+  mergeSmsReviewDrafts: (...args: readonly unknown[]): unknown =>
+    mockMergeSmsReviewDrafts(...args),
+}));
+
 jest.mock("@/services/ai-sms-parser-service", () => ({
   isAiConsentRequiredError: (error: unknown): boolean =>
     error instanceof Error && error.name === "AiConsentRequiredError",
 }));
 
 describe("useSmsReviewRetry", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockMergeSmsReviewDrafts.mockResolvedValue({
+      insertedCount: 0,
+      existingCount: 0,
+    });
+  });
 
   it("guards repeated taps and commits one atomic result", async () => {
     let resolveRetry: ((value: unknown) => void) | undefined;
@@ -70,7 +99,6 @@ describe("useSmsReviewRetry", () => {
     await waitFor(() => expect(result.current.isRetrying).toBe(false));
     expect(mockUpdateReviewSession).toHaveBeenCalledWith(
       {
-        transactions: [],
         unresolvedCandidates: [],
       },
       1
@@ -135,6 +163,44 @@ describe("useSmsReviewRetry", () => {
 
     expect(result.current.hasRetryError).toBe(true);
     expect(mockUpdateReviewSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("persists successful retry results before updating the review session", async () => {
+    mockRetrySmsReviewCandidates.mockResolvedValueOnce({
+      transactions: [parsedTransaction],
+      unresolvedCandidates: [],
+      hasRetryError: false,
+    });
+    const { result } = renderHook(() => useSmsReviewRetry());
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(mockMergeSmsReviewDrafts).toHaveBeenCalledWith({
+      transactions: [parsedTransaction],
+      expectedUserId: "user-1",
+    });
+    expect(mockMergeSmsReviewDrafts.mock.invocationCallOrder[0]).toBeLessThan(
+      mockUpdateReviewSession.mock.invocationCallOrder[0]
+    );
+  });
+
+  it("keeps retry results out of transient state when durable persistence fails", async () => {
+    mockRetrySmsReviewCandidates.mockResolvedValueOnce({
+      transactions: [parsedTransaction],
+      unresolvedCandidates: [],
+      hasRetryError: false,
+    });
+    mockMergeSmsReviewDrafts.mockRejectedValueOnce(new Error("storage full"));
+    const { result } = renderHook(() => useSmsReviewRetry());
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(result.current.hasRetryError).toBe(true);
+    expect(mockUpdateReviewSession).not.toHaveBeenCalled();
   });
 
   it("routes stale consent failures to consent recovery instead of generic retry error", async () => {

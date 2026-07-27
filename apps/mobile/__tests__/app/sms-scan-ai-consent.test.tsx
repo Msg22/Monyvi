@@ -28,6 +28,8 @@ let mockAiConsentContinue: (() => Promise<void>) | null = null;
 let mockIsAiConsented = false;
 let mockScanResult: Record<string, unknown> | null = null;
 let mockScanTransactions: ReadonlyArray<Record<string, unknown>> = [];
+let mockDraftItemCount = 0;
+let mockDraftQueueLoading = false;
 let mockScanStatus:
   | "idle"
   | "scanning"
@@ -173,6 +175,18 @@ jest.mock("@/hooks/useAiProcessingConsent", () => ({
   }),
 }));
 
+jest.mock("@/hooks/useSmsReviewDraftQueue", () => ({
+  useSmsReviewDraftQueue: () => ({
+    userId: "user-1",
+    queueId: mockDraftItemCount > 0 ? "queue-1" : null,
+    items: [],
+    itemCount: mockDraftItemCount,
+    isLoading: mockDraftQueueLoading,
+    error: null,
+    refetch: jest.fn(),
+  }),
+}));
+
 jest.mock("@/services/sms-sync-service", () => ({
   loadExistingSmsFingerprints: (): Promise<ReadonlySet<string>> =>
     mockLoadExistingSmsFingerprints(),
@@ -227,11 +241,39 @@ describe("SmsScanScreen AI consent", () => {
     mockScanResult = null;
     mockScanTransactions = [];
     mockScanStatus = "idle";
+    mockDraftItemCount = 0;
+    mockDraftQueueLoading = false;
     mockRequestPermission.mockResolvedValue("granted");
     mockRevokeAiConsent.mockResolvedValue();
     mockStartScan.mockResolvedValue();
     mockLoadExistingSmsFingerprints.mockResolvedValue(new Set());
     mockMarkSyncComplete.mockResolvedValue();
+  });
+
+  it("resumes durable drafts without requiring current AI consent", async () => {
+    mockDraftItemCount = 3;
+    mockIsAiConsented = false;
+
+    render(<SmsScanScreen />);
+
+    expect(await screen.findByTestId("sms-review-resume-primary")).toBeTruthy();
+    expect(screen.queryByTestId("ai-consent-continue")).toBeNull();
+    expect(mockStartScan).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByTestId("sms-review-resume-primary"));
+
+    expect(mockRouterPush).toHaveBeenCalledWith("/sms-review");
+  });
+
+  it("applies consent before checking for new messages from an active queue", async () => {
+    mockDraftItemCount = 2;
+    mockIsAiConsented = false;
+
+    render(<SmsScanScreen />);
+    fireEvent.press(await screen.findByTestId("sms-review-check-new"));
+
+    expect(await screen.findByTestId("ai-consent-continue")).toBeTruthy();
+    expect(mockStartScan).not.toHaveBeenCalled();
   });
 
   it("keeps consent visible so the user can retry when granting consent fails", async () => {

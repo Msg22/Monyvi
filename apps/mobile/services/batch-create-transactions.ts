@@ -42,10 +42,14 @@ import { hasExistingSmsFingerprint } from "./sms-dedup-service";
 // Types
 // ---------------------------------------------------------------------------
 
-interface BatchSaveResult {
+export interface BatchSaveResult {
   readonly savedCount: number;
   readonly failedCount: number;
   readonly errors: readonly string[];
+}
+
+export interface PreparedBatchSave extends BatchSaveResult {
+  readonly operations: readonly Model[];
 }
 
 // ---------------------------------------------------------------------------
@@ -124,16 +128,16 @@ async function loadAccessibleCategoryIds(
  * @param toAccountMap         - Optional mapping from transaction index → cash account ID (TO, ATM only)
  * @returns Summary of saved/failed counts
  */
-export async function batchCreateTransactions<T extends ReviewableTransaction>(
+export async function prepareBatchCreateTransactions<
+  T extends ReviewableTransaction,
+>(
   transactions: readonly T[],
   transactionAccountMap: ReadonlyMap<number, string>,
   toAccountMap?: ReadonlyMap<number, string>
-): Promise<BatchSaveResult> {
+): Promise<PreparedBatchSave> {
   if (transactions.length === 0) {
-    return { savedCount: 0, failedCount: 0, errors: [] };
+    return { savedCount: 0, failedCount: 0, errors: [], operations: [] };
   }
-
-  // ── Pre-batch lookups (outside the write block) ──────────────────────
 
   const userId = await getCurrentUserId();
   if (!userId) {
@@ -141,31 +145,23 @@ export async function batchCreateTransactions<T extends ReviewableTransaction>(
       savedCount: 0,
       failedCount: transactions.length,
       errors: ["User not authenticated"],
+      operations: [],
     };
   }
 
   const errors: string[] = [];
   const regularCategoryIds = new Set<string>();
-
-  // Ensure Cash accounts exist for ATM withdrawal routing
-  // Only needed for ATM transactions NOT already resolved via toAccountMap
   const cashAccountIdByCurrency = new Map<CurrencyType, string>();
   const atmCurrencies = new Set<CurrencyType>();
 
-  for (let i = 0; i < transactions.length; i++) {
-    const tx = transactions[i];
-    if (isAtmWithdrawalTransaction(tx)) {
-      if (!toAccountMap?.has(i)) {
-        atmCurrencies.add(tx.currency);
-      }
-      continue;
+  transactions.forEach((transaction, index) => {
+    if (isAtmWithdrawalTransaction(transaction)) {
+      if (!toAccountMap?.has(index)) atmCurrencies.add(transaction.currency);
+      return;
     }
-
-    const categoryId = getRuntimeCategoryId(tx);
-    if (categoryId) {
-      regularCategoryIds.add(categoryId);
-    }
-  }
+    const categoryId = getRuntimeCategoryId(transaction);
+    if (categoryId) regularCategoryIds.add(categoryId);
+  });
 
   const accessibleCategoryIds = await loadAccessibleCategoryIds(
     regularCategoryIds,
@@ -183,171 +179,159 @@ export async function batchCreateTransactions<T extends ReviewableTransaction>(
     }
   }
 
-  // ── Prepare all operations in-memory ─────────────────────────────────
-
   const transactionsCollection = database.get<Transaction>("transactions");
   const transfersCollection = database.get<Transfer>("transfers");
   const accountsCollection = database.get<Account>("accounts");
-
-  const preparedOps: Model[] = [];
+  const operations: Model[] = [];
   const balanceDeltas = new Map<string, number>();
   const seenSmsFingerprints = new Set<string>();
   let savedCount = 0;
   let failedCount = 0;
 
-  for (let i = 0; i < transactions.length; i++) {
-    const tx = transactions[i];
+  for (let index = 0; index < transactions.length; index += 1) {
+    const transaction = transactions[index];
     const smsFingerprint =
-      tx.source === "SMS" ? tx.deduplicationHash : undefined;
+      transaction.source === "SMS" ? transaction.deduplicationHash : undefined;
 
-    if (tx.source === "SMS" && !smsFingerprint) {
-      errors.push(`Missing SMS fingerprint for transaction index ${i}`);
-      failedCount++;
+    if (transaction.source === "SMS" && !smsFingerprint) {
+      errors.push(`Missing SMS fingerprint for transaction index ${index}`);
+      failedCount += 1;
       continue;
     }
-
-    if (smsFingerprint && seenSmsFingerprints.has(smsFingerprint)) {
-      continue;
-    }
-
+    if (smsFingerprint && seenSmsFingerprints.has(smsFingerprint)) continue;
     if (smsFingerprint && (await hasExistingSmsFingerprint(smsFingerprint))) {
       seenSmsFingerprints.add(smsFingerprint);
       continue;
     }
 
-    const accountId = transactionAccountMap.get(i);
-
+    const accountId = transactionAccountMap.get(index);
     if (!accountId) {
       errors.push(
-        `No account mapped for transaction index ${i} (${tx.counterparty})`
+        `No account mapped for transaction index ${index} (${transaction.counterparty})`
       );
-      failedCount++;
+      failedCount += 1;
       continue;
     }
 
-    // ── ATM Withdrawal: prepare as Transfer (bank → cash) ──
-    if (isAtmWithdrawalTransaction(tx)) {
-      // Prefer user-selected TO account, fall back to auto-resolved by currency
+    if (isAtmWithdrawalTransaction(transaction)) {
       const cashAccountId =
-        toAccountMap?.get(i) ?? cashAccountIdByCurrency.get(tx.currency);
-
+        toAccountMap?.get(index) ??
+        cashAccountIdByCurrency.get(transaction.currency);
       if (!cashAccountId) {
         errors.push(
-          `Skipped ATM withdrawal index ${i} — failed to resolve Cash account in ${tx.currency}`
+          `Skipped ATM withdrawal index ${index} — failed to resolve Cash account in ${transaction.currency}`
         );
-        failedCount++;
+        failedCount += 1;
         continue;
       }
 
-      preparedOps.push(
-        transfersCollection.prepareCreate((t) => {
-          t.userId = userId;
-          t.fromAccountId = accountId;
-          t.toAccountId = cashAccountId;
-          t.amount = Math.abs(tx.amount);
-          t.currency = tx.currency;
-          t.date = new Date(tx.date);
-          t.notes = `ATM Withdrawal`;
-          t.smsFingerprint = smsFingerprint;
-          t.deleted = false;
+      operations.push(
+        transfersCollection.prepareCreate((transfer) => {
+          transfer.userId = userId;
+          transfer.fromAccountId = accountId;
+          transfer.toAccountId = cashAccountId;
+          transfer.amount = Math.abs(transaction.amount);
+          transfer.currency = transaction.currency;
+          transfer.date = new Date(transaction.date);
+          transfer.notes = "ATM Withdrawal";
+          transfer.smsFingerprint = smsFingerprint;
+          transfer.deleted = false;
         })
       );
-
-      // Transfer balance effects: debit from-account, credit to-account
-      const amount = Math.abs(tx.amount);
+      const amount = Math.abs(transaction.amount);
       accumulateBalanceDelta(balanceDeltas, accountId, -amount);
       accumulateBalanceDelta(balanceDeltas, cashAccountId, amount);
-
-      savedCount++;
-      if (smsFingerprint) {
-        seenSmsFingerprints.add(smsFingerprint);
-      }
+      savedCount += 1;
+      if (smsFingerprint) seenSmsFingerprints.add(smsFingerprint);
       continue;
     }
 
-    // ── Regular transaction ─
-    const categoryId = getRuntimeCategoryId(tx);
+    const categoryId = getRuntimeCategoryId(transaction);
     if (!categoryId) {
-      errors.push(`Transaction ${i + 1} needs a category`);
-      failedCount++;
+      errors.push(`Transaction ${index + 1} needs a category`);
+      failedCount += 1;
       continue;
     }
-
     if (!accessibleCategoryIds.has(categoryId)) {
-      errors.push(`Transaction ${i + 1} needs a valid category`);
-      failedCount++;
+      errors.push(`Transaction ${index + 1} needs a valid category`);
+      failedCount += 1;
       continue;
     }
 
-    preparedOps.push(
+    operations.push(
       transactionsCollection.prepareCreate((record) => {
         record.userId = userId;
         record.accountId = accountId;
-        record.amount = Math.abs(tx.amount);
-        record.currency = tx.currency;
-        record.type = tx.type;
+        record.amount = Math.abs(transaction.amount);
+        record.currency = transaction.currency;
+        record.type = transaction.type;
         record.categoryId = categoryId;
-        record.counterparty = tx.counterparty ?? undefined;
+        record.counterparty = transaction.counterparty ?? undefined;
         record.note = "";
-        record.date = tx.date;
-        record.source = tx.source;
+        record.date = transaction.date;
+        record.source = transaction.source;
         record.smsFingerprint = smsFingerprint;
         record.isDraft = false;
         record.deleted = false;
       })
     );
 
-    // Balance effects
-    const amount = Math.abs(tx.amount);
-    if (tx.type === "EXPENSE") {
-      accumulateBalanceDelta(balanceDeltas, accountId, -amount);
-    } else {
-      accumulateBalanceDelta(balanceDeltas, accountId, amount);
-    }
-
-    savedCount++;
-    if (smsFingerprint) {
-      seenSmsFingerprints.add(smsFingerprint);
-    }
+    const amount = Math.abs(transaction.amount);
+    accumulateBalanceDelta(
+      balanceDeltas,
+      accountId,
+      transaction.type === "EXPENSE" ? -amount : amount
+    );
+    savedCount += 1;
+    if (smsFingerprint) seenSmsFingerprints.add(smsFingerprint);
   }
 
-  // ── Batch-fetch all affected accounts and prepare balance updates ────
-
-  const accountIds = Array.from(balanceDeltas.keys());
+  const accountIds = [...balanceDeltas.keys()];
   if (accountIds.length > 0) {
     const accounts = await queryOwned(
       accountsCollection,
       userId,
       Q.where("id", Q.oneOf(accountIds))
     ).fetch();
-
-    const existingIds = new Set(accounts.map((a) => a.id));
+    const existingIds = new Set(accounts.map((account) => account.id));
     const missingIds = accountIds.filter((id) => !existingIds.has(id));
     if (missingIds.length > 0) {
       throw new Error(
         `[batch-create-transactions] Missing account rows for mapped IDs: ${missingIds.join(", ")}`
       );
     }
-
-    for (const account of accounts) {
+    accounts.forEach((account) => {
       const delta = balanceDeltas.get(account.id);
-      if (delta && delta !== 0) {
-        preparedOps.push(
-          account.prepareUpdate((a) => {
-            a.balance = (a.balance ?? 0) + delta;
-          })
-        );
-      }
-    }
-  }
-
-  // ── Execute everything in a single atomic batch ──────────────────────
-
-  if (preparedOps.length > 0) {
-    await database.write(async () => {
-      await database.batch(preparedOps);
+      if (!delta) return;
+      operations.push(
+        account.prepareUpdate((record) => {
+          record.balance = (record.balance ?? 0) + delta;
+        })
+      );
     });
   }
 
-  return { savedCount, failedCount, errors };
+  return { savedCount, failedCount, errors, operations };
+}
+
+export async function batchCreateTransactions<T extends ReviewableTransaction>(
+  transactions: readonly T[],
+  transactionAccountMap: ReadonlyMap<number, string>,
+  toAccountMap?: ReadonlyMap<number, string>
+): Promise<BatchSaveResult> {
+  const prepared = await prepareBatchCreateTransactions(
+    transactions,
+    transactionAccountMap,
+    toAccountMap
+  );
+  if (prepared.operations.length > 0) {
+    await database.write(async (): Promise<void> => {
+      await database.batch([...prepared.operations]);
+    });
+  }
+  return {
+    savedCount: prepared.savedCount,
+    failedCount: prepared.failedCount,
+    errors: prepared.errors,
+  };
 }

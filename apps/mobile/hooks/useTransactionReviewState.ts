@@ -22,6 +22,7 @@ import {
   getTransactionReviewMeta,
   resolveEditedAccountMatch,
   type TransactionReviewMeta,
+  type TransactionReviewReason,
 } from "@/services/transaction-review-selection";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import type { ReviewableTransaction } from "@monyvi/logic";
@@ -35,6 +36,20 @@ export interface ReviewListItem {
 }
 
 export type TransactionReviewMode = "all" | "needs_review" | "auto_selected";
+
+const HARD_VALIDATION_REASONS: ReadonlySet<TransactionReviewReason> = new Set([
+  "account_needed",
+  "category_needed",
+  "cash_transfer",
+]);
+
+function hasHardValidationReason(
+  meta: TransactionReviewMeta | undefined
+): boolean {
+  return (
+    meta?.reasons.some((reason) => HARD_VALIDATION_REASONS.has(reason)) ?? false
+  );
+}
 
 export interface TransactionReviewFilters {
   readonly period: GroupingPeriod;
@@ -53,10 +68,13 @@ function buildFlatReviewList(
     .sort((a, b) => b.date.getTime() - a.date.getTime())
     .map((tx) => {
       const originalIndex = originalIndexMap.get(tx) ?? 0;
+      const smsFingerprint = (
+        tx as ReviewableTransaction & { readonly smsFingerprint?: string }
+      ).smsFingerprint;
       return {
         originalIndex,
         tx,
-        key: `tx-${originalIndex}`,
+        key: smsFingerprint ? `sms-${smsFingerprint}` : `tx-${originalIndex}`,
       };
     });
 }
@@ -112,6 +130,15 @@ export interface UseTransactionReviewStateProps {
     transactionAccountMap: ReadonlyMap<number, string>,
     toAccountMap: ReadonlyMap<number, string>
   ) => Promise<void>;
+  readonly selectionOverrides?: ReadonlyMap<number, boolean | null>;
+  readonly onSelectionChange?: (
+    index: number,
+    selected: boolean
+  ) => void | Promise<void>;
+  readonly onTransactionChange?: (
+    index: number,
+    transaction: ReviewableTransaction
+  ) => void | Promise<void>;
 }
 
 export interface UseTransactionReviewStateResult {
@@ -223,9 +250,38 @@ function getTransactionParsedContentIdentity(
   });
 }
 
+function applyTransactionEdits(
+  transaction: ReviewableTransaction,
+  edits: TransactionEdits,
+  categoryMap: ReadonlyMap<string, Category>
+): ReviewableTransaction {
+  return {
+    ...transaction,
+    amount: edits.amount,
+    ...(edits.currency !== undefined && { currency: edits.currency }),
+    type: edits.type,
+    categoryId: edits.categoryId,
+    categoryDisplayName:
+      categoryMap.get(edits.categoryId)?.displayName ??
+      transaction.categoryDisplayName,
+    ...(edits.counterparty !== undefined && {
+      counterparty: edits.counterparty,
+      merchant: edits.counterparty,
+    }),
+    ...(edits.note !== undefined && { note: edits.note }),
+    accountId: edits.accountId ?? undefined,
+    ...(edits.toAccountId !== undefined && {
+      toAccountId: edits.toAccountId ?? undefined,
+    }),
+  };
+}
+
 export function useTransactionReviewState({
   transactions,
   onSave,
+  selectionOverrides = new Map(),
+  onSelectionChange,
+  onTransactionChange,
 }: UseTransactionReviewStateProps): UseTransactionReviewStateResult {
   // ── Filter state ──────────────────────────────────────────────────
   const [period, setPeriod] = useState<GroupingPeriod>("all_time");
@@ -394,24 +450,11 @@ export function useTransactionReviewState({
 
   const effectiveTransactions =
     useMemo((): readonly ReviewableTransaction[] => {
-      return transactions.map((tx, i) => {
-        const overrides = transactionOverrides.get(i);
-        if (!overrides) return tx;
-        return {
-          ...tx,
-          amount: overrides.amount,
-          type: overrides.type,
-          categoryId: overrides.categoryId,
-          categoryDisplayName:
-            categoryMap.get(overrides.categoryId)?.displayName ??
-            tx.categoryDisplayName,
-          ...(overrides.counterparty !== undefined && {
-            counterparty: overrides.counterparty,
-          }),
-          ...(overrides.note !== undefined && {
-            note: overrides.note,
-          }),
-        };
+      return transactions.map((transaction, index) => {
+        const overrides = transactionOverrides.get(index);
+        return overrides
+          ? applyTransactionEdits(transaction, overrides, categoryMap)
+          : transaction;
       });
     }, [transactions, transactionOverrides, categoryMap]);
 
@@ -497,11 +540,27 @@ export function useTransactionReviewState({
     if (userTouchedSelectionRef.current) return;
     if (!hasCompleteAccountMatches) return;
 
-    setSelectedIndices(autoSelectedOriginalIndices);
+    const seeded = new Set(autoSelectedOriginalIndices);
+    selectionOverrides.forEach((override, index) => {
+      if (
+        override === true &&
+        hasHardValidationReason(reviewMetaByIndex.get(index))
+      ) {
+        seeded.delete(index);
+        void onSelectionChange?.(index, false);
+        return;
+      }
+      if (override === true) seeded.add(index);
+      if (override === false) seeded.delete(index);
+    });
+    setSelectedIndices(seeded);
     seededSelectionIdentityRef.current = transactionIdentity;
   }, [
     autoSelectedOriginalIndices,
     hasCompleteAccountMatches,
+    onSelectionChange,
+    reviewMetaByIndex,
+    selectionOverrides,
     transactionIdentity,
   ]);
 
@@ -551,37 +610,42 @@ export function useTransactionReviewState({
 
   const handleToggleAll = useCallback(() => {
     userTouchedSelectionRef.current = true;
-    setSelectedIndices((prev) => {
-      const next = new Set(prev);
-      if (allSelected) {
-        filteredOriginalIndices.forEach((index) => {
-          next.delete(index);
-          manuallyDeselectedIndicesRef.current.add(index);
-        });
-      } else {
-        filteredOriginalIndices.forEach((index) => {
+    setSelectedIndices((previous) => {
+      const next = new Set(previous);
+      filteredOriginalIndices.forEach((index) => {
+        const selected = !allSelected;
+        if (selected) {
           next.add(index);
           manuallyDeselectedIndicesRef.current.delete(index);
-        });
-      }
+        } else {
+          next.delete(index);
+          manuallyDeselectedIndicesRef.current.add(index);
+        }
+        void onSelectionChange?.(index, selected);
+      });
       return next;
     });
-  }, [allSelected, filteredOriginalIndices]);
+  }, [allSelected, filteredOriginalIndices, onSelectionChange]);
 
-  const handleToggleItem = useCallback((index: number) => {
-    userTouchedSelectionRef.current = true;
-    setSelectedIndices((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) {
-        next.delete(index);
-        manuallyDeselectedIndicesRef.current.add(index);
-      } else {
-        next.add(index);
-        manuallyDeselectedIndicesRef.current.delete(index);
-      }
-      return next;
-    });
-  }, []);
+  const handleToggleItem = useCallback(
+    (index: number): void => {
+      userTouchedSelectionRef.current = true;
+      setSelectedIndices((previous) => {
+        const next = new Set(previous);
+        const selected = !next.has(index);
+        if (selected) {
+          next.add(index);
+          manuallyDeselectedIndicesRef.current.delete(index);
+        } else {
+          next.delete(index);
+          manuallyDeselectedIndicesRef.current.add(index);
+        }
+        void onSelectionChange?.(index, selected);
+        return next;
+      });
+    },
+    [onSelectionChange]
+  );
 
   const handleOpenEditModal = useCallback((index: number) => {
     setEditModalIndex(index);
@@ -599,19 +663,25 @@ export function useTransactionReviewState({
             edits
           )
         : null;
+      const existingEdits = transactionOverrides.get(editModalIndex);
+      const definedEdits = Object.fromEntries(
+        Object.entries(edits).filter(([, value]) => value !== undefined)
+      );
+      const mergedEdits: TransactionEdits = Object.assign(
+        {},
+        existingEdits,
+        definedEdits
+      );
+      if (currentTransaction) {
+        void onTransactionChange?.(
+          editModalIndex,
+          applyTransactionEdits(currentTransaction, mergedEdits, categoryMap)
+        );
+      }
 
-      setTransactionOverrides((prev) => {
-        const next = new Map(prev);
-        const existing = next.get(editModalIndex);
-        const definedEdits = Object.fromEntries(
-          Object.entries(edits).filter(([, v]) => v !== undefined)
-        );
-        const merged: TransactionEdits = Object.assign(
-          {},
-          existing,
-          definedEdits
-        );
-        next.set(editModalIndex, merged);
+      setTransactionOverrides((previous) => {
+        const next = new Map(previous);
+        next.set(editModalIndex, mergedEdits);
         return next;
       });
 
@@ -619,9 +689,11 @@ export function useTransactionReviewState({
         const next = new Set(prev);
         if (
           editedMeta?.isAutoSelectable &&
+          selectionOverrides.get(editModalIndex) !== false &&
           !manuallyDeselectedIndicesRef.current.has(editModalIndex)
         ) {
           next.add(editModalIndex);
+          void onSelectionChange?.(editModalIndex, true);
         }
         return next;
       });
@@ -632,7 +704,16 @@ export function useTransactionReviewState({
       });
       setEditModalIndex(null);
     },
-    [accountMatches, editModalIndex, effectiveTransactions]
+    [
+      accountMatches,
+      categoryMap,
+      editModalIndex,
+      effectiveTransactions,
+      onSelectionChange,
+      onTransactionChange,
+      selectionOverrides,
+      transactionOverrides,
+    ]
   );
 
   const handleReviewNeeds = useCallback(() => {

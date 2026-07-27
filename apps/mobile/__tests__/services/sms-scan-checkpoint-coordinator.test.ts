@@ -31,13 +31,9 @@ const durableOutcomes = [
   "candidate_too_large",
   "future_durable",
   "trusted_local_match",
+  "draft_suggestion",
 ] as const;
-const nonDurableOutcomes = [
-  "memory_suggestion",
-  "unresolved",
-  "cancelled",
-  "failed",
-] as const;
+const nonDurableOutcomes = ["unresolved", "cancelled", "failed"] as const;
 
 function state(
   fingerprint: string,

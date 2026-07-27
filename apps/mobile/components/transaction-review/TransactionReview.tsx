@@ -28,6 +28,8 @@ import { PartialSmsResultsNotice } from "./PartialSmsResultsNotice";
 import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator";
 import type { SmsSafeguardQaDiagnosticsViewModel } from "@/services/sms-safeguard-qa-diagnostics-service";
 import { SafeguardQaDiagnosticsPanel } from "@/components/sms-sync/SafeguardQaDiagnosticsPanel";
+import { SmsReviewAnimatedItem } from "./SmsReviewAnimatedItem";
+import { SmsReviewUndoBanner } from "./SmsReviewUndoBanner";
 
 export interface TransactionReviewProps {
   readonly transactions: readonly ReviewableTransaction[];
@@ -42,6 +44,22 @@ export interface TransactionReviewProps {
   readonly subtitle?: string;
   readonly onBack?: () => void;
   readonly workspaceVariant?: "default" | "sms";
+  readonly selectionOverrides?: ReadonlyMap<number, boolean | null>;
+  readonly onSelectionChange?: (
+    index: number,
+    selected: boolean
+  ) => void | Promise<void>;
+  readonly onTransactionChange?: (
+    index: number,
+    transaction: ReviewableTransaction
+  ) => void | Promise<void>;
+  readonly onDiscardItem?: (index: number) => void | Promise<void>;
+  readonly onReviewLater?: () => void;
+  readonly undoBanner?: {
+    readonly discardedName: string;
+    readonly onUndo: () => void | Promise<void>;
+    readonly onClose: () => void;
+  };
   readonly partialResults?: {
     readonly safeguardSummary: SmsScanSafeguardSummary;
     readonly retryableCount: number;
@@ -71,11 +89,23 @@ export function TransactionReview({
   workspaceVariant = "default",
   partialResults,
   qaDiagnostics = null,
+  selectionOverrides,
+  onSelectionChange,
+  onTransactionChange,
+  onDiscardItem,
+  onReviewLater,
+  undoBanner,
 }: TransactionReviewProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { t } = useTranslation("common");
   const { t: tTransactions } = useTranslation("transactions");
-  const state = useTransactionReviewState({ transactions, onSave });
+  const state = useTransactionReviewState({
+    transactions,
+    onSave,
+    selectionOverrides,
+    onSelectionChange,
+    onTransactionChange,
+  });
   const [isFilterSheetVisible, setIsFilterSheetVisible] = useState(false);
   const accountDisplayNames = useAccountDisplayNames();
   const isSmsWorkspace = workspaceVariant === "sms";
@@ -178,7 +208,7 @@ export function TransactionReview({
       const content = getExpandedContent(tx);
       const providerPresentation = resolveTransactionReviewProvider(tx);
 
-      return (
+      const transactionItem = (
         <TransactionItem
           transaction={tx}
           index={item.originalIndex}
@@ -188,11 +218,22 @@ export function TransactionReview({
           expandedContentBody={content?.body}
           onToggleSelect={handleToggleItem}
           onPress={handleOpenEditModal}
+          onDiscard={
+            isSmsWorkspace && onDiscardItem
+              ? (index) => void onDiscardItem(index)
+              : undefined
+          }
           hasMissingInfo={invalidIndices.has(item.originalIndex)}
           reviewMeta={reviewMetaByIndex.get(item.originalIndex)}
           isSmsWorkspace={isSmsWorkspace}
           institutionLogo={providerPresentation?.asset.logo ?? null}
         />
+      );
+
+      return isSmsWorkspace ? (
+        <SmsReviewAnimatedItem>{transactionItem}</SmsReviewAnimatedItem>
+      ) : (
+        transactionItem
       );
     },
     [
@@ -206,6 +247,7 @@ export function TransactionReview({
       selectedIndicesRef,
       transactionOverrides,
       isSmsWorkspace,
+      onDiscardItem,
     ]
   );
 
@@ -497,7 +539,16 @@ export function TransactionReview({
         onSave={state.handleSave}
         onDiscard={onDiscard}
         isSmsWorkspace={isSmsWorkspace}
+        onReviewLater={onReviewLater}
       />
+
+      {undoBanner && (
+        <SmsReviewUndoBanner
+          discardedName={undoBanner.discardedName}
+          onUndo={undoBanner.onUndo}
+          onClose={undoBanner.onClose}
+        />
+      )}
 
       <ReviewFiltersSheet
         visible={isFilterSheetVisible}
@@ -533,6 +584,7 @@ export function TransactionReview({
             incomeCategories={state.incomeCategories}
             onSave={state.handleEditModalSave}
             onCreatePendingAccount={state.handleCreatePendingAccount}
+            sourceVariant={workspaceVariant}
             onClose={() => state.setEditModalIndex(null)}
           />
         )}

@@ -788,4 +788,59 @@ describe("useTransactionReviewState", () => {
     expect(result.current.effectiveTransactions[0]?.amount).toBe(125);
     expect(result.current.selectedIndices.has(0)).toBe(wasSelected);
   });
+
+  it("forces a stale selected override off after hard validation resolves", async () => {
+    const onSelectionChange = jest.fn();
+    const transactions = [
+      createTransaction({ originLabel: "NO_ACCOUNT", confidence: 0.99 }),
+    ];
+
+    const { result } = renderHook(() =>
+      useTransactionReviewState({
+        transactions,
+        onSave: jest.fn(),
+        selectionOverrides: new Map([[0, true]]),
+        onSelectionChange,
+      })
+    );
+
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(1));
+    await waitFor(() =>
+      expect(onSelectionChange).toHaveBeenCalledWith(0, false)
+    );
+
+    expect(result.current.selectedIndices.has(0)).toBe(false);
+  });
+
+  it("preserves a persisted hard-validation deselection after correction", async () => {
+    const onSelectionChange = jest.fn();
+    const transactions = [
+      createTransaction({ originLabel: "NO_ACCOUNT", confidence: 0.99 }),
+    ];
+
+    const { result } = renderHook(() =>
+      useTransactionReviewState({
+        transactions,
+        onSave: jest.fn(),
+        selectionOverrides: new Map([[0, false]]),
+        onSelectionChange,
+      })
+    );
+
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(1));
+    act(() => result.current.handleOpenEditModal(0));
+    act(() => {
+      result.current.handleEditModalSave({
+        amount: 100,
+        type: "EXPENSE",
+        categoryId: "cat-food",
+        accountId: "acc-manual",
+        accountName: "Manual account",
+        accountConfirmed: true,
+      });
+    });
+
+    expect(result.current.selectedIndices.has(0)).toBe(false);
+    expect(onSelectionChange).not.toHaveBeenCalledWith(0, true);
+  });
 });

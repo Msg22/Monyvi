@@ -134,6 +134,31 @@ jest.mock("@/services/sms-oversized-outcome-service", () => ({
     mockRecordOversizedSmsOutcome(...args),
 }));
 
+const mockGetHandledSmsReviewFingerprints = jest.fn<
+  Promise<ReadonlySet<string>>,
+  []
+>(() => Promise.resolve(new Set()));
+const mockMergeSmsReviewDrafts = jest.fn<
+  Promise<{ readonly insertedCount: number; readonly existingCount: number }>,
+  [{ readonly transactions: readonly ParsedSmsTransaction[] }]
+>((input) =>
+  Promise.resolve({
+    insertedCount: input.transactions.length,
+    existingCount: 0,
+  })
+);
+
+jest.mock("@/services/sms-review-draft-repository", () => ({
+  getHandledSmsReviewFingerprints: (): Promise<ReadonlySet<string>> =>
+    mockGetHandledSmsReviewFingerprints(),
+  mergeSmsReviewDrafts: (input: {
+    readonly transactions: readonly ParsedSmsTransaction[];
+  }): Promise<{
+    readonly insertedCount: number;
+    readonly existingCount: number;
+  }> => mockMergeSmsReviewDrafts(input),
+}));
+
 // ---------------------------------------------------------------------------
 // Mock: @monyvi/logic (isKnownFinancialSender + computeSmsFingerprint)
 // ---------------------------------------------------------------------------
@@ -361,6 +386,13 @@ function defaultOptions(overrides: Record<string, unknown> = {}): {
 describe("sms-sync-service", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetHandledSmsReviewFingerprints.mockResolvedValue(new Set());
+    mockMergeSmsReviewDrafts.mockImplementation((input) =>
+      Promise.resolve({
+        insertedCount: input.transactions.length,
+        existingCount: 0,
+      })
+    );
     mockReadSmsInbox.mockResolvedValue([]);
     mockIsKnownFinancialSender.mockReturnValue(true);
     mockIsLikelyCorruptedSmsText.mockReturnValue(false);
@@ -958,17 +990,12 @@ describe("sms-sync-service", () => {
       ).toEqual([100]);
     });
 
-    it("loads current-user fingerprints when existing fingerprints are not supplied", async () => {
-      const userDataAccessMock = jest.requireMock<{
-        getCurrentUserDataScope: jest.Mock;
-      }>("@/services/user-data-access");
+    it("loads handled draft fingerprints when none are supplied", async () => {
       mockReadSmsInbox.mockResolvedValue([]);
 
       await scanAndParseSms(defaultOptions());
 
-      expect(userDataAccessMock.getCurrentUserDataScope).toHaveBeenCalledTimes(
-        1
-      );
+      expect(mockGetHandledSmsReviewFingerprints).toHaveBeenCalledTimes(1);
     });
 
     it("should use default maxCount (2000) when not specified", async () => {

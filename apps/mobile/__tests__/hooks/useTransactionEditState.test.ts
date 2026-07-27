@@ -91,4 +91,43 @@ describe("useTransactionEditState", () => {
       })
     );
   });
+
+  it("allows SMS review currency edits and includes the selected currency in saved edits", async () => {
+    const account = createAccount();
+    const category = {
+      id: "cat-food",
+      displayName: "Food",
+    } as unknown as Category;
+    const onSave = jest.fn<void, [TransactionEdits]>();
+
+    const { result } = renderHook(() =>
+      useTransactionEditState({
+        transaction: createTransaction(),
+        currentAccountId: account.id,
+        currentAccountName: account.name,
+        accounts: [account],
+        pendingAccounts: [],
+        categoryMap: new Map([[category.id, category]]),
+        expenseCategories: [category],
+        incomeCategories: [],
+        onSave,
+        onCreatePendingAccount: jest.fn(),
+        allowTransactionCurrencyEdit: true,
+      })
+    );
+
+    await waitFor(() =>
+      expect(result.current.state.selectedCategoryId).toBe(category.id)
+    );
+    expect(result.current.state.isCurrencyLocked).toBe(false);
+
+    act(() => result.current.accountHandlers.handleCurrencySelect("USD"));
+    expect(result.current.state.newAccountCurrency).toBe("USD");
+
+    act(() => result.current.accountHandlers.handleSave());
+
+    expect(onSave).toHaveBeenLastCalledWith(
+      expect.objectContaining({ currency: "USD" })
+    );
+  });
 });

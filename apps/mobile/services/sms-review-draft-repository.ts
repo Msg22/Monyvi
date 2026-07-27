@@ -1,0 +1,586 @@
+import {
+  database,
+  DismissedSmsFingerprint,
+  SmsReviewDraftItem,
+  SmsReviewQueue,
+} from "@monyvi/db";
+import {
+  decodeSmsReviewDraft,
+  encodeSmsReviewDraft,
+  SmsReviewDraftCodecError,
+  type ParsedSmsTransaction,
+} from "@monyvi/logic";
+import { Q, type Collection, type Model } from "@nozbe/watermelondb";
+import type { Observable } from "rxjs";
+
+import { SMS_REVIEW_DRAFT_ERROR_CODES } from "./sms-review-draft-errors";
+
+import {
+  assertExpectedCurrentUser,
+  getCurrentUserDataScope,
+} from "./user-data-access";
+
+const QUEUE_TABLE = "sms_review_queues";
+const ITEM_TABLE = "sms_review_draft_items";
+const DISMISSED_TABLE = "dismissed_sms_fingerprints";
+
+export { SMS_REVIEW_DRAFT_ERROR_CODES } from "./sms-review-draft-errors";
+
+export interface SmsReviewDraftReadItem {
+  readonly draftId: string;
+  readonly queueId: string;
+  readonly transaction: ParsedSmsTransaction;
+  readonly selectionOverride: boolean | null;
+  readonly position: number;
+  readonly parsedAt: Date;
+  readonly updatedAt: Date;
+}
+
+export interface SmsReviewQueueSnapshot {
+  readonly queueId: string;
+  readonly userId: string;
+  readonly items: readonly SmsReviewDraftReadItem[];
+  readonly itemCount: number;
+  readonly earliestParsedAt: Date;
+  readonly latestUpdatedAt: Date;
+}
+
+export interface MergeSmsReviewDraftsInput {
+  readonly transactions: readonly ParsedSmsTransaction[];
+  readonly expectedUserId: string;
+  readonly parsedAt?: Date;
+}
+
+export interface MergeSmsReviewDraftsResult {
+  readonly insertedCount: number;
+  readonly existingCount: number;
+}
+
+export interface VolatileSmsReviewUndoItem {
+  readonly draftId: string;
+  readonly userId: string;
+  readonly queueId: string;
+  readonly smsFingerprint: string;
+  readonly transaction: ParsedSmsTransaction;
+  readonly selectionOverride: boolean | null;
+  readonly position: number;
+  readonly parsedAt: Date;
+  readonly expiresAt: number;
+}
+
+function queueCollection(): Collection<SmsReviewQueue> {
+  return database.get<SmsReviewQueue>(QUEUE_TABLE);
+}
+
+function itemCollection(): Collection<SmsReviewDraftItem> {
+  return database.get<SmsReviewDraftItem>(ITEM_TABLE);
+}
+
+function dismissedCollection(): Collection<DismissedSmsFingerprint> {
+  return database.get<DismissedSmsFingerprint>(DISMISSED_TABLE);
+}
+
+async function fetchOwnedQueues(userId: string): Promise<SmsReviewQueue[]> {
+  return queueCollection().query(Q.where("user_id", userId)).fetch();
+}
+
+function assertSingleQueue(
+  queues: readonly SmsReviewQueue[]
+): SmsReviewQueue | null {
+  if (queues.length > 1) {
+    throw new Error(SMS_REVIEW_DRAFT_ERROR_CODES.QUEUE_CONFLICT);
+  }
+  return queues[0] ?? null;
+}
+
+async function fetchOwnedItems(
+  userId: string,
+  queueId?: string
+): Promise<SmsReviewDraftItem[]> {
+  const conditions = queueId ? [Q.where("queue_id", queueId)] : [];
+  return itemCollection()
+    .query(
+      Q.where("user_id", userId),
+      ...conditions,
+      Q.sortBy("position", Q.asc),
+      Q.sortBy("created_at", Q.asc)
+    )
+    .fetch();
+}
+
+async function fetchDismissedFingerprint(
+  userId: string,
+  smsFingerprint: string
+): Promise<DismissedSmsFingerprint | null> {
+  const records = await dismissedCollection()
+    .query(
+      Q.where("user_id", userId),
+      Q.where("sms_fingerprint", smsFingerprint)
+    )
+    .fetch();
+  return records[0] ?? null;
+}
+
+function decodeItem(item: SmsReviewDraftItem): SmsReviewDraftReadItem {
+  return {
+    draftId: item.id,
+    queueId: item.queueId,
+    transaction: decodeSmsReviewDraft({
+      version: item.payloadVersion,
+      json: item.payloadJson,
+      expectedFingerprint: item.smsFingerprint,
+    }),
+    selectionOverride: item.selectionOverride ?? null,
+    position: item.position,
+    parsedAt: item.parsedAt,
+    updatedAt: item.updatedAt,
+  };
+}
+
+async function removeInvalidItems(
+  userId: string,
+  invalidItems: readonly SmsReviewDraftItem[]
+): Promise<void> {
+  if (invalidItems.length === 0) return;
+
+  await assertExpectedCurrentUser(userId);
+  await database.write(async (): Promise<void> => {
+    await assertExpectedCurrentUser(userId);
+    const ownedIds = new Set(
+      (await fetchOwnedItems(userId)).map((item) => item.id)
+    );
+    const deletes = invalidItems
+      .filter((item) => ownedIds.has(item.id))
+      .map((item) => item.prepareDestroyPermanently());
+    if (deletes.length > 0) await database.batch(deletes);
+    await removeEmptyQueueInWriter(userId);
+  });
+}
+
+async function removeEmptyQueueInWriter(userId: string): Promise<void> {
+  const queue = assertSingleQueue(await fetchOwnedQueues(userId));
+  if (!queue) return;
+  const remaining = await fetchOwnedItems(userId, queue.id);
+  if (remaining.length === 0) {
+    await database.batch([queue.prepareDestroyPermanently()]);
+  }
+}
+
+export async function getSmsReviewDraftQueueSnapshot(
+  expectedUserId: string
+): Promise<SmsReviewQueueSnapshot | null> {
+  const scope = await getCurrentUserDataScope();
+  await assertExpectedCurrentUser(expectedUserId);
+  if (scope.userId !== expectedUserId) {
+    throw new Error(SMS_REVIEW_DRAFT_ERROR_CODES.USER_SCOPE_CHANGED);
+  }
+  const queue = assertSingleQueue(await fetchOwnedQueues(expectedUserId));
+  await assertExpectedCurrentUser(expectedUserId);
+  if (!queue) return null;
+  const records = await fetchOwnedItems(expectedUserId, queue.id);
+  const invalid: SmsReviewDraftItem[] = [];
+  const items = records.flatMap((record) => {
+    try {
+      return [decodeItem(record)];
+    } catch (error) {
+      if (error instanceof SmsReviewDraftCodecError) {
+        invalid.push(record);
+        return [];
+      }
+      throw error;
+    }
+  });
+
+  if (invalid.length > 0) await removeInvalidItems(expectedUserId, invalid);
+  await assertExpectedCurrentUser(expectedUserId);
+  if (items.length === 0) return null;
+  return {
+    queueId: queue.id,
+    userId: expectedUserId,
+    items,
+    itemCount: items.length,
+    earliestParsedAt: new Date(
+      Math.min(...items.map((item) => item.parsedAt.getTime()))
+    ),
+    latestUpdatedAt: new Date(
+      Math.max(
+        queue.updatedAt.getTime(),
+        ...items.map((item) => item.updatedAt.getTime())
+      )
+    ),
+  };
+}
+
+export async function getSmsReviewDraftCount(): Promise<number> {
+  const scope = await getCurrentUserDataScope();
+  return scope.queryOwned(itemCollection()).fetchCount();
+}
+
+export async function getHandledSmsReviewFingerprints(): Promise<
+  ReadonlySet<string>
+> {
+  const scope = await getCurrentUserDataScope();
+  const [activeItems, dismissedItems] = await Promise.all([
+    scope.queryOwned(itemCollection()).fetch(),
+    scope.queryOwned(dismissedCollection()).fetch(),
+  ]);
+
+  return new Set([
+    ...activeItems.map((item) => item.smsFingerprint),
+    ...dismissedItems.map((item) => item.smsFingerprint),
+  ]);
+}
+
+export async function observeSmsReviewDraftChanges(
+  expectedUserId: string
+): Promise<Observable<SmsReviewDraftItem[]>> {
+  const scope = await getCurrentUserDataScope();
+  if (scope.userId !== expectedUserId) {
+    await assertExpectedCurrentUser(expectedUserId);
+  }
+  return scope
+    .queryOwned(
+      itemCollection(),
+      Q.sortBy("position", Q.asc),
+      Q.sortBy("created_at", Q.asc)
+    )
+    .observe();
+}
+
+export async function mergeSmsReviewDrafts(
+  input: MergeSmsReviewDraftsInput
+): Promise<MergeSmsReviewDraftsResult> {
+  if (input.transactions.length === 0) {
+    return { insertedCount: 0, existingCount: 0 };
+  }
+
+  const scope = await getCurrentUserDataScope();
+  if (scope.userId !== input.expectedUserId) {
+    await assertExpectedCurrentUser(input.expectedUserId);
+  }
+  const encoded = input.transactions.map((transaction) => ({
+    transaction,
+    payload: encodeSmsReviewDraft(transaction),
+  }));
+  const parsedAt = input.parsedAt ?? new Date();
+
+  return database.write(async (): Promise<MergeSmsReviewDraftsResult> => {
+    await assertExpectedCurrentUser(input.expectedUserId);
+    const queues = await fetchOwnedQueues(input.expectedUserId);
+    let queue = assertSingleQueue(queues);
+    const [existingItems, dismissedItems] = await Promise.all([
+      fetchOwnedItems(input.expectedUserId, queue?.id),
+      dismissedCollection()
+        .query(Q.where("user_id", input.expectedUserId))
+        .fetch(),
+    ]);
+    const existingFingerprints = new Set(
+      existingItems.map((item) => item.smsFingerprint)
+    );
+    const dismissedFingerprints = new Set(
+      dismissedItems.map((item) => item.smsFingerprint)
+    );
+    const uniqueNew = encoded.filter(
+      ({ transaction }, index, all) =>
+        !existingFingerprints.has(transaction.smsFingerprint) &&
+        !dismissedFingerprints.has(transaction.smsFingerprint) &&
+        all.findIndex(
+          (candidate) =>
+            candidate.transaction.smsFingerprint === transaction.smsFingerprint
+        ) === index
+    );
+
+    if (uniqueNew.length === 0) {
+      return {
+        insertedCount: 0,
+        existingCount: encoded.length,
+      };
+    }
+
+    const operations: Model[] = [];
+    const now = new Date();
+    if (!queue) {
+      queue = queueCollection().prepareCreate((record) => {
+        record.userId = input.expectedUserId;
+        record.updatedAt = now;
+      });
+      operations.push(queue);
+    } else {
+      operations.push(
+        queue.prepareUpdate((record) => {
+          record.updatedAt = now;
+        })
+      );
+    }
+
+    const nextPosition =
+      existingItems.reduce((max, item) => Math.max(max, item.position), -1) + 1;
+    uniqueNew.forEach(({ transaction, payload }, index) => {
+      operations.push(
+        itemCollection().prepareCreate((record) => {
+          record.queueId = queue!.id;
+          record.userId = input.expectedUserId;
+          record.smsFingerprint = transaction.smsFingerprint;
+          record.payloadVersion = payload.version;
+          record.payloadJson = payload.json;
+          record.selectionOverride = null;
+          record.position = nextPosition + index;
+          record.parsedAt = parsedAt;
+          record.updatedAt = now;
+        })
+      );
+    });
+
+    await database.batch(operations);
+    return {
+      insertedCount: uniqueNew.length,
+      existingCount: encoded.length - uniqueNew.length,
+    };
+  });
+}
+
+export async function getOwnedSmsReviewDraftItem(
+  draftId: string,
+  expectedUserId: string
+): Promise<SmsReviewDraftItem> {
+  await assertExpectedCurrentUser(expectedUserId);
+  const record = await itemCollection().find(draftId);
+  if (record.userId !== expectedUserId) {
+    throw new Error(SMS_REVIEW_DRAFT_ERROR_CODES.ITEM_NOT_FOUND);
+  }
+  return record;
+}
+
+export async function updateSmsReviewDraftItem(
+  draftId: string,
+  expectedUserId: string,
+  transaction: ParsedSmsTransaction
+): Promise<void> {
+  const payload = encodeSmsReviewDraft(transaction);
+  await database.write(async (): Promise<void> => {
+    const record = await getOwnedSmsReviewDraftItem(draftId, expectedUserId);
+    if (record.smsFingerprint !== transaction.smsFingerprint) {
+      throw new Error(SMS_REVIEW_DRAFT_ERROR_CODES.TRANSITION_FAILED);
+    }
+    await record.update((draft) => {
+      draft.payloadVersion = payload.version;
+      draft.payloadJson = payload.json;
+      draft.updatedAt = new Date();
+    });
+  });
+}
+
+export async function updateSmsReviewDraftSelection(
+  draftId: string,
+  expectedUserId: string,
+  selectionOverride: boolean | null
+): Promise<void> {
+  await database.write(async (): Promise<void> => {
+    const record = await getOwnedSmsReviewDraftItem(draftId, expectedUserId);
+    await record.update((draft) => {
+      draft.selectionOverride = selectionOverride;
+      draft.updatedAt = new Date();
+    });
+  });
+}
+
+export async function deleteResolvedSmsReviewDraftsInWriter(
+  draftIds: readonly string[],
+  expectedUserId: string,
+  financialOperations: readonly Model[] = []
+): Promise<void> {
+  await assertExpectedCurrentUser(expectedUserId);
+  const records = await Promise.all(
+    draftIds.map((draftId) =>
+      getOwnedSmsReviewDraftItem(draftId, expectedUserId)
+    )
+  );
+  const queue = assertSingleQueue(await fetchOwnedQueues(expectedUserId));
+  const selectedIds = new Set(records.map((record) => record.id));
+  const allItems = await fetchOwnedItems(expectedUserId, queue?.id);
+  const operations: Model[] = [
+    ...financialOperations,
+    ...records.map((record) => record.prepareDestroyPermanently()),
+  ];
+  if (queue && allItems.every((item) => selectedIds.has(item.id))) {
+    operations.push(queue.prepareDestroyPermanently());
+  }
+  await database.batch(operations);
+}
+
+export async function runSmsReviewDraftWriter<T>(
+  action: () => Promise<T>
+): Promise<T> {
+  return database.write(action);
+}
+
+export async function discardSmsReviewDraft(
+  draftId: string,
+  expectedUserId: string,
+  expiresAt: number
+): Promise<VolatileSmsReviewUndoItem> {
+  return database.write(async (): Promise<VolatileSmsReviewUndoItem> => {
+    await assertExpectedCurrentUser(expectedUserId);
+    const record = await getOwnedSmsReviewDraftItem(draftId, expectedUserId);
+    const transaction = decodeItem(record).transaction;
+    const queue = assertSingleQueue(await fetchOwnedQueues(expectedUserId));
+    if (!queue || queue.id !== record.queueId) {
+      throw new Error(SMS_REVIEW_DRAFT_ERROR_CODES.TRANSITION_FAILED);
+    }
+
+    const existingDismissed = await fetchDismissedFingerprint(
+      expectedUserId,
+      record.smsFingerprint
+    );
+    const allItems = await fetchOwnedItems(expectedUserId, queue.id);
+    const operations: Model[] = [];
+    if (!existingDismissed) {
+      operations.push(
+        dismissedCollection().prepareCreate((dismissed) => {
+          dismissed.userId = expectedUserId;
+          dismissed.smsFingerprint = record.smsFingerprint;
+          dismissed.updatedAt = new Date();
+        })
+      );
+    }
+    operations.push(record.prepareDestroyPermanently());
+    if (allItems.length === 1) {
+      operations.push(queue.prepareDestroyPermanently());
+    }
+    await database.batch(operations);
+
+    return {
+      draftId: record.id,
+      userId: expectedUserId,
+      queueId: queue.id,
+      smsFingerprint: record.smsFingerprint,
+      transaction,
+      selectionOverride: record.selectionOverride ?? null,
+      position: record.position,
+      parsedAt: record.parsedAt,
+      expiresAt,
+    };
+  });
+}
+
+export async function restoreSmsReviewDraft(
+  undoItem: VolatileSmsReviewUndoItem
+): Promise<void> {
+  const payload = encodeSmsReviewDraft(undoItem.transaction);
+  await database.write(async (): Promise<void> => {
+    await assertExpectedCurrentUser(undoItem.userId);
+    const active = await itemCollection()
+      .query(
+        Q.where("user_id", undoItem.userId),
+        Q.where("sms_fingerprint", undoItem.smsFingerprint)
+      )
+      .fetch();
+    const dismissed = await fetchDismissedFingerprint(
+      undoItem.userId,
+      undoItem.smsFingerprint
+    );
+    if (active.length > 0) {
+      if (dismissed) {
+        await database.batch([dismissed.prepareDestroyPermanently()]);
+      }
+      return;
+    }
+
+    const existingQueue = assertSingleQueue(
+      await fetchOwnedQueues(undoItem.userId)
+    );
+    const now = new Date();
+    const queue =
+      existingQueue ??
+      queueCollection().prepareCreate((record) => {
+        record.userId = undoItem.userId;
+        record.updatedAt = now;
+      });
+    const operations: Model[] = [];
+    if (!existingQueue) {
+      operations.push(queue);
+    } else {
+      operations.push(
+        queue.prepareUpdate((record) => {
+          record.updatedAt = now;
+        })
+      );
+    }
+    operations.push(
+      itemCollection().prepareCreate((record) => {
+        record.queueId = queue.id;
+        record.userId = undoItem.userId;
+        record.smsFingerprint = undoItem.smsFingerprint;
+        record.payloadVersion = payload.version;
+        record.payloadJson = payload.json;
+        record.selectionOverride = undoItem.selectionOverride;
+        record.position = undoItem.position;
+        record.parsedAt = undoItem.parsedAt;
+        record.updatedAt = now;
+      })
+    );
+    if (dismissed) {
+      operations.push(dismissed.prepareDestroyPermanently());
+    }
+    await database.batch(operations);
+  });
+}
+
+export async function discardAllSmsReviewDrafts(
+  expectedUserId: string
+): Promise<number> {
+  return database.write(async (): Promise<number> => {
+    await assertExpectedCurrentUser(expectedUserId);
+    const queue = assertSingleQueue(await fetchOwnedQueues(expectedUserId));
+    if (!queue) return 0;
+    const items = await fetchOwnedItems(expectedUserId, queue.id);
+    if (items.length === 0) {
+      await database.batch([queue.prepareDestroyPermanently()]);
+      return 0;
+    }
+
+    const dismissed = await dismissedCollection()
+      .query(Q.where("user_id", expectedUserId))
+      .fetch();
+    const dismissedSet = new Set(
+      dismissed.map((record) => record.smsFingerprint)
+    );
+    const now = new Date();
+    const operations: Model[] = items
+      .filter((item) => !dismissedSet.has(item.smsFingerprint))
+      .map((item) =>
+        dismissedCollection().prepareCreate((record) => {
+          record.userId = expectedUserId;
+          record.smsFingerprint = item.smsFingerprint;
+          record.updatedAt = now;
+        })
+      );
+    operations.push(
+      ...items.map((item) => item.prepareDestroyPermanently()),
+      queue.prepareDestroyPermanently()
+    );
+    await database.batch(operations);
+    return items.length;
+  });
+}
+
+export async function deleteExpiredSmsReviewDrafts(
+  expectedUserId: string,
+  cutoff: Date
+): Promise<number> {
+  return database.write(async (): Promise<number> => {
+    await assertExpectedCurrentUser(expectedUserId);
+    const expired = await itemCollection()
+      .query(
+        Q.where("user_id", expectedUserId),
+        Q.where("parsed_at", Q.lte(cutoff.getTime()))
+      )
+      .fetch();
+    if (expired.length === 0) return 0;
+    await database.batch(
+      expired.map((item) => item.prepareDestroyPermanently())
+    );
+    await removeEmptyQueueInWriter(expectedUserId);
+    return expired.length;
+  });
+}

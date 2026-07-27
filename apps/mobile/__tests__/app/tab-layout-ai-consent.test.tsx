@@ -226,7 +226,7 @@ describe("TabLayout AI consent", () => {
     );
 
     fireEvent.press(screen.getByTestId("voice-privacy-details"));
-    expect(mockRouterPush).toHaveBeenCalledWith("/ai-privacy-details");
+    expect(mockRouterPush).toHaveBeenCalledWith("/privacy-details");
     expect(screen.queryByTestId("voice-privacy-details")).toBeNull();
 
     act(() => {

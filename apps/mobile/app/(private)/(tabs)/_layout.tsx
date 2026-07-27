@@ -266,7 +266,7 @@ function TabLayoutInner(): React.ReactElement {
           onPrivacyDetails={() => {
             shouldResumeVoiceConsentAfterPrivacyDetails.current = true;
             setIsVoiceConsentVisible(false);
-            router.push("/ai-privacy-details");
+            router.push("/privacy-details");
           }}
         />
       </View>

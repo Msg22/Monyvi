@@ -62,6 +62,10 @@ import {
 } from "./sms-scan-checkpoint-coordinator";
 import { recordOversizedSmsOutcome } from "./sms-oversized-outcome-service";
 import { getSmsSafeguardQaNowMs } from "@/config/sms-safeguard-qa-config";
+import {
+  getHandledSmsReviewFingerprints,
+  mergeSmsReviewDrafts,
+} from "./sms-review-draft-repository";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -445,9 +449,15 @@ async function executeScanPipeline(
     Math.floor(options?.yieldInterval ?? DEFAULT_YIELD_INTERVAL)
   );
   const abortSignal = options?.abortSignal;
-  const existingFingerprints =
+  const savedFingerprints =
     options?.existingFingerprints ??
     (await loadExistingSmsFingerprintsForScope(initiatingScope));
+  const reviewFingerprints = await getHandledSmsReviewFingerprints();
+  await assertPinnedScanContext(initiatingScope.userId, abortSignal);
+  const existingFingerprints = new Set([
+    ...savedFingerprints,
+    ...reviewFingerprints,
+  ]);
   const initialSafeguardState = await loadSmsScanSafeguardState({
     userId: initiatingScope.userId,
     scanKind: options.scanKind,
@@ -556,7 +566,11 @@ async function executeScanPipeline(
       // Skip if already exists in local DB
       if (seenFingerprints.has(fingerprint)) {
         addCheckpointState(
-          existingFingerprints.has(fingerprint) ? "saved" : null
+          savedFingerprints.has(fingerprint)
+            ? "saved"
+            : reviewFingerprints.has(fingerprint)
+              ? "draft_suggestion"
+              : null
         );
         continue;
       }
@@ -676,6 +690,13 @@ async function executeScanPipeline(
   const transactionFingerprints = new Set(
     deduplicatedTransactions.map((transaction) => transaction.smsFingerprint)
   );
+  await assertPinnedScanContext(initiatingScope.userId, abortSignal);
+  await mergeSmsReviewDrafts({
+    transactions: deduplicatedTransactions,
+    expectedUserId: initiatingScope.userId,
+    parsedAt: new Date(scanStartedAtMs),
+  });
+  await assertPinnedScanContext(initiatingScope.userId, abortSignal);
   const durableNegativeFingerprints = new Set([
     ...(aiResult.durableNegativeFingerprints ?? []),
     ...(aiResult.terminalFingerprints ?? []),
@@ -705,7 +726,7 @@ async function executeScanPipeline(
       outcome:
         state.outcome ??
         (transactionFingerprints.has(state.fingerprint)
-          ? "memory_suggestion"
+          ? "draft_suggestion"
           : durableLocalRejectionFingerprints.has(state.fingerprint)
             ? "local_excluded"
             : oversizedFingerprints.has(state.fingerprint)

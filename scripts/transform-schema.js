@@ -341,10 +341,13 @@ ${columnDefs},
 
 import { appSchema, tableSchema } from "@nozbe/watermelondb";
 
+import { SMS_REVIEW_DRAFT_TABLES } from "./local-schema/sms-review-draft-schema";
+
 export const schema = appSchema({
   version: ${getSchemaVersion()},
   tables: [
 ${tableSchemas},
+    ...SMS_REVIEW_DRAFT_TABLES,
   ],
 });
 `;

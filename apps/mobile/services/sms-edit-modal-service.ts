@@ -20,7 +20,7 @@ import {
   isKnownFinancialSender,
   type ParsedSmsTransaction,
 } from "@monyvi/logic";
-import type { TransactionType } from "@monyvi/db";
+import type { CurrencyType, TransactionType } from "@monyvi/db";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,6 +29,7 @@ import type { TransactionType } from "@monyvi/db";
 /** Fields that can be overridden in the edit modal */
 interface TransactionEdits {
   readonly amount: number;
+  readonly currency?: CurrencyType;
   readonly counterparty?: string;
   readonly categoryId: string;
   readonly type: TransactionType;
@@ -62,6 +63,7 @@ interface BuildTransactionEditsInput {
   readonly categoryConfirmed: boolean;
   readonly shouldClearCategoryConfirmation?: boolean;
   readonly amount: number;
+  readonly currency?: CurrencyType;
   /** Cash account ID for ATM withdrawal destination (optional) */
   readonly toAccountId?: string | null;
   /** Cash account name for ATM withdrawal destination (optional) */
@@ -165,6 +167,7 @@ function buildTransactionEdits(
           ? false
           : undefined,
     amount: input.amount,
+    ...(input.currency !== undefined && { currency: input.currency }),
     toAccountId: input.toAccountId,
     toAccountName: input.toAccountName,
     toAccountConfirmed: input.toAccountConfirmed === true ? true : undefined,

@@ -6,8 +6,10 @@
 
 import { appSchema, tableSchema } from "@nozbe/watermelondb";
 
+import { SMS_REVIEW_DRAFT_TABLES } from "./local-schema/sms-review-draft-schema";
+
 export const schema = appSchema({
-  version: 24,
+  version: 25,
   tables: [
     tableSchema({
       name: "account_sms_senders",
@@ -392,5 +394,6 @@ export const schema = appSchema({
         { name: "user_id", type: "string", isIndexed: true },
       ],
     }),
+    ...SMS_REVIEW_DRAFT_TABLES,
   ],
 });

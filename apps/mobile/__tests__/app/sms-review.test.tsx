@@ -1,10 +1,13 @@
-import { act, render, screen } from "@testing-library/react-native";
+import { act, render, screen, waitFor } from "@testing-library/react-native";
 import type { ParsedSmsTransaction } from "@monyvi/logic";
 import React from "react";
+
 import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator";
 
 interface MockTransactionReviewProps {
-  readonly partialResults: {
+  readonly transactions: readonly ParsedSmsTransaction[];
+  readonly selectionOverrides: ReadonlyMap<number, boolean | null>;
+  readonly partialResults?: {
     readonly safeguardSummary: SmsScanSafeguardSummary;
     readonly retryableCount: number;
     readonly canRetry: boolean;
@@ -12,7 +15,9 @@ interface MockTransactionReviewProps {
     readonly onRetry: () => void;
   };
   readonly onBack: () => void;
+  readonly onReviewLater: () => void;
   readonly onDiscard: () => void;
+  readonly onDiscardItem: (index: number) => Promise<void>;
   readonly isSaving: boolean;
   readonly onSave: (
     selected: readonly ParsedSmsTransaction[],
@@ -22,13 +27,13 @@ interface MockTransactionReviewProps {
 }
 
 interface MockConfirmationModalProps {
+  readonly visible: boolean;
   readonly onConfirm: () => void;
 }
 
 interface MockConsentSheetProps {
   readonly visible: boolean;
   readonly onContinue: () => Promise<void>;
-  readonly onNotNow: () => void;
   readonly onPrivacyDetails: () => void;
 }
 
@@ -39,7 +44,9 @@ const mockRouterPush = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockMarkSyncComplete = jest.fn<Promise<void>, []>();
 const mockShowToast = jest.fn();
-const mockBatchCreateTransactions = jest.fn();
+const mockSaveSelectedDrafts = jest.fn();
+const mockDiscardAll = jest.fn();
+const mockDiscardOne = jest.fn();
 const mockTransactionReview = jest.fn<
   void,
   [props: MockTransactionReviewProps]
@@ -51,6 +58,7 @@ const mockConfirmationModal = jest.fn<
 const mockConsentSheet = jest.fn<void, [props: MockConsentSheetProps]>();
 const mockGrantConsent = jest.fn<Promise<void>, []>();
 const mockDismissConsentRequired = jest.fn();
+
 let mockRetryState = {
   unresolvedCount: 2,
   retryableCount: 2,
@@ -60,6 +68,7 @@ let mockRetryState = {
   dismissConsentRequired: mockDismissConsentRequired,
   retry: mockRetry,
 };
+
 const mockSafeguardSummary: SmsScanSafeguardSummary = {
   admittedAiCount: 1,
   deferredAiCount: 1,
@@ -71,7 +80,6 @@ const mockSafeguardSummary: SmsScanSafeguardSummary = {
   },
   completionStatus: "partial",
 };
-let focusCleanup: (() => void) | undefined;
 
 const mockTransaction: ParsedSmsTransaction = {
   amount: 10,
@@ -88,12 +96,23 @@ const mockTransaction: ParsedSmsTransaction = {
   senderDisplayName: "QNB EGYPT",
   rawSmsBody: "raw",
 };
-let mockReviewTransactions: readonly ParsedSmsTransaction[] = [mockTransaction];
+
+let mockQueueItems = [
+  {
+    draftId: "draft-1",
+    queueId: "queue-1",
+    transaction: mockTransaction,
+    selectionOverride: true,
+    position: 0,
+    parsedAt: new Date("2026-07-16T12:00:00Z"),
+    updatedAt: new Date("2026-07-16T12:00:00Z"),
+    hardValidationReasons: ["account_required"] as const,
+  },
+];
+let mockQueueLoading = false;
+let mockQueueError: Error | null = null;
 
 jest.mock("expo-router", () => ({
-  useFocusEffect: (callback: () => (() => void) | undefined): void => {
-    focusCleanup = callback();
-  },
   useRouter: () => ({
     back: mockRouterBack,
     push: mockRouterPush,
@@ -103,10 +122,32 @@ jest.mock("expo-router", () => ({
 
 jest.mock("@/context/SmsScanContext", () => ({
   useSmsScanContext: () => ({
-    transactions: mockReviewTransactions,
     unresolvedCandidates: mockRetryState.unresolvedCount > 0 ? [{}] : [],
     safeguardSummary: mockSafeguardSummary,
+    parserDiagnostics: null,
     clearTransactions: mockClearTransactions,
+  }),
+}));
+
+jest.mock("@/hooks/useSmsReviewDraftQueue", () => ({
+  useSmsReviewDraftQueue: () => ({
+    userId: "user-1",
+    queueId: mockQueueItems.length > 0 ? "queue-1" : null,
+    items: mockQueueItems,
+    itemCount: mockQueueItems.length,
+    isLoading: mockQueueLoading,
+    error: mockQueueError,
+    refetch: jest.fn(),
+  }),
+}));
+
+jest.mock("@/hooks/useSmsReviewUndo", () => ({
+  useSmsReviewUndo: () => ({
+    undoItem: null,
+    discardedName: null,
+    discard: mockDiscardOne,
+    undo: jest.fn(),
+    close: jest.fn(),
   }),
 }));
 
@@ -141,6 +182,10 @@ jest.mock("@/components/modals/ConfirmationModal", () => ({
   },
 }));
 
+jest.mock("@/components/sms-sync/SafeguardQaDiagnosticsPanel", () => ({
+  SafeguardQaDiagnosticsPanel: (): null => null,
+}));
+
 jest.mock("@/components/ui/Toast", () => ({
   useToast: () => ({ showToast: mockShowToast }),
 }));
@@ -153,19 +198,32 @@ jest.mock("@/hooks/useSmsSync", () => ({
   useSmsSync: () => ({ markSyncComplete: mockMarkSyncComplete }),
 }));
 
-jest.mock("@/services/batch-create-transactions", () => ({
-  batchCreateTransactions: (...args: readonly unknown[]): unknown =>
-    mockBatchCreateTransactions(...args),
+jest.mock("@/services/sms-review-draft-command-service", () => ({
+  discardEverySmsReviewDraft: (...args: readonly unknown[]): unknown =>
+    mockDiscardAll(...args),
+  editSmsReviewDraft: jest.fn(),
+  setSmsReviewDraftSelection: jest.fn(),
 }));
+
+jest.mock("@/services/sms-review-save-service", () => {
+  class MockValidationError extends Error {}
+  return {
+    saveSelectedSmsReviewDrafts: (...args: readonly unknown[]): unknown =>
+      mockSaveSelectedDrafts(...args),
+    SmsReviewDraftSaveValidationError: MockValidationError,
+  };
+});
 
 jest.mock("@/services/sms-live-detection-handler", () => ({
   setReviewingActive: jest.fn(),
   flushQueuedTransactions: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock("@expo/vector-icons", () => ({
-  Ionicons: (): null => null,
+jest.mock("@/services/sms-safeguard-qa-diagnostics-service", () => ({
+  createSmsSafeguardQaDiagnostics: (): null => null,
 }));
+
+jest.mock("@expo/vector-icons", () => ({ Ionicons: (): null => null }));
 
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: ({ children }: { readonly children: React.ReactNode }) =>
@@ -186,10 +244,20 @@ import SmsReviewScreen from "@/app/(private)/sms-review";
 describe("SMS review route", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    focusCleanup = undefined;
-    mockRetry.mockResolvedValue(undefined);
-    mockMarkSyncComplete.mockResolvedValue(undefined);
-    mockGrantConsent.mockResolvedValue(undefined);
+    mockQueueLoading = false;
+    mockQueueError = null;
+    mockQueueItems = [
+      {
+        draftId: "draft-1",
+        queueId: "queue-1",
+        transaction: mockTransaction,
+        selectionOverride: true,
+        position: 0,
+        parsedAt: new Date("2026-07-16T12:00:00Z"),
+        updatedAt: new Date("2026-07-16T12:00:00Z"),
+        hardValidationReasons: ["account_required"] as const,
+      },
+    ];
     mockRetryState = {
       unresolvedCount: 2,
       retryableCount: 2,
@@ -199,156 +267,110 @@ describe("SMS review route", () => {
       dismissConsentRequired: mockDismissConsentRequired,
       retry: mockRetry,
     };
-    mockReviewTransactions = [mockTransaction];
-    mockBatchCreateTransactions.mockResolvedValue({
-      savedCount: 1,
-      failedCount: 0,
-      errors: [],
-    });
+    mockRetry.mockResolvedValue(undefined);
+    mockGrantConsent.mockResolvedValue(undefined);
+    mockDiscardAll.mockResolvedValue(undefined);
+    mockDiscardOne.mockResolvedValue(undefined);
+    mockMarkSyncComplete.mockResolvedValue(undefined);
+    mockSaveSelectedDrafts.mockResolvedValue({ savedCount: 1 });
   });
 
-  it("connects partial retry and clears transient state on Back", () => {
+  it("renders durable queue items and forces a hard-invalid override off", () => {
+    render(<SmsReviewScreen />);
+
+    const props = mockTransactionReview.mock.calls[0]?.[0];
+    expect(props?.transactions).toEqual([mockTransaction]);
+    expect(props?.selectionOverrides.get(0)).toBe(false);
+    expect(props?.partialResults?.canRetry).toBe(true);
+  });
+
+  it("keeps drafts intact when the user chooses Review later", () => {
     render(<SmsReviewScreen />);
     const props = mockTransactionReview.mock.calls[0]?.[0];
-    if (!props) throw new Error("TransactionReview was not rendered");
 
-    expect(props.partialResults.safeguardSummary).toEqual(mockSafeguardSummary);
-    expect(props.partialResults.retryableCount).toBe(2);
-    expect(props.partialResults.canRetry).toBe(true);
-    props.partialResults.onRetry();
-    expect(mockRetry).toHaveBeenCalledTimes(1);
+    act(() => props?.onReviewLater());
 
-    props.onBack();
-    expect(mockClearTransactions).toHaveBeenCalledTimes(1);
-    expect(mockRouterBack).toHaveBeenCalledTimes(1);
+    expect(mockRouterReplace).toHaveBeenCalledWith("/(private)/(tabs)");
+    expect(mockClearTransactions).not.toHaveBeenCalled();
+    expect(mockDiscardAll).not.toHaveBeenCalled();
   });
 
-  it("preserves transient state while opening privacy details", () => {
+  it("opens generalized privacy details without clearing durable work", () => {
+    mockRetryState = { ...mockRetryState, isConsentRequired: true };
     render(<SmsReviewScreen />);
     const consentProps = mockConsentSheet.mock.calls.at(-1)?.[0];
-    if (!consentProps) throw new Error("Consent sheet was not rendered");
 
-    act(() => consentProps.onPrivacyDetails());
-    focusCleanup?.();
+    act(() => consentProps?.onPrivacyDetails());
 
-    expect(mockDismissConsentRequired).toHaveBeenCalledTimes(1);
-    expect(mockRouterPush).toHaveBeenCalledWith("/ai-privacy-details");
+    expect(mockRouterPush).toHaveBeenCalledWith("/privacy-details");
     expect(mockClearTransactions).not.toHaveBeenCalled();
   });
 
-  it("clears transient state when the review route unmounts", () => {
-    const { unmount } = render(<SmsReviewScreen />);
+  it("discards every suggestion only after final confirmation", async () => {
+    render(<SmsReviewScreen />);
+    const reviewProps = mockTransactionReview.mock.calls[0]?.[0];
 
-    unmount();
+    act(() => reviewProps?.onDiscard());
+    const confirmation = mockConfirmationModal.mock.calls.at(-1)?.[0];
+    expect(confirmation?.visible).toBe(true);
+    act(() => confirmation?.onConfirm());
 
+    await waitFor(() => expect(mockDiscardAll).toHaveBeenCalledWith("user-1"));
     expect(mockClearTransactions).toHaveBeenCalledTimes(1);
+    expect(mockRouterReplace).toHaveBeenCalledWith("/(private)/(tabs)");
   });
 
-  it("clears transient state after discard and only after the successful save route unmounts", async () => {
+  it("saves selected drafts atomically and enters loading before navigation", async () => {
     render(<SmsReviewScreen />);
     const reviewProps = mockTransactionReview.mock.calls[0]?.[0];
     if (!reviewProps) throw new Error("TransactionReview was not rendered");
 
-    act(() => reviewProps.onDiscard());
-    const modalProps = mockConfirmationModal.mock.calls.at(-1)?.[0];
-    if (!modalProps) throw new Error("ConfirmationModal was not rendered");
-    act(() => modalProps.onConfirm());
-    expect(mockRouterReplace).toHaveBeenCalledWith("/(private)/(tabs)");
-
     await act(async () => {
-      await reviewProps.onSave([mockTransaction], new Map(), new Map());
+      await reviewProps.onSave(
+        [mockTransaction],
+        new Map([[0, "account-1"]]),
+        new Map()
+      );
+    });
+
+    expect(mockSaveSelectedDrafts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedUserId: "user-1",
+        transactionAccountMap: new Map([[0, "account-1"]]),
+      })
+    );
+    expect(mockShowToast).toHaveBeenCalledWith({
+      type: "success",
+      title: "sms_review_saved:1",
     });
     expect(mockRouterReplace).toHaveBeenCalledWith(
       "/(private)/(tabs)/transactions"
     );
-    expect(mockClearTransactions).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("transaction-review")).toBeNull();
   });
 
-  it("passes retry errors to the inline notice", () => {
-    mockRetryState = { ...mockRetryState, hasRetryError: true };
-
-    render(<SmsReviewScreen />);
-
-    expect(
-      mockTransactionReview.mock.calls[0]?.[0].partialResults.hasRetryError
-    ).toBe(true);
-  });
-
-  it("disables review actions while unresolved messages are retrying", () => {
-    mockRetryState = { ...mockRetryState, isRetrying: true };
-
-    render(<SmsReviewScreen />);
-
-    expect(mockTransactionReview.mock.calls[0]?.[0].isSaving).toBe(true);
-  });
-
-  it("disables unresolved-message retry while transactions are saving", async () => {
-    let finishSave: (() => void) | undefined;
-    mockBatchCreateTransactions.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishSave = () =>
-            resolve({ savedCount: 1, failedCount: 0, errors: [] });
-        })
+  it("does not expose technical storage errors in save feedback", async () => {
+    mockSaveSelectedDrafts.mockRejectedValueOnce(
+      new Error("sqlite disk is full")
     );
-
-    const { rerender } = render(<SmsReviewScreen />);
-    const initialProps = mockTransactionReview.mock.calls.at(-1)?.[0];
-    if (!initialProps) throw new Error("TransactionReview was not rendered");
-
-    let savePromise: Promise<void> | undefined;
-    act(() => {
-      savePromise = initialProps.onSave(
-        [mockTransaction],
-        new Map(),
-        new Map()
-      );
-    });
-    rerender(<SmsReviewScreen />);
-
-    const savingProps = mockTransactionReview.mock.calls.at(-1)?.[0];
-    expect(savingProps?.partialResults.canRetry).toBe(false);
-
-    await act(async () => {
-      finishSave?.();
-      await savePromise;
-    });
-  });
-
-  it("keeps Save enabled and does not advance the sync checkpoint for a permanent remainder", async () => {
-    mockRetryState = {
-      ...mockRetryState,
-      unresolvedCount: 1,
-      retryableCount: 0,
-    };
-
     render(<SmsReviewScreen />);
     const reviewProps = mockTransactionReview.mock.calls[0]?.[0];
     if (!reviewProps) throw new Error("TransactionReview was not rendered");
-
-    expect(reviewProps.partialResults).toEqual(
-      expect.objectContaining({
-        safeguardSummary: mockSafeguardSummary,
-        canRetry: false,
-      })
-    );
-    expect(reviewProps.isSaving).toBe(false);
 
     await act(async () => {
       await reviewProps.onSave([mockTransaction], new Map(), new Map());
     });
 
-    expect(mockMarkSyncComplete).not.toHaveBeenCalled();
-    expect(mockClearTransactions).not.toHaveBeenCalled();
+    expect(mockShowToast).toHaveBeenCalledWith({
+      type: "error",
+      title: "save_error",
+      message: "sms_review_save_failed_message",
+    });
   });
 
-  it("shows an honest partial-result notice when no transactions were accepted", () => {
-    mockReviewTransactions = [];
-    mockRetryState = {
-      ...mockRetryState,
-      unresolvedCount: 2,
-      retryableCount: 0,
-    };
+  it("shows partial-result guidance when no draft was accepted", () => {
+    mockQueueItems = [];
+    mockRetryState = { ...mockRetryState, retryableCount: 0 };
 
     render(<SmsReviewScreen />);
 
@@ -356,13 +378,20 @@ describe("SMS review route", () => {
     expect(screen.getByText("no_transactions_to_review")).toBeTruthy();
   });
 
-  it("re-consents and retries unresolved messages after consent expires", async () => {
+  it("shows the skeleton while the current-user queue is loading", () => {
+    mockQueueLoading = true;
+
+    render(<SmsReviewScreen />);
+
+    expect(screen.queryByTestId("transaction-review")).toBeNull();
+  });
+
+  it("re-consents before retrying unresolved messages", async () => {
     mockRetryState = { ...mockRetryState, isConsentRequired: true };
     render(<SmsReviewScreen />);
     const consentProps = mockConsentSheet.mock.calls.at(-1)?.[0];
     if (!consentProps) throw new Error("Consent sheet was not rendered");
 
-    expect(consentProps.visible).toBe(true);
     await act(async () => {
       await consentProps.onContinue();
     });
@@ -370,36 +399,5 @@ describe("SMS review route", () => {
     expect(mockGrantConsent).toHaveBeenCalledTimes(1);
     expect(mockDismissConsentRequired).toHaveBeenCalledTimes(1);
     expect(mockRetry).toHaveBeenCalledTimes(1);
-  });
-
-  it("renders consent recovery when a partial review has no transactions", () => {
-    mockReviewTransactions = [];
-    mockRetryState = { ...mockRetryState, isConsentRequired: true };
-
-    render(<SmsReviewScreen />);
-
-    expect(screen.getByText("no_transactions_to_review")).toBeTruthy();
-    expect(mockConsentSheet).toHaveBeenCalledWith(
-      expect.objectContaining({ visible: true })
-    );
-  });
-
-  it("keeps consent recovery open when granting consent fails", async () => {
-    mockRetryState = { ...mockRetryState, isConsentRequired: true };
-    mockGrantConsent.mockRejectedValueOnce(new Error("offline"));
-    render(<SmsReviewScreen />);
-    const consentProps = mockConsentSheet.mock.calls.at(-1)?.[0];
-    if (!consentProps) throw new Error("Consent sheet was not rendered");
-
-    await act(async () => {
-      await consentProps.onContinue();
-    });
-
-    expect(mockDismissConsentRequired).not.toHaveBeenCalled();
-    expect(mockRetry).not.toHaveBeenCalled();
-    expect(mockShowToast).toHaveBeenCalledWith({
-      type: "error",
-      title: "ai_consent_retry_error",
-    });
   });
 });

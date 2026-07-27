@@ -18,11 +18,14 @@ import { Category } from "./models/Category";
 import { DailySnapshotAssets } from "./models/DailySnapshotAssets";
 import { DailySnapshotBalance } from "./models/DailySnapshotBalance";
 import { DailySnapshotNetWorth } from "./models/DailySnapshotNetWorth";
+import { DismissedSmsFingerprint } from "./models/DismissedSmsFingerprint";
 import { Debt } from "./models/Debt";
 import { MarketRate } from "./models/MarketRate";
 import { Profile } from "./models/Profile";
 import { RecurringPayment } from "./models/RecurringPayment";
 import { SmsAiNegativeOutcome } from "./models/SmsAiNegativeOutcome";
+import { SmsReviewDraftItem } from "./models/SmsReviewDraftItem";
+import { SmsReviewQueue } from "./models/SmsReviewQueue";
 import { Transaction } from "./models/Transaction";
 import { Transfer } from "./models/Transfer";
 import { UserCategorySettings } from "./models/UserCategorySettings";
@@ -115,6 +118,9 @@ export const database = new Database({
     Debt,
     RecurringPayment,
     SmsAiNegativeOutcome,
+    SmsReviewQueue,
+    SmsReviewDraftItem,
+    DismissedSmsFingerprint,
     Transaction,
     Transfer,
     Budget,

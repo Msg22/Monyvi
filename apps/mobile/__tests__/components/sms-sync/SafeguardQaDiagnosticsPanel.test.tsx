@@ -39,6 +39,7 @@ const diagnostics: SmsSafeguardQaDiagnosticsViewModel = {
     aiResultCount: 0,
     deferredAiCount: 0,
     oversizedCount: 3,
+    unresolvedCount: 0,
   },
   availability: null,
 };

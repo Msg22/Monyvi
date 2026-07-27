@@ -7,6 +7,7 @@ export * from "./net-worth/net-worth-calculations";
 export * from "./parsers/notification-parser";
 export * from "./parsers";
 export * from "./sms-safeguards";
+export * from "./sms-review-drafts";
 export * from "./transactions";
 export * from "./types";
 export * from "./utils/currency";

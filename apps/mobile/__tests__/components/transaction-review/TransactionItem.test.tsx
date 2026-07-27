@@ -36,8 +36,11 @@ jest.mock("@/context/LocaleContext", () => ({
 }));
 
 jest.mock("react-i18next", () => ({
-  useTranslation: (): { readonly t: (key: string) => string } => ({
-    t: (key: string): string => key,
+  useTranslation: (): {
+    readonly t: (key: string, options?: { readonly name?: string }) => string;
+  } => ({
+    t: (key: string, options?: { readonly name?: string }): string =>
+      options?.name ? `${key}:${options.name}` : key,
   }),
 }));
 
@@ -207,6 +210,26 @@ describe("TransactionItem", () => {
     expect(screen.getByTestId("transaction-review-row")).toHaveProp(
       "className",
       expect.stringContaining("dark:bg-background-dark")
+    );
+  });
+
+  it("names the affected suggestion in the discard action label", () => {
+    render(
+      <TransactionItem
+        transaction={createTransaction()}
+        index={0}
+        isSelected
+        accountName="QNB Account"
+        onToggleSelect={jest.fn()}
+        onPress={jest.fn()}
+        isSmsWorkspace
+        onDiscard={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("sms-review-discard-0")).toHaveProp(
+      "accessibilityLabel",
+      "sms_review_discard_accessibility:Fixture Shop"
     );
   });
 });

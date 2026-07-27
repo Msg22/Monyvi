@@ -20,7 +20,7 @@ export type SmsCheckpointOutcome =
   | "candidate_too_large"
   | "future_durable"
   | "trusted_local_match"
-  | "memory_suggestion"
+  | "draft_suggestion"
   | "unresolved"
   | "cancelled"
   | "failed";
@@ -60,6 +60,7 @@ const DURABLE_OUTCOMES: ReadonlySet<SmsCheckpointOutcome> = new Set([
   "candidate_too_large",
   "future_durable",
   "trusted_local_match",
+  "draft_suggestion",
 ]);
 
 export async function loadSmsScanSafeguardState(

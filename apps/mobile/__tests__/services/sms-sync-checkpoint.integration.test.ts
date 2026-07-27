@@ -79,6 +79,14 @@ const mockParseSmsWithOrchestrator = jest.fn<
 const mockInitializeSmsParserScanSession = jest.fn<Promise<void>, unknown[]>();
 const mockGetTrustedPrefilterDisposition = jest.fn<string, [unknown]>();
 const mockAssertExpectedCurrentUser = jest.fn<Promise<void>, [string]>();
+const mockGetHandledSmsReviewFingerprints = jest.fn<
+  Promise<ReadonlySet<string>>,
+  []
+>();
+const mockMergeSmsReviewDrafts = jest.fn<
+  Promise<{ readonly insertedCount: number; readonly existingCount: number }>,
+  [unknown]
+>();
 
 jest.mock("expo-crypto", () => ({
   randomUUID: (): string => mockRandomUuid(),
@@ -113,8 +121,12 @@ jest.mock("@monyvi/logic", () => {
   const boundaries = jest.requireActual<
     typeof import("../../../../packages/logic/src/sms-safeguards/sms-scan-boundary")
   >("../../../../packages/logic/src/sms-safeguards/sms-scan-boundary");
+  const draftCodec = jest.requireActual<
+    typeof import("../../../../packages/logic/src/sms-review-drafts/sms-review-draft-codec")
+  >("../../../../packages/logic/src/sms-review-drafts/sms-review-draft-codec");
   return {
     ...transactionKeys,
+    ...draftCodec,
     DEFAULT_SMS_SCAN_POLICY: {
       version: 1,
       processingPolicyVersion: 1,
@@ -181,6 +193,17 @@ jest.mock("@/services/sms-parser-orchestrator", () => ({
   ): Readonly<Record<string, unknown>> => ({ ...diagnostics }),
   getTrustedPrefilterDisposition: (candidate: unknown): string =>
     mockGetTrustedPrefilterDisposition(candidate),
+}));
+
+jest.mock("@/services/sms-review-draft-repository", () => ({
+  getHandledSmsReviewFingerprints: (): Promise<ReadonlySet<string>> =>
+    mockGetHandledSmsReviewFingerprints(),
+  mergeSmsReviewDrafts: (
+    input: unknown
+  ): Promise<{
+    readonly insertedCount: number;
+    readonly existingCount: number;
+  }> => mockMergeSmsReviewDrafts(input),
 }));
 
 jest.mock("@monyvi/db", () => ({
@@ -277,6 +300,11 @@ describe("SMS sync checkpoint integration", () => {
     mockRandomUuid.mockReturnValue("scan-session-id");
     mockAssertExpectedCurrentUser.mockReset();
     mockAssertExpectedCurrentUser.mockResolvedValue(undefined);
+    mockGetHandledSmsReviewFingerprints.mockResolvedValue(new Set());
+    mockMergeSmsReviewDrafts.mockResolvedValue({
+      insertedCount: 0,
+      existingCount: 0,
+    });
   });
 
   it("uses one fixed scan clock for the inclusive rolling 30-day boundary", async () => {
@@ -404,7 +432,7 @@ describe("SMS sync checkpoint integration", () => {
     );
   });
 
-  it("does not advance past a suggestion that exists only in memory", async () => {
+  it("persists a review draft before advancing through its durable outcome", async () => {
     const first = createSmsMessage({ id: "first" });
     const second = createSmsMessage({ id: "second", date: first.date + 1 });
     mockReadSmsInbox.mockResolvedValue([first, second]);
@@ -428,9 +456,19 @@ describe("SMS sync checkpoint integration", () => {
 
     await scanAndParseSms(options());
 
+    expect(mockMergeSmsReviewDrafts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedUserId: "user-a",
+        transactions: [expect.objectContaining({ smsFingerprint: "fp-first" })],
+      })
+    );
+    expect(mockMergeSmsReviewDrafts.mock.invocationCallOrder[0]).toBeLessThan(
+      mockFinalizeSmsScanCheckpoint.mock.invocationCallOrder[0]
+    );
+
     const finalizeInput = mockFinalizeSmsScanCheckpoint.mock.calls[0]?.[0];
     expect(finalizeInput?.states.map(({ outcome }) => outcome)).toEqual(
-      expect.arrayContaining(["memory_suggestion", "future_durable"])
+      expect.arrayContaining(["draft_suggestion", "future_durable"])
     );
   });
 
@@ -657,6 +695,6 @@ describe("SMS sync checkpoint integration", () => {
     await scanAndParseSms(options());
 
     const finalizeInput = mockFinalizeSmsScanCheckpoint.mock.calls[0]?.[0];
-    expect(finalizeInput?.states[0]?.outcome).toBe("memory_suggestion");
+    expect(finalizeInput?.states[0]?.outcome).toBe("draft_suggestion");
   });
 });

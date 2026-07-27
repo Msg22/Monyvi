@@ -28,6 +28,7 @@
     "install-check": "npx expo install --check",
     "expo-install": "npx expo install",
     "lint": "eslint app components config constants context hooks providers services utils validation __tests__ --rulesdir ../../scripts/eslint-rules --ext .ts,.tsx --quiet",
+    "typecheck": "tsc --noEmit",
     "e2e": "node scripts/run-ci-e2e.js",
     "e2e:ci": "node scripts/run-ci-e2e.js",
     "e2e:seed": "node scripts/e2e-seed.js seed",

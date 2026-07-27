@@ -34,7 +34,12 @@ import { formatCurrency, type ReviewableTransaction } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import React, { memo, useCallback, useState } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import {
+  type GestureResponderEvent,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import type { TransactionReviewMeta } from "@/contracts/transaction-review";
 import {
@@ -72,6 +77,7 @@ interface TransactionItemProps {
   readonly reviewMeta?: TransactionReviewMeta;
   readonly isSmsWorkspace?: boolean;
   readonly institutionLogo?: InstitutionLogo | null;
+  readonly onDiscard?: (index: number) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -194,6 +200,8 @@ function TransactionItemInner({
   hasMissingInfo = false,
   reviewMeta,
   institutionLogo = null,
+  isSmsWorkspace = false,
+  onDiscard,
 }: TransactionItemProps): React.JSX.Element {
   const [isExpanded, setIsExpanded] = useState(false);
   const { language } = useLocale();
@@ -220,6 +228,14 @@ function TransactionItemInner({
     onToggleSelect(index);
   }, [onToggleSelect, index]);
 
+  const handleDiscard = useCallback(
+    (event: GestureResponderEvent): void => {
+      event.stopPropagation();
+      onDiscard?.(index);
+    },
+    [index, onDiscard]
+  );
+
   const counterpartyText = isVoice
     ? transaction.counterparty
     : transaction.counterparty || "Unknown";
@@ -229,6 +245,21 @@ function TransactionItemInner({
       testID="transaction-review-row"
       className="overflow-hidden border-b border-border bg-background dark:border-border-dark dark:bg-background-dark"
     >
+      {isSmsWorkspace && onDiscard && (
+        <TouchableOpacity
+          testID={`sms-review-discard-${index}`}
+          onPress={handleDiscard}
+          hitSlop={10}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={t("sms_review_discard_accessibility", {
+            name: transaction.counterparty || transaction.originLabel,
+          })}
+          className="absolute end-2 top-2 z-10 h-8 w-8 items-center justify-center rounded-full border border-red-500/40 bg-background dark:bg-background-dark"
+        >
+          <Ionicons name="close" size={18} color={palette.red[400]} />
+        </TouchableOpacity>
+      )}
       <TouchableOpacity
         onPress={handlePress}
         className="flex-row items-center px-4 py-2"
@@ -308,7 +339,9 @@ function TransactionItemInner({
               </Text>
             </View>
 
-            <View className="max-w-32 items-end">
+            <View
+              className={`max-w-32 items-end ${isSmsWorkspace ? "me-8" : ""}`}
+            >
               <Text
                 testID="transaction-review-amount"
                 numberOfLines={1}

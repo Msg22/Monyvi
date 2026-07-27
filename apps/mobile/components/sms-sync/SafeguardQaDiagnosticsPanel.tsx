@@ -9,8 +9,16 @@ interface SafeguardQaDiagnosticsPanelProps {
   readonly diagnostics: SmsSafeguardQaDiagnosticsViewModel | null;
 }
 
+interface ScanCounts {
+  readonly localResultCount: number;
+  readonly aiResultCount: number;
+  readonly deferredAiCount: number;
+  readonly oversizedCount: number;
+  readonly unresolvedCount?: number;
+}
+
 interface ScanCountsProps {
-  readonly counts: SmsSafeguardQaDiagnosticsViewModel["currentScan"];
+  readonly counts: ScanCounts;
   readonly t: (key: string, options?: Record<string, unknown>) => string;
 }
 
@@ -39,11 +47,13 @@ function ScanCounts({ counts, t }: ScanCountsProps): React.JSX.Element {
           count: counts.oversizedCount,
         })}
       </Text>
-      <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
-        {t("qa_safeguard_unresolved_results", {
-          count: counts.unresolvedCount,
-        })}
-      </Text>
+      {counts.unresolvedCount !== undefined && (
+        <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
+          {t("qa_safeguard_unresolved_results", {
+            count: counts.unresolvedCount,
+          })}
+        </Text>
+      )}
     </View>
   );
 }

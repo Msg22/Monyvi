@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSmsScanContext } from "@/context/SmsScanContext";
 import { retrySmsReviewCandidates } from "@/services/sms-review-retry-service";
+import { mergeSmsReviewDrafts } from "@/services/sms-review-draft-repository";
 import { isAiConsentRequiredError } from "@/services/ai-sms-parser-service";
 import { logger } from "@/utils/logger";
 
@@ -16,7 +17,6 @@ export interface UseSmsReviewRetryResult {
 
 export function useSmsReviewRetry(): UseSmsReviewRetryResult {
   const {
-    transactions,
     unresolvedCandidates,
     parseContext,
     initiatingUserId,
@@ -59,16 +59,20 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
 
     try {
       const result = await retrySmsReviewCandidates({
-        transactions,
+        transactions: [],
         unresolvedCandidates,
         parseContext,
         abortSignal: abortController.signal,
         expectedUserId: initiatingUserId,
       });
       if (generationRef.current !== generation) return;
+      await mergeSmsReviewDrafts({
+        transactions: result.transactions,
+        expectedUserId: initiatingUserId,
+      });
+      if (generationRef.current !== generation) return;
       updateReviewSession(
         {
-          transactions: result.transactions,
           unresolvedCandidates: result.unresolvedCandidates,
         },
         reviewSessionId
@@ -96,7 +100,6 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
     parseContext,
     initiatingUserId,
     reviewSessionId,
-    transactions,
     unresolvedCandidates,
     updateReviewSession,
   ]);
