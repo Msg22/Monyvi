@@ -17,7 +17,11 @@ import {
   validateTransactionForm,
 } from "@/validation/transaction-validation";
 import type { Category, CurrencyType, TransactionType } from "@monyvi/db";
-import { parseAmountInput, type ReviewableTransaction } from "@monyvi/logic";
+import {
+  parseAmountInput,
+  type ParsedSmsTransaction,
+  type ReviewableTransaction,
+} from "@monyvi/logic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export interface UseTransactionEditStateReturn {
@@ -92,7 +96,7 @@ export interface UseTransactionEditStateReturn {
     readonly handleCancelNew: () => void;
     readonly handleStartNewToAccount: () => void;
     readonly handleCancelNewToAccount: () => void;
-    readonly handleSave: () => void;
+    readonly handleSave: () => Promise<void>;
     readonly handleSelectAccount: (opt: AccountOption) => void;
     readonly handleCurrencySelect: (currency: CurrencyType) => void;
   };
@@ -107,7 +111,9 @@ export interface UseTransactionEditStateProps {
   readonly categoryMap: ReadonlyMap<string, Category>;
   readonly expenseCategories: readonly Category[];
   readonly incomeCategories: readonly Category[];
-  readonly onSave: (edits: TransactionEdits) => void;
+  readonly onSave: (
+    edits: TransactionEdits
+  ) => boolean | void | Promise<boolean | void>;
   readonly onCreatePendingAccount: (account: PendingAccount) => void;
   readonly allowTransactionCurrencyEdit?: boolean;
 }
@@ -130,6 +136,8 @@ export function useTransactionEditState({
     () => getEditFormConfig(transaction),
     [transaction]
   );
+  const smsTransaction =
+    transaction.source === "SMS" ? (transaction as ParsedSmsTransaction) : null;
 
   const readTransactionNote = (tx: ReviewableTransaction): string => {
     const value = (tx as { note?: unknown }).note;
@@ -165,9 +173,11 @@ export function useTransactionEditState({
   const [newAccountError, setNewAccountError] = useState<string | null>(null);
 
   const [selectedToAccountId, setSelectedToAccountId] = useState<string | null>(
-    null
+    smsTransaction?.toAccountId ?? null
   );
-  const [selectedToAccountName, setSelectedToAccountName] = useState("");
+  const [selectedToAccountName, setSelectedToAccountName] = useState(
+    smsTransaction?.toAccountName ?? ""
+  );
   const [newToAccountName, setNewToAccountName] = useState("Cash");
   const [isToAccountPickerOpen, setIsToAccountPickerOpen] = useState(false);
   const [isCreatingNewToAccount, setIsCreatingNewToAccount] = useState(false);
@@ -327,25 +337,33 @@ export function useTransactionEditState({
 
     if (formConfig.showToAccount) {
       setIsToAccountPickerOpen(false);
+      const persistedToAccount = smsTransaction?.toAccountId
+        ? cashAccountOptions.find(
+            (option) => option.id === smsTransaction.toAccountId
+          )
+        : undefined;
       const hasCash = cashAccountOptions.length > 0;
       setIsCreatingNewToAccount(!hasCash);
-      if (hasCash) {
+      if (persistedToAccount) {
+        setSelectedToAccountId(persistedToAccount.id);
+        setSelectedToAccountName(persistedToAccount.name);
+      } else if (hasCash) {
         const currencyMatch = cashAccountOptions.find(
-          (o) => o.currency === transaction.currency
+          (option) => option.currency === transaction.currency
         );
-        const fallback = cashAccountOptions[0];
-        const selected = currencyMatch ?? fallback;
+        const selected = currencyMatch ?? cashAccountOptions[0];
         setSelectedToAccountId(selected.id);
         setSelectedToAccountName(selected.name);
       } else {
         setSelectedToAccountId(null);
-        setSelectedToAccountName("");
-        setNewToAccountName("Cash");
+        setSelectedToAccountName(smsTransaction?.toAccountName ?? "");
+        setNewToAccountName(smsTransaction?.toAccountName ?? "Cash");
       }
     }
   }, [
     transactionIdentity,
     transaction,
+    smsTransaction,
     currentAccountId,
     currentAccountName,
     accountOptions,
@@ -425,7 +443,7 @@ export function useTransactionEditState({
     setIsCurrencyPickerOpen(false);
   }, []);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async (): Promise<void> => {
     const isCreatingNewAccount = isCreatingNew || !hasBankAccounts;
     let resolvedAccountId: string | null = null;
     let resolvedAccountName: string | null = null;
@@ -498,10 +516,6 @@ export function useTransactionEditState({
 
     setFormErrors({});
 
-    if (pendingAccountToCreate) {
-      onCreatePendingAccount(pendingAccountToCreate);
-    }
-
     const edits = buildTransactionEdits({
       accountId: resolvedAccountId,
       accountName: resolvedAccountName,
@@ -525,9 +539,25 @@ export function useTransactionEditState({
           : selectedToAccountName
         : undefined,
       toAccountConfirmed: formConfig.showToAccount ? true : undefined,
+      pendingAccount:
+        transaction.source === "SMS"
+          ? (pendingAccountToCreate ??
+            pendingAccounts.find(
+              (account) => account.tempId === resolvedAccountId
+            ) ??
+            null)
+          : undefined,
     });
 
-    onSave(edits);
+    try {
+      const didSave = await onSave(edits);
+      if (didSave === false) return;
+      if (pendingAccountToCreate) {
+        onCreatePendingAccount(pendingAccountToCreate);
+      }
+    } catch {
+      // Keep the form open; the durable owner provides the error feedback.
+    }
   }, [
     amount,
     note,

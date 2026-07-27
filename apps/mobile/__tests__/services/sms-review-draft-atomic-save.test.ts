@@ -32,7 +32,7 @@ jest.mock("@/services/sms-review-draft-reference-service", () => ({
 import {
   saveSelectedSmsReviewDrafts,
   SmsReviewDraftSaveValidationError,
-} from "@/services/sms-review-save-service";
+} from "@/services/sms-review-draft-save-service";
 import type {
   RevalidatedSmsReviewDraftItem,
   SmsReviewDraftHardValidationReason,
@@ -128,7 +128,7 @@ describe("saveSelectedSmsReviewDrafts", () => {
   it("revalidates the effective selected account before blocking save", async () => {
     mockRevalidate.mockImplementation(
       (
-        items: readonly ReturnType<typeof item>[]
+        items: ReadonlyArray<ReturnType<typeof item>>
       ): Promise<readonly RevalidatedSmsReviewDraftItem[]> =>
         Promise.resolve(
           items.map((draft) => ({ ...draft, hardValidationReasons: [] }))
@@ -158,7 +158,7 @@ describe("saveSelectedSmsReviewDrafts", () => {
   it("blocks a category that became unavailable before the atomic writer", async () => {
     mockRevalidate.mockImplementation(
       (
-        items: readonly ReturnType<typeof item>[]
+        items: ReadonlyArray<ReturnType<typeof item>>
       ): Promise<readonly RevalidatedSmsReviewDraftItem[]> =>
         Promise.resolve(
           items.map((draft) => ({

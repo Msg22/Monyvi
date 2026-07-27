@@ -1,4 +1,7 @@
-import type { ReviewableTransaction } from "@monyvi/logic";
+import type {
+  ParsedSmsTransaction,
+  ReviewableTransaction,
+} from "@monyvi/logic";
 
 const mockGetCurrentUserId = jest.fn<Promise<string | null>, []>();
 const mockEnsureCashAccount = jest.fn();
@@ -189,6 +192,35 @@ describe("batchCreateTransactions", () => {
       smsFingerprint: "sms-hash-1",
     });
     expect(persistedRecord).not.toHaveProperty("rawSmsBody");
+  });
+
+  it("uses the canonical SMS fingerprint when the compatibility hash is absent", async () => {
+    const account = createAccount("acc-1", 1000);
+    mockQueryOwned.mockReturnValue({
+      fetch: jest.fn<Promise<readonly MockAccount[]>, []>(() =>
+        Promise.resolve([account])
+      ),
+    });
+    const transaction: ParsedSmsTransaction = {
+      ...createReviewableTransaction({ deduplicationHash: undefined }),
+      source: "SMS",
+      smsFingerprint: "canonical-sms-fingerprint",
+      senderDisplayName: "QNB EGYPT",
+      rawSmsBody: "Private SMS body",
+    };
+
+    const result = await batchCreateTransactions(
+      [transaction],
+      new Map([[0, "acc-1"]])
+    );
+
+    expect(result).toEqual({ savedCount: 1, failedCount: 0, errors: [] });
+    expect(mockHasExistingSmsFingerprint).toHaveBeenCalledWith(
+      "canonical-sms-fingerprint"
+    );
+    expect(mockPrepareTransactionCreate.mock.results[0]?.value).toMatchObject({
+      smsFingerprint: "canonical-sms-fingerprint",
+    });
   });
 
   it("does not mark a fingerprint as seen until the SMS transaction is valid", async () => {

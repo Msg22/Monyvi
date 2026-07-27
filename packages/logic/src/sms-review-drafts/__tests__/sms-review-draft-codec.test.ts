@@ -30,15 +30,51 @@ function createTransaction(
     rawSmsBody: "Your Debit Card had a transaction.",
     isAtmWithdrawal: false,
     cardLast4: "2132",
+    toAccountId: "account-cash",
+    toAccountName: "Cash",
+    pendingAccount: {
+      tempId: "pending-qnb",
+      name: "QNB EGYPT",
+      currency: "EGP",
+      type: "BANK",
+      institutionId: "institution-qnb",
+      providerDisplayName: "QNB EGYPT",
+      senderDisplayName: "QNB EGYPT",
+      cardLast4: "2132",
+    },
     ...overrides,
   };
 }
 
+function createStoredTransaction(): Record<string, unknown> {
+  const { date, ...transaction } = createTransaction();
+  return {
+    ...transaction,
+    date: date.toISOString(),
+  };
+}
 
-const invalidPayloadCases: readonly [
-  SmsReviewDraftCodecErrorCode,
-  { readonly version: number; readonly json: string },
-][] = [
+function expectCodecError(
+  action: () => unknown,
+  code: SmsReviewDraftCodecErrorCode
+): void {
+  try {
+    action();
+    throw new Error("Expected SMS review draft decoding to fail.");
+  } catch (error: unknown) {
+    expect(error).toBeInstanceOf(SmsReviewDraftCodecError);
+    if (!(error instanceof SmsReviewDraftCodecError)) throw error;
+    expect(error.code).toBe(code);
+    expect(error.message).not.toContain("Your Debit Card");
+  }
+}
+
+const invalidPayloadCases: ReadonlyArray<
+  readonly [
+    SmsReviewDraftCodecErrorCode,
+    { readonly version: number; readonly json: string },
+  ]
+> = [
   ["unsupported_version", { version: 2, json: "{}" }],
   ["malformed_payload", { version: 1, json: "not-json" }],
   [
@@ -48,7 +84,7 @@ const invalidPayloadCases: readonly [
       json: JSON.stringify({
         version: 1,
         transaction: {
-          ...JSON.parse(encodeSmsReviewDraft(createTransaction()).json).transaction,
+          ...createStoredTransaction(),
           date: "not-a-date",
         },
       }),
@@ -83,31 +119,27 @@ describe("SMS review draft codec", () => {
   it.each(invalidPayloadCases)(
     "rejects %s without exposing payload content",
     (code, input) => {
-    expect(() =>
-      decodeSmsReviewDraft({
-        ...input,
-        expectedFingerprint: "fingerprint-1",
-      })
-    ).toThrow(
-      expect.objectContaining({
-        code,
-        message: expect.not.stringContaining("Your Debit Card"),
-      })
-    );
-  });
+      expectCodecError(
+        () =>
+          decodeSmsReviewDraft({
+            ...input,
+            expectedFingerprint: "fingerprint-1",
+          }),
+        code
+      );
+    }
+  );
 
   it("rejects a fingerprint mismatch", () => {
     const encoded = encodeSmsReviewDraft(createTransaction());
 
-    expect(() =>
-      decodeSmsReviewDraft({
-        ...encoded,
-        expectedFingerprint: "different-fingerprint",
-      })
-    ).toThrow(
-      expect.objectContaining({
-        code: "fingerprint_mismatch",
-      })
+    expectCodecError(
+      () =>
+        decodeSmsReviewDraft({
+          ...encoded,
+          expectedFingerprint: "different-fingerprint",
+        }),
+      "fingerprint_mismatch"
     );
   });
 

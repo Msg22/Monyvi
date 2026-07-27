@@ -1,4 +1,5 @@
 import { useTransactionEditState } from "@/hooks/useTransactionEditState";
+import type { PendingAccount } from "@/services/pending-account-service";
 import type { AccountWithBankDetails } from "@/services/sms-account-matcher";
 import type { TransactionEdits } from "@/services/sms-edit-modal-service";
 import type { Category } from "@monyvi/db";
@@ -63,7 +64,9 @@ describe("useTransactionEditState", () => {
       expect(result.current.state.selectedCategoryId).toBe(category.id)
     );
 
-    act(() => result.current.accountHandlers.handleSave());
+    await act(async () => {
+      await result.current.accountHandlers.handleSave();
+    });
 
     expect(onSave).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -82,7 +85,9 @@ describe("useTransactionEditState", () => {
       });
       result.current.setters.setSelectedCategoryId(category.id);
     });
-    act(() => result.current.accountHandlers.handleSave());
+    await act(async () => {
+      await result.current.accountHandlers.handleSave();
+    });
 
     expect(onSave).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -124,10 +129,116 @@ describe("useTransactionEditState", () => {
     act(() => result.current.accountHandlers.handleCurrencySelect("USD"));
     expect(result.current.state.newAccountCurrency).toBe("USD");
 
-    act(() => result.current.accountHandlers.handleSave());
+    await act(async () => {
+      await result.current.accountHandlers.handleSave();
+    });
 
     expect(onSave).toHaveBeenLastCalledWith(
       expect.objectContaining({ currency: "USD" })
     );
+  });
+
+  it("persists a new account snapshot before adding it to in-memory state", async () => {
+    const category = {
+      id: "cat-food",
+      displayName: "Food",
+    } as unknown as Category;
+    let resolveSave!: () => void;
+    const saveResult = new Promise<void>((resolve) => {
+      resolveSave = resolve;
+    });
+    const onSave = jest.fn<Promise<void>, [TransactionEdits]>(() => saveResult);
+    const onCreatePendingAccount = jest.fn<void, [PendingAccount]>();
+
+    const { result } = renderHook(() =>
+      useTransactionEditState({
+        transaction: createTransaction(),
+        currentAccountId: null,
+        currentAccountName: null,
+        accounts: [],
+        pendingAccounts: [],
+        categoryMap: new Map([[category.id, category]]),
+        expenseCategories: [category],
+        incomeCategories: [],
+        onSave,
+        onCreatePendingAccount,
+      })
+    );
+
+    await waitFor(() =>
+      expect(result.current.state.selectedCategoryId).toBe(category.id)
+    );
+
+    await act(async () => {
+      const saving = result.current.accountHandlers.handleSave();
+
+      const savedEdits = onSave.mock.calls[0]?.[0];
+      expect(savedEdits?.accountId).toMatch(/^pending-/);
+      expect(savedEdits?.pendingAccount).toMatchObject({
+        name: "Unknown sender",
+        currency: "EGP",
+        type: "BANK",
+      });
+      expect(onCreatePendingAccount).not.toHaveBeenCalled();
+      resolveSave();
+      await saving;
+    });
+
+    const createdAccount = onCreatePendingAccount.mock.calls[0]?.[0];
+    expect(createdAccount?.tempId).toMatch(/^pending-/);
+    expect(createdAccount?.name).toBe("Unknown sender");
+  });
+
+  it("clears a durable pending-account snapshot after selecting an existing account", async () => {
+    const account = createAccount();
+    const pendingAccount: PendingAccount = {
+      tempId: "pending-qnb",
+      name: "QNB EGYPT",
+      currency: "EGP",
+      type: "BANK",
+      senderDisplayName: "QNB EGYPT",
+    };
+    const category = {
+      id: "cat-food",
+      displayName: "Food",
+    } as unknown as Category;
+    const onSave = jest.fn<void, [TransactionEdits]>();
+    const transaction = {
+      ...createTransaction(),
+      accountId: pendingAccount.tempId,
+    };
+
+    const { result } = renderHook(() =>
+      useTransactionEditState({
+        transaction,
+        currentAccountId: pendingAccount.tempId,
+        currentAccountName: pendingAccount.name,
+        accounts: [account],
+        pendingAccounts: [pendingAccount],
+        categoryMap: new Map([[category.id, category]]),
+        expenseCategories: [category],
+        incomeCategories: [],
+        onSave,
+        onCreatePendingAccount: jest.fn(),
+      })
+    );
+
+    await waitFor(() =>
+      expect(result.current.state.selectedCategoryId).toBe(category.id)
+    );
+    act(() => {
+      result.current.accountHandlers.handleSelectAccount({
+        id: account.id,
+        name: account.name,
+        currency: account.currency,
+        isPending: false,
+        type: account.type,
+      });
+    });
+    await act(async () => {
+      await result.current.accountHandlers.handleSave();
+    });
+
+    expect(onSave.mock.calls[0]?.[0].pendingAccount).toBeNull();
   });
 });

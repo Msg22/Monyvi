@@ -54,6 +54,19 @@ const ReviewReasonSchema = z.enum([
   "non_transactional",
 ]);
 
+const PendingAccountSchema = z
+  .object({
+    tempId: z.string().min(1),
+    name: z.string().min(1),
+    currency: CurrencySchema,
+    type: z.enum(["BANK", "DIGITAL_WALLET"]),
+    institutionId: z.string().nullable().optional(),
+    providerDisplayName: z.string().nullable().optional(),
+    senderDisplayName: z.string().min(1),
+    cardLast4: z.string().optional(),
+  })
+  .strict();
+
 const StoredTransactionSchema = z
   .object({
     amount: z.number().finite().positive(),
@@ -76,6 +89,9 @@ const StoredTransactionSchema = z
     rawSmsBody: z.string(),
     isAtmWithdrawal: z.boolean().optional(),
     cardLast4: z.string().optional(),
+    toAccountId: z.string().min(1).optional(),
+    toAccountName: z.string().min(1).optional(),
+    pendingAccount: PendingAccountSchema.optional(),
   })
   .strict();
 
@@ -95,12 +111,9 @@ export type SmsReviewDraftCodecErrorCode =
   | "fingerprint_mismatch";
 
 export class SmsReviewDraftCodecError extends Error {
-  public readonly code: SmsReviewDraftCodecErrorCode;
-
-  public constructor(code: SmsReviewDraftCodecErrorCode) {
+  public constructor(public readonly code: SmsReviewDraftCodecErrorCode) {
     super(`SMS review draft cannot be read (${code}).`);
     this.name = "SmsReviewDraftCodecError";
-    this.code = code;
   }
 }
 
@@ -159,7 +172,9 @@ function assertSupportedVersion(version: number): void {
   }
 }
 
-function restoreTransaction(transaction: StoredTransaction): ParsedSmsTransaction {
+function restoreTransaction(
+  transaction: StoredTransaction
+): ParsedSmsTransaction {
   const date = new Date(transaction.date);
   if (Number.isNaN(date.getTime())) {
     throw new SmsReviewDraftCodecError("invalid_date");

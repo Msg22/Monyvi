@@ -42,6 +42,8 @@ interface TransactionEdits {
   /** Cash account name for ATM withdrawal destination (optional) */
   readonly toAccountName?: string | null;
   readonly toAccountConfirmed?: boolean;
+  /** Durable snapshot for a newly created account until final batch save. */
+  readonly pendingAccount?: PendingAccount | null;
   /** User-edited note (e.g. itemized voice description) */
   readonly note?: string;
 }
@@ -69,6 +71,7 @@ interface BuildTransactionEditsInput {
   /** Cash account name for ATM withdrawal destination (optional) */
   readonly toAccountName?: string | null;
   readonly toAccountConfirmed?: boolean;
+  readonly pendingAccount?: PendingAccount | null;
   /** User-edited note (e.g. itemized voice description) */
   readonly note?: string;
 }
@@ -171,6 +174,7 @@ function buildTransactionEdits(
     toAccountId: input.toAccountId,
     toAccountName: input.toAccountName,
     toAccountConfirmed: input.toAccountConfirmed === true ? true : undefined,
+    pendingAccount: input.pendingAccount,
     note: input.note,
   };
 }

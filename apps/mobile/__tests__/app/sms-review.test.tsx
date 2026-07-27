@@ -205,7 +205,7 @@ jest.mock("@/services/sms-review-draft-command-service", () => ({
   setSmsReviewDraftSelection: jest.fn(),
 }));
 
-jest.mock("@/services/sms-review-save-service", () => {
+jest.mock("@/services/sms-review-draft-save-service", () => {
   class MockValidationError extends Error {}
   return {
     saveSelectedSmsReviewDrafts: (...args: readonly unknown[]): unknown =>
@@ -284,14 +284,14 @@ describe("SMS review route", () => {
     expect(props?.partialResults?.canRetry).toBe(true);
   });
 
-  it("keeps drafts intact when the user chooses Review later", () => {
+  it("keeps durable drafts but clears transient scan data when reviewing later", () => {
     render(<SmsReviewScreen />);
     const props = mockTransactionReview.mock.calls[0]?.[0];
 
     act(() => props?.onReviewLater());
 
+    expect(mockClearTransactions).toHaveBeenCalledTimes(1);
     expect(mockRouterReplace).toHaveBeenCalledWith("/(private)/(tabs)");
-    expect(mockClearTransactions).not.toHaveBeenCalled();
     expect(mockDiscardAll).not.toHaveBeenCalled();
   });
 

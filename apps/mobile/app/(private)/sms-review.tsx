@@ -20,7 +20,7 @@ import {
 import {
   saveSelectedSmsReviewDrafts,
   SmsReviewDraftSaveValidationError,
-} from "@/services/sms-review-save-service";
+} from "@/services/sms-review-draft-save-service";
 import { createSmsSafeguardQaDiagnostics } from "@/services/sms-safeguard-qa-diagnostics-service";
 import {
   flushQueuedTransactions,
@@ -275,6 +275,11 @@ export default function SmsReviewScreen(): React.JSX.Element {
     }
   }, [clearTransactions, queue.userId, router, showToast, t]);
 
+  const handleReviewLater = useCallback((): void => {
+    clearTransactions();
+    router.replace("/(private)/(tabs)");
+  }, [clearTransactions, router]);
+
   const handleRetryConsentContinue = useCallback(async (): Promise<void> => {
     try {
       await aiConsent.grantConsent();
@@ -350,7 +355,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
         onDiscardItem={handleDiscardItem}
         onSave={handleSave}
         onDiscard={() => setDiscardConfirmVisible(true)}
-        onReviewLater={() => router.replace("/(private)/(tabs)")}
+        onReviewLater={handleReviewLater}
         undoBanner={
           undo.undoItem && undo.discardedName
             ? {

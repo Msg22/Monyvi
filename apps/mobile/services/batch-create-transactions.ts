@@ -31,7 +31,10 @@ import {
   Transfer,
   type CurrencyType,
 } from "@monyvi/db";
-import type { ReviewableTransaction } from "@monyvi/logic";
+import type {
+  ParsedSmsTransaction,
+  ReviewableTransaction,
+} from "@monyvi/logic";
 import { Q, type Model } from "@nozbe/watermelondb";
 import { ensureCashAccount } from "./account-service";
 import { getCurrentUserId } from "./supabase";
@@ -85,6 +88,20 @@ function getRuntimeCategoryId(tx: ReviewableTransaction): string | null {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function getSmsFingerprint(
+  transaction: ReviewableTransaction
+): string | undefined {
+  if (transaction.source !== "SMS") return undefined;
+
+  const canonicalFingerprint = (
+    transaction as ParsedSmsTransaction
+  ).smsFingerprint?.trim();
+  if (canonicalFingerprint) return canonicalFingerprint;
+
+  const legacyFingerprint = transaction.deduplicationHash?.trim();
+  return legacyFingerprint || undefined;
 }
 
 async function loadAccessibleCategoryIds(
@@ -190,8 +207,7 @@ export async function prepareBatchCreateTransactions<
 
   for (let index = 0; index < transactions.length; index += 1) {
     const transaction = transactions[index];
-    const smsFingerprint =
-      transaction.source === "SMS" ? transaction.deduplicationHash : undefined;
+    const smsFingerprint = getSmsFingerprint(transaction);
 
     if (transaction.source === "SMS" && !smsFingerprint) {
       errors.push(`Missing SMS fingerprint for transaction index ${index}`);

@@ -30,6 +30,7 @@ export function useSmsReviewUndo(): UseSmsReviewUndoResult {
     null
   );
   const latestDiscardRequestRef = useRef(0);
+  const pendingDiscardsRef = useRef(new Map<string, Promise<void>>());
 
   useEffect(() => {
     if (!undoItem) return;
@@ -39,13 +40,24 @@ export function useSmsReviewUndo(): UseSmsReviewUndoResult {
   }, [undoItem]);
 
   const discard = useCallback(
-    async (draftId: string, userId: string): Promise<void> => {
+    (draftId: string, userId: string): Promise<void> => {
+      const requestKey = `${userId}:${draftId}`;
+      const existingRequest = pendingDiscardsRef.current.get(requestKey);
+      if (existingRequest) return existingRequest;
+
       const requestId = latestDiscardRequestRef.current + 1;
       latestDiscardRequestRef.current = requestId;
-      const discarded = await discardOneSmsReviewDraft(draftId, userId);
-      if (latestDiscardRequestRef.current === requestId) {
-        setUndoItem(discarded);
-      }
+      const request = discardOneSmsReviewDraft(draftId, userId)
+        .then((discarded) => {
+          if (latestDiscardRequestRef.current === requestId) {
+            setUndoItem(discarded);
+          }
+        })
+        .finally(() => {
+          pendingDiscardsRef.current.delete(requestKey);
+        });
+      pendingDiscardsRef.current.set(requestKey, request);
+      return request;
     },
     []
   );

@@ -128,6 +128,18 @@ export interface ReviewableTransaction {
   readonly reviewReasons?: readonly TransactionReviewReason[];
 }
 
+/** Serializable snapshot for an account created inside SMS review. */
+export interface PendingSmsAccountDraft {
+  readonly tempId: string;
+  readonly name: string;
+  readonly currency: CurrencyType;
+  readonly type: "BANK" | "DIGITAL_WALLET";
+  readonly institutionId?: string | null;
+  readonly providerDisplayName?: string | null;
+  readonly senderDisplayName: string;
+  readonly cardLast4?: string;
+}
+
 /**
  * Fully parsed SMS transaction ready for user review.
  * Extends ReviewableTransaction with SMS-specific metadata.
@@ -141,6 +153,11 @@ export interface ParsedSmsTransaction extends ReviewableTransaction {
   readonly isAtmWithdrawal?: boolean;
   /** Last 4 digits of card extracted from SMS (for bank account matching) */
   readonly cardLast4?: string;
+  /** Cash account destination selected for an ATM withdrawal. */
+  readonly toAccountId?: string;
+  readonly toAccountName?: string;
+  /** Restores a not-yet-persisted account when the draft is resumed. */
+  readonly pendingAccount?: PendingSmsAccountDraft;
 }
 
 /**

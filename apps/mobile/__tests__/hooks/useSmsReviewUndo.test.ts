@@ -87,6 +87,26 @@ describe("useSmsReviewUndo", () => {
     expect(result.current.undoItem?.draftId).toBe("draft-Second");
   });
 
+  it("reuses an in-flight discard for the same draft", async () => {
+    let resolveDiscard!: (item: VolatileSmsReviewUndoItem) => void;
+    const discardResult = new Promise<VolatileSmsReviewUndoItem>((resolve) => {
+      resolveDiscard = resolve;
+    });
+    mockDiscard.mockReturnValue(discardResult);
+    const { result } = renderHook(() => useSmsReviewUndo());
+
+    await act(async () => {
+      const firstDiscard = result.current.discard("draft-1", "user-1");
+      const repeatedDiscard = result.current.discard("draft-1", "user-1");
+
+      expect(mockDiscard).toHaveBeenCalledTimes(1);
+      resolveDiscard(createUndoItem("First"));
+      await Promise.all([firstDiscard, repeatedDiscard]);
+    });
+
+    expect(result.current.undoItem?.draftId).toBe("draft-First");
+  });
+
   it("hides the banner without restoring the suggestion", async () => {
     mockDiscard.mockResolvedValue(createUndoItem("Hidden"));
     const { result } = renderHook(() => useSmsReviewUndo());

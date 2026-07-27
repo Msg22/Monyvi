@@ -25,9 +25,13 @@ import {
   type TransactionReviewReason,
 } from "@/services/transaction-review-selection";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import type { ReviewableTransaction } from "@monyvi/logic";
+import type {
+  ParsedSmsTransaction,
+  ReviewableTransaction,
+} from "@monyvi/logic";
 import type { TransactionEdits } from "@/services/sms-edit-modal-service";
 import { toggleTransactionTypeFilter } from "@/utils/transaction-review-filters";
+import { useTranslation } from "react-i18next";
 
 export interface ReviewListItem {
   readonly originalIndex: number;
@@ -179,7 +183,7 @@ export interface UseTransactionReviewStateResult {
   readonly editModalIndex: number | null;
   readonly setEditModalIndex: (i: number | null) => void;
   readonly handleOpenEditModal: (index: number) => void;
-  readonly handleEditModalSave: (edits: TransactionEdits) => void;
+  readonly handleEditModalSave: (edits: TransactionEdits) => Promise<boolean>;
   readonly handleCreatePendingAccount: (account: PendingAccount) => void;
   readonly handleSave: () => Promise<void>;
   readonly categoryMap: ReadonlyMap<string, Category>;
@@ -221,6 +225,8 @@ function getTransactionParsedContentIdentity(
     readonly senderDisplayName?: string;
     readonly rawSmsBody?: string;
     readonly cardLast4?: string;
+    readonly toAccountName?: string;
+    readonly pendingAccount?: PendingAccount;
     readonly note?: string;
     readonly originalTranscript?: string;
     readonly detectedLanguage?: string;
@@ -245,6 +251,8 @@ function getTransactionParsedContentIdentity(
     rawSmsBody: sourceFields.rawSmsBody ?? null,
     senderDisplayName: sourceFields.senderDisplayName ?? null,
     smsFingerprint: sourceFields.smsFingerprint ?? null,
+    toAccountName: sourceFields.toAccountName ?? null,
+    pendingAccount: sourceFields.pendingAccount ?? null,
     source: transaction.source,
     type: transaction.type,
   });
@@ -272,8 +280,54 @@ function applyTransactionEdits(
     accountId: edits.accountId ?? undefined,
     ...(edits.toAccountId !== undefined && {
       toAccountId: edits.toAccountId ?? undefined,
+      toAccountName: edits.toAccountName ?? undefined,
+    }),
+    ...(edits.pendingAccount !== undefined && {
+      pendingAccount: edits.pendingAccount ?? undefined,
     }),
   };
+}
+
+function getDurablePendingAccounts(
+  transactions: readonly ReviewableTransaction[]
+): readonly PendingAccount[] {
+  const accountsByTempId = new Map<string, PendingAccount>();
+  for (const transaction of transactions) {
+    if (transaction.source !== "SMS") continue;
+    const pendingAccount = (transaction as ParsedSmsTransaction).pendingAccount;
+    if (pendingAccount) {
+      accountsByTempId.set(pendingAccount.tempId, pendingAccount);
+    }
+  }
+  return [...accountsByTempId.values()];
+}
+
+function getDurableTransactionOverrides(
+  transactions: readonly ReviewableTransaction[]
+): ReadonlyMap<number, TransactionEdits> {
+  const overrides = new Map<number, TransactionEdits>();
+  transactions.forEach((transaction, index) => {
+    if (transaction.source !== "SMS") return;
+    const smsTransaction = transaction as ParsedSmsTransaction;
+    if (!smsTransaction.pendingAccount && !smsTransaction.toAccountId) return;
+
+    overrides.set(index, {
+      amount: transaction.amount,
+      currency: transaction.currency,
+      counterparty: transaction.counterparty,
+      categoryId: transaction.categoryId,
+      type: transaction.type,
+      accountId:
+        smsTransaction.pendingAccount?.tempId ?? transaction.accountId ?? null,
+      accountName: smsTransaction.pendingAccount?.name ?? null,
+      accountConfirmed: smsTransaction.pendingAccount ? true : undefined,
+      toAccountId: smsTransaction.toAccountId,
+      toAccountName: smsTransaction.toAccountName,
+      toAccountConfirmed: smsTransaction.toAccountId ? true : undefined,
+      pendingAccount: smsTransaction.pendingAccount,
+    });
+  });
+  return overrides;
 }
 
 export function useTransactionReviewState({
@@ -305,7 +359,7 @@ export function useTransactionReviewState({
   // ── Unified transaction overrides ─────────────────────────────────
   const [transactionOverrides, setTransactionOverrides] = useState<
     ReadonlyMap<number, TransactionEdits>
-  >(new Map());
+  >(() => getDurableTransactionOverrides(transactions));
 
   // ── Account matching state ────────────────────────────────────────
   const [accountMatchState, setAccountMatchState] = useState<AccountMatchState>(
@@ -322,7 +376,7 @@ export function useTransactionReviewState({
   // ── Pending accounts ──────────────────────────────────────────────
   const [pendingAccounts, setPendingAccounts] = useState<
     readonly PendingAccount[]
-  >([]);
+  >(() => getDurablePendingAccounts(transactions));
 
   // ── Missing info flags ────────────────────────────────────────────
   const [invalidIndices, setInvalidIndices] = useState<ReadonlySet<number>>(
@@ -330,9 +384,14 @@ export function useTransactionReviewState({
   );
 
   const { showToast } = useToast();
+  const { t } = useTranslation("transactions");
 
   const handleCreatePendingAccount = useCallback((account: PendingAccount) => {
-    setPendingAccounts((prev) => [...prev, account]);
+    setPendingAccounts((previous) =>
+      previous.some((item) => item.tempId === account.tempId)
+        ? previous
+        : [...previous, account]
+    );
   }, []);
 
   const { latestRates } = useMarketRates();
@@ -363,6 +422,21 @@ export function useTransactionReviewState({
       );
     previousTransactionsRef.current = currentTransactions;
     if (isAppendOnly) {
+      const durableOverrides =
+        getDurableTransactionOverrides(currentTransactions);
+      setTransactionOverrides(
+        (previous) => new Map([...durableOverrides, ...previous])
+      );
+      setPendingAccounts((previous) => {
+        const merged = new Map(
+          getDurablePendingAccounts(currentTransactions).map((account) => [
+            account.tempId,
+            account,
+          ])
+        );
+        previous.forEach((account) => merged.set(account.tempId, account));
+        return [...merged.values()];
+      });
       setAccountMatchState((previous) => ({
         identity: transactionIdentity,
         matches: previous.matches,
@@ -373,12 +447,14 @@ export function useTransactionReviewState({
     userTouchedSelectionRef.current = false;
     manuallyDeselectedIndicesRef.current = new Set();
     setSelectedIndices(new Set());
-    setTransactionOverrides(new Map());
+    setTransactionOverrides(
+      getDurableTransactionOverrides(currentTransactions)
+    );
     setAccountMatchState({
       identity: transactionIdentity,
       matches: new Map(),
     });
-    setPendingAccounts([]);
+    setPendingAccounts(getDurablePendingAccounts(currentTransactions));
     setInvalidIndices(new Set());
     setEditModalIndex(null);
     setReviewMode("all");
@@ -652,17 +728,16 @@ export function useTransactionReviewState({
   }, []);
 
   const handleEditModalSave = useCallback(
-    (edits: TransactionEdits) => {
-      if (editModalIndex === null) return;
+    async (edits: TransactionEdits): Promise<boolean> => {
+      if (editModalIndex === null) return false;
 
       const currentTransaction = effectiveTransactions[editModalIndex];
-      const editedMeta = currentTransaction
-        ? getEditedTransactionReviewMeta(
-            currentTransaction,
-            accountMatches.get(editModalIndex),
-            edits
-          )
-        : null;
+      if (!currentTransaction) return false;
+      const editedMeta = getEditedTransactionReviewMeta(
+        currentTransaction,
+        accountMatches.get(editModalIndex),
+        edits
+      );
       const existingEdits = transactionOverrides.get(editModalIndex);
       const definedEdits = Object.fromEntries(
         Object.entries(edits).filter(([, value]) => value !== undefined)
@@ -672,11 +747,21 @@ export function useTransactionReviewState({
         existingEdits,
         definedEdits
       );
-      if (currentTransaction) {
-        void onTransactionChange?.(
-          editModalIndex,
-          applyTransactionEdits(currentTransaction, mergedEdits, categoryMap)
-        );
+      const updatedTransaction = applyTransactionEdits(
+        currentTransaction,
+        mergedEdits,
+        categoryMap
+      );
+
+      try {
+        await onTransactionChange?.(editModalIndex, updatedTransaction);
+      } catch {
+        showToast({
+          type: "error",
+          title: t("save_error"),
+          message: t("sms_review_save_failed_message"),
+        });
+        return false;
       }
 
       setTransactionOverrides((previous) => {
@@ -688,7 +773,7 @@ export function useTransactionReviewState({
       setSelectedIndices((prev) => {
         const next = new Set(prev);
         if (
-          editedMeta?.isAutoSelectable &&
+          editedMeta.isAutoSelectable &&
           selectionOverrides.get(editModalIndex) !== false &&
           !manuallyDeselectedIndicesRef.current.has(editModalIndex)
         ) {
@@ -703,6 +788,7 @@ export function useTransactionReviewState({
         return next;
       });
       setEditModalIndex(null);
+      return true;
     },
     [
       accountMatches,
@@ -712,6 +798,8 @@ export function useTransactionReviewState({
       onSelectionChange,
       onTransactionChange,
       selectionOverrides,
+      showToast,
+      t,
       transactionOverrides,
     ]
   );

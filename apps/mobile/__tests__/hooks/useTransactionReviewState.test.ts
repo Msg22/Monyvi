@@ -1,5 +1,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
-import type { ReviewableTransaction } from "@monyvi/logic";
+import type {
+  ParsedSmsTransaction,
+  ReviewableTransaction,
+} from "@monyvi/logic";
 import type {
   AccountMatch,
   AccountWithBankDetails,
@@ -193,8 +196,8 @@ describe("useTransactionReviewState", () => {
     expect(Array.from(result.current.resolvedAccountMatchIndices)).toEqual([0]);
     expect(result.current.isReviewMetadataReady).toBe(false);
     act(() => result.current.handleOpenEditModal(0));
-    act(() => {
-      result.current.handleEditModalSave({
+    await act(async () => {
+      await result.current.handleEditModalSave({
         amount: 125,
         type: "EXPENSE",
         categoryId: "cat-food",
@@ -382,8 +385,8 @@ describe("useTransactionReviewState", () => {
     act(() => {
       result.current.handleOpenEditModal(0);
     });
-    act(() => {
-      result.current.handleEditModalSave({
+    await act(async () => {
+      await result.current.handleEditModalSave({
         amount: 100,
         type: "EXPENSE",
         categoryId: "cat-food",
@@ -418,8 +421,8 @@ describe("useTransactionReviewState", () => {
     expect(result.current.selectedIndices.has(0)).toBe(false);
 
     act(() => result.current.handleOpenEditModal(0));
-    act(() => {
-      result.current.handleEditModalSave({
+    await act(async () => {
+      await result.current.handleEditModalSave({
         amount: 100,
         type: "EXPENSE",
         categoryId: "cat-food",
@@ -438,6 +441,87 @@ describe("useTransactionReviewState", () => {
     expect(result.current.selectedIndices.has(0)).toBe(true);
   });
 
+  it("hydrates pending account and ATM destination edits from a durable SMS draft", async () => {
+    const pendingAccount = {
+      tempId: "pending-qnb",
+      name: "QNB EGYPT",
+      currency: "EGP" as const,
+      type: "BANK" as const,
+      institutionId: "institution-qnb",
+      providerDisplayName: "QNB EGYPT",
+      senderDisplayName: "QNB EGYPT",
+      cardLast4: "2132",
+    };
+    const transaction: ParsedSmsTransaction = {
+      ...createTransaction({
+        accountId: pendingAccount.tempId,
+        reviewStatus: "needs_review",
+        reviewReasons: ["cash_transfer_review"],
+      }),
+      source: "SMS",
+      smsFingerprint: "sms-fingerprint-1",
+      senderDisplayName: "QNB EGYPT",
+      rawSmsBody: "Private SMS body",
+      isAtmWithdrawal: true,
+      toAccountId: "cash-1",
+      toAccountName: "Cash",
+      pendingAccount,
+    };
+    const transactions = [transaction];
+
+    const { result } = renderHook(() =>
+      useTransactionReviewState({
+        transactions,
+        onSave: jest.fn(),
+      })
+    );
+
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(1));
+
+    expect(result.current.pendingAccounts).toEqual([pendingAccount]);
+    expect(result.current.transactionOverrides.get(0)).toEqual(
+      expect.objectContaining({
+        accountId: pendingAccount.tempId,
+        accountName: pendingAccount.name,
+        accountConfirmed: true,
+        toAccountId: "cash-1",
+        toAccountName: "Cash",
+        toAccountConfirmed: true,
+      })
+    );
+  });
+
+  it("keeps the edit modal and local state unchanged when durable persistence fails", async () => {
+    const persistEdit = jest.fn().mockRejectedValue(new Error("write failed"));
+    const transactions = [createTransaction()];
+    const { result } = renderHook(() =>
+      useTransactionReviewState({
+        transactions,
+        onSave: jest.fn(),
+        onTransactionChange: persistEdit,
+      })
+    );
+
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(1));
+    act(() => result.current.handleOpenEditModal(0));
+
+    await act(async () => {
+      await result.current.handleEditModalSave({
+        amount: 125,
+        type: "EXPENSE",
+        categoryId: "cat-food",
+        accountId: "acc-1",
+        accountName: "Bank",
+      });
+    });
+
+    expect(result.current.editModalIndex).toBe(0);
+    expect(result.current.transactionOverrides.has(0)).toBe(false);
+    expect(mockShowToast).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "error" })
+    );
+  });
+
   it("preserves an explicit deselection when a safe row is edited", async () => {
     const transactions = [createTransaction({ confidence: 0.99 })];
     const { result } = renderHook(() =>
@@ -452,8 +536,8 @@ describe("useTransactionReviewState", () => {
     expect(result.current.selectedIndices.has(0)).toBe(false);
 
     act(() => result.current.handleOpenEditModal(0));
-    act(() => {
-      result.current.handleEditModalSave({
+    await act(async () => {
+      await result.current.handleEditModalSave({
         amount: 125,
         type: "EXPENSE",
         categoryId: "cat-food",
@@ -484,8 +568,8 @@ describe("useTransactionReviewState", () => {
     await waitFor(() => expect(result.current.accountMatches.size).toBe(1));
 
     act(() => result.current.handleOpenEditModal(0));
-    act(() => {
-      result.current.handleEditModalSave({
+    await act(async () => {
+      await result.current.handleEditModalSave({
         amount: 100,
         type: "EXPENSE",
         categoryId: "cat-food",
@@ -502,8 +586,8 @@ describe("useTransactionReviewState", () => {
     expect(result.current.needsReviewCount).toBe(1);
 
     act(() => result.current.handleOpenEditModal(0));
-    act(() => {
-      result.current.handleEditModalSave({
+    await act(async () => {
+      await result.current.handleEditModalSave({
         amount: 100,
         type: "EXPENSE",
         categoryId: "cat-shopping",
@@ -521,8 +605,8 @@ describe("useTransactionReviewState", () => {
     expect(result.current.needsReviewCount).toBe(0);
 
     act(() => result.current.handleOpenEditModal(0));
-    act(() => {
-      result.current.handleEditModalSave({
+    await act(async () => {
+      await result.current.handleEditModalSave({
         amount: 120,
         type: "EXPENSE",
         categoryId: "cat-shopping",
@@ -613,8 +697,8 @@ describe("useTransactionReviewState", () => {
     await waitFor(() => expect(result.current.accountMatches.size).toBe(1));
 
     act(() => result.current.handleOpenEditModal(0));
-    act(() => {
-      result.current.handleEditModalSave({
+    await act(async () => {
+      await result.current.handleEditModalSave({
         amount: 100,
         type: "EXPENSE",
         categoryId: "cat-food",
@@ -770,15 +854,15 @@ describe("useTransactionReviewState", () => {
     );
     await waitFor(() => expect(result.current.accountMatches.size).toBe(1));
     act(() => result.current.handleOpenEditModal(0));
-    act(() =>
-      result.current.handleEditModalSave({
+    await act(async () => {
+      await result.current.handleEditModalSave({
         amount: 125,
         type: "EXPENSE",
         categoryId: "cat-food",
         accountId: "acc-1",
         accountName: "Bank",
-      })
-    );
+      });
+    });
     act(() => result.current.handleToggleItem(0));
     const wasSelected = result.current.selectedIndices.has(0);
 
@@ -829,8 +913,8 @@ describe("useTransactionReviewState", () => {
 
     await waitFor(() => expect(result.current.accountMatches.size).toBe(1));
     act(() => result.current.handleOpenEditModal(0));
-    act(() => {
-      result.current.handleEditModalSave({
+    await act(async () => {
+      await result.current.handleEditModalSave({
         amount: 100,
         type: "EXPENSE",
         categoryId: "cat-food",

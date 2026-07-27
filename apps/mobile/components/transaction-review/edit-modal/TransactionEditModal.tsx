@@ -74,7 +74,9 @@ export interface TransactionEditModalProps {
   /** Income categories for the category picker */
   readonly incomeCategories: readonly Category[];
   /** Called with the edits when user saves */
-  readonly onSave: (edits: TransactionEdits) => void;
+  readonly onSave: (
+    edits: TransactionEdits
+  ) => boolean | void | Promise<boolean | void>;
   /** Called when a new PendingAccount is created via "+ New" */
   readonly onCreatePendingAccount: (account: PendingAccount) => void;
   /** Called when modal is dismissed without saving */
@@ -146,7 +148,7 @@ export function TransactionEditModal(
               {t("edit_transaction")}
             </Text>
             <TouchableOpacity
-              onPress={accountHandlers.handleSave}
+              onPress={() => void accountHandlers.handleSave()}
               activeOpacity={0.7}
               className="bg-nileGreen-500 px-5 py-1.5 rounded-full"
             >
