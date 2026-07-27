@@ -4,6 +4,9 @@ const mockCreateRecurringPayment = jest.fn();
 const mockFindOwned = jest.fn();
 const mockFindAccessibleCategory = jest.fn();
 const mockGetCurrentUserDataScope = jest.fn();
+const mockBatch = jest.fn();
+const mockAssertValidTransactionAmount = jest.fn();
+const mockPrepareTransactionCreateWithBalance = jest.fn();
 
 interface MockRecurringPaymentRecord {
   readonly id: string;
@@ -23,6 +26,10 @@ interface MockRecurringPaymentRecord {
   notes?: string;
   update: jest.Mock<
     Promise<void>,
+    [(record: MockRecurringPaymentRecord) => void]
+  >;
+  prepareUpdate: jest.Mock<
+    MockRecurringPaymentRecord,
     [(record: MockRecurringPaymentRecord) => void]
   >;
 }
@@ -63,6 +70,12 @@ function createRecurringRecord(
         return Promise.resolve();
       }
     ),
+    prepareUpdate: jest.fn(
+      (builder: (draft: MockRecurringPaymentRecord) => void) => {
+        builder(record);
+        return record;
+      }
+    ),
     ...overrides,
   };
 
@@ -75,6 +88,8 @@ jest.mock("@monyvi/db", () => ({
       mockWrite(...args) as Promise<unknown>,
     get: (tableName: string): MockCollection =>
       mockGet(tableName) as MockCollection,
+    batch: (...args: readonly unknown[]): Promise<void> =>
+      mockBatch(...args) as Promise<void>,
   },
 }));
 
@@ -103,7 +118,14 @@ jest.mock("@/utils/dateHelpers", () => ({
 }));
 
 jest.mock("@/services/transaction-service", () => ({
+  assertValidTransactionAmount: (amount: number): void => {
+    mockAssertValidTransactionAmount(amount);
+  },
   createTransaction: jest.fn(),
+  prepareTransactionCreateWithBalance: (
+    ...args: readonly unknown[]
+  ): Promise<unknown> =>
+    mockPrepareTransactionCreateWithBalance(...args) as Promise<unknown>,
 }));
 
 import {
@@ -112,6 +134,7 @@ import {
   pauseRecurringPayment,
   RECURRING_PAYMENT_SERVICE_ERROR_CODES,
   resumeRecurringPayment,
+  submitRecurringPayment,
   updateRecurringPayment,
 } from "@/services/recurring-payment-service";
 
@@ -121,6 +144,12 @@ describe("recurring-payment-service", () => {
     mockWrite.mockImplementation(
       async (callback: () => Promise<unknown>): Promise<unknown> => callback()
     );
+    mockBatch.mockResolvedValue(undefined);
+    mockAssertValidTransactionAmount.mockReturnValue(undefined);
+    mockPrepareTransactionCreateWithBalance.mockResolvedValue({
+      transaction: { id: "transaction-1" },
+      operations: [{ id: "transaction-1" }, { id: "account-1" }],
+    });
     mockCreateRecurringPayment.mockImplementation(
       (
         builder: (record: Partial<MockRecurringPaymentRecord>) => void
@@ -521,6 +550,169 @@ describe("recurring-payment-service", () => {
     });
 
     expect(payment.nextDueDate).toEqual(new Date("2026-07-08T00:00:00.000Z"));
+  });
+
+  describe("submitRecurringPayment", () => {
+    it("batches transaction creation, balance update, and persisted schedule advancement in one writer", async () => {
+      const stalePayment = createRecurringRecord({
+        currency: "USD",
+        categoryId: "stale-category",
+        nextDueDate: new Date("2026-05-01T00:00:00.000Z"),
+      });
+      const persistedPayment = createRecurringRecord({
+        currency: "EGP",
+        categoryId: "category-1",
+        nextDueDate: new Date("2026-07-01T00:00:00.000Z"),
+      });
+      mockFindOwned.mockResolvedValue(persistedPayment);
+
+      await submitRecurringPayment({
+        payment: stalePayment as never,
+        accountId: "account-1",
+        amount: 425,
+        note: "July bill",
+      });
+
+      expect(mockWrite).toHaveBeenCalledTimes(1);
+      expect(mockFindOwned).toHaveBeenCalledWith(
+        expect.anything(),
+        "payment-1"
+      );
+      expect(mockPrepareTransactionCreateWithBalance).toHaveBeenCalledWith(
+        {
+          amount: 425,
+          currency: "EGP",
+          categoryId: "category-1",
+          accountId: "account-1",
+          note: "July bill",
+          type: "EXPENSE",
+          source: "MANUAL",
+          date: expect.any(Date) as Date,
+          linkedRecurringId: "payment-1",
+        },
+        expect.objectContaining({ userId: "user-1" }),
+        "user-1"
+      );
+      expect(persistedPayment.nextDueDate).toEqual(
+        new Date("2026-08-01T00:00:00.000Z")
+      );
+      expect(mockBatch).toHaveBeenCalledTimes(1);
+      expect(mockBatch).toHaveBeenCalledWith([
+        { id: "transaction-1" },
+        { id: "account-1" },
+        persistedPayment,
+      ]);
+    });
+
+    it("propagates an atomic batch failure without falling back to separate writes", async () => {
+      const payment = createRecurringRecord();
+      const batchError = new Error("atomic batch failed");
+      mockFindOwned.mockResolvedValue(payment);
+      mockBatch.mockRejectedValue(batchError);
+
+      await expect(
+        submitRecurringPayment({
+          payment: payment as never,
+          accountId: "account-1",
+          amount: 250,
+        })
+      ).rejects.toThrow(batchError);
+
+      expect(mockWrite).toHaveBeenCalledTimes(1);
+      expect(mockBatch).toHaveBeenCalledTimes(1);
+    });
+
+    it("uses persisted income direction when preparing the atomic transaction", async () => {
+      const payment = createRecurringRecord({ type: "INCOME" });
+      mockFindOwned.mockResolvedValue(payment);
+
+      await submitRecurringPayment({
+        payment: payment as never,
+        accountId: "account-1",
+        amount: 900,
+      });
+
+      expect(mockPrepareTransactionCreateWithBalance).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "INCOME", amount: 900 }),
+        expect.anything(),
+        "user-1"
+      );
+      expect(mockBatch).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects a deleted recurring payment without preparing or committing", async () => {
+      const payment = createRecurringRecord({ deleted: true });
+      mockFindOwned.mockResolvedValue(payment);
+
+      await expect(
+        submitRecurringPayment({
+          payment: payment as never,
+          accountId: "account-1",
+          amount: 250,
+        })
+      ).rejects.toThrow(
+        RECURRING_PAYMENT_SERVICE_ERROR_CODES.PAYMENT_UNAVAILABLE
+      );
+
+      expect(mockPrepareTransactionCreateWithBalance).not.toHaveBeenCalled();
+      expect(mockBatch).not.toHaveBeenCalled();
+    });
+
+    it("rejects a missing or foreign recurring payment without committing", async () => {
+      const payment = createRecurringRecord();
+      const scopeError = new Error("OWNERSHIP_FAILED");
+      mockFindOwned.mockRejectedValue(scopeError);
+
+      await expect(
+        submitRecurringPayment({
+          payment: payment as never,
+          accountId: "account-1",
+          amount: 250,
+        })
+      ).rejects.toThrow(scopeError);
+
+      expect(mockPrepareTransactionCreateWithBalance).not.toHaveBeenCalled();
+      expect(mockBatch).not.toHaveBeenCalled();
+    });
+
+    it("does not commit when account lookup or auth revalidation fails", async () => {
+      const payment = createRecurringRecord();
+      const preparationError = new Error("AUTH_SCOPE_CHANGED");
+      mockFindOwned.mockResolvedValue(payment);
+      mockPrepareTransactionCreateWithBalance.mockRejectedValue(
+        preparationError
+      );
+
+      await expect(
+        submitRecurringPayment({
+          payment: payment as never,
+          accountId: "account-1",
+          amount: 250,
+        })
+      ).rejects.toThrow(preparationError);
+
+      expect(mockBatch).not.toHaveBeenCalled();
+    });
+
+    it("rejects an invalid amount before resolving scope or opening a writer", async () => {
+      const payment = createRecurringRecord();
+      const validationError = new Error("INVALID_TRANSACTION_AMOUNT");
+      mockAssertValidTransactionAmount.mockImplementation(() => {
+        throw validationError;
+      });
+
+      await expect(
+        submitRecurringPayment({
+          payment: payment as never,
+          accountId: "account-1",
+          amount: 0,
+        })
+      ).rejects.toThrow(validationError);
+
+      expect(mockGetCurrentUserDataScope).not.toHaveBeenCalled();
+      expect(mockWrite).not.toHaveBeenCalled();
+      expect(mockBatch).not.toHaveBeenCalled();
+    });
   });
 
   it("pauses, resumes, and soft-deletes an owned recurring payment", async () => {

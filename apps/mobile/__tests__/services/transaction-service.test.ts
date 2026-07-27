@@ -85,6 +85,14 @@ jest.mock("@monyvi/db", () => {
         getStore(tableName).set(m.id, m);
         return Promise.resolve(m);
       }),
+      prepareCreate: jest.fn(
+        (builder: (r: Record<string, unknown>) => void) => {
+          const m = createModel(`new-${tableName}-${Date.now()}`);
+          builder(m);
+          getStore(tableName).set(m.id, m);
+          return m;
+        }
+      ),
       query: jest.fn(() => ({
         fetch: jest.fn(() =>
           Promise.resolve(Array.from(getStore(tableName).values()))
@@ -117,6 +125,7 @@ jest.mock("@monyvi/db", () => {
     __rewireMocks: () => {
       db.write.mockImplementation((cb: () => Promise<unknown>) => cb());
       db.get.mockImplementation((t: string) => createCollection(t));
+      db.batch.mockResolvedValue(undefined);
     },
   };
 });
@@ -243,6 +252,24 @@ describe("transaction-service", () => {
         source: "MANUAL",
       });
       expect(acc.balance).toBe(1500);
+    });
+
+    it("commits transaction creation and balance update in one prepared batch", async () => {
+      const account = seedAccount("acc-1", 1000);
+
+      const transaction = await createTransaction({
+        amount: 200,
+        currency: "EGP",
+        categoryId: "cat-food",
+        accountId: "acc-1",
+        type: "EXPENSE",
+        source: "MANUAL",
+      });
+
+      expect(mockDb.write).toHaveBeenCalledTimes(1);
+      expect(account.prepareUpdate).toHaveBeenCalledTimes(1);
+      expect(mockDb.batch).toHaveBeenCalledTimes(1);
+      expect(mockDb.batch).toHaveBeenCalledWith([transaction, account]);
     });
 
     it("should reject negative input without mutating the account", async () => {
@@ -380,6 +407,29 @@ describe("transaction-service", () => {
       ).rejects.toThrow(USER_DATA_ACCESS_ERROR_CODES.OWNERSHIP_FAILED);
 
       expect(foreignAccount.balance).toBe(1000);
+    });
+
+    it("rejects a deleted account without preparing or committing", async () => {
+      const deletedAccount = mockModel("acc-deleted", {
+        balance: 1000,
+        userId: "test-user-id",
+        deleted: true,
+      });
+      mockSeed("accounts", deletedAccount);
+
+      await expect(
+        createTransaction({
+          amount: 100,
+          currency: "EGP",
+          categoryId: "cat-1",
+          accountId: "acc-deleted",
+          type: "EXPENSE",
+          source: "MANUAL",
+        })
+      ).rejects.toThrow("TRANSACTION_ACCOUNT_UNAVAILABLE");
+
+      expect(deletedAccount.prepareUpdate).not.toHaveBeenCalled();
+      expect(mockDb.batch).not.toHaveBeenCalled();
     });
   });
 

@@ -22,6 +22,8 @@ export const BALANCE_REVERSAL_ACCOUNT_NOT_FOUND_ERROR_CODE =
   "BALANCE_REVERSAL_ACCOUNT_NOT_FOUND";
 export const INVALID_TRANSACTION_AMOUNT_ERROR_CODE =
   "INVALID_TRANSACTION_AMOUNT";
+export const TRANSACTION_ACCOUNT_UNAVAILABLE_ERROR_CODE =
+  "TRANSACTION_ACCOUNT_UNAVAILABLE";
 
 function accountsCollection(): ReturnType<typeof database.get<Account>> {
   return database.get<Account>("accounts");
@@ -47,10 +49,73 @@ async function getOwnedTransaction(
   return scope.findOwned(transactionsCollection(), transactionId);
 }
 
-function assertValidTransactionAmount(amount: number): void {
+export interface CreateTransactionData {
+  readonly amount: number;
+  readonly currency: CurrencyType;
+  readonly categoryId: string;
+  readonly counterparty?: string;
+  readonly accountId: string;
+  readonly note?: string;
+  readonly type: TransactionType;
+  readonly date?: Date;
+  readonly linkedRecurringId?: string;
+  readonly source: TransactionSource;
+  readonly smsFingerprint?: string;
+}
+
+export interface PreparedTransactionCreate {
+  readonly transaction: Transaction;
+  readonly operations: Model[];
+}
+
+export function assertValidTransactionAmount(amount: number): void {
   if (!isValidTransactionAmount(amount)) {
     throw new Error(INVALID_TRANSACTION_AMOUNT_ERROR_CODE);
   }
+}
+
+export async function prepareTransactionCreateWithBalance(
+  data: CreateTransactionData,
+  scope: CurrentUserDataScope,
+  expectedUserId?: string
+): Promise<PreparedTransactionCreate> {
+  const account = await getOwnedAccount(data.accountId, scope);
+  if (account.deleted) {
+    throw new Error(TRANSACTION_ACCOUNT_UNAVAILABLE_ERROR_CODE);
+  }
+  if (expectedUserId !== undefined) {
+    await assertExpectedCurrentUser(expectedUserId);
+  }
+
+  const transaction = transactionsCollection().prepareCreate((record) => {
+    record.userId = scope.userId;
+    record.accountId = data.accountId;
+    record.amount = data.amount;
+    record.currency = data.currency;
+    record.type = data.type;
+    record.categoryId = data.categoryId;
+    record.counterparty = data.counterparty || undefined;
+    record.note = data.note || undefined;
+    record.date = data.date || new Date();
+    record.source = data.source;
+    record.linkedRecurringId = data.linkedRecurringId || undefined;
+    record.smsFingerprint = data.smsFingerprint || undefined;
+    record.isDraft = false;
+    record.deleted = false;
+  });
+
+  const accountUpdate = account.prepareUpdate((record) => {
+    if (data.type === "EXPENSE") {
+      record.balance -= data.amount;
+    } else {
+      record.balance += data.amount;
+    }
+  });
+
+  return {
+    transaction,
+    operations: [transaction, accountUpdate],
+  };
 }
 
 /**
@@ -58,19 +123,7 @@ function assertValidTransactionAmount(amount: number): void {
  * Atomically creates the Transaction record and updates the account balance.
  */
 export async function createTransaction(
-  data: {
-    amount: number;
-    currency: CurrencyType;
-    categoryId: string;
-    counterparty?: string;
-    accountId: string;
-    note?: string;
-    type: TransactionType;
-    date?: Date;
-    linkedRecurringId?: string;
-    source: TransactionSource;
-    smsFingerprint?: string;
-  },
+  data: CreateTransactionData,
   expectedUserId?: string
 ): Promise<Transaction> {
   assertValidTransactionAmount(data.amount);
@@ -79,46 +132,15 @@ export async function createTransaction(
     throw new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
   }
 
-  const transactionCollection = transactionsCollection();
-
-  // Combine transaction creation and balance update in a single atomic write
-  const newTransaction = await database.write(async () => {
-    const account = await getOwnedAccount(data.accountId, scope);
-    if (expectedUserId !== undefined) {
-      await assertExpectedCurrentUser(expectedUserId);
-    }
-
-    // Create the transaction
-    const transaction = await transactionCollection.create((tx) => {
-      tx.userId = scope.userId;
-      tx.accountId = data.accountId;
-      tx.amount = data.amount;
-      tx.currency = data.currency;
-      tx.type = data.type;
-      tx.categoryId = data.categoryId;
-      tx.counterparty = data.counterparty || undefined;
-      tx.note = data.note || undefined;
-      tx.date = data.date || new Date();
-      tx.source = data.source;
-      tx.linkedRecurringId = data.linkedRecurringId || undefined;
-      tx.smsFingerprint = data.smsFingerprint || undefined;
-      tx.isDraft = false;
-      tx.deleted = false;
-    });
-
-    // Update account balance in the same write block
-    await account.update((acc) => {
-      if (data.type === "EXPENSE") {
-        acc.balance -= data.amount;
-      } else {
-        acc.balance += data.amount;
-      }
-    });
-
-    return transaction;
+  return await database.write(async () => {
+    const prepared = await prepareTransactionCreateWithBalance(
+      data,
+      scope,
+      expectedUserId
+    );
+    await database.batch(prepared.operations);
+    return prepared.transaction;
   });
-
-  return newTransaction;
 }
 
 /**
