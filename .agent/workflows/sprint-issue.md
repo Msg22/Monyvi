@@ -134,6 +134,7 @@ Use the `codex/` branch prefix by default.
 
 Every PR for a sprint issue should include:
 
+- PR should be ready not a draft
 - the issue link,
 - a short root-cause or implementation summary,
 - any product/design decisions made,
