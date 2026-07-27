@@ -217,14 +217,26 @@ describe("recurring payment SQLite atomicity", () => {
     ).toHaveLength(1);
 
     const observerError = new Error("observer failed after commit");
-    const healthyAccountSubscriber = jest.fn();
+    const healthyDatabaseSubscriber = jest.fn();
+    const healthyCollectionSubscriber = jest.fn();
+    const leadingHealthyAccountSubscriber = jest.fn();
+    const trailingHealthyAccountSubscriber = jest.fn();
     const healthyPaymentSubscriber = jest.fn();
+    const unsubscribeHealthyDatabaseSubscriber = database.experimentalSubscribe(
+      ["accounts"],
+      healthyDatabaseSubscriber,
+      "atomic batch regression"
+    );
+    const unsubscribeHealthyCollectionSubscriber = database
+      .get<Account>("accounts")
+      .experimentalSubscribe(healthyCollectionSubscriber);
+    const unsubscribeLeadingHealthyAccountSubscriber =
+      account.experimentalSubscribe(leadingHealthyAccountSubscriber);
     const unsubscribeThrowingSubscriber = account.experimentalSubscribe(() => {
       throw observerError;
     });
-    const unsubscribeHealthyAccountSubscriber = account.experimentalSubscribe(
-      healthyAccountSubscriber
-    );
+    const unsubscribeTrailingHealthyAccountSubscriber =
+      account.experimentalSubscribe(trailingHealthyAccountSubscriber);
     const unsubscribeHealthyPaymentSubscriber = payment.experimentalSubscribe(
       healthyPaymentSubscriber
     );
@@ -240,11 +252,20 @@ describe("recurring payment SQLite atomicity", () => {
       ).resolves.toBeUndefined();
     } finally {
       unsubscribeHealthyPaymentSubscriber();
-      unsubscribeHealthyAccountSubscriber();
+      unsubscribeTrailingHealthyAccountSubscriber();
       unsubscribeThrowingSubscriber();
+      unsubscribeLeadingHealthyAccountSubscriber();
+      unsubscribeHealthyCollectionSubscriber();
+      unsubscribeHealthyDatabaseSubscriber();
     }
 
-    expect(healthyAccountSubscriber).toHaveBeenCalledWith(false);
+    expect(healthyDatabaseSubscriber).toHaveBeenCalledTimes(1);
+    expect(healthyCollectionSubscriber).toHaveBeenCalledTimes(1);
+    expect(leadingHealthyAccountSubscriber).toHaveBeenCalledTimes(1);
+    expect(leadingHealthyAccountSubscriber).toHaveBeenCalledWith(false);
+    expect(trailingHealthyAccountSubscriber).toHaveBeenCalledTimes(1);
+    expect(trailingHealthyAccountSubscriber).toHaveBeenCalledWith(false);
+    expect(healthyPaymentSubscriber).toHaveBeenCalledTimes(1);
     expect(healthyPaymentSubscriber).toHaveBeenCalledWith(false);
 
     expect(account.balance).toBe(500);

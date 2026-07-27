@@ -10,6 +10,7 @@ type DatabaseSubscriber = [Array<TableName<Model>>, () => void, unknown];
 
 interface NotificationDatabaseAccess {
   _notify?: (changes: DatabaseChanges) => void;
+  _pendingNotificationBatches?: number;
   _subscribers?: DatabaseSubscriber[];
 }
 
@@ -48,7 +49,7 @@ function runNotificationSafely(callback: () => void): void {
     callback();
   } catch (error) {
     logger.error(
-      "WatermelonDB subscriber failed during committed change replay",
+      "WatermelonDB subscriber failed during committed change publication",
       error
     );
   }
@@ -136,15 +137,11 @@ export async function commitPreparedBatch(
   };
   if (originalDatabaseNotify) {
     notificationDatabase._notify = (changes): void => {
-      try {
+      if ((notificationDatabase._pendingNotificationBatches ?? 0) > 0) {
         originalDatabaseNotify.call(database, changes);
-      } catch (error) {
-        logger.error(
-          "WatermelonDB notification failed after adapter commit",
-          error
-        );
-        publishCommittedChanges(changes, notificationDatabase);
+        return;
       }
+      publishCommittedChanges(changes, notificationDatabase);
     };
   }
 
