@@ -1,5 +1,9 @@
 const mockInvoke = jest.fn();
 
+jest.mock("expo-crypto", () => ({
+  randomUUID: (): string => "confidence-test-request-id",
+}));
+
 jest.mock("@/services/supabase", () => ({
   supabase: {
     functions: {

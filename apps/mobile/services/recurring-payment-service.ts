@@ -10,7 +10,15 @@ import {
   TransactionType,
 } from "@monyvi/db";
 import { getCurrentUserDataScope } from "@/services/user-data-access";
-import { createTransaction } from "./transaction-service";
+import {
+  assertValidTransactionAmount,
+  prepareTransactionCreateWithBalance,
+} from "./transaction-service";
+import {
+  captureCachedModelSnapshot,
+  restoreCachedModelSnapshot,
+} from "./watermelon-cache-snapshot";
+import { commitPreparedBatch } from "./watermelon-atomic-batch";
 
 export interface RecurringPaymentData {
   name: string;
@@ -30,6 +38,7 @@ export type UpdateRecurringPaymentData = RecurringPaymentData;
 export const RECURRING_PAYMENT_SERVICE_ERROR_CODES = {
   ACCOUNT_UNAVAILABLE: "RECURRING_PAYMENT_ACCOUNT_UNAVAILABLE",
   CATEGORY_UNAVAILABLE: "RECURRING_PAYMENT_CATEGORY_UNAVAILABLE",
+  PAYMENT_UNAVAILABLE: "RECURRING_PAYMENT_UNAVAILABLE",
 } as const;
 
 async function resolveRecurringPaymentReferences(
@@ -205,13 +214,8 @@ export async function updateRecurringPaymentNextDueDate(
 }
 
 /**
- * Submit a recurring payment: create a linked transaction and advance the due date.
- * Orchestrates the two DB writes (transaction creation + due date update).
- *
- * TODO: Wrap both operations in a single database.write() for atomicity.
- * Currently, if updateRecurringPaymentNextDueDate fails after createTransaction
- * succeeds, the payment is recorded but the schedule is not advanced.
- * See: https://github.com/Msamir22/Monyvi/issues/217
+ * Atomically creates a linked transaction, updates its account balance, and
+ * advances the authoritative recurring-payment schedule.
  */
 export async function submitRecurringPayment(params: {
   payment: RecurringPayment;
@@ -220,22 +224,56 @@ export async function submitRecurringPayment(params: {
   note?: string;
 }): Promise<void> {
   const { payment, accountId, amount, note } = params;
+  assertValidTransactionAmount(amount);
 
-  await createTransaction({
-    amount,
-    currency: payment.currency,
-    categoryId: payment.categoryId,
-    accountId,
-    note,
-    type: payment.type,
-    source: "MANUAL",
-    date: new Date(),
-    linkedRecurringId: payment.id,
+  const scope = await getCurrentUserDataScope();
+  const recurringCollection =
+    database.get<RecurringPayment>("recurring_payments");
+
+  await database.write(async () => {
+    const persistedPayment = await scope.findOwned(
+      recurringCollection,
+      payment.id
+    );
+    if (persistedPayment.deleted) {
+      throw new Error(
+        RECURRING_PAYMENT_SERVICE_ERROR_CODES.PAYMENT_UNAVAILABLE
+      );
+    }
+
+    const transactionData = {
+      amount,
+      currency: persistedPayment.currency,
+      categoryId: persistedPayment.categoryId,
+      accountId,
+      note,
+      type: persistedPayment.type,
+      source: "MANUAL" as const,
+      date: new Date(),
+      linkedRecurringId: persistedPayment.id,
+    };
+    const preparedTransaction = await prepareTransactionCreateWithBalance(
+      transactionData,
+      scope,
+      scope.userId
+    );
+    const paymentSnapshot = captureCachedModelSnapshot(persistedPayment);
+    try {
+      const scheduleUpdate = persistedPayment.prepareUpdate((record) => {
+        record.nextDueDate = calculateNextDueDate(
+          persistedPayment.nextDueDate,
+          persistedPayment.frequency
+        );
+      });
+
+      await commitPreparedBatch([
+        ...preparedTransaction.operations,
+        scheduleUpdate,
+      ]);
+    } catch (error) {
+      preparedTransaction.restoreCachedAccount();
+      restoreCachedModelSnapshot(paymentSnapshot);
+      throw error;
+    }
   });
-
-  await updateRecurringPaymentNextDueDate(
-    payment.id,
-    payment.nextDueDate,
-    payment.frequency
-  );
 }

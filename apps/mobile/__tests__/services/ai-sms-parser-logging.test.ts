@@ -5,6 +5,10 @@ import {
 } from "@/services/ai-sms-parser-service";
 
 const mockInvoke = jest.fn();
+
+jest.mock("expo-crypto", () => ({
+  randomUUID: (): string => "logging-test-request-id",
+}));
 const mockLoggerWarn = jest.fn<
   void,
   [message: string, context?: Readonly<Record<string, unknown>>]

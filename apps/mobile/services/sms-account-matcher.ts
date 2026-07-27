@@ -402,16 +402,22 @@ function matchAccountCore(
 ): AccountMatch {
   const { senderDisplayName, cardLast4, currency } = input;
   const normalizedCardLast4 = normalizeCardLast4ForStorage(cardLast4);
+  const currencyCompatibleAccounts = currency
+    ? accounts.filter((account) => account.currency === currency)
+    : accounts;
 
   // Step 1: Card last 4 + sender match (highest confidence)
   if (normalizedCardLast4 !== undefined) {
     const cardAndSenderMatches = accounts.filter(
-      (acc) =>
-        acc.cardLast4 === normalizedCardLast4 &&
-        doesAccountMatchSender(senderDisplayName, acc)
+      (account) =>
+        account.cardLast4 === normalizedCardLast4 &&
+        doesAccountMatchSender(senderDisplayName, account)
     );
     if (cardAndSenderMatches.length === 1) {
       const [matchedAccount] = cardAndSenderMatches;
+      if (currency && matchedAccount.currency !== currency) {
+        return { accountId: null, accountName: null, matchReason: "none" };
+      }
       return {
         accountId: matchedAccount.id,
         accountName: matchedAccount.name,
@@ -422,13 +428,12 @@ function matchAccountCore(
       return { accountId: null, accountName: null, matchReason: "none" };
     }
 
-    // A stored card suffix can be stale or represent another card from the same
-    // provider. Fall through to sender-only matching, which is still safe only
-    // when it identifies exactly one accessible account.
+    // No account owns both identity signals. A stale suffix may fall through to
+    // a unique sender match, but a known card identity never changes accounts.
   }
 
   // Step 2: Sender match alone against bank_details / account name
-  const senderMatches = accounts.filter((account) =>
+  const senderMatches = currencyCompatibleAccounts.filter((account) =>
     doesAccountMatchSender(senderDisplayName, account)
   );
   if (senderMatches.length === 1) {
@@ -453,8 +458,7 @@ function matchAccountCore(
     // This should return institution info for supported Egyptian providers
     // since we already filter the sms based on this registry
     if (senderInstitution) {
-      for (const acc of accounts) {
-        if (acc.currency !== currency) continue;
+      for (const acc of currencyCompatibleAccounts) {
         if (!doesAccountMatchInstitutionType(acc, senderInstitution.type)) {
           continue;
         }
@@ -492,7 +496,7 @@ function matchAccountCore(
   }
 
   // Step 4: Default account fallback
-  const defaultAcc = accounts.find(
+  const defaultAcc = currencyCompatibleAccounts.find(
     (account) =>
       account.isDefault &&
       (!senderInstitution ||
