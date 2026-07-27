@@ -7,6 +7,7 @@ const mockGetCurrentUserDataScope = jest.fn();
 const mockBatch = jest.fn();
 const mockAssertValidTransactionAmount = jest.fn();
 const mockPrepareTransactionCreateWithBalance = jest.fn();
+const mockRestoreCachedAccount = jest.fn();
 
 interface MockRecurringPaymentRecord {
   readonly id: string;
@@ -149,6 +150,7 @@ describe("recurring-payment-service", () => {
     mockPrepareTransactionCreateWithBalance.mockResolvedValue({
       transaction: { id: "transaction-1" },
       operations: [{ id: "transaction-1" }, { id: "account-1" }],
+      restoreCachedAccount: mockRestoreCachedAccount,
     });
     mockCreateRecurringPayment.mockImplementation(
       (
@@ -620,6 +622,7 @@ describe("recurring-payment-service", () => {
 
       expect(mockWrite).toHaveBeenCalledTimes(1);
       expect(mockBatch).toHaveBeenCalledTimes(1);
+      expect(mockRestoreCachedAccount).toHaveBeenCalledTimes(1);
     });
 
     it("uses persisted income direction when preparing the atomic transaction", async () => {

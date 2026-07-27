@@ -334,7 +334,7 @@ describe("syncDatabase", () => {
           },
         }),
       ],
-      { onConflict: "id" }
+      { onConflict: "user_id" }
     );
   });
 

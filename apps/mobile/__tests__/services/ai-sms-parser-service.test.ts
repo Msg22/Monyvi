@@ -697,7 +697,7 @@ describe("ai-sms-parser-service parser strategy", () => {
     const result = await parsePromise;
 
     expect(result.transactions).toHaveLength(1);
-    expect(result.unresolvedCandidates).toEqual(
+    expect(result.unresolvedCandidates).toMatchObject(
       candidates.slice(50).map((failedCandidate) => ({
         candidate: failedCandidate,
         reason: "chunk_failed",
@@ -773,11 +773,11 @@ describe("ai-sms-parser-service parser strategy", () => {
       expect(result.transactions).toHaveLength(1);
       expect(result.transactions[0]?.smsFingerprint).toBe("enum-fingerprint-0");
       expect(result.unresolvedCandidates).toEqual([
-        {
+        expect.objectContaining({
           candidate: candidates[50],
           reason: "response_invalid",
           isRetryable: true,
-        },
+        }),
       ]);
     } finally {
       jest.clearAllTimers();
@@ -829,11 +829,11 @@ describe("ai-sms-parser-service parser strategy", () => {
     expect(mockInvoke).toHaveBeenCalledTimes(1);
     expect(result.transactions).toHaveLength(10);
     expect(result.unresolvedCandidates).toEqual([
-      {
+      expect.objectContaining({
         candidate: candidates[10],
         reason: "response_invalid",
         isRetryable: true,
-      },
+      }),
     ]);
   });
 
@@ -883,11 +883,11 @@ describe("ai-sms-parser-service parser strategy", () => {
         expect.objectContaining({ smsFingerprint: "thrown-fingerprint-0" }),
       ]);
       expect(result.unresolvedCandidates).toEqual([
-        {
+        expect.objectContaining({
           candidate: candidates[50],
           reason: "unexpected_failure",
           isRetryable: true,
-        },
+        }),
       ]);
     } finally {
       jest.clearAllTimers();

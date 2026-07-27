@@ -142,7 +142,7 @@ async function openFreshDatabase(): Promise<Database> {
 }
 
 describe("recurring payment SQLite atomicity", () => {
-  it("rolls back transaction, balance, and due date when the final batch operation fails", async () => {
+  it("restores cached models after rollback so a same-instance retry applies once", async () => {
     const { account, payment } = await seedAtomicityFixture();
     const originalAdapterBatch = database.adapter.batch.bind(database.adapter);
     const adapterBatchSpy = jest
@@ -184,6 +184,16 @@ describe("recurring payment SQLite atomicity", () => {
 
     adapterBatchSpy.mockRestore();
 
+    expect(account.balance).toBe(1000);
+    expect(payment.nextDueDate).toEqual(originalDueDate);
+
+    await submitRecurringPayment({
+      payment,
+      accountId: account.id,
+      amount: 250,
+      note: "Rent payment",
+    });
+
     const freshDatabase = await openFreshDatabase();
     const freshAccount = await freshDatabase
       .get<Account>("accounts")
@@ -196,12 +206,14 @@ describe("recurring payment SQLite atomicity", () => {
       .query()
       .fetch();
 
-    expect(freshAccount.balance).toBe(1000);
-    expect(freshPayment.nextDueDate).toEqual(originalDueDate);
+    expect(freshAccount.balance).toBe(750);
+    expect(freshPayment.nextDueDate).toEqual(
+      new Date("2026-08-01T00:00:00.000Z")
+    );
     expect(
       linkedTransactions.filter(
         (transaction) => transaction.linkedRecurringId === payment.id
       )
-    ).toHaveLength(0);
+    ).toHaveLength(1);
   });
 });

@@ -30,8 +30,8 @@ const mockMultiSet = AsyncStorage.multiSet as jest.MockedFunction<
 
 function valuesForKeys(
   keys: readonly string[]
-): ReadonlyArray<readonly [string, string | null]> {
-  return keys.map((key) => {
+): Array<[string, string | null]> {
+  return keys.map((key): [string, string | null] => {
     if (key.endsWith(":user-a")) {
       if (key.includes("sms-last-sync")) return [key, "123"];
       return [key, "true"];

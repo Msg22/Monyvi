@@ -44,6 +44,21 @@ interface MockDbApi {
 // jest.mock declarations — factory is hoisted, so everything must be inline
 // ---------------------------------------------------------------------------
 
+jest.mock("@/services/watermelon-cache-snapshot", () => ({
+  captureCachedModelSnapshot: jest.fn((model: Record<string, unknown>) => ({
+    model,
+    raw: { ...model },
+  })),
+  restoreCachedModelSnapshot: jest.fn(
+    (snapshot: {
+      readonly model: Record<string, unknown>;
+      readonly raw: Record<string, unknown>;
+    }): void => {
+      Object.assign(snapshot.model, snapshot.raw);
+    }
+  ),
+}));
+
 jest.mock("@monyvi/db", () => {
   /** Mutable model: .update(builder) mutates fields in place */
   function createModel(
@@ -270,6 +285,28 @@ describe("transaction-service", () => {
       expect(account.prepareUpdate).toHaveBeenCalledTimes(1);
       expect(mockDb.batch).toHaveBeenCalledTimes(1);
       expect(mockDb.batch).toHaveBeenCalledWith([transaction, account]);
+    });
+
+    it("restores the cached balance after a failed batch before retrying", async () => {
+      const account = seedAccount("acc-1", 1000);
+      const data = {
+        amount: 200,
+        currency: "EGP" as const,
+        categoryId: "cat-food",
+        accountId: "acc-1",
+        type: "EXPENSE" as const,
+        source: "MANUAL" as const,
+      };
+      mockDb.batch.mockRejectedValueOnce(new Error("atomic batch failed"));
+
+      await expect(createTransaction(data)).rejects.toThrow(
+        "atomic batch failed"
+      );
+      expect(account.balance).toBe(1000);
+
+      await createTransaction(data);
+
+      expect(account.balance).toBe(800);
     });
 
     it("should reject negative input without mutating the account", async () => {

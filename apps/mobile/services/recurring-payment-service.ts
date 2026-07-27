@@ -14,6 +14,10 @@ import {
   assertValidTransactionAmount,
   prepareTransactionCreateWithBalance,
 } from "./transaction-service";
+import {
+  captureCachedModelSnapshot,
+  restoreCachedModelSnapshot,
+} from "./watermelon-cache-snapshot";
 
 export interface RecurringPaymentData {
   name: string;
@@ -251,13 +255,20 @@ export async function submitRecurringPayment(params: {
       scope,
       scope.userId
     );
-    const scheduleUpdate = persistedPayment.prepareUpdate((record) => {
-      record.nextDueDate = calculateNextDueDate(
-        persistedPayment.nextDueDate,
-        persistedPayment.frequency
-      );
-    });
+    const paymentSnapshot = captureCachedModelSnapshot(persistedPayment);
+    try {
+      const scheduleUpdate = persistedPayment.prepareUpdate((record) => {
+        record.nextDueDate = calculateNextDueDate(
+          persistedPayment.nextDueDate,
+          persistedPayment.frequency
+        );
+      });
 
-    await database.batch([...preparedTransaction.operations, scheduleUpdate]);
+      await database.batch([...preparedTransaction.operations, scheduleUpdate]);
+    } catch (error) {
+      preparedTransaction.restoreCachedAccount();
+      restoreCachedModelSnapshot(paymentSnapshot);
+      throw error;
+    }
   });
 }

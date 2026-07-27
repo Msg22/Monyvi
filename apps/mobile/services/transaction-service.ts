@@ -16,6 +16,10 @@ import {
 } from "@/services/user-data-access";
 import { USER_DATA_ACCESS_ERROR_CODES } from "@/services/user-data-access-error-codes";
 import { isValidTransactionAmount } from "@monyvi/logic";
+import {
+  captureCachedModelSnapshot,
+  restoreCachedModelSnapshot,
+} from "@/services/watermelon-cache-snapshot";
 
 export const INVALID_ACCOUNT_BALANCE_ERROR_CODE = "INVALID_ACCOUNT_BALANCE";
 export const BALANCE_REVERSAL_ACCOUNT_NOT_FOUND_ERROR_CODE =
@@ -66,6 +70,7 @@ export interface CreateTransactionData {
 export interface PreparedTransactionCreate {
   readonly transaction: Transaction;
   readonly operations: Model[];
+  readonly restoreCachedAccount: () => void;
 }
 
 export function assertValidTransactionAmount(amount: number): void {
@@ -86,6 +91,8 @@ export async function prepareTransactionCreateWithBalance(
   if (expectedUserId !== undefined) {
     await assertExpectedCurrentUser(expectedUserId);
   }
+
+  const accountSnapshot = captureCachedModelSnapshot(account);
 
   const transaction = transactionsCollection().prepareCreate((record) => {
     record.userId = scope.userId;
@@ -115,6 +122,9 @@ export async function prepareTransactionCreateWithBalance(
   return {
     transaction,
     operations: [transaction, accountUpdate],
+    restoreCachedAccount: (): void => {
+      restoreCachedModelSnapshot(accountSnapshot);
+    },
   };
 }
 
@@ -138,8 +148,13 @@ export async function createTransaction(
       scope,
       expectedUserId
     );
-    await database.batch(prepared.operations);
-    return prepared.transaction;
+    try {
+      await database.batch(prepared.operations);
+      return prepared.transaction;
+    } catch (error) {
+      prepared.restoreCachedAccount();
+      throw error;
+    }
   });
 }
 
