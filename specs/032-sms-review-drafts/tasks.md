@@ -313,7 +313,7 @@ review.
       gap
 - [x] T070 Update `specs/032-sms-review-drafts/quickstart.md` and PR Manual QA
       Plan with the final coverage matrix and honest manual-only native checks
-- [ ] T071 Commit with conventional message, push `384-sms-review-drafts`,
+- [x] T071 Commit with conventional message, push `384-sms-review-drafts`,
       create a PR to `main`, include `Closes #770`, architecture/privacy notes,
       testing, Manual QA Plan, and coverage matrix
 
