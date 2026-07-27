@@ -27,13 +27,17 @@ interface MockModelRecord {
 
 type MockUnsafeQueryRaw = jest.Mock<Promise<unknown[]>, []>;
 type MockBatch = jest.Mock<Promise<void>, [readonly MockModelRecord[]]>;
+type MockAdapterBatch = jest.Mock<Promise<void>, [readonly unknown[]]>;
 
 interface MockDbApi {
   readonly __mockDb: {
     write: jest.Mock;
     get: jest.Mock;
     batch: MockBatch;
-    adapter: { unsafeQueryRaw: MockUnsafeQueryRaw };
+    adapter: {
+      batch: MockAdapterBatch;
+      unsafeQueryRaw: MockUnsafeQueryRaw;
+    };
   };
   readonly __model: (
     id: string,
@@ -91,6 +95,7 @@ jest.mock("@monyvi/db", () => {
   }
 
   const adapter = {
+    batch: jest.fn<Promise<void>, [readonly unknown[]]>(),
     unsafeQueryRaw: jest.fn<Promise<unknown[]>, []>(),
   };
 
@@ -151,6 +156,7 @@ jest.mock("@monyvi/db", () => {
       db.write.mockImplementation((cb: () => Promise<unknown>) => cb());
       db.get.mockImplementation((t: string) => createCollection(t));
       db.batch.mockResolvedValue(undefined);
+      db.adapter.batch.mockResolvedValue(undefined);
       db.adapter.unsafeQueryRaw.mockResolvedValue([]);
     },
   };
@@ -245,6 +251,7 @@ describe("transaction-service", () => {
     mockDb.write.mockClear();
     mockDb.get.mockClear();
     mockDb.batch.mockClear();
+    mockDb.adapter.batch.mockClear();
     mockDb.adapter.unsafeQueryRaw.mockClear();
     mockRewire();
 
@@ -304,7 +311,7 @@ describe("transaction-service", () => {
       expect(mockDb.batch).toHaveBeenCalledWith([transaction, account]);
     });
 
-    it("restores the cached balance after a failed batch before retrying", async () => {
+    it("restores the cached balance immediately after an adapter rollback", async () => {
       const account = seedAccount("acc-1", 1000);
       const data = {
         amount: 200,
@@ -314,23 +321,33 @@ describe("transaction-service", () => {
         type: "EXPENSE" as const,
         source: "MANUAL" as const,
       };
-      mockDb.batch.mockRejectedValueOnce(new Error("atomic batch failed"));
+      const adapterError = new Error("atomic adapter batch failed");
+      mockDb.adapter.batch.mockRejectedValueOnce(adapterError);
+      mockDb.batch.mockImplementationOnce(async (records) => {
+        await mockDb.adapter.batch(records);
+      });
 
-      await expect(createTransaction(data)).rejects.toThrow(
-        "atomic batch failed"
-      );
+      await expect(createTransaction(data)).rejects.toThrow(adapterError);
       expect(account.balance).toBe(1000);
+      expect(mockDb.adapter.unsafeQueryRaw).not.toHaveBeenCalled();
 
       await createTransaction(data);
 
       expect(account.balance).toBe(800);
+      expect(account.prepareUpdate).toHaveBeenCalledTimes(2);
+      expect(mockDb.batch).toHaveBeenCalledTimes(2);
     });
 
-    it("treats a rejected notification as committed when the transaction persisted", async () => {
+    it("treats a cache publication failure after adapter commit as success", async () => {
       const account = seedAccount("acc-1", 1000);
       const notificationError = new Error("observer failed after commit");
-      mockDb.batch.mockRejectedValueOnce(notificationError);
-      mockDb.adapter.unsafeQueryRaw.mockResolvedValueOnce([{}]);
+      mockDb.batch.mockImplementationOnce(async (records) => {
+        await mockDb.adapter.batch(records);
+        throw notificationError;
+      });
+      mockDb.adapter.unsafeQueryRaw.mockRejectedValue(
+        new Error("persistence query unavailable")
+      );
 
       await expect(
         createTransaction({
@@ -344,68 +361,9 @@ describe("transaction-service", () => {
       ).resolves.toBeDefined();
 
       expect(account.balance).toBe(800);
-      expect(mockDb.adapter.unsafeQueryRaw).toHaveBeenCalledTimes(1);
-    });
-
-    it("blocks a retry until an indeterminate rollback can be verified", async () => {
-      const account = seedAccount("acc-1", 1000);
-      const data = {
-        amount: 200,
-        currency: "EGP" as const,
-        categoryId: "cat-food",
-        accountId: "acc-1",
-        type: "EXPENSE" as const,
-        source: "MANUAL" as const,
-      };
-      mockDb.batch.mockRejectedValueOnce(new Error("atomic batch failed"));
-      mockDb.adapter.unsafeQueryRaw
-        .mockRejectedValueOnce(new Error("verification unavailable"))
-        .mockRejectedValueOnce(new Error("verification still unavailable"))
-        .mockResolvedValueOnce([]);
-
-      await expect(createTransaction(data)).rejects.toThrow(
-        "atomic batch failed"
-      );
-      expect(account.balance).toBe(800);
-
-      await expect(createTransaction(data)).rejects.toThrow(
-        "TRANSACTION_COMMIT_STATE_UNAVAILABLE"
-      );
-      expect(account.balance).toBe(800);
-      expect(mockDb.batch).toHaveBeenCalledTimes(1);
-
-      await expect(createTransaction(data)).resolves.toBeDefined();
-      expect(account.balance).toBe(800);
-      expect(account.prepareUpdate).toHaveBeenCalledTimes(2);
-      expect(mockDb.batch).toHaveBeenCalledTimes(2);
-    });
-
-    it("returns the original transaction when a later verification confirms the commit", async () => {
-      const account = seedAccount("acc-1", 1000);
-      const data = {
-        amount: 200,
-        currency: "EGP" as const,
-        categoryId: "cat-food",
-        accountId: "acc-1",
-        type: "EXPENSE" as const,
-        source: "MANUAL" as const,
-      };
-      mockDb.batch.mockRejectedValueOnce(
-        new Error("observer failed after adapter commit")
-      );
-      mockDb.adapter.unsafeQueryRaw
-        .mockRejectedValueOnce(new Error("verification unavailable"))
-        .mockResolvedValueOnce([{}]);
-
-      await expect(createTransaction(data)).rejects.toThrow(
-        "observer failed after adapter commit"
-      );
-      const originalTransaction = mockDb.batch.mock.calls[0]?.[0]?.[0];
-
-      await expect(createTransaction(data)).resolves.toBe(originalTransaction);
-      expect(account.balance).toBe(800);
       expect(account.prepareUpdate).toHaveBeenCalledTimes(1);
       expect(mockDb.batch).toHaveBeenCalledTimes(1);
+      expect(mockDb.adapter.unsafeQueryRaw).not.toHaveBeenCalled();
     });
 
     it("rejects a transaction whose currency differs from the selected account", async () => {

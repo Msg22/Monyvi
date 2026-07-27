@@ -20,12 +20,7 @@ import {
   captureCachedModelSnapshot,
   restoreCachedModelSnapshot,
 } from "@/services/watermelon-cache-snapshot";
-import {
-  createTransactionAccountScopeKey,
-  createTransactionOperationKey,
-  rememberIndeterminateTransactionCommit,
-  resolvePendingTransactionCommit,
-} from "@/services/transaction-commit-recovery";
+import { commitPreparedBatch } from "@/services/watermelon-atomic-batch";
 
 export const INVALID_ACCOUNT_BALANCE_ERROR_CODE = "INVALID_ACCOUNT_BALANCE";
 export const BALANCE_REVERSAL_ACCOUNT_NOT_FOUND_ERROR_CODE =
@@ -79,7 +74,6 @@ export interface PreparedTransactionCreate {
   readonly transaction: Transaction;
   readonly operations: Model[];
   readonly restoreCachedAccount: () => void;
-  readonly wasTransactionPersisted: () => Promise<boolean | null>;
 }
 
 export function assertValidTransactionAmount(amount: number): void {
@@ -137,16 +131,6 @@ export async function prepareTransactionCreateWithBalance(
     restoreCachedAccount: (): void => {
       restoreCachedModelSnapshot(accountSnapshot);
     },
-    wasTransactionPersisted: async (): Promise<boolean | null> => {
-      try {
-        const persistedTransactions = (await transactionsCollection()
-          .query(Q.where("id", transaction.id))
-          .unsafeFetchRaw()) as unknown[];
-        return persistedTransactions.length > 0;
-      } catch {
-        return null;
-      }
-    },
   };
 }
 
@@ -164,45 +148,17 @@ export async function createTransaction(
     throw new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
   }
 
-  const accountScopeKey = createTransactionAccountScopeKey(
-    scope.userId,
-    data.accountId
-  );
-  const operationKey = createTransactionOperationKey(data);
-
   return await database.write(async () => {
-    const recoveredTransaction = await resolvePendingTransactionCommit(
-      accountScopeKey,
-      operationKey
-    );
-    if (recoveredTransaction) {
-      return recoveredTransaction;
-    }
-
     const prepared = await prepareTransactionCreateWithBalance(
       data,
       scope,
       expectedUserId
     );
     try {
-      await database.batch(prepared.operations);
+      await commitPreparedBatch(prepared.operations);
       return prepared.transaction;
     } catch (error) {
-      const wasTransactionPersisted = await prepared.wasTransactionPersisted();
-      if (wasTransactionPersisted === true) {
-        return prepared.transaction;
-      }
-      if (wasTransactionPersisted === false) {
-        prepared.restoreCachedAccount();
-      } else {
-        rememberIndeterminateTransactionCommit({
-          accountScopeKey,
-          operationKey,
-          transaction: prepared.transaction,
-          wasTransactionPersisted: prepared.wasTransactionPersisted,
-          restoreCachedState: prepared.restoreCachedAccount,
-        });
-      }
+      prepared.restoreCachedAccount();
       throw error;
     }
   });

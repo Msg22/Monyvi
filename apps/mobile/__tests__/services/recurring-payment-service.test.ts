@@ -5,10 +5,10 @@ const mockFindOwned = jest.fn();
 const mockFindAccessibleCategory = jest.fn();
 const mockGetCurrentUserDataScope = jest.fn();
 const mockBatch = jest.fn();
+const mockAdapterBatch = jest.fn<Promise<void>, [readonly unknown[]]>();
 const mockAssertValidTransactionAmount = jest.fn();
 const mockPrepareTransactionCreateWithBalance = jest.fn();
 const mockRestoreCachedAccount = jest.fn();
-const mockWasTransactionPersisted = jest.fn();
 
 interface MockRecurringPaymentRecord {
   readonly id: string;
@@ -92,6 +92,10 @@ jest.mock("@monyvi/db", () => ({
       mockGet(tableName) as MockCollection,
     batch: (...args: readonly unknown[]): Promise<void> =>
       mockBatch(...args) as Promise<void>,
+    adapter: {
+      batch: (operations: readonly unknown[]): Promise<void> =>
+        mockAdapterBatch(operations),
+    },
   },
 }));
 
@@ -140,6 +144,14 @@ import {
   updateRecurringPayment,
 } from "@/services/recurring-payment-service";
 
+const { database: mockDatabase } = jest.requireMock<{
+  database: {
+    adapter: {
+      batch: (operations: readonly unknown[]) => Promise<void>;
+    };
+  };
+}>("@monyvi/db");
+
 describe("recurring-payment-service", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -147,13 +159,12 @@ describe("recurring-payment-service", () => {
       async (callback: () => Promise<unknown>): Promise<unknown> => callback()
     );
     mockBatch.mockResolvedValue(undefined);
+    mockAdapterBatch.mockResolvedValue(undefined);
     mockAssertValidTransactionAmount.mockReturnValue(undefined);
-    mockWasTransactionPersisted.mockResolvedValue(false);
     mockPrepareTransactionCreateWithBalance.mockResolvedValue({
       transaction: { id: "transaction-1" },
       operations: [{ id: "transaction-1" }, { id: "account-1" }],
       restoreCachedAccount: mockRestoreCachedAccount,
-      wasTransactionPersisted: mockWasTransactionPersisted,
     });
     mockCreateRecurringPayment.mockImplementation(
       (
@@ -609,11 +620,16 @@ describe("recurring-payment-service", () => {
       ]);
     });
 
-    it("propagates an atomic batch failure without falling back to separate writes", async () => {
+    it("restores cached state immediately after an adapter rollback", async () => {
       const payment = createRecurringRecord();
-      const batchError = new Error("atomic batch failed");
+      const adapterError = new Error("atomic adapter batch failed");
       mockFindOwned.mockResolvedValue(payment);
-      mockBatch.mockRejectedValue(batchError);
+      mockAdapterBatch.mockRejectedValueOnce(adapterError);
+      mockBatch.mockImplementationOnce(
+        async (operations: readonly unknown[]): Promise<void> => {
+          await mockDatabase.adapter.batch(operations);
+        }
+      );
 
       await expect(
         submitRecurringPayment({
@@ -621,19 +637,23 @@ describe("recurring-payment-service", () => {
           accountId: "account-1",
           amount: 250,
         })
-      ).rejects.toThrow(batchError);
+      ).rejects.toThrow(adapterError);
 
       expect(mockWrite).toHaveBeenCalledTimes(1);
       expect(mockBatch).toHaveBeenCalledTimes(1);
       expect(mockRestoreCachedAccount).toHaveBeenCalledTimes(1);
     });
 
-    it("does not rewind or reject when a notification fails after the transaction commits", async () => {
+    it("does not rewind or reject when cache publication fails after adapter commit", async () => {
       const payment = createRecurringRecord();
       const notificationError = new Error("observer failed after commit");
       mockFindOwned.mockResolvedValue(payment);
-      mockBatch.mockRejectedValue(notificationError);
-      mockWasTransactionPersisted.mockResolvedValue(true);
+      mockBatch.mockImplementationOnce(
+        async (operations: readonly unknown[]): Promise<void> => {
+          await mockDatabase.adapter.batch(operations);
+          throw notificationError;
+        }
+      );
 
       await expect(
         submitRecurringPayment({
@@ -643,7 +663,6 @@ describe("recurring-payment-service", () => {
         })
       ).resolves.toBeUndefined();
 
-      expect(mockWasTransactionPersisted).toHaveBeenCalledTimes(1);
       expect(mockRestoreCachedAccount).not.toHaveBeenCalled();
     });
 
@@ -737,80 +756,6 @@ describe("recurring-payment-service", () => {
       expect(mockGetCurrentUserDataScope).not.toHaveBeenCalled();
       expect(mockWrite).not.toHaveBeenCalled();
       expect(mockBatch).not.toHaveBeenCalled();
-    });
-
-    it("restores cached state before retrying after a later rollback verification", async () => {
-      const payment = createRecurringRecord();
-      const batchError = new Error("atomic batch outcome unknown");
-      const params = {
-        payment: payment as never,
-        accountId: "account-1",
-        amount: 250,
-      };
-      mockFindOwned.mockResolvedValue(payment);
-      mockBatch.mockRejectedValueOnce(batchError);
-      mockWasTransactionPersisted
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(false);
-
-      await expect(submitRecurringPayment(params)).rejects.toThrow(batchError);
-      await expect(submitRecurringPayment(params)).resolves.toBeUndefined();
-
-      expect(mockWasTransactionPersisted).toHaveBeenCalledTimes(2);
-      expect(mockRestoreCachedAccount).toHaveBeenCalledTimes(1);
-      expect(mockPrepareTransactionCreateWithBalance).toHaveBeenCalledTimes(2);
-      expect(payment.prepareUpdate).toHaveBeenCalledTimes(2);
-      expect(mockBatch).toHaveBeenCalledTimes(2);
-    });
-
-    it("does not duplicate a recurring submission later confirmed as committed", async () => {
-      const payment = createRecurringRecord();
-      const batchError = new Error("atomic batch outcome unknown");
-      const params = {
-        payment: payment as never,
-        accountId: "account-1",
-        amount: 250,
-      };
-      mockFindOwned.mockResolvedValue(payment);
-      mockBatch.mockRejectedValueOnce(batchError);
-      mockWasTransactionPersisted
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(true);
-
-      await expect(submitRecurringPayment(params)).rejects.toThrow(batchError);
-      await expect(submitRecurringPayment(params)).resolves.toBeUndefined();
-
-      expect(mockWasTransactionPersisted).toHaveBeenCalledTimes(2);
-      expect(mockRestoreCachedAccount).not.toHaveBeenCalled();
-      expect(mockPrepareTransactionCreateWithBalance).toHaveBeenCalledTimes(1);
-      expect(payment.prepareUpdate).toHaveBeenCalledTimes(1);
-      expect(mockBatch).toHaveBeenCalledTimes(1);
-    });
-
-    it("blocks a retry while the previous commit state remains unavailable", async () => {
-      const payment = createRecurringRecord();
-      const batchError = new Error("atomic batch outcome unknown");
-      const params = {
-        payment: payment as never,
-        accountId: "account-1",
-        amount: 250,
-      };
-      mockFindOwned.mockResolvedValue(payment);
-      mockBatch.mockRejectedValueOnce(batchError);
-      mockWasTransactionPersisted.mockResolvedValue(null);
-
-      await expect(submitRecurringPayment(params)).rejects.toThrow(batchError);
-      await expect(submitRecurringPayment(params)).rejects.toThrow(
-        "TRANSACTION_COMMIT_STATE_UNAVAILABLE"
-      );
-
-      expect(mockPrepareTransactionCreateWithBalance).toHaveBeenCalledTimes(1);
-      expect(payment.prepareUpdate).toHaveBeenCalledTimes(1);
-      expect(mockBatch).toHaveBeenCalledTimes(1);
-      expect(mockRestoreCachedAccount).not.toHaveBeenCalled();
-
-      mockWasTransactionPersisted.mockResolvedValueOnce(false);
-      await expect(submitRecurringPayment(params)).resolves.toBeUndefined();
     });
   });
 

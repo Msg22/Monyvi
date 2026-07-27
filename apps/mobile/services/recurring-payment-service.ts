@@ -18,12 +18,7 @@ import {
   captureCachedModelSnapshot,
   restoreCachedModelSnapshot,
 } from "./watermelon-cache-snapshot";
-import {
-  createTransactionAccountScopeKey,
-  createTransactionOperationKey,
-  rememberIndeterminateTransactionCommit,
-  resolvePendingTransactionCommit,
-} from "./transaction-commit-recovery";
+import { commitPreparedBatch } from "./watermelon-atomic-batch";
 
 export interface RecurringPaymentData {
   name: string;
@@ -257,19 +252,6 @@ export async function submitRecurringPayment(params: {
       date: new Date(),
       linkedRecurringId: persistedPayment.id,
     };
-    const accountScopeKey = createTransactionAccountScopeKey(
-      scope.userId,
-      accountId
-    );
-    const operationKey = createTransactionOperationKey(transactionData);
-    const recoveredTransaction = await resolvePendingTransactionCommit(
-      accountScopeKey,
-      operationKey
-    );
-    if (recoveredTransaction) {
-      return;
-    }
-
     const preparedTransaction = await prepareTransactionCreateWithBalance(
       transactionData,
       scope,
@@ -284,28 +266,13 @@ export async function submitRecurringPayment(params: {
         );
       });
 
-      await database.batch([...preparedTransaction.operations, scheduleUpdate]);
+      await commitPreparedBatch([
+        ...preparedTransaction.operations,
+        scheduleUpdate,
+      ]);
     } catch (error) {
-      const wasTransactionPersisted =
-        await preparedTransaction.wasTransactionPersisted();
-      if (wasTransactionPersisted === true) {
-        return;
-      }
-      if (wasTransactionPersisted === false) {
-        preparedTransaction.restoreCachedAccount();
-        restoreCachedModelSnapshot(paymentSnapshot);
-      } else {
-        rememberIndeterminateTransactionCommit({
-          accountScopeKey,
-          operationKey,
-          transaction: preparedTransaction.transaction,
-          wasTransactionPersisted: preparedTransaction.wasTransactionPersisted,
-          restoreCachedState: (): void => {
-            preparedTransaction.restoreCachedAccount();
-            restoreCachedModelSnapshot(paymentSnapshot);
-          },
-        });
-      }
+      preparedTransaction.restoreCachedAccount();
+      restoreCachedModelSnapshot(paymentSnapshot);
       throw error;
     }
   });
