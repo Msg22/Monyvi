@@ -13,9 +13,16 @@ import * as SecureStore from "expo-secure-store";
 import { AUTH_REDIRECT_URL } from "@/constants/auth-constants";
 import { z } from "zod";
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL as string;
-const supabasePublishableKey = process.env
-  .EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY as string;
+function readPublicEnvironmentVariable(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+const supabaseUrl = readPublicEnvironmentVariable(
+  process.env.EXPO_PUBLIC_SUPABASE_URL
+);
+const supabasePublishableKey = readPublicEnvironmentVariable(
+  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+);
 
 if (!supabaseUrl || !supabasePublishableKey) {
   throw new Error(
@@ -41,7 +48,9 @@ export function resolveSupabaseStorageKey(
 
 const AUTH_STORAGE_KEY = resolveSupabaseStorageKey(
   supabaseUrl,
-  process.env.EXPO_PUBLIC_SUPABASE_AUTH_STORAGE_KEY
+  readPublicEnvironmentVariable(
+    process.env.EXPO_PUBLIC_SUPABASE_AUTH_STORAGE_KEY
+  )
 );
 
 /**

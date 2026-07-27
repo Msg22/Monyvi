@@ -266,8 +266,15 @@ export async function submitRecurringPayment(params: {
 
       await database.batch([...preparedTransaction.operations, scheduleUpdate]);
     } catch (error) {
-      preparedTransaction.restoreCachedAccount();
-      restoreCachedModelSnapshot(paymentSnapshot);
+      const wasTransactionPersisted =
+        await preparedTransaction.wasTransactionPersisted();
+      if (wasTransactionPersisted === true) {
+        return;
+      }
+      if (wasTransactionPersisted === false) {
+        preparedTransaction.restoreCachedAccount();
+        restoreCachedModelSnapshot(paymentSnapshot);
+      }
       throw error;
     }
   });

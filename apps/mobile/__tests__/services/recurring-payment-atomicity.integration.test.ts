@@ -215,5 +215,55 @@ describe("recurring payment SQLite atomicity", () => {
         (transaction) => transaction.linkedRecurringId === payment.id
       )
     ).toHaveLength(1);
+
+    const observerError = new Error("observer failed after commit");
+    const originalDatabaseBatch = database.batch.bind(database);
+    const databaseBatchSpy = jest
+      .spyOn(database, "batch")
+      .mockImplementationOnce(async (...records): Promise<void> => {
+        await originalDatabaseBatch(...records);
+        throw observerError;
+      });
+
+    try {
+      await expect(
+        submitRecurringPayment({
+          payment,
+          accountId: account.id,
+          amount: 250,
+          note: "Second rent payment",
+        })
+      ).resolves.toBeUndefined();
+    } finally {
+      databaseBatchSpy.mockRestore();
+    }
+
+    expect(account.balance).toBe(500);
+    expect(payment.nextDueDate).toEqual(new Date("2026-09-01T00:00:00.000Z"));
+
+    const databaseAfterNotificationFailure = await openFreshDatabase();
+    const accountAfterNotificationFailure =
+      await databaseAfterNotificationFailure
+        .get<Account>("accounts")
+        .find(account.id);
+    const paymentAfterNotificationFailure =
+      await databaseAfterNotificationFailure
+        .get<RecurringPayment>("recurring_payments")
+        .find(payment.id);
+    const transactionsAfterNotificationFailure =
+      await databaseAfterNotificationFailure
+        .get<Transaction>("transactions")
+        .query()
+        .fetch();
+
+    expect(accountAfterNotificationFailure.balance).toBe(500);
+    expect(paymentAfterNotificationFailure.nextDueDate).toEqual(
+      new Date("2026-09-01T00:00:00.000Z")
+    );
+    expect(
+      transactionsAfterNotificationFailure.filter(
+        (transaction) => transaction.linkedRecurringId === payment.id
+      )
+    ).toHaveLength(2);
   });
 });

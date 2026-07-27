@@ -92,6 +92,10 @@ import type { Category } from "@monyvi/db";
 // Helpers
 // ---------------------------------------------------------------------------
 
+function readProcessEnvironmentVariable(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
 /** Minimal valid options for all tests (matches strict ParseVoiceOptions). */
 function makeDefaultOptions(overrides: Record<string, unknown> = {}): {
   audioUri: string;
@@ -215,12 +219,15 @@ describe("ai-voice-parser-service", () => {
     });
 
     it("keeps voice parsing available when every SMS AI capability is disabled", async () => {
-      const originalFullParserFlag =
-        process.env.EXPO_PUBLIC_SMS_FULL_PARSER_ENABLED;
-      const originalEnrichmentFlag =
-        process.env.EXPO_PUBLIC_SMS_CATEGORY_ENRICHMENT_ENABLED;
-      const originalQaProfile =
-        process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE;
+      const originalFullParserFlag = readProcessEnvironmentVariable(
+        process.env.EXPO_PUBLIC_SMS_FULL_PARSER_ENABLED
+      );
+      const originalEnrichmentFlag = readProcessEnvironmentVariable(
+        process.env.EXPO_PUBLIC_SMS_CATEGORY_ENRICHMENT_ENABLED
+      );
+      const originalQaProfile = readProcessEnvironmentVariable(
+        process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE
+      );
       process.env.EXPO_PUBLIC_SMS_FULL_PARSER_ENABLED = "false";
       process.env.EXPO_PUBLIC_SMS_CATEGORY_ENRICHMENT_ENABLED = "false";
       process.env.EXPO_PUBLIC_SMS_SAFEGUARD_QA_PROFILE = "quota-exhaustion-v1";

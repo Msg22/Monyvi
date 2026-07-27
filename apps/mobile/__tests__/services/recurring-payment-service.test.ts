@@ -8,6 +8,7 @@ const mockBatch = jest.fn();
 const mockAssertValidTransactionAmount = jest.fn();
 const mockPrepareTransactionCreateWithBalance = jest.fn();
 const mockRestoreCachedAccount = jest.fn();
+const mockWasTransactionPersisted = jest.fn();
 
 interface MockRecurringPaymentRecord {
   readonly id: string;
@@ -147,10 +148,12 @@ describe("recurring-payment-service", () => {
     );
     mockBatch.mockResolvedValue(undefined);
     mockAssertValidTransactionAmount.mockReturnValue(undefined);
+    mockWasTransactionPersisted.mockResolvedValue(false);
     mockPrepareTransactionCreateWithBalance.mockResolvedValue({
       transaction: { id: "transaction-1" },
       operations: [{ id: "transaction-1" }, { id: "account-1" }],
       restoreCachedAccount: mockRestoreCachedAccount,
+      wasTransactionPersisted: mockWasTransactionPersisted,
     });
     mockCreateRecurringPayment.mockImplementation(
       (
@@ -623,6 +626,25 @@ describe("recurring-payment-service", () => {
       expect(mockWrite).toHaveBeenCalledTimes(1);
       expect(mockBatch).toHaveBeenCalledTimes(1);
       expect(mockRestoreCachedAccount).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not rewind or reject when a notification fails after the transaction commits", async () => {
+      const payment = createRecurringRecord();
+      const notificationError = new Error("observer failed after commit");
+      mockFindOwned.mockResolvedValue(payment);
+      mockBatch.mockRejectedValue(notificationError);
+      mockWasTransactionPersisted.mockResolvedValue(true);
+
+      await expect(
+        submitRecurringPayment({
+          payment: payment as never,
+          accountId: "account-1",
+          amount: 250,
+        })
+      ).resolves.toBeUndefined();
+
+      expect(mockWasTransactionPersisted).toHaveBeenCalledTimes(1);
+      expect(mockRestoreCachedAccount).not.toHaveBeenCalled();
     });
 
     it("uses persisted income direction when preparing the atomic transaction", async () => {

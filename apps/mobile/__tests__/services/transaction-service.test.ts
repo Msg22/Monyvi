@@ -25,11 +25,14 @@ interface MockModelRecord {
   prepareUpdate: jest.Mock;
 }
 
+type MockUnsafeQueryRaw = jest.Mock<Promise<unknown[]>, []>;
+
 interface MockDbApi {
   readonly __mockDb: {
     write: jest.Mock;
     get: jest.Mock;
     batch: jest.Mock;
+    adapter: { unsafeQueryRaw: MockUnsafeQueryRaw };
   };
   readonly __model: (
     id: string,
@@ -86,6 +89,10 @@ jest.mock("@monyvi/db", () => {
     return stores[t];
   }
 
+  const adapter = {
+    unsafeQueryRaw: jest.fn<Promise<unknown[]>, []>(),
+  };
+
   function createCollection(tableName: string): Record<string, jest.Mock> {
     return {
       find: jest.fn((id: string) => {
@@ -112,6 +119,7 @@ jest.mock("@monyvi/db", () => {
         fetch: jest.fn(() =>
           Promise.resolve(Array.from(getStore(tableName).values()))
         ),
+        unsafeFetchRaw: jest.fn(() => adapter.unsafeQueryRaw()),
       })),
     };
   }
@@ -120,6 +128,7 @@ jest.mock("@monyvi/db", () => {
     write: jest.fn((cb: () => Promise<unknown>) => cb()),
     get: jest.fn((t: string) => createCollection(t)),
     batch: jest.fn(),
+    adapter,
   };
 
   return {
@@ -141,6 +150,7 @@ jest.mock("@monyvi/db", () => {
       db.write.mockImplementation((cb: () => Promise<unknown>) => cb());
       db.get.mockImplementation((t: string) => createCollection(t));
       db.batch.mockResolvedValue(undefined);
+      db.adapter.unsafeQueryRaw.mockResolvedValue([]);
     },
   };
 });
@@ -161,6 +171,7 @@ import {
   batchDeleteDisplayTransactions,
   BALANCE_REVERSAL_ACCOUNT_NOT_FOUND_ERROR_CODE,
   INVALID_TRANSACTION_AMOUNT_ERROR_CODE,
+  TRANSACTION_ACCOUNT_CURRENCY_MISMATCH_ERROR_CODE,
 } from "@/services/transaction-service";
 import { USER_DATA_ACCESS_ERROR_CODES } from "@/services/user-data-access";
 import { MAX_TRANSACTION_AMOUNT } from "@monyvi/logic";
@@ -184,7 +195,11 @@ const {
 // ---------------------------------------------------------------------------
 
 function seedAccount(id: string, balance: number): MockModelRecord {
-  const acc = mockModel(id, { balance, userId: "test-user-id" });
+  const acc = mockModel(id, {
+    balance,
+    currency: "EGP",
+    userId: "test-user-id",
+  });
   mockSeed("accounts", acc);
   return acc;
 }
@@ -229,6 +244,7 @@ describe("transaction-service", () => {
     mockDb.write.mockClear();
     mockDb.get.mockClear();
     mockDb.batch.mockClear();
+    mockDb.adapter.unsafeQueryRaw.mockClear();
     mockRewire();
 
     const supabaseMock = jest.requireMock<{ getCurrentUserId: jest.Mock }>(
@@ -307,6 +323,45 @@ describe("transaction-service", () => {
       await createTransaction(data);
 
       expect(account.balance).toBe(800);
+    });
+
+    it("treats a rejected notification as committed when the transaction persisted", async () => {
+      const account = seedAccount("acc-1", 1000);
+      const notificationError = new Error("observer failed after commit");
+      mockDb.batch.mockRejectedValueOnce(notificationError);
+      mockDb.adapter.unsafeQueryRaw.mockResolvedValueOnce([{}]);
+
+      await expect(
+        createTransaction({
+          amount: 200,
+          currency: "EGP",
+          categoryId: "cat-food",
+          accountId: "acc-1",
+          type: "EXPENSE",
+          source: "MANUAL",
+        })
+      ).resolves.toBeDefined();
+
+      expect(account.balance).toBe(800);
+      expect(mockDb.adapter.unsafeQueryRaw).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects a transaction whose currency differs from the selected account", async () => {
+      const account = seedAccount("acc-1", 1000);
+
+      await expect(
+        createTransaction({
+          amount: 200,
+          currency: "USD",
+          categoryId: "cat-food",
+          accountId: "acc-1",
+          type: "EXPENSE",
+          source: "MANUAL",
+        })
+      ).rejects.toThrow(TRANSACTION_ACCOUNT_CURRENCY_MISMATCH_ERROR_CODE);
+
+      expect(account.balance).toBe(1000);
+      expect(mockDb.batch).not.toHaveBeenCalled();
     });
 
     it("should reject negative input without mutating the account", async () => {

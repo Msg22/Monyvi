@@ -28,6 +28,8 @@ export const INVALID_TRANSACTION_AMOUNT_ERROR_CODE =
   "INVALID_TRANSACTION_AMOUNT";
 export const TRANSACTION_ACCOUNT_UNAVAILABLE_ERROR_CODE =
   "TRANSACTION_ACCOUNT_UNAVAILABLE";
+export const TRANSACTION_ACCOUNT_CURRENCY_MISMATCH_ERROR_CODE =
+  "TRANSACTION_ACCOUNT_CURRENCY_MISMATCH";
 
 function accountsCollection(): ReturnType<typeof database.get<Account>> {
   return database.get<Account>("accounts");
@@ -71,6 +73,7 @@ export interface PreparedTransactionCreate {
   readonly transaction: Transaction;
   readonly operations: Model[];
   readonly restoreCachedAccount: () => void;
+  readonly wasTransactionPersisted: () => Promise<boolean | null>;
 }
 
 export function assertValidTransactionAmount(amount: number): void {
@@ -87,6 +90,9 @@ export async function prepareTransactionCreateWithBalance(
   const account = await getOwnedAccount(data.accountId, scope);
   if (account.deleted) {
     throw new Error(TRANSACTION_ACCOUNT_UNAVAILABLE_ERROR_CODE);
+  }
+  if (account.currency !== data.currency) {
+    throw new Error(TRANSACTION_ACCOUNT_CURRENCY_MISMATCH_ERROR_CODE);
   }
   if (expectedUserId !== undefined) {
     await assertExpectedCurrentUser(expectedUserId);
@@ -125,6 +131,16 @@ export async function prepareTransactionCreateWithBalance(
     restoreCachedAccount: (): void => {
       restoreCachedModelSnapshot(accountSnapshot);
     },
+    wasTransactionPersisted: async (): Promise<boolean | null> => {
+      try {
+        const persistedTransactions = (await transactionsCollection()
+          .query(Q.where("id", transaction.id))
+          .unsafeFetchRaw()) as unknown[];
+        return persistedTransactions.length > 0;
+      } catch {
+        return null;
+      }
+    },
   };
 }
 
@@ -152,7 +168,13 @@ export async function createTransaction(
       await database.batch(prepared.operations);
       return prepared.transaction;
     } catch (error) {
-      prepared.restoreCachedAccount();
+      const wasTransactionPersisted = await prepared.wasTransactionPersisted();
+      if (wasTransactionPersisted === true) {
+        return prepared.transaction;
+      }
+      if (wasTransactionPersisted === false) {
+        prepared.restoreCachedAccount();
+      }
       throw error;
     }
   });
