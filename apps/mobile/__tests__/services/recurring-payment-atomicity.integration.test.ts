@@ -217,13 +217,17 @@ describe("recurring payment SQLite atomicity", () => {
     ).toHaveLength(1);
 
     const observerError = new Error("observer failed after commit");
-    const originalDatabaseBatch = database.batch.bind(database);
-    const databaseBatchSpy = jest
-      .spyOn(database, "batch")
-      .mockImplementationOnce(async (...records): Promise<void> => {
-        await originalDatabaseBatch(...records);
-        throw observerError;
-      });
+    const healthyAccountSubscriber = jest.fn();
+    const healthyPaymentSubscriber = jest.fn();
+    const unsubscribeThrowingSubscriber = account.experimentalSubscribe(() => {
+      throw observerError;
+    });
+    const unsubscribeHealthyAccountSubscriber = account.experimentalSubscribe(
+      healthyAccountSubscriber
+    );
+    const unsubscribeHealthyPaymentSubscriber = payment.experimentalSubscribe(
+      healthyPaymentSubscriber
+    );
 
     try {
       await expect(
@@ -235,8 +239,13 @@ describe("recurring payment SQLite atomicity", () => {
         })
       ).resolves.toBeUndefined();
     } finally {
-      databaseBatchSpy.mockRestore();
+      unsubscribeHealthyPaymentSubscriber();
+      unsubscribeHealthyAccountSubscriber();
+      unsubscribeThrowingSubscriber();
     }
+
+    expect(healthyAccountSubscriber).toHaveBeenCalledWith(false);
+    expect(healthyPaymentSubscriber).toHaveBeenCalledWith(false);
 
     expect(account.balance).toBe(500);
     expect(payment.nextDueDate).toEqual(new Date("2026-09-01T00:00:00.000Z"));

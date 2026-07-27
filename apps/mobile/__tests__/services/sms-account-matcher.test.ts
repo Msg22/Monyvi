@@ -122,6 +122,31 @@ describe("sms-account-matcher - matchAccountCore", () => {
     });
   });
 
+  it("does not fall through to a same-sender account after a card currency conflict", () => {
+    const usdSiblingAccount: AccountWithBankDetails = {
+      ...accBank1,
+      id: "acc_bank1_usd",
+      name: "CIB USD Account",
+      currency: "USD",
+      cardLast4: 5678,
+    };
+
+    const result = matchAccountCore(
+      {
+        senderDisplayName: "CIB-EGYPT",
+        cardLast4: "1234",
+        currency: "USD",
+      },
+      [accBank1, usdSiblingAccount]
+    );
+
+    expect(result).toEqual({
+      accountId: null,
+      accountName: null,
+      matchReason: "none",
+    });
+  });
+
   it("Step 1: Matches parsed card digits with leading zeroes against stored integer digits", () => {
     const leadingZeroAccount: AccountWithBankDetails = {
       id: "acc_leading_zero",
