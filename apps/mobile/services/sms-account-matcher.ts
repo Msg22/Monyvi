@@ -402,10 +402,13 @@ function matchAccountCore(
 ): AccountMatch {
   const { senderDisplayName, cardLast4, currency } = input;
   const normalizedCardLast4 = normalizeCardLast4ForStorage(cardLast4);
+  const currencyCompatibleAccounts = currency
+    ? accounts.filter((account) => account.currency === currency)
+    : accounts;
 
   // Step 1: Card last 4 + sender match (highest confidence)
   if (normalizedCardLast4 !== undefined) {
-    const cardAndSenderMatches = accounts.filter(
+    const cardAndSenderMatches = currencyCompatibleAccounts.filter(
       (acc) =>
         acc.cardLast4 === normalizedCardLast4 &&
         doesAccountMatchSender(senderDisplayName, acc)
@@ -428,7 +431,7 @@ function matchAccountCore(
   }
 
   // Step 2: Sender match alone against bank_details / account name
-  const senderMatches = accounts.filter((account) =>
+  const senderMatches = currencyCompatibleAccounts.filter((account) =>
     doesAccountMatchSender(senderDisplayName, account)
   );
   if (senderMatches.length === 1) {
@@ -453,8 +456,7 @@ function matchAccountCore(
     // This should return institution info for supported Egyptian providers
     // since we already filter the sms based on this registry
     if (senderInstitution) {
-      for (const acc of accounts) {
-        if (acc.currency !== currency) continue;
+      for (const acc of currencyCompatibleAccounts) {
         if (!doesAccountMatchInstitutionType(acc, senderInstitution.type)) {
           continue;
         }
@@ -492,7 +494,7 @@ function matchAccountCore(
   }
 
   // Step 4: Default account fallback
-  const defaultAcc = accounts.find(
+  const defaultAcc = currencyCompatibleAccounts.find(
     (account) =>
       account.isDefault &&
       (!senderInstitution ||

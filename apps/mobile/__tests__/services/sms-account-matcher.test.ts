@@ -105,6 +105,23 @@ describe("sms-account-matcher - matchAccountCore", () => {
     expect(result.matchReason).toBe("card_last4");
   });
 
+  it("leaves a card and sender match unresolved when its currency differs", () => {
+    const result = matchAccountCore(
+      {
+        senderDisplayName: "CIB-EGYPT",
+        cardLast4: "1234",
+        currency: "USD",
+      },
+      [accBank1]
+    );
+
+    expect(result).toEqual({
+      accountId: null,
+      accountName: null,
+      matchReason: "none",
+    });
+  });
+
   it("Step 1: Matches parsed card digits with leading zeroes against stored integer digits", () => {
     const leadingZeroAccount: AccountWithBankDetails = {
       id: "acc_leading_zero",
@@ -200,6 +217,19 @@ describe("sms-account-matcher - matchAccountCore", () => {
     const result = matchAccountCore(input, accounts);
     expect(result.accountId).toBe("acc_bank2");
     expect(result.matchReason).toBe("sms_sender");
+  });
+
+  it("leaves a sender-only match unresolved when its currency differs", () => {
+    const result = matchAccountCore(
+      { senderDisplayName: "NBE", currency: "EGP" },
+      [accBank2]
+    );
+
+    expect(result).toEqual({
+      accountId: null,
+      accountName: null,
+      matchReason: "none",
+    });
   });
 
   it("Step 2: Leaves the account unresolved when a sender matches multiple accounts", () => {
@@ -378,11 +408,24 @@ describe("sms-account-matcher - matchAccountCore", () => {
   it("Step 4: Falls back to default account if NO other match and not a known bank", () => {
     const input: MatchInput = {
       senderDisplayName: "RANDOM_STORE",
-      currency: "EGP",
+      currency: "USD",
     };
     const result = matchAccountCore(input, accounts);
     expect(result.accountId).toBe("acc_bank2"); // accBank2 is default
     expect(result.matchReason).toBe("default");
+  });
+
+  it("does not use a default account whose currency differs", () => {
+    const result = matchAccountCore(
+      { senderDisplayName: "RANDOM_STORE", currency: "EGP" },
+      [accBank2]
+    );
+
+    expect(result).toEqual({
+      accountId: null,
+      accountName: null,
+      matchReason: "none",
+    });
   });
 
   it("Step 5: Returns 'none' if no default and no match (first_bank fallback removed)", () => {
