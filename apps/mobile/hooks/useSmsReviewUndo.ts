@@ -19,9 +19,13 @@ function getDiscardedName(
 ): string | null {
   if (!item) return null;
   return (
-    item.transaction.merchant ??
-    item.transaction.counterparty ??
-    item.transaction.originLabel
+    [
+      item.transaction.merchant,
+      item.transaction.counterparty,
+      item.transaction.originLabel,
+    ]
+      .map((name) => name?.trim())
+      .find((name): name is string => Boolean(name)) ?? null
   );
 }
 

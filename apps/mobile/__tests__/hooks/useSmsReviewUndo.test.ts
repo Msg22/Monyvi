@@ -87,6 +87,15 @@ describe("useSmsReviewUndo", () => {
     expect(result.current.undoItem?.draftId).toBe("draft-Second");
   });
 
+  it("falls back to the sender label when merchant names are empty", async () => {
+    mockDiscard.mockResolvedValue(createUndoItem(""));
+    const { result } = renderHook(() => useSmsReviewUndo());
+
+    await act(async () => result.current.discard("draft-empty", "user-1"));
+
+    expect(result.current.discardedName).toBe("QNB EGYPT");
+  });
+
   it("hides the previous undo as soon as a different discard starts", async () => {
     let resolveSecond!: (item: VolatileSmsReviewUndoItem) => void;
     const secondResult = new Promise<VolatileSmsReviewUndoItem>((resolve) => {

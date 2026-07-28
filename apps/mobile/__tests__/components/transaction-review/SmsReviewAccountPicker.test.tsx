@@ -51,4 +51,23 @@ describe("SmsReviewAccountPicker", () => {
       expect.stringContaining("dark:text-text-muted-dark")
     );
   });
+
+  it("exposes an accessible close action with a 44-point target", () => {
+    render(
+      <SmsReviewAccountPicker
+        visible
+        options={[]}
+        selectedId={null}
+        onSelect={jest.fn()}
+        onStartNew={jest.fn()}
+        onClose={jest.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText("close")).toHaveProp(
+      "accessibilityRole",
+      "button"
+    );
+    expect(screen.getByLabelText("close")).toHaveProp("hitSlop", 6);
+  });
 });

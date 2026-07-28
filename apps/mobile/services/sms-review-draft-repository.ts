@@ -21,7 +21,7 @@ import {
   assertExpectedCurrentUser,
   getCurrentUserDataScope,
 } from "./user-data-access";
-import { commitPreparedBatch } from "./watermelon-atomic-batch";
+import { commitScopedPreparedBatch } from "./sms-review-draft-batch-service";
 
 const QUEUE_TABLE = "sms_review_queues";
 const ITEM_TABLE = "sms_review_draft_items";
@@ -32,19 +32,6 @@ function throwIfAborted(signal?: AbortSignal): void {
   const error = new Error("SMS review draft operation was cancelled.");
   error.name = "AbortError";
   throw error;
-}
-
-async function commitScopedPreparedBatch(
-  expectedUserId: string,
-  prepareOperations: () => readonly Model[],
-  signal?: AbortSignal
-): Promise<void> {
-  throwIfAborted(signal);
-  await assertExpectedCurrentUser(expectedUserId);
-  throwIfAborted(signal);
-  const operations = prepareOperations();
-  if (operations.length === 0) return;
-  await commitPreparedBatch(operations);
 }
 
 export { SMS_REVIEW_DRAFT_ERROR_CODES } from "./sms-review-draft-errors";
@@ -505,6 +492,12 @@ export async function mergeSmsReviewDrafts(
           );
         });
         return operations;
+      },
+      {
+        cachedModels: [
+          ...(queue ? [queue] : []),
+          ...refreshableExisting.map(({ item }) => item),
+        ],
       }
     );
     return {
@@ -539,13 +532,17 @@ export async function updateSmsReviewDraftItem(
     if (record.smsFingerprint !== transaction.smsFingerprint) {
       throw new Error(SMS_REVIEW_DRAFT_ERROR_CODES.TRANSITION_FAILED);
     }
-    await commitScopedPreparedBatch(expectedUserId, () => [
-      record.prepareUpdate((draft) => {
-        draft.payloadVersion = payload.version;
-        draft.payloadJson = payload.json;
-        draft.updatedAt = new Date();
-      }),
-    ]);
+    await commitScopedPreparedBatch(
+      expectedUserId,
+      () => [
+        record.prepareUpdate((draft) => {
+          draft.payloadVersion = payload.version;
+          draft.payloadJson = payload.json;
+          draft.updatedAt = new Date();
+        }),
+      ],
+      { cachedModels: [record] }
+    );
   });
 }
 
@@ -556,12 +553,16 @@ export async function updateSmsReviewDraftSelection(
 ): Promise<void> {
   await database.write(async (): Promise<void> => {
     const record = await getOwnedSmsReviewDraftItem(draftId, expectedUserId);
-    await commitScopedPreparedBatch(expectedUserId, () => [
-      record.prepareUpdate((draft) => {
-        draft.selectionOverride = selectionOverride;
-        draft.updatedAt = new Date();
-      }),
-    ]);
+    await commitScopedPreparedBatch(
+      expectedUserId,
+      () => [
+        record.prepareUpdate((draft) => {
+          draft.selectionOverride = selectionOverride;
+          draft.updatedAt = new Date();
+        }),
+      ],
+      { cachedModels: [record] }
+    );
   });
 }
 
@@ -884,7 +885,7 @@ export async function deleteExpiredSmsReviewDrafts(
         }
         return operations;
       },
-      signal
+      { signal }
     );
     return expired.length;
   });

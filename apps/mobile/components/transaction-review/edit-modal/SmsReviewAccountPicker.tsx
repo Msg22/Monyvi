@@ -32,6 +32,7 @@ export function SmsReviewAccountPicker({
   onClose,
 }: SmsReviewAccountPickerProps): React.JSX.Element {
   const { t } = useTranslation("transactions");
+  const { t: tCommon } = useTranslation("common");
   const bottomInset = useModalBottomInset();
 
   return (
@@ -51,7 +52,13 @@ export function SmsReviewAccountPicker({
               <Text className="text-lg font-bold text-text-primary dark:text-text-primary-dark">
                 {t("select_an_account")}
               </Text>
-              <TouchableOpacity onPress={onClose} className="p-1">
+              <TouchableOpacity
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel={tCommon("close")}
+                hitSlop={6}
+                className="h-11 w-11 items-center justify-center"
+              >
                 <Ionicons name="close" size={24} color={palette.slate[400]} />
               </TouchableOpacity>
             </View>

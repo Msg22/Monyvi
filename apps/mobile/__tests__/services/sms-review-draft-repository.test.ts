@@ -114,7 +114,20 @@ class FakeCollection {
   }
 }
 
+interface FakeCachedModelSnapshot {
+  readonly model: FakeRecord;
+  readonly values: Partial<FakeRecord>;
+}
+
 const mockCollections = new Map<string, FakeCollection>();
+const mockCaptureCachedModelSnapshot = jest.fn<
+  FakeCachedModelSnapshot,
+  [FakeRecord]
+>();
+const mockRestoreCachedModelSnapshot = jest.fn<
+  void,
+  [FakeCachedModelSnapshot]
+>();
 const mockBatch = jest.fn(
   (operations: readonly FakeRecord[]): Promise<void> => {
     for (const operation of operations) {
@@ -206,6 +219,13 @@ jest.mock("@/services/watermelon-atomic-batch", () => ({
     mockBatch(operations),
 }));
 
+jest.mock("@/services/watermelon-cache-snapshot", () => ({
+  captureCachedModelSnapshot: (model: FakeRecord): FakeCachedModelSnapshot =>
+    mockCaptureCachedModelSnapshot(model),
+  restoreCachedModelSnapshot: (snapshot: FakeCachedModelSnapshot): void =>
+    mockRestoreCachedModelSnapshot(snapshot),
+}));
+
 function createTransaction(
   smsFingerprint: string,
   amount = 100
@@ -240,6 +260,21 @@ function seedRecord(table: string, values: Partial<FakeRecord>): FakeRecord {
 describe("sms-review-draft-repository", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCaptureCachedModelSnapshot.mockImplementation((model: FakeRecord) => ({
+      model,
+      values: { ...model },
+    }));
+    mockRestoreCachedModelSnapshot.mockImplementation(
+      ({
+        model,
+        values,
+      }: {
+        model: FakeRecord;
+        values: Partial<FakeRecord>;
+      }) => {
+        Object.assign(model, values);
+      }
+    );
     mockCurrentUserId = "user-1";
     mockAssertExpectedCurrentUser.mockImplementation(
       (expectedUserId: string): Promise<void> => {
@@ -382,6 +417,32 @@ describe("sms-review-draft-repository", () => {
 
     expect(draft.payloadJson).toBe(encodeSmsReviewDraft(enriched).json);
     expect(mockBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores untouched parser payloads when the adapter batch fails", async () => {
+    const queue = seedRecord("sms_review_queues", { userId: "user-1" });
+    const baseline = createTransaction("fp-refresh-failure", 100);
+    const encodedBaseline = encodeSmsReviewDraft(baseline);
+    const draft = seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      queueId: queue.id,
+      smsFingerprint: "fp-refresh-failure",
+      payloadVersion: encodedBaseline.version,
+      payloadJson: encodedBaseline.json,
+      selectionOverride: null,
+    });
+    mockBatch.mockRejectedValueOnce(new Error("adapter failed"));
+
+    await expect(
+      mergeSmsReviewDrafts({
+        expectedUserId: "user-1",
+        transactions: [{ ...baseline, categoryDisplayName: "Food" }],
+        baselineTransactions: [baseline],
+      })
+    ).rejects.toThrow("adapter failed");
+
+    expect(draft.payloadJson).toBe(encodedBaseline.json);
+    expect(mockRestoreCachedModelSnapshot).toHaveBeenCalled();
   });
 
   it("does not overwrite a draft edited after its baseline was persisted", async () => {
@@ -601,6 +662,26 @@ describe("sms-review-draft-repository", () => {
     expect(mockBatch).not.toHaveBeenCalled();
   });
 
+  it("restores a cached draft edit when the adapter batch fails", async () => {
+    const draft = seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      smsFingerprint: "fp-edit-failure",
+      payloadJson: "original-payload",
+    });
+    mockBatch.mockRejectedValueOnce(new Error("adapter failed"));
+
+    await expect(
+      updateSmsReviewDraftItem(
+        draft.id,
+        "user-1",
+        createTransaction("fp-edit-failure", 250)
+      )
+    ).rejects.toThrow("adapter failed");
+
+    expect(draft.payloadJson).toBe("original-payload");
+    expect(mockRestoreCachedModelSnapshot).toHaveBeenCalledTimes(1);
+  });
+
   it("does not prepare a selection change after the active user changes", async () => {
     const draft = seedRecord("sms_review_draft_items", {
       userId: "user-1",
@@ -617,6 +698,22 @@ describe("sms-review-draft-repository", () => {
 
     expect(draft.selectionOverride).toBeNull();
     expect(mockBatch).not.toHaveBeenCalled();
+  });
+
+  it("restores a cached selection when the adapter batch fails", async () => {
+    const draft = seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      smsFingerprint: "fp-selection-failure",
+      selectionOverride: null,
+    });
+    mockBatch.mockRejectedValueOnce(new Error("adapter failed"));
+
+    await expect(
+      updateSmsReviewDraftSelection(draft.id, "user-1", true)
+    ).rejects.toThrow("adapter failed");
+
+    expect(draft.selectionOverride).toBeNull();
+    expect(mockRestoreCachedModelSnapshot).toHaveBeenCalledTimes(1);
   });
 
   it("does not discard after the active user changes", async () => {
