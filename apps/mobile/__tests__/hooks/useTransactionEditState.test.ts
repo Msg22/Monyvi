@@ -128,13 +128,66 @@ describe("useTransactionEditState", () => {
 
     act(() => result.current.accountHandlers.handleCurrencySelect("USD"));
     expect(result.current.state.newAccountCurrency).toBe("USD");
+    expect(result.current.state.selectedAccountId).toBeNull();
+
+    await act(async () => {
+      await result.current.accountHandlers.handleSave();
+    });
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(result.current.state.formErrors.accountId).toBeDefined();
+  });
+
+  it("saves an edited SMS currency after selecting a matching account", async () => {
+    const egpAccount = createAccount();
+    const usdAccount = {
+      ...createAccount(),
+      id: "account-usd",
+      name: "USD account",
+      currency: "USD" as const,
+    };
+    const category = {
+      id: "cat-food",
+      displayName: "Food",
+    } as unknown as Category;
+    const onSave = jest.fn<void, [TransactionEdits]>();
+
+    const { result } = renderHook(() =>
+      useTransactionEditState({
+        transaction: createTransaction(),
+        currentAccountId: egpAccount.id,
+        currentAccountName: egpAccount.name,
+        accounts: [egpAccount, usdAccount],
+        pendingAccounts: [],
+        categoryMap: new Map([[category.id, category]]),
+        expenseCategories: [category],
+        incomeCategories: [],
+        onSave,
+        onCreatePendingAccount: jest.fn(),
+        allowTransactionCurrencyEdit: true,
+      })
+    );
+
+    act(() => {
+      result.current.accountHandlers.handleCurrencySelect("USD");
+      result.current.accountHandlers.handleSelectAccount({
+        id: usdAccount.id,
+        name: usdAccount.name,
+        currency: usdAccount.currency,
+        isPending: false,
+        type: usdAccount.type,
+      });
+    });
 
     await act(async () => {
       await result.current.accountHandlers.handleSave();
     });
 
     expect(onSave).toHaveBeenLastCalledWith(
-      expect.objectContaining({ currency: "USD" })
+      expect.objectContaining({
+        accountId: usdAccount.id,
+        currency: "USD",
+      })
     );
   });
 
@@ -187,7 +240,9 @@ describe("useTransactionEditState", () => {
     act(() => result.current.accountHandlers.handleCurrencySelect("USD"));
 
     expect(result.current.state.selectedToAccountId).toBe(usdCashAccount.id);
-    expect(result.current.state.selectedToAccountName).toBe(usdCashAccount.name);
+    expect(result.current.state.selectedToAccountName).toBe(
+      usdCashAccount.name
+    );
     expect(result.current.state.isCreatingNewToAccount).toBe(false);
   });
 

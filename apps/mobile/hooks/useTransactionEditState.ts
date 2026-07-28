@@ -23,6 +23,7 @@ import {
   type ReviewableTransaction,
 } from "@monyvi/logic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 export interface UseTransactionEditStateReturn {
   readonly state: {
@@ -131,6 +132,7 @@ export function useTransactionEditState({
   onCreatePendingAccount,
   allowTransactionCurrencyEdit = false,
 }: UseTransactionEditStateProps): UseTransactionEditStateReturn {
+  const { t } = useTranslation("transactions");
   // Config
   const formConfig = useMemo(
     () => getEditFormConfig(transaction),
@@ -270,23 +272,27 @@ export function useTransactionEditState({
 
   const hasCashAccounts = cashAccountOptions.length > 0;
 
-  // SMS review may edit transaction currency independently from account currency.
+  const editedTransactionCurrency = allowTransactionCurrencyEdit
+    ? newAccountCurrency
+    : transaction.currency;
+
   const selectedAccountCurrency = useMemo((): CurrencyType => {
-    if (allowTransactionCurrencyEdit || isCreatingNew) {
+    if (isCreatingNew) {
       return newAccountCurrency;
     }
     const found = accountOptions.find((opt) => opt.id === selectedAccountId);
-    return found?.currency ?? transaction.currency;
+    return found?.currency ?? editedTransactionCurrency;
   }, [
     accountOptions,
-    allowTransactionCurrencyEdit,
     selectedAccountId,
-    transaction.currency,
+    editedTransactionCurrency,
     isCreatingNew,
     newAccountCurrency,
   ]);
 
-  const hasCurrencyMismatch = selectedAccountCurrency !== transaction.currency;
+  const hasCurrencyMismatch =
+    selectedAccountId !== null &&
+    selectedAccountCurrency !== editedTransactionCurrency;
 
   // Existing non-SMS flows keep currency tied to the selected account.
   const isCurrencyLocked =
@@ -305,6 +311,7 @@ export function useTransactionEditState({
     initializedForIdentityRef.current = transactionIdentity;
 
     setAmount(transaction.amount.toString());
+    setNewAccountCurrency(transaction.currency);
     setNote(readTransactionNote(transaction));
     setCounterparty(transaction.counterparty || "");
     setTxType(transaction.type);
@@ -442,6 +449,16 @@ export function useTransactionEditState({
     (currency: CurrencyType): void => {
       setNewAccountCurrency(currency);
       setIsCurrencyPickerOpen(false);
+      if (allowTransactionCurrencyEdit && !isCreatingNew) {
+        const selectedAccount = accountOptions.find(
+          (option) => option.id === selectedAccountId
+        );
+        if (selectedAccount && selectedAccount.currency !== currency) {
+          setSelectedAccountId(null);
+          setSelectedAccountName("");
+          setIsAccountConfirmed(false);
+        }
+      }
       if (!formConfig.showToAccount) return;
 
       const matchingCashAccount = cashAccountOptions.find(
@@ -459,7 +476,14 @@ export function useTransactionEditState({
       setNewToAccountName("Cash");
       setIsCreatingNewToAccount(true);
     },
-    [cashAccountOptions, formConfig.showToAccount]
+    [
+      accountOptions,
+      allowTransactionCurrencyEdit,
+      cashAccountOptions,
+      formConfig.showToAccount,
+      isCreatingNew,
+      selectedAccountId,
+    ]
   );
 
   const handleSave = useCallback(async (): Promise<void> => {
@@ -507,6 +531,19 @@ export function useTransactionEditState({
     } else {
       resolvedAccountId = selectedAccountId;
       resolvedAccountName = selectedAccountName;
+      const selectedAccount = accountOptions.find(
+        (option) => option.id === selectedAccountId
+      );
+      if (
+        selectedAccount &&
+        selectedAccount.currency !== editedTransactionCurrency
+      ) {
+        setFormErrors((previous) => ({
+          ...previous,
+          accountId: t("account_currency_mismatch"),
+        }));
+        return;
+      }
     }
 
     const { isValid, errors } = validateTransactionForm(txType, {
@@ -603,6 +640,9 @@ export function useTransactionEditState({
     isCreatingNewToAccount,
     newAccountCurrency,
     allowTransactionCurrencyEdit,
+    accountOptions,
+    editedTransactionCurrency,
+    t,
   ]);
 
   return {

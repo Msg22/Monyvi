@@ -18,6 +18,9 @@ interface MockTransactionReviewProps {
   readonly onReviewLater: () => void;
   readonly onDiscard: () => void;
   readonly onDiscardItem: (index: number) => Promise<void>;
+  readonly undoBanner?: {
+    readonly onUndo: () => Promise<void>;
+  };
   readonly isSaving: boolean;
   readonly onSave: (
     selected: readonly ParsedSmsTransaction[],
@@ -407,6 +410,33 @@ describe("SMS review route", () => {
     render(<SmsReviewScreen />);
 
     expect(screen.getByTestId("sms-review-undo-banner")).toBeTruthy();
+  });
+
+  it("keeps Undo recoverable and shows friendly feedback when restore fails", async () => {
+    const undo = jest
+      .fn<Promise<boolean>, []>()
+      .mockRejectedValue(new Error("adapter failed"));
+    mockUndoState = {
+      undoItem: {},
+      discardedName: "QA Merchant",
+      discard: mockDiscardOne,
+      undo,
+      close: jest.fn(),
+    };
+    render(<SmsReviewScreen />);
+    const reviewProps = mockTransactionReview.mock.calls[0]?.[0];
+
+    await act(async () => {
+      await reviewProps?.undoBanner?.onUndo();
+    });
+
+    expect(undo).toHaveBeenCalledTimes(1);
+    expect(mockShowToast).toHaveBeenCalledWith({
+      type: "error",
+      title: "sms_review_undo_failed",
+      message: "sms_review_undo_failed_message",
+    });
+    expect(mockUndoState.undoItem).not.toBeNull();
   });
 
   it("shows the skeleton while the current-user queue is loading", () => {

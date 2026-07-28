@@ -30,7 +30,8 @@ import { t } from "i18next";
 import { normalizeAccountSmsSender } from "./account-sms-sender-service";
 import { normalizeCardLast4ForStorage } from "./card-last4-normalizer";
 import { getCurrentUserId } from "./supabase";
-import { queryOwned } from "./user-data-access";
+import { assertExpectedCurrentUser, queryOwned } from "./user-data-access";
+import { commitPreparedBatch } from "./watermelon-atomic-batch";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -71,6 +72,16 @@ interface PersistResult {
   readonly errors: readonly string[];
 }
 
+interface PreparePendingAccountsOptions {
+  readonly expectedUserId?: string;
+  readonly initialBalanceByTempId?: ReadonlyMap<string, number>;
+}
+
+interface PreparedPendingAccounts extends PersistResult {
+  readonly operations: readonly (Account | AccountSmsSender | BankDetails)[];
+  readonly preparedAccountIds: ReadonlySet<string>;
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -96,26 +107,70 @@ interface PersistResult {
 async function persistPendingAccounts(
   pendingAccounts: readonly PendingAccount[]
 ): Promise<PersistResult> {
+  const prepared = await preparePendingAccounts(pendingAccounts);
+  if (prepared.errors.length > 0) {
+    return {
+      tempToRealIdMap: prepared.tempToRealIdMap,
+      createdCount: 0,
+      errors: prepared.errors,
+    };
+  }
+
+  try {
+    if (prepared.operations.length > 0) {
+      await database.write(async (): Promise<void> => {
+        await commitPreparedBatch(prepared.operations);
+      });
+    }
+    return {
+      tempToRealIdMap: prepared.tempToRealIdMap,
+      createdCount: prepared.createdCount,
+      errors: [],
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      tempToRealIdMap: new Map(),
+      createdCount: 0,
+      errors: [`Batch write failed: ${message}`],
+    };
+  }
+}
+
+async function preparePendingAccounts(
+  pendingAccounts: readonly PendingAccount[],
+  options: PreparePendingAccountsOptions = {}
+): Promise<PreparedPendingAccounts> {
   if (pendingAccounts.length === 0) {
     return {
       tempToRealIdMap: new Map(),
       createdCount: 0,
       errors: [],
+      operations: [],
+      preparedAccountIds: new Set(),
     };
   }
 
   const userId = await getCurrentUserId();
-  if (!userId) {
+  if (
+    !userId ||
+    (options.expectedUserId && userId !== options.expectedUserId)
+  ) {
     return {
       tempToRealIdMap: new Map(),
       createdCount: 0,
       errors: ["No authenticated user — cannot persist accounts"],
+      operations: [],
+      preparedAccountIds: new Set(),
     };
+  }
+  if (options.expectedUserId) {
+    await assertExpectedCurrentUser(options.expectedUserId);
   }
 
   const tempToRealIdMap = new Map<string, string>();
   const errors: string[] = [];
-  let createdCount = 0;
+  const preparedAccountIds = new Set<string>();
 
   try {
     // Pre-fetch existing active accounts for the same uniqueness contract used
@@ -131,16 +186,19 @@ async function persistPendingAccounts(
       string,
       { readonly realId: string; readonly type: AccountType }
     >();
+    const initialBalanceByDedupKey = new Map<string, number>();
+    for (const pending of pendingAccounts) {
+      const initialBalance =
+        options.initialBalanceByTempId?.get(pending.tempId) ?? 0;
+      const dedupKey = buildAccountDedupKey(pending);
+      initialBalanceByDedupKey.set(
+        dedupKey,
+        (initialBalanceByDedupKey.get(dedupKey) ?? 0) + initialBalance
+      );
+    }
 
     // Collect all DB operations to commit atomically
     const ops: Array<Account | AccountSmsSender | BankDetails> = [];
-
-    // Deferred mappings — only applied after successful batch commit
-    const pendingMappings: Array<{
-      readonly tempId: string;
-      readonly dedupKey: string;
-      readonly realId: string;
-    }> = [];
 
     for (const pending of pendingAccounts) {
       const dedupKey = buildAccountDedupKey(pending);
@@ -207,11 +265,12 @@ async function persistPendingAccounts(
           record.institutionId = pending.institutionId?.trim() || undefined;
           record.providerDisplayName =
             pending.providerDisplayName?.trim() || undefined;
-          record.balance = 0;
+          record.balance = initialBalanceByDedupKey.get(dedupKey) ?? 0;
           record.isDefault = false;
           record.deleted = false;
         });
       ops.push(account);
+      preparedAccountIds.add(account.id);
 
       const senderDisplayName = pending.senderDisplayName.trim();
       const normalizedSender = normalizeAccountSmsSender(senderDisplayName);
@@ -238,39 +297,43 @@ async function persistPendingAccounts(
         ops.push(bankDetails);
       }
 
-      // Defer: collect mapping info for post-commit application
-      pendingMappings.push({
-        tempId: pending.tempId,
-        dedupKey,
-        realId: account.id,
-      });
+      tempToRealIdMap.set(pending.tempId, account.id);
 
       // Track in createdInBatch so subsequent loop iterations can dedup
       createdInBatch.set(dedupKey, { realId: account.id, type: pending.type });
     }
 
     if (errors.length > 0) {
-      return { tempToRealIdMap, createdCount: 0, errors };
+      return {
+        tempToRealIdMap: new Map(),
+        createdCount: 0,
+        errors,
+        operations: [],
+        preparedAccountIds: new Set(),
+      };
     }
 
-    // Commit all prepared records atomically
-    if (ops.length > 0) {
-      await database.write(async () => {
-        await database.batch(ops);
-      });
+    if (options.expectedUserId) {
+      await assertExpectedCurrentUser(options.expectedUserId);
     }
 
-    // Apply mappings only after successful commit
-    for (const mapping of pendingMappings) {
-      tempToRealIdMap.set(mapping.tempId, mapping.realId);
-      createdCount++;
-    }
+    return {
+      tempToRealIdMap,
+      createdCount: preparedAccountIds.size,
+      errors: [],
+      operations: ops,
+      preparedAccountIds,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    errors.push(`Batch write failed: ${message}`);
+    return {
+      tempToRealIdMap: new Map(),
+      createdCount: 0,
+      errors: [`Account preparation failed: ${message}`],
+      operations: [],
+      preparedAccountIds: new Set(),
+    };
   }
-
-  return { tempToRealIdMap, createdCount, errors };
 }
 
 function buildAccountDedupKey(account: {
@@ -309,5 +372,10 @@ function buildProviderIdentity(account: {
     : "manual:__monyvi_no_provider__";
 }
 
-export { persistPendingAccounts };
-export type { PendingAccount, PersistResult };
+export { persistPendingAccounts, preparePendingAccounts };
+export type {
+  PendingAccount,
+  PersistResult,
+  PreparePendingAccountsOptions,
+  PreparedPendingAccounts,
+};

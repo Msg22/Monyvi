@@ -4,6 +4,7 @@ import {
   deleteResolvedSmsReviewDraftsInWriter,
   getHandledSmsReviewFingerprints,
   getSmsReviewDraftCount,
+  getSmsReviewDraftQueueSnapshot,
   mergeSmsReviewDrafts,
 } from "@/services/sms-review-draft-repository";
 
@@ -114,6 +115,14 @@ const mockBatch = jest.fn(
   }
 );
 let mockCurrentUserId = "user-1";
+const mockAssertExpectedCurrentUser = jest.fn(
+  (expectedUserId: string): Promise<void> => {
+    if (expectedUserId !== mockCurrentUserId) {
+      return Promise.reject(new Error("sms_review_draft_user_scope_changed"));
+    }
+    return Promise.resolve();
+  }
+);
 
 function toPropertyName(column: string): string {
   return column.replace(/_([a-z])/g, (_, letter: string) =>
@@ -156,12 +165,8 @@ jest.mock("@nozbe/watermelondb", () => ({
 }));
 
 jest.mock("@/services/user-data-access", () => ({
-  assertExpectedCurrentUser: (expectedUserId: string): Promise<void> => {
-    if (expectedUserId !== mockCurrentUserId) {
-      return Promise.reject(new Error("sms_review_draft_user_scope_changed"));
-    }
-    return Promise.resolve();
-  },
+  assertExpectedCurrentUser: (expectedUserId: string): Promise<void> =>
+    mockAssertExpectedCurrentUser(expectedUserId),
   getCurrentUserDataScope: (): Promise<unknown> =>
     Promise.resolve({
       userId: mockCurrentUserId,
@@ -216,6 +221,16 @@ describe("sms-review-draft-repository", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCurrentUserId = "user-1";
+    mockAssertExpectedCurrentUser.mockImplementation(
+      (expectedUserId: string): Promise<void> => {
+        if (expectedUserId !== mockCurrentUserId) {
+          return Promise.reject(
+            new Error("sms_review_draft_user_scope_changed")
+          );
+        }
+        return Promise.resolve();
+      }
+    );
     mockCollections.clear();
     mockCollections.set(
       "sms_review_queues",
@@ -261,6 +276,24 @@ describe("sms-review-draft-repository", () => {
     expect(items.map((item) => item.smsFingerprint)).toEqual(["fp-new"]);
     expect(items.map((item) => item.position)).toEqual([0]);
     expect(mockBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("reasserts the pinned user immediately before committing a merge", async () => {
+    mockAssertExpectedCurrentUser
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("sms_review_draft_user_scope_changed"));
+
+    await expect(
+      mergeSmsReviewDrafts({
+        expectedUserId: "user-1",
+        transactions: [createTransaction("fp-stale-user")],
+      })
+    ).rejects.toThrow("sms_review_draft_user_scope_changed");
+
+    expect(mockBatch).not.toHaveBeenCalled();
+    expect(mockCollections.get("sms_review_draft_items")?.records).toHaveLength(
+      0
+    );
   });
 
   it("preserves an existing edited payload and appends at the next position", async () => {
@@ -394,9 +427,9 @@ describe("sms-review-draft-repository", () => {
       new Set(["fp-preexisting"])
     );
 
-    expect(mockCollections.get("sms_review_draft_items")?.records).not.toContain(
-      draft
-    );
+    expect(
+      mockCollections.get("sms_review_draft_items")?.records
+    ).not.toContain(draft);
     expect(mockCollections.get("transactions")?.records).toHaveLength(1);
     expect(mockBatch).toHaveBeenCalledTimes(1);
   });
@@ -435,6 +468,33 @@ describe("sms-review-draft-repository", () => {
     await expect(getSmsReviewDraftCount()).resolves.toBe(1);
     await expect(getHandledSmsReviewFingerprints()).resolves.toEqual(
       new Set(["fp-active", "fp-dismissed"])
+    );
+  });
+
+  it("does not delete a malformed draft that is repaired before cleanup commits", async () => {
+    await mergeSmsReviewDrafts({
+      expectedUserId: "user-1",
+      transactions: [createTransaction("fp-repaired")],
+    });
+    const draft = mockCollections.get("sms_review_draft_items")?.records[0];
+    if (!draft) throw new Error("Expected seeded draft");
+    const validPayload = draft.payloadJson;
+    draft.payloadJson = "malformed-json";
+    let assertionCount = 0;
+    mockAssertExpectedCurrentUser.mockImplementation(
+      (expectedUserId: string): Promise<void> => {
+        assertionCount += 1;
+        if (assertionCount === 4) draft.payloadJson = validPayload;
+        return expectedUserId === mockCurrentUserId
+          ? Promise.resolve()
+          : Promise.reject(new Error("sms_review_draft_user_scope_changed"));
+      }
+    );
+
+    await expect(getSmsReviewDraftQueueSnapshot("user-1")).resolves.toBeNull();
+
+    expect(mockCollections.get("sms_review_draft_items")?.records).toContain(
+      draft
     );
   });
 

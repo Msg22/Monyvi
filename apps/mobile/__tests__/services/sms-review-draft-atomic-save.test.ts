@@ -2,6 +2,9 @@ const mockPrepare = jest.fn();
 const mockDeleteResolved = jest.fn();
 const mockRunWriter = jest.fn();
 const mockRevalidate = jest.fn();
+const mockPreparePendingAccounts = jest.fn();
+const mockPrepareCashAccount = jest.fn();
+const mockHasExistingSmsFingerprint = jest.fn();
 
 jest.mock("@/services/batch-create-transactions", () => ({
   prepareBatchCreateTransactions: (...args: readonly unknown[]): unknown =>
@@ -17,11 +20,18 @@ jest.mock("@/services/sms-review-draft-repository", () => ({
 }));
 
 jest.mock("@/services/pending-account-service", () => ({
-  persistPendingAccounts: jest.fn(),
+  preparePendingAccounts: (...args: readonly unknown[]): unknown =>
+    mockPreparePendingAccounts(...args),
 }));
 
 jest.mock("@/services/account-service", () => ({
-  ensureCashAccount: jest.fn(),
+  prepareCashAccount: (...args: readonly unknown[]): unknown =>
+    mockPrepareCashAccount(...args),
+}));
+
+jest.mock("@/services/sms-dedup-service", () => ({
+  hasExistingSmsFingerprint: (...args: readonly unknown[]): unknown =>
+    mockHasExistingSmsFingerprint(...args),
 }));
 
 jest.mock("@/services/sms-review-draft-reference-service", () => ({
@@ -41,7 +51,8 @@ import type { ParsedSmsTransaction } from "@monyvi/logic";
 
 function item(
   draftId: string,
-  hardValidationReasons: readonly SmsReviewDraftHardValidationReason[] = []
+  hardValidationReasons: readonly SmsReviewDraftHardValidationReason[] = [],
+  transactionOverrides: Partial<ParsedSmsTransaction> = {}
 ): RevalidatedSmsReviewDraftItem {
   const fingerprint = `fp-${draftId}`;
   return {
@@ -63,6 +74,7 @@ function item(
       senderDisplayName: "QNB EGYPT",
       rawSmsBody: "private sms",
       deduplicationHash: fingerprint,
+      ...transactionOverrides,
     },
     selectionOverride: true,
     position: 0,
@@ -79,6 +91,19 @@ describe("saveSelectedSmsReviewDrafts", () => {
       (items: readonly unknown[]): Promise<readonly unknown[]> =>
         Promise.resolve(items)
     );
+    mockHasExistingSmsFingerprint.mockResolvedValue(false);
+    mockPreparePendingAccounts.mockResolvedValue({
+      tempToRealIdMap: new Map(),
+      createdCount: 0,
+      errors: [],
+      operations: [],
+      preparedAccountIds: new Set(),
+    });
+    mockPrepareCashAccount.mockResolvedValue({
+      accountId: "cash-account-1",
+      created: false,
+      operation: null,
+    });
     mockPrepare.mockResolvedValue({
       savedCount: 2,
       failedCount: 0,
@@ -116,6 +141,7 @@ describe("saveSelectedSmsReviewDrafts", () => {
 
   it("passes preexisting saved fingerprints to final draft cleanup", async () => {
     const alreadySavedSmsFingerprints = new Set(["fp-draft-1"]);
+    mockHasExistingSmsFingerprint.mockResolvedValue(true);
     mockPrepare.mockResolvedValue({
       savedCount: 0,
       failedCount: 0,
@@ -150,7 +176,10 @@ describe("saveSelectedSmsReviewDrafts", () => {
       alreadySavedSmsFingerprints: new Set(),
       restoreCachedAccounts,
     });
-    mockRunWriter.mockRejectedValue(new Error("adapter failed"));
+    mockRunWriter.mockImplementation(async (action: () => Promise<unknown>) => {
+      await action();
+      throw new Error("adapter failed");
+    });
 
     await expect(
       saveSelectedSmsReviewDrafts({
@@ -175,7 +204,7 @@ describe("saveSelectedSmsReviewDrafts", () => {
     ).rejects.toBeInstanceOf(SmsReviewDraftSaveValidationError);
 
     expect(mockPrepare).not.toHaveBeenCalled();
-    expect(mockRunWriter).not.toHaveBeenCalled();
+    expect(mockRunWriter).toHaveBeenCalledTimes(1);
   });
 
   it("revalidates the effective selected account before blocking save", async () => {
@@ -231,7 +260,7 @@ describe("saveSelectedSmsReviewDrafts", () => {
     ).rejects.toBeInstanceOf(SmsReviewDraftSaveValidationError);
 
     expect(mockPrepare).not.toHaveBeenCalled();
-    expect(mockRunWriter).not.toHaveBeenCalled();
+    expect(mockRunWriter).toHaveBeenCalledTimes(1);
   });
 
   it("retains every draft when financial preparation reports a failure", async () => {
@@ -253,7 +282,59 @@ describe("saveSelectedSmsReviewDrafts", () => {
       })
     ).rejects.toBeInstanceOf(SmsReviewDraftSaveValidationError);
 
-    expect(mockRunWriter).not.toHaveBeenCalled();
+    expect(mockRunWriter).toHaveBeenCalledTimes(1);
     expect(mockDeleteResolved).not.toHaveBeenCalled();
+  });
+
+  it("commits a newly created source account in the same batch as the financial record and draft deletion", async () => {
+    const pendingAccount = {
+      tempId: "pending-account-1",
+      name: "QNB EGYPT",
+      currency: "EGP" as const,
+      type: "BANK" as const,
+      senderDisplayName: "QNB EGYPT",
+    };
+    mockPreparePendingAccounts.mockResolvedValue({
+      tempToRealIdMap: new Map([["pending-account-1", "account-created-1"]]),
+      createdCount: 1,
+      errors: [],
+      operations: [{ id: "account-created-1" }],
+      preparedAccountIds: new Set(["account-created-1"]),
+    });
+
+    await saveSelectedSmsReviewDrafts({
+      selectedItems: [
+        item("draft-1", [], {
+          accountId: "pending-account-1",
+          pendingAccount,
+        }),
+      ],
+      expectedUserId: "user-1",
+      transactionAccountMap: new Map([[0, "pending-account-1"]]),
+      toAccountMap: new Map(),
+    });
+
+    expect(mockPreparePendingAccounts).toHaveBeenCalledWith(
+      [pendingAccount],
+      expect.objectContaining({
+        expectedUserId: "user-1",
+        initialBalanceByTempId: new Map([["pending-account-1", -100]]),
+      })
+    );
+    expect(mockPrepare).toHaveBeenCalledWith(
+      [expect.objectContaining({ smsFingerprint: "fp-draft-1" })],
+      new Map([[0, "account-created-1"]]),
+      new Map(),
+      expect.objectContaining({
+        expectedUserId: "user-1",
+        preparedAccountCurrencies: new Map([["account-created-1", "EGP"]]),
+      })
+    );
+    expect(mockDeleteResolved).toHaveBeenCalledWith(
+      ["draft-1"],
+      "user-1",
+      [{ id: "account-created-1" }, { id: "financial-1" }],
+      new Set()
+    );
   });
 });

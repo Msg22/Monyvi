@@ -104,6 +104,9 @@ async function prepareSavePayload(
     effectiveTransactions,
     userId,
   } = input;
+  const deferAccountPersistence = effectiveTransactions.some(
+    (transaction) => transaction.source === "SMS"
+  );
 
   // Step 1: Collect selected original indices in order
   const selectedOriginalIndices = Array.from(selectedIndices).sort(
@@ -137,7 +140,7 @@ async function prepareSavePayload(
   }
 
   // Step 4: Persist only referenced pending accounts
-  if (pendingAccounts.length > 0) {
+  if (!deferAccountPersistence && pendingAccounts.length > 0) {
     const referencedTempIds = new Set(originalIndexToAccountId.values());
     const referencedPending = pendingAccounts.filter((pa) =>
       referencedTempIds.has(pa.tempId)
@@ -259,6 +262,7 @@ async function prepareSavePayload(
   // Pass 2: Create each unique cash account once
   const resolvedCashIds = new Map<string, string>();
   for (const [key, { name, currency }] of pendingCashKeys) {
+    if (deferAccountPersistence) continue;
     try {
       const result = await ensureCashAccount(userId, currency, name);
       if (result.accountId) {

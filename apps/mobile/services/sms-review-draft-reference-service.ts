@@ -11,7 +11,9 @@ import {
 export type SmsReviewDraftHardValidationReason =
   | "account_required"
   | "account_unavailable"
+  | "account_currency_mismatch"
   | "destination_account_unavailable"
+  | "destination_account_currency_mismatch"
   | "category_unavailable";
 
 export interface RevalidatedSmsReviewDraftItem extends SmsReviewDraftReadItem {
@@ -40,25 +42,49 @@ export async function revalidateSmsReviewDraftReferences(
       .fetch(),
   ]);
   await assertExpectedCurrentUser(expectedUserId);
-  const accountIds = new Set(accounts.map((account) => account.id));
+  const accountById = new Map(
+    accounts.map((account) => [account.id, account] as const)
+  );
   const categoryIds = new Set(categories.map((category) => category.id));
 
   return items.map((item) => {
     const reasons: SmsReviewDraftHardValidationReason[] = [];
+    const pendingAccount = item.transaction.pendingAccount;
     const hasMatchingPendingAccount =
-      item.transaction.pendingAccount?.tempId === item.transaction.accountId;
+      pendingAccount?.tempId === item.transaction.accountId;
     if (
       item.transaction.accountId &&
-      !accountIds.has(item.transaction.accountId) &&
+      !accountById.has(item.transaction.accountId) &&
       !hasMatchingPendingAccount
     ) {
       reasons.push("account_unavailable");
     }
+    const sourceAccountCurrency =
+      hasMatchingPendingAccount && pendingAccount
+        ? pendingAccount.currency
+        : item.transaction.accountId
+          ? accountById.get(item.transaction.accountId)?.currency
+          : undefined;
+    if (
+      sourceAccountCurrency &&
+      sourceAccountCurrency !== item.transaction.currency
+    ) {
+      reasons.push("account_currency_mismatch");
+    }
     if (
       item.transaction.toAccountId &&
-      !accountIds.has(item.transaction.toAccountId)
+      !accountById.has(item.transaction.toAccountId)
     ) {
       reasons.push("destination_account_unavailable");
+    }
+    const destinationAccountCurrency = item.transaction.toAccountId
+      ? accountById.get(item.transaction.toAccountId)?.currency
+      : undefined;
+    if (
+      destinationAccountCurrency &&
+      destinationAccountCurrency !== item.transaction.currency
+    ) {
+      reasons.push("destination_account_currency_mismatch");
     }
     if (!categoryIds.has(item.transaction.categoryId)) {
       reasons.push("category_unavailable");

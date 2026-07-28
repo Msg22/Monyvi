@@ -50,6 +50,12 @@ export interface EnsureCashAccountResult {
   readonly error?: string;
 }
 
+export interface PreparedCashAccount {
+  readonly accountId: string;
+  readonly created: boolean;
+  readonly operation: Account | null;
+}
+
 /** Result of the create-account operation. */
 export interface CreateAccountResult {
   readonly success: boolean;
@@ -187,6 +193,66 @@ export async function createCashAccountWithinWriter(
     acc.isDefault = isFirstAccount;
   });
   return { accountId: record.id, created: true };
+}
+
+export async function prepareCashAccount(
+  userId: string,
+  currency: CurrencyType,
+  initialBalance: number,
+  name?: string,
+  expectedUserId?: string
+): Promise<PreparedCashAccount> {
+  const normalizedUserId = userId.trim();
+  if (!normalizedUserId) {
+    throw new Error(CREATE_ACCOUNT_ERROR_CODES.USER_ID_REQUIRED);
+  }
+  if (expectedUserId !== undefined) {
+    await assertExpectedCurrentUser(expectedUserId);
+  }
+
+  const accountsCollection = database.get<Account>("accounts");
+  const existing = await queryOwned(
+    accountsCollection,
+    normalizedUserId,
+    Q.where("type", CASH_ACCOUNT_TYPE),
+    Q.where("currency", currency),
+    Q.where("deleted", Q.notEq(true)),
+    Q.sortBy("created_at", Q.asc)
+  ).fetch();
+  if (existing.length > 0) {
+    return {
+      accountId: existing[0].id,
+      created: false,
+      operation: null,
+    };
+  }
+
+  const activeAccountCount = await queryOwned(
+    accountsCollection,
+    normalizedUserId,
+    Q.where("deleted", Q.notEq(true))
+  ).fetchCount();
+  const accountName = name?.trim()
+    ? name.trim()
+    : await resolveDefaultCashAccountName(normalizedUserId);
+  const operation = accountsCollection.prepareCreate((account) => {
+    account.userId = normalizedUserId;
+    account.name = accountName;
+    account.type = CASH_ACCOUNT_TYPE;
+    account.currency = currency;
+    account.balance = initialBalance;
+    account.deleted = false;
+    account.isDefault = activeAccountCount === 0;
+  });
+
+  if (expectedUserId !== undefined) {
+    await assertExpectedCurrentUser(expectedUserId);
+  }
+  return {
+    accountId: operation.id,
+    created: true,
+    operation,
+  };
 }
 
 function buildCreateAccountKey(userId: string, data: AccountFormData): string {

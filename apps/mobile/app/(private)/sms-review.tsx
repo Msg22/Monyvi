@@ -60,7 +60,10 @@ function applyHardValidationReasons(
 
   const mappedReasons = hardValidationReasons.map((reason) => {
     if (reason === "category_unavailable") return "category_needed" as const;
-    if (reason === "destination_account_unavailable") {
+    if (
+      reason === "destination_account_unavailable" ||
+      reason === "destination_account_currency_mismatch"
+    ) {
       return "cash_transfer_review" as const;
     }
     return "account_needed" as const;
@@ -90,17 +93,17 @@ function SmsReviewLoadingState(): React.JSX.Element {
 
 function ActiveSmsReviewUndoBanner({
   undo,
+  onUndo,
 }: {
   readonly undo: UseSmsReviewUndoResult;
+  readonly onUndo: () => Promise<void>;
 }): React.JSX.Element | null {
   if (!undo.undoItem || !undo.discardedName) return null;
 
   return (
     <SmsReviewUndoBanner
       discardedName={undo.discardedName}
-      onUndo={async (): Promise<void> => {
-        await undo.undo();
-      }}
+      onUndo={onUndo}
       onClose={undo.close}
     />
   );
@@ -309,6 +312,21 @@ export default function SmsReviewScreen(): React.JSX.Element {
     [queue.items, queue.userId, showToast, t, undo]
   );
 
+  const handleUndoDiscard = useCallback(async (): Promise<void> => {
+    try {
+      await undo.undo();
+    } catch (error: unknown) {
+      logger.warn("smsReview.undo.failed", {
+        errorName: error instanceof Error ? error.name : "unknown",
+      });
+      showToast({
+        type: "error",
+        title: t("sms_review_undo_failed"),
+        message: t("sms_review_undo_failed_message"),
+      });
+    }
+  }, [showToast, t, undo]);
+
   const handleConfirmDiscard = useCallback(async (): Promise<void> => {
     if (!queue.userId) return;
     try {
@@ -389,7 +407,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
           </Text>
         </TouchableOpacity>
         {retryConsentSheet}
-        <ActiveSmsReviewUndoBanner undo={undo} />
+        <ActiveSmsReviewUndoBanner undo={undo} onUndo={handleUndoDiscard} />
       </SafeAreaView>
     );
   }
@@ -410,9 +428,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
           undo.undoItem && undo.discardedName
             ? {
                 discardedName: undo.discardedName,
-                onUndo: async (): Promise<void> => {
-                  await undo.undo();
-                },
+                onUndo: handleUndoDiscard,
                 onClose: undo.close,
               }
             : undefined

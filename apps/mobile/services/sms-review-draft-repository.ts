@@ -151,12 +151,23 @@ async function removeInvalidItems(
   await assertExpectedCurrentUser(userId);
   await database.write(async (): Promise<void> => {
     await assertExpectedCurrentUser(userId);
-    const ownedIds = new Set(
-      (await fetchOwnedItems(userId)).map((item) => item.id)
+    const invalidIds = new Set(invalidItems.map((item) => item.id));
+    const currentInvalidItems = (await fetchOwnedItems(userId)).filter(
+      (item) => {
+        if (!invalidIds.has(item.id)) return false;
+        try {
+          decodeItem(item);
+          return false;
+        } catch (error) {
+          if (error instanceof SmsReviewDraftCodecError) return true;
+          throw error;
+        }
+      }
     );
-    const deletes = invalidItems
-      .filter((item) => ownedIds.has(item.id))
-      .map((item) => item.prepareDestroyPermanently());
+    await assertExpectedCurrentUser(userId);
+    const deletes = currentInvalidItems.map((item) =>
+      item.prepareDestroyPermanently()
+    );
     if (deletes.length > 0) await database.batch(deletes);
     await removeEmptyQueueInWriter(userId);
   });
@@ -397,6 +408,7 @@ export async function mergeSmsReviewDrafts(
       );
     });
 
+    await assertExpectedCurrentUser(input.expectedUserId);
     await database.batch(operations);
     return {
       insertedCount: uniqueNew.length,

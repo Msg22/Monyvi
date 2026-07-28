@@ -63,6 +63,11 @@ export interface PreparedBatchSave extends BatchSaveResult {
   readonly restoreCachedAccounts: () => void;
 }
 
+export interface PrepareBatchCreateOptions {
+  readonly expectedUserId?: string;
+  readonly preparedAccountCurrencies?: ReadonlyMap<string, CurrencyType>;
+}
+
 // ---------------------------------------------------------------------------
 // Balance delta accumulator
 // ---------------------------------------------------------------------------
@@ -158,7 +163,8 @@ export async function prepareBatchCreateTransactions<
 >(
   transactions: readonly T[],
   transactionAccountMap: ReadonlyMap<number, string>,
-  toAccountMap?: ReadonlyMap<number, string>
+  toAccountMap?: ReadonlyMap<number, string>,
+  options: PrepareBatchCreateOptions = {}
 ): Promise<PreparedBatchSave> {
   if (transactions.length === 0) {
     return {
@@ -172,7 +178,10 @@ export async function prepareBatchCreateTransactions<
   }
 
   const userId = await getCurrentUserId();
-  if (!userId) {
+  if (
+    !userId ||
+    (options.expectedUserId !== undefined && userId !== options.expectedUserId)
+  ) {
     return {
       savedCount: 0,
       failedCount: transactions.length,
@@ -216,6 +225,39 @@ export async function prepareBatchCreateTransactions<
   const transactionsCollection = database.get<Transaction>("transactions");
   const transfersCollection = database.get<Transfer>("transfers");
   const accountsCollection = database.get<Account>("accounts");
+  const preparedAccountCurrencies =
+    options.preparedAccountCurrencies ?? new Map<string, CurrencyType>();
+  const referencedAccountIds = new Set<string>([
+    ...transactionAccountMap.values(),
+    ...(toAccountMap?.values() ?? []),
+    ...cashAccountIdByCurrency.values(),
+  ]);
+  const persistedAccountIds = [...referencedAccountIds].filter(
+    (accountId) => !preparedAccountCurrencies.has(accountId)
+  );
+  const persistedAccounts =
+    persistedAccountIds.length > 0
+      ? await queryOwned(
+          accountsCollection,
+          userId,
+          Q.where("id", Q.oneOf(persistedAccountIds)),
+          Q.where("deleted", false)
+        ).fetch()
+      : [];
+  const accountCurrencyById = new Map<string, CurrencyType>([
+    ...persistedAccounts.map(
+      (account) => [account.id, account.currency] as const
+    ),
+    ...preparedAccountCurrencies,
+  ]);
+  const missingAccountIds = [...referencedAccountIds].filter(
+    (accountId) => !accountCurrencyById.has(accountId)
+  );
+  if (missingAccountIds.length > 0) {
+    throw new Error(
+      `[batch-create-transactions] Missing account rows for mapped IDs: ${missingAccountIds.join(", ")}`
+    );
+  }
   const operations: Model[] = [];
   const balanceDeltas = new Map<string, number>();
   const seenSmsFingerprints = new Set<string>();
@@ -248,6 +290,11 @@ export async function prepareBatchCreateTransactions<
       failedCount += 1;
       continue;
     }
+    if (accountCurrencyById.get(accountId) !== transaction.currency) {
+      errors.push(`Account currency mismatch for transaction index ${index}`);
+      failedCount += 1;
+      continue;
+    }
 
     if (isAtmWithdrawalTransaction(transaction)) {
       const cashAccountId =
@@ -256,6 +303,13 @@ export async function prepareBatchCreateTransactions<
       if (!cashAccountId) {
         errors.push(
           `Skipped ATM withdrawal index ${index} — failed to resolve Cash account in ${transaction.currency}`
+        );
+        failedCount += 1;
+        continue;
+      }
+      if (accountCurrencyById.get(cashAccountId) !== transaction.currency) {
+        errors.push(
+          `Cash account currency mismatch for ATM withdrawal index ${index}`
         );
         failedCount += 1;
         continue;
@@ -322,21 +376,11 @@ export async function prepareBatchCreateTransactions<
     if (smsFingerprint) seenSmsFingerprints.add(smsFingerprint);
   }
 
-  const accountIds = [...balanceDeltas.keys()];
+  const accountIds = [...balanceDeltas.keys()].filter(
+    (accountId) => !preparedAccountCurrencies.has(accountId)
+  );
   if (accountIds.length > 0) {
-    const accounts = await queryOwned(
-      accountsCollection,
-      userId,
-      Q.where("id", Q.oneOf(accountIds))
-    ).fetch();
-    const existingIds = new Set(accounts.map((account) => account.id));
-    const missingIds = accountIds.filter((id) => !existingIds.has(id));
-    if (missingIds.length > 0) {
-      throw new Error(
-        `[batch-create-transactions] Missing account rows for mapped IDs: ${missingIds.join(", ")}`
-      );
-    }
-    accounts.forEach((account) => {
+    persistedAccounts.forEach((account) => {
       const delta = balanceDeltas.get(account.id);
       if (!delta) return;
       accountSnapshots.push(captureCachedModelSnapshot(account));

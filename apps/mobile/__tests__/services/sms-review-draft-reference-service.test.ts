@@ -4,7 +4,10 @@ import type { SmsReviewDraftReadItem } from "@/services/sms-review-draft-reposit
 import { revalidateSmsReviewDraftReferences } from "@/services/sms-review-draft-reference-service";
 
 const mockAssertExpectedCurrentUser = jest.fn<Promise<void>, [string]>();
-const mockAccountFetch = jest.fn<Promise<readonly { id: string }[]>, []>();
+const mockAccountFetch = jest.fn<
+  Promise<readonly { id: string; currency: "EGP" | "USD" }[]>,
+  []
+>();
 const mockCategoryFetch = jest.fn<Promise<readonly { id: string }[]>, []>();
 const mockGetCurrentUserDataScope = jest.fn();
 
@@ -65,7 +68,7 @@ describe("revalidateSmsReviewDraftReferences", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAssertExpectedCurrentUser.mockResolvedValue();
-    mockAccountFetch.mockResolvedValue([{ id: "account-1" }]);
+    mockAccountFetch.mockResolvedValue([{ id: "account-1", currency: "EGP" }]);
     mockCategoryFetch.mockResolvedValue([{ id: "category-1" }]);
     mockGetCurrentUserDataScope.mockResolvedValue({
       userId: "user-1",
@@ -140,6 +143,55 @@ describe("revalidateSmsReviewDraftReferences", () => {
 
     expect(result?.hardValidationReasons).toEqual([
       "destination_account_unavailable",
+    ]);
+  });
+
+  it("rejects source and destination accounts in another currency", async () => {
+    mockAccountFetch.mockResolvedValue([
+      { id: "account-usd", currency: "USD" },
+      { id: "cash-usd", currency: "USD" },
+    ]);
+
+    const [result] = await revalidateSmsReviewDraftReferences(
+      [
+        createItem(
+          createTransaction({
+            accountId: "account-usd",
+            isAtmWithdrawal: true,
+            toAccountId: "cash-usd",
+          })
+        ),
+      ],
+      "user-1"
+    );
+
+    expect(result?.hardValidationReasons).toEqual([
+      "account_currency_mismatch",
+      "destination_account_currency_mismatch",
+    ]);
+  });
+
+  it("rejects a pending source account in another currency", async () => {
+    const [result] = await revalidateSmsReviewDraftReferences(
+      [
+        createItem(
+          createTransaction({
+            accountId: "pending-usd",
+            pendingAccount: {
+              tempId: "pending-usd",
+              name: "USD account",
+              currency: "USD",
+              type: "BANK",
+              senderDisplayName: "QNB EGYPT",
+            },
+          })
+        ),
+      ],
+      "user-1"
+    );
+
+    expect(result?.hardValidationReasons).toEqual([
+      "account_currency_mismatch",
     ]);
   });
 

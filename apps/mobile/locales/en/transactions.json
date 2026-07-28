@@ -215,6 +215,8 @@
   "sms_review_undo_description": "This SMS won't be suggested again on this device unless you undo now.",
   "sms_review_undo": "Undo",
   "sms_review_undo_close": "Hide undo message",
+  "sms_review_undo_failed": "We couldn't restore this suggestion",
+  "sms_review_undo_failed_message": "Please try again.",
   "sms_review_pending_title": "Suggestions ready to review",
   "sms_review_pending_description": "Your saved suggestions are ready when you are.",
   "sms_review_continue_one": "Continue reviewing {{count}} transaction",
@@ -226,7 +228,7 @@
   "privacy_sms_drafts_local": "Stored only on this device for the signed-in user.",
   "privacy_sms_drafts_retention": "Unresolved suggestions are removed after 30 days.",
   "privacy_sms_drafts_removed": "The original SMS is removed when you save or discard its suggestion.",
-  "privacy_sms_drafts_not_synced": "Review drafts and original SMS text are not synced to Supabase.",
+  "privacy_sms_drafts_not_synced": "Review drafts and original SMS text stay on this device and are not uploaded to the cloud.",
   "privacy_ai_title": "AI processing",
   "privacy_details_footer": "You can turn off AI features later in Settings. Existing local review suggestions remain available to resolve.",
   "my_bills": "My Bills",
@@ -519,5 +521,6 @@
   "review_badge_review_amount": "Review amount",
   "review_badge_auto_selected": "Auto-selected",
   "review_badge_missing_info": "Review details",
-  "save_error_title": "Save Error"
+  "save_error_title": "Save Error",
+  "account_currency_mismatch": "Select an account with the same currency."
 }

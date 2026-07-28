@@ -39,7 +39,6 @@ export interface ReviewListItem {
   readonly tx: ReviewableTransaction;
   readonly key: string;
 }
-
 export type TransactionReviewMode = "all" | "needs_review" | "auto_selected";
 
 const HARD_VALIDATION_REASONS: ReadonlySet<TransactionReviewReason> = new Set([
@@ -55,13 +54,11 @@ function hasHardValidationReason(
     meta?.reasons.some((reason) => HARD_VALIDATION_REASONS.has(reason)) ?? false
   );
 }
-
 export interface TransactionReviewFilters {
   readonly period: GroupingPeriod;
   readonly selectedTypes: readonly TransactionTypeFilter[];
   readonly searchQuery: string;
 }
-
 function buildFlatReviewList(
   transactions: readonly ReviewableTransaction[],
   originalTransactions: readonly ReviewableTransaction[]
