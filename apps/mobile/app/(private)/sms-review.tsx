@@ -467,7 +467,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
         isSaving={isSaving || smsRetry.isRetrying}
         title={t("review_transactions_title")}
         subtitle={t("review_sms_source_summary", {
-          count: discardConfirmation?.draftIds.length ?? 0,
+          count: transactions.length,
         })}
         workspaceVariant="sms"
         partialResults={partialResults}
@@ -479,7 +479,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
         variant="danger"
         title={t("sms_review_discard_all_title")}
         message={t("sms_review_discard_all_message", {
-          count: transactions.length,
+          count: discardConfirmation?.draftIds.length ?? 0,
         })}
         confirmLabel={t("discard")}
         cancelLabel={t("cancel")}

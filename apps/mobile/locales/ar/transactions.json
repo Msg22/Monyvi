@@ -428,6 +428,10 @@
   "status_paused": "متوقف",
   "status_completed": "مكتمل",
   "tap_to_edit_transaction": "اضغط لتعديل هذه المعاملة",
+  "sms_review_select_accessibility": "حدد اقتراح {{name}}",
+  "sms_review_deselect_accessibility": "ألغ تحديد اقتراح {{name}}",
+  "sms_review_expand_accessibility": "اعرض الرسالة الأصلية لـ {{name}}",
+  "sms_review_collapse_accessibility": "أخفِ الرسالة الأصلية لـ {{name}}",
 
   "voice_resume": "استئناف",
   "voice_pause": "إيقاف مؤقت",

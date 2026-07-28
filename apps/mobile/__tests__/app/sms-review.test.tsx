@@ -6,6 +6,7 @@ import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator
 
 interface MockTransactionReviewProps {
   readonly transactions: readonly ParsedSmsTransaction[];
+  readonly subtitle: string;
   readonly selectionOverrides: ReadonlyMap<number, boolean | null>;
   readonly partialResults?: {
     readonly safeguardSummary: SmsScanSafeguardSummary;
@@ -35,6 +36,7 @@ interface MockTransactionReviewProps {
 
 interface MockConfirmationModalProps {
   readonly visible: boolean;
+  readonly message: string;
   readonly onConfirm: () => void;
 }
 
@@ -373,6 +375,39 @@ describe("SMS review route", () => {
     );
     expect(mockClearTransactions).toHaveBeenCalledTimes(1);
     expect(mockRouterReplace).toHaveBeenCalledWith("/(private)/(tabs)");
+  });
+
+  it("shows the live review count and freezes the confirmed discard count", () => {
+    const view = render(<SmsReviewScreen />);
+    const initialReview = mockTransactionReview.mock.calls.at(-1)?.[0];
+
+    expect(initialReview?.subtitle).toBe("review_sms_source_summary:1");
+
+    act(() => initialReview?.onDiscard());
+    expect(mockConfirmationModal.mock.calls.at(-1)?.[0]?.message).toBe(
+      "sms_review_discard_all_message:1"
+    );
+
+    mockQueueItems = [
+      ...mockQueueItems,
+      {
+        ...mockQueueItems[0],
+        draftId: "draft-2",
+        transaction: {
+          ...mockTransaction,
+          smsFingerprint: "fingerprint-2",
+        },
+        position: 1,
+      },
+    ];
+    view.rerender(<SmsReviewScreen />);
+
+    expect(mockTransactionReview.mock.calls.at(-1)?.[0]?.subtitle).toBe(
+      "review_sms_source_summary:2"
+    );
+    expect(mockConfirmationModal.mock.calls.at(-1)?.[0]?.message).toBe(
+      "sms_review_discard_all_message:1"
+    );
   });
 
   it("saves selected drafts atomically and enters loading before navigation", async () => {

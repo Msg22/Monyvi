@@ -438,6 +438,10 @@
   "status_paused": "Paused",
   "status_completed": "Completed",
   "tap_to_edit_transaction": "Tap to edit this transaction",
+  "sms_review_select_accessibility": "Select {{name}} suggestion",
+  "sms_review_deselect_accessibility": "Deselect {{name}} suggestion",
+  "sms_review_expand_accessibility": "Show original message for {{name}}",
+  "sms_review_collapse_accessibility": "Hide original message for {{name}}",
 
   "voice_resume": "Resume",
   "voice_pause": "Pause",

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import React from "react";
 import {
@@ -185,6 +185,57 @@ describe("TransactionItem", () => {
       expect.stringContaining("flex-1")
     );
     expect(screen.getByTestId("transaction-review-expand-toggle")).toBeTruthy();
+  });
+
+  it("exposes selection as an independent accessible checkbox", () => {
+    const onToggleSelect = jest.fn();
+    render(
+      <TransactionItem
+        transaction={createTransaction()}
+        index={0}
+        isSelected
+        accountName="QNB Account"
+        onToggleSelect={onToggleSelect}
+        onPress={jest.fn()}
+        expandedContentTitle="Original SMS"
+        expandedContentBody="Raw message"
+      />
+    );
+
+    expect(
+      screen.getByRole("checkbox", {
+        name: "sms_review_deselect_accessibility:Fixture Shop",
+      })
+    ).toHaveProp("accessibilityState", { checked: true });
+
+    fireEvent.press(
+      screen.getByRole("checkbox", {
+        name: "sms_review_deselect_accessibility:Fixture Shop",
+      })
+    );
+    expect(onToggleSelect).toHaveBeenCalledWith(0);
+  });
+
+  it("exposes SMS expansion as an independent accessible button", () => {
+    renderItem();
+
+    expect(
+      screen.getByRole("button", {
+        name: "sms_review_expand_accessibility:Fixture Shop",
+      })
+    ).toHaveProp("accessibilityState", { expanded: false });
+
+    fireEvent.press(
+      screen.getByRole("button", {
+        name: "sms_review_expand_accessibility:Fixture Shop",
+      })
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "sms_review_collapse_accessibility:Fixture Shop",
+      })
+    ).toHaveProp("accessibilityState", { expanded: true });
   });
 
   it("keeps the shared row theme-aware outside the SMS workspace", () => {
