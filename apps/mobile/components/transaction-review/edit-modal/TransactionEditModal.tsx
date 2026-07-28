@@ -200,7 +200,6 @@ export function TransactionEditModal(
                 state={state}
                 setters={setters}
                 accountHandlers={accountHandlers}
-                transaction={transaction}
                 latestRates={latestRates}
               />
             ) : (
@@ -543,7 +542,6 @@ interface SmsReviewEditFieldsProps {
   readonly state: UseTransactionEditStateReturn["state"];
   readonly setters: UseTransactionEditStateReturn["setters"];
   readonly accountHandlers: UseTransactionEditStateReturn["accountHandlers"];
-  readonly transaction: ReviewableTransaction;
   readonly latestRates: MarketRate | null;
 }
 
@@ -553,7 +551,6 @@ function SmsReviewEditFields({
   state,
   setters,
   accountHandlers,
-  transaction,
   latestRates,
 }: SmsReviewEditFieldsProps): React.JSX.Element {
   const { t } = useTranslation("transactions");
@@ -610,7 +607,7 @@ function SmsReviewEditFields({
             </Text>
             <View className="flex-row items-center">
               <Text className="me-1 text-base font-semibold text-text-primary dark:text-text-primary-dark">
-                {transaction.currency}
+                {state.editedTransactionCurrency}
               </Text>
               <TextInput
                 value={formatAmountInput(state.amount)}
@@ -723,7 +720,7 @@ function SmsReviewEditFields({
               {t("currency")}
             </Text>
             <Text className="text-base font-semibold text-text-primary dark:text-text-primary-dark">
-              {state.selectedAccountCurrency}
+              {state.editedTransactionCurrency}
             </Text>
           </View>
           <Ionicons
@@ -782,7 +779,7 @@ function SmsReviewEditFields({
           <Text className="ms-2 flex-1 text-xs font-medium text-blue-500">
             {formatConversionPreview(
               state.amount,
-              transaction.currency,
+              state.editedTransactionCurrency,
               state.selectedAccountCurrency,
               latestRates
             )}
@@ -797,7 +794,7 @@ function SmsReviewEditFields({
           placeholder={t("select_cash_account")}
           hintMessage={t("cash_account_hint", {
             name: state.newToAccountName.trim() || t("cash_default"),
-            currency: transaction.currency,
+            currency: state.editedTransactionCurrency,
           })}
           themeColor="amber"
           iconName="cash"
@@ -814,7 +811,7 @@ function SmsReviewEditFields({
             setters.setIsToAccountPickerOpen(!state.isToAccountPickerOpen)
           }
           allowCreateNew
-          isCreatingNew={!state.hasCashAccounts}
+          isCreatingNew={state.isCreatingNewToAccount}
           newAccountName={state.newToAccountName}
           onNewAccountNameChange={setters.setNewToAccountName}
           onStartNew={accountHandlers.handleStartNewToAccount}

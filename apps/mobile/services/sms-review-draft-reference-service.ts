@@ -86,7 +86,10 @@ export async function revalidateSmsReviewDraftReferences(
     ) {
       reasons.push("destination_account_currency_mismatch");
     }
-    if (!categoryIds.has(item.transaction.categoryId)) {
+    if (
+      item.transaction.isAtmWithdrawal !== true &&
+      !categoryIds.has(item.transaction.categoryId)
+    ) {
       reasons.push("category_unavailable");
     }
     return { ...item, hardValidationReasons: reasons };

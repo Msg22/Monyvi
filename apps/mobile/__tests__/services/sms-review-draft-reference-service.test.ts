@@ -195,6 +195,23 @@ describe("revalidateSmsReviewDraftReferences", () => {
     ]);
   });
 
+  it("does not require an accessible category for an ATM transfer draft", async () => {
+    const [result] = await revalidateSmsReviewDraftReferences(
+      [
+        createItem(
+          createTransaction({
+            accountId: "account-1",
+            categoryId: "deleted-category",
+            isAtmWithdrawal: true,
+          })
+        ),
+      ],
+      "user-1"
+    );
+
+    expect(result?.hardValidationReasons).toEqual([]);
+  });
+
   it("fails closed when the current-user scope changes", async () => {
     mockGetCurrentUserDataScope.mockResolvedValue({
       userId: "user-2",

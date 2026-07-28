@@ -51,6 +51,7 @@ export interface UseTransactionEditStateReturn {
     readonly hasBankAccounts: boolean;
     readonly cashAccountOptions: readonly AccountOption[];
     readonly hasCashAccounts: boolean;
+    readonly editedTransactionCurrency: CurrencyType;
     readonly selectedAccountCurrency: CurrencyType;
     readonly hasCurrencyMismatch: boolean;
     readonly formConfig: EditFormConfig;
@@ -671,6 +672,7 @@ export function useTransactionEditState({
       hasBankAccounts,
       cashAccountOptions,
       hasCashAccounts,
+      editedTransactionCurrency,
       selectedAccountCurrency,
       hasCurrencyMismatch,
       formConfig,

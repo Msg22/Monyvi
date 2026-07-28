@@ -2,10 +2,12 @@ import type { ParsedSmsTransaction } from "@monyvi/logic";
 
 import {
   deleteResolvedSmsReviewDraftsInWriter,
+  discardAllSmsReviewDrafts,
   getHandledSmsReviewFingerprints,
   getSmsReviewDraftCount,
   getSmsReviewDraftQueueSnapshot,
   mergeSmsReviewDrafts,
+  restoreSmsReviewDraft,
 } from "@/services/sms-review-draft-repository";
 
 interface QueryCondition {
@@ -452,6 +454,55 @@ describe("sms-review-draft-repository", () => {
     ).rejects.toThrow("sms_review_draft_user_scope_changed");
 
     expect(mockBatch).not.toHaveBeenCalled();
+  });
+
+  it("revalidates the active user immediately before discard all commits", async () => {
+    const queue = seedRecord("sms_review_queues", { userId: "user-1" });
+    seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      queueId: queue.id,
+      smsFingerprint: "fp-discard-race",
+    });
+    mockAssertExpectedCurrentUser
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("sms_review_draft_user_scope_changed"));
+
+    await expect(discardAllSmsReviewDrafts("user-1")).rejects.toThrow(
+      "sms_review_draft_user_scope_changed"
+    );
+
+    expect(mockBatch).not.toHaveBeenCalled();
+  });
+
+  it("does not restore an undone draft after its fingerprint was saved", async () => {
+    seedRecord("dismissed_sms_fingerprints", {
+      userId: "user-1",
+      smsFingerprint: "fp-saved-during-undo",
+    });
+    seedRecord("transactions", {
+      userId: "user-1",
+      smsFingerprint: "fp-saved-during-undo",
+      deleted: false,
+    });
+
+    await restoreSmsReviewDraft({
+      draftId: "draft-undo",
+      queueId: "queue-undo",
+      userId: "user-1",
+      smsFingerprint: "fp-saved-during-undo",
+      transaction: createTransaction("fp-saved-during-undo"),
+      selectionOverride: true,
+      position: 2,
+      parsedAt: new Date("2026-07-27T12:00:00.000Z"),
+      expiresAt: Date.now() + 5_000,
+    });
+
+    expect(mockCollections.get("sms_review_draft_items")?.records).toHaveLength(
+      0
+    );
+    expect(
+      mockCollections.get("dismissed_sms_fingerprints")?.records
+    ).toHaveLength(0);
   });
 
   it("reads handled metadata without decoding payload JSON", async () => {

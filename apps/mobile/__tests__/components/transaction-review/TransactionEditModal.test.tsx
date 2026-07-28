@@ -1,4 +1,4 @@
-import { fireEvent, render } from "@testing-library/react-native";
+import { fireEvent, render, within } from "@testing-library/react-native";
 
 import { TransactionEditModal } from "@/components/transaction-review/edit-modal/TransactionEditModal";
 
@@ -7,6 +7,7 @@ const mockSetIsCategoryPickerOpen = jest.fn();
 const mockSetIsCurrencyPickerOpen = jest.fn();
 const mockHandleSave = jest.fn();
 const mockHandleSelectAccount = jest.fn();
+let mockStateOverrides: Record<string, unknown> = {};
 
 jest.mock("@/hooks/useModalBottomInset", () => ({
   useModalBottomInset: (): number => 16,
@@ -47,6 +48,7 @@ jest.mock("@/hooks/useTransactionEditState", () => ({
       hasBankAccounts: true,
       cashAccountOptions: [],
       hasCashAccounts: false,
+      editedTransactionCurrency: "EGP",
       selectedAccountCurrency: "EGP",
       hasCurrencyMismatch: false,
       formConfig: {
@@ -62,6 +64,7 @@ jest.mock("@/hooks/useTransactionEditState", () => ({
       isCurrencyLocked: false,
       isCurrencyPickerOpen: false,
       newAccountCurrency: "EGP",
+      ...mockStateOverrides,
     },
     setters: {
       setAmount: jest.fn(),
@@ -100,7 +103,15 @@ jest.mock("@/components/add-transaction/TypeTabs", () => {
 jest.mock("@/components/transaction-review/edit-modal/AccountSelector", () => {
   const { View } =
     jest.requireActual<typeof import("react-native")>("react-native");
-  return { AccountSelector: () => <View testID="legacy-account-selector" /> };
+  return {
+    AccountSelector: ({ isCreatingNew }: { isCreatingNew: boolean }) => (
+      <View
+        testID={
+          isCreatingNew ? "cash-account-create-mode" : "legacy-account-selector"
+        }
+      />
+    ),
+  };
 });
 
 jest.mock("@/components/modals/CategorySelectorModal", () => {
@@ -148,7 +159,10 @@ const baseProps = {
 } as const;
 
 describe("TransactionEditModal SMS workspace", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockStateOverrides = {};
+  });
 
   it("renders the approved bounded grouped fields without type tabs", () => {
     const view = render(
@@ -202,9 +216,50 @@ describe("TransactionEditModal SMS workspace", () => {
     expect(mockSetIsAccountPickerOpen).toHaveBeenCalledWith(true);
     expect(mockSetIsCurrencyPickerOpen).toHaveBeenCalledWith(true);
   });
+
+  it("shows the edited SMS currency beside the amount", () => {
+    mockStateOverrides = {
+      editedTransactionCurrency: "USD",
+      newAccountCurrency: "USD",
+      selectedAccountCurrency: "USD",
+    };
+
+    const view = render(
+      <TransactionEditModal {...baseProps} sourceVariant="sms" />
+    );
+
+    expect(
+      within(view.getByTestId("sms-edit-amount")).getByText("USD")
+    ).toBeTruthy();
+  });
+
+  it("renders the resolved ATM destination creation mode", () => {
+    mockStateOverrides = {
+      formConfig: {
+        showTypeToggle: false,
+        showCategory: false,
+        showCounterparty: false,
+        showToAccount: true,
+        sourceTypeBadge: null,
+      },
+      hasCashAccounts: true,
+      isCreatingNewToAccount: true,
+    };
+
+    const view = render(
+      <TransactionEditModal {...baseProps} sourceVariant="sms" />
+    );
+
+    expect(view.getByTestId("cash-account-create-mode")).toBeTruthy();
+    expect(view.queryByTestId("legacy-account-selector")).toBeNull();
+  });
 });
 
 describe("TransactionEditModal existing voice workspace", () => {
+  beforeEach(() => {
+    mockStateOverrides = {};
+  });
+
   it("preserves the existing type tabs and account editor", () => {
     const voiceTransaction = {
       ...transaction,

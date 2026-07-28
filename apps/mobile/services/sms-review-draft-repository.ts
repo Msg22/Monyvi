@@ -601,6 +601,32 @@ export async function restoreSmsReviewDraft(
       undoItem.userId,
       undoItem.smsFingerprint
     );
+    const savedFingerprints = await getSavedSmsFingerprintsInWriter(
+      undoItem.userId
+    );
+    if (savedFingerprints.has(undoItem.smsFingerprint)) {
+      const queue = assertSingleQueue(await fetchOwnedQueues(undoItem.userId));
+      const allItems = await fetchOwnedItems(undoItem.userId, queue?.id);
+      const activeIds = new Set(active.map((record) => record.id));
+      const operations: Model[] = [
+        ...active.map((record) => record.prepareDestroyPermanently()),
+      ];
+      if (dismissed) {
+        operations.push(dismissed.prepareDestroyPermanently());
+      }
+      if (
+        queue &&
+        allItems.length > 0 &&
+        allItems.every((record) => activeIds.has(record.id))
+      ) {
+        operations.push(queue.prepareDestroyPermanently());
+      }
+      if (operations.length > 0) {
+        await assertExpectedCurrentUser(undoItem.userId);
+        await database.batch(operations);
+      }
+      return;
+    }
     if (active.length > 0) {
       if (dismissed) {
         await database.batch([dismissed.prepareDestroyPermanently()]);
@@ -657,6 +683,7 @@ export async function discardAllSmsReviewDrafts(
     if (!queue) return 0;
     const items = await fetchOwnedItems(expectedUserId, queue.id);
     if (items.length === 0) {
+      await assertExpectedCurrentUser(expectedUserId);
       await database.batch([queue.prepareDestroyPermanently()]);
       return 0;
     }
@@ -681,6 +708,7 @@ export async function discardAllSmsReviewDrafts(
       ...items.map((item) => item.prepareDestroyPermanently()),
       queue.prepareDestroyPermanently()
     );
+    await assertExpectedCurrentUser(expectedUserId);
     await database.batch(operations);
     return items.length;
   });
