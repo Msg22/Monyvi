@@ -34,7 +34,8 @@ export function getDurableTransactionOverrides(
     if (
       !transaction.accountId &&
       !smsTransaction.pendingAccount &&
-      !smsTransaction.toAccountId
+      !smsTransaction.toAccountId &&
+      smsTransaction.categoryConfirmed !== true
     ) {
       return;
     }
@@ -45,6 +46,8 @@ export function getDurableTransactionOverrides(
       counterparty: transaction.counterparty,
       categoryId: transaction.categoryId,
       type: transaction.type,
+      categoryConfirmed:
+        smsTransaction.categoryConfirmed === true ? true : undefined,
       accountId:
         smsTransaction.pendingAccount?.tempId ?? transaction.accountId ?? null,
       accountName: smsTransaction.pendingAccount?.name ?? null,

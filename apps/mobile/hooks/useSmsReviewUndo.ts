@@ -47,6 +47,7 @@ export function useSmsReviewUndo(): UseSmsReviewUndoResult {
 
       const requestId = latestDiscardRequestRef.current + 1;
       latestDiscardRequestRef.current = requestId;
+      setUndoItem(null);
       const request = discardOneSmsReviewDraft(draftId, userId)
         .then((discarded) => {
           if (latestDiscardRequestRef.current === requestId) {

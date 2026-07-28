@@ -59,6 +59,14 @@ const mockConsentSheet = jest.fn<void, [props: MockConsentSheetProps]>();
 const mockGrantConsent = jest.fn<Promise<void>, []>();
 const mockDismissConsentRequired = jest.fn();
 
+let mockUndoState = {
+  undoItem: null as object | null,
+  discardedName: null as string | null,
+  discard: mockDiscardOne,
+  undo: jest.fn<Promise<boolean>, []>(),
+  close: jest.fn(),
+};
+
 let mockRetryState = {
   unresolvedCount: 2,
   retryableCount: 2,
@@ -142,13 +150,7 @@ jest.mock("@/hooks/useSmsReviewDraftQueue", () => ({
 }));
 
 jest.mock("@/hooks/useSmsReviewUndo", () => ({
-  useSmsReviewUndo: () => ({
-    undoItem: null,
-    discardedName: null,
-    discard: mockDiscardOne,
-    undo: jest.fn(),
-    close: jest.fn(),
-  }),
+  useSmsReviewUndo: () => mockUndoState,
 }));
 
 jest.mock("@/hooks/useSmsReviewRetry", () => ({
@@ -172,6 +174,14 @@ jest.mock("@/components/transaction-review/TransactionReview", () => ({
       jest.requireActual<typeof import("react-native")>("react-native");
     mockTransactionReview(props);
     return <ReactNative.View testID="transaction-review" />;
+  },
+}));
+
+jest.mock("@/components/transaction-review/SmsReviewUndoBanner", () => ({
+  SmsReviewUndoBanner: (): React.JSX.Element => {
+    const ReactNative =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return <ReactNative.View testID="sms-review-undo-banner" />;
   },
 }));
 
@@ -273,6 +283,13 @@ describe("SMS review route", () => {
     mockDiscardOne.mockResolvedValue(undefined);
     mockMarkSyncComplete.mockResolvedValue(undefined);
     mockSaveSelectedDrafts.mockResolvedValue({ savedCount: 1 });
+    mockUndoState = {
+      undoItem: null,
+      discardedName: null,
+      discard: mockDiscardOne,
+      undo: jest.fn<Promise<boolean>, []>(),
+      close: jest.fn(),
+    };
   });
 
   it("renders durable queue items and forces a hard-invalid override off", () => {
@@ -377,6 +394,19 @@ describe("SMS review route", () => {
 
     expect(screen.getByTestId("partial-sms-results-notice")).toBeTruthy();
     expect(screen.getByText("no_transactions_to_review")).toBeTruthy();
+  });
+
+  it("keeps Undo visible after discarding the final suggestion", () => {
+    mockQueueItems = [];
+    mockUndoState = {
+      ...mockUndoState,
+      undoItem: { draftId: "discarded-final" },
+      discardedName: "Final merchant",
+    };
+
+    render(<SmsReviewScreen />);
+
+    expect(screen.getByTestId("sms-review-undo-banner")).toBeTruthy();
   });
 
   it("shows the skeleton while the current-user queue is loading", () => {

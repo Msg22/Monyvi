@@ -1,4 +1,5 @@
 import { palette } from "@/constants/colors";
+import { PageHeader } from "@/components/navigation/PageHeader";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
@@ -20,25 +21,17 @@ export function SmsReviewResumeState({
   const { t } = useTranslation("transactions");
 
   return (
-    <View className="flex-1 bg-slate-50 px-4 dark:bg-slate-900">
-      <View className="flex-row items-center pt-2 pb-3">
-        <TouchableOpacity
-          testID="sms-review-resume-back"
-          accessibilityRole="button"
-          accessibilityLabel={t("back_to_dashboard")}
-          onPress={onBack}
-          activeOpacity={0.7}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          className="h-10 w-10 items-center justify-center"
-        >
-          <Ionicons name="chevron-back" size={24} color={palette.slate[400]} />
-        </TouchableOpacity>
-        <Text className="-ms-10 flex-1 text-center text-base font-bold text-slate-800 dark:text-white">
-          {t("sms_scan_header")}
-        </Text>
-      </View>
+    <View className="flex-1 bg-slate-50 dark:bg-slate-900">
+      <PageHeader
+        title={t("sms_scan_header")}
+        showDrawer={false}
+        showBackButton
+        centerTitle
+        onBack={onBack}
+        backAccessibilityLabel={t("back_to_dashboard")}
+      />
 
-      <View className="flex-1 justify-center pb-10">
+      <View className="flex-1 justify-center px-4 pb-10">
         <View className="items-center">
           <View className="mb-5 h-16 w-16 items-center justify-center rounded-2xl bg-nileGreen-500/15">
             <Ionicons
@@ -47,10 +40,10 @@ export function SmsReviewResumeState({
               color={palette.nileGreen[500]}
             />
           </View>
-          <Text className="text-center text-xl font-bold text-text-primary">
+          <Text className="text-center text-xl font-bold text-text-primary dark:text-text-primary-dark">
             {t("sms_review_pending_title")}
           </Text>
-          <Text className="mt-2 max-w-sm text-center text-sm leading-5 text-text-secondary">
+          <Text className="mt-2 max-w-sm text-center text-sm leading-5 text-text-secondary dark:text-text-secondary-dark">
             {t("sms_review_pending_description")}
           </Text>
         </View>

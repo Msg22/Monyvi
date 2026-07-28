@@ -3,6 +3,7 @@ import { ConfirmationModal } from "@/components/modals/ConfirmationModal";
 import { SafeguardQaDiagnosticsPanel } from "@/components/sms-sync/SafeguardQaDiagnosticsPanel";
 import { TransactionReview } from "@/components/transaction-review/TransactionReview";
 import { PartialSmsResultsNotice } from "@/components/transaction-review/PartialSmsResultsNotice";
+import { SmsReviewUndoBanner } from "@/components/transaction-review/SmsReviewUndoBanner";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
@@ -10,7 +11,10 @@ import { useSmsScanContext } from "@/context/SmsScanContext";
 import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
 import { useSmsReviewDraftQueue } from "@/hooks/useSmsReviewDraftQueue";
 import { useSmsReviewRetry } from "@/hooks/useSmsReviewRetry";
-import { useSmsReviewUndo } from "@/hooks/useSmsReviewUndo";
+import {
+  type UseSmsReviewUndoResult,
+  useSmsReviewUndo,
+} from "@/hooks/useSmsReviewUndo";
 import { useSmsSync } from "@/hooks/useSmsSync";
 import {
   discardEverySmsReviewDraft,
@@ -81,6 +85,24 @@ function SmsReviewLoadingState(): React.JSX.Element {
         <Skeleton width="100%" height={132} borderRadius={8} />
       </View>
     </SafeAreaView>
+  );
+}
+
+function ActiveSmsReviewUndoBanner({
+  undo,
+}: {
+  readonly undo: UseSmsReviewUndoResult;
+}): React.JSX.Element | null {
+  if (!undo.undoItem || !undo.discardedName) return null;
+
+  return (
+    <SmsReviewUndoBanner
+      discardedName={undo.discardedName}
+      onUndo={async (): Promise<void> => {
+        await undo.undo();
+      }}
+      onClose={undo.close}
+    />
   );
 }
 
@@ -367,6 +389,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
           </Text>
         </TouchableOpacity>
         {retryConsentSheet}
+        <ActiveSmsReviewUndoBanner undo={undo} />
       </SafeAreaView>
     );
   }

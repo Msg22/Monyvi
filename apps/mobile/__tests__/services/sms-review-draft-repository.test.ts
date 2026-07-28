@@ -1,6 +1,7 @@
 import type { ParsedSmsTransaction } from "@monyvi/logic";
 
 import {
+  deleteResolvedSmsReviewDraftsInWriter,
   getHandledSmsReviewFingerprints,
   getSmsReviewDraftCount,
   mergeSmsReviewDrafts,
@@ -58,6 +59,13 @@ class FakeCollection {
   public readonly table: string;
   public records: FakeRecord[] = [];
   private nextId = 1;
+
+  public find(id: string): Promise<FakeRecord> {
+    const record = this.records.find((candidate) => candidate.id === id);
+    return record
+      ? Promise.resolve(record)
+      : Promise.reject(new Error(`Missing record ${this.table}:${id}`));
+  }
 
   public query(...conditions: readonly QueryCondition[]): FakeQuery {
     const fetchRecords = (): FakeRecord[] => {
@@ -336,6 +344,49 @@ describe("sms-review-draft-repository", () => {
         .get("sms_review_draft_items")
         ?.records.map((item) => item.smsFingerprint)
     ).toEqual(["fp-new"]);
+  });
+
+  it("blocks a final save when the fingerprint was saved after preparation", async () => {
+    const queue = seedRecord("sms_review_queues", { userId: "user-1" });
+    const draft = seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      queueId: queue.id,
+      smsFingerprint: "fp-raced",
+    });
+    seedRecord("transactions", {
+      userId: "user-1",
+      smsFingerprint: "fp-raced",
+      deleted: false,
+    });
+
+    await expect(
+      deleteResolvedSmsReviewDraftsInWriter([draft.id], "user-1")
+    ).rejects.toThrow("sms_review_draft_fingerprint_already_saved");
+
+    expect(mockCollections.get("sms_review_draft_items")?.records).toContain(
+      draft
+    );
+    expect(mockBatch).not.toHaveBeenCalled();
+  });
+
+  it("revalidates the active user immediately before the final save batch", async () => {
+    const queue = seedRecord("sms_review_queues", { userId: "user-1" });
+    const draft = seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      queueId: queue.id,
+      smsFingerprint: "fp-user-race",
+    });
+    jest.spyOn(draft, "prepareDestroyPermanently").mockImplementation(() => {
+      draft.operation = "destroy";
+      mockCurrentUserId = "user-2";
+      return draft;
+    });
+
+    await expect(
+      deleteResolvedSmsReviewDraftsInWriter([draft.id], "user-1")
+    ).rejects.toThrow("sms_review_draft_user_scope_changed");
+
+    expect(mockBatch).not.toHaveBeenCalled();
   });
 
   it("reads handled metadata without decoding payload JSON", async () => {

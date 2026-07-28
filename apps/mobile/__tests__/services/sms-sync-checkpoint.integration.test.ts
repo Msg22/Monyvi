@@ -60,6 +60,17 @@ interface MockOversizedOutcomeInput {
   readonly lookbackDays: number;
 }
 
+interface MockMergeSmsReviewDraftsInput {
+  readonly transactions: readonly ParsedSmsTransaction[];
+}
+
+interface MockMergeSmsReviewDraftsResult {
+  readonly insertedCount: number;
+  readonly existingCount: number;
+  readonly rejectedCount: number;
+  readonly reviewableFingerprints: readonly string[];
+}
+
 const mockFinalizeSmsScanCheckpoint = jest.fn<
   Promise<unknown>,
   [MockFinalizeCheckpointInput]
@@ -84,8 +95,8 @@ const mockGetHandledSmsReviewFingerprints = jest.fn<
   []
 >();
 const mockMergeSmsReviewDrafts = jest.fn<
-  Promise<{ readonly insertedCount: number; readonly existingCount: number }>,
-  [unknown]
+  Promise<MockMergeSmsReviewDraftsResult>,
+  [MockMergeSmsReviewDraftsInput]
 >();
 
 jest.mock("expo-crypto", () => ({
@@ -199,11 +210,8 @@ jest.mock("@/services/sms-review-draft-repository", () => ({
   getHandledSmsReviewFingerprints: (): Promise<ReadonlySet<string>> =>
     mockGetHandledSmsReviewFingerprints(),
   mergeSmsReviewDrafts: (
-    input: unknown
-  ): Promise<{
-    readonly insertedCount: number;
-    readonly existingCount: number;
-  }> => mockMergeSmsReviewDrafts(input),
+    input: MockMergeSmsReviewDraftsInput
+  ): Promise<MockMergeSmsReviewDraftsResult> => mockMergeSmsReviewDrafts(input),
 }));
 
 jest.mock("@monyvi/db", () => ({
@@ -301,10 +309,16 @@ describe("SMS sync checkpoint integration", () => {
     mockAssertExpectedCurrentUser.mockReset();
     mockAssertExpectedCurrentUser.mockResolvedValue(undefined);
     mockGetHandledSmsReviewFingerprints.mockResolvedValue(new Set());
-    mockMergeSmsReviewDrafts.mockResolvedValue({
-      insertedCount: 0,
-      existingCount: 0,
-    });
+    mockMergeSmsReviewDrafts.mockImplementation((input) =>
+      Promise.resolve({
+        insertedCount: input.transactions.length,
+        existingCount: 0,
+        rejectedCount: 0,
+        reviewableFingerprints: input.transactions.map(
+          (transaction) => transaction.smsFingerprint
+        ),
+      })
+    );
   });
 
   it("uses one fixed scan clock for the inclusive rolling 30-day boundary", async () => {

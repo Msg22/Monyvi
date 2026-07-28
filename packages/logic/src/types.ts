@@ -158,6 +158,8 @@ export interface ParsedSmsTransaction extends ReviewableTransaction {
   readonly toAccountName?: string;
   /** Restores a not-yet-persisted account when the draft is resumed. */
   readonly pendingAccount?: PendingSmsAccountDraft;
+  /** Restores an explicit category confirmation after the draft is resumed. */
+  readonly categoryConfirmed?: boolean;
 }
 
 /**

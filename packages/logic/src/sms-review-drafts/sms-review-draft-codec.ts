@@ -84,6 +84,7 @@ const StoredTransactionSchema = z
     merchant: z.string().optional(),
     reviewStatus: z.enum(["auto_selectable", "needs_review"]).optional(),
     reviewReasons: z.array(ReviewReasonSchema).optional(),
+    categoryConfirmed: z.boolean().optional(),
     smsFingerprint: z.string().min(1),
     senderDisplayName: z.string().min(1),
     rawSmsBody: z.string(),

@@ -264,7 +264,7 @@ function applyTransactionEdits(
   edits: TransactionEdits,
   categoryMap: ReadonlyMap<string, Category>
 ): ReviewableTransaction {
-  return {
+  const updatedTransaction = {
     ...transaction,
     amount: edits.amount,
     ...(edits.currency !== undefined && { currency: edits.currency }),
@@ -286,7 +286,12 @@ function applyTransactionEdits(
     ...(edits.pendingAccount !== undefined && {
       pendingAccount: edits.pendingAccount ?? undefined,
     }),
+    ...(transaction.source === "SMS" &&
+      edits.categoryConfirmed !== undefined && {
+        categoryConfirmed: edits.categoryConfirmed,
+      }),
   };
+  return updatedTransaction;
 }
 
 function getDurablePendingAccounts(

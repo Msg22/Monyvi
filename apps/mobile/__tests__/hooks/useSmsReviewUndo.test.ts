@@ -87,6 +87,38 @@ describe("useSmsReviewUndo", () => {
     expect(result.current.undoItem?.draftId).toBe("draft-Second");
   });
 
+  it("hides the previous undo as soon as a different discard starts", async () => {
+    let resolveSecond!: (item: VolatileSmsReviewUndoItem) => void;
+    const secondResult = new Promise<VolatileSmsReviewUndoItem>((resolve) => {
+      resolveSecond = resolve;
+    });
+    mockDiscard
+      .mockResolvedValueOnce(createUndoItem("First"))
+      .mockReturnValueOnce(secondResult);
+    mockUndo.mockResolvedValue(true);
+    const { result } = renderHook(() => useSmsReviewUndo());
+
+    await act(async () => result.current.discard("draft-1", "user-1"));
+    expect(result.current.undoItem?.draftId).toBe("draft-First");
+
+    let secondDiscard!: Promise<void>;
+    act(() => {
+      secondDiscard = result.current.discard("draft-2", "user-1");
+    });
+    expect(result.current.undoItem).toBeNull();
+
+    let restored = true;
+    await act(async () => {
+      restored = await result.current.undo();
+      resolveSecond(createUndoItem("Second"));
+      await secondDiscard;
+    });
+
+    expect(restored).toBe(false);
+    expect(mockUndo).not.toHaveBeenCalled();
+    expect(result.current.undoItem?.draftId).toBe("draft-Second");
+  });
+
   it("reuses an in-flight discard for the same draft", async () => {
     let resolveDiscard!: (item: VolatileSmsReviewUndoItem) => void;
     const discardResult = new Promise<VolatileSmsReviewUndoItem>((resolve) => {

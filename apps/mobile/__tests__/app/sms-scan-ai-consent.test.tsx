@@ -79,6 +79,10 @@ jest.mock("react-i18next", () => ({
   }),
 }));
 
+jest.mock("@/components/navigation/PageHeader", () => ({
+  PageHeader: (): null => null,
+}));
+
 jest.mock("react-native-safe-area-context", () => ({
   SafeAreaView: ({ children }: { readonly children?: ReactNode }): ReactNode =>
     children,

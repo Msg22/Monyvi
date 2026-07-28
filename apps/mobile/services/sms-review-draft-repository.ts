@@ -383,7 +383,7 @@ export async function mergeSmsReviewDrafts(
     uniqueNew.forEach(({ transaction, payload }, index) => {
       operations.push(
         itemCollection().prepareCreate((record) => {
-          record.queueId = queue!.id;
+          record.queueId = queue.id;
           record.userId = input.expectedUserId;
           record.smsFingerprint = transaction.smsFingerprint;
           record.payloadVersion = payload.version;
@@ -451,6 +451,35 @@ export async function updateSmsReviewDraftSelection(
   });
 }
 
+async function getSavedSmsFingerprintsInWriter(
+  expectedUserId: string
+): Promise<ReadonlySet<string>> {
+  const scope = await getCurrentUserDataScope();
+  if (scope.userId !== expectedUserId) {
+    await assertExpectedCurrentUser(expectedUserId);
+  }
+  const [transactions, transfers] = await Promise.all([
+    scope
+      .queryOwned(
+        database.get<Transaction>("transactions"),
+        Q.where("deleted", false)
+      )
+      .fetch(),
+    scope
+      .queryOwned(
+        database.get<Transfer>("transfers"),
+        Q.where("deleted", false)
+      )
+      .fetch(),
+  ]);
+
+  return new Set(
+    [...transactions, ...transfers].flatMap((record) =>
+      record.smsFingerprint ? [record.smsFingerprint] : []
+    )
+  );
+}
+
 export async function deleteResolvedSmsReviewDraftsInWriter(
   draftIds: readonly string[],
   expectedUserId: string,
@@ -462,6 +491,11 @@ export async function deleteResolvedSmsReviewDraftsInWriter(
       getOwnedSmsReviewDraftItem(draftId, expectedUserId)
     )
   );
+  const savedFingerprints =
+    await getSavedSmsFingerprintsInWriter(expectedUserId);
+  if (records.some((record) => savedFingerprints.has(record.smsFingerprint))) {
+    throw new Error(SMS_REVIEW_DRAFT_ERROR_CODES.FINGERPRINT_ALREADY_SAVED);
+  }
   const queue = assertSingleQueue(await fetchOwnedQueues(expectedUserId));
   const selectedIds = new Set(records.map((record) => record.id));
   const allItems = await fetchOwnedItems(expectedUserId, queue?.id);
@@ -472,6 +506,7 @@ export async function deleteResolvedSmsReviewDraftsInWriter(
   if (queue && allItems.every((item) => selectedIds.has(item.id))) {
     operations.push(queue.prepareDestroyPermanently());
   }
+  await assertExpectedCurrentUser(expectedUserId);
   await database.batch(operations);
 }
 

@@ -25,6 +25,7 @@ function createTransaction(
     merchant: "Fawry Market",
     reviewStatus: "auto_selectable",
     reviewReasons: [],
+    categoryConfirmed: true,
     smsFingerprint: "fingerprint-1",
     senderDisplayName: "QNB EGYPT",
     rawSmsBody: "Your Debit Card had a transaction.",

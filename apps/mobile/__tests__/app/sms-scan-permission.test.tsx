@@ -52,6 +52,10 @@ jest.mock("react-i18next", () => ({
   }),
 }));
 
+jest.mock("@/components/navigation/PageHeader", () => ({
+  PageHeader: (): null => null,
+}));
+
 jest.mock("@/hooks/useSmsPermission", () => ({
   useSmsPermission: () => ({
     status: mockPermissionStatus,
