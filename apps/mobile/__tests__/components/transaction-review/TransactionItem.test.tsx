@@ -39,8 +39,10 @@ jest.mock("react-i18next", () => ({
   useTranslation: (): {
     readonly t: (key: string, options?: { readonly name?: string }) => string;
   } => ({
-    t: (key: string, options?: { readonly name?: string }): string =>
-      options?.name ? `${key}:${options.name}` : key,
+    t: (key: string, options?: { readonly name?: string }): string => {
+      if (key === "expense") return "localized-expense";
+      return options?.name ? `${key}:${options.name}` : key;
+    },
   }),
 }));
 
@@ -214,6 +216,15 @@ describe("TransactionItem", () => {
       })
     );
     expect(onToggleSelect).toHaveBeenCalledWith(0);
+  });
+
+  it("localizes the transaction type in the edit accessibility label", () => {
+    renderItem();
+
+    expect(screen.getByTestId("transaction-review-edit-action")).toHaveProp(
+      "accessibilityLabel",
+      expect.stringContaining("localized-expense")
+    );
   });
 
   it("exposes SMS expansion as an independent accessible button", () => {
