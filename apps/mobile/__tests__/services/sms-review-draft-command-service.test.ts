@@ -113,8 +113,13 @@ describe("sms-review-draft-command-service", () => {
   });
 
   it("delegates final bulk discard without creating undo state", async () => {
-    await expect(discardEverySmsReviewDraft("user-1")).resolves.toBe(2);
-    expect(mockDiscardAll).toHaveBeenCalledWith("user-1");
+    await expect(
+      discardEverySmsReviewDraft("user-1", "queue-1", ["draft-1", "draft-2"])
+    ).resolves.toBe(2);
+    expect(mockDiscardAll).toHaveBeenCalledWith("user-1", "queue-1", [
+      "draft-1",
+      "draft-2",
+    ]);
     expect(mockRestore).not.toHaveBeenCalled();
   });
 });

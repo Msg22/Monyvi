@@ -49,7 +49,9 @@ export async function undoSmsReviewDraftDiscard(
 }
 
 export async function discardEverySmsReviewDraft(
-  userId: string
+  userId: string,
+  queueId: string,
+  draftIds: readonly string[]
 ): Promise<number> {
-  return discardAllSmsReviewDrafts(userId);
+  return discardAllSmsReviewDrafts(userId, queueId, draftIds);
 }

@@ -40,7 +40,6 @@ import { useSmsPermission } from "@/hooks/useSmsPermission";
 import { useSmsSync } from "@/hooks/useSmsSync";
 import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
 import { useSmsReviewDraftQueue } from "@/hooks/useSmsReviewDraftQueue";
-import { loadExistingSmsFingerprints } from "@/services/sms-sync-service";
 import { palette } from "@/constants/colors";
 import { logger } from "@/utils/logger";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
@@ -303,7 +302,7 @@ export default function SmsScanScreen(): React.JSX.Element {
   );
 
   // Shared scan initiation logic (used by both auto-start and retry)
-  const initiateScan = useCallback(async (): Promise<void> => {
+  const initiateScan = useCallback((): void => {
     if (scanAbortControllerRef.current) {
       scanAbortControllerRef.current.abort();
       pendingScanAfterAbortRef.current = true;
@@ -313,15 +312,6 @@ export default function SmsScanScreen(): React.JSX.Element {
 
     const abortController = new AbortController();
     scanAbortControllerRef.current = abortController;
-
-    let existingFingerprints: ReadonlySet<string> | undefined;
-    try {
-      existingFingerprints = await loadExistingSmsFingerprints();
-    } catch (err: unknown) {
-      logger.warn("smsScan.loadExistingFingerprintsFailed", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
 
     if (abortController.signal.aborted) {
       if (scanAbortControllerRef.current === abortController) {
@@ -336,7 +326,6 @@ export default function SmsScanScreen(): React.JSX.Element {
 
     startScan({
       scanKind,
-      existingFingerprints,
       aiContext,
       abortSignal: abortController.signal,
     })
@@ -377,9 +366,7 @@ export default function SmsScanScreen(): React.JSX.Element {
     if (!isAiContextReady) return;
     if (!scanInitiated.current) {
       scanInitiated.current = true;
-      initiateScan().catch((err: unknown) => {
-        logger.error("smsScan.autoStartFailed", err);
-      });
+      initiateScan();
     }
   }, [
     isAiConsented,
@@ -506,9 +493,7 @@ export default function SmsScanScreen(): React.JSX.Element {
   );
 
   const handleRetryPress = (): void => {
-    initiateScan().catch((err: unknown) => {
-      logger.error("smsScan.retryFailed", err);
-    });
+    initiateScan();
   };
 
   // Compute top unique category system names from parsed transactions

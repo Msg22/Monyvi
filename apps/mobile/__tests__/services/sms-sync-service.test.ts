@@ -137,8 +137,11 @@ jest.mock("@/services/sms-oversized-outcome-service", () => ({
 
 const mockGetHandledSmsReviewFingerprints = jest.fn<
   Promise<ReadonlySet<string>>,
-  []
+  [string]
 >(() => Promise.resolve(new Set()));
+const mockUnsafeFetchRaw = jest.fn<Promise<readonly unknown[]>, []>(() =>
+  Promise.resolve([])
+);
 const mockMergeSmsReviewDrafts = jest.fn<
   Promise<{
     readonly insertedCount: number;
@@ -164,8 +167,10 @@ const mockMergeSmsReviewDrafts = jest.fn<
 );
 
 jest.mock("@/services/sms-review-draft-repository", () => ({
-  getHandledSmsReviewFingerprints: (): Promise<ReadonlySet<string>> =>
-    mockGetHandledSmsReviewFingerprints(),
+  getHandledSmsReviewFingerprints: (
+    expectedUserId: string
+  ): Promise<ReadonlySet<string>> =>
+    mockGetHandledSmsReviewFingerprints(expectedUserId),
   mergeSmsReviewDrafts: (input: {
     readonly transactions: readonly ParsedSmsTransaction[];
     readonly baselineTransactions?: readonly ParsedSmsTransaction[];
@@ -307,7 +312,7 @@ jest.mock("@monyvi/db", () => ({
   database: {
     get: jest.fn().mockReturnValue({
       query: jest.fn().mockReturnValue({
-        unsafeFetchRaw: jest.fn().mockResolvedValue([]),
+        unsafeFetchRaw: mockUnsafeFetchRaw,
         fetch: jest.fn().mockResolvedValue([]),
       }),
     }),
@@ -320,17 +325,15 @@ jest.mock("@/services/user-data-access", () => ({
     Promise.resolve({
       userId: "user-a",
       queryOwned: (
-        collection: {
-          query: (...conditions: readonly unknown[]) => {
-            unsafeFetchRaw: jest.Mock<Promise<readonly unknown[]>, []>;
-            fetch: jest.Mock<Promise<readonly unknown[]>, []>;
-          };
-        },
-        ...conditions: unknown[]
+        _collection: unknown,
+        ..._conditions: unknown[]
       ): {
         unsafeFetchRaw: jest.Mock<Promise<readonly unknown[]>, []>;
         fetch: jest.Mock<Promise<readonly unknown[]>, []>;
-      } => collection.query(...conditions),
+      } => ({
+        unsafeFetchRaw: mockUnsafeFetchRaw,
+        fetch: jest.fn(() => Promise.resolve([])),
+      }),
     })
   ),
   assertExpectedCurrentUser: jest.fn(() => Promise.resolve()),
@@ -405,6 +408,7 @@ describe("sms-sync-service", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetHandledSmsReviewFingerprints.mockResolvedValue(new Set());
+    mockUnsafeFetchRaw.mockResolvedValue([]);
     mockMergeSmsReviewDrafts.mockImplementation((input) =>
       Promise.resolve({
         insertedCount: input.transactions.length,
@@ -444,6 +448,14 @@ describe("sms-sync-service", () => {
   // scanAndParseSms — Core Pipeline
   // =========================================================================
   describe("scanAndParseSms", () => {
+    it("pins review fingerprint deduplication to the initiating user", async () => {
+      await scanAndParseSms(defaultOptions());
+
+      expect(mockGetHandledSmsReviewFingerprints).toHaveBeenCalledWith(
+        "user-a"
+      );
+    });
+
     it("should return empty result for an empty inbox", async () => {
       mockReadSmsInbox.mockResolvedValue([]);
 
@@ -809,7 +821,9 @@ describe("sms-sync-service", () => {
         .mockResolvedValueOnce("existing-hash-1")
         .mockResolvedValueOnce("new-hash-2");
 
-      const existingFingerprints = new Set(["existing-hash-1"]);
+      mockUnsafeFetchRaw
+        .mockResolvedValueOnce([{ sms_fingerprint: "existing-hash-1" }])
+        .mockResolvedValueOnce([]);
 
       // Only sms2 should reach AI (sms1 was deduped)
       const parsed = createParsedTransaction({ amount: 200 });
@@ -817,9 +831,7 @@ describe("sms-sync-service", () => {
         transactions: [parsed],
       });
 
-      const result = await scanAndParseSms(
-        defaultOptions({ existingFingerprints })
-      );
+      const result = await scanAndParseSms(defaultOptions());
 
       // Only 1 candidate should have been sent to AI
       expect(mockParseSmsWithOrchestrator).toHaveBeenCalledTimes(1);

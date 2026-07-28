@@ -262,14 +262,19 @@ export async function getSmsReviewDraftCount(): Promise<number> {
   return scope.queryOwned(itemCollection()).fetchCount();
 }
 
-export async function getHandledSmsReviewFingerprints(): Promise<
-  ReadonlySet<string>
-> {
+export async function getHandledSmsReviewFingerprints(
+  expectedUserId: string
+): Promise<ReadonlySet<string>> {
+  await assertExpectedCurrentUser(expectedUserId);
   const scope = await getCurrentUserDataScope();
+  if (scope.userId !== expectedUserId) {
+    throw new Error(SMS_REVIEW_DRAFT_ERROR_CODES.USER_SCOPE_CHANGED);
+  }
   const [activeItems, dismissedItems] = await Promise.all([
     scope.queryOwned(itemCollection()).fetch(),
     scope.queryOwned(dismissedCollection()).fetch(),
   ]);
+  await assertExpectedCurrentUser(expectedUserId);
 
   return new Set([
     ...activeItems.map((item) => item.smsFingerprint),
@@ -809,19 +814,30 @@ export async function restoreSmsReviewDraft(
 }
 
 export async function discardAllSmsReviewDrafts(
-  expectedUserId: string
+  expectedUserId: string,
+  expectedQueueId: string,
+  confirmedDraftIds: readonly string[]
 ): Promise<number> {
+  const confirmedDraftIdSet = new Set(confirmedDraftIds);
+  if (confirmedDraftIdSet.size !== confirmedDraftIds.length) {
+    throw new Error(SMS_REVIEW_DRAFT_ERROR_CODES.CONFIRMATION_STALE);
+  }
+  if (confirmedDraftIds.length === 0) return 0;
+
   return database.write(async (): Promise<number> => {
     await assertExpectedCurrentUser(expectedUserId);
     const queue = assertSingleQueue(await fetchOwnedQueues(expectedUserId));
-    if (!queue) return 0;
-    const items = await fetchOwnedItems(expectedUserId, queue.id);
-    if (items.length === 0) {
-      await commitScopedPreparedBatch(expectedUserId, [queue], () => [
-        queue.prepareDestroyPermanently(),
-      ]);
-      return 0;
+    if (!queue || queue.id !== expectedQueueId) {
+      throw new Error(SMS_REVIEW_DRAFT_ERROR_CODES.CONFIRMATION_STALE);
     }
+    const allItems = await fetchOwnedItems(expectedUserId, queue.id);
+    const confirmedItems = allItems.filter((item) =>
+      confirmedDraftIdSet.has(item.id)
+    );
+    if (confirmedItems.length !== confirmedDraftIds.length) {
+      throw new Error(SMS_REVIEW_DRAFT_ERROR_CODES.CONFIRMATION_STALE);
+    }
+    const hasRemainingItems = allItems.length > confirmedItems.length;
 
     const dismissed = await dismissedCollection()
       .query(Q.where("user_id", expectedUserId))
@@ -832,9 +848,9 @@ export async function discardAllSmsReviewDrafts(
     const now = new Date();
     await commitScopedPreparedBatch(
       expectedUserId,
-      [queue, ...items],
+      [queue, ...confirmedItems],
       (): readonly Model[] => {
-        const operations: Model[] = items
+        const operations: Model[] = confirmedItems
           .filter((item) => !dismissedSet.has(item.smsFingerprint))
           .map((item) =>
             dismissedCollection().prepareCreate((record) => {
@@ -844,13 +860,14 @@ export async function discardAllSmsReviewDrafts(
             })
           );
         operations.push(
-          ...items.map((item) => item.prepareDestroyPermanently()),
-          queue.prepareDestroyPermanently()
+          ...confirmedItems.map((item) => item.prepareDestroyPermanently())
         );
+        if (!hasRemainingItems)
+          operations.push(queue.prepareDestroyPermanently());
         return operations;
       }
     );
-    return items.length;
+    return confirmedItems.length;
   });
 }
 

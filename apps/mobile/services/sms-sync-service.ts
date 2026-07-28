@@ -114,8 +114,6 @@ export interface ScanOptions {
   readonly scanKind: Exclude<SmsScanKind, "live">;
   /** Inbox page size. Every page in the bounded window is read. Defaults to 2000. */
   readonly maxCount?: number;
-  /** Set of existing SMS fingerprints for dedup. */
-  readonly existingFingerprints?: ReadonlySet<string>;
   /** Batch size for keyword filtering — smaller = more frequent progress updates. */
   readonly batchSize?: number;
   /**
@@ -315,20 +313,6 @@ function deduplicateParsedSmsTransactions(
   return deduplicated;
 }
 
-/**
- * Query all existing SMS fingerprints from the transactions AND transfers tables.
- * Used for deduplication before scanning so saved SMS records are skipped.
- *
- * Scoped to the current user so stale local rows from another account do not
- * suppress valid SMS imports for the signed-in user.
- */
-export async function loadExistingSmsFingerprints(): Promise<
-  ReadonlySet<string>
-> {
-  const scope = await getCurrentUserDataScope();
-  return loadExistingSmsFingerprintsForScope(scope);
-}
-
 async function loadExistingSmsFingerprintsForScope(
   scope: CurrentUserDataScope
 ): Promise<ReadonlySet<string>> {
@@ -450,9 +434,11 @@ async function executeScanPipeline(
   );
   const abortSignal = options?.abortSignal;
   const savedFingerprints =
-    options?.existingFingerprints ??
-    (await loadExistingSmsFingerprintsForScope(initiatingScope));
-  const reviewFingerprints = await getHandledSmsReviewFingerprints();
+    await loadExistingSmsFingerprintsForScope(initiatingScope);
+  await assertPinnedScanContext(initiatingScope.userId, abortSignal);
+  const reviewFingerprints = await getHandledSmsReviewFingerprints(
+    initiatingScope.userId
+  );
   await assertPinnedScanContext(initiatingScope.userId, abortSignal);
   const existingFingerprints = new Set([
     ...savedFingerprints,

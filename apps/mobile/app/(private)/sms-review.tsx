@@ -127,6 +127,10 @@ export default function SmsReviewScreen(): React.JSX.Element {
   const [isSaving, setIsSaving] = useState(false);
   const [isLeavingAfterSave, setIsLeavingAfterSave] = useState(false);
   const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
+  const [discardConfirmation, setDiscardConfirmation] = useState<{
+    readonly queueId: string;
+    readonly draftIds: readonly string[];
+  } | null>(null);
 
   const transactions = useMemo(
     () =>
@@ -334,11 +338,16 @@ export default function SmsReviewScreen(): React.JSX.Element {
   }, [showToast, t, undo]);
 
   const handleConfirmDiscard = useCallback(async (): Promise<void> => {
-    if (!queue.userId) return;
+    if (!queue.userId || !discardConfirmation) return;
     try {
-      await discardEverySmsReviewDraft(queue.userId);
+      await discardEverySmsReviewDraft(
+        queue.userId,
+        discardConfirmation.queueId,
+        discardConfirmation.draftIds
+      );
       clearTransactions();
       setDiscardConfirmVisible(false);
+      setDiscardConfirmation(null);
       router.replace("/(private)/(tabs)");
     } catch (error: unknown) {
       logger.warn("smsReview.discardAll.failed", {
@@ -346,7 +355,23 @@ export default function SmsReviewScreen(): React.JSX.Element {
       });
       showToast({ type: "error", title: t("sms_review_discard_failed") });
     }
-  }, [clearTransactions, queue.userId, router, showToast, t]);
+  }, [
+    clearTransactions,
+    discardConfirmation,
+    queue.userId,
+    router,
+    showToast,
+    t,
+  ]);
+
+  const handleRequestDiscardAll = useCallback((): void => {
+    if (!queue.queueId || queue.items.length === 0) return;
+    setDiscardConfirmation({
+      queueId: queue.queueId,
+      draftIds: queue.items.map((item) => item.draftId),
+    });
+    setDiscardConfirmVisible(true);
+  }, [queue.items, queue.queueId]);
 
   const handleReviewLater = useCallback((): void => {
     clearTransactions();
@@ -428,7 +453,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
         onTransactionChange={handleTransactionChange}
         onDiscardItem={handleDiscardItem}
         onSave={handleSave}
-        onDiscard={() => setDiscardConfirmVisible(true)}
+        onDiscard={handleRequestDiscardAll}
         onReviewLater={handleReviewLater}
         undoBanner={
           undo.undoItem && undo.discardedName
@@ -442,7 +467,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
         isSaving={isSaving || smsRetry.isRetrying}
         title={t("review_transactions_title")}
         subtitle={t("review_sms_source_summary", {
-          count: transactions.length,
+          count: discardConfirmation?.draftIds.length ?? 0,
         })}
         workspaceVariant="sms"
         partialResults={partialResults}
@@ -459,7 +484,10 @@ export default function SmsReviewScreen(): React.JSX.Element {
         confirmLabel={t("discard")}
         cancelLabel={t("cancel")}
         onConfirm={() => void handleConfirmDiscard()}
-        onCancel={() => setDiscardConfirmVisible(false)}
+        onCancel={() => {
+          setDiscardConfirmVisible(false);
+          setDiscardConfirmation(null);
+        }}
       />
       {retryConsentSheet}
     </SafeAreaView>

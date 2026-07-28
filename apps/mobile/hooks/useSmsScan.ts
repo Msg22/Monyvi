@@ -56,8 +56,6 @@ export interface UseSmsScanResult {
 interface StartScanOptions {
   /** Explicit bounded scan intent. */
   readonly scanKind: Exclude<SmsScanKind, "live">;
-  /** Set of existing fingerprints for dedup. Omit to let the scan service load them. */
-  readonly existingFingerprints?: ReadonlySet<string>;
   /** Context to pass to AI for better account suggestions. */
   readonly aiContext: ParseSmsContext;
   /** Cancels the scan before more SMS candidates are sent to AI. */
@@ -101,7 +99,6 @@ export function useSmsScan(): UseSmsScanResult {
         const scanResult = await scanAndParseSms(
           {
             scanKind: options.scanKind,
-            existingFingerprints: options.existingFingerprints,
             aiContext: options.aiContext,
             abortSignal: options.abortSignal,
           },

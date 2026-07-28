@@ -13,10 +13,6 @@ const mockRevokeAiConsent = jest.fn<Promise<void>, []>();
 const mockRequestPermission = jest.fn<Promise<"granted">, []>();
 const mockStartScan = jest.fn<Promise<void>, [unknown]>();
 const mockResetScan = jest.fn<void, []>();
-const mockLoadExistingSmsFingerprints = jest.fn<
-  Promise<ReadonlySet<string>>,
-  []
->();
 const mockRouterBack = jest.fn();
 const mockRouterPush = jest.fn<void, [string]>();
 const mockRouterReplace = jest.fn<void, [string]>();
@@ -203,11 +199,6 @@ jest.mock("@/hooks/useSmsReviewDraftQueue", () => ({
   }),
 }));
 
-jest.mock("@/services/sms-sync-service", () => ({
-  loadExistingSmsFingerprints: (): Promise<ReadonlySet<string>> =>
-    mockLoadExistingSmsFingerprints(),
-}));
-
 jest.mock("@/utils/category-tree-source", () => ({
   toCategoryTreeSources: jest.fn(() => []),
 }));
@@ -266,7 +257,6 @@ describe("SmsScanScreen AI consent", () => {
     mockRequestPermission.mockResolvedValue("granted");
     mockRevokeAiConsent.mockResolvedValue();
     mockStartScan.mockResolvedValue();
-    mockLoadExistingSmsFingerprints.mockResolvedValue(new Set());
     mockMarkSyncComplete.mockResolvedValue();
   });
 
@@ -375,44 +365,24 @@ describe("SmsScanScreen AI consent", () => {
     await waitFor(() => expect(mockStartScan).toHaveBeenCalledTimes(2));
   });
 
-  it("does not start scanning when consent is revoked while fingerprint preload is pending", async () => {
+  it("delegates user-scoped fingerprint loading to the scan service", async () => {
     mockIsAiConsented = true;
-    let resolveFingerprints: () => void = () => {};
-    mockLoadExistingSmsFingerprints.mockReturnValueOnce(
-      new Promise<ReadonlySet<string>>((resolve) => {
-        resolveFingerprints = () => resolve(new Set());
-      })
-    );
-
-    const screenView = render(<SmsScanScreen />);
-
-    await waitFor(() =>
-      expect(mockLoadExistingSmsFingerprints).toHaveBeenCalledTimes(1)
-    );
-    mockIsAiConsented = false;
-    screenView.rerender(<SmsScanScreen />);
-
-    await act(async () => {
-      resolveFingerprints();
-      await Promise.resolve();
-    });
-
-    expect(mockStartScan).not.toHaveBeenCalled();
-    expect(await screen.findByTestId("ai-consent-continue")).toBeTruthy();
-  });
-
-  it("lets the scan service load fingerprints when screen preload fails", async () => {
-    mockIsAiConsented = true;
-    mockLoadExistingSmsFingerprints.mockRejectedValueOnce(
-      new Error("fingerprint preload failed")
-    );
 
     render(<SmsScanScreen />);
 
     await waitFor(() => expect(mockStartScan).toHaveBeenCalledTimes(1));
-    expect(mockStartScan).toHaveBeenCalledWith(
-      expect.objectContaining({ existingFingerprints: undefined })
-    );
+    const startOptions = mockStartScan.mock.calls[0]?.[0];
+    if (!startOptions || typeof startOptions !== "object") {
+      throw new Error("Expected scan options");
+    }
+    const typedOptions = startOptions as {
+      readonly scanKind?: unknown;
+      readonly aiContext?: unknown;
+      readonly abortSignal?: unknown;
+    };
+    expect(typedOptions.scanKind).toBe("incremental");
+    expect(typedOptions.aiContext).toEqual(expect.any(Object));
+    expect(typedOptions.abortSignal).toBeInstanceOf(AbortSignal);
   });
 
   it("reopens consent when the server rejects SMS parsing for missing consent", async () => {

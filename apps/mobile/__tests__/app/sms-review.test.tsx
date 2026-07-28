@@ -366,7 +366,11 @@ describe("SMS review route", () => {
     expect(confirmation?.visible).toBe(true);
     act(() => confirmation?.onConfirm());
 
-    await waitFor(() => expect(mockDiscardAll).toHaveBeenCalledWith("user-1"));
+    await waitFor(() =>
+      expect(mockDiscardAll).toHaveBeenCalledWith("user-1", "queue-1", [
+        "draft-1",
+      ])
+    );
     expect(mockClearTransactions).toHaveBeenCalledTimes(1);
     expect(mockRouterReplace).toHaveBeenCalledWith("/(private)/(tabs)");
   });

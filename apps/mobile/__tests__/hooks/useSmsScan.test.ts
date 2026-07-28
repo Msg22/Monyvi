@@ -38,7 +38,6 @@ const smsScanOptions = {
     categories: [],
     supportedCurrencies: ["EGP"],
   } satisfies ParseSmsContext,
-  existingFingerprints: new Set<string>(),
 };
 
 function createAiConsentRequiredError(): Error {

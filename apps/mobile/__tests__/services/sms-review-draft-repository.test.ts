@@ -593,7 +593,7 @@ describe("sms-review-draft-repository", () => {
 
   it("revalidates the active user immediately before discard all commits", async () => {
     const queue = seedRecord("sms_review_queues", { userId: "user-1" });
-    seedRecord("sms_review_draft_items", {
+    const draft = seedRecord("sms_review_draft_items", {
       userId: "user-1",
       queueId: queue.id,
       smsFingerprint: "fp-discard-race",
@@ -602,11 +602,39 @@ describe("sms-review-draft-repository", () => {
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new Error("sms_review_draft_user_scope_changed"));
 
-    await expect(discardAllSmsReviewDrafts("user-1")).rejects.toThrow(
-      "sms_review_draft_user_scope_changed"
-    );
+    await expect(
+      discardAllSmsReviewDrafts("user-1", queue.id, [draft.id])
+    ).rejects.toThrow("sms_review_draft_user_scope_changed");
 
     expect(mockBatch).not.toHaveBeenCalled();
+  });
+
+  it("discards only the exact queue items included in confirmation", async () => {
+    const queue = seedRecord("sms_review_queues", { userId: "user-1" });
+    const confirmed = seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      queueId: queue.id,
+      smsFingerprint: "fp-confirmed",
+    });
+    const appended = seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      queueId: queue.id,
+      smsFingerprint: "fp-appended",
+    });
+
+    await expect(
+      discardAllSmsReviewDrafts("user-1", queue.id, [confirmed.id])
+    ).resolves.toBe(1);
+
+    expect(mockCollections.get("sms_review_draft_items")?.records).toEqual([
+      appended,
+    ]);
+    expect(mockCollections.get("sms_review_queues")?.records).toContain(queue);
+    expect(
+      mockCollections
+        .get("dismissed_sms_fingerprints")
+        ?.records.map((item) => item.smsFingerprint)
+    ).toEqual(["fp-confirmed"]);
   });
 
   it("does not restore an undone draft after its fingerprint was saved", async () => {
@@ -854,8 +882,14 @@ describe("sms-review-draft-repository", () => {
     });
 
     await expect(getSmsReviewDraftCount()).resolves.toBe(1);
-    await expect(getHandledSmsReviewFingerprints()).resolves.toEqual(
+    await expect(getHandledSmsReviewFingerprints("user-1")).resolves.toEqual(
       new Set(["fp-active", "fp-dismissed"])
+    );
+  });
+
+  it("rejects handled fingerprint reads when the requested user is not active", async () => {
+    await expect(getHandledSmsReviewFingerprints("user-2")).rejects.toThrow(
+      "sms_review_draft_user_scope_changed"
     );
   });
 
