@@ -1,4 +1,4 @@
-import type { ParsedSmsTransaction } from "@monyvi/logic";
+import { encodeSmsReviewDraft, type ParsedSmsTransaction } from "@monyvi/logic";
 
 import {
   deleteExpiredSmsReviewDrafts,
@@ -350,6 +350,62 @@ describe("sms-review-draft-repository", () => {
     expect(
       items.find((item) => item.smsFingerprint === "fp-next")?.position
     ).toBe(5);
+  });
+
+  it("refreshes only an untouched baseline draft with its enriched result", async () => {
+    const queue = seedRecord("sms_review_queues", {
+      userId: "user-1",
+      updatedAt: new Date("2026-07-27T10:00:00.000Z"),
+    });
+    const baseline = createTransaction("fp-enriched", 100);
+    const encodedBaseline = encodeSmsReviewDraft(baseline);
+    const draft = seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      queueId: queue.id,
+      smsFingerprint: "fp-enriched",
+      payloadVersion: encodedBaseline.version,
+      payloadJson: encodedBaseline.json,
+      selectionOverride: null,
+    });
+    const enriched = {
+      ...baseline,
+      categoryId: "category-food",
+      categoryDisplayName: "Food",
+      confidence: 0.98,
+    };
+
+    await mergeSmsReviewDrafts({
+      expectedUserId: "user-1",
+      transactions: [enriched],
+      baselineTransactions: [baseline],
+    });
+
+    expect(draft.payloadJson).toBe(encodeSmsReviewDraft(enriched).json);
+    expect(mockBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not overwrite a draft edited after its baseline was persisted", async () => {
+    const queue = seedRecord("sms_review_queues", { userId: "user-1" });
+    const baseline = createTransaction("fp-edited", 100);
+    const edited = createTransaction("fp-edited", 125);
+    const encodedEdited = encodeSmsReviewDraft(edited);
+    const draft = seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      queueId: queue.id,
+      smsFingerprint: "fp-edited",
+      payloadVersion: encodedEdited.version,
+      payloadJson: encodedEdited.json,
+      selectionOverride: null,
+    });
+
+    await mergeSmsReviewDrafts({
+      expectedUserId: "user-1",
+      transactions: [createTransaction("fp-edited", 999)],
+      baselineTransactions: [baseline],
+    });
+
+    expect(draft.payloadJson).toBe(encodedEdited.json);
+    expect(mockBatch).not.toHaveBeenCalled();
   });
 
   it("keeps valid siblings when one parser result cannot be encoded", async () => {

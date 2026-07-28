@@ -17,6 +17,7 @@ import {
   type RevalidatedSmsReviewDraftItem,
 } from "@/services/sms-review-draft-reference-service";
 import { hasExistingSmsFingerprint } from "@/services/sms-dedup-service";
+import { isSmsReviewDraftExpired } from "@/services/sms-review-draft-retention";
 import type { CurrencyType } from "@monyvi/db";
 import type { ParsedSmsTransaction } from "@monyvi/logic";
 
@@ -73,6 +74,12 @@ export async function saveSelectedSmsReviewDrafts(
 
   try {
     await runSmsReviewDraftWriter(async (): Promise<void> => {
+      const expiredDrafts = effectiveItems.filter((item) =>
+        isSmsReviewDraftExpired(item.parsedAt)
+      );
+      if (expiredDrafts.length > 0) {
+        throw new SmsReviewDraftSaveValidationError(["draft_expired"]);
+      }
       const revalidatedItems = await revalidateSmsReviewDraftReferences(
         effectiveItems,
         input.expectedUserId

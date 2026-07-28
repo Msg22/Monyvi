@@ -227,6 +227,58 @@ export function buildAutoSelectedIndices(
   return selected;
 }
 
+const HARD_VALIDATION_REASONS: ReadonlySet<TransactionReviewReason> = new Set([
+  "account_needed",
+  "category_needed",
+  "cash_transfer",
+]);
+
+export interface SeedTransactionReviewSelectionInput {
+  readonly transactionCount: number;
+  readonly previousCount: number;
+  readonly currentSelectedIndices: ReadonlySet<number>;
+  readonly selectionOverrides: ReadonlyMap<number, boolean | null>;
+  readonly autoSelectedIndices: ReadonlySet<number>;
+  readonly reviewMetaByIndex: ReadonlyMap<number, TransactionReviewMeta>;
+}
+
+export interface SeedTransactionReviewSelectionResult {
+  readonly selectedIndices: ReadonlySet<number>;
+  readonly clearedHardInvalidIndices: readonly number[];
+}
+
+export function seedTransactionReviewSelection(
+  input: SeedTransactionReviewSelectionInput
+): SeedTransactionReviewSelectionResult {
+  const selected =
+    input.previousCount === 0
+      ? new Set<number>()
+      : new Set(input.currentSelectedIndices);
+  const clearedHardInvalidIndices: number[] = [];
+
+  for (let index = 0; index < input.transactionCount; index += 1) {
+    const override = input.selectionOverrides.get(index);
+    const hasHardValidation =
+      input.reviewMetaByIndex
+        .get(index)
+        ?.reasons.some((reason) => HARD_VALIDATION_REASONS.has(reason)) ??
+      false;
+    if (override === true && hasHardValidation) {
+      selected.delete(index);
+      clearedHardInvalidIndices.push(index);
+    } else if (override === true) {
+      selected.add(index);
+    } else if (override === false) {
+      selected.delete(index);
+    } else if (index >= input.previousCount) {
+      if (input.autoSelectedIndices.has(index)) selected.add(index);
+      else selected.delete(index);
+    }
+  }
+
+  return { selectedIndices: selected, clearedHardInvalidIndices };
+}
+
 export function isResolvedAccountMatch(
   accountMatch: TransactionReviewAccountMatch | undefined
 ): accountMatch is TransactionReviewAccountMatch & {

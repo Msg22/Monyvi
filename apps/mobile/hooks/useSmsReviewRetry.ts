@@ -64,6 +64,22 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
         parseContext,
         abortSignal: abortController.signal,
         expectedUserId: initiatingUserId,
+        onTransactionsCompleted: async (
+          completedTransactions
+        ): Promise<void> => {
+          if (
+            generationRef.current !== generation ||
+            abortController.signal.aborted
+          ) {
+            const abortError = new Error("SMS review retry was cancelled.");
+            abortError.name = "AbortError";
+            throw abortError;
+          }
+          await mergeSmsReviewDrafts({
+            transactions: completedTransactions,
+            expectedUserId: initiatingUserId,
+          });
+        },
       });
       if (generationRef.current !== generation) return;
       await mergeSmsReviewDrafts({

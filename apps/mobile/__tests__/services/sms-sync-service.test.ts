@@ -146,7 +146,12 @@ const mockMergeSmsReviewDrafts = jest.fn<
     readonly rejectedCount: number;
     readonly reviewableFingerprints: readonly string[];
   }>,
-  [{ readonly transactions: readonly ParsedSmsTransaction[] }]
+  [
+    {
+      readonly transactions: readonly ParsedSmsTransaction[];
+      readonly baselineTransactions?: readonly ParsedSmsTransaction[];
+    },
+  ]
 >((input) =>
   Promise.resolve({
     insertedCount: input.transactions.length,
@@ -163,6 +168,7 @@ jest.mock("@/services/sms-review-draft-repository", () => ({
     mockGetHandledSmsReviewFingerprints(),
   mergeSmsReviewDrafts: (input: {
     readonly transactions: readonly ParsedSmsTransaction[];
+    readonly baselineTransactions?: readonly ParsedSmsTransaction[];
   }): Promise<{
     readonly insertedCount: number;
     readonly existingCount: number;
@@ -1167,6 +1173,49 @@ describe("sms-sync-service", () => {
     });
     expect(mockMergeSmsReviewDrafts).toHaveBeenCalledWith(
       expect.objectContaining({ transactions: [completedTransaction] })
+    );
+  });
+
+  it("refreshes an untouched local baseline after final enrichment", async () => {
+    const baselineTransaction = createParsedTransaction({
+      smsFingerprint: "fp-local-baseline",
+      categoryId: "other",
+      categoryDisplayName: "Other",
+    });
+    const enrichedTransaction = createParsedTransaction({
+      smsFingerprint: "fp-local-baseline",
+      categoryId: "cat-shopping",
+      categoryDisplayName: "Shopping",
+    });
+    mockReadSmsInbox.mockResolvedValue([createSmsMessage()]);
+    mockParseSmsWithOrchestrator.mockImplementationOnce(async (...args) => {
+      const onProgress = args[2] as
+        | ((progress: AiParseProgress) => void | Promise<void>)
+        | undefined;
+      await onProgress?.({
+        chunksCompleted: 0,
+        totalChunks: 0,
+        transactionsSoFar: 1,
+        completedTransactions: [baselineTransaction],
+        chunkDurationMs: 0,
+      });
+      return {
+        transactions: [enrichedTransaction],
+        unresolvedCandidates: [],
+      };
+    });
+
+    await scanAndParseSms(defaultOptions());
+
+    expect(mockMergeSmsReviewDrafts).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ transactions: [baselineTransaction] })
+    );
+    expect(mockMergeSmsReviewDrafts).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        transactions: [enrichedTransaction],
+        baselineTransactions: [baselineTransaction],
+      })
     );
   });
 

@@ -174,6 +174,48 @@ function SmsPermissionGate({
   );
 }
 
+function SmsReviewDraftLoadError({
+  onRetry,
+  onBack,
+}: {
+  readonly onRetry: () => void;
+  readonly onBack: () => void;
+}): React.JSX.Element {
+  const { t } = useTranslation("transactions");
+  const { t: tCommon } = useTranslation("common");
+
+  return (
+    <SafeAreaView
+      className="flex-1 bg-slate-50 dark:bg-slate-900"
+      edges={["top", "bottom"]}
+    >
+      <View className="flex-1 items-center justify-center px-8">
+        <View className="mb-6 h-20 w-20 items-center justify-center rounded-full bg-red-500/10">
+          <Ionicons name="warning-outline" size={38} color={palette.red[500]} />
+        </View>
+        <Text className="mb-8 text-center text-base text-text-secondary">
+          {t("sms_review_load_failed")}
+        </Text>
+        <TouchableOpacity
+          testID="sms-review-draft-load-retry"
+          className="mb-4 w-full rounded-xl bg-nileGreen-500 py-4"
+          activeOpacity={0.8}
+          onPress={onRetry}
+        >
+          <Text className="text-center text-base font-semibold text-slate-25">
+            {t("try_again")}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity activeOpacity={0.7} onPress={onBack}>
+          <Text className="text-base text-text-secondary">
+            {tCommon("back")}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -226,7 +268,7 @@ export default function SmsScanScreen(): React.JSX.Element {
 
   const { setReviewSession, setScanMode, scanMode } = useSmsScanContext();
   const { markSyncComplete } = useSmsSync();
-  const [scanKind] = useState(scanMode);
+  const [scanKind, setScanKind] = useState(scanMode);
   const draftQueue = useSmsReviewDraftQueue();
   const shouldShowDraftEntry =
     !draftQueue.isLoading &&
@@ -318,7 +360,12 @@ export default function SmsScanScreen(): React.JSX.Element {
   // Auto-start scan on mount — waits until permission is granted and categories loaded
   useEffect(() => {
     if (status === "consent_required") return;
-    if (draftQueue.isLoading || shouldShowDraftEntry) return;
+    if (
+      draftQueue.isLoading ||
+      draftQueue.error !== null ||
+      shouldShowDraftEntry
+    )
+      return;
     if (permissionStatus !== "granted") return;
     if (isAiConsentLoading) return;
     if (!isAiConsented) {
@@ -337,6 +384,7 @@ export default function SmsScanScreen(): React.JSX.Element {
   }, [
     isAiConsented,
     draftQueue.isLoading,
+    draftQueue.error,
     shouldShowDraftEntry,
     isAiConsentLoading,
     initiateScan,
@@ -438,6 +486,7 @@ export default function SmsScanScreen(): React.JSX.Element {
   };
 
   const handleCheckNewMessages = (): void => {
+    setScanKind("incremental");
     setIsDraftEntryBypassed(true);
     scanInitiated.current = false;
     setScanRestartNonce((value) => value + 1);
@@ -562,6 +611,16 @@ export default function SmsScanScreen(): React.JSX.Element {
     tSettings
   );
 
+  if (draftQueue.error !== null) {
+    return (
+      <SmsReviewDraftLoadError
+        onRetry={(): void => {
+          void draftQueue.refetch();
+        }}
+        onBack={handleBackPress}
+      />
+    );
+  }
   if (shouldShowDraftEntry) {
     return (
       <SafeAreaView

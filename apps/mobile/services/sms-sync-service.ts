@@ -623,11 +623,20 @@ async function executeScanPipeline(
   // Track per-chunk durations for estimated time remaining calculation
   const chunkDurations: number[] = [];
   const parsedAt = new Date(scanStartedAtMs);
+  const persistedProgressBaselines = new Map<string, ParsedSmsTransaction>();
   const aiResult = await parseSmsWithOrchestrator(
     candidates,
     options.aiContext,
     async (aiProgress) => {
       if (aiProgress.completedTransactions.length > 0) {
+        for (const transaction of aiProgress.completedTransactions) {
+          if (!persistedProgressBaselines.has(transaction.smsFingerprint)) {
+            persistedProgressBaselines.set(
+              transaction.smsFingerprint,
+              transaction
+            );
+          }
+        }
         await assertPinnedScanContext(initiatingScope.userId, abortSignal);
         const chunkMerge = await mergeSmsReviewDrafts({
           transactions: aiProgress.completedTransactions,
@@ -707,6 +716,7 @@ async function executeScanPipeline(
     transactions: deduplicatedTransactions,
     expectedUserId: initiatingScope.userId,
     parsedAt,
+    baselineTransactions: [...persistedProgressBaselines.values()],
   });
   if (mergeResult.rejectedCount > 0) {
     logger.warn("smsReviewDraft.resultRejected", {

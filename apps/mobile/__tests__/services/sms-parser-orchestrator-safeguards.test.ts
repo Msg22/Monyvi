@@ -109,6 +109,52 @@ describe("SMS parser orchestrator safeguards", () => {
     });
   });
 
+  it("publishes trusted local matches before remote parsing settles", async () => {
+    let resolveCategory: ((value: unknown) => void) | undefined;
+    let resolveAi: ((value: AiParseResult) => void) | undefined;
+    mockEnrichTrustedSmsCategories.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCategory = resolve;
+        })
+    );
+    mockParseSmsWithAi.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveAi = resolve;
+        })
+    );
+    const onProgress = jest.fn();
+
+    const parsePromise = parseSmsWithOrchestrator(
+      [trustedPurchaseCandidate(), candidate()],
+      context,
+      onProgress
+    );
+    for (let index = 0; index < 8; index += 1) await Promise.resolve();
+
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chunksCompleted: 0,
+        completedTransactions: [
+          expect.objectContaining({ smsFingerprint: "fingerprint-trusted" }),
+        ],
+        transactionsSoFar: 1,
+      })
+    );
+
+    resolveCategory?.({
+      outcomesByCandidateId: new Map(),
+      attemptedMerchantCount: 1,
+      acceptedCandidateCount: 0,
+      rejectedResultCount: 0,
+      missingResultCount: 1,
+      hasError: false,
+    });
+    resolveAi?.({ transactions: [], hasError: false });
+    await parsePromise;
+  });
+
   it("suppresses a terminal fingerprint from full AI fallback", async () => {
     const unresolved = candidate();
 

@@ -17,6 +17,9 @@ interface RetrySmsReviewCandidatesInput {
   readonly parseContext: ParseSmsContext;
   readonly abortSignal?: AbortSignal;
   readonly expectedUserId: string;
+  readonly onTransactionsCompleted?: (
+    transactions: readonly ParsedSmsTransaction[]
+  ) => Promise<void>;
 }
 
 export interface SmsReviewRetryResult {
@@ -88,20 +91,38 @@ export async function retrySmsReviewCandidates(
   let retriedTransactions: readonly ParsedSmsTransaction[] = [];
   let retriedUnresolvedCandidates: readonly HybridSmsUnresolvedCandidate[] = [];
   let hasRetryError = false;
+  const persistedTransactionKeys = new Set<string>();
+  const persistCompletedTransactions = async (
+    transactions: readonly ParsedSmsTransaction[]
+  ): Promise<void> => {
+    if (input.onTransactionsCompleted === undefined) return;
+    const unpersisted = transactions.filter(
+      (transaction) =>
+        !persistedTransactionKeys.has(getParsedSmsTransactionKey(transaction))
+    );
+    if (unpersisted.length === 0) return;
+    await assertExpectedCurrentUser(input.expectedUserId);
+    await input.onTransactionsCompleted(unpersisted);
+    unpersisted.forEach((transaction) =>
+      persistedTransactionKeys.add(getParsedSmsTransactionKey(transaction))
+    );
+  };
   for (const retryGroup of retryGroups.values()) {
     const result =
       retryGroup.options === undefined
         ? await parseSmsWithOrchestrator(
             retryGroup.candidates,
             input.parseContext,
-            undefined,
+            (progress) =>
+              persistCompletedTransactions(progress.completedTransactions),
             input.abortSignal,
             { expectedUserId: input.expectedUserId }
           )
         : await parseSmsWithOrchestrator(
             retryGroup.candidates,
             input.parseContext,
-            undefined,
+            (progress) =>
+              persistCompletedTransactions(progress.completedTransactions),
             input.abortSignal,
             {
               ...retryGroup.options,
@@ -119,6 +140,7 @@ export async function retrySmsReviewCandidates(
       });
       await assertExpectedCurrentUser(input.expectedUserId);
     }
+    await persistCompletedTransactions(result.transactions);
     retriedTransactions = mergeTransactions(
       retriedTransactions,
       result.transactions

@@ -43,6 +43,7 @@ import {
   saveSelectedSmsReviewDrafts,
   SmsReviewDraftSaveValidationError,
 } from "@/services/sms-review-draft-save-service";
+import { SMS_REVIEW_DRAFT_RETENTION_DAYS } from "@/services/sms-review-draft-retention";
 import type {
   RevalidatedSmsReviewDraftItem,
   SmsReviewDraftHardValidationReason,
@@ -205,6 +206,41 @@ describe("saveSelectedSmsReviewDrafts", () => {
 
     expect(mockPrepare).not.toHaveBeenCalled();
     expect(mockRunWriter).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a draft that expires before the save writer starts", async () => {
+    const now = new Date("2026-07-27T10:00:00.000Z");
+    const expiringItem = {
+      ...item("draft-expiring"),
+      parsedAt: new Date(
+        now.getTime() -
+          SMS_REVIEW_DRAFT_RETENTION_DAYS * 24 * 60 * 60 * 1000 +
+          1
+      ),
+    };
+    jest.useFakeTimers().setSystemTime(now);
+    mockRunWriter.mockImplementationOnce(
+      async (action: () => Promise<unknown>) => {
+        jest.setSystemTime(new Date(now.getTime() + 2));
+        return action();
+      }
+    );
+
+    try {
+      await expect(
+        saveSelectedSmsReviewDrafts({
+          selectedItems: [expiringItem],
+          expectedUserId: "user-1",
+          transactionAccountMap: new Map([[0, "account-1"]]),
+          toAccountMap: new Map(),
+        })
+      ).rejects.toMatchObject({ reasons: ["draft_expired"] });
+    } finally {
+      jest.useRealTimers();
+    }
+
+    expect(mockPrepare).not.toHaveBeenCalled();
+    expect(mockDeleteResolved).not.toHaveBeenCalled();
   });
 
   it("revalidates the effective selected account before blocking save", async () => {

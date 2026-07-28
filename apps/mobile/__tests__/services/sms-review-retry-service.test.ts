@@ -93,7 +93,7 @@ describe("sms review retry service", () => {
     expect(mockParseSmsWithOrchestrator).toHaveBeenCalledWith(
       [candidate("retryable")],
       context,
-      undefined,
+      expect.any(Function),
       undefined,
       { expectedUserId: EXPECTED_USER_ID }
     );
@@ -159,7 +159,7 @@ describe("sms review retry service", () => {
     expect(mockParseSmsWithOrchestrator).toHaveBeenCalledWith(
       [originalCandidate],
       context,
-      undefined,
+      expect.any(Function),
       undefined,
       {
         requestContext: retryRequest.requestContext,
@@ -236,6 +236,54 @@ describe("sms review retry service", () => {
       unresolvedCandidates: [permanent],
       hasRetryError: false,
     });
+  });
+
+  it("persists an earlier retry group before a later group fails", async () => {
+    const firstCandidate = candidate("first");
+    const secondCandidate = candidate("second");
+    const firstTransaction = transaction("first");
+    const onTransactionsCompleted = jest.fn().mockResolvedValue(undefined);
+    const retryRequest = (
+      requestKey: string,
+      retryCandidate: SmsCandidate
+    ): HybridSmsUnresolvedCandidate => ({
+      candidate: retryCandidate,
+      reason: "chunk_failed",
+      isRetryable: true,
+      retryRequest: {
+        requestKey,
+        requestContext: {
+          scanSessionId: `session-${requestKey}`,
+          scanKind: "incremental",
+          scanStartedAtMs: 123,
+        },
+        candidates: [retryCandidate],
+      },
+    });
+    mockParseSmsWithOrchestrator
+      .mockResolvedValueOnce({
+        transactions: [firstTransaction],
+        unresolvedCandidates: [],
+      })
+      .mockRejectedValueOnce(new Error("later group failed"));
+
+    await expect(
+      retrySmsReviewCandidates({
+        transactions: [],
+        unresolvedCandidates: [
+          retryRequest("first", firstCandidate),
+          retryRequest("second", secondCandidate),
+        ],
+        parseContext: context,
+        expectedUserId: EXPECTED_USER_ID,
+        onTransactionsCompleted,
+      })
+    ).rejects.toThrow("later group failed");
+
+    expect(onTransactionsCompleted).toHaveBeenCalledWith([firstTransaction]);
+    expect(onTransactionsCompleted.mock.invocationCallOrder[0]).toBeLessThan(
+      mockParseSmsWithOrchestrator.mock.invocationCallOrder[1]
+    );
   });
 
   it("surfaces retryable failures while preserving successful retry results", async () => {

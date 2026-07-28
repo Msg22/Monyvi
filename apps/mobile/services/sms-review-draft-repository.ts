@@ -72,6 +72,7 @@ export interface MergeSmsReviewDraftsInput {
   readonly transactions: readonly ParsedSmsTransaction[];
   readonly expectedUserId: string;
   readonly parsedAt?: Date;
+  readonly baselineTransactions?: readonly ParsedSmsTransaction[];
 }
 
 export interface MergeSmsReviewDraftsResult {
@@ -349,6 +350,21 @@ export async function mergeSmsReviewDrafts(
     };
   }
 
+  const baselinePayloads = new Map<
+    string,
+    ReturnType<typeof encodeSmsReviewDraft>
+  >();
+  for (const transaction of input.baselineTransactions ?? []) {
+    try {
+      baselinePayloads.set(
+        transaction.smsFingerprint,
+        encodeSmsReviewDraft(transaction)
+      );
+    } catch (error) {
+      if (!(error instanceof SmsReviewDraftCodecError)) throw error;
+    }
+  }
+
   const parsedAt = input.parsedAt ?? new Date();
   return database.write(async (): Promise<MergeSmsReviewDraftsResult> => {
     await assertExpectedCurrentUser(input.expectedUserId);
@@ -375,6 +391,9 @@ export async function mergeSmsReviewDrafts(
       ]);
     const existingFingerprints = new Set(
       existingItems.map((item) => item.smsFingerprint)
+    );
+    const existingItemsByFingerprint = new Map(
+      existingItems.map((item) => [item.smsFingerprint, item])
     );
     const dismissedFingerprints = new Set(
       dismissedItems.map((item) => item.smsFingerprint)
@@ -404,8 +423,31 @@ export async function mergeSmsReviewDrafts(
         reviewableSet.has(transaction.smsFingerprint) &&
         !existingFingerprints.has(transaction.smsFingerprint)
     );
+    const refreshableExisting = uniqueEncoded.flatMap(
+      ({ transaction, payload }) => {
+        const existingItem = existingItemsByFingerprint.get(
+          transaction.smsFingerprint
+        );
+        const baselinePayload = baselinePayloads.get(
+          transaction.smsFingerprint
+        );
+        if (
+          existingItem === undefined ||
+          baselinePayload === undefined ||
+          !reviewableSet.has(transaction.smsFingerprint) ||
+          existingItem.selectionOverride !== null ||
+          existingItem.payloadVersion !== baselinePayload.version ||
+          existingItem.payloadJson !== baselinePayload.json ||
+          (payload.version === baselinePayload.version &&
+            payload.json === baselinePayload.json)
+        ) {
+          return [];
+        }
+        return [{ item: existingItem, payload }];
+      }
+    );
 
-    if (uniqueNew.length === 0) {
+    if (uniqueNew.length === 0 && refreshableExisting.length === 0) {
       return {
         insertedCount: 0,
         existingCount: encoded.length,
@@ -436,6 +478,16 @@ export async function mergeSmsReviewDrafts(
             })
           );
         }
+
+        refreshableExisting.forEach(({ item, payload }) => {
+          operations.push(
+            item.prepareUpdate((record) => {
+              record.payloadVersion = payload.version;
+              record.payloadJson = payload.json;
+              record.updatedAt = now;
+            })
+          );
+        });
 
         uniqueNew.forEach(({ transaction, payload }, index) => {
           operations.push(

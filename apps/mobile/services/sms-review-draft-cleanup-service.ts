@@ -1,8 +1,8 @@
 import { deleteExpiredSmsReviewDrafts } from "./sms-review-draft-repository";
 import { getCurrentUserDataScope } from "./user-data-access";
+import { getSmsReviewDraftExpiryCutoff } from "./sms-review-draft-retention";
 
-export const SMS_REVIEW_DRAFT_RETENTION_DAYS = 30;
-const DAY_MS = 24 * 60 * 60 * 1000;
+export { SMS_REVIEW_DRAFT_RETENTION_DAYS } from "./sms-review-draft-retention";
 
 export interface CleanupSmsReviewDraftsInput {
   readonly now?: Date;
@@ -15,10 +15,7 @@ export async function cleanupExpiredSmsReviewDrafts(
   if (input.signal?.aborted) return 0;
   const scope = await getCurrentUserDataScope();
   if (input.signal?.aborted) return 0;
-  const now = input.now ?? new Date();
-  const cutoff = new Date(
-    now.getTime() - SMS_REVIEW_DRAFT_RETENTION_DAYS * DAY_MS
-  );
+  const cutoff = getSmsReviewDraftExpiryCutoff(input.now ?? new Date());
   const deletedCount = await deleteExpiredSmsReviewDrafts(
     scope.userId,
     cutoff,

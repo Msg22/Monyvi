@@ -47,6 +47,8 @@ import {
   revokeAiProcessingConsent,
 } from "./profile-service";
 import { createLocalParserResult } from "./sms-local-parser-adapter";
+import { publishCompletedSmsParserTransactions } from "./sms-parser-progress-service";
+import { hasTrustedPatternEvidence } from "./sms-trusted-pattern-evidence";
 
 import {
   createSmsParserDiagnostics as createDiagnostics,
@@ -78,17 +80,6 @@ export type TrustedPrefilterDisposition =
 const trustedCatalogProvider = createBundledTrustedSmsCatalogProvider(
   QNB_EGYPT_TRUSTED_SMS_CATALOG
 );
-
-function hasTrustedPatternEvidence(
-  result: TrustedSmsParserOutcome | ReturnType<typeof matchTrustedSmsTemplate>
-): boolean {
-  return (
-    result.status === "matched" ||
-    result.status === "rejected" ||
-    result.status === "ambiguous" ||
-    (result.status === "unresolved" && result.patternIds.length > 0)
-  );
-}
 
 export function getTrustedPrefilterDisposition(
   candidate: SmsCandidate,
@@ -583,6 +574,17 @@ async function parseHybrid(
       throw createAiConsentRequiredError();
     }
   }
+  throwIfAborted(abortSignal);
+
+  const localBaselineTransactions = trustedMatches.map(
+    ({ transaction, candidate }) =>
+      mapTrustedTransaction(transaction, candidate, context)
+  );
+  await publishCompletedSmsParserTransactions(
+    onProgress,
+    localBaselineTransactions,
+    aiSelection.admitted.length > 0
+  );
   throwIfAborted(abortSignal);
 
   const remoteScanSessionReady =

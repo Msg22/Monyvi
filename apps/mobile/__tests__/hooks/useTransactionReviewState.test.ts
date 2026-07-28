@@ -926,6 +926,7 @@ describe("useTransactionReviewState", () => {
     await waitFor(() => expect(result.current.accountMatches.size).toBe(2));
     expect(result.current.effectiveTransactions[0]?.amount).toBe(125);
     expect(result.current.selectedIndices.has(0)).toBe(wasSelected);
+    expect(result.current.selectedIndices.has(1)).toBe(true);
   });
 
   it("forces a stale selected override off after hard validation resolves", async () => {

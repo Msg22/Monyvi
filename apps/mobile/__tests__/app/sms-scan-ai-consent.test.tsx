@@ -23,6 +23,7 @@ const mockRouterReplace = jest.fn<void, [string]>();
 const mockSetReviewSession = jest.fn();
 const mockSetScanMode = jest.fn();
 const mockMarkSyncComplete = jest.fn<Promise<void>, []>();
+const mockRefetchDraftQueue = jest.fn<Promise<void>, []>();
 const mockFocusEffects: Array<() => void | (() => void)> = [];
 let mockAiConsentContinue: (() => Promise<void>) | null = null;
 let mockIsAiConsented = false;
@@ -30,6 +31,8 @@ let mockScanResult: Record<string, unknown> | null = null;
 let mockScanTransactions: ReadonlyArray<Record<string, unknown>> = [];
 let mockDraftItemCount = 0;
 let mockDraftQueueLoading = false;
+let mockDraftQueueError: Error | null = null;
+let mockScanMode: "history" | "incremental" = "incremental";
 let mockSafeAreaEdges: readonly string[] | undefined;
 let mockScanStatus:
   | "idle"
@@ -145,7 +148,7 @@ jest.mock("@/context/CategoriesContext", () => ({
 
 jest.mock("@/context/SmsScanContext", () => ({
   useSmsScanContext: () => ({
-    scanMode: "incremental",
+    scanMode: mockScanMode,
     setReviewSession: mockSetReviewSession,
     setScanMode: mockSetScanMode,
   }),
@@ -195,8 +198,8 @@ jest.mock("@/hooks/useSmsReviewDraftQueue", () => ({
     items: [],
     itemCount: mockDraftItemCount,
     isLoading: mockDraftQueueLoading,
-    error: null,
-    refetch: jest.fn(),
+    error: mockDraftQueueError,
+    refetch: mockRefetchDraftQueue,
   }),
 }));
 
@@ -256,6 +259,9 @@ describe("SmsScanScreen AI consent", () => {
     mockScanStatus = "idle";
     mockDraftItemCount = 0;
     mockDraftQueueLoading = false;
+    mockDraftQueueError = null;
+    mockScanMode = "incremental";
+    mockRefetchDraftQueue.mockResolvedValue();
     mockSafeAreaEdges = undefined;
     mockRequestPermission.mockResolvedValue("granted");
     mockRevokeAiConsent.mockResolvedValue();
@@ -289,6 +295,35 @@ describe("SmsScanScreen AI consent", () => {
 
     expect(await screen.findByTestId("ai-consent-continue")).toBeTruthy();
     expect(mockStartScan).not.toHaveBeenCalled();
+  });
+
+  it("blocks scan startup and offers retry when the draft queue fails to load", async () => {
+    mockIsAiConsented = true;
+    mockDraftQueueError = new Error("storage unavailable");
+
+    render(<SmsScanScreen />);
+
+    expect(
+      await screen.findByTestId("sms-review-draft-load-retry")
+    ).toBeTruthy();
+    expect(mockStartScan).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByTestId("sms-review-draft-load-retry"));
+    expect(mockRefetchDraftQueue).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses incremental mode when checking new messages from a history entry", async () => {
+    mockDraftItemCount = 2;
+    mockIsAiConsented = true;
+    mockScanMode = "history";
+
+    render(<SmsScanScreen />);
+    fireEvent.press(await screen.findByTestId("sms-review-check-new"));
+
+    await waitFor(() => expect(mockStartScan).toHaveBeenCalledTimes(1));
+    expect(mockStartScan).toHaveBeenCalledWith(
+      expect.objectContaining({ scanKind: "incremental" })
+    );
   });
 
   it("keeps consent visible so the user can retry when granting consent fails", async () => {

@@ -22,8 +22,8 @@ import {
   getDurableTransactionOverrides,
   getTransactionReviewMeta,
   resolveEditedAccountMatch,
+  seedTransactionReviewSelection,
   type TransactionReviewMeta,
-  type TransactionReviewReason,
 } from "@/services/transaction-review-selection";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import type {
@@ -41,19 +41,6 @@ export interface ReviewListItem {
 }
 export type TransactionReviewMode = "all" | "needs_review" | "auto_selected";
 
-const HARD_VALIDATION_REASONS: ReadonlySet<TransactionReviewReason> = new Set([
-  "account_needed",
-  "category_needed",
-  "cash_transfer",
-]);
-
-function hasHardValidationReason(
-  meta: TransactionReviewMeta | undefined
-): boolean {
-  return (
-    meta?.reasons.some((reason) => HARD_VALIDATION_REASONS.has(reason)) ?? false
-  );
-}
 export interface TransactionReviewFilters {
   readonly period: GroupingPeriod;
   readonly selectedTypes: readonly TransactionTypeFilter[];
@@ -328,7 +315,7 @@ export function useTransactionReviewState({
   const selectedIndicesRef = useRef(selectedIndices);
   selectedIndicesRef.current = selectedIndices;
   const seededSelectionIdentityRef = useRef<string | null>(null);
-  const userTouchedSelectionRef = useRef(false);
+  const seededSelectionCountRef = useRef(0);
   const manuallyDeselectedIndicesRef = useRef<Set<number>>(new Set());
 
   // ── Unified transaction overrides ─────────────────────────────────
@@ -419,7 +406,7 @@ export function useTransactionReviewState({
       return;
     }
     seededSelectionIdentityRef.current = null;
-    userTouchedSelectionRef.current = false;
+    seededSelectionCountRef.current = 0;
     manuallyDeselectedIndicesRef.current = new Set();
     setSelectedIndices(new Set());
     setTransactionOverrides(
@@ -588,26 +575,26 @@ export function useTransactionReviewState({
 
   useEffect(() => {
     if (seededSelectionIdentityRef.current === transactionIdentity) return;
-    if (userTouchedSelectionRef.current) return;
     if (!hasCompleteAccountMatches) return;
 
-    const seeded = new Set(autoSelectedOriginalIndices);
-    selectionOverrides.forEach((override, index) => {
-      if (
-        override === true &&
-        hasHardValidationReason(reviewMetaByIndex.get(index))
-      ) {
-        seeded.delete(index);
-        void onSelectionChange?.(index, false);
-        return;
-      }
-      if (override === true) seeded.add(index);
-      if (override === false) seeded.delete(index);
+    const previousCount = seededSelectionCountRef.current;
+    const seeded = seedTransactionReviewSelection({
+      transactionCount: effectiveTransactions.length,
+      previousCount,
+      currentSelectedIndices: selectedIndicesRef.current,
+      selectionOverrides,
+      autoSelectedIndices: autoSelectedOriginalIndices,
+      reviewMetaByIndex,
     });
-    setSelectedIndices(seeded);
+    setSelectedIndices(seeded.selectedIndices);
+    seeded.clearedHardInvalidIndices.forEach((index) => {
+      void onSelectionChange?.(index, false);
+    });
+    seededSelectionCountRef.current = effectiveTransactions.length;
     seededSelectionIdentityRef.current = transactionIdentity;
   }, [
     autoSelectedOriginalIndices,
+    effectiveTransactions,
     hasCompleteAccountMatches,
     onSelectionChange,
     reviewMetaByIndex,
@@ -691,7 +678,6 @@ export function useTransactionReviewState({
     );
     if (succeededIndices.size === 0) return;
 
-    userTouchedSelectionRef.current = true;
     setSelectedIndices((previous) => {
       const next = new Set(previous);
       succeededIndices.forEach((index) => {
@@ -712,7 +698,6 @@ export function useTransactionReviewState({
       const selected = !selectedIndicesRef.current.has(index);
       if (!(await persistSelection(index, selected))) return;
 
-      userTouchedSelectionRef.current = true;
       setSelectedIndices((previous) => {
         const next = new Set(previous);
         if (selected) {
