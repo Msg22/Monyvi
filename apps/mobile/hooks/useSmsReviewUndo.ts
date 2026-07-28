@@ -34,12 +34,23 @@ export function useSmsReviewUndo(): UseSmsReviewUndoResult {
     null
   );
   const latestDiscardRequestRef = useRef(0);
+  const latestSuccessfulDiscardRef = useRef<{
+    readonly requestId: number;
+    readonly item: VolatileSmsReviewUndoItem;
+  } | null>(null);
   const pendingDiscardsRef = useRef(new Map<string, Promise<void>>());
 
   useEffect(() => {
     if (!undoItem) return;
     const remainingMs = Math.max(0, undoItem.expiresAt - Date.now());
-    const timeout = setTimeout(() => setUndoItem(null), remainingMs);
+    const timeout = setTimeout(() => {
+      setUndoItem(null);
+      if (
+        latestSuccessfulDiscardRef.current?.item.draftId === undoItem.draftId
+      ) {
+        latestSuccessfulDiscardRef.current = null;
+      }
+    }, remainingMs);
     return () => clearTimeout(timeout);
   }, [undoItem]);
 
@@ -54,9 +65,25 @@ export function useSmsReviewUndo(): UseSmsReviewUndoResult {
       setUndoItem(null);
       const request = discardOneSmsReviewDraft(draftId, userId)
         .then((discarded) => {
-          if (latestDiscardRequestRef.current === requestId) {
+          const latestSuccessful = latestSuccessfulDiscardRef.current;
+          if (!latestSuccessful || requestId > latestSuccessful.requestId) {
+            latestSuccessfulDiscardRef.current = {
+              requestId,
+              item: discarded,
+            };
             setUndoItem(discarded);
           }
+        })
+        .catch((error: unknown) => {
+          if (latestDiscardRequestRef.current === requestId) {
+            const previousSuccessful = latestSuccessfulDiscardRef.current?.item;
+            setUndoItem(
+              previousSuccessful && previousSuccessful.expiresAt > Date.now()
+                ? previousSuccessful
+                : null
+            );
+          }
+          throw error;
         })
         .finally(() => {
           pendingDiscardsRef.current.delete(requestKey);
@@ -71,6 +98,11 @@ export function useSmsReviewUndo(): UseSmsReviewUndoResult {
     if (!undoItem) return false;
     const restored = await undoSmsReviewDraftDiscard(undoItem);
     if (restored) {
+      if (
+        latestSuccessfulDiscardRef.current?.item.draftId === undoItem.draftId
+      ) {
+        latestSuccessfulDiscardRef.current = null;
+      }
       setUndoItem((current) =>
         current?.draftId === undoItem.draftId ? null : current
       );
@@ -78,7 +110,10 @@ export function useSmsReviewUndo(): UseSmsReviewUndoResult {
     return restored;
   }, [undoItem]);
 
-  const close = useCallback((): void => setUndoItem(null), []);
+  const close = useCallback((): void => {
+    latestSuccessfulDiscardRef.current = null;
+    setUndoItem(null);
+  }, []);
   const discardedName = useMemo(() => getDiscardedName(undoItem), [undoItem]);
 
   return { undoItem, discardedName, discard, undo, close };

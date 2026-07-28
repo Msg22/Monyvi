@@ -255,6 +255,79 @@ export async function prepareCashAccount(
   };
 }
 
+export async function prepareNamedCashAccount(
+  userId: string,
+  currency: CurrencyType,
+  initialBalance: number,
+  name: string,
+  expectedUserId?: string
+): Promise<PreparedCashAccount> {
+  const normalizedUserId = userId.trim();
+  const normalizedName = name.trim();
+  if (!normalizedUserId) {
+    throw new Error(CREATE_ACCOUNT_ERROR_CODES.USER_ID_REQUIRED);
+  }
+  if (!normalizedName) {
+    return prepareCashAccount(
+      normalizedUserId,
+      currency,
+      initialBalance,
+      undefined,
+      expectedUserId
+    );
+  }
+  if (expectedUserId !== undefined) {
+    await assertExpectedCurrentUser(expectedUserId);
+  }
+
+  const accountsCollection = database.get<Account>("accounts");
+  const existing = await queryOwned(
+    accountsCollection,
+    normalizedUserId,
+    Q.where("type", CASH_ACCOUNT_TYPE),
+    Q.where("currency", currency),
+    Q.where("deleted", Q.notEq(true))
+  ).fetch();
+  const normalizedIdentity = normalizedName.toLowerCase();
+  const matchingAccount = existing.find(
+    (account) => account.name.trim().toLowerCase() === normalizedIdentity
+  );
+  if (matchingAccount) {
+    if (expectedUserId !== undefined) {
+      await assertExpectedCurrentUser(expectedUserId);
+    }
+    return {
+      accountId: matchingAccount.id,
+      created: false,
+      operation: null,
+    };
+  }
+
+  const activeAccountCount = await queryOwned(
+    accountsCollection,
+    normalizedUserId,
+    Q.where("deleted", Q.notEq(true))
+  ).fetchCount();
+  const operation = accountsCollection.prepareCreate((account) => {
+    account.userId = normalizedUserId;
+    account.name = normalizedName;
+    account.type = CASH_ACCOUNT_TYPE;
+    account.currency = currency;
+    account.balance = initialBalance;
+    account.deleted = false;
+    account.isDefault = activeAccountCount === 0;
+  });
+
+  if (expectedUserId !== undefined) {
+    await assertExpectedCurrentUser(expectedUserId);
+  }
+  return {
+    accountId: operation.id,
+    created: true,
+    operation,
+  };
+}
+
 function buildCreateAccountKey(userId: string, data: AccountFormData): string {
   const providerIdentity = buildProviderIdentity(
     data.institutionId ?? null,

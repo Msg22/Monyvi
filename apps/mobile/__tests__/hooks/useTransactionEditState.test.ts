@@ -288,6 +288,48 @@ describe("useTransactionEditState", () => {
     expect(result.current.state.selectedToAccountName).toBe("");
   });
 
+  it("preserves a durable named ATM destination instead of replacing it with an existing cash account", async () => {
+    const bankAccount = createAccount();
+    const existingCashAccount = {
+      ...createAccount(),
+      id: "cash-egp",
+      name: "Cash",
+      type: "CASH" as const,
+    };
+    const category = {
+      id: "cat-food",
+      displayName: "Food",
+    } as unknown as Category;
+    const transaction = {
+      ...createTransaction(),
+      isAtmWithdrawal: true,
+      toAccountId: null,
+      toAccountName: "Travel Cash",
+    };
+
+    const { result } = renderHook(() =>
+      useTransactionEditState({
+        transaction,
+        currentAccountId: bankAccount.id,
+        currentAccountName: bankAccount.name,
+        accounts: [bankAccount, existingCashAccount],
+        pendingAccounts: [],
+        categoryMap: new Map([[category.id, category]]),
+        expenseCategories: [category],
+        incomeCategories: [],
+        onSave: jest.fn(),
+        onCreatePendingAccount: jest.fn(),
+      })
+    );
+
+    await waitFor(() =>
+      expect(result.current.state.isCreatingNewToAccount).toBe(true)
+    );
+    expect(result.current.state.selectedToAccountId).toBeNull();
+    expect(result.current.state.selectedToAccountName).toBe("Travel Cash");
+    expect(result.current.state.newToAccountName).toBe("Travel Cash");
+  });
+
   it("persists a new account snapshot before adding it to in-memory state", async () => {
     const category = {
       id: "cat-food",

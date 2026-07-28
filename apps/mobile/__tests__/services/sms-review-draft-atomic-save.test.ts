@@ -5,6 +5,7 @@ const mockRunWriter = jest.fn();
 const mockRevalidate = jest.fn();
 const mockPreparePendingAccounts = jest.fn();
 const mockPrepareCashAccount = jest.fn();
+const mockPrepareNamedCashAccount = jest.fn();
 const mockHasExistingSmsFingerprint = jest.fn();
 
 jest.mock("@/services/batch-create-transactions", () => ({
@@ -30,6 +31,8 @@ jest.mock("@/services/pending-account-service", () => ({
 jest.mock("@/services/account-service", () => ({
   prepareCashAccount: (...args: readonly unknown[]): unknown =>
     mockPrepareCashAccount(...args),
+  prepareNamedCashAccount: (...args: readonly unknown[]): unknown =>
+    mockPrepareNamedCashAccount(...args),
 }));
 
 jest.mock("@/services/sms-dedup-service", () => ({
@@ -108,6 +111,11 @@ describe("saveSelectedSmsReviewDrafts", () => {
       created: false,
       operation: null,
     });
+    mockPrepareNamedCashAccount.mockResolvedValue({
+      accountId: "named-cash-account-1",
+      created: true,
+      operation: { id: "named-cash-operation-1" },
+    });
     mockPrepare.mockResolvedValue({
       savedCount: 2,
       failedCount: 0,
@@ -168,6 +176,67 @@ describe("saveSelectedSmsReviewDrafts", () => {
       "user-1",
       [],
       alreadySavedSmsFingerprints
+    );
+    expect(mockHasExistingSmsFingerprint).toHaveBeenCalledWith(
+      "fp-draft-1",
+      "user-1"
+    );
+  });
+
+  it("prepares distinct named ATM destinations with the same currency", async () => {
+    mockPrepareNamedCashAccount
+      .mockResolvedValueOnce({
+        accountId: "travel-cash-id",
+        created: true,
+        operation: { id: "travel-cash-operation" },
+      })
+      .mockResolvedValueOnce({
+        accountId: "home-cash-id",
+        created: true,
+        operation: { id: "home-cash-operation" },
+      });
+    const travel = item("travel", [], {
+      isAtmWithdrawal: true,
+      toAccountId: undefined,
+      toAccountName: "Travel Cash",
+    });
+    const home = item("home", [], {
+      isAtmWithdrawal: true,
+      toAccountId: undefined,
+      toAccountName: "Home Cash",
+    });
+
+    await saveSelectedSmsReviewDrafts({
+      selectedItems: [travel, home],
+      expectedUserId: "user-1",
+      transactionAccountMap: new Map(),
+      toAccountMap: new Map(),
+    });
+
+    expect(mockPrepareNamedCashAccount).toHaveBeenNthCalledWith(
+      1,
+      "user-1",
+      "EGP",
+      100,
+      "Travel Cash",
+      "user-1"
+    );
+    expect(mockPrepareNamedCashAccount).toHaveBeenNthCalledWith(
+      2,
+      "user-1",
+      "EGP",
+      100,
+      "Home Cash",
+      "user-1"
+    );
+    expect(mockPrepare).toHaveBeenCalledWith(
+      [travel.transaction, home.transaction],
+      expect.any(Map),
+      new Map([
+        [0, "travel-cash-id"],
+        [1, "home-cash-id"],
+      ]),
+      expect.any(Object)
     );
   });
 
@@ -244,10 +313,7 @@ describe("saveSelectedSmsReviewDrafts", () => {
     }
 
     expect(mockPrepare).not.toHaveBeenCalled();
-    expect(mockDeleteDrafts).toHaveBeenCalledWith(
-      ["draft-expiring"],
-      "user-1"
-    );
+    expect(mockDeleteDrafts).toHaveBeenCalledWith(["draft-expiring"], "user-1");
   });
 
   it("revalidates the effective selected account before blocking save", async () => {

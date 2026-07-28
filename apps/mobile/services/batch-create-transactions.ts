@@ -282,7 +282,13 @@ export async function prepareBatchCreateTransactions<
       continue;
     }
     if (smsFingerprint && seenSmsFingerprints.has(smsFingerprint)) continue;
-    if (smsFingerprint && (await hasExistingSmsFingerprint(smsFingerprint))) {
+    if (
+      smsFingerprint &&
+      (await hasExistingSmsFingerprint(
+        smsFingerprint,
+        options.expectedUserId ?? userId
+      ))
+    ) {
       seenSmsFingerprints.add(smsFingerprint);
       alreadySavedSmsFingerprints.add(smsFingerprint);
       continue;

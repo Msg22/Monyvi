@@ -3,7 +3,10 @@ import {
   type BatchSaveResult,
   type PreparedBatchSave,
 } from "@/services/batch-create-transactions";
-import { prepareCashAccount } from "@/services/account-service";
+import {
+  prepareCashAccount,
+  prepareNamedCashAccount,
+} from "@/services/account-service";
 import {
   preparePendingAccounts,
   type PendingAccount,
@@ -105,7 +108,9 @@ export async function saveSelectedSmsReviewDrafts(
         const fingerprint = item.transaction.smsFingerprint;
         if (seenFingerprints.has(fingerprint)) continue;
         seenFingerprints.add(fingerprint);
-        if (await hasExistingSmsFingerprint(fingerprint)) {
+        if (
+          await hasExistingSmsFingerprint(fingerprint, input.expectedUserId)
+        ) {
           alreadySavedFingerprints.add(fingerprint);
         } else {
           unsavedItems.push(item);
@@ -156,8 +161,15 @@ export async function saveSelectedSmsReviewDrafts(
       });
       const transactionAccountMap = new Map<number, string>();
       const toAccountMap = new Map<number, string>();
-      const cashBalanceByCurrency = new Map<CurrencyType, number>();
-      const cashNameByCurrency = new Map<CurrencyType, string>();
+      const cashDestinations = new Map<
+        string,
+        {
+          readonly currency: CurrencyType;
+          readonly name: string | null;
+          readonly initialBalance: number;
+        }
+      >();
+      const cashDestinationKeyByIndex = new Map<number, string>();
 
       unsavedItems.forEach((item, index) => {
         const sourceId = item.transaction.accountId;
@@ -172,37 +184,55 @@ export async function saveSelectedSmsReviewDrafts(
           toAccountMap.set(index, item.transaction.toAccountId);
           return;
         }
-        accumulate(
-          cashBalanceByCurrency,
-          item.transaction.currency,
-          Math.abs(item.transaction.amount)
-        );
-        cashNameByCurrency.set(
-          item.transaction.currency,
-          item.transaction.toAccountName?.trim() || "Cash"
-        );
+        const name = item.transaction.toAccountName?.trim() || null;
+        const destinationKey = name
+          ? `named:${item.transaction.currency}:${name.toLowerCase()}`
+          : `default:${item.transaction.currency}`;
+        const existingDestination = cashDestinations.get(destinationKey);
+        cashDestinations.set(destinationKey, {
+          currency: item.transaction.currency,
+          name,
+          initialBalance:
+            (existingDestination?.initialBalance ?? 0) +
+            Math.abs(item.transaction.amount),
+        });
+        cashDestinationKeyByIndex.set(index, destinationKey);
       });
 
       const accountOperations = [...preparedPendingAccounts.operations];
-      const preparedCashIdByCurrency = new Map<CurrencyType, string>();
-      for (const [currency, initialBalance] of cashBalanceByCurrency) {
-        const cashAccount = await prepareCashAccount(
-          input.expectedUserId,
-          currency,
-          initialBalance,
-          cashNameByCurrency.get(currency),
-          input.expectedUserId
+      const preparedCashIdByDestinationKey = new Map<string, string>();
+      for (const [destinationKey, destination] of cashDestinations) {
+        const cashAccount = destination.name
+          ? await prepareNamedCashAccount(
+              input.expectedUserId,
+              destination.currency,
+              destination.initialBalance,
+              destination.name,
+              input.expectedUserId
+            )
+          : await prepareCashAccount(
+              input.expectedUserId,
+              destination.currency,
+              destination.initialBalance,
+              undefined,
+              input.expectedUserId
+            );
+        preparedCashIdByDestinationKey.set(
+          destinationKey,
+          cashAccount.accountId
         );
-        preparedCashIdByCurrency.set(currency, cashAccount.accountId);
         if (cashAccount.operation) {
           accountOperations.push(cashAccount.operation);
-          preparedAccountCurrencies.set(cashAccount.accountId, currency);
+          preparedAccountCurrencies.set(
+            cashAccount.accountId,
+            destination.currency
+          );
         }
       }
       unsavedItems.forEach((item, index) => {
         if (isAtmWithdrawal(item.transaction) && !toAccountMap.has(index)) {
-          const cashAccountId = preparedCashIdByCurrency.get(
-            item.transaction.currency
+          const cashAccountId = preparedCashIdByDestinationKey.get(
+            cashDestinationKeyByIndex.get(index) ?? ""
           );
           if (cashAccountId) toAccountMap.set(index, cashAccountId);
         }

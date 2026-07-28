@@ -7,7 +7,10 @@ const mockGetCurrentUserId = jest.fn<Promise<string | null>, []>();
 const mockEnsureCashAccount = jest.fn();
 const mockQueryOwned = jest.fn();
 const mockQueryAccessibleCategories = jest.fn();
-const mockHasExistingSmsFingerprint = jest.fn<Promise<boolean>, [string]>();
+const mockHasExistingSmsFingerprint = jest.fn<
+  Promise<boolean>,
+  [string, string?]
+>();
 const mockPrepareTransactionCreate = jest.fn();
 const mockPrepareTransferCreate = jest.fn();
 const mockDatabaseBatch = jest.fn<Promise<void>, [readonly unknown[]]>();
@@ -40,8 +43,11 @@ jest.mock("@/services/user-data-access", () => ({
 }));
 
 jest.mock("@/services/sms-dedup-service", () => ({
-  hasExistingSmsFingerprint: (smsFingerprint: string): Promise<boolean> =>
-    mockHasExistingSmsFingerprint(smsFingerprint),
+  hasExistingSmsFingerprint: (
+    smsFingerprint: string,
+    expectedUserId?: string
+  ): Promise<boolean> =>
+    mockHasExistingSmsFingerprint(smsFingerprint, expectedUserId),
 }));
 
 jest.mock("@nozbe/watermelondb", () => ({
@@ -270,7 +276,8 @@ describe("batchCreateTransactions", () => {
 
     expect(result).toEqual({ savedCount: 1, failedCount: 0, errors: [] });
     expect(mockHasExistingSmsFingerprint).toHaveBeenCalledWith(
-      "canonical-sms-fingerprint"
+      "canonical-sms-fingerprint",
+      "user-1"
     );
     expect(mockPrepareTransactionCreate.mock.results[0]?.value).toMatchObject({
       smsFingerprint: "canonical-sms-fingerprint",

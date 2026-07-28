@@ -128,6 +128,50 @@ describe("useSmsReviewUndo", () => {
     expect(result.current.undoItem?.draftId).toBe("draft-Second");
   });
 
+  it("restores the previous successful undo when a replacement discard fails", async () => {
+    mockDiscard
+      .mockResolvedValueOnce(createUndoItem("First"))
+      .mockRejectedValueOnce(new Error("discard failed"));
+    const { result } = renderHook(() => useSmsReviewUndo());
+
+    await act(async () => result.current.discard("draft-1", "user-1"));
+    await act(async () => {
+      await expect(result.current.discard("draft-2", "user-1")).rejects.toThrow(
+        "discard failed"
+      );
+    });
+
+    expect(result.current.undoItem?.draftId).toBe("draft-First");
+  });
+
+  it("keeps an earlier in-flight discard undo when the newer discard fails", async () => {
+    let resolveFirst!: (item: VolatileSmsReviewUndoItem) => void;
+    let rejectSecond!: (error: Error) => void;
+    const firstResult = new Promise<VolatileSmsReviewUndoItem>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondResult = new Promise<VolatileSmsReviewUndoItem>(
+      (_resolve, reject) => {
+        rejectSecond = reject;
+      }
+    );
+    mockDiscard
+      .mockReturnValueOnce(firstResult)
+      .mockReturnValueOnce(secondResult);
+    const { result } = renderHook(() => useSmsReviewUndo());
+
+    await act(async () => {
+      const firstDiscard = result.current.discard("draft-1", "user-1");
+      const secondDiscard = result.current.discard("draft-2", "user-1");
+      rejectSecond(new Error("discard failed"));
+      await expect(secondDiscard).rejects.toThrow("discard failed");
+      resolveFirst(createUndoItem("First"));
+      await firstDiscard;
+    });
+
+    expect(result.current.undoItem?.draftId).toBe("draft-First");
+  });
+
   it("reuses an in-flight discard for the same draft", async () => {
     let resolveDiscard!: (item: VolatileSmsReviewUndoItem) => void;
     const discardResult = new Promise<VolatileSmsReviewUndoItem>((resolve) => {

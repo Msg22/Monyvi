@@ -26,6 +26,7 @@ import {
   throwIfSmsReviewDraftOperationAborted,
 } from "./sms-review-draft-batch-service";
 import { getSavedSmsReviewFingerprints } from "./sms-review-handled-fingerprint-service";
+import { getSmsReviewDraftItemsToShiftForRestore } from "./sms-review-draft-restore-position";
 
 const QUEUE_TABLE = "sms_review_queues";
 const ITEM_TABLE = "sms_review_draft_items";
@@ -745,11 +746,19 @@ export async function restoreSmsReviewDraft(
     const existingQueue = assertSingleQueue(
       await fetchOwnedQueues(undoItem.userId)
     );
+    const existingItems = existingQueue
+      ? await fetchOwnedItems(undoItem.userId, existingQueue.id)
+      : [];
+    const shiftedItems = getSmsReviewDraftItemsToShiftForRestore(
+      existingItems,
+      undoItem.position
+    );
     const now = new Date();
     await commitScopedPreparedBatch(
       undoItem.userId,
       [
         ...(existingQueue ? [existingQueue] : []),
+        ...shiftedItems,
         ...(dismissed ? [dismissed] : []),
       ],
       (): readonly Model[] => {
@@ -769,6 +778,14 @@ export async function restoreSmsReviewDraft(
             })
           );
         }
+        shiftedItems.forEach((item) => {
+          operations.push(
+            item.prepareUpdate((record) => {
+              record.position += 1;
+              record.updatedAt = now;
+            })
+          );
+        });
         operations.push(
           itemCollection().prepareCreate((record) => {
             record.queueId = queue.id;

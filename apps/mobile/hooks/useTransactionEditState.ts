@@ -345,6 +345,9 @@ export function useTransactionEditState({
 
     if (formConfig.showToAccount) {
       setIsToAccountPickerOpen(false);
+      const durableNewDestinationName = smsTransaction?.toAccountId
+        ? ""
+        : (smsTransaction?.toAccountName?.trim() ?? "");
       const persistedToAccount = smsTransaction?.toAccountId
         ? cashAccountOptions.find(
             (option) =>
@@ -355,15 +358,14 @@ export function useTransactionEditState({
       const currencyMatch = cashAccountOptions.find(
         (option) => option.currency === transaction.currency
       );
-      const selectedToAccount = persistedToAccount ?? currencyMatch;
+      const selectedToAccount = durableNewDestinationName
+        ? undefined
+        : (persistedToAccount ?? currencyMatch);
       setIsCreatingNewToAccount(selectedToAccount === undefined);
       if (selectedToAccount) {
         setSelectedToAccountId(selectedToAccount.id);
         setSelectedToAccountName(selectedToAccount.name);
       } else {
-        const durableNewDestinationName = smsTransaction?.toAccountId
-          ? ""
-          : (smsTransaction?.toAccountName ?? "");
         setSelectedToAccountId(null);
         setSelectedToAccountName(durableNewDestinationName);
         setNewToAccountName(durableNewDestinationName || "Cash");

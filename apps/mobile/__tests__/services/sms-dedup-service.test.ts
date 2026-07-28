@@ -10,6 +10,7 @@ let mockFetchCounts: number[] = [];
 let mockScopeUserId = "user-1";
 const mockQueryOwned = jest.fn<MockQuery, unknown[]>();
 const mockGet = jest.fn<MockCollection, [string]>();
+const mockAssertExpectedCurrentUser = jest.fn<Promise<void>, [string]>();
 
 jest.mock("@monyvi/db", () => ({
   database: {
@@ -25,6 +26,8 @@ jest.mock("@nozbe/watermelondb", () => ({
 }));
 
 jest.mock("@/services/user-data-access", () => ({
+  assertExpectedCurrentUser: (expectedUserId: string): Promise<void> =>
+    mockAssertExpectedCurrentUser(expectedUserId),
   getCurrentUserDataScope: jest.fn(() =>
     Promise.resolve({
       userId: mockScopeUserId,
@@ -45,6 +48,8 @@ describe("sms-dedup-service", () => {
     }));
     mockGet.mockReset();
     mockGet.mockImplementation((tableName: string) => ({ tableName }));
+    mockAssertExpectedCurrentUser.mockReset();
+    mockAssertExpectedCurrentUser.mockResolvedValue();
   });
 
   it("returns false when the SMS fingerprint is not found in transactions or transfers", async () => {
@@ -65,12 +70,27 @@ describe("sms-dedup-service", () => {
     await expect(hasExistingSmsFingerprint("hash-1")).resolves.toBe(true);
   });
 
-  it("does not query another user's scope for a pinned live-SMS event", async () => {
+  it("rejects another user's scope for a pinned live-SMS event", async () => {
     mockScopeUserId = "user-2";
+    mockAssertExpectedCurrentUser.mockRejectedValue(
+      new Error("auth_scope_changed")
+    );
+
+    await expect(hasExistingSmsFingerprint("hash-1", "user-1")).rejects.toThrow(
+      "auth_scope_changed"
+    );
+    expect(mockQueryOwned).not.toHaveBeenCalled();
+  });
+
+  it("reasserts the pinned user after both fingerprint queries finish", async () => {
+    mockFetchCounts = [0, 0];
 
     await expect(hasExistingSmsFingerprint("hash-1", "user-1")).resolves.toBe(
       false
     );
-    expect(mockQueryOwned).not.toHaveBeenCalled();
+
+    expect(mockAssertExpectedCurrentUser).toHaveBeenCalledTimes(2);
+    expect(mockAssertExpectedCurrentUser).toHaveBeenNthCalledWith(1, "user-1");
+    expect(mockAssertExpectedCurrentUser).toHaveBeenNthCalledWith(2, "user-1");
   });
 });
