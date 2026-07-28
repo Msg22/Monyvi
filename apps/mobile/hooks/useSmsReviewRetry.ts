@@ -56,6 +56,7 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
     setIsRetrying(true);
     setHasRetryError(false);
     setIsConsentRequired(false);
+    let pendingCandidates = unresolvedCandidates;
 
     try {
       const result = await retrySmsReviewCandidates({
@@ -75,10 +76,25 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
             abortError.name = "AbortError";
             throw abortError;
           }
-          await mergeSmsReviewDrafts({
+          const mergeResult = await mergeSmsReviewDrafts({
             transactions: completedTransactions,
             expectedUserId: initiatingUserId,
           });
+          if (generationRef.current !== generation) return;
+          const completedFingerprints = new Set(
+            mergeResult.reviewableFingerprints
+          );
+          const remainingCandidates = pendingCandidates.filter(
+            ({ candidate }) =>
+              !completedFingerprints.has(candidate.smsFingerprint)
+          );
+          if (remainingCandidates.length !== pendingCandidates.length) {
+            pendingCandidates = remainingCandidates;
+            updateReviewSession(
+              { unresolvedCandidates: remainingCandidates },
+              reviewSessionId
+            );
+          }
         },
       });
       if (generationRef.current !== generation) return;
@@ -103,7 +119,7 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
       }
       setHasRetryError(true);
       logger.warn("smsReview.retry.failed", {
-        unresolvedCount: unresolvedCandidates.length,
+        unresolvedCount: pendingCandidates.length,
         errorName: error instanceof Error ? error.name : "unknown",
       });
     } finally {

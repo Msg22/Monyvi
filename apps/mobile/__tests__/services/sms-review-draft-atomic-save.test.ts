@@ -1,5 +1,6 @@
 const mockPrepare = jest.fn();
 const mockDeleteResolved = jest.fn();
+const mockDeleteDrafts = jest.fn();
 const mockRunWriter = jest.fn();
 const mockRevalidate = jest.fn();
 const mockPreparePendingAccounts = jest.fn();
@@ -15,6 +16,8 @@ jest.mock("@/services/sms-review-draft-repository", () => ({
   deleteResolvedSmsReviewDraftsInWriter: (
     ...args: readonly unknown[]
   ): unknown => mockDeleteResolved(...args),
+  deleteSmsReviewDraftsInWriter: (...args: readonly unknown[]): unknown =>
+    mockDeleteDrafts(...args),
   runSmsReviewDraftWriter: (action: () => Promise<unknown>): unknown =>
     mockRunWriter(action),
 }));
@@ -114,6 +117,7 @@ describe("saveSelectedSmsReviewDrafts", () => {
       restoreCachedAccounts: jest.fn(),
     });
     mockDeleteResolved.mockResolvedValue(undefined);
+    mockDeleteDrafts.mockResolvedValue(undefined);
     mockRunWriter.mockImplementation(async (action: () => Promise<unknown>) =>
       action()
     );
@@ -240,7 +244,10 @@ describe("saveSelectedSmsReviewDrafts", () => {
     }
 
     expect(mockPrepare).not.toHaveBeenCalled();
-    expect(mockDeleteResolved).not.toHaveBeenCalled();
+    expect(mockDeleteDrafts).toHaveBeenCalledWith(
+      ["draft-expiring"],
+      "user-1"
+    );
   });
 
   it("revalidates the effective selected account before blocking save", async () => {

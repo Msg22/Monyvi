@@ -594,6 +594,39 @@ async function getSavedSmsFingerprintsInWriter(
   );
 }
 
+async function deleteSmsReviewDraftRecordsInWriter(
+  records: readonly SmsReviewDraftItem[],
+  expectedUserId: string,
+  additionalOperations: readonly Model[] = []
+): Promise<void> {
+  const queue = assertSingleQueue(await fetchOwnedQueues(expectedUserId));
+  const selectedIds = new Set(records.map((record) => record.id));
+  const allItems = await fetchOwnedItems(expectedUserId, queue?.id);
+  await commitScopedPreparedBatch(expectedUserId, (): readonly Model[] => {
+    const operations: Model[] = [
+      ...additionalOperations,
+      ...records.map((record) => record.prepareDestroyPermanently()),
+    ];
+    if (queue && allItems.every((item) => selectedIds.has(item.id))) {
+      operations.push(queue.prepareDestroyPermanently());
+    }
+    return operations;
+  });
+}
+
+export async function deleteSmsReviewDraftsInWriter(
+  draftIds: readonly string[],
+  expectedUserId: string
+): Promise<void> {
+  await assertExpectedCurrentUser(expectedUserId);
+  const records = await Promise.all(
+    draftIds.map((draftId) =>
+      getOwnedSmsReviewDraftItem(draftId, expectedUserId)
+    )
+  );
+  await deleteSmsReviewDraftRecordsInWriter(records, expectedUserId);
+}
+
 export async function deleteResolvedSmsReviewDraftsInWriter(
   draftIds: readonly string[],
   expectedUserId: string,
@@ -617,19 +650,11 @@ export async function deleteResolvedSmsReviewDraftsInWriter(
   ) {
     throw new Error(SMS_REVIEW_DRAFT_ERROR_CODES.FINGERPRINT_ALREADY_SAVED);
   }
-  const queue = assertSingleQueue(await fetchOwnedQueues(expectedUserId));
-  const selectedIds = new Set(records.map((record) => record.id));
-  const allItems = await fetchOwnedItems(expectedUserId, queue?.id);
-  await commitScopedPreparedBatch(expectedUserId, (): readonly Model[] => {
-    const operations: Model[] = [
-      ...financialOperations,
-      ...records.map((record) => record.prepareDestroyPermanently()),
-    ];
-    if (queue && allItems.every((item) => selectedIds.has(item.id))) {
-      operations.push(queue.prepareDestroyPermanently());
-    }
-    return operations;
-  });
+  await deleteSmsReviewDraftRecordsInWriter(
+    records,
+    expectedUserId,
+    financialOperations
+  );
 }
 
 export async function runSmsReviewDraftWriter<T>(

@@ -11,7 +11,7 @@ const parsedTransaction = {
   type: "EXPENSE",
   counterparty: "Retry Merchant",
   date: new Date("2026-07-20T11:00:00.000Z"),
-  smsFingerprint: "fp-retry",
+  smsFingerprint: "fp-1",
   senderDisplayName: "NBE",
   categoryId: "cat-other",
   categoryDisplayName: "Other",
@@ -68,6 +68,8 @@ describe("useSmsReviewRetry", () => {
     mockMergeSmsReviewDrafts.mockResolvedValue({
       insertedCount: 0,
       existingCount: 0,
+      rejectedCount: 0,
+      reviewableFingerprints: [],
     });
   });
 
@@ -132,6 +134,75 @@ describe("useSmsReviewRetry", () => {
 
     expect(result.current.hasRetryError).toBe(true);
     expect(mockUpdateReviewSession).not.toHaveBeenCalled();
+  });
+
+  it("prunes a durably completed candidate before a later retry group fails", async () => {
+    mockRetrySmsReviewCandidates.mockImplementationOnce(
+      async ({
+        onTransactionsCompleted,
+      }: {
+        readonly onTransactionsCompleted: (
+          transactions: readonly (typeof parsedTransaction)[]
+        ) => Promise<void>;
+      }) => {
+        await onTransactionsCompleted([
+          { ...parsedTransaction, smsFingerprint: "fp-1" },
+        ]);
+        throw new Error("later group failed");
+      }
+    );
+    mockMergeSmsReviewDrafts.mockResolvedValueOnce({
+      insertedCount: 1,
+      existingCount: 0,
+      rejectedCount: 0,
+      reviewableFingerprints: ["fp-1"],
+    });
+    const { result } = renderHook(() => useSmsReviewRetry());
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(mockMergeSmsReviewDrafts).toHaveBeenCalledWith({
+      transactions: [{ ...parsedTransaction, smsFingerprint: "fp-1" }],
+      expectedUserId: "user-1",
+    });
+    expect(mockUpdateReviewSession).toHaveBeenCalledWith(
+      { unresolvedCandidates: [] },
+      1
+    );
+    expect(result.current.hasRetryError).toBe(true);
+  });
+
+  it("keeps a retry candidate pending when durable merge rejects its result", async () => {
+    mockRetrySmsReviewCandidates.mockImplementationOnce(
+      async ({
+        onTransactionsCompleted,
+      }: {
+        readonly onTransactionsCompleted: (
+          transactions: readonly (typeof parsedTransaction)[]
+        ) => Promise<void>;
+      }) => {
+        await onTransactionsCompleted([
+          { ...parsedTransaction, smsFingerprint: "fp-1" },
+        ]);
+        throw new Error("later group failed");
+      }
+    );
+    mockMergeSmsReviewDrafts.mockResolvedValueOnce({
+      insertedCount: 0,
+      existingCount: 0,
+      rejectedCount: 1,
+      reviewableFingerprints: [],
+    });
+    const { result } = renderHook(() => useSmsReviewRetry());
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(mockUpdateReviewSession).not.toHaveBeenCalled();
+    expect(result.current.hasRetryError).toBe(true);
   });
 
   it("commits successful rows and surfaces a retryable partial failure", async () => {

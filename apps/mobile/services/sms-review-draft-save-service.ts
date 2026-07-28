@@ -9,6 +9,7 @@ import {
   type PendingAccount,
 } from "@/services/pending-account-service";
 import {
+  deleteSmsReviewDraftsInWriter,
   deleteResolvedSmsReviewDraftsInWriter,
   runSmsReviewDraftWriter,
 } from "@/services/sms-review-draft-repository";
@@ -71,6 +72,7 @@ export async function saveSelectedSmsReviewDrafts(
     },
   }));
   const preparedHolder: { current?: PreparedBatchSave } = {};
+  let didDeleteExpiredDrafts = false;
 
   try {
     await runSmsReviewDraftWriter(async (): Promise<void> => {
@@ -78,7 +80,12 @@ export async function saveSelectedSmsReviewDrafts(
         isSmsReviewDraftExpired(item.parsedAt)
       );
       if (expiredDrafts.length > 0) {
-        throw new SmsReviewDraftSaveValidationError(["draft_expired"]);
+        await deleteSmsReviewDraftsInWriter(
+          expiredDrafts.map(({ draftId }) => draftId),
+          input.expectedUserId
+        );
+        didDeleteExpiredDrafts = true;
+        return;
       }
       const revalidatedItems = await revalidateSmsReviewDraftReferences(
         effectiveItems,
@@ -225,6 +232,9 @@ export async function saveSelectedSmsReviewDrafts(
         ])
       );
     });
+    if (didDeleteExpiredDrafts) {
+      throw new SmsReviewDraftSaveValidationError(["draft_expired"]);
+    }
   } catch (error) {
     preparedHolder.current?.restoreCachedAccounts();
     throw error;
