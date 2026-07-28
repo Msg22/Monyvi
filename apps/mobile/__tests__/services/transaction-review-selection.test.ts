@@ -109,6 +109,26 @@ describe("transaction-review-selection", () => {
     ).toEqual({ isAutoSelectable: true, reasons: [] });
   });
 
+  it("restores confirmation for a durable named ATM cash destination", () => {
+    const transaction: ParsedSmsTransaction = {
+      ...createTransaction(),
+      source: "SMS",
+      smsFingerprint: "sms-fingerprint-1",
+      senderDisplayName: "QNB EGYPT",
+      rawSmsBody: "ATM withdrawal",
+      isAtmWithdrawal: true,
+      toAccountName: "New cash account",
+    };
+
+    expect(getDurableTransactionOverrides([transaction]).get(0)).toEqual(
+      expect.objectContaining({
+        toAccountId: undefined,
+        toAccountName: "New cash account",
+        toAccountConfirmed: true,
+      })
+    );
+  });
+
   it("does not auto-select rows that only fell back to a default account", () => {
     const transaction = createTransaction({ confidence: 0.99 });
     const defaultMatch = {

@@ -142,7 +142,7 @@ describe("useSmsReviewRetry", () => {
         onTransactionsCompleted,
       }: {
         readonly onTransactionsCompleted: (
-          transactions: readonly (typeof parsedTransaction)[]
+          transactions: ReadonlyArray<typeof parsedTransaction>
         ) => Promise<void>;
       }) => {
         await onTransactionsCompleted([
@@ -180,7 +180,7 @@ describe("useSmsReviewRetry", () => {
         onTransactionsCompleted,
       }: {
         readonly onTransactionsCompleted: (
-          transactions: readonly (typeof parsedTransaction)[]
+          transactions: ReadonlyArray<typeof parsedTransaction>
         ) => Promise<void>;
       }) => {
         await onTransactionsCompleted([
@@ -299,5 +299,31 @@ describe("useSmsReviewRetry", () => {
         }
       ).isConsentRequired
     ).toBe(false);
+  });
+
+  it("prunes a concurrently handled candidate before a later retry failure", async () => {
+    mockRetrySmsReviewCandidates.mockImplementationOnce(
+      async ({
+        onCandidatesHandled,
+      }: {
+        readonly onCandidatesHandled: (
+          fingerprints: readonly string[]
+        ) => Promise<void>;
+      }) => {
+        await onCandidatesHandled(["fp-1"]);
+        throw new Error("later group failed");
+      }
+    );
+    const { result } = renderHook(() => useSmsReviewRetry());
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(mockUpdateReviewSession).toHaveBeenCalledWith(
+      { unresolvedCandidates: [] },
+      1
+    );
+    expect(result.current.hasRetryError).toBe(true);
   });
 });

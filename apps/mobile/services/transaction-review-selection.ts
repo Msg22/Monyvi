@@ -35,6 +35,7 @@ export function getDurableTransactionOverrides(
       !transaction.accountId &&
       !smsTransaction.pendingAccount &&
       !smsTransaction.toAccountId &&
+      !smsTransaction.toAccountName?.trim() &&
       smsTransaction.categoryConfirmed !== true
     ) {
       return;
@@ -57,7 +58,10 @@ export function getDurableTransactionOverrides(
           : undefined,
       toAccountId: smsTransaction.toAccountId,
       toAccountName: smsTransaction.toAccountName,
-      toAccountConfirmed: smsTransaction.toAccountId ? true : undefined,
+      toAccountConfirmed:
+        smsTransaction.toAccountId || smsTransaction.toAccountName?.trim()
+          ? true
+          : undefined,
       pendingAccount: smsTransaction.pendingAccount,
     });
   });

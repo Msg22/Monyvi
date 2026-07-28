@@ -58,6 +58,20 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
     setIsConsentRequired(false);
     let pendingCandidates = unresolvedCandidates;
 
+    const prunePendingCandidates = (fingerprints: readonly string[]): void => {
+      if (generationRef.current !== generation || fingerprints.length === 0)
+        return;
+      const handledFingerprints = new Set(fingerprints);
+      const remainingCandidates = pendingCandidates.filter(
+        ({ candidate }) => !handledFingerprints.has(candidate.smsFingerprint)
+      );
+      if (remainingCandidates.length === pendingCandidates.length) return;
+      pendingCandidates = remainingCandidates;
+      updateReviewSession(
+        { unresolvedCandidates: remainingCandidates },
+        reviewSessionId
+      );
+    };
     try {
       const result = await retrySmsReviewCandidates({
         transactions: [],
@@ -81,20 +95,16 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
             expectedUserId: initiatingUserId,
           });
           if (generationRef.current !== generation) return;
-          const completedFingerprints = new Set(
-            mergeResult.reviewableFingerprints
-          );
-          const remainingCandidates = pendingCandidates.filter(
-            ({ candidate }) =>
-              !completedFingerprints.has(candidate.smsFingerprint)
-          );
-          if (remainingCandidates.length !== pendingCandidates.length) {
-            pendingCandidates = remainingCandidates;
-            updateReviewSession(
-              { unresolvedCandidates: remainingCandidates },
-              reviewSessionId
-            );
+          prunePendingCandidates(mergeResult.reviewableFingerprints);
+        },
+        onCandidatesHandled: (fingerprints): Promise<void> => {
+          if (abortController.signal.aborted) {
+            const abortError = new Error("SMS review retry was cancelled.");
+            abortError.name = "AbortError";
+            throw abortError;
           }
+          prunePendingCandidates(fingerprints);
+          return Promise.resolve();
         },
       });
       if (generationRef.current !== generation) return;

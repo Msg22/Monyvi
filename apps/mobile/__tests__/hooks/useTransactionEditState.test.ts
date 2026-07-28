@@ -246,6 +246,48 @@ describe("useTransactionEditState", () => {
     expect(result.current.state.isCreatingNewToAccount).toBe(false);
   });
 
+  it("starts a new ATM cash destination when no account matches the transaction currency", async () => {
+    const bankAccount = createAccount();
+    const usdCashAccount = {
+      ...createAccount(),
+      id: "cash-usd",
+      name: "USD Cash",
+      currency: "USD" as const,
+      type: "CASH" as const,
+    };
+    const category = {
+      id: "cat-food",
+      displayName: "Food",
+    } as unknown as Category;
+    const transaction: ReviewableTransaction & {
+      readonly isAtmWithdrawal: true;
+    } = {
+      ...createTransaction(),
+      isAtmWithdrawal: true,
+    };
+
+    const { result } = renderHook(() =>
+      useTransactionEditState({
+        transaction,
+        currentAccountId: bankAccount.id,
+        currentAccountName: bankAccount.name,
+        accounts: [bankAccount, usdCashAccount],
+        pendingAccounts: [],
+        categoryMap: new Map([[category.id, category]]),
+        expenseCategories: [category],
+        incomeCategories: [],
+        onSave: jest.fn(),
+        onCreatePendingAccount: jest.fn(),
+      })
+    );
+
+    await waitFor(() =>
+      expect(result.current.state.isCreatingNewToAccount).toBe(true)
+    );
+    expect(result.current.state.selectedToAccountId).toBeNull();
+    expect(result.current.state.selectedToAccountName).toBe("");
+  });
+
   it("persists a new account snapshot before adding it to in-memory state", async () => {
     const category = {
       id: "cat-food",

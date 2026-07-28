@@ -3,6 +3,8 @@ import {
   getParsedSmsTransactionKey,
   type ParsedSmsTransaction,
 } from "@monyvi/logic";
+import { createFilteredSmsAiRetryRequestKey } from "./sms-parse-transport";
+import { getDurablyHandledSmsReviewFingerprints } from "./sms-review-handled-fingerprint-service";
 import type { ParseSmsContext } from "./ai-sms-parser-service";
 import {
   parseSmsWithOrchestrator,
@@ -20,6 +22,9 @@ interface RetrySmsReviewCandidatesInput {
   readonly onTransactionsCompleted?: (
     transactions: readonly ParsedSmsTransaction[]
   ) => Promise<void>;
+  readonly onCandidatesHandled?: (
+    fingerprints: readonly string[]
+  ) => Promise<void>;
 }
 
 export interface SmsReviewRetryResult {
@@ -35,6 +40,39 @@ interface RetryGroup {
       HybridSmsUnresolvedCandidate["retryRequest"]
     >["requestContext"];
     readonly requestKey: string;
+  };
+}
+
+interface PreparedRetryGroup extends RetryGroup {
+  readonly handledFingerprints: readonly string[];
+}
+
+async function prepareRetryGroup(
+  retryGroup: RetryGroup,
+  expectedUserId: string
+): Promise<PreparedRetryGroup> {
+  await assertExpectedCurrentUser(expectedUserId);
+  const handled = await getDurablyHandledSmsReviewFingerprints(expectedUserId);
+  const handledFingerprints = retryGroup.candidates
+    .map((candidate) => candidate.smsFingerprint)
+    .filter((fingerprint) => handled.has(fingerprint));
+  const candidates = retryGroup.candidates.filter(
+    (candidate) => !handled.has(candidate.smsFingerprint)
+  );
+  if (
+    retryGroup.options === undefined ||
+    candidates.length === retryGroup.candidates.length
+  ) {
+    return { candidates, options: retryGroup.options, handledFingerprints };
+  }
+  const requestKey = await createFilteredSmsAiRetryRequestKey(
+    retryGroup.options.requestKey,
+    candidates.map((candidate) => candidate.smsFingerprint)
+  );
+  return {
+    candidates,
+    handledFingerprints,
+    options: { ...retryGroup.options, requestKey },
   };
 }
 
@@ -92,6 +130,7 @@ export async function retrySmsReviewCandidates(
   let retriedUnresolvedCandidates: readonly HybridSmsUnresolvedCandidate[] = [];
   let hasRetryError = false;
   const persistedTransactionKeys = new Set<string>();
+  const handledDuringRetry = new Set<string>();
   const persistCompletedTransactions = async (
     transactions: readonly ParsedSmsTransaction[]
   ): Promise<void> => {
@@ -108,10 +147,26 @@ export async function retrySmsReviewCandidates(
     );
   };
   for (const retryGroup of retryGroups.values()) {
+    const preparedGroup = await prepareRetryGroup(
+      retryGroup,
+      input.expectedUserId
+    );
+    preparedGroup.handledFingerprints.forEach((fingerprint) =>
+      handledDuringRetry.add(fingerprint)
+    );
+    if (
+      preparedGroup.handledFingerprints.length > 0 &&
+      input.onCandidatesHandled !== undefined
+    ) {
+      await input.onCandidatesHandled(preparedGroup.handledFingerprints);
+      await assertExpectedCurrentUser(input.expectedUserId);
+    }
+    const { candidates, options } = preparedGroup;
+    if (candidates.length === 0) continue;
     const result =
-      retryGroup.options === undefined
+      options === undefined
         ? await parseSmsWithOrchestrator(
-            retryGroup.candidates,
+            candidates,
             input.parseContext,
             (progress) =>
               persistCompletedTransactions(progress.completedTransactions),
@@ -119,15 +174,12 @@ export async function retrySmsReviewCandidates(
             { expectedUserId: input.expectedUserId }
           )
         : await parseSmsWithOrchestrator(
-            retryGroup.candidates,
+            candidates,
             input.parseContext,
             (progress) =>
               persistCompletedTransactions(progress.completedTransactions),
             input.abortSignal,
-            {
-              ...retryGroup.options,
-              expectedUserId: input.expectedUserId,
-            }
+            { ...options, expectedUserId: input.expectedUserId }
           );
     await assertExpectedCurrentUser(input.expectedUserId);
     for (const candidate of result.oversizedCandidates ?? []) {
@@ -152,7 +204,10 @@ export async function retrySmsReviewCandidates(
     hasRetryError ||= result.hasError === true;
   }
   const unresolvedCandidates = [
-    ...input.unresolvedCandidates.filter(({ isRetryable }) => !isRetryable),
+    ...input.unresolvedCandidates.filter(
+      ({ candidate, isRetryable }) =>
+        !isRetryable && !handledDuringRetry.has(candidate.smsFingerprint)
+    ),
     ...retriedUnresolvedCandidates,
   ];
   return {

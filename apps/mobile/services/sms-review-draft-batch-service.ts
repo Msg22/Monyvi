@@ -9,10 +9,11 @@ import { commitPreparedBatch } from "./watermelon-atomic-batch";
 
 interface CommitScopedPreparedBatchOptions {
   readonly signal?: AbortSignal;
-  readonly cachedModels?: readonly Model[];
 }
 
-function throwIfAborted(signal?: AbortSignal): void {
+export function throwIfSmsReviewDraftOperationAborted(
+  signal?: AbortSignal
+): void {
   if (!signal?.aborted) return;
   const error = new Error("SMS review draft operation was cancelled.");
   error.name = "AbortError";
@@ -21,15 +22,16 @@ function throwIfAborted(signal?: AbortSignal): void {
 
 export async function commitScopedPreparedBatch(
   expectedUserId: string,
+  cachedModels: readonly Model[],
   prepareOperations: () => readonly Model[],
   options: CommitScopedPreparedBatchOptions = {}
 ): Promise<void> {
-  throwIfAborted(options.signal);
+  throwIfSmsReviewDraftOperationAborted(options.signal);
   await assertExpectedCurrentUser(expectedUserId);
-  throwIfAborted(options.signal);
+  throwIfSmsReviewDraftOperationAborted(options.signal);
 
-  const snapshots = (options.cachedModels ?? []).map(
-    captureCachedModelSnapshot
+  const snapshots = cachedModels.map((model) =>
+    captureCachedModelSnapshot(model)
   );
 
   try {
@@ -37,7 +39,7 @@ export async function commitScopedPreparedBatch(
     if (operations.length === 0) return;
     await commitPreparedBatch(operations);
   } catch (error) {
-    snapshots.forEach(restoreCachedModelSnapshot);
+    snapshots.forEach((snapshot) => restoreCachedModelSnapshot(snapshot));
     throw error;
   }
 }

@@ -23,6 +23,23 @@ jest.mock("@/services/user-data-access", () => ({
     mockAssertExpectedCurrentUser(...args),
 }));
 
+const mockGetDurablyHandledSmsReviewFingerprints = jest
+  .fn()
+  .mockResolvedValue(new Set<string>());
+jest.mock("@/services/sms-review-handled-fingerprint-service", () => ({
+  getDurablyHandledSmsReviewFingerprints: (
+    ...args: readonly unknown[]
+  ): unknown => mockGetDurablyHandledSmsReviewFingerprints(...args),
+}));
+
+const mockCreateFilteredSmsAiRetryRequestKey = jest
+  .fn()
+  .mockResolvedValue("filtered-request-key");
+jest.mock("@/services/sms-parse-transport", () => ({
+  createFilteredSmsAiRetryRequestKey: (...args: readonly unknown[]): unknown =>
+    mockCreateFilteredSmsAiRetryRequestKey(...args),
+}));
+
 import { retrySmsReviewCandidates } from "@/services/sms-review-retry-service";
 
 const context: ParseSmsContext = {
@@ -71,7 +88,15 @@ function transaction(id: string): ParsedSmsTransaction {
 }
 
 describe("sms review retry service", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetDurablyHandledSmsReviewFingerprints.mockResolvedValue(
+      new Set<string>()
+    );
+    mockCreateFilteredSmsAiRetryRequestKey.mockResolvedValue(
+      "filtered-request-key"
+    );
+  });
   afterEach(() => jest.restoreAllMocks());
 
   it("retries only retryable unresolved candidates and atomically merges by fingerprint", async () => {
@@ -309,5 +334,129 @@ describe("sms review retry service", () => {
       unresolvedCandidates: [stillRetryable],
       hasRetryError: true,
     });
+  });
+
+  it("skips a retry candidate that became durably handled", async () => {
+    const onCandidatesHandled = jest.fn().mockResolvedValue(undefined);
+    mockGetDurablyHandledSmsReviewFingerprints.mockResolvedValueOnce(
+      new Set(["fp-retryable"])
+    );
+
+    const result = await retrySmsReviewCandidates({
+      transactions: [],
+      unresolvedCandidates: [unresolved("retryable")],
+      parseContext: context,
+      expectedUserId: EXPECTED_USER_ID,
+      onCandidatesHandled,
+    });
+
+    expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
+    expect(onCandidatesHandled).toHaveBeenCalledWith(["fp-retryable"]);
+    expect(result.unresolvedCandidates).toEqual([]);
+  });
+
+  it("uses a deterministic filtered identity for a partially handled retry group", async () => {
+    const handledCandidate = candidate("handled");
+    const pendingCandidate = candidate("pending");
+    const retryRequest = {
+      requestKey: "original-request-key",
+      requestContext: {
+        scanSessionId: "scan-session-id",
+        scanKind: "incremental" as const,
+        scanStartedAtMs: 123,
+      },
+      candidates: [handledCandidate, pendingCandidate],
+    };
+    mockGetDurablyHandledSmsReviewFingerprints.mockResolvedValueOnce(
+      new Set([handledCandidate.smsFingerprint])
+    );
+    mockParseSmsWithOrchestrator.mockResolvedValueOnce({
+      transactions: [transaction("pending")],
+      unresolvedCandidates: [],
+    });
+
+    await retrySmsReviewCandidates({
+      transactions: [],
+      unresolvedCandidates: [
+        {
+          candidate: pendingCandidate,
+          reason: "chunk_failed",
+          isRetryable: true,
+          retryRequest,
+        },
+      ],
+      parseContext: context,
+      expectedUserId: EXPECTED_USER_ID,
+    });
+
+    expect(mockCreateFilteredSmsAiRetryRequestKey).toHaveBeenCalledWith(
+      "original-request-key",
+      [pendingCandidate.smsFingerprint]
+    );
+    expect(mockParseSmsWithOrchestrator).toHaveBeenCalledWith(
+      [pendingCandidate],
+      context,
+      expect.any(Function),
+      undefined,
+      expect.objectContaining({ requestKey: "filtered-request-key" })
+    );
+  });
+
+  it("refreshes handled fingerprints before every paid retry group", async () => {
+    const firstCandidate = candidate("first");
+    const secondCandidate = candidate("second");
+    const retryRequest = (
+      requestKey: string,
+      retryCandidate: SmsCandidate
+    ): HybridSmsUnresolvedCandidate => ({
+      candidate: retryCandidate,
+      reason: "chunk_failed",
+      isRetryable: true,
+      retryRequest: {
+        requestKey,
+        requestContext: {
+          scanSessionId: `session-${requestKey}`,
+          scanKind: "incremental",
+          scanStartedAtMs: 123,
+        },
+        candidates: [retryCandidate],
+      },
+    });
+    mockGetDurablyHandledSmsReviewFingerprints
+      .mockResolvedValueOnce(new Set())
+      .mockResolvedValueOnce(new Set([secondCandidate.smsFingerprint]));
+    mockParseSmsWithOrchestrator.mockResolvedValueOnce({
+      transactions: [transaction("first")],
+      unresolvedCandidates: [],
+    });
+
+    await retrySmsReviewCandidates({
+      transactions: [],
+      unresolvedCandidates: [
+        retryRequest("first", firstCandidate),
+        retryRequest("second", secondCandidate),
+      ],
+      parseContext: context,
+      expectedUserId: EXPECTED_USER_ID,
+    });
+
+    expect(mockGetDurablyHandledSmsReviewFingerprints).toHaveBeenCalledTimes(2);
+    expect(mockParseSmsWithOrchestrator).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not start paid parsing when the pinned user changes", async () => {
+    mockGetDurablyHandledSmsReviewFingerprints.mockRejectedValueOnce(
+      new Error("SMS_REVIEW_USER_SCOPE_CHANGED")
+    );
+
+    await expect(
+      retrySmsReviewCandidates({
+        transactions: [],
+        unresolvedCandidates: [unresolved("retryable")],
+        parseContext: context,
+        expectedUserId: EXPECTED_USER_ID,
+      })
+    ).rejects.toThrow("SMS_REVIEW_USER_SCOPE_CHANGED");
+    expect(mockParseSmsWithOrchestrator).not.toHaveBeenCalled();
   });
 });

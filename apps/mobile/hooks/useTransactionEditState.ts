@@ -347,25 +347,26 @@ export function useTransactionEditState({
       setIsToAccountPickerOpen(false);
       const persistedToAccount = smsTransaction?.toAccountId
         ? cashAccountOptions.find(
-            (option) => option.id === smsTransaction.toAccountId
+            (option) =>
+              option.id === smsTransaction.toAccountId &&
+              option.currency === transaction.currency
           )
         : undefined;
-      const hasCash = cashAccountOptions.length > 0;
-      setIsCreatingNewToAccount(!hasCash);
-      if (persistedToAccount) {
-        setSelectedToAccountId(persistedToAccount.id);
-        setSelectedToAccountName(persistedToAccount.name);
-      } else if (hasCash) {
-        const currencyMatch = cashAccountOptions.find(
-          (option) => option.currency === transaction.currency
-        );
-        const selected = currencyMatch ?? cashAccountOptions[0];
-        setSelectedToAccountId(selected.id);
-        setSelectedToAccountName(selected.name);
+      const currencyMatch = cashAccountOptions.find(
+        (option) => option.currency === transaction.currency
+      );
+      const selectedToAccount = persistedToAccount ?? currencyMatch;
+      setIsCreatingNewToAccount(selectedToAccount === undefined);
+      if (selectedToAccount) {
+        setSelectedToAccountId(selectedToAccount.id);
+        setSelectedToAccountName(selectedToAccount.name);
       } else {
+        const durableNewDestinationName = smsTransaction?.toAccountId
+          ? ""
+          : (smsTransaction?.toAccountName ?? "");
         setSelectedToAccountId(null);
-        setSelectedToAccountName(smsTransaction?.toAccountName ?? "");
-        setNewToAccountName(smsTransaction?.toAccountName ?? "Cash");
+        setSelectedToAccountName(durableNewDestinationName);
+        setNewToAccountName(durableNewDestinationName || "Cash");
       }
     }
   }, [

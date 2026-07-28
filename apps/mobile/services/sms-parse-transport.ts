@@ -14,6 +14,21 @@ export function createSmsAiRequestKey(qaRunId?: string): string {
   return scopedRequestKey;
 }
 
+export async function createFilteredSmsAiRetryRequestKey(
+  requestKey: string,
+  candidateFingerprints: readonly string[]
+): Promise<string> {
+  const identity = [
+    "sms-ai-filtered-retry-v1",
+    requestKey,
+    ...[...candidateFingerprints].sort(),
+  ].join(":");
+  return Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    identity
+  );
+}
+
 export function scopeSmsAiRequestKey(
   requestKey: string,
   qaRunId?: string
