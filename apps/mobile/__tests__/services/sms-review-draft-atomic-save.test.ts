@@ -264,13 +264,14 @@ describe("saveSelectedSmsReviewDrafts", () => {
   });
 
   it("retains every draft when financial preparation reports a failure", async () => {
+    const restoreCachedAccounts = jest.fn();
     mockPrepare.mockResolvedValue({
       savedCount: 1,
       failedCount: 1,
       errors: ["Transaction 2 needs a category"],
       operations: [{ id: "partial-operation" }],
       alreadySavedSmsFingerprints: new Set(),
-      restoreCachedAccounts: jest.fn(),
+      restoreCachedAccounts,
     });
 
     await expect(
@@ -284,6 +285,7 @@ describe("saveSelectedSmsReviewDrafts", () => {
 
     expect(mockRunWriter).toHaveBeenCalledTimes(1);
     expect(mockDeleteResolved).not.toHaveBeenCalled();
+    expect(restoreCachedAccounts).toHaveBeenCalledTimes(1);
   });
 
   it("commits a newly created source account in the same batch as the financial record and draft deletion", async () => {

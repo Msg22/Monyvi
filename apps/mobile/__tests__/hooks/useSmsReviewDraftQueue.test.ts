@@ -125,6 +125,34 @@ describe("useSmsReviewDraftQueue", () => {
     expect(result.current.items[0]?.transaction.smsFingerprint).toBe("fp-b");
   });
 
+  it("hides a loaded previous-user queue immediately while the next user loads", async () => {
+    let resolveUserB: ((value: TestQueueSnapshot) => void) | undefined;
+    const userBRequest = new Promise<TestQueueSnapshot>((resolve) => {
+      resolveUserB = resolve;
+    });
+    mockGetSnapshot.mockImplementation((userId: string) =>
+      userId === "user-a"
+        ? Promise.resolve(createSnapshot("user-a", "fp-a"))
+        : userBRequest
+    );
+
+    const { result, rerender } = renderHook(() => useSmsReviewDraftQueue());
+    await waitFor(() => expect(result.current.queueId).toBe("queue-user-a"));
+
+    mockUserId = "user-b";
+    rerender(undefined);
+
+    expect(result.current.userId).toBe("user-b");
+    expect(result.current.queueId).toBeNull();
+    expect(result.current.items).toEqual([]);
+    expect(result.current.itemCount).toBe(0);
+
+    await act(async () => {
+      resolveUserB?.(createSnapshot("user-b", "fp-b"));
+      await userBRequest;
+    });
+  });
+
   it("does not let an older same-user refetch replace a newer snapshot", async () => {
     let resolveOlder: ((value: TestQueueSnapshot) => void) | undefined;
     let resolveNewer: ((value: TestQueueSnapshot) => void) | undefined;
@@ -146,14 +174,18 @@ describe("useSmsReviewDraftQueue", () => {
       resolveNewer?.(createSnapshot("user-a", "fp-newer"));
       await newestRefetch;
     });
-    expect(result.current.items[0]?.transaction.smsFingerprint).toBe("fp-newer");
+    expect(result.current.items[0]?.transaction.smsFingerprint).toBe(
+      "fp-newer"
+    );
 
     await act(async () => {
       resolveOlder?.(createSnapshot("user-a", "fp-older"));
       await olderRequest;
     });
 
-    expect(result.current.items[0]?.transaction.smsFingerprint).toBe("fp-newer");
+    expect(result.current.items[0]?.transaction.smsFingerprint).toBe(
+      "fp-newer"
+    );
   });
 
   it("persists a stale selected override as unselected after hard validation", async () => {

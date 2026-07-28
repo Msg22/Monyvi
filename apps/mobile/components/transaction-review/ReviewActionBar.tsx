@@ -16,6 +16,8 @@ export interface ReviewActionBarProps {
   readonly onReviewLater?: () => void;
 }
 
+export const SMS_REVIEW_ACTION_BAR_HEIGHT = 100;
+
 export function ReviewActionBar({
   selectedCount,
   isSaving,

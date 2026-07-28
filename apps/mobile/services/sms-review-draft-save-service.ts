@@ -203,10 +203,10 @@ export async function saveSelectedSmsReviewDrafts(
           preparedAccountCurrencies,
         }
       );
+      preparedHolder.current = prepared;
       if (prepared.failedCount > 0) {
         throw new SmsReviewDraftSaveValidationError(prepared.errors);
       }
-      preparedHolder.current = prepared;
 
       await deleteResolvedSmsReviewDraftsInWriter(
         input.selectedItems.map((item) => item.draftId),

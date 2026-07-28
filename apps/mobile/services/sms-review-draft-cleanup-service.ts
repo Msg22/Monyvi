@@ -19,6 +19,10 @@ export async function cleanupExpiredSmsReviewDrafts(
   const cutoff = new Date(
     now.getTime() - SMS_REVIEW_DRAFT_RETENTION_DAYS * DAY_MS
   );
-  const deletedCount = await deleteExpiredSmsReviewDrafts(scope.userId, cutoff);
+  const deletedCount = await deleteExpiredSmsReviewDrafts(
+    scope.userId,
+    cutoff,
+    input.signal
+  );
   return deletedCount;
 }

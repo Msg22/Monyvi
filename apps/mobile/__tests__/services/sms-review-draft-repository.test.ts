@@ -1,13 +1,17 @@
 import type { ParsedSmsTransaction } from "@monyvi/logic";
 
 import {
+  deleteExpiredSmsReviewDrafts,
   deleteResolvedSmsReviewDraftsInWriter,
   discardAllSmsReviewDrafts,
+  discardSmsReviewDraft,
   getHandledSmsReviewFingerprints,
   getSmsReviewDraftCount,
   getSmsReviewDraftQueueSnapshot,
   mergeSmsReviewDrafts,
   restoreSmsReviewDraft,
+  updateSmsReviewDraftItem,
+  updateSmsReviewDraftSelection,
 } from "@/services/sms-review-draft-repository";
 
 interface QueryCondition {
@@ -76,9 +80,22 @@ class FakeCollection {
       for (const condition of conditions) {
         if (condition.kind === "where") {
           const property = toPropertyName(condition.column);
-          result = result.filter(
-            (record) => record[property as keyof FakeRecord] === condition.value
-          );
+          result = result.filter((record) => {
+            const actual = record[property as keyof FakeRecord];
+            if (
+              typeof condition.value === "object" &&
+              condition.value !== null &&
+              "lte" in condition.value
+            ) {
+              const comparable =
+                actual instanceof Date ? actual.getTime() : actual;
+              return (
+                typeof comparable === "number" &&
+                comparable <= Number(condition.value.lte)
+              );
+            }
+            return actual === condition.value;
+          });
         }
       }
       return result;
@@ -153,6 +170,7 @@ jest.mock("@monyvi/db", () => ({
 jest.mock("@nozbe/watermelondb", () => ({
   Q: {
     asc: "asc",
+    lte: (value: number): { readonly lte: number } => ({ lte: value }),
     where: (column: string, value: unknown): QueryCondition => ({
       kind: "where",
       column,
@@ -443,17 +461,17 @@ describe("sms-review-draft-repository", () => {
       queueId: queue.id,
       smsFingerprint: "fp-user-race",
     });
-    jest.spyOn(draft, "prepareDestroyPermanently").mockImplementation(() => {
-      draft.operation = "destroy";
-      mockCurrentUserId = "user-2";
-      return draft;
-    });
+    mockAssertExpectedCurrentUser
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("sms_review_draft_user_scope_changed"));
 
     await expect(
       deleteResolvedSmsReviewDraftsInWriter([draft.id], "user-1")
     ).rejects.toThrow("sms_review_draft_user_scope_changed");
 
     expect(mockBatch).not.toHaveBeenCalled();
+    expect(draft.operation).toBe("update");
   });
 
   it("revalidates the active user immediately before discard all commits", async () => {
@@ -503,6 +521,172 @@ describe("sms-review-draft-repository", () => {
     expect(
       mockCollections.get("dismissed_sms_fingerprints")?.records
     ).toHaveLength(0);
+  });
+
+  it("does not prepare an edit after the active user changes", async () => {
+    const draft = seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      smsFingerprint: "fp-edit-race",
+      payloadJson: "original-payload",
+    });
+    mockAssertExpectedCurrentUser
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("sms_review_draft_user_scope_changed"));
+
+    await expect(
+      updateSmsReviewDraftItem(
+        draft.id,
+        "user-1",
+        createTransaction("fp-edit-race", 250)
+      )
+    ).rejects.toThrow("sms_review_draft_user_scope_changed");
+
+    expect(draft.payloadJson).toBe("original-payload");
+    expect(mockBatch).not.toHaveBeenCalled();
+  });
+
+  it("does not prepare a selection change after the active user changes", async () => {
+    const draft = seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      smsFingerprint: "fp-selection-race",
+      selectionOverride: null,
+    });
+    mockAssertExpectedCurrentUser
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("sms_review_draft_user_scope_changed"));
+
+    await expect(
+      updateSmsReviewDraftSelection(draft.id, "user-1", true)
+    ).rejects.toThrow("sms_review_draft_user_scope_changed");
+
+    expect(draft.selectionOverride).toBeNull();
+    expect(mockBatch).not.toHaveBeenCalled();
+  });
+
+  it("does not discard after the active user changes", async () => {
+    await mergeSmsReviewDrafts({
+      expectedUserId: "user-1",
+      transactions: [createTransaction("fp-single-discard-race")],
+    });
+    const draft = mockCollections.get("sms_review_draft_items")?.records[0];
+    if (!draft) throw new Error("Expected seeded draft");
+    mockBatch.mockClear();
+    mockAssertExpectedCurrentUser.mockClear();
+    mockAssertExpectedCurrentUser
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("sms_review_draft_user_scope_changed"));
+
+    await expect(
+      discardSmsReviewDraft(draft.id, "user-1", Date.now() + 5_000)
+    ).rejects.toThrow("sms_review_draft_user_scope_changed");
+
+    expect(mockCollections.get("sms_review_draft_items")?.records).toContain(
+      draft
+    );
+    expect(mockCollections.get("dismissed_sms_fingerprints")?.records).toEqual(
+      []
+    );
+    expect(mockBatch).not.toHaveBeenCalled();
+  });
+
+  it("does not restore after the active user changes", async () => {
+    const dismissed = seedRecord("dismissed_sms_fingerprints", {
+      userId: "user-1",
+      smsFingerprint: "fp-restore-race",
+    });
+    mockAssertExpectedCurrentUser
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("sms_review_draft_user_scope_changed"));
+
+    await expect(
+      restoreSmsReviewDraft({
+        draftId: "draft-restore-race",
+        queueId: "queue-restore-race",
+        userId: "user-1",
+        smsFingerprint: "fp-restore-race",
+        transaction: createTransaction("fp-restore-race"),
+        selectionOverride: null,
+        position: 0,
+        parsedAt: new Date("2026-07-27T12:00:00.000Z"),
+        expiresAt: Date.now() + 5_000,
+      })
+    ).rejects.toThrow("sms_review_draft_user_scope_changed");
+
+    expect(
+      mockCollections.get("dismissed_sms_fingerprints")?.records
+    ).toContain(dismissed);
+    expect(mockCollections.get("sms_review_draft_items")?.records).toEqual([]);
+    expect(mockBatch).not.toHaveBeenCalled();
+  });
+
+  it("deletes the final malformed draft and its queue in one batch", async () => {
+    const queue = seedRecord("sms_review_queues", { userId: "user-1" });
+    seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      queueId: queue.id,
+      smsFingerprint: "fp-malformed-final",
+      payloadJson: "malformed-json",
+    });
+
+    await expect(getSmsReviewDraftQueueSnapshot("user-1")).resolves.toBeNull();
+
+    expect(mockBatch).toHaveBeenCalledTimes(1);
+    expect(mockBatch.mock.calls[0]?.[0]).toHaveLength(2);
+    expect(mockCollections.get("sms_review_queues")?.records).toEqual([]);
+    expect(mockCollections.get("sms_review_draft_items")?.records).toEqual([]);
+  });
+
+  it("deletes the final expired draft and its queue in one batch", async () => {
+    const queue = seedRecord("sms_review_queues", { userId: "user-1" });
+    seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      queueId: queue.id,
+      smsFingerprint: "fp-expired-final",
+      parsedAt: new Date("2026-06-01T12:00:00.000Z"),
+    });
+
+    await expect(
+      deleteExpiredSmsReviewDrafts(
+        "user-1",
+        new Date("2026-07-01T12:00:00.000Z")
+      )
+    ).resolves.toBe(1);
+
+    expect(mockBatch).toHaveBeenCalledTimes(1);
+    expect(mockBatch.mock.calls[0]?.[0]).toHaveLength(2);
+    expect(mockCollections.get("sms_review_queues")?.records).toEqual([]);
+    expect(mockCollections.get("sms_review_draft_items")?.records).toEqual([]);
+  });
+
+  it("cancels expiry cleanup at its final commit boundary", async () => {
+    const controller = new AbortController();
+    const queue = seedRecord("sms_review_queues", { userId: "user-1" });
+    const draft = seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      queueId: queue.id,
+      smsFingerprint: "fp-expiry-cancelled",
+      parsedAt: new Date("2026-06-01T12:00:00.000Z"),
+    });
+    let assertionCount = 0;
+    mockAssertExpectedCurrentUser.mockImplementation((): Promise<void> => {
+      assertionCount += 1;
+      if (assertionCount === 2) controller.abort();
+      return Promise.resolve();
+    });
+
+    await expect(
+      deleteExpiredSmsReviewDrafts(
+        "user-1",
+        new Date("2026-07-01T12:00:00.000Z"),
+        controller.signal
+      )
+    ).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(mockCollections.get("sms_review_draft_items")?.records).toContain(
+      draft
+    );
+    expect(mockBatch).not.toHaveBeenCalled();
   });
 
   it("reads handled metadata without decoding payload JSON", async () => {

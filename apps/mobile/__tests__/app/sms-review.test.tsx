@@ -18,6 +18,10 @@ interface MockTransactionReviewProps {
   readonly onReviewLater: () => void;
   readonly onDiscard: () => void;
   readonly onDiscardItem: (index: number) => Promise<void>;
+  readonly onSelectionChange: (
+    index: number,
+    selected: boolean
+  ) => Promise<void>;
   readonly undoBanner?: {
     readonly onUndo: () => Promise<void>;
   };
@@ -50,6 +54,8 @@ const mockShowToast = jest.fn();
 const mockSaveSelectedDrafts = jest.fn();
 const mockDiscardAll = jest.fn();
 const mockDiscardOne = jest.fn();
+const mockSetSelection = jest.fn();
+const mockQueueRefetch = jest.fn<Promise<void>, []>();
 const mockTransactionReview = jest.fn<
   void,
   [props: MockTransactionReviewProps]
@@ -148,7 +154,7 @@ jest.mock("@/hooks/useSmsReviewDraftQueue", () => ({
     itemCount: mockQueueItems.length,
     isLoading: mockQueueLoading,
     error: mockQueueError,
-    refetch: jest.fn(),
+    refetch: mockQueueRefetch,
   }),
 }));
 
@@ -215,7 +221,8 @@ jest.mock("@/services/sms-review-draft-command-service", () => ({
   discardEverySmsReviewDraft: (...args: readonly unknown[]): unknown =>
     mockDiscardAll(...args),
   editSmsReviewDraft: jest.fn(),
-  setSmsReviewDraftSelection: jest.fn(),
+  setSmsReviewDraftSelection: (...args: readonly unknown[]): unknown =>
+    mockSetSelection(...args),
 }));
 
 jest.mock("@/services/sms-review-draft-save-service", () => {
@@ -253,6 +260,7 @@ jest.mock("react-i18next", () => ({
 }));
 
 import SmsReviewScreen from "@/app/(private)/sms-review";
+import { SmsReviewDraftSaveValidationError } from "@/services/sms-review-draft-save-service";
 
 describe("SMS review route", () => {
   beforeEach(() => {
@@ -284,6 +292,8 @@ describe("SMS review route", () => {
     mockGrantConsent.mockResolvedValue(undefined);
     mockDiscardAll.mockResolvedValue(undefined);
     mockDiscardOne.mockResolvedValue(undefined);
+    mockSetSelection.mockResolvedValue(undefined);
+    mockQueueRefetch.mockResolvedValue(undefined);
     mockMarkSyncComplete.mockResolvedValue(undefined);
     mockSaveSelectedDrafts.mockResolvedValue({ savedCount: 1 });
     mockUndoState = {
@@ -303,6 +313,26 @@ describe("SMS review route", () => {
     expect(props?.transactions[0]?.reviewReasons).toContain("account_needed");
     expect(props?.selectionOverrides.get(0)).toBe(false);
     expect(props?.partialResults?.canRetry).toBe(true);
+  });
+
+  it("rejects selecting a draft with unresolved hard validation", async () => {
+    render(<SmsReviewScreen />);
+    const props = mockTransactionReview.mock.calls[0]?.[0];
+    if (!props) throw new Error("TransactionReview was not rendered");
+
+    await expect(props.onSelectionChange(0, true)).rejects.toThrow(
+      "sms_review_draft_hard_validation_required"
+    );
+    expect(mockSetSelection).not.toHaveBeenCalled();
+  });
+
+  it("clears volatile scan state when the review route unmounts", () => {
+    const { unmount } = render(<SmsReviewScreen />);
+
+    unmount();
+
+    expect(mockClearTransactions).toHaveBeenCalledTimes(1);
+    expect(mockDiscardAll).not.toHaveBeenCalled();
   });
 
   it("keeps durable drafts but clears transient scan data when reviewing later", () => {
@@ -368,6 +398,29 @@ describe("SMS review route", () => {
       "/(private)/(tabs)/transactions"
     );
     expect(screen.queryByTestId("transaction-review")).toBeNull();
+  });
+
+  it("refreshes durable validation state before showing save guidance", async () => {
+    mockSaveSelectedDrafts.mockRejectedValueOnce(
+      new SmsReviewDraftSaveValidationError(["account_required"])
+    );
+    render(<SmsReviewScreen />);
+    const reviewProps = mockTransactionReview.mock.calls[0]?.[0];
+    if (!reviewProps) throw new Error("TransactionReview was not rendered");
+
+    await act(async () => {
+      await reviewProps.onSave([mockTransaction], new Map(), new Map());
+    });
+
+    expect(mockQueueRefetch).toHaveBeenCalledTimes(1);
+    expect(mockShowToast).toHaveBeenCalledWith({
+      type: "warning",
+      title: "sms_review_fix_selected",
+      message: "sms_review_fix_selected_message",
+    });
+    expect(mockQueueRefetch.mock.invocationCallOrder[0]).toBeLessThan(
+      mockShowToast.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER
+    );
   });
 
   it("does not expose technical storage errors in save feedback", async () => {

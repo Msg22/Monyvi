@@ -31,9 +31,10 @@ import {
   Transfer,
   type CurrencyType,
 } from "@monyvi/db";
-import type {
-  ParsedSmsTransaction,
-  ReviewableTransaction,
+import {
+  isValidTransactionAmount,
+  type ParsedSmsTransaction,
+  type ReviewableTransaction,
 } from "@monyvi/logic";
 import { Q, type Model } from "@nozbe/watermelondb";
 import { ensureCashAccount } from "./account-service";
@@ -270,6 +271,11 @@ export async function prepareBatchCreateTransactions<
     const transaction = transactions[index];
     const smsFingerprint = getSmsFingerprint(transaction);
 
+    if (!isValidTransactionAmount(transaction.amount)) {
+      errors.push(`Invalid amount for transaction index ${index}`);
+      failedCount += 1;
+      continue;
+    }
     if (transaction.source === "SMS" && !smsFingerprint) {
       errors.push(`Missing SMS fingerprint for transaction index ${index}`);
       failedCount += 1;
@@ -379,17 +385,46 @@ export async function prepareBatchCreateTransactions<
   const accountIds = [...balanceDeltas.keys()].filter(
     (accountId) => !preparedAccountCurrencies.has(accountId)
   );
+  if ([...balanceDeltas.values()].some((delta) => !Number.isFinite(delta))) {
+    return {
+      savedCount: 0,
+      failedCount: transactions.length,
+      errors: ["Account balance delta is not finite"],
+      operations: [],
+      alreadySavedSmsFingerprints,
+      restoreCachedAccounts: () => {},
+    };
+  }
   if (accountIds.length > 0) {
+    let hasInvalidAccountBalance = false;
     persistedAccounts.forEach((account) => {
       const delta = balanceDeltas.get(account.id);
       if (!delta) return;
+      const nextBalance = (account.balance ?? 0) + delta;
+      if (!Number.isFinite(nextBalance)) {
+        errors.push(`Account balance is not finite for account ${account.id}`);
+        failedCount += 1;
+        hasInvalidAccountBalance = true;
+        return;
+      }
       accountSnapshots.push(captureCachedModelSnapshot(account));
       operations.push(
         account.prepareUpdate((record) => {
-          record.balance = (record.balance ?? 0) + delta;
+          record.balance = nextBalance;
         })
       );
     });
+    if (hasInvalidAccountBalance) {
+      accountSnapshots.forEach(restoreCachedModelSnapshot);
+      return {
+        savedCount: 0,
+        failedCount: transactions.length,
+        errors,
+        operations: [],
+        alreadySavedSmsFingerprints,
+        restoreCachedAccounts: () => {},
+      };
+    }
   }
 
   return {

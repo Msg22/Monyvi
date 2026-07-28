@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { ParsedSmsTransaction } from "../types";
+import { isValidTransactionAmount } from "../utils/amount-helpers";
 
 const SMS_REVIEW_DRAFT_VERSION = 1 as const;
 
@@ -69,7 +70,7 @@ const PendingAccountSchema = z
 
 const StoredTransactionSchema = z
   .object({
-    amount: z.number().finite().positive(),
+    amount: z.number().refine(isValidTransactionAmount),
     currency: CurrencySchema,
     type: z.enum(["EXPENSE", "INCOME"]),
     counterparty: z.string().optional(),

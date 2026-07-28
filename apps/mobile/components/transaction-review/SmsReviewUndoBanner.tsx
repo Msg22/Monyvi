@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 
 import { palette } from "@/constants/colors";
+import { SMS_REVIEW_ACTION_BAR_HEIGHT } from "@/components/transaction-review/ReviewActionBar";
 
 interface SmsReviewUndoBannerProps {
   readonly discardedName: string;
@@ -30,7 +31,7 @@ export function SmsReviewUndoBanner({
       entering={FadeInDown.duration(180).reduceMotion(ReduceMotion.System)}
       exiting={FadeOutDown.duration(150).reduceMotion(ReduceMotion.System)}
       className="absolute inset-x-4 z-30 flex-row items-center rounded-lg border border-nileGreen-500/40 bg-surface px-3 py-2 dark:bg-surface-dark"
-      style={{ bottom: Math.max(bottom, 8) + 74 }}
+      style={{ bottom: bottom + SMS_REVIEW_ACTION_BAR_HEIGHT + 8 }}
       testID="sms-review-undo-banner"
     >
       <View className="min-w-0 flex-1">

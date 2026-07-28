@@ -146,6 +146,7 @@ describe("SMS review draft codec", () => {
 
   it.each([
     createTransaction({ amount: Number.POSITIVE_INFINITY }),
+    createTransaction({ amount: 1_000_000_001 }),
     createTransaction({ confidence: Number.NaN }),
     createTransaction({ smsFingerprint: "" }),
   ])("rejects invalid financial values and identifiers", (transaction) => {

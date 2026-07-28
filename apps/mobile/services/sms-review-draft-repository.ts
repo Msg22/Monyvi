@@ -27,6 +27,26 @@ const QUEUE_TABLE = "sms_review_queues";
 const ITEM_TABLE = "sms_review_draft_items";
 const DISMISSED_TABLE = "dismissed_sms_fingerprints";
 
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  const error = new Error("SMS review draft operation was cancelled.");
+  error.name = "AbortError";
+  throw error;
+}
+
+async function commitScopedPreparedBatch(
+  expectedUserId: string,
+  prepareOperations: () => readonly Model[],
+  signal?: AbortSignal
+): Promise<void> {
+  throwIfAborted(signal);
+  await assertExpectedCurrentUser(expectedUserId);
+  throwIfAborted(signal);
+  const operations = prepareOperations();
+  if (operations.length === 0) return;
+  await commitPreparedBatch(operations);
+}
+
 export { SMS_REVIEW_DRAFT_ERROR_CODES } from "./sms-review-draft-errors";
 
 export interface SmsReviewDraftReadItem {
@@ -151,35 +171,52 @@ async function removeInvalidItems(
   await assertExpectedCurrentUser(userId);
   await database.write(async (): Promise<void> => {
     await assertExpectedCurrentUser(userId);
+    const queue = assertSingleQueue(await fetchOwnedQueues(userId));
+    const allItems = await fetchOwnedItems(userId, queue?.id);
     const invalidIds = new Set(invalidItems.map((item) => item.id));
-    const currentInvalidItems = (await fetchOwnedItems(userId)).filter(
-      (item) => {
-        if (!invalidIds.has(item.id)) return false;
-        try {
-          decodeItem(item);
-          return false;
-        } catch (error) {
-          if (error instanceof SmsReviewDraftCodecError) return true;
-          throw error;
-        }
+    const currentInvalidItems = allItems.filter((item) => {
+      if (!invalidIds.has(item.id)) return false;
+      try {
+        decodeItem(item);
+        return false;
+      } catch (error) {
+        if (error instanceof SmsReviewDraftCodecError) return true;
+        throw error;
       }
+    });
+    const currentInvalidIds = new Set(
+      currentInvalidItems.map((item) => item.id)
     );
-    await assertExpectedCurrentUser(userId);
-    const deletes = currentInvalidItems.map((item) =>
-      item.prepareDestroyPermanently()
-    );
-    if (deletes.length > 0) await database.batch(deletes);
-    await removeEmptyQueueInWriter(userId);
+
+    await commitScopedPreparedBatch(userId, (): readonly Model[] => {
+      const operations: Model[] = currentInvalidItems.map((item) =>
+        item.prepareDestroyPermanently()
+      );
+      if (
+        queue &&
+        allItems.length > 0 &&
+        allItems.every((item) => currentInvalidIds.has(item.id))
+      ) {
+        operations.push(queue.prepareDestroyPermanently());
+      }
+      return operations;
+    });
   });
 }
 
-async function removeEmptyQueueInWriter(userId: string): Promise<void> {
-  const queue = assertSingleQueue(await fetchOwnedQueues(userId));
-  if (!queue) return;
-  const remaining = await fetchOwnedItems(userId, queue.id);
-  if (remaining.length === 0) {
-    await database.batch([queue.prepareDestroyPermanently()]);
-  }
+async function removeOwnedQueueIfEmpty(
+  expectedUserId: string,
+  expectedQueueId: string
+): Promise<void> {
+  await database.write(async (): Promise<void> => {
+    const queue = assertSingleQueue(await fetchOwnedQueues(expectedUserId));
+    if (!queue || queue.id !== expectedQueueId) return;
+    const remaining = await fetchOwnedItems(expectedUserId, queue.id);
+    if (remaining.length > 0) return;
+    await commitScopedPreparedBatch(expectedUserId, () => [
+      queue.prepareDestroyPermanently(),
+    ]);
+  });
 }
 
 export async function getSmsReviewDraftQueueSnapshot(
@@ -209,7 +246,10 @@ export async function getSmsReviewDraftQueueSnapshot(
 
   if (invalid.length > 0) await removeInvalidItems(expectedUserId, invalid);
   await assertExpectedCurrentUser(expectedUserId);
-  if (items.length === 0) return null;
+  if (items.length === 0) {
+    await removeOwnedQueueIfEmpty(expectedUserId, queue.id);
+    return null;
+  }
   return {
     queueId: queue.id,
     userId: expectedUserId,
@@ -313,7 +353,7 @@ export async function mergeSmsReviewDrafts(
   return database.write(async (): Promise<MergeSmsReviewDraftsResult> => {
     await assertExpectedCurrentUser(input.expectedUserId);
     const queues = await fetchOwnedQueues(input.expectedUserId);
-    let queue = assertSingleQueue(queues);
+    const queue = assertSingleQueue(queues);
     const [existingItems, dismissedItems, savedTransactions, savedTransfers] =
       await Promise.all([
         fetchOwnedItems(input.expectedUserId, queue?.id),
@@ -374,42 +414,47 @@ export async function mergeSmsReviewDrafts(
       };
     }
 
-    const operations: Model[] = [];
     const now = new Date();
-    if (!queue) {
-      queue = queueCollection().prepareCreate((record) => {
-        record.userId = input.expectedUserId;
-        record.updatedAt = now;
-      });
-      operations.push(queue);
-    } else {
-      operations.push(
-        queue.prepareUpdate((record) => {
-          record.updatedAt = now;
-        })
-      );
-    }
-
     const nextPosition =
       existingItems.reduce((max, item) => Math.max(max, item.position), -1) + 1;
-    uniqueNew.forEach(({ transaction, payload }, index) => {
-      operations.push(
-        itemCollection().prepareCreate((record) => {
-          record.queueId = queue.id;
-          record.userId = input.expectedUserId;
-          record.smsFingerprint = transaction.smsFingerprint;
-          record.payloadVersion = payload.version;
-          record.payloadJson = payload.json;
-          record.selectionOverride = null;
-          record.position = nextPosition + index;
-          record.parsedAt = parsedAt;
-          record.updatedAt = now;
-        })
-      );
-    });
+    await commitScopedPreparedBatch(
+      input.expectedUserId,
+      (): readonly Model[] => {
+        const operations: Model[] = [];
+        const targetQueue =
+          queue ??
+          queueCollection().prepareCreate((record) => {
+            record.userId = input.expectedUserId;
+            record.updatedAt = now;
+          });
+        if (!queue) {
+          operations.push(targetQueue);
+        } else {
+          operations.push(
+            targetQueue.prepareUpdate((record) => {
+              record.updatedAt = now;
+            })
+          );
+        }
 
-    await assertExpectedCurrentUser(input.expectedUserId);
-    await database.batch(operations);
+        uniqueNew.forEach(({ transaction, payload }, index) => {
+          operations.push(
+            itemCollection().prepareCreate((record) => {
+              record.queueId = targetQueue.id;
+              record.userId = input.expectedUserId;
+              record.smsFingerprint = transaction.smsFingerprint;
+              record.payloadVersion = payload.version;
+              record.payloadJson = payload.json;
+              record.selectionOverride = null;
+              record.position = nextPosition + index;
+              record.parsedAt = parsedAt;
+              record.updatedAt = now;
+            })
+          );
+        });
+        return operations;
+      }
+    );
     return {
       insertedCount: uniqueNew.length,
       existingCount: encoded.length - uniqueNew.length,
@@ -442,11 +487,13 @@ export async function updateSmsReviewDraftItem(
     if (record.smsFingerprint !== transaction.smsFingerprint) {
       throw new Error(SMS_REVIEW_DRAFT_ERROR_CODES.TRANSITION_FAILED);
     }
-    await record.update((draft) => {
-      draft.payloadVersion = payload.version;
-      draft.payloadJson = payload.json;
-      draft.updatedAt = new Date();
-    });
+    await commitScopedPreparedBatch(expectedUserId, () => [
+      record.prepareUpdate((draft) => {
+        draft.payloadVersion = payload.version;
+        draft.payloadJson = payload.json;
+        draft.updatedAt = new Date();
+      }),
+    ]);
   });
 }
 
@@ -457,10 +504,12 @@ export async function updateSmsReviewDraftSelection(
 ): Promise<void> {
   await database.write(async (): Promise<void> => {
     const record = await getOwnedSmsReviewDraftItem(draftId, expectedUserId);
-    await record.update((draft) => {
-      draft.selectionOverride = selectionOverride;
-      draft.updatedAt = new Date();
-    });
+    await commitScopedPreparedBatch(expectedUserId, () => [
+      record.prepareUpdate((draft) => {
+        draft.selectionOverride = selectionOverride;
+        draft.updatedAt = new Date();
+      }),
+    ]);
   });
 }
 
@@ -519,15 +568,16 @@ export async function deleteResolvedSmsReviewDraftsInWriter(
   const queue = assertSingleQueue(await fetchOwnedQueues(expectedUserId));
   const selectedIds = new Set(records.map((record) => record.id));
   const allItems = await fetchOwnedItems(expectedUserId, queue?.id);
-  const operations: Model[] = [
-    ...financialOperations,
-    ...records.map((record) => record.prepareDestroyPermanently()),
-  ];
-  if (queue && allItems.every((item) => selectedIds.has(item.id))) {
-    operations.push(queue.prepareDestroyPermanently());
-  }
-  await assertExpectedCurrentUser(expectedUserId);
-  await commitPreparedBatch(operations);
+  await commitScopedPreparedBatch(expectedUserId, (): readonly Model[] => {
+    const operations: Model[] = [
+      ...financialOperations,
+      ...records.map((record) => record.prepareDestroyPermanently()),
+    ];
+    if (queue && allItems.every((item) => selectedIds.has(item.id))) {
+      operations.push(queue.prepareDestroyPermanently());
+    }
+    return operations;
+  });
 }
 
 export async function runSmsReviewDraftWriter<T>(
@@ -555,21 +605,23 @@ export async function discardSmsReviewDraft(
       record.smsFingerprint
     );
     const allItems = await fetchOwnedItems(expectedUserId, queue.id);
-    const operations: Model[] = [];
-    if (!existingDismissed) {
-      operations.push(
-        dismissedCollection().prepareCreate((dismissed) => {
-          dismissed.userId = expectedUserId;
-          dismissed.smsFingerprint = record.smsFingerprint;
-          dismissed.updatedAt = new Date();
-        })
-      );
-    }
-    operations.push(record.prepareDestroyPermanently());
-    if (allItems.length === 1) {
-      operations.push(queue.prepareDestroyPermanently());
-    }
-    await database.batch(operations);
+    await commitScopedPreparedBatch(expectedUserId, (): readonly Model[] => {
+      const operations: Model[] = [];
+      if (!existingDismissed) {
+        operations.push(
+          dismissedCollection().prepareCreate((dismissed) => {
+            dismissed.userId = expectedUserId;
+            dismissed.smsFingerprint = record.smsFingerprint;
+            dismissed.updatedAt = new Date();
+          })
+        );
+      }
+      operations.push(record.prepareDestroyPermanently());
+      if (allItems.length === 1) {
+        operations.push(queue.prepareDestroyPermanently());
+      }
+      return operations;
+    });
 
     return {
       draftId: record.id,
@@ -608,28 +660,29 @@ export async function restoreSmsReviewDraft(
       const queue = assertSingleQueue(await fetchOwnedQueues(undoItem.userId));
       const allItems = await fetchOwnedItems(undoItem.userId, queue?.id);
       const activeIds = new Set(active.map((record) => record.id));
-      const operations: Model[] = [
-        ...active.map((record) => record.prepareDestroyPermanently()),
-      ];
-      if (dismissed) {
-        operations.push(dismissed.prepareDestroyPermanently());
-      }
-      if (
-        queue &&
-        allItems.length > 0 &&
-        allItems.every((record) => activeIds.has(record.id))
-      ) {
-        operations.push(queue.prepareDestroyPermanently());
-      }
-      if (operations.length > 0) {
-        await assertExpectedCurrentUser(undoItem.userId);
-        await database.batch(operations);
-      }
+      await commitScopedPreparedBatch(undoItem.userId, (): readonly Model[] => {
+        const operations: Model[] = [
+          ...active.map((record) => record.prepareDestroyPermanently()),
+        ];
+        if (dismissed) {
+          operations.push(dismissed.prepareDestroyPermanently());
+        }
+        if (
+          queue &&
+          allItems.length > 0 &&
+          allItems.every((record) => activeIds.has(record.id))
+        ) {
+          operations.push(queue.prepareDestroyPermanently());
+        }
+        return operations;
+      });
       return;
     }
     if (active.length > 0) {
       if (dismissed) {
-        await database.batch([dismissed.prepareDestroyPermanently()]);
+        await commitScopedPreparedBatch(undoItem.userId, () => [
+          dismissed.prepareDestroyPermanently(),
+        ]);
       }
       return;
     }
@@ -638,39 +691,41 @@ export async function restoreSmsReviewDraft(
       await fetchOwnedQueues(undoItem.userId)
     );
     const now = new Date();
-    const queue =
-      existingQueue ??
-      queueCollection().prepareCreate((record) => {
-        record.userId = undoItem.userId;
-        record.updatedAt = now;
-      });
-    const operations: Model[] = [];
-    if (!existingQueue) {
-      operations.push(queue);
-    } else {
+    await commitScopedPreparedBatch(undoItem.userId, (): readonly Model[] => {
+      const queue =
+        existingQueue ??
+        queueCollection().prepareCreate((record) => {
+          record.userId = undoItem.userId;
+          record.updatedAt = now;
+        });
+      const operations: Model[] = [];
+      if (!existingQueue) {
+        operations.push(queue);
+      } else {
+        operations.push(
+          queue.prepareUpdate((record) => {
+            record.updatedAt = now;
+          })
+        );
+      }
       operations.push(
-        queue.prepareUpdate((record) => {
+        itemCollection().prepareCreate((record) => {
+          record.queueId = queue.id;
+          record.userId = undoItem.userId;
+          record.smsFingerprint = undoItem.smsFingerprint;
+          record.payloadVersion = payload.version;
+          record.payloadJson = payload.json;
+          record.selectionOverride = undoItem.selectionOverride;
+          record.position = undoItem.position;
+          record.parsedAt = undoItem.parsedAt;
           record.updatedAt = now;
         })
       );
-    }
-    operations.push(
-      itemCollection().prepareCreate((record) => {
-        record.queueId = queue.id;
-        record.userId = undoItem.userId;
-        record.smsFingerprint = undoItem.smsFingerprint;
-        record.payloadVersion = payload.version;
-        record.payloadJson = payload.json;
-        record.selectionOverride = undoItem.selectionOverride;
-        record.position = undoItem.position;
-        record.parsedAt = undoItem.parsedAt;
-        record.updatedAt = now;
-      })
-    );
-    if (dismissed) {
-      operations.push(dismissed.prepareDestroyPermanently());
-    }
-    await database.batch(operations);
+      if (dismissed) {
+        operations.push(dismissed.prepareDestroyPermanently());
+      }
+      return operations;
+    });
   });
 }
 
@@ -683,8 +738,9 @@ export async function discardAllSmsReviewDrafts(
     if (!queue) return 0;
     const items = await fetchOwnedItems(expectedUserId, queue.id);
     if (items.length === 0) {
-      await assertExpectedCurrentUser(expectedUserId);
-      await database.batch([queue.prepareDestroyPermanently()]);
+      await commitScopedPreparedBatch(expectedUserId, () => [
+        queue.prepareDestroyPermanently(),
+      ]);
       return 0;
     }
 
@@ -695,42 +751,64 @@ export async function discardAllSmsReviewDrafts(
       dismissed.map((record) => record.smsFingerprint)
     );
     const now = new Date();
-    const operations: Model[] = items
-      .filter((item) => !dismissedSet.has(item.smsFingerprint))
-      .map((item) =>
-        dismissedCollection().prepareCreate((record) => {
-          record.userId = expectedUserId;
-          record.smsFingerprint = item.smsFingerprint;
-          record.updatedAt = now;
-        })
+    await commitScopedPreparedBatch(expectedUserId, (): readonly Model[] => {
+      const operations: Model[] = items
+        .filter((item) => !dismissedSet.has(item.smsFingerprint))
+        .map((item) =>
+          dismissedCollection().prepareCreate((record) => {
+            record.userId = expectedUserId;
+            record.smsFingerprint = item.smsFingerprint;
+            record.updatedAt = now;
+          })
+        );
+      operations.push(
+        ...items.map((item) => item.prepareDestroyPermanently()),
+        queue.prepareDestroyPermanently()
       );
-    operations.push(
-      ...items.map((item) => item.prepareDestroyPermanently()),
-      queue.prepareDestroyPermanently()
-    );
-    await assertExpectedCurrentUser(expectedUserId);
-    await database.batch(operations);
+      return operations;
+    });
     return items.length;
   });
 }
 
 export async function deleteExpiredSmsReviewDrafts(
   expectedUserId: string,
-  cutoff: Date
+  cutoff: Date,
+  signal?: AbortSignal
 ): Promise<number> {
+  throwIfAborted(signal);
   return database.write(async (): Promise<number> => {
     await assertExpectedCurrentUser(expectedUserId);
-    const expired = await itemCollection()
-      .query(
-        Q.where("user_id", expectedUserId),
-        Q.where("parsed_at", Q.lte(cutoff.getTime()))
-      )
-      .fetch();
+    throwIfAborted(signal);
+    const queue = assertSingleQueue(await fetchOwnedQueues(expectedUserId));
+    const [expired, allItems] = await Promise.all([
+      itemCollection()
+        .query(
+          Q.where("user_id", expectedUserId),
+          Q.where("parsed_at", Q.lte(cutoff.getTime()))
+        )
+        .fetch(),
+      fetchOwnedItems(expectedUserId, queue?.id),
+    ]);
     if (expired.length === 0) return 0;
-    await database.batch(
-      expired.map((item) => item.prepareDestroyPermanently())
+    const expiredIds = new Set(expired.map((item) => item.id));
+    await commitScopedPreparedBatch(
+      expectedUserId,
+      (): readonly Model[] => {
+        const operations: Model[] = expired.map((item) =>
+          item.prepareDestroyPermanently()
+        );
+        if (
+          queue &&
+          allItems.length > 0 &&
+          allItems.every((item) => expiredIds.has(item.id))
+        ) {
+          operations.push(queue.prepareDestroyPermanently());
+        }
+        return operations;
+      },
+      signal
     );
-    await removeEmptyQueueInWriter(expectedUserId);
     return expired.length;
   });
 }

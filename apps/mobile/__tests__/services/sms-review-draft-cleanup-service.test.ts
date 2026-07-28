@@ -31,7 +31,8 @@ describe("cleanupExpiredSmsReviewDrafts", () => {
       "user-1",
       new Date(
         now.getTime() - SMS_REVIEW_DRAFT_RETENTION_DAYS * 24 * 60 * 60 * 1000
-      )
+      ),
+      undefined
     );
   });
 
@@ -57,5 +58,11 @@ describe("cleanupExpiredSmsReviewDrafts", () => {
     await expect(
       cleanupExpiredSmsReviewDrafts({ signal: controller.signal })
     ).resolves.toBe(2);
+
+    expect(mockDeleteExpired).toHaveBeenCalledWith(
+      "user-1",
+      expect.any(Date),
+      controller.signal
+    );
   });
 });

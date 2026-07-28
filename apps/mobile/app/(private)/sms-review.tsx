@@ -189,13 +189,14 @@ export default function SmsReviewScreen(): React.JSX.Element {
     setReviewingActive(true);
     return () => {
       setReviewingActive(false);
+      clearTransactions();
       void flushQueuedTransactions().catch((error: unknown) => {
         logger.warn("smsReview.flushQueuedTransactions.failed", {
           errorName: error instanceof Error ? error.name : "unknown",
         });
       });
     };
-  }, []);
+  }, [clearTransactions]);
 
   const handleSave = useCallback(
     async (
@@ -242,6 +243,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
       } catch (error: unknown) {
         const isValidationError =
           error instanceof SmsReviewDraftSaveValidationError;
+        if (isValidationError) await queue.refetch();
         logger.warn("smsReview.save.failed", {
           errorName: error instanceof Error ? error.name : "unknown",
           isValidationError,
@@ -264,6 +266,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
       itemByFingerprint,
       markSyncComplete,
       queue.userId,
+      queue.refetch,
       router,
       showToast,
       t,
@@ -275,6 +278,9 @@ export default function SmsReviewScreen(): React.JSX.Element {
     async (index: number, selected: boolean): Promise<void> => {
       const item = queue.items[index];
       if (!item || !queue.userId) return;
+      if (selected && item.hardValidationReasons.length > 0) {
+        throw new Error("sms_review_draft_hard_validation_required");
+      }
       await setSmsReviewDraftSelection(item.draftId, queue.userId, selected);
     },
     [queue.items, queue.userId]

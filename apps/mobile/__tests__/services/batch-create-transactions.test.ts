@@ -418,6 +418,18 @@ describe("batchCreateTransactions", () => {
     );
   });
 
+  it("rejects an amount above the canonical transaction limit", async () => {
+    const result = await batchCreateTransactions(
+      [createReviewableTransaction({ amount: 1_000_000_001 })],
+      new Map([[0, "acc-1"]])
+    );
+
+    expect(result.savedCount).toBe(0);
+    expect(result.failedCount).toBe(1);
+    expect(result.errors).toEqual(["Invalid amount for transaction index 0"]);
+    expect(mockDatabaseBatch).not.toHaveBeenCalled();
+  });
+
   it("restores cached account balances when the adapter batch fails", async () => {
     const account = createAccount("acc-1", 1000);
     mockQueryOwned.mockReturnValue({

@@ -150,12 +150,16 @@ export function useSmsReviewDraftQueue(): UseSmsReviewDraftQueueResult {
     };
   }, [isResolvingUser, refetch, userId]);
 
+  const visibleSnapshot =
+    !isResolvingUser && snapshot?.userId === userId ? snapshot : null;
+  const visibleItems = visibleSnapshot ? items : [];
+
   return {
     userId,
-    queueId: snapshot?.queueId ?? null,
-    items,
-    itemCount: items.length,
-    isLoading,
+    queueId: visibleSnapshot?.queueId ?? null,
+    items: visibleItems,
+    itemCount: visibleItems.length,
+    isLoading: isResolvingUser || isLoading,
     error,
     refetch,
   };
