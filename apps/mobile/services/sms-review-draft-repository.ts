@@ -21,6 +21,7 @@ import {
   assertExpectedCurrentUser,
   getCurrentUserDataScope,
 } from "./user-data-access";
+import { commitPreparedBatch } from "./watermelon-atomic-batch";
 
 const QUEUE_TABLE = "sms_review_queues";
 const ITEM_TABLE = "sms_review_draft_items";
@@ -483,7 +484,8 @@ async function getSavedSmsFingerprintsInWriter(
 export async function deleteResolvedSmsReviewDraftsInWriter(
   draftIds: readonly string[],
   expectedUserId: string,
-  financialOperations: readonly Model[] = []
+  financialOperations: readonly Model[] = [],
+  alreadySavedBeforePreparation: ReadonlySet<string> = new Set()
 ): Promise<void> {
   await assertExpectedCurrentUser(expectedUserId);
   const records = await Promise.all(
@@ -493,7 +495,13 @@ export async function deleteResolvedSmsReviewDraftsInWriter(
   );
   const savedFingerprints =
     await getSavedSmsFingerprintsInWriter(expectedUserId);
-  if (records.some((record) => savedFingerprints.has(record.smsFingerprint))) {
+  if (
+    records.some(
+      (record) =>
+        savedFingerprints.has(record.smsFingerprint) &&
+        !alreadySavedBeforePreparation.has(record.smsFingerprint)
+    )
+  ) {
     throw new Error(SMS_REVIEW_DRAFT_ERROR_CODES.FINGERPRINT_ALREADY_SAVED);
   }
   const queue = assertSingleQueue(await fetchOwnedQueues(expectedUserId));
@@ -507,7 +515,7 @@ export async function deleteResolvedSmsReviewDraftsInWriter(
     operations.push(queue.prepareDestroyPermanently());
   }
   await assertExpectedCurrentUser(expectedUserId);
-  await database.batch(operations);
+  await commitPreparedBatch(operations);
 }
 
 export async function runSmsReviewDraftWriter<T>(

@@ -40,6 +40,12 @@ import { ensureCashAccount } from "./account-service";
 import { getCurrentUserId } from "./supabase";
 import { queryAccessibleCategories, queryOwned } from "./user-data-access";
 import { hasExistingSmsFingerprint } from "./sms-dedup-service";
+import { commitPreparedBatch } from "./watermelon-atomic-batch";
+import {
+  captureCachedModelSnapshot,
+  restoreCachedModelSnapshot,
+  type CachedModelSnapshot,
+} from "./watermelon-cache-snapshot";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,6 +59,8 @@ export interface BatchSaveResult {
 
 export interface PreparedBatchSave extends BatchSaveResult {
   readonly operations: readonly Model[];
+  readonly alreadySavedSmsFingerprints: ReadonlySet<string>;
+  readonly restoreCachedAccounts: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -153,7 +161,14 @@ export async function prepareBatchCreateTransactions<
   toAccountMap?: ReadonlyMap<number, string>
 ): Promise<PreparedBatchSave> {
   if (transactions.length === 0) {
-    return { savedCount: 0, failedCount: 0, errors: [], operations: [] };
+    return {
+      savedCount: 0,
+      failedCount: 0,
+      errors: [],
+      operations: [],
+      alreadySavedSmsFingerprints: new Set(),
+      restoreCachedAccounts: () => {},
+    };
   }
 
   const userId = await getCurrentUserId();
@@ -163,6 +178,8 @@ export async function prepareBatchCreateTransactions<
       failedCount: transactions.length,
       errors: ["User not authenticated"],
       operations: [],
+      alreadySavedSmsFingerprints: new Set(),
+      restoreCachedAccounts: () => {},
     };
   }
 
@@ -202,6 +219,8 @@ export async function prepareBatchCreateTransactions<
   const operations: Model[] = [];
   const balanceDeltas = new Map<string, number>();
   const seenSmsFingerprints = new Set<string>();
+  const alreadySavedSmsFingerprints = new Set<string>();
+  const accountSnapshots: CachedModelSnapshot[] = [];
   let savedCount = 0;
   let failedCount = 0;
 
@@ -217,6 +236,7 @@ export async function prepareBatchCreateTransactions<
     if (smsFingerprint && seenSmsFingerprints.has(smsFingerprint)) continue;
     if (smsFingerprint && (await hasExistingSmsFingerprint(smsFingerprint))) {
       seenSmsFingerprints.add(smsFingerprint);
+      alreadySavedSmsFingerprints.add(smsFingerprint);
       continue;
     }
 
@@ -319,6 +339,7 @@ export async function prepareBatchCreateTransactions<
     accounts.forEach((account) => {
       const delta = balanceDeltas.get(account.id);
       if (!delta) return;
+      accountSnapshots.push(captureCachedModelSnapshot(account));
       operations.push(
         account.prepareUpdate((record) => {
           record.balance = (record.balance ?? 0) + delta;
@@ -327,7 +348,16 @@ export async function prepareBatchCreateTransactions<
     });
   }
 
-  return { savedCount, failedCount, errors, operations };
+  return {
+    savedCount,
+    failedCount,
+    errors,
+    operations,
+    alreadySavedSmsFingerprints,
+    restoreCachedAccounts: () => {
+      accountSnapshots.forEach(restoreCachedModelSnapshot);
+    },
+  };
 }
 
 export async function batchCreateTransactions<T extends ReviewableTransaction>(
@@ -341,9 +371,14 @@ export async function batchCreateTransactions<T extends ReviewableTransaction>(
     toAccountMap
   );
   if (prepared.operations.length > 0) {
-    await database.write(async (): Promise<void> => {
-      await database.batch([...prepared.operations]);
-    });
+    try {
+      await database.write(async (): Promise<void> => {
+        await commitPreparedBatch(prepared.operations);
+      });
+    } catch (error) {
+      prepared.restoreCachedAccounts();
+      throw error;
+    }
   }
   return {
     savedCount: prepared.savedCount,

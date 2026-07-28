@@ -60,13 +60,19 @@ export async function saveSelectedSmsReviewDrafts(
     throw new SmsReviewDraftSaveValidationError(prepared.errors);
   }
 
-  await runSmsReviewDraftWriter(async (): Promise<void> => {
-    await deleteResolvedSmsReviewDraftsInWriter(
-      input.selectedItems.map((item) => item.draftId),
-      input.expectedUserId,
-      prepared.operations
-    );
-  });
+  try {
+    await runSmsReviewDraftWriter(async (): Promise<void> => {
+      await deleteResolvedSmsReviewDraftsInWriter(
+        input.selectedItems.map((item) => item.draftId),
+        input.expectedUserId,
+        prepared.operations,
+        prepared.alreadySavedSmsFingerprints
+      );
+    });
+  } catch (error) {
+    prepared.restoreCachedAccounts();
+    throw error;
+  }
 
   return {
     savedCount: prepared.savedCount,

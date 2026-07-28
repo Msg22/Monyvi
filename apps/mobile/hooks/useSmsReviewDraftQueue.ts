@@ -51,12 +51,18 @@ export function useSmsReviewDraftQueue(): UseSmsReviewDraftQueueResult {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const activeUserIdRef = useRef<string | null>(userId);
+  const latestRefetchRequestRef = useRef(0);
   activeUserIdRef.current = userId;
 
   const refetch = useCallback(async (): Promise<void> => {
     const requestedUserId = userId;
+    const requestId = latestRefetchRequestRef.current + 1;
+    latestRefetchRequestRef.current = requestId;
+    const isCurrentRequest = (): boolean =>
+      activeUserIdRef.current === requestedUserId &&
+      latestRefetchRequestRef.current === requestId;
     if (!requestedUserId) {
-      if (activeUserIdRef.current !== requestedUserId) return;
+      if (!isCurrentRequest()) return;
       setSnapshot(null);
       setItems([]);
       setIsLoading(false);
@@ -69,24 +75,24 @@ export function useSmsReviewDraftQueue(): UseSmsReviewDraftQueueResult {
         nextSnapshot?.items ?? [],
         requestedUserId
       );
-      if (activeUserIdRef.current !== requestedUserId) return;
+      if (!isCurrentRequest()) return;
       const normalized = await normalizeHardInvalidSelectionOverrides(
         validated,
         requestedUserId
       );
-      if (activeUserIdRef.current !== requestedUserId) return;
+      if (!isCurrentRequest()) return;
       setSnapshot(nextSnapshot);
       setItems(normalized);
       setError(null);
     } catch (caught) {
-      if (activeUserIdRef.current !== requestedUserId) return;
+      if (!isCurrentRequest()) return;
       setSnapshot(null);
       setItems([]);
       setError(
         caught instanceof Error ? caught : new Error("sms_review_failed")
       );
     } finally {
-      if (activeUserIdRef.current === requestedUserId) setIsLoading(false);
+      if (isCurrentRequest()) setIsLoading(false);
     }
   }, [userId]);
 

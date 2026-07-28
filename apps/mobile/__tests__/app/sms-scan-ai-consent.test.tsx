@@ -30,6 +30,7 @@ let mockScanResult: Record<string, unknown> | null = null;
 let mockScanTransactions: ReadonlyArray<Record<string, unknown>> = [];
 let mockDraftItemCount = 0;
 let mockDraftQueueLoading = false;
+let mockSafeAreaEdges: readonly string[] | undefined;
 let mockScanStatus:
   | "idle"
   | "scanning"
@@ -84,8 +85,16 @@ jest.mock("@/components/navigation/PageHeader", () => ({
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
-  SafeAreaView: ({ children }: { readonly children?: ReactNode }): ReactNode =>
+  SafeAreaView: ({
     children,
+    edges,
+  }: {
+    readonly children?: ReactNode;
+    readonly edges?: readonly string[];
+  }): ReactNode => {
+    mockSafeAreaEdges = edges;
+    return children;
+  },
 }));
 
 jest.mock("@/components/sms-sync/SmsScanProgress", () => ({
@@ -247,6 +256,7 @@ describe("SmsScanScreen AI consent", () => {
     mockScanStatus = "idle";
     mockDraftItemCount = 0;
     mockDraftQueueLoading = false;
+    mockSafeAreaEdges = undefined;
     mockRequestPermission.mockResolvedValue("granted");
     mockRevokeAiConsent.mockResolvedValue();
     mockStartScan.mockResolvedValue();
@@ -263,6 +273,7 @@ describe("SmsScanScreen AI consent", () => {
     expect(await screen.findByTestId("sms-review-resume-primary")).toBeTruthy();
     expect(screen.queryByTestId("ai-consent-continue")).toBeNull();
     expect(mockStartScan).not.toHaveBeenCalled();
+    expect(mockSafeAreaEdges).toEqual(["bottom"]);
 
     fireEvent.press(screen.getByTestId("sms-review-resume-primary"));
 

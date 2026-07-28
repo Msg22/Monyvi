@@ -84,6 +84,8 @@ describe("saveSelectedSmsReviewDrafts", () => {
       failedCount: 0,
       errors: [],
       operations: [{ id: "financial-1" }],
+      alreadySavedSmsFingerprints: new Set(),
+      restoreCachedAccounts: jest.fn(),
     });
     mockDeleteResolved.mockResolvedValue(undefined);
     mockRunWriter.mockImplementation(async (action: () => Promise<unknown>) =>
@@ -107,8 +109,59 @@ describe("saveSelectedSmsReviewDrafts", () => {
     expect(mockDeleteResolved).toHaveBeenCalledWith(
       ["draft-1", "draft-2"],
       "user-1",
-      [{ id: "financial-1" }]
+      [{ id: "financial-1" }],
+      new Set()
     );
+  });
+
+  it("passes preexisting saved fingerprints to final draft cleanup", async () => {
+    const alreadySavedSmsFingerprints = new Set(["fp-draft-1"]);
+    mockPrepare.mockResolvedValue({
+      savedCount: 0,
+      failedCount: 0,
+      errors: [],
+      operations: [],
+      alreadySavedSmsFingerprints,
+      restoreCachedAccounts: jest.fn(),
+    });
+
+    await saveSelectedSmsReviewDrafts({
+      selectedItems: [item("draft-1")],
+      expectedUserId: "user-1",
+      transactionAccountMap: new Map([[0, "account-1"]]),
+      toAccountMap: new Map(),
+    });
+
+    expect(mockDeleteResolved).toHaveBeenCalledWith(
+      ["draft-1"],
+      "user-1",
+      [],
+      alreadySavedSmsFingerprints
+    );
+  });
+
+  it("restores prepared account cache state when the atomic writer fails", async () => {
+    const restoreCachedAccounts = jest.fn();
+    mockPrepare.mockResolvedValue({
+      savedCount: 1,
+      failedCount: 0,
+      errors: [],
+      operations: [{ id: "financial-1" }],
+      alreadySavedSmsFingerprints: new Set(),
+      restoreCachedAccounts,
+    });
+    mockRunWriter.mockRejectedValue(new Error("adapter failed"));
+
+    await expect(
+      saveSelectedSmsReviewDrafts({
+        selectedItems: [item("draft-1")],
+        expectedUserId: "user-1",
+        transactionAccountMap: new Map([[0, "account-1"]]),
+        toAccountMap: new Map(),
+      })
+    ).rejects.toThrow("adapter failed");
+
+    expect(restoreCachedAccounts).toHaveBeenCalledTimes(1);
   });
 
   it("blocks selected hard-invalid drafts before preparing writes", async () => {
@@ -187,6 +240,8 @@ describe("saveSelectedSmsReviewDrafts", () => {
       failedCount: 1,
       errors: ["Transaction 2 needs a category"],
       operations: [{ id: "partial-operation" }],
+      alreadySavedSmsFingerprints: new Set(),
+      restoreCachedAccounts: jest.fn(),
     });
 
     await expect(

@@ -566,7 +566,7 @@ export default function SmsScanScreen(): React.JSX.Element {
     return (
       <SafeAreaView
         className="flex-1 bg-slate-50 dark:bg-slate-900"
-        edges={["top", "bottom"]}
+        edges={["bottom"]}
       >
         <SmsReviewResumeState
           itemCount={draftQueue.itemCount}

@@ -48,7 +48,7 @@ export function SmsReviewAccountPicker({
             style={{ paddingBottom: bottomInset }}
           >
             <View className="flex-row items-center justify-between border-b border-slate-200 px-6 py-5 dark:border-slate-800">
-              <Text className="text-lg font-bold text-text-primary">
+              <Text className="text-lg font-bold text-text-primary dark:text-text-primary-dark">
                 {t("select_an_account")}
               </Text>
               <TouchableOpacity onPress={onClose} className="p-1">
@@ -81,10 +81,10 @@ export function SmsReviewAccountPicker({
                       color={palette.blue[500]}
                     />
                     <View className="ms-3 flex-1">
-                      <Text className="text-base font-semibold text-text-primary">
+                      <Text className="text-base font-semibold text-text-primary dark:text-text-primary-dark">
                         {option.name}
                       </Text>
-                      <Text className="text-xs text-text-muted">
+                      <Text className="text-xs text-text-muted dark:text-text-muted-dark">
                         {option.currency}
                       </Text>
                     </View>

@@ -138,6 +138,59 @@ describe("useTransactionEditState", () => {
     );
   });
 
+  it("re-resolves an ATM cash destination when the transaction currency changes", async () => {
+    const bankAccount = createAccount();
+    const egpCashAccount = {
+      ...createAccount(),
+      id: "cash-egp",
+      name: "EGP Cash",
+      type: "CASH" as const,
+    };
+    const usdCashAccount = {
+      ...createAccount(),
+      id: "cash-usd",
+      name: "USD Cash",
+      currency: "USD" as const,
+      type: "CASH" as const,
+    };
+    const category = {
+      id: "cat-food",
+      displayName: "Food",
+    } as unknown as Category;
+    const transaction = {
+      ...createTransaction(),
+      isAtmWithdrawal: true,
+      toAccountId: egpCashAccount.id,
+      toAccountName: egpCashAccount.name,
+    };
+
+    const { result } = renderHook(() =>
+      useTransactionEditState({
+        transaction,
+        currentAccountId: bankAccount.id,
+        currentAccountName: bankAccount.name,
+        accounts: [bankAccount, egpCashAccount, usdCashAccount],
+        pendingAccounts: [],
+        categoryMap: new Map([[category.id, category]]),
+        expenseCategories: [category],
+        incomeCategories: [],
+        onSave: jest.fn(),
+        onCreatePendingAccount: jest.fn(),
+        allowTransactionCurrencyEdit: true,
+      })
+    );
+
+    await waitFor(() =>
+      expect(result.current.state.selectedToAccountId).toBe(egpCashAccount.id)
+    );
+
+    act(() => result.current.accountHandlers.handleCurrencySelect("USD"));
+
+    expect(result.current.state.selectedToAccountId).toBe(usdCashAccount.id);
+    expect(result.current.state.selectedToAccountName).toBe(usdCashAccount.name);
+    expect(result.current.state.isCreatingNewToAccount).toBe(false);
+  });
+
   it("persists a new account snapshot before adding it to in-memory state", async () => {
     const category = {
       id: "cat-food",

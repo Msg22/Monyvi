@@ -40,6 +40,12 @@ export function SmsReviewUndoBanner({
         >
           {t("sms_review_undo_title", { name: discardedName })}
         </Text>
+        <Text
+          numberOfLines={2}
+          className="mt-0.5 text-xs text-text-muted dark:text-text-muted-dark"
+        >
+          {t("sms_review_undo_description")}
+        </Text>
       </View>
       <TouchableOpacity
         onPress={() => void onUndo()}

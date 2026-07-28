@@ -212,6 +212,7 @@
   "sms_review_discard_suggestion": "Discard suggestion",
   "sms_review_discard_accessibility": "Discard {{name}} suggestion",
   "sms_review_undo_title": "{{name}} discarded",
+  "sms_review_undo_description": "This SMS won't be suggested again on this device unless you undo now.",
   "sms_review_undo": "Undo",
   "sms_review_undo_close": "Hide undo message",
   "sms_review_pending_title": "Suggestions ready to review",

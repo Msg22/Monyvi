@@ -102,6 +102,28 @@ describe("revalidateSmsReviewDraftReferences", () => {
     ]);
   });
 
+  it("accepts a durable pending account referenced by its temporary ID", async () => {
+    const [result] = await revalidateSmsReviewDraftReferences(
+      [
+        createItem(
+          createTransaction({
+            accountId: "pending-qnb",
+            pendingAccount: {
+              tempId: "pending-qnb",
+              name: "QNB EGYPT",
+              currency: "EGP",
+              type: "BANK",
+              senderDisplayName: "QNB EGYPT",
+            },
+          })
+        ),
+      ],
+      "user-1"
+    );
+
+    expect(result?.hardValidationReasons).toEqual([]);
+  });
+
   it("rejects an inaccessible ATM destination account", async () => {
     const [result] = await revalidateSmsReviewDraftReferences(
       [

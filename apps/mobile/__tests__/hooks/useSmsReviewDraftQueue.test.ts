@@ -125,6 +125,37 @@ describe("useSmsReviewDraftQueue", () => {
     expect(result.current.items[0]?.transaction.smsFingerprint).toBe("fp-b");
   });
 
+  it("does not let an older same-user refetch replace a newer snapshot", async () => {
+    let resolveOlder: ((value: TestQueueSnapshot) => void) | undefined;
+    let resolveNewer: ((value: TestQueueSnapshot) => void) | undefined;
+    const olderRequest = new Promise<TestQueueSnapshot>((resolve) => {
+      resolveOlder = resolve;
+    });
+    const newerRequest = new Promise<TestQueueSnapshot>((resolve) => {
+      resolveNewer = resolve;
+    });
+    mockGetSnapshot
+      .mockReturnValueOnce(olderRequest)
+      .mockReturnValueOnce(newerRequest);
+
+    const { result } = renderHook(() => useSmsReviewDraftQueue());
+    await waitFor(() => expect(mockGetSnapshot).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      const newestRefetch = result.current.refetch();
+      resolveNewer?.(createSnapshot("user-a", "fp-newer"));
+      await newestRefetch;
+    });
+    expect(result.current.items[0]?.transaction.smsFingerprint).toBe("fp-newer");
+
+    await act(async () => {
+      resolveOlder?.(createSnapshot("user-a", "fp-older"));
+      await olderRequest;
+    });
+
+    expect(result.current.items[0]?.transaction.smsFingerprint).toBe("fp-newer");
+  });
+
   it("persists a stale selected override as unselected after hard validation", async () => {
     const snapshot = createSnapshot("user-a", "fp-hard");
     mockGetSnapshot.mockResolvedValue(snapshot);

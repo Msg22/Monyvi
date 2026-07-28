@@ -45,9 +45,12 @@ export async function revalidateSmsReviewDraftReferences(
 
   return items.map((item) => {
     const reasons: SmsReviewDraftHardValidationReason[] = [];
+    const hasMatchingPendingAccount =
+      item.transaction.pendingAccount?.tempId === item.transaction.accountId;
     if (
       item.transaction.accountId &&
-      !accountIds.has(item.transaction.accountId)
+      !accountIds.has(item.transaction.accountId) &&
+      !hasMatchingPendingAccount
     ) {
       reasons.push("account_unavailable");
     }

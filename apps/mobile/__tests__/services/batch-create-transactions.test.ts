@@ -65,7 +65,28 @@ jest.mock("@monyvi/db", () => ({
   },
 }));
 
-import { batchCreateTransactions } from "@/services/batch-create-transactions";
+jest.mock("@/services/watermelon-atomic-batch", () => ({
+  commitPreparedBatch: (operations: readonly unknown[]): Promise<void> =>
+    mockDatabaseBatch(operations),
+}));
+
+jest.mock("@/services/watermelon-cache-snapshot", () => ({
+  captureCachedModelSnapshot: (model: MockAccount): unknown => ({
+    model,
+    balance: model.balance,
+  }),
+  restoreCachedModelSnapshot: (snapshot: {
+    readonly model: MockAccount;
+    readonly balance: number;
+  }): void => {
+    snapshot.model.balance = snapshot.balance;
+  },
+}));
+
+import {
+  batchCreateTransactions,
+  prepareBatchCreateTransactions,
+} from "@/services/batch-create-transactions";
 
 function createAccount(id: string, balance: number): MockAccount {
   const account: MockAccount = {
@@ -349,5 +370,37 @@ describe("batchCreateTransactions", () => {
     expect(result).toEqual({ savedCount: 0, failedCount: 0, errors: [] });
     expect(mockPrepareTransactionCreate).not.toHaveBeenCalled();
     expect(mockDatabaseBatch).not.toHaveBeenCalled();
+  });
+
+  it("reports fingerprints that were already saved before preparation", async () => {
+    mockHasExistingSmsFingerprint.mockResolvedValue(true);
+
+    const prepared = await prepareBatchCreateTransactions(
+      [createReviewableTransaction()],
+      new Map([[0, "acc-1"]])
+    );
+
+    expect(prepared.alreadySavedSmsFingerprints).toEqual(
+      new Set(["sms-hash-1"])
+    );
+  });
+
+  it("restores cached account balances when the adapter batch fails", async () => {
+    const account = createAccount("acc-1", 1000);
+    mockQueryOwned.mockReturnValue({
+      fetch: jest.fn<Promise<readonly MockAccount[]>, []>(() =>
+        Promise.resolve([account])
+      ),
+    });
+    mockDatabaseBatch.mockRejectedValueOnce(new Error("adapter failed"));
+
+    await expect(
+      batchCreateTransactions(
+        [createReviewableTransaction()],
+        new Map([[0, "acc-1"]])
+      )
+    ).rejects.toThrow("adapter failed");
+
+    expect(account.balance).toBe(1000);
   });
 });

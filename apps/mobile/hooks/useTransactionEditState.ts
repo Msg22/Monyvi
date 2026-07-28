@@ -438,10 +438,29 @@ export function useTransactionEditState({
     }
   }, [currentAccountId, accountOptions, transaction.currency]);
 
-  const handleCurrencySelect = useCallback((currency: CurrencyType) => {
-    setNewAccountCurrency(currency);
-    setIsCurrencyPickerOpen(false);
-  }, []);
+  const handleCurrencySelect = useCallback(
+    (currency: CurrencyType): void => {
+      setNewAccountCurrency(currency);
+      setIsCurrencyPickerOpen(false);
+      if (!formConfig.showToAccount) return;
+
+      const matchingCashAccount = cashAccountOptions.find(
+        (option) => option.currency === currency
+      );
+      if (matchingCashAccount) {
+        setSelectedToAccountId(matchingCashAccount.id);
+        setSelectedToAccountName(matchingCashAccount.name);
+        setIsCreatingNewToAccount(false);
+        return;
+      }
+
+      setSelectedToAccountId(null);
+      setSelectedToAccountName("");
+      setNewToAccountName("Cash");
+      setIsCreatingNewToAccount(true);
+    },
+    [cashAccountOptions, formConfig.showToAccount]
+  );
 
   const handleSave = useCallback(async (): Promise<void> => {
     const isCreatingNewAccount = isCreatingNew || !hasBankAccounts;

@@ -35,6 +35,7 @@ describe("SMS review discard feedback", () => {
     );
 
     expect(screen.getByText("sms_review_undo_title:Fawry Market")).toBeTruthy();
+    expect(screen.getByText("sms_review_undo_description")).toBeTruthy();
     expect(screen.getByTestId("sms-review-undo-banner")).toHaveStyle({
       bottom: 94,
     });

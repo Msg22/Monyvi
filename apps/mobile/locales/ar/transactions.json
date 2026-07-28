@@ -219,6 +219,7 @@
   "sms_review_discard_suggestion": "تجاهل الاقتراح",
   "sms_review_discard_accessibility": "تجاهل اقتراح {{name}}",
   "sms_review_undo_title": "تم تجاهل {{name}}",
+  "sms_review_undo_description": "لن يتم اقتراح هذه الرسالة مرة أخرى على هذا الجهاز إلا إذا تراجعت الآن.",
   "sms_review_undo": "تراجع",
   "sms_review_undo_close": "إخفاء رسالة التراجع",
   "sms_review_pending_title": "اقتراحات جاهزة للمراجعة",

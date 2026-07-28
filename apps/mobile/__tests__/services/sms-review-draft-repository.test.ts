@@ -176,6 +176,11 @@ jest.mock("@/services/user-data-access", () => ({
     }),
 }));
 
+jest.mock("@/services/watermelon-atomic-batch", () => ({
+  commitPreparedBatch: (operations: readonly FakeRecord[]): Promise<void> =>
+    mockBatch(operations),
+}));
+
 function createTransaction(
   smsFingerprint: string,
   amount = 100
@@ -367,6 +372,33 @@ describe("sms-review-draft-repository", () => {
       draft
     );
     expect(mockBatch).not.toHaveBeenCalled();
+  });
+
+  it("removes a draft that was already saved before financial preparation", async () => {
+    const queue = seedRecord("sms_review_queues", { userId: "user-1" });
+    const draft = seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      queueId: queue.id,
+      smsFingerprint: "fp-preexisting",
+    });
+    seedRecord("transactions", {
+      userId: "user-1",
+      smsFingerprint: "fp-preexisting",
+      deleted: false,
+    });
+
+    await deleteResolvedSmsReviewDraftsInWriter(
+      [draft.id],
+      "user-1",
+      [],
+      new Set(["fp-preexisting"])
+    );
+
+    expect(mockCollections.get("sms_review_draft_items")?.records).not.toContain(
+      draft
+    );
+    expect(mockCollections.get("transactions")?.records).toHaveLength(1);
+    expect(mockBatch).toHaveBeenCalledTimes(1);
   });
 
   it("revalidates the active user immediately before the final save batch", async () => {
