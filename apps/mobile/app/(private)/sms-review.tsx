@@ -61,6 +61,16 @@ function getSmsFingerprint(transaction: ReviewableTransaction): string | null {
   return fingerprint && fingerprint.trim().length > 0 ? fingerprint : null;
 }
 
+function isSameSmsReviewSuggestion(
+  left: RevalidatedSmsReviewDraftItem,
+  right: RevalidatedSmsReviewDraftItem
+): boolean {
+  return (
+    left.draftId === right.draftId ||
+    left.transaction.smsFingerprint === right.transaction.smsFingerprint
+  );
+}
+
 function applyHardValidationReasons(
   transaction: ParsedSmsTransaction,
   hardValidationReasons: readonly SmsReviewDraftHardValidationReason[]
@@ -155,8 +165,8 @@ export default function SmsReviewScreen(): React.JSX.Element {
     );
     if (
       !optimisticallyRestoredItem ||
-      visibleItems.some(
-        (item) => item.draftId === optimisticallyRestoredItem.draftId
+      visibleItems.some((item) =>
+        isSameSmsReviewSuggestion(item, optimisticallyRestoredItem)
       )
     ) {
       return visibleItems;
@@ -238,8 +248,8 @@ export default function SmsReviewScreen(): React.JSX.Element {
   useEffect(() => {
     if (
       !optimisticallyRestoredItem ||
-      !queue.items.some(
-        (item) => item.draftId === optimisticallyRestoredItem.draftId
+      !queue.items.some((item) =>
+        isSameSmsReviewSuggestion(item, optimisticallyRestoredItem)
       )
     ) {
       return;

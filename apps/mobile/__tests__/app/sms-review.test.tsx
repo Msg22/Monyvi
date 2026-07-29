@@ -402,9 +402,70 @@ describe("SMS review route", () => {
     await waitFor(() => {
       const latestProps = mockTransactionReview.mock.calls.at(-1)?.[0];
       expect(latestProps?.transactions).toHaveLength(1);
-      expect(latestProps?.transactions[0]?.smsFingerprint).toBe("fingerprint-2");
+      expect(latestProps?.transactions[0]?.smsFingerprint).toBe(
+        "fingerprint-2"
+      );
     });
     expect(screen.getByTestId("transaction-review")).toBeTruthy();
+  });
+
+  it("reconciles an optimistic undo with the restored draft by fingerprint", async () => {
+    const discardedItem = mockQueueItems[0];
+    mockQueueItems = [
+      discardedItem,
+      {
+        ...discardedItem,
+        draftId: "draft-2",
+        transaction: {
+          ...mockTransaction,
+          smsFingerprint: "fingerprint-2",
+        },
+        position: 1,
+      },
+    ];
+    mockUndoState = {
+      ...mockUndoState,
+      undoItem: { draftId: discardedItem.draftId },
+      discardedName: "QA Merchant",
+      undo: jest.fn<Promise<boolean>, []>().mockResolvedValue(true),
+    };
+    const view = render(<SmsReviewScreen />);
+    const initialProps = mockTransactionReview.mock.calls.at(-1)?.[0];
+    if (!initialProps) throw new Error("TransactionReview was not rendered");
+
+    await act(async () => {
+      await initialProps.onDiscardItem(0);
+    });
+    const discardedProps = mockTransactionReview.mock.calls.at(-1)?.[0];
+    if (!discardedProps?.undoBanner) {
+      throw new Error("Undo banner was not rendered");
+    }
+
+    await act(async () => {
+      await discardedProps.undoBanner?.onUndo();
+    });
+    expect(
+      mockTransactionReview.mock.calls.at(-1)?.[0]?.transactions
+    ).toHaveLength(2);
+
+    mockQueueItems = [
+      {
+        ...discardedItem,
+        draftId: "restored-draft-1",
+      },
+      mockQueueItems[1],
+    ];
+    view.rerender(<SmsReviewScreen />);
+
+    await waitFor(() => {
+      const transactions =
+        mockTransactionReview.mock.calls.at(-1)?.[0]?.transactions ?? [];
+      expect(transactions).toHaveLength(2);
+      expect(
+        new Set(transactions.map((transaction) => transaction.smsFingerprint))
+          .size
+      ).toBe(2);
+    });
   });
 
   it("shows the live review count and freezes the confirmed discard count", () => {

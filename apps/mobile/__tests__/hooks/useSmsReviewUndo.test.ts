@@ -216,6 +216,36 @@ describe("useSmsReviewUndo", () => {
     expect(result.current.undoItem).toBeNull();
   });
 
+  it("coalesces repeated undo requests while restoration is pending", async () => {
+    const item = createUndoItem("Restored");
+    let resolveUndo!: (restored: boolean) => void;
+    mockDiscard.mockResolvedValue(item);
+    mockUndo.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        resolveUndo = resolve;
+      })
+    );
+    const { result } = renderHook(() => useSmsReviewUndo());
+
+    await act(async () => {
+      await result.current.discard(item.draftId, item.userId);
+    });
+
+    let firstUndo!: Promise<boolean>;
+    let secondUndo!: Promise<boolean>;
+    act(() => {
+      firstUndo = result.current.undo();
+      secondUndo = result.current.undo();
+    });
+
+    expect(mockUndo).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveUndo(true);
+      await Promise.all([firstUndo, secondUndo]);
+    });
+    expect(result.current.undoItem).toBeNull();
+  });
+
   it("keeps the visible undo until the user acts on it", async () => {
     mockDiscard.mockResolvedValue(createUndoItem("Persistent"));
     const { result } = renderHook(() => useSmsReviewUndo());

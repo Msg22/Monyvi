@@ -39,6 +39,7 @@ export function useSmsReviewUndo(): UseSmsReviewUndoResult {
     readonly item: VolatileSmsReviewUndoItem;
   } | null>(null);
   const pendingDiscardsRef = useRef(new Map<string, Promise<void>>());
+  const pendingUndoRef = useRef<Promise<boolean> | null>(null);
 
   const discard = useCallback(
     (draftId: string, userId: string): Promise<void> => {
@@ -76,20 +77,31 @@ export function useSmsReviewUndo(): UseSmsReviewUndoResult {
     []
   );
 
-  const undo = useCallback(async (): Promise<boolean> => {
-    if (!undoItem) return false;
-    const restored = await undoSmsReviewDraftDiscard(undoItem);
-    if (restored) {
-      if (
-        latestSuccessfulDiscardRef.current?.item.draftId === undoItem.draftId
-      ) {
-        latestSuccessfulDiscardRef.current = null;
-      }
-      setUndoItem((current) =>
-        current?.draftId === undoItem.draftId ? null : current
-      );
-    }
-    return restored;
+  const undo = useCallback((): Promise<boolean> => {
+    if (pendingUndoRef.current) return pendingUndoRef.current;
+    if (!undoItem) return Promise.resolve(false);
+
+    const itemToRestore = undoItem;
+    const request = undoSmsReviewDraftDiscard(itemToRestore)
+      .then((restored) => {
+        if (restored) {
+          if (
+            latestSuccessfulDiscardRef.current?.item.draftId ===
+            itemToRestore.draftId
+          ) {
+            latestSuccessfulDiscardRef.current = null;
+          }
+          setUndoItem((current) =>
+            current?.draftId === itemToRestore.draftId ? null : current
+          );
+        }
+        return restored;
+      })
+      .finally(() => {
+        if (pendingUndoRef.current === request) pendingUndoRef.current = null;
+      });
+    pendingUndoRef.current = request;
+    return request;
   }, [undoItem]);
 
   const close = useCallback((): void => {
