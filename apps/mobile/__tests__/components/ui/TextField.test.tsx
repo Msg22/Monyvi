@@ -1,86 +1,97 @@
-/**
- * TextField responsiveness tests.
- *
- * Numeric forms validate on every keystroke, which can make parent state lag
- * behind native typing. TextField keeps a local focused draft so a stale
- * parent render cannot overwrite fast input like typing "22".
- */
-
+import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
-import { TextInput } from "react-native";
+import { Pressable, Text } from "react-native";
+
 import { TextField } from "@/components/ui/TextField";
-
-interface ReactTestRendererInstance {
-  readonly root: {
-    findByType: (type: unknown) => { props: Record<string, unknown> };
-  };
-  readonly update: (element: React.ReactElement) => void;
-}
-
-type ReactTestRendererAct = (callback: () => void) => void;
-
-interface ReactTestRendererModule {
-  readonly act: ReactTestRendererAct;
-  readonly create: (element: React.ReactElement) => ReactTestRendererInstance;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
-const RTR: ReactTestRendererModule = require("react-test-renderer");
-
-function getInput(renderer: ReactTestRendererInstance): {
-  props: {
-    value?: string;
-    onChangeText?: (text: string) => void;
-    onFocus?: (event: unknown) => void;
-    onBlur?: (event: unknown) => void;
-  };
-} {
-  return renderer.root.findByType(TextInput) as {
-    props: {
-      value?: string;
-      onChangeText?: (text: string) => void;
-      onFocus?: (event: unknown) => void;
-      onBlur?: (event: unknown) => void;
-    };
-  };
-}
 
 describe("TextField", () => {
   it("keeps fast typed text visible while a focused parent render is stale", () => {
     const onChangeText = jest.fn();
-    const renderField = (value: string): React.ReactElement => (
+    const { rerender } = render(
       <TextField
         label="Amount"
-        value={value}
+        value=""
+        onChangeText={onChangeText}
+        keyboardType="numeric"
+      />
+    );
+    fireEvent(screen.getByLabelText("Amount"), "focus", {});
+    fireEvent.changeText(screen.getByLabelText("Amount"), "2");
+    fireEvent.changeText(screen.getByLabelText("Amount"), "22");
+    rerender(
+      <TextField
+        label="Amount"
+        value="2"
         onChangeText={onChangeText}
         keyboardType="numeric"
       />
     );
 
-    const renderer = RTR.create(renderField(""));
-
-    RTR.act(() => {
-      getInput(renderer).props.onFocus?.({});
-      getInput(renderer).props.onChangeText?.("2");
-      getInput(renderer).props.onChangeText?.("22");
-    });
-
-    RTR.act(() => {
-      renderer.update(renderField("2"));
-    });
-
-    expect(getInput(renderer).props.value).toBe("22");
+    expect(screen.getByLabelText("Amount")).toHaveDisplayValue("22");
     expect(onChangeText).toHaveBeenCalledWith("2");
     expect(onChangeText).toHaveBeenCalledWith("22");
   });
 
   it("syncs external value changes while not focused", () => {
-    const renderer = RTR.create(<TextField label="Amount" value="10" />);
+    const { rerender } = render(<TextField label="Amount" value="10" />);
 
-    RTR.act(() => {
-      renderer.update(<TextField label="Amount" value="25" />);
+    rerender(<TextField label="Amount" value="25" />);
+
+    expect(screen.getByLabelText("Amount")).toHaveDisplayValue("25");
+  });
+
+  it("renders leading and trailing adornments with reserved input space", () => {
+    render(
+      <TextField
+        label="Password"
+        leadingAdornment={<Text>lock</Text>}
+        trailingAdornment={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Show password"
+          >
+            <Text>eye</Text>
+          </Pressable>
+        }
+      />
+    );
+
+    expect(screen.getByText("lock")).toBeOnTheScreen();
+    expect(
+      screen.getByRole("button", { name: "Show password" })
+    ).toBeOnTheScreen();
+    expect(screen.getByLabelText("Password")).toHaveStyle({
+      paddingStart: 48,
+      paddingEnd: 56,
     });
+  });
 
-    expect(getInput(renderer).props.value).toBe("25");
+  it("associates inline errors with the input and announces them", () => {
+    render(
+      <TextField label="Email" error="Enter a valid email." value="invalid" />
+    );
+
+    expect(
+      screen.getByRole("alert", { name: "Enter a valid email." })
+    ).toBeOnTheScreen();
+    expect(screen.getByLabelText("Email")).toHaveProp("aria-invalid", true);
+  });
+
+  it("accepts localized font styles for labels and errors", () => {
+    render(
+      <TextField
+        label="Email"
+        error="Invalid email"
+        labelStyle={{ fontFamily: "NotoSansArabic_600SemiBold" }}
+        errorStyle={{ fontFamily: "NotoSansArabic_400Regular" }}
+      />
+    );
+
+    expect(screen.getByText("Email")).toHaveStyle({
+      fontFamily: "NotoSansArabic_600SemiBold",
+    });
+    expect(screen.getByRole("alert")).toHaveStyle({
+      fontFamily: "NotoSansArabic_400Regular",
+    });
   });
 });

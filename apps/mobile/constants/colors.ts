@@ -81,6 +81,10 @@ export const palette = {
   brand: {
     facebook: "#1877F2",
     google: "#4285F4",
+    googleBlue: "#4285F4",
+    googleGreen: "#34A853",
+    googleYellow: "#FBBC05",
+    googleRed: "#EA4335",
   },
 } as const;
 

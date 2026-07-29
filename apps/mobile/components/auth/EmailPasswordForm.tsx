@@ -1,277 +1,297 @@
-/**
- * Email/Password Authentication Form
- *
- * Renders the email + password input form with sign-in/sign-up mode toggle.
- * Handles client-side validation before delegating to the parent handler.
- *
- * Architecture & Design Rationale:
- * - Pattern: Controlled Component (Constitution III)
- * - Why: Parent (AuthScreen) owns the auth flow; this component only
- *   handles form state and validation. onSubmit delegates to parent.
- *   This component only renders the form and reflects state.
- * - SOLID: SRP — form rendering only. OCP — new fields can be added
- *   without modifying existing validation logic.
- *
- * @module EmailPasswordForm
- */
-
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 import {
-  ActivityIndicator,
+  Pressable,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
+  type NativeSyntheticEvent,
+  type TextInputSelectionChangeEventData,
 } from "react-native";
-
-import { palette } from "@/constants/colors";
-import { useTheme } from "@/context/ThemeContext";
 import { useTranslation } from "react-i18next";
 
-// =============================================================================
-// Types
-// =============================================================================
-
-type AuthMode = "signIn" | "signUp";
+import type { AuthMode, AuthPendingAction } from "@/components/auth/auth-types";
+import { TextField } from "@/components/ui/TextField";
+import { palette } from "@/constants/colors";
+import { useLocale } from "@/context/LocaleContext";
+import { useTheme } from "@/context/ThemeContext";
 
 interface EmailPasswordFormProps {
-  /** Called when the user submits the form. */
+  readonly mode: AuthMode;
+  readonly pendingAction: AuthPendingAction;
+  readonly errorMessage: string | null;
+  readonly emailFieldRef?: RefObject<View | null>;
+  readonly passwordFieldRef?: RefObject<View | null>;
   readonly onSubmit: (
     email: string,
     password: string,
     mode: AuthMode
   ) => Promise<void>;
-  /** Called when the user taps "Forgot Password?". */
-  readonly onForgotPassword: (email: string) => void;
-  /** Whether the form is currently submitting. */
-  readonly isLoading: boolean;
-  /** Error message to display below the form. */
-  readonly errorMessage: string | null;
-  /** Called when user interacts with the form to clear any server-side error. */
+  readonly onForgotPassword: (email: string) => Promise<void>;
   readonly onClearError?: () => void;
+  readonly onEmailFocus?: () => void;
+  readonly onPasswordFocus?: () => void;
 }
 
-// =============================================================================
-// Constants
-// =============================================================================
+interface FieldError {
+  readonly field: "email" | "password";
+  readonly message: string;
+}
 
 const MIN_PASSWORD_LENGTH = 6;
 
-// =============================================================================
-// Component
-// =============================================================================
-
 export function EmailPasswordForm({
+  mode,
+  pendingAction,
+  errorMessage,
+  emailFieldRef,
+  passwordFieldRef,
   onSubmit,
   onForgotPassword,
-  isLoading,
-  errorMessage,
   onClearError,
+  onEmailFocus,
+  onPasswordFocus,
 }: EmailPasswordFormProps): React.JSX.Element {
-  const { isDark } = useTheme();
   const { t } = useTranslation("auth");
+  const { fontFamily, isRTL } = useLocale();
+  const { isDark } = useTheme();
+  const passwordInputRef = useRef<TextInput>(null);
+  const passwordSelectionRef = useRef({ start: 0, end: 0 });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [mode, setMode] = useState<AuthMode>("signIn");
-  const [localError, setLocalError] = useState<string | null>(null);
+  const [isPasswordVisible, setPasswordVisible] = useState(false);
+  const [fieldError, setFieldError] = useState<FieldError | null>(null);
 
-  const displayError = errorMessage ?? localError;
+  const isAnyActionPending = pendingAction !== null;
+  const isEmailPending = pendingAction === "email";
+  const isResetPending = pendingAction === "passwordReset";
+  const iconColor = isDark ? palette.slate[400] : palette.slate[500];
 
   const clearErrors = (): void => {
-    setLocalError(null);
+    setFieldError(null);
     onClearError?.();
   };
 
   const validateAndSubmit = async (): Promise<void> => {
     clearErrors();
+    const normalizedEmail = email.trim();
 
-    const trimmedEmail = email.trim();
-
-    if (!trimmedEmail) {
-      setLocalError(t("validation_email_required"));
+    if (!normalizedEmail) {
+      setFieldError({
+        field: "email",
+        message: t("validation_email_required"),
+      });
       return;
     }
 
-    if (!isValidEmail(trimmedEmail)) {
-      setLocalError(t("validation_email_invalid"));
+    if (!isValidEmail(normalizedEmail)) {
+      setFieldError({ field: "email", message: t("validation_email_invalid") });
       return;
     }
 
     if (!password) {
-      setLocalError(t("validation_password_required"));
+      setFieldError({
+        field: "password",
+        message: t("validation_password_required"),
+      });
       return;
     }
 
     if (mode === "signUp" && password.length < MIN_PASSWORD_LENGTH) {
-      setLocalError(t("validation_password_min", { min: MIN_PASSWORD_LENGTH }));
+      setFieldError({
+        field: "password",
+        message: t("validation_password_min", { min: MIN_PASSWORD_LENGTH }),
+      });
       return;
     }
 
-    await onSubmit(trimmedEmail, password, mode);
+    await onSubmit(normalizedEmail, password, mode);
   };
 
-  const toggleMode = (): void => {
-    setMode((prev) => (prev === "signIn" ? "signUp" : "signIn"));
-    clearErrors();
+  const togglePasswordVisibility = (): void => {
+    setPasswordVisible((currentValue) => !currentValue);
+    requestAnimationFrame(() => {
+      passwordInputRef.current?.focus();
+      passwordInputRef.current?.setNativeProps({
+        selection: passwordSelectionRef.current,
+      });
+    });
   };
 
-  const handleForgotPassword = (): void => {
-    onForgotPassword(email.trim());
+  const handleSelectionChange = (
+    event: NativeSyntheticEvent<TextInputSelectionChangeEventData>
+  ): void => {
+    passwordSelectionRef.current = event.nativeEvent.selection;
   };
 
-  const inputTextColor = isDark ? palette.slate[50] : palette.slate[900];
-  const placeholderColor = isDark ? palette.slate[400] : palette.slate[500];
+  const buttonLabel = isEmailPending
+    ? mode === "signIn"
+      ? t("signing_in")
+      : t("creating_account")
+    : mode === "signIn"
+      ? t("sign_in")
+      : t("create_account");
 
   return (
-    <View className="gap-4 w-full">
-      {/* Divider */}
-      <View className="flex-row items-center gap-3 my-2">
-        <View className="flex-1 h-px bg-slate-300 dark:bg-slate-600" />
-        <Text className="text-sm text-slate-400 dark:text-slate-500">
-          {t("or_continue_with_email")}
-        </Text>
-        <View className="flex-1 h-px bg-slate-300 dark:bg-slate-600" />
-      </View>
-
-      {/* Email Input */}
-      <View>
-        <TextInput
-          className="py-4 px-4 rounded-2xl border text-base bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600"
+    <View className="w-full gap-1">
+      <View ref={emailFieldRef} collapsable={false}>
+        <TextField
+          testID="auth-email-input"
+          label={t("email_address")}
+          labelStyle={{ fontFamily: fontFamily.semiBold }}
+          errorStyle={{ fontFamily: fontFamily.regular }}
           placeholder={t("email_address_placeholder")}
-          placeholderTextColor={placeholderColor}
-          style={{ color: inputTextColor }}
           value={email}
-          onChangeText={(text) => {
-            setEmail(text);
+          onChangeText={(nextEmail) => {
+            setEmail(nextEmail);
             clearErrors();
           }}
+          onFocus={onEmailFocus}
+          error={fieldError?.field === "email" ? fieldError.message : undefined}
           keyboardType="email-address"
           autoCapitalize="none"
           autoCorrect={false}
           textContentType="emailAddress"
-          editable={!isLoading}
-          accessibilityLabel={t("email_address")}
-          accessibilityHint={t("email_placeholder")}
+          autoComplete="email"
+          editable={!isAnyActionPending}
+          returnKeyType="next"
+          style={{
+            fontFamily: fontFamily.regular,
+            writingDirection: "ltr",
+            textAlign: "left",
+          }}
+          leadingAdornment={
+            <Ionicons name="mail-outline" size={20} color={iconColor} />
+          }
         />
       </View>
 
-      {/* Password Input */}
-      <View className="relative">
-        <TextInput
-          className="py-4 px-4 pe-14 rounded-2xl border text-base bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600"
+      <View ref={passwordFieldRef} collapsable={false}>
+        <TextField
+          testID="auth-password-input"
+          inputRef={passwordInputRef}
+          label={t("password")}
+          labelStyle={{ fontFamily: fontFamily.semiBold }}
+          errorStyle={{ fontFamily: fontFamily.regular }}
           placeholder={t("password_placeholder_label")}
-          placeholderTextColor={placeholderColor}
-          style={{ color: inputTextColor }}
           value={password}
-          onChangeText={(text) => {
-            setPassword(text);
+          onChangeText={(nextPassword) => {
+            setPassword(nextPassword);
             clearErrors();
           }}
-          secureTextEntry={!showPassword}
+          onFocus={onPasswordFocus}
+          onSelectionChange={handleSelectionChange}
+          error={
+            fieldError?.field === "password" ? fieldError.message : undefined
+          }
+          secureTextEntry={!isPasswordVisible}
           autoCapitalize="none"
           autoCorrect={false}
           textContentType={mode === "signUp" ? "newPassword" : "password"}
-          editable={!isLoading}
-          accessibilityLabel={t("password")}
-          accessibilityHint={t("password_placeholder")}
+          autoComplete={mode === "signUp" ? "new-password" : "current-password"}
+          editable={!isAnyActionPending}
+          returnKeyType="done"
+          onSubmitEditing={() => {
+            void validateAndSubmit();
+          }}
+          style={{
+            fontFamily: fontFamily.regular,
+            writingDirection: isRTL ? "rtl" : "ltr",
+            textAlign: isRTL ? "right" : "left",
+          }}
+          leadingAdornment={
+            <Ionicons name="lock-closed-outline" size={20} color={iconColor} />
+          }
+          trailingAdornment={
+            <Pressable
+              testID="auth-password-visibility"
+              onPress={togglePasswordVisibility}
+              disabled={isAnyActionPending}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isPasswordVisible ? t("hide_password") : t("show_password")
+              }
+              accessibilityState={{ disabled: isAnyActionPending }}
+              className="items-center justify-center"
+              style={{
+                minWidth: 44,
+                minHeight: 44,
+                opacity: isAnyActionPending ? 0.5 : 1,
+              }}
+            >
+              <Ionicons
+                name={isPasswordVisible ? "eye-off-outline" : "eye-outline"}
+                size={22}
+                color={iconColor}
+              />
+            </Pressable>
+          }
         />
-        <TouchableOpacity
-          onPress={() => setShowPassword((prev) => !prev)}
-          className="absolute end-4 top-4"
-          accessibilityLabel={
-            showPassword ? t("hide_password") : t("show_password")
-          }
+
+        {errorMessage ? (
+          <Text
+            accessibilityRole="alert"
+            className="mb-2 text-sm text-red-500"
+            style={{ fontFamily: fontFamily.regular }}
+          >
+            {errorMessage}
+          </Text>
+        ) : null}
+
+        {mode === "signIn" ? (
+          <Pressable
+            testID="auth-forgot-password"
+            onPress={() => {
+              void onForgotPassword(email.trim());
+            }}
+            disabled={isAnyActionPending}
+            accessibilityRole="link"
+            accessibilityLabel={
+              isResetPending ? t("sending_reset") : t("forgot_password")
+            }
+            accessibilityState={{
+              disabled: isAnyActionPending,
+              busy: isResetPending,
+            }}
+            className="mb-4 min-h-11 self-end justify-center"
+            style={{ opacity: isAnyActionPending ? 0.55 : 1 }}
+          >
+            <Text
+              className="text-sm text-nileGreen-700 dark:text-nileGreen-300"
+              style={{ fontFamily: fontFamily.semiBold }}
+            >
+              {isResetPending ? t("sending_reset") : t("forgot_password")}
+            </Text>
+          </Pressable>
+        ) : null}
+
+        <Pressable
+          testID="auth-submit-button"
+          onPress={() => {
+            void validateAndSubmit();
+          }}
+          disabled={isAnyActionPending}
           accessibilityRole="button"
+          accessibilityLabel={buttonLabel}
+          accessibilityState={{
+            disabled: isAnyActionPending,
+            busy: isEmailPending,
+          }}
+          className="min-h-12 items-center justify-center rounded-2xl bg-nileGreen-700 px-6 dark:bg-nileGreen-500"
+          style={{ opacity: isAnyActionPending ? 0.6 : 1 }}
         >
-          <Ionicons
-            name={showPassword ? "eye-off-outline" : "eye-outline"}
-            size={22}
-            color={placeholderColor}
-          />
-        </TouchableOpacity>
-      </View>
-
-      {/* Error Message */}
-      {displayError ? (
-        <Text className="text-red-400 text-sm px-1" accessibilityRole="alert">
-          {displayError}
-        </Text>
-      ) : null}
-
-      {/* Forgot Password (Sign In mode only) */}
-      {mode === "signIn" ? (
-        <TouchableOpacity
-          onPress={handleForgotPassword}
-          disabled={isLoading}
-          className="self-end"
-          accessibilityLabel={t("forgot_password")}
-          accessibilityRole="link"
-        >
-          <Text className="text-sm text-nileGreen-400 font-medium">
-            {t("forgot_password")}
+          <Text
+            className="text-base text-slate-25"
+            style={{ fontFamily: fontFamily.semiBold }}
+          >
+            {buttonLabel}
           </Text>
-        </TouchableOpacity>
-      ) : null}
-
-      {/* Submit Button */}
-      <TouchableOpacity
-        onPress={() => {
-          // Errors are handled internally via setLocalError; catch prevents unhandled rejection
-          validateAndSubmit().catch(() => {});
-        }}
-        disabled={isLoading}
-        className="py-4 px-6 rounded-2xl bg-nileGreen-500 items-center justify-center"
-        activeOpacity={0.8}
-        style={{ opacity: isLoading ? 0.6 : 1 }}
-        accessibilityLabel={mode === "signIn" ? "Sign in" : "Create account"}
-        accessibilityRole="button"
-      >
-        {isLoading ? (
-          <ActivityIndicator size="small" color={palette.slate[25]} />
-        ) : (
-          <Text className="text-base font-semibold text-white">
-            {mode === "signIn" ? t("sign_in") : t("create_account")}
-          </Text>
-        )}
-      </TouchableOpacity>
-
-      {/* Mode Toggle */}
-      <View className="flex-row justify-center items-center gap-1 mt-2">
-        <Text className="text-sm text-slate-400 dark:text-slate-500">
-          {mode === "signIn"
-            ? t("dont_have_account")
-            : t("already_have_account")}
-        </Text>
-        <TouchableOpacity
-          onPress={toggleMode}
-          disabled={isLoading}
-          accessibilityLabel={
-            mode === "signIn" ? "Switch to sign up" : "Switch to sign in"
-          }
-          accessibilityRole="button"
-        >
-          <Text className="text-sm font-semibold text-nileGreen-400">
-            {mode === "signIn" ? t("sign_up") : t("sign_in")}
-          </Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </View>
   );
 }
 
-// =============================================================================
-// Helpers
-// =============================================================================
-
-/**
- * Basic email validation — checks for presence of @ and a dot in domain.
- * Not exhaustive, as server-side validation will catch edge cases.
- */
 function isValidEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
-
-export type { AuthMode };

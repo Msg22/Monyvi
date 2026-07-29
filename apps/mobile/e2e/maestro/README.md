@@ -186,8 +186,9 @@ To verify the local seeded auth path only:
 npm run e2e:auth:local -w @monyvi/mobile
 ```
 
-That command clears app state, seeds the local E2E user, opens the dev client
-through the preflight wrapper, signs in, and handles first-run prompts.
+That command clears app state, seeds the local E2E user, opens the dev client,
+checks the signed-out auth controls and keyboard reachability, signs in, and
+handles first-run prompts.
 
 ## Target A Specific Emulator Or Device
 
@@ -290,6 +291,7 @@ set with `E2E_CI_LIVE_SMS_JOURNEYS=01,02,...` when debugging a smaller slice.
 | Folder                | Purpose                                     |
 | --------------------- | ------------------------------------------- |
 | `helpers/`            | Shared setup and visible navigation helpers |
+| `auth/`               | Signed-out authentication journeys          |
 | `transactions/`       | Transaction create/edit/delete/search flows |
 | `sms-sync/`           | SMS sync permission and recovery flows      |
 | `live-sms-detection/` | Live SMS detection journeys and helpers     |
@@ -310,22 +312,30 @@ set with `E2E_CI_LIVE_SMS_JOURNEYS=01,02,...` when debugging a smaller slice.
 
 ## testID Reference
 
-| testID                  | Component                           |
-| ----------------------- | ----------------------------------- |
-| `fab-button`            | Main FAB button                     |
-| `fab-transaction`       | "Add Transaction" action            |
-| `transaction-card-{id}` | Transaction card                    |
-| `card-category-{id}`    | Category icon on card               |
-| `card-amount-{id}`      | Amount area on card                 |
-| `type-tab-{VALUE}`      | Type tabs (EXPENSE/INCOME/TRANSFER) |
-| `header-save`           | Save button                         |
-| `header-delete`         | Delete button                       |
-| `header-back`           | Back button                         |
-| `modal-confirm`         | Confirm button                      |
-| `modal-cancel`          | Cancel button                       |
-| `search-input`          | Search input                        |
-| `filter-period`         | Period filter                       |
-| `filter-type`           | Type filter                         |
+| testID                     | Component                           |
+| -------------------------- | ----------------------------------- |
+| `auth-mode-sign-in`        | Sign-in mode segment                |
+| `auth-mode-sign-up`        | Sign-up mode segment                |
+| `auth-google-button`       | Google authentication action        |
+| `auth-email-input`         | Email input                         |
+| `auth-password-input`      | Password input                      |
+| `auth-password-visibility` | Password visibility action          |
+| `auth-forgot-password`     | Password recovery action            |
+| `auth-submit-button`       | Email authentication CTA            |
+| `fab-button`               | Main FAB button                     |
+| `fab-transaction`          | "Add Transaction" action            |
+| `transaction-card-{id}`    | Transaction card                    |
+| `card-category-{id}`       | Category icon on card               |
+| `card-amount-{id}`         | Amount area on card                 |
+| `type-tab-{VALUE}`         | Type tabs (EXPENSE/INCOME/TRANSFER) |
+| `header-save`              | Save button                         |
+| `header-delete`            | Delete button                       |
+| `header-back`              | Back button                         |
+| `modal-confirm`            | Confirm button                      |
+| `modal-cancel`             | Cancel button                       |
+| `search-input`             | Search input                        |
+| `filter-period`            | Period filter                       |
+| `filter-type`              | Type filter                         |
 
 ## Live SMS Permission Flows
 

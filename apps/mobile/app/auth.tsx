@@ -1,278 +1,105 @@
-/**
- * Authentication Screen \u2014 Unified Sign In / Sign Up
- *
- * Full-screen authentication page shown when user has no valid session.
- * Handles:
- * - Google OAuth sign-in (via SocialLoginButtons)
- * - Email/password sign-up and sign-in (via EmailPasswordForm)
- * - Email verification pending state
- * - Forgot password flow
- *
- * No "Skip" option \u2014 authentication is mandatory for this fintech app.
- *
- * Architecture & Design Rationale:
- * - Pattern: Composition \u2014 delegates to SocialLoginButtons and EmailPasswordForm
- * - Why: Screen orchestrates auth flows, delegates rendering to subcomponents (SRP)
- * - SOLID: DIP \u2014 depends on auth-service abstractions, not Supabase directly
- *
- * @module AuthScreen
- */
-
-import { palette } from "@/constants/colors";
-import { useAuth } from "@/context/AuthContext";
-import { useTheme } from "@/context/ThemeContext";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useCallback, useState } from "react";
-import { useTranslation } from "react-i18next";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
+import { useRouter } from "expo-router";
+import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
+import Animated, { FadeInDown, ReduceMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FormView } from "@/components/auth/FormView";
-import { VerificationPendingView } from "@/components/auth/VerificationPendingView";
 import { ResetSentView } from "@/components/auth/ResetSentView";
-import { type AuthMode } from "@/components/auth/EmailPasswordForm";
-import { useToast } from "@/components/ui/Toast";
-import {
-  signInWithOAuth,
-  signUpWithEmail,
-  signInWithEmail,
-  requestPasswordReset,
-} from "@/services/auth-service";
-import {
-  resendVerificationEmail,
-  type OAuthProvider,
-} from "@/services/supabase";
-import { useDeferredRouterReplace } from "@/hooks/useDeferredRouterReplace";
-
-// =============================================================================
-// Types
-// =============================================================================
-
-type ScreenState = "form" | "verificationPending" | "resetSent";
-
-// =============================================================================
-// Component
-// =============================================================================
+import { VerificationPendingView } from "@/components/auth/VerificationPendingView";
+import { LanguageSwitcherPill } from "@/components/onboarding/LanguageSwitcherPill";
+import { MonyviLogo } from "@/components/ui/MonyviLogo";
+import { palette } from "@/constants/colors";
+import { useTheme } from "@/context/ThemeContext";
+import { useAuthScreenController } from "@/hooks/useAuthScreenController";
+import { useFormScroll } from "@/hooks/useFormScroll";
+import { useKeyboardVisibility } from "@/hooks/useKeyboardVisibility";
 
 export default function AuthScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { isDark } = useTheme();
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
-  const { showToast } = useToast();
-  const { t } = useTranslation("auth");
-  const { t: tCommon } = useTranslation("common");
+  const isKeyboardVisible = useKeyboardVisibility();
+  const controller = useAuthScreenController();
+  const { scrollViewRef, getFieldRef, onScroll, scrollToField } = useFormScroll<
+    "email" | "password"
+  >({ bottomInset: insets.bottom });
 
-  const [screenState, setScreenState] = useState<ScreenState>("form");
-  const [pendingEmail, setPendingEmail] = useState("");
-  const [oauthLoading, setOauthLoading] = useState<OAuthProvider | null>(null);
-  const [emailLoading, setEmailLoading] = useState(false);
-  const [emailError, setEmailError] = useState<string | null>(null);
-  const [networkError, setNetworkError] = useState<string | null>(null);
-
-  // index.tsx handles the profile-driven routing decision.
-  useDeferredRouterReplace({
-    enabled: !isAuthLoading && isAuthenticated,
-    href: "/",
-  });
-
-  // \u2500\u2500\u2500 OAuth Handler \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-
-  const handleOAuth = useCallback(
-    async (provider: OAuthProvider): Promise<void> => {
-      setOauthLoading(provider);
-      setNetworkError(null);
-
-      try {
-        const result = await signInWithOAuth(provider);
-
-        if (!result.success) {
-          if (result.errorCode === "cancelled") {
-            // User cancelled \u2014 silent, no error shown
-          } else if (result.errorCode === "network") {
-            setNetworkError(result.error);
-          } else {
-            showToast({ type: "error", title: result.error });
-          }
-        }
-      } finally {
-        setOauthLoading(null);
-      }
-    },
-    [showToast]
-  );
-
-  // \u2500\u2500\u2500 Email/Password Handler \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-
-  const handleEmailSubmit = useCallback(
-    async (email: string, password: string, mode: AuthMode): Promise<void> => {
-      setEmailLoading(true);
-      setEmailError(null);
-      setNetworkError(null);
-
-      try {
-        if (mode === "signUp") {
-          const result = await signUpWithEmail(email, password);
-
-          if (result.error) {
-            setEmailError(result.error.message);
-            return;
-          }
-
-          if (result.needsVerification) {
-            setPendingEmail(email);
-            setScreenState("verificationPending");
-            return;
-          }
-
-          // Rare: email already verified (shouldn't happen normally)
-          showToast({ type: "success", title: t("account_created") });
-        } else {
-          const result = await signInWithEmail(email, password);
-
-          if (result.error) {
-            setEmailError(result.error.message);
-            return;
-          }
-        }
-      } catch {
-        setEmailError(tCommon("error_generic"));
-      } finally {
-        setEmailLoading(false);
-      }
-    },
-    [showToast, t, tCommon]
-  );
-
-  // \u2500\u2500\u2500 Forgot Password Handler \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-
-  const handleForgotPassword = useCallback(
-    (email: string): void => {
-      if (!email) {
-        showToast({
-          type: "info",
-          title: t("forgot_password_hint"),
-        });
-        return;
-      }
-
-      requestPasswordReset(email)
-        .then((result) => {
-          if (result.error) {
-            showToast({ type: "error", title: result.error.message });
-            return;
-          }
-          setPendingEmail(email);
-          setScreenState("resetSent");
-        })
-        .catch(() => {
-          showToast({
-            type: "error",
-            title: t("reset_email_failed"),
-          });
-        });
-    },
-    [showToast, t]
-  );
-
-  // \u2500\u2500\u2500 Resend Verification \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-
-  const handleResendVerification = useCallback(async (): Promise<void> => {
-    try {
-      const result = await resendVerificationEmail(pendingEmail);
-      if (result.error) {
-        showToast({ type: "error", title: result.error.message });
-      } else {
-        showToast({ type: "success", title: t("verification_email_sent") });
-      }
-    } catch {
-      showToast({
-        type: "error",
-        title: t("resend_verification_failed"),
-      });
-    }
-  }, [pendingEmail, showToast, t]);
-
-  // \u2500\u2500\u2500 Back to Form \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-
-  const handleBackToForm = useCallback((): void => {
-    setScreenState("form");
-    setEmailError(null);
-    setNetworkError(null);
-  }, []);
-
-  // \u2500\u2500\u2500 Render \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  const gradientColors: readonly [string, string] = isDark
+    ? [palette.slate[950], palette.slate[900]]
+    : [palette.nileGreen[50], palette.slate[25]];
 
   return (
-    // Background uses the same `bg-background dark:bg-background-dark`
-    // tokens used by every other authenticated screen (dashboard,
-    // add-account, edit-account, etc). Pre-2026-04-26 the auth screen
-    // rendered a custom green-tinted LinearGradient in dark mode which
-    // looked off compared to the rest of the app — user direction:
-    // standardize to the solid app-wide dark background. The light-mode
-    // gradient is kept since it was working there, but moved to a
-    // tokenized class so the auth screen also follows the system theme
-    // when users have a system-level dark/light preference.
     <View className="flex-1 bg-background dark:bg-background-dark">
-      {!isDark && (
-        <LinearGradient
-          // Use the project's `slate[25]` token instead of a raw hex
-          // literal — keeps the gradient's "near-white" terminus tied
-          // to the same single source of truth used by every other
-          // light-mode background in the app.
-          colors={[palette.nileGreen[50], palette.slate[25]]}
-          style={StyleSheet.absoluteFill}
-        />
-      )}
-
+      <LinearGradient
+        colors={gradientColors}
+        className="absolute inset-0"
+        pointerEvents="none"
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
       >
         <ScrollView
-          // eslint-disable-next-line react-native/no-inline-styles
+          testID="auth-scroll"
+          ref={scrollViewRef}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           contentContainerStyle={{
             flexGrow: 1,
-            justifyContent: "space-between",
-            paddingTop: insets.top + 24,
+            paddingTop: insets.top + 16,
             paddingBottom: insets.bottom + 24,
             paddingHorizontal: 24,
           }}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={
+            Platform.OS === "ios" ? "interactive" : "on-drag"
+          }
           showsVerticalScrollIndicator={false}
         >
-          {screenState === "form" ? (
-            <FormView
-              isDark={isDark}
-              oauthLoading={oauthLoading}
-              emailLoading={emailLoading}
-              emailError={emailError}
-              networkError={networkError}
-              onOAuth={handleOAuth}
-              onEmailSubmit={handleEmailSubmit}
-              onForgotPassword={handleForgotPassword}
-              onClearError={() => setEmailError(null)}
-              onRetry={() => setNetworkError(null)}
-            />
-          ) : screenState === "verificationPending" ? (
-            <VerificationPendingView
-              email={pendingEmail}
-              isDark={isDark}
-              onResend={handleResendVerification}
-              onBack={handleBackToForm}
-            />
-          ) : (
-            <ResetSentView
-              email={pendingEmail}
-              isDark={isDark}
-              onBack={handleBackToForm}
-            />
-          )}
+          <View className="mb-5 flex-row items-center justify-between">
+            <MonyviLogo width={112} height={34} />
+            <LanguageSwitcherPill />
+          </View>
+
+          <Animated.View
+            entering={FadeInDown.duration(260).reduceMotion(
+              ReduceMotion.System
+            )}
+            className="flex-1"
+          >
+            {controller.screenState === "form" ? (
+              <FormView
+                isKeyboardVisible={isKeyboardVisible}
+                pendingAction={controller.pendingAction}
+                emailError={controller.emailError}
+                networkError={controller.networkError}
+                emailFieldRef={getFieldRef("email")}
+                passwordFieldRef={getFieldRef("password")}
+                onOAuth={controller.handleOAuth}
+                onEmailSubmit={controller.handleEmailSubmit}
+                onForgotPassword={controller.handleForgotPassword}
+                onClearError={controller.clearEmailError}
+                onClearNetworkError={controller.clearNetworkError}
+                onPrivacyPress={() => router.push("/privacy-policy")}
+                onTermsPress={() => router.push("/terms")}
+                onEmailFocus={() => scrollToField("email")}
+                onPasswordFocus={() => scrollToField("password")}
+              />
+            ) : controller.screenState === "verificationPending" ? (
+              <VerificationPendingView
+                email={controller.pendingEmail}
+                isResending={controller.pendingAction === "verificationResend"}
+                onResend={controller.handleResendVerification}
+                onBack={controller.handleBackToForm}
+              />
+            ) : (
+              <ResetSentView
+                email={controller.pendingEmail}
+                onBack={controller.handleBackToForm}
+              />
+            )}
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

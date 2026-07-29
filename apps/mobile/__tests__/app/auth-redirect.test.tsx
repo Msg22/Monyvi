@@ -1,4 +1,4 @@
-import { act, render } from "@testing-library/react-native";
+import { act, render, screen } from "@testing-library/react-native";
 import React from "react";
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -13,12 +13,20 @@ interface MockNavigationContainerRef {
 }
 
 const mockReplace = jest.fn();
+const mockPush = jest.fn();
 let mockIsNavigationReady: boolean;
 let mockAuthState: MockAuthState;
+let mockSafeAreaInsets: {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+};
 
 jest.mock("expo-router", () => ({
-  useRouter: (): { replace: typeof mockReplace } => ({
+  useRouter: (): { replace: typeof mockReplace; push: typeof mockPush } => ({
     replace: mockReplace,
+    push: mockPush,
   }),
   useNavigationContainerRef: (): MockNavigationContainerRef => ({
     isReady: (): boolean => mockIsNavigationReady,
@@ -45,12 +53,7 @@ jest.mock("react-native-safe-area-context", () => ({
     right: number;
     bottom: number;
     left: number;
-  } => ({
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-  }),
+  } => mockSafeAreaInsets,
 }));
 
 jest.mock("@/components/ui/Toast", () => ({
@@ -62,6 +65,14 @@ jest.mock("@/components/auth/FormView", () => ({
     const ReactMod = require("react") as typeof React;
     const RN = require("react-native") as typeof import("react-native");
     return ReactMod.createElement(RN.View, { testID: "auth-form" });
+  },
+}));
+
+jest.mock("@/components/onboarding/LanguageSwitcherPill", () => ({
+  LanguageSwitcherPill: (): React.ReactElement => {
+    const ReactMod = require("react") as typeof React;
+    const RN = require("react-native") as typeof import("react-native");
+    return ReactMod.createElement(RN.View, { testID: "language-switcher" });
   },
 }));
 
@@ -108,6 +119,7 @@ describe("AuthScreen redirect", () => {
       isAuthenticated: true,
       isLoading: false,
     };
+    mockSafeAreaInsets = { top: 24, right: 0, bottom: 34, left: 0 };
   });
 
   afterEach(() => {
@@ -125,5 +137,17 @@ describe("AuthScreen redirect", () => {
     });
 
     expect(mockReplace).toHaveBeenCalledWith("/");
+  });
+
+  it("adds top and bottom safe-area insets exactly once", () => {
+    render(<AuthScreen />);
+
+    expect(screen.getByTestId("auth-scroll")).toHaveProp(
+      "contentContainerStyle",
+      expect.objectContaining({
+        paddingTop: 40,
+        paddingBottom: 58,
+      })
+    );
   });
 });

@@ -734,6 +734,8 @@ interface AuthTranslations {
 
   // Welcome screen
   readonly welcome_title: string;
+  readonly welcome_headline: string;
+  readonly welcome_support: string;
   readonly welcome_tagline: string;
   readonly pill_voice: string;
   readonly pill_bank_sms: string;
@@ -741,6 +743,16 @@ interface AuthTranslations {
   readonly pill_gold_silver: string;
   readonly trust_encrypted: string;
   readonly trust_private: string;
+  readonly signing_in: string;
+  readonly creating_account: string;
+  readonly sending_reset: string;
+  readonly resending_email: string;
+  readonly continue_with_google: string;
+  readonly opening_google: string;
+  readonly private_by_design: string;
+  readonly privacy: string;
+  readonly terms: string;
+  readonly dismiss: string;
 }
 
 /** Metals namespace */

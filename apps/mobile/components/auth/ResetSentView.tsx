@@ -1,83 +1,63 @@
-/**
- * ResetSentView — Password Reset Confirmation State
- *
- * Displayed after a password reset email has been sent.
- * Shows confirmation message and a back-to-sign-in link.
- *
- * Architecture & Design Rationale:
- * - Pattern: Presentational Component
- * - Why: Extracted from auth.tsx to enforce SRP — auth.tsx orchestrates
- *   screen state, this component handles the reset confirmation UI.
- *
- * @module ResetSentView
- */
-
-import { palette } from "@/constants/colors";
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
-// =============================================================================
-// Types
-// =============================================================================
+import { palette } from "@/constants/colors";
+import { useLocale } from "@/context/LocaleContext";
+import { useTheme } from "@/context/ThemeContext";
 
 export interface ResetSentViewProps {
   readonly email: string;
-  readonly isDark: boolean;
   readonly onBack: () => void;
 }
 
-// =============================================================================
-// Component
-// =============================================================================
-
 export function ResetSentView({
   email,
-  isDark,
   onBack,
 }: ResetSentViewProps): React.JSX.Element {
   const { t } = useTranslation("auth");
-  return (
-    <>
-      <View className="flex-1 items-center justify-center gap-6 px-4">
-        {/* Key Icon */}
-        <View className="w-24 h-24 rounded-full bg-nileGreen-500/15 items-center justify-center">
-          <Ionicons
-            name="key-outline"
-            size={48}
-            color={isDark ? palette.nileGreen[400] : palette.nileGreen[600]}
-          />
-        </View>
+  const { fontFamily, isRTL } = useLocale();
+  const { isDark } = useTheme();
+  const iconColor = isDark ? palette.nileGreen[400] : palette.nileGreen[700];
 
-        <Text className="text-2xl font-bold text-center text-text-primary dark:text-text-primary-dark">
+  return (
+    <View className="flex-1 justify-center py-10">
+      <View className="items-center rounded-[28px] border border-slate-200 bg-slate-25/90 px-6 py-10 dark:border-slate-700 dark:bg-slate-900/90">
+        <View className="mb-6 h-20 w-20 items-center justify-center rounded-full bg-nileGreen-500/15">
+          <Ionicons name="key-outline" size={40} color={iconColor} />
+        </View>
+        <Text
+          accessibilityRole="header"
+          className="text-center text-2xl text-text-primary dark:text-text-primary-dark"
+          style={{ fontFamily: fontFamily.bold }}
+        >
           {t("reset_link_sent")}
         </Text>
-
-        <Text className="text-base text-center text-text-secondary dark:text-text-secondary-dark max-w-[300px] leading-6">
+        <Text
+          className="mt-3 max-w-[310px] text-center text-base leading-6 text-text-secondary dark:text-text-secondary-dark"
+          style={{ fontFamily: fontFamily.regular }}
+        >
           {t("reset_link_message", { email })}
         </Text>
-      </View>
-
-      {/* Back to Sign In */}
-      <TouchableOpacity
-        onPress={onBack}
-        className="py-3 items-center"
-        activeOpacity={0.6}
-        accessibilityLabel={t("back_to_sign_in")}
-        accessibilityRole="button"
-      >
-        <View className="flex-row items-center gap-1">
+        <Pressable
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel={t("back_to_sign_in")}
+          className="mt-7 min-h-12 flex-row items-center justify-center gap-2 rounded-2xl bg-nileGreen-700 px-6 dark:bg-nileGreen-500"
+        >
           <Ionicons
-            name="arrow-back"
-            size={14}
-            color={isDark ? palette.slate[400] : palette.slate[500]}
+            name={isRTL ? "arrow-forward" : "arrow-back"}
+            size={16}
+            color={palette.slate[25]}
           />
-          <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
+          <Text
+            className="text-sm text-slate-25"
+            style={{ fontFamily: fontFamily.semiBold }}
+          >
             {t("back_to_sign_in")}
           </Text>
-        </View>
-      </TouchableOpacity>
-    </>
+        </Pressable>
+      </View>
+    </View>
   );
 }

@@ -35,7 +35,7 @@
     "e2e:local": "cross-env E2E_SUPABASE_MODE=local EXPO_PUBLIC_MONYVI_TEST_MODE=e2e EXPO_PUBLIC_AI_SMS_PARSER_MODE=fixture node scripts/run-ci-e2e.js",
     "e2e:flow": "node scripts/run-maestro.js test",
     "e2e:flow:local": "cross-env E2E_SUPABASE_MODE=local EXPO_PUBLIC_MONYVI_TEST_MODE=e2e EXPO_PUBLIC_AI_SMS_PARSER_MODE=fixture node scripts/run-maestro.js test",
-    "e2e:auth:local": "cross-env E2E_SUPABASE_MODE=local npm run e2e:seed && cross-env E2E_SUPABASE_MODE=local EXPO_PUBLIC_MONYVI_TEST_MODE=e2e EXPO_PUBLIC_AI_SMS_PARSER_MODE=fixture E2E_CLEAR_APP_STATE=1 node scripts/run-maestro.js test e2e/maestro/helpers/ci-auth-bootstrap.yaml",
+    "e2e:auth:local": "cross-env E2E_SUPABASE_MODE=local npm run e2e:seed && cross-env E2E_SUPABASE_MODE=local EXPO_PUBLIC_MONYVI_TEST_MODE=e2e EXPO_PUBLIC_AI_SMS_PARSER_MODE=fixture E2E_CLEAR_APP_STATE=1 node scripts/run-maestro.js test e2e/maestro/auth/signed-out-auth.yaml",
     "e2e:sms-sync": "node scripts/run-sms-sync-journeys.js",
     "e2e:sms-sync:local": "cross-env E2E_SUPABASE_MODE=local EXPO_PUBLIC_MONYVI_TEST_MODE=e2e EXPO_PUBLIC_AI_SMS_PARSER_MODE=fixture node scripts/run-sms-sync-journeys.js",
     "e2e:sms-sync:local-parser": "cross-env E2E_SUPABASE_MODE=local E2E_AUTH_DEEPLINK_BOOTSTRAP=1 EXPO_PUBLIC_MONYVI_TEST_MODE=e2e EXPO_PUBLIC_AI_SMS_PARSER_MODE=local node scripts/run-sms-sync-journeys.js",
