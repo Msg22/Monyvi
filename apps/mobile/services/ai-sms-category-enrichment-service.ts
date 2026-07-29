@@ -26,7 +26,8 @@ const NON_INFORMATIVE_CATEGORY_SYSTEM_NAMES: ReadonlySet<string> = new Set([
   "uncategorized",
 ]);
 
-export const MIN_TRUSTED_CATEGORY_CONFIDENCE = 0.9;
+export const MIN_ACCEPTED_CATEGORY_CONFIDENCE = 0.5;
+export const MIN_AUTO_SELECT_CATEGORY_CONFIDENCE = 0.8;
 export const TRUSTED_ENRICHED_PURCHASE_CONFIDENCE = 0.98;
 
 export interface TrustedSmsCategoryCandidate {
@@ -299,7 +300,7 @@ function mapCategoryResponse(
       candidateIds === undefined ||
       responseIdCounts.get(value.merchantId) !== 1 ||
       !allowedCategories.has(value.categorySystemName) ||
-      value.confidence < MIN_TRUSTED_CATEGORY_CONFIDENCE
+      value.confidence < MIN_ACCEPTED_CATEGORY_CONFIDENCE
     ) {
       rejectedResultCount += 1;
       continue;

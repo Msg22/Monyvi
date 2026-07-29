@@ -105,8 +105,9 @@ See `docs/development/sms-parser.md` for the complete operator runbook.
   against the current request. This avoids Gemini's generated-constraint limit
   without weakening response correlation.
 - The client excludes custom, hidden, internal, deleted, and non-expense
-  categories from accepted outcomes. Category confidence below `0.90` preserves
-  `other` and review-required state.
+  categories from accepted outcomes. Category confidence below `0.50` preserves
+  `other`; confidence from `0.50` through values below `0.80` applies the
+  returned category but keeps it review-required with `Review category`.
 - Mobile category enrichment uses chunks of at most 20, no more than two
   concurrent requests, and one 20-second deadline for the complete operation.
   Each provider attempt times out after 8 seconds and uses the bounded Edge

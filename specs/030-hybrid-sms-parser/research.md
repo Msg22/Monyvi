@@ -214,11 +214,12 @@ or consent failure without mutable worker state.
 ## Decision 15: Derive auto-selection after all financial gates
 
 **Decision**: Trusted patterns remain review-required and cannot request
-auto-selection. An exact trusted `card_purchase` may become auto-selectable only
-after a valid enrichment-safe category at confidence `>= 0.90`, fixed local
-extraction confidence `0.98`, a resolved account under FR-057, and zero
-remaining review reasons. Every other family and every failed or uncertain
-enrichment remains review-required.
+auto-selection. An allowed enrichment-safe category is applied at confidence
+`>= 0.50`; values below `0.80` retain a category-specific review reason. An
+exact trusted `card_purchase` may become auto-selectable only after category
+confidence reaches `>= 0.80`, fixed local extraction confidence is `0.98`, an
+account is resolved under FR-057, and zero review reasons remain. Every other
+family and every failed or uncertain enrichment remains review-required.
 
 **Rationale**: Trusting an SMS structure is not enough to trust category or
 account assignment. Keeping selection derivation in mobile orchestration after

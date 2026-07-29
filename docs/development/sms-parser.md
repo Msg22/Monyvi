@@ -23,15 +23,16 @@ it. Raw SMS and financial fields never enter this request. The response can
 supply only category and confidence. It cannot replace the local merchant or any
 financial value.
 
-A category is accepted at confidence `0.90` or greater. Generic fallback
+A category is accepted at confidence `0.50` or greater. Generic fallback
 categories such as `other` and `uncategorized` are never accepted. Duplicate
-response identities fail closed even when one sibling is malformed. The final
-suggestion confidence is the lower of category confidence and the
-trusted-purchase ceiling `0.98`. Category-enriched card purchases still require
-exactly one resolved account and zero existing review reasons before
-auto-selection. Failed category enrichment, ambiguous account matches, ATM
-withdrawals, transfers, refunds, and unresolved templates remain
-review-required.
+response identities fail closed even when one sibling is malformed. Accepted
+category confidence below `0.80` applies the category but keeps a
+category-specific review reason. Exact trusted purchases retain local extraction
+confidence `0.98`; category-enriched card purchases still require category
+confidence at least `0.80`, exactly one resolved account, and zero existing
+review reasons before auto-selection. Failed category enrichment, ambiguous
+account matches, ATM withdrawals, transfers, refunds, and unresolved templates
+remain review-required.
 
 Catalog version 2 also includes one exact `QNB EGYPT` online-banking
 transfer-request structure. It remains a low-confidence, review-required

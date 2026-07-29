@@ -85,6 +85,17 @@ export function getPrimaryTransactionBadge(
   reviewMeta: TransactionReviewMeta | undefined,
   isSelected: boolean
 ): TransactionBadgeData | undefined {
+  const reviewReasons = reviewMeta?.reasons ?? [];
+  if (
+    reviewReasons.includes("category_needed") &&
+    (reviewReasons.length > 1 || hasMissingInfo)
+  ) {
+    return {
+      labelKey: "review_badge_review_details",
+      color: "amber",
+    };
+  }
+
   return [...getTransactionBadges(hasMissingInfo, reviewMeta, isSelected)].sort(
     (left, right) =>
       (BADGE_PRIORITY[left.labelKey] ?? Number.MAX_SAFE_INTEGER) -

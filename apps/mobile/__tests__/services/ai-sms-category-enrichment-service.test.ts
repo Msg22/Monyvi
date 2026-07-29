@@ -77,7 +77,7 @@ import type {
 } from "@monyvi/logic";
 import {
   enrichTrustedSmsCategories,
-  MIN_TRUSTED_CATEGORY_CONFIDENCE,
+  MIN_ACCEPTED_CATEGORY_CONFIDENCE,
   type SmsCategoryEnrichmentRequestContext,
   type TrustedSmsCategoryCandidate,
 } from "@/services/ai-sms-category-enrichment-service";
@@ -391,7 +391,7 @@ describe("ai-sms-category-enrichment-service", () => {
           {
             merchantId: "merchant-1",
             categorySystemName: "shopping",
-            confidence: MIN_TRUSTED_CATEGORY_CONFIDENCE - 0.01,
+            confidence: MIN_ACCEPTED_CATEGORY_CONFIDENCE - 0.01,
           },
           {
             merchantId: "merchant-2",
@@ -413,6 +413,33 @@ describe("ai-sms-category-enrichment-service", () => {
 
     expect(result.outcomesByCandidateId.size).toBe(0);
     expect(result.rejectedResultCount).toBe(2);
+  });
+
+  it("accepts an allowed category at the minimum confidence boundary", async () => {
+    mockInvoke.mockResolvedValueOnce({
+      data: {
+        categories: [
+          {
+            merchantId: "merchant-1",
+            categorySystemName: "shopping",
+            confidence: 0.5,
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const result = await enrichTrustedSmsCategories(
+      [candidate("candidate-1", "ASMAK BAHARY")],
+      categories
+    );
+
+    expect(result.outcomesByCandidateId.get("candidate-1")).toEqual({
+      categorySystemName: "shopping",
+      confidence: 0.5,
+    });
+    expect(result.acceptedCandidateCount).toBe(1);
+    expect(result.rejectedResultCount).toBe(0);
   });
 
   it("rejects duplicate response identities instead of choosing one arbitrarily", async () => {

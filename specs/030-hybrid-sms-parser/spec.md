@@ -49,9 +49,18 @@
   only to classify it into an allowed system category.
 - Q: When may a trusted local result become auto-selectable? -> A: Only an exact
   trusted `card_purchase` with fixed local extraction confidence `0.98`, a valid
-  category result with confidence at least `0.90`, a resolved account, and no
+  category result with confidence at least `0.80`, a resolved account, and no
   remaining review reason. ATM, transfer, uncertain-category, failed-enrichment,
   ambiguous, and unresolved results remain review-required.
+
+### Session 2026-07-29
+
+- Q: How should useful category enrichment results below the auto-selection
+  threshold behave? -> A: Apply an allowed category when confidence is at least
+  `0.50`. Confidence from `0.50` through values below `0.80` keeps the
+  suggestion review-required with a category-specific reason. Confidence
+  `0.80` or higher may clear the category review reason, but auto-selection
+  still requires a resolved account and no other review reason.
 
 ## User Scenarios & Testing
 
@@ -454,14 +463,16 @@ trusted template and verify messages return to the unresolved path.
 - **FR-053**: A category result is accepted only when its category is in both
   the server-owned enrichment-safe allowlist and the client's current visible,
   non-internal, non-deleted system expense categories, and its confidence is at
-  least `0.90`. Generic fallback categories such as `other` and `uncategorized`
-  MUST NOT be enrichment-safe. Otherwise the local fallback category and
-  review-required state remain.
+  least `0.50`. Generic fallback categories such as `other` and `uncategorized`
+  MUST NOT be enrichment-safe. Accepted results below `0.80` MUST use the
+  returned category but remain review-required with `category_needed`.
+  Otherwise the local fallback category and review-required state remain.
 - **FR-054**: A category-enriched trusted card purchase MAY be auto-selected
-  only when category enrichment satisfies FR-053, account matching is resolved,
-  and the existing review-selection service reports no remaining reason. The
-  enrichment path MUST NOT bypass account, transfer, category, parser, or user
-  override gates. Account resolution MUST satisfy the evidence rules in FR-057.
+  only when category enrichment satisfies FR-053 with confidence at least
+  `0.80`, account matching is resolved, and the existing review-selection
+  service reports no remaining reason. The enrichment path MUST NOT bypass
+  account, transfer, category, parser, or user override gates. Account
+  resolution MUST satisfy the evidence rules in FR-057.
 - **FR-055**: Catalog version 2 MUST include only the approved exact `QNB EGYPT`
   online-banking transfer-request structure with amount and currency
   placeholders. A match MUST emit an `EXPENSE` suggestion in family

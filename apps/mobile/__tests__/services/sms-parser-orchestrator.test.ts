@@ -32,7 +32,8 @@ jest.mock("@/services/profile-service", () => ({
 }));
 
 jest.mock("@/services/ai-sms-category-enrichment-service", () => ({
-  MIN_TRUSTED_CATEGORY_CONFIDENCE: 0.9,
+  MIN_ACCEPTED_CATEGORY_CONFIDENCE: 0.5,
+  MIN_AUTO_SELECT_CATEGORY_CONFIDENCE: 0.8,
   TRUSTED_ENRICHED_PURCHASE_CONFIDENCE: 0.98,
   enrichTrustedSmsCategories: (...args: readonly unknown[]): unknown =>
     mockEnrichTrustedSmsCategories(...args),
@@ -293,7 +294,7 @@ describe("sms-parser-orchestrator", () => {
   it("changes only category fields and unlocks existing auto-selection gates after confident enrichment", async () => {
     mockEnrichTrustedSmsCategories.mockResolvedValueOnce({
       outcomesByCandidateId: new Map([
-        ["sms-trusted", { categorySystemName: "shopping", confidence: 0.95 }],
+        ["sms-trusted", { categorySystemName: "shopping", confidence: 0.8 }],
       ]),
       attemptedMerchantCount: 1,
       acceptedCandidateCount: 1,
@@ -341,7 +342,7 @@ describe("sms-parser-orchestrator", () => {
         counterparty: "GEIDEAE*BASHAYER LIBAYE",
         categoryId: "cat-shopping",
         categoryDisplayName: "Shopping",
-        confidence: 0.95,
+        confidence: 0.98,
         reviewStatus: "auto_selectable",
         reviewReasons: [],
         smsFingerprint: "fingerprint-trusted",

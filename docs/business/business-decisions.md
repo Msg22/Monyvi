@@ -1,6 +1,6 @@
 # Monyvi Business Decisions
 
-**Status:** Active product source of truth **Last updated:** 2026-07-20
+**Status:** Active product source of truth **Last updated:** 2026-07-29
 **Scope:** Business and product rules confirmed by the current codebase and
 implementation history.
 
@@ -724,13 +724,15 @@ Business rules:
   merchant-free results, and locally unresolved candidates do not use this
   enrichment endpoint in the first release.
 - Exact trusted card purchases use a fixed local extraction confidence of
-  `0.98`. A category result is accepted only at confidence `0.90` or greater.
-  Generic fallback categories such as `other` and `uncategorized` are never
-  accepted as enrichment outcomes even if the provider reports high confidence.
-  After acceptance, auto-selection still requires a resolved account and zero
-  remaining reasons from the existing transaction-review selection service.
-  Account evidence follows the exact-card or unique-sender rule below; ambiguous
-  matches remain review-required.
+  `0.98`. An allowed category result is accepted at confidence `0.50` or
+  greater. Accepted results below `0.80` remain review-required with a
+  category-specific reason; `0.80` is included in the auto-selection confidence
+  range. Generic fallback categories such as `other` and `uncategorized` are
+  never accepted as enrichment outcomes even if the provider reports high
+  confidence. After acceptance, auto-selection still requires a resolved
+  account and zero remaining reasons from the existing transaction-review
+  selection service. Account evidence follows the exact-card or unique-sender
+  rule below; ambiguous matches remain review-required.
 - ATM withdrawals, transfers, unresolved templates, uncertain categories, and
   failed enrichment remain review-required regardless of local confidence.
 - Missing, malformed, low-confidence, invented-category, timeout, cancellation,

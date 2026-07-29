@@ -26,13 +26,15 @@ jest.mock("@/services/profile-service", () => ({
 }));
 
 jest.mock("@/services/ai-sms-category-enrichment-service", () => ({
-  MIN_TRUSTED_CATEGORY_CONFIDENCE: 0.9,
+  MIN_ACCEPTED_CATEGORY_CONFIDENCE: 0.5,
+  MIN_AUTO_SELECT_CATEGORY_CONFIDENCE: 0.8,
   TRUSTED_ENRICHED_PURCHASE_CONFIDENCE: 0.98,
   enrichTrustedSmsCategories: (...args: readonly unknown[]): unknown =>
     mockEnrichTrustedSmsCategories(...args),
 }));
 
 import { parseSmsWithOrchestrator } from "@/services/sms-parser-orchestrator";
+import { getTransactionReviewMeta } from "@/services/transaction-review-selection";
 
 const RECEIVED_AT_MS = new Date(2026, 3, 8, 14, 30).getTime();
 const context: ParseSmsContext = {
@@ -153,6 +155,42 @@ describe("SMS parser orchestrator safeguards", () => {
     });
     resolveAi?.({ transactions: [], hasError: false });
     await parsePromise;
+  });
+
+  it("applies a reviewable category below the auto-selection confidence threshold", async () => {
+    mockEnrichTrustedSmsCategories.mockResolvedValueOnce({
+      outcomesByCandidateId: new Map([
+        ["sms-trusted", { categorySystemName: "shopping", confidence: 0.79 }],
+      ]),
+      attemptedMerchantCount: 1,
+      acceptedCandidateCount: 1,
+      rejectedResultCount: 0,
+      hasError: false,
+    });
+
+    const result = await parseSmsWithOrchestrator(
+      [trustedPurchaseCandidate()],
+      context
+    );
+
+    expect(result.transactions[0]).toEqual(
+      expect.objectContaining({
+        categoryId: "cat-shopping",
+        categoryDisplayName: "Shopping",
+        confidence: 0.98,
+        reviewStatus: "needs_review",
+        reviewReasons: ["category_needed"],
+      })
+    );
+    expect(
+      getTransactionReviewMeta(result.transactions[0], {
+        accountId: "account-1",
+        matchReason: "card_last4",
+      })
+    ).toEqual({
+      isAutoSelectable: false,
+      reasons: ["category_needed"],
+    });
   });
 
   it("suppresses a terminal fingerprint from full AI fallback", async () => {

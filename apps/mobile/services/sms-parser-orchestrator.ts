@@ -35,7 +35,8 @@ import {
 } from "./ai-sms-parser-service";
 import {
   enrichTrustedSmsCategories,
-  MIN_TRUSTED_CATEGORY_CONFIDENCE,
+  MIN_ACCEPTED_CATEGORY_CONFIDENCE,
+  MIN_AUTO_SELECT_CATEGORY_CONFIDENCE,
   TRUSTED_ENRICHED_PURCHASE_CONFIDENCE,
   type TrustedSmsCategoryCandidate,
   type TrustedSmsCategoryEnrichmentResult,
@@ -140,7 +141,7 @@ function mapTrustedTransaction(
     transaction.messageFamily === "card_purchase" &&
     categoryOutcome !== undefined &&
     Number.isFinite(categoryOutcome.confidence) &&
-    categoryOutcome.confidence >= MIN_TRUSTED_CATEGORY_CONFIDENCE
+    categoryOutcome.confidence >= MIN_ACCEPTED_CATEGORY_CONFIDENCE
       ? context.categories.find(
           (category) =>
             category.isSystem === true &&
@@ -155,7 +156,10 @@ function mapTrustedTransaction(
     acceptedCategory !== undefined && categoryOutcome !== undefined
       ? categoryOutcome
       : undefined;
-  const isAcceptedCategoryOutcome = acceptedCategoryOutcome !== undefined;
+  const requiresCategoryReview =
+    acceptedCategoryOutcome !== undefined &&
+    acceptedCategoryOutcome.confidence <
+      MIN_AUTO_SELECT_CATEGORY_CONFIDENCE;
   const category = acceptedCategory
     ? {
         id: acceptedCategory.id,
@@ -165,11 +169,14 @@ function mapTrustedTransaction(
         transaction.categorySystemName,
         buildCategoryMap(context.categories)
       );
-  const reviewReasons = isAcceptedCategoryOutcome
+  const preservedReviewReasons = acceptedCategoryOutcome !== undefined
     ? transaction.reviewReasons.filter(
         (reason) => reason !== "low_confidence" && reason !== "category_needed"
       )
     : transaction.reviewReasons;
+  const reviewReasons = requiresCategoryReview
+    ? [...preservedReviewReasons, "category_needed" as const]
+    : preservedReviewReasons;
   return {
     amount: transaction.amount,
     currency: normalizeCurrency(transaction.currency),
@@ -178,11 +185,8 @@ function mapTrustedTransaction(
     date: transaction.date,
     categoryId: category.id,
     categoryDisplayName: category.displayName,
-    confidence: isAcceptedCategoryOutcome
-      ? Math.min(
-          TRUSTED_ENRICHED_PURCHASE_CONFIDENCE,
-          clampConfidence(acceptedCategoryOutcome.confidence)
-        )
+    confidence: acceptedCategoryOutcome !== undefined
+      ? TRUSTED_ENRICHED_PURCHASE_CONFIDENCE
       : clampConfidence(transaction.confidence),
     originLabel: candidate.message.address,
     source: "SMS",
@@ -191,7 +195,7 @@ function mapTrustedTransaction(
     senderDisplayName: candidate.message.address,
     rawSmsBody: candidate.message.body,
     reviewStatus:
-      isAcceptedCategoryOutcome && reviewReasons.length === 0
+      acceptedCategoryOutcome !== undefined && reviewReasons.length === 0
         ? "auto_selectable"
         : "needs_review",
     reviewReasons,
