@@ -121,11 +121,13 @@ Expected:
 Expected:
 - First tap discards without confirmation.
 - Card fades/collapses once; adjacent cards settle once.
-- Banner names the item and includes Undo plus close.
+- Banner stays inline above the transaction rows, names the item, includes Undo
+  plus close, and does not disappear on a timer.
 - Undo restores same values, position, and selection.
 - Second discard finalizes/replaces the first Undo opportunity.
 - Reduced motion uses immediate transitions.
-- Failed persistence leaves/restores the card.
+- Discard and Undo update the visible list immediately without a full-list
+  skeleton; failed persistence restores the previous visible state.
 
 ### 8. Discard all and Review later
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
   discardOneSmsReviewDraft,
@@ -40,20 +40,6 @@ export function useSmsReviewUndo(): UseSmsReviewUndoResult {
   } | null>(null);
   const pendingDiscardsRef = useRef(new Map<string, Promise<void>>());
 
-  useEffect(() => {
-    if (!undoItem) return;
-    const remainingMs = Math.max(0, undoItem.expiresAt - Date.now());
-    const timeout = setTimeout(() => {
-      setUndoItem(null);
-      if (
-        latestSuccessfulDiscardRef.current?.item.draftId === undoItem.draftId
-      ) {
-        latestSuccessfulDiscardRef.current = null;
-      }
-    }, remainingMs);
-    return () => clearTimeout(timeout);
-  }, [undoItem]);
-
   const discard = useCallback(
     (draftId: string, userId: string): Promise<void> => {
       const requestKey = `${userId}:${draftId}`;
@@ -77,11 +63,7 @@ export function useSmsReviewUndo(): UseSmsReviewUndoResult {
         .catch((error: unknown) => {
           if (latestDiscardRequestRef.current === requestId) {
             const previousSuccessful = latestSuccessfulDiscardRef.current?.item;
-            setUndoItem(
-              previousSuccessful && previousSuccessful.expiresAt > Date.now()
-                ? previousSuccessful
-                : null
-            );
+            setUndoItem(previousSuccessful ?? null);
           }
           throw error;
         })

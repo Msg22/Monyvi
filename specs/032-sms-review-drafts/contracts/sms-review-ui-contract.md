@@ -48,9 +48,12 @@ Without an active queue, retain the established scan entry behavior.
 - Only the latest individual discard is undoable.
 - Banner names the latest discarded suggestion.
 - Actions: `Undo` and trailing close X.
-- Must not obscure the list or sticky footer.
+- Remains visible without timer-based dismissal until acted on, replaced, or
+  the review process ends.
+- Renders in normal layout flow above transaction rows; it must not obscure the
+  list or sticky footer.
 - A second discard finalizes/replaces the previous Undo item.
-- Close, expiry, or process death finalizes the discard.
+- Close or process death finalizes the discard.
 - Undo restores the same item at its prior position with expand/fade motion and no
   overshoot.
 - Reduced-motion preference uses immediate state changes.

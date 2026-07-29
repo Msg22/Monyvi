@@ -489,6 +489,13 @@ export function TransactionReview({
               />
             )}
             <SafeguardQaDiagnosticsPanel diagnostics={qaDiagnostics} />
+            {undoBanner && (
+              <SmsReviewUndoBanner
+                discardedName={undoBanner.discardedName}
+                onUndo={undoBanner.onUndo}
+                onClose={undoBanner.onClose}
+              />
+            )}
           </Animated.View>
         }
         ListEmptyComponent={
@@ -541,14 +548,6 @@ export function TransactionReview({
         isSmsWorkspace={isSmsWorkspace}
         onReviewLater={onReviewLater}
       />
-
-      {undoBanner && (
-        <SmsReviewUndoBanner
-          discardedName={undoBanner.discardedName}
-          onUndo={undoBanner.onUndo}
-          onClose={undoBanner.onClose}
-        />
-      )}
 
       <ReviewFiltersSheet
         visible={isFilterSheetVisible}

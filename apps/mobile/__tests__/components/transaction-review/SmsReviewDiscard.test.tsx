@@ -22,7 +22,7 @@ jest.mock("@expo/vector-icons", () => ({
 }));
 
 describe("SMS review discard feedback", () => {
-  it("shows one named safe-area-aware Undo banner with Undo and close actions", () => {
+  it("shows one named inline Undo banner with Undo and close actions", () => {
     const onUndo = jest.fn();
     const onClose = jest.fn();
 
@@ -36,9 +36,15 @@ describe("SMS review discard feedback", () => {
 
     expect(screen.getByText("sms_review_undo_title:Fawry Market")).toBeTruthy();
     expect(screen.getByText("sms_review_undo_description")).toBeTruthy();
-    expect(screen.getByTestId("sms-review-undo-banner")).toHaveStyle({
-      bottom: 128,
-    });
+    expect(screen.getByTestId("sms-review-undo-banner")).toBeTruthy();
+    expect(
+      readFileSync(
+        require.resolve(
+          "@/components/transaction-review/SmsReviewUndoBanner"
+        ),
+        "utf8"
+      )
+    ).not.toMatch(/className="[^"]*\babsolute\b/);
     fireEvent.press(screen.getByText("sms_review_undo"));
     fireEvent.press(screen.getByTestId("sms-review-undo-close"));
     expect(onUndo).toHaveBeenCalledTimes(1);

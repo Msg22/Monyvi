@@ -5,7 +5,6 @@ import {
   discardOneSmsReviewDraft,
   editSmsReviewDraft,
   setSmsReviewDraftSelection,
-  SMS_REVIEW_UNDO_DURATION_MS,
   undoSmsReviewDraftDiscard,
 } from "@/services/sms-review-draft-command-service";
 import type { VolatileSmsReviewUndoItem } from "@/services/sms-review-draft-repository";
@@ -45,7 +44,7 @@ const transaction: ParsedSmsTransaction = {
   rawSmsBody: "message",
 };
 
-function createUndoItem(expiresAt: number): VolatileSmsReviewUndoItem {
+function createUndoItem(): VolatileSmsReviewUndoItem {
   return {
     draftId: "draft-1",
     userId: "user-1",
@@ -55,7 +54,6 @@ function createUndoItem(expiresAt: number): VolatileSmsReviewUndoItem {
     selectionOverride: false,
     position: 2,
     parsedAt: new Date("2026-07-27T12:00:00.000Z"),
-    expiresAt,
   };
 }
 
@@ -63,10 +61,7 @@ describe("sms-review-draft-command-service", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockDiscardAll.mockResolvedValue(2);
-    mockDiscardOne.mockImplementation(
-      (_draftId: string, _userId: string, expiresAt: number) =>
-        Promise.resolve(createUndoItem(expiresAt))
-    );
+    mockDiscardOne.mockResolvedValue(createUndoItem());
     mockRestore.mockResolvedValue(undefined);
     mockUpdateItem.mockResolvedValue(undefined);
     mockUpdateSelection.mockResolvedValue(undefined);
@@ -84,32 +79,21 @@ describe("sms-review-draft-command-service", () => {
     expect(mockUpdateSelection).toHaveBeenCalledWith("draft-1", "user-1", null);
   });
 
-  it("creates a bounded latest undo window for individual discard", async () => {
-    const now = 1_000;
-
-    const result = await discardOneSmsReviewDraft("draft-1", "user-1", now);
+  it("keeps the latest individual discard undoable for the active session", async () => {
+    const result = await discardOneSmsReviewDraft("draft-1", "user-1");
 
     expect(mockDiscardOne).toHaveBeenCalledWith(
       "draft-1",
-      "user-1",
-      now + SMS_REVIEW_UNDO_DURATION_MS
+      "user-1"
     );
-    expect(result.expiresAt).toBe(now + SMS_REVIEW_UNDO_DURATION_MS);
+    expect(result).toEqual(createUndoItem());
   });
 
-  it("restores before expiry and refuses an expired undo", async () => {
-    const undoItem = createUndoItem(5_000);
+  it("restores the active session undo without a timer cutoff", async () => {
+    const undoItem = createUndoItem();
 
-    await expect(undoSmsReviewDraftDiscard(undoItem, 4_999)).resolves.toBe(
-      true
-    );
+    await expect(undoSmsReviewDraftDiscard(undoItem)).resolves.toBe(true);
     expect(mockRestore).toHaveBeenCalledWith(undoItem);
-
-    mockRestore.mockClear();
-    await expect(undoSmsReviewDraftDiscard(undoItem, 5_000)).resolves.toBe(
-      false
-    );
-    expect(mockRestore).not.toHaveBeenCalled();
   });
 
   it("delegates final bulk discard without creating undo state", async () => {

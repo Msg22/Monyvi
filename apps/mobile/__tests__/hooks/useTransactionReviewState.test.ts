@@ -161,6 +161,31 @@ describe("useTransactionReviewState", () => {
     expect(result.current.needsReviewCount).toBe(3);
   });
 
+  it("keeps retained rows resolved while one suggestion is removed", async () => {
+    const first = createTransaction({
+      originLabel: "FIRST",
+      deduplicationHash: "fingerprint-first",
+    });
+    const retained = createTransaction({
+      originLabel: "RETAINED",
+      deduplicationHash: "fingerprint-retained",
+    });
+    const { result, rerender } = renderHook(
+      ({ transactions }: { transactions: readonly ReviewableTransaction[] }) =>
+        useTransactionReviewState({ transactions, onSave: jest.fn() }),
+      { initialProps: { transactions: [first, retained] } }
+    );
+    await waitFor(() => expect(result.current.accountMatches.size).toBe(2));
+    mockMatchTransactionsBatched.mockImplementationOnce(
+      (): Promise<void> => new Promise(() => undefined)
+    );
+
+    rerender({ transactions: [retained] });
+
+    expect(Array.from(result.current.resolvedAccountMatchIndices)).toEqual([0]);
+    expect(result.current.isReviewMetadataReady).toBe(true);
+  });
+
   it("still seeds later safe rows when a row is edited during account matching", async () => {
     const transactions = [
       createTransaction({ originLabel: "FIRST_SAFE", confidence: 0.95 }),

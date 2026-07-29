@@ -33,6 +33,11 @@ import type {
 import type { TransactionEdits } from "@/services/sms-edit-modal-service";
 import { toggleTransactionTypeFilter } from "@/utils/transaction-review-filters";
 import { useTranslation } from "react-i18next";
+import {
+  getTransactionParsedContentIdentity,
+  mergeTransactionAccountMatchCache,
+  readTransactionAccountMatchCache,
+} from "@/services/transaction-review-account-match-cache";
 
 export interface ReviewListItem {
   readonly originalIndex: number;
@@ -182,67 +187,6 @@ interface AccountMatchState {
   readonly matches: ReadonlyMap<number, AccountMatch>;
 }
 
-function getTransactionRiskIdentity(
-  transaction: ReviewableTransaction
-): string {
-  const reviewFields = transaction as {
-    readonly accountId?: string | null;
-    readonly isAtmWithdrawal?: boolean;
-    readonly toAccountId?: string | null;
-  };
-
-  return [
-    transaction.confidence,
-    transaction.categoryId ?? "",
-    transaction.reviewStatus ?? "",
-    [...(transaction.reviewReasons ?? [])].sort().join(","),
-    reviewFields.accountId ?? "",
-    reviewFields.toAccountId ?? "",
-    reviewFields.isAtmWithdrawal === true ? "atm" : "not-atm",
-  ].join(":");
-}
-
-function getTransactionParsedContentIdentity(
-  transaction: ReviewableTransaction
-): string {
-  const sourceFields = transaction as ReviewableTransaction & {
-    readonly smsFingerprint?: string;
-    readonly senderDisplayName?: string;
-    readonly rawSmsBody?: string;
-    readonly cardLast4?: string;
-    readonly toAccountName?: string;
-    readonly pendingAccount?: PendingAccount;
-    readonly note?: string;
-    readonly originalTranscript?: string;
-    readonly detectedLanguage?: string;
-    readonly aiDetectedCurrency?: string | null;
-  };
-
-  return JSON.stringify({
-    accountAndRisk: getTransactionRiskIdentity(transaction),
-    amount: transaction.amount,
-    cardLast4: sourceFields.cardLast4 ?? null,
-    categoryDisplayName: transaction.categoryDisplayName,
-    counterparty: transaction.counterparty ?? null,
-    currency: transaction.currency,
-    date: transaction.date.getTime(),
-    deduplicationHash: transaction.deduplicationHash ?? null,
-    detectedLanguage: sourceFields.detectedLanguage ?? null,
-    aiDetectedCurrency: sourceFields.aiDetectedCurrency ?? null,
-    merchant: transaction.merchant ?? null,
-    note: sourceFields.note ?? null,
-    originalTranscript: sourceFields.originalTranscript ?? null,
-    originLabel: transaction.originLabel,
-    rawSmsBody: sourceFields.rawSmsBody ?? null,
-    senderDisplayName: sourceFields.senderDisplayName ?? null,
-    smsFingerprint: sourceFields.smsFingerprint ?? null,
-    toAccountName: sourceFields.toAccountName ?? null,
-    pendingAccount: sourceFields.pendingAccount ?? null,
-    source: transaction.source,
-    type: transaction.type,
-  });
-}
-
 function applyTransactionEdits(
   transaction: ReviewableTransaction,
   edits: TransactionEdits,
@@ -330,7 +274,9 @@ export function useTransactionReviewState({
       matches: new Map(),
     })
   );
-  const accountMatches = accountMatchState.matches;
+  const accountMatchCacheRef = useRef<ReadonlyMap<string, AccountMatch>>(
+    new Map()
+  );
   const [userAccounts, setUserAccounts] = useState<
     readonly AccountWithBankDetails[]
   >([]);
@@ -363,10 +309,30 @@ export function useTransactionReviewState({
   const { userId, isResolvingUser } = useCurrentUser();
 
   const batchSize = 20;
-  const transactionIdentity = useMemo(
-    () => JSON.stringify(transactions.map(getTransactionParsedContentIdentity)),
-    [transactions]
+  const transactionKeys = useMemo(
+    () =>
+      transactions.map(
+        (transaction) =>
+          `${userId ?? "unresolved"}:${getTransactionParsedContentIdentity(transaction)}`
+      ),
+    [transactions, userId]
   );
+  const transactionIdentity = useMemo(
+    () => JSON.stringify(transactionKeys),
+    [transactionKeys]
+  );
+  const cachedAccountMatches = useMemo(
+    () =>
+      readTransactionAccountMatchCache(
+        transactionKeys,
+        accountMatchCacheRef.current
+      ),
+    [transactionKeys]
+  );
+  const accountMatches =
+    accountMatchState.identity === transactionIdentity
+      ? accountMatchState.matches
+      : cachedAccountMatches;
   const previousTransactionsRef = useRef<readonly ReviewableTransaction[]>([]);
   const currentTransactionsRef = useRef(transactions);
   currentTransactionsRef.current = transactions;
@@ -414,13 +380,13 @@ export function useTransactionReviewState({
     );
     setAccountMatchState({
       identity: transactionIdentity,
-      matches: new Map(),
+      matches: cachedAccountMatches,
     });
     setPendingAccounts(getDurablePendingAccounts(currentTransactions));
     setInvalidIndices(new Set());
     setEditModalIndex(null);
     setReviewMode("all");
-  }, [transactionIdentity]);
+  }, [cachedAccountMatches, transactionIdentity]);
 
   useEffect(() => {
     let cancelled = false;
@@ -447,6 +413,11 @@ export function useTransactionReviewState({
               for (const [idx, match] of batchResults) {
                 next.set(idx, match);
               }
+              accountMatchCacheRef.current = mergeTransactionAccountMatchCache(
+                transactionKeys,
+                batchResults,
+                accountMatchCacheRef.current
+              );
               return {
                 identity: transactionIdentity,
                 matches: next,
@@ -457,18 +428,24 @@ export function useTransactionReviewState({
         );
       } catch (err: unknown) {
         if (cancelled) return;
+        const failedMatches = new Map(
+          transactions.map((transaction, index) => {
+            const match = {
+              accountId: null,
+              accountName: null,
+              matchReason: "none",
+            } satisfies AccountMatch;
+            return [index, match] as const;
+          })
+        );
+        accountMatchCacheRef.current = mergeTransactionAccountMatchCache(
+          transactionKeys,
+          failedMatches,
+          accountMatchCacheRef.current
+        );
         setAccountMatchState({
           identity: transactionIdentity,
-          matches: new Map(
-            transactions.map((_, index) => [
-              index,
-              {
-                accountId: null,
-                accountName: null,
-                matchReason: "none",
-              } satisfies AccountMatch,
-            ])
-          ),
+          matches: failedMatches,
         });
         console.warn("[TransactionReview] Account matching failed:", err);
         showToast({
@@ -484,7 +461,14 @@ export function useTransactionReviewState({
     return () => {
       cancelled = true;
     };
-  }, [transactions, showToast, userId, isResolvingUser, transactionIdentity]);
+  }, [
+    transactions,
+    showToast,
+    userId,
+    isResolvingUser,
+    transactionIdentity,
+    transactionKeys,
+  ]);
 
   const effectiveTransactions =
     useMemo((): readonly ReviewableTransaction[] => {
@@ -562,15 +546,11 @@ export function useTransactionReviewState({
   }, [effectiveTransactions, autoSelectedOriginalIndices]);
 
   const hasCompleteAccountMatches =
-    accountMatchState.identity === transactionIdentity &&
-    (effectiveTransactions.length === 0 ||
-      accountMatches.size >= effectiveTransactions.length);
+    effectiveTransactions.length === 0 ||
+    accountMatches.size >= effectiveTransactions.length;
   const resolvedAccountMatchIndices = useMemo<ReadonlySet<number>>(
-    () =>
-      accountMatchState.identity === transactionIdentity
-        ? new Set(accountMatchState.matches.keys())
-        : new Set(),
-    [accountMatchState, transactionIdentity]
+    () => new Set(accountMatches.keys()),
+    [accountMatches]
   );
 
   useEffect(() => {

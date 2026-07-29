@@ -377,6 +377,36 @@ describe("SMS review route", () => {
     expect(mockRouterReplace).toHaveBeenCalledWith("/(private)/(tabs)");
   });
 
+  it("removes one suggestion immediately without waiting for persistence", async () => {
+    mockQueueItems = [
+      mockQueueItems[0],
+      {
+        ...mockQueueItems[0],
+        draftId: "draft-2",
+        transaction: {
+          ...mockTransaction,
+          smsFingerprint: "fingerprint-2",
+        },
+        position: 1,
+      },
+    ];
+    mockDiscardOne.mockReturnValue(new Promise<void>(() => undefined));
+    render(<SmsReviewScreen />);
+    const reviewProps = mockTransactionReview.mock.calls.at(-1)?.[0];
+    if (!reviewProps) throw new Error("TransactionReview was not rendered");
+
+    act(() => {
+      void reviewProps.onDiscardItem(0);
+    });
+
+    await waitFor(() => {
+      const latestProps = mockTransactionReview.mock.calls.at(-1)?.[0];
+      expect(latestProps?.transactions).toHaveLength(1);
+      expect(latestProps?.transactions[0]?.smsFingerprint).toBe("fingerprint-2");
+    });
+    expect(screen.getByTestId("transaction-review")).toBeTruthy();
+  });
+
   it("shows the live review count and freezes the confirmed discard count", () => {
     const view = render(<SmsReviewScreen />);
     const initialReview = mockTransactionReview.mock.calls.at(-1)?.[0];

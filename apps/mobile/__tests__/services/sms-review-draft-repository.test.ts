@@ -657,7 +657,6 @@ describe("sms-review-draft-repository", () => {
       selectionOverride: true,
       position: 2,
       parsedAt: new Date("2026-07-27T12:00:00.000Z"),
-      expiresAt: Date.now() + 5_000,
     });
 
     expect(mockCollections.get("sms_review_draft_items")?.records).toHaveLength(
@@ -759,7 +758,7 @@ describe("sms-review-draft-repository", () => {
       .mockRejectedValueOnce(new Error("sms_review_draft_user_scope_changed"));
 
     await expect(
-      discardSmsReviewDraft(draft.id, "user-1", Date.now() + 5_000)
+      discardSmsReviewDraft(draft.id, "user-1")
     ).rejects.toThrow("sms_review_draft_user_scope_changed");
 
     expect(mockCollections.get("sms_review_draft_items")?.records).toContain(
@@ -790,7 +789,6 @@ describe("sms-review-draft-repository", () => {
         selectionOverride: null,
         position: 0,
         parsedAt: new Date("2026-07-27T12:00:00.000Z"),
-        expiresAt: Date.now() + 5_000,
       })
     ).rejects.toThrow("sms_review_draft_user_scope_changed");
 

@@ -13,10 +13,7 @@ jest.mock("@/services/sms-review-draft-command-service", () => ({
     mockUndo(...args),
 }));
 
-function createUndoItem(
-  name: string,
-  expiresAt = Date.now() + 3_500
-): VolatileSmsReviewUndoItem {
+function createUndoItem(name: string): VolatileSmsReviewUndoItem {
   return {
     draftId: `draft-${name}`,
     userId: "user-1",
@@ -46,7 +43,6 @@ function createUndoItem(
     selectionOverride: null,
     position: 0,
     parsedAt: new Date("2026-07-27T09:12:00.000Z"),
-    expiresAt,
   } as const;
 }
 
@@ -220,14 +216,14 @@ describe("useSmsReviewUndo", () => {
     expect(result.current.undoItem).toBeNull();
   });
 
-  it("expires the visible undo without restoring it", async () => {
-    mockDiscard.mockResolvedValue(createUndoItem("Expired", Date.now() + 100));
+  it("keeps the visible undo until the user acts on it", async () => {
+    mockDiscard.mockResolvedValue(createUndoItem("Persistent"));
     const { result } = renderHook(() => useSmsReviewUndo());
 
     await act(async () => result.current.discard("draft-1", "user-1"));
-    act(() => jest.advanceTimersByTime(100));
+    act(() => jest.advanceTimersByTime(60_000));
 
-    expect(result.current.undoItem).toBeNull();
+    expect(result.current.undoItem?.draftId).toBe("draft-Persistent");
     expect(mockUndo).not.toHaveBeenCalled();
   });
 });

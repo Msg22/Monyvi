@@ -96,12 +96,12 @@ interface VolatileSmsReviewUndoItem {
   readonly selectionOverride: boolean | null;
   readonly position: number;
   readonly parsedAt: number;
-  readonly expiresAt: number;
 }
 ```
 
-This object exists in process memory only. Replacing, closing, or expiring the
-Undo banner erases it. It never appears in logs or persisted state.
+This object exists in process memory only. Replacing or closing the Undo banner,
+or ending the review process, erases it. It never appears in logs or persisted
+state. The visible Undo opportunity has no timer cutoff.
 
 ## Read Model: SMS Review Queue Snapshot
 

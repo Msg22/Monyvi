@@ -76,7 +76,6 @@ export interface VolatileSmsReviewUndoItem {
   readonly selectionOverride: boolean | null;
   readonly position: number;
   readonly parsedAt: Date;
-  readonly expiresAt: number;
 }
 
 function queueCollection(): Collection<SmsReviewQueue> {
@@ -637,8 +636,7 @@ export async function runSmsReviewDraftWriter<T>(
 
 export async function discardSmsReviewDraft(
   draftId: string,
-  expectedUserId: string,
-  expiresAt: number
+  expectedUserId: string
 ): Promise<VolatileSmsReviewUndoItem> {
   return database.write(async (): Promise<VolatileSmsReviewUndoItem> => {
     await assertExpectedCurrentUser(expectedUserId);
@@ -685,7 +683,6 @@ export async function discardSmsReviewDraft(
       selectionOverride: record.selectionOverride ?? null,
       position: record.position,
       parsedAt: record.parsedAt,
-      expiresAt,
     };
   });
 }

@@ -9,8 +9,6 @@ import {
   updateSmsReviewDraftSelection,
 } from "./sms-review-draft-repository";
 
-export const SMS_REVIEW_UNDO_DURATION_MS = 3500;
-
 export async function editSmsReviewDraft(
   draftId: string,
   userId: string,
@@ -29,21 +27,14 @@ export async function setSmsReviewDraftSelection(
 
 export async function discardOneSmsReviewDraft(
   draftId: string,
-  userId: string,
-  now = Date.now()
+  userId: string
 ): Promise<VolatileSmsReviewUndoItem> {
-  return discardSmsReviewDraft(
-    draftId,
-    userId,
-    now + SMS_REVIEW_UNDO_DURATION_MS
-  );
+  return discardSmsReviewDraft(draftId, userId);
 }
 
 export async function undoSmsReviewDraftDiscard(
-  undoItem: VolatileSmsReviewUndoItem,
-  now = Date.now()
+  undoItem: VolatileSmsReviewUndoItem
 ): Promise<boolean> {
-  if (undoItem.expiresAt <= now) return false;
   await restoreSmsReviewDraft(undoItem);
   return true;
 }

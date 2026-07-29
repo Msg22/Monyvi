@@ -67,12 +67,15 @@ the app does not lose parsed work or cause repeat paid AI parsing.
   A: Provide one compact circular X action at the top-right of each SMS
   suggestion card. It has a full accessible touch target, remains visually
   secondary to selection and editing, and discards in one tap without an
-  individual confirmation. Discard removes the item immediately and shows one
-  banner naming the latest discarded suggestion with Undo and a trailing close
-  action. Undo restores the same edited item, position, and selection state.
-  Closing the banner, letting it expire, closing the process, or discarding
-  another item finalizes the previous discard; a later discard replaces the
-  banner and becomes the only undoable item.
+   individual confirmation. Discard removes the item immediately and shows one
+   inline banner fixed in the review layout above the transaction rows, naming
+   the latest discarded suggestion with Undo and a trailing close action. The
+   banner MUST remain visible until the user acts, another item replaces it, or
+   the review process ends; it MUST NOT auto-dismiss on a timer. Undo restores
+   the same edited item, position, and selection state. Closing the banner,
+   closing the process, or discarding another item finalizes the previous
+   discard; a later discard replaces the banner and becomes the only undoable
+   item.
 - Q: How should individual discard and Undo move? A: Use restrained product
   motion. A successfully discarded card fades and collapses once while adjacent
   cards settle once without bounce or layout jitter. Undo expands and fades the
@@ -264,16 +267,17 @@ financial writes.
 2. **Given** an individual discard succeeds, **When** the card leaves the list,
    **Then** it fades and collapses once, adjacent cards settle once without
    bounce or layout jitter, and the single Undo banner names the discarded
-   suggestion and offers Undo plus a trailing close action without obscuring
-   the review list or footer.
+   suggestion and offers Undo plus a trailing close action in normal layout
+   flow above the transaction rows without obscuring the review list or footer.
 3. **Given** the latest item was just discarded, **When** the user selects Undo,
    **Then** the same edited item expands and fades into its previous list
    position without overshoot, its explicit selection state is restored, and
    its dismissed fingerprint is removed.
-4. **Given** an Undo banner is active, **When** the user closes it, it expires,
-   the process ends, or another item is discarded, **Then** the current discard
-   becomes final, its volatile payload is erased, and any later discard replaces
-   the banner as the only undoable item.
+4. **Given** an Undo banner is active, **When** the user leaves it untouched,
+   **Then** it remains visible and undoable without a timer cutoff; when the user
+   closes it, the process ends, or another item is discarded, the current
+   discard becomes final, its volatile payload is erased, and any later discard
+   replaces the banner as the only undoable item.
 5. **Given** an item was discarded and not undone, **When** a later scan sees
    that fingerprint, **Then** it is not offered or sent for paid parsing again
    while that user's local data remains.
@@ -484,9 +488,10 @@ opportunity.
   state and remove its dismissed fingerprint without invoking AI.
 - **FR-030**: After individual discard, the complete edited item MAY remain only
   in volatile memory during the immediate Undo opportunity and MUST be erased
-  when the banner is closed, replaced by another discard, expires, or the process
-  ends. The single banner MUST name the latest item and expose Undo plus a
-  trailing close action.
+  when the banner is closed, replaced by another discard, or the process ends.
+  The single banner MUST remain visible without timer-based dismissal, name the
+  latest item, expose Undo plus a trailing close action, and occupy normal layout
+  flow above the transaction rows rather than overlaying review content.
 - **FR-031**: Discard all MUST be visually secondary, require explicit
   confirmation, apply dismissed-fingerprint behavior to every remaining item,
   and become final without Undo after confirmation. User-facing confirmation
