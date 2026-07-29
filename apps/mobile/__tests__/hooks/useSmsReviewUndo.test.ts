@@ -13,7 +13,10 @@ jest.mock("@/services/sms-review-draft-command-service", () => ({
     mockUndo(...args),
 }));
 
-function createUndoItem(name: string): VolatileSmsReviewUndoItem {
+function createUndoItem(
+  name: string,
+  selectionOverride: boolean | null = null
+): VolatileSmsReviewUndoItem {
   return {
     draftId: `draft-${name}`,
     userId: "user-1",
@@ -40,7 +43,7 @@ function createUndoItem(name: string): VolatileSmsReviewUndoItem {
       rawSmsBody: "private body",
       isAtmWithdrawal: false,
     },
-    selectionOverride: null,
+    selectionOverride,
     position: 0,
     parsedAt: new Date("2026-07-27T09:12:00.000Z"),
   } as const;
@@ -90,6 +93,85 @@ describe("useSmsReviewUndo", () => {
     await act(async () => result.current.discard("draft-empty", "user-1"));
 
     expect(result.current.discardedName).toBe("QNB EGYPT");
+  });
+
+  it("shows the optimistic Undo item immediately and preserves its live selection", async () => {
+    let resolveDiscard!: (item: VolatileSmsReviewUndoItem) => void;
+    const persistedItem = createUndoItem("Selected", null);
+    const optimisticItem = createUndoItem("Selected", true);
+    mockDiscard.mockReturnValue(
+      new Promise<VolatileSmsReviewUndoItem>((resolve) => {
+        resolveDiscard = resolve;
+      })
+    );
+    const { result } = renderHook(() => useSmsReviewUndo());
+
+    let discardRequest!: Promise<void>;
+    act(() => {
+      discardRequest = result.current.discard(
+        optimisticItem.draftId,
+        optimisticItem.userId,
+        optimisticItem
+      );
+    });
+
+    expect(result.current.undoItem).toEqual(optimisticItem);
+    expect(result.current.undoItem?.selectionOverride).toBe(true);
+
+    await act(async () => {
+      resolveDiscard(persistedItem);
+      await discardRequest;
+    });
+
+    expect(result.current.undoItem?.selectionOverride).toBe(true);
+  });
+
+  it("hides Undo immediately and restores once when discard persistence is pending", async () => {
+    let resolveDiscard!: (item: VolatileSmsReviewUndoItem) => void;
+    let resolveUndo!: (restored: boolean) => void;
+    const optimisticItem = createUndoItem("Pending", false);
+    mockDiscard.mockReturnValue(
+      new Promise<VolatileSmsReviewUndoItem>((resolve) => {
+        resolveDiscard = resolve;
+      })
+    );
+    mockUndo.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        resolveUndo = resolve;
+      })
+    );
+    const { result } = renderHook(() => useSmsReviewUndo());
+
+    act(() => {
+      void result.current.discard(
+        optimisticItem.draftId,
+        optimisticItem.userId,
+        optimisticItem
+      );
+    });
+
+    let undoRequest!: Promise<boolean>;
+    act(() => {
+      undoRequest = result.current.undo();
+    });
+    expect(result.current.undoItem).toBeNull();
+    expect(mockUndo).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveDiscard(createUndoItem("Pending", null));
+      await Promise.resolve();
+    });
+    expect(mockUndo).toHaveBeenCalledWith(
+      expect.objectContaining({ selectionOverride: false })
+    );
+    expect(result.current.undoItem).toBeNull();
+
+    await act(async () => {
+      resolveUndo(true);
+      await undoRequest;
+    });
+    expect(mockUndo).toHaveBeenCalledTimes(1);
+    expect(result.current.undoItem).toBeNull();
   });
 
   it("hides the previous undo as soon as a different discard starts", async () => {
@@ -197,6 +279,42 @@ describe("useSmsReviewUndo", () => {
 
     expect(result.current.undoItem).toBeNull();
     expect(mockUndo).not.toHaveBeenCalled();
+  });
+
+  it("does not re-show a closed banner when discard persistence finishes", async () => {
+    let resolveDiscard!: (item: VolatileSmsReviewUndoItem) => void;
+    const optimisticItem = createUndoItem("Hidden pending");
+    mockDiscard.mockReturnValue(
+      new Promise<VolatileSmsReviewUndoItem>((resolve) => {
+        resolveDiscard = resolve;
+      })
+    );
+    const { result } = renderHook(() => useSmsReviewUndo());
+
+    let discardRequest!: Promise<void>;
+    act(() => {
+      discardRequest = result.current.discard(
+        optimisticItem.draftId,
+        optimisticItem.userId,
+        optimisticItem
+      );
+      result.current.close();
+    });
+    expect(result.current.undoItem).toBeNull();
+
+    await act(async () => {
+      resolveDiscard(optimisticItem);
+      await discardRequest;
+    });
+
+    expect(result.current.undoItem).toBeNull();
+    mockDiscard.mockRejectedValueOnce(new Error("replacement failed"));
+    await act(async () => {
+      await expect(
+        result.current.discard("draft-replacement", "user-1")
+      ).rejects.toThrow("replacement failed");
+    });
+    expect(result.current.undoItem).toBeNull();
   });
 
   it("clears the latest undo after a successful restore", async () => {

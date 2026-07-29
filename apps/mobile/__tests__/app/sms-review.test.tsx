@@ -18,7 +18,10 @@ interface MockTransactionReviewProps {
   readonly onBack: () => void;
   readonly onReviewLater: () => void;
   readonly onDiscard: () => void;
-  readonly onDiscardItem: (index: number) => Promise<void>;
+  readonly onDiscardItem: (
+    index: number,
+    wasSelected: boolean
+  ) => Promise<void>;
   readonly onSelectionChange: (
     index: number,
     selected: boolean
@@ -396,7 +399,7 @@ describe("SMS review route", () => {
     if (!reviewProps) throw new Error("TransactionReview was not rendered");
 
     act(() => {
-      void reviewProps.onDiscardItem(0);
+      void reviewProps.onDiscardItem(0, true);
     });
 
     await waitFor(() => {
@@ -406,6 +409,11 @@ describe("SMS review route", () => {
         "fingerprint-2"
       );
     });
+    expect(mockDiscardOne).toHaveBeenCalledWith(
+      "draft-1",
+      "user-1",
+      expect.objectContaining({ selectionOverride: true })
+    );
     expect(screen.getByTestId("transaction-review")).toBeTruthy();
   });
 
@@ -434,7 +442,7 @@ describe("SMS review route", () => {
     if (!initialProps) throw new Error("TransactionReview was not rendered");
 
     await act(async () => {
-      await initialProps.onDiscardItem(0);
+      await initialProps.onDiscardItem(0, false);
     });
     const discardedProps = mockTransactionReview.mock.calls.at(-1)?.[0];
     if (!discardedProps?.undoBanner) {
@@ -447,6 +455,9 @@ describe("SMS review route", () => {
     expect(
       mockTransactionReview.mock.calls.at(-1)?.[0]?.transactions
     ).toHaveLength(2);
+    expect(
+      mockTransactionReview.mock.calls.at(-1)?.[0]?.selectionOverrides.get(0)
+    ).toBe(false);
 
     mockQueueItems = [
       {

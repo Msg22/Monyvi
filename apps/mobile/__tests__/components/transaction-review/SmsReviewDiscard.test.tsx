@@ -37,11 +37,17 @@ describe("SMS review discard feedback", () => {
     expect(screen.getByText("sms_review_undo_title:Fawry Market")).toBeTruthy();
     expect(screen.getByText("sms_review_undo_description")).toBeTruthy();
     expect(screen.getByTestId("sms-review-undo-banner")).toBeTruthy();
+    expect(screen.getByText("sms_review_undo_title:Fawry Market")).toHaveProp(
+      "numberOfLines",
+      2
+    );
+    expect(screen.getByText("sms_review_undo_description")).toHaveProp(
+      "className",
+      expect.stringContaining("text-text-secondary")
+    );
     expect(
       readFileSync(
-        require.resolve(
-          "@/components/transaction-review/SmsReviewUndoBanner"
-        ),
+        require.resolve("@/components/transaction-review/SmsReviewUndoBanner"),
         "utf8"
       )
     ).not.toMatch(/className="[^"]*\babsolute\b/);

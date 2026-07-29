@@ -53,7 +53,10 @@ export interface TransactionReviewProps {
     index: number,
     transaction: ReviewableTransaction
   ) => void | Promise<void>;
-  readonly onDiscardItem?: (index: number) => void | Promise<void>;
+  readonly onDiscardItem?: (
+    index: number,
+    wasSelected: boolean
+  ) => void | Promise<void>;
   readonly onReviewLater?: () => void;
   readonly undoBanner?: {
     readonly discardedName: string;
@@ -220,7 +223,11 @@ export function TransactionReview({
           onPress={handleOpenEditModal}
           onDiscard={
             isSmsWorkspace && onDiscardItem
-              ? (index) => void onDiscardItem(index)
+              ? (index) =>
+                  void onDiscardItem(
+                    index,
+                    selectedIndicesRef.current.has(index)
+                  )
               : undefined
           }
           hasMissingInfo={invalidIndices.has(item.originalIndex)}

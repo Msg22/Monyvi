@@ -32,14 +32,14 @@ export function SmsReviewUndoBanner({
     >
       <View className="min-w-0 flex-1">
         <Text
-          numberOfLines={1}
+          numberOfLines={2}
           className="text-sm font-semibold text-text-primary dark:text-text-primary-dark"
         >
           {t("sms_review_undo_title", { name: discardedName })}
         </Text>
         <Text
           numberOfLines={2}
-          className="mt-0.5 text-xs text-text-muted dark:text-text-muted-dark"
+          className="mt-0.5 text-xs text-text-secondary dark:text-text-secondary-dark"
         >
           {t("sms_review_undo_description")}
         </Text>

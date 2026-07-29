@@ -35,6 +35,7 @@ import type {
   RevalidatedSmsReviewDraftItem,
   SmsReviewDraftHardValidationReason,
 } from "@/services/sms-review-draft-reference-service";
+import type { VolatileSmsReviewUndoItem } from "@/services/sms-review-draft-repository";
 import { logger } from "@/utils/logger";
 import { Ionicons } from "@expo/vector-icons";
 import type {
@@ -368,17 +369,28 @@ export default function SmsReviewScreen(): React.JSX.Element {
   );
 
   const handleDiscardItem = useCallback(
-    async (index: number): Promise<void> => {
+    async (index: number, wasSelected: boolean): Promise<void> => {
       const item = reviewItems[index];
       if (!item || !queue.userId) return;
       const requestId = latestVisualDiscardRequestRef.current + 1;
       latestVisualDiscardRequestRef.current = requestId;
       const previousDiscardedItem = latestDiscardedItem;
+      const discardedItem = { ...item, selectionOverride: wasSelected };
+      const optimisticUndoItem: VolatileSmsReviewUndoItem = {
+        draftId: item.draftId,
+        userId: queue.userId,
+        queueId: item.queueId,
+        smsFingerprint: item.transaction.smsFingerprint,
+        transaction: item.transaction,
+        selectionOverride: wasSelected,
+        position: item.position,
+        parsedAt: item.parsedAt,
+      };
       setHiddenDraftIds((previous) => new Set(previous).add(item.draftId));
-      setLatestDiscardedItem(item);
+      setLatestDiscardedItem(discardedItem);
       setOptimisticallyRestoredItem(null);
       try {
-        await undo.discard(item.draftId, queue.userId);
+        await undo.discard(item.draftId, queue.userId, optimisticUndoItem);
       } catch (error: unknown) {
         setHiddenDraftIds((previous) => {
           const next = new Set(previous);
