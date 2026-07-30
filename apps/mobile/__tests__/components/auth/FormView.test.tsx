@@ -11,6 +11,7 @@ const COPY: Readonly<Record<string, string>> = {
   welcome_support: "Track spending, savings, and every move in between.",
   sign_in: "Sign in",
   sign_up: "Create account",
+  create_account: "Create account",
   continue_with_google: "Continue with Google",
   or_continue_with_email: "or continue with email",
   email_address: "Email",
@@ -32,6 +33,7 @@ const COPY: Readonly<Record<string, string>> = {
   hide_password: "Hide password",
 };
 
+let mockIsRTL = false;
 jest.mock("react-i18next", () => ({
   useTranslation: (): {
     t: (key: string, values?: { min?: number }) => string;
@@ -55,7 +57,7 @@ jest.mock("@/context/LocaleContext", () => ({
       bold: string;
     };
   } => ({
-    isRTL: false,
+    isRTL: mockIsRTL,
     fontFamily: {
       regular: "Inter_400Regular",
       medium: "Inter_500Medium",
@@ -82,6 +84,7 @@ function renderForm(
   render(
     <FormView
       isKeyboardVisible={false}
+      isCompactViewport={false}
       pendingAction={null}
       emailError={null}
       networkError={null}
@@ -100,6 +103,7 @@ function renderForm(
 describe("FormView", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsRTL = false;
     mockOAuth.mockResolvedValue(undefined);
     mockEmailSubmit.mockResolvedValue(undefined);
     mockForgotPassword.mockResolvedValue(undefined);
@@ -130,8 +134,119 @@ describe("FormView", () => {
     expect(screen.getByRole("link", { name: "Terms" })).toBeOnTheScreen();
   });
 
+  it("matches the approved standard hero and legal-footer layout", () => {
+    renderForm({ isCompactViewport: false });
+
+    expect(screen.getByTestId("auth-form-root")).toHaveProp(
+      "className",
+      expect.stringContaining("flex-1")
+    );
+    expect(screen.getByTestId("auth-hero")).toHaveStyle({
+      minHeight: 300,
+      paddingTop: 42,
+      paddingBottom: 12,
+    });
+    expect(screen.getByTestId("auth-hero-copy")).toHaveStyle({ width: 225 });
+    expect(screen.getByTestId("auth-illustration-container")).toHaveStyle({
+      top: 35,
+      end: -8,
+    });
+    expect(
+      screen.getByTestId("financial-flow-ltr", { includeHiddenElements: true })
+    ).toHaveProp("width", 205);
+    expect(
+      screen.getByTestId("financial-flow-ltr", { includeHiddenElements: true })
+    ).toHaveProp("height", 245);
+    expect(screen.getByTestId("auth-mode-switch")).toHaveStyle({
+      height: 46,
+      marginTop: 8,
+      marginBottom: 22,
+      borderRadius: 14,
+      padding: 3,
+    });
+    expect(screen.getByTestId("auth-google-button")).toHaveStyle({
+      height: 49,
+      borderRadius: 14,
+    });
+    expect(screen.getByTestId("auth-email-divider")).toHaveStyle({
+      height: 46,
+    });
+    expect(screen.getByTestId("auth-email-input")).toHaveStyle({
+      height: 52,
+      borderRadius: 14,
+    });
+    expect(screen.getByTestId("auth-submit-button")).toHaveStyle({
+      height: 51,
+      marginTop: 16,
+      borderRadius: 14,
+    });
+    expect(screen.getByTestId("auth-forgot-password")).toHaveStyle({
+      marginTop: 11,
+    });
+    expect(screen.getByTestId("auth-privacy-footer")).toHaveStyle({
+      marginTop: 34,
+      paddingTop: 14,
+      gap: 9,
+    });
+    expect(screen.getByTestId("auth-trust-row")).toBeOnTheScreen();
+    expect(screen.getByTestId("auth-legal-row")).toBeOnTheScreen();
+  });
+
+  it("uses the approved compact hero dimensions on small phones", () => {
+    renderForm({ isCompactViewport: true });
+
+    expect(screen.getByTestId("auth-hero")).toHaveStyle({
+      minHeight: 191,
+      paddingTop: 0,
+      paddingBottom: 0,
+    });
+    expect(screen.getByTestId("auth-hero-copy")).toHaveStyle({ width: 210 });
+    expect(screen.getByTestId("auth-illustration-container")).toHaveStyle({
+      top: 0,
+      end: -8,
+    });
+    expect(
+      screen.getByTestId("financial-flow-ltr", { includeHiddenElements: true })
+    ).toHaveProp("width", 160);
+    expect(
+      screen.getByTestId("financial-flow-ltr", { includeHiddenElements: true })
+    ).toHaveProp("height", 191);
+    expect(screen.getByTestId("auth-email-divider")).toHaveStyle({
+      height: 31,
+    });
+    expect(screen.getByTestId("auth-privacy-footer")).toHaveStyle({
+      marginTop: 19,
+    });
+  });
+
+  it("uses the approved RTL illustration geometry and offset", () => {
+    mockIsRTL = true;
+    renderForm({ isCompactViewport: false });
+
+    expect(
+      screen.getByTestId("financial-flow-rtl", { includeHiddenElements: true })
+    ).toBeOnTheScreen();
+    expect(screen.getByTestId("auth-illustration-container")).toHaveStyle({
+      top: 35,
+      end: -36,
+    });
+  });
+
+  it("anchors compact Arabic copy right and keeps geometry away from the edge", () => {
+    mockIsRTL = true;
+    renderForm({ isCompactViewport: true });
+
+    expect(screen.getByTestId("auth-hero-copy")).toHaveStyle({
+      alignSelf: "flex-start",
+    });
+    expect(screen.getByTestId("auth-illustration-container")).toHaveStyle({
+      end: -8,
+    });
+    expect(screen.getByRole("header")).toHaveStyle({ textAlign: "right" });
+  });
+
   it("switches to create-account mode while preserving entered values", () => {
-    renderForm();
+    renderForm({ isCompactViewport: true });
     fireEvent.changeText(screen.getByLabelText("Email"), "user@example.com");
     fireEvent.changeText(screen.getByLabelText("Password"), "secret");
 
@@ -147,6 +262,15 @@ describe("FormView", () => {
     expect(
       screen.queryByRole("link", { name: "Forgot password?" })
     ).not.toBeOnTheScreen();
+    expect(screen.getByTestId("auth-submit-button")).toHaveStyle({
+      marginTop: 16,
+    });
+    expect(screen.getByTestId("auth-privacy-footer")).toHaveStyle({
+      marginTop: 20,
+    });
+    expect(screen.getByTestId("auth-email-divider")).toHaveStyle({
+      height: 46,
+    });
   });
 
   it("validates fields before delegating submission", () => {

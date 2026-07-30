@@ -40,9 +40,10 @@ describe("TextField", () => {
     expect(screen.getByLabelText("Amount")).toHaveDisplayValue("25");
   });
 
-  it("renders leading and trailing adornments with reserved input space", () => {
+  it("aligns adornments and reserves the approved input space", () => {
     render(
       <TextField
+        testID="password-field"
         label="Password"
         leadingAdornment={<Text>lock</Text>}
         trailingAdornment={
@@ -61,9 +62,29 @@ describe("TextField", () => {
       screen.getByRole("button", { name: "Show password" })
     ).toBeOnTheScreen();
     expect(screen.getByLabelText("Password")).toHaveStyle({
-      paddingStart: 48,
-      paddingEnd: 56,
+      paddingStart: 43,
+      paddingEnd: 48,
     });
+    expect(screen.getByTestId("password-field-leading-adornment")).toHaveStyle({
+      position: "absolute",
+      top: 0,
+      bottom: 0,
+      start: 0,
+      width: 47,
+      alignItems: "center",
+      justifyContent: "center",
+    });
+    expect(screen.getByTestId("password-field-trailing-adornment")).toHaveStyle(
+      {
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        end: 0,
+        width: 50,
+        alignItems: "center",
+        justifyContent: "center",
+      }
+    );
   });
 
   it("associates inline errors with the input and announces them", () => {

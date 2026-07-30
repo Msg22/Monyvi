@@ -82,8 +82,8 @@ describe("EmailPasswordForm RTL", () => {
     expect(screen.getByLabelText("كلمة المرور")).toHaveStyle({
       writingDirection: "rtl",
       textAlign: "right",
-      paddingStart: 48,
-      paddingEnd: 56,
+      paddingStart: 43,
+      paddingEnd: 48,
     });
   });
 

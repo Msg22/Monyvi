@@ -31,12 +31,16 @@ export function SocialLoginButtons({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ busy: isLoading, disabled: isDisabled }}
-      className="min-h-12 flex-row items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-3.5 dark:border-slate-600 dark:bg-slate-800"
-      style={{ opacity: isDisabled && !isLoading ? 0.6 : 1 }}
+      className="flex-row items-center justify-center border border-slate-200 bg-white px-6 dark:border-slate-600 dark:bg-slate-800"
+      style={{
+        height: 49,
+        borderRadius: 14,
+        opacity: isDisabled && !isLoading ? 0.6 : 1,
+      }}
     >
-      <GoogleMark size={20} />
+      <GoogleMark size={18} />
       <Text
-        className="ms-3 text-base text-text-primary dark:text-text-primary-dark"
+        className="ms-3 text-sm text-text-primary dark:text-text-primary-dark"
         style={{ fontFamily: fontFamily.semiBold }}
       >
         {label}

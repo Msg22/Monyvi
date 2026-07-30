@@ -22,6 +22,8 @@ interface TextFieldProps extends TextInputProps {
   readonly label: string;
   readonly error?: string;
   readonly containerStyle?: ViewStyle;
+  readonly containerClassName?: string;
+  readonly labelClassName?: string;
   readonly labelStyle?: StyleProp<TextStyle>;
   readonly errorStyle?: StyleProp<TextStyle>;
   readonly leadingAdornment?: ReactNode;
@@ -29,13 +31,15 @@ interface TextFieldProps extends TextInputProps {
   readonly inputRef?: Ref<TextInput>;
 }
 
-const LEADING_ADORNMENT_SPACE = 48;
-const TRAILING_ADORNMENT_SPACE = 56;
+const LEADING_ADORNMENT_SPACE = 43;
+const TRAILING_ADORNMENT_SPACE = 48;
 
 export function TextField({
   label,
   error,
   containerStyle,
+  containerClassName,
+  labelClassName,
   labelStyle,
   errorStyle,
   className,
@@ -45,6 +49,7 @@ export function TextField({
   onFocus,
   onBlur,
   accessibilityLabel,
+  testID,
   leadingAdornment,
   trailingAdornment,
   inputRef,
@@ -85,8 +90,8 @@ export function TextField({
   );
 
   return (
-    <View style={containerStyle} className="mb-4">
-      <Text className="input-label" style={labelStyle}>
+    <View style={containerStyle} className={containerClassName ?? "mb-4"}>
+      <Text className={labelClassName ?? "input-label"} style={labelStyle}>
         {label}
       </Text>
       <View className="relative">
@@ -98,6 +103,7 @@ export function TextField({
           } ${className || ""}`}
           {...props}
           accessibilityLabel={accessibilityLabel ?? label}
+          testID={testID}
           aria-invalid={Boolean(error)}
           style={[
             style,
@@ -111,16 +117,34 @@ export function TextField({
         />
         {leadingAdornment ? (
           <View
+            testID={testID ? `${testID}-leading-adornment` : undefined}
             pointerEvents="none"
-            className="absolute inset-y-0 start-0 w-12 items-center justify-center"
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              start: 0,
+              width: 47,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
           >
             {leadingAdornment}
           </View>
         ) : null}
         {trailingAdornment ? (
           <View
+            testID={testID ? `${testID}-trailing-adornment` : undefined}
             pointerEvents="box-none"
-            className="absolute inset-y-0 end-0 w-14 items-center justify-center"
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              end: 0,
+              width: 50,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
           >
             {trailingAdornment}
           </View>

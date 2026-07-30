@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useState, type RefObject } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -14,6 +15,7 @@ import type { OAuthProvider } from "@/services/supabase";
 
 export interface FormViewProps {
   readonly isKeyboardVisible: boolean;
+  readonly isCompactViewport: boolean;
   readonly pendingAction: AuthPendingAction;
   readonly emailError: string | null;
   readonly networkError: string | null;
@@ -36,6 +38,7 @@ export interface FormViewProps {
 
 export function FormView({
   isKeyboardVisible,
+  isCompactViewport,
   pendingAction,
   emailError,
   networkError,
@@ -59,6 +62,21 @@ export function FormView({
   const flowColor = isDark ? palette.nileGreen[400] : palette.nileGreen[700];
   const mutedFlowColor = isDark ? palette.slate[600] : palette.slate[300];
   const surfaceColor = isDark ? palette.slate[800] : palette.slate[25];
+  const heroHeight = isKeyboardVisible ? 82 : isCompactViewport ? 191 : 300;
+  const heroCopyWidth = isKeyboardVisible
+    ? "100%"
+    : isCompactViewport
+      ? 210
+      : 225;
+  const heroPaddingTop = isKeyboardVisible || isCompactViewport ? 0 : 42;
+  const heroPaddingBottom = isKeyboardVisible || isCompactViewport ? 0 : 12;
+  const illustrationWidth = isCompactViewport ? 160 : 205;
+  const illustrationHeight = isCompactViewport ? 191 : 245;
+  const illustrationTop = isCompactViewport ? 0 : 35;
+  const illustrationEnd = isRTL ? (isCompactViewport ? -8 : -36) : -8;
+  const modeGradientColors: readonly [string, string] = isDark
+    ? [palette.nileGreen[500], palette.nileGreen[400]]
+    : [palette.nileGreen[800], palette.nileGreen[600]];
 
   const selectMode = (nextMode: AuthMode): void => {
     if (nextMode === mode || isActionPending) {
@@ -70,15 +88,33 @@ export function FormView({
   };
 
   return (
-    <View className="w-full">
-      <View className={isKeyboardVisible ? "mb-4" : "mb-7 min-h-[210px]"}>
-        <View className={isKeyboardVisible ? "max-w-full" : "max-w-[58%]"}>
+    <View testID="auth-form-root" className="w-full flex-1">
+      <View
+        testID="auth-hero"
+        className="relative justify-center"
+        style={{
+          minHeight: heroHeight,
+          paddingTop: heroPaddingTop,
+          paddingBottom: heroPaddingBottom,
+        }}
+      >
+        <View
+          testID="auth-hero-copy"
+          className="z-10"
+          style={{
+            width: heroCopyWidth,
+            alignSelf: "flex-start",
+          }}
+        >
           {!isKeyboardVisible ? (
             <Text
-              className="mb-3 text-xs uppercase tracking-[1.8px] text-nileGreen-700 dark:text-nileGreen-300"
+              className="mb-2 text-xs text-nileGreen-700 dark:text-nileGreen-300"
               style={{
                 fontFamily: fontFamily.semiBold,
+                fontWeight: "800",
+                letterSpacing: isRTL ? 0 : 0.96,
                 textAlign: isRTL ? "right" : "left",
+                textTransform: isRTL ? "none" : "uppercase",
               }}
             >
               {t("welcome_title")}
@@ -86,13 +122,29 @@ export function FormView({
           ) : null}
           <Text
             accessibilityRole="header"
-            className={
-              isKeyboardVisible
-                ? "text-3xl leading-10 text-text-primary dark:text-text-primary-dark"
-                : "text-[34px] leading-[44px] text-text-primary dark:text-text-primary-dark"
-            }
+            className="text-text-primary dark:text-text-primary-dark"
             style={{
               fontFamily: fontFamily.bold,
+              fontSize: isKeyboardVisible
+                ? 25
+                : isRTL
+                  ? isCompactViewport
+                    ? 27
+                    : 29
+                  : isCompactViewport
+                    ? 28
+                    : 31,
+              lineHeight: isKeyboardVisible
+                ? 32
+                : isRTL
+                  ? isCompactViewport
+                    ? 35
+                    : 37
+                  : isCompactViewport
+                    ? 30
+                    : 32,
+              letterSpacing: isRTL ? 0 : -1.1,
+              maxWidth: isCompactViewport ? 210 : 220,
               textAlign: isRTL ? "right" : "left",
             }}
           >
@@ -100,9 +152,12 @@ export function FormView({
           </Text>
           {!isKeyboardVisible ? (
             <Text
-              className="mt-4 text-[15px] leading-6 text-text-secondary dark:text-text-secondary-dark"
+              className="text-sm text-text-secondary dark:text-text-secondary-dark"
               style={{
                 fontFamily: fontFamily.regular,
+                marginTop: 14,
+                lineHeight: isRTL ? 25 : 22,
+                maxWidth: 220,
                 textAlign: isRTL ? "right" : "left",
               }}
             >
@@ -112,7 +167,11 @@ export function FormView({
         </View>
 
         {!isKeyboardVisible ? (
-          <View className="absolute end-[-12px] top-[-8px]">
+          <View
+            testID="auth-illustration-container"
+            className="absolute"
+            style={{ end: illustrationEnd, top: illustrationTop }}
+          >
             <FinancialFlowIllustration
               direction={isRTL ? "rtl" : "ltr"}
               flowColor={flowColor}
@@ -120,16 +179,24 @@ export function FormView({
               accentColor={palette.gold[500]}
               accentSoftColor={isDark ? palette.gold[800] : palette.gold[100]}
               surfaceColor={surfaceColor}
-              width={164}
-              height={196}
+              width={illustrationWidth}
+              height={illustrationHeight}
             />
           </View>
         ) : null}
       </View>
 
       <View
+        testID="auth-mode-switch"
         accessibilityRole="tablist"
-        className="mb-5 flex-row rounded-2xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-700 dark:bg-slate-800"
+        className="flex-row border border-nileGreen-700 dark:border-nileGreen-500"
+        style={{
+          height: 46,
+          marginTop: 8,
+          marginBottom: 22,
+          borderRadius: 14,
+          padding: 3,
+        }}
       >
         <ModeButton
           testID="auth-mode-sign-in"
@@ -137,14 +204,16 @@ export function FormView({
           isSelected={mode === "signIn"}
           isDisabled={isActionPending}
           fontFamily={fontFamily.semiBold}
+          gradientColors={modeGradientColors}
           onPress={() => selectMode("signIn")}
         />
         <ModeButton
           testID="auth-mode-sign-up"
-          label={t("sign_up")}
+          label={t("create_account")}
           isSelected={mode === "signUp"}
           isDisabled={isActionPending}
           fontFamily={fontFamily.semiBold}
+          gradientColors={modeGradientColors}
           onPress={() => selectMode("signUp")}
         />
       </View>
@@ -182,7 +251,13 @@ export function FormView({
             isDisabled={isActionPending}
             onPress={() => onOAuth("google")}
           />
-          <View className="my-5 flex-row items-center gap-3">
+          <View
+            testID="auth-email-divider"
+            className="flex-row items-center gap-3"
+            style={{
+              height: isCompactViewport && mode === "signIn" ? 31 : 46,
+            }}
+          >
             <View className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
             <Text
               className="text-xs text-text-muted dark:text-text-muted-dark"
@@ -197,6 +272,7 @@ export function FormView({
 
       <EmailPasswordForm
         mode={mode}
+        isCompactViewport={isCompactViewport}
         pendingAction={pendingAction}
         errorMessage={emailError}
         emailFieldRef={emailFieldRef}
@@ -209,47 +285,65 @@ export function FormView({
       />
 
       {!isKeyboardVisible ? (
-        <View className="mt-6 flex-row flex-wrap items-center justify-center gap-x-2 gap-y-1">
-          <Ionicons
-            name="shield-checkmark-outline"
-            size={15}
-            color={isDark ? palette.slate[400] : palette.slate[500]}
-          />
-          <Text
-            className="text-xs text-text-muted dark:text-text-muted-dark"
-            style={{ fontFamily: fontFamily.regular }}
+        <View
+          testID="auth-privacy-footer"
+          className="items-center border-t border-slate-200 dark:border-slate-700"
+          style={{
+            marginTop: isCompactViewport ? (mode === "signIn" ? 19 : 20) : 34,
+            paddingTop: 14,
+            gap: 9,
+          }}
+        >
+          <View
+            testID="auth-trust-row"
+            className="flex-row items-center"
+            style={{ gap: 7 }}
           >
-            {t("private_by_design")}
-          </Text>
-          <Pressable
-            accessibilityRole="link"
-            accessibilityLabel={t("privacy")}
-            onPress={onPrivacyPress}
-            className="min-h-11 justify-center"
-          >
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={19}
+              color={flowColor}
+            />
             <Text
-              className="text-xs text-nileGreen-700 underline dark:text-nileGreen-300"
-              style={{ fontFamily: fontFamily.semiBold }}
+              className="text-text-secondary dark:text-text-secondary-dark"
+              style={{ fontFamily: fontFamily.regular, fontSize: 11.5 }}
             >
-              {t("privacy")}
+              {t("private_by_design")}
             </Text>
-          </Pressable>
-          <Text className="text-xs text-text-muted dark:text-text-muted-dark">
-            ·
-          </Text>
-          <Pressable
-            accessibilityRole="link"
-            accessibilityLabel={t("terms")}
-            onPress={onTermsPress}
-            className="min-h-11 justify-center"
+          </View>
+          <View
+            testID="auth-legal-row"
+            className="flex-row items-center"
+            style={{ gap: 14 }}
           >
-            <Text
-              className="text-xs text-nileGreen-700 underline dark:text-nileGreen-300"
-              style={{ fontFamily: fontFamily.semiBold }}
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={t("privacy")}
+              hitSlop={8}
+              onPress={onPrivacyPress}
             >
-              {t("terms")}
-            </Text>
-          </Pressable>
+              <Text
+                className="text-nileGreen-700 dark:text-nileGreen-300"
+                style={{ fontFamily: fontFamily.semiBold, fontSize: 11.5 }}
+              >
+                {t("privacy")}
+              </Text>
+            </Pressable>
+            <View className="h-3 w-px bg-slate-200 dark:bg-slate-700" />
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={t("terms")}
+              hitSlop={8}
+              onPress={onTermsPress}
+            >
+              <Text
+                className="text-nileGreen-700 dark:text-nileGreen-300"
+                style={{ fontFamily: fontFamily.semiBold, fontSize: 11.5 }}
+              >
+                {t("terms")}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       ) : null}
     </View>
@@ -262,6 +356,7 @@ interface ModeButtonProps {
   readonly isSelected: boolean;
   readonly isDisabled: boolean;
   readonly fontFamily: string;
+  readonly gradientColors: readonly [string, string];
   readonly onPress: () => void;
 }
 
@@ -271,6 +366,7 @@ function ModeButton({
   isSelected,
   isDisabled,
   fontFamily,
+  gradientColors,
   onPress,
 }: ModeButtonProps): React.JSX.Element {
   return (
@@ -280,17 +376,30 @@ function ModeButton({
       accessibilityLabel={label}
       accessibilityState={{ selected: isSelected, disabled: isDisabled }}
       disabled={isDisabled}
+      hitSlop={3}
       onPress={onPress}
-      className={`min-h-11 flex-1 items-center justify-center rounded-xl ${
-        isSelected ? "bg-nileGreen-700 dark:bg-nileGreen-500" : "bg-transparent"
-      }`}
-      style={{ opacity: isDisabled ? 0.55 : 1 }}
+      className="flex-1 overflow-hidden items-center justify-center"
+      style={{ height: 40, borderRadius: 10, opacity: isDisabled ? 0.55 : 1 }}
     >
+      {isSelected ? (
+        <LinearGradient
+          colors={gradientColors}
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            borderRadius: 10,
+          }}
+        />
+      ) : null}
       <Text
         className={
           isSelected
-            ? "text-sm text-slate-25"
-            : "text-sm text-text-secondary dark:text-text-secondary-dark"
+            ? "text-sm text-slate-25 dark:text-nileGreen-900"
+            : "text-sm text-nileGreen-700 dark:text-nileGreen-300"
         }
         style={{ fontFamily }}
       >

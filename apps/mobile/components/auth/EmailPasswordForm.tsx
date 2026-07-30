@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRef, useState, type RefObject } from "react";
 import {
   Pressable,
@@ -18,6 +19,7 @@ import { useTheme } from "@/context/ThemeContext";
 
 interface EmailPasswordFormProps {
   readonly mode: AuthMode;
+  readonly isCompactViewport?: boolean;
   readonly pendingAction: AuthPendingAction;
   readonly errorMessage: string | null;
   readonly emailFieldRef?: RefObject<View | null>;
@@ -42,6 +44,7 @@ const MIN_PASSWORD_LENGTH = 6;
 
 export function EmailPasswordForm({
   mode,
+  isCompactViewport = false,
   pendingAction,
   errorMessage,
   emailFieldRef,
@@ -66,6 +69,11 @@ export function EmailPasswordForm({
   const isEmailPending = pendingAction === "email";
   const isResetPending = pendingAction === "passwordReset";
   const iconColor = isDark ? palette.slate[400] : palette.slate[500];
+  const fieldHeight = isCompactViewport ? 49 : 52;
+  const buttonHeight = isCompactViewport ? 49 : 51;
+  const buttonGradientColors: readonly [string, string] = isDark
+    ? [palette.nileGreen[500], palette.nileGreen[400]]
+    : [palette.nileGreen[800], palette.nileGreen[600]];
 
   const clearErrors = (): void => {
     setFieldError(null);
@@ -133,14 +141,17 @@ export function EmailPasswordForm({
       : t("create_account");
 
   return (
-    <View className="w-full gap-1">
+    <View testID="auth-credentials-form" className="w-full" style={{ gap: 11 }}>
       <View ref={emailFieldRef} collapsable={false}>
         <TextField
           testID="auth-email-input"
           label={t("email_address")}
-          labelStyle={{ fontFamily: fontFamily.semiBold }}
+          containerClassName=""
+          labelClassName="text-xs text-text-primary dark:text-text-primary-dark"
+          labelStyle={{ fontFamily: fontFamily.semiBold, marginBottom: 7 }}
           errorStyle={{ fontFamily: fontFamily.regular }}
           placeholder={t("email_address_placeholder")}
+          className="text-sm font-normal"
           value={email}
           onChangeText={(nextEmail) => {
             setEmail(nextEmail);
@@ -157,11 +168,15 @@ export function EmailPasswordForm({
           returnKeyType="next"
           style={{
             fontFamily: fontFamily.regular,
+            fontSize: 14,
+            height: fieldHeight,
+            borderRadius: 14,
+            paddingVertical: 0,
             writingDirection: "ltr",
             textAlign: "left",
           }}
           leadingAdornment={
-            <Ionicons name="mail-outline" size={20} color={iconColor} />
+            <Ionicons name="mail-outline" size={17} color={iconColor} />
           }
         />
       </View>
@@ -171,9 +186,12 @@ export function EmailPasswordForm({
           testID="auth-password-input"
           inputRef={passwordInputRef}
           label={t("password")}
-          labelStyle={{ fontFamily: fontFamily.semiBold }}
+          containerClassName=""
+          labelClassName="text-xs text-text-primary dark:text-text-primary-dark"
+          labelStyle={{ fontFamily: fontFamily.semiBold, marginBottom: 7 }}
           errorStyle={{ fontFamily: fontFamily.regular }}
           placeholder={t("password_placeholder_label")}
+          className="text-sm font-normal"
           value={password}
           onChangeText={(nextPassword) => {
             setPassword(nextPassword);
@@ -196,11 +214,15 @@ export function EmailPasswordForm({
           }}
           style={{
             fontFamily: fontFamily.regular,
+            fontSize: 14,
+            height: fieldHeight,
+            borderRadius: 14,
+            paddingVertical: 0,
             writingDirection: isRTL ? "rtl" : "ltr",
             textAlign: isRTL ? "right" : "left",
           }}
           leadingAdornment={
-            <Ionicons name="lock-closed-outline" size={20} color={iconColor} />
+            <Ionicons name="lock-closed-outline" size={17} color={iconColor} />
           }
           trailingAdornment={
             <Pressable
@@ -253,11 +275,12 @@ export function EmailPasswordForm({
               disabled: isAnyActionPending,
               busy: isResetPending,
             }}
-            className="mb-4 min-h-11 self-end justify-center"
-            style={{ opacity: isAnyActionPending ? 0.55 : 1 }}
+            className="min-h-5 self-end justify-center"
+            hitSlop={{ top: 24, right: 12, bottom: 0, left: 12 }}
+            style={{ marginTop: 11, opacity: isAnyActionPending ? 0.55 : 1 }}
           >
             <Text
-              className="text-sm text-nileGreen-700 dark:text-nileGreen-300"
+              className="text-xs text-nileGreen-700 dark:text-nileGreen-300"
               style={{ fontFamily: fontFamily.semiBold }}
             >
               {isResetPending ? t("sending_reset") : t("forgot_password")}
@@ -277,12 +300,29 @@ export function EmailPasswordForm({
             disabled: isAnyActionPending,
             busy: isEmailPending,
           }}
-          className="min-h-12 items-center justify-center rounded-2xl bg-nileGreen-700 px-6 dark:bg-nileGreen-500"
-          style={{ opacity: isAnyActionPending ? 0.6 : 1 }}
+          className="overflow-hidden items-center justify-center px-6"
+          style={{
+            height: buttonHeight,
+            marginTop: 16,
+            borderRadius: 14,
+            opacity: isAnyActionPending ? 0.6 : 1,
+          }}
         >
+          <LinearGradient
+            colors={buttonGradientColors}
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              borderRadius: 14,
+            }}
+          />
           <Text
-            className="text-base text-slate-25"
-            style={{ fontFamily: fontFamily.semiBold }}
+            className="text-slate-25 dark:text-nileGreen-900"
+            style={{ fontFamily: fontFamily.semiBold, fontSize: 15 }}
           >
             {buttonLabel}
           </Text>

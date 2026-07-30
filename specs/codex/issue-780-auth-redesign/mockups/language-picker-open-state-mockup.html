@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Monyvi language picker open state</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, "Segoe UI", Arial, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        width: 1500px;
+        height: 900px;
+        overflow: hidden;
+        color: #f8fafc;
+        background:
+          radial-gradient(
+            circle at 16% 10%,
+            rgba(16, 185, 129, 0.13),
+            transparent 26%
+          ),
+          radial-gradient(
+            circle at 84% 86%,
+            rgba(52, 211, 153, 0.09),
+            transparent 28%
+          ),
+          linear-gradient(145deg, #020617, #07140f);
+      }
+      .sheet {
+        padding: 46px 64px 52px;
+      }
+      .header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        margin-bottom: 28px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 30px;
+        letter-spacing: -0.7px;
+      }
+      .subtitle {
+        margin: 8px 0 0;
+        color: #94a3b8;
+        font-size: 14px;
+      }
+      .badge {
+        border: 1px solid rgba(52, 211, 153, 0.32);
+        border-radius: 999px;
+        padding: 9px 14px;
+        color: #6ee7b7;
+        background: rgba(16, 185, 129, 0.08);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 34px;
+      }
+      .panel {
+        position: relative;
+        height: 725px;
+        overflow: hidden;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 30px;
+        background: rgba(15, 23, 42, 0.62);
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+      }
+      .panel-label {
+        position: absolute;
+        z-index: 5;
+        top: 20px;
+        left: 24px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        color: #cbd5e1;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #34d399;
+      }
+      .phone-crop {
+        position: absolute;
+        top: 66px;
+        left: 50%;
+        width: 430px;
+        height: 620px;
+        translate: -50% 0;
+        overflow: hidden;
+        border-radius: 48px;
+        box-shadow: 0 28px 70px rgba(0, 0, 0, 0.34);
+        background-repeat: no-repeat;
+        background-size: 868px 1200px;
+        background-position: -219px -116px;
+      }
+      .phone-crop.light {
+        background-size: 900px 1200px;
+        background-position: -219px -116px;
+      }
+      .popover {
+        position: absolute;
+        z-index: 8;
+        top: 111px;
+        width: 194px;
+        padding: 6px;
+        border-radius: 17px;
+        backdrop-filter: blur(20px);
+      }
+      .dark-popover {
+        left: 30px;
+        border: 1px solid #334155;
+        background: rgba(23, 32, 51, 0.98);
+        box-shadow:
+          0 18px 46px rgba(2, 6, 23, 0.52),
+          0 2px 8px rgba(2, 6, 23, 0.32);
+      }
+      .light-popover {
+        right: 30px;
+        border: 1px solid #d8e2df;
+        background: rgba(255, 255, 255, 0.98);
+        box-shadow:
+          0 18px 46px rgba(15, 23, 42, 0.17),
+          0 2px 8px rgba(15, 23, 42, 0.09);
+      }
+      .language-row {
+        height: 50px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 12px;
+        border-radius: 12px;
+        color: #cbd5e1;
+      }
+      .light-popover .language-row {
+        color: #334155;
+      }
+      .language-row.selected {
+        color: #d1fae5;
+        background: rgba(52, 211, 153, 0.13);
+      }
+      .light-popover .language-row.selected {
+        color: #065f46;
+        background: #ecfdf5;
+      }
+      .native-name {
+        flex: 1;
+        font-size: 13px;
+        font-weight: 650;
+      }
+      .arabic-name {
+        direction: rtl;
+        font-family: Tahoma, Arial, sans-serif;
+      }
+      .code {
+        min-width: 27px;
+        height: 22px;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(148, 163, 184, 0.27);
+        border-radius: 7px;
+        color: #94a3b8;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+      }
+      .light-popover .code {
+        color: #64748b;
+        border-color: #d8e2df;
+      }
+      .check {
+        width: 18px;
+        height: 18px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        color: #022c22;
+        background: #34d399;
+        font-size: 12px;
+        font-weight: 900;
+      }
+      .light-popover .check {
+        color: #fff;
+        background: #059669;
+      }
+      .row-placeholder {
+        width: 18px;
+      }
+      .connector {
+        position: absolute;
+        z-index: 7;
+        top: 103px;
+        width: 14px;
+        height: 8px;
+        border-radius: 999px 999px 0 0;
+        background: #172033;
+        border-top: 1px solid #334155;
+      }
+      .dark-connector {
+        left: 63px;
+      }
+      .light-connector {
+        right: 63px;
+        background: #fff;
+        border-top-color: #d8e2df;
+      }
+      .caption {
+        position: absolute;
+        z-index: 9;
+        right: 20px;
+        bottom: 18px;
+        left: 20px;
+        padding: 11px 14px;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 14px;
+        color: #94a3b8;
+        background: rgba(2, 6, 23, 0.78);
+        font-size: 11px;
+        line-height: 1.45;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="sheet">
+      <div class="header">
+        <div>
+          <h1>Language picker · open state</h1>
+          <p class="subtitle">
+            Anchored below the existing pill with a 12 px visual gap; never
+            covers the trigger.
+          </p>
+        </div>
+        <div class="badge">DESIGN APPROVAL</div>
+      </div>
+      <section class="grid">
+        <article class="panel">
+          <div class="panel-label">
+            <span class="dot"></span>English · dark · LTR
+          </div>
+          <div
+            class="phone-crop"
+            style="
+              background-image: url(&quot;renders/auth-sign-in-en-dark.png&quot;);
+            "
+          >
+            <div class="connector dark-connector"></div>
+            <div class="popover dark-popover">
+              <div class="language-row selected">
+                <span class="native-name">English</span
+                ><span class="code">EN</span><span class="check">✓</span>
+              </div>
+              <div class="language-row">
+                <span class="native-name arabic-name">العربية</span
+                ><span class="code">AR</span
+                ><span class="row-placeholder"></span>
+              </div>
+            </div>
+          </div>
+          <div class="caption">
+            194 px card · 17 px radius · 6 px inset · 50 px rows · selected tint
+            + checkmark
+          </div>
+        </article>
+        <article class="panel">
+          <div class="panel-label">
+            <span class="dot"></span>Arabic · light · RTL
+          </div>
+          <div
+            class="phone-crop light"
+            style="
+              background-image: url(&quot;renders/auth-sign-in-ar-light.png&quot;);
+            "
+          >
+            <div class="connector light-connector"></div>
+            <div class="popover light-popover">
+              <div class="language-row selected" dir="rtl">
+                <span class="native-name arabic-name">العربية</span
+                ><span class="code">AR</span><span class="check">✓</span>
+              </div>
+              <div class="language-row" dir="rtl">
+                <span class="native-name">English</span
+                ><span class="code">EN</span
+                ><span class="row-placeholder"></span>
+              </div>
+            </div>
+          </div>
+          <div class="caption">
+            Same component mirrors with the trigger; card remains clamped inside
+            the safe screen edge
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

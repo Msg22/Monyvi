@@ -1,5 +1,5 @@
 import { act, render, screen } from "@testing-library/react-native";
-import React from "react";
+import React, { Children } from "react";
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 
@@ -107,8 +107,13 @@ jest.mock("@/services/supabase", () => ({
 
 const AuthModule = require("../../app/auth") as {
   default: () => React.JSX.Element;
+  getAuthBottomPadding: (
+    bottomInset: number,
+    isCompactViewport: boolean
+  ) => number;
 };
 const AuthScreen = AuthModule.default;
+const { getAuthBottomPadding } = AuthModule;
 
 describe("AuthScreen redirect", () => {
   beforeEach(() => {
@@ -139,15 +144,48 @@ describe("AuthScreen redirect", () => {
     expect(mockReplace).toHaveBeenCalledWith("/");
   });
 
+  it("keeps approved language-first header ordering", () => {
+    render(<AuthScreen />);
+
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access */
+    const header = screen.getByTestId("auth-topbar");
+    const children = Children.toArray(
+      header.props.children
+    ) as React.ReactElement[];
+
+    expect(children[0]).toHaveProperty("props.testID", "auth-language-slot");
+    expect(children[1]).toHaveProperty("props.testID", "auth-logo-slot");
+    /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access */
+  });
+
   it("adds top and bottom safe-area insets exactly once", () => {
     render(<AuthScreen />);
 
     expect(screen.getByTestId("auth-scroll")).toHaveProp(
       "contentContainerStyle",
       expect.objectContaining({
-        paddingTop: 40,
-        paddingBottom: 58,
+        paddingTop: 30,
+        paddingBottom: 56,
       })
+    );
+  });
+
+  it("preserves the Android bottom inset while tightening compact design padding", () => {
+    expect(getAuthBottomPadding(34, false)).toBe(56);
+    expect(getAuthBottomPadding(34, true)).toBe(42);
+  });
+
+  it("keeps the auth surface fixed without user scrolling or overscroll", () => {
+    render(<AuthScreen />);
+
+    expect(screen.getByTestId("auth-scroll")).toHaveProp(
+      "scrollEnabled",
+      false
+    );
+    expect(screen.getByTestId("auth-scroll")).toHaveProp("bounces", false);
+    expect(screen.getByTestId("auth-scroll")).toHaveProp(
+      "overScrollMode",
+      "never"
     );
   });
 });

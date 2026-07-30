@@ -1,6 +1,12 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import Animated, { FadeInDown, ReduceMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -15,11 +21,21 @@ import { useAuthScreenController } from "@/hooks/useAuthScreenController";
 import { useFormScroll } from "@/hooks/useFormScroll";
 import { useKeyboardVisibility } from "@/hooks/useKeyboardVisibility";
 
+export function getAuthBottomPadding(
+  bottomInset: number,
+  isCompactViewport: boolean
+): number {
+  return bottomInset + (isCompactViewport ? 8 : 22);
+}
+
 export default function AuthScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { isDark } = useTheme();
   const isKeyboardVisible = useKeyboardVisibility();
+  const { width: viewportWidth, height: viewportHeight } =
+    useWindowDimensions();
+  const isCompactViewport = viewportWidth <= 390 || viewportHeight <= 850;
   const controller = useAuthScreenController();
   const { scrollViewRef, getFieldRef, onScroll, scrollToField } = useFormScroll<
     "email" | "password"
@@ -45,11 +61,17 @@ export default function AuthScreen(): React.JSX.Element {
           ref={scrollViewRef}
           onScroll={onScroll}
           scrollEventThrottle={16}
+          scrollEnabled={false}
+          bounces={false}
+          overScrollMode="never"
           contentContainerStyle={{
             flexGrow: 1,
-            paddingTop: insets.top + 16,
-            paddingBottom: insets.bottom + 24,
-            paddingHorizontal: 24,
+            paddingTop: insets.top + 6,
+            paddingBottom: getAuthBottomPadding(
+              insets.bottom,
+              isCompactViewport
+            ),
+            paddingHorizontal: isCompactViewport ? 25 : 30,
           }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={
@@ -57,9 +79,17 @@ export default function AuthScreen(): React.JSX.Element {
           }
           showsVerticalScrollIndicator={false}
         >
-          <View className="mb-5 flex-row items-center justify-between">
-            <MonyviLogo width={112} height={34} />
-            <LanguageSwitcherPill />
+          <View
+            testID="auth-topbar"
+            className="flex-row items-center justify-between"
+            style={{ minHeight: 50 }}
+          >
+            <View testID="auth-language-slot">
+              <LanguageSwitcherPill />
+            </View>
+            <View testID="auth-logo-slot">
+              <MonyviLogo width={114} height={34} />
+            </View>
           </View>
 
           <Animated.View
@@ -71,6 +101,7 @@ export default function AuthScreen(): React.JSX.Element {
             {controller.screenState === "form" ? (
               <FormView
                 isKeyboardVisible={isKeyboardVisible}
+                isCompactViewport={isCompactViewport}
                 pendingAction={controller.pendingAction}
                 emailError={controller.emailError}
                 networkError={controller.networkError}
