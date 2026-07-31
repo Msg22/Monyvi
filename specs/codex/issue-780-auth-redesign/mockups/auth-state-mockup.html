@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Monyvi auth redesign mockup</title>
+  <style>
+    @font-face {
+      font-family:"Monyvi Inter";
+      src:url("../../../../node_modules/@expo-google-fonts/inter/Inter_400Regular.ttf") format("truetype");
+      font-weight:400;
+    }
+    @font-face {
+      font-family:"Monyvi Inter";
+      src:url("../../../../node_modules/@expo-google-fonts/inter/Inter_500Medium.ttf") format("truetype");
+      font-weight:500;
+    }
+    @font-face {
+      font-family:"Monyvi Inter";
+      src:url("../../../../node_modules/@expo-google-fonts/inter/Inter_600SemiBold.ttf") format("truetype");
+      font-weight:600;
+    }
+    @font-face {
+      font-family:"Monyvi Inter";
+      src:url("../../../../node_modules/@expo-google-fonts/inter/Inter_700Bold.ttf") format("truetype");
+      font-weight:700;
+    }
+    @font-face {
+      font-family:"Monyvi Arabic";
+      src:url("../../../../node_modules/@expo-google-fonts/noto-sans-arabic/400Regular/NotoSansArabic_400Regular.ttf") format("truetype");
+      font-weight:400;
+    }
+    @font-face {
+      font-family:"Monyvi Arabic";
+      src:url("../../../../node_modules/@expo-google-fonts/noto-sans-arabic/500Medium/NotoSansArabic_500Medium.ttf") format("truetype");
+      font-weight:500;
+    }
+    @font-face {
+      font-family:"Monyvi Arabic";
+      src:url("../../../../node_modules/@expo-google-fonts/noto-sans-arabic/600SemiBold/NotoSansArabic_600SemiBold.ttf") format("truetype");
+      font-weight:600;
+    }
+    @font-face {
+      font-family:"Monyvi Arabic";
+      src:url("../../../../node_modules/@expo-google-fonts/noto-sans-arabic/700Bold/NotoSansArabic_700Bold.ttf") format("truetype");
+      font-weight:700;
+    }
+    :root {
+      --green-900:#022c22; --green-800:#064e3b; --green-700:#065f46; --green-600:#059669;
+      --green-500:#10b981; --green-400:#34d399; --green-100:#d1fae5; --green-50:#ecfdf5;
+      --gold-600:#d97706; --gold-400:#fbbf24;
+      --slate-950:#020617; --slate-900:#0f172a; --slate-800:#1e293b; --slate-700:#334155;
+      --slate-600:#475569; --slate-500:#64748b; --slate-400:#94a3b8; --slate-300:#cbd5e1;
+      --slate-200:#e2e8f0; --slate-100:#f1f5f9; --slate-50:#f8fafc; --white:#fff;
+      --red:#dc2626; --red-soft:#fee2e2;
+      --page-bg:#e9efed; --phone-bg:#f8fafc; --surface:#fff; --surface-alt:#f1f5f9;
+      --text:#1e293b; --text-2:#475569; --muted:#64748b; --border:#d8e2df; --line:#d8e3df;
+      --button:#065f46; --button-text:#fff; --field-shadow:0 8px 24px rgba(2,44,34,.045);
+    }
+    * { box-sizing:border-box; }
+    html, body { margin:0; width:100%; min-height:100%; }
+    body {
+      display:grid; place-items:center; min-height:100vh; padding:54px;
+      background:
+        radial-gradient(circle at 30% 20%, rgba(16,185,129,.10), transparent 28%),
+        linear-gradient(145deg, var(--page-bg), #dfe8e5);
+      color:var(--text); font-family:"Monyvi Inter", Inter, "Segoe UI", Arial, sans-serif;
+    }
+    body.dark {
+      --page-bg:#020617; --phone-bg:#0f172a; --surface:#1e293b; --surface-alt:#172033;
+      --text:#f8fafc; --text-2:#cbd5e1; --muted:#94a3b8; --border:#334155; --line:#334155;
+      --button:#10b981; --button-text:#022c22; --field-shadow:none;
+      background:
+        radial-gradient(circle at 70% 8%, rgba(16,185,129,.12), transparent 30%),
+        linear-gradient(145deg, #020617, #07140f);
+    }
+    .canvas { width:760px; min-height:1060px; display:grid; place-items:center; }
+    .device {
+      position:relative; width:430px; height:970px; padding:12px; border-radius:58px;
+      background:linear-gradient(145deg,#111827,#020617 50%,#334155);
+      box-shadow:0 34px 80px rgba(2,6,23,.30), inset 0 0 0 1px rgba(255,255,255,.18);
+    }
+    .device.small { width:390px; height:844px; border-radius:52px; }
+    .screen {
+      position:relative; width:100%; height:100%; overflow:hidden; border-radius:47px;
+      background:
+        radial-gradient(circle at 77% 18%, rgba(16,185,129,.065), transparent 26%),
+        var(--phone-bg);
+    }
+    .dark .screen { background:radial-gradient(circle at 78% 12%,rgba(16,185,129,.08),transparent 30%),var(--phone-bg); }
+    .grain {
+      position:absolute; inset:0; pointer-events:none; opacity:.035;
+      background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.45'/%3E%3C/svg%3E");
+    }
+    .dynamic-island { position:absolute; z-index:8; top:13px; left:50%; translate:-50% 0; width:112px; height:31px; border-radius:18px; background:#020617; }
+    .status { height:46px; padding:15px 27px 0; display:flex; align-items:flex-start; justify-content:space-between; font-size:12px; font-weight:700; letter-spacing:.1px; }
+    .status-icons { display:flex; gap:5px; align-items:center; }
+    .signal { width:14px; height:9px; border-bottom:2px solid currentColor; border-left:2px solid transparent; transform:skew(-12deg); }
+    .battery { width:18px; height:9px; border:1.5px solid currentColor; border-radius:2px; position:relative; }
+    .battery:after { content:""; position:absolute; right:-3px; top:2px; width:2px; height:4px; border-radius:0 1px 1px 0; background:currentColor; }
+    .app { position:relative; z-index:2; height:calc(100% - 46px); padding:6px 30px 22px; display:flex; flex-direction:column; }
+    .topbar { min-height:50px; display:flex; align-items:center; justify-content:space-between; gap:18px; }
+    .language {
+      height:36px; min-width:80px; padding:0 10px; border-radius:18px;
+      display:flex; align-items:center; justify-content:center; gap:4px; color:var(--text); background:var(--surface-alt);
+      font-size:12px; font-weight:600; letter-spacing:.04em;
+    }
+    .language-icon { width:17px; height:17px; display:grid; place-items:center; font-size:13px; line-height:1; letter-spacing:0; }
+    .chevron { width:7px; height:7px; border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor; rotate:45deg; translate:0 -2px; }
+    .brand { width:114px; height:auto; display:block; }
+    .hero { position:relative; min-height:300px; display:flex; align-items:center; padding:42px 0 12px; }
+    .hero-copy { position:relative; z-index:2; flex:0 0 225px; min-width:0; }
+    .eyebrow { margin:0 0 8px; color:var(--green-600); font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+    .dark .eyebrow { color:var(--green-400); }
+    h1 { margin:0; max-width:220px; color:var(--text); font-size:31px; line-height:1.04; letter-spacing:-1.1px; font-weight:700; text-wrap:balance; }
+    .rtl h1 { letter-spacing:0; line-height:1.28; font-size:29px; max-width:210px; font-family:"Monyvi Arabic",Tahoma,Arial,sans-serif; }
+    .hero-copy p { margin:14px 0 0; max-width:220px; color:var(--text-2); font-size:14px; line-height:1.58; }
+    .rtl .hero-copy p { line-height:1.78; font-family:"Monyvi Arabic",Tahoma,Arial,sans-serif; }
+    .hero-art { position:absolute; z-index:1; inset-inline-end:-8px; top:35px; width:205px; height:245px; object-fit:contain; object-position:center; opacity:.98; }
+    .rtl .hero-art { inset-inline-end:-36px; }
+    .mode-switch { height:46px; display:flex; padding:3px; border:1px solid var(--green-700); border-radius:14px; margin:8px 0 22px; }
+    .dark .mode-switch { border-color:var(--green-500); }
+    .mode { flex:1; display:grid; place-items:center; border-radius:10px; color:var(--green-700); font-size:14px; font-weight:600; }
+    .dark .mode { color:var(--green-400); }
+    .mode.active { color:#fff; background:linear-gradient(135deg,var(--green-800),var(--green-600)); box-shadow:0 5px 14px rgba(2,44,34,.16); }
+    .dark .mode.active { color:var(--green-900); background:linear-gradient(135deg,var(--green-500),var(--green-400)); }
+    .google {
+      height:49px; border:1px solid var(--border); border-radius:14px; background:var(--surface); display:flex; align-items:center; justify-content:center;
+      gap:12px; font-size:14px; font-weight:600; color:var(--text); box-shadow:var(--field-shadow);
+    }
+    .google-mark { width:18px; height:18px; display:block; flex:0 0 18px; }
+    .divider { height:46px; display:flex; align-items:center; gap:12px; color:var(--muted); font-size:12px; white-space:nowrap; }
+    .divider:before,.divider:after { content:""; height:1px; flex:1; background:var(--line); }
+    .form { display:flex; flex-direction:column; gap:11px; }
+    .field-group { display:flex; flex-direction:column; gap:7px; }
+    label { color:var(--text); font-size:12px; font-weight:600; }
+    .field { position:relative; height:52px; display:flex; align-items:center; border:1px solid var(--border); border-radius:14px; background:var(--surface); box-shadow:var(--field-shadow); }
+    .field.focus { border-color:var(--green-500); box-shadow:0 0 0 3px rgba(16,185,129,.12); }
+    .field.error { border-color:var(--red); box-shadow:0 0 0 3px rgba(220,38,38,.08); }
+    .field-icon { position:absolute; inset-inline-start:15px; width:17px; height:17px; color:var(--muted); }
+    .field-text { width:100%; padding-inline:43px 48px; color:var(--text); font-size:14px; direction:ltr; text-align:start; }
+    .rtl .field-text.placeholder { direction:rtl; text-align:start; font-family:"Monyvi Arabic",Tahoma,Arial,sans-serif; }
+    .rtl .field-text.password { direction:rtl; text-align:start; }
+    .field-text.placeholder { color:var(--muted); }
+    .eye { position:absolute; inset-inline-end:14px; width:22px; height:16px; border:1.7px solid var(--muted); border-radius:50% 10% 50% 10%; rotate:45deg; }
+    .eye:after { content:""; position:absolute; width:5px; height:5px; border:1.5px solid var(--muted); border-radius:50%; top:4px; left:7px; }
+    .field-help { color:var(--muted); font-size:10.5px; line-height:1.35; }
+    .error-copy { color:#dc2626; font-size:11.5px; line-height:1.35; display:flex; gap:7px; align-items:flex-start; }
+    .dark .error-copy { color:#fca5a5; }
+    .error-dot { width:14px; height:14px; flex:0 0 14px; border:1.5px solid currentColor; border-radius:50%; text-align:center; font-size:10px; line-height:11px; font-weight:800; }
+    .form-row { display:flex; align-items:center; justify-content:flex-end; min-height:20px; }
+    .forgot { color:var(--green-700); font-size:12px; font-weight:600; }
+    .dark .forgot { color:var(--green-400); }
+    .primary {
+      height:51px; margin-top:5px; border-radius:14px; display:flex; align-items:center; justify-content:center; gap:9px;
+      color:var(--button-text); background:linear-gradient(135deg,var(--green-800),var(--green-600)); font-size:15px; font-weight:700;
+      box-shadow:0 10px 22px rgba(2,44,34,.17);
+    }
+    .dark .primary { background:linear-gradient(135deg,var(--green-500),var(--green-400)); color:var(--green-900); box-shadow:none; }
+    .primary.disabled { opacity:.62; box-shadow:none; }
+    .loading-dots { display:flex; gap:3px; }
+    .loading-dots span { width:4px; height:4px; border-radius:50%; background:currentColor; }
+    .privacy { margin-top:auto; padding-top:14px; border-top:1px solid var(--line); display:flex; flex-direction:column; align-items:center; gap:9px; }
+    .trust { display:flex; align-items:center; gap:7px; color:var(--text-2); font-size:11.5px; }
+    .shield { width:19px; height:22px; color:var(--green-700); }
+    .dark .shield { color:var(--green-400); }
+    .legal { display:flex; align-items:center; gap:14px; color:var(--green-700); font-size:11.5px; font-weight:600; }
+    .dark .legal { color:var(--green-400); }
+    .legal-sep { width:1px; height:12px; background:var(--line); }
+    .notice { margin:2px 0 10px; padding:10px 12px; display:flex; gap:9px; border:1px solid rgba(220,38,38,.22); border-radius:13px; background:color-mix(in srgb,var(--red-soft) 65%,transparent); color:#991b1b; font-size:11.5px; line-height:1.35; }
+    .dark .notice { background:rgba(220,38,38,.12); color:#fca5a5; }
+    .notice.network { border-color:rgba(16,185,129,.20); background:rgba(16,185,129,.08); color:var(--text-2); }
+    .state-view { flex:1; display:flex; flex-direction:column; }
+    .state-brand { width:126px; margin:10px auto 0; }
+    .state-content { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:0 20px 70px; }
+    .state-icon { width:92px; height:92px; border-radius:50%; display:grid; place-items:center; background:rgba(16,185,129,.10); border:1px solid rgba(16,185,129,.22); color:var(--green-700); margin-bottom:24px; }
+    .dark .state-icon { color:var(--green-400); background:rgba(16,185,129,.12); }
+    .state-icon svg { width:43px; height:43px; }
+    .state-content h2 { margin:0; color:var(--text); font-size:27px; line-height:1.15; letter-spacing:-.6px; }
+    .rtl .state-content h2 { letter-spacing:0; font-family:"Monyvi Arabic",Tahoma,Arial,sans-serif; }
+    .state-content p { max-width:295px; margin:13px 0 22px; color:var(--text-2); font-size:14px; line-height:1.6; }
+    .rtl .state-content p { line-height:1.9; font-family:"Monyvi Arabic",Tahoma,Arial,sans-serif; }
+    .email-chip { direction:ltr; display:inline-block; padding:4px 8px; border-radius:7px; color:var(--text); background:var(--surface-alt); font-weight:600; }
+    .secondary { height:44px; padding:0 20px; border:1px solid var(--green-600); border-radius:13px; display:flex; align-items:center; justify-content:center; color:var(--green-700); font-size:13px; font-weight:600; }
+    .dark .secondary { color:var(--green-400); border-color:var(--green-400); }
+    .back-link { height:42px; display:flex; align-items:center; justify-content:center; gap:7px; color:var(--text-2); font-size:12px; }
+    .arrow { width:8px; height:8px; border-left:1.5px solid currentColor; border-bottom:1.5px solid currentColor; rotate:45deg; }
+    .rtl .arrow { rotate:225deg; }
+    .keyboard-mode .hero { min-height:82px; padding:0; }
+    .keyboard-mode .hero-art { display:none; }
+    .keyboard-mode .hero-copy p,.keyboard-mode .eyebrow { display:none; }
+    .keyboard-mode h1 { max-width:none; font-size:25px; }
+    .keyboard-mode .mode-switch { margin-top:4px; }
+    .keyboard-mode .google,.keyboard-mode .divider,.keyboard-mode .privacy { display:none; }
+    .keyboard-mode .app { padding-bottom:292px; overflow:hidden; }
+    .keyboard-mode .form { gap:8px; }
+    .keyboard {
+      position:absolute; z-index:5; inset-inline:0; bottom:0; height:284px; padding:10px 8px 18px; background:#d1d5db; border-top:1px solid #b7bdc5;
+      display:none; grid-template-rows:repeat(4,1fr); gap:7px; direction:ltr;
+    }
+    .keyboard-mode .keyboard { display:grid; }
+    .dark .keyboard { background:#1f2937; border-top-color:#334155; }
+    .key-row { display:flex; justify-content:center; gap:6px; }
+    .key { min-width:31px; padding:0 7px; border-radius:6px; background:#fff; box-shadow:0 1px 1px rgba(0,0,0,.25); display:grid; place-items:center; color:#111827; font-size:13px; }
+    .dark .key { background:#475569; color:#f8fafc; box-shadow:none; }
+    .space { flex:1; max-width:190px; }
+    .return { min-width:74px; background:#64748b; color:#fff; }
+    .rtl { font-family:"Monyvi Arabic",Tahoma,Arial,sans-serif; }
+    .rtl .eyebrow { letter-spacing:0; text-transform:none; }
+    .rtl .divider,.rtl .mode,.rtl .google,.rtl .primary,.rtl .privacy,.rtl .notice { font-family:"Monyvi Arabic",Tahoma,Arial,sans-serif; }
+    .small .app { padding-inline:25px; }
+    .small .hero { min-height:166px; padding-top:0; }
+    .small h1 { font-size:28px; }
+    .small .hero-copy { flex-basis:210px; }
+    .small .hero-art { width:160px; height:170px; top:0; }
+    .small .field { height:49px; }
+    .small .primary { height:49px; }
+    .error-state .hero { min-height:270px; padding-top:26px; }
+  </style>
+</head>
+<body>
+  <main class="canvas">
+    <section class="device" aria-label="Monyvi auth mockup">
+      <div class="screen">
+        <div class="grain"></div>
+        <div class="dynamic-island"></div>
+        <div class="status"><span>9:41</span><div class="status-icons"><span class="signal"></span><span>◒</span><span class="battery"></span></div></div>
+        <div id="app" class="app"></div>
+        <div class="keyboard" aria-hidden="true">
+          <div class="key-row"><span class="key">Q</span><span class="key">W</span><span class="key">E</span><span class="key">R</span><span class="key">T</span><span class="key">Y</span><span class="key">U</span><span class="key">I</span><span class="key">O</span><span class="key">P</span></div>
+          <div class="key-row"><span class="key">A</span><span class="key">S</span><span class="key">D</span><span class="key">F</span><span class="key">G</span><span class="key">H</span><span class="key">J</span><span class="key">K</span><span class="key">L</span></div>
+          <div class="key-row"><span class="key">⇧</span><span class="key">Z</span><span class="key">X</span><span class="key">C</span><span class="key">V</span><span class="key">B</span><span class="key">N</span><span class="key">M</span><span class="key">⌫</span></div>
+          <div class="key-row"><span class="key">123</span><span class="key space">space</span><span class="key return">return</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+<script>
+  const params = new URLSearchParams(location.search);
+  const theme = params.get('theme') || 'light';
+  const locale = params.get('locale') || 'en';
+  const state = params.get('state') || 'sign-in';
+  const size = params.get('size') || 'standard';
+  const isArabic = locale === 'ar';
+  const isSignUp = state === 'sign-up';
+  const isKeyboard = state === 'keyboard';
+  const copy = {
+    en: {
+      language:'EN', eyebrow:'WELCOME TO MONYVI', headline:'Your money, understood.', support:'Track spending, savings, and every move in between.',
+      signIn:'Sign in', signUp:'Create account', google:'Continue with Google', divider:'or continue with email', email:'Email', password:'Password',
+      emailPlaceholder:'you@example.com', passwordPlaceholder:'Enter your password', forgot:'Forgot password?', passwordHelp:'Use at least 6 characters.',
+      submitSignIn:'Sign in', submitSignUp:'Create account', signingIn:'Signing in', validation:'Email or password is incorrect. Check your details and try again.',
+      network:'No internet connection. You can retry when you are back online.', trust:'Private by design.', privacy:'Privacy', terms:'Terms',
+      checkInbox:'Check your inbox', verification:'We sent a verification link to', resend:'Resend email', back:'Back to sign in',
+      resetTitle:'Reset link sent', resetMessage:'Follow the link we sent to reset your password securely.'
+    },
+    ar: {
+      language:'AR', eyebrow:'أهلًا بك في مونيڤي', headline:'فلوسك كلها، واضحة قدامك.', support:'مصاريفك ومدخراتك وكل حركة بينهم، مرتّبين في مكان واحد.',
+      signIn:'تسجيل الدخول', signUp:'إنشاء حساب', google:'المتابعة باستخدام Google', divider:'أو تابع بالبريد الإلكتروني', email:'البريد الإلكتروني', password:'كلمة المرور',
+      emailPlaceholder:'you@example.com', passwordPlaceholder:'أدخل كلمة المرور', forgot:'نسيت كلمة المرور؟', passwordHelp:'استخدم ٦ أحرف على الأقل.',
+      submitSignIn:'تسجيل الدخول', submitSignUp:'إنشاء حساب', signingIn:'جارٍ تسجيل الدخول', validation:'البريد الإلكتروني أو كلمة المرور غير صحيحة. راجع البيانات وحاول مرة أخرى.',
+      network:'لا يوجد اتصال بالإنترنت. حاول مرة أخرى عند عودة الاتصال.', trust:'خصوصيتك جزء من التصميم.', privacy:'الخصوصية', terms:'الشروط',
+      checkInbox:'تحقق من بريدك', verification:'أرسلنا رابط التحقق إلى', resend:'إعادة إرسال البريد', back:'العودة لتسجيل الدخول',
+      resetTitle:'تم إرسال رابط إعادة التعيين', resetMessage:'اتبع الرابط الذي أرسلناه لإعادة تعيين كلمة المرور بأمان.'
+    }
+  }[locale];
+
+  document.documentElement.lang = locale;
+  document.documentElement.dir = isArabic ? 'rtl' : 'ltr';
+  document.body.classList.toggle('dark', theme === 'dark');
+  document.body.classList.toggle('rtl', isArabic);
+  document.body.classList.toggle('keyboard-mode', isKeyboard);
+  document.body.classList.toggle('error-state', state === 'validation-error' || state === 'network-error');
+  document.querySelector('.device').classList.toggle('small', size === 'small');
+  const app = document.getElementById('app');
+
+  const iconMail = `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="9" width="38" height="30" rx="5"/><path d="M7 13l17 13 17-13"/></svg>`;
+  const iconKey = `<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2"><circle cx="17" cy="21" r="9"/><path d="M24 27l17 14M31 33l5-5M36 37l4-4"/></svg>`;
+  const fieldIcon = (kind) => kind === 'mail'
+    ? `<svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M4 7l8 6 8-6"/></svg>`
+    : `<svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>`;
+  const googleMark = `<svg class="google-mark" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.482h4.844a4.14 4.14 0 0 1-1.797 2.716v2.258h2.909c1.702-1.567 2.684-3.874 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.468-.806 5.956-2.18l-2.909-2.258c-.806.54-1.836.859-3.047.859-2.344 0-4.329-1.585-5.037-3.711H.956v2.333A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.963 10.71A5.42 5.42 0 0 1 3.682 9c0-.593.102-1.17.281-1.71V4.957H.956A9 9 0 0 0 0 9c0 1.452.347 2.827.956 4.043l3.007-2.333z"/><path fill="#EA4335" d="M9 3.579c1.322 0 2.508.454 3.441 1.346l2.582-2.582C13.464.892 11.43 0 9 0A9 9 0 0 0 .956 4.957L3.963 7.29C4.671 5.164 6.656 3.579 9 3.579z"/></svg>`;
+  const topbar = `<div class="topbar"><div class="language"><span class="language-icon">🌐</span><span>${copy.language}</span><span class="chevron"></span></div><img class="brand" src="monyvi-wordmark.svg" alt="Monyvi" /></div>`;
+  const heroArt = isArabic ? 'financial-flow-illustration-rtl.svg' : 'financial-flow-illustration.svg';
+  const hero = `<div class="hero"><div class="hero-copy"><div class="eyebrow">${copy.eyebrow}</div><h1>${copy.headline}</h1><p>${copy.support}</p></div><img class="hero-art" src="${heroArt}" alt="" /></div>`;
+  const switcher = (signUp) => `<div class="mode-switch"><div class="mode ${!signUp?'active':''}">${copy.signIn}</div><div class="mode ${signUp?'active':''}">${copy.signUp}</div></div>`;
+  const privacy = `<div class="privacy"><div class="trust"><svg class="shield" viewBox="0 0 24 28" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 1.5l9 4v7.2c0 6.4-3.9 11-9 13.8-5.1-2.8-9-7.4-9-13.8V5.5l9-4z"/><path d="M7.8 13.8l2.7 2.8 5.8-6"/></svg><span>${copy.trust}</span></div><div class="legal"><span>${copy.privacy}</span><span class="legal-sep"></span><span>${copy.terms}</span></div></div>`;
+  const inputField = (kind, focused=false, error=false, typed=false) => {
+    const label = kind === 'mail' ? copy.email : copy.password;
+    const display = typed ? (kind === 'mail' ? 'mohamed@example.com' : '••••••••') : (kind === 'mail' ? copy.emailPlaceholder : copy.passwordPlaceholder);
+    return `<div class="field-group"><label>${label}</label><div class="field ${focused?'focus':''} ${error?'error':''}">${fieldIcon(kind)}<div class="field-text ${kind === 'password' ? 'password' : 'email'} ${typed?'':'placeholder'}">${display}</div>${kind==='password'?'<span class="eye"></span>':''}</div></div>`;
+  };
+  const authForm = () => {
+    const showValidation = state === 'validation-error';
+    const loading = state === 'loading';
+    const typed = showValidation || loading || isKeyboard;
+    return `<div class="form">
+      ${inputField('mail', isKeyboard, false, typed)}
+      ${inputField('password', false, showValidation, typed)}
+      ${showValidation?`<div class="error-copy"><span class="error-dot">!</span><span>${copy.validation}</span></div>`:''}
+      ${isSignUp?`<div class="field-help">${copy.passwordHelp}</div>`:`<div class="form-row"><span class="forgot">${copy.forgot}</span></div>`}
+      <div class="primary ${loading?'disabled':''}"><span>${loading?copy.signingIn:(isSignUp?copy.submitSignUp:copy.submitSignIn)}</span>${loading?'<span class="loading-dots"><span></span><span></span><span></span></span>':''}</div>
+    </div>`;
+  };
+
+  if (state === 'verification' || state === 'reset-sent') {
+    const verification = state === 'verification';
+    app.innerHTML = `<div class="state-view">${topbar}<div class="state-content"><div class="state-icon">${verification?iconMail:iconKey}</div><h2>${verification?copy.checkInbox:copy.resetTitle}</h2><p>${verification?`${copy.verification}<br><span class="email-chip">mohamed@example.com</span>`:`${copy.resetMessage}<br><span class="email-chip">mohamed@example.com</span>`}</p>${verification?`<div class="secondary">${copy.resend}</div>`:''}</div><div class="back-link"><span class="arrow"></span><span>${copy.back}</span></div>${privacy}</div>`;
+  } else {
+    const notice = state === 'network-error' ? `<div class="notice network"><span class="error-dot">i</span><span>${copy.network}</span></div>` : '';
+    app.innerHTML = `${topbar}${hero}${switcher(isSignUp)}${state==='network-error'?notice:''}<div class="google">${googleMark}<span>${copy.google}</span></div><div class="divider">${copy.divider}</div>${authForm()}${privacy}`;
+  }
+</script>
+</body>
+</html>

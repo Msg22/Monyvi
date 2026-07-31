@@ -49,8 +49,8 @@ const AR_PLURAL_SUFFIXES = ["_zero", "_two", "_few", "_many"];
  * (e.g. a language name displayed in its own script).
  */
 const AR_LATIN_KEY_EXCEPTIONS = new Set<string>([
-  // Currently empty — "English" was removed because the AR value is "الإنجليزية".
-  // Add entries as: "namespace.flatKey"
+  // Email examples stay Latin and LTR in every locale.
+  "auth.email_address_placeholder",
 ]);
 
 /** Brand terms that stay untranslated across locales and source labels. */

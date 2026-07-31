@@ -31,14 +31,16 @@
  * the Modal — we use `StyleSheet` for everything inside the Modal here,
  * so the warning doesn't apply.
  *
- * No vertical gap between the pill and the popover (`POPOVER_MARGIN_TOP
- * = 0`) so they read as a single unit per the 2026-04-26 user direction.
+ * Approved auth redesign uses a detached premium card with a 12 px gap so
+ * locale options never cover the trigger.
  */
 
 import React, { useCallback, useRef, useState } from "react";
 import {
   I18nManager,
   Modal,
+  Platform,
+  StatusBar,
   Pressable,
   StyleSheet,
   Text,
@@ -50,6 +52,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { palette } from "@/constants/colors";
+import { arabicFontFamily, fontFamily } from "@/constants/typography";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useIntroLocaleOverride } from "@/hooks/useIntroLocaleOverride";
@@ -72,62 +75,97 @@ const LOCALES: readonly LocaleOption[] = [
 ];
 
 const PILL_WIDTH_FALLBACK = 80;
-const POPOVER_WIDTH = 160;
-/** Visible gap between the pill and the popover. 0 makes the two read as
- *  a single piece — the popover hangs flush off the bottom edge of the
- *  pill, only the rounded corners + shadow distinguish them. */
-const POPOVER_MARGIN_TOP = 0;
-/** Minimum margin between the popover and either screen edge so it never
- *  hugs the edge or runs off-screen on narrow phones / RTL. */
+const POPOVER_WIDTH = 194;
+const POPOVER_MARGIN_TOP = 12;
 const POPOVER_EDGE_MARGIN = 8;
 
 const styles = StyleSheet.create({
-  // Modal backdrop — full-screen Pressable that closes on outside tap.
   backdrop: {
     flex: 1,
   },
-  popoverLight: {
+  popoverBase: {
     position: "absolute",
     width: POPOVER_WIDTH,
-    backgroundColor: palette.slate[25],
-    // Square the top corners so the popover visually butts up against
-    // the pill's bottom edge (one continuous shape).
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
+    borderRadius: 17,
     borderWidth: 1,
+    padding: 6,
+    shadowColor: palette.slate[950],
+    shadowOffset: { width: 0, height: 18 },
+    shadowRadius: 23,
+    elevation: 12,
+  },
+  popoverLight: {
+    backgroundColor: palette.slate[25],
     borderColor: palette.slate[200],
-    paddingVertical: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOpacity: 0.17,
   },
   popoverDark: {
-    position: "absolute",
-    width: POPOVER_WIDTH,
     backgroundColor: palette.slate[800],
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    borderWidth: 1,
     borderColor: palette.slate[700],
-    paddingVertical: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOpacity: 0.52,
   },
   optionRow: {
+    height: 50,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    columnGap: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  optionSelectedLight: {
+    backgroundColor: palette.nileGreen[50],
+  },
+  optionSelectedDark: {
+    backgroundColor: `${palette.nileGreen[400]}21`,
+  },
+  optionLabel: {
+    flex: 1,
+    fontSize: 13,
+  },
+  codeBadge: {
+    minWidth: 27,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderRadius: 7,
+  },
+  codeBadgeLight: {
+    borderColor: palette.slate[200],
+  },
+  codeBadgeDark: {
+    borderColor: palette.slate[600],
+  },
+  codeText: {
+    fontFamily: fontFamily.bold,
+    fontSize: 10,
+    letterSpacing: 0.4,
+  },
+  codeTextLight: {
+    color: palette.slate[500],
+  },
+  codeTextDark: {
+    color: palette.slate[400],
+  },
+  selectionSlot: {
+    width: 18,
+    height: 18,
+  },
+  checkCircleLight: {
+    width: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 9,
+    backgroundColor: palette.nileGreen[600],
+  },
+  checkCircleDark: {
+    width: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 9,
+    backgroundColor: palette.nileGreen[400],
   },
 });
 
@@ -241,10 +279,12 @@ export function LanguageSwitcherPill(): React.ReactElement {
   );
 
   const popoverLeft = pillRect ? computePopoverLeft(pillRect, screenWidth) : 0;
-  // No gap — the popover's top edge sits flush against the pill's bottom
-  // edge so the two read as a single piece (user direction 2026-04-26).
+  const androidModalOffset =
+    Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
+  // Modal content begins below Android's status bar while measureInWindow uses
+  // window coordinates. Normalize that origin, then preserve approved 12 px gap.
   const popoverTop = pillRect
-    ? pillRect.y + pillRect.height + POPOVER_MARGIN_TOP
+    ? pillRect.y + pillRect.height + POPOVER_MARGIN_TOP + androidModalOffset
     : 0;
 
   // RTL handling for the popover position.
@@ -292,7 +332,7 @@ export function LanguageSwitcherPill(): React.ReactElement {
           {currentLang}
         </Text>
         <Ionicons
-          name="chevron-down"
+          name={isOpen ? "chevron-up" : "chevron-down"}
           size={12}
           color={isDark ? palette.slate[400] : palette.slate[500]}
         />
@@ -302,15 +342,9 @@ export function LanguageSwitcherPill(): React.ReactElement {
           - transparent: overlay the current screen without dimming.
           - animationType=none: instant open/close, a fade reads as sluggish.
           - onRequestClose: handles the Android hardware back button.
-          - statusBarTranslucent INTENTIONALLY OMITTED (defaults to false).
-            Setting it to true on Android makes the Modal extend behind the
-            status bar, so the Modal's coordinate origin moves up by
-            STATUS_BAR_HEIGHT. measureInWindow keeps returning the pill's Y
-            in window coords (which exclude the status bar), so the popover
-            ended up STATUS_BAR_HEIGHT pixels too high — visually covering
-            the pill instead of sitting below it (user-reported 2026-04-26).
-            Keeping statusBarTranslucent=false aligns the two coordinate
-            spaces. */}
+          - statusBarTranslucent remains false. Android's status-bar origin
+            difference is normalized in `popoverTop`, preserving the approved
+            visible gap without moving Modal content behind system UI. */}
       <Modal
         visible={isOpen && pillRect !== null}
         transparent
@@ -332,50 +366,101 @@ export function LanguageSwitcherPill(): React.ReactElement {
               (which would close the popover before the row onPress fires). */}
           {pillRect && (
             <View
+              testID="language-popover"
               style={[
+                styles.popoverBase,
                 isDark ? styles.popoverDark : styles.popoverLight,
                 popoverPositionStyle,
               ]}
               onStartShouldSetResponder={() => true}
             >
-              {LOCALES.map((option, idx) => {
-                const isActive = option.code === currentLang;
-                const isFirst = idx === 0;
-                return (
-                  <Pressable
-                    key={option.code}
-                    onPress={() => handleSelect(option.code)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isActive }}
-                    style={[
-                      styles.optionRow,
-                      !isFirst && {
-                        borderTopWidth: StyleSheet.hairlineWidth,
-                        borderTopColor: isDark
-                          ? palette.slate[700]
-                          : palette.slate[200],
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={{
-                        color: isDark ? palette.slate[200] : palette.slate[800],
-                        fontSize: 14,
-                        fontWeight: isActive ? "600" : "400",
-                      }}
+              {(currentLang === "ar" ? [...LOCALES].reverse() : LOCALES).map(
+                (option) => {
+                  const isActive = option.code === currentLang;
+                  const optionFontFamily =
+                    option.code === "ar"
+                      ? arabicFontFamily.semiBold
+                      : fontFamily.semiBold;
+                  const optionColor = isDark
+                    ? isActive
+                      ? palette.nileGreen[100]
+                      : palette.slate[300]
+                    : isActive
+                      ? palette.nileGreen[700]
+                      : palette.slate[700];
+
+                  return (
+                    <Pressable
+                      key={option.code}
+                      testID={`language-option-${option.code}`}
+                      onPress={() => handleSelect(option.code)}
+                      accessibilityRole="button"
+                      accessibilityLabel={option.nativeLabel}
+                      accessibilityState={{ selected: isActive }}
+                      style={[
+                        styles.optionRow,
+                        isActive &&
+                          (isDark
+                            ? styles.optionSelectedDark
+                            : styles.optionSelectedLight),
+                      ]}
                     >
-                      {option.nativeLabel}
-                    </Text>
-                    {isActive && (
-                      <Ionicons
-                        name="checkmark"
-                        size={16}
-                        color={palette.nileGreen[500]}
-                      />
-                    )}
-                  </Pressable>
-                );
-              })}
+                      <Text
+                        testID={`language-label-${option.code}`}
+                        style={[
+                          styles.optionLabel,
+                          {
+                            color: optionColor,
+                            fontFamily: optionFontFamily,
+                            writingDirection:
+                              option.code === "ar" ? "rtl" : "ltr",
+                          },
+                        ]}
+                      >
+                        {option.nativeLabel}
+                      </Text>
+                      <View
+                        style={[
+                          styles.codeBadge,
+                          isDark ? styles.codeBadgeDark : styles.codeBadgeLight,
+                        ]}
+                      >
+                        <Text
+                          testID={`language-code-${option.code}`}
+                          style={[
+                            styles.codeText,
+                            isDark ? styles.codeTextDark : styles.codeTextLight,
+                          ]}
+                        >
+                          {option.code.toUpperCase()}
+                        </Text>
+                      </View>
+                      {isActive ? (
+                        <View
+                          testID={`language-selected-check-${option.code}`}
+                          style={
+                            isDark
+                              ? styles.checkCircleDark
+                              : styles.checkCircleLight
+                          }
+                        >
+                          <Ionicons
+                            name="checkmark"
+                            size={12}
+                            color={
+                              isDark
+                                ? palette.nileGreen[900]
+                                : palette.slate[25]
+                            }
+                          />
+                        </View>
+                      ) : (
+                        <View style={styles.selectionSlot} />
+                      )}
+                    </Pressable>
+                  );
+                }
+              )}
             </View>
           )}
         </Pressable>

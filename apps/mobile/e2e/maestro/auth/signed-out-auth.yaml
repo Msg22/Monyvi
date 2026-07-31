@@ -1,0 +1,105 @@
+appId: com.monyvi.app
+---
+# Issue 780: signed-out premium auth journey.
+# Preconditions: local seeded E2E user and E2E_CLEAR_APP_STATE=1.
+
+- waitForAnimationToEnd
+
+- runFlow:
+    when:
+      visible: "This is the developer menu"
+    commands:
+      - tapOn: "Continue"
+      - waitForAnimationToEnd
+
+- runFlow:
+    when:
+      visible: "Connected to:"
+    commands:
+      - pressKey: Back
+      - waitForAnimationToEnd
+
+- extendedWaitUntil:
+    visible: "Skip|Your money, understood."
+    timeout: 120000
+
+- runFlow:
+    when:
+      visible: "Skip"
+    commands:
+      - tapOn: "Skip"
+
+- extendedWaitUntil:
+    visible:
+      id: "auth-email-input"
+    timeout: 120000
+
+- assertVisible:
+    id: "auth-mode-sign-in"
+- assertVisible:
+    id: "auth-mode-sign-up"
+- assertVisible:
+    id: "auth-google-button"
+
+- tapOn:
+    id: "auth-mode-sign-up"
+- assertVisible: "Create account"
+- tapOn:
+    id: "auth-mode-sign-in"
+
+- tapOn:
+    id: "auth-email-input"
+- inputText: ${MAESTRO_E2E_EMAIL}
+- tapOn:
+    id: "auth-password-input"
+- inputText: ${MAESTRO_E2E_PASSWORD}
+
+# Compact keyboard composition keeps the focused fields, recovery action, and CTA reachable.
+- assertVisible:
+    id: "auth-forgot-password"
+- assertVisible:
+    id: "auth-submit-button"
+
+- tapOn:
+    id: "auth-password-visibility"
+- assertVisible:
+    id: "auth-password-input"
+- hideKeyboard
+
+- tapOn:
+    id: "auth-submit-button"
+
+- runFlow:
+    when:
+      visible: "Save password to Google?"
+    commands:
+      - tapOn: "Not now|Never"
+
+- runFlow:
+    when:
+      visible: "Auto-Track Transactions"
+    commands:
+      - tapOn: "Not Now"
+
+- extendedWaitUntil:
+    visible:
+      "Choose your primary currency|Transactions|Accounts|Open menu|Good
+      Morning|Good Afternoon|Good Evening"
+    timeout: 120000
+
+- runFlow:
+    when:
+      visible: "Choose your primary currency"
+    commands:
+      - tapOn: "Confirm"
+
+- runFlow:
+    when:
+      visible: "Auto-Track Transactions"
+    commands:
+      - tapOn: "Not Now"
+
+- extendedWaitUntil:
+    visible:
+      "Transactions|Accounts|Open menu|Good Morning|Good Afternoon|Good Evening"
+    timeout: 120000
