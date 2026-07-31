@@ -1,263 +1,410 @@
-/**
- * FormView -- Default Auth Screen Form
- *
- * Renders the welcome messaging, value-prop pill grid, and authentication
- * controls (social login + email/password form) on the auth screen.
- *
- * Architecture & Design Rationale:
- * - Pattern: Presentational Component
- * - Why: Extracted from auth.tsx to enforce SRP -- auth.tsx orchestrates
- *   screen state, this component handles the form layout and trust UI.
- *
- * @module FormView
- */
-
-import {
-  FontAwesome5,
-  Ionicons,
-  MaterialCommunityIcons,
-} from "@expo/vector-icons";
-import { palette } from "@/constants/colors";
-import { LanguageSwitcherPill } from "@/components/onboarding/LanguageSwitcherPill";
-import React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { useState, type RefObject } from "react";
+import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
-import {
-  EmailPasswordForm,
-  type AuthMode,
-} from "@/components/auth/EmailPasswordForm";
+import { EmailPasswordForm } from "@/components/auth/EmailPasswordForm";
+import { FinancialFlowIllustration } from "@/components/auth/FinancialFlowIllustration";
 import { SocialLoginButtons } from "@/components/auth/SocialLoginButtons";
+import type { AuthMode, AuthPendingAction } from "@/components/auth/auth-types";
+import { palette } from "@/constants/colors";
+import { useLocale } from "@/context/LocaleContext";
+import { useTheme } from "@/context/ThemeContext";
 import type { OAuthProvider } from "@/services/supabase";
 
-// =============================================================================
-// Types
-// =============================================================================
-
-/**
- * Discriminated union over the icon-set field.
- *
- * The earlier design used a single `interface` with a flat
- * `icon: "microphone" | ... | "diamond-stone"` plus an `iconSet`
- * discriminator and `as keyof typeof <set>.glyphMap` casts in
- * `PillIcon`. That type didn't actually verify each name belonged in
- * its assigned library — which is exactly the failure mode that bit
- * the `trending-up` glyph (FontAwesome5 Pro-only on the free font →
- * runtime "not a valid icon name" warning, user-reported 2026-04-26).
- *
- * As a discriminated union the compiler narrows `pill.icon` by
- * `iconSet` branch, so the same regression is impossible at the type
- * level and the `as keyof typeof ... .glyphMap` casts can go away.
- *
- * Note: project style normally prefers `interface` over `type`, but
- * discriminated unions are the idiomatic shape here and the win in
- * type-safety justifies the exception.
- */
-type ValuePill =
-  | {
-      readonly translationKey: string;
-      readonly iconSet: "FontAwesome5";
-      readonly icon: keyof typeof FontAwesome5.glyphMap;
-    }
-  | {
-      readonly translationKey: string;
-      readonly iconSet: "MaterialCommunityIcons";
-      readonly icon: keyof typeof MaterialCommunityIcons.glyphMap;
-    };
-
 export interface FormViewProps {
-  readonly isDark: boolean;
-  readonly oauthLoading: OAuthProvider | null;
-  readonly emailLoading: boolean;
+  readonly isKeyboardVisible: boolean;
+  readonly isCompactViewport: boolean;
+  readonly pendingAction: AuthPendingAction;
   readonly emailError: string | null;
   readonly networkError: string | null;
+  readonly emailFieldRef?: RefObject<View | null>;
+  readonly passwordFieldRef?: RefObject<View | null>;
   readonly onOAuth: (provider: OAuthProvider) => Promise<void>;
   readonly onEmailSubmit: (
     email: string,
     password: string,
     mode: AuthMode
   ) => Promise<void>;
-  readonly onForgotPassword: (email: string) => void;
+  readonly onForgotPassword: (email: string) => Promise<void>;
   readonly onClearError: () => void;
-  readonly onRetry: () => void;
+  readonly onClearNetworkError: () => void;
+  readonly onPrivacyPress: () => void;
+  readonly onTermsPress: () => void;
+  readonly onEmailFocus?: () => void;
+  readonly onPasswordFocus?: () => void;
 }
-
-// =============================================================================
-// Constants
-// =============================================================================
-
-const VALUE_PILLS: readonly ValuePill[] = [
-  { translationKey: "pill_voice", icon: "microphone", iconSet: "FontAwesome5" },
-  {
-    translationKey: "pill_bank_sms",
-    icon: "message-text",
-    iconSet: "MaterialCommunityIcons",
-  },
-  {
-    translationKey: "pill_live_rates",
-    icon: "trending-up",
-    iconSet: "MaterialCommunityIcons",
-  },
-  {
-    translationKey: "pill_gold_silver",
-    icon: "diamond-stone",
-    iconSet: "MaterialCommunityIcons",
-  },
-];
-
-// =============================================================================
-// Sub-components
-// =============================================================================
-
-interface PillIconProps {
-  readonly pill: ValuePill;
-  readonly size: number;
-  readonly color: string;
-}
-
-function PillIcon({ pill, size, color }: PillIconProps): React.JSX.Element {
-  // The discriminated union narrows `pill.icon` to the correct glyph
-  // map per branch, so we no longer need the `as keyof typeof
-  // ...glyphMap` casts the previous design required.
-  if (pill.iconSet === "FontAwesome5") {
-    return <FontAwesome5 name={pill.icon} size={size} color={color} />;
-  }
-  return <MaterialCommunityIcons name={pill.icon} size={size} color={color} />;
-}
-
-// =============================================================================
-// Component
-// =============================================================================
 
 export function FormView({
-  isDark,
-  oauthLoading,
-  emailLoading,
+  isKeyboardVisible,
+  isCompactViewport,
+  pendingAction,
   emailError,
   networkError,
+  emailFieldRef,
+  passwordFieldRef,
   onOAuth,
   onEmailSubmit,
   onForgotPassword,
   onClearError,
-  onRetry,
+  onClearNetworkError,
+  onPrivacyPress,
+  onTermsPress,
+  onEmailFocus,
+  onPasswordFocus,
 }: FormViewProps): React.JSX.Element {
   const { t } = useTranslation("auth");
+  const { fontFamily, isRTL } = useLocale();
+  const { isDark } = useTheme();
+  const [mode, setMode] = useState<AuthMode>("signIn");
+  const isActionPending = pendingAction !== null;
+  const flowColor = isDark ? palette.nileGreen[400] : palette.nileGreen[700];
+  const mutedFlowColor = isDark ? palette.slate[600] : palette.slate[300];
+  const surfaceColor = isDark ? palette.slate[800] : palette.slate[25];
+  const heroHeight = isKeyboardVisible ? 82 : isCompactViewport ? 191 : 300;
+  const heroCopyWidth = isKeyboardVisible
+    ? "100%"
+    : isCompactViewport
+      ? 210
+      : 225;
+  const heroPaddingTop = isKeyboardVisible || isCompactViewport ? 0 : 42;
+  const heroPaddingBottom = isKeyboardVisible || isCompactViewport ? 0 : 12;
+  const illustrationWidth = isCompactViewport ? 160 : 205;
+  const illustrationHeight = isCompactViewport ? 191 : 245;
+  const illustrationTop = isCompactViewport ? 0 : 35;
+  const illustrationEnd = isRTL ? (isCompactViewport ? -8 : -36) : -8;
+  const modeGradientColors: readonly [string, string] = isDark
+    ? [palette.nileGreen[500], palette.nileGreen[400]]
+    : [palette.nileGreen[800], palette.nileGreen[600]];
 
-  const pillIconColor = isDark
-    ? palette.nileGreen[400]
-    : palette.nileGreen[600];
-  const trustIconColor = isDark ? palette.slate[400] : palette.slate[500];
+  const selectMode = (nextMode: AuthMode): void => {
+    if (nextMode === mode || isActionPending) {
+      return;
+    }
+
+    setMode(nextMode);
+    onClearError();
+  };
 
   return (
-    <>
-      {/* Language Switcher — top-start corner per mockup
-          `specs/026-onboarding-restructure/mockups/04-auth-light.png`.
-          `self-start` aligns to the leading edge (left in LTR / right in
-          RTL); the previous `self-end` was a regression that placed it on
-          the trailing edge. */}
-      <View className="self-start mb-4">
-        <LanguageSwitcherPill />
-      </View>
-
-      {/* Welcome Section */}
-      <View className="items-center gap-2 mb-6">
-        <Text className="text-[28px] font-bold text-center text-text-primary dark:text-text-primary-dark">
-          {t("welcome_title")}
-        </Text>
-        <Text className="text-base text-center text-text-secondary dark:text-text-secondary-dark max-w-[320px] leading-6">
-          {t("welcome_tagline")}
-        </Text>
-      </View>
-
-      {/* 2×2 Value-Prop Pill Grid (per mockup 04-auth-light.png).
-          Explicit two-row layout with `flex-1` per pill so the grid is always
-          2-up regardless of phone width. The previous `flex-wrap` approach
-          allowed 3 of the 4 pills to fit on a single row at common widths
-          (~360-400dp), producing a 3+1 layout that did not match the mockup. */}
-      <View className="gap-2.5 mb-8">
-        {[0, 2].map((rowStart) => (
-          <View key={rowStart} className="flex-row" style={{ gap: 10 }}>
-            {VALUE_PILLS.slice(rowStart, rowStart + 2).map((pill) => (
-              <View
-                key={pill.translationKey}
-                className="flex-1 flex-row items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 px-3.5 py-2"
-                style={{ gap: 6 }}
-              >
-                <PillIcon pill={pill} size={14} color={pillIconColor} />
-                <Text className="text-xs font-medium text-text-secondary dark:text-text-secondary-dark">
-                  {t(pill.translationKey)}
-                </Text>
-              </View>
-            ))}
-          </View>
-        ))}
-      </View>
-
-      {/* Auth Controls */}
-      <View className="gap-4">
-        {/* Network Error Banner */}
-        {networkError ? (
-          <View className="bg-red-500/10 border border-red-400/30 rounded-2xl p-4 flex-row items-center gap-3">
-            <Ionicons
-              name="cloud-offline-outline"
-              size={22}
-              color={palette.slate[400]}
-            />
-            <View className="flex-1">
-              <Text className="text-sm text-red-400 font-medium">
-                {networkError}
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={onRetry}
-              accessibilityLabel={t("retry")}
-              accessibilityRole="button"
+    <View testID="auth-form-root" className="w-full flex-1">
+      <View
+        testID="auth-hero"
+        className="relative justify-center"
+        style={{
+          minHeight: heroHeight,
+          paddingTop: heroPaddingTop,
+          paddingBottom: heroPaddingBottom,
+        }}
+      >
+        <View
+          testID="auth-hero-copy"
+          className="z-10"
+          style={{
+            width: heroCopyWidth,
+            alignSelf: "flex-start",
+          }}
+        >
+          {!isKeyboardVisible ? (
+            <Text
+              className="mb-2 text-xs text-nileGreen-700 dark:text-nileGreen-300"
+              style={{
+                fontFamily: fontFamily.semiBold,
+                fontWeight: "800",
+                letterSpacing: isRTL ? 0 : 0.96,
+                textAlign: isRTL ? "right" : "left",
+                textTransform: isRTL ? "none" : "uppercase",
+              }}
             >
-              <Ionicons
-                name="refresh-outline"
-                size={22}
-                color={palette.nileGreen[400]}
-              />
-            </TouchableOpacity>
+              {t("welcome_title")}
+            </Text>
+          ) : null}
+          <Text
+            accessibilityRole="header"
+            className="text-text-primary dark:text-text-primary-dark"
+            style={{
+              fontFamily: fontFamily.bold,
+              fontSize: isKeyboardVisible
+                ? 25
+                : isRTL
+                  ? isCompactViewport
+                    ? 27
+                    : 29
+                  : isCompactViewport
+                    ? 28
+                    : 31,
+              lineHeight: isKeyboardVisible
+                ? 32
+                : isRTL
+                  ? isCompactViewport
+                    ? 35
+                    : 37
+                  : isCompactViewport
+                    ? 30
+                    : 32,
+              letterSpacing: isRTL ? 0 : -1.1,
+              maxWidth: isCompactViewport ? 210 : 220,
+              textAlign: isRTL ? "right" : "left",
+            }}
+          >
+            {t("welcome_headline")}
+          </Text>
+          {!isKeyboardVisible ? (
+            <Text
+              className="text-sm text-text-secondary dark:text-text-secondary-dark"
+              style={{
+                fontFamily: fontFamily.regular,
+                marginTop: 14,
+                lineHeight: isRTL ? 25 : 22,
+                maxWidth: 220,
+                textAlign: isRTL ? "right" : "left",
+              }}
+            >
+              {t("welcome_support")}
+            </Text>
+          ) : null}
+        </View>
+
+        {!isKeyboardVisible ? (
+          <View
+            testID="auth-illustration-container"
+            className="absolute"
+            style={{ end: illustrationEnd, top: illustrationTop }}
+          >
+            <FinancialFlowIllustration
+              direction={isRTL ? "rtl" : "ltr"}
+              flowColor={flowColor}
+              mutedFlowColor={mutedFlowColor}
+              accentColor={palette.gold[500]}
+              accentSoftColor={isDark ? palette.gold[800] : palette.gold[100]}
+              surfaceColor={surfaceColor}
+              width={illustrationWidth}
+              height={illustrationHeight}
+            />
           </View>
         ) : null}
+      </View>
 
-        {/* Google OAuth */}
-        <SocialLoginButtons loadingProvider={oauthLoading} onPress={onOAuth} />
-
-        {/* Email/Password Form (includes its own "or" divider) */}
-        <EmailPasswordForm
-          onSubmit={onEmailSubmit}
-          onForgotPassword={onForgotPassword}
-          isLoading={emailLoading}
-          errorMessage={emailError}
-          onClearError={onClearError}
+      <View
+        testID="auth-mode-switch"
+        accessibilityRole="tablist"
+        className="flex-row border border-nileGreen-700 dark:border-nileGreen-500"
+        style={{
+          height: 46,
+          marginTop: 8,
+          marginBottom: 22,
+          borderRadius: 14,
+          padding: 3,
+        }}
+      >
+        <ModeButton
+          testID="auth-mode-sign-in"
+          label={t("sign_in")}
+          isSelected={mode === "signIn"}
+          isDisabled={isActionPending}
+          fontFamily={fontFamily.semiBold}
+          gradientColors={modeGradientColors}
+          onPress={() => selectMode("signIn")}
+        />
+        <ModeButton
+          testID="auth-mode-sign-up"
+          label={t("create_account")}
+          isSelected={mode === "signUp"}
+          isDisabled={isActionPending}
+          fontFamily={fontFamily.semiBold}
+          gradientColors={modeGradientColors}
+          onPress={() => selectMode("signUp")}
         />
       </View>
 
-      {/* Trust Microbar Footer */}
-      <View className="flex-row justify-center items-center gap-5 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
-        <View className="flex-row items-center" style={{ gap: 4 }}>
-          <MaterialCommunityIcons
-            name="lock-outline"
-            size={14}
-            color={trustIconColor}
+      {networkError ? (
+        <View className="mb-4 flex-row items-center gap-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-4">
+          <Ionicons
+            name="cloud-offline-outline"
+            size={21}
+            color={palette.red[500]}
           />
-          <Text className="text-xs text-text-muted dark:text-text-muted-dark">
-            {t("trust_encrypted")}
+          <Text
+            accessibilityRole="alert"
+            accessibilityLabel={networkError}
+            className="flex-1 text-sm text-red-600 dark:text-red-300"
+            style={{ fontFamily: fontFamily.medium }}
+          >
+            {networkError}
           </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("dismiss")}
+            onPress={onClearNetworkError}
+            className="min-h-11 min-w-11 items-center justify-center"
+          >
+            <Ionicons name="close" size={22} color={palette.red[500]} />
+          </Pressable>
         </View>
-        <View className="flex-row items-center" style={{ gap: 4 }}>
-          <MaterialCommunityIcons
-            name="shield-check-outline"
-            size={14}
-            color={trustIconColor}
+      ) : null}
+
+      {!isKeyboardVisible ? (
+        <>
+          <SocialLoginButtons
+            isLoading={pendingAction === "google"}
+            isDisabled={isActionPending}
+            onPress={() => onOAuth("google")}
           />
-          <Text className="text-xs text-text-muted dark:text-text-muted-dark">
-            {t("trust_private")}
-          </Text>
+          <View
+            testID="auth-email-divider"
+            className="flex-row items-center gap-3"
+            style={{
+              height: isCompactViewport && mode === "signIn" ? 31 : 46,
+            }}
+          >
+            <View className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+            <Text
+              className="text-xs text-text-muted dark:text-text-muted-dark"
+              style={{ fontFamily: fontFamily.regular }}
+            >
+              {t("or_continue_with_email")}
+            </Text>
+            <View className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+          </View>
+        </>
+      ) : null}
+
+      <EmailPasswordForm
+        mode={mode}
+        isCompactViewport={isCompactViewport}
+        pendingAction={pendingAction}
+        errorMessage={emailError}
+        emailFieldRef={emailFieldRef}
+        passwordFieldRef={passwordFieldRef}
+        onSubmit={onEmailSubmit}
+        onForgotPassword={onForgotPassword}
+        onClearError={onClearError}
+        onEmailFocus={onEmailFocus}
+        onPasswordFocus={onPasswordFocus}
+      />
+
+      {!isKeyboardVisible ? (
+        <View
+          testID="auth-privacy-footer"
+          className="items-center border-t border-slate-200 dark:border-slate-700"
+          style={{
+            marginTop: isCompactViewport ? (mode === "signIn" ? 19 : 20) : 34,
+            paddingTop: 14,
+            gap: 9,
+          }}
+        >
+          <View
+            testID="auth-trust-row"
+            className="flex-row items-center"
+            style={{ gap: 7 }}
+          >
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={19}
+              color={flowColor}
+            />
+            <Text
+              className="text-text-secondary dark:text-text-secondary-dark"
+              style={{ fontFamily: fontFamily.regular, fontSize: 11.5 }}
+            >
+              {t("private_by_design")}
+            </Text>
+          </View>
+          <View
+            testID="auth-legal-row"
+            className="flex-row items-center"
+            style={{ gap: 14 }}
+          >
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={t("privacy")}
+              hitSlop={8}
+              onPress={onPrivacyPress}
+            >
+              <Text
+                className="text-nileGreen-700 dark:text-nileGreen-300"
+                style={{ fontFamily: fontFamily.semiBold, fontSize: 11.5 }}
+              >
+                {t("privacy")}
+              </Text>
+            </Pressable>
+            <View className="h-3 w-px bg-slate-200 dark:bg-slate-700" />
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={t("terms")}
+              hitSlop={8}
+              onPress={onTermsPress}
+            >
+              <Text
+                className="text-nileGreen-700 dark:text-nileGreen-300"
+                style={{ fontFamily: fontFamily.semiBold, fontSize: 11.5 }}
+              >
+                {t("terms")}
+              </Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
-    </>
+      ) : null}
+    </View>
+  );
+}
+
+interface ModeButtonProps {
+  readonly testID: string;
+  readonly label: string;
+  readonly isSelected: boolean;
+  readonly isDisabled: boolean;
+  readonly fontFamily: string;
+  readonly gradientColors: readonly [string, string];
+  readonly onPress: () => void;
+}
+
+function ModeButton({
+  testID,
+  label,
+  isSelected,
+  isDisabled,
+  fontFamily,
+  gradientColors,
+  onPress,
+}: ModeButtonProps): React.JSX.Element {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: isSelected, disabled: isDisabled }}
+      disabled={isDisabled}
+      hitSlop={3}
+      onPress={onPress}
+      className="flex-1 overflow-hidden items-center justify-center"
+      style={{ height: 40, borderRadius: 10, opacity: isDisabled ? 0.55 : 1 }}
+    >
+      {isSelected ? (
+        <LinearGradient
+          colors={gradientColors}
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            borderRadius: 10,
+          }}
+        />
+      ) : null}
+      <Text
+        className={
+          isSelected
+            ? "text-sm text-slate-25 dark:text-nileGreen-900"
+            : "text-sm text-nileGreen-700 dark:text-nileGreen-300"
+        }
+        style={{ fontFamily }}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }

@@ -1,100 +1,89 @@
-/**
- * VerificationPendingView — Email Verification Pending State
- *
- * Displayed after a successful sign-up when the user's email
- * needs verification. Shows instructions and a resend button.
- *
- * Architecture & Design Rationale:
- * - Pattern: Presentational Component
- * - Why: Extracted from auth.tsx to enforce SRP — auth.tsx orchestrates
- *   screen state, this component handles the verification pending UI.
- *
- * @module VerificationPendingView
- */
-
-import { palette } from "@/constants/colors";
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
-// =============================================================================
-// Types
-// =============================================================================
+import { palette } from "@/constants/colors";
+import { useLocale } from "@/context/LocaleContext";
+import { useTheme } from "@/context/ThemeContext";
 
 export interface VerificationPendingViewProps {
   readonly email: string;
-  readonly isDark: boolean;
+  readonly isResending: boolean;
   readonly onResend: () => Promise<void>;
   readonly onBack: () => void;
 }
 
-// =============================================================================
-// Component
-// =============================================================================
-
 export function VerificationPendingView({
   email,
-  isDark,
+  isResending,
   onResend,
   onBack,
 }: VerificationPendingViewProps): React.JSX.Element {
   const { t } = useTranslation("auth");
-  return (
-    <>
-      <View className="flex-1 items-center justify-center gap-6 px-4">
-        {/* Mail Icon */}
-        <View className="w-24 h-24 rounded-full bg-nileGreen-500/15 items-center justify-center">
-          <Ionicons
-            name="mail-outline"
-            size={48}
-            color={isDark ? palette.nileGreen[400] : palette.nileGreen[600]}
-          />
-        </View>
+  const { fontFamily, isRTL } = useLocale();
+  const { isDark } = useTheme();
+  const iconColor = isDark ? palette.nileGreen[400] : palette.nileGreen[700];
+  const resendLabel = isResending ? t("resending_email") : t("resend_email");
 
-        <Text className="text-2xl font-bold text-center text-text-primary dark:text-text-primary-dark">
+  return (
+    <View className="flex-1 justify-center py-10">
+      <View className="items-center rounded-[28px] border border-slate-200 bg-slate-25/90 px-6 py-10 dark:border-slate-700 dark:bg-slate-900/90">
+        <View className="mb-6 h-20 w-20 items-center justify-center rounded-full bg-nileGreen-500/15">
+          <Ionicons name="mail-unread-outline" size={40} color={iconColor} />
+        </View>
+        <Text
+          accessibilityRole="header"
+          className="text-center text-2xl text-text-primary dark:text-text-primary-dark"
+          style={{ fontFamily: fontFamily.bold }}
+        >
           {t("check_your_inbox")}
         </Text>
-
-        <Text className="text-base text-center text-text-secondary dark:text-text-secondary-dark max-w-[300px] leading-6">
+        <Text
+          className="mt-3 max-w-[310px] text-center text-base leading-6 text-text-secondary dark:text-text-secondary-dark"
+          style={{ fontFamily: fontFamily.regular }}
+        >
           {t("verification_sent_message", { email })}
         </Text>
-
-        {/* Resend Button */}
-        <TouchableOpacity
+        <Pressable
           onPress={() => {
-            onResend().catch(() => {});
+            void onResend();
           }}
-          className="py-3 px-6 rounded-2xl border border-nileGreen-500"
-          activeOpacity={0.8}
-          accessibilityLabel={t("resend_email")}
+          disabled={isResending}
           accessibilityRole="button"
+          accessibilityLabel={resendLabel}
+          accessibilityState={{ disabled: isResending, busy: isResending }}
+          className="mt-7 min-h-12 min-w-[180px] items-center justify-center rounded-2xl border border-nileGreen-600 px-6"
+          style={{ opacity: isResending ? 0.6 : 1 }}
         >
-          <Text className="text-sm font-semibold text-nileGreen-400">
-            {t("resend_email")}
+          <Text
+            className="text-sm text-nileGreen-700 dark:text-nileGreen-300"
+            style={{ fontFamily: fontFamily.semiBold }}
+          >
+            {resendLabel}
           </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Back to Sign In */}
-      <TouchableOpacity
-        onPress={onBack}
-        className="py-3 items-center"
-        activeOpacity={0.6}
-        accessibilityLabel={t("back_to_sign_in")}
-        accessibilityRole="button"
-      >
-        <View className="flex-row items-center gap-1">
+        </Pressable>
+        <Pressable
+          onPress={onBack}
+          disabled={isResending}
+          accessibilityRole="button"
+          accessibilityLabel={t("back_to_sign_in")}
+          accessibilityState={{ disabled: isResending }}
+          className="mt-3 min-h-11 flex-row items-center justify-center gap-2"
+          style={{ opacity: isResending ? 0.55 : 1 }}
+        >
           <Ionicons
-            name="arrow-back"
-            size={14}
+            name={isRTL ? "arrow-forward" : "arrow-back"}
+            size={16}
             color={isDark ? palette.slate[400] : palette.slate[500]}
           />
-          <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
+          <Text
+            className="text-sm text-text-secondary dark:text-text-secondary-dark"
+            style={{ fontFamily: fontFamily.medium }}
+          >
             {t("back_to_sign_in")}
           </Text>
-        </View>
-      </TouchableOpacity>
-    </>
+        </Pressable>
+      </View>
+    </View>
   );
 }

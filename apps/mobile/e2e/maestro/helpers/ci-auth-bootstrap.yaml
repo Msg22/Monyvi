@@ -21,7 +21,7 @@ appId: com.monyvi.app
 
 - extendedWaitUntil:
     visible:
-      "Skip|Welcome to Monyvi|Email address|Auto-Track
+      "Skip|Your money, understood.|Email|Auto-Track
       Transactions|Transactions|Accounts|Open menu|Good Morning|Good
       Afternoon|Good Evening"
     timeout: 120000
@@ -33,21 +33,25 @@ appId: com.monyvi.app
       - tapOn: "Skip"
       - extendedWaitUntil:
           visible:
-            "Welcome to Monyvi|Email address|Transactions|Accounts|Open
-            menu|Good Morning|Good Afternoon|Good Evening"
+            "Your money, understood.|Email|Transactions|Accounts|Open menu|Good
+            Morning|Good Afternoon|Good Evening"
           timeout: 120000
 
 - runFlow:
     when:
-      visible: "Welcome to Monyvi"
+      visible:
+        id: "auth-email-input"
     commands:
-      - tapOn: "Email address"
+      - tapOn:
+          id: "auth-email-input"
       - inputText: ${MAESTRO_E2E_EMAIL}
       - hideKeyboard
-      - tapOn: "Password"
+      - tapOn:
+          id: "auth-password-input"
       - inputText: ${MAESTRO_E2E_PASSWORD}
       - hideKeyboard
-      - tapOn: "Sign in"
+      - tapOn:
+          id: "auth-submit-button"
       - runFlow:
           when:
             visible: "Save password to Google?"
