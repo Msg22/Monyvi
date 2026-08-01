@@ -50,4 +50,40 @@ describe("PitchSlide", () => {
       paddingBottom: 56,
     });
   });
+
+  it("uses the approved compact composition on short screens", () => {
+    render(
+      <PitchSlide
+        headline="Track with your voice."
+        subhead="Three transactions ready to review."
+        isLast={false}
+        hasPrevious={false}
+        isCompactLayout
+        slideIndex={0}
+        totalSlides={3}
+        onSkip={jest.fn()}
+        onPrevious={jest.fn()}
+        onAdvance={jest.fn()}
+      >
+        <Text>Compact voice results</Text>
+      </PitchSlide>
+    );
+
+    expect(screen.getByTestId("pitch-slide-root")).toHaveProp(
+      "className",
+      expect.stringContaining("pt-8")
+    );
+    expect(screen.getByTestId("pitch-slide-headline")).toHaveProp(
+      "className",
+      expect.stringContaining("text-2xl")
+    );
+    expect(screen.getByTestId("pitch-slide-content")).toHaveProp(
+      "className",
+      expect.stringContaining("mt-3")
+    );
+    expect(screen.getByTestId("pitch-slide-pagination")).toHaveProp(
+      "className",
+      expect.stringContaining("mb-3")
+    );
+  });
 });
