@@ -12,6 +12,7 @@ import {
   restoreSmsReviewDraft,
   updateSmsReviewDraftItem,
   updateSmsReviewDraftSelection,
+  updateSmsReviewDraftSelections,
 } from "@/services/sms-review-draft-repository";
 
 interface QueryCondition {
@@ -419,6 +420,39 @@ describe("sms-review-draft-repository", () => {
     expect(mockBatch).toHaveBeenCalledTimes(1);
   });
 
+  it("refreshes an untouched parser payload without clearing its selection", async () => {
+    const queue = seedRecord("sms_review_queues", {
+      userId: "user-1",
+      updatedAt: new Date("2026-07-27T10:00:00.000Z"),
+    });
+    const baseline = createTransaction("fp-selected-enriched", 100);
+    const encodedBaseline = encodeSmsReviewDraft(baseline);
+    const draft = seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      queueId: queue.id,
+      smsFingerprint: "fp-selected-enriched",
+      payloadVersion: encodedBaseline.version,
+      payloadJson: encodedBaseline.json,
+      selectionOverride: true,
+    });
+    const enriched = {
+      ...baseline,
+      categoryId: "category-food",
+      categoryDisplayName: "Food",
+      confidence: 0.98,
+    };
+
+    await mergeSmsReviewDrafts({
+      expectedUserId: "user-1",
+      transactions: [enriched],
+      baselineTransactions: [baseline],
+    });
+
+    expect(draft.payloadJson).toBe(encodeSmsReviewDraft(enriched).json);
+    expect(draft.selectionOverride).toBe(true);
+    expect(mockBatch).toHaveBeenCalledTimes(1);
+  });
+
   it("restores untouched parser payloads when the adapter batch fails", async () => {
     const queue = seedRecord("sms_review_queues", { userId: "user-1" });
     const baseline = createTransaction("fp-refresh-failure", 100);
@@ -743,6 +777,31 @@ describe("sms-review-draft-repository", () => {
     expect(mockRestoreCachedModelSnapshot).toHaveBeenCalledTimes(1);
   });
 
+  it("updates multiple selection overrides in one atomic batch", async () => {
+    const first = seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      smsFingerprint: "fp-selection-bulk-1",
+      selectionOverride: null,
+    });
+    const second = seedRecord("sms_review_draft_items", {
+      userId: "user-1",
+      smsFingerprint: "fp-selection-bulk-2",
+      selectionOverride: null,
+    });
+
+    await updateSmsReviewDraftSelections(
+      [
+        { draftId: first.id, selectionOverride: true },
+        { draftId: second.id, selectionOverride: false },
+      ],
+      "user-1"
+    );
+
+    expect(first.selectionOverride).toBe(true);
+    expect(second.selectionOverride).toBe(false);
+    expect(mockBatch).toHaveBeenCalledTimes(1);
+  });
+
   it("does not discard after the active user changes", async () => {
     await mergeSmsReviewDrafts({
       expectedUserId: "user-1",
@@ -757,9 +816,9 @@ describe("sms-review-draft-repository", () => {
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new Error("sms_review_draft_user_scope_changed"));
 
-    await expect(
-      discardSmsReviewDraft(draft.id, "user-1")
-    ).rejects.toThrow("sms_review_draft_user_scope_changed");
+    await expect(discardSmsReviewDraft(draft.id, "user-1")).rejects.toThrow(
+      "sms_review_draft_user_scope_changed"
+    );
 
     expect(mockCollections.get("sms_review_draft_items")?.records).toContain(
       draft
@@ -768,6 +827,22 @@ describe("sms-review-draft-repository", () => {
       []
     );
     expect(mockBatch).not.toHaveBeenCalled();
+  });
+
+  it("discards the restored draft by fingerprint when its old id is stale", async () => {
+    await mergeSmsReviewDrafts({
+      expectedUserId: "user-1",
+      transactions: [createTransaction("fp-restored")],
+    });
+
+    await expect(
+      discardSmsReviewDraft("destroyed-old-draft-id", "user-1", "fp-restored")
+    ).resolves.toMatchObject({ smsFingerprint: "fp-restored" });
+
+    expect(mockCollections.get("sms_review_draft_items")?.records).toEqual([]);
+    expect(
+      mockCollections.get("dismissed_sms_fingerprints")?.records
+    ).toHaveLength(1);
   });
 
   it("does not restore after the active user changes", async () => {

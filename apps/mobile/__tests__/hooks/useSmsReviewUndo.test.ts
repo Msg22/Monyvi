@@ -117,6 +117,11 @@ describe("useSmsReviewUndo", () => {
 
     expect(result.current.undoItem).toEqual(optimisticItem);
     expect(result.current.undoItem?.selectionOverride).toBe(true);
+    expect(mockDiscard).toHaveBeenCalledWith(
+      optimisticItem.draftId,
+      optimisticItem.userId,
+      optimisticItem.smsFingerprint
+    );
 
     await act(async () => {
       resolveDiscard(persistedItem);
@@ -359,6 +364,44 @@ describe("useSmsReviewUndo", () => {
     expect(mockUndo).toHaveBeenCalledTimes(1);
     await act(async () => {
       resolveUndo(true);
+      await Promise.all([firstUndo, secondUndo]);
+    });
+    expect(result.current.undoItem).toBeNull();
+  });
+
+  it("treats a new discard of the same draft as a new undo generation", async () => {
+    const item = createUndoItem("Repeat", true);
+    let resolveFirstUndo!: (restored: boolean) => void;
+    mockDiscard.mockResolvedValue(item);
+    mockUndo
+      .mockReturnValueOnce(
+        new Promise<boolean>((resolve) => {
+          resolveFirstUndo = resolve;
+        })
+      )
+      .mockResolvedValueOnce(true);
+    const { result } = renderHook(() => useSmsReviewUndo());
+
+    await act(async () =>
+      result.current.discard(item.draftId, item.userId, item)
+    );
+    let firstUndo!: Promise<boolean>;
+    act(() => {
+      firstUndo = result.current.undo();
+    });
+    await act(async () =>
+      result.current.discard(item.draftId, item.userId, item)
+    );
+    expect(result.current.undoItem).toEqual(item);
+
+    let secondUndo!: Promise<boolean>;
+    act(() => {
+      secondUndo = result.current.undo();
+    });
+    expect(mockUndo).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolveFirstUndo(true);
       await Promise.all([firstUndo, secondUndo]);
     });
     expect(result.current.undoItem).toBeNull();

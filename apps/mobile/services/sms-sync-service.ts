@@ -30,7 +30,6 @@ import {
 import { Q } from "@nozbe/watermelondb";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
-import { InteractionManager } from "react-native";
 import {
   type ParseSmsContext,
   type SmsCandidate,
@@ -117,7 +116,7 @@ export interface ScanOptions {
   /** Batch size for keyword filtering — smaller = more frequent progress updates. */
   readonly batchSize?: number;
   /**
-   * Yield to the UI thread every N batches via InteractionManager.
+   * Yield to idle time every N batches.
    * Prevents UI freezing on large inboxes (10K+ messages).
    * Defaults to 3.
    */
@@ -150,7 +149,12 @@ function resolveSmsInboxPageSize(value: number | undefined): number {
 
 async function yieldToUiThread(): Promise<void> {
   await new Promise<void>((resolve) => {
-    InteractionManager.runAfterInteractions(resolve);
+    const requestIdle = globalThis.requestIdleCallback;
+    if (requestIdle) {
+      requestIdle(() => resolve(), { timeout: 50 });
+      return;
+    }
+    setTimeout(resolve, 0);
   });
 }
 

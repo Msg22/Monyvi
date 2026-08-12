@@ -69,16 +69,10 @@ function getAsyncStorageMocks(): {
 }
 
 // ---------------------------------------------------------------------------
-// Mock: react-native (InteractionManager + Platform)
+// Mock: react-native
 // ---------------------------------------------------------------------------
 
 jest.mock("react-native", () => ({
-  InteractionManager: {
-    runAfterInteractions: jest.fn((cb: () => void) => {
-      cb();
-      return { cancel: jest.fn() };
-    }),
-  },
   Platform: { OS: "android" },
 }));
 
@@ -1105,10 +1099,15 @@ describe("sms-sync-service", () => {
   // scanAndParseSms — UI Thread Yielding
   // =========================================================================
   describe("UI thread yielding", () => {
-    it("should yield to InteractionManager after yieldInterval batches", async () => {
-      const { InteractionManager } = jest.requireMock<{
-        InteractionManager: { runAfterInteractions: jest.Mock };
-      }>("react-native");
+    it("should yield with requestIdleCallback after yieldInterval batches", async () => {
+      const requestIdleCallback = jest.fn((callback: IdleRequestCallback) => {
+        callback({ didTimeout: false, timeRemaining: () => 10 });
+        return 1;
+      });
+      Object.defineProperty(globalThis, "requestIdleCallback", {
+        configurable: true,
+        value: requestIdleCallback,
+      });
 
       // 6 messages, batchSize=1, yieldInterval=2 → yield at batch 2, 4, 6
       const messages = Array.from({ length: 6 }, (_, i) =>
@@ -1118,7 +1117,8 @@ describe("sms-sync-service", () => {
 
       await scanAndParseSms(defaultOptions({ batchSize: 1, yieldInterval: 2 }));
 
-      expect(InteractionManager.runAfterInteractions).toHaveBeenCalledTimes(8);
+      expect(requestIdleCallback).toHaveBeenCalledTimes(8);
+      Reflect.deleteProperty(globalThis, "requestIdleCallback");
     });
   });
 

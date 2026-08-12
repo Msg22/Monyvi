@@ -20,6 +20,7 @@ import {
   discardEverySmsReviewDraft,
   editSmsReviewDraft,
   setSmsReviewDraftSelection,
+  setSmsReviewDraftSelections,
 } from "@/services/sms-review-draft-command-service";
 import {
   saveSelectedSmsReviewDrafts,
@@ -98,14 +99,42 @@ function applyHardValidationReasons(
   };
 }
 
-function SmsReviewLoadingState(): React.JSX.Element {
+function SmsReviewLoadingState({
+  title,
+}: {
+  readonly title: string;
+}): React.JSX.Element {
   return (
-    <SafeAreaView className="flex-1 bg-background px-5 pt-4 dark:bg-background-dark">
-      <Skeleton width="65%" height={34} borderRadius={6} />
-      <View className="mt-5 gap-3">
-        <Skeleton width="100%" height={92} borderRadius={8} />
-        <Skeleton width="100%" height={132} borderRadius={8} />
-        <Skeleton width="100%" height={132} borderRadius={8} />
+    <SafeAreaView
+      testID="sms-review-loading"
+      className="flex-1 bg-background dark:bg-background-dark"
+    >
+      <View className="h-20 flex-row items-center px-5">
+        <Ionicons name="arrow-back" size={26} color={palette.slate[400]} />
+        <View className="ms-4 flex-1">
+          <Text className="text-xl font-bold text-text-primary dark:text-text-primary-dark">
+            {title}
+          </Text>
+          <View className="mt-2">
+            <Skeleton width="42%" height={14} borderRadius={4} />
+          </View>
+        </View>
+      </View>
+      <View className="gap-3 px-5 pb-3 pt-3">
+        <Skeleton width="100%" height={80} borderRadius={8} />
+        <Skeleton width="100%" height={40} borderRadius={8} />
+        <Skeleton width="100%" height={40} borderRadius={8} />
+      </View>
+      <View className="gap-px">
+        {[0, 1, 2].map((index) => (
+          <View
+            key={index}
+            testID="sms-review-loading-row"
+            className="h-28 border-b border-border bg-background px-5 py-4 dark:border-border-dark dark:bg-background-dark"
+          >
+            <Skeleton width="100%" height={80} borderRadius={8} />
+          </View>
+        ))}
       </View>
     </SafeAreaView>
   );
@@ -147,14 +176,20 @@ export default function SmsReviewScreen(): React.JSX.Element {
   const [isSaving, setIsSaving] = useState(false);
   const [isLeavingAfterSave, setIsLeavingAfterSave] = useState(false);
   const [discardConfirmVisible, setDiscardConfirmVisible] = useState(false);
-  const [hiddenDraftIds, setHiddenDraftIds] = useState<ReadonlySet<string>>(
-    () => new Set()
-  );
+  const [hiddenFingerprints, setHiddenFingerprints] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
   const [latestDiscardedItem, setLatestDiscardedItem] =
     useState<RevalidatedSmsReviewDraftItem | null>(null);
   const [optimisticallyRestoredItem, setOptimisticallyRestoredItem] =
     useState<RevalidatedSmsReviewDraftItem | null>(null);
   const latestVisualDiscardRequestRef = useRef(0);
+  const visualOperationByFingerprintRef = useRef(
+    new Map<
+      string,
+      { readonly id: number; readonly type: "discard" | "restore" }
+    >()
+  );
   const [discardConfirmation, setDiscardConfirmation] = useState<{
     readonly queueId: string;
     readonly draftIds: readonly string[];
@@ -162,7 +197,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
 
   const reviewItems = useMemo(() => {
     const visibleItems = queue.items.filter(
-      (item) => !hiddenDraftIds.has(item.draftId)
+      (item) => !hiddenFingerprints.has(item.transaction.smsFingerprint)
     );
     if (
       !optimisticallyRestoredItem ||
@@ -175,7 +210,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
     return [...visibleItems, optimisticallyRestoredItem].sort(
       (left, right) => left.position - right.position
     );
-  }, [hiddenDraftIds, optimisticallyRestoredItem, queue.items]);
+  }, [hiddenFingerprints, optimisticallyRestoredItem, queue.items]);
   const transactions = useMemo(
     () =>
       reviewItems.map((item) =>
@@ -247,19 +282,35 @@ export default function SmsReviewScreen(): React.JSX.Element {
   }, [clearTransactions]);
 
   useEffect(() => {
+    if (!optimisticallyRestoredItem) return;
+    const restoredFingerprint =
+      optimisticallyRestoredItem.transaction.smsFingerprint;
+    const restoredQueueItem = queue.items.find(
+      (item) => item.transaction.smsFingerprint === restoredFingerprint
+    );
     if (
-      !optimisticallyRestoredItem ||
-      !queue.items.some((item) =>
-        isSameSmsReviewSuggestion(item, optimisticallyRestoredItem)
-      )
+      !restoredQueueItem ||
+      restoredQueueItem.draftId === optimisticallyRestoredItem.draftId
     ) {
       return;
     }
-    setOptimisticallyRestoredItem(null);
-    setLatestDiscardedItem(null);
-    setHiddenDraftIds((previous) => {
+    const operation =
+      visualOperationByFingerprintRef.current.get(restoredFingerprint);
+    if (operation?.type !== "restore") return;
+    visualOperationByFingerprintRef.current.delete(restoredFingerprint);
+    setOptimisticallyRestoredItem((current) =>
+      current?.transaction.smsFingerprint === restoredFingerprint
+        ? null
+        : current
+    );
+    setLatestDiscardedItem((current) =>
+      current?.transaction.smsFingerprint === restoredFingerprint
+        ? null
+        : current
+    );
+    setHiddenFingerprints((previous) => {
       const next = new Set(previous);
-      next.delete(optimisticallyRestoredItem.draftId);
+      next.delete(restoredFingerprint);
       return next;
     });
   }, [optimisticallyRestoredItem, queue.items]);
@@ -352,6 +403,27 @@ export default function SmsReviewScreen(): React.JSX.Element {
     [queue.userId, reviewItems]
   );
 
+  const handleSelectionChanges = useCallback(
+    async (
+      changes: ReadonlyArray<{
+        readonly index: number;
+        readonly selected: boolean;
+      }>
+    ): Promise<void> => {
+      if (!queue.userId) return;
+      const updates = changes.map(({ index, selected }) => {
+        const item = reviewItems[index];
+        if (!item) throw new Error("sms_review_draft_item_not_found");
+        if (selected && item.hardValidationReasons.length > 0) {
+          throw new Error("sms_review_draft_hard_validation_required");
+        }
+        return { draftId: item.draftId, selectionOverride: selected };
+      });
+      await setSmsReviewDraftSelections(updates, queue.userId);
+    },
+    [queue.userId, reviewItems]
+  );
+
   const handleTransactionChange = useCallback(
     async (
       index: number,
@@ -374,6 +446,11 @@ export default function SmsReviewScreen(): React.JSX.Element {
       if (!item || !queue.userId) return;
       const requestId = latestVisualDiscardRequestRef.current + 1;
       latestVisualDiscardRequestRef.current = requestId;
+      const fingerprint = item.transaction.smsFingerprint;
+      visualOperationByFingerprintRef.current.set(fingerprint, {
+        id: requestId,
+        type: "discard",
+      });
       const previousDiscardedItem = latestDiscardedItem;
       const discardedItem = { ...item, selectionOverride: wasSelected };
       const optimisticUndoItem: VolatileSmsReviewUndoItem = {
@@ -386,18 +463,21 @@ export default function SmsReviewScreen(): React.JSX.Element {
         position: item.position,
         parsedAt: item.parsedAt,
       };
-      setHiddenDraftIds((previous) => new Set(previous).add(item.draftId));
+      setHiddenFingerprints((previous) => new Set(previous).add(fingerprint));
       setLatestDiscardedItem(discardedItem);
       setOptimisticallyRestoredItem(null);
       try {
         await undo.discard(item.draftId, queue.userId, optimisticUndoItem);
       } catch (error: unknown) {
-        setHiddenDraftIds((previous) => {
-          const next = new Set(previous);
-          next.delete(item.draftId);
-          return next;
-        });
-        if (latestVisualDiscardRequestRef.current === requestId) {
+        const operation =
+          visualOperationByFingerprintRef.current.get(fingerprint);
+        if (operation?.id === requestId && operation.type === "discard") {
+          visualOperationByFingerprintRef.current.delete(fingerprint);
+          setHiddenFingerprints((previous) => {
+            const next = new Set(previous);
+            next.delete(fingerprint);
+            return next;
+          });
           setLatestDiscardedItem(previousDiscardedItem);
         }
         logger.warn("smsReview.discard.failed", {
@@ -411,28 +491,54 @@ export default function SmsReviewScreen(): React.JSX.Element {
 
   const handleUndoDiscard = useCallback(async (): Promise<void> => {
     const itemToRestore = latestDiscardedItem;
+    let restoreRequestId: number | null = null;
     if (itemToRestore) {
+      const fingerprint = itemToRestore.transaction.smsFingerprint;
+      restoreRequestId = latestVisualDiscardRequestRef.current + 1;
+      latestVisualDiscardRequestRef.current = restoreRequestId;
+      visualOperationByFingerprintRef.current.set(fingerprint, {
+        id: restoreRequestId,
+        type: "restore",
+      });
       setOptimisticallyRestoredItem(itemToRestore);
-      setHiddenDraftIds((previous) => {
+      setHiddenFingerprints((previous) => {
         const next = new Set(previous);
-        next.delete(itemToRestore.draftId);
+        next.delete(fingerprint);
         return next;
       });
     }
     try {
       const restored = await undo.undo();
       if (!restored && itemToRestore) {
-        setOptimisticallyRestoredItem(null);
-        setHiddenDraftIds((previous) =>
-          new Set(previous).add(itemToRestore.draftId)
-        );
+        const fingerprint = itemToRestore.transaction.smsFingerprint;
+        const operation =
+          visualOperationByFingerprintRef.current.get(fingerprint);
+        if (
+          operation?.id === restoreRequestId &&
+          operation.type === "restore"
+        ) {
+          visualOperationByFingerprintRef.current.delete(fingerprint);
+          setOptimisticallyRestoredItem(null);
+          setHiddenFingerprints((previous) =>
+            new Set(previous).add(fingerprint)
+          );
+        }
       }
     } catch (error: unknown) {
       if (itemToRestore) {
-        setOptimisticallyRestoredItem(null);
-        setHiddenDraftIds((previous) =>
-          new Set(previous).add(itemToRestore.draftId)
-        );
+        const fingerprint = itemToRestore.transaction.smsFingerprint;
+        const operation =
+          visualOperationByFingerprintRef.current.get(fingerprint);
+        if (
+          operation?.id === restoreRequestId &&
+          operation.type === "restore"
+        ) {
+          visualOperationByFingerprintRef.current.delete(fingerprint);
+          setOptimisticallyRestoredItem(null);
+          setHiddenFingerprints((previous) =>
+            new Set(previous).add(fingerprint)
+          );
+        }
       }
       logger.warn("smsReview.undo.failed", {
         errorName: error instanceof Error ? error.name : "unknown",
@@ -517,7 +623,9 @@ export default function SmsReviewScreen(): React.JSX.Element {
     />
   );
 
-  if (queue.isLoading || isLeavingAfterSave) return <SmsReviewLoadingState />;
+  if (queue.isLoading || isLeavingAfterSave) {
+    return <SmsReviewLoadingState title={t("review_transactions_title")} />;
+  }
 
   if (transactions.length === 0) {
     return (
@@ -567,6 +675,7 @@ export default function SmsReviewScreen(): React.JSX.Element {
         transactions={transactions}
         selectionOverrides={selectionOverrides}
         onSelectionChange={handleSelectionChange}
+        onSelectionChanges={handleSelectionChanges}
         onTransactionChange={handleTransactionChange}
         onDiscardItem={handleDiscardItem}
         onSave={handleSave}

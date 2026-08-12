@@ -38,28 +38,37 @@ export function useSmsReviewUndo(): UseSmsReviewUndoResult {
     null
   );
   const undoItemRef = useRef<VolatileSmsReviewUndoItem | null>(null);
+  const activeUndoRequestIdRef = useRef<number | null>(null);
   const discardSequenceRef = useRef(0);
-  const activeDiscardRequestRef = useRef(0);
   const latestSuccessfulDiscardRef = useRef<{
     readonly requestId: number;
     readonly item: VolatileSmsReviewUndoItem;
   } | null>(null);
   const pendingDiscardsRef = useRef(
-    new Map<string, Promise<VolatileSmsReviewUndoItem>>()
-  );
-  const pendingDiscardRequestIdsRef = useRef(new Map<string, number>());
-  const discardedItemsRef = useRef(
     new Map<
       string,
-      { readonly requestId: number; readonly item: VolatileSmsReviewUndoItem }
+      {
+        readonly requestId: number;
+        readonly promise: Promise<VolatileSmsReviewUndoItem>;
+      }
     >()
   );
-  const suppressedDraftIdsRef = useRef(new Set<string>());
-  const pendingUndoRef = useRef<Promise<boolean> | null>(null);
+  const pendingDiscardsByRequestIdRef = useRef(
+    new Map<number, Promise<VolatileSmsReviewUndoItem>>()
+  );
+  const discardedItemsRef = useRef(
+    new Map<number, VolatileSmsReviewUndoItem>()
+  );
+  const suppressedRequestIdsRef = useRef(new Set<number>());
+  const pendingUndoRequestsRef = useRef(new Map<number, Promise<boolean>>());
 
   const publishUndoItem = useCallback(
-    (item: VolatileSmsReviewUndoItem | null): void => {
+    (
+      item: VolatileSmsReviewUndoItem | null,
+      requestId: number | null
+    ): void => {
       undoItemRef.current = item;
+      activeUndoRequestIdRef.current = requestId;
       setUndoItem(item);
     },
     []
@@ -73,15 +82,23 @@ export function useSmsReviewUndo(): UseSmsReviewUndoResult {
     ): Promise<void> => {
       const requestKey = `${userId}:${draftId}`;
       const existingRequest = pendingDiscardsRef.current.get(requestKey);
-      if (existingRequest) return existingRequest.then(() => undefined);
+      if (
+        existingRequest &&
+        !pendingUndoRequestsRef.current.has(existingRequest.requestId)
+      ) {
+        return existingRequest.promise.then(() => undefined);
+      }
 
       const requestId = discardSequenceRef.current + 1;
       discardSequenceRef.current = requestId;
-      activeDiscardRequestRef.current = requestId;
-      suppressedDraftIdsRef.current.delete(draftId);
-      publishUndoItem(optimisticItem ?? null);
+      const previousSuccessful = latestSuccessfulDiscardRef.current;
+      publishUndoItem(optimisticItem ?? null, requestId);
 
-      const request = discardOneSmsReviewDraft(draftId, userId)
+      const request = discardOneSmsReviewDraft(
+        draftId,
+        userId,
+        optimisticItem?.smsFingerprint
+      )
         .then((discarded) => {
           const resolvedItem = optimisticItem
             ? {
@@ -89,11 +106,8 @@ export function useSmsReviewUndo(): UseSmsReviewUndoResult {
                 selectionOverride: optimisticItem.selectionOverride,
               }
             : discarded;
-          discardedItemsRef.current.set(draftId, {
-            requestId,
-            item: resolvedItem,
-          });
-          const isSuppressed = suppressedDraftIdsRef.current.has(draftId);
+          discardedItemsRef.current.set(requestId, resolvedItem);
+          const isSuppressed = suppressedRequestIdsRef.current.has(requestId);
           const latestSuccessful = latestSuccessfulDiscardRef.current;
           if (
             !isSuppressed &&
@@ -105,117 +119,110 @@ export function useSmsReviewUndo(): UseSmsReviewUndoResult {
             };
           }
           if (
-            activeDiscardRequestRef.current === requestId &&
-            !isSuppressed
+            !isSuppressed &&
+            (activeUndoRequestIdRef.current === requestId ||
+              (activeUndoRequestIdRef.current === null &&
+                latestSuccessfulDiscardRef.current?.requestId === requestId))
           ) {
-            publishUndoItem(resolvedItem);
+            publishUndoItem(resolvedItem, requestId);
           }
           return resolvedItem;
         })
         .catch((error: unknown) => {
-          if (activeDiscardRequestRef.current === requestId) {
-            const fallbackRequestId = Math.max(
-              latestSuccessfulDiscardRef.current?.requestId ?? 0,
-              ...[...pendingDiscardRequestIdsRef.current.entries()]
-                .filter(([key]) => key !== requestKey)
-                .map(([, pendingRequestId]) => pendingRequestId)
+          if (activeUndoRequestIdRef.current === requestId) {
+            publishUndoItem(
+              previousSuccessful?.item ?? null,
+              previousSuccessful?.requestId ?? null
             );
-            activeDiscardRequestRef.current = fallbackRequestId;
-            if (!suppressedDraftIdsRef.current.has(draftId)) {
-              const previousSuccessful = latestSuccessfulDiscardRef.current;
-              publishUndoItem(
-                previousSuccessful?.requestId === fallbackRequestId
-                  ? previousSuccessful.item
-                  : null
-              );
-            }
           }
           throw error;
         })
         .finally(() => {
-          pendingDiscardsRef.current.delete(requestKey);
-          pendingDiscardRequestIdsRef.current.delete(requestKey);
+          if (
+            pendingDiscardsRef.current.get(requestKey)?.requestId === requestId
+          ) {
+            pendingDiscardsRef.current.delete(requestKey);
+          }
+          pendingDiscardsByRequestIdRef.current.delete(requestId);
         });
-      pendingDiscardsRef.current.set(requestKey, request);
-      pendingDiscardRequestIdsRef.current.set(requestKey, requestId);
+      pendingDiscardsRef.current.set(requestKey, {
+        requestId,
+        promise: request,
+      });
+      pendingDiscardsByRequestIdRef.current.set(requestId, request);
       return request.then(() => undefined);
     },
     [publishUndoItem]
   );
 
   const undo = useCallback((): Promise<boolean> => {
-    if (pendingUndoRef.current) return pendingUndoRef.current;
     const itemToRestore = undoItemRef.current;
-    if (!itemToRestore) return Promise.resolve(false);
+    const targetRequestId = activeUndoRequestIdRef.current;
+    if (!itemToRestore || targetRequestId === null)
+      return Promise.resolve(false);
+    const existingUndo = pendingUndoRequestsRef.current.get(targetRequestId);
+    if (existingUndo) return existingUndo;
 
-    const requestKey = `${itemToRestore.userId}:${itemToRestore.draftId}`;
-    const targetRequestId =
-      pendingDiscardRequestIdsRef.current.get(requestKey) ??
-      discardedItemsRef.current.get(itemToRestore.draftId)?.requestId ??
-      activeDiscardRequestRef.current;
-    suppressedDraftIdsRef.current.add(itemToRestore.draftId);
-    publishUndoItem(null);
+    suppressedRequestIdsRef.current.add(targetRequestId);
+    publishUndoItem(null, null);
 
     const request = (async (): Promise<boolean> => {
       let persistedItem = itemToRestore;
-      const pendingDiscard = pendingDiscardsRef.current.get(requestKey);
+      const pendingDiscard =
+        pendingDiscardsByRequestIdRef.current.get(targetRequestId);
       if (pendingDiscard) {
         try {
           persistedItem = await pendingDiscard;
         } catch {
-          suppressedDraftIdsRef.current.delete(itemToRestore.draftId);
-          discardedItemsRef.current.delete(itemToRestore.draftId);
+          suppressedRequestIdsRef.current.delete(targetRequestId);
+          discardedItemsRef.current.delete(targetRequestId);
           return true;
         }
       } else {
         persistedItem =
-          discardedItemsRef.current.get(itemToRestore.draftId)?.item ??
-          itemToRestore;
+          discardedItemsRef.current.get(targetRequestId) ?? itemToRestore;
       }
 
       try {
         const restored = await undoSmsReviewDraftDiscard(persistedItem);
         if (restored) {
-          discardedItemsRef.current.delete(itemToRestore.draftId);
+          discardedItemsRef.current.delete(targetRequestId);
           if (
-            latestSuccessfulDiscardRef.current?.item.draftId ===
-            itemToRestore.draftId
+            latestSuccessfulDiscardRef.current?.requestId === targetRequestId
           ) {
             latestSuccessfulDiscardRef.current = null;
           }
           return true;
         }
 
-        suppressedDraftIdsRef.current.delete(itemToRestore.draftId);
-        if (
-          activeDiscardRequestRef.current === targetRequestId &&
-          undoItemRef.current === null
-        ) {
-          publishUndoItem(persistedItem);
+        suppressedRequestIdsRef.current.delete(targetRequestId);
+        if (activeUndoRequestIdRef.current === null) {
+          publishUndoItem(persistedItem, targetRequestId);
         }
         return false;
       } catch (error: unknown) {
-        suppressedDraftIdsRef.current.delete(itemToRestore.draftId);
-        if (
-          activeDiscardRequestRef.current === targetRequestId &&
-          undoItemRef.current === null
-        ) {
-          publishUndoItem(persistedItem);
+        suppressedRequestIdsRef.current.delete(targetRequestId);
+        if (activeUndoRequestIdRef.current === null) {
+          publishUndoItem(persistedItem, targetRequestId);
         }
         throw error;
       }
     })().finally(() => {
-      if (pendingUndoRef.current === request) pendingUndoRef.current = null;
+      pendingUndoRequestsRef.current.delete(targetRequestId);
     });
-    pendingUndoRef.current = request;
+    pendingUndoRequestsRef.current.set(targetRequestId, request);
     return request;
   }, [publishUndoItem]);
 
   const close = useCallback((): void => {
-    const currentItem = undoItemRef.current;
-    if (currentItem) suppressedDraftIdsRef.current.add(currentItem.draftId);
-    latestSuccessfulDiscardRef.current = null;
-    publishUndoItem(null);
+    const currentRequestId = activeUndoRequestIdRef.current;
+    if (currentRequestId !== null) {
+      suppressedRequestIdsRef.current.add(currentRequestId);
+      if (latestSuccessfulDiscardRef.current?.requestId === currentRequestId) {
+        latestSuccessfulDiscardRef.current = null;
+      }
+    }
+    publishUndoItem(null, null);
   }, [publishUndoItem]);
   const discardedName = useMemo(() => getDiscardedName(undoItem), [undoItem]);
 

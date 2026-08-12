@@ -176,14 +176,17 @@ describe("useTransactionReviewState", () => {
       { initialProps: { transactions: [first, retained] } }
     );
     await waitFor(() => expect(result.current.accountMatches.size).toBe(2));
-    mockMatchTransactionsBatched.mockImplementationOnce(
-      (): Promise<void> => new Promise(() => undefined)
-    );
-
+    const matchingCallCount = mockMatchTransactionsBatched.mock.calls.length;
     rerender({ transactions: [retained] });
+    await act(async () => {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    });
 
     expect(Array.from(result.current.resolvedAccountMatchIndices)).toEqual([0]);
     expect(result.current.isReviewMetadataReady).toBe(true);
+    expect(mockMatchTransactionsBatched).toHaveBeenCalledTimes(
+      matchingCallCount
+    );
   });
 
   it("still seeds later safe rows when a row is edited during account matching", async () => {

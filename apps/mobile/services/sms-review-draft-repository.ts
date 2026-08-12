@@ -428,7 +428,6 @@ export async function mergeSmsReviewDrafts(
           existingItem === undefined ||
           baselinePayload === undefined ||
           !reviewableSet.has(transaction.smsFingerprint) ||
-          existingItem.selectionOverride !== null ||
           existingItem.payloadVersion !== baselinePayload.version ||
           existingItem.payloadJson !== baselinePayload.json ||
           (payload.version === baselinePayload.version &&
@@ -562,6 +561,38 @@ export async function updateSmsReviewDraftSelection(
   });
 }
 
+export interface SmsReviewDraftSelectionUpdate {
+  readonly draftId: string;
+  readonly selectionOverride: boolean | null;
+}
+
+export async function updateSmsReviewDraftSelections(
+  updates: readonly SmsReviewDraftSelectionUpdate[],
+  expectedUserId: string
+): Promise<void> {
+  const updatesByDraftId = new Map(
+    updates.map((update) => [update.draftId, update.selectionOverride] as const)
+  );
+  if (updatesByDraftId.size === 0) return;
+
+  await database.write(async (): Promise<void> => {
+    const records = await Promise.all(
+      [...updatesByDraftId.keys()].map((draftId) =>
+        getOwnedSmsReviewDraftItem(draftId, expectedUserId)
+      )
+    );
+    const updatedAt = new Date();
+    await commitScopedPreparedBatch(expectedUserId, records, () =>
+      records.map((record) =>
+        record.prepareUpdate((draft) => {
+          draft.selectionOverride = updatesByDraftId.get(record.id) ?? null;
+          draft.updatedAt = updatedAt;
+        })
+      )
+    );
+  });
+}
+
 async function deleteSmsReviewDraftRecordsInWriter(
   records: readonly SmsReviewDraftItem[],
   expectedUserId: string,
@@ -636,11 +667,23 @@ export async function runSmsReviewDraftWriter<T>(
 
 export async function discardSmsReviewDraft(
   draftId: string,
-  expectedUserId: string
+  expectedUserId: string,
+  expectedFingerprint?: string
 ): Promise<VolatileSmsReviewUndoItem> {
   return database.write(async (): Promise<VolatileSmsReviewUndoItem> => {
     await assertExpectedCurrentUser(expectedUserId);
-    const record = await getOwnedSmsReviewDraftItem(draftId, expectedUserId);
+    const matchingRecords = expectedFingerprint
+      ? await itemCollection()
+          .query(
+            Q.where("user_id", expectedUserId),
+            Q.where("sms_fingerprint", expectedFingerprint)
+          )
+          .fetch()
+      : [await getOwnedSmsReviewDraftItem(draftId, expectedUserId)];
+    const record = matchingRecords[0];
+    if (matchingRecords.length !== 1 || !record) {
+      throw new Error(SMS_REVIEW_DRAFT_ERROR_CODES.ITEM_NOT_FOUND);
+    }
     const transaction = decodeItem(record).transaction;
     const queue = assertSingleQueue(await fetchOwnedQueues(expectedUserId));
     if (!queue || queue.id !== record.queueId) {

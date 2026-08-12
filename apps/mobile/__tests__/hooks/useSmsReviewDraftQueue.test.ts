@@ -188,6 +188,31 @@ describe("useSmsReviewDraftQueue", () => {
     );
   });
 
+  it("preserves unchanged draft item identity across observer refetches", async () => {
+    const snapshot = createSnapshot("user-a", "fp-stable");
+    mockGetSnapshot.mockImplementation(() =>
+      Promise.resolve({
+        ...snapshot,
+        items: snapshot.items.map((item) => ({
+          ...item,
+          transaction: { ...item.transaction },
+          parsedAt: new Date(item.parsedAt),
+          updatedAt: new Date(item.updatedAt),
+        })),
+      })
+    );
+
+    const { result } = renderHook(() => useSmsReviewDraftQueue());
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    const firstItem = result.current.items[0];
+
+    await act(async () => {
+      await result.current.refetch();
+    });
+
+    expect(result.current.items[0]).toBe(firstItem);
+  });
+
   it("persists a stale selected override as unselected after hard validation", async () => {
     const snapshot = createSnapshot("user-a", "fp-hard");
     mockGetSnapshot.mockResolvedValue(snapshot);

@@ -49,6 +49,12 @@ export interface TransactionReviewProps {
     index: number,
     selected: boolean
   ) => void | Promise<void>;
+  readonly onSelectionChanges?: (
+    changes: ReadonlyArray<{
+      readonly index: number;
+      readonly selected: boolean;
+    }>
+  ) => void | Promise<void>;
   readonly onTransactionChange?: (
     index: number,
     transaction: ReviewableTransaction
@@ -76,9 +82,9 @@ export interface TransactionReviewProps {
 
 export const TRANSACTION_REVIEW_LIST_RENDER_CONFIG = {
   initialNumToRender: 8,
-  maxToRenderPerBatch: 8,
-  updateCellsBatchingPeriod: 50,
-  windowSize: 5,
+  maxToRenderPerBatch: 10,
+  updateCellsBatchingPeriod: 16,
+  windowSize: 3,
 } as const;
 
 export function TransactionReview({
@@ -94,6 +100,7 @@ export function TransactionReview({
   qaDiagnostics = null,
   selectionOverrides,
   onSelectionChange,
+  onSelectionChanges,
   onTransactionChange,
   onDiscardItem,
   onReviewLater,
@@ -107,6 +114,7 @@ export function TransactionReview({
     onSave,
     selectionOverrides,
     onSelectionChange,
+    onSelectionChanges,
     onTransactionChange,
   });
   const [isFilterSheetVisible, setIsFilterSheetVisible] = useState(false);
@@ -221,15 +229,7 @@ export function TransactionReview({
           expandedContentBody={content?.body}
           onToggleSelect={handleToggleItem}
           onPress={handleOpenEditModal}
-          onDiscard={
-            isSmsWorkspace && onDiscardItem
-              ? (index) =>
-                  void onDiscardItem(
-                    index,
-                    selectedIndicesRef.current.has(index)
-                  )
-              : undefined
-          }
+          onDiscard={isSmsWorkspace ? onDiscardItem : undefined}
           hasMissingInfo={invalidIndices.has(item.originalIndex)}
           reviewMeta={reviewMetaByIndex.get(item.originalIndex)}
           isSmsWorkspace={isSmsWorkspace}
@@ -251,7 +251,6 @@ export function TransactionReview({
       invalidIndices,
       resolvedAccountMatchIndices,
       reviewMetaByIndex,
-      selectedIndicesRef,
       transactionOverrides,
       isSmsWorkspace,
       onDiscardItem,

@@ -28,6 +28,17 @@ function getSafeErrorType(error: unknown): string {
   return error instanceof Error ? error.name || "Error" : typeof error;
 }
 
+function getProviderFailurePhase(error: unknown): string {
+  if (error instanceof SyntaxError) return "json_parse";
+  if (!(error instanceof Error)) return "provider_request";
+  if (error.name === "TimeoutError") return "timeout";
+  if (error.message === "EmptyProviderResponse") return "empty_response";
+  if (error.message === "InvalidProviderResponse") {
+    return "response_validation";
+  }
+  return "provider_request";
+}
+
 function createServiceClient(): ReturnType<typeof createClient> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -111,12 +122,14 @@ async function classifyWithRetry(
       console.warn("[enrich-sms-categories] Provider attempt failed", {
         attempt: attempt + 1,
         errorType: getSafeErrorType(error),
+        phase: getProviderFailurePhase(error),
       });
     }
   }
 
   console.error("[enrich-sms-categories] Provider retries exhausted", {
     errorType: getSafeErrorType(lastError),
+    phase: getProviderFailurePhase(lastError),
   });
   return null;
 }

@@ -55,7 +55,7 @@ jest.mock("@/components/transactions/TransactionFiltersBar", () => ({
 
 interface MockTransactionItemProps {
   readonly transaction: ReviewableTransaction;
-  readonly onDiscard?: (index: number) => void;
+  readonly onDiscard?: (index: number, wasSelected: boolean) => void;
 }
 
 const mockReviewFiltersSheet = jest.fn();
@@ -104,7 +104,10 @@ jest.mock("@/components/transaction-review/TransactionItem", () => ({
     const ReactActual = jest.requireActual<typeof import("react")>("react");
     const ReactNative =
       jest.requireActual<typeof import("react-native")>("react-native");
-    mockTransactionItem({ transaction, ...props } satisfies MockTransactionItemProps);
+    mockTransactionItem({
+      transaction,
+      ...props,
+    } satisfies MockTransactionItemProps);
     return ReactActual.createElement(
       ReactNative.Text,
       null,
@@ -334,7 +337,8 @@ describe("TransactionReview", () => {
     );
 
     const itemProps = mockTransactionItem.mock.calls.at(-1)?.[0];
-    itemProps?.onDiscard?.(0);
+    expect(itemProps?.onDiscard).toBe(onDiscardItem);
+    itemProps?.onDiscard?.(0, true);
 
     expect(onDiscardItem).toHaveBeenCalledWith(0, true);
   });
@@ -506,9 +510,9 @@ describe("TransactionReview", () => {
   it("uses smaller render batches for long transaction lists", () => {
     expect(TRANSACTION_REVIEW_LIST_RENDER_CONFIG).toEqual({
       initialNumToRender: 8,
-      maxToRenderPerBatch: 8,
-      updateCellsBatchingPeriod: 50,
-      windowSize: 5,
+      maxToRenderPerBatch: 10,
+      updateCellsBatchingPeriod: 16,
+      windowSize: 3,
     });
   });
 

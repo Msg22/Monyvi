@@ -77,7 +77,7 @@ interface TransactionItemProps {
   readonly reviewMeta?: TransactionReviewMeta;
   readonly isSmsWorkspace?: boolean;
   readonly institutionLogo?: InstitutionLogo | null;
-  readonly onDiscard?: (index: number) => void;
+  readonly onDiscard?: (index: number, wasSelected: boolean) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -233,9 +233,9 @@ function TransactionItemInner({
   const handleDiscard = useCallback(
     (event: GestureResponderEvent): void => {
       event.stopPropagation();
-      onDiscard?.(index);
+      onDiscard?.(index, isSelected);
     },
-    [index, onDiscard]
+    [index, isSelected, onDiscard]
   );
 
   const counterpartyText = isVoice
@@ -462,5 +462,35 @@ function TransactionItemInner({
   );
 }
 
+function areTransactionItemPropsEqual(
+  previous: TransactionItemProps,
+  next: TransactionItemProps
+): boolean {
+  const previousReasons = previous.reviewMeta?.reasons ?? [];
+  const nextReasons = next.reviewMeta?.reasons ?? [];
+  return (
+    previous.transaction === next.transaction &&
+    previous.index === next.index &&
+    previous.isSelected === next.isSelected &&
+    previous.accountName === next.accountName &&
+    previous.matchReason === next.matchReason &&
+    previous.expandedContentTitle === next.expandedContentTitle &&
+    previous.expandedContentBody === next.expandedContentBody &&
+    previous.onToggleSelect === next.onToggleSelect &&
+    previous.onPress === next.onPress &&
+    previous.hasMissingInfo === next.hasMissingInfo &&
+    previous.reviewMeta?.isAutoSelectable ===
+      next.reviewMeta?.isAutoSelectable &&
+    previousReasons.length === nextReasons.length &&
+    previousReasons.every((reason, index) => reason === nextReasons[index]) &&
+    previous.isSmsWorkspace === next.isSmsWorkspace &&
+    previous.institutionLogo === next.institutionLogo &&
+    previous.onDiscard === next.onDiscard
+  );
+}
+
 /** Memoized to avoid re-rendering all 150+ items on every parent state change. */
-export const TransactionItem = memo(TransactionItemInner);
+export const TransactionItem = memo(
+  TransactionItemInner,
+  areTransactionItemPropsEqual
+);

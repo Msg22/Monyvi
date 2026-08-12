@@ -737,6 +737,16 @@ describe("ai-sms-category-enrichment-service", () => {
     expect(result.attemptedMerchantCount).toBe(21);
     expect(result.missingResultCount).toBe(20);
     expect(result.hasError).toBe(true);
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      "smsCategoryEnrichment.requestFailed",
+      expect.objectContaining({
+        attemptedMerchantCount: 1,
+        chunkIndex: 2,
+        chunkCount: 2,
+        phase: "http_response",
+        status: 500,
+      })
+    );
   });
 
   it("uses one 20-second total deadline across bounded concurrent chunks", async () => {

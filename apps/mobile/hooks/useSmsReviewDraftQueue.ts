@@ -11,6 +11,7 @@ import {
   revalidateSmsReviewDraftReferences,
   type RevalidatedSmsReviewDraftItem,
 } from "@/services/sms-review-draft-reference-service";
+import { getTransactionParsedContentIdentity } from "@/services/transaction-review-account-match-cache";
 
 import { useCurrentUser } from "./useCurrentUser";
 
@@ -40,6 +41,51 @@ async function normalizeHardInvalidSelectionOverrides(
       return { ...item, selectionOverride: false };
     })
   );
+}
+
+function haveSameHardValidationReasons(
+  left: readonly string[] | undefined,
+  right: readonly string[] | undefined
+): boolean {
+  const leftReasons = left ?? [];
+  const rightReasons = right ?? [];
+  return (
+    leftReasons.length === rightReasons.length &&
+    leftReasons.every((reason, index) => reason === rightReasons[index])
+  );
+}
+
+function preserveUnchangedDraftItems(
+  previous: readonly RevalidatedSmsReviewDraftItem[],
+  next: readonly RevalidatedSmsReviewDraftItem[]
+): readonly RevalidatedSmsReviewDraftItem[] {
+  const previousById = new Map(previous.map((item) => [item.draftId, item]));
+  const stabilized = next.map((item) => {
+    const prior = previousById.get(item.draftId);
+    if (
+      prior?.updatedAt.getTime() === item.updatedAt.getTime() &&
+      prior.selectionOverride === item.selectionOverride &&
+      prior.position === item.position &&
+      haveSameHardValidationReasons(
+        prior.hardValidationReasons,
+        item.hardValidationReasons
+      )
+    ) {
+      return prior;
+    }
+    if (
+      prior &&
+      getTransactionParsedContentIdentity(prior.transaction) ===
+        getTransactionParsedContentIdentity(item.transaction)
+    ) {
+      return { ...item, transaction: prior.transaction };
+    }
+    return item;
+  });
+  return stabilized.length === previous.length &&
+    stabilized.every((item, index) => item === previous[index])
+    ? previous
+    : stabilized;
 }
 
 export function useSmsReviewDraftQueue(): UseSmsReviewDraftQueueResult {
@@ -82,7 +128,7 @@ export function useSmsReviewDraftQueue(): UseSmsReviewDraftQueueResult {
       );
       if (!isCurrentRequest()) return;
       setSnapshot(nextSnapshot);
-      setItems(normalized);
+      setItems((previous) => preserveUnchangedDraftItems(previous, normalized));
       setError(null);
     } catch (caught) {
       if (!isCurrentRequest()) return;
@@ -111,6 +157,7 @@ export function useSmsReviewDraftQueue(): UseSmsReviewDraftQueueResult {
 
     let isActive = true;
     let unsubscribe: (() => void) | undefined;
+    let refetchTimer: ReturnType<typeof setTimeout> | undefined;
     const abortController = new AbortController();
     setIsLoading(true);
 
@@ -123,7 +170,12 @@ export function useSmsReviewDraftQueue(): UseSmsReviewDraftQueueResult {
         if (!isActive) return;
         const subscription = observable.subscribe({
           next: (): void => {
-            if (isActive) void refetch();
+            if (!isActive) return;
+            if (refetchTimer) clearTimeout(refetchTimer);
+            refetchTimer = setTimeout(() => {
+              refetchTimer = undefined;
+              if (isActive) void refetch();
+            }, 40);
           },
           error: (caught: unknown): void => {
             if (!isActive) return;
@@ -146,6 +198,7 @@ export function useSmsReviewDraftQueue(): UseSmsReviewDraftQueueResult {
     return () => {
       isActive = false;
       abortController.abort();
+      if (refetchTimer) clearTimeout(refetchTimer);
       unsubscribe?.();
     };
   }, [isResolvingUser, refetch, userId]);

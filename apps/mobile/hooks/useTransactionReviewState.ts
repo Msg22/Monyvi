@@ -38,6 +38,8 @@ import {
   mergeTransactionAccountMatchCache,
   readTransactionAccountMatchCache,
 } from "@/services/transaction-review-account-match-cache";
+import { logger } from "@/utils/logger";
+import { useTransactionReviewSelection } from "./useTransactionReviewSelection";
 
 export interface ReviewListItem {
   readonly originalIndex: number;
@@ -71,6 +73,18 @@ function buildFlatReviewList(
         key: smsFingerprint ? `sms-${smsFingerprint}` : `tx-${originalIndex}`,
       };
     });
+}
+
+function getTransactionSelectionIdentity(
+  transaction: ReviewableTransaction
+): string {
+  const smsFingerprint = (
+    transaction as ReviewableTransaction & { readonly smsFingerprint?: string }
+  ).smsFingerprint;
+  return [
+    transaction.source,
+    smsFingerprint ?? getTransactionParsedContentIdentity(transaction),
+  ].join(":");
 }
 
 function applyFilters(
@@ -128,6 +142,12 @@ export interface UseTransactionReviewStateProps {
   readonly onSelectionChange?: (
     index: number,
     selected: boolean
+  ) => void | Promise<void>;
+  readonly onSelectionChanges?: (
+    changes: ReadonlyArray<{
+      readonly index: number;
+      readonly selected: boolean;
+    }>
   ) => void | Promise<void>;
   readonly onTransactionChange?: (
     index: number,
@@ -241,6 +261,7 @@ export function useTransactionReviewState({
   onSave,
   selectionOverrides = new Map(),
   onSelectionChange,
+  onSelectionChanges,
   onTransactionChange,
 }: UseTransactionReviewStateProps): UseTransactionReviewStateResult {
   // ── Filter state ──────────────────────────────────────────────────
@@ -252,15 +273,8 @@ export function useTransactionReviewState({
   const [reviewMode, setReviewMode] = useState<TransactionReviewMode>("all");
 
   // ── Selection state ─────────────────────────────────────────────────
-  const [selectedIndices, setSelectedIndices] = useState<ReadonlySet<number>>(
-    () => new Set()
-  );
-
-  const selectedIndicesRef = useRef(selectedIndices);
-  selectedIndicesRef.current = selectedIndices;
   const seededSelectionIdentityRef = useRef<string | null>(null);
   const seededSelectionCountRef = useRef(0);
-  const manuallyDeselectedIndicesRef = useRef<Set<number>>(new Set());
 
   // ── Unified transaction overrides ─────────────────────────────────
   const [transactionOverrides, setTransactionOverrides] = useState<
@@ -317,10 +331,41 @@ export function useTransactionReviewState({
       ),
     [transactions, userId]
   );
+  const selectionKeys = useMemo(
+    () =>
+      transactions.map(
+        (transaction) =>
+          `${userId ?? "unresolved"}:${getTransactionSelectionIdentity(transaction)}`
+      ),
+    [transactions, userId]
+  );
   const transactionIdentity = useMemo(
     () => JSON.stringify(transactionKeys),
     [transactionKeys]
   );
+  const handleSelectionPersistenceError = useCallback((): void => {
+    showToast({
+      type: "error",
+      title: t("save_error"),
+      message: t("sms_review_save_failed_message"),
+    });
+  }, [showToast, t]);
+  const selection = useTransactionReviewSelection({
+    transactionKeys: selectionKeys,
+    onSelectionChange,
+    onSelectionChanges,
+    onPersistenceError: handleSelectionPersistenceError,
+  });
+  const {
+    selectedIndices,
+    selectedIndicesRef,
+    replaceSelectedIndices,
+    resetSelection,
+    isManuallyDeselected,
+    toggleSelection: handleToggleItem,
+    setSelections,
+    ensureSelected,
+  } = selection;
   const cachedAccountMatches = useMemo(
     () =>
       readTransactionAccountMatchCache(
@@ -334,12 +379,18 @@ export function useTransactionReviewState({
       ? accountMatchState.matches
       : cachedAccountMatches;
   const previousTransactionsRef = useRef<readonly ReviewableTransaction[]>([]);
+  const previousSelectionKeysRef = useRef<readonly string[]>([]);
   const currentTransactionsRef = useRef(transactions);
   currentTransactionsRef.current = transactions;
 
   useEffect(() => {
     const currentTransactions = currentTransactionsRef.current;
     const previousTransactions = previousTransactionsRef.current;
+    const previousSelectionKeys = previousSelectionKeysRef.current;
+    const previousSelectionKeySet = new Set(previousSelectionKeys);
+    const hasSelectionContinuity = selectionKeys.some((key) =>
+      previousSelectionKeySet.has(key)
+    );
     const isAppendOnly =
       previousTransactions.length > 0 &&
       currentTransactions.length >= previousTransactions.length &&
@@ -349,6 +400,7 @@ export function useTransactionReviewState({
           getTransactionParsedContentIdentity(currentTransactions[index])
       );
     previousTransactionsRef.current = currentTransactions;
+    previousSelectionKeysRef.current = selectionKeys;
     if (isAppendOnly) {
       const durableOverrides =
         getDurableTransactionOverrides(currentTransactions);
@@ -373,8 +425,7 @@ export function useTransactionReviewState({
     }
     seededSelectionIdentityRef.current = null;
     seededSelectionCountRef.current = 0;
-    manuallyDeselectedIndicesRef.current = new Set();
-    setSelectedIndices(new Set());
+    if (!hasSelectionContinuity) resetSelection();
     setTransactionOverrides(
       getDurableTransactionOverrides(currentTransactions)
     );
@@ -385,8 +436,13 @@ export function useTransactionReviewState({
     setPendingAccounts(getDurablePendingAccounts(currentTransactions));
     setInvalidIndices(new Set());
     setEditModalIndex(null);
-    setReviewMode("all");
-  }, [cachedAccountMatches, transactionIdentity]);
+    if (!hasSelectionContinuity) setReviewMode("all");
+  }, [
+    cachedAccountMatches,
+    resetSelection,
+    selectionKeys,
+    transactionIdentity,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -399,23 +455,46 @@ export function useTransactionReviewState({
           setUserAccounts(accounts);
         }
 
+        const missingIndices = transactionKeys.flatMap((_, index) =>
+          cachedAccountMatches.has(index) ? [] : [index]
+        );
+        if (missingIndices.length === 0) {
+          if (!cancelled) {
+            setAccountMatchState({
+              identity: transactionIdentity,
+              matches: cachedAccountMatches,
+            });
+          }
+          return;
+        }
+        const missingTransactions = missingIndices.map(
+          (index) => transactions[index]
+        );
+
         await matchTransactionsBatched(
-          transactions,
+          missingTransactions,
           userId,
           batchSize,
           (batchResults) => {
             if (cancelled) return;
+            const translatedResults = new Map<number, AccountMatch>();
+            for (const [subsetIndex, match] of batchResults) {
+              const originalIndex = missingIndices[subsetIndex];
+              if (originalIndex !== undefined) {
+                translatedResults.set(originalIndex, match);
+              }
+            }
             setAccountMatchState((prev) => {
               const next =
                 prev.identity === transactionIdentity
                   ? new Map(prev.matches)
-                  : new Map<number, AccountMatch>();
-              for (const [idx, match] of batchResults) {
+                  : new Map(cachedAccountMatches);
+              for (const [idx, match] of translatedResults) {
                 next.set(idx, match);
               }
               accountMatchCacheRef.current = mergeTransactionAccountMatchCache(
                 transactionKeys,
-                batchResults,
+                translatedResults,
                 accountMatchCacheRef.current
               );
               return {
@@ -428,16 +507,17 @@ export function useTransactionReviewState({
         );
       } catch (err: unknown) {
         if (cancelled) return;
-        const failedMatches = new Map(
-          transactions.map((transaction, index) => {
+        const failedMatches = new Map(cachedAccountMatches);
+        transactions.forEach((_transaction, index) => {
+          if (!failedMatches.has(index)) {
             const match = {
               accountId: null,
               accountName: null,
               matchReason: "none",
             } satisfies AccountMatch;
-            return [index, match] as const;
-          })
-        );
+            failedMatches.set(index, match);
+          }
+        });
         accountMatchCacheRef.current = mergeTransactionAccountMatchCache(
           transactionKeys,
           failedMatches,
@@ -447,7 +527,9 @@ export function useTransactionReviewState({
           identity: transactionIdentity,
           matches: failedMatches,
         });
-        console.warn("[TransactionReview] Account matching failed:", err);
+        logger.warn("transactionReview.accountMatching.failed", {
+          errorName: err instanceof Error ? err.name : "unknown",
+        });
         showToast({
           type: "warning",
           title: "Account Matching Failed",
@@ -468,6 +550,7 @@ export function useTransactionReviewState({
     isResolvingUser,
     transactionIdentity,
     transactionKeys,
+    cachedAccountMatches,
   ]);
 
   const effectiveTransactions =
@@ -552,7 +635,6 @@ export function useTransactionReviewState({
     () => new Set(accountMatches.keys()),
     [accountMatches]
   );
-
   useEffect(() => {
     if (seededSelectionIdentityRef.current === transactionIdentity) return;
     if (!hasCompleteAccountMatches) return;
@@ -566,7 +648,7 @@ export function useTransactionReviewState({
       autoSelectedIndices: autoSelectedOriginalIndices,
       reviewMetaByIndex,
     });
-    setSelectedIndices(seeded.selectedIndices);
+    replaceSelectedIndices(seeded.selectedIndices);
     seeded.clearedHardInvalidIndices.forEach((index) => {
       void onSelectionChange?.(index, false);
     });
@@ -577,8 +659,10 @@ export function useTransactionReviewState({
     effectiveTransactions,
     hasCompleteAccountMatches,
     onSelectionChange,
+    replaceSelectedIndices,
     reviewMetaByIndex,
     selectionOverrides,
+    transactionKeys,
     transactionIdentity,
   ]);
 
@@ -626,72 +710,9 @@ export function useTransactionReviewState({
   const autoSelectedCount = autoSelectedOriginalIndices.size;
   const needsReviewCount = needsReviewOriginalIndices.size;
 
-  const persistSelection = useCallback(
-    async (index: number, selected: boolean): Promise<boolean> => {
-      try {
-        await onSelectionChange?.(index, selected);
-        return true;
-      } catch {
-        showToast({
-          type: "error",
-          title: t("save_error"),
-          message: t("sms_review_save_failed_message"),
-        });
-        return false;
-      }
-    },
-    [onSelectionChange, showToast, t]
-  );
-
   const handleToggleAll = useCallback(async (): Promise<void> => {
-    const selected = !allSelected;
-    const persisted = await Promise.all(
-      filteredOriginalIndices.map(async (index) => ({
-        index,
-        succeeded: await persistSelection(index, selected),
-      }))
-    );
-    const succeededIndices = new Set(
-      persisted
-        .filter((result) => result.succeeded)
-        .map((result) => result.index)
-    );
-    if (succeededIndices.size === 0) return;
-
-    setSelectedIndices((previous) => {
-      const next = new Set(previous);
-      succeededIndices.forEach((index) => {
-        if (selected) {
-          next.add(index);
-          manuallyDeselectedIndicesRef.current.delete(index);
-        } else {
-          next.delete(index);
-          manuallyDeselectedIndicesRef.current.add(index);
-        }
-      });
-      return next;
-    });
-  }, [allSelected, filteredOriginalIndices, persistSelection]);
-
-  const handleToggleItem = useCallback(
-    async (index: number): Promise<void> => {
-      const selected = !selectedIndicesRef.current.has(index);
-      if (!(await persistSelection(index, selected))) return;
-
-      setSelectedIndices((previous) => {
-        const next = new Set(previous);
-        if (selected) {
-          next.add(index);
-          manuallyDeselectedIndicesRef.current.delete(index);
-        } else {
-          next.delete(index);
-          manuallyDeselectedIndicesRef.current.add(index);
-        }
-        return next;
-      });
-    },
-    [persistSelection]
-  );
+    await setSelections(filteredOriginalIndices, !allSelected);
+  }, [allSelected, filteredOriginalIndices, setSelections]);
 
   const handleOpenEditModal = useCallback((index: number) => {
     setEditModalIndex(index);
@@ -743,13 +764,9 @@ export function useTransactionReviewState({
       const shouldAutoSelect =
         editedMeta.isAutoSelectable &&
         selectionOverrides.get(editModalIndex) !== false &&
-        !manuallyDeselectedIndicesRef.current.has(editModalIndex);
-      if (shouldAutoSelect && (await persistSelection(editModalIndex, true))) {
-        setSelectedIndices((previous) => {
-          const next = new Set(previous);
-          next.add(editModalIndex);
-          return next;
-        });
+        !isManuallyDeselected(editModalIndex);
+      if (shouldAutoSelect) {
+        await ensureSelected(editModalIndex);
       }
       setInvalidIndices((prev) => {
         const next = new Set(prev);
@@ -763,8 +780,9 @@ export function useTransactionReviewState({
       accountMatches,
       categoryMap,
       editModalIndex,
+      ensureSelected,
       effectiveTransactions,
-      persistSelection,
+      isManuallyDeselected,
       onTransactionChange,
       selectionOverrides,
       showToast,

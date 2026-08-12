@@ -5,6 +5,7 @@ import {
   discardOneSmsReviewDraft,
   editSmsReviewDraft,
   setSmsReviewDraftSelection,
+  setSmsReviewDraftSelections,
   undoSmsReviewDraftDiscard,
 } from "@/services/sms-review-draft-command-service";
 import type { VolatileSmsReviewUndoItem } from "@/services/sms-review-draft-repository";
@@ -14,6 +15,7 @@ const mockDiscardOne = jest.fn();
 const mockRestore = jest.fn();
 const mockUpdateItem = jest.fn();
 const mockUpdateSelection = jest.fn();
+const mockUpdateSelections = jest.fn();
 
 jest.mock("@/services/sms-review-draft-repository", () => ({
   discardAllSmsReviewDrafts: (...args: readonly unknown[]): unknown =>
@@ -26,6 +28,8 @@ jest.mock("@/services/sms-review-draft-repository", () => ({
     mockUpdateItem(...args),
   updateSmsReviewDraftSelection: (...args: readonly unknown[]): unknown =>
     mockUpdateSelection(...args),
+  updateSmsReviewDraftSelections: (...args: readonly unknown[]): unknown =>
+    mockUpdateSelections(...args),
 }));
 
 const transaction: ParsedSmsTransaction = {
@@ -65,6 +69,19 @@ describe("sms-review-draft-command-service", () => {
     mockRestore.mockResolvedValue(undefined);
     mockUpdateItem.mockResolvedValue(undefined);
     mockUpdateSelection.mockResolvedValue(undefined);
+    mockUpdateSelections.mockResolvedValue(undefined);
+  });
+
+  it("persists bulk selection changes in one repository operation", async () => {
+    const updates = [
+      { draftId: "draft-1", selectionOverride: true },
+      { draftId: "draft-2", selectionOverride: true },
+    ];
+
+    await setSmsReviewDraftSelections(updates, "user-1");
+
+    expect(mockUpdateSelections).toHaveBeenCalledWith(updates, "user-1");
+    expect(mockUpdateSelection).not.toHaveBeenCalled();
   });
 
   it("delegates complete edits and nullable selection overrides", async () => {
@@ -79,12 +96,43 @@ describe("sms-review-draft-command-service", () => {
     expect(mockUpdateSelection).toHaveBeenCalledWith("draft-1", "user-1", null);
   });
 
+  it("serializes writes for the same draft so discard cannot race selection", async () => {
+    let finishSelection: (() => void) | undefined;
+    mockUpdateSelection.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSelection = resolve;
+        })
+    );
+
+    const selectionPromise = setSmsReviewDraftSelection(
+      "draft-1",
+      "user-1",
+      true
+    );
+    const discardPromise = discardOneSmsReviewDraft("draft-1", "user-1");
+
+    await Promise.resolve();
+    expect(mockDiscardOne).not.toHaveBeenCalled();
+
+    finishSelection?.();
+    await selectionPromise;
+    await discardPromise;
+
+    expect(mockDiscardOne).toHaveBeenCalledWith("draft-1", "user-1");
+  });
+
   it("keeps the latest individual discard undoable for the active session", async () => {
-    const result = await discardOneSmsReviewDraft("draft-1", "user-1");
+    const result = await discardOneSmsReviewDraft(
+      "draft-1",
+      "user-1",
+      "fingerprint-1"
+    );
 
     expect(mockDiscardOne).toHaveBeenCalledWith(
       "draft-1",
-      "user-1"
+      "user-1",
+      "fingerprint-1"
     );
     expect(result).toEqual(createUndoItem());
   });
@@ -105,5 +153,33 @@ describe("sms-review-draft-command-service", () => {
       "draft-2",
     ]);
     expect(mockRestore).not.toHaveBeenCalled();
+  });
+
+  it("waits for pending draft writes before bulk discard", async () => {
+    let finishSelection: (() => void) | undefined;
+    mockUpdateSelection.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSelection = resolve;
+        })
+    );
+
+    const selectionPromise = setSmsReviewDraftSelection(
+      "draft-1",
+      "user-1",
+      true
+    );
+    const discardPromise = discardEverySmsReviewDraft("user-1", "queue-1", [
+      "draft-1",
+      "draft-2",
+    ]);
+
+    await Promise.resolve();
+    expect(mockDiscardAll).not.toHaveBeenCalled();
+
+    finishSelection?.();
+    await selectionPromise;
+    await discardPromise;
+    expect(mockDiscardAll).toHaveBeenCalledTimes(1);
   });
 });

@@ -26,6 +26,12 @@ interface MockTransactionReviewProps {
     index: number,
     selected: boolean
   ) => Promise<void>;
+  readonly onSelectionChanges: (
+    changes: ReadonlyArray<{
+      readonly index: number;
+      readonly selected: boolean;
+    }>
+  ) => Promise<void>;
   readonly undoBanner?: {
     readonly onUndo: () => Promise<void>;
   };
@@ -60,6 +66,7 @@ const mockSaveSelectedDrafts = jest.fn();
 const mockDiscardAll = jest.fn();
 const mockDiscardOne = jest.fn();
 const mockSetSelection = jest.fn();
+const mockSetSelections = jest.fn();
 const mockQueueRefetch = jest.fn<Promise<void>, []>();
 const mockTransactionReview = jest.fn<
   void,
@@ -228,6 +235,8 @@ jest.mock("@/services/sms-review-draft-command-service", () => ({
   editSmsReviewDraft: jest.fn(),
   setSmsReviewDraftSelection: (...args: readonly unknown[]): unknown =>
     mockSetSelection(...args),
+  setSmsReviewDraftSelections: (...args: readonly unknown[]): unknown =>
+    mockSetSelections(...args),
 }));
 
 jest.mock("@/services/sms-review-draft-save-service", () => {
@@ -298,6 +307,7 @@ describe("SMS review route", () => {
     mockDiscardAll.mockResolvedValue(undefined);
     mockDiscardOne.mockResolvedValue(undefined);
     mockSetSelection.mockResolvedValue(undefined);
+    mockSetSelections.mockResolvedValue(undefined);
     mockQueueRefetch.mockResolvedValue(undefined);
     mockMarkSyncComplete.mockResolvedValue(undefined);
     mockSaveSelectedDrafts.mockResolvedValue({ savedCount: 1 });
@@ -327,6 +337,20 @@ describe("SMS review route", () => {
 
     await expect(props.onSelectionChange(0, true)).rejects.toThrow(
       "sms_review_draft_hard_validation_required"
+    );
+    expect(mockSetSelection).not.toHaveBeenCalled();
+  });
+
+  it("persists bulk selection changes through one command", async () => {
+    render(<SmsReviewScreen />);
+    const props = mockTransactionReview.mock.calls[0]?.[0];
+    if (!props) throw new Error("TransactionReview was not rendered");
+
+    await props.onSelectionChanges([{ index: 0, selected: false }]);
+
+    expect(mockSetSelections).toHaveBeenCalledWith(
+      [{ draftId: "draft-1", selectionOverride: false }],
+      "user-1"
     );
     expect(mockSetSelection).not.toHaveBeenCalled();
   });
@@ -459,12 +483,24 @@ describe("SMS review route", () => {
       mockTransactionReview.mock.calls.at(-1)?.[0]?.selectionOverrides.get(0)
     ).toBe(false);
 
+    mockQueueItems = [mockQueueItems[1]];
+    view.rerender(<SmsReviewScreen />);
+
+    await waitFor(() => {
+      const transactions =
+        mockTransactionReview.mock.calls.at(-1)?.[0]?.transactions ?? [];
+      expect(transactions).toHaveLength(2);
+      expect(
+        transactions.map((transaction) => transaction.smsFingerprint)
+      ).toContain("fingerprint-1");
+    });
+
     mockQueueItems = [
       {
         ...discardedItem,
         draftId: "restored-draft-1",
       },
-      mockQueueItems[1],
+      mockQueueItems[0],
     ];
     view.rerender(<SmsReviewScreen />);
 
@@ -639,6 +675,7 @@ describe("SMS review route", () => {
     render(<SmsReviewScreen />);
 
     expect(screen.queryByTestId("transaction-review")).toBeNull();
+    expect(screen.getAllByTestId("sms-review-loading-row")).toHaveLength(3);
   });
 
   it("re-consents before retrying unresolved messages", async () => {
