@@ -33,7 +33,7 @@ import { ToastProvider } from "../components/ui/Toast";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import { LocaleProvider } from "../context/LocaleContext";
 import { ThemeProvider, useTheme } from "../context/ThemeContext";
-import i18n, { initI18n } from "../i18n";
+import i18n, { initI18n, initI18nFallback } from "../i18n";
 import { initializeNotifications } from "../services/notification-service";
 import {
   handleDetectedSms,
@@ -94,7 +94,7 @@ function RootLayout(): React.ReactNode {
       .catch(async (error: unknown) => {
         logger.error("Failed to initialize i18n", error);
         try {
-          await i18n.changeLanguage("en");
+          await initI18nFallback();
         } catch (fallbackError: unknown) {
           logger.error("Failed to set i18n fallback to en", fallbackError);
         }
