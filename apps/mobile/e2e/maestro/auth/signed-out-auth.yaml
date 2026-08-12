@@ -27,6 +27,14 @@ appId: com.monyvi.app
     when:
       visible: "Skip"
     commands:
+      - assertVisible:
+          id: "voice-pitch-result-coffee"
+      - assertVisible:
+          id: "voice-pitch-result-clothes"
+      - assertVisible:
+          id: "voice-pitch-result-borrowed"
+      - assertVisible:
+          id: "voice-pitch-review-status"
       - tapOn: "Skip"
 
 - extendedWaitUntil:

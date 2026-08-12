@@ -15,6 +15,7 @@ interface PitchSlideProps {
    *  back-arrow (replacing the language pill). Slide 1 keeps the language
    *  pill at top-left because there is nowhere to go back to. */
   readonly hasPrevious: boolean;
+  readonly isCompactLayout?: boolean;
   /** Zero-based index of THIS slide (passed in for the pagination dots). */
   readonly slideIndex: number;
   /** Total number of slides — used to render the dot row. */
@@ -57,6 +58,7 @@ export function PitchSlide({
   subhead,
   isLast,
   hasPrevious,
+  isCompactLayout = false,
   slideIndex,
   totalSlides,
   onSkip,
@@ -75,7 +77,9 @@ export function PitchSlide({
   return (
     <View
       testID="pitch-slide-root"
-      className="flex-1 px-6 pt-14 bg-background dark:bg-background-dark"
+      className={`flex-1 px-6 bg-background dark:bg-background-dark ${
+        isCompactLayout ? "pt-8" : "pt-14"
+      }`}
       style={{ paddingBottom: PITCH_SLIDE_BOTTOM_PADDING + insets.bottom }}
     >
       {/* Top bar — back-arrow on slides 2+3, language pill on slide 1 only. */}
@@ -114,7 +118,12 @@ export function PitchSlide({
       </View>
 
       {/* Centered headline + subhead */}
-      <Text className="mt-10 text-center text-3xl font-bold leading-tight text-slate-900 dark:text-white">
+      <Text
+        testID="pitch-slide-headline"
+        className={`text-center font-bold leading-tight text-slate-900 dark:text-white ${
+          isCompactLayout ? "mt-4 text-2xl" : "mt-10 text-3xl"
+        }`}
+      >
         {headline}
       </Text>
 
@@ -124,7 +133,13 @@ export function PitchSlide({
           tells the truth."). The previous full-width subhead wrapped to
           only 2 lines on common phone widths (user-reported 2026-04-26).
           `self-center` re-centers the now-narrower text in the slide. */}
-      <Text className="mt-3 max-w-[300px] self-center text-center text-base leading-relaxed text-slate-600 dark:text-slate-300">
+      <Text
+        className={`max-w-[300px] self-center text-center text-slate-600 dark:text-slate-300 ${
+          isCompactLayout
+            ? "mt-1 text-xs leading-4"
+            : "mt-3 text-base leading-relaxed"
+        }`}
+      >
         {subhead}
       </Text>
 
@@ -132,7 +147,12 @@ export function PitchSlide({
           vertical-center gap. The previous `flex-1 + justify-center`
           padded the card halfway down the leftover space, which the user
           flagged as "empty space between subtitle and card". */}
-      <View className="mt-6 items-center">{children}</View>
+      <View
+        testID="pitch-slide-content"
+        className={`items-center ${isCompactLayout ? "mt-3" : "mt-6"}`}
+      >
+        {children}
+      </View>
 
       {/* Spacer pushes the dot row + CTA to the bottom of the slide. */}
       <View className="flex-1" />
@@ -141,7 +161,12 @@ export function PitchSlide({
           an absolute overlay) so they always sit above the CTA with a
           deterministic gap, regardless of safe-area inset or device font
           metrics. */}
-      <View className="mb-6 flex-row items-center justify-center gap-2">
+      <View
+        testID="pitch-slide-pagination"
+        className={`flex-row items-center justify-center gap-2 ${
+          isCompactLayout ? "mb-3" : "mb-6"
+        }`}
+      >
         {dotIndices.map((i) => (
           <View
             key={i}
@@ -161,7 +186,9 @@ export function PitchSlide({
         accessibilityLabel={
           isLast ? t("pitch_get_started") : t("pitch_continue")
         }
-        className="items-center justify-center rounded-2xl bg-nileGreen-500 py-4 active:bg-nileGreen-600 dark:bg-nileGreen-600"
+        className={`items-center justify-center bg-nileGreen-500 active:bg-nileGreen-600 dark:bg-nileGreen-600 ${
+          isCompactLayout ? "rounded-xl py-3" : "rounded-2xl py-4"
+        }`}
       >
         <Text className="text-base font-semibold text-white">
           {isLast ? t("pitch_get_started") : t("pitch_continue")}

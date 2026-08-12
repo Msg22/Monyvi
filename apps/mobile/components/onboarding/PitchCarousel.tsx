@@ -18,6 +18,8 @@ import { Slide2SMS } from "./Slide2SMS";
 import { Slide2Offline } from "./Slide2Offline";
 import { Slide3LiveMarket } from "./Slide3LiveMarket";
 
+const COMPACT_VOICE_SLIDE_HEIGHT = 700;
+
 interface SlideDef {
   readonly key: string;
   readonly component: React.ComponentType;
@@ -168,6 +170,10 @@ export function PitchCarousel(): React.ReactElement {
               subhead={t(`pitch_slide_${item.key}_subhead`)}
               isLast={narrativeIndex === totalSlides - 1}
               hasPrevious={narrativeIndex > 0}
+              isCompactLayout={
+                item.key === "voice" &&
+                screenHeight < COMPACT_VOICE_SLIDE_HEIGHT
+              }
               slideIndex={narrativeIndex}
               totalSlides={totalSlides}
               onSkip={() => {
