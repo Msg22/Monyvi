@@ -20,10 +20,6 @@ import {
 } from "@monyvi/logic";
 
 import {
-  getCategoryAndSubcategoryIds,
-  getSpendingForBudget,
-} from "@/services/budget-service";
-import {
   queryAccessibleCategories,
   queryOwned,
 } from "@/services/user-data-access";
@@ -64,7 +60,14 @@ export async function getBudgetDetailReadModel(
     budget.periodStart,
     budget.periodEnd
   );
-  const spent = await getSpendingForBudget(budget);
+  const categoryHierarchy = await getCategoryHierarchy(budget);
+  const activeTransactions = await getActiveTransactions(
+    budget,
+    bounds,
+    categoryHierarchy.categoryIds,
+    getBudgetPauseState(budget)
+  );
+  const spent = getTotalSpent(activeTransactions);
   const daysElapsed = getDaysElapsed(bounds.start);
   const daysLeft = getDaysLeft(bounds.end);
   const metrics = computeSpendingMetrics(
@@ -73,34 +76,19 @@ export async function getBudgetDetailReadModel(
     daysElapsed,
     budget.alertThreshold
   );
-  const categoryIds =
-    budget.isCategoryBudget && budget.categoryId
-      ? await getCategoryAndSubcategoryIds(budget.categoryId)
-      : null;
-  const pauseState = getBudgetPauseState(budget);
 
   return {
     metrics,
     daysLeft,
     daysElapsed,
-    weeklySpending: await getWeeklySpending(
-      budget,
-      categoryIds,
-      bounds,
-      pauseState
-    ),
-    subcategoryBreakdown: await getSubcategoryBreakdown(
+    weeklySpending: getWeeklySpending(activeTransactions, bounds),
+    subcategoryBreakdown: getSubcategoryBreakdown(
       budget,
       spent,
-      bounds,
-      pauseState
+      activeTransactions,
+      categoryHierarchy.categories
     ),
-    recentTransactions: await getRecentTransactions(
-      budget,
-      categoryIds,
-      bounds,
-      pauseState
-    ),
+    recentTransactions: getRecentTransactions(activeTransactions),
   };
 }
 
@@ -111,103 +99,60 @@ function getBudgetPauseState(budget: Budget): BudgetPauseState {
   };
 }
 
-async function getWeeklySpending(
-  budget: Budget,
-  categoryIds: readonly string[] | null,
-  bounds: ReturnType<typeof getCurrentPeriodBounds>,
-  pauseState: BudgetPauseState
-): Promise<WeeklySpendingData[]> {
-  const weeklyData: WeeklySpendingData[] = [];
-
-  for (const bucket of getWeeklyBuckets(bounds)) {
-    const conditions = [
-      Q.where("deleted", false),
-      Q.where("type", "EXPENSE"),
-      Q.where("date", Q.gte(bucket.weekStart.getTime())),
-      Q.where("date", Q.lte(bucket.weekEnd.getTime())),
-    ];
-
-    if (categoryIds) {
-      conditions.push(Q.where("category_id", Q.oneOf([...categoryIds])));
-    }
-
-    const weeklyTransactions = await queryOwned(
-      database.get<Transaction>("transactions"),
-      budget.userId,
-      Q.and(...conditions)
-    ).fetch();
-    const activeTransactions = filterExcludedTransactions(
-      weeklyTransactions,
-      pauseState.pauseIntervals,
-      pauseState.pausedAtMs
-    );
-
-    weeklyData.push({
-      bucket,
-      amount: activeTransactions.reduce((sum, tx) => sum + tx.amount, 0),
-    });
-  }
-
-  return weeklyData;
+interface CategoryHierarchy {
+  readonly categories: readonly Category[];
+  readonly categoryIds: readonly string[] | null;
 }
 
-async function getSubcategoryBreakdown(
-  budget: Budget,
-  spent: number,
-  bounds: ReturnType<typeof getCurrentPeriodBounds>,
-  pauseState: BudgetPauseState
-): Promise<SubcategorySpending[]> {
-  if (!budget.isCategoryBudget || !budget.categoryId || spent <= 0) {
-    return [];
+async function getCategoryHierarchy(budget: Budget): Promise<CategoryHierarchy> {
+  if (!budget.isCategoryBudget || !budget.categoryId) {
+    return { categories: [], categoryIds: null };
   }
 
-  const children = await queryAccessibleCategories(
+  const categories = await queryAccessibleCategories(
     database.get<Category>("categories"),
     budget.userId,
-    Q.and(Q.where("parent_id", budget.categoryId), Q.where("deleted", false))
+    Q.where("deleted", false)
   ).fetch();
-  const breakdown: SubcategorySpending[] = [];
 
-  for (const child of children) {
-    const childCategoryIds = await getCategoryAndSubcategoryIds(child.id);
-    const childTransactions = await queryOwned(
-      database.get<Transaction>("transactions"),
-      budget.userId,
-      Q.and(
-        Q.where("deleted", false),
-        Q.where("type", "EXPENSE"),
-        Q.where("category_id", Q.oneOf(childCategoryIds)),
-        Q.where("date", Q.gte(bounds.start.getTime())),
-        Q.where("date", Q.lte(bounds.end.getTime()))
-      )
-    ).fetch();
-    const activeChildTransactions = filterExcludedTransactions(
-      childTransactions,
-      pauseState.pauseIntervals,
-      pauseState.pausedAtMs
-    );
-    const childAmount = activeChildTransactions.reduce(
-      (sum, tx) => sum + tx.amount,
-      0
-    );
+  return {
+    categories,
+    categoryIds: getDescendantCategoryIds(categories, budget.categoryId),
+  };
+}
 
-    if (childAmount > 0) {
-      breakdown.push({
-        categoryId: child.id,
-        categoryName: child.displayName,
-        amount: childAmount,
-        percentage: (childAmount / spent) * 100,
-      });
+function getDescendantCategoryIds(
+  categories: readonly Category[],
+  rootCategoryId: string
+): string[] {
+  const childIdsByParentId = new Map<string, string[]>();
+
+  for (const category of categories) {
+    if (!category.parentId) continue;
+    const childIds = childIdsByParentId.get(category.parentId) ?? [];
+    childIds.push(category.id);
+    childIdsByParentId.set(category.parentId, childIds);
+  }
+
+  const categoryIds = [rootCategoryId];
+  const knownCategoryIds = new Set(categoryIds);
+  for (let index = 0; index < categoryIds.length; index++) {
+    const currentCategoryId = categoryIds[index];
+    if (!currentCategoryId) continue;
+    for (const childCategoryId of childIdsByParentId.get(currentCategoryId) ?? []) {
+      if (knownCategoryIds.has(childCategoryId)) continue;
+      knownCategoryIds.add(childCategoryId);
+      categoryIds.push(childCategoryId);
     }
   }
 
-  return breakdown.sort((a, b) => b.amount - a.amount);
+  return categoryIds;
 }
 
-async function getRecentTransactions(
+async function getActiveTransactions(
   budget: Budget,
-  categoryIds: readonly string[] | null,
   bounds: ReturnType<typeof getCurrentPeriodBounds>,
+  categoryIds: readonly string[] | null,
   pauseState: BudgetPauseState
 ): Promise<Transaction[]> {
   const conditions = [
@@ -221,17 +166,101 @@ async function getRecentTransactions(
     conditions.push(Q.where("category_id", Q.oneOf([...categoryIds])));
   }
 
-  const recentRaw = await queryOwned(
+  const transactions = await queryOwned(
     database.get<Transaction>("transactions"),
     budget.userId,
-    ...conditions,
-    Q.sortBy("date", Q.desc),
-    Q.take(RECENT_TRANSACTIONS_LIMIT * 2)
+    Q.and(...conditions)
   ).fetch();
 
   return filterExcludedTransactions(
-    recentRaw,
+    transactions,
     pauseState.pauseIntervals,
     pauseState.pausedAtMs
-  ).slice(0, RECENT_TRANSACTIONS_LIMIT);
+  );
+}
+
+function getTotalSpent(transactions: readonly Transaction[]): number {
+  return transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+}
+
+function getWeeklySpending(
+  transactions: readonly Transaction[],
+  bounds: ReturnType<typeof getCurrentPeriodBounds>
+): WeeklySpendingData[] {
+  return getWeeklyBuckets(bounds).map((bucket) => ({
+    bucket,
+    amount: transactions
+      .filter(
+        (transaction) =>
+          transaction.date.getTime() >= bucket.weekStart.getTime() &&
+          transaction.date.getTime() <= bucket.weekEnd.getTime()
+      )
+      .reduce((sum, transaction) => sum + transaction.amount, 0),
+  }));
+}
+
+function getSubcategoryBreakdown(
+  budget: Budget,
+  spent: number,
+  transactions: readonly Transaction[],
+  categories: readonly Category[]
+): SubcategorySpending[] {
+  if (!budget.isCategoryBudget || !budget.categoryId || spent <= 0) {
+    return [];
+  }
+
+  const categoryById = new Map(categories.map((category) => [category.id, category]));
+  const amountsByChildId = new Map<string, number>();
+
+  for (const transaction of transactions) {
+    const childCategoryId = getDirectChildCategoryId(
+      transaction.categoryId,
+      budget.categoryId,
+      categoryById
+    );
+    if (!childCategoryId) continue;
+    amountsByChildId.set(
+      childCategoryId,
+      (amountsByChildId.get(childCategoryId) ?? 0) + transaction.amount
+    );
+  }
+
+  return [...amountsByChildId.entries()]
+    .map(([categoryId, amount]) => {
+      const category = categoryById.get(categoryId);
+      if (!category) return null;
+      return {
+        categoryId,
+        categoryName: category.displayName,
+        amount,
+        percentage: (amount / spent) * 100,
+      };
+    })
+    .filter((item): item is SubcategorySpending => item !== null)
+    .sort((left, right) => right.amount - left.amount);
+}
+
+function getDirectChildCategoryId(
+  categoryId: string | null,
+  rootCategoryId: string,
+  categoryById: ReadonlyMap<string, Category>
+): string | null {
+  let currentCategoryId = categoryId;
+
+  while (currentCategoryId && currentCategoryId !== rootCategoryId) {
+    const category = categoryById.get(currentCategoryId);
+    if (!category) return null;
+    if (category.parentId === rootCategoryId) return category.id;
+    currentCategoryId = category.parentId ?? null;
+  }
+
+  return null;
+}
+
+function getRecentTransactions(
+  transactions: readonly Transaction[]
+): Transaction[] {
+  return [...transactions]
+    .sort((left, right) => right.date.getTime() - left.date.getTime())
+    .slice(0, RECENT_TRANSACTIONS_LIMIT);
 }

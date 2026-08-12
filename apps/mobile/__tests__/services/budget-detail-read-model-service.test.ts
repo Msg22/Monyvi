@@ -19,6 +19,15 @@ interface QueryOperator {
   readonly value: unknown;
 }
 
+const mockQueryAccessibleCategories = jest.fn<
+  { fetch: () => Promise<Category[]> },
+  [collection: string, userId: string, ...conditions: QueryCondition[]]
+>();
+const mockQueryOwned = jest.fn<
+  { fetch: () => Promise<Transaction[]> },
+  [collection: string, userId: string, ...conditions: QueryCondition[]]
+>();
+
 interface MockBudgetOptions {
   readonly type?: "GLOBAL" | "CATEGORY";
   readonly categoryId?: string;
@@ -85,30 +94,14 @@ jest.mock("@/services/user-data-access", () => ({
     collection: string,
     userId: string,
     ...conditions: readonly QueryCondition[]
-  ): { fetch: () => Promise<Category[]> } => ({
-    fetch: (): Promise<Category[]> =>
-      Promise.resolve(
-        mockFilterRecords(
-          mockCategories,
-          conditions,
-          userId
-        ) as unknown as Category[]
-      ),
-  }),
+  ): { fetch: () => Promise<Category[]> } =>
+    mockQueryAccessibleCategories(collection, userId, ...conditions),
   queryOwned: (
     collection: string,
     userId: string,
     ...conditions: readonly QueryCondition[]
-  ): { fetch: () => Promise<Transaction[]> } => ({
-    fetch: (): Promise<Transaction[]> =>
-      Promise.resolve(
-        mockFilterRecords(
-          collection === "transactions" ? mockTransactions : [],
-          conditions,
-          userId
-        ) as unknown as Transaction[]
-      ),
-  }),
+  ): { fetch: () => Promise<Transaction[]> } =>
+    mockQueryOwned(collection, userId, ...conditions),
 }));
 
 import { getBudgetDetailReadModel } from "@/services/budget-detail-read-model-service";
@@ -254,6 +247,38 @@ describe("budget-detail-read-model-service", () => {
     jest.clearAllMocks();
     mockTransactions = [];
     mockCategories = [];
+    mockQueryAccessibleCategories.mockImplementation(
+      (
+        _collection: string,
+        userId: string,
+        ...conditions: readonly QueryCondition[]
+      ): { fetch: () => Promise<Category[]> } => ({
+        fetch: (): Promise<Category[]> =>
+          Promise.resolve(
+            mockFilterRecords(
+              mockCategories,
+              conditions,
+              userId
+            ) as unknown as Category[]
+          ),
+      })
+    );
+    mockQueryOwned.mockImplementation(
+      (
+        collection: string,
+        userId: string,
+        ...conditions: readonly QueryCondition[]
+      ): { fetch: () => Promise<Transaction[]> } => ({
+        fetch: (): Promise<Transaction[]> =>
+          Promise.resolve(
+            mockFilterRecords(
+              collection === "transactions" ? mockTransactions : [],
+              conditions,
+              userId
+            ) as unknown as Transaction[]
+          ),
+      })
+    );
     mockGetSpendingForBudget.mockResolvedValue(0);
     mockGetCategoryAndSubcategoryIds.mockResolvedValue(["category-parent"]);
   });
@@ -295,6 +320,7 @@ describe("budget-detail-read-model-service", () => {
     const budget = createBudget({ type: "CATEGORY" });
     mockCategories = [
       createCategory("food", "Food", "category-parent"),
+      createCategory("grocery", "Groceries", "food"),
       createCategory("transport", "Transport", "category-parent"),
     ];
     mockTransactions = [
@@ -350,6 +376,10 @@ describe("budget-detail-read-model-service", () => {
     expect(
       result.weeklySpending.reduce((sum, item) => sum + item.amount, 0)
     ).toBe(600);
+    expect(mockQueryOwned).toHaveBeenCalledTimes(1);
+    expect(mockQueryAccessibleCategories).toHaveBeenCalledTimes(1);
+    expect(mockGetSpendingForBudget).not.toHaveBeenCalled();
+    expect(mockGetCategoryAndSubcategoryIds).not.toHaveBeenCalled();
   });
 
   it("excludes pause-window transactions from buckets, breakdown, and recent items", async () => {
@@ -398,6 +428,19 @@ describe("budget-detail-read-model-service", () => {
     expect(
       result.weeklySpending.reduce((sum, item) => sum + item.amount, 0)
     ).toBe(100);
+  });
+
+  it("returns zero spend without a subcategory breakdown", async () => {
+    const budget = createBudget({ type: "CATEGORY" });
+    mockCategories = [createCategory("food", "Food", "category-parent")];
+
+    const result = await getBudgetDetailReadModel(budget);
+
+    expect(result.metrics.spent).toBe(0);
+    expect(result.subcategoryBreakdown).toEqual([]);
+    expect(result.weeklySpending.every((item) => item.amount === 0)).toBe(
+      true
+    );
   });
 
   it("returns the newest six non-paused matching transactions", async () => {
