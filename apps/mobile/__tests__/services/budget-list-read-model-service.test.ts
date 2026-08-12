@@ -301,7 +301,7 @@ describe("budget-list-read-model-service", () => {
     expect(result.totalCount).toBe(3);
   });
 
-  it("keeps paused budgets in their own section for the all filter", () => {
+  it("keeps paused category budgets visible in the category grid", () => {
     const paused = createBudgetMetric(
       createBudget("paused", {
         period: "WEEKLY",
@@ -313,7 +313,7 @@ describe("budget-list-read-model-service", () => {
 
     expect(result.budgets).toEqual([paused]);
     expect(result.globalBudget).toBeUndefined();
-    expect(result.categoryBudgets).toEqual([]);
+    expect(result.categoryBudgets).toEqual([paused]);
     expect(result.pausedBudgets).toEqual([paused]);
     expect(result.totalCount).toBe(1);
   });

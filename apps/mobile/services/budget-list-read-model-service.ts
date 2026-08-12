@@ -90,7 +90,7 @@ export function buildBudgetListReadModel(
     budgets: filteredBudgets,
     globalBudget: filteredBudgets.find((item) => item.budget.isGlobal),
     categoryBudgets: filteredBudgets.filter(
-      (item) => item.budget.isCategoryBudget && item.budget.status === "ACTIVE"
+      (item) => item.budget.isCategoryBudget
     ),
     pausedBudgets: filteredBudgets.filter(
       (item) => item.budget.status === "PAUSED"
