@@ -6,6 +6,8 @@ const mockGetCategoryAndSubcategoryIds = jest.fn<
   Promise<string[]>,
   [string | undefined]
 >();
+const mockAssertOwned = jest.fn<Budget, [Budget]>();
+const mockFindAccessibleCategory = jest.fn<Promise<Category>, [string, string]>();
 
 interface QueryCondition {
   readonly kind: "where" | "and" | "sortBy" | "take";
@@ -18,6 +20,27 @@ interface QueryOperator {
   readonly operator: "gte" | "lte" | "oneOf";
   readonly value: unknown;
 }
+
+interface MockUserDataScope {
+  readonly assertOwned: (budget: Budget) => Budget;
+  readonly findAccessibleCategory: (
+    collection: string,
+    categoryId: string
+  ) => Promise<Category>;
+  readonly queryAccessibleCategories: (
+    collection: string,
+    ...conditions: readonly QueryCondition[]
+  ) => { fetch: () => Promise<Category[]> };
+  readonly queryOwned: (
+    collection: string,
+    ...conditions: readonly QueryCondition[]
+  ) => { fetch: () => Promise<Transaction[]> };
+}
+
+const mockGetCurrentUserDataScope = jest.fn<
+  Promise<MockUserDataScope>,
+  []
+>();
 
 const mockQueryAccessibleCategories = jest.fn<
   { fetch: () => Promise<Category[]> },
@@ -90,6 +113,11 @@ jest.mock("@/services/budget-service", () => ({
 }));
 
 jest.mock("@/services/user-data-access", () => ({
+  USER_DATA_ACCESS_ERROR_CODES: {
+    OWNERSHIP_FAILED: "OWNERSHIP_FAILED",
+  },
+  getCurrentUserDataScope: (): Promise<MockUserDataScope> =>
+    mockGetCurrentUserDataScope(),
   queryAccessibleCategories: (
     collection: string,
     userId: string,
@@ -247,6 +275,14 @@ describe("budget-detail-read-model-service", () => {
     jest.clearAllMocks();
     mockTransactions = [];
     mockCategories = [];
+    mockAssertOwned.mockImplementation((budget): Budget => budget);
+    mockFindAccessibleCategory.mockResolvedValue(
+      createCategory(
+        "category-parent",
+        "Parent",
+        null
+      ) as unknown as Category
+    );
     mockQueryAccessibleCategories.mockImplementation(
       (
         _collection: string,
@@ -279,6 +315,21 @@ describe("budget-detail-read-model-service", () => {
           ),
       })
     );
+    mockGetCurrentUserDataScope.mockResolvedValue({
+      assertOwned: (budget): Budget => mockAssertOwned(budget),
+      findAccessibleCategory: (collection, categoryId): Promise<Category> =>
+        mockFindAccessibleCategory(collection, categoryId),
+      queryAccessibleCategories: (
+        collection,
+        ...conditions
+      ): { fetch: () => Promise<Category[]> } =>
+        mockQueryAccessibleCategories(collection, "user-1", ...conditions),
+      queryOwned: (
+        collection,
+        ...conditions
+      ): { fetch: () => Promise<Transaction[]> } =>
+        mockQueryOwned(collection, "user-1", ...conditions),
+    });
     mockGetSpendingForBudget.mockResolvedValue(0);
     mockGetCategoryAndSubcategoryIds.mockResolvedValue(["category-parent"]);
   });
@@ -314,6 +365,52 @@ describe("budget-detail-read-model-service", () => {
     expect(
       result.weeklySpending.reduce((sum, item) => sum + item.amount, 0)
     ).toBe(650);
+  });
+
+  it("rejects a budget not owned by the authenticated user before reading data", async () => {
+    const error = new Error("OWNERSHIP_FAILED");
+    const foreignBudget = {
+      ...createBudget(),
+      userId: "user-2",
+    } as unknown as Budget;
+    mockAssertOwned.mockImplementation(() => {
+      throw error;
+    });
+
+    await expect(getBudgetDetailReadModel(foreignBudget)).rejects.toBe(error);
+
+    expect(mockQueryAccessibleCategories).not.toHaveBeenCalled();
+    expect(mockQueryOwned).not.toHaveBeenCalled();
+  });
+
+  it("rejects an inaccessible root category before reading transactions", async () => {
+    const budget = createBudget({
+      type: "CATEGORY",
+      categoryId: "foreign-category",
+    });
+    mockCategories = [
+      {
+        ...createCategory("foreign-category", "Foreign", null),
+        userId: "user-2",
+      },
+    ];
+    mockTransactions = [
+      createTransaction({
+        id: "tx-foreign-category",
+        amount: 100,
+        date: "2026-05-05T10:00:00.000Z",
+        categoryId: "foreign-category",
+      }),
+    ];
+    mockFindAccessibleCategory.mockRejectedValueOnce(
+      new Error("OWNERSHIP_FAILED")
+    );
+
+    await expect(getBudgetDetailReadModel(budget)).rejects.toThrow(
+      "OWNERSHIP_FAILED"
+    );
+
+    expect(mockQueryOwned).not.toHaveBeenCalled();
   });
 
   it("includes selected category descendants and sorts subcategory breakdown", async () => {
@@ -464,5 +561,38 @@ describe("budget-detail-read-model-service", () => {
       "tx-4",
       "tx-3",
     ]);
+  });
+
+  it("assigns long custom-period transactions without rescanning per week", async () => {
+    const transactionDate = new Date("2024-01-15T10:00:00.000Z");
+    let dateReadCount = 0;
+    const transaction = {
+      id: "tx-long-period",
+      userId: "user-1",
+      deleted: false,
+      type: "EXPENSE",
+      amount: 100,
+      categoryId: "category-parent",
+      get date(): Date {
+        dateReadCount += 1;
+        return transactionDate;
+      },
+    } as unknown as Transaction;
+    const budget = {
+      ...createBudget(),
+      periodStart: new Date("2024-01-01T00:00:00.000Z"),
+      periodEnd: new Date("2025-12-31T23:59:59.999Z"),
+    } as unknown as Budget;
+    mockQueryOwned.mockReturnValueOnce({
+      fetch: (): Promise<Transaction[]> => Promise.resolve([transaction]),
+    });
+
+    const result = await getBudgetDetailReadModel(budget);
+
+    expect(result.metrics.spent).toBe(100);
+    expect(
+      result.weeklySpending.reduce((sum, item) => sum + item.amount, 0)
+    ).toBe(100);
+    expect(dateReadCount).toBeLessThan(20);
   });
 });

@@ -20,8 +20,8 @@ import {
 } from "@monyvi/logic";
 
 import {
-  queryAccessibleCategories,
-  queryOwned,
+  getCurrentUserDataScope,
+  type CurrentUserDataScope,
 } from "@/services/user-data-access";
 
 export interface SubcategorySpending {
@@ -51,18 +51,22 @@ interface BudgetPauseState {
 }
 
 const RECENT_TRANSACTIONS_LIMIT = 6;
+const DAYS_PER_WEEK = 7;
+const MS_PER_DAY = 86_400_000;
 
 export async function getBudgetDetailReadModel(
   budget: Budget
 ): Promise<BudgetDetailReadModel> {
+  const scope = await getCurrentUserDataScope();
+  scope.assertOwned(budget);
   const bounds = getCurrentPeriodBounds(
     budget.period,
     budget.periodStart,
     budget.periodEnd
   );
-  const categoryHierarchy = await getCategoryHierarchy(budget);
+  const categoryHierarchy = await getCategoryHierarchy(budget, scope);
   const activeTransactions = await getActiveTransactions(
-    budget,
+    scope,
     bounds,
     categoryHierarchy.categoryIds,
     getBudgetPauseState(budget)
@@ -104,14 +108,20 @@ interface CategoryHierarchy {
   readonly categoryIds: readonly string[] | null;
 }
 
-async function getCategoryHierarchy(budget: Budget): Promise<CategoryHierarchy> {
+async function getCategoryHierarchy(
+  budget: Budget,
+  scope: CurrentUserDataScope
+): Promise<CategoryHierarchy> {
   if (!budget.isCategoryBudget || !budget.categoryId) {
     return { categories: [], categoryIds: null };
   }
 
-  const categories = await queryAccessibleCategories(
+  await scope.findAccessibleCategory(
     database.get<Category>("categories"),
-    budget.userId,
+    budget.categoryId
+  );
+  const categories = await scope.queryAccessibleCategories(
+    database.get<Category>("categories"),
     Q.where("deleted", false)
   ).fetch();
 
@@ -136,9 +146,7 @@ function getDescendantCategoryIds(
 
   const categoryIds = [rootCategoryId];
   const knownCategoryIds = new Set(categoryIds);
-  for (let index = 0; index < categoryIds.length; index++) {
-    const currentCategoryId = categoryIds[index];
-    if (!currentCategoryId) continue;
+  for (const currentCategoryId of categoryIds) {
     for (const childCategoryId of childIdsByParentId.get(currentCategoryId) ?? []) {
       if (knownCategoryIds.has(childCategoryId)) continue;
       knownCategoryIds.add(childCategoryId);
@@ -150,7 +158,7 @@ function getDescendantCategoryIds(
 }
 
 async function getActiveTransactions(
-  budget: Budget,
+  scope: CurrentUserDataScope,
   bounds: ReturnType<typeof getCurrentPeriodBounds>,
   categoryIds: readonly string[] | null,
   pauseState: BudgetPauseState
@@ -166,9 +174,8 @@ async function getActiveTransactions(
     conditions.push(Q.where("category_id", Q.oneOf([...categoryIds])));
   }
 
-  const transactions = await queryOwned(
+  const transactions = await scope.queryOwned(
     database.get<Transaction>("transactions"),
-    budget.userId,
     Q.and(...conditions)
   ).fetch();
 
@@ -187,16 +194,29 @@ function getWeeklySpending(
   transactions: readonly Transaction[],
   bounds: ReturnType<typeof getCurrentPeriodBounds>
 ): WeeklySpendingData[] {
-  return getWeeklyBuckets(bounds).map((bucket) => ({
+  const buckets = getWeeklyBuckets(bounds);
+  const amountsByBucket = buckets.map(() => 0);
+  const periodStartDay = getLocalCalendarDay(bounds.start);
+
+  for (const transaction of transactions) {
+    const transactionDay = getLocalCalendarDay(transaction.date);
+    const dayOffset = (transactionDay - periodStartDay) / MS_PER_DAY;
+    const bucketIndex = Math.floor(dayOffset / DAYS_PER_WEEK);
+
+    if (bucketIndex >= 0 && bucketIndex < amountsByBucket.length) {
+      amountsByBucket[bucketIndex] =
+        (amountsByBucket[bucketIndex] ?? 0) + transaction.amount;
+    }
+  }
+
+  return buckets.map((bucket, index) => ({
     bucket,
-    amount: transactions
-      .filter(
-        (transaction) =>
-          transaction.date.getTime() >= bucket.weekStart.getTime() &&
-          transaction.date.getTime() <= bucket.weekEnd.getTime()
-      )
-      .reduce((sum, transaction) => sum + transaction.amount, 0),
+    amount: amountsByBucket[index] ?? 0,
   }));
+}
+
+function getLocalCalendarDay(date: Date): number {
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 function getSubcategoryBreakdown(
