@@ -90,6 +90,7 @@ export default function PrivateLayout(): React.ReactNode {
                           }}
                         />
                         <Stack.Screen name="ai-privacy-details" />
+                        <Stack.Screen name="privacy-details" />
                         <Stack.Screen
                           name="recurring-payments"
                           options={{

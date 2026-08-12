@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
 import type { ReviewableTransaction } from "@monyvi/logic";
 import React from "react";
 import {
@@ -36,8 +36,13 @@ jest.mock("@/context/LocaleContext", () => ({
 }));
 
 jest.mock("react-i18next", () => ({
-  useTranslation: (): { readonly t: (key: string) => string } => ({
-    t: (key: string): string => key,
+  useTranslation: (): {
+    readonly t: (key: string, options?: { readonly name?: string }) => string;
+  } => ({
+    t: (key: string, options?: { readonly name?: string }): string => {
+      if (key === "expense") return "localized-expense";
+      return options?.name ? `${key}:${options.name}` : key;
+    },
   }),
 }));
 
@@ -184,6 +189,66 @@ describe("TransactionItem", () => {
     expect(screen.getByTestId("transaction-review-expand-toggle")).toBeTruthy();
   });
 
+  it("exposes selection as an independent accessible checkbox", () => {
+    const onToggleSelect = jest.fn();
+    render(
+      <TransactionItem
+        transaction={createTransaction()}
+        index={0}
+        isSelected
+        accountName="QNB Account"
+        onToggleSelect={onToggleSelect}
+        onPress={jest.fn()}
+        expandedContentTitle="Original SMS"
+        expandedContentBody="Raw message"
+      />
+    );
+
+    expect(
+      screen.getByRole("checkbox", {
+        name: "sms_review_deselect_accessibility:Fixture Shop",
+      })
+    ).toHaveProp("accessibilityState", { checked: true });
+
+    fireEvent.press(
+      screen.getByRole("checkbox", {
+        name: "sms_review_deselect_accessibility:Fixture Shop",
+      })
+    );
+    expect(onToggleSelect).toHaveBeenCalledWith(0);
+  });
+
+  it("localizes the transaction type in the edit accessibility label", () => {
+    renderItem();
+
+    expect(screen.getByTestId("transaction-review-edit-action")).toHaveProp(
+      "accessibilityLabel",
+      expect.stringContaining("localized-expense")
+    );
+  });
+
+  it("exposes SMS expansion as an independent accessible button", () => {
+    renderItem();
+
+    expect(
+      screen.getByRole("button", {
+        name: "sms_review_expand_accessibility:Fixture Shop",
+      })
+    ).toHaveProp("accessibilityState", { expanded: false });
+
+    fireEvent.press(
+      screen.getByRole("button", {
+        name: "sms_review_expand_accessibility:Fixture Shop",
+      })
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "sms_review_collapse_accessibility:Fixture Shop",
+      })
+    ).toHaveProp("accessibilityState", { expanded: true });
+  });
+
   it("keeps the shared row theme-aware outside the SMS workspace", () => {
     renderItem();
 
@@ -207,6 +272,26 @@ describe("TransactionItem", () => {
     expect(screen.getByTestId("transaction-review-row")).toHaveProp(
       "className",
       expect.stringContaining("dark:bg-background-dark")
+    );
+  });
+
+  it("names the affected suggestion in the discard action label", () => {
+    render(
+      <TransactionItem
+        transaction={createTransaction()}
+        index={0}
+        isSelected
+        accountName="QNB Account"
+        onToggleSelect={jest.fn()}
+        onPress={jest.fn()}
+        isSmsWorkspace
+        onDiscard={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("sms-review-discard-0")).toHaveProp(
+      "accessibilityLabel",
+      "sms_review_discard_accessibility:Fixture Shop"
     );
   });
 });

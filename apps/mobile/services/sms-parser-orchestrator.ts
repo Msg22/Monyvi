@@ -35,7 +35,8 @@ import {
 } from "./ai-sms-parser-service";
 import {
   enrichTrustedSmsCategories,
-  MIN_TRUSTED_CATEGORY_CONFIDENCE,
+  MIN_ACCEPTED_CATEGORY_CONFIDENCE,
+  MIN_AUTO_SELECT_CATEGORY_CONFIDENCE,
   TRUSTED_ENRICHED_PURCHASE_CONFIDENCE,
   type TrustedSmsCategoryCandidate,
   type TrustedSmsCategoryEnrichmentResult,
@@ -47,6 +48,8 @@ import {
   revokeAiProcessingConsent,
 } from "./profile-service";
 import { createLocalParserResult } from "./sms-local-parser-adapter";
+import { publishCompletedSmsParserTransactions } from "./sms-parser-progress-service";
+import { hasTrustedPatternEvidence } from "./sms-trusted-pattern-evidence";
 
 import {
   createSmsParserDiagnostics as createDiagnostics,
@@ -78,17 +81,6 @@ export type TrustedPrefilterDisposition =
 const trustedCatalogProvider = createBundledTrustedSmsCatalogProvider(
   QNB_EGYPT_TRUSTED_SMS_CATALOG
 );
-
-function hasTrustedPatternEvidence(
-  result: TrustedSmsParserOutcome | ReturnType<typeof matchTrustedSmsTemplate>
-): boolean {
-  return (
-    result.status === "matched" ||
-    result.status === "rejected" ||
-    result.status === "ambiguous" ||
-    (result.status === "unresolved" && result.patternIds.length > 0)
-  );
-}
 
 export function getTrustedPrefilterDisposition(
   candidate: SmsCandidate,
@@ -149,7 +141,7 @@ function mapTrustedTransaction(
     transaction.messageFamily === "card_purchase" &&
     categoryOutcome !== undefined &&
     Number.isFinite(categoryOutcome.confidence) &&
-    categoryOutcome.confidence >= MIN_TRUSTED_CATEGORY_CONFIDENCE
+    categoryOutcome.confidence >= MIN_ACCEPTED_CATEGORY_CONFIDENCE
       ? context.categories.find(
           (category) =>
             category.isSystem === true &&
@@ -164,7 +156,10 @@ function mapTrustedTransaction(
     acceptedCategory !== undefined && categoryOutcome !== undefined
       ? categoryOutcome
       : undefined;
-  const isAcceptedCategoryOutcome = acceptedCategoryOutcome !== undefined;
+  const requiresCategoryReview =
+    acceptedCategoryOutcome !== undefined &&
+    acceptedCategoryOutcome.confidence <
+      MIN_AUTO_SELECT_CATEGORY_CONFIDENCE;
   const category = acceptedCategory
     ? {
         id: acceptedCategory.id,
@@ -174,11 +169,14 @@ function mapTrustedTransaction(
         transaction.categorySystemName,
         buildCategoryMap(context.categories)
       );
-  const reviewReasons = isAcceptedCategoryOutcome
+  const preservedReviewReasons = acceptedCategoryOutcome !== undefined
     ? transaction.reviewReasons.filter(
         (reason) => reason !== "low_confidence" && reason !== "category_needed"
       )
     : transaction.reviewReasons;
+  const reviewReasons = requiresCategoryReview
+    ? [...preservedReviewReasons, "category_needed" as const]
+    : preservedReviewReasons;
   return {
     amount: transaction.amount,
     currency: normalizeCurrency(transaction.currency),
@@ -187,11 +185,8 @@ function mapTrustedTransaction(
     date: transaction.date,
     categoryId: category.id,
     categoryDisplayName: category.displayName,
-    confidence: isAcceptedCategoryOutcome
-      ? Math.min(
-          TRUSTED_ENRICHED_PURCHASE_CONFIDENCE,
-          clampConfidence(acceptedCategoryOutcome.confidence)
-        )
+    confidence: acceptedCategoryOutcome !== undefined
+      ? TRUSTED_ENRICHED_PURCHASE_CONFIDENCE
       : clampConfidence(transaction.confidence),
     originLabel: candidate.message.address,
     source: "SMS",
@@ -200,7 +195,7 @@ function mapTrustedTransaction(
     senderDisplayName: candidate.message.address,
     rawSmsBody: candidate.message.body,
     reviewStatus:
-      isAcceptedCategoryOutcome && reviewReasons.length === 0
+      acceptedCategoryOutcome !== undefined && reviewReasons.length === 0
         ? "auto_selectable"
         : "needs_review",
     reviewReasons,
@@ -386,7 +381,7 @@ async function runFullAiFallback(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
   localTransactionCount: number,
-  onProgress?: (progress: AiParseProgress) => void,
+  onProgress?: (progress: AiParseProgress) => void | Promise<void>,
   abortSignal?: AbortSignal,
   expectedUserId?: string,
   requestContext?: SmsAiRequestContext,
@@ -444,7 +439,7 @@ async function runFullAiFallback(
 function parseSmsWithPinnedUser(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
-  onProgress?: (progress: AiParseProgress) => void,
+  onProgress?: (progress: AiParseProgress) => void | Promise<void>,
   abortSignal?: AbortSignal,
   expectedUserId?: string,
   requestContext?: SmsAiRequestContext,
@@ -528,7 +523,7 @@ async function reconcileLateRemoteConsentRejection(
 async function parseHybrid(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
-  onProgress?: (progress: AiParseProgress) => void,
+  onProgress?: (progress: AiParseProgress) => void | Promise<void>,
   abortSignal?: AbortSignal,
   options: SmsParserOrchestratorOptions = {}
 ): Promise<SmsParserOrchestratorResult> {
@@ -585,8 +580,20 @@ async function parseHybrid(
   }
   throwIfAborted(abortSignal);
 
+  const localBaselineTransactions = trustedMatches.map(
+    ({ transaction, candidate }) =>
+      mapTrustedTransaction(transaction, candidate, context)
+  );
+  await publishCompletedSmsParserTransactions(
+    onProgress,
+    localBaselineTransactions,
+    aiSelection.admitted.length > 0
+  );
+  throwIfAborted(abortSignal);
+
   const remoteScanSessionReady =
-    aiSelection.admitted.length > 0 && options.ensureRemoteScanSession !== undefined
+    aiSelection.admitted.length > 0 &&
+    options.ensureRemoteScanSession !== undefined
       ? Promise.resolve().then(options.ensureRemoteScanSession)
       : undefined;
   const [categoryResult, aiResult] = await Promise.all([
@@ -743,7 +750,7 @@ function assertExpectedUserId(
 export async function parseSmsWithOrchestrator(
   candidates: readonly SmsCandidate[],
   context: ParseSmsContext,
-  onProgress?: (progress: AiParseProgress) => void,
+  onProgress?: (progress: AiParseProgress) => void | Promise<void>,
   abortSignal?: AbortSignal,
   options: SmsParserOrchestratorOptions = {}
 ): Promise<SmsParserOrchestratorResult> {
@@ -781,10 +788,11 @@ export async function parseSmsWithOrchestrator(
     const result = createLocalParserResult(parserCandidates, context);
     throwIfAborted(abortSignal);
 
-    onProgress?.({
+    await onProgress?.({
       chunksCompleted: 1,
       totalChunks: 1,
       transactionsSoFar: result.transactions.length,
+      completedTransactions: result.transactions,
       chunkDurationMs: 0,
     });
     throwIfAborted(abortSignal);

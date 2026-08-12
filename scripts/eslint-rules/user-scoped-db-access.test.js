@@ -14,6 +14,14 @@ const ruleTester = new RuleTester({
 ruleTester.run("user-scoped-db-access", rule, {
   valid: [
     {
+      filename: "/repo/apps/mobile/services/sms-review-draft-repository.ts",
+      code: `
+        import { database } from "@monyvi/db";
+        const queues = database.get("sms_review_queues");
+        queues.query();
+      `,
+    },
+    {
       code: `
         const scope = await getCurrentUserDataScope();
         const account = await scope.findOwned(database.get("accounts"), id);
@@ -76,6 +84,14 @@ ruleTester.run("user-scoped-db-access", rule, {
     },
   ],
   invalid: [
+    {
+      filename: "/repo/apps/mobile/services/unsafe-sms-review-access.ts",
+      code: `
+        import { database } from "@monyvi/db";
+        database.get("sms_review_draft_items").query();
+      `,
+      errors: [{ messageId: "unsafeAccess" }],
+    },
     {
       code: `
         const account = await database.get("accounts").find(id);

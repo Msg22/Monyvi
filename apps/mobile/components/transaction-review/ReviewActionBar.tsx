@@ -3,7 +3,7 @@ import { palette } from "@/constants/colors";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated, { FadeInDown, ReduceMotion } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 
 export interface ReviewActionBarProps {
@@ -13,7 +13,10 @@ export interface ReviewActionBarProps {
   readonly onSave: () => Promise<void>;
   readonly onDiscard: () => void;
   readonly isSmsWorkspace?: boolean;
+  readonly onReviewLater?: () => void;
 }
+
+export const SMS_REVIEW_ACTION_BAR_HEIGHT = 100;
 
 export function ReviewActionBar({
   selectedCount,
@@ -21,6 +24,7 @@ export function ReviewActionBar({
   isReviewMetadataReady,
   onSave,
   onDiscard,
+  onReviewLater,
 }: ReviewActionBarProps): React.JSX.Element {
   const { showToast } = useToast();
   const { t } = useTranslation("transactions");
@@ -41,7 +45,7 @@ export function ReviewActionBar({
   return (
     <Animated.View
       testID="review-action-bar"
-      entering={FadeInDown.delay(200)}
+      entering={FadeInDown.delay(200).reduceMotion(ReduceMotion.System)}
       className="border-t border-border bg-background px-5 py-2 dark:border-border-dark dark:bg-background-dark"
     >
       <View testID="review-actions-row" className="h-12 flex-row gap-3">
@@ -84,6 +88,19 @@ export function ReviewActionBar({
           </Text>
         </TouchableOpacity>
       </View>
+      {onReviewLater && (
+        <TouchableOpacity
+          testID="sms-review-later"
+          onPress={onReviewLater}
+          disabled={isSaving}
+          activeOpacity={0.7}
+          className="h-9 items-center justify-center"
+        >
+          <Text className="text-sm font-semibold text-nileGreen-600 dark:text-nileGreen-400">
+            {t("sms_review_review_later")}
+          </Text>
+        </TouchableOpacity>
+      )}
     </Animated.View>
   );
 }

@@ -232,8 +232,10 @@ retry unresolved messages, while the notice remains a presentational component.
    local merchant and direction-correct fallback category for every per-
    merchant or endpoint failure. Do not route failed trusted enrichment inputs
    through `parse-sms`.
-7. Assign exact trusted card purchases local extraction confidence `0.98`, then
-   make them auto-selectable only after category confidence reaches `0.90`, the
+7. Assign exact trusted card purchases local extraction confidence `0.98`.
+   Accept allowed category outcomes at confidence `0.50` or higher, keep
+   outcomes below `0.80` review-required with a category-specific reason, and
+   make them auto-selectable only after category confidence reaches `0.80`, the
    account is resolved, and the existing review service finds no other reason.
    Exclude generic fallback categories from acceptance, reject every outcome for
    duplicated response identities, and require account evidence to satisfy the

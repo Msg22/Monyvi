@@ -67,6 +67,32 @@ describe("getTransactionBadges", () => {
     });
   });
 
+  it("shows review category when category is the only concern", () => {
+    expect(
+      getPrimaryTransactionBadge(
+        false,
+        reviewMeta({ reasons: ["category_needed"] }),
+        false
+      )
+    ).toEqual({
+      labelKey: "review_badge_review_category",
+      color: "red",
+    });
+  });
+
+  it("shows review details when category and another concern need review", () => {
+    expect(
+      getPrimaryTransactionBadge(
+        false,
+        reviewMeta({ reasons: ["category_needed", "account_needed"] }),
+        false
+      )
+    ).toEqual({
+      labelKey: "review_badge_review_details",
+      color: "amber",
+    });
+  });
+
   it("marks selected safe rows as auto-selected", () => {
     const badges = getTransactionBadges(
       false,

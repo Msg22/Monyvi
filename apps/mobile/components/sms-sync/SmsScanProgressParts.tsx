@@ -48,7 +48,7 @@ export function ScanningState({
   if (phase === "filtering" && total > 0) {
     percentage = Math.round((scanned / total) * 50);
   } else if (phase === "ai-parsing") {
-    const aiTotal = aiChunksTotal ?? 1;
+    const aiTotal = aiChunksTotal !== undefined && aiChunksTotal > 0 ? aiChunksTotal : 1;
     percentage = 50 + Math.round((aiChunksCompleted / aiTotal) * 50);
   } else if (phase === "complete") {
     percentage = 100;

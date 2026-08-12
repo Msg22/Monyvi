@@ -10,6 +10,9 @@ const DIRECT_USER_OWNED_TABLES = new Set([
   "debts",
   "profiles",
   "recurring_payments",
+  "sms_review_queues",
+  "sms_review_draft_items",
+  "dismissed_sms_fingerprints",
   "transactions",
   "transfers",
   "user_category_settings",
@@ -25,6 +28,7 @@ const MIXED_VISIBILITY_TABLES = new Set(["categories"]);
 
 const ALLOWED_FILE_SUFFIXES = [
   "apps/mobile/services/user-data-access.ts",
+  "apps/mobile/services/sms-review-draft-repository.ts",
   "apps/mobile/services/sync.ts",
 ];
 

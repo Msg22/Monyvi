@@ -1,10 +1,16 @@
-import type { ReviewableTransaction } from "@monyvi/logic";
+import type {
+  ParsedSmsTransaction,
+  ReviewableTransaction,
+} from "@monyvi/logic";
 
 const mockGetCurrentUserId = jest.fn<Promise<string | null>, []>();
 const mockEnsureCashAccount = jest.fn();
 const mockQueryOwned = jest.fn();
 const mockQueryAccessibleCategories = jest.fn();
-const mockHasExistingSmsFingerprint = jest.fn<Promise<boolean>, [string]>();
+const mockHasExistingSmsFingerprint = jest.fn<
+  Promise<boolean>,
+  [string, string?]
+>();
 const mockPrepareTransactionCreate = jest.fn();
 const mockPrepareTransferCreate = jest.fn();
 const mockDatabaseBatch = jest.fn<Promise<void>, [readonly unknown[]]>();
@@ -13,6 +19,7 @@ const mockDatabaseGet = jest.fn();
 
 interface MockAccount {
   readonly id: string;
+  readonly currency: "EGP" | "USD";
   balance: number;
   readonly prepareUpdate: jest.Mock<
     MockAccount,
@@ -36,8 +43,11 @@ jest.mock("@/services/user-data-access", () => ({
 }));
 
 jest.mock("@/services/sms-dedup-service", () => ({
-  hasExistingSmsFingerprint: (smsFingerprint: string): Promise<boolean> =>
-    mockHasExistingSmsFingerprint(smsFingerprint),
+  hasExistingSmsFingerprint: (
+    smsFingerprint: string,
+    expectedUserId?: string
+  ): Promise<boolean> =>
+    mockHasExistingSmsFingerprint(smsFingerprint, expectedUserId),
 }));
 
 jest.mock("@nozbe/watermelondb", () => ({
@@ -62,11 +72,37 @@ jest.mock("@monyvi/db", () => ({
   },
 }));
 
-import { batchCreateTransactions } from "@/services/batch-create-transactions";
+jest.mock("@/services/watermelon-atomic-batch", () => ({
+  commitPreparedBatch: (operations: readonly unknown[]): Promise<void> =>
+    mockDatabaseBatch(operations),
+}));
 
-function createAccount(id: string, balance: number): MockAccount {
+jest.mock("@/services/watermelon-cache-snapshot", () => ({
+  captureCachedModelSnapshot: (model: MockAccount): unknown => ({
+    model,
+    balance: model.balance,
+  }),
+  restoreCachedModelSnapshot: (snapshot: {
+    readonly model: MockAccount;
+    readonly balance: number;
+  }): void => {
+    snapshot.model.balance = snapshot.balance;
+  },
+}));
+
+import {
+  batchCreateTransactions,
+  prepareBatchCreateTransactions,
+} from "@/services/batch-create-transactions";
+
+function createAccount(
+  id: string,
+  balance: number,
+  currency: "EGP" | "USD" = "EGP"
+): MockAccount {
   const account: MockAccount = {
     id,
+    currency,
     balance,
     prepareUpdate: jest.fn((updater: (record: MockAccount) => void) => {
       updater(account);
@@ -105,6 +141,11 @@ describe("batchCreateTransactions", () => {
       await writer();
     });
     mockDatabaseBatch.mockResolvedValue();
+    mockQueryOwned.mockReturnValue({
+      fetch: jest.fn<Promise<readonly MockAccount[]>, []>(() =>
+        Promise.resolve([createAccount("acc-1", 1000)])
+      ),
+    });
     mockQueryAccessibleCategories.mockReturnValue({
       fetch: jest.fn<Promise<ReadonlyArray<{ readonly id: string }>>, []>(() =>
         Promise.resolve([{ id: "cat-food" }])
@@ -189,6 +230,58 @@ describe("batchCreateTransactions", () => {
       smsFingerprint: "sms-hash-1",
     });
     expect(persistedRecord).not.toHaveProperty("rawSmsBody");
+  });
+
+  it("rejects a mapped account whose currency differs from the transaction", async () => {
+    const usdAccount = createAccount("acc-usd", 1000, "USD");
+    mockQueryOwned.mockReturnValue({
+      fetch: jest.fn<Promise<readonly MockAccount[]>, []>(() =>
+        Promise.resolve([usdAccount])
+      ),
+    });
+
+    const result = await batchCreateTransactions(
+      [createReviewableTransaction({ currency: "EGP" })],
+      new Map([[0, "acc-usd"]])
+    );
+
+    expect(result.savedCount).toBe(0);
+    expect(result.failedCount).toBe(1);
+    expect(result.errors).toEqual([
+      "Account currency mismatch for transaction index 0",
+    ]);
+    expect(mockPrepareTransactionCreate).not.toHaveBeenCalled();
+    expect(usdAccount.balance).toBe(1000);
+  });
+
+  it("uses the canonical SMS fingerprint when the compatibility hash is absent", async () => {
+    const account = createAccount("acc-1", 1000);
+    mockQueryOwned.mockReturnValue({
+      fetch: jest.fn<Promise<readonly MockAccount[]>, []>(() =>
+        Promise.resolve([account])
+      ),
+    });
+    const transaction: ParsedSmsTransaction = {
+      ...createReviewableTransaction({ deduplicationHash: undefined }),
+      source: "SMS",
+      smsFingerprint: "canonical-sms-fingerprint",
+      senderDisplayName: "QNB EGYPT",
+      rawSmsBody: "Private SMS body",
+    };
+
+    const result = await batchCreateTransactions(
+      [transaction],
+      new Map([[0, "acc-1"]])
+    );
+
+    expect(result).toEqual({ savedCount: 1, failedCount: 0, errors: [] });
+    expect(mockHasExistingSmsFingerprint).toHaveBeenCalledWith(
+      "canonical-sms-fingerprint",
+      "user-1"
+    );
+    expect(mockPrepareTransactionCreate.mock.results[0]?.value).toMatchObject({
+      smsFingerprint: "canonical-sms-fingerprint",
+    });
   });
 
   it("does not mark a fingerprint as seen until the SMS transaction is valid", async () => {
@@ -317,5 +410,49 @@ describe("batchCreateTransactions", () => {
     expect(result).toEqual({ savedCount: 0, failedCount: 0, errors: [] });
     expect(mockPrepareTransactionCreate).not.toHaveBeenCalled();
     expect(mockDatabaseBatch).not.toHaveBeenCalled();
+  });
+
+  it("reports fingerprints that were already saved before preparation", async () => {
+    mockHasExistingSmsFingerprint.mockResolvedValue(true);
+
+    const prepared = await prepareBatchCreateTransactions(
+      [createReviewableTransaction()],
+      new Map([[0, "acc-1"]])
+    );
+
+    expect(prepared.alreadySavedSmsFingerprints).toEqual(
+      new Set(["sms-hash-1"])
+    );
+  });
+
+  it("rejects an amount above the canonical transaction limit", async () => {
+    const result = await batchCreateTransactions(
+      [createReviewableTransaction({ amount: 1_000_000_001 })],
+      new Map([[0, "acc-1"]])
+    );
+
+    expect(result.savedCount).toBe(0);
+    expect(result.failedCount).toBe(1);
+    expect(result.errors).toEqual(["Invalid amount for transaction index 0"]);
+    expect(mockDatabaseBatch).not.toHaveBeenCalled();
+  });
+
+  it("restores cached account balances when the adapter batch fails", async () => {
+    const account = createAccount("acc-1", 1000);
+    mockQueryOwned.mockReturnValue({
+      fetch: jest.fn<Promise<readonly MockAccount[]>, []>(() =>
+        Promise.resolve([account])
+      ),
+    });
+    mockDatabaseBatch.mockRejectedValueOnce(new Error("adapter failed"));
+
+    await expect(
+      batchCreateTransactions(
+        [createReviewableTransaction()],
+        new Map([[0, "acc-1"]])
+      )
+    ).rejects.toThrow("adapter failed");
+
+    expect(account.balance).toBe(1000);
   });
 });

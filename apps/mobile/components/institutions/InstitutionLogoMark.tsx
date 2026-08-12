@@ -75,13 +75,15 @@ export function InstitutionLogoMark({
       ? (logo?.presentation?.rowImageResizeMode ?? "contain")
       : "contain";
   const imageSizeClassName = getImageSizeClassName(logo, size, appLogoViewport);
+  const isBundledImageSource =
+    imageSource !== undefined && logo?.appSource === imageSource;
   const [isImageLoading, setIsImageLoading] = useState(
-    imageSource !== undefined
+    imageSource !== undefined && !isBundledImageSource
   );
 
   useEffect(() => {
-    setIsImageLoading(imageSource !== undefined);
-  }, [imageSource]);
+    setIsImageLoading(imageSource !== undefined && !isBundledImageSource);
+  }, [imageSource, isBundledImageSource]);
 
   return (
     <View
@@ -112,7 +114,9 @@ export function InstitutionLogoMark({
             resizeMode={imageResizeMode}
             className={imageSizeClassName}
             testID={testID ? `${testID} image` : undefined}
-            onLoadStart={() => setIsImageLoading(true)}
+            onLoadStart={() => {
+              if (!isBundledImageSource) setIsImageLoading(true);
+            }}
             onLoadEnd={() => setIsImageLoading(false)}
             onError={() => setIsImageLoading(false)}
           />

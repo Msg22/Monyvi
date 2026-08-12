@@ -1,4 +1,5 @@
 import type {
+  ParsedSmsTransaction,
   ReviewableTransaction,
   TransactionReviewReason as ParserReviewReason,
 } from "@monyvi/logic";
@@ -6,6 +7,7 @@ import type {
   TransactionReviewMeta,
   TransactionReviewReason,
 } from "@/contracts/transaction-review";
+import type { TransactionEdits } from "@/services/sms-edit-modal-service";
 
 export type {
   TransactionReviewMeta,
@@ -20,6 +22,50 @@ export interface TransactionReviewAccountMatch {
 export interface TransactionReviewResolutionContext {
   readonly hasCategoryOverride?: boolean;
   readonly hasCashDestinationOverride?: boolean;
+}
+
+export function getDurableTransactionOverrides(
+  transactions: readonly ReviewableTransaction[]
+): ReadonlyMap<number, TransactionEdits> {
+  const overrides = new Map<number, TransactionEdits>();
+  transactions.forEach((transaction, index) => {
+    if (transaction.source !== "SMS") return;
+    const smsTransaction = transaction as ParsedSmsTransaction;
+    if (
+      !transaction.accountId &&
+      !smsTransaction.pendingAccount &&
+      !smsTransaction.toAccountId &&
+      !smsTransaction.toAccountName?.trim() &&
+      smsTransaction.categoryConfirmed !== true
+    ) {
+      return;
+    }
+
+    overrides.set(index, {
+      amount: transaction.amount,
+      currency: transaction.currency,
+      counterparty: transaction.counterparty,
+      categoryId: transaction.categoryId,
+      type: transaction.type,
+      categoryConfirmed:
+        smsTransaction.categoryConfirmed === true ? true : undefined,
+      accountId:
+        smsTransaction.pendingAccount?.tempId ?? transaction.accountId ?? null,
+      accountName: smsTransaction.pendingAccount?.name ?? null,
+      accountConfirmed:
+        smsTransaction.pendingAccount || transaction.accountId
+          ? true
+          : undefined,
+      toAccountId: smsTransaction.toAccountId,
+      toAccountName: smsTransaction.toAccountName,
+      toAccountConfirmed:
+        smsTransaction.toAccountId || smsTransaction.toAccountName?.trim()
+          ? true
+          : undefined,
+      pendingAccount: smsTransaction.pendingAccount,
+    });
+  });
+  return overrides;
 }
 
 export function resolveEditedAccountMatch<
@@ -183,6 +229,58 @@ export function buildAutoSelectedIndices(
   });
 
   return selected;
+}
+
+const HARD_VALIDATION_REASONS: ReadonlySet<TransactionReviewReason> = new Set([
+  "account_needed",
+  "category_needed",
+  "cash_transfer",
+]);
+
+export interface SeedTransactionReviewSelectionInput {
+  readonly transactionCount: number;
+  readonly previousCount: number;
+  readonly currentSelectedIndices: ReadonlySet<number>;
+  readonly selectionOverrides: ReadonlyMap<number, boolean | null>;
+  readonly autoSelectedIndices: ReadonlySet<number>;
+  readonly reviewMetaByIndex: ReadonlyMap<number, TransactionReviewMeta>;
+}
+
+export interface SeedTransactionReviewSelectionResult {
+  readonly selectedIndices: ReadonlySet<number>;
+  readonly clearedHardInvalidIndices: readonly number[];
+}
+
+export function seedTransactionReviewSelection(
+  input: SeedTransactionReviewSelectionInput
+): SeedTransactionReviewSelectionResult {
+  const selected =
+    input.previousCount === 0
+      ? new Set<number>()
+      : new Set(input.currentSelectedIndices);
+  const clearedHardInvalidIndices: number[] = [];
+
+  for (let index = 0; index < input.transactionCount; index += 1) {
+    const override = input.selectionOverrides.get(index);
+    const hasHardValidation =
+      input.reviewMetaByIndex
+        .get(index)
+        ?.reasons.some((reason) => HARD_VALIDATION_REASONS.has(reason)) ??
+      false;
+    if (override === true && hasHardValidation) {
+      selected.delete(index);
+      clearedHardInvalidIndices.push(index);
+    } else if (override === true) {
+      selected.add(index);
+    } else if (override === false) {
+      selected.delete(index);
+    } else if (index >= input.previousCount) {
+      if (input.autoSelectedIndices.has(index)) selected.add(index);
+      else selected.delete(index);
+    }
+  }
+
+  return { selectedIndices: selected, clearedHardInvalidIndices };
 }
 
 export function isResolvedAccountMatch(

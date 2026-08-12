@@ -21,6 +21,7 @@ import type {
 } from "@monyvi/logic";
 import type {
   AiParseResult,
+  AiParseProgress,
   ParseSmsContext,
   SmsCandidate,
 } from "@/services/ai-sms-parser-service";
@@ -68,16 +69,10 @@ function getAsyncStorageMocks(): {
 }
 
 // ---------------------------------------------------------------------------
-// Mock: react-native (InteractionManager + Platform)
+// Mock: react-native
 // ---------------------------------------------------------------------------
 
 jest.mock("react-native", () => ({
-  InteractionManager: {
-    runAfterInteractions: jest.fn((cb: () => void) => {
-      cb();
-      return { cancel: jest.fn() };
-    }),
-  },
   Platform: { OS: "android" },
 }));
 
@@ -132,6 +127,53 @@ jest.mock("@/services/sms-scan-checkpoint-coordinator", () => ({
 jest.mock("@/services/sms-oversized-outcome-service", () => ({
   recordOversizedSmsOutcome: (...args: readonly unknown[]): unknown =>
     mockRecordOversizedSmsOutcome(...args),
+}));
+
+const mockGetHandledSmsReviewFingerprints = jest.fn<
+  Promise<ReadonlySet<string>>,
+  [string]
+>(() => Promise.resolve(new Set()));
+const mockUnsafeFetchRaw = jest.fn<Promise<readonly unknown[]>, []>(() =>
+  Promise.resolve([])
+);
+const mockMergeSmsReviewDrafts = jest.fn<
+  Promise<{
+    readonly insertedCount: number;
+    readonly existingCount: number;
+    readonly rejectedCount: number;
+    readonly reviewableFingerprints: readonly string[];
+  }>,
+  [
+    {
+      readonly transactions: readonly ParsedSmsTransaction[];
+      readonly baselineTransactions?: readonly ParsedSmsTransaction[];
+    },
+  ]
+>((input) =>
+  Promise.resolve({
+    insertedCount: input.transactions.length,
+    existingCount: 0,
+    rejectedCount: 0,
+    reviewableFingerprints: input.transactions.map(
+      (transaction) => transaction.smsFingerprint
+    ),
+  })
+);
+
+jest.mock("@/services/sms-review-draft-repository", () => ({
+  getHandledSmsReviewFingerprints: (
+    expectedUserId: string
+  ): Promise<ReadonlySet<string>> =>
+    mockGetHandledSmsReviewFingerprints(expectedUserId),
+  mergeSmsReviewDrafts: (input: {
+    readonly transactions: readonly ParsedSmsTransaction[];
+    readonly baselineTransactions?: readonly ParsedSmsTransaction[];
+  }): Promise<{
+    readonly insertedCount: number;
+    readonly existingCount: number;
+    readonly rejectedCount: number;
+    readonly reviewableFingerprints: readonly string[];
+  }> => mockMergeSmsReviewDrafts(input),
 }));
 
 // ---------------------------------------------------------------------------
@@ -264,7 +306,7 @@ jest.mock("@monyvi/db", () => ({
   database: {
     get: jest.fn().mockReturnValue({
       query: jest.fn().mockReturnValue({
-        unsafeFetchRaw: jest.fn().mockResolvedValue([]),
+        unsafeFetchRaw: mockUnsafeFetchRaw,
         fetch: jest.fn().mockResolvedValue([]),
       }),
     }),
@@ -277,17 +319,15 @@ jest.mock("@/services/user-data-access", () => ({
     Promise.resolve({
       userId: "user-a",
       queryOwned: (
-        collection: {
-          query: (...conditions: readonly unknown[]) => {
-            unsafeFetchRaw: jest.Mock<Promise<readonly unknown[]>, []>;
-            fetch: jest.Mock<Promise<readonly unknown[]>, []>;
-          };
-        },
-        ...conditions: unknown[]
+        _collection: unknown,
+        ..._conditions: unknown[]
       ): {
         unsafeFetchRaw: jest.Mock<Promise<readonly unknown[]>, []>;
         fetch: jest.Mock<Promise<readonly unknown[]>, []>;
-      } => collection.query(...conditions),
+      } => ({
+        unsafeFetchRaw: mockUnsafeFetchRaw,
+        fetch: jest.fn(() => Promise.resolve([])),
+      }),
     })
   ),
   assertExpectedCurrentUser: jest.fn(() => Promise.resolve()),
@@ -361,6 +401,18 @@ function defaultOptions(overrides: Record<string, unknown> = {}): {
 describe("sms-sync-service", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetHandledSmsReviewFingerprints.mockResolvedValue(new Set());
+    mockUnsafeFetchRaw.mockResolvedValue([]);
+    mockMergeSmsReviewDrafts.mockImplementation((input) =>
+      Promise.resolve({
+        insertedCount: input.transactions.length,
+        existingCount: 0,
+        rejectedCount: 0,
+        reviewableFingerprints: input.transactions.map(
+          (transaction) => transaction.smsFingerprint
+        ),
+      })
+    );
     mockReadSmsInbox.mockResolvedValue([]);
     mockIsKnownFinancialSender.mockReturnValue(true);
     mockIsLikelyCorruptedSmsText.mockReturnValue(false);
@@ -390,6 +442,14 @@ describe("sms-sync-service", () => {
   // scanAndParseSms — Core Pipeline
   // =========================================================================
   describe("scanAndParseSms", () => {
+    it("pins review fingerprint deduplication to the initiating user", async () => {
+      await scanAndParseSms(defaultOptions());
+
+      expect(mockGetHandledSmsReviewFingerprints).toHaveBeenCalledWith(
+        "user-a"
+      );
+    });
+
     it("should return empty result for an empty inbox", async () => {
       mockReadSmsInbox.mockResolvedValue([]);
 
@@ -755,7 +815,9 @@ describe("sms-sync-service", () => {
         .mockResolvedValueOnce("existing-hash-1")
         .mockResolvedValueOnce("new-hash-2");
 
-      const existingFingerprints = new Set(["existing-hash-1"]);
+      mockUnsafeFetchRaw
+        .mockResolvedValueOnce([{ sms_fingerprint: "existing-hash-1" }])
+        .mockResolvedValueOnce([]);
 
       // Only sms2 should reach AI (sms1 was deduped)
       const parsed = createParsedTransaction({ amount: 200 });
@@ -763,9 +825,7 @@ describe("sms-sync-service", () => {
         transactions: [parsed],
       });
 
-      const result = await scanAndParseSms(
-        defaultOptions({ existingFingerprints })
-      );
+      const result = await scanAndParseSms(defaultOptions());
 
       // Only 1 candidate should have been sent to AI
       expect(mockParseSmsWithOrchestrator).toHaveBeenCalledTimes(1);
@@ -958,17 +1018,12 @@ describe("sms-sync-service", () => {
       ).toEqual([100]);
     });
 
-    it("loads current-user fingerprints when existing fingerprints are not supplied", async () => {
-      const userDataAccessMock = jest.requireMock<{
-        getCurrentUserDataScope: jest.Mock;
-      }>("@/services/user-data-access");
+    it("loads handled draft fingerprints when none are supplied", async () => {
       mockReadSmsInbox.mockResolvedValue([]);
 
       await scanAndParseSms(defaultOptions());
 
-      expect(userDataAccessMock.getCurrentUserDataScope).toHaveBeenCalledTimes(
-        1
-      );
+      expect(mockGetHandledSmsReviewFingerprints).toHaveBeenCalledTimes(1);
     });
 
     it("should use default maxCount (2000) when not specified", async () => {
@@ -1044,10 +1099,15 @@ describe("sms-sync-service", () => {
   // scanAndParseSms — UI Thread Yielding
   // =========================================================================
   describe("UI thread yielding", () => {
-    it("should yield to InteractionManager after yieldInterval batches", async () => {
-      const { InteractionManager } = jest.requireMock<{
-        InteractionManager: { runAfterInteractions: jest.Mock };
-      }>("react-native");
+    it("should yield with requestIdleCallback after yieldInterval batches", async () => {
+      const requestIdleCallback = jest.fn((callback: IdleRequestCallback) => {
+        callback({ didTimeout: false, timeRemaining: () => 10 });
+        return 1;
+      });
+      Object.defineProperty(globalThis, "requestIdleCallback", {
+        configurable: true,
+        value: requestIdleCallback,
+      });
 
       // 6 messages, batchSize=1, yieldInterval=2 → yield at batch 2, 4, 6
       const messages = Array.from({ length: 6 }, (_, i) =>
@@ -1057,7 +1117,8 @@ describe("sms-sync-service", () => {
 
       await scanAndParseSms(defaultOptions({ batchSize: 1, yieldInterval: 2 }));
 
-      expect(InteractionManager.runAfterInteractions).toHaveBeenCalledTimes(8);
+      expect(requestIdleCallback).toHaveBeenCalledTimes(8);
+      Reflect.deleteProperty(globalThis, "requestIdleCallback");
     });
   });
 
@@ -1096,6 +1157,78 @@ describe("sms-sync-service", () => {
       const { removeItem } = getAsyncStorageMocks();
       expect(removeItem).toHaveBeenCalledWith("@monyvi/sms_scan_in_progress");
     });
+  });
+
+  it("persists a completed AI chunk before a later parser abort", async () => {
+    const completedTransaction = createParsedTransaction({
+      smsFingerprint: "fp-completed-chunk",
+    });
+    mockReadSmsInbox.mockResolvedValue([createSmsMessage()]);
+    mockParseSmsWithOrchestrator.mockImplementationOnce(async (...args) => {
+      const onProgress = args[2] as
+        | ((progress: AiParseProgress) => void | Promise<void>)
+        | undefined;
+      await onProgress?.({
+        chunksCompleted: 1,
+        totalChunks: 2,
+        transactionsSoFar: 1,
+        completedTransactions: [completedTransaction],
+        chunkDurationMs: 10,
+      });
+      const abortError = new Error("aborted after one chunk");
+      abortError.name = "AbortError";
+      throw abortError;
+    });
+
+    await expect(scanAndParseSms(defaultOptions())).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(mockMergeSmsReviewDrafts).toHaveBeenCalledWith(
+      expect.objectContaining({ transactions: [completedTransaction] })
+    );
+  });
+
+  it("refreshes an untouched local baseline after final enrichment", async () => {
+    const baselineTransaction = createParsedTransaction({
+      smsFingerprint: "fp-local-baseline",
+      categoryId: "other",
+      categoryDisplayName: "Other",
+    });
+    const enrichedTransaction = createParsedTransaction({
+      smsFingerprint: "fp-local-baseline",
+      categoryId: "cat-shopping",
+      categoryDisplayName: "Shopping",
+    });
+    mockReadSmsInbox.mockResolvedValue([createSmsMessage()]);
+    mockParseSmsWithOrchestrator.mockImplementationOnce(async (...args) => {
+      const onProgress = args[2] as
+        | ((progress: AiParseProgress) => void | Promise<void>)
+        | undefined;
+      await onProgress?.({
+        chunksCompleted: 0,
+        totalChunks: 0,
+        transactionsSoFar: 1,
+        completedTransactions: [baselineTransaction],
+        chunkDurationMs: 0,
+      });
+      return {
+        transactions: [enrichedTransaction],
+        unresolvedCandidates: [],
+      };
+    });
+
+    await scanAndParseSms(defaultOptions());
+
+    expect(mockMergeSmsReviewDrafts).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ transactions: [baselineTransaction] })
+    );
+    expect(mockMergeSmsReviewDrafts).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        transactions: [enrichedTransaction],
+        baselineTransactions: [baselineTransaction],
+      })
+    );
   });
 
   // =========================================================================

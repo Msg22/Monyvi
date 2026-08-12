@@ -701,7 +701,7 @@ export default function SettingsScreen(): React.JSX.Element {
     shouldResumeAiConsentAfterPrivacyDetails.current =
       isAiConsentSheetVisible || pendingAiConsentAction !== null;
     setIsAiConsentSheetVisible(false);
-    router.push("/ai-privacy-details");
+    router.push("/privacy-details");
   }, [isAiConsentSheetVisible, pendingAiConsentAction]);
 
   const currencyInfo = CURRENCY_INFO_MAP[preferredCurrency];

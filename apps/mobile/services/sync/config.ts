@@ -37,6 +37,9 @@ export const EXCLUDED_TABLES = [
   "sms_ai_work_requests",
   "sms_ai_usage_events",
   "sms_ai_scan_sessions",
+  "sms_review_queues",
+  "sms_review_draft_items",
+  "dismissed_sms_fingerprints",
 ] as const;
 export const SNAPSHOT_TABLES = [
   "daily_snapshot_assets",

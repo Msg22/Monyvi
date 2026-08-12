@@ -79,11 +79,24 @@ jest.mock("@/services/supabase", () => ({
 }));
 
 jest.mock("@/services/user-data-access", () => ({
+  assertExpectedCurrentUser: (): Promise<void> => Promise.resolve(),
   queryOwned: jest.fn(() => ({
     fetch: jest.fn(
       (): Promise<MockAccountRow[]> => Promise.resolve(mockOwnedAccounts)
     ),
   })),
+}));
+
+jest.mock("@/services/watermelon-atomic-batch", () => ({
+  commitPreparedBatch: (
+    operations: readonly MockPreparedRecord[]
+  ): Promise<void> => {
+    const { database } = jest.requireMock<{
+      readonly database: { batch: jest.Mock };
+    }>("@monyvi/db");
+    database.batch(operations);
+    return Promise.resolve();
+  },
 }));
 
 jest.mock("i18next", () => ({
@@ -98,6 +111,7 @@ jest.mock("i18next", () => ({
 
 import {
   persistPendingAccounts,
+  preparePendingAccounts,
   type PendingAccount,
 } from "@/services/pending-account-service";
 
@@ -268,6 +282,29 @@ describe("persistPendingAccounts", () => {
     expect(result.createdCount).toBe(2);
     expect(result.tempToRealIdMap.get("temp-cib-1")).toBe("new-accounts-1");
     expect(result.tempToRealIdMap.get("temp-qnb-1")).toBe("new-accounts-4");
+  });
+
+  it("aggregates initial balances when duplicate pending accounts share one prepared account", async () => {
+    const result = await preparePendingAccounts(
+      [
+        buildPendingAccount({ tempId: "temp-bank-1" }),
+        buildPendingAccount({ tempId: "temp-bank-2" }),
+      ],
+      {
+        initialBalanceByTempId: new Map([
+          ["temp-bank-1", -100],
+          ["temp-bank-2", -200],
+        ]),
+      }
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.createdCount).toBe(1);
+    expect(result.tempToRealIdMap.get("temp-bank-1")).toBe("new-accounts-1");
+    expect(result.tempToRealIdMap.get("temp-bank-2")).toBe("new-accounts-1");
+    expect(mockCreatedRecords.accounts?.[0]).toEqual(
+      expect.objectContaining({ balance: -300 })
+    );
   });
 
   it("rejects intra-batch manual accounts with the same name and currency but different types", async () => {

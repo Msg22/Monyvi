@@ -1,6 +1,10 @@
 import { database, type Transaction, type Transfer } from "@monyvi/db";
 import { Q } from "@nozbe/watermelondb";
-import { getCurrentUserDataScope } from "./user-data-access";
+import {
+  assertExpectedCurrentUser,
+  getCurrentUserDataScope,
+  USER_DATA_ACCESS_ERROR_CODES,
+} from "./user-data-access";
 
 /**
  * Check whether an SMS has already produced a transaction or transfer.
@@ -9,9 +13,12 @@ export async function hasExistingSmsFingerprint(
   smsFingerprint: string,
   expectedUserId?: string
 ): Promise<boolean> {
+  if (expectedUserId !== undefined) {
+    await assertExpectedCurrentUser(expectedUserId);
+  }
   const scope = await getCurrentUserDataScope();
   if (expectedUserId !== undefined && scope.userId !== expectedUserId) {
-    return false;
+    throw new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
   }
 
   const [transactionCount, transferCount] = await Promise.all([
@@ -30,6 +37,9 @@ export async function hasExistingSmsFingerprint(
       )
       .fetchCount(),
   ]);
+  if (expectedUserId !== undefined) {
+    await assertExpectedCurrentUser(expectedUserId);
+  }
 
   return transactionCount > 0 || transferCount > 0;
 }

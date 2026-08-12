@@ -34,7 +34,12 @@ import { formatCurrency, type ReviewableTransaction } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import React, { memo, useCallback, useState } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import {
+  type GestureResponderEvent,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import type { TransactionReviewMeta } from "@/contracts/transaction-review";
 import {
@@ -72,6 +77,7 @@ interface TransactionItemProps {
   readonly reviewMeta?: TransactionReviewMeta;
   readonly isSmsWorkspace?: boolean;
   readonly institutionLogo?: InstitutionLogo | null;
+  readonly onDiscard?: (index: number, wasSelected: boolean) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -194,6 +200,8 @@ function TransactionItemInner({
   hasMissingInfo = false,
   reviewMeta,
   institutionLogo = null,
+  isSmsWorkspace = false,
+  onDiscard,
 }: TransactionItemProps): React.JSX.Element {
   const [isExpanded, setIsExpanded] = useState(false);
   const { language } = useLocale();
@@ -201,6 +209,8 @@ function TransactionItemInner({
   const isExpense = transaction.type === "EXPENSE";
   const isVoice = transaction.source === "VOICE";
   const hasExpandableContent = !isVoice && !!expandedContentBody;
+  const accessibleName =
+    transaction.counterparty?.trim() || transaction.originLabel;
 
   const primaryBadge = getPrimaryTransactionBadge(
     hasMissingInfo,
@@ -220,6 +230,14 @@ function TransactionItemInner({
     onToggleSelect(index);
   }, [onToggleSelect, index]);
 
+  const handleDiscard = useCallback(
+    (event: GestureResponderEvent): void => {
+      event.stopPropagation();
+      onDiscard?.(index, isSelected);
+    },
+    [index, isSelected, onDiscard]
+  );
+
   const counterpartyText = isVoice
     ? transaction.counterparty
     : transaction.counterparty || "Unknown";
@@ -229,25 +247,35 @@ function TransactionItemInner({
       testID="transaction-review-row"
       className="overflow-hidden border-b border-border bg-background dark:border-border-dark dark:bg-background-dark"
     >
-      <TouchableOpacity
-        onPress={handlePress}
-        className="flex-row items-center px-4 py-2"
-        activeOpacity={0.7}
-        accessible
-        accessibilityRole="button"
-        accessibilityLanguage={language}
-        accessibilityLabel={`${transaction.originLabel}, ${isExpense ? "expense" : "income"} ${formatCurrency({ amount: transaction.amount, currency: transaction.currency })}, ${counterpartyText ?? ""}, ${transaction.categoryDisplayName}${accountName ? `, ${accountName}` : ""}`}
-        accessibilityHint={t("tap_to_edit_transaction")}
-        accessibilityState={{ selected: isSelected }}
-      >
+      {isSmsWorkspace && onDiscard && (
+        <TouchableOpacity
+          testID={`sms-review-discard-${index}`}
+          onPress={handleDiscard}
+          hitSlop={10}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={t("sms_review_discard_accessibility", {
+            name: transaction.counterparty || transaction.originLabel,
+          })}
+          className="absolute end-2 top-2 z-10 h-8 w-8 items-center justify-center rounded-full border border-red-500/40 bg-background dark:bg-background-dark"
+        >
+          <Ionicons name="close" size={18} color={palette.red[400]} />
+        </TouchableOpacity>
+      )}
+      <View className="relative flex-row items-center px-4 py-2">
         {/* Checkbox */}
         <TouchableOpacity
           onPress={handleToggle}
-          hitSlop={8}
-          className="me-2"
+          className="-ms-2 me-0 h-11 w-11 items-center justify-center"
           activeOpacity={0.7}
-          accessible={false}
-          importantForAccessibility="no"
+          accessibilityRole="checkbox"
+          accessibilityLabel={t(
+            isSelected
+              ? "sms_review_deselect_accessibility"
+              : "sms_review_select_accessibility",
+            { name: accessibleName }
+          )}
+          accessibilityState={{ checked: isSelected }}
         >
           <View
             className={`h-6 w-6 items-center justify-center rounded-md border-2 ${
@@ -262,131 +290,160 @@ function TransactionItemInner({
           </View>
         </TouchableOpacity>
 
-        <InstitutionLogoMark
-          logo={institutionLogo}
-          size="compact"
-          testID="transaction-review-provider-logo"
-          accessibilityLabel={`${transaction.originLabel} logo`}
-          containerClassName="me-2"
-          defaultSurfaceClassName="border-border bg-surface dark:border-border-dark dark:bg-surface-dark"
-          fallback={
-            <Ionicons
-              name={
-                transaction.source === "VOICE" ? "mic-outline" : "card-outline"
-              }
-              size={22}
-              color={palette.slate[400]}
-            />
-          }
-        />
+        <TouchableOpacity
+          testID="transaction-review-edit-action"
+          onPress={handlePress}
+          className="min-w-0 flex-1 flex-row items-center"
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLanguage={language}
+          accessibilityLabel={`${transaction.originLabel}, ${t(
+            isExpense ? "expense" : "income"
+          )} ${formatCurrency({ amount: transaction.amount, currency: transaction.currency })}, ${counterpartyText ?? ""}, ${transaction.categoryDisplayName}${accountName ? `, ${accountName}` : ""}`}
+          accessibilityHint={t("tap_to_edit_transaction")}
+        >
+          <InstitutionLogoMark
+            logo={institutionLogo}
+            size="compact"
+            testID="transaction-review-provider-logo"
+            accessibilityLabel={`${transaction.originLabel} logo`}
+            containerClassName="me-2"
+            defaultSurfaceClassName="border-border bg-surface dark:border-border-dark dark:bg-surface-dark"
+            fallback={
+              <Ionicons
+                name={
+                  transaction.source === "VOICE"
+                    ? "mic-outline"
+                    : "card-outline"
+                }
+                size={22}
+                color={palette.slate[400]}
+              />
+            }
+          />
 
-        {/* Content */}
-        <View className="flex-1">
-          <View className="flex-row items-start gap-2">
-            <View className="min-w-0 flex-1">
-              <Text
-                className="text-base font-bold text-slate-900 dark:text-white"
-                numberOfLines={1}
-              >
-                {isVoice && "note" in transaction
-                  ? (transaction as { note: string }).note ||
-                    transaction.counterparty ||
-                    transaction.originLabel
-                  : transaction.originLabel}
-              </Text>
+          {/* Content */}
+          <View className="flex-1">
+            <View className="flex-row items-start gap-2">
+              <View className="min-w-0 flex-1">
+                <Text
+                  className="text-base font-bold text-slate-900 dark:text-white"
+                  numberOfLines={1}
+                >
+                  {isVoice && "note" in transaction
+                    ? (transaction as { note: string }).note ||
+                      transaction.counterparty ||
+                      transaction.originLabel
+                    : transaction.originLabel}
+                </Text>
 
-              <Text
-                className="mt-0.5 text-xs text-text-secondary dark:text-text-secondary-dark"
-                numberOfLines={1}
-              >
-                {formatReviewDateTime(
-                  transaction.date,
-                  t("review_date_today"),
-                  t("review_date_yesterday"),
-                  language
-                )}
-              </Text>
-            </View>
+                <Text
+                  className="mt-0.5 text-xs text-text-secondary dark:text-text-secondary-dark"
+                  numberOfLines={1}
+                >
+                  {formatReviewDateTime(
+                    transaction.date,
+                    t("review_date_today"),
+                    t("review_date_yesterday"),
+                    language
+                  )}
+                </Text>
+              </View>
 
-            <View className="max-w-32 items-end">
-              <Text
-                testID="transaction-review-amount"
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.75}
-                className={`text-base font-semibold ${
-                  isExpense
-                    ? "text-red-600 dark:text-red-400"
-                    : "text-nileGreen-600 dark:text-nileGreen-400"
-                }`}
-              >
-                {isExpense ? "-" : "+"}
-                {formatCurrency({
-                  amount: transaction.amount,
-                  currency: transaction.currency,
-                })}
-              </Text>
-              {primaryBadge && (
-                <View className="mt-1.5 items-end">
-                  <TransactionBadge
-                    data={primaryBadge}
-                    label={t(primaryBadge.labelKey)}
-                  />
-                </View>
-              )}
-            </View>
-          </View>
-
-          <View className="mt-1.5 flex-row items-center gap-1.5 overflow-hidden">
-            <View className="max-w-24 shrink-0 rounded-md border border-border bg-surface px-2 py-0.5 dark:border-border-dark dark:bg-surface-dark">
-              <Text
-                numberOfLines={1}
-                className="text-xs text-text-secondary dark:text-text-secondary-dark"
-              >
-                {transaction.categoryDisplayName}
-              </Text>
-            </View>
-
-            {accountName && (
               <View
-                testID="transaction-account-match"
-                className="min-w-0 shrink rounded-md border border-border bg-surface px-2 py-0.5 dark:border-border-dark dark:bg-surface-dark"
+                className={`max-w-32 items-end ${isSmsWorkspace ? "me-8" : ""}`}
               >
                 <Text
+                  testID="transaction-review-amount"
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.75}
+                  className={`text-base font-semibold ${
+                    isExpense
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-nileGreen-600 dark:text-nileGreen-400"
+                  }`}
+                >
+                  {isExpense ? "-" : "+"}
+                  {formatCurrency({
+                    amount: transaction.amount,
+                    currency: transaction.currency,
+                  })}
+                </Text>
+                {primaryBadge && (
+                  <View className="mt-1.5 items-end">
+                    <TransactionBadge
+                      data={primaryBadge}
+                      label={t(primaryBadge.labelKey)}
+                    />
+                  </View>
+                )}
+              </View>
+            </View>
+
+            <View
+              className={`mt-1.5 flex-row items-center gap-1.5 overflow-hidden ${
+                hasExpandableContent ? "pe-8" : ""
+              }`}
+            >
+              <View className="max-w-24 shrink-0 rounded-md border border-border bg-surface px-2 py-0.5 dark:border-border-dark dark:bg-surface-dark">
+                <Text
+                  numberOfLines={1}
                   className="text-xs text-text-secondary dark:text-text-secondary-dark"
                 >
-                  {accountName}
+                  {transaction.categoryDisplayName}
                 </Text>
               </View>
-            )}
 
-            {hasExpandableContent && (
-              <>
+              {accountName && (
+                <View
+                  testID="transaction-account-match"
+                  className="min-w-0 shrink rounded-md border border-border bg-surface px-2 py-0.5 dark:border-border-dark dark:bg-surface-dark"
+                >
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.75}
+                    className="text-xs text-text-secondary dark:text-text-secondary-dark"
+                  >
+                    {accountName}
+                  </Text>
+                </View>
+              )}
+
+              {hasExpandableContent && (
                 <View
                   testID="transaction-review-chevron-spacer"
                   className="flex-1"
                 />
-                <TouchableOpacity
-                  testID="transaction-review-expand-toggle"
-                  onPress={handleToggleExpand}
-                  hitSlop={14}
-                  className="h-6 w-6 shrink-0 items-center justify-center"
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name={isExpanded ? "chevron-up" : "chevron-down"}
-                    size={18}
-                    color={palette.slate[500]}
-                  />
-                </TouchableOpacity>
-              </>
-            )}
+              )}
+            </View>
           </View>
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+
+        {hasExpandableContent && (
+          <TouchableOpacity
+            testID="transaction-review-expand-toggle"
+            onPress={handleToggleExpand}
+            className="absolute bottom-0 end-2 h-11 w-11 items-center justify-center"
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={t(
+              isExpanded
+                ? "sms_review_collapse_accessibility"
+                : "sms_review_expand_accessibility",
+              { name: accessibleName }
+            )}
+            accessibilityState={{ expanded: isExpanded }}
+          >
+            <Ionicons
+              name={isExpanded ? "chevron-up" : "chevron-down"}
+              size={18}
+              color={palette.slate[500]}
+            />
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* Expanded: source-specific content */}
       {isExpanded && hasExpandableContent && (
@@ -405,5 +462,35 @@ function TransactionItemInner({
   );
 }
 
+function areTransactionItemPropsEqual(
+  previous: TransactionItemProps,
+  next: TransactionItemProps
+): boolean {
+  const previousReasons = previous.reviewMeta?.reasons ?? [];
+  const nextReasons = next.reviewMeta?.reasons ?? [];
+  return (
+    previous.transaction === next.transaction &&
+    previous.index === next.index &&
+    previous.isSelected === next.isSelected &&
+    previous.accountName === next.accountName &&
+    previous.matchReason === next.matchReason &&
+    previous.expandedContentTitle === next.expandedContentTitle &&
+    previous.expandedContentBody === next.expandedContentBody &&
+    previous.onToggleSelect === next.onToggleSelect &&
+    previous.onPress === next.onPress &&
+    previous.hasMissingInfo === next.hasMissingInfo &&
+    previous.reviewMeta?.isAutoSelectable ===
+      next.reviewMeta?.isAutoSelectable &&
+    previousReasons.length === nextReasons.length &&
+    previousReasons.every((reason, index) => reason === nextReasons[index]) &&
+    previous.isSmsWorkspace === next.isSmsWorkspace &&
+    previous.institutionLogo === next.institutionLogo &&
+    previous.onDiscard === next.onDiscard
+  );
+}
+
 /** Memoized to avoid re-rendering all 150+ items on every parent state change. */
-export const TransactionItem = memo(TransactionItemInner);
+export const TransactionItem = memo(
+  TransactionItemInner,
+  areTransactionItemPropsEqual
+);

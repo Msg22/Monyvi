@@ -30,7 +30,6 @@ import {
 import { Q } from "@nozbe/watermelondb";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
-import { InteractionManager } from "react-native";
 import {
   type ParseSmsContext,
   type SmsCandidate,
@@ -62,6 +61,10 @@ import {
 } from "./sms-scan-checkpoint-coordinator";
 import { recordOversizedSmsOutcome } from "./sms-oversized-outcome-service";
 import { getSmsSafeguardQaNowMs } from "@/config/sms-safeguard-qa-config";
+import {
+  getHandledSmsReviewFingerprints,
+  mergeSmsReviewDrafts,
+} from "./sms-review-draft-repository";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -110,12 +113,10 @@ export interface ScanOptions {
   readonly scanKind: Exclude<SmsScanKind, "live">;
   /** Inbox page size. Every page in the bounded window is read. Defaults to 2000. */
   readonly maxCount?: number;
-  /** Set of existing SMS fingerprints for dedup. */
-  readonly existingFingerprints?: ReadonlySet<string>;
   /** Batch size for keyword filtering — smaller = more frequent progress updates. */
   readonly batchSize?: number;
   /**
-   * Yield to the UI thread every N batches via InteractionManager.
+   * Yield to idle time every N batches.
    * Prevents UI freezing on large inboxes (10K+ messages).
    * Defaults to 3.
    */
@@ -148,7 +149,12 @@ function resolveSmsInboxPageSize(value: number | undefined): number {
 
 async function yieldToUiThread(): Promise<void> {
   await new Promise<void>((resolve) => {
-    InteractionManager.runAfterInteractions(resolve);
+    const requestIdle = globalThis.requestIdleCallback;
+    if (requestIdle) {
+      requestIdle(() => resolve(), { timeout: 50 });
+      return;
+    }
+    setTimeout(resolve, 0);
   });
 }
 
@@ -311,20 +317,6 @@ function deduplicateParsedSmsTransactions(
   return deduplicated;
 }
 
-/**
- * Query all existing SMS fingerprints from the transactions AND transfers tables.
- * Used for deduplication before scanning so saved SMS records are skipped.
- *
- * Scoped to the current user so stale local rows from another account do not
- * suppress valid SMS imports for the signed-in user.
- */
-export async function loadExistingSmsFingerprints(): Promise<
-  ReadonlySet<string>
-> {
-  const scope = await getCurrentUserDataScope();
-  return loadExistingSmsFingerprintsForScope(scope);
-}
-
 async function loadExistingSmsFingerprintsForScope(
   scope: CurrentUserDataScope
 ): Promise<ReadonlySet<string>> {
@@ -445,9 +437,17 @@ async function executeScanPipeline(
     Math.floor(options?.yieldInterval ?? DEFAULT_YIELD_INTERVAL)
   );
   const abortSignal = options?.abortSignal;
-  const existingFingerprints =
-    options?.existingFingerprints ??
-    (await loadExistingSmsFingerprintsForScope(initiatingScope));
+  const savedFingerprints =
+    await loadExistingSmsFingerprintsForScope(initiatingScope);
+  await assertPinnedScanContext(initiatingScope.userId, abortSignal);
+  const reviewFingerprints = await getHandledSmsReviewFingerprints(
+    initiatingScope.userId
+  );
+  await assertPinnedScanContext(initiatingScope.userId, abortSignal);
+  const existingFingerprints = new Set([
+    ...savedFingerprints,
+    ...reviewFingerprints,
+  ]);
   const initialSafeguardState = await loadSmsScanSafeguardState({
     userId: initiatingScope.userId,
     scanKind: options.scanKind,
@@ -556,7 +556,11 @@ async function executeScanPipeline(
       // Skip if already exists in local DB
       if (seenFingerprints.has(fingerprint)) {
         addCheckpointState(
-          existingFingerprints.has(fingerprint) ? "saved" : null
+          savedFingerprints.has(fingerprint)
+            ? "saved"
+            : reviewFingerprints.has(fingerprint)
+              ? "draft_suggestion"
+              : null
         );
         continue;
       }
@@ -608,10 +612,34 @@ async function executeScanPipeline(
 
   // Track per-chunk durations for estimated time remaining calculation
   const chunkDurations: number[] = [];
+  const parsedAt = new Date(scanStartedAtMs);
+  const persistedProgressBaselines = new Map<string, ParsedSmsTransaction>();
   const aiResult = await parseSmsWithOrchestrator(
     candidates,
     options.aiContext,
-    (aiProgress) => {
+    async (aiProgress) => {
+      if (aiProgress.completedTransactions.length > 0) {
+        for (const transaction of aiProgress.completedTransactions) {
+          if (!persistedProgressBaselines.has(transaction.smsFingerprint)) {
+            persistedProgressBaselines.set(
+              transaction.smsFingerprint,
+              transaction
+            );
+          }
+        }
+        await assertPinnedScanContext(initiatingScope.userId, abortSignal);
+        const chunkMerge = await mergeSmsReviewDrafts({
+          transactions: aiProgress.completedTransactions,
+          expectedUserId: initiatingScope.userId,
+          parsedAt,
+        });
+        if (chunkMerge.rejectedCount > 0) {
+          logger.warn("smsReviewDraft.chunkRejected", {
+            rejectedCount: chunkMerge.rejectedCount,
+          });
+        }
+        await assertPinnedScanContext(initiatingScope.userId, abortSignal);
+      }
       // Accumulate chunk durations for rolling average
       chunkDurations.push(aiProgress.chunkDurationMs);
 
@@ -673,9 +701,26 @@ async function executeScanPipeline(
   const deduplicatedTransactions = deduplicateParsedSmsTransactions(
     aiResult.transactions
   );
-  const transactionFingerprints = new Set(
-    deduplicatedTransactions.map((transaction) => transaction.smsFingerprint)
+  await assertPinnedScanContext(initiatingScope.userId, abortSignal);
+  const mergeResult = await mergeSmsReviewDrafts({
+    transactions: deduplicatedTransactions,
+    expectedUserId: initiatingScope.userId,
+    parsedAt,
+    baselineTransactions: [...persistedProgressBaselines.values()],
+  });
+  if (mergeResult.rejectedCount > 0) {
+    logger.warn("smsReviewDraft.resultRejected", {
+      rejectedCount: mergeResult.rejectedCount,
+    });
+  }
+  const reviewableFingerprintSet = new Set(mergeResult.reviewableFingerprints);
+  const reviewableTransactions = deduplicatedTransactions.filter(
+    (transaction) => reviewableFingerprintSet.has(transaction.smsFingerprint)
   );
+  const transactionFingerprints = new Set(
+    reviewableTransactions.map((transaction) => transaction.smsFingerprint)
+  );
+  await assertPinnedScanContext(initiatingScope.userId, abortSignal);
   const durableNegativeFingerprints = new Set([
     ...(aiResult.durableNegativeFingerprints ?? []),
     ...(aiResult.terminalFingerprints ?? []),
@@ -705,7 +750,7 @@ async function executeScanPipeline(
       outcome:
         state.outcome ??
         (transactionFingerprints.has(state.fingerprint)
-          ? "memory_suggestion"
+          ? "draft_suggestion"
           : durableLocalRejectionFingerprints.has(state.fingerprint)
             ? "local_excluded"
             : oversizedFingerprints.has(state.fingerprint)
@@ -733,7 +778,7 @@ async function executeScanPipeline(
   onProgress?.({
     totalMessages,
     messagesScanned: totalMessages,
-    transactionsFound: deduplicatedTransactions.length,
+    transactionsFound: reviewableTransactions.length,
     candidatesFound: candidates.length,
     currentPhase: "complete",
     currentSender: "",
@@ -741,15 +786,15 @@ async function executeScanPipeline(
   });
 
   logger.info("smsSync.aiParsing.complete", {
-    transactionCount: deduplicatedTransactions.length,
+    transactionCount: reviewableTransactions.length,
     candidateCount: candidates.length,
     durationMs,
   });
 
   return {
-    transactions: deduplicatedTransactions,
+    transactions: reviewableTransactions,
     totalScanned: messagesScanned,
-    totalFound: deduplicatedTransactions.length,
+    totalFound: reviewableTransactions.length,
     totalFilteredCandidates: candidates.length,
     durationMs,
     unresolvedCandidates: aiResult.unresolvedCandidates ?? [],

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSmsScanContext } from "@/context/SmsScanContext";
 import { retrySmsReviewCandidates } from "@/services/sms-review-retry-service";
+import { mergeSmsReviewDrafts } from "@/services/sms-review-draft-repository";
 import { isAiConsentRequiredError } from "@/services/ai-sms-parser-service";
 import { logger } from "@/utils/logger";
 
@@ -16,7 +17,6 @@ export interface UseSmsReviewRetryResult {
 
 export function useSmsReviewRetry(): UseSmsReviewRetryResult {
   const {
-    transactions,
     unresolvedCandidates,
     parseContext,
     initiatingUserId,
@@ -56,19 +56,65 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
     setIsRetrying(true);
     setHasRetryError(false);
     setIsConsentRequired(false);
+    let pendingCandidates = unresolvedCandidates;
 
+    const prunePendingCandidates = (fingerprints: readonly string[]): void => {
+      if (generationRef.current !== generation || fingerprints.length === 0)
+        return;
+      const handledFingerprints = new Set(fingerprints);
+      const remainingCandidates = pendingCandidates.filter(
+        ({ candidate }) => !handledFingerprints.has(candidate.smsFingerprint)
+      );
+      if (remainingCandidates.length === pendingCandidates.length) return;
+      pendingCandidates = remainingCandidates;
+      updateReviewSession(
+        { unresolvedCandidates: remainingCandidates },
+        reviewSessionId
+      );
+    };
     try {
       const result = await retrySmsReviewCandidates({
-        transactions,
+        transactions: [],
         unresolvedCandidates,
         parseContext,
         abortSignal: abortController.signal,
+        expectedUserId: initiatingUserId,
+        onTransactionsCompleted: async (
+          completedTransactions
+        ): Promise<void> => {
+          if (
+            generationRef.current !== generation ||
+            abortController.signal.aborted
+          ) {
+            const abortError = new Error("SMS review retry was cancelled.");
+            abortError.name = "AbortError";
+            throw abortError;
+          }
+          const mergeResult = await mergeSmsReviewDrafts({
+            transactions: completedTransactions,
+            expectedUserId: initiatingUserId,
+          });
+          if (generationRef.current !== generation) return;
+          prunePendingCandidates(mergeResult.reviewableFingerprints);
+        },
+        onCandidatesHandled: (fingerprints): Promise<void> => {
+          if (abortController.signal.aborted) {
+            const abortError = new Error("SMS review retry was cancelled.");
+            abortError.name = "AbortError";
+            throw abortError;
+          }
+          prunePendingCandidates(fingerprints);
+          return Promise.resolve();
+        },
+      });
+      if (generationRef.current !== generation) return;
+      await mergeSmsReviewDrafts({
+        transactions: result.transactions,
         expectedUserId: initiatingUserId,
       });
       if (generationRef.current !== generation) return;
       updateReviewSession(
         {
-          transactions: result.transactions,
           unresolvedCandidates: result.unresolvedCandidates,
         },
         reviewSessionId
@@ -83,7 +129,7 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
       }
       setHasRetryError(true);
       logger.warn("smsReview.retry.failed", {
-        unresolvedCount: unresolvedCandidates.length,
+        unresolvedCount: pendingCandidates.length,
         errorName: error instanceof Error ? error.name : "unknown",
       });
     } finally {
@@ -96,7 +142,6 @@ export function useSmsReviewRetry(): UseSmsReviewRetryResult {
     parseContext,
     initiatingUserId,
     reviewSessionId,
-    transactions,
     unresolvedCandidates,
     updateReviewSession,
   ]);

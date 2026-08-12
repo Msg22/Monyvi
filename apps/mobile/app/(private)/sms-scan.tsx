@@ -31,6 +31,7 @@ import {
   getRecoveryModeForPermissionStatus,
 } from "@/components/settings/permission-recovery-content";
 import { SmsScanProgress } from "@/components/sms-sync/SmsScanProgress";
+import { SmsReviewResumeState } from "@/components/sms-sync/SmsReviewResumeState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useAllCategories } from "@/context/CategoriesContext";
 import { useSmsScanContext } from "@/context/SmsScanContext";
@@ -38,7 +39,7 @@ import { useSmsScan } from "@/hooks/useSmsScan";
 import { useSmsPermission } from "@/hooks/useSmsPermission";
 import { useSmsSync } from "@/hooks/useSmsSync";
 import { useAiProcessingConsent } from "@/hooks/useAiProcessingConsent";
-import { loadExistingSmsFingerprints } from "@/services/sms-sync-service";
+import { useSmsReviewDraftQueue } from "@/hooks/useSmsReviewDraftQueue";
 import { palette } from "@/constants/colors";
 import { logger } from "@/utils/logger";
 import { toCategoryTreeSources } from "@/utils/category-tree-source";
@@ -172,6 +173,48 @@ function SmsPermissionGate({
   );
 }
 
+function SmsReviewDraftLoadError({
+  onRetry,
+  onBack,
+}: {
+  readonly onRetry: () => void;
+  readonly onBack: () => void;
+}): React.JSX.Element {
+  const { t } = useTranslation("transactions");
+  const { t: tCommon } = useTranslation("common");
+
+  return (
+    <SafeAreaView
+      className="flex-1 bg-slate-50 dark:bg-slate-900"
+      edges={["top", "bottom"]}
+    >
+      <View className="flex-1 items-center justify-center px-8">
+        <View className="mb-6 h-20 w-20 items-center justify-center rounded-full bg-red-500/10">
+          <Ionicons name="warning-outline" size={38} color={palette.red[500]} />
+        </View>
+        <Text className="mb-8 text-center text-base text-text-secondary">
+          {t("sms_review_load_failed")}
+        </Text>
+        <TouchableOpacity
+          testID="sms-review-draft-load-retry"
+          className="mb-4 w-full rounded-xl bg-nileGreen-500 py-4"
+          activeOpacity={0.8}
+          onPress={onRetry}
+        >
+          <Text className="text-center text-base font-semibold text-slate-25">
+            {t("try_again")}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity activeOpacity={0.7} onPress={onBack}>
+          <Text className="text-base text-text-secondary">
+            {tCommon("back")}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -213,6 +256,7 @@ export default function SmsScanScreen(): React.JSX.Element {
   const [isConsentSheetVisible, setIsConsentSheetVisible] =
     React.useState(false);
   const [scanRestartNonce, setScanRestartNonce] = React.useState(0);
+  const [isDraftEntryBypassed, setIsDraftEntryBypassed] = React.useState(false);
   const shouldResumeConsentAfterPrivacyDetails = useRef(false);
   const scanInitiated = useRef(false);
   const previousPermissionStatusRef = useRef(permissionStatus);
@@ -223,7 +267,13 @@ export default function SmsScanScreen(): React.JSX.Element {
 
   const { setReviewSession, setScanMode, scanMode } = useSmsScanContext();
   const { markSyncComplete } = useSmsSync();
-  const [scanKind] = useState(scanMode);
+  const [scanKind, setScanKind] = useState(scanMode);
+  const draftQueue = useSmsReviewDraftQueue();
+  const shouldShowDraftEntry =
+    !draftQueue.isLoading &&
+    draftQueue.itemCount > 0 &&
+    !isDraftEntryBypassed &&
+    status === "idle";
 
   useEffect(() => {
     setScanMode("incremental");
@@ -252,7 +302,7 @@ export default function SmsScanScreen(): React.JSX.Element {
   );
 
   // Shared scan initiation logic (used by both auto-start and retry)
-  const initiateScan = useCallback(async (): Promise<void> => {
+  const initiateScan = useCallback((): void => {
     if (scanAbortControllerRef.current) {
       scanAbortControllerRef.current.abort();
       pendingScanAfterAbortRef.current = true;
@@ -262,15 +312,6 @@ export default function SmsScanScreen(): React.JSX.Element {
 
     const abortController = new AbortController();
     scanAbortControllerRef.current = abortController;
-
-    let existingFingerprints: ReadonlySet<string> | undefined;
-    try {
-      existingFingerprints = await loadExistingSmsFingerprints();
-    } catch (err: unknown) {
-      logger.warn("smsScan.loadExistingFingerprintsFailed", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
 
     if (abortController.signal.aborted) {
       if (scanAbortControllerRef.current === abortController) {
@@ -285,7 +326,6 @@ export default function SmsScanScreen(): React.JSX.Element {
 
     startScan({
       scanKind,
-      existingFingerprints,
       aiContext,
       abortSignal: abortController.signal,
     })
@@ -309,6 +349,12 @@ export default function SmsScanScreen(): React.JSX.Element {
   // Auto-start scan on mount — waits until permission is granted and categories loaded
   useEffect(() => {
     if (status === "consent_required") return;
+    if (
+      draftQueue.isLoading ||
+      draftQueue.error !== null ||
+      shouldShowDraftEntry
+    )
+      return;
     if (permissionStatus !== "granted") return;
     if (isAiConsentLoading) return;
     if (!isAiConsented) {
@@ -320,12 +366,13 @@ export default function SmsScanScreen(): React.JSX.Element {
     if (!isAiContextReady) return;
     if (!scanInitiated.current) {
       scanInitiated.current = true;
-      initiateScan().catch((err: unknown) => {
-        logger.error("smsScan.autoStartFailed", err);
-      });
+      initiateScan();
     }
   }, [
     isAiConsented,
+    draftQueue.isLoading,
+    draftQueue.error,
+    shouldShowDraftEntry,
     isAiConsentLoading,
     initiateScan,
     isAiContextReady,
@@ -421,6 +468,17 @@ export default function SmsScanScreen(): React.JSX.Element {
     router.back();
   };
 
+  const handleContinueDraftReview = (): void => {
+    router.push("/sms-review");
+  };
+
+  const handleCheckNewMessages = (): void => {
+    setScanKind("incremental");
+    setIsDraftEntryBypassed(true);
+    scanInitiated.current = false;
+    setScanRestartNonce((value) => value + 1);
+  };
+
   useFocusEffect(
     useCallback(() => {
       if (!shouldResumeConsentAfterPrivacyDetails.current) {
@@ -435,9 +493,7 @@ export default function SmsScanScreen(): React.JSX.Element {
   );
 
   const handleRetryPress = (): void => {
-    initiateScan().catch((err: unknown) => {
-      logger.error("smsScan.retryFailed", err);
-    });
+    initiateScan();
   };
 
   // Compute top unique category system names from parsed transactions
@@ -527,7 +583,7 @@ export default function SmsScanScreen(): React.JSX.Element {
       onPrivacyDetails={(): void => {
         shouldResumeConsentAfterPrivacyDetails.current = true;
         setIsConsentSheetVisible(false);
-        router.push("/ai-privacy-details");
+        router.push("/privacy-details");
       }}
     />
   );
@@ -539,6 +595,32 @@ export default function SmsScanScreen(): React.JSX.Element {
     },
     tSettings
   );
+
+  if (draftQueue.error !== null) {
+    return (
+      <SmsReviewDraftLoadError
+        onRetry={(): void => {
+          void draftQueue.refetch();
+        }}
+        onBack={handleBackPress}
+      />
+    );
+  }
+  if (shouldShowDraftEntry) {
+    return (
+      <SafeAreaView
+        className="flex-1 bg-slate-50 dark:bg-slate-900"
+        edges={["bottom"]}
+      >
+        <SmsReviewResumeState
+          itemCount={draftQueue.itemCount}
+          onContinueReview={handleContinueDraftReview}
+          onCheckNewMessages={handleCheckNewMessages}
+          onBack={handleBackPress}
+        />
+      </SafeAreaView>
+    );
+  }
 
   // ── Permission gate ──
   // The native permission dialog is only opened from the app-side rationale

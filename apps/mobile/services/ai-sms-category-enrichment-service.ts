@@ -26,7 +26,8 @@ const NON_INFORMATIVE_CATEGORY_SYSTEM_NAMES: ReadonlySet<string> = new Set([
   "uncategorized",
 ]);
 
-export const MIN_TRUSTED_CATEGORY_CONFIDENCE = 0.9;
+export const MIN_ACCEPTED_CATEGORY_CONFIDENCE = 0.5;
+export const MIN_AUTO_SELECT_CATEGORY_CONFIDENCE = 0.8;
 export const TRUSTED_ENRICHED_PURCHASE_CONFIDENCE = 0.98;
 
 export interface TrustedSmsCategoryCandidate {
@@ -115,6 +116,8 @@ interface PreparedCategoryRequest {
 
 interface CategoryChunkRequest extends PreparedCategoryRequest {
   readonly requestKey: string;
+  readonly chunkIndex: number;
+  readonly chunkCount: number;
 }
 
 const CategoryResponseItemSchema = z
@@ -252,11 +255,14 @@ function prepareCategoryRequest(
 
 function mapCategoryResponse(
   data: unknown,
-  prepared: PreparedCategoryRequest
+  prepared: CategoryChunkRequest
 ): TrustedSmsCategoryEnrichmentResult {
   const envelope = CategoryResponseEnvelopeSchema.safeParse(data);
   if (!envelope.success) {
     logger.warn("smsCategoryEnrichment.responseInvalid", {
+      chunkIndex: prepared.chunkIndex,
+      chunkCount: prepared.chunkCount,
+      phase: "response_validation",
       issueCount: envelope.error.issues.length,
     });
     return emptyResult(prepared.body.merchants.length, true);
@@ -299,7 +305,7 @@ function mapCategoryResponse(
       candidateIds === undefined ||
       responseIdCounts.get(value.merchantId) !== 1 ||
       !allowedCategories.has(value.categorySystemName) ||
-      value.confidence < MIN_TRUSTED_CATEGORY_CONFIDENCE
+      value.confidence < MIN_ACCEPTED_CATEGORY_CONFIDENCE
     ) {
       rejectedResultCount += 1;
       continue;
@@ -383,6 +389,9 @@ function splitPreparedRequest(
   requestKey: string
 ): readonly CategoryChunkRequest[] {
   const chunks: CategoryChunkRequest[] = [];
+  const chunkCount = Math.ceil(
+    prepared.body.merchants.length / CATEGORY_ENRICHMENT_CHUNK_SIZE
+  );
   let chunkNumber = 0;
   for (
     let start = 0;
@@ -395,6 +404,8 @@ function splitPreparedRequest(
     );
     chunkNumber += 1;
     chunks.push({
+      chunkIndex: chunkNumber,
+      chunkCount,
       requestKey:
         chunkNumber === 1 ? requestKey : `${requestKey}:${chunkNumber}`,
       body: {
@@ -467,6 +478,7 @@ async function invokeCategoryChunk(
   expectedUserId?: string
 ): Promise<TrustedSmsCategoryEnrichmentResult> {
   const attemptedMerchantCount = prepared.body.merchants.length;
+  const startedAt = Date.now();
   let isCheckingUserScope = false;
   try {
     if (expectedUserId !== undefined) {
@@ -533,6 +545,10 @@ async function invokeCategoryChunk(
       }
       logger.warn("smsCategoryEnrichment.requestFailed", {
         attemptedMerchantCount,
+        chunkIndex: prepared.chunkIndex,
+        chunkCount: prepared.chunkCount,
+        durationMs: Date.now() - startedAt,
+        phase: "http_response",
         status,
         bodyLength: refusal?.bodyLength,
         reason: refusal?.reason,
@@ -557,11 +573,19 @@ async function invokeCategoryChunk(
     if (timedSignal.didTimeOut()) {
       logger.warn("smsCategoryEnrichment.requestTimedOut", {
         attemptedMerchantCount,
+        chunkIndex: prepared.chunkIndex,
+        chunkCount: prepared.chunkCount,
+        durationMs: Date.now() - startedAt,
+        phase: isCheckingUserScope ? "user_scope" : "request",
       });
       return emptyResult(attemptedMerchantCount, true, { isTimedOut: true });
     }
     logger.warn("smsCategoryEnrichment.requestFailed", {
       attemptedMerchantCount,
+      chunkIndex: prepared.chunkIndex,
+      chunkCount: prepared.chunkCount,
+      durationMs: Date.now() - startedAt,
+      phase: isCheckingUserScope ? "user_scope" : "request",
       errorName: error instanceof Error ? error.name : "unknown",
     });
     return emptyResult(attemptedMerchantCount, true);

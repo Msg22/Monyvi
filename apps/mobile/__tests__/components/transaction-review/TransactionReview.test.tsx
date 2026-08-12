@@ -53,9 +53,14 @@ jest.mock("@/components/transactions/TransactionFiltersBar", () => ({
   TransactionFiltersBar: (): null => null,
 }));
 
+interface MockTransactionItemProps {
+  readonly transaction: ReviewableTransaction;
+  readonly onDiscard?: (index: number, wasSelected: boolean) => void;
+}
+
 const mockReviewFiltersSheet = jest.fn();
 const mockGetExpandedContent = jest.fn();
-const mockTransactionItem = jest.fn();
+const mockTransactionItem = jest.fn<void, [MockTransactionItemProps]>();
 
 jest.mock("@/components/transaction-review/ReviewFiltersSheet", () => ({
   ReviewFiltersSheet: (props: Record<string, unknown>): null => {
@@ -99,7 +104,10 @@ jest.mock("@/components/transaction-review/TransactionItem", () => ({
     const ReactActual = jest.requireActual<typeof import("react")>("react");
     const ReactNative =
       jest.requireActual<typeof import("react-native")>("react-native");
-    mockTransactionItem({ transaction, ...props });
+    mockTransactionItem({
+      transaction,
+      ...props,
+    } satisfies MockTransactionItemProps);
     return ReactActual.createElement(
       ReactNative.Text,
       null,
@@ -304,6 +312,37 @@ describe("TransactionReview", () => {
     expect(screen.queryByText(/fixture parser/i)).toBeNull();
   });
 
+  it("passes the live selection state when discarding an SMS suggestion", () => {
+    const transaction = createTransaction();
+    const onDiscardItem = jest.fn();
+    mockUseTransactionReviewState.mockReturnValue(
+      createReviewState({
+        effectiveTransactions: [transaction],
+        filteredTransactions: [transaction],
+        listItems: [{ key: "tx-0", tx: transaction, originalIndex: 0 }],
+        selectedIndices: new Set([0]),
+        selectedIndicesRef: { current: new Set([0]) },
+      })
+    );
+
+    render(
+      <TransactionReview
+        transactions={[transaction]}
+        onSave={jest.fn()}
+        onDiscard={jest.fn()}
+        onDiscardItem={onDiscardItem}
+        isSaving={false}
+        workspaceVariant="sms"
+      />
+    );
+
+    const itemProps = mockTransactionItem.mock.calls.at(-1)?.[0];
+    expect(itemProps?.onDiscard).toBe(onDiscardItem);
+    itemProps?.onDiscard?.(0, true);
+
+    expect(onDiscardItem).toHaveBeenCalledWith(0, true);
+  });
+
   it("keeps the safety notice readable above the footer in dark mode", () => {
     const transaction = createTransaction();
     renderReview({
@@ -471,9 +510,9 @@ describe("TransactionReview", () => {
   it("uses smaller render batches for long transaction lists", () => {
     expect(TRANSACTION_REVIEW_LIST_RENDER_CONFIG).toEqual({
       initialNumToRender: 8,
-      maxToRenderPerBatch: 8,
-      updateCellsBatchingPeriod: 50,
-      windowSize: 5,
+      maxToRenderPerBatch: 10,
+      updateCellsBatchingPeriod: 16,
+      windowSize: 3,
     });
   });
 

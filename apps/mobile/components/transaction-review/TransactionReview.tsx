@@ -28,6 +28,8 @@ import { PartialSmsResultsNotice } from "./PartialSmsResultsNotice";
 import type { SmsScanSafeguardSummary } from "@/services/sms-parser-orchestrator";
 import type { SmsSafeguardQaDiagnosticsViewModel } from "@/services/sms-safeguard-qa-diagnostics-service";
 import { SafeguardQaDiagnosticsPanel } from "@/components/sms-sync/SafeguardQaDiagnosticsPanel";
+import { SmsReviewAnimatedItem } from "./SmsReviewAnimatedItem";
+import { SmsReviewUndoBanner } from "./SmsReviewUndoBanner";
 
 export interface TransactionReviewProps {
   readonly transactions: readonly ReviewableTransaction[];
@@ -42,6 +44,31 @@ export interface TransactionReviewProps {
   readonly subtitle?: string;
   readonly onBack?: () => void;
   readonly workspaceVariant?: "default" | "sms";
+  readonly selectionOverrides?: ReadonlyMap<number, boolean | null>;
+  readonly onSelectionChange?: (
+    index: number,
+    selected: boolean
+  ) => void | Promise<void>;
+  readonly onSelectionChanges?: (
+    changes: ReadonlyArray<{
+      readonly index: number;
+      readonly selected: boolean;
+    }>
+  ) => void | Promise<void>;
+  readonly onTransactionChange?: (
+    index: number,
+    transaction: ReviewableTransaction
+  ) => void | Promise<void>;
+  readonly onDiscardItem?: (
+    index: number,
+    wasSelected: boolean
+  ) => void | Promise<void>;
+  readonly onReviewLater?: () => void;
+  readonly undoBanner?: {
+    readonly discardedName: string;
+    readonly onUndo: () => void | Promise<void>;
+    readonly onClose: () => void;
+  };
   readonly partialResults?: {
     readonly safeguardSummary: SmsScanSafeguardSummary;
     readonly retryableCount: number;
@@ -55,9 +82,9 @@ export interface TransactionReviewProps {
 
 export const TRANSACTION_REVIEW_LIST_RENDER_CONFIG = {
   initialNumToRender: 8,
-  maxToRenderPerBatch: 8,
-  updateCellsBatchingPeriod: 50,
-  windowSize: 5,
+  maxToRenderPerBatch: 10,
+  updateCellsBatchingPeriod: 16,
+  windowSize: 3,
 } as const;
 
 export function TransactionReview({
@@ -71,11 +98,25 @@ export function TransactionReview({
   workspaceVariant = "default",
   partialResults,
   qaDiagnostics = null,
+  selectionOverrides,
+  onSelectionChange,
+  onSelectionChanges,
+  onTransactionChange,
+  onDiscardItem,
+  onReviewLater,
+  undoBanner,
 }: TransactionReviewProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { t } = useTranslation("common");
   const { t: tTransactions } = useTranslation("transactions");
-  const state = useTransactionReviewState({ transactions, onSave });
+  const state = useTransactionReviewState({
+    transactions,
+    onSave,
+    selectionOverrides,
+    onSelectionChange,
+    onSelectionChanges,
+    onTransactionChange,
+  });
   const [isFilterSheetVisible, setIsFilterSheetVisible] = useState(false);
   const accountDisplayNames = useAccountDisplayNames();
   const isSmsWorkspace = workspaceVariant === "sms";
@@ -178,7 +219,7 @@ export function TransactionReview({
       const content = getExpandedContent(tx);
       const providerPresentation = resolveTransactionReviewProvider(tx);
 
-      return (
+      const transactionItem = (
         <TransactionItem
           transaction={tx}
           index={item.originalIndex}
@@ -188,11 +229,18 @@ export function TransactionReview({
           expandedContentBody={content?.body}
           onToggleSelect={handleToggleItem}
           onPress={handleOpenEditModal}
+          onDiscard={isSmsWorkspace ? onDiscardItem : undefined}
           hasMissingInfo={invalidIndices.has(item.originalIndex)}
           reviewMeta={reviewMetaByIndex.get(item.originalIndex)}
           isSmsWorkspace={isSmsWorkspace}
           institutionLogo={providerPresentation?.asset.logo ?? null}
         />
+      );
+
+      return isSmsWorkspace ? (
+        <SmsReviewAnimatedItem>{transactionItem}</SmsReviewAnimatedItem>
+      ) : (
+        transactionItem
       );
     },
     [
@@ -203,9 +251,9 @@ export function TransactionReview({
       invalidIndices,
       resolvedAccountMatchIndices,
       reviewMetaByIndex,
-      selectedIndicesRef,
       transactionOverrides,
       isSmsWorkspace,
+      onDiscardItem,
     ]
   );
 
@@ -447,6 +495,13 @@ export function TransactionReview({
               />
             )}
             <SafeguardQaDiagnosticsPanel diagnostics={qaDiagnostics} />
+            {undoBanner && (
+              <SmsReviewUndoBanner
+                discardedName={undoBanner.discardedName}
+                onUndo={undoBanner.onUndo}
+                onClose={undoBanner.onClose}
+              />
+            )}
           </Animated.View>
         }
         ListEmptyComponent={
@@ -497,6 +552,7 @@ export function TransactionReview({
         onSave={state.handleSave}
         onDiscard={onDiscard}
         isSmsWorkspace={isSmsWorkspace}
+        onReviewLater={onReviewLater}
       />
 
       <ReviewFiltersSheet
@@ -533,6 +589,7 @@ export function TransactionReview({
             incomeCategories={state.incomeCategories}
             onSave={state.handleEditModalSave}
             onCreatePendingAccount={state.handleCreatePendingAccount}
+            sourceVariant={workspaceVariant}
             onClose={() => state.setEditModalIndex(null)}
           />
         )}

@@ -1,10 +1,14 @@
 import {
   buildAutoSelectedIndices,
   getEditedTransactionReviewMeta,
+  getDurableTransactionOverrides,
   getTransactionReviewMeta,
   resolveEditedAccountMatch,
 } from "@/services/transaction-review-selection";
-import type { ReviewableTransaction } from "@monyvi/logic";
+import type {
+  ParsedSmsTransaction,
+  ReviewableTransaction,
+} from "@monyvi/logic";
 
 function createTransaction(
   overrides: Partial<ReviewableTransaction> = {}
@@ -103,6 +107,26 @@ describe("transaction-review-selection", () => {
         toAccountConfirmed: true,
       })
     ).toEqual({ isAutoSelectable: true, reasons: [] });
+  });
+
+  it("restores confirmation for a durable named ATM cash destination", () => {
+    const transaction: ParsedSmsTransaction = {
+      ...createTransaction(),
+      source: "SMS",
+      smsFingerprint: "sms-fingerprint-1",
+      senderDisplayName: "QNB EGYPT",
+      rawSmsBody: "ATM withdrawal",
+      isAtmWithdrawal: true,
+      toAccountName: "New cash account",
+    };
+
+    expect(getDurableTransactionOverrides([transaction]).get(0)).toEqual(
+      expect.objectContaining({
+        toAccountId: undefined,
+        toAccountName: "New cash account",
+        toAccountConfirmed: true,
+      })
+    );
   });
 
   it("does not auto-select rows that only fell back to a default account", () => {
@@ -255,6 +279,28 @@ describe("transaction-review-selection", () => {
       isAutoSelectable: true,
       reasons: [],
     });
+  });
+
+  it("restores a persisted category confirmation after resuming a draft", () => {
+    const transaction: ParsedSmsTransaction = {
+      ...createTransaction({
+        categoryId: "cat-food",
+        reviewStatus: "needs_review",
+        reviewReasons: ["category_needed"],
+      }),
+      source: "SMS",
+      smsFingerprint: "sms-fingerprint-1",
+      senderDisplayName: "NBE",
+      rawSmsBody: "Purchase of EGP 100 at Shop",
+      categoryConfirmed: true,
+    };
+
+    expect(getDurableTransactionOverrides([transaction]).get(0)).toEqual(
+      expect.objectContaining({
+        categoryId: "cat-food",
+        categoryConfirmed: true,
+      })
+    );
   });
 
   it("preserves ambiguous amounts as a field-specific review reason", () => {

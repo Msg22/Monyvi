@@ -10,7 +10,10 @@ const mockRouterBack = jest.fn<void, []>();
 const mockRouterReplace = jest.fn<void, [string]>();
 const mockStartScan = jest.fn<void, [unknown]>();
 const mockSetTransactions = jest.fn<void, [readonly unknown[]]>();
-const mockSetScanMode = jest.fn<void, ["incremental"]>();
+const mockSetScanMode = jest.fn<
+  void,
+  ["initial" | "incremental" | "history"]
+>();
 const mockGrantAiConsent = jest.fn<Promise<void>, []>();
 
 let mockPermissionStatus: SmsPermissionStatus = "undetermined";
@@ -47,6 +50,10 @@ jest.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
   }),
+}));
+
+jest.mock("@/components/navigation/PageHeader", () => ({
+  PageHeader: (): null => null,
 }));
 
 jest.mock("@/hooks/useSmsPermission", () => ({
@@ -114,8 +121,8 @@ jest.mock("@/components/ai-consent/AiProcessingConsentSheet", () => ({
 jest.mock("@/context/SmsScanContext", () => ({
   useSmsScanContext: () => ({
     setTransactions: mockSetTransactions,
-    setScanMode: mockSetScanMode,
     scanMode: "incremental",
+    setScanMode: mockSetScanMode,
   }),
 }));
 
@@ -128,6 +135,17 @@ jest.mock("@/context/CategoriesContext", () => ({
 
 jest.mock("@/services/sms-sync-service", () => ({
   loadExistingSmsFingerprints: jest.fn(() => Promise.resolve(new Set())),
+}));
+
+jest.mock("@/hooks/useSmsReviewDraftQueue", () => ({
+  useSmsReviewDraftQueue: () => ({
+    items: [],
+    count: 0,
+    userId: "user-1",
+    isLoading: false,
+    error: null,
+    refresh: jest.fn(),
+  }),
 }));
 
 jest.mock("@/utils/category-tree-source", () => ({

@@ -1,20 +1,3 @@
-/**
- * SMS Scan Context
- *
- * React Context for sharing parsed SMS transactions between the
- * scan page and the review page. Data flows:
- *   sms-scan.tsx → setTransactions() → sms-review.tsx reads transactions
- *
- * Architecture & Design Rationale:
- * - Pattern: Provider Pattern (React Context)
- * - Why: Lightweight cross-route state sharing without adding Zustand.
- *   Scoped to the SMS scan flow — no global store pollution.
- * - SOLID: SRP — only holds parsed transactions for inter-screen transfer.
- *
- * @module SmsScanContext
- */
-
-import type { ParsedSmsTransaction } from "@monyvi/logic";
 import type { ParseSmsContext } from "@/services/ai-sms-parser-service";
 import type {
   HybridSmsUnresolvedCandidate,
@@ -33,15 +16,7 @@ import React, {
 
 export type SmsScanMode = "incremental" | "history";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface SmsScanContextValue {
-  /** Parsed transactions from the scan pipeline */
-  readonly transactions: readonly ParsedSmsTransaction[];
-  /** Set parsed transactions (called by scan page on completion) */
-  readonly setTransactions: (txns: readonly ParsedSmsTransaction[]) => void;
   readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
   readonly parseContext: ParseSmsContext | null;
   readonly safeguardSummary: SmsScanSafeguardSummary | null;
@@ -51,28 +26,16 @@ interface SmsScanContextValue {
   readonly setReviewSession: (result: SmsScanResult) => void;
   readonly updateReviewSession: (
     input: {
-      readonly transactions: readonly ParsedSmsTransaction[];
       readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
     },
     expectedSessionId: number
   ) => void;
-  /** Clear transactions (called after save or discard) */
   readonly clearTransactions: () => void;
-  /** Whether the next scan should be incremental or a deliberate history scan. */
   readonly scanMode: SmsScanMode;
-  /** Set the scan mode before navigating to scan page */
   readonly setScanMode: (mode: SmsScanMode) => void;
 }
 
-// ---------------------------------------------------------------------------
-// Context
-// ---------------------------------------------------------------------------
-
 const SmsScanContext = createContext<SmsScanContextValue | null>(null);
-
-// ---------------------------------------------------------------------------
-// Provider
-// ---------------------------------------------------------------------------
 
 interface SmsScanProviderProps {
   readonly children: React.ReactNode;
@@ -81,9 +44,6 @@ interface SmsScanProviderProps {
 export function SmsScanProvider({
   children,
 }: SmsScanProviderProps): React.JSX.Element {
-  const [transactions, setTransactionsState] = useState<
-    readonly ParsedSmsTransaction[]
-  >([]);
   const [scanMode, setScanModeState] = useState<SmsScanMode>("incremental");
   const [unresolvedCandidates, setUnresolvedCandidates] = useState<
     readonly HybridSmsUnresolvedCandidate[]
@@ -104,22 +64,8 @@ export function SmsScanProvider({
     setReviewSessionId(reviewSessionIdRef.current);
   }, []);
 
-  const setTransactions = useCallback(
-    (txns: readonly ParsedSmsTransaction[]) => {
-      advanceReviewSession();
-      setTransactionsState(txns);
-      setUnresolvedCandidates([]);
-      setParseContext(null);
-      setSafeguardSummary(null);
-      setParserDiagnostics(null);
-      setInitiatingUserId(null);
-    },
-    [advanceReviewSession]
-  );
-
-  const clearTransactions = useCallback(() => {
+  const clearTransactions = useCallback((): void => {
     advanceReviewSession();
-    setTransactionsState([]);
     setUnresolvedCandidates([]);
     setParseContext(null);
     setSafeguardSummary(null);
@@ -130,7 +76,6 @@ export function SmsScanProvider({
   const setReviewSession = useCallback(
     (result: SmsScanResult): void => {
       advanceReviewSession();
-      setTransactionsState(result.transactions);
       setUnresolvedCandidates(result.unresolvedCandidates);
       setParseContext(result.parseContext);
       setSafeguardSummary(result.safeguardSummary);
@@ -143,13 +88,11 @@ export function SmsScanProvider({
   const updateReviewSession = useCallback(
     (
       input: {
-        readonly transactions: readonly ParsedSmsTransaction[];
         readonly unresolvedCandidates: readonly HybridSmsUnresolvedCandidate[];
       },
       expectedSessionId: number
     ): void => {
       if (reviewSessionIdRef.current !== expectedSessionId) return;
-      setTransactionsState(input.transactions);
       setUnresolvedCandidates(input.unresolvedCandidates);
       setSafeguardSummary((current) =>
         current === null
@@ -169,14 +112,12 @@ export function SmsScanProvider({
     []
   );
 
-  const setScanMode = useCallback((mode: SmsScanMode) => {
+  const setScanMode = useCallback((mode: SmsScanMode): void => {
     setScanModeState(mode);
   }, []);
 
   const value = useMemo<SmsScanContextValue>(
     () => ({
-      transactions,
-      setTransactions,
       unresolvedCandidates,
       parseContext,
       safeguardSummary,
@@ -190,8 +131,6 @@ export function SmsScanProvider({
       setScanMode,
     }),
     [
-      transactions,
-      setTransactions,
       unresolvedCandidates,
       parseContext,
       safeguardSummary,
@@ -211,17 +150,10 @@ export function SmsScanProvider({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Hook
-// ---------------------------------------------------------------------------
-
-/**
- * Access the SMS scan context. Must be used inside SmsScanProvider.
- */
 export function useSmsScanContext(): SmsScanContextValue {
-  const ctx = useContext(SmsScanContext);
-  if (!ctx) {
+  const context = useContext(SmsScanContext);
+  if (!context) {
     throw new Error("useSmsScanContext must be used within a SmsScanProvider");
   }
-  return ctx;
+  return context;
 }

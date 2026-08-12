@@ -1,6 +1,6 @@
 # Monyvi Business Decisions
 
-**Status:** Active product source of truth **Last updated:** 2026-07-20
+**Status:** Active product source of truth **Last updated:** 2026-07-29
 **Scope:** Business and product rules confirmed by the current codebase and
 implementation history.
 
@@ -724,13 +724,15 @@ Business rules:
   merchant-free results, and locally unresolved candidates do not use this
   enrichment endpoint in the first release.
 - Exact trusted card purchases use a fixed local extraction confidence of
-  `0.98`. A category result is accepted only at confidence `0.90` or greater.
-  Generic fallback categories such as `other` and `uncategorized` are never
-  accepted as enrichment outcomes even if the provider reports high confidence.
-  After acceptance, auto-selection still requires a resolved account and zero
-  remaining reasons from the existing transaction-review selection service.
-  Account evidence follows the exact-card or unique-sender rule below; ambiguous
-  matches remain review-required.
+  `0.98`. An allowed category result is accepted at confidence `0.50` or
+  greater. Accepted results below `0.80` remain review-required with a
+  category-specific reason; `0.80` is included in the auto-selection confidence
+  range. Generic fallback categories such as `other` and `uncategorized` are
+  never accepted as enrichment outcomes even if the provider reports high
+  confidence. After acceptance, auto-selection still requires a resolved
+  account and zero remaining reasons from the existing transaction-review
+  selection service. Account evidence follows the exact-card or unique-sender
+  rule below; ambiguous matches remain review-required.
 - ATM withdrawals, transfers, unresolved templates, uncertain categories, and
   failed enrichment remain review-required regardless of local confidence.
 - Missing, malformed, low-confidence, invented-category, timeout, cancellation,
@@ -826,6 +828,78 @@ Business rules:
 - These safeguards are SMS-specific. Voice consent, parsing, request contracts,
   and usage accounting remain unchanged. Persistent review drafts and dismissed
   fingerprints remain owned by issue #770.
+
+#### Resumable SMS Review Suggestions
+
+Successful SMS parsing results use one resumable, device-local review queue per
+authenticated user so paid parsing work is not lost when review is left or the
+app restarts.
+
+Business rules:
+
+- Accepted trusted-local and AI suggestions become durable automatically only
+  after pinned-user and stale-session validation. Failed, cancelled, malformed,
+  quota-deferred, oversized, or otherwise unresolved candidates do not create
+  review items.
+- The queue is stored in WatermelonDB as installation-local user data and is
+  excluded from Supabase synchronization. Another local account must never see,
+  count, edit, save, discard, or merge a different user's queue.
+- One user has at most one active queue. New unique successful results merge
+  into it by canonical SMS fingerprint without replacing confirmed edits or
+  explicit selection overrides. Saved financial records, active review items,
+  and dismissed fingerprints are excluded before paid parsing.
+- The durable review payload preserves the original SMS only while its item is
+  active, plus parsed values, parser provenance, confidence, review reasons,
+  account/category references, fingerprint, confirmed edits, and an optional
+  explicit selection override. Original SMS and complete payloads never enter
+  final financial records, sync, notifications, logs, diagnostics, analytics,
+  crash context, or category enrichment.
+- Active unresolved items expire 30 days after parsing. Saving, discarding, or
+  expiry removes the complete payload and original SMS. A temporarily undoable
+  individual discard may retain the edited item only in volatile memory until
+  Undo closes, expires, is replaced, or the process ends.
+- SMS import with an active queue shows `Continue reviewing N transactions` as
+  the primary action and `Check for new messages` separately. `Review later`
+  exits the complete scan/review flow in one tap while preserving every item.
+- Untouched items derive selection from current review metadata. Explicit user
+  selection or deselection survives navigation and restart. Hard-invalid items
+  remain unselected; selecting an unresolved hard-invalid item blocks the full
+  atomic selected batch. Unselected hard-invalid items and soft warnings do not
+  block other valid selected items. Deliberately selecting a structurally valid
+  soft-warning item confirms it.
+- A successful atomic save removes only the saved selected items, preserves
+  every unselected item, navigates to Transactions, and reports only the saved
+  count. A failed batch writes no financial records and leaves the complete
+  queue recoverable.
+- The approved edit experience is a compact bounded bottom sheet that keeps the
+  review header and filters visible. It preserves the provider identity block
+  and colorful field icons, includes Currency, edits Amount and Merchant inline
+  one field at a time with keyboard-aware internal scrolling, and opens existing
+  selector sheets for Category, Account, and editable Currency. SMS suggestion
+  direction/type is read-only: Expense and Income tabs are absent. Individual
+  discard is absent from the edit sheet.
+- Each card has one compact circular top-right `X` action with an accessible
+  label and touch target. One tap discards that suggestion without an individual
+  confirmation, writes no financial record, and records a user-scoped dismissed
+  fingerprint so that SMS is not offered or billed again on that installation.
+- Successful individual discard uses a restrained single fade-and-collapse;
+  neighboring cards settle once. The named Undo banner restores only the latest
+  discarded item to the same position with its edits and selection, using a
+  restrained expand-and-fade. Motion has no bounce, overshoot, or repeated
+  layout movement and respects reduced-motion preferences. Failed durable
+  discard or restore leaves or restores the card with friendly recovery
+  feedback.
+- Closing or replacing the Undo banner, letting it expire, or ending the process
+  finalizes that individual discard. Only the latest individual discard is
+  undoable.
+- `Discard all` remains visually secondary and requires confirmation. Copy uses
+  `suggestions`, states the affected count, permanent removal, that the action
+  cannot be undone, and that those SMS messages will not be suggested again on
+  this device. Confirmed bulk discard has no Undo.
+- The full disclosure page is titled `Privacy details` and separates AI
+  processing from temporary device-local SMS review storage. It states that the
+  original SMS is retained for resumable review for no more than 30 days without
+  claiming unverified local encryption.
 
 ## 8. Notifications
 

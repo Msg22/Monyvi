@@ -102,6 +102,38 @@ describe("SmsScanProgress", () => {
     expect(getByText("2")).toBeTruthy();
   });
 
+  it("renders finite progress when AI parsing has no chunks", () => {
+    const { getByText, queryByText } = render(
+      <SmsScanProgress
+        status="scanning"
+        progress={{
+          totalMessages: 6,
+          messagesScanned: 6,
+          transactionsFound: 1,
+          candidatesFound: 1,
+          currentPhase: "ai-parsing",
+          currentSender: "",
+          aiChunksCompleted: 0,
+          aiChunksTotal: 0,
+          scanStartedAt: Date.now(),
+        }}
+        transactionsFound={0}
+        totalScanned={0}
+        durationMs={0}
+        topCategories={[]}
+        categoryNameMap={new Map<string, string>()}
+        safeguardSummary={completeSummary}
+        error={null}
+        onReviewPress={jest.fn()}
+        onBackPress={jest.fn()}
+        onRetryPress={jest.fn()}
+      />
+    );
+
+    expect(getByText("50%")).toBeTruthy();
+    expect(queryByText("NaN%")).toBeNull();
+  });
+
   it("renders category display labels from props without category hooks", () => {
     const categoryNameMap = new Map<string, string>([
       ["food_drinks", "Food & Drinks"],
