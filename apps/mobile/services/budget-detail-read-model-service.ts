@@ -120,10 +120,12 @@ async function getCategoryHierarchy(
     database.get<Category>("categories"),
     budget.categoryId
   );
-  const categories = await scope.queryAccessibleCategories(
-    database.get<Category>("categories"),
-    Q.where("deleted", false)
-  ).fetch();
+  const categories = await scope
+    .queryAccessibleCategories(
+      database.get<Category>("categories"),
+      Q.where("deleted", false)
+    )
+    .fetch();
 
   return {
     categories,
@@ -140,14 +142,14 @@ function getDescendantCategoryIds(
   for (const category of categories) {
     if (!category.parentId) continue;
     const childIds = childIdsByParentId.get(category.parentId) ?? [];
-    childIds.push(category.id);
-    childIdsByParentId.set(category.parentId, childIds);
+    childIdsByParentId.set(category.parentId, [...childIds, category.id]);
   }
 
   const categoryIds = [rootCategoryId];
   const knownCategoryIds = new Set(categoryIds);
   for (const currentCategoryId of categoryIds) {
-    for (const childCategoryId of childIdsByParentId.get(currentCategoryId) ?? []) {
+    for (const childCategoryId of childIdsByParentId.get(currentCategoryId) ??
+      []) {
       if (knownCategoryIds.has(childCategoryId)) continue;
       knownCategoryIds.add(childCategoryId);
       categoryIds.push(childCategoryId);
@@ -174,10 +176,9 @@ async function getActiveTransactions(
     conditions.push(Q.where("category_id", Q.oneOf([...categoryIds])));
   }
 
-  const transactions = await scope.queryOwned(
-    database.get<Transaction>("transactions"),
-    Q.and(...conditions)
-  ).fetch();
+  const transactions = await scope
+    .queryOwned(database.get<Transaction>("transactions"), Q.and(...conditions))
+    .fetch();
 
   return filterExcludedTransactions(
     transactions,
@@ -229,7 +230,9 @@ function getSubcategoryBreakdown(
     return [];
   }
 
-  const categoryById = new Map(categories.map((category) => [category.id, category]));
+  const categoryById = new Map(
+    categories.map((category) => [category.id, category])
+  );
   const amountsByChildId = new Map<string, number>();
 
   for (const transaction of transactions) {
