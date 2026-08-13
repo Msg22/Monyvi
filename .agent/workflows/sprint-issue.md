@@ -146,3 +146,43 @@ Every PR for a sprint issue should include:
 If a verified part of the issue is intentionally deferred, call it out in the
 PR. Create a follow-up GitHub issue when the deferred work is actionable and
 needs tracking.
+
+## 7. Manual QA Data Readiness
+
+When a sprint-issue PR includes a manual QA plan with scenarios that depend on
+database state, prepare the local Supabase data needed to execute that plan
+before final handoff.
+
+1. Use the QA user Mohamed specifies for the issue. Operate on local Supabase
+   only unless Mohamed explicitly authorizes a remote or shared environment.
+2. Translate every database-backed manual QA scenario into its required
+   accounts, categories, transactions, budgets, dates, statuses, relationships,
+   and edge-case state.
+3. Inspect that user's existing local data before writing anything. Compare the
+   observed rows with the complete scenario requirements and identify only the
+   missing or unsuitable data.
+4. If the existing data already supports every scenario, leave it unchanged. Do
+   not reseed merely because a seed command exists.
+5. If data is missing, add or update only the minimum user-scoped rows needed to
+   remove the QA blocker. Preserve unrelated users and existing usable data. Do
+   not reset or fully reseed the local database unless Mohamed explicitly
+   requests it or a branch migration makes a reset unavoidable.
+6. Prefer deterministic, idempotent fixture identifiers and values so a repeated
+   preparation run updates the intended QA rows without creating duplicates.
+   Respect ownership, foreign-key, hierarchy, sync, and local-first invariants.
+7. Query local Supabase after preparation and verify that every database-backed
+   scenario is now executable, including expected totals, ordering, exclusion
+   cases, empty states, and expired or inactive records where relevant.
+8. Complete a successful sync on the QA device, then verify the prepared
+   scenarios through the app or the current user's scoped WatermelonDB state.
+   Supabase verification alone does not prove device readiness because local
+   sync metadata, pending edits, or stale rows can make the device state differ.
+   If device sync or local verification is unavailable, report the scenario as
+   blocked instead of declaring the manual QA data ready.
+9. In the final handoff, state:
+   - which QA user was prepared,
+   - what data was added or confirmed,
+   - the expected values or record names needed during testing,
+   - how to pull or refresh the data on the device, and
+   - any scenario that remains manual-only or blocked by something other than
+     database state.
