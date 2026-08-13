@@ -43,6 +43,8 @@ import { BudgetHeroCard } from "./BudgetHeroCard";
 import { BudgetCategoryCard } from "./BudgetCategoryCard";
 import { BudgetEmptyState } from "./BudgetEmptyState";
 
+const SUMMARY_FOOTER_BASE_PADDING = 12;
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -201,8 +203,11 @@ export function BudgetDashboard(): React.JSX.Element {
       {/* S-01: Bottom summary bar */}
       {globalBudget && (
         <View
+          testID="budget-summary-footer"
           className="flex-row items-center justify-center border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-3"
-          style={{ paddingBottom: Math.max(insets.bottom, 12) }}
+          style={{
+            paddingBottom: SUMMARY_FOOTER_BASE_PADDING + insets.bottom,
+          }}
         >
           <View className="items-center flex-1">
             <Text className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 dark:text-slate-500">

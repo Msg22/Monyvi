@@ -25,6 +25,8 @@ interface AccountSelectorModalProps {
   onClose: () => void;
 }
 
+const ACCOUNT_LIST_BOTTOM_SPACING = 40;
+
 export function AccountSelectorModal({
   visible,
   accounts,
@@ -79,7 +81,7 @@ export function AccountSelectorModal({
             />
             <View className="absolute inset-0 bg-white/95 dark:bg-slate-900/95" />
 
-            <View>
+            <View testID="account-selector-scroll-container" className="shrink">
               {/* Header */}
               <View className="flex-row justify-between items-center px-6 py-5 border-b border-slate-200 dark:border-slate-800">
                 <Text className="text-xl font-bold text-slate-800 dark:text-slate-100">
@@ -97,18 +99,16 @@ export function AccountSelectorModal({
               {/* Account List */}
               <ScrollView
                 testID="account-selector-scroll"
+                className="shrink"
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{
                   gap: 12,
-                  paddingBottom: bottomInset + 40,
+                  paddingBottom: ACCOUNT_LIST_BOTTOM_SPACING,
                   paddingHorizontal: 16,
                   paddingTop: 16,
                 }}
               >
-                <View
-                  testID="account-selector-list-content"
-                  className="gap-3"
-                >
+                <View testID="account-selector-list-content" className="gap-3">
                   {accounts.map((account) => {
                     const isSelected = account.id === selectedId;
 

@@ -1,11 +1,12 @@
 import React from "react";
-import { act, render, waitFor } from "@testing-library/react-native";
+import { act, render, screen, waitFor } from "@testing-library/react-native";
 
 const mockPauseExpiredCustomBudgets = jest.fn();
 const mockRefresh = jest.fn();
 const mockUseBudgets = jest.fn();
 const mockLoggerError = jest.fn();
 let mockIsFocused = true;
+let mockBottomInset = 0;
 
 jest.mock("expo-router", () => {
   const ReactModule = jest.requireActual<typeof React>("react");
@@ -26,7 +27,7 @@ jest.mock("react-i18next", () => ({
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
-  useSafeAreaInsets: (): { bottom: number } => ({ bottom: 0 }),
+  useSafeAreaInsets: (): { bottom: number } => ({ bottom: mockBottomInset }),
 }));
 
 jest.mock("@expo/vector-icons", () => ({
@@ -119,13 +120,52 @@ function setBudgetState(autoPauseCheckKey: string): void {
   });
 }
 
+function setBudgetStateWithGlobalBudget(): void {
+  const globalBudget = {
+    budget: { id: "global-budget" },
+    daysLeft: 10,
+    metrics: { remaining: 1000 },
+  };
+
+  mockUseBudgets.mockReturnValue({
+    globalBudget,
+    categoryBudgets: [],
+    isLoading: false,
+    totalCount: 1,
+    periodFilter: "ALL",
+    setPeriodFilter: jest.fn(),
+    budgets: [globalBudget],
+    refresh: mockRefresh,
+    autoPauseCheckKey: "global-budget",
+  });
+}
+
 describe("BudgetDashboard", () => {
   beforeEach((): void => {
     jest.clearAllMocks();
     mockIsFocused = true;
+    mockBottomInset = 0;
     mockPauseExpiredCustomBudgets.mockResolvedValue(0);
     setBudgetState("initial");
   });
+
+  it.each([
+    { bottomInset: 0, expectedPadding: 12 },
+    { bottomInset: 16, expectedPadding: 28 },
+    { bottomInset: 48, expectedPadding: 60 },
+  ])(
+    "adds the $bottomInset bottom inset to the summary footer base spacing",
+    ({ bottomInset, expectedPadding }): void => {
+      mockBottomInset = bottomInset;
+      setBudgetStateWithGlobalBudget();
+
+      render(<BudgetDashboard />);
+
+      expect(screen.getByTestId("budget-summary-footer")).toHaveStyle({
+        paddingBottom: expectedPadding,
+      });
+    }
+  );
 
   it("re-runs budget auto-pause when relevant budget data changes while focused", async (): Promise<void> => {
     const { rerender } = render(<BudgetDashboard />);

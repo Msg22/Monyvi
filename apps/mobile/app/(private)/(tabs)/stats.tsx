@@ -6,9 +6,9 @@
 
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { CategoryDrilldownCard } from "@/components/stats/CategoryDrilldownCard";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { MonthlyExpenseChart } from "@/components/stats/MonthlyExpenseChart";
 import { QuickStats } from "@/components/stats/QuickStats";
-import { TAB_BAR_HEIGHT } from "@/constants/ui";
 import { useTranslation } from "react-i18next";
 import React from "react";
 import { ScrollView, View } from "react-native";
@@ -17,14 +17,20 @@ import { ScrollView, View } from "react-native";
 // Screen
 // =============================================================================
 
+const TAB_CONTENT_BOTTOM_SPACING = 20;
+
 export default function StatsScreen(): React.JSX.Element {
   const { t } = useTranslation("common");
+  const tabBarHeight = useBottomTabBarHeight();
 
   return (
     <View className="flex-1">
       <PageHeader title={t("stats")} />
       <ScrollView
-        contentContainerStyle={{ paddingBottom: TAB_BAR_HEIGHT + 20 }}
+        testID="stats-scroll"
+        contentContainerStyle={{
+          paddingBottom: tabBarHeight + TAB_CONTENT_BOTTOM_SPACING,
+        }}
         showsVerticalScrollIndicator={false}
       >
         <View className="px-5 pt-4">

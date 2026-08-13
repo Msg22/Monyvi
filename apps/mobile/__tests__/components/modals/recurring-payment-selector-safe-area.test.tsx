@@ -11,8 +11,9 @@ jest.mock("react-native-safe-area-context", () => ({
   initialWindowMetrics: {
     insets: { bottom: 24, left: 0, right: 0, top: 0 },
   },
-  SafeAreaInsetsContext:
-    jest.requireActual<typeof import("react")>("react").createContext(null),
+  SafeAreaInsetsContext: jest
+    .requireActual<typeof import("react")>("react")
+    .createContext(null),
   useSafeAreaInsets: (): { readonly bottom: number } => ({ bottom: 0 }),
 }));
 
@@ -140,8 +141,16 @@ describe("recurring payment selector safe areas", () => {
     expect(screen.getByTestId("account-selector-scroll")).toHaveProp(
       "contentContainerStyle",
       expect.objectContaining({
-        paddingBottom: 88,
+        paddingBottom: 40,
       })
+    );
+    expect(screen.getByTestId("account-selector-scroll-container")).toHaveProp(
+      "className",
+      expect.stringContaining("shrink")
+    );
+    expect(screen.getByTestId("account-selector-scroll")).toHaveProp(
+      "className",
+      expect.stringContaining("shrink")
     );
   });
 

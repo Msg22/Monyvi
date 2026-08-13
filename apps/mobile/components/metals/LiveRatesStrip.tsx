@@ -33,8 +33,8 @@ interface LiveRatesStripProps {
   readonly goldChangePercent: number;
   /** Silver 24h change percentage (positive = up) */
   readonly silverChangePercent: number;
-  /** Additional bottom inset for safe area */
-  readonly bottomInset?: number;
+  /** Measured bottom offset owned by the parent navigation surface. */
+  readonly bottomOffset?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,7 +64,7 @@ export function LiveRatesStrip({
   silverPricePerGramUsd,
   goldChangePercent,
   silverChangePercent,
-  bottomInset = 0,
+  bottomOffset = 0,
 }: LiveRatesStripProps): React.JSX.Element {
   const { t } = useTranslation("metals");
   const goldPerOz = goldPricePerGramUsd * TROY_OUNCE_GRAMS;
@@ -85,7 +85,7 @@ export function LiveRatesStrip({
   return (
     <View
       className="absolute start-4 end-4 flex-row items-center justify-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3"
-      style={[STRIP_SHADOW, { bottom: bottomInset + 10 }]}
+      style={[STRIP_SHADOW, { bottom: bottomOffset + 10 }]}
       accessibilityRole="summary"
       accessibilityLabel={accessibilityLabel}
     >
