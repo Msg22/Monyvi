@@ -44,36 +44,35 @@ export function observeBudgetList(userId: string): Query<Budget> {
 export async function buildBudgetMetrics(
   budgets: readonly Budget[]
 ): Promise<BudgetWithMetrics[]> {
-  const results: BudgetWithMetrics[] = [];
+  const liveBudgets = budgets.filter(
+    (budget) =>
+      !(
+        budget.status === "ACTIVE" &&
+        budget.period === "CUSTOM" &&
+        isPeriodExpired(budget.periodEnd)
+      )
+  );
 
-  for (const budget of budgets) {
-    if (
-      budget.status === "ACTIVE" &&
-      budget.period === "CUSTOM" &&
-      isPeriodExpired(budget.periodEnd)
-    ) {
-      continue;
-    }
+  return Promise.all(
+    liveBudgets.map(async (budget) => {
+      const bounds = getCurrentPeriodBounds(
+        budget.period,
+        budget.periodStart,
+        budget.periodEnd
+      );
+      const spent = await getSpendingForBudget(budget);
+      const daysElapsed = getDaysElapsed(bounds.start);
+      const daysLeft = getDaysLeft(bounds.end);
+      const metrics = computeSpendingMetrics(
+        spent,
+        budget.amount,
+        daysElapsed,
+        budget.alertThreshold
+      );
 
-    const bounds = getCurrentPeriodBounds(
-      budget.period,
-      budget.periodStart,
-      budget.periodEnd
-    );
-    const spent = await getSpendingForBudget(budget);
-    const daysElapsed = getDaysElapsed(bounds.start);
-    const daysLeft = getDaysLeft(bounds.end);
-    const metrics = computeSpendingMetrics(
-      spent,
-      budget.amount,
-      daysElapsed,
-      budget.alertThreshold
-    );
-
-    results.push({ budget, metrics, daysLeft, daysElapsed });
-  }
-
-  return results;
+      return { budget, metrics, daysLeft, daysElapsed };
+    })
+  );
 }
 
 export function buildBudgetListReadModel(
@@ -91,7 +90,7 @@ export function buildBudgetListReadModel(
     budgets: filteredBudgets,
     globalBudget: filteredBudgets.find((item) => item.budget.isGlobal),
     categoryBudgets: filteredBudgets.filter(
-      (item) => item.budget.isCategoryBudget && item.budget.status === "ACTIVE"
+      (item) => item.budget.isCategoryBudget
     ),
     pausedBudgets: filteredBudgets.filter(
       (item) => item.budget.status === "PAUSED"

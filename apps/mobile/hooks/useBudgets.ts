@@ -31,7 +31,7 @@ interface UseBudgetsResult {
   readonly budgets: readonly BudgetWithMetrics[];
   /** The global budget (if any) */
   readonly globalBudget: BudgetWithMetrics | undefined;
-  /** Category budgets only (active) */
+  /** Active and paused category budgets */
   readonly categoryBudgets: readonly BudgetWithMetrics[];
   /** Paused budgets */
   readonly pausedBudgets: readonly BudgetWithMetrics[];

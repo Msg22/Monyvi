@@ -221,6 +221,43 @@ describe("budget-list-read-model-service", () => {
     });
   });
 
+  it("starts every eligible spending read before waiting for any result", async () => {
+    const firstBudget = createBudget("first");
+    const secondBudget = createBudget("second");
+    const startedBudgetIds: string[] = [];
+    let resolveFirst: (value: number) => void = () => undefined;
+    let resolveSecond: (value: number) => void = () => undefined;
+
+    mockGetSpendingForBudget.mockImplementation((budget) => {
+      startedBudgetIds.push(budget.id);
+      return new Promise<number>((resolve) => {
+        if (budget.id === "first") {
+          resolveFirst = resolve;
+        } else {
+          resolveSecond = resolve;
+        }
+      });
+    });
+
+    const resultPromise = buildBudgetMetrics([firstBudget, secondBudget]);
+
+    expect(startedBudgetIds).toEqual(["first", "second"]);
+
+    resolveSecond(125);
+    resolveFirst(300);
+
+    await expect(resultPromise).resolves.toHaveLength(2);
+  });
+
+  it("propagates a rejected eligible spending read", async () => {
+    const error = new Error("spending read failed");
+    mockGetSpendingForBudget.mockRejectedValueOnce(error);
+
+    await expect(buildBudgetMetrics([createBudget("budget-1")])).rejects.toBe(
+      error
+    );
+  });
+
   it("skips expired active custom budgets before computing metrics", async () => {
     const expiredCustomBudget = createBudget("expired-custom", {
       period: "CUSTOM",
@@ -264,7 +301,7 @@ describe("budget-list-read-model-service", () => {
     expect(result.totalCount).toBe(3);
   });
 
-  it("keeps paused budgets in their own section for the all filter", () => {
+  it("keeps paused category budgets visible in the category grid", () => {
     const paused = createBudgetMetric(
       createBudget("paused", {
         period: "WEEKLY",
@@ -276,7 +313,7 @@ describe("budget-list-read-model-service", () => {
 
     expect(result.budgets).toEqual([paused]);
     expect(result.globalBudget).toBeUndefined();
-    expect(result.categoryBudgets).toEqual([]);
+    expect(result.categoryBudgets).toEqual([paused]);
     expect(result.pausedBudgets).toEqual([paused]);
     expect(result.totalCount).toBe(1);
   });
