@@ -147,7 +147,9 @@ const REQUIRED_SCALAR_KEYS: Record<string, readonly string[]> = {
     "pitch_slide_sms_bank_body",
     "pitch_slide_sms_detected",
     "pitch_slide_sms_category_groceries",
+    "pitch_slide_sms_account",
     "pitch_slide_sms_status_imported",
+    "pitch_slide_sms_status_just_now",
     // Pitch slide 2B — Offline (iOS)
     "pitch_slide_offline_headline",
     "pitch_slide_offline_subhead",

@@ -11,4 +11,19 @@ describe("translation resource runtime contract", () => {
       })
     ).not.toThrow();
   });
+
+  it.each([
+    ["en", enOnboarding],
+    ["ar", arOnboarding],
+  ])(
+    "includes every SMS transaction-card label in %s",
+    (_language, resource) => {
+      const translations: Record<string, unknown> = resource;
+
+      expect(typeof translations.pitch_slide_sms_account).toBe("string");
+      expect(typeof translations.pitch_slide_sms_status_just_now).toBe(
+        "string"
+      );
+    }
+  );
 });
