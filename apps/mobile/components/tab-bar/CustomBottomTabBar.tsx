@@ -1,16 +1,20 @@
 import { palette } from "@/constants/colors";
 import { MIC_BUTTON_SIZE, TAB_BAR_HEIGHT } from "@/constants/ui";
 import { Ionicons } from "@expo/vector-icons";
-import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import {
+  BottomTabBarHeightCallbackContext,
+  type BottomTabBarProps,
+} from "@react-navigation/bottom-tabs";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { memo, useCallback, useEffect } from "react";
+import React, { memo, useCallback, useContext, useEffect } from "react";
 import {
   Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  type LayoutChangeEvent,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -77,10 +81,18 @@ function CustomBottomTabBarComponent({
   const insets = useSafeAreaInsets();
   const { language } = useLocale();
   const { t } = useTranslation("common");
+  const onHeightChange = useContext(BottomTabBarHeightCallbackContext);
 
   // Calculate safe bottom padding
   const bottomPadding = Math.max(insets.bottom);
   const tabBarHeight = TAB_BAR_HEIGHT + bottomPadding;
+
+  const handleLayout = useCallback(
+    (event: LayoutChangeEvent): void => {
+      onHeightChange?.(event.nativeEvent.layout.height);
+    },
+    [onHeightChange]
+  );
 
   const handleMicPress = useCallback(() => {
     if (onMicPress) {
@@ -179,6 +191,8 @@ function CustomBottomTabBarComponent({
     <>
       {/* Main tab bar */}
       <View
+        testID="custom-bottom-tab-bar"
+        onLayout={handleLayout}
         className="absolute bottom-0 start-0 end-0 z-[25]"
         style={{ paddingBottom: bottomPadding, height: tabBarHeight }}
       >

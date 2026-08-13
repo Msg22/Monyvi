@@ -15,10 +15,10 @@
  */
 
 import { Ionicons } from "@expo/vector-icons";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useTranslation } from "react-i18next";
 import React, { useCallback, useState } from "react";
 import { FlatList, Text, TouchableOpacity, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { PageHeader } from "@/components/navigation/PageHeader";
 import {
@@ -49,6 +49,7 @@ const HOLDING_SKELETON_HEIGHT = 72;
 const RADIUS_LARGE = 24;
 const RADIUS_SMALL = 16;
 const PERCENTAGE_MULTIPLIER = 100;
+const LIVE_RATES_STRIP_CLEARANCE = 80;
 
 // ---------------------------------------------------------------------------
 // Skeleton Loading Component
@@ -117,8 +118,6 @@ function MetalsPageSkeleton(): React.JSX.Element {
 
 const HOLDING_KEY_EXTRACTOR = (item: MetalHolding): string => item.asset.id;
 
-const FLAT_LIST_CONTENT_STYLE = { paddingBottom: 100 };
-
 // ---------------------------------------------------------------------------
 // Main Screen
 // ---------------------------------------------------------------------------
@@ -128,7 +127,7 @@ const FLAT_LIST_CONTENT_STYLE = { paddingBottom: 100 };
  * portfolio split, live rates strip, and add holding modal.
  */
 export default function MyMetalsScreen(): React.JSX.Element {
-  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const { t } = useTranslation("metals");
   const { latestRates, previousDayRate } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
@@ -282,12 +281,15 @@ export default function MyMetalsScreen(): React.JSX.Element {
         <EmptyMetalsState onAddHolding={handleAddFromEmpty} />
       ) : (
         <FlatList
+          testID="metals-list"
           data={activeHoldings}
           keyExtractor={HOLDING_KEY_EXTRACTOR}
           renderItem={renderHoldingItem}
           ListHeaderComponent={renderListHeader}
           ListEmptyComponent={renderEmptyList}
-          contentContainerStyle={FLAT_LIST_CONTENT_STYLE}
+          contentContainerStyle={{
+            paddingBottom: tabBarHeight + LIVE_RATES_STRIP_CLEARANCE,
+          }}
           showsVerticalScrollIndicator={false}
           // Performance optimizations
           {...ANDROID_SAFE_LIST_PROPS}
@@ -304,7 +306,7 @@ export default function MyMetalsScreen(): React.JSX.Element {
           silverPricePerGramUsd={latestRates.silverUsdPerGram}
           goldChangePercent={goldChangePercent}
           silverChangePercent={silverChangePercent}
-          bottomInset={insets.bottom}
+          bottomOffset={tabBarHeight}
         />
       ) : null}
 
