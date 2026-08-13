@@ -170,11 +170,16 @@ before final handoff.
 6. Prefer deterministic, idempotent fixture identifiers and values so a repeated
    preparation run updates the intended QA rows without creating duplicates.
    Respect ownership, foreign-key, hierarchy, sync, and local-first invariants.
-7. Query the local database after preparation and verify that every
-   database-backed scenario is now executable, including expected totals,
-   ordering, exclusion cases, empty states, and expired or inactive records
-   where relevant.
-8. In the final handoff, state:
+7. Query local Supabase after preparation and verify that every database-backed
+   scenario is now executable, including expected totals, ordering, exclusion
+   cases, empty states, and expired or inactive records where relevant.
+8. Complete a successful sync on the QA device, then verify the prepared
+   scenarios through the app or the current user's scoped WatermelonDB state.
+   Supabase verification alone does not prove device readiness because local
+   sync metadata, pending edits, or stale rows can make the device state differ.
+   If device sync or local verification is unavailable, report the scenario as
+   blocked instead of declaring the manual QA data ready.
+9. In the final handoff, state:
    - which QA user was prepared,
    - what data was added or confirmed,
    - the expected values or record names needed during testing,
