@@ -99,5 +99,18 @@
   "alert_over_budget_title": "Over Budget!",
   "alert_over_budget_subtitle": "You've exceeded your budget by {{overage}}",
   "alert_got_it": "Got It",
-  "alert_dismiss": "Dismiss"
+  "alert_dismiss": "Dismiss",
+  "overall_budgets": "Overall budgets",
+  "needs_attention": "Needs attention",
+  "category_budgets": "Category budgets",
+  "budget_expired": "Expired",
+  "deleted_category": "Deleted category",
+  "renew_budget": "Renew budget",
+  "resume_confirmation_title": "Resume budget?",
+  "resume_confirmation_message": "Spending will be tracked again from now on.",
+  "resume_confirmation_confirm": "Resume budget",
+  "dashboard_load_error": "We couldn't refresh your budgets. Your last results are still here.",
+  "dashboard_action_error": "We couldn't update this budget. Please try again.",
+  "retry": "Try again",
+  "carousel_page_announcement": "Budget page {{current}} of {{total}}"
 }

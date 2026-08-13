@@ -4,10 +4,19 @@ interface RunCiE2eModule {
     nextChunk: string,
     maxLength?: number
   ): string;
+  getBudgetMaestroFlows(): readonly {
+    readonly flow: string;
+    readonly profile: "dashboard-full" | "dashboard-filter-empty";
+  }[];
   getRequestedCiSuites(
     env?: Readonly<Record<string, string | undefined>>
   ): ReadonlySet<
-    "accounts" | "transactions" | "recurring-payments" | "sms-sync" | "live-sms"
+    | "accounts"
+    | "transactions"
+    | "recurring-payments"
+    | "budgets"
+    | "sms-sync"
+    | "live-sms"
   >;
   getChildTimeoutMs(env?: Readonly<Record<string, string | undefined>>): number;
   getLiveSmsTimeoutMs(
@@ -69,8 +78,26 @@ describe("run-ci-e2e helpers", () => {
       "accounts",
       "transactions",
       "recurring-payments",
+      "budgets",
       "sms-sync",
       "live-sms",
+    ]);
+  });
+
+  it("registers deterministic budget flow profiles", () => {
+    expect(runCiE2e.getBudgetMaestroFlows()).toEqual([
+      {
+        flow: "budgets/dashboard-visibility-filters.yaml",
+        profile: "dashboard-filter-empty",
+      },
+      {
+        flow: "budgets/dashboard-lifecycle-actions.yaml",
+        profile: "dashboard-full",
+      },
+      {
+        flow: "budgets/dashboard-carousel.yaml",
+        profile: "dashboard-full",
+      },
     ]);
   });
 
@@ -85,6 +112,7 @@ describe("run-ci-e2e helpers", () => {
       0
     );
   });
+
 
   it("keeps only a bounded output tail for retry detection", () => {
     expect(runCiE2e.appendOutputTail("abcdef", "ghij", 6)).toBe("efghij");

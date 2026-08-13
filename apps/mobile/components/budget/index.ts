@@ -10,9 +10,11 @@ export { BudgetEmptyState } from "./BudgetEmptyState";
 export { AlertThresholdSlider } from "./AlertThresholdSlider";
 
 // Dashboard
-export { BudgetHeroCard } from "./BudgetHeroCard";
-export { BudgetCategoryCard } from "./BudgetCategoryCard";
 export { BudgetDashboard } from "./BudgetDashboard";
+export { BudgetDashboardCard } from "./BudgetDashboardCard";
+export { BudgetDashboardSectionHeader } from "./BudgetDashboardSectionHeader";
+export { BudgetDashboardSkeleton } from "./BudgetDashboardSkeleton";
+export { GlobalBudgetCarousel } from "./GlobalBudgetCarousel";
 
 // Form
 export { BudgetForm } from "./BudgetForm";

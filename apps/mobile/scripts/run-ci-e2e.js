@@ -7,7 +7,12 @@ const {
   reconnectAndroidDevice,
   stabilizeAndroidDevice,
 } = require("./e2e-preflight");
-const { getE2eSeedConfig, seedE2eData } = require("./e2e-seed");
+const {
+  getE2eFixture,
+  getE2eSeedConfig,
+  resetE2eData,
+  seedE2eData,
+} = require("./e2e-seed");
 const { logE2eDuration } = require("./e2e-timing");
 
 const mobileRoot = join(__dirname, "..");
@@ -21,6 +26,7 @@ const allCiSuites = [
   "accounts",
   "transactions",
   "recurring-payments",
+  "budgets",
   "sms-sync",
   "live-sms",
 ];
@@ -43,6 +49,20 @@ const recurringPaymentMaestroFlows = [
   "recurring-payments/recurring-payments-crud-actions.yaml",
 ];
 const smsSyncMaestroFlows = ["sms-sync/sms-sync-permission-requestable.yaml"];
+const budgetMaestroFlows = [
+  {
+    flow: "budgets/dashboard-visibility-filters.yaml",
+    profile: "dashboard-filter-empty",
+  },
+  {
+    flow: "budgets/dashboard-lifecycle-actions.yaml",
+    profile: "dashboard-full",
+  },
+  {
+    flow: "budgets/dashboard-carousel.yaml",
+    profile: "dashboard-full",
+  },
+];
 const defaultLiveSmsJourneys = [
   "01",
   "02",
@@ -151,7 +171,8 @@ function shouldResetMaestroFlowBeforeRetry(flow, env = process.env) {
   return (
     flow.startsWith("accounts/") ||
     flow.startsWith("transactions/") ||
-    flow.startsWith("recurring-payments/")
+    flow.startsWith("recurring-payments/") ||
+    flow.startsWith("budgets/")
   );
 }
 
@@ -165,7 +186,7 @@ function shouldRetryMaestroSuiteFlow(flow, env = process.env) {
 function getMaestroSuiteFlowOptions(flow, env = process.env) {
   return {
     prepareRetry: shouldResetMaestroFlowBeforeRetry(flow, env)
-      ? prepareCleanMaestroFlowRetry
+      ? () => prepareCleanMaestroFlowRetry(flow)
       : undefined,
     retryOnDeviceFailure: shouldRetryMaestroSuiteFlow(flow, env),
   };
@@ -320,15 +341,16 @@ async function runNodeScript(script, args, options = {}) {
   }
 }
 
-async function maybeSeedE2eData() {
+async function maybeSeedE2eData(profile) {
   if (process.env.E2E_SKIP_SEED === "1") return;
 
   const startedAt = Date.now();
   const config = getE2eSeedConfig();
+  const fixture = getE2eFixture({ E2E_BUDGET_PROFILE: profile });
   const client = createClient(config.supabaseUrl, config.serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const result = await seedE2eData(client, config);
+  const result = await seedE2eData(client, config, fixture);
   process.env.E2E_USER_ID = result.userId;
   console.log(
     `Seeded E2E data for ${config.email} (${result.userId}) on ${config.mode} Supabase`
@@ -336,10 +358,40 @@ async function maybeSeedE2eData() {
   logE2eDuration("seed E2E data", startedAt);
 }
 
-async function prepareCleanMaestroFlowRetry() {
+function getBudgetMaestroFlows() {
+  return budgetMaestroFlows;
+}
+
+function getBudgetProfileForMaestroFlow(flow) {
+  return budgetMaestroFlows.find((entry) => entry.flow === flow)?.profile;
+}
+
+async function resetAndSeedBudgetE2eData(profile) {
+  if (process.env.E2E_SKIP_SEED === "1") return;
+
+  const config = getE2eSeedConfig();
+  const fixture = getE2eFixture({ E2E_BUDGET_PROFILE: profile });
+  const client = createClient(config.supabaseUrl, config.serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const resetResult = await resetE2eData(client, config, fixture);
+  const seedResult = await seedE2eData(client, config, fixture);
+  process.env.E2E_USER_ID = seedResult.userId;
+
+  if (resetResult.userId !== seedResult.userId) {
+    throw new Error("Budget E2E reset changed the authenticated fixture user.");
+  }
+}
+
+async function prepareCleanMaestroFlowRetry(flow) {
   if (!isLocalSupabaseMode()) return;
 
-  await maybeSeedE2eData();
+  const budgetProfile = getBudgetProfileForMaestroFlow(flow);
+  if (budgetProfile) {
+    await resetAndSeedBudgetE2eData(budgetProfile);
+  } else {
+    await maybeSeedE2eData();
+  }
   const previousClearAppState = process.env.E2E_CLEAR_APP_STATE;
   process.env.E2E_CLEAR_APP_STATE = "1";
 
@@ -444,6 +496,18 @@ async function runMaestroFlows(flows) {
   }
 }
 
+async function runBudgetMaestroFlows() {
+  for (const { flow, profile } of getBudgetMaestroFlows()) {
+    await resetAndSeedBudgetE2eData(profile);
+    await maybeRunAuthBootstrap();
+    await runNodeScript(
+      "scripts/run-maestro.js",
+      ["test", join("e2e", "maestro", flow)],
+      getMaestroSuiteFlowOptions(flow)
+    );
+  }
+}
+
 async function main() {
   const selectedSuites = getRequestedCiSuites();
   if (selectedSuites.size === 0) {
@@ -467,6 +531,10 @@ async function main() {
 
   if (selectedSuites.has("recurring-payments")) {
     await runMaestroFlows(recurringPaymentMaestroFlows);
+  }
+
+  if (selectedSuites.has("budgets")) {
+    await runBudgetMaestroFlows();
   }
 
   if (selectedSuites.has("sms-sync")) {
@@ -499,6 +567,7 @@ module.exports = {
   getChildTimeoutMs,
   getDeviceOfflineRetryCount,
   getLiveSmsTimeoutMs,
+  getBudgetMaestroFlows,
   getRequestedCiSuites,
   getAuthBootstrapFlow,
   getInitialAuthBootstrapOptions,

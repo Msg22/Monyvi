@@ -21,10 +21,11 @@ describe("resolve-ci-e2e-scope", () => {
       scopeResolver.buildCiE2eMatrix([
         "transactions",
         "recurring-payments",
+        "budgets",
         "sms-sync",
       ])
     ).toEqual({
-      suite: ["transactions", "recurring-payments", "sms-sync"],
+      suite: ["transactions", "recurring-payments", "budgets", "sms-sync"],
     });
     expect(scopeResolver.buildCiE2eMatrix([])).toEqual({ suite: ["skip"] });
   });
@@ -95,6 +96,21 @@ describe("resolve-ci-e2e-scope", () => {
     });
   });
 
+  it("selects only budget E2E for dashboard implementation and Maestro changes", () => {
+    expect(
+      scopeResolver.resolveCiE2eScope([
+        "apps/mobile/app/(private)/budgets.tsx",
+        "apps/mobile/components/budget/BudgetDashboard.tsx",
+        "apps/mobile/e2e/maestro/budgets/dashboard-carousel.yaml",
+        "apps/mobile/hooks/useBudgets.ts",
+        "apps/mobile/services/budget-list-read-model-service.ts",
+      ])
+    ).toEqual({
+      shouldRun: true,
+      suites: ["budgets"],
+    });
+  });
+
   it("ignores global mobile files that do not directly affect E2E journeys", () => {
     expect(
       scopeResolver.resolveCiE2eScope([
@@ -137,6 +153,7 @@ describe("resolve-ci-e2e-scope", () => {
         "accounts",
         "transactions",
         "recurring-payments",
+        "budgets",
         "sms-sync",
         "live-sms",
       ],
@@ -177,7 +194,7 @@ describe("resolve-ci-e2e-scope", () => {
     });
   });
 
-  it("selects transaction and recurring payment E2E for shared payment form changes", () => {
+  it("selects transaction, recurring payment, and budget E2E for shared payment form changes", () => {
     expect(
       scopeResolver.resolveCiE2eScope([
         "apps/mobile/__tests__/app/budget-screens-style.test.tsx",
@@ -198,7 +215,7 @@ describe("resolve-ci-e2e-scope", () => {
       ])
     ).toEqual({
       shouldRun: true,
-      suites: ["transactions", "recurring-payments"],
+      suites: ["transactions", "recurring-payments", "budgets"],
     });
   });
 
@@ -224,6 +241,7 @@ describe("resolve-ci-e2e-scope", () => {
         "accounts",
         "transactions",
         "recurring-payments",
+        "budgets",
         "sms-sync",
         "live-sms",
       ],
@@ -239,6 +257,7 @@ describe("resolve-ci-e2e-scope", () => {
         "accounts",
         "transactions",
         "recurring-payments",
+        "budgets",
         "sms-sync",
         "live-sms",
       ],
@@ -254,6 +273,7 @@ describe("resolve-ci-e2e-scope", () => {
         "accounts",
         "transactions",
         "recurring-payments",
+        "budgets",
         "sms-sync",
         "live-sms",
       ],
@@ -307,6 +327,7 @@ describe("resolve-ci-e2e-scope", () => {
         "accounts",
         "transactions",
         "recurring-payments",
+        "budgets",
         "sms-sync",
         "live-sms",
       ],
@@ -331,6 +352,7 @@ describe("resolve-ci-e2e-scope", () => {
         "accounts",
         "transactions",
         "recurring-payments",
+        "budgets",
         "sms-sync",
         "live-sms",
       ],
@@ -349,6 +371,7 @@ describe("resolve-ci-e2e-scope", () => {
         "accounts",
         "transactions",
         "recurring-payments",
+        "budgets",
         "sms-sync",
         "live-sms",
       ],

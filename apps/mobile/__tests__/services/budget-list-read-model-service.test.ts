@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-unsafe-assignment */
 import type { Budget, BudgetPeriod } from "@monyvi/db";
 
 const mockDatabaseGet = jest.fn((tableName: string): string => tableName);
@@ -76,7 +77,7 @@ jest.mock("@monyvi/logic", () => ({
 }));
 
 import {
-  buildBudgetListReadModel,
+  buildBudgetDashboardReadModel,
   buildBudgetMetrics,
   observeBudgetList,
   type BudgetWithMetrics,
@@ -143,7 +144,15 @@ describe("budget-list-read-model-service", () => {
     });
     mockGetDaysElapsed.mockReturnValue(15);
     mockGetDaysLeft.mockReturnValue(16);
-    mockIsPeriodExpired.mockReturnValue(false);
+    mockIsPeriodExpired.mockReset();
+    mockIsPeriodExpired.mockImplementation(
+      (periodEnd: Date | null | undefined, referenceDate: Date): boolean => {
+        if (!periodEnd) return false;
+        const endOfDay = new Date(periodEnd);
+        endOfDay.setHours(23, 59, 59, 999);
+        return referenceDate.getTime() > endOfDay.getTime();
+      }
+    );
     mockComputeSpendingMetrics.mockReturnValue({
       spent: 250,
       limit: 1000,
@@ -258,63 +267,277 @@ describe("budget-list-read-model-service", () => {
     );
   });
 
-  it("skips expired active custom budgets before computing metrics", async () => {
+  it("retains expired active custom budgets while computing existing metrics", async () => {
     const expiredCustomBudget = createBudget("expired-custom", {
       period: "CUSTOM",
       status: "ACTIVE",
       periodEnd: new Date("2026-04-30T23:59:59.999Z"),
     });
-    mockIsPeriodExpired.mockReturnValueOnce(true);
-
     const result = await buildBudgetMetrics([expiredCustomBudget]);
 
-    expect(result).toEqual([]);
-    expect(mockIsPeriodExpired).toHaveBeenCalledWith(
-      expiredCustomBudget.periodEnd
-    );
-    expect(mockGetSpendingForBudget).not.toHaveBeenCalled();
+    expect(result).toHaveLength(1);
+    expect(result[0]?.budget).toBe(expiredCustomBudget);
+    expect(mockGetSpendingForBudget).toHaveBeenCalledWith(expiredCustomBudget);
   });
 
-  it("selects filtered budget sections from computed metrics", () => {
-    const global = createBudgetMetric(
-      createBudget("global", { type: "GLOBAL" })
-    );
-    const category = createBudgetMetric(
-      createBudget("category", { type: "CATEGORY" })
-    );
-    const paused = createBudgetMetric(
-      createBudget("paused", {
-        period: "WEEKLY",
+  it("shapes immutable dashboard cards from scoped metrics and accessible categories", () => {
+    const globalBudget = {
+      ...createBudget("global", { type: "GLOBAL" }),
+      name: "Overall",
+      currency: "EGP",
+    } as Budget;
+    const categoryBudget = {
+      ...createBudget("category"),
+      name: "Food",
+      categoryId: "food",
+      currency: "EGP",
+    } as Budget;
+    const result = buildBudgetDashboardReadModel({
+      budgets: [createBudgetMetric(globalBudget), createBudgetMetric(categoryBudget)],
+      categoryMap: new Map([["food", { displayName: "Food & Drinks" }]]),
+      filter: "ALL",
+      now: new Date("2026-05-15T00:00:00.000Z"),
+      activeLocale: "en",
+    });
+
+    expect(result.overallBudgets[0]).toMatchObject({
+      id: "global",
+      displayName: "Overall",
+      period: "MONTHLY",
+      currency: "EGP",
+      categoryLabel: { kind: "not-applicable" },
+      lifecycle: "HEALTHY",
+      sectionId: "OVERALL",
+      metrics: expect.objectContaining({
+        spent: 250,
+        limit: 1000,
+        percentage: 25,
+        remaining: 750,
+      }),
+      daysLeft: 16,
+    });
+    expect(result.categoryBudgets[0]).toMatchObject({
+      id: "category",
+      categoryLabel: {
+        kind: "resolved",
+        categoryId: "food",
+        name: "Food & Drinks",
+      },
+      lifecycle: "HEALTHY",
+      sectionId: "CATEGORY",
+    });
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result.overallBudgets)).toBe(true);
+    expect(Object.isFrozen(result.overallBudgets[0])).toBe(true);
+  });
+
+  it.each(["en", "ar"] as const)(
+    "emits display-ready dashboard DTOs for the %s locale without exposing models",
+    (activeLocale) => {
+      const globalBudget = {
+        ...createBudget("global", { type: "GLOBAL" }),
+        name: "  Overall  ",
+        currency: "EGP",
+      } as Budget;
+      const originalMetric = createBudgetMetric(globalBudget);
+
+      const result = buildBudgetDashboardReadModel({
+        budgets: [originalMetric],
+        categoryMap: new Map(),
+        filter: "ALL",
+        now: new Date("2026-05-15T00:00:00.000Z"),
+        activeLocale,
+      });
+
+      expect(result.overallBudgets[0]).toEqual({
+        id: "global",
+        displayName: "Overall",
+        period: "MONTHLY",
+        currency: "EGP",
+        scope: "GLOBAL",
+        lifecycle: "HEALTHY",
+        sectionId: "OVERALL",
+        metrics: originalMetric.metrics,
+        daysLeft: 16,
+        daysElapsed: 15,
+        expiresAt: null,
+        categoryLabel: { kind: "not-applicable" },
+        availableAction: null,
+      });
+      expect(result.overallBudgets[0]).not.toHaveProperty("budget");
+      expect(originalMetric.budget).toBe(globalBudget);
+      expect(originalMetric.metrics.spent).toBe(250);
+    }
+  );
+
+  it("retains expired custom budgets and shapes deleted category history", () => {
+    const expiredBudget = {
+      ...createBudget("expired", {
+        period: "CUSTOM",
         status: "PAUSED",
-      })
-    );
+        periodEnd: new Date("2026-05-01T00:00:00.000Z"),
+      }),
+      name: "Historic Education",
+      categoryId: "deleted-category",
+      currency: "EGP",
+    } as Budget;
 
-    const result = buildBudgetListReadModel(
-      [global, category, paused],
-      "MONTHLY"
-    );
+    const result = buildBudgetDashboardReadModel({
+      budgets: [createBudgetMetric(expiredBudget)],
+      categoryMap: new Map(),
+      filter: "ALL",
+      now: new Date("2026-05-15T00:00:00.000Z"),
+      activeLocale: "en",
+    });
 
-    expect(result.budgets).toEqual([global, category]);
-    expect(result.globalBudget).toBe(global);
-    expect(result.categoryBudgets).toEqual([category]);
+    expect(result.needsAttentionBudgets[0]).toMatchObject({
+      id: "expired",
+      lifecycle: "EXPIRED",
+      sectionId: "NEEDS_ATTENTION",
+      expiresAt: expiredBudget.periodEnd,
+      categoryLabel: {
+        kind: "deleted",
+        categoryId: "deleted-category",
+      },
+      availableAction: "RENEW",
+    });
     expect(result.pausedBudgets).toEqual([]);
-    expect(result.totalCount).toBe(3);
   });
 
-  it("keeps paused category budgets visible in the category grid", () => {
-    const paused = createBudgetMetric(
-      createBudget("paused", {
-        period: "WEEKLY",
+  it("retains every global budget exactly once with expiry taking precedence", () => {
+    const healthy = {
+      ...createBudget("healthy", { type: "GLOBAL" }),
+      name: "Healthy",
+      currency: "EGP",
+    } as Budget;
+    const warning = {
+      ...createBudget("warning", { type: "GLOBAL" }),
+      name: "Warning",
+      currency: "EGP",
+    } as Budget;
+    const paused = {
+      ...createBudget("paused", { type: "GLOBAL", status: "PAUSED" }),
+      name: "Paused",
+      currency: "EGP",
+    } as Budget;
+    const expiredPaused = {
+      ...createBudget("expired-paused", {
+        type: "GLOBAL",
+        period: "CUSTOM",
         status: "PAUSED",
-      })
-    );
+        periodEnd: new Date("2026-05-01T00:00:00.000Z"),
+      }),
+      name: "Expired",
+      currency: "EGP",
+    } as Budget;
+    const warningMetric = {
+      ...createBudgetMetric(warning),
+      metrics: {
+        ...createBudgetMetric(warning).metrics,
+        percentage: 85,
+        status: "warning" as const,
+      },
+    };
 
-    const result = buildBudgetListReadModel([paused], "ALL");
+    const result = buildBudgetDashboardReadModel({
+      budgets: [
+        createBudgetMetric(healthy),
+        warningMetric,
+        createBudgetMetric(paused),
+        createBudgetMetric(expiredPaused),
+      ],
+      categoryMap: new Map(),
+      filter: "ALL",
+      now: new Date("2026-05-15T00:00:00.000Z"),
+      activeLocale: "en",
+    });
+    const allIds = [
+      ...result.overallBudgets,
+      ...result.needsAttentionBudgets,
+      ...result.categoryBudgets,
+      ...result.pausedBudgets,
+    ].map((item) => item.id);
 
-    expect(result.budgets).toEqual([paused]);
-    expect(result.globalBudget).toBeUndefined();
-    expect(result.categoryBudgets).toEqual([paused]);
-    expect(result.pausedBudgets).toEqual([paused]);
-    expect(result.totalCount).toBe(1);
+    expect(result.overallBudgets.map((item) => item.id)).toEqual(["healthy"]);
+    expect(result.needsAttentionBudgets.map((item) => item.id)).toEqual([
+      "expired-paused",
+      "warning",
+    ]);
+    expect(result.pausedBudgets.map((item) => item.id)).toEqual(["paused"]);
+    expect(allIds).toHaveLength(4);
+    expect(new Set(allIds).size).toBe(4);
+  });
+
+  it.each(["en", "ar"] as const)(
+    "sorts trimmed display names for %s and uses ID as the final tie-break",
+    (activeLocale) => {
+      const makeNamedMetric = (id: string, name: string): BudgetWithMetrics =>
+        createBudgetMetric({
+          ...createBudget(id),
+          name,
+          categoryId: id,
+          currency: "EGP",
+        } as Budget);
+      const input = [
+        makeNamedMetric("z-id", "Budget 10"),
+        makeNamedMetric("b-id", " budget 2 "),
+        makeNamedMetric("a-id", "BUDGET 2"),
+      ];
+
+      const result = buildBudgetDashboardReadModel({
+        budgets: input,
+        categoryMap: new Map(
+          input.map((item) => [
+            item.budget.id,
+            { displayName: item.budget.name },
+          ])
+        ),
+        filter: "ALL",
+        now: new Date("2026-05-15T00:00:00.000Z"),
+        activeLocale,
+      });
+
+      expect(result.categoryBudgets.map((item) => item.id)).toEqual([
+        "a-id",
+        "b-id",
+        "z-id",
+      ]);
+    }
+  );
+
+  it("filters every lifecycle section before exclusive classification", () => {
+    const weeklyHealthy = {
+      ...createBudget("weekly-healthy", { period: "WEEKLY" }),
+      name: "Weekly healthy",
+      categoryId: "weekly-healthy",
+      currency: "EGP",
+    } as Budget;
+    const monthlyPaused = {
+      ...createBudget("monthly-paused", { status: "PAUSED" }),
+      name: "Monthly paused",
+      categoryId: "monthly-paused",
+      currency: "EGP",
+    } as Budget;
+
+    const result = buildBudgetDashboardReadModel({
+      budgets: [
+        createBudgetMetric(weeklyHealthy),
+        createBudgetMetric(monthlyPaused),
+      ],
+      categoryMap: new Map([
+        ["weekly-healthy", { displayName: "Weekly healthy" }],
+        ["monthly-paused", { displayName: "Monthly paused" }],
+      ]),
+      filter: "WEEKLY",
+      now: new Date("2026-05-15T00:00:00.000Z"),
+      activeLocale: "en",
+    });
+
+    expect(result.categoryBudgets.map((item) => item.id)).toEqual([
+      "weekly-healthy",
+    ]);
+    expect(result.pausedBudgets).toEqual([]);
+    expect(result.totalCount).toBe(2);
+    expect(result.matchingCount).toBe(1);
   });
 });

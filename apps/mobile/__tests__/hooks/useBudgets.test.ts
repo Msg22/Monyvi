@@ -4,10 +4,13 @@ import type { Budget } from "@monyvi/db";
 const mockLoggerError = jest.fn();
 const mockObserveBudgetList = jest.fn();
 const mockBuildBudgetMetrics = jest.fn();
-const mockBuildBudgetListReadModel = jest.fn();
+const mockBuildBudgetDashboardReadModel = jest.fn();
+const mockCategoryMap = new Map<string, { readonly displayName: string }>();
 
 let mockUserId: string | null = "user-1";
 let mockIsResolvingUser = false;
+let mockCategoriesLoading = false;
+let mockActiveLocale: "en" | "ar" = "en";
 
 interface MockObserver<TRecord> {
   readonly next: (records: TRecord[]) => void;
@@ -53,21 +56,37 @@ const budgetMetrics = [
     daysElapsed: 5,
   },
 ];
-const listReadModel = {
-  budgets: budgetMetrics,
-  globalBudget: undefined,
-  categoryBudgets: budgetMetrics,
+const dashboardReadModel = {
+  overallBudgets: [],
+  needsAttentionBudgets: [],
+  categoryBudgets: [],
   pausedBudgets: [],
   totalCount: 1,
+  matchingCount: 1,
 };
 
 jest.mock("@/services/budget-list-read-model-service", () => ({
-  buildBudgetListReadModel: (...args: readonly unknown[]): unknown =>
-    mockBuildBudgetListReadModel(...args),
+  buildBudgetDashboardReadModel: (...args: readonly unknown[]): unknown =>
+    mockBuildBudgetDashboardReadModel(...args),
   buildBudgetMetrics: (...args: readonly unknown[]): unknown =>
     mockBuildBudgetMetrics(...args),
   observeBudgetList: (...args: readonly unknown[]): unknown =>
     mockObserveBudgetList(...args),
+}));
+
+jest.mock("@/context/CategoriesContext", () => ({
+  useAllCategories: (): {
+    readonly categories: readonly unknown[];
+    readonly isLoading: boolean;
+  } => ({ categories: [], isLoading: mockCategoriesLoading }),
+  useCategoryLookup: (): ReadonlyMap<string, { readonly displayName: string }> =>
+    mockCategoryMap,
+}));
+
+jest.mock("react-i18next", () => ({
+  useTranslation: (): {
+    readonly i18n: { readonly resolvedLanguage: string };
+  } => ({ i18n: { resolvedLanguage: mockActiveLocale } }),
 }));
 
 jest.mock("@/utils/logger", () => ({
@@ -115,9 +134,12 @@ describe("useBudgets", () => {
     jest.clearAllMocks();
     mockUserId = "user-1";
     mockIsResolvingUser = false;
+    mockCategoriesLoading = false;
+    mockActiveLocale = "en";
+    budgetQuery.observerRef.current = null;
     mockObserveBudgetList.mockReturnValue(budgetQuery);
     mockBuildBudgetMetrics.mockResolvedValue(budgetMetrics);
-    mockBuildBudgetListReadModel.mockReturnValue(listReadModel);
+    mockBuildBudgetDashboardReadModel.mockReturnValue(dashboardReadModel);
   });
 
   it("observes budgets and delegates metric/read-model shaping to the service", async () => {
@@ -133,12 +155,19 @@ describe("useBudgets", () => {
 
     expect(mockObserveBudgetList).toHaveBeenCalledWith("user-1");
     expect(mockBuildBudgetMetrics).toHaveBeenCalledWith(rawBudgets);
-    expect(mockBuildBudgetListReadModel).toHaveBeenCalledWith(
-      budgetMetrics,
-      "ALL"
+    expect(mockBuildBudgetDashboardReadModel).toHaveBeenCalledWith({
+      budgets: budgetMetrics,
+      categoryMap: mockCategoryMap,
+      filter: "ALL",
+      // Jest asymmetric matchers are intentionally dynamic at this boundary.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      now: expect.any(Date),
+      activeLocale: "en",
+    });
+    expect(result.current.readModel).toBe(dashboardReadModel);
+    expect(result.current.categoryBudgets).toBe(
+      dashboardReadModel.categoryBudgets
     );
-    expect(result.current.budgets).toBe(listReadModel.budgets);
-    expect(result.current.categoryBudgets).toBe(listReadModel.categoryBudgets);
     expect(result.current.totalCount).toBe(1);
   });
 
@@ -175,9 +204,12 @@ describe("useBudgets", () => {
       result.current.setPeriodFilter("WEEKLY");
     });
 
-    expect(mockBuildBudgetListReadModel).toHaveBeenLastCalledWith(
-      budgetMetrics,
-      "WEEKLY"
+    expect(mockBuildBudgetDashboardReadModel).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        budgets: budgetMetrics,
+        filter: "WEEKLY",
+        activeLocale: "en",
+      })
     );
   });
 
@@ -202,7 +234,7 @@ describe("useBudgets", () => {
         callsBeforeRefresh + 1
       );
     });
-    expect(result.current).toHaveProperty("globalBudget");
+    expect(result.current).toHaveProperty("overallBudgets");
     expect(result.current).toHaveProperty("pausedBudgets");
   });
 
@@ -223,7 +255,7 @@ describe("useBudgets", () => {
     );
   });
 
-  it("logs metric calculation failures and resets computed budgets", async () => {
+  it("reports an initial metric failure without claiming valid data", async () => {
     const error = new Error("metrics failed");
     mockBuildBudgetMetrics.mockRejectedValue(error);
 
@@ -241,6 +273,122 @@ describe("useBudgets", () => {
       "budgets.readModel.failed",
       error
     );
-    expect(mockBuildBudgetListReadModel).toHaveBeenLastCalledWith([], "ALL");
+    expect(result.current.hasValidData).toBe(false);
+    expect(result.current.errorKey).toBe("dashboard_load_error");
+    expect(result.current.readModel.matchingCount).toBe(0);
+  });
+
+  it("waits for accessible categories before shaping dashboard data", async () => {
+    mockCategoriesLoading = true;
+    const { result, rerender } = renderHook(() => useBudgets());
+
+    act(() => {
+      budgetQuery.observerRef.current?.next(rawBudgets);
+    });
+
+    await waitFor(() => {
+      expect(mockBuildBudgetMetrics).toHaveBeenCalledWith(rawBudgets);
+    });
+    expect(mockBuildBudgetDashboardReadModel).not.toHaveBeenCalled();
+    expect(result.current.isInitialLoading).toBe(true);
+
+    mockCategoriesLoading = false;
+    rerender(undefined);
+
+    await waitFor(() => {
+      expect(result.current.hasValidData).toBe(true);
+    });
+  });
+
+  it("retains the last valid dashboard after a recoverable refresh failure", async () => {
+    const { result } = renderHook(() => useBudgets());
+
+    act(() => {
+      budgetQuery.observerRef.current?.next(rawBudgets);
+    });
+    await waitFor(() => {
+      expect(result.current.hasValidData).toBe(true);
+    });
+
+    mockBuildBudgetMetrics.mockRejectedValueOnce(new Error("refresh failed"));
+    act(() => {
+      result.current.refresh();
+    });
+
+    await waitFor(() => {
+      expect(result.current.errorKey).toBe("dashboard_load_error");
+    });
+    expect(result.current.readModel).toBe(dashboardReadModel);
+    expect(result.current.hasValidData).toBe(true);
+    expect(result.current.isRefreshing).toBe(false);
+  });
+
+  it("ignores a stale metric completion after newer observed data wins", async () => {
+    let resolveFirst: (value: typeof budgetMetrics) => void = () => undefined;
+    const firstPromise = new Promise<typeof budgetMetrics>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const newerBudgets = [{ id: "budget-2" } as unknown as Budget];
+    const newerMetrics = [
+      {
+        ...budgetMetrics[0],
+        budget: newerBudgets[0],
+      },
+    ];
+    mockBuildBudgetMetrics
+      .mockReturnValueOnce(firstPromise)
+      .mockResolvedValueOnce(newerMetrics);
+    const { result } = renderHook(() => useBudgets());
+
+    act(() => {
+      budgetQuery.observerRef.current?.next(rawBudgets);
+    });
+    await waitFor(() => {
+      expect(mockBuildBudgetMetrics).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      budgetQuery.observerRef.current?.next(newerBudgets);
+    });
+
+    await waitFor(() => {
+      expect(mockBuildBudgetDashboardReadModel).toHaveBeenCalledWith(
+        expect.objectContaining({ budgets: newerMetrics })
+      );
+    });
+    act(() => {
+      resolveFirst(budgetMetrics);
+    });
+
+    await waitFor(() => {
+      expect(result.current.hasValidData).toBe(true);
+    });
+    expect(mockBuildBudgetDashboardReadModel).not.toHaveBeenLastCalledWith(
+      expect.objectContaining({ budgets: budgetMetrics })
+    );
+  });
+
+  it("clears scoped dashboard data after sign-out and unsubscribes on unmount", async () => {
+    const { result, rerender, unmount } = renderHook(() => useBudgets());
+    act(() => {
+      budgetQuery.observerRef.current?.next(rawBudgets);
+    });
+    await waitFor(() => {
+      expect(result.current.hasValidData).toBe(true);
+    });
+
+    mockUserId = null;
+    rerender(undefined);
+
+    await waitFor(() => {
+      expect(result.current.hasValidData).toBe(false);
+    });
+    expect(result.current.readModel.matchingCount).toBe(0);
+    expect(budgetQuery.unsubscribe).toHaveBeenCalledTimes(1);
+
+    mockUserId = "user-1";
+    rerender(undefined);
+    unmount();
+    expect(budgetQuery.unsubscribe).toHaveBeenCalledTimes(2);
   });
 });

@@ -71,6 +71,7 @@ export function PeriodFilterChips({
           <FilterChip
             key={chip.key}
             label={t(chip.labelKey)}
+            testID={`budget-filter-${chip.key.toLowerCase()}`}
             isActive={selected === chip.key}
             onPress={() => onSelect(chip.key)}
           />
@@ -85,12 +86,14 @@ export function PeriodFilterChips({
 // ---------------------------------------------------------------------------
 
 interface FilterChipProps {
+  readonly testID: string;
   readonly label: string;
   readonly isActive: boolean;
   readonly onPress: () => void;
 }
 
 function FilterChip({
+  testID,
   label,
   isActive,
   onPress,
@@ -101,6 +104,7 @@ function FilterChip({
 
   return (
     <TouchableOpacity
+      testID={testID}
       onPress={handlePress}
       accessibilityRole="button"
       accessibilityState={{ selected: isActive }}

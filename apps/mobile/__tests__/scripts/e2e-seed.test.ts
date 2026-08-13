@@ -1,5 +1,6 @@
 import {
   E2E_TABLE_DELETE_ORDER,
+  getE2eFixture,
   getE2eSeedConfig,
   resetE2eData,
   seedE2eData,
@@ -8,6 +9,70 @@ import {
 const EXPECTED_E2E_MARKET_RATE_ID = "00000000-0000-0000-0006-000000000001";
 
 describe("e2e-seed script helpers", () => {
+  it("selects immutable budget profiles without changing the default fixture", () => {
+    const defaultFixture = getE2eFixture({});
+    const fullFixture = getE2eFixture({ E2E_BUDGET_PROFILE: "dashboard-full" });
+    const filteredEmptyFixture = getE2eFixture({
+      E2E_BUDGET_PROFILE: "dashboard-filter-empty",
+    });
+
+    expect(defaultFixture.seedScope).toBe("e2e");
+    expect(defaultFixture.buildExtraRows).toBeUndefined();
+    expect(fullFixture.seedScope).toBe("e2e-dashboard-full");
+    expect(filteredEmptyFixture.seedScope).toBe("e2e-dashboard-filter-empty");
+    expect(fullFixture).not.toBe(defaultFixture);
+  });
+
+  it("uses all periods in the full profile and no custom budget in the filtered-empty profile", () => {
+    const fullFixture = getE2eFixture({ E2E_BUDGET_PROFILE: "dashboard-full" });
+    const filteredEmptyFixture = getE2eFixture({
+      E2E_BUDGET_PROFILE: "dashboard-filter-empty",
+    });
+    const commonArgs = {
+      categoryIds: { shopping: "shopping", other: "other" },
+      currentTimestamp: "2026-08-13T12:00:00.000Z",
+      dateFromToday: (offset: number): string => `2026-08-${String(13 + offset).padStart(2, "0")}`,
+      deterministicUuid: (): string => "id",
+      fixedNow: "2026-08-13T00:00:00.000Z",
+      seedIds: { budgets: {} },
+      seedScope: "e2e",
+      userId: "user-e2e",
+    };
+
+    const fullPeriods = fullFixture.buildExtraRows?.(commonArgs).budgets.map(
+      (budget: { readonly period: string }) => budget.period
+    );
+    const emptyPeriods = filteredEmptyFixture.buildExtraRows?.(commonArgs).budgets.map(
+      (budget: { readonly period: string }) => budget.period
+    );
+
+    expect(fullPeriods).toEqual(expect.arrayContaining(["WEEKLY", "MONTHLY", "CUSTOM"]));
+    expect(emptyPeriods).not.toContain("CUSTOM");
+    const fullRows = fullFixture.buildExtraRows?.(commonArgs).budgets ?? [];
+    expect(fullRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "E2E Paused Shopping",
+          status: "PAUSED",
+          type: "CATEGORY",
+        }),
+        expect.objectContaining({
+          name: "E2E Custom Overall",
+          period: "CUSTOM",
+          status: "ACTIVE",
+        }),
+      ])
+    );
+    expect(
+      Date.parse(fullRows.find((budget) => budget.name === "E2E Custom Overall")?.period_end ?? "")
+    ).toBeLessThan(Date.parse(commonArgs.fixedNow));
+  });
+
+  it("fails fast for an unknown budget profile", () => {
+    expect(() => getE2eFixture({ E2E_BUDGET_PROFILE: "not-a-profile" })).toThrow(
+      "Unknown E2E budget profile: not-a-profile"
+    );
+  });
   it("uses safe local defaults only for local Supabase mode", () => {
     const config = getE2eSeedConfig({
       E2E_SUPABASE_MODE: "local",

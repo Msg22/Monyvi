@@ -309,6 +309,16 @@ Business rules:
   calculations.
 - Custom budgets can auto-pause when their period expires.
 - Alert levels are reset on period rollover.
+- Budget dashboard lifecycle classification is mutually exclusive and follows this
+  precedence: expired custom budgets need attention; otherwise paused budgets are
+  paused; otherwise warning or danger budgets need attention; otherwise healthy
+  active global and category budgets belong to their respective healthy sections.
+- Renewing an expired custom budget creates a new prefilled budget and leaves the
+  expired historical budget unchanged.
+- Dashboard period filters apply to every lifecycle section. Within each section, budgets
+  sort by trimmed display name using the active English or Arabic locale with numeric,
+  case/diacritic-insensitive comparison; equal names use stable budget ID as the final
+  tie-break, and spend-only changes never affect order.
 
 ### Recurring Payments
 

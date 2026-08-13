@@ -30,6 +30,8 @@ jest.mock("expo-router", () => ({
     push: jest.fn(),
   },
   useLocalSearchParams: (): { readonly id?: string } => mockSearchParams,
+  useRouter: () => ({ back: jest.fn(), push: jest.fn() }),
+  useFocusEffect: jest.fn(),
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
@@ -48,6 +50,10 @@ jest.mock("@/components/navigation/PageHeader", () => ({
 
 jest.mock("@/components/budget/BudgetDashboard", () => ({
   BudgetDashboard: (): React.JSX.Element => mockView("budget-dashboard"),
+}));
+
+jest.mock("@/components/modals/ConfirmationModal", () => ({
+  ConfirmationModal: (): null => null,
 }));
 
 jest.mock("@/components/budget/BudgetForm", () => ({
@@ -97,11 +103,45 @@ jest.mock("@/hooks/usePreferredCurrency", () => ({
   }),
 }));
 
+jest.mock("@/hooks/useBudgets", () => ({
+  useBudgets: () => ({
+    readModel: {
+      overallBudgets: [],
+      needsAttentionBudgets: [],
+      categoryBudgets: [],
+      pausedBudgets: [],
+      totalCount: 0,
+      matchingCount: 0,
+    },
+    periodFilter: "ALL",
+    isInitialLoading: false,
+    isRefreshing: false,
+    hasValidData: true,
+    errorKey: null,
+    setPeriodFilter: jest.fn(),
+    retry: jest.fn(),
+    refresh: jest.fn(),
+    autoPauseCheckKey: "",
+  }),
+}));
+
+jest.mock("@/hooks/useBudgetDashboardActions", () => ({
+  useBudgetDashboardActions: () => ({
+    isSubmitting: false,
+    errorKey: null,
+    confirmResume: jest.fn(),
+    resetError: jest.fn(),
+  }),
+}));
+
 jest.mock("@/services/budget-service", () => ({
   deleteBudget: jest.fn(),
   pauseBudget: jest.fn(),
   resumeBudget: jest.fn(),
+  pauseExpiredCustomBudgets: jest.fn(),
 }));
+
+jest.mock("@/utils/logger", () => ({ logger: { error: jest.fn() } }));
 
 import BudgetDetailScreen from "@/app/(private)/budget-detail";
 import BudgetsScreen from "@/app/(private)/budgets";

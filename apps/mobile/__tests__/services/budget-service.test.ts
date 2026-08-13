@@ -7,6 +7,12 @@ const mockFindAccessibleCategory = jest.fn();
 const mockQueryOwned = jest.fn();
 const mockGetCurrentUserDataScope = jest.fn();
 
+jest.mock("expo-crypto", () => ({
+  randomUUID: jest.fn(() => "test-uuid"),
+  digestStringAsync: jest.fn(() => Promise.resolve("test-digest")),
+  CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+}));
+
 interface MockQueryResult<TRecord> {
   readonly fetch: () => Promise<TRecord[]>;
   readonly fetchCount: () => Promise<number>;
@@ -27,6 +33,7 @@ interface MockBudgetRecord {
   readonly period: string;
   status: string;
   pausedAt?: string;
+  pauseIntervals?: string;
   readonly periodEnd?: Date;
   readonly update: jest.Mock<
     Promise<void>,
@@ -110,6 +117,7 @@ jest.mock("@/services/user-data-access", (): unknown => ({
 import {
   createBudget,
   pauseExpiredCustomBudgets,
+  resumeBudget,
   updateBudget,
 } from "@/services/budget-service";
 
@@ -367,5 +375,73 @@ describe("budget-service", () => {
     expect(pausedCount).toBe(0);
     expect(mockWrite).not.toHaveBeenCalled();
     expect(future.update).not.toHaveBeenCalled();
+  });
+
+  it("resumes only a paused owned budget and appends one closed pause interval", async (): Promise<void> => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-08-14T12:00:00.000Z"));
+    const pausedAt = "2026-08-14T10:00:00.000Z";
+    const existingInterval = {
+      from: new Date("2026-08-13T08:00:00.000Z").getTime(),
+      to: new Date("2026-08-13T09:00:00.000Z").getTime(),
+    };
+    const budget = createLifecycleBudget({
+      status: "PAUSED",
+      pausedAt,
+      pauseIntervals: JSON.stringify([existingInterval]),
+    });
+    mockQueryOwned.mockReturnValue(createQueryResult([budget]));
+
+    await resumeBudget(budget.id);
+
+    expect(budget.status).toBe("ACTIVE");
+    expect(budget.pausedAt).toBeUndefined();
+    expect(JSON.parse(budget.pauseIntervals ?? "[]")).toEqual([
+      existingInterval,
+      {
+        from: new Date(pausedAt).getTime(),
+        to: new Date("2026-08-14T12:00:00.000Z").getTime(),
+      },
+    ]);
+    expect(budget.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a second Resume and appends no second interval", async (): Promise<void> => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-08-14T12:00:00.000Z"));
+    const budget = createLifecycleBudget({
+      status: "PAUSED",
+      pausedAt: "2026-08-14T10:00:00.000Z",
+      pauseIntervals: "[]",
+    });
+    mockQueryOwned.mockReturnValue(createQueryResult([budget]));
+
+    await resumeBudget(budget.id);
+    const intervalsAfterFirstResume = budget.pauseIntervals;
+    await expect(resumeBudget(budget.id)).rejects.toThrow(
+      "Cannot resume a budget that is not paused"
+    );
+
+    expect(budget.pauseIntervals).toBe(intervalsAfterFirstResume);
+    expect(budget.update).toHaveBeenCalledTimes(1);
+    expect(mockWrite).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves a paused budget unchanged when the writer rejects", async (): Promise<void> => {
+    const pausedAt = "2026-08-14T10:00:00.000Z";
+    const budget = createLifecycleBudget({
+      status: "PAUSED",
+      pausedAt,
+      pauseIntervals: "[]",
+    });
+    mockQueryOwned.mockReturnValue(createQueryResult([budget]));
+    mockWrite.mockRejectedValueOnce(new Error("writer unavailable"));
+
+    await expect(resumeBudget(budget.id)).rejects.toThrow("writer unavailable");
+
+    expect(budget.status).toBe("PAUSED");
+    expect(budget.pausedAt).toBe(pausedAt);
+    expect(budget.pauseIntervals).toBe("[]");
+    expect(budget.update).not.toHaveBeenCalled();
   });
 });

@@ -24,7 +24,163 @@ const E2E_SEED_FIXTURE = {
   },
 };
 
+function createBudgetFixture(profile, buildExtraRows) {
+  return {
+    ...E2E_SEED_FIXTURE,
+    seedScope: `e2e-${profile}`,
+    buildExtraRows,
+  };
+}
+
+function buildDashboardFullRows({
+  categoryIds,
+  currentTimestamp,
+  dateFromToday,
+  deterministicUuid,
+  fixedNow,
+  seedScope,
+  userId,
+}) {
+  return {
+    budgets: [
+      createGlobalBudget({
+        id: deterministicUuid(seedScope, userId, "budget:weekly"),
+        name: "E2E Weekly Overall",
+        period: "WEEKLY",
+        periodStart: dateFromToday(-2),
+        periodEnd: dateFromToday(5),
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createGlobalBudget({
+        id: deterministicUuid(seedScope, userId, "budget:monthly"),
+        name: "E2E Monthly Overall",
+        period: "MONTHLY",
+        periodStart: dateFromToday(-7),
+        periodEnd: dateFromToday(23),
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createGlobalBudget({
+        id: deterministicUuid(seedScope, userId, "budget:custom"),
+        name: "E2E Custom Overall",
+        period: "CUSTOM",
+        periodStart: dateFromToday(-14),
+        periodEnd: dateFromToday(-1),
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createCategoryBudget({
+        id: deterministicUuid(seedScope, userId, "budget:paused-shopping"),
+        name: "E2E Paused Shopping",
+        categoryId: categoryIds.shopping,
+        periodStart: dateFromToday(-7),
+        periodEnd: dateFromToday(23),
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+    ],
+  };
+}
+
+function createCategoryBudget({
+  id,
+  name,
+  categoryId,
+  periodStart,
+  periodEnd,
+  currentTimestamp,
+  fixedNow,
+  userId,
+}) {
+  return {
+    ...createGlobalBudget({
+      id,
+      name,
+      period: "MONTHLY",
+      periodStart,
+      periodEnd,
+      currentTimestamp,
+      fixedNow,
+      userId,
+    }),
+    amount: 10000,
+    category_id: categoryId,
+    status: "PAUSED",
+    type: "CATEGORY",
+    paused_at: currentTimestamp,
+  };
+}
+
+function buildDashboardFilteredEmptyRows(args) {
+  const fullRows = buildDashboardFullRows(args);
+  return {
+    ...fullRows,
+    budgets: fullRows.budgets.filter((budget) => budget.period !== "CUSTOM"),
+  };
+}
+
+function createGlobalBudget({
+  id,
+  name,
+  period,
+  periodStart,
+  periodEnd,
+  currentTimestamp,
+  fixedNow,
+  userId,
+}) {
+  return {
+    id,
+    user_id: userId,
+    name,
+    amount: 50000,
+    currency: "EGP",
+    category_id: null,
+    period,
+    period_start: periodStart,
+    period_end: periodEnd,
+    status: "ACTIVE",
+    type: "GLOBAL",
+    alert_threshold: 80,
+    alert_fired_level: null,
+    paused_at: null,
+    pause_intervals: "[]",
+    deleted: false,
+    created_at: fixedNow,
+    updated_at: currentTimestamp,
+  };
+}
+
+const E2E_BUDGET_FIXTURES = {
+  "dashboard-full": createBudgetFixture(
+    "dashboard-full",
+    buildDashboardFullRows
+  ),
+  "dashboard-filter-empty": createBudgetFixture(
+    "dashboard-filter-empty",
+    buildDashboardFilteredEmptyRows
+  ),
+};
+
+function getE2eFixture(profile) {
+  if (!profile) return E2E_SEED_FIXTURE;
+
+  const fixture = E2E_BUDGET_FIXTURES[profile];
+  if (!fixture) {
+    throw new Error(`Unknown E2E budget profile: ${profile}`);
+  }
+
+  return fixture;
+}
+
 module.exports = {
+  E2E_BUDGET_FIXTURES,
   E2E_SEED_FIXTURE,
   E2E_USER_FULL_NAME,
+  getE2eFixture,
 };

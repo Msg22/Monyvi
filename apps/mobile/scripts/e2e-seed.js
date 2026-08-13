@@ -8,7 +8,7 @@ const {
   resetFixtureData: resetFixtureDataWithFixture,
   seedFixtureData: seedFixtureDataWithFixture,
 } = require("./seed-fixtures/seed-engine");
-const { E2E_SEED_FIXTURE } = require("./seed-fixtures/e2e-fixture");
+const { E2E_SEED_FIXTURE, getE2eFixture } = require("./seed-fixtures/e2e-fixture");
 
 const E2E_TABLE_DELETE_ORDER = RESET_TABLE_DELETE_ORDER;
 
@@ -16,12 +16,16 @@ function getE2eSeedConfig(env = process.env, options = {}) {
   return getSeedConfig(env, options);
 }
 
-async function seedE2eData(client, config) {
-  return seedFixtureData(client, config, E2E_SEED_FIXTURE);
+function getE2eFixtureForEnv(env = process.env) {
+  return getE2eFixture(env.E2E_BUDGET_PROFILE);
 }
 
-async function resetE2eData(client, config) {
-  return resetFixtureData(client, config, E2E_SEED_FIXTURE);
+async function seedE2eData(client, config, fixture = getE2eFixtureForEnv()) {
+  return seedFixtureData(client, config, fixture);
+}
+
+async function resetE2eData(client, config, fixture = getE2eFixtureForEnv()) {
+  return resetFixtureData(client, config, fixture);
 }
 
 async function seedFixtureData(client, config, fixture = E2E_SEED_FIXTURE) {
@@ -69,6 +73,7 @@ module.exports = {
   E2E_MARKET_RATE_ID,
   createLocalSupabaseJwt,
   getE2eSeedConfig,
+  getE2eFixture: getE2eFixtureForEnv,
   resetE2eData,
   resetFixtureData,
   seedE2eData,

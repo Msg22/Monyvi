@@ -1,135 +1,212 @@
-/**
- * useBudgets Hook
- *
- * Observes all active/non-deleted budgets, computes spending per budget, and
- * supports period filtering. Lifecycle mutations, such as pausing expired
- * custom budgets, are explicit service commands invoked by containers.
- *
- * @module useBudgets
- */
-
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Budget } from "@monyvi/db";
+import { useTranslation } from "react-i18next";
+
 import type { PeriodFilter } from "@/components/budget/PeriodFilterChips";
 import {
-  buildBudgetListReadModel,
+  useAllCategories,
+  useCategoryLookup,
+} from "@/context/CategoriesContext";
+import {
+  buildBudgetDashboardReadModel,
   buildBudgetMetrics,
   observeBudgetList,
+  type BudgetDashboardItem,
+  type BudgetDashboardReadModel,
   type BudgetWithMetrics,
 } from "@/services/budget-list-read-model-service";
 import { logger } from "@/utils/logger";
 import { runUserScopedEffect, useCurrentUser } from "./useCurrentUser";
 
-export type { BudgetWithMetrics } from "@/services/budget-list-read-model-service";
+export type {
+  BudgetDashboardItem,
+  BudgetDashboardReadModel,
+  BudgetWithMetrics,
+} from "@/services/budget-list-read-model-service";
 
-// =============================================================================
-// TYPES
-// =============================================================================
+const EMPTY_DASHBOARD_READ_MODEL: BudgetDashboardReadModel = Object.freeze({
+  overallBudgets: Object.freeze([]),
+  needsAttentionBudgets: Object.freeze([]),
+  categoryBudgets: Object.freeze([]),
+  pausedBudgets: Object.freeze([]),
+  totalCount: 0,
+  matchingCount: 0,
+});
 
-interface UseBudgetsResult {
-  /** All budgets with computed metrics, filtered by period */
-  readonly budgets: readonly BudgetWithMetrics[];
-  /** The global budget (if any) */
-  readonly globalBudget: BudgetWithMetrics | undefined;
-  /** Active and paused category budgets */
-  readonly categoryBudgets: readonly BudgetWithMetrics[];
-  /** Paused budgets */
-  readonly pausedBudgets: readonly BudgetWithMetrics[];
-  /** Whether data is loading */
-  readonly isLoading: boolean;
-  /** Total unfiltered budget count (for distinguishing empty vs filtered-empty) */
+interface ComputedBudgets {
+  readonly source: readonly Budget[];
+  readonly metrics: readonly BudgetWithMetrics[];
+}
+
+export interface UseBudgetsResult {
+  readonly readModel: BudgetDashboardReadModel;
+  readonly overallBudgets: readonly BudgetDashboardItem[];
+  readonly needsAttentionBudgets: readonly BudgetDashboardItem[];
+  readonly categoryBudgets: readonly BudgetDashboardItem[];
+  readonly pausedBudgets: readonly BudgetDashboardItem[];
+  readonly budgets: readonly BudgetDashboardItem[];
   readonly totalCount: number;
-  /** Selected period filter */
+  readonly matchingCount: number;
+  readonly isInitialLoading: boolean;
+  readonly isRefreshing: boolean;
+  readonly isLoading: boolean;
+  readonly errorKey: "dashboard_load_error" | null;
+  readonly hasValidData: boolean;
   readonly periodFilter: PeriodFilter;
-  /** Update the period filter */
   readonly setPeriodFilter: (filter: PeriodFilter) => void;
-  /** Force refresh spending calculations */
   readonly refresh: () => void;
-  /** Changes when budget fields relevant to lifecycle auto-pause change */
+  readonly retry: () => void;
   readonly autoPauseCheckKey: string;
 }
 
-// =============================================================================
-// HOOK
-// =============================================================================
+function resolveActiveLocale(language: string | undefined): "en" | "ar" {
+  return language?.toLowerCase().startsWith("ar") ? "ar" : "en";
+}
 
 export function useBudgets(): UseBudgetsResult {
-  const [rawBudgets, setRawBudgets] = useState<Budget[]>([]);
-  const [budgetsWithMetrics, setBudgetsWithMetrics] = useState<
-    readonly BudgetWithMetrics[]
-  >([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("ALL");
+  const [rawBudgets, setRawBudgets] = useState<readonly Budget[]>([]);
+  const [computedBudgets, setComputedBudgets] =
+    useState<ComputedBudgets | null>(null);
+  const [readModel, setReadModel] = useState<BudgetDashboardReadModel>(
+    EMPTY_DASHBOARD_READ_MODEL
+  );
+  const [hasObservedBudgets, setHasObservedBudgets] = useState(false);
+  const [hasValidData, setHasValidData] = useState(false);
+  const [isComputing, setIsComputing] = useState(false);
+  const [errorKey, setErrorKey] = useState<"dashboard_load_error" | null>(null);
+  const [periodFilter, setPeriodFilterState] = useState<PeriodFilter>("ALL");
   const [refreshCounter, setRefreshCounter] = useState(0);
   const { userId, isResolvingUser } = useCurrentUser();
+  const categoryMap = useCategoryLookup();
+  const { isLoading: areCategoriesLoading } = useAllCategories();
+  const { i18n } = useTranslation("budgets");
+  const activeLocale = resolveActiveLocale(i18n.resolvedLanguage);
+
+  const clearScopedState = useCallback((isLoading: boolean): void => {
+    setRawBudgets([]);
+    setComputedBudgets(null);
+    setReadModel(EMPTY_DASHBOARD_READ_MODEL);
+    setHasObservedBudgets(false);
+    setHasValidData(false);
+    setIsComputing(isLoading);
+    setErrorKey(null);
+  }, []);
 
   useEffect(() => {
     return runUserScopedEffect({
       userId,
       isResolvingUser,
-      onResolving: () => {
-        setRawBudgets([]);
-        setBudgetsWithMetrics([]);
-        setIsLoading(true);
-      },
-      onSignedOut: () => {
-        setRawBudgets([]);
-        setBudgetsWithMetrics([]);
-        setIsLoading(false);
-      },
+      onResolving: () => clearScopedState(true),
+      onSignedOut: () => clearScopedState(false),
       onAuthenticated: (currentUserId) => {
+        setHasObservedBudgets(false);
+        setIsComputing(true);
+        setErrorKey(null);
+
         const subscription = observeBudgetList(currentUserId)
           .observe()
           .subscribe({
             next: (budgets) => {
               setRawBudgets(budgets);
+              setHasObservedBudgets(true);
+              setIsComputing(true);
             },
             error: (error: unknown) => {
               logger.error("budgets.observe.failed", error);
-              setRawBudgets([]);
-              setBudgetsWithMetrics([]);
-              setIsLoading(false);
+              setHasObservedBudgets(true);
+              setIsComputing(false);
+              setErrorKey("dashboard_load_error");
             },
           });
 
         return () => subscription.unsubscribe();
       },
     });
-  }, [userId, isResolvingUser]);
+  }, [clearScopedState, isResolvingUser, userId]);
 
   useEffect(() => {
-    let cancelled = false;
+    if (!userId || isResolvingUser || !hasObservedBudgets) return;
 
-    async function computeAll(): Promise<void> {
-      setIsLoading(true);
+    let isCurrent = true;
+
+    async function computeMetrics(): Promise<void> {
+      setIsComputing(true);
 
       try {
-        const results = await buildBudgetMetrics(rawBudgets);
-
-        if (!cancelled) {
-          setBudgetsWithMetrics(results);
-          setIsLoading(false);
+        const metrics = await buildBudgetMetrics(rawBudgets);
+        if (isCurrent) {
+          setComputedBudgets({ source: rawBudgets, metrics });
         }
       } catch (error: unknown) {
         logger.error("budgets.readModel.failed", error);
-
-        if (!cancelled) {
-          setBudgetsWithMetrics([]);
-          setIsLoading(false);
+        if (isCurrent) {
+          setIsComputing(false);
+          setErrorKey("dashboard_load_error");
         }
       }
     }
 
-    void computeAll();
+    void computeMetrics();
 
     return () => {
-      cancelled = true;
+      isCurrent = false;
     };
-  }, [rawBudgets, refreshCounter]);
+  }, [hasObservedBudgets, isResolvingUser, rawBudgets, refreshCounter, userId]);
 
-  const readModel = useMemo(
-    () => buildBudgetListReadModel(budgetsWithMetrics, periodFilter),
-    [budgetsWithMetrics, periodFilter]
+  useEffect(() => {
+    if (
+      !computedBudgets ||
+      computedBudgets.source !== rawBudgets ||
+      areCategoriesLoading
+    ) {
+      return;
+    }
+
+    try {
+      const nextReadModel = buildBudgetDashboardReadModel({
+        budgets: computedBudgets.metrics,
+        categoryMap,
+        filter: periodFilter,
+        now: new Date(),
+        activeLocale,
+      });
+      setReadModel(nextReadModel);
+      setHasValidData(true);
+      setIsComputing(false);
+      setErrorKey(null);
+    } catch (error: unknown) {
+      logger.error("budgets.readModel.failed", error);
+      setIsComputing(false);
+      setErrorKey("dashboard_load_error");
+    }
+  }, [
+    activeLocale,
+    areCategoriesLoading,
+    categoryMap,
+    computedBudgets,
+    periodFilter,
+    rawBudgets,
+  ]);
+
+  const setPeriodFilter = useCallback((filter: PeriodFilter): void => {
+    setIsComputing(true);
+    setPeriodFilterState(filter);
+  }, []);
+
+  const refresh = useCallback((): void => {
+    setIsComputing(true);
+    setRefreshCounter((counter) => counter + 1);
+  }, []);
+
+  const allMatchingBudgets = useMemo(
+    () =>
+      Object.freeze([
+        ...readModel.overallBudgets,
+        ...readModel.needsAttentionBudgets,
+        ...readModel.categoryBudgets,
+        ...readModel.pausedBudgets,
+      ]),
+    [readModel]
   );
 
   const autoPauseCheckKey = useMemo(
@@ -147,20 +224,30 @@ export function useBudgets(): UseBudgetsResult {
     [rawBudgets]
   );
 
-  const refresh = useCallback(() => {
-    setRefreshCounter((c) => c + 1);
-  }, []);
+  const isInitialLoading =
+    isResolvingUser ||
+    (Boolean(userId) &&
+      (areCategoriesLoading ||
+        (!hasValidData && (!hasObservedBudgets || isComputing))));
 
   return {
-    budgets: readModel.budgets,
-    globalBudget: readModel.globalBudget,
+    readModel,
+    overallBudgets: readModel.overallBudgets,
+    needsAttentionBudgets: readModel.needsAttentionBudgets,
     categoryBudgets: readModel.categoryBudgets,
     pausedBudgets: readModel.pausedBudgets,
-    isLoading,
+    budgets: allMatchingBudgets,
     totalCount: readModel.totalCount,
+    matchingCount: readModel.matchingCount,
+    isInitialLoading,
+    isRefreshing: hasValidData && isComputing,
+    isLoading: isInitialLoading,
+    errorKey,
+    hasValidData,
     periodFilter,
     setPeriodFilter,
     refresh,
+    retry: refresh,
     autoPauseCheckKey,
   };
 }

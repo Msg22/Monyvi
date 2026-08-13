@@ -1,243 +1,283 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return */
 import React from "react";
-import { act, render, screen, waitFor } from "@testing-library/react-native";
+import {
+  Text as MockText,
+  TouchableOpacity as MockTouchableOpacity,
+} from "react-native";
+import { fireEvent, render } from "@testing-library/react-native";
 
-const mockPauseExpiredCustomBudgets = jest.fn();
-const mockRefresh = jest.fn();
-const mockUseBudgets = jest.fn();
-const mockLoggerError = jest.fn();
-let mockIsFocused = true;
+import { BudgetDashboard } from "@/components/budget/BudgetDashboard";
+import type {
+  BudgetDashboardItem,
+  BudgetDashboardReadModel,
+} from "@/services/budget-list-read-model-service";
+
 let mockBottomInset = 0;
 
-jest.mock("expo-router", () => {
-  const ReactModule = jest.requireActual<typeof React>("react");
-
-  return {
-    router: { push: jest.fn() },
-    useFocusEffect: (callback: () => void | (() => void)): void => {
-      ReactModule.useEffect(() => callback(), [callback]);
-    },
-    useIsFocused: (): boolean => mockIsFocused,
-  };
-});
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: () => ({
+    top: 0,
+    right: 0,
+    bottom: mockBottomInset,
+    left: 0,
+  }),
+}));
 
 jest.mock("react-i18next", () => ({
-  useTranslation: (): { t: (key: string) => string } => ({
+  useTranslation: () => ({
     t: (key: string): string => key,
   }),
 }));
 
-jest.mock("react-native-safe-area-context", () => ({
-  useSafeAreaInsets: (): { bottom: number } => ({ bottom: mockBottomInset }),
-}));
-
 jest.mock("@expo/vector-icons", () => ({
-  Ionicons: function Ionicons(): React.JSX.Element {
-    const { Text: MockText } =
-      jest.requireActual<typeof import("react-native")>("react-native");
-    return <MockText>icon</MockText>;
-  },
+  Ionicons: () => <MockText>icon</MockText>,
 }));
 
 jest.mock("@/constants/colors", () => ({
   palette: {
-    nileGreen: { 500: "#000000" },
-    slate: { 400: "#000000", 500: "#000000" },
+    gold: { 600: "#000" },
+    slate: { 400: "#000" },
   },
 }));
 
-jest.mock("@/hooks/usePreferredCurrency", () => ({
-  usePreferredCurrency: (): { preferredCurrency: "EGP" } => ({
-    preferredCurrency: "EGP",
-  }),
+jest.mock("@/components/budget/BudgetDashboardCard", () => ({
+  BudgetDashboardCard: ({ item }: { item: BudgetDashboardItem }) => (
+    <MockText testID={`dashboard-card-${item.id}`}>{item.lifecycle}</MockText>
+  ),
 }));
 
-jest.mock("@/hooks/useBudgets", () => ({
-  useBudgets: (): unknown => mockUseBudgets(),
+jest.mock("@/components/budget/GlobalBudgetCarousel", () => ({
+  GlobalBudgetCarousel: ({
+    budgets,
+  }: {
+    budgets: readonly BudgetDashboardItem[];
+  }) => (
+    <MockText testID="global-budget-carousel">
+      {budgets.map((budget) => budget.id).join(",")}
+    </MockText>
+  ),
 }));
 
-jest.mock("@/services/budget-service", () => ({
-  pauseExpiredCustomBudgets: (): Promise<number> =>
-    mockPauseExpiredCustomBudgets() as Promise<number>,
-}));
-
-jest.mock("@/utils/logger", () => ({
-  logger: {
-    error: (...args: readonly unknown[]): void => {
-      mockLoggerError(...args);
-    },
-  },
-}));
-
-jest.mock("@monyvi/logic", () => ({
-  formatCurrency: (amount: number): string => String(amount),
-}));
-
-jest.mock("@/components/budget/PeriodFilterChips", () => ({
-  PeriodFilterChips: function PeriodFilterChips(): React.JSX.Element {
-    const { Text: MockText } =
-      jest.requireActual<typeof import("react-native")>("react-native");
-    return <MockText>period-filter</MockText>;
-  },
-}));
-
-jest.mock("@/components/budget/BudgetHeroCard", () => ({
-  BudgetHeroCard: function BudgetHeroCard(): React.JSX.Element {
-    const { Text: MockText } =
-      jest.requireActual<typeof import("react-native")>("react-native");
-    return <MockText>hero</MockText>;
-  },
-}));
-
-jest.mock("@/components/budget/BudgetCategoryCard", () => ({
-  BudgetCategoryCard: function BudgetCategoryCard(): React.JSX.Element {
-    const { Text: MockText } =
-      jest.requireActual<typeof import("react-native")>("react-native");
-    return <MockText>category-card</MockText>;
-  },
+jest.mock("@/components/budget/BudgetDashboardSkeleton", () => ({
+  BudgetDashboardSkeleton: () => (
+    <MockText testID="budget-dashboard-skeleton">loading</MockText>
+  ),
 }));
 
 jest.mock("@/components/budget/BudgetEmptyState", () => ({
-  BudgetEmptyState: function BudgetEmptyState(): React.JSX.Element {
-    const { Text: MockText } =
-      jest.requireActual<typeof import("react-native")>("react-native");
-    return <MockText>empty</MockText>;
-  },
+  BudgetEmptyState: ({ onCreateBudget }: { onCreateBudget: () => void }) => (
+    <MockTouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel="create-empty"
+      onPress={onCreateBudget}
+    >
+      <MockText>empty</MockText>
+    </MockTouchableOpacity>
+  ),
 }));
 
-import { BudgetDashboard } from "@/components/budget/BudgetDashboard";
+jest.mock("@/components/budget/PeriodFilterChips", () => ({
+  PeriodFilterChips: ({ onSelect }: { onSelect: (filter: "ALL") => void }) => (
+    <MockTouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel="select-all"
+      onPress={() => onSelect("ALL")}
+    >
+      <MockText>filters</MockText>
+    </MockTouchableOpacity>
+  ),
+}));
 
-function setBudgetState(autoPauseCheckKey: string): void {
-  mockUseBudgets.mockReturnValue({
-    globalBudget: undefined,
-    categoryBudgets: [],
-    isLoading: false,
-    totalCount: 0,
-    periodFilter: "ALL",
-    setPeriodFilter: jest.fn(),
-    budgets: [],
-    refresh: mockRefresh,
-    autoPauseCheckKey,
-  });
+function item(
+  id: string,
+  sectionId: BudgetDashboardItem["sectionId"],
+  lifecycle: BudgetDashboardItem["lifecycle"] = "HEALTHY"
+): BudgetDashboardItem {
+  return {
+    id,
+    displayName: id,
+    period: "MONTHLY",
+    currency: "EGP",
+    scope: sectionId === "OVERALL" ? "GLOBAL" : "CATEGORY",
+    lifecycle,
+    sectionId,
+    metrics: {
+      spent: 0,
+      limit: 1000,
+      remaining: 1000,
+      percentage: 0,
+      dailyAverage: 0,
+      status: "safe",
+    },
+    daysLeft: 10,
+    daysElapsed: 20,
+    expiresAt: null,
+    categoryLabel:
+      sectionId === "OVERALL"
+        ? { kind: "not-applicable" }
+        : { kind: "resolved", categoryId: id, name: id },
+    availableAction: lifecycle === "PAUSED" ? "RESUME" : null,
+  };
 }
 
-function setBudgetStateWithGlobalBudget(): void {
-  const globalBudget = {
-    budget: { id: "global-budget" },
-    daysLeft: 10,
-    metrics: { remaining: 1000 },
-  };
-
-  mockUseBudgets.mockReturnValue({
-    globalBudget,
+function readModel(
+  overrides: Partial<BudgetDashboardReadModel> = {}
+): BudgetDashboardReadModel {
+  return {
+    overallBudgets: [],
+    needsAttentionBudgets: [],
     categoryBudgets: [],
-    isLoading: false,
-    totalCount: 1,
+    pausedBudgets: [],
+    totalCount: 0,
+    matchingCount: 0,
+    ...overrides,
+  };
+}
+
+function renderDashboard(
+  overrides: Partial<React.ComponentProps<typeof BudgetDashboard>> = {}
+): ReturnType<typeof render> & {
+  readonly props: React.ComponentProps<typeof BudgetDashboard>;
+} {
+  const props: React.ComponentProps<typeof BudgetDashboard> = {
+    readModel: readModel(),
     periodFilter: "ALL",
-    setPeriodFilter: jest.fn(),
-    budgets: [globalBudget],
-    refresh: mockRefresh,
-    autoPauseCheckKey: "global-budget",
-  });
+    isInitialLoading: false,
+    isRefreshing: false,
+    hasValidData: true,
+    errorKey: null,
+    preferredCurrency: "EGP",
+    onSelectPeriod: jest.fn(),
+    onRetry: jest.fn(),
+    onCreateBudget: jest.fn(),
+    onBudgetPress: jest.fn(),
+    onResume: jest.fn(),
+    onRenew: jest.fn(),
+    ...overrides,
+  };
+  return { ...render(<BudgetDashboard {...props} />), props };
 }
 
 describe("BudgetDashboard", () => {
-  beforeEach((): void => {
-    jest.clearAllMocks();
-    mockIsFocused = true;
+  beforeEach(() => {
     mockBottomInset = 0;
-    mockPauseExpiredCustomBudgets.mockResolvedValue(0);
-    setBudgetState("initial");
+  });
+
+  it("renders four non-empty sections in approved order", () => {
+    const screen = renderDashboard({
+      readModel: readModel({
+        overallBudgets: [item("overall", "OVERALL")],
+        needsAttentionBudgets: [
+          item("attention", "NEEDS_ATTENTION", "NEAR_LIMIT"),
+        ],
+        categoryBudgets: [item("category", "CATEGORY")],
+        pausedBudgets: [item("paused", "PAUSED", "PAUSED")],
+        totalCount: 4,
+        matchingCount: 4,
+      }),
+    });
+
+    expect(
+      screen
+        .getAllByTestId(/^budget-section-/)
+        .map((section) => section.props.testID)
+    ).toEqual([
+      "budget-section-overall",
+      "budget-section-needs_attention",
+      "budget-section-category_budgets",
+      "budget-section-paused",
+    ]);
+    expect(screen.getByTestId("global-budget-carousel").props.children).toBe(
+      "overall"
+    );
+    expect(screen.getByTestId("dashboard-card-attention")).toBeTruthy();
+    expect(screen.getByTestId("dashboard-card-category")).toBeTruthy();
+    expect(screen.getByTestId("dashboard-card-paused")).toBeTruthy();
+  });
+
+  it("omits empty sections and has no summary footer or floating action", () => {
+    const screen = renderDashboard({
+      readModel: readModel({
+        categoryBudgets: [item("category", "CATEGORY")],
+        totalCount: 1,
+        matchingCount: 1,
+      }),
+    });
+
+    expect(screen.queryByTestId("budget-section-overall")).toBeNull();
+    expect(screen.queryByTestId("budget-section-needs_attention")).toBeNull();
+    expect(screen.queryByTestId("budget-section-paused")).toBeNull();
+    expect(screen.queryByTestId("budget-summary-footer")).toBeNull();
+    expect(screen.queryByTestId("budget-create-fab")).toBeNull();
+  });
+
+  it("uses a layout-matching Skeleton for initial loading", () => {
+    const screen = renderDashboard({
+      isInitialLoading: true,
+      hasValidData: false,
+    });
+
+    expect(screen.getByTestId("budget-dashboard-skeleton")).toBeTruthy();
+    expect(screen.queryByTestId("activity-indicator")).toBeNull();
+  });
+
+  it("distinguishes no-budget, filtered-empty, and recoverable error states", () => {
+    const create = jest.fn();
+    const noBudgets = renderDashboard({ onCreateBudget: create });
+    fireEvent.press(noBudgets.getByRole("button", { name: "create-empty" }));
+    expect(create).toHaveBeenCalledTimes(1);
+    noBudgets.unmount();
+
+    const selectPeriod = jest.fn();
+    const filtered = renderDashboard({
+      readModel: readModel({ totalCount: 2, matchingCount: 0 }),
+      periodFilter: "CUSTOM",
+      onSelectPeriod: selectPeriod,
+    });
+    expect(
+      filtered.getByTestId("budget-dashboard-filtered-empty")
+    ).toBeTruthy();
+    fireEvent.press(filtered.getByRole("button", { name: "filter_all" }));
+    expect(selectPeriod).toHaveBeenCalledWith("ALL");
+    filtered.unmount();
+
+    const recoverable = renderDashboard({
+      readModel: readModel({
+        categoryBudgets: [item("category", "CATEGORY")],
+        totalCount: 1,
+        matchingCount: 1,
+      }),
+      errorKey: "dashboard_load_error",
+      hasValidData: true,
+    });
+    expect(
+      recoverable.getByTestId("budget-dashboard-recoverable-error")
+    ).toBeTruthy();
+  });
+
+  it("shows recovery instead of a false empty state when the initial load fails", () => {
+    const screen = renderDashboard({
+      errorKey: "dashboard_load_error",
+      hasValidData: false,
+    });
+
+    expect(screen.getByTestId("budget-dashboard-initial-error")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "create-empty" })).toBeNull();
   });
 
   it.each([
-    { bottomInset: 0, expectedPadding: 12 },
-    { bottomInset: 16, expectedPadding: 28 },
-    { bottomInset: 48, expectedPadding: 60 },
+    { bottomInset: 0, expectedPadding: 24 },
+    { bottomInset: 16, expectedPadding: 40 },
+    { bottomInset: 48, expectedPadding: 72 },
   ])(
-    "adds the $bottomInset bottom inset to the summary footer base spacing",
-    ({ bottomInset, expectedPadding }): void => {
+    "owns the $bottomInset bottom inset exactly once",
+    ({ bottomInset, expectedPadding }) => {
       mockBottomInset = bottomInset;
-      setBudgetStateWithGlobalBudget();
+      const screen = renderDashboard();
 
-      render(<BudgetDashboard />);
-
-      expect(screen.getByTestId("budget-summary-footer")).toHaveStyle({
-        paddingBottom: expectedPadding,
-      });
+      expect(
+        screen.getByTestId("budget-dashboard-list").props.contentContainerStyle
+      ).toEqual(expect.objectContaining({ paddingBottom: expectedPadding }));
     }
   );
-
-  it("re-runs budget auto-pause when relevant budget data changes while focused", async (): Promise<void> => {
-    const { rerender } = render(<BudgetDashboard />);
-
-    await waitFor(() => {
-      expect(mockPauseExpiredCustomBudgets).toHaveBeenCalledTimes(1);
-    });
-
-    setBudgetState("expired-custom-budget-changed");
-    rerender(<BudgetDashboard />);
-
-    await waitFor(() => {
-      expect(mockPauseExpiredCustomBudgets).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  it("refreshes the budget list when expired budgets are auto-paused", async (): Promise<void> => {
-    mockPauseExpiredCustomBudgets.mockResolvedValueOnce(2);
-
-    render(<BudgetDashboard />);
-
-    await waitFor(() => {
-      expect(mockRefresh).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  it("does not refresh when no budgets needed pausing", async (): Promise<void> => {
-    mockPauseExpiredCustomBudgets.mockResolvedValueOnce(0);
-
-    render(<BudgetDashboard />);
-
-    await waitFor(() => {
-      expect(mockPauseExpiredCustomBudgets).toHaveBeenCalledTimes(1);
-    });
-    expect(mockRefresh).not.toHaveBeenCalled();
-  });
-
-  it("logs and swallows errors from auto-pause", async (): Promise<void> => {
-    const error = new Error("db failure");
-    mockPauseExpiredCustomBudgets.mockRejectedValueOnce(error);
-
-    render(<BudgetDashboard />);
-
-    await waitFor(() => {
-      expect(mockLoggerError).toHaveBeenCalledWith(
-        "budgetDashboard.pauseExpired.failed",
-        error
-      );
-    });
-    expect(mockRefresh).not.toHaveBeenCalled();
-  });
-
-  it("does not refresh if auto-pause resolves after cleanup", async (): Promise<void> => {
-    let resolvePause: (pausedCount: number) => void = () => undefined;
-    mockPauseExpiredCustomBudgets.mockReturnValueOnce(
-      new Promise<number>((resolve) => {
-        resolvePause = resolve;
-      })
-    );
-
-    const { unmount } = render(<BudgetDashboard />);
-
-    await waitFor(() => {
-      expect(mockPauseExpiredCustomBudgets).toHaveBeenCalledTimes(1);
-    });
-
-    unmount();
-    await act(async () => {
-      resolvePause(3);
-      await Promise.resolve();
-    });
-
-    expect(mockRefresh).not.toHaveBeenCalled();
-  });
 });
