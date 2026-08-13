@@ -1,4 +1,9 @@
-import i18next, { type InitOptions, type Resource } from "i18next";
+import i18next, {
+  init as initializeI18next,
+  use as registerI18nextPlugin,
+  type InitOptions,
+  type Resource,
+} from "i18next";
 import { initReactI18next } from "react-i18next";
 import * as Localization from "expo-localization";
 
@@ -102,7 +107,22 @@ export async function initI18n(): Promise<void> {
 
   const language = await detectInitialLanguage();
 
-  i18next.use(initReactI18next);
+  await initializeI18n(language);
+}
+
+/**
+ * Initialize the bundled English resources after primary startup fails before
+ * i18next is ready. This intentionally skips runtime contract validation: the
+ * validation failure has already been logged, and fallback must still create a
+ * usable i18next instance instead of calling changeLanguage on an uninitialized
+ * singleton.
+ */
+export async function initI18nFallback(): Promise<void> {
+  await initializeI18n("en");
+}
+
+async function initializeI18n(language: "en" | "ar"): Promise<void> {
+  registerI18nextPlugin(initReactI18next);
 
   const options: InitOptions = {
     resources,
@@ -117,7 +137,7 @@ export async function initI18n(): Promise<void> {
     },
   };
 
-  await i18next.init(options);
+  await initializeI18next(options);
 }
 
 /**

@@ -73,7 +73,7 @@ export function Slide2SMS(): React.ReactElement {
         </View>
 
         <Text className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          {t("pitch_slide_voice_account")}
+          {t("pitch_slide_sms_account")}
         </Text>
 
         <View className="mt-3 flex-row items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-700">
@@ -88,7 +88,7 @@ export function Slide2SMS(): React.ReactElement {
             </Text>
           </View>
           <Text className="text-xs text-slate-400 dark:text-slate-500">
-            {t("pitch_slide_voice_status_just_now")}
+            {t("pitch_slide_sms_status_just_now")}
           </Text>
         </View>
       </View>
