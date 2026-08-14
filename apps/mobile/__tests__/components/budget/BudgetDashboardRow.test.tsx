@@ -89,7 +89,9 @@ describe("BudgetDashboardRow", () => {
 
     const rowClassName = screen.getByTestId("budget-dashboard-row-budget-1")
       .props.className as string;
-    expect(rowClassName).toContain("min-h-28");
+    expect(rowClassName).toContain("min-h-24");
+    expect(rowClassName).toContain("py-3");
+    expect(rowClassName).not.toContain("min-h-28");
     expect(rowClassName).not.toContain("min-h-64");
     expect(screen.getByText("Groceries Monthly")).toHaveProp(
       "numberOfLines",
@@ -101,6 +103,10 @@ describe("BudgetDashboardRow", () => {
     expect(screen.getByText("safe_to_spend")).toBeOnTheScreen();
     expect(screen.getByTestId("category-icon")).toHaveTextContent(
       "restaurant-outline"
+    );
+    expect(screen.getByTestId("budget-row-icon-budget-1")).toHaveProp(
+      "className",
+      expect.stringContaining("h-10 w-10")
     );
     expect(
       screen.getByTestId("budget-row-progress-budget-1")
@@ -195,7 +201,11 @@ describe("BudgetDashboardRow", () => {
     );
     expect(screen.getByTestId("budget-row-subtitle-budget-1")).toHaveProp(
       "numberOfLines",
-      2
+      1
+    );
+    expect(screen.getByTestId("budget-row-subtitle-budget-1")).toHaveProp(
+      "adjustsFontSizeToFit",
+      true
     );
   });
 
@@ -226,8 +236,8 @@ describe("BudgetDashboardRow", () => {
     const trailingClassName = screen.getByTestId("budget-row-trailing-budget-1")
       .props.className as string;
 
-    expect(rowClassName).toContain("min-h-28");
-    expect(trailingClassName).toContain("w-28");
+    expect(rowClassName).toContain("min-h-24");
+    expect(trailingClassName).toContain("w-24");
     expect(screen.getByTestId("budget-row-percentage-budget-1")).toHaveProp(
       "numberOfLines",
       1

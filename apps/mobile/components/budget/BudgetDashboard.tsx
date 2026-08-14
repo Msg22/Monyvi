@@ -152,7 +152,7 @@ export function BudgetDashboard({
           ) : null}
 
           {readModel.matchingCount > 0 ? (
-            <View testID="budget-results-group" className="pb-4 pt-6">
+            <View testID="budget-results-group" className="pb-2 pt-5">
               <Text className="text-sm text-text-muted dark:text-slate-400">
                 {t(RESULT_COUNT_KEYS[filters.status], {
                   count: readModel.matchingCount,

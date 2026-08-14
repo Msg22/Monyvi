@@ -46,6 +46,14 @@ describe("BudgetDashboardSkeleton", () => {
     expect(
       screen.getByTestId("budget-result-count-skeleton")
     ).toBeOnTheScreen();
+    expect(screen.getByTestId("budget-filter-card-skeleton-0")).toHaveProp(
+      "className",
+      expect.stringContaining("min-h-16")
+    );
+    expect(screen.getByTestId("budget-result-count-skeleton")).toHaveProp(
+      "className",
+      expect.stringContaining("pb-2 pt-5")
+    );
     expect(screen.getAllByTestId(/^budget-row-skeleton-\d+$/)).toHaveLength(3);
     expect(screen.getByTestId("budget-row-skeleton-group")).not.toHaveProp(
       "className",
@@ -64,6 +72,10 @@ describe("BudgetDashboardSkeleton", () => {
       expect(
         screen.getByTestId(`budget-row-chevron-skeleton-${index}`)
       ).toBeOnTheScreen();
+      expect(screen.getByTestId(`budget-row-skeleton-${index}`)).toHaveProp(
+        "className",
+        expect.stringContaining("min-h-24")
+      );
     }
     expect(screen.queryByTestId("budget-global-card-skeleton")).toBeNull();
     expect(screen.queryByTestId("budget-carousel-dot-skeletons")).toBeNull();

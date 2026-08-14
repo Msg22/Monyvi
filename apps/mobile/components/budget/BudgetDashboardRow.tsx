@@ -81,7 +81,7 @@ function RowIcon({
   return (
     <View
       testID={`budget-row-icon-${item.id}`}
-      className={`h-12 w-12 items-center justify-center rounded-full border ${colors.container}`}
+      className={`h-10 w-10 items-center justify-center rounded-full border ${colors.container}`}
     >
       {shouldShowCategoryIcon && item.categoryIcon ? (
         <CategoryIcon
@@ -92,7 +92,7 @@ function RowIcon({
               ? item.categoryIcon.iconColor
               : colors.fallback
           }
-          size={24}
+          size={22}
         />
       ) : (
         <Ionicons
@@ -109,7 +109,7 @@ function RowIcon({
                   ? "wallet-outline"
                   : "pie-chart-outline"
           }
-          size={27}
+          size={25}
           color={colors.fallback}
         />
       )}
@@ -137,7 +137,7 @@ export function BudgetDashboardRow({
     >
       <View
         testID={`budget-dashboard-row-${item.id}`}
-        className={`min-h-28 bg-white px-4 py-4 dark:bg-slate-800 ${getContainerClasses(
+        className={`min-h-24 bg-white px-4 py-3 dark:bg-slate-800 ${getContainerClasses(
           position
         )} ${isLast ? "" : "border-b"}`}
       >
@@ -151,26 +151,31 @@ export function BudgetDashboardRow({
               >
                 {item.displayName}
               </Text>
-              <Text className="mt-1 text-sm text-text-muted dark:text-slate-400">
+              <Text
+                numberOfLines={1}
+                className="mt-0.5 text-sm text-text-muted dark:text-slate-400"
+              >
                 {presentation.periodAndScopeLabel}
               </Text>
               {item.categoryLabel.kind === "deleted" ? (
-                <Text className="mt-1 text-sm text-red-500 dark:text-red-300">
+                <Text className="mt-0.5 text-xs text-red-500 dark:text-red-300">
                   {presentation.deletedCategoryLabel}
                 </Text>
               ) : null}
               {item.lifecycle === "EXPIRED" ? (
                 <Text
                   testID={`budget-row-expiry-${item.id}`}
-                  className="mt-1 text-sm text-red-500 dark:text-red-300"
+                  className="mt-0.5 text-sm text-red-500 dark:text-red-300"
                 >
                   {presentation.expiryLabel}
                 </Text>
               ) : null}
               <Text
                 testID={`budget-row-subtitle-${item.id}`}
-                numberOfLines={2}
-                className="mt-2 text-sm text-text-muted dark:text-slate-400"
+                numberOfLines={1}
+                adjustsFontSizeToFit={true}
+                minimumFontScale={0.75}
+                className="mt-1.5 text-sm text-text-muted dark:text-slate-400"
               >
                 {presentation.spentOfLimitLabel}
               </Text>
@@ -179,7 +184,7 @@ export function BudgetDashboardRow({
 
           <View
             testID={`budget-row-trailing-${item.id}`}
-            className="ms-3 w-28 items-end"
+            className="ms-2 w-24 items-end"
           >
             {item.showsProgress ? (
               <>
@@ -188,7 +193,7 @@ export function BudgetDashboardRow({
                   numberOfLines={1}
                   adjustsFontSizeToFit={true}
                   minimumFontScale={0.65}
-                  className={`max-w-full text-2xl font-bold ${getLifecycleColorClasses(item)}`}
+                  className={`max-w-full text-xl font-bold ${getLifecycleColorClasses(item)}`}
                 >
                   {presentation.percentageLabel}
                 </Text>
@@ -197,7 +202,7 @@ export function BudgetDashboardRow({
                   numberOfLines={1}
                   adjustsFontSizeToFit={true}
                   minimumFontScale={0.7}
-                  className={`mt-1 text-sm font-medium ${getLifecycleColorClasses(item)}`}
+                  className={`mt-0.5 text-xs font-medium ${getLifecycleColorClasses(item)}`}
                 >
                   {presentation.statusLabel}
                 </Text>
@@ -220,7 +225,7 @@ export function BudgetDashboardRow({
                 {hasAction ? (
                   <TouchableOpacity
                     testID={`budget-action-${item.availableAction.toLowerCase()}-${item.id}`}
-                    className="mt-2 min-h-8 justify-center px-1"
+                    className="mt-1 min-h-8 justify-center px-1"
                     activeOpacity={0.8}
                     accessibilityRole="button"
                     accessibilityLabel={
@@ -242,10 +247,10 @@ export function BudgetDashboardRow({
             )}
           </View>
 
-          <View className="ms-1 min-h-11 min-w-7 items-end justify-center">
+          <View className="ms-1 min-h-11 min-w-6 items-end justify-center">
             <Ionicons
               name={I18nManager.isRTL ? "chevron-back" : "chevron-forward"}
-              size={24}
+              size={22}
               color={palette.slate[400]}
             />
           </View>
@@ -254,7 +259,7 @@ export function BudgetDashboardRow({
         {item.showsProgress ? (
           <View
             testID={`budget-row-progress-${item.id}`}
-            className="ms-16 me-8 mt-3 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+            className="ms-14 me-7 mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
           >
             <View
               className={`h-full rounded-full ${getProgressClasses(item)}`}

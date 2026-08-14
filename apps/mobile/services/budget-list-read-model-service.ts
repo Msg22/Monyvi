@@ -250,10 +250,9 @@ function createDashboardPresentation(
   const deletedCategoryLabel =
     categoryLabel.kind === "deleted" ? copy.deletedCategoryLabel : null;
   const periodLabel = copy.periodLabels[item.budget.period];
-  const scopeLabel =
-    categoryLabel.kind === "resolved"
-      ? categoryLabel.name
-      : copy.scopeLabels[item.budget.type];
+  const scopeLabel = copy.scopeLabels[item.budget.type];
+  const accessibilityScopeLabel =
+    categoryLabel.kind === "resolved" ? categoryLabel.name : scopeLabel;
   const expiryLabel = resolveExpiryLabel(
     item.budget,
     lifecycle,
@@ -266,7 +265,7 @@ function createDashboardPresentation(
     displayName,
     deletedCategoryLabel,
     periodLabel,
-    scopeLabel,
+    accessibilityScopeLabel,
     spentOfLimitLabel,
     percentageLabel,
     statusLabel,

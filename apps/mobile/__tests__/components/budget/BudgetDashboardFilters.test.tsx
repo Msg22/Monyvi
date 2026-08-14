@@ -93,6 +93,15 @@ describe("BudgetDashboardFilters", () => {
     const tabListClasses = tabListClassName.split(/\s+/).filter(Boolean);
     expect(tabListClasses).toContain("min-h-12");
     expect(tabListClasses).not.toContain("h-12");
+
+    expect(screen.getByTestId("budget-filter-period-layout")).toHaveProp(
+      "className",
+      expect.stringContaining("min-h-16")
+    );
+    expect(screen.getByTestId("budget-filter-cards")).toHaveProp(
+      "className",
+      expect.stringContaining("mt-3")
+    );
   });
 
   it("selects scope directly and Period/Status through safe-area option sheets", () => {

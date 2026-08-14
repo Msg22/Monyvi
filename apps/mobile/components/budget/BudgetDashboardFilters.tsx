@@ -84,26 +84,31 @@ function FilterCard({
   return (
     <TouchableOpacity
       testID={testID}
-      className="min-h-24 flex-1 flex-row items-center rounded-2xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-800"
+      className="min-h-16 flex-1 rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
       activeOpacity={0.8}
       accessibilityRole="button"
       accessibilityLabel={`${label}, ${value}`}
       accessibilityState={{ expanded: isExpanded }}
       onPress={onPress}
     >
-      <Ionicons name={icon} size={29} color={palette.slate[400]} />
-      <View className="ms-3 min-w-0 flex-1">
-        <Text className="text-xs text-text-muted dark:text-slate-400">
-          {label}
-        </Text>
-        <Text
-          numberOfLines={1}
-          className="mt-1 text-base font-semibold text-text-primary dark:text-slate-25"
-        >
-          {value}
-        </Text>
+      <View
+        testID={`${testID}-layout`}
+        className="min-h-16 flex-1 flex-row items-center px-3"
+      >
+        <Ionicons name={icon} size={24} color={palette.slate[400]} />
+        <View className="ms-2.5 min-w-0 flex-1">
+          <Text className="text-xs text-text-muted dark:text-slate-400">
+            {label}
+          </Text>
+          <Text
+            numberOfLines={1}
+            className="mt-0.5 text-base font-semibold text-text-primary dark:text-slate-25"
+          >
+            {value}
+          </Text>
+        </View>
+        <Ionicons name="chevron-down" size={20} color={palette.slate[400]} />
       </View>
-      <Ionicons name="chevron-down" size={20} color={palette.slate[400]} />
     </TouchableOpacity>
   );
 }
@@ -137,7 +142,7 @@ export function BudgetDashboardFilters({
     openSelector === "period" ? filters.period : filters.status;
 
   return (
-    <View testID="budget-dashboard-filters" className="pt-4">
+    <View testID="budget-dashboard-filters" className="pt-3">
       <View
         testID="budget-scope-tabs"
         accessibilityRole="tablist"
@@ -172,7 +177,7 @@ export function BudgetDashboardFilters({
         })}
       </View>
 
-      <View className="mt-4 flex-row gap-3">
+      <View testID="budget-filter-cards" className="mt-3 flex-row gap-3">
         <FilterCard
           testID="budget-filter-period"
           label={t("period")}

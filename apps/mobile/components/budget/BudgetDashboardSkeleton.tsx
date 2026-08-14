@@ -5,14 +5,21 @@ import { Skeleton } from "@/components/ui/Skeleton";
 
 const ROW_SKELETON_COUNT = 3;
 
-function FilterCardSkeleton(): React.JSX.Element {
+function FilterCardSkeleton({
+  index,
+}: {
+  readonly index: number;
+}): React.JSX.Element {
   return (
-    <View className="min-h-24 flex-1 flex-row items-center rounded-2xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-800">
-      <Skeleton width={29} height={29} borderRadius={8} />
-      <View className="ms-3 min-w-0 flex-1">
+    <View
+      testID={`budget-filter-card-skeleton-${index}`}
+      className="min-h-16 flex-1 flex-row items-center rounded-2xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-slate-800"
+    >
+      <Skeleton width={24} height={24} borderRadius={7} />
+      <View className="ms-2.5 min-w-0 flex-1">
         <Skeleton width="58%" height={12} borderRadius={6} />
-        <View className="mt-2">
-          <Skeleton width="76%" height={18} borderRadius={7} />
+        <View className="mt-1">
+          <Skeleton width="76%" height={16} borderRadius={7} />
         </View>
       </View>
       <Skeleton width={18} height={18} borderRadius={6} />
@@ -28,14 +35,14 @@ function BudgetRowSkeleton({
   return (
     <View
       testID={`budget-row-skeleton-${index}`}
-      className={`min-h-28 flex-row items-center bg-white px-4 py-4 dark:bg-slate-800 ${
+      className={`min-h-24 flex-row items-center bg-white px-4 py-3 dark:bg-slate-800 ${
         index < ROW_SKELETON_COUNT - 1
           ? "border-b border-slate-200 dark:border-slate-700"
           : ""
       }`}
     >
       <View testID={`budget-row-icon-skeleton-${index}`}>
-        <Skeleton width={48} height={48} borderRadius={24} />
+        <Skeleton width={40} height={40} borderRadius={20} />
       </View>
       <View
         testID={`budget-row-copy-skeleton-${index}`}
@@ -45,16 +52,16 @@ function BudgetRowSkeleton({
         <View className="mt-2">
           <Skeleton width="62%" height={13} borderRadius={6} />
         </View>
-        <View className="mt-3">
+        <View className="mt-2">
           <Skeleton width="92%" height={13} borderRadius={6} />
         </View>
-        <View className="mt-3">
+        <View className="mt-2">
           <Skeleton width="100%" height={6} borderRadius={3} />
         </View>
       </View>
       <View
         testID={`budget-row-metric-skeleton-${index}`}
-        className="ms-3 w-28 items-end"
+        className="ms-2 w-24 items-end"
       >
         <Skeleton width={52} height={26} borderRadius={7} />
         <View className="mt-2">
@@ -63,7 +70,7 @@ function BudgetRowSkeleton({
       </View>
       <View
         testID={`budget-row-chevron-skeleton-${index}`}
-        className="ms-1 min-h-11 min-w-7 items-end justify-center"
+        className="ms-1 min-h-11 min-w-6 items-end justify-center"
       >
         <Skeleton width={9} height={22} borderRadius={4} />
       </View>
@@ -85,14 +92,14 @@ export function BudgetDashboardSkeleton(): React.JSX.Element {
         </View>
         <View
           testID="budget-filter-card-skeletons"
-          className="mt-4 flex-row gap-3"
+          className="mt-3 flex-row gap-3"
         >
-          <FilterCardSkeleton />
-          <FilterCardSkeleton />
+          <FilterCardSkeleton index={0} />
+          <FilterCardSkeleton index={1} />
         </View>
       </View>
 
-      <View testID="budget-result-count-skeleton" className="pb-4 pt-6">
+      <View testID="budget-result-count-skeleton" className="pb-2 pt-5">
         <Skeleton width={132} height={14} borderRadius={7} />
       </View>
 

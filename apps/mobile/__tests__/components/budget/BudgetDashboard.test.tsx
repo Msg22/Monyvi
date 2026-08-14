@@ -200,6 +200,10 @@ describe("BudgetDashboard", () => {
     ]);
     expect(screen.getByTestId("budget-results-group")).toBeOnTheScreen();
     expect(screen.getByText("3 matching budgets")).toBeOnTheScreen();
+    expect(screen.getByTestId("budget-results-group")).toHaveProp(
+      "className",
+      expect.stringContaining("pb-2 pt-5")
+    );
     expect(screen.queryByTestId(/^budget-section-/)).toBeNull();
     expect(screen.queryByTestId("global-budget-carousel")).toBeNull();
     expect(screen.queryByTestId("budget-create-fab")).toBeNull();
