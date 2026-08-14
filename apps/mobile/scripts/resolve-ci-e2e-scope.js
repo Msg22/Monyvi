@@ -116,6 +116,8 @@ function getSuitesForFile(filePath) {
   const isTransactionsLocaleFile =
     /locales\/(?:ar|en)\/transactions\.json/i.test(normalized);
   const isBudgetPath = /budget/i.test(normalized);
+  const isSharedConfirmationModal =
+    normalized === "apps/mobile/components/modals/ConfirmationModal.tsx";
   const maestroSuite = getSuiteForMaestroFlow(normalized);
   if (maestroSuite) {
     suites.push(maestroSuite);
@@ -169,7 +171,7 @@ function getSuitesForFile(filePath) {
     suites.push("transactions", "recurring-payments", "sms-sync");
   }
 
-  if (isBudgetPath) {
+  if (isBudgetPath || isSharedConfirmationModal) {
     suites.push("budgets");
   }
 

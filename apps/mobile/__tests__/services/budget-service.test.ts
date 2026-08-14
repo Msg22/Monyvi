@@ -5,6 +5,8 @@ const mockWhere = jest.fn();
 const mockAnd = jest.fn();
 const mockFindAccessibleCategory = jest.fn();
 const mockQueryOwned = jest.fn();
+const mockQueryAccessibleCategories = jest.fn();
+const mockAssertOwned = jest.fn();
 const mockGetCurrentUserDataScope = jest.fn();
 
 jest.mock("expo-crypto", () => ({
@@ -22,6 +24,8 @@ interface MockUserDataScope {
   readonly userId: string;
   readonly findAccessibleCategory: typeof mockFindAccessibleCategory;
   readonly queryOwned: typeof mockQueryOwned;
+  readonly queryAccessibleCategories: typeof mockQueryAccessibleCategories;
+  readonly assertOwned: typeof mockAssertOwned;
 }
 
 interface MockBudgetRecord {
@@ -116,6 +120,7 @@ jest.mock("@/services/user-data-access", (): unknown => ({
 
 import {
   createBudget,
+  getSpendingForBudget,
   pauseExpiredCustomBudgets,
   resumeBudget,
   updateBudget,
@@ -154,10 +159,13 @@ describe("budget-service", () => {
     );
     mockFindAccessibleCategory.mockResolvedValue({ id: "category-resolved" });
     mockQueryOwned.mockReturnValue(createQueryResult<MockBudgetRecord>([]));
+    mockQueryAccessibleCategories.mockReturnValue(createQueryResult([]));
     const scope: MockUserDataScope = {
       userId: "user-1",
       findAccessibleCategory: mockFindAccessibleCategory,
       queryOwned: mockQueryOwned,
+      queryAccessibleCategories: mockQueryAccessibleCategories,
+      assertOwned: mockAssertOwned,
     };
     mockGetCurrentUserDataScope.mockResolvedValue(scope);
   });
@@ -277,6 +285,35 @@ describe("budget-service", () => {
     ).rejects.toThrow();
 
     expect(existingBudget.update).not.toHaveBeenCalled();
+    expect(mockQueryOwned).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts owned historical transactions for a deleted budget category", async (): Promise<void> => {
+    const budget = {
+      ...createLifecycleBudget({
+        type: "CATEGORY",
+        categoryId: "deleted-category",
+        period: "MONTHLY",
+      }),
+      isGlobal: false,
+      periodStart: new Date("2026-08-01T00:00:00.000Z"),
+      pauseIntervals: "[]",
+      pausedAt: undefined,
+    };
+    const historicalTransaction = {
+      amount: 420,
+      date: new Date("2026-08-05T00:00:00.000Z"),
+    };
+    mockQueryAccessibleCategories.mockReturnValueOnce(createQueryResult([]));
+    mockQueryOwned.mockReturnValueOnce(
+      createQueryResult([historicalTransaction as unknown as Transaction])
+    );
+
+    await expect(
+      getSpendingForBudget(budget as unknown as Budget)
+    ).resolves.toBe(420);
+
+    expect(mockAssertOwned).toHaveBeenCalledWith(budget);
     expect(mockQueryOwned).toHaveBeenCalledTimes(1);
   });
 
@@ -445,3 +482,4 @@ describe("budget-service", () => {
     expect(budget.update).not.toHaveBeenCalled();
   });
 });
+import type { Budget, Transaction } from "@monyvi/db";

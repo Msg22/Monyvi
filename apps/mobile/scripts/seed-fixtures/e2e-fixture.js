@@ -68,7 +68,7 @@ function buildDashboardFullRows({
         name: "E2E Custom Overall",
         period: "CUSTOM",
         periodStart: dateFromToday(-14),
-        periodEnd: dateFromToday(-1),
+        periodEnd: dateFromToday(14),
         currentTimestamp,
         fixedNow,
         userId,
@@ -83,6 +83,17 @@ function buildDashboardFullRows({
         fixedNow,
         userId,
       }),
+      createCategoryBudget({
+        id: deterministicUuid(seedScope, userId, "budget:expired-custom"),
+        name: "E2E Expired Custom",
+        categoryId: categoryIds.other,
+        period: "CUSTOM",
+        periodStart: dateFromToday(-30),
+        periodEnd: dateFromToday(-1),
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
     ],
   };
 }
@@ -91,6 +102,7 @@ function createCategoryBudget({
   id,
   name,
   categoryId,
+  period = "MONTHLY",
   periodStart,
   periodEnd,
   currentTimestamp,
@@ -101,7 +113,7 @@ function createCategoryBudget({
     ...createGlobalBudget({
       id,
       name,
-      period: "MONTHLY",
+      period,
       periodStart,
       periodEnd,
       currentTimestamp,

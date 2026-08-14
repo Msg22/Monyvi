@@ -19,7 +19,7 @@ appId: com.monyvi.app
     notVisible: "Resume budget?"
     timeout: 30000
 - scrollUntilVisible:
-    element: "E2E Custom Overall"
+    element: "E2E Expired Custom"
     direction: DOWN
     timeout: 30000
 - tapOn:

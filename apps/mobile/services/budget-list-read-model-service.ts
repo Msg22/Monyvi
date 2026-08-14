@@ -39,11 +39,7 @@ export function observeBudgetList(userId: string): Query<Budget> {
 }
 
 export async function buildBudgetMetrics(
-  budgets: readonly Budget[],
-  accessibleCategoryMap?: ReadonlyMap<
-    string,
-    { readonly displayName: string }
-  >
+  budgets: readonly Budget[]
 ): Promise<BudgetWithMetrics[]> {
   return Promise.all(
     budgets.map(async (budget) => {
@@ -52,13 +48,7 @@ export async function buildBudgetMetrics(
         budget.periodStart,
         budget.periodEnd
       );
-      const isDeletedCategoryBudget =
-        accessibleCategoryMap !== undefined &&
-        budget.isCategoryBudget &&
-        (!budget.categoryId || !accessibleCategoryMap.has(budget.categoryId));
-      const spent = isDeletedCategoryBudget
-        ? 0
-        : await getSpendingForBudget(budget);
+      const spent = await getSpendingForBudget(budget);
       const daysElapsed = getDaysElapsed(bounds.start);
       const daysLeft = getDaysLeft(bounds.end);
       const metrics = computeSpendingMetrics(

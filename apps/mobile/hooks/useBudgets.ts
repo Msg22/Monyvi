@@ -76,6 +76,7 @@ export function useBudgets(): UseBudgetsResult {
   const [errorKey, setErrorKey] = useState<"dashboard_load_error" | null>(null);
   const [periodFilter, setPeriodFilterState] = useState<PeriodFilter>("ALL");
   const [refreshCounter, setRefreshCounter] = useState(0);
+  const [observationRetryCounter, setObservationRetryCounter] = useState(0);
   const { userId, isResolvingUser } = useCurrentUser();
   const categoryMap = useCategoryLookup();
   const { isLoading: areCategoriesLoading } = useAllCategories();
@@ -113,7 +114,7 @@ export function useBudgets(): UseBudgetsResult {
             },
             error: (error: unknown) => {
               logger.error("budgets.observe.failed", error);
-              setHasObservedBudgets(true);
+              setHasObservedBudgets(false);
               setIsComputing(false);
               setErrorKey("dashboard_load_error");
             },
@@ -122,15 +123,10 @@ export function useBudgets(): UseBudgetsResult {
         return () => subscription.unsubscribe();
       },
     });
-  }, [clearScopedState, isResolvingUser, userId]);
+  }, [clearScopedState, isResolvingUser, observationRetryCounter, userId]);
 
   useEffect(() => {
-    if (
-      !userId ||
-      isResolvingUser ||
-      !hasObservedBudgets ||
-      areCategoriesLoading
-    ) {
+    if (!userId || isResolvingUser || !hasObservedBudgets) {
       return;
     }
 
@@ -140,7 +136,7 @@ export function useBudgets(): UseBudgetsResult {
       setIsComputing(true);
 
       try {
-        const metrics = await buildBudgetMetrics(rawBudgets, categoryMap);
+        const metrics = await buildBudgetMetrics(rawBudgets);
         if (isCurrent) {
           setComputedBudgets({ source: rawBudgets, metrics });
         }
@@ -158,15 +154,7 @@ export function useBudgets(): UseBudgetsResult {
     return () => {
       isCurrent = false;
     };
-  }, [
-    areCategoriesLoading,
-    categoryMap,
-    hasObservedBudgets,
-    isResolvingUser,
-    rawBudgets,
-    refreshCounter,
-    userId,
-  ]);
+  }, [hasObservedBudgets, isResolvingUser, rawBudgets, refreshCounter, userId]);
 
   useEffect(() => {
     if (
@@ -213,6 +201,13 @@ export function useBudgets(): UseBudgetsResult {
     setRefreshCounter((counter) => counter + 1);
   }, []);
 
+  const retry = useCallback((): void => {
+    setIsComputing(true);
+    setHasObservedBudgets(false);
+    setObservationRetryCounter((counter) => counter + 1);
+    setRefreshCounter((counter) => counter + 1);
+  }, []);
+
   const allMatchingBudgets = useMemo(
     () =>
       Object.freeze([
@@ -242,6 +237,7 @@ export function useBudgets(): UseBudgetsResult {
   const isInitialLoading =
     isResolvingUser ||
     (Boolean(userId) &&
+      errorKey === null &&
       (areCategoriesLoading ||
         (!hasValidData && (!hasObservedBudgets || isComputing))));
 
@@ -262,7 +258,7 @@ export function useBudgets(): UseBudgetsResult {
     periodFilter,
     setPeriodFilter,
     refresh,
-    retry: refresh,
+    retry,
     autoPauseCheckKey,
   };
 }

@@ -468,10 +468,14 @@ export async function getSpendingForBudget(budget: Budget): Promise<number> {
       .fetch();
   } else {
     // Category budget: need to include subcategories
-    const categoryIds = await getCategoryAndSubcategoryIds(
-      budget.categoryId,
-      scope
-    );
+    // Deleted category rows are unavailable for hierarchy expansion, but the
+    // owned budget's persisted category ID still identifies historical spend.
+    const categoryIds = budget.categoryId
+      ? ((await getAccessibleCategoryHierarchyIds(
+          budget.categoryId,
+          scope
+        )) ?? [budget.categoryId])
+      : [];
 
     transactions = await scope
       .queryOwned(
@@ -506,10 +510,31 @@ export async function getCategoryAndSubcategoryIds(
   if (!categoryId) return [];
 
   const currentScope = scope ?? (await getCurrentUserDataScope());
+  const hierarchyIds = await getAccessibleCategoryHierarchyIds(
+    categoryId,
+    currentScope
+  );
+  if (hierarchyIds) return hierarchyIds;
+
   await currentScope.findAccessibleCategory(categoriesCollection(), categoryId);
+  return [categoryId];
+}
+
+async function getAccessibleCategoryHierarchyIds(
+  categoryId: string,
+  scope: CurrentUserDataScope
+): Promise<string[] | null> {
+  const roots = await scope
+    .queryAccessibleCategories(
+      categoriesCollection(),
+      Q.where("id", categoryId),
+      Q.where("deleted", false)
+    )
+    .fetch();
+  if (roots.length === 0) return null;
 
   // Get direct children (L2)
-  const children = await currentScope
+  const children = await scope
     .queryAccessibleCategories(
       categoriesCollection(),
       Q.where("parent_id", categoryId),
@@ -522,7 +547,7 @@ export async function getCategoryAndSubcategoryIds(
   // Get grandchildren (L3)
   let grandchildIds: string[] = [];
   if (childIds.length > 0) {
-    const grandchildren = await currentScope
+    const grandchildren = await scope
       .queryAccessibleCategories(
         categoriesCollection(),
         Q.where("parent_id", Q.oneOf(childIds)),

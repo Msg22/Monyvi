@@ -15,6 +15,7 @@ import { logger } from "@/utils/logger";
 
 export default function BudgetsScreen(): React.JSX.Element {
   const { t } = useTranslation("budgets");
+  const { t: tCommon } = useTranslation("common");
   const router = useRouter();
   const { showToast } = useToast();
   const { preferredCurrency } = usePreferredCurrency();
@@ -137,7 +138,7 @@ export default function BudgetsScreen(): React.JSX.Element {
         title={t("resume_confirmation_title")}
         message={t("resume_confirmation_message")}
         confirmLabel={t("resume_confirmation_confirm")}
-        cancelLabel={t("cancel")}
+        cancelLabel={tCommon("cancel")}
         variant="info"
         icon="play-circle-outline"
         isConfirming={actions.isSubmitting}

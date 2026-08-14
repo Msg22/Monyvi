@@ -111,6 +111,17 @@ describe("resolve-ci-e2e-scope", () => {
     });
   });
 
+  it("routes the shared confirmation modal to every suite that uses it", () => {
+    expect(
+      scopeResolver.resolveCiE2eScope([
+        "apps/mobile/components/modals/ConfirmationModal.tsx",
+      ])
+    ).toEqual({
+      shouldRun: true,
+      suites: ["transactions", "recurring-payments", "budgets"],
+    });
+  });
+
   it("ignores global mobile files that do not directly affect E2E journeys", () => {
     expect(
       scopeResolver.resolveCiE2eScope([

@@ -30,7 +30,10 @@ jest.mock("expo-router", () => ({
 }));
 
 jest.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string): string => key }),
+  useTranslation: (namespace: string) => ({
+    t: (key: string): string =>
+      namespace === "common" ? `common:${key}` : key,
+  }),
 }));
 
 jest.mock("@/components/navigation/PageHeader", () => ({
@@ -83,13 +86,16 @@ jest.mock("@/components/modals/ConfirmationModal", () => ({
     visible,
     onConfirm,
     onCancel,
+    cancelLabel,
   }: {
     readonly visible: boolean;
     readonly onConfirm: () => void;
     readonly onCancel: () => void;
+    readonly cancelLabel: string;
   }): mockReact.JSX.Element | null =>
     visible ? (
       <MockView testID="resume-confirmation">
+        <MockText testID="resume-cancel-label">{cancelLabel}</MockText>
         <MockPressable testID="modal-cancel" onPress={onCancel} />
         <MockPressable testID="modal-confirm" onPress={onConfirm} />
       </MockView>
@@ -190,6 +196,7 @@ describe("BudgetsScreen dashboard actions", () => {
 
     fireEvent.press(screen.getByTestId("dashboard-resume"));
     expect(screen.getByTestId("resume-confirmation")).toBeTruthy();
+    expect(screen.getByText("common:cancel")).toBeTruthy();
 
     fireEvent.press(screen.getByTestId("modal-cancel"));
     expect(mockConfirmResume).not.toHaveBeenCalled();
@@ -210,7 +217,10 @@ describe("BudgetsScreen dashboard actions", () => {
     expect(mockConfirmResume).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId("resume-confirmation")).toBeTruthy();
 
-    act(() => resolveResume?.(true));
+    await act(async () => {
+      resolveResume?.(true);
+      await Promise.resolve();
+    });
     await waitFor(() =>
       expect(screen.queryByTestId("resume-confirmation")).toBeNull()
     );

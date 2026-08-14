@@ -267,19 +267,20 @@ describe("budget-list-read-model-service", () => {
     );
   });
 
-  it("uses zero spending when a category budget references a deleted category", async () => {
+  it("preserves historical spending when a category budget references a deleted category", async () => {
     const deletedCategoryBudget = {
       ...createBudget("deleted-category-budget"),
       categoryId: "deleted-category",
     } as Budget;
 
-    const result = await buildBudgetMetrics(
-      [deletedCategoryBudget],
-      new Map()
-    );
+    mockGetSpendingForBudget.mockResolvedValueOnce(420);
 
-    expect(mockGetSpendingForBudget).not.toHaveBeenCalled();
-    expect(mockComputeSpendingMetrics).toHaveBeenCalledWith(0, 1000, 15, 80);
+    const result = await buildBudgetMetrics([deletedCategoryBudget]);
+
+    expect(mockGetSpendingForBudget).toHaveBeenCalledWith(
+      deletedCategoryBudget
+    );
+    expect(mockComputeSpendingMetrics).toHaveBeenCalledWith(420, 1000, 15, 80);
     expect(result).toHaveLength(1);
   });
 
@@ -291,12 +292,9 @@ describe("budget-list-read-model-service", () => {
     } as Budget;
     mockGetSpendingForBudget.mockRejectedValueOnce(error);
 
-    await expect(
-      buildBudgetMetrics(
-        [accessibleCategoryBudget],
-        new Map([["food", { displayName: "Food" }]])
-      )
-    ).rejects.toBe(error);
+    await expect(buildBudgetMetrics([accessibleCategoryBudget])).rejects.toBe(
+      error
+    );
   });
 
   it("retains expired active custom budgets while computing existing metrics", async () => {
@@ -325,7 +323,10 @@ describe("budget-list-read-model-service", () => {
       currency: "EGP",
     } as Budget;
     const result = buildBudgetDashboardReadModel({
-      budgets: [createBudgetMetric(globalBudget), createBudgetMetric(categoryBudget)],
+      budgets: [
+        createBudgetMetric(globalBudget),
+        createBudgetMetric(categoryBudget),
+      ],
       categoryMap: new Map([["food", { displayName: "Food & Drinks" }]]),
       filter: "ALL",
       now: new Date("2026-05-15T00:00:00.000Z"),

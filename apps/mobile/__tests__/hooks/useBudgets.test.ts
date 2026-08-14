@@ -79,8 +79,10 @@ jest.mock("@/context/CategoriesContext", () => ({
     readonly categories: readonly unknown[];
     readonly isLoading: boolean;
   } => ({ categories: [], isLoading: mockCategoriesLoading }),
-  useCategoryLookup: (): ReadonlyMap<string, { readonly displayName: string }> =>
-    mockCategoryMap,
+  useCategoryLookup: (): ReadonlyMap<
+    string,
+    { readonly displayName: string }
+  > => mockCategoryMap,
 }));
 
 jest.mock("react-i18next", () => ({
@@ -154,10 +156,7 @@ describe("useBudgets", () => {
     });
 
     expect(mockObserveBudgetList).toHaveBeenCalledWith("user-1");
-    expect(mockBuildBudgetMetrics).toHaveBeenCalledWith(
-      rawBudgets,
-      mockCategoryMap
-    );
+    expect(mockBuildBudgetMetrics).toHaveBeenCalledWith(rawBudgets);
     expect(mockBuildBudgetDashboardReadModel).toHaveBeenCalledWith({
       budgets: budgetMetrics,
       categoryMap: mockCategoryMap,
@@ -241,7 +240,7 @@ describe("useBudgets", () => {
     expect(result.current).toHaveProperty("pausedBudgets");
   });
 
-  it("logs observation failures and clears loading", async () => {
+  it("re-subscribes after an observation failure when retry is requested", async () => {
     const error = new Error("observe failed");
     const { result } = renderHook(() => useBudgets());
 
@@ -256,6 +255,23 @@ describe("useBudgets", () => {
       "budgets.observe.failed",
       error
     );
+
+    act(() => {
+      result.current.retry();
+    });
+
+    await waitFor(() => {
+      expect(mockObserveBudgetList).toHaveBeenCalledTimes(2);
+    });
+    expect(budgetQuery.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(mockBuildBudgetMetrics).not.toHaveBeenCalled();
+
+    act(() => {
+      budgetQuery.observerRef.current?.next(rawBudgets);
+    });
+    await waitFor(() => {
+      expect(result.current.hasValidData).toBe(true);
+    });
   });
 
   it("reports an initial metric failure without claiming valid data", async () => {
@@ -289,7 +305,9 @@ describe("useBudgets", () => {
       budgetQuery.observerRef.current?.next(rawBudgets);
     });
 
-    expect(mockBuildBudgetMetrics).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(mockBuildBudgetMetrics).toHaveBeenCalledWith(rawBudgets);
+    });
     expect(mockBuildBudgetDashboardReadModel).not.toHaveBeenCalled();
     expect(result.current.isInitialLoading).toBe(true);
 
@@ -299,10 +317,7 @@ describe("useBudgets", () => {
     await waitFor(() => {
       expect(result.current.hasValidData).toBe(true);
     });
-    expect(mockBuildBudgetMetrics).toHaveBeenCalledWith(
-      rawBudgets,
-      mockCategoryMap
-    );
+    expect(mockBuildBudgetMetrics).toHaveBeenCalledWith(rawBudgets);
   });
 
   it("retains the last valid dashboard after a recoverable refresh failure", async () => {
