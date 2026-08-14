@@ -215,7 +215,8 @@ function createAccessibilityLabel(
   scopeLabel: string,
   spentOfLimitLabel: string,
   percentageLabel: string | null,
-  statusLabel: string
+  statusLabel: string,
+  expiryLabel: string | null
 ): string {
   return [
     displayName,
@@ -224,7 +225,7 @@ function createAccessibilityLabel(
     scopeLabel,
     spentOfLimitLabel,
     ...(percentageLabel ? [percentageLabel] : []),
-    statusLabel,
+    expiryLabel ?? statusLabel,
   ].join(", ");
 }
 
@@ -265,7 +266,8 @@ function createDashboardPresentation(
     scopeLabel,
     spentOfLimitLabel,
     percentageLabel,
-    statusLabel
+    statusLabel,
+    expiryLabel
   );
 
   return Object.freeze({

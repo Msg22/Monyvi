@@ -467,6 +467,9 @@ describe("budget-list-read-model-service", () => {
     expect(Object.isFrozen(result)).toBe(true);
     expect(Object.isFrozen(result.items)).toBe(true);
     expect(Object.isFrozen(result.items[0])).toBe(true);
+    expect(result.items[0]?.presentation.accessibilityLabel).toContain(
+      "Expired May 1"
+    );
   });
 
   it("shapes display-only DTOs and deleted-category history without exposing models", () => {

@@ -24,6 +24,7 @@ import {
 } from "@/services/budget-list-read-model-service";
 import { logger } from "@/utils/logger";
 import {
+  clearBudgetDashboardFilterSession,
   DEFAULT_BUDGET_DASHBOARD_FILTERS,
   readBudgetDashboardFilterSession,
   resetBudgetDashboardFilterSession,
@@ -135,6 +136,10 @@ export function useBudgets(
   const [observationRetryCounter, setObservationRetryCounter] = useState(0);
   const [lifecycleClockRevision, setLifecycleClockRevision] = useState(0);
   const [spendingRevision, setSpendingRevision] = useState(0);
+  const [hasBudgetObservationError, setHasBudgetObservationError] =
+    useState(false);
+  const [hasSpendingObservationError, setHasSpendingObservationError] =
+    useState(false);
   const refreshGenerationRef = useRef(0);
   const activeScopeUserIdRef = useRef<string | null>(null);
   const { userId, isResolvingUser } = useCurrentUser();
@@ -182,6 +187,8 @@ export function useBudgets(
     setHasValidData(false);
     setIsComputing(isLoading);
     setErrorKey(null);
+    setHasBudgetObservationError(false);
+    setHasSpendingObservationError(false);
   }, []);
 
   useEffect(() => {
@@ -195,6 +202,7 @@ export function useBudgets(
       },
       onSignedOut: () => {
         activeScopeUserIdRef.current = null;
+        clearBudgetDashboardFilterSession();
         clearScopedState(false);
         setFilters(DEFAULT_BUDGET_DASHBOARD_FILTERS);
       },
@@ -210,12 +218,14 @@ export function useBudgets(
           .observeWithColumns(BUDGET_LIST_OBSERVED_COLUMNS)
           .subscribe({
             next: (budgets) => {
+              setHasBudgetObservationError(false);
               setRawBudgets(budgets);
               setHasObservedBudgets(true);
               setIsComputing(true);
             },
             error: (error: unknown) => {
               logger.error("budgets.observe.failed", error);
+              setHasBudgetObservationError(true);
               setHasObservedBudgets(false);
               setIsComputing(false);
               setErrorKey("dashboard_load_error");
@@ -227,6 +237,7 @@ export function useBudgets(
           .observeWithColumns(BUDGET_SPENDING_OBSERVED_COLUMNS)
           .subscribe({
             next: () => {
+              setHasSpendingObservationError(false);
               if (!hasReceivedInitialSpendingSnapshot) {
                 hasReceivedInitialSpendingSnapshot = true;
                 return;
@@ -235,6 +246,7 @@ export function useBudgets(
             },
             error: (error: unknown) => {
               logger.error("budgets.spendingObserve.failed", error);
+              setHasSpendingObservationError(true);
               setIsComputing(false);
               setErrorKey("dashboard_load_error");
             },
@@ -323,7 +335,11 @@ export function useBudgets(
       setReadModel(nextReadModel);
       setHasValidData(true);
       setIsComputing(false);
-      if (computedBudgets.refreshGeneration === refreshGenerationRef.current) {
+      if (
+        computedBudgets.refreshGeneration === refreshGenerationRef.current &&
+        !hasBudgetObservationError &&
+        !hasSpendingObservationError
+      ) {
         setErrorKey(null);
       }
     } catch (error: unknown) {
@@ -337,6 +353,8 @@ export function useBudgets(
     categoryMap,
     categoryError,
     computedBudgets,
+    hasBudgetObservationError,
+    hasSpendingObservationError,
     isResolvingUser,
     lifecycleClockRevision,
     preferredCurrency,

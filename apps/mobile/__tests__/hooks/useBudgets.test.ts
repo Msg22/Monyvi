@@ -386,6 +386,36 @@ describe("useBudgets", () => {
     expect(sameUser.result.current.readModel.matchingCount).toBe(0);
   });
 
+  it("clears the remembered filter session after sign-out", async () => {
+    const { result, rerender } = renderHook(() => useBudgets());
+
+    act(() => {
+      result.current.setScopeFilter("GLOBAL");
+      result.current.setPeriodFilter("CUSTOM");
+      result.current.setStatusFilter("EXPIRED");
+    });
+
+    mockUserId = null;
+    rerender(undefined);
+    await waitFor(() => {
+      expect(result.current.filters).toEqual({
+        scope: "ALL",
+        period: "ALL",
+        status: "ACTIVE",
+      });
+    });
+    mockUserId = "user-1";
+    rerender(undefined);
+
+    await waitFor(() => {
+      expect(result.current.filters).toEqual({
+        scope: "ALL",
+        period: "ALL",
+        status: "ACTIVE",
+      });
+    });
+  });
+
   it("refreshes budget metrics without replacing the public return shape", async () => {
     const { result } = renderHook(() => useBudgets());
 
@@ -461,6 +491,58 @@ describe("useBudgets", () => {
       expect(result.current.hasValidData).toBe(true);
     });
   });
+
+  it.each(["budget", "spending"] as const)(
+    "keeps a %s observation error visible until replacement subscriptions recover",
+    async (failedObservation) => {
+      const weeklyReadModel = {
+        ...dashboardReadModel,
+        filters: { ...dashboardReadModel.filters, period: "WEEKLY" },
+      };
+      mockBuildBudgetDashboardReadModel.mockImplementation((input: unknown) =>
+        (
+          input as {
+            readonly filters: typeof dashboardReadModel.filters;
+          }
+        ).filters.period === "WEEKLY"
+          ? weeklyReadModel
+          : dashboardReadModel
+      );
+      const { result } = renderHook(() => useBudgets());
+
+      act(() => {
+        budgetQuery.observerRef.current?.next(rawBudgets);
+        spendingQuery.observerRef.current?.next([]);
+      });
+      await waitFor(() => expect(result.current.hasValidData).toBe(true));
+
+      act(() => {
+        const error = new Error(`${failedObservation} failed`);
+        if (failedObservation === "budget") {
+          budgetQuery.observerRef.current?.error(error);
+        } else {
+          spendingQuery.observerRef.current?.error(error);
+        }
+      });
+      await waitFor(() =>
+        expect(result.current.errorKey).toBe("dashboard_load_error")
+      );
+
+      act(() => result.current.setPeriodFilter("WEEKLY"));
+      await waitFor(() => expect(result.current.filters.period).toBe("WEEKLY"));
+      expect(result.current.errorKey).toBe("dashboard_load_error");
+
+      act(() => result.current.retry());
+      await waitFor(() =>
+        expect(mockObserveBudgetList).toHaveBeenCalledTimes(2)
+      );
+      act(() => {
+        budgetQuery.observerRef.current?.next(rawBudgets);
+        spendingQuery.observerRef.current?.next([]);
+      });
+      await waitFor(() => expect(result.current.errorKey).toBeNull());
+    }
+  );
 
   it("reports an initial metric failure without claiming valid data", async () => {
     const error = new Error("metrics failed");

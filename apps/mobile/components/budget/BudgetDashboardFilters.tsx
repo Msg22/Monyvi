@@ -140,8 +140,9 @@ export function BudgetDashboardFilters({
   return (
     <View testID="budget-dashboard-filters" className="pt-4">
       <View
+        testID="budget-scope-tabs"
         accessibilityRole="tablist"
-        className="h-12 flex-row overflow-hidden rounded-full border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
+        className="min-h-12 flex-row overflow-hidden rounded-full border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
       >
         {SCOPE_OPTIONS.map((scope) => {
           const isSelected = filters.scope === scope;
@@ -149,7 +150,7 @@ export function BudgetDashboardFilters({
             <TouchableOpacity
               key={scope}
               testID={`budget-scope-${scope.toLowerCase()}`}
-              className={`flex-1 items-center justify-center ${
+              className={`flex-1 items-center justify-center py-3 ${
                 isSelected ? "bg-nileGreen-500" : ""
               }`}
               activeOpacity={0.8}

@@ -74,6 +74,11 @@ describe("BudgetDashboardFilters", () => {
     expect(
       screen.getByRole("button", { name: "Status, Active" })
     ).toBeOnTheScreen();
+    const tabListClassName = screen.getByTestId("budget-scope-tabs").props
+      .className as string;
+    const tabListClasses = tabListClassName.split(/\s+/).filter(Boolean);
+    expect(tabListClasses).toContain("min-h-12");
+    expect(tabListClasses).not.toContain("h-12");
   });
 
   it("selects scope directly and Period/Status through safe-area option sheets", () => {
