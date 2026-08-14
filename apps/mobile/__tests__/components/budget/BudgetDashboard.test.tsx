@@ -262,6 +262,8 @@ describe("BudgetDashboard", () => {
     });
 
     expect(screen.getByTestId("budget-dashboard-initial-error")).toBeTruthy();
+    expect(screen.getByText("dashboard_initial_load_error")).toBeTruthy();
+    expect(screen.queryByText("dashboard_load_error")).toBeNull();
     expect(screen.queryByRole("button", { name: "create-empty" })).toBeNull();
   });
 

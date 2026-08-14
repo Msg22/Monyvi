@@ -6,7 +6,14 @@ appId: com.monyvi.app
     visible:
       id: "global-budget-carousel"
     timeout: 120000
-- assertVisible: "E2E Monthly Overall"
+- assertVisible: "E2E Custom Overall"
+- swipe:
+    start: 90%, 45%
+    end: 10%, 45%
+    duration: 500
+- extendedWaitUntil:
+    visible: "E2E Monthly Overall"
+    timeout: 30000
 - swipe:
     start: 90%, 45%
     end: 10%, 45%
@@ -15,4 +22,4 @@ appId: com.monyvi.app
     visible: "E2E Weekly Overall"
     timeout: 30000
 - assertVisible:
-    id: "global-budget-page-dot-1"
+    id: "global-budget-page-dot-2"

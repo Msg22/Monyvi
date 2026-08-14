@@ -256,7 +256,7 @@ export function BudgetDashboard({
               color={palette.slate[400]}
             />
             <Text className="mt-4 text-center text-base text-text-secondary dark:text-slate-300">
-              {t(errorKey)}
+              {t("dashboard_initial_load_error")}
             </Text>
             <TouchableOpacity
               className="mt-5 min-h-11 justify-center rounded-xl bg-nileGreen-500 px-6"

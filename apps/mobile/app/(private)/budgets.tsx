@@ -91,11 +91,12 @@ export default function BudgetsScreen(): React.JSX.Element {
   const handleConfirmResume = useCallback(async (): Promise<void> => {
     if (!resumeBudgetId || actions.isSubmitting) return;
 
-    const didResume = await actions.confirmResume(resumeBudgetId);
-    if (didResume) {
+    const result = await actions.confirmResume(resumeBudgetId);
+    if (result === "resumed") {
       setResumeBudgetId(null);
       return;
     }
+    if (result === "ignored") return;
 
     showToast({ type: "error", title: t("dashboard_action_error") });
     actions.resetError();
@@ -113,6 +114,7 @@ export default function BudgetsScreen(): React.JSX.Element {
         rightAction={{
           icon: "add",
           onPress: handleCreateBudget,
+          accessibilityLabel: t("accessibility_create_budget"),
           testID: "budgets-add-button",
         }}
       />

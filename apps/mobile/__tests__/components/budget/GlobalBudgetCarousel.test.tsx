@@ -126,6 +126,29 @@ describe("GlobalBudgetCarousel", () => {
     expect(screen.queryByTestId(/global-budget-page-dot-/)).toBeNull();
   });
 
+  it("exposes page position when the carousel has exactly one page", () => {
+    const screen = render(
+      <GlobalBudgetCarousel
+        budgets={[item("a")]}
+        preferredCurrency="EGP"
+        onBudgetPress={jest.fn()}
+      />
+    );
+    fireEvent(
+      screen.getByTestId("global-budget-carousel-container"),
+      "layout",
+      {
+        nativeEvent: { layout: { width: 320, height: 300, x: 0, y: 0 } },
+      }
+    );
+
+    expect(screen.queryByTestId(/global-budget-page-dot-/)).toBeNull();
+    expect(screen.getByTestId("global-budget-carousel")).toHaveProp(
+      "accessibilityValue",
+      { text: "Budget page 1 of 1" }
+    );
+  });
+
   it("announces only a user-driven page change", () => {
     const screen = render(
       <GlobalBudgetCarousel

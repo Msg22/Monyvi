@@ -32,8 +32,8 @@ describe("useBudgetDashboardActions", () => {
     );
     const { result } = renderHook(() => useBudgetDashboardActions());
 
-    let first: Promise<boolean> | undefined;
-    let second: Promise<boolean> | undefined;
+    let first: Promise<"resumed" | "ignored" | "failed"> | undefined;
+    let second: Promise<"resumed" | "ignored" | "failed"> | undefined;
     act(() => {
       first = result.current.confirmResume("budget-1");
       second = result.current.confirmResume("budget-1");
@@ -41,9 +41,10 @@ describe("useBudgetDashboardActions", () => {
 
     expect(mockResumeBudget).toHaveBeenCalledTimes(1);
     expect(result.current.isSubmitting).toBe(true);
+    await expect(second).resolves.toBe("ignored");
     resolveResume();
     await act(async () => {
-      await Promise.all([first, second]);
+      await expect(first).resolves.toBe("resumed");
     });
     expect(result.current.isSubmitting).toBe(false);
   });
@@ -87,14 +88,14 @@ describe("useBudgetDashboardActions", () => {
       })
     );
     const { result, unmount } = renderHook(() => useBudgetDashboardActions());
-    let request: Promise<boolean> | undefined;
+    let request: Promise<"resumed" | "ignored" | "failed"> | undefined;
     act(() => {
       request = result.current.confirmResume("budget-1");
     });
     unmount();
     resolveResume();
 
-    await expect(request).resolves.toBe(true);
+    await expect(request).resolves.toBe("resumed");
     await waitFor(() => {
       expect(mockResumeBudget).toHaveBeenCalledTimes(1);
     });

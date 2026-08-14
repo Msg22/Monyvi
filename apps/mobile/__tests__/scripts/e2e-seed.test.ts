@@ -33,9 +33,13 @@ describe("e2e-seed script helpers", () => {
       currentTimestamp: "2026-08-13T12:00:00.000Z",
       dateFromToday: (offset: number): string =>
         `2026-08-${String(13 + offset).padStart(2, "0")}`,
-      deterministicUuid: (): string => "id",
+      deterministicUuid: (
+        _scope: string,
+        _userId: string,
+        key: string
+      ): string => key,
       fixedNow: "2026-08-13T00:00:00.000Z",
-      seedIds: { budgets: {} },
+      seedIds: { accounts: { cash: "cash-account" }, budgets: {} },
       seedScope: "e2e",
       userId: "user-e2e",
     };
@@ -71,8 +75,33 @@ describe("e2e-seed script helpers", () => {
           status: "PAUSED",
           type: "CATEGORY",
         }),
+        expect.objectContaining({
+          name: "E2E Healthy Shopping",
+          period: "WEEKLY",
+          status: "ACTIVE",
+          type: "CATEGORY",
+        }),
+        expect.objectContaining({
+          name: "E2E Near Limit Other",
+          period: "MONTHLY",
+          status: "ACTIVE",
+          type: "CATEGORY",
+        }),
       ])
     );
+    expect(fullFixture.buildExtraRows?.(commonArgs).transactions).toEqual([
+      expect.objectContaining({
+        amount: 8500,
+        category_id: "other",
+        type: "EXPENSE",
+      }),
+    ]);
+    const uniquenessKeys = fullRows.map((budget) =>
+      budget.type === "GLOBAL"
+        ? `${budget.type}:${budget.period}`
+        : `${budget.type}:${budget.category_id}:${budget.period}`
+    );
+    expect(new Set(uniquenessKeys).size).toBe(uniquenessKeys.length);
     expect(
       Date.parse(
         fullRows.find((budget) => budget.name === "E2E Custom Overall")

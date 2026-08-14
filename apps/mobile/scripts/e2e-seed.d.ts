@@ -19,9 +19,15 @@ export const E2E_TABLE_DELETE_ORDER: readonly string[];
 export interface E2eBudgetFixtureRows {
   readonly budgets: readonly {
     readonly name: string;
+    readonly category_id: string | null;
     readonly period: string;
     readonly period_end: string;
     readonly status: string;
+    readonly type: string;
+  }[];
+  readonly transactions?: readonly {
+    readonly amount: number;
+    readonly category_id: string;
     readonly type: string;
   }[];
 }
@@ -32,9 +38,16 @@ export interface E2eFixture {
     readonly categoryIds: Readonly<Record<string, string>>;
     readonly currentTimestamp: string;
     readonly dateFromToday: (offset: number) => string;
-    readonly deterministicUuid: () => string;
+    readonly deterministicUuid: (
+      scope: string,
+      userId: string,
+      key: string
+    ) => string;
     readonly fixedNow: string;
-    readonly seedIds: { readonly budgets: Readonly<Record<string, string>> };
+    readonly seedIds: {
+      readonly accounts: { readonly cash: string };
+      readonly budgets: Readonly<Record<string, string>>;
+    };
     readonly seedScope: string;
     readonly userId: string;
   }) => E2eBudgetFixtureRows;

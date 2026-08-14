@@ -6,7 +6,9 @@ import { logger } from "@/utils/logger";
 export interface UseBudgetDashboardActionsResult {
   readonly isSubmitting: boolean;
   readonly errorKey: "dashboard_action_error" | null;
-  readonly confirmResume: (budgetId: string) => Promise<boolean>;
+  readonly confirmResume: (
+    budgetId: string
+  ) => Promise<"resumed" | "ignored" | "failed">;
   readonly resetError: () => void;
 }
 
@@ -26,8 +28,10 @@ export function useBudgetDashboardActions(): UseBudgetDashboardActionsResult {
   );
 
   const confirmResume = useCallback(
-    async (budgetId: string): Promise<boolean> => {
-      if (isSubmittingRef.current) return false;
+    async (
+      budgetId: string
+    ): Promise<"resumed" | "ignored" | "failed"> => {
+      if (isSubmittingRef.current) return "ignored";
 
       isSubmittingRef.current = true;
       if (isMountedRef.current) {
@@ -37,11 +41,11 @@ export function useBudgetDashboardActions(): UseBudgetDashboardActionsResult {
 
       try {
         await resumeBudget(budgetId);
-        return true;
+        return "resumed";
       } catch (error: unknown) {
         logger.error("budgetDashboard.resume.failed", error, { budgetId });
         if (isMountedRef.current) setErrorKey("dashboard_action_error");
-        return false;
+        return "failed";
       } finally {
         isSubmittingRef.current = false;
         if (isMountedRef.current) setIsSubmitting(false);

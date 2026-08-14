@@ -110,6 +110,7 @@
   "resume_confirmation_message": "Spending will be tracked again from now on.",
   "resume_confirmation_confirm": "Resume budget",
   "dashboard_load_error": "We couldn't refresh your budgets. Your last results are still here.",
+  "dashboard_initial_load_error": "We couldn't load your budgets. Please try again.",
   "dashboard_action_error": "We couldn't update this budget. Please try again.",
   "retry": "Try again",
   "carousel_page_announcement": "Budget page {{current}} of {{total}}"

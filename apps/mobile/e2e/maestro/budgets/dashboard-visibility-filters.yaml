@@ -7,7 +7,14 @@ appId: com.monyvi.app
       id: "budgets-screen"
     timeout: 120000
 - assertVisible: "Overall budgets"
-- assertVisible: "E2E Weekly Overall"
+- assertVisible: "E2E Monthly Overall"
+- swipe:
+    start: 90%, 45%
+    end: 10%, 45%
+    duration: 500
+- extendedWaitUntil:
+    visible: "E2E Weekly Overall"
+    timeout: 30000
 - tapOn:
     id: "budget-filter-weekly"
 - assertVisible: "E2E Weekly Overall"
@@ -23,5 +30,11 @@ appId: com.monyvi.app
     timeout: 30000
 - tapOn:
     id: "budget-filter-all"
-- assertVisible: "E2E Weekly Overall"
 - assertVisible: "E2E Monthly Overall"
+- swipe:
+    start: 90%, 45%
+    end: 10%, 45%
+    duration: 500
+- extendedWaitUntil:
+    visible: "E2E Weekly Overall"
+    timeout: 30000

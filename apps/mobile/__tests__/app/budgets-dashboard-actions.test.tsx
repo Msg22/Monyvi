@@ -8,7 +8,10 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 const mockPush = jest.fn();
 const mockShowToast = jest.fn();
-const mockConfirmResume = jest.fn<Promise<boolean>, [string]>();
+const mockConfirmResume = jest.fn<
+  Promise<"resumed" | "ignored" | "failed">,
+  [string]
+>();
 const mockResetActionError = jest.fn();
 const mockRefresh = jest.fn();
 const mockPauseExpiredCustomBudgets = jest.fn<Promise<number>, []>();
@@ -43,9 +46,14 @@ jest.mock("@/components/navigation/PageHeader", () => ({
     readonly rightAction?: {
       readonly onPress: () => void;
       readonly testID?: string;
+      readonly accessibilityLabel?: string;
     };
   }): mockReact.JSX.Element => (
-    <MockPressable testID={rightAction?.testID} onPress={rightAction?.onPress}>
+    <MockPressable
+      testID={rightAction?.testID}
+      onPress={rightAction?.onPress}
+      accessibilityLabel={rightAction?.accessibilityLabel}
+    >
       <MockText>header action</MockText>
     </MockPressable>
   ),
@@ -147,7 +155,7 @@ import BudgetsScreen from "@/app/(private)/budgets";
 describe("BudgetsScreen dashboard actions", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockConfirmResume.mockResolvedValue(true);
+    mockConfirmResume.mockResolvedValue("resumed");
     mockPauseExpiredCustomBudgets.mockResolvedValue(0);
   });
 
@@ -159,6 +167,7 @@ describe("BudgetsScreen dashboard actions", () => {
 
     expect(mockPush).toHaveBeenNthCalledWith(1, "/create-budget");
     expect(mockPush).toHaveBeenNthCalledWith(2, "/create-budget");
+    expect(screen.getByLabelText("accessibility_create_budget")).toBeTruthy();
   });
 
   it("routes detail and Renew with distinct contracts", () => {
@@ -204,9 +213,9 @@ describe("BudgetsScreen dashboard actions", () => {
   });
 
   it("confirms Resume once and closes only after success", async () => {
-    let resolveResume: ((result: boolean) => void) | undefined;
+    let resolveResume: ((result: "resumed") => void) | undefined;
     mockConfirmResume.mockReturnValue(
-      new Promise<boolean>((resolve) => {
+      new Promise<"resumed">((resolve) => {
         resolveResume = resolve;
       })
     );
@@ -218,7 +227,7 @@ describe("BudgetsScreen dashboard actions", () => {
     expect(screen.getByTestId("resume-confirmation")).toBeTruthy();
 
     await act(async () => {
-      resolveResume?.(true);
+      resolveResume?.("resumed");
       await Promise.resolve();
     });
     await waitFor(() =>
@@ -227,7 +236,7 @@ describe("BudgetsScreen dashboard actions", () => {
   });
 
   it("keeps the confirmation and shows friendly feedback after Resume failure", async () => {
-    mockConfirmResume.mockResolvedValue(false);
+    mockConfirmResume.mockResolvedValue("failed");
     const screen = render(<BudgetsScreen />);
 
     fireEvent.press(screen.getByTestId("dashboard-resume"));
@@ -241,6 +250,19 @@ describe("BudgetsScreen dashboard actions", () => {
     );
     expect(screen.getByTestId("resume-confirmation")).toBeTruthy();
     expect(mockResetActionError).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a duplicate Resume confirmation without false failure feedback", async () => {
+    mockConfirmResume.mockResolvedValue("ignored");
+    const screen = render(<BudgetsScreen />);
+
+    fireEvent.press(screen.getByTestId("dashboard-resume"));
+    fireEvent.press(screen.getByTestId("modal-confirm"));
+
+    await waitFor(() => expect(mockConfirmResume).toHaveBeenCalledTimes(1));
+    expect(mockShowToast).not.toHaveBeenCalled();
+    expect(mockResetActionError).not.toHaveBeenCalled();
+    expect(screen.getByTestId("resume-confirmation")).toBeTruthy();
   });
 
   it("refreshes only when the focus lifecycle command changes budgets", async () => {

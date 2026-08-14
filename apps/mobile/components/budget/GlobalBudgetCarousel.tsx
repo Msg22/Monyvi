@@ -158,12 +158,18 @@ export function GlobalBudgetCarousel({
     <View
       testID="global-budget-carousel-container"
       onLayout={handleLayout}
-      accessibilityLabel={t("overall_budgets")}
     >
       {containerWidth > 0 ? (
         <FlatList
           ref={listRef}
           testID="global-budget-carousel"
+          accessibilityLabel={t("overall_budgets")}
+          accessibilityValue={{
+            text: t("carousel_page_announcement", {
+              current: currentPage + 1,
+              total: pages.length,
+            }),
+          }}
           horizontal
           pagingEnabled
           data={pages}
