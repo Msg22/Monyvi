@@ -18,6 +18,7 @@ let mockBudgetDetailResult: {
   readonly recentTransactions: readonly [];
   readonly isLoading: boolean;
 };
+const mockBudgetActionsSheet = jest.fn();
 
 const mockView = (testID: string): React.JSX.Element => {
   const ReactNative =
@@ -103,7 +104,14 @@ jest.mock("@/components/budget/BudgetRecentTransactions", () => ({
 }));
 
 jest.mock("@/components/budget/BudgetActionsSheet", () => ({
-  BudgetActionsSheet: (): null => null,
+  BudgetActionsSheet: (props: unknown): null => {
+    mockBudgetActionsSheet(props);
+    return null;
+  },
+}));
+
+jest.mock("@/components/ui/Skeleton", () => ({
+  Skeleton: (): React.JSX.Element => mockView("budget-detail-skeleton-block"),
 }));
 
 jest.mock("@/components/ui/Toast", () => ({
@@ -172,6 +180,7 @@ import CreateBudgetScreen from "@/app/(private)/create-budget";
 
 describe("Budget screen dark theme styling", () => {
   beforeEach(() => {
+    mockBudgetActionsSheet.mockClear();
     mockSearchParams = {};
     mockEditableBudgetResult = {
       budget: undefined,
@@ -274,6 +283,34 @@ describe("Budget screen dark theme styling", () => {
     expect(screen.getByTestId("budget-detail-screen")).toHaveProp(
       "className",
       expect.stringContaining("bg-background dark:bg-background-dark")
+    );
+    expect(
+      screen.getAllByTestId("budget-detail-skeleton-block").length
+    ).toBeGreaterThan(0);
+    const source = readFileSync(
+      resolve(__dirname, "../../app/(private)/budget-detail.tsx"),
+      "utf8"
+    );
+    expect(source).not.toContain("ActivityIndicator");
+  });
+
+  it("omits the pause toggle for expired custom budget detail", () => {
+    mockSearchParams = { id: "expired-budget" };
+    mockBudgetDetailResult = {
+      ...mockBudgetDetailResult,
+      budget: {
+        ...mockBudgetDetailResult.budget,
+        id: "expired-budget",
+        isPaused: true,
+        period: "CUSTOM",
+        periodEnd: new Date("2020-01-01T00:00:00.000Z"),
+      },
+    };
+
+    render(<BudgetDetailScreen />);
+
+    expect(mockBudgetActionsSheet).toHaveBeenLastCalledWith(
+      expect.objectContaining({ canTogglePause: false })
     );
   });
 

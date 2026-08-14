@@ -104,7 +104,9 @@ export function useBudgetDetail(budgetId: string): UseBudgetDetailResult {
     let cancelled = false;
 
     async function compute(): Promise<void> {
-      setState((prev) => ({ ...prev, isLoading: true }));
+      setState((previous) =>
+        previous.metrics ? previous : { ...previous, isLoading: true }
+      );
 
       try {
         const detail = await getBudgetDetailReadModel(currentBudget);
@@ -118,7 +120,11 @@ export function useBudgetDetail(budgetId: string): UseBudgetDetailResult {
       } catch (error: unknown) {
         logger.error("budgetDetail.compute.failed", error);
         if (!cancelled) {
-          setState(EMPTY_DETAIL_STATE);
+          setState((previous) =>
+            previous.metrics
+              ? { ...previous, isLoading: false }
+              : EMPTY_DETAIL_STATE
+          );
         }
       }
     }

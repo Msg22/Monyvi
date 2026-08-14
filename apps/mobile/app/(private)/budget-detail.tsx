@@ -9,9 +9,10 @@
  */
 
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { isPeriodExpired } from "@monyvi/logic";
 
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { BudgetDetailOverview } from "@/components/budget/BudgetDetailOverview";
@@ -25,12 +26,12 @@ import {
 import { useBudgetDetail } from "@/hooks/useBudgetDetail";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useToast } from "@/components/ui/Toast";
+import { Skeleton } from "@/components/ui/Skeleton";
 import {
   deleteBudget,
   pauseBudget,
   resumeBudget,
 } from "@/services/budget-service";
-import { palette } from "@/constants/colors";
 import { useTranslation } from "react-i18next";
 
 // =============================================================================
@@ -129,9 +130,7 @@ export default function BudgetDetailScreen(): React.JSX.Element {
           showBackButton={true}
           showDrawer={false}
         />
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color={palette.nileGreen[500]} />
-        </View>
+        <BudgetDetailLoadingSkeleton />
       </View>
     );
   }
@@ -161,6 +160,9 @@ export default function BudgetDetailScreen(): React.JSX.Element {
   }
 
   const effectiveCurrency = budget.currency ?? preferredCurrency;
+  const canTogglePause = !(
+    budget.period === "CUSTOM" && isPeriodExpired(budget.periodEnd)
+  );
 
   return (
     <View
@@ -223,9 +225,30 @@ export default function BudgetDetailScreen(): React.JSX.Element {
       <BudgetActionsSheet
         visible={showActions}
         isPaused={budget.isPaused}
+        canTogglePause={canTogglePause}
         onClose={() => setShowActions(false)}
         onAction={handleAction}
       />
+    </View>
+  );
+}
+
+function BudgetDetailLoadingSkeleton(): React.JSX.Element {
+  return (
+    <View className="flex-1 px-5 pt-4">
+      <Skeleton width="100%" height={190} borderRadius={20} />
+      <View className="mt-6">
+        <Skeleton width="45%" height={24} borderRadius={8} />
+      </View>
+      <View className="mt-3">
+        <Skeleton width="100%" height={180} borderRadius={20} />
+      </View>
+      <View className="mt-6">
+        <Skeleton width="55%" height={24} borderRadius={8} />
+      </View>
+      <View className="mt-3">
+        <Skeleton width="100%" height={120} borderRadius={20} />
+      </View>
     </View>
   );
 }

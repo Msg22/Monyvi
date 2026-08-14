@@ -182,4 +182,53 @@ describe("useBudgetDetail", () => {
       expect(result.current.metrics).toBe(updatedDetailReadModel.metrics);
     });
   });
+
+  it("keeps the last valid detail visible while an observed refresh is pending", async () => {
+    let resolveRefresh: (value: typeof detailReadModel) => void = () =>
+      undefined;
+    const { result } = renderHook(() => useBudgetDetail("budget-1"));
+    await waitFor(() => {
+      expect(result.current.metrics).toBe(detailReadModel.metrics);
+    });
+    mockGetBudgetDetailReadModel.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRefresh = resolve;
+        })
+    );
+
+    act(() => {
+      budgetObserver?.next(budget);
+    });
+    await waitFor(() => {
+      expect(mockGetBudgetDetailReadModel).toHaveBeenCalledTimes(2);
+    });
+
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.metrics).toBe(detailReadModel.metrics);
+
+    resolveRefresh(detailReadModel);
+  });
+
+  it("preserves the last valid detail when an observed refresh fails", async () => {
+    const refreshError = new Error("refresh failed");
+    const { result } = renderHook(() => useBudgetDetail("budget-1"));
+    await waitFor(() => {
+      expect(result.current.metrics).toBe(detailReadModel.metrics);
+    });
+    mockGetBudgetDetailReadModel.mockRejectedValueOnce(refreshError);
+
+    act(() => {
+      budgetObserver?.next(budget);
+    });
+    await waitFor(() => {
+      expect(mockLoggerError).toHaveBeenCalledWith(
+        "budgetDetail.compute.failed",
+        refreshError
+      );
+    });
+
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.metrics).toBe(detailReadModel.metrics);
+  });
 });

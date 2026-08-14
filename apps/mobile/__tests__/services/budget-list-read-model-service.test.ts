@@ -506,6 +506,21 @@ describe("budget-list-read-model-service", () => {
     expect(result.items[0]).not.toHaveProperty("budget");
   });
 
+  it("uses a resolved category name as the category row context", () => {
+    const categoryBudget = {
+      ...createBudget("food-budget"),
+      name: "Dining plan",
+      categoryId: "food",
+      currency: "EGP",
+    } as Budget;
+
+    const result = buildReadModel([createBudgetMetric(categoryBudget)]);
+    const presentation = result.items[0]?.presentation;
+
+    expect(presentation?.periodAndScopeLabel).toBe("Monthly • Food & Drinks");
+    expect(presentation?.accessibilityLabel).toContain("Food & Drinks");
+  });
+
   it("falls back from blank persisted names to category then generic name", () => {
     const categoryBudget = {
       ...createBudget("blank-category"),

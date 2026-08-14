@@ -32,12 +32,14 @@ interface MockBudgetRecord {
   readonly id: string;
   readonly userId: string;
   readonly type: string;
+  name?: string;
   categoryId: string | null;
   deleted?: boolean;
   readonly period: string;
   status: string;
   pausedAt?: string;
   pauseIntervals?: string;
+  readonly periodStart?: Date;
   readonly periodEnd?: Date;
   readonly update: jest.Mock<
     Promise<void>,
@@ -85,6 +87,7 @@ function createLifecycleBudget(
     deleted: false,
     period: "CUSTOM",
     status: "ACTIVE",
+    periodStart: new Date("2019-12-01T00:00:00.000Z"),
     periodEnd: new Date("2020-01-01T00:00:00.000Z"),
     update: jest.fn(
       (builder: (record: MockBudgetRecord) => void): Promise<void> => {
@@ -317,6 +320,28 @@ describe("budget-service", () => {
     await expect(validateBudgetUniqueness("GLOBAL", "MONTHLY")).rejects.toThrow(
       "A Global monthly budget already exists"
     );
+  });
+
+  it("allows editing an expired custom history when a current replacement exists", async (): Promise<void> => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-08-14T12:00:00.000Z"));
+    const expiredHistory = createLifecycleBudget({
+      id: "expired-history",
+      status: "PAUSED",
+      periodEnd: new Date("2026-08-13T00:00:00.000Z"),
+    });
+    mockQueryOwned.mockReturnValueOnce(createQueryResult([expiredHistory]));
+
+    await updateBudget("expired-history", {
+      name: "Renamed history",
+      period: "CUSTOM",
+      periodStart: new Date("2026-07-13T00:00:00.000Z"),
+      periodEnd: new Date("2026-08-13T00:00:00.000Z"),
+    });
+
+    expect(mockQueryOwned).toHaveBeenCalledTimes(1);
+    expect(expiredHistory.update).toHaveBeenCalledTimes(1);
+    expect(expiredHistory.name).toBe("Renamed history");
   });
 
   it("resolves a replacement category through the current user scope before update", async (): Promise<void> => {

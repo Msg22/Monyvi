@@ -4,9 +4,14 @@ import { Text as MockText } from "react-native";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 
 let mockBottomInset = 16;
+let mockIsDark = false;
 
 jest.mock("@/hooks/useModalBottomInset", () => ({
   useModalBottomInset: (): number => mockBottomInset,
+}));
+
+jest.mock("@/context/ThemeContext", () => ({
+  useTheme: (): { readonly isDark: boolean } => ({ isDark: mockIsDark }),
 }));
 
 jest.mock("react-i18next", () => ({
@@ -32,15 +37,23 @@ jest.mock("react-i18next", () => ({
 }));
 
 jest.mock("@expo/vector-icons", () => ({
-  Ionicons: ({ name }: { readonly name: string }) => (
-    <MockText>{name}</MockText>
+  Ionicons: ({
+    name,
+    color,
+  }: {
+    readonly name: string;
+    readonly color: string;
+  }) => (
+    <MockText testID={`icon-${name}`} accessibilityLabel={color}>
+      {name}
+    </MockText>
   ),
 }));
 
 jest.mock("@/constants/colors", () => ({
   palette: {
     nileGreen: { 500: "#000" },
-    slate: { 25: "#fff", 300: "#000", 400: "#000", 500: "#000" },
+    slate: { 25: "#fff", 300: "#300", 400: "#400", 500: "#500" },
   },
 }));
 
@@ -49,6 +62,7 @@ import { BudgetDashboardFilters } from "@/components/budget/BudgetDashboardFilte
 describe("BudgetDashboardFilters", () => {
   beforeEach(() => {
     mockBottomInset = 16;
+    mockIsDark = false;
   });
 
   it("shows approved scope order and current Period/Status values", () => {
@@ -127,6 +141,25 @@ describe("BudgetDashboardFilters", () => {
     expect(screen.getByRole("radio", { name: "Paused" })).toHaveProp(
       "accessibilityState",
       { selected: true }
+    );
+  });
+
+  it("uses the resolved app theme for the filter-sheet close icon", () => {
+    mockIsDark = true;
+    render(
+      <BudgetDashboardFilters
+        filters={{ scope: "ALL", period: "ALL", status: "ACTIVE" }}
+        onSelectScope={jest.fn()}
+        onSelectPeriod={jest.fn()}
+        onSelectStatus={jest.fn()}
+      />
+    );
+
+    fireEvent.press(screen.getByRole("button", { name: "Period, All" }));
+
+    expect(screen.getByTestId("icon-close")).toHaveProp(
+      "accessibilityLabel",
+      "#300"
     );
   });
 });

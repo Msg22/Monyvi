@@ -252,6 +252,7 @@ export async function updateBudget(
         {
           categoryId,
           excludeBudgetId: budgetId,
+          candidatePeriodEnd: input.periodEnd ?? budget.periodEnd,
           scope,
         }
       );
@@ -598,6 +599,7 @@ async function getAccessibleCategoryHierarchyIds(
 interface ValidateBudgetUniquenessOptions {
   readonly categoryId?: string;
   readonly excludeBudgetId?: string;
+  readonly candidatePeriodEnd?: Date;
   readonly scope?: CurrentUserDataScope;
 }
 
@@ -607,6 +609,13 @@ export async function validateBudgetUniqueness(
   options: ValidateBudgetUniquenessOptions = {}
 ): Promise<void> {
   const currentScope = options.scope ?? (await getCurrentUserDataScope());
+  if (
+    period === "CUSTOM" &&
+    options.candidatePeriodEnd &&
+    isPeriodExpired(options.candidatePeriodEnd)
+  ) {
+    return;
+  }
 
   const conditions = [
     Q.where("deleted", false),

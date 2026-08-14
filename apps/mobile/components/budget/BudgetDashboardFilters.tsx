@@ -5,13 +5,13 @@ import {
   Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
-  useColorScheme,
   View,
 } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { palette } from "@/constants/colors";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
+import { useTheme } from "@/context/ThemeContext";
 import type {
   BudgetDashboardFilters as DashboardFilters,
   BudgetDashboardPeriodFilter,
@@ -115,10 +115,9 @@ export function BudgetDashboardFilters({
   onSelectStatus,
 }: BudgetDashboardFiltersProps): React.JSX.Element {
   const { t } = useTranslation("budgets");
-  const colorScheme = useColorScheme();
+  const { isDark } = useTheme();
   const bottomInset = useModalBottomInset();
   const [openSelector, setOpenSelector] = useState<OpenSelector>(null);
-  const isDark = colorScheme === "dark";
   const selectedPeriodLabel = t(PERIOD_LABEL_KEYS[filters.period]);
   const selectedStatusLabel = t(STATUS_LABEL_KEYS[filters.status]);
   const selectorOptions = useMemo(
