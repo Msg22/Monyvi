@@ -19,6 +19,13 @@ describe("validateRecurringPaymentForm", () => {
         endDate: validForm.startDate,
       }).isValid
     ).toBe(true);
+    expect(
+      validateRecurringPaymentForm({
+        ...validForm,
+        startDate: new Date("2026-08-14T18:00:00.000Z"),
+        endDate: new Date("2026-08-14T00:00:00.000Z"),
+      }).isValid
+    ).toBe(true);
   });
 
   it("rejects an End date before Due payment", () => {

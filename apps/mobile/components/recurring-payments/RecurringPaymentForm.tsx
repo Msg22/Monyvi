@@ -11,7 +11,7 @@ import { TextField } from "@/components/ui/TextField";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useFormScroll } from "@/hooks/useFormScroll";
-import { calculateNextDueDate, formatDate } from "@/utils/dateHelpers";
+import { formatDate } from "@/utils/dateHelpers";
 import { validateRecurringPaymentForm } from "@/validation/recurring-payment-validation";
 import type {
   Account,
@@ -120,6 +120,7 @@ const ERROR_FIELD_ORDER: readonly FormFieldName[] = [
   "amount",
   "accountId",
   "categoryId",
+  "endDate",
 ];
 const FORM_VALUE_FIELDS: readonly RecurringPaymentFormField[] = [
   "name",
@@ -181,6 +182,7 @@ export const RecurringPaymentForm = React.forwardRef<
   const amountFieldRef = getFieldRef("amount");
   const accountFieldRef = getFieldRef("accountId");
   const categoryFieldRef = getFieldRef("categoryId");
+  const endDateFieldRef = getFieldRef("endDate");
   const initialValuesKey = useMemo(
     () =>
       [
@@ -235,7 +237,6 @@ export const RecurringPaymentForm = React.forwardRef<
     initialValues.frequency !== form.frequency;
   const displayDueDate = getDisplayDueDate({
     dueDate,
-    initialValues,
     form,
     hasScheduleChanges,
   });
@@ -457,19 +458,21 @@ export const RecurringPaymentForm = React.forwardRef<
                 iconContainerClassName="bg-nileGreen-100 dark:bg-slate-700"
               />
               <Divider index={3} />
-              <FormRow
-                testID="recurring-payment-end-date-row"
-                icon="calendar-outline"
-                label={t("end_date")}
-                labelSuffix={t("optional")}
-                value={form.endDate ? formatDate(form.endDate, "MMM d, yyyy") : t("end_date_not_set")}
-                description={t("end_date_hint")}
-                actionLabel={form.endDate ? t("clear") : undefined}
-                onAction={form.endDate ? () => updateField("endDate", null) : undefined}
-                onPress={() => setDatePickerField("endDate")}
-                iconColor={palette.nileGreen[500]}
-                iconContainerClassName="bg-nileGreen-100 dark:bg-slate-700"
-              />
+              <View ref={endDateFieldRef}>
+                <FormRow
+                  testID="recurring-payment-end-date-row"
+                  icon="calendar-outline"
+                  label={t("end_date")}
+                  labelSuffix={t("optional")}
+                  value={form.endDate ? formatDate(form.endDate, "MMM d, yyyy") : t("end_date_not_set")}
+                  description={t("end_date_hint")}
+                  actionLabel={form.endDate ? t("clear") : undefined}
+                  onAction={form.endDate ? () => updateField("endDate", null) : undefined}
+                  onPress={() => setDatePickerField("endDate")}
+                  iconColor={palette.nileGreen[500]}
+                  iconContainerClassName="bg-nileGreen-100 dark:bg-slate-700"
+                />
+              </View>
             </View>
           </View>
           {errors.accountId ? <ErrorText>{errors.accountId}</ErrorText> : null}
@@ -666,12 +669,10 @@ function getFrequencyTypeLabel(
 
 function getDisplayDueDate({
   dueDate,
-  initialValues,
   form,
   hasScheduleChanges,
 }: {
   readonly dueDate?: Date;
-  readonly initialValues: RecurringPaymentFormValues;
   readonly form: RecurringPaymentFormValues;
   readonly hasScheduleChanges: boolean;
 }): Date {
@@ -679,11 +680,8 @@ function getDisplayDueDate({
     return dueDate;
   }
 
-  const didStartDateChange =
-    initialValues.startDate.getTime() !== form.startDate.getTime();
-  const anchor = dueDate && !didStartDateChange ? dueDate : form.startDate;
 
-  return calculateNextDueDate(anchor, form.frequency);
+  return form.startDate;
 }
 
 function getStartDateMinimumDate(

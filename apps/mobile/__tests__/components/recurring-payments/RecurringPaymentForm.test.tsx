@@ -294,7 +294,7 @@ describe("RecurringPaymentForm", () => {
 
     expect(
       screen.getByTestId("recurring-payment-summary-due-value")
-    ).toHaveTextContent("Jul 8, 2026");
+    ).toHaveTextContent("Jun 1, 2026");
   });
 
   it("guards against duplicate submissions while a submit is in flight", async () => {
@@ -553,6 +553,38 @@ describe("RecurringPaymentForm", () => {
       "className",
       expect.stringContaining("input-error")
     );
+  });
+
+  it("scrolls to End date error when Due payment moves after it", async () => {
+    const ref = React.createRef<RecurringPaymentFormHandle>();
+
+    render(
+      <RecurringPaymentForm
+        ref={ref}
+        mode="create"
+        initialValues={{
+          ...initialValues,
+          startDate: new Date("2026-08-02T00:00:00.000Z"),
+          endDate: new Date("2026-08-01T00:00:00.000Z"),
+        }}
+        accounts={accounts as unknown as readonly Account[]}
+        expenseCategories={categories as unknown as readonly Category[]}
+        incomeCategories={[]}
+        isSubmitting={false}
+        submitLabel="save"
+        onSubmit={jest.fn()}
+      />
+    );
+
+    mockScrollTo.mockClear();
+    act(() => {
+      ref.current?.submit();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("end_date_before_due")).toBeTruthy();
+      expect(mockScrollTo).toHaveBeenCalled();
+    });
   });
 
   it("scrolls upward when the first validation error is above the viewport", async () => {

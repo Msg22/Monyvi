@@ -292,6 +292,7 @@ export default function AddTransaction(): React.ReactNode {
       categoryId: selectedCategoryId,
       frequency: recurringFrequency,
       startDate: date,
+      initialOccurrenceRecorded: true,
       action: recurringAutoCreate ? "AUTO_CREATE" : "NOTIFY",
     });
     return recurring.id;

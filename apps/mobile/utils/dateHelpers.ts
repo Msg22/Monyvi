@@ -172,6 +172,17 @@ export function isSameDay(d1: Date, d2: Date): boolean {
   );
 }
 
+/** Returns whether a date falls on or before another date in local calendar days. */
+export function isOnOrBeforeDay(date: Date, boundary: Date): boolean {
+  if (isSameDay(date, boundary)) return true;
+
+  const normalizedDate = new Date(date);
+  normalizedDate.setHours(0, 0, 0, 0);
+  const normalizedBoundary = new Date(boundary);
+  normalizedBoundary.setHours(0, 0, 0, 0);
+  return normalizedDate.getTime() < normalizedBoundary.getTime();
+}
+
 export function getDaysUntil(date: Date): number {
   const today = new Date();
   today.setHours(0, 0, 0, 0);

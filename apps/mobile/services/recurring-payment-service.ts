@@ -1,4 +1,4 @@
-import { calculateNextDueDate } from "@/utils/dateHelpers";
+import { calculateNextDueDate, isOnOrBeforeDay } from "@/utils/dateHelpers";
 import {
   Account,
   Category,
@@ -30,6 +30,7 @@ export interface RecurringPaymentData {
   frequency: RecurringFrequency;
   startDate: Date;
   endDate?: Date | null;
+  initialOccurrenceRecorded?: boolean;
   action: RecurringAction;
   notes?: string;
 }
@@ -104,7 +105,9 @@ export async function createRecurringPayment(
       rec.frequency = data.frequency;
       rec.startDate = data.startDate;
       rec.endDate = data.endDate ?? undefined;
-      rec.nextDueDate = data.startDate;
+      rec.nextDueDate = data.initialOccurrenceRecorded
+        ? calculateNextDueDate(data.startDate, data.frequency)
+        : data.startDate;
       rec.action = data.action;
       rec.status = "ACTIVE";
       rec.deleted = false;
@@ -141,15 +144,14 @@ export async function updateRecurringPayment(
       const didStartDateChange =
         record.startDate.getTime() !== data.startDate.getTime();
       const didFrequencyChange = record.frequency !== data.frequency;
-      const nextDueDateAnchor = didStartDateChange
-        ? data.startDate
-        : record.nextDueDate;
       record.frequency = data.frequency;
       record.startDate = data.startDate;
       record.endDate = data.endDate ?? undefined;
-      if (didStartDateChange || didFrequencyChange) {
+      if (didStartDateChange) {
+        record.nextDueDate = data.startDate;
+      } else if (didFrequencyChange) {
         record.nextDueDate = calculateNextDueDate(
-          nextDueDateAnchor,
+          record.nextDueDate,
           data.frequency
         );
       }
@@ -162,7 +164,7 @@ export async function updateRecurringPayment(
         record.nextDueDate.getTime() > previousEndDate.getTime();
       const nextDueDateIsEligible =
         (record.endDate === undefined || record.endDate === null) ||
-        record.nextDueDate.getTime() <= record.endDate.getTime();
+        isOnOrBeforeDay(record.nextDueDate, record.endDate);
       const hasNoEligibleFutureOccurrence =
         record.status === "ACTIVE" && !nextDueDateIsEligible;
       if (hasNoEligibleFutureOccurrence) {
@@ -258,7 +260,7 @@ export async function submitRecurringPayment(params: {
     const hasEligibleDuePayment =
       persistedPayment.endDate === undefined ||
       persistedPayment.endDate === null ||
-      persistedPayment.nextDueDate.getTime() <= persistedPayment.endDate.getTime();
+      isOnOrBeforeDay(persistedPayment.nextDueDate, persistedPayment.endDate);
     if (
       persistedPayment.deleted ||
       persistedPayment.status === "COMPLETED" ||

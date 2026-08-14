@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isOnOrBeforeDay } from "@/utils/dateHelpers";
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -72,7 +73,7 @@ export function validateRecurringPaymentForm(data: {
 
   if (
     formData.endDate !== null &&
-    formData.endDate.getTime() < formData.startDate.getTime()
+    !isOnOrBeforeDay(formData.startDate, formData.endDate)
   ) {
     errors.endDate =
       endDateErrorMessage ?? "End date must be on or after Due payment.";

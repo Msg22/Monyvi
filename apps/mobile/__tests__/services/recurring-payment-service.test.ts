@@ -121,6 +121,13 @@ jest.mock("@/utils/dateHelpers", () => ({
 
     return new Date("2026-08-01T00:00:00.000Z");
   },
+  isOnOrBeforeDay: (date: Date, boundary: Date): boolean => {
+    const normalizedDate = new Date(date);
+    normalizedDate.setHours(0, 0, 0, 0);
+    const normalizedBoundary = new Date(boundary);
+    normalizedBoundary.setHours(0, 0, 0, 0);
+    return normalizedDate.getTime() <= normalizedBoundary.getTime();
+  },
   getNextMonthSameDay: (): Date => new Date("2026-07-01T00:00:00.000Z"),
 }));
 
@@ -253,6 +260,23 @@ describe("recurring-payment-service", () => {
     });
   });
 
+  it("advances the next due date when the first occurrence is already recorded", async () => {
+    const result = await createRecurringPayment({
+      name: "Recorded gym payment",
+      amount: 250,
+      currency: "EGP",
+      type: "EXPENSE",
+      accountId: "account-1",
+      categoryId: "category-1",
+      frequency: "WEEKLY",
+      startDate: new Date("2026-06-01T00:00:00.000Z"),
+      initialOccurrenceRecorded: true,
+      action: "NOTIFY",
+    });
+
+    expect(result.nextDueDate).toEqual(new Date("2026-06-08T00:00:00.000Z"));
+  });
+
   it("persists an End date on create and clears it on update", async () => {
     const endDate = new Date("2026-08-01T00:00:00.000Z");
     const created = await createRecurringPayment({
@@ -317,6 +341,36 @@ describe("recurring-payment-service", () => {
     });
 
     expect(payment.status).toBe("COMPLETED");
+  });
+
+  it("keeps an edited Due payment outstanding when it equals End date", async () => {
+    const payment = createRecurringRecord({
+      startDate: new Date("2026-06-01T00:00:00.000Z"),
+      nextDueDate: new Date("2026-07-01T00:00:00.000Z"),
+    });
+    mockFindOwned.mockImplementation(
+      (_collection: MockCollection, id: string): Promise<unknown> =>
+        id === "account-1"
+          ? Promise.resolve({ id, userId: "user-1", currency: "EGP" })
+          : Promise.resolve(payment)
+    );
+    const duePayment = new Date("2026-07-15T00:00:00.000Z");
+
+    await updateRecurringPayment("payment-1", {
+      name: "Netflix",
+      amount: 250,
+      currency: "EGP",
+      type: "EXPENSE",
+      accountId: "account-1",
+      categoryId: "category-1",
+      frequency: "MONTHLY",
+      startDate: duePayment,
+      endDate: duePayment,
+      action: "NOTIFY",
+    });
+
+    expect(payment.status).toBe("ACTIVE");
+    expect(payment.nextDueDate).toEqual(duePayment);
   });
 
   it("reactivates only an end-date-completed payment when its next due date becomes eligible", async () => {
@@ -584,7 +638,7 @@ describe("recurring-payment-service", () => {
     });
   });
 
-  it("recomputes next due date with the selected frequency when the start date changes", async () => {
+  it("uses the edited Due payment as the next outstanding occurrence", async () => {
     const payment = createRecurringRecord({
       frequency: "MONTHLY",
       startDate: new Date("2026-06-01T00:00:00.000Z"),
@@ -613,7 +667,7 @@ describe("recurring-payment-service", () => {
       notes: undefined,
     });
 
-    expect(payment.nextDueDate).toEqual(new Date("2026-06-22T00:00:00.000Z"));
+    expect(payment.nextDueDate).toEqual(new Date("2026-06-15T00:00:00.000Z"));
   });
 
   it("recomputes next due date from the current due date when only the frequency changes", async () => {
@@ -660,6 +714,22 @@ describe("recurring-payment-service", () => {
 
       expect(payment.status).toBe("COMPLETED");
       expect(payment.nextDueDate).toEqual(new Date("2026-08-01T00:00:00.000Z"));
+    });
+
+    it("accepts a final due payment on End date when times differ", async () => {
+      const payment = createRecurringRecord({
+        nextDueDate: new Date("2026-07-01T15:00:00.000Z"),
+        endDate: new Date("2026-07-01T00:00:00.000Z"),
+      });
+      mockFindOwned.mockResolvedValue(payment);
+
+      await submitRecurringPayment({
+        payment: payment as never,
+        accountId: "account-1",
+        amount: 250,
+      });
+
+      expect(payment.status).toBe("COMPLETED");
     });
 
     it("rejects a repeated final Pay Now after the series is completed", async () => {
