@@ -104,7 +104,7 @@ export async function createRecurringPayment(
       rec.frequency = data.frequency;
       rec.startDate = data.startDate;
       rec.endDate = data.endDate ?? undefined;
-      rec.nextDueDate = calculateNextDueDate(data.startDate, data.frequency);
+      rec.nextDueDate = data.startDate;
       rec.action = data.action;
       rec.status = "ACTIVE";
       rec.deleted = false;
@@ -163,6 +163,11 @@ export async function updateRecurringPayment(
       const nextDueDateIsEligible =
         (record.endDate === undefined || record.endDate === null) ||
         record.nextDueDate.getTime() <= record.endDate.getTime();
+      const hasNoEligibleFutureOccurrence =
+        record.status === "ACTIVE" && !nextDueDateIsEligible;
+      if (hasNoEligibleFutureOccurrence) {
+        record.status = "COMPLETED";
+      }
       if (endedAtPreviousBoundary && nextDueDateIsEligible) {
         record.status = "ACTIVE";
       }
@@ -250,7 +255,15 @@ export async function submitRecurringPayment(params: {
       recurringCollection,
       payment.id
     );
-    if (persistedPayment.deleted) {
+    const hasEligibleDuePayment =
+      persistedPayment.endDate === undefined ||
+      persistedPayment.endDate === null ||
+      persistedPayment.nextDueDate.getTime() <= persistedPayment.endDate.getTime();
+    if (
+      persistedPayment.deleted ||
+      persistedPayment.status === "COMPLETED" ||
+      !hasEligibleDuePayment
+    ) {
       throw new Error(
         RECURRING_PAYMENT_SERVICE_ERROR_CODES.PAYMENT_UNAVAILABLE
       );

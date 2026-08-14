@@ -233,7 +233,7 @@ describe("recurring-payment-service", () => {
     });
   });
 
-  it("persists the frequency-aware next due date when creating a recurring payment", async () => {
+  it("uses Due payment as the first outstanding occurrence when creating a recurring payment", async () => {
     const result = await createRecurringPayment({
       name: "Weekly Gym",
       amount: 250,
@@ -249,7 +249,7 @@ describe("recurring-payment-service", () => {
 
     expect(result).toMatchObject({
       frequency: "WEEKLY",
-      nextDueDate: new Date("2026-06-08T00:00:00.000Z"),
+      nextDueDate: new Date("2026-06-01T00:00:00.000Z"),
     });
   });
 
@@ -290,6 +290,33 @@ describe("recurring-payment-service", () => {
 
     expect(created).toMatchObject({ endDate });
     expect(payment.endDate).toBeUndefined();
+  });
+
+  it("completes an active series when an edited End date is before its next due payment", async () => {
+    const payment = createRecurringRecord({
+      nextDueDate: new Date("2026-08-01T00:00:00.000Z"),
+    });
+    mockFindOwned.mockImplementation(
+      (_collection: MockCollection, id: string): Promise<unknown> =>
+        id === "account-1"
+          ? Promise.resolve({ id, userId: "user-1", currency: "EGP" })
+          : Promise.resolve(payment)
+    );
+
+    await updateRecurringPayment("payment-1", {
+      name: "Netflix",
+      amount: 250,
+      currency: "EGP",
+      type: "EXPENSE",
+      accountId: "account-1",
+      categoryId: "category-1",
+      frequency: "MONTHLY",
+      startDate: new Date("2026-06-01T00:00:00.000Z"),
+      endDate: new Date("2026-07-01T00:00:00.000Z"),
+      action: "NOTIFY",
+    });
+
+    expect(payment.status).toBe("COMPLETED");
   });
 
   it("reactivates only an end-date-completed payment when its next due date becomes eligible", async () => {
@@ -633,6 +660,27 @@ describe("recurring-payment-service", () => {
 
       expect(payment.status).toBe("COMPLETED");
       expect(payment.nextDueDate).toEqual(new Date("2026-08-01T00:00:00.000Z"));
+    });
+
+    it("rejects a repeated final Pay Now after the series is completed", async () => {
+      const payment = createRecurringRecord({
+        status: "COMPLETED",
+        nextDueDate: new Date("2026-08-01T00:00:00.000Z"),
+        endDate: new Date("2026-07-01T00:00:00.000Z"),
+      });
+      mockFindOwned.mockResolvedValue(payment);
+
+      await expect(
+        submitRecurringPayment({
+          payment: payment as never,
+          accountId: "account-1",
+          amount: 250,
+        })
+      ).rejects.toThrow(
+        RECURRING_PAYMENT_SERVICE_ERROR_CODES.PAYMENT_UNAVAILABLE
+      );
+
+      expect(mockPrepareTransactionCreateWithBalance).not.toHaveBeenCalled();
     });
     it("batches transaction creation, balance update, and persisted schedule advancement in one writer", async () => {
       const stalePayment = createRecurringRecord({
