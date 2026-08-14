@@ -517,4 +517,29 @@ describe("RecurringPaymentsScreen dashboard", () => {
       screen.getByTestId("recurring-payment-row-payment-completed")
     ).not.toHaveTextContent(/overdue/i);
   });
+
+  it("keeps an unpaid final due payment active and actionable", () => {
+    const unpaidFinalPayment = createPayment({
+      id: "payment-final-overdue",
+      name: "Phone Installment",
+      nextDueDate: new Date("2026-06-15T00:00:00.000Z"),
+      status: "ACTIVE",
+      isActive: true,
+      isCompleted: false,
+      isOverdue: true,
+    });
+
+    mockRecurringPaymentsState = {
+      ...mockRecurringPaymentsState,
+      allPayments: [unpaidFinalPayment],
+      filteredPayments: [unpaidFinalPayment],
+      statusFilter: "ACTIVE",
+    };
+
+    render(<RecurringPaymentsScreen />);
+
+    expect(
+      screen.getByTestId("recurring-payment-row-payment-final-overdue")
+    ).toHaveTextContent(/status_active/i);
+  });
 });

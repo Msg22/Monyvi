@@ -55,6 +55,7 @@ export interface RecurringPaymentFormValues {
   readonly categoryId: string | null;
   readonly frequency: RecurringFrequency;
   readonly startDate: Date;
+  readonly endDate: Date | null;
   readonly action: RecurringAction;
   readonly notes: string;
 }
@@ -82,7 +83,7 @@ export interface RecurringPaymentFormHandle {
 }
 
 type FormErrors = Partial<
-  Record<"name" | "amount" | "accountId" | "categoryId", string>
+  Record<"name" | "amount" | "accountId" | "categoryId" | "endDate", string>
 >;
 type FormFieldName = keyof FormErrors;
 type RecurringPaymentFormField = keyof RecurringPaymentFormValues;
@@ -128,6 +129,7 @@ const FORM_VALUE_FIELDS: readonly RecurringPaymentFormField[] = [
   "categoryId",
   "frequency",
   "startDate",
+  "endDate",
   "action",
   "notes",
 ];
@@ -172,7 +174,7 @@ export const RecurringPaymentForm = React.forwardRef<
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showFrequencyModal, setShowFrequencyModal] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerField, setDatePickerField] = useState<"startDate" | "endDate" | null>(null);
   const isSubmitInFlightRef = useRef(false);
   const dirtyFieldsRef = useRef<Set<RecurringPaymentFormField>>(new Set());
   const nameFieldRef = getFieldRef("name");
@@ -189,6 +191,7 @@ export const RecurringPaymentForm = React.forwardRef<
         initialValues.categoryId ?? "",
         initialValues.frequency,
         initialValues.startDate.getTime(),
+        initialValues.endDate?.getTime() ?? "",
         initialValues.action,
         initialValues.notes,
       ].join("|"),
@@ -201,6 +204,7 @@ export const RecurringPaymentForm = React.forwardRef<
       initialValues.name,
       initialValues.notes,
       initialValues.startDate,
+      initialValues.endDate,
       initialValues.type,
     ]
   );
@@ -280,6 +284,9 @@ export const RecurringPaymentForm = React.forwardRef<
       amount: form.amount,
       accountId: form.accountId,
       categoryId: form.categoryId,
+      startDate: form.startDate,
+      endDate: form.endDate ?? null,
+      endDateErrorMessage: t("end_date_before_due"),
     });
 
     if (!result.isValid) {
@@ -309,10 +316,18 @@ export const RecurringPaymentForm = React.forwardRef<
 
   const handleDateChange = useCallback(
     (_event: DateTimePickerEvent, selectedDate?: Date): void => {
-      setShowDatePicker(Platform.OS === "ios");
+      setDatePickerField(Platform.OS === "ios" ? "startDate" : null);
       if (selectedDate) {
         updateField("startDate", selectedDate);
       }
+    },
+    [updateField]
+  );
+
+  const handleEndDateChange = useCallback(
+    (_event: DateTimePickerEvent, selectedDate?: Date): void => {
+      setDatePickerField(Platform.OS === "ios" ? "endDate" : null);
+      if (selectedDate) updateField("endDate", selectedDate);
     },
     [updateField]
   );
@@ -436,7 +451,22 @@ export const RecurringPaymentForm = React.forwardRef<
                 icon="calendar-outline"
                 label={t("start_date")}
                 value={formatDate(form.startDate, "MMM d, yyyy")}
-                onPress={() => setShowDatePicker((current) => !current)}
+                description={t("due_payment_hint")}
+                onPress={() => setDatePickerField("startDate")}
+                iconColor={palette.nileGreen[500]}
+                iconContainerClassName="bg-nileGreen-100 dark:bg-slate-700"
+              />
+              <Divider index={3} />
+              <FormRow
+                testID="recurring-payment-end-date-row"
+                icon="calendar-outline"
+                label={t("end_date")}
+                labelSuffix={t("optional")}
+                value={form.endDate ? formatDate(form.endDate, "MMM d, yyyy") : t("end_date_not_set")}
+                description={t("end_date_hint")}
+                actionLabel={form.endDate ? t("clear") : undefined}
+                onAction={form.endDate ? () => updateField("endDate", null) : undefined}
+                onPress={() => setDatePickerField("endDate")}
                 iconColor={palette.nileGreen[500]}
                 iconContainerClassName="bg-nileGreen-100 dark:bg-slate-700"
               />
@@ -446,6 +476,7 @@ export const RecurringPaymentForm = React.forwardRef<
           {errors.categoryId ? (
             <ErrorText>{errors.categoryId}</ErrorText>
           ) : null}
+          {errors.endDate ? <ErrorText>{errors.endDate}</ErrorText> : null}
         </View>
 
         <View testID="recurring-payment-action-section" className="mb-6">
@@ -530,13 +561,13 @@ export const RecurringPaymentForm = React.forwardRef<
         </TouchableOpacity>
       </ScrollView>
 
-      {showDatePicker ? (
+      {datePickerField ? (
         <DateTimePicker
-          value={form.startDate}
+          value={datePickerField === "startDate" ? form.startDate : (form.endDate ?? form.startDate)}
           mode="date"
           display="default"
-          minimumDate={startDateMinimumDate}
-          onChange={handleDateChange}
+          minimumDate={datePickerField === "startDate" ? startDateMinimumDate : form.startDate}
+          onChange={datePickerField === "startDate" ? handleDateChange : handleEndDateChange}
         />
       ) : null}
 

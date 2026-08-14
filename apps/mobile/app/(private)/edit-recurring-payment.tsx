@@ -50,6 +50,7 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
       categoryId: payment.categoryId,
       frequency: payment.frequency,
       startDate: payment.startDate,
+      endDate: payment.endDate ?? null,
       action: payment.action,
       notes: payment.notes ?? "",
     };
@@ -63,6 +64,7 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
     payment?.name,
     payment?.notes,
     payment?.startDate,
+    payment?.endDate,
     payment?.type,
   ]);
 
@@ -95,6 +97,7 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
         type: values.type,
         frequency: values.frequency,
         startDate: values.startDate,
+        endDate: values.endDate,
         accountId: values.accountId,
         categoryId: values.categoryId,
         action: values.action,

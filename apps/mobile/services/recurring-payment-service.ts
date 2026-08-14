@@ -29,6 +29,7 @@ export interface RecurringPaymentData {
   categoryId: string;
   frequency: RecurringFrequency;
   startDate: Date;
+  endDate?: Date | null;
   action: RecurringAction;
   notes?: string;
 }
@@ -102,6 +103,7 @@ export async function createRecurringPayment(
       rec.categoryId = data.categoryId;
       rec.frequency = data.frequency;
       rec.startDate = data.startDate;
+      rec.endDate = data.endDate ?? undefined;
       rec.nextDueDate = calculateNextDueDate(data.startDate, data.frequency);
       rec.action = data.action;
       rec.status = "ACTIVE";
@@ -129,6 +131,7 @@ export async function updateRecurringPayment(
   await database.write(async () => {
     const payment = await scope.findOwned(recurringCollection, paymentId);
     await payment.update((record) => {
+      const previousEndDate = record.endDate;
       record.name = data.name;
       record.amount = Math.abs(data.amount);
       record.currency = data.currency;
@@ -143,6 +146,7 @@ export async function updateRecurringPayment(
         : record.nextDueDate;
       record.frequency = data.frequency;
       record.startDate = data.startDate;
+      record.endDate = data.endDate ?? undefined;
       if (didStartDateChange || didFrequencyChange) {
         record.nextDueDate = calculateNextDueDate(
           nextDueDateAnchor,
@@ -151,6 +155,17 @@ export async function updateRecurringPayment(
       }
       record.action = data.action;
       record.notes = data.notes;
+      const endedAtPreviousBoundary =
+        record.status === "COMPLETED" &&
+        previousEndDate !== undefined &&
+        previousEndDate !== null &&
+        record.nextDueDate.getTime() > previousEndDate.getTime();
+      const nextDueDateIsEligible =
+        (record.endDate === undefined || record.endDate === null) ||
+        record.nextDueDate.getTime() <= record.endDate.getTime();
+      if (endedAtPreviousBoundary && nextDueDateIsEligible) {
+        record.status = "ACTIVE";
+      }
     });
   });
 }
@@ -260,10 +275,18 @@ export async function submitRecurringPayment(params: {
     const paymentSnapshot = captureCachedModelSnapshot(persistedPayment);
     try {
       const scheduleUpdate = persistedPayment.prepareUpdate((record) => {
-        record.nextDueDate = calculateNextDueDate(
+        const nextDueDate = calculateNextDueDate(
           persistedPayment.nextDueDate,
           persistedPayment.frequency
         );
+        record.nextDueDate = nextDueDate;
+        if (
+          persistedPayment.endDate !== undefined &&
+          persistedPayment.endDate !== null &&
+          nextDueDate.getTime() > persistedPayment.endDate.getTime()
+        ) {
+          record.status = "COMPLETED";
+        }
       });
 
       await commitPreparedBatch([

@@ -79,7 +79,10 @@ const {
 
 const originalDueDate = new Date("2026-07-01T00:00:00.000Z");
 
-async function seedAtomicityFixture(): Promise<{
+async function seedAtomicityFixture(
+  endDate?: Date,
+  conflictTransactionId = "rollback-conflict"
+): Promise<{
   readonly account: Account;
   readonly payment: RecurringPayment;
 }> {
@@ -105,6 +108,7 @@ async function seedAtomicityFixture(): Promise<{
         record.categoryId = "category-1";
         record.frequency = "MONTHLY";
         record.startDate = new Date("2026-06-01T00:00:00.000Z");
+        record.endDate = endDate;
         record.nextDueDate = originalDueDate;
         record.action = "NOTIFY";
         record.status = "ACTIVE";
@@ -112,7 +116,7 @@ async function seedAtomicityFixture(): Promise<{
       });
 
     await database.get<Transaction>("transactions").create((record) => {
-      record._raw.id = "rollback-conflict";
+      record._raw.id = conflictTransactionId;
       record.userId = "user-1";
       record.accountId = account.id;
       record.amount = 1;
@@ -142,6 +146,40 @@ async function openFreshDatabase(): Promise<Database> {
 }
 
 describe("recurring payment SQLite atomicity", () => {
+  it("commits the final transaction, balance, next due date, and completion together", async () => {
+    const { account, payment } = await seedAtomicityFixture(
+      originalDueDate,
+      "final-payment-conflict"
+    );
+
+    await submitRecurringPayment({
+      payment,
+      accountId: account.id,
+      amount: 250,
+    });
+
+    const freshDatabase = await openFreshDatabase();
+    const accountAfterPayment = await freshDatabase
+      .get<Account>("accounts")
+      .find(account.id);
+    const paymentAfterPayment = await freshDatabase
+      .get<RecurringPayment>("recurring_payments")
+      .find(payment.id);
+    const transactions = await freshDatabase
+      .get<Transaction>("transactions")
+      .query()
+      .fetch();
+
+    expect(accountAfterPayment.balance).toBe(750);
+    expect(paymentAfterPayment.nextDueDate).toEqual(
+      new Date("2026-08-01T00:00:00.000Z")
+    );
+    expect(paymentAfterPayment.status).toBe("COMPLETED");
+    expect(
+      transactions.filter((transaction) => transaction.linkedRecurringId === payment.id)
+    ).toHaveLength(1);
+  });
+
   it("restores cached models after rollback so a same-instance retry applies once", async () => {
     const { account, payment } = await seedAtomicityFixture();
     const originalAdapterBatch = database.adapter.batch.bind(database.adapter);

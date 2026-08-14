@@ -291,6 +291,13 @@ interface TransactionsTranslations {
   readonly notes_optional: string;
   readonly add_notes_placeholder: string;
   readonly start_date: string;
+  readonly due_payment_hint: string;
+  readonly end_date: string;
+  readonly optional: string;
+  readonly end_date_not_set: string;
+  readonly end_date_hint: string;
+  readonly clear: string;
+  readonly end_date_before_due: string;
   readonly failed_to_create_payment: string;
   readonly failed_to_update_payment: string;
   readonly failed_to_delete_payment: string;

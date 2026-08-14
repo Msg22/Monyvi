@@ -141,6 +141,7 @@ const initialValues: RecurringPaymentFormValues = {
   categoryId: "category-1",
   frequency: "MONTHLY",
   startDate: new Date("2026-06-01T00:00:00.000Z"),
+  endDate: null,
   action: "NOTIFY",
   notes: "",
 };
@@ -226,6 +227,30 @@ describe("RecurringPaymentForm", () => {
     expect(mockAccountModal).toHaveBeenLastCalledWith(true);
     expect(mockCategoryModal).toHaveBeenLastCalledWith(true);
     expect(mockFrequencyModal).toHaveBeenLastCalledWith(true);
+  });
+
+  it("renders optional end date guidance and clears a selected end date", async () => {
+    const onSubmit = jest.fn().mockResolvedValue(undefined);
+    const selectedEndDate = new Date("2026-08-01T00:00:00.000Z");
+
+    renderForm({
+      initialValues: { ...initialValues, endDate: selectedEndDate },
+      onSubmit,
+    });
+
+    expect(screen.getByText("due_payment_hint")).toBeTruthy();
+    expect(screen.getByText("end_date_hint")).toBeTruthy();
+    expect(screen.getByText("optional")).toBeTruthy();
+    expect(screen.getByTestId("recurring-payment-end-date-row-action")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row-action"));
+    fireEvent.press(screen.getByText("save"));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ endDate: null })
+      );
+    });
   });
 
   it("shows pause/resume and delete actions only in edit mode", () => {

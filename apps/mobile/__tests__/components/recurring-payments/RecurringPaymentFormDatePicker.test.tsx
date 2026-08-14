@@ -91,6 +91,7 @@ const initialValues: RecurringPaymentFormValues = {
   categoryId: "category-1",
   frequency: "MONTHLY",
   startDate: new Date("2026-06-01T00:00:00.000Z"),
+  endDate: null,
   action: "NOTIFY",
   notes: "",
 };
@@ -122,6 +123,33 @@ describe("RecurringPaymentForm date picker", () => {
       expect.objectContaining({
         minimumDate: historicalStartDate,
         value: historicalStartDate,
+      })
+    );
+  });
+
+  it("uses the due payment date as the minimum end date", () => {
+    const duePaymentDate = new Date("2026-06-01T00:00:00.000Z");
+    const endDate = new Date("2026-08-01T00:00:00.000Z");
+
+    render(
+      <RecurringPaymentForm
+        mode="edit"
+        initialValues={{ ...initialValues, startDate: duePaymentDate, endDate }}
+        accounts={[account] as unknown as readonly Account[]}
+        expenseCategories={[category] as unknown as readonly Category[]}
+        incomeCategories={[]}
+        isSubmitting={false}
+        submitLabel="save"
+        onSubmit={jest.fn()}
+      />
+    );
+
+    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row"));
+
+    expect(mockDateTimePicker).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        minimumDate: duePaymentDate,
+        value: endDate,
       })
     );
   });
