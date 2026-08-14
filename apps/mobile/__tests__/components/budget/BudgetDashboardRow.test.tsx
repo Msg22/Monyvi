@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import React from "react";
-import { Text as MockText } from "react-native";
+import { I18nManager, Text as MockText } from "react-native";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 
 jest.mock("@monyvi/logic", () => ({
@@ -28,6 +28,8 @@ jest.mock("react-i18next", () => ({
           filter_monthly: "Monthly",
           filter_weekly: "Weekly",
           filter_custom: "Custom",
+          category_type: "Category",
+          global_type: "Global",
           paused: "Paused",
           resume_action: "Resume",
           renew_action: "Renew",
@@ -62,7 +64,7 @@ jest.mock("@/constants/colors", () => ({
 }));
 
 import { BudgetDashboardRow } from "@/components/budget/BudgetDashboardRow";
-import type { BudgetDashboardItem } from "@/services/budget-list-read-model-service";
+import type { BudgetDashboardItem } from "@/contracts/budget-dashboard";
 
 function item(
   overrides: Partial<BudgetDashboardItem> = {}
@@ -74,7 +76,7 @@ function item(
     currency: "EGP",
     scope: "CATEGORY",
     lifecycle: "HEALTHY",
-    sectionId: "CATEGORY",
+    showsProgress: true,
     metrics: {
       spent: 1750,
       limit: 5000,
@@ -105,7 +107,6 @@ describe("BudgetDashboardRow", () => {
             iconColor: "#000",
           },
         })}
-        variant="category"
         position="only"
         preferredCurrency="EGP"
         onPress={jest.fn()}
@@ -114,13 +115,16 @@ describe("BudgetDashboardRow", () => {
 
     const rowClassName = screen.getByTestId("budget-dashboard-row-budget-1")
       .props.className as string;
-    expect(rowClassName).toContain("min-h-20");
+    expect(rowClassName).toContain("min-h-28");
     expect(rowClassName).not.toContain("min-h-64");
     expect(screen.getByText("Groceries Monthly")).toHaveProp(
       "numberOfLines",
       2
     );
     expect(screen.getByText("35%")).toBeOnTheScreen();
+    expect(screen.getByText("Monthly • Category")).toBeOnTheScreen();
+    expect(screen.getByText("1,750 EGP of 5,000 EGP")).toBeOnTheScreen();
+    expect(screen.getByText("safe_to_spend")).toBeOnTheScreen();
     expect(screen.getByTestId("category-icon")).toHaveTextContent(
       "restaurant-outline"
     );
@@ -133,8 +137,11 @@ describe("BudgetDashboardRow", () => {
     const onResume = jest.fn();
     const { rerender } = render(
       <BudgetDashboardRow
-        item={item({ lifecycle: "PAUSED", availableAction: "RESUME" })}
-        variant="paused"
+        item={item({
+          lifecycle: "PAUSED",
+          showsProgress: false,
+          availableAction: "RESUME",
+        })}
         position="only"
         preferredCurrency="EGP"
         onPress={jest.fn()}
@@ -145,6 +152,11 @@ describe("BudgetDashboardRow", () => {
     expect(
       screen.getByTestId("budget-action-resume-budget-1")
     ).toBeOnTheScreen();
+    expect(screen.queryByTestId("budget-row-progress-budget-1")).toBeNull();
+    expect(screen.queryByTestId("budget-row-percentage-budget-1")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /Food & Drinks, Monthly, Category/ })
+    ).not.toHaveProp("accessibilityLabel", expect.stringContaining("35%"));
     fireEvent.press(screen.getByRole("button", { name: "Resume" }));
     expect(onResume).toHaveBeenCalledWith("budget-1");
 
@@ -153,10 +165,10 @@ describe("BudgetDashboardRow", () => {
       <BudgetDashboardRow
         item={item({
           lifecycle: "EXPIRED",
+          showsProgress: false,
           availableAction: "RENEW",
           expiresAt: new Date("2026-08-12T00:00:00.000Z"),
         })}
-        variant="attention"
         position="only"
         preferredCurrency="EGP"
         onPress={jest.fn()}
@@ -169,7 +181,9 @@ describe("BudgetDashboardRow", () => {
     ).toBeOnTheScreen();
     fireEvent.press(screen.getByRole("button", { name: "Renew" }));
     expect(onRenew).toHaveBeenCalledWith("budget-1");
-    expect(screen.getAllByText(/Expired.*Aug 12/)).toHaveLength(2);
+    expect(screen.getByText(/Expired.*Aug 12/)).toBeOnTheScreen();
+    expect(screen.queryByTestId("budget-row-progress-budget-1")).toBeNull();
+    expect(screen.queryByTestId("budget-row-percentage-budget-1")).toBeNull();
     expect(screen.getByTestId("budget-row-status-budget-1")).toHaveProp(
       "numberOfLines",
       1
@@ -191,7 +205,6 @@ describe("BudgetDashboardRow", () => {
             percentage: 11641,
           },
         })}
-        variant="attention"
         position="only"
         preferredCurrency="EGP"
         onPress={jest.fn()}
@@ -203,8 +216,8 @@ describe("BudgetDashboardRow", () => {
     const trailingClassName = screen.getByTestId("budget-row-trailing-budget-1")
       .props.className as string;
 
-    expect(rowClassName).toContain("min-h-20");
-    expect(trailingClassName).toContain("w-32");
+    expect(rowClassName).toContain("min-h-28");
+    expect(trailingClassName).toContain("w-28");
     expect(screen.getByTestId("budget-row-percentage-budget-1")).toHaveProp(
       "numberOfLines",
       1
@@ -223,8 +236,11 @@ describe("BudgetDashboardRow", () => {
     const onPress = jest.fn();
     render(
       <BudgetDashboardRow
-        item={item({ lifecycle: "PAUSED", availableAction: "RESUME" })}
-        variant="paused"
+        item={item({
+          lifecycle: "PAUSED",
+          showsProgress: false,
+          availableAction: "RESUME",
+        })}
         position="only"
         preferredCurrency="EGP"
         onPress={onPress}
@@ -245,7 +261,6 @@ describe("BudgetDashboardRow", () => {
           displayName: "Historic learning",
           categoryLabel: { kind: "deleted", categoryId: "deleted" },
         })}
-        variant="category"
         position="only"
         preferredCurrency="EGP"
         onPress={jest.fn()}
@@ -257,5 +272,31 @@ describe("BudgetDashboardRow", () => {
         name: /Historic learning.*Deleted category/,
       })
     ).toBeOnTheScreen();
+    expect(screen.getByText("Deleted category")).toBeOnTheScreen();
+  });
+
+  it("uses the RTL-aware detail chevron without changing logical content order", () => {
+    const originalIsRTL = I18nManager.isRTL;
+    Object.defineProperty(I18nManager, "isRTL", {
+      configurable: true,
+      value: true,
+    });
+
+    render(
+      <BudgetDashboardRow
+        item={item({ displayName: "ميزانية الطعام" })}
+        position="only"
+        preferredCurrency="EGP"
+        onPress={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("chevron-back")).toBeOnTheScreen();
+    expect(screen.getByText("ميزانية الطعام")).toHaveProp("numberOfLines", 2);
+
+    Object.defineProperty(I18nManager, "isRTL", {
+      configurable: true,
+      value: originalIsRTL,
+    });
   });
 });

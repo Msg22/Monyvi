@@ -8,43 +8,43 @@ assertions.
 
 ## Phase 1: Setup and deterministic data
 
-- [ ] T001 Audit current PR #226 dashboard files against revised Spec 033 and
+- [x] T001 Audit current PR #226 dashboard files against revised Spec 033 and
       record preserved user-authored styling in
       `specs/033-budget-dashboard-redesign/quickstart.md`
-- [ ] T002 [P] Update manual-QA fixture expectations for all scope/period/status
+- [x] T002 [P] Update manual-QA fixture expectations for all scope/period/status
       states in `apps/mobile/__tests__/scripts/manual-qa-seed.test.ts`
-- [ ] T003 [P] Update E2E profile expectations and flow mapping in
+- [x] T003 [P] Update E2E profile expectations and flow mapping in
       `apps/mobile/__tests__/scripts/e2e-seed.test.ts` and
       `apps/mobile/__tests__/scripts/run-ci-e2e.test.ts`
-- [ ] T004 Add only missing deterministic records to
+- [x] T004 Add only missing deterministic records to
       `apps/mobile/scripts/seed-fixtures/manual-qa-fixture.js` and
       `apps/mobile/scripts/seed-fixtures/e2e-fixture.js`
-- [ ] T005 Update the manual QA coverage matrix after inspecting
+- [x] T005 Update the manual QA coverage matrix after inspecting
       `manual-qa@monyvi.test` in
       `specs/033-budget-dashboard-redesign/quickstart.md`
 
 ## Phase 2: Foundational read-model and session contracts
 
-- [ ] T006 [P] Add failing tests for expiry-first derived status and
+- [x] T006 [P] Add failing tests for expiry-first derived status and
       `showsProgress` in
       `apps/mobile/__tests__/services/budget-list-read-model-service.test.ts`
-- [ ] T007 [P] Add failing exhaustive 3 x 4 x 4 pure filter-predicate tests in
+- [x] T007 [P] Add failing exhaustive 3 x 4 x 4 pure filter-predicate tests in
       `apps/mobile/__tests__/services/budget-list-read-model-service.test.ts`
-- [ ] T008 [P] Add failing priority, EN/AR collation, ID tie-break,
+- [x] T008 [P] Add failing priority, EN/AR collation, ID tie-break,
       exactly-once, zero-spend, and deleted-category tests in
       `apps/mobile/__tests__/services/budget-list-read-model-service.test.ts`
-- [ ] T009 Replace section arrays with immutable unified `items`, derived state,
+- [x] T009 Replace section arrays with immutable unified `items`, derived state,
       AND filtering, and priority ordering in
       `apps/mobile/services/budget-list-read-model-service.ts`
-- [ ] T010 [P] Add failing fresh-default, write, read, reset, and
+- [x] T010 [P] Add failing fresh-default, write, read, reset, and
       immutable-update tests in
       `apps/mobile/__tests__/hooks/budget-dashboard-filter-session.test.ts`
-- [ ] T011 Implement memory-only filter session with `All / All / Active`
+- [x] T011 Implement memory-only filter session with `All / All / Active`
       defaults in `apps/mobile/hooks/budget-dashboard-filter-session.ts`
-- [ ] T012 [P] Add failing hook tests for three setters, reset, same-user
+- [x] T012 [P] Add failing hook tests for three setters, reset, same-user
       remount restore, user-change default reset, rapid-change cancellation, and
       last-valid retention in `apps/mobile/__tests__/hooks/useBudgets.test.ts`
-- [ ] T013 Update `useBudgets` to expose unified read model and session-backed
+- [x] T013 Update `useBudgets` to expose unified read model and session-backed
       filters while preserving observation, cancellation, retry, and last-valid
       state in `apps/mobile/hooks/useBudgets.ts`
 
@@ -60,31 +60,31 @@ budget exactly once with one row style and no section/carousel hierarchy.
 
 ### Tests
 
-- [ ] T014 [P] [US1] Add failing unified-row content and layout tests in
+- [x] T014 [P] [US1] Add failing unified-row content and layout tests in
       `apps/mobile/__tests__/components/budget/BudgetDashboardRow.test.tsx`
-- [ ] T015 [P] [US1] Replace section/carousel dashboard assertions with
+- [x] T015 [P] [US1] Replace section/carousel dashboard assertions with
       one-list, stable-key, long-list, and no-obsolete-hierarchy assertions in
       `apps/mobile/__tests__/components/budget/BudgetDashboard.test.tsx`
-- [ ] T016 [P] [US1] Add failing route assertions for shared PageHeader Add and
+- [x] T016 [P] [US1] Add failing route assertions for shared PageHeader Add and
       no dashboard FAB/footer in
       `apps/mobile/__tests__/app/budget-screens-style.test.tsx`
 
 ### Implementation
 
-- [ ] T017 [US1] Implement display-only full-width `BudgetDashboardRow` with
+- [x] T017 [US1] Implement display-only full-width `BudgetDashboardRow` with
       approved compact structure in
       `apps/mobile/components/budget/BudgetDashboardRow.tsx`
-- [ ] T018 [US1] Replace section-row builder and global list header with one
+- [x] T018 [US1] Replace section-row builder and global list header with one
       virtualized item list in
       `apps/mobile/components/budget/BudgetDashboard.tsx`
-- [ ] T019 [US1] Remove obsolete carousel/section exports and references from
+- [x] T019 [US1] Remove obsolete carousel/section exports and references from
       `apps/mobile/components/budget/index.ts` and
       `apps/mobile/components/budget/budget-dashboard-layout.ts`
-- [ ] T020 [US1] Delete superseded
+- [x] T020 [US1] Delete superseded
       `apps/mobile/components/budget/GlobalBudgetCarousel.tsx` and
       `apps/mobile/__tests__/components/budget/GlobalBudgetCarousel.test.tsx`
       only after unified-list coverage passes
-- [ ] T021 [US1] Preserve PageHeader Add action and remove remaining obsolete
+- [x] T021 [US1] Preserve PageHeader Add action and remove remaining obsolete
       dashboard create/footer surfaces in
       `apps/mobile/app/(private)/budgets.tsx` and
       `apps/mobile/components/budget/BudgetDashboard.tsx`
@@ -101,30 +101,30 @@ rows; navigation back restores selection; reset returns defaults.
 
 ### Tests
 
-- [ ] T022 [P] [US2] Add failing scope-tab order/default/selection accessibility
+- [x] T022 [P] [US2] Add failing scope-tab order/default/selection accessibility
       tests in
       `apps/mobile/__tests__/components/budget/BudgetDashboardFilters.test.tsx`
-- [ ] T023 [P] [US2] Add failing Period/Status visible-value, option, reset, and
+- [x] T023 [P] [US2] Add failing Period/Status visible-value, option, reset, and
       RTL tests in
       `apps/mobile/__tests__/components/budget/BudgetDashboardFilters.test.tsx`
-- [ ] T024 [P] [US2] Add failing dashboard integration tests for combined
+- [x] T024 [P] [US2] Add failing dashboard integration tests for combined
       filters and filtered-empty reset in
       `apps/mobile/__tests__/components/budget/BudgetDashboard.test.tsx`
-- [ ] T025 [P] [US2] Add failing in-session navigation-return and fresh-session
+- [x] T025 [P] [US2] Add failing in-session navigation-return and fresh-session
       initialization integration tests in
       `apps/mobile/__tests__/app/budget-dashboard-filter-session.test.tsx`
 
 ### Implementation
 
-- [ ] T026 [US2] Implement `BudgetDashboardFilters` with All/Category/Global
+- [x] T026 [US2] Implement `BudgetDashboardFilters` with All/Category/Global
       tabs and visible Period/Status selectors in
       `apps/mobile/components/budget/BudgetDashboardFilters.tsx`
-- [ ] T027 [US2] Connect filter controls, reset, selected values, and unified
+- [x] T027 [US2] Connect filter controls, reset, selected values, and unified
       results in `apps/mobile/components/budget/BudgetDashboard.tsx`
-- [ ] T028 [US2] Add EN/AR filter and reset copy in
+- [x] T028 [US2] Add EN/AR filter and reset copy in
       `apps/mobile/locales/en/budgets.json` and
       `apps/mobile/locales/ar/budgets.json`
-- [ ] T029 [US2] Remove obsolete `PeriodFilterChips` usage and lifecycle-section
+- [x] T029 [US2] Remove obsolete `PeriodFilterChips` usage and lifecycle-section
       copy from `apps/mobile/components/budget/PeriodFilterChips.tsx` and budget
       locale files after replacement coverage passes
 
@@ -140,37 +140,37 @@ deleted-category rows expose correct content/action and ordering.
 
 ### Tests
 
-- [ ] T030 [P] [US3] Add failing active-state tests for icon, health label,
+- [x] T030 [P] [US3] Add failing active-state tests for icon, health label,
       amount, percentage, and progress in
       `apps/mobile/__tests__/components/budget/BudgetDashboardRow.test.tsx`
-- [ ] T031 [P] [US3] Add failing paused/expired tests proving
+- [x] T031 [P] [US3] Add failing paused/expired tests proving
       percentage/progress absence and Resume/Renew presence in
       `apps/mobile/__tests__/components/budget/BudgetDashboardRow.test.tsx`
-- [ ] T032 [P] [US3] Preserve/add Resume cancel, confirm-once, failure, retry,
+- [x] T032 [P] [US3] Preserve/add Resume cancel, confirm-once, failure, retry,
       and service rejection tests in
       `apps/mobile/__tests__/hooks/useBudgetDashboardActions.test.ts` and
       `apps/mobile/__tests__/services/budget-service.test.ts`
-- [ ] T033 [P] [US3] Preserve/add Renew prefill and immutable-history tests in
+- [x] T033 [P] [US3] Preserve/add Renew prefill and immutable-history tests in
       `apps/mobile/__tests__/app/budget-renew-integration.test.tsx`
-- [ ] T034 [P] [US3] Preserve/add deleted-category row/detail recovery tests in
+- [x] T034 [P] [US3] Preserve/add deleted-category row/detail recovery tests in
       `apps/mobile/__tests__/services/budget-detail-read-model-service.test.ts`
       and `apps/mobile/__tests__/app/budget-detail-deleted-category.test.tsx`
 
 ### Implementation
 
-- [ ] T035 [US3] Render state-specific active versus paused/expired content
+- [x] T035 [US3] Render state-specific active versus paused/expired content
       without label-string inference in
       `apps/mobile/components/budget/BudgetDashboardRow.tsx`
-- [ ] T036 [US3] Connect stable row press, Resume, and Renew callbacks without
+- [x] T036 [US3] Connect stable row press, Resume, and Renew callbacks without
       optimistic array mutation in
       `apps/mobile/components/budget/BudgetDashboard.tsx` and
       `apps/mobile/app/(private)/budgets.tsx`
-- [ ] T037 [US3] Preserve shared Resume confirmation and `renewFrom` navigation
+- [x] T037 [US3] Preserve shared Resume confirmation and `renewFrom` navigation
       in `apps/mobile/hooks/useBudgetDashboardActions.ts` and
       `apps/mobile/app/(private)/budgets.tsx`
-- [ ] T038 [US3] Preserve missing-category tolerant detail aggregation in
+- [x] T038 [US3] Preserve missing-category tolerant detail aggregation in
       `apps/mobile/services/budget-detail-read-model-service.ts`
-- [ ] T039 [US3] Update EN/AR row status and accessibility copy without obsolete
+- [x] T039 [US3] Update EN/AR row status and accessibility copy without obsolete
       section names in `apps/mobile/locales/en/budgets.json` and
       `apps/mobile/locales/ar/budgets.json`
 
@@ -186,25 +186,25 @@ failure, and action failure keep correct structure/data.
 
 ### Tests
 
-- [ ] T040 [P] [US4] Replace hero/carousel skeleton assertions with tabs, two
+- [x] T040 [P] [US4] Replace hero/carousel skeleton assertions with tabs, two
       filters, and compact rows in
       `apps/mobile/__tests__/components/budget/BudgetDashboardSkeleton.test.tsx`
-- [ ] T041 [P] [US4] Add failing no-budget, filtered-empty reset, retained-data
+- [x] T041 [P] [US4] Add failing no-budget, filtered-empty reset, retained-data
       error, and retry tests in
       `apps/mobile/__tests__/components/budget/BudgetDashboard.test.tsx`
-- [ ] T042 [P] [US4] Add static guard against `ActivityIndicator` and obsolete
+- [x] T042 [P] [US4] Add static guard against `ActivityIndicator` and obsolete
       carousel skeleton regions in
       `apps/mobile/__tests__/components/budget/BudgetDashboardSkeleton.test.tsx`
 
 ### Implementation
 
-- [ ] T043 [US4] Rebuild `BudgetDashboardSkeleton` to mirror approved
+- [x] T043 [US4] Rebuild `BudgetDashboardSkeleton` to mirror approved
       scope/filter/row geometry in
       `apps/mobile/components/budget/BudgetDashboardSkeleton.tsx`
-- [ ] T044 [US4] Implement distinct no-budget, filtered-empty reset, and
+- [x] T044 [US4] Implement distinct no-budget, filtered-empty reset, and
       retained-error presentation in
       `apps/mobile/components/budget/BudgetDashboard.tsx`
-- [ ] T045 [US4] Add friendly EN/AR empty/recovery copy in
+- [x] T045 [US4] Add friendly EN/AR empty/recovery copy in
       `apps/mobile/locales/en/budgets.json` and
       `apps/mobile/locales/ar/budgets.json`
 
@@ -220,31 +220,31 @@ accessibility roles, and bottom inset retain reachability.
 
 ### Tests
 
-- [ ] T046 [P] [US5] Add filter roles, selected/value state, row description,
+- [x] T046 [P] [US5] Add filter roles, selected/value state, row description,
       and hidden-progress accessibility tests in
       `apps/mobile/__tests__/components/budget/BudgetDashboardFilters.test.tsx`
       and `apps/mobile/__tests__/components/budget/BudgetDashboardRow.test.tsx`
-- [ ] T047 [P] [US5] Add long-name, large-amount, font-scale, and RTL layout
+- [x] T047 [P] [US5] Add long-name, large-amount, font-scale, and RTL layout
       tests in
       `apps/mobile/__tests__/components/budget/BudgetDashboard.test.tsx`
-- [ ] T048 [P] [US5] Add light/dark token and prohibited-style assertions in
+- [x] T048 [P] [US5] Add light/dark token and prohibited-style assertions in
       `apps/mobile/__tests__/app/budget-screens-style.test.tsx`
-- [ ] T049 [P] [US5] Add zero/gesture/three-button bottom-inset reachability
+- [x] T049 [P] [US5] Add zero/gesture/three-button bottom-inset reachability
       tests in
       `apps/mobile/__tests__/components/budget/BudgetDashboard.test.tsx`
 
 ### Implementation
 
-- [ ] T050 [US5] Finalize semantic roles, selected/value states, focus order,
+- [x] T050 [US5] Finalize semantic roles, selected/value states, focus order,
       and complete row labels in
       `apps/mobile/components/budget/BudgetDashboardFilters.tsx` and
       `apps/mobile/components/budget/BudgetDashboardRow.tsx`
-- [ ] T051 [US5] Apply responsive wrapping, RTL alignment, theme tokens, and
+- [x] T051 [US5] Apply responsive wrapping, RTL alignment, theme tokens, and
       reduced-motion behavior in
       `apps/mobile/components/budget/BudgetDashboard.tsx`,
       `apps/mobile/components/budget/BudgetDashboardRow.tsx`, and
       `apps/mobile/components/budget/BudgetDashboardFilters.tsx`
-- [ ] T052 [US5] Apply base plus runtime bottom inset exactly once in
+- [x] T052 [US5] Apply base plus runtime bottom inset exactly once in
       `apps/mobile/components/budget/BudgetDashboard.tsx`
 
 **Checkpoint**: US5 independently passes deterministic accessibility/layout
@@ -252,26 +252,26 @@ coverage.
 
 ## Phase 8: E2E, verification, and handoff
 
-- [ ] T053 [P] Replace carousel/section Maestro assertions with default and
+- [x] T053 [P] Replace carousel/section Maestro assertions with default and
       combined-filter journeys in
       `apps/mobile/e2e/maestro/budgets/dashboard-filtering.yaml`
-- [ ] T054 [P] Update lifecycle Maestro selectors for unified paused/expired
+- [x] T054 [P] Update lifecycle Maestro selectors for unified paused/expired
       rows in `apps/mobile/e2e/maestro/budgets/dashboard-lifecycle-actions.yaml`
-- [ ] T055 Remove superseded
+- [x] T055 Remove superseded
       `apps/mobile/e2e/maestro/budgets/dashboard-carousel.yaml` and update suite
       mapping in `apps/mobile/scripts/run-ci-e2e.js`
-- [ ] T056 Run focused mobile Jest and `packages/logic` budget financial
+- [x] T056 Run focused mobile Jest and `packages/logic` budget financial
       regressions from `specs/033-budget-dashboard-redesign/quickstart.md`
-- [ ] T057 Run mobile typecheck, lint, i18n validation, and changed-file static
+- [x] T057 Run mobile typecheck, lint, i18n validation, and changed-file static
       rules; document unrelated baseline failures in
       `specs/033-budget-dashboard-redesign/quickstart.md`
-- [ ] T058 Inspect `manual-qa@monyvi.test` and seed only missing rows using
+- [x] T058 Inspect `manual-qa@monyvi.test` and seed only missing rows using
       `apps/mobile/scripts/seed-fixtures/manual-qa-fixture.js`
 - [ ] T059 Run budget Maestro suite with deterministic profiles and record
       results in `specs/033-budget-dashboard-redesign/quickstart.md`
 - [ ] T060 Complete physical matrix, SC-006 timing, SC-011 timing, and mockup
       comparison in `specs/033-budget-dashboard-redesign/quickstart.md`
-- [ ] T061 Run TypeScript, logic, style, correctness, security, and QA coverage
+- [x] T061 Run TypeScript, logic, style, correctness, security, and QA coverage
       review against revised `specs/033-budget-dashboard-redesign/spec.md`
 - [ ] T062 Update PR #226 description and coverage matrix to mark earlier
       section/carousel design superseded

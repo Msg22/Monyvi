@@ -91,15 +91,11 @@ describe("run-ci-e2e helpers", () => {
   it("registers deterministic budget flow profiles", () => {
     expect(runCiE2e.getBudgetMaestroFlows()).toEqual([
       {
-        flow: "budgets/dashboard-visibility-filters.yaml",
+        flow: "budgets/dashboard-filtering.yaml",
         profile: "dashboard-filter-empty",
       },
       {
         flow: "budgets/dashboard-lifecycle-actions.yaml",
-        profile: "dashboard-full",
-      },
-      {
-        flow: "budgets/dashboard-carousel.yaml",
         profile: "dashboard-full",
       },
     ]);
@@ -116,7 +112,6 @@ describe("run-ci-e2e helpers", () => {
       0
     );
   });
-
 
   it("keeps only a bounded output tail for retry detection", () => {
     expect(runCiE2e.appendOutputTail("abcdef", "ghij", 6)).toBe("efghij");

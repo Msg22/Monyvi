@@ -4,17 +4,14 @@
 
 // Foundation
 export { CircularProgress } from "./CircularProgress";
-export { PeriodFilterChips } from "./PeriodFilterChips";
-export type { PeriodFilter } from "./PeriodFilterChips";
 export { BudgetEmptyState } from "./BudgetEmptyState";
 export { AlertThresholdSlider } from "./AlertThresholdSlider";
 
 // Dashboard
 export { BudgetDashboard } from "./BudgetDashboard";
-export { BudgetDashboardCard } from "./BudgetDashboardCard";
-export { BudgetDashboardSectionHeader } from "./BudgetDashboardSectionHeader";
+export { BudgetDashboardFilters } from "./BudgetDashboardFilters";
+export { BudgetDashboardRow } from "./BudgetDashboardRow";
 export { BudgetDashboardSkeleton } from "./BudgetDashboardSkeleton";
-export { GlobalBudgetCarousel } from "./GlobalBudgetCarousel";
 
 // Form
 export { BudgetForm } from "./BudgetForm";

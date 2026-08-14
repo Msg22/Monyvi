@@ -1,5 +1,7 @@
 import { render, screen } from "@testing-library/react-native";
 import React from "react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 let mockSearchParams: { readonly id?: string } = {};
 let mockEditableBudgetResult: {
@@ -45,7 +47,27 @@ jest.mock("react-i18next", () => ({
 }));
 
 jest.mock("@/components/navigation/PageHeader", () => ({
-  PageHeader: (): null => null,
+  PageHeader: ({
+    rightAction,
+  }: {
+    readonly rightAction?: {
+      readonly testID?: string;
+      readonly accessibilityLabel?: string;
+      readonly onPress: () => void;
+    };
+  }): React.JSX.Element | null => {
+    if (!rightAction) return null;
+    const ReactNative =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return (
+      <ReactNative.TouchableOpacity
+        testID={rightAction.testID}
+        accessibilityRole="button"
+        accessibilityLabel={rightAction.accessibilityLabel}
+        onPress={rightAction.onPress}
+      />
+    );
+  },
 }));
 
 jest.mock("@/components/budget/BudgetDashboard", () => ({
@@ -106,19 +128,20 @@ jest.mock("@/hooks/usePreferredCurrency", () => ({
 jest.mock("@/hooks/useBudgets", () => ({
   useBudgets: () => ({
     readModel: {
-      overallBudgets: [],
-      needsAttentionBudgets: [],
-      categoryBudgets: [],
-      pausedBudgets: [],
+      filters: { scope: "ALL", period: "ALL", status: "ACTIVE" },
+      items: [],
       totalCount: 0,
       matchingCount: 0,
     },
-    periodFilter: "ALL",
+    filters: { scope: "ALL", period: "ALL", status: "ACTIVE" },
     isInitialLoading: false,
     isRefreshing: false,
     hasValidData: true,
     errorKey: null,
+    setScopeFilter: jest.fn(),
     setPeriodFilter: jest.fn(),
+    setStatusFilter: jest.fn(),
+    resetFilters: jest.fn(),
     retry: jest.fn(),
     refresh: jest.fn(),
     autoPauseCheckKey: "",
@@ -180,6 +203,30 @@ describe("Budget screen dark theme styling", () => {
       "className",
       expect.stringContaining("bg-background dark:bg-background-dark")
     );
+  });
+
+  it("keeps budget creation in the shared PageHeader action", () => {
+    render(<BudgetsScreen />);
+
+    expect(screen.getByTestId("budgets-add-button")).toBeOnTheScreen();
+    expect(screen.queryByTestId("budget-create-fab")).toBeNull();
+    expect(screen.queryByTestId("budget-summary-footer")).toBeNull();
+  });
+
+  it("keeps unified dashboard surfaces on theme tokens without static colors", () => {
+    const files = [
+      "../../components/budget/BudgetDashboard.tsx",
+      "../../components/budget/BudgetDashboardFilters.tsx",
+      "../../components/budget/BudgetDashboardRow.tsx",
+      "../../components/budget/BudgetDashboardSkeleton.tsx",
+    ];
+
+    for (const relativePath of files) {
+      const source = readFileSync(resolve(__dirname, relativePath), "utf8");
+      expect(source).not.toContain("StyleSheet.create");
+      expect(source).not.toMatch(/#[0-9a-f]{6}/i);
+      expect(source).toContain("dark:");
+    }
   });
 
   it("uses the themed app background on the create budget root", () => {

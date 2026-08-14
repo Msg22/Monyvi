@@ -1,9 +1,4 @@
-import {
-  Budget,
-  database,
-  type BudgetPeriod,
-  type CurrencyType,
-} from "@monyvi/db";
+import { Budget, database } from "@monyvi/db";
 import { Q } from "@nozbe/watermelondb";
 import type Query from "@nozbe/watermelondb/Query";
 import {
@@ -15,14 +10,27 @@ import {
   type SpendingMetrics,
 } from "@monyvi/logic";
 
+import {
+  type BudgetDashboardCategoryLabel,
+  type BudgetDashboardFilters,
+  type BudgetDashboardItem,
+  type BudgetDashboardLifecycle,
+  type BudgetDashboardReadModel,
+} from "@/contracts/budget-dashboard";
 import { getSpendingForBudget } from "@/services/budget-service";
 import { queryOwned } from "@/services/user-data-access";
-import {
-  getCategoryIconConfig,
-  type CategoryIconConfig,
-} from "@/utils/category-icon-config";
+import { getCategoryIconConfig } from "@/utils/category-icon-config";
 
-export type BudgetPeriodFilter = "ALL" | BudgetPeriod;
+export type {
+  BudgetDashboardCategoryLabel,
+  BudgetDashboardFilters,
+  BudgetDashboardItem,
+  BudgetDashboardLifecycle,
+  BudgetDashboardPeriodFilter,
+  BudgetDashboardReadModel,
+  BudgetDashboardScopeFilter,
+  BudgetDashboardStatusFilter,
+} from "@/contracts/budget-dashboard";
 
 export interface BudgetWithMetrics {
   readonly budget: Budget;
@@ -67,45 +75,6 @@ export async function buildBudgetMetrics(
   );
 }
 
-export type BudgetDashboardLifecycle =
-  | "HEALTHY"
-  | "NEAR_LIMIT"
-  | "OVER_BUDGET"
-  | "PAUSED"
-  | "EXPIRED";
-
-export type BudgetDashboardSectionId =
-  | "OVERALL"
-  | "NEEDS_ATTENTION"
-  | "CATEGORY"
-  | "PAUSED";
-
-export type BudgetDashboardCategoryLabel =
-  | { readonly kind: "not-applicable" }
-  | {
-      readonly kind: "resolved";
-      readonly categoryId: string;
-      readonly name: string;
-    }
-  | { readonly kind: "deleted"; readonly categoryId: string | null };
-
-export interface BudgetDashboardItem {
-  readonly id: string;
-  readonly displayName: string;
-  readonly period: BudgetPeriod;
-  readonly currency: CurrencyType | null;
-  readonly scope: "GLOBAL" | "CATEGORY";
-  readonly lifecycle: BudgetDashboardLifecycle;
-  readonly sectionId: BudgetDashboardSectionId;
-  readonly metrics: SpendingMetrics;
-  readonly daysLeft: number;
-  readonly daysElapsed: number;
-  readonly expiresAt: Date | null;
-  readonly categoryLabel: BudgetDashboardCategoryLabel;
-  readonly categoryIcon: CategoryIconConfig | null;
-  readonly availableAction: "RESUME" | "RENEW" | null;
-}
-
 interface BudgetDashboardCategorySource {
   readonly displayName: string;
   readonly icon?: string;
@@ -117,145 +86,173 @@ interface BudgetDashboardCategorySource {
 export interface BuildBudgetDashboardReadModelInput {
   readonly budgets: readonly BudgetWithMetrics[];
   readonly categoryMap: ReadonlyMap<string, BudgetDashboardCategorySource>;
-  readonly filter: BudgetPeriodFilter;
+  readonly filters: BudgetDashboardFilters;
   readonly now: Date;
   readonly activeLocale: "en" | "ar";
   readonly fallbackName: string;
 }
 
-export interface BudgetDashboardReadModel {
-  readonly overallBudgets: readonly BudgetDashboardItem[];
-  readonly needsAttentionBudgets: readonly BudgetDashboardItem[];
-  readonly categoryBudgets: readonly BudgetDashboardItem[];
-  readonly pausedBudgets: readonly BudgetDashboardItem[];
-  readonly totalCount: number;
-  readonly matchingCount: number;
+const LIFECYCLE_PRIORITY: Readonly<Record<BudgetDashboardLifecycle, number>> = {
+  EXPIRED: 0,
+  OVER_BUDGET: 1,
+  NEAR_LIMIT: 2,
+  PAUSED: 3,
+  HEALTHY: 4,
+};
+
+function deriveLifecycle(
+  item: BudgetWithMetrics,
+  now: Date
+): BudgetDashboardLifecycle {
+  const { budget, metrics } = item;
+  if (budget.period === "CUSTOM" && isPeriodExpired(budget.periodEnd, now)) {
+    return "EXPIRED";
+  }
+  if (budget.status === "PAUSED") return "PAUSED";
+  if (metrics.status === "danger") return "OVER_BUDGET";
+  if (metrics.status === "warning") return "NEAR_LIMIT";
+  return "HEALTHY";
 }
 
-export function buildBudgetDashboardReadModel({
-  budgets,
-  categoryMap,
-  filter,
-  now,
-  activeLocale,
-  fallbackName,
-}: BuildBudgetDashboardReadModelInput): BudgetDashboardReadModel {
-  const matchingBudgets =
-    filter === "ALL"
-      ? budgets
-      : budgets.filter((item) => item.budget.period === filter);
-  const overallBudgets: BudgetDashboardItem[] = [];
-  const needsAttentionBudgets: BudgetDashboardItem[] = [];
-  const categoryBudgets: BudgetDashboardItem[] = [];
-  const pausedBudgets: BudgetDashboardItem[] = [];
+function matchesFilters(
+  item: BudgetWithMetrics,
+  lifecycle: BudgetDashboardLifecycle,
+  filters: BudgetDashboardFilters
+): boolean {
+  const matchesScope =
+    filters.scope === "ALL" || item.budget.type === filters.scope;
+  const matchesPeriod =
+    filters.period === "ALL" || item.budget.period === filters.period;
+  const matchesStatus =
+    filters.status === "ALL" ||
+    (filters.status === "ACTIVE"
+      ? lifecycle === "HEALTHY" ||
+        lifecycle === "NEAR_LIMIT" ||
+        lifecycle === "OVER_BUDGET"
+      : lifecycle === filters.status);
 
-  for (const item of matchingBudgets) {
-    const { budget, metrics, daysLeft, daysElapsed } = item;
-    const category = budget.categoryId
-      ? categoryMap.get(budget.categoryId)
-      : undefined;
-    const isExpired =
-      budget.period === "CUSTOM" && isPeriodExpired(budget.periodEnd, now);
-    const lifecycle: BudgetDashboardLifecycle = isExpired
-      ? "EXPIRED"
-      : budget.status === "PAUSED"
-        ? "PAUSED"
-        : metrics.status === "warning"
-          ? "NEAR_LIMIT"
-          : metrics.status === "danger"
-            ? "OVER_BUDGET"
-            : "HEALTHY";
-    const sectionId: BudgetDashboardSectionId = isExpired
-      ? "NEEDS_ATTENTION"
-      : budget.status === "PAUSED"
-        ? "PAUSED"
-        : metrics.status !== "safe"
-          ? "NEEDS_ATTENTION"
-          : budget.isGlobal
-            ? "OVERALL"
-            : "CATEGORY";
-    const categoryLabel: BudgetDashboardCategoryLabel = budget.isGlobal
-      ? { kind: "not-applicable" }
-      : category && budget.categoryId
-        ? {
-            kind: "resolved",
-            categoryId: budget.categoryId,
-            name: category.displayName,
-          }
-        : { kind: "deleted", categoryId: budget.categoryId ?? null };
-    const persistedName = budget.name?.trim() ?? "";
-    const categoryName = category?.displayName.trim() ?? "";
-    const displayName = persistedName || categoryName || fallbackName.trim();
-    const categoryIcon =
-      category?.icon &&
-      category.iconLibrary &&
-      typeof category.isExpense === "boolean"
-        ? getCategoryIconConfig({
-            icon: category.icon,
-            iconLibrary: category.iconLibrary,
-            color: category.color,
-            isExpense: category.isExpense,
-          })
-        : null;
-    const dashboardItem: BudgetDashboardItem = Object.freeze({
-      id: budget.id,
-      displayName,
-      period: budget.period,
-      currency: budget.currency ?? null,
-      scope: budget.type,
-      lifecycle,
-      sectionId,
-      metrics,
-      daysLeft,
-      daysElapsed,
-      expiresAt: isExpired ? (budget.periodEnd ?? null) : null,
-      categoryLabel: Object.freeze(categoryLabel),
-      categoryIcon: categoryIcon ? Object.freeze(categoryIcon) : null,
-      availableAction:
-        lifecycle === "EXPIRED"
-          ? "RENEW"
-          : lifecycle === "PAUSED"
-            ? "RESUME"
-            : null,
-    });
+  return matchesScope && matchesPeriod && matchesStatus;
+}
 
-    if (sectionId === "NEEDS_ATTENTION") {
-      needsAttentionBudgets.push(dashboardItem);
-    } else if (sectionId === "PAUSED") {
-      pausedBudgets.push(dashboardItem);
-    } else if (sectionId === "OVERALL") {
-      overallBudgets.push(dashboardItem);
-    } else {
-      categoryBudgets.push(dashboardItem);
-    }
+function resolveCategoryLabel(
+  budget: Budget,
+  category: BudgetDashboardCategorySource | undefined
+): BudgetDashboardCategoryLabel {
+  if (budget.isGlobal) return { kind: "not-applicable" };
+  if (category && budget.categoryId) {
+    return {
+      kind: "resolved",
+      categoryId: budget.categoryId,
+      name: category.displayName,
+    };
+  }
+  return { kind: "deleted", categoryId: budget.categoryId ?? null };
+}
+
+function resolveCategoryIcon(
+  category: BudgetDashboardCategorySource | undefined
+): BudgetDashboardItem["categoryIcon"] {
+  if (
+    !category?.icon ||
+    !category.iconLibrary ||
+    typeof category.isExpense !== "boolean"
+  ) {
+    return null;
   }
 
+  return Object.freeze(
+    getCategoryIconConfig({
+      icon: category.icon,
+      iconLibrary: category.iconLibrary,
+      color: category.color,
+      isExpense: category.isExpense,
+    })
+  );
+}
+
+function createDashboardItem(
+  item: BudgetWithMetrics,
+  categoryMap: ReadonlyMap<string, BudgetDashboardCategorySource>,
+  lifecycle: BudgetDashboardLifecycle,
+  fallbackName: string
+): BudgetDashboardItem {
+  const { budget, metrics, daysLeft, daysElapsed } = item;
+  const category = budget.categoryId
+    ? categoryMap.get(budget.categoryId)
+    : undefined;
+  const persistedName = budget.name?.trim() ?? "";
+  const categoryName = category?.displayName.trim() ?? "";
+
+  return Object.freeze({
+    id: budget.id,
+    displayName: persistedName || categoryName || fallbackName.trim(),
+    period: budget.period,
+    currency: budget.currency ?? null,
+    scope: budget.type,
+    lifecycle,
+    showsProgress: ["HEALTHY", "NEAR_LIMIT", "OVER_BUDGET"].includes(lifecycle),
+    metrics,
+    daysLeft,
+    daysElapsed,
+    expiresAt: lifecycle === "EXPIRED" ? (budget.periodEnd ?? null) : null,
+    categoryLabel: Object.freeze(resolveCategoryLabel(budget, category)),
+    categoryIcon: resolveCategoryIcon(category),
+    availableAction:
+      lifecycle === "EXPIRED"
+        ? "RENEW"
+        : lifecycle === "PAUSED"
+          ? "RESUME"
+          : null,
+  });
+}
+
+function createItemComparator(
+  activeLocale: "en" | "ar"
+): (left: BudgetDashboardItem, right: BudgetDashboardItem) => number {
   const collator = new Intl.Collator(activeLocale, {
     sensitivity: "base",
     numeric: true,
     usage: "sort",
   });
-  const compareItems = (
-    left: BudgetDashboardItem,
-    right: BudgetDashboardItem
-  ): number => {
+
+  return (left, right) => {
+    const priorityResult =
+      LIFECYCLE_PRIORITY[left.lifecycle] - LIFECYCLE_PRIORITY[right.lifecycle];
+    if (priorityResult !== 0) return priorityResult;
     const nameResult = collator.compare(left.displayName, right.displayName);
     if (nameResult !== 0) return nameResult;
     if (left.id === right.id) return 0;
     return left.id < right.id ? -1 : 1;
   };
+}
 
-  overallBudgets.sort(compareItems);
-  needsAttentionBudgets.sort(compareItems);
-  categoryBudgets.sort(compareItems);
-  pausedBudgets.sort(compareItems);
+export function buildBudgetDashboardReadModel({
+  budgets,
+  categoryMap,
+  filters,
+  now,
+  activeLocale,
+  fallbackName,
+}: BuildBudgetDashboardReadModelInput): BudgetDashboardReadModel {
+  const dashboardItems: BudgetDashboardItem[] = [];
+
+  for (const item of budgets) {
+    const lifecycle = deriveLifecycle(item, now);
+    if (!matchesFilters(item, lifecycle, filters)) continue;
+
+    dashboardItems.push(
+      createDashboardItem(item, categoryMap, lifecycle, fallbackName)
+    );
+  }
+
+  dashboardItems.sort(createItemComparator(activeLocale));
+
+  const readModelFilters = Object.freeze({ ...filters });
 
   return Object.freeze({
-    overallBudgets: Object.freeze(overallBudgets),
-    needsAttentionBudgets: Object.freeze(needsAttentionBudgets),
-    categoryBudgets: Object.freeze(categoryBudgets),
-    pausedBudgets: Object.freeze(pausedBudgets),
+    filters: readModelFilters,
+    items: Object.freeze(dashboardItems),
     totalCount: budgets.length,
-    matchingCount: matchingBudgets.length,
+    matchingCount: dashboardItems.length,
   });
 }

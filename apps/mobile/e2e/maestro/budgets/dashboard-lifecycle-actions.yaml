@@ -2,6 +2,10 @@ appId: com.monyvi.app
 ---
 - runFlow: ../helpers/setup.yaml
 - openLink: monyvi://budgets
+- tapOn:
+    id: "budget-filter-status"
+- tapOn:
+    id: "budget-filter-option-status-paused"
 - scrollUntilVisible:
     element: "E2E Paused Shopping"
     direction: DOWN
@@ -26,6 +30,10 @@ appId: com.monyvi.app
     notVisible:
       id: ".*budget-action-resume-.*"
     timeout: 30000
+- tapOn:
+    id: "budget-filter-status"
+- tapOn:
+    id: "budget-filter-option-status-expired"
 - scrollUntilVisible:
     element: "E2E Expired Custom"
     direction: DOWN

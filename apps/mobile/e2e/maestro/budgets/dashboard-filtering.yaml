@@ -1,0 +1,33 @@
+appId: com.monyvi.app
+---
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://budgets
+- extendedWaitUntil:
+    visible:
+      id: "budgets-screen"
+    timeout: 120000
+- assertVisible: "Active"
+- assertVisible: "E2E Monthly Overall"
+- tapOn:
+    id: "budget-scope-global"
+- assertVisible: "E2E Monthly Overall"
+- assertNotVisible: "E2E Healthy Shopping"
+- tapOn:
+    id: "budget-filter-period"
+- tapOn:
+    id: "budget-filter-option-period-custom"
+- extendedWaitUntil:
+    visible: "No budgets match this filter"
+    timeout: 30000
+- tapOn: "Reset filters"
+- assertVisible: "E2E Monthly Overall"
+- tapOn:
+    id: "budget-scope-category"
+- tapOn:
+    id: "budget-filter-status"
+- tapOn:
+    id: "budget-filter-option-status-paused"
+- extendedWaitUntil:
+    visible: "E2E Paused Shopping"
+    timeout: 30000
+- assertNotVisible: "E2E Monthly Overall"

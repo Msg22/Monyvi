@@ -17,10 +17,12 @@ const mockRefresh = jest.fn();
 const mockPauseExpiredCustomBudgets = jest.fn<Promise<number>, []>();
 
 const mockEmptyReadModel = Object.freeze({
-  overallBudgets: Object.freeze([]),
-  needsAttentionBudgets: Object.freeze([]),
-  categoryBudgets: Object.freeze([]),
-  pausedBudgets: Object.freeze([]),
+  filters: Object.freeze({
+    scope: "ALL",
+    period: "ALL",
+    status: "ACTIVE",
+  }),
+  items: Object.freeze([]),
   totalCount: 0,
   matchingCount: 0,
 });
@@ -113,12 +115,15 @@ jest.mock("@/components/modals/ConfirmationModal", () => ({
 jest.mock("@/hooks/useBudgets", () => ({
   useBudgets: () => ({
     readModel: mockEmptyReadModel,
-    periodFilter: "ALL",
+    filters: mockEmptyReadModel.filters,
     isInitialLoading: false,
     isRefreshing: false,
     hasValidData: true,
     errorKey: null,
+    setScopeFilter: jest.fn(),
     setPeriodFilter: jest.fn(),
+    setStatusFilter: jest.fn(),
+    resetFilters: jest.fn(),
     retry: jest.fn(),
     refresh: mockRefresh,
     autoPauseCheckKey: "key-1",

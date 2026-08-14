@@ -25,6 +25,18 @@
 
 Production code changes begin only after focused test fails for intended reason.
 
+## Preserved dashboard baseline audit (2026-08-14)
+
+- Keep current compact row density, rounded grouped-list shell, status colors,
+  direct Resume/Renew actions, shared PageHeader Add action, and exactly-once
+  bottom safe-area spacing.
+- Keep user-authored row typography and spacing where approved mockups do not
+  specify a replacement.
+- Replace only superseded hierarchy: section headings, global hero/carousel,
+  page dots, period chips, and lifecycle-specific row variants.
+- Final approved mockups require one grouped list, scope tabs, two visible-value
+  filter cards, and one row structure for global and category budgets.
+
 ## Focused automated checks
 
 From repository root:
@@ -106,6 +118,16 @@ Required matrix:
 - combinations proving each scope/period/status option;
 - at least one deterministic no-match combination.
 
+### Local inspection evidence (2026-08-14)
+
+- Inspected `manual-qa@monyvi.test` directly in local Supabase; 11 non-deleted
+  budgets already cover GLOBAL/CATEGORY, WEEKLY/MONTHLY/CUSTOM,
+  ACTIVE/PAUSED/derived EXPIRED, near-limit, over-budget, zero-spend,
+  deleted-category history, long name, and large amount.
+- Existing rows include two expired custom budgets ending 2026-08-13 and one
+  future paused custom global budget.
+- No missing scenario found. Database left unchanged; no reset or reseed run.
+
 Local preparation:
 
 ```powershell
@@ -117,6 +139,21 @@ npm run mobile:local-supabase
 
 Use `manual:reset-user` only when Mohamed explicitly requests clean data or
 existing fixture is irreparably inconsistent.
+
+## Verification evidence (2026-08-14)
+
+- Focused mobile Jest: 18 suites and 184 tests passed.
+- Budget financial regression: 1 suite and 24 tests passed in `@monyvi/logic`.
+- Full mobile lint and i18n coverage checks passed.
+- Mobile typecheck reached only the pre-existing Expo typed-route errors for
+  `/privacy-policy` and `/terms` in `apps/mobile/app/auth.tsx`; no dashboard
+  type error remains.
+- Architecture, correctness, style, security, and QA coverage review found no
+  remaining implementation issue. Dashboard presentation contracts now live in
+  `apps/mobile/contracts`, outside the read-model service.
+- Maestro and the physical-device matrix were not run because `adb devices -l`
+  reported no connected Android target. They remain required manual handoff
+  checks, not claimed as passed.
 
 ## Maestro
 

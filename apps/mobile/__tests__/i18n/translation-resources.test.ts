@@ -5,9 +5,13 @@ import enOnboarding from "@/locales/en/onboarding.json";
 import { validateTranslationResources } from "@/i18n/translation-schemas";
 
 const budgetDashboardKeys = [
-  "overall_budgets",
-  "needs_attention",
-  "category_budgets",
+  "filter_active",
+  "filter_paused",
+  "filter_expired",
+  "select_period",
+  "select_status",
+  "reset_filters",
+  "dashboard_result_count_active_other",
   "budget_expired",
   "deleted_category",
   "renew_budget",
@@ -17,7 +21,6 @@ const budgetDashboardKeys = [
   "dashboard_load_error",
   "dashboard_action_error",
   "retry",
-  "carousel_page_announcement",
 ] as const;
 
 describe("translation resource runtime contract", () => {
@@ -39,18 +42,23 @@ describe("translation resource runtime contract", () => {
       const translations: Record<string, unknown> = resource;
 
       expect(typeof translations.pitch_slide_sms_account).toBe("string");
-      expect(typeof translations.pitch_slide_sms_status_just_now).toBe("string");
+      expect(typeof translations.pitch_slide_sms_status_just_now).toBe(
+        "string"
+      );
     }
   );
 
   it.each([
     ["en", enBudgets],
     ["ar", arBudgets],
-  ])("includes every dashboard and lifecycle label in %s", (_language, resource) => {
-    const translations: Record<string, unknown> = resource;
+  ])(
+    "includes every dashboard and lifecycle label in %s",
+    (_language, resource) => {
+      const translations: Record<string, unknown> = resource;
 
-    for (const key of budgetDashboardKeys) {
-      expect(typeof translations[key]).toBe("string");
+      for (const key of budgetDashboardKeys) {
+        expect(typeof translations[key]).toBe("string");
+      }
     }
-  });
+  );
 });

@@ -70,10 +70,8 @@ const budgetMetrics = [
   },
 ];
 const dashboardReadModel = {
-  overallBudgets: [],
-  needsAttentionBudgets: [],
-  categoryBudgets: [],
-  pausedBudgets: [],
+  filters: { scope: "ALL", period: "ALL", status: "ACTIVE" },
+  items: [],
   totalCount: 1,
   matchingCount: 1,
 };
@@ -148,6 +146,7 @@ jest.mock("../../hooks/useCurrentUser", () => ({
 }));
 
 import { useBudgets } from "@/hooks/useBudgets";
+import { clearBudgetDashboardFilterSession } from "@/hooks/budget-dashboard-filter-session";
 
 describe("useBudgets", () => {
   beforeEach(() => {
@@ -156,6 +155,7 @@ describe("useBudgets", () => {
     mockIsResolvingUser = false;
     mockCategoriesLoading = false;
     mockActiveLocale = "en";
+    clearBudgetDashboardFilterSession();
     budgetQuery.observerRef.current = null;
     mockObserveBudgetList.mockReturnValue(budgetQuery);
     mockBuildBudgetMetrics.mockResolvedValue(budgetMetrics);
@@ -196,7 +196,7 @@ describe("useBudgets", () => {
     expect(mockBuildBudgetDashboardReadModel).toHaveBeenCalledWith({
       budgets: budgetMetrics,
       categoryMap: mockCategoryMap,
-      filter: "ALL",
+      filters: { scope: "ALL", period: "ALL", status: "ACTIVE" },
       // Jest asymmetric matchers are intentionally dynamic at this boundary.
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       now: expect.any(Date),
@@ -204,9 +204,12 @@ describe("useBudgets", () => {
       fallbackName: "Unnamed budget",
     });
     expect(result.current.readModel).toBe(dashboardReadModel);
-    expect(result.current.categoryBudgets).toBe(
-      dashboardReadModel.categoryBudgets
-    );
+    expect(result.current.budgets).toBe(dashboardReadModel.items);
+    expect(result.current.filters).toEqual({
+      scope: "ALL",
+      period: "ALL",
+      status: "ACTIVE",
+    });
     expect(result.current.totalCount).toBe(1);
   });
 
@@ -228,7 +231,7 @@ describe("useBudgets", () => {
     expect(mockObserveBudgetList).not.toHaveBeenCalled();
   });
 
-  it("applies period filter through the read-model service", async () => {
+  it("applies three filters atomically and resets them to defaults", async () => {
     const { result } = renderHook(() => useBudgets());
 
     act(() => {
@@ -240,16 +243,65 @@ describe("useBudgets", () => {
     });
 
     act(() => {
+      result.current.setScopeFilter("CATEGORY");
       result.current.setPeriodFilter("WEEKLY");
+      result.current.setStatusFilter("PAUSED");
     });
 
     expect(mockBuildBudgetDashboardReadModel).toHaveBeenLastCalledWith(
       expect.objectContaining({
         budgets: budgetMetrics,
-        filter: "WEEKLY",
+        filters: {
+          scope: "CATEGORY",
+          period: "WEEKLY",
+          status: "PAUSED",
+        },
         activeLocale: "en",
       })
     );
+
+    act(() => {
+      result.current.resetFilters();
+    });
+
+    expect(result.current.filters).toEqual({
+      scope: "ALL",
+      period: "ALL",
+      status: "ACTIVE",
+    });
+  });
+
+  it("restores filters for same-user remount and resets on user change", async () => {
+    const first = renderHook(() => useBudgets());
+    act(() => {
+      first.result.current.setScopeFilter("GLOBAL");
+      first.result.current.setPeriodFilter("CUSTOM");
+      first.result.current.setStatusFilter("EXPIRED");
+    });
+    expect(first.result.current.filters).toEqual({
+      scope: "GLOBAL",
+      period: "CUSTOM",
+      status: "EXPIRED",
+    });
+    first.unmount();
+
+    const sameUser = renderHook(() => useBudgets());
+    expect(sameUser.result.current.filters).toEqual({
+      scope: "GLOBAL",
+      period: "CUSTOM",
+      status: "EXPIRED",
+    });
+
+    mockUserId = "user-2";
+    sameUser.rerender(undefined);
+    await waitFor(() => {
+      expect(sameUser.result.current.filters).toEqual({
+        scope: "ALL",
+        period: "ALL",
+        status: "ACTIVE",
+      });
+    });
+    expect(sameUser.result.current.readModel.matchingCount).toBe(0);
   });
 
   it("refreshes budget metrics without replacing the public return shape", async () => {
@@ -290,8 +342,8 @@ describe("useBudgets", () => {
       ).toBeGreaterThan(readModelCallsBeforeRefresh);
       expect(result.current.isRefreshing).toBe(false);
     });
-    expect(result.current).toHaveProperty("overallBudgets");
-    expect(result.current).toHaveProperty("pausedBudgets");
+    expect(result.current).toHaveProperty("budgets");
+    expect(result.current).toHaveProperty("filters");
   });
 
   it("re-subscribes after an observation failure when retry is requested", async () => {

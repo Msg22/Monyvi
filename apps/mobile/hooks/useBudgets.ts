@@ -2,20 +2,31 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Budget } from "@monyvi/db";
 import { useTranslation } from "react-i18next";
 
-import type { PeriodFilter } from "@/components/budget/PeriodFilterChips";
 import {
   useAllCategories,
   useCategoryLookup,
 } from "@/context/CategoriesContext";
 import {
+  type BudgetDashboardItem,
+  type BudgetDashboardFilters,
+  type BudgetDashboardPeriodFilter,
+  type BudgetDashboardReadModel,
+  type BudgetDashboardScopeFilter,
+  type BudgetDashboardStatusFilter,
+} from "@/contracts/budget-dashboard";
+import {
   buildBudgetDashboardReadModel,
   buildBudgetMetrics,
   observeBudgetList,
-  type BudgetDashboardItem,
-  type BudgetDashboardReadModel,
   type BudgetWithMetrics,
 } from "@/services/budget-list-read-model-service";
 import { logger } from "@/utils/logger";
+import {
+  DEFAULT_BUDGET_DASHBOARD_FILTERS,
+  readBudgetDashboardFilterSession,
+  resetBudgetDashboardFilterSession,
+  writeBudgetDashboardFilterSession,
+} from "./budget-dashboard-filter-session";
 import { runUserScopedEffect, useCurrentUser } from "./useCurrentUser";
 
 export type {
@@ -25,10 +36,8 @@ export type {
 } from "@/services/budget-list-read-model-service";
 
 const EMPTY_DASHBOARD_READ_MODEL: BudgetDashboardReadModel = Object.freeze({
-  overallBudgets: Object.freeze([]),
-  needsAttentionBudgets: Object.freeze([]),
-  categoryBudgets: Object.freeze([]),
-  pausedBudgets: Object.freeze([]),
+  filters: DEFAULT_BUDGET_DASHBOARD_FILTERS,
+  items: Object.freeze([]),
   totalCount: 0,
   matchingCount: 0,
 });
@@ -75,10 +84,6 @@ function getNextExpiryDelayMs(
 
 export interface UseBudgetsResult {
   readonly readModel: BudgetDashboardReadModel;
-  readonly overallBudgets: readonly BudgetDashboardItem[];
-  readonly needsAttentionBudgets: readonly BudgetDashboardItem[];
-  readonly categoryBudgets: readonly BudgetDashboardItem[];
-  readonly pausedBudgets: readonly BudgetDashboardItem[];
   readonly budgets: readonly BudgetDashboardItem[];
   readonly totalCount: number;
   readonly matchingCount: number;
@@ -87,8 +92,11 @@ export interface UseBudgetsResult {
   readonly isLoading: boolean;
   readonly errorKey: "dashboard_load_error" | null;
   readonly hasValidData: boolean;
-  readonly periodFilter: PeriodFilter;
-  readonly setPeriodFilter: (filter: PeriodFilter) => void;
+  readonly filters: BudgetDashboardFilters;
+  readonly setScopeFilter: (filter: BudgetDashboardScopeFilter) => void;
+  readonly setPeriodFilter: (filter: BudgetDashboardPeriodFilter) => void;
+  readonly setStatusFilter: (filter: BudgetDashboardStatusFilter) => void;
+  readonly resetFilters: () => void;
   readonly refresh: () => void;
   readonly retry: () => void;
   readonly autoPauseCheckKey: string;
@@ -109,7 +117,9 @@ export function useBudgets(): UseBudgetsResult {
   const [hasValidData, setHasValidData] = useState(false);
   const [isComputing, setIsComputing] = useState(false);
   const [errorKey, setErrorKey] = useState<"dashboard_load_error" | null>(null);
-  const [periodFilter, setPeriodFilterState] = useState<PeriodFilter>("ALL");
+  const [filters, setFilters] = useState<BudgetDashboardFilters>(
+    DEFAULT_BUDGET_DASHBOARD_FILTERS
+  );
   const [refreshCounter, setRefreshCounter] = useState(0);
   const [observationRetryCounter, setObservationRetryCounter] = useState(0);
   const [lifecycleClockRevision, setLifecycleClockRevision] = useState(0);
@@ -134,12 +144,17 @@ export function useBudgets(): UseBudgetsResult {
     return runUserScopedEffect({
       userId,
       isResolvingUser,
-      onResolving: () => clearScopedState(true),
-      onSignedOut: () => clearScopedState(false),
+      onResolving: () => {
+        clearScopedState(true);
+        setFilters(DEFAULT_BUDGET_DASHBOARD_FILTERS);
+      },
+      onSignedOut: () => {
+        clearScopedState(false);
+        setFilters(DEFAULT_BUDGET_DASHBOARD_FILTERS);
+      },
       onAuthenticated: (currentUserId) => {
-        setHasObservedBudgets(false);
-        setIsComputing(true);
-        setErrorKey(null);
+        clearScopedState(true);
+        setFilters(readBudgetDashboardFilterSession(currentUserId));
 
         const subscription = observeBudgetList(currentUserId)
           .observeWithColumns(BUDGET_LIST_OBSERVED_COLUMNS)
@@ -212,7 +227,7 @@ export function useBudgets(): UseBudgetsResult {
       const nextReadModel = buildBudgetDashboardReadModel({
         budgets: computedBudgets.metrics,
         categoryMap,
-        filter: periodFilter,
+        filters,
         now: new Date(),
         activeLocale,
         fallbackName: t("unnamed_budget"),
@@ -235,7 +250,7 @@ export function useBudgets(): UseBudgetsResult {
     computedBudgets,
     isResolvingUser,
     lifecycleClockRevision,
-    periodFilter,
+    filters,
     rawBudgets,
     t,
     userId,
@@ -252,10 +267,37 @@ export function useBudgets(): UseBudgetsResult {
     return () => clearTimeout(timer);
   }, [lifecycleClockRevision, rawBudgets]);
 
-  const setPeriodFilter = useCallback((filter: PeriodFilter): void => {
+  const updateFilters = useCallback(
+    (update: Partial<BudgetDashboardFilters>): void => {
+      if (!userId) return;
+      setIsComputing(true);
+      setFilters((current) =>
+        writeBudgetDashboardFilterSession(userId, { ...current, ...update })
+      );
+    },
+    [userId]
+  );
+
+  const setScopeFilter = useCallback(
+    (scope: BudgetDashboardScopeFilter): void => updateFilters({ scope }),
+    [updateFilters]
+  );
+
+  const setPeriodFilter = useCallback(
+    (period: BudgetDashboardPeriodFilter): void => updateFilters({ period }),
+    [updateFilters]
+  );
+
+  const setStatusFilter = useCallback(
+    (status: BudgetDashboardStatusFilter): void => updateFilters({ status }),
+    [updateFilters]
+  );
+
+  const resetFilters = useCallback((): void => {
+    if (!userId) return;
     setIsComputing(true);
-    setPeriodFilterState(filter);
-  }, []);
+    setFilters(resetBudgetDashboardFilterSession(userId));
+  }, [userId]);
 
   const refresh = useCallback((): void => {
     setIsComputing(true);
@@ -270,17 +312,6 @@ export function useBudgets(): UseBudgetsResult {
     refreshGenerationRef.current += 1;
     setRefreshCounter(refreshGenerationRef.current);
   }, []);
-
-  const allMatchingBudgets = useMemo(
-    () =>
-      Object.freeze([
-        ...readModel.overallBudgets,
-        ...readModel.needsAttentionBudgets,
-        ...readModel.categoryBudgets,
-        ...readModel.pausedBudgets,
-      ]),
-    [readModel]
-  );
 
   const autoPauseCheckKey = useMemo(
     () =>
@@ -307,11 +338,7 @@ export function useBudgets(): UseBudgetsResult {
 
   return {
     readModel,
-    overallBudgets: readModel.overallBudgets,
-    needsAttentionBudgets: readModel.needsAttentionBudgets,
-    categoryBudgets: readModel.categoryBudgets,
-    pausedBudgets: readModel.pausedBudgets,
-    budgets: allMatchingBudgets,
+    budgets: readModel.items,
     totalCount: readModel.totalCount,
     matchingCount: readModel.matchingCount,
     isInitialLoading,
@@ -319,8 +346,11 @@ export function useBudgets(): UseBudgetsResult {
     isLoading: isInitialLoading,
     errorKey,
     hasValidData,
-    periodFilter,
+    filters,
+    setScopeFilter,
     setPeriodFilter,
+    setStatusFilter,
+    resetFilters,
     refresh,
     retry,
     autoPauseCheckKey,

@@ -10,7 +10,7 @@ import { BudgetDashboard } from "@/components/budget/BudgetDashboard";
 import type {
   BudgetDashboardItem,
   BudgetDashboardReadModel,
-} from "@/services/budget-list-read-model-service";
+} from "@/contracts/budget-dashboard";
 
 let mockBottomInset = 0;
 
@@ -25,7 +25,10 @@ jest.mock("react-native-safe-area-context", () => ({
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string): string => key,
+    t: (key: string, options?: { readonly count?: number }): string =>
+      key.startsWith("dashboard_result_count_")
+        ? `${options?.count ?? 0} matching budgets`
+        : key,
   }),
 }));
 
@@ -34,35 +37,43 @@ jest.mock("@expo/vector-icons", () => ({
 }));
 
 jest.mock("@/constants/colors", () => ({
-  palette: {
-    gold: { 600: "#000" },
-    slate: { 400: "#000" },
-  },
+  palette: { gold: { 600: "#000" }, slate: { 400: "#000" } },
 }));
 
 jest.mock("@/components/budget/BudgetDashboardRow", () => ({
   BudgetDashboardRow: ({
     item,
-    variant,
+    position,
   }: {
-    item: BudgetDashboardItem;
-    variant: "attention" | "category" | "paused";
-  }) => (
-    <MockText testID={`dashboard-row-${variant}-${item.id}`}>
-      {item.lifecycle}
-    </MockText>
-  ),
+    readonly item: BudgetDashboardItem;
+    readonly position: string;
+  }) => <MockText testID={`dashboard-row-${item.id}`}>{position}</MockText>,
 }));
 
-jest.mock("@/components/budget/GlobalBudgetCarousel", () => ({
-  GlobalBudgetCarousel: ({
-    budgets,
+jest.mock("@/components/budget/BudgetDashboardFilters", () => ({
+  BudgetDashboardFilters: ({
+    onSelectScope,
+    onSelectPeriod,
+    onSelectStatus,
   }: {
-    budgets: readonly BudgetDashboardItem[];
+    readonly onSelectScope: (value: "CATEGORY") => void;
+    readonly onSelectPeriod: (value: "WEEKLY") => void;
+    readonly onSelectStatus: (value: "PAUSED") => void;
   }) => (
-    <MockText testID="global-budget-carousel">
-      {budgets.map((budget) => budget.id).join(",")}
-    </MockText>
+    <>
+      <MockTouchableOpacity
+        accessibilityLabel="scope-filter"
+        onPress={() => onSelectScope("CATEGORY")}
+      />
+      <MockTouchableOpacity
+        accessibilityLabel="period-filter"
+        onPress={() => onSelectPeriod("WEEKLY")}
+      />
+      <MockTouchableOpacity
+        accessibilityLabel="status-filter"
+        onPress={() => onSelectStatus("PAUSED")}
+      />
+    </>
   ),
 }));
 
@@ -73,7 +84,11 @@ jest.mock("@/components/budget/BudgetDashboardSkeleton", () => ({
 }));
 
 jest.mock("@/components/budget/BudgetEmptyState", () => ({
-  BudgetEmptyState: ({ onCreateBudget }: { onCreateBudget: () => void }) => (
+  BudgetEmptyState: ({
+    onCreateBudget,
+  }: {
+    readonly onCreateBudget: () => void;
+  }) => (
     <MockTouchableOpacity
       accessibilityRole="button"
       accessibilityLabel="create-empty"
@@ -84,31 +99,15 @@ jest.mock("@/components/budget/BudgetEmptyState", () => ({
   ),
 }));
 
-jest.mock("@/components/budget/PeriodFilterChips", () => ({
-  PeriodFilterChips: ({ onSelect }: { onSelect: (filter: "ALL") => void }) => (
-    <MockTouchableOpacity
-      accessibilityRole="button"
-      accessibilityLabel="select-all"
-      onPress={() => onSelect("ALL")}
-    >
-      <MockText>filters</MockText>
-    </MockTouchableOpacity>
-  ),
-}));
-
-function item(
-  id: string,
-  sectionId: BudgetDashboardItem["sectionId"],
-  lifecycle: BudgetDashboardItem["lifecycle"] = "HEALTHY"
-): BudgetDashboardItem {
+function item(id: string): BudgetDashboardItem {
   return {
     id,
     displayName: id,
     period: "MONTHLY",
     currency: "EGP",
-    scope: sectionId === "OVERALL" ? "GLOBAL" : "CATEGORY",
-    lifecycle,
-    sectionId,
+    scope: "CATEGORY",
+    lifecycle: "HEALTHY",
+    showsProgress: true,
     metrics: {
       spent: 0,
       limit: 1000,
@@ -120,12 +119,9 @@ function item(
     daysLeft: 10,
     daysElapsed: 20,
     expiresAt: null,
-    categoryLabel:
-      sectionId === "OVERALL"
-        ? { kind: "not-applicable" }
-        : { kind: "resolved", categoryId: id, name: id },
+    categoryLabel: { kind: "resolved", categoryId: id, name: id },
     categoryIcon: null,
-    availableAction: lifecycle === "PAUSED" ? "RESUME" : null,
+    availableAction: null,
   };
 }
 
@@ -133,10 +129,8 @@ function readModel(
   overrides: Partial<BudgetDashboardReadModel> = {}
 ): BudgetDashboardReadModel {
   return {
-    overallBudgets: [],
-    needsAttentionBudgets: [],
-    categoryBudgets: [],
-    pausedBudgets: [],
+    filters: { scope: "ALL", period: "ALL", status: "ACTIVE" },
+    items: [],
     totalCount: 0,
     matchingCount: 0,
     ...overrides,
@@ -150,13 +144,16 @@ function renderDashboard(
 } {
   const props: React.ComponentProps<typeof BudgetDashboard> = {
     readModel: readModel(),
-    periodFilter: "ALL",
+    filters: { scope: "ALL", period: "ALL", status: "ACTIVE" },
     isInitialLoading: false,
     isRefreshing: false,
     hasValidData: true,
     errorKey: null,
     preferredCurrency: "EGP",
+    onSelectScope: jest.fn(),
     onSelectPeriod: jest.fn(),
+    onSelectStatus: jest.fn(),
+    onResetFilters: jest.fn(),
     onRetry: jest.fn(),
     onCreateBudget: jest.fn(),
     onBudgetPress: jest.fn(),
@@ -172,75 +169,39 @@ describe("BudgetDashboard", () => {
     mockBottomInset = 0;
   });
 
-  it("renders four non-empty sections in approved order", () => {
+  it("renders one grouped virtualized list with stable item order and no old hierarchy", () => {
     const screen = renderDashboard({
       readModel: readModel({
-        overallBudgets: [item("overall", "OVERALL")],
-        needsAttentionBudgets: [
-          item("attention", "NEEDS_ATTENTION", "NEAR_LIMIT"),
-        ],
-        categoryBudgets: [item("category", "CATEGORY")],
-        pausedBudgets: [item("paused", "PAUSED", "PAUSED")],
-        totalCount: 4,
-        matchingCount: 4,
+        items: [item("global"), item("category"), item("paused")],
+        totalCount: 3,
+        matchingCount: 3,
       }),
     });
 
     expect(
-      screen
-        .getAllByTestId(/^budget-section-/)
-        .map((section) => section.props.testID)
+      screen.getAllByTestId(/^dashboard-row-/).map((row) => row.props.testID)
     ).toEqual([
-      "budget-section-overall",
-      "budget-section-needs_attention",
-      "budget-section-category_budgets",
-      "budget-section-paused",
+      "dashboard-row-global",
+      "dashboard-row-category",
+      "dashboard-row-paused",
     ]);
-    expect(screen.getByTestId("global-budget-carousel").props.children).toBe(
-      "overall"
-    );
-    expect(
-      screen.getByTestId("dashboard-row-attention-attention")
-    ).toBeTruthy();
-    expect(screen.getByTestId("dashboard-row-category-category")).toBeTruthy();
-    expect(screen.getByTestId("dashboard-row-paused-paused")).toBeTruthy();
-  });
-
-  it("renders category budgets as full-width compact rows instead of a two-column grid", () => {
-    const screen = renderDashboard({
-      readModel: readModel({
-        categoryBudgets: [
-          item("category-a", "CATEGORY"),
-          item("category-b", "CATEGORY"),
-        ],
-        totalCount: 2,
-        matchingCount: 2,
-      }),
-    });
-
-    expect(
-      screen.getByTestId("dashboard-row-category-category-a")
-    ).toBeTruthy();
-    expect(
-      screen.getByTestId("dashboard-row-category-category-b")
-    ).toBeTruthy();
-    expect(screen.queryByTestId(/dashboard-card-/)).toBeNull();
-  });
-
-  it("omits empty sections and has no summary footer or floating action", () => {
-    const screen = renderDashboard({
-      readModel: readModel({
-        categoryBudgets: [item("category", "CATEGORY")],
-        totalCount: 1,
-        matchingCount: 1,
-      }),
-    });
-
-    expect(screen.queryByTestId("budget-section-overall")).toBeNull();
-    expect(screen.queryByTestId("budget-section-needs_attention")).toBeNull();
-    expect(screen.queryByTestId("budget-section-paused")).toBeNull();
-    expect(screen.queryByTestId("budget-summary-footer")).toBeNull();
+    expect(screen.getByTestId("budget-results-group")).toBeOnTheScreen();
+    expect(screen.getByText("3 matching budgets")).toBeOnTheScreen();
+    expect(screen.queryByTestId(/^budget-section-/)).toBeNull();
+    expect(screen.queryByTestId("global-budget-carousel")).toBeNull();
     expect(screen.queryByTestId("budget-create-fab")).toBeNull();
+    expect(screen.queryByTestId("budget-summary-footer")).toBeNull();
+  });
+
+  it("connects all filter controls", () => {
+    const screen = renderDashboard();
+    fireEvent.press(screen.getByLabelText("scope-filter"));
+    fireEvent.press(screen.getByLabelText("period-filter"));
+    fireEvent.press(screen.getByLabelText("status-filter"));
+
+    expect(screen.props.onSelectScope).toHaveBeenCalledWith("CATEGORY");
+    expect(screen.props.onSelectPeriod).toHaveBeenCalledWith("WEEKLY");
+    expect(screen.props.onSelectStatus).toHaveBeenCalledWith("PAUSED");
   });
 
   it("uses a layout-matching Skeleton for initial loading", () => {
@@ -248,34 +209,30 @@ describe("BudgetDashboard", () => {
       isInitialLoading: true,
       hasValidData: false,
     });
-
-    expect(screen.getByTestId("budget-dashboard-skeleton")).toBeTruthy();
+    expect(screen.getByTestId("budget-dashboard-skeleton")).toBeOnTheScreen();
     expect(screen.queryByTestId("activity-indicator")).toBeNull();
   });
 
-  it("distinguishes no-budget, filtered-empty, and recoverable error states", () => {
+  it("distinguishes no-budget, filtered-empty, and retained-data errors", () => {
     const create = jest.fn();
     const noBudgets = renderDashboard({ onCreateBudget: create });
     fireEvent.press(noBudgets.getByRole("button", { name: "create-empty" }));
     expect(create).toHaveBeenCalledTimes(1);
     noBudgets.unmount();
 
-    const selectPeriod = jest.fn();
+    const reset = jest.fn();
     const filtered = renderDashboard({
       readModel: readModel({ totalCount: 2, matchingCount: 0 }),
-      periodFilter: "CUSTOM",
-      onSelectPeriod: selectPeriod,
+      filters: { scope: "GLOBAL", period: "CUSTOM", status: "EXPIRED" },
+      onResetFilters: reset,
     });
-    expect(
-      filtered.getByTestId("budget-dashboard-filtered-empty")
-    ).toBeTruthy();
-    fireEvent.press(filtered.getByRole("button", { name: "filter_all" }));
-    expect(selectPeriod).toHaveBeenCalledWith("ALL");
+    fireEvent.press(filtered.getByRole("button", { name: "reset_filters" }));
+    expect(reset).toHaveBeenCalledTimes(1);
     filtered.unmount();
 
     const recoverable = renderDashboard({
       readModel: readModel({
-        categoryBudgets: [item("category", "CATEGORY")],
+        items: [item("kept")],
         totalCount: 1,
         matchingCount: 1,
       }),
@@ -284,18 +241,18 @@ describe("BudgetDashboard", () => {
     });
     expect(
       recoverable.getByTestId("budget-dashboard-recoverable-error")
-    ).toBeTruthy();
+    ).toBeOnTheScreen();
+    expect(recoverable.getByTestId("dashboard-row-kept")).toBeOnTheScreen();
   });
 
-  it("shows recovery instead of a false empty state when the initial load fails", () => {
+  it("shows recovery instead of false empty data after initial failure", () => {
     const screen = renderDashboard({
       errorKey: "dashboard_load_error",
       hasValidData: false,
     });
-
-    expect(screen.getByTestId("budget-dashboard-initial-error")).toBeTruthy();
-    expect(screen.getByText("dashboard_initial_load_error")).toBeTruthy();
-    expect(screen.queryByText("dashboard_load_error")).toBeNull();
+    expect(
+      screen.getByTestId("budget-dashboard-initial-error")
+    ).toBeOnTheScreen();
     expect(screen.queryByRole("button", { name: "create-empty" })).toBeNull();
   });
 
@@ -304,11 +261,10 @@ describe("BudgetDashboard", () => {
     { bottomInset: 16, expectedPadding: 40 },
     { bottomInset: 48, expectedPadding: 72 },
   ])(
-    "owns the $bottomInset bottom inset exactly once",
+    "owns the $bottomInset bottom inset once",
     ({ bottomInset, expectedPadding }) => {
       mockBottomInset = bottomInset;
       const screen = renderDashboard();
-
       expect(
         screen.getByTestId("budget-dashboard-list").props.contentContainerStyle
       ).toEqual(expect.objectContaining({ paddingBottom: expectedPadding }));

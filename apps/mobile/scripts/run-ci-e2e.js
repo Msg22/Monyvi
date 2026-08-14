@@ -51,15 +51,11 @@ const recurringPaymentMaestroFlows = [
 const smsSyncMaestroFlows = ["sms-sync/sms-sync-permission-requestable.yaml"];
 const budgetMaestroFlows = [
   {
-    flow: "budgets/dashboard-visibility-filters.yaml",
+    flow: "budgets/dashboard-filtering.yaml",
     profile: "dashboard-filter-empty",
   },
   {
     flow: "budgets/dashboard-lifecycle-actions.yaml",
-    profile: "dashboard-full",
-  },
-  {
-    flow: "budgets/dashboard-carousel.yaml",
     profile: "dashboard-full",
   },
 ];

@@ -121,13 +121,16 @@ export default function BudgetsScreen(): React.JSX.Element {
 
       <BudgetDashboard
         readModel={budgets.readModel}
-        periodFilter={budgets.periodFilter}
+        filters={budgets.filters}
         isInitialLoading={budgets.isInitialLoading}
         isRefreshing={budgets.isRefreshing}
         hasValidData={budgets.hasValidData}
         errorKey={budgets.errorKey}
         preferredCurrency={preferredCurrency}
+        onSelectScope={budgets.setScopeFilter}
         onSelectPeriod={budgets.setPeriodFilter}
+        onSelectStatus={budgets.setStatusFilter}
+        onResetFilters={budgets.resetFilters}
         onRetry={budgets.retry}
         onCreateBudget={handleCreateBudget}
         onBudgetPress={handleBudgetPress}

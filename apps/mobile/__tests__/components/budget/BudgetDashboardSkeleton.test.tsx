@@ -26,42 +26,25 @@ jest.mock("@/components/ui/Skeleton", () => ({
 import { BudgetDashboardSkeleton } from "@/components/budget/BudgetDashboardSkeleton";
 
 describe("BudgetDashboardSkeleton", () => {
-  it("matches the dashboard filters, overall carousel, and compact grouped rows", () => {
+  it("matches scope tabs, two filter cards, result count, and compact rows", () => {
     render(<BudgetDashboardSkeleton />);
 
-    expect(screen.getByTestId("budget-filter-skeleton-shell")).toHaveProp(
-      "className",
-      expect.stringContaining("-mx-5")
-    );
     expect(
-      within(screen.getByTestId("budget-filter-skeletons")).getAllByTestId(
+      screen.getByTestId("budget-filter-skeleton-shell")
+    ).toBeOnTheScreen();
+    expect(
+      within(screen.getByTestId("budget-scope-tab-skeletons")).getAllByTestId(
         "skeleton-block"
       )
-    ).toHaveLength(4);
+    ).toHaveLength(3);
 
     expect(
-      screen.getByTestId("budget-overall-heading-skeleton")
-    ).toBeOnTheScreen();
-    expect(screen.getByTestId("budget-global-card-skeleton")).toHaveProp(
-      "className",
-      expect.stringContaining("h-64")
-    );
+      within(screen.getByTestId("budget-filter-card-skeletons")).getAllByTestId(
+        "skeleton-block"
+      )
+    ).toHaveLength(8);
     expect(
-      within(
-        screen.getByTestId("budget-global-card-title-skeleton")
-      ).getAllByTestId("skeleton-block")
-    ).toHaveLength(4);
-    expect(
-      screen.getByTestId("budget-global-card-progress-skeleton")
-    ).toBeOnTheScreen();
-    expect(
-      within(
-        screen.getByTestId("budget-carousel-dot-skeletons")
-      ).getAllByTestId("skeleton-block")
-    ).toHaveLength(2);
-
-    expect(
-      screen.getByTestId("budget-attention-heading-skeleton")
+      screen.getByTestId("budget-result-count-skeleton")
     ).toBeOnTheScreen();
     expect(screen.getAllByTestId(/^budget-row-skeleton-\d+$/)).toHaveLength(3);
     expect(screen.getByTestId("budget-row-skeleton-group")).not.toHaveProp(
@@ -82,5 +65,8 @@ describe("BudgetDashboardSkeleton", () => {
         screen.getByTestId(`budget-row-chevron-skeleton-${index}`)
       ).toBeOnTheScreen();
     }
+    expect(screen.queryByTestId("budget-global-card-skeleton")).toBeNull();
+    expect(screen.queryByTestId("budget-carousel-dot-skeletons")).toBeNull();
+    expect(screen.queryByTestId("activity-indicator")).toBeNull();
   });
 });

@@ -80,6 +80,8 @@ import {
   buildBudgetDashboardReadModel,
   buildBudgetMetrics,
   observeBudgetList,
+  type BudgetDashboardFilters,
+  type BudgetDashboardReadModel,
   type BudgetWithMetrics,
 } from "@/services/budget-list-read-model-service";
 
@@ -310,23 +312,17 @@ describe("budget-list-read-model-service", () => {
     expect(mockGetSpendingForBudget).toHaveBeenCalledWith(expiredCustomBudget);
   });
 
-  it("shapes immutable dashboard cards from scoped metrics and accessible categories", () => {
-    const globalBudget = {
-      ...createBudget("global", { type: "GLOBAL" }),
-      name: "Overall",
-      currency: "EGP",
-    } as Budget;
-    const categoryBudget = {
-      ...createBudget("category"),
-      name: "Food",
-      categoryId: "food",
-      currency: "EGP",
-    } as Budget;
-    const result = buildBudgetDashboardReadModel({
-      budgets: [
-        createBudgetMetric(globalBudget),
-        createBudgetMetric(categoryBudget),
-      ],
+  function buildReadModel(
+    budgets: readonly BudgetWithMetrics[],
+    filters: BudgetDashboardFilters = {
+      scope: "ALL",
+      period: "ALL",
+      status: "ALL",
+    },
+    activeLocale: "en" | "ar" = "en"
+  ): BudgetDashboardReadModel {
+    return buildBudgetDashboardReadModel({
+      budgets,
       categoryMap: new Map([
         [
           "food",
@@ -339,125 +335,100 @@ describe("budget-list-read-model-service", () => {
           },
         ],
       ]),
-      filter: "ALL",
+      filters,
       now: new Date("2026-05-15T00:00:00.000Z"),
-      activeLocale: "en",
+      activeLocale,
       fallbackName: "Unnamed budget",
     });
+  }
 
-    expect(result.overallBudgets[0]).toMatchObject({
-      id: "global",
-      displayName: "Overall",
-      period: "MONTHLY",
+  function namedMetric(
+    id: string,
+    name: string,
+    overrides: Parameters<typeof createBudget>[1] = {},
+    metricStatus: "safe" | "warning" | "danger" = "safe"
+  ): BudgetWithMetrics {
+    const budget = {
+      ...createBudget(id, overrides),
+      name,
+      categoryId: overrides.type === "GLOBAL" ? null : id,
       currency: "EGP",
-      categoryLabel: { kind: "not-applicable" },
-      lifecycle: "HEALTHY",
-      sectionId: "OVERALL",
-      metrics: expect.objectContaining({
-        spent: 250,
-        limit: 1000,
-        percentage: 25,
-        remaining: 750,
-      }),
-      daysLeft: 16,
-    });
-    expect(result.categoryBudgets[0]).toMatchObject({
-      id: "category",
-      categoryLabel: {
-        kind: "resolved",
-        categoryId: "food",
-        name: "Food & Drinks",
+    } as Budget;
+    const base = createBudgetMetric(budget);
+    return {
+      ...base,
+      metrics: {
+        ...base.metrics,
+        spent:
+          metricStatus === "safe" ? 0 : metricStatus === "warning" ? 850 : 1200,
+        percentage:
+          metricStatus === "safe" ? 0 : metricStatus === "warning" ? 85 : 120,
+        status: metricStatus,
       },
-      categoryIcon: {
-        iconName: "restaurant-outline",
-        iconLibrary: "Ionicons",
-        iconColor: "#10B981",
-      },
-      lifecycle: "HEALTHY",
-      sectionId: "CATEGORY",
-    });
-    expect(Object.isFrozen(result)).toBe(true);
-    expect(Object.isFrozen(result.overallBudgets)).toBe(true);
-    expect(Object.isFrozen(result.overallBudgets[0])).toBe(true);
-  });
+    };
+  }
 
-  it.each(["en", "ar"] as const)(
-    "emits display-ready dashboard DTOs for the %s locale without exposing models",
-    (activeLocale) => {
-      const globalBudget = {
-        ...createBudget("global", { type: "GLOBAL" }),
-        name: "  Overall  ",
-        currency: "EGP",
-      } as Budget;
-      const originalMetric = createBudgetMetric(globalBudget);
-
-      const result = buildBudgetDashboardReadModel({
-        budgets: [originalMetric],
-        categoryMap: new Map(),
-        filter: "ALL",
-        now: new Date("2026-05-15T00:00:00.000Z"),
-        activeLocale,
-        fallbackName: "Unnamed budget",
-      });
-
-      expect(result.overallBudgets[0]).toEqual({
-        id: "global",
-        displayName: "Overall",
-        period: "MONTHLY",
-        currency: "EGP",
-        scope: "GLOBAL",
-        lifecycle: "HEALTHY",
-        sectionId: "OVERALL",
-        metrics: originalMetric.metrics,
-        daysLeft: 16,
-        daysElapsed: 15,
-        expiresAt: null,
-        categoryLabel: { kind: "not-applicable" },
-        categoryIcon: null,
-        availableAction: null,
-      });
-      expect(result.overallBudgets[0]).not.toHaveProperty("budget");
-      expect(originalMetric.budget).toBe(globalBudget);
-      expect(originalMetric.metrics.spent).toBe(250);
-    }
-  );
-
-  it("retains expired custom budgets and shapes deleted category history", () => {
-    const expiredBudget = {
-      ...createBudget("expired", {
+  it("returns immutable unified items with expiry-first state and progress visibility", () => {
+    const expiredPaused = namedMetric(
+      "expired",
+      "Expired",
+      {
         period: "CUSTOM",
         status: "PAUSED",
         periodEnd: new Date("2026-05-01T00:00:00.000Z"),
-      }),
-      name: "Historic Education",
-      categoryId: "deleted-category",
-      currency: "EGP",
-    } as Budget;
-
-    const result = buildBudgetDashboardReadModel({
-      budgets: [createBudgetMetric(expiredBudget)],
-      categoryMap: new Map(),
-      filter: "ALL",
-      now: new Date("2026-05-15T00:00:00.000Z"),
-      activeLocale: "en",
-      fallbackName: "Unnamed budget",
-    });
-
-    expect(result.needsAttentionBudgets[0]).toMatchObject({
-      id: "expired",
-      lifecycle: "EXPIRED",
-      sectionId: "NEEDS_ATTENTION",
-      expiresAt: expiredBudget.periodEnd,
-      categoryLabel: {
-        kind: "deleted",
-        categoryId: "deleted-category",
       },
-      availableAction: "RENEW",
+      "danger"
+    );
+    const paused = namedMetric(
+      "paused",
+      "Paused",
+      { status: "PAUSED" },
+      "danger"
+    );
+    const active = namedMetric("active", "Active", {}, "warning");
+
+    const result = buildReadModel([active, paused, expiredPaused]);
+
+    expect(
+      result.items.map(({ id, lifecycle, showsProgress }) => ({
+        id,
+        lifecycle,
+        showsProgress,
+      }))
+    ).toEqual([
+      { id: "expired", lifecycle: "EXPIRED", showsProgress: false },
+      { id: "active", lifecycle: "NEAR_LIMIT", showsProgress: true },
+      { id: "paused", lifecycle: "PAUSED", showsProgress: false },
+    ]);
+    expect(result.filters).toEqual({
+      scope: "ALL",
+      period: "ALL",
+      status: "ALL",
     });
-    expect(result.pausedBudgets).toEqual([]);
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result.items)).toBe(true);
+    expect(Object.isFrozen(result.items[0])).toBe(true);
   });
 
-  it("falls back after trimming a whitespace-only persisted name", () => {
+  it("shapes display-only DTOs and deleted-category history without exposing models", () => {
+    const global = namedMetric("global", "  Overall  ", { type: "GLOBAL" });
+    const deleted = namedMetric("deleted", "Historic Education");
+
+    const result = buildReadModel([global, deleted]);
+
+    expect(result.items.find((item) => item.id === "global")).toMatchObject({
+      displayName: "Overall",
+      scope: "GLOBAL",
+      categoryLabel: { kind: "not-applicable" },
+      availableAction: null,
+    });
+    expect(result.items.find((item) => item.id === "deleted")).toMatchObject({
+      categoryLabel: { kind: "deleted", categoryId: "deleted" },
+    });
+    expect(result.items[0]).not.toHaveProperty("budget");
+  });
+
+  it("falls back from blank persisted names to category then generic name", () => {
     const categoryBudget = {
       ...createBudget("blank-category"),
       name: "   ",
@@ -468,159 +439,123 @@ describe("budget-list-read-model-service", () => {
       name: "\t ",
     } as Budget;
 
-    const result = buildBudgetDashboardReadModel({
-      budgets: [
-        createBudgetMetric(categoryBudget),
-        createBudgetMetric(globalBudget),
-      ],
-      categoryMap: new Map([["food", { displayName: "Food & Drinks" }]]),
-      filter: "ALL",
-      now: new Date("2026-05-15T00:00:00.000Z"),
-      activeLocale: "en",
-      fallbackName: "Unnamed budget",
-    });
+    const result = buildReadModel([
+      createBudgetMetric(categoryBudget),
+      createBudgetMetric(globalBudget),
+    ]);
 
-    expect(result.categoryBudgets[0]?.displayName).toBe("Food & Drinks");
-    expect(result.overallBudgets[0]?.displayName).toBe("Unnamed budget");
+    expect(
+      result.items.find((item) => item.id === "blank-category")?.displayName
+    ).toBe("Food & Drinks");
+    expect(
+      result.items.find((item) => item.id === "blank-global")?.displayName
+    ).toBe("Unnamed budget");
   });
 
-  it("retains every global budget exactly once with expiry taking precedence", () => {
-    const healthy = {
-      ...createBudget("healthy", { type: "GLOBAL" }),
-      name: "Healthy",
-      currency: "EGP",
-    } as Budget;
-    const warning = {
-      ...createBudget("warning", { type: "GLOBAL" }),
-      name: "Warning",
-      currency: "EGP",
-    } as Budget;
-    const paused = {
-      ...createBudget("paused", { type: "GLOBAL", status: "PAUSED" }),
-      name: "Paused",
-      currency: "EGP",
-    } as Budget;
-    const expiredPaused = {
-      ...createBudget("expired-paused", {
-        type: "GLOBAL",
+  it("orders every match exactly once by lifecycle priority, name, then ID", () => {
+    const input = [
+      namedMetric("healthy", "Zulu"),
+      namedMetric("warning-b", "beta", {}, "warning"),
+      namedMetric("warning-a", "Beta", {}, "warning"),
+      namedMetric("danger", "Alpha", {}, "danger"),
+      namedMetric("paused", "Paused", { status: "PAUSED" }),
+      namedMetric("expired", "Expired", {
         period: "CUSTOM",
-        status: "PAUSED",
         periodEnd: new Date("2026-05-01T00:00:00.000Z"),
       }),
-      name: "Expired",
-      currency: "EGP",
-    } as Budget;
-    const warningMetric = {
-      ...createBudgetMetric(warning),
-      metrics: {
-        ...createBudgetMetric(warning).metrics,
-        percentage: 85,
-        status: "warning" as const,
-      },
-    };
+    ];
 
-    const result = buildBudgetDashboardReadModel({
-      budgets: [
-        createBudgetMetric(healthy),
-        warningMetric,
-        createBudgetMetric(paused),
-        createBudgetMetric(expiredPaused),
-      ],
-      categoryMap: new Map(),
-      filter: "ALL",
-      now: new Date("2026-05-15T00:00:00.000Z"),
-      activeLocale: "en",
-      fallbackName: "Unnamed budget",
-    });
-    const allIds = [
-      ...result.overallBudgets,
-      ...result.needsAttentionBudgets,
-      ...result.categoryBudgets,
-      ...result.pausedBudgets,
-    ].map((item) => item.id);
+    const result = buildReadModel(input);
 
-    expect(result.overallBudgets.map((item) => item.id)).toEqual(["healthy"]);
-    expect(result.needsAttentionBudgets.map((item) => item.id)).toEqual([
-      "expired-paused",
-      "warning",
+    expect(result.items.map((item) => item.id)).toEqual([
+      "expired",
+      "danger",
+      "warning-a",
+      "warning-b",
+      "paused",
+      "healthy",
     ]);
-    expect(result.pausedBudgets.map((item) => item.id)).toEqual(["paused"]);
-    expect(allIds).toHaveLength(4);
-    expect(new Set(allIds).size).toBe(4);
+    expect(new Set(result.items.map((item) => item.id)).size).toBe(
+      input.length
+    );
+    expect(result.totalCount).toBe(input.length);
+    expect(result.matchingCount).toBe(input.length);
   });
 
   it.each(["en", "ar"] as const)(
-    "sorts trimmed display names for %s and uses ID as the final tie-break",
+    "uses %s collation and stable ID tie-break without mutating input",
     (activeLocale) => {
-      const makeNamedMetric = (id: string, name: string): BudgetWithMetrics =>
-        createBudgetMetric({
-          ...createBudget(id),
-          name,
-          categoryId: id,
-          currency: "EGP",
-        } as Budget);
       const input = [
-        makeNamedMetric("z-id", "Budget 10"),
-        makeNamedMetric("b-id", " budget 2 "),
-        makeNamedMetric("a-id", "BUDGET 2"),
+        namedMetric("z-id", "Budget 10"),
+        namedMetric("b-id", " budget 2 "),
+        namedMetric("a-id", "BUDGET 2"),
       ];
+      const snapshot = input.map((item) => ({
+        id: item.budget.id,
+        spent: item.metrics.spent,
+      }));
 
-      const result = buildBudgetDashboardReadModel({
-        budgets: input,
-        categoryMap: new Map(
-          input.map((item) => [
-            item.budget.id,
-            { displayName: item.budget.name },
-          ])
-        ),
-        filter: "ALL",
-        now: new Date("2026-05-15T00:00:00.000Z"),
-        activeLocale,
-        fallbackName: "Unnamed budget",
-      });
+      const result = buildReadModel(
+        input,
+        { scope: "ALL", period: "ALL", status: "ALL" },
+        activeLocale
+      );
 
-      expect(result.categoryBudgets.map((item) => item.id)).toEqual([
+      expect(result.items.map((item) => item.id)).toEqual([
         "a-id",
         "b-id",
         "z-id",
       ]);
+      expect(
+        input.map((item) => ({ id: item.budget.id, spent: item.metrics.spent }))
+      ).toEqual(snapshot);
     }
   );
 
-  it("filters every lifecycle section before exclusive classification", () => {
-    const weeklyHealthy = {
-      ...createBudget("weekly-healthy", { period: "WEEKLY" }),
-      name: "Weekly healthy",
-      categoryId: "weekly-healthy",
-      currency: "EGP",
-    } as Budget;
-    const monthlyPaused = {
-      ...createBudget("monthly-paused", { status: "PAUSED" }),
-      name: "Monthly paused",
-      categoryId: "monthly-paused",
-      currency: "EGP",
-    } as Budget;
+  it("applies all 48 scope, period, and status combinations with AND semantics", () => {
+    const expiredEnd = new Date("2026-05-01T00:00:00.000Z");
+    const input = [
+      namedMetric("global-weekly-active", "A", {
+        type: "GLOBAL",
+        period: "WEEKLY",
+      }),
+      namedMetric("category-monthly-paused", "B", { status: "PAUSED" }),
+      namedMetric("category-custom-expired", "C", {
+        period: "CUSTOM",
+        periodEnd: expiredEnd,
+      }),
+      namedMetric("category-monthly-active", "D"),
+    ];
+    const scopes = ["ALL", "CATEGORY", "GLOBAL"] as const;
+    const periods = ["ALL", "WEEKLY", "MONTHLY", "CUSTOM"] as const;
+    const statuses = ["ALL", "ACTIVE", "PAUSED", "EXPIRED"] as const;
 
-    const result = buildBudgetDashboardReadModel({
-      budgets: [
-        createBudgetMetric(weeklyHealthy),
-        createBudgetMetric(monthlyPaused),
-      ],
-      categoryMap: new Map([
-        ["weekly-healthy", { displayName: "Weekly healthy" }],
-        ["monthly-paused", { displayName: "Monthly paused" }],
-      ]),
-      filter: "WEEKLY",
-      now: new Date("2026-05-15T00:00:00.000Z"),
-      activeLocale: "en",
-      fallbackName: "Unnamed budget",
-    });
+    for (const scope of scopes) {
+      for (const period of periods) {
+        for (const status of statuses) {
+          const result = buildReadModel(input, { scope, period, status });
+          const expected = input.filter(({ budget }) => {
+            const isExpired =
+              budget.period === "CUSTOM" &&
+              budget.periodEnd?.getTime() === expiredEnd.getTime();
+            const lifecycleStatus = isExpired
+              ? "EXPIRED"
+              : budget.status === "PAUSED"
+                ? "PAUSED"
+                : "ACTIVE";
+            return (
+              (scope === "ALL" || budget.type === scope) &&
+              (period === "ALL" || budget.period === period) &&
+              (status === "ALL" || lifecycleStatus === status)
+            );
+          });
 
-    expect(result.categoryBudgets.map((item) => item.id)).toEqual([
-      "weekly-healthy",
-    ]);
-    expect(result.pausedBudgets).toEqual([]);
-    expect(result.totalCount).toBe(2);
-    expect(result.matchingCount).toBe(1);
+          expect(result.items.map((item) => item.id).sort()).toEqual(
+            expected.map(({ budget }) => budget.id).sort()
+          );
+          expect(result.matchingCount).toBe(expected.length);
+        }
+      }
+    }
   });
 });
