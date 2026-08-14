@@ -54,6 +54,23 @@ describe("buildBudgetRenewalFormValues", () => {
     expect(values.periodEnd).toEqual(new Date("2026-08-15T08:00:00.000Z"));
   });
 
+  it("preserves custom calendar-day duration when elapsed hours cross a DST boundary", () => {
+    const now = new Date("2026-08-14T08:00:00.000Z");
+    const source: BudgetRenewalSource = {
+      name: "DST custom",
+      type: "GLOBAL",
+      amount: 5000,
+      period: "CUSTOM",
+      periodStart: new Date("2026-03-01T08:00:00.000Z"),
+      periodEnd: new Date("2026-03-03T07:00:00.000Z"),
+      alertThreshold: 80,
+    };
+
+    const values = buildBudgetRenewalFormValues(source, now);
+
+    expect(values.periodEnd).toEqual(new Date("2026-08-16T08:00:00.000Z"));
+  });
+
   it("clears a renewal category that is no longer accessible", () => {
     const now = new Date("2026-08-14T08:00:00.000Z");
     const source: BudgetRenewalSource = {

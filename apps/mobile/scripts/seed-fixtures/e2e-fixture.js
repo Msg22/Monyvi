@@ -42,7 +42,47 @@ function buildDashboardFullRows({
   seedScope,
   userId,
 }) {
+  const overBudgetCategoryId = deterministicUuid(
+    seedScope,
+    userId,
+    "category:over-budget"
+  );
+  const zeroSpendCategoryId = deterministicUuid(
+    seedScope,
+    userId,
+    "category:zero-spend"
+  );
+  const deletedCategoryId = deterministicUuid(
+    seedScope,
+    userId,
+    "category:deleted-history"
+  );
+
   return {
+    categories: [
+      createBudgetCategory({
+        id: overBudgetCategoryId,
+        name: "E2E Over Budget",
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createBudgetCategory({
+        id: zeroSpendCategoryId,
+        name: "E2E Zero Spend",
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createBudgetCategory({
+        id: deletedCategoryId,
+        name: "Deleted Category",
+        deleted: true,
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+    ],
     budgets: [
       createGlobalBudget({
         id: deterministicUuid(seedScope, userId, "budget:weekly"),
@@ -119,10 +159,53 @@ function buildDashboardFullRows({
         fixedNow,
         userId,
       }),
+      createCategoryBudget({
+        id: deterministicUuid(seedScope, userId, "budget:over-budget"),
+        name: "E2E Over Budget Category",
+        categoryId: overBudgetCategoryId,
+        amount: 1000,
+        period: "MONTHLY",
+        periodStart: dateFromToday(-7),
+        periodEnd: dateFromToday(23),
+        status: "ACTIVE",
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createCategoryBudget({
+        id: deterministicUuid(seedScope, userId, "budget:zero-spend"),
+        name: "E2E Zero Spend Category",
+        categoryId: zeroSpendCategoryId,
+        amount: 5000,
+        period: "CUSTOM",
+        periodStart: dateFromToday(-14),
+        periodEnd: dateFromToday(14),
+        status: "ACTIVE",
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createCategoryBudget({
+        id: deterministicUuid(seedScope, userId, "budget:deleted-history"),
+        name: "E2E Historical Deleted Category Budget With A Very Long Name",
+        categoryId: deletedCategoryId,
+        amount: 9876543,
+        period: "WEEKLY",
+        periodStart: dateFromToday(-2),
+        periodEnd: dateFromToday(5),
+        status: "ACTIVE",
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
     ],
     transactions: [
       {
-        id: deterministicUuid(seedScope, userId, "transaction:near-limit-other"),
+        id: deterministicUuid(
+          seedScope,
+          userId,
+          "transaction:near-limit-other"
+        ),
         user_id: userId,
         account_id: seedIds.accounts.cash,
         amount: 8500,
@@ -138,6 +221,23 @@ function buildDashboardFullRows({
         created_at: fixedNow,
         updated_at: currentTimestamp,
       },
+      {
+        id: deterministicUuid(seedScope, userId, "transaction:over-budget"),
+        user_id: userId,
+        account_id: seedIds.accounts.cash,
+        amount: 2000,
+        currency: "EGP",
+        type: "EXPENSE",
+        category_id: overBudgetCategoryId,
+        counterparty: "E2E Budget Overrun",
+        note: "Seeded over-budget state",
+        date: dateFromToday(0),
+        source: "MANUAL",
+        is_draft: false,
+        deleted: false,
+        created_at: fixedNow,
+        updated_at: currentTimestamp,
+      },
     ],
   };
 }
@@ -146,6 +246,7 @@ function createCategoryBudget({
   id,
   name,
   categoryId,
+  amount = 10000,
   period = "MONTHLY",
   periodStart,
   periodEnd,
@@ -165,11 +266,42 @@ function createCategoryBudget({
       fixedNow,
       userId,
     }),
-    amount: 10000,
+    amount,
     category_id: categoryId,
     status,
     type: "CATEGORY",
     paused_at: status === "PAUSED" ? currentTimestamp : null,
+  };
+}
+
+function createBudgetCategory({
+  id,
+  name,
+  deleted = false,
+  currentTimestamp,
+  fixedNow,
+  userId,
+}) {
+  return {
+    id,
+    user_id: userId,
+    system_name: null,
+    display_name: name,
+    type: "EXPENSE",
+    icon: "wallet-outline",
+    icon_library: "Ionicons",
+    color: null,
+    is_system: false,
+    level: 1,
+    parent_id: null,
+    sort_order: 900,
+    is_hidden: deleted,
+    is_internal: false,
+    nature: "WANT",
+    usage_count: 0,
+    deleted,
+    created_at: fixedNow,
+    updated_at: currentTimestamp,
   };
 }
 

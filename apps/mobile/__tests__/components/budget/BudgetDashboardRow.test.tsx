@@ -34,6 +34,7 @@ const BASE_PRESENTATION: BudgetDashboardItem["presentation"] = {
   deletedCategoryLabel: null,
   expiryLabel: null,
   actionLabel: null,
+  actionAccessibilityLabel: null,
   accessibilityLabel:
     "Food & Drinks, Monthly, Category, 1,750 EGP of 5,000 EGP, 35%, safe_to_spend",
   viewBudgetLabel: "View Budget: Food & Drinks",
@@ -120,6 +121,7 @@ describe("BudgetDashboardRow", () => {
             progressWidth: null,
             statusLabel: "Paused",
             actionLabel: "Resume",
+            actionAccessibilityLabel: "Resume: Food & Drinks",
             accessibilityLabel:
               "Food & Drinks, Monthly, Category, 1,750 EGP of 5,000 EGP, Paused",
           },
@@ -138,7 +140,13 @@ describe("BudgetDashboardRow", () => {
     expect(
       screen.getByRole("button", { name: /Food & Drinks, Monthly, Category/ })
     ).not.toHaveProp("accessibilityLabel", expect.stringContaining("35%"));
-    fireEvent.press(screen.getByRole("button", { name: "Resume" }));
+    expect(screen.getByTestId("budget-action-resume-budget-1")).toHaveProp(
+      "accessibilityLabel",
+      "Resume: Food & Drinks"
+    );
+    fireEvent.press(screen.getByTestId("budget-action-resume-budget-1"), {
+      stopPropagation: jest.fn(),
+    });
     expect(onResume).toHaveBeenCalledWith("budget-1");
 
     const onRenew = jest.fn();
@@ -156,6 +164,7 @@ describe("BudgetDashboardRow", () => {
             statusLabel: "Expired",
             expiryLabel: "Expired Aug 12",
             actionLabel: "Renew",
+            actionAccessibilityLabel: "Renew: Food & Drinks",
             accessibilityLabel:
               "Food & Drinks, Monthly, Category, 1,750 EGP of 5,000 EGP, Expired",
           },
@@ -169,7 +178,13 @@ describe("BudgetDashboardRow", () => {
     expect(
       screen.getByTestId("budget-action-renew-budget-1")
     ).toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "Renew" }));
+    expect(screen.getByTestId("budget-action-renew-budget-1")).toHaveProp(
+      "accessibilityLabel",
+      "Renew: Food & Drinks"
+    );
+    fireEvent.press(screen.getByTestId("budget-action-renew-budget-1"), {
+      stopPropagation: jest.fn(),
+    });
     expect(onRenew).toHaveBeenCalledWith("budget-1");
     expect(screen.getByText(/Expired.*Aug 12/)).toBeOnTheScreen();
     expect(screen.queryByTestId("budget-row-progress-budget-1")).toBeNull();
@@ -241,6 +256,7 @@ describe("BudgetDashboardRow", () => {
             progressWidth: null,
             statusLabel: "Paused",
             actionLabel: "Resume",
+            actionAccessibilityLabel: "Resume: Food & Drinks",
           },
         })}
         position="only"
@@ -253,6 +269,19 @@ describe("BudgetDashboardRow", () => {
       screen.getByRole("button", { name: /Food & Drinks, Monthly/ })
     );
     expect(onPress).toHaveBeenCalledWith("budget-1");
+  });
+
+  it("opens detail from active-row metrics and progress without dead tap zones", () => {
+    const onPress = jest.fn();
+    render(
+      <BudgetDashboardRow item={item()} position="only" onPress={onPress} />
+    );
+
+    fireEvent.press(screen.getByTestId("budget-row-percentage-budget-1"));
+    fireEvent.press(screen.getByTestId("budget-row-progress-budget-1"));
+
+    expect(onPress).toHaveBeenNthCalledWith(1, "budget-1");
+    expect(onPress).toHaveBeenNthCalledWith(2, "budget-1");
   });
 
   it("announces deleted-category history in the row label", () => {

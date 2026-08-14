@@ -94,8 +94,12 @@ export function BudgetForm({
   const isEditMode = !!existingBudget;
   const { isDark } = useTheme();
   const { t } = useTranslation("budgets");
-  const { expenseCategories, isLoading: areCategoriesLoading } =
-    useCategories();
+  const {
+    expenseCategories,
+    isLoading: areCategoriesLoading,
+    error: categoryError,
+    retry: retryCategories,
+  } = useCategories();
   const categoryMap = useCategoryLookup();
   const accessibleCategoryIds = useMemo(
     () => new Set(categoryMap.keys()),
@@ -110,7 +114,9 @@ export function BudgetForm({
       return buildBudgetRenewalFormValues(
         renewalSource,
         new Date(),
-        areCategoriesLoading ? undefined : accessibleCategoryIds
+        areCategoriesLoading || categoryError
+          ? undefined
+          : accessibleCategoryIds
       );
     }
 
@@ -137,7 +143,7 @@ export function BudgetForm({
     : null;
 
   useEffect(() => {
-    if (!renewalSource || areCategoriesLoading) return;
+    if (!renewalSource || areCategoriesLoading || categoryError) return;
     const normalizedCategoryId = resolveRenewalCategoryId(
       renewalSource,
       accessibleCategoryIds
@@ -148,7 +154,12 @@ export function BudgetForm({
         ? { ...current, categoryId: normalizedCategoryId }
         : current
     );
-  }, [accessibleCategoryIds, areCategoriesLoading, renewalSource]);
+  }, [
+    accessibleCategoryIds,
+    areCategoriesLoading,
+    categoryError,
+    renewalSource,
+  ]);
 
   // ── Field updaters ──
   const updateField = useCallback(
@@ -192,8 +203,12 @@ export function BudgetForm({
       newErrors.amount = t("validation_amount_invalid");
     }
 
-    if (form.type === "CATEGORY" && !form.categoryId) {
-      newErrors.category = t("validation_category_required");
+    if (form.type === "CATEGORY") {
+      if (categoryError) {
+        newErrors.category = t("category_load_error");
+      } else if (!form.categoryId) {
+        newErrors.category = t("validation_category_required");
+      }
     }
 
     if (form.period === "CUSTOM") {
@@ -204,7 +219,7 @@ export function BudgetForm({
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [form, t]);
+  }, [categoryError, form, t]);
 
   // ── Submit ──
   const handleSubmit = useCallback(async (): Promise<void> => {
@@ -411,28 +426,49 @@ export function BudgetForm({
           <Text className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold mb-2">
             {t("category_type")}
           </Text>
-          <TouchableOpacity
-            onPress={() => setIsCategoryModalOpen(true)}
-            activeOpacity={0.7}
-            className="flex-row items-center bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700"
-          >
-            <Ionicons
-              name="grid-outline"
-              size={18}
-              color={isDark ? palette.slate[400] : palette.slate[500]}
-            />
-            <Text
-              numberOfLines={1}
-              className="flex-1 ms-3 text-base font-medium text-slate-800 dark:text-white"
+          {categoryError ? (
+            <View
+              testID="budget-category-load-error"
+              className="rounded-2xl border border-red-300 bg-red-50 p-4 dark:border-red-700 dark:bg-red-900/20"
             >
-              {selectedCategory?.displayName ?? t("select_a_category")}
-            </Text>
-            <Ionicons
-              name="chevron-down"
-              size={16}
-              color={isDark ? palette.slate[500] : palette.slate[400]}
-            />
-          </TouchableOpacity>
+              <Text className="text-sm text-red-600 dark:text-red-300">
+                {t("category_load_error")}
+              </Text>
+              <TouchableOpacity
+                className="mt-2 min-h-11 self-start justify-center"
+                accessibilityRole="button"
+                accessibilityLabel={t("retry")}
+                onPress={retryCategories}
+              >
+                <Text className="font-semibold text-nileGreen-600 dark:text-nileGreen-300">
+                  {t("retry")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              onPress={() => setIsCategoryModalOpen(true)}
+              activeOpacity={0.7}
+              className="flex-row items-center bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700"
+            >
+              <Ionicons
+                name="grid-outline"
+                size={18}
+                color={isDark ? palette.slate[400] : palette.slate[500]}
+              />
+              <Text
+                numberOfLines={1}
+                className="flex-1 ms-3 text-base font-medium text-slate-800 dark:text-white"
+              >
+                {selectedCategory?.displayName ?? t("select_a_category")}
+              </Text>
+              <Ionicons
+                name="chevron-down"
+                size={16}
+                color={isDark ? palette.slate[500] : palette.slate[400]}
+              />
+            </TouchableOpacity>
+          )}
           {errors.category ? (
             <Text className="text-red-500 text-xs font-medium mt-1">
               {errors.category}

@@ -59,6 +59,7 @@
   "validation_name_required": "Budget name is required",
   "validation_amount_invalid": "Enter a valid amount greater than 0",
   "validation_category_required": "Select a category",
+  "category_load_error": "We couldn't load your categories. Try again.",
   "validation_date_order": "End date must be after start date",
   "budget_updated": "Budget updated",
   "budget_updated_message": "Your budget settings have been saved.",

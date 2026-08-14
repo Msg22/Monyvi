@@ -42,6 +42,7 @@ export interface BudgetDashboardPresentation {
   readonly deletedCategoryLabel: string | null;
   readonly expiryLabel: string | null;
   readonly actionLabel: string | null;
+  readonly actionAccessibilityLabel: string | null;
   readonly accessibilityLabel: string;
   readonly viewBudgetLabel: string;
 }

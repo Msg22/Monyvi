@@ -98,15 +98,48 @@ describe("e2e-seed script helpers", () => {
           status: "ACTIVE",
           type: "CATEGORY",
         }),
+        expect.objectContaining({
+          name: "E2E Over Budget Category",
+          amount: 1000,
+          status: "ACTIVE",
+          type: "CATEGORY",
+        }),
+        expect.objectContaining({
+          name: "E2E Zero Spend Category",
+          status: "ACTIVE",
+          type: "CATEGORY",
+        }),
+        expect.objectContaining({
+          name: "E2E Historical Deleted Category Budget With A Very Long Name",
+          status: "ACTIVE",
+          type: "CATEGORY",
+        }),
       ])
     );
-    expect(fullFixture.buildExtraRows?.(commonArgs).transactions).toEqual([
-      expect.objectContaining({
-        amount: 8500,
-        category_id: "other",
-        type: "EXPENSE",
-      }),
-    ]);
+    expect(fullFixture.buildExtraRows?.(commonArgs).categories).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          display_name: "Deleted Category",
+          deleted: true,
+        }),
+      ])
+    );
+    expect(fullFixture.buildExtraRows?.(commonArgs).transactions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          amount: 8500,
+          category_id: "other",
+          type: "EXPENSE",
+        }),
+        expect.objectContaining({
+          amount: 2000,
+          type: "EXPENSE",
+        }),
+      ])
+    );
+    expect(fullFixture.buildExtraRows?.(commonArgs).transactions).toHaveLength(
+      2
+    );
     const uniquenessKeys = fullRows.map((budget) =>
       budget.type === "GLOBAL"
         ? `${budget.type}:${budget.period}`

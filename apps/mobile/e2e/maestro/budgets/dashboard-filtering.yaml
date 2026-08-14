@@ -17,7 +17,7 @@ appId: com.monyvi.app
 - tapOn:
     id: "budget-filter-option-period-custom"
 - extendedWaitUntil:
-    visible: "No budgets match this filter"
+    visible: "E2E Custom Overall"
     timeout: 30000
 - tapOn: "Reset filters"
 - assertVisible: "E2E Monthly Overall"

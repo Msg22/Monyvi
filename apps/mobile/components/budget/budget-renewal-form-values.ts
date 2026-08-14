@@ -30,7 +30,7 @@ export function buildBudgetRenewalFormValues(
   accessibleCategoryIds?: ReadonlySet<string>
 ): BudgetFormInitialValues {
   const periodStart = new Date(now.getTime());
-  const sourceDuration = resolveSourceDuration(source);
+  const sourceDurationDays = resolveSourceDurationDays(source);
 
   return {
     name: source.name,
@@ -39,7 +39,7 @@ export function buildBudgetRenewalFormValues(
     amount: source.amount.toString(),
     period: source.period,
     periodStart,
-    periodEnd: new Date(periodStart.getTime() + sourceDuration),
+    periodEnd: addCalendarDays(periodStart, sourceDurationDays),
     alertThreshold: source.alertThreshold,
   };
 }
@@ -54,11 +54,25 @@ export function resolveRenewalCategoryId(
   return accessibleCategoryIds.has(categoryId) ? categoryId : null;
 }
 
-function resolveSourceDuration(source: BudgetRenewalSource): number {
+function resolveSourceDurationDays(source: BudgetRenewalSource): number {
   if (source.period === "CUSTOM" && source.periodStart && source.periodEnd) {
-    const duration = source.periodEnd.getTime() - source.periodStart.getTime();
-    if (duration > 0) return duration;
+    const durationDays = Math.round(
+      (getLocalCalendarDay(source.periodEnd) -
+        getLocalCalendarDay(source.periodStart)) /
+        MILLISECONDS_PER_DAY
+    );
+    if (durationDays > 0) return durationDays;
   }
 
-  return MILLISECONDS_PER_DAY;
+  return 1;
+}
+
+function getLocalCalendarDay(date: Date): number {
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function addCalendarDays(date: Date, days: number): Date {
+  const result = new Date(date.getTime());
+  result.setDate(result.getDate() + days);
+  return result;
 }

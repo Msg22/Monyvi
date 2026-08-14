@@ -470,6 +470,9 @@ describe("budget-list-read-model-service", () => {
     expect(result.items[0]?.presentation.accessibilityLabel).toContain(
       "Expired May 1"
     );
+    expect(result.items[0]?.presentation.actionAccessibilityLabel).toBe(
+      "Renew: Expired"
+    );
   });
 
   it("shapes display-only DTOs and deleted-category history without exposing models", () => {
@@ -495,6 +498,7 @@ describe("budget-list-read-model-service", () => {
         deletedCategoryLabel: "Deleted category",
         expiryLabel: null,
         actionLabel: null,
+        actionAccessibilityLabel: null,
         accessibilityLabel:
           "Historic Education, Deleted category, Monthly, Category, 0 EGP of 1,000 EGP, 0%, Safe to spend",
       },

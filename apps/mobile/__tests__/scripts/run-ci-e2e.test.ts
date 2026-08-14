@@ -96,6 +96,10 @@ describe("run-ci-e2e helpers", () => {
     expect(runCiE2e.getBudgetMaestroFlows()).toEqual([
       {
         flow: "budgets/dashboard-filtering.yaml",
+        profile: "dashboard-full",
+      },
+      {
+        flow: "budgets/dashboard-filtered-empty.yaml",
         profile: "dashboard-filter-empty",
       },
       {

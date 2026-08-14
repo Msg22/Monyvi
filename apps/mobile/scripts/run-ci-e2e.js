@@ -52,6 +52,10 @@ const smsSyncMaestroFlows = ["sms-sync/sms-sync-permission-requestable.yaml"];
 const budgetMaestroFlows = [
   {
     flow: "budgets/dashboard-filtering.yaml",
+    profile: "dashboard-full",
+  },
+  {
+    flow: "budgets/dashboard-filtered-empty.yaml",
     profile: "dashboard-filter-empty",
   },
   {

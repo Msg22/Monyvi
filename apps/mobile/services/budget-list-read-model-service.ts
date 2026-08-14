@@ -281,6 +281,9 @@ function createDashboardPresentation(
     deletedCategoryLabel,
     expiryLabel,
     actionLabel,
+    actionAccessibilityLabel: actionLabel
+      ? `${actionLabel}: ${displayName}`
+      : null,
     accessibilityLabel,
     viewBudgetLabel: copy.formatViewBudget(displayName),
   });

@@ -131,6 +131,7 @@ function item(id: string): BudgetDashboardItem {
       deletedCategoryLabel: null,
       expiryLabel: null,
       actionLabel: null,
+      actionAccessibilityLabel: null,
       accessibilityLabel:
         "Budget, Monthly, Category, 100 EGP of 1,000 EGP, 10%, Safe to spend",
       viewBudgetLabel: "View Budget: Budget",

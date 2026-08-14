@@ -63,6 +63,7 @@
   "validation_name_required": "اسم الميزانية مطلوب",
   "validation_amount_invalid": "أدخل مبلغاً صحيحاً أكبر من 0",
   "validation_category_required": "اختر فئة",
+  "category_load_error": "تعذر تحميل الفئات. حاول مرة أخرى.",
   "validation_date_order": "يجب أن يكون تاريخ الانتهاء بعد تاريخ البدء",
   "budget_updated": "تم تحديث الميزانية",
   "budget_updated_message": "تم حفظ إعدادات الميزانية.",

@@ -17,8 +17,13 @@ export interface E2eSeedConfigOptions {
 export const E2E_TABLE_DELETE_ORDER: readonly string[];
 
 export interface E2eBudgetFixtureRows {
+  readonly categories?: readonly {
+    readonly display_name: string;
+    readonly deleted: boolean;
+  }[];
   readonly budgets: readonly {
     readonly name: string;
+    readonly amount: number;
     readonly category_id: string | null;
     readonly period: string;
     readonly period_end: string;
