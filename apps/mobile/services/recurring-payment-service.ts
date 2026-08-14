@@ -135,6 +135,11 @@ export async function updateRecurringPayment(
     const payment = await scope.findOwned(recurringCollection, paymentId);
     await payment.update((record) => {
       const previousEndDate = record.endDate;
+      const endedAtPreviousBoundary =
+        record.status === "COMPLETED" &&
+        previousEndDate !== undefined &&
+        previousEndDate !== null &&
+        !isOnOrBeforeDay(record.nextDueDate, previousEndDate);
       record.name = data.name;
       record.amount = Math.abs(data.amount);
       record.currency = data.currency;
@@ -157,16 +162,12 @@ export async function updateRecurringPayment(
       }
       record.action = data.action;
       record.notes = data.notes;
-      const endedAtPreviousBoundary =
-        record.status === "COMPLETED" &&
-        previousEndDate !== undefined &&
-        previousEndDate !== null &&
-        record.nextDueDate.getTime() > previousEndDate.getTime();
       const nextDueDateIsEligible =
         (record.endDate === undefined || record.endDate === null) ||
         isOnOrBeforeDay(record.nextDueDate, record.endDate);
       const hasNoEligibleFutureOccurrence =
-        record.status === "ACTIVE" && !nextDueDateIsEligible;
+        (record.status === "ACTIVE" || record.status === "PAUSED") &&
+        !nextDueDateIsEligible;
       if (hasNoEligibleFutureOccurrence) {
         record.status = "COMPLETED";
       }
@@ -298,7 +299,7 @@ export async function submitRecurringPayment(params: {
         if (
           persistedPayment.endDate !== undefined &&
           persistedPayment.endDate !== null &&
-          nextDueDate.getTime() > persistedPayment.endDate.getTime()
+          !isOnOrBeforeDay(nextDueDate, persistedPayment.endDate)
         ) {
           record.status = "COMPLETED";
         }

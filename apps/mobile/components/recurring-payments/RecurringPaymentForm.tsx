@@ -11,7 +11,7 @@ import { TextField } from "@/components/ui/TextField";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useFormScroll } from "@/hooks/useFormScroll";
-import { formatDate } from "@/utils/dateHelpers";
+import { calculateNextDueDate, formatDate } from "@/utils/dateHelpers";
 import { validateRecurringPaymentForm } from "@/validation/recurring-payment-validation";
 import type {
   Account,
@@ -237,6 +237,7 @@ export const RecurringPaymentForm = React.forwardRef<
     initialValues.frequency !== form.frequency;
   const displayDueDate = getDisplayDueDate({
     dueDate,
+    initialValues,
     form,
     hasScheduleChanges,
   });
@@ -669,10 +670,12 @@ function getFrequencyTypeLabel(
 
 function getDisplayDueDate({
   dueDate,
+  initialValues,
   form,
   hasScheduleChanges,
 }: {
   readonly dueDate?: Date;
+  readonly initialValues: RecurringPaymentFormValues;
   readonly form: RecurringPaymentFormValues;
   readonly hasScheduleChanges: boolean;
 }): Date {
@@ -680,6 +683,13 @@ function getDisplayDueDate({
     return dueDate;
   }
 
+
+  const didStartDateChange =
+    initialValues.startDate.getTime() !== form.startDate.getTime();
+  const didFrequencyChange = initialValues.frequency !== form.frequency;
+  if (dueDate && !didStartDateChange && didFrequencyChange) {
+    return calculateNextDueDate(dueDate, form.frequency);
+  }
 
   return form.startDate;
 }

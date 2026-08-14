@@ -294,7 +294,7 @@ describe("RecurringPaymentForm", () => {
 
     expect(
       screen.getByTestId("recurring-payment-summary-due-value")
-    ).toHaveTextContent("Jun 1, 2026");
+    ).toHaveTextContent("Jul 8, 2026");
   });
 
   it("guards against duplicate submissions while a submit is in flight", async () => {
