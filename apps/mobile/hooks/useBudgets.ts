@@ -125,7 +125,14 @@ export function useBudgets(): UseBudgetsResult {
   }, [clearScopedState, isResolvingUser, userId]);
 
   useEffect(() => {
-    if (!userId || isResolvingUser || !hasObservedBudgets) return;
+    if (
+      !userId ||
+      isResolvingUser ||
+      !hasObservedBudgets ||
+      areCategoriesLoading
+    ) {
+      return;
+    }
 
     let isCurrent = true;
 
@@ -133,7 +140,7 @@ export function useBudgets(): UseBudgetsResult {
       setIsComputing(true);
 
       try {
-        const metrics = await buildBudgetMetrics(rawBudgets);
+        const metrics = await buildBudgetMetrics(rawBudgets, categoryMap);
         if (isCurrent) {
           setComputedBudgets({ source: rawBudgets, metrics });
         }
@@ -151,7 +158,15 @@ export function useBudgets(): UseBudgetsResult {
     return () => {
       isCurrent = false;
     };
-  }, [hasObservedBudgets, isResolvingUser, rawBudgets, refreshCounter, userId]);
+  }, [
+    areCategoriesLoading,
+    categoryMap,
+    hasObservedBudgets,
+    isResolvingUser,
+    rawBudgets,
+    refreshCounter,
+    userId,
+  ]);
 
   useEffect(() => {
     if (

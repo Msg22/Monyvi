@@ -35,6 +35,10 @@ const {
 
 interface BudgetSeedRow {
   readonly name?: string;
+  readonly type?: string;
+  readonly period?: string;
+  readonly category_id?: string | null;
+  readonly deleted?: boolean;
   readonly pause_intervals?: string;
 }
 
@@ -206,14 +210,25 @@ describe("manual-qa-seed script helpers", () => {
     expect(
       operations.filter((operation) => operation.startsWith("delete:"))
     ).toEqual([]);
-    expect(categoryRows).toEqual([
-      expect.objectContaining({
-        deleted: true,
-        display_name: "QA Deleted Category",
-        user_id: "user-manual-qa",
-      }),
-    ]);
-    expect(operations.indexOf("upsert:categories:1")).toBeLessThan(
+    expect(categoryRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          deleted: true,
+          display_name: "QA Deleted Category",
+          user_id: "user-manual-qa",
+        }),
+        expect.objectContaining({
+          deleted: false,
+          display_name: "QA Expired Custom Category",
+        }),
+        expect.objectContaining({
+          deleted: false,
+          display_name: "QA Expired Paused Custom Category",
+        }),
+      ])
+    );
+    expect(categoryRows).toHaveLength(3);
+    expect(operations.indexOf("upsert:categories:3")).toBeLessThan(
       operations.indexOf(`upsert:budgets:${budgetRows.length}`)
     );
     expect(accountRows).toEqual(
@@ -276,12 +291,13 @@ describe("manual-qa-seed script helpers", () => {
         }),
         expect.objectContaining({
           name: "QA Healthy Custom Global",
-          period: "CUSTOM",
+          deleted: true,
         }),
         expect.objectContaining({
           name: "QA Near Limit Category",
           amount: 250,
           alert_threshold: 80,
+          period: "WEEKLY",
         }),
         expect.objectContaining({
           name: "QA Over Budget Category",
@@ -294,10 +310,12 @@ describe("manual-qa-seed script helpers", () => {
         expect.objectContaining({
           name: "QA Expired Custom",
           period: "CUSTOM",
+          type: "CATEGORY",
         }),
         expect.objectContaining({
           name: "QA Expired Paused Custom",
           status: "PAUSED",
+          type: "CATEGORY",
         }),
         expect.objectContaining({
           name: "QA Historical Deleted Category Budget With A Long Name",
@@ -306,6 +324,15 @@ describe("manual-qa-seed script helpers", () => {
       ])
     );
     expectRowsStampedForIncrementalPull(budgetRows);
+    const uniquenessKeys = budgetRows
+      .filter((row) => (row as BudgetSeedRow).deleted !== true)
+      .map((row) => {
+        const budget = row as BudgetSeedRow;
+        return budget.type === "GLOBAL"
+          ? `GLOBAL:${budget.period}`
+          : `CATEGORY:${budget.category_id}:${budget.period}`;
+      });
+    expect(new Set(uniquenessKeys).size).toBe(uniquenessKeys.length);
     expect(
       budgetRows.every(
         (row) => typeof (row as BudgetSeedRow).pause_intervals === "string"

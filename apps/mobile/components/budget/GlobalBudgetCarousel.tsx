@@ -57,12 +57,24 @@ export function GlobalBudgetCarousel({
     () => groupGlobalBudgets(budgets, layout.visibleCardCount),
     [budgets, layout.visibleCardCount]
   );
+  const carouselGeneration = `${layout.containerWidth}:${pages
+    .map((page) => page.key)
+    .join("|")}`;
+  const activeGestureGenerationRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const preservedBudgetId = firstVisibleBudgetIdRef.current;
     const nextPage = resolveGlobalCarouselPage(
       pages,
-      firstVisibleBudgetIdRef.current
+      preservedBudgetId
     );
+    const hasPreservedBudget = pages.some((page) =>
+      page.budgets.some((budget) => budget.id === preservedBudgetId)
+    );
+    if (!hasPreservedBudget) {
+      firstVisibleBudgetIdRef.current =
+        pages[nextPage]?.budgets[0]?.id ?? null;
+    }
     setCurrentPage(nextPage);
     if (layout.containerWidth > 0 && pages.length > 0) {
       listRef.current?.scrollToOffset({
@@ -76,8 +88,15 @@ export function GlobalBudgetCarousel({
     setContainerWidth(Math.max(0, event.nativeEvent.layout.width));
   }, []);
 
+  const handleScrollBeginDrag = useCallback((): void => {
+    activeGestureGenerationRef.current = carouselGeneration;
+  }, [carouselGeneration]);
+
   const handleMomentumScrollEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>): void => {
+      const gestureGeneration = activeGestureGenerationRef.current;
+      activeGestureGenerationRef.current = null;
+      if (gestureGeneration !== carouselGeneration) return;
       if (layout.containerWidth <= 0 || pages.length === 0) return;
       const nextPage = Math.min(
         pages.length - 1,
@@ -97,7 +116,7 @@ export function GlobalBudgetCarousel({
         })
       );
     },
-    [layout.containerWidth, pages, t]
+    [carouselGeneration, layout.containerWidth, pages, t]
   );
 
   const renderPage = useCallback(
@@ -151,6 +170,7 @@ export function GlobalBudgetCarousel({
           renderItem={renderPage}
           keyExtractor={(page) => page.key}
           showsHorizontalScrollIndicator={false}
+          onScrollBeginDrag={handleScrollBeginDrag}
           onMomentumScrollEnd={handleMomentumScrollEnd}
           getItemLayout={(_data, index) => ({
             index,

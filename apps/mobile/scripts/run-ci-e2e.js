@@ -460,12 +460,7 @@ function shouldBootstrapBeforeLiveSms(selectedSuites, supabaseMode) {
 
 async function maybeRunAuthBootstrap() {
   if (shouldBootstrapAuth && !hasRunAuthBootstrap) {
-    await runNodeScript(
-      "scripts/run-maestro.js",
-      ["test", join("e2e", "maestro", getAuthBootstrapFlow())],
-      getInitialAuthBootstrapOptions()
-    );
-    hasRunAuthBootstrap = true;
+    await runAuthBootstrap(getInitialAuthBootstrapOptions());
   }
 }
 
@@ -480,6 +475,19 @@ function getInitialAuthBootstrapOptions() {
     env: { E2E_CLEAR_APP_STATE: "1" },
     retryOnDeviceFailure: true,
   };
+}
+
+function getBudgetAuthBootstrapOptions() {
+  return getInitialAuthBootstrapOptions();
+}
+
+async function runAuthBootstrap(options) {
+  await runNodeScript(
+    "scripts/run-maestro.js",
+    ["test", join("e2e", "maestro", getAuthBootstrapFlow())],
+    options
+  );
+  hasRunAuthBootstrap = true;
 }
 
 async function runMaestroFlows(flows) {
@@ -499,7 +507,9 @@ async function runMaestroFlows(flows) {
 async function runBudgetMaestroFlows() {
   for (const { flow, profile } of getBudgetMaestroFlows()) {
     await resetAndSeedBudgetE2eData(profile);
-    await maybeRunAuthBootstrap();
+    if (shouldBootstrapAuth) {
+      await runAuthBootstrap(getBudgetAuthBootstrapOptions());
+    }
     await runNodeScript(
       "scripts/run-maestro.js",
       ["test", join("e2e", "maestro", flow)],
@@ -571,6 +581,7 @@ module.exports = {
   getRequestedCiSuites,
   getAuthBootstrapFlow,
   getInitialAuthBootstrapOptions,
+  getBudgetAuthBootstrapOptions,
   getMaestroSuiteFlowOptions,
   getSmsSyncJourneyOptions,
   isDeviceOfflineFailure,

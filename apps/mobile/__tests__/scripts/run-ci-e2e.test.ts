@@ -34,6 +34,10 @@ interface RunCiE2eModule {
     readonly env: Readonly<Record<string, string>>;
     readonly retryOnDeviceFailure: boolean;
   };
+  getBudgetAuthBootstrapOptions(): {
+    readonly env: Readonly<Record<string, string>>;
+    readonly retryOnDeviceFailure: boolean;
+  };
   getMaestroSuiteFlowOptions(
     flow: string,
     env?: Readonly<Record<string, string | undefined>>
@@ -152,6 +156,13 @@ describe("run-ci-e2e helpers", () => {
 
   it("clears cached emulator app data before the initial auth bootstrap", () => {
     expect(runCiE2e.getInitialAuthBootstrapOptions()).toEqual({
+      env: { E2E_CLEAR_APP_STATE: "1" },
+      retryOnDeviceFailure: true,
+    });
+  });
+
+  it("clears cached app data before every budget fixture flow bootstrap", () => {
+    expect(runCiE2e.getBudgetAuthBootstrapOptions()).toEqual({
       env: { E2E_CLEAR_APP_STATE: "1" },
       retryOnDeviceFailure: true,
     });

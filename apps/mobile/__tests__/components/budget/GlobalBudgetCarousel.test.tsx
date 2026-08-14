@@ -146,6 +146,10 @@ describe("GlobalBudgetCarousel", () => {
     act(() => {
       fireEvent(
         screen.getByTestId("global-budget-carousel"),
+        "scrollBeginDrag"
+      );
+      fireEvent(
+        screen.getByTestId("global-budget-carousel"),
         "momentumScrollEnd",
         { nativeEvent: { contentOffset: { x: 320, y: 0 } } }
       );
@@ -172,6 +176,10 @@ describe("GlobalBudgetCarousel", () => {
       }
     );
 
+    fireEvent(
+      screen.getByTestId("global-budget-carousel"),
+      "scrollBeginDrag"
+    );
     fireEvent(
       screen.getByTestId("global-budget-carousel"),
       "momentumScrollEnd",
@@ -201,6 +209,10 @@ describe("GlobalBudgetCarousel", () => {
     );
     fireEvent(
       screen.getByTestId("global-budget-carousel"),
+      "scrollBeginDrag"
+    );
+    fireEvent(
+      screen.getByTestId("global-budget-carousel"),
       "momentumScrollEnd",
       { nativeEvent: { contentOffset: { x: 320, y: 0 } } }
     );
@@ -216,5 +228,71 @@ describe("GlobalBudgetCarousel", () => {
     expect(
       screen.getByTestId("global-budget-page-dot-0").props.accessibilityState
     ).toEqual({ selected: true });
+  });
+
+  it("replaces a removed preserved anchor with the fallback page anchor", () => {
+    const props = {
+      preferredCurrency: "EGP" as const,
+      onBudgetPress: jest.fn(),
+    };
+    const screen = render(
+      <GlobalBudgetCarousel
+        {...props}
+        budgets={[item("a"), item("b"), item("c")]}
+      />
+    );
+    fireEvent(screen.getByTestId("global-budget-carousel-container"), "layout", {
+      nativeEvent: { layout: { width: 320, height: 300, x: 0, y: 0 } },
+    });
+    fireEvent(screen.getByTestId("global-budget-carousel"), "scrollBeginDrag");
+    fireEvent(screen.getByTestId("global-budget-carousel"), "momentumScrollEnd", {
+      nativeEvent: { contentOffset: { x: 320, y: 0 } },
+    });
+
+    screen.rerender(
+      <GlobalBudgetCarousel {...props} budgets={[item("a"), item("c")]} />
+    );
+    screen.rerender(
+      <GlobalBudgetCarousel
+        {...props}
+        budgets={[item("a"), item("b"), item("c")]}
+      />
+    );
+
+    expect(screen.getByTestId("global-budget-page-dot-0")).toHaveProp(
+      "accessibilityState",
+      { selected: true }
+    );
+  });
+
+  it("ignores momentum completion from an obsolete data generation", () => {
+    const props = {
+      preferredCurrency: "EGP" as const,
+      onBudgetPress: jest.fn(),
+    };
+    const screen = render(
+      <GlobalBudgetCarousel
+        {...props}
+        budgets={[item("a"), item("b"), item("c")]}
+      />
+    );
+    fireEvent(screen.getByTestId("global-budget-carousel-container"), "layout", {
+      nativeEvent: { layout: { width: 320, height: 300, x: 0, y: 0 } },
+    });
+    fireEvent(screen.getByTestId("global-budget-carousel"), "scrollBeginDrag");
+
+    screen.rerender(
+      <GlobalBudgetCarousel {...props} budgets={[item("a"), item("c")]} />
+    );
+    jest.mocked(AccessibilityInfo.announceForAccessibility).mockClear();
+    fireEvent(screen.getByTestId("global-budget-carousel"), "momentumScrollEnd", {
+      nativeEvent: { contentOffset: { x: 320, y: 0 } },
+    });
+
+    expect(screen.getByTestId("global-budget-page-dot-0")).toHaveProp(
+      "accessibilityState",
+      { selected: true }
+    );
+    expect(AccessibilityInfo.announceForAccessibility).not.toHaveBeenCalled();
   });
 });

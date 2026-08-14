@@ -267,6 +267,38 @@ describe("budget-list-read-model-service", () => {
     );
   });
 
+  it("uses zero spending when a category budget references a deleted category", async () => {
+    const deletedCategoryBudget = {
+      ...createBudget("deleted-category-budget"),
+      categoryId: "deleted-category",
+    } as Budget;
+
+    const result = await buildBudgetMetrics(
+      [deletedCategoryBudget],
+      new Map()
+    );
+
+    expect(mockGetSpendingForBudget).not.toHaveBeenCalled();
+    expect(mockComputeSpendingMetrics).toHaveBeenCalledWith(0, 1000, 15, 80);
+    expect(result).toHaveLength(1);
+  });
+
+  it("still propagates spending failures for accessible category budgets", async () => {
+    const error = new Error("spending read failed");
+    const accessibleCategoryBudget = {
+      ...createBudget("accessible-category-budget"),
+      categoryId: "food",
+    } as Budget;
+    mockGetSpendingForBudget.mockRejectedValueOnce(error);
+
+    await expect(
+      buildBudgetMetrics(
+        [accessibleCategoryBudget],
+        new Map([["food", { displayName: "Food" }]])
+      )
+    ).rejects.toBe(error);
+  });
+
   it("retains expired active custom budgets while computing existing metrics", async () => {
     const expiredCustomBudget = createBudget("expired-custom", {
       period: "CUSTOM",
