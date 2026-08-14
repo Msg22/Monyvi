@@ -133,6 +133,23 @@ export async function getBudgetById(budgetId: string): Promise<Budget> {
   return getOwnedBudget(budgetId, scope);
 }
 
+export async function getRenewableBudgetById(
+  budgetId: string
+): Promise<Budget> {
+  const scope = await getCurrentUserDataScope();
+  const budget = await getOwnedBudget(budgetId, scope);
+
+  if (
+    budget.deleted ||
+    budget.period !== "CUSTOM" ||
+    !isPeriodExpired(budget.periodEnd)
+  ) {
+    throw new BudgetServiceError(BUDGET_SERVICE_ERROR_CODES.NOT_FOUND);
+  }
+
+  return budget;
+}
+
 // =============================================================================
 // CREATE
 // =============================================================================
@@ -572,8 +589,9 @@ async function getAccessibleCategoryHierarchyIds(
  * Validate that no duplicate budget exists for the same type+period+category.
  *
  * Rules (from FR-014 + Q1):
- * - Max ONE Global budget per period type (WEEKLY, MONTHLY, CUSTOM)
- * - Max ONE Category budget per category per period type
+ * - Max ONE current Global budget per period type (WEEKLY, MONTHLY, CUSTOM)
+ * - Max ONE current Category budget per category per period type
+ * - Expired CUSTOM budgets are historical and do not occupy the current slot
  *
  * @throws Error if a duplicate is found
  */
@@ -604,11 +622,18 @@ export async function validateBudgetUniqueness(
     conditions.push(Q.where("id", Q.notEq(options.excludeBudgetId)));
   }
 
-  const existing = await currentScope
-    .queryOwned(budgetsCollection(), Q.and(...conditions))
-    .fetchCount();
+  const matchingBudgets = currentScope.queryOwned(
+    budgetsCollection(),
+    Q.and(...conditions)
+  );
+  const hasExisting =
+    period === "CUSTOM"
+      ? (await matchingBudgets.fetch()).some(
+          (budget) => !isPeriodExpired(budget.periodEnd)
+        )
+      : (await matchingBudgets.fetchCount()) > 0;
 
-  if (existing > 0) {
+  if (hasExisting) {
     const label =
       type === "GLOBAL"
         ? `A Global ${period.toLowerCase()} budget already exists`

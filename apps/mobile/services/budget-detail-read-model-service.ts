@@ -116,10 +116,9 @@ async function getCategoryHierarchy(
     return { categories: [], categoryIds: null };
   }
 
-  await scope.findAccessibleCategory(
-    database.get<Category>("categories"),
-    budget.categoryId
-  );
+  // A historical budget keeps its category ID after Watermelon removes the
+  // deleted category record. Accessible metadata remains scoped below, while
+  // the persisted root ID still lets us read the user's historical spending.
   const categories = await scope
     .queryAccessibleCategories(
       database.get<Category>("categories"),

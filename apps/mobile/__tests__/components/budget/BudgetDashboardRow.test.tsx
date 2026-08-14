@@ -142,6 +142,9 @@ describe("BudgetDashboardRow", () => {
       />
     );
 
+    expect(
+      screen.getByTestId("budget-action-resume-budget-1")
+    ).toBeOnTheScreen();
     fireEvent.press(screen.getByRole("button", { name: "Resume" }));
     expect(onResume).toHaveBeenCalledWith("budget-1");
 
@@ -161,6 +164,9 @@ describe("BudgetDashboardRow", () => {
       />
     );
 
+    expect(
+      screen.getByTestId("budget-action-renew-budget-1")
+    ).toBeOnTheScreen();
     fireEvent.press(screen.getByRole("button", { name: "Renew" }));
     expect(onRenew).toHaveBeenCalledWith("budget-1");
     expect(screen.getAllByText(/Expired.*Aug 12/)).toHaveLength(2);
@@ -170,7 +176,7 @@ describe("BudgetDashboardRow", () => {
     );
     expect(screen.getByTestId("budget-row-subtitle-budget-1")).toHaveProp(
       "numberOfLines",
-      1
+      2
     );
   });
 

@@ -12,7 +12,7 @@ interface MockEditableBudgetResult {
 
 const mockUseEditableBudget = jest.fn<
   MockEditableBudgetResult,
-  [string | undefined]
+  [string | undefined, "EDIT" | "RENEWAL"]
 >();
 const mockBudgetForm = jest.fn(
   (_props: {
@@ -38,8 +38,10 @@ jest.mock("@/components/ui/Skeleton", () => ({
 }));
 
 jest.mock("@/hooks/useEditableBudget", () => ({
-  useEditableBudget: (budgetId: string | undefined) =>
-    mockUseEditableBudget(budgetId),
+  useEditableBudget: (
+    budgetId: string | undefined,
+    sourceKind: "EDIT" | "RENEWAL"
+  ) => mockUseEditableBudget(budgetId, sourceKind),
 }));
 
 jest.mock("@/components/budget/BudgetForm", () => ({
@@ -74,7 +76,7 @@ describe("budget renewal form integration", () => {
     render(<CreateBudgetScreen />);
 
     expect(screen.getByTestId("budget-form")).toBeOnTheScreen();
-    expect(mockUseEditableBudget).toHaveBeenCalledWith("expired-1");
+    expect(mockUseEditableBudget).toHaveBeenCalledWith("expired-1", "RENEWAL");
     expect(mockBudgetForm).toHaveBeenCalledWith({
       existingBudget: undefined,
       renewalSource: source,
@@ -92,7 +94,7 @@ describe("budget renewal form integration", () => {
 
     render(<CreateBudgetScreen />);
 
-    expect(mockUseEditableBudget).toHaveBeenCalledWith("budget-1");
+    expect(mockUseEditableBudget).toHaveBeenCalledWith("budget-1", "EDIT");
     expect(mockBudgetForm).toHaveBeenCalledWith({
       existingBudget: existing,
       renewalSource: undefined,

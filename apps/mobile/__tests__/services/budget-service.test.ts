@@ -121,10 +121,12 @@ jest.mock("@/services/user-data-access", (): unknown => ({
 import {
   createBudget,
   getCategoryAndSubcategoryIds,
+  getRenewableBudgetById,
   getSpendingForBudget,
   pauseExpiredCustomBudgets,
   resumeBudget,
   updateBudget,
+  validateBudgetUniqueness,
 } from "@/services/budget-service";
 
 describe("budget-service", () => {
@@ -241,6 +243,82 @@ describe("budget-service", () => {
     expect(mockCreateBudget).not.toHaveBeenCalled();
   });
 
+  it("allows a custom budget when only expired historical matches exist", async (): Promise<void> => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-08-14T12:00:00.000Z"));
+    const expired = createLifecycleBudget({
+      id: "expired-history",
+      status: "PAUSED",
+      periodEnd: new Date("2026-08-13T00:00:00.000Z"),
+    });
+    mockQueryOwned.mockReturnValueOnce(createQueryResult([expired], 1));
+
+    await expect(
+      validateBudgetUniqueness("GLOBAL", "CUSTOM")
+    ).resolves.toBeUndefined();
+  });
+
+  it("allows a category custom budget when only expired historical matches exist", async (): Promise<void> => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-08-14T12:00:00.000Z"));
+    const expired = createLifecycleBudget({
+      id: "expired-category-history",
+      type: "CATEGORY",
+      categoryId: "category-resolved",
+      status: "PAUSED",
+      periodEnd: new Date("2026-08-13T00:00:00.000Z"),
+    });
+    mockQueryOwned.mockReturnValueOnce(createQueryResult([expired], 1));
+
+    await expect(
+      validateBudgetUniqueness("CATEGORY", "CUSTOM", {
+        categoryId: "category-resolved",
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects a custom budget when a current matching budget exists", async (): Promise<void> => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-08-14T12:00:00.000Z"));
+    const current = createLifecycleBudget({
+      id: "current-custom",
+      periodEnd: new Date("2026-08-15T00:00:00.000Z"),
+    });
+    mockQueryOwned.mockReturnValueOnce(createQueryResult([current], 1));
+
+    await expect(validateBudgetUniqueness("GLOBAL", "CUSTOM")).rejects.toThrow(
+      "A Global custom budget already exists"
+    );
+  });
+
+  it("rejects a category custom budget when a current matching budget exists", async (): Promise<void> => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-08-14T12:00:00.000Z"));
+    const current = createLifecycleBudget({
+      id: "current-category-custom",
+      type: "CATEGORY",
+      categoryId: "category-resolved",
+      periodEnd: new Date("2026-08-15T00:00:00.000Z"),
+    });
+    mockQueryOwned.mockReturnValueOnce(createQueryResult([current], 1));
+
+    await expect(
+      validateBudgetUniqueness("CATEGORY", "CUSTOM", {
+        categoryId: "category-resolved",
+      })
+    ).rejects.toThrow(
+      "A budget for this category with custom period already exists"
+    );
+  });
+
+  it("keeps non-custom uniqueness validation unchanged", async (): Promise<void> => {
+    mockQueryOwned.mockReturnValueOnce(createQueryResult([], 1));
+
+    await expect(validateBudgetUniqueness("GLOBAL", "MONTHLY")).rejects.toThrow(
+      "A Global monthly budget already exists"
+    );
+  });
+
   it("resolves a replacement category through the current user scope before update", async (): Promise<void> => {
     const existingBudget = createExistingCategoryBudget();
     mockQueryOwned
@@ -288,6 +366,39 @@ describe("budget-service", () => {
     expect(existingBudget.update).not.toHaveBeenCalled();
     expect(mockQueryOwned).toHaveBeenCalledTimes(1);
   });
+
+  it("loads an owned non-deleted expired custom budget as a renewal source", async (): Promise<void> => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-08-14T12:00:00.000Z"));
+    const expired = createLifecycleBudget({
+      id: "expired-custom",
+      status: "PAUSED",
+      periodEnd: new Date("2026-08-13T00:00:00.000Z"),
+    });
+    mockQueryOwned.mockReturnValueOnce(createQueryResult([expired]));
+
+    await expect(getRenewableBudgetById("expired-custom")).resolves.toBe(
+      expired
+    );
+  });
+
+  it.each([
+    ["deleted", { deleted: true }],
+    ["non-custom", { period: "MONTHLY", periodEnd: undefined }],
+    ["not expired", { periodEnd: new Date("2026-08-15T00:00:00.000Z") }],
+  ])(
+    "rejects a %s budget as a renewal source",
+    async (_caseName, overrides): Promise<void> => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date("2026-08-14T12:00:00.000Z"));
+      const ineligible = createLifecycleBudget(overrides);
+      mockQueryOwned.mockReturnValueOnce(createQueryResult([ineligible]));
+
+      await expect(getRenewableBudgetById(ineligible.id)).rejects.toMatchObject(
+        { code: "BUDGET_NOT_FOUND" }
+      );
+    }
+  );
 
   it("counts owned historical transactions for a deleted budget category", async (): Promise<void> => {
     const budget = {

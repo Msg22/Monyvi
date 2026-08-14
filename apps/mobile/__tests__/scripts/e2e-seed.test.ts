@@ -31,8 +31,11 @@ describe("e2e-seed script helpers", () => {
     const commonArgs = {
       categoryIds: { shopping: "shopping", other: "other" },
       currentTimestamp: "2026-08-13T12:00:00.000Z",
-      dateFromToday: (offset: number): string =>
-        `2026-08-${String(13 + offset).padStart(2, "0")}`,
+      dateFromToday: (offset: number): string => {
+        const date = new Date("2026-08-13T00:00:00.000Z");
+        date.setUTCDate(date.getUTCDate() + offset);
+        return date.toISOString().slice(0, 10);
+      },
       deterministicUuid: (
         _scope: string,
         _userId: string,
@@ -56,6 +59,14 @@ describe("e2e-seed script helpers", () => {
     );
     expect(emptyPeriods).not.toContain("CUSTOM");
     const fullRows = fullFixture.buildExtraRows?.(commonArgs).budgets ?? [];
+    const expiredCustomRow = fullRows.find(
+      (budget) => budget.name === "E2E Expired Custom"
+    ) as
+      | {
+          readonly period_end?: string;
+          readonly period_start?: string;
+        }
+      | undefined;
     expect(fullRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -108,12 +119,12 @@ describe("e2e-seed script helpers", () => {
           ?.period_end ?? ""
       )
     ).toBeGreaterThan(Date.parse(commonArgs.fixedNow));
+    expect(Date.parse(expiredCustomRow?.period_end ?? "")).toBeLessThan(
+      Date.parse(commonArgs.fixedNow)
+    );
     expect(
-      Date.parse(
-        fullRows.find((budget) => budget.name === "E2E Expired Custom")
-          ?.period_end ?? ""
-      )
-    ).toBeLessThan(Date.parse(commonArgs.fixedNow));
+      Number.isFinite(Date.parse(expiredCustomRow?.period_start ?? ""))
+    ).toBe(true);
   });
 
   it("fails fast for an unknown budget profile", () => {

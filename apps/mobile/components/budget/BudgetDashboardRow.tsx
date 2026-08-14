@@ -111,14 +111,14 @@ function RowIcon({
   return (
     <View
       testID={`budget-row-icon-${item.id}`}
-      className={`h-11 w-11 items-center justify-center rounded-full border ${containerClasses}`}
+      className={`h-9 w-9 items-center justify-center rounded-full border ${containerClasses}`}
     >
       {variant !== "attention" && item.categoryIcon ? (
         <CategoryIcon
           iconName={item.categoryIcon.iconName}
           iconLibrary={item.categoryIcon.iconLibrary}
           color={item.categoryIcon.iconColor}
-          size={22}
+          size={19}
         />
       ) : (
         <Ionicons
@@ -131,7 +131,7 @@ function RowIcon({
                   ? "pause-circle-outline"
                   : "pie-chart-outline"
           }
-          size={23}
+          size={20}
           color={fallbackColor}
         />
       )}
@@ -205,7 +205,7 @@ export function BudgetDashboardRow({
         <View className="ms-2.5 min-w-0 flex-1">
           <Text
             numberOfLines={2}
-            className="text-[15px] font-bold leading-5 text-text-primary dark:text-slate-25"
+            className="text-[11px] font-bold leading-5 text-text-primary dark:text-slate-25"
           >
             {item.displayName}
           </Text>
@@ -216,7 +216,7 @@ export function BudgetDashboardRow({
           ) : null}
           <Text
             testID={`budget-row-subtitle-${item.id}`}
-            numberOfLines={1}
+            numberOfLines={2}
             className={`mt-0.5 text-xs ${
               item.lifecycle === "EXPIRED" || item.lifecycle === "PAUSED"
                 ? getPercentageClasses(item)
@@ -248,6 +248,7 @@ export function BudgetDashboardRow({
               </Text>
             </View>
             <TouchableOpacity
+              testID={`budget-action-${item.availableAction.toLowerCase()}-${item.id}`}
               className="min-h-7 justify-center px-1"
               activeOpacity={0.8}
               accessibilityRole="button"

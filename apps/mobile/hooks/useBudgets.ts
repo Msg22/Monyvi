@@ -40,6 +40,20 @@ interface ComputedBudgets {
 }
 
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
+const BUDGET_LIST_OBSERVED_COLUMNS = [
+  "name",
+  "type",
+  "category_id",
+  "amount",
+  "currency",
+  "period",
+  "period_start",
+  "period_end",
+  "alert_threshold",
+  "status",
+  "pause_intervals",
+  "paused_at",
+];
 
 function getNextExpiryDelayMs(
   budgets: readonly Budget[],
@@ -128,7 +142,7 @@ export function useBudgets(): UseBudgetsResult {
         setErrorKey(null);
 
         const subscription = observeBudgetList(currentUserId)
-          .observe()
+          .observeWithColumns(BUDGET_LIST_OBSERVED_COLUMNS)
           .subscribe({
             next: (budgets) => {
               setRawBudgets(budgets);
@@ -270,17 +284,18 @@ export function useBudgets(): UseBudgetsResult {
 
   const autoPauseCheckKey = useMemo(
     () =>
-      rawBudgets
-        .map((budget) =>
+      [
+        lifecycleClockRevision,
+        ...rawBudgets.map((budget) =>
           [
             budget.id,
             budget.status,
             budget.period,
             budget.periodEnd?.getTime() ?? "none",
           ].join(":")
-        )
-        .join("|"),
-    [rawBudgets]
+        ),
+      ].join("|"),
+    [lifecycleClockRevision, rawBudgets]
   );
 
   const isInitialLoading =

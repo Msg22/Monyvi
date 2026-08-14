@@ -30,7 +30,8 @@ export default function CreateBudgetScreen(): React.JSX.Element {
   const isEdit = !!id;
   const isRenewal = !id && !!renewFrom;
   const { budget, isLoading, loadErrorKey } = useEditableBudget(
-    id ?? renewFrom
+    id ?? renewFrom,
+    isRenewal ? "RENEWAL" : "EDIT"
   );
 
   return (

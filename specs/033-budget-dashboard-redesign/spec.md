@@ -363,7 +363,11 @@ screen-reader mode, and supported system navigation modes.
 - This specification covers dashboard redesign child issue #224 only. Budget
   detail and create/edit/renew presentation are covered by #223 and #225.
 - The existing Budget domain model and persistence rules remain unchanged.
-- One global budget per user and period remains the governing uniqueness rule.
+- One current global budget per user and period remains the governing uniqueness
+  rule; one current category budget per user, category, and period follows the
+  same rule. Expired custom budgets remain historical and do not occupy the
+  uniqueness slot for their replacement; another non-expired matching custom
+  budget still blocks creation.
 - The existing warning and danger thresholds determine Needs attention
   membership.
 - Expired custom budgets remain historical records and renewal creates a new

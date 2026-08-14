@@ -2,6 +2,7 @@ import { renderHook, waitFor } from "@testing-library/react-native";
 import type { Budget } from "@monyvi/db";
 
 const mockGetBudgetById = jest.fn<Promise<unknown>, [string]>();
+const mockGetRenewableBudgetById = jest.fn<Promise<unknown>, [string]>();
 const mockLoggerError = jest.fn();
 
 jest.mock("@/services/budget-service", () => {
@@ -24,6 +25,8 @@ jest.mock("@/services/budget-service", () => {
     BudgetServiceError,
     getBudgetById: async (budgetId: string): Promise<Budget> =>
       (await mockGetBudgetById(budgetId)) as Budget,
+    getRenewableBudgetById: async (budgetId: string): Promise<Budget> =>
+      (await mockGetRenewableBudgetById(budgetId)) as Budget,
   };
 });
 
@@ -58,6 +61,23 @@ describe("useEditableBudget", () => {
 
     expect(result.current.budget).toBe(budget);
     expect(result.current.loadErrorKey).toBeNull();
+  });
+
+  it("uses the renewal-specific lookup for renewal sources", async () => {
+    const budget = { id: "expired-1" };
+    mockGetRenewableBudgetById.mockResolvedValue(budget);
+
+    const { result } = renderHook(() =>
+      useEditableBudget("expired-1", "RENEWAL")
+    );
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(mockGetRenewableBudgetById).toHaveBeenCalledWith("expired-1");
+    expect(mockGetBudgetById).not.toHaveBeenCalled();
+    expect(result.current.budget).toBe(budget);
   });
 
   it("surfaces a typed missing budget error instead of falling back to create mode", async () => {

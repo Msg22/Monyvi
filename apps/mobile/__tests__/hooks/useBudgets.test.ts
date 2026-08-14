@@ -24,6 +24,15 @@ interface MockQuery<TRecord> {
       [MockObserver<TRecord>]
     >;
   }>;
+  readonly observeWithColumns: jest.Mock<
+    {
+      readonly subscribe: jest.Mock<
+        { readonly unsubscribe: jest.Mock },
+        [MockObserver<TRecord>]
+      >;
+    },
+    [readonly string[]]
+  >;
   readonly observerRef: { current: MockObserver<TRecord> | null };
   readonly unsubscribe: jest.Mock;
 }
@@ -33,15 +42,19 @@ function createQuery<TRecord>(): MockQuery<TRecord> {
     current: null,
   };
   const unsubscribe = jest.fn();
+  const subscribe = jest.fn((observer: MockObserver<TRecord>) => {
+    observerRef.current = observer;
+    return { unsubscribe };
+  });
 
   return {
     observerRef,
     unsubscribe,
     observe: jest.fn(() => ({
-      subscribe: jest.fn((observer: MockObserver<TRecord>) => {
-        observerRef.current = observer;
-        return { unsubscribe };
-      }),
+      subscribe,
+    })),
+    observeWithColumns: jest.fn((_columns: readonly string[]) => ({
+      subscribe,
     })),
   };
 }
@@ -165,6 +178,20 @@ describe("useBudgets", () => {
     });
 
     expect(mockObserveBudgetList).toHaveBeenCalledWith("user-1");
+    expect(budgetQuery.observeWithColumns).toHaveBeenCalledWith([
+      "name",
+      "type",
+      "category_id",
+      "amount",
+      "currency",
+      "period",
+      "period_start",
+      "period_end",
+      "alert_threshold",
+      "status",
+      "pause_intervals",
+      "paused_at",
+    ]);
     expect(mockBuildBudgetMetrics).toHaveBeenCalledWith(rawBudgets);
     expect(mockBuildBudgetDashboardReadModel).toHaveBeenCalledWith({
       budgets: budgetMetrics,
@@ -394,6 +421,7 @@ describe("useBudgets", () => {
     await waitFor(() => {
       expect(result.current.hasValidData).toBe(true);
     });
+    const autoPauseCheckKeyBeforeExpiry = result.current.autoPauseCheckKey;
     const callsBeforeExpiry =
       mockBuildBudgetDashboardReadModel.mock.calls.length;
 
@@ -406,6 +434,9 @@ describe("useBudgets", () => {
         mockBuildBudgetDashboardReadModel.mock.calls.length
       ).toBeGreaterThan(callsBeforeExpiry);
     });
+    expect(result.current.autoPauseCheckKey).not.toBe(
+      autoPauseCheckKeyBeforeExpiry
+    );
     unmount();
   });
 
