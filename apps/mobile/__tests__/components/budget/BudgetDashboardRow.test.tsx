@@ -1,7 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import React from "react";
 import { I18nManager, Text as MockText } from "react-native";
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import {
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react-native";
 
 jest.mock("@expo/vector-icons", () => ({
   Ionicons: ({ name }: { name: string }) => <MockText>{name}</MockText>,
@@ -150,6 +155,11 @@ describe("BudgetDashboardRow", () => {
       "accessibilityLabel",
       "Resume: Food & Drinks"
     );
+    expect(
+      within(screen.getByTestId("budget-detail-target-budget-1")).queryByTestId(
+        "budget-action-resume-budget-1"
+      )
+    ).toBeNull();
     fireEvent.press(screen.getByTestId("budget-action-resume-budget-1"), {
       stopPropagation: jest.fn(),
     });

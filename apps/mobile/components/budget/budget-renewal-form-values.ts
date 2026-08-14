@@ -1,4 +1,4 @@
-import type { BudgetPeriod, BudgetType } from "@monyvi/db";
+import type { BudgetPeriod, BudgetType, CurrencyType } from "@monyvi/db";
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -7,6 +7,7 @@ export interface BudgetFormInitialValues {
   readonly type: BudgetType;
   readonly categoryId: string | null;
   readonly amount: string;
+  readonly currency: CurrencyType | null;
   readonly period: BudgetPeriod;
   readonly periodStart: Date;
   readonly periodEnd: Date;
@@ -18,6 +19,7 @@ export interface BudgetRenewalSource {
   readonly type: BudgetType;
   readonly categoryId?: string;
   readonly amount: number;
+  readonly currency?: CurrencyType | null;
   readonly period: BudgetPeriod;
   readonly periodStart?: Date;
   readonly periodEnd?: Date;
@@ -37,6 +39,7 @@ export function buildBudgetRenewalFormValues(
     type: source.type,
     categoryId: resolveRenewalCategoryId(source, accessibleCategoryIds),
     amount: source.amount.toString(),
+    currency: source.currency ?? null,
     period: source.period,
     periodStart,
     periodEnd: addCalendarDays(periodStart, sourceDurationDays),

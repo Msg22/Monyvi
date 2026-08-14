@@ -26,6 +26,7 @@ describe("buildBudgetRenewalFormValues", () => {
       type: "GLOBAL",
       categoryId: null,
       amount: "15000",
+      currency: null,
       period: "CUSTOM",
       periodStart: now,
       periodEnd: new Date("2026-10-13T08:00:00.000Z"),
@@ -33,6 +34,19 @@ describe("buildBudgetRenewalFormValues", () => {
     });
     expect(source.periodStart).toBe(sourceStart);
     expect(source.periodEnd).toBe(sourceEnd);
+  });
+
+  it("preserves the source currency for the replacement budget", () => {
+    const values = buildBudgetRenewalFormValues({
+      name: "USD travel",
+      type: "GLOBAL",
+      amount: 100,
+      currency: "USD",
+      period: "MONTHLY",
+      alertThreshold: 80,
+    });
+
+    expect(values.currency).toBe("USD");
   });
 
   it("uses a one-day valid duration when persisted custom dates are malformed", () => {

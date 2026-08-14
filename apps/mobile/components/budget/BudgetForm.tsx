@@ -125,6 +125,7 @@ export function BudgetForm({
       type: existingBudget?.type ?? "CATEGORY",
       categoryId: existingBudget?.categoryId ?? null,
       amount: existingBudget?.amount?.toString() ?? "",
+      currency: existingBudget?.currency ?? null,
       period: existingBudget?.period ?? "MONTHLY",
       periodStart: existingBudget?.periodStart ?? new Date(),
       periodEnd: existingBudget?.periodEnd ?? new Date(),
@@ -204,7 +205,7 @@ export function BudgetForm({
     }
 
     if (form.type === "CATEGORY") {
-      if (categoryError) {
+      if (areCategoriesLoading || categoryError) {
         newErrors.category = t("category_load_error");
       } else if (!form.categoryId) {
         newErrors.category = t("validation_category_required");
@@ -219,7 +220,7 @@ export function BudgetForm({
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [categoryError, form, t]);
+  }, [areCategoriesLoading, categoryError, form, t]);
 
   // ── Submit ──
   const handleSubmit = useCallback(async (): Promise<void> => {
@@ -232,6 +233,7 @@ export function BudgetForm({
         const input: UpdateBudgetInput = {
           name: form.name.trim(),
           amount: parseFloat(form.amount),
+          currency: form.currency ?? preferredCurrency,
           period: form.period,
           alertThreshold: form.alertThreshold,
           ...(form.period === "CUSTOM" && {
@@ -258,6 +260,7 @@ export function BudgetForm({
               ? (form.categoryId ?? undefined)
               : undefined,
           amount: parseFloat(form.amount),
+          currency: form.currency ?? preferredCurrency,
           period: form.period,
           alertThreshold: form.alertThreshold,
           ...(form.period === "CUSTOM" && {
@@ -282,7 +285,15 @@ export function BudgetForm({
     } finally {
       setIsSubmitting(false);
     }
-  }, [validate, isEditMode, existingBudget, form, showToast, t]);
+  }, [
+    validate,
+    isEditMode,
+    existingBudget,
+    form,
+    preferredCurrency,
+    showToast,
+    t,
+  ]);
 
   return (
     <ScrollView
@@ -487,7 +498,7 @@ export function BudgetForm({
             className="text-base font-bold ps-4"
             style={{ color: palette.nileGreen[500] }}
           >
-            {preferredCurrency}
+            {form.currency ?? preferredCurrency}
           </Text>
           <TextInput
             value={form.amount}
@@ -616,8 +627,17 @@ export function BudgetForm({
 
       {/* Submit Button */}
       <TouchableOpacity
+        testID="budget-form-submit"
         onPress={() => void handleSubmit()}
-        disabled={isSubmitting}
+        accessibilityRole="button"
+        accessibilityLabel={isEditMode ? t("save_changes") : t("create_budget")}
+        disabled={
+          isSubmitting || (form.type === "CATEGORY" && areCategoriesLoading)
+        }
+        accessibilityState={{
+          disabled:
+            isSubmitting || (form.type === "CATEGORY" && areCategoriesLoading),
+        }}
         activeOpacity={0.85}
         className="rounded-2xl py-4 items-center"
         style={{ backgroundColor: palette.nileGreen[500] }}

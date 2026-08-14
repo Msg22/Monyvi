@@ -128,146 +128,162 @@ export function BudgetDashboardRow({
   const isLast = position === "last" || position === "only";
   const hasAction = item.availableAction !== null;
 
+  const openDetail = (): void => onPress(item.id);
+
   return (
-    <TouchableOpacity
-      activeOpacity={0.8}
-      accessibilityRole="button"
-      accessibilityLabel={presentation.accessibilityLabel}
-      onPress={() => onPress(item.id)}
+    <View
+      testID={`budget-dashboard-row-${item.id}`}
+      className={`min-h-24 bg-white px-4 py-3 dark:bg-slate-800 ${getContainerClasses(
+        position
+      )} ${isLast ? "" : "border-b"}`}
     >
-      <View
-        testID={`budget-dashboard-row-${item.id}`}
-        className={`min-h-24 bg-white px-4 py-3 dark:bg-slate-800 ${getContainerClasses(
-          position
-        )} ${isLast ? "" : "border-b"}`}
-      >
-        <View className="flex-row items-center">
-          <View className="min-w-0 flex-1 flex-row items-center">
-            <RowIcon item={item} />
-            <View className="ms-3 min-w-0 flex-1">
-              <Text
-                numberOfLines={2}
-                className="text-base font-bold leading-5 text-text-primary dark:text-slate-25"
-              >
-                {item.displayName}
+      <View className="flex-row items-center">
+        <TouchableOpacity
+          testID={`budget-detail-target-${item.id}`}
+          className="min-w-0 flex-1 flex-row items-center"
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={presentation.accessibilityLabel}
+          onPress={openDetail}
+        >
+          <RowIcon item={item} />
+          <View className="ms-3 min-w-0 flex-1">
+            <Text
+              numberOfLines={2}
+              className="text-base font-bold leading-5 text-text-primary dark:text-slate-25"
+            >
+              {item.displayName}
+            </Text>
+            <Text
+              numberOfLines={1}
+              className="mt-0.5 text-sm text-text-muted dark:text-slate-400"
+            >
+              {presentation.periodAndScopeLabel}
+            </Text>
+            {item.categoryLabel.kind === "deleted" ? (
+              <Text className="mt-0.5 text-xs text-red-500 dark:text-red-300">
+                {presentation.deletedCategoryLabel}
               </Text>
+            ) : null}
+            {item.lifecycle === "EXPIRED" ? (
               <Text
-                numberOfLines={1}
-                className="mt-0.5 text-sm text-text-muted dark:text-slate-400"
+                testID={`budget-row-expiry-${item.id}`}
+                className="mt-0.5 text-sm text-red-500 dark:text-red-300"
               >
-                {presentation.periodAndScopeLabel}
+                {presentation.expiryLabel}
               </Text>
-              {item.categoryLabel.kind === "deleted" ? (
-                <Text className="mt-0.5 text-xs text-red-500 dark:text-red-300">
-                  {presentation.deletedCategoryLabel}
-                </Text>
-              ) : null}
-              {item.lifecycle === "EXPIRED" ? (
-                <Text
-                  testID={`budget-row-expiry-${item.id}`}
-                  className="mt-0.5 text-sm text-red-500 dark:text-red-300"
-                >
-                  {presentation.expiryLabel}
-                </Text>
-              ) : null}
+            ) : null}
+            <Text
+              testID={`budget-row-subtitle-${item.id}`}
+              numberOfLines={1}
+              adjustsFontSizeToFit={true}
+              minimumFontScale={0.75}
+              className="mt-1.5 text-sm text-text-muted dark:text-slate-400"
+            >
+              {presentation.spentOfLimitLabel}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <View
+          testID={`budget-row-trailing-${item.id}`}
+          className="ms-2 w-24 items-end"
+        >
+          {item.showsProgress ? (
+            <TouchableOpacity
+              className="w-full items-end"
+              activeOpacity={0.8}
+              accessible={false}
+              onPress={openDetail}
+            >
               <Text
-                testID={`budget-row-subtitle-${item.id}`}
+                testID={`budget-row-percentage-${item.id}`}
                 numberOfLines={1}
                 adjustsFontSizeToFit={true}
-                minimumFontScale={0.75}
-                className="mt-1.5 text-sm text-text-muted dark:text-slate-400"
+                minimumFontScale={0.65}
+                className={`max-w-full text-xl font-bold ${getLifecycleColorClasses(item)}`}
               >
-                {presentation.spentOfLimitLabel}
+                {presentation.percentageLabel}
               </Text>
-            </View>
-          </View>
-
-          <View
-            testID={`budget-row-trailing-${item.id}`}
-            className="ms-2 w-24 items-end"
-          >
-            {item.showsProgress ? (
-              <>
-                <Text
-                  testID={`budget-row-percentage-${item.id}`}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit={true}
-                  minimumFontScale={0.65}
-                  className={`max-w-full text-xl font-bold ${getLifecycleColorClasses(item)}`}
-                >
-                  {presentation.percentageLabel}
-                </Text>
+              <Text
+                testID={`budget-row-status-${item.id}`}
+                numberOfLines={1}
+                adjustsFontSizeToFit={true}
+                minimumFontScale={0.7}
+                className={`mt-0.5 text-xs font-medium ${getLifecycleColorClasses(item)}`}
+              >
+                {presentation.statusLabel}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <>
+              <TouchableOpacity
+                className={`rounded-full border px-3 py-1 ${getStatusContainerClasses(
+                  item
+                )}`}
+                activeOpacity={0.8}
+                accessible={false}
+                onPress={openDetail}
+              >
                 <Text
                   testID={`budget-row-status-${item.id}`}
                   numberOfLines={1}
-                  adjustsFontSizeToFit={true}
-                  minimumFontScale={0.7}
-                  className={`mt-0.5 text-xs font-medium ${getLifecycleColorClasses(item)}`}
+                  className={`text-sm font-medium ${getLifecycleColorClasses(item)}`}
                 >
                   {presentation.statusLabel}
                 </Text>
-              </>
-            ) : (
-              <>
-                <View
-                  className={`rounded-full border px-3 py-1 ${getStatusContainerClasses(
-                    item
-                  )}`}
+              </TouchableOpacity>
+              {hasAction ? (
+                <TouchableOpacity
+                  testID={`budget-action-${item.availableAction.toLowerCase()}-${item.id}`}
+                  className="mt-1 min-h-8 justify-center px-1"
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    presentation.actionAccessibilityLabel ?? undefined
+                  }
+                  onPress={() => {
+                    if (item.availableAction === "RESUME") onResume?.(item.id);
+                    else onRenew?.(item.id);
+                  }}
                 >
-                  <Text
-                    testID={`budget-row-status-${item.id}`}
-                    numberOfLines={1}
-                    className={`text-sm font-medium ${getLifecycleColorClasses(item)}`}
-                  >
-                    {presentation.statusLabel}
+                  <Text className="text-base font-semibold text-nileGreen-600 dark:text-nileGreen-300">
+                    {presentation.actionLabel}
                   </Text>
-                </View>
-                {hasAction ? (
-                  <TouchableOpacity
-                    testID={`budget-action-${item.availableAction.toLowerCase()}-${item.id}`}
-                    className="mt-1 min-h-8 justify-center px-1"
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      presentation.actionAccessibilityLabel ?? undefined
-                    }
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      if (item.availableAction === "RESUME")
-                        onResume?.(item.id);
-                      else onRenew?.(item.id);
-                    }}
-                  >
-                    <Text className="text-base font-semibold text-nileGreen-600 dark:text-nileGreen-300">
-                      {presentation.actionLabel}
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-              </>
-            )}
-          </View>
-
-          <View className="ms-1 min-h-11 min-w-6 items-end justify-center">
-            <Ionicons
-              name={I18nManager.isRTL ? "chevron-back" : "chevron-forward"}
-              size={22}
-              color={palette.slate[400]}
-            />
-          </View>
+                </TouchableOpacity>
+              ) : null}
+            </>
+          )}
         </View>
 
-        {item.showsProgress ? (
-          <View
-            testID={`budget-row-progress-${item.id}`}
-            className="ms-14 me-7 mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
-          >
-            <View
-              className={`h-full rounded-full ${getProgressClasses(item)}`}
-              style={{ width: presentation.progressWidth ?? "0%" }}
-            />
-          </View>
-        ) : null}
+        <TouchableOpacity
+          className="ms-1 min-h-11 min-w-6 items-end justify-center"
+          activeOpacity={0.8}
+          accessible={false}
+          onPress={openDetail}
+        >
+          <Ionicons
+            name={I18nManager.isRTL ? "chevron-back" : "chevron-forward"}
+            size={22}
+            color={palette.slate[400]}
+          />
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+
+      {item.showsProgress ? (
+        <TouchableOpacity
+          testID={`budget-row-progress-${item.id}`}
+          className="ms-14 me-7 mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+          activeOpacity={0.8}
+          accessible={false}
+          onPress={openDetail}
+        >
+          <View
+            className={`h-full rounded-full ${getProgressClasses(item)}`}
+            style={{ width: presentation.progressWidth ?? "0%" }}
+          />
+        </TouchableOpacity>
+      ) : null}
+    </View>
   );
 }

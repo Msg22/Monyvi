@@ -1,10 +1,16 @@
 /* eslint-disable @typescript-eslint/consistent-type-assertions */
 import React from "react";
 import { Text as MockText } from "react-native";
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react-native";
 import type { Budget, Category } from "@monyvi/db";
 
 let mockCategoryError: unknown = new Error("category observation failed");
+let mockAreCategoriesLoading = false;
 let mockCategoryMap = new Map<string, Category>();
 const mockRetryCategories = jest.fn();
 
@@ -19,7 +25,7 @@ jest.mock("@/hooks/useCategories", () => ({
     categories: [],
     expenseCategories: [],
     incomeCategories: [],
-    isLoading: false,
+    isLoading: mockAreCategoriesLoading,
     error: mockCategoryError,
     retry: mockRetryCategories,
   }),
@@ -69,6 +75,9 @@ jest.mock("@/utils/dateHelpers", () => ({
 }));
 
 import { BudgetForm } from "@/components/budget/BudgetForm";
+import { createBudget as createBudgetService } from "@/services/budget-service";
+
+const mockedCreateBudgetService = jest.mocked(createBudgetService);
 
 const RENEWAL_SOURCE = {
   id: "budget-1",
@@ -76,6 +85,7 @@ const RENEWAL_SOURCE = {
   type: "CATEGORY",
   categoryId: "education",
   amount: 5000,
+  currency: "USD",
   period: "CUSTOM",
   periodStart: new Date("2026-06-01T00:00:00.000Z"),
   periodEnd: new Date("2026-07-01T00:00:00.000Z"),
@@ -85,8 +95,10 @@ const RENEWAL_SOURCE = {
 describe("BudgetForm category recovery", () => {
   beforeEach(() => {
     mockCategoryError = new Error("category observation failed");
+    mockAreCategoriesLoading = false;
     mockCategoryMap = new Map<string, Category>();
     mockRetryCategories.mockClear();
+    mockedCreateBudgetService.mockReset();
   });
 
   it("preserves a renewal category through an observation failure and recovers after retry", () => {
@@ -104,5 +116,48 @@ describe("BudgetForm category recovery", () => {
 
     expect(screen.getByText("Education")).toBeOnTheScreen();
     expect(screen.queryByTestId("budget-category-load-error")).toBeNull();
+  });
+
+  it("blocks category renewal while categories are still loading", () => {
+    mockCategoryError = null;
+    mockAreCategoriesLoading = true;
+    mockCategoryMap = new Map([
+      ["education", { displayName: "Education" } as unknown as Category],
+    ]);
+    render(<BudgetForm renewalSource={RENEWAL_SOURCE} />);
+
+    expect(screen.getByTestId("budget-form-submit")).toHaveProp(
+      "accessibilityState",
+      { disabled: true }
+    );
+    fireEvent.press(screen.getByRole("button", { name: "create_budget" }));
+    expect(mockedCreateBudgetService).not.toHaveBeenCalled();
+  });
+
+  it("submits a renewal with the source currency", async () => {
+    mockCategoryError = null;
+    mockAreCategoriesLoading = false;
+    mockCategoryMap = new Map([
+      ["education", { displayName: "Education" } as unknown as Category],
+    ]);
+    render(<BudgetForm renewalSource={RENEWAL_SOURCE} />);
+
+    expect(screen.getByTestId("budget-form-submit")).toHaveProp(
+      "accessibilityState",
+      { disabled: false }
+    );
+    fireEvent.press(screen.getByRole("button", { name: "create_budget" }));
+
+    expect(screen.queryByText("validation_name_required")).toBeNull();
+    expect(screen.queryByText("validation_amount_invalid")).toBeNull();
+    expect(screen.queryByText("validation_category_required")).toBeNull();
+    expect(screen.queryByText("category_load_error")).toBeNull();
+    expect(screen.queryByText("validation_date_order")).toBeNull();
+
+    await waitFor(() =>
+      expect(mockedCreateBudgetService).toHaveBeenCalledWith(
+        expect.objectContaining({ currency: "USD" })
+      )
+    );
   });
 });
