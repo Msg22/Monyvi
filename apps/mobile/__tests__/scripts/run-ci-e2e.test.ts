@@ -70,6 +70,10 @@ interface RunCiE2eModule {
     selectedSuites: ReadonlySet<string>,
     supabaseMode: "local" | "remote"
   ): boolean;
+  assertBudgetSuiteIsolation(
+    selectedSuites: ReadonlySet<string>,
+    env?: Readonly<Record<string, string | undefined>>
+  ): void;
 }
 
 const runCiE2e = jest.requireActual(
@@ -161,6 +165,19 @@ describe("run-ci-e2e helpers", () => {
       env: { E2E_CLEAR_APP_STATE: "1" },
       retryOnDeviceFailure: true,
     });
+  });
+
+  it("rejects budget profile runs when auth bootstrap cannot clear local app data", () => {
+    expect(() =>
+      runCiE2e.assertBudgetSuiteIsolation(new Set(["budgets"]), {
+        E2E_SKIP_AUTH_BOOTSTRAP: "1",
+      })
+    ).toThrow("Budget E2E requires auth bootstrap");
+    expect(() =>
+      runCiE2e.assertBudgetSuiteIsolation(new Set(["transactions"]), {
+        E2E_SKIP_AUTH_BOOTSTRAP: "1",
+      })
+    ).not.toThrow();
   });
 
   it("detects ADB device-offline failures for infrastructure-only retry", () => {

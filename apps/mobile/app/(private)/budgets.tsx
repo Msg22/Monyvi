@@ -19,7 +19,7 @@ export default function BudgetsScreen(): React.JSX.Element {
   const router = useRouter();
   const { showToast } = useToast();
   const { preferredCurrency } = usePreferredCurrency();
-  const budgets = useBudgets();
+  const budgets = useBudgets(preferredCurrency);
   const actions = useBudgetDashboardActions();
   const [isFocused, setIsFocused] = useState(false);
   const [resumeBudgetId, setResumeBudgetId] = useState<string | null>(null);
@@ -126,7 +126,6 @@ export default function BudgetsScreen(): React.JSX.Element {
         isRefreshing={budgets.isRefreshing}
         hasValidData={budgets.hasValidData}
         errorKey={budgets.errorKey}
-        preferredCurrency={preferredCurrency}
         onSelectScope={budgets.setScopeFilter}
         onSelectPeriod={budgets.setPeriodFilter}
         onSelectStatus={budgets.setStatusFilter}

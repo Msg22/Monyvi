@@ -3,47 +3,6 @@ import React from "react";
 import { I18nManager, Text as MockText } from "react-native";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 
-jest.mock("@monyvi/logic", () => ({
-  formatCurrency: ({
-    amount,
-    currency,
-  }: {
-    amount: number;
-    currency: string;
-  }) => `${amount.toLocaleString("en-US")} ${currency}`,
-}));
-
-jest.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    i18n: { resolvedLanguage: "en" },
-    t: (
-      key: string,
-      options?: { readonly spent?: string; readonly limit?: string }
-    ): string => {
-      if (key === "spent_of_limit") {
-        return `${options?.spent} of ${options?.limit}`;
-      }
-      return (
-        {
-          filter_monthly: "Monthly",
-          filter_weekly: "Weekly",
-          filter_custom: "Custom",
-          category_type: "Category",
-          global_type: "Global",
-          paused: "Paused",
-          resume_action: "Resume",
-          renew_action: "Renew",
-          over_budget: "Over Budget",
-          near_limit: "Near limit",
-          budget_expired: "Expired",
-          deleted_category: "Deleted category",
-          view_budget: "View Budget",
-        }[key] ?? key
-      );
-    },
-  }),
-}));
-
 jest.mock("@expo/vector-icons", () => ({
   Ionicons: ({ name }: { name: string }) => <MockText>{name}</MockText>,
 }));
@@ -65,6 +24,20 @@ jest.mock("@/constants/colors", () => ({
 
 import { BudgetDashboardRow } from "@/components/budget/BudgetDashboardRow";
 import type { BudgetDashboardItem } from "@/contracts/budget-dashboard";
+
+const BASE_PRESENTATION: BudgetDashboardItem["presentation"] = {
+  periodAndScopeLabel: "Monthly • Category",
+  spentOfLimitLabel: "1,750 EGP of 5,000 EGP",
+  percentageLabel: "35%",
+  progressWidth: "35%",
+  statusLabel: "safe_to_spend",
+  deletedCategoryLabel: null,
+  expiryLabel: null,
+  actionLabel: null,
+  accessibilityLabel:
+    "Food & Drinks, Monthly, Category, 1,750 EGP of 5,000 EGP, 35%, safe_to_spend",
+  viewBudgetLabel: "View Budget: Food & Drinks",
+};
 
 function item(
   overrides: Partial<BudgetDashboardItem> = {}
@@ -91,6 +64,7 @@ function item(
     categoryLabel: { kind: "resolved", categoryId: "food", name: "Food" },
     categoryIcon: null,
     availableAction: null,
+    presentation: BASE_PRESENTATION,
     ...overrides,
   };
 }
@@ -108,7 +82,6 @@ describe("BudgetDashboardRow", () => {
           },
         })}
         position="only"
-        preferredCurrency="EGP"
         onPress={jest.fn()}
       />
     );
@@ -141,9 +114,17 @@ describe("BudgetDashboardRow", () => {
           lifecycle: "PAUSED",
           showsProgress: false,
           availableAction: "RESUME",
+          presentation: {
+            ...BASE_PRESENTATION,
+            percentageLabel: null,
+            progressWidth: null,
+            statusLabel: "Paused",
+            actionLabel: "Resume",
+            accessibilityLabel:
+              "Food & Drinks, Monthly, Category, 1,750 EGP of 5,000 EGP, Paused",
+          },
         })}
         position="only"
-        preferredCurrency="EGP"
         onPress={jest.fn()}
         onResume={onResume}
       />
@@ -168,9 +149,18 @@ describe("BudgetDashboardRow", () => {
           showsProgress: false,
           availableAction: "RENEW",
           expiresAt: new Date("2026-08-12T00:00:00.000Z"),
+          presentation: {
+            ...BASE_PRESENTATION,
+            percentageLabel: null,
+            progressWidth: null,
+            statusLabel: "Expired",
+            expiryLabel: "Expired Aug 12",
+            actionLabel: "Renew",
+            accessibilityLabel:
+              "Food & Drinks, Monthly, Category, 1,750 EGP of 5,000 EGP, Expired",
+          },
         })}
         position="only"
-        preferredCurrency="EGP"
         onPress={jest.fn()}
         onRenew={onRenew}
       />
@@ -204,9 +194,14 @@ describe("BudgetDashboardRow", () => {
             ...item().metrics,
             percentage: 11641,
           },
+          presentation: {
+            ...BASE_PRESENTATION,
+            percentageLabel: "11641%",
+            progressWidth: "100%",
+            statusLabel: "Over Budget",
+          },
         })}
         position="only"
-        preferredCurrency="EGP"
         onPress={jest.fn()}
       />
     );
@@ -240,9 +235,15 @@ describe("BudgetDashboardRow", () => {
           lifecycle: "PAUSED",
           showsProgress: false,
           availableAction: "RESUME",
+          presentation: {
+            ...BASE_PRESENTATION,
+            percentageLabel: null,
+            progressWidth: null,
+            statusLabel: "Paused",
+            actionLabel: "Resume",
+          },
         })}
         position="only"
-        preferredCurrency="EGP"
         onPress={onPress}
         onResume={jest.fn()}
       />
@@ -260,9 +261,14 @@ describe("BudgetDashboardRow", () => {
         item={item({
           displayName: "Historic learning",
           categoryLabel: { kind: "deleted", categoryId: "deleted" },
+          presentation: {
+            ...BASE_PRESENTATION,
+            deletedCategoryLabel: "Deleted category",
+            accessibilityLabel:
+              "Historic learning, Deleted category, Monthly, Category, 1,750 EGP of 5,000 EGP, 35%, safe_to_spend",
+          },
         })}
         position="only"
-        preferredCurrency="EGP"
         onPress={jest.fn()}
       />
     );
@@ -286,7 +292,6 @@ describe("BudgetDashboardRow", () => {
       <BudgetDashboardRow
         item={item({ displayName: "ميزانية الطعام" })}
         position="only"
-        preferredCurrency="EGP"
         onPress={jest.fn()}
       />
     );

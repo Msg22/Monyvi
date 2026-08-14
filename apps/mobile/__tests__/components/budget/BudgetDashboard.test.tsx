@@ -122,6 +122,19 @@ function item(id: string): BudgetDashboardItem {
     categoryLabel: { kind: "resolved", categoryId: id, name: id },
     categoryIcon: null,
     availableAction: null,
+    presentation: {
+      periodAndScopeLabel: "Monthly • Category",
+      spentOfLimitLabel: "100 EGP of 1,000 EGP",
+      percentageLabel: "10%",
+      progressWidth: "10%",
+      statusLabel: "Safe to spend",
+      deletedCategoryLabel: null,
+      expiryLabel: null,
+      actionLabel: null,
+      accessibilityLabel:
+        "Budget, Monthly, Category, 100 EGP of 1,000 EGP, 10%, Safe to spend",
+      viewBudgetLabel: "View Budget: Budget",
+    },
   };
 }
 
@@ -149,7 +162,6 @@ function renderDashboard(
     isRefreshing: false,
     hasValidData: true,
     errorKey: null,
-    preferredCurrency: "EGP",
     onSelectScope: jest.fn(),
     onSelectPeriod: jest.fn(),
     onSelectStatus: jest.fn(),

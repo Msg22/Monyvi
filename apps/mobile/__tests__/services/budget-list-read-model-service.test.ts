@@ -74,6 +74,13 @@ jest.mock("@monyvi/logic", () => ({
     mockGetDaysLeft(...args),
   isPeriodExpired: (...args: readonly unknown[]): unknown =>
     mockIsPeriodExpired(...args),
+  formatCurrency: ({
+    amount,
+    currency,
+  }: {
+    readonly amount: number;
+    readonly currency: string;
+  }): string => `${amount.toLocaleString("en-US")} ${currency}`,
 }));
 
 import {
@@ -370,6 +377,27 @@ describe("budget-list-read-model-service", () => {
       now: new Date("2026-05-15T00:00:00.000Z"),
       activeLocale,
       fallbackName: "Unnamed budget",
+      preferredCurrency: "EGP",
+      presentationCopy: {
+        periodLabels: {
+          WEEKLY: "Weekly",
+          MONTHLY: "Monthly",
+          CUSTOM: "Custom",
+        },
+        scopeLabels: { GLOBAL: "Global", CATEGORY: "Category" },
+        statusLabels: {
+          HEALTHY: "Safe to spend",
+          NEAR_LIMIT: "Near limit",
+          OVER_BUDGET: "Over budget",
+          PAUSED: "Paused",
+          EXPIRED: "Expired",
+        },
+        deletedCategoryLabel: "Deleted category",
+        resumeActionLabel: "Resume",
+        renewActionLabel: "Renew",
+        formatSpentOfLimit: (spent, limit) => `${spent} of ${limit}`,
+        formatViewBudget: (name) => `View Budget: ${name}`,
+      },
     });
   }
 
@@ -455,6 +483,18 @@ describe("budget-list-read-model-service", () => {
     });
     expect(result.items.find((item) => item.id === "deleted")).toMatchObject({
       categoryLabel: { kind: "deleted", categoryId: "deleted" },
+      presentation: {
+        periodAndScopeLabel: "Monthly • Category",
+        spentOfLimitLabel: "0 EGP of 1,000 EGP",
+        percentageLabel: "0%",
+        progressWidth: "0%",
+        statusLabel: "Safe to spend",
+        deletedCategoryLabel: "Deleted category",
+        expiryLabel: null,
+        actionLabel: null,
+        accessibilityLabel:
+          "Historic Education, Deleted category, Monthly, Category, 0 EGP of 1,000 EGP, 0%, Safe to spend",
+      },
     });
     expect(result.items[0]).not.toHaveProperty("budget");
   });

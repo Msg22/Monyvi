@@ -226,6 +226,15 @@ describe("useBudgets", () => {
       now: expect.any(Date),
       activeLocale: "en",
       fallbackName: "Unnamed budget",
+      preferredCurrency: "EGP",
+      // Jest asymmetric matchers are intentionally dynamic at this boundary.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      presentationCopy: expect.objectContaining({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        deletedCategoryLabel: expect.any(String),
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        formatSpentOfLimit: expect.any(Function),
+      }),
     });
     expect(result.current.readModel).toBe(dashboardReadModel);
     expect(result.current.budgets).toBe(dashboardReadModel.items);
@@ -341,6 +350,7 @@ describe("useBudgets", () => {
       period: "ALL",
       status: "ACTIVE",
     });
+    expect(result.current.filters).toBe(result.current.readModel.filters);
   });
 
   it("restores filters for same-user remount and resets on user change", async () => {
@@ -525,6 +535,31 @@ describe("useBudgets", () => {
     });
 
     expect(result.current.errorKey).toBe("dashboard_load_error");
+  });
+
+  it("keeps the last valid rows visible while retry reconnects observations", async () => {
+    const { result } = renderHook(() => useBudgets());
+
+    act(() => {
+      budgetQuery.observerRef.current?.next(rawBudgets);
+    });
+    await waitFor(() => {
+      expect(result.current.hasValidData).toBe(true);
+    });
+
+    mockBuildBudgetMetrics.mockRejectedValueOnce(new Error("refresh failed"));
+    act(() => result.current.refresh());
+    await waitFor(() => {
+      expect(result.current.errorKey).toBe("dashboard_load_error");
+    });
+    const retainedModel = result.current.readModel;
+
+    act(() => result.current.retry());
+
+    expect(result.current.readModel).toBe(retainedModel);
+    expect(result.current.hasValidData).toBe(true);
+    expect(result.current.isInitialLoading).toBe(false);
+    await waitFor(() => expect(mockObserveBudgetList).toHaveBeenCalledTimes(2));
   });
 
   it("rebuilds lifecycle state when a visible custom budget crosses expiry", async () => {

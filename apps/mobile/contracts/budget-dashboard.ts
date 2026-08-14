@@ -33,6 +33,30 @@ export type BudgetDashboardCategoryLabel =
     }
   | { readonly kind: "deleted"; readonly categoryId: string | null };
 
+export interface BudgetDashboardPresentation {
+  readonly periodAndScopeLabel: string;
+  readonly spentOfLimitLabel: string;
+  readonly percentageLabel: string | null;
+  readonly progressWidth: `${number}%` | null;
+  readonly statusLabel: string;
+  readonly deletedCategoryLabel: string | null;
+  readonly expiryLabel: string | null;
+  readonly actionLabel: string | null;
+  readonly accessibilityLabel: string;
+  readonly viewBudgetLabel: string;
+}
+
+export interface BudgetDashboardPresentationCopy {
+  readonly periodLabels: Readonly<Record<BudgetPeriod, string>>;
+  readonly scopeLabels: Readonly<Record<"GLOBAL" | "CATEGORY", string>>;
+  readonly statusLabels: Readonly<Record<BudgetDashboardLifecycle, string>>;
+  readonly deletedCategoryLabel: string;
+  readonly resumeActionLabel: string;
+  readonly renewActionLabel: string;
+  readonly formatSpentOfLimit: (spent: string, limit: string) => string;
+  readonly formatViewBudget: (name: string) => string;
+}
+
 export interface BudgetDashboardItem {
   readonly id: string;
   readonly displayName: string;
@@ -48,6 +72,7 @@ export interface BudgetDashboardItem {
   readonly categoryLabel: BudgetDashboardCategoryLabel;
   readonly categoryIcon: CategoryIconConfig | null;
   readonly availableAction: "RESUME" | "RENEW" | null;
+  readonly presentation: BudgetDashboardPresentation;
 }
 
 export interface BudgetDashboardReadModel {

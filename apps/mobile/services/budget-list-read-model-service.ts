@@ -1,8 +1,9 @@
-import { Budget, database, Transaction } from "@monyvi/db";
+import { Budget, database, Transaction, type CurrencyType } from "@monyvi/db";
 import { Q } from "@nozbe/watermelondb";
 import type Query from "@nozbe/watermelondb/Query";
 import {
   computeSpendingMetrics,
+  formatCurrency,
   getCurrentPeriodBounds,
   getDaysElapsed,
   getDaysLeft,
@@ -15,6 +16,8 @@ import {
   type BudgetDashboardFilters,
   type BudgetDashboardItem,
   type BudgetDashboardLifecycle,
+  type BudgetDashboardPresentation,
+  type BudgetDashboardPresentationCopy,
   type BudgetDashboardReadModel,
 } from "@/contracts/budget-dashboard";
 import { getSpendingForBudget } from "@/services/budget-service";
@@ -100,6 +103,8 @@ export interface BuildBudgetDashboardReadModelInput {
   readonly now: Date;
   readonly activeLocale: "en" | "ar";
   readonly fallbackName: string;
+  readonly preferredCurrency: CurrencyType;
+  readonly presentationCopy: BudgetDashboardPresentationCopy;
 }
 
 const LIFECYCLE_PRIORITY: Readonly<Record<BudgetDashboardLifecycle, number>> = {
@@ -180,11 +185,113 @@ function resolveCategoryIcon(
   );
 }
 
+function resolveExpiryLabel(
+  budget: Budget,
+  lifecycle: BudgetDashboardLifecycle,
+  statusLabel: string,
+  activeLocale: "en" | "ar"
+): string | null {
+  if (lifecycle !== "EXPIRED" || !budget.periodEnd) return null;
+  const expiryDate = budget.periodEnd.toLocaleDateString(activeLocale, {
+    month: "short",
+    day: "numeric",
+  });
+  return `${statusLabel} ${expiryDate}`;
+}
+
+function resolveActionLabel(
+  lifecycle: BudgetDashboardLifecycle,
+  copy: BudgetDashboardPresentationCopy
+): string | null {
+  if (lifecycle === "EXPIRED") return copy.renewActionLabel;
+  if (lifecycle === "PAUSED") return copy.resumeActionLabel;
+  return null;
+}
+
+function createAccessibilityLabel(
+  displayName: string,
+  deletedCategoryLabel: string | null,
+  periodLabel: string,
+  scopeLabel: string,
+  spentOfLimitLabel: string,
+  percentageLabel: string | null,
+  statusLabel: string
+): string {
+  return [
+    displayName,
+    ...(deletedCategoryLabel ? [deletedCategoryLabel] : []),
+    periodLabel,
+    scopeLabel,
+    spentOfLimitLabel,
+    ...(percentageLabel ? [percentageLabel] : []),
+    statusLabel,
+  ].join(", ");
+}
+
+function createDashboardPresentation(
+  item: BudgetWithMetrics,
+  lifecycle: BudgetDashboardLifecycle,
+  displayName: string,
+  categoryLabel: BudgetDashboardCategoryLabel,
+  preferredCurrency: CurrencyType,
+  activeLocale: "en" | "ar",
+  copy: BudgetDashboardPresentationCopy
+): BudgetDashboardPresentation {
+  const currency = item.budget.currency ?? preferredCurrency;
+  const spent = formatCurrency({ amount: item.metrics.spent, currency });
+  const limit = formatCurrency({ amount: item.metrics.limit, currency });
+  const spentOfLimitLabel = copy.formatSpentOfLimit(spent, limit);
+  const roundedPercentage = Math.round(item.metrics.percentage);
+  const showsProgress = ["HEALTHY", "NEAR_LIMIT", "OVER_BUDGET"].includes(
+    lifecycle
+  );
+  const statusLabel = copy.statusLabels[lifecycle];
+  const deletedCategoryLabel =
+    categoryLabel.kind === "deleted" ? copy.deletedCategoryLabel : null;
+  const periodLabel = copy.periodLabels[item.budget.period];
+  const scopeLabel = copy.scopeLabels[item.budget.type];
+  const expiryLabel = resolveExpiryLabel(
+    item.budget,
+    lifecycle,
+    statusLabel,
+    activeLocale
+  );
+  const percentageLabel = showsProgress ? `${roundedPercentage}%` : null;
+  const actionLabel = resolveActionLabel(lifecycle, copy);
+  const accessibilityLabel = createAccessibilityLabel(
+    displayName,
+    deletedCategoryLabel,
+    periodLabel,
+    scopeLabel,
+    spentOfLimitLabel,
+    percentageLabel,
+    statusLabel
+  );
+
+  return Object.freeze({
+    periodAndScopeLabel: `${periodLabel} • ${scopeLabel}`,
+    spentOfLimitLabel,
+    percentageLabel,
+    progressWidth: showsProgress
+      ? `${Math.min(100, Math.max(0, roundedPercentage))}%`
+      : null,
+    statusLabel,
+    deletedCategoryLabel,
+    expiryLabel,
+    actionLabel,
+    accessibilityLabel,
+    viewBudgetLabel: copy.formatViewBudget(displayName),
+  });
+}
+
 function createDashboardItem(
   item: BudgetWithMetrics,
   categoryMap: ReadonlyMap<string, BudgetDashboardCategorySource>,
   lifecycle: BudgetDashboardLifecycle,
-  fallbackName: string
+  fallbackName: string,
+  preferredCurrency: CurrencyType,
+  activeLocale: "en" | "ar",
+  presentationCopy: BudgetDashboardPresentationCopy
 ): BudgetDashboardItem {
   const { budget, metrics, daysLeft, daysElapsed } = item;
   const category = budget.categoryId
@@ -192,10 +299,12 @@ function createDashboardItem(
     : undefined;
   const persistedName = budget.name?.trim() ?? "";
   const categoryName = category?.displayName.trim() ?? "";
+  const displayName = persistedName || categoryName || fallbackName.trim();
+  const categoryLabel = Object.freeze(resolveCategoryLabel(budget, category));
 
   return Object.freeze({
     id: budget.id,
-    displayName: persistedName || categoryName || fallbackName.trim(),
+    displayName,
     period: budget.period,
     currency: budget.currency ?? null,
     scope: budget.type,
@@ -205,7 +314,7 @@ function createDashboardItem(
     daysLeft,
     daysElapsed,
     expiresAt: lifecycle === "EXPIRED" ? (budget.periodEnd ?? null) : null,
-    categoryLabel: Object.freeze(resolveCategoryLabel(budget, category)),
+    categoryLabel,
     categoryIcon: resolveCategoryIcon(category),
     availableAction:
       lifecycle === "EXPIRED"
@@ -213,6 +322,15 @@ function createDashboardItem(
         : lifecycle === "PAUSED"
           ? "RESUME"
           : null,
+    presentation: createDashboardPresentation(
+      item,
+      lifecycle,
+      displayName,
+      categoryLabel,
+      preferredCurrency,
+      activeLocale,
+      presentationCopy
+    ),
   });
 }
 
@@ -243,6 +361,8 @@ export function buildBudgetDashboardReadModel({
   now,
   activeLocale,
   fallbackName,
+  preferredCurrency,
+  presentationCopy,
 }: BuildBudgetDashboardReadModelInput): BudgetDashboardReadModel {
   const dashboardItems: BudgetDashboardItem[] = [];
 
@@ -251,7 +371,15 @@ export function buildBudgetDashboardReadModel({
     if (!matchesFilters(item, lifecycle, filters)) continue;
 
     dashboardItems.push(
-      createDashboardItem(item, categoryMap, lifecycle, fallbackName)
+      createDashboardItem(
+        item,
+        categoryMap,
+        lifecycle,
+        fallbackName,
+        preferredCurrency,
+        activeLocale,
+        presentationCopy
+      )
     );
   }
 

@@ -1,15 +1,6 @@
 import React from "react";
-import {
-  I18nManager,
-  Text,
-  TouchableOpacity,
-  View,
-  type DimensionValue,
-} from "react-native";
+import { I18nManager, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
-import { useTranslation } from "react-i18next";
 
 import { CategoryIcon } from "@/components/common/CategoryIcon";
 import { palette } from "@/constants/colors";
@@ -20,28 +11,10 @@ export type BudgetDashboardRowPosition = "first" | "middle" | "last" | "only";
 interface BudgetDashboardRowProps {
   readonly item: BudgetDashboardItem;
   readonly position: BudgetDashboardRowPosition;
-  readonly preferredCurrency: CurrencyType;
   readonly onPress: (budgetId: string) => void;
   readonly onResume?: (budgetId: string) => void;
   readonly onRenew?: (budgetId: string) => void;
 }
-
-const PERIOD_KEYS = {
-  WEEKLY: "filter_weekly",
-  MONTHLY: "filter_monthly",
-  CUSTOM: "filter_custom",
-} as const;
-const SCOPE_KEYS = {
-  GLOBAL: "global_type",
-  CATEGORY: "category_type",
-} as const;
-const STATUS_KEYS = {
-  HEALTHY: "safe_to_spend",
-  NEAR_LIMIT: "near_limit",
-  OVER_BUDGET: "over_budget",
-  PAUSED: "paused",
-  EXPIRED: "budget_expired",
-} as const;
 
 function getLifecycleColorClasses(item: BudgetDashboardItem): string {
   if (item.lifecycle === "EXPIRED" || item.lifecycle === "OVER_BUDGET") {
@@ -147,46 +120,11 @@ function RowIcon({
 export function BudgetDashboardRow({
   item,
   position,
-  preferredCurrency,
   onPress,
   onResume,
   onRenew,
 }: BudgetDashboardRowProps): React.JSX.Element {
-  const { t, i18n } = useTranslation("budgets");
-  const currency = item.currency ?? preferredCurrency;
-  const formattedSpent = formatCurrency({
-    amount: item.metrics.spent,
-    currency,
-  });
-  const formattedLimit = formatCurrency({
-    amount: item.metrics.limit,
-    currency,
-  });
-  const percentage = Math.round(item.metrics.percentage);
-  const progressWidth: DimensionValue = `${Math.min(100, Math.max(0, percentage))}%`;
-  const periodLabel = t(PERIOD_KEYS[item.period]);
-  const scopeLabel = t(SCOPE_KEYS[item.scope]);
-  const statusLabel = t(STATUS_KEYS[item.lifecycle]);
-  const spentOfLimit = t("spent_of_limit", {
-    spent: formattedSpent,
-    limit: formattedLimit,
-  });
-  const expiryDate = item.expiresAt
-    ? item.expiresAt.toLocaleDateString(i18n.resolvedLanguage ?? "en", {
-        month: "short",
-        day: "numeric",
-      })
-    : null;
-  const expiryLabel = expiryDate ? `${statusLabel} ${expiryDate}` : statusLabel;
-  const accessibilityParts = [
-    item.displayName,
-    ...(item.categoryLabel.kind === "deleted" ? [t("deleted_category")] : []),
-    periodLabel,
-    scopeLabel,
-    spentOfLimit,
-    ...(item.showsProgress ? [`${percentage}%`] : []),
-    statusLabel,
-  ];
+  const { presentation } = item;
   const isLast = position === "last" || position === "only";
   const hasAction = item.availableAction !== null;
 
@@ -202,7 +140,7 @@ export function BudgetDashboardRow({
           className="min-w-0 flex-1 flex-row items-center"
           activeOpacity={0.8}
           accessibilityRole="button"
-          accessibilityLabel={accessibilityParts.join(", ")}
+          accessibilityLabel={presentation.accessibilityLabel}
           onPress={() => onPress(item.id)}
         >
           <RowIcon item={item} />
@@ -214,11 +152,11 @@ export function BudgetDashboardRow({
               {item.displayName}
             </Text>
             <Text className="mt-1 text-sm text-text-muted dark:text-slate-400">
-              {periodLabel} • {scopeLabel}
+              {presentation.periodAndScopeLabel}
             </Text>
             {item.categoryLabel.kind === "deleted" ? (
               <Text className="mt-1 text-sm text-red-500 dark:text-red-300">
-                {t("deleted_category")}
+                {presentation.deletedCategoryLabel}
               </Text>
             ) : null}
             {item.lifecycle === "EXPIRED" ? (
@@ -226,7 +164,7 @@ export function BudgetDashboardRow({
                 testID={`budget-row-expiry-${item.id}`}
                 className="mt-1 text-sm text-red-500 dark:text-red-300"
               >
-                {expiryLabel}
+                {presentation.expiryLabel}
               </Text>
             ) : null}
             <Text
@@ -234,7 +172,7 @@ export function BudgetDashboardRow({
               numberOfLines={2}
               className="mt-2 text-sm text-text-muted dark:text-slate-400"
             >
-              {spentOfLimit}
+              {presentation.spentOfLimitLabel}
             </Text>
           </View>
         </TouchableOpacity>
@@ -252,7 +190,7 @@ export function BudgetDashboardRow({
                 minimumFontScale={0.65}
                 className={`max-w-full text-2xl font-bold ${getLifecycleColorClasses(item)}`}
               >
-                {percentage}%
+                {presentation.percentageLabel}
               </Text>
               <Text
                 testID={`budget-row-status-${item.id}`}
@@ -261,7 +199,7 @@ export function BudgetDashboardRow({
                 minimumFontScale={0.7}
                 className={`mt-1 text-sm font-medium ${getLifecycleColorClasses(item)}`}
               >
-                {statusLabel}
+                {presentation.statusLabel}
               </Text>
             </>
           ) : (
@@ -276,7 +214,7 @@ export function BudgetDashboardRow({
                   numberOfLines={1}
                   className={`text-sm font-medium ${getLifecycleColorClasses(item)}`}
                 >
-                  {statusLabel}
+                  {presentation.statusLabel}
                 </Text>
               </View>
               {hasAction ? (
@@ -285,20 +223,14 @@ export function BudgetDashboardRow({
                   className="mt-2 min-h-8 justify-center px-1"
                   activeOpacity={0.8}
                   accessibilityRole="button"
-                  accessibilityLabel={
-                    item.availableAction === "RESUME"
-                      ? t("resume_action")
-                      : t("renew_action")
-                  }
+                  accessibilityLabel={presentation.actionLabel ?? undefined}
                   onPress={() => {
                     if (item.availableAction === "RESUME") onResume?.(item.id);
                     else onRenew?.(item.id);
                   }}
                 >
                   <Text className="text-base font-semibold text-nileGreen-600 dark:text-nileGreen-300">
-                    {item.availableAction === "RESUME"
-                      ? t("resume_action")
-                      : t("renew_action")}
+                    {presentation.actionLabel}
                   </Text>
                 </TouchableOpacity>
               ) : null}
@@ -310,7 +242,7 @@ export function BudgetDashboardRow({
           className="ms-1 min-h-11 min-w-7 items-end justify-center"
           activeOpacity={0.8}
           accessibilityRole="button"
-          accessibilityLabel={`${t("view_budget")}: ${item.displayName}`}
+          accessibilityLabel={presentation.viewBudgetLabel}
           onPress={() => onPress(item.id)}
         >
           <Ionicons
@@ -328,7 +260,7 @@ export function BudgetDashboardRow({
         >
           <View
             className={`h-full rounded-full ${getProgressClasses(item)}`}
-            style={{ width: progressWidth }}
+            style={{ width: presentation.progressWidth ?? "0%" }}
           />
         </View>
       ) : null}

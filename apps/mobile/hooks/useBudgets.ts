@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Budget } from "@monyvi/db";
+import type { Budget, CurrencyType } from "@monyvi/db";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -10,6 +10,7 @@ import {
   type BudgetDashboardItem,
   type BudgetDashboardFilters,
   type BudgetDashboardPeriodFilter,
+  type BudgetDashboardPresentationCopy,
   type BudgetDashboardReadModel,
   type BudgetDashboardScopeFilter,
   type BudgetDashboardStatusFilter,
@@ -114,7 +115,9 @@ function resolveActiveLocale(language: string | undefined): "en" | "ar" {
   return language?.toLowerCase().startsWith("ar") ? "ar" : "en";
 }
 
-export function useBudgets(): UseBudgetsResult {
+export function useBudgets(
+  preferredCurrency: CurrencyType = "EGP"
+): UseBudgetsResult {
   const [rawBudgets, setRawBudgets] = useState<readonly Budget[]>([]);
   const [computedBudgets, setComputedBudgets] =
     useState<ComputedBudgets | null>(null);
@@ -133,6 +136,7 @@ export function useBudgets(): UseBudgetsResult {
   const [lifecycleClockRevision, setLifecycleClockRevision] = useState(0);
   const [spendingRevision, setSpendingRevision] = useState(0);
   const refreshGenerationRef = useRef(0);
+  const activeScopeUserIdRef = useRef<string | null>(null);
   const { userId, isResolvingUser } = useCurrentUser();
   const categoryMap = useCategoryLookup();
   const {
@@ -142,6 +146,33 @@ export function useBudgets(): UseBudgetsResult {
   } = useAllCategories();
   const { i18n, t } = useTranslation("budgets");
   const activeLocale = resolveActiveLocale(i18n.resolvedLanguage);
+  const presentationCopy = useMemo<BudgetDashboardPresentationCopy>(
+    () => ({
+      periodLabels: {
+        WEEKLY: t("filter_weekly"),
+        MONTHLY: t("filter_monthly"),
+        CUSTOM: t("filter_custom"),
+      },
+      scopeLabels: {
+        GLOBAL: t("global_type"),
+        CATEGORY: t("category_type"),
+      },
+      statusLabels: {
+        HEALTHY: t("safe_to_spend"),
+        NEAR_LIMIT: t("near_limit"),
+        OVER_BUDGET: t("over_budget"),
+        PAUSED: t("paused"),
+        EXPIRED: t("budget_expired"),
+      },
+      deletedCategoryLabel: t("deleted_category"),
+      resumeActionLabel: t("resume_action"),
+      renewActionLabel: t("renew_action"),
+      formatSpentOfLimit: (spent, limit) =>
+        t("spent_of_limit", { spent, limit }),
+      formatViewBudget: (name) => `${t("view_budget")}: ${name}`,
+    }),
+    [activeLocale, t]
+  );
 
   const clearScopedState = useCallback((isLoading: boolean): void => {
     setRawBudgets([]);
@@ -158,16 +189,22 @@ export function useBudgets(): UseBudgetsResult {
       userId,
       isResolvingUser,
       onResolving: () => {
+        activeScopeUserIdRef.current = null;
         clearScopedState(true);
         setFilters(DEFAULT_BUDGET_DASHBOARD_FILTERS);
       },
       onSignedOut: () => {
+        activeScopeUserIdRef.current = null;
         clearScopedState(false);
         setFilters(DEFAULT_BUDGET_DASHBOARD_FILTERS);
       },
       onAuthenticated: (currentUserId) => {
-        clearScopedState(true);
-        setFilters(readBudgetDashboardFilterSession(currentUserId));
+        const isNewUser = activeScopeUserIdRef.current !== currentUserId;
+        activeScopeUserIdRef.current = currentUserId;
+        if (isNewUser) {
+          clearScopedState(true);
+          setFilters(readBudgetDashboardFilterSession(currentUserId));
+        }
 
         const subscription = observeBudgetList(currentUserId)
           .observeWithColumns(BUDGET_LIST_OBSERVED_COLUMNS)
@@ -280,6 +317,8 @@ export function useBudgets(): UseBudgetsResult {
         now: new Date(),
         activeLocale,
         fallbackName: t("unnamed_budget"),
+        preferredCurrency,
+        presentationCopy,
       });
       setReadModel(nextReadModel);
       setHasValidData(true);
@@ -300,6 +339,8 @@ export function useBudgets(): UseBudgetsResult {
     computedBudgets,
     isResolvingUser,
     lifecycleClockRevision,
+    preferredCurrency,
+    presentationCopy,
     filters,
     rawBudgets,
     t,
@@ -397,7 +438,7 @@ export function useBudgets(): UseBudgetsResult {
     isLoading: isInitialLoading,
     errorKey,
     hasValidData,
-    filters,
+    filters: hasValidData ? readModel.filters : filters,
     setScopeFilter,
     setPeriodFilter,
     setStatusFilter,

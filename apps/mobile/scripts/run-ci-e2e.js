@@ -243,6 +243,14 @@ function getRequestedCiSuites(env = process.env) {
   return new Set(requested);
 }
 
+function assertBudgetSuiteIsolation(selectedSuites, env = process.env) {
+  if (selectedSuites.has("budgets") && env.E2E_SKIP_AUTH_BOOTSTRAP === "1") {
+    throw new Error(
+      "Budget E2E requires auth bootstrap so every fixture profile starts with cleared local app data."
+    );
+  }
+}
+
 function reconnectAdb(attempt, maxAttempts) {
   console.warn(
     `ADB device went offline. Reconnecting before retry ${attempt + 1} of ${maxAttempts}.`
@@ -523,6 +531,8 @@ async function main() {
     return;
   }
 
+  assertBudgetSuiteIsolation(selectedSuites);
+
   applyLocalE2eDefaults();
   assertRequiredEnv();
   await maybeSeedE2eData();
@@ -570,6 +580,7 @@ if (require.main === module) {
 
 module.exports = {
   appendOutputTail,
+  assertBudgetSuiteIsolation,
   getChildTimeoutMs,
   getDeviceOfflineRetryCount,
   getLiveSmsTimeoutMs,

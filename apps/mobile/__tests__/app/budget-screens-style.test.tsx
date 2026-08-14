@@ -229,6 +229,17 @@ describe("Budget screen dark theme styling", () => {
     }
   });
 
+  it("keeps financial and localized row presentation in the read model", () => {
+    const source = readFileSync(
+      resolve(__dirname, "../../components/budget/BudgetDashboardRow.tsx"),
+      "utf8"
+    );
+
+    expect(source).not.toContain("@monyvi/logic");
+    expect(source).not.toContain("formatCurrency");
+    expect(source).not.toContain("useTranslation");
+  });
+
   it("uses the themed app background on the create budget root", () => {
     render(<CreateBudgetScreen />);
 

@@ -1,7 +1,6 @@
 import React, { useCallback } from "react";
 import { FlatList, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { CurrencyType } from "@monyvi/db";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -38,7 +37,6 @@ export interface BudgetDashboardProps {
   readonly isRefreshing: boolean;
   readonly hasValidData: boolean;
   readonly errorKey: "dashboard_load_error" | null;
-  readonly preferredCurrency: CurrencyType;
   readonly onSelectScope: (filter: BudgetDashboardScopeFilter) => void;
   readonly onSelectPeriod: (filter: BudgetDashboardPeriodFilter) => void;
   readonly onSelectStatus: (filter: BudgetDashboardStatusFilter) => void;
@@ -56,7 +54,6 @@ export function BudgetDashboard({
   isInitialLoading,
   hasValidData,
   errorKey,
-  preferredCurrency,
   onSelectScope,
   onSelectPeriod,
   onSelectStatus,
@@ -92,20 +89,13 @@ export function BudgetDashboard({
         <BudgetDashboardRow
           item={item}
           position={position}
-          preferredCurrency={preferredCurrency}
           onPress={onBudgetPress}
           onResume={onResume}
           onRenew={onRenew}
         />
       );
     },
-    [
-      onBudgetPress,
-      onRenew,
-      onResume,
-      preferredCurrency,
-      readModel.items.length,
-    ]
+    [onBudgetPress, onRenew, onResume, readModel.items.length]
   );
 
   if (isInitialLoading) return <BudgetDashboardSkeleton />;
