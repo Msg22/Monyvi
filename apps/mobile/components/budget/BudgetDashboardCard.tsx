@@ -109,13 +109,9 @@ export function BudgetDashboardCard({
   const cardClassName = useMemo(
     () =>
       `overflow-hidden rounded-3xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 ${
-        isCompact
-          ? "min-h-52 p-4"
-          : variant === "global"
-            ? "h-full min-h-64 p-5"
-            : "min-h-64 p-5"
+        isCompact ? "min-h-52 p-4" : "min-h-64 p-5"
       }`,
-    [isCompact, variant]
+    [isCompact]
   );
 
   return (

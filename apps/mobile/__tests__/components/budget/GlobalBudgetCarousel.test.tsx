@@ -126,6 +126,28 @@ describe("GlobalBudgetCarousel", () => {
     expect(screen.queryByTestId(/global-budget-page-dot-/)).toBeNull();
   });
 
+  it("keeps global cards intrinsically sized instead of filling the carousel viewport", () => {
+    const screen = render(
+      <GlobalBudgetCarousel
+        budgets={[item("a")]}
+        preferredCurrency="EGP"
+        onBudgetPress={jest.fn()}
+      />
+    );
+    fireEvent(
+      screen.getByTestId("global-budget-carousel-container"),
+      "layout",
+      {
+        nativeEvent: { layout: { width: 320, height: 800, x: 0, y: 0 } },
+      }
+    );
+
+    const cardClassName = screen.getByTestId("budget-dashboard-card-a").props
+      .className as string;
+    expect(cardClassName).toContain("min-h-64");
+    expect(cardClassName).not.toContain("h-full");
+  });
+
   it("exposes page position when the carousel has exactly one page", () => {
     const screen = render(
       <GlobalBudgetCarousel
@@ -199,10 +221,7 @@ describe("GlobalBudgetCarousel", () => {
       }
     );
 
-    fireEvent(
-      screen.getByTestId("global-budget-carousel"),
-      "scrollBeginDrag"
-    );
+    fireEvent(screen.getByTestId("global-budget-carousel"), "scrollBeginDrag");
     fireEvent(
       screen.getByTestId("global-budget-carousel"),
       "momentumScrollEnd",
@@ -230,10 +249,7 @@ describe("GlobalBudgetCarousel", () => {
         nativeEvent: { layout: { width: 320, height: 300, x: 0, y: 0 } },
       }
     );
-    fireEvent(
-      screen.getByTestId("global-budget-carousel"),
-      "scrollBeginDrag"
-    );
+    fireEvent(screen.getByTestId("global-budget-carousel"), "scrollBeginDrag");
     fireEvent(
       screen.getByTestId("global-budget-carousel"),
       "momentumScrollEnd",
@@ -264,13 +280,21 @@ describe("GlobalBudgetCarousel", () => {
         budgets={[item("a"), item("b"), item("c")]}
       />
     );
-    fireEvent(screen.getByTestId("global-budget-carousel-container"), "layout", {
-      nativeEvent: { layout: { width: 320, height: 300, x: 0, y: 0 } },
-    });
+    fireEvent(
+      screen.getByTestId("global-budget-carousel-container"),
+      "layout",
+      {
+        nativeEvent: { layout: { width: 320, height: 300, x: 0, y: 0 } },
+      }
+    );
     fireEvent(screen.getByTestId("global-budget-carousel"), "scrollBeginDrag");
-    fireEvent(screen.getByTestId("global-budget-carousel"), "momentumScrollEnd", {
-      nativeEvent: { contentOffset: { x: 320, y: 0 } },
-    });
+    fireEvent(
+      screen.getByTestId("global-budget-carousel"),
+      "momentumScrollEnd",
+      {
+        nativeEvent: { contentOffset: { x: 320, y: 0 } },
+      }
+    );
 
     screen.rerender(
       <GlobalBudgetCarousel {...props} budgets={[item("a"), item("c")]} />
@@ -299,18 +323,26 @@ describe("GlobalBudgetCarousel", () => {
         budgets={[item("a"), item("b"), item("c")]}
       />
     );
-    fireEvent(screen.getByTestId("global-budget-carousel-container"), "layout", {
-      nativeEvent: { layout: { width: 320, height: 300, x: 0, y: 0 } },
-    });
+    fireEvent(
+      screen.getByTestId("global-budget-carousel-container"),
+      "layout",
+      {
+        nativeEvent: { layout: { width: 320, height: 300, x: 0, y: 0 } },
+      }
+    );
     fireEvent(screen.getByTestId("global-budget-carousel"), "scrollBeginDrag");
 
     screen.rerender(
       <GlobalBudgetCarousel {...props} budgets={[item("a"), item("c")]} />
     );
     jest.mocked(AccessibilityInfo.announceForAccessibility).mockClear();
-    fireEvent(screen.getByTestId("global-budget-carousel"), "momentumScrollEnd", {
-      nativeEvent: { contentOffset: { x: 320, y: 0 } },
-    });
+    fireEvent(
+      screen.getByTestId("global-budget-carousel"),
+      "momentumScrollEnd",
+      {
+        nativeEvent: { contentOffset: { x: 320, y: 0 } },
+      }
+    );
 
     expect(screen.getByTestId("global-budget-page-dot-0")).toHaveProp(
       "accessibilityState",
