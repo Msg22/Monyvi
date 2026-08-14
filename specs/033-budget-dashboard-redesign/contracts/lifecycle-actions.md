@@ -4,8 +4,8 @@
 
 ### Trigger
 
-A dashboard item with `availableAction: "RESUME"` exposes a visible, labelled
-Resume button.
+A unified row with `availableAction: "RESUME"` exposes a visible, labelled
+Resume button and omits percentage/progress.
 
 ### Confirmation
 
@@ -26,7 +26,7 @@ command, cancellation, and friendly error state.
 
 ### Invariants
 
-- Never mutate hook read-model arrays optimistically.
+- Never mutate hook read-model items optimistically.
 - Never resume an expired custom budget from the dashboard; it exposes Renew.
 - UI/hook in-flight protection prevents repeated taps from invoking the service
   twice.
@@ -70,8 +70,8 @@ The Create/Edit flow must:
   an editable historical record.
 - Navigation failure: retain the expired dashboard card and show recovery
   feedback.
-- Dashboard issue #224 proves the emitted route contract; full prefill
-  acceptance is blocked until child issue #225 consumes it.
+- Dashboard issue #224 preserves the emitted route contract and existing child
+  issue #225 prefill integration already present on the branch.
 
 ## Header Create
 

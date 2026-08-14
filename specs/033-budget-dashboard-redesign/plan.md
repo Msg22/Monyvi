@@ -1,74 +1,68 @@
-# Implementation Plan: Premium Budgets Dashboard
+# Implementation Plan: Unified Budgets Dashboard
 
-**Branch**: `385-budget-dashboard-redesign` | **Date**: 2026-08-13 | **Spec**:
+**Branch**: `385-budget-dashboard-redesign` | **Date**: 2026-08-14 | **Spec**:
 [spec.md](./spec.md)  
-**Input**: Feature specification for GitHub issue #224 under parent issue #218
+**Input**: Revised feature specification for GitHub issue #224 under parent
+issue #218
 
 ## Summary
 
-Redesign the Budgets dashboard around one user-scoped, offline-first read model
-that classifies every matching budget exactly once into Overall budgets, Needs
-attention, Category budgets, or Paused. Replace the single global hero with a
-responsive whole-card page carousel, move Create to the shared `PageHeader`,
-expose safe Resume and Renew actions, and remove the ambiguous fixed summary
-footer and floating action button.
+Replace lifecycle sections and global-budget carousel with one continuous,
+virtualized list of compact, full-width budget rows. Add scope tabs (`All`,
+`Category`, `Global`) and visible Period and Status selectors. Filters combine
+with AND semantics, default to `All / All / Active`, persist only for current
+app session, and reset after fresh launch.
 
-The implementation preserves all existing spending calculations and persistence
-rules. It evolves the existing budget list service, passes accessible category
-data into that service once, keeps lifecycle/error/cancellation state in the
-hook, and renders shaped data through focused presentational components. No
-database, sync, or financial-calculation changes are required.
+Keep lifecycle meaning inside each row. Active rows show health, percentage, and
+progress. Paused and expired rows keep label, icon, amount context, and
+Resume/Renew action but omit percentage and progress. Preserve current financial
+calculations, renewal, confirmation, deleted-category recovery, local-first
+observation, user scope, error retention, header Create, and safe-area behavior.
 
 ## Technical Context
 
 **Language/Version**: TypeScript 5.9 strict mode, React 19.2, React Native
 0.83.6, Expo SDK 55  
 **Primary Dependencies**: Expo Router, React Navigation, NativeWind v4,
-WatermelonDB 0.28, react-i18next, React Native `FlatList`,
-`useWindowDimensions`, and `AccessibilityInfo`  
-**Storage**: Existing user-scoped WatermelonDB budgets, transactions,
-categories, and pause intervals; synchronized Supabase schema unchanged  
-**Testing**: Jest, jest-expo, React Native Testing Library `renderHook`, package
-financial-regression tests, Maestro, and physical Android QA  
-**Target Platform**: Expo-managed Android and iOS; required physical regression
-target includes Android 16 with gesture and three-button navigation  
-**Project Type**: Offline-first mobile app in an Nx monorepo  
-**Performance Goals**: Period changes and observed-data recomputation settle
-within one second for the manual-QA fixture; carousel regrouping remains
-deterministic and does not trigger database reads; vertical budget content
-remains virtualized  
-**Constraints**: Preserve totals, thresholds, pause exclusions, category
-descendants, user scoping, and input order; never crop carousel cards; support
-EN/AR, RTL, light/dark, font scaling, reduced motion, and screen readers; apply
-bottom inset exactly once  
-**Scale/Scope**: One dashboard route, four conditional sections, at most one
-healthy global budget per period and therefore at most three in All, with an
-unbounded category-budget list that must remain virtualized
+WatermelonDB 0.28, react-i18next, React Native `FlatList`, shared modal and
+selector primitives **Storage**: Existing user-scoped WatermelonDB budgets,
+transactions, categories, and pause intervals; Supabase schema unchanged
+**Testing**: Jest, jest-expo, React Native Testing Library `renderHook`, logic
+financial regressions, Maestro, and physical Android QA **Target Platform**:
+Expo-managed Android and iOS; Android 16 gesture and three-button navigation
+remain required physical targets **Project Type**: Offline-first mobile app in
+Nx monorepo **Performance Goals**: Combined filter updates settle within one
+second for manual-QA fixture; filtering and ordering trigger no extra database
+query; unbounded list remains virtualized **Constraints**: Preserve totals,
+thresholds, pause exclusions, descendant category aggregation, ownership,
+current branch styling not superseded by approved mockup, EN/AR, RTL,
+light/dark, text scaling, reduced motion, screen readers, and exactly-once
+bottom inset **Scale/Scope**: One dashboard route, one list, three scope
+choices, four period choices, four status choices, unbounded user budget count
 
 ## Constitution Check
 
-_GATE: Passed before Phase 0 and re-checked after Phase 1 design._
+_GATE: Passed before research and re-checked after design._
 
-| Gate                           | Status               | Design response                                                                                                                                                                                     |
-| ------------------------------ | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Offline-first source of truth  | PASS                 | Continue observing and mutating WatermelonDB first; no network dependency is added.                                                                                                                 |
-| Documented budget rules        | PASS                 | The approved lifecycle precedence, renewal preservation, global filtering, and stable ordering are recorded in `docs/business/business-decisions.md` and the feature spec.                          |
-| User-scoped data               | PASS                 | Retain `queryOwned` for budgets and reuse the already user-accessible Categories provider input; no raw component queries.                                                                          |
-| Layer boundaries               | PASS                 | The service owns metric enrichment, category label resolution, lifecycle classification, and sorting; the hook owns subscription/loading/error/cancellation; UI renders shaped props and callbacks. |
-| Shared financial logic         | PASS                 | Existing `@monyvi/logic` spending calculations and status thresholds remain unchanged.                                                                                                              |
-| Type safety and null semantics | PASS                 | New dashboard DTOs use discriminated unions and nullable IDs only where the domain permits them.                                                                                                    |
-| UI approval                    | PASS                 | Dashboard, Detail, and Create/Edit mockups are approved; this branch implements dashboard issue #224 only.                                                                                          |
-| Design-system compliance       | PASS                 | Use `PageHeader`, `Skeleton`, shared confirmation UI, NativeWind tokens, theme variants, and accessible text status.                                                                                |
-| Safe areas                     | PASS WITH DEPENDENCY | Consume issue #219 / PR #222 ownership rules after it lands: no global padding; dashboard list content owns `base + insets.bottom` once.                                                            |
-| TDD and complete QA            | PASS                 | Add failing service, hook, component, seed, and Maestro coverage before production changes; retain explicit manual-only device/a11y checks.                                                         |
-| Schema and sync safety         | PASS                 | No migration, backfill, sync-contract, or persisted enum change. Expiry remains a derived presentation state.                                                                                       |
+| Gate                          | Status | Design response                                                                                                                   |
+| ----------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| Offline-first source of truth | PASS   | Continue observing and mutating WatermelonDB first; no network dependency added.                                                  |
+| Documented budget rules       | PASS   | Revised filtering, derived status, ordering, and row rules are recorded in business decisions and spec.                           |
+| User-scoped data              | PASS   | Retain owned budget queries and accessible category input; cards perform no query.                                                |
+| Layer boundaries              | PASS   | Service derives display items/filtering/order; hook owns subscription/session filter/error/cancellation; UI renders shaped props. |
+| Shared financial logic        | PASS   | Existing spending helpers and thresholds remain unchanged.                                                                        |
+| Type/null safety              | PASS   | Filters and presentation states use closed unions; category IDs retain domain null semantics.                                     |
+| UI approval                   | PASS   | Active, Paused, and Expired unified-list mockups approved on 2026-08-14.                                                          |
+| Design system                 | PASS   | Preserve `PageHeader`, `Skeleton`, shared confirmation, selectors, tokens, and NativeWind.                                        |
+| Safe areas                    | PASS   | PR #222 is merged; unified list owns bottom content spacing exactly once.                                                         |
+| TDD and QA                    | PASS   | Tests change before production; deterministic fixtures and honest device/E2E matrix remain required.                              |
+| Schema/sync safety            | PASS   | No migration, backfill, persisted status, or sync change.                                                                         |
 
-Post-design re-check: the contracts introduce no architecture exception.
-Complexity tracking is therefore unnecessary.
+Post-design re-check: no constitution exception or complexity waiver required.
 
 ## Project Structure
 
-### Documentation (this feature)
+### Documentation
 
 ```text
 specs/033-budget-dashboard-redesign/
@@ -78,188 +72,192 @@ specs/033-budget-dashboard-redesign/
 ├── data-model.md
 ├── quickstart.md
 ├── tasks.md
-├── checklists/
-│   └── requirements.md
+├── checklists/requirements.md
 └── contracts/
     ├── budget-dashboard-read-model.md
-    ├── global-budget-carousel.md
+    ├── budget-dashboard-filtering.md
     ├── budget-e2e-profiles.md
     └── lifecycle-actions.md
 ```
 
-`tasks.md` was generated by `/speckit-tasks` and is the executable TDD sequence.
+Obsolete `global-budget-carousel.md` contract is removed because approved
+dashboard has no carousel, page grouping, or page indicators.
 
-### Source Code (repository root)
+### Source Code
 
 ```text
 apps/mobile/
 ├── app/(private)/
-│   ├── budgets.tsx                         # PageHeader create action and route composition
-│   └── create-budget.tsx                   # #225 consumes the Renew route contract
+│   ├── budgets.tsx
+│   └── create-budget.tsx
 ├── components/budget/
-│   ├── BudgetDashboard.tsx                 # composed, shaped dashboard view
-│   ├── GlobalBudgetCarousel.tsx            # responsive whole-card pages
-│   ├── BudgetDashboardCard.tsx             # lifecycle-aware presentation
-│   ├── BudgetDashboardSectionHeader.tsx
+│   ├── BudgetDashboard.tsx
+│   ├── BudgetDashboardFilters.tsx
+│   ├── BudgetDashboardRow.tsx
 │   ├── BudgetDashboardSkeleton.tsx
-│   └── budget-dashboard-layout.ts          # pure row/page layout helpers
+│   └── budget-dashboard-layout.ts
 ├── hooks/
-│   ├── useBudgets.ts                       # subscription, cancellation, last-valid state
-│   └── useBudgetDashboardActions.ts        # async Resume command state only
+│   ├── budget-dashboard-filter-session.ts
+│   ├── useBudgets.ts
+│   └── useBudgetDashboardActions.ts
 ├── services/
-│   ├── budget-list-read-model-service.ts   # exclusive classifier and shaped DTOs
-│   └── budget-service.ts                   # existing owned Resume command
+│   ├── budget-list-read-model-service.ts
+│   └── budget-service.ts
 ├── scripts/seed-fixtures/
 │   ├── manual-qa-fixture.js
 │   └── e2e-fixture.js
-├── scripts/e2e-seed.js                     # selects an explicit budget E2E profile
 ├── e2e/maestro/budgets/
-│   ├── dashboard-visibility-filters.yaml
-│   ├── dashboard-lifecycle-actions.yaml
-│   └── dashboard-carousel.yaml
+│   ├── dashboard-filtering.yaml
+│   └── dashboard-lifecycle-actions.yaml
 └── __tests__/
     ├── services/budget-list-read-model-service.test.ts
-    ├── services/budget-service.test.ts
     ├── hooks/useBudgets.test.ts
-    ├── hooks/useBudgetDashboardActions.test.ts
+    ├── hooks/budget-dashboard-filter-session.test.ts
     ├── components/budget/BudgetDashboard.test.tsx
-    ├── components/budget/GlobalBudgetCarousel.test.tsx
+    ├── components/budget/BudgetDashboardFilters.test.tsx
+    ├── components/budget/BudgetDashboardRow.test.tsx
+    ├── components/budget/BudgetDashboardSkeleton.test.tsx
     ├── app/budget-screens-style.test.tsx
     └── scripts/manual-qa-seed.test.ts
 
 packages/logic/src/budget/__tests__/
-└── budget-spending.test.ts                 # unchanged financial regression guard
-
-docs/business/
-└── business-decisions.md
+└── budget-spending.test.ts
 ```
 
-**Structure Decision**: Keep the existing mobile-service and hook boundaries,
-split the oversized dashboard into focused presentation components, and place
-only pure responsive row/page layout helpers beside those components. Do not
-create a new package, persistence model, or API.
+**Structure Decision**: Evolve current service/hook boundaries. Replace carousel
+and section-card components with one filter component and one unified row. Keep
+pure filter/order helpers testable; add no package or persistence API.
 
 ## Phase 0: Research Decisions
 
-See [research.md](./research.md). The key decisions are:
+See [research.md](./research.md). Main decisions:
 
-1. Classify in one service pass using expiry-first precedence; never derive
-   sections with independent filters.
-2. Retain expired custom budgets in the enriched input; expiry is derived from
-   dates, not represented as a persisted status.
-3. Represent the global carousel as viewport-width pages using a 320 dp minimum
-   card width and 16 dp gap, containing the maximum whole number of equal cards.
-4. Preserve the first visible eligible budget by stable ID during regrouping;
-   fall back to page one only when that ID is no longer eligible.
-5. Reuse accessible category data already provided to the private runtime and
-   resolve presentation labels before cards render.
-6. Preserve the last valid dashboard read model through refresh or command
-   failures.
-7. Reuse the shared `ConfirmationModal` pattern for Resume. Current budget
-   actions do not actually confirm Resume, so this behavior must be added and
-   tested.
-8. Treat Renew as a distinct create-flow contract, never as edit-by-`id`.
-9. Rebase on issue #219 / PR #222 before final integration and own bottom
-   spacing locally once.
+1. Derive one presentation lifecycle per budget before status filtering.
+2. Build display-ready items once, then apply scope, period, and status using
+   pure AND predicates.
+3. Sort with explicit presentation priority, then locale-aware name and stable
+   ID.
+4. Use one outer vertical `FlatList`; remove horizontal carousel state and all
+   lifecycle section grouping.
+5. Keep filter selections in an in-memory session boundary owned by hook; never
+   persist them to WatermelonDB, Supabase, or device preferences.
+6. Preserve last-valid data and reject stale async completions after filters or
+   observations change.
+7. Keep existing Resume confirmation and Renew create-source contracts.
+8. Reuse merged #219/#222 safe-area ownership without global padding.
 
 ## Phase 1: Design and Contracts
 
 ### Read model
 
-Evolve `budget-list-read-model-service.ts` to emit immutable, display-ready
-items and four mutually exclusive arrays. The service receives enriched budgets,
-the accessible category map, and active `en` or `ar` locale. It derives expiry
-and attention state, resolves category labels, and sorts trimmed names with
-`Intl.Collator(locale, { sensitivity: "base", numeric: true, usage: "sort" })`,
-then uses budget ID as a final code-point tie-break. It must not query from a
-card or change metric calculations.
+`budget-list-read-model-service.ts` emits one immutable `items` array plus
+counts and selected filters. It receives enriched owned budgets, accessible
+category data, one clock value, locale, and three filters. It derives display
+status first, applies AND filters, ranks results, resolves historical category
+labels, and sorts without recalculating metrics or querying per row.
 
-### Hook state
+Status derivation:
 
-Keep `useBudgets` as the React facade. It coordinates the budget observation,
-accessible-category readiness, asynchronous metric calculation, selected period,
-cancellation, retry, and last-valid state. After at least one success, later
-failures set a recoverable error without clearing rendered budgets.
+1. expired CUSTOM: `EXPIRED`;
+2. otherwise persisted `PAUSED`: `PAUSED`;
+3. otherwise metric danger: `OVER_BUDGET`;
+4. otherwise metric warning: `NEAR_LIMIT`;
+5. otherwise: `HEALTHY`.
+
+Status filter mapping:
+
+- `ALL`: every derived presentation state;
+- `ACTIVE`: `HEALTHY`, `NEAR_LIMIT`, `OVER_BUDGET`;
+- `PAUSED`: `PAUSED` only;
+- `EXPIRED`: `EXPIRED` only.
+
+### Filter and session state
+
+`useBudgets` owns scope, period, and status selections and exposes setters plus
+one reset action. A small in-memory filter-session module stores only these
+three values for the current authenticated user while JS app process remains
+alive. Hook initialization reads that session value; each accepted selection
+writes it. User change or module reload/fresh launch returns defaults. No
+persistent storage is used.
+
+Selection changes start a new read-model generation. Generation/user/observation
+tokens ignore stale async completions. After first success, failures retain last
+valid rows and current selections.
 
 ### Rendering and virtualization
 
-Render one vertical `FlatList` of full-width compact dashboard rows for Needs
-attention, Category budgets, and Paused. Rows in each section share a bordered
-group with separators, while direct Resume/Renew actions remain inline. The
-Overall carousel stays in the list header/first section block. This avoids
-nested vertical virtualized lists and prevents narrow two-column cards from
-crushing titles and status content.
+`BudgetDashboard` renders one vertical `FlatList`. Header contains scope tabs
+followed by two visible filter controls. Every item uses `BudgetDashboardRow`;
+no data-dependent card type changes width or hierarchy. Row receives
+display-ready state and callbacks only.
 
-### Responsive carousel
+Active rows include percentage/progress and health label. Paused and expired
+rows omit both percentage and progress by contract, while still showing amount
+context and direct action. Long text may wrap within bounded regions; actions,
+badges, and chevrons remain reachable. Preserve approved branch typography,
+spacing, color tokens, header Add action, and current user styling where not
+superseded by final mockup.
 
-Use measured container width and `useWindowDimensions` with
-`GLOBAL_BUDGET_MIN_CARD_WIDTH = 320` dp and `GLOBAL_BUDGET_CARD_GAP = 16` dp to
-select the maximum whole card count; containers below 320 dp fall back to one
-card at full available width. Build page groups with
-`ceil(total / visibleCount)`; each horizontal `FlatList` item occupies one
-viewport and contains equal-width cards. Test 319/320 dp and the 655/656 dp
-two-card threshold plus surrounding boundaries. Use stable IDs, deterministic
-`getItemLayout`, and a page visibility callback. Hide dots for one page.
-Announce user-driven page changes and honor reduced motion.
+### Ordering
+
+Ranking is `EXPIRED`, `OVER_BUDGET`, `NEAR_LIMIT`, `PAUSED`, `HEALTHY` when
+Status is `ALL`; only applicable groups remain under narrower status filters.
+Names sort with existing active-locale collator and ID tie-break. Metric amounts
+never become secondary sort key.
 
 ### Actions
 
-The route/container owns the selected Resume target and confirmation visibility.
-A focused `useBudgetDashboardActions` hook owns async submission, cancellation,
-and friendly error state only. Cancel writes nothing; confirm invokes
-`resumeBudget` once, disables repeat submission, and waits for the Watermelon
-observation to move the record. The existing command remains paused-only: a
-second/non-paused call is rejected and must not append another pause interval.
-Failures retain the card.
+Resume and Renew contracts remain unchanged. Resume opens shared confirmation,
+blocks duplicate submit, invokes owned command once, and waits for local
+observation. Renew uses `renewFrom`, opens create mode with reusable values, and
+never edits history. Opening detail uses stable budget ID and tolerates missing
+historical category.
 
-Renew emits `/create-budget?renewFrom=<budgetId>`. Child issue #225 owns loading
-that source and constructing a new prefilled form. The expired source must never
-be passed as edit `id` or mutated. The dashboard contract can be tested
-independently, but end-to-end renewal acceptance requires #225 in the
-integration branch/release.
+### Loading, empty, and failure states
 
-### Safe-area integration
+Skeleton mirrors header-adjacent content: scope tabs, two filter controls, then
+compact rows. No content spinner. No-budget and filtered-empty are distinct;
+filtered reset returns `All / All / Active`. Recoverable failures retain last
+model and filters.
 
-Remove the fixed summary footer and FAB. Apply `contentContainerStyle` bottom
-clearance as a named base spacing plus `useSafeAreaInsets().bottom` exactly
-once. Rebase after PR #222; resolve its obsolete Budget footer hunk by
-preserving the ownership contract, not the removed footer.
+### Safe area and accessibility
+
+List `contentContainerStyle` uses named base spacing plus runtime bottom inset
+once. Controls expose role, selected/value state, and translated labels. Each
+row announces identity, scope/category, period, amount, derived state, and
+available action; paused/expired descriptions do not announce hidden progress.
 
 ## Phase 2: Implementation Strategy
 
-1. Extend deterministic manual-QA fixtures and add explicit `dashboard-full` and
-   `dashboard-filter-empty` E2E profiles; prove selection, isolation, and
-   idempotence.
-2. Write failing read-model tests for all precedence, filter, ordering, deleted
-   category, zero-spend, and exactly-once cases.
-3. Implement the immutable dashboard read model without altering financial
-   helpers.
-4. Write failing hook tests for cancellation, filter changes, category
-   readiness, retry, and last-valid-state preservation; then update the hook.
-5. Write pure carousel/layout tests at width boundaries, rotation regrouping,
-   uneven pages, stable anchor preservation, RTL, and reduced motion; then
-   implement helpers and carousel.
-6. Write failing dashboard/header/action tests; then implement approved
-   sections, Skeleton loading, empty/error states, header Add action, Resume
-   confirmation, Renew navigation, and removal of FAB/footer.
-7. Add three deterministic Maestro journeys and wire a `budgets` E2E suite/scope
-   that resets and selects the required profile before each flow. Maestro covers
-   visible Resume cancel/confirm and Renew navigation; injected action failure
-   stays in Jest/RNTL because no approved user-level failure harness exists.
-8. Measure SC-006 with removable development-only commit-frame probes and SC-010
-   with timed fresh no-budget trials; record device, build, and results.
-9. Rebase/integrate PR #222, run focused and package gates, seed only missing
-   manual-QA records for `manual-qa@monyvi.test`, and complete the
-   physical-device matrix.
-10. Run TypeScript, logic financial regressions, mobile Jest, lint, Maestro, and
-    the PR coverage audit. Record unsupported screen-reader/contrast/nav-mode
-    automation as manual-only evidence.
+1. Update deterministic fixtures and write failing service tests for all filter
+   combinations, status precedence, ordering, exactly-once membership, zero
+   spend, and deleted categories.
+2. Replace sectioned read-model output with unified items and make service tests
+   green without altering spending helpers.
+3. Write failing session/hook tests for defaults, in-session restore, reset,
+   stale cancellation, rapid filter changes, retry, and last-valid retention;
+   then update hook state.
+4. Write failing component tests for tabs, visible filter values, reset, unified
+   rows, active progress, paused/expired omission, long text, RTL,
+   accessibility, and removed carousel/sections; then update presentation.
+5. Update layout-matching skeleton tests before production skeleton changes.
+6. Preserve and rerun Resume/Renew/detail regression suites, including deleted
+   category and prefilled renewal behavior.
+7. Replace carousel Maestro coverage with combined-filter reachability; update
+   deterministic E2E profiles and manual fixture only where data is missing.
+8. Run focused tests, financial regressions, typecheck, lint, i18n validation,
+   Maestro, and physical device matrix. Record manual-only TalkBack, contrast,
+   navigation-mode, and timing evidence.
 
 ## Dependency and Delivery Boundaries
 
-- **#219 / PR #222**: merge or rebase before final safe-area validation.
-- **#225 Create/Edit redesign**: must consume `renewFrom` before the Renew
-  journey is considered end-to-end complete.
-- **#223 Detail redesign**: independent; no dashboard implementation dependency.
-- **No schema work**: any proposed migration or sync change is out of scope and
-  requires a new approval gate.
+- **#219 / PR #222**: merged; safe-area contract required and must not be
+  replaced.
+- **#225 Create/Edit redesign**: existing `renewFrom` integration preserved; no
+  new Create/Edit visual scope added here.
+- **#223 Detail redesign**: independent, except deleted-category detail must
+  continue recovering safely.
+- **PR #226**: remains open. Revised implementation replaces obsolete dashboard
+  presentation while keeping valid correctness fixes already on branch.
+- **No schema work**: migration, backfill, sync, or persisted-status changes are
+  out of scope and require separate approval gate.

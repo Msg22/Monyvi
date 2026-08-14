@@ -1,9 +1,9 @@
-# Specification Quality Checklist: Premium Budgets Dashboard
+# Specification Quality Checklist: Unified Budgets Dashboard
 
 **Purpose**: Validate specification completeness and quality before proceeding
 to planning  
 **Created**: 2026-08-13  
-**Feature**: [spec.md](../spec.md)
+**Revalidated**: 2026-08-14 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
 
@@ -32,8 +32,12 @@ to planning
 
 ## Notes
 
-- Validated against parent issue #218, dashboard child issue #224, the approved
-  dashboard mockup, the Budgets business decisions, and existing dashboard
-  behavior.
+- Revalidated against parent issue #218, dashboard child issue #224, the final
+  approved Active/Paused/Expired unified-list mockups, the Budgets business
+  decisions, and current PR #226 behavior.
+- The 2026-08-14 approved design supersedes the earlier lifecycle sections,
+  special global cards, responsive carousel, and page-dot requirements.
+- Scope tabs, Period/Status options and defaults, AND semantics, priority order,
+  and session-only persistence are testable with no clarification markers.
 - Detail and create/edit redesign requirements are intentionally excluded and
   tracked by child issues #223 and #225.

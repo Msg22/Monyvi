@@ -1,219 +1,154 @@
-# Phase 0 Research: Premium Budgets Dashboard
+# Phase 0 Research: Unified Budgets Dashboard
 
-## Decision 1: Derive one exclusive lifecycle section
+## Decision 1: Derive lifecycle before filtering
 
-**Decision**: After the selected-period filter, classify every enriched budget
-once with this precedence:
+**Decision**: Derive one state per budget in this order: expired custom,
+persisted paused, over budget, near limit, healthy.
 
-1. expired custom -> Needs attention;
-2. otherwise persisted `PAUSED` -> Paused;
-3. otherwise `warning` or `danger` metrics -> Needs attention;
-4. otherwise `GLOBAL` -> Overall budgets;
-5. otherwise `CATEGORY` -> Category budgets.
+**Rationale**: `EXPIRED` is not persisted and must win while auto-pause is
+pending or after manual pause. One derivation prevents one budget matching
+Active and Expired.
 
-**Rationale**: The current independent filters duplicate paused category budgets
-and the single `.find()` hides global budgets. A single classifier makes FR-002
-provable and preserves expiry-over-pause clarification A.
-
-**Alternatives rejected**:
-
-- Add persisted `EXPIRED`: unnecessary schema/sync expansion for a state derived
-  from custom-period dates.
-- Infer expiry from `PAUSED`: auto-pause and manual pause share the same
-  persisted status, so the inference is false.
-- Keep independent section filters: cannot guarantee exactly-once membership.
+**Rejected**: Persist `EXPIRED`; infer expiry from `PAUSED`; run independent
+status predicates.
 
 ## Decision 2: Keep expired budgets in metric enrichment
 
-**Decision**: Remove the list service's early exclusion of active expired custom
-budgets. Calculate their existing metrics, then classify them as expired before
-considering persisted pause status.
+**Decision**: Enrich every eligible active/paused budget, including expired
+custom records, before building presentation state.
 
-**Rationale**: A budget must remain visible while auto-pause is pending, fails,
-or has already changed the status. Existing spending calculations are still
-useful historical display data and remain unchanged.
+**Rationale**: Expired history must remain visible if lifecycle writes are
+pending or fail. Existing metrics provide amount context without changing
+financial rules.
 
-**Alternative rejected**: Depend on the focus-triggered auto-pause command to
-make the record visible. That creates a transient disappearance and hides
-failures.
+**Rejected**: Depend on focus-triggered auto-pause for visibility.
 
-## Decision 3: Evolve the existing service and inject category lookup data
+## Decision 3: Build one display item, then apply three filters
 
-**Decision**: Retain `budget-list-read-model-service.ts`. Pass the accessible
-category map already maintained by the authenticated private runtime into its
-pure read-model builder. Emit display-ready category label state instead of
-looking up categories in a card.
+**Decision**: Build immutable display-ready items once and apply scope, period,
+and status using pure AND predicates.
 
-**Rationale**: The Categories provider already performs one user-accessible
-WatermelonDB observation. Reusing its plain map avoids a duplicate query and
-removes data/presentation shaping from `BudgetCategoryCard`.
+**Rationale**: One pipeline makes combination coverage deterministic and avoids
+section duplication. Category labels remain service-shaped from accessible
+category input; rows do no query.
 
-**Alternatives rejected**:
+**Rejected**: Filter independently in cards, route, or separate sections.
 
-- Query categories per card: violates presentation boundaries and amplifies
-  reads.
-- Add another categories observation to the budget hook: duplicates existing
-  private runtime state.
-- Resolve labels directly in the route: route/container components must not
-  shape business read models.
+## Decision 4: Use explicit priority ordering
 
-## Decision 4: Model the carousel as page groups
+**Decision**: Rank `EXPIRED`, `OVER_BUDGET`, `NEAR_LIMIT`, `PAUSED`, `HEALTHY`.
+Within rank, use active-locale collator and stable ID tie-break.
 
-**Decision**: Use `GLOBAL_BUDGET_MIN_CARD_WIDTH = 320` dp and
-`GLOBAL_BUDGET_CARD_GAP = 16` dp, compute the maximum whole visible-card count,
-and build immutable viewport-width page groups. Render a horizontal `FlatList`
-whose items are complete page groups. Use fixed layout metadata and stable keys.
+**Rationale**: Urgent/actionable states remain discoverable without sections.
+Approved active order is Over Budget, Near Limit, Healthy. Expired comes first
+under All status because it requires renewal; paused precedes healthy but
+follows spending attention states.
 
-**Rationale**: The approved behavior is group paging, not partially revealed
-card-by-card scrolling. React Native's
-[FlatList](https://reactnative.dev/docs/flatlist) supports horizontal
-virtualization, viewability callbacks, `getItemLayout`, and programmatic index
-recovery. Page grouping directly proves `ceil(total / visibleCount)` and
-prevents cropped cards. The 320 dp baseline preserves the approved phone
-mockup's readable card and 16 dp is the approved inter-card rhythm. It is the
-threshold for adding cards; a narrower container uses one full-available-width
-card. Tests lock 319/320 dp and the 655/656 dp transition to two cards.
+**Rejected**: Spending-percentage sort, creation-time sort, or pure alphabetical
+order across all states; each can bury attention rows or reorder continuously.
 
-**Alternatives rejected**:
+## Decision 5: Use one virtualized list, no carousel
 
-- Horizontal `ScrollView`: eagerly renders all content and provides a weaker
-  viewability contract; React Native recommends virtualized lists for growing
-  data.
-- Card-by-card snap points: conflicts with page indicators that represent
-  complete visible groups.
-- Fixed “phone/tablet” counts: breaks foldables, split screen, landscape, and
-  future widths.
+**Decision**: Use one vertical `FlatList` with one compact full-width row type.
+Remove section rows, global page groups, page dots, carousel announcements,
+horizontal snapping, and responsive card-count helpers.
 
-## Decision 5: Measure responsive width and preserve a stable anchor
+**Rationale**: Approved information architecture is filter-driven. One row type
+removes special global hierarchy and prevents prior width/height failures.
 
-**Decision**: Combine the actual carousel container width with
-[`useWindowDimensions`](https://reactnative.dev/docs/usewindowdimensions). When
-filtering, lifecycle changes, or resize regroup pages, preserve the first
-currently visible eligible budget ID. Find its new page; otherwise select page
-zero.
+**Rejected**: Preserve carousel under Global tab; it contradicts unified style
+and reintroduces two navigation models.
 
-**Rationale**: Window dimensions update on rotation and resizing, while
-container measurement accounts for page padding. Stable IDs survive sorting and
-regrouping; numeric page indices do not.
+## Decision 6: Keep filters visible and compose selectors
 
-**Alternatives rejected**:
+**Decision**: Scope is a three-tab control. Period and Status are two visible
+selector controls that always expose current value. Selector content uses
+existing app modal/dropdown patterns and safe-area ownership.
 
-- Preserve old page index: can point at unrelated budgets after regrouping.
-- Always reset to page one: violates the approved clarification and disorients
-  users.
-- Preserve scroll offset: offsets become invalid when page/card widths change.
+**Rationale**: Users understand all active constraints without opening a general
+filter sheet. Separate controls scale better than twelve combined chips.
 
-## Decision 6: One virtualized vertical row model
+**Rejected**: One hidden filter modal, one chip per combination, or status
+sections.
 
-**Decision**: Use one outer vertical `FlatList` of dashboard layout rows. Render
-Needs attention, healthy category, and paused budgets as full-width compact rows
-inside section groups. Put the global carousel in the list header/first block.
+## Decision 7: Session-only filter persistence
 
-**Rationale**: Category budgets are not bounded. A single vertical list honors
-the project's long-list rule, avoids nested same-axis virtualized lists, and
-preserves readable names, metrics, and actions at phone widths.
+**Decision**: Store latest three selections in an in-memory UI session boundary.
+Initialize with `All / All / Active`; update on accepted changes; reset on fresh
+JS runtime. Do not persist to database, cloud, or preferences.
 
-**Alternative rejected**: A page-level `ScrollView` containing mapped section
-lists renders every category card and will degrade as budget count grows.
+**Rationale**: Matches approved navigation-back behavior while preventing
+surprising stale filters after fresh launch.
 
-## Decision 7: Preserve the last valid read model
+**Rejected**: Permanent device preference; URL-only state; relying on route
+mount lifetime without explicit contract.
 
-**Decision**: `useBudgets` distinguishes initial loading from recoverable
-refresh or action errors. Once a valid model exists, later
-calculation/observation failures retain that model, expose friendly recovery
-state, and ignore stale async completions.
+## Decision 8: Preserve last valid model and cancel stale work
 
-**Rationale**: Clearing budgets makes a transient error look like financial data
-was deleted. Hook lifecycle state is the correct boundary for cancellation and
-last-success retention.
+**Decision**: `useBudgets` distinguishes initial loading from later work. New
+selection/observation generations invalidate older async completions. Later
+failure retains last valid rows and current selections.
 
-**Alternative rejected**: Cache inside the service. Services are plain
-deterministic operations and should not retain React lifecycle state.
+**Rationale**: Financial content must not disappear or revert to earlier filter
+because of a race.
 
-## Decision 8: Add Resume confirmation with the shared component
+**Rejected**: Clear rows on every change or cache mutable state in service.
 
-**Decision**: Use the existing shared `ConfirmationModal` presentation pattern.
-The route owns selected-target/modal state; `useBudgetDashboardActions` owns
-only async submission, cancellation, and recovery state. Cancel does nothing;
-confirm submits once; failure leaves the observed paused card visible.
+## Decision 9: Preserve lifecycle action contracts
 
-**Rationale**: Code inspection showed current budget Resume calls the command
-directly. The reusable modal exists, but the claimed budget confirmation
-behavior does not. Planning must not encode the false premise. The existing
-`resumeBudget` command remains paused-only: a second or non-paused call rejects
-and must not append a second pause interval. Duplicate taps are prevented at the
-route/hook boundary, not redefined as service idempotence.
+**Decision**: Resume continues through shared confirmation and owned command.
+Renew continues through distinct `renewFrom` create-source navigation with
+prefilled reusable values and immutable history.
 
-**Alternative rejected**: Continue direct Resume because the command is
-reversible. It contradicts the approved UX and creates accidental lifecycle
-changes.
+**Rationale**: Approved actions remain useful after sections disappear, and
+current correctness fixes already implement safety boundaries.
 
-## Decision 9: Renew uses a distinct create-source parameter
+**Rejected**: Hide actions in menu, direct Resume without confirmation, or renew
+through edit `id`.
 
-**Decision**: Dashboard navigation emits
-`{ pathname: "/create-budget", params: { renewFrom: budgetId } }`. It never uses
-the existing edit `id` parameter. Child issue #225 resolves the source, prefills
-a new draft, and creates a new record.
+## Decision 10: Match skeleton to final information architecture
 
-**Rationale**: Passing the expired ID through the edit path would mutate
-historical data. A distinct parameter makes create versus edit intent explicit
-and testable.
+**Decision**: Skeleton renders scope-tab shapes, two visible filter-control
+shapes, and repeated compact-row shapes. It contains no hero or carousel block.
 
-**Alternative rejected**: Clone the record in the dashboard. Form defaults and
-validation belong to the Create/Edit flow, and duplicating them would cross
-issue boundaries.
+**Rationale**: Geometry continuity reduces layout surprise and fulfills shared
+Skeleton policy.
 
-## Decision 10: Consume, do not replace, safe-area work
+**Rejected**: Reuse section/carousel skeleton or generic full-page blocks.
 
-**Decision**: Rebase after issue #219 / PR #222. Remove the old fixed budget
-footer and FAB, then give the new vertical list one bottom content inset equal
-to named base spacing plus the runtime bottom safe-area inset.
+## Decision 11: Consume established safe-area ownership
 
-**Rationale**: Physical QA proved the old footer issue is local to the Budgets
-stack, while other root/tab surfaces already work. Global root padding would
-double-pad correct screens.
+**Decision**: Keep root measurement and PR #222 contract. Unified list adds
+runtime bottom inset once to base content spacing; filter selectors use shared
+modal inset behavior.
 
-**Alternative rejected**: Wrap the app in global bottom padding. It regresses
-Home, Accounts, Transactions, and gesture mode.
+**Rationale**: Root padding would regress already-correct screens and gesture
+mode.
 
-## Decision 11: Testing and seed strategy
+**Rejected**: Global bottom wrapper or fixed navigation-bar spacer.
 
-**Decision**: Start with deterministic fixtures and failing tests. Extend the
-manual-QA fixture only with missing lifecycle, period, carousel, zero-spend,
-deleted-category, and long-copy scenarios; do not wipe already-valid user data.
-Add two isolated budget E2E profiles selected through `E2E_BUDGET_PROFILE`:
-`dashboard-full` for all periods, carousel, and lifecycle actions;
-`dashboard-filter-empty` with no CUSTOM budgets for the Custom filtered-empty
-journey. Reset/reseed the E2E user before each budget flow.
+## Decision 12: Testing and seed strategy
 
-**Rationale**: Existing fixtures cannot prove the spec, and current tests assert
-two obsolete behaviors: hidden expired customs and duplicated paused categories.
-Manual data and automated E2E data have different reproducibility needs.
+**Decision**: Extend fixtures only for missing scope/period/status combinations.
+Keep `dashboard-full` and `dashboard-filter-empty`; replace carousel Maestro
+journey with combined-filter coverage. TDD covers deterministic service, hook,
+row, filter, skeleton, action, and recovery branches.
 
 **Automation boundary**:
 
-- Jest/RNTL: classifier precedence, locale-aware ordering, filters, exact
-  membership, geometry, anchor reconciliation, RTL layout semantics, accessible
-  labels, reduced motion, injected errors, Resume confirmation/failure, and
-  Renew route payload.
-- Maestro: visible sections/filters, Resume cancel/confirm, Renew navigation,
-  and carousel reachability. Resume failure is excluded because no approved
-  user-visible failure-injection harness exists.
-- Manual-only: TalkBack announcement quality, contrast judgment, maximum device
-  font, Android navigation-mode switching, rotation during an active gesture,
-  timed SC-006 and SC-010 evidence, and final pixel-level safe-area
-  verification.
+- Jest/RNTL: all derived states, 3 x 4 x 4 filter matrix, ordering, session
+  persistence/reset, stale cancellation, row content omissions, accessibility,
+  long text, safe area, injected failures, Resume/Renew/detail behavior.
+- Maestro: defaults, visible selected values, representative combined filters,
+  reset, row detail, Resume cancel/confirm, Renew prefill.
+- Manual-only: TalkBack quality, visual contrast, maximum font scale, Android
+  navigation-mode switching, pixel comparison, and timed acceptance evidence.
 
-## Decision 12: Make ordering and timed outcomes reproducible
+## Decision 13: Reproducible timing and ordering
 
-**Decision**: The read-model builder receives active locale `en` or `ar` and
-compares trimmed display names with
-`Intl.Collator(locale, { sensitivity: "base", numeric: true, usage: "sort" })`;
-equal names use budget ID as the final code-point tie-break. SC-006 uses
-temporary development-only `performance.now()` probes for five transitions per
-filter and removes them before PR. SC-010 uses three timed fresh no-budget
-trials.
+**Decision**: Use one injected clock per read-model build, explicit active
+locale, stable ID tie-break, and temporary development-only timing probes for
+five consecutive selection transitions. Remove probes before PR completion.
 
-**Rationale**: Explicit collation removes platform/default-locale drift.
-Separate timed device evidence measures user-perceived commits honestly without
-turning deterministic unit tests or Maestro into a fake performance harness.
+**Rationale**: Tests and device evidence stay deterministic without production
+logging or device-specific rules.
