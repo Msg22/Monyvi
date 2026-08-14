@@ -13,7 +13,7 @@
  * @module BudgetForm
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -44,6 +44,7 @@ import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { formatDate } from "@/utils/dateHelpers";
 import {
   buildBudgetRenewalFormValues,
+  resolveRenewalCategoryId,
   type BudgetFormInitialValues,
 } from "./budget-renewal-form-values";
 
@@ -93,14 +94,25 @@ export function BudgetForm({
   const isEditMode = !!existingBudget;
   const { isDark } = useTheme();
   const { t } = useTranslation("budgets");
-  const { expenseCategories } = useCategories();
+  const { expenseCategories, isLoading: areCategoriesLoading } =
+    useCategories();
   const categoryMap = useCategoryLookup();
+  const accessibleCategoryIds = useMemo(
+    () => new Set(categoryMap.keys()),
+    [categoryMap]
+  );
   const { showToast } = useToast();
   const { preferredCurrency } = usePreferredCurrency();
 
   // ── Form state ──
   const [form, setForm] = useState<FormState>(() => {
-    if (renewalSource) return buildBudgetRenewalFormValues(renewalSource);
+    if (renewalSource) {
+      return buildBudgetRenewalFormValues(
+        renewalSource,
+        new Date(),
+        areCategoriesLoading ? undefined : accessibleCategoryIds
+      );
+    }
 
     return {
       name: existingBudget?.name ?? "",
@@ -123,6 +135,20 @@ export function BudgetForm({
   const selectedCategory = form.categoryId
     ? categoryMap.get(form.categoryId)
     : null;
+
+  useEffect(() => {
+    if (!renewalSource || areCategoriesLoading) return;
+    const normalizedCategoryId = resolveRenewalCategoryId(
+      renewalSource,
+      accessibleCategoryIds
+    );
+    setForm((current) =>
+      current.categoryId === renewalSource.categoryId &&
+      current.categoryId !== normalizedCategoryId
+        ? { ...current, categoryId: normalizedCategoryId }
+        : current
+    );
+  }, [accessibleCategoryIds, areCategoriesLoading, renewalSource]);
 
   // ── Field updaters ──
   const updateField = useCallback(

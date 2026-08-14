@@ -273,7 +273,7 @@ coverage.
       comparison in `specs/033-budget-dashboard-redesign/quickstart.md`
 - [x] T061 Run TypeScript, logic, style, correctness, security, and QA coverage
       review against revised `specs/033-budget-dashboard-redesign/spec.md`
-- [ ] T062 Update PR #226 description and coverage matrix to mark earlier
+- [x] T062 Update PR #226 description and coverage matrix to mark earlier
       section/carousel design superseded
 
 ## Dependencies and execution order

@@ -26,7 +26,8 @@ export interface BudgetRenewalSource {
 
 export function buildBudgetRenewalFormValues(
   source: BudgetRenewalSource,
-  now: Date = new Date()
+  now: Date = new Date(),
+  accessibleCategoryIds?: ReadonlySet<string>
 ): BudgetFormInitialValues {
   const periodStart = new Date(now.getTime());
   const sourceDuration = resolveSourceDuration(source);
@@ -34,13 +35,23 @@ export function buildBudgetRenewalFormValues(
   return {
     name: source.name,
     type: source.type,
-    categoryId: source.categoryId ?? null,
+    categoryId: resolveRenewalCategoryId(source, accessibleCategoryIds),
     amount: source.amount.toString(),
     period: source.period,
     periodStart,
     periodEnd: new Date(periodStart.getTime() + sourceDuration),
     alertThreshold: source.alertThreshold,
   };
+}
+
+export function resolveRenewalCategoryId(
+  source: BudgetRenewalSource,
+  accessibleCategoryIds?: ReadonlySet<string>
+): string | null {
+  if (source.type === "GLOBAL") return null;
+  const categoryId = source.categoryId ?? null;
+  if (!categoryId || !accessibleCategoryIds) return categoryId;
+  return accessibleCategoryIds.has(categoryId) ? categoryId : null;
 }
 
 function resolveSourceDuration(source: BudgetRenewalSource): number {

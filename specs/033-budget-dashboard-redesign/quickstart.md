@@ -110,9 +110,10 @@ Before seeding:
 
 Required matrix:
 
-- GLOBAL and CATEGORY across WEEKLY, MONTHLY, CUSTOM;
+- active GLOBAL budgets across WEEKLY, MONTHLY, and CUSTOM, plus CATEGORY
+  coverage across all periods;
 - healthy, near-limit, over-budget, zero-spend active;
-- paused global/category and expired active/paused custom;
+- a current paused category and expired active/paused custom budgets;
 - deleted-category history;
 - long name, long translated context, and large amount;
 - combinations proving each scope/period/status option;
@@ -120,13 +121,18 @@ Required matrix:
 
 ### Local inspection evidence (2026-08-14)
 
-- Inspected `manual-qa@monyvi.test` directly in local Supabase; 11 non-deleted
+- Inspected `manual-qa@monyvi.test` directly in local Supabase; 12 non-deleted
   budgets already cover GLOBAL/CATEGORY, WEEKLY/MONTHLY/CUSTOM,
   ACTIVE/PAUSED/derived EXPIRED, near-limit, over-budget, zero-spend,
   deleted-category history, long name, and large amount.
-- Existing rows include two expired custom budgets ending 2026-08-13 and one
-  future paused custom global budget.
-- No missing scenario found. Database left unchanged; no reset or reseed run.
+- Existing rows include two expired custom budgets ending 2026-08-13, one
+  current paused category budget, and active GLOBAL budgets for every period.
+- The idempotent seed added the missing paused-category fixture, activated the
+  healthy Custom Global fixture, and retained conflicting `Ramadan Hosting` as a
+  tombstone. No reset or whole-database reseed was run.
+- A simultaneous current paused Global and active Global for every period is
+  impossible under the production uniqueness rule. The manual fixture obeys
+  production uniqueness; service tests cover the paused Global predicate.
 
 Local preparation:
 
@@ -142,7 +148,7 @@ existing fixture is irreparably inconsistent.
 
 ## Verification evidence (2026-08-14)
 
-- Focused mobile Jest: 18 suites and 184 tests passed.
+- Focused mobile Jest: 20 suites and 191 tests passed.
 - Budget financial regression: 1 suite and 24 tests passed in `@monyvi/logic`.
 - Full mobile lint and i18n coverage checks passed.
 - Mobile typecheck reached only the pre-existing Expo typed-route errors for

@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-unsafe-assignment */
-import type { Budget, BudgetPeriod } from "@monyvi/db";
+import type { Budget, BudgetPeriod, Transaction } from "@monyvi/db";
 
 const mockDatabaseGet = jest.fn((tableName: string): string => tableName);
 const mockQueryOwned = jest.fn<
-  MockQuery<Budget>,
+  MockQuery<unknown>,
   [string, string, QueryCondition]
 >();
 const mockGetSpendingForBudget = jest.fn<Promise<number>, [Budget]>();
@@ -55,7 +55,7 @@ jest.mock("@/services/user-data-access", () => ({
     collection: string,
     userId: string,
     condition: QueryCondition
-  ): MockQuery<Budget> => mockQueryOwned(collection, userId, condition),
+  ): MockQuery<unknown> => mockQueryOwned(collection, userId, condition),
 }));
 
 jest.mock("@/services/budget-service", () => ({
@@ -80,6 +80,7 @@ import {
   buildBudgetDashboardReadModel,
   buildBudgetMetrics,
   observeBudgetList,
+  observeBudgetSpendingChanges,
   type BudgetDashboardFilters,
   type BudgetDashboardReadModel,
   type BudgetWithMetrics,
@@ -192,6 +193,36 @@ describe("budget-list-read-model-service", () => {
           kind: "where",
           column: "status",
           value: { oneOf: ["ACTIVE", "PAUSED"] },
+        }),
+      ])
+    );
+  });
+
+  it("builds a scoped expense transaction observation for metric invalidation", () => {
+    const query = createQuery<Transaction>([]);
+    mockQueryOwned.mockReturnValue(query);
+
+    const result = observeBudgetSpendingChanges("user-1");
+
+    expect(result).toBe(query);
+    expect(mockDatabaseGet).toHaveBeenCalledWith("transactions");
+    expect(mockQueryOwned).toHaveBeenCalledWith(
+      "transactions",
+      "user-1",
+      expect.objectContaining({ kind: "and" })
+    );
+    const condition = mockQueryOwned.mock.calls[0]?.[2];
+    expect(condition?.conditions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "where",
+          column: "deleted",
+          value: false,
+        }),
+        expect.objectContaining({
+          kind: "where",
+          column: "type",
+          value: "EXPENSE",
         }),
       ])
     );

@@ -18,6 +18,7 @@ import {
   buildBudgetDashboardReadModel,
   buildBudgetMetrics,
   observeBudgetList,
+  observeBudgetSpendingChanges,
   type BudgetWithMetrics,
 } from "@/services/budget-list-read-model-service";
 import { logger } from "@/utils/logger";
@@ -62,6 +63,13 @@ const BUDGET_LIST_OBSERVED_COLUMNS = [
   "status",
   "pause_intervals",
   "paused_at",
+];
+const BUDGET_SPENDING_OBSERVED_COLUMNS = [
+  "amount",
+  "type",
+  "category_id",
+  "date",
+  "deleted",
 ];
 
 function getNextExpiryDelayMs(
@@ -123,10 +131,15 @@ export function useBudgets(): UseBudgetsResult {
   const [refreshCounter, setRefreshCounter] = useState(0);
   const [observationRetryCounter, setObservationRetryCounter] = useState(0);
   const [lifecycleClockRevision, setLifecycleClockRevision] = useState(0);
+  const [spendingRevision, setSpendingRevision] = useState(0);
   const refreshGenerationRef = useRef(0);
   const { userId, isResolvingUser } = useCurrentUser();
   const categoryMap = useCategoryLookup();
-  const { isLoading: areCategoriesLoading } = useAllCategories();
+  const {
+    isLoading: areCategoriesLoading,
+    error: categoryError,
+    retry: retryCategories,
+  } = useAllCategories();
   const { i18n, t } = useTranslation("budgets");
   const activeLocale = resolveActiveLocale(i18n.resolvedLanguage);
 
@@ -172,10 +185,38 @@ export function useBudgets(): UseBudgetsResult {
             },
           });
 
-        return () => subscription.unsubscribe();
+        let hasReceivedInitialSpendingSnapshot = false;
+        const spendingSubscription = observeBudgetSpendingChanges(currentUserId)
+          .observeWithColumns(BUDGET_SPENDING_OBSERVED_COLUMNS)
+          .subscribe({
+            next: () => {
+              if (!hasReceivedInitialSpendingSnapshot) {
+                hasReceivedInitialSpendingSnapshot = true;
+                return;
+              }
+              setSpendingRevision((revision) => revision + 1);
+            },
+            error: (error: unknown) => {
+              logger.error("budgets.spendingObserve.failed", error);
+              setIsComputing(false);
+              setErrorKey("dashboard_load_error");
+            },
+          });
+
+        return () => {
+          subscription.unsubscribe();
+          spendingSubscription.unsubscribe();
+        };
       },
     });
   }, [clearScopedState, isResolvingUser, observationRetryCounter, userId]);
+
+  useEffect(() => {
+    if (!categoryError) return;
+    logger.error("budgets.categories.failed", categoryError);
+    setIsComputing(false);
+    setErrorKey("dashboard_load_error");
+  }, [categoryError]);
 
   useEffect(() => {
     if (!userId || isResolvingUser || !hasObservedBudgets) {
@@ -210,7 +251,14 @@ export function useBudgets(): UseBudgetsResult {
     return () => {
       isCurrent = false;
     };
-  }, [hasObservedBudgets, isResolvingUser, rawBudgets, refreshCounter, userId]);
+  }, [
+    hasObservedBudgets,
+    isResolvingUser,
+    rawBudgets,
+    refreshCounter,
+    spendingRevision,
+    userId,
+  ]);
 
   useEffect(() => {
     if (
@@ -218,7 +266,8 @@ export function useBudgets(): UseBudgetsResult {
       isResolvingUser ||
       !computedBudgets ||
       computedBudgets.source !== rawBudgets ||
-      areCategoriesLoading
+      areCategoriesLoading ||
+      categoryError
     ) {
       return;
     }
@@ -247,6 +296,7 @@ export function useBudgets(): UseBudgetsResult {
     activeLocale,
     areCategoriesLoading,
     categoryMap,
+    categoryError,
     computedBudgets,
     isResolvingUser,
     lifecycleClockRevision,
@@ -311,7 +361,8 @@ export function useBudgets(): UseBudgetsResult {
     setObservationRetryCounter((counter) => counter + 1);
     refreshGenerationRef.current += 1;
     setRefreshCounter(refreshGenerationRef.current);
-  }, []);
+    retryCategories();
+  }, [retryCategories]);
 
   const autoPauseCheckKey = useMemo(
     () =>

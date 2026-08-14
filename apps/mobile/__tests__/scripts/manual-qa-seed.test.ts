@@ -233,10 +233,14 @@ describe("manual-qa-seed script helpers", () => {
           deleted: false,
           display_name: "QA Over Budget Fixture Category",
         }),
+        expect.objectContaining({
+          deleted: false,
+          display_name: "QA Paused Fixture Category",
+        }),
       ])
     );
-    expect(categoryRows).toHaveLength(5);
-    expect(operations.indexOf("upsert:categories:5")).toBeLessThan(
+    expect(categoryRows).toHaveLength(6);
+    expect(operations.indexOf("upsert:categories:6")).toBeLessThan(
       operations.indexOf(`upsert:budgets:${budgetRows.length}`)
     );
     expect(accountRows).toEqual(
@@ -291,7 +295,11 @@ describe("manual-qa-seed script helpers", () => {
           period: "MONTHLY",
         }),
         expect.objectContaining({ name: "Transport Weekly", period: "WEEKLY" }),
-        expect.objectContaining({ name: "Ramadan Hosting", status: "PAUSED" }),
+        expect.objectContaining({
+          name: "Ramadan Hosting",
+          status: "PAUSED",
+          deleted: true,
+        }),
         expect.objectContaining({ name: "Overall Spending", type: "GLOBAL" }),
         expect.objectContaining({
           name: "QA Healthy Weekly Global",
@@ -299,7 +307,14 @@ describe("manual-qa-seed script helpers", () => {
         }),
         expect.objectContaining({
           name: "QA Healthy Custom Global",
-          deleted: true,
+          status: "ACTIVE",
+          deleted: false,
+        }),
+        expect.objectContaining({
+          name: "QA Paused Category",
+          status: "PAUSED",
+          type: "CATEGORY",
+          deleted: false,
         }),
         expect.objectContaining({
           name: "QA Near Limit Category",
@@ -373,7 +388,7 @@ describe("manual-qa-seed script helpers", () => {
       )
     ).toBe(true);
     const pausedBudget = budgetRows.find(
-      (row) => (row as BudgetSeedRow).name === "Ramadan Hosting"
+      (row) => (row as BudgetSeedRow).name === "QA Paused Category"
     ) as BudgetSeedRow | undefined;
     const pauseIntervals = parsePauseIntervals(
       pausedBudget?.pause_intervals ?? "[]"

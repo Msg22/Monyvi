@@ -53,4 +53,26 @@ describe("buildBudgetRenewalFormValues", () => {
     expect(values.periodStart).toEqual(now);
     expect(values.periodEnd).toEqual(new Date("2026-08-15T08:00:00.000Z"));
   });
+
+  it("clears a renewal category that is no longer accessible", () => {
+    const now = new Date("2026-08-14T08:00:00.000Z");
+    const source: BudgetRenewalSource = {
+      name: "Deleted category history",
+      type: "CATEGORY",
+      categoryId: "deleted-category",
+      amount: 5000,
+      period: "CUSTOM",
+      periodStart: new Date("2026-06-01T00:00:00.000Z"),
+      periodEnd: new Date("2026-07-01T00:00:00.000Z"),
+      alertThreshold: 80,
+    };
+
+    const values = buildBudgetRenewalFormValues(
+      source,
+      now,
+      new Set(["accessible-category"])
+    );
+
+    expect(values.categoryId).toBeNull();
+  });
 });

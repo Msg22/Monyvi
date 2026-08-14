@@ -3,6 +3,7 @@ import type { Budget } from "@monyvi/db";
 
 const mockLoggerError = jest.fn();
 const mockObserveBudgetList = jest.fn();
+const mockObserveBudgetSpendingChanges = jest.fn();
 const mockBuildBudgetMetrics = jest.fn();
 const mockBuildBudgetDashboardReadModel = jest.fn();
 const mockCategoryMap = new Map<string, { readonly displayName: string }>();
@@ -10,6 +11,8 @@ const mockCategoryMap = new Map<string, { readonly displayName: string }>();
 let mockUserId: string | null = "user-1";
 let mockIsResolvingUser = false;
 let mockCategoriesLoading = false;
+let mockCategoryError: unknown = null;
+const mockRetryCategories = jest.fn();
 let mockActiveLocale: "en" | "ar" = "en";
 
 interface MockObserver<TRecord> {
@@ -60,6 +63,7 @@ function createQuery<TRecord>(): MockQuery<TRecord> {
 }
 
 const budgetQuery = createQuery<Budget>();
+const spendingQuery = createQuery<unknown>();
 const rawBudgets = [{ id: "budget-1" } as unknown as Budget];
 const budgetMetrics = [
   {
@@ -83,13 +87,22 @@ jest.mock("@/services/budget-list-read-model-service", () => ({
     mockBuildBudgetMetrics(...args),
   observeBudgetList: (...args: readonly unknown[]): unknown =>
     mockObserveBudgetList(...args),
+  observeBudgetSpendingChanges: (...args: readonly unknown[]): unknown =>
+    mockObserveBudgetSpendingChanges(...args),
 }));
 
 jest.mock("@/context/CategoriesContext", () => ({
   useAllCategories: (): {
     readonly categories: readonly unknown[];
     readonly isLoading: boolean;
-  } => ({ categories: [], isLoading: mockCategoriesLoading }),
+    readonly error: unknown;
+    readonly retry: () => void;
+  } => ({
+    categories: [],
+    isLoading: mockCategoriesLoading,
+    error: mockCategoryError,
+    retry: mockRetryCategories,
+  }),
   useCategoryLookup: (): ReadonlyMap<
     string,
     { readonly displayName: string }
@@ -154,10 +167,13 @@ describe("useBudgets", () => {
     mockUserId = "user-1";
     mockIsResolvingUser = false;
     mockCategoriesLoading = false;
+    mockCategoryError = null;
     mockActiveLocale = "en";
     clearBudgetDashboardFilterSession();
     budgetQuery.observerRef.current = null;
+    spendingQuery.observerRef.current = null;
     mockObserveBudgetList.mockReturnValue(budgetQuery);
+    mockObserveBudgetSpendingChanges.mockReturnValue(spendingQuery);
     mockBuildBudgetMetrics.mockResolvedValue(budgetMetrics);
     mockBuildBudgetDashboardReadModel.mockReturnValue(dashboardReadModel);
   });
@@ -178,6 +194,14 @@ describe("useBudgets", () => {
     });
 
     expect(mockObserveBudgetList).toHaveBeenCalledWith("user-1");
+    expect(mockObserveBudgetSpendingChanges).toHaveBeenCalledWith("user-1");
+    expect(spendingQuery.observeWithColumns).toHaveBeenCalledWith([
+      "amount",
+      "type",
+      "category_id",
+      "date",
+      "deleted",
+    ]);
     expect(budgetQuery.observeWithColumns).toHaveBeenCalledWith([
       "name",
       "type",
@@ -211,6 +235,54 @@ describe("useBudgets", () => {
       status: "ACTIVE",
     });
     expect(result.current.totalCount).toBe(1);
+  });
+
+  it("recomputes metrics when an owned expense transaction changes", async () => {
+    const { result } = renderHook(() => useBudgets());
+
+    act(() => {
+      budgetQuery.observerRef.current?.next(rawBudgets);
+      spendingQuery.observerRef.current?.next([]);
+    });
+    await waitFor(() =>
+      expect(mockBuildBudgetMetrics).toHaveBeenCalledTimes(1)
+    );
+    const readModelCallsBeforeChange =
+      mockBuildBudgetDashboardReadModel.mock.calls.length;
+
+    await act(async () => {
+      spendingQuery.observerRef.current?.next([{ id: "expense-1" }]);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(mockBuildBudgetMetrics).toHaveBeenCalledTimes(2);
+      expect(
+        mockBuildBudgetDashboardReadModel.mock.calls.length
+      ).toBeGreaterThan(readModelCallsBeforeChange);
+      expect(result.current.isRefreshing).toBe(false);
+    });
+  });
+
+  it("surfaces category observation failure and retries the provider", async () => {
+    const categoryError = new Error("categories failed");
+    mockCategoryError = categoryError;
+    const { result } = renderHook(() => useBudgets());
+
+    act(() => {
+      budgetQuery.observerRef.current?.next(rawBudgets);
+    });
+
+    await waitFor(() => {
+      expect(result.current.errorKey).toBe("dashboard_load_error");
+    });
+    expect(result.current.hasValidData).toBe(false);
+    expect(mockBuildBudgetDashboardReadModel).not.toHaveBeenCalled();
+
+    act(() => result.current.retry());
+    expect(mockRetryCategories).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockObserveBudgetList).toHaveBeenCalledTimes(2));
   });
 
   it("keeps reads disabled while resolving or signed out", async () => {

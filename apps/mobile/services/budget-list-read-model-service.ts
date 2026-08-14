@@ -1,4 +1,4 @@
-import { Budget, database } from "@monyvi/db";
+import { Budget, database, Transaction } from "@monyvi/db";
 import { Q } from "@nozbe/watermelondb";
 import type Query from "@nozbe/watermelondb/Query";
 import {
@@ -47,6 +47,16 @@ export function observeBudgetList(userId: string): Query<Budget> {
       Q.where("deleted", false),
       Q.where("status", Q.oneOf(["ACTIVE", "PAUSED"]))
     )
+  );
+}
+
+export function observeBudgetSpendingChanges(
+  userId: string
+): Query<Transaction> {
+  return queryOwned(
+    database.get<Transaction>("transactions"),
+    userId,
+    Q.and(Q.where("deleted", false), Q.where("type", "EXPENSE"))
   );
 }
 
