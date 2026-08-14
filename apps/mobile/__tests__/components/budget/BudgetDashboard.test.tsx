@@ -40,9 +40,17 @@ jest.mock("@/constants/colors", () => ({
   },
 }));
 
-jest.mock("@/components/budget/BudgetDashboardCard", () => ({
-  BudgetDashboardCard: ({ item }: { item: BudgetDashboardItem }) => (
-    <MockText testID={`dashboard-card-${item.id}`}>{item.lifecycle}</MockText>
+jest.mock("@/components/budget/BudgetDashboardRow", () => ({
+  BudgetDashboardRow: ({
+    item,
+    variant,
+  }: {
+    item: BudgetDashboardItem;
+    variant: "attention" | "category" | "paused";
+  }) => (
+    <MockText testID={`dashboard-row-${variant}-${item.id}`}>
+      {item.lifecycle}
+    </MockText>
   ),
 }));
 
@@ -116,6 +124,7 @@ function item(
       sectionId === "OVERALL"
         ? { kind: "not-applicable" }
         : { kind: "resolved", categoryId: id, name: id },
+    categoryIcon: null,
     availableAction: lifecycle === "PAUSED" ? "RESUME" : null,
   };
 }
@@ -190,9 +199,32 @@ describe("BudgetDashboard", () => {
     expect(screen.getByTestId("global-budget-carousel").props.children).toBe(
       "overall"
     );
-    expect(screen.getByTestId("dashboard-card-attention")).toBeTruthy();
-    expect(screen.getByTestId("dashboard-card-category")).toBeTruthy();
-    expect(screen.getByTestId("dashboard-card-paused")).toBeTruthy();
+    expect(
+      screen.getByTestId("dashboard-row-attention-attention")
+    ).toBeTruthy();
+    expect(screen.getByTestId("dashboard-row-category-category")).toBeTruthy();
+    expect(screen.getByTestId("dashboard-row-paused-paused")).toBeTruthy();
+  });
+
+  it("renders category budgets as full-width compact rows instead of a two-column grid", () => {
+    const screen = renderDashboard({
+      readModel: readModel({
+        categoryBudgets: [
+          item("category-a", "CATEGORY"),
+          item("category-b", "CATEGORY"),
+        ],
+        totalCount: 2,
+        matchingCount: 2,
+      }),
+    });
+
+    expect(
+      screen.getByTestId("dashboard-row-category-category-a")
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId("dashboard-row-category-category-b")
+    ).toBeTruthy();
+    expect(screen.queryByTestId(/dashboard-card-/)).toBeNull();
   });
 
   it("omits empty sections and has no summary footer or floating action", () => {

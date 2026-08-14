@@ -65,6 +65,7 @@ function createItem(
     daysElapsed: 18,
     expiresAt: null,
     categoryLabel: { kind: "not-applicable" },
+    categoryIcon: null,
     availableAction: null,
     ...overrides,
   };
@@ -93,6 +94,29 @@ describe("BudgetDashboardCard", () => {
         /Monthly essentials.*Monthly.*1,750.*5,000.*35.*3,250.*12/
       )
     ).toBeTruthy();
+  });
+
+  it("places the global icon beside the title and percentage beside progress", () => {
+    const screen = render(
+      <BudgetDashboardCard
+        item={createItem({
+          metrics: { ...createItem().metrics, percentage: 78 },
+        })}
+        variant="global"
+        preferredCurrency="EGP"
+        onPress={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("budget-global-title-row")).toContainElement(
+      screen.getByTestId("budget-global-icon")
+    );
+    expect(screen.getByTestId("budget-global-title-row")).toContainElement(
+      screen.getByText("Monthly essentials")
+    );
+    expect(screen.getByTestId("budget-global-progress-row")).toContainElement(
+      screen.getByText("78%")
+    );
   });
 
   it.each([

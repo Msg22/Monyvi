@@ -190,12 +190,12 @@ type DashboardLayoutRow =
       readonly kind: "section-heading";
       readonly sectionId: BudgetDashboardSectionId;
     }
-  | { readonly kind: "attention"; readonly budget: BudgetDashboardItem }
   | {
-      readonly kind: "category-pair";
-      readonly budgets: readonly BudgetDashboardItem[];
-    }
-  | { readonly kind: "paused"; readonly budget: BudgetDashboardItem };
+      readonly kind: "compact-budget";
+      readonly variant: "attention" | "category" | "paused";
+      readonly position: "first" | "middle" | "last" | "only";
+      readonly budget: BudgetDashboardItem;
+    };
 ```
 
 Rules:
@@ -211,7 +211,8 @@ Rules:
 - Dots are visible only when `pageCount > 1`.
 - A final page may contain fewer cards but must not stretch them wider than
   other pages.
-- Category pair rows contain one or two cards and preserve sorted order.
+- Needs attention, Category budgets, and Paused use full-width compact rows in
+  service order; section position controls shared borders and separators.
 - Regrouping selects the page containing the prior first-visible eligible ID,
   else 0.
 

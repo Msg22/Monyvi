@@ -11,16 +11,16 @@ import type {
   BudgetDashboardItem,
   BudgetDashboardReadModel,
 } from "@/services/budget-list-read-model-service";
-import { BudgetDashboardCard } from "./BudgetDashboardCard";
+import {
+  BudgetDashboardRow,
+  type BudgetDashboardRowPosition,
+  type BudgetDashboardRowVariant,
+} from "./BudgetDashboardRow";
 import { BudgetDashboardSectionHeader } from "./BudgetDashboardSectionHeader";
 import { BudgetDashboardSkeleton } from "./BudgetDashboardSkeleton";
 import { BudgetEmptyState } from "./BudgetEmptyState";
 import { GlobalBudgetCarousel } from "./GlobalBudgetCarousel";
 import { PeriodFilterChips, type PeriodFilter } from "./PeriodFilterChips";
-import {
-  buildCategoryBudgetRows,
-  type CategoryBudgetRow,
-} from "./budget-dashboard-layout";
 
 const DASHBOARD_BOTTOM_BASE_SPACING = 24;
 
@@ -31,14 +31,11 @@ type DashboardRow =
       readonly titleKey: "needs_attention" | "category_budgets" | "paused";
     }
   | {
-      readonly kind: "full";
+      readonly kind: "budget";
       readonly key: string;
       readonly item: BudgetDashboardItem;
-    }
-  | {
-      readonly kind: "category";
-      readonly key: string;
-      readonly row: CategoryBudgetRow;
+      readonly variant: BudgetDashboardRowVariant;
+      readonly position: BudgetDashboardRowPosition;
     };
 
 export interface BudgetDashboardProps {
@@ -62,50 +59,39 @@ function buildDashboardRows(
 ): readonly DashboardRow[] {
   const rows: DashboardRow[] = [];
 
-  if (readModel.needsAttentionBudgets.length > 0) {
-    rows.push({
-      kind: "heading",
-      key: "heading-needs-attention",
-      titleKey: "needs_attention",
-    });
-    rows.push(
-      ...readModel.needsAttentionBudgets.map((item) => ({
-        kind: "full" as const,
-        key: `attention-${item.id}`,
+  const appendSection = (
+    titleKey: "needs_attention" | "category_budgets" | "paused",
+    budgets: readonly BudgetDashboardItem[],
+    variant: BudgetDashboardRowVariant
+  ): void => {
+    if (budgets.length === 0) return;
+    rows.push({ kind: "heading", key: `heading-${variant}`, titleKey });
+    budgets.forEach((item, index) => {
+      const position: BudgetDashboardRowPosition =
+        budgets.length === 1
+          ? "only"
+          : index === 0
+            ? "first"
+            : index === budgets.length - 1
+              ? "last"
+              : "middle";
+      rows.push({
+        kind: "budget",
+        key: `${variant}-${item.id}`,
         item,
-      }))
-    );
-  }
-
-  if (readModel.categoryBudgets.length > 0) {
-    rows.push({
-      kind: "heading",
-      key: "heading-category",
-      titleKey: "category_budgets",
+        variant,
+        position,
+      });
     });
-    rows.push(
-      ...buildCategoryBudgetRows(readModel.categoryBudgets).map((row) => ({
-        kind: "category" as const,
-        key: `category-${row.key}`,
-        row,
-      }))
-    );
-  }
+  };
 
-  if (readModel.pausedBudgets.length > 0) {
-    rows.push({
-      kind: "heading",
-      key: "heading-paused",
-      titleKey: "paused",
-    });
-    rows.push(
-      ...readModel.pausedBudgets.map((item) => ({
-        kind: "full" as const,
-        key: `paused-${item.id}`,
-        item,
-      }))
-    );
-  }
+  appendSection(
+    "needs_attention",
+    readModel.needsAttentionBudgets,
+    "attention"
+  );
+  appendSection("category_budgets", readModel.categoryBudgets, "category");
+  appendSection("paused", readModel.pausedBudgets, "paused");
 
   return Object.freeze(rows);
 }
@@ -139,37 +125,16 @@ export function BudgetDashboard({
         );
       }
 
-      if (row.kind === "category") {
-        return (
-          <View className="mb-3 flex-row gap-3">
-            {row.row.budgets.map((item) => (
-              <View key={item.id} className="flex-1">
-                <BudgetDashboardCard
-                  item={item}
-                  variant="compact"
-                  preferredCurrency={preferredCurrency}
-                  onPress={onBudgetPress}
-                  onResume={onResume}
-                  onRenew={onRenew}
-                />
-              </View>
-            ))}
-            {row.row.budgets.length === 1 ? <View className="flex-1" /> : null}
-          </View>
-        );
-      }
-
       return (
-        <View className="mb-3">
-          <BudgetDashboardCard
-            item={row.item}
-            variant="full"
-            preferredCurrency={preferredCurrency}
-            onPress={onBudgetPress}
-            onResume={onResume}
-            onRenew={onRenew}
-          />
-        </View>
+        <BudgetDashboardRow
+          item={row.item}
+          variant={row.variant}
+          position={row.position}
+          preferredCurrency={preferredCurrency}
+          onPress={onBudgetPress}
+          onResume={onResume}
+          onRenew={onRenew}
+        />
       );
     },
     [onBudgetPress, onRenew, onResume, preferredCurrency, t]

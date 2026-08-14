@@ -123,13 +123,31 @@ export function BudgetDashboardCard({
         accessibilityRole="button"
         accessibilityLabel={accessibleLabel}
       >
-        <View className="flex-row items-start justify-between gap-3">
-          <View className="min-w-0 flex-1">
-            <Text
-              className={`${isCompact ? "text-lg" : "text-xl"} font-bold text-text-primary dark:text-slate-25`}
+        <View
+          testID="budget-global-title-row"
+          className="flex-row items-start justify-between gap-3"
+        >
+          <View className="min-w-0 flex-1 flex-row items-center">
+            <View
+              testID="budget-global-icon"
+              className="h-11 w-11 items-center justify-center rounded-xl bg-nileGreen-500/15"
             >
-              {item.displayName}
-            </Text>
+              <Ionicons
+                name="wallet-outline"
+                size={24}
+                color={palette.nileGreen[500]}
+              />
+            </View>
+            <View className="ms-3 min-w-0 flex-1">
+              <Text
+                className={`${isCompact ? "text-lg" : "text-xl"} font-bold text-text-primary dark:text-slate-25`}
+              >
+                {item.displayName}
+              </Text>
+              <Text className="mt-1 text-xs font-medium uppercase tracking-wider text-text-muted dark:text-slate-400">
+                {periodLabel}
+              </Text>
+            </View>
             {item.categoryLabel.kind === "deleted" ? (
               <Text className="mt-1 text-xs text-text-muted dark:text-slate-400">
                 {t("deleted_category")}
@@ -147,35 +165,25 @@ export function BudgetDashboardCard({
           </View>
         </View>
 
-        <View className="mt-5 flex-row items-end justify-between">
-          <View>
-            <Text className="text-xs font-medium uppercase tracking-wider text-text-muted dark:text-slate-400">
-              {periodLabel}
-            </Text>
-            <Text className="mt-1 text-3xl font-bold text-text-primary dark:text-slate-25">
-              {Math.round(item.metrics.percentage)}%
-            </Text>
+        <View
+          testID="budget-global-progress-row"
+          className="mt-5 flex-row items-center gap-3"
+        >
+          <View className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+            <View
+              className={`h-full rounded-full ${
+                item.lifecycle === "OVER_BUDGET" || item.lifecycle === "EXPIRED"
+                  ? "bg-red-500"
+                  : item.lifecycle === "NEAR_LIMIT"
+                    ? "bg-amber-500"
+                    : "bg-nileGreen-500"
+              }`}
+              style={{ width: progressWidth }}
+            />
           </View>
-          <Ionicons
-            name={
-              item.scope === "GLOBAL" ? "wallet-outline" : "pie-chart-outline"
-            }
-            size={26}
-            color={palette.nileGreen[500]}
-          />
-        </View>
-
-        <View className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
-          <View
-            className={`h-full rounded-full ${
-              item.lifecycle === "OVER_BUDGET" || item.lifecycle === "EXPIRED"
-                ? "bg-red-500"
-                : item.lifecycle === "NEAR_LIMIT"
-                  ? "bg-amber-500"
-                  : "bg-nileGreen-500"
-            }`}
-            style={{ width: progressWidth }}
-          />
+          <Text className="text-xl font-bold text-nileGreen-600 dark:text-nileGreen-300">
+            {Math.round(item.metrics.percentage)}%
+          </Text>
         </View>
 
         <Text className="mt-4 text-sm text-text-secondary dark:text-slate-300">

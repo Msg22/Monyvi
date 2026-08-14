@@ -105,14 +105,13 @@ regrouping; numeric page indices do not.
 
 ## Decision 6: One virtualized vertical row model
 
-**Decision**: Use one outer vertical `FlatList` of dashboard layout rows. Pair
-healthy category budgets in a pure layout helper; render attention and paused
-cards as full-width rows. Put the global carousel in the list header/first
-block.
+**Decision**: Use one outer vertical `FlatList` of dashboard layout rows. Render
+Needs attention, healthy category, and paused budgets as full-width compact rows
+inside section groups. Put the global carousel in the list header/first block.
 
 **Rationale**: Category budgets are not bounded. A single vertical list honors
 the project's long-list rule, avoids nested same-axis virtualized lists, and
-preserves the approved two-column category design.
+preserves readable names, metrics, and actions at phone widths.
 
 **Alternative rejected**: A page-level `ScrollView` containing mapped section
 lists renders every category card and will degrade as budget count grows.

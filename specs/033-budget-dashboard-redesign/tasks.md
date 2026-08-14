@@ -170,9 +170,9 @@ deleted-category records each appear once in correct ordered section.
       deleted-category cards, layout-matching Skeleton loading, no-budget state,
       recoverable error, no footer, and no FAB in
       `apps/mobile/__tests__/components/budget/BudgetDashboard.test.tsx`
-- [x] T026 [P] [US2] Add failing one/two-card category-row pairing and
-      stable-order tests in
-      `apps/mobile/__tests__/components/budget/budget-dashboard-layout.test.ts`
+- [x] T026 [P] [US2] Add failing full-width compact-row and stable-order tests
+      for Needs attention, Category budgets, and Paused in
+      `apps/mobile/__tests__/components/budget/BudgetDashboardRow.test.tsx`
 - [x] T027 [P] [US2] Add failing PageHeader and no-budget Create navigation
       assertions plus absent persistent FAB/summary assertions in
       `apps/mobile/__tests__/app/budget-screens-style.test.tsx`
@@ -182,9 +182,8 @@ deleted-category records each appear once in correct ordered section.
 - [x] T028 [US2] Make T024 pass with exclusive classification, deleted-category
       labels, and exact active-locale `Intl.Collator` plus budget-ID ordering in
       `apps/mobile/services/budget-list-read-model-service.ts`
-- [x] T029 [P] [US2] Make T026 pass with immutable category-pair rows that
-      preserve service order in
-      `apps/mobile/components/budget/budget-dashboard-layout.ts`
+- [x] T029 [P] [US2] Make T026 pass with grouped compact rows that preserve
+      service order in `apps/mobile/components/budget/BudgetDashboardRow.tsx`
 - [x] T030 [P] [US2] Extend lifecycle/category/zero-spend/deleted-category
       visual states and text labels in
       `apps/mobile/components/budget/BudgetDashboardCard.tsx`
@@ -392,6 +391,11 @@ obligations.
       `docs/business/business-decisions.md`, architecture boundaries, user
       scoping, offline behavior, and unchanged financial calculations; document
       PR evidence in `specs/033-budget-dashboard-redesign/quickstart.md`
+- [x] T063 Apply physical-QA correction: keep Overall compact, place its icon
+      beside the title and percentage beside progress, and replace full/grid
+      cards in the remaining sections with approved compact rows
+- [x] T064 Add focused layout regressions for compact section rows, readable
+      titles, inline lifecycle actions, and Overall title/progress placement
 
 ---
 
@@ -466,7 +470,7 @@ Task T016: dashboard global integration tests
 
 ```text
 Task T025: section/state rendering tests
-Task T026: category-pair layout tests
+Task T026: compact section-row layout tests
 Task T027: PageHeader/create action tests
 ```
 

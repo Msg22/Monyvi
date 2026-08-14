@@ -2,7 +2,6 @@ import type { BudgetDashboardItem } from "@/services/budget-list-read-model-serv
 import {
   GLOBAL_BUDGET_CARD_GAP,
   GLOBAL_BUDGET_MIN_CARD_WIDTH,
-  buildCategoryBudgetRows,
   calculateGlobalCarouselLayout,
   groupGlobalBudgets,
   resolveGlobalCarouselPage,
@@ -29,6 +28,7 @@ function item(id: string): BudgetDashboardItem {
     daysElapsed: 1,
     expiresAt: null,
     categoryLabel: { kind: "not-applicable" },
+    categoryIcon: null,
     availableAction: null,
   };
   return dashboardItem;
@@ -83,23 +83,5 @@ describe("budget dashboard layout", () => {
     expect(resolveGlobalCarouselPage(pages, "c")).toBe(1);
     expect(resolveGlobalCarouselPage(pages, "missing")).toBe(0);
     expect(resolveGlobalCarouselPage(pages, null)).toBe(0);
-  });
-
-  it("pairs category cards without changing service order", () => {
-    const rows = buildCategoryBudgetRows([
-      item("a"),
-      item("b"),
-      item("c"),
-      item("d"),
-      item("e"),
-    ]);
-
-    expect(rows.map((row) => row.budgets.map((budget) => budget.id))).toEqual([
-      ["a", "b"],
-      ["c", "d"],
-      ["e"],
-    ]);
-    expect(rows.map((row) => row.key)).toEqual(["a:b", "c:d", "e"]);
-    expect(Object.isFrozen(rows)).toBe(true);
   });
 });

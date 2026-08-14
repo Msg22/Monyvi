@@ -69,6 +69,7 @@ function item(id: string): BudgetDashboardItem {
     daysElapsed: 20,
     expiresAt: null,
     categoryLabel: { kind: "not-applicable" },
+    categoryIcon: null,
     availableAction: null,
   };
 }

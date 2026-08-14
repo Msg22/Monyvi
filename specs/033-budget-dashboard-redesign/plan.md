@@ -183,11 +183,12 @@ failures set a recoverable error without clearing rendered budgets.
 
 ### Rendering and virtualization
 
-Render one vertical `FlatList` of full-width dashboard rows. A pure layout
-helper pairs healthy category cards into grid rows while attention and paused
-entries remain full-width. The Overall carousel is a list header/section block.
-This avoids nested vertical virtualized lists and preserves two-column category
-presentation.
+Render one vertical `FlatList` of full-width compact dashboard rows for Needs
+attention, Category budgets, and Paused. Rows in each section share a bordered
+group with separators, while direct Resume/Renew actions remain inline. The
+Overall carousel stays in the list header/first section block. This avoids
+nested vertical virtualized lists and prevents narrow two-column cards from
+crushing titles and status content.
 
 ### Responsive carousel
 

@@ -15,11 +15,6 @@ export interface GlobalBudgetPage {
   readonly budgets: readonly BudgetDashboardItem[];
 }
 
-export interface CategoryBudgetRow {
-  readonly key: string;
-  readonly budgets: readonly BudgetDashboardItem[];
-}
-
 export function calculateGlobalCarouselLayout(
   containerWidth: number,
   itemCount: number
@@ -84,22 +79,4 @@ export function resolveGlobalCarouselPage(
     page.budgets.some((budget) => budget.id === firstVisibleBudgetId)
   );
   return pageIndex >= 0 ? pageIndex : 0;
-}
-
-export function buildCategoryBudgetRows(
-  budgets: readonly BudgetDashboardItem[]
-): readonly CategoryBudgetRow[] {
-  const rows: CategoryBudgetRow[] = [];
-
-  for (let index = 0; index < budgets.length; index += 2) {
-    const rowBudgets = Object.freeze(budgets.slice(index, index + 2));
-    rows.push(
-      Object.freeze({
-        key: rowBudgets.map((budget) => budget.id).join(":"),
-        budgets: rowBudgets,
-      })
-    );
-  }
-
-  return Object.freeze(rows);
 }

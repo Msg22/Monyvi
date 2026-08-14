@@ -327,7 +327,18 @@ describe("budget-list-read-model-service", () => {
         createBudgetMetric(globalBudget),
         createBudgetMetric(categoryBudget),
       ],
-      categoryMap: new Map([["food", { displayName: "Food & Drinks" }]]),
+      categoryMap: new Map([
+        [
+          "food",
+          {
+            displayName: "Food & Drinks",
+            icon: "restaurant-outline",
+            iconLibrary: "Ionicons",
+            color: "#10B981",
+            isExpense: true,
+          },
+        ],
+      ]),
       filter: "ALL",
       now: new Date("2026-05-15T00:00:00.000Z"),
       activeLocale: "en",
@@ -355,6 +366,11 @@ describe("budget-list-read-model-service", () => {
         kind: "resolved",
         categoryId: "food",
         name: "Food & Drinks",
+      },
+      categoryIcon: {
+        iconName: "restaurant-outline",
+        iconLibrary: "Ionicons",
+        iconColor: "#10B981",
       },
       lifecycle: "HEALTHY",
       sectionId: "CATEGORY",
@@ -395,6 +411,7 @@ describe("budget-list-read-model-service", () => {
         daysElapsed: 15,
         expiresAt: null,
         categoryLabel: { kind: "not-applicable" },
+        categoryIcon: null,
         availableAction: null,
       });
       expect(result.overallBudgets[0]).not.toHaveProperty("budget");

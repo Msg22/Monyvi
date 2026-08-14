@@ -212,17 +212,19 @@ Result: _pending implementation/device run_.
 
 Record device, OS, build/commit, language, theme, navigation mode, and evidence.
 
-| Dimension          | Required checks                                                           |
-| ------------------ | ------------------------------------------------------------------------- |
-| Android navigation | Gesture and three-button; final card/action remains clear                 |
-| Orientation/width  | Small portrait, landscape, and a width that fits 2+ full cards            |
-| Language           | English and Arabic/RTL; no clipped status/action/currency                 |
-| Theme              | Light and dark; readable status/progress/action contrast                  |
-| Font               | Default and maximum supported app/device scale                            |
-| Screen reader      | TalkBack reading order, card content, status, action, page X/Y            |
-| Motion             | Reduced-motion setting; no decorative forced animation                    |
-| Carousel race      | Rotate or filter during/after swipe; stable eligible anchor retained      |
-| Renew integration  | Prefilled Create form after #225; expired source unchanged on back/create |
+| Dimension          | Required checks                                                                   |
+| ------------------ | --------------------------------------------------------------------------------- |
+| Android navigation | Gesture and three-button; final card/action remains clear                         |
+| Orientation/width  | Small portrait, landscape, and a width that fits 2+ full cards                    |
+| Compact rows       | Full-width attention/category/paused rows; no grid, giant cards, or crushed names |
+| Overall card       | Icon beside title; percentage at progress edge; compact height retained           |
+| Language           | English and Arabic/RTL; no clipped status/action/currency                         |
+| Theme              | Light and dark; readable status/progress/action contrast                          |
+| Font               | Default and maximum supported app/device scale                                    |
+| Screen reader      | TalkBack reading order, card content, status, action, page X/Y                    |
+| Motion             | Reduced-motion setting; no decorative forced animation                            |
+| Carousel race      | Rotate or filter during/after swipe; stable eligible anchor retained              |
+| Renew integration  | Prefilled Create form after #225; expired source unchanged on back/create         |
 
 ## PR evidence
 
@@ -277,6 +279,7 @@ Validation ran from `385-budget-dashboard-redesign`, based on merged PR #222 at
 | Exclusive lifecycle classification, ordering, filters, zero spend, deleted category | Green: read-model and hook suites             | Visibility flow authored; device blocked    | Fixture ready                                   |
 | Whole-card responsive carousel, dots, regrouping, RTL offset, announcements         | Green: layout and carousel suites             | Carousel flow authored; device blocked      | Width/orientation/TalkBack pending              |
 | Section order, Skeleton, empty/error states, header Create, no footer/FAB           | Green: dashboard and route suites             | Visibility flow authored; device blocked    | Visual screenshots pending                      |
+| Compact grouped rows and Overall icon/percentage placement                          | Green: row, card, and dashboard suites        | Visibility flow authored; device blocked    | Physical screenshot rerun pending               |
 | Resume confirmation, cancel, submit-once, failure retention                         | Green: service, hook, modal, and route suites | Lifecycle flow authored; device blocked     | Physical confirmation pending                   |
 | Renew route contract and navigation failure recovery                                | Green: route suite                            | Route-opening step authored; device blocked | Prefill/source preservation waits for #225      |
 | Light/dark, EN/AR, long text, font scale, reduced motion                            | Green: component/style assertions             | Not honestly controllable by current flow   | Physical matrix pending                         |

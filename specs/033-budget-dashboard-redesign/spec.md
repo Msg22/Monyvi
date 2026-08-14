@@ -292,6 +292,13 @@ screen-reader mode, and supported system navigation modes.
 - **FR-032**: The dashboard MUST preserve the last valid visible state when a
   refresh or direct lifecycle action fails, while presenting a friendly recovery
   message.
+- **FR-033**: Overall cards MUST keep the approved compact implementation, place
+  the budget icon directly beside the title, and place the percentage at the
+  progress bar's trailing edge.
+- **FR-034**: Needs attention, Category budgets, and Paused MUST render as
+  full-width compact rows grouped by section with separators, chevrons, readable
+  names, inline metrics/status, and direct inline lifecycle actions; they MUST
+  NOT render as large standalone cards or a two-column grid.
 
 ### Key Entities
 

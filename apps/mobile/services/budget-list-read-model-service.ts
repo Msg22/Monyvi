@@ -17,6 +17,10 @@ import {
 
 import { getSpendingForBudget } from "@/services/budget-service";
 import { queryOwned } from "@/services/user-data-access";
+import {
+  getCategoryIconConfig,
+  type CategoryIconConfig,
+} from "@/utils/category-icon-config";
 
 export type BudgetPeriodFilter = "ALL" | BudgetPeriod;
 
@@ -98,12 +102,21 @@ export interface BudgetDashboardItem {
   readonly daysElapsed: number;
   readonly expiresAt: Date | null;
   readonly categoryLabel: BudgetDashboardCategoryLabel;
+  readonly categoryIcon: CategoryIconConfig | null;
   readonly availableAction: "RESUME" | "RENEW" | null;
+}
+
+interface BudgetDashboardCategorySource {
+  readonly displayName: string;
+  readonly icon?: string;
+  readonly iconLibrary?: string;
+  readonly color?: string | null;
+  readonly isExpense?: boolean;
 }
 
 export interface BuildBudgetDashboardReadModelInput {
   readonly budgets: readonly BudgetWithMetrics[];
-  readonly categoryMap: ReadonlyMap<string, { readonly displayName: string }>;
+  readonly categoryMap: ReadonlyMap<string, BudgetDashboardCategorySource>;
   readonly filter: BudgetPeriodFilter;
   readonly now: Date;
   readonly activeLocale: "en" | "ar";
@@ -169,6 +182,17 @@ export function buildBudgetDashboardReadModel({
           }
         : { kind: "deleted", categoryId: budget.categoryId ?? null };
     const displayName = (budget.name || category?.displayName || "").trim();
+    const categoryIcon =
+      category?.icon &&
+      category.iconLibrary &&
+      typeof category.isExpense === "boolean"
+        ? getCategoryIconConfig({
+            icon: category.icon,
+            iconLibrary: category.iconLibrary,
+            color: category.color,
+            isExpense: category.isExpense,
+          })
+        : null;
     const dashboardItem: BudgetDashboardItem = Object.freeze({
       id: budget.id,
       displayName,
@@ -182,6 +206,7 @@ export function buildBudgetDashboardReadModel({
       daysElapsed,
       expiresAt: isExpired ? (budget.periodEnd ?? null) : null,
       categoryLabel: Object.freeze(categoryLabel),
+      categoryIcon: categoryIcon ? Object.freeze(categoryIcon) : null,
       availableAction:
         lifecycle === "EXPIRED"
           ? "RENEW"
