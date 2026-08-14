@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Budget } from "@monyvi/db";
 import { useTranslation } from "react-i18next";
 
@@ -36,6 +36,27 @@ const EMPTY_DASHBOARD_READ_MODEL: BudgetDashboardReadModel = Object.freeze({
 interface ComputedBudgets {
   readonly source: readonly Budget[];
   readonly metrics: readonly BudgetWithMetrics[];
+  readonly refreshGeneration: number;
+}
+
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
+
+function getNextExpiryDelayMs(
+  budgets: readonly Budget[],
+  now: Date
+): number | null {
+  let nextDelay: number | null = null;
+
+  for (const budget of budgets) {
+    if (budget.period !== "CUSTOM" || !budget.periodEnd) continue;
+    const boundary = new Date(budget.periodEnd);
+    boundary.setHours(23, 59, 59, 999);
+    const delay = boundary.getTime() + 1 - now.getTime();
+    if (delay <= 0) continue;
+    nextDelay = nextDelay === null ? delay : Math.min(nextDelay, delay);
+  }
+
+  return nextDelay === null ? null : Math.min(nextDelay, MAX_TIMER_DELAY_MS);
 }
 
 export interface UseBudgetsResult {
@@ -77,10 +98,12 @@ export function useBudgets(): UseBudgetsResult {
   const [periodFilter, setPeriodFilterState] = useState<PeriodFilter>("ALL");
   const [refreshCounter, setRefreshCounter] = useState(0);
   const [observationRetryCounter, setObservationRetryCounter] = useState(0);
+  const [lifecycleClockRevision, setLifecycleClockRevision] = useState(0);
+  const refreshGenerationRef = useRef(0);
   const { userId, isResolvingUser } = useCurrentUser();
   const categoryMap = useCategoryLookup();
   const { isLoading: areCategoriesLoading } = useAllCategories();
-  const { i18n } = useTranslation("budgets");
+  const { i18n, t } = useTranslation("budgets");
   const activeLocale = resolveActiveLocale(i18n.resolvedLanguage);
 
   const clearScopedState = useCallback((isLoading: boolean): void => {
@@ -138,7 +161,11 @@ export function useBudgets(): UseBudgetsResult {
       try {
         const metrics = await buildBudgetMetrics(rawBudgets);
         if (isCurrent) {
-          setComputedBudgets({ source: rawBudgets, metrics });
+          setComputedBudgets({
+            source: rawBudgets,
+            metrics,
+            refreshGeneration: refreshCounter,
+          });
         }
       } catch (error: unknown) {
         logger.error("budgets.readModel.failed", error);
@@ -158,6 +185,8 @@ export function useBudgets(): UseBudgetsResult {
 
   useEffect(() => {
     if (
+      !userId ||
+      isResolvingUser ||
       !computedBudgets ||
       computedBudgets.source !== rawBudgets ||
       areCategoriesLoading
@@ -172,11 +201,14 @@ export function useBudgets(): UseBudgetsResult {
         filter: periodFilter,
         now: new Date(),
         activeLocale,
+        fallbackName: t("unnamed_budget"),
       });
       setReadModel(nextReadModel);
       setHasValidData(true);
       setIsComputing(false);
-      setErrorKey(null);
+      if (computedBudgets.refreshGeneration === refreshGenerationRef.current) {
+        setErrorKey(null);
+      }
     } catch (error: unknown) {
       logger.error("budgets.readModel.failed", error);
       setIsComputing(false);
@@ -187,9 +219,24 @@ export function useBudgets(): UseBudgetsResult {
     areCategoriesLoading,
     categoryMap,
     computedBudgets,
+    isResolvingUser,
+    lifecycleClockRevision,
     periodFilter,
     rawBudgets,
+    t,
+    userId,
   ]);
+
+  useEffect(() => {
+    const delay = getNextExpiryDelayMs(rawBudgets, new Date());
+    if (delay === null) return;
+
+    const timer = setTimeout(() => {
+      setLifecycleClockRevision((revision) => revision + 1);
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [lifecycleClockRevision, rawBudgets]);
 
   const setPeriodFilter = useCallback((filter: PeriodFilter): void => {
     setIsComputing(true);
@@ -198,14 +245,16 @@ export function useBudgets(): UseBudgetsResult {
 
   const refresh = useCallback((): void => {
     setIsComputing(true);
-    setRefreshCounter((counter) => counter + 1);
+    refreshGenerationRef.current += 1;
+    setRefreshCounter(refreshGenerationRef.current);
   }, []);
 
   const retry = useCallback((): void => {
     setIsComputing(true);
     setHasObservedBudgets(false);
     setObservationRetryCounter((counter) => counter + 1);
-    setRefreshCounter((counter) => counter + 1);
+    refreshGenerationRef.current += 1;
+    setRefreshCounter(refreshGenerationRef.current);
   }, []);
 
   const allMatchingBudgets = useMemo(

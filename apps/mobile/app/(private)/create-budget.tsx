@@ -2,7 +2,7 @@
  * Create/Edit Budget Screen
  *
  * Route page for creating a new budget or editing an existing one.
- * When `id` query param is present, loads budget for edit mode.
+ * `id` loads edit mode. `renewFrom` loads a source while preserving create mode.
  *
  * @module create-budget
  */
@@ -23,9 +23,15 @@ import { useTranslation } from "react-i18next";
 export default function CreateBudgetScreen(): React.JSX.Element {
   const { t } = useTranslation("budgets");
 
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, renewFrom } = useLocalSearchParams<{
+    id?: string;
+    renewFrom?: string;
+  }>();
   const isEdit = !!id;
-  const { budget, isLoading, loadErrorKey } = useEditableBudget(id);
+  const isRenewal = !id && !!renewFrom;
+  const { budget, isLoading, loadErrorKey } = useEditableBudget(
+    id ?? renewFrom
+  );
 
   return (
     <View
@@ -63,7 +69,10 @@ export default function CreateBudgetScreen(): React.JSX.Element {
           </Text>
         </View>
       ) : (
-        <BudgetForm existingBudget={budget} />
+        <BudgetForm
+          existingBudget={isEdit ? budget : undefined}
+          renewalSource={isRenewal ? budget : undefined}
+        />
       )}
     </View>
   );

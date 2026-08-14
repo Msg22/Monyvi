@@ -342,6 +342,7 @@ describe("budget-list-read-model-service", () => {
       filter: "ALL",
       now: new Date("2026-05-15T00:00:00.000Z"),
       activeLocale: "en",
+      fallbackName: "Unnamed budget",
     });
 
     expect(result.overallBudgets[0]).toMatchObject({
@@ -396,6 +397,7 @@ describe("budget-list-read-model-service", () => {
         filter: "ALL",
         now: new Date("2026-05-15T00:00:00.000Z"),
         activeLocale,
+        fallbackName: "Unnamed budget",
       });
 
       expect(result.overallBudgets[0]).toEqual({
@@ -438,6 +440,7 @@ describe("budget-list-read-model-service", () => {
       filter: "ALL",
       now: new Date("2026-05-15T00:00:00.000Z"),
       activeLocale: "en",
+      fallbackName: "Unnamed budget",
     });
 
     expect(result.needsAttentionBudgets[0]).toMatchObject({
@@ -452,6 +455,33 @@ describe("budget-list-read-model-service", () => {
       availableAction: "RENEW",
     });
     expect(result.pausedBudgets).toEqual([]);
+  });
+
+  it("falls back after trimming a whitespace-only persisted name", () => {
+    const categoryBudget = {
+      ...createBudget("blank-category"),
+      name: "   ",
+      categoryId: "food",
+    } as Budget;
+    const globalBudget = {
+      ...createBudget("blank-global", { type: "GLOBAL" }),
+      name: "\t ",
+    } as Budget;
+
+    const result = buildBudgetDashboardReadModel({
+      budgets: [
+        createBudgetMetric(categoryBudget),
+        createBudgetMetric(globalBudget),
+      ],
+      categoryMap: new Map([["food", { displayName: "Food & Drinks" }]]),
+      filter: "ALL",
+      now: new Date("2026-05-15T00:00:00.000Z"),
+      activeLocale: "en",
+      fallbackName: "Unnamed budget",
+    });
+
+    expect(result.categoryBudgets[0]?.displayName).toBe("Food & Drinks");
+    expect(result.overallBudgets[0]?.displayName).toBe("Unnamed budget");
   });
 
   it("retains every global budget exactly once with expiry taking precedence", () => {
@@ -500,6 +530,7 @@ describe("budget-list-read-model-service", () => {
       filter: "ALL",
       now: new Date("2026-05-15T00:00:00.000Z"),
       activeLocale: "en",
+      fallbackName: "Unnamed budget",
     });
     const allIds = [
       ...result.overallBudgets,
@@ -545,6 +576,7 @@ describe("budget-list-read-model-service", () => {
         filter: "ALL",
         now: new Date("2026-05-15T00:00:00.000Z"),
         activeLocale,
+        fallbackName: "Unnamed budget",
       });
 
       expect(result.categoryBudgets.map((item) => item.id)).toEqual([
@@ -581,6 +613,7 @@ describe("budget-list-read-model-service", () => {
       filter: "WEEKLY",
       now: new Date("2026-05-15T00:00:00.000Z"),
       activeLocale: "en",
+      fallbackName: "Unnamed budget",
     });
 
     expect(result.categoryBudgets.map((item) => item.id)).toEqual([

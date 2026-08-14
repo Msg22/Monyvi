@@ -296,13 +296,15 @@ prefilled-form journey tasks T043 and T047 wait for child issue #225.
       Resume callbacks, and distinct Renew navigation in
       `apps/mobile/app/(private)/budgets.tsx` and
       `apps/mobile/components/budget/BudgetDashboard.tsx`
-- [ ] T047 [US4] After #225 consumes `renewFrom`, add/pass visible Resume
-      cancel/confirm plus Renew-prefill coverage with `dashboard-full` in
-      `apps/mobile/e2e/maestro/budgets/dashboard-lifecycle-actions.yaml`; keep
-      injected failure in Jest/RNTL
+- [x] T047 [US4] Consume the approved #225 `renewFrom` contract, add/pass
+      visible Resume cancel/confirm plus Renew-prefill coverage with
+      `dashboard-full` in
+      `apps/mobile/e2e/maestro/budgets/dashboard-lifecycle-actions.yaml`, and
+      keep injected failure in Jest/RNTL
 
-**Checkpoint**: Dashboard lifecycle actions safe independently; full Renew
-journey marked complete only after #225 integration test and Maestro flow pass.
+**Checkpoint**: Dashboard lifecycle actions are safe independently; the Renew
+journey now loads a current-user-owned source into create mode, prefills
+reusable fields, and leaves the historical budget unchanged.
 
 ---
 

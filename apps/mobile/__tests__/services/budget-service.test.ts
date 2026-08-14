@@ -120,6 +120,7 @@ jest.mock("@/services/user-data-access", (): unknown => ({
 
 import {
   createBudget,
+  getCategoryAndSubcategoryIds,
   getSpendingForBudget,
   pauseExpiredCustomBudgets,
   resumeBudget,
@@ -317,6 +318,19 @@ describe("budget-service", () => {
     expect(mockQueryOwned).toHaveBeenCalledTimes(1);
   });
 
+  it("discovers accessible descendants when the category root is deleted", async (): Promise<void> => {
+    mockQueryAccessibleCategories
+      .mockReturnValueOnce(createQueryResult([]))
+      .mockReturnValueOnce(createQueryResult([{ id: "child" }]))
+      .mockReturnValueOnce(createQueryResult([{ id: "grandchild" }]));
+
+    await expect(getCategoryAndSubcategoryIds("deleted-root")).resolves.toEqual(
+      ["deleted-root", "child", "grandchild"]
+    );
+
+    expect(mockFindAccessibleCategory).not.toHaveBeenCalled();
+  });
+
   it("pauses only expired active custom budgets and returns the paused count", async (): Promise<void> => {
     const expired = createLifecycleBudget({ id: "expired" });
     const future = createLifecycleBudget({
@@ -424,6 +438,7 @@ describe("budget-service", () => {
     };
     const budget = createLifecycleBudget({
       status: "PAUSED",
+      periodEnd: new Date("2026-08-20T00:00:00.000Z"),
       pausedAt,
       pauseIntervals: JSON.stringify([existingInterval]),
     });
@@ -448,6 +463,7 @@ describe("budget-service", () => {
     jest.setSystemTime(new Date("2026-08-14T12:00:00.000Z"));
     const budget = createLifecycleBudget({
       status: "PAUSED",
+      periodEnd: new Date("2026-08-20T00:00:00.000Z"),
       pausedAt: "2026-08-14T10:00:00.000Z",
       pauseIntervals: "[]",
     });
@@ -468,6 +484,7 @@ describe("budget-service", () => {
     const pausedAt = "2026-08-14T10:00:00.000Z";
     const budget = createLifecycleBudget({
       status: "PAUSED",
+      periodEnd: new Date("2999-01-01T00:00:00.000Z"),
       pausedAt,
       pauseIntervals: "[]",
     });
@@ -480,6 +497,26 @@ describe("budget-service", () => {
     expect(budget.pausedAt).toBe(pausedAt);
     expect(budget.pauseIntervals).toBe("[]");
     expect(budget.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects Resume when a paused custom budget has expired", async (): Promise<void> => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-08-14T12:00:00.000Z"));
+    const budget = createLifecycleBudget({
+      status: "PAUSED",
+      periodEnd: new Date("2026-08-13T00:00:00.000Z"),
+      pausedAt: "2026-08-12T10:00:00.000Z",
+      pauseIntervals: "[]",
+    });
+    mockQueryOwned.mockReturnValue(createQueryResult([budget]));
+
+    await expect(resumeBudget(budget.id)).rejects.toThrow(
+      "Cannot resume an expired budget"
+    );
+
+    expect(mockWrite).not.toHaveBeenCalled();
+    expect(budget.update).not.toHaveBeenCalled();
+    expect(budget.status).toBe("PAUSED");
   });
 });
 import type { Budget, Transaction } from "@monyvi/db";

@@ -312,6 +312,9 @@ export async function resumeBudget(budgetId: string): Promise<void> {
   if (budget.status !== "PAUSED") {
     throw new Error("Cannot resume a budget that is not paused");
   }
+  if (budget.period === "CUSTOM" && isPeriodExpired(budget.periodEnd)) {
+    throw new Error("Cannot resume an expired budget");
+  }
 
   const pausedAtMs = parsePausedAtMs(budget.pausedAt);
   const nowMs = Date.now();
@@ -531,9 +534,8 @@ async function getAccessibleCategoryHierarchyIds(
       Q.where("deleted", false)
     )
     .fetch();
-  if (roots.length === 0) return null;
 
-  // Get direct children (L2)
+  // Descendants may remain accessible after a historical root is deleted.
   const children = await scope
     .queryAccessibleCategories(
       categoriesCollection(),
@@ -541,6 +543,8 @@ async function getAccessibleCategoryHierarchyIds(
       Q.where("deleted", false)
     )
     .fetch();
+
+  if (roots.length === 0 && children.length === 0) return null;
 
   const childIds = children.map((c) => c.id);
 

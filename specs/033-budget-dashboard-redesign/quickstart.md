@@ -269,20 +269,23 @@ Validation ran from `385-budget-dashboard-redesign`, based on merged PR #222 at
   The near-limit fixture is 220 EGP spent against a 250 EGP limit (88%, above
   its 80% warning threshold); post-seed local Supabase verification confirmed
   the 250 EGP limit.
-- Renew emits `renewFrom` and never an edit `id`. Full prefilled Create behavior
-  remains correctly blocked on child issue #225.
+- Renew emits `renewFrom`, resolves it through the scoped editable-budget hook,
+  and opens create mode with name, scope/category, amount, period, alert
+  threshold, and valid new custom dates prefilled. Unit/integration coverage
+  proves the source is never passed as an edit record; the remaining premium
+  Create/Edit redesign stays in child issue #225.
 
 ### Final coverage matrix
 
-| Scenario                                                                            | Jest/integration                              | Maestro                                     | Manual-only status                              |
-| ----------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------- | ----------------------------------------------- |
-| Exclusive lifecycle classification, ordering, filters, zero spend, deleted category | Green: read-model and hook suites             | Visibility flow authored; device blocked    | Fixture ready                                   |
-| Whole-card responsive carousel, dots, regrouping, RTL offset, announcements         | Green: layout and carousel suites             | Carousel flow authored; device blocked      | Width/orientation/TalkBack pending              |
-| Section order, Skeleton, empty/error states, header Create, no footer/FAB           | Green: dashboard and route suites             | Visibility flow authored; device blocked    | Visual screenshots pending                      |
-| Compact grouped rows and Overall icon/percentage placement                          | Green: row, card, and dashboard suites        | Visibility flow authored; device blocked    | Physical screenshot rerun pending               |
-| Resume confirmation, cancel, submit-once, failure retention                         | Green: service, hook, modal, and route suites | Lifecycle flow authored; device blocked     | Physical confirmation pending                   |
-| Renew route contract and navigation failure recovery                                | Green: route suite                            | Route-opening step authored; device blocked | Prefill/source preservation waits for #225      |
-| Light/dark, EN/AR, long text, font scale, reduced motion                            | Green: component/style assertions             | Not honestly controllable by current flow   | Physical matrix pending                         |
-| Bottom inset included once and final-row reachability                               | Green: zero/gesture/button inset assertions   | Not honestly switchable in runner           | Samsung Android 16 gesture/button rerun pending |
-| Filter commit within 1,000 ms                                                       | Deterministic correctness green               | Not a geometry/performance assertion        | SC-006 device probes pending                    |
-| Fresh no-budget to Create within 10 seconds                                         | Navigation path green                         | Not run without device                      | SC-010 three timed trials pending               |
+| Scenario                                                                            | Jest/integration                              | Maestro                                      | Manual-only status                                      |
+| ----------------------------------------------------------------------------------- | --------------------------------------------- | -------------------------------------------- | ------------------------------------------------------- |
+| Exclusive lifecycle classification, ordering, filters, zero spend, deleted category | Green: read-model and hook suites             | Visibility flow authored; device blocked     | Fixture ready                                           |
+| Whole-card responsive carousel, dots, regrouping, RTL offset, announcements         | Green: layout and carousel suites             | Carousel flow authored; device blocked       | Width/orientation/TalkBack pending                      |
+| Section order, Skeleton, empty/error states, header Create, no footer/FAB           | Green: dashboard and route suites             | Visibility flow authored; device blocked     | Visual screenshots pending                              |
+| Compact grouped rows and Overall icon/percentage placement                          | Green: row, card, and dashboard suites        | Visibility flow authored; device blocked     | Physical screenshot rerun pending                       |
+| Resume confirmation, cancel, submit-once, failure retention                         | Green: service, hook, modal, and route suites | Lifecycle flow authored; device blocked      | Physical confirmation pending                           |
+| Renew route, prefilled create source, and navigation recovery                       | Green: helper and route integration suites    | Prefilled-name step authored; device blocked | Successful-create source preservation pending device QA |
+| Light/dark, EN/AR, long text, font scale, reduced motion                            | Green: component/style assertions             | Not honestly controllable by current flow    | Physical matrix pending                                 |
+| Bottom inset included once and final-row reachability                               | Green: zero/gesture/button inset assertions   | Not honestly switchable in runner            | Samsung Android 16 gesture/button rerun pending         |
+| Filter commit within 1,000 ms                                                       | Deterministic correctness green               | Not a geometry/performance assertion         | SC-006 device probes pending                            |
+| Fresh no-budget to Create within 10 seconds                                         | Navigation path green                         | Not run without device                       | SC-010 three timed trials pending                       |

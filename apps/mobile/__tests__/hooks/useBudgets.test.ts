@@ -88,7 +88,12 @@ jest.mock("@/context/CategoriesContext", () => ({
 jest.mock("react-i18next", () => ({
   useTranslation: (): {
     readonly i18n: { readonly resolvedLanguage: string };
-  } => ({ i18n: { resolvedLanguage: mockActiveLocale } }),
+    readonly t: (key: string) => string;
+  } => ({
+    i18n: { resolvedLanguage: mockActiveLocale },
+    t: (key: string): string =>
+      key === "unnamed_budget" ? "Unnamed budget" : key,
+  }),
 }));
 
 jest.mock("@/utils/logger", () => ({
@@ -144,6 +149,10 @@ describe("useBudgets", () => {
     mockBuildBudgetDashboardReadModel.mockReturnValue(dashboardReadModel);
   });
 
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it("observes budgets and delegates metric/read-model shaping to the service", async () => {
     const { result } = renderHook(() => useBudgets());
 
@@ -165,6 +174,7 @@ describe("useBudgets", () => {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       now: expect.any(Date),
       activeLocale: "en",
+      fallbackName: "Unnamed budget",
     });
     expect(result.current.readModel).toBe(dashboardReadModel);
     expect(result.current.categoryBudgets).toBe(
@@ -226,6 +236,13 @@ describe("useBudgets", () => {
       expect(result.current.isLoading).toBe(false);
     });
     const callsBeforeRefresh = mockBuildBudgetMetrics.mock.calls.length;
+    const readModelCallsBeforeRefresh =
+      mockBuildBudgetDashboardReadModel.mock.calls.length;
+    let resolveRefresh: (value: typeof budgetMetrics) => void = () => undefined;
+    const refreshPromise = new Promise<typeof budgetMetrics>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    mockBuildBudgetMetrics.mockReturnValueOnce(refreshPromise);
 
     act(() => {
       result.current.refresh();
@@ -235,6 +252,16 @@ describe("useBudgets", () => {
       expect(mockBuildBudgetMetrics).toHaveBeenCalledTimes(
         callsBeforeRefresh + 1
       );
+    });
+    await act(async () => {
+      resolveRefresh(budgetMetrics);
+      await refreshPromise;
+    });
+    await waitFor(() => {
+      expect(
+        mockBuildBudgetDashboardReadModel.mock.calls.length
+      ).toBeGreaterThan(readModelCallsBeforeRefresh);
+      expect(result.current.isRefreshing).toBe(false);
     });
     expect(result.current).toHaveProperty("overallBudgets");
     expect(result.current).toHaveProperty("pausedBudgets");
@@ -341,6 +368,45 @@ describe("useBudgets", () => {
     expect(result.current.readModel).toBe(dashboardReadModel);
     expect(result.current.hasValidData).toBe(true);
     expect(result.current.isRefreshing).toBe(false);
+
+    act(() => {
+      result.current.setPeriodFilter("WEEKLY");
+    });
+
+    expect(result.current.errorKey).toBe("dashboard_load_error");
+  });
+
+  it("rebuilds lifecycle state when a visible custom budget crosses expiry", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(2026, 7, 14, 23, 59, 59, 900));
+    const expiringBudgets = [
+      {
+        id: "expiring",
+        period: "CUSTOM",
+        periodEnd: new Date(2026, 7, 14),
+      } as unknown as Budget,
+    ];
+    const { result, unmount } = renderHook(() => useBudgets());
+
+    act(() => {
+      budgetQuery.observerRef.current?.next(expiringBudgets);
+    });
+    await waitFor(() => {
+      expect(result.current.hasValidData).toBe(true);
+    });
+    const callsBeforeExpiry =
+      mockBuildBudgetDashboardReadModel.mock.calls.length;
+
+    act(() => {
+      jest.advanceTimersByTime(100);
+    });
+
+    await waitFor(() => {
+      expect(
+        mockBuildBudgetDashboardReadModel.mock.calls.length
+      ).toBeGreaterThan(callsBeforeExpiry);
+    });
+    unmount();
   });
 
   it("ignores a stale metric completion after newer observed data wins", async () => {

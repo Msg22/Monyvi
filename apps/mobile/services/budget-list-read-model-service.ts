@@ -120,6 +120,7 @@ export interface BuildBudgetDashboardReadModelInput {
   readonly filter: BudgetPeriodFilter;
   readonly now: Date;
   readonly activeLocale: "en" | "ar";
+  readonly fallbackName: string;
 }
 
 export interface BudgetDashboardReadModel {
@@ -137,6 +138,7 @@ export function buildBudgetDashboardReadModel({
   filter,
   now,
   activeLocale,
+  fallbackName,
 }: BuildBudgetDashboardReadModelInput): BudgetDashboardReadModel {
   const matchingBudgets =
     filter === "ALL"
@@ -181,7 +183,9 @@ export function buildBudgetDashboardReadModel({
             name: category.displayName,
           }
         : { kind: "deleted", categoryId: budget.categoryId ?? null };
-    const displayName = (budget.name || category?.displayName || "").trim();
+    const persistedName = budget.name?.trim() ?? "";
+    const categoryName = category?.displayName.trim() ?? "";
+    const displayName = persistedName || categoryName || fallbackName.trim();
     const categoryIcon =
       category?.icon &&
       category.iconLibrary &&

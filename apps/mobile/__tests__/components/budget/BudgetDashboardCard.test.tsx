@@ -186,5 +186,30 @@ describe("BudgetDashboardCard", () => {
 
     expect(screen.getByText("Deleted category")).toBeTruthy();
     expect(screen.getByText("0%")).toBeTruthy();
+    expect(
+      screen.getByRole("button", {
+        name: /Historic learning.*Deleted category/,
+      })
+    ).toBeTruthy();
+  });
+
+  it("uses a bounded equal height for global carousel cards", () => {
+    const screen = render(
+      <BudgetDashboardCard
+        item={createItem({ displayName: "A wrapping global budget name" })}
+        variant="global"
+        preferredCurrency="EGP"
+        onPress={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("budget-dashboard-card-budget-1")).toHaveProp(
+      "className",
+      expect.stringContaining("h-64")
+    );
+    expect(screen.getByTestId("budget-dashboard-card-budget-1")).not.toHaveProp(
+      "className",
+      expect.stringContaining("min-h-64")
+    );
   });
 });

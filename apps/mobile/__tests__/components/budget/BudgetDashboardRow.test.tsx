@@ -114,7 +114,7 @@ describe("BudgetDashboardRow", () => {
 
     const rowClassName = screen.getByTestId("budget-dashboard-row-budget-1")
       .props.className as string;
-    expect(rowClassName).toContain("min-h-24");
+    expect(rowClassName).toContain("min-h-20");
     expect(rowClassName).not.toContain("min-h-64");
     expect(screen.getByText("Groceries Monthly")).toHaveProp(
       "numberOfLines",
@@ -164,6 +164,53 @@ describe("BudgetDashboardRow", () => {
     fireEvent.press(screen.getByRole("button", { name: "Renew" }));
     expect(onRenew).toHaveBeenCalledWith("budget-1");
     expect(screen.getAllByText(/Expired.*Aug 12/)).toHaveLength(2);
+    expect(screen.getByTestId("budget-row-status-budget-1")).toHaveProp(
+      "numberOfLines",
+      1
+    );
+    expect(screen.getByTestId("budget-row-subtitle-budget-1")).toHaveProp(
+      "numberOfLines",
+      1
+    );
+  });
+
+  it("keeps extreme percentages and status on one compact trailing line", () => {
+    render(
+      <BudgetDashboardRow
+        item={item({
+          displayName: "QA Over Budget Category",
+          lifecycle: "OVER_BUDGET",
+          metrics: {
+            ...item().metrics,
+            percentage: 11641,
+          },
+        })}
+        variant="attention"
+        position="only"
+        preferredCurrency="EGP"
+        onPress={jest.fn()}
+      />
+    );
+
+    const rowClassName = screen.getByTestId("budget-dashboard-row-budget-1")
+      .props.className as string;
+    const trailingClassName = screen.getByTestId("budget-row-trailing-budget-1")
+      .props.className as string;
+
+    expect(rowClassName).toContain("min-h-20");
+    expect(trailingClassName).toContain("w-32");
+    expect(screen.getByTestId("budget-row-percentage-budget-1")).toHaveProp(
+      "numberOfLines",
+      1
+    );
+    expect(screen.getByTestId("budget-row-percentage-budget-1")).toHaveProp(
+      "adjustsFontSizeToFit",
+      true
+    );
+    expect(screen.getByTestId("budget-row-status-budget-1")).toHaveProp(
+      "numberOfLines",
+      1
+    );
   });
 
   it("keeps detail navigation available separately from lifecycle actions", () => {
@@ -183,5 +230,26 @@ describe("BudgetDashboardRow", () => {
       screen.getByRole("button", { name: /Food & Drinks, Monthly/ })
     );
     expect(onPress).toHaveBeenCalledWith("budget-1");
+  });
+
+  it("announces deleted-category history in the row label", () => {
+    render(
+      <BudgetDashboardRow
+        item={item({
+          displayName: "Historic learning",
+          categoryLabel: { kind: "deleted", categoryId: "deleted" },
+        })}
+        variant="category"
+        position="only"
+        preferredCurrency="EGP"
+        onPress={jest.fn()}
+      />
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: /Historic learning.*Deleted category/,
+      })
+    ).toBeOnTheScreen();
   });
 });

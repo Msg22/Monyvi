@@ -127,7 +127,7 @@ describe("GlobalBudgetCarousel", () => {
     expect(screen.queryByTestId(/global-budget-page-dot-/)).toBeNull();
   });
 
-  it("keeps global cards intrinsically sized instead of filling the carousel viewport", () => {
+  it("uses a bounded equal height without filling the carousel viewport", () => {
     const screen = render(
       <GlobalBudgetCarousel
         budgets={[item("a")]}
@@ -143,10 +143,14 @@ describe("GlobalBudgetCarousel", () => {
       }
     );
 
-    const cardClassName = screen.getByTestId("budget-dashboard-card-a").props
-      .className as string;
-    expect(cardClassName).toContain("min-h-64");
-    expect(cardClassName).not.toContain("h-full");
+    expect(screen.getByTestId("budget-dashboard-card-a")).toHaveProp(
+      "className",
+      expect.stringContaining("h-64")
+    );
+    expect(screen.getByTestId("budget-dashboard-card-a")).not.toHaveProp(
+      "className",
+      expect.stringContaining("h-full")
+    );
   });
 
   it("exposes page position when the carousel has exactly one page", () => {

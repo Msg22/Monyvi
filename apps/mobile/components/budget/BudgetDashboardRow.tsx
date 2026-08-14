@@ -111,14 +111,14 @@ function RowIcon({
   return (
     <View
       testID={`budget-row-icon-${item.id}`}
-      className={`h-12 w-12 items-center justify-center rounded-full border ${containerClasses}`}
+      className={`h-11 w-11 items-center justify-center rounded-full border ${containerClasses}`}
     >
       {variant !== "attention" && item.categoryIcon ? (
         <CategoryIcon
           iconName={item.categoryIcon.iconName}
           iconLibrary={item.categoryIcon.iconLibrary}
           color={item.categoryIcon.iconColor}
-          size={24}
+          size={22}
         />
       ) : (
         <Ionicons
@@ -131,7 +131,7 @@ function RowIcon({
                   ? "pause-circle-outline"
                   : "pie-chart-outline"
           }
-          size={25}
+          size={23}
           color={fallbackColor}
         />
       )}
@@ -181,6 +181,7 @@ export function BudgetDashboardRow({
         : spentOfLimit;
   const accessibleLabel = [
     item.displayName,
+    ...(item.categoryLabel.kind === "deleted" ? [t("deleted_category")] : []),
     periodLabel,
     spentOfLimit,
     `${percentage}%`,
@@ -191,7 +192,7 @@ export function BudgetDashboardRow({
   return (
     <View
       testID={`budget-dashboard-row-${item.id}`}
-      className={`min-h-24 flex-row items-center bg-white px-4 py-3 dark:bg-slate-800 ${getContainerClasses(position)}`}
+      className={`min-h-20 flex-row items-center bg-white px-3 py-2.5 dark:bg-slate-800 ${getContainerClasses(position)}`}
     >
       <TouchableOpacity
         className="min-w-0 flex-1 flex-row items-center"
@@ -201,10 +202,10 @@ export function BudgetDashboardRow({
         onPress={() => onPress(item.id)}
       >
         <RowIcon item={item} variant={variant} />
-        <View className="ms-3 min-w-0 flex-1">
+        <View className="ms-2.5 min-w-0 flex-1">
           <Text
             numberOfLines={2}
-            className="text-base font-bold text-text-primary dark:text-slate-25"
+            className="text-[15px] font-bold leading-5 text-text-primary dark:text-slate-25"
           >
             {item.displayName}
           </Text>
@@ -214,8 +215,9 @@ export function BudgetDashboardRow({
             </Text>
           ) : null}
           <Text
-            numberOfLines={2}
-            className={`mt-1 text-xs ${
+            testID={`budget-row-subtitle-${item.id}`}
+            numberOfLines={1}
+            className={`mt-0.5 text-xs ${
               item.lifecycle === "EXPIRED" || item.lifecycle === "PAUSED"
                 ? getPercentageClasses(item)
                 : "text-text-muted dark:text-slate-400"
@@ -226,20 +228,27 @@ export function BudgetDashboardRow({
         </View>
       </TouchableOpacity>
 
-      <View className="ms-3 w-28 items-end">
+      <View
+        testID={`budget-row-trailing-${item.id}`}
+        className={`ms-2 items-end ${hasAction ? "w-24" : "w-32"}`}
+      >
         {hasAction ? (
           <>
             <View
-              className={`rounded-full border px-3 py-1 ${getStatusClasses(item)}`}
+              className={`max-w-full rounded-full border px-2 py-1 ${getStatusClasses(item)}`}
             >
               <Text
-                className={`text-xs font-semibold ${getPercentageClasses(item)}`}
+                testID={`budget-row-status-${item.id}`}
+                numberOfLines={1}
+                adjustsFontSizeToFit={true}
+                minimumFontScale={0.7}
+                className={`text-[11px] font-semibold ${getPercentageClasses(item)}`}
               >
                 {item.lifecycle === "EXPIRED" ? expiryLabel : statusLabel}
               </Text>
             </View>
             <TouchableOpacity
-              className="mt-1 min-h-8 justify-center px-1"
+              className="min-h-7 justify-center px-1"
               activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityLabel={
@@ -252,7 +261,7 @@ export function BudgetDashboardRow({
                 else onRenew?.(item.id);
               }}
             >
-              <Text className="font-semibold text-nileGreen-600 dark:text-nileGreen-300">
+              <Text className="text-sm font-semibold text-nileGreen-600 dark:text-nileGreen-300">
                 {item.availableAction === "RESUME"
                   ? t("resume_action")
                   : t("renew_action")}
@@ -261,9 +270,13 @@ export function BudgetDashboardRow({
           </>
         ) : (
           <>
-            <View className="flex-row items-center gap-1">
+            <View className="w-full flex-row items-center justify-end gap-1">
               <Text
-                className={`text-lg font-bold ${getPercentageClasses(item)}`}
+                testID={`budget-row-percentage-${item.id}`}
+                numberOfLines={1}
+                adjustsFontSizeToFit={true}
+                minimumFontScale={0.65}
+                className={`min-w-0 flex-shrink text-lg font-bold ${getPercentageClasses(item)}`}
               >
                 {percentage}%
               </Text>
@@ -272,7 +285,11 @@ export function BudgetDashboardRow({
                   className={`rounded-full border px-2 py-1 ${getStatusClasses(item)}`}
                 >
                   <Text
-                    className={`text-xs font-semibold ${getPercentageClasses(item)}`}
+                    testID={`budget-row-status-${item.id}`}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit={true}
+                    minimumFontScale={0.7}
+                    className={`text-[10px] font-semibold ${getPercentageClasses(item)}`}
                   >
                     {statusLabel}
                   </Text>
@@ -281,7 +298,7 @@ export function BudgetDashboardRow({
             </View>
             <View
               testID={`budget-row-progress-${item.id}`}
-              className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+              className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
             >
               <View
                 className={`h-full rounded-full ${getProgressClasses(item)}`}
@@ -293,7 +310,7 @@ export function BudgetDashboardRow({
       </View>
 
       <TouchableOpacity
-        className="ms-2 min-h-11 min-w-8 items-end justify-center"
+        className="ms-1 min-h-11 min-w-6 items-end justify-center"
         activeOpacity={0.8}
         accessibilityRole="button"
         accessibilityLabel={`${t("view_budget")}: ${item.displayName}`}

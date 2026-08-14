@@ -2,6 +2,10 @@ appId: com.monyvi.app
 ---
 - runFlow: ../helpers/setup.yaml
 - openLink: monyvi://budgets
+- scrollUntilVisible:
+    element: "E2E Paused Shopping"
+    direction: DOWN
+    timeout: 120000
 - extendedWaitUntil:
     visible: "E2E Paused Shopping"
     timeout: 120000
@@ -18,6 +22,10 @@ appId: com.monyvi.app
 - extendedWaitUntil:
     notVisible: "Resume budget?"
     timeout: 30000
+- extendedWaitUntil:
+    notVisible:
+      id: ".*budget-action-resume-.*"
+    timeout: 30000
 - scrollUntilVisible:
     element: "E2E Expired Custom"
     direction: DOWN
@@ -28,3 +36,4 @@ appId: com.monyvi.app
     visible:
       id: "create-budget-screen"
     timeout: 120000
+- assertVisible: "E2E Expired Custom"

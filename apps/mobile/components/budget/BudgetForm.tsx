@@ -29,7 +29,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { useCategories } from "@/hooks/useCategories";
 import { CategorySelectorModal } from "@/components/modals/CategorySelectorModal";
 import { AlertThresholdSlider } from "./AlertThresholdSlider";
-import type { Budget, BudgetPeriod, BudgetType } from "@monyvi/db";
+import type { Budget, BudgetPeriod } from "@monyvi/db";
 import {
   createBudget,
   updateBudget,
@@ -42,6 +42,10 @@ import { useCategoryLookup } from "@/context/CategoriesContext";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { formatDate } from "@/utils/dateHelpers";
+import {
+  buildBudgetRenewalFormValues,
+  type BudgetFormInitialValues,
+} from "./budget-renewal-form-values";
 
 // =============================================================================
 // Types
@@ -50,18 +54,11 @@ import { formatDate } from "@/utils/dateHelpers";
 interface BudgetFormProps {
   /** Existing budget for edit mode (undefined = create mode) */
   readonly existingBudget?: Budget;
+  /** Historical source used only to prefill a new budget. */
+  readonly renewalSource?: Budget;
 }
 
-interface FormState {
-  name: string;
-  type: BudgetType;
-  categoryId: string;
-  amount: string;
-  period: BudgetPeriod;
-  periodStart: Date;
-  periodEnd: Date;
-  alertThreshold: number;
-}
+type FormState = BudgetFormInitialValues;
 
 interface FormErrors {
   name?: string;
@@ -91,6 +88,7 @@ const DEFAULT_THRESHOLD = 80;
 
 export function BudgetForm({
   existingBudget,
+  renewalSource,
 }: BudgetFormProps): React.JSX.Element {
   const isEditMode = !!existingBudget;
   const { isDark } = useTheme();
@@ -101,16 +99,20 @@ export function BudgetForm({
   const { preferredCurrency } = usePreferredCurrency();
 
   // ── Form state ──
-  const [form, setForm] = useState<FormState>(() => ({
-    name: existingBudget?.name ?? "",
-    type: existingBudget?.type ?? "CATEGORY",
-    categoryId: existingBudget?.categoryId ?? "",
-    amount: existingBudget?.amount?.toString() ?? "",
-    period: existingBudget?.period ?? "MONTHLY",
-    periodStart: existingBudget?.periodStart ?? new Date(),
-    periodEnd: existingBudget?.periodEnd ?? new Date(),
-    alertThreshold: existingBudget?.alertThreshold ?? DEFAULT_THRESHOLD,
-  }));
+  const [form, setForm] = useState<FormState>(() => {
+    if (renewalSource) return buildBudgetRenewalFormValues(renewalSource);
+
+    return {
+      name: existingBudget?.name ?? "",
+      type: existingBudget?.type ?? "CATEGORY",
+      categoryId: existingBudget?.categoryId ?? null,
+      amount: existingBudget?.amount?.toString() ?? "",
+      period: existingBudget?.period ?? "MONTHLY",
+      periodStart: existingBudget?.periodStart ?? new Date(),
+      periodEnd: existingBudget?.periodEnd ?? new Date(),
+      alertThreshold: existingBudget?.alertThreshold ?? DEFAULT_THRESHOLD,
+    };
+  });
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -147,7 +149,7 @@ export function BudgetForm({
   // ── Auto-clear category when switching to Global ──
   useEffect(() => {
     if (form.type === "GLOBAL") {
-      setForm((prev) => ({ ...prev, categoryId: "" }));
+      setForm((prev) => ({ ...prev, categoryId: null }));
     }
   }, [form.type]);
 
@@ -196,7 +198,7 @@ export function BudgetForm({
             periodEnd: form.periodEnd,
           }),
           ...(form.type === "CATEGORY" && {
-            categoryId: form.categoryId,
+            categoryId: form.categoryId ?? undefined,
           }),
         };
 
@@ -210,7 +212,10 @@ export function BudgetForm({
         const input: CreateBudgetInput = {
           name: form.name.trim(),
           type: form.type,
-          categoryId: form.type === "CATEGORY" ? form.categoryId : undefined,
+          categoryId:
+            form.type === "CATEGORY"
+              ? (form.categoryId ?? undefined)
+              : undefined,
           amount: parseFloat(form.amount),
           period: form.period,
           alertThreshold: form.alertThreshold,

@@ -96,6 +96,7 @@ export function BudgetDashboardCard({
       : t("days_remaining", { count: Math.max(0, item.daysLeft) });
   const accessibleLabel = [
     item.displayName,
+    ...(item.categoryLabel.kind === "deleted" ? [t("deleted_category")] : []),
     periodLabel,
     `${t("spent")}: ${formattedSpent}`,
     `${t("budget_limit")}: ${formattedLimit}`,
@@ -109,7 +110,7 @@ export function BudgetDashboardCard({
   const cardClassName = useMemo(
     () =>
       `overflow-hidden rounded-3xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 ${
-        isCompact ? "min-h-52 p-4" : "min-h-64 p-5"
+        isCompact ? "min-h-52 p-4" : "h-64 p-5"
       }`,
     [isCompact]
   );

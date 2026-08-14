@@ -225,10 +225,18 @@ describe("manual-qa-seed script helpers", () => {
           deleted: false,
           display_name: "QA Expired Paused Custom Category",
         }),
+        expect.objectContaining({
+          deleted: false,
+          display_name: "QA Near Limit Fixture Category",
+        }),
+        expect.objectContaining({
+          deleted: false,
+          display_name: "QA Over Budget Fixture Category",
+        }),
       ])
     );
-    expect(categoryRows).toHaveLength(3);
-    expect(operations.indexOf("upsert:categories:3")).toBeLessThan(
+    expect(categoryRows).toHaveLength(5);
+    expect(operations.indexOf("upsert:categories:5")).toBeLessThan(
       operations.indexOf(`upsert:budgets:${budgetRows.length}`)
     );
     expect(accountRows).toEqual(
@@ -333,6 +341,32 @@ describe("manual-qa-seed script helpers", () => {
           : `CATEGORY:${budget.category_id}:${budget.period}`;
       });
     expect(new Set(uniquenessKeys).size).toBe(uniquenessKeys.length);
+    const nearLimitCategoryId = getStringField(
+      categoryRows.find(
+        (row) =>
+          getStringField(row, "display_name") ===
+          "QA Near Limit Fixture Category"
+      ),
+      "id"
+    );
+    const overBudgetCategoryId = getStringField(
+      categoryRows.find(
+        (row) =>
+          getStringField(row, "display_name") ===
+          "QA Over Budget Fixture Category"
+      ),
+      "id"
+    );
+    expect(
+      budgetRows.find(
+        (row) => getStringField(row, "name") === "QA Near Limit Category"
+      )
+    ).toEqual(expect.objectContaining({ category_id: nearLimitCategoryId }));
+    expect(
+      budgetRows.find(
+        (row) => getStringField(row, "name") === "QA Over Budget Category"
+      )
+    ).toEqual(expect.objectContaining({ category_id: overBudgetCategoryId }));
     expect(
       budgetRows.every(
         (row) => typeof (row as BudgetSeedRow).pause_intervals === "string"
@@ -386,6 +420,16 @@ describe("manual-qa-seed script helpers", () => {
         expect.objectContaining({ counterparty: "Salary" }),
         expect.objectContaining({ source: "SMS" }),
         expect.objectContaining({ source: "VOICE" }),
+        expect.objectContaining({
+          amount: 220,
+          category_id: nearLimitCategoryId,
+          counterparty: "QA Near Limit Fixture",
+        }),
+        expect.objectContaining({
+          amount: 11640.5,
+          category_id: overBudgetCategoryId,
+          counterparty: "QA Over Budget Fixture",
+        }),
       ])
     );
     expect(
@@ -398,7 +442,7 @@ describe("manual-qa-seed script helpers", () => {
         (row) => getStringField(row, "linked_debt_id") !== undefined
       )
     ).toBe(true);
-    expect(transactionRows).toHaveLength(8);
+    expect(transactionRows).toHaveLength(10);
     expectRowsStampedForIncrementalPull(
       transactionRows.filter(
         (row) =>
