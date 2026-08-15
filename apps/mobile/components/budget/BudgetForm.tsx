@@ -233,7 +233,7 @@ export function BudgetForm({
         const input: UpdateBudgetInput = {
           name: form.name.trim(),
           amount: parseFloat(form.amount),
-          currency: form.currency ?? preferredCurrency,
+          ...(form.currency !== null && { currency: form.currency }),
           period: form.period,
           alertThreshold: form.alertThreshold,
           ...(form.period === "CUSTOM" && {

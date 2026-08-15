@@ -75,9 +75,13 @@ jest.mock("@/utils/dateHelpers", () => ({
 }));
 
 import { BudgetForm } from "@/components/budget/BudgetForm";
-import { createBudget as createBudgetService } from "@/services/budget-service";
+import {
+  createBudget as createBudgetService,
+  updateBudget as updateBudgetService,
+} from "@/services/budget-service";
 
 const mockedCreateBudgetService = jest.mocked(createBudgetService);
+const mockedUpdateBudgetService = jest.mocked(updateBudgetService);
 
 const RENEWAL_SOURCE = {
   id: "budget-1",
@@ -99,6 +103,7 @@ describe("BudgetForm category recovery", () => {
     mockCategoryMap = new Map<string, Category>();
     mockRetryCategories.mockClear();
     mockedCreateBudgetService.mockReset();
+    mockedUpdateBudgetService.mockReset();
   });
 
   it("preserves a renewal category through an observation failure and recovers after retry", () => {
@@ -158,6 +163,31 @@ describe("BudgetForm category recovery", () => {
       expect(mockedCreateBudgetService).toHaveBeenCalledWith(
         expect.objectContaining({ currency: "USD" })
       )
+    );
+  });
+
+  it("does not persist the preferred-currency fallback when editing a legacy budget", async () => {
+    mockCategoryError = null;
+    mockCategoryMap = new Map([
+      ["education", { displayName: "Education" } as unknown as Category],
+    ]);
+    const legacyBudget = {
+      ...RENEWAL_SOURCE,
+      currency: null,
+      period: "MONTHLY",
+      periodStart: null,
+      periodEnd: null,
+    } as unknown as Budget;
+
+    render(<BudgetForm existingBudget={legacyBudget} />);
+    fireEvent.press(screen.getByRole("button", { name: "save_changes" }));
+
+    await waitFor(() =>
+      expect(mockedUpdateBudgetService).toHaveBeenCalledTimes(1)
+    );
+    expect(mockedUpdateBudgetService.mock.calls[0]?.[0]).toBe("budget-1");
+    expect(mockedUpdateBudgetService.mock.calls[0]?.[1]).not.toHaveProperty(
+      "currency"
     );
   });
 });

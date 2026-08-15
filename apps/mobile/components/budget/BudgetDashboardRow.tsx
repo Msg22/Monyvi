@@ -275,7 +275,7 @@ export function BudgetDashboardRow({
         ) : (
           <View
             testID={`budget-row-lifecycle-controls-${item.id}`}
-            className="ms-2 w-28 self-stretch items-end justify-between"
+            className="ms-2 min-w-28 shrink-0 self-stretch items-end justify-between"
           >
             <TouchableOpacity
               className={`rounded-full border px-3 py-1 ${getStatusContainerClasses(

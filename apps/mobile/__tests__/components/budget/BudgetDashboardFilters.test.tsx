@@ -5,6 +5,14 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 
 let mockBottomInset = 16;
 let mockIsDark = false;
+let mockIsReducedMotion = false;
+
+jest.mock("react-native-reanimated", () => ({
+  ...jest.requireActual<Record<string, unknown>>(
+    "react-native-reanimated/mock"
+  ),
+  useReducedMotion: (): boolean => mockIsReducedMotion,
+}));
 
 jest.mock("@/hooks/useModalBottomInset", () => ({
   useModalBottomInset: (): number => mockBottomInset,
@@ -63,6 +71,7 @@ describe("BudgetDashboardFilters", () => {
   beforeEach(() => {
     mockBottomInset = 16;
     mockIsDark = false;
+    mockIsReducedMotion = false;
   });
 
   it("shows approved scope order and current Period/Status values", () => {
@@ -169,6 +178,25 @@ describe("BudgetDashboardFilters", () => {
     expect(screen.getByTestId("icon-close")).toHaveProp(
       "accessibilityLabel",
       "#300"
+    );
+  });
+
+  it("disables the filter-sheet slide when reduced motion is enabled", () => {
+    mockIsReducedMotion = true;
+    render(
+      <BudgetDashboardFilters
+        filters={{ scope: "ALL", period: "ALL", status: "ACTIVE" }}
+        onSelectScope={jest.fn()}
+        onSelectPeriod={jest.fn()}
+        onSelectStatus={jest.fn()}
+      />
+    );
+
+    fireEvent.press(screen.getByRole("button", { name: "Period, All" }));
+
+    expect(screen.getByTestId("budget-filter-modal")).toHaveProp(
+      "animationType",
+      "none"
     );
   });
 });

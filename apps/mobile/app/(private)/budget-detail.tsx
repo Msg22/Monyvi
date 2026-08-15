@@ -12,7 +12,6 @@ import React, { useCallback, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { isPeriodExpired } from "@monyvi/logic";
 
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { BudgetDetailOverview } from "@/components/budget/BudgetDetailOverview";
@@ -24,6 +23,7 @@ import {
   type BudgetAction,
 } from "@/components/budget/BudgetActionsSheet";
 import { useBudgetDetail } from "@/hooks/useBudgetDetail";
+import { useBudgetPeriodExpiry } from "@/hooks/useBudgetPeriodExpiry";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useToast } from "@/components/ui/Toast";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -53,6 +53,7 @@ export default function BudgetDetailScreen(): React.JSX.Element {
     recentTransactions,
     isLoading,
   } = useBudgetDetail(id);
+  const isCustomPeriodExpired = useBudgetPeriodExpiry(budget?.periodEnd);
 
   const { t } = useTranslation("budgets");
   const { t: tCommon } = useTranslation("common");
@@ -160,9 +161,7 @@ export default function BudgetDetailScreen(): React.JSX.Element {
   }
 
   const effectiveCurrency = budget.currency ?? preferredCurrency;
-  const canTogglePause = !(
-    budget.period === "CUSTOM" && isPeriodExpired(budget.periodEnd)
-  );
+  const canTogglePause = !(budget.period === "CUSTOM" && isCustomPeriodExpired);
 
   return (
     <View

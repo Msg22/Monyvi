@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react-native";
 const mockDatabase = { id: "database" };
 const mockPerformLogout = jest.fn();
 const mockLoggerError = jest.fn();
+const mockClearBudgetDashboardFilterSession = jest.fn();
 
 jest.mock("@/providers/DatabaseProvider", () => ({
   useDatabase: (): unknown => mockDatabase,
@@ -11,6 +12,12 @@ jest.mock("@/providers/DatabaseProvider", () => ({
 jest.mock("@/services/logout-service", () => ({
   performLogout: (...args: readonly unknown[]): unknown =>
     mockPerformLogout(...args),
+}));
+
+jest.mock("@/hooks/budget-dashboard-filter-session", () => ({
+  clearBudgetDashboardFilterSession: (): void => {
+    mockClearBudgetDashboardFilterSession();
+  },
 }));
 
 jest.mock("@/utils/logger", () => ({
@@ -39,6 +46,7 @@ describe("useLogoutFlow", () => {
     });
 
     expect(mockPerformLogout).toHaveBeenCalledWith(mockDatabase);
+    expect(mockClearBudgetDashboardFilterSession).toHaveBeenCalledTimes(1);
     expect(onSuccess).toHaveBeenCalledTimes(1);
     expect(result.current.isLoggingOut).toBe(false);
   });
@@ -99,6 +107,7 @@ describe("useLogoutFlow", () => {
     });
 
     expect(mockPerformLogout).toHaveBeenCalledWith(mockDatabase, true);
+    expect(mockClearBudgetDashboardFilterSession).toHaveBeenCalledTimes(1);
     expect(result.current.showSyncWarning).toBe(false);
     expect(onSuccess).toHaveBeenCalledTimes(1);
   });
@@ -113,6 +122,7 @@ describe("useLogoutFlow", () => {
     });
 
     expect(result.current.showForceLogoutError).toBe(true);
+    expect(mockClearBudgetDashboardFilterSession).not.toHaveBeenCalled();
     expect(result.current.isLoggingOut).toBe(false);
   });
 

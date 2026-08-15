@@ -466,6 +466,13 @@ function shouldBootstrapBeforeLiveSms(selectedSuites, supabaseMode) {
   return selectedSuites.has("live-sms") && supabaseMode !== "local";
 }
 
+function shouldRestoreDefaultFixtureAfterBudgets(selectedSuites) {
+  return (
+    selectedSuites.has("budgets") &&
+    (selectedSuites.has("sms-sync") || selectedSuites.has("live-sms"))
+  );
+}
+
 async function maybeRunAuthBootstrap() {
   if (shouldBootstrapAuth && !hasRunAuthBootstrap) {
     await runAuthBootstrap(getInitialAuthBootstrapOptions());
@@ -526,6 +533,13 @@ async function runBudgetMaestroFlows() {
   }
 }
 
+async function restoreDefaultE2eData() {
+  await resetAndSeedBudgetE2eData();
+  if (shouldBootstrapAuth) {
+    await runAuthBootstrap(getInitialAuthBootstrapOptions());
+  }
+}
+
 async function main() {
   const selectedSuites = getRequestedCiSuites();
   if (selectedSuites.size === 0) {
@@ -555,6 +569,9 @@ async function main() {
 
   if (selectedSuites.has("budgets")) {
     await runBudgetMaestroFlows();
+    if (shouldRestoreDefaultFixtureAfterBudgets(selectedSuites)) {
+      await restoreDefaultE2eData();
+    }
   }
 
   if (selectedSuites.has("sms-sync")) {
@@ -601,4 +618,5 @@ module.exports = {
   shouldRetryChildScriptFailure,
   shouldRetryStabilizationFailure,
   shouldBootstrapBeforeLiveSms,
+  shouldRestoreDefaultFixtureAfterBudgets,
 };

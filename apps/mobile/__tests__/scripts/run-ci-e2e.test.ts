@@ -70,6 +70,9 @@ interface RunCiE2eModule {
     selectedSuites: ReadonlySet<string>,
     supabaseMode: "local" | "remote"
   ): boolean;
+  shouldRestoreDefaultFixtureAfterBudgets(
+    selectedSuites: ReadonlySet<string>
+  ): boolean;
   assertBudgetSuiteIsolation(
     selectedSuites: ReadonlySet<string>,
     env?: Readonly<Record<string, string | undefined>>
@@ -107,6 +110,25 @@ describe("run-ci-e2e helpers", () => {
         profile: "dashboard-full",
       },
     ]);
+  });
+
+  it("restores the default fixture when a downstream suite follows budgets", () => {
+    expect(
+      runCiE2e.shouldRestoreDefaultFixtureAfterBudgets(
+        new Set(["budgets", "sms-sync"])
+      )
+    ).toBe(true);
+    expect(
+      runCiE2e.shouldRestoreDefaultFixtureAfterBudgets(
+        new Set(["budgets", "live-sms"])
+      )
+    ).toBe(true);
+    expect(
+      runCiE2e.shouldRestoreDefaultFixtureAfterBudgets(new Set(["budgets"]))
+    ).toBe(false);
+    expect(
+      runCiE2e.shouldRestoreDefaultFixtureAfterBudgets(new Set(["sms-sync"]))
+    ).toBe(false);
   });
 
   it("parses selected E2E suites and treats skip as no-op", () => {

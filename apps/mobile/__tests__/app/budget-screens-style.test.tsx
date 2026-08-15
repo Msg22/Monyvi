@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react-native";
+import { act, render, screen } from "@testing-library/react-native";
 import React from "react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -312,6 +312,38 @@ describe("Budget screen dark theme styling", () => {
     expect(mockBudgetActionsSheet).toHaveBeenLastCalledWith(
       expect.objectContaining({ canTogglePause: false })
     );
+  });
+
+  it("removes the pause toggle when a mounted custom budget expires", () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(2026, 7, 14, 23, 59, 59, 998));
+    mockSearchParams = { id: "expiring-budget" };
+    mockBudgetDetailResult = {
+      ...mockBudgetDetailResult,
+      budget: {
+        ...mockBudgetDetailResult.budget,
+        id: "expiring-budget",
+        period: "CUSTOM",
+        periodEnd: new Date(2026, 7, 14),
+      },
+    };
+
+    const view = render(<BudgetDetailScreen />);
+
+    expect(mockBudgetActionsSheet).toHaveBeenLastCalledWith(
+      expect.objectContaining({ canTogglePause: true })
+    );
+
+    act(() => {
+      jest.advanceTimersByTime(2);
+    });
+
+    expect(mockBudgetActionsSheet).toHaveBeenLastCalledWith(
+      expect.objectContaining({ canTogglePause: false })
+    );
+
+    view.unmount();
+    jest.useRealTimers();
   });
 
   it("uses the themed app background on the budget detail not-found root", () => {

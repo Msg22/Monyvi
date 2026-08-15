@@ -273,7 +273,7 @@ function createDashboardPresentation(
   );
 
   return Object.freeze({
-    periodAndScopeLabel: `${periodLabel} • ${scopeLabel}`,
+    periodAndScopeLabel: `${periodLabel} • ${accessibilityScopeLabel}`,
     spentOfLimitLabel,
     percentageLabel,
     progressWidth: showsProgress

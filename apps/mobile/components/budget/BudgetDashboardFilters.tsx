@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { useTranslation } from "react-i18next";
+import { useReducedMotion } from "react-native-reanimated";
 
 import { palette } from "@/constants/colors";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
@@ -122,6 +123,7 @@ export function BudgetDashboardFilters({
   const { t } = useTranslation("budgets");
   const { isDark } = useTheme();
   const bottomInset = useModalBottomInset();
+  const isReducedMotion = useReducedMotion();
   const [openSelector, setOpenSelector] = useState<OpenSelector>(null);
   const selectedPeriodLabel = t(PERIOD_LABEL_KEYS[filters.period]);
   const selectedStatusLabel = t(STATUS_LABEL_KEYS[filters.status]);
@@ -197,9 +199,10 @@ export function BudgetDashboardFilters({
       </View>
 
       <Modal
+        testID="budget-filter-modal"
         visible={openSelector !== null}
         transparent={true}
-        animationType="slide"
+        animationType={isReducedMotion ? "none" : "slide"}
         onRequestClose={() => setOpenSelector(null)}
       >
         <TouchableWithoutFeedback onPress={() => setOpenSelector(null)}>

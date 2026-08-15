@@ -208,7 +208,11 @@ describe("BudgetDashboardRow", () => {
     );
     expect(
       screen.getByTestId("budget-row-lifecycle-controls-budget-1")
-    ).toHaveProp("className", expect.stringContaining("justify-between"));
+    ).toHaveProp("className", expect.stringContaining("min-w-28"));
+    expect(
+      screen.getByTestId("budget-row-lifecycle-controls-budget-1").props
+        .className
+    ).not.toMatch(/(?:^|\s)w-28(?:\s|$)/);
     expect(
       within(
         screen.getByTestId("budget-row-action-anchor-budget-1")
