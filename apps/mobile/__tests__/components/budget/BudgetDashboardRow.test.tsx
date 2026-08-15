@@ -10,6 +10,9 @@ import {
 
 jest.mock("@expo/vector-icons", () => ({
   Ionicons: ({ name }: { name: string }) => <MockText>{name}</MockText>,
+  MaterialCommunityIcons: ({ name }: { name: string }) => (
+    <MockText>{name}</MockText>
+  ),
 }));
 
 jest.mock("@/components/common/CategoryIcon", () => ({
@@ -100,7 +103,19 @@ describe("BudgetDashboardRow", () => {
     expect(rowClassName).not.toContain("min-h-64");
     expect(screen.getByText("Groceries Monthly")).toHaveProp(
       "numberOfLines",
-      2
+      1
+    );
+    expect(screen.getByText("Groceries Monthly")).toHaveProp(
+      "ellipsizeMode",
+      "tail"
+    );
+    expect(screen.getByText("Groceries Monthly")).toHaveProp(
+      "className",
+      expect.stringContaining("text-xs")
+    );
+    expect(screen.getByText("Groceries Monthly")).not.toHaveProp(
+      "adjustsFontSizeToFit",
+      true
     );
     expect(screen.getByText("35%")).toBeOnTheScreen();
     expect(screen.getByText("Monthly • Category")).toBeOnTheScreen();
@@ -116,6 +131,42 @@ describe("BudgetDashboardRow", () => {
     expect(
       screen.getByTestId("budget-row-progress-budget-1")
     ).toBeOnTheScreen();
+  });
+
+  it("uses the approved contextual icons for actionable budget states", () => {
+    const { rerender } = render(
+      <BudgetDashboardRow
+        item={item({ lifecycle: "NEAR_LIMIT" })}
+        position="only"
+        onPress={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("speedometer")).toBeOnTheScreen();
+    expect(screen.queryByText("alert-circle-outline")).toBeNull();
+
+    rerender(
+      <BudgetDashboardRow
+        item={item({ lifecycle: "OVER_BUDGET" })}
+        position="only"
+        onPress={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("wallet-outline")).toBeOnTheScreen();
+    expect(screen.getByText("arrow-up")).toBeOnTheScreen();
+    expect(screen.queryByText("alert-circle-outline")).toBeNull();
+
+    rerender(
+      <BudgetDashboardRow
+        item={item({ lifecycle: "EXPIRED", showsProgress: false })}
+        position="only"
+        onPress={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("calendar-clock-outline")).toBeOnTheScreen();
+    expect(screen.queryByText("alert-circle-outline")).toBeNull();
   });
 
   it("renders direct compact Resume and Renew actions", () => {
@@ -154,6 +205,23 @@ describe("BudgetDashboardRow", () => {
     expect(screen.getByTestId("budget-action-resume-budget-1")).toHaveProp(
       "accessibilityLabel",
       "Resume: Food & Drinks"
+    );
+    expect(
+      screen.getByTestId("budget-row-lifecycle-controls-budget-1")
+    ).toHaveProp("className", expect.stringContaining("justify-between"));
+    expect(
+      within(
+        screen.getByTestId("budget-row-action-anchor-budget-1")
+      ).getByTestId("budget-action-resume-budget-1")
+    ).toBeOnTheScreen();
+    expect(
+      within(screen.getByTestId("budget-row-action-anchor-budget-1")).getByText(
+        "chevron-forward"
+      )
+    ).toBeOnTheScreen();
+    expect(screen.getByTestId("budget-row-action-anchor-budget-1")).toHaveProp(
+      "className",
+      expect.stringContaining("gap-1")
     );
     expect(
       within(screen.getByTestId("budget-detail-target-budget-1")).queryByTestId(
@@ -198,6 +266,16 @@ describe("BudgetDashboardRow", () => {
       "accessibilityLabel",
       "Renew: Food & Drinks"
     );
+    expect(
+      within(
+        screen.getByTestId("budget-row-lifecycle-controls-budget-1")
+      ).getByTestId("budget-row-status-budget-1")
+    ).toBeOnTheScreen();
+    expect(
+      within(
+        screen.getByTestId("budget-row-action-anchor-budget-1")
+      ).getByTestId("budget-action-renew-budget-1")
+    ).toBeOnTheScreen();
     fireEvent.press(screen.getByTestId("budget-action-renew-budget-1"), {
       stopPropagation: jest.fn(),
     });
@@ -346,7 +424,11 @@ describe("BudgetDashboardRow", () => {
     );
 
     expect(screen.getByText("chevron-back")).toBeOnTheScreen();
-    expect(screen.getByText("ميزانية الطعام")).toHaveProp("numberOfLines", 2);
+    expect(screen.getByText("ميزانية الطعام")).toHaveProp("numberOfLines", 1);
+    expect(screen.getByText("ميزانية الطعام")).toHaveProp(
+      "ellipsizeMode",
+      "tail"
+    );
 
     Object.defineProperty(I18nManager, "isRTL", {
       configurable: true,
