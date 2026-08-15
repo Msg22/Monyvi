@@ -8,9 +8,11 @@ jest.mock("@react-native-community/datetimepicker", () => ({
   default: (props: {
     readonly minimumDate?: Date;
     readonly value: Date;
-  }): null => {
+  }): React.JSX.Element => {
     mockDateTimePicker(props);
-    return null;
+    const ReactNative =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return <ReactNative.Text testID="recurring-payment-date-picker" />;
   },
 }));
 
@@ -152,5 +154,30 @@ describe("RecurringPaymentForm date picker", () => {
         value: endDate,
       })
     );
+  });
+
+  it("closes a date picker when its row is pressed again", () => {
+    render(
+      <RecurringPaymentForm
+        mode="create"
+        initialValues={initialValues}
+        accounts={[account] as unknown as readonly Account[]}
+        expenseCategories={[category] as unknown as readonly Category[]}
+        incomeCategories={[]}
+        isSubmitting={false}
+        submitLabel="save"
+        onSubmit={jest.fn()}
+      />
+    );
+
+    const endDateRow = screen.getByTestId("recurring-payment-end-date-row");
+    fireEvent.press(endDateRow);
+    expect(screen.getByTestId("recurring-payment-date-picker")).toBeTruthy();
+
+    fireEvent.press(endDateRow);
+
+    expect(
+      screen.queryByTestId("recurring-payment-date-picker")
+    ).toBeNull();
   });
 });

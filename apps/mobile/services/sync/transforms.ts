@@ -14,6 +14,15 @@ import {
 
 const INVALID_SYNC_AMOUNT_ERROR_CODE = "INVALID_TRANSACTION_AMOUNT";
 
+function formatLocalDateOnly(timestamp: number): string {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 export function stringifyJsonForWatermelon(
   value: unknown
 ): string | null | undefined {
@@ -185,7 +194,7 @@ export function transformToSupabase(
 
   for (const col of DATE_ONLY_COLUMNS) {
     if (typeof wmRecord[col] === "number") {
-      transformed[col] = new Date(wmRecord[col]).toISOString().split("T")[0];
+      transformed[col] = formatLocalDateOnly(wmRecord[col]);
     }
   }
 

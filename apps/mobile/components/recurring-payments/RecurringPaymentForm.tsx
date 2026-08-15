@@ -454,7 +454,11 @@ export const RecurringPaymentForm = React.forwardRef<
                 label={t("start_date")}
                 value={formatDate(form.startDate, "MMM d, yyyy")}
                 description={t("due_payment_hint")}
-                onPress={() => setDatePickerField("startDate")}
+                onPress={() =>
+                  setDatePickerField((current) =>
+                    current === "startDate" ? null : "startDate"
+                  )
+                }
                 iconColor={palette.nileGreen[500]}
                 iconContainerClassName="bg-nileGreen-100 dark:bg-slate-700"
               />
@@ -469,7 +473,11 @@ export const RecurringPaymentForm = React.forwardRef<
                   description={t("end_date_hint")}
                   actionLabel={form.endDate ? t("clear") : undefined}
                   onAction={form.endDate ? () => updateField("endDate", null) : undefined}
-                  onPress={() => setDatePickerField("endDate")}
+                  onPress={() =>
+                    setDatePickerField((current) =>
+                      current === "endDate" ? null : "endDate"
+                    )
+                  }
                   iconColor={palette.nileGreen[500]}
                   iconContainerClassName="bg-nileGreen-100 dark:bg-slate-700"
                 />
