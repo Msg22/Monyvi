@@ -260,7 +260,7 @@ export function BudgetForm({
               ? (form.categoryId ?? undefined)
               : undefined,
           amount: parseFloat(form.amount),
-          currency: form.currency ?? preferredCurrency,
+          ...(form.currency !== null && { currency: form.currency }),
           period: form.period,
           alertThreshold: form.alertThreshold,
           ...(form.period === "CUSTOM" && {
@@ -285,15 +285,7 @@ export function BudgetForm({
     } finally {
       setIsSubmitting(false);
     }
-  }, [
-    validate,
-    isEditMode,
-    existingBudget,
-    form,
-    preferredCurrency,
-    showToast,
-    t,
-  ]);
+  }, [validate, isEditMode, existingBudget, form, showToast, t]);
 
   return (
     <ScrollView

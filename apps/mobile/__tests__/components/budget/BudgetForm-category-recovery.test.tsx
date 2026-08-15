@@ -166,6 +166,30 @@ describe("BudgetForm category recovery", () => {
     );
   });
 
+  it("does not persist the preferred-currency fallback for ordinary creation", async () => {
+    mockCategoryError = null;
+    render(<BudgetForm />);
+
+    fireEvent.press(
+      screen.getByRole("button", {
+        name: "accessibility_global_budget_type",
+      })
+    );
+    fireEvent.changeText(
+      screen.getByPlaceholderText("budget_name_placeholder"),
+      "Monthly spending"
+    );
+    fireEvent.changeText(screen.getByPlaceholderText("0.00"), "5000");
+    fireEvent.press(screen.getByRole("button", { name: "create_budget" }));
+
+    await waitFor(() =>
+      expect(mockedCreateBudgetService).toHaveBeenCalledTimes(1)
+    );
+    expect(mockedCreateBudgetService.mock.calls[0]?.[0]).not.toHaveProperty(
+      "currency"
+    );
+  });
+
   it("does not persist the preferred-currency fallback when editing a legacy budget", async () => {
     mockCategoryError = null;
     mockCategoryMap = new Map([
