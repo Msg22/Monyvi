@@ -619,6 +619,42 @@ describe("useBudgets", () => {
     expect(result.current.errorKey).toBe("dashboard_load_error");
   });
 
+  it("keeps a spending metric failure visible until recomputation succeeds", async () => {
+    const weeklyReadModel = {
+      ...dashboardReadModel,
+      filters: { ...dashboardReadModel.filters, period: "WEEKLY" },
+    };
+    mockBuildBudgetDashboardReadModel.mockImplementation((input: unknown) =>
+      (
+        input as {
+          readonly filters: typeof dashboardReadModel.filters;
+        }
+      ).filters.period === "WEEKLY"
+        ? weeklyReadModel
+        : dashboardReadModel
+    );
+    const { result } = renderHook(() => useBudgets());
+
+    act(() => {
+      budgetQuery.observerRef.current?.next(rawBudgets);
+      spendingQuery.observerRef.current?.next([]);
+    });
+    await waitFor(() => expect(result.current.hasValidData).toBe(true));
+
+    mockBuildBudgetMetrics.mockRejectedValueOnce(new Error("metrics failed"));
+    act(() => spendingQuery.observerRef.current?.next([]));
+    await waitFor(() =>
+      expect(result.current.errorKey).toBe("dashboard_load_error")
+    );
+
+    act(() => result.current.setPeriodFilter("WEEKLY"));
+    await waitFor(() => expect(result.current.filters.period).toBe("WEEKLY"));
+    expect(result.current.errorKey).toBe("dashboard_load_error");
+
+    act(() => spendingQuery.observerRef.current?.next([]));
+    await waitFor(() => expect(result.current.errorKey).toBeNull());
+  });
+
   it("keeps the last valid rows visible while retry reconnects observations", async () => {
     const { result } = renderHook(() => useBudgets());
 

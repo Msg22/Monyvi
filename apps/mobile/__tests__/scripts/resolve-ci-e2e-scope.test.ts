@@ -122,6 +122,16 @@ describe("resolve-ci-e2e-scope", () => {
     });
   });
 
+  it.each([
+    "apps/mobile/context/CategoriesContext.tsx",
+    "apps/mobile/hooks/useCategories.ts",
+  ])("routes shared category provider %s to its journeys", (filePath) => {
+    expect(scopeResolver.resolveCiE2eScope([filePath])).toEqual({
+      shouldRun: true,
+      suites: ["transactions", "budgets"],
+    });
+  });
+
   it("ignores global mobile files that do not directly affect E2E journeys", () => {
     expect(
       scopeResolver.resolveCiE2eScope([

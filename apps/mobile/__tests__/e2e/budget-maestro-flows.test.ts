@@ -16,6 +16,9 @@ describe("budget Maestro journeys", () => {
     );
 
     expect(filteringFlow).toContain('visible: "E2E Custom Overall"');
+    expect(filteringFlow).toContain('id: "budget-scope-all"');
+    expect(filteringFlow).toContain('id: "budget-filter-option-period-all"');
+    expect(filteringFlow).not.toContain('- tapOn: "Reset filters"');
     expect(filteringFlow).not.toContain("No budgets match this filter");
     expect(emptyFlow).toContain('id: "budget-filter-option-period-custom"');
     expect(emptyFlow).toContain('visible: "No budgets match this filter"');

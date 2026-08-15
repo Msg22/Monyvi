@@ -140,6 +140,8 @@ export function useBudgets(
     useState(false);
   const [hasSpendingObservationError, setHasSpendingObservationError] =
     useState(false);
+  const [hasMetricComputationError, setHasMetricComputationError] =
+    useState(false);
   const refreshGenerationRef = useRef(0);
   const activeScopeUserIdRef = useRef<string | null>(null);
   const { userId, isResolvingUser } = useCurrentUser();
@@ -189,6 +191,7 @@ export function useBudgets(
     setErrorKey(null);
     setHasBudgetObservationError(false);
     setHasSpendingObservationError(false);
+    setHasMetricComputationError(false);
   }, []);
 
   useEffect(() => {
@@ -280,6 +283,7 @@ export function useBudgets(
       try {
         const metrics = await buildBudgetMetrics(rawBudgets);
         if (isCurrent) {
+          setHasMetricComputationError(false);
           setComputedBudgets({
             source: rawBudgets,
             metrics,
@@ -289,6 +293,7 @@ export function useBudgets(
       } catch (error: unknown) {
         logger.error("budgets.readModel.failed", error);
         if (isCurrent) {
+          setHasMetricComputationError(true);
           setIsComputing(false);
           setErrorKey("dashboard_load_error");
         }
@@ -338,7 +343,8 @@ export function useBudgets(
       if (
         computedBudgets.refreshGeneration === refreshGenerationRef.current &&
         !hasBudgetObservationError &&
-        !hasSpendingObservationError
+        !hasSpendingObservationError &&
+        !hasMetricComputationError
       ) {
         setErrorKey(null);
       }
@@ -354,6 +360,7 @@ export function useBudgets(
     categoryError,
     computedBudgets,
     hasBudgetObservationError,
+    hasMetricComputationError,
     hasSpendingObservationError,
     isResolvingUser,
     lifecycleClockRevision,

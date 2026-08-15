@@ -118,6 +118,9 @@ function getSuitesForFile(filePath) {
   const isBudgetPath = /budget/i.test(normalized);
   const isSharedConfirmationModal =
     normalized === "apps/mobile/components/modals/ConfirmationModal.tsx";
+  const isSharedCategoryProvider =
+    normalized === "apps/mobile/context/CategoriesContext.tsx" ||
+    normalized === "apps/mobile/hooks/useCategories.ts";
   const maestroSuite = getSuiteForMaestroFlow(normalized);
   if (maestroSuite) {
     suites.push(maestroSuite);
@@ -171,7 +174,7 @@ function getSuitesForFile(filePath) {
     suites.push("transactions", "recurring-payments", "sms-sync");
   }
 
-  if (isBudgetPath || isSharedConfirmationModal) {
+  if (isBudgetPath || isSharedConfirmationModal || isSharedCategoryProvider) {
     suites.push("budgets");
   }
 
@@ -185,9 +188,10 @@ function getSuitesForFile(filePath) {
 
   if (
     !isTransactionsLocaleFile &&
-    /transaction|category|transfer|AccountSelectorModal|ConfirmationModal|useFormScroll/i.test(
-      normalized
-    )
+    (isSharedCategoryProvider ||
+      /transaction|category|transfer|AccountSelectorModal|ConfirmationModal|useFormScroll/i.test(
+        normalized
+      ))
   ) {
     suites.push("transactions");
   }
