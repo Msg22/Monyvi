@@ -619,6 +619,33 @@ describe("useBudgets", () => {
     expect(result.current.errorKey).toBe("dashboard_load_error");
   });
 
+  it("keeps attempted filters visible when shaping them fails", async () => {
+    const { result } = renderHook(() => useBudgets());
+
+    act(() => budgetQuery.observerRef.current?.next(rawBudgets));
+    await waitFor(() => expect(result.current.hasValidData).toBe(true));
+
+    mockBuildBudgetDashboardReadModel.mockImplementation((input: unknown) => {
+      const attemptedFilters = (
+        input as {
+          readonly filters: typeof dashboardReadModel.filters;
+        }
+      ).filters;
+      if (attemptedFilters.period === "WEEKLY") {
+        throw new Error("shaping failed");
+      }
+      return dashboardReadModel;
+    });
+
+    act(() => result.current.setPeriodFilter("WEEKLY"));
+
+    await waitFor(() =>
+      expect(result.current.errorKey).toBe("dashboard_load_error")
+    );
+    expect(result.current.filters.period).toBe("WEEKLY");
+    expect(result.current.readModel).toBe(dashboardReadModel);
+  });
+
   it("keeps a spending metric failure visible until recomputation succeeds", async () => {
     const weeklyReadModel = {
       ...dashboardReadModel,

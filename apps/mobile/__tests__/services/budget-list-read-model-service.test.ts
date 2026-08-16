@@ -521,7 +521,7 @@ describe("budget-list-read-model-service", () => {
     expect(presentation?.accessibilityLabel).toContain("Food & Drinks");
   });
 
-  it("falls back from blank persisted names to category then generic name", () => {
+  it("uses category and scope-specific fallbacks for blank names", () => {
     const categoryBudget = {
       ...createBudget("blank-category"),
       name: "   ",
@@ -531,10 +531,16 @@ describe("budget-list-read-model-service", () => {
       ...createBudget("blank-global", { type: "GLOBAL" }),
       name: "\t ",
     } as Budget;
+    const deletedCategoryBudget = {
+      ...createBudget("blank-deleted"),
+      name: " ",
+      categoryId: "missing-category",
+    } as Budget;
 
     const result = buildReadModel([
       createBudgetMetric(categoryBudget),
       createBudgetMetric(globalBudget),
+      createBudgetMetric(deletedCategoryBudget),
     ]);
 
     expect(
@@ -542,7 +548,10 @@ describe("budget-list-read-model-service", () => {
     ).toBe("Food & Drinks");
     expect(
       result.items.find((item) => item.id === "blank-global")?.displayName
-    ).toBe("Unnamed budget");
+    ).toBe("Global");
+    expect(
+      result.items.find((item) => item.id === "blank-deleted")?.displayName
+    ).toBe("Deleted category");
   });
 
   it("orders every match exactly once by lifecycle priority, name, then ID", () => {

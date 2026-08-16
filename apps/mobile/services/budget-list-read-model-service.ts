@@ -306,7 +306,14 @@ function createDashboardItem(
     : undefined;
   const persistedName = budget.name?.trim() ?? "";
   const categoryName = category?.displayName.trim() ?? "";
-  const displayName = persistedName || categoryName || fallbackName.trim();
+  const semanticFallbackName = budget.isGlobal
+    ? presentationCopy.scopeLabels.GLOBAL.trim()
+    : presentationCopy.deletedCategoryLabel.trim();
+  const displayName =
+    persistedName ||
+    categoryName ||
+    semanticFallbackName ||
+    fallbackName.trim();
   const categoryLabel = Object.freeze(resolveCategoryLabel(budget, category));
 
   return Object.freeze({

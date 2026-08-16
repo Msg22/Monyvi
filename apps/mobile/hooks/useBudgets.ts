@@ -463,7 +463,7 @@ export function useBudgets(
     isLoading: isInitialLoading,
     errorKey,
     hasValidData,
-    filters: hasValidData ? readModel.filters : filters,
+    filters: hasValidData && errorKey === null ? readModel.filters : filters,
     setScopeFilter,
     setPeriodFilter,
     setStatusFilter,
