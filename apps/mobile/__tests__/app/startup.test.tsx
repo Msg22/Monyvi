@@ -30,6 +30,7 @@ import { ActivityIndicator } from "react-native";
 const mockUseSync = jest.fn();
 const mockUseProfile = jest.fn();
 const mockPerformLogout = jest.fn().mockResolvedValue({ success: true });
+const mockClearBudgetDashboardFilterSession = jest.fn();
 const mockRouterReplace = jest.fn();
 
 // Tag the Redirect element with its `href` so the test can assert the target
@@ -64,6 +65,12 @@ jest.mock("@/hooks/useProfile", () => ({
 jest.mock("@/services/logout-service", () => ({
   performLogout: (...args: unknown[]): Promise<unknown> =>
     mockPerformLogout(...args) as Promise<unknown>,
+}));
+
+jest.mock("@/hooks/budget-dashboard-filter-session", () => ({
+  clearBudgetDashboardFilterSession: (): void => {
+    mockClearBudgetDashboardFilterSession();
+  },
 }));
 
 jest.mock("@/utils/logger", () => ({
@@ -405,7 +412,7 @@ describe("(private)/startup.tsx routing gate", () => {
     expect(findRedirectHref(renderer)).toBeUndefined();
   });
 
-  it("wires the retry screen's Sign out callback to performLogout (guards against the gate dropping the handler)", () => {
+  it("clears budget filters after retry-screen sign out succeeds", async () => {
     setState({ syncState: "failed", onboardingCompleted: false });
     const renderer = renderGate();
 
@@ -413,9 +420,12 @@ describe("(private)/startup.tsx routing gate", () => {
     const node = nodes[0] as { props: { onSignOut?: () => void } } | undefined;
     expect(node).toBeDefined();
 
-    node?.props.onSignOut?.();
+    act(() => {
+      node?.props.onSignOut?.();
+    });
 
-    expect(mockPerformLogout).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockPerformLogout).toHaveBeenCalledTimes(1));
+    expect(mockClearBudgetDashboardFilterSession).toHaveBeenCalledTimes(1);
   });
 
   it("forces fallback sign-out when the retry screen logout cannot sync first", async () => {
@@ -439,6 +449,7 @@ describe("(private)/startup.tsx routing gate", () => {
       expect.anything(),
       true
     );
+    expect(mockClearBudgetDashboardFilterSession).toHaveBeenCalledTimes(1);
   });
 
   it("wires the retry screen's Retry callback to retryInitialSync", () => {

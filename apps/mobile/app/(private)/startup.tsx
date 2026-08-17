@@ -10,6 +10,7 @@ import { database } from "@monyvi/db";
 import { StartupRecoveryScreen } from "@/components/ui/StartupRecoveryScreen";
 import { StartupLoadingView } from "@/components/ui/StartupLoadingView";
 import { useProfile } from "@/hooks/useProfile";
+import { clearBudgetDashboardFilterSession } from "@/hooks/budget-dashboard-filter-session";
 import { useSync, type InitialSyncState } from "@/providers/SyncProvider";
 import { performLogout } from "@/services/logout-service";
 import {
@@ -49,17 +50,22 @@ export default function Index(): React.ReactNode {
   const handleSignOut = useCallback((): void => {
     void (async (): Promise<void> => {
       const result = await performLogout(database);
-      if (!result.success) {
-        logger.warn("onboarding.retryScreen.signOut.failed", {
-          reason: result.error ?? "unknown",
-        });
+      if (result.success) {
+        clearBudgetDashboardFilterSession();
+        return;
+      }
 
-        const fallbackResult = await performLogout(database, true);
-        if (!fallbackResult.success) {
-          logger.warn("onboarding.retryScreen.forceSignOut.failed", {
-            reason: fallbackResult.error ?? "unknown",
-          });
-        }
+      logger.warn("onboarding.retryScreen.signOut.failed", {
+        reason: result.error ?? "unknown",
+      });
+
+      const fallbackResult = await performLogout(database, true);
+      if (fallbackResult.success) {
+        clearBudgetDashboardFilterSession();
+      } else {
+        logger.warn("onboarding.retryScreen.forceSignOut.failed", {
+          reason: fallbackResult.error ?? "unknown",
+        });
       }
     })().catch((error: unknown) => {
       logger.warn(

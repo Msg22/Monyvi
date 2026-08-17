@@ -235,16 +235,11 @@ export function useBudgets(
             },
           });
 
-        let hasReceivedInitialSpendingSnapshot = false;
         const spendingSubscription = observeBudgetSpendingChanges(currentUserId)
           .observeWithColumns(BUDGET_SPENDING_OBSERVED_COLUMNS)
           .subscribe({
             next: () => {
               setHasSpendingObservationError(false);
-              if (!hasReceivedInitialSpendingSnapshot) {
-                hasReceivedInitialSpendingSnapshot = true;
-                return;
-              }
               setSpendingRevision((revision) => revision + 1);
             },
             error: (error: unknown) => {

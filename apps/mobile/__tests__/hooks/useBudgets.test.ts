@@ -274,6 +274,28 @@ describe("useBudgets", () => {
     });
   });
 
+  it("recomputes for the first spending snapshot after initial metrics settle", async () => {
+    const { result, unmount } = renderHook(() => useBudgets());
+
+    act(() => {
+      budgetQuery.observerRef.current?.next(rawBudgets);
+    });
+    await waitFor(() =>
+      expect(mockBuildBudgetMetrics).toHaveBeenCalledTimes(1)
+    );
+
+    await act(async () => {
+      spendingQuery.observerRef.current?.next([{ id: "synced-expense" }]);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(mockBuildBudgetMetrics).toHaveBeenCalledTimes(2);
+      expect(result.current.isRefreshing).toBe(false);
+    });
+    unmount();
+  });
+
   it("surfaces category observation failure and retries the provider", async () => {
     const categoryError = new Error("categories failed");
     mockCategoryError = categoryError;

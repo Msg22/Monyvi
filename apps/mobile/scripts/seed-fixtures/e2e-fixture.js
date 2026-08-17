@@ -285,7 +285,7 @@ function createBudgetCategory({
   return {
     id,
     user_id: userId,
-    system_name: null,
+    system_name: `budget_${id.replace(/[^a-zA-Z0-9]+/g, "_").toLowerCase()}`,
     display_name: name,
     type: "EXPENSE",
     icon: "wallet-outline",

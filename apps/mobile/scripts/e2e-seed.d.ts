@@ -18,6 +18,7 @@ export const E2E_TABLE_DELETE_ORDER: readonly string[];
 
 export interface E2eBudgetFixtureRows {
   readonly categories?: readonly {
+    readonly system_name: string;
     readonly display_name: string;
     readonly deleted: boolean;
   }[];

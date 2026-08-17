@@ -116,7 +116,11 @@ describe("e2e-seed script helpers", () => {
         }),
       ])
     );
-    expect(fullFixture.buildExtraRows?.(commonArgs).categories).toEqual(
+    const fullCategories =
+      fullFixture.buildExtraRows?.(commonArgs).categories ?? [];
+    const filteredEmptyCategories =
+      filteredEmptyFixture.buildExtraRows?.(commonArgs).categories ?? [];
+    expect(fullCategories).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           display_name: "Deleted Category",
@@ -124,6 +128,11 @@ describe("e2e-seed script helpers", () => {
         }),
       ])
     );
+    for (const categories of [fullCategories, filteredEmptyCategories]) {
+      const systemNames = categories.map((category) => category.system_name);
+      expect(systemNames.every((name: string) => name.length > 0)).toBe(true);
+      expect(new Set(systemNames).size).toBe(systemNames.length);
+    }
     expect(fullFixture.buildExtraRows?.(commonArgs).transactions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

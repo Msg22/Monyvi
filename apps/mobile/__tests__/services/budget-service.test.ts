@@ -294,6 +294,33 @@ describe("budget-service", () => {
     );
   });
 
+  it("creates expired custom history without competing with a current custom budget", async (): Promise<void> => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-08-14T12:00:00.000Z"));
+    const current = createLifecycleBudget({
+      id: "current-custom",
+      periodEnd: new Date("2026-08-15T00:00:00.000Z"),
+    });
+    mockQueryOwned.mockReturnValue(createQueryResult([current], 1));
+
+    await expect(
+      createBudget({
+        name: "Historical trip",
+        type: "GLOBAL",
+        amount: 1000,
+        period: "CUSTOM",
+        periodStart: new Date("2026-08-01T00:00:00.000Z"),
+        periodEnd: new Date("2026-08-13T00:00:00.000Z"),
+        alertThreshold: 80,
+      })
+    ).resolves.toMatchObject({
+      name: "Historical trip",
+      period: "CUSTOM",
+    });
+
+    expect(mockQueryOwned).not.toHaveBeenCalled();
+  });
+
   it("rejects a category custom budget when a current matching budget exists", async (): Promise<void> => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date("2026-08-14T12:00:00.000Z"));

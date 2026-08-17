@@ -182,6 +182,7 @@ export async function createBudget(input: CreateBudgetInput): Promise<Budget> {
 
     await validateBudgetUniqueness(input.type, input.period, {
       categoryId,
+      candidatePeriodEnd: input.periodEnd,
       scope,
     });
 
