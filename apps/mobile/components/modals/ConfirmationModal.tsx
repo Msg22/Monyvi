@@ -23,6 +23,8 @@ interface ConfirmationModalProps {
   readonly cancelLabel?: string;
   readonly variant?: ConfirmationVariant;
   readonly icon?: keyof typeof Ionicons.glyphMap;
+  readonly isConfirming?: boolean;
+  readonly dismissOnConfirm?: boolean;
 }
 
 const VARIANT_CONFIG: Record<
@@ -79,6 +81,8 @@ export function ConfirmationModal({
   cancelLabel = "Cancel",
   variant = "danger",
   icon,
+  isConfirming = false,
+  dismissOnConfirm = true,
 }: ConfirmationModalProps): React.JSX.Element {
   const config = VARIANT_CONFIG[variant];
   const iconName = icon ?? config.defaultIcon;
@@ -126,6 +130,8 @@ export function ConfirmationModal({
                     testID="modal-cancel"
                     className="flex-1 py-3.5 rounded-xl items-center justify-center bg-slate-100 dark:bg-slate-800"
                     onPress={onCancel}
+                    disabled={isConfirming}
+                    accessibilityState={{ disabled: isConfirming }}
                   >
                     <Text className="text-base font-semibold text-slate-600 dark:text-slate-300">
                       {cancelLabel}
@@ -137,8 +143,10 @@ export function ConfirmationModal({
                     className={`flex-1 py-3.5 rounded-xl items-center justify-center ${config.buttonBg}`}
                     onPress={() => {
                       onConfirm();
-                      onCancel();
+                      if (dismissOnConfirm) onCancel();
                     }}
+                    disabled={isConfirming}
+                    accessibilityState={{ disabled: isConfirming }}
                   >
                     <Text className="text-base font-semibold text-white">
                       {confirmLabel}

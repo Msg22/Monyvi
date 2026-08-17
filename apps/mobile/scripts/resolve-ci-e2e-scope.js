@@ -5,6 +5,7 @@ const orderedSuites = [
   "accounts",
   "transactions",
   "recurring-payments",
+  "budgets",
   "sms-sync",
   "live-sms",
 ];
@@ -114,6 +115,12 @@ function getSuitesForFile(filePath) {
     normalized === "apps/mobile/services/pending-account-service.ts";
   const isTransactionsLocaleFile =
     /locales\/(?:ar|en)\/transactions\.json/i.test(normalized);
+  const isBudgetPath = /budget/i.test(normalized);
+  const isSharedConfirmationModal =
+    normalized === "apps/mobile/components/modals/ConfirmationModal.tsx";
+  const isSharedCategoryProvider =
+    normalized === "apps/mobile/context/CategoriesContext.tsx" ||
+    normalized === "apps/mobile/hooks/useCategories.ts";
   const maestroSuite = getSuiteForMaestroFlow(normalized);
   if (maestroSuite) {
     suites.push(maestroSuite);
@@ -167,6 +174,10 @@ function getSuitesForFile(filePath) {
     suites.push("transactions", "recurring-payments", "sms-sync");
   }
 
+  if (isBudgetPath || isSharedConfirmationModal || isSharedCategoryProvider) {
+    suites.push("budgets");
+  }
+
   if (
     /recurring-payment|recurringPayment|recurring-payments|AccountSelectorModal|CategorySelectorModal|ConfirmationModal|FrequencyPickerModal|useFormScroll/i.test(
       normalized
@@ -177,9 +188,10 @@ function getSuitesForFile(filePath) {
 
   if (
     !isTransactionsLocaleFile &&
-    /transaction|category|transfer|budget|AccountSelectorModal|ConfirmationModal|useFormScroll/i.test(
-      normalized
-    )
+    (isSharedCategoryProvider ||
+      /transaction|category|transfer|AccountSelectorModal|ConfirmationModal|useFormScroll/i.test(
+        normalized
+      ))
   ) {
     suites.push("transactions");
   }

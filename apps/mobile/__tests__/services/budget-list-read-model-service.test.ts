@@ -1,8 +1,9 @@
-import type { Budget, BudgetPeriod } from "@monyvi/db";
+/* eslint-disable @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-unsafe-assignment */
+import type { Budget, BudgetPeriod, Transaction } from "@monyvi/db";
 
 const mockDatabaseGet = jest.fn((tableName: string): string => tableName);
 const mockQueryOwned = jest.fn<
-  MockQuery<Budget>,
+  MockQuery<unknown>,
   [string, string, QueryCondition]
 >();
 const mockGetSpendingForBudget = jest.fn<Promise<number>, [Budget]>();
@@ -54,7 +55,7 @@ jest.mock("@/services/user-data-access", () => ({
     collection: string,
     userId: string,
     condition: QueryCondition
-  ): MockQuery<Budget> => mockQueryOwned(collection, userId, condition),
+  ): MockQuery<unknown> => mockQueryOwned(collection, userId, condition),
 }));
 
 jest.mock("@/services/budget-service", () => ({
@@ -73,12 +74,22 @@ jest.mock("@monyvi/logic", () => ({
     mockGetDaysLeft(...args),
   isPeriodExpired: (...args: readonly unknown[]): unknown =>
     mockIsPeriodExpired(...args),
+  formatCurrency: ({
+    amount,
+    currency,
+  }: {
+    readonly amount: number;
+    readonly currency: string;
+  }): string => `${amount.toLocaleString("en-US")} ${currency}`,
 }));
 
 import {
-  buildBudgetListReadModel,
+  buildBudgetDashboardReadModel,
   buildBudgetMetrics,
   observeBudgetList,
+  observeBudgetSpendingChanges,
+  type BudgetDashboardFilters,
+  type BudgetDashboardReadModel,
   type BudgetWithMetrics,
 } from "@/services/budget-list-read-model-service";
 
@@ -143,7 +154,15 @@ describe("budget-list-read-model-service", () => {
     });
     mockGetDaysElapsed.mockReturnValue(15);
     mockGetDaysLeft.mockReturnValue(16);
-    mockIsPeriodExpired.mockReturnValue(false);
+    mockIsPeriodExpired.mockReset();
+    mockIsPeriodExpired.mockImplementation(
+      (periodEnd: Date | null | undefined, referenceDate: Date): boolean => {
+        if (!periodEnd) return false;
+        const endOfDay = new Date(periodEnd);
+        endOfDay.setHours(23, 59, 59, 999);
+        return referenceDate.getTime() > endOfDay.getTime();
+      }
+    );
     mockComputeSpendingMetrics.mockReturnValue({
       spent: 250,
       limit: 1000,
@@ -181,6 +200,36 @@ describe("budget-list-read-model-service", () => {
           kind: "where",
           column: "status",
           value: { oneOf: ["ACTIVE", "PAUSED"] },
+        }),
+      ])
+    );
+  });
+
+  it("builds a scoped expense transaction observation for metric invalidation", () => {
+    const query = createQuery<Transaction>([]);
+    mockQueryOwned.mockReturnValue(query);
+
+    const result = observeBudgetSpendingChanges("user-1");
+
+    expect(result).toBe(query);
+    expect(mockDatabaseGet).toHaveBeenCalledWith("transactions");
+    expect(mockQueryOwned).toHaveBeenCalledWith(
+      "transactions",
+      "user-1",
+      expect.objectContaining({ kind: "and" })
+    );
+    const condition = mockQueryOwned.mock.calls[0]?.[2];
+    expect(condition?.conditions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "where",
+          column: "deleted",
+          value: false,
+        }),
+        expect.objectContaining({
+          kind: "where",
+          column: "type",
+          value: "EXPENSE",
         }),
       ])
     );
@@ -258,63 +307,357 @@ describe("budget-list-read-model-service", () => {
     );
   });
 
-  it("skips expired active custom budgets before computing metrics", async () => {
+  it("preserves historical spending when a category budget references a deleted category", async () => {
+    const deletedCategoryBudget = {
+      ...createBudget("deleted-category-budget"),
+      categoryId: "deleted-category",
+    } as Budget;
+
+    mockGetSpendingForBudget.mockResolvedValueOnce(420);
+
+    const result = await buildBudgetMetrics([deletedCategoryBudget]);
+
+    expect(mockGetSpendingForBudget).toHaveBeenCalledWith(
+      deletedCategoryBudget
+    );
+    expect(mockComputeSpendingMetrics).toHaveBeenCalledWith(420, 1000, 15, 80);
+    expect(result).toHaveLength(1);
+  });
+
+  it("still propagates spending failures for accessible category budgets", async () => {
+    const error = new Error("spending read failed");
+    const accessibleCategoryBudget = {
+      ...createBudget("accessible-category-budget"),
+      categoryId: "food",
+    } as Budget;
+    mockGetSpendingForBudget.mockRejectedValueOnce(error);
+
+    await expect(buildBudgetMetrics([accessibleCategoryBudget])).rejects.toBe(
+      error
+    );
+  });
+
+  it("retains expired active custom budgets while computing existing metrics", async () => {
     const expiredCustomBudget = createBudget("expired-custom", {
       period: "CUSTOM",
       status: "ACTIVE",
       periodEnd: new Date("2026-04-30T23:59:59.999Z"),
     });
-    mockIsPeriodExpired.mockReturnValueOnce(true);
-
     const result = await buildBudgetMetrics([expiredCustomBudget]);
 
-    expect(result).toEqual([]);
-    expect(mockIsPeriodExpired).toHaveBeenCalledWith(
-      expiredCustomBudget.periodEnd
-    );
-    expect(mockGetSpendingForBudget).not.toHaveBeenCalled();
+    expect(result).toHaveLength(1);
+    expect(result[0]?.budget).toBe(expiredCustomBudget);
+    expect(mockGetSpendingForBudget).toHaveBeenCalledWith(expiredCustomBudget);
   });
 
-  it("selects filtered budget sections from computed metrics", () => {
-    const global = createBudgetMetric(
-      createBudget("global", { type: "GLOBAL" })
-    );
-    const category = createBudgetMetric(
-      createBudget("category", { type: "CATEGORY" })
-    );
-    const paused = createBudgetMetric(
-      createBudget("paused", {
-        period: "WEEKLY",
+  function buildReadModel(
+    budgets: readonly BudgetWithMetrics[],
+    filters: BudgetDashboardFilters = {
+      scope: "ALL",
+      period: "ALL",
+      status: "ALL",
+    },
+    activeLocale: "en" | "ar" = "en"
+  ): BudgetDashboardReadModel {
+    return buildBudgetDashboardReadModel({
+      budgets,
+      categoryMap: new Map([
+        [
+          "food",
+          {
+            displayName: "Food & Drinks",
+            icon: "restaurant-outline",
+            iconLibrary: "Ionicons",
+            color: "#10B981",
+            isExpense: true,
+          },
+        ],
+      ]),
+      filters,
+      now: new Date("2026-05-15T00:00:00.000Z"),
+      activeLocale,
+      fallbackName: "Unnamed budget",
+      preferredCurrency: "EGP",
+      presentationCopy: {
+        periodLabels: {
+          WEEKLY: "Weekly",
+          MONTHLY: "Monthly",
+          CUSTOM: "Custom",
+        },
+        scopeLabels: { GLOBAL: "Global", CATEGORY: "Category" },
+        statusLabels: {
+          HEALTHY: "Safe to spend",
+          NEAR_LIMIT: "Near limit",
+          OVER_BUDGET: "Over budget",
+          PAUSED: "Paused",
+          EXPIRED: "Expired",
+        },
+        deletedCategoryLabel: "Deleted category",
+        resumeActionLabel: "Resume",
+        renewActionLabel: "Renew",
+        formatSpentOfLimit: (spent, limit) => `${spent} of ${limit}`,
+        formatViewBudget: (name) => `View Budget: ${name}`,
+      },
+    });
+  }
+
+  function namedMetric(
+    id: string,
+    name: string,
+    overrides: Parameters<typeof createBudget>[1] = {},
+    metricStatus: "safe" | "warning" | "danger" = "safe"
+  ): BudgetWithMetrics {
+    const budget = {
+      ...createBudget(id, overrides),
+      name,
+      categoryId: overrides.type === "GLOBAL" ? null : id,
+      currency: "EGP",
+    } as Budget;
+    const base = createBudgetMetric(budget);
+    return {
+      ...base,
+      metrics: {
+        ...base.metrics,
+        spent:
+          metricStatus === "safe" ? 0 : metricStatus === "warning" ? 850 : 1200,
+        percentage:
+          metricStatus === "safe" ? 0 : metricStatus === "warning" ? 85 : 120,
+        status: metricStatus,
+      },
+    };
+  }
+
+  it("returns immutable unified items with expiry-first state and progress visibility", () => {
+    const expiredPaused = namedMetric(
+      "expired",
+      "Expired",
+      {
+        period: "CUSTOM",
         status: "PAUSED",
-      })
+        periodEnd: new Date("2026-05-01T00:00:00.000Z"),
+      },
+      "danger"
     );
-
-    const result = buildBudgetListReadModel(
-      [global, category, paused],
-      "MONTHLY"
+    const paused = namedMetric(
+      "paused",
+      "Paused",
+      { status: "PAUSED" },
+      "danger"
     );
+    const active = namedMetric("active", "Active", {}, "warning");
 
-    expect(result.budgets).toEqual([global, category]);
-    expect(result.globalBudget).toBe(global);
-    expect(result.categoryBudgets).toEqual([category]);
-    expect(result.pausedBudgets).toEqual([]);
-    expect(result.totalCount).toBe(3);
+    const result = buildReadModel([active, paused, expiredPaused]);
+
+    expect(
+      result.items.map(({ id, lifecycle, showsProgress }) => ({
+        id,
+        lifecycle,
+        showsProgress,
+      }))
+    ).toEqual([
+      { id: "expired", lifecycle: "EXPIRED", showsProgress: false },
+      { id: "active", lifecycle: "NEAR_LIMIT", showsProgress: true },
+      { id: "paused", lifecycle: "PAUSED", showsProgress: false },
+    ]);
+    expect(result.filters).toEqual({
+      scope: "ALL",
+      period: "ALL",
+      status: "ALL",
+    });
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result.items)).toBe(true);
+    expect(Object.isFrozen(result.items[0])).toBe(true);
+    expect(result.items[0]?.presentation.accessibilityLabel).toContain(
+      "Expired May 1"
+    );
+    expect(result.items[0]?.presentation.actionAccessibilityLabel).toBe(
+      "Renew: Expired"
+    );
   });
 
-  it("keeps paused category budgets visible in the category grid", () => {
-    const paused = createBudgetMetric(
-      createBudget("paused", {
-        period: "WEEKLY",
-        status: "PAUSED",
-      })
+  it("shapes display-only DTOs and deleted-category history without exposing models", () => {
+    const global = namedMetric("global", "  Overall  ", { type: "GLOBAL" });
+    const deleted = namedMetric("deleted", "Historic Education");
+
+    const result = buildReadModel([global, deleted]);
+
+    expect(result.items.find((item) => item.id === "global")).toMatchObject({
+      displayName: "Overall",
+      scope: "GLOBAL",
+      categoryLabel: { kind: "not-applicable" },
+      availableAction: null,
+    });
+    expect(result.items.find((item) => item.id === "deleted")).toMatchObject({
+      categoryLabel: { kind: "deleted", categoryId: "deleted" },
+      presentation: {
+        periodAndScopeLabel: "Monthly • Category",
+        spentOfLimitLabel: "0 EGP of 1,000 EGP",
+        percentageLabel: "0%",
+        progressWidth: "0%",
+        statusLabel: "Safe to spend",
+        deletedCategoryLabel: "Deleted category",
+        expiryLabel: null,
+        actionLabel: null,
+        actionAccessibilityLabel: null,
+        accessibilityLabel:
+          "Historic Education, Deleted category, Monthly, Category, 0 EGP of 1,000 EGP, 0%, Safe to spend",
+      },
+    });
+    expect(result.items[0]).not.toHaveProperty("budget");
+  });
+
+  it("shows and announces the resolved category name", () => {
+    const categoryBudget = {
+      ...createBudget("food-budget"),
+      name: "Dining plan",
+      categoryId: "food",
+      currency: "EGP",
+    } as Budget;
+
+    const result = buildReadModel([createBudgetMetric(categoryBudget)]);
+    const presentation = result.items[0]?.presentation;
+
+    expect(presentation?.periodAndScopeLabel).toBe("Monthly • Food & Drinks");
+    expect(presentation?.accessibilityLabel).toContain("Food & Drinks");
+  });
+
+  it("uses category and scope-specific fallbacks for blank names", () => {
+    const categoryBudget = {
+      ...createBudget("blank-category"),
+      name: "   ",
+      categoryId: "food",
+    } as Budget;
+    const globalBudget = {
+      ...createBudget("blank-global", { type: "GLOBAL" }),
+      name: "\t ",
+    } as Budget;
+    const deletedCategoryBudget = {
+      ...createBudget("blank-deleted"),
+      name: " ",
+      categoryId: "missing-category",
+    } as Budget;
+
+    const result = buildReadModel([
+      createBudgetMetric(categoryBudget),
+      createBudgetMetric(globalBudget),
+      createBudgetMetric(deletedCategoryBudget),
+    ]);
+
+    expect(
+      result.items.find((item) => item.id === "blank-category")?.displayName
+    ).toBe("Food & Drinks");
+    expect(
+      result.items.find((item) => item.id === "blank-global")?.displayName
+    ).toBe("Global");
+    expect(
+      result.items.find((item) => item.id === "blank-deleted")?.displayName
+    ).toBe("Deleted category");
+  });
+
+  it("orders every match exactly once by lifecycle priority, name, then ID", () => {
+    const input = [
+      namedMetric("healthy", "Zulu"),
+      namedMetric("warning-b", "beta", {}, "warning"),
+      namedMetric("warning-a", "Beta", {}, "warning"),
+      namedMetric("danger", "Alpha", {}, "danger"),
+      namedMetric("paused", "Paused", { status: "PAUSED" }),
+      namedMetric("expired", "Expired", {
+        period: "CUSTOM",
+        periodEnd: new Date("2026-05-01T00:00:00.000Z"),
+      }),
+    ];
+
+    const result = buildReadModel(input);
+
+    expect(result.items.map((item) => item.id)).toEqual([
+      "expired",
+      "danger",
+      "warning-a",
+      "warning-b",
+      "paused",
+      "healthy",
+    ]);
+    expect(new Set(result.items.map((item) => item.id)).size).toBe(
+      input.length
     );
+    expect(result.totalCount).toBe(input.length);
+    expect(result.matchingCount).toBe(input.length);
+  });
 
-    const result = buildBudgetListReadModel([paused], "ALL");
+  it.each(["en", "ar"] as const)(
+    "uses %s collation and stable ID tie-break without mutating input",
+    (activeLocale) => {
+      const input = [
+        namedMetric("z-id", "Budget 10"),
+        namedMetric("b-id", " budget 2 "),
+        namedMetric("a-id", "BUDGET 2"),
+      ];
+      const snapshot = input.map((item) => ({
+        id: item.budget.id,
+        spent: item.metrics.spent,
+      }));
 
-    expect(result.budgets).toEqual([paused]);
-    expect(result.globalBudget).toBeUndefined();
-    expect(result.categoryBudgets).toEqual([paused]);
-    expect(result.pausedBudgets).toEqual([paused]);
-    expect(result.totalCount).toBe(1);
+      const result = buildReadModel(
+        input,
+        { scope: "ALL", period: "ALL", status: "ALL" },
+        activeLocale
+      );
+
+      expect(result.items.map((item) => item.id)).toEqual([
+        "a-id",
+        "b-id",
+        "z-id",
+      ]);
+      expect(
+        input.map((item) => ({ id: item.budget.id, spent: item.metrics.spent }))
+      ).toEqual(snapshot);
+    }
+  );
+
+  it("applies all 48 scope, period, and status combinations with AND semantics", () => {
+    const expiredEnd = new Date("2026-05-01T00:00:00.000Z");
+    const input = [
+      namedMetric("global-weekly-active", "A", {
+        type: "GLOBAL",
+        period: "WEEKLY",
+      }),
+      namedMetric("category-monthly-paused", "B", { status: "PAUSED" }),
+      namedMetric("category-custom-expired", "C", {
+        period: "CUSTOM",
+        periodEnd: expiredEnd,
+      }),
+      namedMetric("category-monthly-active", "D"),
+    ];
+    const scopes = ["ALL", "CATEGORY", "GLOBAL"] as const;
+    const periods = ["ALL", "WEEKLY", "MONTHLY", "CUSTOM"] as const;
+    const statuses = ["ALL", "ACTIVE", "PAUSED", "EXPIRED"] as const;
+
+    for (const scope of scopes) {
+      for (const period of periods) {
+        for (const status of statuses) {
+          const result = buildReadModel(input, { scope, period, status });
+          const expected = input.filter(({ budget }) => {
+            const isExpired =
+              budget.period === "CUSTOM" &&
+              budget.periodEnd?.getTime() === expiredEnd.getTime();
+            const lifecycleStatus = isExpired
+              ? "EXPIRED"
+              : budget.status === "PAUSED"
+                ? "PAUSED"
+                : "ACTIVE";
+            return (
+              (scope === "ALL" || budget.type === scope) &&
+              (period === "ALL" || budget.period === period) &&
+              (status === "ALL" || lifecycleStatus === status)
+            );
+          });
+
+          expect(result.items.map((item) => item.id).sort()).toEqual(
+            expected.map(({ budget }) => budget.id).sort()
+          );
+          expect(result.matchingCount).toBe(expected.length);
+        }
+      }
+    }
   });
 });

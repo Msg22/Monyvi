@@ -13,7 +13,7 @@
  * @module BudgetForm
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -29,7 +29,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { useCategories } from "@/hooks/useCategories";
 import { CategorySelectorModal } from "@/components/modals/CategorySelectorModal";
 import { AlertThresholdSlider } from "./AlertThresholdSlider";
-import type { Budget, BudgetPeriod, BudgetType } from "@monyvi/db";
+import type { Budget, BudgetPeriod } from "@monyvi/db";
 import {
   createBudget,
   updateBudget,
@@ -42,6 +42,11 @@ import { useCategoryLookup } from "@/context/CategoriesContext";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { formatDate } from "@/utils/dateHelpers";
+import {
+  buildBudgetRenewalFormValues,
+  resolveRenewalCategoryId,
+  type BudgetFormInitialValues,
+} from "./budget-renewal-form-values";
 
 // =============================================================================
 // Types
@@ -50,18 +55,11 @@ import { formatDate } from "@/utils/dateHelpers";
 interface BudgetFormProps {
   /** Existing budget for edit mode (undefined = create mode) */
   readonly existingBudget?: Budget;
+  /** Historical source used only to prefill a new budget. */
+  readonly renewalSource?: Budget;
 }
 
-interface FormState {
-  name: string;
-  type: BudgetType;
-  categoryId: string;
-  amount: string;
-  period: BudgetPeriod;
-  periodStart: Date;
-  periodEnd: Date;
-  alertThreshold: number;
-}
+type FormState = BudgetFormInitialValues;
 
 interface FormErrors {
   name?: string;
@@ -91,26 +89,49 @@ const DEFAULT_THRESHOLD = 80;
 
 export function BudgetForm({
   existingBudget,
+  renewalSource,
 }: BudgetFormProps): React.JSX.Element {
   const isEditMode = !!existingBudget;
   const { isDark } = useTheme();
   const { t } = useTranslation("budgets");
-  const { expenseCategories } = useCategories();
+  const {
+    expenseCategories,
+    isLoading: areCategoriesLoading,
+    error: categoryError,
+    retry: retryCategories,
+  } = useCategories();
   const categoryMap = useCategoryLookup();
+  const accessibleCategoryIds = useMemo(
+    () => new Set(categoryMap.keys()),
+    [categoryMap]
+  );
   const { showToast } = useToast();
   const { preferredCurrency } = usePreferredCurrency();
 
   // ── Form state ──
-  const [form, setForm] = useState<FormState>(() => ({
-    name: existingBudget?.name ?? "",
-    type: existingBudget?.type ?? "CATEGORY",
-    categoryId: existingBudget?.categoryId ?? "",
-    amount: existingBudget?.amount?.toString() ?? "",
-    period: existingBudget?.period ?? "MONTHLY",
-    periodStart: existingBudget?.periodStart ?? new Date(),
-    periodEnd: existingBudget?.periodEnd ?? new Date(),
-    alertThreshold: existingBudget?.alertThreshold ?? DEFAULT_THRESHOLD,
-  }));
+  const [form, setForm] = useState<FormState>(() => {
+    if (renewalSource) {
+      return buildBudgetRenewalFormValues(
+        renewalSource,
+        new Date(),
+        areCategoriesLoading || categoryError
+          ? undefined
+          : accessibleCategoryIds
+      );
+    }
+
+    return {
+      name: existingBudget?.name ?? "",
+      type: existingBudget?.type ?? "CATEGORY",
+      categoryId: existingBudget?.categoryId ?? null,
+      amount: existingBudget?.amount?.toString() ?? "",
+      currency: existingBudget?.currency ?? null,
+      period: existingBudget?.period ?? "MONTHLY",
+      periodStart: existingBudget?.periodStart ?? new Date(),
+      periodEnd: existingBudget?.periodEnd ?? new Date(),
+      alertThreshold: existingBudget?.alertThreshold ?? DEFAULT_THRESHOLD,
+    };
+  });
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -121,6 +142,25 @@ export function BudgetForm({
   const selectedCategory = form.categoryId
     ? categoryMap.get(form.categoryId)
     : null;
+
+  useEffect(() => {
+    if (!renewalSource || areCategoriesLoading || categoryError) return;
+    const normalizedCategoryId = resolveRenewalCategoryId(
+      renewalSource,
+      accessibleCategoryIds
+    );
+    setForm((current) =>
+      current.categoryId === renewalSource.categoryId &&
+      current.categoryId !== normalizedCategoryId
+        ? { ...current, categoryId: normalizedCategoryId }
+        : current
+    );
+  }, [
+    accessibleCategoryIds,
+    areCategoriesLoading,
+    categoryError,
+    renewalSource,
+  ]);
 
   // ── Field updaters ──
   const updateField = useCallback(
@@ -147,7 +187,7 @@ export function BudgetForm({
   // ── Auto-clear category when switching to Global ──
   useEffect(() => {
     if (form.type === "GLOBAL") {
-      setForm((prev) => ({ ...prev, categoryId: "" }));
+      setForm((prev) => ({ ...prev, categoryId: null }));
     }
   }, [form.type]);
 
@@ -164,8 +204,12 @@ export function BudgetForm({
       newErrors.amount = t("validation_amount_invalid");
     }
 
-    if (form.type === "CATEGORY" && !form.categoryId) {
-      newErrors.category = t("validation_category_required");
+    if (form.type === "CATEGORY") {
+      if (areCategoriesLoading || categoryError) {
+        newErrors.category = t("category_load_error");
+      } else if (!form.categoryId) {
+        newErrors.category = t("validation_category_required");
+      }
     }
 
     if (form.period === "CUSTOM") {
@@ -176,7 +220,7 @@ export function BudgetForm({
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [form, t]);
+  }, [areCategoriesLoading, categoryError, form, t]);
 
   // ── Submit ──
   const handleSubmit = useCallback(async (): Promise<void> => {
@@ -189,6 +233,7 @@ export function BudgetForm({
         const input: UpdateBudgetInput = {
           name: form.name.trim(),
           amount: parseFloat(form.amount),
+          ...(form.currency !== null && { currency: form.currency }),
           period: form.period,
           alertThreshold: form.alertThreshold,
           ...(form.period === "CUSTOM" && {
@@ -196,7 +241,7 @@ export function BudgetForm({
             periodEnd: form.periodEnd,
           }),
           ...(form.type === "CATEGORY" && {
-            categoryId: form.categoryId,
+            categoryId: form.categoryId ?? undefined,
           }),
         };
 
@@ -210,8 +255,12 @@ export function BudgetForm({
         const input: CreateBudgetInput = {
           name: form.name.trim(),
           type: form.type,
-          categoryId: form.type === "CATEGORY" ? form.categoryId : undefined,
+          categoryId:
+            form.type === "CATEGORY"
+              ? (form.categoryId ?? undefined)
+              : undefined,
           amount: parseFloat(form.amount),
+          ...(form.currency !== null && { currency: form.currency }),
           period: form.period,
           alertThreshold: form.alertThreshold,
           ...(form.period === "CUSTOM" && {
@@ -380,28 +429,49 @@ export function BudgetForm({
           <Text className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold mb-2">
             {t("category_type")}
           </Text>
-          <TouchableOpacity
-            onPress={() => setIsCategoryModalOpen(true)}
-            activeOpacity={0.7}
-            className="flex-row items-center bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700"
-          >
-            <Ionicons
-              name="grid-outline"
-              size={18}
-              color={isDark ? palette.slate[400] : palette.slate[500]}
-            />
-            <Text
-              numberOfLines={1}
-              className="flex-1 ms-3 text-base font-medium text-slate-800 dark:text-white"
+          {categoryError ? (
+            <View
+              testID="budget-category-load-error"
+              className="rounded-2xl border border-red-300 bg-red-50 p-4 dark:border-red-700 dark:bg-red-900/20"
             >
-              {selectedCategory?.displayName ?? t("select_a_category")}
-            </Text>
-            <Ionicons
-              name="chevron-down"
-              size={16}
-              color={isDark ? palette.slate[500] : palette.slate[400]}
-            />
-          </TouchableOpacity>
+              <Text className="text-sm text-red-600 dark:text-red-300">
+                {t("category_load_error")}
+              </Text>
+              <TouchableOpacity
+                className="mt-2 min-h-11 self-start justify-center"
+                accessibilityRole="button"
+                accessibilityLabel={t("retry")}
+                onPress={retryCategories}
+              >
+                <Text className="font-semibold text-nileGreen-600 dark:text-nileGreen-300">
+                  {t("retry")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              onPress={() => setIsCategoryModalOpen(true)}
+              activeOpacity={0.7}
+              className="flex-row items-center bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700"
+            >
+              <Ionicons
+                name="grid-outline"
+                size={18}
+                color={isDark ? palette.slate[400] : palette.slate[500]}
+              />
+              <Text
+                numberOfLines={1}
+                className="flex-1 ms-3 text-base font-medium text-slate-800 dark:text-white"
+              >
+                {selectedCategory?.displayName ?? t("select_a_category")}
+              </Text>
+              <Ionicons
+                name="chevron-down"
+                size={16}
+                color={isDark ? palette.slate[500] : palette.slate[400]}
+              />
+            </TouchableOpacity>
+          )}
           {errors.category ? (
             <Text className="text-red-500 text-xs font-medium mt-1">
               {errors.category}
@@ -420,7 +490,7 @@ export function BudgetForm({
             className="text-base font-bold ps-4"
             style={{ color: palette.nileGreen[500] }}
           >
-            {preferredCurrency}
+            {form.currency ?? preferredCurrency}
           </Text>
           <TextInput
             value={form.amount}
@@ -549,8 +619,17 @@ export function BudgetForm({
 
       {/* Submit Button */}
       <TouchableOpacity
+        testID="budget-form-submit"
         onPress={() => void handleSubmit()}
-        disabled={isSubmitting}
+        accessibilityRole="button"
+        accessibilityLabel={isEditMode ? t("save_changes") : t("create_budget")}
+        disabled={
+          isSubmitting || (form.type === "CATEGORY" && areCategoriesLoading)
+        }
+        accessibilityState={{
+          disabled:
+            isSubmitting || (form.type === "CATEGORY" && areCategoriesLoading),
+        }}
         activeOpacity={0.85}
         className="rounded-2xl py-4 items-center"
         style={{ backgroundColor: palette.nileGreen[500] }}

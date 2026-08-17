@@ -29,6 +29,7 @@ interface PageHeaderProps {
   rightAction?: {
     icon?: keyof typeof Ionicons.glyphMap;
     label?: string;
+    accessibilityLabel?: string;
     onPress: () => void;
     disabled?: boolean;
     loading?: boolean;
@@ -207,13 +208,27 @@ function RightAction({
       onPress={rightAction.onPress}
       activeOpacity={0.7}
       disabled={rightAction.disabled || rightAction.loading}
+      accessibilityRole="button"
+      accessibilityLabel={rightAction.accessibilityLabel ?? rightAction.label}
       className={`flex-row rounded-full items-center justify-center ${
         rightAction.icon
           ? rightAction.transparent
             ? "w-10 h-10 bg-transparent"
-            : "w-14 h-10 bg-white elevation-[2] dark:bg-slate-800 shadow-sm"
+            : "w-14 h-10 bg-white dark:bg-slate-800"
           : "px-4 py-2"
-      } ${rightAction.disabled ? "opacity-50" : ""}`}
+      }`}
+      style={[
+        rightAction.icon && !rightAction.transparent
+          ? {
+              elevation: 2,
+              shadowColor: palette.slate[900],
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.18,
+              shadowRadius: 1.5,
+            }
+          : undefined,
+        rightAction.disabled ? { opacity: 0.5 } : undefined,
+      ]}
     >
       {rightAction.loading ? (
         <>

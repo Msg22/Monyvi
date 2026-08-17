@@ -133,6 +133,23 @@ export async function getBudgetById(budgetId: string): Promise<Budget> {
   return getOwnedBudget(budgetId, scope);
 }
 
+export async function getRenewableBudgetById(
+  budgetId: string
+): Promise<Budget> {
+  const scope = await getCurrentUserDataScope();
+  const budget = await getOwnedBudget(budgetId, scope);
+
+  if (
+    budget.deleted ||
+    budget.period !== "CUSTOM" ||
+    !isPeriodExpired(budget.periodEnd)
+  ) {
+    throw new BudgetServiceError(BUDGET_SERVICE_ERROR_CODES.NOT_FOUND);
+  }
+
+  return budget;
+}
+
 // =============================================================================
 // CREATE
 // =============================================================================
@@ -165,6 +182,7 @@ export async function createBudget(input: CreateBudgetInput): Promise<Budget> {
 
     await validateBudgetUniqueness(input.type, input.period, {
       categoryId,
+      candidatePeriodEnd: input.periodEnd,
       scope,
     });
 
@@ -235,6 +253,7 @@ export async function updateBudget(
         {
           categoryId,
           excludeBudgetId: budgetId,
+          candidatePeriodEnd: input.periodEnd ?? budget.periodEnd,
           scope,
         }
       );
@@ -311,6 +330,9 @@ export async function resumeBudget(budgetId: string): Promise<void> {
   // M3 fix: Guard against resuming a non-paused budget
   if (budget.status !== "PAUSED") {
     throw new Error("Cannot resume a budget that is not paused");
+  }
+  if (budget.period === "CUSTOM" && isPeriodExpired(budget.periodEnd)) {
+    throw new Error("Cannot resume an expired budget");
   }
 
   const pausedAtMs = parsePausedAtMs(budget.pausedAt);
@@ -468,10 +490,14 @@ export async function getSpendingForBudget(budget: Budget): Promise<number> {
       .fetch();
   } else {
     // Category budget: need to include subcategories
-    const categoryIds = await getCategoryAndSubcategoryIds(
-      budget.categoryId,
-      scope
-    );
+    // Deleted category rows are unavailable for hierarchy expansion, but the
+    // owned budget's persisted category ID still identifies historical spend.
+    const categoryIds = budget.categoryId
+      ? ((await getAccessibleCategoryHierarchyIds(
+          budget.categoryId,
+          scope
+        )) ?? [budget.categoryId])
+      : [];
 
     transactions = await scope
       .queryOwned(
@@ -506,10 +532,30 @@ export async function getCategoryAndSubcategoryIds(
   if (!categoryId) return [];
 
   const currentScope = scope ?? (await getCurrentUserDataScope());
-  await currentScope.findAccessibleCategory(categoriesCollection(), categoryId);
+  const hierarchyIds = await getAccessibleCategoryHierarchyIds(
+    categoryId,
+    currentScope
+  );
+  if (hierarchyIds) return hierarchyIds;
 
-  // Get direct children (L2)
-  const children = await currentScope
+  await currentScope.findAccessibleCategory(categoriesCollection(), categoryId);
+  return [categoryId];
+}
+
+async function getAccessibleCategoryHierarchyIds(
+  categoryId: string,
+  scope: CurrentUserDataScope
+): Promise<string[] | null> {
+  const roots = await scope
+    .queryAccessibleCategories(
+      categoriesCollection(),
+      Q.where("id", categoryId),
+      Q.where("deleted", false)
+    )
+    .fetch();
+
+  // Descendants may remain accessible after a historical root is deleted.
+  const children = await scope
     .queryAccessibleCategories(
       categoriesCollection(),
       Q.where("parent_id", categoryId),
@@ -517,12 +563,14 @@ export async function getCategoryAndSubcategoryIds(
     )
     .fetch();
 
+  if (roots.length === 0 && children.length === 0) return null;
+
   const childIds = children.map((c) => c.id);
 
   // Get grandchildren (L3)
   let grandchildIds: string[] = [];
   if (childIds.length > 0) {
-    const grandchildren = await currentScope
+    const grandchildren = await scope
       .queryAccessibleCategories(
         categoriesCollection(),
         Q.where("parent_id", Q.oneOf(childIds)),
@@ -543,14 +591,16 @@ export async function getCategoryAndSubcategoryIds(
  * Validate that no duplicate budget exists for the same type+period+category.
  *
  * Rules (from FR-014 + Q1):
- * - Max ONE Global budget per period type (WEEKLY, MONTHLY, CUSTOM)
- * - Max ONE Category budget per category per period type
+ * - Max ONE current Global budget per period type (WEEKLY, MONTHLY, CUSTOM)
+ * - Max ONE current Category budget per category per period type
+ * - Expired CUSTOM budgets are historical and do not occupy the current slot
  *
  * @throws Error if a duplicate is found
  */
 interface ValidateBudgetUniquenessOptions {
   readonly categoryId?: string;
   readonly excludeBudgetId?: string;
+  readonly candidatePeriodEnd?: Date;
   readonly scope?: CurrentUserDataScope;
 }
 
@@ -560,6 +610,13 @@ export async function validateBudgetUniqueness(
   options: ValidateBudgetUniquenessOptions = {}
 ): Promise<void> {
   const currentScope = options.scope ?? (await getCurrentUserDataScope());
+  if (
+    period === "CUSTOM" &&
+    options.candidatePeriodEnd &&
+    isPeriodExpired(options.candidatePeriodEnd)
+  ) {
+    return;
+  }
 
   const conditions = [
     Q.where("deleted", false),
@@ -575,11 +632,18 @@ export async function validateBudgetUniqueness(
     conditions.push(Q.where("id", Q.notEq(options.excludeBudgetId)));
   }
 
-  const existing = await currentScope
-    .queryOwned(budgetsCollection(), Q.and(...conditions))
-    .fetchCount();
+  const matchingBudgets = currentScope.queryOwned(
+    budgetsCollection(),
+    Q.and(...conditions)
+  );
+  const hasExisting =
+    period === "CUSTOM"
+      ? (await matchingBudgets.fetch()).some(
+          (budget) => !isPeriodExpired(budget.periodEnd)
+        )
+      : (await matchingBudgets.fetchCount()) > 0;
 
-  if (existing > 0) {
+  if (hasExisting) {
     const label =
       type === "GLOBAL"
         ? `A Global ${period.toLowerCase()} budget already exists`

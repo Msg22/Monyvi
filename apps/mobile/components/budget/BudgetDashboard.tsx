@@ -1,271 +1,219 @@
-/**
- * BudgetDashboard Component
- *
- * Container component that composes the budget dashboard:
- * - Period filter chips
- * - Global budget hero card (if any)
- * - Category budget list with section header
- * - Bottom summary bar (safe to spend + daily limit)
- * - Empty state (when no budgets)
- *
- * Architecture & Design Rationale:
- * - Pattern: Container Component (composition)
- * - Why: Orchestrates layout of presentational budget components.
- * - SOLID: SRP — manages layout, delegates data to hook and rendering to sub-components.
- *
- * @module BudgetDashboard
- */
-
-import React, { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import React, { useCallback } from "react";
+import { FlatList, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { palette } from "@/constants/colors";
 import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
-import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
-import { useBudgets } from "@/hooks/useBudgets";
-import { pauseExpiredCustomBudgets } from "@/services/budget-service";
-import type { BudgetWithMetrics } from "@/services/budget-list-read-model-service";
-import { logger } from "@/utils/logger";
-
-import { formatCurrency } from "@monyvi/logic";
-import { PeriodFilterChips } from "./PeriodFilterChips";
-import { BudgetHeroCard } from "./BudgetHeroCard";
-import { BudgetCategoryCard } from "./BudgetCategoryCard";
+import type {
+  BudgetDashboardFilters as DashboardFilters,
+  BudgetDashboardItem,
+  BudgetDashboardPeriodFilter,
+  BudgetDashboardReadModel,
+  BudgetDashboardScopeFilter,
+  BudgetDashboardStatusFilter,
+} from "@/contracts/budget-dashboard";
+import { BudgetDashboardFilters } from "./BudgetDashboardFilters";
+import {
+  BudgetDashboardRow,
+  type BudgetDashboardRowPosition,
+} from "./BudgetDashboardRow";
+import { BudgetDashboardSkeleton } from "./BudgetDashboardSkeleton";
 import { BudgetEmptyState } from "./BudgetEmptyState";
 
-const SUMMARY_FOOTER_BASE_PADDING = 12;
+const DASHBOARD_BOTTOM_BASE_SPACING = 24;
+const RESULT_COUNT_KEYS = {
+  ALL: "dashboard_result_count_all",
+  ACTIVE: "dashboard_result_count_active",
+  PAUSED: "dashboard_result_count_paused",
+  EXPIRED: "dashboard_result_count_expired",
+} as const;
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+export interface BudgetDashboardProps {
+  readonly readModel: BudgetDashboardReadModel;
+  readonly filters: DashboardFilters;
+  readonly isInitialLoading: boolean;
+  readonly isRefreshing: boolean;
+  readonly hasValidData: boolean;
+  readonly errorKey: "dashboard_load_error" | null;
+  readonly onSelectScope: (filter: BudgetDashboardScopeFilter) => void;
+  readonly onSelectPeriod: (filter: BudgetDashboardPeriodFilter) => void;
+  readonly onSelectStatus: (filter: BudgetDashboardStatusFilter) => void;
+  readonly onResetFilters: () => void;
+  readonly onRetry: () => void;
+  readonly onCreateBudget: () => void;
+  readonly onBudgetPress: (budgetId: string) => void;
+  readonly onResume: (budgetId: string) => void;
+  readonly onRenew: (budgetId: string) => void;
+}
 
-export function BudgetDashboard(): React.JSX.Element {
-  const insets = useSafeAreaInsets();
+export function BudgetDashboard({
+  readModel,
+  filters,
+  isInitialLoading,
+  hasValidData,
+  errorKey,
+  onSelectScope,
+  onSelectPeriod,
+  onSelectStatus,
+  onResetFilters,
+  onRetry,
+  onCreateBudget,
+  onBudgetPress,
+  onResume,
+  onRenew,
+}: BudgetDashboardProps): React.JSX.Element {
+  const { bottom } = useSafeAreaInsets();
   const { t } = useTranslation("budgets");
-  const { preferredCurrency } = usePreferredCurrency();
-  const {
-    globalBudget,
-    categoryBudgets,
-    isLoading,
-    totalCount,
-    periodFilter,
-    setPeriodFilter,
-    budgets,
-    refresh,
-    autoPauseCheckKey,
-  } = useBudgets();
-  const [isAutoPauseActive, setIsAutoPauseActive] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      setIsAutoPauseActive(true);
+  const renderItem = useCallback(
+    ({
+      item,
+      index,
+    }: {
+      readonly item: BudgetDashboardItem;
+      readonly index: number;
+    }): React.JSX.Element => {
+      const lastIndex = readModel.items.length - 1;
+      const position: BudgetDashboardRowPosition =
+        lastIndex === 0
+          ? "only"
+          : index === 0
+            ? "first"
+            : index === lastIndex
+              ? "last"
+              : "middle";
 
-      return () => {
-        setIsAutoPauseActive(false);
-      };
-    }, [])
+      return (
+        <BudgetDashboardRow
+          item={item}
+          position={position}
+          onPress={onBudgetPress}
+          onResume={onResume}
+          onRenew={onRenew}
+        />
+      );
+    },
+    [onBudgetPress, onRenew, onResume, readModel.items.length]
   );
 
-  useEffect(() => {
-    if (!isAutoPauseActive) return;
+  if (isInitialLoading) return <BudgetDashboardSkeleton />;
 
-    let isActive = true;
-
-    pauseExpiredCustomBudgets()
-      .then((pausedCount) => {
-        if (isActive && pausedCount > 0) {
-          refresh();
-        }
-      })
-      .catch((error: unknown) => {
-        logger.error("budgetDashboard.pauseExpired.failed", error);
-      });
-
-    return () => {
-      isActive = false;
-    };
-  }, [autoPauseCheckKey, isAutoPauseActive, refresh]);
-
-  const handleCreateBudget = useCallback((): void => {
-    router.push("/create-budget");
-  }, []);
-
-  const handleBudgetPress = useCallback((budgetId: string): void => {
-    router.push(`/budget-detail?id=${budgetId}`);
-  }, []);
-
-  const renderCategoryItem = useCallback(
-    ({ item }: { item: BudgetWithMetrics }) => (
-      <BudgetCategoryCard
-        data={item}
-        currency={preferredCurrency}
-        onPress={() => handleBudgetPress(item.budget.id)}
-      />
-    ),
-    [preferredCurrency, handleBudgetPress]
-  );
-
-  const keyExtractor = useCallback(
-    (item: BudgetWithMetrics) => item.budget.id,
-    []
-  );
-
-  // Loading
-  if (isLoading) {
-    return (
-      <View className="flex-1 items-center justify-center">
-        <ActivityIndicator size="large" color={palette.nileGreen[500]} />
-      </View>
-    );
-  }
-
-  // S-01: Compute safe-to-spend and daily limit from global budget
-  const safeToSpend = globalBudget
-    ? Math.max(0, globalBudget.metrics.remaining)
-    : 0;
-  const dailyLimit =
-    globalBudget && globalBudget.daysLeft > 0
-      ? safeToSpend / globalBudget.daysLeft
-      : 0;
+  const hasNoBudgets = readModel.totalCount === 0;
+  const hasNoFilterMatches =
+    readModel.totalCount > 0 && readModel.matchingCount === 0;
 
   return (
-    <View className="flex-1">
-      {/* Period Filter */}
-      <PeriodFilterChips selected={periodFilter} onSelect={setPeriodFilter} />
-
-      {/* Budget Content or Empty State */}
-      {budgets.length === 0 && totalCount === 0 ? (
-        <BudgetEmptyState onCreateBudget={handleCreateBudget} />
-      ) : budgets.length === 0 && periodFilter !== "ALL" ? (
-        <View className="flex-1 items-center justify-center px-6">
-          <Ionicons
-            name="filter-outline"
-            size={40}
-            color={palette.slate[400]}
+    <FlatList
+      testID="budget-dashboard-list"
+      data={readModel.items}
+      keyExtractor={(item) => item.id}
+      renderItem={renderItem}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{
+        flexGrow: 1,
+        paddingHorizontal: 20,
+        paddingBottom: DASHBOARD_BOTTOM_BASE_SPACING + bottom,
+      }}
+      ListHeaderComponent={
+        <View>
+          <BudgetDashboardFilters
+            filters={filters}
+            onSelectScope={onSelectScope}
+            onSelectPeriod={onSelectPeriod}
+            onSelectStatus={onSelectStatus}
           />
-          <Text className="text-base font-semibold text-slate-500 dark:text-slate-400 mt-3 text-center">
-            {t("no_budgets_for_filter")}
-          </Text>
-          <Text className="text-sm text-slate-400 dark:text-slate-500 mt-1 text-center">
-            {t("try_different_filter")}
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={categoryBudgets}
-          keyExtractor={keyExtractor}
-          renderItem={renderCategoryItem}
-          numColumns={2}
-          columnWrapperStyle={{ gap: 10, paddingHorizontal: 20 }}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingBottom: insets.bottom + 80,
-          }}
-          {...ANDROID_SAFE_LIST_PROPS}
-          maxToRenderPerBatch={10}
-          windowSize={5}
-          ListHeaderComponent={
-            <>
-              {/* Hero Card */}
-              {globalBudget ? (
-                <View className="px-5 mt-6 mb-2">
-                  <BudgetHeroCard
-                    data={globalBudget}
-                    currency={preferredCurrency}
-                    onPress={() => handleBudgetPress(globalBudget.budget.id)}
-                  />
-                </View>
-              ) : null}
 
-              {/* S-04: CATEGORIES section header */}
-              {categoryBudgets.length > 0 && (
-                <View className="px-5 mb-3 mt-2">
-                  <Text className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 dark:text-slate-500">
-                    {t("categories")}
-                  </Text>
-                </View>
-              )}
-            </>
-          }
-        />
-      )}
-
-      {/* S-01: Bottom summary bar */}
-      {globalBudget && (
-        <View
-          testID="budget-summary-footer"
-          className="flex-row items-center justify-center border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-3"
-          style={{
-            paddingBottom: SUMMARY_FOOTER_BASE_PADDING + insets.bottom,
-          }}
-        >
-          <View className="items-center flex-1">
-            <Text className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 dark:text-slate-500">
-              {t("safe_to_spend")}
-            </Text>
-            <Text
-              className="text-base font-bold"
-              style={{ color: palette.nileGreen[500] }}
+          {errorKey && hasValidData ? (
+            <View
+              testID="budget-dashboard-recoverable-error"
+              className="mt-4 flex-row items-center rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950"
             >
-              {formatCurrency({
-                amount: safeToSpend,
-                currency: preferredCurrency,
-                maximumFractionDigits: 0,
-              })}
-            </Text>
-          </View>
+              <Ionicons
+                name="alert-circle-outline"
+                size={20}
+                color={palette.gold[600]}
+              />
+              <Text className="mx-3 flex-1 text-sm text-amber-800 dark:text-amber-200">
+                {t(errorKey)}
+              </Text>
+              <TouchableOpacity
+                className="min-h-11 justify-center"
+                accessibilityRole="button"
+                accessibilityLabel={t("retry")}
+                onPress={onRetry}
+              >
+                <Text className="font-semibold text-amber-800 dark:text-amber-200">
+                  {t("retry")}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
 
-          {/* Vertical divider */}
-          <View className="w-px h-8 bg-slate-200 dark:bg-slate-700 mx-4" />
-
-          <View className="items-center flex-1">
-            <Text className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 dark:text-slate-500">
-              {t("daily_limit")}
-            </Text>
-            <Text className="text-base font-bold text-slate-800 dark:text-white">
-              {formatCurrency({
-                amount: dailyLimit,
-                currency: preferredCurrency,
-                maximumFractionDigits: 0,
-              })}
-            </Text>
-          </View>
+          {readModel.matchingCount > 0 ? (
+            <View testID="budget-results-group" className="pb-2 pt-5">
+              <Text className="text-sm text-text-muted dark:text-slate-400">
+                {t(RESULT_COUNT_KEYS[filters.status], {
+                  count: readModel.matchingCount,
+                })}
+              </Text>
+            </View>
+          ) : null}
         </View>
-      )}
-
-      {/* FAB - Create Budget */}
-      {budgets.length > 0 && (
-        <TouchableOpacity
-          onPress={handleCreateBudget}
-          className="absolute end-5 bg-nileGreen-500 w-14 h-14 rounded-full items-center justify-center"
-          accessibilityRole="button"
-          accessibilityLabel={t("accessibility_create_budget")}
-          accessibilityHint={t("accessibility_create_budget_hint")}
-          // NativeWind v4 shadow limitation — requires inline style on interactive components
-          style={{
-            bottom: globalBudget
-              ? insets.bottom + 85 // Above bottom summary bar
-              : insets.bottom + 20,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.15,
-            shadowRadius: 8,
-            elevation: 5,
-          }}
-        >
-          <Ionicons name="add" size={28} color="white" />
-        </TouchableOpacity>
-      )}
-    </View>
+      }
+      ListEmptyComponent={
+        errorKey && !hasValidData ? (
+          <View
+            testID="budget-dashboard-initial-error"
+            className="flex-1 items-center justify-center px-6 py-20"
+          >
+            <Ionicons
+              name="cloud-offline-outline"
+              size={42}
+              color={palette.slate[400]}
+            />
+            <Text className="mt-4 text-center text-base text-text-secondary dark:text-slate-300">
+              {t("dashboard_initial_load_error")}
+            </Text>
+            <TouchableOpacity
+              className="mt-5 min-h-11 justify-center rounded-xl bg-nileGreen-500 px-6"
+              accessibilityRole="button"
+              accessibilityLabel={t("retry")}
+              onPress={onRetry}
+            >
+              <Text className="font-semibold text-slate-25">{t("retry")}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : hasNoBudgets ? (
+          <BudgetEmptyState onCreateBudget={onCreateBudget} />
+        ) : hasNoFilterMatches ? (
+          <View
+            testID="budget-dashboard-filtered-empty"
+            className="flex-1 items-center justify-center px-6 py-20"
+          >
+            <Ionicons
+              name="filter-outline"
+              size={40}
+              color={palette.slate[400]}
+            />
+            <Text className="mt-3 text-center text-base font-semibold text-text-secondary dark:text-slate-300">
+              {t("no_budgets_for_filter")}
+            </Text>
+            <TouchableOpacity
+              className="mt-5 min-h-11 justify-center rounded-xl border border-nileGreen-500 px-5"
+              accessibilityRole="button"
+              accessibilityLabel={t("reset_filters")}
+              onPress={onResetFilters}
+            >
+              <Text className="font-semibold text-nileGreen-600 dark:text-nileGreen-400">
+                {t("reset_filters")}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null
+      }
+      {...ANDROID_SAFE_LIST_PROPS}
+    />
   );
 }

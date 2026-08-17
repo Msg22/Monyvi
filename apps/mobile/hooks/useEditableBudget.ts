@@ -4,6 +4,7 @@ import {
   BUDGET_SERVICE_ERROR_CODES,
   BudgetServiceError,
   getBudgetById,
+  getRenewableBudgetById,
 } from "@/services/budget-service";
 import { logger } from "@/utils/logger";
 
@@ -15,8 +16,11 @@ interface UseEditableBudgetResult {
   readonly loadErrorKey: BudgetLoadErrorKey | null;
 }
 
+export type BudgetFormSourceKind = "EDIT" | "RENEWAL";
+
 export function useEditableBudget(
-  budgetId: string | undefined
+  budgetId: string | undefined,
+  sourceKind: BudgetFormSourceKind = "EDIT"
 ): UseEditableBudgetResult {
   const [budget, setBudget] = useState<Budget | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(Boolean(budgetId));
@@ -40,7 +44,10 @@ export function useEditableBudget(
       setLoadErrorKey(null);
 
       try {
-        const found = await getBudgetById(currentBudgetId);
+        const found =
+          sourceKind === "RENEWAL"
+            ? await getRenewableBudgetById(currentBudgetId)
+            : await getBudgetById(currentBudgetId);
         if (!isCancelled) {
           setBudget(found);
         }
@@ -69,7 +76,7 @@ export function useEditableBudget(
     return () => {
       isCancelled = true;
     };
-  }, [budgetId]);
+  }, [budgetId, sourceKind]);
 
   return { budget, isLoading, loadErrorKey };
 }

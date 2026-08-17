@@ -14,6 +14,8 @@ interface UseCategoriesResult {
   readonly expenseCategories: readonly Category[];
   readonly incomeCategories: readonly Category[];
   readonly isLoading: boolean;
+  readonly error: unknown;
+  readonly retry: () => void;
 }
 
 interface UseCategoriesOptions {
@@ -36,7 +38,12 @@ export function useCategories(
   options: UseCategoriesOptions = {}
 ): UseCategoriesResult {
   const { topLevelOnly = true, type, includeHidden = false } = options;
-  const { categories: allCategories, isLoading } = useAllCategories();
+  const {
+    categories: allCategories,
+    isLoading,
+    error,
+    retry,
+  } = useAllCategories();
 
   const filtered = useMemo(() => {
     let result = allCategories.filter((c) => !c.isInternal);
@@ -71,5 +78,7 @@ export function useCategories(
     expenseCategories,
     incomeCategories,
     isLoading,
+    error,
+    retry,
   };
 }

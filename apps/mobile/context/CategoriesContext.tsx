@@ -12,6 +12,7 @@ import { queryAccessibleCategories } from "@/services/user-data-access";
 import { runUserScopedEffect, useCurrentUser } from "@/hooks/useCurrentUser";
 import { logger } from "@/utils/logger";
 import React, {
+  useCallback,
   createContext,
   useContext,
   useEffect,
@@ -30,6 +31,10 @@ interface CategoriesContextValue {
   readonly categoryMap: ReadonlyMap<string, Category>;
   /** True while the initial observation result hasn't arrived yet. */
   readonly isLoading: boolean;
+  /** Observation failure; prior category data remains available when present. */
+  readonly error: unknown;
+  /** Recreate the scoped observation after a failure. */
+  readonly retry: () => void;
 }
 
 interface CategoriesProviderProps {
@@ -51,6 +56,8 @@ export function CategoriesProvider({
 }: CategoriesProviderProps): React.JSX.Element {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<unknown>(null);
+  const [retryCounter, setRetryCounter] = useState(0);
   const { userId, isResolvingUser } = useCurrentUser();
 
   useEffect(() => {
@@ -60,12 +67,16 @@ export function CategoriesProvider({
       onResolving: () => {
         setCategories([]);
         setIsLoading(true);
+        setError(null);
       },
       onSignedOut: () => {
         setCategories([]);
         setIsLoading(false);
+        setError(null);
       },
       onAuthenticated: (currentUserId) => {
+        setIsLoading(true);
+        setError(null);
         const subscription = queryAccessibleCategories(
           database.get<Category>("categories"),
           currentUserId,
@@ -77,17 +88,23 @@ export function CategoriesProvider({
             next: (result) => {
               setCategories(result);
               setIsLoading(false);
+              setError(null);
             },
             error: (err) => {
               logger.error("categoriesProvider.observe.failed", err);
               setIsLoading(false);
+              setError(err);
             },
           });
 
         return () => subscription.unsubscribe();
       },
     });
-  }, [userId, isResolvingUser]);
+  }, [userId, isResolvingUser, retryCounter]);
+
+  const retry = useCallback((): void => {
+    setRetryCounter((counter) => counter + 1);
+  }, []);
 
   const categoryMap = useMemo(
     () => new Map(categories.map((c) => [c.id, c])),
@@ -95,8 +112,8 @@ export function CategoriesProvider({
   );
 
   const value = useMemo<CategoriesContextValue>(
-    () => ({ categories, categoryMap, isLoading }),
-    [categories, categoryMap, isLoading]
+    () => ({ categories, categoryMap, isLoading, error, retry }),
+    [categories, categoryMap, error, isLoading, retry]
   );
 
   return (
@@ -134,6 +151,8 @@ export function useCategoryLookup(): ReadonlyMap<string, Category> {
 export function useAllCategories(): {
   readonly categories: readonly Category[];
   readonly isLoading: boolean;
+  readonly error: unknown;
+  readonly retry: () => void;
 } {
   const context = useContext(CategoriesContext);
   if (!context) {
@@ -141,5 +160,10 @@ export function useAllCategories(): {
       "useAllCategories must be used within a CategoriesProvider"
     );
   }
-  return { categories: context.categories, isLoading: context.isLoading };
+  return {
+    categories: context.categories,
+    isLoading: context.isLoading,
+    error: context.error,
+    retry: context.retry,
+  };
 }

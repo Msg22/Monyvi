@@ -7,7 +7,10 @@ const mockGetCategoryAndSubcategoryIds = jest.fn<
   [string | undefined]
 >();
 const mockAssertOwned = jest.fn<Budget, [Budget]>();
-const mockFindAccessibleCategory = jest.fn<Promise<Category>, [string, string]>();
+const mockFindAccessibleCategory = jest.fn<
+  Promise<Category>,
+  [string, string]
+>();
 
 interface QueryCondition {
   readonly kind: "where" | "and" | "sortBy" | "take";
@@ -37,10 +40,7 @@ interface MockUserDataScope {
   ) => { fetch: () => Promise<Transaction[]> };
 }
 
-const mockGetCurrentUserDataScope = jest.fn<
-  Promise<MockUserDataScope>,
-  []
->();
+const mockGetCurrentUserDataScope = jest.fn<Promise<MockUserDataScope>, []>();
 
 const mockQueryAccessibleCategories = jest.fn<
   { fetch: () => Promise<Category[]> },
@@ -277,11 +277,7 @@ describe("budget-detail-read-model-service", () => {
     mockCategories = [];
     mockAssertOwned.mockImplementation((budget): Budget => budget);
     mockFindAccessibleCategory.mockResolvedValue(
-      createCategory(
-        "category-parent",
-        "Parent",
-        null
-      ) as unknown as Category
+      createCategory("category-parent", "Parent", null) as unknown as Category
     );
     mockQueryAccessibleCategories.mockImplementation(
       (
@@ -383,7 +379,7 @@ describe("budget-detail-read-model-service", () => {
     expect(mockQueryOwned).not.toHaveBeenCalled();
   });
 
-  it("rejects an inaccessible root category before reading transactions", async () => {
+  it("does not expose inaccessible category metadata in historical detail", async () => {
     const budget = createBudget({
       type: "CATEGORY",
       categoryId: "foreign-category",
@@ -406,11 +402,48 @@ describe("budget-detail-read-model-service", () => {
       new Error("OWNERSHIP_FAILED")
     );
 
-    await expect(getBudgetDetailReadModel(budget)).rejects.toThrow(
-      "OWNERSHIP_FAILED"
-    );
+    const result = await getBudgetDetailReadModel(budget);
 
-    expect(mockQueryOwned).not.toHaveBeenCalled();
+    expect(result.metrics.spent).toBe(100);
+    expect(result.subcategoryBreakdown).toEqual([]);
+    expect(mockFindAccessibleCategory).not.toHaveBeenCalled();
+    expect(mockQueryAccessibleCategories).toHaveBeenCalledTimes(1);
+    expect(mockQueryOwned).toHaveBeenCalledTimes(1);
+  });
+
+  it("builds historical detail when the budget category was deleted", async () => {
+    const budget = createBudget({
+      type: "CATEGORY",
+      categoryId: "deleted-category",
+    });
+    mockFindAccessibleCategory.mockRejectedValueOnce(
+      new Error("Record categories#deleted-category not found")
+    );
+    mockCategories = [
+      {
+        ...createCategory("deleted-category", "Deleted Category", null),
+        deleted: true,
+      },
+    ];
+    mockTransactions = [
+      createTransaction({
+        id: "tx-deleted-category",
+        amount: 275,
+        date: "2026-05-05T10:00:00.000Z",
+        categoryId: "deleted-category",
+      }),
+    ];
+
+    const result = await getBudgetDetailReadModel(budget);
+
+    expect(result.metrics.spent).toBe(275);
+    expect(result.subcategoryBreakdown).toEqual([]);
+    expect(
+      result.recentTransactions.map((transaction) => transaction.id)
+    ).toEqual(["tx-deleted-category"]);
+    expect(mockFindAccessibleCategory).not.toHaveBeenCalled();
+    expect(mockQueryAccessibleCategories).toHaveBeenCalledTimes(1);
+    expect(mockQueryOwned).toHaveBeenCalledTimes(1);
   });
 
   it("includes selected category descendants and sorts subcategory breakdown", async () => {
@@ -535,9 +568,7 @@ describe("budget-detail-read-model-service", () => {
 
     expect(result.metrics.spent).toBe(0);
     expect(result.subcategoryBreakdown).toEqual([]);
-    expect(result.weeklySpending.every((item) => item.amount === 0)).toBe(
-      true
-    );
+    expect(result.weeklySpending.every((item) => item.amount === 0)).toBe(true);
   });
 
   it("returns the newest six non-paused matching transactions", async () => {

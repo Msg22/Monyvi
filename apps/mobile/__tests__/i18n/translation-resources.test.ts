@@ -1,6 +1,27 @@
+import arBudgets from "@/locales/ar/budgets.json";
 import arOnboarding from "@/locales/ar/onboarding.json";
+import enBudgets from "@/locales/en/budgets.json";
 import enOnboarding from "@/locales/en/onboarding.json";
 import { validateTranslationResources } from "@/i18n/translation-schemas";
+
+const budgetDashboardKeys = [
+  "filter_active",
+  "filter_paused",
+  "filter_expired",
+  "select_period",
+  "select_status",
+  "reset_filters",
+  "dashboard_result_count_active_other",
+  "budget_expired",
+  "deleted_category",
+  "renew_budget",
+  "resume_confirmation_title",
+  "resume_confirmation_message",
+  "resume_confirmation_confirm",
+  "dashboard_load_error",
+  "dashboard_action_error",
+  "retry",
+] as const;
 
 describe("translation resource runtime contract", () => {
   it("accepts the actual onboarding resources for every supported language", () => {
@@ -24,6 +45,20 @@ describe("translation resource runtime contract", () => {
       expect(typeof translations.pitch_slide_sms_status_just_now).toBe(
         "string"
       );
+    }
+  );
+
+  it.each([
+    ["en", enBudgets],
+    ["ar", arBudgets],
+  ])(
+    "includes every dashboard and lifecycle label in %s",
+    (_language, resource) => {
+      const translations: Record<string, unknown> = resource;
+
+      for (const key of budgetDashboardKeys) {
+        expect(typeof translations[key]).toBe("string");
+      }
     }
   );
 });

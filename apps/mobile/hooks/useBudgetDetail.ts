@@ -53,6 +53,7 @@ const EMPTY_DETAIL_STATE: BudgetDetailState = {
 
 export function useBudgetDetail(budgetId: string): UseBudgetDetailResult {
   const [budget, setBudget] = useState<Budget | null>(null);
+  const [observedRevision, setObservedRevision] = useState(0);
   const [state, setState] = useState<BudgetDetailState>({
     ...EMPTY_DETAIL_STATE,
     isLoading: true,
@@ -67,10 +68,12 @@ export function useBudgetDetail(budgetId: string): UseBudgetDetailResult {
       isResolvingUser,
       onResolving: () => {
         setBudget(null);
+        setObservedRevision(0);
         setState((prev) => ({ ...prev, isLoading: true }));
       },
       onSignedOut: () => {
         setBudget(null);
+        setObservedRevision(0);
         setState(EMPTY_DETAIL_STATE);
       },
       onAuthenticated: (currentUserId) => {
@@ -79,7 +82,10 @@ export function useBudgetDetail(budgetId: string): UseBudgetDetailResult {
           budgetId,
           currentUserId
         ).subscribe({
-          next: (observedBudget) => setBudget(observedBudget),
+          next: (observedBudget) => {
+            setBudget(observedBudget);
+            setObservedRevision((revision) => revision + 1);
+          },
           error: (err: unknown) => {
             logger.error("budgetDetail.budget.observe.failed", err);
             setBudget(null);
@@ -98,7 +104,9 @@ export function useBudgetDetail(budgetId: string): UseBudgetDetailResult {
     let cancelled = false;
 
     async function compute(): Promise<void> {
-      setState((prev) => ({ ...prev, isLoading: true }));
+      setState((previous) =>
+        previous.metrics ? previous : { ...previous, isLoading: true }
+      );
 
       try {
         const detail = await getBudgetDetailReadModel(currentBudget);
@@ -112,7 +120,11 @@ export function useBudgetDetail(budgetId: string): UseBudgetDetailResult {
       } catch (error: unknown) {
         logger.error("budgetDetail.compute.failed", error);
         if (!cancelled) {
-          setState(EMPTY_DETAIL_STATE);
+          setState((previous) =>
+            previous.metrics
+              ? { ...previous, isLoading: false }
+              : EMPTY_DETAIL_STATE
+          );
         }
       }
     }
@@ -122,7 +134,7 @@ export function useBudgetDetail(budgetId: string): UseBudgetDetailResult {
     return () => {
       cancelled = true;
     };
-  }, [budget]);
+  }, [budget, observedRevision]);
 
   return {
     budget,

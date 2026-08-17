@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react-native";
+import { act, renderHook, waitFor } from "@testing-library/react-native";
 import type { Budget } from "@monyvi/db";
 
 const mockDatabaseGet = jest.fn((tableName: string): string => tableName);
@@ -6,6 +6,7 @@ const mockObserveOwnedById = jest.fn();
 const mockGetBudgetDetailReadModel = jest.fn<Promise<unknown>, [Budget]>();
 const mockLoggerError = jest.fn();
 const mockUnsubscribe = jest.fn();
+let budgetObserver: MockObserver<Budget> | null = null;
 
 interface MockObserver<TRecord> {
   readonly next: (record: TRecord) => void;
@@ -98,10 +99,12 @@ import { useBudgetDetail } from "@/hooks/useBudgetDetail";
 describe("useBudgetDetail", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    budgetObserver = null;
     mockObserveOwnedById.mockReturnValue({
       subscribe: (
         observer: MockObserver<Budget>
       ): { unsubscribe: jest.Mock } => {
+        budgetObserver = observer;
         observer.next(budget);
         return { unsubscribe: mockUnsubscribe };
       },
@@ -149,5 +152,83 @@ describe("useBudgetDetail", () => {
       "budgetDetail.compute.failed",
       error
     );
+  });
+
+  it("recomputes when WatermelonDB emits the same updated model instance", async () => {
+    const updatedDetailReadModel = {
+      ...detailReadModel,
+      metrics: {
+        ...detailReadModel.metrics,
+        limit: 2000,
+        remaining: 1750,
+        percentage: 12.5,
+      },
+    };
+    const { result } = renderHook(() => useBudgetDetail("budget-1"));
+
+    await waitFor(() => {
+      expect(result.current.metrics).toBe(detailReadModel.metrics);
+    });
+    mockGetBudgetDetailReadModel.mockResolvedValueOnce(updatedDetailReadModel);
+
+    act(() => {
+      budgetObserver?.next(budget);
+    });
+
+    await waitFor(() => {
+      expect(mockGetBudgetDetailReadModel).toHaveBeenCalledTimes(2);
+    });
+    await waitFor(() => {
+      expect(result.current.metrics).toBe(updatedDetailReadModel.metrics);
+    });
+  });
+
+  it("keeps the last valid detail visible while an observed refresh is pending", async () => {
+    let resolveRefresh: (value: typeof detailReadModel) => void = () =>
+      undefined;
+    const { result } = renderHook(() => useBudgetDetail("budget-1"));
+    await waitFor(() => {
+      expect(result.current.metrics).toBe(detailReadModel.metrics);
+    });
+    mockGetBudgetDetailReadModel.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRefresh = resolve;
+        })
+    );
+
+    act(() => {
+      budgetObserver?.next(budget);
+    });
+    await waitFor(() => {
+      expect(mockGetBudgetDetailReadModel).toHaveBeenCalledTimes(2);
+    });
+
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.metrics).toBe(detailReadModel.metrics);
+
+    resolveRefresh(detailReadModel);
+  });
+
+  it("preserves the last valid detail when an observed refresh fails", async () => {
+    const refreshError = new Error("refresh failed");
+    const { result } = renderHook(() => useBudgetDetail("budget-1"));
+    await waitFor(() => {
+      expect(result.current.metrics).toBe(detailReadModel.metrics);
+    });
+    mockGetBudgetDetailReadModel.mockRejectedValueOnce(refreshError);
+
+    act(() => {
+      budgetObserver?.next(budget);
+    });
+    await waitFor(() => {
+      expect(mockLoggerError).toHaveBeenCalledWith(
+        "budgetDetail.compute.failed",
+        refreshError
+      );
+    });
+
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.metrics).toBe(detailReadModel.metrics);
   });
 });

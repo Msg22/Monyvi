@@ -612,6 +612,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
   const assetMetals = extraRows.assetMetals ?? [];
   const debts = extraRows.debts ?? [];
   const budgets = extraRows.budgets ?? [];
+  const categories = extraRows.categories ?? [];
   const recurringPayments = extraRows.recurringPayments ?? [];
   const expandedTransactions = extraRows.transactions ?? [];
   const expandedTransfers = extraRows.transfers ?? [];
@@ -799,6 +800,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
     assets,
     assetMetals,
     budgets,
+    categories,
     debts,
     recurringPayments,
     transactions: [
@@ -874,8 +876,10 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
   };
   const rows = buildSeedRows(userId, seedIds, fixture);
 
-  for (const table of SEED_TABLE_DELETE_ORDER) {
-    await deleteScopedRows(client, table, userId, seedIds);
+  if (!fixture.preserveExistingRows) {
+    for (const table of SEED_TABLE_DELETE_ORDER) {
+      await deleteScopedRows(client, table, userId, seedIds);
+    }
   }
 
   await upsertRows(client, "profiles", rows.profile, {
@@ -893,6 +897,9 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
     onConflict: "id",
   });
   await upsertRowsIfAny(client, "debts", rows.debts, { onConflict: "id" });
+  await upsertRowsIfAny(client, "categories", rows.categories, {
+    onConflict: "id",
+  });
   await upsertRowsIfAny(client, "budgets", rows.budgets, {
     onConflict: "id",
   });

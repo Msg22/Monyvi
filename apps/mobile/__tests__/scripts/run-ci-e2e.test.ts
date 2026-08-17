@@ -4,10 +4,19 @@ interface RunCiE2eModule {
     nextChunk: string,
     maxLength?: number
   ): string;
+  getBudgetMaestroFlows(): readonly {
+    readonly flow: string;
+    readonly profile: "dashboard-full" | "dashboard-filter-empty";
+  }[];
   getRequestedCiSuites(
     env?: Readonly<Record<string, string | undefined>>
   ): ReadonlySet<
-    "accounts" | "transactions" | "recurring-payments" | "sms-sync" | "live-sms"
+    | "accounts"
+    | "transactions"
+    | "recurring-payments"
+    | "budgets"
+    | "sms-sync"
+    | "live-sms"
   >;
   getChildTimeoutMs(env?: Readonly<Record<string, string | undefined>>): number;
   getLiveSmsTimeoutMs(
@@ -22,6 +31,10 @@ interface RunCiE2eModule {
     | "helpers/ci-auth-bootstrap.yaml"
     | "helpers/ci-auth-deeplink-bootstrap.yaml";
   getInitialAuthBootstrapOptions(): {
+    readonly env: Readonly<Record<string, string>>;
+    readonly retryOnDeviceFailure: boolean;
+  };
+  getBudgetAuthBootstrapOptions(): {
     readonly env: Readonly<Record<string, string>>;
     readonly retryOnDeviceFailure: boolean;
   };
@@ -57,6 +70,13 @@ interface RunCiE2eModule {
     selectedSuites: ReadonlySet<string>,
     supabaseMode: "local" | "remote"
   ): boolean;
+  shouldRestoreDefaultFixtureAfterBudgets(
+    selectedSuites: ReadonlySet<string>
+  ): boolean;
+  assertBudgetSuiteIsolation(
+    selectedSuites: ReadonlySet<string>,
+    env?: Readonly<Record<string, string | undefined>>
+  ): void;
 }
 
 const runCiE2e = jest.requireActual(
@@ -69,9 +89,46 @@ describe("run-ci-e2e helpers", () => {
       "accounts",
       "transactions",
       "recurring-payments",
+      "budgets",
       "sms-sync",
       "live-sms",
     ]);
+  });
+
+  it("registers deterministic budget flow profiles", () => {
+    expect(runCiE2e.getBudgetMaestroFlows()).toEqual([
+      {
+        flow: "budgets/dashboard-filtering.yaml",
+        profile: "dashboard-full",
+      },
+      {
+        flow: "budgets/dashboard-filtered-empty.yaml",
+        profile: "dashboard-filter-empty",
+      },
+      {
+        flow: "budgets/dashboard-lifecycle-actions.yaml",
+        profile: "dashboard-full",
+      },
+    ]);
+  });
+
+  it("restores the default fixture when a downstream suite follows budgets", () => {
+    expect(
+      runCiE2e.shouldRestoreDefaultFixtureAfterBudgets(
+        new Set(["budgets", "sms-sync"])
+      )
+    ).toBe(true);
+    expect(
+      runCiE2e.shouldRestoreDefaultFixtureAfterBudgets(
+        new Set(["budgets", "live-sms"])
+      )
+    ).toBe(true);
+    expect(
+      runCiE2e.shouldRestoreDefaultFixtureAfterBudgets(new Set(["budgets"]))
+    ).toBe(false);
+    expect(
+      runCiE2e.shouldRestoreDefaultFixtureAfterBudgets(new Set(["sms-sync"]))
+    ).toBe(false);
   });
 
   it("parses selected E2E suites and treats skip as no-op", () => {
@@ -127,6 +184,26 @@ describe("run-ci-e2e helpers", () => {
       env: { E2E_CLEAR_APP_STATE: "1" },
       retryOnDeviceFailure: true,
     });
+  });
+
+  it("clears cached app data before every budget fixture flow bootstrap", () => {
+    expect(runCiE2e.getBudgetAuthBootstrapOptions()).toEqual({
+      env: { E2E_CLEAR_APP_STATE: "1" },
+      retryOnDeviceFailure: true,
+    });
+  });
+
+  it("rejects budget profile runs when auth bootstrap cannot clear local app data", () => {
+    expect(() =>
+      runCiE2e.assertBudgetSuiteIsolation(new Set(["budgets"]), {
+        E2E_SKIP_AUTH_BOOTSTRAP: "1",
+      })
+    ).toThrow("Budget E2E requires auth bootstrap");
+    expect(() =>
+      runCiE2e.assertBudgetSuiteIsolation(new Set(["transactions"]), {
+        E2E_SKIP_AUTH_BOOTSTRAP: "1",
+      })
+    ).not.toThrow();
   });
 
   it("detects ADB device-offline failures for infrastructure-only retry", () => {

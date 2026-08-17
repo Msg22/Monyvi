@@ -86,4 +86,24 @@ describe("PageHeader review variant", () => {
       paddingTop: 8,
     });
   });
+
+  it("names icon actions and keeps NativeWind shadow classes off the touchable", () => {
+    render(
+      <PageHeader
+        title="Budgets"
+        showDrawer={false}
+        rightAction={{
+          icon: "add",
+          accessibilityLabel: "Create budget",
+          onPress: jest.fn(),
+        }}
+      />
+    );
+
+    expect(screen.getByLabelText("Create budget")).toHaveProp(
+      "accessibilityRole",
+      "button"
+    );
+    expect(screen.getByLabelText("Create budget")).toHaveStyle({ elevation: 2 });
+  });
 });

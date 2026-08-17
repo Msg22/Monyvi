@@ -301,14 +301,41 @@ Budgets help users control spending.
 
 Business rules:
 
-- A global budget is unique per user and period.
-- A category budget is unique per user, category, and period.
+- A current global budget is unique per user and period.
+- A current category budget is unique per user, category, and period.
+- Expired custom budgets remain historical and do not occupy the uniqueness slot
+  for creating their replacement; another non-expired custom budget still does.
 - Category budgets include spending in the selected category and descendants.
 - Custom-period budgets require both start and end dates.
 - Paused budgets track pause intervals and exclude paused time from spending
   calculations.
 - Custom budgets can auto-pause when their period expires.
 - Alert levels are reset on period rollover.
+- Budget dashboard lifecycle classification is derived and mutually exclusive:
+  an expired custom budget is `EXPIRED` even when its persisted status is
+  `ACTIVE` or `PAUSED`; otherwise a persisted paused budget is `PAUSED`;
+  otherwise warning and danger spending states are active near-limit and
+  over-budget presentation states; remaining active budgets are healthy.
+- Renewing an expired custom budget creates a new prefilled budget and leaves
+  the expired historical budget unchanged.
+- The dashboard uses one unified budget list. Scope tabs (`All`, `Category`,
+  `Global`), period filters (`All`, `Weekly`, `Monthly`, `Custom`), and status
+  filters (`All`, `Active`, `Paused`, `Expired`) combine using AND semantics.
+  Defaults are `All` scope, `All` period, and `Active` status.
+- Dashboard selections persist while the dashboard remains in the current
+  signed-in app session and reset to their defaults after a fresh app launch or
+  authenticated-user change.
+- Active results sort by spending priority: over budget, near limit, then
+  healthy. When all statuses are selected, expired budgets come first and paused
+  budgets appear after attention-required active budgets and before healthy
+  budgets. Within each priority group, budgets sort by trimmed display name
+  using the active English or Arabic locale with numeric,
+  case/diacritic-insensitive comparison; equal names use stable budget ID as the
+  final tie-break, and spend-only changes never affect order inside a group.
+- Every budget uses the same compact dashboard row pattern. Active rows show
+  percentage and progress. Paused and expired rows show neither percentage nor
+  progress, but keep explicit status, context, and direct Resume or Renew
+  actions.
 
 ### Recurring Payments
 
@@ -729,10 +756,10 @@ Business rules:
   category-specific reason; `0.80` is included in the auto-selection confidence
   range. Generic fallback categories such as `other` and `uncategorized` are
   never accepted as enrichment outcomes even if the provider reports high
-  confidence. After acceptance, auto-selection still requires a resolved
-  account and zero remaining reasons from the existing transaction-review
-  selection service. Account evidence follows the exact-card or unique-sender
-  rule below; ambiguous matches remain review-required.
+  confidence. After acceptance, auto-selection still requires a resolved account
+  and zero remaining reasons from the existing transaction-review selection
+  service. Account evidence follows the exact-card or unique-sender rule below;
+  ambiguous matches remain review-required.
 - ATM withdrawals, transfers, unresolved templates, uncertain categories, and
   failed enrichment remain review-required regardless of local confidence.
 - Missing, malformed, low-confidence, invented-category, timeout, cancellation,

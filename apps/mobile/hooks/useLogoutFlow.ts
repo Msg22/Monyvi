@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 
 import { useDatabase } from "@/providers/DatabaseProvider";
+import { clearBudgetDashboardFilterSession } from "@/hooks/budget-dashboard-filter-session";
 import { performLogout } from "@/services/logout-service";
 import { logger } from "@/utils/logger";
 
@@ -38,6 +39,7 @@ export function useLogoutFlow({
       const result = await performLogout(database);
 
       if (result.success) {
+        clearBudgetDashboardFilterSession();
         onSuccess?.();
         return;
       }
@@ -69,6 +71,7 @@ export function useLogoutFlow({
       const result = await performLogout(database, true);
 
       if (result.success) {
+        clearBudgetDashboardFilterSession();
         onSuccess?.();
         return;
       }

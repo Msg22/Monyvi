@@ -42,6 +42,7 @@ export type BudgetAction = "edit" | "pause" | "resume" | "delete";
 interface BudgetActionsSheetProps {
   readonly visible: boolean;
   readonly isPaused: boolean;
+  readonly canTogglePause?: boolean;
   readonly onClose: () => void;
   readonly onAction: (action: BudgetAction) => void | Promise<void>;
 }
@@ -181,6 +182,7 @@ const styles = StyleSheet.create({
 export function BudgetActionsSheet({
   visible,
   isPaused,
+  canTogglePause = true,
   onClose,
   onAction,
 }: BudgetActionsSheetProps): React.JSX.Element {
@@ -287,65 +289,72 @@ export function BudgetActionsSheet({
             {/* Divider */}
             <View style={[styles.divider, { backgroundColor: dividerColor }]} />
 
-            {/* Pause/Resume with toggle */}
-            <View style={styles.row}>
-              <Ionicons
-                name={isPaused ? "play-circle" : "pause-circle"}
-                size={22}
-                color={palette.gold[500]}
-              />
-              <View style={{ flex: 1, marginStart: 16 }}>
-                <Text
-                  style={[
-                    { fontSize: 16, fontWeight: "600" },
-                    { color: textColor },
-                  ]}
-                >
-                  {isPaused ? t("resume_budget") : t("pause_budget")}
-                </Text>
-                <Text style={[styles.sublabel, { color: subtextColor }]}>
-                  {isPaused
-                    ? t("continue_tracking_spending")
-                    : t("temporarily_stop_tracking")}
-                </Text>
-              </View>
-              {/* Toggle */}
-              <TouchableOpacity
-                onPress={() => {
-                  void handlePauseToggle();
-                }}
-                disabled={isToggling}
-                activeOpacity={0.7}
-                accessibilityRole="switch"
-                accessibilityState={{ checked: !isPaused, busy: isToggling }}
-                accessibilityLabel={
-                  isPaused
-                    ? t("accessibility_resume_budget")
-                    : t("accessibility_pause_budget")
-                }
-                style={[
-                  styles.toggleTrack,
-                  {
-                    backgroundColor: !isPaused
-                      ? palette.nileGreen[500]
-                      : isDark
-                        ? palette.slate[600]
-                        : palette.slate[300],
-                  },
-                  isToggling && { opacity: 0.6 },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.toggleThumb,
-                    { alignSelf: !isPaused ? "flex-end" : "flex-start" },
-                  ]}
-                />
-              </TouchableOpacity>
-            </View>
+            {canTogglePause ? (
+              <>
+                {/* Pause/Resume with toggle */}
+                <View style={styles.row}>
+                  <Ionicons
+                    name={isPaused ? "play-circle" : "pause-circle"}
+                    size={22}
+                    color={palette.gold[500]}
+                  />
+                  <View style={{ flex: 1, marginStart: 16 }}>
+                    <Text
+                      style={[
+                        { fontSize: 16, fontWeight: "600" },
+                        { color: textColor },
+                      ]}
+                    >
+                      {isPaused ? t("resume_budget") : t("pause_budget")}
+                    </Text>
+                    <Text style={[styles.sublabel, { color: subtextColor }]}>
+                      {isPaused
+                        ? t("continue_tracking_spending")
+                        : t("temporarily_stop_tracking")}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      void handlePauseToggle();
+                    }}
+                    disabled={isToggling}
+                    activeOpacity={0.7}
+                    accessibilityRole="switch"
+                    accessibilityState={{
+                      checked: !isPaused,
+                      busy: isToggling,
+                    }}
+                    accessibilityLabel={
+                      isPaused
+                        ? t("accessibility_resume_budget")
+                        : t("accessibility_pause_budget")
+                    }
+                    style={[
+                      styles.toggleTrack,
+                      {
+                        backgroundColor: !isPaused
+                          ? palette.nileGreen[500]
+                          : isDark
+                            ? palette.slate[600]
+                            : palette.slate[300],
+                      },
+                      isToggling && { opacity: 0.6 },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.toggleThumb,
+                        { alignSelf: !isPaused ? "flex-end" : "flex-start" },
+                      ]}
+                    />
+                  </TouchableOpacity>
+                </View>
 
-            {/* Divider */}
-            <View style={[styles.divider, { backgroundColor: dividerColor }]} />
+                <View
+                  style={[styles.divider, { backgroundColor: dividerColor }]}
+                />
+              </>
+            ) : null}
 
             {/* Delete */}
             <TouchableOpacity
@@ -373,9 +382,7 @@ export function BudgetActionsSheet({
           race condition that renders Modal content invisible on this screen */}
       {showDeleteConfirm && (
         <View style={styles.confirmOverlay}>
-          <TouchableWithoutFeedback
-            onPress={() => setShowDeleteConfirm(false)}
-          >
+          <TouchableWithoutFeedback onPress={() => setShowDeleteConfirm(false)}>
             <View style={styles.confirmBackdrop} />
           </TouchableWithoutFeedback>
 
@@ -414,9 +421,7 @@ export function BudgetActionsSheet({
                   style={[
                     styles.confirmButtonLabel,
                     {
-                      color: isDark
-                        ? palette.slate[300]
-                        : palette.slate[600],
+                      color: isDark ? palette.slate[300] : palette.slate[600],
                     },
                   ]}
                 >
