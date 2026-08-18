@@ -65,6 +65,40 @@ function buildManualQaExtraRows({
     userId,
     "category:qa-paused-fixture"
   );
+  const detailParentCategoryId = deterministicUuid(
+    seedScope,
+    userId,
+    "category:qa-detail-food"
+  );
+  const detailGroceriesCategoryId = deterministicUuid(
+    seedScope,
+    userId,
+    "category:qa-detail-groceries"
+  );
+  const detailDiningCategoryId = deterministicUuid(
+    seedScope,
+    userId,
+    "category:qa-detail-dining"
+  );
+  const detailFreshFoodCategoryId = deterministicUuid(
+    seedScope,
+    userId,
+    "category:qa-detail-fresh-food"
+  );
+  const arabicDetailCategoryId = deterministicUuid(
+    seedScope,
+    userId,
+    "category:qa-arabic-detail"
+  );
+  const disposableDetailCategoryId = deterministicUuid(
+    seedScope,
+    userId,
+    "category:qa-disposable-detail"
+  );
+  const detailPauseInterval = createCompletedPauseInterval(
+    dateFromToday(-20),
+    dateFromToday(-18)
+  );
 
   return {
     categories: [
@@ -194,6 +228,72 @@ function buildManualQaExtraRows({
         created_at: fixedNow,
         updated_at: currentTimestamp,
       },
+      createManualQaBudgetCategory({
+        id: detailParentCategoryId,
+        name: "QA Detail Food",
+        systemName: "qa_detail_food",
+        level: 1,
+        parentId: null,
+        sortOrder: 990,
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createManualQaBudgetCategory({
+        id: detailGroceriesCategoryId,
+        name: "QA Detail Groceries",
+        systemName: "qa_detail_groceries",
+        level: 2,
+        parentId: detailParentCategoryId,
+        sortOrder: 991,
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createManualQaBudgetCategory({
+        id: detailDiningCategoryId,
+        name: "QA Detail Dining",
+        systemName: "qa_detail_dining",
+        level: 2,
+        parentId: detailParentCategoryId,
+        sortOrder: 992,
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createManualQaBudgetCategory({
+        id: detailFreshFoodCategoryId,
+        name: "QA Detail Fresh Food",
+        systemName: "qa_detail_fresh_food",
+        level: 3,
+        parentId: detailGroceriesCategoryId,
+        sortOrder: 993,
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createManualQaBudgetCategory({
+        id: arabicDetailCategoryId,
+        name: "QA Arabic Detail",
+        systemName: "qa_arabic_detail",
+        level: 1,
+        parentId: null,
+        sortOrder: 988,
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createManualQaBudgetCategory({
+        id: disposableDetailCategoryId,
+        name: "QA Disposable Detail",
+        systemName: "qa_disposable_detail",
+        level: 1,
+        parentId: null,
+        sortOrder: 989,
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
     ],
     accounts: [
       {
@@ -708,6 +808,44 @@ function buildManualQaExtraRows({
         created_at: fixedNow,
         updated_at: currentTimestamp,
       },
+      createManualQaDetailBudget({
+        id: deterministicUuid(
+          seedScope,
+          userId,
+          "budget:qa-detail-long-custom"
+        ),
+        categoryId: detailParentCategoryId,
+        pauseInterval: detailPauseInterval,
+        periodStart: dateFromToday(-35),
+        periodEnd: dateFromToday(14),
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createManualQaScenarioBudget({
+        id: deterministicUuid(seedScope, userId, "budget:qa-arabic-detail"),
+        name: "ميزانية عربية طويلة لاختبار شاشة تفاصيل الميزانية",
+        amount: 6400,
+        categoryId: arabicDetailCategoryId,
+        period: "WEEKLY",
+        periodStart: dateFromToday(-2),
+        periodEnd: dateFromToday(5),
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createManualQaScenarioBudget({
+        id: deterministicUuid(seedScope, userId, "budget:qa-disposable-detail"),
+        name: "QA Disposable Detail Budget",
+        amount: 5000,
+        categoryId: disposableDetailCategoryId,
+        period: "MONTHLY",
+        periodStart: dateFromToday(-7),
+        periodEnd: dateFromToday(23),
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
     ],
     recurringPayments: [
       {
@@ -973,6 +1111,44 @@ function buildManualQaExtraRows({
         created_at: fixedNow,
         updated_at: currentTimestamp,
       },
+      {
+        id: deterministicUuid(
+          seedScope,
+          userId,
+          "transaction:qa-retained-after-budget-delete"
+        ),
+        user_id: userId,
+        account_id: seedIds.accounts.cash,
+        amount: 350,
+        currency: "EGP",
+        type: "EXPENSE",
+        category_id: disposableDetailCategoryId,
+        counterparty: "QA Retained After Budget Delete",
+        note: "Transaction must survive disposable budget deletion",
+        date: dateFromToday(0),
+        source: "MANUAL",
+        is_draft: false,
+        linked_asset_id: null,
+        linked_debt_id: null,
+        linked_recurring_id: null,
+        deleted: false,
+        created_at: fixedNow,
+        updated_at: currentTimestamp,
+      },
+      ...createManualQaDetailTransactions({
+        accountId: seedIds.accounts.cash,
+        categoryIds: {
+          dining: detailDiningCategoryId,
+          freshFood: detailFreshFoodCategoryId,
+          groceries: detailGroceriesCategoryId,
+        },
+        currentTimestamp,
+        dateFromToday,
+        deterministicUuid,
+        fixedNow,
+        seedScope,
+        userId,
+      }),
     ],
     transfers: [
       {
@@ -1037,6 +1213,175 @@ function buildManualQaExtraRows({
       },
     ],
   };
+}
+
+function createManualQaBudgetCategory({
+  id,
+  name,
+  systemName,
+  level,
+  parentId,
+  sortOrder,
+  currentTimestamp,
+  fixedNow,
+  userId,
+}) {
+  return {
+    id,
+    user_id: userId,
+    system_name: systemName,
+    display_name: name,
+    type: "EXPENSE",
+    icon: "restaurant-outline",
+    icon_library: "Ionicons",
+    color: null,
+    is_system: false,
+    level,
+    parent_id: parentId,
+    sort_order: sortOrder,
+    is_hidden: false,
+    is_internal: false,
+    nature: "NEED",
+    usage_count: 0,
+    deleted: false,
+    created_at: fixedNow,
+    updated_at: currentTimestamp,
+  };
+}
+
+function createCompletedPauseInterval(startDate, endDate) {
+  return {
+    from: Date.parse(`${startDate}T00:00:00.000Z`),
+    to: Date.parse(`${endDate}T23:59:59.999Z`),
+  };
+}
+
+function createManualQaDetailBudget({
+  id,
+  categoryId,
+  pauseInterval,
+  periodStart,
+  periodEnd,
+  currentTimestamp,
+  fixedNow,
+  userId,
+}) {
+  return {
+    id,
+    user_id: userId,
+    name: "QA Detail Long Custom",
+    amount: 12000,
+    currency: "EGP",
+    category_id: categoryId,
+    period: "CUSTOM",
+    period_start: periodStart,
+    period_end: periodEnd,
+    status: "ACTIVE",
+    type: "CATEGORY",
+    alert_threshold: 80,
+    alert_fired_level: null,
+    paused_at: null,
+    pause_intervals: JSON.stringify([pauseInterval]),
+    deleted: false,
+    created_at: fixedNow,
+    updated_at: currentTimestamp,
+  };
+}
+
+function createManualQaScenarioBudget({
+  id,
+  name,
+  amount,
+  categoryId,
+  period,
+  periodStart,
+  periodEnd,
+  currentTimestamp,
+  fixedNow,
+  userId,
+}) {
+  return {
+    id,
+    user_id: userId,
+    name,
+    amount,
+    currency: "EGP",
+    category_id: categoryId,
+    period,
+    period_start: periodStart,
+    period_end: periodEnd,
+    status: "ACTIVE",
+    type: "CATEGORY",
+    alert_threshold: 80,
+    alert_fired_level: null,
+    paused_at: null,
+    pause_intervals: "[]",
+    deleted: false,
+    created_at: fixedNow,
+    updated_at: currentTimestamp,
+  };
+}
+
+function createManualQaDetailTransactions({
+  accountId,
+  categoryIds,
+  currentTimestamp,
+  dateFromToday,
+  deterministicUuid,
+  fixedNow,
+  seedScope,
+  userId,
+}) {
+  const fixtures = [
+    ["editable", "QA Detail Editable", 0, 450, categoryIds.groceries],
+    ["week-one", "QA Detail Week One", -2, 320, categoryIds.dining],
+    ["week-two", "QA Detail Week Two", -8, 275, categoryIds.freshFood],
+    [
+      "week-two-extra",
+      "QA Detail Week Two Extra",
+      -10,
+      125,
+      categoryIds.groceries,
+    ],
+    ["week-three", "QA Detail Week Three", -15, 610, categoryIds.dining],
+    [
+      "paused-inside",
+      "QA Detail Paused Inside",
+      -19,
+      999,
+      categoryIds.freshFood,
+    ],
+    [
+      "paused-outside",
+      "QA Detail Paused Outside",
+      -22,
+      420,
+      categoryIds.groceries,
+    ],
+    ["week-five", "QA Detail Week Five", -29, 200, categoryIds.dining],
+    ["week-six", "QA Detail Week Six", -34, 180, categoryIds.freshFood],
+  ];
+
+  return fixtures.map(([key, counterparty, dayOffset, amount, categoryId]) => ({
+    id: deterministicUuid(seedScope, userId, `transaction:qa-detail:${key}`),
+    user_id: userId,
+    account_id: accountId,
+    amount,
+    currency: "EGP",
+    type: "EXPENSE",
+    category_id: categoryId,
+    counterparty,
+    note: "Manual QA Budget Detail hierarchy fixture",
+    date: dateFromToday(dayOffset),
+    source: "MANUAL",
+    is_draft: false,
+    linked_asset_id: null,
+    linked_debt_id: null,
+    linked_recurring_id: null,
+    deleted: false,
+    created_at: fixedNow,
+    updated_at: currentTimestamp,
+  }));
 }
 
 module.exports = {

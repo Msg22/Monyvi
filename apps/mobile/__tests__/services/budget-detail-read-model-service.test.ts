@@ -54,6 +54,7 @@ const mockQueryOwned = jest.fn<
 interface MockBudgetOptions {
   readonly type?: "GLOBAL" | "CATEGORY";
   readonly categoryId?: string;
+  readonly status?: "ACTIVE" | "PAUSED";
   readonly pauseIntervals?: ReadonlyArray<{
     readonly from: number;
     readonly to: number;
@@ -67,6 +68,8 @@ interface MockTransactionOptions {
   readonly date: string;
   readonly categoryId?: string;
   readonly type?: "EXPENSE" | "INCOME";
+  readonly counterparty?: string;
+  readonly currency?: "EGP" | "USD";
 }
 
 let mockTransactions: Array<Record<string, unknown>> = [];
@@ -231,12 +234,14 @@ function createBudget(options: MockBudgetOptions = {}): Budget {
     alertThreshold: 80,
     currency: "EGP",
     period: "CUSTOM",
-    periodStart: new Date("2026-05-01T00:00:00.000Z"),
-    periodEnd: new Date("2026-05-31T23:59:59.999Z"),
+    periodStart: new Date(2026, 4, 1, 0, 0, 0, 0),
+    periodEnd: new Date(2026, 4, 31, 23, 59, 59, 999),
     isCategoryBudget: type === "CATEGORY",
     isGlobal: type === "GLOBAL",
     pauseIntervals: JSON.stringify(options.pauseIntervals ?? []),
     pausedAt: options.pausedAt,
+    status: options.status ?? "ACTIVE",
+    isPaused: options.status === "PAUSED",
   } as unknown as Budget;
 }
 
@@ -251,6 +256,8 @@ function createTransaction(
     amount: options.amount,
     date: new Date(options.date),
     categoryId: options.categoryId ?? "category-parent",
+    counterparty: options.counterparty,
+    currency: options.currency ?? "EGP",
   };
 }
 
@@ -265,6 +272,10 @@ function createCategory(
     deleted: false,
     displayName,
     parentId,
+    icon: "receipt-outline",
+    iconLibrary: "Ionicons",
+    color: null,
+    isExpense: true,
   };
 }
 
@@ -353,13 +364,13 @@ describe("budget-detail-read-model-service", () => {
     const result = await getBudgetDetailReadModel(budget);
 
     expect(result.metrics.spent).toBe(650);
-    expect(result.subcategoryBreakdown).toEqual([]);
-    expect(result.recentTransactions.map((tx) => tx.id)).toEqual([
+    expect(result.categoryBreakdown).toBeNull();
+    expect(result.recentTransactions.map((tx) => tx.transactionId)).toEqual([
       "tx-2",
       "tx-1",
     ]);
     expect(
-      result.weeklySpending.reduce((sum, item) => sum + item.amount, 0)
+      result.weeklySpending.reduce((sum, item) => sum + item.actualAmount, 0)
     ).toBe(650);
   });
 
@@ -405,7 +416,7 @@ describe("budget-detail-read-model-service", () => {
     const result = await getBudgetDetailReadModel(budget);
 
     expect(result.metrics.spent).toBe(100);
-    expect(result.subcategoryBreakdown).toEqual([]);
+    expect(result.categoryBreakdown).toEqual([]);
     expect(mockFindAccessibleCategory).not.toHaveBeenCalled();
     expect(mockQueryAccessibleCategories).toHaveBeenCalledTimes(1);
     expect(mockQueryOwned).toHaveBeenCalledTimes(1);
@@ -437,9 +448,9 @@ describe("budget-detail-read-model-service", () => {
     const result = await getBudgetDetailReadModel(budget);
 
     expect(result.metrics.spent).toBe(275);
-    expect(result.subcategoryBreakdown).toEqual([]);
+    expect(result.categoryBreakdown).toEqual([]);
     expect(
-      result.recentTransactions.map((transaction) => transaction.id)
+      result.recentTransactions.map((transaction) => transaction.transactionId)
     ).toEqual(["tx-deleted-category"]);
     expect(mockFindAccessibleCategory).not.toHaveBeenCalled();
     expect(mockQueryAccessibleCategories).toHaveBeenCalledTimes(1);
@@ -489,22 +500,24 @@ describe("budget-detail-read-model-service", () => {
 
     const result = await getBudgetDetailReadModel(budget);
 
-    expect(result.subcategoryBreakdown).toEqual([
-      {
+    expect(result.categoryBreakdown).toEqual([
+      expect.objectContaining({
         categoryId: "food",
-        categoryName: "Food",
+        name: "Food",
+        transactionCount: 2,
         amount: 500,
         percentage: (500 / 600) * 100,
-      },
-      {
+      }),
+      expect.objectContaining({
         categoryId: "transport",
-        categoryName: "Transport",
+        name: "Transport",
+        transactionCount: 1,
         amount: 100,
         percentage: (100 / 600) * 100,
-      },
+      }),
     ]);
     expect(
-      result.weeklySpending.reduce((sum, item) => sum + item.amount, 0)
+      result.weeklySpending.reduce((sum, item) => sum + item.actualAmount, 0)
     ).toBe(600);
     expect(mockQueryOwned).toHaveBeenCalledTimes(1);
     expect(mockQueryAccessibleCategories).toHaveBeenCalledTimes(1);
@@ -546,17 +559,20 @@ describe("budget-detail-read-model-service", () => {
     const result = await getBudgetDetailReadModel(budget);
 
     expect(result.metrics.spent).toBe(100);
-    expect(result.recentTransactions.map((tx) => tx.id)).toEqual(["tx-active"]);
-    expect(result.subcategoryBreakdown).toEqual([
-      {
+    expect(result.recentTransactions.map((tx) => tx.transactionId)).toEqual([
+      "tx-active",
+    ]);
+    expect(result.categoryBreakdown).toEqual([
+      expect.objectContaining({
         categoryId: "food",
-        categoryName: "Food",
+        name: "Food",
+        transactionCount: 1,
         amount: 100,
         percentage: 100,
-      },
+      }),
     ]);
     expect(
-      result.weeklySpending.reduce((sum, item) => sum + item.amount, 0)
+      result.weeklySpending.reduce((sum, item) => sum + item.actualAmount, 0)
     ).toBe(100);
   });
 
@@ -567,8 +583,10 @@ describe("budget-detail-read-model-service", () => {
     const result = await getBudgetDetailReadModel(budget);
 
     expect(result.metrics.spent).toBe(0);
-    expect(result.subcategoryBreakdown).toEqual([]);
-    expect(result.weeklySpending.every((item) => item.amount === 0)).toBe(true);
+    expect(result.categoryBreakdown).toEqual([]);
+    expect(result.weeklySpending.every((item) => item.actualAmount === 0)).toBe(
+      true
+    );
   });
 
   it("returns the newest six non-paused matching transactions", async () => {
@@ -584,7 +602,7 @@ describe("budget-detail-read-model-service", () => {
 
     const result = await getBudgetDetailReadModel(budget);
 
-    expect(result.recentTransactions.map((tx) => tx.id)).toEqual([
+    expect(result.recentTransactions.map((tx) => tx.transactionId)).toEqual([
       "tx-8",
       "tx-7",
       "tx-6",
@@ -622,8 +640,241 @@ describe("budget-detail-read-model-service", () => {
 
     expect(result.metrics.spent).toBe(100);
     expect(
-      result.weeklySpending.reduce((sum, item) => sum + item.amount, 0)
+      result.weeklySpending.reduce((sum, item) => sum + item.actualAmount, 0)
     ).toBe(100);
     expect(dateReadCount).toBeLessThan(20);
+  });
+
+  it("shapes and freezes global identity, lifecycle, pace, and applicable empty sections", async () => {
+    const budget = createBudget();
+
+    const result = await getBudgetDetailReadModel(
+      budget,
+      new Date("2026-05-15T12:00:00.000Z")
+    );
+
+    expect(result.identity).toEqual({
+      budgetId: "budget-1",
+      name: "Budget",
+      type: "GLOBAL",
+      lifecycle: "ACTIVE",
+      period: "CUSTOM",
+      periodStart: new Date(2026, 4, 1, 0, 0, 0, 0),
+      periodEnd: new Date(2026, 4, 31, 23, 59, 59, 999),
+      icon: { kind: "GLOBAL" },
+      availableLifecycleAction: "PAUSE",
+    });
+    expect(result.categoryBreakdown).toBeNull();
+    expect(result.paceState).toBe("BELOW");
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result.identity)).toBe(true);
+    expect(Object.isFrozen(result.weeklySpending)).toBe(true);
+    expect(mockQueryAccessibleCategories).toHaveBeenCalledTimes(1);
+    expect(mockQueryOwned).toHaveBeenCalledTimes(1);
+  });
+
+  it("shapes category identity, proportional weeks, transaction counts, and recent DTOs", async () => {
+    const budget = createBudget({ type: "CATEGORY" });
+    mockCategories = [
+      createCategory("category-parent", "Food & Drinks", null),
+      createCategory("food", "Food", "category-parent"),
+      createCategory("grocery", "Groceries", "food"),
+    ];
+    mockTransactions = [
+      createTransaction({
+        id: "tx-food",
+        amount: 300,
+        date: "2026-05-05T10:00:00.000Z",
+        categoryId: "food",
+        counterparty: "Restaurant",
+      }),
+      createTransaction({
+        id: "tx-grocery",
+        amount: 200,
+        date: "2026-05-06T10:00:00.000Z",
+        categoryId: "grocery",
+      }),
+    ];
+
+    const result = await getBudgetDetailReadModel(
+      budget,
+      new Date("2026-05-15T12:00:00.000Z")
+    );
+
+    expect(result.identity.icon).toMatchObject({
+      kind: "CATEGORY",
+      iconName: "receipt-outline",
+      iconLibrary: "Ionicons",
+    });
+    expect(result.categoryBreakdown).toEqual([
+      expect.objectContaining({
+        categoryId: "food",
+        name: "Food",
+        transactionCount: 2,
+        amount: 500,
+        percentage: 100,
+      }),
+    ]);
+    expect(result.weeklySpending).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: new Date(2026, 4, 1, 0, 0, 0, 0).toISOString(),
+          actualAmount: 500,
+        }),
+      ])
+    );
+    expect(result.weeklySpending.at(-1)?.paceAmount).toBeLessThan(
+      result.weeklySpending[0]?.paceAmount ?? 0
+    );
+    expect(result.recentTransactions).toEqual([
+      expect.objectContaining({
+        transactionId: "tx-grocery",
+        label: "Groceries",
+        amount: 200,
+        currency: "EGP",
+      }),
+      expect.objectContaining({
+        transactionId: "tx-food",
+        label: "Restaurant",
+      }),
+    ]);
+  });
+
+  it("uses a deleted-category fallback and reports only completed pause exclusions", async () => {
+    const budget = createBudget({
+      type: "CATEGORY",
+      categoryId: "deleted-category",
+      status: "PAUSED",
+      pauseIntervals: [
+        {
+          from: new Date("2026-05-02T00:00:00.000Z").getTime(),
+          to: new Date("2026-05-03T23:59:59.999Z").getTime(),
+        },
+      ],
+      pausedAt: "2026-05-10T00:00:00.000Z",
+    });
+    mockTransactions = [
+      createTransaction({
+        id: "tx-completed-pause",
+        amount: 100,
+        date: "2026-05-02T10:00:00.000Z",
+        categoryId: "deleted-category",
+      }),
+      createTransaction({
+        id: "tx-open-pause",
+        amount: 200,
+        date: "2026-05-12T10:00:00.000Z",
+        categoryId: "deleted-category",
+      }),
+    ];
+
+    const result = await getBudgetDetailReadModel(budget);
+
+    expect(result.identity.icon).toEqual({ kind: "DELETED_CATEGORY" });
+    expect(result.identity.lifecycle).toBe("PAUSED");
+    expect(result.identity.availableLifecycleAction).toBe("RESUME");
+    expect(result.hasCompletedPauseExclusion).toBe(true);
+    expect(result.metrics.spent).toBe(0);
+  });
+
+  it("uses the preferred fallback currency precision when the budget has no currency", async () => {
+    const now = new Date("2026-05-15T12:00:00.000Z");
+    const budget = {
+      ...createBudget(),
+      amount: 10.001,
+      currency: null,
+      periodStart: new Date("2026-05-15T00:00:00.000Z"),
+      periodEnd: new Date("2026-05-15T23:59:59.999Z"),
+    } as unknown as Budget;
+    mockTransactions = [
+      createTransaction({
+        id: "tx-kwd-precision",
+        amount: 10.004,
+        date: "2026-05-15T10:00:00.000Z",
+      }),
+    ];
+
+    const result = await getBudgetDetailReadModel(budget, now, "KWD");
+
+    expect(result.currency).toBe("KWD");
+    expect(result.paceState).toBe("ABOVE");
+  });
+
+  it("keeps a missing recent transaction label semantic instead of emitting blank copy", async () => {
+    const budget = createBudget();
+    mockTransactions = [
+      createTransaction({
+        id: "tx-missing-label",
+        amount: 25,
+        date: "2026-05-15T10:00:00.000Z",
+        categoryId: "missing-category",
+        counterparty: "   ",
+      }),
+    ];
+
+    const result = await getBudgetDetailReadModel(budget);
+
+    expect(result.recentTransactions[0]?.label).toBeNull();
+  });
+
+  it.each([
+    ["#10B981", "GREEN"],
+    ["#14B8A6", "GREEN"],
+    ["#F59E0B", "GOLD"],
+    ["#EF4444", "RED"],
+    ["#3B82F6", "BLUE"],
+    ["#06B6D4", "BLUE"],
+    ["#8B5CF6", "VIOLET"],
+    ["#9CA3AF", "SLATE"],
+  ] as const)(
+    "maps persisted category color %s to semantic %s icon tone",
+    async (color, expectedTone) => {
+      const budget = createBudget({ type: "CATEGORY" });
+      mockCategories = [
+        {
+          ...createCategory("category-parent", "Food & Drinks", null),
+          color,
+        },
+      ];
+
+      const result = await getBudgetDetailReadModel(budget);
+
+      expect(result.identity.icon).toMatchObject({
+        kind: "CATEGORY",
+        tone: expectedTone,
+      });
+    }
+  );
+
+  it("does not attribute an open-pause exclusion to completed pause history", async () => {
+    const budget = createBudget({
+      status: "PAUSED",
+      pausedAt: "2026-05-10T00:00:00.000Z",
+    });
+    mockTransactions = [
+      createTransaction({
+        id: "tx-open-pause",
+        amount: 200,
+        date: "2026-05-12T10:00:00.000Z",
+      }),
+    ];
+
+    const result = await getBudgetDetailReadModel(budget);
+
+    expect(result.hasCompletedPauseExclusion).toBe(false);
+    expect(result.metrics.spent).toBe(0);
+  });
+
+  it("suppresses lifecycle actions and pace for an expired custom budget", async () => {
+    const budget = createBudget({ status: "PAUSED" });
+
+    const result = await getBudgetDetailReadModel(
+      budget,
+      new Date("2026-06-01T00:00:00.000Z")
+    );
+
+    expect(result.identity.lifecycle).toBe("EXPIRED");
+    expect(result.identity.availableLifecycleAction).toBeNull();
+    expect(result.paceState).toBeNull();
   });
 });

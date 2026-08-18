@@ -111,6 +111,20 @@ describe("resolve-ci-e2e-scope", () => {
     });
   });
 
+  it("selects only budget E2E for Budget Detail implementation and journeys", () => {
+    expect(
+      scopeResolver.resolveCiE2eScope([
+        "apps/mobile/app/(private)/budget-detail.tsx",
+        "apps/mobile/components/budget/BudgetDetailIdentity.tsx",
+        "apps/mobile/services/budget-detail-read-model-service.ts",
+        "apps/mobile/e2e/maestro/budgets/budget-detail-active.yaml",
+      ])
+    ).toEqual({
+      shouldRun: true,
+      suites: ["budgets"],
+    });
+  });
+
   it("routes the shared confirmation modal to every suite that uses it", () => {
     expect(
       scopeResolver.resolveCiE2eScope([

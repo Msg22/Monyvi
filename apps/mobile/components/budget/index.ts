@@ -23,8 +23,6 @@ export { SubcategoryBreakdown } from "./SubcategoryBreakdown";
 export { BudgetRecentTransactions } from "./BudgetRecentTransactions";
 
 // Actions
-export { BudgetActionsSheet } from "./BudgetActionsSheet";
-export type { BudgetAction } from "./BudgetActionsSheet";
 
 // Alerts
 export { BudgetAlertModal } from "./BudgetAlertModal";

@@ -1,0 +1,106 @@
+appId: com.monyvi.app
+---
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://budgets
+- extendedWaitUntil:
+    visible:
+      id: "budgets-screen"
+    timeout: 120000
+- tapOn:
+    id: "budget-scope-category"
+- tapOn:
+    id: "budget-filter-period"
+- tapOn:
+    id: "budget-filter-option-period-custom"
+- scrollUntilVisible:
+    element: "E2E Detail Long Custom"
+    direction: DOWN
+    timeout: 120000
+- assertVisible:
+    id: ".*budget-detail-target-.*"
+- tapOn: "E2E Detail Long Custom"
+- extendedWaitUntil:
+    visible:
+      id: "budget-detail-screen"
+    timeout: 120000
+- assertVisible:
+    id: "budget-detail-identity"
+- assertVisible:
+    id: "budget-detail-overview"
+- tapOn:
+    id: "budget-detail-edit"
+- extendedWaitUntil:
+    visible:
+      id: "create-budget-screen"
+    timeout: 120000
+- assertVisible: "E2E Detail Long Custom"
+- back
+- extendedWaitUntil:
+    visible:
+      id: "budget-detail-screen"
+    timeout: 120000
+- scrollUntilVisible:
+    element:
+      id: "budget-spending-trend-chart"
+    direction: DOWN
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      "Transactions during completed pause periods are excluded from these
+      totals."
+    direction: DOWN
+    timeout: 30000
+- assertVisible:
+    "Transactions during completed pause periods are excluded from these totals."
+- scrollUntilVisible:
+    element:
+      id: "subcategory-breakdown"
+    direction: DOWN
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: "budget-recent-transactions"
+    direction: DOWN
+    timeout: 30000
+- assertVisible:
+    id: ".*recent-transaction-.*"
+- tapOn: "E2E Detail Editable"
+- extendedWaitUntil:
+    visible:
+      id: "edit-transaction-screen"
+    timeout: 120000
+- tapOn:
+    id: "calculator-key-del"
+- tapOn:
+    id: "calculator-key-del"
+- tapOn:
+    id: "calculator-key-del"
+- tapOn:
+    id: "calculator-key-del"
+- tapOn:
+    id: "calculator-key-del"
+- tapOn:
+    id: "calculator-key-del"
+- tapOn:
+    id: "calculator-key-del"
+- tapOn:
+    id: "calculator-key-del"
+- tapOn:
+    id: "calculator-key-7"
+- tapOn:
+    id: "calculator-key-7"
+- tapOn:
+    id: "calculator-key-7"
+- tapOn:
+    id: "header-save"
+- extendedWaitUntil:
+    visible:
+      id: "budget-detail-screen"
+    timeout: 120000
+- scrollUntilVisible:
+    element: "E2E Detail Editable"
+    direction: DOWN
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "777 EGP"
+    timeout: 30000

@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react-native";
+import { render, screen } from "@testing-library/react-native";
 import React from "react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -9,16 +9,7 @@ let mockEditableBudgetResult: {
   readonly isLoading: boolean;
   readonly loadErrorKey: "budget_not_found" | "load_budget_error" | null;
 };
-let mockBudgetDetailResult: {
-  readonly budget: Record<string, unknown> | null;
-  readonly metrics: Record<string, unknown> | null;
-  readonly daysLeft: number;
-  readonly weeklySpending: readonly [];
-  readonly subcategoryBreakdown: readonly [];
-  readonly recentTransactions: readonly [];
-  readonly isLoading: boolean;
-};
-const mockBudgetActionsSheet = jest.fn();
+let mockBudgetDetailResult: Record<string, unknown>;
 
 const mockView = (testID: string): React.JSX.Element => {
   const ReactNative =
@@ -83,6 +74,19 @@ jest.mock("@/components/budget/BudgetForm", () => ({
   BudgetForm: (): React.JSX.Element => mockView("budget-form"),
 }));
 
+jest.mock("@/components/budget/BudgetDetailIdentity", () => ({
+  BudgetDetailIdentity: (): React.JSX.Element =>
+    mockView("budget-detail-identity"),
+}));
+jest.mock("@/components/budget/BudgetDetailDangerZone", () => ({
+  BudgetDetailDangerZone: (): React.JSX.Element =>
+    mockView("budget-detail-danger-zone"),
+}));
+jest.mock("@/components/budget/BudgetDetailSkeleton", () => ({
+  BudgetDetailSkeleton: (): React.JSX.Element =>
+    mockView("budget-detail-skeleton"),
+}));
+
 jest.mock("@/components/budget/BudgetDetailOverview", () => ({
   BudgetDetailOverview: (): React.JSX.Element =>
     mockView("budget-detail-overview"),
@@ -103,12 +107,6 @@ jest.mock("@/components/budget/BudgetRecentTransactions", () => ({
     mockView("budget-recent-transactions"),
 }));
 
-jest.mock("@/components/budget/BudgetActionsSheet", () => ({
-  BudgetActionsSheet: (props: unknown): null => {
-    mockBudgetActionsSheet(props);
-    return null;
-  },
-}));
 
 jest.mock("@/components/ui/Skeleton", () => ({
   Skeleton: (): React.JSX.Element => mockView("budget-detail-skeleton-block"),
@@ -125,6 +123,15 @@ jest.mock("@/hooks/useEditableBudget", () => ({
 
 jest.mock("@/hooks/useBudgetDetail", () => ({
   useBudgetDetail: (): typeof mockBudgetDetailResult => mockBudgetDetailResult,
+}));
+
+jest.mock("@/hooks/useBudgetDetailActions", () => ({
+  useBudgetDetailActions: () => ({
+    pendingAction: null,
+    errorKey: null,
+    execute: jest.fn(),
+    clearError: jest.fn(),
+  }),
 }));
 
 jest.mock("@/hooks/usePreferredCurrency", () => ({
@@ -180,7 +187,6 @@ import CreateBudgetScreen from "@/app/(private)/create-budget";
 
 describe("Budget screen dark theme styling", () => {
   beforeEach(() => {
-    mockBudgetActionsSheet.mockClear();
     mockSearchParams = {};
     mockEditableBudgetResult = {
       budget: undefined,
@@ -188,19 +194,42 @@ describe("Budget screen dark theme styling", () => {
       loadErrorKey: null,
     };
     mockBudgetDetailResult = {
-      budget: {
-        id: "budget-1",
-        name: "Food",
-        amount: 1000,
+      budget: { id: "budget-1" },
+      readModel: {
+        identity: {
+          budgetId: "budget-1",
+          name: "Food",
+          type: "GLOBAL",
+          lifecycle: "ACTIVE",
+          period: "MONTHLY",
+          periodStart: new Date(2026, 7, 1),
+          periodEnd: new Date(2026, 7, 31),
+          icon: { kind: "GLOBAL" },
+          availableLifecycleAction: "PAUSE",
+        },
         currency: "EGP",
-        isPaused: false,
-        isCategoryBudget: false,
+        metrics: {
+          spent: 500,
+          limit: 1000,
+          remaining: 500,
+          percentage: 50,
+          dailyAverage: 25,
+          status: "safe",
+        },
+        daysLeft: 10,
+        daysElapsed: 20,
+        paceState: "BELOW",
+        weeklySpending: [],
+        categoryBreakdown: null,
+        recentTransactions: [],
+        hasCompletedPauseExclusion: false,
       },
-      metrics: { remaining: 500 },
-      daysLeft: 10,
-      weeklySpending: [],
-      subcategoryBreakdown: [],
-      recentTransactions: [],
+      isInitialLoading: false,
+      isRefreshing: false,
+      isNotFound: false,
+      errorKey: null,
+      hasValidData: true,
+      retry: jest.fn(),
       isLoading: false,
     };
   });
@@ -273,8 +302,8 @@ describe("Budget screen dark theme styling", () => {
     mockSearchParams = { id: "budget-1" };
     mockBudgetDetailResult = {
       ...mockBudgetDetailResult,
-      budget: null,
-      metrics: null,
+      readModel: null,
+      isInitialLoading: true,
       isLoading: true,
     };
 
@@ -284,9 +313,7 @@ describe("Budget screen dark theme styling", () => {
       "className",
       expect.stringContaining("bg-background dark:bg-background-dark")
     );
-    expect(
-      screen.getAllByTestId("budget-detail-skeleton-block").length
-    ).toBeGreaterThan(0);
+    expect(screen.getByTestId("budget-detail-skeleton")).toBeOnTheScreen();
     const source = readFileSync(
       resolve(__dirname, "../../app/(private)/budget-detail.tsx"),
       "utf8"
@@ -294,64 +321,14 @@ describe("Budget screen dark theme styling", () => {
     expect(source).not.toContain("ActivityIndicator");
   });
 
-  it("omits the pause toggle for expired custom budget detail", () => {
-    mockSearchParams = { id: "expired-budget" };
-    mockBudgetDetailResult = {
-      ...mockBudgetDetailResult,
-      budget: {
-        ...mockBudgetDetailResult.budget,
-        id: "expired-budget",
-        isPaused: true,
-        period: "CUSTOM",
-        periodEnd: new Date("2020-01-01T00:00:00.000Z"),
-      },
-    };
-
-    render(<BudgetDetailScreen />);
-
-    expect(mockBudgetActionsSheet).toHaveBeenLastCalledWith(
-      expect.objectContaining({ canTogglePause: false })
-    );
-  });
-
-  it("removes the pause toggle when a mounted custom budget expires", () => {
-    jest.useFakeTimers();
-    jest.setSystemTime(new Date(2026, 7, 14, 23, 59, 59, 998));
-    mockSearchParams = { id: "expiring-budget" };
-    mockBudgetDetailResult = {
-      ...mockBudgetDetailResult,
-      budget: {
-        ...mockBudgetDetailResult.budget,
-        id: "expiring-budget",
-        period: "CUSTOM",
-        periodEnd: new Date(2026, 7, 14),
-      },
-    };
-
-    const view = render(<BudgetDetailScreen />);
-
-    expect(mockBudgetActionsSheet).toHaveBeenLastCalledWith(
-      expect.objectContaining({ canTogglePause: true })
-    );
-
-    act(() => {
-      jest.advanceTimersByTime(2);
-    });
-
-    expect(mockBudgetActionsSheet).toHaveBeenLastCalledWith(
-      expect.objectContaining({ canTogglePause: false })
-    );
-
-    view.unmount();
-    jest.useRealTimers();
-  });
 
   it("uses the themed app background on the budget detail not-found root", () => {
     mockSearchParams = { id: "budget-1" };
     mockBudgetDetailResult = {
       ...mockBudgetDetailResult,
-      budget: null,
-      metrics: null,
+      readModel: null,
+      isNotFound: true,
+      isInitialLoading: false,
       isLoading: false,
     };
 

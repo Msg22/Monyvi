@@ -155,5 +155,95 @@
   "dashboard_load_error": "تعذر تحديث ميزانياتك. ما زالت آخر النتائج ظاهرة.",
   "dashboard_initial_load_error": "تعذر تحميل ميزانياتك. حاول مرة أخرى.",
   "dashboard_action_error": "تعذر تحديث هذه الميزانية. حاول مرة أخرى.",
-  "retry": "حاول مرة أخرى"
+  "retry": "حاول مرة أخرى",
+  "detail": {
+    "lifecycle": {
+      "active": "نشطة",
+      "paused": "متوقفة",
+      "expired": "منتهية"
+    },
+    "period": {
+      "weekly": "أسبوعية",
+      "monthly": "شهرية",
+      "custom": "مخصصة"
+    },
+    "actions": {
+      "edit": "تعديل",
+      "pause": "إيقاف",
+      "resume": "استئناف",
+      "delete": "حذف الميزانية",
+      "pause_confirmation_title": "إيقاف هذه الميزانية؟",
+      "pause_confirmation_message": "لن تُحتسب المعاملات خلال فترة الإيقاف ضمن هذه الميزانية.",
+      "pause_confirmation_confirm": "إيقاف الميزانية",
+      "resume_confirmation_title": "استئناف هذه الميزانية؟",
+      "resume_confirmation_message": "سيُحتسب الإنفاق الجديد ضمن هذه الميزانية مرة أخرى.",
+      "resume_confirmation_confirm": "استئناف الميزانية",
+      "delete_confirmation_title": "حذف هذه الميزانية؟",
+      "delete_confirmation_message": "ستُزال الميزانية من لوحة التحكم، لكن ستبقى معاملاتها.",
+      "delete_confirmation_confirm": "حذف الميزانية",
+      "pause_success": "تم إيقاف الميزانية",
+      "resume_success": "تم استئناف الميزانية",
+      "delete_success": "تم حذف الميزانية",
+      "pause_error": "تعذر إيقاف هذه الميزانية. حاول مرة أخرى.",
+      "resume_error": "تعذر استئناف هذه الميزانية. حاول مرة أخرى.",
+      "delete_error": "تعذر حذف هذه الميزانية. حاول مرة أخرى."
+    },
+    "accessibility": {
+      "identity": "{{name}}، {{lifecycle}}، {{period}}، {{dateRange}}",
+      "pause_budget": "إيقاف {{name}}",
+      "resume_budget": "استئناف {{name}}",
+      "progress": "تم إنفاق {{percentage}} بالمئة من الميزانية",
+      "chart_summary": "الإنفاق الأسبوعي مقارنة بمعدل الميزانية",
+      "week_summary": "{{week}}، {{dateRange}}: تم إنفاق {{spent}}، معدل الميزانية {{pace}}",
+      "edit_transaction": "تعديل معاملة {{name}}، {{date}}، {{amount}}",
+      "breakdown_item": "{{name}}، {{count}} معاملات، {{amount}}، {{percentage}} بالمئة",
+      "delete_budget": "حذف {{name}}"
+    },
+    "overview": {
+      "spent": "تم الإنفاق",
+      "of_budget": "من {{limit}}",
+      "of_budget_percentage": "من الميزانية",
+      "remaining": "المتبقي",
+      "daily_average_spent": "متوسط الإنفاق اليومي",
+      "per_day": "{{amount}}/يوم",
+      "days_left": "الأيام المتبقية",
+      "days_value": "{{count}} يوم",
+      "status_warning": "قرب الحد",
+      "status_danger": "تجاوز الميزانية"
+    },
+    "trend": {
+      "title": "اتجاه الإنفاق الأسبوعي",
+      "you_spent": "ما أنفقته",
+      "budget_pace": "معدل الميزانية",
+      "week_label": "أ{{index}}",
+      "below": "إنفاقك أقل من معدل الميزانية. استمر!",
+      "on": "إنفاقك يطابق معدل الميزانية.",
+      "above": "إنفاقك أعلى من معدل الميزانية."
+    },
+    "breakdown": {
+      "title": "تفصيل الفئات",
+      "transaction_count_zero": "لا معاملات",
+      "transaction_count_one": "معاملة واحدة",
+      "transaction_count_two": "معاملتان",
+      "transaction_count_few": "{{count}} معاملات",
+      "transaction_count_many": "{{count}} معاملة",
+      "transaction_count_other": "{{count}} معاملة",
+      "empty": "لا يوجد إنفاق مطابق لهذه الميزانية حتى الآن."
+    },
+    "recent": {
+      "title": "أحدث المعاملات",
+      "empty": "لا توجد معاملات مطابقة لهذه الميزانية حتى الآن.",
+      "fallback_label": "معاملة"
+    },
+    "danger": {
+      "title": "منطقة الخطر",
+      "description": "حذف هذه الميزانية يُبقي معاملاتك، لكنه يزيل الميزانية من لوحة التحكم."
+    },
+    "pause_exclusion": "المعاملات خلال فترات الإيقاف المكتملة مستبعدة من هذه الإجماليات.",
+    "loading": "جارٍ تحميل تفاصيل الميزانية",
+    "initial_error": "تعذر تحميل هذه الميزانية. حاول مرة أخرى.",
+    "refresh_error": "تعذر تحديث هذه الميزانية. ما زالت آخر التفاصيل ظاهرة.",
+    "not_found": "هذه الميزانية لم تعد متاحة.",
+    "retry": "حاول مرة أخرى"
+  }
 }

@@ -12,7 +12,7 @@ with Angular equivalents in chat (never in code comments).
 
 <!-- SPECKIT START -->
 
-Active Speckit plan: `specs/033-budget-dashboard-redesign/plan.md`
+Active Speckit plan: `specs/034-budget-detail-redesign/plan.md`
 
 <!-- SPECKIT END -->
 
@@ -680,6 +680,8 @@ Strong success criteria let you loop independently. Weak criteria ("make it
 work") require constant clarification.
 
 ## Active Technologies
+- TypeScript 5.9 strict mode, React 19.2, React Native + Expo Router, React Navigation, NativeWind v4, (034-budget-detail-redesign)
+- Existing current-user-scoped WatermelonDB budgets, transactions, (034-budget-detail-redesign)
 
 - TypeScript 5.9 strict mode, Expo 55, React Native 0.83, WatermelonDB 0.28, and
   PostgreSQL migrations (031-sms-scan-safeguards)

@@ -1,7 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  I18nManager,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
@@ -29,6 +35,8 @@ interface PageHeaderProps {
   rightAction?: {
     icon?: keyof typeof Ionicons.glyphMap;
     label?: string;
+    iconColor?: string;
+    darkIconColor?: string;
     accessibilityLabel?: string;
     onPress: () => void;
     disabled?: boolean;
@@ -78,7 +86,7 @@ function ReviewPageHeader({
             accessibilityLabel={backAccessibilityLabel}
           >
             <Ionicons
-              name="arrow-back"
+              name={I18nManager.isRTL ? "arrow-forward" : "arrow-back"}
               size={24}
               color={isDark ? palette.slate[25] : palette.slate[900]}
             />
@@ -150,19 +158,31 @@ function ActiveSelection({
 function BackButton({
   backIcon,
   isDark,
+  onBack,
+  accessibilityLabel,
 }: {
   backIcon: "close" | "arrow";
   isDark: boolean;
+  onBack?: () => void;
+  accessibilityLabel?: string;
 }): React.ReactElement {
   const router = useRouter();
   return (
     <TouchableOpacity
-      onPress={() => router.back()}
+      onPress={onBack ?? router.back}
       testID="header-back"
-      className="me-2 p-1"
+      className="me-2 min-h-11 min-w-11 items-center justify-center rounded-full"
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
     >
       <Ionicons
-        name={backIcon === "close" ? "close-outline" : "arrow-back-outline"}
+        name={
+          backIcon === "close"
+            ? "close-outline"
+            : I18nManager.isRTL
+              ? "arrow-forward-outline"
+              : "arrow-back-outline"
+        }
         size={28}
         color={isDark ? palette.slate[50] : palette.slate[800]}
       />
@@ -199,6 +219,18 @@ function RightAction({
   rightAction: NonNullable<PageHeaderProps["rightAction"]>;
   isDark: boolean;
 }): React.ReactElement {
+  const hasIconAndLabel = Boolean(rightAction.icon && rightAction.label);
+  const actionSizeClasses = hasIconAndLabel
+    ? "min-h-11 px-3"
+    : rightAction.icon
+      ? rightAction.transparent
+        ? "min-h-11 min-w-11 bg-transparent"
+        : "min-h-11 min-w-14 bg-white dark:bg-slate-800"
+      : "min-h-11 px-4";
+  const iconColor =
+    (isDark ? rightAction.darkIconColor ?? rightAction.iconColor : rightAction.iconColor) ??
+    (isDark ? palette.slate[50] : palette.slate[800]);
+
   return (
     <TouchableOpacity
       testID={
@@ -210,13 +242,7 @@ function RightAction({
       disabled={rightAction.disabled || rightAction.loading}
       accessibilityRole="button"
       accessibilityLabel={rightAction.accessibilityLabel ?? rightAction.label}
-      className={`flex-row rounded-full items-center justify-center ${
-        rightAction.icon
-          ? rightAction.transparent
-            ? "w-10 h-10 bg-transparent"
-            : "w-14 h-10 bg-white dark:bg-slate-800"
-          : "px-4 py-2"
-      }`}
+      className={`flex-row rounded-full items-center justify-center ${actionSizeClasses}`}
       style={[
         rightAction.icon && !rightAction.transparent
           ? {
@@ -238,19 +264,27 @@ function RightAction({
             style={rightAction.label ? { marginEnd: 6 } : undefined}
           />
           {rightAction.label ? (
-            <Text className="text-base font-bold text-nileGreen-600 dark:text-nileGreen-400">
+            <Text className="text-base font-bold text-nileGreen-700 dark:text-nileGreen-400">
               {rightAction.label}
             </Text>
           ) : null}
         </>
       ) : rightAction.icon ? (
-        <Ionicons
-          name={rightAction.icon}
-          size={24}
-          color={isDark ? palette.slate[50] : palette.slate[800]}
-        />
+        <>
+          <Ionicons
+            name={rightAction.icon}
+            size={hasIconAndLabel ? 20 : 24}
+            color={iconColor}
+            style={hasIconAndLabel ? { marginEnd: 6 } : undefined}
+          />
+          {rightAction.label ? (
+            <Text className="text-base font-bold text-nileGreen-700 dark:text-nileGreen-400">
+              {rightAction.label}
+            </Text>
+          ) : null}
+        </>
       ) : (
-        <Text className="text-base font-bold text-nileGreen-600 dark:text-nileGreen-400">
+        <Text className="text-base font-bold text-nileGreen-700 dark:text-nileGreen-400">
           {rightAction.label}
         </Text>
       )}
@@ -330,7 +364,12 @@ export function PageHeader({
             ) : (
               <>
                 {showBackButton && (
-                  <BackButton backIcon={backIcon} isDark={isDark} />
+                  <BackButton
+                    backIcon={backIcon}
+                    isDark={isDark}
+                    onBack={onBack}
+                    accessibilityLabel={backAccessibilityLabel}
+                  />
                 )}
                 {shouldShowDrawerButton && (
                   <HamburgerButton

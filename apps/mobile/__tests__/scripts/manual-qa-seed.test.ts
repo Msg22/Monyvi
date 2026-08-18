@@ -54,6 +54,11 @@ interface PauseInterval {
   readonly startedAt: string;
 }
 
+interface CompletedPauseInterval {
+  readonly from: number;
+  readonly to: number;
+}
+
 function getStringField(row: unknown, field: string): string | undefined {
   if (typeof row !== "object" || row === null) return undefined;
   const value = (row as Record<string, unknown>)[field];
@@ -86,6 +91,20 @@ function parsePauseIntervals(value: string): readonly PauseInterval[] {
       typeof item === "object" &&
       item !== null &&
       typeof (item as Record<string, unknown>).startedAt === "string"
+  );
+}
+
+function parseCompletedPauseIntervals(
+  value: string
+): readonly CompletedPauseInterval[] {
+  const parsed: unknown = JSON.parse(value);
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter(
+    (item): item is CompletedPauseInterval =>
+      typeof item === "object" &&
+      item !== null &&
+      typeof (item as Record<string, unknown>).from === "number" &&
+      typeof (item as Record<string, unknown>).to === "number"
   );
 }
 
@@ -237,12 +256,76 @@ describe("manual-qa-seed script helpers", () => {
           deleted: false,
           display_name: "QA Paused Fixture Category",
         }),
+        expect.objectContaining({
+          display_name: "QA Detail Food",
+          level: 1,
+          parent_id: null,
+        }),
+        expect.objectContaining({
+          display_name: "QA Detail Groceries",
+          level: 2,
+        }),
+        expect.objectContaining({
+          display_name: "QA Detail Dining",
+          level: 2,
+        }),
+        expect.objectContaining({
+          display_name: "QA Detail Fresh Food",
+          level: 3,
+        }),
+        expect.objectContaining({
+          display_name: "QA Arabic Detail",
+          deleted: false,
+        }),
+        expect.objectContaining({
+          display_name: "QA Disposable Detail",
+          deleted: false,
+        }),
       ])
     );
-    expect(categoryRows).toHaveLength(6);
-    expect(operations.indexOf("upsert:categories:6")).toBeLessThan(
+    expect(categoryRows).toHaveLength(12);
+    expect(operations.indexOf("upsert:categories:12")).toBeLessThan(
       operations.indexOf(`upsert:budgets:${budgetRows.length}`)
     );
+    const detailParentId = getStringField(
+      categoryRows.find(
+        (row) => getStringField(row, "display_name") === "QA Detail Food"
+      ),
+      "id"
+    );
+    const detailGroceriesId = getStringField(
+      categoryRows.find(
+        (row) => getStringField(row, "display_name") === "QA Detail Groceries"
+      ),
+      "id"
+    );
+    const detailDiningId = getStringField(
+      categoryRows.find(
+        (row) => getStringField(row, "display_name") === "QA Detail Dining"
+      ),
+      "id"
+    );
+    const detailFreshFoodId = getStringField(
+      categoryRows.find(
+        (row) => getStringField(row, "display_name") === "QA Detail Fresh Food"
+      ),
+      "id"
+    );
+    expect(
+      categoryRows.find(
+        (row) => getStringField(row, "display_name") === "QA Detail Groceries"
+      )
+    ).toEqual(expect.objectContaining({ parent_id: detailParentId }));
+    expect(
+      categoryRows.find(
+        (row) => getStringField(row, "display_name") === "QA Detail Dining"
+      )
+    ).toEqual(expect.objectContaining({ parent_id: detailParentId }));
+    expect(
+      categoryRows.find(
+        (row) => getStringField(row, "display_name") === "QA Detail Fresh Food"
+      )
+    ).toEqual(expect.objectContaining({ parent_id: detailGroceriesId }));
     expect(accountRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: "Cash Wallet" }),
@@ -344,6 +427,25 @@ describe("manual-qa-seed script helpers", () => {
           name: "QA Historical Deleted Category Budget With A Long Name",
           category_id: getStringField(categoryRows[0], "id"),
         }),
+        expect.objectContaining({
+          name: "QA Detail Long Custom",
+          category_id: detailParentId,
+          period: "CUSTOM",
+          status: "ACTIVE",
+          type: "CATEGORY",
+        }),
+        expect.objectContaining({
+          name: "ميزانية عربية طويلة لاختبار شاشة تفاصيل الميزانية",
+          period: "WEEKLY",
+          status: "ACTIVE",
+          type: "CATEGORY",
+        }),
+        expect.objectContaining({
+          name: "QA Disposable Detail Budget",
+          period: "MONTHLY",
+          status: "ACTIVE",
+          type: "CATEGORY",
+        }),
       ])
     );
     expectRowsStampedForIncrementalPull(budgetRows);
@@ -395,6 +497,20 @@ describe("manual-qa-seed script helpers", () => {
     );
     expect(pauseIntervals).toHaveLength(1);
     expect(typeof pauseIntervals[0]?.startedAt).toBe("string");
+    const detailBudget = budgetRows.find(
+      (row) => getStringField(row, "name") === "QA Detail Long Custom"
+    ) as BudgetSeedRow | undefined;
+    const detailPauseIntervals = parseCompletedPauseIntervals(
+      detailBudget?.pause_intervals ?? "[]"
+    );
+    expect(detailPauseIntervals).toHaveLength(1);
+    expect(detailPauseIntervals[0]?.to).toBeGreaterThan(
+      detailPauseIntervals[0]?.from ?? Number.POSITIVE_INFINITY
+    );
+    expect(
+      Date.parse(getStringField(detailBudget, "period_end") ?? "") -
+        Date.parse(getStringField(detailBudget, "period_start") ?? "")
+    ).toBeGreaterThan(28 * 24 * 60 * 60 * 1000);
     expect(debtRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ party_name: "Ahmed", type: "LENT" }),
@@ -445,6 +561,12 @@ describe("manual-qa-seed script helpers", () => {
           category_id: overBudgetCategoryId,
           counterparty: "QA Over Budget Fixture",
         }),
+        expect.objectContaining({
+          amount: 350,
+          counterparty: "QA Retained After Budget Delete",
+          deleted: false,
+          type: "EXPENSE",
+        }),
       ])
     );
     expect(
@@ -457,7 +579,40 @@ describe("manual-qa-seed script helpers", () => {
         (row) => getStringField(row, "linked_debt_id") !== undefined
       )
     ).toBe(true);
-    expect(transactionRows).toHaveLength(10);
+    const detailTransactions = transactionRows.filter((row) =>
+      getStringField(row, "counterparty")?.startsWith("QA Detail ")
+    );
+    expect(detailTransactions).toHaveLength(9);
+    expect(
+      new Set(detailTransactions.map((row) => getStringField(row, "date"))).size
+    ).toBeGreaterThan(6);
+    expect(
+      detailTransactions.map((row) => getStringField(row, "category_id"))
+    ).toEqual(
+      expect.arrayContaining([
+        detailGroceriesId,
+        detailDiningId,
+        detailFreshFoodId,
+      ])
+    );
+    const insidePauseTransaction = detailTransactions.find(
+      (row) => getStringField(row, "counterparty") === "QA Detail Paused Inside"
+    );
+    const outsidePauseTransaction = detailTransactions.find(
+      (row) =>
+        getStringField(row, "counterparty") === "QA Detail Paused Outside"
+    );
+    const completedPause = detailPauseIntervals[0];
+    expect(
+      Date.parse(getStringField(insidePauseTransaction, "date") ?? "")
+    ).toBeGreaterThanOrEqual(completedPause?.from ?? Number.POSITIVE_INFINITY);
+    expect(
+      Date.parse(getStringField(insidePauseTransaction, "date") ?? "")
+    ).toBeLessThanOrEqual(completedPause?.to ?? Number.NEGATIVE_INFINITY);
+    expect(
+      Date.parse(getStringField(outsidePauseTransaction, "date") ?? "")
+    ).toBeLessThan(completedPause?.from ?? Number.NEGATIVE_INFINITY);
+    expect(transactionRows).toHaveLength(20);
     expectRowsStampedForIncrementalPull(
       transactionRows.filter(
         (row) =>

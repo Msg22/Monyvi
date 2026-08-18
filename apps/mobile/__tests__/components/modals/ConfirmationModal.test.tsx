@@ -52,5 +52,66 @@ describe("ConfirmationModal", () => {
       "accessibilityState",
       { disabled: true }
     );
+    expect(screen.getByTestId("confirmation-modal-card")).toHaveProp(
+      "aria-busy",
+      true
+    );
+  });
+
+  it("exposes modal semantics and blocks backdrop dismissal while confirming", () => {
+    const onCancel = jest.fn();
+    const screen = render(
+      <ConfirmationModal
+        visible
+        title="Delete budget?"
+        message="Transactions stay available"
+        isConfirming
+        onConfirm={jest.fn()}
+        onCancel={onCancel}
+      />
+    );
+
+    expect(screen.getByTestId("confirmation-modal-card")).toHaveProp(
+      "accessibilityViewIsModal",
+      true
+    );
+    expect(screen.getByTestId("confirmation-modal-card")).not.toHaveProp(
+      "accessible",
+      true
+    );
+    expect(screen.getByText("Delete budget?")).toHaveProp(
+      "accessibilityRole",
+      "header"
+    );
+    expect(screen.getByTestId("confirmation-modal-status")).toHaveProp(
+      "accessibilityState",
+      { busy: true }
+    );
+
+    fireEvent.press(screen.getByTestId("confirmation-modal-backdrop"));
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it("labels both modal actions as buttons", () => {
+    const screen = render(
+      <ConfirmationModal
+        visible
+        title="Pause budget?"
+        message="Pause tracking"
+        confirmLabel="Pause"
+        cancelLabel="Cancel"
+        onConfirm={jest.fn()}
+        onCancel={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("modal-confirm")).toHaveProp(
+      "accessibilityRole",
+      "button"
+    );
+    expect(screen.getByTestId("modal-cancel")).toHaveProp(
+      "accessibilityRole",
+      "button"
+    );
   });
 });

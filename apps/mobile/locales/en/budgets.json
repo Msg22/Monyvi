@@ -131,5 +131,91 @@
   "dashboard_load_error": "We couldn't refresh your budgets. Your last results are still here.",
   "dashboard_initial_load_error": "We couldn't load your budgets. Please try again.",
   "dashboard_action_error": "We couldn't update this budget. Please try again.",
-  "retry": "Try again"
+  "retry": "Try again",
+  "detail": {
+    "lifecycle": {
+      "active": "Active",
+      "paused": "Paused",
+      "expired": "Expired"
+    },
+    "period": {
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "custom": "Custom"
+    },
+    "actions": {
+      "edit": "Edit",
+      "pause": "Pause",
+      "resume": "Resume",
+      "delete": "Delete budget",
+      "pause_confirmation_title": "Pause this budget?",
+      "pause_confirmation_message": "Transactions during the pause will not count toward this budget.",
+      "pause_confirmation_confirm": "Pause budget",
+      "resume_confirmation_title": "Resume this budget?",
+      "resume_confirmation_message": "New spending will count toward this budget again.",
+      "resume_confirmation_confirm": "Resume budget",
+      "delete_confirmation_title": "Delete this budget?",
+      "delete_confirmation_message": "The budget will leave your dashboard, but its transactions will stay.",
+      "delete_confirmation_confirm": "Delete budget",
+      "pause_success": "Budget paused",
+      "resume_success": "Budget resumed",
+      "delete_success": "Budget deleted",
+      "pause_error": "We couldn't pause this budget. Please try again.",
+      "resume_error": "We couldn't resume this budget. Please try again.",
+      "delete_error": "We couldn't delete this budget. Please try again."
+    },
+    "accessibility": {
+      "identity": "{{name}}, {{lifecycle}}, {{period}}, {{dateRange}}",
+      "pause_budget": "Pause {{name}}",
+      "resume_budget": "Resume {{name}}",
+      "progress": "{{percentage}} percent of budget spent",
+      "chart_summary": "Weekly spending compared with budget pace",
+      "week_summary": "{{week}}, {{dateRange}}: spent {{spent}}, budget pace {{pace}}",
+      "edit_transaction": "Edit transaction {{name}}, {{date}}, {{amount}}",
+      "breakdown_item": "{{name}}, {{count}} transactions, {{amount}}, {{percentage}} percent",
+      "delete_budget": "Delete {{name}}"
+    },
+    "overview": {
+      "spent": "Spent",
+      "of_budget": "of {{limit}}",
+      "of_budget_percentage": "of budget",
+      "remaining": "Remaining",
+      "daily_average_spent": "Daily average spent",
+      "per_day": "{{amount}}/day",
+      "days_left": "Days left",
+      "days_value": "{{count}} days",
+      "status_warning": "Near limit",
+      "status_danger": "Over budget"
+    },
+    "trend": {
+      "title": "Weekly spending trend",
+      "you_spent": "You spent",
+      "budget_pace": "Budget pace",
+      "week_label": "W{{index}}",
+      "below": "You're below budget pace. Keep it up!",
+      "on": "You're on budget pace.",
+      "above": "You're above budget pace."
+    },
+    "breakdown": {
+      "title": "Category breakdown",
+      "transaction_count_one": "{{count}} transaction",
+      "transaction_count_other": "{{count}} transactions",
+      "empty": "No category spending matched this budget yet."
+    },
+    "recent": {
+      "title": "Recent transactions",
+      "empty": "No transactions matched this budget yet.",
+      "fallback_label": "Transaction"
+    },
+    "danger": {
+      "title": "Danger zone",
+      "description": "Deleting this budget keeps your transactions, but removes this budget from your dashboard."
+    },
+    "pause_exclusion": "Transactions during completed pause periods are excluded from these totals.",
+    "loading": "Loading budget details",
+    "initial_error": "We couldn't load this budget. Please try again.",
+    "refresh_error": "We couldn't refresh this budget. Your last details are still here.",
+    "not_found": "This budget is no longer available.",
+    "retry": "Try again"
+  }
 }

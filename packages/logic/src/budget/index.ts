@@ -10,3 +10,5 @@ export * from "./budget-period-utils";
 export * from "./budget-spending";
 
 export * from "./budget-pause-utils";
+
+export * from "./budget-pace";

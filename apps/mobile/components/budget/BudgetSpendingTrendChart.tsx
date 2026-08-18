@@ -1,190 +1,231 @@
-/**
- * BudgetSpendingTrendChart Component
- *
- * Weekly spending bar chart for the budget detail screen.
- * Built with react-native-reanimated for animated bars and
- * a dashed average line.
- *
- * Architecture & Design Rationale:
- * - Pattern: Presentational Component
- * - Why: No external chart library needed — simple bar chart with animated transitions.
- * - SOLID: SRP — renders only the weekly spending visualization.
- *
- * @module BudgetSpendingTrendChart
- */
-
-import React, { useEffect } from "react";
-import { Text, View } from "react-native";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  Easing,
-} from "react-native-reanimated";
-import { formatCurrency } from "@monyvi/logic";
+import type {
+  BudgetDetailPaceState,
+  BudgetDetailWeek,
+} from "@/contracts/budget-detail-presentation";
+import { useLocale } from "@/context/LocaleContext";
 import type { CurrencyType } from "@monyvi/db";
-import { palette } from "@/constants/colors";
-import { useTheme } from "@/context/ThemeContext";
+import { formatCurrency } from "@monyvi/logic";
+import React, { useEffect } from "react";
+import { I18nManager, ScrollView, Text, View } from "react-native";
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface WeeklySpending {
-  readonly label: string;
-  readonly amount: number;
-}
-
 interface BudgetSpendingTrendChartProps {
-  /** Weekly spending data (sorted chronologically) */
-  readonly data: readonly WeeklySpending[];
-  /** Budget currency */
+  readonly data: readonly BudgetDetailWeek[];
   readonly currency: CurrencyType;
-  /** Weekly budget limit (amount / weeks in period) for the average line */
-  readonly weeklyAverage: number;
+  readonly paceState: BudgetDetailPaceState | null;
 }
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const BAR_MAX_HEIGHT = 120;
+const CHART_HEIGHT = 132;
+const BAR_MAX_HEIGHT = 104;
+const WEEK_WIDTH = 88;
 const BAR_WIDTH = 28;
-const ANIMATION_DURATION = 600;
-
-// ---------------------------------------------------------------------------
-// Animated Bar
-// ---------------------------------------------------------------------------
-
-function AnimatedBar({
-  height,
-  color,
-  delay,
-}: {
-  readonly height: number;
-  readonly color: string;
-  readonly delay: number;
-}): React.JSX.Element {
-  const animHeight = useSharedValue(0);
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      animHeight.value = withTiming(height, {
-        duration: ANIMATION_DURATION,
-        easing: Easing.out(Easing.cubic),
-      });
-    }, delay);
-    return () => clearTimeout(timeout);
-  }, [height, delay, animHeight]);
-
-  const animStyle = useAnimatedStyle(() => ({
-    height: animHeight.value,
-  }));
-
-  return (
-    <Animated.View
-      className="rounded-t-lg"
-      style={[{ width: BAR_WIDTH, backgroundColor: color }, animStyle]}
-    />
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export function BudgetSpendingTrendChart({
   data,
   currency,
-  weeklyAverage,
+  paceState,
 }: BudgetSpendingTrendChartProps): React.JSX.Element {
   const { t } = useTranslation("budgets");
-  const { isDark } = useTheme();
-  const amounts = data.map((d) => d.amount);
-  const maxAmount = Math.max(...amounts, weeklyAverage, 1);
-
-  const getBarColor = (amount: number): string => {
-    if (amount >= weeklyAverage * 1.2) return palette.red[500];
-    if (amount >= weeklyAverage * 0.8) return palette.gold[500];
-    return palette.nileGreen[500];
-  };
-
-  const averageLineBottom = (weeklyAverage / maxAmount) * BAR_MAX_HEIGHT;
+  const { language } = useLocale();
+  const maxAmount = Math.max(
+    ...data.flatMap((week) => [week.actualAmount, week.paceAmount]),
+    1
+  );
+  const contentWidth = Math.max(data.length * WEEK_WIDTH, 264);
+  const insight = getPaceInsight(paceState, t);
 
   return (
-    <View className="mb-6">
-      <Text className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold mb-2 ms-[22px]">
-        {t("spending_trend")}
-      </Text>
-      <View className="bg-white dark:bg-slate-800 rounded-3xl p-5 border border-slate-200 dark:border-slate-700">
-        {/* Chart area */}
-        <View style={{ height: BAR_MAX_HEIGHT + 24 }}>
-          {/* Average line */}
-          <View
-            className="absolute start-0 end-0 border-dashed"
-            style={{
-              bottom: averageLineBottom,
-              borderBottomWidth: 1,
-              borderBottomColor: isDark
-                ? palette.slate[600]
-                : palette.slate[300],
-            }}
-          >
-            <View
-              className="absolute flex-row justify-end"
-              style={{ right: 0, top: -7, left: 0, zIndex: 10 }}
-            >
-              <Text
-                className="text-slate-400 dark:text-slate-500 font-medium bg-white dark:bg-slate-800 px-1"
-                style={{ fontSize: 9 }}
-              >
-                {t("daily_avg")}{" "}
-                {formatCurrency({
-                  amount: weeklyAverage,
-                  currency,
-                  maximumFractionDigits: 0,
-                })}
-              </Text>
-            </View>
-          </View>
-
-          {/* Bars */}
-          <View
-            className="flex-row items-end justify-around"
-            style={{ height: BAR_MAX_HEIGHT }}
-          >
-            {data.map((week, index) => {
-              const barHeight = Math.max(
-                (week.amount / maxAmount) * BAR_MAX_HEIGHT,
-                2
-              );
-              return (
-                <View key={week.label} className="items-center">
-                  <AnimatedBar
-                    height={barHeight}
-                    color={getBarColor(week.amount)}
-                    delay={index * 80}
-                  />
-                </View>
-              );
-            })}
-          </View>
-
-          {/* Labels */}
-          <View className="flex-row justify-around mt-2">
-            {data.map((week) => (
-              <Text
-                key={week.label}
-                className="text-slate-400 dark:text-slate-500 font-medium text-center"
-                style={{ fontSize: 9, width: BAR_WIDTH + 8 }}
-              >
-                {week.label}
-              </Text>
-            ))}
-          </View>
+    <View
+      testID="budget-spending-trend-chart"
+      className="mx-5 mb-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800"
+    >
+      <View className="mb-3 flex-row flex-wrap items-center justify-between gap-2">
+        <Text
+          accessible
+          accessibilityLabel={t("detail.accessibility.chart_summary", {
+            defaultValue: `Weekly spending trend. ${data.length} weeks.`,
+          })}
+          className="text-base font-semibold text-text-primary"
+        >
+          {t("detail.trend.title", { defaultValue: "Weekly spending trend" })}
+        </Text>
+        <View className="flex-row items-center gap-4">
+          <Legend label={t("detail.trend.you_spent", { defaultValue: "You spent" })} kind="actual" />
+          <Legend label={t("detail.trend.budget_pace", { defaultValue: "Budget pace" })} kind="pace" />
         </View>
       </View>
+
+      <View className="flex-row">
+        <View
+          testID="budget-trend-y-axis"
+          className="w-[70px] justify-between pb-12 pe-2"
+          style={{ height: CHART_HEIGHT + 48 }}
+        >
+          <AxisLabel amount={maxAmount} currency={currency} />
+          <AxisLabel amount={maxAmount / 2} currency={currency} />
+          <AxisLabel amount={0} currency={currency} />
+        </View>
+        <ScrollView
+          testID="budget-trend-scroll"
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className="flex-1"
+        >
+          <View
+            testID="budget-trend-scroll-content"
+            className={`items-end border-b border-slate-200 dark:border-slate-700 ${I18nManager.isRTL ? "flex-row-reverse" : "flex-row"}`}
+            style={{
+              width: contentWidth,
+              height: CHART_HEIGHT + 48,
+            }}
+          >
+            {data.map((week, index) => (
+              <WeekColumn
+                key={week.id}
+                week={week}
+                index={index}
+                maxAmount={maxAmount}
+                currency={currency}
+                language={language}
+              />
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+
+      {insight ? (
+        <View className="mt-3 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700">
+          <Text className="text-sm text-text-secondary">{insight}</Text>
+        </View>
+      ) : null}
     </View>
   );
+}
+
+function WeekColumn({
+  week,
+  index,
+  maxAmount,
+  currency,
+  language,
+}: {
+  readonly week: BudgetDetailWeek;
+  readonly index: number;
+  readonly maxAmount: number;
+  readonly currency: CurrencyType;
+  readonly language: string;
+}): React.JSX.Element {
+  const { t } = useTranslation("budgets");
+  const actualHeight = Math.max((week.actualAmount / maxAmount) * BAR_MAX_HEIGHT, 2);
+  const paceHeight = Math.max((week.paceAmount / maxAmount) * BAR_MAX_HEIGHT, 2);
+  const locale = language === "ar" ? "ar-EG" : "en-US";
+  const dateFormatter = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" });
+  const amount = (value: number): string =>
+    formatCurrency({ amount: value, currency, maximumFractionDigits: 0 });
+  const weekLabel = t("detail.trend.week_label", {
+    defaultValue: `Week ${index + 1}`,
+    index: index + 1,
+  });
+  const dateRange = `${dateFormatter.format(week.start)}–${dateFormatter.format(week.end)}`;
+
+  return (
+    <View
+      testID={`budget-trend-week-${week.id}`}
+      accessible
+      accessibilityLabel={t("detail.accessibility.week_summary", {
+        defaultValue: `${weekLabel}. You spent ${amount(week.actualAmount)}. Budget pace ${amount(week.paceAmount)}.`,
+        week: weekLabel,
+        dateRange,
+        spent: amount(week.actualAmount),
+        pace: amount(week.paceAmount),
+      })}
+      className="items-center justify-end"
+      style={{ width: WEEK_WIDTH, height: CHART_HEIGHT + 48 }}
+    >
+      <View className="flex-row items-end gap-2" style={{ height: CHART_HEIGHT }}>
+        <View className="items-center justify-end" style={{ height: CHART_HEIGHT, width: BAR_WIDTH }}>
+          <Text
+            className="absolute w-[72px] text-center text-[9px] font-medium text-text-secondary"
+            numberOfLines={1}
+            style={{ bottom: actualHeight + 3 }}
+          >
+            {amount(week.actualAmount)}
+          </Text>
+          <AnimatedActualBar height={actualHeight} />
+        </View>
+        <View className="justify-end" style={{ height: CHART_HEIGHT, width: BAR_WIDTH }}>
+          <View
+            className="rounded-t border-2 border-dashed border-slate-500 dark:border-slate-400"
+            style={{ height: paceHeight, width: BAR_WIDTH }}
+          />
+        </View>
+      </View>
+      <Text className="mt-2 text-xs font-medium text-text-secondary">{weekLabel.replace("Week ", "W")}</Text>
+      <Text className="mt-0.5 text-[10px] text-text-muted">
+        {dateRange}
+      </Text>
+    </View>
+  );
+}
+
+function AnimatedActualBar({ height }: { readonly height: number }): React.JSX.Element {
+  const prefersReducedMotion = useReducedMotion();
+  const animatedHeight = useSharedValue(prefersReducedMotion ? height : 0);
+
+  useEffect(() => {
+    animatedHeight.value = prefersReducedMotion
+      ? height
+      : withTiming(height, { duration: 220, easing: Easing.out(Easing.cubic) });
+    return () => cancelAnimation(animatedHeight);
+  }, [animatedHeight, height, prefersReducedMotion]);
+
+  const animatedStyle = useAnimatedStyle(() => ({ height: animatedHeight.value }));
+  return (
+    <Animated.View
+      className="rounded-t bg-nileGreen-700 dark:bg-nileGreen-400"
+      style={[{ width: BAR_WIDTH }, animatedStyle]}
+    />
+  );
+}
+
+function AxisLabel({ amount, currency }: { readonly amount: number; readonly currency: CurrencyType }): React.JSX.Element {
+  return (
+    <Text className="text-[10px] text-text-muted">
+      {formatCurrency({ amount, currency, maximumFractionDigits: 0 })}
+    </Text>
+  );
+}
+
+function Legend({ label, kind }: { readonly label: string; readonly kind: "actual" | "pace" }): React.JSX.Element {
+  return (
+    <View className="flex-row items-center gap-1.5">
+      <Text className="text-[10px] text-text-secondary">{label}</Text>
+      <View
+        className={kind === "actual" ? "h-1.5 w-7 rounded-full bg-nileGreen-700 dark:bg-nileGreen-400" : "h-1.5 w-7 rounded border border-dashed border-slate-500 dark:border-slate-400"}
+      />
+    </View>
+  );
+}
+
+function getPaceInsight(
+  paceState: BudgetDetailPaceState | null,
+  translate: ReturnType<typeof useTranslation>["t"]
+): string | null {
+  if (paceState === null) return null;
+  const defaults = {
+    BELOW: "Below budget pace",
+    ON: "On budget pace",
+    ABOVE: "Above budget pace",
+  } as const;
+  return translate(`detail.trend.${paceState.toLowerCase()}`, {
+    defaultValue: defaults[paceState],
+  });
 }

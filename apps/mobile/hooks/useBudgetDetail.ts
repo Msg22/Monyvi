@@ -1,149 +1,227 @@
-/**
- * useBudgetDetail Hook
- *
- * Observes a single scoped budget and delegates detail aggregation to the
- * budget detail read-model service.
- *
- * @module useBudgetDetail
- */
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
+import { useFocusEffect } from "expo-router";
+import type { Budget, CurrencyType } from "@monyvi/db";
 
-import { useEffect, useState } from "react";
-import { database, type Budget, type Transaction } from "@monyvi/db";
-import type { SpendingMetrics } from "@monyvi/logic";
-
-import {
-  getBudgetDetailReadModel,
-  type SubcategorySpending,
-  type WeeklySpendingData,
-} from "@/services/budget-detail-read-model-service";
-import { observeOwnedById } from "@/services/user-data-access";
+import type {
+  BudgetDetailErrorKey,
+  BudgetDetailReadModel,
+} from "@/contracts/budget-detail-presentation";
+import { observeBudgetDetailReadModels } from "@/services/budget-detail-observation-service";
 import { logger } from "@/utils/logger";
 import { runUserScopedEffect, useCurrentUser } from "./useCurrentUser";
 
-interface UseBudgetDetailResult {
-  readonly budget: Budget | null;
-  readonly metrics: SpendingMetrics | null;
-  readonly daysLeft: number;
-  readonly daysElapsed: number;
-  readonly weeklySpending: readonly WeeklySpendingData[];
-  readonly subcategoryBreakdown: readonly SubcategorySpending[];
-  readonly recentTransactions: readonly Transaction[];
-  readonly isLoading: boolean;
-}
-
 interface BudgetDetailState {
-  readonly metrics: SpendingMetrics | null;
-  readonly daysLeft: number;
-  readonly daysElapsed: number;
-  readonly weeklySpending: readonly WeeklySpendingData[];
-  readonly subcategoryBreakdown: readonly SubcategorySpending[];
-  readonly recentTransactions: readonly Transaction[];
-  readonly isLoading: boolean;
+  readonly budget: Budget | null;
+  readonly readModel: BudgetDetailReadModel | null;
+  readonly isInitialLoading: boolean;
+  readonly isRefreshing: boolean;
+  readonly isNotFound: boolean;
+  readonly errorKey: BudgetDetailErrorKey | null;
 }
 
-const EMPTY_DETAIL_STATE: BudgetDetailState = {
-  metrics: null,
-  daysLeft: 0,
-  daysElapsed: 1,
-  weeklySpending: [],
-  subcategoryBreakdown: [],
-  recentTransactions: [],
-  isLoading: false,
+export interface UseBudgetDetailResult extends BudgetDetailState {
+  readonly hasValidData: boolean;
+  readonly retry: () => void;
+  readonly isLoading: boolean;
+  readonly metrics: BudgetDetailReadModel["metrics"] | null;
+  readonly daysLeft: number;
+  readonly daysElapsed: number;
+  readonly weeklySpending: BudgetDetailReadModel["weeklySpending"];
+  readonly subcategoryBreakdown: NonNullable<
+    BudgetDetailReadModel["categoryBreakdown"]
+  >;
+  readonly recentTransactions: BudgetDetailReadModel["recentTransactions"];
+}
+
+const SIGNED_OUT_STATE: BudgetDetailState = {
+  budget: null,
+  readModel: null,
+  isInitialLoading: false,
+  isRefreshing: false,
+  isNotFound: false,
+  errorKey: null,
 };
 
-export function useBudgetDetail(budgetId: string): UseBudgetDetailResult {
-  const [budget, setBudget] = useState<Budget | null>(null);
-  const [observedRevision, setObservedRevision] = useState(0);
-  const [state, setState] = useState<BudgetDetailState>({
-    ...EMPTY_DETAIL_STATE,
-    isLoading: true,
-  });
+const INITIAL_STATE: BudgetDetailState = {
+  ...SIGNED_OUT_STATE,
+  isInitialLoading: true,
+};
+
+export function useBudgetDetail(
+  budgetId: string | undefined,
+  fallbackCurrency: CurrencyType
+): UseBudgetDetailResult {
+  const [state, setState] = useState<BudgetDetailState>(INITIAL_STATE);
+  const [refreshRevision, setRefreshRevision] = useState(0);
+  const generationRef = useRef(0);
+  const hasFocusedRef = useRef(false);
+  const activeRequestRef = useRef<{
+    readonly userId: string;
+    readonly budgetId: string;
+    readonly fallbackCurrency: CurrencyType;
+  } | null>(null);
   const { userId, isResolvingUser } = useCurrentUser();
 
-  useEffect(() => {
-    if (!budgetId) return;
+  const requestRefresh = useCallback((): void => {
+    setRefreshRevision((revision) => revision + 1);
+  }, []);
 
-    return runUserScopedEffect({
+  useFocusEffect(
+    useCallback((): void => {
+      if (hasFocusedRef.current) requestRefresh();
+      else hasFocusedRef.current = true;
+    }, [requestRefresh])
+  );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") requestRefresh();
+    });
+    return () => subscription.remove();
+  }, [requestRefresh]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleNextDay = (): void => {
+      const now = new Date();
+      const nextDay = new Date(now);
+      nextDay.setHours(24, 0, 0, 0);
+      timer = setTimeout(() => {
+        requestRefresh();
+        scheduleNextDay();
+      }, Math.max(1, nextDay.getTime() - now.getTime()));
+    };
+    scheduleNextDay();
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [requestRefresh]);
+
+  useEffect(() => {
+    const generation = ++generationRef.current;
+    let isActive = true;
+    let unsubscribe: (() => void) | undefined;
+
+    const clear = (nextState: BudgetDetailState): void => {
+      if (!isActive || generation !== generationRef.current) return;
+      setState(nextState);
+    };
+
+    const cleanup = runUserScopedEffect({
       userId,
       isResolvingUser,
-      onResolving: () => {
-        setBudget(null);
-        setObservedRevision(0);
-        setState((prev) => ({ ...prev, isLoading: true }));
-      },
+      onResolving: () => clear(INITIAL_STATE),
       onSignedOut: () => {
-        setBudget(null);
-        setObservedRevision(0);
-        setState(EMPTY_DETAIL_STATE);
+        activeRequestRef.current = null;
+        clear(SIGNED_OUT_STATE);
       },
       onAuthenticated: (currentUserId) => {
-        const subscription = observeOwnedById<Budget>(
-          database.get<Budget>("budgets"),
+        if (!budgetId) {
+          activeRequestRef.current = null;
+          clear({ ...SIGNED_OUT_STATE, isNotFound: true });
+          return;
+        }
+        const previousRequest = activeRequestRef.current;
+        const isSameRequest =
+          previousRequest?.userId === currentUserId &&
+          previousRequest.budgetId === budgetId &&
+          previousRequest.fallbackCurrency === fallbackCurrency;
+        activeRequestRef.current = {
+          userId: currentUserId,
           budgetId,
-          currentUserId
-        ).subscribe({
-          next: (observedBudget) => {
-            setBudget(observedBudget);
-            setObservedRevision((revision) => revision + 1);
-          },
-          error: (err: unknown) => {
-            logger.error("budgetDetail.budget.observe.failed", err);
-            setBudget(null);
-            setState(EMPTY_DETAIL_STATE);
-          },
-        });
+          fallbackCurrency,
+        };
+        if (isSameRequest) {
+          setState((previous) => ({
+            ...previous,
+            isInitialLoading: previous.readModel === null,
+            isRefreshing: previous.readModel !== null,
+            isNotFound: false,
+            errorKey: null,
+          }));
+        } else {
+          clear(INITIAL_STATE);
+        }
 
-        return () => subscription.unsubscribe();
+        void (async (): Promise<void> => {
+          try {
+            const observation = await observeBudgetDetailReadModels({
+              budgetId,
+              userId: currentUserId,
+              fallbackCurrency,
+              getNow: () => new Date(),
+            });
+            if (!isActive || generation !== generationRef.current) return;
+            const subscription = observation.subscribe({
+              next: (value): void => {
+                if (!isActive || generation !== generationRef.current) return;
+                if (!value) {
+                  setState({
+                    ...SIGNED_OUT_STATE,
+                    isNotFound: true,
+                  });
+                  return;
+                }
+                setState({
+                  budget: value.budget,
+                  readModel: value.readModel,
+                  isInitialLoading: false,
+                  isRefreshing: false,
+                  isNotFound: false,
+                  errorKey: null,
+                });
+              },
+              error: (error): void => {
+                if (!isActive || generation !== generationRef.current) return;
+                logger.error("budgetDetail.observe.failed", error, { budgetId });
+                setState((previous) => ({
+                  ...previous,
+                  isInitialLoading: false,
+                  isRefreshing: false,
+                  errorKey: previous.readModel
+                    ? "budget_detail_refresh_failed"
+                    : "budget_detail_load_failed",
+                }));
+              },
+            });
+            unsubscribe = (): void => subscription.unsubscribe();
+          } catch (error: unknown) {
+            if (!isActive || generation !== generationRef.current) return;
+            logger.error("budgetDetail.observe.failed", error, { budgetId });
+            setState((previous) => ({
+              ...previous,
+              isInitialLoading: false,
+              isRefreshing: false,
+              errorKey: previous.readModel
+                ? "budget_detail_refresh_failed"
+                : "budget_detail_load_failed",
+            }));
+          }
+        })();
+
+        return () => unsubscribe?.();
       },
     });
-  }, [budgetId, userId, isResolvingUser]);
-
-  useEffect(() => {
-    if (!budget) return;
-    const currentBudget = budget;
-    let cancelled = false;
-
-    async function compute(): Promise<void> {
-      setState((previous) =>
-        previous.metrics ? previous : { ...previous, isLoading: true }
-      );
-
-      try {
-        const detail = await getBudgetDetailReadModel(currentBudget);
-
-        if (!cancelled) {
-          setState({
-            ...detail,
-            isLoading: false,
-          });
-        }
-      } catch (error: unknown) {
-        logger.error("budgetDetail.compute.failed", error);
-        if (!cancelled) {
-          setState((previous) =>
-            previous.metrics
-              ? { ...previous, isLoading: false }
-              : EMPTY_DETAIL_STATE
-          );
-        }
-      }
-    }
-
-    void compute();
 
     return () => {
-      cancelled = true;
+      isActive = false;
+      generationRef.current += 1;
+      cleanup?.();
     };
-  }, [budget, observedRevision]);
+  }, [budgetId, fallbackCurrency, isResolvingUser, refreshRevision, userId]);
 
+  const readModel = state.readModel;
   return {
-    budget,
-    metrics: state.metrics,
-    daysLeft: state.daysLeft,
-    daysElapsed: state.daysElapsed,
-    weeklySpending: state.weeklySpending,
-    subcategoryBreakdown: state.subcategoryBreakdown,
-    recentTransactions: state.recentTransactions,
-    isLoading: state.isLoading,
+    ...state,
+    hasValidData: readModel !== null,
+    retry: requestRefresh,
+    isLoading: state.isInitialLoading,
+    metrics: readModel?.metrics ?? null,
+    daysLeft: readModel?.daysLeft ?? 0,
+    daysElapsed: readModel?.daysElapsed ?? 1,
+    weeklySpending: readModel?.weeklySpending ?? [],
+    subcategoryBreakdown: readModel?.categoryBreakdown ?? [],
+    recentTransactions: readModel?.recentTransactions ?? [],
   };
 }

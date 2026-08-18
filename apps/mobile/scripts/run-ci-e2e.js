@@ -62,6 +62,18 @@ const budgetMaestroFlows = [
     flow: "budgets/dashboard-lifecycle-actions.yaml",
     profile: "dashboard-full",
   },
+  {
+    flow: "budgets/budget-detail-active.yaml",
+    profile: "dashboard-full",
+  },
+  {
+    flow: "budgets/budget-detail-lifecycle.yaml",
+    profile: "dashboard-full",
+  },
+  {
+    flow: "budgets/budget-detail-delete.yaml",
+    profile: "budget-detail-delete",
+  },
 ];
 const defaultLiveSmsJourneys = [
   "01",

@@ -8,6 +8,35 @@ import {
 
 const EXPECTED_E2E_MARKET_RATE_ID = "00000000-0000-0000-0006-000000000001";
 
+interface BudgetFixtureCategoryRow {
+  readonly id: string;
+  readonly system_name: string;
+  readonly display_name: string;
+  readonly deleted: boolean;
+  readonly level: number;
+  readonly parent_id: string | null;
+}
+
+interface BudgetFixtureBudgetRow {
+  readonly name: string;
+  readonly amount: number;
+  readonly category_id: string | null;
+  readonly period: string;
+  readonly period_start: string;
+  readonly period_end: string;
+  readonly status: string;
+  readonly type: string;
+  readonly pause_intervals: string;
+}
+
+interface BudgetFixtureTransactionRow {
+  readonly amount: number;
+  readonly category_id: string;
+  readonly type: string;
+  readonly counterparty: string;
+  readonly date: string;
+}
+
 describe("e2e-seed script helpers", () => {
   it("selects immutable budget profiles without changing the default fixture", () => {
     const defaultFixture = getE2eFixture({});
@@ -15,11 +44,15 @@ describe("e2e-seed script helpers", () => {
     const filteredEmptyFixture = getE2eFixture({
       E2E_BUDGET_PROFILE: "dashboard-filter-empty",
     });
+    const deleteFixture = getE2eFixture({
+      E2E_BUDGET_PROFILE: "budget-detail-delete",
+    });
 
     expect(defaultFixture.seedScope).toBe("e2e");
     expect(defaultFixture.buildExtraRows).toBeUndefined();
     expect(fullFixture.seedScope).toBe("e2e-dashboard-full");
     expect(filteredEmptyFixture.seedScope).toBe("e2e-dashboard-filter-empty");
+    expect(deleteFixture.seedScope).toBe("e2e-budget-detail-delete");
     expect(fullFixture).not.toBe(defaultFixture);
   });
 
@@ -58,7 +91,8 @@ describe("e2e-seed script helpers", () => {
       expect.arrayContaining(["WEEKLY", "MONTHLY", "CUSTOM"])
     );
     expect(emptyPeriods).not.toContain("CUSTOM");
-    const fullRows = fullFixture.buildExtraRows?.(commonArgs).budgets ?? [];
+    const fullRows = (fullFixture.buildExtraRows?.(commonArgs).budgets ??
+      []) as readonly BudgetFixtureBudgetRow[];
     const expiredCustomRow = fullRows.find(
       (budget) => budget.name === "E2E Expired Custom"
     ) as
@@ -116,10 +150,11 @@ describe("e2e-seed script helpers", () => {
         }),
       ])
     );
-    const fullCategories =
-      fullFixture.buildExtraRows?.(commonArgs).categories ?? [];
-    const filteredEmptyCategories =
-      filteredEmptyFixture.buildExtraRows?.(commonArgs).categories ?? [];
+    const fullCategories = (fullFixture.buildExtraRows?.(commonArgs)
+      .categories ?? []) as readonly BudgetFixtureCategoryRow[];
+    const filteredEmptyCategories = (filteredEmptyFixture.buildExtraRows?.(
+      commonArgs
+    ).categories ?? []) as readonly BudgetFixtureCategoryRow[];
     expect(fullCategories).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -146,8 +181,73 @@ describe("e2e-seed script helpers", () => {
         }),
       ])
     );
-    expect(fullFixture.buildExtraRows?.(commonArgs).transactions).toHaveLength(
-      2
+    const fullTransactions = (fullFixture.buildExtraRows?.(commonArgs)
+      .transactions ?? []) as readonly BudgetFixtureTransactionRow[];
+    const detailCategories = fullCategories.filter((category) =>
+      category.display_name.startsWith("E2E Detail ")
+    );
+    const detailParent = detailCategories.find(
+      (category) => category.display_name === "E2E Detail Food"
+    );
+    const detailGroceries = detailCategories.find(
+      (category) => category.display_name === "E2E Detail Groceries"
+    );
+    const detailDining = detailCategories.find(
+      (category) => category.display_name === "E2E Detail Dining"
+    );
+    const detailFreshFood = detailCategories.find(
+      (category) => category.display_name === "E2E Detail Fresh Food"
+    );
+    expect(detailParent).toMatchObject({ level: 1, parent_id: null });
+    expect(detailGroceries).toMatchObject({
+      level: 2,
+      parent_id: detailParent?.id,
+    });
+    expect(detailDining).toMatchObject({
+      level: 2,
+      parent_id: detailParent?.id,
+    });
+    expect(detailFreshFood).toMatchObject({
+      level: 3,
+      parent_id: detailGroceries?.id,
+    });
+    const detailBudget = fullRows.find(
+      (budget) => budget.name === "E2E Detail Long Custom"
+    );
+    expect(detailBudget).toMatchObject({
+      category_id: detailParent?.id,
+      period: "CUSTOM",
+      status: "ACTIVE",
+      type: "CATEGORY",
+    });
+    expect(
+      Date.parse(detailBudget?.period_end ?? "") -
+        Date.parse(detailBudget?.period_start ?? "")
+    ).toBeGreaterThan(28 * 24 * 60 * 60 * 1000);
+    const completedPauseIntervals = JSON.parse(
+      detailBudget?.pause_intervals ?? "[]"
+    ) as ReadonlyArray<{ readonly from: number; readonly to: number }>;
+    expect(completedPauseIntervals).toHaveLength(1);
+    expect(typeof completedPauseIntervals[0]?.from).toBe("number");
+    expect(typeof completedPauseIntervals[0]?.to).toBe("number");
+    expect(completedPauseIntervals[0]?.to).toBeGreaterThan(
+      completedPauseIntervals[0]?.from ?? Number.POSITIVE_INFINITY
+    );
+    const detailTransactions = fullTransactions.filter((transaction) =>
+      transaction.counterparty.startsWith("E2E Detail ")
+    );
+    expect(detailTransactions).toHaveLength(9);
+    expect(
+      new Set(detailTransactions.map((transaction) => transaction.date)).size
+    ).toBe(9);
+    expect(
+      detailTransactions.map((transaction) => transaction.category_id)
+    ).toEqual(
+      expect.arrayContaining([
+        detailGroceries?.id,
+        detailDining?.id,
+        detailFreshFood?.id,
+      ])
     );
     const uniquenessKeys = fullRows.map((budget) =>
       budget.type === "GLOBAL"
@@ -167,6 +267,44 @@ describe("e2e-seed script helpers", () => {
     expect(
       Number.isFinite(Date.parse(expiredCustomRow?.period_start ?? ""))
     ).toBe(true);
+  });
+
+  it("provides an isolated disposable budget whose transaction survives budget deletion", () => {
+    const fixture = getE2eFixture({
+      E2E_BUDGET_PROFILE: "budget-detail-delete",
+    });
+    const rows = fixture.buildExtraRows?.({
+      categoryIds: { shopping: "shopping", other: "other" },
+      currentTimestamp: "2026-08-13T12:00:00.000Z",
+      dateFromToday: (offset: number): string => {
+        const date = new Date("2026-08-13T00:00:00.000Z");
+        date.setUTCDate(date.getUTCDate() + offset);
+        return date.toISOString().slice(0, 10);
+      },
+      deterministicUuid: (
+        _scope: string,
+        _userId: string,
+        key: string
+      ): string => key,
+      fixedNow: "2026-08-13T00:00:00.000Z",
+      seedIds: { accounts: { cash: "cash-account" }, budgets: {} },
+      seedScope: "e2e-budget-detail-delete",
+      userId: "user-e2e",
+    });
+
+    expect(rows?.budgets).toEqual([
+      expect.objectContaining({
+        name: "E2E Disposable Detail Budget",
+        status: "ACTIVE",
+        type: "CATEGORY",
+      }),
+    ]);
+    expect(rows?.transactions).toEqual([
+      expect.objectContaining({
+        counterparty: "E2E Retained After Budget Delete",
+        type: "EXPENSE",
+      }),
+    ]);
   });
 
   it("fails fast for an unknown budget profile", () => {

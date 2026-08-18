@@ -1,6 +1,6 @@
 # Monyvi Business Decisions
 
-**Status:** Active product source of truth **Last updated:** 2026-07-29
+**Status:** Active product source of truth **Last updated:** 2026-08-18
 **Scope:** Business and product rules confirmed by the current codebase and
 implementation history.
 
@@ -336,6 +336,28 @@ Business rules:
   percentage and progress. Paused and expired rows show neither percentage nor
   progress, but keep explicit status, context, and direct Resume or Renew
   actions.
+- Budget Detail uses direct Edit, eligible Pause/Resume, and isolated Delete
+  actions; Pause, Resume, and Delete require confirmation and suppress duplicate
+  pending submission. Delete removes only the budget and keeps transactions.
+- Budget Detail preserves the existing daily-average-spent calculation and
+  labels it `Daily average spent`; it is not presented as `Safe to spend`.
+- The active Budget Detail pace insight compares eligible cumulative spending
+  with the budget allowance elapsed by today over inclusive local calendar days.
+  Values equal at displayed currency precision are on pace. Weekly dashed pace
+  values allocate the unchanged limit proportionally by each bucket's inclusive
+  day count, including partial first or final weeks.
+- Paused and expired Budget Detail screens retain historical spending,
+  percentage, and progress, but do not show an active below/on/above pace
+  insight.
+- Applicable empty Category breakdown and Recent transactions sections remain
+  visible with compact explanations. Global budgets omit Category breakdown.
+- Long custom-period weekly charts retain every chronological week through
+  horizontal scrolling with consistent readable column widths.
+- Global budget detail uses the wallet/overall-spending icon. A historical
+  category budget whose category was deleted uses a neutral category fallback.
+- Recent Budget Detail transaction rows open the existing Edit Transaction
+  journey. Category breakdown rows are noninteractive, and Recent transactions
+  has no `View all` action until a budget-scoped destination exists.
 
 ### Recurring Payments
 
