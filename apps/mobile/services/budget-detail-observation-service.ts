@@ -39,6 +39,23 @@ interface Subscription {
   readonly unsubscribe: () => void;
 }
 
+const CATEGORY_DISPLAY_COLUMNS = [
+  "display_name",
+  "icon",
+  "icon_library",
+  "color",
+  "parent_id",
+] as const;
+
+const TRANSACTION_DISPLAY_COLUMNS = [
+  "amount",
+  "currency",
+  "counterparty",
+  "category_id",
+  "date",
+  "type",
+] as const;
+
 export interface BudgetDetailObservation {
   subscribe(observer: Observer<BudgetDetailObservedValue | null>): Subscription;
 }
@@ -90,47 +107,72 @@ export async function observeBudgetDetailReadModels(
           }
 
           const observedBudgetGeneration = budgetGeneration;
-          const categoryQuery = createBudgetDetailCategoryQuery(scope);
-          categorySubscription = categoryQuery.observe().subscribe({
-            next: (categories: Category[]): void => {
-              if (!isActive || observedBudgetGeneration !== budgetGeneration) {
-                return;
-              }
-              transactionSubscription?.unsubscribe();
-              const observedTransactionGeneration = ++transactionGeneration;
-              const now = getNow();
-              const transactionQuery = createBudgetDetailTransactionQuery(
-                scope,
-                budget,
-                categories,
-                now
-              );
-              transactionSubscription = transactionQuery.observe().subscribe({
-                next: (transactions: Transaction[]): void => {
-                  if (
-                    !isActive ||
-                    observedTransactionGeneration !== transactionGeneration
-                  ) {
-                    return;
-                  }
-                  observer.next({
+          let categoryQuery: ReturnType<typeof createBudgetDetailCategoryQuery>;
+          try {
+            categoryQuery = createBudgetDetailCategoryQuery(scope);
+          } catch (error: unknown) {
+            fail(error);
+            return;
+          }
+          categorySubscription = categoryQuery
+            .observeWithColumns([...CATEGORY_DISPLAY_COLUMNS])
+            .subscribe({
+              next: (categories: Category[]): void => {
+                if (
+                  !isActive ||
+                  observedBudgetGeneration !== budgetGeneration
+                ) {
+                  return;
+                }
+                transactionSubscription?.unsubscribe();
+                const observedTransactionGeneration = ++transactionGeneration;
+                const now = getNow();
+                let transactionQuery: ReturnType<
+                  typeof createBudgetDetailTransactionQuery
+                >;
+                try {
+                  transactionQuery = createBudgetDetailTransactionQuery(
+                    scope,
                     budget,
-                    readModel: buildBudgetDetailReadModel(
-                      {
-                        budget,
-                        categories,
-                        transactions,
-                        fallbackCurrency: options.fallbackCurrency,
-                      },
-                      now
-                    ),
+                    categories,
+                    now
+                  );
+                } catch (error: unknown) {
+                  fail(error);
+                  return;
+                }
+                transactionSubscription = transactionQuery
+                  .observeWithColumns([...TRANSACTION_DISPLAY_COLUMNS])
+                  .subscribe({
+                    next: (transactions: Transaction[]): void => {
+                      if (
+                        !isActive ||
+                        observedTransactionGeneration !== transactionGeneration
+                      ) {
+                        return;
+                      }
+                      try {
+                        observer.next({
+                          budget,
+                          readModel: buildBudgetDetailReadModel(
+                            {
+                              budget,
+                              categories,
+                              transactions,
+                              fallbackCurrency: options.fallbackCurrency,
+                            },
+                            now
+                          ),
+                        });
+                      } catch (error: unknown) {
+                        fail(error);
+                      }
+                    },
+                    error: fail,
                   });
-                },
-                error: fail,
-              });
-            },
-            error: fail,
-          });
+              },
+              error: fail,
+            });
         },
         error: fail,
       });

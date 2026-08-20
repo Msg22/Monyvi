@@ -87,9 +87,7 @@ export function calculateWeeklyBudgetPace(
       start,
       end,
       allowance:
-        limit === 0 || totalDays === 0
-          ? 0
-          : (limit * bucketDays) / totalDays,
+        limit === 0 || totalDays === 0 ? 0 : (limit * bucketDays) / totalDays,
     };
   });
 }
@@ -103,5 +101,9 @@ function roundForDisplay(value: number, fractionDigits: number): number {
   const digits = Number.isFinite(fractionDigits)
     ? Math.min(20, Math.max(0, Math.trunc(fractionDigits)))
     : 0;
-  return Number(value.toFixed(digits));
+  const formatted = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+  return Number(formatted.replaceAll(",", ""));
 }

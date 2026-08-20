@@ -93,6 +93,19 @@ describe("classifyBudgetPace", () => {
     expect(classifyBudgetPace({ ...baseInput, spent: 500.006 })).toBe("ABOVE");
   });
 
+  it("uses Intl display rounding for half values", () => {
+    expect(
+      classifyBudgetPace({
+        limit: 10.95,
+        periodStart: new Date(2026, 7, 1),
+        periodEnd: new Date(2026, 7, 2, 23, 59, 59, 999),
+        now: new Date(2026, 7, 1, 12, 0, 0),
+        spent: 5.475,
+        currencyFractionDigits: 2,
+      })
+    ).toBe("ON");
+  });
+
   it("stays finite for zero-limit inputs", () => {
     expect(classifyBudgetPace({ ...baseInput, limit: 0, spent: 0 })).toBe("ON");
     expect(classifyBudgetPace({ ...baseInput, limit: 0, spent: 1 })).toBe(

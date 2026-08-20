@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { palette } from "@/constants/colors";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
+import { useTranslation } from "react-i18next";
 
 type ConfirmationVariant = "danger" | "warning" | "success" | "info";
 
@@ -83,12 +84,16 @@ export function ConfirmationModal({
   variant = "danger",
   icon,
   isConfirming = false,
-  confirmingStatusLabel = "In progress",
+  confirmingStatusLabel,
   dismissOnConfirm = true,
 }: ConfirmationModalProps): React.JSX.Element {
   const config = VARIANT_CONFIG[variant];
   const iconName = icon ?? config.defaultIcon;
   const bottomInset = useModalBottomInset();
+  const { t: tCommon } = useTranslation("common");
+  const localizedStatusLabel =
+    confirmingStatusLabel ??
+    tCommon("in_progress", { defaultValue: "In progress" });
 
   return (
     <Modal
@@ -143,7 +148,7 @@ export function ConfirmationModal({
                     testID="confirmation-modal-status"
                     accessible
                     accessibilityLiveRegion="polite"
-                    accessibilityLabel={`${confirmLabel} ${confirmingStatusLabel}`}
+                    accessibilityLabel={`${confirmLabel} ${localizedStatusLabel}`}
                     accessibilityState={{ busy: true }}
                   />
                 ) : null}

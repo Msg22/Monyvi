@@ -449,7 +449,10 @@ function toIconTone(color: string | null | undefined): BudgetDetailIconTone {
   const parsedColor = parseHexColor(value);
   if (!parsedColor) return "SLATE";
 
-  return ICON_TONE_ANCHORS.reduce(
+  return ICON_TONE_ANCHORS.reduce<{
+    readonly tone: BudgetDetailIconTone;
+    readonly distance: number;
+  }>(
     (closest, anchor) => {
       const anchorColor = parseHexColor(anchor.color);
       if (!anchorColor) return closest;

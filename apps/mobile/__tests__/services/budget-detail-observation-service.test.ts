@@ -87,10 +87,12 @@ describe("budget-detail-observation-service", () => {
     mockObserveOwnedById.mockReturnValue(budgetSource.observable);
     mockCreateCategoryQuery.mockReturnValue({
       observe: () => categorySource.observable,
+      observeWithColumns: () => categorySource.observable,
       fetch: categoryFetch,
     });
     mockCreateTransactionQuery.mockReturnValue({
       observe: () => transactionSource.observable,
+      observeWithColumns: () => transactionSource.observable,
       fetch: transactionFetch,
     });
     const now = new Date("2026-05-15T12:00:00.000Z");
@@ -141,10 +143,17 @@ describe("budget-detail-observation-service", () => {
     mockObserveOwnedById.mockReturnValue(budgetSource.observable);
     mockCreateCategoryQuery.mockReturnValue({
       observe: () => categorySource.observable,
+      observeWithColumns: () => categorySource.observable,
     });
     mockCreateTransactionQuery
-      .mockReturnValueOnce({ observe: () => firstTransactions.observable })
-      .mockReturnValueOnce({ observe: () => secondTransactions.observable });
+      .mockReturnValueOnce({
+        observe: () => firstTransactions.observable,
+        observeWithColumns: () => firstTransactions.observable,
+      })
+      .mockReturnValueOnce({
+        observe: () => secondTransactions.observable,
+        observeWithColumns: () => secondTransactions.observable,
+      });
     const observation = await observeBudgetDetailReadModels({
       budgetId: "budget-1",
       userId: "user-1",
@@ -216,5 +225,25 @@ describe("budget-detail-observation-service", () => {
     ).rejects.toThrow("AUTH_SCOPE_CHANGED");
 
     expect(mockObserveOwnedById).not.toHaveBeenCalled();
+  });
+
+  it("routes synchronous dependency query failures through observation error", async () => {
+    const budgetSource = createObservable<Budget | null>();
+    const error = new Error("INVALID_PERIOD");
+    mockObserveOwnedById.mockReturnValue(budgetSource.observable);
+    mockCreateCategoryQuery.mockImplementation(() => {
+      throw error;
+    });
+    const observation = await observeBudgetDetailReadModels({
+      budgetId: "budget-1",
+      userId: "user-1",
+      fallbackCurrency: "EGP",
+    });
+    const observer = { next: jest.fn(), error: jest.fn() };
+    observation.subscribe(observer);
+
+    budgetSource.emit(budget);
+
+    expect(observer.error).toHaveBeenCalledWith(error);
   });
 });

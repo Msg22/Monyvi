@@ -15,6 +15,7 @@
   "loading": "جاري التحميل...",
   "error": "خطأ",
   "success": "نجح",
+  "in_progress": "جارٍ التنفيذ",
   "empty_state": "لا توجد بيانات",
   "search": "بحث",
   "no_results": "لا توجد نتائج",
