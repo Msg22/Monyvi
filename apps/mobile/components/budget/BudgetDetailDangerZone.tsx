@@ -14,7 +14,9 @@ export function BudgetDetailDangerZone({
   isDisabled = false,
 }: BudgetDetailDangerZoneProps): React.JSX.Element {
   const { t } = useTranslation("budgets");
-  const actionLabel = t("detail.actions.delete", { defaultValue: "Delete budget" });
+  const actionLabel = t("detail.actions.delete", {
+    defaultValue: "Delete budget",
+  });
   return (
     <View
       testID="budget-detail-danger-zone"
@@ -23,9 +25,10 @@ export function BudgetDetailDangerZone({
       <Text className="text-base font-semibold text-red-600 dark:text-red-500">
         {t("detail.danger.title", { defaultValue: "Danger zone" })}
       </Text>
-      <Text className="mt-1 text-sm leading-5 text-text-secondary">
+      <Text className="mt-1 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark">
         {t("detail.danger.description", {
-          defaultValue: "Deleting this budget keeps your transactions, but removes this budget from your dashboard.",
+          defaultValue:
+            "Deleting this budget keeps your transactions, but removes this budget from your dashboard.",
         })}
       </Text>
       <TouchableOpacity
@@ -40,7 +43,9 @@ export function BudgetDetailDangerZone({
         style={isDisabled ? { opacity: 0.5 } : undefined}
       >
         <Ionicons name="trash-outline" size={19} color={palette.red[500]} />
-        <Text className="text-sm font-semibold text-red-600 dark:text-red-500">{actionLabel}</Text>
+        <Text className="text-sm font-semibold text-red-600 dark:text-red-500">
+          {actionLabel}
+        </Text>
       </TouchableOpacity>
     </View>
   );

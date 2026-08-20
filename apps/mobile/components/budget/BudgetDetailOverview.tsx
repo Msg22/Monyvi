@@ -33,21 +33,27 @@ export function BudgetDetailOverview({
     : isWarning
       ? "bg-gold-800 dark:bg-gold-400"
       : "bg-nileGreen-700 dark:bg-nileGreen-400";
-  const amount = (value: number, maximumFractionDigits = 2): string =>
-    formatCurrency({ amount: value, currency, maximumFractionDigits });
+  const amount = (value: number): string =>
+    formatCurrency({ amount: value, currency });
 
   return (
     <View
       testID="budget-detail-overview"
       className="mx-5 mb-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800"
     >
-      <View className={isConstrained ? "gap-3" : "flex-row items-start justify-between"}>
+      <View
+        className={
+          isConstrained ? "gap-3" : "flex-row items-start justify-between"
+        }
+      >
         <View>
           <Text className="text-sm font-medium text-nileGreen-700 dark:text-nileGreen-400">
             {t("detail.overview.spent", { defaultValue: "Spent" })}
           </Text>
-          <Text className="mt-1 text-2xl font-semibold text-text-primary">{amount(metrics.spent)}</Text>
-          <Text className="mt-0.5 text-sm text-text-secondary">
+          <Text className="mt-1 text-2xl font-semibold text-text-primary dark:text-text-primary-dark">
+            {amount(metrics.spent)}
+          </Text>
+          <Text className="mt-0.5 text-sm text-text-secondary dark:text-text-secondary-dark">
             {t("detail.overview.of_budget", {
               defaultValue: `of ${amount(metrics.limit)}`,
               limit: amount(metrics.limit),
@@ -55,14 +61,20 @@ export function BudgetDetailOverview({
           </Text>
         </View>
         <View className={isConstrained ? "items-start" : "items-end"}>
-          <Text className={`text-2xl font-bold ${semanticTextClass}`}>{Math.round(metrics.percentage)}%</Text>
-          <Text className="text-sm text-text-secondary">
-            {t("detail.overview.of_budget_percentage", { defaultValue: "of budget" })}
+          <Text className={`text-2xl font-bold ${semanticTextClass}`}>
+            {Math.round(metrics.percentage)}%
+          </Text>
+          <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
+            {t("detail.overview.of_budget_percentage", {
+              defaultValue: "of budget",
+            })}
           </Text>
           {isDanger || isWarning ? (
             <Text className={`mt-1 text-xs font-semibold ${semanticTextClass}`}>
               {t(
-                isDanger ? "detail.overview.status_danger" : "detail.overview.status_warning",
+                isDanger
+                  ? "detail.overview.status_danger"
+                  : "detail.overview.status_warning",
                 { defaultValue: isDanger ? "Over budget" : "Near limit" }
               )}
             </Text>
@@ -107,18 +119,31 @@ export function BudgetDetailOverview({
           />
         </View>
         <View className="mt-1 flex-row justify-between">
-          <Text className="text-xs text-text-muted">0%</Text>
-          <Text className="text-xs text-text-muted">100%</Text>
+          <Text className="text-xs text-text-muted dark:text-text-muted-dark">
+            0%
+          </Text>
+          <Text className="text-xs text-text-muted dark:text-text-muted-dark">
+            100%
+          </Text>
         </View>
       </View>
 
-      <View className={`mt-4 border-t border-slate-200 pt-4 dark:border-slate-700 ${isConstrained ? "gap-3" : "flex-row"}`}>
-        <Stat label={t("detail.overview.remaining", { defaultValue: "Remaining" })} value={amount(metrics.remaining)} valueClass={semanticTextClass} isStacked={isConstrained} />
+      <View
+        className={`mt-4 border-t border-slate-200 pt-4 dark:border-slate-700 ${isConstrained ? "gap-3" : "flex-row"}`}
+      >
         <Stat
-          label={t("detail.overview.daily_average_spent", { defaultValue: "Daily average spent" })}
+          label={t("detail.overview.remaining", { defaultValue: "Remaining" })}
+          value={amount(metrics.remaining)}
+          valueClass={semanticTextClass}
+          isStacked={isConstrained}
+        />
+        <Stat
+          label={t("detail.overview.daily_average_spent", {
+            defaultValue: "Daily average spent",
+          })}
           value={t("detail.overview.per_day", {
-            defaultValue: `${amount(metrics.dailyAverage, 0)}/day`,
-            amount: amount(metrics.dailyAverage, 0),
+            defaultValue: `${amount(metrics.dailyAverage)}/day`,
+            amount: amount(metrics.dailyAverage),
           })}
           hasDivider
           isStacked={isConstrained}
@@ -140,7 +165,7 @@ export function BudgetDetailOverview({
 function Stat({
   label,
   value,
-  valueClass = "text-text-primary",
+  valueClass = "text-text-primary dark:text-text-primary-dark",
   hasDivider = false,
   isStacked = false,
 }: {
@@ -151,9 +176,19 @@ function Stat({
   readonly isStacked?: boolean;
 }): React.JSX.Element {
   return (
-    <View className={`flex-1 px-1 ${isStacked ? "items-start" : "items-center"} ${hasDivider ? (isStacked ? "border-t border-slate-200 pt-3 dark:border-slate-700" : "border-s border-slate-200 dark:border-slate-700") : ""}`}>
-      <Text className={`${isStacked ? "text-start" : "text-center"} text-xs text-text-secondary`}>{label}</Text>
-      <Text className={`mt-1 ${isStacked ? "text-start" : "text-center"} text-sm font-semibold ${valueClass}`}>{value}</Text>
+    <View
+      className={`flex-1 px-1 ${isStacked ? "items-start" : "items-center"} ${hasDivider ? (isStacked ? "border-t border-slate-200 pt-3 dark:border-slate-700" : "border-s border-slate-200 dark:border-slate-700") : ""}`}
+    >
+      <Text
+        className={`${isStacked ? "text-start" : "text-center"} text-xs text-text-secondary dark:text-text-secondary-dark`}
+      >
+        {label}
+      </Text>
+      <Text
+        className={`mt-1 ${isStacked ? "text-start" : "text-center"} text-sm font-semibold ${valueClass}`}
+      >
+        {value}
+      </Text>
     </View>
   );
 }

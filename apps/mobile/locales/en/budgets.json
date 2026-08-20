@@ -160,6 +160,7 @@
       "pause_success": "Budget paused",
       "resume_success": "Budget resumed",
       "delete_success": "Budget deleted",
+      "in_progress": "in progress",
       "pause_error": "We couldn't pause this budget. Please try again.",
       "resume_error": "We couldn't resume this budget. Please try again.",
       "delete_error": "We couldn't delete this budget. Please try again."
@@ -183,7 +184,8 @@
       "daily_average_spent": "Daily average spent",
       "per_day": "{{amount}}/day",
       "days_left": "Days left",
-      "days_value": "{{count}} days",
+      "days_value_one": "{{count}} day",
+      "days_value_other": "{{count}} days",
       "status_warning": "Near limit",
       "status_danger": "Over budget"
     },

@@ -24,6 +24,7 @@ interface ConfirmationModalProps {
   readonly variant?: ConfirmationVariant;
   readonly icon?: keyof typeof Ionicons.glyphMap;
   readonly isConfirming?: boolean;
+  readonly confirmingStatusLabel?: string;
   readonly dismissOnConfirm?: boolean;
 }
 
@@ -82,6 +83,7 @@ export function ConfirmationModal({
   variant = "danger",
   icon,
   isConfirming = false,
+  confirmingStatusLabel = "In progress",
   dismissOnConfirm = true,
 }: ConfirmationModalProps): React.JSX.Element {
   const config = VARIANT_CONFIG[variant];
@@ -141,7 +143,7 @@ export function ConfirmationModal({
                     testID="confirmation-modal-status"
                     accessible
                     accessibilityLiveRegion="polite"
-                    accessibilityLabel={`${confirmLabel} in progress`}
+                    accessibilityLabel={`${confirmLabel} ${confirmingStatusLabel}`}
                     accessibilityState={{ busy: true }}
                   />
                 ) : null}

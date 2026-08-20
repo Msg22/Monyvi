@@ -6,7 +6,7 @@ import { useLocale } from "@/context/LocaleContext";
 import type { CurrencyType } from "@monyvi/db";
 import { formatCurrency } from "@monyvi/logic";
 import React, { useEffect } from "react";
-import { I18nManager, ScrollView, Text, View } from "react-native";
+import { FlatList, I18nManager, Text, View } from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
@@ -53,13 +53,21 @@ export function BudgetSpendingTrendChart({
           accessibilityLabel={t("detail.accessibility.chart_summary", {
             defaultValue: `Weekly spending trend. ${data.length} weeks.`,
           })}
-          className="text-base font-semibold text-text-primary"
+          className="text-base font-semibold text-text-primary dark:text-text-primary-dark"
         >
           {t("detail.trend.title", { defaultValue: "Weekly spending trend" })}
         </Text>
         <View className="flex-row items-center gap-4">
-          <Legend label={t("detail.trend.you_spent", { defaultValue: "You spent" })} kind="actual" />
-          <Legend label={t("detail.trend.budget_pace", { defaultValue: "Budget pace" })} kind="pace" />
+          <Legend
+            label={t("detail.trend.you_spent", { defaultValue: "You spent" })}
+            kind="actual"
+          />
+          <Legend
+            label={t("detail.trend.budget_pace", {
+              defaultValue: "Budget pace",
+            })}
+            kind="pace"
+          />
         </View>
       </View>
 
@@ -73,37 +81,45 @@ export function BudgetSpendingTrendChart({
           <AxisLabel amount={maxAmount / 2} currency={currency} />
           <AxisLabel amount={0} currency={currency} />
         </View>
-        <ScrollView
-          testID="budget-trend-scroll"
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="flex-1"
+        <View
+          testID="budget-trend-scroll-content"
+          className={`flex-1 border-b border-slate-200 dark:border-slate-700 ${I18nManager.isRTL ? "flex-row-reverse" : "flex-row"}`}
         >
-          <View
-            testID="budget-trend-scroll-content"
-            className={`items-end border-b border-slate-200 dark:border-slate-700 ${I18nManager.isRTL ? "flex-row-reverse" : "flex-row"}`}
-            style={{
+          <FlatList
+            testID="budget-trend-scroll"
+            data={data}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            inverted={I18nManager.isRTL}
+            className="flex-1"
+            contentContainerStyle={{
               width: contentWidth,
               height: CHART_HEIGHT + 48,
             }}
-          >
-            {data.map((week, index) => (
+            getItemLayout={(_, index) => ({
+              length: WEEK_WIDTH,
+              offset: WEEK_WIDTH * index,
+              index,
+            })}
+            keyExtractor={(week) => week.id}
+            renderItem={({ item: week, index }) => (
               <WeekColumn
-                key={week.id}
                 week={week}
                 index={index}
                 maxAmount={maxAmount}
                 currency={currency}
                 language={language}
               />
-            ))}
-          </View>
-        </ScrollView>
+            )}
+          />
+        </View>
       </View>
 
       {insight ? (
         <View className="mt-3 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700">
-          <Text className="text-sm text-text-secondary">{insight}</Text>
+          <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
+            {insight}
+          </Text>
         </View>
       ) : null}
     </View>
@@ -124,12 +140,21 @@ function WeekColumn({
   readonly language: string;
 }): React.JSX.Element {
   const { t } = useTranslation("budgets");
-  const actualHeight = Math.max((week.actualAmount / maxAmount) * BAR_MAX_HEIGHT, 2);
-  const paceHeight = Math.max((week.paceAmount / maxAmount) * BAR_MAX_HEIGHT, 2);
+  const actualHeight =
+    week.actualAmount > 0
+      ? Math.max((week.actualAmount / maxAmount) * BAR_MAX_HEIGHT, 2)
+      : 0;
+  const paceHeight =
+    week.paceAmount > 0
+      ? Math.max((week.paceAmount / maxAmount) * BAR_MAX_HEIGHT, 2)
+      : 0;
   const locale = language === "ar" ? "ar-EG" : "en-US";
-  const dateFormatter = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" });
+  const dateFormatter = new Intl.DateTimeFormat(locale, {
+    month: "short",
+    day: "numeric",
+  });
   const amount = (value: number): string =>
-    formatCurrency({ amount: value, currency, maximumFractionDigits: 0 });
+    formatCurrency({ amount: value, currency });
   const weekLabel = t("detail.trend.week_label", {
     defaultValue: `Week ${index + 1}`,
     index: index + 1,
@@ -150,33 +175,49 @@ function WeekColumn({
       className="items-center justify-end"
       style={{ width: WEEK_WIDTH, height: CHART_HEIGHT + 48 }}
     >
-      <View className="flex-row items-end gap-2" style={{ height: CHART_HEIGHT }}>
-        <View className="items-center justify-end" style={{ height: CHART_HEIGHT, width: BAR_WIDTH }}>
+      <View
+        className="flex-row items-end gap-2"
+        style={{ height: CHART_HEIGHT }}
+      >
+        <View
+          className="items-center justify-end"
+          style={{ height: CHART_HEIGHT, width: BAR_WIDTH }}
+        >
           <Text
-            className="absolute w-[72px] text-center text-[9px] font-medium text-text-secondary"
-            numberOfLines={1}
+            className="absolute text-center text-[9px] font-medium text-text-secondary dark:text-text-secondary-dark"
             style={{ bottom: actualHeight + 3 }}
           >
             {amount(week.actualAmount)}
           </Text>
           <AnimatedActualBar height={actualHeight} />
         </View>
-        <View className="justify-end" style={{ height: CHART_HEIGHT, width: BAR_WIDTH }}>
-          <View
-            className="rounded-t border-2 border-dashed border-slate-500 dark:border-slate-400"
-            style={{ height: paceHeight, width: BAR_WIDTH }}
-          />
+        <View
+          className="justify-end"
+          style={{ height: CHART_HEIGHT, width: BAR_WIDTH }}
+        >
+          {paceHeight > 0 ? (
+            <View
+              className="rounded-t border-2 border-dashed border-slate-500 dark:border-slate-400"
+              style={{ height: paceHeight, width: BAR_WIDTH }}
+            />
+          ) : null}
         </View>
       </View>
-      <Text className="mt-2 text-xs font-medium text-text-secondary">{weekLabel.replace("Week ", "W")}</Text>
-      <Text className="mt-0.5 text-[10px] text-text-muted">
+      <Text className="mt-2 text-xs font-medium text-text-secondary dark:text-text-secondary-dark">
+        {weekLabel.replace("Week ", "W")}
+      </Text>
+      <Text className="mt-0.5 text-[10px] text-text-muted dark:text-text-muted-dark">
         {dateRange}
       </Text>
     </View>
   );
 }
 
-function AnimatedActualBar({ height }: { readonly height: number }): React.JSX.Element {
+function AnimatedActualBar({
+  height,
+}: {
+  readonly height: number;
+}): React.JSX.Element | null {
   const prefersReducedMotion = useReducedMotion();
   const animatedHeight = useSharedValue(prefersReducedMotion ? height : 0);
 
@@ -187,7 +228,10 @@ function AnimatedActualBar({ height }: { readonly height: number }): React.JSX.E
     return () => cancelAnimation(animatedHeight);
   }, [animatedHeight, height, prefersReducedMotion]);
 
-  const animatedStyle = useAnimatedStyle(() => ({ height: animatedHeight.value }));
+  const animatedStyle = useAnimatedStyle(() => ({
+    height: animatedHeight.value,
+  }));
+  if (height <= 0) return null;
   return (
     <Animated.View
       className="rounded-t bg-nileGreen-700 dark:bg-nileGreen-400"
@@ -196,20 +240,38 @@ function AnimatedActualBar({ height }: { readonly height: number }): React.JSX.E
   );
 }
 
-function AxisLabel({ amount, currency }: { readonly amount: number; readonly currency: CurrencyType }): React.JSX.Element {
+function AxisLabel({
+  amount,
+  currency,
+}: {
+  readonly amount: number;
+  readonly currency: CurrencyType;
+}): React.JSX.Element {
   return (
-    <Text className="text-[10px] text-text-muted">
-      {formatCurrency({ amount, currency, maximumFractionDigits: 0 })}
+    <Text className="text-[10px] text-text-muted dark:text-text-muted-dark">
+      {formatCurrency({ amount, currency })}
     </Text>
   );
 }
 
-function Legend({ label, kind }: { readonly label: string; readonly kind: "actual" | "pace" }): React.JSX.Element {
+function Legend({
+  label,
+  kind,
+}: {
+  readonly label: string;
+  readonly kind: "actual" | "pace";
+}): React.JSX.Element {
   return (
     <View className="flex-row items-center gap-1.5">
-      <Text className="text-[10px] text-text-secondary">{label}</Text>
+      <Text className="text-[10px] text-text-secondary dark:text-text-secondary-dark">
+        {label}
+      </Text>
       <View
-        className={kind === "actual" ? "h-1.5 w-7 rounded-full bg-nileGreen-700 dark:bg-nileGreen-400" : "h-1.5 w-7 rounded border border-dashed border-slate-500 dark:border-slate-400"}
+        className={
+          kind === "actual"
+            ? "h-1.5 w-7 rounded-full bg-nileGreen-700 dark:bg-nileGreen-400"
+            : "h-1.5 w-7 rounded border border-dashed border-slate-500 dark:border-slate-400"
+        }
       />
     </View>
   );

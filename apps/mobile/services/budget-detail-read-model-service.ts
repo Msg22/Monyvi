@@ -40,6 +40,7 @@ import {
   type CurrentUserDataScope,
 } from "@/services/user-data-access";
 import { DEFAULT_CURRENCY } from "@/utils/currency-detection";
+import { getSafeCategoryIconConfig } from "@/utils/category-icon-config";
 
 export type { BudgetDetailReadModel } from "@/contracts/budget-detail-presentation";
 
@@ -61,10 +62,12 @@ const MS_PER_DAY = 86_400_000;
 const RGB_CHANNEL_RANGE = 256;
 const RGB_RED_DIVISOR = RGB_CHANNEL_RANGE * RGB_CHANNEL_RANGE;
 const HEX_COLOR_PATTERN = /^#([0-9a-f]{6})$/i;
-const ICON_TONE_ANCHORS: readonly Readonly<{
-  tone: BudgetDetailIconTone;
-  color: string;
-}>[] = [
+const ICON_TONE_ANCHORS: ReadonlyArray<
+  Readonly<{
+    tone: BudgetDetailIconTone;
+    color: string;
+  }>
+> = [
   { tone: "GREEN", color: palette.nileGreen[500] },
   { tone: "GOLD", color: palette.gold[500] },
   { tone: "RED", color: palette.red[500] },
@@ -181,8 +184,7 @@ export function buildBudgetDetailReadModel(
             now,
             spent,
             currencyFractionDigits:
-              CURRENCY_PRECISION[currency] ??
-              DEFAULT_PRECISION,
+              CURRENCY_PRECISION[currency] ?? DEFAULT_PRECISION,
           })
         : null,
     weeklySpending: createWeeklySpending(
@@ -409,11 +411,20 @@ function createRecentTransactions(
 }
 
 function createCategoryIcon(category: Category): BudgetDetailIcon {
+  const iconLibrary = toIconLibrary(category.iconLibrary);
+  const tone = toIconTone(category.color);
+  const iconColor =
+    tone === "GREEN" ? palette.nileGreen[500] : palette.slate[500];
+  const safeIcon = getSafeCategoryIconConfig(
+    category.icon || "receipt-outline",
+    iconLibrary,
+    iconColor
+  );
   return {
     kind: "CATEGORY",
-    iconName: category.icon || "receipt-outline",
-    iconLibrary: toIconLibrary(category.iconLibrary),
-    tone: toIconTone(category.color),
+    iconName: safeIcon.iconName,
+    iconLibrary: safeIcon.iconLibrary,
+    tone,
   };
 }
 
@@ -447,7 +458,7 @@ function toIconTone(color: string | null | undefined): BudgetDetailIconTone {
         ? { tone: anchor.tone, distance }
         : closest;
     },
-    { tone: "SLATE" as BudgetDetailIconTone, distance: Number.POSITIVE_INFINITY }
+    { tone: "SLATE", distance: Number.POSITIVE_INFINITY }
   ).tone;
 }
 
@@ -490,9 +501,7 @@ function getTotalSpent(transactions: readonly Transaction[]): number {
   return transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
 }
 
-function freezeReadModel(
-  model: BudgetDetailReadModel
-): BudgetDetailReadModel {
+function freezeReadModel(model: BudgetDetailReadModel): BudgetDetailReadModel {
   const identity = Object.freeze({
     ...model.identity,
     periodStart: Object.freeze(new Date(model.identity.periodStart)),

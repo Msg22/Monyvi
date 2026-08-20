@@ -29,17 +29,25 @@ export function BudgetRecentTransactions({
       testID="budget-recent-transactions"
       className="mx-5 mb-4 rounded-2xl border border-slate-200 bg-white px-4 dark:border-slate-700 dark:bg-slate-800"
     >
-      <Text className="py-3 text-base font-semibold text-text-primary">
+      <Text className="py-3 text-base font-semibold text-text-primary dark:text-text-primary-dark">
         {t("detail.recent.title", { defaultValue: "Recent transactions" })}
       </Text>
       {transactions.length === 0 ? (
-        <Text testID="recent-transactions-empty" className="border-t border-slate-200 py-5 text-sm text-text-secondary dark:border-slate-700">
-          {t("detail.recent.empty", { defaultValue: "No matching transactions yet" })}
+        <Text
+          testID="recent-transactions-empty"
+          className="border-t border-slate-200 py-5 text-sm text-text-secondary dark:border-slate-700"
+        >
+          {t("detail.recent.empty", {
+            defaultValue: "No matching transactions yet",
+          })}
         </Text>
       ) : (
         transactions.map((transaction) => {
           const currency = transaction.currency ?? fallbackCurrency;
-          const amount = formatCurrency({ amount: transaction.amount, currency });
+          const amount = formatCurrency({
+            amount: transaction.amount,
+            currency,
+          });
           const transactionLabel =
             transaction.label ??
             t("detail.recent.fallback_label", { defaultValue: "Transaction" });
@@ -64,16 +72,29 @@ export function BudgetRecentTransactions({
             >
               <BudgetDetailIconView icon={transaction.icon} size={18} />
               <View className="ms-3 min-w-0 flex-1">
-                <Text className="text-sm font-medium text-text-primary" numberOfLines={2}>{transactionLabel}</Text>
-                <Text className="mt-0.5 text-xs text-text-secondary">
-                  {new Intl.DateTimeFormat(locale, { month: "short", day: "numeric", year: "numeric" }).format(transaction.date)}
+                <Text
+                  className="text-sm font-medium text-text-primary dark:text-text-primary-dark"
+                  numberOfLines={2}
+                >
+                  {transactionLabel}
+                </Text>
+                <Text className="mt-0.5 text-xs text-text-secondary dark:text-text-secondary-dark">
+                  {new Intl.DateTimeFormat(locale, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  }).format(transaction.date)}
                 </Text>
               </View>
-              <Text className="ps-3 text-sm font-medium text-text-primary">{amount}</Text>
+              <Text className="ps-3 text-sm font-medium text-text-primary dark:text-text-primary-dark">
+                {amount}
+              </Text>
               <View
                 testID={`recent-transaction-chevron-${transaction.transactionId}`}
                 accessible={false}
-                accessibilityLabel={I18nManager.isRTL ? "chevron-back" : "chevron-forward"}
+                accessibilityLabel={
+                  I18nManager.isRTL ? "chevron-back" : "chevron-forward"
+                }
               >
                 <Ionicons
                   name={I18nManager.isRTL ? "chevron-back" : "chevron-forward"}

@@ -31,7 +31,10 @@ interface ConfirmationCopy {
   readonly confirmKey: string;
   readonly successKey: string;
   readonly variant: "info" | "danger";
-  readonly icon: "pause-circle-outline" | "play-circle-outline" | "trash-outline";
+  readonly icon:
+    | "pause-circle-outline"
+    | "play-circle-outline"
+    | "trash-outline";
 }
 
 interface ConfirmationRequest {
@@ -125,7 +128,8 @@ export default function BudgetDetailScreen(): React.JSX.Element {
   const handleLifecycleAction = useCallback(
     (action: BudgetDetailLifecycleAction): void => {
       const budgetId = detail.readModel?.identity.budgetId;
-      if (actions.pendingAction !== null || action === null || !budgetId) return;
+      if (actions.pendingAction !== null || action === null || !budgetId)
+        return;
       setConfirmationRequest({
         action: action === "PAUSE" ? "pause" : "resume",
         budgetId,
@@ -169,7 +173,6 @@ export default function BudgetDetailScreen(): React.JSX.Element {
     const result = await actions.execute(request.action, request.budgetId);
     if (!isMountedRef.current || result.status === "ignored") return;
 
-    setConfirmationRequest(null);
     if (result.status === "error") {
       showToast({
         type: "error",
@@ -179,20 +182,22 @@ export default function BudgetDetailScreen(): React.JSX.Element {
       return;
     }
 
+    setConfirmationRequest(null);
+
     showToast({
       type: "success",
       title: t(CONFIRMATION_COPY[request.action].successKey),
     });
     if (request.action === "delete") {
-      router.back();
+      if (typeof router.canGoBack === "function" && router.canGoBack()) {
+        router.back();
+      } else if (typeof router.replace === "function") {
+        router.replace("/budgets");
+      } else {
+        router.back();
+      }
     }
-  }, [
-    actions,
-    confirmationRequest,
-    showToast,
-    t,
-    tCommon,
-  ]);
+  }, [actions, confirmationRequest, showToast, t, tCommon]);
 
   const handlePressTransaction = useCallback((transactionId: string): void => {
     router.push({
@@ -216,7 +221,7 @@ export default function BudgetDetailScreen(): React.JSX.Element {
         <View className="flex-1 items-center justify-center px-6">
           <Text
             accessibilityRole="header"
-            className="text-center text-lg font-semibold text-text-primary"
+            className="text-center text-lg font-semibold text-text-primary dark:text-text-primary-dark"
           >
             {t(hasInitialError ? "detail.initial_error" : "detail.not_found")}
           </Text>
@@ -281,7 +286,7 @@ export default function BudgetDetailScreen(): React.JSX.Element {
             className="mx-5 mb-4 min-h-11 justify-center rounded-xl border border-gold-500 px-4 py-2"
             onPress={detail.retry}
           >
-            <Text className="text-sm text-text-secondary">
+            <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
               {t("detail.refresh_error")}
             </Text>
           </TouchableOpacity>
@@ -341,6 +346,7 @@ export default function BudgetDetailScreen(): React.JSX.Element {
         variant={modalCopy?.variant ?? "info"}
         icon={modalCopy?.icon}
         isConfirming={actions.pendingAction !== null}
+        confirmingStatusLabel={t("detail.actions.in_progress")}
         dismissOnConfirm={false}
         onConfirm={(): void => {
           void handleConfirm();
@@ -356,10 +362,7 @@ interface ScreenFrameProps {
   readonly children: React.ReactNode;
 }
 
-function ScreenFrame({
-  title,
-  children,
-}: ScreenFrameProps): React.JSX.Element {
+function ScreenFrame({ title, children }: ScreenFrameProps): React.JSX.Element {
   const { t } = useTranslation("common");
   return (
     <View

@@ -41,7 +41,8 @@ jest.mock("@monyvi/db", () => ({
 }));
 
 jest.mock("@/services/user-data-access", () => ({
-  getCurrentUserDataScope: (): Promise<unknown> => mockGetCurrentUserDataScope(),
+  getCurrentUserDataScope: (): Promise<unknown> =>
+    mockGetCurrentUserDataScope(),
   assertExpectedCurrentUser: (userId: string): Promise<void> =>
     mockAssertExpectedCurrentUser(userId),
   observeOwnedById: (...args: unknown[]): unknown =>
@@ -199,6 +200,21 @@ describe("budget-detail-observation-service", () => {
     ).rejects.toThrow("AUTH_SCOPE_CHANGED");
 
     expect(mockAssertExpectedCurrentUser).toHaveBeenCalledWith("user-1");
+    expect(mockObserveOwnedById).not.toHaveBeenCalled();
+  });
+
+  it("rejects a mismatched scope even when the recheck resolves", async () => {
+    mockGetCurrentUserDataScope.mockResolvedValue({ userId: "user-2" });
+    mockAssertExpectedCurrentUser.mockResolvedValue(undefined);
+
+    await expect(
+      observeBudgetDetailReadModels({
+        budgetId: "budget-1",
+        userId: "user-1",
+        fallbackCurrency: "EGP",
+      })
+    ).rejects.toThrow("AUTH_SCOPE_CHANGED");
+
     expect(mockObserveOwnedById).not.toHaveBeenCalled();
   });
 });

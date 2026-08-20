@@ -9,12 +9,19 @@ import { useLocale } from "@/context/LocaleContext";
 import { useTheme } from "@/context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
+import {
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 
 interface BudgetDetailIdentityProps {
   readonly identity: BudgetIdentity;
-  readonly onLifecycleAction: (action: Exclude<BudgetDetailLifecycleAction, null>) => void;
+  readonly onLifecycleAction: (
+    action: Exclude<BudgetDetailLifecycleAction, null>
+  ) => void;
   readonly isActionDisabled?: boolean;
 }
 
@@ -124,13 +131,28 @@ export function BudgetDetailIdentity({
   const isConstrained = width < 390 || fontScale > 1.2;
   const locale = language === "ar" ? "ar-EG" : "en-US";
   const formatDate = (date: Date): string =>
-    new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }).format(date);
+    new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }).format(
+      date
+    );
   const action = identity.availableLifecycleAction;
-  const lifecycleLabel = t(`detail.lifecycle.${identity.lifecycle.toLowerCase()}`, {
-    defaultValue: identity.lifecycle === "ACTIVE" ? "Active" : identity.lifecycle === "PAUSED" ? "Paused" : "Expired",
-  });
+  const lifecycleLabel = t(
+    `detail.lifecycle.${identity.lifecycle.toLowerCase()}`,
+    {
+      defaultValue:
+        identity.lifecycle === "ACTIVE"
+          ? "Active"
+          : identity.lifecycle === "PAUSED"
+            ? "Paused"
+            : "Expired",
+    }
+  );
   const periodLabel = t(`detail.period.${identity.period.toLowerCase()}`, {
-    defaultValue: identity.period === "WEEKLY" ? "Weekly" : identity.period === "MONTHLY" ? "Monthly" : "Custom",
+    defaultValue:
+      identity.period === "WEEKLY"
+        ? "Weekly"
+        : identity.period === "MONTHLY"
+          ? "Monthly"
+          : "Custom",
   });
   const lifecycleClass =
     identity.lifecycle === "ACTIVE"
@@ -173,16 +195,21 @@ export function BudgetDetailIdentity({
       <View className="flex-row items-center gap-3">
         <BudgetDetailIconView icon={identity.icon} size={24} />
         <View className="min-w-0 flex-1">
-          <Text className="text-xl font-semibold text-text-primary" numberOfLines={2}>
+          <Text className="text-xl font-semibold text-text-primary dark:text-text-primary-dark">
             {identity.name}
           </Text>
           <View className="mt-1 flex-row flex-wrap items-center gap-x-2">
-            <Text className={`text-sm font-semibold ${lifecycleClass}`}>{lifecycleLabel}</Text>
+            <Text className={`text-sm font-semibold ${lifecycleClass}`}>
+              {lifecycleLabel}
+            </Text>
             <Text className="text-sm text-text-muted">•</Text>
-            <Text className="text-sm font-semibold text-nileGreen-700 dark:text-nileGreen-400">{periodLabel}</Text>
+            <Text className="text-sm font-semibold text-nileGreen-700 dark:text-nileGreen-400">
+              {periodLabel}
+            </Text>
             <Text className="text-sm text-text-muted">•</Text>
-            <Text className="text-sm text-text-secondary">
-              {formatDate(identity.periodStart)} – {formatDate(identity.periodEnd)}
+            <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
+              {formatDate(identity.periodStart)} –{" "}
+              {formatDate(identity.periodEnd)}
             </Text>
           </View>
         </View>

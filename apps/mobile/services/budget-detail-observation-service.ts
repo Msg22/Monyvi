@@ -40,9 +40,7 @@ interface Subscription {
 }
 
 export interface BudgetDetailObservation {
-  subscribe(
-    observer: Observer<BudgetDetailObservedValue | null>
-  ): Subscription;
+  subscribe(observer: Observer<BudgetDetailObservedValue | null>): Subscription;
 }
 
 export async function observeBudgetDetailReadModels(
@@ -51,6 +49,7 @@ export async function observeBudgetDetailReadModels(
   const scope = await getCurrentUserDataScope();
   if (scope.userId !== options.userId) {
     await assertExpectedCurrentUser(options.userId);
+    throw new Error("AUTH_SCOPE_CHANGED");
   }
   const getNow = options.getNow ?? (() => new Date());
 
@@ -94,10 +93,7 @@ export async function observeBudgetDetailReadModels(
           const categoryQuery = createBudgetDetailCategoryQuery(scope);
           categorySubscription = categoryQuery.observe().subscribe({
             next: (categories: Category[]): void => {
-              if (
-                !isActive ||
-                observedBudgetGeneration !== budgetGeneration
-              ) {
+              if (!isActive || observedBudgetGeneration !== budgetGeneration) {
                 return;
               }
               transactionSubscription?.unsubscribe();

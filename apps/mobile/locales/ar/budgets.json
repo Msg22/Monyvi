@@ -184,6 +184,7 @@
       "pause_success": "تم إيقاف الميزانية",
       "resume_success": "تم استئناف الميزانية",
       "delete_success": "تم حذف الميزانية",
+      "in_progress": "جارٍ التنفيذ",
       "pause_error": "تعذر إيقاف هذه الميزانية. حاول مرة أخرى.",
       "resume_error": "تعذر استئناف هذه الميزانية. حاول مرة أخرى.",
       "delete_error": "تعذر حذف هذه الميزانية. حاول مرة أخرى."
@@ -207,7 +208,12 @@
       "daily_average_spent": "متوسط الإنفاق اليومي",
       "per_day": "{{amount}}/يوم",
       "days_left": "الأيام المتبقية",
-      "days_value": "{{count}} يوم",
+      "days_value_zero": "لا أيام",
+      "days_value_one": "يوم واحد",
+      "days_value_two": "يومان",
+      "days_value_few": "{{count}} أيام",
+      "days_value_many": "{{count}} يومًا",
+      "days_value_other": "{{count}} يوم",
       "status_warning": "قرب الحد",
       "status_danger": "تجاوز الميزانية"
     },
