@@ -130,10 +130,14 @@ export function BudgetDetailIdentity({
   const { width, fontScale } = useWindowDimensions();
   const isConstrained = width < 390 || fontScale > 1.2;
   const locale = language === "ar" ? "ar-EG" : "en-US";
-  const formatDate = (date: Date): string =>
-    new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }).format(
-      date
-    );
+  const includesYear =
+    identity.periodStart.getFullYear() !== identity.periodEnd.getFullYear();
+  const dateFormatter = new Intl.DateTimeFormat(locale, {
+    month: "short",
+    day: "numeric",
+    ...(includesYear ? { year: "numeric" as const } : {}),
+  });
+  const dateRange = `${dateFormatter.format(identity.periodStart)} – ${dateFormatter.format(identity.periodEnd)}`;
   const action = identity.availableLifecycleAction;
   const lifecycleLabel = t(
     `detail.lifecycle.${identity.lifecycle.toLowerCase()}`,
@@ -153,6 +157,13 @@ export function BudgetDetailIdentity({
         : identity.period === "MONTHLY"
           ? "Monthly"
           : "Custom",
+  });
+  const identityAccessibilityLabel = t("detail.accessibility.identity", {
+    defaultValue: `${identity.name}, ${lifecycleLabel}, ${periodLabel}, ${dateRange}`,
+    name: identity.name,
+    lifecycle: lifecycleLabel,
+    period: periodLabel,
+    dateRange,
   });
   const lifecycleClass =
     identity.lifecycle === "ACTIVE"
@@ -194,7 +205,12 @@ export function BudgetDetailIdentity({
     <View testID="budget-detail-identity" className="mx-5 mb-4">
       <View className="flex-row items-center gap-3">
         <BudgetDetailIconView icon={identity.icon} size={24} />
-        <View className="min-w-0 flex-1">
+        <View
+          className="min-w-0 flex-1"
+          accessible
+          importantForAccessibility="yes"
+          accessibilityLabel={identityAccessibilityLabel}
+        >
           <Text className="text-xl font-semibold text-text-primary dark:text-text-primary-dark">
             {identity.name}
           </Text>
@@ -208,8 +224,7 @@ export function BudgetDetailIdentity({
             </Text>
             <Text className="text-sm text-text-muted">•</Text>
             <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
-              {formatDate(identity.periodStart)} –{" "}
-              {formatDate(identity.periodEnd)}
+              {dateRange}
             </Text>
           </View>
         </View>

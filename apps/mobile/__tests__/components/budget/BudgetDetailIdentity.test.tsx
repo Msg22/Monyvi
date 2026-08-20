@@ -45,6 +45,9 @@ describe("BudgetDetailIdentity", () => {
     expect(screen.getByText("Monthly")).toBeOnTheScreen();
     expect(screen.getByText(/Aug 1/)).toBeOnTheScreen();
     expect(
+      screen.getByLabelText("Food & Drinks, Active, Monthly, Aug 1 – Aug 31")
+    ).toBeOnTheScreen();
+    expect(
       screen.getByTestId("budget-detail-category-icon", {
         includeHiddenElements: true,
       })
@@ -106,5 +109,20 @@ describe("BudgetDetailIdentity", () => {
     expect(source).toContain("text-nileGreen-700 dark:text-nileGreen-400");
     expect(source).toContain("text-red-600 dark:text-red-500");
     expect(source).toContain("border-slate-500");
+  });
+
+  it("includes years in a cross-year identity range", () => {
+    render(
+      <BudgetDetailIdentity
+        identity={{
+          ...identity,
+          periodStart: new Date(2025, 11, 28),
+          periodEnd: new Date(2026, 0, 4),
+        }}
+        onLifecycleAction={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText(/Dec 28, 2025 – Jan 4, 2026/)).toBeOnTheScreen();
   });
 });

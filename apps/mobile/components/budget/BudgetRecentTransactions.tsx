@@ -35,7 +35,7 @@ export function BudgetRecentTransactions({
       {transactions.length === 0 ? (
         <Text
           testID="recent-transactions-empty"
-          className="border-t border-slate-200 py-5 text-sm text-text-secondary dark:border-slate-700"
+          className="border-t border-slate-200 py-5 text-sm text-text-secondary dark:border-slate-700 dark:text-text-secondary-dark"
         >
           {t("detail.recent.empty", {
             defaultValue: "No matching transactions yet",

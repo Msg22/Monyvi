@@ -27,7 +27,7 @@ export function SubcategoryBreakdown({
       {data.length === 0 ? (
         <Text
           testID="subcategory-breakdown-empty"
-          className="border-t border-slate-200 py-5 text-sm text-text-secondary dark:border-slate-700"
+          className="border-t border-slate-200 py-5 text-sm text-text-secondary dark:border-slate-700 dark:text-text-secondary-dark"
         >
           {t("detail.breakdown.empty", {
             defaultValue: "No category spending yet",
