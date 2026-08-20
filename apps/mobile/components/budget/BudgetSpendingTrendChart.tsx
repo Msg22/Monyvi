@@ -40,6 +40,11 @@ export function BudgetSpendingTrendChart({
     1
   );
   const contentWidth = Math.max(data.length * WEEK_WIDTH, 264);
+  const showsYear =
+    data.some((week) => week.start.getFullYear() !== week.end.getFullYear()) ||
+    new Set(
+      data.flatMap((week) => [week.start.getFullYear(), week.end.getFullYear()])
+    ).size > 1;
   const insight = getPaceInsight(paceState, t);
 
   return (
@@ -109,6 +114,7 @@ export function BudgetSpendingTrendChart({
                 maxAmount={maxAmount}
                 currency={currency}
                 language={language}
+                showsYear={showsYear}
               />
             )}
           />
@@ -132,12 +138,14 @@ function WeekColumn({
   maxAmount,
   currency,
   language,
+  showsYear,
 }: {
   readonly week: BudgetDetailWeek;
   readonly index: number;
   readonly maxAmount: number;
   readonly currency: CurrencyType;
   readonly language: string;
+  readonly showsYear: boolean;
 }): React.JSX.Element {
   const { t } = useTranslation("budgets");
   const actualHeight =
@@ -152,6 +160,7 @@ function WeekColumn({
   const dateFormatter = new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
+    ...(showsYear ? { year: "numeric" as const } : {}),
   });
   const amount = (value: number): string =>
     formatCurrency({ amount: value, currency });

@@ -209,7 +209,15 @@ export default function BudgetDetailScreen(): React.JSX.Element {
   if (detail.isInitialLoading) {
     return (
       <ScreenFrame title={t("budget_detail")}>
-        <BudgetDetailSkeleton />
+        <View
+          testID="budget-detail-loading"
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLiveRegion="polite"
+          accessibilityLabel={t("detail.loading")}
+        >
+          <BudgetDetailSkeleton />
+        </View>
       </ScreenFrame>
     );
   }
@@ -282,7 +290,7 @@ export default function BudgetDetailScreen(): React.JSX.Element {
         {detail.errorKey === "budget_detail_refresh_failed" ? (
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel={t("detail.retry")}
+            accessibilityLabel={`${t("detail.refresh_error")} ${t("detail.retry")}`}
             className="mx-5 mb-4 min-h-11 justify-center rounded-xl border border-gold-500 px-4 py-2"
             onPress={detail.retry}
           >

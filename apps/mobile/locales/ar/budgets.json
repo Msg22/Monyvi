@@ -197,7 +197,7 @@
       "chart_summary": "الإنفاق الأسبوعي مقارنة بمعدل الميزانية",
       "week_summary": "{{week}}، {{dateRange}}: تم إنفاق {{spent}}، معدل الميزانية {{pace}}",
       "edit_transaction": "تعديل معاملة {{name}}، {{date}}، {{amount}}",
-      "breakdown_item": "{{name}}، {{count}} معاملات، {{amount}}، {{percentage}} بالمئة",
+      "breakdown_item": "{{name}}، {{countLabel}}، {{amount}}، {{percentage}} بالمئة",
       "delete_budget": "حذف {{name}}"
     },
     "overview": {

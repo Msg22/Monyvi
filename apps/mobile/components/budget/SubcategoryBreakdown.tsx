@@ -39,9 +39,12 @@ export function SubcategoryBreakdown({
             key={item.categoryId}
             accessible
             accessibilityLabel={t("detail.accessibility.breakdown_item", {
-              defaultValue: `${item.name}. ${item.transactionCount} transactions. ${formatCurrency({ amount: item.amount, currency })}. ${Math.round(item.percentage)} percent.`,
+              defaultValue: `${item.name}. ${t("detail.breakdown.transaction_count", { count: item.transactionCount, defaultValue: `${item.transactionCount} transactions` })}. ${formatCurrency({ amount: item.amount, currency })}. ${Math.round(item.percentage)} percent.`,
               name: item.name,
-              count: item.transactionCount,
+              countLabel: t("detail.breakdown.transaction_count", {
+                count: item.transactionCount,
+                defaultValue: `${item.transactionCount} transactions`,
+              }),
               amount: formatCurrency({ amount: item.amount, currency }),
               percentage: Math.round(item.percentage),
             })}

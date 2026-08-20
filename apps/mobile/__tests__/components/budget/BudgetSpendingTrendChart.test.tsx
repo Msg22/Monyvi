@@ -47,11 +47,7 @@ describe("BudgetSpendingTrendChart", () => {
 
   it("keeps the axis fixed and every equal-width week horizontally scrollable", () => {
     render(
-      <BudgetSpendingTrendChart
-        data={weeks}
-        currency="EGP"
-        paceState="BELOW"
-      />
+      <BudgetSpendingTrendChart data={weeks} currency="EGP" paceState="BELOW" />
     );
 
     expect(screen.getByText("Weekly spending trend")).toBeOnTheScreen();
@@ -63,7 +59,9 @@ describe("BudgetSpendingTrendChart", () => {
     expect(screen.getAllByTestId(/^budget-trend-week-/)).toHaveLength(6);
     expect(screen.getByText("200 EGP")).toBeOnTheScreen();
     expect(screen.getByText("Below budget pace")).toBeOnTheScreen();
-    expect(screen.getByLabelText(/Week 1.*You spent.*Budget pace/)).toBeOnTheScreen();
+    expect(
+      screen.getByLabelText(/Week 1.*You spent.*Budget pace/)
+    ).toBeOnTheScreen();
   });
 
   it("uses AA graphical tones for actual and pace series", () => {
@@ -103,7 +101,10 @@ describe("BudgetSpendingTrendChart", () => {
 
   it("uses RTL logical week ordering without reversing source data", () => {
     const original = I18nManager.isRTL;
-    Object.defineProperty(I18nManager, "isRTL", { configurable: true, value: true });
+    Object.defineProperty(I18nManager, "isRTL", {
+      configurable: true,
+      value: true,
+    });
     render(
       <BudgetSpendingTrendChart
         data={weeks.slice(0, 2)}
@@ -125,5 +126,25 @@ describe("BudgetSpendingTrendChart", () => {
       configurable: true,
       value: original,
     });
+  });
+
+  it("includes years when a custom period crosses a calendar year", () => {
+    render(
+      <BudgetSpendingTrendChart
+        data={[
+          {
+            id: "year-boundary",
+            start: new Date(2025, 11, 29),
+            end: new Date(2026, 0, 4),
+            actualAmount: 200,
+            paceAmount: 300,
+          },
+        ]}
+        currency="EGP"
+        paceState={null}
+      />
+    );
+
+    expect(screen.getByText("Dec 29, 2025–Jan 4, 2026")).toBeOnTheScreen();
   });
 });

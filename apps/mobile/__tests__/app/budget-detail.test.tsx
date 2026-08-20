@@ -632,6 +632,7 @@ describe("BudgetDetailScreen", () => {
     };
     const view = render(<BudgetDetailScreen />);
     expect(screen.getByTestId("budget-detail-skeleton")).toBeOnTheScreen();
+    expect(screen.getByLabelText("detail.loading")).toBeOnTheScreen();
 
     mockDetail = {
       ...mockDetail,
@@ -651,6 +652,9 @@ describe("BudgetDetailScreen", () => {
     };
     view.rerender(<BudgetDetailScreen />);
     expect(screen.getByText("detail.refresh_error")).toBeOnTheScreen();
+    expect(
+      screen.getByLabelText("detail.refresh_error detail.retry")
+    ).toBeOnTheScreen();
     expect(screen.getByTestId("budget-detail-overview")).toBeOnTheScreen();
   });
 

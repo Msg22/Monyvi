@@ -173,7 +173,7 @@
       "chart_summary": "Weekly spending compared with budget pace",
       "week_summary": "{{week}}, {{dateRange}}: spent {{spent}}, budget pace {{pace}}",
       "edit_transaction": "Edit transaction {{name}}, {{date}}, {{amount}}",
-      "breakdown_item": "{{name}}, {{count}} transactions, {{amount}}, {{percentage}} percent",
+      "breakdown_item": "{{name}}, {{countLabel}}, {{amount}}, {{percentage}} percent",
       "delete_budget": "Delete {{name}}"
     },
     "overview": {
