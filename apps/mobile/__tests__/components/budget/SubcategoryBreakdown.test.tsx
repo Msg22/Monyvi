@@ -68,10 +68,11 @@ describe("SubcategoryBreakdown", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("keeps an applicable empty section visible", () => {
+  it("hides the section when there is no category spending", () => {
     render(<SubcategoryBreakdown data={[]} currency="EGP" />);
-    expect(screen.getByText("Category breakdown")).toBeOnTheScreen();
-    expect(screen.getByText("No category spending yet")).toBeOnTheScreen();
+    expect(screen.queryByTestId("subcategory-breakdown")).toBeNull();
+    expect(screen.queryByText("Category breakdown")).toBeNull();
+    expect(screen.queryByText("No category spending yet")).toBeNull();
   });
 
   it("uses the singular transaction count in the row announcement", () => {

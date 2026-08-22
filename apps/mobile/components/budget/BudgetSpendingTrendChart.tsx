@@ -218,7 +218,7 @@ function WeekColumn({
       <Text className="mt-2 text-xs font-medium text-text-secondary dark:text-text-secondary-dark">
         {weekLabel.replace("Week ", "W")}
       </Text>
-      <Text className="mt-0.5 text-[10px] text-text-muted dark:text-text-muted-dark">
+      <Text className="mt-0.5 text-[10px] text-text-secondary dark:text-text-secondary-dark">
         {dateRange}
       </Text>
     </View>
@@ -260,7 +260,7 @@ function AxisLabel({
   readonly currency: CurrencyType;
 }): React.JSX.Element {
   return (
-    <Text className="text-[10px] text-text-muted dark:text-text-muted-dark">
+    <Text className="text-[10px] text-text-secondary dark:text-text-secondary-dark">
       {formatCurrency({ amount, currency })}
     </Text>
   );

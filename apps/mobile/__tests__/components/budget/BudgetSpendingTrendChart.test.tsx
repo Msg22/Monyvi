@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react-native";
+import { render, screen, within } from "@testing-library/react-native";
 import { I18nManager } from "react-native";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -58,6 +58,16 @@ describe("BudgetSpendingTrendChart", () => {
     expect(screen.getByText("You spent")).toBeOnTheScreen();
     expect(screen.getByText("Budget pace")).toBeOnTheScreen();
     expect(screen.getByTestId("budget-trend-y-axis")).toBeOnTheScreen();
+    expect(screen.getByText("Aug 1–Aug 7")).toHaveProp(
+      "className",
+      "mt-0.5 text-[10px] text-text-secondary dark:text-text-secondary-dark"
+    );
+    expect(
+      within(screen.getByTestId("budget-trend-y-axis")).getByText("700 EGP")
+    ).toHaveProp(
+      "className",
+      "text-[10px] text-text-secondary dark:text-text-secondary-dark"
+    );
     expect(screen.getByTestId("budget-trend-scroll")).toHaveProp(
       "horizontal",
       true

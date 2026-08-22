@@ -14,8 +14,9 @@ interface SubcategoryBreakdownProps {
 export function SubcategoryBreakdown({
   data,
   currency,
-}: SubcategoryBreakdownProps): React.JSX.Element {
+}: SubcategoryBreakdownProps): React.JSX.Element | null {
   const { t } = useTranslation("budgets");
+  if (data.length === 0) return null;
   return (
     <View
       testID="subcategory-breakdown"
