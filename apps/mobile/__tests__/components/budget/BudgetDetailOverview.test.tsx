@@ -9,6 +9,24 @@ jest.mock("@/context/LocaleContext", () => ({
   useLocale: (): { readonly language: string } => ({ language: "en" }),
 }));
 
+let mockScreenWidth = 360;
+let mockFontScale = 1;
+
+jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
+  __esModule: true,
+  default: (): {
+    readonly width: number;
+    readonly height: number;
+    readonly scale: number;
+    readonly fontScale: number;
+  } => ({
+    width: mockScreenWidth,
+    height: 844,
+    scale: 1,
+    fontScale: mockFontScale,
+  }),
+}));
+
 describe("BudgetDetailOverview", () => {
   it("shows the approved values and accessible linear progress", () => {
     render(
@@ -66,6 +84,64 @@ describe("BudgetDetailOverview", () => {
       width: "100%",
     });
     expect(screen.getByText("Over budget")).toBeOnTheScreen();
+  });
+
+  it("keeps percentage and all overview stats on one row at A54 width", () => {
+    mockScreenWidth = 360;
+    mockFontScale = 1;
+
+    render(
+      <BudgetDetailOverview
+        metrics={{
+          spent: 1750,
+          limit: 5000,
+          remaining: 3250,
+          percentage: 35,
+          dailyAverage: 135,
+          status: "safe",
+        }}
+        currency="EGP"
+        daysLeft={18}
+      />
+    );
+
+    expect(screen.getByTestId("budget-detail-overview-summary")).toHaveProp(
+      "className",
+      expect.stringContaining("flex-row")
+    );
+    expect(screen.getByTestId("budget-detail-overview-stats")).toHaveProp(
+      "className",
+      expect.stringContaining("flex-row")
+    );
+  });
+
+  it("stacks overview groups only when the viewport is genuinely narrow", () => {
+    mockScreenWidth = 320;
+    mockFontScale = 1;
+
+    render(
+      <BudgetDetailOverview
+        metrics={{
+          spent: 1750,
+          limit: 5000,
+          remaining: 3250,
+          percentage: 35,
+          dailyAverage: 135,
+          status: "safe",
+        }}
+        currency="EGP"
+        daysLeft={18}
+      />
+    );
+
+    expect(screen.getByTestId("budget-detail-overview-summary")).toHaveProp(
+      "className",
+      expect.not.stringContaining("flex-row")
+    );
+    expect(screen.getByTestId("budget-detail-overview-stats")).toHaveProp(
+      "className",
+      expect.not.stringContaining("flex-row")
+    );
   });
 
   it("uses responsive stacking and AA semantic tones", () => {

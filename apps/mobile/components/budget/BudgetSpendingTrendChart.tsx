@@ -58,11 +58,14 @@ export function BudgetSpendingTrendChart({
           accessibilityLabel={t("detail.accessibility.chart_summary", {
             defaultValue: `Weekly spending trend. ${data.length} weeks.`,
           })}
-          className="text-base font-semibold text-text-primary dark:text-text-primary-dark"
+          className="min-w-0 flex-1 text-base font-semibold text-text-primary dark:text-text-primary-dark"
         >
           {t("detail.trend.title", { defaultValue: "Weekly spending trend" })}
         </Text>
-        <View className="flex-row items-center gap-4">
+        <View
+          testID="budget-trend-legend"
+          className="shrink-0 flex-row items-center gap-2"
+        >
           <Legend
             label={t("detail.trend.you_spent", { defaultValue: "You spent" })}
             kind="actual"

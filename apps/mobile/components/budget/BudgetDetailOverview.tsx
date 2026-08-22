@@ -1,4 +1,5 @@
 import { useLocale } from "@/context/LocaleContext";
+import { shouldUseCompactLayout } from "@/constants/ui";
 import type { CurrencyType } from "@monyvi/db";
 import { formatCurrency, type SpendingMetrics } from "@monyvi/logic";
 import React from "react";
@@ -19,7 +20,9 @@ export function BudgetDetailOverview({
   const { t } = useTranslation("budgets");
   useLocale();
   const { width, fontScale } = useWindowDimensions();
-  const isConstrained = width < 390 || fontScale > 1.2;
+  // Keep the approved horizontal composition on ordinary phones; stack only
+  // when the shared responsive contract says the layout cannot fit safely.
+  const isConstrained = shouldUseCompactLayout(width, fontScale);
   const clampedPercentage = Math.max(0, Math.min(metrics.percentage, 100));
   const isDanger = metrics.status === "danger";
   const isWarning = metrics.status === "warning";
@@ -42,11 +45,12 @@ export function BudgetDetailOverview({
       className="mx-5 mb-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800"
     >
       <View
+        testID="budget-detail-overview-summary"
         className={
-          isConstrained ? "gap-3" : "flex-row items-start justify-between"
+          isConstrained ? "gap-3" : "flex-row items-start justify-between gap-2"
         }
       >
-        <View>
+        <View className="min-w-0 flex-1">
           <Text className="text-sm font-medium text-nileGreen-700 dark:text-nileGreen-400">
             {t("detail.overview.spent", { defaultValue: "Spent" })}
           </Text>
@@ -60,7 +64,9 @@ export function BudgetDetailOverview({
             })}
           </Text>
         </View>
-        <View className={isConstrained ? "items-start" : "items-end"}>
+        <View
+          className={`shrink-0 ${isConstrained ? "items-start" : "items-end"}`}
+        >
           <Text className={`text-2xl font-bold ${semanticTextClass}`}>
             {Math.round(metrics.percentage)}%
           </Text>
@@ -129,6 +135,7 @@ export function BudgetDetailOverview({
       </View>
 
       <View
+        testID="budget-detail-overview-stats"
         className={`mt-4 border-t border-slate-200 pt-4 dark:border-slate-700 ${isConstrained ? "gap-3" : "flex-row"}`}
       >
         <Stat

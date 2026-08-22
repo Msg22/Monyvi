@@ -10,6 +10,24 @@ jest.mock("@/context/LocaleContext", () => ({
   useLocale: (): { readonly language: string } => ({ language: "en" }),
 }));
 
+let mockScreenWidth = 360;
+let mockFontScale = 1;
+
+jest.mock("react-native/Libraries/Utilities/useWindowDimensions", () => ({
+  __esModule: true,
+  default: (): {
+    readonly width: number;
+    readonly height: number;
+    readonly scale: number;
+    readonly fontScale: number;
+  } => ({
+    width: mockScreenWidth,
+    height: 844,
+    scale: 1,
+    fontScale: mockFontScale,
+  }),
+}));
+
 import type { BudgetDetailIdentity as Identity } from "@/contracts/budget-detail-presentation";
 import { BudgetDetailIdentity } from "@/components/budget/BudgetDetailIdentity";
 
@@ -98,6 +116,39 @@ describe("BudgetDetailIdentity", () => {
     expect(screen.getByText("Expired")).toBeOnTheScreen();
     expect(screen.queryByText("Pause")).toBeNull();
     expect(screen.queryByText("Resume")).toBeNull();
+  });
+
+  it("keeps the lifecycle action beside the identity on an A54-sized viewport", () => {
+    mockScreenWidth = 360;
+    mockFontScale = 1;
+
+    render(
+      <BudgetDetailIdentity identity={identity} onLifecycleAction={jest.fn()} />
+    );
+
+    expect(screen.getByTestId("budget-detail-identity-row")).toHaveProp(
+      "className",
+      expect.stringContaining("flex-row")
+    );
+    expect(
+      screen.queryByTestId("budget-detail-identity-lifecycle-row")
+    ).toBeNull();
+    expect(
+      screen.getByTestId("budget-detail-lifecycle-action")
+    ).toBeOnTheScreen();
+  });
+
+  it("moves the lifecycle action below only when the viewport is genuinely narrow", () => {
+    mockScreenWidth = 320;
+    mockFontScale = 1;
+
+    render(
+      <BudgetDetailIdentity identity={identity} onLifecycleAction={jest.fn()} />
+    );
+
+    expect(
+      screen.getByTestId("budget-detail-identity-lifecycle-row")
+    ).toBeOnTheScreen();
   });
 
   it("uses constrained wrapping and lifecycle-specific semantic tones", () => {

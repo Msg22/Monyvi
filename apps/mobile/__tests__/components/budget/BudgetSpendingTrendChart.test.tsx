@@ -51,6 +51,12 @@ describe("BudgetSpendingTrendChart", () => {
     );
 
     expect(screen.getByText("Weekly spending trend")).toBeOnTheScreen();
+    expect(screen.getByTestId("budget-trend-legend")).toHaveProp(
+      "className",
+      expect.stringContaining("flex-row")
+    );
+    expect(screen.getByText("You spent")).toBeOnTheScreen();
+    expect(screen.getByText("Budget pace")).toBeOnTheScreen();
     expect(screen.getByTestId("budget-trend-y-axis")).toBeOnTheScreen();
     expect(screen.getByTestId("budget-trend-scroll")).toHaveProp(
       "horizontal",

@@ -7,6 +7,7 @@ import type {
 } from "@/contracts/budget-detail-presentation";
 import { useLocale } from "@/context/LocaleContext";
 import { useTheme } from "@/context/ThemeContext";
+import { shouldUseCompactLayout } from "@/constants/ui";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import {
@@ -128,7 +129,9 @@ export function BudgetDetailIdentity({
   const { language } = useLocale();
   const { isDark } = useTheme();
   const { width, fontScale } = useWindowDimensions();
-  const isConstrained = width < 390 || fontScale > 1.2;
+  // Keep the approved single-row identity on ordinary phones; stack only when
+  // the shared responsive contract says the viewport or text scale cannot fit.
+  const isConstrained = shouldUseCompactLayout(width, fontScale);
   const locale = language === "ar" ? "ar-EG" : "en-US";
   const includesYear =
     identity.periodStart.getFullYear() !== identity.periodEnd.getFullYear();
@@ -186,7 +189,7 @@ export function BudgetDetailIdentity({
       disabled={isActionDisabled}
       onPress={() => onLifecycleAction(action)}
       activeOpacity={0.75}
-      className="min-h-11 min-w-11 flex-row items-center justify-center gap-2 rounded-full border border-nileGreen-600 px-3 dark:border-nileGreen-400"
+      className="min-h-11 min-w-11 shrink-0 flex-row items-center justify-center gap-2 rounded-full border border-nileGreen-600 px-3 dark:border-nileGreen-400"
     >
       <Ionicons
         name={action === "PAUSE" ? "pause" : "play"}
@@ -203,7 +206,10 @@ export function BudgetDetailIdentity({
 
   return (
     <View testID="budget-detail-identity" className="mx-5 mb-4">
-      <View className="flex-row items-center gap-3">
+      <View
+        testID="budget-detail-identity-row"
+        className="flex-row items-center gap-3"
+      >
         <BudgetDetailIconView icon={identity.icon} size={24} />
         <View
           className="min-w-0 flex-1"
@@ -231,7 +237,12 @@ export function BudgetDetailIdentity({
         {!isConstrained ? lifecycleAction : null}
       </View>
       {isConstrained && lifecycleAction ? (
-        <View className="mt-3 items-end">{lifecycleAction}</View>
+        <View
+          testID="budget-detail-identity-lifecycle-row"
+          className="mt-3 items-end"
+        >
+          {lifecycleAction}
+        </View>
       ) : null}
     </View>
   );

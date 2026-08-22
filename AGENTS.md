@@ -298,6 +298,16 @@ the true domain model.
   coding. The workflow's narrowly defined micro-UI exception may be used for
   small, unambiguous changes that preserve the existing layout, interaction,
   flow, and design-system pattern.
+
+- **Responsive mockup implementation**: Treat the approved mockup as the
+  normal-width composition, then validate it at compact-phone, ordinary-phone,
+  tablet, orientation, RTL, and enlarged-font sizes before shipping. Keep
+  controls and related metrics on the approved row whenever the shared layout
+  contract fits; stack only when measured space or text scale requires it. Use
+  the centralized `apps/mobile/constants/ui.ts` responsive breakpoints and
+  helpers instead of component-specific device-width magic numbers. Add focused
+  layout tests for the ordinary phone and compact-phone breakpoints, and never
+  optimize for one handset at the expense of other supported devices.
 - **NativeWind classes only**: Use `className` for ALL styling. Do NOT use
   `StyleSheet.create()` or inline `style` unless there is no NativeWind
   equivalent (e.g., dynamic computed values like `` width: `${percent}%` ``).
@@ -680,8 +690,11 @@ Strong success criteria let you loop independently. Weak criteria ("make it
 work") require constant clarification.
 
 ## Active Technologies
-- TypeScript 5.9 strict mode, React 19.2, React Native + Expo Router, React Navigation, NativeWind v4, (034-budget-detail-redesign)
-- Existing current-user-scoped WatermelonDB budgets, transactions, (034-budget-detail-redesign)
+
+- TypeScript 5.9 strict mode, React 19.2, React Native + Expo Router, React
+  Navigation, NativeWind v4, (034-budget-detail-redesign)
+- Existing current-user-scoped WatermelonDB budgets, transactions,
+  (034-budget-detail-redesign)
 
 - TypeScript 5.9 strict mode, Expo 55, React Native 0.83, WatermelonDB 0.28, and
   PostgreSQL migrations (031-sms-scan-safeguards)
