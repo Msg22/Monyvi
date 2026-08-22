@@ -2,10 +2,12 @@ import type {
   BudgetDetailPaceState,
   BudgetDetailWeek,
 } from "@/contracts/budget-detail-presentation";
+import { palette } from "@/constants/colors";
 import { useLocale } from "@/context/LocaleContext";
 import type { CurrencyType } from "@monyvi/db";
 import { formatCurrency } from "@monyvi/logic";
 import React, { useEffect } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { FlatList, I18nManager, Text, View } from "react-native";
 import Animated, {
   cancelAnimation,
@@ -27,6 +29,20 @@ const CHART_HEIGHT = 132;
 const BAR_MAX_HEIGHT = 104;
 const WEEK_WIDTH = 88;
 const BAR_WIDTH = 28;
+
+const MIN_VISIBLE_PACE_HEIGHT = 12;
+
+const PACE_INSIGHT_ICONS = {
+  BELOW: "arrow-down",
+  ON: "arrow-forward",
+  ABOVE: "arrow-up",
+} as const;
+
+const PACE_INSIGHT_COLORS = {
+  BELOW: palette.nileGreen[700],
+  ON: palette.gold[800],
+  ABOVE: palette.red[600],
+} as const;
 
 export function BudgetSpendingTrendChart({
   data,
@@ -124,9 +140,17 @@ export function BudgetSpendingTrendChart({
         </View>
       </View>
 
-      {insight ? (
-        <View className="mt-3 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700">
-          <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
+      {insight && paceState ? (
+        <View className="mt-3 flex-row items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700">
+          <Ionicons
+            testID="budget-pace-insight-icon"
+            accessible={false}
+            importantForAccessibility="no"
+            name={PACE_INSIGHT_ICONS[paceState]}
+            size={18}
+            color={PACE_INSIGHT_COLORS[paceState]}
+          />
+          <Text className="flex-1 text-sm text-text-secondary dark:text-text-secondary-dark">
             {insight}
           </Text>
         </View>
@@ -157,7 +181,10 @@ function WeekColumn({
       : 0;
   const paceHeight =
     week.paceAmount > 0
-      ? Math.max((week.paceAmount / maxAmount) * BAR_MAX_HEIGHT, 2)
+      ? Math.max(
+          (week.paceAmount / maxAmount) * BAR_MAX_HEIGHT,
+          MIN_VISIBLE_PACE_HEIGHT
+        )
       : 0;
   const locale = language === "ar" ? "ar-EG" : "en-US";
   const dateFormatter = new Intl.DateTimeFormat(locale, {
@@ -209,6 +236,7 @@ function WeekColumn({
         >
           {paceHeight > 0 ? (
             <View
+              testID={`budget-trend-pace-bar-${week.id}`}
               className="rounded-t border-2 border-dashed border-slate-500 dark:border-slate-400"
               style={{ height: paceHeight, width: BAR_WIDTH }}
             />

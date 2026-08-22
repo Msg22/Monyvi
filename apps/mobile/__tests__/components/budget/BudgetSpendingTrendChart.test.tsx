@@ -80,6 +80,39 @@ describe("BudgetSpendingTrendChart", () => {
     ).toBeOnTheScreen();
   });
 
+  it("keeps a tiny pace bar visible when actual spending is far over budget", () => {
+    render(
+      <BudgetSpendingTrendChart
+        data={[
+          {
+            id: "over-budget-week",
+            start: new Date(2026, 7, 15),
+            end: new Date(2026, 7, 21),
+            actualAmount: 11640.5,
+            paceAmount: 0.5,
+          },
+        ]}
+        currency="EGP"
+        paceState="ABOVE"
+      />
+    );
+
+    expect(
+      screen.getByTestId("budget-trend-pace-bar-over-budget-week")
+    ).toHaveStyle({
+      height: 12,
+    });
+    const source = readFileSync(
+      resolve(
+        __dirname,
+        "../../../components/budget/BudgetSpendingTrendChart.tsx"
+      ),
+      "utf8"
+    );
+    expect(source).toContain('ABOVE: "arrow-up"');
+    expect(source).toContain("name={PACE_INSIGHT_ICONS[paceState]}");
+  });
+
   it("uses AA graphical tones for actual and pace series", () => {
     const source = readFileSync(
       resolve(
