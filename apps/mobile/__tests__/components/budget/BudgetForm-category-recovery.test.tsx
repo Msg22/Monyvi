@@ -12,6 +12,8 @@ import type { Budget, Category } from "@monyvi/db";
 let mockCategoryError: unknown = new Error("category observation failed");
 let mockAreCategoriesLoading = false;
 let mockCategoryMap = new Map<string, Category>();
+let mockPreferredCurrency = "EGP";
+let mockIsPreferredCurrencyLoading = false;
 const mockRetryCategories = jest.fn();
 
 jest.mock("@expo/vector-icons", () => ({
@@ -44,7 +46,10 @@ jest.mock("@/components/ui/Toast", () => ({
 }));
 
 jest.mock("@/hooks/usePreferredCurrency", () => ({
-  usePreferredCurrency: () => ({ preferredCurrency: "EGP" }),
+  usePreferredCurrency: () => ({
+    preferredCurrency: mockPreferredCurrency,
+    isLoading: mockIsPreferredCurrencyLoading,
+  }),
 }));
 
 jest.mock("expo-router", () => ({
@@ -116,6 +121,8 @@ describe("BudgetForm category recovery", () => {
     mockCategoryError = new Error("category observation failed");
     mockAreCategoriesLoading = false;
     mockCategoryMap = new Map<string, Category>();
+    mockPreferredCurrency = "EGP";
+    mockIsPreferredCurrencyLoading = false;
     mockRetryCategories.mockClear();
     mockedCreateBudgetService.mockReset();
     mockedUpdateBudgetService.mockReset();
@@ -202,6 +209,31 @@ describe("BudgetForm category recovery", () => {
     );
     expect(mockedCreateBudgetService).toHaveBeenCalledWith(
       expect.objectContaining({ currency: "EGP" })
+    );
+  });
+
+  it("uses the loaded preference unless the user already selected a currency", async () => {
+    mockCategoryError = null;
+    mockPreferredCurrency = "USD";
+    mockIsPreferredCurrencyLoading = true;
+    const { rerender } = render(<BudgetForm />);
+
+    mockPreferredCurrency = "EGP";
+    mockIsPreferredCurrencyLoading = false;
+    rerender(<BudgetForm />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("budget-currency-selector")).toHaveTextContent(
+        /EGP/
+      )
+    );
+    fireEvent.press(screen.getByTestId("budget-currency-selector"));
+    fireEvent.press(screen.getByTestId("currency-picker-option-usd"));
+
+    mockPreferredCurrency = "EGP";
+    rerender(<BudgetForm />);
+    expect(screen.getByTestId("budget-currency-selector")).toHaveTextContent(
+      /USD/
     );
   });
 

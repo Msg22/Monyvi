@@ -807,6 +807,29 @@ describe("budget-detail-read-model-service", () => {
     expect(result.metrics.spent).toBe(0);
   });
 
+  it("does not report pause exclusions for a different-currency transaction", async () => {
+    const budget = createBudget({
+      pauseIntervals: [
+        {
+          from: new Date("2026-05-02T00:00:00.000Z").getTime(),
+          to: new Date("2026-05-03T23:59:59.999Z").getTime(),
+        },
+      ],
+    });
+    mockTransactions = [
+      createTransaction({
+        id: "tx-usd-pause",
+        amount: 100,
+        currency: "USD",
+        date: "2026-05-02T10:00:00.000Z",
+      }),
+    ];
+
+    const result = await getBudgetDetailReadModel(budget);
+
+    expect(result.hasCompletedPauseExclusion).toBe(false);
+  });
+
   it("keeps a missing recent transaction label semantic instead of emitting blank copy", async () => {
     const budget = createBudget();
     mockTransactions = [

@@ -108,7 +108,10 @@ export function BudgetForm({
     [categoryMap]
   );
   const { showToast } = useToast();
-  const { preferredCurrency } = usePreferredCurrency();
+  const {
+    preferredCurrency,
+    isLoading: isPreferredCurrencyLoading,
+  } = usePreferredCurrency();
 
   // ── Form state ──
   const [form, setForm] = useState<FormState>(() => {
@@ -141,6 +144,7 @@ export function BudgetForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isCurrencyPickerOpen, setIsCurrencyPickerOpen] = useState(false);
+  const [hasUserSelectedCurrency, setHasUserSelectedCurrency] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
 
@@ -164,6 +168,29 @@ export function BudgetForm({
     accessibleCategoryIds,
     areCategoriesLoading,
     categoryError,
+    renewalSource,
+  ]);
+
+  useEffect(() => {
+    if (
+      isEditMode ||
+      renewalSource ||
+      isPreferredCurrencyLoading ||
+      hasUserSelectedCurrency
+    ) {
+      return;
+    }
+
+    setForm((current) =>
+      current.currency === preferredCurrency
+        ? current
+        : { ...current, currency: preferredCurrency }
+    );
+  }, [
+    hasUserSelectedCurrency,
+    isEditMode,
+    isPreferredCurrencyLoading,
+    preferredCurrency,
     renewalSource,
   ]);
 
@@ -691,7 +718,10 @@ export function BudgetForm({
       <CurrencyPicker
         visible={isCurrencyPickerOpen}
         selectedCurrency={form.currency ?? preferredCurrency}
-        onSelect={(currency) => updateField("currency", currency)}
+        onSelect={(currency) => {
+          setHasUserSelectedCurrency(true);
+          updateField("currency", currency);
+        }}
         onClose={() => setIsCurrencyPickerOpen(false)}
       />
     </ScrollView>

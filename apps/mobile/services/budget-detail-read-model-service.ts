@@ -150,15 +150,15 @@ export function buildBudgetDetailReadModel(
     now
   );
   const pauseState = getBudgetPauseState(budget);
+  const currencyEligibleTransactions = transactions.filter((transaction) =>
+    hasMatchingBudgetCurrency(transaction.currency, budget.currency)
+  );
   const activeTransactions = filterExcludedTransactions(
-    transactions,
+    currencyEligibleTransactions,
     pauseState.pauseIntervals,
     pauseState.pausedAtMs
   );
-  const budgetTransactions = activeTransactions.filter((transaction) =>
-    hasMatchingBudgetCurrency(transaction.currency, budget.currency)
-  );
-  const spent = getTotalSpent(budgetTransactions);
+  const spent = getTotalSpent(activeTransactions);
   const daysElapsed = getDaysElapsed(bounds.start, now);
   const daysLeft = getDaysLeft(bounds.end, now);
   const metrics = computeSpendingMetrics(
@@ -192,22 +192,22 @@ export function buildBudgetDetailReadModel(
           })
         : null,
     weeklySpending: createWeeklySpending(
-      budgetTransactions,
+      activeTransactions,
       budget.amount,
       bounds
     ),
     categoryBreakdown: createCategoryBreakdown(
       budget,
       spent,
-      budgetTransactions,
+      activeTransactions,
       categoryMap
     ),
     recentTransactions: createRecentTransactions(
-      budgetTransactions,
+      activeTransactions,
       categoryMap
     ),
     hasCompletedPauseExclusion: hasCompletedPauseExclusion(
-      transactions,
+      currencyEligibleTransactions,
       pauseState.pauseIntervals
     ),
   });
