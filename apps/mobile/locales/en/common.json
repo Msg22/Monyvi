@@ -15,6 +15,7 @@
   "loading": "Loading...",
   "error": "Error",
   "success": "Success",
+  "in_progress": "In progress",
   "empty_state": "No data available",
   "search": "Search",
   "no_results": "No results found",

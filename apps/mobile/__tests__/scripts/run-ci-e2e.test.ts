@@ -6,7 +6,10 @@ interface RunCiE2eModule {
   ): string;
   getBudgetMaestroFlows(): readonly {
     readonly flow: string;
-    readonly profile: "dashboard-full" | "dashboard-filter-empty";
+    readonly profile:
+      | "dashboard-full"
+      | "dashboard-filter-empty"
+      | "budget-detail-delete";
   }[];
   getRequestedCiSuites(
     env?: Readonly<Record<string, string | undefined>>
@@ -108,6 +111,18 @@ describe("run-ci-e2e helpers", () => {
       {
         flow: "budgets/dashboard-lifecycle-actions.yaml",
         profile: "dashboard-full",
+      },
+      {
+        flow: "budgets/budget-detail-active.yaml",
+        profile: "dashboard-full",
+      },
+      {
+        flow: "budgets/budget-detail-lifecycle.yaml",
+        profile: "dashboard-full",
+      },
+      {
+        flow: "budgets/budget-detail-delete.yaml",
+        profile: "budget-detail-delete",
       },
     ]);
   });

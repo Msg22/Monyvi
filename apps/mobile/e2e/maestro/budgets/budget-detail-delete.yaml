@@ -1,0 +1,41 @@
+appId: com.monyvi.app
+---
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://budgets
+- extendedWaitUntil:
+    visible: "E2E Disposable Detail Budget"
+    timeout: 120000
+- tapOn: "E2E Disposable Detail Budget"
+- extendedWaitUntil:
+    visible:
+      id: "budget-detail-screen"
+    timeout: 120000
+- scrollUntilVisible:
+    element:
+      id: "budget-detail-delete"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: "budget-detail-delete"
+- assertVisible: "Delete budget?"
+- tapOn:
+    id: "modal-cancel"
+- assertNotVisible: "Delete budget?"
+- assertVisible:
+    id: "budget-detail-screen"
+- tapOn:
+    id: "budget-detail-delete"
+- assertVisible: "Delete budget?"
+- tapOn:
+    id: "modal-confirm"
+- extendedWaitUntil:
+    visible:
+      id: "budgets-screen"
+    timeout: 120000
+- assertNotVisible: "E2E Disposable Detail Budget"
+- openLink: monyvi://transactions
+- extendedWaitUntil:
+    visible:
+      id: "transactions-list"
+    timeout: 120000
+- assertVisible: "E2E Retained After Budget Delete"

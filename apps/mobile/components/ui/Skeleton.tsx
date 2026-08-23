@@ -23,7 +23,9 @@ import {
   type ViewStyle,
 } from "react-native";
 import Animated, {
+  cancelAnimation,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withRepeat,
   withTiming,
@@ -96,18 +98,29 @@ export function Skeleton({
 }: SkeletonProps): React.JSX.Element {
   const { isDark } = useTheme();
   const shimmerPosition = useSharedValue(-1);
+  const isReducedMotion = useReducedMotion();
   const [containerWidth, setContainerWidth] = useState(0);
 
   const colors = isDark ? SHIMMER_COLORS.dark : SHIMMER_COLORS.light;
 
   // Start the shimmer animation
   useEffect(() => {
+    if (isReducedMotion) {
+      shimmerPosition.value = 0;
+      return (): void => {
+        cancelAnimation(shimmerPosition);
+      };
+    }
+
     shimmerPosition.value = withRepeat(
       withTiming(1, { duration: ANIMATION_DURATION_MS }),
       -1, // infinite repeat
       false // no reverse
     );
-  }, [shimmerPosition]);
+    return (): void => {
+      cancelAnimation(shimmerPosition);
+    };
+  }, [isReducedMotion, shimmerPosition]);
 
   const handleLayout = useCallback((event: LayoutChangeEvent): void => {
     setContainerWidth(event.nativeEvent.layout.width);
@@ -139,15 +152,27 @@ export function Skeleton({
   };
 
   return (
-    <View style={[containerStyle, style]} onLayout={handleLayout}>
-      <Animated.View style={[{ flex: 1 }, animatedStyle]}>
-        <LinearGradient
-          colors={[colors.base, colors.highlight, colors.base]}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={gradientContainerStyle}
-        />
-      </Animated.View>
+    <View
+      testID="skeleton-block"
+      style={[containerStyle, style]}
+      onLayout={handleLayout}
+      accessible={false}
+      importantForAccessibility="no"
+    >
+      {!isReducedMotion ? (
+        <Animated.View
+          testID="skeleton-shimmer"
+          className="flex-1"
+          style={animatedStyle}
+        >
+          <LinearGradient
+            colors={[colors.base, colors.highlight, colors.base]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={gradientContainerStyle}
+          />
+        </Animated.View>
+      ) : null}
     </View>
   );
 }

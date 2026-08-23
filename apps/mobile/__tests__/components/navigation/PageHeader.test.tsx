@@ -1,8 +1,29 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
+import { I18nManager } from "react-native";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { PageHeader } from "@/components/navigation/PageHeader";
 
 const mockRouterBack = jest.fn();
+
+jest.mock("@expo/vector-icons", () => ({
+  Ionicons: ({
+    name,
+    color,
+  }: {
+    readonly name: string;
+    readonly color: string;
+  }): React.JSX.Element => {
+    const ReactNative =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    const IconView = ReactNative.View as unknown as React.ComponentType<{
+      readonly testID: string;
+      readonly color: string;
+    }>;
+    return <IconView testID={`icon-${name}`} color={color} />;
+  },
+}));
 
 jest.mock("expo-router", () => ({
   useRouter: (): { readonly back: typeof mockRouterBack } => ({
@@ -105,5 +126,102 @@ describe("PageHeader review variant", () => {
       "button"
     );
     expect(screen.getByLabelText("Create budget")).toHaveStyle({ elevation: 2 });
+  });
+
+  it("renders an icon and label together with an explicit brand icon color", () => {
+    const onPress = jest.fn();
+
+    render(
+      <PageHeader
+        title="Budget Detail"
+        showDrawer={false}
+        rightAction={{
+          icon: "create-outline",
+          label: "Edit",
+          iconColor: "#10B981",
+          accessibilityLabel: "Edit budget",
+          onPress,
+          transparent: true,
+        }}
+      />
+    );
+
+    expect(screen.getByLabelText("Edit budget")).toHaveProp(
+      "accessibilityRole",
+      "button"
+    );
+    expect(
+      readFileSync(
+        resolve(__dirname, "../../../components/navigation/PageHeader.tsx"),
+        "utf8"
+      )
+    ).toContain("min-h-11");
+    expect(screen.getByText("Edit")).toBeOnTheScreen();
+    expect(screen.getByTestId("icon-create-outline")).toHaveProp(
+      "color",
+      "#10B981"
+    );
+
+    fireEvent.press(screen.getByLabelText("Edit budget"));
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the default Back action labelled and at least 44dp", () => {
+    const onBack = jest.fn();
+
+    render(
+      <PageHeader
+        title="Budget Detail"
+        showDrawer={false}
+        showBackButton
+        onBack={onBack}
+        backAccessibilityLabel="Back"
+      />
+    );
+
+    expect(screen.getByLabelText("Back")).toHaveProp(
+      "accessibilityRole",
+      "button"
+    );
+    expect(
+      readFileSync(
+        resolve(__dirname, "../../../components/navigation/PageHeader.tsx"),
+        "utf8"
+      )
+    ).toContain("min-h-11 min-w-11");
+
+    fireEvent.press(screen.getByLabelText("Back"));
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(mockRouterBack).not.toHaveBeenCalled();
+  });
+
+  it("mirrors the default Back arrow in RTL", () => {
+    const original = I18nManager.isRTL;
+    Object.defineProperty(I18nManager, "isRTL", {
+      configurable: true,
+      value: true,
+    });
+    render(
+      <PageHeader
+        title="Budget Detail"
+        showDrawer={false}
+        showBackButton
+        backAccessibilityLabel="Back"
+      />
+    );
+    expect(screen.getByTestId("icon-arrow-forward-outline")).toBeOnTheScreen();
+    Object.defineProperty(I18nManager, "isRTL", {
+      configurable: true,
+      value: original,
+    });
+  });
+
+  it("uses accessible light and dark brand tones for labelled actions", () => {
+    expect(
+      readFileSync(
+        resolve(__dirname, "../../../components/navigation/PageHeader.tsx"),
+        "utf8"
+      )
+    ).toContain("text-nileGreen-700 dark:text-nileGreen-400");
   });
 });

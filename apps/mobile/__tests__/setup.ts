@@ -103,9 +103,20 @@ jest.mock("react-native-worklets", () =>
     "react-native-worklets/lib/module/mock"
   )
 );
-jest.mock("react-native-reanimated", () =>
-  jest.requireActual<Record<string, unknown>>("react-native-reanimated/mock")
-);
+jest.mock("react-native-reanimated", () => {
+  const reanimatedMock = jest.requireActual<Record<string, unknown>>(
+    "react-native-reanimated/mock"
+  );
+  const mockedUseReducedMotion = reanimatedMock.useReducedMotion;
+
+  return {
+    ...reanimatedMock,
+    useReducedMotion:
+      typeof mockedUseReducedMotion === "function"
+        ? mockedUseReducedMotion
+        : (): boolean => false,
+  };
+});
 
 // React 19 schedules react-test-renderer mounts asynchronously unless they are
 // wrapped in act(). Existing tests use a small project-local RTR pattern, so

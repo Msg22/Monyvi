@@ -163,6 +163,63 @@ export function getDaysElapsed(
 }
 
 /**
+ * Count local calendar days in an inclusive date range.
+ *
+ * Converting each local date to a UTC day number avoids daylight-saving hour
+ * changes affecting the number of represented calendar days.
+ */
+export function getInclusiveCalendarDayCount(
+  periodStart: Date,
+  periodEnd: Date
+): number {
+  const startDay = getLocalCalendarDayTimestamp(periodStart);
+  const endDay = getLocalCalendarDayTimestamp(periodEnd);
+
+  if (
+    !Number.isFinite(startDay) ||
+    !Number.isFinite(endDay) ||
+    endDay < startDay
+  ) {
+    return 0;
+  }
+
+  return Math.floor((endDay - startDay) / MS_PER_DAY) + 1;
+}
+
+/**
+ * Count inclusive local calendar days elapsed within a period.
+ *
+ * The injected reference date keeps all calculations in one read-model build
+ * anchored to the same instant. The result is clamped to the period.
+ */
+export function getElapsedCalendarDays(
+  periodStart: Date,
+  periodEnd: Date,
+  referenceDate: Date = new Date()
+): number {
+  const totalDays = getInclusiveCalendarDayCount(periodStart, periodEnd);
+  const startDay = getLocalCalendarDayTimestamp(periodStart);
+  const referenceDay = getLocalCalendarDayTimestamp(referenceDate);
+
+  if (
+    totalDays === 0 ||
+    !Number.isFinite(startDay) ||
+    !Number.isFinite(referenceDay) ||
+    referenceDay < startDay
+  ) {
+    return 0;
+  }
+
+  const elapsedDays = Math.floor((referenceDay - startDay) / MS_PER_DAY) + 1;
+  return Math.min(totalDays, elapsedDays);
+}
+
+function getLocalCalendarDayTimestamp(date: Date): number {
+  if (!Number.isFinite(date.getTime())) return Number.NaN;
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+/**
  * Check whether a given date falls within a period boundary.
  *
  * @param date - The date to check

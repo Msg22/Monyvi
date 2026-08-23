@@ -1,118 +1,201 @@
-/**
- * BudgetDetailOverview Component
- *
- * Overview card on the budget detail screen with circular progress ring,
- * "spent of budget" text, and three key stats (Remaining, Daily Average, Days Left).
- *
- * @module BudgetDetailOverview
- */
-
-import { palette } from "@/constants/colors";
+import { useLocale } from "@/context/LocaleContext";
+import { shouldUseCompactLayout } from "@/constants/ui";
 import type { CurrencyType } from "@monyvi/db";
-import { type SpendingMetrics, formatCurrency } from "@monyvi/logic";
+import { formatCurrency, type SpendingMetrics } from "@monyvi/logic";
 import React from "react";
-import { Text, View } from "react-native";
+import { Text, useWindowDimensions, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { CircularProgress } from "./CircularProgress";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 interface BudgetDetailOverviewProps {
   readonly metrics: SpendingMetrics;
   readonly currency: CurrencyType;
   readonly daysLeft: number;
-  readonly isPaused: boolean;
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export function BudgetDetailOverview({
   metrics,
   currency,
   daysLeft,
-  isPaused,
 }: BudgetDetailOverviewProps): React.JSX.Element {
   const { t } = useTranslation("budgets");
+  useLocale();
+  const { width, fontScale } = useWindowDimensions();
+  // Keep the approved horizontal composition on ordinary phones; stack only
+  // when the shared responsive contract says the layout cannot fit safely.
+  const isConstrained = shouldUseCompactLayout(width, fontScale);
+  const clampedPercentage = Math.max(0, Math.min(metrics.percentage, 100));
+  const isDanger = metrics.status === "danger";
+  const isWarning = metrics.status === "warning";
+  const semanticTextClass = isDanger
+    ? "text-red-600 dark:text-red-500"
+    : isWarning
+      ? "text-gold-800 dark:text-gold-400"
+      : "text-nileGreen-700 dark:text-nileGreen-400";
+  const semanticBackgroundClass = isDanger
+    ? "bg-red-600 dark:bg-red-500"
+    : isWarning
+      ? "bg-gold-800 dark:bg-gold-400"
+      : "bg-nileGreen-700 dark:bg-nileGreen-400";
+  const amount = (value: number): string =>
+    formatCurrency({ amount: value, currency });
 
   return (
-    <View className="rounded-3xl border p-6 mb-4 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
-      {/* Paused indicator */}
-      {isPaused && (
-        <View className="bg-slate-500 rounded-full px-3 py-1 mb-3 self-center">
-          <Text className="text-xs font-medium text-white">{t("paused")}</Text>
-        </View>
-      )}
-
-      {/* Ring + Label */}
-      <View className="items-center mb-6">
-        <CircularProgress
-          percentage={metrics.percentage}
-          status={metrics.status}
-          size={140}
-          strokeWidth={12}
-          label={t("spent")}
-        />
-
-        <View className="mt-3 items-center">
-          <Text className="text-2xl font-bold text-slate-800 dark:text-white">
-            {formatCurrency({ amount: metrics.spent, currency })}
+    <View
+      testID="budget-detail-overview"
+      className="mx-5 mb-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800"
+    >
+      <View
+        testID="budget-detail-overview-summary"
+        className={
+          isConstrained ? "gap-3" : "flex-row items-start justify-between gap-2"
+        }
+      >
+        <View className="min-w-0 flex-1">
+          <Text className="text-sm font-medium text-nileGreen-700 dark:text-nileGreen-400">
+            {t("detail.overview.spent", { defaultValue: "Spent" })}
           </Text>
-          <Text className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            {t("of_budget", {
-              amount: formatCurrency({ amount: metrics.limit, currency }),
+          <Text className="mt-1 text-2xl font-semibold text-text-primary dark:text-text-primary-dark">
+            {amount(metrics.spent)}
+          </Text>
+          <Text className="mt-0.5 text-sm text-text-secondary dark:text-text-secondary-dark">
+            {t("detail.overview.of_budget", {
+              defaultValue: `of ${amount(metrics.limit)}`,
+              limit: amount(metrics.limit),
             })}
           </Text>
         </View>
+        <View
+          className={`shrink-0 ${isConstrained ? "items-start" : "items-end"}`}
+        >
+          <Text className={`text-2xl font-bold ${semanticTextClass}`}>
+            {Math.round(metrics.percentage)}%
+          </Text>
+          <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
+            {t("detail.overview.of_budget_percentage", {
+              defaultValue: "of budget",
+            })}
+          </Text>
+          {isDanger || isWarning ? (
+            <Text className={`mt-1 text-xs font-semibold ${semanticTextClass}`}>
+              {t(
+                isDanger
+                  ? "detail.overview.status_danger"
+                  : "detail.overview.status_warning",
+                { defaultValue: isDanger ? "Over budget" : "Near limit" }
+              )}
+            </Text>
+          ) : null}
+        </View>
       </View>
 
-      {/* Three Stats Row */}
-      <View className="flex-row">
-        {/* Remaining */}
-        <View className="flex-1 items-center border-r border-slate-200 dark:border-slate-700">
-          <Text className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-medium">
-            {t("remaining")}
-          </Text>
-          <Text
-            className="text-lg font-bold mt-1"
+      <View
+        testID="budget-detail-progress"
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel={t("detail.accessibility.progress", {
+          defaultValue: `Budget spent ${Math.round(metrics.percentage)} percent`,
+          percentage: Math.round(metrics.percentage),
+        })}
+        accessibilityValue={{ min: 0, max: 100, now: metrics.percentage }}
+        className="mt-5"
+      >
+        <View className="relative h-6">
+          <View
+            className="absolute w-10 items-center"
             style={{
-              color:
-                metrics.status === "danger"
-                  ? palette.red[500]
-                  : palette.nileGreen[500],
+              left: `${Math.max(10, Math.min(clampedPercentage, 90))}%`,
+              transform: [{ translateX: -20 }],
             }}
           >
-            {formatCurrency({ amount: metrics.remaining, currency })}
-          </Text>
+            <Text className={`text-xs font-semibold ${semanticTextClass}`}>
+              {Math.round(metrics.percentage)}%
+            </Text>
+          </View>
         </View>
-
-        {/* Daily Average */}
-        <View className="flex-1 items-center border-r border-slate-200 dark:border-slate-700">
-          <Text className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-medium">
-            {t("daily_avg")}
-          </Text>
-          <Text className="text-lg font-bold mt-1 text-slate-800 dark:text-white">
-            {formatCurrency({
-              amount: metrics.dailyAverage,
-              currency,
-              maximumFractionDigits: 0,
-            })}
-          </Text>
+        <View className="relative h-2 rounded-full bg-slate-200 dark:bg-slate-700">
+          <View
+            testID="budget-detail-progress-fill"
+            className={`h-full rounded-full ${semanticBackgroundClass}`}
+            style={{ width: `${clampedPercentage}%` }}
+          />
+          <View
+            testID="budget-detail-progress-marker"
+            className={`absolute -top-1 h-4 w-0.5 ${semanticBackgroundClass}`}
+            style={{ left: `${clampedPercentage}%` }}
+          />
         </View>
-
-        {/* Days Left */}
-        <View className="flex-1 items-center">
-          <Text className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-medium">
-            {t("days_left")}
+        <View className="mt-1 flex-row justify-between">
+          <Text className="text-xs text-text-muted dark:text-text-muted-dark">
+            0%
           </Text>
-          <Text className="text-lg font-bold mt-1 text-slate-800 dark:text-white">
-            {daysLeft}
+          <Text className="text-xs text-text-muted dark:text-text-muted-dark">
+            100%
           </Text>
         </View>
       </View>
+
+      <View
+        testID="budget-detail-overview-stats"
+        className={`mt-4 border-t border-slate-200 pt-4 dark:border-slate-700 ${isConstrained ? "gap-3" : "flex-row"}`}
+      >
+        <Stat
+          label={t("detail.overview.remaining", { defaultValue: "Remaining" })}
+          value={amount(metrics.remaining)}
+          valueClass={semanticTextClass}
+          isStacked={isConstrained}
+        />
+        <Stat
+          label={t("detail.overview.daily_average_spent", {
+            defaultValue: "Daily average spent",
+          })}
+          value={t("detail.overview.per_day", {
+            defaultValue: `${amount(metrics.dailyAverage)}/day`,
+            amount: amount(metrics.dailyAverage),
+          })}
+          hasDivider
+          isStacked={isConstrained}
+        />
+        <Stat
+          label={t("detail.overview.days_left", { defaultValue: "Days left" })}
+          value={t("detail.overview.days_value", {
+            defaultValue: `${daysLeft} days`,
+            count: daysLeft,
+          })}
+          hasDivider
+          isStacked={isConstrained}
+        />
+      </View>
+    </View>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  valueClass = "text-text-primary dark:text-text-primary-dark",
+  hasDivider = false,
+  isStacked = false,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly valueClass?: string;
+  readonly hasDivider?: boolean;
+  readonly isStacked?: boolean;
+}): React.JSX.Element {
+  return (
+    <View
+      className={`flex-1 px-1 ${isStacked ? "items-start" : "items-center"} ${hasDivider ? (isStacked ? "border-t border-slate-200 pt-3 dark:border-slate-700" : "border-s border-slate-200 dark:border-slate-700") : ""}`}
+    >
+      <Text
+        className={`${isStacked ? "text-start" : "text-center"} text-xs text-text-secondary dark:text-text-secondary-dark`}
+      >
+        {label}
+      </Text>
+      <Text
+        className={`mt-1 ${isStacked ? "text-start" : "text-center"} text-sm font-semibold ${valueClass}`}
+      >
+        {value}
+      </Text>
     </View>
   );
 }

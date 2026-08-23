@@ -57,6 +57,30 @@ function buildDashboardFullRows({
     userId,
     "category:deleted-history"
   );
+  const detailParentCategoryId = deterministicUuid(
+    seedScope,
+    userId,
+    "category:detail-food"
+  );
+  const detailGroceriesCategoryId = deterministicUuid(
+    seedScope,
+    userId,
+    "category:detail-groceries"
+  );
+  const detailDiningCategoryId = deterministicUuid(
+    seedScope,
+    userId,
+    "category:detail-dining"
+  );
+  const detailFreshFoodCategoryId = deterministicUuid(
+    seedScope,
+    userId,
+    "category:detail-fresh-food"
+  );
+  const detailPauseInterval = createCompletedPauseInterval(
+    dateFromToday(-20),
+    dateFromToday(-18)
+  );
 
   return {
     categories: [
@@ -78,6 +102,40 @@ function buildDashboardFullRows({
         id: deletedCategoryId,
         name: "Deleted Category",
         deleted: true,
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createBudgetCategory({
+        id: detailParentCategoryId,
+        name: "E2E Detail Food",
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createBudgetCategory({
+        id: detailGroceriesCategoryId,
+        name: "E2E Detail Groceries",
+        level: 2,
+        parentId: detailParentCategoryId,
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createBudgetCategory({
+        id: detailDiningCategoryId,
+        name: "E2E Detail Dining",
+        level: 2,
+        parentId: detailParentCategoryId,
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+      createBudgetCategory({
+        id: detailFreshFoodCategoryId,
+        name: "E2E Detail Fresh Food",
+        level: 3,
+        parentId: detailGroceriesCategoryId,
         currentTimestamp,
         fixedNow,
         userId,
@@ -198,6 +256,22 @@ function buildDashboardFullRows({
         fixedNow,
         userId,
       }),
+      {
+        ...createCategoryBudget({
+          id: deterministicUuid(seedScope, userId, "budget:detail-long-custom"),
+          name: "E2E Detail Long Custom",
+          categoryId: detailParentCategoryId,
+          amount: 12000,
+          period: "CUSTOM",
+          periodStart: dateFromToday(-35),
+          periodEnd: dateFromToday(14),
+          status: "ACTIVE",
+          currentTimestamp,
+          fixedNow,
+          userId,
+        }),
+        pause_intervals: JSON.stringify([detailPauseInterval]),
+      },
     ],
     transactions: [
       {
@@ -238,6 +312,20 @@ function buildDashboardFullRows({
         created_at: fixedNow,
         updated_at: currentTimestamp,
       },
+      ...createBudgetDetailTransactions({
+        accountId: seedIds.accounts.cash,
+        categoryIds: {
+          dining: detailDiningCategoryId,
+          freshFood: detailFreshFoodCategoryId,
+          groceries: detailGroceriesCategoryId,
+        },
+        currentTimestamp,
+        dateFromToday,
+        deterministicUuid,
+        fixedNow,
+        seedScope,
+        userId,
+      }),
     ],
   };
 }
@@ -278,6 +366,8 @@ function createBudgetCategory({
   id,
   name,
   deleted = false,
+  level = 1,
+  parentId = null,
   currentTimestamp,
   fixedNow,
   userId,
@@ -292,8 +382,8 @@ function createBudgetCategory({
     icon_library: "Ionicons",
     color: null,
     is_system: false,
-    level: 1,
-    parent_id: null,
+    level,
+    parent_id: parentId,
     sort_order: 900,
     is_hidden: deleted,
     is_internal: false,
@@ -302,6 +392,125 @@ function createBudgetCategory({
     deleted,
     created_at: fixedNow,
     updated_at: currentTimestamp,
+  };
+}
+
+function createCompletedPauseInterval(startDate, endDate) {
+  return {
+    from: Date.parse(`${startDate}T00:00:00.000Z`),
+    to: Date.parse(`${endDate}T23:59:59.999Z`),
+  };
+}
+
+function createBudgetDetailTransactions({
+  accountId,
+  categoryIds,
+  currentTimestamp,
+  dateFromToday,
+  deterministicUuid,
+  fixedNow,
+  seedScope,
+  userId,
+}) {
+  const fixtures = [
+    ["editable", "E2E Detail Editable", 0, 450, categoryIds.groceries],
+    ["week-one", "E2E Detail Week One", -2, 320, categoryIds.dining],
+    ["week-two", "E2E Detail Week Two", -8, 275, categoryIds.freshFood],
+    [
+      "week-two-extra",
+      "E2E Detail Week Two Extra",
+      -10,
+      125,
+      categoryIds.groceries,
+    ],
+    ["week-three", "E2E Detail Week Three", -15, 610, categoryIds.dining],
+    [
+      "paused-inside",
+      "E2E Detail Paused Inside",
+      -19,
+      999,
+      categoryIds.freshFood,
+    ],
+    [
+      "paused-outside",
+      "E2E Detail Paused Outside",
+      -22,
+      420,
+      categoryIds.groceries,
+    ],
+    ["week-five", "E2E Detail Week Five", -29, 200, categoryIds.dining],
+    ["week-six", "E2E Detail Week Six", -34, 180, categoryIds.freshFood],
+  ];
+
+  return fixtures.map(([key, counterparty, dayOffset, amount, categoryId]) => ({
+    id: deterministicUuid(seedScope, userId, `transaction:detail:${key}`),
+    user_id: userId,
+    account_id: accountId,
+    amount,
+    currency: "EGP",
+    type: "EXPENSE",
+    category_id: categoryId,
+    counterparty,
+    note: "Seeded Budget Detail hierarchy fixture",
+    date: dateFromToday(dayOffset),
+    source: "MANUAL",
+    is_draft: false,
+    deleted: false,
+    created_at: fixedNow,
+    updated_at: currentTimestamp,
+  }));
+}
+
+function buildBudgetDetailDeleteRows({
+  categoryIds,
+  currentTimestamp,
+  dateFromToday,
+  deterministicUuid,
+  fixedNow,
+  seedIds,
+  seedScope,
+  userId,
+}) {
+  return {
+    categories: [],
+    budgets: [
+      createCategoryBudget({
+        id: deterministicUuid(seedScope, userId, "budget:disposable-detail"),
+        name: "E2E Disposable Detail Budget",
+        categoryId: categoryIds.shopping,
+        amount: 5000,
+        period: "MONTHLY",
+        periodStart: dateFromToday(-7),
+        periodEnd: dateFromToday(23),
+        status: "ACTIVE",
+        currentTimestamp,
+        fixedNow,
+        userId,
+      }),
+    ],
+    transactions: [
+      {
+        id: deterministicUuid(
+          seedScope,
+          userId,
+          "transaction:retained-after-budget-delete"
+        ),
+        user_id: userId,
+        account_id: seedIds.accounts.cash,
+        amount: 350,
+        currency: "EGP",
+        type: "EXPENSE",
+        category_id: categoryIds.shopping,
+        counterparty: "E2E Retained After Budget Delete",
+        note: "Transaction must survive disposable budget deletion",
+        date: dateFromToday(0),
+        source: "MANUAL",
+        is_draft: false,
+        deleted: false,
+        created_at: fixedNow,
+        updated_at: currentTimestamp,
+      },
+    ],
   };
 }
 
@@ -353,6 +562,10 @@ const E2E_BUDGET_FIXTURES = {
   "dashboard-filter-empty": createBudgetFixture(
     "dashboard-filter-empty",
     buildDashboardFilteredEmptyRows
+  ),
+  "budget-detail-delete": createBudgetFixture(
+    "budget-detail-delete",
+    buildBudgetDetailDeleteRows
   ),
 };
 

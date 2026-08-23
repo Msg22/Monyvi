@@ -123,6 +123,7 @@ jest.mock("@/services/user-data-access", (): unknown => ({
 
 import {
   createBudget,
+  deleteBudget,
   getCategoryAndSubcategoryIds,
   getRenewableBudgetById,
   getSpendingForBudget,
@@ -589,6 +590,18 @@ describe("budget-service", () => {
     expect(pausedCount).toBe(0);
     expect(mockWrite).not.toHaveBeenCalled();
     expect(future.update).not.toHaveBeenCalled();
+  });
+
+  it("soft-deletes only the owned budget and never mutates transactions", async (): Promise<void> => {
+    const budget = createLifecycleBudget({ id: "budget-delete" });
+    mockQueryOwned.mockReturnValueOnce(createQueryResult([budget]));
+
+    await deleteBudget(budget.id);
+
+    expect(budget.deleted).toBe(true);
+    expect(budget.update).toHaveBeenCalledTimes(1);
+    expect(mockWrite).toHaveBeenCalledTimes(1);
+    expect(mockGet).not.toHaveBeenCalledWith("transactions");
   });
 
   it("resumes only a paused owned budget and appends one closed pause interval", async (): Promise<void> => {

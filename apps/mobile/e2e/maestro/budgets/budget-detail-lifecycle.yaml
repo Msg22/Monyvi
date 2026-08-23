@@ -1,0 +1,88 @@
+appId: com.monyvi.app
+---
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://budgets
+- extendedWaitUntil:
+    visible:
+      id: "budgets-screen"
+    timeout: 120000
+- tapOn:
+    id: "budget-scope-category"
+- tapOn:
+    id: "budget-filter-period"
+- tapOn:
+    id: "budget-filter-option-period-custom"
+- scrollUntilVisible:
+    element: "E2E Detail Long Custom"
+    direction: DOWN
+    timeout: 120000
+- tapOn: "E2E Detail Long Custom"
+- extendedWaitUntil:
+    visible:
+      id: "budget-detail-lifecycle-action"
+    timeout: 120000
+- tapOn:
+    id: "budget-detail-lifecycle-action"
+- assertVisible: "Pause budget?"
+- tapOn:
+    id: "modal-cancel"
+- assertNotVisible: "Pause budget?"
+- assertVisible: "Pause"
+- tapOn:
+    id: "budget-detail-lifecycle-action"
+- assertVisible: "Pause budget?"
+- tapOn:
+    id: "modal-confirm"
+- extendedWaitUntil:
+    notVisible: "Pause budget?"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Resume"
+    timeout: 30000
+- tapOn:
+    id: "budget-detail-lifecycle-action"
+- assertVisible: "Resume budget?"
+- tapOn:
+    id: "modal-cancel"
+- assertNotVisible: "Resume budget?"
+- assertVisible: "Resume"
+- tapOn:
+    id: "budget-detail-lifecycle-action"
+- assertVisible: "Resume budget?"
+- tapOn:
+    id: "modal-confirm"
+- extendedWaitUntil:
+    notVisible: "Resume budget?"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Pause"
+    timeout: 30000
+- openLink: monyvi://budgets
+- tapOn:
+    id: "budget-scope-category"
+- tapOn:
+    id: "budget-filter-status"
+- tapOn:
+    id: "budget-filter-option-status-expired"
+- scrollUntilVisible:
+    element: "E2E Expired Custom"
+    direction: DOWN
+    timeout: 120000
+- tapOn: "E2E Expired Custom"
+- extendedWaitUntil:
+    visible:
+      id: "budget-detail-screen"
+    timeout: 120000
+- assertVisible: "Expired"
+- assertNotVisible:
+    id: "budget-detail-lifecycle-action"
+- scrollUntilVisible:
+    element:
+      id: "subcategory-breakdown-empty"
+    direction: DOWN
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: "recent-transactions-empty"
+    direction: DOWN
+    timeout: 30000

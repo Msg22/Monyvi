@@ -1,25 +1,73 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
-import type { Budget } from "@monyvi/db";
+import { AppState } from "react-native";
+import type { Budget, CurrencyType } from "@monyvi/db";
+import type { BudgetDetailReadModel } from "@/contracts/budget-detail-presentation";
+import type {
+  BudgetDetailObservation,
+  BudgetDetailObservationOptions,
+} from "@/services/budget-detail-observation-service";
 
-const mockDatabaseGet = jest.fn((tableName: string): string => tableName);
-const mockObserveOwnedById = jest.fn();
-const mockGetBudgetDetailReadModel = jest.fn<Promise<unknown>, [Budget]>();
-const mockLoggerError = jest.fn();
-const mockUnsubscribe = jest.fn();
-let budgetObserver: MockObserver<Budget> | null = null;
+const mockObserveBudgetDetailReadModels = jest.fn<
+  Promise<BudgetDetailObservation>,
+  [BudgetDetailObservationOptions]
+>();
+const mockLoggerError = jest.fn<
+  void,
+  [string, unknown, Readonly<Record<string, unknown>>?]
+>();
+let mockCurrentUser: { userId: string | null; isResolvingUser: boolean } = {
+  userId: "user-1",
+  isResolvingUser: false,
+};
+let focusCallback: (() => void | (() => void)) | null = null;
 
-interface MockObserver<TRecord> {
-  readonly next: (record: TRecord) => void;
-  readonly error: (error: unknown) => void;
+interface Observer<T> {
+  readonly next: (value: T) => void;
+  readonly error?: (error: unknown) => void;
+}
+
+function createObservation<T>(): {
+  readonly observable: {
+    readonly subscribe: jest.Mock<{ unsubscribe: jest.Mock }, [Observer<T>]>;
+  };
+  readonly emit: (value: T) => void;
+  readonly fail: (error: unknown) => void;
+  readonly unsubscribe: jest.Mock;
+} {
+  let observer: Observer<T> | null = null;
+  const unsubscribe = jest.fn();
+  const subscribe = jest.fn(
+    (nextObserver: Observer<T>): { unsubscribe: jest.Mock } => {
+      observer = nextObserver;
+      return { unsubscribe };
+    }
+  );
+  return {
+    observable: { subscribe },
+    emit: (value): void => observer?.next(value),
+    fail: (error): void => observer?.error?.(error),
+    unsubscribe,
+  };
 }
 
 const budget = {
   id: "budget-1",
   userId: "user-1",
-  isCategoryBudget: false,
 } as unknown as Budget;
 
 const detailReadModel = {
+  identity: {
+    budgetId: "budget-1",
+    name: "Budget",
+    type: "GLOBAL",
+    lifecycle: "ACTIVE",
+    period: "MONTHLY",
+    periodStart: new Date(2026, 4, 1),
+    periodEnd: new Date(2026, 4, 31, 23, 59, 59, 999),
+    icon: { kind: "GLOBAL" },
+    availableLifecycleAction: "PAUSE",
+  },
+  currency: "EGP",
   metrics: {
     spent: 250,
     limit: 1000,
@@ -30,45 +78,40 @@ const detailReadModel = {
   },
   daysLeft: 10,
   daysElapsed: 5,
-  weeklySpending: [
-    {
-      bucket: { label: "May 1", weekStart: new Date(), weekEnd: new Date() },
-      amount: 250,
-    },
-  ],
-  subcategoryBreakdown: [],
+  paceState: "BELOW",
+  weeklySpending: [],
+  categoryBreakdown: null,
   recentTransactions: [],
-};
+  hasCompletedPauseExclusion: false,
+} as const satisfies BudgetDetailReadModel;
 
-jest.mock("@monyvi/db", () => ({
-  database: {
-    get: (tableName: string): string => mockDatabaseGet(tableName),
+jest.mock("expo-router", () => ({
+  useFocusEffect: (callback: () => void | (() => void)): void => {
+    const ReactModule = jest.requireActual<typeof import("react")>("react");
+    focusCallback = callback;
+    ReactModule.useEffect(() => callback(), [callback]);
   },
 }));
 
-jest.mock("@/services/user-data-access", () => ({
-  observeOwnedById: (...args: readonly unknown[]): unknown =>
-    mockObserveOwnedById(...args),
-}));
-
-jest.mock("@/services/budget-detail-read-model-service", () => ({
-  getBudgetDetailReadModel: (input: Budget): Promise<unknown> =>
-    mockGetBudgetDetailReadModel(input),
+jest.mock("@/services/budget-detail-observation-service", () => ({
+  observeBudgetDetailReadModels: (
+    options: BudgetDetailObservationOptions
+  ): Promise<BudgetDetailObservation> =>
+    mockObserveBudgetDetailReadModels(options),
 }));
 
 jest.mock("@/utils/logger", () => ({
   logger: {
-    error: (...args: readonly unknown[]): void => {
-      mockLoggerError(...args);
-    },
+    error: (
+      message: string,
+      error: unknown,
+      context?: Readonly<Record<string, unknown>>
+    ): void => mockLoggerError(message, error, context),
   },
 }));
 
 jest.mock("../../hooks/useCurrentUser", () => ({
-  useCurrentUser: (): { userId: string; isResolvingUser: boolean } => ({
-    userId: "user-1",
-    isResolvingUser: false,
-  }),
+  useCurrentUser: (): typeof mockCurrentUser => mockCurrentUser,
   runUserScopedEffect: ({
     userId,
     isResolvingUser,
@@ -82,14 +125,8 @@ jest.mock("../../hooks/useCurrentUser", () => ({
     readonly onSignedOut: () => void;
     readonly onAuthenticated: (userId: string) => void | (() => void);
   }): void | (() => void) => {
-    if (isResolvingUser) {
-      onResolving();
-      return;
-    }
-    if (!userId) {
-      onSignedOut();
-      return;
-    }
+    if (isResolvingUser) return onResolving();
+    if (!userId) return onSignedOut();
     return onAuthenticated(userId);
   },
 }));
@@ -97,138 +134,277 @@ jest.mock("../../hooks/useCurrentUser", () => ({
 import { useBudgetDetail } from "@/hooks/useBudgetDetail";
 
 describe("useBudgetDetail", () => {
+  let appStateListener: ((state: string) => void) | null;
+  let removeAppStateListener: jest.Mock;
+
   beforeEach(() => {
     jest.clearAllMocks();
-    budgetObserver = null;
-    mockObserveOwnedById.mockReturnValue({
-      subscribe: (
-        observer: MockObserver<Budget>
-      ): { unsubscribe: jest.Mock } => {
-        budgetObserver = observer;
-        observer.next(budget);
-        return { unsubscribe: mockUnsubscribe };
-      },
-    });
-    mockGetBudgetDetailReadModel.mockResolvedValue(detailReadModel);
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(2026, 4, 15, 12));
+    mockCurrentUser = { userId: "user-1", isResolvingUser: false };
+    focusCallback = null;
+    appStateListener = null;
+    removeAppStateListener = jest.fn();
+    jest.spyOn(AppState, "addEventListener").mockImplementation(
+      (_event, listener): { remove: () => void } => {
+        appStateListener = listener as (state: string) => void;
+        return { remove: removeAppStateListener };
+      }
+    );
   });
 
-  it("observes the scoped budget and delegates detail computation to the read model", async () => {
-    const { result, unmount } = renderHook(() => useBudgetDetail("budget-1"));
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
 
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-    });
+  it("shows initial loading then exposes the observed immutable read model", async () => {
+    const source = createObservation<{
+      budget: Budget;
+      readModel: BudgetDetailReadModel;
+    } | null>();
+    mockObserveBudgetDetailReadModels.mockResolvedValue(source.observable);
+    const { result } = renderHook(() => useBudgetDetail("budget-1", "KWD"));
 
-    expect(mockObserveOwnedById).toHaveBeenCalledWith(
-      "budgets",
-      "budget-1",
-      "user-1"
+    expect(result.current.isInitialLoading).toBe(true);
+    await waitFor(() =>
+      expect(source.observable.subscribe).toHaveBeenCalledTimes(1)
     );
-    expect(mockGetBudgetDetailReadModel).toHaveBeenCalledWith(budget);
+    act(() => source.emit({ budget, readModel: detailReadModel }));
+
+    expect(result.current.readModel).toBe(detailReadModel);
     expect(result.current.budget).toBe(budget);
-    expect(result.current.metrics).toBe(detailReadModel.metrics);
-    expect(result.current.weeklySpending).toBe(detailReadModel.weeklySpending);
+    expect(result.current.hasValidData).toBe(true);
+    expect(result.current.isInitialLoading).toBe(false);
+    expect(result.current.errorKey).toBeNull();
+    const observationOptions = mockObserveBudgetDetailReadModels.mock.calls[0]?.[0];
+    expect(observationOptions?.budgetId).toBe("budget-1");
+    expect(observationOptions?.userId).toBe("user-1");
+    expect(observationOptions?.fallbackCurrency).toBe("KWD");
+    expect(typeof observationOptions?.getNow).toBe("function");
+  });
+
+  it("shows an initial stable error and Retry starts a new generation", async () => {
+    const error = new Error("initial observation failed");
+    const retrySource = createObservation<{
+      budget: Budget;
+      readModel: BudgetDetailReadModel;
+    } | null>();
+    mockObserveBudgetDetailReadModels
+      .mockRejectedValueOnce(error)
+      .mockResolvedValueOnce(retrySource.observable);
+    const { result } = renderHook(() => useBudgetDetail("budget-1", "EGP"));
+
+    await waitFor(() =>
+      expect(result.current.errorKey).toBe("budget_detail_load_failed")
+    );
+    expect(result.current.readModel).toBeNull();
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      "budgetDetail.observe.failed",
+      error,
+      { budgetId: "budget-1" }
+    );
+
+    act(() => result.current.retry());
+    expect(result.current.isInitialLoading).toBe(true);
+    await waitFor(() =>
+      expect(mockObserveBudgetDetailReadModels).toHaveBeenCalledTimes(2)
+    );
+    act(() => retrySource.emit({ budget, readModel: detailReadModel }));
+    expect(result.current.readModel).toBe(detailReadModel);
+    expect(result.current.errorKey).toBeNull();
+  });
+
+  it("retains the last valid model and exposes a refresh error", async () => {
+    const source = createObservation<{
+      budget: Budget;
+      readModel: BudgetDetailReadModel;
+    } | null>();
+    mockObserveBudgetDetailReadModels.mockResolvedValue(source.observable);
+    const { result } = renderHook(() => useBudgetDetail("budget-1", "EGP"));
+    await waitFor(() =>
+      expect(mockObserveBudgetDetailReadModels).toHaveBeenCalledTimes(1)
+    );
+    act(() => source.emit({ budget, readModel: detailReadModel }));
+
+    const error = new Error("dependency observation failed");
+    act(() => source.fail(error));
+
+    expect(result.current.readModel).toBe(detailReadModel);
+    expect(result.current.errorKey).toBe("budget_detail_refresh_failed");
+    expect(result.current.isRefreshing).toBe(false);
+  });
+
+  it("ignores a stale async generation without subscribing to it", async () => {
+    let resolveFirst: (value: BudgetDetailObservation) => void = () => undefined;
+    const firstPromise = new Promise<BudgetDetailObservation>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const staleSource = createObservation<{
+      budget: Budget;
+      readModel: BudgetDetailReadModel;
+    } | null>();
+    const currentSource = createObservation<{
+      budget: Budget;
+      readModel: BudgetDetailReadModel;
+    } | null>();
+    mockObserveBudgetDetailReadModels
+      .mockReturnValueOnce(firstPromise)
+      .mockResolvedValueOnce(currentSource.observable);
+    const { result } = renderHook(() => useBudgetDetail("budget-1", "EGP"));
+
+    act(() => result.current.retry());
+    await waitFor(() =>
+      expect(mockObserveBudgetDetailReadModels).toHaveBeenCalledTimes(2)
+    );
+    resolveFirst(staleSource.observable);
+    await act(async () => Promise.resolve());
+
+    expect(staleSource.observable.subscribe).not.toHaveBeenCalled();
+    act(() => currentSource.emit({ budget, readModel: detailReadModel }));
+    expect(result.current.readModel).toBe(detailReadModel);
+  });
+
+  it("refreshes on later focus, foreground, and local-day rollover", async () => {
+    const sources = Array.from({ length: 4 }, () => createObservation<unknown>());
+    for (const source of sources) {
+      mockObserveBudgetDetailReadModels.mockResolvedValueOnce(source.observable);
+    }
+    renderHook(() => useBudgetDetail("budget-1", "EGP"));
+    await waitFor(() =>
+      expect(mockObserveBudgetDetailReadModels).toHaveBeenCalledTimes(1)
+    );
+
+    act(() => {
+      void focusCallback?.();
+    });
+    await waitFor(() =>
+      expect(mockObserveBudgetDetailReadModels).toHaveBeenCalledTimes(2)
+    );
+    act(() => appStateListener?.("active"));
+    await waitFor(() =>
+      expect(mockObserveBudgetDetailReadModels).toHaveBeenCalledTimes(3)
+    );
+    act(() => {
+      jest.advanceTimersByTime(12 * 60 * 60 * 1000 + 1);
+    });
+    await waitFor(() =>
+      expect(mockObserveBudgetDetailReadModels).toHaveBeenCalledTimes(4)
+    );
+  });
+
+  it("clears prior-user data and subscriptions on sign-out", async () => {
+    const source = createObservation<{
+      budget: Budget;
+      readModel: BudgetDetailReadModel;
+    } | null>();
+    mockObserveBudgetDetailReadModels.mockResolvedValue(source.observable);
+    const { result, rerender } = renderHook(() => useBudgetDetail("budget-1", "EGP"));
+    await waitFor(() =>
+      expect(mockObserveBudgetDetailReadModels).toHaveBeenCalledTimes(1)
+    );
+    act(() => source.emit({ budget, readModel: detailReadModel }));
+
+    mockCurrentUser = { userId: null, isResolvingUser: false };
+    rerender({});
+
+    expect(source.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(result.current.readModel).toBeNull();
+    expect(result.current.budget).toBeNull();
+    expect(result.current.hasValidData).toBe(false);
+    expect(result.current.isInitialLoading).toBe(false);
+  });
+
+  it("clears prior-user data before observing a different authenticated user", async () => {
+    const firstSource = createObservation<{
+      budget: Budget;
+      readModel: BudgetDetailReadModel;
+    } | null>();
+    const secondSource = createObservation<{
+      budget: Budget;
+      readModel: BudgetDetailReadModel;
+    } | null>();
+    mockObserveBudgetDetailReadModels
+      .mockResolvedValueOnce(firstSource.observable)
+      .mockResolvedValueOnce(secondSource.observable);
+    const { result, rerender } = renderHook(() =>
+      useBudgetDetail("budget-1", "EGP")
+    );
+    await waitFor(() =>
+      expect(firstSource.observable.subscribe).toHaveBeenCalledTimes(1)
+    );
+    act(() => firstSource.emit({ budget, readModel: detailReadModel }));
+
+    mockCurrentUser = { userId: "user-2", isResolvingUser: false };
+    rerender({});
+
+    expect(firstSource.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(result.current.readModel).toBeNull();
+    expect(result.current.budget).toBeNull();
+    expect(result.current.isInitialLoading).toBe(true);
+    await waitFor(() =>
+      expect(mockObserveBudgetDetailReadModels).toHaveBeenLastCalledWith(
+        expect.objectContaining({ userId: "user-2" })
+      )
+    );
+  });
+
+  it("restarts the scoped observation when the preferred fallback currency changes", async () => {
+    const firstSource = createObservation<{
+      budget: Budget;
+      readModel: BudgetDetailReadModel;
+    } | null>();
+    const secondSource = createObservation<{
+      budget: Budget;
+      readModel: BudgetDetailReadModel;
+    } | null>();
+    mockObserveBudgetDetailReadModels
+      .mockResolvedValueOnce(firstSource.observable)
+      .mockResolvedValueOnce(secondSource.observable);
+    const { result, rerender } = renderHook(
+      ({ fallbackCurrency }: { readonly fallbackCurrency: CurrencyType }) =>
+        useBudgetDetail("budget-1", fallbackCurrency),
+      { initialProps: { fallbackCurrency: "EGP" as CurrencyType } }
+    );
+    await waitFor(() =>
+      expect(firstSource.observable.subscribe).toHaveBeenCalledTimes(1)
+    );
+    act(() => firstSource.emit({ budget, readModel: detailReadModel }));
+
+    rerender({ fallbackCurrency: "KWD" });
+
+    expect(firstSource.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(result.current.readModel).toBeNull();
+    expect(result.current.isInitialLoading).toBe(true);
+    await waitFor(() =>
+      expect(mockObserveBudgetDetailReadModels).toHaveBeenLastCalledWith(
+        expect.objectContaining({ fallbackCurrency: "KWD" })
+      )
+    );
+  });
+
+  it("cleans observation, app-state, and day timer on unmount", async () => {
+    const source = createObservation<unknown>();
+    mockObserveBudgetDetailReadModels.mockResolvedValue(source.observable);
+    const { unmount } = renderHook(() => useBudgetDetail("budget-1", "EGP"));
+    await waitFor(() =>
+      expect(mockObserveBudgetDetailReadModels).toHaveBeenCalledTimes(1)
+    );
 
     unmount();
-    expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+
+    expect(source.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(removeAppStateListener).toHaveBeenCalledTimes(1);
+    expect(jest.getTimerCount()).toBe(0);
   });
 
-  it("logs service failures and resets derived detail state", async () => {
-    const error = new Error("read model failed");
-    mockGetBudgetDetailReadModel.mockRejectedValue(error);
+  it("treats a missing route budget ID as not found without querying", async () => {
+    const { result } = renderHook(() => useBudgetDetail(undefined, "EGP"));
 
-    const { result } = renderHook(() => useBudgetDetail("budget-1"));
+    await waitFor(() => expect(result.current.isInitialLoading).toBe(false));
 
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false);
-    });
-
-    expect(result.current.budget).toBe(budget);
-    expect(result.current.metrics).toBeNull();
-    expect(result.current.weeklySpending).toEqual([]);
-    expect(result.current.subcategoryBreakdown).toEqual([]);
-    expect(result.current.recentTransactions).toEqual([]);
-    expect(mockLoggerError).toHaveBeenCalledWith(
-      "budgetDetail.compute.failed",
-      error
-    );
-  });
-
-  it("recomputes when WatermelonDB emits the same updated model instance", async () => {
-    const updatedDetailReadModel = {
-      ...detailReadModel,
-      metrics: {
-        ...detailReadModel.metrics,
-        limit: 2000,
-        remaining: 1750,
-        percentage: 12.5,
-      },
-    };
-    const { result } = renderHook(() => useBudgetDetail("budget-1"));
-
-    await waitFor(() => {
-      expect(result.current.metrics).toBe(detailReadModel.metrics);
-    });
-    mockGetBudgetDetailReadModel.mockResolvedValueOnce(updatedDetailReadModel);
-
-    act(() => {
-      budgetObserver?.next(budget);
-    });
-
-    await waitFor(() => {
-      expect(mockGetBudgetDetailReadModel).toHaveBeenCalledTimes(2);
-    });
-    await waitFor(() => {
-      expect(result.current.metrics).toBe(updatedDetailReadModel.metrics);
-    });
-  });
-
-  it("keeps the last valid detail visible while an observed refresh is pending", async () => {
-    let resolveRefresh: (value: typeof detailReadModel) => void = () =>
-      undefined;
-    const { result } = renderHook(() => useBudgetDetail("budget-1"));
-    await waitFor(() => {
-      expect(result.current.metrics).toBe(detailReadModel.metrics);
-    });
-    mockGetBudgetDetailReadModel.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          resolveRefresh = resolve;
-        })
-    );
-
-    act(() => {
-      budgetObserver?.next(budget);
-    });
-    await waitFor(() => {
-      expect(mockGetBudgetDetailReadModel).toHaveBeenCalledTimes(2);
-    });
-
-    expect(result.current.isLoading).toBe(false);
-    expect(result.current.metrics).toBe(detailReadModel.metrics);
-
-    resolveRefresh(detailReadModel);
-  });
-
-  it("preserves the last valid detail when an observed refresh fails", async () => {
-    const refreshError = new Error("refresh failed");
-    const { result } = renderHook(() => useBudgetDetail("budget-1"));
-    await waitFor(() => {
-      expect(result.current.metrics).toBe(detailReadModel.metrics);
-    });
-    mockGetBudgetDetailReadModel.mockRejectedValueOnce(refreshError);
-
-    act(() => {
-      budgetObserver?.next(budget);
-    });
-    await waitFor(() => {
-      expect(mockLoggerError).toHaveBeenCalledWith(
-        "budgetDetail.compute.failed",
-        refreshError
-      );
-    });
-
-    expect(result.current.isLoading).toBe(false);
-    expect(result.current.metrics).toBe(detailReadModel.metrics);
+    expect(result.current.isNotFound).toBe(true);
+    expect(result.current.readModel).toBeNull();
+    expect(mockObserveBudgetDetailReadModels).not.toHaveBeenCalled();
   });
 });

@@ -146,6 +146,7 @@ export default function BudgetsScreen(): React.JSX.Element {
         variant="info"
         icon="play-circle-outline"
         isConfirming={actions.isSubmitting}
+        confirmingStatusLabel={t("detail.actions.in_progress")}
         dismissOnConfirm={false}
         onCancel={handleCancelResume}
         onConfirm={() => {

@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { palette } from "@/constants/colors";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
+import { useTranslation } from "react-i18next";
 
 type ConfirmationVariant = "danger" | "warning" | "success" | "info";
 
@@ -24,6 +25,7 @@ interface ConfirmationModalProps {
   readonly variant?: ConfirmationVariant;
   readonly icon?: keyof typeof Ionicons.glyphMap;
   readonly isConfirming?: boolean;
+  readonly confirmingStatusLabel?: string;
   readonly dismissOnConfirm?: boolean;
 }
 
@@ -82,26 +84,40 @@ export function ConfirmationModal({
   variant = "danger",
   icon,
   isConfirming = false,
+  confirmingStatusLabel,
   dismissOnConfirm = true,
 }: ConfirmationModalProps): React.JSX.Element {
   const config = VARIANT_CONFIG[variant];
   const iconName = icon ?? config.defaultIcon;
   const bottomInset = useModalBottomInset();
+  const { t: tCommon } = useTranslation("common");
+  const localizedStatusLabel =
+    confirmingStatusLabel ??
+    tCommon("in_progress", { defaultValue: "In progress" });
 
   return (
     <Modal
       visible={visible}
       transparent
       animationType="fade"
-      onRequestClose={onCancel}
+      onRequestClose={isConfirming ? (): void => undefined : onCancel}
     >
-      <TouchableWithoutFeedback onPress={onCancel}>
+      <TouchableWithoutFeedback
+        testID="confirmation-modal-backdrop"
+        onPress={isConfirming ? undefined : onCancel}
+      >
         <View
           className="flex-1 bg-black/70 justify-center items-center"
           style={{ paddingBottom: bottomInset }}
         >
-          <TouchableWithoutFeedback>
-            <View className="w-[85%] max-w-[340px] rounded-2xl overflow-hidden border border-transparent dark:border-slate-700/40 bg-white dark:bg-slate-900">
+          <TouchableWithoutFeedback accessible={false}>
+            <View
+              testID="confirmation-modal-card"
+              accessible={false}
+              accessibilityViewIsModal
+              aria-busy={isConfirming}
+              className="w-[85%] max-w-[340px] rounded-2xl overflow-hidden border border-transparent dark:border-slate-700/40 bg-white dark:bg-slate-900"
+            >
               <View className="p-6">
                 {/* Icon */}
                 <View
@@ -115,7 +131,10 @@ export function ConfirmationModal({
                 </View>
 
                 {/* Title */}
-                <Text className="text-[22px] font-bold text-slate-800 dark:text-slate-100 text-center mb-2">
+                <Text
+                  accessibilityRole="header"
+                  className="text-[22px] font-bold text-slate-800 dark:text-slate-100 text-center mb-2"
+                >
                   {title}
                 </Text>
 
@@ -123,6 +142,16 @@ export function ConfirmationModal({
                 <Text className="text-[15px] text-slate-500 dark:text-slate-400 text-center leading-[22px] mb-6">
                   {message}
                 </Text>
+
+                {isConfirming ? (
+                  <View
+                    testID="confirmation-modal-status"
+                    accessible
+                    accessibilityLiveRegion="polite"
+                    accessibilityLabel={`${confirmLabel} ${localizedStatusLabel}`}
+                    accessibilityState={{ busy: true }}
+                  />
+                ) : null}
 
                 {/* Actions */}
                 <View className="flex-row gap-3">
@@ -132,6 +161,8 @@ export function ConfirmationModal({
                     onPress={onCancel}
                     disabled={isConfirming}
                     accessibilityState={{ disabled: isConfirming }}
+                    accessibilityRole="button"
+                    accessibilityLabel={cancelLabel}
                   >
                     <Text className="text-base font-semibold text-slate-600 dark:text-slate-300">
                       {cancelLabel}
@@ -147,6 +178,8 @@ export function ConfirmationModal({
                     }}
                     disabled={isConfirming}
                     accessibilityState={{ disabled: isConfirming }}
+                    accessibilityRole="button"
+                    accessibilityLabel={confirmLabel}
                   >
                     <Text className="text-base font-semibold text-white">
                       {confirmLabel}

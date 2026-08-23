@@ -12,6 +12,8 @@ import {
   isWithinPeriod,
   isPeriodExpired,
   getWeeklyBuckets,
+  getElapsedCalendarDays,
+  getInclusiveCalendarDayCount,
 } from "../budget-period-utils";
 
 // =============================================================================
@@ -151,6 +153,82 @@ describe("getDaysElapsed", () => {
     const start = new Date(2026, 2, 1, 0, 0, 0);
     const now = new Date(2026, 2, 11, 0, 0, 0);
     expect(getDaysElapsed(start, now)).toBe(10);
+  });
+});
+
+// =============================================================================
+// Inclusive calendar-day calculations
+// =============================================================================
+
+describe("getInclusiveCalendarDayCount", () => {
+  it("counts both period boundary days", () => {
+    expect(
+      getInclusiveCalendarDayCount(
+        new Date(2026, 7, 3, 18, 30),
+        new Date(2026, 7, 13, 7, 15)
+      )
+    ).toBe(11);
+  });
+
+  it("counts local calendar days across a daylight-saving transition", () => {
+    expect(
+      getInclusiveCalendarDayCount(
+        new Date(2026, 2, 27, 23, 30),
+        new Date(2026, 2, 29, 1, 30)
+      )
+    ).toBe(3);
+  });
+
+  it("returns zero for reversed or invalid boundaries", () => {
+    expect(
+      getInclusiveCalendarDayCount(
+        new Date(2026, 7, 14),
+        new Date(2026, 7, 13)
+      )
+    ).toBe(0);
+    expect(
+      getInclusiveCalendarDayCount(new Date(Number.NaN), new Date(2026, 7, 13))
+    ).toBe(0);
+  });
+});
+
+describe("getElapsedCalendarDays", () => {
+  const start = new Date(2026, 7, 3, 0, 0, 0, 0);
+  const end = new Date(2026, 7, 13, 23, 59, 59, 999);
+
+  it("uses the injected reference time and includes the current local day", () => {
+    expect(
+      getElapsedCalendarDays(start, end, new Date(2026, 7, 3, 0, 0, 1))
+    ).toBe(1);
+    expect(
+      getElapsedCalendarDays(start, end, new Date(2026, 7, 7, 12, 0, 0))
+    ).toBe(5);
+  });
+
+  it("clamps before the period to zero and after it to the total day count", () => {
+    expect(
+      getElapsedCalendarDays(start, end, new Date(2026, 7, 2, 23, 59, 59))
+    ).toBe(0);
+    expect(
+      getElapsedCalendarDays(start, end, new Date(2026, 7, 14, 0, 0, 0))
+    ).toBe(11);
+  });
+
+  it("returns zero for an invalid period without mutating its dates", () => {
+    const reversedStart = new Date(2026, 7, 14, 8, 0, 0);
+    const reversedEnd = new Date(2026, 7, 13, 8, 0, 0);
+    const startTime = reversedStart.getTime();
+    const endTime = reversedEnd.getTime();
+
+    expect(
+      getElapsedCalendarDays(
+        reversedStart,
+        reversedEnd,
+        new Date(2026, 7, 13)
+      )
+    ).toBe(0);
+    expect(reversedStart.getTime()).toBe(startTime);
+    expect(reversedEnd.getTime()).toBe(endTime);
   });
 });
 

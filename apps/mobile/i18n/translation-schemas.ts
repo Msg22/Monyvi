@@ -38,13 +38,33 @@ const pluralKeysAllowAdditional = z
 export const PluralKeysSchema = pluralKeysAllowAdditional;
 
 /**
- * Generic JSON object schema — namespaces accept any string values.
+ * Translation nodes can be strings or nested namespaces.
  * Validation focuses on (a) required scalar keys and (b) declared plural
  * bases having the right CLDR forms for the locale.
  */
-const StringDict = z.record(z.string(), z.string());
+const NamespaceSchema = z.record(z.string(), z.unknown());
 
-export const NamespaceSchema = StringDict;
+function assertStringOrObjectDictionary(
+  language: "en" | "ar",
+  namespace: string,
+  value: unknown,
+  path: string[] = []
+): void {
+  if (typeof value === "string") {
+    return;
+  }
+
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    const fullPath = [namespace, ...path].join(".");
+    throw new Error(
+      `[i18n] ${language}/${fullPath}: expected translation string or object`
+    );
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    assertStringOrObjectDictionary(language, namespace, child, [...path, key]);
+  }
+}
 
 /**
  * Required scalar (non-plural) keys per namespace. Keep this in sync with
@@ -254,10 +274,12 @@ function validateNamespace(
   const parsed = NamespaceSchema.safeParse(json);
   if (!parsed.success) {
     throw new Error(
-      `[i18n] ${language}/${namespace}: not a flat string dictionary — ${parsed.error.message}`
+      `[i18n] ${language}/${namespace}: not a valid translation namespace — ${parsed.error.message}`
     );
   }
   const dict = parsed.data;
+
+  assertStringOrObjectDictionary(language, namespace, dict);
 
   for (const key of REQUIRED_SCALAR_KEYS[namespace] ?? []) {
     if (typeof dict[key] !== "string" || dict[key].length === 0) {
