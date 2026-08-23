@@ -62,7 +62,7 @@ specs/019-budget-management/
 ```text
 # Schema Migration
 supabase/migrations/
-└── 035_budget_schema_updates.sql          # alert_fired_level column; currency remains required
+└── 035_budget_schema_updates.sql          # alert_fired_level column; persisted currency remains nullable for legacy rows
 
 # Package: @monyvi/db (packages/db/)
 packages/db/src/models/base/base-budget.ts  # AUTO-GENERATED — will update via db:migrate
@@ -128,7 +128,8 @@ between `packages/logic` (pure calculations) and `apps/mobile/services`
 
 1. Create SQL migration `035_budget_schema_updates.sql`:
    - `ALTER TABLE budgets ADD COLUMN alert_fired_level TEXT;`
-   - Keep `currency` required; every budget persists one supported currency.
+   - Keep persisted `currency` nullable for pre-release legacy rows; every new
+     budget persists one supported currency.
 2. Run `npm run db:push` to apply to Supabase
 3. Run `npm run db:migrate` to regenerate WatermelonDB schema + types
 4. Verify `BaseBudget` model auto-regenerates with new fields

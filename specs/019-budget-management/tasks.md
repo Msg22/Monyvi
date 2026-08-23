@@ -19,8 +19,9 @@ testing.
 **Purpose**: Database schema updates and project structure initialization
 
 - [ ] T001 Create SQL migration
-      `supabase/migrations/035_budget_schema_updates.sql` — ADD alert_fired_level
-      TEXT column; keep `currency` required
+      `supabase/migrations/035_budget_schema_updates.sql` — ADD
+      alert_fired_level TEXT column; keep persisted `currency` nullable for
+      pre-release legacy rows while requiring it for new budgets
 - [ ] T002 Run `npm run db:push` to apply migration to Supabase
 - [ ] T003 Run `npm run db:migrate` to regenerate WatermelonDB schema, types,
       and local migrations

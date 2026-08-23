@@ -55,40 +55,45 @@ function CurrencyRow({
   return (
     <TouchableOpacity
       onPress={onPress}
-      className={`flex-row items-center justify-between px-5 py-3.5 ${
-        isSelected ? "bg-nileGreen-50 dark:bg-nileGreen-900/20" : ""
-      }`}
+      className="px-5 py-3.5"
       activeOpacity={0.7}
     >
-      <View className="flex-row items-center gap-3 flex-1">
-        <Text className="text-2xl">{item.flag}</Text>
-        <View className="flex-1">
-          <View
-            testID={`currency-code-row-${item.code}`}
-            className="flex-row items-center gap-1.5"
-          >
-            <Text
-              testID={`currency-code-${item.code}`}
-              className="text-base font-semibold text-slate-800 dark:text-white"
+      <View
+        testID={isSelected ? `currency-row-highlight-${item.code}` : undefined}
+        className={`flex-row items-center justify-between ${
+          isSelected ? "bg-nileGreen-50 dark:bg-nileGreen-900/20" : ""
+        }`}
+      >
+        <View className="flex-row items-center gap-3 flex-1">
+          <Text className="text-2xl">{item.flag}</Text>
+          <View className="flex-1">
+            <View
+              testID={`currency-code-row-${item.code}`}
+              className="flex-row items-center gap-1.5"
             >
-              {item.code}
+              <Text
+                testID={`currency-code-${item.code}`}
+                className="text-base font-semibold text-slate-800 dark:text-white"
+              >
+                {item.code}
+              </Text>
+              {isSelected ? (
+                <Ionicons
+                  testID={`currency-selected-checkmark-${item.code}`}
+                  name="checkmark-circle"
+                  size={17}
+                  color={palette.nileGreen[500]}
+                />
+              ) : null}
+            </View>
+            <Text className="text-xs text-slate-500 dark:text-slate-400">
+              {item.name}
             </Text>
-            {isSelected ? (
-              <Ionicons
-                testID={`currency-selected-checkmark-${item.code}`}
-                name="checkmark-circle"
-                size={17}
-                color={palette.nileGreen[500]}
-              />
-            ) : null}
           </View>
-          <Text className="text-xs text-slate-500 dark:text-slate-400">
-            {item.name}
+          <Text className="text-sm text-slate-400 dark:text-slate-500 me-2">
+            {item.symbol}
           </Text>
         </View>
-        <Text className="text-sm text-slate-400 dark:text-slate-500 me-2">
-          {item.symbol}
-        </Text>
       </View>
     </TouchableOpacity>
   );

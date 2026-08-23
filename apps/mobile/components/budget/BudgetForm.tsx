@@ -149,6 +149,11 @@ export function BudgetForm({
   const selectedCategory = form.categoryId
     ? categoryMap.get(form.categoryId)
     : null;
+  const isWaitingForCreateCurrency =
+    !isEditMode &&
+    isPreferredCurrencyLoading &&
+    !hasUserSelectedCurrency &&
+    (!renewalSource || form.currency === null);
 
   useEffect(() => {
     if (!renewalSource || areCategoriesLoading || categoryError) return;
@@ -170,20 +175,19 @@ export function BudgetForm({
   ]);
 
   useEffect(() => {
-    if (
-      isEditMode ||
-      renewalSource ||
-      isPreferredCurrencyLoading ||
-      hasUserSelectedCurrency
-    ) {
+    if (isEditMode || isPreferredCurrencyLoading || hasUserSelectedCurrency) {
       return;
     }
 
-    setForm((current) =>
-      current.currency === preferredCurrency
-        ? current
-        : { ...current, currency: preferredCurrency }
-    );
+    setForm((current) => {
+      if (
+        current.currency === preferredCurrency ||
+        (renewalSource && current.currency !== null)
+      ) {
+        return current;
+      }
+      return { ...current, currency: preferredCurrency };
+    });
   }, [
     hasUserSelectedCurrency,
     isEditMode,
@@ -253,7 +257,7 @@ export function BudgetForm({
 
   // ── Submit ──
   const handleSubmit = useCallback(async (): Promise<void> => {
-    if (!isEditMode && !renewalSource && isPreferredCurrencyLoading) return;
+    if (isWaitingForCreateCurrency) return;
     if (!validate()) return;
 
     const currency = form.currency;
@@ -327,8 +331,7 @@ export function BudgetForm({
     isEditMode,
     existingBudget,
     form,
-    isPreferredCurrencyLoading,
-    preferredCurrency,
+    isWaitingForCreateCurrency,
     renewalSource,
     showToast,
     t,
@@ -703,11 +706,13 @@ export function BudgetForm({
         disabled={
           isSubmitting ||
           (form.type === "CATEGORY" && areCategoriesLoading) ||
-          (!isEditMode && !renewalSource && isPreferredCurrencyLoading)
+          isWaitingForCreateCurrency
         }
         accessibilityState={{
           disabled:
-            isSubmitting || (form.type === "CATEGORY" && areCategoriesLoading),
+            isSubmitting ||
+            (form.type === "CATEGORY" && areCategoriesLoading) ||
+            isWaitingForCreateCurrency,
         }}
         activeOpacity={0.85}
         className="rounded-2xl py-4 items-center"

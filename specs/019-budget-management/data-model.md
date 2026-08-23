@@ -7,8 +7,9 @@
 ### Budget (existing table — `budgets`)
 
 The `budgets` table already exists in WatermelonDB and Supabase. No schema
-migration is needed for the table itself. The existing required `currency`
-column persists one supported currency for every budget.
+migration is needed for the table itself. Its persisted `currency` field remains
+nullable to preserve pre-release legacy rows, while every newly created budget
+must store one supported currency.
 
 | Field             | Type         | Required | Notes                                        |
 | ----------------- | ------------ | -------- | -------------------------------------------- |
@@ -17,7 +18,7 @@ column persists one supported currency for every budget.
 | `type`            | BudgetType   | ✅       | `"GLOBAL"` or `"CATEGORY"`                   |
 | `category_id`     | string       | ❌       | FK → categories. Required when type=CATEGORY |
 | `amount`          | number       | ✅       | Budget limit in the budget's saved currency  |
-| `currency`        | CurrencyType | ✅       | Required, immutable supported currency       |
+| `currency`        | CurrencyType | ✅ new   | Immutable supported currency for new budgets |
 | `period`          | BudgetPeriod | ✅       | `"WEEKLY"`, `"MONTHLY"`, `"CUSTOM"`          |
 | `period_start`    | Date         | ❌       | Required for CUSTOM period                   |
 | `period_end`      | Date         | ❌       | Required for CUSTOM period                   |
@@ -85,9 +86,10 @@ Budget ──has_many────▶ Transaction (computed: spending aggregation
 
 ## Currency Persistence
 
-`currency` remains required in both WatermelonDB and Supabase. Creation defaults
-to the user preference but persists the selected supported currency; it is not
-changed during edit. No currency migration or backfill is required.
+`currency` remains nullable in the persisted WatermelonDB and Supabase schema to
+support pre-release legacy rows. Creation defaults to the user preference but
+persists the selected supported currency; it is not changed during edit. No
+currency migration or backfill is required.
 
 ### Alert Deduplication Tracking
 

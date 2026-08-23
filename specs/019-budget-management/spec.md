@@ -365,8 +365,8 @@ verifying that only budgets matching that period are shown.
   budget period.
 - **FR-014**: System MUST prevent duplicate budgets for the same category and
   overlapping period. For global budgets, the system MUST allow at most one
-  global budget per period type (e.g., one weekly global and one monthly global
-  are allowed, but two monthly globals are not).
+  global budget per currency and period type (e.g., one EGP monthly global and
+  one USD monthly global are allowed, but not two EGP monthly globals).
 - **FR-015**: System MUST aggregate spending for category budgets by including
   all transactions in the budget's category and its subcategories (L2 and L3
   levels).
@@ -386,10 +386,10 @@ verifying that only budgets matching that period are shown.
 
 - **Budget**: A spending limit set by the user, either global (all categories)
   or category-specific. Key attributes: name, type (Global/Category), linked
-  category, amount limit, immutable currency, period
-  (Weekly/Monthly/Custom), custom date range (period_start, period_end), alert
-  threshold percentage, and status (Active/Paused — deletion uses WatermelonDB's
-  built-in sync-aware deletion, not a status value).
+  category, amount limit, immutable currency, period (Weekly/Monthly/Custom),
+  custom date range (period_start, period_end), alert threshold percentage, and
+  status (Active/Paused — deletion uses WatermelonDB's built-in sync-aware
+  deletion, not a status value).
 - **Category**: An existing Monyvi entity (3-level hierarchy: L1 Main, L2 Sub,
   L3 User-defined). Budgets link to categories at L1 or L2 level for scoped
   spending tracking.
@@ -422,9 +422,9 @@ verifying that only budgets matching that period are shown.
 
 ## Assumptions
 
-- The `budgets` table already exists in the WatermelonDB schema and Supabase;
-  no migration or backfill is needed. Pre-release budgets without a currency
-  are recreated.
+- The `budgets` table already exists in the WatermelonDB schema and Supabase; no
+  migration or backfill is needed. Pre-release budgets without a currency are
+  recreated.
 - Spending aggregation is performed locally using WatermelonDB queries
   (offline-first).
 - Budget alerts (FR-011) are in-app modal alerts triggered only after a

@@ -74,7 +74,10 @@ jest.mock("@/components/currency/CurrencyPicker", () => ({
     readonly onSelect: (currency: "USD") => void;
   }): React.JSX.Element | null =>
     visible ? (
-      <MockText testID="currency-picker-option-usd" onPress={() => onSelect("USD")}>
+      <MockText
+        testID="currency-picker-option-usd"
+        onPress={() => onSelect("USD")}
+      >
         USD
       </MockText>
     ) : null,
@@ -226,6 +229,35 @@ describe("BudgetForm category recovery", () => {
     expect(mockedCreateBudgetService).not.toHaveBeenCalled();
   });
 
+  it("blocks a currency-less renewal until it can use the loaded preference", () => {
+    mockCategoryError = null;
+    mockCategoryMap = new Map([
+      ["education", { displayName: "Education" } as unknown as Category],
+    ]);
+    mockPreferredCurrency = "USD";
+    mockIsPreferredCurrencyLoading = true;
+    const legacyRenewalSource = {
+      ...RENEWAL_SOURCE,
+      currency: null,
+    } as unknown as Budget;
+
+    const { rerender } = render(
+      <BudgetForm renewalSource={legacyRenewalSource} />
+    );
+
+    expect(screen.getByTestId("budget-form-submit")).toHaveProp(
+      "accessibilityState",
+      { disabled: true }
+    );
+
+    mockIsPreferredCurrencyLoading = false;
+    rerender(<BudgetForm renewalSource={legacyRenewalSource} />);
+
+    expect(screen.getByTestId("budget-currency-selector")).toHaveTextContent(
+      /USD/
+    );
+  });
+
   it("uses the loaded preference unless the user already selected a currency", async () => {
     mockCategoryError = null;
     mockPreferredCurrency = "USD";
@@ -275,7 +307,9 @@ describe("BudgetForm category recovery", () => {
     mockCategoryError = null;
     render(<BudgetForm />);
 
-    expect(screen.getByText("budget_currency_immutable_info")).toBeOnTheScreen();
+    expect(
+      screen.getByText("budget_currency_immutable_info")
+    ).toBeOnTheScreen();
     fireEvent.press(screen.getByTestId("budget-currency-selector"));
     fireEvent.press(screen.getByTestId("currency-picker-option-usd"));
 

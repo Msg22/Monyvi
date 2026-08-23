@@ -111,12 +111,17 @@ jest.mock("@monyvi/db", (): unknown => ({
     where: (...args: unknown[]): unknown => mockWhere(...args),
     and: (...args: unknown[]): unknown => mockAnd(...args),
     notEq: (value: unknown): unknown => ({ operator: "notEq", value }),
-    oneOf: (values: readonly unknown[]): unknown => ({ operator: "oneOf", values }),
+    oneOf: (values: readonly unknown[]): unknown => ({
+      operator: "oneOf",
+      values,
+    }),
   },
 }));
 
 jest.mock("@nozbe/watermelondb", (): unknown => {
-  const actual = jest.requireActual("@nozbe/watermelondb");
+  const actual = jest.requireActual<typeof import("@nozbe/watermelondb")>(
+    "@nozbe/watermelondb"
+  );
   return {
     ...actual,
     Q: {
