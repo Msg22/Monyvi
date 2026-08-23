@@ -14,7 +14,9 @@ describe("amount helpers", () => {
   it("parses only valid localized budget money amounts", () => {
     expect(parsePositiveMoneyAmount(" 100 ")).toBe(100);
     expect(parsePositiveMoneyAmount("100.5")).toBe(100.5);
+    expect(parsePositiveMoneyAmount(".5")).toBe(0.5);
     expect(parsePositiveMoneyAmount("١٢٣٫٤٥")).toBe(123.45);
+    expect(parsePositiveMoneyAmount("٫٥")).toBe(0.5);
     expect(parsePositiveMoneyAmount("999999999.99")).toBe(999999999.99);
   });
 

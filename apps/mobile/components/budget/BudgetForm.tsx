@@ -255,6 +255,7 @@ export function BudgetForm({
 
   // ── Submit ──
   const handleSubmit = useCallback(async (): Promise<void> => {
+    if (!isEditMode && !renewalSource && isPreferredCurrencyLoading) return;
     if (!validate()) return;
 
     const amount = parsePositiveMoneyAmount(form.amount);
@@ -318,7 +319,17 @@ export function BudgetForm({
     } finally {
       setIsSubmitting(false);
     }
-  }, [validate, isEditMode, existingBudget, form, preferredCurrency, showToast, t]);
+  }, [
+    validate,
+    isEditMode,
+    existingBudget,
+    form,
+    isPreferredCurrencyLoading,
+    preferredCurrency,
+    renewalSource,
+    showToast,
+    t,
+  ]);
 
   return (
     <ScrollView
@@ -687,7 +698,9 @@ export function BudgetForm({
         accessibilityRole="button"
         accessibilityLabel={isEditMode ? t("save_changes") : t("create_budget")}
         disabled={
-          isSubmitting || (form.type === "CATEGORY" && areCategoriesLoading)
+          isSubmitting ||
+          (form.type === "CATEGORY" && areCategoriesLoading) ||
+          (!isEditMode && !renewalSource && isPreferredCurrencyLoading)
         }
         accessibilityState={{
           disabled:

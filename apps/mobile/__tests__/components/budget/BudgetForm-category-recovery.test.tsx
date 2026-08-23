@@ -212,6 +212,20 @@ describe("BudgetForm category recovery", () => {
     );
   });
 
+  it("blocks ordinary creation until the preferred currency has loaded", () => {
+    mockCategoryError = null;
+    mockPreferredCurrency = "USD";
+    mockIsPreferredCurrencyLoading = true;
+    render(<BudgetForm />);
+
+    expect(screen.getByTestId("budget-form-submit")).toHaveProp(
+      "accessibilityState",
+      { disabled: true }
+    );
+    fireEvent.press(screen.getByRole("button", { name: "create_budget" }));
+    expect(mockedCreateBudgetService).not.toHaveBeenCalled();
+  });
+
   it("uses the loaded preference unless the user already selected a currency", async () => {
     mockCategoryError = null;
     mockPreferredCurrency = "USD";

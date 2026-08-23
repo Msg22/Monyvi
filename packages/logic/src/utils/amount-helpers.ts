@@ -6,7 +6,7 @@ export const MAX_TRANSACTION_AMOUNT = 1_000_000_000;
 export const MAX_BUDGET_AMOUNT = 999_999_999.99;
 
 const STRICT_AMOUNT_INPUT_PATTERN = /^(?:\d+\.?\d*|\.\d+)$/;
-const STRICT_BUDGET_AMOUNT_PATTERN = /^\d+(?:\.\d{1,2})?$/;
+const STRICT_BUDGET_AMOUNT_PATTERN = /^(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/;
 const ARABIC_INDIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
 const EASTERN_ARABIC_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
 

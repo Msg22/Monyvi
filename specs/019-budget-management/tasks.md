@@ -14,13 +14,13 @@ testing.
 
 ---
 
-## Phase 1: Setup (Schema & Migration)
+## Phase 1: Setup (Schema)
 
 **Purpose**: Database schema updates and project structure initialization
 
 - [ ] T001 Create SQL migration
-      `supabase/migrations/035_budget_schema_updates.sql` — ALTER currency to
-      nullable, ADD alert_fired_level TEXT column
+      `supabase/migrations/035_budget_schema_updates.sql` — ADD alert_fired_level
+      TEXT column; keep `currency` required
 - [ ] T002 Run `npm run db:push` to apply migration to Supabase
 - [ ] T003 Run `npm run db:migrate` to regenerate WatermelonDB schema, types,
       and local migrations
@@ -356,7 +356,7 @@ Within Phase 5 (US3):
 
 ### MVP First (US1 + US2)
 
-1. Complete Phase 1: Setup (schema migration)
+1. Complete Phase 1: Setup (schema work; keep `currency` required)
 2. Complete Phase 2: Foundational (logic + service + shared components)
 3. Complete Phase 3: US1 (dashboard with progress rings)
 4. Complete Phase 4: US2 (budget creation form)
