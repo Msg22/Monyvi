@@ -59,7 +59,7 @@ As a user paying the final occurrence of a bounded recurring payment, I see the 
 **Acceptance Scenarios**:
 
 1. **Given** a recurring payment is due on its end date, **When** it is paid, **Then** that occurrence is accepted.
-2. **Given** the final eligible occurrence is paid, **When** the payment is recorded, **Then** the linked financial record, balance effect, schedule advance, and completed state remain consistent as one outcome.
+2. **Given** the final eligible occurrence is paid, **When** the payment is recorded, **Then** the linked financial record, balance effect, final due payment, and completed state remain consistent as one outcome without persisting an ineligible future due date.
 3. **Given** a payment was completed because its end date passed, **When** the user extends or clears the end date such that its next due payment is valid again, **Then** the payment becomes active again.
 4. **Given** the final eligible occurrence is overdue after End date, **When** the user chooses Pay Now, **Then** one final payment is recorded and the series is completed.
 5. **Given** an active recurring payment is overdue, **When** the user views My Bills, **Then** its row offers Pay Now while the rest of the row remains available for editing.
@@ -89,7 +89,7 @@ As a user paying the final occurrence of a bounded recurring payment, I see the 
 - **FR-008**: After the final eligible occurrence is successfully paid, the recurring payment MUST be completed so it is not presented as an active future payment.
 - **FR-008a**: A final eligible occurrence that remains unpaid after End date MUST remain active and overdue until it is successfully paid.
 - **FR-008b**: The user MUST be able to record an overdue final eligible occurrence after End date through the Pay Now action on its My Bills row; its successful payment MUST complete the series.
-- **FR-009**: Completion of a final payment MUST not leave the payment's financial record, balance effect, schedule, and status in conflicting states if the payment fails.
+- **FR-009**: Completion of a final payment MUST not leave the payment's financial record, balance effect, final due payment, and status in conflicting states if the payment fails.
 - **FR-010**: If a payment was completed only because of its End date, extending or clearing End date MUST reactivate it when its next due payment is valid again.
 - **FR-012**: All new user-visible labels, unset-state text, hints, and validation messages MUST be available in English and Arabic.
 
@@ -114,7 +114,7 @@ As a user paying the final occurrence of a bounded recurring payment, I see the 
 - Owner-approved mockup is visual source of truth: both date fields remain inside existing grouped Payment Schedule control, with concise helper text directly beneath each field. In selected state, `(Optional)` sits beside End date label and inline Clear remains beneath selected value.
 - End date is inclusive: a payment due exactly on that date is valid.
 - End date is initially unset, representing an ongoing recurring payment.
-- Completion caused by End date is reversible only when an edit makes the existing next due payment valid again.
+- A completed final occurrence retains its final paid Due payment. If the user extends or clears End date, the next eligible occurrence is calculated then; a completed series reactivates only when that occurrence is valid.
 - The existing future scheduler remains out of implementation scope until that processor exists.
 
 ## Deferred Follow-up

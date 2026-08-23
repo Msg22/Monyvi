@@ -713,7 +713,7 @@ describe("recurring-payment-service", () => {
       await submitRecurringPayment({ payment: payment as never, accountId: "account-1", amount: 250 });
 
       expect(payment.status).toBe("COMPLETED");
-      expect(payment.nextDueDate).toEqual(new Date("2026-08-01T00:00:00.000Z"));
+      expect(payment.nextDueDate).toEqual(new Date("2026-07-01T00:00:00.000Z"));
     });
 
     it("accepts a final due payment on End date when times differ", async () => {

@@ -138,11 +138,13 @@ export async function updateRecurringPayment(
     await payment.update((record) => {
       const previousEndDate = record.endDate;
       const nextEndDate = data.endDate ?? null;
-      const endedAtPreviousBoundary =
+      const wasCompletedByPreviousEndDate =
         record.status === "COMPLETED" &&
         previousEndDate !== undefined &&
-        previousEndDate !== null &&
-        !isOnOrBeforeDay(record.nextDueDate, previousEndDate);
+        previousEndDate !== null;
+      const wasCompletedAtPreviousBoundary =
+        wasCompletedByPreviousEndDate &&
+        isOnOrBeforeDay(record.nextDueDate, previousEndDate);
       const didRelaxEndDate =
         nextEndDate === null ||
         (nextEndDate !== null &&
@@ -163,6 +165,11 @@ export async function updateRecurringPayment(
       record.endDate = nextEndDate ?? undefined;
       if (didStartDateChange) {
         record.nextDueDate = data.startDate;
+      } else if (wasCompletedAtPreviousBoundary && didRelaxEndDate) {
+        record.nextDueDate = calculateNextDueDate(
+          record.nextDueDate,
+          data.frequency
+        );
       } else if (didFrequencyChange) {
         record.nextDueDate = calculateNextDueDate(
           record.nextDueDate,
@@ -181,7 +188,7 @@ export async function updateRecurringPayment(
         record.status = "COMPLETED";
       }
       if (
-        endedAtPreviousBoundary &&
+        wasCompletedByPreviousEndDate &&
         didRelaxEndDate &&
         nextDueDateIsEligible
       ) {
@@ -308,14 +315,15 @@ export async function submitRecurringPayment(params: {
           persistedPayment.nextDueDate,
           persistedPayment.frequency
         );
-        record.nextDueDate = nextDueDate;
-        if (
+        const hasReachedFinalEligibleOccurrence =
           persistedPayment.endDate !== undefined &&
           persistedPayment.endDate !== null &&
-          !isOnOrBeforeDay(nextDueDate, persistedPayment.endDate)
-        ) {
+          !isOnOrBeforeDay(nextDueDate, persistedPayment.endDate);
+        if (hasReachedFinalEligibleOccurrence) {
           record.status = "COMPLETED";
+          return;
         }
+        record.nextDueDate = nextDueDate;
       });
 
       await commitPreparedBatch([
