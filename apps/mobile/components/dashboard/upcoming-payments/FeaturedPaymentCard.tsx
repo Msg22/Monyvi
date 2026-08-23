@@ -8,7 +8,7 @@
 import { palette } from "@/constants/colors";
 import { getDueText } from "@/utils/dateHelpers";
 import { getPaymentIcon } from "@/utils/recurring-helpers";
-import { formatCurrency } from "@monyvi/logic";
+import { calculateCalendarDaysUntil, formatCurrency } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
@@ -26,7 +26,7 @@ function FeaturedPaymentCardComponent({
   const iconName = getPaymentIcon(payment.name);
 
   const dueClass =
-    payment.daysUntilDue <= URGENT_DAYS_THRESHOLD
+    calculateCalendarDaysUntil(payment.nextDueDate) <= URGENT_DAYS_THRESHOLD
       ? "text-red-400"
       : "text-nileGreen-400";
 

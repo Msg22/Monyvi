@@ -6,7 +6,7 @@
  * the `usePaymentSubmission` hook (SRP).
  */
 
-import { formatCurrency } from "@monyvi/logic";
+import { calculateCalendarDaysUntil, formatCurrency } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
 import { buildAccountDisplayNames } from "@/utils/account-display";
@@ -272,7 +272,7 @@ export function PayNowModal({
             </Text>
             <Text
               className={`text-sm font-semibold ${
-                payment.daysUntilDue <= 0
+                calculateCalendarDaysUntil(payment.nextDueDate) <= 0
                   ? "text-red-500"
                   : "text-slate-800 dark:text-slate-25"
               }`}

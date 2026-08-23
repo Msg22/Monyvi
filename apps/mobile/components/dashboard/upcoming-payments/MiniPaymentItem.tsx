@@ -11,6 +11,7 @@ import { Text, View } from "react-native";
 import { palette } from "@/constants/colors";
 import { getDueText } from "@/utils/dateHelpers";
 import { getPaymentIcon } from "@/utils/recurring-helpers";
+import { calculateCalendarDaysUntil } from "@monyvi/logic";
 
 import type { MiniPaymentItemProps } from "./types";
 
@@ -23,7 +24,7 @@ function MiniPaymentItemComponent({
   const iconName = getPaymentIcon(payment.name);
 
   const dueClass =
-    payment.daysUntilDue <= URGENT_DAYS_THRESHOLD
+    calculateCalendarDaysUntil(payment.nextDueDate) <= URGENT_DAYS_THRESHOLD
       ? "text-red-400"
       : "text-slate-500 dark:text-slate-400";
 

@@ -17,7 +17,7 @@ import type {
   RecurringPayment,
   RecurringStatus,
 } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { calculateCalendarDaysUntil, formatCurrency } from "@monyvi/logic";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -50,6 +50,7 @@ interface NextPaymentInsightProps {
 interface PaymentRowProps {
   readonly payment: RecurringPayment;
   readonly onPress: () => void;
+  readonly isPayNowAvailable: boolean;
   readonly onPayNow?: () => void;
 }
 
@@ -263,6 +264,7 @@ export function SortControl({
 export function PaymentRow({
   payment,
   onPress,
+  isPayNowAvailable,
   onPayNow,
 }: PaymentRowProps): React.JSX.Element {
   const { isDark } = useTheme();
@@ -272,14 +274,11 @@ export function PaymentRow({
   const iconConfig = category ? getCategoryIconConfig(category) : undefined;
   const typeLabel = payment.isIncome ? t("income") : t("expense");
   const dueLabel = getRecurringPaymentDueLabel(payment);
-  const isOverdueLabel = payment.isOverdue && !payment.isCompleted;
+  const isOverdueLabel =
+    calculateCalendarDaysUntil(payment.nextDueDate) < 0 && !payment.isCompleted;
   const { fontScale, width } = useWindowDimensions();
   const isCompactLayout = shouldUseCompactLayout(width, fontScale);
-  const canPayNow =
-    payment.isExpense &&
-    payment.isActive &&
-    payment.isOverdue &&
-    onPayNow !== undefined;
+  const canPayNow = isPayNowAvailable && onPayNow !== undefined;
 
   return (
     <View

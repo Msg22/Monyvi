@@ -15,7 +15,11 @@ import {
   TransactionType,
   type CurrencyType,
 } from "@monyvi/db";
-import { convertCurrency } from "@monyvi/logic";
+import {
+  calculateCalendarDaysUntil,
+  convertCurrency,
+  isInCurrentLocalMonth,
+} from "@monyvi/logic";
 import { Q } from "@nozbe/watermelondb";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMarketRates } from "./useMarketRates";
@@ -296,7 +300,7 @@ export function useRecurringPayments(
  *
  * @param activeExpenses - Active expense recurring payments to consider
  * @param toPreferred - Function that converts an amount from the payment's currency to the user's preferred currency
- * @returns The sum, in the preferred currency, of amounts whose `daysUntilDue` is between 0 and 7 (inclusive)
+ * @returns The sum, in the preferred currency, of amounts due in 0 to 7 local calendar days
  */
 
 function getNext7DaysTotal(
@@ -304,7 +308,10 @@ function getNext7DaysTotal(
   toPreferred: (amount: number, currency: CurrencyType) => number
 ): number {
   return activeExpenses
-    .filter((p) => p.daysUntilDue >= 0 && p.daysUntilDue <= 7)
+    .filter((p) => {
+      const daysUntilDue = calculateCalendarDaysUntil(p.nextDueDate);
+      return daysUntilDue >= 0 && daysUntilDue <= 7;
+    })
     .reduce((sum, p) => sum + toPreferred(p.amount, p.currency), 0);
 }
 
@@ -313,14 +320,14 @@ function getNext7DaysTotal(
  *
  * @param payments - Recurring payments to include in the aggregation
  * @param toPreferred - Function that converts an amount and its currency to the user's preferred currency
- * @returns The sum of amounts for payments where `isInThisMonth` is true, converted to the preferred currency
+ * @returns The sum of amounts due in the current local calendar month, converted to the preferred currency
  */
 function getThisMonthTotal(
   payments: RecurringPayment[],
   toPreferred: (amount: number, currency: CurrencyType) => number
 ): number {
   return payments
-    .filter((p) => p.isInThisMonth)
+    .filter((p) => isInCurrentLocalMonth(p.nextDueDate))
     .reduce((sum, p) => sum + toPreferred(p.amount, p.currency), 0);
 }
 

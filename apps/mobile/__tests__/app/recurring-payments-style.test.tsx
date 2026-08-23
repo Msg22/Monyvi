@@ -201,6 +201,14 @@ jest.mock("@/hooks/useRecurringPayments", () => ({
 }));
 
 jest.mock("@monyvi/logic", () => ({
+  calculateCalendarDaysUntil: (date: Date): number => {
+    const now = new Date();
+    return (
+      (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) -
+        Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) /
+      (1000 * 60 * 60 * 24)
+    );
+  },
   convertCurrency: (
     amount: number,
     fromCurrency: CurrencyType,
@@ -607,6 +615,7 @@ describe("RecurringPaymentsScreen dashboard", () => {
   it("keeps overdue Pay Now inline at an ordinary layout width", () => {
     const overduePayment = createPayment({
       id: "payment-inline-pay-now",
+      nextDueDate: new Date("2026-06-15T00:00:00.000Z"),
       isOverdue: true,
     });
     mockRecurringPaymentsState = {
@@ -628,6 +637,7 @@ describe("RecurringPaymentsScreen dashboard", () => {
     mockUsesCompactLayout = true;
     const overduePayment = createPayment({
       id: "payment-stacked-pay-now",
+      nextDueDate: new Date("2026-06-15T00:00:00.000Z"),
       isOverdue: true,
     });
     mockRecurringPaymentsState = {

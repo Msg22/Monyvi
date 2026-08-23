@@ -197,19 +197,6 @@ export function getDueText(date: Date): string {
   return i18n.t("common:due_in_days", { count: days });
 }
 
-export function calculateDaysUntilDue(dueDate: Date): number {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const due = new Date(
-    dueDate.getFullYear(),
-    dueDate.getMonth(),
-    dueDate.getDate()
-  );
-  const diffTime = due.getTime() - today.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
-}
-
 export function isDateInCurrentMonth(date: Date): boolean {
   const now = new Date();
   return (

@@ -33,7 +33,7 @@ import type {
   RecurringPayment,
   RecurringStatus,
 } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { calculateCalendarDaysUntil, formatCurrency } from "@monyvi/logic";
 import { router } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -89,7 +89,7 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
     () =>
       sortPayments(
         billPayments.filter(
-          (payment) => payment.isActive && !payment.isOverdue
+          (payment) => payment.isActive && !isOverdue(payment)
         ),
         "next_due"
       )[0] ?? null,
@@ -98,7 +98,7 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
 
   const overdueCount = useMemo(
     () =>
-      billPayments.filter((payment) => payment.isActive && payment.isOverdue)
+      billPayments.filter((payment) => payment.isActive && isOverdue(payment))
         .length,
     [billPayments]
   );
@@ -156,6 +156,7 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
       <PaymentRow
         payment={item}
         onPress={() => handlePaymentPress(item)}
+        isPayNowAvailable={isPayNowAvailable(item)}
         onPayNow={() => handlePayNow(item)}
       />
     ),
@@ -275,4 +276,12 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
 
 function keyExtractor(item: RecurringPayment): string {
   return item.id;
+}
+
+function isPayNowAvailable(payment: RecurringPayment): boolean {
+  return payment.isExpense && payment.isActive && isOverdue(payment);
+}
+
+function isOverdue(payment: RecurringPayment): boolean {
+  return calculateCalendarDaysUntil(payment.nextDueDate) < 0;
 }
