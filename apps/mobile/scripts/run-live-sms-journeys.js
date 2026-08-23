@@ -370,20 +370,41 @@ function normalizeNotificationPatterns(patterns) {
   return Array.isArray(patterns) ? patterns : [patterns];
 }
 
+function getAppNotificationRecords(notificationDump, applicationId = appId) {
+  return notificationDump
+    .split(/(?=\s*NotificationRecord\()/)
+    .filter((record) => record.includes(`pkg=${applicationId} `));
+}
+
+function classifyNotificationObservation(
+  notificationDump,
+  patterns,
+  applicationId = appId
+) {
+  const records = getAppNotificationRecords(notificationDump, applicationId);
+  if (records.length === 0) {
+    return "not-delivered";
+  }
+
+  const regexes = normalizeNotificationPatterns(patterns).map(
+    (pattern) => new RegExp(pattern, "i")
+  );
+  return records.some((record) => regexes.every((regex) => regex.test(record)))
+    ? "matched"
+    : "delivered-content-mismatch";
+}
+
 function hasMatchingAppNotification(
   notificationDump,
   patterns,
   applicationId = appId
 ) {
-  const records = notificationDump
-    .split(/(?=\s*NotificationRecord\()/)
-    .filter((record) => record.includes(`pkg=${applicationId} `));
-  const regexes = normalizeNotificationPatterns(patterns).map(
-    (pattern) => new RegExp(pattern, "i")
-  );
-
-  return records.some((record) =>
-    regexes.every((regex) => regex.test(record))
+  return (
+    classifyNotificationObservation(
+      notificationDump,
+      patterns,
+      applicationId
+    ) === "matched"
   );
 }
 
@@ -482,9 +503,11 @@ function findExpandButtonForNotification(nodes, notificationMatch) {
 
 function waitForNotificationText(patterns, timeoutMs = 60000) {
   const startedAt = Date.now();
+  let lastNotificationDump = "";
 
   while (Date.now() - startedAt < timeoutMs) {
-    if (hasMatchingAppNotification(readNotificationServiceState(), patterns)) {
+    lastNotificationDump = readNotificationServiceState();
+    if (hasMatchingAppNotification(lastNotificationDump, patterns)) {
       return;
     }
     wait(1000);
@@ -499,15 +522,30 @@ function waitForNotificationText(patterns, timeoutMs = 60000) {
       "-s",
       "SmsBroadcastReceiver:D",
       "SmsHeadlessTaskService:D",
+      "ExpoNotifications:D",
+      "ReactNativeJS:D",
       "*:S",
     ],
     { allowFailure: true, capture: true }
   ).trim();
+  const observation = classifyNotificationObservation(
+    lastNotificationDump,
+    patterns
+  );
+  const appRecords = getAppNotificationRecords(lastNotificationDump)
+    .map((record) => record.trim())
+    .join("\n---\n");
   throw new Error(
     `Timed out waiting for notification text: ${normalizeNotificationPatterns(
       patterns
-    ).join(", ")}\nNative SMS delivery diagnostics:\n${
-      nativeDeliveryDiagnostics || "(no receiver or headless-service logs)"
+    ).join(
+      ", "
+    )}\nNotification observation: ${observation}\nMonyvi notification records:\n${
+      appRecords ||
+      "(none observed; scheduling or Android delivery may have failed)"
+    }\nNative SMS/notification diagnostics:\n${
+      nativeDeliveryDiagnostics ||
+      "(no receiver, headless-service, or notification logs)"
     }`
   );
 }
@@ -963,6 +1001,7 @@ const journeys = {
     prepare: () => {
       grantSmsPermissions();
       grantNotificationPermission();
+      clearDeliveredNotifications();
       collapseSystemUi();
     },
     after: () => {
@@ -1159,6 +1198,7 @@ module.exports = {
   getAuthBootstrapFlow,
   getMaestroFlowTimeoutMs,
   getMaestroTransportRetryAttempts,
+  classifyNotificationObservation,
   hasMatchingAppNotification,
   getActiveUserFilter,
   isRetryableMaestroTransportFailure,
