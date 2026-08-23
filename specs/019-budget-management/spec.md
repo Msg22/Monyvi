@@ -9,8 +9,9 @@ spending progress tracking"
 ### Session 2026-03-19
 
 - Q: Should a user be limited to one global budget at a time, or can they have
-  multiple? → A: One global budget per period type (e.g., one weekly global +
-  one monthly global allowed, but not two monthly globals).
+  multiple? → A: One global budget per currency and period type (e.g., one EGP
+  monthly global and one USD monthly global are allowed, but not two EGP monthly
+  globals).
 - Q: If multiple transactions cross the alert threshold, should each trigger the
   alert modal? → A: Alert fires once per threshold crossing per budget period
   (first time crossing 80%, first time crossing 100%). Subsequent transactions
@@ -285,10 +286,10 @@ verifying that only budgets matching that period are shown.
   has a budget in the same period? → The system should prevent duplicate budgets
   for the same category and period and show an error: "A budget for this
   category already exists for the selected period."
-- Can a user have multiple global budgets? → One global budget per period type
-  is allowed (e.g., one weekly + one monthly). If the user tries to create a
-  second global budget with the same period type, the system shows: "A global
-  budget already exists for this period type."
+- Can a user have multiple global budgets? → One global budget per currency and
+  period type is allowed (e.g., one EGP monthly and one USD monthly). If the
+  user tries to create a second global budget with the same currency and period
+  type, the system shows that a matching global budget already exists.
 - How does the system handle mid-period budget creation? → Spending is
   calculated from the start of the current period (e.g., if a monthly budget is
   created on March 15, spending from March 1 onward is included).

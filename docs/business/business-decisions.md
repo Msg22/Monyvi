@@ -301,7 +301,7 @@ Budgets help users control spending.
 
 Business rules:
 
-- A current global budget is unique per user and period.
+- A current global budget is unique per user, currency, and period.
 - A current category budget is unique per user, category, and period.
 - Expired custom budgets remain historical and do not occupy the uniqueness slot
   for creating their replacement; another non-expired custom budget still does.

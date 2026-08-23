@@ -111,8 +111,22 @@ jest.mock("@monyvi/db", (): unknown => ({
     where: (...args: unknown[]): unknown => mockWhere(...args),
     and: (...args: unknown[]): unknown => mockAnd(...args),
     notEq: (value: unknown): unknown => ({ operator: "notEq", value }),
+    oneOf: (values: readonly unknown[]): unknown => ({ operator: "oneOf", values }),
   },
 }));
+
+jest.mock("@nozbe/watermelondb", (): unknown => {
+  const actual = jest.requireActual("@nozbe/watermelondb");
+  return {
+    ...actual,
+    Q: {
+      ...actual.Q,
+      where: (...args: unknown[]): unknown => mockWhere(...args),
+      and: (...args: unknown[]): unknown => mockAnd(...args),
+      notEq: (value: unknown): unknown => ({ operator: "notEq", value }),
+    },
+  };
+});
 
 jest.mock("@/services/user-data-access", (): unknown => ({
   getCurrentUserDataScope: (): Promise<unknown> => {
@@ -261,7 +275,7 @@ describe("budget-service", () => {
     mockQueryOwned.mockReturnValueOnce(createQueryResult([expired], 1));
 
     await expect(
-      validateBudgetUniqueness("GLOBAL", "CUSTOM")
+      validateBudgetUniqueness("GLOBAL", "CUSTOM", { currency: "EGP" })
     ).resolves.toBeUndefined();
   });
 
@@ -293,9 +307,9 @@ describe("budget-service", () => {
     });
     mockQueryOwned.mockReturnValueOnce(createQueryResult([current], 1));
 
-    await expect(validateBudgetUniqueness("GLOBAL", "CUSTOM")).rejects.toThrow(
-      "A Global custom budget already exists"
-    );
+    await expect(
+      validateBudgetUniqueness("GLOBAL", "CUSTOM", { currency: "EGP" })
+    ).rejects.toThrow("A Global custom budget already exists");
   });
 
   it("creates expired custom history without competing with a current custom budget", async (): Promise<void> => {
@@ -349,9 +363,19 @@ describe("budget-service", () => {
   it("keeps non-custom uniqueness validation unchanged", async (): Promise<void> => {
     mockQueryOwned.mockReturnValueOnce(createQueryResult([], 1));
 
-    await expect(validateBudgetUniqueness("GLOBAL", "MONTHLY")).rejects.toThrow(
-      "A Global monthly budget already exists"
-    );
+    await expect(
+      validateBudgetUniqueness("GLOBAL", "MONTHLY", { currency: "EGP" })
+    ).rejects.toThrow("A Global monthly budget already exists");
+  });
+
+  it("scopes global-budget uniqueness to the selected currency", async (): Promise<void> => {
+    mockQueryOwned.mockReturnValueOnce(createQueryResult([], 0));
+
+    await expect(
+      validateBudgetUniqueness("GLOBAL", "MONTHLY", { currency: "USD" })
+    ).resolves.toBeUndefined();
+
+    expect(mockWhere).toHaveBeenCalledWith("currency", "USD");
   });
 
   it("allows editing an expired custom history when a current replacement exists", async (): Promise<void> => {

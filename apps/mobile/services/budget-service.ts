@@ -182,6 +182,7 @@ export async function createBudget(input: CreateBudgetInput): Promise<Budget> {
 
     await validateBudgetUniqueness(input.type, input.period, {
       categoryId,
+      currency: input.currency,
       candidatePeriodEnd: input.periodEnd,
       scope,
     });
@@ -252,6 +253,7 @@ export async function updateBudget(
         input.period ?? budget.period,
         {
           categoryId,
+          currency: budget.currency,
           excludeBudgetId: budgetId,
           candidatePeriodEnd: input.periodEnd ?? budget.periodEnd,
           scope,
@@ -589,10 +591,10 @@ async function getAccessibleCategoryHierarchyIds(
 // =============================================================================
 
 /**
- * Validate that no duplicate budget exists for the same type+period+category.
+ * Validate that no duplicate budget exists for the same type, period, and scope.
  *
  * Rules (from FR-014 + Q1):
- * - Max ONE current Global budget per period type (WEEKLY, MONTHLY, CUSTOM)
+ * - Max ONE current Global budget per currency and period type
  * - Max ONE current Category budget per category per period type
  * - Expired CUSTOM budgets are historical and do not occupy the current slot
  *
@@ -600,6 +602,7 @@ async function getAccessibleCategoryHierarchyIds(
  */
 interface ValidateBudgetUniquenessOptions {
   readonly categoryId?: string;
+  readonly currency?: CurrencyType;
   readonly excludeBudgetId?: string;
   readonly candidatePeriodEnd?: Date;
   readonly scope?: CurrentUserDataScope;
@@ -627,6 +630,13 @@ export async function validateBudgetUniqueness(
 
   if (type === "CATEGORY" && options.categoryId) {
     conditions.push(Q.where("category_id", options.categoryId));
+  }
+
+  if (type === "GLOBAL") {
+    if (!options.currency) {
+      throw new Error("Global budget uniqueness requires a currency");
+    }
+    conditions.push(Q.where("currency", options.currency));
   }
 
   if (options.excludeBudgetId) {
