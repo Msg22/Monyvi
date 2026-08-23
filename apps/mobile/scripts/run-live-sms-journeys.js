@@ -23,6 +23,7 @@ const mobileRoot = join(__dirname, "..");
 const flowDir = join("e2e", "maestro", "live-sms-detection");
 const defaultMaestroFlowTimeoutMs = 10 * 60 * 1000;
 const defaultMaestroTransportRetryAttempts = 4;
+const liveSmsJourneyStopSettleMs = 1000;
 const liveSmsJourneyLaunchSettleMs = 3000;
 const uiAuthBootstrapFlow = "../helpers/ci-auth-bootstrap.yaml";
 const deeplinkAuthBootstrapFlow = "../helpers/ci-auth-deeplink-bootstrap.yaml";
@@ -1149,6 +1150,7 @@ function prepareLiveSmsJourneyStart(
   }
 ) {
   dependencies.stopApp();
+  dependencies.waitForLaunch(liveSmsJourneyStopSettleMs);
   dependencies.startApp();
   dependencies.waitForLaunch(liveSmsJourneyLaunchSettleMs);
 }
