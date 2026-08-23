@@ -286,7 +286,7 @@ describe("run-live-sms-journeys helpers", () => {
       waitForLaunch: (durationMs) => operations.push(`wait:${durationMs}`),
     });
 
-    expect(operations).toEqual(["stop", "start", "wait:3000"]);
+    expect(operations).toEqual(["stop", "wait:1000", "start", "wait:3000"]);
   });
 
   it("matches notification text only inside Monyvi notification records", () => {
