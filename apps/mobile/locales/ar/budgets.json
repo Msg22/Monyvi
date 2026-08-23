@@ -54,6 +54,8 @@
   "global_type": "عامة",
   "budget_name_placeholder": "مثال: ميزانية الطعام الشهرية",
   "budget_limit": "حد الميزانية",
+  "select_budget_currency": "اختر عملة الميزانية",
+  "budget_currency_immutable_info": "لا يمكن تغيير عملة الميزانية لاحقاً.",
   "custom_period": "مخصص",
   "start_date": "تاريخ البدء",
   "end_date": "تاريخ الانتهاء",

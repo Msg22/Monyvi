@@ -50,6 +50,8 @@
   "global_type": "Global",
   "budget_name_placeholder": "e.g., Monthly Food Budget",
   "budget_limit": "Budget Limit",
+  "select_budget_currency": "Select budget currency",
+  "budget_currency_immutable_info": "Your budget currency can't be changed later.",
   "custom_period": "Custom",
   "start_date": "Start Date",
   "end_date": "End Date",

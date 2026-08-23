@@ -34,6 +34,10 @@ appId: com.monyvi.app
       id: "create-budget-screen"
     timeout: 120000
 - assertVisible: "E2E Detail Long Custom"
+- assertVisible:
+    id: "budget-currency-read-only"
+- assertNotVisible:
+    id: "budget-currency-selector"
 - back
 - extendedWaitUntil:
     visible:

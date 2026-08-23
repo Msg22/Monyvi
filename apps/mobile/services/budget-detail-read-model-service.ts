@@ -17,6 +17,7 @@ import {
   getDaysElapsed,
   getDaysLeft,
   getWeeklyBuckets,
+  hasMatchingBudgetCurrency,
   isPeriodExpired,
   parsePauseIntervals,
   parsePausedAtMs,
@@ -154,7 +155,10 @@ export function buildBudgetDetailReadModel(
     pauseState.pauseIntervals,
     pauseState.pausedAtMs
   );
-  const spent = getTotalSpent(activeTransactions);
+  const budgetTransactions = activeTransactions.filter((transaction) =>
+    hasMatchingBudgetCurrency(transaction.currency, budget.currency)
+  );
+  const spent = getTotalSpent(budgetTransactions);
   const daysElapsed = getDaysElapsed(bounds.start, now);
   const daysLeft = getDaysLeft(bounds.end, now);
   const metrics = computeSpendingMetrics(
@@ -188,18 +192,18 @@ export function buildBudgetDetailReadModel(
           })
         : null,
     weeklySpending: createWeeklySpending(
-      activeTransactions,
+      budgetTransactions,
       budget.amount,
       bounds
     ),
     categoryBreakdown: createCategoryBreakdown(
       budget,
       spent,
-      activeTransactions,
+      budgetTransactions,
       categoryMap
     ),
     recentTransactions: createRecentTransactions(
-      activeTransactions,
+      budgetTransactions,
       categoryMap
     ),
     hasCompletedPauseExclusion: hasCompletedPauseExclusion(

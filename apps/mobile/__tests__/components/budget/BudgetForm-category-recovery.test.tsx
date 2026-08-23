@@ -60,6 +60,21 @@ jest.mock("@/components/modals/CategorySelectorModal", () => ({
   CategorySelectorModal: (): null => null,
 }));
 
+jest.mock("@/components/currency/CurrencyPicker", () => ({
+  CurrencyPicker: ({
+    visible,
+    onSelect,
+  }: {
+    readonly visible: boolean;
+    readonly onSelect: (currency: "USD") => void;
+  }): React.JSX.Element | null =>
+    visible ? (
+      <MockText testID="currency-picker-option-usd" onPress={() => onSelect("USD")}>
+        USD
+      </MockText>
+    ) : null,
+}));
+
 jest.mock("@/components/budget/AlertThresholdSlider", () => ({
   AlertThresholdSlider: (): null => null,
 }));
@@ -166,7 +181,7 @@ describe("BudgetForm category recovery", () => {
     );
   });
 
-  it("does not persist the preferred-currency fallback for ordinary creation", async () => {
+  it("persists the preferred currency for ordinary creation", async () => {
     mockCategoryError = null;
     render(<BudgetForm />);
 
@@ -185,9 +200,53 @@ describe("BudgetForm category recovery", () => {
     await waitFor(() =>
       expect(mockedCreateBudgetService).toHaveBeenCalledTimes(1)
     );
-    expect(mockedCreateBudgetService.mock.calls[0]?.[0]).not.toHaveProperty(
-      "currency"
+    expect(mockedCreateBudgetService).toHaveBeenCalledWith(
+      expect.objectContaining({ currency: "EGP" })
     );
+  });
+
+  it("blocks malformed budget-limit input", () => {
+    mockCategoryError = null;
+    render(<BudgetForm />);
+
+    fireEvent.press(
+      screen.getByRole("button", {
+        name: "accessibility_global_budget_type",
+      })
+    );
+    fireEvent.changeText(
+      screen.getByPlaceholderText("budget_name_placeholder"),
+      "Monthly spending"
+    );
+    fireEvent.changeText(screen.getByPlaceholderText("0.00"), "1e3");
+    fireEvent.press(screen.getByRole("button", { name: "create_budget" }));
+
+    expect(screen.getByText("validation_amount_invalid")).toBeOnTheScreen();
+    expect(mockedCreateBudgetService).not.toHaveBeenCalled();
+  });
+
+  it("lets creation select a supported currency and explains the choice is final", () => {
+    mockCategoryError = null;
+    render(<BudgetForm />);
+
+    expect(screen.getByText("budget_currency_immutable_info")).toBeOnTheScreen();
+    fireEvent.press(screen.getByTestId("budget-currency-selector"));
+    fireEvent.press(screen.getByTestId("currency-picker-option-usd"));
+
+    expect(screen.getByTestId("budget-currency-selector")).toHaveTextContent(
+      /USD/
+    );
+  });
+
+  it("shows a saved budget currency as read-only during editing", () => {
+    mockCategoryError = null;
+    mockCategoryMap = new Map([
+      ["education", { displayName: "Education" } as unknown as Category],
+    ]);
+    render(<BudgetForm existingBudget={RENEWAL_SOURCE} />);
+
+    expect(screen.getByTestId("budget-currency-read-only")).toBeOnTheScreen();
+    expect(screen.queryByTestId("budget-currency-selector")).toBeNull();
   });
 
   it("does not persist the preferred-currency fallback when editing a legacy budget", async () => {

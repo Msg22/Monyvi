@@ -25,6 +25,7 @@ import {
   buildPauseInterval,
   parsePauseIntervals,
   parsePausedAtMs,
+  hasMatchingBudgetCurrency,
 } from "@monyvi/logic";
 import {
   getCurrentUserDataScope,
@@ -40,7 +41,7 @@ export interface CreateBudgetInput {
   readonly type: BudgetType;
   readonly categoryId?: string;
   readonly amount: number;
-  readonly currency?: CurrencyType;
+  readonly currency: CurrencyType;
   readonly period: BudgetPeriod;
   readonly periodStart?: Date;
   readonly periodEnd?: Date;
@@ -50,7 +51,6 @@ export interface CreateBudgetInput {
 export interface UpdateBudgetInput {
   readonly name?: string;
   readonly amount?: number;
-  readonly currency?: CurrencyType;
   readonly period?: BudgetPeriod;
   readonly periodStart?: Date;
   readonly periodEnd?: Date;
@@ -262,7 +262,6 @@ export async function updateBudget(
     await budget.update((b) => {
       if (input.name !== undefined) b.name = input.name;
       if (input.amount !== undefined) b.amount = input.amount;
-      if (input.currency !== undefined) b.currency = input.currency;
       if (input.period !== undefined) b.period = input.period;
       if (input.periodStart !== undefined) b.periodStart = input.periodStart;
       if (input.periodEnd !== undefined) b.periodEnd = input.periodEnd;
@@ -516,6 +515,8 @@ export async function getSpendingForBudget(budget: Budget): Promise<number> {
     transactions,
     pauseIntervals,
     pausedAtMs
+  ).filter((transaction) =>
+    hasMatchingBudgetCurrency(transaction.currency, budget.currency)
   );
 
   return filtered.reduce((sum, tx) => sum + tx.amount, 0);

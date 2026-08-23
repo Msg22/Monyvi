@@ -306,6 +306,13 @@ Business rules:
 - Expired custom budgets remain historical and do not occupy the uniqueness slot
   for creating their replacement; another non-expired custom budget still does.
 - Category budgets include spending in the selected category and descendants.
+- Every new budget stores one supported currency. Creation defaults to the
+  user's preferred currency, but may select another supported currency before
+  saving; the saved currency is immutable.
+- Budget spending includes only transactions with the exact same currency as
+  the budget. Monyvi does not convert transaction currencies for budgets.
+- Budget limits accept localized positive decimals with at most two fractional
+  digits and a maximum of `999,999,999.99`.
 - Custom-period budgets require both start and end dates.
 - Paused budgets track pause intervals and exclude paused time from spending
   calculations.
