@@ -217,7 +217,7 @@ describe("RecurringPaymentForm date picker", () => {
     }
     const datePickerEvent: DateTimePickerEvent = {
       type: "set",
-      nativeEvent: { timestamp: 0 },
+      nativeEvent: { timestamp: 0, utcOffset: 0 },
     };
     act(() => {
       datePickerProps.onChange(
