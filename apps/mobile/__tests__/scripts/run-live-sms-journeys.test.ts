@@ -76,6 +76,16 @@ describe("run-live-sms-journeys helpers", () => {
     expect(sql).not.toMatch(/delete from transfers where[^;]*counterparty/);
   });
 
+  it("uses the Android notification cancel_all command", () => {
+    const source = readFileSync(
+      resolve(__dirname, "../../scripts/run-live-sms-journeys.js"),
+      "utf8"
+    );
+
+    expect(source).toContain('"cancel_all"');
+    expect(source).not.toContain('"cancel-all"');
+  });
+
   it("skips run-as probe cleanup for release APK runs", () => {
     expect(
       liveSmsJourneys.shouldSkipRunAsProbeCleanup({

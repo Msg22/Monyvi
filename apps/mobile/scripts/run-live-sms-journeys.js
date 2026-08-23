@@ -156,7 +156,7 @@ function blockSmsPermissions() {
 }
 
 function clearDeliveredNotifications(allowFailure = true) {
-  adb(["shell", "cmd", "notification", "cancel-all"], { allowFailure });
+  adb(["shell", "cmd", "notification", "cancel_all"], { allowFailure });
 }
 
 function resetNotificationPermission() {
