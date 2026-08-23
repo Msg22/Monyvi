@@ -28,6 +28,7 @@ import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useCategories } from "@/hooks/useCategories";
 import { CategorySelectorModal } from "@/components/modals/CategorySelectorModal";
+import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
 import { AlertThresholdSlider } from "./AlertThresholdSlider";
 import type { Budget, BudgetPeriod } from "@monyvi/db";
 import {
@@ -42,6 +43,7 @@ import { useCategoryLookup } from "@/context/CategoriesContext";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { formatDate } from "@/utils/dateHelpers";
+import { parsePositiveMoneyAmount } from "@monyvi/logic";
 import {
   buildBudgetRenewalFormValues,
   resolveRenewalCategoryId,
@@ -106,7 +108,8 @@ export function BudgetForm({
     [categoryMap]
   );
   const { showToast } = useToast();
-  const { preferredCurrency } = usePreferredCurrency();
+  const { preferredCurrency, isLoading: isPreferredCurrencyLoading } =
+    usePreferredCurrency();
 
   // ── Form state ──
   const [form, setForm] = useState<FormState>(() => {
@@ -125,7 +128,9 @@ export function BudgetForm({
       type: existingBudget?.type ?? "CATEGORY",
       categoryId: existingBudget?.categoryId ?? null,
       amount: existingBudget?.amount?.toString() ?? "",
-      currency: existingBudget?.currency ?? null,
+      currency: existingBudget
+        ? (existingBudget.currency ?? null)
+        : preferredCurrency,
       period: existingBudget?.period ?? "MONTHLY",
       periodStart: existingBudget?.periodStart ?? new Date(),
       periodEnd: existingBudget?.periodEnd ?? new Date(),
@@ -136,12 +141,19 @@ export function BudgetForm({
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [isCurrencyPickerOpen, setIsCurrencyPickerOpen] = useState(false);
+  const [hasUserSelectedCurrency, setHasUserSelectedCurrency] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
 
   const selectedCategory = form.categoryId
     ? categoryMap.get(form.categoryId)
     : null;
+  const isWaitingForCreateCurrency =
+    !isEditMode &&
+    isPreferredCurrencyLoading &&
+    !hasUserSelectedCurrency &&
+    (!renewalSource || form.currency === null);
 
   useEffect(() => {
     if (!renewalSource || areCategoriesLoading || categoryError) return;
@@ -159,6 +171,28 @@ export function BudgetForm({
     accessibleCategoryIds,
     areCategoriesLoading,
     categoryError,
+    renewalSource,
+  ]);
+
+  useEffect(() => {
+    if (isEditMode || isPreferredCurrencyLoading || hasUserSelectedCurrency) {
+      return;
+    }
+
+    setForm((current) => {
+      if (
+        current.currency === preferredCurrency ||
+        (renewalSource && current.currency !== null)
+      ) {
+        return current;
+      }
+      return { ...current, currency: preferredCurrency };
+    });
+  }, [
+    hasUserSelectedCurrency,
+    isEditMode,
+    isPreferredCurrencyLoading,
+    preferredCurrency,
     renewalSource,
   ]);
 
@@ -199,8 +233,7 @@ export function BudgetForm({
       newErrors.name = t("validation_name_required");
     }
 
-    const parsedAmount = parseFloat(form.amount);
-    if (!form.amount || isNaN(parsedAmount) || parsedAmount <= 0) {
+    if (parsePositiveMoneyAmount(form.amount) === null) {
       newErrors.amount = t("validation_amount_invalid");
     }
 
@@ -224,7 +257,12 @@ export function BudgetForm({
 
   // ── Submit ──
   const handleSubmit = useCallback(async (): Promise<void> => {
+    if (isWaitingForCreateCurrency) return;
     if (!validate()) return;
+
+    const currency = form.currency;
+    const amount = parsePositiveMoneyAmount(form.amount);
+    if (amount === null) return;
 
     setIsSubmitting(true);
     try {
@@ -232,8 +270,7 @@ export function BudgetForm({
         // Edit mode
         const input: UpdateBudgetInput = {
           name: form.name.trim(),
-          amount: parseFloat(form.amount),
-          ...(form.currency !== null && { currency: form.currency }),
+          amount,
           period: form.period,
           alertThreshold: form.alertThreshold,
           ...(form.period === "CUSTOM" && {
@@ -252,6 +289,10 @@ export function BudgetForm({
           message: t("budget_updated_message"),
         });
       } else {
+        if (!currency) {
+          setErrors({ general: t("validation_currency_required") });
+          return;
+        }
         const input: CreateBudgetInput = {
           name: form.name.trim(),
           type: form.type,
@@ -259,8 +300,8 @@ export function BudgetForm({
             form.type === "CATEGORY"
               ? (form.categoryId ?? undefined)
               : undefined,
-          amount: parseFloat(form.amount),
-          ...(form.currency !== null && { currency: form.currency }),
+          amount,
+          currency,
           period: form.period,
           alertThreshold: form.alertThreshold,
           ...(form.period === "CUSTOM" && {
@@ -285,7 +326,16 @@ export function BudgetForm({
     } finally {
       setIsSubmitting(false);
     }
-  }, [validate, isEditMode, existingBudget, form, showToast, t]);
+  }, [
+    validate,
+    isEditMode,
+    existingBudget,
+    form,
+    isWaitingForCreateCurrency,
+    renewalSource,
+    showToast,
+    t,
+  ]);
 
   return (
     <ScrollView
@@ -486,12 +536,30 @@ export function BudgetForm({
           {t("budget_limit")}
         </Text>
         <View className="flex-row items-center bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
-          <Text
-            className="text-base font-bold ps-4"
-            style={{ color: palette.nileGreen[500] }}
-          >
-            {form.currency ?? preferredCurrency}
-          </Text>
+          {isEditMode ? (
+            <View testID="budget-currency-read-only" className="px-4 py-4">
+              <Text className="text-base font-bold text-nileGreen-500">
+                {form.currency ?? "—"}
+              </Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              testID="budget-currency-selector"
+              onPress={() => setIsCurrencyPickerOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={t("select_budget_currency")}
+              className="flex-row items-center gap-1 border-e border-slate-200 px-4 py-4 dark:border-slate-700"
+            >
+              <Text className="text-base font-bold text-nileGreen-500">
+                {form.currency ?? preferredCurrency}
+              </Text>
+              <Ionicons
+                name="chevron-down"
+                size={16}
+                color={isDark ? palette.slate[400] : palette.slate[500]}
+              />
+            </TouchableOpacity>
+          )}
           <TextInput
             value={form.amount}
             onChangeText={(v) => updateField("amount", v)}
@@ -507,6 +575,18 @@ export function BudgetForm({
           <Text className="text-red-500 text-xs font-medium mt-1">
             {errors.amount}
           </Text>
+        ) : null}
+        {!isEditMode ? (
+          <View className="mt-2 flex-row items-center gap-2 rounded-xl bg-nileGreen-50 p-3 dark:bg-nileGreen-900/20">
+            <Ionicons
+              name="information-circle-outline"
+              size={18}
+              color={palette.nileGreen[500]}
+            />
+            <Text className="flex-1 text-xs text-nileGreen-700 dark:text-nileGreen-400">
+              {t("budget_currency_immutable_info")}
+            </Text>
+          </View>
         ) : null}
       </View>
 
@@ -624,11 +704,15 @@ export function BudgetForm({
         accessibilityRole="button"
         accessibilityLabel={isEditMode ? t("save_changes") : t("create_budget")}
         disabled={
-          isSubmitting || (form.type === "CATEGORY" && areCategoriesLoading)
+          isSubmitting ||
+          (form.type === "CATEGORY" && areCategoriesLoading) ||
+          isWaitingForCreateCurrency
         }
         accessibilityState={{
           disabled:
-            isSubmitting || (form.type === "CATEGORY" && areCategoriesLoading),
+            isSubmitting ||
+            (form.type === "CATEGORY" && areCategoriesLoading) ||
+            isWaitingForCreateCurrency,
         }}
         activeOpacity={0.85}
         className="rounded-2xl py-4 items-center"
@@ -651,6 +735,15 @@ export function BudgetForm({
         type="EXPENSE"
         onSelect={(id) => updateField("categoryId", id)}
         onClose={() => setIsCategoryModalOpen(false)}
+      />
+      <CurrencyPicker
+        visible={isCurrencyPickerOpen}
+        selectedCurrency={form.currency ?? preferredCurrency}
+        onSelect={(currency) => {
+          setHasUserSelectedCurrency(true);
+          updateField("currency", currency);
+        }}
+        onClose={() => setIsCurrencyPickerOpen(false)}
       />
     </ScrollView>
   );

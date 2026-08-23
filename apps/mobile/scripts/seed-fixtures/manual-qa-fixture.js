@@ -585,7 +585,7 @@ function buildManualQaExtraRows({
         user_id: userId,
         name: "Overall Spending",
         amount: 22000,
-        currency: null,
+        currency: "EGP",
         category_id: null,
         period: "MONTHLY",
         period_start: dateFromToday(-7),

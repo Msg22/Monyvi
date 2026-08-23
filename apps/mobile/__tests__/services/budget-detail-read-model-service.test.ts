@@ -54,6 +54,7 @@ const mockQueryOwned = jest.fn<
 interface MockBudgetOptions {
   readonly type?: "GLOBAL" | "CATEGORY";
   readonly categoryId?: string;
+  readonly currency?: "EGP" | "USD" | null;
   readonly status?: "ACTIVE" | "PAUSED";
   readonly pauseIntervals?: ReadonlyArray<{
     readonly from: number;
@@ -232,7 +233,7 @@ function createBudget(options: MockBudgetOptions = {}): Budget {
     categoryId,
     amount: 1000,
     alertThreshold: 80,
-    currency: "EGP",
+    currency: options.currency === undefined ? "EGP" : options.currency,
     period: "CUSTOM",
     periodStart: new Date(2026, 4, 1, 0, 0, 0, 0),
     periodEnd: new Date(2026, 4, 31, 23, 59, 59, 999),
@@ -341,6 +342,15 @@ describe("budget-detail-read-model-service", () => {
     mockGetCategoryAndSubcategoryIds.mockResolvedValue(["category-parent"]);
   });
 
+  it("rejects a legacy budget without a saved currency instead of using a display fallback", async () => {
+    const budget = createBudget({ currency: null });
+
+    await expect(getBudgetDetailReadModel(budget)).rejects.toThrow(
+      "Budget currency is required"
+    );
+    expect(mockQueryOwned).not.toHaveBeenCalled();
+  });
+
   afterEach(() => {
     jest.useRealTimers();
   });
@@ -372,6 +382,35 @@ describe("budget-detail-read-model-service", () => {
     expect(
       result.weeklySpending.reduce((sum, item) => sum + item.actualAmount, 0)
     ).toBe(650);
+  });
+
+  it("excludes different-currency transactions from all detail calculations", async () => {
+    const budget = createBudget();
+    mockTransactions = [
+      createTransaction({
+        id: "tx-egp",
+        amount: 400,
+        date: "2026-05-05T10:00:00.000Z",
+        currency: "EGP",
+      }),
+      createTransaction({
+        id: "tx-usd",
+        amount: 20,
+        date: "2026-05-12T10:00:00.000Z",
+        currency: "USD",
+      }),
+    ];
+    mockGetSpendingForBudget.mockResolvedValue(400);
+
+    const result = await getBudgetDetailReadModel(budget);
+
+    expect(result.metrics.spent).toBe(400);
+    expect(result.recentTransactions.map((tx) => tx.transactionId)).toEqual([
+      "tx-egp",
+    ]);
+    expect(
+      result.weeklySpending.reduce((sum, item) => sum + item.actualAmount, 0)
+    ).toBe(400);
   });
 
   it("rejects a budget not owned by the authenticated user before reading data", async () => {
@@ -621,6 +660,7 @@ describe("budget-detail-read-model-service", () => {
       deleted: false,
       type: "EXPENSE",
       amount: 100,
+      currency: "EGP",
       categoryId: "category-parent",
       get date(): Date {
         dateReadCount += 1;
@@ -777,27 +817,27 @@ describe("budget-detail-read-model-service", () => {
     expect(result.metrics.spent).toBe(0);
   });
 
-  it("uses the preferred fallback currency precision when the budget has no currency", async () => {
-    const now = new Date("2026-05-15T12:00:00.000Z");
-    const budget = {
-      ...createBudget(),
-      amount: 10.001,
-      currency: null,
-      periodStart: new Date("2026-05-15T00:00:00.000Z"),
-      periodEnd: new Date("2026-05-15T23:59:59.999Z"),
-    } as unknown as Budget;
+  it("does not report pause exclusions for a different-currency transaction", async () => {
+    const budget = createBudget({
+      pauseIntervals: [
+        {
+          from: new Date("2026-05-02T00:00:00.000Z").getTime(),
+          to: new Date("2026-05-03T23:59:59.999Z").getTime(),
+        },
+      ],
+    });
     mockTransactions = [
       createTransaction({
-        id: "tx-kwd-precision",
-        amount: 10.004,
-        date: "2026-05-15T10:00:00.000Z",
+        id: "tx-usd-pause",
+        amount: 100,
+        currency: "USD",
+        date: "2026-05-02T10:00:00.000Z",
       }),
     ];
 
-    const result = await getBudgetDetailReadModel(budget, now, "KWD");
+    const result = await getBudgetDetailReadModel(budget);
 
-    expect(result.currency).toBe("KWD");
-    expect(result.paceState).toBe("ABOVE");
+    expect(result.hasCompletedPauseExclusion).toBe(false);
   });
 
   it("keeps a missing recent transaction label semantic instead of emitting blank copy", async () => {

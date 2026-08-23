@@ -66,7 +66,7 @@ export interface BudgetDetailTransactionItem {
   readonly label: string | null;
   readonly date: Date;
   readonly amount: number;
-  readonly currency: CurrencyType | null;
+  readonly currency: CurrencyType;
   readonly icon: BudgetDetailIcon;
 }
 

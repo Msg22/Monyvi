@@ -102,6 +102,7 @@ function createBudget(
     readonly amount: number;
     readonly alertThreshold: number;
     readonly periodEnd: Date;
+    readonly currency: "EGP" | "USD" | null;
   }> = {}
 ): Budget {
   const type = overrides.type ?? "CATEGORY";
@@ -117,6 +118,7 @@ function createBudget(
     periodEnd: overrides.periodEnd ?? new Date("2026-05-31T23:59:59.999Z"),
     isGlobal: type === "GLOBAL",
     isCategoryBudget: type === "CATEGORY",
+    currency: overrides.currency === undefined ? "EGP" : overrides.currency,
   } as unknown as Budget;
 }
 
@@ -268,6 +270,13 @@ describe("budget-list-read-model-service", () => {
       daysLeft: 16,
       daysElapsed: 15,
     });
+  });
+
+  it("omits legacy budgets without a saved currency instead of assigning the preferred currency", async () => {
+    const legacyBudget = createBudget("legacy-budget", { currency: null });
+
+    await expect(buildBudgetMetrics([legacyBudget])).resolves.toEqual([]);
+    expect(mockGetSpendingForBudget).not.toHaveBeenCalled();
   });
 
   it("starts every eligible spending read before waiting for any result", async () => {

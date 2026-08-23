@@ -2,7 +2,6 @@ import { palette } from "@/constants/colors";
 import type { BudgetDetailTransactionItem } from "@/contracts/budget-detail-presentation";
 import { useLocale } from "@/context/LocaleContext";
 import { Ionicons } from "@expo/vector-icons";
-import type { CurrencyType } from "@monyvi/db";
 import { formatCurrency } from "@monyvi/logic";
 import React from "react";
 import { I18nManager, Text, TouchableOpacity, View } from "react-native";
@@ -11,13 +10,11 @@ import { BudgetDetailIconView } from "./BudgetDetailIdentity";
 
 interface BudgetRecentTransactionsProps {
   readonly transactions: readonly BudgetDetailTransactionItem[];
-  readonly fallbackCurrency: CurrencyType;
   readonly onPressTransaction: (transactionId: string) => void;
 }
 
 export function BudgetRecentTransactions({
   transactions,
-  fallbackCurrency,
   onPressTransaction,
 }: BudgetRecentTransactionsProps): React.JSX.Element {
   const { t } = useTranslation("budgets");
@@ -43,10 +40,9 @@ export function BudgetRecentTransactions({
         </Text>
       ) : (
         transactions.map((transaction) => {
-          const currency = transaction.currency ?? fallbackCurrency;
           const amount = formatCurrency({
             amount: transaction.amount,
-            currency,
+            currency: transaction.currency,
           });
           const transactionLabel =
             transaction.label ??

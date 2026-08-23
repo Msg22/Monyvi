@@ -13,12 +13,13 @@
  * @module budget-alert-service
  */
 
-import { Budget, database, Transaction } from "@monyvi/db";
+import { Budget, database, Transaction, type CurrencyType } from "@monyvi/db";
 import { Q } from "@nozbe/watermelondb";
 import {
   getCurrentPeriodBounds,
   getDaysElapsed,
   computeSpendingMetrics,
+  hasMatchingBudgetCurrency,
 } from "@monyvi/logic";
 import {
   getSpendingForBudget,
@@ -39,6 +40,7 @@ export interface BudgetAlert {
   readonly percentage: number;
   readonly spent: number;
   readonly limit: number;
+  readonly currency: CurrencyType;
 }
 
 // =============================================================================
@@ -76,19 +78,29 @@ export async function checkBudgetAlerts(
   ).fetch();
 
   // Filter to budgets that match the transaction's category (including descendants)
-  const matchingBudgets: Budget[] = [];
+  const matchingBudgets: Array<{
+    readonly budget: Budget;
+    readonly currency: CurrencyType;
+  }> = [];
   for (const budget of budgets) {
+    const currency = budget.currency;
+    if (
+      currency === undefined ||
+      !hasMatchingBudgetCurrency(transaction.currency, currency)
+    ) {
+      continue;
+    }
     if (budget.isGlobal) {
-      matchingBudgets.push(budget);
+      matchingBudgets.push({ budget, currency });
     } else if (budget.isCategoryBudget && budget.categoryId) {
       const categoryIds = await getCategoryAndSubcategoryIds(budget.categoryId);
       if (categoryIds.includes(transaction.categoryId)) {
-        matchingBudgets.push(budget);
+        matchingBudgets.push({ budget, currency });
       }
     }
   }
 
-  for (const budget of matchingBudgets) {
+  for (const { budget, currency } of matchingBudgets) {
     const bounds = getCurrentPeriodBounds(
       budget.period,
       budget.periodStart,
@@ -132,6 +144,7 @@ export async function checkBudgetAlerts(
         percentage: metrics.percentage,
         spent: metrics.spent,
         limit: metrics.limit,
+        currency,
       };
     }
 
@@ -149,6 +162,7 @@ export async function checkBudgetAlerts(
         percentage: metrics.percentage,
         spent: metrics.spent,
         limit: metrics.limit,
+        currency,
       };
     }
   }

@@ -14,7 +14,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { palette } from "@/constants/colors";
 import type { BudgetAlert } from "@/services/budget-alert-service";
 import { formatCurrency } from "@monyvi/logic";
-import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useTranslation } from "react-i18next";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 
@@ -45,7 +44,6 @@ export function BudgetAlertModal({
   onDismiss,
   onViewBudget,
 }: BudgetAlertModalProps): React.JSX.Element {
-  const { preferredCurrency } = usePreferredCurrency();
   const { t } = useTranslation("budgets");
   const bottomInset = useModalBottomInset();
 
@@ -83,7 +81,7 @@ export function BudgetAlertModal({
       : t("alert_over_budget_subtitle", {
           overage: formatCurrency({
             amount: overage,
-            currency: preferredCurrency,
+            currency: alert.currency,
             maximumFractionDigits: 0,
           }),
         });
@@ -144,13 +142,13 @@ export function BudgetAlertModal({
               >
                 {formatCurrency({
                   amount: alert.spent,
-                  currency: preferredCurrency,
+                  currency: alert.currency,
                 })}
               </Text>
               <Text className="text-sm font-semibold text-slate-800 dark:text-white">
                 {formatCurrency({
                   amount: alert.limit,
-                  currency: preferredCurrency,
+                  currency: alert.currency,
                 })}
               </Text>
             </View>

@@ -72,6 +72,7 @@ const BUDGET_SPENDING_OBSERVED_COLUMNS = [
   "category_id",
   "date",
   "deleted",
+  "currency",
 ];
 
 function getNextExpiryDelayMs(

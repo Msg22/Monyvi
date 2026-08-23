@@ -201,6 +201,7 @@ describe("useBudgets", () => {
       "category_id",
       "date",
       "deleted",
+      "currency",
     ]);
     expect(budgetQuery.observeWithColumns).toHaveBeenCalledWith([
       "name",

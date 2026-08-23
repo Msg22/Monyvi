@@ -37,6 +37,7 @@ interface BudgetSeedRow {
   readonly name?: string;
   readonly type?: string;
   readonly period?: string;
+  readonly currency?: string | null;
   readonly category_id?: string | null;
   readonly deleted?: boolean;
   readonly pause_intervals?: string;
@@ -383,7 +384,11 @@ describe("manual-qa-seed script helpers", () => {
           status: "PAUSED",
           deleted: true,
         }),
-        expect.objectContaining({ name: "Overall Spending", type: "GLOBAL" }),
+        expect.objectContaining({
+          name: "Overall Spending",
+          type: "GLOBAL",
+          currency: "EGP",
+        }),
         expect.objectContaining({
           name: "QA Healthy Weekly Global",
           type: "GLOBAL",

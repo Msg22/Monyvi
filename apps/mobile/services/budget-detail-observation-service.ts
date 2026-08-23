@@ -2,7 +2,6 @@ import {
   database,
   type Budget,
   type Category,
-  type CurrencyType,
   type Transaction,
 } from "@monyvi/db";
 
@@ -26,7 +25,6 @@ export interface BudgetDetailObservedValue {
 export interface BudgetDetailObservationOptions {
   readonly budgetId: string;
   readonly userId: string;
-  readonly fallbackCurrency: CurrencyType;
   readonly getNow?: () => Date;
 }
 
@@ -166,7 +164,6 @@ export async function observeBudgetDetailReadModels(
                               budget,
                               categories,
                               transactions,
-                              fallbackCurrency: options.fallbackCurrency,
                             },
                             now
                           ),

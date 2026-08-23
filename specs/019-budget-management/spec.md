@@ -9,8 +9,9 @@ spending progress tracking"
 ### Session 2026-03-19
 
 - Q: Should a user be limited to one global budget at a time, or can they have
-  multiple? → A: One global budget per period type (e.g., one weekly global +
-  one monthly global allowed, but not two monthly globals).
+  multiple? → A: One global budget per currency and period type (e.g., one EGP
+  monthly global and one USD monthly global are allowed, but not two EGP monthly
+  globals).
 - Q: If multiple transactions cross the alert threshold, should each trigger the
   alert modal? → A: Alert fires once per threshold crossing per budget period
   (first time crossing 80%, first time crossing 100%). Subsequent transactions
@@ -285,10 +286,10 @@ verifying that only budgets matching that period are shown.
   has a budget in the same period? → The system should prevent duplicate budgets
   for the same category and period and show an error: "A budget for this
   category already exists for the selected period."
-- Can a user have multiple global budgets? → One global budget per period type
-  is allowed (e.g., one weekly + one monthly). If the user tries to create a
-  second global budget with the same period type, the system shows: "A global
-  budget already exists for this period type."
+- Can a user have multiple global budgets? → One global budget per currency and
+  period type is allowed (e.g., one EGP monthly and one USD monthly). If the
+  user tries to create a second global budget with the same currency and period
+  type, the system shows that a matching global budget already exists.
 - How does the system handle mid-period budget creation? → Spending is
   calculated from the start of the current period (e.g., if a monthly budget is
   created on March 15, spending from March 1 onward is included).
@@ -305,10 +306,9 @@ verifying that only budgets matching that period are shown.
 - How is spending calculated for category budgets with subcategories? → Spending
   aggregation includes all transactions within the budget's category AND its
   subcategories (L2 and L3).
-- What if the user's preferred currency differs from the budget currency? →
-  Budgets track spending in the user's preferred currency. Multi-currency
-  transactions are converted using cached rates from the local `market_rates`
-  WatermelonDB table (offline-compatible).
+- What if a transaction currency differs from the budget currency? → Budgets
+  count only transactions with the exact same currency. They do not convert
+  transactions or fetch exchange rates.
 - What happens when a user has no transactions in the budget period? → The
   dashboard shows 0% progress with "EGP 0 / [limit]" and all stat values at zero
   or default.
@@ -365,16 +365,17 @@ verifying that only budgets matching that period are shown.
   budget period.
 - **FR-014**: System MUST prevent duplicate budgets for the same category and
   overlapping period. For global budgets, the system MUST allow at most one
-  global budget per period type (e.g., one weekly global and one monthly global
-  are allowed, but two monthly globals are not).
+  global budget per currency and period type (e.g., one EGP monthly global and
+  one USD monthly global are allowed, but not two EGP monthly globals).
 - **FR-015**: System MUST aggregate spending for category budgets by including
   all transactions in the budget's category and its subcategories (L2 and L3
   levels).
 - **FR-016**: System MUST automatically calculate spending for the current
   budget period and reset at the start of each new period (Weekly: Sunday,
   Monthly: 1st of month).
-- **FR-017**: System MUST make the budget currency field optional — defaulting
-  to the user's preferred currency when not specified.
+- **FR-017**: System MUST persist one supported currency for each new budget.
+  Creation defaults to the user's preferred currency and permits another
+  supported selection before save; the saved currency cannot be changed.
 - **FR-018**: System MUST prevent changing the budget type (Global ↔ Category)
   when editing an existing budget.
 - **FR-019**: System MUST support period filter chips (All, Weekly, Monthly,
@@ -385,10 +386,10 @@ verifying that only budgets matching that period are shown.
 
 - **Budget**: A spending limit set by the user, either global (all categories)
   or category-specific. Key attributes: name, type (Global/Category), linked
-  category, amount limit, currency (optional, defaults to preferred), period
-  (Weekly/Monthly/Custom), custom date range (period_start, period_end), alert
-  threshold percentage, and status (Active/Paused — deletion uses WatermelonDB's
-  built-in sync-aware deletion, not a status value).
+  category, amount limit, immutable currency, period (Weekly/Monthly/Custom),
+  custom date range (period_start, period_end), alert threshold percentage, and
+  status (Active/Paused — deletion uses WatermelonDB's built-in sync-aware
+  deletion, not a status value).
 - **Category**: An existing Monyvi entity (3-level hierarchy: L1 Main, L2 Sub,
   L3 User-defined). Budgets link to categories at L1 or L2 level for scoped
   spending tracking.
@@ -421,9 +422,9 @@ verifying that only budgets matching that period are shown.
 
 ## Assumptions
 
-- The `budgets` table already exists in the WatermelonDB schema and Supabase —
-  no migration is needed for the table itself. However, the `currency` field
-  will be changed to optional.
+- The `budgets` table already exists in the WatermelonDB schema and Supabase; no
+  migration or backfill is needed. Pre-release budgets without a currency are
+  recreated.
 - Spending aggregation is performed locally using WatermelonDB queries
   (offline-first).
 - Budget alerts (FR-011) are in-app modal alerts triggered only after a

@@ -17,6 +17,7 @@ import {
   getDaysElapsed,
   getDaysLeft,
   getWeeklyBuckets,
+  hasMatchingBudgetCurrency,
   isPeriodExpired,
   parsePauseIntervals,
   parsePausedAtMs,
@@ -39,7 +40,6 @@ import {
   getCurrentUserDataScope,
   type CurrentUserDataScope,
 } from "@/services/user-data-access";
-import { DEFAULT_CURRENCY } from "@/utils/currency-detection";
 import { getSafeCategoryIconConfig } from "@/utils/category-icon-config";
 
 export type { BudgetDetailReadModel } from "@/contracts/budget-detail-presentation";
@@ -48,7 +48,6 @@ export interface BudgetDetailInputSnapshot {
   readonly budget: Budget;
   readonly categories: readonly Category[];
   readonly transactions: readonly Transaction[];
-  readonly fallbackCurrency: CurrencyType;
 }
 
 interface BudgetPauseState {
@@ -78,11 +77,11 @@ const ICON_TONE_ANCHORS: ReadonlyArray<
 
 export async function getBudgetDetailReadModel(
   budget: Budget,
-  now: Date = new Date(),
-  fallbackCurrency: CurrencyType = DEFAULT_CURRENCY
+  now: Date = new Date()
 ): Promise<BudgetDetailReadModel> {
   const scope = await getCurrentUserDataScope();
   scope.assertOwned(budget);
+  getRequiredBudgetCurrency(budget);
   const categories = await createBudgetDetailCategoryQuery(scope).fetch();
   const transactions = await createBudgetDetailTransactionQuery(
     scope,
@@ -90,10 +89,7 @@ export async function getBudgetDetailReadModel(
     categories,
     now
   ).fetch();
-  return buildBudgetDetailReadModel(
-    { budget, categories, transactions, fallbackCurrency },
-    now
-  );
+  return buildBudgetDetailReadModel({ budget, categories, transactions }, now);
 }
 
 export function createBudgetDetailCategoryQuery(
@@ -141,7 +137,7 @@ export function buildBudgetDetailReadModel(
   snapshot: BudgetDetailInputSnapshot,
   now: Date = new Date()
 ): BudgetDetailReadModel {
-  const { budget, categories, transactions, fallbackCurrency } = snapshot;
+  const { budget, categories, transactions } = snapshot;
   const bounds = getCurrentPeriodBounds(
     budget.period,
     budget.periodStart,
@@ -149,8 +145,11 @@ export function buildBudgetDetailReadModel(
     now
   );
   const pauseState = getBudgetPauseState(budget);
+  const currencyEligibleTransactions = transactions.filter((transaction) =>
+    hasMatchingBudgetCurrency(transaction.currency, budget.currency)
+  );
   const activeTransactions = filterExcludedTransactions(
-    transactions,
+    currencyEligibleTransactions,
     pauseState.pauseIntervals,
     pauseState.pausedAtMs
   );
@@ -167,7 +166,7 @@ export function buildBudgetDetailReadModel(
     categories.map((category) => [category.id, category] as const)
   );
   const lifecycle = getLifecycle(budget, now);
-  const currency = budget.currency ?? fallbackCurrency;
+  const currency = getRequiredBudgetCurrency(budget);
 
   return freezeReadModel({
     identity: createIdentity(budget, bounds, categoryMap, lifecycle),
@@ -203,10 +202,17 @@ export function buildBudgetDetailReadModel(
       categoryMap
     ),
     hasCompletedPauseExclusion: hasCompletedPauseExclusion(
-      transactions,
+      currencyEligibleTransactions,
       pauseState.pauseIntervals
     ),
   });
+}
+
+function getRequiredBudgetCurrency(budget: Budget): CurrencyType {
+  if (!budget.currency) {
+    throw new Error("Budget currency is required");
+  }
+  return budget.currency;
 }
 
 function getBudgetPauseState(budget: Budget): BudgetPauseState {

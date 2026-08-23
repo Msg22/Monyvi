@@ -99,7 +99,6 @@ describe("budget-detail-observation-service", () => {
     const observation = await observeBudgetDetailReadModels({
       budgetId: "budget-1",
       userId: "user-1",
-      fallbackCurrency: "KWD",
       getNow: () => now,
     });
     const next = jest.fn();
@@ -122,7 +121,7 @@ describe("budget-detail-observation-service", () => {
       now
     );
     expect(mockBuildReadModel).toHaveBeenCalledWith(
-      { budget, categories, transactions, fallbackCurrency: "KWD" },
+      { budget, categories, transactions },
       now
     );
     expect(next).toHaveBeenCalledWith({ budget, readModel });
@@ -157,7 +156,6 @@ describe("budget-detail-observation-service", () => {
     const observation = await observeBudgetDetailReadModels({
       budgetId: "budget-1",
       userId: "user-1",
-      fallbackCurrency: "EGP",
     });
     const next = jest.fn();
     observation.subscribe({ next });
@@ -180,7 +178,6 @@ describe("budget-detail-observation-service", () => {
     const observation = await observeBudgetDetailReadModels({
       budgetId: "budget-1",
       userId: "user-1",
-      fallbackCurrency: "EGP",
     });
     const next = jest.fn();
     observation.subscribe({ next });
@@ -200,7 +197,6 @@ describe("budget-detail-observation-service", () => {
     const observation = await observeBudgetDetailReadModels({
       budgetId: "budget-1",
       userId: "user-1",
-      fallbackCurrency: "EGP",
     });
     const next = jest.fn();
     const error = jest.fn();
@@ -223,7 +219,6 @@ describe("budget-detail-observation-service", () => {
       observeBudgetDetailReadModels({
         budgetId: "budget-1",
         userId: "user-1",
-        fallbackCurrency: "EGP",
       })
     ).rejects.toThrow("AUTH_SCOPE_CHANGED");
 
@@ -239,7 +234,6 @@ describe("budget-detail-observation-service", () => {
       observeBudgetDetailReadModels({
         budgetId: "budget-1",
         userId: "user-1",
-        fallbackCurrency: "EGP",
       })
     ).rejects.toThrow("AUTH_SCOPE_CHANGED");
 
@@ -256,7 +250,6 @@ describe("budget-detail-observation-service", () => {
     const observation = await observeBudgetDetailReadModels({
       budgetId: "budget-1",
       userId: "user-1",
-      fallbackCurrency: "EGP",
     });
     const observer = { next: jest.fn(), error: jest.fn() };
     observation.subscribe(observer);

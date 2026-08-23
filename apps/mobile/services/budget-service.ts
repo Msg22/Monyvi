@@ -25,6 +25,7 @@ import {
   buildPauseInterval,
   parsePauseIntervals,
   parsePausedAtMs,
+  hasMatchingBudgetCurrency,
 } from "@monyvi/logic";
 import {
   getCurrentUserDataScope,
@@ -40,7 +41,7 @@ export interface CreateBudgetInput {
   readonly type: BudgetType;
   readonly categoryId?: string;
   readonly amount: number;
-  readonly currency?: CurrencyType;
+  readonly currency: CurrencyType;
   readonly period: BudgetPeriod;
   readonly periodStart?: Date;
   readonly periodEnd?: Date;
@@ -50,7 +51,6 @@ export interface CreateBudgetInput {
 export interface UpdateBudgetInput {
   readonly name?: string;
   readonly amount?: number;
-  readonly currency?: CurrencyType;
   readonly period?: BudgetPeriod;
   readonly periodStart?: Date;
   readonly periodEnd?: Date;
@@ -182,6 +182,7 @@ export async function createBudget(input: CreateBudgetInput): Promise<Budget> {
 
     await validateBudgetUniqueness(input.type, input.period, {
       categoryId,
+      currency: input.currency,
       candidatePeriodEnd: input.periodEnd,
       scope,
     });
@@ -252,6 +253,7 @@ export async function updateBudget(
         input.period ?? budget.period,
         {
           categoryId,
+          currency: budget.currency,
           excludeBudgetId: budgetId,
           candidatePeriodEnd: input.periodEnd ?? budget.periodEnd,
           scope,
@@ -262,7 +264,6 @@ export async function updateBudget(
     await budget.update((b) => {
       if (input.name !== undefined) b.name = input.name;
       if (input.amount !== undefined) b.amount = input.amount;
-      if (input.currency !== undefined) b.currency = input.currency;
       if (input.period !== undefined) b.period = input.period;
       if (input.periodStart !== undefined) b.periodStart = input.periodStart;
       if (input.periodEnd !== undefined) b.periodEnd = input.periodEnd;
@@ -516,6 +517,8 @@ export async function getSpendingForBudget(budget: Budget): Promise<number> {
     transactions,
     pauseIntervals,
     pausedAtMs
+  ).filter((transaction) =>
+    hasMatchingBudgetCurrency(transaction.currency, budget.currency)
   );
 
   return filtered.reduce((sum, tx) => sum + tx.amount, 0);
@@ -588,10 +591,10 @@ async function getAccessibleCategoryHierarchyIds(
 // =============================================================================
 
 /**
- * Validate that no duplicate budget exists for the same type+period+category.
+ * Validate that no duplicate budget exists for the same type, period, and scope.
  *
  * Rules (from FR-014 + Q1):
- * - Max ONE current Global budget per period type (WEEKLY, MONTHLY, CUSTOM)
+ * - Max ONE current Global budget per currency and period type
  * - Max ONE current Category budget per category per period type
  * - Expired CUSTOM budgets are historical and do not occupy the current slot
  *
@@ -599,6 +602,7 @@ async function getAccessibleCategoryHierarchyIds(
  */
 interface ValidateBudgetUniquenessOptions {
   readonly categoryId?: string;
+  readonly currency?: CurrencyType;
   readonly excludeBudgetId?: string;
   readonly candidatePeriodEnd?: Date;
   readonly scope?: CurrentUserDataScope;
@@ -626,6 +630,13 @@ export async function validateBudgetUniqueness(
 
   if (type === "CATEGORY" && options.categoryId) {
     conditions.push(Q.where("category_id", options.categoryId));
+  }
+
+  if (type === "GLOBAL") {
+    if (!options.currency) {
+      throw new Error("Global budget uniqueness requires a currency");
+    }
+    conditions.push(Q.where("currency", options.currency));
   }
 
   if (options.excludeBudgetId) {

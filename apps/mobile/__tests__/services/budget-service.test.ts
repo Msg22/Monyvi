@@ -111,8 +111,27 @@ jest.mock("@monyvi/db", (): unknown => ({
     where: (...args: unknown[]): unknown => mockWhere(...args),
     and: (...args: unknown[]): unknown => mockAnd(...args),
     notEq: (value: unknown): unknown => ({ operator: "notEq", value }),
+    oneOf: (values: readonly unknown[]): unknown => ({
+      operator: "oneOf",
+      values,
+    }),
   },
 }));
+
+jest.mock("@nozbe/watermelondb", (): unknown => {
+  const actual = jest.requireActual<typeof import("@nozbe/watermelondb")>(
+    "@nozbe/watermelondb"
+  );
+  return {
+    ...actual,
+    Q: {
+      ...actual.Q,
+      where: (...args: unknown[]): unknown => mockWhere(...args),
+      and: (...args: unknown[]): unknown => mockAnd(...args),
+      notEq: (value: unknown): unknown => ({ operator: "notEq", value }),
+    },
+  };
+});
 
 jest.mock("@/services/user-data-access", (): unknown => ({
   getCurrentUserDataScope: (): Promise<unknown> => {
@@ -187,6 +206,7 @@ describe("budget-service", () => {
       type: "CATEGORY",
       categoryId: "category-input",
       amount: 1000,
+      currency: "EGP",
       period: "MONTHLY",
       alertThreshold: 80,
     });
@@ -216,6 +236,7 @@ describe("budget-service", () => {
         type: "CATEGORY",
         categoryId: "category-input",
         amount: 1000,
+        currency: "EGP",
         period: "MONTHLY",
         alertThreshold: 80,
       })
@@ -238,6 +259,7 @@ describe("budget-service", () => {
         type: "CATEGORY",
         categoryId: "category-input",
         amount: 1000,
+        currency: "EGP",
         period: "MONTHLY",
         alertThreshold: 80,
       })
@@ -258,7 +280,7 @@ describe("budget-service", () => {
     mockQueryOwned.mockReturnValueOnce(createQueryResult([expired], 1));
 
     await expect(
-      validateBudgetUniqueness("GLOBAL", "CUSTOM")
+      validateBudgetUniqueness("GLOBAL", "CUSTOM", { currency: "EGP" })
     ).resolves.toBeUndefined();
   });
 
@@ -290,9 +312,9 @@ describe("budget-service", () => {
     });
     mockQueryOwned.mockReturnValueOnce(createQueryResult([current], 1));
 
-    await expect(validateBudgetUniqueness("GLOBAL", "CUSTOM")).rejects.toThrow(
-      "A Global custom budget already exists"
-    );
+    await expect(
+      validateBudgetUniqueness("GLOBAL", "CUSTOM", { currency: "EGP" })
+    ).rejects.toThrow("A Global custom budget already exists");
   });
 
   it("creates expired custom history without competing with a current custom budget", async (): Promise<void> => {
@@ -309,6 +331,7 @@ describe("budget-service", () => {
         name: "Historical trip",
         type: "GLOBAL",
         amount: 1000,
+        currency: "EGP",
         period: "CUSTOM",
         periodStart: new Date("2026-08-01T00:00:00.000Z"),
         periodEnd: new Date("2026-08-13T00:00:00.000Z"),
@@ -345,9 +368,19 @@ describe("budget-service", () => {
   it("keeps non-custom uniqueness validation unchanged", async (): Promise<void> => {
     mockQueryOwned.mockReturnValueOnce(createQueryResult([], 1));
 
-    await expect(validateBudgetUniqueness("GLOBAL", "MONTHLY")).rejects.toThrow(
-      "A Global monthly budget already exists"
-    );
+    await expect(
+      validateBudgetUniqueness("GLOBAL", "MONTHLY", { currency: "EGP" })
+    ).rejects.toThrow("A Global monthly budget already exists");
+  });
+
+  it("scopes global-budget uniqueness to the selected currency", async (): Promise<void> => {
+    mockQueryOwned.mockReturnValueOnce(createQueryResult([], 0));
+
+    await expect(
+      validateBudgetUniqueness("GLOBAL", "MONTHLY", { currency: "USD" })
+    ).resolves.toBeUndefined();
+
+    expect(mockWhere).toHaveBeenCalledWith("currency", "USD");
   });
 
   it("allows editing an expired custom history when a current replacement exists", async (): Promise<void> => {
@@ -464,10 +497,12 @@ describe("budget-service", () => {
       periodStart: new Date("2026-08-01T00:00:00.000Z"),
       pauseIntervals: "[]",
       pausedAt: undefined,
+      currency: "EGP",
     };
     const historicalTransaction = {
       amount: 420,
       date: new Date("2026-08-05T00:00:00.000Z"),
+      currency: "EGP",
     };
     mockQueryAccessibleCategories.mockReturnValueOnce(createQueryResult([]));
     mockQueryOwned.mockReturnValueOnce(
@@ -480,6 +515,34 @@ describe("budget-service", () => {
 
     expect(mockAssertOwned).toHaveBeenCalledWith(budget);
     expect(mockQueryOwned).toHaveBeenCalledTimes(1);
+  });
+
+  it("excludes transactions whose currency differs from the budget", async (): Promise<void> => {
+    const budget = {
+      ...createLifecycleBudget({ period: "MONTHLY" }),
+      isGlobal: true,
+      periodStart: new Date("2026-08-01T00:00:00.000Z"),
+      pauseIntervals: "[]",
+      currency: "EGP",
+    };
+    mockQueryOwned.mockReturnValueOnce(
+      createQueryResult([
+        {
+          amount: 420,
+          currency: "EGP",
+          date: new Date("2026-08-05T00:00:00.000Z"),
+        },
+        {
+          amount: 20,
+          currency: "USD",
+          date: new Date("2026-08-06T00:00:00.000Z"),
+        },
+      ] as unknown as Transaction[])
+    );
+
+    await expect(
+      getSpendingForBudget(budget as unknown as Budget)
+    ).resolves.toBe(420);
   });
 
   it("discovers accessible descendants when the category root is deleted", async (): Promise<void> => {

@@ -58,6 +58,7 @@ describe("CurrencyPicker", () => {
     expect(
       selectedCodeRow.getByTestId("currency-selected-checkmark-EGP")
     ).toHaveTextContent(`checkmark-circle:${palette.nileGreen[500]}`);
+    expect(screen.getByTestId("currency-row-highlight-EGP")).toBeOnTheScreen();
     expect(screen.queryByTestId("currency-selected-checkmark-AED")).toBeNull();
   });
 });

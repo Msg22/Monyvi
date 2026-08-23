@@ -67,7 +67,7 @@ export async function buildBudgetMetrics(
   budgets: readonly Budget[]
 ): Promise<BudgetWithMetrics[]> {
   return Promise.all(
-    budgets.map(async (budget) => {
+    budgets.filter(hasSavedBudgetCurrency).map(async (budget) => {
       const bounds = getCurrentPeriodBounds(
         budget.period,
         budget.periodStart,
@@ -234,11 +234,10 @@ function createDashboardPresentation(
   lifecycle: BudgetDashboardLifecycle,
   displayName: string,
   categoryLabel: BudgetDashboardCategoryLabel,
-  preferredCurrency: CurrencyType,
   activeLocale: "en" | "ar",
   copy: BudgetDashboardPresentationCopy
 ): BudgetDashboardPresentation {
-  const currency = item.budget.currency ?? preferredCurrency;
+  const currency = getRequiredBudgetCurrency(item.budget);
   const spent = formatCurrency({ amount: item.metrics.spent, currency });
   const limit = formatCurrency({ amount: item.metrics.limit, currency });
   const spentOfLimitLabel = copy.formatSpentOfLimit(spent, limit);
@@ -296,7 +295,6 @@ function createDashboardItem(
   categoryMap: ReadonlyMap<string, BudgetDashboardCategorySource>,
   lifecycle: BudgetDashboardLifecycle,
   fallbackName: string,
-  preferredCurrency: CurrencyType,
   activeLocale: "en" | "ar",
   presentationCopy: BudgetDashboardPresentationCopy
 ): BudgetDashboardItem {
@@ -320,7 +318,7 @@ function createDashboardItem(
     id: budget.id,
     displayName,
     period: budget.period,
-    currency: budget.currency ?? null,
+    currency: getRequiredBudgetCurrency(budget),
     scope: budget.type,
     lifecycle,
     showsProgress: ["HEALTHY", "NEAR_LIMIT", "OVER_BUDGET"].includes(lifecycle),
@@ -341,7 +339,6 @@ function createDashboardItem(
       lifecycle,
       displayName,
       categoryLabel,
-      preferredCurrency,
       activeLocale,
       presentationCopy
     ),
@@ -375,7 +372,6 @@ export function buildBudgetDashboardReadModel({
   now,
   activeLocale,
   fallbackName,
-  preferredCurrency,
   presentationCopy,
 }: BuildBudgetDashboardReadModelInput): BudgetDashboardReadModel {
   const dashboardItems: BudgetDashboardItem[] = [];
@@ -390,7 +386,6 @@ export function buildBudgetDashboardReadModel({
         categoryMap,
         lifecycle,
         fallbackName,
-        preferredCurrency,
         activeLocale,
         presentationCopy
       )
@@ -407,4 +402,16 @@ export function buildBudgetDashboardReadModel({
     totalCount: budgets.length,
     matchingCount: dashboardItems.length,
   });
+}
+
+function hasSavedBudgetCurrency(budget: Budget): boolean {
+  return budget.currency !== null && budget.currency !== undefined;
+}
+
+function getRequiredBudgetCurrency(budget: Budget): CurrencyType {
+  const currency = budget.currency;
+  if (currency === null || currency === undefined) {
+    throw new Error("Budget currency is required");
+  }
+  return currency;
 }

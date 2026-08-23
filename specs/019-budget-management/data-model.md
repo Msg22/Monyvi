@@ -7,8 +7,9 @@
 ### Budget (existing table — `budgets`)
 
 The `budgets` table already exists in WatermelonDB and Supabase. No schema
-migration is needed for the table itself. Only the `currency` column needs to be
-made optional.
+migration is needed for the table itself. Its persisted `currency` field remains
+nullable to preserve pre-release legacy rows, while every newly created budget
+must store one supported currency.
 
 | Field             | Type         | Required | Notes                                        |
 | ----------------- | ------------ | -------- | -------------------------------------------- |
@@ -16,8 +17,8 @@ made optional.
 | `name`            | string       | ✅       | User-defined budget name                     |
 | `type`            | BudgetType   | ✅       | `"GLOBAL"` or `"CATEGORY"`                   |
 | `category_id`     | string       | ❌       | FK → categories. Required when type=CATEGORY |
-| `amount`          | number       | ✅       | Budget limit in preferred currency           |
-| `currency`        | CurrencyType | ❌       | Optional — defaults to user preferred        |
+| `amount`          | number       | ✅       | Budget limit in the budget's saved currency  |
+| `currency`        | CurrencyType | ✅ new   | Immutable supported currency for new budgets |
 | `period`          | BudgetPeriod | ✅       | `"WEEKLY"`, `"MONTHLY"`, `"CUSTOM"`          |
 | `period_start`    | Date         | ❌       | Required for CUSTOM period                   |
 | `period_end`      | Date         | ❌       | Required for CUSTOM period                   |
@@ -83,18 +84,12 @@ Budget ──has_many────▶ Transaction (computed: spending aggregation
 | `periodStart`     | For WEEKLY: most recent Sunday. For MONTHLY: 1st of month                     |
 | `periodEnd`       | For WEEKLY: next Saturday. For MONTHLY: last day of month                     |
 
-## Schema Migration Required
+## Currency Persistence
 
-### Migration: Make `currency` column optional
-
-The `currency` field currently has `isOptional: false` in the WatermelonDB
-schema. It needs to be made optional to support defaulting to the user's
-preferred currency.
-
-**Note**: This requires:
-
-1. A Supabase SQL migration to `ALTER COLUMN currency DROP NOT NULL`
-2. Regeneration of WatermelonDB schema via `npm run db:migrate`
+`currency` remains nullable in the persisted WatermelonDB and Supabase schema to
+support pre-release legacy rows. Creation defaults to the user preference but
+persists the selected supported currency; it is not changed during edit. No
+currency migration or backfill is required.
 
 ### Alert Deduplication Tracking
 

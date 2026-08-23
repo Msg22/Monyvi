@@ -5,6 +5,8 @@
  * visual progress status (green/amber/red color coding).
  */
 
+import type { CurrencyType } from "@monyvi/db";
+
 // =============================================================================
 // CONSTANTS
 // =============================================================================
@@ -27,6 +29,22 @@ export interface SpendingMetrics {
   readonly percentage: number;
   readonly dailyAverage: number;
   readonly status: ProgressStatus;
+}
+
+/**
+ * Determines whether a transaction may contribute to a budget.
+ *
+ * Budgets do not convert currencies: only an exact currency match counts.
+ */
+export function hasMatchingBudgetCurrency(
+  transactionCurrency: CurrencyType,
+  budgetCurrency: CurrencyType | null | undefined
+): boolean {
+  return (
+    budgetCurrency !== null &&
+    budgetCurrency !== undefined &&
+    transactionCurrency === budgetCurrency
+  );
 }
 
 // =============================================================================

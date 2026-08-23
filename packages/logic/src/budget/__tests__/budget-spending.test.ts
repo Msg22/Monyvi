@@ -11,6 +11,7 @@ import {
   calculateDailyAverage,
   getProgressStatus,
   computeSpendingMetrics,
+  hasMatchingBudgetCurrency,
 } from "../budget-spending";
 
 // =============================================================================
@@ -40,6 +41,13 @@ describe("calculateSpentPercentage", () => {
 
   it("handles fractional values", () => {
     expect(calculateSpentPercentage(33, 100)).toBe(33);
+  });
+});
+
+describe("hasMatchingBudgetCurrency", () => {
+  it("includes only transactions with the exact budget currency", () => {
+    expect(hasMatchingBudgetCurrency("EGP", "EGP")).toBe(true);
+    expect(hasMatchingBudgetCurrency("USD", "EGP")).toBe(false);
   });
 });
 
