@@ -96,7 +96,7 @@ export function BudgetDetailOverview({
           defaultValue: `Budget spent ${Math.round(metrics.percentage)} percent`,
           percentage: Math.round(metrics.percentage),
         })}
-        accessibilityValue={{ min: 0, max: 100, now: metrics.percentage }}
+        accessibilityValue={{ min: 0, max: 100, now: clampedPercentage }}
         className="mt-5"
       >
         <View className="relative h-6">
