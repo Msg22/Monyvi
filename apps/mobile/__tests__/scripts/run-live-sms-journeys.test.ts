@@ -46,8 +46,9 @@ interface RunLiveSmsJourneysModule {
   classifyNotificationObservation(
     notificationDump: string,
     patterns: readonly string[],
-    applicationId?: string
-  ): "matched" | "unrelated-delivery" | "not-delivered";
+    applicationId?: string,
+    observationError?: string
+  ): "matched" | "unrelated-delivery" | "not-delivered" | "observation-error";
 }
 
 const liveSmsJourneys = jest.requireActual(
@@ -343,6 +344,17 @@ describe("run-live-sms-journeys helpers", () => {
         ["Transaction created"]
       )
     ).toBe("not-delivered");
+  });
+
+  it("classifies notification command failures as observation errors", () => {
+    expect(
+      liveSmsJourneys.classifyNotificationObservation(
+        "",
+        ["Transaction created"],
+        undefined,
+        "adb dumpsys notification failed"
+      )
+    ).toBe("observation-error");
   });
 
   it("establishes a disabled live-SMS state before the denied-permission journey", () => {

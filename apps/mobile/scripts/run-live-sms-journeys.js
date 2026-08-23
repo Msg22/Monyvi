@@ -379,8 +379,13 @@ function getAppNotificationRecords(notificationDump, applicationId = appId) {
 function classifyNotificationObservation(
   notificationDump,
   patterns,
-  applicationId = appId
+  applicationId = appId,
+  observationError
 ) {
+  if (observationError) {
+    return "observation-error";
+  }
+
   const records = getAppNotificationRecords(notificationDump, applicationId);
   if (records.length === 0) {
     return "not-delivered";
@@ -410,7 +415,7 @@ function hasMatchingAppNotification(
 
 function readNotificationServiceState() {
   return adb(["shell", "dumpsys", "notification", "--noredact"], {
-    allowFailure: true,
+    allowFailure: false,
     capture: true,
   });
 }
@@ -504,9 +509,17 @@ function findExpandButtonForNotification(nodes, notificationMatch) {
 function waitForNotificationText(patterns, timeoutMs = 60000) {
   const startedAt = Date.now();
   let lastNotificationDump = "";
+  let notificationObservationError = "";
 
   while (Date.now() - startedAt < timeoutMs) {
-    lastNotificationDump = readNotificationServiceState();
+    try {
+      lastNotificationDump = readNotificationServiceState();
+    } catch (error) {
+      notificationObservationError =
+        error instanceof Error ? error.message : String(error);
+      break;
+    }
+
     if (hasMatchingAppNotification(lastNotificationDump, patterns)) {
       return;
     }
@@ -530,7 +543,9 @@ function waitForNotificationText(patterns, timeoutMs = 60000) {
   ).trim();
   const observation = classifyNotificationObservation(
     lastNotificationDump,
-    patterns
+    patterns,
+    appId,
+    notificationObservationError
   );
   const appNotificationCount =
     getAppNotificationRecords(lastNotificationDump).length;
@@ -539,7 +554,7 @@ function waitForNotificationText(patterns, timeoutMs = 60000) {
       patterns
     ).join(
       ", "
-    )}\nNotification observation: ${observation}\nMonyvi notification records observed: ${appNotificationCount}\nNative SMS/notification diagnostics:\n${
+    )}\nNotification observation: ${observation}\nNotification dump error: ${notificationObservationError || "(none)"}\nMonyvi notification records observed: ${appNotificationCount}\nNative SMS/notification diagnostics:\n${
       nativeDeliveryDiagnostics ||
       "(no receiver, headless-service, or notification logs)"
     }`
