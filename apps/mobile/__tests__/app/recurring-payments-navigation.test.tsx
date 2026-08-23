@@ -63,6 +63,16 @@ jest.mock("@/hooks/useRecurringPayments", () => ({
   }),
 }));
 
+jest.mock("@/components/dashboard/upcoming-payments", () => ({
+  PayNowModal: (): null => null,
+}));
+
+jest.mock("@/components/ui/Toast", () => ({
+  useToast: (): { readonly showToast: jest.Mock } => ({
+    showToast: jest.fn(),
+  }),
+}));
+
 jest.mock("@monyvi/logic", () => ({
   formatCurrency: (): string => "EGP 250",
 }));
