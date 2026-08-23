@@ -12,17 +12,17 @@ export function calculateDaysUntilDue(dueDate: Date): number {
   assertValidDate(dueDate, "due date");
   const now = new Date();
   const todayUtc = Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate()
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
   );
   const dueUtc = Date.UTC(
-    dueDate.getUTCFullYear(),
-    dueDate.getUTCMonth(),
-    dueDate.getUTCDate()
+    dueDate.getFullYear(),
+    dueDate.getMonth(),
+    dueDate.getDate()
   );
   const diffTime = dueUtc - todayUtc;
-  return Math.ceil(diffTime / MS_PER_DAY);
+  return diffTime / MS_PER_DAY;
 }
 
 export class RecurringPayment extends BaseRecurringPayment {

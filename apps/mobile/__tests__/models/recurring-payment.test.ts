@@ -10,8 +10,10 @@ describe("RecurringPayment date helpers", () => {
     jest.useRealTimers();
   });
 
-  it("calculates days until due from UTC calendar dates", () => {
-    expect(calculateDaysUntilDue(new Date("2026-05-11T00:30:00.000Z"))).toBe(1);
+  it("keeps a locally due-today payment out of overdue state", () => {
+    jest.setSystemTime(new Date(2026, 4, 11, 12, 0, 0));
+
+    expect(calculateDaysUntilDue(new Date(2026, 4, 11, 0, 0, 0))).toBe(0);
   });
 
   it("fails fast for invalid due dates", () => {

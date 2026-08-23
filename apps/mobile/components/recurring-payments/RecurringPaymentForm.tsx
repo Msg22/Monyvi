@@ -271,6 +271,10 @@ export const RecurringPaymentForm = React.forwardRef<
     ): void => {
       dirtyFieldsRef.current = new Set([...dirtyFieldsRef.current, field]);
       setForm((prev) => ({ ...prev, [field]: value }));
+      if (field === "startDate") {
+        setErrors((prev) => ({ ...prev, endDate: undefined }));
+        return;
+      }
       if (field in errors) {
         setErrors((prev) => ({ ...prev, [field]: undefined }));
       }

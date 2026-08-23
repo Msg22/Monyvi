@@ -275,7 +275,11 @@ export function PaymentRow({
   const isOverdueLabel = payment.isOverdue && !payment.isCompleted;
   const { fontScale, width } = useWindowDimensions();
   const isCompactLayout = shouldUseCompactLayout(width, fontScale);
-  const canPayNow = payment.isActive && payment.isOverdue && onPayNow !== undefined;
+  const canPayNow =
+    payment.isExpense &&
+    payment.isActive &&
+    payment.isOverdue &&
+    onPayNow !== undefined;
 
   return (
     <View

@@ -582,6 +582,28 @@ describe("RecurringPaymentsScreen dashboard", () => {
     );
   });
 
+  it("does not offer expense Pay Now flow for overdue income", () => {
+    const overdueIncome = createPayment({
+      id: "payment-overdue-income",
+      name: "Salary",
+      type: "INCOME",
+      isOverdue: true,
+      isActive: true,
+      isCompleted: false,
+    });
+    mockRecurringPaymentsState = {
+      ...mockRecurringPaymentsState,
+      allPayments: [overdueIncome],
+      filteredPayments: [overdueIncome],
+    };
+
+    render(<RecurringPaymentsScreen />);
+
+    expect(
+      screen.queryByTestId("recurring-payment-pay-now-payment-overdue-income")
+    ).toBeNull();
+  });
+
   it("keeps overdue Pay Now inline at an ordinary layout width", () => {
     const overduePayment = createPayment({
       id: "payment-inline-pay-now",
