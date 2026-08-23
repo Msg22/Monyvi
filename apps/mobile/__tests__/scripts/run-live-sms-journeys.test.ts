@@ -47,7 +47,7 @@ interface RunLiveSmsJourneysModule {
     notificationDump: string,
     patterns: readonly string[],
     applicationId?: string
-  ): "matched" | "delivered-content-mismatch" | "not-delivered";
+  ): "matched" | "unrelated-delivery" | "not-delivered";
 }
 
 const liveSmsJourneys = jest.requireActual(
@@ -336,7 +336,7 @@ describe("run-live-sms-journeys helpers", () => {
         "QNB",
         "75",
       ])
-    ).toBe("delivered-content-mismatch");
+    ).toBe("unrelated-delivery");
     expect(
       liveSmsJourneys.classifyNotificationObservation(
         "NotificationRecord(0x3: pkg=com.google.android.apps.messaging user=0)",

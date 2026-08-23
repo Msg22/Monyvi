@@ -154,8 +154,8 @@ function blockSmsPermissions() {
   }
 }
 
-function clearDeliveredNotifications() {
-  adb(["shell", "cmd", "notification", "cancel-all"], { allowFailure: true });
+function clearDeliveredNotifications(allowFailure = true) {
+  adb(["shell", "cmd", "notification", "cancel-all"], { allowFailure });
 }
 
 function resetNotificationPermission() {
@@ -391,7 +391,7 @@ function classifyNotificationObservation(
   );
   return records.some((record) => regexes.every((regex) => regex.test(record)))
     ? "matched"
-    : "delivered-content-mismatch";
+    : "unrelated-delivery";
 }
 
 function hasMatchingAppNotification(
@@ -532,18 +532,14 @@ function waitForNotificationText(patterns, timeoutMs = 60000) {
     lastNotificationDump,
     patterns
   );
-  const appRecords = getAppNotificationRecords(lastNotificationDump)
-    .map((record) => record.trim())
-    .join("\n---\n");
+  const appNotificationCount =
+    getAppNotificationRecords(lastNotificationDump).length;
   throw new Error(
     `Timed out waiting for notification text: ${normalizeNotificationPatterns(
       patterns
     ).join(
       ", "
-    )}\nNotification observation: ${observation}\nMonyvi notification records:\n${
-      appRecords ||
-      "(none observed; scheduling or Android delivery may have failed)"
-    }\nNative SMS/notification diagnostics:\n${
+    )}\nNotification observation: ${observation}\nMonyvi notification records observed: ${appNotificationCount}\nNative SMS/notification diagnostics:\n${
       nativeDeliveryDiagnostics ||
       "(no receiver, headless-service, or notification logs)"
     }`
@@ -1001,7 +997,7 @@ const journeys = {
     prepare: () => {
       grantSmsPermissions();
       grantNotificationPermission();
-      clearDeliveredNotifications();
+      clearDeliveredNotifications(false);
       collapseSystemUi();
     },
     after: () => {
