@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isOnOrBeforeDay } from "@/utils/dateHelpers";
+import { isOnOrBeforeDay } from "@monyvi/logic";
 
 // ---------------------------------------------------------------------------
 // Schema

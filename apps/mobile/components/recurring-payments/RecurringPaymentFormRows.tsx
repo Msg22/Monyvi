@@ -1,7 +1,8 @@
 import { palette } from "@/constants/colors";
+import { shouldUseCompactLayout } from "@/constants/ui";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 
 interface FormRowProps {
   readonly testID: string;
@@ -30,6 +31,59 @@ export function FormRow({
   iconContainerClassName,
   onPress,
 }: FormRowProps): React.JSX.Element {
+  const { fontScale, width } = useWindowDimensions();
+  const hasAction = actionLabel !== undefined && onAction !== undefined;
+  const isCompactLayout = shouldUseCompactLayout(width, fontScale);
+
+  if (hasAction) {
+    return (
+      <View testID={testID} className="px-4 py-3">
+        <View className={isCompactLayout ? "flex-col" : "flex-row items-center"}>
+          <TouchableOpacity
+            className={isCompactLayout ? "flex-row items-center" : "flex-1 flex-row items-center"}
+            onPress={onPress}
+          >
+            <View
+              testID={`${testID}-icon`}
+              className={`w-8 h-8 rounded-xl items-center justify-center me-3 ${iconContainerClassName}`}
+            >
+              <Ionicons name={icon} size={17} color={iconColor} />
+            </View>
+            <View className="flex-1">
+              <View className="flex-row items-center">
+                <Text className="text-[11px] font-semibold text-text-muted dark:text-text-muted-dark">
+                  {label}
+                </Text>
+                {labelSuffix ? (
+                  <Text className="ms-1 text-[11px] text-text-muted dark:text-text-muted-dark">
+                    {labelSuffix}
+                  </Text>
+                ) : null}
+              </View>
+              {description ? (
+                <Text className="mt-1 text-xs leading-4 text-text-secondary dark:text-text-secondary-dark">
+                  {description}
+                </Text>
+              ) : null}
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={palette.slate[400]} />
+          </TouchableOpacity>
+          <View
+            testID={`${testID}-value-action`}
+            className={isCompactLayout ? "self-end mt-2 items-end" : "ms-3 items-end"}
+          >
+            <Text className="text-sm font-bold text-text-primary dark:text-text-primary-dark">
+              {value}
+            </Text>
+            <TouchableOpacity testID={`${testID}-action`} className="mt-1" onPress={onAction}>
+              <Text className="text-sm font-semibold text-nileGreen-500">{actionLabel}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View testID={testID} className="px-4 py-3">
       <TouchableOpacity className="flex-row items-center" onPress={onPress}>

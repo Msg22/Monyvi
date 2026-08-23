@@ -12,6 +12,7 @@ export * from "./transactions";
 export * from "./types";
 export * from "./utils/currency";
 export * from "./utils/currency-data";
+export * from "./utils/date-boundary";
 export * from "./utils/ai-parser-utils";
 export * from "./utils/build-category-tree";
 

@@ -16,6 +16,7 @@ import {
 const mockAccountModal = jest.fn();
 const mockCategoryModal = jest.fn();
 const mockFrequencyModal = jest.fn();
+let mockUsesCompactLayout = false;
 const mockScrollTo = jest.fn<
   void,
   [{ readonly animated?: boolean; readonly y?: number }]
@@ -65,6 +66,10 @@ jest.mock("react-i18next", () => ({
 
 jest.mock("@/context/ThemeContext", () => ({
   useTheme: (): { readonly isDark: true } => ({ isDark: true }),
+}));
+
+jest.mock("@/constants/ui", () => ({
+  shouldUseCompactLayout: (): boolean => mockUsesCompactLayout,
 }));
 
 jest.mock("@/components/modals/AccountSelectorModal", () => ({
@@ -199,6 +204,7 @@ describe("RecurringPaymentForm", () => {
     jest.clearAllMocks();
     mockScrollTo.mockClear();
     keyboardShowListener = null;
+    mockUsesCompactLayout = false;
   });
 
   it("renders the approved shared add/edit sections", () => {
@@ -242,6 +248,9 @@ describe("RecurringPaymentForm", () => {
     expect(screen.getByText("end_date_hint")).toBeTruthy();
     expect(screen.getByText("optional")).toBeTruthy();
     expect(screen.getByTestId("recurring-payment-end-date-row-action")).toBeTruthy();
+    expect(
+      screen.getByTestId("recurring-payment-end-date-row-value-action")
+    ).toHaveProp("className", expect.stringContaining("items-end"));
 
     fireEvent.press(screen.getByTestId("recurring-payment-end-date-row-action"));
     fireEvent.press(screen.getByText("save"));
@@ -251,6 +260,20 @@ describe("RecurringPaymentForm", () => {
         expect.objectContaining({ endDate: null })
       );
     });
+  });
+
+  it("stacks selected End date action at compact layout widths", () => {
+    mockUsesCompactLayout = true;
+    renderForm({
+      initialValues: {
+        ...initialValues,
+        endDate: new Date("2026-08-01T00:00:00.000Z"),
+      },
+    });
+
+    expect(
+      screen.getByTestId("recurring-payment-end-date-row-value-action")
+    ).toHaveProp("className", expect.stringContaining("self-end mt-2"));
   });
 
   it("shows pause/resume and delete actions only in edit mode", () => {

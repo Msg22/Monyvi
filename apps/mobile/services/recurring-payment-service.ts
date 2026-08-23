@@ -1,4 +1,6 @@
-import { calculateNextDueDate, isOnOrBeforeDay } from "@/utils/dateHelpers";
+import { isOnOrBeforeDay } from "@monyvi/logic";
+
+import { calculateNextDueDate } from "@/utils/dateHelpers";
 import {
   Account,
   Category,
