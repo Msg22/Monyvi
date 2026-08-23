@@ -119,6 +119,23 @@ describe("sync transforms", () => {
     );
   });
 
+  it("keeps pulled date-only values on their local calendar day", () => {
+    const pulled = transformFromSupabase("recurring_payments", {
+      id: "recurring-payment-1",
+      end_date: "2026-08-14",
+    });
+    const pushed = transformToSupabase(
+      "recurring_payments",
+      pulled,
+      "current-user"
+    );
+
+    expect(pulled.end_date).toBe(new Date(2026, 7, 14).getTime());
+    expect(pushed).toEqual(
+      expect.objectContaining({ end_date: "2026-08-14" })
+    );
+  });
+
   it("omits unchanged AI processing consent from profile update payloads", () => {
     const transformed = transformToSupabase(
       "profiles",

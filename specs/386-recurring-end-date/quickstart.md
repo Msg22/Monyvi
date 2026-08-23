@@ -18,6 +18,7 @@
 6. Let final due date pass unpaid. Confirm payment remains active/overdue; use Pay Now and confirm one final payment completes series.
 7. Edit an end-date-completed payment: extend then clear End date. Confirm reactivation occurs only when existing next due payment is eligible.
 8. Repeat all visible copy checks in Arabic, including right-to-left layout and date-row helper text.
+9. View an active overdue bill in My Bills. Confirm Pay Now opens the existing payment confirmation while pressing the rest of the row still opens edit; confirm normal, paused, and completed rows do not show Pay Now.
 
 ## Manual-only note
 

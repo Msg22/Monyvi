@@ -135,11 +135,18 @@ export async function updateRecurringPayment(
     const payment = await scope.findOwned(recurringCollection, paymentId);
     await payment.update((record) => {
       const previousEndDate = record.endDate;
+      const nextEndDate = data.endDate ?? null;
       const endedAtPreviousBoundary =
         record.status === "COMPLETED" &&
         previousEndDate !== undefined &&
         previousEndDate !== null &&
         !isOnOrBeforeDay(record.nextDueDate, previousEndDate);
+      const didRelaxEndDate =
+        nextEndDate === null ||
+        (nextEndDate !== null &&
+          previousEndDate !== undefined &&
+          previousEndDate !== null &&
+          !isOnOrBeforeDay(nextEndDate, previousEndDate));
       record.name = data.name;
       record.amount = Math.abs(data.amount);
       record.currency = data.currency;
@@ -151,7 +158,7 @@ export async function updateRecurringPayment(
       const didFrequencyChange = record.frequency !== data.frequency;
       record.frequency = data.frequency;
       record.startDate = data.startDate;
-      record.endDate = data.endDate ?? undefined;
+      record.endDate = nextEndDate ?? undefined;
       if (didStartDateChange) {
         record.nextDueDate = data.startDate;
       } else if (didFrequencyChange) {
@@ -171,7 +178,11 @@ export async function updateRecurringPayment(
       if (hasNoEligibleFutureOccurrence) {
         record.status = "COMPLETED";
       }
-      if (endedAtPreviousBoundary && nextDueDateIsEligible) {
+      if (
+        endedAtPreviousBoundary &&
+        didRelaxEndDate &&
+        nextDueDateIsEligible
+      ) {
         record.status = "ACTIVE";
       }
     });

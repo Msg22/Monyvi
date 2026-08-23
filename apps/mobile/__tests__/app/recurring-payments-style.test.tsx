@@ -4,6 +4,9 @@ import React from "react";
 import { groupPaymentsByDueDate } from "@/services/recurring-payments-dashboard-read-model";
 
 const mockSetStatusFilter = jest.fn();
+const mockPayNowModal = jest.fn();
+const mockShowToast = jest.fn();
+let mockUsesCompactLayout = false;
 
 interface MockPageHeaderProps {
   readonly title: string;
@@ -148,6 +151,26 @@ jest.mock("@/components/ui/Skeleton", () => ({
   },
 }));
 
+jest.mock("@/components/dashboard/upcoming-payments", () => ({
+  PayNowModal: (props: {
+    readonly payment: RecurringPayment | null;
+    readonly visible: boolean;
+  }): null => {
+    mockPayNowModal(props);
+    return null;
+  },
+}));
+
+jest.mock("@/components/ui/Toast", () => ({
+  useToast: (): { readonly showToast: jest.Mock } => ({
+    showToast: mockShowToast,
+  }),
+}));
+
+jest.mock("@/constants/ui", () => ({
+  shouldUseCompactLayout: (): boolean => mockUsesCompactLayout,
+}));
+
 jest.mock("@/context/CategoriesContext", () => ({
   useCategoryLookup: (): ReadonlyMap<string, unknown> => new Map(),
 }));
@@ -211,6 +234,9 @@ describe("RecurringPaymentsScreen dashboard", () => {
     jest.requireMock<MockExpoRouter>("expo-router").router.push.mockClear();
     mockPageHeader.mockClear();
     mockSetStatusFilter.mockClear();
+    mockPayNowModal.mockClear();
+    mockShowToast.mockClear();
+    mockUsesCompactLayout = false;
     mockRecurringPaymentsState = {
       allPayments: [netflix, rent],
       filteredPayments: [netflix, rent],
@@ -518,7 +544,7 @@ describe("RecurringPaymentsScreen dashboard", () => {
     ).not.toHaveTextContent(/overdue/i);
   });
 
-  it("keeps an unpaid final due payment active and actionable", () => {
+  it("opens Pay Now for an unpaid final overdue payment", () => {
     const unpaidFinalPayment = createPayment({
       id: "payment-final-overdue",
       name: "Phone Installment",
@@ -541,5 +567,62 @@ describe("RecurringPaymentsScreen dashboard", () => {
     expect(
       screen.getByTestId("recurring-payment-row-payment-final-overdue")
     ).toHaveTextContent(/status_active/i);
+
+    fireEvent.press(
+      screen.getByTestId(
+        "recurring-payment-pay-now-payment-final-overdue"
+      )
+    );
+
+    expect(mockPayNowModal).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        payment: unpaidFinalPayment,
+        visible: true,
+      })
+    );
+  });
+
+  it("keeps overdue Pay Now inline at an ordinary layout width", () => {
+    const overduePayment = createPayment({
+      id: "payment-inline-pay-now",
+      isOverdue: true,
+    });
+    mockRecurringPaymentsState = {
+      ...mockRecurringPaymentsState,
+      allPayments: [overduePayment],
+      filteredPayments: [overduePayment],
+    };
+
+    render(<RecurringPaymentsScreen />);
+
+    expect(
+      screen.getByTestId(
+        "recurring-payment-pay-now-layout-payment-inline-pay-now"
+      )
+    ).toHaveProp("className", expect.stringContaining("ms-3"));
+  });
+
+  it("stacks overdue Pay Now at compact layout widths", () => {
+    mockUsesCompactLayout = true;
+    const overduePayment = createPayment({
+      id: "payment-stacked-pay-now",
+      isOverdue: true,
+    });
+    mockRecurringPaymentsState = {
+      ...mockRecurringPaymentsState,
+      allPayments: [overduePayment],
+      filteredPayments: [overduePayment],
+    };
+
+    render(<RecurringPaymentsScreen />);
+
+    expect(
+      screen.getByTestId(
+        "recurring-payment-pay-now-layout-payment-stacked-pay-now"
+      )
+    ).toHaveProp(
+      "className",
+      expect.stringContaining("mt-3 self-stretch")
+    );
   });
 });

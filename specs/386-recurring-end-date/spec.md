@@ -62,6 +62,7 @@ As a user paying the final occurrence of a bounded recurring payment, I see the 
 2. **Given** the final eligible occurrence is paid, **When** the payment is recorded, **Then** the linked financial record, balance effect, schedule advance, and completed state remain consistent as one outcome.
 3. **Given** a payment was completed because its end date passed, **When** the user extends or clears the end date such that its next due payment is valid again, **Then** the payment becomes active again.
 4. **Given** the final eligible occurrence is overdue after End date, **When** the user chooses Pay Now, **Then** one final payment is recorded and the series is completed.
+5. **Given** an active recurring payment is overdue, **When** the user views My Bills, **Then** its row offers Pay Now while the rest of the row remains available for editing.
 
 ### Edge Cases
 
@@ -87,7 +88,7 @@ As a user paying the final occurrence of a bounded recurring payment, I see the 
 - **FR-007**: An occurrence due exactly on End date MUST be eligible for payment.
 - **FR-008**: After the final eligible occurrence is successfully paid, the recurring payment MUST be completed so it is not presented as an active future payment.
 - **FR-008a**: A final eligible occurrence that remains unpaid after End date MUST remain active and overdue until it is successfully paid.
-- **FR-008b**: The user MUST be able to record an overdue final eligible occurrence after End date; its successful payment MUST complete the series.
+- **FR-008b**: The user MUST be able to record an overdue final eligible occurrence after End date through the Pay Now action on its My Bills row; its successful payment MUST complete the series.
 - **FR-009**: Completion of a final payment MUST not leave the payment's financial record, balance effect, schedule, and status in conflicting states if the payment fails.
 - **FR-010**: If a payment was completed only because of its End date, extending or clearing End date MUST reactivate it when its next due payment is valid again.
 - **FR-012**: All new user-visible labels, unset-state text, hints, and validation messages MUST be available in English and Arabic.

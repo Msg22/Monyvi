@@ -114,4 +114,20 @@ describe("recurring payment End date lifecycle", () => {
     expect(payment.status).toBe("ACTIVE");
     expect(payment.nextDueDate).toEqual(duePayment);
   });
+
+  it("does not reactivate a completed series when only Due payment changes", async () => {
+    const payment = createPayment({
+      status: "COMPLETED",
+      endDate: new Date("2026-07-01T00:00:00.000Z"),
+      nextDueDate: new Date("2026-08-01T00:00:00.000Z"),
+    });
+
+    await update(
+      payment,
+      new Date("2026-06-15T00:00:00.000Z"),
+      new Date("2026-07-01T00:00:00.000Z")
+    );
+
+    expect(payment.status).toBe("COMPLETED");
+  });
 });

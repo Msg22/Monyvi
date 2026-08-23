@@ -2,6 +2,7 @@ import { CategoryIcon } from "@/components/common/CategoryIcon";
 import { getFrequencyLabel } from "@/components/modals/FrequencyPickerModal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
+import { shouldUseCompactLayout } from "@/constants/ui";
 import { useCategoryLookup } from "@/context/CategoriesContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
@@ -25,6 +26,7 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
+  useWindowDimensions,
 } from "react-native";
 
 interface StatusTabsProps {
@@ -48,6 +50,7 @@ interface NextPaymentInsightProps {
 interface PaymentRowProps {
   readonly payment: RecurringPayment;
   readonly onPress: () => void;
+  readonly onPayNow?: () => void;
 }
 
 interface SortControlProps {
@@ -260,6 +263,7 @@ export function SortControl({
 export function PaymentRow({
   payment,
   onPress,
+  onPayNow,
 }: PaymentRowProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { t } = useTranslation("transactions");
@@ -269,12 +273,15 @@ export function PaymentRow({
   const typeLabel = payment.isIncome ? t("income") : t("expense");
   const dueLabel = getRecurringPaymentDueLabel(payment);
   const isOverdueLabel = payment.isOverdue && !payment.isCompleted;
+  const { fontScale, width } = useWindowDimensions();
+  const isCompactLayout = shouldUseCompactLayout(width, fontScale);
+  const canPayNow = payment.isActive && payment.isOverdue && onPayNow !== undefined;
 
   return (
-    <TouchableOpacity
-      testID={`recurring-payment-row-${payment.id}`}
-      onPress={onPress}
-      className="flex-row items-center p-3 rounded-xl border mb-3 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+    <View
+      className={`p-3 rounded-xl border mb-3 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 ${
+        canPayNow && !isCompactLayout ? "flex-row items-center" : ""
+      }`}
       // eslint-disable-next-line react-native/no-inline-styles
       style={{
         shadowColor: palette.slate[900],
@@ -284,12 +291,14 @@ export function PaymentRow({
         elevation: 1,
       }}
     >
-      <View
-        testID="recurring-payment-row"
-        className="flex-1 flex-row items-center"
+      <TouchableOpacity
+        testID={`recurring-payment-row-${payment.id}`}
+        onPress={onPress}
+        className="flex-1"
       >
-        <View
-          className={`w-12 h-12 rounded-2xl items-center justify-center me-3 ${
+        <View testID="recurring-payment-row" className="flex-row items-center">
+          <View
+            className={`w-12 h-12 rounded-2xl items-center justify-center me-3 ${
             payment.isIncome
               ? "bg-nileGreen-50 dark:bg-nileGreen-900"
               : "bg-slate-100 dark:bg-slate-700"
@@ -363,10 +372,35 @@ export function PaymentRow({
               {dueLabel}
             </Text>
           </View>
+          </View>
+          {!canPayNow ? (
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={palette.slate[400]}
+            />
+          ) : null}
         </View>
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={palette.slate[400]} />
-    </TouchableOpacity>
+      </TouchableOpacity>
+      {canPayNow ? (
+        <View
+          testID={`recurring-payment-pay-now-layout-${payment.id}`}
+          className={isCompactLayout ? "mt-3 self-stretch" : "ms-3"}
+        >
+          <TouchableOpacity
+            testID={`recurring-payment-pay-now-${payment.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={t("pay_now")}
+            onPress={onPayNow}
+            className="rounded-xl border border-nileGreen-500 items-center justify-center px-3 py-2"
+          >
+            <Text className="text-sm font-semibold text-nileGreen-600 dark:text-nileGreen-400">
+              {t("pay_now")}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+    </View>
   );
 }
 

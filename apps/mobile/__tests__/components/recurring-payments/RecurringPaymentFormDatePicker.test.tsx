@@ -170,11 +170,10 @@ describe("RecurringPaymentForm date picker", () => {
       />
     );
 
-    const endDateRow = screen.getByTestId("recurring-payment-end-date-row");
-    fireEvent.press(endDateRow);
+    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row"));
     expect(screen.getByTestId("recurring-payment-date-picker")).toBeTruthy();
 
-    fireEvent.press(endDateRow);
+    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row"));
 
     expect(
       screen.queryByTestId("recurring-payment-date-picker")

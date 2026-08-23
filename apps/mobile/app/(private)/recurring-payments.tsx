@@ -12,8 +12,10 @@ import {
   SortPaymentsModal,
   StatusTabs,
 } from "@/components/recurring-payments/RecurringPaymentsDashboard";
+import { PayNowModal } from "@/components/dashboard/upcoming-payments";
 import { EmptyStateCard } from "@/components/ui/EmptyStateCard";
 import { PageHeader } from "@/components/navigation/PageHeader";
+import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
 import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { useMarketRates } from "@/hooks/useMarketRates";
@@ -26,7 +28,12 @@ import {
   type SortOption,
 } from "@/services/recurring-payments-dashboard-read-model";
 import { Ionicons } from "@expo/vector-icons";
-import type { RecurringPayment, RecurringStatus } from "@monyvi/db";
+import type {
+  CurrencyType,
+  RecurringPayment,
+  RecurringStatus,
+} from "@monyvi/db";
+import { formatCurrency } from "@monyvi/logic";
 import { router } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -35,9 +42,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function RecurringPaymentsScreen(): React.JSX.Element {
   const { t } = useTranslation("transactions");
+  const { t: tCommon } = useTranslation("common");
+  const { showToast } = useToast();
   const insets = useSafeAreaInsets();
   const [selectedSort, setSelectedSort] = useState<SortOption>("next_due");
   const [isSortModalVisible, setIsSortModalVisible] = useState(false);
+  const [payNowPayment, setPayNowPayment] =
+    useState<RecurringPayment | null>(null);
   const {
     allPayments = [],
     filteredPayments,
@@ -109,6 +120,32 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
     router.push("/create-recurring-payment");
   }, []);
 
+  const handlePayNow = useCallback((payment: RecurringPayment): void => {
+    setPayNowPayment(payment);
+  }, []);
+
+  const handlePayNowClose = useCallback((): void => {
+    setPayNowPayment(null);
+  }, []);
+
+  const handlePaymentSuccess = useCallback(
+    (
+      amount: number,
+      paymentName: string,
+      paymentCurrency: CurrencyType
+    ): void => {
+      showToast({
+        type: "success",
+        title: tCommon("payment_recorded"),
+        message: `${paymentName} - ${formatCurrency({
+          amount,
+          currency: paymentCurrency,
+        })}`,
+      });
+    },
+    [showToast, tCommon]
+  );
+
   const handleSortSelect = useCallback((sort: SortOption): void => {
     setSelectedSort(sort);
     setIsSortModalVisible(false);
@@ -116,9 +153,13 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
 
   const renderPaymentItem = useCallback(
     ({ item }: { readonly item: RecurringPayment }) => (
-      <PaymentRow payment={item} onPress={() => handlePaymentPress(item)} />
+      <PaymentRow
+        payment={item}
+        onPress={() => handlePaymentPress(item)}
+        onPayNow={() => handlePayNow(item)}
+      />
     ),
-    [handlePaymentPress]
+    [handlePayNow, handlePaymentPress]
   );
 
   const renderSectionHeader = useCallback(
@@ -221,6 +262,12 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
         selectedSort={selectedSort}
         onSelect={handleSortSelect}
         onClose={() => setIsSortModalVisible(false)}
+      />
+      <PayNowModal
+        payment={payNowPayment}
+        visible={payNowPayment !== null}
+        onClose={handlePayNowClose}
+        onSuccess={handlePaymentSuccess}
       />
     </View>
   );
