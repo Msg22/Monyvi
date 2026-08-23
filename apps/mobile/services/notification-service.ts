@@ -565,8 +565,14 @@ async function showInfoOnlySmsTransactionNotification({
     return;
   }
 
+  const notificationId = `${identifierPrefix}-${parsed.smsFingerprint}`;
+  logger.info("smsNotification.scheduleStarted", {
+    notificationType: type,
+    redactedNotificationId: redactIdentifierForLog(notificationId),
+  });
+
   await getNotifications().scheduleNotificationAsync({
-    identifier: `${identifierPrefix}-${parsed.smsFingerprint}`,
+    identifier: notificationId,
     content: {
       title,
       body,
@@ -575,6 +581,11 @@ async function showInfoOnlySmsTransactionNotification({
       sound: "default",
     },
     trigger: Platform.OS === "android" ? { channelId: SMS_CHANNEL_ID } : null,
+  });
+
+  logger.info("smsNotification.scheduleSucceeded", {
+    notificationType: type,
+    redactedNotificationId: redactIdentifierForLog(notificationId),
   });
 }
 

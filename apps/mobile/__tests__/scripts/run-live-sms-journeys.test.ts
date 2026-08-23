@@ -43,6 +43,12 @@ interface RunLiveSmsJourneysModule {
     patterns: readonly string[],
     applicationId?: string
   ): boolean;
+  classifyNotificationObservation(
+    notificationDump: string,
+    patterns: readonly string[],
+    applicationId?: string,
+    observationError?: string
+  ): "matched" | "unrelated-delivery" | "not-delivered" | "observation-error";
 }
 
 const liveSmsJourneys = jest.requireActual(
@@ -309,6 +315,46 @@ describe("run-live-sms-journeys helpers", () => {
         patterns
       )
     ).toBe(true);
+  });
+
+  it("classifies missing notification text without hiding delivery evidence", () => {
+    const deliveredRecord = `
+      NotificationRecord(0x2: pkg=com.monyvi.app user=0)
+        android.title=String (Transaction created)
+        android.text=String (EGP 75 from NBE)
+    `;
+
+    expect(
+      liveSmsJourneys.classifyNotificationObservation(deliveredRecord, [
+        "Transaction created",
+        "NBE",
+        "75",
+      ])
+    ).toBe("matched");
+    expect(
+      liveSmsJourneys.classifyNotificationObservation(deliveredRecord, [
+        "Transaction created",
+        "QNB",
+        "75",
+      ])
+    ).toBe("unrelated-delivery");
+    expect(
+      liveSmsJourneys.classifyNotificationObservation(
+        "NotificationRecord(0x3: pkg=com.google.android.apps.messaging user=0)",
+        ["Transaction created"]
+      )
+    ).toBe("not-delivered");
+  });
+
+  it("classifies notification command failures as observation errors", () => {
+    expect(
+      liveSmsJourneys.classifyNotificationObservation(
+        "",
+        ["Transaction created"],
+        undefined,
+        "adb dumpsys notification failed"
+      )
+    ).toBe("observation-error");
   });
 
   it("establishes a disabled live-SMS state before the denied-permission journey", () => {

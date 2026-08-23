@@ -154,8 +154,8 @@ function blockSmsPermissions() {
   }
 }
 
-function clearDeliveredNotifications() {
-  adb(["shell", "cmd", "notification", "cancel-all"], { allowFailure: true });
+function clearDeliveredNotifications(allowFailure = true) {
+  adb(["shell", "cmd", "notification", "cancel-all"], { allowFailure });
 }
 
 function resetNotificationPermission() {
@@ -370,26 +370,52 @@ function normalizeNotificationPatterns(patterns) {
   return Array.isArray(patterns) ? patterns : [patterns];
 }
 
+function getAppNotificationRecords(notificationDump, applicationId = appId) {
+  return notificationDump
+    .split(/(?=\s*NotificationRecord\()/)
+    .filter((record) => record.includes(`pkg=${applicationId} `));
+}
+
+function classifyNotificationObservation(
+  notificationDump,
+  patterns,
+  applicationId = appId,
+  observationError
+) {
+  if (observationError) {
+    return "observation-error";
+  }
+
+  const records = getAppNotificationRecords(notificationDump, applicationId);
+  if (records.length === 0) {
+    return "not-delivered";
+  }
+
+  const regexes = normalizeNotificationPatterns(patterns).map(
+    (pattern) => new RegExp(pattern, "i")
+  );
+  return records.some((record) => regexes.every((regex) => regex.test(record)))
+    ? "matched"
+    : "unrelated-delivery";
+}
+
 function hasMatchingAppNotification(
   notificationDump,
   patterns,
   applicationId = appId
 ) {
-  const records = notificationDump
-    .split(/(?=\s*NotificationRecord\()/)
-    .filter((record) => record.includes(`pkg=${applicationId} `));
-  const regexes = normalizeNotificationPatterns(patterns).map(
-    (pattern) => new RegExp(pattern, "i")
-  );
-
-  return records.some((record) =>
-    regexes.every((regex) => regex.test(record))
+  return (
+    classifyNotificationObservation(
+      notificationDump,
+      patterns,
+      applicationId
+    ) === "matched"
   );
 }
 
 function readNotificationServiceState() {
   return adb(["shell", "dumpsys", "notification", "--noredact"], {
-    allowFailure: true,
+    allowFailure: false,
     capture: true,
   });
 }
@@ -482,9 +508,19 @@ function findExpandButtonForNotification(nodes, notificationMatch) {
 
 function waitForNotificationText(patterns, timeoutMs = 60000) {
   const startedAt = Date.now();
+  let lastNotificationDump = "";
+  let notificationObservationError = "";
 
   while (Date.now() - startedAt < timeoutMs) {
-    if (hasMatchingAppNotification(readNotificationServiceState(), patterns)) {
+    try {
+      lastNotificationDump = readNotificationServiceState();
+    } catch (error) {
+      notificationObservationError =
+        error instanceof Error ? error.message : String(error);
+      break;
+    }
+
+    if (hasMatchingAppNotification(lastNotificationDump, patterns)) {
       return;
     }
     wait(1000);
@@ -499,15 +535,28 @@ function waitForNotificationText(patterns, timeoutMs = 60000) {
       "-s",
       "SmsBroadcastReceiver:D",
       "SmsHeadlessTaskService:D",
+      "ExpoNotifications:D",
+      "ReactNativeJS:D",
       "*:S",
     ],
     { allowFailure: true, capture: true }
   ).trim();
+  const observation = classifyNotificationObservation(
+    lastNotificationDump,
+    patterns,
+    appId,
+    notificationObservationError
+  );
+  const appNotificationCount =
+    getAppNotificationRecords(lastNotificationDump).length;
   throw new Error(
     `Timed out waiting for notification text: ${normalizeNotificationPatterns(
       patterns
-    ).join(", ")}\nNative SMS delivery diagnostics:\n${
-      nativeDeliveryDiagnostics || "(no receiver or headless-service logs)"
+    ).join(
+      ", "
+    )}\nNotification observation: ${observation}\nNotification dump error: ${notificationObservationError || "(none)"}\nMonyvi notification records observed: ${appNotificationCount}\nNative SMS/notification diagnostics:\n${
+      nativeDeliveryDiagnostics ||
+      "(no receiver, headless-service, or notification logs)"
     }`
   );
 }
@@ -963,6 +1012,7 @@ const journeys = {
     prepare: () => {
       grantSmsPermissions();
       grantNotificationPermission();
+      clearDeliveredNotifications(false);
       collapseSystemUi();
     },
     after: () => {
@@ -1159,6 +1209,7 @@ module.exports = {
   getAuthBootstrapFlow,
   getMaestroFlowTimeoutMs,
   getMaestroTransportRetryAttempts,
+  classifyNotificationObservation,
   hasMatchingAppNotification,
   getActiveUserFilter,
   isRetryableMaestroTransportFailure,
