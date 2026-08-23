@@ -74,6 +74,7 @@ jest.mock("@/components/ui/Toast", () => ({
 }));
 
 jest.mock("@monyvi/logic", () => ({
+  calculateCalendarDaysUntil: (): number => 1,
   formatCurrency: (): string => "EGP 250",
 }));
 
