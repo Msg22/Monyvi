@@ -23,6 +23,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { clearBudgetDashboardFilterSession } from "@/hooks/budget-dashboard-filter-session";
 import { clearPersistedAuthSession, supabase } from "@/services/supabase";
 import { logger } from "@/utils/logger";
 
@@ -163,7 +164,10 @@ export function AuthProvider({
     const subscribeToAuthChanges = (): void => {
       const {
         data: { subscription },
-      } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      } = supabase.auth.onAuthStateChange((event, newSession) => {
+        if (event === "SIGNED_OUT") {
+          clearBudgetDashboardFilterSession();
+        }
         applySession(newSession, true);
         setIsLoading(false);
       });

@@ -47,6 +47,20 @@ describe("budget-dashboard-filter-session", () => {
     );
   });
 
+  it("restores defaults for the same user after the auth session is cleared", () => {
+    writeBudgetDashboardFilterSession("user-a", {
+      scope: "GLOBAL",
+      period: "CUSTOM",
+      status: "EXPIRED",
+    });
+
+    clearBudgetDashboardFilterSession();
+
+    expect(readBudgetDashboardFilterSession("user-a")).toBe(
+      DEFAULT_BUDGET_DASHBOARD_FILTERS
+    );
+  });
+
   it("explicitly resets all filters for the current user", () => {
     writeBudgetDashboardFilterSession("user-a", {
       scope: "CATEGORY",

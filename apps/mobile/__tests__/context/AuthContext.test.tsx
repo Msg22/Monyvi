@@ -3,6 +3,12 @@ import { Text } from "react-native";
 import { act, render, waitFor } from "@testing-library/react-native";
 import { AuthApiError } from "@supabase/supabase-js";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import {
+  DEFAULT_BUDGET_DASHBOARD_FILTERS,
+  clearBudgetDashboardFilterSession,
+  readBudgetDashboardFilterSession,
+  writeBudgetDashboardFilterSession,
+} from "@/hooks/budget-dashboard-filter-session";
 
 const mockGetSession = jest.fn();
 const mockOnAuthStateChange = jest.fn();
@@ -57,6 +63,7 @@ describe("AuthProvider", () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    clearBudgetDashboardFilterSession();
     mockClearPersistedAuthSession.mockResolvedValue(undefined);
     mockOnAuthStateChange.mockReturnValue({
       data: {
@@ -238,6 +245,57 @@ describe("AuthProvider", () => {
 
     await waitFor(() => {
       expect(screen.getByText("authenticated")).toBeTruthy();
+    });
+  });
+
+  it("clears budget dashboard filters when the auth listener signs out", async () => {
+    writeBudgetDashboardFilterSession("user-1", {
+      scope: "GLOBAL",
+      period: "CUSTOM",
+      status: "EXPIRED",
+    });
+    mockGetSession.mockResolvedValue({
+      data: {
+        session: {
+          user: {
+            id: "user-1",
+          },
+        },
+      },
+    });
+    let authCallback: AuthStateChangeCallback | null = null;
+    mockOnAuthStateChange.mockImplementationOnce(
+      (callback: AuthStateChangeCallback) => {
+        authCallback = callback;
+        return {
+          data: {
+            subscription: {
+              unsubscribe: mockUnsubscribe,
+            },
+          },
+        };
+      }
+    );
+
+    const screen = render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("authenticated")).toBeTruthy();
+    });
+
+    act(() => {
+      authCallback?.("SIGNED_OUT", null);
+    });
+
+    expect(readBudgetDashboardFilterSession("user-1")).toBe(
+      DEFAULT_BUDGET_DASHBOARD_FILTERS
+    );
+    await waitFor(() => {
+      expect(screen.getByText("anonymous")).toBeTruthy();
     });
   });
 });
