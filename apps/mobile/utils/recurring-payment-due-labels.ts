@@ -1,11 +1,10 @@
 import type { RecurringPayment } from "@monyvi/db";
-import { calculateCalendarDaysUntil } from "@monyvi/logic";
 import { formatDate, getDaysUntil, getDueText } from "./dateHelpers";
 
 export function getRecurringPaymentDueLabel(
   payment: RecurringPayment
 ): string {
-  if (payment.isCompleted && calculateCalendarDaysUntil(payment.nextDueDate) < 0) {
+  if (payment.isCompleted) {
     return formatRecurringPaymentCalendarDate(payment.nextDueDate);
   }
 
@@ -17,7 +16,7 @@ export function getRecurringPaymentDueGroupTitle(
 ): string {
   const daysUntilDue = getDaysUntil(payment.nextDueDate);
 
-  if (payment.isCompleted && calculateCalendarDaysUntil(payment.nextDueDate) < 0) {
+  if (payment.isCompleted) {
     return formatRecurringPaymentCalendarDate(payment.nextDueDate);
   }
 

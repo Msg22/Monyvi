@@ -752,6 +752,25 @@ describe("recurring-payment-service", () => {
 
       expect(mockPrepareTransactionCreateWithBalance).not.toHaveBeenCalled();
     });
+
+    it("rejects Pay Now when the persisted payment is paused", async () => {
+      const payment = createRecurringRecord({ status: "PAUSED" });
+      mockFindOwned.mockResolvedValue(payment);
+
+      await expect(
+        submitRecurringPayment({
+          payment: payment as never,
+          accountId: "account-1",
+          amount: 250,
+        })
+      ).rejects.toThrow(
+        RECURRING_PAYMENT_SERVICE_ERROR_CODES.PAYMENT_UNAVAILABLE
+      );
+
+      expect(mockPrepareTransactionCreateWithBalance).not.toHaveBeenCalled();
+      expect(mockBatch).not.toHaveBeenCalled();
+    });
+
     it("batches transaction creation, balance update, and persisted schedule advancement in one writer", async () => {
       const stalePayment = createRecurringRecord({
         currency: "USD",

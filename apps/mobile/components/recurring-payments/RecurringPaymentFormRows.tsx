@@ -66,19 +66,23 @@ export function FormRow({
                 </Text>
               ) : null}
             </View>
-            <Ionicons name="chevron-forward" size={18} color={palette.slate[400]} />
           </TouchableOpacity>
           <View
             testID={`${testID}-value-action`}
             className={isCompactLayout ? "self-end mt-2 items-end" : "ms-3 items-end"}
           >
-            <Text className="text-sm font-bold text-text-primary dark:text-text-primary-dark">
-              {value}
-            </Text>
+            <TouchableOpacity testID={`${testID}-value`} onPress={onPress}>
+              <Text className="text-sm font-bold text-text-primary dark:text-text-primary-dark">
+                {value}
+              </Text>
+            </TouchableOpacity>
             <TouchableOpacity testID={`${testID}-action`} className="mt-1" onPress={onAction}>
               <Text className="text-sm font-semibold text-nileGreen-500">{actionLabel}</Text>
             </TouchableOpacity>
           </View>
+          <TouchableOpacity testID={`${testID}-chevron`} className="ms-2" onPress={onPress}>
+            <Ionicons name="chevron-forward" size={18} color={palette.slate[400]} />
+          </TouchableOpacity>
         </View>
       </View>
     );

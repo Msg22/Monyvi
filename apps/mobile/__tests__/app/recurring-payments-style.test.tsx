@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import type { CurrencyType, RecurringPayment } from "@monyvi/db";
 import React from "react";
 import { groupPaymentsByDueDate } from "@/services/recurring-payments-dashboard-read-model";
@@ -552,6 +552,32 @@ describe("RecurringPaymentsScreen dashboard", () => {
     ).not.toHaveTextContent(/overdue/i);
   });
 
+  it("uses a calendar date instead of due text for early completed payments", () => {
+    const completedPayment = createPayment({
+      id: "payment-completed-early",
+      nextDueDate: new Date("2026-07-01T00:00:00.000Z"),
+      status: "COMPLETED",
+      isActive: false,
+      isCompleted: true,
+    });
+    mockRecurringPaymentsState = {
+      ...mockRecurringPaymentsState,
+      allPayments: [completedPayment],
+      filteredPayments: [completedPayment],
+      counts: { ACTIVE: 0, PAUSED: 0, COMPLETED: 1 },
+      statusFilter: "COMPLETED",
+    };
+
+    render(<RecurringPaymentsScreen />);
+
+    expect(
+      screen.getByTestId("recurring-payment-row-payment-completed-early")
+    ).toHaveTextContent(/Jul 1/);
+    expect(
+      screen.getByTestId("recurring-payment-row-payment-completed-early")
+    ).not.toHaveTextContent(/due_in_days/i);
+  });
+
   it("opens Pay Now for an unpaid final overdue payment", () => {
     const unpaidFinalPayment = createPayment({
       id: "payment-final-overdue",
@@ -610,6 +636,32 @@ describe("RecurringPaymentsScreen dashboard", () => {
     expect(
       screen.queryByTestId("recurring-payment-pay-now-payment-overdue-income")
     ).toBeNull();
+  });
+
+  it("refreshes Pay Now eligibility after local midnight", () => {
+    const paymentDueToday = createPayment({
+      id: "payment-due-today",
+      nextDueDate: new Date("2026-06-20T00:00:00.000Z"),
+    });
+    mockRecurringPaymentsState = {
+      ...mockRecurringPaymentsState,
+      allPayments: [paymentDueToday],
+      filteredPayments: [paymentDueToday],
+    };
+
+    render(<RecurringPaymentsScreen />);
+
+    expect(
+      screen.queryByTestId("recurring-payment-pay-now-payment-due-today")
+    ).toBeNull();
+
+    act(() => {
+      jest.advanceTimersByTime(24 * 60 * 60 * 1000);
+    });
+
+    expect(
+      screen.getByTestId("recurring-payment-pay-now-payment-due-today")
+    ).toBeTruthy();
   });
 
   it("keeps overdue Pay Now inline at an ordinary layout width", () => {

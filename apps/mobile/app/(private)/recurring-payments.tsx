@@ -35,9 +35,9 @@ import type {
 } from "@monyvi/db";
 import { calculateCalendarDaysUntil, formatCurrency } from "@monyvi/logic";
 import { router } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { SectionList, Text, TouchableOpacity, View } from "react-native";
+import { AppState, SectionList, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function RecurringPaymentsScreen(): React.JSX.Element {
@@ -49,6 +49,7 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
   const [isSortModalVisible, setIsSortModalVisible] = useState(false);
   const [payNowPayment, setPayNowPayment] =
     useState<RecurringPayment | null>(null);
+  const [todayRevision, setTodayRevision] = useState(0);
   const {
     allPayments = [],
     filteredPayments,
@@ -61,6 +62,32 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
   } = useRecurringPayments();
   const { preferredCurrency } = usePreferredCurrency();
   const { latestRates } = useMarketRates();
+
+  const refreshToday = useCallback((): void => {
+    setTodayRevision((revision) => revision + 1);
+  }, []);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleNextDayRefresh = (): void => {
+      const now = new Date();
+      const nextDay = new Date(now);
+      nextDay.setHours(24, 0, 0, 0);
+      timer = setTimeout(() => {
+        refreshToday();
+        scheduleNextDayRefresh();
+      }, Math.max(1, nextDay.getTime() - now.getTime()));
+    };
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") refreshToday();
+    });
+
+    scheduleNextDayRefresh();
+    return () => {
+      if (timer) clearTimeout(timer);
+      appStateSubscription.remove();
+    };
+  }, [refreshToday]);
 
   const sortOptions = useMemo(
     () => (latestRates ? { preferredCurrency, latestRates } : {}),
@@ -93,14 +120,14 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
         ),
         "next_due"
       )[0] ?? null,
-    [billPayments]
+    [billPayments, todayRevision]
   );
 
   const overdueCount = useMemo(
     () =>
       billPayments.filter((payment) => payment.isActive && isOverdue(payment))
         .length,
-    [billPayments]
+    [billPayments, todayRevision]
   );
 
   const statusLabelMap = useMemo<Record<RecurringStatus, string>>(
@@ -160,7 +187,7 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
         onPayNow={() => handlePayNow(item)}
       />
     ),
-    [handlePayNow, handlePaymentPress]
+    [handlePayNow, handlePaymentPress, todayRevision]
   );
 
   const renderSectionHeader = useCallback(

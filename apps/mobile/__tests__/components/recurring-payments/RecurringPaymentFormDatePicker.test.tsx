@@ -165,6 +165,28 @@ describe("RecurringPaymentForm date picker", () => {
     );
   });
 
+  it("reopens the picker when the selected End date value is pressed", () => {
+    render(
+      <RecurringPaymentForm
+        mode="edit"
+        initialValues={{
+          ...initialValues,
+          endDate: new Date("2026-08-01T00:00:00.000Z"),
+        }}
+        accounts={[account] as unknown as readonly Account[]}
+        expenseCategories={[category] as unknown as readonly Category[]}
+        incomeCategories={[]}
+        isSubmitting={false}
+        submitLabel="save"
+        onSubmit={jest.fn()}
+      />
+    );
+
+    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row-value"));
+
+    expect(screen.getByTestId("recurring-payment-date-picker")).toBeTruthy();
+  });
+
   it("closes a date picker when its row is pressed again", () => {
     render(
       <RecurringPaymentForm

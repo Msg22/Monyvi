@@ -284,7 +284,7 @@ export async function submitRecurringPayment(params: {
       isOnOrBeforeDay(persistedPayment.nextDueDate, persistedPayment.endDate);
     if (
       persistedPayment.deleted ||
-      persistedPayment.status === "COMPLETED" ||
+      persistedPayment.status !== "ACTIVE" ||
       !hasEligibleDuePayment
     ) {
       throw new Error(
