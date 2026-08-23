@@ -54,6 +54,7 @@ const mockQueryOwned = jest.fn<
 interface MockBudgetOptions {
   readonly type?: "GLOBAL" | "CATEGORY";
   readonly categoryId?: string;
+  readonly currency?: "EGP" | "USD" | null;
   readonly status?: "ACTIVE" | "PAUSED";
   readonly pauseIntervals?: ReadonlyArray<{
     readonly from: number;
@@ -232,7 +233,7 @@ function createBudget(options: MockBudgetOptions = {}): Budget {
     categoryId,
     amount: 1000,
     alertThreshold: 80,
-    currency: "EGP",
+    currency: options.currency === undefined ? "EGP" : options.currency,
     period: "CUSTOM",
     periodStart: new Date(2026, 4, 1, 0, 0, 0, 0),
     periodEnd: new Date(2026, 4, 31, 23, 59, 59, 999),
@@ -339,6 +340,15 @@ describe("budget-detail-read-model-service", () => {
     });
     mockGetSpendingForBudget.mockResolvedValue(0);
     mockGetCategoryAndSubcategoryIds.mockResolvedValue(["category-parent"]);
+  });
+
+  it("rejects a legacy budget without a saved currency instead of using a display fallback", async () => {
+    const budget = createBudget({ currency: null });
+
+    await expect(getBudgetDetailReadModel(budget)).rejects.toThrow(
+      "Budget currency is required"
+    );
+    expect(mockQueryOwned).not.toHaveBeenCalled();
   });
 
   afterEach(() => {

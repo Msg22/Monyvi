@@ -108,10 +108,8 @@ export function BudgetForm({
     [categoryMap]
   );
   const { showToast } = useToast();
-  const {
-    preferredCurrency,
-    isLoading: isPreferredCurrencyLoading,
-  } = usePreferredCurrency();
+  const { preferredCurrency, isLoading: isPreferredCurrencyLoading } =
+    usePreferredCurrency();
 
   // ── Form state ──
   const [form, setForm] = useState<FormState>(() => {
@@ -258,6 +256,7 @@ export function BudgetForm({
     if (!isEditMode && !renewalSource && isPreferredCurrencyLoading) return;
     if (!validate()) return;
 
+    const currency = form.currency;
     const amount = parsePositiveMoneyAmount(form.amount);
     if (amount === null) return;
 
@@ -286,6 +285,10 @@ export function BudgetForm({
           message: t("budget_updated_message"),
         });
       } else {
+        if (!currency) {
+          setErrors({ general: t("validation_currency_required") });
+          return;
+        }
         const input: CreateBudgetInput = {
           name: form.name.trim(),
           type: form.type,
@@ -294,7 +297,7 @@ export function BudgetForm({
               ? (form.categoryId ?? undefined)
               : undefined,
           amount,
-          currency: form.currency ?? preferredCurrency,
+          currency,
           period: form.period,
           alertThreshold: form.alertThreshold,
           ...(form.period === "CUSTOM" && {
@@ -577,7 +580,7 @@ export function BudgetForm({
               size={18}
               color={palette.nileGreen[500]}
             />
-            <Text className="flex-1 text-xs text-nileGreen-700 dark:text-nileGreen-200">
+            <Text className="flex-1 text-xs text-nileGreen-700 dark:text-nileGreen-400">
               {t("budget_currency_immutable_info")}
             </Text>
           </View>

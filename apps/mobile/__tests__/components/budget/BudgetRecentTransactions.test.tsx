@@ -31,7 +31,6 @@ describe("BudgetRecentTransactions", () => {
     render(
       <BudgetRecentTransactions
         transactions={[transaction]}
-        fallbackCurrency="EGP"
         onPressTransaction={onPressTransaction}
       />
     );
@@ -54,7 +53,6 @@ describe("BudgetRecentTransactions", () => {
     render(
       <BudgetRecentTransactions
         transactions={[]}
-        fallbackCurrency="EGP"
         onPressTransaction={jest.fn()}
       />
     );
@@ -65,7 +63,6 @@ describe("BudgetRecentTransactions", () => {
     render(
       <BudgetRecentTransactions
         transactions={[{ ...transaction, label: null }]}
-        fallbackCurrency="EGP"
         onPressTransaction={jest.fn()}
       />
     );
@@ -79,11 +76,13 @@ describe("BudgetRecentTransactions", () => {
 
   it("mirrors the decorative chevron in RTL", () => {
     const original = I18nManager.isRTL;
-    Object.defineProperty(I18nManager, "isRTL", { configurable: true, value: true });
+    Object.defineProperty(I18nManager, "isRTL", {
+      configurable: true,
+      value: true,
+    });
     render(
       <BudgetRecentTransactions
         transactions={[transaction]}
-        fallbackCurrency="EGP"
         onPressTransaction={jest.fn()}
       />
     );

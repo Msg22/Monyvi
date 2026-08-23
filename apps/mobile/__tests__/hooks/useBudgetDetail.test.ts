@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import { AppState } from "react-native";
-import type { Budget, CurrencyType } from "@monyvi/db";
+import type { Budget } from "@monyvi/db";
 import type { BudgetDetailReadModel } from "@/contracts/budget-detail-presentation";
 import type {
   BudgetDetailObservation,
@@ -145,12 +145,12 @@ describe("useBudgetDetail", () => {
     focusCallback = null;
     appStateListener = null;
     removeAppStateListener = jest.fn();
-    jest.spyOn(AppState, "addEventListener").mockImplementation(
-      (_event, listener): { remove: () => void } => {
+    jest
+      .spyOn(AppState, "addEventListener")
+      .mockImplementation((_event, listener): { remove: () => void } => {
         appStateListener = listener as (state: string) => void;
         return { remove: removeAppStateListener };
-      }
-    );
+      });
   });
 
   afterEach(() => {
@@ -164,7 +164,7 @@ describe("useBudgetDetail", () => {
       readModel: BudgetDetailReadModel;
     } | null>();
     mockObserveBudgetDetailReadModels.mockResolvedValue(source.observable);
-    const { result } = renderHook(() => useBudgetDetail("budget-1", "KWD"));
+    const { result } = renderHook(() => useBudgetDetail("budget-1"));
 
     expect(result.current.isInitialLoading).toBe(true);
     await waitFor(() =>
@@ -177,10 +177,10 @@ describe("useBudgetDetail", () => {
     expect(result.current.hasValidData).toBe(true);
     expect(result.current.isInitialLoading).toBe(false);
     expect(result.current.errorKey).toBeNull();
-    const observationOptions = mockObserveBudgetDetailReadModels.mock.calls[0]?.[0];
+    const observationOptions =
+      mockObserveBudgetDetailReadModels.mock.calls[0]?.[0];
     expect(observationOptions?.budgetId).toBe("budget-1");
     expect(observationOptions?.userId).toBe("user-1");
-    expect(observationOptions?.fallbackCurrency).toBe("KWD");
     expect(typeof observationOptions?.getNow).toBe("function");
   });
 
@@ -193,7 +193,7 @@ describe("useBudgetDetail", () => {
     mockObserveBudgetDetailReadModels
       .mockRejectedValueOnce(error)
       .mockResolvedValueOnce(retrySource.observable);
-    const { result } = renderHook(() => useBudgetDetail("budget-1", "EGP"));
+    const { result } = renderHook(() => useBudgetDetail("budget-1"));
 
     await waitFor(() =>
       expect(result.current.errorKey).toBe("budget_detail_load_failed")
@@ -221,7 +221,7 @@ describe("useBudgetDetail", () => {
       readModel: BudgetDetailReadModel;
     } | null>();
     mockObserveBudgetDetailReadModels.mockResolvedValue(source.observable);
-    const { result } = renderHook(() => useBudgetDetail("budget-1", "EGP"));
+    const { result } = renderHook(() => useBudgetDetail("budget-1"));
     await waitFor(() =>
       expect(mockObserveBudgetDetailReadModels).toHaveBeenCalledTimes(1)
     );
@@ -236,7 +236,8 @@ describe("useBudgetDetail", () => {
   });
 
   it("ignores a stale async generation without subscribing to it", async () => {
-    let resolveFirst: (value: BudgetDetailObservation) => void = () => undefined;
+    let resolveFirst: (value: BudgetDetailObservation) => void = () =>
+      undefined;
     const firstPromise = new Promise<BudgetDetailObservation>((resolve) => {
       resolveFirst = resolve;
     });
@@ -251,7 +252,7 @@ describe("useBudgetDetail", () => {
     mockObserveBudgetDetailReadModels
       .mockReturnValueOnce(firstPromise)
       .mockResolvedValueOnce(currentSource.observable);
-    const { result } = renderHook(() => useBudgetDetail("budget-1", "EGP"));
+    const { result } = renderHook(() => useBudgetDetail("budget-1"));
 
     act(() => result.current.retry());
     await waitFor(() =>
@@ -266,11 +267,15 @@ describe("useBudgetDetail", () => {
   });
 
   it("refreshes on later focus, foreground, and local-day rollover", async () => {
-    const sources = Array.from({ length: 4 }, () => createObservation<unknown>());
+    const sources = Array.from({ length: 4 }, () =>
+      createObservation<unknown>()
+    );
     for (const source of sources) {
-      mockObserveBudgetDetailReadModels.mockResolvedValueOnce(source.observable);
+      mockObserveBudgetDetailReadModels.mockResolvedValueOnce(
+        source.observable
+      );
     }
-    renderHook(() => useBudgetDetail("budget-1", "EGP"));
+    renderHook(() => useBudgetDetail("budget-1"));
     await waitFor(() =>
       expect(mockObserveBudgetDetailReadModels).toHaveBeenCalledTimes(1)
     );
@@ -299,7 +304,7 @@ describe("useBudgetDetail", () => {
       readModel: BudgetDetailReadModel;
     } | null>();
     mockObserveBudgetDetailReadModels.mockResolvedValue(source.observable);
-    const { result, rerender } = renderHook(() => useBudgetDetail("budget-1", "EGP"));
+    const { result, rerender } = renderHook(() => useBudgetDetail("budget-1"));
     await waitFor(() =>
       expect(mockObserveBudgetDetailReadModels).toHaveBeenCalledTimes(1)
     );
@@ -327,9 +332,7 @@ describe("useBudgetDetail", () => {
     mockObserveBudgetDetailReadModels
       .mockResolvedValueOnce(firstSource.observable)
       .mockResolvedValueOnce(secondSource.observable);
-    const { result, rerender } = renderHook(() =>
-      useBudgetDetail("budget-1", "EGP")
-    );
+    const { result, rerender } = renderHook(() => useBudgetDetail("budget-1"));
     await waitFor(() =>
       expect(firstSource.observable.subscribe).toHaveBeenCalledTimes(1)
     );
@@ -349,44 +352,10 @@ describe("useBudgetDetail", () => {
     );
   });
 
-  it("restarts the scoped observation when the preferred fallback currency changes", async () => {
-    const firstSource = createObservation<{
-      budget: Budget;
-      readModel: BudgetDetailReadModel;
-    } | null>();
-    const secondSource = createObservation<{
-      budget: Budget;
-      readModel: BudgetDetailReadModel;
-    } | null>();
-    mockObserveBudgetDetailReadModels
-      .mockResolvedValueOnce(firstSource.observable)
-      .mockResolvedValueOnce(secondSource.observable);
-    const { result, rerender } = renderHook(
-      ({ fallbackCurrency }: { readonly fallbackCurrency: CurrencyType }) =>
-        useBudgetDetail("budget-1", fallbackCurrency),
-      { initialProps: { fallbackCurrency: "EGP" as CurrencyType } }
-    );
-    await waitFor(() =>
-      expect(firstSource.observable.subscribe).toHaveBeenCalledTimes(1)
-    );
-    act(() => firstSource.emit({ budget, readModel: detailReadModel }));
-
-    rerender({ fallbackCurrency: "KWD" });
-
-    expect(firstSource.unsubscribe).toHaveBeenCalledTimes(1);
-    expect(result.current.readModel).toBeNull();
-    expect(result.current.isInitialLoading).toBe(true);
-    await waitFor(() =>
-      expect(mockObserveBudgetDetailReadModels).toHaveBeenLastCalledWith(
-        expect.objectContaining({ fallbackCurrency: "KWD" })
-      )
-    );
-  });
-
   it("cleans observation, app-state, and day timer on unmount", async () => {
     const source = createObservation<unknown>();
     mockObserveBudgetDetailReadModels.mockResolvedValue(source.observable);
-    const { unmount } = renderHook(() => useBudgetDetail("budget-1", "EGP"));
+    const { unmount } = renderHook(() => useBudgetDetail("budget-1"));
     await waitFor(() =>
       expect(mockObserveBudgetDetailReadModels).toHaveBeenCalledTimes(1)
     );
@@ -399,7 +368,7 @@ describe("useBudgetDetail", () => {
   });
 
   it("treats a missing route budget ID as not found without querying", async () => {
-    const { result } = renderHook(() => useBudgetDetail(undefined, "EGP"));
+    const { result } = renderHook(() => useBudgetDetail(undefined));
 
     await waitFor(() => expect(result.current.isInitialLoading).toBe(false));
 

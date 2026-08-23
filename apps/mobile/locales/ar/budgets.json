@@ -64,6 +64,7 @@
   "save_changes": "حفظ التغييرات",
   "validation_name_required": "اسم الميزانية مطلوب",
   "validation_amount_invalid": "أدخل مبلغاً موجباً حتى 999,999,999.99 وبحد أقصى منزلتين عشريتين",
+  "validation_currency_required": "اختر عملة قبل إنشاء هذه الميزانية",
   "validation_category_required": "اختر فئة",
   "category_load_error": "تعذر تحميل الفئات. حاول مرة أخرى.",
   "validation_date_order": "يجب أن يكون تاريخ الانتهاء بعد تاريخ البدء",

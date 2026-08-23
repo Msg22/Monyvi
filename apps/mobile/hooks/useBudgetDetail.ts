@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { useFocusEffect } from "expo-router";
-import type { Budget, CurrencyType } from "@monyvi/db";
+import type { Budget } from "@monyvi/db";
 
 import type {
   BudgetDetailErrorKey,
@@ -49,8 +49,7 @@ const INITIAL_STATE: BudgetDetailState = {
 };
 
 export function useBudgetDetail(
-  budgetId: string | undefined,
-  fallbackCurrency: CurrencyType
+  budgetId: string | undefined
 ): UseBudgetDetailResult {
   const [state, setState] = useState<BudgetDetailState>(INITIAL_STATE);
   const [refreshRevision, setRefreshRevision] = useState(0);
@@ -59,7 +58,6 @@ export function useBudgetDetail(
   const activeRequestRef = useRef<{
     readonly userId: string;
     readonly budgetId: string;
-    readonly fallbackCurrency: CurrencyType;
   } | null>(null);
   const { userId, isResolvingUser } = useCurrentUser();
 
@@ -87,10 +85,13 @@ export function useBudgetDetail(
       const now = new Date();
       const nextDay = new Date(now);
       nextDay.setHours(24, 0, 0, 0);
-      timer = setTimeout(() => {
-        requestRefresh();
-        scheduleNextDay();
-      }, Math.max(1, nextDay.getTime() - now.getTime()));
+      timer = setTimeout(
+        () => {
+          requestRefresh();
+          scheduleNextDay();
+        },
+        Math.max(1, nextDay.getTime() - now.getTime())
+      );
     };
     scheduleNextDay();
     return () => {
@@ -125,12 +126,10 @@ export function useBudgetDetail(
         const previousRequest = activeRequestRef.current;
         const isSameRequest =
           previousRequest?.userId === currentUserId &&
-          previousRequest.budgetId === budgetId &&
-          previousRequest.fallbackCurrency === fallbackCurrency;
+          previousRequest.budgetId === budgetId;
         activeRequestRef.current = {
           userId: currentUserId,
           budgetId,
-          fallbackCurrency,
         };
         if (isSameRequest) {
           setState((previous) => ({
@@ -149,7 +148,6 @@ export function useBudgetDetail(
             const observation = await observeBudgetDetailReadModels({
               budgetId,
               userId: currentUserId,
-              fallbackCurrency,
               getNow: () => new Date(),
             });
             if (!isActive || generation !== generationRef.current) return;
@@ -174,7 +172,9 @@ export function useBudgetDetail(
               },
               error: (error): void => {
                 if (!isActive || generation !== generationRef.current) return;
-                logger.error("budgetDetail.observe.failed", error, { budgetId });
+                logger.error("budgetDetail.observe.failed", error, {
+                  budgetId,
+                });
                 setState((previous) => ({
                   ...previous,
                   isInitialLoading: false,
@@ -209,7 +209,7 @@ export function useBudgetDetail(
       generationRef.current += 1;
       cleanup?.();
     };
-  }, [budgetId, fallbackCurrency, isResolvingUser, refreshRevision, userId]);
+  }, [budgetId, isResolvingUser, refreshRevision, userId]);
 
   const readModel = state.readModel;
   return {

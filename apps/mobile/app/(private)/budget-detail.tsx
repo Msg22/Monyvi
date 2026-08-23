@@ -21,7 +21,6 @@ import {
   type BudgetDetailAction,
   useBudgetDetailActions,
 } from "@/hooks/useBudgetDetailActions";
-import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 
 const DETAIL_BOTTOM_GAP = 24;
 
@@ -82,11 +81,10 @@ function toLifecycleAction(
 export default function BudgetDetailScreen(): React.JSX.Element {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const insets = useSafeAreaInsets();
-  const { preferredCurrency } = usePreferredCurrency();
   const { showToast } = useToast();
   const { t } = useTranslation("budgets");
   const { t: tCommon } = useTranslation("common");
-  const detail = useBudgetDetail(id, preferredCurrency);
+  const detail = useBudgetDetail(id);
   const actions = useBudgetDetailActions();
   const [confirmationRequest, setConfirmationRequest] =
     useState<ConfirmationRequest | null>(null);
@@ -251,7 +249,7 @@ export default function BudgetDetailScreen(): React.JSX.Element {
   }
 
   const readModel = detail.readModel;
-  const effectiveCurrency = readModel.currency ?? preferredCurrency;
+  const effectiveCurrency = readModel.currency;
   const modalCopy = confirmationRequest
     ? CONFIRMATION_COPY[confirmationRequest.action]
     : null;
@@ -335,7 +333,6 @@ export default function BudgetDetailScreen(): React.JSX.Element {
 
         <BudgetRecentTransactions
           transactions={readModel.recentTransactions}
-          fallbackCurrency={effectiveCurrency}
           onPressTransaction={handlePressTransaction}
         />
 

@@ -60,6 +60,7 @@
   "save_changes": "Save Changes",
   "validation_name_required": "Budget name is required",
   "validation_amount_invalid": "Enter a positive amount up to 999,999,999.99 with no more than 2 decimal places",
+  "validation_currency_required": "Choose a currency before creating this budget",
   "validation_category_required": "Select a category",
   "category_load_error": "We couldn't load your categories. Try again.",
   "validation_date_order": "End date must be after start date",
