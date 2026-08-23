@@ -83,6 +83,11 @@ describe("BudgetDetailOverview", () => {
     expect(screen.getByTestId("budget-detail-progress-fill")).toHaveStyle({
       width: "100%",
     });
+
+    expect(screen.getByTestId("budget-detail-progress")).toHaveProp(
+      "accessibilityValue",
+      expect.objectContaining({ min: 0, max: 100, now: 100 })
+    );
     expect(screen.getByText("Over budget")).toBeOnTheScreen();
   });
 
