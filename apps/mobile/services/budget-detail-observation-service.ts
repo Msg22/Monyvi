@@ -56,6 +56,13 @@ const TRANSACTION_DISPLAY_COLUMNS = [
   "type",
 ] as const;
 
+function isMissingBudgetRecordError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /^Record budgets#.+ not found$/.test(error.message)
+  );
+}
+
 export interface BudgetDetailObservation {
   subscribe(observer: Observer<BudgetDetailObservedValue | null>): Subscription;
 }
@@ -174,7 +181,14 @@ export async function observeBudgetDetailReadModels(
               error: fail,
             });
         },
-        error: fail,
+        error: (error: unknown): void => {
+          if (isMissingBudgetRecordError(error)) {
+            clearDependencies();
+            observer.next(null);
+            return;
+          }
+          fail(error);
+        },
       });
 
       return {

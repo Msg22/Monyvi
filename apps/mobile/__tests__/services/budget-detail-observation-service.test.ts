@@ -194,6 +194,25 @@ describe("budget-detail-observation-service", () => {
     expect(mockCreateTransactionQuery).not.toHaveBeenCalled();
   });
 
+  it("treats a missing budget observation record as not-found", async () => {
+    const budgetSource = createObservable<Budget | null>();
+    mockObserveOwnedById.mockReturnValue(budgetSource.observable);
+    const observation = await observeBudgetDetailReadModels({
+      budgetId: "budget-1",
+      userId: "user-1",
+      fallbackCurrency: "EGP",
+    });
+    const next = jest.fn();
+    const error = jest.fn();
+    observation.subscribe({ next, error });
+
+    budgetSource.fail(new Error("Record budgets#budget-1 not found"));
+
+    expect(next).toHaveBeenCalledWith(null);
+    expect(error).not.toHaveBeenCalled();
+    expect(mockCreateCategoryQuery).not.toHaveBeenCalled();
+  });
+
   it("rejects a stale authenticated-user scope before subscribing", async () => {
     mockGetCurrentUserDataScope.mockResolvedValue({ userId: "user-2" });
     mockAssertExpectedCurrentUser.mockRejectedValue(
