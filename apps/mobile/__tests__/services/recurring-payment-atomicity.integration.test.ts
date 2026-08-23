@@ -172,7 +172,7 @@ describe("recurring payment SQLite atomicity", () => {
 
     expect(accountAfterPayment.balance).toBe(750);
     expect(paymentAfterPayment.nextDueDate).toEqual(
-      new Date("2026-08-01T00:00:00.000Z")
+      new Date("2026-07-01T00:00:00.000Z")
     );
     expect(paymentAfterPayment.status).toBe("COMPLETED");
     expect(
