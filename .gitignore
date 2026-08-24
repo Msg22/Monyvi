@@ -84,6 +84,8 @@ temp/
 .agents/skills/*
 !.agents/skills/source-command-code-review/
 !.agents/skills/source-command-code-review/**
+!.agents/skills/team-led-delivery/
+!.agents/skills/team-led-delivery/**
 !.agents/skills/gpt-taste/
 !.agents/skills/gpt-taste/**
 

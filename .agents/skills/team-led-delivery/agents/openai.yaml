@@ -1,0 +1,7 @@
+interface:
+  display_name: "Team-Led Delivery"
+  short_description: "Coordinate specialist agents for large Monyvi work"
+  default_prompt: "Use $team-led-delivery to form and lead a specialist team for this large Monyvi task."
+
+policy:
+  allow_implicit_invocation: true
