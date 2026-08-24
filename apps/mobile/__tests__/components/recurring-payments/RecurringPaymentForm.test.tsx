@@ -272,7 +272,7 @@ describe("RecurringPaymentForm", () => {
     });
 
     expect(
-      screen.getByTestId("recurring-payment-end-date-row-value-action")
+      screen.getByTestId("recurring-payment-end-date-row-controls")
     ).toHaveProp("className", expect.stringContaining("self-end mt-2"));
   });
 

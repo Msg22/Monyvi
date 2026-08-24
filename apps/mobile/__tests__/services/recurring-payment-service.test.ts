@@ -386,6 +386,32 @@ describe("recurring-payment-service", () => {
     expect(payment.status).toBe("ACTIVE");
   });
 
+  it("keeps the final paid occurrence when editing a completed bounded series", async () => {
+    const finalPaidDate = new Date("2026-07-01T00:00:00.000Z");
+    const payment = createRecurringRecord({
+      status: "COMPLETED",
+      endDate: finalPaidDate,
+      nextDueDate: finalPaidDate,
+    });
+    mockFindOwned.mockImplementation((_collection: MockCollection, id: string): Promise<unknown> => id === "account-1" ? Promise.resolve({ id, userId: "user-1" }) : Promise.resolve(payment));
+
+    await updateRecurringPayment("payment-1", {
+      name: "Netflix",
+      amount: 250,
+      currency: "EGP",
+      type: "EXPENSE",
+      accountId: "account-1",
+      categoryId: "category-1",
+      frequency: "WEEKLY",
+      startDate: new Date("2026-06-15T00:00:00.000Z"),
+      endDate: finalPaidDate,
+      action: "NOTIFY",
+    });
+
+    expect(payment.status).toBe("COMPLETED");
+    expect(payment.nextDueDate).toEqual(finalPaidDate);
+  });
+
   it("rejects a deleted category reference before creating a recurring payment", async () => {
     mockFindAccessibleCategory.mockResolvedValue({
       id: "category-1",

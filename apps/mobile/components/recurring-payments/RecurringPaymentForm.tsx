@@ -321,7 +321,11 @@ export const RecurringPaymentForm = React.forwardRef<
   );
 
   const handleDateChange = useCallback(
-    (_event: DateTimePickerEvent, selectedDate?: Date): void => {
+    (event: DateTimePickerEvent, selectedDate?: Date): void => {
+      if (event.type === "dismissed") {
+        setDatePickerField(null);
+        return;
+      }
       setDatePickerField(Platform.OS === "ios" ? "startDate" : null);
       if (selectedDate) {
         updateField("startDate", selectedDate);
@@ -331,7 +335,11 @@ export const RecurringPaymentForm = React.forwardRef<
   );
 
   const handleEndDateChange = useCallback(
-    (_event: DateTimePickerEvent, selectedDate?: Date): void => {
+    (event: DateTimePickerEvent, selectedDate?: Date): void => {
+      if (event.type === "dismissed") {
+        setDatePickerField(null);
+        return;
+      }
       setDatePickerField(Platform.OS === "ios" ? "endDate" : null);
       if (selectedDate) updateField("endDate", selectedDate);
     },

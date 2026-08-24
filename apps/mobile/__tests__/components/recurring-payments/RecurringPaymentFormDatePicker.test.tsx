@@ -187,6 +187,35 @@ describe("RecurringPaymentForm date picker", () => {
     expect(screen.getByTestId("recurring-payment-date-picker")).toBeTruthy();
   });
 
+  it("keeps an unset End date unchanged when the picker is dismissed", () => {
+    render(
+      <RecurringPaymentForm
+        mode="create"
+        initialValues={initialValues}
+        accounts={[account] as unknown as readonly Account[]}
+        expenseCategories={[category] as unknown as readonly Category[]}
+        incomeCategories={[]}
+        isSubmitting={false}
+        submitLabel="save"
+        onSubmit={jest.fn()}
+      />
+    );
+
+    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row"));
+    const dismissedEvent: DateTimePickerEvent = {
+      type: "dismissed",
+      nativeEvent: { timestamp: 0, utcOffset: 0 },
+    };
+    act(() => {
+      latestDateTimePickerProps?.onChange(
+        dismissedEvent,
+        new Date("2026-08-24T00:00:00.000Z")
+      );
+    });
+
+    expect(screen.getByText("end_date_not_set")).toBeTruthy();
+  });
+
   it("closes a date picker when its row is pressed again", () => {
     render(
       <RecurringPaymentForm

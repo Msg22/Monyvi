@@ -160,10 +160,14 @@ export async function updateRecurringPayment(
       const didStartDateChange =
         record.startDate.getTime() !== data.startDate.getTime();
       const didFrequencyChange = record.frequency !== data.frequency;
+      const shouldRetainFinalPaidOccurrence =
+        wasCompletedAtPreviousBoundary && !didRelaxEndDate;
       record.frequency = data.frequency;
       record.startDate = data.startDate;
       record.endDate = nextEndDate ?? undefined;
-      if (didStartDateChange) {
+      if (shouldRetainFinalPaidOccurrence) {
+        // Preserve the final paid date until its End date is relaxed.
+      } else if (didStartDateChange) {
         record.nextDueDate = data.startDate;
       } else if (wasCompletedAtPreviousBoundary && didRelaxEndDate) {
         record.nextDueDate = calculateNextDueDate(
