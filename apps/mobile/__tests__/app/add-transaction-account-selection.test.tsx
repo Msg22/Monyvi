@@ -248,6 +248,7 @@ jest.mock("@/components/budget/BudgetAlertModal", () => ({
 
 jest.mock("@/services/recurring-payment-service", () => ({
   createRecurringPayment: jest.fn(),
+  deleteRecurringPayment: jest.fn(),
   RECURRING_PAYMENT_SERVICE_ERROR_CODES: {
     ACCOUNT_UNAVAILABLE: "RECURRING_PAYMENT_ACCOUNT_UNAVAILABLE",
     CATEGORY_UNAVAILABLE: "RECURRING_PAYMENT_CATEGORY_UNAVAILABLE",
@@ -266,12 +267,21 @@ import AddTransaction from "@/app/(private)/add-transaction";
 
 interface RecurringPaymentServiceMocks {
   readonly createRecurringPayment: jest.Mock;
+  readonly deleteRecurringPayment: jest.Mock;
 }
 
 function recurringPaymentServiceMocks(): RecurringPaymentServiceMocks {
   return jest.requireMock<RecurringPaymentServiceMocks>(
     "@/services/recurring-payment-service"
   );
+}
+
+function transactionServiceMocks(): {
+  readonly createTransaction: jest.Mock;
+} {
+  return jest.requireMock("@/services/transaction-service") as {
+    readonly createTransaction: jest.Mock;
+  };
 }
 
 function account(id: string, name: string, isDefault: boolean): MockAccount {
@@ -295,6 +305,8 @@ describe("AddTransaction account selection", () => {
     mockPush.mockClear();
     mockShowToast.mockClear();
     recurringPaymentServiceMocks().createRecurringPayment.mockReset();
+    recurringPaymentServiceMocks().deleteRecurringPayment.mockReset();
+    transactionServiceMocks().createTransaction.mockReset();
   });
 
   it("selects a default account that appears after an initial no-default emission", async () => {
@@ -354,5 +366,28 @@ describe("AddTransaction account selection", () => {
       );
     });
     expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  it("removes a created recurring payment when its first transaction fails", async () => {
+    mockAccounts = [account("cash-1", "Cash", true)];
+    recurringPaymentServiceMocks().createRecurringPayment.mockResolvedValueOnce({
+      id: "recurring-1",
+    });
+    transactionServiceMocks().createTransaction.mockRejectedValueOnce(
+      new Error("transaction write failed")
+    );
+    render(<AddTransaction />);
+
+    await waitFor(() => expect(screen.getByText("Cash")).toBeTruthy());
+    fireEvent.press(screen.getByTestId("key-1"));
+    fireEvent.press(screen.getByText("add_more_details"));
+    fireEvent.press(screen.getByTestId("enable-recurring"));
+    fireEvent.press(screen.getByTestId("key-done"));
+
+    await waitFor(() => {
+      expect(
+        recurringPaymentServiceMocks().deleteRecurringPayment
+      ).toHaveBeenCalledWith("recurring-1");
+    });
   });
 });

@@ -97,8 +97,8 @@ As a user paying the final occurrence of a bounded recurring payment, I see the 
 - **FR-008b**: The user MUST be able to record an overdue final eligible occurrence after End date through the Pay Now action on its My Bills row; its successful payment MUST complete the series.
 - **FR-009**: Completion of a final payment MUST not leave the payment's financial record, balance effect, final due payment, and status in conflicting states if the payment fails.
 - **FR-010**: Editing a completed payment, including extending or clearing End date, MUST NOT reactivate it.
-- **FR-010a**: The My Bills completed-payment card MUST offer an explicit Reactivate action that presents a confirmation before changing status.
-- **FR-010b**: The completed-payment edit form MUST offer a save-time "Reactivate after saving" checkbox and MUST NOT show a confirmation sheet for that path.
+- **FR-010a**: The My Bills completed-payment card MUST NOT offer a Reactivate action; users update the schedule through the edit form instead.
+- **FR-010b**: The completed-payment edit form MUST offer the sole save-time "Reactivate after saving" checkbox and MUST NOT show a confirmation sheet for that path. When it is unavailable, its disabled appearance and guidance MUST make that state clear.
 - **FR-010c**: Reactivation MUST be blocked when the calculated next due payment is later than End date, with friendly localized guidance to extend or clear End date.
 - **FR-010d**: The form MUST reject a Due payment later than End date and MUST show a friendly localized error. It MUST allow a valid one-occurrence schedule and explain that no further payment will be due when its following recurrence is later than End date.
 - **FR-012**: All new user-visible labels, unset-state text, hints, and validation messages MUST be available in English and Arabic.

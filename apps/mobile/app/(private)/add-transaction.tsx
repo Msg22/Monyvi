@@ -22,11 +22,13 @@ import { useCategoryChildren } from "@/hooks/useCategoryChildren";
 import { useMarketRates } from "@/hooks/useMarketRates";
 import {
   createRecurringPayment,
+  deleteRecurringPayment,
   RECURRING_PAYMENT_SERVICE_ERROR_CODES,
 } from "@/services/recurring-payment-service";
 import { createTransaction } from "@/services/transaction-service";
 import { createTransfer } from "@/services/transfer-service";
 import { resolveInitialTransactionAccountSelection } from "@/utils/account-selection";
+import { logger } from "@/utils/logger";
 import { useBudgetAlert } from "@/hooks/useBudgetAlert";
 import { BudgetAlertModal } from "@/components/budget/BudgetAlertModal";
 import {
@@ -420,22 +422,40 @@ export default function AddTransaction(): React.ReactNode {
       if (type === "TRANSFER") {
         await validateAndCreateTransfer(finalAmount);
       } else {
+        let createdRecurringPaymentId: string | undefined;
         let linkedRecurringId: string | undefined;
 
         if (isRecurring && recurringName && selectedAccount) {
-          linkedRecurringId = await createRecurring(
+          createdRecurringPaymentId = await createRecurring(
             finalAmount,
             type,
             selectedAccount.currency
           );
+          linkedRecurringId = createdRecurringPaymentId;
         }
 
-        const tx = await validateAndCreateTransaction({
-          amount: finalAmount,
-          note,
-          type,
-          linkedRecurringId,
-        });
+        let tx: Transaction | undefined;
+        try {
+          tx = await validateAndCreateTransaction({
+            amount: finalAmount,
+            note,
+            type,
+            linkedRecurringId,
+          });
+        } catch (error: unknown) {
+          if (createdRecurringPaymentId) {
+            try {
+              await deleteRecurringPayment(createdRecurringPaymentId);
+            } catch (cleanupError: unknown) {
+              logger.error(
+                "Failed to remove recurring payment after transaction failure",
+                cleanupError,
+                { recurringPaymentId: createdRecurringPaymentId }
+              );
+            }
+          }
+          throw error;
+        }
 
         // F-02: Show success feedback immediately before non-critical alert check
         showToast({

@@ -52,7 +52,6 @@ interface PaymentRowProps {
   readonly onPress: () => void;
   readonly isPayNowAvailable: boolean;
   readonly onPayNow?: () => void;
-  readonly onReactivate?: () => void;
 }
 
 interface SortControlProps {
@@ -267,7 +266,6 @@ export function PaymentRow({
   onPress,
   isPayNowAvailable,
   onPayNow,
-  onReactivate,
 }: PaymentRowProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { t } = useTranslation("transactions");
@@ -281,10 +279,7 @@ export function PaymentRow({
   const { fontScale, width } = useWindowDimensions();
   const isCompactLayout = shouldUseCompactLayout(width, fontScale);
   const canPayNow = isPayNowAvailable && onPayNow !== undefined;
-  const canReactivate = payment.isCompleted && onReactivate !== undefined;
-  const hasInlineAction = canPayNow || canReactivate;
-  const actionLabel = canPayNow ? t("pay_now") : t("reactivate_payment");
-  const onInlineAction = canPayNow ? onPayNow : onReactivate;
+  const hasInlineAction = canPayNow;
 
   return (
     <View
@@ -344,7 +339,11 @@ export function PaymentRow({
             {payment.name}
           </Text>
           <View className="flex-row items-center mt-1">
-            <Text className="text-xs text-text-muted dark:text-text-muted-dark">
+            <Text
+              testID={`recurring-payment-frequency-label-${payment.id}`}
+              className="text-xs text-text-muted dark:text-text-muted-dark"
+              numberOfLines={1}
+            >
               {getFrequencyLabel(payment.frequency, t)} {typeLabel}
             </Text>
           </View>
@@ -396,18 +395,18 @@ export function PaymentRow({
       </TouchableOpacity>
       {hasInlineAction ? (
         <View
-          testID={`recurring-payment-${canPayNow ? "pay-now" : "reactivate"}-layout-${payment.id}`}
+          testID={`recurring-payment-pay-now-layout-${payment.id}`}
           className={isCompactLayout ? "mt-3 self-stretch" : "ms-3"}
         >
           <TouchableOpacity
-            testID={`recurring-payment-${canPayNow ? "pay-now" : "reactivate"}-${payment.id}`}
+            testID={`recurring-payment-pay-now-${payment.id}`}
             accessibilityRole="button"
-            accessibilityLabel={actionLabel}
-            onPress={onInlineAction}
+            accessibilityLabel={t("pay_now")}
+            onPress={onPayNow}
             className="rounded-xl border border-nileGreen-500 items-center justify-center px-3 py-2"
           >
             <Text className="text-sm font-semibold text-nileGreen-600 dark:text-nileGreen-400">
-              {actionLabel}
+              {t("pay_now")}
             </Text>
           </TouchableOpacity>
         </View>

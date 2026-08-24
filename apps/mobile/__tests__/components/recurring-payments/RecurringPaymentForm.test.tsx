@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Existing form integration fixtures are consolidated pending a dedicated test-structure refactor. */
 import {
   act,
   fireEvent,
@@ -47,7 +48,26 @@ jest.spyOn(ScrollView.prototype, "scrollTo").mockImplementation((options) => {
 
 jest.mock("@react-native-community/datetimepicker", () => ({
   __esModule: true,
-  default: (): null => null,
+  default: ({
+    onChange,
+  }: {
+    readonly onChange: (event: { readonly type: "set" }, date: Date) => void;
+  }): React.JSX.Element => {
+    const ReactNative =
+      jest.requireActual<typeof import("react-native")>("react-native");
+
+    return (
+      <ReactNative.Pressable
+        testID="set-recurring-payment-date-july-15"
+        onPress={() =>
+          onChange(
+            { type: "set" },
+            new Date("2026-07-15T00:00:00.000Z")
+          )
+        }
+      />
+    );
+  },
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
@@ -414,6 +434,33 @@ describe("RecurringPaymentForm", () => {
       expect.objectContaining({ disabled: true })
     );
     expect(screen.getByText("reactivate_payment_unavailable")).toBeTruthy();
+    expect(
+      screen.getByTestId("recurring-payment-reactivate-after-saving")
+    ).toHaveStyle({ opacity: 0.5 });
+  });
+
+  it("enables save-time reactivation when edited Due payment is eligible", () => {
+    renderForm({
+      mode: "edit",
+      status: "COMPLETED",
+      dueDate: new Date("2026-07-01T00:00:00.000Z"),
+      initialValues: {
+        ...initialValues,
+        endDate: new Date("2026-07-01T00:00:00.000Z"),
+      },
+    });
+
+    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row"));
+    fireEvent.press(screen.getByTestId("set-recurring-payment-date-july-15"));
+    fireEvent.press(screen.getByTestId("recurring-payment-start-date-row"));
+    fireEvent.press(screen.getByTestId("set-recurring-payment-date-july-15"));
+
+    expect(
+      screen.getByTestId("recurring-payment-reactivate-after-saving")
+    ).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: false })
+    );
   });
 
   it("explains when a valid bounded schedule has no further eligible recurrence", () => {

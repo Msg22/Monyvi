@@ -13,7 +13,6 @@ import {
   StatusTabs,
 } from "@/components/recurring-payments/RecurringPaymentsDashboard";
 import { PayNowModal } from "@/components/dashboard/upcoming-payments";
-import { ConfirmationModal } from "@/components/modals/ConfirmationModal";
 import { EmptyStateCard } from "@/components/ui/EmptyStateCard";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { useToast } from "@/components/ui/Toast";
@@ -22,10 +21,6 @@ import { ANDROID_SAFE_LIST_PROPS } from "@/constants/virtualized-list-policy";
 import { useMarketRates } from "@/hooks/useMarketRates";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useRecurringPayments } from "@/hooks/useRecurringPayments";
-import {
-  reactivateRecurringPayment,
-  RECURRING_PAYMENT_SERVICE_ERROR_CODES,
-} from "@/services/recurring-payment-service";
 import {
   groupPaymentsByDueDate,
   sortPayments,
@@ -41,10 +36,7 @@ import type {
 import {
   calculateCalendarDaysUntil,
   formatCurrency,
-  getRecurringPaymentReactivationDueDate,
-  isOnOrBeforeDay,
 } from "@monyvi/logic";
-import { formatDate } from "@/utils/dateHelpers";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -59,8 +51,6 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
   const [selectedSort, setSelectedSort] = useState<SortOption>("next_due");
   const [isSortModalVisible, setIsSortModalVisible] = useState(false);
   const [payNowPayment, setPayNowPayment] =
-    useState<RecurringPayment | null>(null);
-  const [reactivatePayment, setReactivatePayment] =
     useState<RecurringPayment | null>(null);
   const [todayRevision, setTodayRevision] = useState(0);
   const {
@@ -168,57 +158,6 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
     setPayNowPayment(null);
   }, []);
 
-  const handleReactivate = useCallback(
-    (payment: RecurringPayment): void => {
-      const nextDueDate = getRecurringPaymentReactivationDueDate(payment);
-      const isEligible =
-        payment.endDate === undefined ||
-        payment.endDate === null ||
-        isOnOrBeforeDay(nextDueDate, payment.endDate);
-      if (!isEligible) {
-        showToast({
-          type: "error",
-          title: tCommon("error"),
-          message: t("reactivate_payment_unavailable"),
-        });
-        return;
-      }
-
-      setReactivatePayment(payment);
-    },
-    [showToast, t, tCommon]
-  );
-
-  const handleReactivateClose = useCallback((): void => {
-    setReactivatePayment(null);
-  }, []);
-
-  const handleReactivateConfirm = useCallback(async (): Promise<void> => {
-    if (!reactivatePayment) return;
-
-    try {
-      await reactivateRecurringPayment(reactivatePayment.id);
-      showToast({
-        type: "success",
-        title: t("reactivate_payment"),
-        message: t("recurring_payment_resumed_message"),
-      });
-      setReactivatePayment(null);
-    } catch (error: unknown) {
-      const isUnavailable =
-        error instanceof Error &&
-        error.message ===
-          RECURRING_PAYMENT_SERVICE_ERROR_CODES.REACTIVATION_UNAVAILABLE;
-      showToast({
-        type: "error",
-        title: tCommon("error"),
-        message: isUnavailable
-          ? t("reactivate_payment_unavailable")
-          : tCommon("error_generic"),
-      });
-    }
-  }, [reactivatePayment, showToast, t, tCommon]);
-
   const handlePaymentSuccess = useCallback(
     (
       amount: number,
@@ -249,10 +188,9 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
         onPress={() => handlePaymentPress(item)}
         isPayNowAvailable={isPayNowAvailable(item)}
         onPayNow={() => handlePayNow(item)}
-        onReactivate={item.isCompleted ? () => handleReactivate(item) : undefined}
       />
     ),
-    [handlePayNow, handlePaymentPress, handleReactivate, todayRevision]
+    [handlePayNow, handlePaymentPress, todayRevision]
   );
 
   const renderSectionHeader = useCallback(
@@ -361,28 +299,6 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
         visible={payNowPayment !== null}
         onClose={handlePayNowClose}
         onSuccess={handlePaymentSuccess}
-      />
-      <ConfirmationModal
-        visible={reactivatePayment !== null}
-        title={t("reactivate_payment_title", {
-          name: reactivatePayment?.name ?? "",
-        })}
-        message={
-          reactivatePayment
-            ? `${t("reactivate_payment_next_due", {
-                date: formatDate(
-                  getRecurringPaymentReactivationDueDate(reactivatePayment),
-                  "MMM d, yyyy"
-                ),
-              })}\n\n${t("reactivate_payment_message")}`
-            : ""
-        }
-        confirmLabel={t("reactivate_payment")}
-        cancelLabel={tCommon("cancel")}
-        variant="success"
-        icon="play-circle-outline"
-        onConfirm={() => void handleReactivateConfirm()}
-        onCancel={handleReactivateClose}
       />
     </View>
   );

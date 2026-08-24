@@ -23,7 +23,6 @@ Existing user-owned scheduled payment record.
 | Active, bounded | End date passes with final occurrence unpaid | Final occurrence has not been paid | Active, overdue |
 | Active, overdue final | Pay Now | Final occurrence succeeds | Completed, bounded |
 | Completed, bounded | Edit any field | Any | Completed; schedule may change but status does not |
-| Completed, bounded | Reactivate from My Bills | User confirms and next due is eligible | Active; bounded if End date remains, ongoing if cleared |
 | Completed, bounded | Save with Reactivate after saving | Next due is eligible | Active; bounded if End date remains, ongoing if cleared |
 
 ## Invariants

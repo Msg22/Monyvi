@@ -617,7 +617,7 @@ describe("RecurringPaymentsScreen dashboard", () => {
     ).not.toHaveTextContent(/Jun 15/);
   });
 
-  it("requires dashboard confirmation before reactivating a completed payment", async () => {
+  it("keeps completed cards focused on editing and keeps the frequency label on one line", () => {
     const completedPayment = createPayment({
       id: "payment-reactivate",
       status: "COMPLETED",
@@ -625,7 +625,6 @@ describe("RecurringPaymentsScreen dashboard", () => {
       isCompleted: true,
       endDate: new Date("2026-08-15T00:00:00.000Z"),
     });
-    mockReactivateRecurringPayment.mockResolvedValue(undefined);
     mockRecurringPaymentsState = {
       ...mockRecurringPaymentsState,
       allPayments: [completedPayment],
@@ -636,49 +635,12 @@ describe("RecurringPaymentsScreen dashboard", () => {
 
     render(<RecurringPaymentsScreen />);
 
-    fireEvent.press(
-      screen.getByTestId("recurring-payment-reactivate-payment-reactivate")
-    );
-    expect(screen.getByTestId("reactivate-confirmation-modal")).toBeTruthy();
-
-    await act(async () => {
-      fireEvent.press(screen.getByTestId("reactivate-confirmation-confirm"));
-    });
-
-    expect(mockReactivateRecurringPayment).toHaveBeenCalledWith(
-      "payment-reactivate"
-    );
-  });
-
-  it("explains when End date prevents dashboard reactivation", () => {
-    const completedPayment = createPayment({
-      id: "payment-reactivate-blocked",
-      status: "COMPLETED",
-      isActive: false,
-      isCompleted: true,
-      endDate: new Date("2026-07-01T00:00:00.000Z"),
-      nextDueDate: new Date("2026-07-01T00:00:00.000Z"),
-    });
-    mockRecurringPaymentsState = {
-      ...mockRecurringPaymentsState,
-      allPayments: [completedPayment],
-      filteredPayments: [completedPayment],
-      counts: { ACTIVE: 0, PAUSED: 0, COMPLETED: 1 },
-      statusFilter: "COMPLETED",
-    };
-
-    render(<RecurringPaymentsScreen />);
-
-    fireEvent.press(
-      screen.getByTestId(
-        "recurring-payment-reactivate-payment-reactivate-blocked"
-      )
-    );
-
-    expect(screen.queryByTestId("reactivate-confirmation-modal")).toBeNull();
-    expect(mockShowToast).toHaveBeenLastCalledWith(
-      expect.objectContaining({ message: "reactivate_payment_unavailable" })
-    );
+    expect(
+      screen.queryByTestId("recurring-payment-reactivate-payment-reactivate")
+    ).toBeNull();
+    expect(
+      screen.getByTestId("recurring-payment-frequency-label-payment-reactivate")
+    ).toHaveProp("numberOfLines", 1);
   });
 
   it("does not show a next due date for completed payments", () => {

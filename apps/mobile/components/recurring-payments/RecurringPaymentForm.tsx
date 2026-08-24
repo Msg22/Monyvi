@@ -28,9 +28,7 @@ import {
   parseAmountInput,
 } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker, {
-  type DateTimePickerEvent,
-} from "@react-native-community/datetimepicker";
+import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import React, {
   useCallback,
   useEffect,
@@ -82,17 +80,12 @@ interface RecurringPaymentFormProps {
   readonly onPauseToggle?: () => Promise<void>;
   readonly onDelete?: () => Promise<void>;
 }
-
 export interface RecurringPaymentFormHandle {
   submit: () => void;
 }
-
-type FormErrors = Partial<
-  Record<"name" | "amount" | "accountId" | "categoryId" | "endDate", string>
->;
+type FormErrors = Partial<Record<"name" | "amount" | "accountId" | "categoryId" | "endDate", string>>;
 type FormFieldName = keyof FormErrors;
 type RecurringPaymentFormField = keyof RecurringPaymentFormValues;
-
 const TYPE_OPTIONS: ReadonlyArray<{
   readonly value: TransactionType;
   readonly labelKey: "expense" | "income";
@@ -101,7 +94,6 @@ const TYPE_OPTIONS: ReadonlyArray<{
   { value: "EXPENSE", labelKey: "expense", icon: "receipt-outline" },
   { value: "INCOME", labelKey: "income", icon: "cash-outline" },
 ];
-
 const ACTION_OPTIONS: ReadonlyArray<{
   readonly value: RecurringAction;
   readonly labelKey: string;
@@ -118,7 +110,6 @@ const ACTION_OPTIONS: ReadonlyArray<{
     icon: "flash-outline",
   },
 ];
-
 const DEFAULT_CURRENCY: CurrencyType = "EGP";
 const ERROR_FIELD_ORDER: readonly FormFieldName[] = [
   "name",
@@ -257,11 +248,15 @@ export const RecurringPaymentForm = React.forwardRef<
     form.frequency,
     form.endDate
   );
-  const reactivationDueDate = getReactivationDueDate(
-    dueDate,
-    initialValues.endDate,
-    form.frequency
-  );
+  const didDuePaymentChange =
+    initialValues.startDate.getTime() !== form.startDate.getTime();
+  const reactivationDueDate = didDuePaymentChange
+    ? form.startDate
+    : getReactivationDueDate(
+        dueDate,
+        initialValues.endDate,
+        form.frequency
+      );
   const isReactivationAvailable =
     reactivationDueDate !== null &&
     (form.endDate === null ||
@@ -552,7 +547,13 @@ export const RecurringPaymentForm = React.forwardRef<
                 !form.reactivateAfterSaving
               )
             }
-            className="mb-6 flex-row items-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-25 dark:bg-slate-800 px-4 py-3"
+            className={`mb-6 flex-row items-center rounded-2xl border px-4 py-3 ${
+              isReactivationAvailable
+                ? "border-slate-200 dark:border-slate-700 bg-slate-25 dark:bg-slate-800"
+                : "border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"
+            }`}
+            // NativeWind opacity classes crash on TouchableOpacity.
+            style={!isReactivationAvailable ? { opacity: 0.5 } : undefined}
           >
             <View
               className={`me-3 h-5 w-5 rounded border items-center justify-center ${
@@ -566,7 +567,13 @@ export const RecurringPaymentForm = React.forwardRef<
               ) : null}
             </View>
             <View className="flex-1">
-              <Text className="text-sm font-semibold text-text-primary dark:text-text-primary-dark">
+              <Text
+                className={`text-sm font-semibold ${
+                  isReactivationAvailable
+                    ? "text-text-primary dark:text-text-primary-dark"
+                    : "text-text-muted dark:text-text-muted-dark"
+                }`}
+              >
                 {t("reactivate_after_saving")}
               </Text>
               <Text className="mt-1 text-xs leading-4 text-text-secondary dark:text-text-secondary-dark">
