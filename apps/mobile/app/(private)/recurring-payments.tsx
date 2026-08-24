@@ -34,7 +34,7 @@ import type {
   RecurringStatus,
 } from "@monyvi/db";
 import { calculateCalendarDaysUntil, formatCurrency } from "@monyvi/logic";
-import { router, useFocusEffect } from "expo-router";
+import { router } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AppState, SectionList, Text, TouchableOpacity, View } from "react-native";
@@ -50,7 +50,6 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
   const [payNowPayment, setPayNowPayment] =
     useState<RecurringPayment | null>(null);
   const [todayRevision, setTodayRevision] = useState(0);
-  const [listRevision, setListRevision] = useState(0);
   const {
     allPayments = [],
     filteredPayments,
@@ -89,12 +88,6 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
       appStateSubscription.remove();
     };
   }, [refreshToday]);
-
-  useFocusEffect(
-    useCallback((): void => {
-      setListRevision((revision) => revision + 1);
-    }, [])
-  );
 
   const sortOptions = useMemo(
     () => (latestRates ? { preferredCurrency, latestRates } : {}),
@@ -262,8 +255,6 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
           />
         ) : (
           <SectionList
-            key={`recurring-payments-list-${listRevision}`}
-            testID={`recurring-payments-list-${listRevision}`}
             sections={paymentSections}
             keyExtractor={keyExtractor}
             renderItem={renderPaymentItem}

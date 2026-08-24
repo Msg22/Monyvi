@@ -4,7 +4,6 @@ import React from "react";
 jest.mock("expo-router", () => ({
   __esModule: true,
   router: { push: jest.fn() },
-  useFocusEffect: (): void => undefined,
 }));
 
 jest.mock("react-native-safe-area-context", () => ({

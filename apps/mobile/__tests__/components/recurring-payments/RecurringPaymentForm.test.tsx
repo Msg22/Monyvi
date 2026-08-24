@@ -315,9 +315,7 @@ describe("RecurringPaymentForm", () => {
     fireEvent.press(screen.getByTestId("recurring-payment-frequency-row"));
     fireEvent.press(screen.getByTestId("select-weekly-frequency"));
 
-    expect(
-      screen.getByTestId("recurring-payment-summary-due-value")
-    ).toHaveTextContent("Jul 8, 2026");
+    expect(screen.getByTestId("recurring-payment-summary-due-value")).toHaveTextContent("Jul 8, 2026");
   });
 
   it("keeps the final paid date in the summary when frequency changes on a completed bounded payment", () => {

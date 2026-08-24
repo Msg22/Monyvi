@@ -282,7 +282,8 @@ export function PaymentRow({
 
   return (
     <View
-      className={`p-3 rounded-xl border mb-3 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 ${
+      testID={`recurring-payment-card-${payment.id}`}
+      className={`min-h-[72px] p-3 rounded-xl border mb-3 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 ${
         canPayNow && !isCompactLayout ? "flex-row items-center" : ""
       }`}
       // eslint-disable-next-line react-native/no-inline-styles
