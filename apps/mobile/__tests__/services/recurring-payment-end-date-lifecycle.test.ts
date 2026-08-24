@@ -63,6 +63,11 @@ jest.mock("@/services/user-data-access", () => ({
 
 jest.mock("@/utils/dateHelpers", () => ({
   calculateNextDueDate: (): Date => new Date("2026-08-01T00:00:00.000Z"),
+  getRecurringPaymentReactivationDueDate: (payment: MockRecurringPayment): Date =>
+    payment.endDate &&
+    new Date(payment.nextDueDate).getTime() <= new Date(payment.endDate).getTime()
+      ? new Date("2026-08-01T00:00:00.000Z")
+      : payment.nextDueDate,
   isOnOrBeforeDay: (date: Date, boundary: Date): boolean => {
     const left = new Date(date);
     left.setHours(0, 0, 0, 0);
@@ -72,7 +77,11 @@ jest.mock("@/utils/dateHelpers", () => ({
   },
 }));
 
-import { updateRecurringPayment } from "@/services/recurring-payment-service";
+import {
+  reactivateRecurringPayment,
+  RECURRING_PAYMENT_SERVICE_ERROR_CODES,
+  updateRecurringPayment,
+} from "@/services/recurring-payment-service";
 
 describe("recurring payment End date lifecycle", () => {
   beforeEach(() => {
@@ -87,14 +96,19 @@ describe("recurring payment End date lifecycle", () => {
     });
   });
 
-  async function update(payment: MockRecurringPayment, startDate: Date, endDate: Date | null): Promise<void> {
+  async function update(
+    payment: MockRecurringPayment,
+    startDate: Date,
+    endDate: Date | null,
+    reactivateAfterSaving = false
+  ): Promise<void> {
     mockFindOwned.mockImplementation((_collection: unknown, id: string): Promise<unknown> =>
       Promise.resolve(id === "account-1" ? { id, userId: "user-1", currency: "EGP" } : payment)
     );
     await updateRecurringPayment("payment-1", {
       name: "Netflix", amount: 250, currency: "EGP", type: "EXPENSE",
       accountId: "account-1", categoryId: "category-1", frequency: "MONTHLY",
-      startDate, endDate, action: "NOTIFY",
+      startDate, endDate, action: "NOTIFY", reactivateAfterSaving,
     });
   }
 
@@ -104,18 +118,18 @@ describe("recurring payment End date lifecycle", () => {
     expect(payment.status).toBe("COMPLETED");
   });
 
-  it("reactivates boundary-completed series after clearing End date and changing Due payment", async () => {
+  it("keeps a boundary-completed series completed after clearing End date and changing Due payment", async () => {
     const payment = createPayment({
       status: "COMPLETED", endDate: new Date("2026-07-01T00:00:00.000Z"),
       nextDueDate: new Date("2026-08-01T00:00:00.000Z"),
     });
     const duePayment = new Date("2026-06-15T00:00:00.000Z");
     await update(payment, duePayment, null);
-    expect(payment.status).toBe("ACTIVE");
+    expect(payment.status).toBe("COMPLETED");
     expect(payment.nextDueDate).toEqual(duePayment);
   });
 
-  it("calculates the next occurrence only when reopening a paid final occurrence", async () => {
+  it("calculates the next occurrence after relaxing End date without implicitly reactivating", async () => {
     const payment = createPayment({
       status: "COMPLETED",
       endDate: new Date("2026-07-01T00:00:00.000Z"),
@@ -123,6 +137,52 @@ describe("recurring payment End date lifecycle", () => {
     });
 
     await update(payment, new Date("2026-06-01T00:00:00.000Z"), null);
+
+    expect(payment.status).toBe("COMPLETED");
+    expect(payment.nextDueDate).toEqual(new Date("2026-08-01T00:00:00.000Z"));
+  });
+
+  it("reactivates an eligible next occurrence only through the explicit service action", async () => {
+    const payment = createPayment({
+      status: "COMPLETED",
+      endDate: new Date("2026-08-15T00:00:00.000Z"),
+      nextDueDate: new Date("2026-07-01T00:00:00.000Z"),
+    });
+    mockFindOwned.mockResolvedValue(payment);
+
+    await reactivateRecurringPayment("payment-1");
+
+    expect(payment.status).toBe("ACTIVE");
+    expect(payment.nextDueDate).toEqual(new Date("2026-08-01T00:00:00.000Z"));
+  });
+
+  it("rejects explicit reactivation when the next occurrence is after End date", async () => {
+    const payment = createPayment({
+      status: "COMPLETED",
+      endDate: new Date("2026-07-01T00:00:00.000Z"),
+      nextDueDate: new Date("2026-07-01T00:00:00.000Z"),
+    });
+    mockFindOwned.mockResolvedValue(payment);
+
+    await expect(reactivateRecurringPayment("payment-1")).rejects.toThrow(
+      RECURRING_PAYMENT_SERVICE_ERROR_CODES.REACTIVATION_UNAVAILABLE
+    );
+    expect(payment.status).toBe("COMPLETED");
+  });
+
+  it("reactivates through the edit save intent only when the next occurrence is eligible", async () => {
+    const payment = createPayment({
+      status: "COMPLETED",
+      endDate: new Date("2026-07-01T00:00:00.000Z"),
+      nextDueDate: new Date("2026-07-01T00:00:00.000Z"),
+    });
+
+    await update(
+      payment,
+      new Date("2026-06-01T00:00:00.000Z"),
+      null,
+      true
+    );
 
     expect(payment.status).toBe("ACTIVE");
     expect(payment.nextDueDate).toEqual(new Date("2026-08-01T00:00:00.000Z"));

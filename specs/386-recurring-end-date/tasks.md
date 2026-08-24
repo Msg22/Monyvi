@@ -92,6 +92,18 @@
 - [ ] T030 Run manual device QA from `specs/386-recurring-end-date/quickstart.md`; confirm automatic processing is not present and do not claim scheduler coverage
 - [X] T031 Reconcile implementation with owner-approved selected-End-date-with-Clear state recorded in `specs/386-recurring-end-date/mockups/README.md` and `specs/386-recurring-end-date/contracts/recurring-payment-schedule.md`
 
+## Phase 7: Explicit completed-series reactivation
+
+**Purpose**: Make reactivation a deliberate user action and prevent impossible due dates from being presented.
+
+- [X] T032 Update feature and business-rule documentation for explicit reactivation, invalid Due payment after End date, and valid one-occurrence schedules.
+- [X] T033 Add red service, form, dashboard, route, and pure date-calculation tests for explicit reactivation and post-boundary previews.
+- [X] T034 Keep completed series completed on ordinary edits; add eligibility-checked dashboard and save-time reactivation commands.
+- [X] T035 Add the approved My Bills Reactivate confirmation and edit-form Reactivate after saving checkbox.
+- [X] T036 Show immediate Due payment/End date guidance and explain valid schedules with no further eligible recurrence.
+- [X] T037 Run focused Jest suites, TypeScript checks, and changed-file lint.
+- [ ] T038 Run the expanded manual device QA in `quickstart.md`; do not push until the owner confirms the visual behaviour.
+
 ## Dependencies & Execution Order
 
 - Phase 1 must finish before code changes so business and translation decisions are available.

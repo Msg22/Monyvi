@@ -60,6 +60,7 @@ export interface RecurringPaymentFormValues {
   readonly frequency: RecurringFrequency;
   readonly startDate: Date;
   readonly endDate: Date | null;
+  readonly reactivateAfterSaving: boolean;
   readonly action: RecurringAction;
   readonly notes: string;
 }
@@ -135,6 +136,7 @@ const FORM_VALUE_FIELDS: readonly RecurringPaymentFormField[] = [
   "frequency",
   "startDate",
   "endDate",
+  "reactivateAfterSaving",
   "action",
   "notes",
 ];
@@ -198,6 +200,7 @@ export const RecurringPaymentForm = React.forwardRef<
         initialValues.frequency,
         initialValues.startDate.getTime(),
         initialValues.endDate?.getTime() ?? "",
+        initialValues.reactivateAfterSaving,
         initialValues.action,
         initialValues.notes,
       ].join("|"),
@@ -211,6 +214,7 @@ export const RecurringPaymentForm = React.forwardRef<
       initialValues.notes,
       initialValues.startDate,
       initialValues.endDate,
+      initialValues.reactivateAfterSaving,
       initialValues.type,
     ]
   );
@@ -248,6 +252,22 @@ export const RecurringPaymentForm = React.forwardRef<
     status,
   });
   const startDateMinimumDate = getStartDateMinimumDate(mode, form.startDate);
+  const hasNoFurtherEligibleRecurrence = hasNoFurtherEligiblePayment(
+    form.startDate,
+    form.frequency,
+    form.endDate
+  );
+  const reactivationDueDate = getReactivationDueDate(
+    dueDate,
+    initialValues.endDate,
+    form.frequency
+  );
+  const isReactivationAvailable =
+    reactivationDueDate !== null &&
+    (form.endDate === null ||
+      isOnOrBeforeDay(reactivationDueDate, form.endDate));
+  const hasDuePaymentAfterEndDate =
+    form.endDate !== null && !isOnOrBeforeDay(form.startDate, form.endDate);
 
   useEffect(() => {
     const dirtyFields = dirtyFieldsRef.current;
@@ -488,7 +508,11 @@ export const RecurringPaymentForm = React.forwardRef<
                   label={t("end_date")}
                   labelSuffix={t("optional")}
                   value={form.endDate ? formatDate(form.endDate, "MMM d, yyyy") : t("end_date_not_set")}
-                  description={t("end_date_hint")}
+                  description={
+                    hasNoFurtherEligibleRecurrence
+                      ? t("end_date_no_further_payments")
+                      : t("end_date_hint")
+                  }
                   actionLabel={form.endDate ? t("clear") : undefined}
                   onAction={form.endDate ? () => updateField("endDate", null) : undefined}
                   onPress={() =>
@@ -506,8 +530,55 @@ export const RecurringPaymentForm = React.forwardRef<
           {errors.categoryId ? (
             <ErrorText>{errors.categoryId}</ErrorText>
           ) : null}
-          {errors.endDate ? <ErrorText>{errors.endDate}</ErrorText> : null}
+          {hasDuePaymentAfterEndDate ? (
+            <ErrorText>{t("end_date_before_due")}</ErrorText>
+          ) : errors.endDate ? (
+            <ErrorText>{errors.endDate}</ErrorText>
+          ) : null}
         </View>
+
+        {mode === "edit" && status === "COMPLETED" ? (
+          <TouchableOpacity
+            testID="recurring-payment-reactivate-after-saving"
+            accessibilityRole="checkbox"
+            accessibilityState={{
+              checked: form.reactivateAfterSaving,
+              disabled: !isReactivationAvailable,
+            }}
+            disabled={!isReactivationAvailable}
+            onPress={() =>
+              updateField(
+                "reactivateAfterSaving",
+                !form.reactivateAfterSaving
+              )
+            }
+            className="mb-6 flex-row items-center rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-25 dark:bg-slate-800 px-4 py-3"
+          >
+            <View
+              className={`me-3 h-5 w-5 rounded border items-center justify-center ${
+                form.reactivateAfterSaving
+                  ? "border-nileGreen-500 bg-nileGreen-500"
+                  : "border-slate-400 dark:border-slate-500"
+              }`}
+            >
+              {form.reactivateAfterSaving ? (
+                <Ionicons name="checkmark" size={16} color={palette.slate[25]} />
+              ) : null}
+            </View>
+            <View className="flex-1">
+              <Text className="text-sm font-semibold text-text-primary dark:text-text-primary-dark">
+                {t("reactivate_after_saving")}
+              </Text>
+              <Text className="mt-1 text-xs leading-4 text-text-secondary dark:text-text-secondary-dark">
+                {isReactivationAvailable && reactivationDueDate
+                  ? t("reactivate_after_saving_hint", {
+                      date: formatDate(reactivationDueDate, "MMM d, yyyy"),
+                    })
+                  : t("reactivate_payment_unavailable")}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ) : null}
 
         <View testID="recurring-payment-action-section" className="mb-6">
           <Text testID="recurring-payment-action-title" className="input-label">
@@ -711,9 +782,14 @@ function getDisplayDueDate({
     return dueDate;
   }
 
+  if (dueDate && status === "COMPLETED" && !form.reactivateAfterSaving) {
+    return dueDate;
+  }
+
   const shouldRetainFinalPaidOccurrence =
     dueDate !== undefined &&
     status === "COMPLETED" &&
+    form.reactivateAfterSaving &&
     initialValues.endDate !== null &&
     isOnOrBeforeDay(dueDate, initialValues.endDate) &&
     !didRelaxEndDate(initialValues.endDate, form.endDate);
@@ -729,11 +805,29 @@ function getDisplayDueDate({
     status === "COMPLETED" &&
     initialValues.endDate !== null &&
     didRelaxEndDate(initialValues.endDate, form.endDate);
-  if (dueDate && !didStartDateChange && didRelaxCompletedEndDate) {
+  if (
+    dueDate &&
+    !didStartDateChange &&
+    didRelaxCompletedEndDate &&
+    isOnOrBeforeDay(dueDate, initialValues.endDate)
+  ) {
     return calculateNextDueDate(dueDate, form.frequency);
   }
-  if (dueDate && !didStartDateChange && didFrequencyChange) {
+  if (
+    dueDate &&
+    !didStartDateChange &&
+    didFrequencyChange &&
+    !(
+      status === "COMPLETED" &&
+      initialValues.endDate !== null &&
+      !isOnOrBeforeDay(dueDate, initialValues.endDate)
+    )
+  ) {
     return calculateNextDueDate(dueDate, form.frequency);
+  }
+
+  if (dueDate && status === "COMPLETED") {
+    return dueDate;
   }
 
   return form.startDate;
@@ -744,6 +838,30 @@ function didRelaxEndDate(
   nextEndDate: Date | null
 ): boolean {
   return nextEndDate === null || !isOnOrBeforeDay(nextEndDate, initialEndDate);
+}
+
+function hasNoFurtherEligiblePayment(
+  duePayment: Date,
+  frequency: RecurringFrequency,
+  endDate: Date | null
+): boolean {
+  return (
+    endDate !== null &&
+    isOnOrBeforeDay(duePayment, endDate) &&
+    !isOnOrBeforeDay(calculateNextDueDate(duePayment, frequency), endDate)
+  );
+}
+
+function getReactivationDueDate(
+  dueDate: Date | undefined,
+  initialEndDate: Date | null,
+  frequency: RecurringFrequency
+): Date | null {
+  if (!dueDate) return null;
+
+  return initialEndDate !== null && isOnOrBeforeDay(dueDate, initialEndDate)
+    ? calculateNextDueDate(dueDate, frequency)
+    : dueDate;
 }
 
 function getStartDateMinimumDate(

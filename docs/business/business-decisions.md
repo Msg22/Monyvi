@@ -379,9 +379,14 @@ Business rules:
 - Pay Now may record an overdue final occurrence. Its successful local batch must
   create the transaction, apply the balance effect, advance the schedule, and set
   the recurring payment to `COMPLETED` together.
-- Extending or clearing End date may reactivate only a series that was completed
-  because its prior end-date boundary was reached and whose existing next due date
-  becomes eligible again.
+- Editing a completed recurring payment, including extending or clearing End date,
+  never changes its status. Reactivation is always an explicit user decision.
+- Users can reactivate a completed series from My Bills after a confirmation, or
+  select "Reactivate after saving" while editing it. Reactivation is allowed only
+  when the calculated next due payment is eligible under the selected End date.
+- A Due payment after End date is invalid. A schedule with one eligible Due payment
+  and no later eligible recurrence is valid and explains that no further payments
+  will be due.
 
 ### Debts
 

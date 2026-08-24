@@ -36,6 +36,7 @@ export default function CreateRecurringPaymentScreen(): React.JSX.Element {
       frequency: "MONTHLY",
       startDate: new Date(),
       endDate: null,
+      reactivateAfterSaving: false,
       action: "NOTIFY",
       notes: "",
     }),

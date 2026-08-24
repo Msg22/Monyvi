@@ -5,6 +5,7 @@ import { groupPaymentsByDueDate } from "@/services/recurring-payments-dashboard-
 
 const mockSetStatusFilter = jest.fn();
 const mockPayNowModal = jest.fn();
+const mockReactivateRecurringPayment = jest.fn();
 const mockShowToast = jest.fn();
 let mockUsesCompactLayout = false;
 
@@ -24,6 +25,7 @@ interface MockRecurringPayment {
   readonly categoryId: string;
   readonly frequency: "MONTHLY" | "YEARLY";
   readonly nextDueDate: Date;
+  readonly endDate?: Date;
   readonly status: "ACTIVE" | "PAUSED" | "COMPLETED";
   readonly isIncome: boolean;
   readonly isExpense: boolean;
@@ -161,6 +163,36 @@ jest.mock("@/components/dashboard/upcoming-payments", () => ({
   },
 }));
 
+jest.mock("@/components/modals/ConfirmationModal", () => ({
+  ConfirmationModal: ({
+    visible,
+    title,
+    onConfirm,
+  }: {
+    readonly visible: boolean;
+    readonly title: string;
+    readonly onConfirm: () => void;
+  }): React.JSX.Element | null => {
+    if (!visible) return null;
+    const { Text, TouchableOpacity, View } =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return (
+      <View testID="reactivate-confirmation-modal">
+        <Text>{title}</Text>
+        <TouchableOpacity testID="reactivate-confirmation-confirm" onPress={onConfirm} />
+      </View>
+    );
+  },
+}));
+
+jest.mock("@/services/recurring-payment-service", () => ({
+  reactivateRecurringPayment: (...args: readonly unknown[]): unknown =>
+    mockReactivateRecurringPayment(...args),
+  RECURRING_PAYMENT_SERVICE_ERROR_CODES: {
+    REACTIVATION_UNAVAILABLE: "RECURRING_PAYMENT_REACTIVATION_UNAVAILABLE",
+  },
+}));
+
 jest.mock("@/components/ui/Toast", () => ({
   useToast: (): { readonly showToast: jest.Mock } => ({
     showToast: mockShowToast,
@@ -209,6 +241,25 @@ jest.mock("@monyvi/logic", () => ({
       (1000 * 60 * 60 * 24)
     );
   },
+  isOnOrBeforeDay: (left: Date, right: Date): boolean =>
+    left.getTime() <= right.getTime(),
+  getRecurringPaymentReactivationDueDate: ({
+    nextDueDate,
+    endDate,
+  }: {
+    readonly nextDueDate: Date;
+    readonly endDate?: Date | null;
+  }): Date => {
+    if (endDate && nextDueDate.getTime() <= endDate.getTime()) {
+      return new Date(
+        nextDueDate.getFullYear(),
+        nextDueDate.getMonth() + 1,
+        nextDueDate.getDate()
+      );
+    }
+
+    return nextDueDate;
+  },
   convertCurrency: (
     amount: number,
     fromCurrency: CurrencyType,
@@ -243,6 +294,7 @@ describe("RecurringPaymentsScreen dashboard", () => {
     mockPageHeader.mockClear();
     mockSetStatusFilter.mockClear();
     mockPayNowModal.mockClear();
+    mockReactivateRecurringPayment.mockReset();
     mockShowToast.mockClear();
     mockUsesCompactLayout = false;
     mockRecurringPaymentsState = {
@@ -261,12 +313,16 @@ describe("RecurringPaymentsScreen dashboard", () => {
     jest.useRealTimers();
   });
 
-  it("keeps every payment card tall enough for its row content", () => {
+  it("keeps every payment card tall enough for its three-line metadata", () => {
     render(<RecurringPaymentsScreen />);
 
     expect(screen.getByTestId("recurring-payment-card-payment-1")).toHaveProp(
       "className",
-      expect.stringContaining("min-h-[72px]")
+      expect.stringContaining("min-h-[88px]")
+    );
+    expect(screen.getByTestId("recurring-payment-row-payment-1")).not.toHaveProp(
+      "className",
+      "flex-1"
     );
   });
 
@@ -555,13 +611,77 @@ describe("RecurringPaymentsScreen dashboard", () => {
 
     expect(
       screen.getByTestId("recurring-payment-row-payment-completed")
-    ).toHaveTextContent(/Jun 15/);
+    ).not.toHaveTextContent(/overdue/i);
     expect(
       screen.getByTestId("recurring-payment-row-payment-completed")
-    ).not.toHaveTextContent(/overdue/i);
+    ).not.toHaveTextContent(/Jun 15/);
   });
 
-  it("uses a calendar date instead of due text for early completed payments", () => {
+  it("requires dashboard confirmation before reactivating a completed payment", async () => {
+    const completedPayment = createPayment({
+      id: "payment-reactivate",
+      status: "COMPLETED",
+      isActive: false,
+      isCompleted: true,
+      endDate: new Date("2026-08-15T00:00:00.000Z"),
+    });
+    mockReactivateRecurringPayment.mockResolvedValue(undefined);
+    mockRecurringPaymentsState = {
+      ...mockRecurringPaymentsState,
+      allPayments: [completedPayment],
+      filteredPayments: [completedPayment],
+      counts: { ACTIVE: 0, PAUSED: 0, COMPLETED: 1 },
+      statusFilter: "COMPLETED",
+    };
+
+    render(<RecurringPaymentsScreen />);
+
+    fireEvent.press(
+      screen.getByTestId("recurring-payment-reactivate-payment-reactivate")
+    );
+    expect(screen.getByTestId("reactivate-confirmation-modal")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("reactivate-confirmation-confirm"));
+    });
+
+    expect(mockReactivateRecurringPayment).toHaveBeenCalledWith(
+      "payment-reactivate"
+    );
+  });
+
+  it("explains when End date prevents dashboard reactivation", () => {
+    const completedPayment = createPayment({
+      id: "payment-reactivate-blocked",
+      status: "COMPLETED",
+      isActive: false,
+      isCompleted: true,
+      endDate: new Date("2026-07-01T00:00:00.000Z"),
+      nextDueDate: new Date("2026-07-01T00:00:00.000Z"),
+    });
+    mockRecurringPaymentsState = {
+      ...mockRecurringPaymentsState,
+      allPayments: [completedPayment],
+      filteredPayments: [completedPayment],
+      counts: { ACTIVE: 0, PAUSED: 0, COMPLETED: 1 },
+      statusFilter: "COMPLETED",
+    };
+
+    render(<RecurringPaymentsScreen />);
+
+    fireEvent.press(
+      screen.getByTestId(
+        "recurring-payment-reactivate-payment-reactivate-blocked"
+      )
+    );
+
+    expect(screen.queryByTestId("reactivate-confirmation-modal")).toBeNull();
+    expect(mockShowToast).toHaveBeenLastCalledWith(
+      expect.objectContaining({ message: "reactivate_payment_unavailable" })
+    );
+  });
+
+  it("does not show a next due date for completed payments", () => {
     const completedPayment = createPayment({
       id: "payment-completed-early",
       nextDueDate: new Date("2026-07-01T00:00:00.000Z"),
@@ -581,10 +701,10 @@ describe("RecurringPaymentsScreen dashboard", () => {
 
     expect(
       screen.getByTestId("recurring-payment-row-payment-completed-early")
-    ).toHaveTextContent(/Jul 1/);
+    ).not.toHaveTextContent(/due_in_days/i);
     expect(
       screen.getByTestId("recurring-payment-row-payment-completed-early")
-    ).not.toHaveTextContent(/due_in_days/i);
+    ).not.toHaveTextContent(/Jul 1/);
   });
 
   it("opens Pay Now for an unpaid final overdue payment", () => {

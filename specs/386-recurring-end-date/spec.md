@@ -60,19 +60,25 @@ As a user paying the final occurrence of a bounded recurring payment, I see the 
 
 1. **Given** a recurring payment is due on its end date, **When** it is paid, **Then** that occurrence is accepted.
 2. **Given** the final eligible occurrence is paid, **When** the payment is recorded, **Then** the linked financial record, balance effect, final due payment, and completed state remain consistent as one outcome without persisting an ineligible future due date.
-3. **Given** a payment was completed because its end date passed, **When** the user extends or clears the end date such that its next due payment is valid again, **Then** the payment becomes active again.
-4. **Given** the final eligible occurrence is overdue after End date, **When** the user chooses Pay Now, **Then** one final payment is recorded and the series is completed.
-5. **Given** an active recurring payment is overdue, **When** the user views My Bills, **Then** its row offers Pay Now while the rest of the row remains available for editing.
+3. **Given** a payment is completed, **When** the user edits any schedule field without choosing Reactivate, **Then** it remains completed.
+4. **Given** a completed payment has an eligible next due payment, **When** the user chooses Reactivate in My Bills and confirms, **Then** it becomes active without recording a payment.
+5. **Given** a completed payment is being edited and has an eligible next due payment, **When** the user selects Reactivate after saving and saves, **Then** it becomes active without a confirmation sheet.
+6. **Given** a completed payment has no eligible next due payment under its End date, **When** the user tries to reactivate it, **Then** the UI explains that the End date must be extended or cleared first.
+7. **Given** the final eligible occurrence is overdue after End date, **When** the user chooses Pay Now, **Then** one final payment is recorded and the series is completed.
+8. **Given** an active recurring payment is overdue, **When** the user views My Bills, **Then** its row offers Pay Now while the rest of the row remains available for editing.
 
 ### Edge Cases
 
 - An end date equal to Due payment permits exactly one occurrence.
 - An end date earlier than Due payment is rejected before save.
+- A Due payment later than End date is rejected before save.
+- A Due payment within End date whose following recurrence is later than End date is a valid one-occurrence schedule; the form explains that no further payment will be due.
 - Clearing End date from an active payment removes its final boundary and preserves the existing next due payment.
 - An unpaid final eligible occurrence remains active and overdue after End date; it is not silently completed.
 - A user can pay an overdue final eligible occurrence after End date; that successful payment completes the series.
 - A failed final payment must not leave the payment completed, advanced, or financially recorded only in part.
-- A user may not reactivate a completed payment unless its End date is extended or cleared and its next due payment is valid again.
+- Editing an End date or any other field never implicitly reactivates a completed payment.
+- A user may reactivate a completed payment only through an explicit My Bills action or edit-form choice, and only when its next due payment is valid again.
 
 ## Requirements _(mandatory)_
 
@@ -90,7 +96,11 @@ As a user paying the final occurrence of a bounded recurring payment, I see the 
 - **FR-008a**: A final eligible occurrence that remains unpaid after End date MUST remain active and overdue until it is successfully paid.
 - **FR-008b**: The user MUST be able to record an overdue final eligible occurrence after End date through the Pay Now action on its My Bills row; its successful payment MUST complete the series.
 - **FR-009**: Completion of a final payment MUST not leave the payment's financial record, balance effect, final due payment, and status in conflicting states if the payment fails.
-- **FR-010**: If a payment was completed only because of its End date, extending or clearing End date MUST reactivate it when its next due payment is valid again.
+- **FR-010**: Editing a completed payment, including extending or clearing End date, MUST NOT reactivate it.
+- **FR-010a**: The My Bills completed-payment card MUST offer an explicit Reactivate action that presents a confirmation before changing status.
+- **FR-010b**: The completed-payment edit form MUST offer a save-time "Reactivate after saving" checkbox and MUST NOT show a confirmation sheet for that path.
+- **FR-010c**: Reactivation MUST be blocked when the calculated next due payment is later than End date, with friendly localized guidance to extend or clear End date.
+- **FR-010d**: The form MUST reject a Due payment later than End date and MUST show a friendly localized error. It MUST allow a valid one-occurrence schedule and explain that no further payment will be due when its following recurrence is later than End date.
 - **FR-012**: All new user-visible labels, unset-state text, hints, and validation messages MUST be available in English and Arabic.
 
 ### Key Entities _(include if feature involves data)_
@@ -114,7 +124,7 @@ As a user paying the final occurrence of a bounded recurring payment, I see the 
 - Owner-approved mockup is visual source of truth: both date fields remain inside existing grouped Payment Schedule control, with concise helper text directly beneath each field. In selected state, `(Optional)` sits beside End date label and inline Clear remains beneath selected value.
 - End date is inclusive: a payment due exactly on that date is valid.
 - End date is initially unset, representing an ongoing recurring payment.
-- A completed final occurrence retains its final paid Due payment. If the user extends or clears End date, the next eligible occurrence is calculated then; a completed series reactivates only when that occurrence is valid.
+- A completed final occurrence retains its final paid Due payment. Editing it keeps the status completed; only an explicit Reactivate action may calculate and activate its next eligible occurrence.
 - The existing future scheduler remains out of implementation scope until that processor exists.
 
 ## Deferred Follow-up

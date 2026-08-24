@@ -1,5 +1,6 @@
 import {
   calculateCalendarDaysUntil,
+  getRecurringPaymentReactivationDueDate,
   isInCurrentLocalMonth,
   isOnOrBeforeDay,
 } from "../date-boundary";
@@ -41,5 +42,24 @@ describe("calendar-day classification", () => {
         new Date(2026, 8, 15, 12, 0, 0)
       )
     ).toBe(true);
+  });
+});
+
+describe("getRecurringPaymentReactivationDueDate", () => {
+  it("advances a final paid occurrence and preserves an already outstanding one", () => {
+    expect(
+      getRecurringPaymentReactivationDueDate({
+        nextDueDate: new Date(2026, 6, 1),
+        frequency: "MONTHLY",
+        endDate: new Date(2026, 6, 1),
+      })
+    ).toEqual(new Date(2026, 7, 1));
+    expect(
+      getRecurringPaymentReactivationDueDate({
+        nextDueDate: new Date(2026, 7, 1),
+        frequency: "MONTHLY",
+        endDate: new Date(2026, 6, 1),
+      })
+    ).toEqual(new Date(2026, 7, 1));
   });
 });

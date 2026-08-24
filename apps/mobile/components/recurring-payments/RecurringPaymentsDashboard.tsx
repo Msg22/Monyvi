@@ -52,6 +52,7 @@ interface PaymentRowProps {
   readonly onPress: () => void;
   readonly isPayNowAvailable: boolean;
   readonly onPayNow?: () => void;
+  readonly onReactivate?: () => void;
 }
 
 interface SortControlProps {
@@ -266,6 +267,7 @@ export function PaymentRow({
   onPress,
   isPayNowAvailable,
   onPayNow,
+  onReactivate,
 }: PaymentRowProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { t } = useTranslation("transactions");
@@ -279,12 +281,16 @@ export function PaymentRow({
   const { fontScale, width } = useWindowDimensions();
   const isCompactLayout = shouldUseCompactLayout(width, fontScale);
   const canPayNow = isPayNowAvailable && onPayNow !== undefined;
+  const canReactivate = payment.isCompleted && onReactivate !== undefined;
+  const hasInlineAction = canPayNow || canReactivate;
+  const actionLabel = canPayNow ? t("pay_now") : t("reactivate_payment");
+  const onInlineAction = canPayNow ? onPayNow : onReactivate;
 
   return (
     <View
       testID={`recurring-payment-card-${payment.id}`}
-      className={`min-h-[72px] p-3 rounded-xl border mb-3 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 ${
-        canPayNow && !isCompactLayout ? "flex-row items-center" : ""
+      className={`min-h-[88px] p-3 rounded-xl border mb-3 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 ${
+        hasInlineAction && !isCompactLayout ? "flex-row items-center" : ""
       }`}
       // eslint-disable-next-line react-native/no-inline-styles
       style={{
@@ -298,7 +304,7 @@ export function PaymentRow({
       <TouchableOpacity
         testID={`recurring-payment-row-${payment.id}`}
         onPress={onPress}
-        className="flex-1"
+        className={hasInlineAction && !isCompactLayout ? "flex-1" : ""}
       >
         <View testID="recurring-payment-row" className="flex-row items-center">
           <View
@@ -360,24 +366,26 @@ export function PaymentRow({
               currency: payment.currency,
             })}
           </Text>
-          <View className="flex-row items-center mt-2">
-            <Ionicons
-              name="calendar-outline"
-              size={13}
-              color={palette.slate[500]}
-            />
-            <Text
-              className={`text-xs font-medium ms-1 ${
-                isOverdueLabel
-                  ? "text-red-500"
-                  : "text-text-muted dark:text-text-muted-dark"
-              }`}
-            >
-              {dueLabel}
-            </Text>
+          {!payment.isCompleted ? (
+            <View className="flex-row items-center mt-2">
+              <Ionicons
+                name="calendar-outline"
+                size={13}
+                color={palette.slate[500]}
+              />
+              <Text
+                className={`text-xs font-medium ms-1 ${
+                  isOverdueLabel
+                    ? "text-red-500"
+                    : "text-text-muted dark:text-text-muted-dark"
+                }`}
+              >
+                {dueLabel}
+              </Text>
+            </View>
+          ) : null}
           </View>
-          </View>
-          {!canPayNow ? (
+          {!hasInlineAction ? (
             <Ionicons
               name="chevron-forward"
               size={18}
@@ -386,20 +394,20 @@ export function PaymentRow({
           ) : null}
         </View>
       </TouchableOpacity>
-      {canPayNow ? (
+      {hasInlineAction ? (
         <View
-          testID={`recurring-payment-pay-now-layout-${payment.id}`}
+          testID={`recurring-payment-${canPayNow ? "pay-now" : "reactivate"}-layout-${payment.id}`}
           className={isCompactLayout ? "mt-3 self-stretch" : "ms-3"}
         >
           <TouchableOpacity
-            testID={`recurring-payment-pay-now-${payment.id}`}
+            testID={`recurring-payment-${canPayNow ? "pay-now" : "reactivate"}-${payment.id}`}
             accessibilityRole="button"
-            accessibilityLabel={t("pay_now")}
-            onPress={onPayNow}
+            accessibilityLabel={actionLabel}
+            onPress={onInlineAction}
             className="rounded-xl border border-nileGreen-500 items-center justify-center px-3 py-2"
           >
             <Text className="text-sm font-semibold text-nileGreen-600 dark:text-nileGreen-400">
-              {t("pay_now")}
+              {actionLabel}
             </Text>
           </TouchableOpacity>
         </View>

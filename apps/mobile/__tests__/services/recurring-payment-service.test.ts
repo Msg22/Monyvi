@@ -373,7 +373,7 @@ describe("recurring-payment-service", () => {
     expect(payment.nextDueDate).toEqual(duePayment);
   });
 
-  it("reactivates only an end-date-completed payment when its next due date becomes eligible", async () => {
+  it("keeps an end-date-completed payment completed when its next due date becomes eligible", async () => {
     const payment = createRecurringRecord({
       status: "COMPLETED",
       endDate: new Date("2026-07-01T00:00:00.000Z"),
@@ -383,7 +383,8 @@ describe("recurring-payment-service", () => {
 
     await updateRecurringPayment("payment-1", { name: "Netflix", amount: 250, currency: "EGP", type: "EXPENSE", accountId: "account-1", categoryId: "category-1", frequency: "MONTHLY", startDate: payment.startDate, endDate: null, action: "NOTIFY" });
 
-    expect(payment.status).toBe("ACTIVE");
+    expect(payment.status).toBe("COMPLETED");
+    expect(payment.nextDueDate).toEqual(new Date("2026-08-01T00:00:00.000Z"));
   });
 
   it("keeps the final paid occurrence when editing a completed bounded series", async () => {

@@ -51,6 +51,7 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
       frequency: payment.frequency,
       startDate: payment.startDate,
       endDate: payment.endDate ?? null,
+      reactivateAfterSaving: false,
       action: payment.action,
       notes: payment.notes ?? "",
     };
@@ -102,6 +103,7 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
         categoryId: values.categoryId,
         action: values.action,
         notes: values.notes.trim() || undefined,
+        reactivateAfterSaving: values.reactivateAfterSaving,
       });
       showToast({
         type: "success",

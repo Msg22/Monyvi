@@ -9,7 +9,7 @@ Existing user-owned scheduled payment record.
 | Due payment date | First date a series is due | Required. Existing persisted field remains the schedule anchor. |
 | End date | Final eligible due date | Optional and null by default. Must be on or after Due payment. |
 | Next due date | Next outstanding occurrence | An occurrence is eligible when it is on or before End date, or when End date is null. |
-| Status | Current lifecycle state | Becomes completed after final eligible payment. |
+| Status | Current lifecycle state | Becomes completed after final eligible payment; changes back to active only through explicit reactivation. |
 | Action | Payment handling preference | Future automatic handling must use the same boundary rule; not implemented here. |
 
 ## State Transitions
@@ -22,13 +22,17 @@ Existing user-owned scheduled payment record.
 | Active, bounded | Pay final eligible occurrence | Next calculated due date is after End date | Completed, bounded |
 | Active, bounded | End date passes with final occurrence unpaid | Final occurrence has not been paid | Active, overdue |
 | Active, overdue final | Pay Now | Final occurrence succeeds | Completed, bounded |
-| Completed, bounded | Extend or clear End date | Existing next due date becomes eligible | Active; bounded if extended, ongoing if cleared |
+| Completed, bounded | Edit any field | Any | Completed; schedule may change but status does not |
+| Completed, bounded | Reactivate from My Bills | User confirms and next due is eligible | Active; bounded if End date remains, ongoing if cleared |
+| Completed, bounded | Save with Reactivate after saving | Next due is eligible | Active; bounded if End date remains, ongoing if cleared |
 
 ## Invariants
 
 - End date is null or on/after Due payment.
 - Due date equal to End date is eligible.
+- A calculated recurrence later than End date is never stored or presented as an eligible next due payment.
 - A completed series caused by End date has no future eligible occurrence.
+- Editing a completed series never changes status; reactivation is explicit.
 - A passed End date never itself proves payment or completion.
 - A selected End date can return to null through Clear before the form is saved.
 - Financial record, balance effect, next due date, and completed state must not persist partially.

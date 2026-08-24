@@ -147,6 +147,7 @@ const initialValues: RecurringPaymentFormValues = {
   frequency: "MONTHLY",
   startDate: new Date("2026-06-01T00:00:00.000Z"),
   endDate: null,
+  reactivateAfterSaving: false,
   action: "NOTIFY",
   notes: "",
 };
@@ -337,7 +338,7 @@ describe("RecurringPaymentForm", () => {
     ).toHaveTextContent("Jul 1, 2026");
   });
 
-  it("advances the summary preview when relaxing End date and changing frequency on a completed bounded payment", () => {
+  it("keeps a completed payment completed in the preview when End date is relaxed", () => {
     renderForm({
       mode: "edit",
       status: "COMPLETED",
@@ -354,7 +355,90 @@ describe("RecurringPaymentForm", () => {
 
     expect(
       screen.getByTestId("recurring-payment-summary-due-value")
-    ).toHaveTextContent("Jul 8, 2026");
+    ).toHaveTextContent("Jul 1, 2026");
+  });
+
+  it("shows a save-time reactivation choice only for completed edit payments", () => {
+    renderForm({
+      mode: "edit",
+      status: "COMPLETED",
+      dueDate: new Date("2026-07-01T00:00:00.000Z"),
+      initialValues: {
+        ...initialValues,
+        endDate: new Date("2026-08-15T00:00:00.000Z"),
+      },
+    });
+
+    expect(
+      screen.getByTestId("recurring-payment-reactivate-after-saving")
+    ).toBeTruthy();
+    expect(screen.getByText("reactivate_after_saving")).toBeTruthy();
+  });
+
+  it("keeps the stored occurrence in the reactivation preview after a boundary shortened before it", () => {
+    renderForm({
+      mode: "edit",
+      status: "COMPLETED",
+      dueDate: new Date("2026-08-01T00:00:00.000Z"),
+      initialValues: {
+        ...initialValues,
+        endDate: new Date("2026-07-01T00:00:00.000Z"),
+      },
+    });
+
+    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row-action"));
+    fireEvent.press(
+      screen.getByTestId("recurring-payment-reactivate-after-saving")
+    );
+
+    expect(
+      screen.getByTestId("recurring-payment-summary-due-value")
+    ).toHaveTextContent("Aug 1, 2026");
+  });
+
+  it("disables save-time reactivation when the next payment is after End date", () => {
+    renderForm({
+      mode: "edit",
+      status: "COMPLETED",
+      dueDate: new Date("2026-07-01T00:00:00.000Z"),
+      initialValues: {
+        ...initialValues,
+        endDate: new Date("2026-07-01T00:00:00.000Z"),
+      },
+    });
+
+    expect(
+      screen.getByTestId("recurring-payment-reactivate-after-saving")
+    ).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: true })
+    );
+    expect(screen.getByText("reactivate_payment_unavailable")).toBeTruthy();
+  });
+
+  it("explains when a valid bounded schedule has no further eligible recurrence", () => {
+    renderForm({
+      initialValues: {
+        ...initialValues,
+        frequency: "WEEKLY",
+        startDate: new Date("2026-08-25T00:00:00.000Z"),
+        endDate: new Date("2026-08-27T00:00:00.000Z"),
+      },
+    });
+
+    expect(screen.getByText("end_date_no_further_payments")).toBeTruthy();
+  });
+
+  it("shows End date guidance immediately when Due payment is outside the allowed period", () => {
+    renderForm({
+      initialValues: {
+        ...initialValues,
+        startDate: new Date("2026-08-28T00:00:00.000Z"),
+        endDate: new Date("2026-08-27T00:00:00.000Z"),
+      },
+    });
+
+    expect(screen.getByText("end_date_before_due")).toBeTruthy();
   });
 
   it("guards against duplicate submissions while a submit is in flight", async () => {
