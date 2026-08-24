@@ -1,4 +1,5 @@
 import i18n from "../i18n";
+import { calculateCalendarDaysUntil } from "@monyvi/logic";
 
 /**
  * Get the current language from i18next instance.
@@ -173,13 +174,7 @@ export function isSameDay(d1: Date, d2: Date): boolean {
 }
 
 export function getDaysUntil(date: Date): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(date);
-  target.setHours(0, 0, 0, 0);
-  return Math.ceil(
-    (target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-  );
+  return calculateCalendarDaysUntil(date);
 }
 
 export function getDueText(date: Date): string {

@@ -22,7 +22,11 @@ import type {
   RecurringStatus,
   TransactionType,
 } from "@monyvi/db";
-import { formatAmountInput, parseAmountInput } from "@monyvi/logic";
+import {
+  formatAmountInput,
+  isOnOrBeforeDay,
+  parseAmountInput,
+} from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker, {
   type DateTimePickerEvent,
@@ -240,6 +244,7 @@ export const RecurringPaymentForm = React.forwardRef<
     initialValues,
     form,
     hasScheduleChanges,
+    status,
   });
   const startDateMinimumDate = getStartDateMinimumDate(mode, form.startDate);
 
@@ -693,16 +698,26 @@ function getDisplayDueDate({
   initialValues,
   form,
   hasScheduleChanges,
+  status,
 }: {
   readonly dueDate?: Date;
   readonly initialValues: RecurringPaymentFormValues;
   readonly form: RecurringPaymentFormValues;
   readonly hasScheduleChanges: boolean;
+  readonly status?: RecurringStatus;
 }): Date {
   if (dueDate && !hasScheduleChanges) {
     return dueDate;
   }
 
+  const shouldRetainFinalPaidOccurrence =
+    dueDate !== undefined &&
+    status === "COMPLETED" &&
+    initialValues.endDate !== null &&
+    isOnOrBeforeDay(dueDate, initialValues.endDate);
+  if (shouldRetainFinalPaidOccurrence) {
+    return dueDate;
+  }
 
   const didStartDateChange =
     initialValues.startDate.getTime() !== form.startDate.getTime();

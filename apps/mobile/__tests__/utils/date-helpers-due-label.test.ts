@@ -14,7 +14,25 @@ jest.mock("../../i18n", () => ({
   },
 }));
 
+jest.mock("@monyvi/logic", () => ({
+  calculateCalendarDaysUntil: jest.fn(
+    (date: Date, referenceDate: Date = new Date()): number =>
+      (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) -
+        Date.UTC(
+          referenceDate.getFullYear(),
+          referenceDate.getMonth(),
+          referenceDate.getDate()
+        )) /
+      (1000 * 60 * 60 * 24)
+  ),
+}));
+
 import { getDueText } from "../../utils/dateHelpers";
+import { calculateCalendarDaysUntil } from "@monyvi/logic";
+
+const mockCalculateCalendarDaysUntil = jest.mocked(
+  calculateCalendarDaysUntil
+);
 
 describe("getDueText", (): void => {
   beforeEach((): void => {
@@ -39,6 +57,17 @@ describe("getDueText", (): void => {
     );
     expect(getDueText(new Date("2026-05-13T12:00:00.000Z"))).toBe(
       "2 days overdue"
+    );
+  });
+
+  it("derives the due label from the shared calendar-day calculation", (): void => {
+    mockCalculateCalendarDaysUntil.mockReturnValueOnce(-1);
+
+    expect(getDueText(new Date("2026-05-15T02:00:00.000Z"))).toBe(
+      "1 days overdue"
+    );
+    expect(mockCalculateCalendarDaysUntil).toHaveBeenCalledWith(
+      new Date("2026-05-15T02:00:00.000Z")
     );
   });
 });
