@@ -4,7 +4,7 @@ import { formatDate, getDaysUntil, getDueText } from "./dateHelpers";
 export function getRecurringPaymentDueLabel(
   payment: RecurringPayment
 ): string {
-  if (payment.isCompleted && payment.isOverdue) {
+  if (payment.isCompleted) {
     return formatRecurringPaymentCalendarDate(payment.nextDueDate);
   }
 
@@ -16,7 +16,7 @@ export function getRecurringPaymentDueGroupTitle(
 ): string {
   const daysUntilDue = getDaysUntil(payment.nextDueDate);
 
-  if (payment.isCompleted && payment.isOverdue) {
+  if (payment.isCompleted) {
     return formatRecurringPaymentCalendarDate(payment.nextDueDate);
   }
 

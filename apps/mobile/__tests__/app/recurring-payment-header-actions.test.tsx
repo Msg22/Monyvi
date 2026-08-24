@@ -7,6 +7,8 @@ import {
 import React from "react";
 
 let mockPaymentStatus: "ACTIVE" | "PAUSED" | "COMPLETED" = "ACTIVE";
+let mockFormEndDate: Date | null = null;
+let mockReactivateAfterSaving = false;
 let mockAccountsLoading = false;
 const mockShowToast = jest.fn();
 
@@ -62,6 +64,8 @@ jest.mock("@/components/recurring-payments", () => {
           readonly categoryId: string;
           readonly frequency: "MONTHLY";
           readonly startDate: Date;
+          readonly endDate: Date | null;
+          readonly reactivateAfterSaving: boolean;
           readonly action: "NOTIFY";
           readonly notes: string;
         }) => Promise<void>;
@@ -80,6 +84,8 @@ jest.mock("@/components/recurring-payments", () => {
         categoryId: "category-1",
         frequency: "MONTHLY" as const,
         startDate: new Date("2026-06-01T00:00:00.000Z"),
+        endDate: mockFormEndDate,
+        reactivateAfterSaving: mockReactivateAfterSaving,
         action: "NOTIFY" as const,
         notes: "",
       };
@@ -214,6 +220,7 @@ jest.mock("@/hooks/useRecurringPayment", () => ({
       readonly categoryId: "category-1";
       readonly frequency: "MONTHLY";
       readonly startDate: Date;
+      readonly endDate: Date | null;
       readonly action: "NOTIFY";
       readonly notes: "";
       readonly status: "ACTIVE" | "PAUSED" | "COMPLETED";
@@ -230,6 +237,7 @@ jest.mock("@/hooks/useRecurringPayment", () => ({
       categoryId: "category-1",
       frequency: "MONTHLY",
       startDate: new Date("2026-06-01T00:00:00.000Z"),
+      endDate: mockFormEndDate,
       action: "NOTIFY",
       notes: "",
       status: mockPaymentStatus,
@@ -283,6 +291,8 @@ describe("recurring payment header and destructive actions", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPaymentStatus = "ACTIVE";
+    mockFormEndDate = null;
+    mockReactivateAfterSaving = false;
     mockAccountsLoading = false;
   });
 
@@ -299,6 +309,7 @@ describe("recurring payment header and destructive actions", () => {
         type: "EXPENSE",
         frequency: "MONTHLY",
         startDate: new Date("2026-06-01T00:00:00.000Z"),
+        endDate: null,
         accountId: "account-1",
         categoryId: "category-1",
         action: "NOTIFY",
@@ -330,6 +341,19 @@ describe("recurring payment header and destructive actions", () => {
     });
   });
 
+  it("maps a selected End date through creation", async () => {
+    mockFormEndDate = new Date("2026-08-01T00:00:00.000Z");
+    render(<CreateRecurringPaymentScreen />);
+
+    fireEvent.press(screen.getByTestId("header-save"));
+
+    await waitFor(() => {
+      expect(serviceMocks().createRecurringPayment).toHaveBeenCalledWith(
+        expect.objectContaining({ endDate: mockFormEndDate })
+      );
+    });
+  });
+
   it("submits the edit payment form from the header save action", async () => {
     render(<EditRecurringPaymentScreen />);
 
@@ -345,6 +369,8 @@ describe("recurring payment header and destructive actions", () => {
           type: "EXPENSE",
           frequency: "MONTHLY",
           startDate: new Date("2026-06-01T00:00:00.000Z"),
+          endDate: null,
+          reactivateAfterSaving: false,
           accountId: "account-1",
           categoryId: "category-1",
           action: "NOTIFY",
@@ -382,6 +408,35 @@ describe("recurring payment header and destructive actions", () => {
         expect.objectContaining({
           message: "recurring_payment_account_unavailable",
         })
+      );
+    });
+  });
+
+  it("loads and saves a selected End date when editing", async () => {
+    mockFormEndDate = new Date("2026-08-01T00:00:00.000Z");
+    render(<EditRecurringPaymentScreen />);
+
+    fireEvent.press(screen.getByTestId("header-save"));
+
+    await waitFor(() => {
+      expect(serviceMocks().updateRecurringPayment).toHaveBeenCalledWith(
+        "payment-1",
+        expect.objectContaining({ endDate: mockFormEndDate })
+      );
+    });
+  });
+
+  it("maps the completed edit form reactivation choice through save", async () => {
+    mockPaymentStatus = "COMPLETED";
+    mockReactivateAfterSaving = true;
+    render(<EditRecurringPaymentScreen />);
+
+    fireEvent.press(screen.getByTestId("header-save"));
+
+    await waitFor(() => {
+      expect(serviceMocks().updateRecurringPayment).toHaveBeenCalledWith(
+        "payment-1",
+        expect.objectContaining({ reactivateAfterSaving: true })
       );
     });
   });

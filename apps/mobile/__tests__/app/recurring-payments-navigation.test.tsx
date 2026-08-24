@@ -63,8 +63,28 @@ jest.mock("@/hooks/useRecurringPayments", () => ({
   }),
 }));
 
+jest.mock("@/components/dashboard/upcoming-payments", () => ({
+  PayNowModal: (): null => null,
+}));
+
+jest.mock("@/services/recurring-payment-service", () => ({
+  reactivateRecurringPayment: jest.fn(),
+  RECURRING_PAYMENT_SERVICE_ERROR_CODES: {
+    REACTIVATION_UNAVAILABLE: "RECURRING_PAYMENT_REACTIVATION_UNAVAILABLE",
+  },
+}));
+
+jest.mock("@/components/ui/Toast", () => ({
+  useToast: (): { readonly showToast: jest.Mock } => ({
+    showToast: jest.fn(),
+  }),
+}));
+
 jest.mock("@monyvi/logic", () => ({
+  calculateCalendarDaysUntil: (): number => 1,
   formatCurrency: (): string => "EGP 250",
+  getRecurringPaymentReactivationDueDate: ({ nextDueDate }: { readonly nextDueDate: Date }): Date => nextDueDate,
+  isOnOrBeforeDay: (): boolean => true,
 }));
 
 import RecurringPaymentsScreen from "@/app/(private)/recurring-payments";

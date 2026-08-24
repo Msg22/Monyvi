@@ -1,9 +1,13 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import type { CurrencyType, RecurringPayment } from "@monyvi/db";
 import React from "react";
 import { groupPaymentsByDueDate } from "@/services/recurring-payments-dashboard-read-model";
 
 const mockSetStatusFilter = jest.fn();
+const mockPayNowModal = jest.fn();
+const mockReactivateRecurringPayment = jest.fn();
+const mockShowToast = jest.fn();
+let mockUsesCompactLayout = false;
 
 interface MockPageHeaderProps {
   readonly title: string;
@@ -21,6 +25,7 @@ interface MockRecurringPayment {
   readonly categoryId: string;
   readonly frequency: "MONTHLY" | "YEARLY";
   readonly nextDueDate: Date;
+  readonly endDate?: Date;
   readonly status: "ACTIVE" | "PAUSED" | "COMPLETED";
   readonly isIncome: boolean;
   readonly isExpense: boolean;
@@ -148,6 +153,56 @@ jest.mock("@/components/ui/Skeleton", () => ({
   },
 }));
 
+jest.mock("@/components/dashboard/upcoming-payments", () => ({
+  PayNowModal: (props: {
+    readonly payment: RecurringPayment | null;
+    readonly visible: boolean;
+  }): null => {
+    mockPayNowModal(props);
+    return null;
+  },
+}));
+
+jest.mock("@/components/modals/ConfirmationModal", () => ({
+  ConfirmationModal: ({
+    visible,
+    title,
+    onConfirm,
+  }: {
+    readonly visible: boolean;
+    readonly title: string;
+    readonly onConfirm: () => void;
+  }): React.JSX.Element | null => {
+    if (!visible) return null;
+    const { Text, TouchableOpacity, View } =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return (
+      <View testID="reactivate-confirmation-modal">
+        <Text>{title}</Text>
+        <TouchableOpacity testID="reactivate-confirmation-confirm" onPress={onConfirm} />
+      </View>
+    );
+  },
+}));
+
+jest.mock("@/services/recurring-payment-service", () => ({
+  reactivateRecurringPayment: (...args: readonly unknown[]): unknown =>
+    mockReactivateRecurringPayment(...args),
+  RECURRING_PAYMENT_SERVICE_ERROR_CODES: {
+    REACTIVATION_UNAVAILABLE: "RECURRING_PAYMENT_REACTIVATION_UNAVAILABLE",
+  },
+}));
+
+jest.mock("@/components/ui/Toast", () => ({
+  useToast: (): { readonly showToast: jest.Mock } => ({
+    showToast: mockShowToast,
+  }),
+}));
+
+jest.mock("@/constants/ui", () => ({
+  shouldUseCompactLayout: (): boolean => mockUsesCompactLayout,
+}));
+
 jest.mock("@/context/CategoriesContext", () => ({
   useCategoryLookup: (): ReadonlyMap<string, unknown> => new Map(),
 }));
@@ -178,6 +233,33 @@ jest.mock("@/hooks/useRecurringPayments", () => ({
 }));
 
 jest.mock("@monyvi/logic", () => ({
+  calculateCalendarDaysUntil: (date: Date): number => {
+    const now = new Date();
+    return (
+      (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) -
+        Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) /
+      (1000 * 60 * 60 * 24)
+    );
+  },
+  isOnOrBeforeDay: (left: Date, right: Date): boolean =>
+    left.getTime() <= right.getTime(),
+  getRecurringPaymentReactivationDueDate: ({
+    nextDueDate,
+    endDate,
+  }: {
+    readonly nextDueDate: Date;
+    readonly endDate?: Date | null;
+  }): Date => {
+    if (endDate && nextDueDate.getTime() <= endDate.getTime()) {
+      return new Date(
+        nextDueDate.getFullYear(),
+        nextDueDate.getMonth() + 1,
+        nextDueDate.getDate()
+      );
+    }
+
+    return nextDueDate;
+  },
   convertCurrency: (
     amount: number,
     fromCurrency: CurrencyType,
@@ -211,6 +293,10 @@ describe("RecurringPaymentsScreen dashboard", () => {
     jest.requireMock<MockExpoRouter>("expo-router").router.push.mockClear();
     mockPageHeader.mockClear();
     mockSetStatusFilter.mockClear();
+    mockPayNowModal.mockClear();
+    mockReactivateRecurringPayment.mockReset();
+    mockShowToast.mockClear();
+    mockUsesCompactLayout = false;
     mockRecurringPaymentsState = {
       allPayments: [netflix, rent],
       filteredPayments: [netflix, rent],
@@ -225,6 +311,19 @@ describe("RecurringPaymentsScreen dashboard", () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it("keeps every payment card tall enough for its three-line metadata", () => {
+    render(<RecurringPaymentsScreen />);
+
+    expect(screen.getByTestId("recurring-payment-card-payment-1")).toHaveProp(
+      "className",
+      expect.stringContaining("min-h-[88px]")
+    );
+    expect(screen.getByTestId("recurring-payment-row-payment-1")).not.toHaveProp(
+      "className",
+      "flex-1"
+    );
   });
 
   it("uses the themed app background on the dashboard root", () => {
@@ -512,9 +611,193 @@ describe("RecurringPaymentsScreen dashboard", () => {
 
     expect(
       screen.getByTestId("recurring-payment-row-payment-completed")
-    ).toHaveTextContent(/Jun 15/);
+    ).not.toHaveTextContent(/overdue/i);
     expect(
       screen.getByTestId("recurring-payment-row-payment-completed")
-    ).not.toHaveTextContent(/overdue/i);
+    ).not.toHaveTextContent(/Jun 15/);
+  });
+
+  it("keeps completed cards focused on editing and keeps the frequency label on one line", () => {
+    const completedPayment = createPayment({
+      id: "payment-reactivate",
+      status: "COMPLETED",
+      isActive: false,
+      isCompleted: true,
+      endDate: new Date("2026-08-15T00:00:00.000Z"),
+    });
+    mockRecurringPaymentsState = {
+      ...mockRecurringPaymentsState,
+      allPayments: [completedPayment],
+      filteredPayments: [completedPayment],
+      counts: { ACTIVE: 0, PAUSED: 0, COMPLETED: 1 },
+      statusFilter: "COMPLETED",
+    };
+
+    render(<RecurringPaymentsScreen />);
+
+    expect(
+      screen.queryByTestId("recurring-payment-reactivate-payment-reactivate")
+    ).toBeNull();
+    expect(
+      screen.getByTestId("recurring-payment-frequency-label-payment-reactivate")
+    ).toHaveProp("numberOfLines", 1);
+  });
+
+  it("does not show a next due date for completed payments", () => {
+    const completedPayment = createPayment({
+      id: "payment-completed-early",
+      nextDueDate: new Date("2026-07-01T00:00:00.000Z"),
+      status: "COMPLETED",
+      isActive: false,
+      isCompleted: true,
+    });
+    mockRecurringPaymentsState = {
+      ...mockRecurringPaymentsState,
+      allPayments: [completedPayment],
+      filteredPayments: [completedPayment],
+      counts: { ACTIVE: 0, PAUSED: 0, COMPLETED: 1 },
+      statusFilter: "COMPLETED",
+    };
+
+    render(<RecurringPaymentsScreen />);
+
+    expect(
+      screen.getByTestId("recurring-payment-row-payment-completed-early")
+    ).not.toHaveTextContent(/due_in_days/i);
+    expect(
+      screen.getByTestId("recurring-payment-row-payment-completed-early")
+    ).not.toHaveTextContent(/Jul 1/);
+  });
+
+  it("opens Pay Now for an unpaid final overdue payment", () => {
+    const unpaidFinalPayment = createPayment({
+      id: "payment-final-overdue",
+      name: "Phone Installment",
+      nextDueDate: new Date("2026-06-15T00:00:00.000Z"),
+      status: "ACTIVE",
+      isActive: true,
+      isCompleted: false,
+      isOverdue: true,
+    });
+
+    mockRecurringPaymentsState = {
+      ...mockRecurringPaymentsState,
+      allPayments: [unpaidFinalPayment],
+      filteredPayments: [unpaidFinalPayment],
+      statusFilter: "ACTIVE",
+    };
+
+    render(<RecurringPaymentsScreen />);
+
+    expect(
+      screen.getByTestId("recurring-payment-row-payment-final-overdue")
+    ).toHaveTextContent(/status_active/i);
+
+    fireEvent.press(
+      screen.getByTestId(
+        "recurring-payment-pay-now-payment-final-overdue"
+      )
+    );
+
+    expect(mockPayNowModal).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        payment: unpaidFinalPayment,
+        visible: true,
+      })
+    );
+  });
+
+  it("does not offer expense Pay Now flow for overdue income", () => {
+    const overdueIncome = createPayment({
+      id: "payment-overdue-income",
+      name: "Salary",
+      type: "INCOME",
+      isOverdue: true,
+      isActive: true,
+      isCompleted: false,
+    });
+    mockRecurringPaymentsState = {
+      ...mockRecurringPaymentsState,
+      allPayments: [overdueIncome],
+      filteredPayments: [overdueIncome],
+    };
+
+    render(<RecurringPaymentsScreen />);
+
+    expect(
+      screen.queryByTestId("recurring-payment-pay-now-payment-overdue-income")
+    ).toBeNull();
+  });
+
+  it("refreshes Pay Now eligibility after local midnight", () => {
+    const paymentDueToday = createPayment({
+      id: "payment-due-today",
+      nextDueDate: new Date("2026-06-20T00:00:00.000Z"),
+    });
+    mockRecurringPaymentsState = {
+      ...mockRecurringPaymentsState,
+      allPayments: [paymentDueToday],
+      filteredPayments: [paymentDueToday],
+    };
+
+    render(<RecurringPaymentsScreen />);
+
+    expect(
+      screen.queryByTestId("recurring-payment-pay-now-payment-due-today")
+    ).toBeNull();
+
+    act(() => {
+      jest.advanceTimersByTime(24 * 60 * 60 * 1000);
+    });
+
+    expect(
+      screen.getByTestId("recurring-payment-pay-now-payment-due-today")
+    ).toBeTruthy();
+  });
+
+  it("keeps overdue Pay Now inline at an ordinary layout width", () => {
+    const overduePayment = createPayment({
+      id: "payment-inline-pay-now",
+      nextDueDate: new Date("2026-06-15T00:00:00.000Z"),
+      isOverdue: true,
+    });
+    mockRecurringPaymentsState = {
+      ...mockRecurringPaymentsState,
+      allPayments: [overduePayment],
+      filteredPayments: [overduePayment],
+    };
+
+    render(<RecurringPaymentsScreen />);
+
+    expect(
+      screen.getByTestId(
+        "recurring-payment-pay-now-layout-payment-inline-pay-now"
+      )
+    ).toHaveProp("className", expect.stringContaining("ms-3"));
+  });
+
+  it("stacks overdue Pay Now at compact layout widths", () => {
+    mockUsesCompactLayout = true;
+    const overduePayment = createPayment({
+      id: "payment-stacked-pay-now",
+      nextDueDate: new Date("2026-06-15T00:00:00.000Z"),
+      isOverdue: true,
+    });
+    mockRecurringPaymentsState = {
+      ...mockRecurringPaymentsState,
+      allPayments: [overduePayment],
+      filteredPayments: [overduePayment],
+    };
+
+    render(<RecurringPaymentsScreen />);
+
+    expect(
+      screen.getByTestId(
+        "recurring-payment-pay-now-layout-payment-stacked-pay-now"
+      )
+    ).toHaveProp(
+      "className",
+      expect.stringContaining("mt-3 self-stretch")
+    );
   });
 });

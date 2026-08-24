@@ -22,11 +22,13 @@ import type {
   RecurringStatus,
   TransactionType,
 } from "@monyvi/db";
-import { formatAmountInput, parseAmountInput } from "@monyvi/logic";
+import {
+  formatAmountInput,
+  isOnOrBeforeDay,
+  parseAmountInput,
+} from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker, {
-  type DateTimePickerEvent,
-} from "@react-native-community/datetimepicker";
+import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import React, {
   useCallback,
   useEffect,
@@ -55,6 +57,8 @@ export interface RecurringPaymentFormValues {
   readonly categoryId: string | null;
   readonly frequency: RecurringFrequency;
   readonly startDate: Date;
+  readonly endDate: Date | null;
+  readonly reactivateAfterSaving: boolean;
   readonly action: RecurringAction;
   readonly notes: string;
 }
@@ -76,17 +80,12 @@ interface RecurringPaymentFormProps {
   readonly onPauseToggle?: () => Promise<void>;
   readonly onDelete?: () => Promise<void>;
 }
-
 export interface RecurringPaymentFormHandle {
   submit: () => void;
 }
-
-type FormErrors = Partial<
-  Record<"name" | "amount" | "accountId" | "categoryId", string>
->;
+type FormErrors = Partial<Record<"name" | "amount" | "accountId" | "categoryId" | "endDate", string>>;
 type FormFieldName = keyof FormErrors;
 type RecurringPaymentFormField = keyof RecurringPaymentFormValues;
-
 const TYPE_OPTIONS: ReadonlyArray<{
   readonly value: TransactionType;
   readonly labelKey: "expense" | "income";
@@ -95,7 +94,6 @@ const TYPE_OPTIONS: ReadonlyArray<{
   { value: "EXPENSE", labelKey: "expense", icon: "receipt-outline" },
   { value: "INCOME", labelKey: "income", icon: "cash-outline" },
 ];
-
 const ACTION_OPTIONS: ReadonlyArray<{
   readonly value: RecurringAction;
   readonly labelKey: string;
@@ -112,13 +110,13 @@ const ACTION_OPTIONS: ReadonlyArray<{
     icon: "flash-outline",
   },
 ];
-
 const DEFAULT_CURRENCY: CurrencyType = "EGP";
 const ERROR_FIELD_ORDER: readonly FormFieldName[] = [
   "name",
   "amount",
   "accountId",
   "categoryId",
+  "endDate",
 ];
 const FORM_VALUE_FIELDS: readonly RecurringPaymentFormField[] = [
   "name",
@@ -128,6 +126,8 @@ const FORM_VALUE_FIELDS: readonly RecurringPaymentFormField[] = [
   "categoryId",
   "frequency",
   "startDate",
+  "endDate",
+  "reactivateAfterSaving",
   "action",
   "notes",
 ];
@@ -172,13 +172,14 @@ export const RecurringPaymentForm = React.forwardRef<
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showFrequencyModal, setShowFrequencyModal] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerField, setDatePickerField] = useState<"startDate" | "endDate" | null>(null);
   const isSubmitInFlightRef = useRef(false);
   const dirtyFieldsRef = useRef<Set<RecurringPaymentFormField>>(new Set());
   const nameFieldRef = getFieldRef("name");
   const amountFieldRef = getFieldRef("amount");
   const accountFieldRef = getFieldRef("accountId");
   const categoryFieldRef = getFieldRef("categoryId");
+  const endDateFieldRef = getFieldRef("endDate");
   const initialValuesKey = useMemo(
     () =>
       [
@@ -189,6 +190,8 @@ export const RecurringPaymentForm = React.forwardRef<
         initialValues.categoryId ?? "",
         initialValues.frequency,
         initialValues.startDate.getTime(),
+        initialValues.endDate?.getTime() ?? "",
+        initialValues.reactivateAfterSaving,
         initialValues.action,
         initialValues.notes,
       ].join("|"),
@@ -201,6 +204,8 @@ export const RecurringPaymentForm = React.forwardRef<
       initialValues.name,
       initialValues.notes,
       initialValues.startDate,
+      initialValues.endDate,
+      initialValues.reactivateAfterSaving,
       initialValues.type,
     ]
   );
@@ -228,14 +233,29 @@ export const RecurringPaymentForm = React.forwardRef<
   );
   const hasScheduleChanges =
     initialValues.startDate.getTime() !== form.startDate.getTime() ||
-    initialValues.frequency !== form.frequency;
+    initialValues.frequency !== form.frequency ||
+    initialValues.endDate?.getTime() !== form.endDate?.getTime();
   const displayDueDate = getDisplayDueDate({
     dueDate,
     initialValues,
     form,
     hasScheduleChanges,
+    status,
   });
   const startDateMinimumDate = getStartDateMinimumDate(mode, form.startDate);
+  const hasNoFurtherEligibleRecurrence = hasNoFurtherEligiblePayment(
+    form.startDate,
+    form.frequency,
+    form.endDate
+  );
+  const didDuePaymentChange = initialValues.startDate.getTime() !== form.startDate.getTime();
+  const reactivationDueDate = didDuePaymentChange ? form.startDate : getReactivationDueDate(dueDate, initialValues.endDate, form.frequency);
+  const isReactivationAvailable =
+    reactivationDueDate !== null &&
+    (form.endDate === null ||
+      isOnOrBeforeDay(reactivationDueDate, form.endDate));
+  const hasDuePaymentAfterEndDate =
+    form.endDate !== null && !isOnOrBeforeDay(form.startDate, form.endDate);
 
   useEffect(() => {
     const dirtyFields = dirtyFieldsRef.current;
@@ -265,12 +285,20 @@ export const RecurringPaymentForm = React.forwardRef<
     ): void => {
       dirtyFieldsRef.current = new Set([...dirtyFieldsRef.current, field]);
       setForm((prev) => ({ ...prev, [field]: value }));
+      if (field === "startDate") {
+        setErrors((prev) => ({ ...prev, endDate: undefined }));
+        return;
+      }
       if (field in errors) {
         setErrors((prev) => ({ ...prev, [field]: undefined }));
       }
     },
     [errors]
   );
+
+  useEffect(() => {
+    if (form.reactivateAfterSaving && !isReactivationAvailable) updateField("reactivateAfterSaving", false);
+  }, [form.reactivateAfterSaving, isReactivationAvailable, updateField]);
 
   const handleSubmit = useCallback(async (): Promise<void> => {
     if (isSubmitting || isSubmitInFlightRef.current) return;
@@ -280,6 +308,9 @@ export const RecurringPaymentForm = React.forwardRef<
       amount: form.amount,
       accountId: form.accountId,
       categoryId: form.categoryId,
+      startDate: form.startDate,
+      endDate: form.endDate ?? null,
+      endDateErrorMessage: t("end_date_before_due"),
     });
 
     if (!result.isValid) {
@@ -308,11 +339,27 @@ export const RecurringPaymentForm = React.forwardRef<
   );
 
   const handleDateChange = useCallback(
-    (_event: DateTimePickerEvent, selectedDate?: Date): void => {
-      setShowDatePicker(Platform.OS === "ios");
+    (event: DateTimePickerEvent, selectedDate?: Date): void => {
+      if (event.type === "dismissed") {
+        setDatePickerField(null);
+        return;
+      }
+      setDatePickerField(Platform.OS === "ios" ? "startDate" : null);
       if (selectedDate) {
         updateField("startDate", selectedDate);
       }
+    },
+    [updateField]
+  );
+
+  const handleEndDateChange = useCallback(
+    (event: DateTimePickerEvent, selectedDate?: Date): void => {
+      if (event.type === "dismissed") {
+        setDatePickerField(null);
+        return;
+      }
+      setDatePickerField(Platform.OS === "ios" ? "endDate" : null);
+      if (selectedDate) updateField("endDate", selectedDate);
     },
     [updateField]
   );
@@ -436,17 +483,106 @@ export const RecurringPaymentForm = React.forwardRef<
                 icon="calendar-outline"
                 label={t("start_date")}
                 value={formatDate(form.startDate, "MMM d, yyyy")}
-                onPress={() => setShowDatePicker((current) => !current)}
+                description={t("due_payment_hint")}
+                onPress={() =>
+                  setDatePickerField((current) =>
+                    current === "startDate" ? null : "startDate"
+                  )
+                }
                 iconColor={palette.nileGreen[500]}
                 iconContainerClassName="bg-nileGreen-100 dark:bg-slate-700"
               />
+              <Divider index={3} />
+              <View ref={endDateFieldRef}>
+                <FormRow
+                  testID="recurring-payment-end-date-row"
+                  icon="calendar-outline"
+                  label={t("end_date")}
+                  labelSuffix={t("optional")}
+                  value={form.endDate ? formatDate(form.endDate, "MMM d, yyyy") : t("end_date_not_set")}
+                  description={
+                    hasNoFurtherEligibleRecurrence
+                      ? t("end_date_no_further_payments")
+                      : t("end_date_hint")
+                  }
+                  actionLabel={form.endDate ? t("clear") : undefined}
+                  onAction={form.endDate ? () => updateField("endDate", null) : undefined}
+                  onPress={() =>
+                    setDatePickerField((current) =>
+                      current === "endDate" ? null : "endDate"
+                    )
+                  }
+                  iconColor={palette.nileGreen[500]}
+                  iconContainerClassName="bg-nileGreen-100 dark:bg-slate-700"
+                />
+              </View>
             </View>
           </View>
           {errors.accountId ? <ErrorText>{errors.accountId}</ErrorText> : null}
           {errors.categoryId ? (
             <ErrorText>{errors.categoryId}</ErrorText>
           ) : null}
+          {hasDuePaymentAfterEndDate ? (
+            <ErrorText>{t("end_date_before_due")}</ErrorText>
+          ) : errors.endDate ? (
+            <ErrorText>{errors.endDate}</ErrorText>
+          ) : null}
         </View>
+
+        {mode === "edit" && status === "COMPLETED" ? (
+          <TouchableOpacity
+            testID="recurring-payment-reactivate-after-saving"
+            accessibilityRole="checkbox"
+            accessibilityState={{
+              checked: form.reactivateAfterSaving,
+              disabled: !isReactivationAvailable,
+            }}
+            disabled={!isReactivationAvailable}
+            onPress={() =>
+              updateField(
+                "reactivateAfterSaving",
+                !form.reactivateAfterSaving
+              )
+            }
+            className={`mb-6 flex-row items-center rounded-2xl border px-4 py-3 ${
+              isReactivationAvailable
+                ? "border-slate-200 dark:border-slate-700 bg-slate-25 dark:bg-slate-800"
+                : "border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"
+            }`}
+            // NativeWind opacity classes crash on TouchableOpacity.
+            style={!isReactivationAvailable ? { opacity: 0.5 } : undefined}
+          >
+            <View
+              className={`me-3 h-5 w-5 rounded border items-center justify-center ${
+                form.reactivateAfterSaving
+                  ? "border-nileGreen-500 bg-nileGreen-500"
+                  : "border-slate-400 dark:border-slate-500"
+              }`}
+            >
+              {form.reactivateAfterSaving ? (
+                <Ionicons name="checkmark" size={16} color={palette.slate[25]} />
+              ) : null}
+            </View>
+            <View className="flex-1">
+              <Text
+                className={`text-sm font-semibold ${
+                  isReactivationAvailable
+                    ? "text-text-primary dark:text-text-primary-dark"
+                    : "text-text-muted dark:text-text-muted-dark"
+                }`}
+              >
+                {t("reactivate_after_saving")}
+              </Text>
+              <Text className="mt-1 text-xs leading-4 text-text-secondary dark:text-text-secondary-dark">
+                {isReactivationAvailable && reactivationDueDate
+                  ? t("reactivate_after_saving_hint", {
+                      date: formatDate(reactivationDueDate, "MMM d, yyyy"),
+                    })
+                  : t("reactivate_payment_unavailable")}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ) : null}
 
         <View testID="recurring-payment-action-section" className="mb-6">
           <Text testID="recurring-payment-action-title" className="input-label">
@@ -530,13 +666,13 @@ export const RecurringPaymentForm = React.forwardRef<
         </TouchableOpacity>
       </ScrollView>
 
-      {showDatePicker ? (
+      {datePickerField ? (
         <DateTimePicker
-          value={form.startDate}
+          value={datePickerField === "startDate" ? form.startDate : (form.endDate ?? form.startDate)}
           mode="date"
           display="default"
-          minimumDate={startDateMinimumDate}
-          onChange={handleDateChange}
+          minimumDate={datePickerField === "startDate" ? startDateMinimumDate : form.startDate}
+          onChange={datePickerField === "startDate" ? handleDateChange : handleEndDateChange}
         />
       ) : null}
 
@@ -638,21 +774,98 @@ function getDisplayDueDate({
   initialValues,
   form,
   hasScheduleChanges,
+  status,
 }: {
   readonly dueDate?: Date;
   readonly initialValues: RecurringPaymentFormValues;
   readonly form: RecurringPaymentFormValues;
   readonly hasScheduleChanges: boolean;
+  readonly status?: RecurringStatus;
 }): Date {
   if (dueDate && !hasScheduleChanges) {
     return dueDate;
   }
 
+  if (dueDate && status === "COMPLETED" && !form.reactivateAfterSaving) {
+    return dueDate;
+  }
+
+  const shouldRetainFinalPaidOccurrence =
+    dueDate !== undefined &&
+    status === "COMPLETED" &&
+    form.reactivateAfterSaving &&
+    initialValues.endDate !== null &&
+    isOnOrBeforeDay(dueDate, initialValues.endDate) &&
+    !didRelaxEndDate(initialValues.endDate, form.endDate);
+  if (shouldRetainFinalPaidOccurrence) {
+    return dueDate;
+  }
+
   const didStartDateChange =
     initialValues.startDate.getTime() !== form.startDate.getTime();
-  const anchor = dueDate && !didStartDateChange ? dueDate : form.startDate;
+  const didFrequencyChange = initialValues.frequency !== form.frequency;
+  const didRelaxCompletedEndDate =
+    dueDate !== undefined &&
+    status === "COMPLETED" &&
+    initialValues.endDate !== null &&
+    didRelaxEndDate(initialValues.endDate, form.endDate);
+  if (
+    dueDate &&
+    !didStartDateChange &&
+    didRelaxCompletedEndDate &&
+    isOnOrBeforeDay(dueDate, initialValues.endDate)
+  ) {
+    return calculateNextDueDate(dueDate, form.frequency);
+  }
+  if (
+    dueDate &&
+    !didStartDateChange &&
+    didFrequencyChange &&
+    !(
+      status === "COMPLETED" &&
+      initialValues.endDate !== null &&
+      !isOnOrBeforeDay(dueDate, initialValues.endDate)
+    )
+  ) {
+    return calculateNextDueDate(dueDate, form.frequency);
+  }
 
-  return calculateNextDueDate(anchor, form.frequency);
+  if (dueDate && status === "COMPLETED") {
+    return dueDate;
+  }
+
+  return form.startDate;
+}
+
+function didRelaxEndDate(
+  initialEndDate: Date,
+  nextEndDate: Date | null
+): boolean {
+  return nextEndDate === null || !isOnOrBeforeDay(nextEndDate, initialEndDate);
+}
+
+function hasNoFurtherEligiblePayment(
+  duePayment: Date,
+  frequency: RecurringFrequency,
+  endDate: Date | null
+): boolean {
+  return (
+    endDate !== null &&
+    isOnOrBeforeDay(duePayment, endDate) &&
+    !isOnOrBeforeDay(calculateNextDueDate(duePayment, frequency), endDate)
+  );
+}
+
+function getReactivationDueDate(
+  dueDate: Date | undefined,
+  initialEndDate: Date | null,
+  frequency: RecurringFrequency
+): Date | null {
+  if (!dueDate) return null;
+
+  return initialEndDate !== null && isOnOrBeforeDay(dueDate, initialEndDate)
+    ? calculateNextDueDate(dueDate, frequency)
+    : dueDate;
 }
 
 function getStartDateMinimumDate(

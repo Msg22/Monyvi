@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Existing form integration fixtures are consolidated pending a dedicated test-structure refactor. */
 import {
   act,
   fireEvent,
@@ -16,6 +17,7 @@ import {
 const mockAccountModal = jest.fn();
 const mockCategoryModal = jest.fn();
 const mockFrequencyModal = jest.fn();
+let mockUsesCompactLayout = false;
 const mockScrollTo = jest.fn<
   void,
   [{ readonly animated?: boolean; readonly y?: number }]
@@ -46,7 +48,26 @@ jest.spyOn(ScrollView.prototype, "scrollTo").mockImplementation((options) => {
 
 jest.mock("@react-native-community/datetimepicker", () => ({
   __esModule: true,
-  default: (): null => null,
+  default: ({
+    onChange,
+  }: {
+    readonly onChange: (event: { readonly type: "set" }, date: Date) => void;
+  }): React.JSX.Element => {
+    const ReactNative =
+      jest.requireActual<typeof import("react-native")>("react-native");
+
+    return (
+      <ReactNative.Pressable
+        testID="set-recurring-payment-date-july-15"
+        onPress={() =>
+          onChange(
+            { type: "set" },
+            new Date("2026-07-15T00:00:00.000Z")
+          )
+        }
+      />
+    );
+  },
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
@@ -65,6 +86,10 @@ jest.mock("react-i18next", () => ({
 
 jest.mock("@/context/ThemeContext", () => ({
   useTheme: (): { readonly isDark: true } => ({ isDark: true }),
+}));
+
+jest.mock("@/constants/ui", () => ({
+  shouldUseCompactLayout: (): boolean => mockUsesCompactLayout,
 }));
 
 jest.mock("@/components/modals/AccountSelectorModal", () => ({
@@ -141,6 +166,8 @@ const initialValues: RecurringPaymentFormValues = {
   categoryId: "category-1",
   frequency: "MONTHLY",
   startDate: new Date("2026-06-01T00:00:00.000Z"),
+  endDate: null,
+  reactivateAfterSaving: false,
   action: "NOTIFY",
   notes: "",
 };
@@ -198,6 +225,7 @@ describe("RecurringPaymentForm", () => {
     jest.clearAllMocks();
     mockScrollTo.mockClear();
     keyboardShowListener = null;
+    mockUsesCompactLayout = false;
   });
 
   it("renders the approved shared add/edit sections", () => {
@@ -226,6 +254,47 @@ describe("RecurringPaymentForm", () => {
     expect(mockAccountModal).toHaveBeenLastCalledWith(true);
     expect(mockCategoryModal).toHaveBeenLastCalledWith(true);
     expect(mockFrequencyModal).toHaveBeenLastCalledWith(true);
+  });
+
+  it("renders optional end date guidance and clears a selected end date", async () => {
+    const onSubmit = jest.fn().mockResolvedValue(undefined);
+    const selectedEndDate = new Date("2026-08-01T00:00:00.000Z");
+
+    renderForm({
+      initialValues: { ...initialValues, endDate: selectedEndDate },
+      onSubmit,
+    });
+
+    expect(screen.getByText("due_payment_hint")).toBeTruthy();
+    expect(screen.getByText("end_date_hint")).toBeTruthy();
+    expect(screen.getByText("optional")).toBeTruthy();
+    expect(screen.getByTestId("recurring-payment-end-date-row-action")).toBeTruthy();
+    expect(
+      screen.getByTestId("recurring-payment-end-date-row-value-action")
+    ).toHaveProp("className", expect.stringContaining("items-end"));
+
+    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row-action"));
+    fireEvent.press(screen.getByText("save"));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ endDate: null })
+      );
+    });
+  });
+
+  it("stacks selected End date action at compact layout widths", () => {
+    mockUsesCompactLayout = true;
+    renderForm({
+      initialValues: {
+        ...initialValues,
+        endDate: new Date("2026-08-01T00:00:00.000Z"),
+      },
+    });
+
+    expect(
+      screen.getByTestId("recurring-payment-end-date-row-controls")
+    ).toHaveProp("className", expect.stringContaining("self-end mt-2"));
   });
 
   it("shows pause/resume and delete actions only in edit mode", () => {
@@ -267,9 +336,190 @@ describe("RecurringPaymentForm", () => {
     fireEvent.press(screen.getByTestId("recurring-payment-frequency-row"));
     fireEvent.press(screen.getByTestId("select-weekly-frequency"));
 
+    expect(screen.getByTestId("recurring-payment-summary-due-value")).toHaveTextContent("Jul 8, 2026");
+  });
+
+  it("keeps the final paid date in the summary when frequency changes on a completed bounded payment", () => {
+    renderForm({
+      mode: "edit",
+      status: "COMPLETED",
+      dueDate: new Date("2026-07-01T00:00:00.000Z"),
+      initialValues: {
+        ...initialValues,
+        endDate: new Date("2026-07-01T00:00:00.000Z"),
+      },
+    });
+
+    fireEvent.press(screen.getByTestId("recurring-payment-frequency-row"));
+    fireEvent.press(screen.getByTestId("select-weekly-frequency"));
+
     expect(
       screen.getByTestId("recurring-payment-summary-due-value")
-    ).toHaveTextContent("Jul 8, 2026");
+    ).toHaveTextContent("Jul 1, 2026");
+  });
+
+  it("keeps a completed payment completed in the preview when End date is relaxed", () => {
+    renderForm({
+      mode: "edit",
+      status: "COMPLETED",
+      dueDate: new Date("2026-07-01T00:00:00.000Z"),
+      initialValues: {
+        ...initialValues,
+        endDate: new Date("2026-07-01T00:00:00.000Z"),
+      },
+    });
+
+    fireEvent.press(screen.getByTestId("recurring-payment-frequency-row"));
+    fireEvent.press(screen.getByTestId("select-weekly-frequency"));
+    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row-action"));
+
+    expect(
+      screen.getByTestId("recurring-payment-summary-due-value")
+    ).toHaveTextContent("Jul 1, 2026");
+  });
+
+  it("shows a save-time reactivation choice only for completed edit payments", () => {
+    renderForm({
+      mode: "edit",
+      status: "COMPLETED",
+      dueDate: new Date("2026-07-01T00:00:00.000Z"),
+      initialValues: {
+        ...initialValues,
+        endDate: new Date("2026-08-15T00:00:00.000Z"),
+      },
+    });
+
+    expect(
+      screen.getByTestId("recurring-payment-reactivate-after-saving")
+    ).toBeTruthy();
+    expect(screen.getByText("reactivate_after_saving")).toBeTruthy();
+  });
+
+  it("keeps the stored occurrence in the reactivation preview after a boundary shortened before it", () => {
+    renderForm({
+      mode: "edit",
+      status: "COMPLETED",
+      dueDate: new Date("2026-08-01T00:00:00.000Z"),
+      initialValues: {
+        ...initialValues,
+        endDate: new Date("2026-07-01T00:00:00.000Z"),
+      },
+    });
+
+    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row-action"));
+    fireEvent.press(
+      screen.getByTestId("recurring-payment-reactivate-after-saving")
+    );
+
+    expect(
+      screen.getByTestId("recurring-payment-summary-due-value")
+    ).toHaveTextContent("Aug 1, 2026");
+  });
+
+  it("disables save-time reactivation when the next payment is after End date", () => {
+    renderForm({
+      mode: "edit",
+      status: "COMPLETED",
+      dueDate: new Date("2026-07-01T00:00:00.000Z"),
+      initialValues: {
+        ...initialValues,
+        endDate: new Date("2026-07-01T00:00:00.000Z"),
+      },
+    });
+
+    expect(
+      screen.getByTestId("recurring-payment-reactivate-after-saving")
+    ).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: true })
+    );
+    expect(screen.getByText("reactivate_payment_unavailable")).toBeTruthy();
+    expect(
+      screen.getByTestId("recurring-payment-reactivate-after-saving")
+    ).toHaveStyle({ opacity: 0.5 });
+  });
+
+  it("enables save-time reactivation when edited Due payment is eligible", () => {
+    renderForm({
+      mode: "edit",
+      status: "COMPLETED",
+      dueDate: new Date("2026-07-01T00:00:00.000Z"),
+      initialValues: {
+        ...initialValues,
+        endDate: new Date("2026-07-01T00:00:00.000Z"),
+      },
+    });
+
+    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row"));
+    fireEvent.press(screen.getByTestId("set-recurring-payment-date-july-15"));
+    fireEvent.press(screen.getByTestId("recurring-payment-start-date-row"));
+    fireEvent.press(screen.getByTestId("set-recurring-payment-date-july-15"));
+
+    expect(
+      screen.getByTestId("recurring-payment-reactivate-after-saving")
+    ).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: false })
+    );
+  });
+
+  it("clears reactivation intent when a later End date change makes it unavailable", async () => {
+    const onSubmit = jest.fn().mockResolvedValue(undefined);
+    renderForm({
+      mode: "edit",
+      status: "COMPLETED",
+      dueDate: new Date("2026-07-01T00:00:00.000Z"),
+      initialValues: {
+        ...initialValues,
+        endDate: new Date("2026-07-01T00:00:00.000Z"),
+      },
+      onSubmit,
+    });
+
+    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row-action"));
+    fireEvent.press(screen.getByTestId("recurring-payment-reactivate-after-saving"));
+    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row"));
+    fireEvent.press(screen.getByTestId("set-recurring-payment-date-july-15"));
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("recurring-payment-reactivate-after-saving")
+      ).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ checked: false, disabled: true })
+      );
+    });
+    fireEvent.press(screen.getByText("save"));
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ reactivateAfterSaving: false })
+      );
+    });
+  });
+
+  it("explains when a valid bounded schedule has no further eligible recurrence", () => {
+    renderForm({
+      initialValues: {
+        ...initialValues,
+        frequency: "WEEKLY",
+        startDate: new Date("2026-08-25T00:00:00.000Z"),
+        endDate: new Date("2026-08-27T00:00:00.000Z"),
+      },
+    });
+
+    expect(screen.getByText("end_date_no_further_payments")).toBeTruthy();
+  });
+
+  it("shows End date guidance immediately when Due payment is outside the allowed period", () => {
+    renderForm({
+      initialValues: {
+        ...initialValues,
+        startDate: new Date("2026-08-28T00:00:00.000Z"),
+        endDate: new Date("2026-08-27T00:00:00.000Z"),
+      },
+    });
+
+    expect(screen.getByText("end_date_before_due")).toBeTruthy();
   });
 
   it("guards against duplicate submissions while a submit is in flight", async () => {
@@ -528,6 +778,38 @@ describe("RecurringPaymentForm", () => {
       "className",
       expect.stringContaining("input-error")
     );
+  });
+
+  it("scrolls to End date error when Due payment moves after it", async () => {
+    const ref = React.createRef<RecurringPaymentFormHandle>();
+
+    render(
+      <RecurringPaymentForm
+        ref={ref}
+        mode="create"
+        initialValues={{
+          ...initialValues,
+          startDate: new Date("2026-08-02T00:00:00.000Z"),
+          endDate: new Date("2026-08-01T00:00:00.000Z"),
+        }}
+        accounts={accounts as unknown as readonly Account[]}
+        expenseCategories={categories as unknown as readonly Category[]}
+        incomeCategories={[]}
+        isSubmitting={false}
+        submitLabel="save"
+        onSubmit={jest.fn()}
+      />
+    );
+
+    mockScrollTo.mockClear();
+    act(() => {
+      ref.current?.submit();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("end_date_before_due")).toBeTruthy();
+      expect(mockScrollTo).toHaveBeenCalled();
+    });
   });
 
   it("scrolls upward when the first validation error is above the viewport", async () => {

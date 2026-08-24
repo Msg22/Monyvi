@@ -46,6 +46,17 @@ describe("useHistoricalRates", () => {
     jest.clearAllMocks();
   });
 
+  it("uses local calendar fields for historical-rate lookup keys", () => {
+    const localCalendarDate = new Date("2026-08-31T21:00:00.000Z");
+    Object.assign(localCalendarDate, {
+      getFullYear: (): number => 2026,
+      getMonth: (): number => 8,
+      getDate: (): number => 1,
+    });
+
+    expect(toDateKey(localCalendarDate)).toBe("2026-09-01");
+  });
+
   it("treats an invalid cached historical rate as unavailable", async () => {
     const invalidRate = createMarketRate();
     Object.defineProperty(invalidRate, "egpUsd", { value: 0 });

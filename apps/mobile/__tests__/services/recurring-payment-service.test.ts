@@ -26,6 +26,7 @@ interface MockRecurringPaymentRecord {
   status: string;
   deleted: boolean;
   notes?: string;
+  endDate?: Date;
   update: jest.Mock<
     Promise<void>,
     [(record: MockRecurringPaymentRecord) => void]
@@ -119,6 +120,13 @@ jest.mock("@/utils/dateHelpers", () => ({
     }
 
     return new Date("2026-08-01T00:00:00.000Z");
+  },
+  isOnOrBeforeDay: (date: Date, boundary: Date): boolean => {
+    const normalizedDate = new Date(date);
+    normalizedDate.setHours(0, 0, 0, 0);
+    const normalizedBoundary = new Date(boundary);
+    normalizedBoundary.setHours(0, 0, 0, 0);
+    return normalizedDate.getTime() <= normalizedBoundary.getTime();
   },
   getNextMonthSameDay: (): Date => new Date("2026-07-01T00:00:00.000Z"),
 }));
@@ -232,7 +240,7 @@ describe("recurring-payment-service", () => {
     });
   });
 
-  it("persists the frequency-aware next due date when creating a recurring payment", async () => {
+  it("uses Due payment as the first outstanding occurrence when creating a recurring payment", async () => {
     const result = await createRecurringPayment({
       name: "Weekly Gym",
       amount: 250,
@@ -248,8 +256,161 @@ describe("recurring-payment-service", () => {
 
     expect(result).toMatchObject({
       frequency: "WEEKLY",
-      nextDueDate: new Date("2026-06-08T00:00:00.000Z"),
+      nextDueDate: new Date("2026-06-01T00:00:00.000Z"),
     });
+  });
+
+  it("advances the next due date when the first occurrence is already recorded", async () => {
+    const result = await createRecurringPayment({
+      name: "Recorded gym payment",
+      amount: 250,
+      currency: "EGP",
+      type: "EXPENSE",
+      accountId: "account-1",
+      categoryId: "category-1",
+      frequency: "WEEKLY",
+      startDate: new Date("2026-06-01T00:00:00.000Z"),
+      initialOccurrenceRecorded: true,
+      action: "NOTIFY",
+    });
+
+    expect(result.nextDueDate).toEqual(new Date("2026-06-08T00:00:00.000Z"));
+  });
+
+  it("persists an End date on create and clears it on update", async () => {
+    const endDate = new Date("2026-08-01T00:00:00.000Z");
+    const created = await createRecurringPayment({
+      name: "Internet bill",
+      amount: 120,
+      currency: "EGP",
+      type: "EXPENSE",
+      accountId: "account-1",
+      categoryId: "category-1",
+      frequency: "MONTHLY",
+      startDate: new Date("2026-06-01T00:00:00.000Z"),
+      endDate,
+      action: "NOTIFY",
+    });
+    const payment = createRecurringRecord({ endDate });
+    mockFindOwned.mockImplementation(
+      (_collection: MockCollection, id: string): Promise<unknown> =>
+        id === "account-1"
+          ? Promise.resolve({ id, userId: "user-1", currency: "EGP" })
+          : Promise.resolve(payment)
+    );
+
+    await updateRecurringPayment("payment-1", {
+      name: "Internet bill",
+      amount: 120,
+      currency: "EGP",
+      type: "EXPENSE",
+      accountId: "account-1",
+      categoryId: "category-1",
+      frequency: "MONTHLY",
+      startDate: new Date("2026-06-01T00:00:00.000Z"),
+      endDate: null,
+      action: "NOTIFY",
+    });
+
+    expect(created).toMatchObject({ endDate });
+    expect(payment.endDate).toBeUndefined();
+  });
+
+  it("completes an active series when an edited End date is before its next due payment", async () => {
+    const payment = createRecurringRecord({
+      nextDueDate: new Date("2026-08-01T00:00:00.000Z"),
+    });
+    mockFindOwned.mockImplementation(
+      (_collection: MockCollection, id: string): Promise<unknown> =>
+        id === "account-1"
+          ? Promise.resolve({ id, userId: "user-1", currency: "EGP" })
+          : Promise.resolve(payment)
+    );
+
+    await updateRecurringPayment("payment-1", {
+      name: "Netflix",
+      amount: 250,
+      currency: "EGP",
+      type: "EXPENSE",
+      accountId: "account-1",
+      categoryId: "category-1",
+      frequency: "MONTHLY",
+      startDate: new Date("2026-06-01T00:00:00.000Z"),
+      endDate: new Date("2026-07-01T00:00:00.000Z"),
+      action: "NOTIFY",
+    });
+
+    expect(payment.status).toBe("COMPLETED");
+  });
+
+  it("keeps an edited Due payment outstanding when it equals End date", async () => {
+    const payment = createRecurringRecord({
+      startDate: new Date("2026-06-01T00:00:00.000Z"),
+      nextDueDate: new Date("2026-07-01T00:00:00.000Z"),
+    });
+    mockFindOwned.mockImplementation(
+      (_collection: MockCollection, id: string): Promise<unknown> =>
+        id === "account-1"
+          ? Promise.resolve({ id, userId: "user-1", currency: "EGP" })
+          : Promise.resolve(payment)
+    );
+    const duePayment = new Date("2026-07-15T00:00:00.000Z");
+
+    await updateRecurringPayment("payment-1", {
+      name: "Netflix",
+      amount: 250,
+      currency: "EGP",
+      type: "EXPENSE",
+      accountId: "account-1",
+      categoryId: "category-1",
+      frequency: "MONTHLY",
+      startDate: duePayment,
+      endDate: duePayment,
+      action: "NOTIFY",
+    });
+
+    expect(payment.status).toBe("ACTIVE");
+    expect(payment.nextDueDate).toEqual(duePayment);
+  });
+
+  it("keeps an end-date-completed payment completed when its next due date becomes eligible", async () => {
+    const payment = createRecurringRecord({
+      status: "COMPLETED",
+      endDate: new Date("2026-07-01T00:00:00.000Z"),
+      nextDueDate: new Date("2026-08-01T00:00:00.000Z"),
+    });
+    mockFindOwned.mockImplementation((_collection: MockCollection, id: string): Promise<unknown> => id === "account-1" ? Promise.resolve({ id, userId: "user-1" }) : Promise.resolve(payment));
+
+    await updateRecurringPayment("payment-1", { name: "Netflix", amount: 250, currency: "EGP", type: "EXPENSE", accountId: "account-1", categoryId: "category-1", frequency: "MONTHLY", startDate: payment.startDate, endDate: null, action: "NOTIFY" });
+
+    expect(payment.status).toBe("COMPLETED");
+    expect(payment.nextDueDate).toEqual(new Date("2026-08-01T00:00:00.000Z"));
+  });
+
+  it("keeps the final paid occurrence when editing a completed bounded series", async () => {
+    const finalPaidDate = new Date("2026-07-01T00:00:00.000Z");
+    const payment = createRecurringRecord({
+      status: "COMPLETED",
+      endDate: finalPaidDate,
+      nextDueDate: finalPaidDate,
+    });
+    mockFindOwned.mockImplementation((_collection: MockCollection, id: string): Promise<unknown> => id === "account-1" ? Promise.resolve({ id, userId: "user-1" }) : Promise.resolve(payment));
+
+    await updateRecurringPayment("payment-1", {
+      name: "Netflix",
+      amount: 250,
+      currency: "EGP",
+      type: "EXPENSE",
+      accountId: "account-1",
+      categoryId: "category-1",
+      frequency: "WEEKLY",
+      startDate: new Date("2026-06-15T00:00:00.000Z"),
+      endDate: finalPaidDate,
+      action: "NOTIFY",
+    });
+
+    expect(payment.status).toBe("COMPLETED");
+    expect(payment.nextDueDate).toEqual(finalPaidDate);
   });
 
   it("rejects a deleted category reference before creating a recurring payment", async () => {
@@ -504,7 +665,7 @@ describe("recurring-payment-service", () => {
     });
   });
 
-  it("recomputes next due date with the selected frequency when the start date changes", async () => {
+  it("uses the edited Due payment as the next outstanding occurrence", async () => {
     const payment = createRecurringRecord({
       frequency: "MONTHLY",
       startDate: new Date("2026-06-01T00:00:00.000Z"),
@@ -533,7 +694,7 @@ describe("recurring-payment-service", () => {
       notes: undefined,
     });
 
-    expect(payment.nextDueDate).toEqual(new Date("2026-06-22T00:00:00.000Z"));
+    expect(payment.nextDueDate).toEqual(new Date("2026-06-15T00:00:00.000Z"));
   });
 
   it("recomputes next due date from the current due date when only the frequency changes", async () => {
@@ -569,6 +730,74 @@ describe("recurring-payment-service", () => {
   });
 
   describe("submitRecurringPayment", () => {
+    it("completes after the final eligible payment, including overdue Pay Now", async () => {
+      const payment = createRecurringRecord({
+        nextDueDate: new Date("2026-07-01T00:00:00.000Z"),
+        endDate: new Date("2026-07-01T00:00:00.000Z"),
+      });
+      mockFindOwned.mockResolvedValue(payment);
+
+      await submitRecurringPayment({ payment: payment as never, accountId: "account-1", amount: 250 });
+
+      expect(payment.status).toBe("COMPLETED");
+      expect(payment.nextDueDate).toEqual(new Date("2026-07-01T00:00:00.000Z"));
+    });
+
+    it("accepts a final due payment on End date when times differ", async () => {
+      const payment = createRecurringRecord({
+        nextDueDate: new Date("2026-07-01T15:00:00.000Z"),
+        endDate: new Date("2026-07-01T00:00:00.000Z"),
+      });
+      mockFindOwned.mockResolvedValue(payment);
+
+      await submitRecurringPayment({
+        payment: payment as never,
+        accountId: "account-1",
+        amount: 250,
+      });
+
+      expect(payment.status).toBe("COMPLETED");
+    });
+
+    it("rejects a repeated final Pay Now after the series is completed", async () => {
+      const payment = createRecurringRecord({
+        status: "COMPLETED",
+        nextDueDate: new Date("2026-08-01T00:00:00.000Z"),
+        endDate: new Date("2026-07-01T00:00:00.000Z"),
+      });
+      mockFindOwned.mockResolvedValue(payment);
+
+      await expect(
+        submitRecurringPayment({
+          payment: payment as never,
+          accountId: "account-1",
+          amount: 250,
+        })
+      ).rejects.toThrow(
+        RECURRING_PAYMENT_SERVICE_ERROR_CODES.PAYMENT_UNAVAILABLE
+      );
+
+      expect(mockPrepareTransactionCreateWithBalance).not.toHaveBeenCalled();
+    });
+
+    it("rejects Pay Now when the persisted payment is paused", async () => {
+      const payment = createRecurringRecord({ status: "PAUSED" });
+      mockFindOwned.mockResolvedValue(payment);
+
+      await expect(
+        submitRecurringPayment({
+          payment: payment as never,
+          accountId: "account-1",
+          amount: 250,
+        })
+      ).rejects.toThrow(
+        RECURRING_PAYMENT_SERVICE_ERROR_CODES.PAYMENT_UNAVAILABLE
+      );
+
+      expect(mockPrepareTransactionCreateWithBalance).not.toHaveBeenCalled();
+      expect(mockBatch).not.toHaveBeenCalled();
+    });
+
     it("batches transaction creation, balance update, and persisted schedule advancement in one writer", async () => {
       const stalePayment = createRecurringRecord({
         currency: "USD",

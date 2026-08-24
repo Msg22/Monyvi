@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isOnOrBeforeDay } from "@monyvi/logic";
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -22,6 +23,8 @@ const recurringPaymentSchema = z.object({
     ),
   accountId: z.string().nullable().refine(Boolean, "Account is required"),
   categoryId: z.string().nullable().refine(Boolean, "Category is required"),
+  startDate: z.date(),
+  endDate: z.date().nullable(),
 });
 
 // ---------------------------------------------------------------------------
@@ -32,7 +35,7 @@ export type RecurringPaymentFormData = z.infer<typeof recurringPaymentSchema>;
 
 /** Union of all possible form field keys for error display */
 export type RecurringPaymentValidationErrors = Partial<
-  Record<"name" | "amount" | "accountId" | "categoryId", string>
+  Record<"name" | "amount" | "accountId" | "categoryId" | "endDate", string>
 >;
 
 // ---------------------------------------------------------------------------
@@ -50,21 +53,31 @@ export function validateRecurringPaymentForm(data: {
   amount: string;
   accountId: string | null;
   categoryId: string | null;
+  startDate: Date;
+  endDate: Date | null;
+  endDateErrorMessage?: string;
 }): { isValid: boolean; errors: RecurringPaymentValidationErrors } {
-  const result = recurringPaymentSchema.safeParse(data);
-
-  if (result.success) {
-    return { isValid: true, errors: {} };
-  }
+  const { endDateErrorMessage, ...formData } = data;
+  const result = recurringPaymentSchema.safeParse(formData);
 
   const errors: RecurringPaymentValidationErrors = {};
-  result.error.issues.forEach((issue) => {
-    const path = issue.path[0] as keyof RecurringPaymentValidationErrors;
-    // Keep only the first error per field
-    if (path && !errors[path]) {
-      errors[path] = issue.message;
-    }
-  });
+  if (!result.success) {
+    result.error.issues.forEach((issue) => {
+      const path = issue.path[0] as keyof RecurringPaymentValidationErrors;
+      // Keep only the first error per field
+      if (path && !errors[path]) {
+        errors[path] = issue.message;
+      }
+    });
+  }
 
-  return { isValid: false, errors };
+  if (
+    formData.endDate !== null &&
+    !isOnOrBeforeDay(formData.startDate, formData.endDate)
+  ) {
+    errors.endDate =
+      endDateErrorMessage ?? "End date must be on or after Due payment.";
+  }
+
+  return { isValid: Object.keys(errors).length === 0, errors };
 }

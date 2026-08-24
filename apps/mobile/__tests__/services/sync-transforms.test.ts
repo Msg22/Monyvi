@@ -102,6 +102,40 @@ describe("sync transforms", () => {
     expect(transformed).not.toHaveProperty("sms_body_hash");
   });
 
+  it("preserves a local end-date calendar day when pushing recurring payments", () => {
+    const localEndDate = new Date(2026, 7, 14, 0, 0, 0, 0);
+
+    const transformed = transformToSupabase(
+      "recurring_payments",
+      {
+        id: "recurring-payment-1",
+        end_date: localEndDate.getTime(),
+      },
+      "current-user"
+    );
+
+    expect(transformed).toEqual(
+      expect.objectContaining({ end_date: "2026-08-14" })
+    );
+  });
+
+  it("keeps pulled date-only values on their local calendar day", () => {
+    const pulled = transformFromSupabase("recurring_payments", {
+      id: "recurring-payment-1",
+      end_date: "2026-08-14",
+    });
+    const pushed = transformToSupabase(
+      "recurring_payments",
+      pulled,
+      "current-user"
+    );
+
+    expect(pulled.end_date).toBe(new Date(2026, 7, 14).getTime());
+    expect(pushed).toEqual(
+      expect.objectContaining({ end_date: "2026-08-14" })
+    );
+  });
+
   it("omits unchanged AI processing consent from profile update payloads", () => {
     const transformed = transformToSupabase(
       "profiles",

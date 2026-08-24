@@ -373,13 +373,29 @@ Recurring payments describe expected future money movement.
 Business rules:
 
 - A recurring payment has a type, amount, account, category, currency,
-  frequency, next due date, status, and action.
+  frequency, next due date, optional end date, status, and action.
 - Supported actions are `AUTO_CREATE` and `NOTIFY`, but current production UI is
   primarily centered on displaying upcoming payments and manual "pay now"
   handling.
 - When a recurring payment creates a transaction, the created transaction should
   link back through `linked_recurring_id`.
 - Any future scheduler must preserve local-first writes and idempotency.
+- End date is optional and inclusive: an occurrence due exactly on it is eligible.
+- An unpaid final occurrence remains active and overdue after End date. Passing the
+  boundary never proves that it was paid.
+- Pay Now may record an overdue final occurrence. Its successful local batch must
+  create the transaction, apply the balance effect, advance the schedule, and set
+  the recurring payment to `COMPLETED` together.
+- Editing a completed recurring payment, including extending or clearing End date,
+  never changes its status. Reactivation is always an explicit user decision.
+- Users reactivate a completed series only by selecting "Reactivate after saving"
+  while editing it. The completed My Bills card has no Reactivate action because
+  an ineligible schedule needs its End date changed in the edit form. Reactivation
+  is allowed only when the calculated next due payment is eligible under the
+  selected End date.
+- A Due payment after End date is invalid. A schedule with one eligible Due payment
+  and no later eligible recurrence is valid and explains that no further payments
+  will be due.
 
 ### Debts
 

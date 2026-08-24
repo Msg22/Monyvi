@@ -41,6 +41,23 @@ appId: com.monyvi.app
 - tapOn: "Shopping"
 - waitForAnimationToEnd
 
+# Optional end date follows the existing Payment Schedule row pattern.
+- scrollUntilVisible:
+    element:
+      id: "recurring-payment-end-date-row"
+    direction: DOWN
+    centerElement: true
+    timeout: 30000
+- assertVisible: "End date"
+- assertVisible: "(Optional)"
+- tapOn:
+    id: "recurring-payment-end-date-row"
+- tapOn: "OK"
+- extendedWaitUntil:
+    visible:
+      id: "recurring-payment-end-date-row-action"
+    timeout: 30000
+
 - scrollUntilVisible:
     element:
       id: "recurring-payment-action-AUTO_CREATE"
@@ -84,6 +101,16 @@ appId: com.monyvi.app
 - inputText: "Updated"
 - assertVisible: "E2E Subscription Updated"
 - hideKeyboard
+
+- scrollUntilVisible:
+    element:
+      id: "recurring-payment-end-date-row-action"
+    direction: DOWN
+    centerElement: true
+    timeout: 30000
+- tapOn:
+    id: "recurring-payment-end-date-row-action"
+- assertNotVisible: "Clear"
 
 - tapOn:
     id: "recurring-payment-amount-input"

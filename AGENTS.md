@@ -690,6 +690,9 @@ Strong success criteria let you loop independently. Weak criteria ("make it
 work") require constant clarification.
 
 ## Active Technologies
+- TypeScript strict mode; React Native Expo mobile app + Expo Router, React Native, NativeWind v4, WatermelonDB, Zod, DateTimePicker, i18next (386-recurring-end-date)
+- Existing WatermelonDB and synced recurring-payments record; existing optional end-date column (386-recurring-end-date)
+- Existing synced recurring-payment end-date field in WatermelonDB (386-recurring-end-date)
 
 - TypeScript 5.9 strict mode, React 19.2, React Native + Expo Router, React
   Navigation, NativeWind v4, (034-budget-detail-redesign)

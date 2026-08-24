@@ -1,3 +1,8 @@
+import {
+  getRecurringPaymentReactivationDueDate,
+  isOnOrBeforeDay,
+} from "@monyvi/logic";
+
 import { calculateNextDueDate } from "@/utils/dateHelpers";
 import {
   Account,
@@ -29,17 +34,35 @@ export interface RecurringPaymentData {
   categoryId: string;
   frequency: RecurringFrequency;
   startDate: Date;
+  endDate?: Date | null;
+  initialOccurrenceRecorded?: boolean;
   action: RecurringAction;
   notes?: string;
 }
 
-export type UpdateRecurringPaymentData = RecurringPaymentData;
+export interface UpdateRecurringPaymentData extends RecurringPaymentData {
+  readonly reactivateAfterSaving?: boolean;
+}
 
 export const RECURRING_PAYMENT_SERVICE_ERROR_CODES = {
   ACCOUNT_UNAVAILABLE: "RECURRING_PAYMENT_ACCOUNT_UNAVAILABLE",
   CATEGORY_UNAVAILABLE: "RECURRING_PAYMENT_CATEGORY_UNAVAILABLE",
   PAYMENT_UNAVAILABLE: "RECURRING_PAYMENT_UNAVAILABLE",
+  REACTIVATION_UNAVAILABLE: "RECURRING_PAYMENT_REACTIVATION_UNAVAILABLE",
 } as const;
+
+function isEligibleDueDate(
+  dueDate: Date,
+  endDate: Date | null | undefined
+): boolean {
+  return endDate === undefined || endDate === null || isOnOrBeforeDay(dueDate, endDate);
+}
+
+function assertEndDateAllowsDuePayment(data: RecurringPaymentData): void {
+  if (!isEligibleDueDate(data.startDate, data.endDate)) {
+    throw new Error(RECURRING_PAYMENT_SERVICE_ERROR_CODES.REACTIVATION_UNAVAILABLE);
+  }
+}
 
 async function resolveRecurringPaymentReferences(
   scope: Awaited<ReturnType<typeof getCurrentUserDataScope>>,
@@ -80,6 +103,7 @@ async function resolveRecurringPaymentReferences(
 export async function createRecurringPayment(
   data: RecurringPaymentData
 ): Promise<RecurringPayment> {
+  assertEndDateAllowsDuePayment(data);
   const scope = await getCurrentUserDataScope();
   await resolveRecurringPaymentReferences(
     scope,
@@ -93,6 +117,10 @@ export async function createRecurringPayment(
 
   return await database.write(async () => {
     return await recurringCollection.create((rec) => {
+      const nextDueDate = data.initialOccurrenceRecorded
+        ? calculateNextDueDate(data.startDate, data.frequency)
+        : data.startDate;
+      const hasEligibleNextDueDate = isEligibleDueDate(nextDueDate, data.endDate);
       rec.userId = scope.userId;
       rec.name = data.name;
       rec.amount = Math.abs(data.amount);
@@ -102,9 +130,16 @@ export async function createRecurringPayment(
       rec.categoryId = data.categoryId;
       rec.frequency = data.frequency;
       rec.startDate = data.startDate;
-      rec.nextDueDate = calculateNextDueDate(data.startDate, data.frequency);
+      rec.endDate = data.endDate ?? undefined;
+      rec.nextDueDate =
+        data.initialOccurrenceRecorded && !hasEligibleNextDueDate
+          ? data.startDate
+          : nextDueDate;
       rec.action = data.action;
-      rec.status = "ACTIVE";
+      rec.status =
+        data.initialOccurrenceRecorded && !hasEligibleNextDueDate
+          ? "COMPLETED"
+          : "ACTIVE";
       rec.deleted = false;
       rec.notes = data.notes;
     });
@@ -115,6 +150,7 @@ export async function updateRecurringPayment(
   paymentId: string,
   data: UpdateRecurringPaymentData
 ): Promise<void> {
+  assertEndDateAllowsDuePayment(data);
   const scope = await getCurrentUserDataScope();
   await resolveRecurringPaymentReferences(
     scope,
@@ -128,6 +164,45 @@ export async function updateRecurringPayment(
 
   await database.write(async () => {
     const payment = await scope.findOwned(recurringCollection, paymentId);
+    const previousEndDate = payment.endDate;
+    const nextEndDate = data.endDate ?? null;
+    const previousStatus = payment.status;
+    const wasCompletedByPreviousEndDate =
+      previousStatus === "COMPLETED" &&
+      previousEndDate !== undefined &&
+      previousEndDate !== null;
+    const wasCompletedAtPreviousBoundary =
+      wasCompletedByPreviousEndDate &&
+      isOnOrBeforeDay(payment.nextDueDate, previousEndDate);
+    const didRelaxEndDate =
+      nextEndDate === null ||
+      (nextEndDate !== null &&
+        previousEndDate !== undefined &&
+        previousEndDate !== null &&
+        !isOnOrBeforeDay(nextEndDate, previousEndDate));
+    const didStartDateChange =
+      payment.startDate.getTime() !== data.startDate.getTime();
+    const didFrequencyChange = payment.frequency !== data.frequency;
+    const shouldRetainFinalPaidOccurrence =
+      wasCompletedAtPreviousBoundary && !didRelaxEndDate && data.reactivateAfterSaving !== true;
+    let nextDueDate = payment.nextDueDate;
+    if (didStartDateChange) {
+      nextDueDate = data.startDate;
+    } else if (wasCompletedAtPreviousBoundary && didRelaxEndDate) {
+      nextDueDate = calculateNextDueDate(payment.nextDueDate, data.frequency);
+    } else if (didFrequencyChange) {
+      nextDueDate = calculateNextDueDate(payment.nextDueDate, data.frequency);
+    }
+    const nextDueDateIsEligible = isEligibleDueDate(nextDueDate, nextEndDate);
+    if (
+      previousStatus === "COMPLETED" &&
+      data.reactivateAfterSaving === true &&
+      !nextDueDateIsEligible
+    ) {
+      throw new Error(
+        RECURRING_PAYMENT_SERVICE_ERROR_CODES.REACTIVATION_UNAVAILABLE
+      );
+    }
     await payment.update((record) => {
       record.name = data.name;
       record.amount = Math.abs(data.amount);
@@ -135,22 +210,56 @@ export async function updateRecurringPayment(
       record.type = data.type;
       record.accountId = data.accountId;
       record.categoryId = data.categoryId;
-      const didStartDateChange =
-        record.startDate.getTime() !== data.startDate.getTime();
-      const didFrequencyChange = record.frequency !== data.frequency;
-      const nextDueDateAnchor = didStartDateChange
-        ? data.startDate
-        : record.nextDueDate;
       record.frequency = data.frequency;
       record.startDate = data.startDate;
-      if (didStartDateChange || didFrequencyChange) {
-        record.nextDueDate = calculateNextDueDate(
-          nextDueDateAnchor,
-          data.frequency
-        );
+      record.endDate = nextEndDate ?? undefined;
+      if (shouldRetainFinalPaidOccurrence) {
+        // Preserve the final paid date until its End date is relaxed.
+      } else {
+        record.nextDueDate = nextDueDate;
       }
       record.action = data.action;
       record.notes = data.notes;
+      const hasNoEligibleFutureOccurrence =
+        (previousStatus === "ACTIVE" || previousStatus === "PAUSED") &&
+        !nextDueDateIsEligible;
+      if (hasNoEligibleFutureOccurrence) {
+        record.status = "COMPLETED";
+      }
+      if (
+        previousStatus === "COMPLETED" &&
+        data.reactivateAfterSaving === true &&
+        nextDueDateIsEligible
+      ) {
+        record.status = "ACTIVE";
+      }
+    });
+  });
+}
+
+export async function reactivateRecurringPayment(
+  paymentId: string
+): Promise<void> {
+  const scope = await getCurrentUserDataScope();
+  const recurringCollection =
+    database.get<RecurringPayment>("recurring_payments");
+
+  await database.write(async () => {
+    const payment = await scope.findOwned(recurringCollection, paymentId);
+    const nextDueDate = getRecurringPaymentReactivationDueDate(payment);
+    if (
+      payment.deleted ||
+      payment.status !== "COMPLETED" ||
+      !isEligibleDueDate(nextDueDate, payment.endDate)
+    ) {
+      throw new Error(
+        RECURRING_PAYMENT_SERVICE_ERROR_CODES.REACTIVATION_UNAVAILABLE
+      );
+    }
+
+    await payment.update((record) => {
+      record.nextDueDate = nextDueDate;
+      record.status = "ACTIVE";
     });
   });
 }
@@ -235,7 +344,15 @@ export async function submitRecurringPayment(params: {
       recurringCollection,
       payment.id
     );
-    if (persistedPayment.deleted) {
+    const hasEligibleDuePayment =
+      persistedPayment.endDate === undefined ||
+      persistedPayment.endDate === null ||
+      isOnOrBeforeDay(persistedPayment.nextDueDate, persistedPayment.endDate);
+    if (
+      persistedPayment.deleted ||
+      persistedPayment.status !== "ACTIVE" ||
+      !hasEligibleDuePayment
+    ) {
       throw new Error(
         RECURRING_PAYMENT_SERVICE_ERROR_CODES.PAYMENT_UNAVAILABLE
       );
@@ -260,10 +377,19 @@ export async function submitRecurringPayment(params: {
     const paymentSnapshot = captureCachedModelSnapshot(persistedPayment);
     try {
       const scheduleUpdate = persistedPayment.prepareUpdate((record) => {
-        record.nextDueDate = calculateNextDueDate(
+        const nextDueDate = calculateNextDueDate(
           persistedPayment.nextDueDate,
           persistedPayment.frequency
         );
+        const hasReachedFinalEligibleOccurrence =
+          persistedPayment.endDate !== undefined &&
+          persistedPayment.endDate !== null &&
+          !isOnOrBeforeDay(nextDueDate, persistedPayment.endDate);
+        if (hasReachedFinalEligibleOccurrence) {
+          record.status = "COMPLETED";
+          return;
+        }
+        record.nextDueDate = nextDueDate;
       });
 
       await commitPreparedBatch([

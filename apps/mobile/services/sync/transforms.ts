@@ -1,5 +1,4 @@
 import {
-  ALL_DATE_COLUMNS,
   DATE_ONLY_COLUMNS,
   PROFILE_AI_PROCESSING_CONSENT_COLUMN,
   PROFILE_NOTIFICATION_SETTINGS_COLUMN,
@@ -13,6 +12,32 @@ import {
 } from "@monyvi/logic";
 
 const INVALID_SYNC_AMOUNT_ERROR_CODE = "INVALID_TRANSACTION_AMOUNT";
+
+function parseDateOnlyAsLocal(value: string): number | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  const [, yearValue, monthValue, dayValue] = match;
+  const year = Number(yearValue);
+  const month = Number(monthValue) - 1;
+  const day = Number(dayValue);
+  const date = new Date(year, month, day);
+
+  return date.getFullYear() === year &&
+    date.getMonth() === month &&
+    date.getDate() === day
+    ? date.getTime()
+    : null;
+}
+
+function formatLocalDateOnly(timestamp: number): string {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
 
 export function stringifyJsonForWatermelon(
   value: unknown
@@ -138,10 +163,19 @@ export function transformFromSupabase(
   const transformed: Record<string, unknown> =
     table === "profiles" ? normalizeProfileFromSupabase(record) : { ...record };
 
-  for (const col of ALL_DATE_COLUMNS) {
+  for (const col of TIMESTAMP_COLUMNS) {
     if (typeof record[col] === "string") {
       const timestamp = new Date(record[col]).getTime();
       if (!Number.isNaN(timestamp)) {
+        transformed[col] = timestamp;
+      }
+    }
+  }
+
+  for (const col of DATE_ONLY_COLUMNS) {
+    if (typeof record[col] === "string") {
+      const timestamp = parseDateOnlyAsLocal(record[col]);
+      if (timestamp !== null) {
         transformed[col] = timestamp;
       }
     }
@@ -185,7 +219,7 @@ export function transformToSupabase(
 
   for (const col of DATE_ONLY_COLUMNS) {
     if (typeof wmRecord[col] === "number") {
-      transformed[col] = new Date(wmRecord[col]).toISOString().split("T")[0];
+      transformed[col] = formatLocalDateOnly(wmRecord[col]);
     }
   }
 
