@@ -7,6 +7,7 @@ const mockSetStatusFilter = jest.fn();
 const mockPayNowModal = jest.fn();
 const mockShowToast = jest.fn();
 let mockUsesCompactLayout = false;
+let mockFocusEffect: (() => void | (() => void)) | null = null;
 
 interface MockPageHeaderProps {
   readonly title: string;
@@ -99,6 +100,9 @@ let mockRecurringPaymentsState: MockRecurringPaymentsState = {
 jest.mock("expo-router", () => ({
   __esModule: true,
   router: { push: jest.fn() },
+  useFocusEffect: (effect: () => void | (() => void)): void => {
+    mockFocusEffect = effect;
+  },
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
@@ -259,6 +263,18 @@ describe("RecurringPaymentsScreen dashboard", () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it("remounts the payment list when My Bills regains focus after live data changes", () => {
+    render(<RecurringPaymentsScreen />);
+
+    expect(screen.getByTestId("recurring-payments-list-0")).toBeTruthy();
+
+    act(() => {
+      mockFocusEffect?.();
+    });
+
+    expect(screen.getByTestId("recurring-payments-list-1")).toBeTruthy();
   });
 
   it("uses the themed app background on the dashboard root", () => {

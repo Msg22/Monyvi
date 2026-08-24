@@ -238,7 +238,8 @@ export const RecurringPaymentForm = React.forwardRef<
   );
   const hasScheduleChanges =
     initialValues.startDate.getTime() !== form.startDate.getTime() ||
-    initialValues.frequency !== form.frequency;
+    initialValues.frequency !== form.frequency ||
+    initialValues.endDate?.getTime() !== form.endDate?.getTime();
   const displayDueDate = getDisplayDueDate({
     dueDate,
     initialValues,
@@ -714,7 +715,8 @@ function getDisplayDueDate({
     dueDate !== undefined &&
     status === "COMPLETED" &&
     initialValues.endDate !== null &&
-    isOnOrBeforeDay(dueDate, initialValues.endDate);
+    isOnOrBeforeDay(dueDate, initialValues.endDate) &&
+    !didRelaxEndDate(initialValues.endDate, form.endDate);
   if (shouldRetainFinalPaidOccurrence) {
     return dueDate;
   }
@@ -722,11 +724,26 @@ function getDisplayDueDate({
   const didStartDateChange =
     initialValues.startDate.getTime() !== form.startDate.getTime();
   const didFrequencyChange = initialValues.frequency !== form.frequency;
+  const didRelaxCompletedEndDate =
+    dueDate !== undefined &&
+    status === "COMPLETED" &&
+    initialValues.endDate !== null &&
+    didRelaxEndDate(initialValues.endDate, form.endDate);
+  if (dueDate && !didStartDateChange && didRelaxCompletedEndDate) {
+    return calculateNextDueDate(dueDate, form.frequency);
+  }
   if (dueDate && !didStartDateChange && didFrequencyChange) {
     return calculateNextDueDate(dueDate, form.frequency);
   }
 
   return form.startDate;
+}
+
+function didRelaxEndDate(
+  initialEndDate: Date,
+  nextEndDate: Date | null
+): boolean {
+  return nextEndDate === null || !isOnOrBeforeDay(nextEndDate, initialEndDate);
 }
 
 function getStartDateMinimumDate(

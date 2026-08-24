@@ -339,6 +339,26 @@ describe("RecurringPaymentForm", () => {
     ).toHaveTextContent("Jul 1, 2026");
   });
 
+  it("advances the summary preview when relaxing End date and changing frequency on a completed bounded payment", () => {
+    renderForm({
+      mode: "edit",
+      status: "COMPLETED",
+      dueDate: new Date("2026-07-01T00:00:00.000Z"),
+      initialValues: {
+        ...initialValues,
+        endDate: new Date("2026-07-01T00:00:00.000Z"),
+      },
+    });
+
+    fireEvent.press(screen.getByTestId("recurring-payment-frequency-row"));
+    fireEvent.press(screen.getByTestId("select-weekly-frequency"));
+    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row-action"));
+
+    expect(
+      screen.getByTestId("recurring-payment-summary-due-value")
+    ).toHaveTextContent("Jul 8, 2026");
+  });
+
   it("guards against duplicate submissions while a submit is in flight", async () => {
     const onSubmit = jest.fn((): Promise<void> => new Promise(() => undefined));
     const ref = React.createRef<RecurringPaymentFormHandle>();
