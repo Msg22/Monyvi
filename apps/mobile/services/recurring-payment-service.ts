@@ -184,7 +184,7 @@ export async function updateRecurringPayment(
       payment.startDate.getTime() !== data.startDate.getTime();
     const didFrequencyChange = payment.frequency !== data.frequency;
     const shouldRetainFinalPaidOccurrence =
-      wasCompletedAtPreviousBoundary && !didRelaxEndDate;
+      wasCompletedAtPreviousBoundary && !didRelaxEndDate && data.reactivateAfterSaving !== true;
     let nextDueDate = payment.nextDueDate;
     if (didStartDateChange) {
       nextDueDate = data.startDate;

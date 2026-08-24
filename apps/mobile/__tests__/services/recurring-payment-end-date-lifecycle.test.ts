@@ -1,3 +1,5 @@
+import type { RecurringFrequency } from "@monyvi/db";
+
 const mockWrite = jest.fn();
 const mockGet = jest.fn();
 const mockFindOwned = jest.fn();
@@ -62,7 +64,10 @@ jest.mock("@/services/user-data-access", () => ({
 }));
 
 jest.mock("@/utils/dateHelpers", () => ({
-  calculateNextDueDate: (): Date => new Date("2026-08-01T00:00:00.000Z"),
+  calculateNextDueDate: (_date: Date, frequency: string): Date =>
+    frequency === "DAILY"
+      ? new Date("2026-07-02T00:00:00.000Z")
+      : new Date("2026-08-01T00:00:00.000Z"),
   getRecurringPaymentReactivationDueDate: (payment: MockRecurringPayment): Date =>
     payment.endDate &&
     new Date(payment.nextDueDate).getTime() <= new Date(payment.endDate).getTime()
@@ -100,14 +105,15 @@ describe("recurring payment End date lifecycle", () => {
     payment: MockRecurringPayment,
     startDate: Date,
     endDate: Date | null,
-    reactivateAfterSaving = false
+    reactivateAfterSaving = false,
+    frequency: RecurringFrequency = "MONTHLY"
   ): Promise<void> {
     mockFindOwned.mockImplementation((_collection: unknown, id: string): Promise<unknown> =>
       Promise.resolve(id === "account-1" ? { id, userId: "user-1", currency: "EGP" } : payment)
     );
     await updateRecurringPayment("payment-1", {
       name: "Netflix", amount: 250, currency: "EGP", type: "EXPENSE",
-      accountId: "account-1", categoryId: "category-1", frequency: "MONTHLY",
+      accountId: "account-1", categoryId: "category-1", frequency,
       startDate, endDate, action: "NOTIFY", reactivateAfterSaving,
     });
   }
@@ -132,7 +138,7 @@ describe("recurring payment End date lifecycle", () => {
   it("calculates the next occurrence after relaxing End date without implicitly reactivating", async () => {
     const payment = createPayment({
       status: "COMPLETED",
-      endDate: new Date("2026-07-01T00:00:00.000Z"),
+      endDate: new Date("2026-07-15T00:00:00.000Z"),
       nextDueDate: new Date("2026-07-01T00:00:00.000Z"),
     });
 
@@ -186,6 +192,25 @@ describe("recurring payment End date lifecycle", () => {
 
     expect(payment.status).toBe("ACTIVE");
     expect(payment.nextDueDate).toEqual(new Date("2026-08-01T00:00:00.000Z"));
+  });
+
+  it("persists the recalculated occurrence when frequency change explicitly reactivates", async () => {
+    const payment = createPayment({
+      status: "COMPLETED",
+      endDate: new Date("2026-07-01T00:00:00.000Z"),
+      nextDueDate: new Date("2026-07-01T00:00:00.000Z"),
+    });
+
+    await update(
+      payment,
+      new Date("2026-06-01T00:00:00.000Z"),
+      new Date("2026-07-15T00:00:00.000Z"),
+      true,
+      "DAILY"
+    );
+
+    expect(payment.status).toBe("ACTIVE");
+    expect(payment.nextDueDate).toEqual(new Date("2026-07-02T00:00:00.000Z"));
   });
 
   it("does not reactivate a completed series when only Due payment changes", async () => {

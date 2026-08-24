@@ -463,6 +463,40 @@ describe("RecurringPaymentForm", () => {
     );
   });
 
+  it("clears reactivation intent when a later End date change makes it unavailable", async () => {
+    const onSubmit = jest.fn().mockResolvedValue(undefined);
+    renderForm({
+      mode: "edit",
+      status: "COMPLETED",
+      dueDate: new Date("2026-07-01T00:00:00.000Z"),
+      initialValues: {
+        ...initialValues,
+        endDate: new Date("2026-07-01T00:00:00.000Z"),
+      },
+      onSubmit,
+    });
+
+    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row-action"));
+    fireEvent.press(screen.getByTestId("recurring-payment-reactivate-after-saving"));
+    fireEvent.press(screen.getByTestId("recurring-payment-end-date-row"));
+    fireEvent.press(screen.getByTestId("set-recurring-payment-date-july-15"));
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("recurring-payment-reactivate-after-saving")
+      ).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ checked: false, disabled: true })
+      );
+    });
+    fireEvent.press(screen.getByText("save"));
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ reactivateAfterSaving: false })
+      );
+    });
+  });
+
   it("explains when a valid bounded schedule has no further eligible recurrence", () => {
     renderForm({
       initialValues: {

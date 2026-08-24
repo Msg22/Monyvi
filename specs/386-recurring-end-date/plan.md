@@ -5,7 +5,7 @@
 
 ## Summary
 
-Expose the existing optional end date in the established Payment Schedule group, validate and persist it, and complete a series only after its final eligible payment succeeds. The approved interaction keeps date fields in the existing grouped list with inline helper text; selected End date has an inline Clear action. An unpaid final occurrence remains active and overdue, while Pay Now may record that overdue final occurrence and then complete the series. Completed series never reactivate through schedule edits: users explicitly reactivate from My Bills after confirmation or choose Reactivate after saving in the edit form.
+Expose the existing optional end date in the established Payment Schedule group, validate and persist it, and complete a series only after its final eligible payment succeeds. The approved interaction keeps date fields in the existing grouped list with inline helper text; selected End date has an inline Clear action. An unpaid final occurrence remains active and overdue, while Pay Now may record that overdue final occurrence and then complete the series. Completed series never reactivate through ordinary schedule edits; users explicitly choose Reactivate after saving in the edit form.
 
 ## Technical Context
 

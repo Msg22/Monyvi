@@ -27,9 +27,9 @@ The create and edit forms present one existing grouped Payment Schedule control 
 
 ## Completed-payment reactivation
 
-- A completed My Bills card includes a compact Reactivate action. Pressing it opens a confirmation sheet that shows the next eligible payment date and confirms that no payment will be recorded.
-- A completed edit form has a checkbox labeled `Reactivate after saving`. It appears beneath Payment Schedule and changes status only when the user saves; it does not open a confirmation sheet.
-- If the calculated next payment is later than End date, the Reactivate action and edit-form checkbox explain that End date must be extended or cleared first.
+- Completed My Bills cards do not include a Reactivate action; users update the schedule through the edit form.
+- A completed edit form has the sole checkbox labeled `Reactivate after saving`. It appears beneath Payment Schedule and changes status only when the user saves; it does not open a confirmation sheet.
+- If the calculated next payment is later than End date, the disabled edit-form checkbox explains that End date must be extended or cleared first and clears any previously selected reactivation intent.
 - The End date helper explicitly states when a valid bounded schedule has no later eligible recurrence.
 
 ## Localized copy contract

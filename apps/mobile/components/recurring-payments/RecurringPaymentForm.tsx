@@ -248,15 +248,8 @@ export const RecurringPaymentForm = React.forwardRef<
     form.frequency,
     form.endDate
   );
-  const didDuePaymentChange =
-    initialValues.startDate.getTime() !== form.startDate.getTime();
-  const reactivationDueDate = didDuePaymentChange
-    ? form.startDate
-    : getReactivationDueDate(
-        dueDate,
-        initialValues.endDate,
-        form.frequency
-      );
+  const didDuePaymentChange = initialValues.startDate.getTime() !== form.startDate.getTime();
+  const reactivationDueDate = didDuePaymentChange ? form.startDate : getReactivationDueDate(dueDate, initialValues.endDate, form.frequency);
   const isReactivationAvailable =
     reactivationDueDate !== null &&
     (form.endDate === null ||
@@ -302,6 +295,10 @@ export const RecurringPaymentForm = React.forwardRef<
     },
     [errors]
   );
+
+  useEffect(() => {
+    if (form.reactivateAfterSaving && !isReactivationAvailable) updateField("reactivateAfterSaving", false);
+  }, [form.reactivateAfterSaving, isReactivationAvailable, updateField]);
 
   const handleSubmit = useCallback(async (): Promise<void> => {
     if (isSubmitting || isSubmitInFlightRef.current) return;
