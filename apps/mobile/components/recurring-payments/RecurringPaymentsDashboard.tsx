@@ -365,24 +365,22 @@ export function PaymentRow({
               currency: payment.currency,
             })}
           </Text>
-          {!payment.isCompleted ? (
-            <View className="flex-row items-center mt-2">
-              <Ionicons
-                name="calendar-outline"
-                size={13}
-                color={palette.slate[500]}
-              />
-              <Text
-                className={`text-xs font-medium ms-1 ${
-                  isOverdueLabel
-                    ? "text-red-500"
-                    : "text-text-muted dark:text-text-muted-dark"
-                }`}
-              >
-                {dueLabel}
-              </Text>
-            </View>
-          ) : null}
+          <View className="flex-row items-center mt-2">
+            <Ionicons
+              name="calendar-outline"
+              size={13}
+              color={palette.slate[500]}
+            />
+            <Text
+              className={`text-xs font-medium ms-1 ${
+                isOverdueLabel
+                  ? "text-red-500"
+                  : "text-text-muted dark:text-text-muted-dark"
+              }`}
+            >
+              {dueLabel}
+            </Text>
+          </View>
           </View>
           {!hasInlineAction ? (
             <Ionicons

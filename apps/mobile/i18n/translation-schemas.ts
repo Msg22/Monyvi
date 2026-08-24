@@ -136,6 +136,12 @@ const REQUIRED_SCALAR_KEYS: Record<string, readonly string[]> = {
     "language_change_error_title",
     "language_change_failed",
   ],
+  transactions: [
+    "end_date_no_further_payments",
+    "reactivate_after_saving",
+    "reactivate_after_saving_hint",
+    "reactivate_payment_unavailable",
+  ],
   onboarding: [
     // Pitch chrome
     "pitch_skip",

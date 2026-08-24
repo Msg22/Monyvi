@@ -298,6 +298,10 @@ interface TransactionsTranslations {
   readonly end_date_hint: string;
   readonly clear: string;
   readonly end_date_before_due: string;
+  readonly end_date_no_further_payments: string;
+  readonly reactivate_after_saving: string;
+  readonly reactivate_after_saving_hint: string;
+  readonly reactivate_payment_unavailable: string;
   readonly failed_to_create_payment: string;
   readonly failed_to_update_payment: string;
   readonly failed_to_delete_payment: string;
