@@ -64,7 +64,7 @@ describe("translation resource runtime contract", () => {
   );
 
   it("rejects a missing recurring End date or Reactivate label", () => {
-    const transactions = { ...enTransactions } as Record<string, unknown>;
+    const transactions: Record<string, unknown> = { ...enTransactions };
     delete transactions.reactivate_after_saving;
 
     expect(() =>
