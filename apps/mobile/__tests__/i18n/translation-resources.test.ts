@@ -2,6 +2,7 @@ import arBudgets from "@/locales/ar/budgets.json";
 import arOnboarding from "@/locales/ar/onboarding.json";
 import enBudgets from "@/locales/en/budgets.json";
 import enOnboarding from "@/locales/en/onboarding.json";
+import enTransactions from "@/locales/en/transactions.json";
 import { validateTranslationResources } from "@/i18n/translation-schemas";
 
 const budgetDashboardKeys = [
@@ -61,4 +62,16 @@ describe("translation resource runtime contract", () => {
       }
     }
   );
+
+  it("rejects a missing recurring End date or Reactivate label", () => {
+    const transactions: Record<string, unknown> = { ...enTransactions };
+    delete transactions.reactivate_after_saving;
+
+    expect(() =>
+      validateTranslationResources({
+        en: { transactions },
+        ar: { transactions: enTransactions },
+      })
+    ).toThrow('missing required key "reactivate_after_saving"');
+  });
 });

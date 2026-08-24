@@ -62,7 +62,7 @@ export default function RecurringPaymentsScreen(): React.JSX.Element {
     isLoading,
     statusFilter,
     setStatusFilter,
-  } = useRecurringPayments();
+  } = useRecurringPayments({ calendarRevision: todayRevision });
   const { preferredCurrency } = usePreferredCurrency();
   const { latestRates } = useMarketRates();
 

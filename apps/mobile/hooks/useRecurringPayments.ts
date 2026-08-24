@@ -37,6 +37,8 @@ interface UseRecurringPaymentsOptions {
   readonly status?: RecurringStatus;
   readonly type?: TransactionType;
   readonly dateRange?: { readonly start: Date; readonly end: Date };
+  /** Changes when calendar-based results must be recalculated without a DB update. */
+  readonly calendarRevision?: number;
 }
 
 interface UseRecurringPaymentsResult {
@@ -136,7 +138,7 @@ export type { BillsPeriodFilter };
 export function useRecurringPayments(
   options: UseRecurringPaymentsOptions = {}
 ): UseRecurringPaymentsResult {
-  const { limit, status, type, dateRange } = options;
+  const { limit, status, type, dateRange, calendarRevision } = options;
 
   const [allPayments, setAllPayments] = useState<RecurringPayment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -262,7 +264,7 @@ export function useRecurringPayments(
         totalDueThisMonth: dueThisMonth,
         totalIncomeThisMonth: incomeThisMonth,
       };
-    }, [allPayments, latestRates, toPreferred]);
+    }, [allPayments, calendarRevision, latestRates, toPreferred]);
 
   /** Total due for filtered period, computed from the FULL matching set (not limit-truncated). */
   const totalDueFiltered = useMemo((): number => {

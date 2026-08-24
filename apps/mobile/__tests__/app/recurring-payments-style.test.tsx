@@ -7,6 +7,7 @@ const mockSetStatusFilter = jest.fn();
 const mockPayNowModal = jest.fn();
 const mockReactivateRecurringPayment = jest.fn();
 const mockShowToast = jest.fn();
+const mockUseRecurringPayments = jest.fn();
 let mockUsesCompactLayout = false;
 
 interface MockPageHeaderProps {
@@ -228,8 +229,10 @@ jest.mock("@/hooks/useMarketRates", () => ({
 }));
 
 jest.mock("@/hooks/useRecurringPayments", () => ({
-  useRecurringPayments: (): MockRecurringPaymentsState =>
-    mockRecurringPaymentsState,
+  useRecurringPayments: (options: unknown): MockRecurringPaymentsState => {
+    mockUseRecurringPayments(options);
+    return mockRecurringPaymentsState;
+  },
 }));
 
 jest.mock("@monyvi/logic", () => ({
@@ -296,6 +299,7 @@ describe("RecurringPaymentsScreen dashboard", () => {
     mockPayNowModal.mockClear();
     mockReactivateRecurringPayment.mockReset();
     mockShowToast.mockClear();
+    mockUseRecurringPayments.mockClear();
     mockUsesCompactLayout = false;
     mockRecurringPaymentsState = {
       allPayments: [netflix, rent],
@@ -614,7 +618,7 @@ describe("RecurringPaymentsScreen dashboard", () => {
     ).not.toHaveTextContent(/overdue/i);
     expect(
       screen.getByTestId("recurring-payment-row-payment-completed")
-    ).not.toHaveTextContent(/Jun 15/);
+    ).toHaveTextContent(/Jun 15/);
   });
 
   it("keeps completed cards focused on editing and keeps the frequency label on one line", () => {
@@ -643,7 +647,7 @@ describe("RecurringPaymentsScreen dashboard", () => {
     ).toHaveProp("numberOfLines", 1);
   });
 
-  it("does not show a next due date for completed payments", () => {
+  it("shows the retained final date for completed payments", () => {
     const completedPayment = createPayment({
       id: "payment-completed-early",
       nextDueDate: new Date("2026-07-01T00:00:00.000Z"),
@@ -666,7 +670,7 @@ describe("RecurringPaymentsScreen dashboard", () => {
     ).not.toHaveTextContent(/due_in_days/i);
     expect(
       screen.getByTestId("recurring-payment-row-payment-completed-early")
-    ).not.toHaveTextContent(/Jul 1/);
+    ).toHaveTextContent(/Jul 1/);
   });
 
   it("opens Pay Now for an unpaid final overdue payment", () => {
@@ -753,6 +757,22 @@ describe("RecurringPaymentsScreen dashboard", () => {
     expect(
       screen.getByTestId("recurring-payment-pay-now-payment-due-today")
     ).toBeTruthy();
+  });
+
+  it("refreshes calendar-based totals after local midnight", () => {
+    render(<RecurringPaymentsScreen />);
+
+    expect(mockUseRecurringPayments).toHaveBeenLastCalledWith({
+      calendarRevision: 0,
+    });
+
+    act(() => {
+      jest.advanceTimersByTime(24 * 60 * 60 * 1000);
+    });
+
+    expect(mockUseRecurringPayments).toHaveBeenLastCalledWith({
+      calendarRevision: 1,
+    });
   });
 
   it("keeps overdue Pay Now inline at an ordinary layout width", () => {
