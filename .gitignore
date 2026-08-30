@@ -80,8 +80,16 @@ temp/
 # Codex generated/local skills, ignored by default
 
 .agents/*
+!.agents/personas/
+!.agents/personas/**
 !.agents/skills/
 .agents/skills/*
+!.agents/skills/financial-domain-engineering/
+!.agents/skills/financial-domain-engineering/**
+!.agents/skills/offline-financial-systems/
+!.agents/skills/offline-financial-systems/**
+!.agents/skills/integration-maintenance/
+!.agents/skills/integration-maintenance/**
 !.agents/skills/source-command-code-review/
 !.agents/skills/source-command-code-review/**
 !.agents/skills/team-led-delivery/
