@@ -138,6 +138,25 @@ clear integration point. Use existing persona/skill when suitable; create
 task-specific persona only for a recurring uncovered responsibility. Never
 duplicate investigation. Keep one in-progress task per worker.
 
+### Persona Package And Runtime Adapters
+
+Portable role contracts live in `.agents/personas/`; reusable role workflows
+live in `.agents/skills/`; runtime-specific adapters such as `.claude/agents/`
+only point to those canonical files. Never mirror a full persona prompt across
+directories.
+
+Before adding a role, check the canonical package. Reuse these contracts when
+their boundaries match the assigned work:
+
+- `financial-domain-engineer` for pure exact Metals logic in `packages/logic`;
+- `offline-financial-systems-engineer` for financial action, migration, and
+  sync-safety work;
+- `integration-maintainer` for lead-declared shared integration surfaces.
+
+An adapter is discoverability metadata, not a competing policy source. Current
+`AGENTS.md`, constitution, approved decisions, and canonical persona/skill
+instructions govern execution.
+
 ## 6. Model And Effort
 
 Use lowest-cost model and effort safe for risk and ambiguity. Prefer inherited
