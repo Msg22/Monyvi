@@ -1,53 +1,32 @@
 <!--
 Sync Impact Report
-- Version change: 0.0.0 → 1.0.0 → 1.1.0 → 1.2.0 → 1.3.0 → 1.4.0 → 1.5.0
-- Added principles:
-  - I. Offline-First Data Architecture (NEW in 1.0.0, AMENDED in 1.2.0)
-  - II. Documented Business Logic (NEW in 1.0.0)
-  - III. Type Safety (NEW in 1.0.0)
-  - IV. Service-Layer Separation (NEW in 1.0.0)
-  - V. Premium UI with Consistent Theming (NEW in 1.0.0, AMENDED in 1.1.0)
-  - VI. Monorepo Package Boundaries (NEW in 1.0.0)
-  - VII. Local-First Migrations (NEW in 1.0.0)
-  - VIII. Authenticated User Scope & Sync Correctness (NEW in 1.3.0)
-- Amendments in 1.1.0:
-  - Principle V: Added schema-driven UI rule (from mockup-implementation workflow)
-  - Development Workflow: Added no-magic-numbers and TODO-for-debt rules (from architect-first.md)
-- Amendments in 1.2.0:
-  - Principle I: Added exception for server-generated read-only tables (pull-only)
-    that MAY omit updated_at and deleted columns (from 005-sync-snapshot-tables)
-- Amendments in 1.3.0:
-  - Principle IV: Clarified that components must not own raw WatermelonDB access
-  - Development Workflow: Added debug-before-fix, scoped tooling guardrails, and
-    sensitive logging constraints
-- Amendments in 1.4.0:
-  - Technology Constraints: Reconciled current backend/auth/currency/localization
-    reality with implementation.
-  - Principle VI: Added explicit handling for known existing package-boundary
-    violations so they are not treated as precedent.
-  - Development Workflow: Added documentation freshness and implementation-debt
-    disclosure rules.
-- Amendments in 1.5.0:
-  - Principle IV: Clarified command services, read-model services, hook facades,
-    route/container components, and presentational components.
-  - Principle VI: Clarified that DB models must not own presentation formatting,
-    parsed helper state, app workflows, or shared calculations.
-  - Development Workflow: Clarified that guardrails should push developers
-    toward approved scoped helpers, command services, read models, or established
-    repositories.
-- Added sections:
-  - Technology Constraints (NEW)
-  - Development Workflow (NEW)
-  - Governance (NEW)
-- Templates requiring updates:
-  - plan-template.md ✅ — Constitution Check section aligns with principles
-  - spec-template.md ✅ — User Scenarios and Requirements sections compatible
-  - tasks-template.md ✅ — Phase structure and path conventions compatible
+- Version change: 1.5.0 → 1.6.0
+- Modified principles:
+  - I. Offline-First Data Architecture: scoped LWW to ordinary independent
+    metadata; added atomic local action groups and server CAS for grouped
+    lifecycle or balance-changing actions; clarified root and child sync columns.
+  - VIII. Authenticated User Scope & Sync Correctness: made inherited ownership
+    strict, retained multi-device access, and added rejected-action reconciliation.
+  - Technology Constraints: limited Metals V1 to Gold and Silver and established
+    the shared Decimal.js financial arithmetic contract.
+- Added sections: None.
+- Removed sections: None.
+- Templates reviewed:
+  - .specify/templates/plan-template.md ✅ compatible; no update required.
+  - .specify/templates/spec-template.md ✅ compatible; no update required.
+  - .specify/templates/tasks-template.md ✅ compatible; no update required.
+  - .specify/templates/commands/*.md ✅ directory absent; no files to update.
 - Follow-up TODOs:
   - TODO(PACKAGE_BOUNDARY_REPAIR): remove remaining allowlisted package-boundary
-    debt tracked by the architecture audit issues.
+    debt tracked by architecture audit issues.
   - TODO(UI_DEBT_AUDIT): replace remaining content-loading ActivityIndicator
     usage, raw console calls, and unjustified raw hex/style exceptions.
+  - TODO(AGENT_GUIDANCE_SYNC): reconcile AGENTS.md and equivalent runtime
+    guidance with this amendment in separately authorized documentation work.
+  - TODO(SECURITY_HARDENING): issue #240 owns app lock, MFA or step-up,
+    session/device management, sign-in notifications, and SecureStore logout.
+  - TODO(APP_WIDE_DECIMAL_AUDIT): issue #241 owns audit and staged migration of
+    existing financial calculations; Metals is the first adopter.
 -->
 
 # Monyvi Constitution
@@ -65,14 +44,22 @@ device. Every read and write operation MUST happen locally first.
   app MUST remain fully functional with zero network connectivity.
 - Local calculations (net worth, account balances, asset valuations) MUST NOT
   depend on API availability. Use `@monyvi/logic` for on-device computation.
-- Sync uses **Last Write Wins** conflict resolution via WatermelonDB's built-in
-  sync protocol.
-- All syncable tables MUST include `created_at`, `updated_at`, `deleted`, and
-  `user_id` columns. **Exception**: Server-generated read-only tables that are
-  pull-only (never edited or soft-deleted client-side) MAY omit `updated_at` and
-  `deleted`. These tables use a custom pull function with date-based filtering
-  instead of the standard sync protocol. Current examples: `market_rates` (also
-  omits `user_id`), `daily_snapshot_balance`, `daily_snapshot_assets`,
+- Ordinary independently replaceable metadata MAY use WatermelonDB Last Write
+  Wins reconciliation.
+- A grouped lifecycle or balance-changing financial action MUST use a stable
+  `action_id`, an expected financial revision, and one idempotent atomic local
+  action group. Synchronization MUST submit the complete group through one
+  atomic server compare-and-swap operation. The first complete valid action
+  accepted for the expected revision becomes canonical; repeat delivery is
+  idempotent. Client timestamps and Last Write Wins MUST NOT choose between
+  competing grouped financial actions.
+- Every user-owned root syncable table MUST include `created_at`, `updated_at`,
+  `deleted`, and `user_id`. A user-owned child MAY omit `user_id` only under
+  the strict inherited-ownership contract in Principle VIII.
+- Server-generated read-only pull-only tables MAY omit `updated_at` and
+  `deleted`. A globally shared server-generated table MAY also omit `user_id`.
+  These tables MUST use approved specialized pull behavior. Current examples:
+  `market_rates`, `daily_snapshot_balance`, `daily_snapshot_assets`, and
   `daily_snapshot_net_worth`.
 
 ### II. Documented Business Logic
@@ -229,6 +216,9 @@ Authenticated routing, local data access, and sync MUST be designed so one
 account can never observe, route from, calculate from, push, or pull another
 account's private data.
 
+- Monyvi MAY support the same authenticated user on multiple devices. Every
+  device remains subject to ownership scope and financial-action reconciliation;
+  session policy MUST NOT be used as a substitute for data integrity.
 - Private route UI MUST NOT be visible or interactable until the auth state is
   resolved and the required startup account/profile state has settled.
 - Auth/session/profile gates are UX boundaries, not data security boundaries.
@@ -241,8 +231,12 @@ account's private data.
 - Logout MAY preserve local offline data. Preserved rows from another account
   MUST NOT influence routing, visible UI state, sync payloads, financial
   calculations, or current-user queries.
-- User-owned child tables without direct `user_id` columns MUST be scoped
-  through an owned parent record for reads, writes, push, and delete sync.
+- A user-owned child table MAY omit `user_id` only when each row has one
+  required immutable parent link and ownership is inherited from that parent.
+  Reads, writes, pull, push, soft deletion, and RLS MUST verify the same owned
+  parent chain; reparenting across owners MUST be impossible. `asset_metals`
+  follows this approved contract through its parent `assets` row and MUST NOT
+  duplicate `user_id`.
 - Shared/system tables with mixed visibility MUST use explicit accessible-scope
   helpers. Examples include system categories (`user_id IS NULL`) plus
   current-user custom categories.
@@ -252,6 +246,9 @@ account's private data.
 - Pull and push failures MUST fail the sync operation. Remote errors MUST NOT be
   converted into empty successful changes, and failed sync MUST NOT advance
   WatermelonDB sync metadata or mark local dirty changes as synced.
+- A rejected optimistic grouped financial action and every linked effect MUST
+  reconcile exactly once. It MUST affect no ownership, balance, net worth,
+  reporting, or normal user History after reconciliation.
 - Startup UX may block only what is required for safe routing (auth plus scoped
   account/profile state). Full cloud sync remains background work; after routing
   is safe, screens should use local data and screen-level skeletons.
@@ -267,11 +264,24 @@ account's private data.
 | Backend API          | Supabase Edge Functions                   | AI parsing and market-rate ingestion            |
 | Monorepo             | npm workspaces + Nx                       | Build caching and task orchestration            |
 | Language             | TypeScript (strict mode)                  | Across all packages and apps                    |
+| Financial Arithmetic | Decimal.js shared primitive               | Precision 50; half-even final rounding          |
 | Animations           | React Native Reanimated + Gesture Handler | Required for premium interactions               |
 | API Caching          | React Query (TanStack Query)              | Prevents duplicate API calls                    |
 | Target Market        | Egyptian users                            | EGP-centered, Arabic and English supported      |
 | Supported Currencies | Generated `CurrencyType` enum + rates     | One account = one currency                      |
-| Precious Metals      | Gold, Silver, Platinum, Palladium         | Unified `purity_fraction` valuation             |
+| Precious Metals      | Gold and Silver in V1                     | Future metals require separate approval         |
+
+New authoritative financial calculations MUST use one shared `@monyvi/logic`
+Decimal.js primitive cloned with 50 significant digits and `ROUND_HALF_EVEN`.
+Inputs and non-posted outputs MUST cross calculation and persistence boundaries
+as canonical base-10 strings; WatermelonDB stores them as text and PostgreSQL as
+exact `numeric`. Posted money MUST cross account boundaries as integer minor
+units for its currency. Calculations MUST perform no intermediate rounding and
+MUST round only at the approved presentation or posting boundary.
+
+Metals is the first adopter. Existing authoritative `number` calculations are
+migration debt tracked by issue #241, not precedent. This amendment requires
+staged reuse for new or changed financial calculations, not a big-bang migration.
 
 ## Development Workflow
 
@@ -357,4 +367,4 @@ account's private data.
   `/speckit.plan`, `/speckit.tasks`, `/speckit.implement`) MUST reference this
   constitution and verify compliance before producing output.
 
-**Version**: 1.5.0 | **Ratified**: 2026-02-14 | **Last Amended**: 2026-05-21
+**Version**: 1.6.0 | **Ratified**: 2026-02-14 | **Last Amended**: 2026-08-30
