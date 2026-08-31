@@ -290,6 +290,13 @@ export function canonicalizeFinancialActionEnvelope(
   ) {
     fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
   }
+  const payload = registry
+    .resolve(value.domain, value.kind, value.payloadVersion)
+    .validatePayload(value.payload);
+  inspectRuntimeValue(payload);
+  if (containsNumber(payload)) {
+    fail(FINANCIAL_ACTION_ERROR_CODES.UNSUPPORTED_VALUE);
+  }
   return {
     accountGuards: Object.freeze([]),
     actionId: value.actionId,
@@ -298,9 +305,7 @@ export function canonicalizeFinancialActionEnvelope(
     envelopeVersion: value.envelopeVersion,
     kind: value.kind,
     occurredAt: value.occurredAt,
-    payload: registry
-      .resolve(value.domain, value.kind, value.payloadVersion)
-      .validatePayload(value.payload),
+    payload,
     payloadVersion: value.payloadVersion,
     userId: value.userId,
   };

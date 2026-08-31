@@ -14,12 +14,14 @@ import {
   Sha256Provider,
 } from "../action-contracts";
 import {
+  createFinancialActionRegistry,
   MAX_ACTION_NOTES_UTF8_BYTES,
   MAX_ACTION_RATE_REFERENCE_IDS,
   MAX_CANONICAL_ACTION_UTF8_BYTES,
   MAX_CANONICAL_DECIMAL_SCALE,
   MAX_CANONICAL_FINANCIAL_DIGITS,
   MetalsSellPayloadV1,
+  type RegisteredActionPayload,
 } from "../action-registry";
 
 const ARABIC_VECTOR =
@@ -53,6 +55,29 @@ describe("financial action canonical contract", () => {
       canonicalText: ARABIC_VECTOR,
       payloadHash: ARABIC_DIGEST,
     });
+  });
+
+  it("rejects numeric payload returned by a custom validator before hashing", async () => {
+    const registry = createFinancialActionRegistry([
+      {
+        domain: "metals",
+        kind: "sell",
+        payloadVersion: "metals.sell/v1",
+        validatePayload: (): RegisteredActionPayload =>
+          ({ numericValue: 1 }) as unknown as RegisteredActionPayload,
+      },
+    ]);
+    const digestUtf8 = jest.fn(
+      (_canonicalText: string): Promise<string> => Promise.resolve(ARABIC_DIGEST)
+    );
+
+    expect(() =>
+      canonicalizeFinancialActionEnvelope(validEnvelope(), registry)
+    ).toThrow(FINANCIAL_ACTION_ERROR_CODES.UNSUPPORTED_VALUE);
+    await expect(
+      hashFinancialActionEnvelope(validEnvelope(), { digestUtf8 }, registry)
+    ).rejects.toThrow(FINANCIAL_ACTION_ERROR_CODES.UNSUPPORTED_VALUE);
+    expect(digestUtf8).not.toHaveBeenCalled();
   });
 
   it("sorts every object by ASCII key bytes while preserving array order", () => {
