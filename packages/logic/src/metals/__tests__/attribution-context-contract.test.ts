@@ -208,6 +208,119 @@ describe("attribution expected instrument context", () => {
     });
   });
 
+  it("uses identity conversion for same-currency display despite differing snapshots", () => {
+    expect(
+      convertAttributionForDisplay({
+        attribution: {
+          available: true,
+          value: {
+            combinedDecimal: "100",
+            components: {
+              metalMovementDecimal: "60",
+              currencyMovementDecimal: "40",
+            },
+          },
+        },
+        canonicalCurrencyInstrumentCode: "currency:EGP",
+        preferredCurrencyInstrumentCode: "currency:EGP",
+        canonicalCurrencyAtDisplayRate: currencyRate(
+          "display_purchase_currency",
+          "currency:EGP",
+          "0.25"
+        ),
+        preferredCurrencyAtDisplayRate: currencyRate(
+          "display_preferred_currency",
+          "currency:EGP",
+          "0.5"
+        ),
+        decimalPlaces: 2,
+      })
+    ).toMatchObject({
+      available: true,
+      value: {
+        combinedDecimal: "100.00",
+        displayedComponents: {
+          metalMovementDecimal: "60.00",
+          currencyMovementDecimal: "40.00",
+        },
+      },
+    });
+  });
+
+  it.each([
+    ["missing", null, null],
+    [
+      "unknown-freshness",
+      {
+        ...currencyRate(
+          "display_purchase_currency",
+          "currency:EGP",
+          "0.25"
+        ),
+        providerObservedAt: null,
+        capturedFreshness: "unknown" as const,
+      },
+      {
+        ...currencyRate(
+          "display_preferred_currency",
+          "currency:EGP",
+          "0.25"
+        ),
+        providerObservedAt: null,
+        capturedFreshness: "unknown" as const,
+      },
+    ],
+  ] as const)(
+    "keeps already-canonical same-currency display available with %s snapshots",
+    (_state, canonicalRate, preferredRate) => {
+      expect(
+        convertAttributionForDisplay({
+          attribution: {
+            available: true,
+            value: {
+              combinedDecimal: "100",
+              components: { metalMovementDecimal: "100" },
+            },
+          },
+          canonicalCurrencyInstrumentCode: "currency:EGP",
+          preferredCurrencyInstrumentCode: "currency:EGP",
+          canonicalCurrencyAtDisplayRate: canonicalRate,
+          preferredCurrencyAtDisplayRate: preferredRate,
+          decimalPlaces: 2,
+        })
+      ).toMatchObject({
+        available: true,
+        value: {
+          combinedDecimal: "100.00",
+          displayedComponents: { metalMovementDecimal: "100.00" },
+        },
+      });
+    }
+  );
+
+  it("rejects provided same-currency display evidence with mismatched context", () => {
+    expect(
+      convertAttributionForDisplay({
+        attribution: {
+          available: true,
+          value: { combinedDecimal: "10", components: { metal: "10" } },
+        },
+        canonicalCurrencyInstrumentCode: "currency:EGP",
+        preferredCurrencyInstrumentCode: "currency:EGP",
+        canonicalCurrencyAtDisplayRate: currencyRate(
+          "display_purchase_currency",
+          "currency:SAR",
+          "0.2"
+        ),
+        preferredCurrencyAtDisplayRate: null,
+        decimalPlaces: 2,
+      })
+    ).toEqual({
+      available: false,
+      reason: "canonical_currency_display_rate_unavailable",
+    });
+  });
+
   it.each([
     [
       "canonical_currency_display_rate_unavailable",

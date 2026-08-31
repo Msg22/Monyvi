@@ -480,6 +480,15 @@ export function convertAttributionForDisplay(
   if (!input.attribution.available) {
     return input.attribution;
   }
+  if (
+    input.canonicalCurrencyInstrumentCode ===
+    input.preferredCurrencyInstrumentCode
+  ) {
+    return convertSameCurrencyAttributionForDisplay(
+      input,
+      input.attribution.value
+    );
+  }
   const canonicalCurrency = readRate(
     input.canonicalCurrencyAtDisplayRate,
     "canonical_currency_display_rate_unavailable",
@@ -523,6 +532,57 @@ export function convertAttributionForDisplay(
     components: convertedComponents,
     decimalPlaces: input.decimalPlaces,
   });
+}
+
+function convertSameCurrencyAttributionForDisplay(
+  input: DisplayAttributionInput,
+  attribution: DisplayAttributionSource
+): Availability<RoundedAttribution> {
+  const canonicalValidation = validateOptionalDisplayRate(
+    input.canonicalCurrencyAtDisplayRate,
+    "canonical_currency_display_rate_unavailable",
+    "display_purchase_currency",
+    input.canonicalCurrencyInstrumentCode
+  );
+  if (!canonicalValidation.available) {
+    return canonicalValidation;
+  }
+  const preferredValidation = validateOptionalDisplayRate(
+    input.preferredCurrencyAtDisplayRate,
+    "preferred_currency_display_rate_unavailable",
+    "display_preferred_currency",
+    input.preferredCurrencyInstrumentCode
+  );
+  if (!preferredValidation.available) {
+    return preferredValidation;
+  }
+  if (!hasExactComponentSum(attribution)) {
+    return { available: false, reason: "attribution_components_mismatch" };
+  }
+  return roundReconciledAttributionForDisplay({
+    ...attribution,
+    decimalPlaces: input.decimalPlaces,
+  });
+}
+
+function validateOptionalDisplayRate(
+  reference: ExactRateReference | null,
+  unavailableReason: string,
+  role: CurrencyRateRole,
+  instrumentCode: CurrencyInstrumentCode
+): Availability<null> {
+  if (reference === null) {
+    return { available: true, value: null };
+  }
+  const validation = readRate(
+    reference,
+    unavailableReason,
+    role,
+    instrumentCode
+  );
+  return validation.available
+    ? { available: true, value: null }
+    : validation;
 }
 
 function calculateCoreComponents(input: {
