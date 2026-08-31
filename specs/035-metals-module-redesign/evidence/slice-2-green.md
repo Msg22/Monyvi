@@ -483,3 +483,44 @@ SHA-256 values below were computed from the current worktree bytes for all track
 
 This snapshot authenticates final Slice 2 source state. It is not release coverage or
 merge-approval evidence.
+
+
+## Final SHA-256 supersession at final Metals logic head — 2026-08-31
+
+The preceding SHA-256 records remain historical evidence. This append-only record
+supersedes them for byte-level authentication of every tracked TypeScript file
+under `packages/logic/src/metals/` at final foundation code head
+`226aab2c8a240cb41cc4a99df0813758cf1b4e73`.
+
+Final worker evidence records 10/10 Metals suites and 277/277 tests with 0
+snapshots. Aggregate coverage was 93.52% statements, 88.53% branches, 98.6%
+functions, and 93.46% lines. Full logic passed 65/65 suites and 1115/1115 tests;
+package typecheck, root lint, and diff checks passed.
+
+SHA-256 values below were computed from current worktree bytes for all tracked
+`.ts` files in `packages/logic/src/metals/`:
+
+| Source relative to `packages/logic/src/metals/` | SHA-256 |
+| --- | --- |
+| `attribution.ts` | `b248dabd8d5af68d5b2fe37e66943f1952b619b57d3a1afbe452cc4b9193d634` |
+| `currency-minor-units.ts` | `6e64fde0766bc64b4337071547430b2f7920d597efe1f402ba1366fecc603af1` |
+| `decimal.ts` | `5a5b9da07b3c0e9247344a22bd3ed3c105af5c3e6c4a458d3d486abd610d2edb` |
+| `index.ts` | `424d092cf51b33b6c6eafc2aa719ce9056bdb3c5fe0dfc932b204fc13da2af4f` |
+| `lifecycle-reducer.ts` | `89eb61d83c496dfe2bb64f0a0ccddcf57bd5aa7f1cee5847eede33431d9a2af4` |
+| `purity-catalog.ts` | `fc7a5e6e1ca5140e63f4ef18d209906316fdec03606e9fed289b2722aeaff373` |
+| `rate-reference.ts` | `a35d0a9e481d7143d81484335d45821a74553944bcc2dd9685af9f186a070973` |
+| `rate-trust.ts` | `978d9a8058963da1bcb70bdabfd35b173e05a6d6f8557ea04989125feaedd5c0` |
+| `valuation.ts` | `93c35ff7d07de1eb2fc4605c16eb0b459425437e5d8a9418e451377b8aff2feb` |
+| `__tests__/attribution-context-contract.test.ts` | `015a07efe6507a5781a7eccfd5c995f81660ba792f4cb0cfa0ce6ae2ab3da251` |
+| `__tests__/attribution-postgres-parity.test.ts` | `4832f34f1e929cfe90d9a2666244b118cbf82f78b499b9210d3698cf49644c9d` |
+| `__tests__/attribution-reason-types.test.ts` | `87b4dfecda1b48b86e48bebb416b820f34d4cae165cbbccf28c311046817bd76` |
+| `__tests__/attribution-rounding-validation.test.ts` | `1da74f748073b4228edb5cf52e81b5ca15476905b3eaeea3b46e870b9872f95f` |
+| `__tests__/currency-minor-units.test.ts` | `417f00d38ee148427535ab19a715cea52493f9a7e4d4232d4c6167564a175ce9` |
+| `__tests__/decimal.test.ts` | `6146026fbb9d45b0d94cd2d3bbef8afa7c7aa1824f97eb1fa9a960921fbe84af` |
+| `__tests__/lifecycle-rate-trust.test.ts` | `3162d7f11fe619a20fbe93bca394c6c58138f3aa7621f3aae548f33dfcf03e4e` |
+| `__tests__/lifecycle-reducer-contract.test.ts` | `83c7f665fa2e00e37cca644df5864ceeffe05e510ff82266cb46b357a8aeeaf3` |
+| `__tests__/purity-valuation.test.ts` | `178a6d0522709739c02fbcd9c282543960f23a33e211b5bb01105396e6013fb5` |
+| `__tests__/rate-reference-contract.test.ts` | `6296f213ba0605ffaf3d48e0fb36f964f1130d237775afa44fb5f4f5abdc007a` |
+
+This snapshot authenticates final Metals logic source state; it is not release
+coverage or merge-approval evidence.
