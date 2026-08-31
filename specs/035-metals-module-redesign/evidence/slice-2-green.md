@@ -357,3 +357,39 @@ passed: complete Metals coverage (8/8 suites, 232/232 tests; 94.77% statements,
 87.69% branches, 100% functions, 94.72% lines) and
 `npm run typecheck -w @monyvi/logic` (exit 0). This remains dated foundation
 evidence, not release coverage or approval evidence.
+
+
+## Final SHA-256 supersession at final foundation head — 2026-08-31
+
+The preceding Git-blob snapshots and the uncommitted PR #244-head draft remain
+historical evidence. This append-only record supersedes them for byte-level source
+authentication at final foundation head `be99eba76757a966ea80b0c070f71fce1e58c33a`.
+
+The current Metals coverage command passed 8/8 suites and 241/241 tests with 0
+snapshots. Aggregate coverage was 94.36% statements, 87.05% branches, 100%
+functions, and 94.3% lines. Full logic passed 1079/1079 tests; package typecheck,
+root lint, and diff checks passed according to final worker evidence.
+
+SHA-256 values below were computed from current worktree files:
+
+| Source | SHA-256 |
+| --- | --- |
+| `decimal.ts` | `74e1a92389479f9beb3dcac65dc52aaaa6bc597724b9164a7892c8e32c26a9af` |
+| `purity-catalog.ts` | `fc7a5e6e1ca5140e63f4ef18d209906316fdec03606e9fed289b2722aeaff373` |
+| `valuation.ts` | `71eca82b5fc8261bc39fdc7d82fe8937661f9fdb923331af4b2fba37679dc00b` |
+| `attribution.ts` | `af2612097871c8fb0ec760ce41e4ad6aae17aaa13418e6b62e573c1311040eaa` |
+| `lifecycle-reducer.ts` | `ccd116b534bcefadd0e374e655a47f1c73d7a15e00b2cbb8f83d30aab8eca757` |
+| `rate-trust.ts` | `489a9295e0ea8fcd8ecd3ab099cd7238730e39fc022b0794b81fced96d902565` |
+| `rate-reference.ts` | `0ee96f2abefbe29cc1240e42de64c082253139a3c599aae5d54bd91c87462d89` |
+| `metals/index.ts` | `abdb6238e223db39363f5553c6d165532ef586cab8b3ed2289d1204be3bd3c1d` |
+| `decimal.test.ts` | `077293384ae3de36e3b36d26db5c3376454e08e29ba75a3cf91bf23eae89cffb` |
+| `purity-valuation.test.ts` | `01db37dc0cc65497c6df232429b8ee3ec2f2223462e45e36067ad4fc942b62ec` |
+| `attribution-postgres-parity.test.ts` | `9627a8cd970e2a3357f712510e2144f60b35d1f84516973fac6a2e972fd952ff` |
+| `lifecycle-rate-trust.test.ts` | `b70e33fdfd241a7e392435fe4732fba1b90f7d8540421f554f06960ef4fe04e7` |
+| `rate-reference-contract.test.ts` | `139c3202338f8ac37e11b368dfaab25f53e6964615dce37e022cf761a91b34a1` |
+| `attribution-rounding-validation.test.ts` | `1da74f748073b4228edb5cf52e81b5ca15476905b3eaeea3b46e870b9872f95f` |
+| `attribution-context-contract.test.ts` | `edd724560e70000fefd1accd768656aa0684a0b2666b1dfecb2202fa44baa16a` |
+| `lifecycle-reducer-contract.test.ts` | `20739f9d12019b1f5db9510727d077394a042e14e6832ea7e3e30965bb6c9aea` |
+
+This snapshot authenticates foundation source state; it is not release coverage
+or merge approval evidence.

@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/035-metals-module-redesign`
 **Created**: 2026-08-25
-**Status**: Approved V1 product contract; all eight normal-flow visual candidates approved and promoted; Slice 2 implementation is partially complete, with T013, T015, and T017 still implementation-pending; later slices remain planned only
+**Status**: Approved V1 product contract; all eight normal-flow visual candidates approved and promoted; Slice 2 implementation is complete; later slices remain planned only
 **Input**: User description: "Redesign Metals V1 as a connected, trustworthy, offline-capable experience spanning Home, portfolio, rates, holding details, lifecycle actions, permanent history, and transparent profit/loss."
 
 ## Clarifications

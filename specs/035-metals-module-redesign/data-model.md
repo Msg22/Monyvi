@@ -92,14 +92,15 @@ persistence against this root.
 
 | Column | Type | Constraint |
 | --- | --- | --- |
-| `id` / `action_id` | text/uuid | Same stable value; owner-unique |
+| `id` | text/uuid | Opaque globally unique persistence row ID; never forced equal to `action_id` |
+| `action_id` | text/uuid | Stable envelope ID; durable identity is owner-scoped `(user_id, action_id)` |
 | `user_id` | text/uuid | Owner |
 | `domain` | text | Owning domain, including `metals` |
 | `kind` | text | Stable domain action type |
 | `domain_reference_id` | text/uuid | Link to owning domain evidence |
 | `payload_json` | text/jsonb | Canonical immutable payload |
 | `payload_hash` | text | SHA-256 of canonical payload envelope |
-| `expected_account_revision` | integer/bigint nullable | Required iff account effect exists |
+| `expected_account_revision` | text / text nullable | Canonical unsigned integer string, bounded to 50 digits; null-only in Slice 3A; required iff account effect exists |
 | `state` | text | State machine below |
 | `server_outcome` | text nullable | accepted, idempotent, stale, rejected |
 | `outcome_json` | text/jsonb nullable | Canonical durable replay outcome |
