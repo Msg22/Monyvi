@@ -6,6 +6,7 @@ jest.mock("@monyvi/db", () => ({
   schema: {
     tables: {
       categories: {},
+      financial_action_groups: {},
       profiles: {},
     },
   },
@@ -26,7 +27,10 @@ jest.mock("@/utils/logger", () => ({
   },
 }));
 
-import { pushChanges } from "../../services/sync/push-service";
+import {
+  GENERIC_SYNC_ERROR_CODES,
+  pushChanges,
+} from "../../services/sync/push-service";
 
 type PushChangesDatabase = Parameters<typeof pushChanges>[0];
 type PushChangesArgs = Parameters<typeof pushChanges>[1];
@@ -39,6 +43,65 @@ describe("pushChanges", () => {
       upsert: mockUpsert,
     });
     mockUpsert.mockResolvedValue({ error: null });
+  });
+
+  it.each([
+    ["created", { created: [{ id: "root-1" }], updated: [], deleted: [] }],
+    ["updated", { created: [], updated: [{ id: "root-1" }], deleted: [] }],
+    ["deleted", { created: [], updated: [], deleted: ["root-1"] }],
+  ] as const)(
+    "rejects dirty dedicated-table %s changes before auth or remote writes",
+    async (_changeKind, dedicatedChanges) => {
+      const database = Object.create(null) as PushChangesDatabase;
+      const changes = {
+        financial_action_groups: dedicatedChanges,
+        profiles: {
+          created: [
+            {
+              id: "profile-1",
+              user_id: "current-user",
+              deleted: false,
+            },
+          ],
+          updated: [],
+          deleted: [],
+        },
+      };
+      const pushArgs: PushChangesArgs = {
+        changes,
+        lastPulledAt: 0,
+      };
+
+      await expect(pushChanges(database, pushArgs)).rejects.toThrow(
+        GENERIC_SYNC_ERROR_CODES.DEDICATED_CHANGES_PENDING
+      );
+
+      expect(mockGetCurrentUserId).not.toHaveBeenCalled();
+      expect(mockFrom).not.toHaveBeenCalled();
+      expect(mockUpsert).not.toHaveBeenCalled();
+    }
+  );
+
+  it("allows an empty dedicated-table change set without generating a generic remote write", async () => {
+    const database = Object.create(null) as PushChangesDatabase;
+    const profile = {
+      id: "profile-1",
+      user_id: "current-user",
+      deleted: false,
+    };
+    const changes = {
+      financial_action_groups: { created: [], updated: [], deleted: [] },
+      profiles: { created: [profile], updated: [], deleted: [] },
+    };
+    const pushArgs: PushChangesArgs = {
+      changes,
+      lastPulledAt: 0,
+    };
+
+    await expect(pushChanges(database, pushArgs)).resolves.toBeUndefined();
+
+    expect(mockFrom).not.toHaveBeenCalledWith("financial_action_groups");
+    expect(mockFrom).toHaveBeenCalledWith("profiles");
   });
 
   it("skips dirty shared system categories instead of pushing them through user RLS", async () => {

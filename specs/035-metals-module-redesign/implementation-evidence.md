@@ -242,3 +242,45 @@ Manual plan: inspect the root barrel and confirm each owned domain barrel appear
 once. No UI, database, synchronization, financial calculation, or account-effect
 behavior changes in T034; downstream consumer journeys remain owned by later tasks.
 No stop condition remains active.
+
+### PR #250 post-merge foundation safety follow-up — 2026-08-31
+
+Base: `8cc090346004b590ed5d2e53d2ec3e6c829a517f`
+Owner: financial-action foundation follow-up
+Scope: linked-operation ownership validation, generic-push dirty dedicated-table
+failure, the canonical unsigned-revision runtime constructor, focused contracts and
+tests, and this evidence entry. No completed task checkbox changed.
+
+Focused Red used three isolated commands. The canonical action-contract suite failed
+17/87 assertions because `parseCanonicalUnsignedIntegerString` did not exist. The
+foundation repository suite failed 3/29 assertions because ownership validation was
+not invoked and foreign direct-owner/owned-parent plans reached the batch boundary; a
+fourth focused assertion freezes omission of the mandatory validator as invalid.
+The push/contract suites failed 4/16 assertions because dirty dedicated-table changes
+were skipped instead of rejecting generic synchronization.
+
+Green requires every linked plan to assert ownership for the exact cached and prepared
+model sets before one atomic batch, followed by an auth reassertion. It rejects an
+omitted validator, restores cached Watermelon raw state after validation failure,
+does not prepare or validate linked work on replay, and keeps domain-specific direct or
+owned-parent validation outside the generic repository. Generic push now throws
+`sync_dedicated_table_changes_pending` before auth lookup or remote writes whenever a
+dedicated table has created, updated, or deleted changes; empty dedicated change sets
+remain excluded and non-blocking. The exported revision constructor accepts only `0`
+or no-leading-zero unsigned decimal text bounded to PostgreSQL signed-bigint max and
+rejects JavaScript numbers and every noncanonical or overflowing input.
+
+Focused Green: revision contract 87/87, foundation repository 30/30, and generic-sync
+16/16. Broad Green: full logic 69/69 suites and 1,238/1,238 tests; mobile foundation,
+SQLite, generic sync, sync wrapper/config/ownership/transform coverage 8/8 suites and
+98/98 tests; logic and mobile typechecks pass; repository lint reports 0 errors with
+272 pre-existing warnings; and `git diff --check` passes. No migration, schema artifact,
+dedicated synchronizer, remote database mutation, or account-guard enablement is
+included.
+
+Manual plan: inspect the linked plan contract and verify every future caller must
+provide a real direct-owner or owned-parent assertion; inspect generic push ordering
+and verify the dedicated dirty check precedes auth and all Supabase calls; verify the
+revision parser boundary values against PostgreSQL signed-bigint max. Automated tests
+cover the executable paths, so no emulator journey is required for this infrastructure
+follow-up.

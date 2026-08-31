@@ -49,6 +49,15 @@ export type CreateFinancialActionGroupResult =
 export interface FinancialActionLinkedOperationPlan {
   readonly cachedModels: readonly Model[];
   readonly prepareOperations: () => readonly Model[];
+  readonly assertOwnership: (
+    input: FinancialActionLinkedOperationOwnershipInput
+  ) => Promise<void>;
+}
+
+export interface FinancialActionLinkedOperationOwnershipInput {
+  readonly userId: string;
+  readonly cachedModels: readonly Model[];
+  readonly preparedOperations: readonly Model[];
 }
 
 export interface CommitFinancialActionGroupLocallyInput extends CreateFinancialActionGroupInput {
@@ -250,6 +259,9 @@ export function createFinancialActionFoundationRepository(
     foundRecord: FinancialActionGroup | null,
     plan: FinancialActionLinkedOperationPlan
   ): Promise<CommitFinancialActionGroupLocallyResult> {
+    if (typeof plan.assertOwnership !== "function") {
+      throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+    }
     assertNoRootTargets(plan.cachedModels);
     const snapshotModels = foundRecord
       ? [foundRecord, ...plan.cachedModels]
@@ -264,6 +276,12 @@ export function createFinancialActionFoundationRepository(
         throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
       }
       assertNoRootTargets(linkedOperations);
+      await plan.assertOwnership({
+        userId: context.scope.userId,
+        cachedModels: plan.cachedModels,
+        preparedOperations: linkedOperations,
+      });
+      await reassertExpectedCurrentUser(context.scope.userId);
       assertFinancialActionTransition("pending_local", "local_complete");
       const root = prepareLocalRoot(context, foundRecord);
       await reassertExpectedCurrentUser(context.scope.userId);

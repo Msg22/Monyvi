@@ -3,15 +3,16 @@ import { createHash } from "node:crypto";
 import {
   FINANCIAL_ACTION_ERROR_CODES,
   FINANCIAL_ACTION_STATES,
+  MAX_CANONICAL_UNSIGNED_INTEGER_STRING,
   SERVER_OUTCOMES,
   canonicalizeFinancialActionEnvelope,
   hashFinancialActionEnvelope,
+  parseCanonicalUnsignedIntegerString,
   parseFinancialActionEnvelopeJson,
   resolveFinancialActionReplay,
   serializeFinancialActionEnvelope,
-  FinancialActionEnvelopeV1,
-  CanonicalUnsignedIntegerString,
-  Sha256Provider,
+  type FinancialActionEnvelopeV1,
+  type Sha256Provider,
 } from "../action-contracts";
 import {
   createFinancialActionRegistry,
@@ -31,7 +32,9 @@ const ARABIC_DIGEST =
 
 const sha256Provider: Sha256Provider = {
   digestUtf8: (canonicalText: string): Promise<string> =>
-    Promise.resolve(createHash("sha256").update(canonicalText, "utf8").digest("hex")),
+    Promise.resolve(
+      createHash("sha256").update(canonicalText, "utf8").digest("hex")
+    ),
 };
 
 function validEnvelope(): FinancialActionEnvelopeV1<MetalsSellPayloadV1> {
@@ -68,7 +71,8 @@ describe("financial action canonical contract", () => {
       },
     ]);
     const digestUtf8 = jest.fn(
-      (_canonicalText: string): Promise<string> => Promise.resolve(ARABIC_DIGEST)
+      (_canonicalText: string): Promise<string> =>
+        Promise.resolve(ARABIC_DIGEST)
     );
 
     expect(() =>
@@ -145,20 +149,53 @@ describe("financial action canonical contract", () => {
   });
 
   it("reserves ordered account guards in the V1 type while Slice 3A rejects non-empty guards", () => {
-    const reservedRevision = "7" as CanonicalUnsignedIntegerString;
-    const revisionBearingEnvelope: FinancialActionEnvelopeV1<MetalsSellPayloadV1> = {
-      ...validEnvelope(),
-      accountGuards: [
-        {
-          accountId: "018f0c7a-1234-7abc-8def-000000000007",
-          expectedRevision: reservedRevision,
-        },
-      ],
-    };
+    const reservedRevision = parseCanonicalUnsignedIntegerString("7");
+    const revisionBearingEnvelope: FinancialActionEnvelopeV1<MetalsSellPayloadV1> =
+      {
+        ...validEnvelope(),
+        accountGuards: [
+          {
+            accountId: "018f0c7a-1234-7abc-8def-000000000007",
+            expectedRevision: reservedRevision,
+          },
+        ],
+      };
 
     expectContractError(
       revisionBearingEnvelope,
       FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE
+    );
+  });
+
+  it.each(["0", "1", "999999999999999999", "9223372036854775807"])(
+    "constructs SQL-parity canonical revision boundary %s",
+    (revision) => {
+      const parsed = parseCanonicalUnsignedIntegerString(revision);
+
+      expect(parsed).toBe(revision);
+      expect(typeof parsed).toBe("string");
+      expect(MAX_CANONICAL_UNSIGNED_INTEGER_STRING).toBe(
+        "9223372036854775807"
+      );
+    }
+  );
+
+  it.each([
+    ["number zero", 0],
+    ["number one", 1],
+    ["empty", ""],
+    ["leading whitespace", " 1"],
+    ["trailing whitespace", "1 "],
+    ["plus sign", "+1"],
+    ["minus sign", "-1"],
+    ["decimal", "1.0"],
+    ["leading zero", "01"],
+    ["overflow", "9223372036854775808"],
+    ["long overflow", "10000000000000000000"],
+    ["null", null],
+  ])("rejects non-canonical revision input: %s", (_name, revision) => {
+    expect(() => parseCanonicalUnsignedIntegerString(revision)).toThrow(
+      FINANCIAL_ACTION_ERROR_CODES.INVALID_REVISION
     );
   });
 

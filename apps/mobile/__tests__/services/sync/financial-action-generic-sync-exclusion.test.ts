@@ -26,6 +26,29 @@ describe("financial action generic sync exclusion", () => {
     expect(SYNCABLE_TABLES).not.toContain("financial_action_groups");
   });
 
+  it("fails generic push before remote writes when a dedicated table is dirty", () => {
+    const pushService = readFileSync(
+      resolve(REPOSITORY_ROOT, "apps/mobile/services/sync/push-service.ts"),
+      "utf8"
+    );
+    const contract = readFileSync(
+      resolve(
+        REPOSITORY_ROOT,
+        "specs/035-metals-module-redesign/contracts/action-contract.md"
+      ),
+      "utf8"
+    );
+
+    expect(pushService).toContain("DEDICATED_SYNC_TABLES");
+    expect(pushService).toContain("sync_dedicated_table_changes_pending");
+    expect(pushService.indexOf("assertNoDedicatedTableChanges")).toBeLessThan(
+      pushService.indexOf("getCurrentUserId()")
+    );
+    expect(contract).toMatch(
+      /Generic push fails before any remote write when a dedicated table has local\s+changes\./
+    );
+  });
+
   it.each([
     "scripts/transform-schema.js",
     "scripts/sql-to-watermelon-migration.js",
@@ -122,7 +145,9 @@ describe("financial action generic sync exclusion", () => {
       "private.financial_action_assert_root_binding_v1"
     );
     expect(migration).toMatch(/account_guards_json jsonb/);
-    expect(migration).toContain("financial_action_groups_foundation_guards_empty");
+    expect(migration).toContain(
+      "financial_action_groups_foundation_guards_empty"
+    );
     expect(localMigration).toMatch(
       /name: "account_guards_json",\s+type: "string"/
     );
@@ -223,7 +248,9 @@ describe("financial action generic sync exclusion", () => {
     expect(sqlTest).toContain(
       "server-side hard delete of a durable root is rejected"
     );
-    expect(sqlTest).toContain("owner cascade cannot delete durable action roots");
+    expect(sqlTest).toContain(
+      "owner cascade cannot delete durable action roots"
+    );
     expect(sqlTest).toContain("private canonicalizer execution is denied");
     expect(sqlTest).toContain("private state execution is denied");
     expect(sqlTest).toContain("private helper execution is denied");

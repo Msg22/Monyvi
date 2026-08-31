@@ -8,7 +8,11 @@ import type {
 import { logger } from "@/utils/logger";
 
 import { getCurrentUserId, supabase } from "../supabase";
-import { SYNCABLE_TABLES, type SyncableTable } from "./config";
+import {
+  DEDICATED_SYNC_TABLES,
+  SYNCABLE_TABLES,
+  type SyncableTable,
+} from "./config";
 import { createSyncTableError } from "./errors";
 import {
   assertPushRecordBelongsToCurrentUser,
@@ -18,6 +22,30 @@ import {
 import { getChildTableConfig, isWritableTable } from "./table-predicates";
 import { transformToSupabase } from "./transforms";
 import type { SupabaseWriteTable, WritableSupabaseTablesNames } from "./types";
+
+export const GENERIC_SYNC_ERROR_CODES = {
+  DEDICATED_CHANGES_PENDING: "sync_dedicated_table_changes_pending",
+} as const;
+
+function hasChanges(changeSet: SyncTableChangeSet | undefined): boolean {
+  return (
+    changeSet !== undefined &&
+    (changeSet.created.length > 0 ||
+      changeSet.updated.length > 0 ||
+      changeSet.deleted.length > 0)
+  );
+}
+
+function assertNoDedicatedTableChanges(changes: SyncPushArgs["changes"]): void {
+  for (const [table, changeSet] of Object.entries(changes)) {
+    if (
+      DEDICATED_SYNC_TABLES.has(table as "financial_action_groups") &&
+      hasChanges(changeSet as SyncTableChangeSet)
+    ) {
+      throw new Error(GENERIC_SYNC_ERROR_CODES.DEDICATED_CHANGES_PENDING);
+    }
+  }
+}
 
 function comparePushTableOrder(
   [leftTableName]: readonly [string, unknown],
@@ -62,6 +90,7 @@ export async function pushChanges(
   database: Database,
   pushArgs: SyncPushArgs
 ): Promise<SyncPushResult | undefined | void> {
+  assertNoDedicatedTableChanges(pushArgs.changes);
   const userId = await getCurrentUserId();
   if (!userId) {
     logger.debug("sync.push.skippedUnauthenticated");

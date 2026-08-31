@@ -161,7 +161,9 @@ schema explicitly permits it.
   are valid ordinary canonical decimals. A minor-unit string matches
   `^-?(0|[1-9][0-9]*)$` plus an explicit `-0` rejection. A revision string matches
   `^(0|[1-9][0-9]*)$`. No exponent, leading plus, leading zero, negative zero, or
-  trailing fractional zero is canonical.
+  trailing fractional zero is canonical. A revision is additionally bounded to
+  PostgreSQL signed-bigint max `9223372036854775807`; runtime callers construct the
+  branded value only through `parseCanonicalUnsignedIntegerString(unknown)`.
 - `occurredAt` is a strict calendar-valid UTC timestamp with milliseconds only:
   `YYYY-MM-DDTHH:mm:ss.SSSZ`. It has no offset variant. JavaScript `number` values
   are forbidden in the envelope and payload.
@@ -286,3 +288,8 @@ never remove or change this exclusion. Only a dedicated-synchronizer capability 
 added after dedicated action synchronization is proven, may change; it governs the
 dedicated path, not generic selection. This prevents action roots from activating
 independently of their complete domain evidence and durable outcome protocol.
+
+Generic push fails before any remote write when a dedicated table has local changes.
+This keeps the complete WatermelonDB-captured change set dirty when generic
+`synchronize()` has no authority to acknowledge the dedicated rows. Empty dedicated
+change sets remain excluded and do not block ordinary generic table synchronization.
