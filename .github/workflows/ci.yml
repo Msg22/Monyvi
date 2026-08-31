@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, codex/035-metals-module-redesign]
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -100,9 +100,10 @@ jobs:
 
   financial-action-pgtap:
     name: Financial Action pgTAP
-    if:
-      github.event_name == 'pull_request' && github.event.pull_request.base.ref
-      == 'main'
+    if: >-
+      github.event_name == 'pull_request' && (github.event.pull_request.base.ref
+      == 'main' || github.event.pull_request.base.ref ==
+      'codex/035-metals-module-redesign')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
