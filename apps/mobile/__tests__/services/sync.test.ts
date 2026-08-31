@@ -122,6 +122,10 @@ function mockSupabaseTable(): void {
 }
 
 const mockDatabaseStub = {
+  adapter: {
+    getLocal: jest.fn().mockResolvedValue(undefined),
+    setLocal: jest.fn().mockResolvedValue(undefined),
+  },
   get: mockDatabaseGet,
   write: mockDatabaseWrite,
 };

@@ -457,3 +457,31 @@ prepared-create recheck occurs immediately after every existing updater and befo
 postimage capture. Deterministic service tests cover these non-UI boundaries, so no
 emulator journey is required. No schema, migration, remote database, synchronization,
 account-guard, or GitHub thread mutation is included.
+
+### PR #251 sync-owner watermark isolation — 2026-09-01
+
+This append applies to head `48ba63b009ae933bda42ad6bd4d2befccf8917a8`. The sync
+facade captures one authenticated user inside its existing module-level lock, reads the
+adapter-local `__monyvi_sync_owner_user_id` marker, and forces the pull callback to use
+`null` whenever that marker is absent or belongs to another user. It reasserts the bound
+user only after `synchronize()` returns, then records the marker; auth loss, a user switch,
+or any synchronize failure therefore leaves the previous marker intact. Installed
+WatermelonDB source confirms the callback result is applied and its global
+`lastPulledAt` is stored before `synchronize()` returns, so a subsequent user with a
+different marker recovers with a full pull instead of inheriting that watermark.
+
+The lifecycle harness controls callback return, simulated remote application, and
+watermark advance in that order. It covers prior owner A to user B full pull/marker
+commit, a post-callback auth switch with no local changes, B's older row after a global
+watermark advance, same-owner incremental pull, and first-sync failure with a missing
+marker. The first broader run was red in 24 assertions only because pre-existing
+database doubles lacked the adapter metadata API newly required by the facade; adding
+those focused doubles made the harness reach the intended synchronization behavior.
+
+Final Green: broad sync coverage is 10/10 suites and 80/80 tests. Exact mobile and logic
+TypeScript checks pass. Changed-file lint and full mobile lint pass; full repository lint
+has 0 errors and 275 pre-existing warnings. `git diff --check` passes. The changed sync
+facade and lifecycle test are 116 and 211 lines respectively; the touched legacy
+`sync.test.ts` is 911 lines (907 before this four-line adapter-double addition) and no
+configured maximum-file-lines lint rule exists. No schema, migration, remote database,
+auth-path lock, GitHub-thread, or remote-data mutation is included.

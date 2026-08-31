@@ -39,7 +39,12 @@ describe("syncDatabase dedicated rejection passthrough", () => {
   });
 
   it("returns push rejected ids to Watermelon synchronize", async () => {
-    const database = Object.create(null) as Parameters<typeof syncDatabase>[0];
+    const database = {
+      adapter: {
+        getLocal: jest.fn().mockResolvedValue(undefined),
+        setLocal: jest.fn().mockResolvedValue(undefined),
+      },
+    } as unknown as Parameters<typeof syncDatabase>[0];
     const rejectedResult = {
       experimentalRejectedIds: {
         financial_action_groups: ["foreign-root"],

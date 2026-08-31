@@ -39,8 +39,12 @@ interface SynchronizeCallbacks {
 
 const EXPECTED_USER_ID = "current-user";
 const INITIAL_WATERMARK = 1_700_000_000_000;
-const emptyDatabase: Record<string, never> = {};
-const database = emptyDatabase as unknown as Database;
+const database = {
+  adapter: {
+    getLocal: jest.fn().mockResolvedValue(undefined),
+    setLocal: jest.fn().mockResolvedValue(undefined),
+  },
+} as unknown as Database;
 
 describe("sync auth scope lifecycle", () => {
   beforeEach(() => {
