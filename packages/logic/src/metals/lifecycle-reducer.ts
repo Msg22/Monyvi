@@ -60,6 +60,11 @@ interface ReductionState {
   readonly rejected: readonly LifecycleRejectedEvent[];
 }
 
+interface SnapshottedLifecycleEvent {
+  readonly event: LifecycleEvent;
+  readonly isStructurallyComplete: boolean;
+}
+
 export function orderLifecycleEventsNewestFirst(
   events: readonly LifecycleEvent[]
 ): readonly LifecycleEvent[] {
@@ -124,7 +129,7 @@ export function reduceMetalLifecycle(
   return finalizeReduction(accepted, rejectRemaining(state, accepted));
 }
 
-function snapshotEvent(observation: unknown): LifecycleEvent {
+function snapshotEvent(observation: unknown): SnapshottedLifecycleEvent {
   const event = isRecord(observation) ? observation : {};
   const isStructurallyComplete =
     isNonEmptyString(event.id) &&
@@ -135,7 +140,7 @@ function snapshotEvent(observation: unknown): LifecycleEvent {
     isOptionalEventReference(event.reversesEventId) &&
     isLifecycleEvidenceState(event.evidenceState) &&
     isCanonicalCasStatus(event.canonicalCasStatus);
-  return Object.freeze({
+  const snapshot: LifecycleEvent = Object.freeze({
     id: typeof event.id === "string" ? event.id : "",
     fingerprint: typeof event.fingerprint === "string" ? event.fingerprint : "",
     kind: isLifecycleKind(event.kind) ? event.kind : "created",
@@ -146,14 +151,16 @@ function snapshotEvent(observation: unknown): LifecycleEvent {
     reversesEventId: isOptionalEventReference(event.reversesEventId)
       ? event.reversesEventId
       : null,
-    evidenceState: isStructurallyComplete &&
-      isLifecycleEvidenceState(event.evidenceState)
-      ? event.evidenceState
-      : "incomplete",
+    evidenceState:
+      isStructurallyComplete && isLifecycleEvidenceState(event.evidenceState)
+        ? event.evidenceState
+        : "incomplete",
     canonicalCasStatus: isCanonicalCasStatus(event.canonicalCasStatus)
       ? event.canonicalCasStatus
       : "unknown",
   });
+
+  return Object.freeze({ event: snapshot, isStructurallyComplete });
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
@@ -181,7 +188,9 @@ function isOptionalEventReference(value: unknown): value is string | null {
   return value === null || isNonEmptyString(value);
 }
 
-function prepareCandidates(events: readonly LifecycleEvent[]): ReductionState {
+function prepareCandidates(
+  events: readonly SnapshottedLifecycleEvent[]
+): ReductionState {
   const grouped = groupById(events);
   const candidates = new Map<string, LifecycleEvent>();
   let state: ReductionState = {
@@ -190,18 +199,48 @@ function prepareCandidates(events: readonly LifecycleEvent[]): ReductionState {
     rejectedIds: new Set(),
     rejected: [],
   };
-  for (const [id, duplicates] of grouped) {
+  for (const [id, snapshots] of grouped) {
+    const duplicates = snapshots
+      .filter(({ isStructurallyComplete }) => isStructurallyComplete)
+      .map(({ event }) => event);
+    for (const snapshot of snapshots) {
+      if (!snapshot.isStructurallyComplete) {
+        state = appendRejection(
+          state,
+          snapshot.event,
+          "incomplete_evidence",
+          null,
+          duplicates.length === 0
+        );
+      }
+    }
+    if (duplicates.length === 0) {
+      continue;
+    }
+
     const first = duplicates[0] as LifecycleEvent;
     if (duplicates.length === 1) {
       candidates.set(id, first);
     } else if (duplicates.every((event) => sameLifecycleEvent(event, first))) {
       candidates.set(id, first);
       for (const replay of duplicates.slice(1)) {
-        state = appendRejection(state, replay, "duplicate_event_id_replay", id, false);
+        state = appendRejection(
+          state,
+          replay,
+          "duplicate_event_id_replay",
+          id,
+          false
+        );
       }
     } else {
       for (const conflict of duplicates) {
-        state = appendRejection(state, conflict, "duplicate_event_id_conflict", id, true);
+        state = appendRejection(
+          state,
+          conflict,
+          "duplicate_event_id_conflict",
+          id,
+          true
+        );
       }
     }
   }
@@ -243,11 +282,18 @@ function sameLifecycleEvent(left: LifecycleEvent, right: LifecycleEvent): boolea
 }
 
 function groupById(
-  events: readonly LifecycleEvent[]
-): ReadonlyMap<string, readonly LifecycleEvent[]> {
-  const grouped = new Map<string, readonly LifecycleEvent[]>();
-  for (const event of [...events].sort(compareEvents)) {
-    grouped.set(event.id, [...(grouped.get(event.id) ?? []), event]);
+  snapshots: readonly SnapshottedLifecycleEvent[]
+): ReadonlyMap<string, readonly SnapshottedLifecycleEvent[]> {
+  const grouped = new Map<
+    string,
+    readonly SnapshottedLifecycleEvent[]
+  >();
+  const sorted = [...snapshots].sort((left, right) =>
+    compareEvents(left.event, right.event)
+  );
+  for (const snapshot of sorted) {
+    const id = snapshot.event.id;
+    grouped.set(id, [...(grouped.get(id) ?? []), snapshot]);
   }
   return grouped;
 }

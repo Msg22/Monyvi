@@ -278,9 +278,13 @@ export function calculateRealizedAttribution(
     return { available: false, reason: "fees_unavailable" };
   }
 
-  const saleConversion = proceedsCurrencyAtSale.value.decimal.dividedBy(
-    purchaseCurrencyAtSale.value.decimal
-  );
+  const saleConversion =
+    input.purchaseCurrencyInstrumentCode ===
+    input.proceedsCurrencyInstrumentCode
+      ? parseCanonicalDecimal("1")
+      : proceedsCurrencyAtSale.value.decimal.dividedBy(
+          purchaseCurrencyAtSale.value.decimal
+        );
   const canonicalGrossProceeds = grossProceeds.value.times(saleConversion);
   const canonicalFees = fees.value.times(saleConversion);
   const combined = canonicalGrossProceeds

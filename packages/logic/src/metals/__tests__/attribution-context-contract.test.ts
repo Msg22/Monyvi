@@ -159,6 +159,55 @@ describe("attribution expected instrument context", () => {
     });
   });
 
+  it("uses identity conversion for a same-currency sale despite differing terminal snapshots", () => {
+    expect(
+      calculateRealizedAttribution({
+        ...CURRENT_CONTEXT,
+        proceedsCurrencyInstrumentCode: "currency:EGP",
+        grossProceedsDecimal: "150",
+        feesDecimal: "10",
+        proceedsCurrencyDecimalPlaces: 2,
+        acquisitionMetalRate: metalRate(
+          "acquisition_metal",
+          "metal:GOLD",
+          "2"
+        ),
+        acquisitionCurrencyRate: currencyRate(
+          "acquisition_purchase_currency",
+          "currency:EGP",
+          "0.5"
+        ),
+        saleMetalRate: metalRate("terminal_metal", "metal:GOLD", "3"),
+        purchaseCurrencyAtSaleRate: currencyRate(
+          "terminal_purchase_currency",
+          "currency:EGP",
+          "0.25"
+        ),
+        proceedsCurrencyAtSaleRate: currencyRate(
+          "terminal_proceeds_currency",
+          "currency:EGP",
+          "0.5"
+        ),
+      })
+    ).toMatchObject({
+      available: true,
+      value: {
+        combinedDecimal: "105",
+        canonicalGrossProceedsDecimal: "150",
+        canonicalFeesDecimal: "10",
+        breakdown: {
+          available: true,
+          value: {
+            components: {
+              saleDifferenceDecimal: "30",
+              feeDecimal: "-10",
+            },
+          },
+        },
+      },
+    });
+  });
+
   it.each([
     [
       "canonical_currency_display_rate_unavailable",

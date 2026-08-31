@@ -134,6 +134,44 @@ describe("approved pure lifecycle reduction", () => {
     ]);
   });
 
+  it("keeps a valid creation when a structurally malformed row repeats its ID", () => {
+    const malformedDuplicate = {
+      ...ROOT,
+      fingerprint: undefined,
+    };
+
+    const result = reduceMetalLifecycle([malformedDuplicate, ROOT]);
+
+    expect(result.projection?.effectiveEventId).toBe("created");
+    expect(result.acceptedEvents.map(({ id }) => id)).toEqual(["created"]);
+    expect(reasons(result)).toContain("incomplete_evidence");
+    expect(reasons(result)).not.toContain("duplicate_event_id_conflict");
+  });
+
+  it("keeps a valid successor when a structurally malformed row repeats its ID", () => {
+    const correction = event("correction", "corrected", "created", {
+      occurredAt: 2_000,
+    });
+    const malformedDuplicate = {
+      ...correction,
+      occurredAt: "corrupt",
+    };
+
+    const result = reduceMetalLifecycle([ROOT, malformedDuplicate, correction]);
+
+    expect(result.projection?.effectiveEventId).toBe("correction");
+    expect(result.acceptedEvents.map(({ id }) => id)).toEqual([
+      "created",
+      "correction",
+    ]);
+    expect(result.projection?.history.map(({ id }) => id)).toEqual([
+      "correction",
+      "created",
+    ]);
+    expect(reasons(result)).toContain("incomplete_evidence");
+    expect(reasons(result)).not.toContain("duplicate_event_id_conflict");
+  });
+
   it.each([undefined, "corrupt"])(
     "fails closed for runtime evidence state %p",
     (evidenceState) => {
