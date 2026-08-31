@@ -23,3 +23,14 @@ Use a consistent envelope for all API responses:
 - Include the data payload (nullable on error)
 - Include an error message field (nullable on success)
 - Include metadata for paginated responses (total, page, limit)
+
+### Financial Action Groups
+
+- Use Last Write Wins only for ordinary independently replaceable metadata.
+- A grouped lifecycle or balance-changing financial action requires a stable
+  action ID, expected financial revision, and one idempotent atomic local group.
+- Synchronize the complete group through one server compare-and-swap operation.
+  Client timestamps and Last Write Wins must never select a competing financial
+  action.
+- A rejected optimistic group and linked effects reconcile exactly once and are
+  excluded from ownership, balances, net worth, reporting, and normal History.

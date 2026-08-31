@@ -1,6 +1,6 @@
 # Monyvi Business Decisions
 
-**Status:** Active product source of truth **Last updated:** 2026-08-18
+**Status:** Active product source of truth **Last updated:** 2026-08-31
 **Scope:** Business and product rules confirmed by the current codebase and
 implementation history.
 
@@ -411,37 +411,275 @@ Business rules:
 ### Assets And Metals
 
 Assets represent non-spendable wealth holdings. The implemented subtype is metal
-holdings.
+holdings. Feature 035 defines the approved Metals V1 behavior below.
 
 Business rules:
 
-- Parent `assets` rows store owner, name, type, purchase price, purchase date,
-  purchase currency, liquidity flag, notes, and sync columns.
-- `asset_metals` child rows store `metal_type`, `weight_grams`,
-  `purity_fraction`, and optional item form.
-- Supported metal types are `GOLD`, `SILVER`, `PLATINUM`, and `PALLADIUM`.
-- `purity_fraction` is the canonical purity field. Do not document or implement
-  new flows against the old `purity_karat` field.
-- Current value is calculated, not stored:
-  `weight_grams * purity_fraction * metal_usd_per_gram`, converted for display
-  as needed.
-- If a metal purchase is deducted from an account in a future flow, it should
-  create an internal asset-purchase transaction and link it to the asset.
+- Metals V1 supports Gold and Silver only. Platinum, Palladium, or any other
+  metal requires separate product approval and is not a compatibility concern
+  for V1.
+- Immutable Metals rate evidence uses a discriminated observed reference with a
+  role and kind: Gold/Silver use `metal:GOLD` or `metal:SILVER`; an approved ISO
+  currency uses `currency:<MetalsIsoCurrencyCode>`. BTC and every other
+  non-ISO/currency or non-Gold/Silver instrument are outside Metals V1.
+- Approved role vocabulary is `acquisition_metal`, `current_metal`, and
+  `terminal_metal` for metals; and `acquisition_purchase_currency`,
+  `current_purchase_currency`, `terminal_purchase_currency`,
+  `terminal_proceeds_currency`, `display_purchase_currency`, and
+  `display_preferred_currency` for currencies. A metal reference is only
+  `usd_per_pure_gram` with `quote_per_base`; a currency reference is either
+  `usd_per_currency_unit` with `quote_per_base` or `currency_units_per_usd`
+  with `base_per_quote`. USD is the exact identity rate `1`; inverse metal
+  references are rejected.
+- Every action preserves the raw observed reference and provenance. Adapter/pure
+  logic normalizes valid inputs once to canonical USD-per-base; no persistence
+  column stores an unavailable reason. Missing or unparseable observation time
+  makes freshness Unknown but does not by itself make calculation unavailable.
+- Lifecycle ownership uses one causal chain and a pure DB-neutral reducer. It
+  returns the last valid projection or `null`, plus immutable accepted and
+  rejected event records with stable internal reasons. Input evidence is
+  `effective`, `ineffective`, or `incomplete`; structural validation always
+  runs, so `is_effective` alone never establishes ownership. Invalid events and
+  descendants never affect ownership, net worth, reporting, analytics, or
+  normal History; retained malformed/rejected/incomplete evidence remains
+  available for audit, sync, and recovery.
+- A reversal is valid only when both references identify the current Sold or
+  Disposed head. Equal-time causality wins; event IDs stabilize only unrelated
+  display/diagnostic order and never select a CAS winner. Per-event persisted
+  diagnostics are deferred; the planned effectiveness/visibility fields and
+  action-root rejection are sufficient for Slice 2. User-facing recovery maps
+  internal reason codes to the approved reconciliation-recovery state.
+- Parent `assets` rows own the user, name, purchase facts, notes, and root sync
+  columns. `asset_metals` is a strict parent-owned child through `asset_id`;
+  it stores metal-specific facts and does not duplicate `user_id`.
+- `purity_factor_decimal` is the canonical exact purity factor snapshot for new
+  financial logic. Numeric `purity_fraction` is migration/compatibility-only and
+  MUST NOT drive authoritative calculations. New flows MUST NOT use the retired
+  `purity_karat` field or calculate from display text.
+- A holding persists the selected stable purity-catalog code, catalog version,
+  and exact `purity_factor_decimal` as its current purity projection. Only an
+  accepted material correction may replace that tuple. Immutable before/after
+  tuples and their catalog snapshots remain in append-only action evidence, and
+  later catalog changes never rewrite current or historical recorded facts.
+- Metal type is locked after creation. Correcting a wrong metal uses Delete
+  holding, then Add holding with the correct metal.
+- Add holding uses one focused full-screen form in this order: Name, Metal,
+  Weight and Purity on one row when space permits, total purchase price,
+  purchase currency, purchase date, Physical form, Notes, compact live preview,
+  local-first status, then direct `Add holding`. Submission stays in the same
+  form with no intermediate step or route.
+- Every other Active holding field is correctable. Name and notes are ordinary
+  metadata edits. Weight, purity, physical form, total purchase price, purchase
+  currency, and purchase date are material corrections that require a reason
+  and preserve immutable before/after evidence in History.
+- Edit holding is one form with one direct `Save changes` action. Material
+  differences reveal previous/current facts, required reason, and a live
+  consequence summary; there is no separate correction-review route.
+- Preserved legacy holdings with unavailable exact weight, purity tuple, or
+  total purchase price remain visible and show those saved facts as not recorded.
+  Calculations that require a missing fact are unavailable and must never fall
+  back to compatibility numbers. A material correction of such a holding must
+  supply the complete valid exact fact set atomically; metadata-only edits do not
+  invent facts.
+- Purchase price means the total amount paid, including workmanship, premium,
+  and other acquisition costs.
+- Effective holding state is Active, Sold, or Disposed. Creation, material
+  correction, Sale, No Longer, and Undo are immutable lifecycle events.
+  Terminal event facts are never edited in place.
+- Sell applies to the whole holding only. It records positive gross proceeds,
+  same-currency optional fees, net proceeds, sale date, optional notes, and
+  realized profit or loss. Partial sales are backlog.
+- Sell shows a complete live `What will happen` summary and commits directly
+  with `Record sale`; no second review or confirmation appears.
+- Sale may optionally credit one selected account in the sale currency. An
+  eligible matching default account may be preselected, but the user may change
+  or disable it. Cross-currency automatic credit is not allowed.
+- Issue #242 is a separate immediate implementation prerequisite only for sale
+  account credit, Undo of an actually credited sale, and account compensation or
+  replacement credit. Those effects remain disabled until #242 passes its account
+  revision, writer-guard, CAS, sync, cutover, and regression contract. Sale without
+  credit, uncredited Undo, and unrelated Metals work continue.
+- Sale credit equals exact net proceeds. It is a narrow linked Metals account
+  effect, increases the account balance, and is excluded from ordinary income,
+  budget-income, and earned-cashflow analytics.
+- No Longer applies to the whole holding and uses exactly: Lost or stolen,
+  Destroyed or damaged, Given away, Donated, or Other. The first two are
+  write-offs; Given away and Donated are external transfers. Other requires the
+  user to choose one of those meanings. No Longer creates no proceeds, account
+  credit, or realized sale profit/loss.
+- No Longer shows a complete live `What will happen` summary and commits
+  directly with `Record change`; no second review or confirmation appears.
+- Delete holding is only for an incorrect Active record. It creates no Sale,
+  disposal, proceeds, profit/loss, write-off, or transfer. Complete hidden
+  non-effective audit/sync evidence prevents the mistaken holding from
+  reappearing, while normal portfolio, detail, and History omit it.
+- Delete holding requires one focused destructive confirmation with brief copy
+  distinguishing Delete from Sell and No Longer.
+- Sold and Disposed holdings remain visible in permanent History with filters.
+  Undo has no time limit, appends a reversal event, preserves the terminal
+  event, restores the same holding to Active, and reverses any linked sale
+  account effect in the same grouped action.
+- Undo uses one focused consequence confirmation before restoring ownership and
+  reversing any linked effect.
+- Correcting terminal financial facts requires Undo, then a new correct terminal
+  action. Gift, inheritance, dowry acquisition, partial sale, purchase-time
+  account deduction, and Zakat are outside Metals V1. Zakat is a separate future
+  module.
+
+Approved purity catalog version 1:
+
+| Metal  | User-facing choice | Exact factor snapshot |
+| ------ | ------------------ | --------------------- |
+| Gold   | 24K · 999.9        | `0.9999`              |
+| Gold   | 24K · 999          | `0.999`               |
+| Gold   | 995 bullion        | `0.995`               |
+| Gold   | 23.5K · 979.16     | `0.97916`             |
+| Gold   | 22K · 916.7        | `0.9167`              |
+| Gold   | 21K · 875          | `0.875`               |
+| Gold   | 18K · 750          | `0.75`                |
+| Gold   | 14K · 583.33       | `0.58333`             |
+| Gold   | 12K · 500          | `0.5`                 |
+| Gold   | 9K · 375           | `0.375`               |
+| Silver | 999.9 bullion      | `0.9999`              |
+| Silver | 999 bullion        | `0.999`               |
+| Silver | 925                | `0.925`               |
+| Silver | 900                | `0.9`                 |
+| Silver | 800                | `0.8`                 |
+| Silver | 600                | `0.6`                 |
+
+A bare `24K = 1.0` option is forbidden. The user selects the actual stamped
+fineness. Current pure grams equal exact weight multiplied by the stored factor
+snapshot; current value is calculated from pure grams and the trusted local
+metal/FX references.
+
+### Financial Arithmetic
+
+New authoritative financial calculations use one shared `@monyvi/logic`
+Decimal.js primitive configured for 50 significant digits and
+`ROUND_HALF_EVEN`.
+
+- Financial calculation inputs and non-posted outputs cross boundaries as
+  canonical base-10 decimal strings, never binary floating-point numbers.
+- WatermelonDB persists exact decimal values as text; PostgreSQL persists them
+  as exact `numeric`.
+- Posted account money uses integer minor units for its currency.
+- Calculations retain full precision, sum components before rounding, and round
+  once only at the approved display or posting boundary.
+- Metals is the first adopter. Issue #241 owns the broader audit and staged
+  migration of existing modules; feature 035 does not perform a big-bang
+  app-wide conversion.
+
+#### Metals Canonical Valuation And Attribution (Feature 035)
+
+These approved rules are the implementation authority for Metals V1. They
+normalize the approved specification, data model, and contracts; they do not
+introduce a new calculation or product decision.
+
+- V1 supports Gold and Silver only. A selected catalog member supplies a stable
+  normalized purity factor `p` in `(0, 1]`. With weight in grams, pure grams are
+  `q = weight × p`. A label without its declared factor, free-text purity, or a
+  missing/invalid purity factor is unavailable input, never an inferred value.
+- Metal rate `m_t` means USD per pure gram. Currency factor `x_{C,t}` means the
+  USD value of one unit of currency `C`; USD is `1`. The reference value in
+  currency `C` at time `t` is `q × m_t ÷ x_{C,t}`. Missing or invalid rate
+  inputs are unavailable, never zero.
+- Purchase currency `P` is the canonical calculation and reporting basis. With
+  acquisition time `a`, current or terminal valuation time `v`, and positive
+  known all-in purchase cost `K`: acquisition reference
+  `A = q × m_a ÷ x_{P,a}`; valuation reference
+  `V = q × m_v ÷ x_{P,v}`; metal movement
+  `= q × (m_v - m_a) ÷ x_{P,a}`; currency movement
+  `= q × m_v × (1 ÷ x_{P,v} - 1 ÷ x_{P,a})`; and purchase-cost component
+  `= A - K`.
+- Trustworthy unrealized P/L equals metal movement plus currency movement plus
+  purchase-cost component, therefore `V - K`. Only Active holdings contribute
+  current value and unrealized P/L; Sold and Disposed holdings do not.
+- For a sale at time `s`, `v = s`. With gross proceeds `G`, fees `F`, and
+  proceeds currency `S`: canonical gross proceeds
+  `G_P = G × x_{S,s} ÷ x_{P,s}`; canonical fees
+  `F_P = F × x_{S,s} ÷ x_{P,s}`; sale-difference component `= G_P - V`; and
+  fee component `= -F_P`. Trustworthy realized P/L equals metal movement plus
+  currency movement plus purchase-cost component plus sale-difference component
+  plus fee component, therefore `G_P - F_P - K`.
+- Fees use the sale-proceeds currency only, are non-negative, cannot exceed
+  gross proceeds, and are deducted from gross proceeds to produce net proceeds.
+  A sale without account credit remains valid. Optional account credit equals
+  exact net proceeds only, requires a matching-currency account, and creates
+  asset-sale proceeds excluded from ordinary income, budget-income, and
+  earned-cashflow analytics.
+- Preferred-currency presentation converts every canonical purchase-currency
+  combined value and attribution component at current display time `d`. For
+  preferred currency `D`, display canonical amount `Y_P` as
+  `Y_P × x_{P,d} ÷ x_{D,d}`. Use the same current observed FX basis for the
+  combined value and every component; never rewrite canonical historical facts.
+- Combined P/L is available only with exact positive weight, a complete valid
+  purity tuple, a positive known all-in purchase cost, and every required current
+  or terminal conversion fact. Missing, invalid, zero, ambiguous, or legacy-null
+  required exact facts make only dependent value, P/L, or attribution unavailable,
+  never a free acquisition or hidden holding. Detailed attribution is unavailable
+  without required historical references. A combined result may still be shown
+  only when recorded facts derive it without assumptions, with an explanation
+  that its breakdown is unavailable.
+- Every acquired, corrected, sold, or attributed calculation preserves each
+  consumed metal/FX reference's numeric value, unit, orientation, provider
+  observation time, source, source-reported quality, and captured freshness.
+  Current rates never replace missing historical references. Freshness is per
+  input from provider observation time: over 24 hours is stale; missing or
+  unparseable observation time is Unknown; local fetch, storage, and sync times
+  never make a rate Fresh. Valid cached rates remain usable offline. Failed
+  refresh retains valid cache and offers retry; missing/invalid current rates
+  preserve holdings while affected values and P/L are unavailable.
+- Derived valuations, conversions, attribution, P/L, proceeds, fees, account
+  effects, and net-worth calculations use decimal arithmetic with at least 34
+  significant digits (the shared primitive is configured to 50), never binary
+  floating point. No intermediate rounding. Weight accepts at most three
+  decimals, `p` at most six; entered/posted money uses currency minor units;
+  supplied rate precision is preserved.
+- Calculate each canonical component at full internal precision, sum components
+  before rounding, and half-even round authoritative combined P/L once to normal
+  display precision. Display each component at the same precision. Its displayed
+  component sum may differ from displayed combined P/L by at most two minor
+  units solely from rounding. Every non-zero difference needs a visible,
+  understandable explanation; no hidden balancing component is allowed.
+- Attribution is collapsed by default and expandable without hiding combined P/L
+  or its trust state. User-facing copy uses plain language; internal records may
+  retain realized/unrealized P/L terminology.
+- Global net worth contains only effective owned asset values and account
+  balances. P/L, proceeds reporting, budgets, transactions, write-offs,
+  transfers, snapshots, and attribution components never add separate wealth.
+  Sale without credit removes the metal without inventing cash; a credited sale
+  atomically replaces metal value with matching account cash. Delete and Dispose
+  remove the holding contribution without adding a reporting metric. Incomplete
+  or conflicted candidates contribute nothing beyond the last effective state;
+  earlier daily snapshots are never rewritten.
 
 ## 5. Market Rates And Net Worth
 
 ### Market Rates
 
-Market rates are stored in `market_rates` as append-only-ish rows of USD-based
-rates:
+Market rates are stored in `market_rates` as append-only USD-based references:
 
 - Currency columns store the USD value of one unit of that currency, for example
   `egp_usd`.
-- Metal columns store USD per gram, for example `gold_usd_per_gram`.
-- The mobile app syncs recent market-rate rows into WatermelonDB.
-- The current implementation treats rates older than 24 hours as stale.
+- Metal columns store USD per pure gram, for example
+  `gold_usd_per_gram`.
+- The mobile app synchronizes recent rows into WatermelonDB. Authenticated startup
+  never blocks on market-rate presence; missing or invalid rates are handled by
+  affected screens as unavailable-value states while routing remains safe.
+- Freshness uses provider observation time, never fetch, storage, refresh, or
+  synchronization time. An input older than 24 hours is stale; missing or
+  unparseable observation time means freshness is Unknown.
+- Every consumed metal or FX reference preserves its numeric value, unit and
+  orientation, provider observation time, source identity, source-reported
+  quality or validity, and derived freshness. Unavailable provenance remains
+  explicitly Unknown.
+- A failed refresh retains valid cached data and offers retry. Missing or invalid
+  rates preserve holdings and recorded facts while affected values remain
+  unavailable, never zero or an empty portfolio.
+- Current and historical references are distinct. Current rates MUST NOT
+  fabricate acquisition or terminal snapshots.
 - `market_rates_history` is not part of the current WatermelonDB schema and
-  should not be referenced as the active app data source.
+  MUST NOT be referenced as the active app data source.
 
 ### Net Worth
 
@@ -1003,16 +1241,55 @@ Business rules:
 
 Business rules:
 
-- All user-owned syncable rows must include `created_at`, `updated_at`,
-  `deleted`, and `user_id`, except child rows whose ownership is inherited from
-  an owned parent.
-- Server-generated pull-only tables may omit `deleted` and may use specialized
-  pull behavior.
-- Sync pull/push failures must fail sync, not silently advance sync metadata.
+- Every user-owned root syncable table must include `created_at`, `updated_at`,
+  `deleted`, and `user_id`.
+- A user-owned child may omit `user_id` only when it has one required immutable
+  owned-parent link. Reads, writes, pull, push, delete, and RLS must validate
+  that same parent ownership chain. `asset_metals` inherits ownership from
+  `assets` and must not duplicate `user_id`.
+- Server-generated pull-only tables may omit `updated_at` and `deleted`.
+  Globally shared server-generated tables may also omit `user_id` and must use
+  approved specialized pull behavior.
+- Ordinary independently replaceable metadata may use WatermelonDB Last Write
+  Wins reconciliation.
+- A grouped lifecycle or balance-changing financial action must use one generic
+  owner-scoped financial-action root/outbox with stable `action_id`, immutable
+  payload hash, durable state/outcome, and generic immutable account effects.
+  Expected, accepted, and canonical revisions are canonical unsigned-integer
+  strings bounded to PostgreSQL signed-bigint max `9223372036854775807`; invalid
+  strings are rejected before casting and max-revision increments are rejected
+  instead of overflowing. Account guard/result/evidence arrays contain each
+  affected account exactly once and use deterministic ascending account-ID order
+  for payload hashing, row locks, RPC outcomes, and reconciliation. Transfers
+  guard both source and destination accounts.
+  Transactions, transfers, recurring payments, SMS, and Metals reuse this protocol;
+  a domain may link its own evidence but must not create a competing account outbox.
+  The complete group synchronizes through dedicated action sync and one atomic server
+  compare-and-swap RPC.
+- Account `balance` and `financial_revision` are protected from direct authenticated
+  writes and generic full-row sync. Existing accounts backfill revision `0` without
+  fabricated historical actions. Before fail-closed enforcement, legacy unsynced
+  financial rows are drained, migrated, or explicitly quarantined; clients without
+  action ID, payload hash, and expected revision cannot overwrite protected fields.
+  The app is not in production, so cutover claims are proven with safe test/developer
+  fixtures rather than invented production-user assumptions.
+- The first complete valid action accepted for the expected revision becomes
+  canonical. Client time and Last Write Wins never choose competing grouped
+  financial actions. Repeat delivery is idempotent.
+- A rejected optimistic action and each linked effect reconcile exactly once and
+  then affect no ownership, balance, net worth, reporting, or normal History.
+  Incomplete groups remain durable, financially ineffective, and recoverable.
+- Multi-device access remains supported. Session limits are not a consistency
+  mechanism.
+- Sync pull/push failures must fail sync, not silently advance sync metadata or
+  mark local changes synchronized.
 - Push must refuse local rows that do not belong to the authenticated user.
-- Supabase RLS is required but is not a substitute for client-side scoping.
+  Supabase RLS is required but is not a substitute for client-side scoping.
 - Logout may preserve local rows, so routing, calculations, and visible UI must
   never read foreign local data.
+- App lock, MFA or step-up authentication, device/session management, new
+  sign-in notifications, and SecureStore logout hardening are deferred to issue
+  #240.
 
 ## 11. Current Known Product And Documentation Gaps
 
