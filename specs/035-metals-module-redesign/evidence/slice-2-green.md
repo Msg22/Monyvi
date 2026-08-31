@@ -293,3 +293,36 @@ git hash-object packages/logic/src/metals/decimal.ts packages/logic/src/metals/p
 The associated reviewer verification passed 7/7 Metals suites and 209/209 tests,
 and `npm run typecheck -w @monyvi/logic` passed. This snapshot remains dated
 evidence; any later source edit requires a new append-only supersession record.
+
+
+## Source-hash supersession after localization and display-conversion fixes — 2026-08-31
+
+The earlier foundation-review snapshot remains historical evidence for commit
+`d4ee8c5188dbec47e596fcc8795706b94cc44e17`. This append-only record supersedes
+it for source authentication after commits `e3c7e569636dd0deab96cc79daa1550aaea47b12`
+and `9b4ac04cc69820fccda7ea334fc75332f6599752`. It was calculated from the
+current worktree with the same `git hash-object` command listed above.
+
+| Source | Current Git blob hash |
+| --- | --- |
+| `decimal.ts` | `fb395f6516fdb272f6e784792edb7aa4a98948ef` |
+| `purity-catalog.ts` | `eaa9942ffa425b8208aa2f2c3d5163ffdc9ef373` |
+| `valuation.ts` | `f09dbcfa018f30f39b7730d3ca1978e25a7f26af` |
+| `attribution.ts` | `8ce4d6e9700215c894898a5844a77d0875ff25a7` |
+| `lifecycle-reducer.ts` | `4c5d56ea96a18d6687e4cfa0d05a34bdf6b9a24d` |
+| `rate-trust.ts` | `7cdc8d2442a3e05b1a91eae7a930a3a2328aaff2` |
+| `rate-reference.ts` | `42f11dac8040eafbce82bac70a26c80a303d84a0` |
+| `metals/index.ts` | `fc9d51e5ce367740619c60504981f7637fbd6df6` |
+| `decimal.test.ts` | `f3f07cf3bcbcb9efc5aea51608b6d09e3ffaf884` |
+| `purity-valuation.test.ts` | `d787694182ccd63b17faaa633b6ce1a88b40d15f` |
+| `attribution-postgres-parity.test.ts` | `b5f639c4e655e2c526dd73609762224b86a3618e` |
+| `lifecycle-rate-trust.test.ts` | `5bacc378039f48c195a13e9a6a7dc99a325673ec` |
+| `rate-reference-contract.test.ts` | `0ada9eb1ac53b87d625c5466853f68311cba2b35` |
+| `attribution-rounding-validation.test.ts` | `3cca046923a5144df7f2706b01541fd931422b59` |
+
+Independent verification at this source state, run from the documented
+worktree, passed: the complete Metals coverage command (8/8 suites, 229/229
+tests; 94.67% statements, 87.56% branches, 100% functions, 94.62% lines),
+`npm run typecheck -w @monyvi/logic` (exit 0), and root `npm run lint` (exit 0;
+269 pre-existing warnings, no errors). This remains dated foundation evidence,
+not release coverage or approval evidence.

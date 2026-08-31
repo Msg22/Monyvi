@@ -651,8 +651,9 @@ Market rates are stored in `market_rates` as append-only USD-based references:
   `egp_usd`.
 - Metal columns store USD per pure gram, for example
   `gold_usd_per_gram`.
-- The mobile app synchronizes recent rows into WatermelonDB. Startup blocks only
-  when no cached local rate exists; any valid cached row allows offline use.
+- The mobile app synchronizes recent rows into WatermelonDB. Authenticated startup
+  never blocks on market-rate presence; missing or invalid rates are handled by
+  affected screens as unavailable-value states while routing remains safe.
 - Freshness uses provider observation time, never fetch, storage, refresh, or
   synchronization time. An input older than 24 hours is stale; missing or
   unparseable observation time means freshness is Unknown.
