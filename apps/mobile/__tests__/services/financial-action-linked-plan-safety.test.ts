@@ -604,6 +604,54 @@ describe("financial action linked plan safety", () => {
     }
   );
 
+  it.each(["update", "soft-delete"] as const)(
+    "rejects an earlier updater mutating a later %s model before its preparation",
+    async (laterKind) => {
+      const earlier = fakeModel(`earlier-${laterKind}`, "asset_metals");
+      const later = fakeModel(`later-${laterKind}`, "asset_metals");
+      later._raw.amount_minor = "100";
+      later._raw.deleted = false;
+      const earlierRaw = { ...earlier._raw };
+      const laterRaw = { ...later._raw };
+      const laterUpdate = jest.fn();
+      const prepareLater = jest.spyOn(
+        later,
+        laterKind === "update" ? "prepareUpdate" : "prepareMarkAsDeleted"
+      );
+      const laterOperation =
+        laterKind === "update"
+          ? { kind: "update" as const, model: later as unknown as Model, update: laterUpdate }
+          : { kind: "markAsDeleted" as const, model: later as unknown as Model };
+
+      await expect(
+        commit(
+          plan([
+            {
+              kind: "update",
+              model: earlier as unknown as Model,
+              update: (): void => {
+                later._raw.amount_minor = "999";
+                later._raw.deleted = true;
+              },
+            },
+            laterOperation,
+          ])
+        )
+      ).rejects.toThrow(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+
+      expect(laterUpdate).not.toHaveBeenCalled();
+      expect(prepareLater).not.toHaveBeenCalled();
+      expect(mockAssertPreparedOwnership).not.toHaveBeenCalled();
+      expect(mockBatch).not.toHaveBeenCalled();
+      expect(earlier._raw).toEqual(earlierRaw);
+      expect(later._raw).toEqual(laterRaw);
+      expect(earlier._preparedState).toBeNull();
+      expect(later._preparedState).toBeNull();
+      expect(earlier._isEditing).toBe(false);
+      expect(later._isEditing).toBe(false);
+    }
+  );
+
   it.each([
     [
       "raw",

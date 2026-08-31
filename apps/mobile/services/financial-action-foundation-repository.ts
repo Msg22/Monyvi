@@ -649,9 +649,16 @@ export function createFinancialActionFoundationRepository(
         preparedCreates,
         initialPreparedCreateExpectations
       );
-      const preparedExistingOperations = existingOperations.map(
-        prepareExistingOperation
-      );
+      const preparedExistingOperations: Model[] = [];
+      for (const [index, operation] of existingOperations.entries()) {
+        assertCachedOperationsUnchanged(
+          cachedModels.slice(index),
+          cachedSnapshots.slice(index),
+          existingExpectations.slice(index),
+          preparedCreates
+        );
+        preparedExistingOperations.push(prepareExistingOperation(operation));
+      }
       assertPreparedOperationsMatch(
         preparedCreates,
         initialPreparedCreateExpectations

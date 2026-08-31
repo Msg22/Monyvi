@@ -505,3 +505,23 @@ changed-file lint, full repository lint (0 errors, 275 pre-existing warnings), a
 900-line check pass: the changed sync facade is 117 lines and lifecycle test is 262 lines.
 No schema, migration, remote database, auth-path lock, GitHub-thread, or remote-data
 mutation is included.
+
+### PR #251 sequential linked-operation isolation — 2026-09-01
+
+This append applies to exact head `26f287ab181f325d3940cf4e9d71641b2497b4f7`.
+Existing linked operations now prepare in their declared atomic order, but immediately
+before each preparation the still-unprepared suffix is checked against its captured
+cached snapshots and expectations. An earlier updater therefore cannot mutate a later
+update or soft-delete sibling and have the later operation accept that altered raw state.
+The ordinary root-first batch order remains unchanged; a failure restores every cached
+model before any later preparation or batch.
+
+Focused Red was 1 failed suite with 2 failed and 25 passed of 27 tests: earlier update
+callbacks mutated the raw amount/deleted flag of a later update or `markAsDeleted` model,
+and both commits resolved. The parameterized regression pair now proves rejection, full
+rollback, no later preparation, no prepared-ownership validation, and no batch. Focused
+Green is 1/1 suite and 27/27 tests; broad financial-action Green is 4/4 suites and 75/75
+tests. Exact mobile and logic TypeScript checks and changed-file lint pass; full repository
+lint has 0 errors and 275 pre-existing warnings. `git diff --check` passes, and the
+repository/safety-test files are 898 and 876 lines. No schema, migration, remote database,
+auth-path lock, GitHub-thread, or remote-data mutation is included.
