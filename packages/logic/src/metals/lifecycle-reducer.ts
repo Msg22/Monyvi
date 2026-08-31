@@ -249,8 +249,9 @@ function prepareCandidates(
     if (event.evidenceState === "incomplete") {
       state = appendRejection(state, event, "incomplete_evidence", null, true);
     } else if (
-      event.evidenceState === "ineffective" ||
-      event.canonicalCasStatus === "rejected"
+      event.canonicalCasStatus === "rejected" ||
+      (event.evidenceState === "ineffective" &&
+        !isAcceptedDeleteTombstone(event))
     ) {
       state = appendRejection(state, event, "ineffective_evidence", null, true);
     } else if (
@@ -261,6 +262,12 @@ function prepareCandidates(
     }
   }
   return state;
+}
+
+function isAcceptedDeleteTombstone(event: LifecycleEvent): boolean {
+  return event.kind === "deleted" &&
+    event.evidenceState === "ineffective" &&
+    event.canonicalCasStatus === "accepted";
 }
 
 function isLifecycleEvidenceState(value: unknown): value is LifecycleEvidenceState {

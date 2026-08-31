@@ -88,6 +88,116 @@ describe("approved pure lifecycle reduction", () => {
     expect(result.rejectedEvents).toEqual([]);
   });
 
+  it("preserves an accepted ineffective Delete as a hidden tombstone across restart order", () => {
+    const deleted = event("deleted", "deleted", "created", {
+      occurredAt: 2_000,
+      evidenceState: "ineffective",
+      canonicalCasStatus: "accepted",
+    });
+
+    const first = reduceMetalLifecycle([ROOT, deleted]);
+    const restarted = reduceMetalLifecycle([deleted, ROOT]);
+
+    expect(first.projection).toEqual({
+      status: "active",
+      isVisible: false,
+      effectiveEventId: "deleted",
+      history: [],
+    });
+    expect(first.acceptedEvents.map(({ id }) => id)).toEqual([
+      "created",
+      "deleted",
+    ]);
+    expect(first.rejectedEvents).toEqual([]);
+    expect(restarted).toEqual(first);
+  });
+
+  it.each([
+    ["unaccepted", "unknown"],
+    ["rejected", "rejected"],
+  ] as const)(
+    "ignores an ineffective %s Delete tombstone",
+    (_case, canonicalCasStatus) => {
+      const deleted = event("deleted", "deleted", "created", {
+        evidenceState: "ineffective",
+        canonicalCasStatus,
+      });
+
+      const result = reduceMetalLifecycle([deleted, ROOT]);
+
+      expect(result.projection?.effectiveEventId).toBe("created");
+      expect(result.projection?.isVisible).toBe(true);
+      expect(result.acceptedEvents.map(({ id }) => id)).toEqual(["created"]);
+      expect(reasons(result)).toContain("ineffective_evidence");
+    }
+  );
+
+  it("ignores a structurally invalid accepted Delete tombstone", () => {
+    const malformedDelete = {
+      ...event("deleted", "deleted", "created", {
+        evidenceState: "ineffective",
+        canonicalCasStatus: "accepted",
+      }),
+      fingerprint: undefined,
+    };
+
+    const result = reduceMetalLifecycle([ROOT, malformedDelete]);
+
+    expect(result.projection?.effectiveEventId).toBe("created");
+    expect(result.projection?.isVisible).toBe(true);
+    expect(result.acceptedEvents.map(({ id }) => id)).toEqual(["created"]);
+    expect(reasons(result)).toContain("incomplete_evidence");
+  });
+
+  it("lets an accepted Delete tombstone win over a local competing successor", () => {
+    const localCorrection = event("correction", "corrected", "created", {
+      occurredAt: 2_000,
+    });
+    const deleted = event("deleted", "deleted", "created", {
+      occurredAt: 3_000,
+      evidenceState: "ineffective",
+      canonicalCasStatus: "accepted",
+    });
+
+    const result = reduceMetalLifecycle([localCorrection, ROOT, deleted]);
+
+    expect(result.projection).toEqual({
+      status: "active",
+      isVisible: false,
+      effectiveEventId: "deleted",
+      history: [],
+    });
+    expect(result.acceptedEvents.map(({ id }) => id)).toEqual([
+      "created",
+      "deleted",
+    ]);
+    expect(
+      result.rejectedEvents.find(({ event: rejected }) =>
+        rejected.id === "correction"
+      )?.reasonCode
+    ).toBe("conflicting_effective_successors");
+  });
+
+  it("fails closed when an accepted Delete tombstone conflicts with another accepted successor", () => {
+    const sold = event("sold", "sold", "created", {
+      canonicalCasStatus: "accepted",
+    });
+    const deleted = event("deleted", "deleted", "created", {
+      evidenceState: "ineffective",
+      canonicalCasStatus: "accepted",
+    });
+
+    const result = reduceMetalLifecycle([deleted, ROOT, sold]);
+
+    expect(result.projection?.effectiveEventId).toBe("created");
+    expect(result.projection?.isVisible).toBe(true);
+    expect(result.acceptedEvents.map(({ id }) => id)).toEqual(["created"]);
+    expect(reasons(result)).toEqual([
+      "conflicting_effective_successors",
+      "conflicting_effective_successors",
+    ]);
+  });
+
   it("accepts a reversal only when both references target the current terminal head", () => {
     const sold = event("sold", "sold", "created");
     const reversal = event("undo", "reversed", "sold", { reversesEventId: "sold" });
