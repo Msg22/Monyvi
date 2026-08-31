@@ -81,7 +81,9 @@ function fakeModel(
   preparedState: Model["_preparedState"] = null
 ): FakeModel {
   const model: FakeModel = {
-    id,
+    get id(): string {
+      return this._raw.id;
+    },
     table,
     _isEditing: false,
     _preparedState: preparedState,
@@ -469,6 +471,75 @@ describe("financial action linked plan safety", () => {
         )
       ).rejects.toThrow(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
 
+      expect(mockBatch).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    [
+      "update",
+      "identity",
+      (model: FakeModel): void => {
+        model._raw.id = "tampered-existing-id";
+      },
+    ],
+    [
+      "update",
+      "prepared state",
+      (model: FakeModel): void => {
+        model._preparedState = "destroyPermanently";
+        model._isEditing = true;
+      },
+    ],
+    [
+      "markAsDeleted",
+      "identity",
+      (model: FakeModel): void => {
+        model._raw.id = "tampered-existing-id";
+      },
+    ],
+    [
+      "markAsDeleted",
+      "prepared state",
+      (model: FakeModel): void => {
+        model._preparedState = "destroyPermanently";
+        model._isEditing = true;
+      },
+    ],
+  ] as const)(
+    "rejects %s descriptor %s tampering and restores its cached model",
+    async (operationKind, _tamperKind, tamper) => {
+      const existing = fakeModel("tampered-existing", "asset_metals");
+      const originalRaw = { ...existing._raw };
+      const existingOperation: FinancialActionLinkedOperationPlan["existingOperations"][number] =
+        operationKind === "update"
+          ? {
+              kind: "update",
+              model: existing as unknown as Model,
+              update: (): void => undefined,
+            }
+          : {
+              kind: "markAsDeleted",
+              model: existing as unknown as Model,
+            };
+      const assertPreparedOwnership = jest.fn(
+        (
+          input: FinancialActionLinkedOperationPreparedOwnershipInput
+        ): Promise<void> => {
+          const preparedExisting = input
+            .preparedOperations[0] as unknown as FakeModel;
+          tamper(preparedExisting);
+          return Promise.resolve();
+        }
+      );
+
+      await expect(
+        commit(plan([existingOperation], [], assertPreparedOwnership))
+      ).rejects.toThrow(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+
+      expect(existing._raw).toEqual(originalRaw);
+      expect(existing._preparedState).toBeNull();
+      expect(existing._isEditing).toBe(false);
       expect(mockBatch).not.toHaveBeenCalled();
     }
   );

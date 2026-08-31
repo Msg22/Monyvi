@@ -111,6 +111,14 @@ interface PreparedLocalRoot {
   readonly record: FinancialActionGroup;
 }
 
+interface ExistingOperationExpectation {
+  readonly model: Model;
+  readonly table: string;
+  readonly id: string;
+  readonly kind: FinancialActionLinkedExistingOperation["kind"];
+  readonly expectedPreparedState: "update" | "markAsDeleted";
+}
+
 export interface FinancialActionFoundationRepositoryDependencies {
   readonly database: Database;
   readonly getCurrentUserDataScope: () => Promise<FinancialActionUserDataScope>;
@@ -301,6 +309,22 @@ export function createFinancialActionFoundationRepository(
     return Object.freeze([...models]);
   }
 
+  function captureExistingOperationExpectations(
+    operations: readonly FinancialActionLinkedExistingOperation[]
+  ): readonly ExistingOperationExpectation[] {
+    return Object.freeze(
+      operations.map((operation) =>
+        Object.freeze({
+          model: operation.model,
+          table: operation.model.table,
+          id: operation.model.id,
+          kind: operation.kind,
+          expectedPreparedState: operation.kind,
+        })
+      )
+    );
+  }
+
   function assertPreparedCreateIntegrity(
     models: readonly Model[],
     expectedIdentities: readonly string[]
@@ -315,6 +339,41 @@ export function createFinancialActionFoundationRepository(
     ) {
       throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
     }
+  }
+
+  function assertLinkedOperationIntegrity(
+    preparedCreates: readonly Model[],
+    preparedCreateIdentities: readonly string[],
+    preparedExistingOperations: readonly Model[],
+    existingExpectations: readonly ExistingOperationExpectation[]
+  ): void {
+    assertPreparedCreateIntegrity(preparedCreates, preparedCreateIdentities);
+    if (
+      preparedExistingOperations.length !== existingExpectations.length ||
+      preparedExistingOperations.some((model, index) => {
+        const expectation = existingExpectations[index];
+        if (!expectation) return true;
+        const expectedPreparedState =
+          expectation.kind === "update" ? "update" : "markAsDeleted";
+        return (
+          model !== expectation.model ||
+          model.table !== expectation.table ||
+          model.id !== expectation.id ||
+          expectation.expectedPreparedState !== expectedPreparedState ||
+          model._preparedState !== expectation.expectedPreparedState ||
+          model._isEditing
+        );
+      })
+    ) {
+      throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+    }
+    assertNoRootTargets(preparedCreates);
+    assertNoRootTargets(preparedExistingOperations);
+    assertUniqueModelIdentities(preparedExistingOperations);
+    assertDisjointModelIdentities(
+      preparedExistingOperations,
+      preparedCreates
+    );
   }
 
   function createImmutablePreimages(
@@ -401,6 +460,9 @@ export function createFinancialActionFoundationRepository(
     const existingOperations = captureExistingOperations(
       plan.existingOperations
     );
+    const existingExpectations = captureExistingOperationExpectations(
+      existingOperations
+    );
     const preparedCreates = capturePreparedCreates(plan.preparedCreates);
     const cachedModels = Object.freeze(
       existingOperations.map((operation) => operation.model)
@@ -433,6 +495,12 @@ export function createFinancialActionFoundationRepository(
       const preparedExistingOperations = existingOperations.map(
         prepareExistingOperation
       );
+      assertLinkedOperationIntegrity(
+        preparedCreates,
+        preparedCreateIdentities,
+        preparedExistingOperations,
+        existingExpectations
+      );
       const linkedOperations = Object.freeze([
         ...preparedCreates,
         ...preparedExistingOperations,
@@ -448,11 +516,21 @@ export function createFinancialActionFoundationRepository(
         preparedOperations: linkedOperations,
       });
       await reassertExpectedCurrentUser(context.scope.userId);
-      assertPreparedCreateIntegrity(preparedCreates, preparedCreateIdentities);
+      assertLinkedOperationIntegrity(
+        preparedCreates,
+        preparedCreateIdentities,
+        preparedExistingOperations,
+        existingExpectations
+      );
       assertFinancialActionTransition("pending_local", "local_complete");
       const root = prepareLocalRoot(context, foundRecord);
       await reassertExpectedCurrentUser(context.scope.userId);
-      assertPreparedCreateIntegrity(preparedCreates, preparedCreateIdentities);
+      assertLinkedOperationIntegrity(
+        preparedCreates,
+        preparedCreateIdentities,
+        preparedExistingOperations,
+        existingExpectations
+      );
       await dependencies.database.batch(root.operation, ...linkedOperations);
       hasCommitted = true;
       await reassertExpectedCurrentUser(context.scope.userId);
