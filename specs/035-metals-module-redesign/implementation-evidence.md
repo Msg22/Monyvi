@@ -218,3 +218,27 @@ test-harness leak tracked by issue #247, while the affected suite passes 5/5 alo
 and all PR-scoped suites are green. No remote database was touched. Implementation
 freeze is `84afb2f53c61aeda6f1d7b55bf4c34b56467b68e`; mobile repository blob is
 `0f5dfe947f60908ef67e887738fb9bf32d520a74`.
+
+### T034 package integration — 2026-08-31
+
+Base: `f63468b8c3621aa001a7186845da808562328b3b`
+Owner: package-integration owner
+Scope: the `@monyvi/logic` root barrel, its dedicated public-surface test, T034
+status, and this evidence entry only
+
+The focused Red command was
+`npm test -w @monyvi/logic -- --runInBand src/financial-actions/__tests__/public-surface.test.ts --watchman=false`.
+It failed for the intended missing behavior: the exact Metals root export count was
+zero instead of one. An earlier test-only attempt imported the complete root at
+runtime and encountered the existing Expo Crypto Jest transform boundary; it was
+removed before production changed and is not counted as Red evidence.
+
+Green adds exactly one `./financial-actions` export and one `./metals` export. The
+same focused command passes 1/1. Full `@monyvi/logic` Jest passes 69/69 suites and
+1,222/1,222 tests; `npm run typecheck -w @monyvi/logic` passes; repository lint
+passes with 0 errors and 272 pre-existing warnings; and `git diff --check` passes.
+
+Manual plan: inspect the root barrel and confirm each owned domain barrel appears
+once. No UI, database, synchronization, financial calculation, or account-effect
+behavior changes in T034; downstream consumer journeys remain owned by later tasks.
+No stop condition remains active.
