@@ -130,3 +130,23 @@ authenticated write and private-helper denial, all immutable root fields, retent
 and post-failure no-mutation behavior. Generator tests remain 4/4 and 7/7, all three
 TypeScript checks pass, regeneration is clean, and `git diff --check` passes. T024
 still awaits only local execution of these 63 assertions; no remote was touched.
+
+### Slice 3A T024 final runtime freeze — 2026-08-31
+
+This final entry supersedes the earlier incremental Slice 3A gate counts and pending
+Docker notes. The local Supabase runtime was available, migration `067` was applied
+locally, and the final expanded pgTAP plan passed 65/65. The linked remote database
+was not touched.
+
+Strict Red/Green remediation also made the local owner/action unique index
+generator-owned, withheld a created model when auth changes during the awaited
+batch, and removed the premature Financial Actions root-barrel export until T034.
+Fresh SQLite duplicate insertion is rejected. Exact mobile foundation/SQLite/sync
+suites pass 31/31; full logic passes 66 suites and 1,141 tests; transform-schema
+passes 5/5; logic, DB, and mobile TypeScript checks pass; and repeated local schema
+generation preserves hash `2106e67c300a752ca7fdf9ac97711ea8e682a2a3`.
+
+Implementation freeze commit is `ecb673971f1071d131c1f5795a1ec3e4972eb3cc`
+against stacked base `be99eba76757a966ea80b0c070f71fce1e58c33a`.
+Repository-wide lint remains at the known 46-error stacked-branch baseline; no CI
+green claim is made because PR #245 reported no checks at freeze. T024 is complete.
