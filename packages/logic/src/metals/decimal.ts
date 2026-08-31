@@ -92,6 +92,23 @@ export function parseCanonicalDecimal(value: string): ExactDecimalValue {
   return wrapDecimal(parseCanonicalInternal(value));
 }
 
+export function hasCanonicalDecimalPrecision(
+  value: string,
+  maximumSignificantDigits: number = EXACT_DECIMAL_CONFIG.precision
+): boolean {
+  if (
+    typeof value !== "string" ||
+    !CANONICAL_DECIMAL_PATTERN.test(value) ||
+    !Number.isInteger(maximumSignificantDigits) ||
+    maximumSignificantDigits <= 0
+  ) {
+    return false;
+  }
+  const unsigned = value.startsWith("-") ? value.slice(1) : value;
+  const significantDigits = unsigned.replace(".", "").replace(/^0+/, "");
+  return Math.max(significantDigits.length, 1) <= maximumSignificantDigits;
+}
+
 export function parseLocalizedDecimal(
   value: string,
   context: LocalizedDecimalContext = {}

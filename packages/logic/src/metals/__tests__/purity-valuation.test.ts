@@ -179,6 +179,43 @@ describe("exact purity and valuation", () => {
   });
 
   it.each([
+    [
+      "pure grams",
+      () =>
+        calculatePureGrams({
+          weightGramsDecimal: "9".repeat(51),
+          purityFactorDecimal: "1",
+        }),
+    ],
+    [
+      "reference value",
+      () =>
+        calculateMetalReferenceValue({
+          weightGramsDecimal: "9".repeat(51),
+          purityFactorDecimal: "1",
+          metalUsdPerPureGramDecimal: "1",
+          currencyUsdPerUnitDecimal: "1",
+        }),
+    ],
+  ] as const)("rejects a 51-significant-digit weight before %s arithmetic", (_case, calculate) => {
+    expect(calculate()).toEqual({
+      available: false,
+      reason: "invalid_weight",
+    });
+  });
+
+  it("preserves an exact 50-significant-digit weight without rounding", () => {
+    const weightGramsDecimal = "9".repeat(50);
+
+    expect(
+      calculatePureGrams({
+        weightGramsDecimal,
+        purityFactorDecimal: "1",
+      })
+    ).toEqual({ available: true, valueDecimal: weightGramsDecimal });
+  });
+
+  it.each([
     ["10", "0.999", "9.99"],
     ["0.001", "0.999999", "0.000999999"],
     ["999999999999999999.999", "0.999999", "999998999999999999.999000001"],

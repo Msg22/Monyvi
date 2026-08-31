@@ -3,6 +3,7 @@ import {
   compareDecimal,
   EXACT_DECIMAL_CONFIG,
   fromMinorUnits,
+  hasCanonicalDecimalPrecision,
   parseCanonicalDecimal,
   parseLocalizedDecimal,
   roundDecimal,
@@ -14,6 +15,7 @@ function loadDecimalApi(): {
   readonly compareDecimal: typeof compareDecimal;
   readonly EXACT_DECIMAL_CONFIG: typeof EXACT_DECIMAL_CONFIG;
   readonly fromMinorUnits: typeof fromMinorUnits;
+  readonly hasCanonicalDecimalPrecision: typeof hasCanonicalDecimalPrecision;
   readonly parseCanonicalDecimal: typeof parseCanonicalDecimal;
   readonly parseLocalizedDecimal: typeof parseLocalizedDecimal;
   readonly roundDecimal: typeof roundDecimal;
@@ -24,6 +26,7 @@ function loadDecimalApi(): {
     compareDecimal,
     EXACT_DECIMAL_CONFIG,
     fromMinorUnits,
+    hasCanonicalDecimalPrecision,
     parseCanonicalDecimal,
     parseLocalizedDecimal,
     roundDecimal,
@@ -67,6 +70,16 @@ describe("exact Metals decimal contract", () => {
     expect(() =>
       parseCanonicalDecimal(0.1 as unknown as string)
     ).toThrow();
+  });
+
+  it("checks canonical significant-digit limits without Decimal rounding", () => {
+    const { hasCanonicalDecimalPrecision } = loadDecimalApi();
+
+    expect(hasCanonicalDecimalPrecision("9".repeat(50))).toBe(true);
+    expect(hasCanonicalDecimalPrecision("9".repeat(51))).toBe(false);
+    expect(hasCanonicalDecimalPrecision("0.0000099999", 5)).toBe(true);
+    expect(hasCanonicalDecimalPrecision("0.00000999999", 5)).toBe(false);
+    expect(hasCanonicalDecimalPrecision("not-canonical")).toBe(false);
   });
 
   it("hides the mutable Decimal constructor and exposes immutable precision metadata", () => {

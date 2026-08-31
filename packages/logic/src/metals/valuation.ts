@@ -1,4 +1,5 @@
 import {
+  hasCanonicalDecimalPrecision,
   parseCanonicalDecimal,
   serializeDecimal,
   type ExactDecimalValue,
@@ -42,7 +43,7 @@ export interface MetalReferenceValueInput extends PureGramInput {
 export function calculatePureGrams(
   input: PureGramInput
 ): ExactValueAvailability {
-  const weight = positiveDecimal(input.weightGramsDecimal, 3);
+  const weight = weightDecimal(input.weightGramsDecimal);
   if (weight === null) {
     return { available: false, reason: "invalid_weight" };
   }
@@ -60,7 +61,7 @@ export function calculatePureGrams(
 export function calculateMetalReferenceValue(
   input: MetalReferenceValueInput
 ): ExactValueAvailability {
-  const weight = positiveDecimal(input.weightGramsDecimal, 3);
+  const weight = weightDecimal(input.weightGramsDecimal);
   if (weight === null) {
     return { available: false, reason: "invalid_weight" };
   }
@@ -118,6 +119,12 @@ function positiveDecimal(
   } catch {
     return null;
   }
+}
+
+function weightDecimal(value: string): ExactDecimalValue | null {
+  return hasCanonicalDecimalPrecision(value)
+    ? positiveDecimal(value, 3)
+    : null;
 }
 
 function normalizedPurity(value: string): ExactDecimalValue | null {
