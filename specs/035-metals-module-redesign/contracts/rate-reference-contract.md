@@ -122,7 +122,15 @@ above.
 | Acquisition | `acquisition_metal`, `acquisition_purchase_currency` |
 | Current valuation | `current_metal`, `current_purchase_currency` |
 | Terminal sale | `terminal_metal`, `terminal_purchase_currency`, `terminal_proceeds_currency` |
-| Display conversion | `display_purchase_currency`, `display_preferred_currency` |
+| Display conversion, different canonical/preferred currencies | `display_purchase_currency`, `display_preferred_currency` |
+| Display conversion, same canonical/preferred currency | No arithmetic references required; factor is exact `1` |
+
+
+When canonical and preferred currency are same, display conversion is an exact
+identity and no missing, invalid, stale, or unknown redundant display snapshot may
+make arithmetic unavailable or change the factor. Such snapshots may be retained as
+immutable audit provenance only. Cross-currency conversion still requires both
+validated display references.
 
 `RateReferenceUnavailableReason` describes raw-reference/context validation only.
 Position-specific unavailable results belong to

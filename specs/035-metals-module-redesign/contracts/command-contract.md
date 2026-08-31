@@ -35,26 +35,29 @@ validated before and inside the local writer and RPC. `local_complete` means the
 complete local projection/evidence/effect committed in one transaction.
 
 
-## Internal Reconciliation Compensation
+## Internal Reconciliation Recovery
 
-`compensate` is not part of the client-submittable `MetalCommand` union. Only the
-reconciliation service may construct it after validating a signed/owned RPC stale
-outcome against the durable losing action.
+`compensate` and `rollback` are not part of client-submittable `MetalCommand`.
+Only reconciliation may construct either after it validates a durable, owned RPC
+outcome against the local action ID and payload hash. Stable `stale` identifies a
+server winner; server `rejected` identifies a validation, ownership, link, state,
+account-eligibility, or incomplete-group failure. Neither is a locally successful
+financial action.
 
 ```ts
-interface InternalCompensationEnvelope {
+interface InternalRecoveryEnvelope {
   actionId: string;
-  kind: "compensate";
+  kind: "compensate" | "rollback";
   userId: string;
   holdingId: string;
-  source: "server_stale_outcome";
+  source: "server_stale_outcome" | "server_rejected_outcome";
   payload: {
     losingActionId: string;
     losingPayloadHash: string;
-    canonicalActionId: string;
-    canonicalHoldingRevision: number;
+    canonicalActionId: string | null;
+    canonicalHoldingRevision: number | null;
     canonicalAccountRevision: number | null;
-    canonicalEvidenceHash: string;
+    canonicalEvidenceHash: string | null;
     inverseAccountEffectId: string | null;
     inverseAmountMinorUnits: string | null;
   };
@@ -62,15 +65,24 @@ interface InternalCompensationEnvelope {
 }
 ```
 
-The compensation action ID is deterministically derived from owner, losing action ID,
-and canonical action/revision. Its hash uses the same canonical serialization rules.
-A unique losing-action compensation key plus `compensated_at` makes replay/restart a
-no-op after success; same ID with another hash is a recovery error.
+The recovery action ID is deterministically derived from owner, losing action ID,
+outcome kind, and canonical revision when present. Its hash uses the same canonical
+serialization rules. A unique losing-action recovery key plus `compensated_at` makes
+restart/replay a no-op after success; same ID with another hash is a recovery error.
 
-One dedicated reconciliation writer boundary atomically marks losing Metals evidence
-ineffective, restores the canonical holding projection, applies the exact inverse
-generic account effect when present, records the internal envelope against the generic
-root, and marks the losing action
-reconciled. Missing or mismatched canonical evidence writes nothing and enters
-`reconciliation_incomplete`. UI/form code, public command factories, and the RPC reject
-client-supplied `kind: "compensate"`.
+After any server `rejected` outcome for a locally complete action, reconciliation
+immediately marks the action recovery-visible but locks financial actions in
+`reconciliation_incomplete` while it fetches canonical evidence. It then uses one
+writer to either: atomically make local rejected evidence/effects ineffective and
+restore the authoritative projection with an exact inverse effect; or perform an
+atomic safe rollback to the last verified projection when no winner exists. Missing
+or mismatched evidence writes no partial repair and remains locked for retry. No
+optimistic ownership, reporting, or account effect may remain effective indefinitely.
+`PAYLOAD_HASH_MISMATCH` is never retried as the same action: its immutable action ID
+and hash remain diagnostic evidence; a later user intent must use a new action ID.
+
+For stale winners, one dedicated reconciliation writer atomically marks losing Metals
+evidence ineffective, restores the canonical holding projection, applies the exact
+inverse generic account effect when present, records recovery against the generic
+root, and marks the losing action reconciled. UI/form code, public command factories,
+and the RPC reject client-supplied `kind: "compensate"` or `kind: "rollback"`.

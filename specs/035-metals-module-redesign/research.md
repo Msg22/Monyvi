@@ -101,11 +101,12 @@ Metals instrument. Metal roles are `acquisition_metal`, `current_metal`, and
 `display_preferred_currency`. Metals must be `usd_per_pure_gram`/
 `quote_per_base`; currencies may be `usd_per_currency_unit`/
 `quote_per_base` or `currency_units_per_usd`/`base_per_quote`; USD is exact `1`.
-Inverse metals are rejected. Raw observation/provenance remains immutable;
-adapter/pure logic normalizes once to canonical USD-per-base. Unknown or
-unparseable observation time changes freshness only, never calculation
-availability by itself. See the canonical matrix and unavailable-reason codes in
-[`rate-reference-contract.md`](./contracts/rate-reference-contract.md).
+Same canonical/preferred currency display conversion is also exact `1`; redundant
+snapshots remain provenance only and cannot control arithmetic/availability. Inverse
+metals are rejected. Raw observation/provenance remains immutable; adapter/pure logic
+normalizes once to canonical USD-per-base. Unknown or unparseable observation time
+changes freshness only, never calculation availability by itself. See the canonical
+matrix and unavailable-reason codes in [`rate-reference-contract.md`](./contracts/rate-reference-contract.md).
 
 ### Alternatives Rejected
 
@@ -190,20 +191,26 @@ reuse stable `action_id`; Metals does not introduce a second account outbox.
 - `pending_local`: not committed; prevent duplicate/exit.
 - `local_complete`: all local effects durable/effective after restart.
 - `sync_pending`/`sync_failed`: local-complete remains usable.
-- `reconciliation_incomplete`: safe remote proof incomplete; actions locked.
+- `reconciliation_incomplete`: any server rejection after local completion, or
+  missing safe canonical proof; actions locked and no unresolved optimistic effect
+  stays reportable.
 - `accepted`: server accepted complete valid group.
-- `rejected_compensating`: another group won; reverse local effects.
-- `reconciled`: losing effects reversed exactly once; canonical holding shown.
+- `rejected_compensating`: verified stale winner or rejected recovery reverses local
+  effects/restores a verified projection exactly once.
+- `reconciled`: losing/rejected effects reversed exactly once; canonical or safely
+  rolled-back holding shown.
 
 Stored code names may change in Phase 1; observable meaning cannot.
 
 ### Effective-State Rule
 
 Local-complete optimistic action may affect local UI/net worth while awaiting
-sync. Once conflict known, rejected group becomes ineffective and its holding/
-account effects compensate in one local writer transaction. If evidence is
-missing or compensation unsafe, make no partial correction; retain last complete
-effective state, lock financial actions, expose recovery.
+sync. A known stale winner or server rejection immediately locks financial actions.
+After canonical evidence is fetched, one local writer makes the local candidate
+effective only if server-accepted; otherwise it atomically compensates/restores the
+verified canonical projection or safely rolls back to the last verified projection.
+Missing evidence leaves no partial correction and remains recovery-visible/locked;
+`PAYLOAD_HASH_MISMATCH` is not retried with the same action ID.
 
 ## 7. Server CAS and Reconciliation
 
@@ -330,7 +337,7 @@ remains accounts plus active metal value only:
 - Sale with credit atomically replaces metal with account cash.
 - No Longer/Delete remove metal without adding reporting metrics.
 - Undo restores metal and reverses linked account effect atomically.
-- Incomplete/rejected groups contribute only last effective state.
+- Rejected groups never contribute; while recovery is incomplete, only the last verified effective state is reportable.
 - P/L, proceeds, write-offs, transfers, attribution never add wealth separately.
 
 Daily snapshots remain immutable; actions affect current/future views only.

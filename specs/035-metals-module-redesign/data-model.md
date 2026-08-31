@@ -114,6 +114,13 @@ belong to Metals domain evidence, never the generic root. The optional expected 
 revision is the root's only revision guard and remains null unless a generic account
 effect exists.
 
+
+A server `rejected` outcome after `local_complete` is never final success: preserve
+its immutable outcome/rejection code, make its action recovery-visible, and enter
+`reconciliation_incomplete` before any reportable projection/effect can remain
+active. `PAYLOAD_HASH_MISMATCH` permanently binds that action ID/hash pair and cannot
+be replayed as the same action.
+
 ### `metal_action_evidence`
 
 One Metals domain record per generic action, introduced by `068_metals_domain` and linked
@@ -200,10 +207,16 @@ new holdings.
 Additional transitions:
 
 - `sync_pending -> sync_failed -> sync_pending` on retry.
-- `sync_pending -> rejected_compensating -> reconciled` for a stale loser.
-- Any state requiring missing canonical evidence -> `reconciliation_incomplete`.
-- `reconciliation_incomplete -> rejected_compensating|accepted` only after a
-  successful canonical pull/RPC replay.
+- `sync_pending -> rejected_compensating -> reconciled` for a stale outcome with
+  complete canonical winner evidence.
+- `sync_pending -> reconciliation_incomplete` for every server `rejected` outcome
+  after local completion, and for stale/rejected outcomes lacking verified canonical
+  evidence; financial actions remain locked.
+- `reconciliation_incomplete -> rejected_compensating -> reconciled` only after
+  canonical pull/RPC evidence permits exact-once compensation/restore, or a verified
+  prior projection permits atomic safe rollback.
+- `reconciliation_incomplete -> accepted` only for a same-ID/hash idempotent replay
+  that proves server acceptance; hash mismatch cannot take this transition.
 - Terminal action buttons are disabled while reconciliation is incomplete.
 
 ## Lifecycle Reduction

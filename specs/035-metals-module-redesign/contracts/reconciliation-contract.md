@@ -67,11 +67,20 @@ States: `pending_local`, `local_complete`, `sync_pending`, `sync_failed`,
 
 States live on the generic owner-scoped financial-action root; Metals holding/lifecycle
 evidence and generic account effects link by the same action ID. Restart resumes durable
-non-final state by action ID. Accepted/idempotent matches hash
-and revisions. Stale records canonical evidence, then one Watermelon writer makes the
-loser ineffective, restores canonical holding state, applies one exact inverse account
-effect when needed, and stamps `compensated_at`. Replay cannot compensate twice.
-Missing canonical evidence performs no partial repair: lock financial actions, enter
-`reconciliation_incomplete`, and retry canonical fetch/RPC. Rejected candidates never
-appear in History or analytics. UI shows plain-language checking/retry and a one-time
-reconciled notice.
+non-final state by action ID. Accepted/idempotent matches hash and revisions.
+
+A stable server `stale` outcome records canonical winner evidence. One Watermelon writer
+makes loser evidence/effects ineffective, restores the canonical holding state, applies
+one exact inverse account effect when needed, and stamps `compensated_at`. Replay cannot
+compensate twice. A server `rejected` outcome after local completion is not a stale
+winner and is never locally effective: immediately lock financial actions and enter
+`reconciliation_incomplete` while canonical evidence is fetched. Once evidence is
+complete, the same writer performs exact-once compensation/restore; if no winner exists,
+it atomically rolls back to the last verified projection. Missing or mismatched evidence
+performs no partial repair and remains locked for retry. No optimistic financial effect
+may remain effective indefinitely.
+
+`PAYLOAD_HASH_MISMATCH` is terminal for its action ID/hash pair: retain it as immutable
+diagnostic/recovery evidence, do not retry it as the same action, and require a new ID
+for later user intent. Rejected candidates never appear in History or analytics. UI shows
+plain-language checking/retry and a one-time reconciled notice.
