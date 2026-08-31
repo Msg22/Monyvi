@@ -19,6 +19,10 @@ export const EXACT_DECIMAL_CONFIG = Object.freeze({
 
 export type ExactDecimalInput = string | ExactDecimalValue;
 
+export interface LocalizedDecimalContext {
+  readonly decimalSeparator?: "." | ",";
+}
+
 export interface ExactDecimalValue {
   readonly [exactDecimalBrand]: true;
   plus(value: ExactDecimalInput): ExactDecimalValue;
@@ -88,7 +92,10 @@ export function parseCanonicalDecimal(value: string): ExactDecimalValue {
   return wrapDecimal(parseCanonicalInternal(value));
 }
 
-export function parseLocalizedDecimal(value: string): ExactDecimalValue {
+export function parseLocalizedDecimal(
+  value: string,
+  context: LocalizedDecimalContext = {}
+): ExactDecimalValue {
   if (typeof value !== "string") {
     throw new Error("Expected a localized decimal string");
   }
@@ -96,7 +103,9 @@ export function parseLocalizedDecimal(value: string): ExactDecimalValue {
   const normalizedDigits = Array.from(value, normalizeLocalizedCharacter).join("");
   const withoutArabicGrouping = normalizeArabicGrouping(normalizedDigits);
   const withStandardDecimal = withoutArabicGrouping.replace("٫", ".");
-  return parseCanonicalDecimal(normalizeEnglishSeparators(withStandardDecimal));
+  return parseCanonicalDecimal(
+    normalizeEnglishSeparators(withStandardDecimal, context.decimalSeparator)
+  );
 }
 
 export function serializeDecimal(value: ExactDecimalInput): string {
@@ -210,12 +219,27 @@ function normalizeArabicGrouping(value: string): string {
   return value.replaceAll("٬", "");
 }
 
-function normalizeEnglishSeparators(value: string): string {
+function normalizeEnglishSeparators(
+  value: string,
+  decimalSeparator: "." | "," | undefined
+): string {
   if (!value.includes(",")) {
     return value;
   }
 
   const commaCount = value.split(",").length - 1;
+  if (decimalSeparator === ",") {
+    if (commaCount !== 1 || value.includes(".")) {
+      throw new Error("Expected valid decimal-comma notation");
+    }
+    return value.replace(",", ".");
+  }
+  if (decimalSeparator === ".") {
+    if (!ENGLISH_GROUPED_DECIMAL_PATTERN.test(value)) {
+      throw new Error("Expected valid English thousands grouping");
+    }
+    return value.replaceAll(",", "");
+  }
   if (commaCount === 1 && AMBIGUOUS_SINGLE_COMMA_PATTERN.test(value)) {
     throw new Error("Ambiguous single-comma decimal notation");
   }

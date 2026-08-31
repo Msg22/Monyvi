@@ -198,6 +198,32 @@ describe("exact Metals decimal contract", () => {
     }
   );
 
+  it.each([
+    ["decimal-comma", { decimalSeparator: "," as const }, "1.234"],
+    ["decimal-point", { decimalSeparator: "." as const }, "1234"],
+  ])(
+    "uses explicit %s context to disambiguate 1,234",
+    (_notation, context, expected) => {
+      const { parseLocalizedDecimal, serializeDecimal } = loadDecimalApi();
+
+      expect(
+        serializeDecimal(parseLocalizedDecimal("1,234", context))
+      ).toBe(expected);
+    }
+  );
+
+  it.each([
+    ["decimal-comma", "1,234.56", { decimalSeparator: "," as const }],
+    ["decimal-point", "1,23", { decimalSeparator: "." as const }],
+  ])(
+    "rejects %s input that conflicts with its explicit separator context",
+    (_notation, input, context) => {
+      const { parseLocalizedDecimal } = loadDecimalApi();
+
+      expect(() => parseLocalizedDecimal(input, context)).toThrow();
+    }
+  );
+
   it.each(["١٬٢", "١٬", "١٬٢٣٬٤٥٦", "١٬٢٣٤,٥٦", "١٬٢٣٤.٥٦"])(
     "rejects malformed Arabic grouping %s",
     (input) => {
