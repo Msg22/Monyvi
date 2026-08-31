@@ -150,3 +150,26 @@ Implementation freeze commit is `ecb673971f1071d131c1f5795a1ec3e4972eb3cc`
 against stacked base `be99eba76757a966ea80b0c070f71fce1e58c33a`.
 Repository-wide lint remains at the known 46-error stacked-branch baseline; no CI
 green claim is made because PR #245 reported no checks at freeze. T024 is complete.
+
+### Slice 3A main-rebase and account-guard reconciliation — 2026-08-31
+
+This supersedes prior stacked-base hashes, counts, scalar
+expected-account-revision wording, and lint baseline. Seven Financial Actions
+commits were transplanted from merge-base
+`d1f865948a28141653c7c829714805d57b499fa4` onto main
+`e02ca34cbc0cb56bdab84ed22d14056bdada9ce5`; safety ref
+`codex/backup-035-financial-action-foundation-pre-main-20260831` preserves
+`4a349642c55a561ca23b3b45f9dda06dd7cb72e5`.
+
+Current main requires deterministic `accountGuards`. Strict Red rejected that
+envelope against the scalar implementation. Green aligns TypeScript, repository,
+WatermelonDB generation, SQL, pgTAP, and canonical fixture. Slice 3A accepts only
+`[]`; populated guards/account effects remain gated by #242/T033. T018–T024 stay
+complete and root exports remain deferred to T034.
+
+Local evidence: reset through migration 067; pgTAP 66/66; focused logic 104/104;
+full logic 69 suites and 1,221/1,221; mobile repository/SQLite/sync 31/31;
+generator 5/5; all TypeScript checks; lint 0 errors/278 warnings; and
+`git diff --check` passed. A second `db:sync-local` preserved diff hash
+`e7748f03cbcce546fc54e543ee4cb214dafe176a`. Implementation freeze is
+`c3a6fc7d804d5efb5a829f1141214d85059e124f`. No remote database was touched.
