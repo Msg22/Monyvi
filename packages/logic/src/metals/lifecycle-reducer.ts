@@ -424,7 +424,7 @@ function finalizeReduction(
         status: statusForEvent(effective),
         isVisible: effective.kind !== "deleted",
         effectiveEventId: effective.id,
-        history: Object.freeze(effective.kind === "deleted" ? [] : [...accepted].reverse()),
+        history: Object.freeze(effective.kind === "deleted" ? [] : orderLifecycleEventsNewestFirst(accepted)),
       });
   return Object.freeze({
     projection,

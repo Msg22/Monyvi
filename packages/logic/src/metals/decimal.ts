@@ -3,6 +3,8 @@ import Decimal from "decimal.js";
 const CANONICAL_DECIMAL_PATTERN = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
 const INTEGER_PATTERN = /^-?(?:0|[1-9]\d*)$/;
 const ENGLISH_GROUPED_DECIMAL_PATTERN = /^-?(?:0|[1-9]\d{0,2})(?:,\d{3})+(?:\.\d+)?$/;
+const ARABIC_GROUPED_DECIMAL_PATTERN = /^-?(?:0|[1-9]\d{0,2})(?:٬\d{3})+(?:٫\d+)?$/;
+const AMBIGUOUS_SINGLE_COMMA_PATTERN = /^-?\d+,\d{3}$/;
 const ARABIC_INDIC_ZERO = "٠".charCodeAt(0);
 const InternalDecimal = Decimal.clone({
   precision: 50,
@@ -92,7 +94,7 @@ export function parseLocalizedDecimal(value: string): ExactDecimalValue {
   }
 
   const normalizedDigits = Array.from(value, normalizeLocalizedCharacter).join("");
-  const withoutArabicGrouping = normalizedDigits.replaceAll("٬", "");
+  const withoutArabicGrouping = normalizeArabicGrouping(normalizedDigits);
   const withStandardDecimal = withoutArabicGrouping.replace("٫", ".");
   return parseCanonicalDecimal(normalizeEnglishSeparators(withStandardDecimal));
 }
@@ -197,12 +199,26 @@ function normalizeLocalizedCharacter(character: string): string {
   return character;
 }
 
+function normalizeArabicGrouping(value: string): string {
+  if (!value.includes("٬")) {
+    return value;
+  }
+  if (!ARABIC_GROUPED_DECIMAL_PATTERN.test(value)) {
+    throw new Error("Expected valid Arabic thousands grouping");
+  }
+
+  return value.replaceAll("٬", "");
+}
+
 function normalizeEnglishSeparators(value: string): string {
   if (!value.includes(",")) {
     return value;
   }
 
   const commaCount = value.split(",").length - 1;
+  if (commaCount === 1 && AMBIGUOUS_SINGLE_COMMA_PATTERN.test(value)) {
+    throw new Error("Ambiguous single-comma decimal notation");
+  }
   const usesGrouping = value.includes(".") || commaCount > 1;
   if (!usesGrouping) {
     return value.replace(",", ".");

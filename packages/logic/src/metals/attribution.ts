@@ -198,20 +198,21 @@ export function calculateUnrealizedAttribution(
     valuationMetal: valuationMetal.value.decimal,
     valuationCurrency: valuationCurrency.value.decimal,
   });
+  const serializedComponents = {
+    metalMovementDecimal: serializeDecimal(components.metalMovement),
+    currencyMovementDecimal: serializeDecimal(components.currencyMovement),
+    purchaseCostDecimal: serializeDecimal(components.purchaseCost),
+  };
 
   return {
     available: true,
     value: {
-      combinedDecimal: serializeDecimal(combined),
+      combinedDecimal: sumDecimalStrings(Object.values(serializedComponents)),
       consumedRateReferences,
       breakdown: {
         available: true,
         value: {
-          components: {
-            metalMovementDecimal: serializeDecimal(components.metalMovement),
-            currencyMovementDecimal: serializeDecimal(components.currencyMovement),
-            purchaseCostDecimal: serializeDecimal(components.purchaseCost),
-          },
+          components: serializedComponents,
           rateReferences: consumedRateReferences,
         },
       },
@@ -363,22 +364,24 @@ export function calculateRealizedAttribution(
     .dividedBy(purchaseCurrencyAtSale.value.decimal);
   const saleDifference = canonicalGrossProceeds.minus(terminalReference);
   const feeComponent = canonicalFees.negated();
+  const serializedComponents = {
+    metalMovementDecimal: serializeDecimal(components.metalMovement),
+    currencyMovementDecimal: serializeDecimal(components.currencyMovement),
+    purchaseCostDecimal: serializeDecimal(components.purchaseCost),
+    saleDifferenceDecimal: serializeDecimal(saleDifference),
+    feeDecimal: serializeDecimal(feeComponent),
+  };
 
   return {
     available: true,
     value: {
       ...baseResult,
+      combinedDecimal: sumDecimalStrings(Object.values(serializedComponents)),
       consumedRateReferences,
       breakdown: {
         available: true,
         value: {
-          components: {
-            metalMovementDecimal: serializeDecimal(components.metalMovement),
-            currencyMovementDecimal: serializeDecimal(components.currencyMovement),
-            purchaseCostDecimal: serializeDecimal(components.purchaseCost),
-            saleDifferenceDecimal: serializeDecimal(saleDifference),
-            feeDecimal: serializeDecimal(feeComponent),
-          },
+          components: serializedComponents,
           rateReferences: consumedRateReferences,
         },
       },
@@ -391,14 +394,18 @@ export function roundAttributionForDisplay(input: {
   readonly components: Readonly<Record<string, string>>;
   readonly decimalPlaces: number;
 }): Availability<RoundedAttribution> {
-  const canonicalComponentSum = Object.values(input.components).reduce(
-    (sum, value) => sum.plus(value),
-    parseCanonicalDecimal("0")
-  );
-  if (compareDecimal(input.combinedDecimal, canonicalComponentSum) !== 0) {
+  if (!hasExactComponentSum(input)) {
     return { available: false, reason: "attribution_components_mismatch" };
   }
 
+  return roundReconciledAttributionForDisplay(input);
+}
+
+function roundReconciledAttributionForDisplay(input: {
+  readonly combinedDecimal: string;
+  readonly components: Readonly<Record<string, string>>;
+  readonly decimalPlaces: number;
+}): Availability<RoundedAttribution> {
   const combinedDecimal = roundDecimal(
     input.combinedDecimal,
     input.decimalPlaces
@@ -443,6 +450,26 @@ export function roundAttributionForDisplay(input: {
   };
 }
 
+function hasExactComponentSum(input: DisplayAttributionSource): boolean {
+  try {
+    return compareDecimal(
+      input.combinedDecimal,
+      sumDecimalStrings(Object.values(input.components))
+    ) === 0;
+  } catch {
+    return false;
+  }
+}
+
+function sumDecimalStrings(values: readonly string[]): string {
+  return serializeDecimal(
+    values.reduce(
+      (sum, value) => sum.plus(value),
+      parseCanonicalDecimal("0")
+    )
+  );
+}
+
 export function convertAttributionForDisplay(
   input: DisplayAttributionInput
 ): Availability<RoundedAttribution> {
@@ -467,6 +494,9 @@ export function convertAttributionForDisplay(
   if (!preferredCurrency.available) {
     return preferredCurrency;
   }
+  if (!hasExactComponentSum(input.attribution.value)) {
+    return { available: false, reason: "attribution_components_mismatch" };
+  }
 
   const displayFactor = canonicalCurrency.value.decimal.dividedBy(
     preferredCurrency.value.decimal
@@ -480,7 +510,7 @@ export function convertAttributionForDisplay(
     }),
     {}
   );
-  return roundAttributionForDisplay({
+  return roundReconciledAttributionForDisplay({
     combinedDecimal: serializeDecimal(
       parseCanonicalDecimal(input.attribution.value.combinedDecimal).times(
         displayFactor

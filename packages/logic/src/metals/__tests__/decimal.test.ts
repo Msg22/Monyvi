@@ -162,6 +162,8 @@ describe("exact Metals decimal contract", () => {
     ["-٠٫٠٠٥", "-0.005"],
     ["١٬٢٣٤٫٥٦", "1234.56"],
     ["1234,56", "1234.56"],
+    ["1,23", "1.23"],
+    ["١٬٢٣٤٬٥٦٧٫٨٩", "1234567.89"],
   ])("normalizes localized decimal %s to %s", (input, expected) => {
     const { parseLocalizedDecimal, serializeDecimal } = loadDecimalApi();
 
@@ -171,6 +173,7 @@ describe("exact Metals decimal contract", () => {
   it.each([
     ["1,234.56", "1234.56"],
     ["12,345,678.90", "12345678.9"],
+    ["1,234,567", "1234567"],
   ])("normalizes grouped English decimal %s to %s", (input, expected) => {
     const { parseLocalizedDecimal, serializeDecimal } = loadDecimalApi();
 
@@ -179,6 +182,24 @@ describe("exact Metals decimal contract", () => {
 
   it.each(["12,34.56", "1,23,4.56", "1,2345.67", "1,234,56"])(
     "rejects malformed English grouping %s",
+    (input) => {
+      const { parseLocalizedDecimal } = loadDecimalApi();
+
+      expect(() => parseLocalizedDecimal(input)).toThrow();
+    }
+  );
+
+  it.each(["1,234", "0,123", "1234,567"])(
+    "rejects ambiguous single-comma notation %s without locale context",
+    (input) => {
+      const { parseLocalizedDecimal } = loadDecimalApi();
+
+      expect(() => parseLocalizedDecimal(input)).toThrow();
+    }
+  );
+
+  it.each(["١٬٢", "١٬", "١٬٢٣٬٤٥٦", "١٬٢٣٤,٥٦", "١٬٢٣٤.٥٦"])(
+    "rejects malformed Arabic grouping %s",
     (input) => {
       const { parseLocalizedDecimal } = loadDecimalApi();
 

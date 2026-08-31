@@ -207,6 +207,7 @@ describe("provider-observation-time rate trust", () => {
     ["NaN", Number.NaN],
     ["positive infinity", Number.POSITIVE_INFINITY],
     ["negative infinity", Number.NEGATIVE_INFINITY],
+    ["negative finite epoch", -1],
   ] as const)("keeps %s provider observation time Unknown even when captured now", (_case, providerObservedAt) => {
     const { classifyRateTrust } = loadRateTrustApi();
 

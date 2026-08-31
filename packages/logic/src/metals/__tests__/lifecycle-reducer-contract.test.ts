@@ -211,6 +211,26 @@ describe("approved pure lifecycle reduction", () => {
     expect(result.projection?.effectiveEventId).toBe("a-sold");
   });
 
+  it("orders visible history by recorded time while retaining causal acceptance order", () => {
+    const created = event("created-newer", "created", null, {
+      occurredAt: 2_000,
+    });
+    const correction = event("correction-older", "corrected", "created-newer", {
+      occurredAt: 1_000,
+    });
+
+    const result = reduceMetalLifecycle([correction, created]);
+
+    expect(result.acceptedEvents.map(({ id }) => id)).toEqual([
+      "created-newer",
+      "correction-older",
+    ]);
+    expect(result.projection?.history.map(({ id }) => id)).toEqual([
+      "created-newer",
+      "correction-older",
+    ]);
+  });
+
   it("is deterministic across shuffled input and restart replay", () => {
     const correction = event("correction", "corrected", "created", { occurredAt: 2_000 });
     const sold = event("sold", "sold", "correction", { occurredAt: 3_000 });
