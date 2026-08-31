@@ -26,6 +26,48 @@ describe("financial action generic sync exclusion", () => {
     expect(SYNCABLE_TABLES).not.toContain("financial_action_groups");
   });
 
+  it("returns dedicated ids to Watermelon for rejection without blocking generic writes", () => {
+    const pushService = readFileSync(
+      resolve(REPOSITORY_ROOT, "apps/mobile/services/sync/push-service.ts"),
+      "utf8"
+    );
+    const synchronizeSource = readFileSync(
+      resolve(
+        REPOSITORY_ROOT,
+        "node_modules/@nozbe/watermelondb/src/sync/impl/synchronize.js"
+      ),
+      "utf8"
+    );
+    const markAsSyncedSource = readFileSync(
+      resolve(
+        REPOSITORY_ROOT,
+        "node_modules/@nozbe/watermelondb/src/sync/impl/markAsSynced.js"
+      ),
+      "utf8"
+    );
+    const contract = readFileSync(
+      resolve(
+        REPOSITORY_ROOT,
+        "specs/035-metals-module-redesign/contracts/action-contract.md"
+      ),
+      "utf8"
+    );
+
+    expect(pushService).toContain("DEDICATED_SYNC_TABLES");
+    expect(pushService).toContain("experimentalRejectedIds");
+    expect(pushService).not.toContain("sync_dedicated_table_changes_pending");
+    expect(synchronizeSource).toContain(
+      "markLocalChangesAsSynced(database, localChanges, pushResult.experimentalRejectedIds)"
+    );
+    expect(markAsSyncedSource).toContain("!rejectedIds.has(id)");
+    expect(markAsSyncedSource).toContain(
+      "changes[tableName].deleted.filter((id) => !rejectedIds.has(id))"
+    );
+    expect(contract).toMatch(
+      /Generic push returns every captured dedicated-table row ID through\s+WatermelonDB's rejected-ID result/
+    );
+  });
+
   it.each([
     "scripts/transform-schema.js",
     "scripts/sql-to-watermelon-migration.js",
@@ -122,7 +164,9 @@ describe("financial action generic sync exclusion", () => {
       "private.financial_action_assert_root_binding_v1"
     );
     expect(migration).toMatch(/account_guards_json jsonb/);
-    expect(migration).toContain("financial_action_groups_foundation_guards_empty");
+    expect(migration).toContain(
+      "financial_action_groups_foundation_guards_empty"
+    );
     expect(localMigration).toMatch(
       /name: "account_guards_json",\s+type: "string"/
     );
@@ -223,7 +267,9 @@ describe("financial action generic sync exclusion", () => {
     expect(sqlTest).toContain(
       "server-side hard delete of a durable root is rejected"
     );
-    expect(sqlTest).toContain("owner cascade cannot delete durable action roots");
+    expect(sqlTest).toContain(
+      "owner cascade cannot delete durable action roots"
+    );
     expect(sqlTest).toContain("private canonicalizer execution is denied");
     expect(sqlTest).toContain("private state execution is denied");
     expect(sqlTest).toContain("private helper execution is denied");

@@ -2,13 +2,18 @@ import type { Database } from "@nozbe/watermelondb";
 import type {
   SyncPushArgs,
   SyncPushResult,
+  SyncRejectedIds,
   SyncTableChangeSet,
 } from "@nozbe/watermelondb/sync";
 
 import { logger } from "@/utils/logger";
 
 import { getCurrentUserId, supabase } from "../supabase";
-import { SYNCABLE_TABLES, type SyncableTable } from "./config";
+import {
+  DEDICATED_SYNC_TABLES,
+  SYNCABLE_TABLES,
+  type SyncableTable,
+} from "./config";
 import { createSyncTableError } from "./errors";
 import {
   assertPushRecordBelongsToCurrentUser,
@@ -18,6 +23,63 @@ import {
 import { getChildTableConfig, isWritableTable } from "./table-predicates";
 import { transformToSupabase } from "./transforms";
 import type { SupabaseWriteTable, WritableSupabaseTablesNames } from "./types";
+
+export const GENERIC_SYNC_ERROR_CODES = {
+  AUTH_SCOPE_LOST: "sync_push_auth_scope_lost",
+  INVALID_CHANGE_ID: "sync_invalid_change_id",
+} as const;
+
+async function assertExpectedPushUser(
+  expectedUserId?: string
+): Promise<string> {
+  const currentUserId = await getCurrentUserId();
+  if (
+    !currentUserId ||
+    (expectedUserId !== undefined && currentUserId !== expectedUserId)
+  ) {
+    throw new Error(GENERIC_SYNC_ERROR_CODES.AUTH_SCOPE_LOST);
+  }
+  return expectedUserId ?? currentUserId;
+}
+
+function parseChangeId(value: unknown): string {
+  const candidate =
+    typeof value === "string"
+      ? value
+      : (value as { readonly id?: unknown } | null)?.id;
+  if (typeof candidate !== "string" || candidate.length === 0) {
+    throw new Error(GENERIC_SYNC_ERROR_CODES.INVALID_CHANGE_ID);
+  }
+  return candidate;
+}
+
+function collectDedicatedRejectedIds(
+  changes: SyncPushArgs["changes"]
+): SyncRejectedIds | undefined {
+  const rejectedIds: Record<string, string[]> = {};
+  for (const [table, changeSet] of Object.entries(changes)) {
+    if (!DEDICATED_SYNC_TABLES.has(table as "financial_action_groups"))
+      continue;
+
+    const tableChanges = changeSet as SyncTableChangeSet;
+    const tableRejectedIds = [
+      ...tableChanges.created.map((record: unknown): string =>
+        parseChangeId(record)
+      ),
+      ...tableChanges.updated.map((record: unknown): string =>
+        parseChangeId(record)
+      ),
+      ...tableChanges.deleted.map((recordId: unknown): string =>
+        parseChangeId(recordId)
+      ),
+    ];
+    if (tableRejectedIds.length > 0) {
+      rejectedIds[table] = [...new Set(tableRejectedIds)];
+    }
+  }
+
+  return Object.keys(rejectedIds).length > 0 ? rejectedIds : undefined;
+}
 
 function comparePushTableOrder(
   [leftTableName]: readonly [string, unknown],
@@ -60,13 +122,11 @@ function getUpsertConflictColumn(table: SyncableTable): "id" | "user_id" {
 
 export async function pushChanges(
   database: Database,
-  pushArgs: SyncPushArgs
+  pushArgs: SyncPushArgs,
+  expectedUserId?: string
 ): Promise<SyncPushResult | undefined | void> {
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    logger.debug("sync.push.skippedUnauthenticated");
-    return;
-  }
+  const dedicatedRejectedIds = collectDedicatedRejectedIds(pushArgs.changes);
+  const userId = await assertExpectedPushUser(expectedUserId);
 
   const { changes } = pushArgs;
   for (const [tableName, rawTableChanges] of Object.entries(changes).sort(
@@ -178,4 +238,10 @@ export async function pushChanges(
       throw err;
     }
   }
+
+  await assertExpectedPushUser(userId);
+
+  return dedicatedRejectedIds
+    ? { experimentalRejectedIds: dedicatedRejectedIds }
+    : undefined;
 }

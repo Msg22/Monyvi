@@ -242,3 +242,306 @@ Manual plan: inspect the root barrel and confirm each owned domain barrel appear
 once. No UI, database, synchronization, financial calculation, or account-effect
 behavior changes in T034; downstream consumer journeys remain owned by later tasks.
 No stop condition remains active.
+
+### PR #250 post-merge foundation safety follow-up — 2026-08-31
+
+Base: `8cc090346004b590ed5d2e53d2ec3e6c829a517f`
+Owner: financial-action foundation follow-up
+Scope: linked-operation ownership validation, generic-push dirty dedicated-table
+failure, the canonical unsigned-revision runtime constructor, focused contracts and
+tests, and this evidence entry. No completed task checkbox changed.
+
+Focused Red used three isolated commands. The canonical action-contract suite failed
+17/87 assertions because `parseCanonicalUnsignedIntegerString` did not exist. The
+foundation repository suite failed 3/29 assertions because ownership validation was
+not invoked and foreign direct-owner/owned-parent plans reached the batch boundary; a
+fourth focused assertion freezes omission of the mandatory validator as invalid.
+The push/contract suites failed 4/16 assertions because dirty dedicated-table changes
+were skipped instead of rejecting generic synchronization.
+
+Green requires every linked plan to assert ownership for the exact cached and prepared
+model sets before one atomic batch, followed by an auth reassertion. It rejects an
+omitted validator, restores cached Watermelon raw state after validation failure,
+does not prepare or validate linked work on replay, and keeps domain-specific direct or
+owned-parent validation outside the generic repository. Generic push now throws
+`sync_dedicated_table_changes_pending` before auth lookup or remote writes whenever a
+dedicated table has created, updated, or deleted changes; empty dedicated change sets
+remain excluded and non-blocking. The exported revision constructor accepts only `0`
+or no-leading-zero unsigned decimal text bounded to PostgreSQL signed-bigint max and
+rejects JavaScript numbers and every noncanonical or overflowing input.
+
+Focused Green: revision contract 87/87, foundation repository 30/30, and generic-sync
+16/16. Broad Green: full logic 69/69 suites and 1,238/1,238 tests; mobile foundation,
+SQLite, generic sync, sync wrapper/config/ownership/transform coverage 8/8 suites and
+98/98 tests; logic and mobile typechecks pass; repository lint reports 0 errors with
+272 pre-existing warnings; and `git diff --check` passes. No migration, schema artifact,
+dedicated synchronizer, remote database mutation, or account-guard enablement is
+included.
+
+Manual plan: inspect the linked plan contract and verify every future caller must
+provide a real direct-owner or owned-parent assertion; inspect generic push ordering
+and verify the dedicated dirty check precedes auth and all Supabase calls; verify the
+revision parser boundary values against PostgreSQL signed-bigint max. Automated tests
+cover the executable paths, so no emulator journey is required for this infrastructure
+follow-up.
+
+### PR #251 review hardening — 2026-08-31
+
+Live review validation found all three unresolved threads valid. Installed
+WatermelonDB source confirms `synchronize()` passes
+`experimentalRejectedIds` into `markLocalChangesAsSynced`; rejected created and
+updated IDs are not marked synced, and rejected deleted IDs are not destroyed. The
+safe generic-sync design therefore rejects every captured dedicated-table ID without
+owner filtering, skips every dedicated remote write, and still pushes unrelated
+owner-scoped generic changes. This removes the post-pull failure/watermark hazard and
+prevents a prior user's dirty dedicated root from blocking the current user's generic
+sync while leaving that foreign root dirty. An independently found auth-loss test also
+requires `sync_push_auth_scope_lost` if auth disappears before push, so no unsent
+generic row can be acknowledged.
+
+This rejected-ID contract supersedes the earlier dated generic-push throw and
+related manual-plan wording above; those lines remain only as historical evidence.
+
+Linked operation plans now separate genuine prepared creates from declarative
+existing-model operations and require separate cached-preimage and prepared-postimage
+ownership validators. The repository derives every cached model from the existing
+operation descriptors, validates and snapshots those preimages, and only then invokes
+their update or delete preparation. Prepared validation receives the exact cached
+models and prepared operations so domain implementations can recheck direct owners and
+immutable owned-parent links. Auth is reasserted after each asynchronous validator,
+cached state is restored before commit on failure, and replay invokes neither validator
+nor existing-model preparation.
+
+Focused Red, rerun with `--no-watchman` after the Windows Watchman pipe failed before
+test execution: 4/4 suites failed with 8 failed and 61 passed of 69 tests. Failures
+proved the dedicated throw, discarded push result, missing rejected-ID contract,
+owner-rewrite bypass, and missing two-phase callback order. The added auth-loss
+lifecycle test separately resolved instead of rejecting before the stable error was
+implemented. Final focused Green is 4/4 suites and 51/51 tests. Relevant foundation and
+sync Green is 9/9 suites and 103/103 tests; mobile typecheck passes. No schema, migration,
+changed-file lint passes, and full repository lint reports 0 errors with 272 pre-existing
+warnings. No schema, migration, remote database mutation, dedicated synchronizer,
+account-guard enablement, or task checkbox change is included.
+
+Current-head follow-up Red failed 1 of 33 foundation tests because a foreign existing
+model omitted from the declared cached preimages could rewrite its owner and reach the
+batch. Final Green replaces arbitrary existing-model preparation with repository-owned
+declarative descriptors: focused foundation 33/33 and the relevant foundation/sync set
+9/9 suites, 104/104 tests. Mobile typecheck and changed-file lint pass; full repository
+lint reports 0 errors with 272 pre-existing warnings; `git diff --check` passes. The
+current manual review must verify every existing descriptor is derived into the cached
+validation/snapshot set before repository-controlled preparation.
+
+Manual plan: inspect callback order and verify cached validation precedes preparation;
+inspect generic push and verify all dedicated created, updated, and deleted IDs are
+returned as rejected regardless of owner; verify the synchronize wrapper returns that
+result to WatermelonDB; verify auth loss throws before any remote write. Installed
+Watermelon source-contract coverage freezes both rejected-record marking and rejected
+deletion preservation, so no emulator journey is required.
+
+### PR #251 current-head scope and preimage hardening — 2026-08-31
+
+This entry extends, and does not replace, the dated evidence above. `syncDatabase` now
+binds the authenticated user captured before `synchronize()` to both pull and push.
+Pull fails with `sync_pull_auth_scope_lost` when that user disappears or changes at
+either boundary, including an empty/no-local-change synchronization, so WatermelonDB
+cannot persist a timestamp for skipped data. Push uses the same bound identity and
+reasserts it before returning, while retaining the `experimentalRejectedIds` contract
+that supersedes the earlier historical generic-push throw/manual-plan wording.
+
+Existing linked-operation descriptors must now be clean, unique by `(table, id)`, and
+disjoint from genuine prepared creates before any updater runs. The repository freezes
+plain `{ table, id, raw }` preimages captured before preparation and supplies them to
+both ownership validators, allowing owned-parent foreign-key changes to be rejected
+against immutable evidence and rolled back. Synced financial descriptors expose only
+update and Watermelon soft-delete (`markAsDeleted`) preparation; unrestricted hard
+delete is not part of the contract.
+
+Focused Red proved both defects: all four synchronize lifecycle cases resolved instead
+of rejecting, while 6 of 7 linked-plan safety tests failed for missing immutable
+preimages, dirty/duplicate/overlapping input acceptance, and hard-delete exposure (the
+existing `markAsDeleted` branch passed). Final focused Green is 2/2 suites and 11/11
+tests. The broader foundation/generic-sync set is 11/11 suites and 108/108 tests.
+Mobile and logic typechecks, changed-file lint, full repository lint, and
+`git diff --check` pass. No schema, migration, remote database mutation, dedicated
+synchronizer, account-guard enablement, or GitHub thread mutation is included.
+
+Manual plan: inspect an A-to-B same-user owned-parent rewrite and verify the prepared
+validator receives the original frozen parent ID and rejection restores `_raw`,
+`_preparedState`, and `_isEditing`; inspect dirty, duplicate, and create-overlap inputs
+and verify rejection occurs before updater invocation; inspect soft deletion and verify
+only `prepareMarkAsDeleted` is batched; simulate auth loss/mismatch before and after an
+empty pull and verify the prior watermark remains unchanged. These infrastructure paths
+have deterministic automated coverage, so no emulator journey is required.
+
+### PR #251 immutable linked-operation validator boundary — 2026-08-31
+
+This entry extends, and does not replace, the dated evidence above. Linked-operation
+ownership validators now receive only frozen plain preimage and prepared-postimage
+snapshots containing `{ table, id, kind, raw }`; no live Watermelon model reference
+crosses either validator boundary. The repository retains separate unexposed expectations
+and, after every validation/auth await and immediately before batching, compares each live
+operation's object identity, table, ID, exact preparation/editing state, and complete
+shallow raw record. Raw comparison is key-complete and value-based, including Date values,
+without serialization. Any drift rejects the commit and restores existing cached models
+and genuine prepared creates to their captured state.
+
+Focused Red was 1 failed suite with 3 failed and 14 passed of 17 tests: retained update
+parent, soft-delete flag, and prepared-create amount mutations all reached a successful
+commit. Final focused Green is 1/1 suite and 17/17 tests; combined foundation Green is
+2/2 suites and 50/50 tests; broader foundation plus sync Green is 12/12 suites and
+130/130 tests. Exact mobile and logic TypeScript checks pass. Changed-file lint passes,
+the foundation integration file remains within the 900-line limit, full repository lint
+reports 0 errors with 272 pre-existing warnings, and `git diff --check` passes.
+
+Manual inspection verified that cached validation sees only frozen preimages, prepared
+validation sees only frozen preimages/postimages, and update, `markAsDeleted`, and genuine
+create tampering cannot reach `database.batch`. The deterministic tests also verify frozen
+snapshot mutation is ineffective, failure restores `_raw`, `_preparedState`, and
+`_isEditing`, and hard-delete preparation remains absent. No emulator journey is required
+for this infrastructure-only boundary.
+
+### PR #251 cached-preimage post-validation hardening — 2026-08-31
+
+This entry extends, and does not replace, the dated evidence above. After cached ownership
+validation returns and the expected user is reasserted, the repository now compares every
+live cached model with its unexposed captured preimage and expectation before any update or
+soft-delete preparation. Object, table, and ID identity must remain exact; preparation must
+remain clean and non-editing; the complete shallow raw record must remain key/value equal;
+and non-root, unique, and prepared-create-disjoint guards are reasserted. Any validator
+closure that retains and mutates a Watermelon model therefore fails with
+`financial_action_invalid_input`, restores its cached snapshot, and cannot invoke an updater,
+`prepareMarkAsDeleted`, prepared ownership validation, or `database.batch`.
+
+The first focused command hit the Windows Watchman startup failure before test execution.
+Focused Red rerun with `--watchman=false` was 1 failed suite with 2 failed and 17 passed of
+19 tests: retained update and soft-delete models with changed owner, parent, and amount raw
+fields both committed instead of rejecting before preparation. Final focused Green is 1/1
+suite and 19/19 tests. The explicit broader foundation plus sync set is 12/12 suites and
+132/132 tests. Exact mobile and logic TypeScript checks pass. Changed-file lint and the
+explicit 900-line guard pass; full repository lint reports 0 errors with 272 pre-existing
+warnings; `git diff --check` passes.
+
+Manual inspection verified the cached-model guard runs immediately after cached validation
+and auth reassertion, before both existing-operation preparation paths. Deterministic tests
+prove no preparation or batch call occurs and exact `_raw`, `_preparedState`, and
+`_isEditing` rollback for both update and `markAsDeleted` closure tampering. No schema,
+migration, remote database, dedicated synchronizer, account-guard, or GitHub thread mutation
+is included.
+
+### PR #251 pending-root and prepared-create closure hardening — 2026-09-01
+
+This append-only evidence applies to exact base head
+`fe92f0d7150e033257b8600ce7a1f053998dc5cd`. A resumed `pending_local` root is now
+captured before the linked-plan callback and retained as an unexposed full raw snapshot
+plus object, table, ID, owner, action, payload, outcome, and clean-state expectations.
+Those expectations are reasserted after the plan, after every precommit ownership/auth
+await, before root preparation, and against the prepared root immediately before the
+atomic batch. Any drift rejects with `financial_action_invalid_input` and restores the
+persisted root snapshot before commit.
+
+After all declarative existing-model updaters run, genuine prepared creates are compared
+with their original complete expectations before prepared postimages are captured. An
+updater closure therefore cannot rewrite a prepared create's raw payload, identity, or
+preparation/editing state and have that mutation blessed as the expected postimage.
+
+Scoped Red evidence contained 5 failing cases: prepared-create raw/identity mutations and
+pending-root owner/state/payload raw mutations all committed. Final focused Green is 2/2
+suites and 58/58 tests. The broader financial-action foundation/generic-sync set is 4/4
+suites and 73/73 tests. Exact mobile and logic TypeScript checks pass. Changed-file lint,
+the explicit 900-line guard, full mobile lint, and `git diff --check` pass.
+
+Manual inspection verified each pending-root assertion remains before
+`prepareLocalRoot`/`database.batch`, failure restoration runs only before commit, and the
+prepared-create recheck occurs immediately after every existing updater and before
+postimage capture. Deterministic service tests cover these non-UI boundaries, so no
+emulator journey is required. No schema, migration, remote database, synchronization,
+account-guard, or GitHub thread mutation is included.
+
+### PR #251 sync-owner watermark isolation — 2026-09-01
+
+This append applies to head `48ba63b009ae933bda42ad6bd4d2befccf8917a8`. The sync
+facade captures one authenticated user inside its existing module-level lock, reads the
+adapter-local `__monyvi_sync_owner_user_id` marker, and forces the pull callback to use
+`null` whenever that marker is absent or belongs to another user. It reasserts the bound
+user only after `synchronize()` returns, then records the marker; auth loss, a user switch,
+or any synchronize failure therefore leaves the previous marker intact. Installed
+WatermelonDB source confirms the callback result is applied and its global
+`lastPulledAt` is stored before `synchronize()` returns, so a subsequent user with a
+different marker recovers with a full pull instead of inheriting that watermark.
+
+The lifecycle harness controls callback return, simulated remote application, and
+watermark advance in that order. It covers prior owner A to user B full pull/marker
+commit, a post-callback auth switch with no local changes, B's older row after a global
+watermark advance, same-owner incremental pull, and first-sync failure with a missing
+marker. The first broader run was red in 24 assertions only because pre-existing
+database doubles lacked the adapter metadata API newly required by the facade; adding
+those focused doubles made the harness reach the intended synchronization behavior.
+
+Final Green: broad sync coverage is 10/10 suites and 80/80 tests. Exact mobile and logic
+TypeScript checks pass. Changed-file lint and full mobile lint pass; full repository lint
+has 0 errors and 275 pre-existing warnings. `git diff --check` passes. The changed sync
+facade and lifecycle test are 116 and 211 lines respectively; the touched legacy
+`sync.test.ts` is 911 lines (907 before this four-line adapter-double addition) and no
+configured maximum-file-lines lint rule exists. No schema, migration, remote database,
+auth-path lock, GitHub-thread, or remote-data mutation is included.
+
+### PR #251 owner-marker write auth closure — 2026-09-01
+
+This append applies to exact head `be372cad0a5e6e42c9211e4525a50798139e025e`.
+`syncDatabase` now reasserts its captured authenticated user immediately after awaiting
+the adapter-local owner-marker write. If authentication switches during that metadata
+await, the original and every caller sharing the active sync promise reject with
+`sync_auth_scope_lost`; the marker may remain the original owner, which safely forces
+the next user to full-pull.
+
+Focused Red was 1 failed lifecycle suite: the original A caller resolved after a deferred
+marker write and an A-to-B switch. The new controllable lifecycle case holds
+`setLocal`, starts a concurrent B caller while the active promise is shared, releases the
+write, expects both callers to reject, verifies the A marker remains, then verifies a
+fresh B sync uses `null` and records B. Focused Green is 1/1 suite and 6/6 tests; broad
+sync Green is 10/10 suites and 81/81 tests. Exact mobile and logic TypeScript checks,
+changed-file lint, full repository lint (0 errors, 275 pre-existing warnings), and the
+900-line check pass: the changed sync facade is 117 lines and lifecycle test is 262 lines.
+No schema, migration, remote database, auth-path lock, GitHub-thread, or remote-data
+mutation is included.
+
+### PR #251 sequential linked-operation isolation — 2026-09-01
+
+This append applies to exact head `26f287ab181f325d3940cf4e9d71641b2497b4f7`.
+Existing linked operations now prepare in their declared atomic order, but immediately
+before each preparation the still-unprepared suffix is checked against its captured
+cached snapshots and expectations. An earlier updater therefore cannot mutate a later
+update or soft-delete sibling and have the later operation accept that altered raw state.
+The ordinary root-first batch order remains unchanged; a failure restores every cached
+model before any later preparation or batch.
+
+Focused Red was 1 failed suite with 2 failed and 25 passed of 27 tests: earlier update
+callbacks mutated the raw amount/deleted flag of a later update or `markAsDeleted` model,
+and both commits resolved. The parameterized regression pair now proves rejection, full
+rollback, no later preparation, no prepared-ownership validation, and no batch. Focused
+Green is 1/1 suite and 27/27 tests; broad financial-action Green is 4/4 suites and 75/75
+tests. Exact mobile and logic TypeScript checks and changed-file lint pass; full repository
+lint has 0 errors and 275 pre-existing warnings. `git diff --check` passes, and the
+repository/safety-test files are 898 and 876 lines. No schema, migration, remote database,
+auth-path lock, GitHub-thread, or remote-data mutation is included.
+
+### PR #251 prepared-prefix sibling isolation — 2026-09-01
+
+This append applies to exact head `41c0f3abca656d21bcc0c388c2ee9e03e57a0849`.
+Each existing operation now captures its immutable prepared expectation immediately after
+its own preparation. Before and after every updater, the repository verifies the prepared
+prefix against those retained expectations and the unprepared suffix against cached raw
+snapshots. This closes both mutation directions: an earlier updater cannot alter a later
+unprepared sibling, and a later updater cannot alter an earlier prepared update or
+soft-delete sibling. Failure restores all cached models and never reaches the batch.
+
+Focused Red was 1 failed suite with 2 failed and 27 passed of 29 tests: a later update
+mutated an earlier prepared update or `markAsDeleted` raw record, and both commits
+resolved. The four-case directional matrix now proves rollback and no batch for update and
+soft-delete targets in both orders. Focused Green is 1/1 suite and 29/29 tests; broad
+financial-action Green is 4/4 suites and 77/77 tests. Exact mobile and logic TypeScript
+checks and changed-file lint pass; full repository lint has 0 errors and 275 pre-existing
+warnings. `git diff --check` passes, and the repository/safety-test files are 898 and 883
+lines. No schema, migration, remote database, auth-path lock, GitHub-thread, or remote-data
+mutation is included.

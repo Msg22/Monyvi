@@ -161,7 +161,9 @@ schema explicitly permits it.
   are valid ordinary canonical decimals. A minor-unit string matches
   `^-?(0|[1-9][0-9]*)$` plus an explicit `-0` rejection. A revision string matches
   `^(0|[1-9][0-9]*)$`. No exponent, leading plus, leading zero, negative zero, or
-  trailing fractional zero is canonical.
+  trailing fractional zero is canonical. A revision is additionally bounded to
+  PostgreSQL signed-bigint max `9223372036854775807`; runtime callers construct the
+  branded value only through `parseCanonicalUnsignedIntegerString(unknown)`.
 - `occurredAt` is a strict calendar-valid UTC timestamp with milliseconds only:
   `YYYY-MM-DDTHH:mm:ss.SSSZ`. It has no offset variant. JavaScript `number` values
   are forbidden in the envelope and payload.
@@ -258,6 +260,23 @@ scope and reasserts that scope immediately before returning or mutating the root
 durable outcome. A changed, absent, or foreign auth scope returns no action data and
 cannot clear a rejection or advance recovery.
 
+Every linked local operation plan separates genuine prepared creates from declarative
+existing-model operations. The repository derives every existing preimage from those
+descriptors and rejects any existing model that is already prepared/editing, repeats a
+`(table, id)` identity, or overlaps a prepared create before any mutation. It snapshots
+each clean existing model and supplies immutable plain `{ table, id, kind, raw }`
+preimages to cached ownership validation before repository-controlled preparation.
+Existing
+descriptors may only prepare an update or Watermelon soft delete (`markAsDeleted`);
+hard-delete preparation is not part of this synced financial contract. After preparation,
+the repository captures immutable plain `{ table, id, kind, raw }` postimages. Prepared
+ownership validation receives only the frozen preimages and postimages, never live
+Watermelon models. The repository then reasserts auth and compares every live operation's
+object identity, table, ID, preparation/editing state, and complete shallow raw record to
+its unexposed captured postimage immediately before the atomic batch. Any drift rejects
+the commit and restores cached state. Replay invokes neither existing-model preparation
+nor either ownership validator.
+
 Action roots are never soft-deleted by product behavior. Their required `deleted` column
 remains `false` solely for the shared sync-row convention; deleting a holding is a
 separate append-only holding action and never deletes its action root.
@@ -286,3 +305,16 @@ never remove or change this exclusion. Only a dedicated-synchronizer capability 
 added after dedicated action synchronization is proven, may change; it governs the
 dedicated path, not generic selection. This prevents action roots from activating
 independently of their complete domain evidence and durable outcome protocol.
+
+Generic push returns every captured dedicated-table row ID through
+WatermelonDB's rejected-ID result, regardless of owner, and never sends those rows to a
+generic remote writer. WatermelonDB may then complete the pull and push unrelated
+owner-scoped generic rows while keeping dedicated created, updated, and deleted rows
+dirty for the future dedicated synchronizer. Empty dedicated change sets remain
+excluded and non-blocking. The synchronization wrapper binds one authenticated user to
+the complete pull/push lifecycle. If that user disappears or changes before pull starts
+or returns, pull throws `sync_pull_auth_scope_lost` and returns no timestamp, including
+when no table changes exist, so WatermelonDB cannot advance its global watermark over
+skipped data. If the bound scope disappears or changes during push, generic sync throws
+`sync_push_auth_scope_lost`; it must not acknowledge any captured row that was not sent
+remotely.

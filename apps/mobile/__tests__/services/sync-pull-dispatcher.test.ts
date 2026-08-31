@@ -50,6 +50,7 @@ jest.mock("@/utils/logger", () => ({
 }));
 
 import {
+  SYNC_PULL_ERROR_CODES,
   pullChanges,
   pullMarketRates,
 } from "../../services/sync/pull-strategies";
@@ -112,7 +113,7 @@ beforeEach(() => {
 
 describe("pullChanges", () => {
   it("dispatches each syncable table through its scoped pull strategy", async () => {
-    await pullChanges(Date.UTC(2026, 4, 18, 8));
+    await pullChanges(Date.UTC(2026, 4, 18, 8), "current-user");
 
     expect(getFirstChain("market_rates").select).toHaveBeenCalledWith("*");
     expect(getFirstChain("market_rates").gt).toHaveBeenCalledWith(
@@ -163,15 +164,12 @@ describe("pullChanges", () => {
     );
   });
 
-  it("returns an empty changeset without querying Supabase when unauthenticated", async () => {
+  it("fails without querying Supabase when the expected auth scope is lost", async () => {
     mockGetCurrentUserId.mockResolvedValue(null);
 
-    const result = await pullChanges(null);
-
-    if (!("changes" in result)) {
-      throw new Error("Expected WatermelonDB changes result");
-    }
-    expect(result.changes).toEqual({});
+    await expect(pullChanges(null, "current-user")).rejects.toThrow(
+      SYNC_PULL_ERROR_CODES.AUTH_SCOPE_LOST
+    );
     expect(mockFrom).not.toHaveBeenCalled();
   });
 });

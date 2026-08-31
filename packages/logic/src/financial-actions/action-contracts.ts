@@ -18,6 +18,7 @@ export const FINANCIAL_ACTION_ERROR_CODES = {
   INVALID_STATE_EVIDENCE: "financial_action_invalid_state_evidence",
   IMMUTABLE_OUTCOME_EVIDENCE: "financial_action_immutable_outcome_evidence",
   PAYLOAD_TOO_LARGE: "financial_action_payload_too_large",
+  INVALID_REVISION: "financial_action_invalid_revision",
 } as const;
 
 export const FINANCIAL_ACTION_STATES = [
@@ -44,6 +45,7 @@ declare const canonicalUnsignedIntegerStringBrand: unique symbol;
 export type CanonicalUnsignedIntegerString = string & {
   readonly [canonicalUnsignedIntegerStringBrand]: true;
 };
+export const MAX_CANONICAL_UNSIGNED_INTEGER_STRING = "9223372036854775807";
 export interface FinancialActionAccountGuard {
   readonly accountId: string;
   readonly expectedRevision: CanonicalUnsignedIntegerString;
@@ -118,6 +120,7 @@ const UUID_PATTERN =
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const STABLE_ERROR_CODE_PATTERN = /^[a-z][a-z0-9_]*$/;
 const UTC_MILLISECOND_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const CANONICAL_UNSIGNED_INTEGER_PATTERN = /^(?:0|[1-9][0-9]*)$/;
 
 type JsonPrimitive = string | boolean | null;
 interface CanonicalJsonObject {
@@ -157,6 +160,21 @@ const ALLOWED_TRANSITIONS: Readonly<
 
 function fail(code: string): never {
   throw new Error(code);
+}
+
+export function parseCanonicalUnsignedIntegerString(
+  value: unknown
+): CanonicalUnsignedIntegerString {
+  if (
+    typeof value !== "string" ||
+    !CANONICAL_UNSIGNED_INTEGER_PATTERN.test(value) ||
+    value.length > MAX_CANONICAL_UNSIGNED_INTEGER_STRING.length ||
+    (value.length === MAX_CANONICAL_UNSIGNED_INTEGER_STRING.length &&
+      value > MAX_CANONICAL_UNSIGNED_INTEGER_STRING)
+  ) {
+    fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_REVISION);
+  }
+  return value as CanonicalUnsignedIntegerString;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

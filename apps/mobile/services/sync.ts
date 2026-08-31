@@ -14,6 +14,12 @@ import { pullChanges } from "./sync/pull-strategies";
 import { pushChanges } from "./sync/push-service";
 import { getCurrentUserId } from "./supabase";
 
+export const SYNC_ERROR_CODES = {
+  AUTH_SCOPE_LOST: "sync_auth_scope_lost",
+} as const;
+
+const SYNC_OWNER_LOCAL_KEY = "__monyvi_sync_owner_user_id";
+
 // Module-level sync lock tracks in-flight sync to prevent concurrent synchronize() calls.
 // If syncDatabase is called while one is already running, the second call returns it.
 let activeSyncPromise: Promise<void> | null = null;
@@ -24,6 +30,13 @@ let activeSyncPromise: Promise<void> | null = null;
  */
 export function getActiveSyncPromise(): Promise<void> | null {
   return activeSyncPromise;
+}
+
+async function assertExpectedSyncUser(expectedUserId: string): Promise<void> {
+  const currentUserId = await getCurrentUserId();
+  if (currentUserId !== expectedUserId) {
+    throw new Error(SYNC_ERROR_CODES.AUTH_SCOPE_LOST);
+  }
 }
 
 /**
@@ -49,7 +62,13 @@ export async function syncDatabase(
       return;
     }
 
-    if (forceFullSync) {
+    const persistedSyncOwner = await database.adapter.getLocal(
+      SYNC_OWNER_LOCAL_KEY
+    );
+    const shouldForceFullSync =
+      forceFullSync || persistedSyncOwner !== userId;
+
+    if (shouldForceFullSync) {
       logger.info("sync.forceFullSyncRequested");
     }
 
@@ -58,14 +77,18 @@ export async function syncDatabase(
         await synchronize({
           database,
           pullChanges: async ({ lastPulledAt }): Promise<SyncPullResult> => {
-            const effectiveLastPulledAt = forceFullSync ? null : lastPulledAt;
-            return pullChanges(effectiveLastPulledAt ?? null);
+            const effectiveLastPulledAt = shouldForceFullSync
+              ? null
+              : lastPulledAt;
+            return pullChanges(effectiveLastPulledAt ?? null, userId);
           },
-          pushChanges: async ({ changes, lastPulledAt }) => {
-            await pushChanges(database, { changes, lastPulledAt });
-          },
+          pushChanges: ({ changes, lastPulledAt }) =>
+            pushChanges(database, { changes, lastPulledAt }, userId),
           sendCreatedAsUpdated: true,
         });
+        await assertExpectedSyncUser(userId);
+        await database.adapter.setLocal(SYNC_OWNER_LOCAL_KEY, userId);
+        await assertExpectedSyncUser(userId);
         logger.debug("sync.completed");
       } catch (error) {
         const errorMessage = String(error);
