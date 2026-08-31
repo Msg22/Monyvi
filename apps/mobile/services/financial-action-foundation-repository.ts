@@ -29,6 +29,16 @@ import {
   captureCachedModelSnapshot,
   restoreCachedModelSnapshot,
 } from "./watermelon-cache-snapshot";
+import {
+  assertPendingFinancialActionRootUnchanged,
+  assertPreparedFinancialActionRootUnchanged,
+  capturePendingFinancialActionRoot,
+  type PendingFinancialActionRootExpectation,
+} from "./financial-action-root-integrity";
+import {
+  cloneWatermelonRaw,
+  watermelonRawRecordsMatch,
+} from "./watermelon-raw-integrity";
 
 export const FINANCIAL_ACTION_FOUNDATION_ERROR_CODES = {
   AUTH_SCOPE_CHANGED: "financial_action_auth_scope_changed",
@@ -337,7 +347,7 @@ export function createFinancialActionFoundationRepository(
   ): readonly PreparedCreateSnapshot[] {
     return models.map((model) => ({
       model,
-      raw: cloneRaw(model._raw),
+      raw: cloneWatermelonRaw(model._raw),
       preparedState: model._preparedState,
       isEditing: model._isEditing,
     }));
@@ -346,7 +356,7 @@ export function createFinancialActionFoundationRepository(
   function restorePreparedCreateSnapshot(
     snapshot: PreparedCreateSnapshot
   ): void {
-    snapshot.model._raw = cloneRaw(snapshot.raw);
+    snapshot.model._raw = cloneWatermelonRaw(snapshot.raw);
     snapshot.model._preparedState = snapshot.preparedState;
     snapshot.model._isEditing = snapshot.isEditing;
   }
@@ -383,46 +393,6 @@ export function createFinancialActionFoundationRepository(
     }
   }
 
-  function cloneRaw(raw: Readonly<Model["_raw"]>): Model["_raw"] {
-    const source = raw as unknown as Readonly<Record<string, unknown>>;
-    const clone = Object.fromEntries(
-      Object.entries(source).map(([key, value]) => [
-        key,
-        value instanceof Date ? new Date(value.getTime()) : value,
-      ])
-    );
-    return clone as unknown as Model["_raw"];
-  }
-
-  function rawValuesMatch(current: unknown, expected: unknown): boolean {
-    if (current instanceof Date || expected instanceof Date) {
-      return (
-        current instanceof Date &&
-        expected instanceof Date &&
-        current.getTime() === expected.getTime()
-      );
-    }
-    return Object.is(current, expected);
-  }
-
-  function rawRecordsMatch(
-    current: Readonly<Model["_raw"]>,
-    expected: Readonly<Model["_raw"]>
-  ): boolean {
-    const currentRecord = current as unknown as Readonly<Record<string, unknown>>;
-    const expectedRecord = expected as unknown as Readonly<Record<string, unknown>>;
-    const currentKeys = Object.keys(currentRecord);
-    const expectedKeys = Object.keys(expectedRecord);
-    return (
-      currentKeys.length === expectedKeys.length &&
-      currentKeys.every(
-        (key) =>
-          Object.prototype.hasOwnProperty.call(expectedRecord, key) &&
-          rawValuesMatch(currentRecord[key], expectedRecord[key])
-      )
-    );
-  }
-
   function assertCachedOperationsUnchanged(
     models: readonly Model[],
     snapshots: ReadonlyArray<ReturnType<typeof captureCachedModelSnapshot>>,
@@ -444,7 +414,7 @@ export function createFinancialActionFoundationRepository(
           model.id !== expectation.id ||
           model._preparedState !== null ||
           model._isEditing ||
-          !rawRecordsMatch(model._raw, snapshot.raw)
+          !watermelonRawRecordsMatch(model._raw, snapshot.raw)
         );
       })
     ) {
@@ -467,7 +437,7 @@ export function createFinancialActionFoundationRepository(
         id: model.id,
         kind: "create" as const,
         expectedPreparedState: "create" as const,
-        raw: Object.freeze(cloneRaw(model._raw)),
+        raw: Object.freeze(cloneWatermelonRaw(model._raw)),
         isEditing: false,
       })
     );
@@ -482,7 +452,7 @@ export function createFinancialActionFoundationRepository(
         id: existing.id,
         kind: existing.kind,
         expectedPreparedState: existing.expectedPreparedState,
-        raw: Object.freeze(cloneRaw(model._raw)),
+        raw: Object.freeze(cloneWatermelonRaw(model._raw)),
         isEditing: false,
       });
     });
@@ -504,7 +474,7 @@ export function createFinancialActionFoundationRepository(
           model.id !== expected.id ||
           model._preparedState !== expected.expectedPreparedState ||
           model._isEditing !== expected.isEditing ||
-          !rawRecordsMatch(model._raw, expected.raw)
+          !watermelonRawRecordsMatch(model._raw, expected.raw)
         );
       })
     ) {
@@ -515,7 +485,7 @@ export function createFinancialActionFoundationRepository(
   }
 
   function immutableRaw(raw: Readonly<Model["_raw"]>): Readonly<Model["_raw"]> {
-    return Object.freeze(cloneRaw(raw));
+    return Object.freeze(cloneWatermelonRaw(raw));
   }
 
   function createImmutablePreimages(
@@ -610,6 +580,7 @@ export function createFinancialActionFoundationRepository(
   async function commitLinkedPlan(
     context: PreparedFinancialActionContext,
     foundRecord: FinancialActionGroup | null,
+    pendingRootExpectation: PendingFinancialActionRootExpectation | null,
     plan: FinancialActionLinkedOperationPlan
   ): Promise<CommitFinancialActionGroupLocallyResult> {
     const assertCachedOwnership = plan.assertCachedOwnership;
@@ -639,9 +610,7 @@ export function createFinancialActionFoundationRepository(
     assertCleanExistingModels(cachedModels);
     assertUniqueModelIdentities(cachedModels);
     assertDisjointModelIdentities(cachedModels, preparedCreates);
-    const cachedSnapshots = cachedModels.map((model) =>
-      captureCachedModelSnapshot(model)
-    );
+    const cachedSnapshots = cachedModels.map(captureCachedModelSnapshot);
     const cachedPreimages = createImmutablePreimages(
       cachedSnapshots,
       existingExpectations
@@ -652,16 +621,23 @@ export function createFinancialActionFoundationRepository(
       [],
       []
     );
-    const snapshots = foundRecord
-      ? [captureCachedModelSnapshot(foundRecord), ...cachedSnapshots]
-      : cachedSnapshots;
     let hasCommitted = false;
     try {
       await assertCachedOwnership(Object.freeze({
         userId: context.scope.userId,
         cachedPreimages,
       }));
+      assertPendingFinancialActionRootUnchanged(
+        foundRecord,
+        pendingRootExpectation,
+        FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+      );
       await reassertExpectedCurrentUser(context.scope.userId);
+      assertPendingFinancialActionRootUnchanged(
+        foundRecord,
+        pendingRootExpectation,
+        FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+      );
       assertCachedOperationsUnchanged(
         cachedModels,
         cachedSnapshots,
@@ -675,6 +651,10 @@ export function createFinancialActionFoundationRepository(
       );
       const preparedExistingOperations = existingOperations.map(
         prepareExistingOperation
+      );
+      assertPreparedOperationsMatch(
+        preparedCreates,
+        initialPreparedCreateExpectations
       );
       const linkedOperations = Object.freeze([
         ...preparedCreates,
@@ -695,19 +675,56 @@ export function createFinancialActionFoundationRepository(
         cachedPreimages,
         preparedPostimages,
       }));
+      assertPendingFinancialActionRootUnchanged(
+        foundRecord,
+        pendingRootExpectation,
+        FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+      );
       await reassertExpectedCurrentUser(context.scope.userId);
+      assertPendingFinancialActionRootUnchanged(
+        foundRecord,
+        pendingRootExpectation,
+        FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+      );
       assertPreparedOperationsMatch(linkedOperations, preparedExpectations);
       assertFinancialActionTransition("pending_local", "local_complete");
+      assertPendingFinancialActionRootUnchanged(
+        foundRecord,
+        pendingRootExpectation,
+        FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+      );
       const root = prepareLocalRoot(context, foundRecord);
+      const preparedRootSnapshot = foundRecord
+        ? captureCachedModelSnapshot(foundRecord)
+        : null;
       await reassertExpectedCurrentUser(context.scope.userId);
+      if (foundRecord && pendingRootExpectation && preparedRootSnapshot) {
+        assertPreparedFinancialActionRootUnchanged(
+          foundRecord,
+          pendingRootExpectation,
+          preparedRootSnapshot,
+          FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+        );
+      }
       assertPreparedOperationsMatch(linkedOperations, preparedExpectations);
+      if (foundRecord && pendingRootExpectation && preparedRootSnapshot) {
+        assertPreparedFinancialActionRootUnchanged(
+          foundRecord,
+          pendingRootExpectation,
+          preparedRootSnapshot,
+          FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+        );
+      }
       await dependencies.database.batch(root.operation, ...linkedOperations);
       hasCommitted = true;
       await reassertExpectedCurrentUser(context.scope.userId);
       return { kind: "committed", record: root.record };
     } catch (error) {
       if (!hasCommitted) {
-        snapshots.forEach(restoreCachedModelSnapshot);
+        if (pendingRootExpectation) {
+          restoreCachedModelSnapshot(pendingRootExpectation.snapshot);
+        }
+        cachedSnapshots.forEach(restoreCachedModelSnapshot);
         preparedCreateSnapshots.forEach(restorePreparedCreateSnapshot);
       }
       throw error;
@@ -738,9 +755,38 @@ export function createFinancialActionFoundationRepository(
           };
         }
 
-        const plan = await input.prepareLinkedOperationPlan();
-        await reassertExpectedCurrentUser(context.scope.userId);
-        return commitLinkedPlan(context, foundRecord, plan);
+        const pendingRootExpectation = foundRecord
+          ? capturePendingFinancialActionRoot(
+              foundRecord,
+              FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+            )
+          : null;
+        let plan: FinancialActionLinkedOperationPlan;
+        try {
+          plan = await input.prepareLinkedOperationPlan();
+          assertPendingFinancialActionRootUnchanged(
+            foundRecord,
+            pendingRootExpectation,
+            FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+          );
+          await reassertExpectedCurrentUser(context.scope.userId);
+          assertPendingFinancialActionRootUnchanged(
+            foundRecord,
+            pendingRootExpectation,
+            FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
+          );
+        } catch (error) {
+          if (pendingRootExpectation) {
+            restoreCachedModelSnapshot(pendingRootExpectation.snapshot);
+          }
+          throw error;
+        }
+        return commitLinkedPlan(
+          context,
+          foundRecord,
+          pendingRootExpectation,
+          plan
+        );
       }
     );
   }

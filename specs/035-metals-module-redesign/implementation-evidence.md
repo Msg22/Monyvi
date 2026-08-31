@@ -428,3 +428,32 @@ prove no preparation or batch call occurs and exact `_raw`, `_preparedState`, an
 `_isEditing` rollback for both update and `markAsDeleted` closure tampering. No schema,
 migration, remote database, dedicated synchronizer, account-guard, or GitHub thread mutation
 is included.
+
+### PR #251 pending-root and prepared-create closure hardening — 2026-09-01
+
+This append-only evidence applies to exact base head
+`fe92f0d7150e033257b8600ce7a1f053998dc5cd`. A resumed `pending_local` root is now
+captured before the linked-plan callback and retained as an unexposed full raw snapshot
+plus object, table, ID, owner, action, payload, outcome, and clean-state expectations.
+Those expectations are reasserted after the plan, after every precommit ownership/auth
+await, before root preparation, and against the prepared root immediately before the
+atomic batch. Any drift rejects with `financial_action_invalid_input` and restores the
+persisted root snapshot before commit.
+
+After all declarative existing-model updaters run, genuine prepared creates are compared
+with their original complete expectations before prepared postimages are captured. An
+updater closure therefore cannot rewrite a prepared create's raw payload, identity, or
+preparation/editing state and have that mutation blessed as the expected postimage.
+
+Scoped Red evidence contained 5 failing cases: prepared-create raw/identity mutations and
+pending-root owner/state/payload raw mutations all committed. Final focused Green is 2/2
+suites and 58/58 tests. The broader financial-action foundation/generic-sync set is 4/4
+suites and 73/73 tests. Exact mobile and logic TypeScript checks pass. Changed-file lint,
+the explicit 900-line guard, full mobile lint, and `git diff --check` pass.
+
+Manual inspection verified each pending-root assertion remains before
+`prepareLocalRoot`/`database.batch`, failure restoration runs only before commit, and the
+prepared-create recheck occurs immediately after every existing updater and before
+postimage capture. Deterministic service tests cover these non-UI boundaries, so no
+emulator journey is required. No schema, migration, remote database, synchronization,
+account-guard, or GitHub thread mutation is included.

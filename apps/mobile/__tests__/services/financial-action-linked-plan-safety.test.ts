@@ -69,7 +69,9 @@ interface MutableUpdateOperation {
 }
 
 const USER_ID = "018f0c7a-1234-7abc-8def-000000000003";
-const mockBatch = jest.fn((): Promise<void> => Promise.resolve());
+const mockBatch = jest.fn(
+  (..._operations: Model[]): Promise<void> => Promise.resolve()
+);
 const mockAssertCachedOwnership = jest.fn(
   (): Promise<void> => Promise.resolve()
 );
@@ -158,6 +160,7 @@ function envelope(): FinancialActionEnvelopeV1 {
 }
 
 function createRepository(): FinancialActionFoundationRepository {
+  let ownedRoot: Model | null = null;
   const rootCollection = {
     prepareCreate: (update: (model: FakeModel) => void): Model => {
       const root = fakeModel("root-row", "financial_action_groups", "create");
@@ -166,12 +169,22 @@ function createRepository(): FinancialActionFoundationRepository {
     },
   };
   const database = {
-    batch: mockBatch,
+    batch: async (...operations: Model[]): Promise<void> => {
+      await mockBatch(...operations);
+      const root = operations.find(
+        (operation) => operation.table === "financial_action_groups"
+      );
+      if (root) {
+        root._preparedState = null;
+        root._isEditing = false;
+        ownedRoot = root;
+      }
+    },
     get: jest.fn(() => rootCollection),
     write: async <T>(action: () => Promise<T>): Promise<T> => action(),
   } as unknown as Database;
   const emptyOwnedQuery = {
-    fetch: (): Promise<never[]> => Promise.resolve([]),
+    fetch: (): Promise<Model[]> => Promise.resolve(ownedRoot ? [ownedRoot] : []),
   };
   const queryOwned: FinancialActionUserDataScope["queryOwned"] = () =>
     emptyOwnedQuery as never;
@@ -219,6 +232,38 @@ async function commit(
       (): Promise<FinancialActionLinkedOperationPlan> =>
         Promise.resolve(linkedPlan),
   });
+}
+
+async function createPendingRootAndCommit(
+  linkedPlan: FinancialActionLinkedOperationPlan,
+  mutateRoot: (root: FakeModel) => void
+): Promise<FakeModel> {
+  const repository = createRepository();
+  const createResult = await repository.createFinancialActionGroup({
+    envelope: envelope(),
+    hashProvider: {
+      digestUtf8: (value): Promise<string> =>
+        Promise.resolve(createHash("sha256").update(value).digest("hex")),
+    },
+  });
+  const root = createResult.record as unknown as FakeModel;
+  const assertCachedOwnership = jest.fn((): Promise<void> => {
+    mutateRoot(root);
+    return Promise.resolve();
+  });
+
+  await expect(
+    repository.commitFinancialActionGroupLocally({
+      envelope: envelope(),
+      hashProvider: {
+        digestUtf8: (value): Promise<string> =>
+          Promise.resolve(createHash("sha256").update(value).digest("hex")),
+      },
+      prepareLinkedOperationPlan: (): Promise<FinancialActionLinkedOperationPlan> =>
+        Promise.resolve({ ...linkedPlan, assertCachedOwnership }),
+    })
+  ).rejects.toThrow(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+  return root;
 }
 
 describe("financial action linked plan safety", () => {
@@ -556,6 +601,102 @@ describe("financial action linked plan safety", () => {
       ).rejects.toThrow(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
 
       expect(mockBatch).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    [
+      "raw",
+      (model: FakeModel): void => {
+        model._raw.amount_minor = "999";
+      },
+    ],
+    [
+      "identity",
+      (model: FakeModel): void => {
+        model._raw.id = "updater-tampered-id";
+      },
+    ],
+    [
+      "prepared state",
+      (model: FakeModel): void => {
+        model._preparedState = "update";
+        model._isEditing = true;
+      },
+    ],
+  ] as const)(
+    "rejects existing updater closure tampering with prepared-create %s",
+    async (_case, tamperPreparedCreate) => {
+      const existing = fakeModel("updater-existing", "asset_metals");
+      const preparedCreate = fakeModel(
+        "updater-create",
+        "asset_metals",
+        "create"
+      );
+      preparedCreate._raw.amount_minor = "100";
+      const originalRaw = { ...preparedCreate._raw };
+
+      await expect(
+        commit(
+          plan(
+            [
+              {
+                kind: "update",
+                model: existing as unknown as Model,
+                update: (): void => tamperPreparedCreate(preparedCreate),
+              },
+            ],
+            [preparedCreate as unknown as Model]
+          )
+        )
+      ).rejects.toThrow(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+
+      expect(preparedCreate._raw).toEqual(originalRaw);
+      expect(preparedCreate._preparedState).toBe("create");
+      expect(preparedCreate._isEditing).toBe(false);
+      expect(mockAssertPreparedOwnership).not.toHaveBeenCalled();
+      expect(mockBatch).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    [
+      "owner",
+      (root: FakeModel): void => {
+        root._raw.user_id = "018f0c7a-1234-7abc-8def-000000000099";
+      },
+    ],
+    [
+      "state",
+      (root: FakeModel): void => {
+        (root._raw as FakeRaw & { state?: string }).state = "accepted";
+      },
+    ],
+    [
+      "payload",
+      (root: FakeModel): void => {
+        (root._raw as FakeRaw & { payload_json?: string }).payload_json =
+          '{"tampered":true}';
+      },
+    ],
+  ] as const)(
+    "rejects pending-root %s closure mutation during cached ownership validation",
+    async (_case, mutateRoot) => {
+      const preparedCreate = fakeModel(
+        "pending-root-linked-row",
+        "asset_metals",
+        "create"
+      );
+      const root = await createPendingRootAndCommit(
+        plan([], [preparedCreate as unknown as Model]),
+        mutateRoot
+      );
+
+      expect(root._raw).toEqual({ id: "root-row", _status: "created" });
+      expect(root._preparedState).toBeNull();
+      expect(root._isEditing).toBe(false);
+      expect(preparedCreate._preparedState).toBe("create");
+      expect(mockBatch).toHaveBeenCalledTimes(1);
     }
   );
 

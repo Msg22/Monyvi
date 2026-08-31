@@ -7,6 +7,8 @@ import {
 } from "../../../../packages/logic/src/financial-actions";
 import type { Model } from "@nozbe/watermelondb";
 
+import type { MockFinancialActionRecord as MockRecord } from "./financial-action-foundation-test-model";
+
 const mockRecords: MockRecord[] = [];
 let mockCurrentUserId = "018f0c7a-1234-7abc-8def-000000000003";
 let nextLocalRowId = 0;
@@ -14,33 +16,11 @@ let mockSwitchUserDuringNextLookup = false;
 let mockSwitchUserDuringBatch = false;
 let mockFailBatchAfterApply = false;
 
-interface MockRecord {
-  table?: string;
-  _isEditing: boolean;
-  _preparedState: Model["_preparedState"];
-  _raw: { id: string; state?: string; user_id?: string };
-  id: string;
-  actionId: string;
-  userId: string;
-  domain: string;
-  kind: string;
-  domainReferenceId: string;
-  payloadJson: string;
-  payloadHash: string;
-  accountGuardsJson: string;
-  state: string;
-  serverOutcome: string | null;
-  outcomeJson: string | null;
-  rejectionCode: string | null;
-  deleted: boolean;
-  updatedAt: Date;
-  prepareUpdate: (updater: (record: MockRecord) => void) => MockRecord;
-}
-
 const mockCollection = {
   prepareCreate: jest.fn(
     (updater: (record: MockRecord) => void): MockRecord => {
       const record = {
+        table: "financial_action_groups",
         _isEditing: false,
         _preparedState: "create" as const,
         _raw: { id: `local-financial-action-${++nextLocalRowId}` },
@@ -97,6 +77,10 @@ const mockDatabaseBatch = jest.fn(
       mockSwitchUserDuringBatch = false;
       mockCurrentUserId = "018f0c7a-1234-7abc-8def-000000000099";
     }
+    operations.forEach((operation) => {
+      operation._preparedState = null;
+      operation._isEditing = false;
+    });
     return Promise.resolve();
   }
 );
