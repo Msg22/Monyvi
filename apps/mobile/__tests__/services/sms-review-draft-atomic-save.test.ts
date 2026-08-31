@@ -62,6 +62,7 @@ function item(
   transactionOverrides: Partial<ParsedSmsTransaction> = {}
 ): RevalidatedSmsReviewDraftItem {
   const fingerprint = `fp-${draftId}`;
+  const createdAt = new Date();
   return {
     draftId,
     queueId: "queue-1",
@@ -85,8 +86,8 @@ function item(
     },
     selectionOverride: true,
     position: 0,
-    parsedAt: new Date("2026-07-27T10:00:00.000Z"),
-    updatedAt: new Date("2026-07-27T10:00:00.000Z"),
+    parsedAt: createdAt,
+    updatedAt: createdAt,
     hardValidationReasons,
   };
 }
