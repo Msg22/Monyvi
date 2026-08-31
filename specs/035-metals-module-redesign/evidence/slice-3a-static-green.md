@@ -2,7 +2,7 @@
 
 Date: 2026-08-31
 Branch: `codex/035-financial-action-foundation`
-Implementation freeze: `c3a6fc7d804d5efb5a829f1141214d85059e124f`
+Implementation freeze: `2ca7eaaad293c075d71b14304f0aeaf30d2d6d49`
 Rebased main authority: `e02ca34cbc0cb56bdab84ed22d14056bdada9ce5`
 
 ## Completed scope
@@ -31,8 +31,8 @@ WatermelonDB generation, pgTAP, repository tests, and the canonical Arabic vecto
 | --- | --- |
 | Local reset through migration `067` | passed |
 | pgTAP | 66/66 passed locally |
-| Focused logic | 4 suites, 104/104 passed |
-| Full logic | 69 suites, 1,221/1,221 passed |
+| Focused logic | 4 suites, 105/105 passed |
+| Full logic | 69 suites, 1,222/1,222 passed |
 | Mobile repository/SQLite/sync | 3 suites, 31/31 passed |
 | Generator | 5/5 passed |
 | Logic, DB, mobile TypeScript | passed |

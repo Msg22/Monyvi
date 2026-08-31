@@ -173,3 +173,21 @@ generator 5/5; all TypeScript checks; lint 0 errors/278 warnings; and
 `git diff --check` passed. A second `db:sync-local` preserved diff hash
 `e7748f03cbcce546fc54e543ee4cb214dafe176a`. Implementation freeze is
 `c3a6fc7d804d5efb5a829f1141214d85059e124f`. No remote database was touched.
+
+### Slice 3A validator-output numeric rejection — 2026-08-31
+
+Review thread `PRRT_kwDOT16ATM6dn3T5` identified that a custom registry validator
+could return a runtime number after the initial envelope inspection. The canonical
+serializer has no numeric branch, so the value could otherwise be misserialized
+before hashing.
+
+Strict Red was one intended failure with 70 existing contract tests passing:
+canonicalization did not raise `financial_action_unsupported_value`. Green
+re-inspects the validated payload, recursively rejects any number with that stable
+error, and proves the hash provider is never called. The canonical contract passes
+71/71; focused Financial Actions passes 105/105; full logic passes 69 suites and
+1,222/1,222; logic TypeScript passes; repository-wide lint has 0 errors and 278
+warnings; and unaffected local pgTAP remains 66/66. The approved Arabic vector and
+digest are unchanged. New implementation freeze is
+`2ca7eaaad293c075d71b14304f0aeaf30d2d6d49`; logic tree hash is
+`2f8735847a2cf58cdf35bab20b47cf3d5bd0d07c`.

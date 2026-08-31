@@ -4,7 +4,7 @@ Status: **T018–T024 complete and frozen locally**
 
 Date: 2026-08-31
 Branch: `codex/035-financial-action-foundation`
-Implementation freeze commit: `c3a6fc7d804d5efb5a829f1141214d85059e124f`
+Implementation freeze commit: `2ca7eaaad293c075d71b14304f0aeaf30d2d6d49`
 Rebased main authority: `e02ca34cbc0cb56bdab84ed22d14056bdada9ce5`
 Pre-rebase safety ref: `codex/backup-035-financial-action-foundation-pre-main-20260831` at
 `4a349642c55a561ca23b3b45f9dda06dd7cb72e5`
@@ -35,8 +35,8 @@ Approved Arabic fixture digest:
 | --- | --- |
 | Local PostgreSQL reset/migration | passed through migration 067 |
 | Local PostgreSQL pgTAP | 66/66 passed |
-| Focused Financial Actions logic | 4 suites, 104/104 passed |
-| Full `packages/logic` Jest | 69 suites, 1,221/1,221 passed |
+| Focused Financial Actions logic | 4 suites, 105/105 passed |
+| Full `packages/logic` Jest | 69 suites, 1,222/1,222 passed |
 | Repository, fresh SQLite, generic-sync exclusion | 3 suites, 31/31 passed |
 | Transform-schema generator | 5/5 passed |
 | Logic, DB, and mobile TypeScript | passed |
@@ -51,7 +51,7 @@ No remote database was touched. Remote CI must rerun after publication/retarget.
 
 | Surface | Git object hash |
 | --- | --- |
-| `packages/logic/src/financial-actions/` | `0de93db47aac648cc34c070092b1eb4b28e6f2be` |
+| `packages/logic/src/financial-actions/` | `2f8735847a2cf58cdf35bab20b47cf3d5bd0d07c` |
 | Migration `067` | `6df3bf1353a21fae5d5955f162ec4d1ec070257e` |
 | Generated schema | `efa3a6613e036928efa054b2653a630ed650a671` |
 | Watermelon migrations | `ffb209072c8c2b696797c332b64fb8e70833e131` |
