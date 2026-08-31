@@ -4,12 +4,13 @@ import {
   FINANCIAL_ACTION_ERROR_CODES,
   type FinancialActionEnvelopeV1,
   type Sha256Provider,
-} from "@monyvi/logic";
+} from "../../../../packages/logic/src/financial-actions";
 
 const mockRecords: MockRecord[] = [];
 let mockCurrentUserId = "018f0c7a-1234-7abc-8def-000000000003";
 let nextLocalRowId = 0;
 let mockSwitchUserDuringNextLookup = false;
+let mockSwitchUserDuringBatch = false;
 
 interface MockRecord {
   _raw: { id: string };
@@ -73,6 +74,10 @@ const mockDatabaseBatch = jest.fn(async (...operations: MockRecord[]): Promise<v
   operations.forEach((operation) => {
     if (!mockRecords.includes(operation)) mockRecords.push(operation);
   });
+  if (mockSwitchUserDuringBatch) {
+    mockSwitchUserDuringBatch = false;
+    mockCurrentUserId = "018f0c7a-1234-7abc-8def-000000000099";
+  }
 });
 
 jest.mock("@monyvi/db", () => ({
@@ -166,6 +171,7 @@ describe("financial action foundation repository", () => {
     mockCurrentUserId = USER_ID;
     nextLocalRowId = 0;
     mockSwitchUserDuringNextLookup = false;
+    mockSwitchUserDuringBatch = false;
     jest.clearAllMocks();
   });
 
@@ -357,6 +363,15 @@ describe("financial action foundation repository", () => {
     );
     expect(mockRecords).toHaveLength(0);
     expect(mockDatabaseBatch).not.toHaveBeenCalled();
+  });
+
+  it("does not return the prior owner's model when auth changes during the batch", async () => {
+    mockSwitchUserDuringBatch = true;
+
+    await expect(createFinancialActionGroup(input())).rejects.toThrow(
+      FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.AUTH_SCOPE_CHANGED
+    );
+    expect(mockDatabaseBatch).toHaveBeenCalledTimes(1);
   });
 
   it("does not retry or mutate when auth changes during the final lookup", async () => {

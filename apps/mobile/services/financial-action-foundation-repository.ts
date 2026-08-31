@@ -11,7 +11,7 @@ import {
   type FinancialActionEnvelopeV1,
   type FinancialActionState,
   type Sha256Provider,
-} from "@monyvi/logic";
+} from "../../../packages/logic/src/financial-actions";
 import { Q, type Collection, type Database } from "@nozbe/watermelondb";
 
 import {
@@ -147,6 +147,7 @@ export function createFinancialActionFoundationRepository(
           candidate.updatedAt = now;
         });
         await dependencies.database.batch(record);
+        await reassertExpectedCurrentUser(scope.userId);
         return { kind: "created", record };
       }
     );

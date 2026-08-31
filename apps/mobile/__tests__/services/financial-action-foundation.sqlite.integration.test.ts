@@ -6,7 +6,7 @@ import {
   hashFinancialActionEnvelope,
   type FinancialActionEnvelopeV1,
   type Sha256Provider,
-} from "@monyvi/logic";
+} from "../../../../packages/logic/src/financial-actions";
 
 interface TestDatabaseModule {
   readonly database: Database;

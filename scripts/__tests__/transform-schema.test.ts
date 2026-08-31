@@ -12,6 +12,7 @@ interface ParsedSchema {
 
 interface TransformSchemaModule {
   readonly parseSupabaseTypes: (content: string) => ParsedSchema;
+  readonly generateSchema: (tables: ParsedSchema["tables"]) => string;
   readonly generateBaseModel: (
     tableName: string,
     columns: readonly unknown[],
@@ -143,4 +144,24 @@ test("financial action explicit-null generation is deterministic", () => {
     )
   );
   assert.equal((generated.match(/!: (?:number|string) \| null;/g) ?? []).length, 4);
+});
+
+test("generated schema preserves owner-scoped financial action uniqueness", () => {
+  const parsed = transformSchema.parseSupabaseTypes(
+    readFileSync(
+      new URL("../../packages/db/src/supabase-types.ts", import.meta.url),
+      "utf8"
+    )
+  );
+  const generated = transformSchema.generateSchema(parsed.tables);
+
+  assert.match(
+    generated,
+    /financial_action_groups_user_action_unique[\s\S]*financial_action_groups[\s\S]*user_id[\s\S]*action_id/
+  );
+  assert.equal(
+    (generated.match(/financial_action_groups_user_action_unique/g) ?? [])
+      .length,
+    1
+  );
 });

@@ -335,8 +335,15 @@ function generateSchema(tables) {
         })
         .join(",\n");
 
+      const unsafeSql =
+        tableName === "financial_action_groups"
+          ? `
+      unsafeSql: (sql: string): string =>
+        \`\${sql}create unique index if not exists "financial_action_groups_user_action_unique" on "financial_action_groups" ("user_id", "action_id");\`,`
+          : "";
+
       return `    tableSchema({
-      name: "${tableName}",
+      name: "${tableName}",${unsafeSql}
       columns: [
 ${columnDefs},
       ],
@@ -772,4 +779,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { generateBaseModel, parseSupabaseTypes };
+module.exports = { generateBaseModel, generateSchema, parseSupabaseTypes };
