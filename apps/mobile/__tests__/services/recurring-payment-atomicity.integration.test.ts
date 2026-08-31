@@ -218,7 +218,10 @@ describe("recurring payment SQLite atomicity", () => {
         amount: 250,
         note: "Rent payment",
       })
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      name: "SqliteError",
+      message: "UNIQUE constraint failed: transactions.id",
+    });
 
     adapterBatchSpy.mockRestore();
 
