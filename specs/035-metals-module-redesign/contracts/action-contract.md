@@ -260,6 +260,12 @@ scope and reasserts that scope immediately before returning or mutating the root
 durable outcome. A changed, absent, or foreign auth scope returns no action data and
 cannot clear a rejection or advance recovery.
 
+Every linked local operation plan validates the exact cached model preimages before
+`prepareOperations()` can mutate them, then separately validates the exact cached
+postimages, prepared operations, and owned-parent links before the atomic batch. Both
+validators are mandatory and auth is reasserted after each asynchronous validation.
+Replay invokes neither preparation nor either ownership validator.
+
 Action roots are never soft-deleted by product behavior. Their required `deleted` column
 remains `false` solely for the shared sync-row convention; deleting a holding is a
 separate append-only holding action and never deletes its action root.
@@ -289,7 +295,11 @@ added after dedicated action synchronization is proven, may change; it governs t
 dedicated path, not generic selection. This prevents action roots from activating
 independently of their complete domain evidence and durable outcome protocol.
 
-Generic push fails before any remote write when a dedicated table has local changes.
-This keeps the complete WatermelonDB-captured change set dirty when generic
-`synchronize()` has no authority to acknowledge the dedicated rows. Empty dedicated
-change sets remain excluded and do not block ordinary generic table synchronization.
+Generic push returns every captured dedicated-table row ID through
+WatermelonDB's rejected-ID result, regardless of owner, and never sends those rows to a
+generic remote writer. WatermelonDB may then complete the pull and push unrelated
+owner-scoped generic rows while keeping dedicated created, updated, and deleted rows
+dirty for the future dedicated synchronizer. Empty dedicated change sets remain
+excluded and non-blocking. If authenticated scope disappears before push, generic sync
+throws `sync_push_auth_scope_lost`; it must not acknowledge any captured row that was
+not sent remotely.

@@ -49,12 +49,20 @@ export type CreateFinancialActionGroupResult =
 export interface FinancialActionLinkedOperationPlan {
   readonly cachedModels: readonly Model[];
   readonly prepareOperations: () => readonly Model[];
-  readonly assertOwnership: (
-    input: FinancialActionLinkedOperationOwnershipInput
+  readonly assertCachedOwnership: (
+    input: FinancialActionLinkedOperationCachedOwnershipInput
+  ) => Promise<void>;
+  readonly assertPreparedOwnership: (
+    input: FinancialActionLinkedOperationPreparedOwnershipInput
   ) => Promise<void>;
 }
 
-export interface FinancialActionLinkedOperationOwnershipInput {
+export interface FinancialActionLinkedOperationCachedOwnershipInput {
+  readonly userId: string;
+  readonly cachedModels: readonly Model[];
+}
+
+export interface FinancialActionLinkedOperationPreparedOwnershipInput {
   readonly userId: string;
   readonly cachedModels: readonly Model[];
   readonly preparedOperations: readonly Model[];
@@ -259,7 +267,10 @@ export function createFinancialActionFoundationRepository(
     foundRecord: FinancialActionGroup | null,
     plan: FinancialActionLinkedOperationPlan
   ): Promise<CommitFinancialActionGroupLocallyResult> {
-    if (typeof plan.assertOwnership !== "function") {
+    if (
+      typeof plan.assertCachedOwnership !== "function" ||
+      typeof plan.assertPreparedOwnership !== "function"
+    ) {
       throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
     }
     assertNoRootTargets(plan.cachedModels);
@@ -271,12 +282,17 @@ export function createFinancialActionFoundationRepository(
     );
     let hasCommitted = false;
     try {
+      await plan.assertCachedOwnership({
+        userId: context.scope.userId,
+        cachedModels: plan.cachedModels,
+      });
+      await reassertExpectedCurrentUser(context.scope.userId);
       const linkedOperations = plan.prepareOperations();
       if (linkedOperations.length === 0) {
         throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
       }
       assertNoRootTargets(linkedOperations);
-      await plan.assertOwnership({
+      await plan.assertPreparedOwnership({
         userId: context.scope.userId,
         cachedModels: plan.cachedModels,
         preparedOperations: linkedOperations,

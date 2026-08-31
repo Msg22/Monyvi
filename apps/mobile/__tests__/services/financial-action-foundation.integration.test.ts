@@ -141,8 +141,9 @@ jest.mock("../../services/user-data-access", () => ({
 
 import {
   type CommitFinancialActionGroupLocallyInput,
-  type FinancialActionLinkedOperationOwnershipInput,
+  type FinancialActionLinkedOperationCachedOwnershipInput,
   type FinancialActionLinkedOperationPlan,
+  type FinancialActionLinkedOperationPreparedOwnershipInput,
   FINANCIAL_ACTION_FOUNDATION_ERROR_CODES,
   commitFinancialActionGroupLocally,
   createFinancialActionGroup,
@@ -229,9 +230,12 @@ function requireMockRecord(index = 0): MockRecord {
 function inputWithLinkedOperations(
   prepareOperations: () => readonly Model[],
   cachedModels: readonly Model[] = [],
-  assertOwnership: (
-    input: FinancialActionLinkedOperationOwnershipInput
-  ) => Promise<void> = assertDirectLinkedOperationOwnership
+  assertCachedOwnership: (
+    input: FinancialActionLinkedOperationCachedOwnershipInput
+  ) => Promise<void> = assertDirectCachedLinkedOperationOwnership,
+  assertPreparedOwnership: (
+    input: FinancialActionLinkedOperationPreparedOwnershipInput
+  ) => Promise<void> = assertDirectPreparedLinkedOperationOwnership
 ): CommitFinancialActionGroupLocallyInput {
   return {
     ...input(),
@@ -240,13 +244,24 @@ function inputWithLinkedOperations(
         Promise.resolve({
           cachedModels,
           prepareOperations,
-          assertOwnership,
+          assertCachedOwnership,
+          assertPreparedOwnership,
         }),
   };
 }
 
-function assertDirectLinkedOperationOwnership(
-  input: FinancialActionLinkedOperationOwnershipInput
+function assertDirectCachedLinkedOperationOwnership(
+  input: FinancialActionLinkedOperationCachedOwnershipInput
+): Promise<void> {
+  input.cachedModels.forEach((model) => {
+    const record = model as unknown as MockRecord;
+    if (record.userId !== input.userId) throw new Error("ownership_failed");
+  });
+  return Promise.resolve();
+}
+
+function assertDirectPreparedLinkedOperationOwnership(
+  input: FinancialActionLinkedOperationPreparedOwnershipInput
 ): Promise<void> {
   [...input.cachedModels, ...input.preparedOperations].forEach((model) => {
     const record = model as unknown as MockRecord;
@@ -490,20 +505,31 @@ describe("financial action foundation repository", () => {
   it("requires ownership validation for the exact cached and prepared models before one atomic batch", async () => {
     const cached = linkedOperation("cached-domain-row");
     const prepared = linkedOperation("prepared-domain-row");
-    const assertOwnership = jest.fn(assertDirectLinkedOperationOwnership);
+    const assertCachedOwnership = jest.fn(
+      assertDirectCachedLinkedOperationOwnership
+    );
+    const assertPreparedOwnership = jest.fn(
+      assertDirectPreparedLinkedOperationOwnership
+    );
 
     await expect(
       commitFinancialActionGroupLocally(
         inputWithLinkedOperations(
           (): readonly Model[] => [prepared as unknown as Model],
           [cached as unknown as Model],
-          assertOwnership
+          assertCachedOwnership,
+          assertPreparedOwnership
         )
       )
     ).resolves.toMatchObject({ kind: "committed" });
 
-    expect(assertOwnership).toHaveBeenCalledTimes(1);
-    expect(assertOwnership).toHaveBeenCalledWith({
+    expect(assertCachedOwnership).toHaveBeenCalledTimes(1);
+    expect(assertCachedOwnership).toHaveBeenCalledWith({
+      userId: USER_ID,
+      cachedModels: [cached],
+    });
+    expect(assertPreparedOwnership).toHaveBeenCalledTimes(1);
+    expect(assertPreparedOwnership).toHaveBeenCalledWith({
       userId: USER_ID,
       cachedModels: [cached],
       preparedOperations: [prepared],
@@ -536,6 +562,91 @@ describe("financial action foundation repository", () => {
     expect(mockRecords).toHaveLength(0);
   });
 
+  it("validates cached ownership before preparation can rewrite the owner", async () => {
+    const foreign = linkedOperation("foreign-owner-rewrite-row");
+    foreign.userId = "018f0c7a-1234-7abc-8def-000000000099";
+    const prepareOperations = jest.fn((): readonly Model[] => {
+      foreign.userId = USER_ID;
+      return [foreign as unknown as Model];
+    });
+    const assertCachedOwnership = jest.fn(
+      (ownershipInput: {
+        readonly userId: string;
+        readonly cachedModels: readonly Model[];
+      }): Promise<void> => {
+        const cached = ownershipInput.cachedModels[0] as unknown as MockRecord;
+        if (cached.userId !== ownershipInput.userId)
+          throw new Error("ownership_failed");
+        return Promise.resolve();
+      }
+    );
+
+    await expect(
+      commitFinancialActionGroupLocally({
+        ...input(),
+        prepareLinkedOperationPlan:
+          (): Promise<FinancialActionLinkedOperationPlan> =>
+            Promise.resolve({
+              cachedModels: [foreign as unknown as Model],
+              prepareOperations,
+              assertCachedOwnership,
+              assertPreparedOwnership:
+                assertDirectPreparedLinkedOperationOwnership,
+            }),
+      })
+    ).rejects.toThrow("ownership_failed");
+
+    expect(assertCachedOwnership).toHaveBeenCalledWith({
+      userId: USER_ID,
+      cachedModels: [foreign],
+    });
+    expect(prepareOperations).not.toHaveBeenCalled();
+    expect(mockDatabaseBatch).not.toHaveBeenCalled();
+  });
+
+  it("validates prepared postimages separately after cached preimages", async () => {
+    const cached = linkedOperation("cached-preimage-row");
+    const prepared = linkedOperation("prepared-postimage-row");
+    const executionOrder: string[] = [];
+    const assertCachedOwnership = jest.fn((): Promise<void> => {
+      executionOrder.push("cached");
+      return Promise.resolve();
+    });
+    const prepareOperations = jest.fn((): readonly Model[] => {
+      executionOrder.push("prepare");
+      return [prepared as unknown as Model];
+    });
+    const assertPreparedOwnership = jest.fn((): Promise<void> => {
+      executionOrder.push("prepared");
+      return Promise.resolve();
+    });
+
+    await expect(
+      commitFinancialActionGroupLocally({
+        ...input(),
+        prepareLinkedOperationPlan:
+          (): Promise<FinancialActionLinkedOperationPlan> =>
+            Promise.resolve({
+              cachedModels: [cached as unknown as Model],
+              prepareOperations,
+              assertCachedOwnership,
+              assertPreparedOwnership,
+            }),
+      })
+    ).resolves.toMatchObject({ kind: "committed" });
+
+    expect(executionOrder).toEqual(["cached", "prepare", "prepared"]);
+    expect(assertCachedOwnership).toHaveBeenCalledWith({
+      userId: USER_ID,
+      cachedModels: [cached],
+    });
+    expect(assertPreparedOwnership).toHaveBeenCalledWith({
+      userId: USER_ID,
+      cachedModels: [cached],
+      preparedOperations: [prepared],
+    });
+  });
+
   it("never batches a child model whose owned parent is foreign", async () => {
     const child = linkedOperation("foreign-owned-parent-row");
     const parentUserId = "018f0c7a-1234-7abc-8def-000000000099";
@@ -546,12 +657,11 @@ describe("financial action foundation repository", () => {
         return Promise.resolve();
       }
     );
-    const assertOwnership = jest.fn(
+    const assertCachedOwnership = jest.fn(
       async (
-        ownershipInput: FinancialActionLinkedOperationOwnershipInput
+        ownershipInput: FinancialActionLinkedOperationCachedOwnershipInput
       ): Promise<void> => {
         expect(ownershipInput.cachedModels).toEqual([child]);
-        expect(ownershipInput.preparedOperations).toEqual([child]);
         await assertOwnedParent(ownershipInput.userId);
       }
     );
@@ -561,12 +671,12 @@ describe("financial action foundation repository", () => {
         inputWithLinkedOperations(
           (): readonly Model[] => [child as unknown as Model],
           [child as unknown as Model],
-          assertOwnership
+          assertCachedOwnership
         )
       )
     ).rejects.toThrow("ownership_failed");
 
-    expect(assertOwnership).toHaveBeenCalledTimes(1);
+    expect(assertCachedOwnership).toHaveBeenCalledTimes(1);
     expect(assertOwnedParent).toHaveBeenCalledWith(USER_ID);
     expect(mockDatabaseBatch).not.toHaveBeenCalled();
   });
@@ -586,7 +696,9 @@ describe("financial action foundation repository", () => {
               prepareOperations: (): readonly Model[] => [
                 linked as unknown as Model,
               ],
-              assertOwnership: assertDirectLinkedOperationOwnership,
+              assertCachedOwnership: assertDirectCachedLinkedOperationOwnership,
+              assertPreparedOwnership:
+                assertDirectPreparedLinkedOperationOwnership,
             };
           },
       })
@@ -606,7 +718,12 @@ describe("financial action foundation repository", () => {
     const replayPrepare = jest.fn((): readonly Model[] => [
       linkedOperation("duplicate-domain-row") as unknown as Model,
     ]);
-    const replayAssertOwnership = jest.fn(assertDirectLinkedOperationOwnership);
+    const replayAssertCachedOwnership = jest.fn(
+      assertDirectCachedLinkedOperationOwnership
+    );
+    const replayAssertPreparedOwnership = jest.fn(
+      assertDirectPreparedLinkedOperationOwnership
+    );
 
     await expect(
       commitFinancialActionGroupLocally(inputWithLinkedOperations(firstPrepare))
@@ -616,13 +733,19 @@ describe("financial action foundation repository", () => {
     });
     await expect(
       commitFinancialActionGroupLocally(
-        inputWithLinkedOperations(replayPrepare, [], replayAssertOwnership)
+        inputWithLinkedOperations(
+          replayPrepare,
+          [],
+          replayAssertCachedOwnership,
+          replayAssertPreparedOwnership
+        )
       )
     ).resolves.toMatchObject({ kind: "replay" });
 
     expect(firstPrepare).toHaveBeenCalledTimes(1);
     expect(replayPrepare).not.toHaveBeenCalled();
-    expect(replayAssertOwnership).not.toHaveBeenCalled();
+    expect(replayAssertCachedOwnership).not.toHaveBeenCalled();
+    expect(replayAssertPreparedOwnership).not.toHaveBeenCalled();
     expect(mockRecords.map((record) => record.id)).toEqual([
       expect.stringMatching(/^local-financial-action-/),
       "linked-domain-row",
@@ -659,7 +782,8 @@ describe("financial action foundation repository", () => {
           prepareOperations: (): readonly Model[] => [
             linkedOperation("linked-domain-row") as unknown as Model,
           ],
-          assertOwnership: assertDirectLinkedOperationOwnership,
+          assertCachedOwnership: assertDirectCachedLinkedOperationOwnership,
+          assertPreparedOwnership: assertDirectPreparedLinkedOperationOwnership,
         })
     );
 

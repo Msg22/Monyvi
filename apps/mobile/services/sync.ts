@@ -61,9 +61,8 @@ export async function syncDatabase(
             const effectiveLastPulledAt = forceFullSync ? null : lastPulledAt;
             return pullChanges(effectiveLastPulledAt ?? null);
           },
-          pushChanges: async ({ changes, lastPulledAt }) => {
-            await pushChanges(database, { changes, lastPulledAt });
-          },
+          pushChanges: ({ changes, lastPulledAt }) =>
+            pushChanges(database, { changes, lastPulledAt }),
           sendCreatedAsUpdated: true,
         });
         logger.debug("sync.completed");

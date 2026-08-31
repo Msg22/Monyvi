@@ -284,3 +284,43 @@ and verify the dedicated dirty check precedes auth and all Supabase calls; verif
 revision parser boundary values against PostgreSQL signed-bigint max. Automated tests
 cover the executable paths, so no emulator journey is required for this infrastructure
 follow-up.
+
+### PR #251 review hardening — 2026-08-31
+
+Live review validation found all three unresolved threads valid. Installed
+WatermelonDB source confirms `synchronize()` passes
+`experimentalRejectedIds` into `markLocalChangesAsSynced`; rejected created and
+updated IDs are not marked synced, and rejected deleted IDs are not destroyed. The
+safe generic-sync design therefore rejects every captured dedicated-table ID without
+owner filtering, skips every dedicated remote write, and still pushes unrelated
+owner-scoped generic changes. This removes the post-pull failure/watermark hazard and
+prevents a prior user's dirty dedicated root from blocking the current user's generic
+sync while leaving that foreign root dirty. An independently found auth-loss test also
+requires `sync_push_auth_scope_lost` if auth disappears before push, so no unsent
+generic row can be acknowledged.
+
+Linked operation plans now require separate cached-preimage and prepared-postimage
+ownership validators. Cached ownership runs before `prepareOperations()` can rewrite
+an owner; prepared validation receives the exact cached models and prepared operations
+after preparation so domain implementations can recheck direct owners and immutable
+owned-parent links. Auth is reasserted after each asynchronous validator, cached state
+is restored before commit on failure, and replay invokes neither validator nor
+preparation.
+
+Focused Red, rerun with `--no-watchman` after the Windows Watchman pipe failed before
+test execution: 4/4 suites failed with 8 failed and 61 passed of 69 tests. Failures
+proved the dedicated throw, discarded push result, missing rejected-ID contract,
+owner-rewrite bypass, and missing two-phase callback order. The added auth-loss
+lifecycle test separately resolved instead of rejecting before the stable error was
+implemented. Final focused Green is 4/4 suites and 51/51 tests. Relevant foundation and
+sync Green is 9/9 suites and 103/103 tests; mobile typecheck passes. No schema, migration,
+changed-file lint passes, and full repository lint reports 0 errors with 272 pre-existing
+warnings. No schema, migration, remote database mutation, dedicated synchronizer,
+account-guard enablement, or task checkbox change is included.
+
+Manual plan: inspect callback order and verify cached validation precedes preparation;
+inspect generic push and verify all dedicated created, updated, and deleted IDs are
+returned as rejected regardless of owner; verify the synchronize wrapper returns that
+result to WatermelonDB; verify auth loss throws before any remote write. Installed
+Watermelon source-contract coverage freezes both rejected-record marking and rejected
+deletion preservation, so no emulator journey is required.

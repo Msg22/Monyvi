@@ -50,7 +50,7 @@ describe("pushChanges", () => {
     ["updated", { created: [], updated: [{ id: "root-1" }], deleted: [] }],
     ["deleted", { created: [], updated: [], deleted: ["root-1"] }],
   ] as const)(
-    "rejects dirty dedicated-table %s changes before auth or remote writes",
+    "returns dirty dedicated-table %s ids as rejected while pushing unrelated rows",
     async (_changeKind, dedicatedChanges) => {
       const database = Object.create(null) as PushChangesDatabase;
       const changes = {
@@ -72,15 +72,91 @@ describe("pushChanges", () => {
         lastPulledAt: 0,
       };
 
-      await expect(pushChanges(database, pushArgs)).rejects.toThrow(
-        GENERIC_SYNC_ERROR_CODES.DEDICATED_CHANGES_PENDING
-      );
+      await expect(pushChanges(database, pushArgs)).resolves.toEqual({
+        experimentalRejectedIds: {
+          financial_action_groups: ["root-1"],
+        },
+      });
 
-      expect(mockGetCurrentUserId).not.toHaveBeenCalled();
-      expect(mockFrom).not.toHaveBeenCalled();
-      expect(mockUpsert).not.toHaveBeenCalled();
+      expect(mockGetCurrentUserId).toHaveBeenCalledTimes(1);
+      expect(mockFrom).not.toHaveBeenCalledWith("financial_action_groups");
+      expect(mockFrom).toHaveBeenCalledWith("profiles");
+      expect(mockUpsert).toHaveBeenCalledTimes(1);
     }
   );
+
+  it("keeps foreign prior-user dedicated roots dirty without blocking current-user generic sync", async () => {
+    const database = Object.create(null) as PushChangesDatabase;
+    const pushArgs: PushChangesArgs = {
+      changes: {
+        financial_action_groups: {
+          created: [
+            {
+              id: "foreign-root",
+              user_id: "prior-user",
+            },
+          ],
+          updated: [],
+          deleted: [],
+        },
+        profiles: {
+          created: [
+            {
+              id: "profile-1",
+              user_id: "current-user",
+              deleted: false,
+            },
+          ],
+          updated: [],
+          deleted: [],
+        },
+      },
+      lastPulledAt: 0,
+    };
+
+    await expect(pushChanges(database, pushArgs)).resolves.toEqual({
+      experimentalRejectedIds: {
+        financial_action_groups: ["foreign-root"],
+      },
+    });
+
+    expect(mockFrom).not.toHaveBeenCalledWith("financial_action_groups");
+    expect(mockFrom).toHaveBeenCalledWith("profiles");
+    expect(mockUpsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails when auth disappears before push so no captured row is acknowledged", async () => {
+    mockGetCurrentUserId.mockResolvedValue(null);
+    const database = Object.create(null) as PushChangesDatabase;
+    const pushArgs: PushChangesArgs = {
+      changes: {
+        financial_action_groups: {
+          created: [{ id: "dedicated-root" }],
+          updated: [],
+          deleted: [],
+        },
+        profiles: {
+          created: [
+            {
+              id: "profile-1",
+              user_id: "current-user",
+              deleted: false,
+            },
+          ],
+          updated: [],
+          deleted: [],
+        },
+      },
+      lastPulledAt: 0,
+    };
+
+    await expect(pushChanges(database, pushArgs)).rejects.toThrow(
+      GENERIC_SYNC_ERROR_CODES.AUTH_SCOPE_LOST
+    );
+
+    expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
 
   it("allows an empty dedicated-table change set without generating a generic remote write", async () => {
     const database = Object.create(null) as PushChangesDatabase;
