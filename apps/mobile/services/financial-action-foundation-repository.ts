@@ -278,8 +278,47 @@ export function createFinancialActionFoundationRepository(
     }
   }
 
+  function captureExistingOperations(
+    operations: readonly FinancialActionLinkedExistingOperation[]
+  ): readonly FinancialActionLinkedExistingOperation[] {
+    return Object.freeze(
+      operations.map((operation): FinancialActionLinkedExistingOperation =>
+        operation.kind === "update"
+          ? Object.freeze({
+              kind: "update",
+              model: operation.model,
+              update: operation.update,
+            })
+          : Object.freeze({
+              kind: "markAsDeleted",
+              model: operation.model,
+            })
+      )
+    );
+  }
+
+  function capturePreparedCreates(models: readonly Model[]): readonly Model[] {
+    return Object.freeze([...models]);
+  }
+
+  function assertPreparedCreateIntegrity(
+    models: readonly Model[],
+    expectedIdentities: readonly string[]
+  ): void {
+    assertGenuinePreparedCreates(models);
+    assertUniqueModelIdentities(models);
+    if (
+      models.length !== expectedIdentities.length ||
+      models.some(
+        (model, index) => modelIdentity(model) !== expectedIdentities[index]
+      )
+    ) {
+      throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+    }
+  }
+
   function createImmutablePreimages(
-    snapshots: readonly ReturnType<typeof captureCachedModelSnapshot>[]
+    snapshots: ReadonlyArray<ReturnType<typeof captureCachedModelSnapshot>>
   ): readonly FinancialActionLinkedOperationPreimage[] {
     return Object.freeze(
       snapshots.map((snapshot) =>
@@ -351,22 +390,30 @@ export function createFinancialActionFoundationRepository(
     foundRecord: FinancialActionGroup | null,
     plan: FinancialActionLinkedOperationPlan
   ): Promise<CommitFinancialActionGroupLocallyResult> {
+    const assertCachedOwnership = plan.assertCachedOwnership;
+    const assertPreparedOwnership = plan.assertPreparedOwnership;
     if (
-      typeof plan.assertCachedOwnership !== "function" ||
-      typeof plan.assertPreparedOwnership !== "function"
+      typeof assertCachedOwnership !== "function" ||
+      typeof assertPreparedOwnership !== "function"
     ) {
       throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
     }
-    const cachedModels = plan.existingOperations.map(
-      (operation) => operation.model
+    const existingOperations = captureExistingOperations(
+      plan.existingOperations
+    );
+    const preparedCreates = capturePreparedCreates(plan.preparedCreates);
+    const cachedModels = Object.freeze(
+      existingOperations.map((operation) => operation.model)
+    );
+    const preparedCreateIdentities = Object.freeze(
+      preparedCreates.map(modelIdentity)
     );
     assertNoRootTargets(cachedModels);
-    assertNoRootTargets(plan.preparedCreates);
-    assertGenuinePreparedCreates(plan.preparedCreates);
+    assertNoRootTargets(preparedCreates);
+    assertPreparedCreateIntegrity(preparedCreates, preparedCreateIdentities);
     assertCleanExistingModels(cachedModels);
     assertUniqueModelIdentities(cachedModels);
-    assertUniqueModelIdentities(plan.preparedCreates);
-    assertDisjointModelIdentities(cachedModels, plan.preparedCreates);
+    assertDisjointModelIdentities(cachedModels, preparedCreates);
     const cachedSnapshots = cachedModels.map((model) =>
       captureCachedModelSnapshot(model)
     );
@@ -376,33 +423,36 @@ export function createFinancialActionFoundationRepository(
       : cachedSnapshots;
     let hasCommitted = false;
     try {
-      await plan.assertCachedOwnership({
+      await assertCachedOwnership({
         userId: context.scope.userId,
         cachedModels,
         cachedPreimages,
       });
       await reassertExpectedCurrentUser(context.scope.userId);
-      const preparedExistingOperations = plan.existingOperations.map(
+      assertPreparedCreateIntegrity(preparedCreates, preparedCreateIdentities);
+      const preparedExistingOperations = existingOperations.map(
         prepareExistingOperation
       );
-      const linkedOperations = [
-        ...plan.preparedCreates,
+      const linkedOperations = Object.freeze([
+        ...preparedCreates,
         ...preparedExistingOperations,
-      ];
+      ]);
       if (linkedOperations.length === 0) {
         throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
       }
       assertNoRootTargets(linkedOperations);
-      await plan.assertPreparedOwnership({
+      await assertPreparedOwnership({
         userId: context.scope.userId,
         cachedModels,
         cachedPreimages,
         preparedOperations: linkedOperations,
       });
       await reassertExpectedCurrentUser(context.scope.userId);
+      assertPreparedCreateIntegrity(preparedCreates, preparedCreateIdentities);
       assertFinancialActionTransition("pending_local", "local_complete");
       const root = prepareLocalRoot(context, foundRecord);
       await reassertExpectedCurrentUser(context.scope.userId);
+      assertPreparedCreateIntegrity(preparedCreates, preparedCreateIdentities);
       await dependencies.database.batch(root.operation, ...linkedOperations);
       hasCommitted = true;
       await reassertExpectedCurrentUser(context.scope.userId);

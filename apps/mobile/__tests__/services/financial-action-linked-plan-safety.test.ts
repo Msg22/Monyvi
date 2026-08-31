@@ -17,6 +17,7 @@ import {
   FINANCIAL_ACTION_FOUNDATION_ERROR_CODES,
   createFinancialActionFoundationRepository,
   type FinancialActionFoundationRepository,
+  type FinancialActionLinkedOperationCachedOwnershipInput,
   type FinancialActionLinkedOperationPlan,
   type FinancialActionLinkedOperationPreparedOwnershipInput,
   type FinancialActionUserDataScope,
@@ -52,6 +53,17 @@ interface FakeModel {
   updatedAt?: Date;
   prepareUpdate: (update: (model: Model) => void) => Model;
   prepareMarkAsDeleted: () => Model;
+}
+
+interface Deferred {
+  readonly promise: Promise<void>;
+  readonly resolve: () => void;
+}
+
+interface MutableUpdateOperation {
+  kind: "update";
+  model: Model;
+  update: (model: Model) => void;
 }
 
 const USER_ID = "018f0c7a-1234-7abc-8def-000000000003";
@@ -94,6 +106,14 @@ function fakeModel(
     },
   };
   return model;
+}
+
+function deferred(): Deferred {
+  let resolvePromise = (): void => undefined;
+  const promise = new Promise<void>((resolve) => {
+    resolvePromise = resolve;
+  });
+  return { promise, resolve: (): void => resolvePromise() };
 }
 
 function assertFakeRaw(
@@ -170,12 +190,13 @@ function createRepository(): FinancialActionFoundationRepository {
 function plan(
   existingOperations: FinancialActionLinkedOperationPlan["existingOperations"],
   preparedCreates: readonly Model[] = [],
-  assertPreparedOwnership: FinancialActionLinkedOperationPlan["assertPreparedOwnership"] = mockAssertPreparedOwnership
+  assertPreparedOwnership: FinancialActionLinkedOperationPlan["assertPreparedOwnership"] = mockAssertPreparedOwnership,
+  assertCachedOwnership: FinancialActionLinkedOperationPlan["assertCachedOwnership"] = mockAssertCachedOwnership
 ): FinancialActionLinkedOperationPlan {
   return {
     preparedCreates,
     existingOperations,
-    assertCachedOwnership: mockAssertCachedOwnership,
+    assertCachedOwnership,
     assertPreparedOwnership,
   };
 }
@@ -332,6 +353,125 @@ describe("financial action linked plan safety", () => {
       model as unknown as Model
     );
   });
+
+  it("uses frozen plan copies when retained arrays and descriptors mutate during cached validation", async () => {
+    const validationStarted = deferred();
+    const releaseValidation = deferred();
+    const safeExisting = fakeModel("safe-existing", "asset_metals");
+    const swappedForeign = fakeModel("swapped-foreign", "asset_metals");
+    const appendedForeign = fakeModel("appended-foreign", "asset_metals");
+    const initialCreate = fakeModel("initial-create", "asset_metals", "create");
+    const appendedCreate = fakeModel(
+      "appended-create",
+      "asset_metals",
+      "create"
+    );
+    const safeUpdate = jest.fn();
+    const swappedUpdate = jest.fn();
+    const appendedUpdate = jest.fn();
+    const retainedDescriptor: MutableUpdateOperation = {
+      kind: "update",
+      model: safeExisting as unknown as Model,
+      update: safeUpdate,
+    };
+    const retainedExistingOperations: Array<
+      FinancialActionLinkedOperationPlan["existingOperations"][number]
+    > = [retainedDescriptor];
+    const retainedPreparedCreates: Model[] = [
+      initialCreate as unknown as Model,
+    ];
+    const assertCachedOwnership = jest.fn(
+      async (
+        input: FinancialActionLinkedOperationCachedOwnershipInput
+      ): Promise<void> => {
+        const areCachedModelsFrozen = Object.isFrozen(input.cachedModels);
+        validationStarted.resolve();
+        await releaseValidation.promise;
+        expect(areCachedModelsFrozen).toBe(true);
+      }
+    );
+    const assertPreparedOwnership = jest.fn(
+      (
+        input: FinancialActionLinkedOperationPreparedOwnershipInput
+      ): Promise<void> => {
+        expect(Object.isFrozen(input.cachedModels)).toBe(true);
+        expect(Object.isFrozen(input.preparedOperations)).toBe(true);
+        return Promise.resolve();
+      }
+    );
+    const commitPromise = commit(
+      plan(
+        retainedExistingOperations,
+        retainedPreparedCreates,
+        assertPreparedOwnership,
+        assertCachedOwnership
+      )
+    );
+
+    await validationStarted.promise;
+    retainedDescriptor.model = swappedForeign as unknown as Model;
+    retainedDescriptor.update = swappedUpdate;
+    retainedExistingOperations.push({
+      kind: "update",
+      model: appendedForeign as unknown as Model,
+      update: appendedUpdate,
+    });
+    retainedPreparedCreates.push(appendedCreate as unknown as Model);
+    releaseValidation.resolve();
+
+    await expect(commitPromise).resolves.toBeUndefined();
+    expect(safeUpdate).toHaveBeenCalledTimes(1);
+    expect(swappedUpdate).not.toHaveBeenCalled();
+    expect(appendedUpdate).not.toHaveBeenCalled();
+    expect(swappedForeign._preparedState).toBeNull();
+    expect(appendedForeign._preparedState).toBeNull();
+    expect(appendedCreate._preparedState).toBe("create");
+    expect(mockBatch).toHaveBeenCalledWith(
+      expect.anything(),
+      initialCreate as unknown as Model,
+      safeExisting as unknown as Model
+    );
+  });
+
+  it.each([
+    [
+      "state",
+      (model: FakeModel): void => {
+        model._preparedState = "update";
+      },
+    ],
+    [
+      "identity",
+      (model: FakeModel): void => {
+        Object.defineProperty(model, "id", { value: "mutated-create-id" });
+      },
+    ],
+  ] as const)(
+    "reasserts prepared-create %s after prepared ownership validation",
+    async (_case, mutatePreparedCreate) => {
+      const preparedCreate = fakeModel(
+        "validator-mutated-create",
+        "asset_metals",
+        "create"
+      );
+      const assertPreparedOwnership = jest.fn((): Promise<void> => {
+        mutatePreparedCreate(preparedCreate);
+        return Promise.resolve();
+      });
+
+      await expect(
+        commit(
+          plan(
+            [],
+            [preparedCreate as unknown as Model],
+            assertPreparedOwnership
+          )
+        )
+      ).rejects.toThrow(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+
+      expect(mockBatch).not.toHaveBeenCalled();
+    }
+  );
 
   it("does not expose unrestricted hard-delete preparation", () => {
     const repositorySource = readFileSync(
