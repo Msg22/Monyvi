@@ -212,7 +212,7 @@ describe("financial action generic sync exclusion", () => {
       "utf8"
     );
 
-    expect(sqlTest).toContain("select plan(63)");
+    expect(sqlTest).toContain("select plan(65)");
     expect(sqlTest).toContain("SET LOCAL ROLE authenticated");
     expect(sqlTest).toContain("RESET ROLE");
     expect(sqlTest).toContain("authenticated owner can select its root");
@@ -220,6 +220,10 @@ describe("financial action generic sync exclusion", () => {
     expect(sqlTest).toContain("authenticated insert is denied");
     expect(sqlTest).toContain("authenticated update is denied");
     expect(sqlTest).toContain("authenticated delete is denied");
+    expect(sqlTest).toContain(
+      "server-side hard delete of a durable root is rejected"
+    );
+    expect(sqlTest).toContain("owner cascade cannot delete durable action roots");
     expect(sqlTest).toContain("private canonicalizer execution is denied");
     expect(sqlTest).toContain("private state execution is denied");
     expect(sqlTest).toContain("private helper execution is denied");

@@ -635,6 +635,12 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '22023',
+      MESSAGE = 'financial_action_root_delete_forbidden';
+  END IF;
+
   IF NEW.deleted IS DISTINCT FROM false THEN
     RAISE EXCEPTION USING
       ERRCODE = '22023',
@@ -669,7 +675,7 @@ END;
 $$;
 
 CREATE TRIGGER financial_action_groups_validate_state_transition
-  BEFORE INSERT OR UPDATE ON public.financial_action_groups
+  BEFORE INSERT OR UPDATE OR DELETE ON public.financial_action_groups
   FOR EACH ROW
   EXECUTE FUNCTION private.financial_action_validate_state_transition_v1();
 

@@ -10,6 +10,7 @@ import {
   resolveFinancialActionReplay,
   serializeFinancialActionEnvelope,
   FinancialActionEnvelopeV1,
+  CanonicalUnsignedIntegerString,
   Sha256Provider,
 } from "../action-contracts";
 import {
@@ -116,6 +117,19 @@ describe("financial action canonical contract", () => {
 
     expect(validEnvelope().expectedAccountRevision).toBeNull();
     expectContractError(omitted, FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
+  });
+
+  it("reserves canonical account revisions in the V1 type while Slice 3A rejects them", () => {
+    const reservedRevision = "7" as CanonicalUnsignedIntegerString;
+    const revisionBearingEnvelope: FinancialActionEnvelopeV1<MetalsSellPayloadV1> = {
+      ...validEnvelope(),
+      expectedAccountRevision: reservedRevision,
+    };
+
+    expectContractError(
+      revisionBearingEnvelope,
+      FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE
+    );
   });
 
   it.each([

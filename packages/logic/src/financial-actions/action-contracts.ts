@@ -40,6 +40,10 @@ export const SERVER_OUTCOMES = [
 
 export type FinancialActionState = (typeof FINANCIAL_ACTION_STATES)[number];
 export type FinancialActionServerOutcome = (typeof SERVER_OUTCOMES)[number];
+declare const canonicalUnsignedIntegerStringBrand: unique symbol;
+export type CanonicalUnsignedIntegerString = string & {
+  readonly [canonicalUnsignedIntegerStringBrand]: true;
+};
 export type FinancialActionDomain =
   | "metals"
   | "transactions"
@@ -54,7 +58,7 @@ export interface FinancialActionEnvelopeV1<
   readonly domain: FinancialActionDomain;
   readonly domainReferenceId: string;
   readonly envelopeVersion: "monyvi.financial-action/v1";
-  readonly expectedAccountRevision: null;
+  readonly expectedAccountRevision: CanonicalUnsignedIntegerString | null;
   readonly kind: string;
   readonly occurredAt: string;
   readonly payload: TPayload;

@@ -1,6 +1,6 @@
 begin;
 
-select plan(63);
+select plan(65);
 
 create or replace function pg_temp.valid_financial_action_envelope()
 returns jsonb
@@ -512,6 +512,20 @@ begin
   perform set_config('request.jwt.claim.role', '', true);
 end;
 $$;
+
+select throws_ok(
+  $$delete from public.financial_action_groups where action_id = '018f0c7a-1234-7abc-8def-000000000001'$$,
+  '22023',
+  'financial_action_root_delete_forbidden',
+  'server-side hard delete of a durable root is rejected'
+);
+
+select throws_ok(
+  $$delete from auth.users where id = '018f0c7a-1234-7abc-8def-000000000003'$$,
+  '22023',
+  'financial_action_root_delete_forbidden',
+  'owner cascade cannot delete durable action roots'
+);
 
 select throws_ok(
   $$update public.financial_action_groups set action_id = '018f0c7a-1234-7abc-8def-000000000091' where action_id = '018f0c7a-1234-7abc-8def-000000000001'$$,
