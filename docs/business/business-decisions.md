@@ -452,11 +452,13 @@ Business rules:
 - Parent `assets` rows own the user, name, purchase facts, notes, and root sync
   columns. `asset_metals` is a strict parent-owned child through `asset_id`;
   it stores metal-specific facts and does not duplicate `user_id`.
-- `purity_fraction` is the canonical normalized purity factor. New flows MUST
-  NOT use the retired `purity_karat` field or calculate from display text.
+- `purity_factor_decimal` is the canonical exact purity factor snapshot for new
+  financial logic. Numeric `purity_fraction` is migration/compatibility-only and
+  MUST NOT drive authoritative calculations. New flows MUST NOT use the retired
+  `purity_karat` field or calculate from display text.
 - A holding persists the selected stable purity-catalog code, catalog version,
-  and exact factor snapshot. Later catalog changes never rewrite recorded
-  holding facts.
+  and exact `purity_factor_decimal` snapshot. Later catalog changes never rewrite
+  recorded holding facts.
 - Metal type is locked after creation. Correcting a wrong metal uses Delete
   holding, then Add holding with the correct metal.
 - Add holding uses one focused full-screen form in this order: Name, Metal,
