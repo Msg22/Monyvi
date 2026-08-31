@@ -21,8 +21,10 @@ Sync Impact Report
     debt tracked by architecture audit issues.
   - TODO(UI_DEBT_AUDIT): replace remaining content-loading ActivityIndicator
     usage, raw console calls, and unjustified raw hex/style exceptions.
-  - TODO(AGENT_GUIDANCE_SYNC): reconcile AGENTS.md and equivalent runtime
-    guidance with this amendment in separately authorized documentation work.
+  - Agent guidance sync: `.agent/rules/ecc-coding-style.md`,
+    `.agent/rules/ecc-patterns.md`, and `.agent/rules/specify-rules.md` are
+    synchronized with this amendment in this PR. Any future `AGENTS.md` change
+    remains separately authorized and must not duplicate or weaken these rules.
   - TODO(SECURITY_HARDENING): issue #240 owns app lock, MFA or step-up,
     session/device management, sign-in notifications, and SecureStore logout.
   - TODO(APP_WIDE_DECIMAL_AUDIT): issue #241 owns audit and staged migration of

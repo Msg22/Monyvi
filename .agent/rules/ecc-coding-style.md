@@ -44,6 +44,19 @@ ALWAYS validate at system boundaries:
 - Fail fast with clear error messages
 - Never trust external data (API responses, user input, file content)
 
+## Authoritative Financial Arithmetic
+
+For new or changed authoritative financial calculations:
+
+- Use the shared `@monyvi/logic` Decimal.js primitive, never JavaScript-number
+  arithmetic.
+- Accept and persist canonical base-10 strings for non-posted values;
+  WatermelonDB uses text and PostgreSQL uses exact `numeric`.
+- Convert posted money only at the approved account boundary to integer minor
+  units. Do not round intermediate calculation results.
+- Use precision 50 and `ROUND_HALF_EVEN`; round only at the approved display or
+  posting boundary.
+
 ## Code Quality Checklist
 
 Before marking work complete:

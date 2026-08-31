@@ -257,4 +257,39 @@ package typecheck and scoped diff validation passed. Production required no chan
   references, evidence state, and canonical CAS status before reduction. Malformed
   evidence is retained as incomplete and cannot affect projection.
 - Runtime Metals ISO membership derives from canonical `SUPPORTED_CURRENCIES` with
-  explicit BTC exclusion; parity covers every catalog code, BTC, and unknown codes.
+explicit BTC exclusion; parity covers every catalog code, BTC, and unknown codes.
+
+## Source-hash supersession after foundation-review refinements — 2026-08-31
+
+The earlier **Final source hashes** table is retained above as historical evidence
+for its recorded Green cycle. It does not identify later reviewer refinements.
+This dated snapshot supersedes that table for source authentication of the current
+foundation-review source tree. Its source/test content is commit
+`d4ee8c5188dbec47e596fcc8795706b94cc44e17`; this evidence addition remains a
+later uncommitted documentation change until integration. It was calculated with:
+
+```powershell
+Set-Location E:\Work\My Projects\Monyvi-metals-redesign
+git hash-object packages/logic/src/metals/decimal.ts packages/logic/src/metals/purity-catalog.ts packages/logic/src/metals/valuation.ts packages/logic/src/metals/attribution.ts packages/logic/src/metals/lifecycle-reducer.ts packages/logic/src/metals/rate-trust.ts packages/logic/src/metals/rate-reference.ts packages/logic/src/metals/index.ts packages/logic/src/metals/__tests__/decimal.test.ts packages/logic/src/metals/__tests__/purity-valuation.test.ts packages/logic/src/metals/__tests__/attribution-postgres-parity.test.ts packages/logic/src/metals/__tests__/lifecycle-rate-trust.test.ts packages/logic/src/metals/__tests__/rate-reference-contract.test.ts packages/logic/src/metals/__tests__/attribution-rounding-validation.test.ts
+```
+
+| Source | Current Git blob hash |
+| --- | --- |
+| `decimal.ts` | `309b0c9487e2301088b6554ec75a946fcc6451f6` |
+| `purity-catalog.ts` | `eaa9942ffa425b8208aa2f2c3d5163ffdc9ef373` |
+| `valuation.ts` | `f09dbcfa018f30f39b7730d3ca1978e25a7f26af` |
+| `attribution.ts` | `0efd10fd12868e4fa145ab2c3ba3018961f3a14f` |
+| `lifecycle-reducer.ts` | `2acafe7cea8853df3496519fc5085bf851870e57` |
+| `rate-trust.ts` | `45e16a9563965ad34b57780b0bde62571efd4bfb` |
+| `rate-reference.ts` | `42f11dac8040eafbce82bac70a26c80a303d84a0` |
+| `metals/index.ts` | `fc9d51e5ce367740619c60504981f7637fbd6df6` |
+| `decimal.test.ts` | `e0220e446f34f68901dd2f75cf48a39b72b790ce` |
+| `purity-valuation.test.ts` | `d787694182ccd63b17faaa633b6ce1a88b40d15f` |
+| `attribution-postgres-parity.test.ts` | `b5f639c4e655e2c526dd73609762224b86a3618e` |
+| `lifecycle-rate-trust.test.ts` | `11118df5b86d2a39a38228ee3c5adfd754e1d9e3` |
+| `rate-reference-contract.test.ts` | `0ada9eb1ac53b87d625c5466853f68311cba2b35` |
+| `attribution-rounding-validation.test.ts` | `417871649e00fec790e7c767ec3db81e2c08bc9b` |
+
+The associated reviewer verification passed 7/7 Metals suites and 209/209 tests,
+and `npm run typecheck -w @monyvi/logic` passed. This snapshot remains dated
+evidence; any later source edit requires a new append-only supersession record.
