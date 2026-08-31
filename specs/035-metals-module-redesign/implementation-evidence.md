@@ -485,3 +485,23 @@ facade and lifecycle test are 116 and 211 lines respectively; the touched legacy
 `sync.test.ts` is 911 lines (907 before this four-line adapter-double addition) and no
 configured maximum-file-lines lint rule exists. No schema, migration, remote database,
 auth-path lock, GitHub-thread, or remote-data mutation is included.
+
+### PR #251 owner-marker write auth closure — 2026-09-01
+
+This append applies to exact head `be372cad0a5e6e42c9211e4525a50798139e025e`.
+`syncDatabase` now reasserts its captured authenticated user immediately after awaiting
+the adapter-local owner-marker write. If authentication switches during that metadata
+await, the original and every caller sharing the active sync promise reject with
+`sync_auth_scope_lost`; the marker may remain the original owner, which safely forces
+the next user to full-pull.
+
+Focused Red was 1 failed lifecycle suite: the original A caller resolved after a deferred
+marker write and an A-to-B switch. The new controllable lifecycle case holds
+`setLocal`, starts a concurrent B caller while the active promise is shared, releases the
+write, expects both callers to reject, verifies the A marker remains, then verifies a
+fresh B sync uses `null` and records B. Focused Green is 1/1 suite and 6/6 tests; broad
+sync Green is 10/10 suites and 81/81 tests. Exact mobile and logic TypeScript checks,
+changed-file lint, full repository lint (0 errors, 275 pre-existing warnings), and the
+900-line check pass: the changed sync facade is 117 lines and lifecycle test is 262 lines.
+No schema, migration, remote database, auth-path lock, GitHub-thread, or remote-data
+mutation is included.

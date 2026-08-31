@@ -55,6 +55,11 @@ interface OwnerMarkerHarness {
   readonly setLocal: jest.Mock;
 }
 
+interface DeferredMarkerWrite {
+  readonly release: () => void;
+  readonly started: Promise<void>;
+}
+
 const USER_A = "user-a";
 const USER_B = "user-b";
 const USER_C = "user-c";
@@ -95,6 +100,24 @@ function getUpdatedRows(
     { readonly updated?: readonly Record<string, unknown>[] }
   >;
   return changes[table]?.updated ?? [];
+}
+
+function deferMarkerWrite(harness: OwnerMarkerHarness): DeferredMarkerWrite {
+  let resolveStarted: () => void = () => undefined;
+  let resolveWrite: () => void = () => undefined;
+  const started = new Promise<void>((resolve) => {
+    resolveStarted = resolve;
+  });
+  const write = new Promise<void>((resolve) => {
+    resolveWrite = resolve;
+  });
+
+  harness.setLocal.mockImplementationOnce((): Promise<void> => {
+    resolveStarted();
+    return write;
+  });
+
+  return { started, release: resolveWrite };
 }
 
 describe("sync owner watermark lifecycle", () => {
@@ -185,6 +208,34 @@ describe("sync owner watermark lifecycle", () => {
     await expect(syncDatabase(harness.database)).resolves.toBeUndefined();
 
     expect(mockPullChanges).toHaveBeenCalledWith(INITIAL_WATERMARK, USER_B);
+    expect(harness.getOwner()).toBe(USER_B);
+  });
+
+  it("rejects shared callers when auth switches during the owner marker write", async () => {
+    const harness = createOwnerMarkerHarness(USER_A);
+    const deferredMarkerWrite = deferMarkerWrite(harness);
+    mockGetCurrentUserId.mockResolvedValue(USER_A);
+    mockSynchronize.mockImplementation(
+      async (callbacks: SynchronizeCallbacks): Promise<void> => {
+        await callbacks.pullChanges({ lastPulledAt: INITIAL_WATERMARK });
+      }
+    );
+
+    const userASync = syncDatabase(harness.database);
+    await deferredMarkerWrite.started;
+
+    mockGetCurrentUserId.mockResolvedValue(USER_B);
+    const sharedUserBSync = syncDatabase(harness.database);
+    deferredMarkerWrite.release();
+
+    await expect(userASync).rejects.toThrow("sync_auth_scope_lost");
+    await expect(sharedUserBSync).rejects.toThrow("sync_auth_scope_lost");
+    expect(harness.getOwner()).toBe(USER_A);
+    expect(mockSynchronize).toHaveBeenCalledTimes(1);
+
+    await expect(syncDatabase(harness.database)).resolves.toBeUndefined();
+
+    expect(mockPullChanges).toHaveBeenLastCalledWith(null, USER_B);
     expect(harness.getOwner()).toBe(USER_B);
   });
 

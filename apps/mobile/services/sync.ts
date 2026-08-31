@@ -88,6 +88,7 @@ export async function syncDatabase(
         });
         await assertExpectedSyncUser(userId);
         await database.adapter.setLocal(SYNC_OWNER_LOCAL_KEY, userId);
+        await assertExpectedSyncUser(userId);
         logger.debug("sync.completed");
       } catch (error) {
         const errorMessage = String(error);
