@@ -96,6 +96,20 @@ function fakeModel(
   return model;
 }
 
+function assertFakeRaw(
+  raw: Readonly<Model["_raw"]>
+): asserts raw is Readonly<Model["_raw"]> & Readonly<FakeRaw> {
+  const candidate = raw as unknown as Partial<FakeRaw>;
+  if (
+    typeof candidate.id !== "string" ||
+    (candidate.parent_id !== undefined &&
+      typeof candidate.parent_id !== "string") ||
+    (candidate.user_id !== undefined && typeof candidate.user_id !== "string")
+  ) {
+    throw new Error("invalid_fake_raw");
+  }
+}
+
 function envelope(): FinancialActionEnvelopeV1 {
   return {
     actionId: "018f0c7a-1234-7abc-8def-000000000001",
@@ -201,12 +215,12 @@ describe("financial action linked plan safety", () => {
         ]);
         expect(Object.isFrozen(input.cachedPreimages)).toBe(true);
         expect(Object.isFrozen(input.cachedPreimages[0]?.raw)).toBe(true);
+        const preimage = input.cachedPreimages[0];
+        if (!preimage) throw new Error("missing_preimage");
+        assertFakeRaw(preimage.raw);
         const preparedChild = input
           .preparedOperations[0] as unknown as FakeModel;
-        if (
-          input.cachedPreimages[0]?.raw.parent_id !==
-          preparedChild._raw.parent_id
-        ) {
+        if (preimage.raw.parent_id !== preparedChild._raw.parent_id) {
           throw new Error("ownership_failed");
         }
         return Promise.resolve();
