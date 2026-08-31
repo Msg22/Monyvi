@@ -1,5 +1,7 @@
 import { schema } from "@monyvi/db";
 
+export { METALS_ACTION_FRAGMENT_COLUMNS } from "./ownership-guards";
+
 import type {
   ChildTableConfigFor,
   ChildTableName,
@@ -22,7 +24,13 @@ export const DATE_ONLY_COLUMNS = [
   "snapshot_date",
 ] as const;
 
-export const TIMESTAMP_COLUMNS = ["created_at", "updated_at"] as const;
+export const TIMESTAMP_COLUMNS = [
+  "created_at",
+  "updated_at",
+  "occurred_at",
+  "captured_at",
+  "provider_observed_at",
+] as const;
 export const ALL_DATE_COLUMNS = [
   ...DATE_ONLY_COLUMNS,
   ...TIMESTAMP_COLUMNS,
@@ -41,7 +49,20 @@ export const EXCLUDED_TABLES = [
   "sms_review_draft_items",
   "dismissed_sms_fingerprints",
 ] as const;
-export const DEDICATED_SYNC_TABLES = new Set(["financial_action_groups"] as const);
+export const METALS_DEDICATED_SYNC_TABLES = [
+  "metal_holding_states",
+  "metal_action_evidence",
+  "metal_lifecycle_events",
+  "metal_rate_references",
+] as const;
+export const DEDICATED_SYNC_TABLES = new Set<string>([
+  "financial_action_groups",
+  ...METALS_DEDICATED_SYNC_TABLES,
+]);
+export const PULL_ONLY_SHARED_TABLES = new Set<string>([
+  "market_rates",
+  "market_rate_observations",
+]);
 export const SNAPSHOT_TABLES = [
   "daily_snapshot_assets",
   "daily_snapshot_balance",
@@ -73,7 +94,7 @@ export const CHILD_TABLE_NAMES = Object.keys(
 export const SYNCABLE_TABLES = Object.keys(schema.tables).filter(
   (table) =>
     !EXCLUDED_TABLES.includes(table as ExcludedTableName) &&
-    !DEDICATED_SYNC_TABLES.has(table as "financial_action_groups")
+    !DEDICATED_SYNC_TABLES.has(table)
 ) as SupabaseTablesNames[];
 
 export type SyncableTable = (typeof SYNCABLE_TABLES)[number];
