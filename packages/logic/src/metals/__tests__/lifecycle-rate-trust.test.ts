@@ -194,6 +194,26 @@ describe("provider-observation-time rate trust", () => {
     ).toEqual({ state: "unknown", ageMs: null });
   });
 
+  it.each([
+    ["NaN", Number.NaN],
+    ["positive Infinity", Number.POSITIVE_INFINITY],
+    ["negative", -1],
+  ] as const)("treats %s capture timestamp as unknown", (_case, capturedAt) => {
+    const { classifyRateTrust } = loadRateTrustApi();
+
+    expect(
+      classifyRateTrust(
+        {
+          valueDecimal: "100.25",
+          providerObservedAt: NOW - 1,
+          capturedAt,
+          quality: "valid",
+        },
+        NOW
+      )
+    ).toEqual({ state: "unknown", ageMs: null });
+  });
+
   it("treats exactly 24 hours old as fresh because only over 24 hours is stale", () => {
     const { classifyRateTrust } = loadRateTrustApi();
 

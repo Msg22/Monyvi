@@ -21,6 +21,9 @@ export function classifyRateTrust(
   if (!hasUsableRateValue(reference)) {
     return { state: "missing", ageMs: null };
   }
+  if (!Number.isFinite(reference.capturedAt) || reference.capturedAt < 0) {
+    return { state: "unknown", ageMs: null };
+  }
   if (
     typeof reference.providerObservedAt !== "number" ||
     !Number.isFinite(reference.providerObservedAt) ||
