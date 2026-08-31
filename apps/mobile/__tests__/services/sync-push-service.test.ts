@@ -158,6 +158,60 @@ describe("pushChanges", () => {
     expect(mockUpsert).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["disappears", null],
+    ["changes", "different-user"],
+  ])(
+    "fails when auth %s after an awaited remote upsert",
+    async (_case, finalUserId) => {
+      const executionOrder: string[] = [];
+      mockGetCurrentUserId
+        .mockImplementationOnce((): Promise<string> => {
+          executionOrder.push("initial-auth");
+          return Promise.resolve("current-user");
+        })
+        .mockImplementationOnce((): Promise<string | null> => {
+          executionOrder.push("final-auth");
+          return Promise.resolve(finalUserId);
+        });
+      mockUpsert.mockImplementationOnce(async (): Promise<{ error: null }> => {
+        executionOrder.push("upsert-start");
+        await Promise.resolve();
+        executionOrder.push("upsert-complete");
+        return { error: null };
+      });
+      const database = Object.create(null) as PushChangesDatabase;
+      const pushArgs: PushChangesArgs = {
+        changes: {
+          profiles: {
+            created: [
+              {
+                id: "profile-1",
+                user_id: "current-user",
+                deleted: false,
+              },
+            ],
+            updated: [],
+            deleted: [],
+          },
+        },
+        lastPulledAt: 0,
+      };
+
+      await expect(
+        pushChanges(database, pushArgs, "current-user")
+      ).rejects.toThrow(GENERIC_SYNC_ERROR_CODES.AUTH_SCOPE_LOST);
+
+      expect(executionOrder).toEqual([
+        "initial-auth",
+        "upsert-start",
+        "upsert-complete",
+        "final-auth",
+      ]);
+      expect(mockUpsert).toHaveBeenCalledTimes(1);
+    }
+  );
+
   it("allows an empty dedicated-table change set without generating a generic remote write", async () => {
     const database = Object.create(null) as PushChangesDatabase;
     const profile = {
