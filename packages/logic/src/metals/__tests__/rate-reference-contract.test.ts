@@ -140,6 +140,18 @@ describe("approved Metals rate-reference contract", () => {
     expect(validateAndNormalizeRateReference(input, expected)).toEqual({ available: false, reason });
   });
 
+  it.each([
+    ["direct", "9".repeat(51), "quote_per_base", "usd_per_currency_unit"],
+    ["inverse", "9".repeat(51), "base_per_quote", "currency_units_per_usd"],
+  ] as const)("rejects a 51-significant-digit %s rate before decimal arithmetic", (_case, valueDecimal, orientation, unit) => {
+    expect(
+      validateAndNormalizeRateReference(
+        reference({ valueDecimal, orientation, unit }),
+        CURRENT_EGP
+      )
+    ).toEqual({ available: false, reason: "invalid_value" });
+  });
+
   it.each([undefined, null, "bad-time", Number.NaN, Number.POSITIVE_INFINITY, 3_000] as const)(
     "keeps usable values available but provider time %p unknown",
     (providerObservedAt) => {

@@ -1,7 +1,11 @@
 import type { CurrencyType } from "@monyvi/db";
 
 import { SUPPORTED_CURRENCIES } from "../utils/currency-data";
-import { parseCanonicalDecimal, serializeDecimal } from "./decimal";
+import {
+  hasCanonicalDecimalPrecision,
+  parseCanonicalDecimal,
+  serializeDecimal,
+} from "./decimal";
 
 export type MetalRateRole =
   | "acquisition_metal"
@@ -255,7 +259,10 @@ function normalizeValue(
   reference: Readonly<Record<string, unknown>>
 ): string | null {
   try {
-    if (typeof reference.valueDecimal !== "string") {
+    if (
+      typeof reference.valueDecimal !== "string" ||
+      !hasCanonicalDecimalPrecision(reference.valueDecimal)
+    ) {
       return null;
     }
     const raw = parseCanonicalDecimal(reference.valueDecimal);

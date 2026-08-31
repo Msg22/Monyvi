@@ -34,22 +34,22 @@ function loadValuationApi(): {
 }
 
 const EXPECTED_CATALOG_V1 = [
-  { metal: "GOLD", label: "24K · 999.9", factorDecimal: "0.9999", catalogVersion: "1" },
-  { metal: "GOLD", label: "24K · 999", factorDecimal: "0.999", catalogVersion: "1" },
-  { metal: "GOLD", label: "995 bullion", factorDecimal: "0.995", catalogVersion: "1" },
-  { metal: "GOLD", label: "23.5K · 979.16", factorDecimal: "0.97916", catalogVersion: "1" },
-  { metal: "GOLD", label: "22K · 916.7", factorDecimal: "0.9167", catalogVersion: "1" },
-  { metal: "GOLD", label: "21K · 875", factorDecimal: "0.875", catalogVersion: "1" },
-  { metal: "GOLD", label: "18K · 750", factorDecimal: "0.75", catalogVersion: "1" },
-  { metal: "GOLD", label: "14K · 583.33", factorDecimal: "0.58333", catalogVersion: "1" },
-  { metal: "GOLD", label: "12K · 500", factorDecimal: "0.5", catalogVersion: "1" },
-  { metal: "GOLD", label: "9K · 375", factorDecimal: "0.375", catalogVersion: "1" },
-  { metal: "SILVER", label: "999.9 bullion", factorDecimal: "0.9999", catalogVersion: "1" },
-  { metal: "SILVER", label: "999 bullion", factorDecimal: "0.999", catalogVersion: "1" },
-  { metal: "SILVER", label: "925", factorDecimal: "0.925", catalogVersion: "1" },
-  { metal: "SILVER", label: "900", factorDecimal: "0.9", catalogVersion: "1" },
-  { metal: "SILVER", label: "800", factorDecimal: "0.8", catalogVersion: "1" },
-  { metal: "SILVER", label: "600", factorDecimal: "0.6", catalogVersion: "1" },
+  { code: "gold-9999", metal: "GOLD", labelKey: "purity_gold_9999", factorDecimal: "0.9999", catalogVersion: "1" },
+  { code: "gold-999", metal: "GOLD", labelKey: "purity_gold_999", factorDecimal: "0.999", catalogVersion: "1" },
+  { code: "gold-995", metal: "GOLD", labelKey: "purity_gold_995", factorDecimal: "0.995", catalogVersion: "1" },
+  { code: "gold-97916", metal: "GOLD", labelKey: "purity_gold_97916", factorDecimal: "0.97916", catalogVersion: "1" },
+  { code: "gold-9167", metal: "GOLD", labelKey: "purity_gold_9167", factorDecimal: "0.9167", catalogVersion: "1" },
+  { code: "gold-875", metal: "GOLD", labelKey: "purity_gold_875", factorDecimal: "0.875", catalogVersion: "1" },
+  { code: "gold-750", metal: "GOLD", labelKey: "purity_gold_750", factorDecimal: "0.75", catalogVersion: "1" },
+  { code: "gold-58333", metal: "GOLD", labelKey: "purity_gold_58333", factorDecimal: "0.58333", catalogVersion: "1" },
+  { code: "gold-500", metal: "GOLD", labelKey: "purity_gold_500", factorDecimal: "0.5", catalogVersion: "1" },
+  { code: "gold-375", metal: "GOLD", labelKey: "purity_gold_375", factorDecimal: "0.375", catalogVersion: "1" },
+  { code: "silver-9999", metal: "SILVER", labelKey: "purity_silver_9999", factorDecimal: "0.9999", catalogVersion: "1" },
+  { code: "silver-999", metal: "SILVER", labelKey: "purity_silver_999", factorDecimal: "0.999", catalogVersion: "1" },
+  { code: "silver-925", metal: "SILVER", labelKey: "purity_silver_925", factorDecimal: "0.925", catalogVersion: "1" },
+  { code: "silver-900", metal: "SILVER", labelKey: "purity_silver_900", factorDecimal: "0.9", catalogVersion: "1" },
+  { code: "silver-800", metal: "SILVER", labelKey: "purity_silver_800", factorDecimal: "0.8", catalogVersion: "1" },
+  { code: "silver-600", metal: "SILVER", labelKey: "purity_silver_600", factorDecimal: "0.6", catalogVersion: "1" },
 ];
 
 describe("Metals purity catalog v1", () => {
@@ -58,9 +58,10 @@ describe("Metals purity catalog v1", () => {
 
     expect(PURITY_CATALOG_VERSION).toBe("1");
     expect(
-      getPurityCatalog().map(({ metal, label, factorDecimal, catalogVersion }) => ({
+      getPurityCatalog().map(({ code, metal, labelKey, factorDecimal, catalogVersion }) => ({
+        code,
         metal,
-        label,
+        labelKey,
         factorDecimal,
         catalogVersion,
       }))
@@ -76,7 +77,7 @@ describe("Metals purity catalog v1", () => {
 
     const exact999 = loadPurityCatalogApi()
       .getPurityCatalog()
-      .find(({ metal, label }) => metal === "GOLD" && label === "24K · 999");
+      .find(({ code }) => code === "gold-999");
     expect(exact999).toBeDefined();
     if (exact999 === undefined) {
       throw new Error("Approved 24K · 999 catalog entry is missing");
@@ -85,13 +86,21 @@ describe("Metals purity catalog v1", () => {
     expect(getPurityEntry("GOLD", exact999.code)).toEqual({
       code: exact999.code,
       metal: "GOLD",
-      label: "24K · 999",
+      labelKey: "purity_gold_999",
       factorDecimal: "0.999",
       catalogVersion: "1",
     });
+    expect(resolvePuritySelection("GOLD", "gold-999")).toEqual({
+      available: true,
+      entry: exact999,
+    });
+    expect(resolvePuritySelection("GOLD", "24K · 999")).toEqual({
+      available: false,
+      reason: "unknown_purity",
+    });
     expect(resolvePuritySelection("GOLD", "24K")).toEqual({
       available: false,
-      reason: "ambiguous_purity",
+      reason: "unknown_purity",
     });
   });
 
@@ -99,9 +108,7 @@ describe("Metals purity catalog v1", () => {
     const { createPuritySnapshot, getPurityCatalog } = loadPurityCatalogApi();
     const { calculatePureGrams } = loadValuationApi();
 
-    const exact999 = getPurityCatalog().find(
-      ({ metal, label }) => metal === "GOLD" && label === "24K · 999"
-    );
+    const exact999 = getPurityCatalog().find(({ code }) => code === "gold-999");
     expect(exact999).toBeDefined();
     if (exact999 === undefined) {
       throw new Error("Approved 24K · 999 catalog entry is missing");
