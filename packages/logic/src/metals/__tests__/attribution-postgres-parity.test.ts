@@ -795,17 +795,21 @@ describe("rounding explanation and hand-derived PostgreSQL numeric compatibility
         decimalPlaces: 2,
       })
     ).toEqual({
-      combinedDecimal: "0.02",
-      displayedComponents: {
-        metalMovementDecimal: "0.00",
-        currencyMovementDecimal: "0.00",
-        purchaseCostDecimal: "0.00",
+      available: true,
+      value: {
+        combinedDecimal: "0.02",
+        displayedComponents: {
+          metalMovementDecimal: "0.00",
+          currencyMovementDecimal: "0.00",
+          purchaseCostDecimal: "0.00",
+        },
+        displayedComponentSumDecimal: "0.00",
+        roundingDifferenceMinorUnits: "2",
+        requiresRoundingExplanation: true,
       },
-      displayedComponentSumDecimal: "0.00",
-      roundingDifferenceMinorUnits: "2",
-      requiresRoundingExplanation: true,
     });
   });
+
 
   it("converts combined P/L and every component through one exact display FX basis before final rounding", () => {
     const { convertAttributionForDisplay } = loadAttributionApi();

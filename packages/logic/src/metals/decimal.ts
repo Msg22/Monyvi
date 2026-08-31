@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 
 const CANONICAL_DECIMAL_PATTERN = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
 const INTEGER_PATTERN = /^-?(?:0|[1-9]\d*)$/;
+const ENGLISH_GROUPED_DECIMAL_PATTERN = /^-?(?:0|[1-9]\d{0,2})(?:,\d{3})+(?:\.\d+)?$/;
 const ARABIC_INDIC_ZERO = "٠".charCodeAt(0);
 const InternalDecimal = Decimal.clone({
   precision: 50,
@@ -92,12 +93,8 @@ export function parseLocalizedDecimal(value: string): ExactDecimalValue {
 
   const normalizedDigits = Array.from(value, normalizeLocalizedCharacter).join("");
   const withoutArabicGrouping = normalizedDigits.replaceAll("٬", "");
-  const normalizedSeparator =
-    withoutArabicGrouping.includes(",") && !withoutArabicGrouping.includes(".")
-      ? withoutArabicGrouping.replace(",", ".")
-      : withoutArabicGrouping;
-
-  return parseCanonicalDecimal(normalizedSeparator.replace("٫", "."));
+  const withStandardDecimal = withoutArabicGrouping.replace("٫", ".");
+  return parseCanonicalDecimal(normalizeEnglishSeparators(withStandardDecimal));
 }
 
 export function serializeDecimal(value: ExactDecimalInput): string {
@@ -198,6 +195,23 @@ function normalizeLocalizedCharacter(character: string): string {
   }
 
   return character;
+}
+
+function normalizeEnglishSeparators(value: string): string {
+  if (!value.includes(",")) {
+    return value;
+  }
+
+  const commaCount = value.split(",").length - 1;
+  const usesGrouping = value.includes(".") || commaCount > 1;
+  if (!usesGrouping) {
+    return value.replace(",", ".");
+  }
+  if (!ENGLISH_GROUPED_DECIMAL_PATTERN.test(value)) {
+    throw new Error("Expected valid English thousands grouping");
+  }
+
+  return value.replaceAll(",", "");
 }
 
 function assertDecimalPlaces(decimalPlaces: number): void {

@@ -276,15 +276,14 @@ function createNormalizedSnapshot(
     !isSupportedRole(reference.role) ||
     !isSupportedInstrument(reference.instrumentCode) ||
     !isValidTimestamp(reference.capturedAt) ||
-    typeof reference.valueDecimal !== "string" ||
-    !(typeof reference.source === "string" || reference.source === null)
+    typeof reference.valueDecimal !== "string"
   ) {
     return null;
   }
   const common = {
     valueDecimal: reference.valueDecimal,
     providerObservedAt,
-    source: reference.source,
+    source: typeof reference.source === "string" ? reference.source : null,
     quality: "valid" as const,
     capturedAt: reference.capturedAt,
     capturedFreshness,

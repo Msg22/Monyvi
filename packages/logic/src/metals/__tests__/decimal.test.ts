@@ -168,6 +168,24 @@ describe("exact Metals decimal contract", () => {
     expect(serializeDecimal(parseLocalizedDecimal(input))).toBe(expected);
   });
 
+  it.each([
+    ["1,234.56", "1234.56"],
+    ["12,345,678.90", "12345678.9"],
+  ])("normalizes grouped English decimal %s to %s", (input, expected) => {
+    const { parseLocalizedDecimal, serializeDecimal } = loadDecimalApi();
+
+    expect(serializeDecimal(parseLocalizedDecimal(input))).toBe(expected);
+  });
+
+  it.each(["12,34.56", "1,23,4.56", "1,2345.67", "1,234,56"])(
+    "rejects malformed English grouping %s",
+    (input) => {
+      const { parseLocalizedDecimal } = loadDecimalApi();
+
+      expect(() => parseLocalizedDecimal(input)).toThrow();
+    }
+  );
+
   it("compares huge and sub-minor decimals without number conversion", () => {
     const { compareDecimal } = loadDecimalApi();
 

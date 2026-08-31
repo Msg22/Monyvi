@@ -390,7 +390,15 @@ export function roundAttributionForDisplay(input: {
   readonly combinedDecimal: string;
   readonly components: Readonly<Record<string, string>>;
   readonly decimalPlaces: number;
-}): RoundedAttribution {
+}): Availability<RoundedAttribution> {
+  const canonicalComponentSum = Object.values(input.components).reduce(
+    (sum, value) => sum.plus(value),
+    parseCanonicalDecimal("0")
+  );
+  if (compareDecimal(input.combinedDecimal, canonicalComponentSum) !== 0) {
+    return { available: false, reason: "attribution_components_mismatch" };
+  }
+
   const combinedDecimal = roundDecimal(
     input.combinedDecimal,
     input.decimalPlaces
@@ -419,13 +427,19 @@ export function roundAttributionForDisplay(input: {
     difference,
     input.decimalPlaces
   );
+  if (compareDecimal(roundingDifferenceMinorUnits, "2") > 0) {
+    return { available: false, reason: "attribution_components_mismatch" };
+  }
 
   return {
-    combinedDecimal,
-    displayedComponents,
-    displayedComponentSumDecimal,
-    roundingDifferenceMinorUnits,
-    requiresRoundingExplanation: !difference.isZero(),
+    available: true,
+    value: {
+      combinedDecimal,
+      displayedComponents,
+      displayedComponentSumDecimal,
+      roundingDifferenceMinorUnits,
+      requiresRoundingExplanation: !difference.isZero(),
+    },
   };
 }
 
@@ -466,18 +480,15 @@ export function convertAttributionForDisplay(
     }),
     {}
   );
-  return {
-    available: true,
-    value: roundAttributionForDisplay({
-      combinedDecimal: serializeDecimal(
-        parseCanonicalDecimal(input.attribution.value.combinedDecimal).times(
-          displayFactor
-        )
-      ),
-      components: convertedComponents,
-      decimalPlaces: input.decimalPlaces,
-    }),
-  };
+  return roundAttributionForDisplay({
+    combinedDecimal: serializeDecimal(
+      parseCanonicalDecimal(input.attribution.value.combinedDecimal).times(
+        displayFactor
+      )
+    ),
+    components: convertedComponents,
+    decimalPlaces: input.decimalPlaces,
+  });
 }
 
 function calculateCoreComponents(input: {

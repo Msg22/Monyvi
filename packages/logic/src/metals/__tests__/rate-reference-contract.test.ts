@@ -150,6 +150,20 @@ describe("approved Metals rate-reference contract", () => {
     }
   );
 
+  it.each([
+    ["missing", (() => {
+      const raw = { ...reference() };
+      Reflect.deleteProperty(raw, "source");
+      return raw;
+    })()],
+    ["non-string", reference({ source: 42 })],
+  ] as const)("keeps valid rates with %s provenance and normalizes source to null", (_case, raw) => {
+    expect(validateAndNormalizeRateReference(raw, CURRENT_EGP)).toMatchObject({
+      available: true,
+      value: { source: null },
+    });
+  });
+
   it("returns a detached immutable snapshot and never mutates raw evidence", () => {
     const raw = { ...reference(), valueDecimal: "50", unit: "currency_units_per_usd", orientation: "base_per_quote" };
     const result = validateAndNormalizeRateReference(raw, CURRENT_EGP);
