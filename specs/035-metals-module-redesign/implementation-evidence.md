@@ -299,13 +299,18 @@ sync while leaving that foreign root dirty. An independently found auth-loss tes
 requires `sync_push_auth_scope_lost` if auth disappears before push, so no unsent
 generic row can be acknowledged.
 
-Linked operation plans now require separate cached-preimage and prepared-postimage
-ownership validators. Cached ownership runs before `prepareOperations()` can rewrite
-an owner; prepared validation receives the exact cached models and prepared operations
-after preparation so domain implementations can recheck direct owners and immutable
-owned-parent links. Auth is reasserted after each asynchronous validator, cached state
-is restored before commit on failure, and replay invokes neither validator nor
-preparation.
+This rejected-ID contract supersedes the earlier dated generic-push throw and
+related manual-plan wording above; those lines remain only as historical evidence.
+
+Linked operation plans now separate genuine prepared creates from declarative
+existing-model operations and require separate cached-preimage and prepared-postimage
+ownership validators. The repository derives every cached model from the existing
+operation descriptors, validates and snapshots those preimages, and only then invokes
+their update or delete preparation. Prepared validation receives the exact cached
+models and prepared operations so domain implementations can recheck direct owners and
+immutable owned-parent links. Auth is reasserted after each asynchronous validator,
+cached state is restored before commit on failure, and replay invokes neither validator
+nor existing-model preparation.
 
 Focused Red, rerun with `--no-watchman` after the Windows Watchman pipe failed before
 test execution: 4/4 suites failed with 8 failed and 61 passed of 69 tests. Failures
@@ -317,6 +322,15 @@ sync Green is 9/9 suites and 103/103 tests; mobile typecheck passes. No schema, 
 changed-file lint passes, and full repository lint reports 0 errors with 272 pre-existing
 warnings. No schema, migration, remote database mutation, dedicated synchronizer,
 account-guard enablement, or task checkbox change is included.
+
+Current-head follow-up Red failed 1 of 33 foundation tests because a foreign existing
+model omitted from the declared cached preimages could rewrite its owner and reach the
+batch. Final Green replaces arbitrary existing-model preparation with repository-owned
+declarative descriptors: focused foundation 33/33 and the relevant foundation/sync set
+9/9 suites, 104/104 tests. Mobile typecheck and changed-file lint pass; full repository
+lint reports 0 errors with 272 pre-existing warnings; `git diff --check` passes. The
+current manual review must verify every existing descriptor is derived into the cached
+validation/snapshot set before repository-controlled preparation.
 
 Manual plan: inspect callback order and verify cached validation precedes preparation;
 inspect generic push and verify all dedicated created, updated, and deleted IDs are

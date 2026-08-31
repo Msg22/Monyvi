@@ -260,11 +260,13 @@ scope and reasserts that scope immediately before returning or mutating the root
 durable outcome. A changed, absent, or foreign auth scope returns no action data and
 cannot clear a rejection or advance recovery.
 
-Every linked local operation plan validates the exact cached model preimages before
-`prepareOperations()` can mutate them, then separately validates the exact cached
-postimages, prepared operations, and owned-parent links before the atomic batch. Both
-validators are mandatory and auth is reasserted after each asynchronous validation.
-Replay invokes neither preparation nor either ownership validator.
+Every linked local operation plan separates genuine prepared creates from declarative
+existing-model operations. The repository derives every existing preimage from those
+descriptors, validates and snapshots the exact models, and only then invokes their
+update or delete preparation. It separately validates the resulting postimages,
+prepared operations, and owned-parent links before the atomic batch. Both validators
+are mandatory and auth is reasserted after each asynchronous validation. Replay invokes
+neither existing-model preparation nor either ownership validator.
 
 Action roots are never soft-deleted by product behavior. Their required `deleted` column
 remains `false` solely for the shared sync-row convention; deleting a holding is a
