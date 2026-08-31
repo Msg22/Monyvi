@@ -475,6 +475,12 @@ Business rules:
 - Edit holding is one form with one direct `Save changes` action. Material
   differences reveal previous/current facts, required reason, and a live
   consequence summary; there is no separate correction-review route.
+- Preserved legacy holdings with unavailable exact weight, purity tuple, or
+  total purchase price remain visible and show those saved facts as not recorded.
+  Calculations that require a missing fact are unavailable and must never fall
+  back to compatibility numbers. A material correction of such a holding must
+  supply the complete valid exact fact set atomically; metadata-only edits do not
+  invent facts.
 - Purchase price means the total amount paid, including workmanship, premium,
   and other acquisition costs.
 - Effective holding state is Active, Sold, or Disposed. Creation, material
@@ -606,12 +612,14 @@ introduce a new calculation or product decision.
   preferred currency `D`, display canonical amount `Y_P` as
   `Y_P × x_{P,d} ÷ x_{D,d}`. Use the same current observed FX basis for the
   combined value and every component; never rewrite canonical historical facts.
-- Combined P/L is available only with a positive known all-in purchase cost and
-  every required current or terminal conversion fact. Missing, zero, or
-  ambiguous cost makes P/L unavailable, never a free acquisition. Detailed
-  attribution is unavailable without required historical references. A combined
-  result may still be shown only when recorded facts derive it without
-  assumptions, with an explanation that its breakdown is unavailable.
+- Combined P/L is available only with exact positive weight, a complete valid
+  purity tuple, a positive known all-in purchase cost, and every required current
+  or terminal conversion fact. Missing, invalid, zero, ambiguous, or legacy-null
+  required exact facts make only dependent value, P/L, or attribution unavailable,
+  never a free acquisition or hidden holding. Detailed attribution is unavailable
+  without required historical references. A combined result may still be shown
+  only when recorded facts derive it without assumptions, with an explanation
+  that its breakdown is unavailable.
 - Every acquired, corrected, sold, or attributed calculation preserves each
   consumed metal/FX reference's numeric value, unit, orientation, provider
   observation time, source, source-reported quality, and captured freshness.
@@ -1246,7 +1254,14 @@ Business rules:
   Wins reconciliation.
 - A grouped lifecycle or balance-changing financial action must use one generic
   owner-scoped financial-action root/outbox with stable `action_id`, immutable
-  payload hash, expected financial revision, and generic immutable account effects.
+  payload hash, durable state/outcome, and generic immutable account effects.
+  Expected, accepted, and canonical revisions are canonical unsigned-integer
+  strings bounded to PostgreSQL signed-bigint max `9223372036854775807`; invalid
+  strings are rejected before casting and max-revision increments are rejected
+  instead of overflowing. Account guard/result/evidence arrays contain each
+  affected account exactly once and use deterministic ascending account-ID order
+  for payload hashing, row locks, RPC outcomes, and reconciliation. Transfers
+  guard both source and destination accounts.
   Transactions, transfers, recurring payments, SMS, and Metals reuse this protocol;
   a domain may link its own evidence but must not create a competing account outbox.
   The complete group synchronizes through dedicated action sync and one atomic server

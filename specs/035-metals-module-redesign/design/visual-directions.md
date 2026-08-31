@@ -50,8 +50,8 @@ noncanonical; Screen 19 is backlog only.
   and Undo use focused confirmation sheets. Reconciliation is automatic; no user
   version-selection or review-stage screen exists.
 - Visible copy avoids `unrealized`, `realized P/L`, and `observed`; use simple
-  `since purchase`, `profit from sold metals`, `Rates updated`, and explicit
-  unavailable/stale/unknown wording.
+  `since purchase`, `profit from sold metals`, `loss from sold metals`, `Rates updated`,
+  and explicit unavailable/stale/unknown wording.
 
 ## Required state and responsive proof
 

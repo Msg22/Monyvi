@@ -27,9 +27,12 @@ Add, material correction, Sell, No Longer, Delete, Undo, and linked account
 effects use the generic owner-scoped financial-action root/outbox for stable
 `action_id`, immutable payload hash, durable state/outcome, and replay. Metals domain
 evidence linked by `action_id` owns the expected holding revision. Only actions with
-an account effect add the root's optional expected-account-revision guard. One domain
-RPC validates and commits the complete group atomically. Rejected optimistic groups
-reconcile exactly once.
+account effects add an ordered guard for each affected account; transfers guard both
+source and destination accounts. Account guard/result/evidence arrays use the same
+deterministic ascending account-ID order for payload hashing, row locks, outcomes, and
+reconciliation. One domain RPC validates signed-bigint-bounded canonical revision
+strings and commits the complete group atomically, rejecting invalid revisions and
+max-revision overflow. Rejected optimistic groups reconcile exactly once.
 
 Sale account credit directly changes `accounts.balance` and records immutable
 linked evidence. This path is not safe until issue #242 satisfies the complete
@@ -75,7 +78,7 @@ implementation dependency._
 | Documented business rules | Pass | `business-decisions.md` records Gold/Silver scope, purity catalog, lifecycle, rate trust, exact arithmetic, account credit, and reversal rules. |
 | Ownership | Pass | `assets` and new root records carry `user_id`; `asset_metals` retains strict inherited ownership through its immutable parent. |
 | Exact arithmetic | Pass | Shared Decimal.js clone uses precision 50 and half-even final rounding; authoritative boundaries use canonical strings or minor units. |
-| Account credit integrity | Conditional pass | Direct balance mutation is approved only after #242 passes its revision/CAS, writer-guard, sync, cutover, and regression contract. Metals validates expected holding and account revisions in one RPC. |
+| Account credit integrity | Conditional pass | Direct balance mutation is approved only after #242 passes its revision/CAS, writer-guard, sync, cutover, and regression contract. Metals validates expected holding revision plus ordered per-account guards/results in one RPC. |
 | Sync failure safety | Pass by design | RPC, pull, or push failure remains failure; no watermark advances and no local work becomes synchronized falsely. |
 | Package boundaries | Pass by design | Pure calculations live in `packages/logic`; DB schema/models in `packages/db`; commands/read models/sync orchestration in `apps/mobile/services`. |
 | Visible design approval | Pass | Eight approved canonical visuals are promoted: Home Concept C, 02, 03, 05 Add, 08 Edit, 14 Delete, 15 History, and 17 Disposed detail. |
@@ -119,7 +122,8 @@ update the selected account balance in the same local writer and server RPC as t
 holding transition.
 Generic `account_financial_effects` stores immutable linked evidence and unique effect
 identity; it is not an ordinary income transaction. Server acceptance requires
-matching expected holding and account revisions.
+matching expected holding revision and one matching bounded revision guard per affected
+account.
 
 Full #242 completion at T033 must:
 
@@ -151,7 +155,7 @@ Undo, and unrelated Metals work to develop and stack. Merge/cutover order remain
 - Server repeats return the recorded outcome for identical `action_id` and
   payload hash.
 - Stale holding or account revision rejects the candidate and returns canonical
-  revision/evidence for deterministic local reconciliation.
+  holding evidence plus ordered account evidence for deterministic local reconciliation.
 - Generic sync continues for unrelated records and canonical pulls, but must not
   independently activate action-owned fragments.
 
@@ -232,8 +236,9 @@ Each slice is independently mergeable after its tests pass.
    holding revision, non-account lifecycle RPC/CAS, matching WatermelonDB artifacts,
    and deterministic backfill. This work may develop and stack while the full #242 lane
    continues.
-4. Merge/cut over `069_account_financial_effects` only after `068`: account revisions,
-   generic immutable account effects, exhaustive writer protection, protected sync,
+4. Merge/cut over `069_account_financial_effects` only after `068`: signed-bigint
+   bounded account revisions, ordered per-account guards/results/evidence, generic
+   immutable account effects, exhaustive writer protection, protected sync,
    idempotent account CAS, and exactly-once account compensation. T033 is the full #242
    completion gate.
 5. Enable only credited Sale, credited Undo, and account compensation/replacement
@@ -289,7 +294,7 @@ Each slice is independently mergeable after its tests pass.
 | Complexity | Why required | Simpler alternative rejected |
 | --- | --- | --- |
 | Domain-specific CAS beside generic sync | Competing lifecycle/account actions must choose one atomic winner across devices. | Per-table LWW can accept fragments or overwrite balances. |
-| Holding and account revisions | One action can change both ownership and cash. | Holding-only CAS leaves account races unresolved. |
+| Holding and per-account revisions | One action can change ownership plus one or more cash accounts, including transfer source and destination. | Holding-only or single-account CAS leaves account races unresolved. |
 | Append-only evidence plus current projection | Corrections, terminal events, Undo, Delete audit, and compensation must stay deterministic. | Mutating only current rows destroys reversal and conflict evidence. |
 | Deterministic RPC harness | Concurrency, replay, rollback, and compensation cannot be scheduled honestly through Maestro. | UI-only tests cannot prove transactional guarantees. |
 

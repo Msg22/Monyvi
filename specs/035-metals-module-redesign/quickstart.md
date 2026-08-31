@@ -57,7 +57,9 @@ npm run lint
   account effects delivered by #242. Metals adds linked holding lifecycle/rate evidence,
   not a competing account outbox.
 - Add the CAS RPC and deterministic harness tests for ownership, replay, hash mismatch,
-  stale holding/account revisions, rollback, and one winner.
+  signed-bigint-bounded canonical revisions, ordered per-account guards/evidence,
+  stale holding/account revisions, source/destination transfer guards, rollback, and
+  one winner.
 - Run `npm run db:migrate`; commit both migration and generated schema only during the
   later authorized implementation/commit phase.
 

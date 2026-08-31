@@ -38,7 +38,8 @@
 | Net proceeds | Net proceeds | صافي الحصيلة |
 | Current value | Current value | القيمة الحالية |
 | Active performance | {{signedAmount}} since purchase | {{signedAmount}} منذ الشراء |
-| Sold-metal performance | {{amount}} profit/loss from sold metals | {{amount}} ربح/خسارة من المعادن المباعة |
+| Sold-metal profit | {{amount}} profit from sold metals | {{amount}} ربح من المعادن المباعة |
+| Sold-metal loss | {{amount}} loss from sold metals | {{amount}} خسارة من المعادن المباعة |
 | Gain / Loss | Gain / Loss | ربح / خسارة |
 | Metal movement | Metal movement | أثر حركة سعر المعدن |
 | Currency movement | Currency movement | أثر حركة سعر العملة |
@@ -129,6 +130,7 @@ Do not shorten **Dispose** to “Remove,” “Delete,” or `حذف`. Do not us
 - **Locked identity:** Metal type remains visible but can’t be changed. / يظل نوع المعدن ظاهراً، لكن لا يمكن تغييره.
 - **Direct metadata save:** Compare fields with their saved values. When only Name or Notes changed, use Save changes / حفظ التغييرات. Do not show a correction reason or intermediate step.
 - **Material correction:** Any difference in Weight, Purity, Physical form, Total purchase price, Purchase currency, or Purchase date shows that field’s persisted previous and current values inline, reveals required Correction reason / سبب التصحيح, and reveals a compact live `What will change` / ما الذي سيتغير section containing only affected facts and consequences. Keep all changes and submission in the same form. If every material field returns to its saved value, hide the previous-value cues, `What will change`, and Correction reason while retaining remaining Name or Notes changes.
+- **Legacy unavailable facts:** Show an unavailable saved Weight, Purity, or Total purchase price as `Not recorded` / `غير مسجل`, never as zero. Before saving any material correction, require valid values for every unavailable required exact fact. Explain: `Some older holding details are missing. Complete Weight, Purity, and Total purchase price to save this correction.` / `بعض تفاصيل الحيازة القديمة مفقودة. أكمل الوزن والنقاوة وإجمالي سعر الشراء لحفظ هذا التصحيح.` Metadata-only Name/Notes saves remain available and do not invent those facts.
 - **Locked metal guidance:** Metal can’t be changed. If you chose the wrong metal, use Delete holding, then add the correct holding. / لا يمكن تغيير المعدن. إذا اخترت المعدن الخطأ، استخدم حذف الحيازة، ثم أضف الحيازة الصحيحة.
 - **Live-summary variables:** Physical-form-only: `Physical form: {{previousPhysicalForm}} → {{currentPhysicalForm}}`; `Current value stays {{amount}}.`; `Your {{profitOrLoss}} since purchase stays {{amount}}.`; `The holding image and description will update.`; `This correction will appear in History.` Financial changes: `Current value: {{previousCurrentValue}} → {{currentCurrentValue}}`; `{{previousProfitOrLoss}} since purchase: {{previousResult}} → {{currentProfitOrLoss}} since purchase: {{currentResult}}`. Preserve explicit stale, unknown, or unavailable-rate status instead of a fabricated figure.
 - **Actions:** Save changes / حفظ التغييرات (single primary commit); Cancel / إلغاء. No intermediate action or navigation step.
@@ -197,7 +199,8 @@ Do not shorten **Dispose** to “Remove,” “Delete,” or `حذف`. Do not us
 | Invalid rate | Rates: this rate can’t be used | أسعار السوق: لا يمكن استخدام هذا السعر |
 | Refresh failed with cache | Rates: couldn’t refresh. Showing the last available rate. | أسعار السوق: تعذر التحديث. نعرض آخر سعر متاح. |
 | Retry refresh | Retry refresh | أعد محاولة التحديث |
-| P/L unavailable | Profit/loss unavailable because required rate or historical reference is missing. | الربح أو الخسارة غير متاحين لأن سعراً مطلوباً أو مرجعاً تاريخياً مفقود. |
+| P/L unavailable — purchase cost | Profit/loss unavailable because the total purchase price is missing or unclear. Correct the holding details to add it. | الربح أو الخسارة غير متاحين لأن إجمالي سعر الشراء مفقود أو غير واضح. صحح تفاصيل الحيازة لإضافته. |
+| P/L unavailable — rate/reference | Profit/loss unavailable because a required rate or historical reference is missing. | الربح أو الخسارة غير متاحين لأن سعراً مطلوباً أو مرجعاً تاريخياً مفقود. |
 | Detail unavailable, combined available | Breakdown unavailable. Combined result is based on recorded facts. | التفصيل غير متاح. النتيجة الإجمالية مبنية على البيانات المسجلة. |
 | Rounding difference | Displayed parts may differ from the total by up to {{amount}} because each value is rounded for display. | قد يختلف مجموع الأجزاء المعروضة عن الإجمالي بما يصل إلى {{amount}} بسبب تقريب كل قيمة للعرض. |
 
@@ -269,7 +272,8 @@ All figures need a full text equivalent; do not rely on color, icon, strikethrou
 | --- | --- | --- |
 | Portfolio total | Metals portfolio value {{amount}}. {{status}}. | قيمة محفظة المعادن {{amount}}. الحالة: {{status}}. |
 | Active performance | {{signedAmount}} since purchase. {{trust}}. | {{signedAmount}} منذ الشراء. {{trust}}. |
-| Sold-metal performance | {{amount}} {{profitOrLoss}} from sold metals. | {{amount}} {{profitOrLoss}} من المعادن المباعة. |
+| Sold-metal profit | {{amount}} profit from sold metals. | {{amount}} ربح من المعادن المباعة. |
+| Sold-metal loss | {{amount}} loss from sold metals. | {{amount}} خسارة من المعادن المباعة. |
 | Rate | {{metal}} rate: {{amount}} USD per pure gram. {{freshness}}. Source: {{source}}. Rates updated {{dateTime}}. | سعر {{metal}}: {{amount}} دولار أمريكي لكل غرام نقي. {{freshness}}. المصدر: {{source}}. تم تحديث الأسعار في {{dateTime}}. |
 | Unavailable value | Current value unavailable. {{reason}}. Holding facts are still available. | القيمة الحالية غير متاحة. {{reason}}. بيانات الحيازة ما زالت متاحة. |
 | Filter | {{filterName}} filter, {{selectedState}}, {{count}} holdings. | عامل التصفية {{filterName}}، {{selectedState}}، {{count}} حيازة. |

@@ -5,9 +5,10 @@
 - WatermelonDB is the user-facing source of truth; every command commits locally first.
 - Canonical decimal values are plain, non-exponent strings locally and PostgreSQL `numeric` remotely.
 - Posted money uses integer minor units represented as strings locally and `bigint` remotely.
-- Every financial revision is `"0"` or a non-zero ASCII digit followed by ASCII digits,
-  at most 50 digits, in local models and all command/RPC/reconciliation JSON. It is
-  never a JavaScript number; PostgreSQL validates and stores it as `bigint`.
+- Every financial revision is `"0"` or a positive no-leading-zero ASCII integer no
+  greater than PostgreSQL signed-bigint max `9223372036854775807`, in local models and
+  all command/RPC/reconciliation JSON. It is never a JavaScript number; PostgreSQL
+  validates grammar and range before storing it as `bigint`.
 - Every new syncable root table includes `id`, `user_id`, `created_at`, `updated_at`, and `deleted`.
 - `asset_metals` keeps inherited ownership through immutable `assets.id`; every read, write, pull, push, RLS policy, and RPC validates the parent owner.
 - Append-only evidence is never edited or hard-deleted by ordinary product actions.
@@ -22,13 +23,18 @@ New columns:
 
 | Column | Local / remote | Rule |
 | --- | --- | --- |
-| `purchase_price_decimal` | text / numeric | Authoritative total paid, including premium/workmanship |
+| `purchase_price_decimal` | text nullable / numeric nullable | Authoritative positive total paid, including premium/workmanship; null only for preserved legacy-unavailable input |
 | `purchase_currency` | text / text | ISO currency code |
 | `acquisition_action_id` | text nullable / uuid nullable | Add/material-correction action whose role-specific acquisition reference set supports the current acquisition projection; retained canonically only when accepted |
 
 The existing numeric `purchase_price` remains compatibility-only after backfill.
 Name and notes are independent metadata eligible for partial LWW. Purchase facts are
 financial facts and may change only through an accepted material-correction action.
+New Add and every accepted material correction require a positive exact purchase price
+and every other required acquisition fact. A missing, invalid, zero, or ambiguous
+legacy purchase price backfills to null rather than a fabricated value; calculations
+that require cost remain unavailable until a material correction supplies the complete
+valid exact fact set.
 `acquisition_action_id` links the current acquisition projection to one action-owned
 reference set; it does not duplicate reference values or collapse Metal and currency
 evidence into one row. That action's `metal_rate_references` children independently
@@ -44,16 +50,20 @@ New columns:
 
 | Column | Local / remote | Rule |
 | --- | --- | --- |
-| `weight_grams_decimal` | text / numeric | Positive canonical decimal |
-| `purity_code` | text / text | Stable catalog member |
-| `purity_factor_decimal` | text / numeric | Authoritative exact factor in the current projection; replaceable only by an accepted material correction |
-| `purity_catalog_version` | text / text | Catalog version in the current projection |
+| `weight_grams_decimal` | text nullable / numeric nullable | Positive canonical decimal; null only for preserved legacy-unavailable input |
+| `purity_code` | text nullable / text nullable | Stable catalog member; null only as part of a wholly unavailable legacy purity tuple |
+| `purity_factor_decimal` | text nullable / numeric nullable | Authoritative exact factor in the current projection; replaceable only by an accepted material correction; null only with the unavailable legacy tuple |
+| `purity_catalog_version` | text nullable / text nullable | Catalog version in the current projection |
 
 `purity_code`, `purity_catalog_version`, and `purity_factor_decimal` are one
 authoritative current projection tuple on `asset_metals`; no purity catalog source
-exists on `assets`. Add sets the tuple and only an accepted material-correction action
-may atomically replace it. Immutable before/after fact sets, including both purity
-tuples and their catalog snapshots, remain in append-only lifecycle/action evidence.
+exists on `assets`. The three columns are either all present and valid or all null for
+a preserved legacy row without one unique catalog match. Add sets a complete tuple and
+only an accepted material-correction action may atomically replace it. Any material
+correction of a legacy-incomplete holding must also replace every unavailable required
+exact weight, purity, and acquisition fact, so the accepted current projection is
+complete. Immutable before/after fact sets, including null legacy facts and the complete
+replacement purity tuple/catalog snapshot, remain in append-only lifecycle/action evidence.
 Later catalog edits never rewrite either current or historical snapshots.
 `purity_factor_decimal` is the authoritative exact persisted factor; legacy numeric
 `purity_fraction` is compatibility-only after backfill. `metal_type` is limited to
@@ -117,10 +127,10 @@ persistence against this root.
 | `domain_reference_id` | text/uuid | Link to owning domain evidence |
 | `payload_json` | text/jsonb | Canonical immutable payload |
 | `payload_hash` | text | SHA-256 of canonical payload envelope |
-| `expected_account_revision` | text / bigint nullable | Canonical unsigned-integer string (`"0"` or non-zero ASCII digit plus digits), bounded to 50 digits; local/RPC value is never a JavaScript number; null-only in Slice 3A; required iff account effect exists |
+| `account_guards_json` | text / jsonb | Canonical array of unique `{accountId, expectedRevision}` entries sorted by ascending canonical account ID; empty in Slice 3A or when no account effect exists; one entry per affected account when effects exist |
 | `state` | text | State machine below |
 | `server_outcome` | text nullable | accepted, idempotent, stale, rejected |
-| `outcome_json` | text/jsonb nullable | Canonical durable replay outcome, including independent nullable holding/account winner IDs plus per-resource canonical revisions/evidence hashes for stale results |
+| `outcome_json` | text/jsonb nullable | Canonical durable replay outcome, including independent nullable holding winner evidence plus canonical account result/evidence arrays in account-ID order |
 | `rejection_code` | text nullable | Stable internal code |
 | standard sync columns | | Required |
 
@@ -128,9 +138,11 @@ Indexes: unique `(user_id,action_id)`; `(user_id,state,updated_at)`;
 `(user_id,domain,created_at)`.
 
 Holding-specific expected/canonical revision, target, event kind, and lifecycle links
-belong to Metals domain evidence, never the generic root. The optional expected account
-revision is the root's only revision guard and remains null unless a generic account
-effect exists.
+belong to Metals domain evidence, never the generic root. `account_guards_json` is the
+root's account-revision guard set. Every account effect has exactly one matching guard,
+every guard names an affected account, and duplicate account IDs are forbidden. A
+transfer therefore guards both source and destination; a credited Metals action has one
+guard; an uncredited Metals action has an empty array.
 
 
 A server `rejected` outcome after `local_complete` is never final success: preserve
@@ -161,7 +173,8 @@ Immutable business evidence.
 Fields: `id`, `user_id`, `holding_id`, `action_id`, `kind`,
 `occurred_at`, `payload_json`, `predecessor_event_id`,
 `reverses_event_id`, `is_effective`, `is_history_visible`, and standard sync
-columns. Unique `(user_id,action_id,kind)`. Events may become ineffective only
+columns. Unique `(user_id,action_id)`: one owner/action may create at most one
+lifecycle row, regardless of kind. Events may become ineffective only
 through deterministic reconciliation; their original payload never changes.
 The future schema does not add per-event rejected-diagnostic columns: existing
 effectiveness/visibility and the action-root rejection state retain enough durable
@@ -211,7 +224,8 @@ Fields: `id`, `user_id`, `action_id`, `account_id`, `domain`,
 `reverses_effect_id`, `is_effective`, `compensated_at`, and standard sync columns.
 `accepted_account_revision` uses the same canonical unsigned-integer string locally
 and in JSON, with PostgreSQL `bigint` storage; it is never a JavaScript number. Unique
-`(user_id,action_id,kind)`.
+`(user_id,action_id,account_id,kind)` permits one independently guarded effect per
+affected account and kind without weakening owner/action idempotency.
 Metals holding/event evidence provides the holding link through the same action ID.
 Metals sale effects are excluded from ordinary-income and budget-income queries.
 
@@ -286,31 +300,36 @@ CAS winners; at equal time they stabilize only unrelated display/diagnostic orde
 1. A local grouped command creates all rows and projection changes in one writer or none.
 2. One RPC commits all server-side financial effects or none.
 3. Same action ID and same hash returns the stored outcome; different hash is rejected.
-4. Expected holding revision comes from `metal_action_evidence`; optional expected
-   account revision comes from the generic root and is required only when an account
-   effect exists. Both must match for an account-credit action.
+4. Expected holding revision comes from `metal_action_evidence`; the ordered account
+   guard set comes from the generic root and must match the account IDs of all effects
+   exactly. Holding and every guarded account revision must match for an
+   account-changing action.
 5. Every linked record must resolve to the authenticated owner.
 6. Generic table sync must never independently activate action-owned fragments.
 7. Missing/stale rates never hide a holding; only affected calculations become unavailable.
 8. A reversal references immutable original evidence and never unlocks historical facts.
-9. A stale outcome binds holding and optional account revisions/evidence hashes
-   independently. Account-only stale carries no holding winner ID and cannot fabricate
-   one during recovery.
+9. A stale outcome binds holding and every guarded account revision/evidence hash
+   independently in canonical account-ID order. Account-only stale carries no holding
+   winner ID and cannot fabricate one during recovery.
 
 ## Migration and Backfill Order
 
 1. Create `067_financial_action_foundation` with the generic root's identity, domain
    type/reference, canonical serialization/hash, durable state/outcome/replay, RLS, and
    stable local/server storage interfaces. T024 freezes this non-account foundation.
-2. After T024, create `068_metals_domain` with exact Metals shadow fields, holding state,
+2. After T024, create `068_metals_domain` with nullable legacy-unavailable exact Metals
+   shadow fields, holding state,
    current acquisition-action/reference-set linkage, `metal_action_evidence` with a
-   required unique `(user_id, action_id)` one-row-per-action constraint, lifecycle/rate
+   required unique `(user_id, action_id)` one-row-per-action constraints for both Metals
+   action evidence and lifecycle events, plus role-unique rate
    evidence, observations, owner-scoped holding revision CAS, and deterministic
    backfill. Non-account Metals lifecycle work may develop and stack here while full
    #242 continues in its separate lane.
 3. After `068`, create and merge `069_account_financial_effects`: account revision,
-   generic immutable account effects, dedicated account-action sync/CAS, writer guards,
-   protected columns, and exact-once account compensation. T033 is the full #242 gate.
+   canonical ordered per-account guards/results, generic immutable account effects,
+   dedicated account-action sync/CAS, writer guards, deterministic multi-account row
+   locking, protected columns, and exact-once account compensation. T033 is the full
+   #242 gate.
 4. Backfill every existing account revision to `0` without historical action rows.
 5. Before fail-closed protection, drain, migrate, or explicitly quarantine every legacy
    unsynced financial row. Reject clients without action ID, hash, and expected revision
@@ -319,16 +338,20 @@ CAS winners; at equal time they stabilize only unrelated display/diagnostic orde
 6. Add matching WatermelonDB schema migration/models and explicit sync allowlists at each
    milestone without allowing `069` to merge ahead of `068`.
 7. Backfill Gold/Silver only. Canonically serialize valid legacy purchase price, weight,
-   and purity compatibility values into the exact fields. Populate catalog code/version
-   only for a unique exact catalog match; otherwise keep provenance explicitly unavailable
-   while preserving the holding. Leave `acquisition_action_id` null for legacy facts;
-   never invent a historical rate/reference set, catalog source, or action.
+   and purity compatibility values into the exact fields. Missing/invalid exact weight
+   or purchase price remains null. Populate the entire purity code/version/factor tuple
+   only for a unique exact catalog match; otherwise keep all three fields null while
+   preserving the holding. Leave `acquisition_action_id` null for legacy facts; never
+   invent a historical rate/reference set, catalog source, exact fact, or action.
 8. Make the backfill rerunnable: populate only missing exact fields, never overwrite an
    existing exact value, and produce the same result for the same input. Fixtures MUST
    cover Gold, Silver, unique and unmatched purity, missing/invalid values, pre-populated
    exact fields, retained compatibility columns, and a second identical migration run.
 9. Seed the versioned purity catalog, pull canonical rows, then switch authoritative
-   calculations/read models to exact fields.
+   calculations/read models to exact fields. A null required exact fact makes only its
+   dependent valuation, P/L, or attribution unavailable; it never hides the legacy
+   holding or falls back to the compatibility number. The first accepted material
+   correction must supply the complete valid required exact fact set atomically.
 10. Keep compatibility columns until the app-wide decimal audit authorizes removal;
    WatermelonDB columns are never dropped.
 

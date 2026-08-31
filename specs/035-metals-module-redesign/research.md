@@ -183,8 +183,11 @@ persisted per-event diagnostics remain deferred. See
 Every Add, material Edit, Sell, No Longer, Delete, Undo, and compensation uses the
 generic owner-scoped financial-action root/outbox. One WatermelonDB writer transaction
 creates that root, Metals-specific holding/lifecycle/rate evidence, projection,
-optional generic account effect, and recovery status. Failure leaves none. Retries
-reuse stable `action_id`; Metals does not introduce a second account outbox.
+optional generic account effects, and recovery status. Failure leaves none. Account
+guards are unique by affected account and sorted by canonical account ID, so transfers
+guard both source and destination accounts while credited Metals actions guard one
+selected account. Retries reuse stable `action_id`; Metals does not introduce a second
+account outbox.
 
 ### Required State Meaning
 
@@ -220,15 +223,16 @@ Add an idempotent PostgreSQL CAS RPC invoked by the dedicated generic financial-
 synchronizer, with Metals domain validation supplied by the linked evidence. In one
 server transaction with row locks, validate auth ownership, immutable payload and
 linkage, group completeness, expected holding revision, and—when account credit is
-enabled—selected account eligibility and expected account revision. Atomically:
+enabled—selected account eligibility and one matching signed-bigint-bounded expected
+revision guard per affected account. Atomically:
 
 1. return the stored outcome for repeated identical `action_id` and payload hash;
 2. reject the same `action_id` with a different payload hash;
 3. accept one complete valid matching-revision action;
-4. increment the holding revision and optional account revision;
+4. increment the holding revision and every affected account revision without overflow;
 5. change `accounts.balance` and activate linked immutable evidence once; or
-6. reject stale input with independent holding/account canonical revisions, nullable
-   per-resource winner IDs, and per-resource evidence hashes.
+6. reject stale input with independent holding evidence plus ordered canonical account
+   evidence arrays, nullable per-resource winner IDs, and per-resource evidence hashes.
 
 First complete valid server-accepted action wins. Client clock, arrival timestamp,
 and generic LWW never choose winner.
@@ -319,11 +323,12 @@ uncredited Undo continue.
 
 The local Sale/Undo/compensation writer updates holding projection, account balance,
 action state, lifecycle evidence, and account-effect evidence atomically. The server
-RPC validates expected holding and account revisions and commits the same group in
-one transaction. Stable effect identity prevents double credit/debit. Generic sync
-must not independently activate action-owned fragments or overwrite a CAS-owned
-balance transition. Conflict compensation applies the exact inverse minor-unit
-amount once and advances both projections from canonical server evidence.
+RPC validates expected holding revision and every ordered account guard, then commits
+the same group in one transaction. Stable effect identity prevents double credit/debit.
+Generic sync must not independently activate action-owned fragments or overwrite a
+CAS-owned balance transition. Conflict compensation applies each exact inverse
+minor-unit amount once and advances holding/account projections from canonical server
+evidence.
 
 ### Alternatives Rejected
 
