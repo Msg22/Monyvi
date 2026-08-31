@@ -335,6 +335,46 @@ select throws_ok(
   'reconciliation cannot change accepted server outcome'
 );
 
+insert into auth.users (
+  id,
+  instance_id,
+  aud,
+  role,
+  email,
+  encrypted_password,
+  email_confirmed_at,
+  raw_app_meta_data,
+  raw_user_meta_data,
+  created_at,
+  updated_at
+)
+values
+  (
+    '018f0c7a-1234-7abc-8def-000000000003',
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated',
+    'authenticated',
+    'financial-action-owner@monyvi.test',
+    'not-used',
+    now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{}'::jsonb,
+    now(),
+    now()
+  ),
+  (
+    '018f0c7a-1234-7abc-8def-000000000013',
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated',
+    'authenticated',
+    'financial-action-foreign@monyvi.test',
+    'not-used',
+    now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{}'::jsonb,
+    now(),
+    now()
+  );
 select lives_ok(
   $insert$
     with envelopes(payload_json) as (
