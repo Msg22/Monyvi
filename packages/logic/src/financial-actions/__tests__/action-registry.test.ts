@@ -57,7 +57,7 @@ describe("financial action definition registry", () => {
       domain: "transactions",
       domainReferenceId: "018f0c7a-1234-7abc-8def-000000000012",
       envelopeVersion: "monyvi.financial-action/v1",
-      expectedAccountRevision: null,
+      accountGuards: [],
       kind: "annotate",
       occurredAt: "2026-08-31T10:15:30.123Z",
       payload: { note: "second definition" },

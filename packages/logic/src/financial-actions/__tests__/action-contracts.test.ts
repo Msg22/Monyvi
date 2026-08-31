@@ -23,13 +23,13 @@ import {
 } from "../action-registry";
 
 const ARABIC_VECTOR =
-  '{"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","expectedAccountRevision":null,"kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}';
+  '{"accountGuards":[],"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}';
 const ARABIC_DIGEST =
-  "d9496846d80647644048c112aa501a2bf2985bc279445d82efdd96669b5718ab";
+  "020ebe94ba4a335d86502ef218f39b2b1789c311c28540f3250a7f5c85cc96c3";
 
 const sha256Provider: Sha256Provider = {
-  digestUtf8: async (canonicalText: string): Promise<string> =>
-    createHash("sha256").update(canonicalText, "utf8").digest("hex"),
+  digestUtf8: (canonicalText: string): Promise<string> =>
+    Promise.resolve(createHash("sha256").update(canonicalText, "utf8").digest("hex")),
 };
 
 function validEnvelope(): FinancialActionEnvelopeV1<MetalsSellPayloadV1> {
@@ -71,7 +71,7 @@ describe("financial action canonical contract", () => {
       },
       occurredAt: envelope.occurredAt,
       kind: envelope.kind,
-      expectedAccountRevision: envelope.expectedAccountRevision,
+      accountGuards: envelope.accountGuards,
       envelopeVersion: envelope.envelopeVersion,
       domainReferenceId: envelope.domainReferenceId,
       domain: envelope.domain,
@@ -111,19 +111,24 @@ describe("financial action canonical contract", () => {
     );
   });
 
-  it("distinguishes explicit null from omission", () => {
-    const omitted = { ...validEnvelope() } as Record<string, unknown>;
-    delete omitted.expectedAccountRevision;
+  it("requires the explicit account guard array", () => {
+    const omitted: Record<string, unknown> = { ...validEnvelope() };
+    delete omitted.accountGuards;
 
-    expect(validEnvelope().expectedAccountRevision).toBeNull();
+    expect(validEnvelope().accountGuards).toEqual([]);
     expectContractError(omitted, FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
   });
 
-  it("reserves canonical account revisions in the V1 type while Slice 3A rejects them", () => {
+  it("reserves ordered account guards in the V1 type while Slice 3A rejects non-empty guards", () => {
     const reservedRevision = "7" as CanonicalUnsignedIntegerString;
     const revisionBearingEnvelope: FinancialActionEnvelopeV1<MetalsSellPayloadV1> = {
       ...validEnvelope(),
-      expectedAccountRevision: reservedRevision,
+      accountGuards: [
+        {
+          accountId: "018f0c7a-1234-7abc-8def-000000000007",
+          expectedRevision: reservedRevision,
+        },
+      ],
     };
 
     expectContractError(
@@ -143,8 +148,15 @@ describe("financial action canonical contract", () => {
     ["non-UTC timestamp", { occurredAt: "2026-08-31T12:15:30.123+02:00" }],
     ["invalid calendar time", { occurredAt: "2026-02-30T10:15:30.123Z" }],
     [
-      "non-null expected revision in foundation",
-      { expectedAccountRevision: "0" },
+      "non-empty account guards in foundation",
+      {
+        accountGuards: [
+          {
+            accountId: "018f0c7a-1234-7abc-8def-000000000007",
+            expectedRevision: "0",
+          },
+        ],
+      },
     ],
   ])("rejects %s", (_name, replacement) => {
     expectContractError(
@@ -278,7 +290,7 @@ describe("financial action canonical contract", () => {
 
   it.each([
     ["unknown envelope field", { unknown: true }],
-    ["JSON number", { expectedAccountRevision: 0 }],
+    ["non-array account guards", { accountGuards: null }],
   ])("rejects %s", (_name, addition) => {
     expectContractError(
       { ...validEnvelope(), ...addition },
@@ -445,7 +457,7 @@ describe("financial action canonical contract", () => {
   it("rejects an invalid digest returned by the injected provider", async () => {
     await expect(
       hashFinancialActionEnvelope(validEnvelope(), {
-        digestUtf8: async (): Promise<string> => "NOT-A-DIGEST",
+        digestUtf8: (): Promise<string> => Promise.resolve("NOT-A-DIGEST"),
       })
     ).rejects.toThrow(FINANCIAL_ACTION_ERROR_CODES.INVALID_HASH);
   });

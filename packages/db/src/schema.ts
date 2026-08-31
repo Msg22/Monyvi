@@ -201,12 +201,12 @@ export const schema = appSchema({
       unsafeSql: (sql: string): string =>
         `${sql}create unique index if not exists "financial_action_groups_user_action_unique" on "financial_action_groups" ("user_id", "action_id");`,
       columns: [
+        { name: "account_guards_json", type: "string" },
         { name: "action_id", type: "string", isIndexed: true },
         { name: "created_at", type: "number" },
         { name: "deleted", type: "boolean" },
         { name: "domain", type: "string" },
         { name: "domain_reference_id", type: "string", isIndexed: true },
-        { name: "expected_account_revision", type: "string", isOptional: true },
         { name: "kind", type: "string" },
         { name: "outcome_json", type: "string", isOptional: true },
         { name: "payload_hash", type: "string" },

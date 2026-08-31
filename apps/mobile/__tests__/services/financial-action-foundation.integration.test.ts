@@ -22,7 +22,7 @@ interface MockRecord {
   domainReferenceId: string;
   payloadJson: string;
   payloadHash: string;
-  expectedAccountRevision: string | null;
+  accountGuardsJson: string;
   state: string;
   serverOutcome: string | null;
   outcomeJson: string | null;
@@ -44,7 +44,7 @@ const mockCollection = {
       domainReferenceId: "",
       payloadJson: "",
       payloadHash: "",
-      expectedAccountRevision: null,
+      accountGuardsJson: "[]",
       state: "",
       serverOutcome: null,
       outcomeJson: null,
@@ -70,7 +70,7 @@ const mockDatabaseWrite = jest.fn(async <T>(action: () => Promise<T>): Promise<T
     throw error;
   }
 });
-const mockDatabaseBatch = jest.fn(async (...operations: MockRecord[]): Promise<void> => {
+const mockDatabaseBatch = jest.fn((...operations: MockRecord[]): Promise<void> => {
   operations.forEach((operation) => {
     if (!mockRecords.includes(operation)) mockRecords.push(operation);
   });
@@ -78,6 +78,7 @@ const mockDatabaseBatch = jest.fn(async (...operations: MockRecord[]): Promise<v
     mockSwitchUserDuringBatch = false;
     mockCurrentUserId = "018f0c7a-1234-7abc-8def-000000000099";
   }
+  return Promise.resolve();
 });
 
 jest.mock("@monyvi/db", () => ({
@@ -91,18 +92,18 @@ jest.mock("@monyvi/db", () => ({
 }));
 
 jest.mock("../../services/user-data-access", () => ({
-  getCurrentUserDataScope: jest.fn(async () => ({
+  getCurrentUserDataScope: jest.fn(() => Promise.resolve({
     userId: mockCurrentUserId,
     queryOwned: (): { fetch: () => Promise<MockRecord[]> } => {
       const scopedUserId = mockCurrentUserId;
       return {
-        fetch: async (): Promise<MockRecord[]> => {
+        fetch: (): Promise<MockRecord[]> => {
           const records = mockRecords.filter((record) => record.userId === scopedUserId);
           if (mockSwitchUserDuringNextLookup) {
             mockSwitchUserDuringNextLookup = false;
             mockCurrentUserId = "018f0c7a-1234-7abc-8def-000000000099";
           }
-          return records;
+          return Promise.resolve(records);
         },
       };
     },
@@ -111,8 +112,9 @@ jest.mock("../../services/user-data-access", () => ({
       return record;
     },
   })),
-  assertExpectedCurrentUser: jest.fn(async (expectedUserId: string): Promise<void> => {
+  assertExpectedCurrentUser: jest.fn((expectedUserId: string): Promise<void> => {
     if (expectedUserId !== mockCurrentUserId) throw new Error("auth_scope_changed");
+    return Promise.resolve();
   }),
 }));
 
@@ -128,8 +130,8 @@ const ACTION_ID = "018f0c7a-1234-7abc-8def-000000000001";
 const USER_ID = "018f0c7a-1234-7abc-8def-000000000003";
 const DOMAIN_REFERENCE_ID = "018f0c7a-1234-7abc-8def-000000000002";
 const sha256Provider: Sha256Provider = {
-  digestUtf8: async (canonicalText: string): Promise<string> =>
-    createHash("sha256").update(canonicalText, "utf8").digest("hex"),
+  digestUtf8: (canonicalText: string): Promise<string> =>
+    Promise.resolve(createHash("sha256").update(canonicalText, "utf8").digest("hex")),
 };
 
 function envelope(
@@ -142,7 +144,7 @@ function envelope(
     kind: "sell" as const,
     domainReferenceId: DOMAIN_REFERENCE_ID,
     envelopeVersion: "monyvi.financial-action/v1",
-    expectedAccountRevision: null,
+    accountGuards: [],
     occurredAt: "2026-08-31T10:15:30.123Z",
     payload: {
       feeMinorUnits: "80000",
@@ -184,7 +186,7 @@ describe("financial action foundation repository", () => {
       actionId: ACTION_ID,
       userId: USER_ID,
       state: "pending_local",
-      expectedAccountRevision: null,
+      accountGuardsJson: "[]",
       deleted: false,
     });
     expect(mockRecords[0]?._raw.id).not.toBe(ACTION_ID);
@@ -225,7 +227,7 @@ describe("financial action foundation repository", () => {
 
   it("rejects changed canonical text when a faulty provider repeats a valid hash", async () => {
     const constantHashProvider: Sha256Provider = {
-      digestUtf8: async (): Promise<string> => "a".repeat(64),
+      digestUtf8: (): Promise<string> => Promise.resolve("a".repeat(64)),
     };
     await createFinancialActionGroup(input(envelope(), constantHashProvider));
 
@@ -400,12 +402,17 @@ describe("financial action foundation repository", () => {
     );
   });
 
-  it("rejects non-null expected account revisions until the account-effect gate", async () => {
+  it("rejects non-empty account guards until the account-effect gate", async () => {
     await expect(
       createFinancialActionGroup(
         input(
           envelope({
-            expectedAccountRevision: "0" as unknown as null,
+            accountGuards: [
+              {
+                accountId: "018f0c7a-1234-7abc-8def-000000000007",
+                expectedRevision: "0",
+              },
+            ] as unknown as [],
           })
         )
       )

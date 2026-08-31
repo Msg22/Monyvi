@@ -492,11 +492,7 @@ end;`
             { name: "domain_reference_id", type: "string", isIndexed: true },
             { name: "payload_json", type: "string" },
             { name: "payload_hash", type: "string" },
-            {
-              name: "expected_account_revision",
-              type: "string",
-              isOptional: true,
-            },
+            { name: "account_guards_json", type: "string" },
             { name: "state", type: "string" },
             { name: "server_outcome", type: "string", isOptional: true },
             { name: "outcome_json", type: "string", isOptional: true },

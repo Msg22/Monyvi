@@ -74,6 +74,16 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   );
 }
 
+function isCanonicalUuidArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (referenceId: unknown) =>
+        typeof referenceId === "string" && UUID_PATTERN.test(referenceId)
+    )
+  );
+}
+
 function hasExactKeys(
   value: Readonly<Record<string, unknown>>,
   expectedKeys: readonly string[]
@@ -141,12 +151,8 @@ function validateMetalsSellPayload(value: unknown): MetalsSellPayloadV1 {
     !isCanonicalNonNegativeMinorUnits(value.netProceedsMinorUnits) ||
     typeof value.notes !== "string" ||
     getFinancialActionUtf8ByteLength(value.notes) > MAX_ACTION_NOTES_UTF8_BYTES ||
-    !Array.isArray(value.rateReferenceIds) ||
-    value.rateReferenceIds.length > MAX_ACTION_RATE_REFERENCE_IDS ||
-    !value.rateReferenceIds.every(
-      (referenceId) =>
-        typeof referenceId === "string" && UUID_PATTERN.test(referenceId)
-    )
+    !isCanonicalUuidArray(value.rateReferenceIds) ||
+    value.rateReferenceIds.length > MAX_ACTION_RATE_REFERENCE_IDS
   ) {
     fail(ACTION_REGISTRY_ERROR_CODES.INVALID_PAYLOAD);
   }

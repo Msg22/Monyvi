@@ -6,8 +6,8 @@ Slice 3A owns this restricted canonical envelope for the generic
 `financial_action_groups` root. It is identity, durable outbox, replay, and outcome
 evidence; it does not own domain lifecycle facts, holding revisions, account effects,
 or mutable synchronization state. The live #242 account-integrity issue remains
-verified open/current: Slice 3A accepts only `expectedAccountRevision: null` and
-does not enable account effects.
+verified open/current: Slice 3A accepts only an empty `accountGuards` array and does
+not enable account effects.
 
 `envelopeVersion` is exactly `"monyvi.financial-action/v1"`. `payloadVersion` is a
 registered domain payload literal such as `"metals.sell/v1"`; the registry selects
@@ -43,11 +43,14 @@ export type CanonicalUnsignedIntegerString = string & {
 };
 
 interface FinancialActionEnvelopeV1 {
+  readonly accountGuards: readonly {
+    readonly accountId: CanonicalUuid;
+    readonly expectedRevision: CanonicalUnsignedIntegerString;
+  }[];
   readonly actionId: CanonicalUuid;
   readonly domain: "metals" | "transactions" | "transfers" | "recurring_payments" | "sms";
   readonly domainReferenceId: CanonicalUuid;
   readonly envelopeVersion: "monyvi.financial-action/v1";
-  readonly expectedAccountRevision: CanonicalUnsignedIntegerString | null;
   readonly kind: RegisteredActionKind;
   readonly occurredAt: UtcMillisecondTimestamp;
   readonly payload: RegisteredActionPayload;
@@ -142,8 +145,8 @@ and explicit `null` are distinct, and `null` is accepted only where the selected
 schema explicitly permits it.
 
 - Keys contain ASCII only and objects serialize keys in ascending ASCII byte order,
-  recursively. The envelope order is therefore `actionId`, `domain`,
-  `domainReferenceId`, `envelopeVersion`, `expectedAccountRevision`, `kind`,
+  recursively. The envelope order is therefore `accountGuards`, `actionId`, `domain`,
+  `domainReferenceId`, `envelopeVersion`, `kind`,
   `occurredAt`, `payload`, `payloadVersion`, `userId`.
 - JSON strings preserve their decoded Unicode scalar sequence. Do not NFC/NFD
   normalize, case-fold, trim, or locale-transform values before hashing. Reject
@@ -214,14 +217,14 @@ must pass identical canonical-text/hash fixtures. JavaScript-only unsupported va
 `Date`, `Map`, `Set`, typed arrays, and class instances) remain TypeScript-boundary
 tests; SQL tests cover encodable raw JSON failures.
 
-## Account-Revision Reservation
+## Account-Guard Reservation
 
-`expectedAccountRevision` is required in the envelope and has type
-`CanonicalUnsignedIntegerString | null`. Slice 3A capability validation accepts
-only `null`; a non-null canonical string is reserved for a future linked
-`account_financial_effects` protocol after full #242 T033 approval. Slice 3A has no
-account effect, account balance mutation, account revision mutation, or account-effect
-synchronizer.
+`accountGuards` is required in the envelope and has the owner-scoped guard-array
+shape above. Slice 3A capability validation accepts only `[]`; non-empty guards are
+reserved for a future linked `account_financial_effects` protocol after full #242
+T033 approval. That protocol must reject duplicate account IDs and persist guards in
+ascending canonical account-ID order. Slice 3A has no account effect, account balance
+mutation, account revision mutation, or account-effect synchronizer.
 
 ## Durable State Matrix And Recovery
 
@@ -262,15 +265,15 @@ separate append-only holding action and never deletes its action root.
 ## Positive Arabic Vector
 
 The following architect-approved vector tests Unicode preservation, ASCII key order,
-`null`, strings for money, and array order. Its digest is verified by the executable
+explicit empty guards, strings for money, and array order. Its digest is verified by the executable
 TypeScript fixture; PostgreSQL digest-parity verification remains pending and neither
 result is Green evidence by itself.
 
 ```json
-{"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","expectedAccountRevision":null,"kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}
+{"accountGuards":[],"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}
 ```
 
-SHA-256: `d9496846d80647644048c112aa501a2bf2985bc279445d82efdd96669b5718ab`.
+SHA-256: `020ebe94ba4a335d86502ef218f39b2b1789c311c28540f3250a7f5c85cc96c3`.
 
 ## Generic-Sync Boundary
 

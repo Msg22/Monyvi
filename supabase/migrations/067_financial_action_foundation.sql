@@ -301,8 +301,8 @@ BEGIN
 
   IF (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(p_value) AS key)
     IS DISTINCT FROM ARRAY[
-      'actionId', 'domain', 'domainReferenceId', 'envelopeVersion',
-      'expectedAccountRevision', 'kind', 'occurredAt', 'payload',
+      'accountGuards', 'actionId', 'domain', 'domainReferenceId', 'envelopeVersion',
+      'kind', 'occurredAt', 'payload',
       'payloadVersion', 'userId'
     ]::text[]
   THEN
@@ -317,7 +317,8 @@ BEGIN
     OR jsonb_typeof(p_value -> 'envelopeVersion') IS DISTINCT FROM 'string'
     OR jsonb_typeof(p_value -> 'payloadVersion') IS DISTINCT FROM 'string'
     OR jsonb_typeof(p_value -> 'occurredAt') IS DISTINCT FROM 'string'
-    OR jsonb_typeof(p_value -> 'expectedAccountRevision') IS DISTINCT FROM 'null'
+    OR jsonb_typeof(p_value -> 'accountGuards') IS DISTINCT FROM 'array'
+    OR jsonb_array_length(p_value -> 'accountGuards') <> 0
   THEN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_envelope';
   END IF;
@@ -472,7 +473,7 @@ CREATE TABLE public.financial_action_groups (
   domain_reference_id uuid NOT NULL,
   payload_json text NOT NULL,
   payload_hash text NOT NULL,
-  expected_account_revision text,
+  account_guards_json jsonb NOT NULL DEFAULT '[]'::jsonb,
   state text NOT NULL DEFAULT 'pending_local',
   server_outcome text,
   outcome_json text,
@@ -485,12 +486,11 @@ CREATE TABLE public.financial_action_groups (
   ),
   CONSTRAINT financial_action_groups_kind_not_blank CHECK (length(btrim(kind)) > 0),
   CONSTRAINT financial_action_groups_hash_format CHECK (payload_hash ~ '^[0-9a-f]{64}$'),
-  CONSTRAINT financial_action_expected_revision_invalid CHECK (
-    expected_account_revision IS NULL
-      OR expected_account_revision ~ '^(0|[1-9][0-9]*)$'
+  CONSTRAINT financial_action_groups_account_guards_array CHECK (
+    jsonb_typeof(account_guards_json) = 'array'
   ),
-  CONSTRAINT financial_action_groups_foundation_revision_disabled CHECK (
-    expected_account_revision IS NULL
+  CONSTRAINT financial_action_groups_foundation_guards_empty CHECK (
+    account_guards_json = '[]'::jsonb
   ),
   CONSTRAINT financial_action_groups_state CHECK (state IN (
     'pending_local', 'local_complete', 'sync_pending', 'sync_failed', 'accepted',
@@ -569,8 +569,7 @@ BEGIN
     OR NEW.domain IS DISTINCT FROM v_envelope ->> 'domain'
     OR NEW.domain_reference_id::text IS DISTINCT FROM v_envelope ->> 'domainReferenceId'
     OR NEW.kind IS DISTINCT FROM v_envelope ->> 'kind'
-    OR NEW.expected_account_revision IS DISTINCT FROM
-      v_envelope ->> 'expectedAccountRevision'
+    OR NEW.account_guards_json IS DISTINCT FROM v_envelope -> 'accountGuards'
   THEN
     RAISE EXCEPTION USING
       ERRCODE = '22023',
@@ -694,7 +693,7 @@ BEGIN
     OR NEW.domain_reference_id IS DISTINCT FROM OLD.domain_reference_id
     OR NEW.payload_json IS DISTINCT FROM OLD.payload_json
     OR NEW.payload_hash IS DISTINCT FROM OLD.payload_hash
-    OR NEW.expected_account_revision IS DISTINCT FROM OLD.expected_account_revision
+    OR NEW.account_guards_json IS DISTINCT FROM OLD.account_guards_json
     OR (
       OLD.server_outcome IS NOT NULL
       AND NEW.server_outcome IS DISTINCT FROM OLD.server_outcome

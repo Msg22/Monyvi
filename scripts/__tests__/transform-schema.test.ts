@@ -76,7 +76,7 @@ export type Database = {
     Tables: {
       financial_action_groups: {
         Row: {
-          expected_account_revision: number | null;
+          account_guards_json: Json;
           outcome_json: string | null;
           rejection_code: string | null;
           server_outcome: string | null;
@@ -112,7 +112,7 @@ export type Database = {
 
   assert.match(
     financialActionModel,
-    /expectedAccountRevision!: number \| null;/
+    /accountGuardsJson!: string;/
   );
   assert.match(financialActionModel, /outcomeJson!: string \| null;/);
   assert.match(financialActionModel, /rejectionCode!: string \| null;/);
@@ -120,7 +120,7 @@ export type Database = {
   assert.match(ordinaryModel, /notes\?: string;/);
 });
 
-test("financial action explicit-null generation is deterministic", () => {
+test("financial action nullable outcome generation is deterministic", () => {
   const source = readFileSync(
     new URL("../../packages/db/src/supabase-types.ts", import.meta.url),
     "utf8"
@@ -143,7 +143,7 @@ test("financial action explicit-null generation is deterministic", () => {
       parsed.tables
     )
   );
-  assert.equal((generated.match(/!: (?:number|string) \| null;/g) ?? []).length, 4);
+  assert.equal((generated.match(/!: (?:number|string) \| null;/g) ?? []).length, 3);
 });
 
 test("generated schema preserves owner-scoped financial action uniqueness", () => {

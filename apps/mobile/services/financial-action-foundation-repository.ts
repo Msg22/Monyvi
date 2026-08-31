@@ -138,7 +138,7 @@ export function createFinancialActionFoundationRepository(
           candidate.domainReferenceId = envelope.domainReferenceId;
           candidate.payloadJson = preparedPayload.canonicalText;
           candidate.payloadHash = preparedPayload.payloadHash;
-          candidate.expectedAccountRevision = null;
+          candidate.accountGuardsJson = "[]";
           candidate.state = "pending_local";
           candidate.serverOutcome = null;
           candidate.outcomeJson = null;

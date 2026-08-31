@@ -1,13 +1,13 @@
 begin;
 
-select plan(65);
+select plan(66);
 
 create or replace function pg_temp.valid_financial_action_envelope()
 returns jsonb
 language sql
 immutable
 as $$
-  select '{"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","expectedAccountRevision":null,"kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":[]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}'::jsonb
+  select '{"accountGuards":[],"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":[]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}'::jsonb
 $$;
 
 select has_table(
@@ -25,9 +25,9 @@ select has_function(
 
 select is(
   private.financial_action_canonical_json_v1(
-    '{"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","expectedAccountRevision":null,"kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}'
+    '{"accountGuards":[],"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}'
   ),
-  '{"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","expectedAccountRevision":null,"kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}',
+  '{"accountGuards":[],"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}',
   'Arabic vector remains canonical'
 );
 
@@ -36,7 +36,7 @@ select is(
     extensions.digest(
       convert_to(
         private.financial_action_canonical_json_v1(
-          '{"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","expectedAccountRevision":null,"kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}'
+          '{"accountGuards":[],"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}'
         ),
         'UTF8'
       ),
@@ -44,58 +44,65 @@ select is(
     ),
     'hex'
   ),
-  'd9496846d80647644048c112aa501a2bf2985bc279445d82efdd96669b5718ab',
+  '020ebe94ba4a335d86502ef218f39b2b1789c311c28540f3250a7f5c85cc96c3',
   'PostgreSQL digest matches TypeScript fixture'
 );
 
 select throws_ok(
-  $$select private.financial_action_canonical_json_v1('{"userId":"018f0c7a-1234-7abc-8def-000000000003","actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","expectedAccountRevision":null,"kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1"}')$$,
+  $$select private.financial_action_canonical_json_v1('{"userId":"018f0c7a-1234-7abc-8def-000000000003","accountGuards":[],"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1"}')$$,
   '22023',
   'financial_action_json_not_canonical',
   'reordered envelope keys are rejected'
 );
 
 select throws_ok(
-  $$select private.financial_action_canonical_json_v1('{"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","expectedAccountRevision":null,"kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"\u0630\u0647\u0628","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}')$$,
+  $$select private.financial_action_canonical_json_v1('{"accountGuards":[],"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"\u0630\u0647\u0628","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}')$$,
   '22023',
   'financial_action_json_not_canonical',
   'alternate string escapes are rejected at SQL boundary'
 );
 
 select throws_ok(
-  $$select private.financial_action_canonical_json_v1('{"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","expectedAccountRevision":null,"kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":35500,"holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":[]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}')$$,
+  $$select private.financial_action_canonical_json_v1('{"accountGuards":[],"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":35500,"holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":[]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}')$$,
   '22023',
   'financial_action_json_number_forbidden',
   'JSON numbers are rejected'
 );
 
 select throws_ok(
-  $$select private.financial_action_canonical_json_v1('{"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","expectedAccountRevision":null,"kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":[]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}')$$,
+  $$select private.financial_action_canonical_json_v1('{"accountGuards":[],"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":[]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}')$$,
   '22023',
   'financial_action_json_duplicate_key',
   'duplicate raw keys are rejected'
 );
 
 select throws_ok(
-  $$insert into public.financial_action_groups (id, action_id, user_id, domain, kind, domain_reference_id, payload_json, payload_hash, expected_account_revision, state, deleted) values ('018f0c7a-1234-7abc-8def-000000000001','018f0c7a-1234-7abc-8def-000000000001','018f0c7a-1234-7abc-8def-000000000003','metals','sell','018f0c7a-1234-7abc-8def-000000000002','{"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","expectedAccountRevision":null,"kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}','bad',null,'sync_pending',false)$$,
+  $$select private.financial_action_canonical_json_v1(private.financial_action_encode_jsonb_v1(jsonb_set(pg_temp.valid_financial_action_envelope(), '{accountGuards}', '[{"accountId":"018f0c7a-1234-7abc-8def-000000000007","expectedRevision":"0"}]'::jsonb)))$$,
+  '22023',
+  'financial_action_invalid_envelope',
+  'non-empty account guards remain disabled in foundation'
+);
+
+select throws_ok(
+  $$insert into public.financial_action_groups (id, action_id, user_id, domain, kind, domain_reference_id, payload_json, payload_hash, account_guards_json, state, deleted) values ('018f0c7a-1234-7abc-8def-000000000001','018f0c7a-1234-7abc-8def-000000000001','018f0c7a-1234-7abc-8def-000000000003','metals','sell','018f0c7a-1234-7abc-8def-000000000002','{"accountGuards":[],"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}','bad','[]'::jsonb,'sync_pending',false)$$,
   '23514',
   null,
   'invalid payload hash is rejected'
 );
 
-select col_is_null(
+select col_not_null(
   'public',
   'financial_action_groups',
-  'expected_account_revision',
-  'expected account revision remains nullable in foundation'
+  'account_guards_json',
+  'account guards are always explicit'
 );
 
 select col_type_is(
   'public',
   'financial_action_groups',
-  'expected_account_revision',
-  'text',
-  'expected account revision preserves exact decimal text'
+  'account_guards_json',
+  'jsonb',
+  'account guards preserve canonical JSON'
 );
 
 select has_trigger(
@@ -106,7 +113,7 @@ select has_trigger(
 );
 
 select throws_ok(
-  $$insert into public.financial_action_groups (id, action_id, user_id, domain, kind, domain_reference_id, payload_json, payload_hash, expected_account_revision, state, deleted) values ('018f0c7a-1234-7abc-8def-000000000001','018f0c7a-1234-7abc-8def-000000000001','018f0c7a-1234-7abc-8def-000000000099','metals','sell','018f0c7a-1234-7abc-8def-000000000002','{"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","expectedAccountRevision":null,"kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}','d9496846d80647644048c112aa501a2bf2985bc279445d82efdd96669b5718ab',null,'sync_pending',false)$$,
+  $$insert into public.financial_action_groups (id, action_id, user_id, domain, kind, domain_reference_id, payload_json, payload_hash, account_guards_json, state, deleted) values ('018f0c7a-1234-7abc-8def-000000000001','018f0c7a-1234-7abc-8def-000000000001','018f0c7a-1234-7abc-8def-000000000099','metals','sell','018f0c7a-1234-7abc-8def-000000000002','{"accountGuards":[],"actionId":"018f0c7a-1234-7abc-8def-000000000001","domain":"metals","domainReferenceId":"018f0c7a-1234-7abc-8def-000000000002","envelopeVersion":"monyvi.financial-action/v1","kind":"sell","occurredAt":"2026-08-31T10:15:30.123Z","payload":{"feeMinorUnits":"80000","grossProceedsDecimal":"35500","holdingId":"018f0c7a-1234-7abc-8def-000000000004","includeAccountCredit":false,"netProceedsMinorUnits":"3470000","notes":"ذهب","rateReferenceIds":["018f0c7a-1234-7abc-8def-000000000005","018f0c7a-1234-7abc-8def-000000000006"]},"payloadVersion":"metals.sell/v1","userId":"018f0c7a-1234-7abc-8def-000000000003"}','020ebe94ba4a335d86502ef218f39b2b1789c311c28540f3250a7f5c85cc96c3','[]'::jsonb,'sync_pending',false)$$,
   '22023',
   'financial_action_root_binding_mismatch',
   'root user id cannot diverge from canonical envelope'
@@ -400,7 +407,7 @@ select lives_ok(
       domain_reference_id,
       payload_json,
       payload_hash,
-      expected_account_revision,
+      account_guards_json,
       state,
       deleted
     )
@@ -415,7 +422,7 @@ select lives_ok(
         extensions.digest(convert_to(payload_json, 'UTF8'), 'sha256'),
         'hex'
       ),
-      null,
+      payload_json::jsonb -> 'accountGuards',
       'pending_local',
       false
     from envelopes
@@ -577,10 +584,10 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$update public.financial_action_groups set expected_account_revision = '1' where action_id = '018f0c7a-1234-7abc-8def-000000000001'$$,
+  $$update public.financial_action_groups set account_guards_json = '[{"accountId":"018f0c7a-1234-7abc-8def-000000000007","expectedRevision":"0"}]'::jsonb where action_id = '018f0c7a-1234-7abc-8def-000000000001'$$,
   '22023',
-  'financial_action_root_binding_mismatch',
-  'update expected_account_revision is rejected'
+  null,
+  'update account_guards_json is rejected'
 );
 
 select throws_ok(
@@ -606,7 +613,7 @@ select is(
         extensions.digest(convert_to(payload_json, 'UTF8'), 'sha256'),
         'hex'
       )
-      and expected_account_revision is null
+      and account_guards_json = '[]'::jsonb
       and deleted = false
   ),
   1::bigint,

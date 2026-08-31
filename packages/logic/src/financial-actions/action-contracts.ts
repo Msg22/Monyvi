@@ -44,6 +44,10 @@ declare const canonicalUnsignedIntegerStringBrand: unique symbol;
 export type CanonicalUnsignedIntegerString = string & {
   readonly [canonicalUnsignedIntegerStringBrand]: true;
 };
+export interface FinancialActionAccountGuard {
+  readonly accountId: string;
+  readonly expectedRevision: CanonicalUnsignedIntegerString;
+}
 export type FinancialActionDomain =
   | "metals"
   | "transactions"
@@ -55,10 +59,10 @@ export interface FinancialActionEnvelopeV1<
   TPayload extends RegisteredActionPayload = RegisteredActionPayload,
 > {
   readonly actionId: string;
+  readonly accountGuards: readonly FinancialActionAccountGuard[];
   readonly domain: FinancialActionDomain;
   readonly domainReferenceId: string;
   readonly envelopeVersion: "monyvi.financial-action/v1";
-  readonly expectedAccountRevision: CanonicalUnsignedIntegerString | null;
   readonly kind: string;
   readonly occurredAt: string;
   readonly payload: TPayload;
@@ -97,11 +101,11 @@ export type FinancialActionReplayResult =
     };
 
 const ENVELOPE_KEYS = [
+  "accountGuards",
   "actionId",
   "domain",
   "domainReferenceId",
   "envelopeVersion",
-  "expectedAccountRevision",
   "kind",
   "occurredAt",
   "payload",
@@ -119,7 +123,7 @@ type JsonPrimitive = string | boolean | null;
 interface CanonicalJsonObject {
   readonly [key: string]: CanonicalJsonValue;
 }
-interface CanonicalJsonArray extends ReadonlyArray<CanonicalJsonValue> {}
+type CanonicalJsonArray = readonly CanonicalJsonValue[];
 type CanonicalJsonValue =
   | JsonPrimitive
   | CanonicalJsonArray
@@ -271,11 +275,12 @@ export function canonicalizeFinancialActionEnvelope(
   }
   if (
     !isCanonicalUuid(value.actionId) ||
+    !Array.isArray(value.accountGuards) ||
+    value.accountGuards.length !== 0 ||
     typeof value.domain !== "string" ||
     !APPROVED_DOMAINS.includes(value.domain as FinancialActionDomain) ||
     !isCanonicalUuid(value.domainReferenceId) ||
     value.envelopeVersion !== "monyvi.financial-action/v1" ||
-    value.expectedAccountRevision !== null ||
     typeof value.kind !== "string" ||
     value.kind.trim().length === 0 ||
     !isStrictUtcMillisecondTimestamp(value.occurredAt) ||
@@ -286,11 +291,11 @@ export function canonicalizeFinancialActionEnvelope(
     fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
   }
   return {
+    accountGuards: Object.freeze([]),
     actionId: value.actionId,
     domain: value.domain as FinancialActionDomain,
     domainReferenceId: value.domainReferenceId,
     envelopeVersion: value.envelopeVersion,
-    expectedAccountRevision: value.expectedAccountRevision,
     kind: value.kind,
     occurredAt: value.occurredAt,
     payload: registry

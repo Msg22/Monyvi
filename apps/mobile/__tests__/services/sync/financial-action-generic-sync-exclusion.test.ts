@@ -98,7 +98,7 @@ describe("financial action generic sync exclusion", () => {
     );
   });
 
-  it("binds root columns to the canonical envelope and stores revisions as exact text", () => {
+  it("binds root columns to the canonical envelope and stores guard arrays as canonical JSON", () => {
     const migration = readFileSync(
       resolve(
         REPOSITORY_ROOT,
@@ -121,15 +121,15 @@ describe("financial action generic sync exclusion", () => {
     expect(migration).toContain(
       "private.financial_action_assert_root_binding_v1"
     );
-    expect(migration).toMatch(/expected_account_revision text/);
-    expect(migration).toContain("financial_action_expected_revision_invalid");
+    expect(migration).toMatch(/account_guards_json jsonb/);
+    expect(migration).toContain("financial_action_groups_foundation_guards_empty");
     expect(localMigration).toMatch(
-      /name: "expected_account_revision",\s+type: "string",\s+isOptional: true/
+      /name: "account_guards_json",\s+type: "string"/
     );
     expect(localMigration).toContain(
       "financial_action_groups_user_action_unique"
     );
-    expect(generatedModel).toContain("expectedAccountRevision!: string | null");
+    expect(generatedModel).toContain("accountGuardsJson!: string");
   });
 
   it("fails closed on unknown action definitions and illegal state evidence", () => {
@@ -212,7 +212,7 @@ describe("financial action generic sync exclusion", () => {
       "utf8"
     );
 
-    expect(sqlTest).toContain("select plan(65)");
+    expect(sqlTest).toContain("select plan(66)");
     expect(sqlTest).toContain("SET LOCAL ROLE authenticated");
     expect(sqlTest).toContain("RESET ROLE");
     expect(sqlTest).toContain("authenticated owner can select its root");
@@ -235,7 +235,7 @@ describe("financial action generic sync exclusion", () => {
       "domain_reference_id",
       "payload_json",
       "payload_hash",
-      "expected_account_revision",
+      "account_guards_json",
       "deleted",
     ].forEach((column) => {
       expect(sqlTest).toContain(`update ${column} is rejected`);

@@ -53,7 +53,7 @@ jest.mock("../../services/user-data-access", () => {
     "@nozbe/watermelondb"
   );
   return {
-    getCurrentUserDataScope: jest.fn(async () => ({
+    getCurrentUserDataScope: jest.fn(() => Promise.resolve({
       userId: mockSqliteCurrentUserId,
       queryOwned: (
         collection: { query: (...clauses: unknown[]) => unknown },
@@ -71,10 +71,11 @@ jest.mock("../../services/user-data-access", () => {
       },
     })),
     assertExpectedCurrentUser: jest.fn(
-      async (expectedUserId: string): Promise<void> => {
+      (expectedUserId: string): Promise<void> => {
         if (expectedUserId !== mockSqliteCurrentUserId) {
           throw new Error("auth_scope_changed");
         }
+        return Promise.resolve();
       }
     ),
   };
@@ -93,8 +94,8 @@ const ACTION_ID = "018f0c7a-1234-7abc-8def-000000000001";
 const USER_ID = "018f0c7a-1234-7abc-8def-000000000003";
 const FOREIGN_USER_ID = "018f0c7a-1234-7abc-8def-000000000099";
 const sha256Provider: Sha256Provider = {
-  digestUtf8: async (canonicalText: string): Promise<string> =>
-    createHash("sha256").update(canonicalText, "utf8").digest("hex"),
+  digestUtf8: (canonicalText: string): Promise<string> =>
+    Promise.resolve(createHash("sha256").update(canonicalText, "utf8").digest("hex")),
 };
 
 function envelope(userId = USER_ID): FinancialActionEnvelopeV1 {
@@ -103,7 +104,7 @@ function envelope(userId = USER_ID): FinancialActionEnvelopeV1 {
     domain: "metals",
     domainReferenceId: "018f0c7a-1234-7abc-8def-000000000002",
     envelopeVersion: "monyvi.financial-action/v1",
-    expectedAccountRevision: null,
+    accountGuards: [],
     kind: "sell",
     occurredAt: "2026-08-31T10:15:30.123Z",
     payload: {
@@ -135,10 +136,12 @@ async function fetchAll(db: Database): Promise<FinancialActionGroup[]> {
     .fetch();
 }
 
-function createRepository(db: Database) {
+function createRepository(
+  db: Database
+): ReturnType<typeof createFinancialActionFoundationRepository> {
   return createFinancialActionFoundationRepository({
     database: db,
-    getCurrentUserDataScope: async () => ({
+    getCurrentUserDataScope: () => Promise.resolve({
       userId: mockSqliteCurrentUserId,
       queryOwned: (collection, ...clauses) =>
         collection.query(
@@ -155,12 +158,13 @@ function createRepository(db: Database) {
         return record;
       },
     }),
-    assertExpectedCurrentUser: async (
+    assertExpectedCurrentUser: (
       expectedUserId: string
     ): Promise<void> => {
       if (expectedUserId !== mockSqliteCurrentUserId) {
         throw new Error("auth_scope_changed");
       }
+      return Promise.resolve();
     },
   });
 }
@@ -233,7 +237,7 @@ describe("financial action foundation SQLite persistence", () => {
             record.domainReferenceId = actionEnvelope.domainReferenceId;
             record.payloadJson = payload.canonicalText;
             record.payloadHash = payload.payloadHash;
-            record.expectedAccountRevision = null;
+            record.accountGuardsJson = "[]";
             record.state = "pending_local";
             record.serverOutcome = null;
             record.outcomeJson = null;
@@ -292,7 +296,7 @@ describe("financial action foundation SQLite persistence", () => {
           record.domainReferenceId = foreignEnvelope.domainReferenceId;
           record.payloadJson = foreignPayload.canonicalText;
           record.payloadHash = foreignPayload.payloadHash;
-          record.expectedAccountRevision = null;
+          record.accountGuardsJson = "[]";
           record.state = "pending_local";
           record.serverOutcome = null;
           record.outcomeJson = null;
