@@ -49,6 +49,10 @@ const RESET_TABLE_DELETE_ORDER = [
   "recurring_payments",
   "budgets",
   "debts",
+  "metal_rate_references",
+  "metal_lifecycle_events",
+  "metal_action_evidence",
+  "metal_holding_states",
   "assets",
   "daily_snapshot_assets",
   "daily_snapshot_balance",
@@ -564,6 +568,31 @@ async function upsertRowsIfAny(client, table, rows, options) {
   await upsertRows(client, table, rows, options);
 }
 
+async function deleteRowsByIds(client, table, rows) {
+  const ids = rows.map((row) => row.id);
+  if (ids.length === 0) {
+    return;
+  }
+
+  await assertNoError(
+    await client.from(table).delete().in("id", ids),
+    `delete ${table}`
+  );
+}
+
+async function selectRowsByIds(client, table, rows) {
+  const ids = rows.map((row) => row.id);
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const result = await assertNoError(
+    await client.from(table).select("*").in("id", ids),
+    `inspect ${table}`
+  );
+  return result.data ?? [];
+}
+
 async function resolveSeedProfileId(client, userId, fallbackProfileId) {
   const result = await assertNoError(
     await client
@@ -610,6 +639,8 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
   const expandedBankDetails = extraRows.bankDetails ?? [];
   const assets = extraRows.assets ?? [];
   const assetMetals = extraRows.assetMetals ?? [];
+  const metalHoldingStates = extraRows.metalHoldingStates ?? [];
+  const marketRateObservations = extraRows.marketRateObservations ?? [];
   const debts = extraRows.debts ?? [];
   const budgets = extraRows.budgets ?? [];
   const categories = extraRows.categories ?? [];
@@ -799,6 +830,8 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
     ],
     assets,
     assetMetals,
+    metalHoldingStates,
+    marketRateObservations,
     budgets,
     categories,
     debts,
@@ -877,6 +910,11 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
   const rows = buildSeedRows(userId, seedIds, fixture);
 
   if (!fixture.preserveExistingRows) {
+    await deleteRowsByIds(
+      client,
+      "market_rate_observations",
+      rows.marketRateObservations
+    );
     for (const table of SEED_TABLE_DELETE_ORDER) {
       await deleteScopedRows(client, table, userId, seedIds);
     }
@@ -896,6 +934,18 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
   await upsertRowsIfAny(client, "asset_metals", rows.assetMetals, {
     onConflict: "id",
   });
+  await upsertRowsIfAny(
+    client,
+    "metal_holding_states",
+    rows.metalHoldingStates,
+    { onConflict: "id" }
+  );
+  await upsertRowsIfAny(
+    client,
+    "market_rate_observations",
+    rows.marketRateObservations,
+    { onConflict: "id" }
+  );
   await upsertRowsIfAny(client, "debts", rows.debts, { onConflict: "id" });
   await upsertRowsIfAny(client, "categories", rows.categories, {
     onConflict: "id",
@@ -927,6 +977,13 @@ async function resetFixtureData(client, config, fixtureOverrides = {}) {
   const userId =
     config.userId ?? (await ensureSeedUser(client, config, fixture));
   const seedIds = buildSeedIds(userId, fixture.seedScope);
+  const rows = buildSeedRows(userId, seedIds, fixture);
+
+  await deleteRowsByIds(
+    client,
+    "market_rate_observations",
+    rows.marketRateObservations
+  );
 
   for (const table of RESET_TABLE_DELETE_ORDER) {
     await deleteScopedRows(client, table, userId, seedIds);
@@ -935,12 +992,41 @@ async function resetFixtureData(client, config, fixtureOverrides = {}) {
   return { userId };
 }
 
+async function inspectFixtureData(client, config, fixtureOverrides = {}) {
+  const fixture = resolveSeedFixture(fixtureOverrides);
+  const userId =
+    config.userId ?? (await ensureSeedUser(client, config, fixture));
+  const seedIds = buildSeedIds(userId, fixture.seedScope);
+  const rows = buildSeedRows(userId, seedIds, fixture);
+  const inspectedTables = {};
+
+  for (const [table, expectedRows] of [
+    ["assets", rows.assets],
+    ["asset_metals", rows.assetMetals],
+    ["metal_holding_states", rows.metalHoldingStates],
+    ["market_rate_observations", rows.marketRateObservations],
+  ]) {
+    inspectedTables[table] = {
+      expected: expectedRows.length,
+      rows: await selectRowsByIds(client, table, expectedRows),
+    };
+  }
+
+  return {
+    userId,
+    seedScope: fixture.seedScope,
+    controls: fixture.controls ?? {},
+    tables: inspectedTables,
+  };
+}
+
 module.exports = {
   RESET_TABLE_DELETE_ORDER,
   SEED_TABLE_DELETE_ORDER,
   E2E_MARKET_RATE_ID,
   createLocalSupabaseJwt,
   getSeedConfig,
+  inspectFixtureData,
   resetFixtureData,
   seedFixtureData,
 };
