@@ -10,13 +10,24 @@ import {
 
 export type { ExactRateReference } from "./rate-reference";
 
-export type Availability<T> =
+export type Availability<T, Reason extends string> =
   | { readonly available: true; readonly value: T }
-  | { readonly available: false; readonly reason: string };
+  | { readonly available: false; readonly reason: Reason };
+
+export type ExactValueUnavailableReason =
+  | "invalid_weight"
+  | "invalid_purity"
+  | "invalid_metal_rate"
+  | "invalid_currency_rate";
+
+export type RateNormalizationUnavailableReason = "invalid_rate";
 
 export type ExactValueAvailability =
   | { readonly available: true; readonly valueDecimal: string }
-  | { readonly available: false; readonly reason: string };
+  | {
+      readonly available: false;
+      readonly reason: ExactValueUnavailableReason;
+    };
 
 export interface PureGramInput {
   readonly weightGramsDecimal: string;
@@ -72,7 +83,7 @@ export function calculateMetalReferenceValue(
 
 export function normalizeUsdPerUnitRate(
   reference: ExactRateReference
-): Availability<string> {
+): Availability<string, RateNormalizationUnavailableReason> {
   const normalized = reference.kind === "metal"
     ? validateAndNormalizeRateReference(reference, {
         role: reference.role,

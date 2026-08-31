@@ -1,4 +1,5 @@
 export * from "./attribution";
+export * from "./currency-minor-units";
 export * from "./decimal";
 export * from "./lifecycle-reducer";
 export * from "./purity-catalog";
@@ -9,6 +10,7 @@ export {
   validateAndNormalizeRateReference,
 } from "./rate-reference";
 export type {
+  AttributionCalculationOutputReason,
   CurrencyInstrumentCode,
   CurrencyRateRole,
   ExactCurrencyRateReference,

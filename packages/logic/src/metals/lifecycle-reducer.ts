@@ -94,16 +94,17 @@ export function reduceMetalLifecycle(
       event.kind === "created" && event.predecessorEventId === null
   );
 
-  if (roots.length !== 1) {
+  const selectedRoot = selectCreationRoot(withCyclesRejected, roots);
+  if (selectedRoot.event === null) {
     return finalizeReduction(
       [],
-      rejectRemaining(rejectUnsafeRoots(withCyclesRejected, roots), [])
+      rejectRemaining(selectedRoot.state, [])
     );
   }
 
-  const accepted: LifecycleEvent[] = [roots[0] as LifecycleEvent];
-  let state = withCyclesRejected;
-  let current = roots[0] as LifecycleEvent;
+  const accepted: LifecycleEvent[] = [selectedRoot.event];
+  let state = selectedRoot.state;
+  let current = selectedRoot.event;
   for (;;) {
     const successors = [...state.candidatesById.values()].filter(
       (event) => !state.rejectedIds.has(event.id) &&
@@ -345,17 +346,26 @@ function rejectCycleEvents(
   return next;
 }
 
-function rejectUnsafeRoots(
+function selectCreationRoot(
   state: ReductionState,
   roots: readonly LifecycleEvent[]
-): ReductionState {
+): { readonly event: LifecycleEvent | null; readonly state: ReductionState } {
+  if (roots.length === 1) {
+    return { event: roots[0] as LifecycleEvent, state };
+  }
+  const canonical = roots.filter(
+    ({ canonicalCasStatus }) => canonicalCasStatus === "accepted"
+  );
+  const winner = canonical.length === 1 ? canonical[0] as LifecycleEvent : null;
   let next = state;
   if (roots.length > 1) {
     for (const root of roots) {
-      next = appendRejection(next, root, "invalid_transition", null, true);
+      if (winner === null || root.id !== winner.id) {
+        next = appendRejection(next, root, "invalid_transition", null, true);
+      }
     }
   }
-  return next;
+  return { event: winner, state: next };
 }
 
 function validateSuccessors(

@@ -915,15 +915,15 @@ describe("rounding explanation and hand-derived PostgreSQL numeric compatibility
     },
     {
       name: "high-precision exact decimals",
-      derivation: "Hand-derived from FR-050 with q=0.000001 and the same exact rates; no database query was executed.",
+      derivation: "Hand-derived from FR-050 with q=0.000001, EGP minor-unit purchase cost K=0.01, and the same exact rates; no database query was executed.",
       pureGramsDecimal: "0.000001",
-      purchaseCostDecimal: "0.0000001",
-      purchaseCurrencyDecimalPlaces: 7,
+      purchaseCostDecimal: "0.01",
+      purchaseCurrencyDecimalPlaces: 2,
       expectedExactNumeric: {
         metalMovementDecimal: "0.000002",
         currencyMovementDecimal: "0.000006",
-        purchaseCostDecimal: "0.0000039",
-        combinedDecimal: "0.0000119",
+        purchaseCostDecimal: "-0.009996",
+        combinedDecimal: "-0.009988",
       },
     },
   ])("matches a hand-derived exact-decimal fixture intended for future PostgreSQL numeric parity: $name", ({ pureGramsDecimal, purchaseCostDecimal, purchaseCurrencyDecimalPlaces, expectedExactNumeric }) => {

@@ -7,8 +7,10 @@ import {
   toMinorUnits,
   type ExactDecimalValue,
 } from "./decimal";
+import { resolveMetalsCurrencyMinorUnits } from "./currency-minor-units";
 import {
   validateAndNormalizeRateReference,
+  type AttributionCalculationOutputReason,
   type CurrencyInstrumentCode,
   type CurrencyRateRole,
   type ExactRateReference,
@@ -18,6 +20,24 @@ import {
   type RateInstrumentCode,
 } from "./rate-reference";
 import type { Availability } from "./valuation";
+
+export type AttributionInputUnavailableReason =
+  | "pure_grams_unavailable"
+  | "gross_proceeds_unavailable"
+  | "fees_unavailable";
+export type AttributionRoundingUnavailableReason =
+  "attribution_components_mismatch";
+export type AttributionUnavailableReason =
+  | AttributionCalculationOutputReason
+  | AttributionInputUnavailableReason
+  | AttributionRoundingUnavailableReason;
+
+type AttributionBreakdown<T> =
+  | { readonly available: true; readonly value: T }
+  | {
+      readonly available: false;
+      readonly reasons: readonly AttributionUnavailableReason[];
+    };
 
 export interface UnrealizedAttributionInput {
   readonly metalInstrumentCode: MetalInstrumentCode;
@@ -51,14 +71,14 @@ export interface RealizedAttributionInput {
 export interface UnrealizedAttribution {
   readonly combinedDecimal: string;
   readonly consumedRateReferences: readonly ExactRateReference[];
-  readonly breakdown: Availability<{
+  readonly breakdown: AttributionBreakdown<{
     readonly components: {
       readonly metalMovementDecimal: string;
       readonly currencyMovementDecimal: string;
       readonly purchaseCostDecimal: string;
     };
     readonly rateReferences: readonly ExactRateReference[];
-  }> | { readonly available: false; readonly reasons: readonly string[] };
+  }>;
 }
 
 export interface RealizedAttribution {
@@ -67,7 +87,7 @@ export interface RealizedAttribution {
   readonly canonicalGrossProceedsDecimal: string;
   readonly canonicalFeesDecimal: string;
   readonly netProceedsDecimal: string;
-  readonly breakdown: Availability<{
+  readonly breakdown: AttributionBreakdown<{
     readonly components: {
       readonly metalMovementDecimal: string;
       readonly currencyMovementDecimal: string;
@@ -76,7 +96,7 @@ export interface RealizedAttribution {
       readonly feeDecimal: string;
     };
     readonly rateReferences: readonly ExactRateReference[];
-  }> | { readonly available: false; readonly reasons: readonly string[] };
+  }>;
 }
 
 export interface RoundedAttribution {
@@ -99,7 +119,10 @@ export interface DisplayAttributionSource {
 export interface DisplayAttributionInput {
   readonly canonicalCurrencyInstrumentCode: CurrencyInstrumentCode;
   readonly preferredCurrencyInstrumentCode: CurrencyInstrumentCode;
-  readonly attribution: Availability<DisplayAttributionSource>;
+  readonly attribution: Availability<
+    DisplayAttributionSource,
+    AttributionUnavailableReason
+  >;
   readonly canonicalCurrencyAtDisplayRate: ExactRateReference | null;
   readonly preferredCurrencyAtDisplayRate: ExactRateReference | null;
   readonly decimalPlaces: number;
@@ -112,7 +135,7 @@ interface RequiredRate {
 
 export function calculateUnrealizedAttribution(
   input: UnrealizedAttributionInput
-): Availability<UnrealizedAttribution> {
+): Availability<UnrealizedAttribution, AttributionUnavailableReason> {
   const pureGrams = readPositiveDecimal(
     input.pureGramsDecimal,
     "pure_grams_unavailable"
@@ -127,10 +150,15 @@ export function calculateUnrealizedAttribution(
   if (!purchaseCost.available) {
     return purchaseCost;
   }
+  const purchaseCurrencyMinorUnits = resolveMetalsCurrencyMinorUnits(
+    input.purchaseCurrencyInstrumentCode
+  );
   if (
+    purchaseCurrencyMinorUnits === null ||
+    input.purchaseCurrencyDecimalPlaces !== purchaseCurrencyMinorUnits ||
     !isMinorUnitCompatible(
       input.purchaseCostDecimal as string,
-      input.purchaseCurrencyDecimalPlaces
+      purchaseCurrencyMinorUnits
     )
   ) {
     return { available: false, reason: "purchase_cost_unavailable" };
@@ -226,7 +254,7 @@ export function calculateUnrealizedAttribution(
 
 export function calculateRealizedAttribution(
   input: RealizedAttributionInput
-): Availability<RealizedAttribution> {
+): Availability<RealizedAttribution, AttributionUnavailableReason> {
   const purchaseCost = readPositiveDecimal(
     input.purchaseCostDecimal,
     "purchase_cost_unavailable"
@@ -234,13 +262,27 @@ export function calculateRealizedAttribution(
   if (!purchaseCost.available) {
     return purchaseCost;
   }
+  const purchaseCurrencyMinorUnits = resolveMetalsCurrencyMinorUnits(
+    input.purchaseCurrencyInstrumentCode
+  );
   if (
+    purchaseCurrencyMinorUnits === null ||
+    input.purchaseCurrencyDecimalPlaces !== purchaseCurrencyMinorUnits ||
     !isMinorUnitCompatible(
       input.purchaseCostDecimal as string,
-      input.purchaseCurrencyDecimalPlaces
+      purchaseCurrencyMinorUnits
     )
   ) {
     return { available: false, reason: "purchase_cost_unavailable" };
+  }
+  const proceedsCurrencyMinorUnits = resolveMetalsCurrencyMinorUnits(
+    input.proceedsCurrencyInstrumentCode
+  );
+  if (
+    proceedsCurrencyMinorUnits === null ||
+    input.proceedsCurrencyDecimalPlaces !== proceedsCurrencyMinorUnits
+  ) {
+    return { available: false, reason: "gross_proceeds_unavailable" };
   }
   const purchaseCurrencyAtSale = readRate(
     input.purchaseCurrencyAtSaleRate,
@@ -268,7 +310,7 @@ export function calculateRealizedAttribution(
     !grossProceeds.available ||
     !isMinorUnitCompatible(
       input.grossProceedsDecimal,
-      input.proceedsCurrencyDecimalPlaces
+      proceedsCurrencyMinorUnits
     )
   ) {
     return { available: false, reason: "gross_proceeds_unavailable" };
@@ -276,7 +318,7 @@ export function calculateRealizedAttribution(
   const fees = readNonNegativeDecimal(input.feesDecimal, "fees_unavailable");
   if (
     !fees.available ||
-    !isMinorUnitCompatible(input.feesDecimal, input.proceedsCurrencyDecimalPlaces) ||
+    !isMinorUnitCompatible(input.feesDecimal, proceedsCurrencyMinorUnits) ||
     fees.value.greaterThan(grossProceeds.value)
   ) {
     return { available: false, reason: "fees_unavailable" };
@@ -401,7 +443,7 @@ export function roundAttributionForDisplay(input: {
   readonly combinedDecimal: string;
   readonly components: Readonly<Record<string, string>>;
   readonly decimalPlaces: number;
-}): Availability<RoundedAttribution> {
+}): Availability<RoundedAttribution, AttributionRoundingUnavailableReason> {
   if (!hasExactComponentSum(input)) {
     return { available: false, reason: "attribution_components_mismatch" };
   }
@@ -413,7 +455,7 @@ function roundReconciledAttributionForDisplay(input: {
   readonly combinedDecimal: string;
   readonly components: Readonly<Record<string, string>>;
   readonly decimalPlaces: number;
-}): Availability<RoundedAttribution> {
+}): Availability<RoundedAttribution, AttributionRoundingUnavailableReason> {
   const combinedDecimal = roundDecimal(
     input.combinedDecimal,
     input.decimalPlaces
@@ -480,7 +522,7 @@ function sumDecimalStrings(values: readonly string[]): string {
 
 export function convertAttributionForDisplay(
   input: DisplayAttributionInput
-): Availability<ConvertedAttribution> {
+): Availability<ConvertedAttribution, AttributionUnavailableReason> {
   if (!input.attribution.available) {
     return input.attribution;
   }
@@ -544,7 +586,7 @@ export function convertAttributionForDisplay(
 function convertSameCurrencyAttributionForDisplay(
   attribution: DisplayAttributionSource,
   decimalPlaces: number
-): Availability<ConvertedAttribution> {
+): Availability<ConvertedAttribution, AttributionRoundingUnavailableReason> {
   if (!hasExactComponentSum(attribution)) {
     return { available: false, reason: "attribution_components_mismatch" };
   }
@@ -558,9 +600,12 @@ function convertSameCurrencyAttributionForDisplay(
 }
 
 function withConsumedRateReferences(
-  attribution: Availability<RoundedAttribution>,
+  attribution: Availability<
+    RoundedAttribution,
+    AttributionRoundingUnavailableReason
+  >,
   references: readonly ExactRateReference[]
-): Availability<ConvertedAttribution> {
+): Availability<ConvertedAttribution, AttributionRoundingUnavailableReason> {
   if (!attribution.available) {
     return attribution;
   }
@@ -603,10 +648,10 @@ function calculateCoreComponents(input: {
 
 function readRate(
   reference: ExactRateReference | null,
-  unavailableReason: string,
+  unavailableReason: AttributionCalculationOutputReason,
   expectedRole: MetalRateRole | CurrencyRateRole,
   expectedInstrumentCode: RateInstrumentCode
-): Availability<RequiredRate> {
+): Availability<RequiredRate, AttributionCalculationOutputReason> {
   if (reference === null) {
     return { available: false, reason: unavailableReason };
   }
@@ -664,10 +709,10 @@ function isMetalInstrumentCode(
   return instrumentCode === "metal:GOLD" || instrumentCode === "metal:SILVER";
 }
 
-function readPositiveDecimal(
+function readPositiveDecimal<Reason extends AttributionUnavailableReason>(
   value: string | null,
-  unavailableReason: string
-): Availability<ExactDecimalValue> {
+  unavailableReason: Reason
+): Availability<ExactDecimalValue, Reason> {
   if (value === null) {
     return { available: false, reason: unavailableReason };
   }
@@ -681,10 +726,10 @@ function readPositiveDecimal(
   }
 }
 
-function readNonNegativeDecimal(
+function readNonNegativeDecimal<Reason extends AttributionUnavailableReason>(
   value: string,
-  unavailableReason: string
-): Availability<ExactDecimalValue> {
+  unavailableReason: Reason
+): Availability<ExactDecimalValue, Reason> {
   try {
     const decimal = parseCanonicalDecimal(value);
     return decimal.greaterThanOrEqualTo("0")
@@ -705,8 +750,8 @@ function isMinorUnitCompatible(value: string, decimalPlaces: number): boolean {
 }
 
 function unavailableReasons(
-  values: readonly Availability<unknown>[]
-): readonly string[] {
+  values: readonly Availability<unknown, AttributionUnavailableReason>[]
+): readonly AttributionUnavailableReason[] {
   return values.flatMap((value) =>
     value.available ? [] : [value.reason]
   );
@@ -726,7 +771,10 @@ function snapshotRateReferences(
 }
 
 function snapshotAvailableRateReferences(
-  rates: readonly Availability<RequiredRate>[]
+  rates: readonly Availability<
+    RequiredRate,
+    AttributionCalculationOutputReason
+  >[]
 ): readonly ExactRateReference[] {
   return snapshotRateReferences(
     rates.flatMap((rate) => rate.available ? [rate.value.reference] : [])

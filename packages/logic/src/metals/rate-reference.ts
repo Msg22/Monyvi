@@ -32,6 +32,18 @@ export type RateReferenceUnavailableReason =
   | "quality_not_valid"
   | "invalid_capture_time";
 
+export type AttributionCalculationOutputReason =
+  | "purchase_cost_unavailable"
+  | "acquisition_metal_rate_unavailable"
+  | "acquisition_currency_rate_unavailable"
+  | "valuation_metal_rate_unavailable"
+  | "valuation_currency_rate_unavailable"
+  | "sale_metal_rate_unavailable"
+  | "purchase_currency_at_sale_rate_unavailable"
+  | "proceeds_currency_at_sale_rate_unavailable"
+  | "canonical_currency_display_rate_unavailable"
+  | "preferred_currency_display_rate_unavailable";
+
 interface ExactRateReferenceBase {
   readonly valueDecimal: string;
   readonly providerObservedAt: number | null;
@@ -283,7 +295,7 @@ function createNormalizedSnapshot(
   const common = {
     valueDecimal: reference.valueDecimal,
     providerObservedAt,
-    source: typeof reference.source === "string" ? reference.source : null,
+    source: normalizeSource(reference.source),
     quality: "valid" as const,
     capturedAt: reference.capturedAt,
     capturedFreshness,
@@ -338,6 +350,14 @@ function createNormalizedSnapshot(
     }
   }
   return null;
+}
+
+function normalizeSource(source: unknown): string | null {
+  if (typeof source !== "string") {
+    return null;
+  }
+  const normalized = source.trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

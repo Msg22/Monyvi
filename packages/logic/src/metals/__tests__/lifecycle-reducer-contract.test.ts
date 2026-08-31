@@ -216,6 +216,41 @@ describe("approved pure lifecycle reduction", () => {
     expect(descendantRejection?.reasonCode).toBe("predecessor_not_accepted");
   });
 
+  it("selects the unique server-accepted creation root over a local competitor", () => {
+    const acceptedRoot = event("accepted-root", "created", null, {
+      canonicalCasStatus: "accepted",
+    });
+    const localRoot = event("local-root", "created", null);
+    const correction = event("correction", "corrected", "accepted-root");
+
+    const result = reduceMetalLifecycle([localRoot, correction, acceptedRoot]);
+
+    expect(result.projection?.effectiveEventId).toBe("correction");
+    expect(result.acceptedEvents.map(({ id }) => id)).toEqual([
+      "accepted-root",
+      "correction",
+    ]);
+    expect(
+      result.rejectedEvents.find(({ event }) => event.id === "local-root")
+        ?.reasonCode
+    ).toBe("invalid_transition");
+  });
+
+  it("fails closed when multiple creation roots claim canonical acceptance", () => {
+    const acceptedRootA = event("accepted-root-a", "created", null, {
+      canonicalCasStatus: "accepted",
+    });
+    const acceptedRootB = event("accepted-root-b", "created", null, {
+      canonicalCasStatus: "accepted",
+    });
+
+    const result = reduceMetalLifecycle([acceptedRootB, acceptedRootA]);
+
+    expect(result.projection).toBeNull();
+    expect(result.acceptedEvents).toEqual([]);
+    expect(result.rejectedEvents).toHaveLength(2);
+    expect(reasons(result)).toEqual(["invalid_transition", "invalid_transition"]);
+  });
   it("rejects cycles and descendants of rejected predecessors", () => {
     const cycleA = event("cycle-a", "corrected", "cycle-b");
     const cycleB = event("cycle-b", "corrected", "cycle-a");

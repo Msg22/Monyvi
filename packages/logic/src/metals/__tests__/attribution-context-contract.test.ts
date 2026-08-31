@@ -71,6 +71,102 @@ const SALE_CONTEXT = {
 } as const;
 
 describe("attribution expected instrument context", () => {
+  it.each([
+    ["currency:EGP", "35.123", 3],
+    ["currency:KWD", "35.12", 2],
+    ["currency:ZZZ", "35.12", 2],
+  ] as const)(
+    "rejects purchase money whose scale is not defined by %s",
+    (purchaseCurrencyInstrumentCode, purchaseCostDecimal, purchaseCurrencyDecimalPlaces) => {
+      expect(
+        calculateUnrealizedAttribution({
+          ...CURRENT_CONTEXT,
+          purchaseCurrencyInstrumentCode:
+            purchaseCurrencyInstrumentCode as CurrencyInstrumentCode,
+          purchaseCostDecimal,
+          purchaseCurrencyDecimalPlaces,
+          acquisitionMetalRate: null,
+          acquisitionCurrencyRate: null,
+          valuationMetalRate: metalRate("current_metal", "metal:GOLD", "3"),
+          valuationCurrencyRate: currencyRate(
+            "current_purchase_currency",
+            purchaseCurrencyInstrumentCode as CurrencyInstrumentCode,
+            "0.25"
+          ),
+        })
+      ).toEqual({ available: false, reason: "purchase_cost_unavailable" });
+    }
+  );
+
+  it("accepts KWD purchase money at the currency's three-decimal scale", () => {
+    expect(
+      calculateUnrealizedAttribution({
+        ...CURRENT_CONTEXT,
+        purchaseCurrencyInstrumentCode: "currency:KWD",
+        purchaseCostDecimal: "35.123",
+        purchaseCurrencyDecimalPlaces: 3,
+        acquisitionMetalRate: null,
+        acquisitionCurrencyRate: null,
+        valuationMetalRate: metalRate("current_metal", "metal:GOLD", "3"),
+        valuationCurrencyRate: currencyRate(
+          "current_purchase_currency",
+          "currency:KWD",
+          "3.25"
+        ),
+      }).available
+    ).toBe(true);
+  });
+
+  it("rejects sale money whose scale does not match the proceeds currency", () => {
+    expect(
+      calculateRealizedAttribution({
+        ...SALE_CONTEXT,
+        proceedsCurrencyInstrumentCode: "currency:KWD",
+        grossProceedsDecimal: "100.12",
+        feesDecimal: "0.01",
+        proceedsCurrencyDecimalPlaces: 2,
+        acquisitionMetalRate: null,
+        acquisitionCurrencyRate: null,
+        saleMetalRate: null,
+        purchaseCurrencyAtSaleRate: currencyRate(
+          "terminal_purchase_currency",
+          "currency:EGP",
+          "0.02"
+        ),
+        proceedsCurrencyAtSaleRate: currencyRate(
+          "terminal_proceeds_currency",
+          "currency:KWD",
+          "3.25"
+        ),
+      })
+    ).toEqual({ available: false, reason: "gross_proceeds_unavailable" });
+  });
+
+  it("accepts KWD sale money at the currency's three-decimal scale", () => {
+    expect(
+      calculateRealizedAttribution({
+        ...SALE_CONTEXT,
+        proceedsCurrencyInstrumentCode: "currency:KWD",
+        grossProceedsDecimal: "100.123",
+        feesDecimal: "0.001",
+        proceedsCurrencyDecimalPlaces: 3,
+        acquisitionMetalRate: null,
+        acquisitionCurrencyRate: null,
+        saleMetalRate: null,
+        purchaseCurrencyAtSaleRate: currencyRate(
+          "terminal_purchase_currency",
+          "currency:EGP",
+          "0.02"
+        ),
+        proceedsCurrencyAtSaleRate: currencyRate(
+          "terminal_proceeds_currency",
+          "currency:KWD",
+          "3.25"
+        ),
+      }).available
+    ).toBe(true);
+  });
+
   it("rejects a current Silver rate for a Gold holding when acquisition Metal evidence is missing", () => {
     expect(
       calculateUnrealizedAttribution({

@@ -157,6 +157,8 @@ describe("approved Metals rate-reference contract", () => {
       return raw;
     })()],
     ["non-string", reference({ source: 42 })],
+    ["blank", reference({ source: "" })],
+    ["whitespace", reference({ source: "  \t  " })],
   ] as const)("keeps valid rates with %s provenance and normalizes source to null", (_case, raw) => {
     expect(validateAndNormalizeRateReference(raw, CURRENT_EGP)).toMatchObject({
       available: true,
@@ -164,6 +166,17 @@ describe("approved Metals rate-reference contract", () => {
     });
   });
 
+  it("trims nonblank rate source provenance", () => {
+    expect(
+      validateAndNormalizeRateReference(
+        reference({ source: "  provider-v1  " }),
+        CURRENT_EGP
+      )
+    ).toMatchObject({
+      available: true,
+      value: { source: "provider-v1" },
+    });
+  });
   it("returns a detached immutable snapshot and never mutates raw evidence", () => {
     const raw = { ...reference(), valueDecimal: "50", unit: "currency_units_per_usd", orientation: "base_per_quote" };
     const result = validateAndNormalizeRateReference(raw, CURRENT_EGP);
