@@ -400,3 +400,31 @@ create tampering cannot reach `database.batch`. The deterministic tests also ver
 snapshot mutation is ineffective, failure restores `_raw`, `_preparedState`, and
 `_isEditing`, and hard-delete preparation remains absent. No emulator journey is required
 for this infrastructure-only boundary.
+
+### PR #251 cached-preimage post-validation hardening — 2026-08-31
+
+This entry extends, and does not replace, the dated evidence above. After cached ownership
+validation returns and the expected user is reasserted, the repository now compares every
+live cached model with its unexposed captured preimage and expectation before any update or
+soft-delete preparation. Object, table, and ID identity must remain exact; preparation must
+remain clean and non-editing; the complete shallow raw record must remain key/value equal;
+and non-root, unique, and prepared-create-disjoint guards are reasserted. Any validator
+closure that retains and mutates a Watermelon model therefore fails with
+`financial_action_invalid_input`, restores its cached snapshot, and cannot invoke an updater,
+`prepareMarkAsDeleted`, prepared ownership validation, or `database.batch`.
+
+The first focused command hit the Windows Watchman startup failure before test execution.
+Focused Red rerun with `--watchman=false` was 1 failed suite with 2 failed and 17 passed of
+19 tests: retained update and soft-delete models with changed owner, parent, and amount raw
+fields both committed instead of rejecting before preparation. Final focused Green is 1/1
+suite and 19/19 tests. The explicit broader foundation plus sync set is 12/12 suites and
+132/132 tests. Exact mobile and logic TypeScript checks pass. Changed-file lint and the
+explicit 900-line guard pass; full repository lint reports 0 errors with 272 pre-existing
+warnings; `git diff --check` passes.
+
+Manual inspection verified the cached-model guard runs immediately after cached validation
+and auth reassertion, before both existing-operation preparation paths. Deterministic tests
+prove no preparation or batch call occurs and exact `_raw`, `_preparedState`, and
+`_isEditing` rollback for both update and `markAsDeleted` closure tampering. No schema,
+migration, remote database, dedicated synchronizer, account-guard, or GitHub thread mutation
+is included.

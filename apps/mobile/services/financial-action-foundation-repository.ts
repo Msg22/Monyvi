@@ -423,6 +423,38 @@ export function createFinancialActionFoundationRepository(
     );
   }
 
+  function assertCachedOperationsUnchanged(
+    models: readonly Model[],
+    snapshots: ReadonlyArray<ReturnType<typeof captureCachedModelSnapshot>>,
+    expectations: readonly ExistingOperationExpectation[],
+    preparedCreates: readonly Model[]
+  ): void {
+    if (
+      models.length !== snapshots.length ||
+      models.length !== expectations.length ||
+      models.some((model, index) => {
+        const snapshot = snapshots[index];
+        const expectation = expectations[index];
+        return (
+          !snapshot ||
+          !expectation ||
+          model !== snapshot.model ||
+          model !== expectation.model ||
+          model.table !== expectation.table ||
+          model.id !== expectation.id ||
+          model._preparedState !== null ||
+          model._isEditing ||
+          !rawRecordsMatch(model._raw, snapshot.raw)
+        );
+      })
+    ) {
+      throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+    }
+    assertNoRootTargets(models);
+    assertUniqueModelIdentities(models);
+    assertDisjointModelIdentities(models, preparedCreates);
+  }
+
   function capturePreparedExpectations(
     preparedCreates: readonly Model[],
     preparedExistingOperations: readonly Model[],
@@ -630,6 +662,12 @@ export function createFinancialActionFoundationRepository(
         cachedPreimages,
       }));
       await reassertExpectedCurrentUser(context.scope.userId);
+      assertCachedOperationsUnchanged(
+        cachedModels,
+        cachedSnapshots,
+        existingExpectations,
+        preparedCreates
+      );
       assertPreparedCreateIntegrity(preparedCreates, preparedCreateIdentities);
       assertPreparedOperationsMatch(
         preparedCreates,

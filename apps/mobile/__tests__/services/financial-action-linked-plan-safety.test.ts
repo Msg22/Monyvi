@@ -438,6 +438,87 @@ describe("financial action linked plan safety", () => {
     );
   });
 
+  it("rejects cached-validator update-model tampering before update preparation", async () => {
+    const existing = fakeModel("cached-update", "asset_metals");
+    existing._raw.user_id = USER_ID;
+    existing._raw.parent_id = "holding-a";
+    existing._raw.amount_minor = "100";
+    existing._raw.deleted = false;
+    const originalRaw = { ...existing._raw };
+    const update = jest.fn();
+    const prepareUpdate = jest.spyOn(existing, "prepareUpdate");
+    const assertCachedOwnership = jest.fn(async (): Promise<void> => {
+      await Promise.resolve();
+      existing._raw.user_id = "018f0c7a-1234-7abc-8def-000000000099";
+      existing._raw.parent_id = "holding-b";
+      existing._raw.amount_minor = "999";
+    });
+
+    await expect(
+      commit(
+        plan(
+          [
+            {
+              kind: "update",
+              model: existing as unknown as Model,
+              update,
+            },
+          ],
+          [],
+          mockAssertPreparedOwnership,
+          assertCachedOwnership
+        )
+      )
+    ).rejects.toThrow(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+
+    expect(prepareUpdate).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+    expect(mockAssertPreparedOwnership).not.toHaveBeenCalled();
+    expect(mockBatch).not.toHaveBeenCalled();
+    expect(existing._raw).toEqual(originalRaw);
+    expect(existing._preparedState).toBeNull();
+    expect(existing._isEditing).toBe(false);
+  });
+
+  it("rejects cached-validator delete-model tampering before delete preparation", async () => {
+    const existing = fakeModel("cached-delete", "asset_metals");
+    existing._raw.user_id = USER_ID;
+    existing._raw.parent_id = "holding-a";
+    existing._raw.amount_minor = "100";
+    existing._raw.deleted = false;
+    const originalRaw = { ...existing._raw };
+    const prepareMarkAsDeleted = jest.spyOn(existing, "prepareMarkAsDeleted");
+    const assertCachedOwnership = jest.fn(async (): Promise<void> => {
+      await Promise.resolve();
+      existing._raw.user_id = "018f0c7a-1234-7abc-8def-000000000099";
+      existing._raw.parent_id = "holding-b";
+      existing._raw.amount_minor = "999";
+    });
+
+    await expect(
+      commit(
+        plan(
+          [
+            {
+              kind: "markAsDeleted",
+              model: existing as unknown as Model,
+            },
+          ],
+          [],
+          mockAssertPreparedOwnership,
+          assertCachedOwnership
+        )
+      )
+    ).rejects.toThrow(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+
+    expect(prepareMarkAsDeleted).not.toHaveBeenCalled();
+    expect(mockAssertPreparedOwnership).not.toHaveBeenCalled();
+    expect(mockBatch).not.toHaveBeenCalled();
+    expect(existing._raw).toEqual(originalRaw);
+    expect(existing._preparedState).toBeNull();
+    expect(existing._isEditing).toBe(false);
+  });
+
   it.each([
     [
       "state",
