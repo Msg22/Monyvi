@@ -579,10 +579,7 @@ describe("financial action foundation repository", () => {
 
     expect(assertCachedOwnership).toHaveBeenCalledTimes(1);
     expect(assertCachedOwnership).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: USER_ID,
-        cachedModels: [cached],
-      })
+      expect.objectContaining({ userId: USER_ID, cachedModels: [cached] })
     );
     expect(assertPreparedOwnership).toHaveBeenCalledTimes(1);
     expect(assertPreparedOwnership).toHaveBeenCalledWith(
@@ -667,10 +664,7 @@ describe("financial action foundation repository", () => {
     ).rejects.toThrow("ownership_failed");
 
     expect(assertCachedOwnership).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: USER_ID,
-        cachedModels: [foreign],
-      })
+      expect.objectContaining({ userId: USER_ID, cachedModels: [foreign] })
     );
     expect(update).not.toHaveBeenCalled();
     expect(foreign._raw).toEqual(originalRaw);
