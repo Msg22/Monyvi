@@ -326,3 +326,34 @@ tests; 94.67% statements, 87.56% branches, 100% functions, 94.62% lines),
 `npm run typecheck -w @monyvi/logic` (exit 0), and root `npm run lint` (exit 0;
 269 pre-existing warnings, no errors). This remains dated foundation evidence,
 not release coverage or approval evidence.
+
+
+## Source-hash supersession after financial-evidence preservation — 2026-08-31
+
+The prior localization/display-conversion snapshot remains historical evidence.
+This append-only record supersedes it for source authentication at commit
+`79a7cd8bfd7dd0396dd84c8057f3c11c7a82a5c9`. It was calculated from the current
+worktree with the same `git hash-object` command listed in the prior supersession.
+
+| Source | Current Git blob hash |
+| --- | --- |
+| `decimal.ts` | `fb395f6516fdb272f6e784792edb7aa4a98948ef` |
+| `purity-catalog.ts` | `eaa9942ffa425b8208aa2f2c3d5163ffdc9ef373` |
+| `valuation.ts` | `f09dbcfa018f30f39b7730d3ca1978e25a7f26af` |
+| `attribution.ts` | `8a78522bee120fc69ff781948e1d537cc9c5cc0a` |
+| `lifecycle-reducer.ts` | `f6987f6ae71c19c1199a69b28b34258bf02532eb` |
+| `rate-trust.ts` | `7cdc8d2442a3e05b1a91eae7a930a3a2328aaff2` |
+| `rate-reference.ts` | `42f11dac8040eafbce82bac70a26c80a303d84a0` |
+| `metals/index.ts` | `fc9d51e5ce367740619c60504981f7637fbd6df6` |
+| `decimal.test.ts` | `f3f07cf3bcbcb9efc5aea51608b6d09e3ffaf884` |
+| `purity-valuation.test.ts` | `d787694182ccd63b17faaa633b6ce1a88b40d15f` |
+| `attribution-postgres-parity.test.ts` | `b5f639c4e655e2c526dd73609762224b86a3618e` |
+| `lifecycle-rate-trust.test.ts` | `5bacc378039f48c195a13e9a6a7dc99a325673ec` |
+| `rate-reference-contract.test.ts` | `0ada9eb1ac53b87d625c5466853f68311cba2b35` |
+| `attribution-rounding-validation.test.ts` | `3cca046923a5144df7f2706b01541fd931422b59` |
+
+Independent verification at this source state, run from the documented worktree,
+passed: complete Metals coverage (8/8 suites, 232/232 tests; 94.77% statements,
+87.69% branches, 100% functions, 94.72% lines) and
+`npm run typecheck -w @monyvi/logic` (exit 0). This remains dated foundation
+evidence, not release coverage or approval evidence.

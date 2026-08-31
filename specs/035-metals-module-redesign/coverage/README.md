@@ -78,8 +78,8 @@ npx jest --testPathPattern='src/metals/__tests__/' --coverage --runInBand --watc
 npm run typecheck -w @monyvi/logic
 ```
 
-The recorded complete Metals suite passed 8/8 suites and 229/229 tests; coverage
-was 94.67% statements, 87.56% branches, 100% functions, and 94.62% lines.
+The recorded complete Metals suite passed 8/8 suites and 232/232 tests; coverage
+was 94.77% statements, 87.69% branches, 100% functions, and 94.72% lines.
 Those are dated verification results, not release coverage guarantees. See
 [`../evidence/slice-2-green.md`](../evidence/slice-2-green.md) for commands,
 coverage scope, and later supersession records.
