@@ -118,7 +118,7 @@ This topology controls ownership, dependency stacks, and future review size. Aft
 
 ### Package integration milestone
 
-- [ ] T034 After T017 and T024, integrate stable Metals and generic-action package APIs exactly once before mobile consumers in `packages/logic/src/index.ts`; no parallel slice may edit this root barrel. Both exports remain deliberately absent until this task.
+- [x] T034 After T017 and T024, integrate stable Metals and generic-action package APIs exactly once before mobile consumers in `packages/logic/src/index.ts`; no parallel slice may edit this root barrel. Both exports remain deliberately absent until this task.
 
 ### Red
 - [ ] T035 [P] Write failing deterministic Gold/Silver exact backfill, schema, persisted-model, current acquisition-action linkage to independent `acquisition_metal` and `acquisition_purchase_currency` references, no invented legacy acquisition action/reference set, replaceable current purity projection with immutable before/after/catalog evidence, valid/missing/ambiguous provenance, rerun idempotency, compatibility-column, inherited ownership, sync-column, index, and Metals-event expected-holding-revision ownership tests in `apps/mobile/__tests__/migrations/metals-domain-backfill-model.test.ts`
