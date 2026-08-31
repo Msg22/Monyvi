@@ -1,12 +1,12 @@
 import {
   parseCanonicalDecimal,
   serializeDecimal,
+  type ExactDecimalValue,
 } from "./decimal";
-import type { ExactDecimalValue } from "./decimal";
 import {
   validateAndNormalizeRateReference,
+  type ExactRateReference,
 } from "./rate-reference";
-import type { ExactRateReference } from "./rate-reference";
 
 export type { ExactRateReference } from "./rate-reference";
 
@@ -104,7 +104,7 @@ function positiveDecimal(
     }
     const decimal = parseCanonicalDecimal(value);
     return decimal.greaterThan("0") ? decimal : null;
-  } catch (_error: unknown) {
+  } catch {
     return null;
   }
 }

@@ -5,21 +5,19 @@ import {
   roundDecimal,
   serializeDecimal,
   toMinorUnits,
+  type ExactDecimalValue,
 } from "./decimal";
-import type { ExactDecimalValue } from "./decimal";
-import { validateAndNormalizeRateReference } from "./rate-reference";
-import type {
-  CurrencyInstrumentCode,
-  CurrencyRateRole,
-  ExactRateReference,
-  MetalInstrumentCode,
-  MetalRateRole,
-  RateReferenceExpectation,
-  RateInstrumentCode,
-} from "./rate-reference";
 import {
-  type Availability,
-} from "./valuation";
+  validateAndNormalizeRateReference,
+  type CurrencyInstrumentCode,
+  type CurrencyRateRole,
+  type ExactRateReference,
+  type MetalInstrumentCode,
+  type MetalRateRole,
+  type RateReferenceExpectation,
+  type RateInstrumentCode,
+} from "./rate-reference";
+import type { Availability } from "./valuation";
 
 export interface UnrealizedAttributionInput {
   readonly metalInstrumentCode: MetalInstrumentCode;
@@ -585,7 +583,7 @@ function readPositiveDecimal(
     return decimal.greaterThan("0")
       ? { available: true, value: decimal }
       : { available: false, reason: unavailableReason };
-  } catch (_error: unknown) {
+  } catch {
     return { available: false, reason: unavailableReason };
   }
 }
@@ -599,7 +597,7 @@ function readNonNegativeDecimal(
     return decimal.greaterThanOrEqualTo("0")
       ? { available: true, value: decimal }
       : { available: false, reason: unavailableReason };
-  } catch (_error: unknown) {
+  } catch {
     return { available: false, reason: unavailableReason };
   }
 }
@@ -608,7 +606,7 @@ function isMinorUnitCompatible(value: string, decimalPlaces: number): boolean {
   try {
     const minorUnits = toMinorUnits(value, decimalPlaces);
     return compareDecimal(value, fromMinorUnits(minorUnits, decimalPlaces)) === 0;
-  } catch (_error: unknown) {
+  } catch {
     return false;
   }
 }

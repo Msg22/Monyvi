@@ -10,7 +10,13 @@ import {
   calculatePureGrams,
 } from "../valuation";
 
-function loadPurityCatalogApi() {
+function loadPurityCatalogApi(): {
+  readonly createPuritySnapshot: typeof createPuritySnapshot;
+  readonly getPurityCatalog: typeof getPurityCatalog;
+  readonly getPurityEntry: typeof getPurityEntry;
+  readonly PURITY_CATALOG_VERSION: typeof PURITY_CATALOG_VERSION;
+  readonly resolvePuritySelection: typeof resolvePuritySelection;
+} {
   return {
     createPuritySnapshot,
     getPurityCatalog,
@@ -20,7 +26,10 @@ function loadPurityCatalogApi() {
   };
 }
 
-function loadValuationApi() {
+function loadValuationApi(): {
+  readonly calculateMetalReferenceValue: typeof calculateMetalReferenceValue;
+  readonly calculatePureGrams: typeof calculatePureGrams;
+} {
   return { calculateMetalReferenceValue, calculatePureGrams };
 }
 
@@ -107,12 +116,12 @@ describe("Metals purity catalog v1", () => {
 
     try {
       (snapshot as { factorDecimal: string }).factorDecimal = "0.5";
-    } catch (_error: unknown) {
+    } catch {
       // Mutation rejection is allowed; observable captured evidence remains authoritative.
     }
     try {
       (exact999 as { factorDecimal: string }).factorDecimal = "0.5";
-    } catch (_error: unknown) {
+    } catch {
       // Mutation rejection is allowed; observable captured evidence remains authoritative.
     }
 

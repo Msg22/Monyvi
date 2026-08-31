@@ -15,7 +15,12 @@ import type {
 } from "../rate-reference";
 import { normalizeUsdPerUnitRate } from "../valuation";
 
-function loadAttributionApi() {
+function loadAttributionApi(): {
+  readonly calculateRealizedAttribution: typeof calculateRealizedAttribution;
+  readonly calculateUnrealizedAttribution: typeof calculateUnrealizedAttribution;
+  readonly convertAttributionForDisplay: typeof convertAttributionForDisplay;
+  readonly roundAttributionForDisplay: typeof roundAttributionForDisplay;
+} {
   return {
     calculateRealizedAttribution,
     calculateUnrealizedAttribution,
@@ -24,7 +29,9 @@ function loadAttributionApi() {
   };
 }
 
-function loadValuationApi() {
+function loadValuationApi(): {
+  readonly normalizeUsdPerUnitRate: typeof normalizeUsdPerUnitRate;
+} {
   return { normalizeUsdPerUnitRate };
 }
 
@@ -756,25 +763,20 @@ describe("current and realized Metals attribution", () => {
     });
     mutableRate.valueDecimal = "999";
 
-    expect(result).toMatchObject({
-      available: true,
-      value: {
-        combinedDecimal: "85",
-        breakdown: {
-          available: true,
-          value: {
-            rateReferences: expect.arrayContaining([
-              expect.objectContaining({
-                instrumentCode: "metal:GOLD",
-                valueDecimal: "3",
-                providerObservedAt: OBSERVED_AT,
-                source: "fixture-provider",
-              }),
-            ]),
-          },
-        },
-      },
-    });
+    expect(result).toMatchObject({ available: true, value: { combinedDecimal: "85" } });
+    if (!result.available || !result.value.breakdown.available) {
+      throw new Error("Expected detailed attribution");
+    }
+    expect(result.value.breakdown.value.rateReferences).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          instrumentCode: "metal:GOLD",
+          valueDecimal: "3",
+          providerObservedAt: OBSERVED_AT,
+          source: "fixture-provider",
+        }),
+      ])
+    );
   });
 });
 

@@ -44,7 +44,7 @@ function hasUsableRateValue(reference: RateTrustInput): boolean {
 
   try {
     return parseCanonicalDecimal(reference.valueDecimal).greaterThan("0");
-  } catch (_error: unknown) {
+  } catch {
     return false;
   }
 }

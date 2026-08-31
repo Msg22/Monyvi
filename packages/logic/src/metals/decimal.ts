@@ -33,12 +33,12 @@ export interface ExactDecimalValue {
 const decimalValues = new WeakMap<ExactDecimalValue, Decimal>();
 
 class ImmutableExactDecimalValue implements ExactDecimalValue {
-  public readonly [exactDecimalBrand] = true as const;
-
   public constructor(value: Decimal) {
     decimalValues.set(this, value);
     Object.freeze(this);
   }
+
+  public readonly [exactDecimalBrand] = true as const;
 
   public plus(value: ExactDecimalInput): ExactDecimalValue {
     return wrapDecimal(readDecimal(this).plus(readInput(value)));

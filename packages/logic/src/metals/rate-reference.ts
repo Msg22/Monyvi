@@ -261,7 +261,7 @@ function normalizeValue(
         ? raw
         : parseCanonicalDecimal("1").dividedBy(raw)
     );
-  } catch (_error: unknown) {
+  } catch {
     return null;
   }
 }

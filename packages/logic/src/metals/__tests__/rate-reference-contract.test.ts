@@ -9,7 +9,7 @@ import { SUPPORTED_CURRENCIES } from "../../utils/currency-data";
 
 type AssertFalse<Value extends false> = Value;
 
-type IllegalInverseMetalReference = {
+interface IllegalInverseMetalReference {
   readonly role: "current_metal";
   readonly kind: "metal";
   readonly instrumentCode: "metal:GOLD";
@@ -21,7 +21,7 @@ type IllegalInverseMetalReference = {
   readonly quality: "valid";
   readonly capturedAt: 2_000;
   readonly capturedFreshness: "fresh";
-};
+}
 
 type IllegalMetalRoleCurrencyReference = Omit<
   IllegalInverseMetalReference,

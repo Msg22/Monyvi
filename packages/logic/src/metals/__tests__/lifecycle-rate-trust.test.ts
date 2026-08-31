@@ -6,11 +6,16 @@ import {
 } from "../lifecycle-reducer";
 import { classifyRateTrust } from "../rate-trust";
 
-function loadLifecycleApi() {
+function loadLifecycleApi(): {
+  readonly orderLifecycleEventsNewestFirst: typeof orderLifecycleEventsNewestFirst;
+  readonly reduceMetalLifecycle: typeof reduceMetalLifecycle;
+} {
   return { orderLifecycleEventsNewestFirst, reduceMetalLifecycle };
 }
 
-function loadRateTrustApi() {
+function loadRateTrustApi(): {
+  readonly classifyRateTrust: typeof classifyRateTrust;
+} {
   return { classifyRateTrust };
 }
 

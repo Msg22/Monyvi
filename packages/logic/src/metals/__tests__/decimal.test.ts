@@ -10,7 +10,16 @@ import {
   toMinorUnits,
 } from "../decimal";
 
-function loadDecimalApi() {
+function loadDecimalApi(): {
+  readonly compareDecimal: typeof compareDecimal;
+  readonly EXACT_DECIMAL_CONFIG: typeof EXACT_DECIMAL_CONFIG;
+  readonly fromMinorUnits: typeof fromMinorUnits;
+  readonly parseCanonicalDecimal: typeof parseCanonicalDecimal;
+  readonly parseLocalizedDecimal: typeof parseLocalizedDecimal;
+  readonly roundDecimal: typeof roundDecimal;
+  readonly serializeDecimal: typeof serializeDecimal;
+  readonly toMinorUnits: typeof toMinorUnits;
+} {
   return {
     compareDecimal,
     EXACT_DECIMAL_CONFIG,
@@ -79,7 +88,7 @@ describe("exact Metals decimal contract", () => {
     type RoundInput = Parameters<typeof DecimalContract.roundDecimal>[0];
     type MinorUnitInput = Parameters<typeof DecimalContract.toMinorUnits>[0];
 
-    if (false) {
+    function verifyBinaryInputRejections(): void {
       // @ts-expect-error Binary numbers are forbidden at authoritative boundaries.
       const serializeInput: SerializeInput = 0.1;
       // @ts-expect-error Binary numbers are forbidden at authoritative boundaries.
@@ -90,6 +99,7 @@ describe("exact Metals decimal contract", () => {
       const minorUnitInput: MinorUnitInput = 0.1;
       void [serializeInput, compareInput, roundInput, minorUnitInput];
     }
+    void verifyBinaryInputRejections;
 
     const { parseCanonicalDecimal, serializeDecimal } = loadDecimalApi();
     expect(serializeDecimal(parseCanonicalDecimal("0.1"))).toBe("0.1");

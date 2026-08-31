@@ -99,7 +99,7 @@ export function reduceMetalLifecycle(
   const accepted: LifecycleEvent[] = [roots[0] as LifecycleEvent];
   let state = withCyclesRejected;
   let current = roots[0] as LifecycleEvent;
-  while (true) {
+  for (;;) {
     const successors = [...state.candidatesById.values()].filter(
       (event) => !state.rejectedIds.has(event.id) &&
         event.predecessorEventId === current.id &&

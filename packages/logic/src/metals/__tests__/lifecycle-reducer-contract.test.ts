@@ -67,12 +67,13 @@ describe("approved pure lifecycle reduction", () => {
     const result = reduceMetalLifecycle([ROOT, malformedSuccessor]);
 
     expect(result.projection?.effectiveEventId).toBe("created");
-    expect(result.rejectedEvents).toEqual([
-      expect.objectContaining({
-        event: expect.objectContaining({ id: "malformed" }),
-        reasonCode: "incomplete_evidence",
-      }),
-    ]);
+    expect(result.rejectedEvents).toHaveLength(1);
+    const rejection = result.rejectedEvents[0];
+    if (rejection === undefined) {
+      throw new Error("Expected malformed-event rejection");
+    }
+    expect(rejection.event.id).toBe("malformed");
+    expect(rejection.reasonCode).toBe("incomplete_evidence");
   });
 
   it.each([
@@ -167,18 +168,14 @@ describe("approved pure lifecycle reduction", () => {
 
     expect(result.projection).toBeNull();
     expect(result.acceptedEvents).toEqual([]);
-    expect(result.rejectedEvents).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          event: expect.objectContaining({ id: "rejected-root" }),
-          reasonCode: "ineffective_evidence",
-        }),
-        expect.objectContaining({
-          event: expect.objectContaining({ id: "descendant" }),
-          reasonCode: "predecessor_not_accepted",
-        }),
-      ])
+    const rootRejection = result.rejectedEvents.find(
+      ({ event }) => event.id === "rejected-root"
     );
+    const descendantRejection = result.rejectedEvents.find(
+      ({ event }) => event.id === "descendant"
+    );
+    expect(rootRejection?.reasonCode).toBe("ineffective_evidence");
+    expect(descendantRejection?.reasonCode).toBe("predecessor_not_accepted");
   });
 
   it("rejects cycles and descendants of rejected predecessors", () => {
