@@ -70,15 +70,19 @@ describe("syncDatabase dedicated rejection passthrough", () => {
     await expect(syncDatabase(database)).resolves.toBeUndefined();
 
     expect(callbackResult).toEqual(rejectedResult);
-    expect(mockPushChanges).toHaveBeenCalledWith(database, {
-      changes: {
-        financial_action_groups: {
-          created: [{ id: "foreign-root" }],
-          updated: [],
-          deleted: [],
+    expect(mockPushChanges).toHaveBeenCalledWith(
+      database,
+      {
+        changes: {
+          financial_action_groups: {
+            created: [{ id: "foreign-root" }],
+            updated: [],
+            deleted: [],
+          },
         },
+        lastPulledAt: 123,
       },
-      lastPulledAt: 123,
-    });
+      "current-user"
+    );
   });
 });

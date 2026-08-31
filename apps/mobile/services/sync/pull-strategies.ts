@@ -22,6 +22,17 @@ import type {
   UserOwnedPullTableName,
 } from "./types";
 
+export const SYNC_PULL_ERROR_CODES = {
+  AUTH_SCOPE_LOST: "sync_pull_auth_scope_lost",
+} as const;
+
+async function assertExpectedPullUser(expectedUserId: string): Promise<void> {
+  const currentUserId = await getCurrentUserId();
+  if (currentUserId !== expectedUserId) {
+    throw new Error(SYNC_PULL_ERROR_CODES.AUTH_SCOPE_LOST);
+  }
+}
+
 export async function pullMarketRates(
   daysToKeep = 7
 ): Promise<SyncTableChangeSet> {
@@ -228,13 +239,10 @@ export async function pullCategories(
 }
 
 export async function pullChanges(
-  lastPulledAt: number | null
+  lastPulledAt: number | null,
+  expectedUserId: string
 ): Promise<SyncPullResult> {
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    logger.debug("sync.pull.skippedUnauthenticated");
-    return { changes: {}, timestamp: Date.now() };
-  }
+  await assertExpectedPullUser(expectedUserId);
 
   const changes: AppSyncDatabaseChangeSet = {};
   const lastSyncDate = lastPulledAt
@@ -247,26 +255,32 @@ export async function pullChanges(
     if (table === "market_rates") {
       changes[table] = await pullMarketRates();
     } else if (isSnapshotTable(table)) {
-      changes[table] = await pullSnapshotTable(table, userId, lastSyncDate);
+      changes[table] = await pullSnapshotTable(
+        table,
+        expectedUserId,
+        lastSyncDate
+      );
     } else if (isServerOwnedUserTable(table)) {
-      changes[table] = await pullUserTable(table, userId, lastSyncDate);
+      changes[table] = await pullUserTable(table, expectedUserId, lastSyncDate);
     } else if (table === "categories") {
-      changes[table] = await pullCategories(userId, lastSyncDate);
+      changes[table] = await pullCategories(expectedUserId, lastSyncDate);
     } else if (childConfig) {
       changes[table] = await pullChildTable(
         table as ChildTableName,
         childConfig,
-        userId,
+        expectedUserId,
         lastSyncDate
       );
     } else {
       changes[table] = await pullUserTable(
         table as UserOwnedPullTableName,
-        userId,
+        expectedUserId,
         lastSyncDate
       );
     }
   }
+
+  await assertExpectedPullUser(expectedUserId);
 
   return {
     changes,

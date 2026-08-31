@@ -578,16 +578,20 @@ describe("financial action foundation repository", () => {
     ).resolves.toMatchObject({ kind: "committed" });
 
     expect(assertCachedOwnership).toHaveBeenCalledTimes(1);
-    expect(assertCachedOwnership).toHaveBeenCalledWith({
-      userId: USER_ID,
-      cachedModels: [cached],
-    });
+    expect(assertCachedOwnership).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER_ID,
+        cachedModels: [cached],
+      })
+    );
     expect(assertPreparedOwnership).toHaveBeenCalledTimes(1);
-    expect(assertPreparedOwnership).toHaveBeenCalledWith({
-      userId: USER_ID,
-      cachedModels: [cached],
-      preparedOperations: [prepared, cached],
-    });
+    expect(assertPreparedOwnership).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER_ID,
+        cachedModels: [cached],
+        preparedOperations: [prepared, cached],
+      })
+    );
     expect(mockDatabaseBatch).toHaveBeenCalledTimes(1);
     expect(mockDatabaseBatch).toHaveBeenCalledWith(
       expect.objectContaining({ state: "local_complete", userId: USER_ID }),
@@ -662,10 +666,12 @@ describe("financial action foundation repository", () => {
       })
     ).rejects.toThrow("ownership_failed");
 
-    expect(assertCachedOwnership).toHaveBeenCalledWith({
-      userId: USER_ID,
-      cachedModels: [foreign],
-    });
+    expect(assertCachedOwnership).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER_ID,
+        cachedModels: [foreign],
+      })
+    );
     expect(update).not.toHaveBeenCalled();
     expect(foreign._raw).toEqual(originalRaw);
     expect(foreign._preparedState).toBeNull();
@@ -703,15 +709,19 @@ describe("financial action foundation repository", () => {
     ).resolves.toMatchObject({ kind: "committed" });
 
     expect(executionOrder).toEqual(["cached", "prepare", "prepared"]);
-    expect(assertCachedOwnership).toHaveBeenCalledWith({
-      userId: USER_ID,
-      cachedModels: [cached],
-    });
-    expect(assertPreparedOwnership).toHaveBeenCalledWith({
-      userId: USER_ID,
-      cachedModels: [cached],
-      preparedOperations: [cached],
-    });
+    expect(assertCachedOwnership).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER_ID,
+        cachedModels: [cached],
+      })
+    );
+    expect(assertPreparedOwnership).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER_ID,
+        cachedModels: [cached],
+        preparedOperations: [cached],
+      })
+    );
   });
 
   it("never batches a child model whose owned parent is foreign", async () => {

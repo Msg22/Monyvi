@@ -66,20 +66,24 @@ export type FinancialActionLinkedExistingOperation =
   | {
       readonly kind: "markAsDeleted";
       readonly model: Model;
-    }
-  | {
-      readonly kind: "destroyPermanently";
-      readonly model: Model;
     };
+
+export interface FinancialActionLinkedOperationPreimage {
+  readonly id: string;
+  readonly table: string;
+  readonly raw: Readonly<Model["_raw"]>;
+}
 
 export interface FinancialActionLinkedOperationCachedOwnershipInput {
   readonly userId: string;
   readonly cachedModels: readonly Model[];
+  readonly cachedPreimages: readonly FinancialActionLinkedOperationPreimage[];
 }
 
 export interface FinancialActionLinkedOperationPreparedOwnershipInput {
   readonly userId: string;
   readonly cachedModels: readonly Model[];
+  readonly cachedPreimages: readonly FinancialActionLinkedOperationPreimage[];
   readonly preparedOperations: readonly Model[];
 }
 
@@ -236,9 +240,56 @@ export function createFinancialActionFoundationRepository(
   }
 
   function assertGenuinePreparedCreates(models: readonly Model[]): void {
-    if (models.some((model) => model._preparedState !== "create")) {
+    if (
+      models.some(
+        (model) => model._preparedState !== "create" || model._isEditing
+      )
+    ) {
       throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
     }
+  }
+
+  function modelIdentity(model: Model): string {
+    return `${model.table}\u0000${model.id}`;
+  }
+
+  function assertUniqueModelIdentities(models: readonly Model[]): void {
+    const identities = models.map(modelIdentity);
+    if (new Set(identities).size !== identities.length) {
+      throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+    }
+  }
+
+  function assertCleanExistingModels(models: readonly Model[]): void {
+    if (
+      models.some((model) => model._preparedState !== null || model._isEditing)
+    ) {
+      throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+    }
+  }
+
+  function assertDisjointModelIdentities(
+    leftModels: readonly Model[],
+    rightModels: readonly Model[]
+  ): void {
+    const leftIdentities = new Set(leftModels.map(modelIdentity));
+    if (rightModels.some((model) => leftIdentities.has(modelIdentity(model)))) {
+      throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+    }
+  }
+
+  function createImmutablePreimages(
+    snapshots: readonly ReturnType<typeof captureCachedModelSnapshot>[]
+  ): readonly FinancialActionLinkedOperationPreimage[] {
+    return Object.freeze(
+      snapshots.map((snapshot) =>
+        Object.freeze({
+          id: snapshot.model.id,
+          table: snapshot.model.table,
+          raw: Object.freeze({ ...snapshot.raw }),
+        })
+      )
+    );
   }
 
   function prepareExistingOperation(
@@ -250,7 +301,7 @@ export function createFinancialActionFoundationRepository(
     if (operation.kind === "markAsDeleted") {
       return operation.model.prepareMarkAsDeleted();
     }
-    return operation.model.prepareDestroyPermanently();
+    throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
   }
 
   function prepareLocalRoot(
@@ -312,17 +363,23 @@ export function createFinancialActionFoundationRepository(
     assertNoRootTargets(cachedModels);
     assertNoRootTargets(plan.preparedCreates);
     assertGenuinePreparedCreates(plan.preparedCreates);
-    const snapshotModels = foundRecord
-      ? [foundRecord, ...cachedModels]
-      : [...cachedModels];
-    const snapshots = [...new Set(snapshotModels)].map((model) =>
+    assertCleanExistingModels(cachedModels);
+    assertUniqueModelIdentities(cachedModels);
+    assertUniqueModelIdentities(plan.preparedCreates);
+    assertDisjointModelIdentities(cachedModels, plan.preparedCreates);
+    const cachedSnapshots = cachedModels.map((model) =>
       captureCachedModelSnapshot(model)
     );
+    const cachedPreimages = createImmutablePreimages(cachedSnapshots);
+    const snapshots = foundRecord
+      ? [captureCachedModelSnapshot(foundRecord), ...cachedSnapshots]
+      : cachedSnapshots;
     let hasCommitted = false;
     try {
       await plan.assertCachedOwnership({
         userId: context.scope.userId,
         cachedModels,
+        cachedPreimages,
       });
       await reassertExpectedCurrentUser(context.scope.userId);
       const preparedExistingOperations = plan.existingOperations.map(
@@ -339,6 +396,7 @@ export function createFinancialActionFoundationRepository(
       await plan.assertPreparedOwnership({
         userId: context.scope.userId,
         cachedModels,
+        cachedPreimages,
         preparedOperations: linkedOperations,
       });
       await reassertExpectedCurrentUser(context.scope.userId);

@@ -59,10 +59,10 @@ export async function syncDatabase(
           database,
           pullChanges: async ({ lastPulledAt }): Promise<SyncPullResult> => {
             const effectiveLastPulledAt = forceFullSync ? null : lastPulledAt;
-            return pullChanges(effectiveLastPulledAt ?? null);
+            return pullChanges(effectiveLastPulledAt ?? null, userId);
           },
           pushChanges: ({ changes, lastPulledAt }) =>
-            pushChanges(database, { changes, lastPulledAt }),
+            pushChanges(database, { changes, lastPulledAt }, userId),
           sendCreatedAsUpdated: true,
         });
         logger.debug("sync.completed");

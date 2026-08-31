@@ -78,7 +78,7 @@ describe("pushChanges", () => {
         },
       });
 
-      expect(mockGetCurrentUserId).toHaveBeenCalledTimes(1);
+      expect(mockGetCurrentUserId).toHaveBeenCalledTimes(2);
       expect(mockFrom).not.toHaveBeenCalledWith("financial_action_groups");
       expect(mockFrom).toHaveBeenCalledWith("profiles");
       expect(mockUpsert).toHaveBeenCalledTimes(1);

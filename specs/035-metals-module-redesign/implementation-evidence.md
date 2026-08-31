@@ -338,3 +338,38 @@ returned as rejected regardless of owner; verify the synchronize wrapper returns
 result to WatermelonDB; verify auth loss throws before any remote write. Installed
 Watermelon source-contract coverage freezes both rejected-record marking and rejected
 deletion preservation, so no emulator journey is required.
+
+### PR #251 current-head scope and preimage hardening — 2026-08-31
+
+This entry extends, and does not replace, the dated evidence above. `syncDatabase` now
+binds the authenticated user captured before `synchronize()` to both pull and push.
+Pull fails with `sync_pull_auth_scope_lost` when that user disappears or changes at
+either boundary, including an empty/no-local-change synchronization, so WatermelonDB
+cannot persist a timestamp for skipped data. Push uses the same bound identity and
+reasserts it before returning, while retaining the `experimentalRejectedIds` contract
+that supersedes the earlier historical generic-push throw/manual-plan wording.
+
+Existing linked-operation descriptors must now be clean, unique by `(table, id)`, and
+disjoint from genuine prepared creates before any updater runs. The repository freezes
+plain `{ table, id, raw }` preimages captured before preparation and supplies them to
+both ownership validators, allowing owned-parent foreign-key changes to be rejected
+against immutable evidence and rolled back. Synced financial descriptors expose only
+update and Watermelon soft-delete (`markAsDeleted`) preparation; unrestricted hard
+delete is not part of the contract.
+
+Focused Red proved both defects: all four synchronize lifecycle cases resolved instead
+of rejecting, while 6 of 7 linked-plan safety tests failed for missing immutable
+preimages, dirty/duplicate/overlapping input acceptance, and hard-delete exposure (the
+existing `markAsDeleted` branch passed). Final focused Green is 2/2 suites and 11/11
+tests. The broader foundation/generic-sync set is 11/11 suites and 108/108 tests.
+Mobile and logic typechecks, changed-file lint, full repository lint, and
+`git diff --check` pass. No schema, migration, remote database mutation, dedicated
+synchronizer, account-guard enablement, or GitHub thread mutation is included.
+
+Manual plan: inspect an A-to-B same-user owned-parent rewrite and verify the prepared
+validator receives the original frozen parent ID and rejection restores `_raw`,
+`_preparedState`, and `_isEditing`; inspect dirty, duplicate, and create-overlap inputs
+and verify rejection occurs before updater invocation; inspect soft deletion and verify
+only `prepareMarkAsDeleted` is batched; simulate auth loss/mismatch before and after an
+empty pull and verify the prior watermark remains unchanged. These infrastructure paths
+have deterministic automated coverage, so no emulator journey is required.

@@ -29,6 +29,19 @@ export const GENERIC_SYNC_ERROR_CODES = {
   INVALID_CHANGE_ID: "sync_invalid_change_id",
 } as const;
 
+async function assertExpectedPushUser(
+  expectedUserId?: string
+): Promise<string> {
+  const currentUserId = await getCurrentUserId();
+  if (
+    !currentUserId ||
+    (expectedUserId !== undefined && currentUserId !== expectedUserId)
+  ) {
+    throw new Error(GENERIC_SYNC_ERROR_CODES.AUTH_SCOPE_LOST);
+  }
+  return expectedUserId ?? currentUserId;
+}
+
 function parseChangeId(value: unknown): string {
   const candidate =
     typeof value === "string"
@@ -109,13 +122,11 @@ function getUpsertConflictColumn(table: SyncableTable): "id" | "user_id" {
 
 export async function pushChanges(
   database: Database,
-  pushArgs: SyncPushArgs
+  pushArgs: SyncPushArgs,
+  expectedUserId?: string
 ): Promise<SyncPushResult | undefined | void> {
   const dedicatedRejectedIds = collectDedicatedRejectedIds(pushArgs.changes);
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    throw new Error(GENERIC_SYNC_ERROR_CODES.AUTH_SCOPE_LOST);
-  }
+  const userId = await assertExpectedPushUser(expectedUserId);
 
   const { changes } = pushArgs;
   for (const [tableName, rawTableChanges] of Object.entries(changes).sort(
@@ -227,6 +238,8 @@ export async function pushChanges(
       throw err;
     }
   }
+
+  await assertExpectedPushUser(userId);
 
   return dedicatedRejectedIds
     ? { experimentalRejectedIds: dedicatedRejectedIds }

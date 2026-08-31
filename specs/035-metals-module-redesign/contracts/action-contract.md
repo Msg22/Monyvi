@@ -262,11 +262,16 @@ cannot clear a rejection or advance recovery.
 
 Every linked local operation plan separates genuine prepared creates from declarative
 existing-model operations. The repository derives every existing preimage from those
-descriptors, validates and snapshots the exact models, and only then invokes their
-update or delete preparation. It separately validates the resulting postimages,
-prepared operations, and owned-parent links before the atomic batch. Both validators
-are mandatory and auth is reasserted after each asynchronous validation. Replay invokes
-neither existing-model preparation nor either ownership validator.
+descriptors and rejects any existing model that is already prepared/editing, repeats a
+`(table, id)` identity, or overlaps a prepared create before any mutation. It snapshots
+each clean existing model and supplies immutable plain `{ table, id, raw }` preimages to
+both ownership validators before repository-controlled preparation. Existing
+descriptors may only prepare an update or Watermelon soft delete (`markAsDeleted`);
+hard-delete preparation is not part of this synced financial contract. Prepared
+validation then compares the resulting postimages and owned-parent links against those
+immutable preimages before the atomic batch. Both validators are mandatory and auth is
+reasserted after each asynchronous validation. Replay invokes neither existing-model
+preparation nor either ownership validator.
 
 Action roots are never soft-deleted by product behavior. Their required `deleted` column
 remains `false` solely for the shared sync-row convention; deleting a holding is a
@@ -302,6 +307,10 @@ WatermelonDB's rejected-ID result, regardless of owner, and never sends those ro
 generic remote writer. WatermelonDB may then complete the pull and push unrelated
 owner-scoped generic rows while keeping dedicated created, updated, and deleted rows
 dirty for the future dedicated synchronizer. Empty dedicated change sets remain
-excluded and non-blocking. If authenticated scope disappears before push, generic sync
-throws `sync_push_auth_scope_lost`; it must not acknowledge any captured row that was
-not sent remotely.
+excluded and non-blocking. The synchronization wrapper binds one authenticated user to
+the complete pull/push lifecycle. If that user disappears or changes before pull starts
+or returns, pull throws `sync_pull_auth_scope_lost` and returns no timestamp, including
+when no table changes exist, so WatermelonDB cannot advance its global watermark over
+skipped data. If the bound scope disappears or changes during push, generic sync throws
+`sync_push_auth_scope_lost`; it must not acknowledge any captured row that was not sent
+remotely.
