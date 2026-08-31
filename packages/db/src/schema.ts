@@ -9,7 +9,7 @@ import { appSchema, tableSchema } from "@nozbe/watermelondb";
 import { SMS_REVIEW_DRAFT_TABLES } from "./local-schema/sms-review-draft-schema";
 
 export const schema = appSchema({
-  version: 25,
+  version: 26,
   tables: [
     tableSchema({
       name: "account_sms_senders",
@@ -191,6 +191,27 @@ export const schema = appSchema({
         { name: "party_name", type: "string" },
         { name: "status", type: "string" },
         { name: "type", type: "string" },
+        { name: "updated_at", type: "number" },
+        { name: "user_id", type: "string", isIndexed: true },
+      ],
+    }),
+
+    tableSchema({
+      name: "financial_action_groups",
+      columns: [
+        { name: "action_id", type: "string", isIndexed: true },
+        { name: "created_at", type: "number" },
+        { name: "deleted", type: "boolean" },
+        { name: "domain", type: "string" },
+        { name: "domain_reference_id", type: "string", isIndexed: true },
+        { name: "expected_account_revision", type: "string", isOptional: true },
+        { name: "kind", type: "string" },
+        { name: "outcome_json", type: "string", isOptional: true },
+        { name: "payload_hash", type: "string" },
+        { name: "payload_json", type: "string" },
+        { name: "rejection_code", type: "string", isOptional: true },
+        { name: "server_outcome", type: "string", isOptional: true },
+        { name: "state", type: "string" },
         { name: "updated_at", type: "number" },
         { name: "user_id", type: "string", isIndexed: true },
       ],
