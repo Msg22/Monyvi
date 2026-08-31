@@ -5,14 +5,17 @@ import {
   type FinancialActionEnvelopeV1,
   type Sha256Provider,
 } from "../../../../packages/logic/src/financial-actions";
+import type { Model } from "@nozbe/watermelondb";
 
 const mockRecords: MockRecord[] = [];
 let mockCurrentUserId = "018f0c7a-1234-7abc-8def-000000000003";
 let nextLocalRowId = 0;
 let mockSwitchUserDuringNextLookup = false;
 let mockSwitchUserDuringBatch = false;
+let mockFailBatchAfterApply = false;
 
 interface MockRecord {
+  table?: string;
   _raw: { id: string };
   id: string;
   actionId: string;
@@ -33,53 +36,63 @@ interface MockRecord {
 }
 
 const mockCollection = {
-  prepareCreate: jest.fn((updater: (record: MockRecord) => void): MockRecord => {
-    const record = {
-      _raw: { id: `local-financial-action-${++nextLocalRowId}` },
-      id: "",
-      actionId: "",
-      userId: "",
-      domain: "",
-      kind: "",
-      domainReferenceId: "",
-      payloadJson: "",
-      payloadHash: "",
-      accountGuardsJson: "[]",
-      state: "",
-      serverOutcome: null,
-      outcomeJson: null,
-      rejectionCode: null,
-      deleted: false,
-      updatedAt: new Date(0),
-      prepareUpdate(update: (value: MockRecord) => void): MockRecord {
-        update(this);
-        return this;
-      },
-    } satisfies MockRecord;
-    updater(record);
-    record.id = record._raw.id;
-    return record;
-  }),
+  prepareCreate: jest.fn(
+    (updater: (record: MockRecord) => void): MockRecord => {
+      const record = {
+        _raw: { id: `local-financial-action-${++nextLocalRowId}` },
+        id: "",
+        actionId: "",
+        userId: "",
+        domain: "",
+        kind: "",
+        domainReferenceId: "",
+        payloadJson: "",
+        payloadHash: "",
+        accountGuardsJson: "[]",
+        state: "",
+        serverOutcome: null,
+        outcomeJson: null,
+        rejectionCode: null,
+        deleted: false,
+        updatedAt: new Date(0),
+        prepareUpdate(update: (value: MockRecord) => void): MockRecord {
+          update(this);
+          return this;
+        },
+      } satisfies MockRecord;
+      updater(record);
+      record.id = record._raw.id;
+      return record;
+    }
+  ),
 };
-const mockDatabaseWrite = jest.fn(async <T>(action: () => Promise<T>): Promise<T> => {
-  const snapshot = mockRecords.map((record) => ({ ...record }));
-  try {
-    return await action();
-  } catch (error) {
-    mockRecords.splice(0, mockRecords.length, ...snapshot);
-    throw error;
+const mockDatabaseWrite = jest.fn(
+  async <T>(action: () => Promise<T>): Promise<T> => {
+    const snapshot = mockRecords.map((record) => ({ ...record }));
+    try {
+      return await action();
+    } catch (error) {
+      mockRecords.splice(0, mockRecords.length, ...snapshot);
+      throw error;
+    }
   }
-});
-const mockDatabaseBatch = jest.fn((...operations: MockRecord[]): Promise<void> => {
-  operations.forEach((operation) => {
-    if (!mockRecords.includes(operation)) mockRecords.push(operation);
-  });
-  if (mockSwitchUserDuringBatch) {
-    mockSwitchUserDuringBatch = false;
-    mockCurrentUserId = "018f0c7a-1234-7abc-8def-000000000099";
+);
+const mockDatabaseBatch = jest.fn(
+  (...operations: MockRecord[]): Promise<void> => {
+    operations.forEach((operation) => {
+      if (!mockRecords.includes(operation)) mockRecords.push(operation);
+    });
+    if (mockFailBatchAfterApply) {
+      mockFailBatchAfterApply = false;
+      throw new Error("linked_write_failed");
+    }
+    if (mockSwitchUserDuringBatch) {
+      mockSwitchUserDuringBatch = false;
+      mockCurrentUserId = "018f0c7a-1234-7abc-8def-000000000099";
+    }
+    return Promise.resolve();
   }
-  return Promise.resolve();
-});
+);
 
 jest.mock("@monyvi/db", () => ({
   database: {
@@ -92,34 +105,45 @@ jest.mock("@monyvi/db", () => ({
 }));
 
 jest.mock("../../services/user-data-access", () => ({
-  getCurrentUserDataScope: jest.fn(() => Promise.resolve({
-    userId: mockCurrentUserId,
-    queryOwned: (): { fetch: () => Promise<MockRecord[]> } => {
-      const scopedUserId = mockCurrentUserId;
-      return {
-        fetch: (): Promise<MockRecord[]> => {
-          const records = mockRecords.filter((record) => record.userId === scopedUserId);
-          if (mockSwitchUserDuringNextLookup) {
-            mockSwitchUserDuringNextLookup = false;
-            mockCurrentUserId = "018f0c7a-1234-7abc-8def-000000000099";
-          }
-          return Promise.resolve(records);
-        },
-      };
-    },
-    assertOwned: (record: MockRecord): MockRecord => {
-      if (record.userId !== mockCurrentUserId) throw new Error("ownership_failed");
-      return record;
-    },
-  })),
-  assertExpectedCurrentUser: jest.fn((expectedUserId: string): Promise<void> => {
-    if (expectedUserId !== mockCurrentUserId) throw new Error("auth_scope_changed");
-    return Promise.resolve();
-  }),
+  getCurrentUserDataScope: jest.fn(() =>
+    Promise.resolve({
+      userId: mockCurrentUserId,
+      queryOwned: (): { fetch: () => Promise<MockRecord[]> } => {
+        const scopedUserId = mockCurrentUserId;
+        return {
+          fetch: (): Promise<MockRecord[]> => {
+            const records = mockRecords.filter(
+              (record) => record.userId === scopedUserId
+            );
+            if (mockSwitchUserDuringNextLookup) {
+              mockSwitchUserDuringNextLookup = false;
+              mockCurrentUserId = "018f0c7a-1234-7abc-8def-000000000099";
+            }
+            return Promise.resolve(records);
+          },
+        };
+      },
+      assertOwned: (record: MockRecord): MockRecord => {
+        if (record.userId !== mockCurrentUserId)
+          throw new Error("ownership_failed");
+        return record;
+      },
+    })
+  ),
+  assertExpectedCurrentUser: jest.fn(
+    (expectedUserId: string): Promise<void> => {
+      if (expectedUserId !== mockCurrentUserId)
+        throw new Error("auth_scope_changed");
+      return Promise.resolve();
+    }
+  ),
 }));
 
 import {
+  type CommitFinancialActionGroupLocallyInput,
+  type FinancialActionLinkedOperationPlan,
   FINANCIAL_ACTION_FOUNDATION_ERROR_CODES,
+  commitFinancialActionGroupLocally,
   createFinancialActionGroup,
   getFinancialActionGroup,
   markFinancialActionGroupSyncFailed,
@@ -131,7 +155,9 @@ const USER_ID = "018f0c7a-1234-7abc-8def-000000000003";
 const DOMAIN_REFERENCE_ID = "018f0c7a-1234-7abc-8def-000000000002";
 const sha256Provider: Sha256Provider = {
   digestUtf8: (canonicalText: string): Promise<string> =>
-    Promise.resolve(createHash("sha256").update(canonicalText, "utf8").digest("hex")),
+    Promise.resolve(
+      createHash("sha256").update(canonicalText, "utf8").digest("hex")
+    ),
 };
 
 function envelope(
@@ -167,6 +193,50 @@ function input(
   return { envelope: envelopeOverride, hashProvider };
 }
 
+function linkedOperation(id: string): MockRecord {
+  return {
+    table: "linked_domain_evidence",
+    _raw: { id },
+    id,
+    actionId: id,
+    userId: USER_ID,
+    domain: "metals",
+    kind: "linked_evidence",
+    domainReferenceId: DOMAIN_REFERENCE_ID,
+    payloadJson: "{}",
+    payloadHash: "b".repeat(64),
+    accountGuardsJson: "[]",
+    state: "local_complete",
+    serverOutcome: null,
+    outcomeJson: null,
+    rejectionCode: null,
+    deleted: false,
+    updatedAt: new Date(0),
+    prepareUpdate(update: (value: MockRecord) => void): MockRecord {
+      update(this);
+      return this;
+    },
+  };
+}
+
+function requireMockRecord(index = 0): MockRecord {
+  const record = mockRecords[index];
+  if (!record) throw new Error(`Missing mock record at index ${index}`);
+  return record;
+}
+
+function inputWithLinkedOperations(
+  prepareOperations: () => readonly Model[],
+  cachedModels: readonly Model[] = []
+): CommitFinancialActionGroupLocallyInput {
+  return {
+    ...input(),
+    prepareLinkedOperationPlan:
+      (): Promise<FinancialActionLinkedOperationPlan> =>
+        Promise.resolve({ cachedModels, prepareOperations }),
+  };
+}
+
 describe("financial action foundation repository", () => {
   beforeEach(() => {
     mockRecords.splice(0);
@@ -174,6 +244,7 @@ describe("financial action foundation repository", () => {
     nextLocalRowId = 0;
     mockSwitchUserDuringNextLookup = false;
     mockSwitchUserDuringBatch = false;
+    mockFailBatchAfterApply = false;
     jest.clearAllMocks();
   });
 
@@ -216,7 +287,9 @@ describe("financial action foundation repository", () => {
 
     await expect(
       createFinancialActionGroup(
-        input(envelope({ payload: { ...envelope().payload, notes: "changed" } }))
+        input(
+          envelope({ payload: { ...envelope().payload, notes: "changed" } })
+        )
       )
     ).rejects.toThrow(
       FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.ACTION_ID_PAYLOAD_MISMATCH
@@ -272,15 +345,15 @@ describe("financial action foundation repository", () => {
     mockCurrentUserId = "018f0c7a-1234-7abc-8def-000000000099";
 
     await expect(getFinancialActionGroup(ACTION_ID)).resolves.toBeNull();
-    await expect(markFinancialActionGroupSyncFailed(ACTION_ID, "offline")).rejects.toThrow(
-      FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.NOT_FOUND
-    );
+    await expect(
+      markFinancialActionGroupSyncFailed(ACTION_ID, "offline")
+    ).rejects.toThrow(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.NOT_FOUND);
     expect(mockRecords[0]?.state).toBe("pending_local");
   });
 
   it("persists retry state across restart without changing immutable identity", async () => {
     await createFinancialActionGroup(input());
-    mockRecords[0]!.state = "sync_pending";
+    requireMockRecord().state = "sync_pending";
     await markFinancialActionGroupSyncFailed(ACTION_ID, "network_failure");
     jest.resetModules();
 
@@ -309,8 +382,176 @@ describe("financial action foundation repository", () => {
   it("rolls back the complete local create when the writer fails", async () => {
     mockDatabaseBatch.mockRejectedValueOnce(new Error("write_failed"));
 
-    await expect(createFinancialActionGroup(input())).rejects.toThrow("write_failed");
+    await expect(createFinancialActionGroup(input())).rejects.toThrow(
+      "write_failed"
+    );
     expect(mockRecords).toHaveLength(0);
+  });
+
+  it("atomically rolls back root and linked operation when the batch fails", async () => {
+    const linked = linkedOperation("linked-domain-row");
+    const prepareLinkedOperations = jest.fn((): readonly Model[] => [
+      linked as unknown as Model,
+    ]);
+    mockFailBatchAfterApply = true;
+
+    await expect(
+      commitFinancialActionGroupLocally(
+        inputWithLinkedOperations(prepareLinkedOperations)
+      )
+    ).rejects.toThrow("linked_write_failed");
+
+    expect(prepareLinkedOperations).toHaveBeenCalledTimes(1);
+    expect(mockRecords).toHaveLength(0);
+  });
+
+  it("does not persist a root when linked operation preparation fails", async () => {
+    const prepareOperations = jest.fn((): readonly Model[] => {
+      throw new Error("linked_prepare_failed");
+    });
+
+    await expect(
+      commitFinancialActionGroupLocally(
+        inputWithLinkedOperations(prepareOperations)
+      )
+    ).rejects.toThrow("linked_prepare_failed");
+
+    expect(mockDatabaseBatch).not.toHaveBeenCalled();
+    expect(mockRecords).toHaveLength(0);
+  });
+
+  it("rejects an empty linked local commit", async () => {
+    const prepareOperations = jest.fn((): readonly Model[] => []);
+
+    await expect(
+      commitFinancialActionGroupLocally(
+        inputWithLinkedOperations(prepareOperations)
+      )
+    ).rejects.toThrow(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+
+    expect(mockDatabaseBatch).not.toHaveBeenCalled();
+    expect(mockRecords).toHaveLength(0);
+  });
+
+  it("rejects linked operations that target the generic root table", async () => {
+    const linked = linkedOperation("second-root");
+    linked.table = "financial_action_groups";
+
+    await expect(
+      commitFinancialActionGroupLocally(
+        inputWithLinkedOperations((): readonly Model[] => [
+          linked as unknown as Model,
+        ])
+      )
+    ).rejects.toThrow(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+
+    expect(mockDatabaseBatch).not.toHaveBeenCalled();
+    expect(mockRecords).toHaveLength(0);
+  });
+
+  it("rechecks auth after the asynchronous linked plan", async () => {
+    const linked = linkedOperation("linked-domain-row");
+
+    await expect(
+      commitFinancialActionGroupLocally({
+        ...input(),
+        prepareLinkedOperationPlan:
+          async (): Promise<FinancialActionLinkedOperationPlan> => {
+            await Promise.resolve();
+            mockCurrentUserId = "018f0c7a-1234-7abc-8def-000000000099";
+            return {
+              cachedModels: [],
+              prepareOperations: (): readonly Model[] => [
+                linked as unknown as Model,
+              ],
+            };
+          },
+      })
+    ).rejects.toThrow(
+      FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.AUTH_SCOPE_CHANGED
+    );
+
+    expect(mockDatabaseBatch).not.toHaveBeenCalled();
+    expect(mockRecords).toHaveLength(0);
+  });
+
+  it("commits linked operations once and does not reapply them on replay", async () => {
+    const linked = linkedOperation("linked-domain-row");
+    const firstPrepare = jest.fn((): readonly Model[] => [
+      linked as unknown as Model,
+    ]);
+    const replayPrepare = jest.fn((): readonly Model[] => [
+      linkedOperation("duplicate-domain-row") as unknown as Model,
+    ]);
+
+    await expect(
+      commitFinancialActionGroupLocally(inputWithLinkedOperations(firstPrepare))
+    ).resolves.toMatchObject({
+      kind: "committed",
+      record: { state: "local_complete" },
+    });
+    await expect(
+      commitFinancialActionGroupLocally(
+        inputWithLinkedOperations(replayPrepare)
+      )
+    ).resolves.toMatchObject({ kind: "replay" });
+
+    expect(firstPrepare).toHaveBeenCalledTimes(1);
+    expect(replayPrepare).not.toHaveBeenCalled();
+    expect(mockRecords.map((record) => record.id)).toEqual([
+      expect.stringMatching(/^local-financial-action-/),
+      "linked-domain-row",
+    ]);
+  });
+
+  it("resumes a matching pending root without creating a duplicate", async () => {
+    const linked = linkedOperation("linked-domain-row");
+    await createFinancialActionGroup(input());
+
+    await expect(
+      commitFinancialActionGroupLocally(
+        inputWithLinkedOperations((): readonly Model[] => [
+          linked as unknown as Model,
+        ])
+      )
+    ).resolves.toMatchObject({
+      kind: "committed",
+      record: { state: "local_complete" },
+    });
+
+    expect(
+      mockRecords.filter((record) => record.actionId === ACTION_ID)
+    ).toHaveLength(1);
+    expect(mockRecords).toHaveLength(2);
+  });
+
+  it("rejects a pending-root hash mismatch before preparing linked operations", async () => {
+    await createFinancialActionGroup(input());
+    const prepareLinkedOperationPlan = jest.fn(
+      (): Promise<FinancialActionLinkedOperationPlan> =>
+        Promise.resolve({
+          cachedModels: [],
+          prepareOperations: (): readonly Model[] => [
+            linkedOperation("linked-domain-row") as unknown as Model,
+          ],
+        })
+    );
+
+    await expect(
+      commitFinancialActionGroupLocally({
+        ...input(
+          envelope({
+            payload: { ...envelope().payload, notes: "changed" },
+          })
+        ),
+        prepareLinkedOperationPlan,
+      })
+    ).rejects.toThrow(
+      FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.ACTION_ID_PAYLOAD_MISMATCH
+    );
+
+    expect(prepareLinkedOperationPlan).not.toHaveBeenCalled();
+    expect(mockRecords).toHaveLength(1);
   });
 
   it("rejects unvalidated root fields before opening a local writer", async () => {
@@ -319,9 +560,9 @@ describe("financial action foundation repository", () => {
       attackerControlledRoot: "override",
     } as unknown as FinancialActionEnvelopeV1;
 
-    await expect(createFinancialActionGroup(input(untrustedEnvelope))).rejects.toThrow(
-      FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE
-    );
+    await expect(
+      createFinancialActionGroup(input(untrustedEnvelope))
+    ).rejects.toThrow(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
     expect(mockDatabaseWrite).not.toHaveBeenCalled();
     expect(mockRecords).toHaveLength(0);
   });
@@ -335,7 +576,9 @@ describe("financial action foundation repository", () => {
           digestUtf8,
         })
       )
-    ).rejects.toThrow(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.AUTH_SCOPE_CHANGED);
+    ).rejects.toThrow(
+      FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.AUTH_SCOPE_CHANGED
+    );
 
     expect(digestUtf8).not.toHaveBeenCalled();
     expect(mockDatabaseWrite).not.toHaveBeenCalled();
@@ -378,8 +621,9 @@ describe("financial action foundation repository", () => {
 
   it("does not retry or mutate when auth changes during the final lookup", async () => {
     await createFinancialActionGroup(input());
-    mockRecords[0]!.state = "sync_failed";
-    mockRecords[0]!.rejectionCode = "offline";
+    const record = requireMockRecord();
+    record.state = "sync_failed";
+    record.rejectionCode = "offline";
     mockSwitchUserDuringNextLookup = true;
     mockDatabaseBatch.mockClear();
 
@@ -391,6 +635,19 @@ describe("financial action foundation repository", () => {
       rejectionCode: "offline",
     });
     expect(mockDatabaseBatch).not.toHaveBeenCalled();
+  });
+
+  it("rejects update completion when auth changes during the awaited batch", async () => {
+    await createFinancialActionGroup(input());
+    const record = requireMockRecord();
+    record.state = "sync_failed";
+    record.rejectionCode = "offline";
+    mockSwitchUserDuringBatch = true;
+
+    await expect(retryFinancialActionGroup(ACTION_ID)).rejects.toThrow(
+      FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.AUTH_SCOPE_CHANGED
+    );
+    expect(mockDatabaseBatch).toHaveBeenCalledTimes(2);
   });
 
   it("does not return a row when auth changes during the awaited read", async () => {
@@ -416,10 +673,7 @@ describe("financial action foundation repository", () => {
           })
         )
       )
-    ).rejects.toThrow(
-      FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE
-    );
+    ).rejects.toThrow(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
     expect(mockRecords).toHaveLength(0);
   });
-
 });

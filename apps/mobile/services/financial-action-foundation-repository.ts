@@ -9,16 +9,26 @@ import {
   canonicalizeFinancialActionEnvelope,
   hashFinancialActionEnvelope,
   type FinancialActionEnvelopeV1,
+  type FinancialActionHashResult,
   type FinancialActionState,
   type Sha256Provider,
 } from "../../../packages/logic/src/financial-actions";
-import { Q, type Collection, type Database } from "@nozbe/watermelondb";
+import {
+  Q,
+  type Collection,
+  type Database,
+  type Model,
+} from "@nozbe/watermelondb";
 
 import {
   assertExpectedCurrentUser as assertProductionCurrentUser,
   getCurrentUserDataScope as getProductionCurrentUserDataScope,
   type CurrentUserDataScope,
 } from "./user-data-access";
+import {
+  captureCachedModelSnapshot,
+  restoreCachedModelSnapshot,
+} from "./watermelon-cache-snapshot";
 
 export const FINANCIAL_ACTION_FOUNDATION_ERROR_CODES = {
   AUTH_SCOPE_CHANGED: "financial_action_auth_scope_changed",
@@ -36,10 +46,34 @@ export type CreateFinancialActionGroupResult =
   | { readonly kind: "created"; readonly record: FinancialActionGroup }
   | { readonly kind: "replay"; readonly record: FinancialActionGroup };
 
+export interface FinancialActionLinkedOperationPlan {
+  readonly cachedModels: readonly Model[];
+  readonly prepareOperations: () => readonly Model[];
+}
+
+export interface CommitFinancialActionGroupLocallyInput extends CreateFinancialActionGroupInput {
+  readonly prepareLinkedOperationPlan: () => Promise<FinancialActionLinkedOperationPlan>;
+}
+
+export type CommitFinancialActionGroupLocallyResult =
+  | { readonly kind: "committed"; readonly record: FinancialActionGroup }
+  | { readonly kind: "replay"; readonly record: FinancialActionGroup };
+
 export type FinancialActionUserDataScope = Pick<
   CurrentUserDataScope,
   "userId" | "queryOwned" | "assertOwned"
 >;
+
+interface PreparedFinancialActionContext {
+  readonly envelope: FinancialActionEnvelopeV1;
+  readonly payload: FinancialActionHashResult;
+  readonly scope: FinancialActionUserDataScope;
+}
+
+interface PreparedLocalRoot {
+  readonly operation: Model;
+  readonly record: FinancialActionGroup;
+}
 
 export interface FinancialActionFoundationRepositoryDependencies {
   readonly database: Database;
@@ -51,6 +85,9 @@ export interface FinancialActionFoundationRepository {
   readonly createFinancialActionGroup: (
     input: CreateFinancialActionGroupInput
   ) => Promise<CreateFinancialActionGroupResult>;
+  readonly commitFinancialActionGroupLocally: (
+    input: CommitFinancialActionGroupLocallyInput
+  ) => Promise<CommitFinancialActionGroupLocallyResult>;
   readonly getFinancialActionGroup: (
     actionId: string
   ) => Promise<FinancialActionGroup | null>;
@@ -87,68 +124,186 @@ export function createFinancialActionFoundationRepository(
     return records.find((record) => record.actionId === actionId) ?? null;
   }
 
-  function assertInputUser(scope: FinancialActionUserDataScope, userId: string): void {
+  function assertInputUser(
+    scope: FinancialActionUserDataScope,
+    userId: string
+  ): void {
     if (scope.userId !== userId) {
-      throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.AUTH_SCOPE_CHANGED);
+      throw new Error(
+        FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.AUTH_SCOPE_CHANGED
+      );
     }
   }
 
-  async function reassertExpectedCurrentUser(expectedUserId: string): Promise<void> {
+  async function reassertExpectedCurrentUser(
+    expectedUserId: string
+  ): Promise<void> {
     try {
       await dependencies.assertExpectedCurrentUser(expectedUserId);
     } catch {
-      throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.AUTH_SCOPE_CHANGED);
+      throw new Error(
+        FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.AUTH_SCOPE_CHANGED
+      );
     }
+  }
+
+  async function prepareActionContext(
+    input: CreateFinancialActionGroupInput
+  ): Promise<PreparedFinancialActionContext> {
+    const envelope = canonicalizeFinancialActionEnvelope(input.envelope);
+    const scope = await dependencies.getCurrentUserDataScope();
+    assertInputUser(scope, envelope.userId);
+    const payload = await hashFinancialActionEnvelope(
+      envelope,
+      input.hashProvider
+    );
+    return { envelope, payload, scope };
+  }
+
+  function assertMatchingPayload(
+    record: FinancialActionGroup,
+    payload: FinancialActionHashResult
+  ): void {
+    if (
+      record.payloadJson !== payload.canonicalText ||
+      record.payloadHash !== payload.payloadHash
+    ) {
+      throw new Error(
+        FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.ACTION_ID_PAYLOAD_MISMATCH
+      );
+    }
+  }
+
+  function prepareNewRoot(
+    context: PreparedFinancialActionContext,
+    state: FinancialActionState,
+    now: Date
+  ): FinancialActionGroup {
+    return collection().prepareCreate((candidate) => {
+      candidate.actionId = context.envelope.actionId;
+      candidate.userId = context.scope.userId;
+      candidate.domain = context.envelope.domain;
+      candidate.kind = context.envelope.kind;
+      candidate.domainReferenceId = context.envelope.domainReferenceId;
+      candidate.payloadJson = context.payload.canonicalText;
+      candidate.payloadHash = context.payload.payloadHash;
+      candidate.accountGuardsJson = "[]";
+      candidate.state = state;
+      candidate.serverOutcome = null;
+      candidate.outcomeJson = null;
+      candidate.rejectionCode = null;
+      candidate.deleted = false;
+      candidate.updatedAt = now;
+    });
+  }
+
+  function assertNoRootTargets(models: readonly Model[]): void {
+    if (models.some((model) => model.table === TABLE_NAME)) {
+      throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+    }
+  }
+
+  function prepareLocalRoot(
+    context: PreparedFinancialActionContext,
+    foundRecord: FinancialActionGroup | null
+  ): PreparedLocalRoot {
+    const now = new Date();
+    const record =
+      foundRecord ?? prepareNewRoot(context, "local_complete", now);
+    const operation = foundRecord
+      ? record.prepareUpdate((candidate) => {
+          candidate.state = "local_complete";
+          candidate.updatedAt = now;
+        })
+      : record;
+    return { operation, record };
   }
 
   async function createFinancialActionGroup(
     input: CreateFinancialActionGroupInput
   ): Promise<CreateFinancialActionGroupResult> {
-    const envelope = canonicalizeFinancialActionEnvelope(input.envelope);
-    const scope = await dependencies.getCurrentUserDataScope();
-    assertInputUser(scope, envelope.userId);
-    const preparedPayload = await hashFinancialActionEnvelope(
-      envelope,
-      input.hashProvider
-    );
+    const context = await prepareActionContext(input);
 
     return dependencies.database.write(
       async (): Promise<CreateFinancialActionGroupResult> => {
-        await reassertExpectedCurrentUser(scope.userId);
-        const existing = await findOwnedByActionId(scope, envelope.actionId);
-        await reassertExpectedCurrentUser(scope.userId);
+        await reassertExpectedCurrentUser(context.scope.userId);
+        const existing = await findOwnedByActionId(
+          context.scope,
+          context.envelope.actionId
+        );
+        await reassertExpectedCurrentUser(context.scope.userId);
         if (existing) {
-          if (
-            existing.payloadJson !== preparedPayload.canonicalText ||
-            existing.payloadHash !== preparedPayload.payloadHash
-          ) {
-            throw new Error(
-              FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.ACTION_ID_PAYLOAD_MISMATCH
-            );
-          }
+          assertMatchingPayload(existing, context.payload);
           return { kind: "replay", record: existing };
         }
 
-        const now = new Date();
-        const record = collection().prepareCreate((candidate) => {
-          candidate.actionId = envelope.actionId;
-          candidate.userId = scope.userId;
-          candidate.domain = envelope.domain;
-          candidate.kind = envelope.kind;
-          candidate.domainReferenceId = envelope.domainReferenceId;
-          candidate.payloadJson = preparedPayload.canonicalText;
-          candidate.payloadHash = preparedPayload.payloadHash;
-          candidate.accountGuardsJson = "[]";
-          candidate.state = "pending_local";
-          candidate.serverOutcome = null;
-          candidate.outcomeJson = null;
-          candidate.rejectionCode = null;
-          candidate.deleted = false;
-          candidate.updatedAt = now;
-        });
+        const record = prepareNewRoot(context, "pending_local", new Date());
         await dependencies.database.batch(record);
-        await reassertExpectedCurrentUser(scope.userId);
+        await reassertExpectedCurrentUser(context.scope.userId);
         return { kind: "created", record };
+      }
+    );
+  }
+
+  async function commitLinkedPlan(
+    context: PreparedFinancialActionContext,
+    foundRecord: FinancialActionGroup | null,
+    plan: FinancialActionLinkedOperationPlan
+  ): Promise<CommitFinancialActionGroupLocallyResult> {
+    assertNoRootTargets(plan.cachedModels);
+    const snapshotModels = foundRecord
+      ? [foundRecord, ...plan.cachedModels]
+      : [...plan.cachedModels];
+    const snapshots = [...new Set(snapshotModels)].map((model) =>
+      captureCachedModelSnapshot(model)
+    );
+    let hasCommitted = false;
+    try {
+      const linkedOperations = plan.prepareOperations();
+      if (linkedOperations.length === 0) {
+        throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+      }
+      assertNoRootTargets(linkedOperations);
+      assertFinancialActionTransition("pending_local", "local_complete");
+      const root = prepareLocalRoot(context, foundRecord);
+      await reassertExpectedCurrentUser(context.scope.userId);
+      await dependencies.database.batch(root.operation, ...linkedOperations);
+      hasCommitted = true;
+      await reassertExpectedCurrentUser(context.scope.userId);
+      return { kind: "committed", record: root.record };
+    } catch (error) {
+      if (!hasCommitted) snapshots.forEach(restoreCachedModelSnapshot);
+      throw error;
+    }
+  }
+
+  async function commitFinancialActionGroupLocally(
+    input: CommitFinancialActionGroupLocallyInput
+  ): Promise<CommitFinancialActionGroupLocallyResult> {
+    const context = await prepareActionContext(input);
+
+    return dependencies.database.write(
+      async (): Promise<CommitFinancialActionGroupLocallyResult> => {
+        await reassertExpectedCurrentUser(context.scope.userId);
+        const foundRecord = await findOwnedByActionId(
+          context.scope,
+          context.envelope.actionId
+        );
+        await reassertExpectedCurrentUser(context.scope.userId);
+        if (foundRecord) assertMatchingPayload(foundRecord, context.payload);
+        if (
+          foundRecord &&
+          asFinancialActionState(foundRecord.state) !== "pending_local"
+        ) {
+          return {
+            kind: "replay",
+            record: context.scope.assertOwned(foundRecord),
+          };
+        }
+
+        const plan = await input.prepareLinkedOperationPlan();
+        await reassertExpectedCurrentUser(context.scope.userId);
+        return commitLinkedPlan(context, foundRecord, plan);
       }
     );
   }
@@ -180,6 +335,7 @@ export function createFinancialActionFoundationRepository(
         candidate.updatedAt = new Date();
       });
       await dependencies.database.batch(operation);
+      await reassertExpectedCurrentUser(scope.userId);
     });
   }
 
@@ -227,6 +383,7 @@ export function createFinancialActionFoundationRepository(
 
   return Object.freeze({
     createFinancialActionGroup,
+    commitFinancialActionGroupLocally,
     getFinancialActionGroup,
     markFinancialActionGroupSyncFailed,
     retryFinancialActionGroup,
@@ -241,7 +398,10 @@ const productionRepository = createFinancialActionFoundationRepository({
 
 export const createFinancialActionGroup =
   productionRepository.createFinancialActionGroup;
-export const getFinancialActionGroup = productionRepository.getFinancialActionGroup;
+export const commitFinancialActionGroupLocally =
+  productionRepository.commitFinancialActionGroupLocally;
+export const getFinancialActionGroup =
+  productionRepository.getFinancialActionGroup;
 export const markFinancialActionGroupSyncFailed =
   productionRepository.markFinancialActionGroupSyncFailed;
 export const retryFinancialActionGroup =
