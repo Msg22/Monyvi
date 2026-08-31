@@ -39,7 +39,7 @@
     "lint": "eslint . --rulesdir scripts/eslint-rules --ext .ts,.tsx,.js,.jsx",
     "lint:fix": "eslint . --rulesdir scripts/eslint-rules --ext .ts,.tsx,.js,.jsx --fix",
     "test:eslint-rules": "node -e \"const fs=require('fs'); for (const f of fs.readdirSync('scripts/eslint-rules').filter((name)=>name.endsWith('.test.js'))) require('./scripts/eslint-rules/'+f)\"",
-    "test:scripts": "node --test scripts/*.test.js",
+    "test:scripts": "node --test scripts/*.test.js && tsx --test scripts/__tests__/transform-schema.test.ts",
     "test:sms-parser-prompt-evaluator": "tsx --test scripts/__tests__/evaluate-sms-parser-prompt.test.ts",
     "sms:prompt:evaluate": "tsx scripts/evaluate-sms-parser-prompt.ts",
     "test:qa-sms-import-command": "tsx --test scripts/__tests__/import-qa-sms-candidate-bundle.test.ts",

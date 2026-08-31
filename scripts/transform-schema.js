@@ -71,6 +71,16 @@ const TABLE_TO_CLASS = {
   user_category_settings: "UserCategorySettings",
 };
 
+// These fields model durable SQL NULL as an explicit local state. Keeping this
+// capability narrow avoids changing the established optional-field contract for
+// existing generated models while allowing repository code to clear sync state
+// without casts or direct `_raw` writes.
+const EXPLICIT_NULL_MODEL_FIELDS = new Set([
+  "financial_action_groups.outcome_json",
+  "financial_action_groups.rejection_code",
+  "financial_action_groups.server_outcome",
+]);
+
 // Fields that should be indexed
 const INDEXED_FIELDS = ["user_id", "sms_fingerprint"];
 
@@ -324,8 +334,15 @@ function generateSchema(tables) {
         })
         .join(",\n");
 
+      const unsafeSql =
+        tableName === "financial_action_groups"
+          ? `
+      unsafeSql: (sql: string): string =>
+        \`\${sql}create unique index if not exists "financial_action_groups_user_action_unique" on "financial_action_groups" ("user_id", "action_id");\`,`
+          : "";
+
       return `    tableSchema({
-      name: "${tableName}",
+      name: "${tableName}",${unsafeSql}
       columns: [
 ${columnDefs},
       ],
@@ -528,13 +545,17 @@ function generateBaseModel(tableName, columns, relationships, allTables) {
         : snakeToCamel(col.name);
       const decorator = col.isTimestamp ? "date" : "field";
       const readonly = col.isReadonly ? "@readonly " : "";
-      const optional = col.isOptional ? "?" : "!";
+      const isExplicitNull = EXPLICIT_NULL_MODEL_FIELDS.has(
+        `${tableName}.${col.name}`
+      );
+      const optional = col.isOptional && !isExplicitNull ? "?" : "!";
       let tsType = "string";
 
       if (col.wmType === "number") tsType = col.isTimestamp ? "Date" : "number";
       else if (col.wmType === "boolean") tsType = "boolean";
       else if (col.isEnum && col.enumName) tsType = snakeToPascal(col.enumName);
       // JSON fields stay as string - they need manual getters to parse
+      if (isExplicitNull) tsType = `${tsType} | null`;
 
       return `  ${readonly}@${decorator}("${col.name}") ${propName}${optional}: ${tsType};`;
     })
@@ -757,4 +778,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { parseSupabaseTypes };
+module.exports = { generateBaseModel, generateSchema, parseSupabaseTypes };

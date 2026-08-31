@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, codex/035-metals-module-redesign]
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -98,6 +98,38 @@ jobs:
       - name: Test Mobile App
         run: npm test -w @monyvi/mobile
 
+  financial-action-pgtap:
+    name: Financial Action pgTAP
+    if: >-
+      github.event_name == 'pull_request' && (github.event.pull_request.base.ref
+      == 'main' || github.event.pull_request.base.ref ==
+      'codex/035-metals-module-redesign')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SENTRYCLI_SKIP_DOWNLOAD: "1"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+        timeout-minutes: 30
+
+      - name: Start local Supabase
+        run: npm run supabase:start:local
+        timeout-minutes: 10
+
+      - name: Run financial action pgTAP
+        run:
+          npx supabase test db --local
+          supabase/tests/financial_action_canonicalization_test.sql
   android-build:
     name: Android Build Verification
     runs-on: ubuntu-latest

@@ -41,6 +41,7 @@ export const EXCLUDED_TABLES = [
   "sms_review_draft_items",
   "dismissed_sms_fingerprints",
 ] as const;
+export const DEDICATED_SYNC_TABLES = new Set(["financial_action_groups"] as const);
 export const SNAPSHOT_TABLES = [
   "daily_snapshot_assets",
   "daily_snapshot_balance",
@@ -70,7 +71,9 @@ export const CHILD_TABLE_NAMES = Object.keys(
 ) as ChildTableName[];
 
 export const SYNCABLE_TABLES = Object.keys(schema.tables).filter(
-  (table) => !EXCLUDED_TABLES.includes(table as ExcludedTableName)
+  (table) =>
+    !EXCLUDED_TABLES.includes(table as ExcludedTableName) &&
+    !DEDICATED_SYNC_TABLES.has(table as "financial_action_groups")
 ) as SupabaseTablesNames[];
 
 export type SyncableTable = (typeof SYNCABLE_TABLES)[number];

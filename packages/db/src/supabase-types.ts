@@ -532,6 +532,63 @@ export type Database = {
           },
         ];
       };
+      financial_action_groups: {
+        Row: {
+          account_guards_json: Json;
+          action_id: string;
+          created_at: string;
+          deleted: boolean;
+          domain: string;
+          domain_reference_id: string;
+          id: string;
+          kind: string;
+          outcome_json: string | null;
+          payload_hash: string;
+          payload_json: string;
+          rejection_code: string | null;
+          server_outcome: string | null;
+          state: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          account_guards_json?: Json;
+          action_id: string;
+          created_at?: string;
+          deleted?: boolean;
+          domain: string;
+          domain_reference_id: string;
+          id?: string;
+          kind: string;
+          outcome_json?: string | null;
+          payload_hash: string;
+          payload_json: string;
+          rejection_code?: string | null;
+          server_outcome?: string | null;
+          state?: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          account_guards_json?: Json;
+          action_id?: string;
+          created_at?: string;
+          deleted?: boolean;
+          domain?: string;
+          domain_reference_id?: string;
+          id?: string;
+          kind?: string;
+          outcome_json?: string | null;
+          payload_hash?: string;
+          payload_json?: string;
+          rejection_code?: string | null;
+          server_outcome?: string | null;
+          state?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       market_rates: {
         Row: {
           aed_usd: number;

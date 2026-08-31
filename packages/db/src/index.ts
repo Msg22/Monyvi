@@ -17,6 +17,7 @@ export { DailySnapshotBalance } from "./models/DailySnapshotBalance";
 export { DailySnapshotNetWorth } from "./models/DailySnapshotNetWorth";
 export { DismissedSmsFingerprint } from "./models/DismissedSmsFingerprint";
 export { Debt } from "./models/Debt";
+export { FinancialActionGroup } from "./models/FinancialActionGroup";
 export { MarketRate } from "./models/MarketRate";
 export { Profile } from "./models/Profile";
 export { RecurringPayment } from "./models/RecurringPayment";

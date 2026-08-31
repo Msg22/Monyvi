@@ -3,9 +3,17 @@
 ## Authority
 
 Authority remains constitution, `AGENTS.md`, business decisions, then approved
-feature artifacts. After Slice 2 reviews, one stable local foundation commit and
-isolated local branches/worktrees are authorized. This document authorizes no
-Metals push, pull request, or other GitHub mutation.
+feature artifacts.
+
+### User Directive — 2026-08-31
+
+The team lead may create local commits, push authorized branches, open separate
+slice pull requests, address review and CI findings, and merge only when required
+review gates pass, CI is green, and no unresolved review comments remain. This
+authorization preserves the separate-slice PR strategy: do not bundle unrelated
+slices, do not merge prematurely, and do not use a later slice's work to bypass an
+upstream gate. It does not authorize remote database/Supabase mutations; migrations
+remain repository changes subject to their normal review and CI gates.
 
 ## Nine-Slice Ownership
 
@@ -27,8 +35,9 @@ Metals push, pull request, or other GitHub mutation.
 1. Completed T001–T005 plus a verified runnable worktree dependency junction
    permit Slice 2 and Slice 3A in disjoint worktrees. After Slice 2 reviews, the
    approved stable local foundation commit may become their shared local base.
-2. T024 freezes generic identity/state/serialization/storage. Only after an
-   authorized future merge may unrelated Metals stacks base on that commit.
+2. T024 freezes generic identity/state/serialization/storage. Only after its
+   required gates pass and its separate slice PR is merged may unrelated Metals
+   stacks base on that commit.
 3. T017 + T024 allow T034–T049. Slice 4 never waits for #242 T033.
 4. Fixed migration order: T022 `067_financial_action_foundation.sql`, T042
    `068_metals_domain.sql`, T029 `069_account_financial_effects.sql`. Slice 4
@@ -58,6 +67,9 @@ unrelated Metals work depend on T024 only where listed.
 
 ## Authorization Boundary
 
-No Metals push, PR, or GitHub action is authorized. A stable local foundation
-commit and isolated local branches/worktrees are allowed only after Slice 2
-reviews. The `before_implement` Speckit hook is optional and MUST NOT run.
+The 2026-08-31 user directive authorizes normal Git delivery actions described
+above, including local commits, branch pushes, separate slice PRs, review/CI fixes,
+and gated merges. A merge remains prohibited until all required review gates pass,
+CI is green, and no review comment remains unresolved. No remote database mutation is
+authorized by this delivery topology. The `before_implement` Speckit hook is optional
+and MUST NOT run unless separately requested.

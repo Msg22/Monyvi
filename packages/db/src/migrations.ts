@@ -9,9 +9,9 @@
  */
 
 import {
+  unsafeExecuteSql,
   createTable,
   addColumns,
-  unsafeExecuteSql,
   schemaMigrations,
 } from "@nozbe/watermelondb/Schema/migrations";
 
@@ -477,6 +477,34 @@ end;`
             { name: "updated_at", type: "number" },
           ],
         }),
+      ],
+    },
+    {
+      toVersion: 26,
+      steps: [
+        createTable({
+          name: "financial_action_groups",
+          columns: [
+            { name: "action_id", type: "string", isIndexed: true },
+            { name: "user_id", type: "string", isIndexed: true },
+            { name: "domain", type: "string" },
+            { name: "kind", type: "string" },
+            { name: "domain_reference_id", type: "string", isIndexed: true },
+            { name: "payload_json", type: "string" },
+            { name: "payload_hash", type: "string" },
+            { name: "account_guards_json", type: "string" },
+            { name: "state", type: "string" },
+            { name: "server_outcome", type: "string", isOptional: true },
+            { name: "outcome_json", type: "string", isOptional: true },
+            { name: "rejection_code", type: "string", isOptional: true },
+            { name: "created_at", type: "number" },
+            { name: "updated_at", type: "number" },
+            { name: "deleted", type: "boolean" },
+          ],
+        }),
+        unsafeExecuteSql(
+          'create unique index if not exists "financial_action_groups_user_action_unique" on "financial_action_groups" ("user_id", "action_id");'
+        ),
       ],
     },
   ],

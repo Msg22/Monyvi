@@ -20,6 +20,7 @@ import { DailySnapshotBalance } from "./models/DailySnapshotBalance";
 import { DailySnapshotNetWorth } from "./models/DailySnapshotNetWorth";
 import { DismissedSmsFingerprint } from "./models/DismissedSmsFingerprint";
 import { Debt } from "./models/Debt";
+import { FinancialActionGroup } from "./models/FinancialActionGroup";
 import { MarketRate } from "./models/MarketRate";
 import { Profile } from "./models/Profile";
 import { RecurringPayment } from "./models/RecurringPayment";
@@ -116,6 +117,7 @@ export const database = new Database({
     Category,
     UserCategorySettings,
     Debt,
+    FinancialActionGroup,
     RecurringPayment,
     SmsAiNegativeOutcome,
     SmsReviewQueue,
