@@ -238,6 +238,7 @@ describe("attribution expected instrument context", () => {
     ).toMatchObject({
       available: true,
       value: {
+        consumedRateReferences: [],
         combinedDecimal: "100.00",
         displayedComponents: {
           metalMovementDecimal: "60.00",
@@ -245,6 +246,56 @@ describe("attribution expected instrument context", () => {
         },
       },
     });
+  });
+
+  it("returns immutable validated rates consumed by cross-currency display conversion", () => {
+    const canonicalRate = currencyRate(
+      "display_purchase_currency",
+      "currency:EGP",
+      "0.25"
+    );
+    const preferredRate = currencyRate(
+      "display_preferred_currency",
+      "currency:USD",
+      "1"
+    );
+    const result = convertAttributionForDisplay({
+      attribution: {
+        available: true,
+        value: {
+          combinedDecimal: "100",
+          components: {
+            metalMovementDecimal: "60",
+            currencyMovementDecimal: "40",
+          },
+        },
+      },
+      canonicalCurrencyInstrumentCode: "currency:EGP",
+      preferredCurrencyInstrumentCode: "currency:USD",
+      canonicalCurrencyAtDisplayRate: canonicalRate,
+      preferredCurrencyAtDisplayRate: preferredRate,
+      decimalPlaces: 2,
+    });
+
+    expect(result).toMatchObject({
+      available: true,
+      value: {
+        combinedDecimal: "25.00",
+        displayedComponents: {
+          metalMovementDecimal: "15.00",
+          currencyMovementDecimal: "10.00",
+        },
+        consumedRateReferences: [canonicalRate, preferredRate],
+      },
+    });
+    if (result.available) {
+      expect(Object.isFrozen(result.value.consumedRateReferences)).toBe(true);
+      expect(
+        result.value.consumedRateReferences.every((reference) =>
+          Object.isFrozen(reference)
+        )
+      ).toBe(true);
+    }
   });
 
   it.each([
@@ -343,6 +394,7 @@ describe("attribution expected instrument context", () => {
       ).toEqual({
         available: true,
         value: {
+          consumedRateReferences: [],
           combinedDecimal: "10.00",
           displayedComponents: { metal: "10.00" },
           displayedComponentSumDecimal: "10.00",

@@ -178,6 +178,22 @@ describe("provider-observation-time rate trust", () => {
     ).toEqual(expected);
   });
 
+  it("treats provider observation after capture as unknown even when observed before now", () => {
+    const { classifyRateTrust } = loadRateTrustApi();
+
+    expect(
+      classifyRateTrust(
+        {
+          valueDecimal: "100.25",
+          providerObservedAt: NOW - 1,
+          capturedAt: NOW - 2,
+          quality: "valid",
+        },
+        NOW
+      )
+    ).toEqual({ state: "unknown", ageMs: null });
+  });
+
   it("treats exactly 24 hours old as fresh because only over 24 hours is stale", () => {
     const { classifyRateTrust } = loadRateTrustApi();
 

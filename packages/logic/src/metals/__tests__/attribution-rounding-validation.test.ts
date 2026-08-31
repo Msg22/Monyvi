@@ -112,6 +112,10 @@ describe("Metals attribution rounding validation", () => {
     ).toEqual({
       available: true,
       value: {
+        consumedRateReferences: [
+          DISPLAY_CANONICAL_RATE,
+          DISPLAY_PREFERRED_RATE,
+        ],
         combinedDecimal: "0.67",
         displayedComponents: {
           metalMovementDecimal: "0.33",

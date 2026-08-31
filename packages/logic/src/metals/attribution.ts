@@ -87,6 +87,10 @@ export interface RoundedAttribution {
   readonly requiresRoundingExplanation: boolean;
 }
 
+export interface ConvertedAttribution extends RoundedAttribution {
+  readonly consumedRateReferences: readonly ExactRateReference[];
+}
+
 export interface DisplayAttributionSource {
   readonly combinedDecimal: string;
   readonly components: Readonly<Record<string, string>>;
@@ -476,7 +480,7 @@ function sumDecimalStrings(values: readonly string[]): string {
 
 export function convertAttributionForDisplay(
   input: DisplayAttributionInput
-): Availability<RoundedAttribution> {
+): Availability<ConvertedAttribution> {
   if (!input.attribution.available) {
     return input.attribution;
   }
@@ -523,28 +527,50 @@ export function convertAttributionForDisplay(
     }),
     {}
   );
-  return roundReconciledAttributionForDisplay({
-    combinedDecimal: serializeDecimal(
-      parseCanonicalDecimal(input.attribution.value.combinedDecimal).times(
-        displayFactor
-      )
-    ),
-    components: convertedComponents,
-    decimalPlaces: input.decimalPlaces,
-  });
+  return withConsumedRateReferences(
+    roundReconciledAttributionForDisplay({
+      combinedDecimal: serializeDecimal(
+        parseCanonicalDecimal(input.attribution.value.combinedDecimal).times(
+          displayFactor
+        )
+      ),
+      components: convertedComponents,
+      decimalPlaces: input.decimalPlaces,
+    }),
+    [canonicalCurrency.value.reference, preferredCurrency.value.reference]
+  );
 }
 
 function convertSameCurrencyAttributionForDisplay(
   attribution: DisplayAttributionSource,
   decimalPlaces: number
-): Availability<RoundedAttribution> {
+): Availability<ConvertedAttribution> {
   if (!hasExactComponentSum(attribution)) {
     return { available: false, reason: "attribution_components_mismatch" };
   }
-  return roundReconciledAttributionForDisplay({
-    ...attribution,
-    decimalPlaces,
-  });
+  return withConsumedRateReferences(
+    roundReconciledAttributionForDisplay({
+      ...attribution,
+      decimalPlaces,
+    }),
+    []
+  );
+}
+
+function withConsumedRateReferences(
+  attribution: Availability<RoundedAttribution>,
+  references: readonly ExactRateReference[]
+): Availability<ConvertedAttribution> {
+  if (!attribution.available) {
+    return attribution;
+  }
+  return {
+    available: true,
+    value: {
+      ...attribution.value,
+      consumedRateReferences: snapshotRateReferences(references),
+    },
+  };
 }
 
 function calculateCoreComponents(input: {

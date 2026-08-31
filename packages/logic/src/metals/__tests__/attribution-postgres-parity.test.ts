@@ -842,6 +842,7 @@ describe("rounding explanation and hand-derived PostgreSQL numeric compatibility
     ).toEqual({
       available: true,
       value: {
+        consumedRateReferences: [directCurrencyRate("display_purchase_currency", "currency:EGP", "0.6"), directCurrencyRate("display_preferred_currency", "currency:SAR", "0.2")],
         combinedDecimal: "0.02",
         displayedComponents: {
           metalMovementDecimal: "0.00",

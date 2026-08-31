@@ -24,7 +24,8 @@ export function classifyRateTrust(
   if (
     typeof reference.providerObservedAt !== "number" ||
     !Number.isFinite(reference.providerObservedAt) ||
-    reference.providerObservedAt < 0
+    reference.providerObservedAt < 0 ||
+    reference.providerObservedAt > reference.capturedAt
   ) {
     return { state: "unknown", ageMs: null };
   }
