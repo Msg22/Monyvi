@@ -650,14 +650,15 @@ export function createFinancialActionFoundationRepository(
         initialPreparedCreateExpectations
       );
       const preparedExistingOperations: Model[] = [];
+      const preparedExistingExpectations: PreparedOperationExpectation[] = [];
       for (const [index, operation] of existingOperations.entries()) {
-        assertCachedOperationsUnchanged(
-          cachedModels.slice(index),
-          cachedSnapshots.slice(index),
-          existingExpectations.slice(index),
-          preparedCreates
-        );
-        preparedExistingOperations.push(prepareExistingOperation(operation));
+        assertPreparedOperationsMatch(preparedExistingOperations, preparedExistingExpectations);
+        assertCachedOperationsUnchanged(cachedModels.slice(index), cachedSnapshots.slice(index), existingExpectations.slice(index), preparedCreates);
+        const preparedOperation = prepareExistingOperation(operation);
+        preparedExistingOperations.push(preparedOperation);
+        preparedExistingExpectations.push(...capturePreparedExpectations([], [preparedOperation], existingExpectations.slice(index, index + 1)));
+        assertPreparedOperationsMatch(preparedExistingOperations, preparedExistingExpectations);
+        assertCachedOperationsUnchanged(cachedModels.slice(index + 1), cachedSnapshots.slice(index + 1), existingExpectations.slice(index + 1), preparedCreates);
       }
       assertPreparedOperationsMatch(
         preparedCreates,
@@ -670,11 +671,10 @@ export function createFinancialActionFoundationRepository(
       if (linkedOperations.length === 0) {
         throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
       }
-      const preparedExpectations = capturePreparedExpectations(
-        preparedCreates,
-        preparedExistingOperations,
-        existingExpectations
-      );
+      const preparedExpectations = Object.freeze([
+        ...initialPreparedCreateExpectations,
+        ...preparedExistingExpectations,
+      ]);
       assertPreparedOperationsMatch(linkedOperations, preparedExpectations);
       const preparedPostimages = createImmutablePostimages(preparedExpectations);
       await assertPreparedOwnership(Object.freeze({

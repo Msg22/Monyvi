@@ -604,43 +604,50 @@ describe("financial action linked plan safety", () => {
     }
   );
 
-  it.each(["update", "soft-delete"] as const)(
-    "rejects an earlier updater mutating a later %s model before its preparation",
-    async (laterKind) => {
-      const earlier = fakeModel(`earlier-${laterKind}`, "asset_metals");
-      const later = fakeModel(`later-${laterKind}`, "asset_metals");
-      later._raw.amount_minor = "100";
-      later._raw.deleted = false;
+  it.each([
+    ["later", "update"],
+    ["later", "soft-delete"],
+    ["earlier", "update"],
+    ["earlier", "soft-delete"],
+  ] as const)(
+    "rejects an updater mutating an %s prepared %s model",
+    async (targetPosition, targetKind) => {
+      const earlier = fakeModel(`earlier-${targetKind}`, "asset_metals");
+      const later = fakeModel(`later-${targetKind}`, "asset_metals");
+      const target = targetPosition === "earlier" ? earlier : later;
+      target._raw.amount_minor = "100";
+      target._raw.deleted = false;
       const earlierRaw = { ...earlier._raw };
       const laterRaw = { ...later._raw };
-      const laterUpdate = jest.fn();
-      const prepareLater = jest.spyOn(
-        later,
-        laterKind === "update" ? "prepareUpdate" : "prepareMarkAsDeleted"
+      const targetUpdate = jest.fn();
+      const prepareTarget = jest.spyOn(
+        target,
+        targetKind === "update" ? "prepareUpdate" : "prepareMarkAsDeleted"
       );
+      const mutateTarget = (): void => {
+        target._raw.amount_minor = "999";
+        target._raw.deleted = true;
+      };
+      const earlierOperation =
+        targetPosition === "later"
+          ? { kind: "update" as const, model: earlier as unknown as Model, update: mutateTarget }
+          : targetKind === "update"
+            ? { kind: "update" as const, model: earlier as unknown as Model, update: targetUpdate }
+            : { kind: "markAsDeleted" as const, model: earlier as unknown as Model };
       const laterOperation =
-        laterKind === "update"
-          ? { kind: "update" as const, model: later as unknown as Model, update: laterUpdate }
-          : { kind: "markAsDeleted" as const, model: later as unknown as Model };
+        targetPosition === "earlier"
+          ? { kind: "update" as const, model: later as unknown as Model, update: mutateTarget }
+          : targetKind === "update"
+            ? { kind: "update" as const, model: later as unknown as Model, update: targetUpdate }
+            : { kind: "markAsDeleted" as const, model: later as unknown as Model };
 
       await expect(
-        commit(
-          plan([
-            {
-              kind: "update",
-              model: earlier as unknown as Model,
-              update: (): void => {
-                later._raw.amount_minor = "999";
-                later._raw.deleted = true;
-              },
-            },
-            laterOperation,
-          ])
-        )
+        commit(plan([earlierOperation, laterOperation]))
       ).rejects.toThrow(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
 
-      expect(laterUpdate).not.toHaveBeenCalled();
-      expect(prepareLater).not.toHaveBeenCalled();
+      expect(prepareTarget).toHaveBeenCalledTimes(
+        targetPosition === "earlier" ? 1 : 0
+      );
       expect(mockAssertPreparedOwnership).not.toHaveBeenCalled();
       expect(mockBatch).not.toHaveBeenCalled();
       expect(earlier._raw).toEqual(earlierRaw);

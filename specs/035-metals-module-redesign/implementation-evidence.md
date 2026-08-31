@@ -525,3 +525,23 @@ tests. Exact mobile and logic TypeScript checks and changed-file lint pass; full
 lint has 0 errors and 275 pre-existing warnings. `git diff --check` passes, and the
 repository/safety-test files are 898 and 876 lines. No schema, migration, remote database,
 auth-path lock, GitHub-thread, or remote-data mutation is included.
+
+### PR #251 prepared-prefix sibling isolation — 2026-09-01
+
+This append applies to exact head `41c0f3abca656d21bcc0c388c2ee9e03e57a0849`.
+Each existing operation now captures its immutable prepared expectation immediately after
+its own preparation. Before and after every updater, the repository verifies the prepared
+prefix against those retained expectations and the unprepared suffix against cached raw
+snapshots. This closes both mutation directions: an earlier updater cannot alter a later
+unprepared sibling, and a later updater cannot alter an earlier prepared update or
+soft-delete sibling. Failure restores all cached models and never reaches the batch.
+
+Focused Red was 1 failed suite with 2 failed and 27 passed of 29 tests: a later update
+mutated an earlier prepared update or `markAsDeleted` raw record, and both commits
+resolved. The four-case directional matrix now proves rollback and no batch for update and
+soft-delete targets in both orders. Focused Green is 1/1 suite and 29/29 tests; broad
+financial-action Green is 4/4 suites and 77/77 tests. Exact mobile and logic TypeScript
+checks and changed-file lint pass; full repository lint has 0 errors and 275 pre-existing
+warnings. `git diff --check` passes, and the repository/safety-test files are 898 and 883
+lines. No schema, migration, remote database, auth-path lock, GitHub-thread, or remote-data
+mutation is included.
