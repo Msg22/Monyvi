@@ -18,7 +18,7 @@ interface MockRecord {
   table?: string;
   _isEditing: boolean;
   _preparedState: Model["_preparedState"];
-  _raw: { id: string; state?: string };
+  _raw: { id: string; state?: string; user_id?: string };
   id: string;
   actionId: string;
   userId: string;
@@ -208,7 +208,7 @@ function linkedOperation(id: string): MockRecord {
     table: "linked_domain_evidence",
     _isEditing: false,
     _preparedState: "create",
-    _raw: { id, state: "local_complete" },
+    _raw: { id, state: "local_complete", user_id: USER_ID },
     id,
     actionId: id,
     userId: USER_ID,
@@ -279,9 +279,9 @@ function inputWithLinkedOperations(
 function assertDirectCachedLinkedOperationOwnership(
   input: FinancialActionLinkedOperationCachedOwnershipInput
 ): Promise<void> {
-  input.cachedModels.forEach((model) => {
-    const record = model as unknown as MockRecord;
-    if (record.userId !== input.userId) throw new Error("ownership_failed");
+  input.cachedPreimages.forEach((snapshot) => {
+    if ((snapshot.raw as unknown as { user_id?: string }).user_id !== input.userId)
+      throw new Error("ownership_failed");
   });
   return Promise.resolve();
 }
@@ -289,9 +289,9 @@ function assertDirectCachedLinkedOperationOwnership(
 function assertDirectPreparedLinkedOperationOwnership(
   input: FinancialActionLinkedOperationPreparedOwnershipInput
 ): Promise<void> {
-  [...input.cachedModels, ...input.preparedOperations].forEach((model) => {
-    const record = model as unknown as MockRecord;
-    if (record.userId !== input.userId) throw new Error("ownership_failed");
+  input.preparedPostimages.forEach((snapshot) => {
+    if ((snapshot.raw as unknown as { user_id?: string }).user_id !== input.userId)
+      throw new Error("ownership_failed");
   });
   return Promise.resolve();
 }
@@ -579,14 +579,16 @@ describe("financial action foundation repository", () => {
 
     expect(assertCachedOwnership).toHaveBeenCalledTimes(1);
     expect(assertCachedOwnership).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: USER_ID, cachedModels: [cached] })
+      expect.objectContaining({ userId: USER_ID, cachedPreimages: [expect.objectContaining({ id: cached.id })] })
     );
     expect(assertPreparedOwnership).toHaveBeenCalledTimes(1);
     expect(assertPreparedOwnership).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: USER_ID,
-        cachedModels: [cached],
-        preparedOperations: [prepared, cached],
+        preparedPostimages: [
+          expect.objectContaining({ id: prepared.id, kind: "create" }),
+          expect.objectContaining({ id: cached.id, kind: "update" }),
+        ],
       })
     );
     expect(mockDatabaseBatch).toHaveBeenCalledTimes(1);
@@ -630,6 +632,7 @@ describe("financial action foundation repository", () => {
   it("rejects a foreign existing preimage before its updater can launder ownership", async () => {
     const foreign = existingLinkedOperation("foreign-owner-rewrite-row");
     foreign.userId = "018f0c7a-1234-7abc-8def-000000000099";
+    foreign._raw.user_id = foreign.userId;
     const originalRaw = { ...foreign._raw };
     const update = jest.fn((model: Model): void => {
       const record = model as unknown as MockRecord;
@@ -637,12 +640,11 @@ describe("financial action foundation repository", () => {
       record._raw.state = "ownership-laundered";
     });
     const assertCachedOwnership = jest.fn(
-      (ownershipInput: {
-        readonly userId: string;
-        readonly cachedModels: readonly Model[];
-      }): Promise<void> => {
-        const cached = ownershipInput.cachedModels[0] as unknown as MockRecord;
-        if (cached.userId !== ownershipInput.userId)
+      (ownershipInput: FinancialActionLinkedOperationCachedOwnershipInput): Promise<void> => {
+        if (
+          (ownershipInput.cachedPreimages[0]?.raw as unknown as { user_id?: string })
+            .user_id !== ownershipInput.userId
+        )
           throw new Error("ownership_failed");
         return Promise.resolve();
       }
@@ -664,7 +666,7 @@ describe("financial action foundation repository", () => {
     ).rejects.toThrow("ownership_failed");
 
     expect(assertCachedOwnership).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: USER_ID, cachedModels: [foreign] })
+      expect.objectContaining({ userId: USER_ID, cachedPreimages: [expect.objectContaining({ id: foreign.id })] })
     );
     expect(update).not.toHaveBeenCalled();
     expect(foreign._raw).toEqual(originalRaw);
@@ -706,14 +708,13 @@ describe("financial action foundation repository", () => {
     expect(assertCachedOwnership).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: USER_ID,
-        cachedModels: [cached],
+        cachedPreimages: [expect.objectContaining({ id: cached.id })],
       })
     );
     expect(assertPreparedOwnership).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: USER_ID,
-        cachedModels: [cached],
-        preparedOperations: [cached],
+        preparedPostimages: [expect.objectContaining({ id: cached.id })],
       })
     );
   });
@@ -732,7 +733,9 @@ describe("financial action foundation repository", () => {
       async (
         ownershipInput: FinancialActionLinkedOperationCachedOwnershipInput
       ): Promise<void> => {
-        expect(ownershipInput.cachedModels).toEqual([child]);
+        expect(ownershipInput.cachedPreimages[0]).toEqual(
+          expect.objectContaining({ id: child.id })
+        );
         await assertOwnedParent(ownershipInput.userId);
       }
     );

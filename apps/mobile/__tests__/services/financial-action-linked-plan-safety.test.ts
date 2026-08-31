@@ -26,6 +26,8 @@ import type { FinancialActionEnvelopeV1 } from "../../../../packages/logic/src/f
 
 interface FakeRaw {
   _status?: string;
+  amount_minor?: string;
+  deleted?: boolean;
   id: string;
   parent_id?: string;
   user_id?: string;
@@ -234,16 +236,17 @@ describe("financial action linked plan safety", () => {
         input: FinancialActionLinkedOperationPreparedOwnershipInput
       ): Promise<void> => {
         expect(input.cachedPreimages).toEqual([
-          { id: child.id, table: child.table, raw: originalRaw },
+          { id: child.id, kind: "update", table: child.table, raw: originalRaw },
         ]);
         expect(Object.isFrozen(input.cachedPreimages)).toBe(true);
         expect(Object.isFrozen(input.cachedPreimages[0]?.raw)).toBe(true);
         const preimage = input.cachedPreimages[0];
         if (!preimage) throw new Error("missing_preimage");
         assertFakeRaw(preimage.raw);
-        const preparedChild = input
-          .preparedOperations[0] as unknown as FakeModel;
-        if (preimage.raw.parent_id !== preparedChild._raw.parent_id) {
+        const preparedChild = input.preparedPostimages[0];
+        if (!preparedChild) throw new Error("missing_postimage");
+        assertFakeRaw(preparedChild.raw);
+        if (preimage.raw.parent_id !== preparedChild.raw.parent_id) {
           throw new Error("ownership_failed");
         }
         return Promise.resolve();
@@ -386,18 +389,18 @@ describe("financial action linked plan safety", () => {
       async (
         input: FinancialActionLinkedOperationCachedOwnershipInput
       ): Promise<void> => {
-        const areCachedModelsFrozen = Object.isFrozen(input.cachedModels);
+        const areCachedPreimagesFrozen = Object.isFrozen(input.cachedPreimages);
         validationStarted.resolve();
         await releaseValidation.promise;
-        expect(areCachedModelsFrozen).toBe(true);
+        expect(areCachedPreimagesFrozen).toBe(true);
       }
     );
     const assertPreparedOwnership = jest.fn(
       (
         input: FinancialActionLinkedOperationPreparedOwnershipInput
       ): Promise<void> => {
-        expect(Object.isFrozen(input.cachedModels)).toBe(true);
-        expect(Object.isFrozen(input.preparedOperations)).toBe(true);
+        expect(Object.isFrozen(input.cachedPreimages)).toBe(true);
+        expect(Object.isFrozen(input.preparedPostimages)).toBe(true);
         return Promise.resolve();
       }
     );
@@ -506,6 +509,20 @@ describe("financial action linked plan safety", () => {
         model._isEditing = true;
       },
     ],
+    [
+      "update",
+      "raw parent",
+      (model: FakeModel): void => {
+        model._raw.parent_id = "tampered-parent";
+      },
+    ],
+    [
+      "markAsDeleted",
+      "raw deleted flag",
+      (model: FakeModel): void => {
+        model._raw.deleted = false;
+      },
+    ],
   ] as const)(
     "rejects %s descriptor %s tampering and restores its cached model",
     async (operationKind, _tamperKind, tamper) => {
@@ -526,9 +543,12 @@ describe("financial action linked plan safety", () => {
         (
           input: FinancialActionLinkedOperationPreparedOwnershipInput
         ): Promise<void> => {
-          const preparedExisting = input
-            .preparedOperations[0] as unknown as FakeModel;
-          tamper(preparedExisting);
+          expect(Object.isFrozen(input.preparedPostimages[0])).toBe(true);
+          expect(Object.isFrozen(input.preparedPostimages[0]?.raw)).toBe(true);
+          const snapshotRaw = input.preparedPostimages[0]?.raw as unknown as FakeRaw;
+          snapshotRaw.parent_id = "snapshot-tamper";
+          expect(snapshotRaw.parent_id).not.toBe("snapshot-tamper");
+          tamper(existing);
           return Promise.resolve();
         }
       );
@@ -543,6 +563,33 @@ describe("financial action linked plan safety", () => {
       expect(mockBatch).not.toHaveBeenCalled();
     }
   );
+
+  it("rejects prepared-create raw tampering before batch", async () => {
+    const preparedCreate = fakeModel("tampered-create", "asset_metals", "create");
+    preparedCreate._raw.amount_minor = "100";
+    const originalRaw = { ...preparedCreate._raw };
+    const assertPreparedOwnership = jest.fn((
+      input: FinancialActionLinkedOperationPreparedOwnershipInput
+    ): Promise<void> => {
+      expect(Object.isFrozen(input.preparedPostimages[0]?.raw)).toBe(true);
+      const snapshotRaw = input.preparedPostimages[0]?.raw as unknown as FakeRaw;
+      snapshotRaw.amount_minor = "snapshot-tamper";
+      expect(snapshotRaw.amount_minor).toBe("100");
+      preparedCreate._raw.amount_minor = "999";
+      return Promise.resolve();
+    });
+
+    await expect(
+      commit(
+        plan([], [preparedCreate as unknown as Model], assertPreparedOwnership)
+      )
+    ).rejects.toThrow(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+
+    expect(preparedCreate._raw).toEqual(originalRaw);
+    expect(preparedCreate._preparedState).toBe("create");
+    expect(preparedCreate._isEditing).toBe(false);
+    expect(mockBatch).not.toHaveBeenCalled();
+  });
 
   it("does not expose unrestricted hard-delete preparation", () => {
     const repositorySource = readFileSync(

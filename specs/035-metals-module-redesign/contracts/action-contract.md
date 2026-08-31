@@ -264,14 +264,18 @@ Every linked local operation plan separates genuine prepared creates from declar
 existing-model operations. The repository derives every existing preimage from those
 descriptors and rejects any existing model that is already prepared/editing, repeats a
 `(table, id)` identity, or overlaps a prepared create before any mutation. It snapshots
-each clean existing model and supplies immutable plain `{ table, id, raw }` preimages to
-both ownership validators before repository-controlled preparation. Existing
+each clean existing model and supplies immutable plain `{ table, id, kind, raw }`
+preimages to cached ownership validation before repository-controlled preparation.
+Existing
 descriptors may only prepare an update or Watermelon soft delete (`markAsDeleted`);
-hard-delete preparation is not part of this synced financial contract. Prepared
-validation then compares the resulting postimages and owned-parent links against those
-immutable preimages before the atomic batch. Both validators are mandatory and auth is
-reasserted after each asynchronous validation. Replay invokes neither existing-model
-preparation nor either ownership validator.
+hard-delete preparation is not part of this synced financial contract. After preparation,
+the repository captures immutable plain `{ table, id, kind, raw }` postimages. Prepared
+ownership validation receives only the frozen preimages and postimages, never live
+Watermelon models. The repository then reasserts auth and compares every live operation's
+object identity, table, ID, preparation/editing state, and complete shallow raw record to
+its unexposed captured postimage immediately before the atomic batch. Any drift rejects
+the commit and restores cached state. Replay invokes neither existing-model preparation
+nor either ownership validator.
 
 Action roots are never soft-deleted by product behavior. Their required `deleted` column
 remains `false` solely for the shared sync-row convention; deleting a holding is a

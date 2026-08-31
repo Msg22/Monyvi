@@ -70,21 +70,27 @@ export type FinancialActionLinkedExistingOperation =
 
 export interface FinancialActionLinkedOperationPreimage {
   readonly id: string;
+  readonly kind: FinancialActionLinkedExistingOperation["kind"];
+  readonly table: string;
+  readonly raw: Readonly<Model["_raw"]>;
+}
+
+export interface FinancialActionLinkedOperationPostimage {
+  readonly id: string;
+  readonly kind: "create" | FinancialActionLinkedExistingOperation["kind"];
   readonly table: string;
   readonly raw: Readonly<Model["_raw"]>;
 }
 
 export interface FinancialActionLinkedOperationCachedOwnershipInput {
   readonly userId: string;
-  readonly cachedModels: readonly Model[];
   readonly cachedPreimages: readonly FinancialActionLinkedOperationPreimage[];
 }
 
 export interface FinancialActionLinkedOperationPreparedOwnershipInput {
   readonly userId: string;
-  readonly cachedModels: readonly Model[];
   readonly cachedPreimages: readonly FinancialActionLinkedOperationPreimage[];
-  readonly preparedOperations: readonly Model[];
+  readonly preparedPostimages: readonly FinancialActionLinkedOperationPostimage[];
 }
 
 export interface CommitFinancialActionGroupLocallyInput extends CreateFinancialActionGroupInput {
@@ -117,6 +123,23 @@ interface ExistingOperationExpectation {
   readonly id: string;
   readonly kind: FinancialActionLinkedExistingOperation["kind"];
   readonly expectedPreparedState: "update" | "markAsDeleted";
+}
+
+interface PreparedOperationExpectation {
+  readonly model: Model;
+  readonly table: string;
+  readonly id: string;
+  readonly kind: FinancialActionLinkedOperationPostimage["kind"];
+  readonly expectedPreparedState: "create" | "update" | "markAsDeleted";
+  readonly raw: Readonly<Model["_raw"]>;
+  readonly isEditing: boolean;
+}
+
+interface PreparedCreateSnapshot {
+  readonly model: Model;
+  readonly raw: Model["_raw"];
+  readonly preparedState: Model["_preparedState"];
+  readonly isEditing: boolean;
 }
 
 export interface FinancialActionFoundationRepositoryDependencies {
@@ -309,6 +332,25 @@ export function createFinancialActionFoundationRepository(
     return Object.freeze([...models]);
   }
 
+  function capturePreparedCreateSnapshots(
+    models: readonly Model[]
+  ): readonly PreparedCreateSnapshot[] {
+    return models.map((model) => ({
+      model,
+      raw: cloneRaw(model._raw),
+      preparedState: model._preparedState,
+      isEditing: model._isEditing,
+    }));
+  }
+
+  function restorePreparedCreateSnapshot(
+    snapshot: PreparedCreateSnapshot
+  ): void {
+    snapshot.model._raw = cloneRaw(snapshot.raw);
+    snapshot.model._preparedState = snapshot.preparedState;
+    snapshot.model._isEditing = snapshot.isEditing;
+  }
+
   function captureExistingOperationExpectations(
     operations: readonly FinancialActionLinkedExistingOperation[]
   ): readonly ExistingOperationExpectation[] {
@@ -341,50 +383,139 @@ export function createFinancialActionFoundationRepository(
     }
   }
 
-  function assertLinkedOperationIntegrity(
+  function cloneRaw(raw: Readonly<Model["_raw"]>): Model["_raw"] {
+    const source = raw as unknown as Readonly<Record<string, unknown>>;
+    const clone = Object.fromEntries(
+      Object.entries(source).map(([key, value]) => [
+        key,
+        value instanceof Date ? new Date(value.getTime()) : value,
+      ])
+    );
+    return clone as unknown as Model["_raw"];
+  }
+
+  function rawValuesMatch(current: unknown, expected: unknown): boolean {
+    if (current instanceof Date || expected instanceof Date) {
+      return (
+        current instanceof Date &&
+        expected instanceof Date &&
+        current.getTime() === expected.getTime()
+      );
+    }
+    return Object.is(current, expected);
+  }
+
+  function rawRecordsMatch(
+    current: Readonly<Model["_raw"]>,
+    expected: Readonly<Model["_raw"]>
+  ): boolean {
+    const currentRecord = current as unknown as Readonly<Record<string, unknown>>;
+    const expectedRecord = expected as unknown as Readonly<Record<string, unknown>>;
+    const currentKeys = Object.keys(currentRecord);
+    const expectedKeys = Object.keys(expectedRecord);
+    return (
+      currentKeys.length === expectedKeys.length &&
+      currentKeys.every(
+        (key) =>
+          Object.prototype.hasOwnProperty.call(expectedRecord, key) &&
+          rawValuesMatch(currentRecord[key], expectedRecord[key])
+      )
+    );
+  }
+
+  function capturePreparedExpectations(
     preparedCreates: readonly Model[],
-    preparedCreateIdentities: readonly string[],
     preparedExistingOperations: readonly Model[],
     existingExpectations: readonly ExistingOperationExpectation[]
+  ): readonly PreparedOperationExpectation[] {
+    const createExpectations = preparedCreates.map((model) =>
+      Object.freeze({
+        model,
+        table: model.table,
+        id: model.id,
+        kind: "create" as const,
+        expectedPreparedState: "create" as const,
+        raw: Object.freeze(cloneRaw(model._raw)),
+        isEditing: false,
+      })
+    );
+    const updateExpectations = preparedExistingOperations.map((model, index) => {
+      const existing = existingExpectations[index];
+      if (!existing || model !== existing.model) {
+        throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+      }
+      return Object.freeze({
+        model,
+        table: existing.table,
+        id: existing.id,
+        kind: existing.kind,
+        expectedPreparedState: existing.expectedPreparedState,
+        raw: Object.freeze(cloneRaw(model._raw)),
+        isEditing: false,
+      });
+    });
+    return Object.freeze([...createExpectations, ...updateExpectations]);
+  }
+
+  function assertPreparedOperationsMatch(
+    operations: readonly Model[],
+    expectations: readonly PreparedOperationExpectation[]
   ): void {
-    assertPreparedCreateIntegrity(preparedCreates, preparedCreateIdentities);
     if (
-      preparedExistingOperations.length !== existingExpectations.length ||
-      preparedExistingOperations.some((model, index) => {
-        const expectation = existingExpectations[index];
-        if (!expectation) return true;
-        const expectedPreparedState =
-          expectation.kind === "update" ? "update" : "markAsDeleted";
+      operations.length !== expectations.length ||
+      operations.some((model, index) => {
+        const expected = expectations[index];
         return (
-          model !== expectation.model ||
-          model.table !== expectation.table ||
-          model.id !== expectation.id ||
-          expectation.expectedPreparedState !== expectedPreparedState ||
-          model._preparedState !== expectation.expectedPreparedState ||
-          model._isEditing
+          !expected ||
+          model !== expected.model ||
+          model.table !== expected.table ||
+          model.id !== expected.id ||
+          model._preparedState !== expected.expectedPreparedState ||
+          model._isEditing !== expected.isEditing ||
+          !rawRecordsMatch(model._raw, expected.raw)
         );
       })
     ) {
       throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
     }
-    assertNoRootTargets(preparedCreates);
-    assertNoRootTargets(preparedExistingOperations);
-    assertUniqueModelIdentities(preparedExistingOperations);
-    assertDisjointModelIdentities(
-      preparedExistingOperations,
-      preparedCreates
-    );
+    assertNoRootTargets(operations);
+    assertUniqueModelIdentities(operations);
+  }
+
+  function immutableRaw(raw: Readonly<Model["_raw"]>): Readonly<Model["_raw"]> {
+    return Object.freeze(cloneRaw(raw));
   }
 
   function createImmutablePreimages(
-    snapshots: ReadonlyArray<ReturnType<typeof captureCachedModelSnapshot>>
+    snapshots: ReadonlyArray<ReturnType<typeof captureCachedModelSnapshot>>,
+    expectations: readonly ExistingOperationExpectation[]
   ): readonly FinancialActionLinkedOperationPreimage[] {
     return Object.freeze(
-      snapshots.map((snapshot) =>
+      snapshots.map((snapshot, index) => {
+        const expectation = expectations[index];
+        if (!expectation) {
+          throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+        }
+        return Object.freeze({
+          id: expectation.id,
+          kind: expectation.kind,
+          table: expectation.table,
+          raw: immutableRaw(snapshot.raw),
+        });
+      })
+    );
+  }
+
+  function createImmutablePostimages(
+    expectations: readonly PreparedOperationExpectation[]
+  ): readonly FinancialActionLinkedOperationPostimage[] {
+    return Object.freeze(
+      expectations.map((expectation) =>
         Object.freeze({
-          id: snapshot.model.id,
-          table: snapshot.model.table,
-          raw: Object.freeze({ ...snapshot.raw }),
+          id: expectation.id,
+          kind: expectation.kind,
+          table: expectation.table,
+          raw: immutableRaw(expectation.raw),
         })
       )
     );
@@ -479,27 +610,33 @@ export function createFinancialActionFoundationRepository(
     const cachedSnapshots = cachedModels.map((model) =>
       captureCachedModelSnapshot(model)
     );
-    const cachedPreimages = createImmutablePreimages(cachedSnapshots);
+    const cachedPreimages = createImmutablePreimages(
+      cachedSnapshots,
+      existingExpectations
+    );
+    const preparedCreateSnapshots = capturePreparedCreateSnapshots(preparedCreates);
+    const initialPreparedCreateExpectations = capturePreparedExpectations(
+      preparedCreates,
+      [],
+      []
+    );
     const snapshots = foundRecord
       ? [captureCachedModelSnapshot(foundRecord), ...cachedSnapshots]
       : cachedSnapshots;
     let hasCommitted = false;
     try {
-      await assertCachedOwnership({
+      await assertCachedOwnership(Object.freeze({
         userId: context.scope.userId,
-        cachedModels,
         cachedPreimages,
-      });
+      }));
       await reassertExpectedCurrentUser(context.scope.userId);
       assertPreparedCreateIntegrity(preparedCreates, preparedCreateIdentities);
+      assertPreparedOperationsMatch(
+        preparedCreates,
+        initialPreparedCreateExpectations
+      );
       const preparedExistingOperations = existingOperations.map(
         prepareExistingOperation
-      );
-      assertLinkedOperationIntegrity(
-        preparedCreates,
-        preparedCreateIdentities,
-        preparedExistingOperations,
-        existingExpectations
       );
       const linkedOperations = Object.freeze([
         ...preparedCreates,
@@ -508,35 +645,33 @@ export function createFinancialActionFoundationRepository(
       if (linkedOperations.length === 0) {
         throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
       }
-      assertNoRootTargets(linkedOperations);
-      await assertPreparedOwnership({
-        userId: context.scope.userId,
-        cachedModels,
-        cachedPreimages,
-        preparedOperations: linkedOperations,
-      });
-      await reassertExpectedCurrentUser(context.scope.userId);
-      assertLinkedOperationIntegrity(
+      const preparedExpectations = capturePreparedExpectations(
         preparedCreates,
-        preparedCreateIdentities,
         preparedExistingOperations,
         existingExpectations
       );
+      assertPreparedOperationsMatch(linkedOperations, preparedExpectations);
+      const preparedPostimages = createImmutablePostimages(preparedExpectations);
+      await assertPreparedOwnership(Object.freeze({
+        userId: context.scope.userId,
+        cachedPreimages,
+        preparedPostimages,
+      }));
+      await reassertExpectedCurrentUser(context.scope.userId);
+      assertPreparedOperationsMatch(linkedOperations, preparedExpectations);
       assertFinancialActionTransition("pending_local", "local_complete");
       const root = prepareLocalRoot(context, foundRecord);
       await reassertExpectedCurrentUser(context.scope.userId);
-      assertLinkedOperationIntegrity(
-        preparedCreates,
-        preparedCreateIdentities,
-        preparedExistingOperations,
-        existingExpectations
-      );
+      assertPreparedOperationsMatch(linkedOperations, preparedExpectations);
       await dependencies.database.batch(root.operation, ...linkedOperations);
       hasCommitted = true;
       await reassertExpectedCurrentUser(context.scope.userId);
       return { kind: "committed", record: root.record };
     } catch (error) {
-      if (!hasCommitted) snapshots.forEach(restoreCachedModelSnapshot);
+      if (!hasCommitted) {
+        snapshots.forEach(restoreCachedModelSnapshot);
+        preparedCreateSnapshots.forEach(restorePreparedCreateSnapshot);
+      }
       throw error;
     }
   }

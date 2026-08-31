@@ -373,3 +373,30 @@ and verify rejection occurs before updater invocation; inspect soft deletion and
 only `prepareMarkAsDeleted` is batched; simulate auth loss/mismatch before and after an
 empty pull and verify the prior watermark remains unchanged. These infrastructure paths
 have deterministic automated coverage, so no emulator journey is required.
+
+### PR #251 immutable linked-operation validator boundary — 2026-08-31
+
+This entry extends, and does not replace, the dated evidence above. Linked-operation
+ownership validators now receive only frozen plain preimage and prepared-postimage
+snapshots containing `{ table, id, kind, raw }`; no live Watermelon model reference
+crosses either validator boundary. The repository retains separate unexposed expectations
+and, after every validation/auth await and immediately before batching, compares each live
+operation's object identity, table, ID, exact preparation/editing state, and complete
+shallow raw record. Raw comparison is key-complete and value-based, including Date values,
+without serialization. Any drift rejects the commit and restores existing cached models
+and genuine prepared creates to their captured state.
+
+Focused Red was 1 failed suite with 3 failed and 14 passed of 17 tests: retained update
+parent, soft-delete flag, and prepared-create amount mutations all reached a successful
+commit. Final focused Green is 1/1 suite and 17/17 tests; combined foundation Green is
+2/2 suites and 50/50 tests; broader foundation plus sync Green is 12/12 suites and
+130/130 tests. Exact mobile and logic TypeScript checks pass. Changed-file lint passes,
+the foundation integration file remains within the 900-line limit, full repository lint
+reports 0 errors with 272 pre-existing warnings, and `git diff --check` passes.
+
+Manual inspection verified that cached validation sees only frozen preimages, prepared
+validation sees only frozen preimages/postimages, and update, `markAsDeleted`, and genuine
+create tampering cannot reach `database.batch`. The deterministic tests also verify frozen
+snapshot mutation is ineffective, failure restores `_raw`, `_preparedState`, and
+`_isEditing`, and hard-delete preparation remains absent. No emulator journey is required
+for this infrastructure-only boundary.
