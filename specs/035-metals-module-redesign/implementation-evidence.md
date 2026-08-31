@@ -191,3 +191,30 @@ warnings; and unaffected local pgTAP remains 66/66. The approved Arabic vector a
 digest are unchanged. New implementation freeze is
 `2ca7eaaad293c075d71b14304f0aeaf30d2d6d49`; logic tree hash is
 `2f8735847a2cf58cdf35bab20b47cf3d5bd0d07c`.
+
+### Slice 3A atomic local composition and auth-race remediation — 2026-08-31
+
+Review threads `PRRT_kwDOT16ATM6drmjS` and `PRRT_kwDOT16ATM6drmjY` identified two
+valid P1 gaps: update completion could return after the authenticated user changed
+during its awaited batch, and root-only creation could leave `pending_local`
+without the linked domain evidence that later Metals commands must write.
+
+Strict Red produced four intended failures with 17 existing repository tests
+passing. Green reasserts auth after update batches and adds the explicit
+`commitFinancialActionGroupLocally` surface. Inside one Watermelon writer it checks
+owned replay first, skips linked preparation for completed same-hash replay, permits
+a matching pending root to resume, rejects empty/root-targeting plans, and commits
+the root transition plus caller-prepared linked operations in one database batch.
+Cached models are restored when preparation or the batch fails; a post-commit auth
+change prevents returning the row but does not claim to undo committed SQLite.
+
+Final scoped evidence: repository tests 26/26; repository/SQLite/generic-sync
+40/40; full logic 69 suites and 1,222/1,222; logic, DB, and mobile TypeScript;
+generator 5/5; local pgTAP 66/66; local `db:sync-local` with zero generated drift;
+repository lint 0 errors and 272 pre-existing warnings with changed files clean;
+and `git diff --check`. Full mobile reached 293/294 suites and 2,525/2,526 tests;
+the sole failure is a reproducible pre-existing order-dependent Watermelon SQLite
+test-harness leak tracked by issue #247, while the affected suite passes 5/5 alone
+and all PR-scoped suites are green. No remote database was touched. Implementation
+freeze is `84afb2f53c61aeda6f1d7b55bf4c34b56467b68e`; mobile repository blob is
+`0f5dfe947f60908ef67e887738fb9bf32d520a74`.

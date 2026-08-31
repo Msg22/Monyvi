@@ -2,7 +2,7 @@
 
 Date: 2026-08-31
 Branch: `codex/035-financial-action-foundation`
-Implementation freeze: `2ca7eaaad293c075d71b14304f0aeaf30d2d6d49`
+Implementation freeze: `84afb2f53c61aeda6f1d7b55bf4c34b56467b68e`
 Rebased main authority: `e02ca34cbc0cb56bdab84ed22d14056bdada9ce5`
 
 ## Completed scope
@@ -10,6 +10,8 @@ Rebased main authority: `e02ca34cbc0cb56bdab84ed22d14056bdada9ce5`
 - Restricted canonical envelope, UTF-8 SHA-256 hashing, registry, durable states,
   replay handling, and owner-scoped `(user_id, action_id)` identity.
 - Current-user-scoped WatermelonDB repository with auth reassertion.
+- Explicit composite local commit batches one root and linked prepared domain
+  operations atomically, while completed replay skips linked preparation.
 - Permanent roots, owner-only RLS, immutable evidence, and 66 pgTAP assertions.
 - Generated WatermelonDB v26 schema/model/migration and composite uniqueness.
 - Generic-sync exclusion and no account/balance effects.
@@ -33,12 +35,13 @@ WatermelonDB generation, pgTAP, repository tests, and the canonical Arabic vecto
 | pgTAP | 66/66 passed locally |
 | Focused logic | 4 suites, 105/105 passed |
 | Full logic | 69 suites, 1,222/1,222 passed |
-| Mobile repository/SQLite/sync | 3 suites, 31/31 passed |
+| Mobile repository/SQLite/sync | 3 suites, 40/40 passed |
+| Full mobile Jest | 293/294 suites, 2,525/2,526; order-dependent SQLite harness exception tracked by #247; affected suite passes 5/5 alone |
 | Generator | 5/5 passed |
 | Logic, DB, mobile TypeScript | passed |
 | `db:sync-local` | passed twice |
 | Repeated generation | zero drift; `e7748f03cbcce546fc54e543ee4cb214dafe176a` |
-| Repository lint | 0 errors; 278 warnings |
+| Repository lint | 0 errors; 272 pre-existing warnings; changed files clean |
 | `git diff --check` | passed |
 
 No remote database was touched. Remote CI must rerun after publication and PR
