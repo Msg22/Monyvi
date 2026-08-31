@@ -298,29 +298,60 @@ describe("attribution expected instrument context", () => {
     }
   );
 
-  it("rejects provided same-currency display evidence with mismatched context", () => {
-    expect(
-      convertAttributionForDisplay({
-        attribution: {
-          available: true,
-          value: { combinedDecimal: "10", components: { metal: "10" } },
-        },
-        canonicalCurrencyInstrumentCode: "currency:EGP",
-        preferredCurrencyInstrumentCode: "currency:EGP",
-        canonicalCurrencyAtDisplayRate: currencyRate(
+  it.each([
+    [
+      "instrument mismatch",
+      currencyRate("display_purchase_currency", "currency:SAR", "0.2"),
+    ],
+    [
+      "role mismatch",
+      currencyRate("terminal_purchase_currency", "currency:EGP", "0.25"),
+    ],
+    [
+      "invalid quality",
+      {
+        ...currencyRate(
           "display_purchase_currency",
-          "currency:SAR",
-          "0.2"
+          "currency:EGP",
+          "0.25"
         ),
-        preferredCurrencyAtDisplayRate: null,
-        decimalPlaces: 2,
-      })
-    ).toEqual({
-      available: false,
-      reason: "canonical_currency_display_rate_unavailable",
-    });
-  });
-
+        quality: "unknown",
+      } as unknown as ExactDirectCurrencyRateReference,
+    ],
+    [
+      "invalid value",
+      currencyRate("display_purchase_currency", "currency:EGP", "0"),
+    ],
+  ] as const)(
+    "ignores redundant same-currency display evidence with %s",
+    (_case, redundantRate) => {
+      expect(
+        convertAttributionForDisplay({
+          attribution: {
+            available: true,
+            value: {
+              combinedDecimal: "10",
+              components: { metal: "10" },
+            },
+          },
+          canonicalCurrencyInstrumentCode: "currency:EGP",
+          preferredCurrencyInstrumentCode: "currency:EGP",
+          canonicalCurrencyAtDisplayRate: redundantRate,
+          preferredCurrencyAtDisplayRate: null,
+          decimalPlaces: 2,
+        })
+      ).toEqual({
+        available: true,
+        value: {
+          combinedDecimal: "10.00",
+          displayedComponents: { metal: "10.00" },
+          displayedComponentSumDecimal: "10.00",
+          roundingDifferenceMinorUnits: "0",
+          requiresRoundingExplanation: false,
+        },
+      });
+    }
+  );
   it.each([
     [
       "canonical_currency_display_rate_unavailable",
