@@ -65,6 +65,14 @@ States: `pending_local`, `local_complete`, `sync_pending`, `sync_failed`,
 `accepted`, `rejected_compensating`, `reconciled`,
 `reconciliation_incomplete`.
 
+### Revision Encoding
+
+Every expected, accepted, and canonical holding/account revision carried by a command,
+RPC outcome, durable outcome, or recovery payload is a canonical unsigned integer
+string: `"0"` or a non-zero ASCII digit followed by ASCII digits, at most 50 digits.
+It is never a JavaScript number. PostgreSQL validates and casts this boundary to its
+`bigint` revision columns before the guarded comparison.
+
 States live on the generic owner-scoped financial-action root; Metals holding/lifecycle
 evidence and generic account effects link by the same action ID. Restart resumes durable
 non-final state by action ID. Accepted/idempotent matches hash and revisions.

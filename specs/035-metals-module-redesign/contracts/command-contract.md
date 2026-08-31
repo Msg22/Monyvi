@@ -6,10 +6,20 @@ financial-action root/outbox; the envelope below is Metals domain evidence linke
 the same `actionId`, not a second Metals-only account outbox.
 
 ```ts
+/**
+ * `0` or a non-zero ASCII digit followed by ASCII digits, maximum 50 digits.
+ * All command, RPC, stored-outcome, and recovery boundaries carry this as a
+ * string; it is never a JavaScript number.
+ */
+type CanonicalUnsignedIntegerString = string;
+
 interface CommandEnvelope<TKind extends string, TPayload> {
   actionId: string; kind: TKind; userId: string; holdingId: string;
-  expectedHoldingRevision: number | null;
-  accountGuard: { accountId: string; expectedRevision: number } | null;
+  expectedHoldingRevision: CanonicalUnsignedIntegerString | null;
+  accountGuard: {
+    accountId: string;
+    expectedRevision: CanonicalUnsignedIntegerString;
+  } | null;
   occurredAt: number; payload: TPayload; payloadHash: string;
 }
 type MetalCommand =
@@ -56,8 +66,8 @@ interface InternalRecoveryEnvelope {
     losingPayloadHash: string;
     canonicalHoldingActionId: string | null;
     canonicalAccountActionId: string | null;
-    canonicalHoldingRevision: number | null;
-    canonicalAccountRevision: number | null;
+    canonicalHoldingRevision: CanonicalUnsignedIntegerString | null;
+    canonicalAccountRevision: CanonicalUnsignedIntegerString | null;
     canonicalHoldingEvidenceHash: string | null;
     canonicalAccountEvidenceHash: string | null;
     inverseAccountEffectId: string | null;
@@ -66,6 +76,11 @@ interface InternalRecoveryEnvelope {
   payloadHash: string;
 }
 ```
+
+All expected and canonical holding/account revisions use
+`CanonicalUnsignedIntegerString`: `"0"` or a non-zero ASCII digit followed by ASCII
+digits, at most 50 digits, never a JavaScript number. PostgreSQL validates and casts
+that wire/storage boundary to its `bigint` revision columns.
 
 The recovery action ID is deterministically derived from owner, losing action ID,
 outcome kind, both resource revisions, and both resource winner IDs when present. Its

@@ -6,18 +6,25 @@ such as `apply_metal_action_v1`, but it MUST NOT create a competing Metals-only 
 outbox or account-effect protocol.
 
 ```ts
+/**
+ * `0` or a non-zero ASCII digit followed by ASCII digits, maximum 50 digits.
+ * RPC JSON never carries a financial revision as a JavaScript number.
+ */
+type CanonicalUnsignedIntegerString = string;
+
 interface StaleCanonicalEvidence {
-  canonicalHoldingRevision: number;
+  canonicalHoldingRevision: CanonicalUnsignedIntegerString;
   canonicalHoldingActionId: string | null;
   canonicalHoldingEvidenceHash: string;
-  canonicalAccountRevision: number | null;
+  canonicalAccountRevision: CanonicalUnsignedIntegerString | null;
   canonicalAccountActionId: string | null;
   canonicalAccountEvidenceHash: string | null;
 }
 
 type RpcOutcome =
   | { status: "accepted" | "idempotent"; actionId: string;
-      holdingRevision: number; accountRevision: number | null;
+      holdingRevision: CanonicalUnsignedIntegerString;
+      accountRevision: CanonicalUnsignedIntegerString | null;
       effectiveEventId: string; serverAcceptedAt: string }
   | (StaleCanonicalEvidence & {
       status: "stale"; actionId: string;
@@ -28,7 +35,11 @@ type RpcOutcome =
       "INVALID_STATE" | "ACCOUNT_INELIGIBLE" | "INCOMPLETE_GROUP" };
 ```
 
-The request is the canonical command plus complete evidence and schema version.
+The request is the canonical command plus complete evidence and schema version. Every
+expected, accepted, and canonical holding/account revision is a
+`CanonicalUnsignedIntegerString`: `"0"` or a non-zero ASCII digit followed by ASCII
+digits, at most 50 digits. The RPC rejects numeric JSON values, signs, exponent form,
+and leading zeroes; PostgreSQL then validates/casts the string to its `bigint` column.
 Server derives owner from `auth.uid()`. It locks replay, holding, and optional account
 rows in stable ID order; returns stored outcome for same ID/hash; rejects hash
 mismatch; validates ownership, links, state, currency, completeness, and revisions;

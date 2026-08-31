@@ -442,3 +442,44 @@ Foundation code is advancing again after this verification point. Do not treat
 `1082/1082` as the next source cycle's final count, and do not finalize new hashes or
 counts until that code stabilizes and its complete verification is rerun. Existing
 dated SHA-256 tables continue to authenticate only the source states they name.
+
+## Final SHA-256 supersession after foundation-contract fixes — 2026-08-31
+
+The preceding SHA-256 records remain unchanged historical evidence. This append-only
+record supersedes them for byte-level authentication of every production and test
+TypeScript file under `packages/logic/src/metals/` at final foundation code head
+`3f25a316d53808ea20f36374ad9168f2389a1a2f`. The documentation-only commit following
+that head does not alter these authenticated source bytes.
+
+The final Metals command passed 8/8 suites and 269/269 tests with 0 snapshots.
+Aggregate coverage was 93.43% statements, 88.41% branches, 98.58% functions, and
+93.37% lines. Full logic passed 1107/1107 tests. Package typecheck, root lint, and
+diff checks passed in final worker evidence.
+
+SHA-256 values below were computed from the current worktree bytes for all tracked
+`.ts` files in `packages/logic/src/metals/`:
+
+| Source relative to `packages/logic/src/metals/` | SHA-256 |
+| --- | --- |
+| `attribution.ts` | `b248dabd8d5af68d5b2fe37e66943f1952b619b57d3a1afbe452cc4b9193d634` |
+| `currency-minor-units.ts` | `6e64fde0766bc64b4337071547430b2f7920d597efe1f402ba1366fecc603af1` |
+| `decimal.ts` | `74e1a92389479f9beb3dcac65dc52aaaa6bc597724b9164a7892c8e32c26a9af` |
+| `index.ts` | `424d092cf51b33b6c6eafc2aa719ce9056bdb3c5fe0dfc932b204fc13da2af4f` |
+| `lifecycle-reducer.ts` | `89eb61d83c496dfe2bb64f0a0ccddcf57bd5aa7f1cee5847eede33431d9a2af4` |
+| `purity-catalog.ts` | `fc7a5e6e1ca5140e63f4ef18d209906316fdec03606e9fed289b2722aeaff373` |
+| `rate-reference.ts` | `a35d0a9e481d7143d81484335d45821a74553944bcc2dd9685af9f186a070973` |
+| `rate-trust.ts` | `131ab4d3caae079cd7e3b2ea6f750abfb019ddbe1d84cd8eadde5a3f7b2ffd50` |
+| `valuation.ts` | `cfe8b70d540740e359368d893722c0138221f23c321384b4e9ece186c95fb079` |
+| `__tests__/attribution-context-contract.test.ts` | `015a07efe6507a5781a7eccfd5c995f81660ba792f4cb0cfa0ce6ae2ab3da251` |
+| `__tests__/attribution-postgres-parity.test.ts` | `4832f34f1e929cfe90d9a2666244b118cbf82f78b499b9210d3698cf49644c9d` |
+| `__tests__/attribution-reason-types.test.ts` | `87b4dfecda1b48b86e48bebb416b820f34d4cae165cbbccf28c311046817bd76` |
+| `__tests__/attribution-rounding-validation.test.ts` | `1da74f748073b4228edb5cf52e81b5ca15476905b3eaeea3b46e870b9872f95f` |
+| `__tests__/currency-minor-units.test.ts` | `417f00d38ee148427535ab19a715cea52493f9a7e4d4232d4c6167564a175ce9` |
+| `__tests__/decimal.test.ts` | `077293384ae3de36e3b36d26db5c3376454e08e29ba75a3cf91bf23eae89cffb` |
+| `__tests__/lifecycle-rate-trust.test.ts` | `cf9ce989d7966fc0d6317581df995c530c7b52455c98bee22748fc3573089b64` |
+| `__tests__/lifecycle-reducer-contract.test.ts` | `83c7f665fa2e00e37cca644df5864ceeffe05e510ff82266cb46b357a8aeeaf3` |
+| `__tests__/purity-valuation.test.ts` | `01db37dc0cc65497c6df232429b8ee3ec2f2223462e45e36067ad4fc942b62ec` |
+| `__tests__/rate-reference-contract.test.ts` | `6296f213ba0605ffaf3d48e0fb36f964f1130d237775afa44fb5f4f5abdc007a` |
+
+This snapshot authenticates final Slice 2 source state. It is not release coverage or
+merge-approval evidence.

@@ -5,6 +5,9 @@
 - WatermelonDB is the user-facing source of truth; every command commits locally first.
 - Canonical decimal values are plain, non-exponent strings locally and PostgreSQL `numeric` remotely.
 - Posted money uses integer minor units represented as strings locally and `bigint` remotely.
+- Every financial revision is `"0"` or a non-zero ASCII digit followed by ASCII digits,
+  at most 50 digits, in local models and all command/RPC/reconciliation JSON. It is
+  never a JavaScript number; PostgreSQL validates and stores it as `bigint`.
 - Every new syncable root table includes `id`, `user_id`, `created_at`, `updated_at`, and `deleted`.
 - `asset_metals` keeps inherited ownership through immutable `assets.id`; every read, write, pull, push, RLS policy, and RPC validates the parent owner.
 - Append-only evidence is never edited or hard-deleted by ordinary product actions.
@@ -60,7 +63,9 @@ Metal type cannot be corrected in place.
 ### `accounts` dependency
 
 Issue #242 must add `financial_revision`, backfill existing accounts to revision `0`
-without fabricating historical actions, and revision-guard every balance writer.
+without fabricating historical actions, and revision-guard every balance writer. The
+account column is PostgreSQL `bigint`; its local and wire contract is the canonical
+unsigned-integer string defined above, never a JavaScript number.
 Metals computes the posted same-currency amount as exact minor units, mutates the
 existing `accounts.balance` projection through the generic financial-action protocol,
 and preserves the amount in immutable generic account-effect evidence. App-wide
@@ -80,7 +85,7 @@ One current projection per holding.
 | `user_id` | text/uuid | Owner |
 | `holding_id` | text/uuid | Unique FK to `assets` |
 | `status` | text | `active`, `sold`, `disposed` |
-| `financial_revision` | integer/bigint | Starts at 0; increments once per accepted material action |
+| `financial_revision` | text / bigint | Canonical unsigned-integer string locally and in JSON; starts at `"0"`; increments once per accepted material action; never a JavaScript number |
 | `effective_event_id` | text/uuid nullable | Current terminal/correction event |
 | `effective_action_id` | text/uuid nullable | Null only for migrated revision-zero legacy projection; action that produced later projections |
 | `is_visible` | boolean | False only for deleted mistaken active record |
@@ -112,7 +117,7 @@ persistence against this root.
 | `domain_reference_id` | text/uuid | Link to owning domain evidence |
 | `payload_json` | text/jsonb | Canonical immutable payload |
 | `payload_hash` | text | SHA-256 of canonical payload envelope |
-| `expected_account_revision` | text / text nullable | Canonical unsigned integer string, bounded to 50 digits; null-only in Slice 3A; required iff account effect exists |
+| `expected_account_revision` | text / bigint nullable | Canonical unsigned-integer string (`"0"` or non-zero ASCII digit plus digits), bounded to 50 digits; local/RPC value is never a JavaScript number; null-only in Slice 3A; required iff account effect exists |
 | `state` | text | State machine below |
 | `server_outcome` | text nullable | accepted, idempotent, stale, rejected |
 | `outcome_json` | text/jsonb nullable | Canonical durable replay outcome, including independent nullable holding/account winner IDs plus per-resource canonical revisions/evidence hashes for stale results |
@@ -136,13 +141,17 @@ be replayed as the same action.
 
 ### `metal_action_evidence`
 
-One Metals domain record per generic action, introduced by `068_metals_domain` and linked
-through the same stable `action_id`.
+Exactly one Metals domain record per generic action, introduced by `068_metals_domain`
+and linked through the same stable `action_id`. The migration MUST enforce unique
+`(user_id, action_id)` on `metal_action_evidence`; no retry, replay, or reconciliation
+path may create a second row for that owner/action pair.
 
 Fields: `id`, `user_id`, `action_id`, `holding_id`, `kind`,
 `expected_holding_revision`, `canonical_holding_revision`, `domain_payload_json`, and
 standard sync columns. Add uses a null expected holding revision; every later material
-action requires it. This row—not `financial_action_groups`—is authoritative for holding
+action requires it. Both revision fields are canonical unsigned-integer strings in
+local/RPC/reconciliation contracts and PostgreSQL `bigint` columns; neither is ever a
+JavaScript number. This row—not `financial_action_groups`—is authoritative for holding
 revision CAS and links the root to holding state, lifecycle, and rate evidence.
 
 ### `metal_lifecycle_events`
@@ -200,7 +209,9 @@ Fields: `id`, `user_id`, `action_id`, `account_id`, `domain`,
 `conflict_compensation` for Metals),
 `amount_minor_units`, `currency`, `accepted_account_revision`,
 `reverses_effect_id`, `is_effective`, `compensated_at`, and standard sync columns.
-Unique `(user_id,action_id,kind)`.
+`accepted_account_revision` uses the same canonical unsigned-integer string locally
+and in JSON, with PostgreSQL `bigint` storage; it is never a JavaScript number. Unique
+`(user_id,action_id,kind)`.
 Metals holding/event evidence provides the holding link through the same action ID.
 Metals sale effects are excluded from ordinary-income and budget-income queries.
 
@@ -292,10 +303,11 @@ CAS winners; at equal time they stabilize only unrelated display/diagnostic orde
    type/reference, canonical serialization/hash, durable state/outcome/replay, RLS, and
    stable local/server storage interfaces. T024 freezes this non-account foundation.
 2. After T024, create `068_metals_domain` with exact Metals shadow fields, holding state,
-   current acquisition-action/reference-set linkage, `metal_action_evidence`,
-   lifecycle/rate evidence, observations, owner-scoped holding revision CAS, and
-   deterministic backfill. Non-account Metals lifecycle work may develop and stack
-   here while full #242 continues in its separate lane.
+   current acquisition-action/reference-set linkage, `metal_action_evidence` with a
+   required unique `(user_id, action_id)` one-row-per-action constraint, lifecycle/rate
+   evidence, observations, owner-scoped holding revision CAS, and deterministic
+   backfill. Non-account Metals lifecycle work may develop and stack here while full
+   #242 continues in its separate lane.
 3. After `068`, create and merge `069_account_financial_effects`: account revision,
    generic immutable account effects, dedicated account-action sync/CAS, writer guards,
    protected columns, and exact-once account compensation. T033 is the full #242 gate.
