@@ -54,10 +54,12 @@ interface InternalRecoveryEnvelope {
   payload: {
     losingActionId: string;
     losingPayloadHash: string;
-    canonicalActionId: string | null;
+    canonicalHoldingActionId: string | null;
+    canonicalAccountActionId: string | null;
     canonicalHoldingRevision: number | null;
     canonicalAccountRevision: number | null;
-    canonicalEvidenceHash: string | null;
+    canonicalHoldingEvidenceHash: string | null;
+    canonicalAccountEvidenceHash: string | null;
     inverseAccountEffectId: string | null;
     inverseAmountMinorUnits: string | null;
   };
@@ -66,9 +68,14 @@ interface InternalRecoveryEnvelope {
 ```
 
 The recovery action ID is deterministically derived from owner, losing action ID,
-outcome kind, and canonical revision when present. Its hash uses the same canonical
-serialization rules. A unique losing-action recovery key plus `compensated_at` makes
-restart/replay a no-op after success; same ID with another hash is a recovery error.
+outcome kind, both resource revisions, and both resource winner IDs when present. Its
+hash uses the same canonical serialization rules. A unique losing-action recovery key
+plus `compensated_at` makes restart/replay a no-op after success; same ID with another
+hash is a recovery error. For a stale outcome, holding revision/hash are required;
+account revision/hash are required iff the command had an account guard. A
+stale-causing resource at revision greater than zero requires its matching action ID;
+the unaffected resource's winner ID remains null. Rejected recovery may keep these
+fields null only until verified prior/canonical evidence is fetched.
 
 After any server `rejected` outcome for a locally complete action, reconciliation
 immediately marks the action recovery-visible but locks financial actions in
@@ -81,8 +88,18 @@ optimistic ownership, reporting, or account effect may remain effective indefini
 `PAYLOAD_HASH_MISMATCH` is never retried as the same action: its immutable action ID
 and hash remain diagnostic evidence; a later user intent must use a new action ID.
 
-For stale winners, one dedicated reconciliation writer atomically marks losing Metals
+For stale outcomes, one dedicated reconciliation writer atomically marks losing Metals
 evidence ineffective, restores the canonical holding projection, applies the exact
 inverse generic account effect when present, records recovery against the generic
 root, and marks the losing action reconciled. UI/form code, public command factories,
 and the RPC reject client-supplied `kind: "compensate"` or `kind: "rollback"`.
+
+For account-only stale, `canonicalHoldingActionId` is null even when the verified
+pre-action holding projection records an older effective action. The writer restores
+that projection by its holding revision/hash and creates no holding winner or
+replacement event. It marks the losing account effect ineffective and records an
+inverse amount equal to the arithmetic negation of that immutable effect only when the
+effect was locally applied. The resulting account projection is the verified canonical
+balance/revision/effect chain; compensation evidence does not apply another delta or
+advance the canonical revision. Any unrelated unverified local account effect keeps
+reconciliation locked rather than being overwritten.

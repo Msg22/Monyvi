@@ -457,8 +457,10 @@ Business rules:
   MUST NOT drive authoritative calculations. New flows MUST NOT use the retired
   `purity_karat` field or calculate from display text.
 - A holding persists the selected stable purity-catalog code, catalog version,
-  and exact `purity_factor_decimal` snapshot. Later catalog changes never rewrite
-  recorded holding facts.
+  and exact `purity_factor_decimal` as its current purity projection. Only an
+  accepted material correction may replace that tuple. Immutable before/after
+  tuples and their catalog snapshots remain in append-only action evidence, and
+  later catalog changes never rewrite current or historical recorded facts.
 - Metal type is locked after creation. Correcting a wrong metal uses Delete
   holding, then Add holding with the correct metal.
 - Add holding uses one focused full-screen form in this order: Name, Metal,

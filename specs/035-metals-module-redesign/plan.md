@@ -91,7 +91,9 @@ implementation dependency._
   effective event, and current financial revision.
 - Add exact text shadow columns instead of changing existing WatermelonDB numeric
   column types in place.
-- Persist stable purity catalog code, catalog version, and exact factor snapshot.
+- Persist stable purity catalog code, catalog version, and exact factor as one current
+  projection tuple. Only accepted material correction may replace it; immutable
+  before/after/catalog snapshots remain in append-only action evidence.
 - Treat old numeric fields as migration compatibility only after exact fields are
   populated; new authoritative calculations never read them.
 
@@ -105,6 +107,10 @@ generic owner-scoped `financial_action_groups` root/outbox frozen by
 gate at T033; do not add a competing Metals-only account outbox. Add shared pull-only
 exact `market_rate_observations`. Metals events and references are append-only domain
 evidence linked to the generic action ID; state changes come from deterministic reduction.
+Current acquisition facts link to the Add/correction action that produced their
+projection; only an accepted action retains that link canonically. Its role-unique
+references independently preserve `acquisition_metal` and
+`acquisition_purchase_currency`; no single purchase-rate ID represents both inputs.
 
 ### Account balance
 
@@ -222,9 +228,10 @@ Each slice is independently mergeable after its tests pass.
    storage interfaces, and the stable T024 interface milestone. It owns no expected
    holding/domain revision.
 3. After T024, create and verify `068_metals_domain`: exact shadow fields, Metals
-   domain tables/evidence, expected holding revision, non-account lifecycle RPC/CAS,
-   matching WatermelonDB artifacts, and deterministic backfill. This work may develop
-   and stack while the full #242 lane continues.
+   domain tables/evidence, current acquisition-action/reference-set linkage, expected
+   holding revision, non-account lifecycle RPC/CAS, matching WatermelonDB artifacts,
+   and deterministic backfill. This work may develop and stack while the full #242 lane
+   continues.
 4. Merge/cut over `069_account_financial_effects` only after `068`: account revisions,
    generic immutable account effects, exhaustive writer protection, protected sync,
    idempotent account CAS, and exactly-once account compensation. T033 is the full #242

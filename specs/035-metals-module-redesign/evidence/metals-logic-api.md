@@ -164,11 +164,15 @@ From `lifecycle-reducer.ts`:
 
 ## Immutability and arithmetic boundary
 
-Catalog entries, purity snapshots, captured rate-reference arrays/objects, and
-opaque exact-decimal values are detached immutable values. Financial formulas
-use the private precision-50 Decimal.js clone from canonical string input
-through exact serialization. JavaScript numbers are used only for timestamps,
-decimal-place configuration, and ordering—not financial inputs or arithmetic.
+Catalog entries, purity snapshots passed through this pure API, captured
+rate-reference arrays/objects, and opaque exact-decimal values are detached immutable
+values. This does not make the holding's current persisted purity projection
+permanent: only an accepted material correction may replace that tuple, while its
+before/after/catalog snapshots remain immutable in append-only action evidence.
+Financial formulas use the private precision-50 Decimal.js clone from canonical
+string input through exact serialization. JavaScript numbers are used only for
+timestamps, decimal-place configuration, and ordering—not financial inputs or
+arithmetic.
 
 ### TypeScript-review boundary refinement — 2026-08-31
 

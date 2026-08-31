@@ -125,6 +125,13 @@ above.
 | Display conversion, different canonical/preferred currencies | `display_purchase_currency`, `display_preferred_currency` |
 | Display conversion, same canonical/preferred currency | No arithmetic references required; factor is exact `1` |
 
+An available acquisition calculation consumes exactly one `acquisition_metal` and one
+`acquisition_purchase_currency` reference. They are distinct role-unique records even
+when purchase currency is USD identity; one reference can never satisfy both roles.
+The holding's current acquisition projection links to the Add/correction action and
+therefore to this action-owned reference set. It does not store one ambiguous
+purchase-rate reference ID or duplicate either observed value on the projection.
+
 
 When canonical and preferred currency are same, display conversion is an exact
 identity and no missing, invalid, stale, or unknown redundant display snapshot may

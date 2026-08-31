@@ -227,10 +227,16 @@ enabled—selected account eligibility and expected account revision. Atomically
 3. accept one complete valid matching-revision action;
 4. increment the holding revision and optional account revision;
 5. change `accounts.balance` and activate linked immutable evidence once; or
-6. reject stale input with canonical revisions and winner evidence.
+6. reject stale input with independent holding/account canonical revisions, nullable
+   per-resource winner IDs, and per-resource evidence hashes.
 
 First complete valid server-accepted action wins. Client clock, arrival timestamp,
 and generic LWW never choose winner.
+
+An account-only stale result applies none of the server group and carries no holding
+winner. Recovery restores the verified pre-action holding projection and removes the
+losing local account effect exactly once against verified canonical account evidence;
+it does not invent a replacement holding event or increment canonical revisions.
 
 ### Rationale
 

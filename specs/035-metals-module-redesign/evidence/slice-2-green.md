@@ -58,7 +58,7 @@ additional boundary fixtures; no tests were added only to chase a percentage.
 | SC-017 | Null purchase cost and all required missing conversion facts make current/realized P/L unavailable; positive-cost validation prevents zero/free acquisition. |
 | SC-018 | Attribution snapshots retain exact value, unit/orientation, provider observation time, source, quality, capture time, and captured freshness after source mutation; unknown/unparseable time is never Fresh. |
 | SC-021 | Precision-50 Decimal clone, canonical non-exponent strings, exact huge/sub-minor comparison, half-even minor-unit conversion, no-intermediate-rounding fixture, high-precision attribution fixture, and final-boundary rounding all pass. |
-| SC-026 | Complete approved Gold/Silver catalog v1, distinct `24K · 999`, ambiguous bare `24K` rejection, immutable purity snapshot, pure-gram factors, and unsupported/free-text rejection all pass. |
+| SC-026 | Complete approved Gold/Silver catalog v1, distinct `24K · 999`, ambiguous bare `24K` rejection, detached immutable evidence snapshots, pure-gram factors, and unsupported/free-text rejection all pass. Persistence separately permits only an accepted material correction to replace the current purity projection while retaining append-only before/after/catalog evidence. |
 
 ## Refactor and boundary review
 
@@ -429,3 +429,16 @@ SHA-256 values below were computed from current worktree files:
 
 This snapshot authenticates foundation source state; it is not release coverage
 or merge approval evidence.
+
+
+## Full-logic count supersession before next foundation source cycle — 2026-08-31
+
+The preceding SHA-256 records remain unchanged historical evidence. Their
+`1079/1079` full-logic count reflected the earlier verification transcript. The
+current full-logic verification point passed **1082/1082 tests**; this append-only
+note supersedes only that carried-forward full-logic count.
+
+Foundation code is advancing again after this verification point. Do not treat
+`1082/1082` as the next source cycle's final count, and do not finalize new hashes or
+counts until that code stabilizes and its complete verification is rerun. Existing
+dated SHA-256 tables continue to authenticate only the source states they name.

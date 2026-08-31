@@ -21,11 +21,19 @@ New columns:
 | --- | --- | --- |
 | `purchase_price_decimal` | text / numeric | Authoritative total paid, including premium/workmanship |
 | `purchase_currency` | text / text | ISO currency code |
-| `purchase_rate_reference_id` | text nullable / uuid nullable | Immutable acquisition FX/metals reference when known |
+| `acquisition_action_id` | text nullable / uuid nullable | Add/material-correction action whose role-specific acquisition reference set supports the current acquisition projection; retained canonically only when accepted |
 
 The existing numeric `purchase_price` remains compatibility-only after backfill.
 Name and notes are independent metadata eligible for partial LWW. Purchase facts are
-financial facts and may change only through a material-correction action.
+financial facts and may change only through an accepted material-correction action.
+`acquisition_action_id` links the current acquisition projection to one action-owned
+reference set; it does not duplicate reference values or collapse Metal and currency
+evidence into one row. That action's `metal_rate_references` children independently
+use roles `acquisition_metal` and `acquisition_purchase_currency` when each input was
+consumed. A locally complete optimistic action may install its link, but stale/rejected
+reconciliation restores the verified prior link and only an accepted action remains
+canonical. The link is null for migrated facts with no historical action and may also
+remain null when no acquisition reference was consumed; migration never invents one.
 
 ### `asset_metals`
 
@@ -35,15 +43,19 @@ New columns:
 | --- | --- | --- |
 | `weight_grams_decimal` | text / numeric | Positive canonical decimal |
 | `purity_code` | text / text | Stable catalog member |
-| `purity_factor_decimal` | text / numeric | Authoritative immutable exact factor snapshot |
-| `purity_catalog_version` | text / text | Catalog version snapshot |
+| `purity_factor_decimal` | text / numeric | Authoritative exact factor in the current projection; replaceable only by an accepted material correction |
+| `purity_catalog_version` | text / text | Catalog version in the current projection |
 
 `purity_code`, `purity_catalog_version`, and `purity_factor_decimal` are one
-authoritative immutable snapshot on `asset_metals`; no purity catalog source exists
-on `assets`. `purity_factor_decimal` is the authoritative exact persisted factor;
-legacy numeric `purity_fraction` is compatibility-only after backfill. `metal_type`
-is limited to Gold and Silver for V1. Existing numeric weight fields remain
-compatibility-only. Metal type cannot be corrected in place.
+authoritative current projection tuple on `asset_metals`; no purity catalog source
+exists on `assets`. Add sets the tuple and only an accepted material-correction action
+may atomically replace it. Immutable before/after fact sets, including both purity
+tuples and their catalog snapshots, remain in append-only lifecycle/action evidence.
+Later catalog edits never rewrite either current or historical snapshots.
+`purity_factor_decimal` is the authoritative exact persisted factor; legacy numeric
+`purity_fraction` is compatibility-only after backfill. `metal_type` is limited to
+Gold and Silver for V1. Existing numeric weight fields remain compatibility-only.
+Metal type cannot be corrected in place.
 
 ### `accounts` dependency
 
@@ -103,7 +115,7 @@ persistence against this root.
 | `expected_account_revision` | text / text nullable | Canonical unsigned integer string, bounded to 50 digits; null-only in Slice 3A; required iff account effect exists |
 | `state` | text | State machine below |
 | `server_outcome` | text nullable | accepted, idempotent, stale, rejected |
-| `outcome_json` | text/jsonb nullable | Canonical durable replay outcome |
+| `outcome_json` | text/jsonb nullable | Canonical durable replay outcome, including independent nullable holding/account winner IDs plus per-resource canonical revisions/evidence hashes for stale results |
 | `rejection_code` | text nullable | Stable internal code |
 | standard sync columns | | Required |
 
@@ -170,6 +182,15 @@ metal references are invalid. These are raw observed values/provenance;
 adapter/pure logic performs one canonical USD-per-base normalization. No persisted
 unavailable-reason column is approved.
 
+Acquisition facts never point at one generic purchase-rate row. The current
+`assets.acquisition_action_id` links to the Add/correction action that produced the
+projection; stale/rejected recovery restores the prior link, so only an accepted
+action remains canonical. Its role-unique children preserve the independently
+consumed `acquisition_metal` and `acquisition_purchase_currency` observations without
+copying their values onto the holding projection. Before/after material-correction
+action payloads retain the prior and replacement action/reference-set linkage as
+append-only evidence.
+
 ### `account_financial_effects` (generic prerequisite evidence)
 
 Immutable evidence linked to direct account mutation.
@@ -209,7 +230,7 @@ Additional transitions:
 
 - `sync_pending -> sync_failed -> sync_pending` on retry.
 - `sync_pending -> rejected_compensating -> reconciled` for a stale outcome with
-  complete canonical winner evidence.
+  complete per-resource canonical evidence.
 - `sync_pending -> reconciliation_incomplete` for every server `rejected` outcome
   after local completion, and for stale/rejected outcomes lacking verified canonical
   evidence; financial actions remain locked.
@@ -242,6 +263,11 @@ CAS winners; at equal time they stabilize only unrelated display/diagnostic orde
   lifecycle transition and must not appear as an Undo option or normal History event.
 - Compensation: restore server-canonical projection and invert the losing account
   effect exactly once.
+- Account-only stale: restore the verified pre-action holding projection without a
+  holding winner/replacement event, make the losing account effect ineffective, and
+  install or verify the canonical account balance/revision/effect chain while recording
+  one exact inverse if the losing effect had been applied. Do not increment either
+  canonical revision.
 - Sold/Disposed records are immutable except name/notes metadata.
 
 ## Atomicity and Ownership Invariants
@@ -256,6 +282,9 @@ CAS winners; at equal time they stabilize only unrelated display/diagnostic orde
 6. Generic table sync must never independently activate action-owned fragments.
 7. Missing/stale rates never hide a holding; only affected calculations become unavailable.
 8. A reversal references immutable original evidence and never unlocks historical facts.
+9. A stale outcome binds holding and optional account revisions/evidence hashes
+   independently. Account-only stale carries no holding winner ID and cannot fabricate
+   one during recovery.
 
 ## Migration and Backfill Order
 
@@ -263,9 +292,10 @@ CAS winners; at equal time they stabilize only unrelated display/diagnostic orde
    type/reference, canonical serialization/hash, durable state/outcome/replay, RLS, and
    stable local/server storage interfaces. T024 freezes this non-account foundation.
 2. After T024, create `068_metals_domain` with exact Metals shadow fields, holding state,
-   `metal_action_evidence`, lifecycle/rate evidence, observations, owner-scoped holding
-   revision CAS, and deterministic backfill. Non-account Metals lifecycle work may
-   develop and stack here while full #242 continues in its separate lane.
+   current acquisition-action/reference-set linkage, `metal_action_evidence`,
+   lifecycle/rate evidence, observations, owner-scoped holding revision CAS, and
+   deterministic backfill. Non-account Metals lifecycle work may develop and stack
+   here while full #242 continues in its separate lane.
 3. After `068`, create and merge `069_account_financial_effects`: account revision,
    generic immutable account effects, dedicated account-action sync/CAS, writer guards,
    protected columns, and exact-once account compensation. T033 is the full #242 gate.
@@ -279,7 +309,8 @@ CAS winners; at equal time they stabilize only unrelated display/diagnostic orde
 7. Backfill Gold/Silver only. Canonically serialize valid legacy purchase price, weight,
    and purity compatibility values into the exact fields. Populate catalog code/version
    only for a unique exact catalog match; otherwise keep provenance explicitly unavailable
-   while preserving the holding. Never invent a historical rate, catalog source, or action.
+   while preserving the holding. Leave `acquisition_action_id` null for legacy facts;
+   never invent a historical rate/reference set, catalog source, or action.
 8. Make the backfill rerunnable: populate only missing exact fields, never overwrite an
    existing exact value, and produce the same result for the same input. Fixtures MUST
    cover Gold, Silver, unique and unmatched purity, missing/invalid values, pre-populated

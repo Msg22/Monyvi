@@ -4,7 +4,8 @@ Inject fixed clock/UUIDs/hash, catalog version, exact rates, owned/foreign holdi
 default/mismatched accounts, and controllable RPC outcomes. Controls reset SQLite and
 server fixtures; seed fresh/stale/unknown/missing rates; pause before RPC; order device
 A/B actions; return acceptance, replay, stale revisions, hash mismatch, ownership,
-partial group, network failure, or missing canonical evidence; restart at every state;
+holding-only stale, account-only stale, both-resource stale, partial group, network
+failure, or missing/mismatched per-resource canonical evidence; restart at every state;
 and inspect holdings, balance/revisions, evidence, History, net worth, and watermark.
 
 Required proofs: local all-or-none; one winner; idempotent replay; one exact
@@ -13,6 +14,13 @@ preserve holdings; metadata never bypasses CAS; failures advance no watermark; s
 effects never count as ordinary income; Decimal.js/PostgreSQL parity. Maestro consumes
 fixtures; real two-device, physical offline, assistive technology, and tablet/
 landscape remain explicit manual evidence.
+
+Account-only stale fixtures prove the RPC carries a null holding-winner ID plus the
+verified pre-action holding revision/hash, independently carries account winner
+identity/revision/hash, restores the holding without inventing a winner event, and
+removes the losing local account effect exactly once. Missing or swapped resource
+hashes, revision/action mismatches, and unrelated unverified local account effects must
+leave recovery locked and write no partial compensation.
 
 Migration/cutover fixtures MUST cover account revision-0 backfill without fabricated
 actions; guarded transaction/transfer/recurring/SMS/debt/account writers; legacy clients

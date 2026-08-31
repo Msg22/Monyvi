@@ -6,14 +6,23 @@ such as `apply_metal_action_v1`, but it MUST NOT create a competing Metals-only 
 outbox or account-effect protocol.
 
 ```ts
+interface StaleCanonicalEvidence {
+  canonicalHoldingRevision: number;
+  canonicalHoldingActionId: string | null;
+  canonicalHoldingEvidenceHash: string;
+  canonicalAccountRevision: number | null;
+  canonicalAccountActionId: string | null;
+  canonicalAccountEvidenceHash: string | null;
+}
+
 type RpcOutcome =
   | { status: "accepted" | "idempotent"; actionId: string;
       holdingRevision: number; accountRevision: number | null;
       effectiveEventId: string; serverAcceptedAt: string }
-  | { status: "stale"; actionId: string;
+  | (StaleCanonicalEvidence & {
+      status: "stale"; actionId: string;
       code: "HOLDING_REVISION_STALE" | "ACCOUNT_REVISION_STALE";
-      holdingRevision: number; accountRevision: number | null;
-      canonicalActionId: string }
+    })
   | { status: "rejected"; actionId: string;
       code: "PAYLOAD_HASH_MISMATCH" | "NOT_OWNED" | "INVALID_LINK" |
       "INVALID_STATE" | "ACCOUNT_INELIGIBLE" | "INCOMPLETE_GROUP" };
@@ -37,3 +46,34 @@ canonical evidence, and finish exact-once compensation/restore or an atomic safe
 rollback before reporting resumes. `PAYLOAD_HASH_MISMATCH` is terminal for that action
 ID/hash pair and MUST NOT be submitted again as a retry; any subsequent user action
 uses a new ID after recovery.
+
+Canonical stale evidence is resource-specific. `canonicalHoldingActionId` identifies
+only an action that won the holding-revision race;
+`canonicalAccountActionId` identifies only an action that won the guarded
+account-revision race. Either is nullable for a revision-zero migrated projection that
+has no fabricated action, and the unaffected resource's winner ID is null. A resource
+whose revision caused the stale result requires its matching action ID when that
+canonical revision is greater than zero. Each evidence hash is SHA-256 over the same
+stable canonical serialization used by command/replay hashing. The holding evidence
+hash binds owner, holding, revision, status/visibility, effective action/event, and
+immutable event/payload fingerprints. When an account guard exists, the account
+evidence hash binds owner, account, currency, balance minor units, revision, and
+accepted action/effect chain; all three account canonical fields are null when no
+account guard exists. The reconciler must fetch evidence matching every carried
+revision and hash before writing recovery.
+
+When both guarded revisions are stale, stable server lock/validation order chooses the
+single `code`, but both stale-causing resource IDs and both canonical evidence sets are
+present. The code never erases the other resource's evidence.
+
+`ACCOUNT_REVISION_STALE` with a matching holding revision is account-only stale. The
+server transaction changed neither resource, `canonicalHoldingActionId` MUST be null,
+and `canonicalHoldingRevision` MUST equal the request's expected holding revision. The
+holding hash still identifies the exact verified pre-action projection to restore; it
+does not imply a holding winner. Recovery atomically makes the losing local holding
+evidence ineffective, restores that verified holding projection, makes the losing
+account effect ineffective, records its deterministic exact inverse when it had been
+applied, and installs or verifies the canonical account balance/revision/effect chain.
+Recovery does not create a replacement holding event, apply a second independent
+account delta, or increment either canonical revision. Missing, mismatched, or
+interleaved unverified evidence writes nothing and remains locked for retry.

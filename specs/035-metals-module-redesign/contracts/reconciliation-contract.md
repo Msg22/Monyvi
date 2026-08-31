@@ -69,7 +69,7 @@ States live on the generic owner-scoped financial-action root; Metals holding/li
 evidence and generic account effects link by the same action ID. Restart resumes durable
 non-final state by action ID. Accepted/idempotent matches hash and revisions.
 
-A stable server `stale` outcome records canonical winner evidence. One Watermelon writer
+A stable server `stale` outcome records per-resource canonical evidence. One Watermelon writer
 makes loser evidence/effects ineffective, restores the canonical holding state, applies
 one exact inverse account effect when needed, and stamps `compensated_at`. Replay cannot
 compensate twice. A server `rejected` outcome after local completion is not a stale
@@ -79,6 +79,26 @@ complete, the same writer performs exact-once compensation/restore; if no winner
 it atomically rolls back to the last verified projection. Missing or mismatched evidence
 performs no partial repair and remains locked for retry. No optimistic financial effect
 may remain effective indefinitely.
+
+Stale evidence names the two guarded resources independently:
+`canonicalHoldingActionId` and `canonicalAccountActionId` are nullable and each may
+identify only that resource's CAS winner. The outcome also carries the canonical
+holding revision/evidence hash and, iff an account guard exists, the canonical account
+revision/evidence hash. Revision-zero migrated projections may have no action ID;
+a stale-causing resource at revision greater than zero requires one, while an
+unaffected resource's winner ID remains null. The writer verifies the complete
+owner-scoped holding projection fingerprint and account balance/effect chain against
+those revisions and hashes before changing local state.
+
+For `ACCOUNT_REVISION_STALE` when holding revision matched, the server applied none of
+the group and `canonicalHoldingActionId` is null. Reconciliation restores the exact
+verified pre-action holding projection, makes all losing holding evidence and the
+losing account effect ineffective, and records one deterministic inverse for the
+locally applied amount while installing or verifying the canonical account
+balance/revision/effect chain. It creates no holding winner/replacement event, no
+second account delta, and no canonical revision increment. Missing/mismatched evidence
+or an unrelated unverified local effect leaves the action in
+`reconciliation_incomplete` with no partial repair.
 
 `PAYLOAD_HASH_MISMATCH` is terminal for its action ID/hash pair: retain it as immutable
 diagnostic/recovery evidence, do not retry it as the same action, and require a new ID
