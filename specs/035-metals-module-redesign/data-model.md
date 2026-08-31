@@ -35,13 +35,15 @@ New columns:
 | --- | --- | --- |
 | `weight_grams_decimal` | text / numeric | Positive canonical decimal |
 | `purity_code` | text / text | Stable catalog member |
-| `purity_factor_decimal` | text / numeric | Immutable factor snapshot |
+| `purity_factor_decimal` | text / numeric | Authoritative immutable exact factor snapshot |
 | `purity_catalog_version` | text / text | Catalog version snapshot |
 
 `purity_code`, `purity_catalog_version`, and `purity_factor_decimal` are one
 authoritative immutable snapshot on `asset_metals`; no purity catalog source exists
-on `assets`. `metal_type` is limited to Gold and Silver for V1. Existing numeric
-weight/purity fields remain compatibility-only. Metal type cannot be corrected in place.
+on `assets`. `purity_factor_decimal` is the authoritative exact persisted factor;
+legacy numeric `purity_fraction` is compatibility-only after backfill. `metal_type`
+is limited to Gold and Silver for V1. Existing numeric weight fields remain
+compatibility-only. Metal type cannot be corrected in place.
 
 ### `accounts` dependency
 
@@ -68,13 +70,17 @@ One current projection per holding.
 | `status` | text | `active`, `sold`, `disposed` |
 | `financial_revision` | integer/bigint | Starts at 0; increments once per accepted material action |
 | `effective_event_id` | text/uuid nullable | Current terminal/correction event |
-| `effective_action_id` | text/uuid | Action that produced the projection |
+| `effective_action_id` | text/uuid nullable | Null only for migrated revision-zero legacy projection; action that produced later projections |
 | `is_visible` | boolean | False only for deleted mistaken active record |
 | `reconciliation_state` | text | Derived action-sync state |
 | standard sync columns | | Required |
 
 Indexes: unique `holding_id`; `(user_id,status,deleted)`;
 `(user_id,updated_at)`.
+A migration may preserve an existing revision-zero legacy projection with null
+`effective_action_id`; it MUST NOT fabricate an action. The first accepted real
+material action transitions that row to its non-null immutable action ID, and every
+later projection requires its effective action ID.
 
 ### `financial_action_groups` (generic T024 foundation root)
 
@@ -139,8 +145,9 @@ Immutable references consumed by acquisition, valuation, sale, or correction.
 Fields: `id`, `user_id`, `holding_id`, `action_id`, `role`, `kind`,
 `instrument_code`, `value_decimal`, `unit`, `orientation`,
 `provider_observed_at`, `source`, `quality`, `captured_freshness`,
-`captured_at`, and standard sync columns. Unique
-`(user_id,action_id,role,instrument_code)`. `kind` is `metal` or `currency`;
+`captured_at`, and standard sync columns. Future `068_metals_domain` creates the
+unique index `(user_id,action_id,role)`, so one action role cannot retain multiple
+instruments. `kind` is `metal` or `currency`;
 instrument grammar is `metal:GOLD|metal:SILVER` or
 `currency:<MetalsIsoCurrencyCode>`. Future `068_metals_domain` SQL CHECK
 constraints enforce the approved role/kind/instrument/unit/orientation matrix:

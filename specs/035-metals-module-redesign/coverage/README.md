@@ -42,7 +42,7 @@ implemented. The approved requirement wording remains in
 
 | Criterion IDs | Proof owner | Evidence contract | Current state |
 | --- | --- | --- | --- |
-| SC-001 | Product research owner | Approved research protocol and decision record | Reserved; not an implementation criterion |
+| SC-001 | Product research owner | Approved T145 methodology plus T146 moderated manual acceptance evidence | Planned; required manual acceptance |
 | SC-002 | QA owner | Measured timing evidence and device/build record | Planned |
 | SC-003 | Slice 5 | US1/UI/Maestro proof | Planned |
 | SC-004–SC-006 | Slice 2 | [`../evidence/slice-2-green.md`](../evidence/slice-2-green.md) | Foundation evidence recorded |
