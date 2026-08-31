@@ -8,6 +8,7 @@ import { logger } from "@/utils/logger";
 import { getCurrentUserId, supabase } from "../supabase";
 import { SNAPSHOT_RETENTION_DAYS, SYNCABLE_TABLES } from "./config";
 import { createSyncTableError } from "./errors";
+import { stripMetalActionFragments } from "./ownership-guards";
 import {
   getChildTableConfig,
   isServerOwnedUserTable,
@@ -32,6 +33,11 @@ async function assertExpectedPullUser(expectedUserId: string): Promise<void> {
     throw new Error(SYNC_PULL_ERROR_CODES.AUTH_SCOPE_LOST);
   }
 }
+
+type GenericUserOwnedPullTableName = Exclude<
+  UserOwnedPullTableName,
+  "market_rate_observations"
+>;
 
 export async function pullMarketRates(
   daysToKeep = 7
@@ -62,6 +68,29 @@ export async function pullMarketRates(
     updated: activeRecords,
     deleted: [],
   };
+}
+
+export async function pullMarketRateObservations(
+  lastSyncDate: string | null
+): Promise<SyncTableChangeSet> {
+  let query = supabase
+    .from("market_rate_observations")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (lastSyncDate) {
+    query = query.gt("created_at", lastSyncDate);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw createSyncTableError("pull", "market_rate_observations", error);
+  }
+
+  const activeRecords = (data ?? []).map((record) =>
+    transformFromSupabase("market_rate_observations", record)
+  );
+  return { created: [], updated: activeRecords, deleted: [] };
 }
 
 export async function pullSnapshotTable(
@@ -110,7 +139,7 @@ export async function pullSnapshotTable(
 }
 
 export async function pullUserTable(
-  table: UserOwnedPullTableName,
+  table: GenericUserOwnedPullTableName,
   userId: string,
   lastSyncDate: string | null
 ): Promise<SyncTableChangeSet> {
@@ -136,7 +165,9 @@ export async function pullUserTable(
 
   const activeRecords = data
     .filter((record) => record.deleted !== true)
-    .map((record) => transformFromSupabase(table, record));
+    .map((record) =>
+      stripMetalActionFragments(table, transformFromSupabase(table, record))
+    );
 
   return {
     created: [],
@@ -191,7 +222,9 @@ export async function pullChildTable(
 
   const activeRecords = data
     .filter((record) => record.deleted !== true)
-    .map((record) => transformFromSupabase(table, record));
+    .map((record) =>
+      stripMetalActionFragments(table, transformFromSupabase(table, record))
+    );
 
   return {
     created: [],
@@ -254,6 +287,8 @@ export async function pullChanges(
 
     if (table === "market_rates") {
       changes[table] = await pullMarketRates();
+    } else if (table === "market_rate_observations") {
+      changes[table] = await pullMarketRateObservations(lastSyncDate);
     } else if (isSnapshotTable(table)) {
       changes[table] = await pullSnapshotTable(
         table,
@@ -273,7 +308,7 @@ export async function pullChanges(
       );
     } else {
       changes[table] = await pullUserTable(
-        table as UserOwnedPullTableName,
+        table as GenericUserOwnedPullTableName,
         expectedUserId,
         lastSyncDate
       );
@@ -286,4 +321,12 @@ export async function pullChanges(
     changes,
     timestamp: Date.now(),
   };
+}
+
+export async function runMetalPullStrategy(input: {
+  readonly pull: () => Promise<void>;
+  readonly commitWatermark: () => Promise<void> | void;
+}): Promise<void> {
+  await input.pull();
+  await input.commitWatermark();
 }
