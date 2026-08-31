@@ -109,15 +109,17 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const STABLE_ERROR_CODE_PATTERN = /^[a-z][a-z0-9_]*$/;
-const UTC_MILLISECOND_PATTERN =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const UTC_MILLISECOND_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 type JsonPrimitive = string | boolean | null;
 interface CanonicalJsonObject {
   readonly [key: string]: CanonicalJsonValue;
 }
 interface CanonicalJsonArray extends ReadonlyArray<CanonicalJsonValue> {}
-type CanonicalJsonValue = JsonPrimitive | CanonicalJsonArray | CanonicalJsonObject;
+type CanonicalJsonValue =
+  | JsonPrimitive
+  | CanonicalJsonArray
+  | CanonicalJsonObject;
 
 const APPROVED_DOMAINS: readonly FinancialActionDomain[] = [
   "metals",
@@ -247,8 +249,12 @@ function isStrictUtcMillisecondTimestamp(value: unknown): value is string {
   if (typeof value !== "string" || !UTC_MILLISECOND_PATTERN.test(value)) {
     return false;
   }
+  const year = Number(value.slice(0, 4));
+  if (year < 1) return false;
   const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
+  return (
+    Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value
+  );
 }
 
 export function canonicalizeFinancialActionEnvelope(
@@ -340,7 +346,9 @@ function serializeCanonicalValue(value: CanonicalJsonValue): string {
     .map(
       (key) =>
         `${escapeJsonString(key)}:${serializeCanonicalValue(
-          (value as Readonly<Record<string, CanonicalJsonValue>>)[key] as CanonicalJsonValue
+          (value as Readonly<Record<string, CanonicalJsonValue>>)[
+            key
+          ] as CanonicalJsonValue
         )}`
     )
     .join(",")}}`;
@@ -391,7 +399,8 @@ function scanValue(rawText: string, start: number): number {
     while (index < rawText.length) {
       index = skipWhitespace(rawText, scanValue(rawText, index));
       if (rawText[index] === "]") return index + 1;
-      if (rawText[index] !== ",") fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_JSON);
+      if (rawText[index] !== ",")
+        fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_JSON);
       index = skipWhitespace(rawText, index + 1);
     }
   }
@@ -400,17 +409,21 @@ function scanValue(rawText: string, start: number): number {
     index = skipWhitespace(rawText, index + 1);
     if (rawText[index] === "}") return index + 1;
     while (index < rawText.length) {
-      if (rawText[index] !== '"') fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_JSON);
+      if (rawText[index] !== '"')
+        fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_JSON);
       const keyEnd = scanStringEnd(rawText, index);
       const key = JSON.parse(rawText.slice(index, keyEnd)) as unknown;
-      if (typeof key !== "string") fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_JSON);
+      if (typeof key !== "string")
+        fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_JSON);
       if (keys.has(key)) fail(FINANCIAL_ACTION_ERROR_CODES.DUPLICATE_KEY);
       keys.add(key);
       index = skipWhitespace(rawText, keyEnd);
-      if (rawText[index] !== ":") fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_JSON);
+      if (rawText[index] !== ":")
+        fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_JSON);
       index = skipWhitespace(rawText, scanValue(rawText, index + 1));
       if (rawText[index] === "}") return index + 1;
-      if (rawText[index] !== ",") fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_JSON);
+      if (rawText[index] !== ",")
+        fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_JSON);
       index = skipWhitespace(rawText, index + 1);
     }
   }
@@ -430,8 +443,7 @@ export function parseFinancialActionEnvelopeJson(
   registry: FinancialActionRegistry = DEFAULT_FINANCIAL_ACTION_REGISTRY
 ): FinancialActionEnvelopeV1 {
   if (
-    getFinancialActionUtf8ByteLength(rawText) >
-    MAX_CANONICAL_ACTION_UTF8_BYTES
+    getFinancialActionUtf8ByteLength(rawText) > MAX_CANONICAL_ACTION_UTF8_BYTES
   ) {
     fail(FINANCIAL_ACTION_ERROR_CODES.PAYLOAD_TOO_LARGE);
   }
@@ -513,16 +525,21 @@ export function assertFinancialActionStateEvidence(
   const hasOutcome = evidence.serverOutcome !== null;
   const hasOutcomeJson = evidence.outcomeJson !== null;
   const outcomePairIsValid = hasOutcome === hasOutcomeJson;
+  const hasKnownOutcome =
+    evidence.serverOutcome !== null &&
+    SERVER_OUTCOMES.includes(evidence.serverOutcome);
   const hasCanonicalOutcome =
-    evidence.outcomeJson !== null && isCanonicalOutcomeJson(evidence.outcomeJson);
+    evidence.outcomeJson !== null &&
+    isCanonicalOutcomeJson(evidence.outcomeJson);
   let isValid = false;
 
   if (["pending_local", "local_complete", "sync_pending"].includes(state)) {
-    isValid =
-      !hasOutcome && !hasOutcomeJson && evidence.rejectionCode === null;
+    isValid = !hasOutcome && !hasOutcomeJson && evidence.rejectionCode === null;
   } else if (state === "sync_failed") {
     isValid =
-      !hasOutcome && !hasOutcomeJson && hasStableRejectionCode(evidence.rejectionCode);
+      !hasOutcome &&
+      !hasOutcomeJson &&
+      hasStableRejectionCode(evidence.rejectionCode);
   } else if (state === "accepted") {
     isValid =
       (evidence.serverOutcome === "accepted" ||
@@ -539,7 +556,7 @@ export function assertFinancialActionStateEvidence(
     isValid =
       outcomePairIsValid &&
       hasStableRejectionCode(evidence.rejectionCode) &&
-      (!hasOutcome || hasCanonicalOutcome);
+      (!hasOutcome || (hasKnownOutcome && hasCanonicalOutcome));
   }
 
   if (!isValid) fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_STATE_EVIDENCE);

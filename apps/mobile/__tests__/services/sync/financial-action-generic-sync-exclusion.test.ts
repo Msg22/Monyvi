@@ -29,16 +29,26 @@ describe("financial action generic sync exclusion", () => {
   it.each([
     "scripts/transform-schema.js",
     "scripts/sql-to-watermelon-migration.js",
-  ])("keeps financial_action_groups included in %s generation", (relativePath) => {
-    const generator = readFileSync(resolve(REPOSITORY_ROOT, relativePath), "utf8");
-    const excludedDeclaration = generator.match(
-      /const EXCLUDED_TABLES = \[[\s\S]*?\];/
-    );
+  ])(
+    "keeps financial_action_groups included in %s generation",
+    (relativePath) => {
+      const generator = readFileSync(
+        resolve(REPOSITORY_ROOT, relativePath),
+        "utf8"
+      );
+      const excludedDeclaration = generator.match(
+        /const EXCLUDED_TABLES = \[[\s\S]*?\];/
+      );
 
-    expect(excludedDeclaration?.[0]).toBeDefined();
-    expect(excludedDeclaration?.[0]).not.toContain('"financial_action_groups"');
-    expect(excludedDeclaration?.[0]).not.toContain("'financial_action_groups'");
-  });
+      expect(excludedDeclaration?.[0]).toBeDefined();
+      expect(excludedDeclaration?.[0]).not.toContain(
+        '"financial_action_groups"'
+      );
+      expect(excludedDeclaration?.[0]).not.toContain(
+        "'financial_action_groups'"
+      );
+    }
+  );
 
   it("registers the generated local table and persisted-field-only model", () => {
     const schema = readFileSync(
@@ -58,6 +68,7 @@ describe("financial action generic sync exclusion", () => {
     );
 
     expect(schema).toContain('name: "financial_action_groups"');
+    expect(schema).toContain("financial_action_groups_user_action_unique");
     expect(database).toContain("FinancialActionGroup");
     expect(model).toContain("BaseFinancialActionGroup");
     expect(model).not.toContain("calculate");
@@ -115,9 +126,10 @@ describe("financial action generic sync exclusion", () => {
     expect(localMigration).toMatch(
       /name: "expected_account_revision",\s+type: "string",\s+isOptional: true/
     );
-    expect(generatedModel).toContain(
-      "expectedAccountRevision!: string | null"
+    expect(localMigration).toContain(
+      "financial_action_groups_user_action_unique"
     );
+    expect(generatedModel).toContain("expectedAccountRevision!: string | null");
   });
 
   it("fails closed on unknown action definitions and illegal state evidence", () => {
@@ -140,22 +152,20 @@ describe("financial action generic sync exclusion", () => {
       "private.financial_action_validate_registered_payload_v1"
     );
     expect(migration).toContain("financial_action_unknown_definition");
-    expect(migration).toContain("private.financial_action_assert_transition_v1");
+    expect(migration).toContain(
+      "private.financial_action_assert_transition_v1"
+    );
     expect(migration).toContain(
       "private.financial_action_validate_state_evidence_v1"
     );
     expect(migration).toContain(
       "private.financial_action_assert_evidence_update_v1"
     );
-    expect(migration).toContain(
-      "p_old_state = 'reconciliation_incomplete'"
-    );
+    expect(migration).toContain("p_old_state = 'reconciliation_incomplete'");
     expect(migration).toContain(
       "jsonb_typeof(p_value -> 'actionId') IS DISTINCT FROM 'string'"
     );
-    expect(migration).toContain(
-      "IF jsonb_typeof(p_payload) <> 'object' THEN"
-    );
+    expect(migration).toContain("IF jsonb_typeof(p_payload) <> 'object' THEN");
     expect(migration).toContain(
       "IF jsonb_typeof(p_payload -> 'rateReferenceIds') <> 'array' THEN"
     );
@@ -178,11 +188,19 @@ describe("financial action generic sync exclusion", () => {
     expect(migration).toContain("octet_length(p_raw_text) > 65536");
     expect(migration).toContain("financial_action_payload_too_large");
     expect(migration).toContain("octet_length(p_payload ->> 'notes') > 4096");
-    expect(migration).toContain("jsonb_array_length(p_payload -> 'rateReferenceIds') > 16");
-    expect(migration).toContain("length(replace(p_payload ->> 'grossProceedsDecimal', '.', '')) > 50");
-    expect(migration).toContain("length(split_part(p_payload ->> 'grossProceedsDecimal', '.', 2)) > 18");
+    expect(migration).toContain(
+      "jsonb_array_length(p_payload -> 'rateReferenceIds') > 16"
+    );
+    expect(migration).toContain(
+      "length(replace(p_payload ->> 'grossProceedsDecimal', '.', '')) > 50"
+    );
+    expect(migration).toContain(
+      "length(split_part(p_payload ->> 'grossProceedsDecimal', '.', 2)) > 18"
+    );
     expect(migration).toContain("length(p_payload ->> 'feeMinorUnits') > 50");
-    expect(migration).toContain("length(p_payload ->> 'netProceedsMinorUnits') > 50");
+    expect(migration).toContain(
+      "length(p_payload ->> 'netProceedsMinorUnits') > 50"
+    );
   });
 
   it("executes owner-only RLS and immutable-root pgTAP coverage", () => {
@@ -218,6 +236,8 @@ describe("financial action generic sync exclusion", () => {
     ].forEach((column) => {
       expect(sqlTest).toContain(`update ${column} is rejected`);
     });
-    expect(sqlTest).toContain("failed immutable updates leave the root unchanged");
+    expect(sqlTest).toContain(
+      "failed immutable updates leave the root unchanged"
+    );
   });
 });

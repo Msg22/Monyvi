@@ -198,6 +198,8 @@ export const schema = appSchema({
 
     tableSchema({
       name: "financial_action_groups",
+      unsafeSql: (sql: string): string =>
+        `${sql}create unique index if not exists "financial_action_groups_user_action_unique" on "financial_action_groups" ("user_id", "action_id");`,
       columns: [
         { name: "action_id", type: "string", isIndexed: true },
         { name: "created_at", type: "number" },

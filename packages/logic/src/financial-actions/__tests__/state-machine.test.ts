@@ -52,7 +52,11 @@ describe("financial action state machine", () => {
     ["sync_pending", EMPTY_EVIDENCE],
     [
       "sync_failed",
-      { serverOutcome: null, outcomeJson: null, rejectionCode: "network_retry" },
+      {
+        serverOutcome: null,
+        outcomeJson: null,
+        rejectionCode: "network_retry",
+      },
     ],
     [
       "accepted",
@@ -95,7 +99,9 @@ describe("financial action state machine", () => {
       },
     ],
   ])("accepts valid %s evidence", (state, evidence) => {
-    expect(() => assertFinancialActionStateEvidence(state, evidence)).not.toThrow();
+    expect(() =>
+      assertFinancialActionStateEvidence(state, evidence)
+    ).not.toThrow();
   });
 
   it.each<readonly [FinancialActionState, FinancialActionStateEvidence]>([
@@ -133,7 +139,20 @@ describe("financial action state machine", () => {
     ],
     [
       "reconciliation_incomplete",
-      { serverOutcome: "rejected", outcomeJson: null, rejectionCode: "bad_pair" },
+      {
+        serverOutcome: "rejected",
+        outcomeJson: null,
+        rejectionCode: "bad_pair",
+      },
+    ],
+    [
+      "reconciliation_incomplete",
+      {
+        serverOutcome:
+          "unknown" as FinancialActionStateEvidence["serverOutcome"],
+        outcomeJson: "{}",
+        rejectionCode: "unknown_outcome",
+      },
     ],
     [
       "accepted",
@@ -174,20 +193,23 @@ describe("financial action state machine", () => {
   it.each([
     ["changed outcome", "accepted", '{"receipt":"changed"}'],
     ["changed server outcome", "idempotent", '{"receipt":"same"}'],
-  ] as const)("rejects reconciliation accepted evidence: %s", (_name, outcome, json) => {
-    expect(() =>
-      assertFinancialActionEvidenceTransition(
-        "reconciliation_incomplete",
-        {
-          serverOutcome: "accepted",
-          outcomeJson: '{"receipt":"same"}',
-          rejectionCode: "local_apply_failed",
-        },
-        "accepted",
-        { serverOutcome: outcome, outcomeJson: json, rejectionCode: null }
-      )
-    ).toThrow("financial_action_immutable_outcome_evidence");
-  });
+  ] as const)(
+    "rejects reconciliation accepted evidence: %s",
+    (_name, outcome, json) => {
+      expect(() =>
+        assertFinancialActionEvidenceTransition(
+          "reconciliation_incomplete",
+          {
+            serverOutcome: "accepted",
+            outcomeJson: '{"receipt":"same"}',
+            rejectionCode: "local_apply_failed",
+          },
+          "accepted",
+          { serverOutcome: outcome, outcomeJson: json, rejectionCode: null }
+        )
+      ).toThrow("financial_action_immutable_outcome_evidence");
+    }
+  );
 
   it("rejects terminal evidence mutation during rejected reconciliation", () => {
     expect(() =>
@@ -237,7 +259,10 @@ describe("financial action state machine", () => {
         )
       ).not.toThrow();
       expect(() =>
-        assertFinancialActionStateEvidence("rejected_compensating", nextEvidence)
+        assertFinancialActionStateEvidence(
+          "rejected_compensating",
+          nextEvidence
+        )
       ).not.toThrow();
     }
   );
@@ -260,6 +285,8 @@ describe("financial action state machine", () => {
         evidence
       )
     ).not.toThrow();
-    expect(() => assertFinancialActionStateEvidence("reconciled", evidence)).not.toThrow();
+    expect(() =>
+      assertFinancialActionStateEvidence("reconciled", evidence)
+    ).not.toThrow();
   });
 });

@@ -55,8 +55,14 @@ jest.mock("../../services/user-data-access", () => {
   return {
     getCurrentUserDataScope: jest.fn(async () => ({
       userId: mockSqliteCurrentUserId,
-      queryOwned: (collection: { query: (...clauses: unknown[]) => unknown }, ...clauses: unknown[]) =>
-        collection.query(Q.where("user_id", mockSqliteCurrentUserId), ...clauses),
+      queryOwned: (
+        collection: { query: (...clauses: unknown[]) => unknown },
+        ...clauses: unknown[]
+      ) =>
+        collection.query(
+          Q.where("user_id", mockSqliteCurrentUserId),
+          ...clauses
+        ),
       assertOwned: <T extends { userId: string }>(record: T): T => {
         if (record.userId !== mockSqliteCurrentUserId) {
           throw new Error("ownership_failed");
@@ -75,9 +81,7 @@ jest.mock("../../services/user-data-access", () => {
 });
 
 import type { FinancialActionGroup } from "@monyvi/db";
-import {
-  createFinancialActionFoundationRepository,
-} from "../../services/financial-action-foundation-repository";
+import { createFinancialActionFoundationRepository } from "../../services/financial-action-foundation-repository";
 
 const {
   database,
@@ -125,7 +129,10 @@ async function openFreshDatabase(): Promise<Database> {
 }
 
 async function fetchAll(db: Database): Promise<FinancialActionGroup[]> {
-  return db.get<FinancialActionGroup>("financial_action_groups").query().fetch();
+  return db
+    .get<FinancialActionGroup>("financial_action_groups")
+    .query()
+    .fetch();
 }
 
 function createRepository(db: Database) {
@@ -135,17 +142,22 @@ function createRepository(db: Database) {
       userId: mockSqliteCurrentUserId,
       queryOwned: (collection, ...clauses) =>
         collection.query(
-          jest.requireActual<typeof import("@nozbe/watermelondb")>(
-            "@nozbe/watermelondb"
-          ).Q.where("user_id", mockSqliteCurrentUserId),
+          jest
+            .requireActual<
+              typeof import("@nozbe/watermelondb")
+            >("@nozbe/watermelondb")
+            .Q.where("user_id", mockSqliteCurrentUserId),
           ...clauses
         ),
       assertOwned: <T extends { userId: string }>(record: T): T => {
-        if (record.userId !== mockSqliteCurrentUserId) throw new Error("ownership_failed");
+        if (record.userId !== mockSqliteCurrentUserId)
+          throw new Error("ownership_failed");
         return record;
       },
     }),
-    assertExpectedCurrentUser: async (expectedUserId: string): Promise<void> => {
+    assertExpectedCurrentUser: async (
+      expectedUserId: string
+    ): Promise<void> => {
       if (expectedUserId !== mockSqliteCurrentUserId) {
         throw new Error("auth_scope_changed");
       }
@@ -184,12 +196,54 @@ describe("financial action foundation SQLite persistence", () => {
 
   it("rolls back a failed writer without leaving a durable row", async () => {
     const repository = createRepository(database);
-    jest.spyOn(database.adapter, "batch").mockRejectedValueOnce(new Error("write_failed"));
+    jest
+      .spyOn(database.adapter, "batch")
+      .mockRejectedValueOnce(new Error("write_failed"));
 
     await expect(
-      repository.createFinancialActionGroup({ envelope: envelope(), hashProvider: sha256Provider })
+      repository.createFinancialActionGroup({
+        envelope: envelope(),
+        hashProvider: sha256Provider,
+      })
     ).rejects.toThrow("write_failed");
     expect(await fetchAll(await openFreshDatabase())).toHaveLength(0);
+  });
+
+  it("rejects duplicate owner-scoped action identities in SQLite", async () => {
+    const repository = createRepository(database);
+    const actionEnvelope = envelope();
+    const payload = await hashFinancialActionEnvelope(
+      actionEnvelope,
+      sha256Provider
+    );
+    await repository.createFinancialActionGroup({
+      envelope: actionEnvelope,
+      hashProvider: sha256Provider,
+    });
+
+    await expect(
+      database.write(async (): Promise<void> => {
+        await database
+          .get<FinancialActionGroup>("financial_action_groups")
+          .create((record) => {
+            record.actionId = actionEnvelope.actionId;
+            record.userId = actionEnvelope.userId;
+            record.domain = actionEnvelope.domain;
+            record.kind = actionEnvelope.kind;
+            record.domainReferenceId = actionEnvelope.domainReferenceId;
+            record.payloadJson = payload.canonicalText;
+            record.payloadHash = payload.payloadHash;
+            record.expectedAccountRevision = null;
+            record.state = "pending_local";
+            record.serverOutcome = null;
+            record.outcomeJson = null;
+            record.rejectionCode = null;
+            record.deleted = false;
+            record.updatedAt = new Date();
+          });
+      })
+    ).rejects.toThrow();
+    expect(await fetchAll(await openFreshDatabase())).toHaveLength(1);
   });
 
   it("persists retry transitions across fresh database instances", async () => {
@@ -228,22 +282,24 @@ describe("financial action foundation SQLite persistence", () => {
       sha256Provider
     );
     await database.write(async (): Promise<void> => {
-      await database.get<FinancialActionGroup>("financial_action_groups").create((record) => {
-        record.actionId = ACTION_ID;
-        record.userId = FOREIGN_USER_ID;
-        record.domain = foreignEnvelope.domain;
-        record.kind = foreignEnvelope.kind;
-        record.domainReferenceId = foreignEnvelope.domainReferenceId;
-        record.payloadJson = foreignPayload.canonicalText;
-        record.payloadHash = foreignPayload.payloadHash;
-        record.expectedAccountRevision = null;
-        record.state = "pending_local";
-        record.serverOutcome = null;
-        record.outcomeJson = null;
-        record.rejectionCode = null;
-        record.deleted = false;
-        record.updatedAt = new Date();
-      });
+      await database
+        .get<FinancialActionGroup>("financial_action_groups")
+        .create((record) => {
+          record.actionId = ACTION_ID;
+          record.userId = FOREIGN_USER_ID;
+          record.domain = foreignEnvelope.domain;
+          record.kind = foreignEnvelope.kind;
+          record.domainReferenceId = foreignEnvelope.domainReferenceId;
+          record.payloadJson = foreignPayload.canonicalText;
+          record.payloadHash = foreignPayload.payloadHash;
+          record.expectedAccountRevision = null;
+          record.state = "pending_local";
+          record.serverOutcome = null;
+          record.outcomeJson = null;
+          record.rejectionCode = null;
+          record.deleted = false;
+          record.updatedAt = new Date();
+        });
     });
 
     await repository.createFinancialActionGroup({

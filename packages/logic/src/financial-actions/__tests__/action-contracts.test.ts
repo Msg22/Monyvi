@@ -32,7 +32,9 @@ const sha256Provider: Sha256Provider = {
 };
 
 function validEnvelope(): FinancialActionEnvelopeV1<MetalsSellPayloadV1> {
-  return JSON.parse(ARABIC_VECTOR) as FinancialActionEnvelopeV1<MetalsSellPayloadV1>;
+  return JSON.parse(
+    ARABIC_VECTOR
+  ) as FinancialActionEnvelopeV1<MetalsSellPayloadV1>;
 }
 
 function expectContractError(value: unknown, code: string): void {
@@ -46,7 +48,10 @@ describe("financial action canonical contract", () => {
     expect(serializeFinancialActionEnvelope(envelope)).toBe(ARABIC_VECTOR);
     await expect(
       hashFinancialActionEnvelope(envelope, sha256Provider)
-    ).resolves.toEqual({ canonicalText: ARABIC_VECTOR, payloadHash: ARABIC_DIGEST });
+    ).resolves.toEqual({
+      canonicalText: ARABIC_VECTOR,
+      payloadHash: ARABIC_DIGEST,
+    });
   });
 
   it("sorts every object by ASCII key bytes while preserving array order", () => {
@@ -96,7 +101,10 @@ describe("financial action canonical contract", () => {
         parseFinancialActionEnvelopeJson(escaped),
         sha256Provider
       )
-    ).resolves.toEqual({ canonicalText: ARABIC_VECTOR, payloadHash: ARABIC_DIGEST });
+    ).resolves.toEqual({
+      canonicalText: ARABIC_VECTOR,
+      payloadHash: ARABIC_DIGEST,
+    });
     expect(serializeFinancialActionEnvelope(composed)).not.toBe(
       serializeFinancialActionEnvelope(decomposed)
     );
@@ -113,16 +121,32 @@ describe("financial action canonical contract", () => {
   it.each([
     ["unsupported envelope version", { envelopeVersion: "v2" }],
     ["unsupported domain", { domain: "other" }],
-    ["non-canonical action id", { actionId: "018F0C7A-1234-7ABC-8DEF-000000000001" }],
+    [
+      "non-canonical action id",
+      { actionId: "018F0C7A-1234-7ABC-8DEF-000000000001" },
+    ],
+    ["year-zero timestamp", { occurredAt: "0000-01-01T00:00:00.000Z" }],
     ["non-UTC timestamp", { occurredAt: "2026-08-31T12:15:30.123+02:00" }],
     ["invalid calendar time", { occurredAt: "2026-02-30T10:15:30.123Z" }],
-    ["non-null expected revision in foundation", { expectedAccountRevision: "0" }],
+    [
+      "non-null expected revision in foundation",
+      { expectedAccountRevision: "0" },
+    ],
   ])("rejects %s", (_name, replacement) => {
     expectContractError(
       { ...validEnvelope(), ...replacement },
       FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE
     );
   });
+
+  it.each(["0001-01-01T00:00:00.000Z", "9999-12-31T23:59:59.999Z"])(
+    "accepts shared four-digit timestamp boundary %s",
+    (occurredAt) => {
+      expect(
+        canonicalizeFinancialActionEnvelope({ ...validEnvelope(), occurredAt })
+      ).toMatchObject({ occurredAt });
+    }
+  );
 
   it.each([
     ["unsupported kind", { kind: "dispose" }],
@@ -233,9 +257,9 @@ describe("financial action canonical contract", () => {
   });
 
   it("rejects raw action text above the canonical byte cap before parsing", () => {
-    expect(() =>
-      parseFinancialActionEnvelopeJson(" ".repeat(65537))
-    ).toThrow("financial_action_payload_too_large");
+    expect(() => parseFinancialActionEnvelopeJson(" ".repeat(65537))).toThrow(
+      "financial_action_payload_too_large"
+    );
   });
 
   it.each([
@@ -316,8 +340,14 @@ describe("financial action canonical contract", () => {
 
     const accessor = { ...base, payload: { ...base.payload } };
     const getter = jest.fn(() => "hidden");
-    Object.defineProperty(accessor.payload, "notes", { enumerable: true, get: getter });
-    expectContractError(accessor, FINANCIAL_ACTION_ERROR_CODES.UNSUPPORTED_VALUE);
+    Object.defineProperty(accessor.payload, "notes", {
+      enumerable: true,
+      get: getter,
+    });
+    expectContractError(
+      accessor,
+      FINANCIAL_ACTION_ERROR_CODES.UNSUPPORTED_VALUE
+    );
     expect(getter).not.toHaveBeenCalled();
 
     const cyclicPayload: Record<string, unknown> = { ...base.payload };
@@ -327,7 +357,10 @@ describe("financial action canonical contract", () => {
   });
 
   it("accepts identical replay and rejects an action-id payload mismatch", () => {
-    const storedOutcome = { serverOutcome: "accepted" as const, outcomeJson: "{}" };
+    const storedOutcome = {
+      serverOutcome: "accepted" as const,
+      outcomeJson: "{}",
+    };
 
     expect(
       resolveFinancialActionReplay(
@@ -347,14 +380,20 @@ describe("financial action canonical contract", () => {
         storedOutcome
       )
     ).toEqual({
-        kind: "rejected",
-        reasonCode: "action_id_payload_mismatch",
-      });
+      kind: "rejected",
+      reasonCode: "action_id_payload_mismatch",
+    });
   });
 
   it("rejects different canonical text even when a faulty provider returns the same hash", () => {
-    const storedOutcome = { serverOutcome: "accepted" as const, outcomeJson: "{}" };
-    const changedCanonicalText = ARABIC_VECTOR.replace('"notes":"ذهب"', '"notes":"changed"');
+    const storedOutcome = {
+      serverOutcome: "accepted" as const,
+      outcomeJson: "{}",
+    };
+    const changedCanonicalText = ARABIC_VECTOR.replace(
+      '"notes":"ذهب"',
+      '"notes":"changed"'
+    );
 
     expect(
       resolveFinancialActionReplay(

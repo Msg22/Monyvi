@@ -506,6 +506,9 @@ end;`
             { name: "deleted", type: "boolean" },
           ],
         }),
+        unsafeExecuteSql(
+          'create unique index if not exists "financial_action_groups_user_action_unique" on "financial_action_groups" ("user_id", "action_id");'
+        ),
       ],
     },
   ],
