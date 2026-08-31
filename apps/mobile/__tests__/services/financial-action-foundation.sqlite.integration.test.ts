@@ -171,6 +171,7 @@ function createRepository(
 
 describe("financial action foundation SQLite persistence", () => {
   beforeEach(async () => {
+    await adapter.initializingPromise;
     mockSqliteCurrentUserId = USER_ID;
     await database.write(async (): Promise<void> => {
       await database.unsafeResetDatabase();
@@ -246,7 +247,11 @@ describe("financial action foundation SQLite persistence", () => {
             record.updatedAt = new Date();
           });
       })
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      name: "SqliteError",
+      message:
+        "UNIQUE constraint failed: financial_action_groups.user_id, financial_action_groups.action_id",
+    });
     expect(await fetchAll(await openFreshDatabase())).toHaveLength(1);
   });
 
