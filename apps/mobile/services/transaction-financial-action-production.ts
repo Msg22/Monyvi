@@ -1,9 +1,9 @@
 import { Account, database, Transaction } from "@monyvi/db";
-import * as Crypto from "expo-crypto";
 
-import { AccountFinancialEffect } from "../../../packages/db/src/models/AccountFinancialEffect";
-import { createAccountBalanceCommandService } from "./account-balance-command-service";
-import { commitFinancialActionGroupLocally } from "./financial-action-foundation-repository";
+import {
+  productionAccountBalanceCommandService,
+  productionFinancialActionHashProvider,
+} from "./account-balance-command-production";
 import {
   createTransactionFinancialActionService,
   type GuardedTransactionCreateData,
@@ -13,39 +13,12 @@ import {
   getCurrentUserDataScope,
 } from "./user-data-access";
 
-const accountBalanceCommandService = createAccountBalanceCommandService({
-  foundationRepository: { commitFinancialActionGroupLocally },
-  prepareEffectCreate: (input) =>
-    database
-      .get<AccountFinancialEffect>("account_financial_effects")
-      .prepareCreate((record) => {
-        record.acceptedAccountRevision = input.acceptedAccountRevision;
-        record.accountId = input.accountId;
-        record.actionId = input.actionId;
-        record.amountMinorUnits = input.amountMinorUnits;
-        record.compensatedAt = null;
-        record.currency = input.currency;
-        record.deleted = false;
-        record.domain = input.domain;
-        record.isEffective = true;
-        record.kind = input.kind;
-        record.reversesEffectId = null;
-        record.userId = input.userId;
-      }),
-});
-
 const productionService = createTransactionFinancialActionService({
   accountsCollection: () => database.get<Account>("accounts"),
   assertExpectedCurrentUser,
-  executeAccountBalanceCommand: accountBalanceCommandService.execute,
+  executeAccountBalanceCommand: productionAccountBalanceCommandService.execute,
   getCurrentUserDataScope,
-  hashProvider: {
-    digestUtf8: (canonicalText: string): Promise<string> =>
-      Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        canonicalText
-      ),
-  },
+  hashProvider: productionFinancialActionHashProvider,
   transactionsCollection: () => database.get<Transaction>("transactions"),
 });
 

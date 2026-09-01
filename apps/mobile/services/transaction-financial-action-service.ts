@@ -72,7 +72,7 @@ export interface TransactionFinancialActionService {
   ) => Promise<Transaction>;
 }
 
-interface TransactionAfter {
+export interface TransactionAfter {
   readonly [key: string]: CanonicalJsonValue;
   readonly accountId: string;
   readonly amountMinorUnits: string;
@@ -106,11 +106,15 @@ function currencyPlaces(currency: string): number {
   );
 }
 
-function formatLocalDateOnly(date: Date): string {
+export function formatFinancialActionLocalDate(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function startOfFinancialActionLocalDate(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 function readRaw(
@@ -145,7 +149,7 @@ function assertCachedOwnership(
   assertOwnedRaw(cachedPreimages[0].raw, userId);
 }
 
-function assertRawTransactionMatches(
+export function assertRawTransactionMatches(
   raw: Readonly<Model["_raw"]>,
   expected: TransactionAfter
 ): void {
@@ -188,7 +192,9 @@ function assertPreparedOwnership(
   assertRawTransactionMatches(transaction.raw, expected);
 }
 
-function exactMinorUnits(data: GuardedTransactionCreateData): string {
+export function getExactTransactionMinorUnits(
+  data: GuardedTransactionCreateData
+): string {
   if (!isValidTransactionAmount(data.amount)) {
     fail(TRANSACTION_FINANCIAL_ACTION_ERROR_CODES.INVALID_AMOUNT);
   }
@@ -201,7 +207,9 @@ function exactMinorUnits(data: GuardedTransactionCreateData): string {
   return minorUnits;
 }
 
-function nextRevision(currentRevision: string): string {
+export function getNextAccountFinancialRevision(
+  currentRevision: string
+): string {
   const current = parseCanonicalUnsignedIntegerString(currentRevision);
   const next = BigInt(current) + 1n;
   if (next > MAX_SIGNED_BIGINT) {
@@ -210,7 +218,7 @@ function nextRevision(currentRevision: string): string {
   return next.toString();
 }
 
-function nextBalance(
+export function getNextAccountBalance(
   currentBalance: number,
   signedMinorUnits: string,
   currency: string
@@ -230,7 +238,7 @@ function nextBalance(
   return value;
 }
 
-function prepareTransaction(
+export function prepareFinancialActionTransaction(
   collection: Collection<Transaction>,
   data: GuardedTransactionCreateData,
   userId: string
@@ -244,7 +252,7 @@ function prepareTransaction(
     record.categoryId = data.categoryId;
     record.counterparty = data.counterparty || undefined;
     record.note = data.note || undefined;
-    record.date = data.date || new Date();
+    record.date = startOfFinancialActionLocalDate(data.date ?? new Date());
     record.source = data.source;
     record.linkedRecurringId = data.linkedRecurringId || undefined;
     record.smsFingerprint = data.smsFingerprint || undefined;
@@ -253,7 +261,7 @@ function prepareTransaction(
   });
 }
 
-function buildAfter(
+export function buildTransactionAfter(
   transaction: Transaction,
   amountMinorUnits: string
 ): TransactionAfter {
@@ -264,7 +272,7 @@ function buildAfter(
     counterparty: transaction.counterparty ?? null,
     createdAt: transaction.createdAt.toISOString(),
     currency: transaction.currency,
-    date: formatLocalDateOnly(transaction.date),
+    date: formatFinancialActionLocalDate(transaction.date),
     deleted: transaction.deleted,
     id: transaction.id,
     isDraft: transaction.isDraft,
@@ -365,7 +373,7 @@ export function createTransactionFinancialActionService(
       data: GuardedTransactionCreateData,
       expectedUserId?: string
     ): Promise<Transaction> => {
-      const amountMinorUnits = exactMinorUnits(data);
+      const amountMinorUnits = getExactTransactionMinorUnits(data);
       const scope = await dependencies.getCurrentUserDataScope();
       if (expectedUserId !== undefined && scope.userId !== expectedUserId) {
         fail(TRANSACTION_FINANCIAL_ACTION_ERROR_CODES.AUTH_SCOPE_CHANGED);
@@ -382,12 +390,12 @@ export function createTransactionFinancialActionService(
       }
       await dependencies.assertExpectedCurrentUser(scope.userId);
 
-      const transaction = prepareTransaction(
+      const transaction = prepareFinancialActionTransaction(
         dependencies.transactionsCollection(),
         data,
         scope.userId
       );
-      const after = buildAfter(transaction, amountMinorUnits);
+      const after = buildTransactionAfter(transaction, amountMinorUnits);
       const signedMinorUnits =
         data.type === "EXPENSE" ? `-${amountMinorUnits}` : amountMinorUnits;
       const envelope = buildEnvelope({
@@ -404,12 +412,14 @@ export function createTransactionFinancialActionService(
             buildPlan({
               account,
               after,
-              nextAccountBalance: nextBalance(
+              nextAccountBalance: getNextAccountBalance(
                 account.balance,
                 signedMinorUnits,
                 account.currency
               ),
-              nextAccountRevision: nextRevision(account.financialRevision),
+              nextAccountRevision: getNextAccountFinancialRevision(
+                account.financialRevision
+              ),
               transaction,
             })
           ),
