@@ -18,11 +18,6 @@ function buildMetalsCleanupRows() {
 function buildMetalsRows(scenario) {
   return ({ currentTimestamp, deterministicUuid, seedScope, userId }) => {
     const holdingId = deterministicUuid(seedScope, userId, "metals:holding");
-    const stateId = deterministicUuid(
-      seedScope,
-      userId,
-      "metals:holding-state"
-    );
     return {
       assets: [
         {
@@ -62,7 +57,7 @@ function buildMetalsRows(scenario) {
       ],
       metalHoldingStates: [
         {
-          id: stateId,
+          id: holdingId,
           user_id: userId,
           holding_id: holdingId,
           status: "active",

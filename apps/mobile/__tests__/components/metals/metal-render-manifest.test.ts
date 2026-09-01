@@ -31,7 +31,23 @@ describe("FR-103 production Metal render manifest", () => {
       source: null,
       accessibilityLabelKey: "render.neutralFallback",
     });
-    expect(getMetalRenderEntry("unsupported" as never, "bar")).toMatchObject({ kind: "neutral" });
+    expect(getMetalRenderEntry("gold", "Ring")).toMatchObject({
+      kind: "neutral",
+      metalLabelKey: "metal.gold",
+      formLabelKey: "form.unknown",
+      accessibilityLabelKey: "render.neutralFallback",
+    });
+    expect(getMetalRenderEntry("silver", null)).toMatchObject({
+      kind: "neutral",
+      metalLabelKey: "metal.silver",
+      formLabelKey: "form.unknown",
+      accessibilityLabelKey: "render.neutralFallback",
+    });
+    expect(getMetalRenderEntry("unsupported", "bar")).toMatchObject({
+      kind: "neutral",
+      metalLabelKey: "metal.unknown",
+      formLabelKey: "form.unknown",
+    });
   });
 
   it("contains the approved immutable object bytes and provenance hashes", () => {

@@ -35,6 +35,37 @@ describe("068 Metals domain migration and persisted models", () => {
     expect(sql).not.toMatch(/set\s+acquisition_action_id\s*=/i);
     expect(sql).toContain("purchase_price");
     expect(sql).toContain("purity_fraction");
+    expect(sql).toMatch(/weight_grams\s*=\s*trunc\(\s*metal\.weight_grams\s*,\s*3\s*\)/i);
+    expect(sql).toContain("'ZAR'");
+    expect(sql).not.toContain("'currency:BTC'");
+    expect(sql).toMatch(/0\.5833[\s\S]*gold-58333[\s\S]*0\.58333/i);
+  });
+
+  it("fails closed on incomplete purity, invalid rates, and unbound action evidence", () => {
+    const sql = source(migrationPath);
+
+    expect(sql).toMatch(
+      /purity_code\s+is\s+not\s+null[\s\S]*purity_factor_decimal\s+is\s+not\s+null[\s\S]*purity_catalog_version\s+is\s+not\s+null/i
+    );
+    expect(sql).toMatch(/quality\s*=\s*'valid'/i);
+    expect(sql).toMatch(/currency:USD[\s\S]*value_decimal\s*=\s*1/i);
+    expect(sql).toMatch(/metal_action_evidence[\s\S]*user_id[\s\S]*action_id[\s\S]*holding_id/i);
+    expect(sql).toMatch(/metal_action_rpc_required/i);
+    expect(sql).not.toMatch(/REFERENCES public\.assets \(user_id, id\) ON DELETE CASCADE/i);
+  });
+
+  it("exposes bounded exact observation pages without using a data-derived watermark", () => {
+    const sql = source(migrationPath);
+
+    expect(sql).toContain("pull_metal_observations_page_v1");
+    expect(sql).toMatch(/statement_timestamp\(\)/i);
+    expect(sql).toMatch(/\(observation\.created_at,\s*observation\.id\)\s*>/i);
+    expect(sql).toMatch(/observation\.created_at\s*<=\s*v_upper_watermark/i);
+    expect(sql).toMatch(/value_decimal[\s\S]*::text/i);
+    expect(sql).toMatch(
+      /create\s+index\s+market_rate_observations_created_id_idx[\s\S]*\(created_at,\s*id\)/i
+    );
+    expect(sql).not.toMatch(/max\s*\(\s*created_at\s*\)/i);
   });
 
   it("creates owner-scoped projections and immutable evidence with canonical revisions", () => {
@@ -118,5 +149,26 @@ describe("068 Metals domain migration and persisted models", () => {
     expect(schema).toContain("acquisition_action_id");
     expect(source(migrationPath)).toContain("acquisition_metal");
     expect(source(migrationPath)).toContain("acquisition_purchase_currency");
+    expect(schema).toMatch(/name:\s*"source",\s*type:\s*"string",\s*isOptional:\s*true/);
+    expect(source("packages/db/src/models/MetalRateReference.ts")).toContain(
+      "source!: string | null"
+    );
+    expect(source("packages/db/src/models/MarketRateObservation.ts")).toContain(
+      "source!: string | null"
+    );
+  });
+
+  it("keeps every exact decimal and bigint revision as text at the generated boundary", () => {
+    const types = source("packages/db/src/supabase-types.ts");
+
+    expect(types).toMatch(/market_rate_observations:[\s\S]*value_decimal:\s*string/);
+    expect(types).toMatch(/metal_rate_references:[\s\S]*value_decimal:\s*string/);
+    expect(types).toMatch(/metal_holding_states:[\s\S]*financial_revision:\s*string/);
+    expect(types).toMatch(
+      /metal_action_evidence:[\s\S]*canonical_holding_revision:\s*string\s*\|\s*null/
+    );
+    expect(types).toMatch(
+      /metal_action_evidence:[\s\S]*expected_holding_revision:\s*string\s*\|\s*null/
+    );
   });
 });

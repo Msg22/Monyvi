@@ -18,6 +18,7 @@ interface RecordedOperation {
   table: string;
   operation: "delete" | "select" | "upsert";
   column?: string;
+  selection?: string;
   value?: unknown;
   rows?: unknown;
 }
@@ -40,7 +41,7 @@ function createSeedClient(records: RecordedOperation[]): {
             },
           };
         },
-        select() {
+        select(selection = "*") {
           const filters: Array<{ column: string; value: unknown }> = [];
           const query = {
             eq(column: string, value: unknown) {
@@ -52,13 +53,23 @@ function createSeedClient(records: RecordedOperation[]): {
               return query;
             },
             maybeSingle() {
-              records.push({ table, operation: "select", ...filters[0] });
+              records.push({
+                table,
+                operation: "select",
+                selection,
+                ...filters[0],
+              });
               return Promise.resolve({ data: null, error: null });
             },
             then(
               resolveResult: (result: { data: unknown[]; error: null }) => void
             ) {
-              records.push({ table, operation: "select", ...filters[0] });
+              records.push({
+                table,
+                operation: "select",
+                selection,
+                ...filters[0],
+              });
               resolveResult({ data: [], error: null });
             },
           };
@@ -126,11 +137,13 @@ describe("Metals deterministic E2E fixture registry", () => {
     ).toMatchObject({
       updated_at: "2030-01-02T03:04:05.000Z",
     });
-    expect(
-      (rows.metalHoldingStates as Array<Record<string, unknown>>)[0]
-    ).toMatchObject({
+    const holdingState = (
+      rows.metalHoldingStates as Array<Record<string, unknown>>
+    )[0];
+    expect(holdingState).toMatchObject({
       updated_at: "2030-01-02T03:04:05.000Z",
     });
+    expect(holdingState?.id).toBe(holdingState?.holding_id);
     expect(
       (rows.marketRateObservations as Array<Record<string, unknown>>)[0]
     ).toMatchObject({
@@ -228,10 +241,30 @@ describe("Metals deterministic E2E fixture registry", () => {
         expect.objectContaining({
           table: "metal_holding_states",
           operation: "select",
+          selection: expect.stringContaining(
+            "financial_revision:financial_revision::text"
+          ),
         }),
         expect.objectContaining({
           table: "market_rate_observations",
           operation: "select",
+          selection: expect.stringContaining(
+            "value_decimal:value_decimal::text"
+          ),
+        }),
+        expect.objectContaining({
+          table: "assets",
+          operation: "select",
+          selection: expect.stringContaining(
+            "purchase_price_decimal:purchase_price_decimal::text"
+          ),
+        }),
+        expect.objectContaining({
+          table: "asset_metals",
+          operation: "select",
+          selection: expect.stringContaining(
+            "weight_grams_decimal:weight_grams_decimal::text"
+          ),
         }),
       ])
     );

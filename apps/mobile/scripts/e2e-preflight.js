@@ -1,4 +1,5 @@
 const { existsSync } = require("node:fs");
+const { createHash } = require("node:crypto");
 const http = require("node:http");
 const https = require("node:https");
 const { delimiter, join } = require("node:path");
@@ -337,6 +338,24 @@ function buildIdDeleteStatement(table, ids) {
   return `delete from "${table}" where "id" in (${idList});`;
 }
 
+function buildDeterministicFixtureId(seedScope, namespace, label) {
+  const hex = createHash("sha256")
+    .update(`monyvi:${seedScope}:${namespace}:${label}`)
+    .digest("hex")
+    .slice(0, 32);
+  const chars = hex.split("");
+  chars[12] = "5";
+  chars[16] = ((Number.parseInt(chars[16], 16) & 0x3) | 0x8).toString(16);
+  const uuidHex = chars.join("");
+  return [
+    uuidHex.slice(0, 8),
+    uuidHex.slice(8, 12),
+    uuidHex.slice(12, 16),
+    uuidHex.slice(16, 20),
+    uuidHex.slice(20, 32),
+  ].join("-");
+}
+
 function buildMetalsLocalFixtureCleanupSql(userId) {
   if (typeof userId !== "string" || userId.trim().length === 0) {
     throw new Error(
@@ -347,10 +366,38 @@ function buildMetalsLocalFixtureCleanupSql(userId) {
   const fixtureIds = METALS_PROFILE_NAMES.map((profileName) =>
     buildSeedIds(userId, `e2e-${profileName}`)
   );
+  const metalsFixtureIds = METALS_PROFILE_NAMES.map((profileName) => {
+    const seedScope = `e2e-${profileName}`;
+    return {
+      asset: buildDeterministicFixtureId(seedScope, userId, "metals:holding"),
+      assetMetal: buildDeterministicFixtureId(
+        seedScope,
+        userId,
+        "metals:details"
+      ),
+      holdingState: buildDeterministicFixtureId(
+        seedScope,
+        userId,
+        "metals:holding-state"
+      ),
+    };
+  });
   const collectIds = (key) =>
     fixtureIds.flatMap((ids) => Object.values(ids[key]));
 
   return [
+    buildIdDeleteStatement(
+      "metal_holding_states",
+      metalsFixtureIds.map(({ holdingState }) => holdingState)
+    ),
+    buildIdDeleteStatement(
+      "asset_metals",
+      metalsFixtureIds.map(({ assetMetal }) => assetMetal)
+    ),
+    buildIdDeleteStatement(
+      "assets",
+      metalsFixtureIds.map(({ asset }) => asset)
+    ),
     buildIdDeleteStatement("transactions", collectIds("transactions")),
     buildIdDeleteStatement("transfers", collectIds("transfers")),
     buildIdDeleteStatement(
@@ -449,7 +496,7 @@ function waitForE2eMetalsObservation(
 
 function resolveE2eFixtureRuntimeSettings(env = process.env) {
   const profileName = env.E2E_FIXTURE_PROFILE ?? env.E2E_METALS_PROFILE;
-  if (!profileName) return null;
+  if (!profileName || !METALS_PROFILE_NAMES.includes(profileName)) return null;
 
   const fixture = getE2eFixture(profileName);
   const { locale, persistenceState, rateState, theme, textScale } = fixture;

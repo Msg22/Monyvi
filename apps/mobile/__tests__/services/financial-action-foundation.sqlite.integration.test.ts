@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { Database, Model } from "@nozbe/watermelondb";
 import type SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 import {
+  DEFAULT_FINANCIAL_ACTION_REGISTRY,
   hashFinancialActionEnvelope,
   type FinancialActionEnvelopeV1,
   type Sha256Provider,
@@ -166,6 +167,7 @@ function createRepository(
       }
       return Promise.resolve();
     },
+    registry: DEFAULT_FINANCIAL_ACTION_REGISTRY,
   });
 }
 

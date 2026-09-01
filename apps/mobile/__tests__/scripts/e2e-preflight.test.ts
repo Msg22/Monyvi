@@ -323,13 +323,41 @@ describe("e2e-preflight", () => {
     expect(seedTheme).not.toHaveBeenCalled();
   });
 
+  it("leaves shared non-Metals fixture profiles on the default preflight path", () => {
+    const env = { E2E_FIXTURE_PROFILE: "dashboard-full" };
+    expect(preflight.resolveE2eFixtureRuntimeSettings(env)).toBeNull();
+
+    const clearLocalState = jest.fn();
+    const forceStop = jest.fn();
+    const runAdb = jest.fn();
+    const seedTheme = jest.fn();
+    preflight.applyE2eFixtureRuntimeSettings(env, {
+      clearLocalState,
+      forceStop,
+      runAdb,
+      seedTheme,
+    });
+
+    expect(runAdb).toHaveBeenCalledWith([
+      "shell",
+      "settings",
+      "put",
+      "system",
+      "font_scale",
+      "1",
+    ]);
+    expect(forceStop).not.toHaveBeenCalled();
+    expect(clearLocalState).not.toHaveBeenCalled();
+    expect(seedTheme).not.toHaveBeenCalled();
+  });
+
   it("clears the pull-only observation cache before a Metals profile launch", () => {
     expect(preflight.buildMetalsLocalObservationCleanupSql()).toBe(
       'delete from "market_rate_observations" where "source" = \'e2e_fixture\';'
     );
   });
 
-  it("clears only deterministic Metals fixture accounts and dependent rows in FK-safe order", () => {
+  it("clears only deterministic Metals fixture holdings, accounts, and dependent rows in FK-safe order", () => {
     const userId = "11111111-1111-4111-8111-111111111111";
     const { buildSeedIds } = jest.requireActual(
       "../../scripts/seed-fixtures/seed-engine"
@@ -354,6 +382,21 @@ describe("e2e-preflight", () => {
     expect(sql).toContain(ids.bankDetails.nbe);
     expect(sql).toContain(ids.accounts.cash);
     expect(sql).not.toContain("user-account-that-must-survive");
+    const holdingStateDelete = sql.indexOf(
+      'delete from "metal_holding_states"'
+    );
+    const assetMetalDelete = sql.indexOf('delete from "asset_metals"');
+    const assetDelete = sql.indexOf('delete from "assets"');
+    expect(holdingStateDelete).toBeGreaterThanOrEqual(0);
+    expect(assetMetalDelete).toBeGreaterThan(holdingStateDelete);
+    expect(assetDelete).toBeGreaterThan(assetMetalDelete);
+    for (const table of ["metal_holding_states", "asset_metals", "assets"]) {
+      const statement = sql
+        .split("\n")
+        .find((line) => line.startsWith(`delete from "${table}"`));
+      expect(statement?.match(/[0-9a-f]{8}-[0-9a-f-]{27}/g)).toHaveLength(4);
+      expect(statement).toContain('where "id" in (');
+    }
     expect(sql.indexOf('delete from "transactions"')).toBeLessThan(
       sql.indexOf('delete from "accounts"')
     );

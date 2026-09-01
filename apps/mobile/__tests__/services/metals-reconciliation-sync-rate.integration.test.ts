@@ -1,4 +1,7 @@
-import { createMetalRateReferenceService } from "../../services/metal-rate-reference-service";
+import {
+  createMetalRateReferenceService,
+  type MetalRateReferenceCapture,
+} from "../../services/metal-rate-reference-service";
 
 jest.mock("@monyvi/db", (): unknown => {
   const schemaModule: unknown = jest.requireActual("../../../../packages/db/src/schema");
@@ -20,6 +23,10 @@ import { runMetalPushStrategy } from "../../services/sync/push-service";
 describe("Metals sync and rates", () => {
   it("keeps rate references immutable and validates the role/kind matrix", () => {
     const service = createMetalRateReferenceService();
+    const acquisitionGoldExpectation = {
+      role: "acquisition_metal",
+      instrumentCode: "metal:GOLD",
+    } as const;
     const reference = service.capture({
       id: "rate-1",
       role: "acquisition_metal",
@@ -33,12 +40,39 @@ describe("Metals sync and rates", () => {
       quality: "valid",
       capturedFreshness: "fresh",
       capturedAt: Date.parse("2026-08-31T10:01:00.000Z"),
-    });
+    }, acquisitionGoldExpectation);
     expect(Object.isFrozen(reference)).toBe(true);
-    const invalidReference = { ...reference, role: "acquisition_purchase_currency" };
-    expect(() => service.capture(invalidReference as never)).toThrow(
+    const invalidReference: unknown = {
+      ...reference,
+      role: "acquisition_purchase_currency",
+    };
+    expect(() =>
+      service.capture(invalidReference as MetalRateReferenceCapture, acquisitionGoldExpectation)
+    ).toThrow(
       "invalid_metal_rate_reference"
     );
+    const wrongMetalReference: unknown = {
+      ...reference,
+      role: "current_metal",
+      instrumentCode: "metal:SILVER",
+    };
+    expect(() =>
+      service.capture(
+        wrongMetalReference as MetalRateReferenceCapture,
+        acquisitionGoldExpectation
+      )
+    ).toThrow("invalid_metal_rate_reference");
+    const wrongRoleReference: unknown = {
+      ...reference,
+      role: "current_metal",
+      instrumentCode: "metal:GOLD",
+    };
+    expect(() =>
+      service.capture(
+        wrongRoleReference as MetalRateReferenceCapture,
+        acquisitionGoldExpectation
+      )
+    ).toThrow("invalid_metal_rate_reference");
   });
 
   it("dedicates action-owned tables and strips protected generic fragments", () => {
