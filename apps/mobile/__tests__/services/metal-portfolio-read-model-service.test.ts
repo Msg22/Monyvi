@@ -80,7 +80,7 @@ interface TestPortfolioHolding {
   readonly purchaseCurrency: MetalsIsoCurrencyCode | null;
   readonly purchaseDate: Date | null;
   readonly purchasePriceDecimal: string | null;
-  readonly purityCatalogVersion: string | null;
+  readonly purityCatalogVersion: "1" | null;
   readonly purityCode: string | null;
   readonly purityFactorDecimal: string | null;
   readonly weightGramsDecimal: string | null;
