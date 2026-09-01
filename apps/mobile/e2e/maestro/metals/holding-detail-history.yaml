@@ -1,0 +1,19 @@
+appId: com.monyvi.app
+---
+# Requires the deterministic Slice 6 holding fixture and a Metro-backed dev client.
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://metals/history
+- extendedWaitUntil:
+    visible:
+      id: metal-history-root
+    timeout: 30000
+- tapOn:
+    id: metal-history-filter-sold
+- assertVisible:
+    id: metal-history-root
+- tapOn:
+    id: metal-history-item-sold
+- assertVisible:
+    id: metal-holding-detail-root
+- assertVisible:
+    id: metal-holding-action-undo
