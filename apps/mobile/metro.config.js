@@ -1,8 +1,13 @@
 const { getSentryExpoConfig } = require("@sentry/react-native/metro");
 const { withNativeWind } = require("nativewind/metro");
+const fs = require("node:fs");
 const path = require("node:path");
 
 const projectRoot = __dirname;
+const workspaceNodeModules = path.resolve(projectRoot, "../..", "node_modules");
+const realWorkspaceNodeModules = fs.existsSync(workspaceNodeModules)
+  ? fs.realpathSync.native(workspaceNodeModules)
+  : workspaceNodeModules;
 const metroIgnoredPaths = [
   path.resolve(projectRoot, "android"),
   path.resolve(projectRoot, ".expo"),
@@ -27,6 +32,13 @@ function pathToBlockListPattern(filePath) {
 }
 
 const config = getSentryExpoConfig(projectRoot);
+
+config.watchFolders = config.watchFolders.map((folder) =>
+  folder === workspaceNodeModules ? realWorkspaceNodeModules : folder
+);
+config.resolver.nodeModulesPaths = config.resolver.nodeModulesPaths.map((folder) =>
+  folder === workspaceNodeModules ? realWorkspaceNodeModules : folder
+);
 
 config.resolver.blockList = [
   ...(Array.isArray(config.resolver.blockList)

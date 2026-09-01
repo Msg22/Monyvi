@@ -23,9 +23,18 @@ function readWorkspaceOptOut(): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-function loadMetroConfig(): MetroConfigShape {
+function loadMetroConfig(
+  realNodeModulesRoot: string = workspaceNodeModules,
+  hasWorkspaceNodeModules: boolean = true
+): MetroConfigShape {
   jest.resetModules();
 
+  jest.doMock("node:fs", () => ({
+    existsSync: jest.fn(() => hasWorkspaceNodeModules),
+    realpathSync: {
+      native: jest.fn(() => realNodeModulesRoot),
+    },
+  }));
   jest.doMock("@sentry/react-native/metro", () => ({
     getSentryExpoConfig: jest.fn(() => ({
       watchFolders: [
@@ -81,6 +90,32 @@ describe("metro config", () => {
       path.resolve(projectRoot, "node_modules"),
       workspaceNodeModules,
     ]);
+  });
+
+  it("uses node_modules realpath when a secondary worktree links dependencies", () => {
+    const mainNodeModules = path.resolve(
+      workspaceRoot,
+      "../Monyvi/node_modules"
+    );
+    const config = loadMetroConfig(mainNodeModules);
+
+    expect(config.watchFolders).toEqual([
+      mainNodeModules,
+      projectRoot,
+      packageLogicRoot,
+      packageDbRoot,
+    ]);
+    expect(config.resolver.nodeModulesPaths).toEqual([
+      path.resolve(projectRoot, "node_modules"),
+      mainNodeModules,
+    ]);
+  });
+
+  it("keeps Sentry paths when node_modules is unavailable", () => {
+    const config = loadMetroConfig(workspaceNodeModules, false);
+
+    expect(config.watchFolders).toContain(workspaceNodeModules);
+    expect(config.resolver.nodeModulesPaths).toContain(workspaceNodeModules);
   });
 
   it("does not add the whole workspace root as an extra Metro crawl root", () => {
