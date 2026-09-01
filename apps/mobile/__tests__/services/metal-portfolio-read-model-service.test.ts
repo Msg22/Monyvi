@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 const mockAssetsCollection = { table: "assets" };
 const mockHoldingStatesCollection = { table: "metal_holding_states" };
 const mockLifecycleEventsCollection = { table: "metal_lifecycle_events" };
@@ -53,8 +56,10 @@ import {
   observePortfolioRecentHistory,
   selectPortfolioHoldings,
   shapeMetalPortfolioHoldings,
+  type MetalPortfolioAssetMetalSnapshot,
   type ShapeMetalPortfolioHoldingsInput,
 } from "@/services/metal-portfolio-read-model-service";
+import type { Asset, AssetMetal } from "@monyvi/db";
 import type { LiveRatesTrustReadModel } from "@/services/live-rates-trust-read-model-service";
 
 interface TestPortfolioHolding {
@@ -436,6 +441,72 @@ describe("metal portfolio read model", () => {
       currentValueDecimal: "25000",
       currentPerformanceDecimal: null,
     });
+  });
+
+  it("accepts persisted optional form and rejects unsupported purchase currency", () => {
+    const input = shapeInput();
+    const persistedAsset: Pick<
+      Asset,
+      | "createdAt"
+      | "id"
+      | "name"
+      | "purchaseCurrency"
+      | "purchaseDate"
+      | "purchasePriceDecimal"
+      | "userId"
+    > = {
+      ...input.assets[0],
+      purchaseCurrency: "BTC",
+    };
+    const persistedMetal: Pick<
+      AssetMetal,
+      | "assetId"
+      | "deleted"
+      | "itemForm"
+      | "metalType"
+      | "purityCatalogVersion"
+      | "purityCode"
+      | "purityFactorDecimal"
+      | "weightGramsDecimal"
+    > = {
+      assetId: "holding-1",
+      deleted: false,
+      metalType: "GOLD",
+      purityCatalogVersion: "1",
+      purityCode: "gold-500",
+      purityFactorDecimal: "0.5",
+      weightGramsDecimal: "10",
+    };
+    const snapshot: MetalPortfolioAssetMetalSnapshot = persistedMetal;
+
+    const [holding] = shapeMetalPortfolioHoldings({
+      ...input,
+      assets: [persistedAsset],
+      assetMetals: [snapshot],
+    });
+
+    expect(holding).toMatchObject({
+      physicalForm: null,
+      purchaseCurrency: null,
+      purchasePriceDecimal: null,
+      currentValueDecimal: "25000",
+      currentPerformanceDecimal: null,
+    });
+  });
+
+  it("declares persisted optional fields at the raw snapshot boundary", () => {
+    const serviceSource = readFileSync(
+      resolve(
+        __dirname,
+        "../../services/metal-portfolio-read-model-service.ts"
+      ),
+      "utf8"
+    );
+
+    expect(serviceSource).toContain("readonly itemForm?: string;");
+    expect(serviceSource).toContain(
+      "readonly purchaseCurrency: string | null;"
+    );
   });
 
   it("converts purchase cost exactly before calculating cross-currency performance", () => {
