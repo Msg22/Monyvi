@@ -14,7 +14,12 @@ function observation(
   return {
     instrumentCode,
     valueDecimal: "100.25",
+    unit: instrumentCode.startsWith("metal:")
+      ? "usd_per_pure_gram"
+      : "usd_per_currency_unit",
+    orientation: "quote_per_base",
     quality: "valid",
+    source: "test-provider",
     providerObservedAt: new Date(NOW_MS - 1_000),
     createdAt: new Date(NOW_MS),
     ...overrides,
@@ -39,6 +44,7 @@ describe("live-rates trust read model", () => {
     );
 
     expect(readModel.gold.state).toBe("fresh");
+    expect(readModel.gold.valueDecimal).toBe("100.25");
     expect(readModel.silver.state).toBe("stale");
     expect(readModel.currencies.get("EGP")?.state).toBe("unknown");
   });
@@ -87,8 +93,33 @@ describe("live-rates trust read model", () => {
     );
 
     expect(readModel.gold.state).toBe("missing");
+    expect(readModel.gold.valueDecimal).toBeNull();
     expect(readModel.silver.state).toBe("invalid");
+    expect(readModel.silver.valueDecimal).toBeNull();
     expect(readModel.currencies.get("EGP")?.state).toBe("fresh");
+  });
+
+  it("exposes only validated normalized exact values for portfolio valuation", () => {
+    const readModel = buildLiveRatesTrustReadModel(
+      [
+        observation("currency:EGP", {
+          valueDecimal: "50",
+          unit: "currency_units_per_usd",
+          orientation: "base_per_quote",
+        }),
+        observation("metal:GOLD", { valueDecimal: "01" }),
+      ],
+      NOW_MS
+    );
+
+    expect(readModel.currencies.get("EGP")).toMatchObject({
+      state: "fresh",
+      valueDecimal: "0.02",
+    });
+    expect(readModel.gold).toMatchObject({
+      state: "invalid",
+      valueDecimal: null,
+    });
   });
 
   it("marks an empty summary missing until local observations arrive", () => {

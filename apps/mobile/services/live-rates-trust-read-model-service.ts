@@ -3,6 +3,10 @@ import {
   SUPPORTED_CURRENCIES,
   classifyRateTrust,
   isSupportedMetalsIsoCurrencyCode,
+  validateAndNormalizeRateReference,
+  type CurrencyInstrumentCode,
+  type MetalInstrumentCode,
+  type RateReferenceExpectation,
   type RateTrustResult,
 } from "@monyvi/logic";
 import { Q, type Database } from "@nozbe/watermelondb";
@@ -21,6 +25,9 @@ const V1_RATE_INSTRUMENT_CODES = [
 
 export interface LiveRatesTrustObservation {
   readonly instrumentCode: string;
+  readonly orientation: string;
+  readonly source: string | null;
+  readonly unit: string;
   readonly valueDecimal: string | null;
   readonly quality: string;
   readonly providerObservedAt: Date | null;
@@ -39,6 +46,7 @@ export interface LiveRatesTrustValue {
   readonly state: LiveRatesTrustState;
   readonly ageMs: number | null;
   readonly providerObservedAt: Date | null;
+  readonly valueDecimal?: string | null;
 }
 
 const TRUST_SEVERITY: Readonly<Record<LiveRatesTrustState, number>> = {
@@ -176,24 +184,28 @@ function classifyObservationTrust(
   nowMs: number
 ): LiveRatesTrustValue {
   if (!observation) {
-    return { state: "missing", ageMs: null, providerObservedAt: null };
+    return {
+      state: "missing",
+      ageMs: null,
+      providerObservedAt: null,
+      valueDecimal: null,
+    };
   }
 
-  if (
-    observation.quality !== "valid" ||
-    hasInvalidRateValue(observation.valueDecimal)
-  ) {
+  const normalizedValueDecimal = normalizeObservationValue(observation);
+  if (normalizedValueDecimal === null) {
     return {
       state: "invalid",
       ageMs: null,
       providerObservedAt: observation.providerObservedAt,
+      valueDecimal: null,
     };
   }
 
   const result = classifyRateTrust(
     {
-      valueDecimal: observation.valueDecimal,
-      quality: observation.quality === "valid" ? "valid" : "invalid",
+      valueDecimal: normalizedValueDecimal,
+      quality: "valid",
       providerObservedAt: observation.providerObservedAt?.getTime() ?? null,
       capturedAt: observation.createdAt.getTime(),
     },
@@ -203,14 +215,59 @@ function classifyObservationTrust(
   return {
     ...result,
     providerObservedAt: observation.providerObservedAt,
+    valueDecimal: normalizedValueDecimal,
   };
 }
 
-function hasInvalidRateValue(valueDecimal: string | null): boolean {
-  if (valueDecimal === null) {
-    return false;
+function normalizeObservationValue(
+  observation: LiveRatesTrustObservation
+): string | null {
+  const expectation = getRateExpectation(observation.instrumentCode);
+  if (expectation === null) {
+    return null;
   }
 
-  const value = Number(valueDecimal);
-  return !Number.isFinite(value) || value <= 0;
+  const kind = observation.instrumentCode.startsWith("metal:")
+    ? "metal"
+    : "currency";
+  const normalized = validateAndNormalizeRateReference(
+    {
+      capturedAt: observation.createdAt.getTime(),
+      instrumentCode: observation.instrumentCode,
+      kind,
+      orientation: observation.orientation,
+      providerObservedAt: observation.providerObservedAt?.getTime() ?? null,
+      quality: observation.quality,
+      role: expectation.role,
+      source: observation.source,
+      unit: observation.unit,
+      valueDecimal: observation.valueDecimal,
+    },
+    expectation
+  );
+
+  return normalized.available
+    ? normalized.value.normalizedUsdPerBaseDecimal
+    : null;
+}
+
+function getRateExpectation(
+  instrumentCode: string
+): RateReferenceExpectation | null {
+  if (instrumentCode === "metal:GOLD" || instrumentCode === "metal:SILVER") {
+    return {
+      instrumentCode: instrumentCode as MetalInstrumentCode,
+      role: "current_metal",
+    };
+  }
+  if (
+    instrumentCode.startsWith("currency:") &&
+    isSupportedMetalsIsoCurrencyCode(instrumentCode.slice("currency:".length))
+  ) {
+    return {
+      instrumentCode: instrumentCode as CurrencyInstrumentCode,
+      role: "display_preferred_currency",
+    };
+  }
+  return null;
 }
