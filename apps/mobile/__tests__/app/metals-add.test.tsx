@@ -250,8 +250,8 @@ describe("Add metal holding form", () => {
       34
     );
     expect(screen.getByTestId("metal-holding-name-field")).toHaveProp(
-      "accessibilityState",
-      expect.objectContaining({ invalid: true })
+      "aria-invalid",
+      true
     );
     expect(screen.getByTestId("metal-holding-name-field")).toHaveProp(
       "autoFocus",

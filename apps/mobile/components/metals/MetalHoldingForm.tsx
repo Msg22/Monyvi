@@ -230,9 +230,6 @@ export function MetalHoldingForm({
     fieldOrder: FIELD_ORDER,
     writingDirection: isRtl ? "rtl" : "ltr",
   };
-  const nameAccessibilityState = {
-    invalid: Boolean(validationErrors.name),
-  };
   const submitAreaMetadata: { readonly bottomInset: number } = { bottomInset };
 
   return (
@@ -269,7 +266,7 @@ export function MetalHoldingForm({
             onChangeText={(value) => onChange("name", value)}
             error={validationErrors.name}
             autoFocus={firstError === "metal-holding-name-field"}
-            accessibilityState={nameAccessibilityState}
+            aria-invalid={Boolean(validationErrors.name)}
             maxLength={100}
           />
 
