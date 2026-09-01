@@ -6,6 +6,7 @@ import {
   type RateReferenceExpectation,
 } from "../rate-reference";
 import { SUPPORTED_CURRENCIES } from "../../utils/currency-data";
+import { classifyRateTrust } from "../rate-trust";
 
 type AssertFalse<Value extends false> = Value;
 
@@ -199,6 +200,33 @@ describe("approved Metals rate-reference contract", () => {
     });
     if (result.available) {
       expect(Object.isFrozen(result.value)).toBe(true);
+    }
+  });
+
+  it("keeps immutable historical provenance separate from a later current freshness decision", () => {
+    const capturedAt = 1_800_000_000_000;
+    const result = validateAndNormalizeRateReference(
+      reference({
+        providerObservedAt: capturedAt - 1_000,
+        capturedAt,
+        source: "provider-a",
+      }),
+      CURRENT_EGP
+    );
+
+    expect(result).toMatchObject({
+      available: true,
+      value: {
+        providerObservedAt: capturedAt - 1_000,
+        capturedFreshness: "fresh",
+        source: "provider-a",
+      },
+    });
+    if (result.available) {
+      expect(classifyRateTrust(result.value, capturedAt + 86_400_001)).toEqual({
+        state: "stale",
+        ageMs: 86_401_001,
+      });
     }
   });
 });
