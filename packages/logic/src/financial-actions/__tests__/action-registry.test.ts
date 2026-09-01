@@ -24,20 +24,25 @@ const syntheticDefinition: FinancialActionDefinition = {
 };
 
 describe("financial action definition registry", () => {
-  it("registers only the approved Metals Sell tuple by default", () => {
-    expect(DEFAULT_FINANCIAL_ACTION_REGISTRY.resolve(
-      "metals",
-      "sell",
-      "metals.sell/v1"
-    )).toMatchObject({
-      domain: "metals",
-      kind: "sell",
-      payloadVersion: "metals.sell/v1",
-    });
+  it("registers the six approved Metals action tuples by default", () => {
+    expect(
+      DEFAULT_FINANCIAL_ACTION_REGISTRY.definitions.map((definition) => [
+        definition.domain,
+        definition.kind,
+        definition.payloadVersion,
+      ])
+    ).toEqual([
+      ["metals", "add", "metals.add/v1"],
+      ["metals", "correct", "metals.correct/v1"],
+      ["metals", "sell", "metals.sell/v2"],
+      ["metals", "dispose", "metals.dispose/v1"],
+      ["metals", "delete", "metals.delete/v1"],
+      ["metals", "undo", "metals.undo/v1"],
+    ]);
     expect(() =>
       DEFAULT_FINANCIAL_ACTION_REGISTRY.resolve(
         "metals",
-        "dispose",
+        "sell",
         "metals.dispose/v1"
       )
     ).toThrow("financial_action_unknown_definition");
