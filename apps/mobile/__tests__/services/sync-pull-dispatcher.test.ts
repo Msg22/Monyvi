@@ -1,3 +1,5 @@
+import type { SyncPullResult } from "@nozbe/watermelondb/sync";
+
 const mockGetCurrentUserId = jest.fn();
 const mockFrom = jest.fn();
 const mockRpc = jest.fn();
@@ -62,6 +64,19 @@ import {
   pullMarketRates,
 } from "../../services/sync/pull-strategies";
 import { MARKET_RATE_VALUE_COLUMNS } from "@monyvi/logic";
+
+function expectCompletedPullResult(
+  value: SyncPullResult
+): asserts value is Extract<
+  SyncPullResult,
+  { readonly changes: unknown; readonly timestamp: number }
+> {
+  const isCompleted = "changes" in value && "timestamp" in value;
+  expect(isCompleted).toBe(true);
+  if (!isCompleted) {
+    throw new Error("Expected a completed pull result");
+  }
+}
 
 const VALID_MARKET_RATE = {
   ...Object.fromEntries(MARKET_RATE_VALUE_COLUMNS.map((column) => [column, 1])),
@@ -192,6 +207,7 @@ beforeEach(() => {
 describe("pullChanges", () => {
   it("dispatches each syncable table through its scoped pull strategy", async () => {
     const result = await pullChanges(Date.UTC(2026, 4, 18, 8), "current-user");
+    expectCompletedPullResult(result);
 
     expect(result.timestamp).toBe(Date.UTC(2026, 4, 18, 8, 5));
     expect(mockRpc).toHaveBeenCalledWith("pull_metal_observations_page_v1", {
