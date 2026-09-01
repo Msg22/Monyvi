@@ -19,6 +19,7 @@ interface MetalPortfolioScreenProps {
   readonly isLoading: boolean;
   readonly isOffline: boolean;
   readonly onFilterChange: (filter: MetalPortfolioFilter) => void;
+  readonly onHoldingPress: (holdingId: string) => void;
   readonly onRetry: () => void;
   readonly portfolio: MetalPortfolioReadModel | null;
   readonly selectedFilter: MetalPortfolioFilter;
@@ -33,6 +34,7 @@ export function MetalPortfolioScreen({
   isLoading,
   isOffline,
   onFilterChange,
+  onHoldingPress,
   onRetry,
   portfolio,
   selectedFilter,
@@ -81,6 +83,7 @@ export function MetalPortfolioScreen({
       <PortfolioContent
         bottomInset={bottomInset}
         currency={currency}
+        onHoldingPress={onHoldingPress}
         portfolio={portfolio}
         selectedFilter={selectedFilter}
         t={t}
@@ -239,12 +242,14 @@ function RateStatus({
 function PortfolioContent({
   bottomInset,
   currency,
+  onHoldingPress,
   portfolio,
   selectedFilter,
   t,
 }: {
   readonly bottomInset: number;
   readonly currency: CurrencyType;
+  readonly onHoldingPress: (holdingId: string) => void;
   readonly portfolio: MetalPortfolioReadModel;
   readonly selectedFilter: MetalPortfolioFilter;
   readonly t: (key: string, values?: Record<string, string>) => string;
@@ -279,7 +284,11 @@ function PortfolioContent({
       data={portfolio.holdings}
       keyExtractor={(holding): string => holding.id}
       renderItem={({ item }): React.JSX.Element => (
-        <MetalHoldingRow currency={currency} holding={item} />
+        <MetalHoldingRow
+          currency={currency}
+          holding={item}
+          onPress={onHoldingPress}
+        />
       )}
       contentContainerClassName="px-5 py-5"
       contentContainerStyle={{ paddingBottom: bottomInset + 24 }}
@@ -324,9 +333,11 @@ function RecentHistory({
 function MetalHoldingRow({
   currency,
   holding,
+  onPress,
 }: {
   readonly currency: CurrencyType;
   readonly holding: MetalPortfolioHoldingInput;
+  readonly onPress: (holdingId: string) => void;
 }): React.JSX.Element {
   const { t } = useTranslation("metals");
   const presentation = getMetalHoldingPresentation(holding);
@@ -347,7 +358,11 @@ function MetalHoldingRow({
           });
 
   return (
-    <View
+    <Pressable
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={holding.name}
+      onPress={(): void => onPress(holding.id)}
       testID={`metal-portfolio-holding-${holding.id}`}
       className="mb-3 flex-row flex-wrap items-center rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800"
     >
@@ -411,7 +426,7 @@ function MetalHoldingRow({
           </Text>
         )}
       </View>
-    </View>
+    </Pressable>
   );
 }
 

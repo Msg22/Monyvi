@@ -182,6 +182,7 @@ function renderPortfolio(
       isLoading={false}
       isOffline={false}
       error={null}
+      onHoldingPress={jest.fn()}
       portfolio={{ ...portfolio, holdings: portfolio.activeHoldings }}
       selectedFilter="ALL"
       onFilterChange={jest.fn()}
@@ -266,6 +267,15 @@ describe("US1 portfolio surfaces", () => {
 
     fireEvent.press(screen.getByTestId("metal-portfolio-filter-GOLD"));
     expect(onFilterChange).toHaveBeenCalledWith("GOLD");
+  });
+
+  it("opens the selected holding detail from My Metals", () => {
+    const onHoldingPress = jest.fn();
+    renderPortfolio({ onHoldingPress });
+
+    fireEvent.press(screen.getByTestId("metal-portfolio-holding-gold-coin"));
+
+    expect(onHoldingPress).toHaveBeenCalledWith("gold-coin");
   });
 
   it("omits purchase date, retains recorded facts, and speaks unavailable value truthfully", () => {

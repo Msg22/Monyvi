@@ -1,4 +1,5 @@
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import { View } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -11,6 +12,7 @@ import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 
 export default function MyMetalsRoute(): React.JSX.Element {
   const { t } = useTranslation("metals");
+  const router = useRouter();
   const tabBarHeight = useBottomTabBarHeight();
   const { preferredCurrency } = usePreferredCurrency();
   const {
@@ -30,6 +32,12 @@ export default function MyMetalsRoute(): React.JSX.Element {
   const closeAddHolding = useCallback((): void => {
     setIsAddHoldingVisible(false);
   }, []);
+  const openHoldingDetail = useCallback(
+    (holdingId: string): void => {
+      router.push({ pathname: "/metals/[id]", params: { id: holdingId } });
+    },
+    [router]
+  );
 
   return (
     <View className="flex-1 bg-slate-50 dark:bg-slate-950">
@@ -44,6 +52,7 @@ export default function MyMetalsRoute(): React.JSX.Element {
         isLoading={isLoading}
         isOffline={isOffline}
         onFilterChange={onFilterChange}
+        onHoldingPress={openHoldingDetail}
         onRetry={refresh}
         portfolio={portfolio}
         selectedFilter={selectedFilter}
