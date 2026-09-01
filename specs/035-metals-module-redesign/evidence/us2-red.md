@@ -1,7 +1,7 @@
 # US2 Red Evidence
 
-Base: `4992ec5bdba3b941eba5939ad4297f4773af85b3` Date: 2026-09-01 Scope: T075,
-T076, and T078. T077, T079, and T080 remain open.
+Base: `9c08cef4261cea417c76694c716257e250969498` Date: 2026-09-01 Scope:
+T075–T078. T079 and T080 remain open.
 
 ## T075 traceability and manual plan
 
@@ -73,6 +73,24 @@ Declared UI contract categories blocked by those boundaries:
 - safe-area CTA, first validation-error focus, dirty-exit request, and a
   pending-submission double-tap lock.
 
+## T077 intended Red command
+
+```text
+node node_modules/jest/bin/jest.js --config apps/mobile/jest.config.js --runInBand --testPathPattern='add-metal-holding-command-service.integration.test.ts' --no-coverage --watchman=false
+```
+
+Result: 1 failed suite, 5 failed tests, in 11.298 seconds.
+
+```text
+Cannot find module '../../services/add-metal-holding-command-service'
+```
+
+All five cases reached the missing scoped Add command boundary after the real
+schema-v27 SQLite adapter initialized successfully. They cover one complete
+exact linked action group, stable replay and payload-mismatch rejection, all-row
+rollback, current-owner enforcement, fresh-database restart, and valid Add
+without rate references while retaining a `sync_pending` holding state.
+
 ## T079 authored but unexecuted
 
 `e2e/maestro/metals/add-holding.yaml` defines runner-controlled Gold, Silver,
@@ -83,8 +101,6 @@ reach a meaningful Maestro failure or success state.
 
 ## Remaining gate status
 
-- T077 command-service/SQLite Red remains outside this lane. T079 stays
-  unexecuted and unchecked until runner fixture wiring and the route exist.
-- T080 remains unchecked because it requires all T076–T079 Red artifacts and
-  their combined evidence. This file records T076 only and must not be read as
-  completion of T080.
+- T079 stays unexecuted and unchecked until runner fixture wiring and the route
+  exist. T080 remains unchecked because it requires all T076–T079 Red artifacts
+  and their combined evidence.
