@@ -5,7 +5,9 @@
 This is a blocking decision inventory, not an approved payload registry. The
 current Feature 035 authorities require six exact, immutable action schemas but
 do not define their complete field sets. No implementation may infer the missing
-fields below.
+fields below. The production Metals registry is therefore intentionally empty,
+and every attempted Metals action fails closed with
+`metal_action_schema_not_approved`.
 
 ## Grounded common contract
 
