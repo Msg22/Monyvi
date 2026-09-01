@@ -1,23 +1,74 @@
 const FIXED_NOW = "2026-08-31T10:15:30.123Z";
 const STALE_RATE_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+const STALE_BOUNDARY_AGE_MS = 24 * 60 * 60 * 1000 + 1;
+const RATE_OBSERVATIONS = Object.freeze([
+  Object.freeze({
+    instrumentCode: "metal:GOLD",
+    label: "gold",
+    orientation: "quote_per_base",
+    unit: "usd_per_pure_gram",
+    valueDecimal: "75.25",
+  }),
+  Object.freeze({
+    instrumentCode: "metal:SILVER",
+    label: "silver",
+    orientation: "quote_per_base",
+    unit: "usd_per_pure_gram",
+    valueDecimal: "0.95",
+  }),
+  Object.freeze({
+    instrumentCode: "currency:EGP",
+    label: "display-egp",
+    orientation: "quote_per_base",
+    unit: "usd_per_currency_unit",
+    valueDecimal: "0.02",
+  }),
+]);
 const METALS_PROFILE_NAMES = Object.freeze([
   "metals-fresh-local-en-light",
   "metals-stale-restart-ar-dark",
+  "metals-stale-boundary-local-en-light",
   "metals-unknown-conflict-en-dark",
+  "metals-offline-cached-local-en-light",
+  "metals-refresh-failure-cached-local-en-light",
   "metals-missing-local-ar-light",
+  "metals-invalid-local-en-light",
 ]);
 
 function buildMetalsCleanupRows() {
   return ({ deterministicUuid, userId }) => ({
-    marketRateObservations: METALS_PROFILE_NAMES.map((name) => ({
-      id: deterministicUuid(`e2e-${name}`, userId, "metals:rate"),
+    marketRates: METALS_PROFILE_NAMES.map((name) => ({
+      id: deterministicUuid(`e2e-${name}`, userId, "metals:market-rate"),
     })),
+    marketRateObservations: METALS_PROFILE_NAMES.flatMap((name) =>
+      RATE_OBSERVATIONS.map(({ label }) => ({
+        id: deterministicUuid(`e2e-${name}`, userId, `metals:rate:${label}`),
+      }))
+    ),
   });
 }
 
 function buildMetalsRows(scenario) {
-  return ({ currentTimestamp, deterministicUuid, seedScope, userId }) => {
+  return ({
+    currentTimestamp,
+    deterministicUuid,
+    marketRateTemplate,
+    seedScope,
+    userId,
+  }) => {
     const holdingId = deterministicUuid(seedScope, userId, "metals:holding");
+    const providerObservedAt =
+      scenario.rateState === "unknown"
+        ? null
+        : scenario.rateState === "stale"
+          ? new Date(
+              Date.parse(currentTimestamp) -
+                (scenario.isStaleBoundary
+                  ? STALE_BOUNDARY_AGE_MS
+                  : STALE_RATE_AGE_MS)
+            ).toISOString()
+          : currentTimestamp;
+    const isMissing = scenario.rateState === "missing";
     return {
       assets: [
         {
@@ -74,34 +125,38 @@ function buildMetalsRows(scenario) {
           updated_at: currentTimestamp,
         },
       ],
-      marketRateObservations:
-        scenario.rateState === "missing"
-          ? []
-          : [
-              {
-                id: deterministicUuid(seedScope, userId, "metals:rate"),
-                batch_id: deterministicUuid(
-                  seedScope,
-                  userId,
-                  "metals:rate-batch"
-                ),
-                instrument_code: "metal:GOLD",
-                value_decimal: "75.25",
-                unit: "usd_per_pure_gram",
-                orientation: "quote_per_base",
-                provider_observed_at:
-                  scenario.rateState === "stale"
-                    ? new Date(
-                        Date.parse(currentTimestamp) - STALE_RATE_AGE_MS
-                      ).toISOString()
-                    : scenario.rateState === "unknown"
-                      ? null
-                      : currentTimestamp,
-                source: "e2e_fixture",
-                quality: "valid",
-                created_at: currentTimestamp,
-              },
-            ],
+      marketRates: isMissing
+        ? []
+        : [
+            {
+              ...marketRateTemplate,
+              id: deterministicUuid(seedScope, userId, "metals:market-rate"),
+              gold_usd_per_gram: 75.25,
+              timestamp_currency: providerObservedAt,
+              timestamp_metal: providerObservedAt,
+            },
+          ],
+      marketRateObservations: isMissing
+        ? []
+        : RATE_OBSERVATIONS.map((rate) => ({
+            id: deterministicUuid(
+              seedScope,
+              userId,
+              `metals:rate:${rate.label}`
+            ),
+            batch_id: deterministicUuid(seedScope, userId, "metals:rate-batch"),
+            instrument_code: rate.instrumentCode,
+            value_decimal: rate.valueDecimal,
+            unit: rate.unit,
+            orientation: rate.orientation,
+            provider_observed_at: providerObservedAt,
+            source: "e2e_fixture",
+            quality:
+              scenario.rateState === "invalid" && rate.label === "gold"
+                ? "invalid"
+                : "valid",
+            created_at: currentTimestamp,
+          })),
     };
   };
 }
@@ -116,6 +171,11 @@ function createMetalsProfile(name, scenario) {
     theme: scenario.theme,
     textScale: scenario.textScale,
     rateState: scenario.rateState,
+    cacheState:
+      scenario.cacheState ??
+      (scenario.rateState === "missing" ? "empty" : "seeded"),
+    connectivityState: scenario.connectivityState ?? "online",
+    refreshFailureMode: scenario.refreshFailureMode ?? null,
     persistenceState: scenario.persistenceState,
     accountEligibility: scenario.accountEligibility,
     baseAccountCurrency:
@@ -149,6 +209,18 @@ const METALS_E2E_FIXTURES = Object.freeze({
       accountEligibility: "eligible",
     }
   ),
+  "metals-stale-boundary-local-en-light": createMetalsProfile(
+    "metals-stale-boundary-local-en-light",
+    {
+      locale: "en",
+      theme: "light",
+      textScale: 1,
+      rateState: "stale",
+      isStaleBoundary: true,
+      persistenceState: "local",
+      accountEligibility: "eligible",
+    }
+  ),
   "metals-unknown-conflict-en-dark": createMetalsProfile(
     "metals-unknown-conflict-en-dark",
     {
@@ -160,6 +232,32 @@ const METALS_E2E_FIXTURES = Object.freeze({
       accountEligibility: "eligible",
     }
   ),
+  "metals-offline-cached-local-en-light": createMetalsProfile(
+    "metals-offline-cached-local-en-light",
+    {
+      locale: "en",
+      theme: "light",
+      textScale: 1,
+      rateState: "fresh",
+      persistenceState: "local",
+      accountEligibility: "eligible",
+      cacheState: "seeded",
+      connectivityState: "offline_after_cache",
+    }
+  ),
+  "metals-refresh-failure-cached-local-en-light": createMetalsProfile(
+    "metals-refresh-failure-cached-local-en-light",
+    {
+      locale: "en",
+      theme: "light",
+      textScale: 1,
+      rateState: "fresh",
+      persistenceState: "local",
+      accountEligibility: "eligible",
+      cacheState: "seeded",
+      refreshFailureMode: "once",
+    }
+  ),
   "metals-missing-local-ar-light": createMetalsProfile(
     "metals-missing-local-ar-light",
     {
@@ -169,6 +267,17 @@ const METALS_E2E_FIXTURES = Object.freeze({
       rateState: "missing",
       persistenceState: "local",
       accountEligibility: "ineligible",
+    }
+  ),
+  "metals-invalid-local-en-light": createMetalsProfile(
+    "metals-invalid-local-en-light",
+    {
+      locale: "en",
+      theme: "light",
+      textScale: 1,
+      rateState: "invalid",
+      persistenceState: "local",
+      accountEligibility: "eligible",
     }
   ),
 });

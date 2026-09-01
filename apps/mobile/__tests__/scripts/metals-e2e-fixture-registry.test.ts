@@ -105,6 +105,18 @@ describe("Metals deterministic E2E fixture registry", () => {
     expect(serialized).toContain("reset");
     expect(serialized).toContain("inspect");
 
+    for (const profileName of [
+      "metals-fresh-local-en-light",
+      "metals-stale-boundary-local-en-light",
+      "metals-unknown-conflict-en-dark",
+      "metals-offline-cached-local-en-light",
+      "metals-refresh-failure-cached-local-en-light",
+      "metals-missing-local-ar-light",
+      "metals-invalid-local-en-light",
+    ]) {
+      expect(METALS_E2E_FIXTURES).toHaveProperty(profileName);
+    }
+
     const fixture = METALS_E2E_FIXTURES["metals-fresh-local-en-light"];
     const buildExtraRows = fixture?.buildExtraRows;
     expect(typeof buildExtraRows).toBe("function");
@@ -115,6 +127,11 @@ describe("Metals deterministic E2E fixture registry", () => {
     )({
       currentTimestamp: "2030-01-02T03:04:05.000Z",
       deterministicUuid: (...parts: unknown[]) => parts.join(":"),
+      marketRateTemplate: {
+        egp_usd: 0.02,
+        gold_usd_per_gram: 75.25,
+        silver_usd_per_gram: 0.95,
+      },
       seedScope: "metals",
       userId: "user",
     });
@@ -150,8 +167,35 @@ describe("Metals deterministic E2E fixture registry", () => {
       created_at: "2030-01-02T03:04:05.000Z",
       provider_observed_at: "2030-01-02T03:04:05.000Z",
     });
+    expect(rows.marketRates).toEqual([
+      expect.objectContaining({
+        gold_usd_per_gram: 75.25,
+        silver_usd_per_gram: 0.95,
+        egp_usd: 0.02,
+        timestamp_currency: "2030-01-02T03:04:05.000Z",
+        timestamp_metal: "2030-01-02T03:04:05.000Z",
+      }),
+    ]);
+    expect(rows.marketRateObservations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          instrument_code: "metal:GOLD",
+          value_decimal: "75.25",
+        }),
+        expect.objectContaining({
+          instrument_code: "metal:SILVER",
+          value_decimal: "0.95",
+        }),
+        expect.objectContaining({
+          instrument_code: "currency:EGP",
+          value_decimal: "0.02",
+        }),
+      ])
+    );
+    expect(rows.marketRateObservations).toHaveLength(3);
 
-    const staleFixture = METALS_E2E_FIXTURES["metals-stale-restart-ar-dark"];
+    const staleFixture =
+      METALS_E2E_FIXTURES["metals-stale-boundary-local-en-light"];
     const staleRows = (
       staleFixture?.buildExtraRows as (
         input: Record<string, unknown>
@@ -159,6 +203,7 @@ describe("Metals deterministic E2E fixture registry", () => {
     )({
       currentTimestamp: "2030-01-02T03:04:05.000Z",
       deterministicUuid: (...parts: unknown[]) => parts.join(":"),
+      marketRateTemplate: {},
       seedScope: "metals",
       userId: "user",
     });
@@ -166,8 +211,37 @@ describe("Metals deterministic E2E fixture registry", () => {
       (staleRows.marketRateObservations as Array<Record<string, unknown>>)[0]
     ).toMatchObject({
       created_at: "2030-01-02T03:04:05.000Z",
-      provider_observed_at: "2029-12-30T03:04:05.000Z",
+      provider_observed_at: "2030-01-01T03:04:04.999Z",
     });
+
+    const invalidFixture = METALS_E2E_FIXTURES["metals-invalid-local-en-light"];
+    const invalidRows = (
+      invalidFixture?.buildExtraRows as (
+        input: Record<string, unknown>
+      ) => Record<string, unknown>
+    )({
+      currentTimestamp: "2030-01-02T03:04:05.000Z",
+      deterministicUuid: (...parts: unknown[]) => parts.join(":"),
+      marketRateTemplate: {},
+      seedScope: "metals-invalid",
+      userId: "user",
+    });
+    expect(invalidRows.marketRateObservations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          instrument_code: "metal:GOLD",
+          quality: "invalid",
+        }),
+        expect.objectContaining({
+          instrument_code: "metal:SILVER",
+          quality: "valid",
+        }),
+        expect.objectContaining({
+          instrument_code: "currency:EGP",
+          quality: "valid",
+        }),
+      ])
+    );
   });
 
   it("returns deterministic profiles and rejects unknown fixture names", () => {
@@ -222,6 +296,10 @@ describe("Metals deterministic E2E fixture registry", () => {
     expect(records).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          table: "market_rates",
+          operation: "upsert",
+        }),
+        expect.objectContaining({
           table: "metal_holding_states",
           operation: "upsert",
         }),
@@ -234,10 +312,15 @@ describe("Metals deterministic E2E fixture registry", () => {
 
     records.length = 0;
     const inspection = await inspectFixtureData(client, config, fixture);
+    expect(inspection.tables.market_rates.expected).toBe(1);
     expect(inspection.tables.metal_holding_states.expected).toBe(1);
-    expect(inspection.tables.market_rate_observations.expected).toBe(1);
+    expect(inspection.tables.market_rate_observations.expected).toBe(3);
     expect(records).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          table: "market_rates",
+          operation: "select",
+        }),
         expect.objectContaining({
           table: "metal_holding_states",
           operation: "select",
@@ -273,6 +356,11 @@ describe("Metals deterministic E2E fixture registry", () => {
     await resetFixtureData(client, config, fixture);
     expect(records).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          table: "market_rates",
+          operation: "delete",
+          column: "id",
+        }),
         expect.objectContaining({
           table: "metal_holding_states",
           operation: "delete",
@@ -396,7 +484,26 @@ describe("Metals deterministic E2E fixture registry", () => {
         record.operation === "delete"
     );
     expect(observationDelete).toMatchObject({ column: "id" });
-    expect(observationDelete?.value).toHaveLength(4);
+    expect(observationDelete?.value).toHaveLength(24);
+  });
+
+  it("exposes materialized cached/offline and one-shot refresh controls", () => {
+    const { METALS_E2E_FIXTURES } = jest.requireActual(fixtureModulePath) as {
+      METALS_E2E_FIXTURES: Record<string, Record<string, unknown>>;
+    };
+
+    expect(
+      METALS_E2E_FIXTURES["metals-offline-cached-local-en-light"]
+    ).toMatchObject({
+      cacheState: "seeded",
+      connectivityState: "offline_after_cache",
+    });
+    expect(
+      METALS_E2E_FIXTURES["metals-refresh-failure-cached-local-en-light"]
+    ).toMatchObject({
+      cacheState: "seeded",
+      refreshFailureMode: "once",
+    });
   });
 
   it("exposes Metals profile selection and inspect through the E2E runner", () => {
