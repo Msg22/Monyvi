@@ -1,0 +1,67 @@
+appId: com.monyvi.app
+---
+# T088 Red contract. Runner profiles must provide a single active Gold holding
+# with immutable persisted facts, plus offline and Arabic RTL variants.
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://metals/holding-e2e-gold/edit
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-edit-screen
+    timeout: 30000
+
+# Metadata only: no reason/review, direct local Save.
+- tapOn:
+    id: metal-holding-name-field
+- inputText: Corrected E2E Gold Coin
+- assertNotVisible:
+    id: metal-holding-correction-reason
+- assertNotVisible:
+    id: metal-holding-review-screen
+- tapOn:
+    id: metal-holding-submit
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-screen
+    timeout: 30000
+
+# Material correction: persisted/current cues, reason, only affected summary.
+- openLink: monyvi://metals/holding-e2e-gold/edit
+- tapOn:
+    id: metal-holding-weight-field
+- inputText: "11.125"
+- assertVisible:
+    id: metal-holding-weight-previous
+- assertVisible:
+    id: metal-holding-weight-current
+- assertVisible:
+    id: metal-holding-correction-reason
+- assertVisible:
+    id: metal-holding-what-will-change
+- tapOn:
+    id: metal-holding-correction-reason
+- inputText: Corrected scale reading
+- tapOn:
+    id: metal-holding-submit
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-screen
+    timeout: 30000
+
+# Reverted material delta restores ordinary direct-save state; offline cannot block it.
+- openLink: monyvi://metals/holding-e2e-gold/edit
+- tapOn:
+    id: metal-holding-physical-form-field
+- tapOn:
+    id: metal-holding-physical-form-option-BAR
+- assertVisible:
+    id: metal-holding-what-will-change
+- tapOn:
+    id: metal-holding-physical-form-field
+- tapOn:
+    id: metal-holding-physical-form-option-COIN
+- assertNotVisible:
+    id: metal-holding-correction-reason
+- assertNotVisible:
+    id: metal-holding-what-will-change
+- assertVisible:
+    id: metal-holding-local-first-status
