@@ -327,7 +327,7 @@ function buildE2eRuntimeStorageSql(theme) {
 }
 
 function buildMetalsLocalObservationCleanupSql() {
-  return `delete from "${metalsObservationTableName}";`;
+  return `delete from "${metalsObservationTableName}" where "source" = 'e2e_fixture';`;
 }
 
 function runE2eWatermelonSql(sql) {

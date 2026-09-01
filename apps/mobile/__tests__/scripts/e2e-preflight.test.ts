@@ -294,7 +294,7 @@ describe("e2e-preflight", () => {
 
   it("clears the pull-only observation cache before a Metals profile launch", () => {
     expect(preflight.buildMetalsLocalObservationCleanupSql()).toBe(
-      'delete from "market_rate_observations";'
+      'delete from "market_rate_observations" where "source" = \'e2e_fixture\';'
     );
   });
 
