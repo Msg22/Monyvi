@@ -18,20 +18,20 @@ import { buildWealthBreakdownReadModel } from "@/services/net-worth-read-model-s
 interface TestHolding {
   readonly id: string;
   readonly metalType: "GOLD" | "SILVER";
-  readonly status: "ACTIVE" | "SOLD" | "DISPOSED";
+  readonly status: "active" | "sold" | "disposed";
   readonly isEffective: boolean;
   readonly isVisible: boolean;
-  readonly currentValue: number | null;
+  readonly currentValueDecimal: string | null;
 }
 
 function buildHolding(overrides: Partial<TestHolding> = {}): TestHolding {
   return {
     id: "holding-gold",
     metalType: "GOLD",
-    status: "ACTIVE",
+    status: "active",
     isEffective: true,
     isVisible: true,
-    currentValue: 162317.87,
+    currentValueDecimal: "162317.87",
     ...overrides,
   };
 }
@@ -41,25 +41,33 @@ describe("net-worth metals contribution read model", () => {
     expect(
       buildWealthBreakdownReadModel({
         currency: "EGP" as CurrencyType,
-        accountsValue: 1062237.75,
+        accountsValueDecimal: "1062237.75",
         holdings: [
           buildHolding(),
           buildHolding({
             id: "holding-silver",
             metalType: "SILVER",
-            currentValue: 19108.3,
+            currentValueDecimal: "19108.30",
           }),
         ],
       })
     ).toEqual({
-      accounts: { amount: 1062237.75, shareOfNetWorth: 85.4 },
+      accounts: { amountDecimal: "1062237.75", shareOfNetWorth: "85.4" },
       metals: {
-        amount: 181426.17,
-        shareOfNetWorth: 14.6,
-        gold: { amount: 162317.87, shareOfMetals: 89.5, holdingCount: 1 },
-        silver: { amount: 19108.3, shareOfMetals: 10.5, holdingCount: 1 },
+        amountDecimal: "181426.17",
+        shareOfNetWorth: "14.6",
+        gold: {
+          amountDecimal: "162317.87",
+          shareOfMetals: "89.5",
+          holdingCount: 1,
+        },
+        silver: {
+          amountDecimal: "19108.3",
+          shareOfMetals: "10.5",
+          holdingCount: 1,
+        },
       },
-      totalNetWorth: 1243663.92,
+      totalNetWorthDecimal: "1243663.92",
     });
   });
 
@@ -67,28 +75,28 @@ describe("net-worth metals contribution read model", () => {
     expect(
       buildWealthBreakdownReadModel({
         currency: "EGP" as CurrencyType,
-        accountsValue: 1232237.75,
+        accountsValueDecimal: "1232237.75",
         holdings: [
-          buildHolding({ status: "SOLD", currentValue: 162317.87 }),
+          buildHolding({ status: "sold", currentValueDecimal: "162317.87" }),
           buildHolding({
             id: "disposed",
             metalType: "SILVER",
-            status: "DISPOSED",
-            currentValue: 19108.3,
+            status: "disposed",
+            currentValueDecimal: "19108.3",
           }),
           buildHolding({ id: "rejected", isEffective: false }),
           buildHolding({ id: "hidden", isVisible: false }),
         ],
       })
     ).toEqual({
-      accounts: { amount: 1232237.75, shareOfNetWorth: 100 },
+      accounts: { amountDecimal: "1232237.75", shareOfNetWorth: "100" },
       metals: {
-        amount: 0,
-        shareOfNetWorth: 0,
-        gold: { amount: 0, shareOfMetals: 0, holdingCount: 0 },
-        silver: { amount: 0, shareOfMetals: 0, holdingCount: 0 },
+        amountDecimal: "0",
+        shareOfNetWorth: "0",
+        gold: { amountDecimal: "0", shareOfMetals: "0", holdingCount: 0 },
+        silver: { amountDecimal: "0", shareOfMetals: "0", holdingCount: 0 },
       },
-      totalNetWorth: 1232237.75,
+      totalNetWorthDecimal: "1232237.75",
     });
   });
 
@@ -96,39 +104,44 @@ describe("net-worth metals contribution read model", () => {
     expect(
       buildWealthBreakdownReadModel({
         currency: "EGP" as CurrencyType,
-        accountsValue: 1062237.75,
+        accountsValueDecimal: "1062237.75",
         holdings: [
-          buildHolding({ currentValue: null }),
+          buildHolding({ currentValueDecimal: null }),
           buildHolding({
             id: "holding-silver",
             metalType: "SILVER",
-            currentValue: null,
+            currentValueDecimal: null,
           }),
         ],
       })
     ).toEqual({
-      accounts: { amount: 1062237.75, shareOfNetWorth: null },
+      accounts: { amountDecimal: "1062237.75", shareOfNetWorth: null },
       metals: {
-        amount: null,
+        amountDecimal: null,
         shareOfNetWorth: null,
-        gold: { amount: null, shareOfMetals: null, holdingCount: 1 },
-        silver: { amount: null, shareOfMetals: null, holdingCount: 1 },
+        gold: { amountDecimal: null, shareOfMetals: null, holdingCount: 1 },
+        silver: { amountDecimal: null, shareOfMetals: null, holdingCount: 1 },
       },
-      totalNetWorth: null,
+      totalNetWorthDecimal: null,
     });
   });
 
-  it("returns a detached snapshot so later holding mutations cannot alter rendered wealth facts", () => {
-    const holdings = [buildHolding()];
+  it("uses exact decimal arithmetic without retaining input references", () => {
+    const holdings = [buildHolding({ currentValueDecimal: "0.2" })];
     const model = buildWealthBreakdownReadModel({
       currency: "EGP" as CurrencyType,
-      accountsValue: 1000,
+      accountsValueDecimal: "0.1",
       holdings,
     });
 
-    (holdings[0] as { currentValue: number | null }).currentValue = 1;
+    expect(model.metals.amountDecimal).toBe("0.2");
+    expect(model.totalNetWorthDecimal).toBe("0.3");
+    expect(model.accounts.shareOfNetWorth).toBe("33.3");
 
-    expect(model.metals.amount).toBe(162317.87);
-    expect(model.totalNetWorth).toBe(163317.87);
+    (
+      holdings[0] as { currentValueDecimal: string | null }
+    ).currentValueDecimal = "1";
+
+    expect(model.metals.amountDecimal).toBe("0.2");
   });
 });
