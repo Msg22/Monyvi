@@ -129,7 +129,7 @@ function assertCreatedRowsOwned(
   }
 }
 
-async function prepareAddPlan(
+function prepareAddPlan(
   database: Database,
   input: AddMetalHoldingCommandInput,
   envelope: FinancialActionEnvelopeV1
@@ -277,7 +277,7 @@ async function prepareAddPlan(
       return Promise.resolve();
     },
   };
-  return plan;
+  return Promise.resolve(plan);
 }
 
 export function createAddMetalHoldingCommandService(

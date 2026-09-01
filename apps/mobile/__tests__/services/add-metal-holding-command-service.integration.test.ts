@@ -32,12 +32,14 @@ interface TestDatabaseModule {
 interface AddMetalHoldingCommandModule {
   readonly createAddMetalHoldingCommandService: (
     dependencies: AddMetalHoldingCommandDependencies
-  ) => {
-    readonly add: (input: AddMetalHoldingCommandInput) => Promise<{
-      readonly kind: "committed" | "replay";
-      readonly holdingId: string;
-    }>;
-  };
+  ) => AddMetalHoldingCommandService;
+}
+
+interface AddMetalHoldingCommandService {
+  readonly add: (input: AddMetalHoldingCommandInput) => Promise<{
+    readonly kind: "committed" | "replay";
+    readonly holdingId: string;
+  }>;
 }
 
 interface AddMetalHoldingCommandDependencies {
@@ -327,7 +329,7 @@ function userScope(): Promise<FinancialActionUserDataScope> {
   });
 }
 
-function createService(db: Database = database) {
+function createService(db: Database = database): AddMetalHoldingCommandService {
   const repository = createFinancialActionFoundationRepository({
     database: db,
     getCurrentUserDataScope: userScope,
