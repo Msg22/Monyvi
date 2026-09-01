@@ -38,6 +38,7 @@ jest.mock("@monyvi/db", () => ({
       assets: {},
       asset_metals: {},
       profiles: {},
+      sms_ai_negative_outcomes: {},
     },
   },
 }));
@@ -64,6 +65,7 @@ import {
   pullMarketRateObservations,
   pullMarketRates,
   pullMetalHoldingStates,
+  runMetalPullStrategy,
 } from "../../services/sync/pull-strategies";
 import { MARKET_RATE_VALUE_COLUMNS } from "@monyvi/logic";
 
@@ -163,6 +165,7 @@ beforeEach(() => {
                 purchase_currency: "EGP",
                 purchase_price_decimal_text: "100000.125",
                 acquisition_action_id: "action-1",
+                updated_at: "2099-01-01T00:00:00.000Z",
               },
             ],
             error: null,
@@ -225,6 +228,10 @@ describe("pullChanges", () => {
       "created_at",
       expect.any(String)
     );
+    expect(getFirstChain("market_rates").lte).toHaveBeenCalledWith(
+      "created_at",
+      "2026-05-18T08:05:00.000Z"
+    );
     expect(getFirstChain("market_rates").order).toHaveBeenCalledWith(
       "created_at",
       { ascending: false }
@@ -238,6 +245,10 @@ describe("pullChanges", () => {
       "created_at",
       "2026-05-18T08:00:00.000Z"
     );
+    expect(getFirstChain("daily_snapshot_balance").lte).toHaveBeenCalledWith(
+      "created_at",
+      "2026-05-18T08:05:00.000Z"
+    );
 
     expect(getFirstChain("categories").or).toHaveBeenCalledWith(
       "user_id.eq.current-user,user_id.is.null"
@@ -246,11 +257,13 @@ describe("pullChanges", () => {
       "updated_at",
       "2026-05-18T08:00:00.000Z"
     );
+    expect(getFirstChain("categories").lte).not.toHaveBeenCalled();
 
     expect(getFirstChain("assets").eq).toHaveBeenCalledWith(
       "user_id",
       "current-user"
     );
+    expect(getFirstChain("assets").lte).not.toHaveBeenCalled();
     expect(getFirstChain("asset_metals").in).toHaveBeenCalledWith("asset_id", [
       "asset-1",
     ]);
@@ -258,6 +271,7 @@ describe("pullChanges", () => {
       "updated_at",
       "2026-05-18T08:00:00.000Z"
     );
+    expect(getFirstChain("asset_metals").lte).not.toHaveBeenCalled();
 
     expect(getFirstChain("profiles").eq).toHaveBeenCalledWith(
       "user_id",
@@ -267,7 +281,13 @@ describe("pullChanges", () => {
       "updated_at",
       "2026-05-18T08:00:00.000Z"
     );
-    expect(getFirstChain("profiles").lte).toHaveBeenCalledWith(
+    expect(getFirstChain("profiles").lte).not.toHaveBeenCalled();
+
+    expect(getFirstChain("sms_ai_negative_outcomes").eq).toHaveBeenCalledWith(
+      "user_id",
+      "current-user"
+    );
+    expect(getFirstChain("sms_ai_negative_outcomes").lte).toHaveBeenCalledWith(
       "updated_at",
       "2026-05-18T08:05:00.000Z"
     );
@@ -298,6 +318,7 @@ describe("pullChanges", () => {
       acquisition_action_id: "action-1",
       purchase_currency: "EGP",
       purchase_price_decimal: "100000.125",
+      updated_at: Date.parse("2099-01-01T00:00:00.000Z"),
     });
     expect(changes.asset_metals?.updated[0]).toMatchObject({
       purity_factor_decimal: "0.999",
@@ -306,6 +327,39 @@ describe("pullChanges", () => {
     expect(changes.metal_holding_states?.updated[0]).toMatchObject({
       financial_revision: "9223372036854775807",
     });
+    expect(getFirstChain("metal_holding_states").lte).toHaveBeenCalledWith(
+      "updated_at",
+      "2026-05-18T08:05:00.000Z"
+    );
+  });
+
+  it("replays a client future-clock row after the server watermark advances", async () => {
+    const first = await pullChanges(Date.UTC(2026, 4, 18, 8), "current-user");
+    const second = await pullChanges(
+      Date.UTC(2026, 4, 18, 8, 5),
+      "current-user"
+    );
+    expectCompletedPullResult(first);
+    expectCompletedPullResult(second);
+
+    const firstAssets = first.changes.assets?.updated ?? [];
+    const secondAssets = second.changes.assets?.updated ?? [];
+    expect(firstAssets).toEqual(secondAssets);
+    expect(secondAssets[0]).toMatchObject({
+      updated_at: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+    const assetPullChains = (tableChains.get("assets") ?? []).filter((chain) =>
+      chain.select.mock.calls.some(
+        ([selection]: readonly [unknown]) =>
+          typeof selection === "string" &&
+          selection.includes("purchase_price_decimal_text")
+      )
+    );
+    expect(assetPullChains[1]?.gt).toHaveBeenCalledWith(
+      "updated_at",
+      "2026-05-18T08:05:00.000Z"
+    );
+    expect(assetPullChains[1]?.lte).not.toHaveBeenCalled();
   });
 
   it("fails without querying Supabase when the expected auth scope is lost", async () => {
@@ -466,6 +520,14 @@ describe("pullMarketRateObservations", () => {
     );
     expect(mockRpc).toHaveBeenCalledTimes(1);
   });
+
+  it("fails when server observation page omits required pagination fields", async () => {
+    mockRpc.mockResolvedValueOnce({ data: { rows: [] }, error: null });
+
+    await expect(pullMarketRateObservations(null)).rejects.toThrow(
+      "sync_invalid_metal_observation_page"
+    );
+  });
 });
 
 describe("pullMarketRates", () => {
@@ -507,5 +569,18 @@ describe("pullMetalHoldingStates", () => {
 
     expect(result.updated).toHaveLength(501);
     expect(mockFrom).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("runMetalPullStrategy", () => {
+  it("does not advance watermark when pull rejects", async () => {
+    const expectedError = new Error("network unavailable");
+    const pull = jest.fn<Promise<void>, []>().mockRejectedValue(expectedError);
+    const commitWatermark = jest.fn();
+
+    await expect(
+      runMetalPullStrategy({ pull, commitWatermark })
+    ).rejects.toThrow(expectedError);
+    expect(commitWatermark).not.toHaveBeenCalled();
   });
 });

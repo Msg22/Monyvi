@@ -424,7 +424,7 @@ export async function pullUserTable(
   table: GenericUserOwnedPullTableName,
   userId: string,
   lastSyncDate: string | null,
-  upperWatermark: string
+  upperWatermark?: string
 ): Promise<SyncTableChangeSet> {
   let query = supabase
     .from(table)
@@ -434,8 +434,9 @@ export async function pullUserTable(
   if (lastSyncDate) {
     query = query.gt("updated_at", lastSyncDate);
   }
-  query = query.lte("updated_at", upperWatermark);
-
+  if (upperWatermark) {
+    query = query.lte("updated_at", upperWatermark);
+  }
   const { data, error } = await query;
 
   if (error) {
@@ -470,8 +471,7 @@ export async function pullChildTable(
   table: ChildTableName,
   childConfig: ChildTableConfig,
   userId: string,
-  lastSyncDate: string | null,
-  upperWatermark: string
+  lastSyncDate: string | null
 ): Promise<SyncTableChangeSet> {
   const parentResult = await supabase
     .from(childConfig.parentTable)
@@ -499,8 +499,6 @@ export async function pullChildTable(
   if (lastSyncDate) {
     query = query.gt("updated_at", lastSyncDate);
   }
-  query = query.lte("updated_at", upperWatermark);
-
   const { data, error } = await query;
 
   if (error) {
@@ -533,8 +531,7 @@ export async function pullChildTable(
 
 export async function pullCategories(
   userId: string,
-  lastSyncDate: string | null,
-  upperWatermark: string
+  lastSyncDate: string | null
 ): Promise<SyncTableChangeSet> {
   let query = supabase
     .from("categories")
@@ -544,8 +541,6 @@ export async function pullCategories(
   if (lastSyncDate) {
     query = query.gt("updated_at", lastSyncDate);
   }
-  query = query.lte("updated_at", upperWatermark);
-
   const { data, error } = await query;
 
   if (error) {
@@ -668,25 +663,19 @@ export async function pullChanges(
         upperWatermark
       );
     } else if (table === "categories") {
-      changes[table] = await pullCategories(
-        expectedUserId,
-        lastSyncDate,
-        upperWatermark
-      );
+      changes[table] = await pullCategories(expectedUserId, lastSyncDate);
     } else if (childConfig) {
       changes[table] = await pullChildTable(
         table as ChildTableName,
         childConfig,
         expectedUserId,
-        lastSyncDate,
-        upperWatermark
+        lastSyncDate
       );
     } else {
       changes[table] = await pullUserTable(
         table as GenericUserOwnedPullTableName,
         expectedUserId,
-        lastSyncDate,
-        upperWatermark
+        lastSyncDate
       );
     }
   }
