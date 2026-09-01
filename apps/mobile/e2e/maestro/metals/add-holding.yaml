@@ -35,19 +35,16 @@ appId: com.monyvi.app
 - tapOn:
     id: metal-holding-weight-field
 - inputText: "10.125"
-- tapOn:
-    id: metal-holding-purity-field
-- tapOn:
-    id: metal-holding-purity-option-gold-999
+- tapOn: Purity
+- tapOn: 24K · 999
 - tapOn:
     id: metal-holding-purchase-price-field
 - inputText: "47800.00"
-- tapOn:
-    id: metal-holding-purchase-currency-field
-- tapOn:
-    id: metal-holding-purchase-currency-option-EGP
+- tapOn: Purchase currency
+- tapOn: EGP
 - tapOn:
     id: metal-holding-purchase-date-field
+- eraseText: 10
 - inputText: "2024-03-14"
 - tapOn:
     id: metal-holding-physical-form-field
@@ -85,19 +82,16 @@ appId: com.monyvi.app
 - tapOn:
     id: metal-holding-weight-field
 - inputText: "25.500"
-- tapOn:
-    id: metal-holding-purity-field
-- tapOn:
-    id: metal-holding-purity-option-silver-925
+- tapOn: Purity
+- tapOn: 925
 - tapOn:
     id: metal-holding-purchase-price-field
 - inputText: "1500.00"
-- tapOn:
-    id: metal-holding-purchase-currency-field
-- tapOn:
-    id: metal-holding-purchase-currency-option-EGP
+- tapOn: Purchase currency
+- tapOn: EGP
 - tapOn:
     id: metal-holding-purchase-date-field
+- eraseText: 10
 - inputText: "2024-03-14"
 - assertVisible:
     id: metal-holding-live-preview
@@ -124,13 +118,14 @@ appId: com.monyvi.app
 - tapOn:
     id: metal-holding-submit
 - assertVisible:
-    id: metal-holding-name-error
-- assertVisible:
-    id: metal-holding-metal-error
-- assertVisible:
-    id: metal-holding-purchase-price-error
+    id: metal-holding-name-field-error
+- assertVisible: Enter a number greater than 0.
+- assertVisible: Use the supported decimal places for this currency.
 - tapOn:
-    id: metal-holding-exit
+    id: metal-holding-name-field
+- inputText: Unsaved holding
+- tapOn:
+    id: header-back
 - assertVisible:
     id: metal-holding-dirty-exit-guard
 

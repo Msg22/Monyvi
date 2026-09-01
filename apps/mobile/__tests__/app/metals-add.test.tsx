@@ -1,6 +1,77 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 
+jest.mock("@/components/navigation/PageHeader", () => {
+  const { TouchableOpacity } =
+    jest.requireActual<typeof import("react-native")>("react-native");
+  return {
+    PageHeader: ({
+      onBack,
+      backAccessibilityLabel,
+    }: {
+      readonly onBack?: () => void;
+      readonly backAccessibilityLabel?: string;
+    }): React.JSX.Element => (
+      <TouchableOpacity
+        testID="header-back"
+        accessibilityLabel={backAccessibilityLabel}
+        onPress={onBack}
+      />
+    ),
+  };
+});
+
+jest.mock("@/context/ThemeContext", () => ({
+  useTheme: (): { readonly isDark: boolean } => ({ isDark: false }),
+}));
+
+jest.mock("@/hooks/usePreferredCurrency", () => ({
+  usePreferredCurrency: () => ({ preferredCurrency: "EGP", isLoading: false }),
+}));
+
+jest.mock("@/hooks/useAddMetalHolding", () => ({
+  useMetalAddPreviewRates: () => ({ getPreviewRates: jest.fn() }),
+  useAddMetalHoldingForm: () => ({
+    values: {
+      name: "",
+      metal: "GOLD",
+      weightGrams: "",
+      purityCode: "gold-999",
+      purchasePrice: "",
+      purchaseCurrency: "EGP",
+      purchaseDate: "2026-09-01",
+      physicalForm: null,
+      notes: "",
+    },
+    validationErrors: {},
+    preview: {
+      metal: "GOLD",
+      purityCode: "gold-999",
+      purityLabel: "24K · 999",
+      purityFactorDecimal: "0.999",
+      physicalForm: null,
+      valuation: { available: false, reason: "missing_rate" },
+    },
+    purityOptions: [{ value: "gold-999", label: "24K · 999" }],
+    isDirty: false,
+    isSubmitting: false,
+    submitError: null,
+    requiresUnusualValueAcknowledgment: false,
+    unusualValueAcknowledged: false,
+    updateField: jest.fn(),
+    acknowledgeUnusualValue: jest.fn(),
+    submit: jest.fn(() => Promise.resolve(null)),
+  }),
+}));
+
+jest.mock("@/services/add-metal-holding-facade-service", () => ({
+  addMetalHoldingFromForm: jest.fn(),
+}));
+
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 34, left: 0 }),
+}));
+
 interface AddHoldingRouteModule {
   readonly default: React.ComponentType;
 }
@@ -147,7 +218,7 @@ describe("Add metal holding form", () => {
       "purityCode",
       "gold-999"
     );
-    expect(screen.getByText("24K · 999")).toBeOnTheScreen();
+    expect(screen.getAllByText("24K · 999").length).toBeGreaterThan(0);
     expect(screen.getByTestId("metal-holding-item-render")).toHaveProp(
       "metal",
       "GOLD"
@@ -186,7 +257,7 @@ describe("Add metal holding form", () => {
       "autoFocus",
       true
     );
-    fireEvent.press(screen.getByTestId("metal-holding-exit"));
+    fireEvent.press(screen.getByTestId("header-back"));
     expect(props.onRequestExit).toHaveBeenCalledTimes(1);
     fireEvent.press(screen.getByTestId("metal-holding-submit"));
     fireEvent.press(screen.getByTestId("metal-holding-submit"));
