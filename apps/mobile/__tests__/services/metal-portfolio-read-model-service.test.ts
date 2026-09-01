@@ -52,7 +52,10 @@ import {
   observePortfolioHoldingStates,
   observePortfolioRecentHistory,
   selectPortfolioHoldings,
+  shapeMetalPortfolioHoldings,
+  type ShapeMetalPortfolioHoldingsInput,
 } from "@/services/metal-portfolio-read-model-service";
+import type { LiveRatesTrustReadModel } from "@/services/live-rates-trust-read-model-service";
 
 interface TestPortfolioHolding {
   readonly id: string;
@@ -66,6 +69,14 @@ interface TestPortfolioHolding {
   readonly currentPerformanceDecimal: string | null;
   readonly soldResultDecimal: string | null;
   readonly occurredAt: Date;
+  readonly physicalForm: string | null;
+  readonly purchaseCurrency: string | null;
+  readonly purchaseDate: Date | null;
+  readonly purchasePriceDecimal: string | null;
+  readonly purityCatalogVersion: string | null;
+  readonly purityCode: string | null;
+  readonly purityFactorDecimal: string | null;
+  readonly weightGramsDecimal: string | null;
 }
 
 function buildHolding(
@@ -83,7 +94,104 @@ function buildHolding(
     currentPerformanceDecimal: "11039.67",
     soldResultDecimal: null,
     occurredAt: new Date("2026-08-20T10:00:00.000Z"),
+    physicalForm: "COIN",
+    purchaseCurrency: "EGP",
+    purchaseDate: new Date("2024-03-14T00:00:00.000Z"),
+    purchasePriceDecimal: "151278.2",
+    purityCatalogVersion: "1",
+    purityCode: "gold-999",
+    purityFactorDecimal: "0.999",
+    weightGramsDecimal: "31.125",
     ...overrides,
+  };
+}
+
+function buildCurrentRates(): LiveRatesTrustReadModel {
+  return {
+    gold: {
+      state: "fresh",
+      ageMs: 1_000,
+      providerObservedAt: new Date("2026-09-01T11:59:59.000Z"),
+      valueDecimal: "100",
+    },
+    silver: {
+      state: "fresh",
+      ageMs: 1_000,
+      providerObservedAt: new Date("2026-09-01T11:59:59.000Z"),
+      valueDecimal: "2",
+    },
+    currencies: new Map([
+      [
+        "EGP",
+        {
+          state: "fresh",
+          ageMs: 1_000,
+          providerObservedAt: new Date("2026-09-01T11:59:59.000Z"),
+          valueDecimal: "0.02",
+        },
+      ],
+      [
+        "USD",
+        {
+          state: "fresh",
+          ageMs: 1_000,
+          providerObservedAt: new Date("2026-09-01T11:59:59.000Z"),
+          valueDecimal: "1",
+        },
+      ],
+    ]),
+  };
+}
+
+function shapeInput(): ShapeMetalPortfolioHoldingsInput {
+  return {
+    userId: "user-1",
+    preferredCurrency: "EGP" as const,
+    currentRates: buildCurrentRates(),
+    assets: [
+      {
+        id: "holding-1",
+        userId: "user-1",
+        name: "Exact gold",
+        createdAt: new Date("2024-01-01T10:00:00.000Z"),
+        purchaseDate: new Date("2024-01-01T00:00:00.000Z"),
+        purchaseCurrency: "EGP",
+        purchasePriceDecimal: "20000",
+      },
+    ],
+    assetMetals: [
+      {
+        assetId: "holding-1",
+        deleted: false,
+        itemForm: "COIN",
+        metalType: "GOLD",
+        purityCatalogVersion: "1",
+        purityCode: "gold-500",
+        purityFactorDecimal: "0.5",
+        weightGramsDecimal: "10",
+      },
+    ],
+    holdingStates: [
+      {
+        deleted: false,
+        effectiveEventId: "event-1",
+        holdingId: "holding-1",
+        isVisible: true,
+        reconciliationState: "accepted",
+        status: "active",
+        userId: "user-1",
+      },
+    ],
+    lifecycleEvents: [
+      {
+        deleted: false,
+        holdingId: "holding-1",
+        id: "event-1",
+        isEffective: true,
+        occurredAt: new Date("2026-08-20T10:00:00.000Z"),
+        userId: "user-1",
+      },
+    ],
   };
 }
 
@@ -261,5 +369,189 @@ describe("metal portfolio read model", () => {
     });
 
     expect(model.activeTotalDecimal).toBe("0.3");
+  });
+
+  it("shapes exact persisted holding facts and calculates preferred-currency card values", () => {
+    const [holding] = shapeMetalPortfolioHoldings(shapeInput());
+
+    expect(holding).toMatchObject({
+      id: "holding-1",
+      physicalForm: "COIN",
+      purchaseCurrency: "EGP",
+      purchasePriceDecimal: "20000",
+      purityCatalogVersion: "1",
+      purityCode: "gold-500",
+      purityFactorDecimal: "0.5",
+      weightGramsDecimal: "10",
+      currentValueDecimal: "25000",
+      currentPerformanceDecimal: "5000",
+    });
+    expect(holding?.purchaseDate?.toISOString()).toBe(
+      "2024-01-01T00:00:00.000Z"
+    );
+  });
+
+  it("keeps holdings visible but never falls back to compatibility weight or purity", () => {
+    const input = shapeInput();
+    const legacyOnlyMetal = {
+      ...input.assetMetals[0],
+      purityFactorDecimal: null,
+      weightGramsDecimal: null,
+      purityFraction: 0.5,
+      weightGrams: 10,
+    };
+
+    const [holding] = shapeMetalPortfolioHoldings({
+      ...input,
+      assetMetals: [legacyOnlyMetal],
+    });
+
+    expect(holding).toMatchObject({
+      weightGramsDecimal: null,
+      purityFactorDecimal: null,
+      currentValueDecimal: null,
+      currentPerformanceDecimal: null,
+    });
+  });
+
+  it("keeps current value available while purchase evidence or date is unavailable", () => {
+    const input = shapeInput();
+
+    const [holding] = shapeMetalPortfolioHoldings({
+      ...input,
+      assets: [
+        {
+          ...input.assets[0],
+          purchaseDate: new Date("invalid"),
+          purchaseCurrency: null,
+          purchasePriceDecimal: null,
+        },
+      ],
+    });
+
+    expect(holding).toMatchObject({
+      purchaseDate: null,
+      purchaseCurrency: null,
+      purchasePriceDecimal: null,
+      currentValueDecimal: "25000",
+      currentPerformanceDecimal: null,
+    });
+  });
+
+  it("converts purchase cost exactly before calculating cross-currency performance", () => {
+    const input = shapeInput();
+
+    const [holding] = shapeMetalPortfolioHoldings({
+      ...input,
+      assets: [
+        {
+          ...input.assets[0],
+          purchaseCurrency: "USD",
+          purchasePriceDecimal: "400",
+        },
+      ],
+    });
+
+    expect(holding).toMatchObject({
+      currentValueDecimal: "25000",
+      currentPerformanceDecimal: "5000",
+    });
+  });
+
+  it("keeps current value but fails performance closed when purchase FX is unavailable", () => {
+    const input = shapeInput();
+    const currencies = new Map(input.currentRates.currencies);
+    currencies.delete("USD");
+
+    const [holding] = shapeMetalPortfolioHoldings({
+      ...input,
+      assets: [
+        {
+          ...input.assets[0],
+          purchaseCurrency: "USD",
+          purchasePriceDecimal: "400",
+        },
+      ],
+      currentRates: { ...input.currentRates, currencies },
+    });
+
+    expect(holding).toMatchObject({
+      currentValueDecimal: "25000",
+      currentPerformanceDecimal: null,
+    });
+  });
+
+  it("fails catalog-mismatched purity and dependent values closed", () => {
+    const input = shapeInput();
+
+    const [holding] = shapeMetalPortfolioHoldings({
+      ...input,
+      assetMetals: [
+        {
+          ...input.assetMetals[0],
+          purityFactorDecimal: "0.5001",
+        },
+      ],
+    });
+
+    expect(holding).toMatchObject({
+      purityCatalogVersion: null,
+      purityCode: null,
+      purityFactorDecimal: null,
+      currentValueDecimal: null,
+      currentPerformanceDecimal: null,
+    });
+  });
+
+  it("fails both rate-dependent values closed when exact current observations are unavailable", () => {
+    const input = shapeInput();
+    const currentRates = buildCurrentRates();
+
+    const [holding] = shapeMetalPortfolioHoldings({
+      ...input,
+      currentRates: {
+        ...currentRates,
+        gold: {
+          ...currentRates.gold,
+          state: "invalid",
+          valueDecimal: null,
+        },
+      },
+    });
+
+    expect(holding).toMatchObject({
+      currentValueDecimal: null,
+      currentPerformanceDecimal: null,
+    });
+  });
+
+  it("excludes foreign and structurally unlinked rows before shaping", () => {
+    const input = shapeInput();
+
+    const holdings = shapeMetalPortfolioHoldings({
+      ...input,
+      assets: [
+        ...input.assets,
+        {
+          ...input.assets[0],
+          id: "foreign-holding",
+          userId: "user-2",
+        },
+      ],
+      assetMetals: [
+        ...input.assetMetals,
+        { ...input.assetMetals[0], assetId: "foreign-holding" },
+      ],
+      holdingStates: [
+        ...input.holdingStates,
+        {
+          ...input.holdingStates[0],
+          holdingId: "foreign-holding",
+          userId: "user-2",
+        },
+      ],
+    });
+
+    expect(holdings.map((holding) => holding.id)).toEqual(["holding-1"]);
   });
 });
