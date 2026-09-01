@@ -37,8 +37,8 @@ the absent read-model export.
 ## T056 focused Green
 
 After the recorded Red run, T056 added scoped local portfolio queries and
-Decimal-backed wealth/portfolio read models. The same focused command passed:
-2 suites and 11 tests.
+Decimal-backed wealth/portfolio read models. The same focused command passed: 2
+suites and 11 tests.
 
 - Wealth values, totals, and one-decimal shares are canonical decimal strings;
   arithmetic uses the shared 50-significant-digit, half-even Decimal primitive.
@@ -57,3 +57,24 @@ Full T055 is not complete: it requires T051–T054, and T053/T054 cannot
 faithfully use approved localized UI content until the Slice 4 owner supplies
 approved EN/AR US1 keys and updates the translation schema. T057/T058 remain
 paused; this evidence does not claim full US1 Green.
+
+## T053 UI Red then Green — 2026-09-01
+
+- T053 first failed before implementation because the assigned Home breakdown
+  and portfolio surface components did not exist. The new Maestro flow also
+  asserted IDs absent from the legacy Metals route. This was the intended Red.
+- T053 Green command:
+
+```text
+cd apps/mobile
+npm test -- --runInBand --watchman=false --runTestsByPath __tests__/components/metals/portfolio-surfaces.test.tsx --testTimeout=15000
+```
+
+Result: 1 suite, 9 tests passed. The contract covers Concept C destinations,
+Skeleton, All/Gold/Silver state, exact `24K · 999`, purchase-date omission,
+approved EN/AR visible and accessible labels, neutral render fallback,
+portfolio-empty/filter-empty, stale/offline/error/retry, and bounded History.
+
+T054 Maestro file now exists but has not run on an emulator/fixture profile.
+T055 and T058 remain unchecked. After Slice 4's fixture-boundary correction
+(`0f73fd5`), full mobile typecheck is Green.

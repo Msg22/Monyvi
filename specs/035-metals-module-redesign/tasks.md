@@ -164,14 +164,14 @@ This topology controls ownership, dependency stacks, and future review size. Aft
 - [x] T050 [US1] Define US1 manual scenarios, SC-001 moderated conditions, and FR/SC mappings in `specs/035-metals-module-redesign/manual-tests/us1-connected-portfolio.md` and `specs/035-metals-module-redesign/coverage/us1.md`
 - [x] T051 [P] [US1] Write failing net-worth contribution, exact share, no-double-count, sale-proceeds, missing-rate, snapshot-immutability, and bounded-query tests in `apps/mobile/__tests__/services/net-worth-read-model-service.metals.test.ts`
 - [x] T052 [P] [US1] Write failing All/Gold/Silver, active totals, sold result, allocation, recent History, unavailable values, user-scope, and list-state tests in `apps/mobile/__tests__/services/metal-portfolio-read-model-service.test.ts`
-- [ ] T053 [P] [US1] Write failing Home Concept C and My Metals Skeleton/empty/filter-empty/offline/stale/error/RTL/theme/compact/ordinary/200%-text/a11y tests in `apps/mobile/__tests__/components/metals/portfolio-surfaces.test.tsx`
+- [X] T053 [P] [US1] Write failing Home Concept C and My Metals Skeleton/empty/filter-empty/offline/stale/error/RTL/theme/compact/ordinary/200%-text/a11y tests in `apps/mobile/__tests__/components/metals/portfolio-surfaces.test.tsx`
 - [ ] T054 [P] [US1] Create failing Home-to-Metals/filter/rates-separation Maestro coverage in `apps/mobile/e2e/maestro/metals/home-and-portfolio.yaml`
 - [ ] T055 [US1] Run T051–T054 and record intended Red failures in `specs/035-metals-module-redesign/evidence/us1-red.md`
 
 #### Green, refactor, verify
 
 - [x] T056 [US1] Implement scoped bounded net-worth and portfolio read models in `apps/mobile/services/net-worth-read-model-service.ts` and `apps/mobile/services/metal-portfolio-read-model-service.ts`
-- [ ] T057 [US1] Implement cancellation-safe portfolio facade, approved Concept C, My Metals states/list, and owned Home/tab integration in `apps/mobile/hooks/useMetalPortfolio.ts`, `apps/mobile/components/dashboard/WealthBreakdownSection.tsx`, `apps/mobile/components/metals/MetalPortfolioScreen.tsx`, `apps/mobile/app/(private)/(tabs)/index.tsx`, and `apps/mobile/app/(private)/(tabs)/metals.tsx`
+- [X] T057 [US1] Implement cancellation-safe portfolio facade, approved Concept C, My Metals states/list, and owned Home/tab integration in `apps/mobile/hooks/useMetalPortfolio.ts`, `apps/mobile/components/dashboard/WealthBreakdownSection.tsx`, `apps/mobile/components/metals/MetalPortfolioScreen.tsx`, `apps/mobile/app/(private)/(tabs)/index.tsx`, and `apps/mobile/app/(private)/(tabs)/metals.tsx`
 - [ ] T058 [US1] Run US1 suites and Maestro, refactor while green, and record automated/manual evidence only in `specs/035-metals-module-redesign/coverage/us1.md`
 
 ### User Story 9 — Keep Trust When Rates or Historical Data Are Incomplete (Priority: P1)
