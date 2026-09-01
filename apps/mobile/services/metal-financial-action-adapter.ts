@@ -1,9 +1,7 @@
 import {
   createFinancialActionRegistry,
-  type CanonicalJsonValue,
   type FinancialActionEnvelopeV1,
   type FinancialActionRegistry,
-  type RegisteredActionPayload,
 } from "@monyvi/logic";
 
 export const METAL_ACTION_KINDS = [
@@ -47,41 +45,8 @@ export function incrementCanonicalMetalRevision(value: string): string {
   return (BigInt(canonical) + 1n).toString();
 }
 
-function asCanonicalJsonValue(value: unknown): CanonicalJsonValue {
-  if (value === null || typeof value === "string" || typeof value === "boolean") {
-    return value;
-  }
-  if (Array.isArray(value)) return value.map(asCanonicalJsonValue);
-  if (typeof value !== "object") throw new Error("invalid_metal_action_payload");
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).map(([key, child]) => [
-      key,
-      asCanonicalJsonValue(child),
-    ])
-  );
-}
-
-function asRegisteredActionPayload(value: unknown): RegisteredActionPayload {
-  if (value === null || Array.isArray(value) || typeof value !== "object") {
-    throw new Error("invalid_metal_action_payload");
-  }
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).map(([key, child]) => [
-      key,
-      asCanonicalJsonValue(child),
-    ])
-  );
-}
-
 export const METAL_FINANCIAL_ACTION_REGISTRY: FinancialActionRegistry =
-  createFinancialActionRegistry(
-    METAL_ACTION_KINDS.map((kind) => ({
-      domain: "metals",
-      kind,
-      payloadVersion: `metals.${kind}/v1`,
-      validatePayload: asRegisteredActionPayload,
-    }))
-  );
+  createFinancialActionRegistry([]);
 
 export function createMetalFinancialActionEnvelope(
   input: CreateMetalFinancialActionEnvelopeInput
@@ -95,21 +60,5 @@ export function createMetalFinancialActionEnvelope(
   } else {
     assertCanonicalMetalRevision(input.expectedHoldingRevision);
   }
-
-  return {
-    actionId: input.actionId,
-    domain: "metals",
-    domainReferenceId: input.actionId,
-    envelopeVersion: "monyvi.financial-action/v1",
-    accountGuards: [],
-    kind: input.kind,
-    occurredAt: input.occurredAt,
-    payload: {
-      holdingId: input.holdingId,
-      kind: input.kind,
-      domainPayload: asCanonicalJsonValue(input.domainPayload),
-    },
-    payloadVersion: `metals.${input.kind}/v1`,
-    userId: input.userId,
-  };
+  throw new Error("metal_action_schema_not_approved");
 }
