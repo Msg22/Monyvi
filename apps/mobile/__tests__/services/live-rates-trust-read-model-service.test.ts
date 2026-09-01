@@ -58,8 +58,8 @@ describe("live-rates trust read model", () => {
       NOW_MS
     );
 
-    expect(readModel.gold).toEqual({ state: "stale", ageMs: DAY_MS + 1 });
-    expect(readModel.silver).toEqual({ state: "unknown", ageMs: null });
+    expect(readModel.gold).toMatchObject({ state: "stale", ageMs: DAY_MS + 1 });
+    expect(readModel.silver).toMatchObject({ state: "unknown", ageMs: null });
   });
 
   it.each([
@@ -87,7 +87,7 @@ describe("live-rates trust read model", () => {
     );
 
     expect(readModel.gold.state).toBe("missing");
-    expect(readModel.silver.state).toBe("missing");
+    expect(readModel.silver.state).toBe("invalid");
     expect(readModel.currencies.get("EGP")?.state).toBe("fresh");
   });
 

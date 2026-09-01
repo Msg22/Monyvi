@@ -66,13 +66,21 @@
   "karat_label": "{{karat}} Karat",
   "price_gram_with_symbol": "{{currencySymbol}} {{price}}/g",
   "metal": { "gold": "Gold", "silver": "Silver", "unknown": "Metal" },
-  "form": { "bar": "Bar", "coin": "Coin", "jewelry": "Jewelry", "unknown": "Other form" },
+  "form": {
+    "bar": "Bar",
+    "coin": "Coin",
+    "jewelry": "Jewelry",
+    "unknown": "Other form"
+  },
   "status": { "active": "Active", "sold": "Sold", "disposed": "Disposed" },
   "rate": {
-    "fresh": "Current",
-    "stale": "Stale",
-    "unknown": "Freshness unknown",
-    "missing": "Rate unavailable"
+    "fresh": "Live Rates: current rate. Rates updated {{dateTime}}",
+    "stale": "Rates: rate is older than 24 hours",
+    "unknown": "Rates: rate age is unknown",
+    "missing": "Rates: current rate unavailable",
+    "invalid": "Rates: this rate can’t be used",
+    "refresh_failed_with_cache": "Rates: couldn’t refresh. Showing the last available rate.",
+    "retry_refresh": "Retry refresh"
   },
   "reconciliation": {
     "incomplete": "Changes are still being checked. The last complete state remains active.",

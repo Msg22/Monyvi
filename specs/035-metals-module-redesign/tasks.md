@@ -180,15 +180,15 @@ This topology controls ownership, dependency stacks, and future review size. Aft
 
 #### Red
 
-- [ ] T059 [US9] Define rate-trust manual scenarios and FR/SC mappings in `specs/035-metals-module-redesign/manual-tests/us9-rate-trust.md` and `specs/035-metals-module-redesign/coverage/us9.md`
+- [x] T059 [US9] Define rate-trust manual scenarios and FR/SC mappings in `specs/035-metals-module-redesign/manual-tests/us9-rate-trust.md` and `specs/035-metals-module-redesign/coverage/us9.md`
 - [ ] T060 [P] [US9] Write failing observation-time, independent metal/FX status, invalid/unknown timestamp, stale threshold, acknowledgment, provenance, and historical/current separation tests in `packages/logic/src/metals/__tests__/rate-reference-contract.test.ts`
-- [ ] T061 [P] [US9] Write failing retained-layout Gold/Silver/currency scope, real refresh, cached failure, offline, Skeleton, focus, RTL/theme/reflow tests in `apps/mobile/__tests__/components/live-rates/LiveRatesScreen.metals-v1.test.tsx`
+- [x] T061 [P] [US9] Write failing retained-layout Gold/Silver/currency scope, real refresh, cached failure, offline, Skeleton, focus, RTL/theme/reflow tests in `apps/mobile/__tests__/components/live-rates/LiveRatesScreen.metals-v1.test.tsx`
 - [ ] T062 [P] [US9] Create failing fresh-to-stale/offline-cache/refresh-failure/missing-rate Maestro coverage in `apps/mobile/e2e/maestro/metals/live-rates-trust.yaml`
 - [ ] T063 [US9] Run T060–T062 and record intended Red failures in `specs/035-metals-module-redesign/evidence/us9-red.md`
 
 #### Green, refactor, verify
 
-- [ ] T064 [US9] Implement provider-derived refresh/trust state through stable persistence APIs in `apps/mobile/hooks/useLiveRatesScreen.ts` and `apps/mobile/services/live-rates-trust-read-model-service.ts`
+- [x] T064 [US9] Implement provider-derived refresh/trust state through stable persistence APIs in `apps/mobile/hooks/useLiveRatesScreen.ts` and `apps/mobile/services/live-rates-trust-read-model-service.ts`
 - [ ] T065 [US9] Preserve existing `/live-rates` composition while limiting content to Gold/Silver/currency and rendering truthful states in `apps/mobile/components/live-rates/LiveRatesScreen.tsx`, then run US9 tests/Maestro and record evidence in `specs/035-metals-module-redesign/coverage/us9.md`
 
 ---
