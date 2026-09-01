@@ -41,7 +41,10 @@ interface AccountBalanceEffect {
 }
 
 export interface AccountBalanceCommandDependencies {
-  readonly foundationRepository: FinancialActionFoundationRepository;
+  readonly foundationRepository: Pick<
+    FinancialActionFoundationRepository,
+    "commitFinancialActionGroupLocally"
+  >;
   readonly prepareEffectCreate: (input: AccountEffectInput) => Model;
 }
 

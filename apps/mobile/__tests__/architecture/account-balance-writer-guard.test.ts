@@ -69,6 +69,8 @@ const LEGACY_MUTATION_OWNER_BY_SYMBOL: Readonly<Record<string, string>> = {
     "account.edit-balance",
   "apps/mobile/services/transaction-service.ts#prepareTransactionCreateWithBalance":
     "transaction.create",
+  "apps/mobile/services/transaction-financial-action-service.ts#buildPlan":
+    "transaction.create",
   "apps/mobile/services/transaction-service.ts#updateTransaction":
     "transaction.update",
   "apps/mobile/services/transaction-service.ts#deleteTransaction":

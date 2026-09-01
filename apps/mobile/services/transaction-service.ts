@@ -14,13 +14,12 @@ import {
   getCurrentUserDataScope,
   type CurrentUserDataScope,
 } from "@/services/user-data-access";
-import { USER_DATA_ACCESS_ERROR_CODES } from "@/services/user-data-access-error-codes";
 import { isValidTransactionAmount } from "@monyvi/logic";
 import {
   captureCachedModelSnapshot,
   restoreCachedModelSnapshot,
 } from "@/services/watermelon-cache-snapshot";
-import { commitPreparedBatch } from "@/services/watermelon-atomic-batch";
+import { createGuardedTransaction } from "@/services/transaction-financial-action-production";
 
 export const INVALID_ACCOUNT_BALANCE_ERROR_CODE = "INVALID_ACCOUNT_BALANCE";
 export const BALANCE_REVERSAL_ACCOUNT_NOT_FOUND_ERROR_CODE =
@@ -143,25 +142,7 @@ export async function createTransaction(
   expectedUserId?: string
 ): Promise<Transaction> {
   assertValidTransactionAmount(data.amount);
-  const scope = await getCurrentUserDataScope();
-  if (expectedUserId !== undefined && scope.userId !== expectedUserId) {
-    throw new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
-  }
-
-  return await database.write(async () => {
-    const prepared = await prepareTransactionCreateWithBalance(
-      data,
-      scope,
-      expectedUserId
-    );
-    try {
-      await commitPreparedBatch(prepared.operations);
-      return prepared.transaction;
-    } catch (error) {
-      prepared.restoreCachedAccount();
-      throw error;
-    }
-  });
+  return createGuardedTransaction(data, expectedUserId);
 }
 
 /**
