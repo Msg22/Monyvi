@@ -167,3 +167,8 @@ stopped, and waits for the first projection before relaunching restart
 profiles without another cleanup. No Android device was attached for this
 verification run, so executable ordering and SQL are automated while the real
 device lifecycle remains an explicit manual check.
+
+A follow-up Red assertion caught that the first cleanup SQL deleted every
+shared observation. Because the shared sync watermark could keep unrelated
+rows from returning, the Green query now deletes only rows whose source is
+`e2e_fixture`.
