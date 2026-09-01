@@ -5,12 +5,12 @@ import {
   FINANCIAL_ACTION_STATES,
   MAX_CANONICAL_UNSIGNED_INTEGER_STRING,
   SERVER_OUTCOMES,
-  canonicalizeFinancialActionEnvelope,
-  hashFinancialActionEnvelope,
+  canonicalizeFinancialActionEnvelope as canonicalizeBase,
+  hashFinancialActionEnvelope as hashBase,
   parseCanonicalUnsignedIntegerString,
-  parseFinancialActionEnvelopeJson,
+  parseFinancialActionEnvelopeJson as parseBase,
   resolveFinancialActionReplay,
-  serializeFinancialActionEnvelope,
+  serializeFinancialActionEnvelope as serializeBase,
   type FinancialActionEnvelopeV1,
   type Sha256Provider,
 } from "../action-contracts";
@@ -22,6 +22,7 @@ import {
   MAX_CANONICAL_DECIMAL_SCALE,
   MAX_CANONICAL_FINANCIAL_DIGITS,
   MetalsSellPayloadV1,
+  validateMetalsSellPayloadV1,
   type RegisteredActionPayload,
 } from "../action-registry";
 
@@ -41,6 +42,44 @@ function validEnvelope(): FinancialActionEnvelopeV1<MetalsSellPayloadV1> {
   return JSON.parse(
     ARABIC_VECTOR
   ) as FinancialActionEnvelopeV1<MetalsSellPayloadV1>;
+}
+
+const LEGACY_REGISTRY = createFinancialActionRegistry([
+  {
+    domain: "metals",
+    kind: "sell",
+    payloadVersion: "metals.sell/v1",
+    validatePayload: validateMetalsSellPayloadV1,
+  },
+]);
+
+function canonicalizeFinancialActionEnvelope(
+  value: unknown,
+  registry = LEGACY_REGISTRY
+): FinancialActionEnvelopeV1 {
+  return canonicalizeBase(value, registry);
+}
+
+function serializeFinancialActionEnvelope(
+  value: unknown,
+  registry = LEGACY_REGISTRY
+): string {
+  return serializeBase(value, registry);
+}
+
+function parseFinancialActionEnvelopeJson(
+  rawText: string,
+  registry = LEGACY_REGISTRY
+): FinancialActionEnvelopeV1 {
+  return parseBase(rawText, registry);
+}
+
+function hashFinancialActionEnvelope(
+  value: unknown,
+  provider: Sha256Provider,
+  registry = LEGACY_REGISTRY
+): Promise<{ canonicalText: string; payloadHash: string }> {
+  return hashBase(value, provider, registry);
 }
 
 function expectContractError(value: unknown, code: string): void {
@@ -174,9 +213,7 @@ describe("financial action canonical contract", () => {
 
       expect(parsed).toBe(revision);
       expect(typeof parsed).toBe("string");
-      expect(MAX_CANONICAL_UNSIGNED_INTEGER_STRING).toBe(
-        "9223372036854775807"
-      );
+      expect(MAX_CANONICAL_UNSIGNED_INTEGER_STRING).toBe("9223372036854775807");
     }
   );
 
