@@ -73,7 +73,7 @@ export interface MetalPortfolioAssetSnapshot {
 export interface MetalPortfolioAssetMetalSnapshot {
   readonly assetId: string;
   readonly deleted: boolean;
-  readonly itemForm: string | null | undefined;
+  readonly itemForm?: string;
   readonly metalType: string;
   readonly purityCatalogVersion: string | null;
   readonly purityCode: string | null;
