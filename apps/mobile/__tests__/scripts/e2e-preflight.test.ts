@@ -1,13 +1,25 @@
 interface E2ePreflightModule {
+  applyE2eFixtureRuntimeSettings(
+    env: Readonly<Record<string, string | undefined>>,
+    dependencies: {
+      forceStop: () => void;
+      runAdb: (args: readonly string[]) => void;
+      seedTheme: (theme: string) => void;
+    }
+  ): void;
   appendAndroidPlatform(url: string): string;
   buildDevClientUrl(url: string): string;
   buildDevMenuPreferencesXml(): string;
   buildIntroSeenFlagSql(): string;
+  buildE2eRuntimeStorageSql(theme: string): string;
   currentFocusShowsDevLauncherError(currentFocus: string): boolean;
   currentFocusShowsDevMenu(currentFocus: string): boolean;
   currentFocusShowsLauncher(currentFocus: string): boolean;
   didDumpUiHierarchy(dumpOutput: string): boolean;
   getHttpClientNameForUrl(url: string): "http" | "https";
+  resolveE2eFixtureRuntimeSettings(
+    env?: Readonly<Record<string, string | undefined>>
+  ): { locale: string; theme: string; textScale: number } | null;
   getMaestroDeviceArgs(
     env?: Readonly<Record<string, string | undefined>>
   ): readonly string[];
@@ -221,6 +233,39 @@ describe("e2e-preflight", () => {
     expect(sql).toContain("'@monyvi/intro-seen'");
     expect(sql).toContain("'true'");
     expect(sql).toContain("insert or replace");
+  });
+
+  it("applies Metals locale, theme, and text scale through executable runtime boundaries", () => {
+    const runtimeSettings = preflight.resolveE2eFixtureRuntimeSettings({
+      E2E_METALS_PROFILE: "metals-stale-restart-ar-dark",
+    });
+    expect(runtimeSettings).toEqual({
+      locale: "ar",
+      theme: "dark",
+      textScale: 2,
+    });
+    expect(preflight.buildE2eRuntimeStorageSql("dark")).toContain(
+      "'monyvi_theme_mode', 'dark'"
+    );
+
+    const forceStop = jest.fn();
+    const runAdb = jest.fn();
+    const seedTheme = jest.fn();
+    preflight.applyE2eFixtureRuntimeSettings(
+      { E2E_METALS_PROFILE: "metals-stale-restart-ar-dark" },
+      { forceStop, runAdb, seedTheme }
+    );
+
+    expect(forceStop).toHaveBeenCalledTimes(1);
+    expect(runAdb).toHaveBeenCalledWith([
+      "shell",
+      "settings",
+      "put",
+      "system",
+      "font_scale",
+      "2",
+    ]);
+    expect(seedTheme).toHaveBeenCalledWith("dark");
   });
 
   it("detects Android devices without a sqlite3 shell binary", () => {

@@ -3,6 +3,7 @@ const http = require("node:http");
 const https = require("node:https");
 const { delimiter, join } = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { getE2eFixture } = require("./seed-fixtures/e2e-fixture");
 
 const appId = process.env.E2E_APP_ID || "com.monyvi.app";
 const deviceId = resolveAndroidDeviceId(process.env);
@@ -24,6 +25,7 @@ const nativeRootLoopbackFallbackDelayMs = 15000;
 const devMenuPreferencesPath =
   "shared_prefs/expo.modules.devmenu.sharedpreferences.xml";
 const introSeenStorageKey = "@monyvi/intro-seen";
+const themeStorageKey = "monyvi_theme_mode";
 const privateShellMarkers = [
   "fab-button",
   "search-input",
@@ -312,6 +314,32 @@ function buildIntroSeenFlagSql() {
   ].join("\n");
 }
 
+function buildE2eRuntimeStorageSql(theme) {
+  return [
+    "create table if not exists catalystLocalStorage (key TEXT PRIMARY KEY, value TEXT NOT NULL);",
+    `insert or replace into catalystLocalStorage (key, value) values (${sqlString(
+      themeStorageKey
+    )}, ${sqlString(theme)});`,
+  ].join("\n");
+}
+
+function resolveE2eFixtureRuntimeSettings(env = process.env) {
+  const profileName = env.E2E_FIXTURE_PROFILE ?? env.E2E_METALS_PROFILE;
+  if (!profileName) return null;
+
+  const fixture = getE2eFixture(profileName);
+  const { locale, theme, textScale } = fixture;
+  const isValid =
+    (locale === "en" || locale === "ar") &&
+    (theme === "light" || theme === "dark") &&
+    (textScale === 1 || textScale === 2);
+  if (!isValid) {
+    throw new Error(`Invalid E2E runtime settings for profile: ${profileName}`);
+  }
+
+  return { locale, theme, textScale };
+}
+
 function isMissingDeviceSqliteError(output) {
   return /exec failed for sqlite3|sqlite3: No such file or directory/i.test(
     output
@@ -348,6 +376,53 @@ function seedIntroSeenFlagForE2e() {
   console.warn(
     `Skipping E2E intro flag seed after adb sqlite3 output: ${output}`
   );
+}
+
+function seedE2eThemePreference(theme) {
+  if (isReleaseBuild) return;
+
+  adb(["shell", "run-as", appId, "mkdir", "-p", "databases"], {
+    capture: true,
+    allowFailure: true,
+  });
+  const output = adb(
+    ["shell", "run-as", appId, "sqlite3", "databases/RKStorage"],
+    {
+      allowFailure: true,
+      capture: true,
+      input: buildE2eRuntimeStorageSql(theme),
+    }
+  ).trim();
+
+  if (!output) return;
+  if (isMissingDeviceSqliteError(output)) {
+    throw new Error(
+      "Cannot materialize the E2E theme because this Android device does not expose sqlite3 through adb shell."
+    );
+  }
+  throw new Error(`Failed to materialize the E2E theme: ${output}`);
+}
+
+function applyE2eFixtureRuntimeSettings(
+  env = process.env,
+  dependencies = {}
+) {
+  const settings = resolveE2eFixtureRuntimeSettings(env);
+  if (!settings) return;
+
+  const forceStop = dependencies.forceStop ?? forceStopApp;
+  const runAdb = dependencies.runAdb ?? adb;
+  const seedTheme = dependencies.seedTheme ?? seedE2eThemePreference;
+  forceStop();
+  runAdb([
+    "shell",
+    "settings",
+    "put",
+    "system",
+    "font_scale",
+    String(settings.textScale),
+  ]);
+  seedTheme(settings.theme);
 }
 
 function disableExpoDevMenuFabForE2e() {
@@ -827,6 +902,7 @@ function visibleTextShowsDevMenu(uiXml) {
 
 async function ensureE2eAppReady() {
   await ensureE2eMetroReady();
+  applyE2eFixtureRuntimeSettings();
 
   let lastError = null;
   for (let attempt = 1; attempt <= preflightLaunchAttempts; attempt += 1) {
@@ -877,11 +953,13 @@ module.exports = {
   currentFocusShowsLauncher,
   buildDevMenuPreferencesXml,
   buildIntroSeenFlagSql,
+  buildE2eRuntimeStorageSql,
   buildDevClientUrl,
   didDumpUiHierarchy,
   disableExpoDevMenuFabForE2e,
   getHttpClientNameForUrl,
   getMaestroDeviceArgs,
+  resolveE2eFixtureRuntimeSettings,
   androidDeviceReconnectTimeoutMs,
   isAppReady,
   isMissingDeviceSqliteError,
@@ -899,6 +977,7 @@ module.exports = {
   resolveMaestroBin,
   run,
   seedIntroSeenFlagForE2e,
+  applyE2eFixtureRuntimeSettings,
   stabilizeAndroidDevice,
   startAppWithoutChangingPermissions,
   toLoopbackMetroUrl,

@@ -114,3 +114,21 @@ whole-projection timestamp could not prove the approved per-field
 `(writtenAt, writerId)` contract, so the incomplete helper, isolated test, and
 coverage claim were removed instead of being extended without the blocked
 action/coordinator contracts.
+
+## PR #254 fixture-runtime and profile-isolation Red
+
+Two focused fixture suites failed with three intended assertions before the
+production fixes:
+
+1. the `metals-stale-restart-ar-dark` fixture retained the seed engine's
+   hard-coded English/system profile instead of materializing Arabic and dark
+   mode;
+2. switching from a fixture with a market-rate observation to the missing-rate
+   fixture did not delete the prior profile's deterministic observation ID;
+3. the Android preflight had no executable path for the selected fixture's
+   theme or text scale, so those registry fields were metadata-only claims.
+
+The Green correction persists locale/theme in the scoped profile, writes the
+theme to the app's AsyncStorage database, applies text scale through Android's
+system setting before launch, and deletes all deterministic Metals observation
+IDs during profile switches and resets.
