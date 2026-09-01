@@ -28,18 +28,25 @@ export interface LiveRatesTrustObservation {
 }
 
 export interface LiveRatesTrustReadModel {
-  readonly gold: RateTrustResult;
-  readonly silver: RateTrustResult;
-  readonly currencies: ReadonlyMap<CurrencyType, RateTrustResult>;
+  readonly gold: LiveRatesTrustValue;
+  readonly silver: LiveRatesTrustValue;
+  readonly currencies: ReadonlyMap<CurrencyType, LiveRatesTrustValue>;
 }
 
-export type LiveRatesTrustState = RateTrustResult["state"];
+export type LiveRatesTrustState = RateTrustResult["state"] | "invalid";
+
+export interface LiveRatesTrustValue {
+  readonly state: LiveRatesTrustState;
+  readonly ageMs: number | null;
+  readonly providerObservedAt: Date | null;
+}
 
 const TRUST_SEVERITY: Readonly<Record<LiveRatesTrustState, number>> = {
   fresh: 0,
   stale: 1,
   unknown: 2,
-  missing: 3,
+  invalid: 3,
+  missing: 4,
 };
 
 export interface LiveRatesTrustObserver {
@@ -75,7 +82,7 @@ export function buildLiveRatesTrustReadModel(
 }
 
 export function summarizeLiveRatesTrust(
-  results: Iterable<RateTrustResult>
+  results: Iterable<LiveRatesTrustValue>
 ): LiveRatesTrustState {
   let hasResult = false;
   let summary: LiveRatesTrustState = "fresh";
@@ -148,8 +155,8 @@ function isNewerObservation(
 function buildCurrencyTrust(
   latestByInstrument: ReadonlyMap<string, LiveRatesTrustObservation>,
   nowMs: number
-): ReadonlyMap<CurrencyType, RateTrustResult> {
-  const currencies = new Map<CurrencyType, RateTrustResult>();
+): ReadonlyMap<CurrencyType, LiveRatesTrustValue> {
+  const currencies = new Map<CurrencyType, LiveRatesTrustValue>();
 
   for (const currencyCode of V1_CURRENCY_CODES) {
     currencies.set(
@@ -167,12 +174,23 @@ function buildCurrencyTrust(
 function classifyObservationTrust(
   observation: LiveRatesTrustObservation | null,
   nowMs: number
-): RateTrustResult {
+): LiveRatesTrustValue {
   if (!observation) {
-    return { state: "missing", ageMs: null };
+    return { state: "missing", ageMs: null, providerObservedAt: null };
   }
 
-  return classifyRateTrust(
+  if (
+    observation.quality !== "valid" ||
+    hasInvalidRateValue(observation.valueDecimal)
+  ) {
+    return {
+      state: "invalid",
+      ageMs: null,
+      providerObservedAt: observation.providerObservedAt,
+    };
+  }
+
+  const result = classifyRateTrust(
     {
       valueDecimal: observation.valueDecimal,
       quality: observation.quality === "valid" ? "valid" : "invalid",
@@ -181,4 +199,18 @@ function classifyObservationTrust(
     },
     nowMs
   );
+
+  return {
+    ...result,
+    providerObservedAt: observation.providerObservedAt,
+  };
+}
+
+function hasInvalidRateValue(valueDecimal: string | null): boolean {
+  if (valueDecimal === null) {
+    return false;
+  }
+
+  const value = Number(valueDecimal);
+  return !Number.isFinite(value) || value <= 0;
 }
