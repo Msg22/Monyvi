@@ -55,6 +55,7 @@ import {
   observeMetalDetailEvents,
   observeMetalDetailHolding,
   observeMetalDetailRateReferences,
+  type BuildMetalDetailReadModelInput,
 } from "@/services/metal-detail-read-model-service";
 import {
   buildMetalHistoryReadModel,
@@ -104,7 +105,9 @@ function rate(role: string, valueDecimal: string): Record<string, unknown> {
   };
 }
 
-function detailInput(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function detailInput(
+  overrides: Partial<BuildMetalDetailReadModelInput> = {}
+): BuildMetalDetailReadModelInput {
   return {
     asset: {
       id: "holding-1",
@@ -233,16 +236,17 @@ describe("metal detail and History read models", () => {
     const terminal = buildMetalDetailReadModel(detailInput({ lifecycleEvents: [event(), sold], holdingState: { holdingId: "holding-1", isVisible: true, reconciliationState: "accepted", status: "sold", userId: "user-1" } }));
     expect(terminal).toMatchObject({ currentValueDecimal: null, isActiveOwnership: false, status: "sold" });
 
+    const historyHoldings = [
+      { id: "sold", lifecycleEvents: [event({ id: "sold-created" }), event({ id: "sold-terminal", kind: "sell", predecessorEventId: "sold-created", occurredAt: new Date("2026-08-23T00:00:00.000Z") })], userId: "user-1" },
+      { id: "reversed", lifecycleEvents: [event({ id: "reversed-created" }), sold, reversed], userId: "user-1" },
+      { id: "foreign", lifecycleEvents: [event({ id: "foreign-created" }), event({ id: "foreign-terminal", kind: "dispose", predecessorEventId: "foreign-created" })], userId: "user-2" },
+    ];
     const history = buildMetalHistoryReadModel({
       filter: "all",
-      holdings: [
-        { id: "sold", lifecycleEvents: [event({ id: "sold-created" }), event({ id: "sold-terminal", kind: "sell", predecessorEventId: "sold-created", occurredAt: new Date("2026-08-23T00:00:00.000Z") })], userId: "user-1" },
-        { id: "reversed", lifecycleEvents: [event({ id: "reversed-created" }), sold, reversed], userId: "user-1" },
-        { id: "foreign", lifecycleEvents: [event({ id: "foreign-created" }), event({ id: "foreign-terminal", kind: "dispose", predecessorEventId: "foreign-created" })], userId: "user-2" },
-      ],
+      holdings: historyHoldings,
       userId: "user-1",
     });
     expect(history.items.map((item) => item.holdingId)).toEqual(["sold"]);
-    expect(buildMetalHistoryReadModel({ ...history, filter: "disposed" }).items).toEqual([]);
+    expect(buildMetalHistoryReadModel({ filter: "disposed", holdings: historyHoldings, userId: "user-1" }).items).toEqual([]);
   });
 });
