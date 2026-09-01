@@ -123,7 +123,27 @@ describe("Metals deterministic E2E fixture registry", () => {
     expect(
       (rows.marketRateObservations as Array<Record<string, unknown>>)[0]
     ).toMatchObject({
+      created_at: "2030-01-02T03:04:05.000Z",
       provider_observed_at: "2030-01-02T03:04:05.000Z",
+    });
+
+    const staleFixture =
+      METALS_E2E_FIXTURES["metals-stale-restart-ar-dark"];
+    const staleRows = (
+      staleFixture?.buildExtraRows as (
+        input: Record<string, unknown>
+      ) => Record<string, unknown>
+    )({
+      currentTimestamp: "2030-01-02T03:04:05.000Z",
+      deterministicUuid: (...parts: unknown[]) => parts.join(":"),
+      seedScope: "metals",
+      userId: "user",
+    });
+    expect(
+      (staleRows.marketRateObservations as Array<Record<string, unknown>>)[0]
+    ).toMatchObject({
+      created_at: "2030-01-02T03:04:05.000Z",
+      provider_observed_at: "2029-12-30T03:04:05.000Z",
     });
   });
 

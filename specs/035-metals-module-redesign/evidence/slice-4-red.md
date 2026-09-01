@@ -144,3 +144,26 @@ rows.
 The Green correction replaces that unsupported fixture with a deterministic
 Gold bar and asserts that no Platinum row is emitted. This changes only
 disposable manual-QA data; it does not rewrite existing user holdings.
+
+## PR #254 deterministic transport and restart-harness Red
+
+Two focused fixture suites failed with four intended assertions before the
+production fixes:
+
+1. a clock-injected fixture still wrote the module's fixed authoring time to
+   the observation transport `created_at` field instead of the injected seed
+   time;
+2. the resolved runtime settings omitted the selected profile's
+   `persistenceState`, so the preflight could not distinguish a restart
+   journey;
+3. the Android preflight exposed no local Metals observation-cache cleanup
+   before the first profile launch;
+4. the restart profile exposed no ordered first-sync, force-stop, same-DB
+   relaunch path.
+
+The Green correction keeps `provider_observed_at` independent for rate
+freshness, clears the local pull-only observation cache while the app is
+stopped, and waits for the first projection before relaunching restart
+profiles without another cleanup. No Android device was attached for this
+verification run, so executable ordering and SQL are automated while the real
+device lifecycle remains an explicit manual check.
