@@ -1,5 +1,6 @@
 import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
 import { AccountsSection } from "@/components/dashboard/AccountsSection";
+import { WealthBreakdownSection } from "@/components/dashboard/WealthBreakdownSection";
 import { CashAccountTooltip } from "@/components/dashboard/CashAccountTooltip";
 import { MicButtonTooltip } from "@/components/dashboard/MicButtonTooltip";
 import { LiveRates } from "@/components/dashboard/LiveRates";
@@ -22,6 +23,7 @@ import { TAB_BAR_HEIGHT } from "@/constants/ui";
 
 import { useAccounts } from "@/hooks/useAccounts";
 import { useMarketRates } from "@/hooks/useMarketRates";
+import { useMetalPortfolio } from "@/hooks/useMetalPortfolio";
 import { useMonthlyPercentageChange, useNetWorth } from "@/hooks/useNetWorth";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useProfile } from "@/hooks/useProfile";
@@ -91,8 +93,12 @@ export default function DashboardScreen(): React.JSX.Element {
   const {
     totalNetWorth,
     totalNetWorthUsd,
+    totalAccounts,
     isLoading: netWorthLoading,
   } = useNetWorth();
+  const { wealthBreakdown, isLoading: isPortfolioLoading } = useMetalPortfolio({
+    accountsValueDecimal: totalAccounts === null ? null : String(totalAccounts),
+  });
   const { monthlyPercentageChange } = useMonthlyPercentageChange();
   const {
     preferredCurrency,
@@ -235,6 +241,15 @@ export default function DashboardScreen(): React.JSX.Element {
               preferredCurrency={preferredCurrency}
               monthlyPercentageChange={monthlyPercentageChange}
               isLoading={isLoading}
+            />
+          </SectionErrorBoundary>
+          <SectionErrorBoundary name={t("section_net_worth")}>
+            <WealthBreakdownSection
+              currency={preferredCurrency}
+              isLoading={netWorthLoading || isPortfolioLoading}
+              breakdown={wealthBreakdown}
+              onAccountsPress={() => router.push("/accounts")}
+              onMetalsPress={() => router.push("/metals")}
             />
           </SectionErrorBoundary>
           <SectionErrorBoundary name={t("section_live_rates")}>
