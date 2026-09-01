@@ -1,5 +1,11 @@
 import type { ImageSourcePropType } from "react-native";
 
+import GoldBarImage from "./gold-bar.png";
+import GoldCoinImage from "./gold-coin.png";
+import GoldJewelryImage from "./gold-jewelry.png";
+import SilverBarImage from "./silver-bar.png";
+import SilverCoinImage from "./silver-coin.png";
+
 export const METAL_RENDER_METALS = ["gold", "silver"] as const;
 export const METAL_RENDER_FORMS = ["bar", "coin", "jewelry"] as const;
 
@@ -66,31 +72,31 @@ export const METAL_RENDER_MANIFEST: Readonly<Record<MetalRenderKey, MetalRenderE
     "gold:bar": objectEntry(
       "gold",
       "bar",
-      require("./gold-bar.png") as ImageSourcePropType,
+      GoldBarImage,
       "7061bc041ea0d39cb9d117f5303d7173a179fbf21df9c5139adc63154ce44889"
     ),
     "gold:coin": objectEntry(
       "gold",
       "coin",
-      require("./gold-coin.png") as ImageSourcePropType,
+      GoldCoinImage,
       "e842f37296abc38a96f9fe0646f3a07e5d5b38910c6b385291e0bd48599d2457"
     ),
     "gold:jewelry": objectEntry(
       "gold",
       "jewelry",
-      require("./gold-jewelry.png") as ImageSourcePropType,
+      GoldJewelryImage,
       "4925134a9ca2c46a0d14b96bc23db56ed2f97577d7fc60887088521782c20466"
     ),
     "silver:bar": objectEntry(
       "silver",
       "bar",
-      require("./silver-bar.png") as ImageSourcePropType,
+      SilverBarImage,
       "96b993e8ef32a1bd0d6320b3581c1e503d5f8b6f4c3eb57ceeabfcdab9b48633"
     ),
     "silver:coin": objectEntry(
       "silver",
       "coin",
-      require("./silver-coin.png") as ImageSourcePropType,
+      SilverCoinImage,
       "9081e7e0dc2e79af4185ce549b6a5359155d72576aa38b50f402c7f36bccd8eb"
     ),
     "silver:jewelry": neutralEntry("silver", "jewelry"),
