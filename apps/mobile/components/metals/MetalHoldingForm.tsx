@@ -223,6 +223,17 @@ export function MetalHoldingForm({
   const submit = useCallback((): void => {
     if (!isSubmitting) onSubmit();
   }, [isSubmitting, onSubmit]);
+  const formMetadata: {
+    readonly fieldOrder: typeof FIELD_ORDER;
+    readonly writingDirection: "rtl" | "ltr";
+  } = {
+    fieldOrder: FIELD_ORDER,
+    writingDirection: isRtl ? "rtl" : "ltr",
+  };
+  const nameAccessibilityState = {
+    invalid: Boolean(validationErrors.name),
+  };
+  const submitAreaMetadata: { readonly bottomInset: number } = { bottomInset };
 
   return (
     <KeyboardAvoidingView
@@ -230,10 +241,7 @@ export function MetalHoldingForm({
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       testID="metal-holding-form"
       accessibilityLanguage={locale}
-      {...({
-        fieldOrder: FIELD_ORDER,
-        writingDirection: isRtl ? "rtl" : "ltr",
-      } as object)}
+      {...formMetadata}
     >
       <PageHeader
         title={copy.title}
@@ -261,9 +269,7 @@ export function MetalHoldingForm({
             onChangeText={(value) => onChange("name", value)}
             error={validationErrors.name}
             autoFocus={firstError === "metal-holding-name-field"}
-            {...({
-              accessibilityState: { invalid: Boolean(validationErrors.name) },
-            } as object)}
+            accessibilityState={nameAccessibilityState}
             maxLength={100}
           />
 
@@ -429,7 +435,7 @@ export function MetalHoldingForm({
         testID="metal-holding-submit-area"
         className="border-t border-slate-200 bg-slate-25 px-5 pt-3 dark:border-slate-800 dark:bg-slate-950"
         style={{ paddingBottom: bottomInset + 12 }}
-        {...({ bottomInset } as object)}
+        {...submitAreaMetadata}
       >
         <TouchableOpacity
           testID="metal-holding-submit"
@@ -596,32 +602,31 @@ function LivePreview({
   const valuationState = preview.valuation.available
     ? "available"
     : "unavailable";
+  const previewMetadata: {
+    readonly metal: "GOLD" | "SILVER";
+    readonly purityCode: string;
+    readonly valuationState: "available" | "unavailable";
+  } = {
+    metal: preview.metal,
+    purityCode: preview.purityCode,
+    valuationState,
+  };
+  const renderMetadata: { readonly metal: "GOLD" | "SILVER" } = {
+    metal: preview.metal,
+  };
   return (
     <View
       testID="metal-holding-live-preview"
       className="rounded-3xl border border-nileGreen-700 bg-nileGreen-50 p-4 dark:border-nileGreen-500 dark:bg-nileGreen-950"
-      {...({
-        metal: preview.metal,
-        purityCode: preview.purityCode,
-        valuationState,
-      } as object)}
+      {...previewMetadata}
     >
       <Text className="mb-3 text-sm font-semibold text-nileGreen-800 dark:text-nileGreen-300">
         {copy.preview}
       </Text>
       <View className={isStacked ? "gap-3" : "flex-row items-center gap-3"}>
-        <View
-          testID="metal-holding-item-render"
-          {...({ metal: preview.metal } as object)}
-        >
+        <View testID="metal-holding-item-render" {...renderMetadata}>
           <MetalHoldingRender
-            itemForm={
-              preview.physicalForm?.toLowerCase() as
-                | "coin"
-                | "bar"
-                | "jewelry"
-                | null
-            }
+            itemForm={toRenderPhysicalForm(preview.physicalForm)}
             metalType={preview.metal}
           />
         </View>
@@ -671,4 +676,13 @@ function LivePreview({
       ) : null}
     </View>
   );
+}
+
+function toRenderPhysicalForm(
+  value: MetalHoldingFormPreview["physicalForm"]
+): "coin" | "bar" | "jewelry" | null {
+  if (value === "COIN") return "coin";
+  if (value === "BAR") return "bar";
+  if (value === "JEWELRY") return "jewelry";
+  return null;
 }
