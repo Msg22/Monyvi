@@ -61,14 +61,17 @@ interface CurrencyDisplayItem {
 }
 
 interface LiveRatesTrustDisplay {
-  readonly gold: LiveRatesTrustState;
-  readonly silver: LiveRatesTrustState;
-  readonly currencies: LiveRatesTrustState;
+  readonly gold: LiveRatesTrustDisplayValue;
+  readonly silver: LiveRatesTrustDisplayValue;
+  readonly currencies: LiveRatesTrustDisplayValue;
 }
 
-type LiveRatesRefreshError =
-  | "cached_refresh_failed"
-  | "initial_refresh_failed";
+interface LiveRatesTrustDisplayValue {
+  readonly state: LiveRatesTrustState;
+  readonly dateTime: string | null;
+}
+
+type LiveRatesRefreshError = "cached_refresh_failed" | "initial_refresh_failed";
 
 interface UseLiveRatesScreenResult {
   readonly isLoading: boolean;
@@ -92,8 +95,8 @@ interface UseLiveRatesScreenResult {
 
 function createInitialTrustReadModel(): LiveRatesTrustReadModel {
   return {
-    gold: { state: "missing", ageMs: null },
-    silver: { state: "missing", ageMs: null },
+    gold: { state: "missing", ageMs: null, providerObservedAt: null },
+    silver: { state: "missing", ageMs: null, providerObservedAt: null },
     currencies: new Map(),
   };
 }
@@ -111,9 +114,8 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
     createInitialTrustReadModel
   );
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [refreshError, setRefreshError] = useState<LiveRatesRefreshError | null>(
-    null
-  );
+  const [refreshError, setRefreshError] =
+    useState<LiveRatesRefreshError | null>(null);
   const isRefreshInProgressRef = useRef(false);
 
   const updateTimestamp = useCallback((): void => {
@@ -269,9 +271,12 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
 
   const rateTrust = useMemo<LiveRatesTrustDisplay>(() => {
     return {
-      gold: trustReadModel.gold.state,
-      silver: trustReadModel.silver.state,
-      currencies: summarizeLiveRatesTrust(trustReadModel.currencies.values()),
+      gold: toTrustDisplayValue(trustReadModel.gold),
+      silver: toTrustDisplayValue(trustReadModel.silver),
+      currencies: toTrustDisplayValue(
+        summarizeLiveRatesTrust(trustReadModel.currencies.values()),
+        null
+      ),
     };
   }, [trustReadModel]);
 
@@ -311,7 +316,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   return {
     isLoading,
     isConnected,
-    isStale: Object.values(rateTrust).some((state) => state !== "fresh"),
+    isStale: Object.values(rateTrust).some(({ state }) => state !== "fresh"),
     hasData: latestRates !== null,
     metals,
     currencies: visibleCurrencies,
@@ -326,5 +331,25 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
     refreshError,
     onRefresh,
     rateTrust,
+  };
+}
+
+function toTrustDisplayValue(
+  value:
+    | {
+        readonly state: LiveRatesTrustState;
+        readonly providerObservedAt: Date | null;
+      }
+    | LiveRatesTrustState,
+  providerObservedAt?: Date | null
+): LiveRatesTrustDisplayValue {
+  const state = typeof value === "string" ? value : value.state;
+  const date =
+    typeof value === "string"
+      ? (providerObservedAt ?? null)
+      : value.providerObservedAt;
+  return {
+    state,
+    dateTime: date?.toLocaleString() ?? null,
   };
 }
