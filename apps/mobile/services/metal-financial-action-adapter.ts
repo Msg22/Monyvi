@@ -1,5 +1,7 @@
 import {
+  canonicalizeFinancialActionEnvelope,
   type FinancialActionEnvelopeV1,
+  type FinancialActionValidationInput,
   type FinancialActionRegistry,
 } from "@monyvi/logic";
 
@@ -24,7 +26,17 @@ export interface CreateMetalFinancialActionEnvelopeInput {
   readonly expectedHoldingRevision: string | null;
   readonly occurredAt: string;
   readonly domainPayload: Readonly<Record<string, unknown>>;
+  readonly validationInput?: FinancialActionValidationInput;
 }
+
+const METAL_ACTION_PAYLOAD_VERSIONS: Record<MetalActionKind, string> = {
+  add: "metals.add/v1",
+  correct: "metals.correct/v1",
+  sell: "metals.sell/v2",
+  dispose: "metals.dispose/v1",
+  delete: "metals.delete/v1",
+  undo: "metals.undo/v1",
+};
 
 const MAX_REVISION = "9223372036854775807";
 const CANONICAL_REVISION_PATTERN = /^(0|[1-9][0-9]*)$/;
@@ -61,5 +73,20 @@ export function createMetalFinancialActionEnvelope(
   } else {
     assertCanonicalMetalRevision(input.expectedHoldingRevision);
   }
-  throw new Error("metal_action_schema_not_approved");
+  return canonicalizeFinancialActionEnvelope(
+    {
+      accountGuards: [],
+      actionId: input.actionId,
+      domain: "metals",
+      domainReferenceId: input.holdingId,
+      envelopeVersion: "monyvi.financial-action/v1",
+      kind: input.kind,
+      occurredAt: input.occurredAt,
+      payload: input.domainPayload,
+      payloadVersion: METAL_ACTION_PAYLOAD_VERSIONS[input.kind],
+      userId: input.userId,
+    },
+    METAL_FINANCIAL_ACTION_REGISTRY,
+    input.validationInput
+  );
 }

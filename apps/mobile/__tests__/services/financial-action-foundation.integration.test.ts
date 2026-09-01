@@ -13,6 +13,10 @@ import {
   assertDirectPreparedLinkedOperationOwnership,
   type MockFinancialActionRecord as MockRecord,
 } from "./financial-action-foundation-test-model";
+import {
+  createApprovedMetalsEnvelope,
+  METALS_VALIDATION_INPUT,
+} from "./financial-action-metals-fixtures";
 
 const mockRecords: MockRecord[] = [];
 let mockCurrentUserId = "018f0c7a-1234-7abc-8def-000000000003";
@@ -178,24 +182,7 @@ function envelope(
   overrides: Partial<FinancialActionEnvelopeV1> = {}
 ): FinancialActionEnvelopeV1 {
   return {
-    actionId: ACTION_ID,
-    userId: USER_ID,
-    domain: "metals" as const,
-    kind: "sell" as const,
-    domainReferenceId: DOMAIN_REFERENCE_ID,
-    envelopeVersion: "monyvi.financial-action/v1",
-    accountGuards: [],
-    occurredAt: "2026-08-31T10:15:30.123Z",
-    payload: {
-      feeMinorUnits: "80000",
-      grossProceedsDecimal: "35500",
-      holdingId: "018f0c7a-1234-7abc-8def-000000000004",
-      includeAccountCredit: false,
-      netProceedsMinorUnits: "3470000",
-      notes: "ذهب",
-      rateReferenceIds: [],
-    },
-    payloadVersion: "metals.sell/v1",
+    ...createApprovedMetalsEnvelope("sell"),
     ...overrides,
   };
 }
@@ -204,7 +191,11 @@ function input(
   envelopeOverride: FinancialActionEnvelopeV1 = envelope(),
   hashProvider: Sha256Provider = sha256Provider
 ): Parameters<typeof createFinancialActionGroup>[0] {
-  return { envelope: envelopeOverride, hashProvider };
+  return {
+    envelope: envelopeOverride,
+    hashProvider,
+    validationInput: METALS_VALIDATION_INPUT,
+  };
 }
 
 function linkedOperation(id: string): MockRecord {

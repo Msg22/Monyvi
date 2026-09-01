@@ -1,5 +1,1 @@
-import { createFinancialActionRegistry } from "@monyvi/logic";
-
-export const APPROVED_FINANCIAL_ACTION_REGISTRY = createFinancialActionRegistry(
-  []
-);
+export { DEFAULT_FINANCIAL_ACTION_REGISTRY as APPROVED_FINANCIAL_ACTION_REGISTRY } from "@monyvi/logic";
