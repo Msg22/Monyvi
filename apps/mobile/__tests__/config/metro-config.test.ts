@@ -7,7 +7,7 @@ interface MetroConfigShape {
     readonly sourceExts: readonly string[];
     readonly nodeModulesPaths?: readonly string[];
     readonly disableHierarchicalLookup?: boolean;
-    readonly blockList?: unknown;
+    readonly blockList?: readonly RegExp[];
   };
   readonly transformer: Record<string, unknown>;
 }
@@ -95,7 +95,7 @@ describe("metro config", () => {
   it("uses node_modules realpath when a secondary worktree links dependencies", () => {
     const mainNodeModules = path.resolve(
       workspaceRoot,
-      "../Monyvi/node_modules"
+      "../main-checkout/node_modules"
     );
     const config = loadMetroConfig(mainNodeModules);
 
@@ -109,6 +109,28 @@ describe("metro config", () => {
       path.resolve(projectRoot, "node_modules"),
       mainNodeModules,
     ]);
+  });
+
+  it("blocks the secondary-worktree junction while retaining package lookup", () => {
+    const mainNodeModules = path.resolve(
+      workspaceRoot,
+      "../main-checkout/node_modules"
+    );
+    const config = loadMetroConfig(mainNodeModules);
+    const blockList = config.resolver.blockList ?? [];
+
+    expect(config.resolver.disableHierarchicalLookup).toBe(false);
+    expect(config.resolver.nodeModulesPaths).toContain(mainNodeModules);
+    expect(
+      blockList.some((pattern) =>
+        pattern.test(path.join(workspaceNodeModules, "react-native-url-polyfill"))
+      )
+    ).toBe(true);
+    expect(
+      blockList.some((pattern) =>
+        pattern.test(path.join(mainNodeModules, "react-native-url-polyfill"))
+      )
+    ).toBe(false);
   });
 
   it("keeps Sentry paths when node_modules is unavailable", () => {

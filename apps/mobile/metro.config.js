@@ -15,6 +15,9 @@ const metroIgnoredPaths = [
   path.resolve(projectRoot, ".gradle"),
   path.resolve(projectRoot, "build"),
   path.resolve(projectRoot, ".kotlin"),
+  ...(realWorkspaceNodeModules === workspaceNodeModules
+    ? []
+    : [workspaceNodeModules]),
 ];
 
 function escapeRegExp(value) {
