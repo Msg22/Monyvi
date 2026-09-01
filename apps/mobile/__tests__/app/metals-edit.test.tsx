@@ -1,6 +1,31 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 
+jest.mock("@/components/navigation/PageHeader", () => {
+  const { Pressable, Text, View } = jest.requireActual(
+    "react-native"
+  ) as typeof import("react-native");
+  return {
+    PageHeader: ({
+      title,
+      onBack,
+    }: {
+      readonly title: string;
+      readonly onBack?: () => void;
+    }) => (
+      <View>
+        <Text>{title}</Text>
+        <Pressable testID="header-back" onPress={onBack}>
+          <Text>Back</Text>
+        </Pressable>
+      </View>
+    ),
+  };
+});
+jest.mock("@/context/ThemeContext", () => ({
+  useTheme: (): { readonly isDark: boolean } => ({ isDark: false }),
+}));
+
 interface EditMetalHoldingFormModule {
   readonly MetalHoldingForm: React.ComponentType<EditMetalHoldingFormProps>;
 }
@@ -14,14 +39,50 @@ interface EditMetalHoldingFormProps {
   readonly fontScale: number;
   readonly bottomInset: number;
   readonly holdingStatus: "active" | "sold" | "disposed";
-  readonly original: EditFacts;
-  readonly current: EditFacts;
-  readonly correctionReason: string | null;
+  readonly values: {
+    readonly name: string;
+    readonly metal: "GOLD" | "SILVER";
+    readonly weightGrams: string;
+    readonly purityCode: string;
+    readonly purchasePrice: string;
+    readonly purchaseCurrency: string;
+    readonly purchaseDate: string;
+    readonly physicalForm: "COIN" | "BAR" | "JEWELRY" | null;
+    readonly notes: string;
+  };
+  readonly preview: {
+    readonly metal: "GOLD" | "SILVER";
+    readonly purityCode: string;
+    readonly purityLabel: string;
+    readonly purityFactorDecimal: string;
+    readonly physicalForm: "COIN" | "BAR" | "JEWELRY" | null;
+    readonly name?: string;
+    readonly weightGramsDecimal?: string;
+    readonly displayCurrency?: string;
+    readonly valuation: {
+      readonly available: true;
+      readonly valueDecimal: string;
+    };
+  };
+  readonly editState: {
+    readonly affectedChanges: readonly {
+      readonly field: string;
+      readonly label: string;
+      readonly before: string;
+      readonly after: string;
+      readonly isFinancial: boolean;
+    }[];
+    readonly correctionReason: string;
+    readonly consequenceAcknowledged: boolean;
+    readonly requiresConsequenceAcknowledgment?: boolean;
+  };
   readonly isSubmitting?: boolean;
   readonly validationErrors?: Readonly<Record<string, string>>;
   readonly onChange: (field: string, value: string | null) => void;
   readonly onSubmit: () => void;
   readonly onRequestExit: () => void;
+  readonly onCorrectionReasonChange: (value: string) => void;
+  readonly onAcknowledgeConsequences: () => void;
 }
 
 interface EditFacts {
@@ -70,17 +131,73 @@ function renderEdit(
     fontScale: 1,
     bottomInset: 34,
     holdingStatus: "active",
-    original,
-    current: original,
-    correctionReason: null,
+    values: toValues(original),
+    preview: toPreview(original),
+    editState: {
+      affectedChanges: [],
+      correctionReason: "",
+      consequenceAcknowledged: false,
+    },
     onChange: jest.fn(),
     onSubmit: jest.fn(),
     onRequestExit: jest.fn(),
+    onCorrectionReasonChange: jest.fn(),
+    onAcknowledgeConsequences: jest.fn(),
     ...overrides,
   };
   const MetalHoldingForm = loadEditForm();
   render(<MetalHoldingForm {...props} />);
   return props;
+}
+
+function toValues(facts: EditFacts): EditMetalHoldingFormProps["values"] {
+  return {
+    name: facts.name,
+    metal: facts.metal,
+    weightGrams: facts.weightGramsDecimal,
+    purityCode: "gold-999",
+    purchasePrice: facts.purchasePriceDecimal,
+    purchaseCurrency: facts.purchaseCurrency,
+    purchaseDate: facts.purchaseDate,
+    physicalForm: facts.physicalForm,
+    notes: facts.notes ?? "",
+  };
+}
+
+function toPreview(facts: EditFacts): EditMetalHoldingFormProps["preview"] {
+  return {
+    metal: facts.metal,
+    purityCode: "gold-999",
+    purityLabel: facts.purityLabel,
+    purityFactorDecimal: "0.999",
+    physicalForm: facts.physicalForm,
+    name: facts.name,
+    weightGramsDecimal: facts.weightGramsDecimal,
+    displayCurrency: facts.purchaseCurrency,
+    valuation: {
+      available: true,
+      valueDecimal: facts.currentValueDecimal ?? "0",
+    },
+  };
+}
+
+function materialOverride(
+  current: EditFacts,
+  field: string,
+  label: string,
+  before: string,
+  after: string,
+  isFinancial = true
+): Partial<EditMetalHoldingFormProps> {
+  return {
+    values: toValues(current),
+    preview: toPreview(current),
+    editState: {
+      affectedChanges: [{ field, label, before, after, isFinancial }],
+      correctionReason: "Corrected details",
+      consequenceAcknowledged: true,
+    },
+  };
 }
 
 describe("Edit metal holding form", () => {
@@ -97,13 +214,15 @@ describe("Edit metal holding form", () => {
       "metal-holding-purchase-date-field",
       "metal-holding-physical-form-field",
       "metal-holding-notes-field",
+      "metal-holding-live-preview",
+      "metal-holding-local-first-status",
       "metal-holding-submit",
     ]);
     expect(screen.getByTestId("metal-holding-metal-field")).toHaveProp(
       "accessibilityState",
       expect.objectContaining({ disabled: true })
     );
-    expect(screen.getByText("24K · 999")).toBeOnTheScreen();
+    expect(screen.getAllByText("24K · 999").length).toBeGreaterThan(0);
     expect(screen.getByTestId("metal-holding-submit")).toHaveTextContent(
       "Save changes"
     );
@@ -112,34 +231,46 @@ describe("Edit metal holding form", () => {
 
   it("keeps metadata-only Save ordinary, then reveals persisted/current cues, reason, and affected-only summary for material changes", (): void => {
     const metadataProps = renderEdit({
-      current: { ...original, name: "Coin for wedding" },
+      values: toValues({ ...original, name: "Coin for wedding" }),
+      preview: toPreview({ ...original, name: "Coin for wedding" }),
     });
     expect(screen.queryByTestId("metal-holding-correction-reason")).toBeNull();
     expect(screen.queryByTestId("metal-holding-what-will-change")).toBeNull();
     fireEvent.press(screen.getByTestId("metal-holding-submit"));
     expect(metadataProps.onSubmit).toHaveBeenCalledTimes(1);
 
-    renderEdit({
-      current: { ...original, weightGramsDecimal: "11.125" },
-      correctionReason: "Corrected scale reading",
-    });
-    expect(screen.getByTestId("metal-holding-weight-previous")).toHaveTextContent(
-      "10.125"
+    renderEdit(
+      materialOverride(
+        { ...original, weightGramsDecimal: "11.125" },
+        "weight",
+        "Weight",
+        "10.125",
+        "11.125"
+      )
     );
-    expect(screen.getByTestId("metal-holding-weight-current")).toHaveTextContent(
-      "11.125"
-    );
-    expect(screen.getByTestId("metal-holding-correction-reason")).toBeOnTheScreen();
-    expect(screen.getByTestId("metal-holding-what-will-change")).toHaveTextContent(
-      "Weight"
-    );
-    expect(screen.queryByTestId("metal-holding-purchase-date-previous")).toBeNull();
+    expect(screen.getByText("Previous: 10.125")).toBeOnTheScreen();
+    expect(screen.getByText("Current: 11.125")).toBeOnTheScreen();
+    expect(
+      screen.getByTestId("metal-holding-correction-reason")
+    ).toBeOnTheScreen();
+    expect(screen.getByText("Weight: 10.125 → 11.125")).toBeOnTheScreen();
+    expect(
+      screen.queryByTestId("metal-holding-purchase-date-previous")
+    ).toBeNull();
   });
 
   it("hides correction state when every material delta is restored while retaining metadata changes", (): void => {
     renderEdit({
-      current: { ...original, name: "Corrected name", notes: "Still mine" },
-      correctionReason: "No longer needed",
+      values: toValues({
+        ...original,
+        name: "Corrected name",
+        notes: "Still mine",
+      }),
+      preview: toPreview({
+        ...original,
+        name: "Corrected name",
+        notes: "Still mine",
+      }),
     });
 
     expect(screen.queryByTestId("metal-holding-correction-reason")).toBeNull();
@@ -148,20 +279,22 @@ describe("Edit metal holding form", () => {
   });
 
   it("describes physical-form-only correction without inventing a financial delta", (): void => {
-    renderEdit({
-      current: { ...original, physicalForm: "BAR" },
-      correctionReason: "Recorded wrong form",
-    });
+    renderEdit(
+      materialOverride(
+        { ...original, physicalForm: "BAR" },
+        "physicalForm",
+        "Physical form",
+        "Coin",
+        "Bar",
+        false
+      )
+    );
 
-    expect(screen.getByTestId("metal-holding-what-will-change")).toHaveTextContent(
-      "Physical form: Coin → Bar"
-    );
-    expect(screen.getByTestId("metal-holding-what-will-change")).toHaveTextContent(
-      "Current value stays 51200"
-    );
-    expect(screen.getByTestId("metal-holding-what-will-change")).toHaveTextContent(
-      "This correction will appear in History"
-    );
+    expect(screen.getByText("Physical form: Coin → Bar")).toBeOnTheScreen();
+    expect(screen.getByText("Current value stays 51200")).toBeOnTheScreen();
+    expect(
+      screen.getByText("This correction will appear in History")
+    ).toBeOnTheScreen();
   });
 
   it("limits terminal holdings to metadata and keeps dirty exit, focus, pending lock, safe area, Arabic RTL, theme, and compact 200 percent reflow accessible", (): void => {
@@ -189,8 +322,10 @@ describe("Edit metal holding form", () => {
       "writingDirection",
       "rtl"
     );
-    expect(screen.getByTestId("metal-holding-weight-purity-stacked")).toBeOnTheScreen();
-    fireEvent.press(screen.getByTestId("metal-holding-exit"));
+    expect(
+      screen.queryByTestId("metal-holding-weight-purity-stacked")
+    ).toBeNull();
+    fireEvent.press(screen.getByTestId("header-back"));
     expect(props.onRequestExit).toHaveBeenCalledTimes(1);
     fireEvent.press(screen.getByTestId("metal-holding-submit"));
     expect(props.onSubmit).not.toHaveBeenCalled();

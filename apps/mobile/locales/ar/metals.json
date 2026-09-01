@@ -77,6 +77,32 @@
       "future_date": "اختر تاريخ شراء ليس في المستقبل."
     }
   },
+  "edit": {
+    "title": "تعديل المقتنى",
+    "submit": "حفظ التغييرات",
+    "submitting": "جارٍ حفظ التغييرات…",
+    "local_first": "تُحفظ التغييرات على هذا الجهاز أولاً، ثم تتم مزامنتها عند توفر اتصال.",
+    "correction_reason": "لماذا تغيّر هذه التفاصيل؟",
+    "what_will_change": "ما الذي سيتغير",
+    "previous": "قبل",
+    "current": "الآن",
+    "history_note": "سيظهر هذا التصحيح في السجل.",
+    "current_value_stays": "تظل القيمة الحالية",
+    "acknowledge_consequences": "راجعت هذه التغييرات",
+    "not_recorded": "غير مسجل",
+    "exit_title": "تجاهل التغييرات؟",
+    "exit_message": "ستفقد التغييرات غير المحفوظة.",
+    "keep_editing": "متابعة التعديل",
+    "discard": "تجاهل التغييرات",
+    "fields": {
+      "weight": "الوزن",
+      "purity": "النقاء",
+      "purchasePrice": "سعر الشراء",
+      "purchaseCurrency": "عملة الشراء",
+      "purchaseDate": "تاريخ الشراء",
+      "physicalForm": "الشكل المادي"
+    }
+  },
   "name": "الاسم",
   "name_placeholder": "مثال: خاتم الزواج",
   "weight_grams": "الوزن (غرام)",

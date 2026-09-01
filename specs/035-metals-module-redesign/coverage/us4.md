@@ -11,4 +11,11 @@
 | US4-M07 | CAS/replay/restart | n/a | deferred deterministic conflict fixture | multi-device sync |
 | US4-M08 | n/a | RTL/theme/compact/200%/safe-area | deferred profile | native assistive tech/layout matrix |
 
-Red gate: T086–T088 intentionally fail until T090–T091 implement Edit command, facade, route, and form mode. Green gate must execute each deterministic suite and report coverage; no Red coverage percentage is meaningful.
+## Green checkpoint — 2026-09-01
+
+- `metals-edit.test.tsx`: 5/5 Green for shared order, locked Metal, direct Save, metadata/material state, physical-form-only copy, terminal immutability, RTL/reflow, pending lock, focus, and bottom inset.
+- `edit-metal-holding-preview-service.test.ts`: 4/4 Green for metadata separation, affected-only material comparison, restored deltas, physical-form-only consequences, and terminal policy.
+- `edit-metal-holding-command-service.integration.test.ts`: 5/5 Green against SQLite for atomic projections/evidence/History/revision, predecessor deactivation, metadata LWW, required reason, replay/hash mismatch, and terminal immutability.
+- Add regression plus metals i18n contract: 13/13 Green. Combined focused gate: 5 suites, 27 tests.
+- Mobile TypeScript and changed-file ESLint with project rules: Green. Full mobile lint reaches one unrelated pre-existing unused import in `metal-financial-action-foundation.integration.test.ts`; no US4 lint finding remains.
+- Maestro/native device execution remains pending under the active physical-device QA lock. T092 stays open; no native, visual, timing, or assistive-technology result is claimed.

@@ -77,6 +77,32 @@
       "future_date": "Choose a purchase date that is not in the future."
     }
   },
+  "edit": {
+    "title": "Edit holding",
+    "submit": "Save changes",
+    "submitting": "Saving changes…",
+    "local_first": "Changes are saved on this device first and sync when a connection is available.",
+    "correction_reason": "Why are you changing these details?",
+    "what_will_change": "What will change",
+    "previous": "Before",
+    "current": "Now",
+    "history_note": "This correction will appear in History.",
+    "current_value_stays": "Current value stays",
+    "acknowledge_consequences": "I reviewed these changes",
+    "not_recorded": "Not recorded",
+    "exit_title": "Discard changes?",
+    "exit_message": "Your unsaved changes will be lost.",
+    "keep_editing": "Keep editing",
+    "discard": "Discard changes",
+    "fields": {
+      "weight": "Weight",
+      "purity": "Purity",
+      "purchasePrice": "Purchase price",
+      "purchaseCurrency": "Purchase currency",
+      "purchaseDate": "Purchase date",
+      "physicalForm": "Physical form"
+    }
+  },
   "name": "Name",
   "name_placeholder": "e.g. Wedding ring",
   "weight_grams": "Weight (grams)",

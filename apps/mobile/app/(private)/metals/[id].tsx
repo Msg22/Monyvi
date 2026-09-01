@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { MetalHoldingDetailScreen } from "@/components/metals/MetalHoldingDetailScreen";
 import { getHoldingActionDescriptors } from "@/components/metals/holding-actions/registry";
+import { getEditMetalHoldingHref } from "@/components/metals/holding-actions/edit-action";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { useMetalHoldingDetail } from "@/hooks/useMetalHoldingDetail";
 
@@ -21,6 +22,9 @@ export default function MetalHoldingDetailRoute(): React.JSX.Element {
         {...detail}
         onRetry={detail.retry}
         onViewHistory={() => router.push("/metals/history")}
+        onAction={(action) => {
+          if (action === "edit" && id) router.push(getEditMetalHoldingHref(id));
+        }}
       />
     </View>
   );
