@@ -56,10 +56,12 @@ import {
   observePortfolioRecentHistory,
   selectPortfolioHoldings,
   shapeMetalPortfolioHoldings,
+  type MetalPortfolioAssetSnapshot,
   type MetalPortfolioAssetMetalSnapshot,
   type ShapeMetalPortfolioHoldingsInput,
 } from "@/services/metal-portfolio-read-model-service";
-import type { Asset, AssetMetal } from "@monyvi/db";
+import type { AssetMetal } from "@monyvi/db";
+import type { MetalsIsoCurrencyCode } from "@monyvi/logic";
 import type { LiveRatesTrustReadModel } from "@/services/live-rates-trust-read-model-service";
 
 interface TestPortfolioHolding {
@@ -75,7 +77,7 @@ interface TestPortfolioHolding {
   readonly soldResultDecimal: string | null;
   readonly occurredAt: Date;
   readonly physicalForm: string | null;
-  readonly purchaseCurrency: string | null;
+  readonly purchaseCurrency: MetalsIsoCurrencyCode | null;
   readonly purchaseDate: Date | null;
   readonly purchasePriceDecimal: string | null;
   readonly purityCatalogVersion: string | null;
@@ -148,22 +150,27 @@ function buildCurrentRates(): LiveRatesTrustReadModel {
   };
 }
 
+function buildRawAssetSnapshot(
+  overrides: Partial<MetalPortfolioAssetSnapshot> = {}
+): MetalPortfolioAssetSnapshot {
+  return {
+    id: "holding-1",
+    userId: "user-1",
+    name: "Exact gold",
+    createdAt: new Date("2024-01-01T10:00:00.000Z"),
+    purchaseDate: new Date("2024-01-01T00:00:00.000Z"),
+    purchaseCurrency: "EGP",
+    purchasePriceDecimal: "20000",
+    ...overrides,
+  };
+}
+
 function shapeInput(): ShapeMetalPortfolioHoldingsInput {
   return {
     userId: "user-1",
     preferredCurrency: "EGP" as const,
     currentRates: buildCurrentRates(),
-    assets: [
-      {
-        id: "holding-1",
-        userId: "user-1",
-        name: "Exact gold",
-        createdAt: new Date("2024-01-01T10:00:00.000Z"),
-        purchaseDate: new Date("2024-01-01T00:00:00.000Z"),
-        purchaseCurrency: "EGP",
-        purchasePriceDecimal: "20000",
-      },
-    ],
+    assets: [buildRawAssetSnapshot()],
     assetMetals: [
       {
         assetId: "holding-1",
@@ -445,19 +452,9 @@ describe("metal portfolio read model", () => {
 
   it("accepts persisted optional form and rejects unsupported purchase currency", () => {
     const input = shapeInput();
-    const persistedAsset: Pick<
-      Asset,
-      | "createdAt"
-      | "id"
-      | "name"
-      | "purchaseCurrency"
-      | "purchaseDate"
-      | "purchasePriceDecimal"
-      | "userId"
-    > = {
-      ...input.assets[0],
+    const persistedAsset = buildRawAssetSnapshot({
       purchaseCurrency: "BTC",
-    };
+    });
     const persistedMetal: Pick<
       AssetMetal,
       | "assetId"
