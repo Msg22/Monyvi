@@ -1,7 +1,8 @@
 const FIXED_NOW = "2026-08-31T10:15:30.123Z";
+const STALE_RATE_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
 function buildMetalsRows(scenario) {
-  return ({ deterministicUuid, seedScope, userId }) => {
+  return ({ currentTimestamp, deterministicUuid, seedScope, userId }) => {
     const holdingId = deterministicUuid(seedScope, userId, "metals:holding");
     const stateId = deterministicUuid(
       seedScope,
@@ -81,10 +82,12 @@ function buildMetalsRows(scenario) {
                 orientation: "quote_per_base",
                 provider_observed_at:
                   scenario.rateState === "stale"
-                    ? "2026-08-28T10:15:30.123Z"
+                    ? new Date(
+                        Date.parse(currentTimestamp) - STALE_RATE_AGE_MS
+                      ).toISOString()
                     : scenario.rateState === "unknown"
                       ? null
-                      : FIXED_NOW,
+                      : currentTimestamp,
                 source: "e2e_fixture",
                 quality: "valid",
                 created_at: FIXED_NOW,
@@ -106,6 +109,8 @@ function createMetalsProfile(name, scenario) {
     rateState: scenario.rateState,
     persistenceState: scenario.persistenceState,
     accountEligibility: scenario.accountEligibility,
+    baseAccountCurrency:
+      scenario.accountEligibility === "ineligible" ? "USD" : "EGP",
     controls: Object.freeze({ reset: true, inspect: true }),
     buildExtraRows: buildMetalsRows(scenario),
   });

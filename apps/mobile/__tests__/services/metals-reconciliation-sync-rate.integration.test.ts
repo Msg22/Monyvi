@@ -1,5 +1,4 @@
 import { createMetalRateReferenceService } from "../../services/metal-rate-reference-service";
-import { applyMetalMetadataPatch } from "../../services/metal-metadata-service";
 
 jest.mock("@monyvi/db", (): unknown => {
   const schemaModule: unknown = jest.requireActual("../../../../packages/db/src/schema");
@@ -18,7 +17,7 @@ import { stripMetalActionFragments } from "../../services/sync/ownership-guards"
 import { runMetalPullStrategy } from "../../services/sync/pull-strategies";
 import { runMetalPushStrategy } from "../../services/sync/push-service";
 
-describe("Metals sync, rates, and metadata", () => {
+describe("Metals sync and rates", () => {
   it("keeps rate references immutable and validates the role/kind matrix", () => {
     const service = createMetalRateReferenceService();
     const reference = service.capture({
@@ -40,27 +39,6 @@ describe("Metals sync, rates, and metadata", () => {
     expect(() => service.capture(invalidReference as never)).toThrow(
       "invalid_metal_rate_reference"
     );
-  });
-
-  it("applies LWW only to name and notes", () => {
-    expect(
-      applyMetalMetadataPatch(
-        { name: "Old", notes: "Old note", updatedAt: "2026-08-01T00:00:00.000Z" },
-        { name: "New", notes: "New note", updatedAt: "2026-08-02T00:00:00.000Z" }
-      )
-    ).toEqual({ name: "New", notes: "New note", updatedAt: "2026-08-02T00:00:00.000Z" });
-    const invalidMetadata = {
-      name: "New",
-      notes: null,
-      updatedAt: "2026-08-02T00:00:00.000Z",
-      status: "sold",
-    };
-    expect(() =>
-      applyMetalMetadataPatch(
-        { name: "Old", notes: null, updatedAt: "2026-08-01T00:00:00.000Z" },
-        invalidMetadata as never
-      )
-    ).toThrow("invalid_metal_metadata_patch");
   });
 
   it("dedicates action-owned tables and strips protected generic fragments", () => {

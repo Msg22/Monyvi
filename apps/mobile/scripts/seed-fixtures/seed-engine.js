@@ -623,6 +623,7 @@ async function restoreSeededAccountBalances(client, accountRows) {
 function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
   const currentTimestamp = new Date().toISOString();
   const currentDate = currentTimestamp.slice(0, 10);
+  const baseAccountCurrency = fixture.baseAccountCurrency ?? "EGP";
   const extraRows = fixture.buildExtraRows
     ? fixture.buildExtraRows({
         categoryIds: CATEGORY_IDS,
@@ -728,7 +729,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         name: fixture.accountNames.cash,
         type: "CASH",
         balance: 2500,
-        currency: "EGP",
+        currency: baseAccountCurrency,
         is_default: true,
         deleted: false,
         created_at: FIXED_NOW,
@@ -740,7 +741,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         name: fixture.accountNames.bank,
         type: "BANK",
         balance: 12430.55,
-        currency: "EGP",
+        currency: baseAccountCurrency,
         institution_id: "nbe",
         provider_display_name: "NBE",
         is_default: false,
@@ -754,7 +755,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         name: fixture.accountNames.qnbBank,
         type: "BANK",
         balance: 3200,
-        currency: "EGP",
+        currency: baseAccountCurrency,
         institution_id: "qnb-egypt",
         provider_display_name: "QNB",
         is_default: false,
@@ -768,7 +769,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         name: fixture.accountNames.wallet,
         type: "DIGITAL_WALLET",
         balance: 950,
-        currency: "EGP",
+        currency: baseAccountCurrency,
         institution_id: "vodafone-cash",
         provider_display_name: "Vodafone Cash",
         is_default: false,
@@ -842,7 +843,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         user_id: userId,
         account_id: seedIds.accounts.cash,
         amount: 125,
-        currency: "EGP",
+        currency: baseAccountCurrency,
         type: "EXPENSE",
         category_id: CATEGORY_IDS.shopping,
         counterparty: fixture.transactionCounterparties.expense,
@@ -859,7 +860,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         user_id: userId,
         account_id: seedIds.accounts.bank,
         amount: 3000,
-        currency: "EGP",
+        currency: baseAccountCurrency,
         type: "INCOME",
         category_id: CATEGORY_IDS.income,
         counterparty: fixture.transactionCounterparties.income,
@@ -880,7 +881,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         from_account_id: seedIds.accounts.bank,
         to_account_id: seedIds.accounts.cash,
         amount: 500,
-        currency: "EGP",
+        currency: baseAccountCurrency,
         exchange_rate: null,
         converted_amount: null,
         notes: fixture.transferNotes.atm,
