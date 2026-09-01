@@ -51,6 +51,20 @@ const database = {
   },
 } as unknown as Database;
 
+interface EmptySelectChain {
+  readonly select: jest.Mock<EmptySelectChain>;
+  readonly eq: jest.Mock<EmptySelectChain>;
+  readonly gt: jest.Mock<EmptySelectChain>;
+  readonly lte: jest.Mock<EmptySelectChain>;
+  readonly then: (
+    resolve: (value: {
+      readonly data: readonly [];
+      readonly error: null;
+    }) => unknown,
+    reject?: (reason: unknown) => unknown
+  ) => Promise<unknown>;
+}
+
 describe("sync auth scope lifecycle", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -65,15 +79,22 @@ describe("sync auth scope lifecycle", () => {
       error: null,
     });
     mockFrom.mockImplementation(() => {
-      const chain = {
-        select: jest.fn(() => chain),
-        eq: jest.fn(() => chain),
-        gt: jest.fn(() => chain),
-        lte: jest.fn(() => chain),
+      const chain: EmptySelectChain = {
+        select: jest.fn((): EmptySelectChain => chain),
+        eq: jest.fn((): EmptySelectChain => chain),
+        gt: jest.fn((): EmptySelectChain => chain),
+        lte: jest.fn((): EmptySelectChain => chain),
         then: (
-          resolve: (value: { readonly data: readonly []; readonly error: null }) => unknown,
+          resolve: (value: {
+            readonly data: readonly [];
+            readonly error: null;
+          }) => unknown,
           reject?: (reason: unknown) => unknown
-        ) => Promise.resolve({ data: [], error: null } as const).then(resolve, reject),
+        ) =>
+          Promise.resolve({ data: [], error: null } as const).then(
+            resolve,
+            reject
+          ),
       };
       return chain;
     });

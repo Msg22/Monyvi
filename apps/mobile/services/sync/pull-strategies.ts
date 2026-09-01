@@ -28,6 +28,7 @@ export const SYNC_PULL_ERROR_CODES = {
   AUTH_SCOPE_LOST: "sync_pull_auth_scope_lost",
   INVALID_EXACT_TEXT: "sync_invalid_exact_text",
   INVALID_METAL_OBSERVATION_PAGE: "sync_invalid_metal_observation_page",
+  INVALID_PULL_ROW: "sync_invalid_pull_row",
 } as const;
 
 const METAL_OBSERVATION_PAGE_SIZE = 500;
@@ -57,6 +58,29 @@ interface MetalObservationPage {
   readonly nextCursor: MetalObservationCursor | null;
   readonly rows: readonly MetalObservationRpcRow[];
   readonly upperWatermark: string;
+}
+
+interface PulledRow extends Record<string, unknown> {
+  readonly deleted?: boolean;
+  readonly id: string;
+}
+
+function isPulledRow(value: unknown): value is PulledRow {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    "id" in value &&
+    typeof value.id === "string" &&
+    (!("deleted" in value) || typeof value.deleted === "boolean")
+  );
+}
+
+function requirePulledRows(values: readonly unknown[]): readonly PulledRow[] {
+  if (!values.every(isPulledRow)) {
+    throw new Error(SYNC_PULL_ERROR_CODES.INVALID_PULL_ROW);
+  }
+  return values;
 }
 
 export interface MetalObservationPullResult {
@@ -308,8 +332,9 @@ export async function pullMarketRateObservations(
     ? { createdAt: lastSyncDate, id: UUID_MAX }
     : null;
   const seenCursors = new Set<string>();
+  let shouldPullNextPage = true;
 
-  while (true) {
+  while (shouldPullNextPage) {
     const { data, error } = await supabase.rpc(METAL_OBSERVATION_RPC, {
       p_after_created_at: cursor?.createdAt ?? null,
       p_after_id: cursor?.id ?? null,
@@ -325,7 +350,10 @@ export async function pullMarketRateObservations(
     }
     upperWatermark = page.upperWatermark;
     rows.push(...page.rows);
-    if (!page.hasMore || page.nextCursor === null) break;
+    if (!page.hasMore || page.nextCursor === null) {
+      shouldPullNextPage = false;
+      continue;
+    }
 
     const cursorKey = `${page.nextCursor.createdAt}\u0000${page.nextCursor.id}`;
     if (seenCursors.has(cursorKey)) failInvalidObservationPage();
@@ -417,11 +445,14 @@ export async function pullUserTable(
     return { created: [], updated: [], deleted: [] };
   }
 
-  const deleted = data
+  // PostgREST supports the exact-value `::text` projections above, but the
+  // Supabase select-string type parser cannot infer rows containing casts.
+  const records = requirePulledRows(data);
+  const deleted = records
     .filter((record) => record.deleted === true)
     .map((record) => record.id);
 
-  const activeRecords = data
+  const activeRecords = records
     .filter((record) => record.deleted !== true)
     .map((record) =>
       transformFromSupabase(table, normalizePulledExactText(table, record))
@@ -479,11 +510,14 @@ export async function pullChildTable(
     return { created: [], updated: [], deleted: [] };
   }
 
-  const deleted = data
+  // PostgREST supports the exact-value `::text` projections above, but the
+  // Supabase select-string type parser cannot infer rows containing casts.
+  const records = requirePulledRows(data);
+  const deleted = records
     .filter((record) => record.deleted === true)
     .map((record) => record.id);
 
-  const activeRecords = data
+  const activeRecords = records
     .filter((record) => record.deleted !== true)
     .map((record) =>
       transformFromSupabase(table, normalizePulledExactText(table, record))
@@ -552,10 +586,13 @@ export async function pullMetalHoldingStates(
   if (error) {
     throw createSyncTableError("pull", "metal_holding_states", error);
   }
-  const deleted = (data ?? [])
+  // PostgREST supports the exact-value `::text` projection above, but the
+  // Supabase select-string type parser cannot infer rows containing casts.
+  const records = requirePulledRows(data ?? []);
+  const deleted = records
     .filter((record) => record.deleted === true)
     .map((record) => record.id);
-  const updated = (data ?? [])
+  const updated = records
     .filter((record) => record.deleted !== true)
     .map((record) =>
       transformFromSupabase(

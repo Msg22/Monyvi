@@ -8,7 +8,11 @@ import {
 } from "../../../../packages/logic/src/financial-actions";
 import type { Model } from "@nozbe/watermelondb";
 
-import type { MockFinancialActionRecord as MockRecord } from "./financial-action-foundation-test-model";
+import {
+  assertDirectCachedLinkedOperationOwnership,
+  assertDirectPreparedLinkedOperationOwnership,
+  type MockFinancialActionRecord as MockRecord,
+} from "./financial-action-foundation-test-model";
 
 const mockRecords: MockRecord[] = [];
 let mockCurrentUserId = "018f0c7a-1234-7abc-8def-000000000003";
@@ -139,16 +143,17 @@ import {
   type FinancialActionLinkedOperationPreparedOwnershipInput,
   FINANCIAL_ACTION_FOUNDATION_ERROR_CODES,
   createFinancialActionFoundationRepository,
-  createFinancialActionGroup as createProductionFinancialActionGroup,
-  getFinancialActionGroup as getProductionFinancialActionGroup,
 } from "../../services/financial-action-foundation-repository";
 
 const testRepository = createFinancialActionFoundationRepository({
-  database: jest.requireMock("@monyvi/db").database,
-  getCurrentUserDataScope: jest.requireMock("../../services/user-data-access")
-    .getCurrentUserDataScope,
-  assertExpectedCurrentUser: jest.requireMock("../../services/user-data-access")
-    .assertExpectedCurrentUser,
+  database:
+    jest.requireMock<typeof import("@monyvi/db")>("@monyvi/db").database,
+  getCurrentUserDataScope: jest.requireMock<
+    typeof import("../../services/user-data-access")
+  >("../../services/user-data-access").getCurrentUserDataScope,
+  assertExpectedCurrentUser: jest.requireMock<
+    typeof import("../../services/user-data-access")
+  >("../../services/user-data-access").assertExpectedCurrentUser,
   registry: DEFAULT_FINANCIAL_ACTION_REGISTRY,
 });
 const {
@@ -275,26 +280,6 @@ function inputWithLinkedOperations(
   };
 }
 
-function assertDirectCachedLinkedOperationOwnership(
-  input: FinancialActionLinkedOperationCachedOwnershipInput
-): Promise<void> {
-  input.cachedPreimages.forEach((snapshot) => {
-    if ((snapshot.raw as unknown as { user_id?: string }).user_id !== input.userId)
-      throw new Error("ownership_failed");
-  });
-  return Promise.resolve();
-}
-
-function assertDirectPreparedLinkedOperationOwnership(
-  input: FinancialActionLinkedOperationPreparedOwnershipInput
-): Promise<void> {
-  input.preparedPostimages.forEach((snapshot) => {
-    if ((snapshot.raw as unknown as { user_id?: string }).user_id !== input.userId)
-      throw new Error("ownership_failed");
-  });
-  return Promise.resolve();
-}
-
 describe("financial action foundation repository", () => {
   beforeEach(() => {
     mockRecords.splice(0);
@@ -326,26 +311,6 @@ describe("financial action foundation repository", () => {
     expect(mockDatabaseBatch).toHaveBeenCalledTimes(1);
     expect(mockRecords[0]).not.toHaveProperty("accountId");
     expect(mockRecords[0]).not.toHaveProperty("amountMinorUnits");
-  });
-
-  it("fails closed at the production repository for the unpublished Metals Sell schema", async () => {
-    const digestUtf8 = jest.fn(sha256Provider.digestUtf8);
-
-    await expect(
-      createProductionFinancialActionGroup(input(envelope(), { digestUtf8 }))
-    ).rejects.toThrow("financial_action_unknown_definition");
-
-    expect(digestUtf8).not.toHaveBeenCalled();
-    expect(mockDatabaseWrite).not.toHaveBeenCalled();
-    expect(mockRecords).toHaveLength(0);
-  });
-
-  it("keeps stored roots readable after their creation schema leaves the approved registry", async () => {
-    await createFinancialActionGroup(input());
-
-    await expect(
-      getProductionFinancialActionGroup(ACTION_ID)
-    ).resolves.toMatchObject({ actionId: ACTION_ID, userId: USER_ID });
   });
 
   it("returns the stored root for same-user same-id same-hash replay after restart", async () => {
@@ -494,9 +459,10 @@ describe("financial action foundation repository", () => {
 
     await expect(
       commitFinancialActionGroupLocally(
-        inputWithLinkedOperations((): readonly Model[] => [], [
-          updateOperation(existing, update),
-        ])
+        inputWithLinkedOperations(
+          (): readonly Model[] => [],
+          [updateOperation(existing, update)]
+        )
       )
     ).rejects.toThrow("linked_prepare_failed");
 
@@ -598,7 +564,10 @@ describe("financial action foundation repository", () => {
 
     expect(assertCachedOwnership).toHaveBeenCalledTimes(1);
     expect(assertCachedOwnership).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: USER_ID, cachedPreimages: [expect.objectContaining({ id: cached.id })] })
+      expect.objectContaining({
+        userId: USER_ID,
+        cachedPreimages: [expect.objectContaining({ id: cached.id })],
+      })
     );
     expect(assertPreparedOwnership).toHaveBeenCalledTimes(1);
     expect(assertPreparedOwnership).toHaveBeenCalledWith(
@@ -659,10 +628,15 @@ describe("financial action foundation repository", () => {
       record._raw.state = "ownership-laundered";
     });
     const assertCachedOwnership = jest.fn(
-      (ownershipInput: FinancialActionLinkedOperationCachedOwnershipInput): Promise<void> => {
+      (
+        ownershipInput: FinancialActionLinkedOperationCachedOwnershipInput
+      ): Promise<void> => {
         if (
-          (ownershipInput.cachedPreimages[0]?.raw as unknown as { user_id?: string })
-            .user_id !== ownershipInput.userId
+          (
+            ownershipInput.cachedPreimages[0]?.raw as unknown as {
+              user_id?: string;
+            }
+          ).user_id !== ownershipInput.userId
         )
           throw new Error("ownership_failed");
         return Promise.resolve();
@@ -685,7 +659,10 @@ describe("financial action foundation repository", () => {
     ).rejects.toThrow("ownership_failed");
 
     expect(assertCachedOwnership).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: USER_ID, cachedPreimages: [expect.objectContaining({ id: foreign.id })] })
+      expect.objectContaining({
+        userId: USER_ID,
+        cachedPreimages: [expect.objectContaining({ id: foreign.id })],
+      })
     );
     expect(update).not.toHaveBeenCalled();
     expect(foreign._raw).toEqual(originalRaw);

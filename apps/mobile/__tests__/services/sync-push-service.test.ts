@@ -54,8 +54,12 @@ describe("pushChanges", () => {
     "returns dirty dedicated-table %s ids as rejected while pushing unrelated rows",
     async (_changeKind, dedicatedChanges) => {
       const database = Object.create(null) as PushChangesDatabase;
-      const changes = {
-        financial_action_groups: dedicatedChanges,
+      const changes: PushChangesArgs["changes"] = {
+        financial_action_groups: {
+          created: [...dedicatedChanges.created],
+          updated: [...dedicatedChanges.updated],
+          deleted: [...dedicatedChanges.deleted],
+        },
         profiles: {
           created: [
             {

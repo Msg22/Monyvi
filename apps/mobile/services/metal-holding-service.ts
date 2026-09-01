@@ -63,10 +63,10 @@ export const METAL_HOLDING_ERROR_CODES = {
  * @returns The created Asset record
  * @throws Error if user is not authenticated, validation fails, or if the write fails
  */
-async function createMetalHolding(
-  _data: CreateMetalHoldingData
-): Promise<Asset> {
-  throw new Error(METAL_HOLDING_ERROR_CODES.ACTION_WRITER_NOT_READY);
+function createMetalHolding(_data: CreateMetalHoldingData): Promise<Asset> {
+  return Promise.reject(
+    new Error(METAL_HOLDING_ERROR_CODES.ACTION_WRITER_NOT_READY)
+  );
 }
 
 export { createMetalHolding };
