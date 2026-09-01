@@ -10,6 +10,7 @@ const {
   seedFixtureData: seedFixtureDataWithFixture,
 } = require("./seed-fixtures/seed-engine");
 const {
+  E2E_BUDGET_FIXTURES,
   E2E_SEED_FIXTURE,
   getE2eFixture,
 } = require("./seed-fixtures/e2e-fixture");
@@ -21,9 +22,17 @@ function getE2eSeedConfig(env = process.env, options = {}) {
 }
 
 function getE2eFixtureForEnv(env = process.env) {
-  return getE2eFixture(
-    env.E2E_FIXTURE_PROFILE ?? env.E2E_METALS_PROFILE ?? env.E2E_BUDGET_PROFILE
-  );
+  const sharedProfile = env.E2E_FIXTURE_PROFILE ?? env.E2E_METALS_PROFILE;
+  if (sharedProfile) return getE2eFixture(sharedProfile);
+  if (!env.E2E_BUDGET_PROFILE) return getE2eFixture();
+
+  const budgetFixture = E2E_BUDGET_FIXTURES[env.E2E_BUDGET_PROFILE];
+  if (!budgetFixture) {
+    throw new Error(
+      `Unknown E2E budget profile: ${env.E2E_BUDGET_PROFILE}`
+    );
+  }
+  return budgetFixture;
 }
 
 async function seedE2eData(client, config, fixture = getE2eFixtureForEnv()) {

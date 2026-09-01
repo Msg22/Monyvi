@@ -22,7 +22,9 @@ interface RecordedOperation {
   rows?: unknown;
 }
 
-function createSeedClient(records: RecordedOperation[]) {
+function createSeedClient(
+  records: RecordedOperation[]
+): { from: (table: string) => unknown } {
   return {
     from(table: string) {
       return {

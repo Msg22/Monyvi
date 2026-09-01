@@ -691,9 +691,7 @@ where "metal_type" in ('GOLD', 'SILVER');`
   "_status", "_changed"
 )
 select
-  lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' ||
-    substr(lower(hex(randomblob(2))), 2) || '-a' ||
-    substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))),
+  "assets"."id",
   "assets"."user_id", "assets"."id", 'active', '0', null, null, 1,
   'accepted', "assets"."created_at", "assets"."updated_at", "assets"."deleted",
   'created', ''
