@@ -95,7 +95,7 @@ describe("metro config", () => {
   it("uses node_modules realpath when a secondary worktree links dependencies", () => {
     const mainNodeModules = path.resolve(
       workspaceRoot,
-      "../Monyvi/node_modules"
+      "../main-checkout/node_modules"
     );
     const config = loadMetroConfig(mainNodeModules);
 
@@ -114,7 +114,7 @@ describe("metro config", () => {
   it("blocks the secondary-worktree junction while retaining package lookup", () => {
     const mainNodeModules = path.resolve(
       workspaceRoot,
-      "../Monyvi/node_modules"
+      "../main-checkout/node_modules"
     );
     const config = loadMetroConfig(mainNodeModules);
     const blockList = config.resolver.blockList ?? [];
