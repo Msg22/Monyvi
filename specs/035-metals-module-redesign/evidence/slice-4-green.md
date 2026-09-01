@@ -76,7 +76,7 @@ All Supabase commands used `--local`; no remote Supabase project was mutated.
 | Foundation + Metals pgTAP | Pass: 2/2 files, 87/87 assertions. |
 | Current Slice 4 Jest set | Pass: 6/6 suites, 31/31 tests. |
 | PR #251 overlap/foundation/sync Jest set | Pass: 11/11 suites, 130/130 tests. |
-| Full mobile Jest suite | Pass: 304/304 suites, 2617/2617 tests after the PR #254 fixture-runtime and profile-isolation batch. |
+| Full mobile Jest suite | Pass: 304/304 suites, 2619/2619 tests after the PR #254 deterministic transport and restart-harness batch. |
 | Full logic Jest suite | Pass: 69/69 suites, 1238/1238 tests. |
 | `npm run typecheck -w @monyvi/mobile` | Pass. |
 | `npm run typecheck -w @monyvi/logic` | Pass. |
@@ -90,6 +90,9 @@ All Supabase commands used `--local`; no remote Supabase project was mutated.
 | Fixture runner/preflight broad set | Pass: 6/6 suites, 69/69 tests across fixture selection, preflight, Maestro, CI E2E, and manual seed entry points. |
 | Cross-profile local fixture cycle | Pass. Fresh profile inspection returned one observation; switching to the missing-rate Arabic/light profile returned zero observations, zero EGP accounts, and one `ar`/`LIGHT` profile; reset succeeded. |
 | Gold/Silver-only manual-QA fixture | Pass: focused 1/1 suite, 8/8 tests; broad fixture/preflight set remains 6/6 suites, 69/69 tests. The real local manual-QA seed and reset both completed without a migration-068 constraint failure. |
+| PR #254 transport/restart focused set | Pass: 2/2 suites, 37/37 tests. Transport `created_at` follows the injected seed clock, provider observation time remains freshness-driving, local observation cleanup is executable, and restart ordering is first sync, stop, same-DB relaunch, ready. |
+| Fixture runner/preflight broad set after restart fix | Pass: 6/6 suites, 71/71 tests. JavaScript syntax checks, mobile typecheck, and root lint also pass. |
+| Clock-relative local fixture cycle | Pass. Stale restart seed inspection returned transport `created_at` at seed time and `provider_observed_at` three days earlier; switching to the missing-rate profile returned zero observations; reset succeeded. |
 | `npx supabase db lint --local --level error` | Pass for `extensions`, `private`, and `public`. |
 | `git diff --check` | Pass. |
 
@@ -117,7 +120,7 @@ All Supabase commands used `--local`; no remote Supabase project was mutated.
 | Unapproved Add/Correct/Sell v2/Dispose/Delete/Undo | adapter approval-gate Jest | Confirm every action remains unavailable until schemas are approved. |
 | Rate-reference rules and sync ownership/protection/failure | Metals sync/rate Jest + PR #251 overlap set | Metadata LWW and real dedicated action delivery remain blocked. |
 | EN/AR parity and approved copy | content-contract Jest | Story slices own rendered locale/RTL verification. |
-| Deterministic clock-relative fresh/stale profiles, material account eligibility, locale/theme/text scale, and profile isolation | fixture/preflight Jest + real local cross-profile cycle | Seed, inspect exact IDs/runtime values, switch profiles, reset, inspect empty. Theme and text scale are materialized by the Android preflight before launch. |
+| Deterministic clock-relative fresh/stale profiles, material account eligibility, locale/theme/text scale, profile isolation, and restart lifecycle | fixture/preflight Jest + real local cross-profile cycle | Seed, inspect exact IDs/runtime values, switch profiles, reset, inspect empty. Theme and text scale are materialized before launch. No Android device was attached in this run, so cache cleanup and same-DB force-stop/relaunch are covered by executable harness tests but still require device execution. |
 | Gold/Silver bar/coin/jewelry selection and fallback | render-manifest Jest with hashes | Visual assets are inherited from the approved handoff; no image was generated. |
 | Accepted mutation, replay, stale winner, restart, rollback, exact-once recovery | none claimed | Blocked until the exact schemas and executable RPC/coordinator exist. |
 

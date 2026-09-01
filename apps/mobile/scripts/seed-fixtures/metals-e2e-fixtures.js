@@ -104,7 +104,7 @@ function buildMetalsRows(scenario) {
                       : currentTimestamp,
                 source: "e2e_fixture",
                 quality: "valid",
-                created_at: FIXED_NOW,
+                created_at: currentTimestamp,
               },
             ],
     };

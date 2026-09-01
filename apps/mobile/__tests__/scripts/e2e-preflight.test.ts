@@ -2,6 +2,7 @@ interface E2ePreflightModule {
   applyE2eFixtureRuntimeSettings(
     env: Readonly<Record<string, string | undefined>>,
     dependencies: {
+      clearLocalState: () => void;
       forceStop: () => void;
       runAdb: (args: readonly string[]) => void;
       seedTheme: (theme: string) => void;
@@ -12,6 +13,7 @@ interface E2ePreflightModule {
   buildDevMenuPreferencesXml(): string;
   buildIntroSeenFlagSql(): string;
   buildE2eRuntimeStorageSql(theme: string): string;
+  buildMetalsLocalObservationCleanupSql(): string;
   currentFocusShowsDevLauncherError(currentFocus: string): boolean;
   currentFocusShowsDevMenu(currentFocus: string): boolean;
   currentFocusShowsLauncher(currentFocus: string): boolean;
@@ -19,7 +21,26 @@ interface E2ePreflightModule {
   getHttpClientNameForUrl(url: string): "http" | "https";
   resolveE2eFixtureRuntimeSettings(
     env?: Readonly<Record<string, string | undefined>>
-  ): { locale: string; theme: string; textScale: number } | null;
+  ): {
+    locale: string;
+    persistenceState: string;
+    theme: string;
+    textScale: number;
+  } | null;
+  relaunchE2eFixtureIfRequired(
+    settings: {
+      locale: string;
+      persistenceState: string;
+      theme: string;
+      textScale: number;
+    } | null,
+    dependencies: {
+      forceStop: () => void;
+      startApp: () => void;
+      waitForReady: () => void;
+      waitForSync: () => void;
+    }
+  ): void;
   getMaestroDeviceArgs(
     env?: Readonly<Record<string, string | undefined>>
   ): readonly string[];
@@ -241,6 +262,7 @@ describe("e2e-preflight", () => {
     });
     expect(runtimeSettings).toEqual({
       locale: "ar",
+      persistenceState: "restart",
       theme: "dark",
       textScale: 2,
     });
@@ -248,15 +270,17 @@ describe("e2e-preflight", () => {
       "'monyvi_theme_mode', 'dark'"
     );
 
+    const clearLocalState = jest.fn();
     const forceStop = jest.fn();
     const runAdb = jest.fn();
     const seedTheme = jest.fn();
     preflight.applyE2eFixtureRuntimeSettings(
       { E2E_METALS_PROFILE: "metals-stale-restart-ar-dark" },
-      { forceStop, runAdb, seedTheme }
+      { clearLocalState, forceStop, runAdb, seedTheme }
     );
 
     expect(forceStop).toHaveBeenCalledTimes(1);
+    expect(clearLocalState).toHaveBeenCalledTimes(1);
     expect(runAdb).toHaveBeenCalledWith([
       "shell",
       "settings",
@@ -266,6 +290,32 @@ describe("e2e-preflight", () => {
       "2",
     ]);
     expect(seedTheme).toHaveBeenCalledWith("dark");
+  });
+
+  it("clears the pull-only observation cache before a Metals profile launch", () => {
+    expect(preflight.buildMetalsLocalObservationCleanupSql()).toBe(
+      'delete from "market_rate_observations";'
+    );
+  });
+
+  it("waits for the seeded projection and relaunches restart profiles without clearing the database", () => {
+    const events: string[] = [];
+    preflight.relaunchE2eFixtureIfRequired(
+      {
+        locale: "ar",
+        persistenceState: "restart",
+        theme: "dark",
+        textScale: 2,
+      },
+      {
+        waitForSync: () => events.push("sync"),
+        forceStop: () => events.push("stop"),
+        startApp: () => events.push("start"),
+        waitForReady: () => events.push("ready"),
+      }
+    );
+
+    expect(events).toEqual(["sync", "stop", "start", "ready"]);
   });
 
   it("detects Android devices without a sqlite3 shell binary", () => {
