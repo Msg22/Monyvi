@@ -112,51 +112,136 @@ describe("approved Metals rate-reference contract", () => {
       { role: "current_metal", instrumentCode: "metal:GOLD" },
       "75.125",
     ],
-    [reference(), CURRENT_EGP, "0.020000000000000000000000000000000000000000000000001"],
-    [reference({ valueDecimal: "50", unit: "currency_units_per_usd", orientation: "base_per_quote" }), CURRENT_EGP, "0.02"],
-    [reference({ instrumentCode: "currency:USD", valueDecimal: "1" }), { role: "current_purchase_currency", instrumentCode: "currency:USD" }, "1"],
-  ] as const)("normalizes every legal direct/inverse matrix form exactly", (input, expected, normalized) => {
-    expect(validateAndNormalizeRateReference(input, expected)).toMatchObject({
-      available: true,
-      value: { normalizedUsdPerBaseDecimal: normalized },
-    });
-  });
+    [
+      reference(),
+      CURRENT_EGP,
+      "0.020000000000000000000000000000000000000000000000001",
+    ],
+    [
+      reference({
+        valueDecimal: "50",
+        unit: "currency_units_per_usd",
+        orientation: "base_per_quote",
+      }),
+      CURRENT_EGP,
+      "0.02",
+    ],
+    [
+      reference({ instrumentCode: "currency:USD", valueDecimal: "1" }),
+      { role: "current_purchase_currency", instrumentCode: "currency:USD" },
+      "1",
+    ],
+  ] as const)(
+    "normalizes every legal direct/inverse matrix form exactly",
+    (input, expected, normalized) => {
+      expect(validateAndNormalizeRateReference(input, expected)).toMatchObject({
+        available: true,
+        value: { normalizedUsdPerBaseDecimal: normalized },
+      });
+    }
+  );
 
   it.each([
     [null, CURRENT_EGP, "missing_reference"],
     [reference({ role: "future_role" }), CURRENT_EGP, "unsupported_role"],
-    [reference({ instrumentCode: "currency:BTC" }), CURRENT_EGP, "unsupported_instrument"],
-    [reference({ instrumentCode: "currency:ZZZ" }), CURRENT_EGP, "unsupported_instrument"],
+    [
+      reference({ instrumentCode: "currency:BTC" }),
+      CURRENT_EGP,
+      "unsupported_instrument",
+    ],
+    [
+      reference({ instrumentCode: "currency:ZZZ" }),
+      CURRENT_EGP,
+      "unsupported_instrument",
+    ],
     [reference({ kind: "metal" }), CURRENT_EGP, "role_kind_mismatch"],
-    [reference({ role: "current_metal", kind: "currency" }), { role: "current_metal", instrumentCode: "metal:GOLD" }, "role_kind_mismatch"],
-    [reference({ instrumentCode: "currency:SAR" }), CURRENT_EGP, "instrument_context_mismatch"],
-    [reference({ role: "terminal_purchase_currency" }), CURRENT_EGP, "instrument_context_mismatch"],
-    [reference({ unit: "currency_units_per_usd", orientation: "quote_per_base" }), CURRENT_EGP, "invalid_unit_orientation_pair"],
-    [reference({ unit: "usd_per_currency_unit", orientation: "base_per_quote" }), CURRENT_EGP, "invalid_unit_orientation_pair"],
-    [reference({ kind: "metal", role: "current_metal", instrumentCode: "metal:GOLD", unit: "usd_per_pure_gram", orientation: "base_per_quote" }), { role: "current_metal", instrumentCode: "metal:GOLD" }, "invalid_unit_orientation_pair"],
+    [
+      reference({ role: "current_metal", kind: "currency" }),
+      { role: "current_metal", instrumentCode: "metal:GOLD" },
+      "role_kind_mismatch",
+    ],
+    [
+      reference({ instrumentCode: "currency:SAR" }),
+      CURRENT_EGP,
+      "instrument_context_mismatch",
+    ],
+    [
+      reference({ role: "terminal_purchase_currency" }),
+      CURRENT_EGP,
+      "instrument_context_mismatch",
+    ],
+    [
+      reference({
+        unit: "currency_units_per_usd",
+        orientation: "quote_per_base",
+      }),
+      CURRENT_EGP,
+      "invalid_unit_orientation_pair",
+    ],
+    [
+      reference({
+        unit: "usd_per_currency_unit",
+        orientation: "base_per_quote",
+      }),
+      CURRENT_EGP,
+      "invalid_unit_orientation_pair",
+    ],
+    [
+      reference({
+        kind: "metal",
+        role: "current_metal",
+        instrumentCode: "metal:GOLD",
+        unit: "usd_per_pure_gram",
+        orientation: "base_per_quote",
+      }),
+      { role: "current_metal", instrumentCode: "metal:GOLD" },
+      "invalid_unit_orientation_pair",
+    ],
     [reference({ valueDecimal: "0" }), CURRENT_EGP, "invalid_value"],
     [reference({ quality: "unknown" }), CURRENT_EGP, "quality_not_valid"],
-    [reference({ capturedAt: "bad-time" }), CURRENT_EGP, "invalid_capture_time"],
+    [
+      reference({ capturedAt: "bad-time" }),
+      CURRENT_EGP,
+      "invalid_capture_time",
+    ],
   ] as const)("returns stable reason %s", (input, expected, reason) => {
-    expect(validateAndNormalizeRateReference(input, expected)).toEqual({ available: false, reason });
+    expect(validateAndNormalizeRateReference(input, expected)).toEqual({
+      available: false,
+      reason,
+    });
   });
 
   it.each([
     ["direct", "9".repeat(51), "quote_per_base", "usd_per_currency_unit"],
     ["inverse", "9".repeat(51), "base_per_quote", "currency_units_per_usd"],
-  ] as const)("rejects a 51-significant-digit %s rate before decimal arithmetic", (_case, valueDecimal, orientation, unit) => {
-    expect(
-      validateAndNormalizeRateReference(
-        reference({ valueDecimal, orientation, unit }),
-        CURRENT_EGP
-      )
-    ).toEqual({ available: false, reason: "invalid_value" });
-  });
+  ] as const)(
+    "rejects a 51-significant-digit %s rate before decimal arithmetic",
+    (_case, valueDecimal, orientation, unit) => {
+      expect(
+        validateAndNormalizeRateReference(
+          reference({ valueDecimal, orientation, unit }),
+          CURRENT_EGP
+        )
+      ).toEqual({ available: false, reason: "invalid_value" });
+    }
+  );
 
-  it.each([undefined, null, "bad-time", Number.NaN, Number.POSITIVE_INFINITY, 3_000] as const)(
+  it.each([
+    undefined,
+    null,
+    "bad-time",
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    3_000,
+  ] as const)(
     "keeps usable values available but provider time %p unknown",
     (providerObservedAt) => {
-      expect(validateAndNormalizeRateReference(reference({ providerObservedAt }), CURRENT_EGP)).toMatchObject({
+      expect(
+        validateAndNormalizeRateReference(
+          reference({ providerObservedAt }),
+          CURRENT_EGP
+        )
+      ).toMatchObject({
         available: true,
         value: { providerObservedAt: null, capturedFreshness: "unknown" },
       });
@@ -164,20 +249,28 @@ describe("approved Metals rate-reference contract", () => {
   );
 
   it.each([
-    ["missing", (() => {
-      const raw = { ...reference() };
-      Reflect.deleteProperty(raw, "source");
-      return raw;
-    })()],
+    [
+      "missing",
+      (() => {
+        const raw = { ...reference() };
+        Reflect.deleteProperty(raw, "source");
+        return raw;
+      })(),
+    ],
     ["non-string", reference({ source: 42 })],
     ["blank", reference({ source: "" })],
     ["whitespace", reference({ source: "  \t  " })],
-  ] as const)("keeps valid rates with %s provenance and normalizes source to null", (_case, raw) => {
-    expect(validateAndNormalizeRateReference(raw, CURRENT_EGP)).toMatchObject({
-      available: true,
-      value: { source: null },
-    });
-  });
+  ] as const)(
+    "keeps valid rates with %s provenance and normalizes source to null",
+    (_case, raw) => {
+      expect(validateAndNormalizeRateReference(raw, CURRENT_EGP)).toMatchObject(
+        {
+          available: true,
+          value: { source: null },
+        }
+      );
+    }
+  );
 
   it("trims nonblank rate source provenance", () => {
     expect(
@@ -191,12 +284,22 @@ describe("approved Metals rate-reference contract", () => {
     });
   });
   it("returns a detached immutable snapshot and never mutates raw evidence", () => {
-    const raw = { ...reference(), valueDecimal: "50", unit: "currency_units_per_usd", orientation: "base_per_quote" };
+    const raw = {
+      ...reference(),
+      valueDecimal: "50",
+      unit: "currency_units_per_usd",
+      orientation: "base_per_quote",
+    };
     const result = validateAndNormalizeRateReference(raw, CURRENT_EGP);
     raw.valueDecimal = "100";
     expect(result).toMatchObject({
       available: true,
-      value: { valueDecimal: "50", unit: "currency_units_per_usd", orientation: "base_per_quote", normalizedUsdPerBaseDecimal: "0.02" },
+      value: {
+        valueDecimal: "50",
+        unit: "currency_units_per_usd",
+        orientation: "base_per_quote",
+        normalizedUsdPerBaseDecimal: "0.02",
+      },
     });
     if (result.available) {
       expect(Object.isFrozen(result.value)).toBe(true);
