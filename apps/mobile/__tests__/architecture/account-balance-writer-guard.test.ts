@@ -220,4 +220,28 @@ describe("issue #242 account-balance writer completeness guard", () => {
       true
     );
   });
+
+  it("keeps effect-free Cash account creation at the revision-zero boundary", () => {
+    const accountService = readText("apps/mobile/services/account-service.ts");
+    const registry = readText(
+      "apps/mobile/services/account-balance-writer-registry.ts"
+    );
+
+    expect(accountService).toMatch(
+      /createCashAccountWithinWriter[\s\S]*?acc\.balance = 0;[\s\S]*?acc\.financialRevision = "0";/
+    );
+    expect(registry).toContain(
+      '{ writerId: "account.cash.create-within-writer", status: "guarded" }'
+    );
+  });
+
+  it("keeps the no-active-debt path guarded by the assignment completeness scan", () => {
+    const registry = readText(
+      "apps/mobile/services/account-balance-writer-registry.ts"
+    );
+
+    expect(registry).toContain(
+      '{ writerId: "debt.no-active-writer", status: "guarded" }'
+    );
+  });
 });

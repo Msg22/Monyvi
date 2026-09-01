@@ -189,6 +189,7 @@ export async function createCashAccountWithinWriter(
     acc.type = CASH_ACCOUNT_TYPE;
     acc.currency = currency;
     acc.balance = 0;
+    acc.financialRevision = "0";
     acc.deleted = false;
     acc.isDefault = isFirstAccount;
   });
