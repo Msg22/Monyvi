@@ -1,4 +1,5 @@
 import { useDatabase } from "@/providers/DatabaseProvider";
+import { refreshLiveMarketRates } from "@/services/live-rates-refresh-service";
 import {
   observeLiveRatesTrust,
   summarizeLiveRatesTrust,
@@ -18,7 +19,7 @@ import {
   getGoldPurityPrice,
   getMetalPrice,
 } from "@monyvi/logic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useMarketRates } from "./useMarketRates";
 import { usePreferredCurrency } from "./usePreferredCurrency";
@@ -65,6 +66,10 @@ interface LiveRatesTrustDisplay {
   readonly currencies: LiveRatesTrustState;
 }
 
+type LiveRatesRefreshError =
+  | "cached_refresh_failed"
+  | "initial_refresh_failed";
+
 interface UseLiveRatesScreenResult {
   readonly isLoading: boolean;
   readonly isConnected: boolean;
@@ -80,6 +85,7 @@ interface UseLiveRatesScreenResult {
   readonly onSearchChange: (query: string) => void;
   readonly lastUpdatedText: string;
   readonly isRefreshing: boolean;
+  readonly refreshError: LiveRatesRefreshError | null;
   readonly onRefresh: () => void;
   readonly rateTrust: LiveRatesTrustDisplay;
 }
@@ -104,6 +110,11 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   const [trustReadModel, setTrustReadModel] = useState<LiveRatesTrustReadModel>(
     createInitialTrustReadModel
   );
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<LiveRatesRefreshError | null>(
+    null
+  );
+  const isRefreshInProgressRef = useRef(false);
 
   const updateTimestamp = useCallback((): void => {
     if (lastUpdated) {
@@ -273,8 +284,29 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   }, []);
 
   const onRefresh = useCallback((): void => {
-    setTrustRefreshRevision((revision) => revision + 1);
-  }, []);
+    if (isRefreshInProgressRef.current) {
+      return;
+    }
+
+    isRefreshInProgressRef.current = true;
+    setIsRefreshing(true);
+    setRefreshError(null);
+
+    void (async (): Promise<void> => {
+      try {
+        await refreshLiveMarketRates(database);
+      } catch (error: unknown) {
+        logger.error("liveRates.refresh.failed", error);
+        setRefreshError(
+          latestRates ? "cached_refresh_failed" : "initial_refresh_failed"
+        );
+      } finally {
+        isRefreshInProgressRef.current = false;
+        setIsRefreshing(false);
+        setTrustRefreshRevision((revision) => revision + 1);
+      }
+    })();
+  }, [database, latestRates]);
 
   return {
     isLoading,
@@ -290,7 +322,8 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
     searchQuery,
     onSearchChange,
     lastUpdatedText,
-    isRefreshing: false,
+    isRefreshing,
+    refreshError,
     onRefresh,
     rateTrust,
   };
