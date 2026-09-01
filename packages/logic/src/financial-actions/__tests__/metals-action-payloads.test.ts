@@ -239,9 +239,13 @@ describe("approved Metals financial action payload registry", () => {
   ] as const;
 
   it("registers exactly the six approved Metals tuples", () => {
-    expect(DEFAULT_FINANCIAL_ACTION_REGISTRY.definitions).toHaveLength(6);
+    const metalsDefinitions =
+      DEFAULT_FINANCIAL_ACTION_REGISTRY.definitions.filter(
+        (entry) => entry.domain === "metals"
+      );
+    expect(metalsDefinitions).toHaveLength(6);
     expect(
-      DEFAULT_FINANCIAL_ACTION_REGISTRY.definitions.map((entry) => [
+      metalsDefinitions.map((entry) => [
         entry.domain,
         entry.kind,
         entry.payloadVersion,

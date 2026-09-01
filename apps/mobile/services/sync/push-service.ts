@@ -21,6 +21,12 @@ import {
 } from "./config";
 import { createSyncTableError } from "./errors";
 import {
+  collectProtectedFinancialActionRowIds,
+  isProtectedFinancialActionRow,
+  readRejectedIdsForTable,
+  stripProtectedAccountFields,
+} from "./account-protected-fields";
+import {
   assertPushRecordBelongsToCurrentUser,
   fetchOwnedParentIds,
   isSharedSystemCategoryPushRecord,
@@ -438,6 +444,28 @@ function collectDedicatedRejectedIds(
   return Object.keys(rejectedIds).length > 0 ? rejectedIds : undefined;
 }
 
+function mergeRejectedIds(
+  left: SyncRejectedIds | undefined,
+  right: SyncRejectedIds | undefined
+): SyncRejectedIds | undefined {
+  const tables = new Set([
+    ...Object.keys(left ?? {}),
+    ...Object.keys(right ?? {}),
+  ]);
+  if (tables.size === 0) return undefined;
+  return Object.fromEntries(
+    [...tables].map((table) => [
+      table,
+      [
+        ...new Set([
+          ...readRejectedIdsForTable(left, table),
+          ...readRejectedIdsForTable(right, table),
+        ]),
+      ],
+    ])
+  );
+}
+
 function comparePushTableOrder(
   [leftTableName]: readonly [string, unknown],
   [rightTableName]: readonly [string, unknown]
@@ -489,9 +517,12 @@ export async function pushChanges(
     defaultMetalRpc,
     (outcome) => commitMetalRpcOutcomeLocally(database, outcome, userId)
   );
-  const dedicatedRejectedIds = dedicatedPush.acknowledgeAllDedicatedRows
-    ? undefined
-    : collectDedicatedRejectedIds(pushArgs.changes);
+  const dedicatedRejectedIds = mergeRejectedIds(
+    dedicatedPush.acknowledgeAllDedicatedRows
+      ? undefined
+      : collectDedicatedRejectedIds(pushArgs.changes),
+    collectProtectedFinancialActionRowIds(pushArgs.changes)
+  );
 
   const { changes } = pushArgs;
   for (const [tableName, rawTableChanges] of Object.entries(changes).sort(
@@ -540,8 +571,10 @@ export async function pushChanges(
       const upsertRecords = async (
         records: ReadonlyArray<Record<string, unknown>>
       ): Promise<void> => {
-        const pushableRecords = records.filter((record) =>
-          isPushableRecord(table, record)
+        const pushableRecords = records.filter(
+          (record) =>
+            isPushableRecord(table, record) &&
+            !isProtectedFinancialActionRow(dedicatedRejectedIds, table, record)
         );
         if (pushableRecords.length === 0) {
           return;
@@ -557,7 +590,10 @@ export async function pushChanges(
           );
           return transformToSupabase(
             table,
-            stripMetalActionFragments(table, record),
+            stripProtectedAccountFields(
+              table,
+              stripMetalActionFragments(table, record)
+            ),
             userId,
             isChildTable
           );
@@ -581,7 +617,11 @@ export async function pushChanges(
         await upsertRecords(softDeletedUpdates);
       }
 
-      if (tableChanges.deleted.length > 0) {
+      const genericDeletedIds = tableChanges.deleted.filter(
+        (recordId) =>
+          !isProtectedFinancialActionRow(dedicatedRejectedIds, table, recordId)
+      );
+      if (genericDeletedIds.length > 0) {
         let query = getSupabaseWriteTable(table).update({
           deleted: true,
           updated_at: new Date().toISOString(),
@@ -593,7 +633,7 @@ export async function pushChanges(
           query = query.eq("user_id", userId);
         }
 
-        const { error } = await query.in("id", tableChanges.deleted);
+        const { error } = await query.in("id", genericDeletedIds);
         if (error) {
           throw createSyncTableError("delete", table, error);
         }

@@ -24,6 +24,7 @@ describe("financial action generic sync exclusion", () => {
     expect(DEDICATED_SYNC_TABLES).toContain("financial_action_groups");
     expect(EXCLUDED_TABLES).not.toContain("financial_action_groups");
     expect(SYNCABLE_TABLES).not.toContain("financial_action_groups");
+    expect(DEDICATED_SYNC_TABLES).toContain("account_financial_effects");
   });
 
   it("returns dedicated ids to Watermelon for rejection without blocking generic writes", () => {

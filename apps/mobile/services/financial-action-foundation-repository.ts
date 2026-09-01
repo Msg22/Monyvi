@@ -177,6 +177,15 @@ export interface FinancialActionFoundationRepository {
     actionId: string,
     rejectionCode: string
   ) => Promise<void>;
+  readonly markFinancialActionGroupSyncPending: (
+    actionId: string
+  ) => Promise<void>;
+  readonly recordFinancialActionGroupServerOutcome: (
+    actionId: string,
+    serverOutcome: "accepted" | "idempotent" | "stale" | "rejected",
+    outcomeJson: string,
+    rejectionCode: string | null
+  ) => Promise<void>;
   readonly retryFinancialActionGroup: (actionId: string) => Promise<void>;
 }
 
@@ -275,7 +284,9 @@ export function createFinancialActionFoundationRepository(
       candidate.domainReferenceId = context.envelope.domainReferenceId;
       candidate.payloadJson = context.payload.canonicalText;
       candidate.payloadHash = context.payload.payloadHash;
-      candidate.accountGuardsJson = "[]";
+      candidate.accountGuardsJson = JSON.stringify(
+        context.envelope.accountGuards
+      );
       candidate.state = state;
       candidate.serverOutcome = null;
       candidate.outcomeJson = null;
@@ -864,6 +875,62 @@ export function createFinancialActionFoundationRepository(
     });
   }
 
+  async function markFinancialActionGroupSyncPending(
+    actionId: string
+  ): Promise<void> {
+    await updateFinancialActionGroup(actionId, (record) => {
+      assertFinancialActionTransition(
+        asFinancialActionState(record.state),
+        "sync_pending"
+      );
+      assertFinancialActionStateEvidence("sync_pending", {
+        serverOutcome: null,
+        outcomeJson: null,
+        rejectionCode: null,
+      });
+      record.state = "sync_pending";
+      record.serverOutcome = null;
+      record.outcomeJson = null;
+      record.rejectionCode = null;
+    });
+  }
+
+  async function recordFinancialActionGroupServerOutcome(
+    actionId: string,
+    serverOutcome: "accepted" | "idempotent" | "stale" | "rejected",
+    outcomeJson: string,
+    rejectionCode: string | null
+  ): Promise<void> {
+    if (
+      outcomeJson.trim().length === 0 ||
+      ((serverOutcome === "accepted" || serverOutcome === "idempotent") &&
+        rejectionCode !== null) ||
+      ((serverOutcome === "stale" || serverOutcome === "rejected") &&
+        (rejectionCode === null || rejectionCode.trim().length === 0))
+    ) {
+      throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
+    }
+    const nextState =
+      serverOutcome === "accepted" || serverOutcome === "idempotent"
+        ? "accepted"
+        : "rejected_compensating";
+    await updateFinancialActionGroup(actionId, (record) => {
+      assertFinancialActionTransition(
+        asFinancialActionState(record.state),
+        nextState
+      );
+      assertFinancialActionStateEvidence(nextState, {
+        serverOutcome,
+        outcomeJson,
+        rejectionCode,
+      });
+      record.state = nextState;
+      record.serverOutcome = serverOutcome;
+      record.outcomeJson = outcomeJson;
+      record.rejectionCode = rejectionCode;
+    });
+  }
+
   async function retryFinancialActionGroup(actionId: string): Promise<void> {
     await updateFinancialActionGroup(actionId, (record) => {
       assertFinancialActionTransition(
@@ -887,6 +954,8 @@ export function createFinancialActionFoundationRepository(
     commitFinancialActionGroupLocally,
     getFinancialActionGroup,
     markFinancialActionGroupSyncFailed,
+    markFinancialActionGroupSyncPending,
+    recordFinancialActionGroupServerOutcome,
     retryFinancialActionGroup,
   });
 }
@@ -906,5 +975,9 @@ export const getFinancialActionGroup =
   productionRepository.getFinancialActionGroup;
 export const markFinancialActionGroupSyncFailed =
   productionRepository.markFinancialActionGroupSyncFailed;
+export const markFinancialActionGroupSyncPending =
+  productionRepository.markFinancialActionGroupSyncPending;
+export const recordFinancialActionGroupServerOutcome =
+  productionRepository.recordFinancialActionGroupServerOutcome;
 export const retryFinancialActionGroup =
   productionRepository.retryFinancialActionGroup;

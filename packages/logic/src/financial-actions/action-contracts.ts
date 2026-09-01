@@ -52,6 +52,7 @@ export interface FinancialActionAccountGuard {
   readonly expectedRevision: CanonicalUnsignedIntegerString;
 }
 export type FinancialActionDomain =
+  | "accounts"
   | "metals"
   | "transactions"
   | "transfers"
@@ -134,6 +135,7 @@ type CanonicalJsonValue =
   | CanonicalJsonObject;
 
 const APPROVED_DOMAINS: readonly FinancialActionDomain[] = [
+  "accounts",
   "metals",
   "transactions",
   "transfers",
@@ -284,6 +286,30 @@ function isStrictUtcMillisecondTimestamp(value: unknown): value is string {
   );
 }
 
+function validateAccountGuards(
+  value: readonly unknown[]
+): readonly FinancialActionAccountGuard[] {
+  let previousAccountId: string | null = null;
+  const guards = value.map((rawGuard) => {
+    if (
+      !isPlainObject(rawGuard) ||
+      !hasExactKeys(rawGuard, ["accountId", "expectedRevision"]) ||
+      !isCanonicalUuid(rawGuard.accountId) ||
+      (previousAccountId !== null && previousAccountId >= rawGuard.accountId)
+    ) {
+      fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
+    }
+    previousAccountId = rawGuard.accountId;
+    return Object.freeze({
+      accountId: rawGuard.accountId,
+      expectedRevision: parseCanonicalUnsignedIntegerString(
+        rawGuard.expectedRevision
+      ),
+    });
+  });
+  return Object.freeze(guards);
+}
+
 export function canonicalizeFinancialActionEnvelope(
   value: unknown,
   registry: FinancialActionRegistry = DEFAULT_FINANCIAL_ACTION_REGISTRY,
@@ -296,7 +322,6 @@ export function canonicalizeFinancialActionEnvelope(
   if (
     !isCanonicalUuid(value.actionId) ||
     !Array.isArray(value.accountGuards) ||
-    value.accountGuards.length !== 0 ||
     typeof value.domain !== "string" ||
     !APPROVED_DOMAINS.includes(value.domain as FinancialActionDomain) ||
     !isCanonicalUuid(value.domainReferenceId) ||
@@ -313,12 +338,33 @@ export function canonicalizeFinancialActionEnvelope(
   const payload = registry
     .resolve(value.domain, value.kind, value.payloadVersion)
     .validatePayload(value.payload, validationInput);
+  const accountGuards = validateAccountGuards(value.accountGuards);
+  if (value.payloadVersion === "account.balance-effects/v1") {
+    const accountEffects = payload.accountEffects;
+    const domainRecordRefs = payload.domainRecordRefs;
+    if (
+      accountGuards.length === 0 ||
+      !Array.isArray(accountEffects) ||
+      accountEffects.length !== accountGuards.length ||
+      accountEffects.some(
+        (effect, index) =>
+          !isPlainObject(effect) ||
+          effect.accountId !== accountGuards[index]?.accountId
+      ) ||
+      !Array.isArray(domainRecordRefs) ||
+      !domainRecordRefs.includes(value.domainReferenceId)
+    ) {
+      fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
+    }
+  } else if (accountGuards.length !== 0) {
+    fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
+  }
   inspectRuntimeValue(payload);
   if (containsNumber(payload)) {
     fail(FINANCIAL_ACTION_ERROR_CODES.UNSUPPORTED_VALUE);
   }
   return {
-    accountGuards: Object.freeze([]),
+    accountGuards,
     actionId: value.actionId,
     domain: value.domain as FinancialActionDomain,
     domainReferenceId: value.domainReferenceId,
