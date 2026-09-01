@@ -56,6 +56,9 @@ interface EmptySelectChain {
   readonly eq: jest.Mock<EmptySelectChain>;
   readonly gt: jest.Mock<EmptySelectChain>;
   readonly lte: jest.Mock<EmptySelectChain>;
+  readonly limit: jest.Mock<EmptySelectChain>;
+  readonly or: jest.Mock<EmptySelectChain>;
+  readonly order: jest.Mock<EmptySelectChain>;
   readonly then: (
     resolve: (value: {
       readonly data: readonly [];
@@ -84,6 +87,9 @@ describe("sync auth scope lifecycle", () => {
         eq: jest.fn((): EmptySelectChain => chain),
         gt: jest.fn((): EmptySelectChain => chain),
         lte: jest.fn((): EmptySelectChain => chain),
+        limit: jest.fn((): EmptySelectChain => chain),
+        or: jest.fn((): EmptySelectChain => chain),
+        order: jest.fn((): EmptySelectChain => chain),
         then: (
           resolve: (value: {
             readonly data: readonly [];

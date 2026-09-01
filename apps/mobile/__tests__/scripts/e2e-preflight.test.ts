@@ -390,6 +390,15 @@ describe("e2e-preflight", () => {
     expect(holdingStateDelete).toBeGreaterThanOrEqual(0);
     expect(assetMetalDelete).toBeGreaterThan(holdingStateDelete);
     expect(assetDelete).toBeGreaterThan(assetMetalDelete);
+    const holdingStateStatement = sql
+      .split("\n")
+      .find((line) => line.startsWith('delete from "metal_holding_states"'));
+    const assetStatement = sql
+      .split("\n")
+      .find((line) => line.startsWith('delete from "assets"'));
+    expect(holdingStateStatement?.match(/[0-9a-f]{8}-[0-9a-f-]{27}/g)).toEqual(
+      assetStatement?.match(/[0-9a-f]{8}-[0-9a-f-]{27}/g)
+    );
     for (const table of ["metal_holding_states", "asset_metals", "assets"]) {
       const statement = sql
         .split("\n")

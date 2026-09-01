@@ -100,6 +100,7 @@ function makeSelectChain(table?: string): Record<string, unknown> {
     eq: jest.fn(() => chain),
     gt: jest.fn(() => chain),
     lte: jest.fn(() => chain),
+    limit: jest.fn(() => chain),
     or: jest.fn(() => chain),
     order: jest.fn(() => chain),
     in: jest.fn(() => chain),
