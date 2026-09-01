@@ -722,7 +722,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
       },
       deleted: false,
       created_at: FIXED_NOW,
-      updated_at: FIXED_NOW,
+      updated_at: currentTimestamp,
     },
     accounts: [
       {
@@ -735,7 +735,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         is_default: true,
         deleted: false,
         created_at: FIXED_NOW,
-        updated_at: FIXED_NOW,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.accounts.bank,
@@ -749,7 +749,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         is_default: false,
         deleted: false,
         created_at: FIXED_NOW,
-        updated_at: FIXED_NOW,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.accounts.qnbBank,
@@ -763,7 +763,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         is_default: false,
         deleted: false,
         created_at: FIXED_NOW,
-        updated_at: FIXED_NOW,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.accounts.wallet,
@@ -777,7 +777,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         is_default: false,
         deleted: false,
         created_at: FIXED_NOW,
-        updated_at: FIXED_NOW,
+        updated_at: currentTimestamp,
       },
       ...expandedAccounts,
     ],
@@ -1028,6 +1028,7 @@ module.exports = {
   RESET_TABLE_DELETE_ORDER,
   SEED_TABLE_DELETE_ORDER,
   E2E_MARKET_RATE_ID,
+  buildSeedIds,
   createLocalSupabaseJwt,
   getSeedConfig,
   inspectFixtureData,

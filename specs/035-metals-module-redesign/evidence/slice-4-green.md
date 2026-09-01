@@ -76,7 +76,7 @@ All Supabase commands used `--local`; no remote Supabase project was mutated.
 | Foundation + Metals pgTAP | Pass: 2/2 files, 87/87 assertions. |
 | Current Slice 4 Jest set | Pass: 6/6 suites, 31/31 tests. |
 | PR #251 overlap/foundation/sync Jest set | Pass: 11/11 suites, 130/130 tests. |
-| Full mobile Jest suite | Pass: 304/304 suites, 2619/2619 tests after the PR #254 deterministic transport and restart-harness batch. |
+| Full mobile Jest suite | Pass: 304/304 suites, 2623/2623 tests after the PR #254 profile-isolation and release-harness batch. |
 | Full logic Jest suite | Pass: 69/69 suites, 1238/1238 tests. |
 | `npm run typecheck -w @monyvi/mobile` | Pass. |
 | `npm run typecheck -w @monyvi/logic` | Pass. |
@@ -93,6 +93,8 @@ All Supabase commands used `--local`; no remote Supabase project was mutated.
 | PR #254 transport/restart focused set | Pass: 2/2 suites, 39/39 tests. Transport `created_at` follows the injected seed clock, provider observation time remains freshness-driving, user-owned projection updates follow the seed clock, local cleanup targets only `e2e_fixture` rows, every non-missing profile waits for its observation, no-profile preflight resets font scale, and restart ordering is first sync, stop, same-DB relaunch, ready. |
 | Fixture runner/preflight broad set after restart fix | Pass: 6/6 suites, 97/97 tests. JavaScript syntax checks, mobile typecheck, and root lint also pass. |
 | Clock-relative local fixture cycle | Pass. Stale restart inspection returned asset, asset-metal, holding-state, and observation transport timestamps at seed time while `provider_observed_at` remained three days earlier; switching to the missing-rate profile returned zero observations with new seed-time projection updates; reset returned all fixture groups to zero rows. |
+| PR #254 profile-isolation/release-harness set | Focused pass: 2/2 suites, 41/41 tests. Broad fixture harness pass: 7/7 suites, 95/95 tests. Full mobile pass: 304/304 suites, 2,623/2,623 tests. Profile and all seeded accounts use the injected update clock while retaining fixed creation evidence; local cleanup targets exact deterministic Metals fixture account/child IDs; release Metals profiles fail before device mutation. Mobile and logic typechecks, script syntax, and root lint also pass. |
+| Profile/account local Supabase cycle | Pass. Fresh seeded `en`/`LIGHT` with four EGP and zero USD accounts; switching seeded `ar`/`LIGHT` with zero EGP and four USD accounts. Profile/account `updated_at` advanced with each seed while `created_at` stayed fixed; missing-rate inspection returned zero observations; reset returned profiles, accounts, and every inspected Metals fixture group to zero. No Android device was attached, so the exact local Watermelon cleanup SQL is automated but not device-executed. |
 | `npx supabase db lint --local --level error` | Pass for `extensions`, `private`, and `public`. |
 | `git diff --check` | Pass. |
 
@@ -120,7 +122,7 @@ All Supabase commands used `--local`; no remote Supabase project was mutated.
 | Unapproved Add/Correct/Sell v2/Dispose/Delete/Undo | adapter approval-gate Jest | Confirm every action remains unavailable until schemas are approved. |
 | Rate-reference rules and sync ownership/protection/failure | Metals sync/rate Jest + PR #251 overlap set | Metadata LWW and real dedicated action delivery remain blocked. |
 | EN/AR parity and approved copy | content-contract Jest | Story slices own rendered locale/RTL verification. |
-| Deterministic clock-relative fresh/stale profiles, material account eligibility, locale/theme/text scale, profile isolation, and restart lifecycle | fixture/preflight Jest + real local cross-profile cycle | Seed, inspect exact IDs/runtime values, switch profiles, reset, inspect empty. Theme and text scale are materialized before launch. No Android device was attached in this run, so cache cleanup and same-DB force-stop/relaunch are covered by executable harness tests but still require device execution. |
+| Deterministic clock-relative fresh/stale profiles, material account eligibility, locale/theme/text scale, profile isolation, and restart lifecycle | fixture/preflight Jest + real local cross-profile cycle | Seed, inspect exact IDs/runtime values, switch profiles, reset, inspect empty. Theme and text scale are materialized before launch. Dev-client cleanup preserves auth and non-fixture rows by targeting exact Metals fixture IDs. Release Metals profiles are explicitly unsupported until an authenticated release cleanup/readiness harness exists. No Android device was attached in this run, so cleanup and same-DB force-stop/relaunch remain device-manual. |
 | Gold/Silver bar/coin/jewelry selection and fallback | render-manifest Jest with hashes | Visual assets are inherited from the approved handoff; no image was generated. |
 | Accepted mutation, replay, stale winner, restart, rollback, exact-once recovery | none claimed | Blocked until the exact schemas and executable RPC/coordinator exist. |
 
