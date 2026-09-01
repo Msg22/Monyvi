@@ -132,3 +132,15 @@ The Green correction persists locale/theme in the scoped profile, writes the
 theme to the app's AsyncStorage database, applies text scale through Android's
 system setting before launch, and deletes all deterministic Metals observation
 IDs during profile switches and resets.
+
+## PR #254 manual-QA Metals fixture Red
+
+The focused manual-QA seed suite failed after its contract was narrowed to the
+approved Gold/Silver-only scope. The production fixture still emitted a
+`PLATINUM` asset-metal row and named asset, which migration 068 rejects for a
+new insert even though its compatibility constraint is `NOT VALID` for legacy
+rows.
+
+The Green correction replaces that unsupported fixture with a deterministic
+Gold bar and asserts that no Platinum row is emitted. This changes only
+disposable manual-QA data; it does not rewrite existing user holdings.

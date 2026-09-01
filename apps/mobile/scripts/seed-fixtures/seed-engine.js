@@ -111,17 +111,13 @@ function buildSeedIds(userId, seedScope = BASE_SEED_FIXTURE.seedScope) {
         "asset:apartment-down-payment"
       ),
       btcHolding: deterministicUuid(seedScope, userId, "asset:btc-holding"),
+      goldBar: deterministicUuid(seedScope, userId, "asset:gold-bar"),
       goldChain: deterministicUuid(seedScope, userId, "asset:gold-chain"),
-      platinumBar: deterministicUuid(seedScope, userId, "asset:platinum-bar"),
       silverCoins: deterministicUuid(seedScope, userId, "asset:silver-coins"),
     },
     assetMetals: {
+      goldBar: deterministicUuid(seedScope, userId, "asset-metal:gold-bar"),
       goldChain: deterministicUuid(seedScope, userId, "asset-metal:gold-chain"),
-      platinumBar: deterministicUuid(
-        seedScope,
-        userId,
-        "asset-metal:platinum-bar"
-      ),
       silverCoins: deterministicUuid(
         seedScope,
         userId,
