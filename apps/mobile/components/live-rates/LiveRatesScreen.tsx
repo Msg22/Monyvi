@@ -13,10 +13,20 @@ import { LiveRatesScreenSkeleton } from "./LiveRatesScreenSkeleton";
 import { MetalCard } from "./MetalCard";
 
 interface LiveRatesTrustSummaryProps {
-  readonly gold: "fresh" | "stale" | "unknown" | "missing";
-  readonly silver: "fresh" | "stale" | "unknown" | "missing";
-  readonly currencies: "fresh" | "stale" | "unknown" | "missing";
+  readonly gold: LiveRatesTrustDisplay;
+  readonly silver: LiveRatesTrustDisplay;
+  readonly currencies: LiveRatesTrustDisplay;
   readonly isConnected: boolean;
+  readonly refreshError:
+    | "cached_refresh_failed"
+    | "initial_refresh_failed"
+    | null;
+  readonly onRetryRefresh: () => void;
+}
+
+interface LiveRatesTrustDisplay {
+  readonly state: "fresh" | "stale" | "unknown" | "missing" | "invalid";
+  readonly dateTime: string | null;
 }
 
 function LiveRatesTrustSummary({
@@ -24,6 +34,8 @@ function LiveRatesTrustSummary({
   silver,
   currencies,
   isConnected,
+  refreshError,
+  onRetryRefresh,
 }: LiveRatesTrustSummaryProps): React.JSX.Element {
   const { t } = useTranslation("metals");
   const { t: tCommon } = useTranslation("common");
@@ -35,29 +47,45 @@ function LiveRatesTrustSummary({
           {t("offline_mode")}
         </Text>
       )}
+      {refreshError === "cached_refresh_failed" && (
+        <View className="mb-2">
+          <Text className="text-xs font-medium text-text-secondary dark:text-text-secondary">
+            {t("rate.refresh_failed_with_cache")}
+          </Text>
+          <Text
+            accessibilityRole="button"
+            accessibilityLabel={t("rate.retry_refresh")}
+            className="mt-1 min-h-11 text-sm font-semibold text-nileGreen-600 dark:text-nileGreen-400"
+            onPress={onRetryRefresh}
+          >
+            {t("rate.retry_refresh")}
+          </Text>
+        </View>
+      )}
       <View className="flex-row flex-wrap gap-2">
         <Text
           testID="live-rates-trust-gold"
           className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-text-secondary dark:bg-slate-800 dark:text-text-secondary"
-          accessibilityLabel={`${t("gold")}: ${t(`rate.${gold}`)}`}
+          accessibilityLabel={`${t("gold")}: ${getRateCopy(t, gold)}`}
         >
-          {t("gold")} · {t(`rate.${gold}`)}
+          {t("gold")} · {getRateCopy(t, gold)}
         </Text>
         <Text
           testID="live-rates-trust-silver"
           className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-text-secondary dark:bg-slate-800 dark:text-text-secondary"
-          accessibilityLabel={`${t("silver")}: ${t(`rate.${silver}`)}`}
+          accessibilityLabel={`${t("silver")}: ${getRateCopy(t, silver)}`}
         >
-          {t("silver")} · {t(`rate.${silver}`)}
+          {t("silver")} · {getRateCopy(t, silver)}
         </Text>
         <Text
           testID="live-rates-trust-currencies"
           className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-text-secondary dark:bg-slate-800 dark:text-text-secondary"
-          accessibilityLabel={`${tCommon("currencies")}: ${t(
-            `rate.${currencies}`
+          accessibilityLabel={`${tCommon("currencies")}: ${getRateCopy(
+            t,
+            currencies
           )}`}
         >
-          {tCommon("currencies")} · {t(`rate.${currencies}`)}
+          {tCommon("currencies")} · {getRateCopy(t, currencies)}
         </Text>
       </View>
     </View>
@@ -81,6 +109,7 @@ export function LiveRatesScreen(): React.JSX.Element {
     onSearchChange,
     lastUpdatedText,
     isRefreshing,
+    refreshError,
     onRefresh,
     rateTrust,
   } = useLiveRatesScreen();
@@ -138,6 +167,8 @@ export function LiveRatesScreen(): React.JSX.Element {
               silver={rateTrust.silver}
               currencies={rateTrust.currencies}
               isConnected={isConnected}
+              refreshError={refreshError}
+              onRetryRefresh={onRefresh}
             />
           </View>
 
@@ -156,4 +187,16 @@ export function LiveRatesScreen(): React.JSX.Element {
       )}
     </View>
   );
+}
+
+function getRateCopy(
+  t: (
+    key: string,
+    options?: Readonly<{ readonly dateTime?: string }>
+  ) => string,
+  rate: LiveRatesTrustDisplay
+): string {
+  return rate.state === "fresh"
+    ? t("rate.fresh", { dateTime: rate.dateTime ?? "" })
+    : t(`rate.${rate.state}`);
 }

@@ -28,5 +28,10 @@ Watchman exited; the repeat disabled file watching only.
 - A later read-model regression test first failed as intended: an empty trust
   aggregate was incorrectly reported as `fresh` rather than `missing`. The
   minimal Green change records whether the iterable contained any result.
+- Approved-copy Red gate: the Live Rates component initially failed all four
+  new cases because it rendered a generic fresh key without provider
+  `dateTime`, had no Invalid state, and omitted cached-refresh failure/retry
+  output. The focused component suite then passed after the minimal consumer
+  and schema changes.
 - T062 was authored but cannot run the required state transitions until Slice 4
   supplies its deterministic fixtures and read-only refresh control.
