@@ -352,6 +352,7 @@ describe("manual-qa-seed script helpers", () => {
     expect(assetRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: "21k Gold Chain", type: "METAL" }),
+        expect.objectContaining({ name: "Gold Test Bar", type: "METAL" }),
         expect.objectContaining({
           name: "Apartment Down Payment",
           type: "REAL_ESTATE",
@@ -368,7 +369,12 @@ describe("manual-qa-seed script helpers", () => {
       expect.arrayContaining([
         expect.objectContaining({ metal_type: "GOLD", item_form: "Jewelry" }),
         expect.objectContaining({ metal_type: "SILVER", item_form: "Coins" }),
-        expect.objectContaining({ metal_type: "PLATINUM", item_form: "Bar" }),
+        expect.objectContaining({ metal_type: "GOLD", item_form: "Bar" }),
+      ])
+    );
+    expect(assetMetalRows).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ metal_type: "PLATINUM" }),
       ])
     );
     expectRowsStampedForIncrementalPull(assetMetalRows);

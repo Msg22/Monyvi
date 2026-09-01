@@ -89,6 +89,7 @@ All Supabase commands used `--local`; no remote Supabase project was mutated.
 | PR #254 fixture-runtime focused set | Pass: 2/2 suites, 35/35 tests. Locale/theme profile persistence, Android theme/text-scale application, and cross-profile observation cleanup are covered. |
 | Fixture runner/preflight broad set | Pass: 6/6 suites, 69/69 tests across fixture selection, preflight, Maestro, CI E2E, and manual seed entry points. |
 | Cross-profile local fixture cycle | Pass. Fresh profile inspection returned one observation; switching to the missing-rate Arabic/light profile returned zero observations, zero EGP accounts, and one `ar`/`LIGHT` profile; reset succeeded. |
+| Gold/Silver-only manual-QA fixture | Pass: focused 1/1 suite, 8/8 tests; broad fixture/preflight set remains 6/6 suites, 69/69 tests. The real local manual-QA seed and reset both completed without a migration-068 constraint failure. |
 | `npx supabase db lint --local --level error` | Pass for `extensions`, `private`, and `public`. |
 | `git diff --check` | Pass. |
 
