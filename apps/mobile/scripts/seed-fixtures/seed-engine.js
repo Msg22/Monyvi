@@ -624,17 +624,21 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
   const currentTimestamp = new Date().toISOString();
   const currentDate = currentTimestamp.slice(0, 10);
   const baseAccountCurrency = fixture.baseAccountCurrency ?? "EGP";
+  const fixtureContext = {
+    categoryIds: CATEGORY_IDS,
+    currentTimestamp,
+    dateFromToday,
+    deterministicUuid,
+    fixedNow: FIXED_NOW,
+    seedIds,
+    seedScope: fixture.seedScope,
+    userId,
+  };
   const extraRows = fixture.buildExtraRows
-    ? fixture.buildExtraRows({
-        categoryIds: CATEGORY_IDS,
-        currentTimestamp,
-        dateFromToday,
-        deterministicUuid,
-        fixedNow: FIXED_NOW,
-        seedIds,
-        seedScope: fixture.seedScope,
-        userId,
-      })
+    ? fixture.buildExtraRows(fixtureContext)
+    : {};
+  const cleanupRows = fixture.buildCleanupRows
+    ? fixture.buildCleanupRows(fixtureContext)
     : {};
   const expandedAccounts = extraRows.accounts ?? [];
   const expandedBankDetails = extraRows.bankDetails ?? [];
@@ -642,6 +646,8 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
   const assetMetals = extraRows.assetMetals ?? [];
   const metalHoldingStates = extraRows.metalHoldingStates ?? [];
   const marketRateObservations = extraRows.marketRateObservations ?? [];
+  const marketRateObservationCleanupRows =
+    cleanupRows.marketRateObservations ?? marketRateObservations;
   const debts = extraRows.debts ?? [];
   const budgets = extraRows.budgets ?? [];
   const categories = extraRows.categories ?? [];
@@ -701,8 +707,8 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
       user_id: userId,
       display_name: fixture.userFullName,
       preferred_currency: "EGP",
-      preferred_language: "en",
-      theme: "SYSTEM",
+      preferred_language: fixture.locale ?? "en",
+      theme: fixture.theme?.toUpperCase() ?? "SYSTEM",
       sms_detection_enabled: false,
       ai_processing_consent: {
         version: AI_PROCESSING_CONSENT_VERSION,
@@ -833,6 +839,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
     assetMetals,
     metalHoldingStates,
     marketRateObservations,
+    marketRateObservationCleanupRows,
     budgets,
     categories,
     debts,
@@ -914,7 +921,7 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
     await deleteRowsByIds(
       client,
       "market_rate_observations",
-      rows.marketRateObservations
+      rows.marketRateObservationCleanupRows
     );
     for (const table of SEED_TABLE_DELETE_ORDER) {
       await deleteScopedRows(client, table, userId, seedIds);
@@ -983,7 +990,7 @@ async function resetFixtureData(client, config, fixtureOverrides = {}) {
   await deleteRowsByIds(
     client,
     "market_rate_observations",
-    rows.marketRateObservations
+    rows.marketRateObservationCleanupRows
   );
 
   for (const table of RESET_TABLE_DELETE_ORDER) {

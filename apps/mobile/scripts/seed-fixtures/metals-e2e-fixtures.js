@@ -1,5 +1,19 @@
 const FIXED_NOW = "2026-08-31T10:15:30.123Z";
 const STALE_RATE_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+const METALS_PROFILE_NAMES = Object.freeze([
+  "metals-fresh-local-en-light",
+  "metals-stale-restart-ar-dark",
+  "metals-unknown-conflict-en-dark",
+  "metals-missing-local-ar-light",
+]);
+
+function buildMetalsCleanupRows() {
+  return ({ deterministicUuid, userId }) => ({
+    marketRateObservations: METALS_PROFILE_NAMES.map((name) => ({
+      id: deterministicUuid(`e2e-${name}`, userId, "metals:rate"),
+    })),
+  });
+}
 
 function buildMetalsRows(scenario) {
   return ({ currentTimestamp, deterministicUuid, seedScope, userId }) => {
@@ -113,6 +127,7 @@ function createMetalsProfile(name, scenario) {
       scenario.accountEligibility === "ineligible" ? "USD" : "EGP",
     controls: Object.freeze({ reset: true, inspect: true }),
     buildExtraRows: buildMetalsRows(scenario),
+    buildCleanupRows: buildMetalsCleanupRows(),
   });
 }
 

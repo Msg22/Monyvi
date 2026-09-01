@@ -256,6 +256,68 @@ describe("Metals deterministic E2E fixture registry", () => {
     );
   });
 
+  it("materializes the selected locale and theme in the seeded profile", async () => {
+    const { METALS_E2E_FIXTURES } = jest.requireActual(fixtureModulePath) as {
+      METALS_E2E_FIXTURES: Record<string, Record<string, unknown>>;
+    };
+    const { seedFixtureData } = jest.requireActual(seedEngineModulePath) as {
+      seedFixtureData: (
+        client: ReturnType<typeof createSeedClient>,
+        config: { mode: string; userId: string },
+        fixture: Record<string, unknown>
+      ) => Promise<unknown>;
+    };
+    const records: RecordedOperation[] = [];
+
+    await seedFixtureData(
+      createSeedClient(records),
+      {
+        mode: "local",
+        userId: "11111111-1111-4111-8111-111111111111",
+      },
+      METALS_E2E_FIXTURES["metals-stale-restart-ar-dark"]!
+    );
+
+    const profileUpsert = records.find(
+      (record) => record.table === "profiles" && record.operation === "upsert"
+    );
+    expect(profileUpsert?.rows).toMatchObject({
+      preferred_language: "ar",
+      theme: "DARK",
+    });
+  });
+
+  it("clears observation IDs from every Metals profile before profile switches", async () => {
+    const { METALS_E2E_FIXTURES } = jest.requireActual(fixtureModulePath) as {
+      METALS_E2E_FIXTURES: Record<string, Record<string, unknown>>;
+    };
+    const { seedFixtureData } = jest.requireActual(seedEngineModulePath) as {
+      seedFixtureData: (
+        client: ReturnType<typeof createSeedClient>,
+        config: { mode: string; userId: string },
+        fixture: Record<string, unknown>
+      ) => Promise<unknown>;
+    };
+    const records: RecordedOperation[] = [];
+
+    await seedFixtureData(
+      createSeedClient(records),
+      {
+        mode: "local",
+        userId: "11111111-1111-4111-8111-111111111111",
+      },
+      METALS_E2E_FIXTURES["metals-missing-local-ar-light"]!
+    );
+
+    const observationDelete = records.find(
+      (record) =>
+        record.table === "market_rate_observations" &&
+        record.operation === "delete"
+    );
+    expect(observationDelete).toMatchObject({ column: "id" });
+    expect(observationDelete?.value).toHaveLength(4);
+  });
+
   it("exposes Metals profile selection and inspect through the E2E runner", () => {
     const { getE2eFixture, inspectE2eData } = jest.requireActual(
       e2eSeedModulePath

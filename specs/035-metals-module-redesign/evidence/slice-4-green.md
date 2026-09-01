@@ -76,7 +76,7 @@ All Supabase commands used `--local`; no remote Supabase project was mutated.
 | Foundation + Metals pgTAP | Pass: 2/2 files, 87/87 assertions. |
 | Current Slice 4 Jest set | Pass: 6/6 suites, 31/31 tests. |
 | PR #251 overlap/foundation/sync Jest set | Pass: 11/11 suites, 130/130 tests. |
-| Full mobile Jest suite | Pass: 304/304 suites, 2614/2614 tests after the PR #254 non-schema review batch. |
+| Full mobile Jest suite | Pass: 304/304 suites, 2617/2617 tests after the PR #254 fixture-runtime and profile-isolation batch. |
 | Full logic Jest suite | Pass: 69/69 suites, 1238/1238 tests. |
 | `npm run typecheck -w @monyvi/mobile` | Pass. |
 | `npm run typecheck -w @monyvi/logic` | Pass. |
@@ -86,6 +86,9 @@ All Supabase commands used `--local`; no remote Supabase project was mutated.
 | Fixture `seed -> inspect -> reset -> inspect` | Pass. Seed inspection returned the exact asset, asset-metal, holding-state, and observation rows; reset inspection returned zero rows for all four groups. |
 | PR #254 non-schema review set | Pass: 3/3 suites, 14/14 tests. Legacy Live Rates labels, clock-relative rate fixtures, material account eligibility, and the reduced sync/rate boundary are covered. |
 | Ineligible account fixture on local Supabase | Pass. The missing-rate/ineligible profile seeded exactly four USD accounts and zero EGP accounts for its EGP Metals holding; reset returned the account table to zero rows. |
+| PR #254 fixture-runtime focused set | Pass: 2/2 suites, 35/35 tests. Locale/theme profile persistence, Android theme/text-scale application, and cross-profile observation cleanup are covered. |
+| Fixture runner/preflight broad set | Pass: 6/6 suites, 69/69 tests across fixture selection, preflight, Maestro, CI E2E, and manual seed entry points. |
+| Cross-profile local fixture cycle | Pass. Fresh profile inspection returned one observation; switching to the missing-rate Arabic/light profile returned zero observations, zero EGP accounts, and one `ar`/`LIGHT` profile; reset succeeded. |
 | `npx supabase db lint --local --level error` | Pass for `extensions`, `private`, and `public`. |
 | `git diff --check` | Pass. |
 
@@ -113,7 +116,7 @@ All Supabase commands used `--local`; no remote Supabase project was mutated.
 | Unapproved Add/Correct/Sell v2/Dispose/Delete/Undo | adapter approval-gate Jest | Confirm every action remains unavailable until schemas are approved. |
 | Rate-reference rules and sync ownership/protection/failure | Metals sync/rate Jest + PR #251 overlap set | Metadata LWW and real dedicated action delivery remain blocked. |
 | EN/AR parity and approved copy | content-contract Jest | Story slices own rendered locale/RTL verification. |
-| Deterministic clock-relative fresh/stale profiles and material account eligibility | fixture Jest + real local fixture cycle | Seed, inspect exact IDs, reset, inspect empty. |
+| Deterministic clock-relative fresh/stale profiles, material account eligibility, locale/theme/text scale, and profile isolation | fixture/preflight Jest + real local cross-profile cycle | Seed, inspect exact IDs/runtime values, switch profiles, reset, inspect empty. Theme and text scale are materialized by the Android preflight before launch. |
 | Gold/Silver bar/coin/jewelry selection and fallback | render-manifest Jest with hashes | Visual assets are inherited from the approved handoff; no image was generated. |
 | Accepted mutation, replay, stale winner, restart, rollback, exact-once recovery | none claimed | Blocked until the exact schemas and executable RPC/coordinator exist. |
 
