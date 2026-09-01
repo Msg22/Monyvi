@@ -35,6 +35,9 @@ export interface MetalHoldingFormValidationContext {
     readonly maximumPurchasePriceDecimal: string;
   };
   readonly isUnusualValue: (field: string, valueDecimal: string) => boolean;
+  readonly isUnusualHolding?: (
+    holding: NormalizedMetalHoldingFormData
+  ) => boolean;
 }
 
 export interface NormalizedMetalHoldingFormData {
@@ -177,13 +180,10 @@ export function validateMetalHoldingForm(
   const physicalForm = normalizePhysicalForm(data.physicalForm, errors);
   const notes = normalizeOptionalText(data.notes);
 
-  const requiresUnusualValueAcknowledgment =
+  const fieldRequiresUnusualValueAcknowledgment =
     (weight !== null && context.isUnusualValue("weightGrams", weight)) ||
     (purchasePrice !== null &&
       context.isUnusualValue("purchasePrice", purchasePrice));
-  if (requiresUnusualValueAcknowledgment && !data.unusualValueAcknowledged) {
-    errors.unusualValueAcknowledged = "required";
-  }
 
   const normalized =
     name.length > 0 &&
@@ -210,6 +210,13 @@ export function validateMetalHoldingForm(
           notes,
         })
       : null;
+
+  const requiresUnusualValueAcknowledgment =
+    fieldRequiresUnusualValueAcknowledgment ||
+    (normalized !== null && context.isUnusualHolding?.(normalized) === true);
+  if (requiresUnusualValueAcknowledgment && !data.unusualValueAcknowledged) {
+    errors.unusualValueAcknowledged = "required";
+  }
 
   return Object.freeze({
     isValid: Object.values(errors).every((value) => value === undefined),
