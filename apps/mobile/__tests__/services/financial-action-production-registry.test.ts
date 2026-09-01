@@ -36,6 +36,11 @@ import {
   createFinancialActionGroup,
   getFinancialActionGroup,
 } from "../../services/financial-action-foundation-repository";
+import { APPROVED_FINANCIAL_ACTION_REGISTRY } from "../../services/financial-action-approved-registry";
+import {
+  createApprovedMetalsEnvelope,
+  METALS_VALIDATION_INPUT,
+} from "./financial-action-metals-fixtures";
 
 const unpublishedEnvelope: FinancialActionEnvelopeV1 = {
   actionId: mockActionId,
@@ -77,6 +82,20 @@ describe("production financial action registry", () => {
     expect(digestUtf8).not.toHaveBeenCalled();
     expect(mockDatabaseWrite).not.toHaveBeenCalled();
   });
+
+  it.each(["add", "correct", "sell", "dispose", "delete", "undo"] as const)(
+    "approves canonical Metals %s action",
+    (kind) => {
+      const envelope = createApprovedMetalsEnvelope(kind);
+      expect(() =>
+        APPROVED_FINANCIAL_ACTION_REGISTRY.resolve(
+          envelope.domain,
+          envelope.kind,
+          envelope.payloadVersion
+        ).validatePayload(envelope.payload, METALS_VALIDATION_INPUT)
+      ).not.toThrow();
+    }
+  );
 
   it("keeps stored roots readable after their schema leaves the approved registry", async () => {
     await expect(getFinancialActionGroup(mockActionId)).resolves.toMatchObject({

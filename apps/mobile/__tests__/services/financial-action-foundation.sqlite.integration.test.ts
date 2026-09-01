@@ -8,6 +8,10 @@ import {
   type FinancialActionEnvelopeV1,
   type Sha256Provider,
 } from "../../../../packages/logic/src/financial-actions";
+import {
+  createApprovedMetalsEnvelope,
+  METALS_VALIDATION_INPUT,
+} from "./financial-action-metals-fixtures";
 
 interface TestDatabaseModule {
   readonly database: Database;
@@ -54,23 +58,25 @@ jest.mock("../../services/user-data-access", () => {
     "@nozbe/watermelondb"
   );
   return {
-    getCurrentUserDataScope: jest.fn(() => Promise.resolve({
-      userId: mockSqliteCurrentUserId,
-      queryOwned: (
-        collection: { query: (...clauses: unknown[]) => unknown },
-        ...clauses: unknown[]
-      ) =>
-        collection.query(
-          Q.where("user_id", mockSqliteCurrentUserId),
-          ...clauses
-        ),
-      assertOwned: <T extends { userId: string }>(record: T): T => {
-        if (record.userId !== mockSqliteCurrentUserId) {
-          throw new Error("ownership_failed");
-        }
-        return record;
-      },
-    })),
+    getCurrentUserDataScope: jest.fn(() =>
+      Promise.resolve({
+        userId: mockSqliteCurrentUserId,
+        queryOwned: (
+          collection: { query: (...clauses: unknown[]) => unknown },
+          ...clauses: unknown[]
+        ) =>
+          collection.query(
+            Q.where("user_id", mockSqliteCurrentUserId),
+            ...clauses
+          ),
+        assertOwned: <T extends { userId: string }>(record: T): T => {
+          if (record.userId !== mockSqliteCurrentUserId) {
+            throw new Error("ownership_failed");
+          }
+          return record;
+        },
+      })
+    ),
     assertExpectedCurrentUser: jest.fn(
       (expectedUserId: string): Promise<void> => {
         if (expectedUserId !== mockSqliteCurrentUserId) {
@@ -96,28 +102,14 @@ const USER_ID = "018f0c7a-1234-7abc-8def-000000000003";
 const FOREIGN_USER_ID = "018f0c7a-1234-7abc-8def-000000000099";
 const sha256Provider: Sha256Provider = {
   digestUtf8: (canonicalText: string): Promise<string> =>
-    Promise.resolve(createHash("sha256").update(canonicalText, "utf8").digest("hex")),
+    Promise.resolve(
+      createHash("sha256").update(canonicalText, "utf8").digest("hex")
+    ),
 };
 
 function envelope(userId = USER_ID): FinancialActionEnvelopeV1 {
   return {
-    actionId: ACTION_ID,
-    domain: "metals",
-    domainReferenceId: "018f0c7a-1234-7abc-8def-000000000002",
-    envelopeVersion: "monyvi.financial-action/v1",
-    accountGuards: [],
-    kind: "sell",
-    occurredAt: "2026-08-31T10:15:30.123Z",
-    payload: {
-      feeMinorUnits: "80000",
-      grossProceedsDecimal: "35500",
-      holdingId: "018f0c7a-1234-7abc-8def-000000000004",
-      includeAccountCredit: false,
-      netProceedsMinorUnits: "3470000",
-      notes: "ذهب",
-      rateReferenceIds: [],
-    },
-    payloadVersion: "metals.sell/v1",
+    ...createApprovedMetalsEnvelope("sell"),
     userId,
   };
 }
@@ -142,26 +134,25 @@ function createRepository(
 ): ReturnType<typeof createFinancialActionFoundationRepository> {
   return createFinancialActionFoundationRepository({
     database: db,
-    getCurrentUserDataScope: () => Promise.resolve({
-      userId: mockSqliteCurrentUserId,
-      queryOwned: (collection, ...clauses) =>
-        collection.query(
-          jest
-            .requireActual<
-              typeof import("@nozbe/watermelondb")
-            >("@nozbe/watermelondb")
-            .Q.where("user_id", mockSqliteCurrentUserId),
-          ...clauses
-        ),
-      assertOwned: <T extends { userId: string }>(record: T): T => {
-        if (record.userId !== mockSqliteCurrentUserId)
-          throw new Error("ownership_failed");
-        return record;
-      },
-    }),
-    assertExpectedCurrentUser: (
-      expectedUserId: string
-    ): Promise<void> => {
+    getCurrentUserDataScope: () =>
+      Promise.resolve({
+        userId: mockSqliteCurrentUserId,
+        queryOwned: (collection, ...clauses) =>
+          collection.query(
+            jest
+              .requireActual<
+                typeof import("@nozbe/watermelondb")
+              >("@nozbe/watermelondb")
+              .Q.where("user_id", mockSqliteCurrentUserId),
+            ...clauses
+          ),
+        assertOwned: <T extends { userId: string }>(record: T): T => {
+          if (record.userId !== mockSqliteCurrentUserId)
+            throw new Error("ownership_failed");
+          return record;
+        },
+      }),
+    assertExpectedCurrentUser: (expectedUserId: string): Promise<void> => {
       if (expectedUserId !== mockSqliteCurrentUserId) {
         throw new Error("auth_scope_changed");
       }
@@ -186,6 +177,7 @@ describe("financial action foundation SQLite persistence", () => {
     const created = await repository.createFinancialActionGroup({
       envelope: envelope(),
       hashProvider: sha256Provider,
+      validationInput: METALS_VALIDATION_INPUT,
     });
     const reopened = await openFreshDatabase();
     const reopenedRepository = createRepository(reopened);
@@ -196,6 +188,7 @@ describe("financial action foundation SQLite persistence", () => {
       reopenedRepository.createFinancialActionGroup({
         envelope: envelope(),
         hashProvider: sha256Provider,
+        validationInput: METALS_VALIDATION_INPUT,
       })
     ).resolves.toMatchObject({ kind: "replay" });
     expect(await fetchAll(await openFreshDatabase())).toHaveLength(1);
@@ -211,6 +204,7 @@ describe("financial action foundation SQLite persistence", () => {
       repository.createFinancialActionGroup({
         envelope: envelope(),
         hashProvider: sha256Provider,
+        validationInput: METALS_VALIDATION_INPUT,
       })
     ).rejects.toThrow("write_failed");
     expect(await fetchAll(await openFreshDatabase())).toHaveLength(0);
@@ -221,11 +215,14 @@ describe("financial action foundation SQLite persistence", () => {
     const actionEnvelope = envelope();
     const payload = await hashFinancialActionEnvelope(
       actionEnvelope,
-      sha256Provider
+      sha256Provider,
+      DEFAULT_FINANCIAL_ACTION_REGISTRY,
+      METALS_VALIDATION_INPUT
     );
     await repository.createFinancialActionGroup({
       envelope: actionEnvelope,
       hashProvider: sha256Provider,
+      validationInput: METALS_VALIDATION_INPUT,
     });
 
     await expect(
@@ -262,6 +259,7 @@ describe("financial action foundation SQLite persistence", () => {
     await repository.createFinancialActionGroup({
       envelope: envelope(),
       hashProvider: sha256Provider,
+      validationInput: METALS_VALIDATION_INPUT,
     });
     const created = (await fetchAll(database))[0]!;
     await database.write(async (): Promise<void> => {
@@ -290,7 +288,9 @@ describe("financial action foundation SQLite persistence", () => {
     const foreignEnvelope = envelope(FOREIGN_USER_ID);
     const foreignPayload = await hashFinancialActionEnvelope(
       foreignEnvelope,
-      sha256Provider
+      sha256Provider,
+      DEFAULT_FINANCIAL_ACTION_REGISTRY,
+      METALS_VALIDATION_INPUT
     );
     await database.write(async (): Promise<void> => {
       await database
@@ -316,6 +316,7 @@ describe("financial action foundation SQLite persistence", () => {
     await repository.createFinancialActionGroup({
       envelope: envelope(),
       hashProvider: sha256Provider,
+      validationInput: METALS_VALIDATION_INPUT,
     });
     const rows = await fetchAll(await openFreshDatabase());
     expect(rows).toHaveLength(2);

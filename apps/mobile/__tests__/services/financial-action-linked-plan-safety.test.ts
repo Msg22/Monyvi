@@ -26,6 +26,10 @@ import {
   DEFAULT_FINANCIAL_ACTION_REGISTRY,
   type FinancialActionEnvelopeV1,
 } from "../../../../packages/logic/src/financial-actions";
+import {
+  createApprovedMetalsEnvelope,
+  METALS_VALIDATION_INPUT,
+} from "./financial-action-metals-fixtures";
 
 interface FakeRaw {
   _status?: string;
@@ -140,26 +144,7 @@ function assertFakeRaw(
 }
 
 function envelope(): FinancialActionEnvelopeV1 {
-  return {
-    actionId: "018f0c7a-1234-7abc-8def-000000000001",
-    userId: USER_ID,
-    domain: "metals",
-    kind: "sell",
-    domainReferenceId: "018f0c7a-1234-7abc-8def-000000000002",
-    envelopeVersion: "monyvi.financial-action/v1",
-    accountGuards: [],
-    occurredAt: "2026-08-31T10:15:30.123Z",
-    payload: {
-      feeMinorUnits: "80000",
-      grossProceedsDecimal: "35500",
-      holdingId: "018f0c7a-1234-7abc-8def-000000000004",
-      includeAccountCredit: false,
-      netProceedsMinorUnits: "3470000",
-      notes: "ذهب",
-      rateReferenceIds: [],
-    },
-    payloadVersion: "metals.sell/v1",
-  };
+  return createApprovedMetalsEnvelope("sell");
 }
 
 function createRepository(): FinancialActionFoundationRepository {
@@ -187,7 +172,8 @@ function createRepository(): FinancialActionFoundationRepository {
     write: async <T>(action: () => Promise<T>): Promise<T> => action(),
   } as unknown as Database;
   const emptyOwnedQuery = {
-    fetch: (): Promise<Model[]> => Promise.resolve(ownedRoot ? [ownedRoot] : []),
+    fetch: (): Promise<Model[]> =>
+      Promise.resolve(ownedRoot ? [ownedRoot] : []),
   };
   const queryOwned: FinancialActionUserDataScope["queryOwned"] = () =>
     emptyOwnedQuery as never;
@@ -232,6 +218,7 @@ async function commit(
       digestUtf8: (value): Promise<string> =>
         Promise.resolve(createHash("sha256").update(value).digest("hex")),
     },
+    validationInput: METALS_VALIDATION_INPUT,
     prepareLinkedOperationPlan:
       (): Promise<FinancialActionLinkedOperationPlan> =>
         Promise.resolve(linkedPlan),
@@ -249,6 +236,7 @@ async function createPendingRootAndCommit(
       digestUtf8: (value): Promise<string> =>
         Promise.resolve(createHash("sha256").update(value).digest("hex")),
     },
+    validationInput: METALS_VALIDATION_INPUT,
   });
   const root = createResult.record as unknown as FakeModel;
   const assertCachedOwnership = jest.fn((): Promise<void> => {
@@ -263,8 +251,10 @@ async function createPendingRootAndCommit(
         digestUtf8: (value): Promise<string> =>
           Promise.resolve(createHash("sha256").update(value).digest("hex")),
       },
-      prepareLinkedOperationPlan: (): Promise<FinancialActionLinkedOperationPlan> =>
-        Promise.resolve({ ...linkedPlan, assertCachedOwnership }),
+      validationInput: METALS_VALIDATION_INPUT,
+      prepareLinkedOperationPlan:
+        (): Promise<FinancialActionLinkedOperationPlan> =>
+          Promise.resolve({ ...linkedPlan, assertCachedOwnership }),
     })
   ).rejects.toThrow(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
   return root;
@@ -285,7 +275,12 @@ describe("financial action linked plan safety", () => {
         input: FinancialActionLinkedOperationPreparedOwnershipInput
       ): Promise<void> => {
         expect(input.cachedPreimages).toEqual([
-          { id: child.id, kind: "update", table: child.table, raw: originalRaw },
+          {
+            id: child.id,
+            kind: "update",
+            table: child.table,
+            raw: originalRaw,
+          },
         ]);
         expect(Object.isFrozen(input.cachedPreimages)).toBe(true);
         expect(Object.isFrozen(input.cachedPreimages[0]?.raw)).toBe(true);
@@ -634,16 +629,38 @@ describe("financial action linked plan safety", () => {
       };
       const earlierOperation =
         targetPosition === "later"
-          ? { kind: "update" as const, model: earlier as unknown as Model, update: mutateTarget }
+          ? {
+              kind: "update" as const,
+              model: earlier as unknown as Model,
+              update: mutateTarget,
+            }
           : targetKind === "update"
-            ? { kind: "update" as const, model: earlier as unknown as Model, update: targetUpdate }
-            : { kind: "markAsDeleted" as const, model: earlier as unknown as Model };
+            ? {
+                kind: "update" as const,
+                model: earlier as unknown as Model,
+                update: targetUpdate,
+              }
+            : {
+                kind: "markAsDeleted" as const,
+                model: earlier as unknown as Model,
+              };
       const laterOperation =
         targetPosition === "earlier"
-          ? { kind: "update" as const, model: later as unknown as Model, update: mutateTarget }
+          ? {
+              kind: "update" as const,
+              model: later as unknown as Model,
+              update: mutateTarget,
+            }
           : targetKind === "update"
-            ? { kind: "update" as const, model: later as unknown as Model, update: targetUpdate }
-            : { kind: "markAsDeleted" as const, model: later as unknown as Model };
+            ? {
+                kind: "update" as const,
+                model: later as unknown as Model,
+                update: targetUpdate,
+              }
+            : {
+                kind: "markAsDeleted" as const,
+                model: later as unknown as Model,
+              };
 
       await expect(
         commit(plan([earlierOperation, laterOperation]))
@@ -826,7 +843,8 @@ describe("financial action linked plan safety", () => {
         ): Promise<void> => {
           expect(Object.isFrozen(input.preparedPostimages[0])).toBe(true);
           expect(Object.isFrozen(input.preparedPostimages[0]?.raw)).toBe(true);
-          const snapshotRaw = input.preparedPostimages[0]?.raw as unknown as FakeRaw;
+          const snapshotRaw = input.preparedPostimages[0]
+            ?.raw as unknown as FakeRaw;
           snapshotRaw.parent_id = "snapshot-tamper";
           expect(snapshotRaw.parent_id).not.toBe("snapshot-tamper");
           tamper(existing);
@@ -846,19 +864,26 @@ describe("financial action linked plan safety", () => {
   );
 
   it("rejects prepared-create raw tampering before batch", async () => {
-    const preparedCreate = fakeModel("tampered-create", "asset_metals", "create");
+    const preparedCreate = fakeModel(
+      "tampered-create",
+      "asset_metals",
+      "create"
+    );
     preparedCreate._raw.amount_minor = "100";
     const originalRaw = { ...preparedCreate._raw };
-    const assertPreparedOwnership = jest.fn((
-      input: FinancialActionLinkedOperationPreparedOwnershipInput
-    ): Promise<void> => {
-      expect(Object.isFrozen(input.preparedPostimages[0]?.raw)).toBe(true);
-      const snapshotRaw = input.preparedPostimages[0]?.raw as unknown as FakeRaw;
-      snapshotRaw.amount_minor = "snapshot-tamper";
-      expect(snapshotRaw.amount_minor).toBe("100");
-      preparedCreate._raw.amount_minor = "999";
-      return Promise.resolve();
-    });
+    const assertPreparedOwnership = jest.fn(
+      (
+        input: FinancialActionLinkedOperationPreparedOwnershipInput
+      ): Promise<void> => {
+        expect(Object.isFrozen(input.preparedPostimages[0]?.raw)).toBe(true);
+        const snapshotRaw = input.preparedPostimages[0]
+          ?.raw as unknown as FakeRaw;
+        snapshotRaw.amount_minor = "snapshot-tamper";
+        expect(snapshotRaw.amount_minor).toBe("100");
+        preparedCreate._raw.amount_minor = "999";
+        return Promise.resolve();
+      }
+    );
 
     await expect(
       commit(
