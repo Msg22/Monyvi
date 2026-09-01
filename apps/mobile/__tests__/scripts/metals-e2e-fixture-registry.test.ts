@@ -102,6 +102,7 @@ describe("Metals deterministic E2E fixture registry", () => {
         input: Record<string, unknown>
       ) => Record<string, unknown>
     )({
+      currentTimestamp: "2030-01-02T03:04:05.000Z",
       deterministicUuid: (...parts: unknown[]) => parts.join(":"),
       seedScope: "metals",
       userId: "user",
@@ -118,6 +119,11 @@ describe("Metals deterministic E2E fixture registry", () => {
     expect((rows.assets as Array<Record<string, unknown>>)[0]).toMatchObject({
       acquisition_action_id: null,
       purchase_date: "2026-08-01",
+    });
+    expect(
+      (rows.marketRateObservations as Array<Record<string, unknown>>)[0]
+    ).toMatchObject({
+      provider_observed_at: "2030-01-02T03:04:05.000Z",
     });
   });
 
@@ -216,6 +222,37 @@ describe("Metals deterministic E2E fixture registry", () => {
           column: "id",
         }),
       ])
+    );
+  });
+
+  it("materializes an ineligible profile with no same-currency account", async () => {
+    const { METALS_E2E_FIXTURES } = jest.requireActual(fixtureModulePath) as {
+      METALS_E2E_FIXTURES: Record<string, Record<string, unknown>>;
+    };
+    const { seedFixtureData } = jest.requireActual(seedEngineModulePath) as {
+      seedFixtureData: (
+        client: ReturnType<typeof createSeedClient>,
+        config: { mode: string; userId: string },
+        fixture: Record<string, unknown>
+      ) => Promise<unknown>;
+    };
+    const records: RecordedOperation[] = [];
+
+    await seedFixtureData(
+      createSeedClient(records),
+      {
+        mode: "local",
+        userId: "11111111-1111-4111-8111-111111111111",
+      },
+      METALS_E2E_FIXTURES["metals-missing-local-ar-light"]!
+    );
+
+    const accountUpsert = records.find(
+      (record) => record.table === "accounts" && record.operation === "upsert"
+    );
+    expect(accountUpsert).toBeDefined();
+    expect(accountUpsert?.rows).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ currency: "EGP" })])
     );
   });
 

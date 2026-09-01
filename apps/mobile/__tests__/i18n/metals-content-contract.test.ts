@@ -52,11 +52,16 @@ describe("Metals EN/AR content contract", () => {
     }
   });
 
+  it("retains the legacy Platinum label while the live-rate card still renders it", () => {
+    expect(enFlat.platinum).toBe("Platinum");
+    expect(arFlat.platinum).toBe("البلاتين");
+  });
+
   it("uses language-neutral keys and omits retired or unsupported user copy", () => {
     const allKeys = Object.keys(enFlat).join(" ");
     const allCopy = `${Object.values(enFlat).join(" ")} ${Object.values(arFlat).join(" ")}`;
     expect(allKeys).not.toMatch(/[\u0600-\u06ff]/);
-    expect(allCopy).not.toMatch(/Platinum|Palladium|unrealized|realized\s+P\/?L|profit\s*\/\s*loss/i);
+    expect(allCopy).not.toMatch(/Palladium|unrealized|realized\s+P\/?L|profit\s*\/\s*loss/i);
   });
 
   it("registers every Metals scalar key in the translation schema", () => {

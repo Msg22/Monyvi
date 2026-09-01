@@ -96,3 +96,21 @@ boundary. The CI finding was valid and in scope.
 All five image dependencies now use the repository's typed static-import
 pattern. The exact root `npm run lint` command passes with zero errors, mobile
 typecheck passes, and the focused render-manifest suite passes 3/3 tests.
+
+## PR #254 non-schema review Red
+
+The two focused review suites failed with three intended assertions before the
+production fixes:
+
+1. the current Live Rates screen still requested the legacy `platinum` key,
+   but the EN/AR Metals catalogs no longer defined it;
+2. the fresh-rate fixture returned the fixed authoring timestamp instead of the
+   seed engine's injected current timestamp;
+3. the account-ineligible fixture still upserted four EGP accounts, so its
+   metadata label did not create the eligibility state it claimed.
+
+The metadata helper was also verified to have no production consumer. Its
+whole-projection timestamp could not prove the approved per-field
+`(writtenAt, writerId)` contract, so the incomplete helper, isolated test, and
+coverage claim were removed instead of being extended without the blocked
+action/coordinator contracts.
