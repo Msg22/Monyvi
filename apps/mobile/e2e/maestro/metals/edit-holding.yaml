@@ -1,0 +1,96 @@
+appId: com.monyvi.app
+---
+# US4 Edit Holding deterministic invocation matrix. Each run starts from a
+# clean profile; this flow makes no fixture write itself.
+#
+# - E2E_FIXTURE_PROFILE=metals-fresh-local-en-light:
+#   metadata-only Save, material correction/revert, and direct Save behavior.
+# - E2E_FIXTURE_PROFILE=metals-offline-cached-local-en-light:
+#   material correction followed by restart and locally retained facts.
+# - E2E_FIXTURE_PROFILE=metals-stale-restart-ar-dark:
+#   Arabic RTL, dark theme, 200% text scale, stale-rate disclosure, and restart.
+#
+# This Red lane does not claim execution. The base has neither the Edit route nor
+# the shared form selectors, and the fixture registry has no edit-clean profile
+# with a controllable holding identity. T091/T092 must provide them first.
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://metals
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-root
+    timeout: 30000
+- tapOn: E2E Gold Bar
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-screen
+    timeout: 30000
+- tapOn:
+    id: metal-holding-edit
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-edit-screen
+    timeout: 30000
+
+# Metadata-only: direct Save has no reason or correction-review requirement.
+- tapOn:
+    id: metal-holding-name-field
+- eraseText: 12
+- inputText: E2E Gold Bar renamed
+- assertNotVisible:
+    id: metal-holding-correction-reason-field
+- assertNotVisible:
+    id: metal-holding-review-screen
+- tapOn:
+    id: metal-holding-save
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-screen
+    timeout: 30000
+
+# Material correction then exact revert: previous/current cues, reason, and
+# What will change appear only for the delta and disappear once it is restored.
+- tapOn:
+    id: metal-holding-edit
+- tapOn:
+    id: metal-holding-weight-field
+- eraseText: 2
+- inputText: "10.125"
+- assertVisible:
+    id: metal-holding-previous-current-weight
+- assertVisible:
+    id: metal-holding-correction-reason-field
+- assertVisible:
+    id: metal-holding-what-will-change
+- tapOn:
+    id: metal-holding-correction-reason-field
+- inputText: Corrected scale reading
+- tapOn:
+    id: metal-holding-weight-field
+- eraseText: 6
+- inputText: "10"
+- assertNotVisible:
+    id: metal-holding-previous-current-weight
+- assertNotVisible:
+    id: metal-holding-correction-reason-field
+- assertNotVisible:
+    id: metal-holding-what-will-change
+- tapOn:
+    id: metal-holding-save
+
+# Offline/restart profile: when selected by the runner, valid local corrections
+# survive process restart without waiting for a network response.
+- openLink: monyvi://metals
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-root
+    timeout: 30000
+- assertVisible: E2E Gold Bar renamed
+- stopApp
+- launchApp:
+    clearState: false
+- openLink: monyvi://metals
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-root
+    timeout: 30000
+- assertVisible: E2E Gold Bar renamed
