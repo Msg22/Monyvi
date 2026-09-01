@@ -13,6 +13,7 @@ interface E2ePreflightModule {
   buildDevMenuPreferencesXml(): string;
   buildIntroSeenFlagSql(): string;
   buildE2eRuntimeStorageSql(theme: string): string;
+  buildMetalsLocalFixtureCleanupSql(userId: string): string;
   buildMetalsLocalObservationCleanupSql(): string;
   currentFocusShowsDevLauncherError(currentFocus: string): boolean;
   currentFocusShowsDevMenu(currentFocus: string): boolean;
@@ -28,6 +29,9 @@ interface E2ePreflightModule {
     theme: string;
     textScale: number;
   } | null;
+  assertMetalsFixtureBuildSupported(
+    env?: Readonly<Record<string, string | undefined>>
+  ): void;
   relaunchE2eFixtureIfRequired(
     settings: {
       locale: string;
@@ -323,6 +327,78 @@ describe("e2e-preflight", () => {
     expect(preflight.buildMetalsLocalObservationCleanupSql()).toBe(
       'delete from "market_rate_observations" where "source" = \'e2e_fixture\';'
     );
+  });
+
+  it("clears only deterministic Metals fixture accounts and dependent rows in FK-safe order", () => {
+    const userId = "11111111-1111-4111-8111-111111111111";
+    const { buildSeedIds } = jest.requireActual(
+      "../../scripts/seed-fixtures/seed-engine"
+    ) as {
+      buildSeedIds: (
+        userId: string,
+        seedScope: string
+      ) => {
+        accounts: Record<string, string>;
+        accountSmsSenders: Record<string, string>;
+        bankDetails: Record<string, string>;
+        transactions: Record<string, string>;
+        transfers: Record<string, string>;
+      };
+    };
+    const ids = buildSeedIds(userId, "e2e-metals-fresh-local-en-light");
+    const sql = preflight.buildMetalsLocalFixtureCleanupSql(userId);
+
+    expect(sql).toContain(ids.transactions.expense);
+    expect(sql).toContain(ids.transfers.atm);
+    expect(sql).toContain(ids.accountSmsSenders.nbe);
+    expect(sql).toContain(ids.bankDetails.nbe);
+    expect(sql).toContain(ids.accounts.cash);
+    expect(sql).not.toContain("user-account-that-must-survive");
+    expect(sql.indexOf('delete from "transactions"')).toBeLessThan(
+      sql.indexOf('delete from "accounts"')
+    );
+    expect(sql.indexOf('delete from "transfers"')).toBeLessThan(
+      sql.indexOf('delete from "accounts"')
+    );
+    expect(sql).toContain(
+      'delete from "market_rate_observations" where "source" = \'e2e_fixture\';'
+    );
+  });
+
+  it("fails fast before attempting a Metals profile in a release build", () => {
+    const releaseEnv = {
+      E2E_METALS_PROFILE: "metals-fresh-local-en-light",
+      E2E_RELEASE_BUILD: "1",
+    };
+    expect(() =>
+      preflight.assertMetalsFixtureBuildSupported(releaseEnv)
+    ).toThrow(
+      "Metals E2E profiles are not supported in release builds until authenticated cleanup and readiness are available."
+    );
+    const clearLocalState = jest.fn();
+    const forceStop = jest.fn();
+    expect(() =>
+      preflight.applyE2eFixtureRuntimeSettings(releaseEnv, {
+        clearLocalState,
+        forceStop,
+        runAdb: jest.fn(),
+        seedTheme: jest.fn(),
+      })
+    ).toThrow(
+      "Metals E2E profiles are not supported in release builds until authenticated cleanup and readiness are available."
+    );
+    expect(forceStop).not.toHaveBeenCalled();
+    expect(clearLocalState).not.toHaveBeenCalled();
+
+    expect(() =>
+      preflight.assertMetalsFixtureBuildSupported({ E2E_RELEASE_BUILD: "1" })
+    ).not.toThrow();
+    expect(() =>
+      preflight.assertMetalsFixtureBuildSupported({
+        E2E_FIXTURE_PROFILE: "some-other-profile",
+        E2E_RELEASE_BUILD: "1",
+      })
+    ).not.toThrow();
   });
 
   it("waits for the seeded projection and relaunches restart profiles without clearing the database", () => {

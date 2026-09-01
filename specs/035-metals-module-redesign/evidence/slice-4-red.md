@@ -189,3 +189,20 @@ Green now resets the no-profile font scale to `1`, waits for every non-missing
 rate profile, performs the extra relaunch only for the restart profile, and
 uses the injected seed clock for all three user-owned projection update
 timestamps while preserving purchase and provider dates.
+
+## PR #254 profile-isolation and release-harness Red
+
+The next focused run failed 3 intended assertions while 38 established checks
+remained green:
+
+1. the seeded profile and its four accounts retained `FIXED_NOW` as
+   `updated_at`, so incremental pulls could miss locale and eligibility changes;
+2. the dev-client preflight had no exact-ID cleanup for prior Metals fixture
+   accounts or their dependent fixture rows;
+3. a release Metals profile could clear the entire app, including auth, before
+   reaching a readiness path that cannot inspect release WatermelonDB.
+
+Green keeps `created_at` fixed, stamps mutable profile/account rows with the
+injected seed clock, deletes only deterministic Metals fixture IDs in
+child-first order, and fails release Metals profiles before any device mutation
+until an authenticated release cleanup/readiness harness exists.

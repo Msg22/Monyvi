@@ -22,9 +22,9 @@ interface RecordedOperation {
   rows?: unknown;
 }
 
-function createSeedClient(
-  records: RecordedOperation[]
-): { from: (table: string) => unknown } {
+function createSeedClient(records: RecordedOperation[]): {
+  from: (table: string) => unknown;
+} {
   return {
     from(table: string) {
       return {
@@ -138,8 +138,7 @@ describe("Metals deterministic E2E fixture registry", () => {
       provider_observed_at: "2030-01-02T03:04:05.000Z",
     });
 
-    const staleFixture =
-      METALS_E2E_FIXTURES["metals-stale-restart-ar-dark"];
+    const staleFixture = METALS_E2E_FIXTURES["metals-stale-restart-ar-dark"];
     const staleRows = (
       staleFixture?.buildExtraRows as (
         input: Record<string, unknown>
@@ -300,22 +299,40 @@ describe("Metals deterministic E2E fixture registry", () => {
     };
     const records: RecordedOperation[] = [];
 
-    await seedFixtureData(
-      createSeedClient(records),
-      {
-        mode: "local",
-        userId: "11111111-1111-4111-8111-111111111111",
-      },
-      METALS_E2E_FIXTURES["metals-stale-restart-ar-dark"]!
-    );
+    jest.useFakeTimers().setSystemTime(Date.parse("2030-01-02T03:04:05.000Z"));
+    try {
+      await seedFixtureData(
+        createSeedClient(records),
+        {
+          mode: "local",
+          userId: "11111111-1111-4111-8111-111111111111",
+        },
+        METALS_E2E_FIXTURES["metals-stale-restart-ar-dark"]!
+      );
+    } finally {
+      jest.useRealTimers();
+    }
 
     const profileUpsert = records.find(
       (record) => record.table === "profiles" && record.operation === "upsert"
     );
     expect(profileUpsert?.rows).toMatchObject({
+      created_at: "2026-04-08T12:00:00.000Z",
       preferred_language: "ar",
       theme: "DARK",
+      updated_at: "2030-01-02T03:04:05.000Z",
     });
+    const accountUpsert = records.find(
+      (record) => record.table === "accounts" && record.operation === "upsert"
+    );
+    const accountRows = accountUpsert?.rows as Array<Record<string, unknown>>;
+    expect(accountRows).toHaveLength(4);
+    for (const account of accountRows) {
+      expect(account).toMatchObject({
+        created_at: "2026-04-08T12:00:00.000Z",
+        updated_at: "2030-01-02T03:04:05.000Z",
+      });
+    }
   });
 
   it("clears observation IDs from every Metals profile before profile switches", async () => {

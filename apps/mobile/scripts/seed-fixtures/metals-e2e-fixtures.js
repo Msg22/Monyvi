@@ -178,4 +178,4 @@ const METALS_E2E_FIXTURES = Object.freeze({
   ),
 });
 
-module.exports = { METALS_E2E_FIXTURES };
+module.exports = { METALS_E2E_FIXTURES, METALS_PROFILE_NAMES };
