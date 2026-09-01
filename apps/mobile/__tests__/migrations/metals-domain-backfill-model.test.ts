@@ -62,6 +62,44 @@ describe("068 Metals domain migration and persisted models", () => {
     );
   });
 
+  it("binds lifecycle event kind to the linked action-evidence kind", () => {
+    const sql = source(migrationPath);
+
+    expect(sql).toMatch(
+      /foreign key\s*\(\s*user_id\s*,\s*action_id\s*,\s*holding_id\s*,\s*kind\s*\)[\s\S]*references\s+public\.metal_action_evidence\s*\(\s*user_id\s*,\s*action_id\s*,\s*holding_id\s*,\s*kind\s*\)/i
+    );
+  });
+
+  it("binds each effective holding action and event as one provenance pair", () => {
+    const sql = source(migrationPath);
+
+    expect(sql).toMatch(
+      /\(financial_revision\s*=\s*0\)\s*=\s*\(effective_event_id\s+is\s+null\)/i
+    );
+    expect(sql).toMatch(
+      /foreign key\s*\(\s*user_id\s*,\s*holding_id\s*,\s*effective_action_id\s*,\s*effective_event_id\s*\)[\s\S]*references\s+public\.metal_lifecycle_events\s*\(\s*user_id\s*,\s*holding_id\s*,\s*action_id\s*,\s*id\s*\)/i
+    );
+  });
+
+  it("derives captured freshness from immutable provider chronology", () => {
+    const sql = source(migrationPath);
+
+    expect(sql).toContain("metal_rate_captured_freshness_v1");
+    expect(sql).toContain("guard_metal_rate_reference_freshness_v1");
+    expect(sql).toMatch(/interval\s+'24 hours'/i);
+    expect(sql).toContain("metal_rate_captured_freshness_mismatch");
+  });
+
+  it("prevents every role from mutating or deleting inserted rate evidence", () => {
+    const sql = source(migrationPath);
+
+    expect(sql).toContain("guard_immutable_metal_rate_reference_v1");
+    expect(sql).toMatch(
+      /before\s+update\s+or\s+delete\s+on\s+public\.metal_rate_references/i
+    );
+    expect(sql).toContain("metal_rate_reference_immutable");
+  });
+
   it("exposes bounded exact observation pages without using a data-derived watermark", () => {
     const sql = source(migrationPath);
 

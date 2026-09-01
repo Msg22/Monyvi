@@ -378,6 +378,9 @@ CREATE TABLE public.metal_holding_states (
   CHECK (id = holding_id),
   CHECK (
     (financial_revision = 0) = (effective_action_id IS NULL)
+  ),
+  CHECK (
+    (financial_revision = 0) = (effective_event_id IS NULL)
   )
 );
 
@@ -401,6 +404,7 @@ CREATE TABLE public.metal_action_evidence (
   deleted boolean NOT NULL DEFAULT false,
   UNIQUE (user_id, action_id),
   UNIQUE (user_id, action_id, holding_id),
+  UNIQUE (user_id, action_id, holding_id, kind),
   FOREIGN KEY (user_id, action_id, holding_id)
     REFERENCES public.financial_action_groups (
       user_id, action_id, domain_reference_id
@@ -467,8 +471,12 @@ CREATE TABLE public.metal_lifecycle_events (
   deleted boolean NOT NULL DEFAULT false,
   UNIQUE (user_id, action_id),
   UNIQUE (user_id, holding_id, id),
+  UNIQUE (user_id, holding_id, action_id, id),
   FOREIGN KEY (user_id, action_id, holding_id)
     REFERENCES public.metal_action_evidence (user_id, action_id, holding_id)
+    ON DELETE RESTRICT,
+  FOREIGN KEY (user_id, action_id, holding_id, kind)
+    REFERENCES public.metal_action_evidence (user_id, action_id, holding_id, kind)
     ON DELETE RESTRICT,
   FOREIGN KEY (user_id, holding_id)
     REFERENCES public.assets (user_id, id) ON DELETE RESTRICT,
@@ -485,6 +493,54 @@ ALTER TABLE public.metal_holding_states
   FOREIGN KEY (user_id, holding_id, effective_event_id)
   REFERENCES public.metal_lifecycle_events (user_id, holding_id, id)
   DEFERRABLE INITIALLY DEFERRED;
+
+ALTER TABLE public.metal_holding_states
+  ADD CONSTRAINT metal_holding_states_effective_provenance_fk
+  FOREIGN KEY (
+    user_id, holding_id, effective_action_id, effective_event_id
+  )
+  REFERENCES public.metal_lifecycle_events (
+    user_id, holding_id, action_id, id
+  );
+
+CREATE OR REPLACE FUNCTION private.metal_rate_captured_freshness_v1(
+  p_provider_observed_at timestamptz,
+  p_captured_at timestamptz
+)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF p_captured_at IS NULL OR NOT isfinite(p_captured_at) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '22023',
+      MESSAGE = 'metal_rate_invalid_capture_time';
+  END IF;
+
+  IF p_provider_observed_at IS NULL THEN
+    RETURN 'unknown';
+  END IF;
+
+  IF NOT isfinite(p_provider_observed_at) THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '22023',
+      MESSAGE = 'metal_rate_invalid_provider_observation_time';
+  END IF;
+
+  IF p_provider_observed_at > p_captured_at THEN
+    RETURN 'unknown';
+  END IF;
+
+  IF p_captured_at - p_provider_observed_at > interval '24 hours' THEN
+    RETURN 'stale';
+  END IF;
+
+  RETURN 'fresh';
+END;
+$$;
 
 CREATE TABLE public.metal_rate_references (
   id uuid PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
@@ -554,6 +610,51 @@ CREATE TABLE public.metal_rate_references (
     )
   )
 );
+
+CREATE OR REPLACE FUNCTION private.guard_metal_rate_reference_freshness_v1()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_derived_freshness text;
+BEGIN
+  v_derived_freshness := private.metal_rate_captured_freshness_v1(
+    NEW.provider_observed_at,
+    NEW.captured_at
+  );
+
+  IF NEW.captured_freshness IS DISTINCT FROM v_derived_freshness THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '22023',
+      MESSAGE = 'metal_rate_captured_freshness_mismatch';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER metal_rate_references_guard_freshness
+BEFORE INSERT ON public.metal_rate_references
+FOR EACH ROW EXECUTE FUNCTION private.guard_metal_rate_reference_freshness_v1();
+
+CREATE OR REPLACE FUNCTION private.guard_immutable_metal_rate_reference_v1()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  RAISE EXCEPTION USING
+    ERRCODE = '22023',
+    MESSAGE = 'metal_rate_reference_immutable';
+END;
+$$;
+
+CREATE TRIGGER metal_rate_references_guard_immutable
+BEFORE UPDATE OR DELETE ON public.metal_rate_references
+FOR EACH ROW EXECUTE FUNCTION private.guard_immutable_metal_rate_reference_v1();
 
 CREATE TABLE public.market_rate_observations (
   id uuid PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
@@ -813,6 +914,13 @@ REVOKE ALL ON FUNCTION private.guard_asset_metal_action_fields_v1()
 REVOKE ALL ON FUNCTION private.guard_asset_metal_detail_action_fields_v1()
   FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.guard_metal_evidence_root_v1()
+  FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION private.metal_rate_captured_freshness_v1(
+  timestamptz, timestamptz
+) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION private.guard_metal_rate_reference_freshness_v1()
+  FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION private.guard_immutable_metal_rate_reference_v1()
   FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.metal_revision_from_text_v1(text)
   FROM PUBLIC, anon, authenticated;
