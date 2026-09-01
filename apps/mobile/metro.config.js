@@ -39,6 +39,7 @@ config.watchFolders = config.watchFolders.map((folder) =>
 config.resolver.nodeModulesPaths = config.resolver.nodeModulesPaths.map((folder) =>
   folder === workspaceNodeModules ? realWorkspaceNodeModules : folder
 );
+config.resolver.disableHierarchicalLookup = true;
 
 config.resolver.blockList = [
   ...(Array.isArray(config.resolver.blockList)

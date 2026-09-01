@@ -111,6 +111,17 @@ describe("metro config", () => {
     ]);
   });
 
+  it("uses explicit real node_modules paths for linked worktrees", () => {
+    const mainNodeModules = path.resolve(
+      workspaceRoot,
+      "../Monyvi/node_modules"
+    );
+    const config = loadMetroConfig(mainNodeModules);
+
+    expect(config.resolver.disableHierarchicalLookup).toBe(true);
+    expect(config.resolver.nodeModulesPaths).toContain(mainNodeModules);
+  });
+
   it("keeps Sentry paths when node_modules is unavailable", () => {
     const config = loadMetroConfig(workspaceNodeModules, false);
 
