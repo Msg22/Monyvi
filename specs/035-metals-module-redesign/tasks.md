@@ -209,9 +209,9 @@ This topology controls ownership, dependency stacks, and future review size. Aft
 
 #### Green, refactor, verify
 
-- [ ] T071 [US3] Implement bounded scoped detail and History read models plus cancellation-safe facades in `apps/mobile/services/metal-detail-read-model-service.ts`, `apps/mobile/services/metal-history-read-model-service.ts`, `apps/mobile/hooks/useMetalHoldingDetail.ts`, and `apps/mobile/hooks/useMetalHistory.ts`
-- [ ] T072 [US3] Implement shaped-prop `MetalHoldingRender` against the T048 typed manifest/neutral fallback plus detail/history/timeline components and isolated action registry in `apps/mobile/components/metals/MetalHoldingRender.tsx`, `apps/mobile/components/metals/MetalHoldingDetailScreen.tsx`, `apps/mobile/components/metals/MetalHistoryScreen.tsx`, and `apps/mobile/components/metals/holding-actions/registry.ts`
-- [ ] T073 [US3] Integrate the isolated History route in `apps/mobile/app/(private)/metals/history.tsx`
+- [x] T071 [US3] Implement bounded scoped detail and History read models plus cancellation-safe facades in `apps/mobile/services/metal-detail-read-model-service.ts`, `apps/mobile/services/metal-history-read-model-service.ts`, `apps/mobile/hooks/useMetalHoldingDetail.ts`, and `apps/mobile/hooks/useMetalHistory.ts`
+- [x] T072 [US3] Implement shaped-prop `MetalHoldingRender` against the T048 typed manifest/neutral fallback plus detail/history/timeline components and isolated action registry in `apps/mobile/components/metals/MetalHoldingRender.tsx`, `apps/mobile/components/metals/MetalHoldingDetailScreen.tsx`, `apps/mobile/components/metals/MetalHistoryScreen.tsx`, and `apps/mobile/components/metals/holding-actions/registry.ts`
+- [x] T073 [US3] Integrate the isolated History route in `apps/mobile/app/(private)/metals/history.tsx`
 - [ ] T074 [US3] Run US3 suites and Maestro, refactor while green, and record evidence in `specs/035-metals-module-redesign/coverage/us3.md`
 
 ---
