@@ -40,7 +40,7 @@ function buildMetalsRows(scenario) {
           is_liquid: true,
           deleted: false,
           created_at: FIXED_NOW,
-          updated_at: FIXED_NOW,
+          updated_at: currentTimestamp,
         },
       ],
       assetMetals: [
@@ -57,7 +57,7 @@ function buildMetalsRows(scenario) {
           item_form: "bar",
           deleted: false,
           created_at: FIXED_NOW,
-          updated_at: FIXED_NOW,
+          updated_at: currentTimestamp,
         },
       ],
       metalHoldingStates: [
@@ -76,7 +76,7 @@ function buildMetalsRows(scenario) {
               : "accepted",
           deleted: false,
           created_at: FIXED_NOW,
-          updated_at: FIXED_NOW,
+          updated_at: currentTimestamp,
         },
       ],
       marketRateObservations:

@@ -403,17 +403,18 @@ function resolveE2eFixtureRuntimeSettings(env = process.env) {
   if (!profileName) return null;
 
   const fixture = getE2eFixture(profileName);
-  const { locale, persistenceState, theme, textScale } = fixture;
+  const { locale, persistenceState, rateState, theme, textScale } = fixture;
   const isValid =
     (locale === "en" || locale === "ar") &&
     ["local", "restart", "conflict"].includes(persistenceState) &&
+    ["fresh", "stale", "unknown", "missing"].includes(rateState) &&
     (theme === "light" || theme === "dark") &&
     (textScale === 1 || textScale === 2);
   if (!isValid) {
     throw new Error(`Invalid E2E runtime settings for profile: ${profileName}`);
   }
 
-  return { locale, persistenceState, theme, textScale };
+  return { locale, persistenceState, rateState, theme, textScale };
 }
 
 function isMissingDeviceSqliteError(output) {
@@ -484,12 +485,22 @@ function applyE2eFixtureRuntimeSettings(
   dependencies = {}
 ) {
   const settings = resolveE2eFixtureRuntimeSettings(env);
-  if (!settings) return;
+  const runAdb = dependencies.runAdb ?? adb;
+  if (!settings) {
+    runAdb([
+      "shell",
+      "settings",
+      "put",
+      "system",
+      "font_scale",
+      "1",
+    ]);
+    return;
+  }
 
   const clearLocalState =
     dependencies.clearLocalState ?? clearE2eMetalsLocalState;
   const forceStop = dependencies.forceStop ?? forceStopApp;
-  const runAdb = dependencies.runAdb ?? adb;
   const seedTheme = dependencies.seedTheme ?? seedE2eThemePreference;
   forceStop();
   clearLocalState();
@@ -505,10 +516,13 @@ function applyE2eFixtureRuntimeSettings(
 }
 
 function relaunchE2eFixtureIfRequired(settings, dependencies = {}) {
-  if (settings?.persistenceState !== "restart") return;
+  if (!settings || settings.rateState === "missing") return;
 
   const waitForSync =
     dependencies.waitForSync ?? waitForE2eMetalsObservation;
+  waitForSync();
+  if (settings.persistenceState !== "restart") return;
+
   const forceStop = dependencies.forceStop ?? forceStopApp;
   const startApp =
     dependencies.startApp ?? startAppWithoutChangingPermissions;
@@ -516,7 +530,6 @@ function relaunchE2eFixtureIfRequired(settings, dependencies = {}) {
     dependencies.waitForReady ??
     (() => waitForProductUi(preflightAttemptTimeoutMs));
 
-  waitForSync();
   forceStop();
   startApp();
   waitForReady();

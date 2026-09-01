@@ -119,6 +119,17 @@ describe("Metals deterministic E2E fixture registry", () => {
     expect((rows.assets as Array<Record<string, unknown>>)[0]).toMatchObject({
       acquisition_action_id: null,
       purchase_date: "2026-08-01",
+      updated_at: "2030-01-02T03:04:05.000Z",
+    });
+    expect(
+      (rows.assetMetals as Array<Record<string, unknown>>)[0]
+    ).toMatchObject({
+      updated_at: "2030-01-02T03:04:05.000Z",
+    });
+    expect(
+      (rows.metalHoldingStates as Array<Record<string, unknown>>)[0]
+    ).toMatchObject({
+      updated_at: "2030-01-02T03:04:05.000Z",
     });
     expect(
       (rows.marketRateObservations as Array<Record<string, unknown>>)[0]

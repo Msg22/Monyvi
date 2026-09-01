@@ -24,6 +24,7 @@ interface E2ePreflightModule {
   ): {
     locale: string;
     persistenceState: string;
+    rateState: string;
     theme: string;
     textScale: number;
   } | null;
@@ -31,6 +32,7 @@ interface E2ePreflightModule {
     settings: {
       locale: string;
       persistenceState: string;
+      rateState: string;
       theme: string;
       textScale: number;
     } | null,
@@ -263,6 +265,7 @@ describe("e2e-preflight", () => {
     expect(runtimeSettings).toEqual({
       locale: "ar",
       persistenceState: "restart",
+      rateState: "stale",
       theme: "dark",
       textScale: 2,
     });
@@ -292,6 +295,30 @@ describe("e2e-preflight", () => {
     expect(seedTheme).toHaveBeenCalledWith("dark");
   });
 
+  it("resets Android font scale for a non-Metals preflight", () => {
+    const clearLocalState = jest.fn();
+    const forceStop = jest.fn();
+    const runAdb = jest.fn();
+    const seedTheme = jest.fn();
+
+    preflight.applyE2eFixtureRuntimeSettings(
+      {},
+      { clearLocalState, forceStop, runAdb, seedTheme }
+    );
+
+    expect(runAdb).toHaveBeenCalledWith([
+      "shell",
+      "settings",
+      "put",
+      "system",
+      "font_scale",
+      "1",
+    ]);
+    expect(forceStop).not.toHaveBeenCalled();
+    expect(clearLocalState).not.toHaveBeenCalled();
+    expect(seedTheme).not.toHaveBeenCalled();
+  });
+
   it("clears the pull-only observation cache before a Metals profile launch", () => {
     expect(preflight.buildMetalsLocalObservationCleanupSql()).toBe(
       'delete from "market_rate_observations" where "source" = \'e2e_fixture\';'
@@ -304,6 +331,7 @@ describe("e2e-preflight", () => {
       {
         locale: "ar",
         persistenceState: "restart",
+        rateState: "stale",
         theme: "dark",
         textScale: 2,
       },
@@ -316,6 +344,44 @@ describe("e2e-preflight", () => {
     );
 
     expect(events).toEqual(["sync", "stop", "start", "ready"]);
+  });
+
+  it("waits for every non-missing Metals rate before handing off to Maestro", () => {
+    const freshEvents: string[] = [];
+    preflight.relaunchE2eFixtureIfRequired(
+      {
+        locale: "en",
+        persistenceState: "local",
+        rateState: "fresh",
+        theme: "light",
+        textScale: 1,
+      },
+      {
+        waitForSync: () => freshEvents.push("sync"),
+        forceStop: () => freshEvents.push("stop"),
+        startApp: () => freshEvents.push("start"),
+        waitForReady: () => freshEvents.push("ready"),
+      }
+    );
+    expect(freshEvents).toEqual(["sync"]);
+
+    const missingEvents: string[] = [];
+    preflight.relaunchE2eFixtureIfRequired(
+      {
+        locale: "ar",
+        persistenceState: "local",
+        rateState: "missing",
+        theme: "light",
+        textScale: 2,
+      },
+      {
+        waitForSync: () => missingEvents.push("sync"),
+        forceStop: () => missingEvents.push("stop"),
+        startApp: () => missingEvents.push("start"),
+        waitForReady: () => missingEvents.push("ready"),
+      }
+    );
+    expect(missingEvents).toEqual([]);
   });
 
   it("detects Android devices without a sqlite3 shell binary", () => {
