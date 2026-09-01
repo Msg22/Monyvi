@@ -1,8 +1,7 @@
 # US2 Red Evidence
 
-Base: `4992ec5bdba3b941eba5939ad4297f4773af85b3`
-Date: 2026-09-01
-Scope: T075 and T076 only. T077–T080 remain open.
+Base: `4992ec5bdba3b941eba5939ad4297f4773af85b3` Date: 2026-09-01 Scope: T075,
+T076, and T078. T077, T079, and T080 remain open.
 
 ## T075 traceability and manual plan
 
@@ -46,10 +45,46 @@ Declared contract categories blocked by that missing boundary:
 - Exact normalized live-preview input and an explicit unavailable valuation that
   leaves valid Add facts submittable.
 
+## T078 intended Red command
+
+```text
+node E:/Work/My Projects/Monyvi-metals-us2-add-red/node_modules/jest/bin/jest.js --config E:/Work/My Projects/Monyvi-metals-us2-add-red/apps/mobile/jest.config.js --runInBand --testPathPattern='metals-add.test.tsx' --no-coverage --watchman=false
+```
+
+Result: 1 failed suite, 7 failed tests, in 6.845 seconds.
+
+```text
+Could not locate module @/components/metals/MetalHoldingForm
+Could not locate module @/app/(private)/metals/add
+```
+
+The six full-form cases reach the missing `MetalHoldingForm` boundary and the
+route case reaches the missing Add route. This is intended Red, not a native,
+router, DB, or dependency-junction failure. The neighboring `index.test.tsx`
+completed Green (1 suite, 4 tests), confirming the mobile Jest harness.
+
+Declared UI contract categories blocked by those boundaries:
+
+- canonical full-form order, ordinary and compact Weight/Purity layout, 200%
+  text, EN/Arabic RTL, light/dark, labels, and Skeleton loading state;
+- Gold/Silver form facts, Monyvi supplied render, exact `24K · 999` identity,
+  direct Add with no review screen, and unavailable valuation that does not
+  disable Add;
+- safe-area CTA, first validation-error focus, dirty-exit request, and a
+  pending-submission double-tap lock.
+
+## T079 authored but unexecuted
+
+`e2e/maestro/metals/add-holding.yaml` defines runner-controlled Gold, Silver,
+validation, and restart journeys under the existing deterministic profile
+matrix. It is intentionally not marked complete: this base lacks both the Add
+route and an Add-specific clean-data fixture profile, so an execution cannot yet
+reach a meaningful Maestro failure or success state.
+
 ## Remaining gate status
 
-- T077 command-service/SQLite Red, T078 route/component Red, and T079 Maestro
-  Red are deliberately outside this lane.
+- T077 command-service/SQLite Red remains outside this lane. T079 stays
+  unexecuted and unchecked until runner fixture wiring and the route exist.
 - T080 remains unchecked because it requires all T076–T079 Red artifacts and
   their combined evidence. This file records T076 only and must not be read as
   completion of T080.

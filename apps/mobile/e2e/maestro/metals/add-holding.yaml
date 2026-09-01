@@ -1,0 +1,148 @@
+appId: com.monyvi.app
+---
+# US2 Add Holding deterministic invocation matrix (each invocation starts from
+# a clean seeded profile; this flow never writes fixture data itself):
+#
+# - E2E_FIXTURE_PROFILE=metals-fresh-local-en-light:
+#   Gold + Silver direct Add, live preview, and required-field validation.
+# - E2E_FIXTURE_PROFILE=metals-offline-cached-local-en-light:
+#   repeat the same journey, then restart and prove the locally persisted entry
+#   remains available while offline.
+# - E2E_FIXTURE_PROFILE=metals-stale-restart-ar-dark:
+#   repeat with Arabic RTL, dark theme, and 200% text-scale restart coverage.
+#
+# Slice 7 only authors this contract. The current fixture registry has no
+# Add-specific clean-data profile and the Add route is intentionally absent, so
+# no successful Maestro execution is claimed until T081/T082 provide the route,
+# local command, and runner fixture wiring.
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://metals/add
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-add-screen
+    timeout: 30000
+
+# Gold: complete the V1 full form and submit directly; there is no review route.
+- assertVisible:
+    id: metal-holding-form
+- tapOn:
+    id: metal-holding-name-field
+- inputText: E2E Gold Coin
+- tapOn:
+    id: metal-holding-metal-field
+- tapOn:
+    id: metal-holding-metal-option-GOLD
+- tapOn:
+    id: metal-holding-weight-field
+- inputText: "10.125"
+- tapOn:
+    id: metal-holding-purity-field
+- tapOn:
+    id: metal-holding-purity-option-gold-999
+- tapOn:
+    id: metal-holding-purchase-price-field
+- inputText: "47800.00"
+- tapOn:
+    id: metal-holding-purchase-currency-field
+- tapOn:
+    id: metal-holding-purchase-currency-option-EGP
+- tapOn:
+    id: metal-holding-purchase-date-field
+- inputText: "2024-03-14"
+- tapOn:
+    id: metal-holding-physical-form-field
+- tapOn:
+    id: metal-holding-physical-form-option-COIN
+- assertVisible:
+    id: metal-holding-live-preview
+- assertVisible:
+    id: metal-holding-item-render
+- assertVisible: "24K · 999"
+- assertNotVisible:
+    id: metal-holding-review-screen
+- tapOn:
+    id: metal-holding-submit
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-screen
+    timeout: 30000
+
+# Silver: a missing rate must make preview valuation unavailable without
+# blocking valid local Add facts. The unavailable assertion is conditional so
+# this one runner-controllable flow also runs against the fresh rate profile.
+- openLink: monyvi://metals/add
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-add-screen
+    timeout: 30000
+- tapOn:
+    id: metal-holding-name-field
+- inputText: E2E Silver Bar
+- tapOn:
+    id: metal-holding-metal-field
+- tapOn:
+    id: metal-holding-metal-option-SILVER
+- tapOn:
+    id: metal-holding-weight-field
+- inputText: "25.500"
+- tapOn:
+    id: metal-holding-purity-field
+- tapOn:
+    id: metal-holding-purity-option-silver-925
+- tapOn:
+    id: metal-holding-purchase-price-field
+- inputText: "1500.00"
+- tapOn:
+    id: metal-holding-purchase-currency-field
+- tapOn:
+    id: metal-holding-purchase-currency-option-EGP
+- tapOn:
+    id: metal-holding-purchase-date-field
+- inputText: "2024-03-14"
+- assertVisible:
+    id: metal-holding-live-preview
+- runFlow:
+    when:
+      visible:
+        id: metal-holding-valuation-unavailable
+    commands:
+      - assertVisible:
+          id: metal-holding-submit
+- tapOn:
+    id: metal-holding-submit
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-screen
+    timeout: 30000
+
+# Required-field error focus and duplicate-submission lock.
+- openLink: monyvi://metals/add
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-add-screen
+    timeout: 30000
+- tapOn:
+    id: metal-holding-submit
+- assertVisible:
+    id: metal-holding-name-error
+- assertVisible:
+    id: metal-holding-metal-error
+- assertVisible:
+    id: metal-holding-purchase-price-error
+- tapOn:
+    id: metal-holding-exit
+- assertVisible:
+    id: metal-holding-dirty-exit-guard
+
+# Restart: the offline profile runs this same flow after cache setup. A created
+# Gold entry must still be present locally after process restart; no network
+# response or valuation is required for the persisted acquisition facts.
+- stopApp
+- launchApp:
+    clearState: false
+- openLink: monyvi://metals
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-root
+    timeout: 30000
+- assertVisible: E2E Gold Coin
