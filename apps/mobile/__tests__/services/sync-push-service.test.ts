@@ -1,14 +1,21 @@
 const mockGetCurrentUserId = jest.fn();
 const mockFrom = jest.fn();
 const mockUpsert = jest.fn();
+const mockRpc = jest.fn();
+const mockMarkSyncFailed = jest.fn();
+const mockMarkSyncPending = jest.fn();
+const mockRecordOutcome = jest.fn();
 
 jest.mock("@monyvi/db", () => ({
   schema: {
     tables: {
+      account_financial_effects: {},
+      accounts: {},
       assets: {},
       categories: {},
       financial_action_groups: {},
       profiles: {},
+      transactions: {},
     },
   },
 }));
@@ -18,7 +25,18 @@ jest.mock("@/services/supabase", () => ({
     mockGetCurrentUserId() as Promise<string | null>,
   supabase: {
     from: (table: string): unknown => mockFrom(table),
+    rpc: (...args: readonly unknown[]): Promise<unknown> =>
+      mockRpc(...args) as Promise<unknown>,
   },
+}));
+
+jest.mock("../../services/financial-action-foundation-repository", () => ({
+  markFinancialActionGroupSyncFailed: (...args: readonly unknown[]): unknown =>
+    mockMarkSyncFailed(...args),
+  markFinancialActionGroupSyncPending: (...args: readonly unknown[]): unknown =>
+    mockMarkSyncPending(...args),
+  recordFinancialActionGroupServerOutcome: (...args: readonly unknown[]): unknown =>
+    mockRecordOutcome(...args),
 }));
 
 jest.mock("@/utils/logger", () => ({
@@ -44,6 +62,9 @@ describe("pushChanges", () => {
       upsert: mockUpsert,
     });
     mockUpsert.mockResolvedValue({ error: null });
+    mockMarkSyncFailed.mockResolvedValue(undefined);
+    mockMarkSyncPending.mockResolvedValue(undefined);
+    mockRecordOutcome.mockResolvedValue(undefined);
   });
 
   it.each([
@@ -237,6 +258,216 @@ describe("pushChanges", () => {
 
     expect(mockFrom).not.toHaveBeenCalledWith("financial_action_groups");
     expect(mockFrom).toHaveBeenCalledWith("profiles");
+  });
+
+  it("acknowledges an accepted account action and all linked local rows", async () => {
+    const actionId = "10000000-0000-4000-8000-000000000001";
+    const accountId = "20000000-0000-4000-8000-000000000002";
+    const transactionId = "30000000-0000-4000-8000-000000000003";
+    const effectId = "40000000-0000-4000-8000-000000000004";
+    const payloadJson = JSON.stringify({
+      payloadVersion: "account.balance-effects/v1",
+      payload: {
+        domainMutation: {
+          records: [
+            { entity: "account", after: { id: accountId } },
+            { entity: "transaction", after: { id: transactionId } },
+          ],
+        },
+      },
+    });
+    const coordinator = {
+      coordinatePush: jest.fn().mockResolvedValue({
+        decisions: [
+          { actionId, disposition: "acknowledge", outcome: null },
+        ],
+      }),
+    };
+    const pushArgs: PushChangesArgs = {
+      changes: {
+        financial_action_groups: {
+          created: [
+            {
+              id: actionId,
+              action_id: actionId,
+              payload_hash: "a".repeat(64),
+              payload_json: payloadJson,
+              state: "accepted",
+            },
+          ],
+          updated: [],
+          deleted: [],
+        },
+        account_financial_effects: {
+          created: [{ id: effectId, action_id: actionId }],
+          updated: [],
+          deleted: [],
+        },
+        accounts: {
+          created: [],
+          updated: [
+            {
+              id: accountId,
+              user_id: "current-user",
+              balance: 100,
+              financial_revision: "1",
+              deleted: false,
+            },
+          ],
+          deleted: [],
+        },
+        transactions: {
+          created: [
+            {
+              id: transactionId,
+              user_id: "current-user",
+              deleted: false,
+            },
+          ],
+          updated: [],
+          deleted: [],
+        },
+      },
+      lastPulledAt: 0,
+    };
+
+    await expect(
+      pushChanges(
+        Object.create(null) as PushChangesDatabase,
+        pushArgs,
+        undefined,
+        coordinator
+      )
+    ).resolves.toBeUndefined();
+
+    expect(coordinator.coordinatePush).toHaveBeenCalledTimes(1);
+    expect(mockFrom).not.toHaveBeenCalledWith("accounts");
+    expect(mockFrom).not.toHaveBeenCalledWith("transactions");
+  });
+
+  it("uses the production owner-scoped RPC before acknowledging an account action", async () => {
+    const actionId = "10000000-0000-4000-8000-000000000011";
+    const accountId = "20000000-0000-4000-8000-000000000012";
+    const effectId = "40000000-0000-4000-8000-000000000014";
+    const payloadJson = JSON.stringify({
+      payloadVersion: "account.balance-effects/v1",
+      payload: {
+        domainMutation: {
+          records: [{ entity: "account", after: { id: accountId } }],
+        },
+      },
+    });
+    mockRpc.mockResolvedValue({
+      data: { actionId, status: "accepted" },
+      error: null,
+    });
+    const pushArgs: PushChangesArgs = {
+      changes: {
+        financial_action_groups: {
+          created: [
+            {
+              id: actionId,
+              action_id: actionId,
+              payload_hash: "c".repeat(64),
+              payload_json: payloadJson,
+              state: "local_complete",
+            },
+          ],
+          updated: [],
+          deleted: [],
+        },
+        account_financial_effects: {
+          created: [{ id: effectId, action_id: actionId }],
+          updated: [],
+          deleted: [],
+        },
+        accounts: {
+          created: [],
+          updated: [{ id: accountId }],
+          deleted: [],
+        },
+      },
+      lastPulledAt: 0,
+    };
+
+    await expect(
+      pushChanges(Object.create(null) as PushChangesDatabase, pushArgs)
+    ).resolves.toBeUndefined();
+
+    expect(mockMarkSyncPending).toHaveBeenCalledWith(actionId);
+    expect(mockRpc).toHaveBeenCalledWith("apply_account_financial_action_v1", {
+      p_payload_hash: "c".repeat(64),
+      p_payload_json: payloadJson,
+    });
+    expect(mockRecordOutcome).toHaveBeenCalledWith(
+      actionId,
+      "accepted",
+      expect.any(String),
+      null
+    );
+  });
+
+  it("keeps a stale account action and every linked row dirty", async () => {
+    const actionId = "10000000-0000-4000-8000-000000000001";
+    const accountId = "20000000-0000-4000-8000-000000000002";
+    const effectId = "40000000-0000-4000-8000-000000000004";
+    const coordinator = {
+      coordinatePush: jest.fn().mockResolvedValue({
+        decisions: [
+          { actionId, disposition: "reject", outcome: null },
+        ],
+      }),
+    };
+    const pushArgs: PushChangesArgs = {
+      changes: {
+        financial_action_groups: {
+          created: [
+            {
+              id: actionId,
+              action_id: actionId,
+              payload_hash: "a".repeat(64),
+              payload_json: JSON.stringify({
+                payloadVersion: "account.balance-effects/v1",
+                payload: {
+                  domainMutation: {
+                    records: [{ entity: "account", after: { id: accountId } }],
+                  },
+                },
+              }),
+              state: "rejected_compensating",
+            },
+          ],
+          updated: [],
+          deleted: [],
+        },
+        account_financial_effects: {
+          created: [{ id: effectId, action_id: actionId }],
+          updated: [],
+          deleted: [],
+        },
+        accounts: {
+          created: [],
+          updated: [{ id: accountId }],
+          deleted: [],
+        },
+      },
+      lastPulledAt: 0,
+    };
+
+    await expect(
+      pushChanges(
+        Object.create(null) as PushChangesDatabase,
+        pushArgs,
+        undefined,
+        coordinator
+      )
+    ).resolves.toEqual({
+      experimentalRejectedIds: {
+        account_financial_effects: [effectId],
+        accounts: [accountId],
+        financial_action_groups: [actionId],
+      },
+    });
   });
 
   it("skips dirty shared system categories instead of pushing them through user RLS", async () => {

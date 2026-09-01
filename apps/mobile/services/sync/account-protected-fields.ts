@@ -3,6 +3,7 @@ import type {
   SyncRejectedIds,
   SyncTableChangeSet,
 } from "@nozbe/watermelondb/sync";
+import type { FinancialActionPushCandidate } from "../financial-action-sync-service";
 
 const ENTITY_TABLES = {
   account: "accounts",
@@ -46,6 +47,97 @@ function protectedRefsFromRoot(record: unknown): ReadonlyArray<{
     return typeof table === "string" && typeof id === "string"
       ? [{ id, table }]
       : [];
+  });
+}
+
+export interface AccountFinancialActionPushBundle {
+  readonly candidate: FinancialActionPushCandidate;
+  readonly rowIds: Readonly<Record<string, readonly string[]>>;
+}
+
+function readNonEmptyString(
+  record: Readonly<Record<string, unknown>>,
+  key: string
+): string | null {
+  const value = record[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function collectEffectIdsByAction(
+  changes: SyncPushArgs["changes"]
+): ReadonlyMap<string, readonly string[]> {
+  const effects = (
+    changes as unknown as Readonly<
+      Record<string, SyncTableChangeSet | undefined>
+    >
+  ).account_financial_effects;
+  const grouped = new Map<string, string[]>();
+  if (!effects) return grouped;
+  [...effects.created, ...effects.updated].forEach((candidate) => {
+    if (!isObject(candidate)) return;
+    const actionId = readNonEmptyString(candidate, "action_id");
+    const id = readNonEmptyString(candidate, "id");
+    if (!actionId || !id) return;
+    grouped.set(actionId, [...new Set([...(grouped.get(actionId) ?? []), id])]);
+  });
+  return grouped;
+}
+
+function groupRowIds(
+  rootId: string,
+  refs: ReadonlyArray<{ readonly id: string; readonly table: string }>,
+  effectIds: readonly string[]
+): Readonly<Record<string, readonly string[]>> {
+  const grouped = new Map<string, string[]>();
+  grouped.set("financial_action_groups", [rootId]);
+  if (effectIds.length > 0) {
+    grouped.set("account_financial_effects", [...effectIds].sort());
+  }
+  refs.forEach((ref) => {
+    grouped.set(ref.table, [
+      ...new Set([...(grouped.get(ref.table) ?? []), ref.id]),
+    ].sort());
+  });
+  return Object.freeze(Object.fromEntries([...grouped.entries()].sort()));
+}
+
+export function collectAccountFinancialActionPushBundles(
+  changes: SyncPushArgs["changes"]
+): readonly AccountFinancialActionPushBundle[] {
+  const roots = (
+    changes as unknown as Readonly<
+      Record<string, SyncTableChangeSet | undefined>
+    >
+  ).financial_action_groups;
+  if (!roots) return [];
+  const effectIdsByAction = collectEffectIdsByAction(changes);
+  return [...roots.created, ...roots.updated].flatMap((candidate) => {
+    if (!isObject(candidate)) return [];
+    const refs = protectedRefsFromRoot(candidate);
+    const actionId = readNonEmptyString(candidate, "action_id");
+    const payloadHash = readNonEmptyString(candidate, "payload_hash");
+    const payloadJson = readNonEmptyString(candidate, "payload_json");
+    const rootId = readNonEmptyString(candidate, "id");
+    const state = readNonEmptyString(candidate, "state");
+    if (!actionId || !payloadHash || !payloadJson || !rootId || !state) {
+      return [];
+    }
+    if (refs.length === 0) return [];
+    return [
+      Object.freeze({
+        candidate: Object.freeze({
+          actionId,
+          payloadHash,
+          payloadJson,
+          state,
+        }),
+        rowIds: groupRowIds(
+          rootId,
+          refs,
+          effectIdsByAction.get(actionId) ?? []
+        ),
+      }),
+    ];
   });
 }
 

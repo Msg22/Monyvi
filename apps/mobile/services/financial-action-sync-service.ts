@@ -39,6 +39,37 @@ interface ParsedOutcome {
   readonly status: "accepted" | "idempotent" | "stale" | "rejected";
 }
 
+export interface FinancialActionPushCandidate {
+  readonly actionId: string;
+  readonly payloadHash: string;
+  readonly payloadJson: string;
+  readonly state: string;
+}
+
+export interface FinancialActionPushDecision {
+  readonly actionId: string;
+  readonly disposition: "acknowledge" | "reject";
+  readonly outcome: ParsedOutcome | null;
+}
+
+export interface FinancialActionPushCoordinator {
+  readonly coordinatePush: (
+    candidates: readonly FinancialActionPushCandidate[]
+  ) => Promise<{ readonly decisions: readonly FinancialActionPushDecision[] }>;
+}
+
+export interface FinancialActionPushCoordinatorDependencies
+  extends Pick<
+    FinancialActionFoundationRepository,
+    | "markFinancialActionGroupSyncFailed"
+    | "markFinancialActionGroupSyncPending"
+    | "recordFinancialActionGroupServerOutcome"
+  > {
+  readonly invokeAccountFinancialActionRpc: (
+    input: FinancialActionRpcInput
+  ) => Promise<unknown>;
+}
+
 function fail(code: string): never {
   throw new Error(code);
 }
@@ -139,4 +170,67 @@ export function createFinancialActionSyncService(
       );
     },
   };
+}
+
+export function createFinancialActionPushCoordinator(
+  dependencies: FinancialActionPushCoordinatorDependencies
+): FinancialActionPushCoordinator {
+  return Object.freeze({
+    coordinatePush: async (
+      candidates: readonly FinancialActionPushCandidate[]
+    ): Promise<{ readonly decisions: readonly FinancialActionPushDecision[] }> => {
+      const decisions: FinancialActionPushDecision[] = [];
+      for (const candidate of candidates) {
+        assertSyncable(candidate);
+        if (candidate.state === "accepted") {
+          decisions.push({
+            actionId: candidate.actionId,
+            disposition: "acknowledge",
+            outcome: null,
+          });
+          continue;
+        }
+        if (candidate.state === "rejected_compensating") {
+          decisions.push({
+            actionId: candidate.actionId,
+            disposition: "reject",
+            outcome: null,
+          });
+          continue;
+        }
+        await dependencies.markFinancialActionGroupSyncPending(
+          candidate.actionId
+        );
+        let rawOutcome: unknown;
+        try {
+          rawOutcome = await dependencies.invokeAccountFinancialActionRpc({
+            payloadHash: candidate.payloadHash,
+            payloadJson: candidate.payloadJson,
+          });
+        } catch (error) {
+          await dependencies.markFinancialActionGroupSyncFailed(
+            candidate.actionId,
+            FINANCIAL_ACTION_SYNC_ERROR_CODES.TRANSPORT_FAILED
+          );
+          throw error;
+        }
+        const outcome = parseOutcome(rawOutcome, candidate.actionId);
+        await dependencies.recordFinancialActionGroupServerOutcome(
+          candidate.actionId,
+          outcome.status,
+          outcome.outcomeJson,
+          outcome.code
+        );
+        decisions.push({
+          actionId: candidate.actionId,
+          disposition:
+            outcome.status === "accepted" || outcome.status === "idempotent"
+              ? "acknowledge"
+              : "reject",
+          outcome,
+        });
+      }
+      return { decisions: Object.freeze(decisions) };
+    },
+  });
 }

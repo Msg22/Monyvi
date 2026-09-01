@@ -21,11 +21,21 @@ import {
 } from "./config";
 import { createSyncTableError } from "./errors";
 import {
+  collectAccountFinancialActionPushBundles,
   collectProtectedFinancialActionRowIds,
   isProtectedFinancialActionRow,
   readRejectedIdsForTable,
   stripProtectedAccountFields,
 } from "./account-protected-fields";
+import {
+  createFinancialActionPushCoordinator,
+  type FinancialActionPushCoordinator,
+} from "../financial-action-sync-service";
+import {
+  markFinancialActionGroupSyncFailed,
+  markFinancialActionGroupSyncPending,
+  recordFinancialActionGroupServerOutcome,
+} from "../financial-action-foundation-repository";
 import {
   assertPushRecordBelongsToCurrentUser,
   fetchOwnedParentIds,
@@ -38,6 +48,7 @@ import type { SupabaseWriteTable, WritableSupabaseTablesNames } from "./types";
 
 export const GENERIC_SYNC_ERROR_CODES = {
   AUTH_SCOPE_LOST: "sync_push_auth_scope_lost",
+  INVALID_ACTION_PUSH_OUTCOME: "sync_invalid_action_push_outcome",
   INVALID_CHANGE_ID: "sync_invalid_change_id",
 } as const;
 
@@ -391,6 +402,49 @@ export async function pushMetalDedicatedChanges(
       !hasUnacceptedLinkedRow &&
       !hasUnacceptedState,
   };
+const ACCOUNT_FINANCIAL_ACTION_RPC = "apply_account_financial_action_v1";
+let productionFinancialActionPushCoordinator:
+  | FinancialActionPushCoordinator
+  | undefined;
+
+interface FinancialActionRpcClient {
+  readonly rpc: (
+    functionName: string,
+    args: Readonly<Record<string, string>>
+  ) => Promise<{
+    readonly data: unknown;
+    readonly error: { readonly message?: string } | null;
+  }>;
+}
+
+function getProductionFinancialActionPushCoordinator(): FinancialActionPushCoordinator {
+  if (productionFinancialActionPushCoordinator) {
+    return productionFinancialActionPushCoordinator;
+  }
+  productionFinancialActionPushCoordinator =
+    createFinancialActionPushCoordinator({
+      invokeAccountFinancialActionRpc: async ({
+        payloadHash,
+        payloadJson,
+      }): Promise<unknown> => {
+        const { data, error } = await (
+          supabase as unknown as FinancialActionRpcClient
+        ).rpc(ACCOUNT_FINANCIAL_ACTION_RPC, {
+          p_payload_hash: payloadHash,
+          p_payload_json: payloadJson,
+        });
+        if (error) {
+          throw new Error(
+            error.message ?? "account_financial_action_rpc_failed"
+          );
+        }
+        return data;
+      },
+      markFinancialActionGroupSyncFailed,
+      markFinancialActionGroupSyncPending,
+      recordFinancialActionGroupServerOutcome,
+    });
+  return productionFinancialActionPushCoordinator;
 }
 
 async function assertExpectedPushUser(
@@ -466,6 +520,72 @@ function mergeRejectedIds(
   );
 }
 
+function subtractRejectedIds(
+  source: SyncRejectedIds | undefined,
+  removed: SyncRejectedIds | undefined
+): SyncRejectedIds | undefined {
+  if (!source) return undefined;
+  const remaining = Object.fromEntries(
+    Object.keys(source).flatMap((table) => {
+      const removedIds = new Set(readRejectedIdsForTable(removed, table));
+      const ids = readRejectedIdsForTable(source, table).filter(
+        (id) => !removedIds.has(id)
+      );
+      return ids.length > 0 ? [[table, ids]] : [];
+    })
+  );
+  return Object.keys(remaining).length > 0 ? remaining : undefined;
+}
+
+function mergeBundleRowIds(
+  bundles: ReadonlyArray<{
+    readonly rowIds: Readonly<Record<string, readonly string[]>>;
+  }>
+): SyncRejectedIds | undefined {
+  return bundles.reduce<SyncRejectedIds | undefined>(
+    (result, bundle) => mergeRejectedIds(result, bundle.rowIds),
+    undefined
+  );
+}
+
+async function resolveAccountActionAcknowledgements(
+  changes: SyncPushArgs["changes"],
+  coordinator: FinancialActionPushCoordinator | undefined
+): Promise<{
+  readonly handledIds: SyncRejectedIds | undefined;
+  readonly rejectedIds: SyncRejectedIds | undefined;
+}> {
+  const bundles = collectAccountFinancialActionPushBundles(changes);
+  if (bundles.length === 0) {
+    return { handledIds: undefined, rejectedIds: undefined };
+  }
+  const resolvedCoordinator =
+    coordinator ?? getProductionFinancialActionPushCoordinator();
+  const { decisions } = await resolvedCoordinator.coordinatePush(
+    bundles.map((bundle) => bundle.candidate)
+  );
+  const decisionByActionId = new Map(
+    decisions.map((decision) => [decision.actionId, decision])
+  );
+  if (
+    decisionByActionId.size !== bundles.length ||
+    bundles.some(
+      (bundle) => !decisionByActionId.has(bundle.candidate.actionId)
+    )
+  ) {
+    throw new Error(GENERIC_SYNC_ERROR_CODES.INVALID_ACTION_PUSH_OUTCOME);
+  }
+  const rejectedBundles = bundles.filter(
+    (bundle) =>
+      decisionByActionId.get(bundle.candidate.actionId)?.disposition ===
+      "reject"
+  );
+  return {
+    handledIds: mergeBundleRowIds(bundles),
+    rejectedIds: mergeBundleRowIds(rejectedBundles),
+  };
+}
+
 function comparePushTableOrder(
   [leftTableName]: readonly [string, unknown],
   [rightTableName]: readonly [string, unknown]
@@ -508,7 +628,8 @@ function getUpsertConflictColumn(table: SyncableTable): "id" | "user_id" {
 export async function pushChanges(
   database: Database,
   pushArgs: SyncPushArgs,
-  expectedUserId?: string
+  expectedUserId?: string,
+  financialActionPushCoordinator?: FinancialActionPushCoordinator
 ): Promise<SyncPushResult | undefined | void> {
   const userId = await assertExpectedPushUser(expectedUserId);
   const dedicatedPush = await pushMetalDedicatedChanges(
@@ -517,11 +638,23 @@ export async function pushChanges(
     defaultMetalRpc,
     (outcome) => commitMetalRpcOutcomeLocally(database, outcome, userId)
   );
-  const dedicatedRejectedIds = mergeRejectedIds(
+  const protectedFinancialActionIds = mergeRejectedIds(
     dedicatedPush.acknowledgeAllDedicatedRows
       ? undefined
       : collectDedicatedRejectedIds(pushArgs.changes),
     collectProtectedFinancialActionRowIds(pushArgs.changes)
+  );
+  const accountActionAcknowledgements =
+    await resolveAccountActionAcknowledgements(
+      pushArgs.changes,
+      financialActionPushCoordinator
+    );
+  const returnedRejectedIds = mergeRejectedIds(
+    subtractRejectedIds(
+      protectedFinancialActionIds,
+      accountActionAcknowledgements.handledIds
+    ),
+    accountActionAcknowledgements.rejectedIds
   );
 
   const { changes } = pushArgs;
@@ -574,7 +707,11 @@ export async function pushChanges(
         const pushableRecords = records.filter(
           (record) =>
             isPushableRecord(table, record) &&
-            !isProtectedFinancialActionRow(dedicatedRejectedIds, table, record)
+            !isProtectedFinancialActionRow(
+              protectedFinancialActionIds,
+              table,
+              record
+            )
         );
         if (pushableRecords.length === 0) {
           return;
@@ -619,7 +756,11 @@ export async function pushChanges(
 
       const genericDeletedIds = tableChanges.deleted.filter(
         (recordId) =>
-          !isProtectedFinancialActionRow(dedicatedRejectedIds, table, recordId)
+          !isProtectedFinancialActionRow(
+            protectedFinancialActionIds,
+            table,
+            recordId
+          )
       );
       if (genericDeletedIds.length > 0) {
         let query = getSupabaseWriteTable(table).update({
@@ -654,8 +795,8 @@ export async function pushChanges(
 
   await assertExpectedPushUser(userId);
 
-  return dedicatedRejectedIds
-    ? { experimentalRejectedIds: dedicatedRejectedIds }
+  return returnedRejectedIds
+    ? { experimentalRejectedIds: returnedRejectedIds }
     : undefined;
 }
 

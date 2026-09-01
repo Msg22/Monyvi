@@ -3,7 +3,10 @@ import {
   FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES,
   type FinancialActionReconciliationBundle,
 } from "../../services/financial-action-reconciliation-service";
-import { createFinancialActionSyncService } from "../../services/financial-action-sync-service";
+import {
+  createFinancialActionPushCoordinator,
+  createFinancialActionSyncService,
+} from "../../services/financial-action-sync-service";
 
 const ACTION_ID = "10000000-0000-4000-8000-000000000001";
 const USER_ID = "20000000-0000-4000-8000-000000000002";
@@ -101,6 +104,96 @@ describe("dedicated financial action sync", () => {
     expect(
       repository.recordFinancialActionGroupServerOutcome
     ).not.toHaveBeenCalled();
+  });
+
+  it("acknowledges only accepted account-action rows during a Watermelon push", async () => {
+    const invoke = jest
+      .fn()
+      .mockResolvedValueOnce({ actionId: ACTION_ID, status: "accepted" })
+      .mockResolvedValueOnce({
+        actionId: "10000000-0000-4000-8000-000000000009",
+        code: "ACCOUNT_REVISION_STALE",
+        status: "stale",
+      });
+    const markPending = jest.fn().mockResolvedValue(undefined);
+    const recordOutcome = jest.fn().mockResolvedValue(undefined);
+    const coordinator = createFinancialActionPushCoordinator({
+      invokeAccountFinancialActionRpc: invoke,
+      markFinancialActionGroupSyncFailed: jest
+        .fn()
+        .mockResolvedValue(undefined),
+      markFinancialActionGroupSyncPending: markPending,
+      recordFinancialActionGroupServerOutcome: recordOutcome,
+    });
+
+    const result = await coordinator.coordinatePush([
+        {
+          actionId: ACTION_ID,
+          payloadHash: "a".repeat(64),
+          payloadJson: '{"accepted":true}',
+          state: "local_complete",
+        },
+        {
+          actionId: "10000000-0000-4000-8000-000000000009",
+          payloadHash: "b".repeat(64),
+          payloadJson: '{"stale":true}',
+          state: "sync_failed",
+        },
+      ]);
+    expect(
+      result.decisions.map((decision) => ({
+        actionId: decision.actionId,
+        code: decision.outcome?.code ?? null,
+        disposition: decision.disposition,
+        status: decision.outcome?.status ?? null,
+      }))
+    ).toEqual([
+        {
+          actionId: ACTION_ID,
+          code: null,
+          disposition: "acknowledge",
+          status: "accepted",
+        },
+        {
+          actionId: "10000000-0000-4000-8000-000000000009",
+          code: "ACCOUNT_REVISION_STALE",
+          disposition: "reject",
+          status: "stale",
+        },
+      ]
+    );
+    expect(markPending).toHaveBeenCalledTimes(2);
+    expect(recordOutcome).toHaveBeenCalledTimes(2);
+  });
+
+  it("acknowledges an already accepted local outcome without resubmitting it", async () => {
+    const invoke = jest.fn();
+    const coordinator = createFinancialActionPushCoordinator({
+      invokeAccountFinancialActionRpc: invoke,
+      markFinancialActionGroupSyncFailed: jest.fn(),
+      markFinancialActionGroupSyncPending: jest.fn(),
+      recordFinancialActionGroupServerOutcome: jest.fn(),
+    });
+
+    await expect(
+      coordinator.coordinatePush([
+        {
+          actionId: ACTION_ID,
+          payloadHash: "a".repeat(64),
+          payloadJson: '{"accepted":true}',
+          state: "accepted",
+        },
+      ])
+    ).resolves.toEqual({
+      decisions: [
+        {
+          actionId: ACTION_ID,
+          disposition: "acknowledge",
+          outcome: null,
+        },
+      ],
+    });
+    expect(invoke).not.toHaveBeenCalled();
   });
 });
 

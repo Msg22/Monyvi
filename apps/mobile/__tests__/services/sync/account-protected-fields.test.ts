@@ -1,6 +1,7 @@
 import type { SyncPushArgs } from "@nozbe/watermelondb/sync";
 
 import {
+  collectAccountFinancialActionPushBundles,
   collectProtectedFinancialActionRowIds,
   isProtectedFinancialActionRow,
   stripProtectedAccountFields,
@@ -8,24 +9,30 @@ import {
 
 const ACCOUNT_ID = "30000000-0000-4000-8000-000000000003";
 const TRANSACTION_ID = "40000000-0000-4000-8000-000000000004";
+const ACTION_ID = "10000000-0000-4000-8000-000000000001";
+const EFFECT_ID = "50000000-0000-4000-8000-000000000005";
+const PAYLOAD_JSON = JSON.stringify({
+  payloadVersion: "account.balance-effects/v1",
+  payload: {
+    domainMutation: {
+      records: [
+        { entity: "account", after: { id: ACCOUNT_ID } },
+        { entity: "transaction", after: { id: TRANSACTION_ID } },
+      ],
+    },
+  },
+});
 
 function changes(): SyncPushArgs["changes"] {
   return {
     financial_action_groups: {
       created: [
         {
-          id: "10000000-0000-4000-8000-000000000001",
-          payload_json: JSON.stringify({
-            payloadVersion: "account.balance-effects/v1",
-            payload: {
-              domainMutation: {
-                records: [
-                  { entity: "account", after: { id: ACCOUNT_ID } },
-                  { entity: "transaction", after: { id: TRANSACTION_ID } },
-                ],
-              },
-            },
-          }),
+          id: ACTION_ID,
+          action_id: ACTION_ID,
+          payload_hash: "a".repeat(64),
+          payload_json: PAYLOAD_JSON,
+          state: "local_complete",
         },
       ],
       updated: [],
@@ -33,6 +40,11 @@ function changes(): SyncPushArgs["changes"] {
     },
     accounts: {
       created: [],
+      updated: [],
+      deleted: [],
+    },
+    account_financial_effects: {
+      created: [{ id: EFFECT_ID, action_id: ACTION_ID }],
       updated: [],
       deleted: [],
     },
@@ -66,5 +78,24 @@ describe("account financial-action generic sync protection", () => {
         financial_revision: "8",
       })
     ).toEqual({ id: ACCOUNT_ID, name: "Renamed cash" });
+  });
+
+  it("groups each account action with exactly the rows its RPC will acknowledge", () => {
+    expect(collectAccountFinancialActionPushBundles(changes())).toEqual([
+      {
+        candidate: {
+          actionId: ACTION_ID,
+          payloadHash: "a".repeat(64),
+          payloadJson: PAYLOAD_JSON,
+          state: "local_complete",
+        },
+        rowIds: {
+          account_financial_effects: [EFFECT_ID],
+          accounts: [ACCOUNT_ID],
+          financial_action_groups: [ACTION_ID],
+          transactions: [TRANSACTION_ID],
+        },
+      },
+    ]);
   });
 });
