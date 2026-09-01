@@ -368,18 +368,19 @@ function buildMetalsLocalFixtureCleanupSql(userId) {
   );
   const metalsFixtureIds = METALS_PROFILE_NAMES.map((profileName) => {
     const seedScope = `e2e-${profileName}`;
+    const asset = buildDeterministicFixtureId(
+      seedScope,
+      userId,
+      "metals:holding"
+    );
     return {
-      asset: buildDeterministicFixtureId(seedScope, userId, "metals:holding"),
+      asset,
       assetMetal: buildDeterministicFixtureId(
         seedScope,
         userId,
         "metals:details"
       ),
-      holdingState: buildDeterministicFixtureId(
-        seedScope,
-        userId,
-        "metals:holding-state"
-      ),
+      holdingState: asset,
     };
   });
   const collectIds = (key) =>

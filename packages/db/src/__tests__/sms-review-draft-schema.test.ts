@@ -14,9 +14,11 @@ function getColumns(tableName: string): readonly string[] {
 }
 
 describe("SMS review draft local schema", () => {
-  it("registers the three indexed local-only tables at schema version 25", () => {
-    expect(schema.version).toBe(25);
-    expect(Object.keys(schema.tables)).toEqual(expect.arrayContaining(EXPECTED_TABLES));
+  it("keeps the three indexed local-only tables after schema version 25", () => {
+    expect(schema.version).toBeGreaterThanOrEqual(25);
+    expect(Object.keys(schema.tables)).toEqual(
+      expect.arrayContaining(EXPECTED_TABLES)
+    );
 
     expect(getColumns("sms_review_queues")).toEqual(
       expect.arrayContaining(["user_id", "created_at", "updated_at"])

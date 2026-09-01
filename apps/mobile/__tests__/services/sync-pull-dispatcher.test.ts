@@ -17,6 +17,7 @@ interface SelectChain {
   readonly lte: jest.Mock;
   readonly or: jest.Mock;
   readonly in: jest.Mock;
+  readonly limit: jest.Mock;
   readonly order: jest.Mock;
   readonly then: (
     resolve: (value: SupabaseResult) => unknown,
@@ -62,6 +63,7 @@ import {
   pullChanges,
   pullMarketRateObservations,
   pullMarketRates,
+  pullMetalHoldingStates,
 } from "../../services/sync/pull-strategies";
 import { MARKET_RATE_VALUE_COLUMNS } from "@monyvi/logic";
 
@@ -95,6 +97,7 @@ function makeSelectChain(
     lte: jest.fn((): SelectChain => chain),
     or: jest.fn((): SelectChain => chain),
     in: jest.fn((): SelectChain => chain),
+    limit: jest.fn((): SelectChain => chain),
     order: jest.fn((): SelectChain => chain),
     then: (
       resolve: (value: SupabaseResult) => unknown,
@@ -475,5 +478,34 @@ describe("pullMarketRates", () => {
       deleted: [],
     });
     expect(mockLoggerError).not.toHaveBeenCalled();
+  });
+});
+
+describe("pullMetalHoldingStates", () => {
+  it("paginates the complete bounded interval before returning", async () => {
+    const rows = Array.from({ length: 501 }, (_, index) => ({
+      id: `state-${String(index).padStart(4, "0")}`,
+      deleted: false,
+      financial_revision_text: String(index),
+      updated_at: `2026-05-18T08:02:${String(Math.floor(index / 10)).padStart(2, "0")}.000Z`,
+    }));
+    let page = 0;
+    mockFrom.mockImplementation(() => {
+      const offset = page * 500;
+      page += 1;
+      return makeSelectChain({
+        data: rows.slice(offset, offset + 500),
+        error: null,
+      });
+    });
+
+    const result = await pullMetalHoldingStates(
+      "current-user",
+      null,
+      "2026-05-18T08:05:00.000Z"
+    );
+
+    expect(result.updated).toHaveLength(501);
+    expect(mockFrom).toHaveBeenCalledTimes(2);
   });
 });

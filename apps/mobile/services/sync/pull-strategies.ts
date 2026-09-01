@@ -32,6 +32,7 @@ export const SYNC_PULL_ERROR_CODES = {
 } as const;
 
 const METAL_OBSERVATION_PAGE_SIZE = 500;
+const METAL_HOLDING_STATE_PAGE_SIZE = 500;
 const METAL_OBSERVATION_RPC = "pull_metal_observations_page_v1";
 const UUID_MAX = "ffffffff-ffff-ffff-ffff-ffffffffffff";
 
@@ -575,20 +576,48 @@ export async function pullMetalHoldingStates(
   lastSyncDate: string | null,
   upperWatermark: string
 ): Promise<SyncTableChangeSet> {
-  let query = supabase
-    .from("metal_holding_states")
-    .select(pullSelect("metal_holding_states"))
-    .eq("user_id", userId);
-  if (lastSyncDate) query = query.gt("updated_at", lastSyncDate);
-  query = query.lte("updated_at", upperWatermark);
+  const records: PulledRow[] = [];
+  let cursorUpdatedAt = lastSyncDate;
+  let cursorId: string | null = null;
+  let shouldPullNextPage = true;
 
-  const { data, error } = await query;
-  if (error) {
-    throw createSyncTableError("pull", "metal_holding_states", error);
+  while (shouldPullNextPage) {
+    let query = supabase
+      .from("metal_holding_states")
+      .select(pullSelect("metal_holding_states"))
+      .eq("user_id", userId);
+    if (cursorUpdatedAt && cursorId) {
+      query = query.or(
+        `updated_at.gt.${cursorUpdatedAt},and(updated_at.eq.${cursorUpdatedAt},id.gt.${cursorId})`
+      );
+    } else if (cursorUpdatedAt) {
+      query = query.gt("updated_at", cursorUpdatedAt);
+    }
+    query = query
+      .lte("updated_at", upperWatermark)
+      .order("updated_at", { ascending: true })
+      .order("id", { ascending: true })
+      .limit(METAL_HOLDING_STATE_PAGE_SIZE);
+
+    const { data, error } = await query;
+    if (error) {
+      throw createSyncTableError("pull", "metal_holding_states", error);
+    }
+    const page = requirePulledRows(data ?? []);
+    records.push(...page);
+    shouldPullNextPage = page.length === METAL_HOLDING_STATE_PAGE_SIZE;
+    if (shouldPullNextPage) {
+      const lastRecord = page[page.length - 1];
+      if (!lastRecord || typeof lastRecord.updated_at !== "string") {
+        throw new Error(SYNC_PULL_ERROR_CODES.INVALID_PULL_ROW);
+      }
+      cursorUpdatedAt = lastRecord.updated_at;
+      cursorId = lastRecord.id;
+    }
   }
+
   // PostgREST supports the exact-value `::text` projection above, but the
   // Supabase select-string type parser cannot infer rows containing casts.
-  const records = requirePulledRows(data ?? []);
   const deleted = records
     .filter((record) => record.deleted === true)
     .map((record) => record.id);

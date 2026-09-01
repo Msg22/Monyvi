@@ -159,7 +159,7 @@ select
   "assets"."id",
   "assets"."user_id", "assets"."id", 'active', '0', null, null, 1,
   'accepted', "assets"."created_at", "assets"."updated_at", "assets"."deleted",
-  'created', ''
+  'synced', ''
 from "assets"
 join "asset_metals" on "asset_metals"."asset_id" = "assets"."id"
 where "asset_metals"."metal_type" in ('GOLD', 'SILVER')
@@ -666,7 +666,11 @@ end;`
         addColumns({
           table: "assets",
           columns: [
-            { name: "purchase_price_decimal", type: "string", isOptional: true },
+            {
+              name: "purchase_price_decimal",
+              type: "string",
+              isOptional: true,
+            },
             { name: "purchase_currency", type: "string", isOptional: true },
             {
               name: "acquisition_action_id",
@@ -682,10 +686,13 @@ end;`
             { name: "weight_grams_decimal", type: "string", isOptional: true },
             { name: "purity_code", type: "string", isOptional: true },
             { name: "purity_factor_decimal", type: "string", isOptional: true },
-            { name: "purity_catalog_version", type: "string", isOptional: true },
+            {
+              name: "purity_catalog_version",
+              type: "string",
+              isOptional: true,
+            },
           ],
         }),
-        unsafeExecuteSql(METALS_V27_BACKFILL_SQL),
         createTable({
           name: "metal_holding_states",
           columns: [
@@ -702,6 +709,7 @@ end;`
             { name: "deleted", type: "boolean" },
           ],
         }),
+        unsafeExecuteSql(METALS_V27_BACKFILL_SQL),
         createTable({
           name: "metal_action_evidence",
           columns: [
@@ -709,8 +717,16 @@ end;`
             { name: "action_id", type: "string", isIndexed: true },
             { name: "holding_id", type: "string", isIndexed: true },
             { name: "kind", type: "string" },
-            { name: "expected_holding_revision", type: "string", isOptional: true },
-            { name: "canonical_holding_revision", type: "string", isOptional: true },
+            {
+              name: "expected_holding_revision",
+              type: "string",
+              isOptional: true,
+            },
+            {
+              name: "canonical_holding_revision",
+              type: "string",
+              isOptional: true,
+            },
             { name: "domain_payload_json", type: "string" },
             { name: "created_at", type: "number" },
             { name: "updated_at", type: "number" },
