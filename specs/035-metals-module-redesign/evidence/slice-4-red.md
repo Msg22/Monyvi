@@ -59,3 +59,29 @@ Focused executable checks exposed three previously documented-but-unproven gaps:
 
 These additions do not authorize exact action-specific schemas. The missing
 field decisions remain blocked in `slice-4-action-schema-decision-matrix.md`.
+
+## Post-PR #251 fail-closed Red gate
+
+After rebasing onto `bf2e3a071c2814772e9a9669479afeeb85d48767`, a
+table-driven test attempted Add, Correct, Sell v2, Dispose, Delete, and Undo
+through the Slice 4 adapter. All six cases failed Red because the adapter still
+accepted recursively shaped payloads without an approved exact schema.
+
+The Green correction removed every speculative registry entry and deleted the
+incomplete repository, command, and reconciliation paths that could imply a
+durable accepted action. The production registry is now empty and all six
+attempts fail closed with `metal_action_schema_not_approved`. This Red gate does
+not complete T036 or T037: their real SQLite/CAS/reconciliation assertions must
+be authored only after the six immutable payload contracts are approved.
+
+The first post-rebase broad mobile run also exposed two compatibility Reds:
+
+1. generalized fixture lookup changed the established unknown-budget-profile
+   error contract;
+2. the Watermelon v27 backfill generated holding-state IDs with `randomblob`,
+   violating the deterministic migration guard.
+
+Production code was corrected without weakening either test: budget-only
+selection retains the existing error contract, and each seeded holding-state ID
+is deterministically the unique holding/asset ID. The focused four-suite rerun
+passed 34/34 tests, followed by the full 304-suite mobile Green gate.
