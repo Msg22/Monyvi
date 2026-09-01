@@ -116,5 +116,50 @@
   "render": {
     "objectAccessibility": "رسم توضيحي لـ {{metal}} على شكل {{form}}",
     "neutralFallback": "الرسم التوضيحي لمقتنى المعدن غير متوفر"
+  },
+  "detail": {
+    "title": "تفاصيل المقتنى",
+    "sold_title": "مقتنى مباع",
+    "disposed_title": "مقتنى تم التخلّص منه",
+    "current_value": "القيمة الحالية",
+    "current_value_unavailable": "القيمة الحالية غير متاحة",
+    "since_purchase": "{{amount}} منذ الشراء",
+    "holding_story": "قصة المقتنى",
+    "physical_facts": "الحقائق المادية",
+    "acquired": "تم الاقتناء",
+    "value_unavailable": "القيمة غير متاحة",
+    "retry": "حاول مرة أخرى",
+    "offline": "وضع عدم الاتصال",
+    "history": "السجل",
+    "view_all": "عرض الكل",
+    "restored": "تمت الاستعادة كنشط",
+    "not_found": "لم يتم العثور على المقتنى",
+    "load_error": "تعذر تحميل هذا المقتنى."
+  },
+  "history": {
+    "title": "السجل",
+    "subtitle": "المبيعات والمقتنيات التي لم تعد بحوزتك.",
+    "all": "الكل",
+    "sold": "مباع",
+    "disposed": "تم التخلّص منه",
+    "empty": "لا توجد مقتنيات هنا بعد",
+    "offline": "وضع عدم الاتصال",
+    "retry": "حاول مرة أخرى"
+  },
+  "actions": {
+    "sell": "بيع المقتنى",
+    "edit": "تعديل التفاصيل",
+    "dispose": "لم يعد بحوزتي",
+    "delete": "حذف المقتنى",
+    "undo_sale": "التراجع عن البيع",
+    "undo_disposal": "التراجع عن التخلّص"
+  },
+  "timeline": {
+    "add": "تمت الإضافة",
+    "correct": "تم تحديث التفاصيل",
+    "sell": "تم البيع",
+    "dispose": "لم يعد بحوزتي",
+    "delete": "تم الحذف",
+    "undo": "تمت الاستعادة"
   }
 }

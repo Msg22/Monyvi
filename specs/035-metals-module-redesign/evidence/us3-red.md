@@ -46,3 +46,18 @@ missing-fact, filter, isolation, and bounded-query assertions remained Green.
 New assertions failed because `readMetalDetailReadModel` and
 `readMetalHistoryReadModel` did not exist. T068, T069, and aggregate T070 remain
 open because UI and Maestro Red coverage is not part of this service-only batch.
+
+## T068 intended Red then Green
+
+`holding-experience.test.tsx` first failed because
+`MetalHoldingDetailScreen` did not exist. After the minimal shaped-prop UI,
+manifest render, descriptor registry, routes, and cancellation-safe service facades:
+
+```text
+npm test -- --runInBand --watchman=false --runTestsByPath
+  __tests__/components/metals/holding-experience.test.tsx
+  __tests__/services/metal-detail-history-read-model.test.ts
+```
+
+Result: 2 suites, 13 tests Green. T069/T070/T074 remain open: the Maestro flow is
+authored but cannot run while the external Metro/device bundle blocker remains.

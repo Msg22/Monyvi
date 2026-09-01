@@ -112,5 +112,50 @@
   "render": {
     "objectAccessibility": "{{metal}} {{form}} illustration",
     "neutralFallback": "Metal holding illustration unavailable"
+  },
+  "detail": {
+    "title": "Holding details",
+    "sold_title": "Sold holding",
+    "disposed_title": "Disposed holding",
+    "current_value": "Current value",
+    "current_value_unavailable": "Current value unavailable",
+    "since_purchase": "{{amount}} since purchase",
+    "holding_story": "Holding story",
+    "physical_facts": "Physical facts",
+    "acquired": "Acquired",
+    "value_unavailable": "Value unavailable",
+    "retry": "Try again",
+    "offline": "Offline mode",
+    "history": "History",
+    "view_all": "View all",
+    "restored": "Restored to Active",
+    "not_found": "Holding not found",
+    "load_error": "We couldn't load this holding."
+  },
+  "history": {
+    "title": "History",
+    "subtitle": "Sales and holdings no longer in your possession.",
+    "all": "All",
+    "sold": "Sold",
+    "disposed": "Disposed",
+    "empty": "No holdings here yet",
+    "offline": "Offline mode",
+    "retry": "Try again"
+  },
+  "actions": {
+    "sell": "Sell holding",
+    "edit": "Edit details",
+    "dispose": "No longer in my possession",
+    "delete": "Delete holding",
+    "undo_sale": "Undo sale",
+    "undo_disposal": "Undo disposal"
+  },
+  "timeline": {
+    "add": "Added",
+    "correct": "Details updated",
+    "sell": "Sold",
+    "dispose": "No longer in my possession",
+    "delete": "Deleted",
+    "undo": "Restored"
   }
 }
