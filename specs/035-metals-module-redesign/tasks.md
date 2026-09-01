@@ -231,8 +231,8 @@ This topology controls ownership, dependency stacks, and future review size. Aft
 
 #### Green, refactor, verify
 
-- [ ] T081 [US2] Implement locale-aware validation, exact preview shaping, and scoped Add command in `apps/mobile/validation/metal-holding-form-validation.ts`, `apps/mobile/services/metal-holding-preview-service.ts`, and `apps/mobile/services/add-metal-holding-command-service.ts`
-- [ ] T082 [US2] Implement reusable shaped-prop form, Add lifecycle facade, and direct-submit isolated route in `apps/mobile/components/metals/MetalHoldingForm.tsx`, `apps/mobile/hooks/useAddMetalHolding.ts`, and `apps/mobile/app/(private)/metals/add.tsx`
+- [x] T081 [US2] Implement locale-aware validation, exact preview shaping, and scoped Add command in `apps/mobile/validation/metal-holding-form-validation.ts`, `apps/mobile/services/metal-holding-preview-service.ts`, and `apps/mobile/services/add-metal-holding-command-service.ts`
+- [x] T082 [US2] Implement reusable shaped-prop form, Add lifecycle facade, and direct-submit isolated route in `apps/mobile/components/metals/MetalHoldingForm.tsx`, `apps/mobile/hooks/useAddMetalHolding.ts`, and `apps/mobile/app/(private)/metals/add.tsx`
 - [ ] T083 [US2] Run US2 suites and Maestro, refactor while green, and record evidence in `specs/035-metals-module-redesign/coverage/us2.md`
 
 ### User Story 4 — Edit a Holding or Correct Active Facts (Priority: P1)
