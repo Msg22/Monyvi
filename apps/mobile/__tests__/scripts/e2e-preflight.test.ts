@@ -5,14 +5,26 @@ interface E2ePreflightModule {
       clearLocalState: () => void;
       forceStop: () => void;
       runAdb: (args: readonly string[]) => void;
-      seedTheme: (theme: string) => void;
+      setConnectivity?: (isOffline: boolean) => void;
+      seedTheme: (
+        theme: string,
+        refreshFailureProfileName?: string | null
+      ) => void;
     }
   ): void;
   appendAndroidPlatform(url: string): string;
   buildDevClientUrl(url: string): string;
   buildDevMenuPreferencesXml(): string;
   buildIntroSeenFlagSql(): string;
-  buildE2eRuntimeStorageSql(theme: string): string;
+  buildE2eRuntimeStorageSql(
+    theme: string,
+    refreshFailureProfileName?: string | null
+  ): string;
+  buildE2eRefreshFailureInspectionSql(profileName: string): string;
+  inspectE2eRefreshFailureState(
+    profileName: string,
+    dependencies?: { runSql: (sql: string) => string }
+  ): "absent" | "armed" | "consumed";
   buildMetalsLocalFixtureCleanupSql(userId: string): string;
   buildMetalsLocalObservationCleanupSql(): string;
   currentFocusShowsDevLauncherError(currentFocus: string): boolean;
@@ -24,8 +36,11 @@ interface E2ePreflightModule {
     env?: Readonly<Record<string, string | undefined>>
   ): {
     locale: string;
+    cacheState?: string;
+    connectivityState?: string;
     persistenceState: string;
     rateState: string;
+    refreshFailureMode?: string | null;
     theme: string;
     textScale: number;
   } | null;
@@ -35,14 +50,18 @@ interface E2ePreflightModule {
   relaunchE2eFixtureIfRequired(
     settings: {
       locale: string;
+      cacheState?: string;
+      connectivityState?: string;
       persistenceState: string;
       rateState: string;
+      refreshFailureMode?: string | null;
       theme: string;
       textScale: number;
     } | null,
     dependencies: {
       forceStop: () => void;
       startApp: () => void;
+      setConnectivity?: (isOffline: boolean) => void;
       waitForReady: () => void;
       waitForSync: () => void;
     }
@@ -268,25 +287,41 @@ describe("e2e-preflight", () => {
     });
     expect(runtimeSettings).toEqual({
       locale: "ar",
+      cacheState: "seeded",
+      connectivityState: "online",
       persistenceState: "restart",
       rateState: "stale",
+      refreshFailureMode: null,
       theme: "dark",
       textScale: 2,
     });
     expect(preflight.buildE2eRuntimeStorageSql("dark")).toContain(
       "'monyvi_theme_mode', 'dark'"
     );
+    const refreshFailureSql = preflight.buildE2eRuntimeStorageSql(
+      "light",
+      "metals-refresh-failure-cached-local-en-light"
+    );
+    expect(refreshFailureSql).toContain(
+      "@monyvi/e2e/live-rates-refresh-failure/%"
+    );
+    expect(refreshFailureSql).toContain(
+      "@monyvi/e2e/live-rates-refresh-failure/metals-refresh-failure-cached-local-en-light"
+    );
+    expect(refreshFailureSql).toContain("'armed'");
 
     const clearLocalState = jest.fn();
     const forceStop = jest.fn();
     const runAdb = jest.fn();
     const seedTheme = jest.fn();
+    const setConnectivity = jest.fn();
     preflight.applyE2eFixtureRuntimeSettings(
       { E2E_METALS_PROFILE: "metals-stale-restart-ar-dark" },
-      { clearLocalState, forceStop, runAdb, seedTheme }
+      { clearLocalState, forceStop, runAdb, seedTheme, setConnectivity }
     );
 
     expect(forceStop).toHaveBeenCalledTimes(1);
+    expect(setConnectivity).toHaveBeenCalledWith(false);
     expect(clearLocalState).toHaveBeenCalledTimes(1);
     expect(runAdb).toHaveBeenCalledWith([
       "shell",
@@ -296,7 +331,63 @@ describe("e2e-preflight", () => {
       "font_scale",
       "2",
     ]);
-    expect(seedTheme).toHaveBeenCalledWith("dark");
+    expect(seedTheme).toHaveBeenCalledWith("dark", null);
+  });
+
+  it("materializes and clears the one-shot refresh marker with the selected profile", () => {
+    const seedTheme = jest.fn();
+
+    preflight.applyE2eFixtureRuntimeSettings(
+      {
+        E2E_METALS_PROFILE: "metals-refresh-failure-cached-local-en-light",
+      },
+      {
+        clearLocalState: jest.fn(),
+        forceStop: jest.fn(),
+        runAdb: jest.fn(),
+        setConnectivity: jest.fn(),
+        seedTheme,
+      }
+    );
+
+    expect(seedTheme).toHaveBeenCalledWith(
+      "light",
+      "metals-refresh-failure-cached-local-en-light"
+    );
+
+    seedTheme.mockClear();
+    preflight.applyE2eFixtureRuntimeSettings(
+      { E2E_METALS_PROFILE: "metals-fresh-local-en-light" },
+      {
+        clearLocalState: jest.fn(),
+        forceStop: jest.fn(),
+        runAdb: jest.fn(),
+        setConnectivity: jest.fn(),
+        seedTheme,
+      }
+    );
+    expect(seedTheme).toHaveBeenCalledWith("light", null);
+  });
+
+  it("inspects armed, consumed, and reset refresh-marker state", () => {
+    const profileName = "metals-refresh-failure-cached-local-en-light";
+    const sql = preflight.buildE2eRefreshFailureInspectionSql(profileName);
+    expect(sql).toContain(
+      `@monyvi/e2e/live-rates-refresh-failure/${profileName}`
+    );
+
+    for (const state of ["armed", "consumed", "absent"] as const) {
+      expect(
+        preflight.inspectE2eRefreshFailureState(profileName, {
+          runSql: () => state,
+        })
+      ).toBe(state);
+    }
+    expect(() =>
+      preflight.inspectE2eRefreshFailureState(profileName, {
+        runSql: () => "unexpected",
+      })
+    ).toThrow("Failed to inspect the live-rates refresh fixture marker");
   });
 
   it("resets Android font scale for a non-Metals preflight", () => {
@@ -304,10 +395,11 @@ describe("e2e-preflight", () => {
     const forceStop = jest.fn();
     const runAdb = jest.fn();
     const seedTheme = jest.fn();
+    const setConnectivity = jest.fn();
 
     preflight.applyE2eFixtureRuntimeSettings(
       {},
-      { clearLocalState, forceStop, runAdb, seedTheme }
+      { clearLocalState, forceStop, runAdb, seedTheme, setConnectivity }
     );
 
     expect(runAdb).toHaveBeenCalledWith([
@@ -318,6 +410,7 @@ describe("e2e-preflight", () => {
       "font_scale",
       "1",
     ]);
+    expect(setConnectivity).toHaveBeenCalledWith(false);
     expect(forceStop).not.toHaveBeenCalled();
     expect(clearLocalState).not.toHaveBeenCalled();
     expect(seedTheme).not.toHaveBeenCalled();
@@ -331,11 +424,13 @@ describe("e2e-preflight", () => {
     const forceStop = jest.fn();
     const runAdb = jest.fn();
     const seedTheme = jest.fn();
+    const setConnectivity = jest.fn();
     preflight.applyE2eFixtureRuntimeSettings(env, {
       clearLocalState,
       forceStop,
       runAdb,
       seedTheme,
+      setConnectivity,
     });
 
     expect(runAdb).toHaveBeenCalledWith([
@@ -346,6 +441,7 @@ describe("e2e-preflight", () => {
       "font_scale",
       "1",
     ]);
+    expect(setConnectivity).toHaveBeenCalledWith(false);
     expect(forceStop).not.toHaveBeenCalled();
     expect(clearLocalState).not.toHaveBeenCalled();
     expect(seedTheme).not.toHaveBeenCalled();
@@ -403,7 +499,7 @@ describe("e2e-preflight", () => {
       const statement = sql
         .split("\n")
         .find((line) => line.startsWith(`delete from "${table}"`));
-      expect(statement?.match(/[0-9a-f]{8}-[0-9a-f-]{27}/g)).toHaveLength(4);
+      expect(statement?.match(/[0-9a-f]{8}-[0-9a-f-]{27}/g)).toHaveLength(8);
       expect(statement).toContain('where "id" in (');
     }
     expect(sql.indexOf('delete from "transactions"')).toBeLessThan(
@@ -415,6 +511,12 @@ describe("e2e-preflight", () => {
     expect(sql).toContain(
       'delete from "market_rate_observations" where "source" = \'e2e_fixture\';'
     );
+    const marketRateStatement = sql
+      .split("\n")
+      .find((line) => line.startsWith('delete from "market_rates"'));
+    expect(
+      marketRateStatement?.match(/[0-9a-f]{8}-[0-9a-f-]{27}/g)
+    ).toHaveLength(8);
   });
 
   it("fails fast before attempting a Metals profile in a release build", () => {
@@ -429,11 +531,13 @@ describe("e2e-preflight", () => {
     );
     const clearLocalState = jest.fn();
     const forceStop = jest.fn();
+    const setConnectivity = jest.fn();
     expect(() =>
       preflight.applyE2eFixtureRuntimeSettings(releaseEnv, {
         clearLocalState,
         forceStop,
         runAdb: jest.fn(),
+        setConnectivity,
         seedTheme: jest.fn(),
       })
     ).toThrow(
@@ -441,6 +545,7 @@ describe("e2e-preflight", () => {
     );
     expect(forceStop).not.toHaveBeenCalled();
     expect(clearLocalState).not.toHaveBeenCalled();
+    expect(setConnectivity).not.toHaveBeenCalled();
 
     expect(() =>
       preflight.assertMetalsFixtureBuildSupported({ E2E_RELEASE_BUILD: "1" })
@@ -510,6 +615,32 @@ describe("e2e-preflight", () => {
       }
     );
     expect(missingEvents).toEqual([]);
+  });
+
+  it("seeds an offline-cached profile online before relaunching the same database offline", () => {
+    const events: string[] = [];
+
+    preflight.relaunchE2eFixtureIfRequired(
+      {
+        locale: "en",
+        cacheState: "seeded",
+        connectivityState: "offline_after_cache",
+        persistenceState: "local",
+        rateState: "fresh",
+        theme: "light",
+        textScale: 1,
+      },
+      {
+        waitForSync: () => events.push("sync"),
+        forceStop: () => events.push("stop"),
+        setConnectivity: (isOffline) =>
+          events.push(isOffline ? "offline" : "online"),
+        startApp: () => events.push("start"),
+        waitForReady: () => events.push("ready"),
+      }
+    );
+
+    expect(events).toEqual(["sync", "stop", "offline", "start", "ready"]);
   });
 
   it("detects Android devices without a sqlite3 shell binary", () => {

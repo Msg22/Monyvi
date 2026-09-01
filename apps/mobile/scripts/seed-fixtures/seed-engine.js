@@ -680,16 +680,67 @@ async function restoreSeededAccountBalances(client, accountRows) {
   );
 }
 
+function buildMarketRateRow(currentTimestamp) {
+  return {
+    id: E2E_MARKET_RATE_ID,
+    aed_usd: 0.2723,
+    aud_usd: 0.66,
+    bhd_usd: 2.65,
+    btc_usd: 65000,
+    cad_usd: 0.74,
+    chf_usd: 1.1,
+    cny_usd: 0.14,
+    dkk_usd: 0.146,
+    dzd_usd: 0.0074,
+    egp_usd: 0.02,
+    eur_usd: 1.09,
+    gbp_usd: 1.27,
+    gold_usd_per_gram: 75,
+    hkd_usd: 0.128,
+    inr_usd: 0.012,
+    iqd_usd: 0.00076,
+    isk_usd: 0.0072,
+    jod_usd: 1.41,
+    jpy_usd: 0.0065,
+    kpw_usd: 0.0011,
+    krw_usd: 0.00073,
+    kwd_usd: 3.25,
+    lyd_usd: 0.21,
+    mad_usd: 0.1,
+    myr_usd: 0.21,
+    nok_usd: 0.094,
+    nzd_usd: 0.61,
+    omr_usd: 2.6,
+    palladium_usd_per_gram: 32,
+    platinum_usd_per_gram: 31,
+    qar_usd: 0.2747,
+    rub_usd: 0.011,
+    sar_usd: 0.2667,
+    sek_usd: 0.096,
+    sgd_usd: 0.74,
+    silver_usd_per_gram: 0.95,
+    timestamp_currency: currentTimestamp,
+    timestamp_metal: currentTimestamp,
+    tnd_usd: 0.32,
+    try_usd: 0.031,
+    updated_at: currentTimestamp,
+    zar_usd: 0.054,
+    created_at: currentTimestamp,
+  };
+}
+
 function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
   const currentTimestamp = new Date().toISOString();
   const currentDate = currentTimestamp.slice(0, 10);
   const baseAccountCurrency = fixture.baseAccountCurrency ?? "EGP";
+  const marketRateTemplate = buildMarketRateRow(currentTimestamp);
   const fixtureContext = {
     categoryIds: CATEGORY_IDS,
     currentTimestamp,
     dateFromToday,
     deterministicUuid,
     fixedNow: FIXED_NOW,
+    marketRateTemplate,
     seedIds,
     seedScope: fixture.seedScope,
     userId,
@@ -706,8 +757,10 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
   const assetMetals = extraRows.assetMetals ?? [];
   const metalHoldingStates = extraRows.metalHoldingStates ?? [];
   const marketRateObservations = extraRows.marketRateObservations ?? [];
+  const marketRates = extraRows.marketRates ?? [];
   const marketRateObservationCleanupRows =
     cleanupRows.marketRateObservations ?? marketRateObservations;
+  const marketRateCleanupRows = cleanupRows.marketRates ?? marketRates;
   const debts = extraRows.debts ?? [];
   const budgets = extraRows.budgets ?? [];
   const categories = extraRows.categories ?? [];
@@ -716,52 +769,9 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
   const expandedTransfers = extraRows.transfers ?? [];
 
   return {
-    marketRate: {
-      id: E2E_MARKET_RATE_ID,
-      aed_usd: 0.2723,
-      aud_usd: 0.66,
-      bhd_usd: 2.65,
-      btc_usd: 65000,
-      cad_usd: 0.74,
-      chf_usd: 1.1,
-      cny_usd: 0.14,
-      dkk_usd: 0.146,
-      dzd_usd: 0.0074,
-      egp_usd: 0.02,
-      eur_usd: 1.09,
-      gbp_usd: 1.27,
-      gold_usd_per_gram: 75,
-      hkd_usd: 0.128,
-      inr_usd: 0.012,
-      iqd_usd: 0.00076,
-      isk_usd: 0.0072,
-      jod_usd: 1.41,
-      jpy_usd: 0.0065,
-      kpw_usd: 0.0011,
-      krw_usd: 0.00073,
-      kwd_usd: 3.25,
-      lyd_usd: 0.21,
-      mad_usd: 0.1,
-      myr_usd: 0.21,
-      nok_usd: 0.094,
-      nzd_usd: 0.61,
-      omr_usd: 2.6,
-      palladium_usd_per_gram: 32,
-      platinum_usd_per_gram: 31,
-      qar_usd: 0.2747,
-      rub_usd: 0.011,
-      sar_usd: 0.2667,
-      sek_usd: 0.096,
-      sgd_usd: 0.74,
-      silver_usd_per_gram: 0.95,
-      timestamp_currency: currentTimestamp,
-      timestamp_metal: currentTimestamp,
-      tnd_usd: 0.32,
-      try_usd: 0.031,
-      updated_at: currentTimestamp,
-      zar_usd: 0.054,
-      created_at: currentTimestamp,
-    },
+    marketRate: marketRateTemplate,
+    marketRates,
+    marketRateCleanupRows,
     profile: {
       id: seedIds.profile,
       user_id: userId,
@@ -983,6 +993,7 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
       "market_rate_observations",
       rows.marketRateObservationCleanupRows
     );
+    await deleteRowsByIds(client, "market_rates", rows.marketRateCleanupRows);
     for (const table of SEED_TABLE_DELETE_ORDER) {
       await deleteScopedRows(client, table, userId, seedIds);
     }
@@ -1008,6 +1019,9 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
     rows.metalHoldingStates,
     { onConflict: "id" }
   );
+  await upsertRowsIfAny(client, "market_rates", rows.marketRates, {
+    onConflict: "id",
+  });
   await upsertRowsIfAny(
     client,
     "market_rate_observations",
@@ -1052,6 +1066,7 @@ async function resetFixtureData(client, config, fixtureOverrides = {}) {
     "market_rate_observations",
     rows.marketRateObservationCleanupRows
   );
+  await deleteRowsByIds(client, "market_rates", rows.marketRateCleanupRows);
 
   for (const table of RESET_TABLE_DELETE_ORDER) {
     await deleteScopedRows(client, table, userId, seedIds);
@@ -1069,6 +1084,7 @@ async function inspectFixtureData(client, config, fixtureOverrides = {}) {
   const inspectedTables = {};
 
   for (const [table, expectedRows] of [
+    ["market_rates", rows.marketRates],
     ["assets", rows.assets],
     ["asset_metals", rows.assetMetals],
     ["metal_holding_states", rows.metalHoldingStates],
