@@ -85,3 +85,14 @@ Production code was corrected without weakening either test: budget-only
 selection retains the existing error contract, and each seeded holding-state ID
 is deterministically the unique holding/asset ID. The focused four-suite rerun
 passed 34/34 tests, followed by the full 304-suite mobile Green gate.
+
+## PR #254 CI Red
+
+The first `Code Quality & Tests` job failed at repository-wide lint because the
+new render manifest used five CommonJS `require()` image calls. The focused
+mobile lint command had not included `assets/`, so it did not exercise this
+boundary. The CI finding was valid and in scope.
+
+All five image dependencies now use the repository's typed static-import
+pattern. The exact root `npm run lint` command passes with zero errors, mobile
+typecheck passes, and the focused render-manifest suite passes 3/3 tests.

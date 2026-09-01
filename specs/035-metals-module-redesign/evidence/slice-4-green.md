@@ -82,6 +82,7 @@ All Supabase commands used `--local`; no remote Supabase project was mutated.
 | `npm run typecheck -w @monyvi/logic` | Pass. |
 | `npm run typecheck -w @monyvi/db` | Pass. |
 | `npm run lint -w @monyvi/mobile` | Pass after adding the required explicit fixture-client return type. |
+| `npm run lint` | Pass with the repository's existing warnings and zero errors after replacing five manifest `require()` calls with typed static image imports. |
 | Fixture `seed -> inspect -> reset -> inspect` | Pass. Seed inspection returned the exact asset, asset-metal, holding-state, and observation rows; reset inspection returned zero rows for all four groups. |
 | `npx supabase db lint --local --level error` | Pass for `extensions`, `private`, and `public`. |
 | `git diff --check` | Pass. |
