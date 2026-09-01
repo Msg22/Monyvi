@@ -172,3 +172,20 @@ A follow-up Red assertion caught that the first cleanup SQL deleted every
 shared observation. Because the shared sync watermark could keep unrelated
 rows from returning, the Green query now deletes only rows whose source is
 `e2e_fixture`.
+
+The next exact-head review produced four further focused Reds before its
+technical fixes:
+
+1. resolved runtime settings omitted `rateState`;
+2. a non-Metals preflight left Android's global font scale unchanged after a
+   200% Metals profile;
+3. fresh and unknown profiles did not wait for their non-blocking startup sync
+   to materialize the selected observation before Maestro began;
+4. asset, asset-metal, and holding-state `updated_at` values remained fixed in
+   2026, so incremental pulls with a newer watermark could miss newly seeded
+   profile rows.
+
+Green now resets the no-profile font scale to `1`, waits for every non-missing
+rate profile, performs the extra relaunch only for the restart profile, and
+uses the injected seed clock for all three user-owned projection update
+timestamps while preserving purchase and provider dates.
