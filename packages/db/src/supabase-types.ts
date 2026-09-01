@@ -102,11 +102,11 @@ export type Database = {
           metal_type: Database["public"]["Enums"]["metal_type"];
           purity_catalog_version: string | null;
           purity_code: string | null;
-          purity_factor_decimal: number | null;
+          purity_factor_decimal: string | null;
           purity_fraction: number;
           updated_at: string;
           weight_grams: number;
-          weight_grams_decimal: number | null;
+          weight_grams_decimal: string | null;
         };
         Insert: {
           asset_id: string;
@@ -117,11 +117,11 @@ export type Database = {
           metal_type: Database["public"]["Enums"]["metal_type"];
           purity_catalog_version?: string | null;
           purity_code?: string | null;
-          purity_factor_decimal?: number | null;
+          purity_factor_decimal?: string | null;
           purity_fraction?: number;
           updated_at?: string;
           weight_grams: number;
-          weight_grams_decimal?: number | null;
+          weight_grams_decimal?: string | null;
         };
         Update: {
           asset_id?: string;
@@ -132,11 +132,11 @@ export type Database = {
           metal_type?: Database["public"]["Enums"]["metal_type"];
           purity_catalog_version?: string | null;
           purity_code?: string | null;
-          purity_factor_decimal?: number | null;
+          purity_factor_decimal?: string | null;
           purity_fraction?: number;
           updated_at?: string;
           weight_grams?: number;
-          weight_grams_decimal?: number | null;
+          weight_grams_decimal?: string | null;
         };
         Relationships: [
           {
@@ -161,7 +161,7 @@ export type Database = {
           purchase_currency: string | null;
           purchase_date: string;
           purchase_price: number;
-          purchase_price_decimal: number | null;
+          purchase_price_decimal: string | null;
           type: Database["public"]["Enums"]["asset_type"];
           updated_at: string;
           user_id: string;
@@ -178,7 +178,7 @@ export type Database = {
           purchase_currency?: string | null;
           purchase_date: string;
           purchase_price: number;
-          purchase_price_decimal?: number | null;
+          purchase_price_decimal?: string | null;
           type: Database["public"]["Enums"]["asset_type"];
           updated_at?: string;
           user_id: string;
@@ -195,18 +195,18 @@ export type Database = {
           purchase_currency?: string | null;
           purchase_date?: string;
           purchase_price?: number;
-          purchase_price_decimal?: number | null;
+          purchase_price_decimal?: string | null;
           type?: Database["public"]["Enums"]["asset_type"];
           updated_at?: string;
           user_id?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "assets_acquisition_action_owner_fk";
-            columns: ["user_id", "acquisition_action_id"];
+            foreignKeyName: "assets_acquisition_action_holding_fk";
+            columns: ["user_id", "acquisition_action_id", "id"];
             isOneToOne: false;
-            referencedRelation: "financial_action_groups";
-            referencedColumns: ["user_id", "action_id"];
+            referencedRelation: "metal_action_evidence";
+            referencedColumns: ["user_id", "action_id", "holding_id"];
           },
         ];
       };
@@ -602,9 +602,9 @@ export type Database = {
           orientation: string;
           provider_observed_at: string | null;
           quality: string;
-          source: string;
+          source: string | null;
           unit: string;
-          value_decimal: number;
+          value_decimal: string;
         };
         Insert: {
           batch_id: string;
@@ -614,9 +614,9 @@ export type Database = {
           orientation: string;
           provider_observed_at?: string | null;
           quality: string;
-          source: string;
+          source?: string | null;
           unit: string;
-          value_decimal: number;
+          value_decimal: string;
         };
         Update: {
           batch_id?: string;
@@ -626,9 +626,9 @@ export type Database = {
           orientation?: string;
           provider_observed_at?: string | null;
           quality?: string;
-          source?: string;
+          source?: string | null;
           unit?: string;
-          value_decimal?: number;
+          value_decimal?: string;
         };
         Relationships: [];
       };
@@ -776,11 +776,11 @@ export type Database = {
       metal_action_evidence: {
         Row: {
           action_id: string;
-          canonical_holding_revision: number | null;
+          canonical_holding_revision: string | null;
           created_at: string;
           deleted: boolean;
           domain_payload_json: Json;
-          expected_holding_revision: number | null;
+          expected_holding_revision: string | null;
           holding_id: string;
           id: string;
           kind: string;
@@ -789,11 +789,11 @@ export type Database = {
         };
         Insert: {
           action_id: string;
-          canonical_holding_revision?: number | null;
+          canonical_holding_revision?: string | null;
           created_at?: string;
           deleted?: boolean;
           domain_payload_json: Json;
-          expected_holding_revision?: number | null;
+          expected_holding_revision?: string | null;
           holding_id: string;
           id?: string;
           kind: string;
@@ -802,11 +802,11 @@ export type Database = {
         };
         Update: {
           action_id?: string;
-          canonical_holding_revision?: number | null;
+          canonical_holding_revision?: string | null;
           created_at?: string;
           deleted?: boolean;
           domain_payload_json?: Json;
-          expected_holding_revision?: number | null;
+          expected_holding_revision?: string | null;
           holding_id?: string;
           id?: string;
           kind?: string;
@@ -815,11 +815,11 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "metal_action_evidence_user_id_action_id_fkey";
-            columns: ["user_id", "action_id"];
+            foreignKeyName: "metal_action_evidence_user_id_action_id_holding_id_fkey";
+            columns: ["user_id", "action_id", "holding_id"];
             isOneToOne: true;
             referencedRelation: "financial_action_groups";
-            referencedColumns: ["user_id", "action_id"];
+            referencedColumns: ["user_id", "action_id", "domain_reference_id"];
           },
           {
             foreignKeyName: "metal_action_evidence_user_id_holding_id_fkey";
@@ -836,7 +836,7 @@ export type Database = {
           deleted: boolean;
           effective_action_id: string | null;
           effective_event_id: string | null;
-          financial_revision: number;
+          financial_revision: string;
           holding_id: string;
           id: string;
           is_visible: boolean;
@@ -850,9 +850,9 @@ export type Database = {
           deleted?: boolean;
           effective_action_id?: string | null;
           effective_event_id?: string | null;
-          financial_revision?: number;
+          financial_revision?: string;
           holding_id: string;
-          id?: string;
+          id: string;
           is_visible?: boolean;
           reconciliation_state?: string;
           status: string;
@@ -864,7 +864,7 @@ export type Database = {
           deleted?: boolean;
           effective_action_id?: string | null;
           effective_event_id?: string | null;
-          financial_revision?: number;
+          financial_revision?: string;
           holding_id?: string;
           id?: string;
           is_visible?: boolean;
@@ -882,11 +882,11 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "metal_holding_states_user_id_effective_action_id_fkey";
-            columns: ["user_id", "effective_action_id"];
+            foreignKeyName: "metal_holding_states_effective_action_fk";
+            columns: ["user_id", "effective_action_id", "holding_id"];
             isOneToOne: false;
-            referencedRelation: "financial_action_groups";
-            referencedColumns: ["user_id", "action_id"];
+            referencedRelation: "metal_action_evidence";
+            referencedColumns: ["user_id", "action_id", "holding_id"];
           },
           {
             foreignKeyName: "metal_holding_states_user_id_holding_id_fkey";
@@ -962,11 +962,11 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "metal_lifecycle_events_user_id_action_id_fkey";
-            columns: ["user_id", "action_id"];
+            foreignKeyName: "metal_lifecycle_events_user_id_action_id_holding_id_fkey";
+            columns: ["user_id", "action_id", "holding_id"];
             isOneToOne: true;
-            referencedRelation: "financial_action_groups";
-            referencedColumns: ["user_id", "action_id"];
+            referencedRelation: "metal_action_evidence";
+            referencedColumns: ["user_id", "action_id", "holding_id"];
           },
           {
             foreignKeyName: "metal_lifecycle_events_user_id_holding_id_fkey";
@@ -992,11 +992,11 @@ export type Database = {
           provider_observed_at: string | null;
           quality: string;
           role: string;
-          source: string;
+          source: string | null;
           unit: string;
           updated_at: string;
           user_id: string;
-          value_decimal: number;
+          value_decimal: string;
         };
         Insert: {
           action_id: string;
@@ -1012,11 +1012,11 @@ export type Database = {
           provider_observed_at?: string | null;
           quality: string;
           role: string;
-          source: string;
+          source?: string | null;
           unit: string;
           updated_at?: string;
           user_id: string;
-          value_decimal: number;
+          value_decimal: string;
         };
         Update: {
           action_id?: string;
@@ -1032,19 +1032,19 @@ export type Database = {
           provider_observed_at?: string | null;
           quality?: string;
           role?: string;
-          source?: string;
+          source?: string | null;
           unit?: string;
           updated_at?: string;
           user_id?: string;
-          value_decimal?: number;
+          value_decimal?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "metal_rate_references_user_id_action_id_fkey";
-            columns: ["user_id", "action_id"];
+            foreignKeyName: "metal_rate_references_user_id_action_id_holding_id_fkey";
+            columns: ["user_id", "action_id", "holding_id"];
             isOneToOne: false;
-            referencedRelation: "financial_action_groups";
-            referencedColumns: ["user_id", "action_id"];
+            referencedRelation: "metal_action_evidence";
+            referencedColumns: ["user_id", "action_id", "holding_id"];
           },
           {
             foreignKeyName: "metal_rate_references_user_id_holding_id_fkey";
@@ -1593,6 +1593,15 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      pull_metal_observations_page_v1: {
+        Args: {
+          p_after_created_at?: string | null;
+          p_after_id?: string | null;
+          p_limit?: number;
+          p_upper_watermark?: string | null;
+        };
+        Returns: Json;
+      };
       recalculate_account_balance: {
         Args: { account_id_param: string };
         Returns: number;

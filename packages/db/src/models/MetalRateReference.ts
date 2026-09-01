@@ -16,7 +16,7 @@ export class MetalRateReference extends Model {
   @date("provider_observed_at") providerObservedAt!: Date | null;
   @field("quality") quality!: string;
   @field("role") role!: string;
-  @field("source") source!: string;
+  @field("source") source!: string | null;
   @field("unit") unit!: string;
   @date("updated_at") updatedAt!: Date;
   @field("user_id") userId!: string;

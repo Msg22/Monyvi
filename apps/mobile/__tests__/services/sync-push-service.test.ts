@@ -5,6 +5,7 @@ const mockUpsert = jest.fn();
 jest.mock("@monyvi/db", () => ({
   schema: {
     tables: {
+      assets: {},
       categories: {},
       financial_action_groups: {},
       profiles: {},
@@ -288,6 +289,45 @@ describe("pushChanges", () => {
       {
         onConflict: "user_id",
       }
+    );
+  });
+
+  it("strips server-authoritative metal projections from generic asset pushes", async () => {
+    const database = Object.create(null) as PushChangesDatabase;
+    const pushArgs: PushChangesArgs = {
+      changes: {
+        assets: {
+          created: [
+            {
+              id: "asset-1",
+              user_id: "current-user",
+              name: "Gold holding",
+              purchase_price_decimal: "100000.125",
+              purchase_currency: "EGP",
+              acquisition_action_id: "action-1",
+              deleted: false,
+            },
+          ],
+          updated: [],
+          deleted: [],
+        },
+      },
+      lastPulledAt: 0,
+    };
+
+    await expect(pushChanges(database, pushArgs)).resolves.toBeUndefined();
+
+    expect(mockFrom).toHaveBeenCalledWith("assets");
+    expect(mockUpsert).toHaveBeenCalledWith(
+      [
+        {
+          id: "asset-1",
+          user_id: "current-user",
+          name: "Gold holding",
+          deleted: false,
+        },
+      ],
+      { onConflict: "id" }
     );
   });
 });

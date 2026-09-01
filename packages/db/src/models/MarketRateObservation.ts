@@ -10,7 +10,7 @@ export class MarketRateObservation extends Model {
   @field("orientation") orientation!: string;
   @date("provider_observed_at") providerObservedAt!: Date | null;
   @field("quality") quality!: string;
-  @field("source") source!: string;
+  @field("source") source!: string | null;
   @field("unit") unit!: string;
   @field("value_decimal") valueDecimal!: string;
 }

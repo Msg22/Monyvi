@@ -10,6 +10,7 @@
 const mockSynchronize = jest.fn();
 const mockGetCurrentUserId = jest.fn();
 const mockFrom = jest.fn();
+const mockRpc = jest.fn();
 const mockInsert = jest.fn();
 const mockUpsert = jest.fn();
 const mockUpdate = jest.fn();
@@ -73,6 +74,7 @@ jest.mock("@/services/supabase", () => ({
     mockGetCurrentUserId() as Promise<string | null>,
   supabase: {
     from: (table: string): unknown => mockFrom(table),
+    rpc: (name: string, args: unknown): unknown => mockRpc(name, args),
   },
 }));
 
@@ -97,9 +99,10 @@ function makeSelectChain(table?: string): Record<string, unknown> {
     select: jest.fn(() => chain),
     eq: jest.fn(() => chain),
     gt: jest.fn(() => chain),
+    lte: jest.fn(() => chain),
     or: jest.fn(() => chain),
-    order: jest.fn(() => Promise.resolve(getSelectResult(table))),
-    in: jest.fn(() => Promise.resolve(getSelectResult(table))),
+    order: jest.fn(() => chain),
+    in: jest.fn(() => chain),
     then: (
       resolve: (value: SupabaseResult) => unknown,
       reject?: (reason: unknown) => unknown
@@ -136,6 +139,15 @@ beforeEach(() => {
   selectResult = { data: [], error: null };
   selectResultsByTable = {};
   mockGetCurrentUserId.mockResolvedValue("current-user");
+  mockRpc.mockResolvedValue({
+    data: {
+      hasMore: false,
+      nextCursor: null,
+      rows: [],
+      upperWatermark: "2026-05-18T08:05:00.000Z",
+    },
+    error: null,
+  });
   mockSupabaseTable();
   mockForeignProfilesFetch.mockResolvedValue([]);
   mockProfileQuery.mockReturnValue({ fetch: mockForeignProfilesFetch });

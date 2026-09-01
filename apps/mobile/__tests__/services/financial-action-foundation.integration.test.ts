@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import {
+  DEFAULT_FINANCIAL_ACTION_REGISTRY,
   FINANCIAL_ACTION_ERROR_CODES,
   type FinancialActionEnvelopeV1,
   type Sha256Provider,
@@ -137,12 +138,26 @@ import {
   type FinancialActionLinkedOperationPlan,
   type FinancialActionLinkedOperationPreparedOwnershipInput,
   FINANCIAL_ACTION_FOUNDATION_ERROR_CODES,
+  createFinancialActionFoundationRepository,
+  createFinancialActionGroup as createProductionFinancialActionGroup,
+  getFinancialActionGroup as getProductionFinancialActionGroup,
+} from "../../services/financial-action-foundation-repository";
+
+const testRepository = createFinancialActionFoundationRepository({
+  database: jest.requireMock("@monyvi/db").database,
+  getCurrentUserDataScope: jest.requireMock("../../services/user-data-access")
+    .getCurrentUserDataScope,
+  assertExpectedCurrentUser: jest.requireMock("../../services/user-data-access")
+    .assertExpectedCurrentUser,
+  registry: DEFAULT_FINANCIAL_ACTION_REGISTRY,
+});
+const {
   commitFinancialActionGroupLocally,
   createFinancialActionGroup,
   getFinancialActionGroup,
   markFinancialActionGroupSyncFailed,
   retryFinancialActionGroup,
-} from "../../services/financial-action-foundation-repository";
+} = testRepository;
 
 const ACTION_ID = "018f0c7a-1234-7abc-8def-000000000001";
 const USER_ID = "018f0c7a-1234-7abc-8def-000000000003";
@@ -311,6 +326,26 @@ describe("financial action foundation repository", () => {
     expect(mockDatabaseBatch).toHaveBeenCalledTimes(1);
     expect(mockRecords[0]).not.toHaveProperty("accountId");
     expect(mockRecords[0]).not.toHaveProperty("amountMinorUnits");
+  });
+
+  it("fails closed at the production repository for the unpublished Metals Sell schema", async () => {
+    const digestUtf8 = jest.fn(sha256Provider.digestUtf8);
+
+    await expect(
+      createProductionFinancialActionGroup(input(envelope(), { digestUtf8 }))
+    ).rejects.toThrow("financial_action_unknown_definition");
+
+    expect(digestUtf8).not.toHaveBeenCalled();
+    expect(mockDatabaseWrite).not.toHaveBeenCalled();
+    expect(mockRecords).toHaveLength(0);
+  });
+
+  it("keeps stored roots readable after their creation schema leaves the approved registry", async () => {
+    await createFinancialActionGroup(input());
+
+    await expect(
+      getProductionFinancialActionGroup(ACTION_ID)
+    ).resolves.toMatchObject({ actionId: ACTION_ID, userId: USER_ID });
   });
 
   it("returns the stored root for same-user same-id same-hash replay after restart", async () => {

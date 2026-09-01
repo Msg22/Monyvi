@@ -576,6 +576,67 @@ async function deleteRowsByIds(client, table, rows) {
   );
 }
 
+const FIXTURE_INSPECTION_SELECTS = Object.freeze({
+  assets: [
+    "id",
+    "user_id",
+    "name",
+    "type",
+    "is_liquid",
+    "purchase_price",
+    "purchase_date",
+    "currency",
+    "notes",
+    "created_at",
+    "updated_at",
+    "deleted",
+    "purchase_price_decimal:purchase_price_decimal::text",
+    "purchase_currency",
+    "acquisition_action_id",
+  ].join(","),
+  asset_metals: [
+    "id",
+    "asset_id",
+    "metal_type",
+    "weight_grams",
+    "item_form",
+    "created_at",
+    "purity_fraction",
+    "deleted",
+    "updated_at",
+    "weight_grams_decimal:weight_grams_decimal::text",
+    "purity_code",
+    "purity_factor_decimal:purity_factor_decimal::text",
+    "purity_catalog_version",
+  ].join(","),
+  metal_holding_states: [
+    "id",
+    "user_id",
+    "holding_id",
+    "status",
+    "financial_revision:financial_revision::text",
+    "effective_event_id",
+    "effective_action_id",
+    "is_visible",
+    "reconciliation_state",
+    "created_at",
+    "updated_at",
+    "deleted",
+  ].join(","),
+  market_rate_observations: [
+    "id",
+    "batch_id",
+    "instrument_code",
+    "value_decimal:value_decimal::text",
+    "unit",
+    "orientation",
+    "provider_observed_at",
+    "source",
+    "quality",
+    "created_at",
+  ].join(","),
+});
+
 async function selectRowsByIds(client, table, rows) {
   const ids = rows.map((row) => row.id);
   if (ids.length === 0) {
@@ -583,7 +644,10 @@ async function selectRowsByIds(client, table, rows) {
   }
 
   const result = await assertNoError(
-    await client.from(table).select("*").in("id", ids),
+    await client
+      .from(table)
+      .select(FIXTURE_INSPECTION_SELECTS[table] ?? "*")
+      .in("id", ids),
     `inspect ${table}`
   );
   return result.data ?? [];

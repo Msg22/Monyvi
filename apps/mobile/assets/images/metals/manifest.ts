@@ -103,11 +103,32 @@ export const METAL_RENDER_MANIFEST: Readonly<Record<MetalRenderKey, MetalRenderE
   });
 
 const UNKNOWN_RENDER_ENTRY = neutralEntry("unknown", "unknown");
+const NEUTRAL_RENDER_ENTRIES: Readonly<Record<MetalRenderMetal, MetalRenderNeutralEntry>> =
+  Object.freeze({
+    gold: neutralEntry("gold", "unknown"),
+    silver: neutralEntry("silver", "unknown"),
+  });
+
+function isMetalRenderMetal(value: unknown): value is MetalRenderMetal {
+  return (
+    typeof value === "string" &&
+    (METAL_RENDER_METALS as readonly string[]).includes(value)
+  );
+}
+
+function isMetalRenderForm(value: unknown): value is MetalRenderForm {
+  return (
+    typeof value === "string" &&
+    (METAL_RENDER_FORMS as readonly string[]).includes(value)
+  );
+}
 
 export function getMetalRenderEntry(
-  metal: MetalRenderMetal,
-  form: MetalRenderForm
+  metal: unknown,
+  form: unknown
 ): MetalRenderEntry {
+  if (!isMetalRenderMetal(metal)) return UNKNOWN_RENDER_ENTRY;
+  if (!isMetalRenderForm(form)) return NEUTRAL_RENDER_ENTRIES[metal];
   const key = `${metal}:${form}` as MetalRenderKey;
-  return METAL_RENDER_MANIFEST[key] ?? UNKNOWN_RENDER_ENTRY;
+  return METAL_RENDER_MANIFEST[key] ?? NEUTRAL_RENDER_ENTRIES[metal];
 }

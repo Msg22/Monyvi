@@ -1,8 +1,9 @@
 import {
-  createFinancialActionRegistry,
   type FinancialActionEnvelopeV1,
   type FinancialActionRegistry,
 } from "@monyvi/logic";
+
+import { APPROVED_FINANCIAL_ACTION_REGISTRY } from "./financial-action-approved-registry";
 
 export const METAL_ACTION_KINDS = [
   "add",
@@ -46,7 +47,7 @@ export function incrementCanonicalMetalRevision(value: string): string {
 }
 
 export const METAL_FINANCIAL_ACTION_REGISTRY: FinancialActionRegistry =
-  createFinancialActionRegistry([]);
+  APPROVED_FINANCIAL_ACTION_REGISTRY;
 
 export function createMetalFinancialActionEnvelope(
   input: CreateMetalFinancialActionEnvelopeInput

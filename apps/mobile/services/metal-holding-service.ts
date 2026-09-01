@@ -13,14 +13,7 @@
  * @module metal-holding-service
  */
 
-import {
-  Asset,
-  AssetMetal,
-  database,
-  type CurrencyType,
-  type MetalType,
-} from "@monyvi/db";
-import { getCurrentUserDataScope } from "@/services/user-data-access";
+import type { Asset, CurrencyType, MetalType } from "@monyvi/db";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,38 +47,9 @@ interface CreateMetalHoldingData {
   readonly notes?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const MIN_PURITY_FRACTION = 0;
-const MAX_PURITY_FRACTION = 1;
-
-// ---------------------------------------------------------------------------
-// Validation
-// ---------------------------------------------------------------------------
-
-/**
- * Validates the input data for creating a metal holding.
- * Throws a descriptive error if any domain rule is violated.
- */
-function validateCreateMetalHoldingData(data: CreateMetalHoldingData): void {
-  if (data.name.trim().length === 0) {
-    throw new Error("Holding name is required");
-  }
-  if (data.weightGrams <= 0) {
-    throw new Error("Weight must be greater than 0");
-  }
-  if (data.purchasePrice < 0) {
-    throw new Error("Purchase price cannot be negative");
-  }
-  if (
-    data.purityFraction <= MIN_PURITY_FRACTION ||
-    data.purityFraction > MAX_PURITY_FRACTION
-  ) {
-    throw new Error("Purity fraction must be in the range (0, 1]");
-  }
-}
+export const METAL_HOLDING_ERROR_CODES = {
+  ACTION_WRITER_NOT_READY: "metal_holding_action_writer_not_ready",
+} as const;
 
 // ---------------------------------------------------------------------------
 // Service Functions
@@ -100,43 +64,9 @@ function validateCreateMetalHoldingData(data: CreateMetalHoldingData): void {
  * @throws Error if user is not authenticated, validation fails, or if the write fails
  */
 async function createMetalHolding(
-  data: CreateMetalHoldingData
+  _data: CreateMetalHoldingData
 ): Promise<Asset> {
-  validateCreateMetalHoldingData(data);
-
-  const scope = await getCurrentUserDataScope();
-
-  const assetsCollection = database.get<Asset>("assets");
-  const assetMetalsCollection = database.get<AssetMetal>("asset_metals");
-
-  const newAsset = await database.write(async () => {
-    // 1. Create the parent Asset record
-    const asset = await assetsCollection.create((record) => {
-      record.userId = scope.userId;
-      record.name = data.name.trim();
-      record.type = "METAL";
-      record.purchasePrice = data.purchasePrice;
-      record.purchaseDate = data.purchaseDate;
-      record.currency = data.currency;
-      record.isLiquid = false;
-      record.deleted = false;
-      record.notes = data.notes;
-    });
-
-    // 2. Create the child AssetMetal record linked to the parent
-    await assetMetalsCollection.create((record) => {
-      record.assetId = asset.id;
-      record.metalType = data.metalType;
-      record.weightGrams = data.weightGrams;
-      record.purityFraction = data.purityFraction;
-      record.itemForm = data.itemForm;
-      record.deleted = false;
-    });
-
-    return asset;
-  });
-
-  return newAsset;
+  throw new Error(METAL_HOLDING_ERROR_CODES.ACTION_WRITER_NOT_READY);
 }
 
 export { createMetalHolding };

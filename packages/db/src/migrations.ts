@@ -15,6 +15,159 @@ import {
   schemaMigrations,
 } from "@nozbe/watermelondb/Schema/migrations";
 
+const APPROVED_METALS_FIAT_SQL = `
+  'EGP', 'SAR', 'AED', 'KWD', 'QAR', 'BHD', 'OMR', 'JOD', 'IQD',
+  'LYD', 'TND', 'MAD', 'DZD', 'USD', 'EUR', 'GBP', 'JPY', 'CHF',
+  'CNY', 'INR', 'KRW', 'KPW', 'SGD', 'HKD', 'MYR', 'AUD', 'NZD',
+  'CAD', 'SEK', 'NOK', 'DKK', 'ISK', 'TRY', 'RUB', 'ZAR'
+`;
+
+const LOCAL_GOLD_PURITY_CODE_SQL = `case
+  when "purity_fraction" = 0.9999 then 'gold-9999'
+  when "purity_fraction" = 0.999 then 'gold-999'
+  when "purity_fraction" = 0.995 then 'gold-995'
+  when "purity_fraction" = 0.97916 then 'gold-97916'
+  when "purity_fraction" in ((22.0 / 24.0), 0.9167) then 'gold-9167'
+  when "purity_fraction" = 0.875 then 'gold-875'
+  when "purity_fraction" = 0.75 then 'gold-750'
+  when "purity_fraction" in ((14.0 / 24.0), 0.5833, 0.58333) then 'gold-58333'
+  when "purity_fraction" = 0.5 then 'gold-500'
+  when "purity_fraction" = 0.375 then 'gold-375'
+  else null end`;
+
+const LOCAL_GOLD_PURITY_FACTOR_SQL = `case
+  when "purity_fraction" = 0.9999 then '0.9999'
+  when "purity_fraction" = 0.999 then '0.999'
+  when "purity_fraction" = 0.995 then '0.995'
+  when "purity_fraction" = 0.97916 then '0.97916'
+  when "purity_fraction" in ((22.0 / 24.0), 0.9167) then '0.9167'
+  when "purity_fraction" = 0.875 then '0.875'
+  when "purity_fraction" = 0.75 then '0.75'
+  when "purity_fraction" in ((14.0 / 24.0), 0.5833, 0.58333) then '0.58333'
+  when "purity_fraction" = 0.5 then '0.5'
+  when "purity_fraction" = 0.375 then '0.375'
+  else null end`;
+
+const LOCAL_SILVER_PURITY_CODE_SQL = `case
+  when "purity_fraction" = 0.9999 then 'silver-9999'
+  when "purity_fraction" = 0.999 then 'silver-999'
+  when "purity_fraction" = 0.925 then 'silver-925'
+  when "purity_fraction" = 0.9 then 'silver-900'
+  when "purity_fraction" = 0.8 then 'silver-800'
+  when "purity_fraction" = 0.6 then 'silver-600'
+  else null end`;
+
+const LOCAL_SILVER_PURITY_FACTOR_SQL = `case
+  when "purity_fraction" = 0.9999 then '0.9999'
+  when "purity_fraction" = 0.999 then '0.999'
+  when "purity_fraction" = 0.925 then '0.925'
+  when "purity_fraction" = 0.9 then '0.9'
+  when "purity_fraction" = 0.8 then '0.8'
+  when "purity_fraction" = 0.6 then '0.6'
+  else null end`;
+
+const LOCAL_PURITY_CODE_SQL = `case
+  when "metal_type" = 'GOLD' then ${LOCAL_GOLD_PURITY_CODE_SQL}
+  when "metal_type" = 'SILVER' then ${LOCAL_SILVER_PURITY_CODE_SQL}
+  else null end`;
+
+const LOCAL_PURITY_FACTOR_SQL = `case
+  when "metal_type" = 'GOLD' then ${LOCAL_GOLD_PURITY_FACTOR_SQL}
+  when "metal_type" = 'SILVER' then ${LOCAL_SILVER_PURITY_FACTOR_SQL}
+  else null end`;
+
+export const METALS_V27_BACKFILL_SQL = `
+update "assets"
+set "purchase_price_decimal" = case
+      when "purchase_price_decimal" is null
+        and "purchase_price" > 0
+        and lower(cast("purchase_price" as text)) not like '%e%'
+        and (
+          instr(cast("purchase_price" as text), '.') = 0
+          or length(rtrim(
+            substr(
+              cast("purchase_price" as text),
+              instr(cast("purchase_price" as text), '.') + 1
+            ),
+            '0'
+          )) <= 2
+        )
+        then cast("purchase_price" as text)
+      else "purchase_price_decimal"
+    end,
+    "purchase_currency" = case
+      when "purchase_currency" is null
+        and "currency" in (${APPROVED_METALS_FIAT_SQL})
+        then "currency"
+      else "purchase_currency"
+    end
+where "id" in (
+  select "asset_id"
+  from "asset_metals"
+  where "metal_type" in ('GOLD', 'SILVER')
+);
+
+update "asset_metals"
+set "weight_grams_decimal" = case
+      when "weight_grams_decimal" is null
+        and "weight_grams" > 0
+        and lower(cast("weight_grams" as text)) not like '%e%'
+        and (
+          instr(cast("weight_grams" as text), '.') = 0
+          or length(rtrim(
+            substr(
+              cast("weight_grams" as text),
+              instr(cast("weight_grams" as text), '.') + 1
+            ),
+            '0'
+          )) <= 3
+        )
+        then cast("weight_grams" as text)
+      else "weight_grams_decimal"
+    end,
+    "purity_code" = case
+      when "purity_code" is null
+        and "purity_factor_decimal" is null
+        and "purity_catalog_version" is null
+        then ${LOCAL_PURITY_CODE_SQL}
+      else "purity_code"
+    end,
+    "purity_factor_decimal" = case
+      when "purity_code" is null
+        and "purity_factor_decimal" is null
+        and "purity_catalog_version" is null
+        then ${LOCAL_PURITY_FACTOR_SQL}
+      else "purity_factor_decimal"
+    end,
+    "purity_catalog_version" = case
+      when "purity_code" is null
+        and "purity_factor_decimal" is null
+        and "purity_catalog_version" is null
+        and (${LOCAL_PURITY_CODE_SQL}) is not null
+        then '1'
+      else "purity_catalog_version"
+    end
+where "metal_type" in ('GOLD', 'SILVER');
+
+insert into "metal_holding_states" (
+  "id", "user_id", "holding_id", "status", "financial_revision",
+  "effective_event_id", "effective_action_id", "is_visible",
+  "reconciliation_state", "created_at", "updated_at", "deleted",
+  "_status", "_changed"
+)
+select
+  "assets"."id",
+  "assets"."user_id", "assets"."id", 'active', '0', null, null, 1,
+  'accepted', "assets"."created_at", "assets"."updated_at", "assets"."deleted",
+  'created', ''
+from "assets"
+join "asset_metals" on "asset_metals"."asset_id" = "assets"."id"
+where "asset_metals"."metal_type" in ('GOLD', 'SILVER')
+  and not exists (
+    select 1 from "metal_holding_states"
+    where "metal_holding_states"."holding_id" = "assets"."id"
+  );`;
+
 export const migrations = schemaMigrations({
   migrations: [
     {
@@ -532,60 +685,7 @@ end;`
             { name: "purity_catalog_version", type: "string", isOptional: true },
           ],
         }),
-        unsafeExecuteSql(
-          `update "assets"
-set "purchase_price_decimal" = case
-      when "purchase_price_decimal" is null and "purchase_price" > 0
-        then cast("purchase_price" as text)
-      else "purchase_price_decimal"
-    end,
-    "purchase_currency" = case
-      when "purchase_currency" is null and length("currency") = 3 then "currency"
-      else "purchase_currency"
-    end
-where "id" in (
-select "asset_id" from "asset_metals" where "metal_type" in ('GOLD', 'SILVER')
-);`
-        ),
-        unsafeExecuteSql(
-          `update "asset_metals"
-set "weight_grams_decimal" = case
-      when "weight_grams_decimal" is null and "weight_grams" > 0
-        then cast("weight_grams" as text)
-      else "weight_grams_decimal"
-    end,
-    "purity_code" = coalesce("purity_code", case
-when "metal_type" = 'GOLD' and "purity_fraction" = 0.9999 then 'gold-9999'
-when "metal_type" = 'GOLD' and "purity_fraction" = 0.999 then 'gold-999'
-when "metal_type" = 'GOLD' and "purity_fraction" = 0.995 then 'gold-995'
-when "metal_type" = 'GOLD' and "purity_fraction" = 0.97916 then 'gold-97916'
-when "metal_type" = 'GOLD' and "purity_fraction" = 0.9167 then 'gold-9167'
-when "metal_type" = 'GOLD' and "purity_fraction" = 0.875 then 'gold-875'
-when "metal_type" = 'GOLD' and "purity_fraction" = 0.75 then 'gold-750'
-when "metal_type" = 'GOLD' and "purity_fraction" = 0.58333 then 'gold-58333'
-when "metal_type" = 'GOLD' and "purity_fraction" = 0.5 then 'gold-500'
-when "metal_type" = 'GOLD' and "purity_fraction" = 0.375 then 'gold-375'
-when "metal_type" = 'SILVER' and "purity_fraction" = 0.9999 then 'silver-9999'
-when "metal_type" = 'SILVER' and "purity_fraction" = 0.999 then 'silver-999'
-when "metal_type" = 'SILVER' and "purity_fraction" = 0.925 then 'silver-925'
-when "metal_type" = 'SILVER' and "purity_fraction" = 0.9 then 'silver-900'
-when "metal_type" = 'SILVER' and "purity_fraction" = 0.8 then 'silver-800'
-when "metal_type" = 'SILVER' and "purity_fraction" = 0.6 then 'silver-600'
-      else null end),
-    "purity_factor_decimal" = coalesce("purity_factor_decimal", case
-      when "purity_fraction" in (
-        0.9999, 0.999, 0.995, 0.97916, 0.9167, 0.875, 0.75,
-        0.58333, 0.5, 0.375, 0.925, 0.9, 0.8, 0.6
-      ) then cast("purity_fraction" as text)
-      else null end),
-    "purity_catalog_version" = coalesce("purity_catalog_version", case
-      when "purity_fraction" in (
-        0.9999, 0.999, 0.995, 0.97916, 0.9167, 0.875, 0.75,
-        0.58333, 0.5, 0.375, 0.925, 0.9, 0.8, 0.6
-      ) then '1'
-      else null end)
-where "metal_type" in ('GOLD', 'SILVER');`
-        ),
+        unsafeExecuteSql(METALS_V27_BACKFILL_SQL),
         createTable({
           name: "metal_holding_states",
           columns: [
@@ -648,7 +748,7 @@ where "metal_type" in ('GOLD', 'SILVER');`
             { name: "unit", type: "string" },
             { name: "orientation", type: "string" },
             { name: "provider_observed_at", type: "number", isOptional: true },
-            { name: "source", type: "string" },
+            { name: "source", type: "string", isOptional: true },
             { name: "quality", type: "string" },
             { name: "captured_freshness", type: "string" },
             { name: "captured_at", type: "number" },
@@ -666,7 +766,7 @@ where "metal_type" in ('GOLD', 'SILVER');`
             { name: "unit", type: "string" },
             { name: "orientation", type: "string" },
             { name: "provider_observed_at", type: "number", isOptional: true },
-            { name: "source", type: "string" },
+            { name: "source", type: "string", isOptional: true },
             { name: "quality", type: "string" },
             { name: "created_at", type: "number" },
           ],
@@ -682,26 +782,6 @@ where "metal_type" in ('GOLD', 'SILVER');`
         ),
         unsafeExecuteSql(
           'create unique index if not exists "metal_rate_references_user_action_role_unique" on "metal_rate_references" ("user_id", "action_id", "role");'
-        ),
-        unsafeExecuteSql(
-          `insert into "metal_holding_states" (
-  "id", "user_id", "holding_id", "status", "financial_revision",
-  "effective_event_id", "effective_action_id", "is_visible",
-  "reconciliation_state", "created_at", "updated_at", "deleted",
-  "_status", "_changed"
-)
-select
-  "assets"."id",
-  "assets"."user_id", "assets"."id", 'active', '0', null, null, 1,
-  'accepted', "assets"."created_at", "assets"."updated_at", "assets"."deleted",
-  'created', ''
-from "assets"
-join "asset_metals" on "asset_metals"."asset_id" = "assets"."id"
-where "asset_metals"."metal_type" in ('GOLD', 'SILVER')
-  and not exists (
-    select 1 from "metal_holding_states"
-    where "metal_holding_states"."holding_id" = "assets"."id"
-  );`
         ),
       ],
     },
