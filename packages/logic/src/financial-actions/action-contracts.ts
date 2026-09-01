@@ -342,6 +342,19 @@ export function canonicalizeFinancialActionEnvelope(
   if (value.payloadVersion === "account.balance-effects/v1") {
     const accountEffects = payload.accountEffects;
     const domainRecordRefs = payload.domainRecordRefs;
+    const operationCode = payload.operationCode;
+    const mutationRecords = (
+      payload.domainMutation as
+        | {
+            readonly records?: ReadonlyArray<{
+              readonly after?: Readonly<Record<string, CanonicalJsonValue>>;
+            }>;
+          }
+        | undefined
+    )?.records;
+    const requiresFirstRecordRoot =
+      operationCode === "recurring.pay-now" ||
+      operationCode === "sms.review-durable";
     if (
       accountGuards.length === 0 ||
       !Array.isArray(accountEffects) ||
@@ -352,7 +365,9 @@ export function canonicalizeFinancialActionEnvelope(
           effect.accountId !== accountGuards[index]?.accountId
       ) ||
       !Array.isArray(domainRecordRefs) ||
-      !domainRecordRefs.includes(value.domainReferenceId)
+      !domainRecordRefs.includes(value.domainReferenceId) ||
+      (requiresFirstRecordRoot &&
+        mutationRecords?.[0]?.after?.id !== value.domainReferenceId)
     ) {
       fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
     }

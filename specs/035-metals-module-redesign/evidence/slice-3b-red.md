@@ -116,6 +116,37 @@ Result: 121/121 predecessor assertions passed (66 foundation and 55 Metals).
 The preparatory migration preserves the frozen foundation validator and existing
 Metals fail-closed behavior.
 
+## Approved composite-writer refinement
+
+Later #242 approval added two exact `account.balance-effects/v1` variants
+without adding another public RPC or a generic table dispatcher:
+
+- `recurring.pay-now` creates its linked transaction/effect and updates only the
+  referenced recurring schedule's `next_due_date` or terminal `status`;
+- `sms.review-durable` creates the selected financial rows/effects and removes
+  only each exact referenced local SMS review draft.
+
+`sms_review_draft_items` remains local-only. Its action mutation is therefore an
+explicit local-cleanup descriptor, not a claim that Supabase stores or deletes a
+draft. The canonical payload contains the stable draft ID, owner-bound queue and
+fingerprint, full restore snapshot, and snapshot hash. The Watermelon action
+group owns local deletion and exact-once restoration during rejected-action
+reconciliation. PostgreSQL validates and hashes the descriptor but intentionally
+does not dispatch it to a table. No Supabase draft table or local `deleted`
+column is introduced.
+
+Initial focused Red evidence:
+
+```text
+packages/logic: 2/2 failed with financial_action_unknown_definition
+mobile migration static: 3/3 failed for missing tuples and dispatch rules
+```
+
+The full local/rejection/restart path remains fail-closed until its writer and
+reconciliation tests are Green. Shared migration replay and pgTAP verification
+remain part of T033 and were not run while physical-device QA owned the shared
+runtime.
+
 ## Gate
 
 T025, T026, T027, and this T028 evidence are complete for the authorized

@@ -54,7 +54,7 @@ function accountEditEnvelope(): AccountEditEnvelope {
 
 describe("account.balance-effects/v1", () => {
   it("keeps all six Metals definitions and registers every guarded writer tuple", () => {
-    expect(DEFAULT_FINANCIAL_ACTION_REGISTRY.definitions).toHaveLength(22);
+    expect(DEFAULT_FINANCIAL_ACTION_REGISTRY.definitions).toHaveLength(24);
     expect(
       DEFAULT_FINANCIAL_ACTION_REGISTRY.resolve(
         "accounts",
