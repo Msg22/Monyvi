@@ -1,6 +1,7 @@
 import {
   database,
   type Category,
+  type CurrencyType,
   type Transaction,
   type TransactionType,
 } from "@monyvi/db";
@@ -28,9 +29,17 @@ interface AccountScopedInput {
   readonly accountIds?: readonly string[];
 }
 
+interface CurrencyScopedInput extends AccountScopedInput {
+  readonly currency: CurrencyType;
+}
+
 type WatermelonWhereClause = ReturnType<typeof Q.where>;
 
-export interface MonthlyChartTransactionsInput extends AccountScopedInput {
+export interface StatsCurrencyTransactionsInput {
+  readonly userId: string;
+}
+
+export interface MonthlyChartTransactionsInput extends CurrencyScopedInput {
   readonly months: number;
   readonly type: TransactionType;
 }
@@ -40,12 +49,17 @@ export interface MonthlyChartDataInput {
   readonly type: TransactionType;
 }
 
-export interface CategoryBreakdownSourcesInput extends AccountScopedInput {
+export interface CategoryBreakdownSourcesInput extends CurrencyScopedInput {
   readonly year: number;
   readonly month: number;
 }
 
-export interface ComparisonTransactionsInput extends AccountScopedInput {
+export interface CategoryDrilldownTransactionsInput extends CurrencyScopedInput {
+  readonly year: number;
+  readonly month: number;
+}
+
+export interface ComparisonTransactionsInput extends CurrencyScopedInput {
   readonly type: "mom" | "yoy";
   readonly year?: number;
   readonly month?: number;
@@ -61,12 +75,22 @@ export interface CategoryBreakdownSourceQueries {
   readonly categoriesQuery: Query<Category>;
 }
 
-export interface MonthlySummaryTransactionsInput extends AccountScopedInput {
+export interface MonthlySummaryTransactionsInput extends CurrencyScopedInput {
   readonly months: number;
 }
 
 export interface MonthlySummariesInput {
   readonly months: number;
+}
+
+export function observeStatsCurrencyTransactions(
+  input: StatsCurrencyTransactionsInput
+): Query<Transaction> {
+  return queryOwned(
+    transactionsCollection(),
+    input.userId,
+    Q.where("deleted", false)
+  );
 }
 
 export function observeMonthlyChartTransactions(
@@ -81,6 +105,7 @@ export function observeMonthlyChartTransactions(
     Q.where("deleted", false),
     Q.where("date", Q.gte(startDate)),
     Q.where("type", input.type),
+    Q.where("currency", input.currency),
     ...getAccountConditions(input.accountIds)
   );
 }
@@ -100,6 +125,7 @@ export function observeCategoryBreakdownSources(
       Q.where("deleted", false),
       Q.where("date", Q.gte(startDate)),
       Q.where("date", Q.lte(endDate)),
+      Q.where("currency", input.currency),
       ...getAccountConditions(input.accountIds)
     ),
     categoriesQuery: queryAccessibleCategories(
@@ -108,6 +134,26 @@ export function observeCategoryBreakdownSources(
       Q.where("deleted", false)
     ),
   };
+}
+
+export function observeCategoryDrilldownTransactions(
+  input: CategoryDrilldownTransactionsInput
+): Query<Transaction> {
+  const { startDate, endDate } = getYearMonthBoundaries(
+    input.year,
+    input.month
+  );
+
+  return queryOwned(
+    transactionsCollection(),
+    input.userId,
+    Q.where("deleted", false),
+    Q.where("date", Q.gte(startDate)),
+    Q.where("date", Q.lte(endDate)),
+    Q.where("type", "EXPENSE"),
+    Q.where("currency", input.currency),
+    ...getAccountConditions(input.accountIds)
+  );
 }
 
 export function observeComparisonTransactions(
@@ -123,6 +169,7 @@ export function observeComparisonTransactions(
   );
   const baseConditions = [
     Q.where("deleted", false),
+    Q.where("currency", input.currency),
     ...getAccountConditions(input.accountIds),
   ];
 
@@ -154,8 +201,27 @@ export function observeMonthlySummaryTransactions(
     input.userId,
     Q.where("deleted", false),
     Q.where("date", Q.gte(getRollingMonthStart(input.months))),
+    Q.where("currency", input.currency),
     ...getAccountConditions(input.accountIds)
   );
+}
+
+export function buildStatsCurrencies(
+  transactions: readonly Transaction[],
+  preferredCurrency: CurrencyType
+): CurrencyType[] {
+  const currencies = Array.from(
+    new Set(transactions.map((transaction) => transaction.currency))
+  ).sort();
+
+  if (!currencies.includes(preferredCurrency)) {
+    return currencies;
+  }
+
+  return [
+    preferredCurrency,
+    ...currencies.filter((currency) => currency !== preferredCurrency),
+  ];
 }
 
 export function buildMonthlyChartData(
