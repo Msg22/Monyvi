@@ -1,6 +1,7 @@
 import type { Transaction } from "@monyvi/db";
 
 const mockTransactionsCollection = { table: "transactions" };
+const mockCategoriesCollection = { table: "categories" };
 const mockTransactionsQuery = { kind: "transactions-query" };
 const mockCategoriesQuery = { kind: "categories-query" };
 const mockQueryOwned = jest.fn(() => mockTransactionsQuery);
@@ -14,7 +15,11 @@ interface QueryCondition {
 
 jest.mock("@monyvi/db", () => ({
   database: {
-    get: (tableName: string): unknown => ({ table: tableName }),
+    get: (tableName: string): unknown => {
+      if (tableName === "transactions") return mockTransactionsCollection;
+      if (tableName === "categories") return mockCategoriesCollection;
+      throw new Error(`Unexpected table: ${tableName}`);
+    },
   },
 }));
 
@@ -81,18 +86,14 @@ describe("Stats currency query contract", () => {
       months: 6,
       type: "EXPENSE",
       currency: "USD",
-    } as unknown as Parameters<
-      typeof analyticsService.observeMonthlyChartTransactions
-    >[0]);
+    });
     expectLastOwnedQueryToUseCurrency("USD");
 
     analyticsService.observeMonthlySummaryTransactions({
       userId: "user-1",
       months: 3,
       currency: "USD",
-    } as unknown as Parameters<
-      typeof analyticsService.observeMonthlySummaryTransactions
-    >[0]);
+    });
     expectLastOwnedQueryToUseCurrency("USD");
 
     analyticsService.observeCategoryBreakdownSources({
@@ -100,9 +101,7 @@ describe("Stats currency query contract", () => {
       year: 2026,
       month: 5,
       currency: "USD",
-    } as unknown as Parameters<
-      typeof analyticsService.observeCategoryBreakdownSources
-    >[0]);
+    });
     expectLastOwnedQueryToUseCurrency("USD");
 
     analyticsService.observeComparisonTransactions({
@@ -111,9 +110,7 @@ describe("Stats currency query contract", () => {
       year: 2026,
       month: 5,
       currency: "USD",
-    } as unknown as Parameters<
-      typeof analyticsService.observeComparisonTransactions
-    >[0]);
+    });
     const comparisonCalls = mockQueryOwned.mock.calls.slice(-2) as ReadonlyArray<
       readonly unknown[]
     >;
@@ -123,19 +120,8 @@ describe("Stats currency query contract", () => {
     );
   });
 
-  it("exposes currency-scoped drilldown and unfiltered currency-source queries", () => {
-    const service = analyticsService as unknown as Record<string, unknown>;
-    const observeDrilldown = service.observeCategoryDrilldownTransactions;
-    const observeCurrencies = service.observeStatsCurrencyTransactions;
-
-    expect(typeof observeDrilldown).toBe("function");
-    expect(typeof observeCurrencies).toBe("function");
-
-    if (typeof observeDrilldown !== "function" || typeof observeCurrencies !== "function") {
-      return;
-    }
-
-    (observeDrilldown as (input: unknown) => unknown)({
+  it("uses a currency-scoped drilldown query and an unfiltered currency-source query", () => {
+    analyticsService.observeCategoryDrilldownTransactions({
       userId: "user-1",
       year: 2026,
       month: 5,
@@ -144,7 +130,7 @@ describe("Stats currency query contract", () => {
     expectLastOwnedQueryToUseCurrency("EUR");
 
     mockQueryOwned.mockClear();
-    (observeCurrencies as (input: unknown) => unknown)({ userId: "user-1" });
+    analyticsService.observeStatsCurrencyTransactions({ userId: "user-1" });
     expect(mockQueryOwned).toHaveBeenCalledWith(
       mockTransactionsCollection,
       "user-1",
@@ -153,29 +139,25 @@ describe("Stats currency query contract", () => {
   });
 
   it("derives unique transaction currencies with preferred currency first", () => {
-    const service = analyticsService as unknown as Record<string, unknown>;
-    const buildStatsCurrencies = service.buildStatsCurrencies;
-
-    expect(typeof buildStatsCurrencies).toBe("function");
-    if (typeof buildStatsCurrencies !== "function") {
-      return;
-    }
-
     expect(
-      (buildStatsCurrencies as (
-        transactions: readonly Transaction[],
-        preferredCurrency: string
-      ) => readonly string[])(
-        [transaction("USD"), transaction("EGP"), transaction("USD"), transaction("EUR")],
+      analyticsService.buildStatsCurrencies(
+        [
+          transaction("USD"),
+          transaction("EGP"),
+          transaction("USD"),
+          transaction("EUR"),
+        ],
         "EGP"
       )
     ).toEqual(["EGP", "EUR", "USD"]);
 
     expect(
-      (buildStatsCurrencies as (
-        transactions: readonly Transaction[],
-        preferredCurrency: string
-      ) => readonly string[])([transaction("USD"), transaction("EUR")], "EGP")
+      analyticsService.buildStatsCurrencies(
+        [transaction("USD"), transaction("EUR")],
+        "EGP"
+      )
     ).toEqual(["EUR", "USD"]);
+
+    expect(analyticsService.buildStatsCurrencies([], "EGP")).toEqual([]);
   });
 });
