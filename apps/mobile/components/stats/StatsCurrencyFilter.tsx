@@ -36,7 +36,7 @@ export function StatsCurrencyFilter({
     <View className="relative z-20">
       <View className="flex-row items-center justify-between gap-3">
         <View className="min-w-0 flex-1">
-          <Text className="text-xs font-semibold uppercase tracking-wide text-text-muted dark:text-text-muted-dark">
+          <Text className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             {t("currency")}
           </Text>
           <Text
@@ -44,7 +44,7 @@ export function StatsCurrencyFilter({
             numberOfLines={1}
             className="mt-0.5 text-sm text-text-secondary dark:text-text-secondary-dark"
           >
-            {t("stats_currency_scope", { currency: selectedCurrency })}
+            {t("transactions")} · {selectedCurrency}
           </Text>
         </View>
 
@@ -113,7 +113,7 @@ export function StatsCurrencyFilter({
                     </Text>
                     <Text
                       numberOfLines={1}
-                      className="text-xs text-text-muted dark:text-text-muted-dark"
+                      className="text-xs text-slate-500 dark:text-slate-400"
                     >
                       {item.name}
                     </Text>
