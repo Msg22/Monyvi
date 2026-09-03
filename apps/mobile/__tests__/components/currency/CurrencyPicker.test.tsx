@@ -61,4 +61,21 @@ describe("CurrencyPicker", () => {
     expect(screen.getByTestId("currency-row-highlight-EGP")).toBeOnTheScreen();
     expect(screen.queryByTestId("currency-selected-checkmark-AED")).toBeNull();
   });
+
+  it("can restrict the picker to currencies supplied by the caller", () => {
+    const props = {
+      visible: true,
+      selectedCurrency: "EGP",
+      allowedCurrencies: ["EGP", "USD"],
+      onSelect: jest.fn(),
+      onClose: jest.fn(),
+    } as unknown as React.ComponentProps<typeof CurrencyPicker>;
+
+    render(<CurrencyPicker {...props} />);
+
+    expect(screen.getByTestId("currency-code-EGP")).toBeOnTheScreen();
+    expect(screen.getByTestId("currency-code-USD")).toBeOnTheScreen();
+    expect(screen.queryByTestId("currency-code-EUR")).toBeNull();
+    expect(screen.queryByTestId("currency-code-AED")).toBeNull();
+  });
 });
