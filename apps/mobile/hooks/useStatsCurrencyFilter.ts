@@ -20,7 +20,7 @@ export function useStatsCurrencyFilter(
   preferredCurrency: CurrencyType
 ): UseStatsCurrencyFilterResult {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [selectedCurrency, setSelectedCurrency] =
+  const [requestedCurrency, setRequestedCurrency] =
     useState<CurrencyType>(preferredCurrency);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -67,24 +67,24 @@ export function useStatsCurrencyFilter(
     [transactions, preferredCurrency]
   );
 
+  const selectedCurrency = useMemo(
+    () =>
+      resolveSelectedCurrency(
+        requestedCurrency,
+        availableCurrencies,
+        preferredCurrency
+      ),
+    [requestedCurrency, availableCurrencies, preferredCurrency]
+  );
+
   useEffect(() => {
-    setSelectedCurrency((currentCurrency) => {
-      if (availableCurrencies.length === 0) {
-        return preferredCurrency;
-      }
-
-      if (availableCurrencies.includes(currentCurrency)) {
-        return currentCurrency;
-      }
-
-      return availableCurrencies[0] ?? preferredCurrency;
-    });
-  }, [availableCurrencies, preferredCurrency]);
+    setRequestedCurrency(selectedCurrency);
+  }, [selectedCurrency]);
 
   const selectCurrency = useCallback(
     (currency: CurrencyType): void => {
       if (availableCurrencies.includes(currency)) {
-        setSelectedCurrency(currency);
+        setRequestedCurrency(currency);
       }
     },
     [availableCurrencies]
@@ -97,4 +97,20 @@ export function useStatsCurrencyFilter(
     isLoading,
     error,
   };
+}
+
+function resolveSelectedCurrency(
+  requestedCurrency: CurrencyType,
+  availableCurrencies: readonly CurrencyType[],
+  preferredCurrency: CurrencyType
+): CurrencyType {
+  if (availableCurrencies.length === 0) {
+    return preferredCurrency;
+  }
+
+  if (availableCurrencies.includes(requestedCurrency)) {
+    return requestedCurrency;
+  }
+
+  return availableCurrencies[0] ?? preferredCurrency;
 }
