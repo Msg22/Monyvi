@@ -246,6 +246,7 @@ interface TransactionsTranslations {
   readonly save_partial: string;
   readonly saved_from_sms: string;
   readonly failed_to_save_transactions: string;
+
   // Recurring payments / bills
   readonly my_bills: string;
   readonly upcoming_expenses: string;
