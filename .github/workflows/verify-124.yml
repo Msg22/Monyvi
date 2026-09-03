@@ -42,8 +42,8 @@ jobs:
 
       - name: Run issue 124 focused tests
         run: >-
-          npm test -w @monyvi/mobile -- --runInBand
-          apps/mobile/__tests__/services/stats-currency-filter.test.ts
-          apps/mobile/__tests__/hooks/useStatsCurrencyFilter.test.ts
-          apps/mobile/__tests__/components/stats/StatsCurrencyFilter.test.tsx
-          apps/mobile/__tests__/app/stats-currency-filter.test.ts
+          npm test -w @monyvi/mobile -- --runInBand --runTestsByPath
+          __tests__/services/stats-currency-filter.test.ts
+          __tests__/hooks/useStatsCurrencyFilter.test.ts
+          __tests__/components/stats/StatsCurrencyFilter.test.tsx
+          __tests__/app/stats-currency-filter.test.ts
