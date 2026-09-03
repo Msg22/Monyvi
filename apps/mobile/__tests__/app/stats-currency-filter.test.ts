@@ -22,4 +22,11 @@ describe("Stats currency screen contract", () => {
 
     expect(source).not.toContain("setPreferredCurrency(");
   });
+
+  it("does not add FX conversion to the Stats screen", () => {
+    const source = read("../../app/(private)/(tabs)/stats.tsx");
+
+    expect(source).not.toContain("useMarketRates");
+    expect(source).not.toContain("getCurrencyRate");
+  });
 });
