@@ -106,7 +106,6 @@ export default function PrivateLayout(): React.ReactNode {
                         <Stack.Screen name="create-budget" />
                         <Stack.Screen name="budget-detail" />
                         <Stack.Screen name="budgets" />
-                        <Stack.Screen name="charts" />
                         <Stack.Screen name="live-rates" />
                         <Stack.Screen name="sms-scan" />
                         <Stack.Screen name="sms-review" />
