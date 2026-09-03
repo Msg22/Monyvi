@@ -1,8 +1,7 @@
-import { database, Transaction } from "@monyvi/db";
-import { getYearMonthBoundaries } from "@monyvi/logic";
-import { Q } from "@nozbe/watermelondb";
+import type { CurrencyType, Transaction } from "@monyvi/db";
 import { useEffect, useState } from "react";
-import { queryOwned } from "@/services/user-data-access";
+
+import { observeCategoryDrilldownTransactions } from "@/services/analytics-read-model-service";
 import { logger } from "@/utils/logger";
 import { runUserScopedEffect, useCurrentUser } from "./useCurrentUser";
 
@@ -14,7 +13,8 @@ interface UseCategoryDrilldownTransactionsResult {
 
 export function useCategoryDrilldownTransactions(
   year: number,
-  month: number
+  month: number,
+  currency: CurrencyType
 ): UseCategoryDrilldownTransactionsResult {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -39,15 +39,12 @@ export function useCategoryDrilldownTransactions(
         setIsLoading(true);
         setError(null);
 
-        const { startDate, endDate } = getYearMonthBoundaries(year, month);
-        const subscription = queryOwned(
-          database.get<Transaction>("transactions"),
-          currentUserId,
-          Q.where("deleted", false),
-          Q.where("date", Q.gte(startDate)),
-          Q.where("date", Q.lte(endDate)),
-          Q.where("type", "EXPENSE")
-        )
+        const subscription = observeCategoryDrilldownTransactions({
+          userId: currentUserId,
+          year,
+          month,
+          currency,
+        })
           .observe()
           .subscribe({
             next: (result) => {
@@ -68,7 +65,7 @@ export function useCategoryDrilldownTransactions(
         return () => subscription.unsubscribe();
       },
     });
-  }, [year, month, userId, isResolvingUser]);
+  }, [year, month, currency, userId, isResolvingUser]);
 
   return { transactions, isLoading, error };
 }
