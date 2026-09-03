@@ -29,7 +29,6 @@ import { useModalBottomInset } from "@/hooks/useModalBottomInset";
 interface CurrencyPickerProps {
   readonly visible: boolean;
   readonly selectedCurrency: CurrencyType;
-  readonly allowedCurrencies?: readonly CurrencyType[];
   readonly onSelect: (currency: CurrencyType) => void;
   readonly onClose: () => void;
 }
@@ -114,7 +113,6 @@ function CurrencyListSeparator(): React.JSX.Element {
  *
  * @param visible - Whether the modal is visible
  * @param selectedCurrency - Currently selected currency code shown as highlighted
- * @param allowedCurrencies - Optional caller-provided subset of selectable currencies
  * @param onSelect - Callback invoked with the selected currency code when a currency is chosen
  * @param onClose - Callback invoked to close the modal
  * @returns The React element for the currency picker modal
@@ -122,7 +120,6 @@ function CurrencyListSeparator(): React.JSX.Element {
 export function CurrencyPicker({
   visible,
   selectedCurrency,
-  allowedCurrencies,
   onSelect,
   onClose,
 }: CurrencyPickerProps): React.JSX.Element {
@@ -130,26 +127,15 @@ export function CurrencyPicker({
   const [searchQuery, setSearchQuery] = useState("");
   const { t } = useTranslation("common");
 
-  const selectableCurrencies = useMemo(() => {
-    if (!allowedCurrencies) {
-      return [...SORTED_SUPPORTED_CURRENCIES];
-    }
-
-    const allowedSet = new Set(allowedCurrencies);
-    return SORTED_SUPPORTED_CURRENCIES.filter((currency) =>
-      allowedSet.has(currency.code)
-    );
-  }, [allowedCurrencies]);
-
   const filteredCurrencies = useMemo(() => {
-    if (!searchQuery.trim()) return selectableCurrencies;
+    if (!searchQuery.trim()) return [...SORTED_SUPPORTED_CURRENCIES];
     const query = searchQuery.toLowerCase();
-    return selectableCurrencies.filter(
+    return SORTED_SUPPORTED_CURRENCIES.filter(
       (c) =>
         c.code.toLowerCase().includes(query) ||
         c.name.toLowerCase().includes(query)
     );
-  }, [searchQuery, selectableCurrencies]);
+  }, [searchQuery]);
 
   const handleSelect = useCallback(
     (currency: CurrencyType) => {
