@@ -4,8 +4,12 @@ const mockTransactionsCollection = { table: "transactions" };
 const mockCategoriesCollection = { table: "categories" };
 const mockTransactionsQuery = { kind: "transactions-query" };
 const mockCategoriesQuery = { kind: "categories-query" };
-const mockQueryOwned = jest.fn(() => mockTransactionsQuery);
-const mockQueryAccessibleCategories = jest.fn(() => mockCategoriesQuery);
+const mockQueryOwned = jest.fn(
+  (..._args: readonly unknown[]) => mockTransactionsQuery
+);
+const mockQueryAccessibleCategories = jest.fn(
+  (..._args: readonly unknown[]) => mockCategoriesQuery
+);
 
 interface QueryCondition {
   readonly kind: "where" | "gte" | "lte" | "oneOf";
