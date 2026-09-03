@@ -95,7 +95,6 @@ interface CommonTranslations {
   readonly continue: string;
   readonly select: string;
   readonly coming_soon: string;
-  readonly charts_subtitle: string;
   readonly all_categories: string;
 
   // Startup recovery screen (feature 024). Declared here — NOT in
@@ -247,7 +246,6 @@ interface TransactionsTranslations {
   readonly save_partial: string;
   readonly saved_from_sms: string;
   readonly failed_to_save_transactions: string;
-
   // Recurring payments / bills
   readonly my_bills: string;
   readonly upcoming_expenses: string;
