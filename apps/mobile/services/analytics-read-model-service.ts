@@ -30,7 +30,7 @@ interface AccountScopedInput {
 }
 
 interface CurrencyScopedInput extends AccountScopedInput {
-  readonly currency: CurrencyType;
+  readonly currency?: CurrencyType;
 }
 
 type WatermelonWhereClause = ReturnType<typeof Q.where>;
@@ -105,7 +105,7 @@ export function observeMonthlyChartTransactions(
     Q.where("deleted", false),
     Q.where("date", Q.gte(startDate)),
     Q.where("type", input.type),
-    Q.where("currency", input.currency),
+    ...getCurrencyConditions(input.currency),
     ...getAccountConditions(input.accountIds)
   );
 }
@@ -125,7 +125,7 @@ export function observeCategoryBreakdownSources(
       Q.where("deleted", false),
       Q.where("date", Q.gte(startDate)),
       Q.where("date", Q.lte(endDate)),
-      Q.where("currency", input.currency),
+      ...getCurrencyConditions(input.currency),
       ...getAccountConditions(input.accountIds)
     ),
     categoriesQuery: queryAccessibleCategories(
@@ -151,7 +151,7 @@ export function observeCategoryDrilldownTransactions(
     Q.where("date", Q.gte(startDate)),
     Q.where("date", Q.lte(endDate)),
     Q.where("type", "EXPENSE"),
-    Q.where("currency", input.currency),
+    ...getCurrencyConditions(input.currency),
     ...getAccountConditions(input.accountIds)
   );
 }
@@ -169,7 +169,7 @@ export function observeComparisonTransactions(
   );
   const baseConditions = [
     Q.where("deleted", false),
-    Q.where("currency", input.currency),
+    ...getCurrencyConditions(input.currency),
     ...getAccountConditions(input.accountIds),
   ];
 
@@ -201,7 +201,7 @@ export function observeMonthlySummaryTransactions(
     input.userId,
     Q.where("deleted", false),
     Q.where("date", Q.gte(getRollingMonthStart(input.months))),
-    Q.where("currency", input.currency),
+    ...getCurrencyConditions(input.currency),
     ...getAccountConditions(input.accountIds)
   );
 }
@@ -306,6 +306,12 @@ function assertValidMonths(months: number): void {
   if (!Number.isInteger(months) || months < 1) {
     throw new Error("months must be a positive integer");
   }
+}
+
+function getCurrencyConditions(
+  currency: CurrencyType | undefined
+): WatermelonWhereClause[] {
+  return currency ? [Q.where("currency", currency)] : [];
 }
 
 function getAccountConditions(
