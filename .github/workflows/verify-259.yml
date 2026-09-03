@@ -29,7 +29,15 @@ jobs:
         run: npm ci
         timeout-minutes: 15
 
-      - name: Run issue 259 failing contract
+      - name: Typecheck mobile
+        working-directory: apps/mobile
+        run: npx tsc --noEmit
+
+      - name: Check i18n coverage
+        working-directory: apps/mobile
+        run: npm run i18n:check
+
+      - name: Run issue 259 focused test
         run: >-
           npm test -w @monyvi/mobile -- --runInBand --runTestsByPath
           __tests__/i18n/charts-subtitle-cleanup.test.ts
