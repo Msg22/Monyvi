@@ -12,7 +12,7 @@ interface MockObserver {
 
 const observerRef: { current: MockObserver | null } = { current: null };
 const unsubscribe = jest.fn();
-const mockObserveStatsCurrencyTransactions = jest.fn(() => ({
+const mockObserveStatsCurrencyTransactions = jest.fn((_input: unknown) => ({
   observe: () => ({
     subscribe: (observer: MockObserver) => {
       observerRef.current = observer;
@@ -38,8 +38,8 @@ function mockBuildStatsCurrencies(
 }
 
 jest.mock("@/services/analytics-read-model-service", () => ({
-  observeStatsCurrencyTransactions: (...args: readonly unknown[]): unknown =>
-    mockObserveStatsCurrencyTransactions(...args),
+  observeStatsCurrencyTransactions: (input: unknown): unknown =>
+    mockObserveStatsCurrencyTransactions(input),
   buildStatsCurrencies: (
     transactions: readonly Transaction[],
     preferredCurrency: CurrencyType
