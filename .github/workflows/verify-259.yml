@@ -1,0 +1,35 @@
+name: Verify Issue 259
+
+on:
+  push:
+    branches:
+      - codex/259-remove-unused-charts-subtitle
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Charts Subtitle Cleanup Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SENTRYCLI_SKIP_DOWNLOAD: "1"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+        timeout-minutes: 15
+
+      - name: Run issue 259 failing contract
+        run: >-
+          npm test -w @monyvi/mobile -- --runInBand --runTestsByPath
+          __tests__/i18n/charts-subtitle-cleanup.test.ts
