@@ -15,8 +15,8 @@ import { palette } from "@/constants/colors";
 import { useAllCategories } from "@/context/CategoriesContext";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useCategoryDrilldownTransactions } from "@/hooks/useCategoryDrilldownTransactions";
-import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useTheme } from "@/context/ThemeContext";
+import type { CurrencyType } from "@monyvi/db";
 import { formatCurrency } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
@@ -24,13 +24,18 @@ import { Text, View } from "react-native";
 import { PieChart } from "react-native-gifted-charts";
 import { useTranslation } from "react-i18next";
 
+interface CategoryDrilldownCardProps {
+  readonly currency: CurrencyType;
+}
+
 // =============================================================================
 // Main Component
 // =============================================================================
 
-export function CategoryDrilldownCard(): React.JSX.Element {
+export function CategoryDrilldownCard({
+  currency,
+}: CategoryDrilldownCardProps): React.JSX.Element {
   const { isDark } = useTheme();
-  const { preferredCurrency } = usePreferredCurrency();
   const { t } = useTranslation("common");
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
@@ -38,7 +43,7 @@ export function CategoryDrilldownCard(): React.JSX.Element {
   // State
   const { categories, isLoading: categoriesLoading } = useAllCategories();
   const { transactions, isLoading: transactionsLoading } =
-    useCategoryDrilldownTransactions(currentYear, currentMonth);
+    useCategoryDrilldownTransactions(currentYear, currentMonth, currency);
   const [currentParentId, setCurrentParentId] = useState<string | null>(null);
   const rootBreadcrumb = useMemo<BreadcrumbItem>(
     () => ({ id: null, name: t("all_categories"), level: 0 }),
@@ -252,7 +257,7 @@ export function CategoryDrilldownCard(): React.JSX.Element {
                   <Text className="text-sm font-bold text-slate-800 dark:text-white">
                     {formatCurrency({
                       amount: totalAmount,
-                      currency: preferredCurrency,
+                      currency,
                     })}
                   </Text>
                 </View>
