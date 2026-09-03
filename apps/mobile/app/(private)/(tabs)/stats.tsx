@@ -34,13 +34,15 @@ export default function StatsScreen(): React.JSX.Element {
 
   return (
     <View className="flex-1">
-      <PageHeader title={t("stats")}>
-        <StatsCurrencyFilter
-          availableCurrencies={availableCurrencies}
-          selectedCurrency={selectedCurrency}
-          onSelectCurrency={selectCurrency}
-        />
-      </PageHeader>
+      <View className="z-30">
+        <PageHeader title={t("stats")}>
+          <StatsCurrencyFilter
+            availableCurrencies={availableCurrencies}
+            selectedCurrency={selectedCurrency}
+            onSelectCurrency={selectCurrency}
+          />
+        </PageHeader>
+      </View>
       <ScrollView
         testID="stats-scroll"
         contentContainerStyle={{
