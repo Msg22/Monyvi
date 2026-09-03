@@ -95,7 +95,6 @@ interface CommonTranslations {
   readonly continue: string;
   readonly select: string;
   readonly coming_soon: string;
-  readonly charts_subtitle: string;
   readonly all_categories: string;
 
   // Startup recovery screen (feature 024). Declared here — NOT in
