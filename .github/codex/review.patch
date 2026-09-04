@@ -1,0 +1,64 @@
+# commit-message: fix: edit the current recurring due payment
+
+diff --git a/apps/mobile/__tests__/app/recurring-payment-header-actions.test.tsx b/apps/mobile/__tests__/app/recurring-payment-header-actions.test.tsx
+index e74c3b1..3b87c88 100644
+--- a/apps/mobile/__tests__/app/recurring-payment-header-actions.test.tsx
++++ b/apps/mobile/__tests__/app/recurring-payment-header-actions.test.tsx
+@@ -58,6 +58,9 @@ jest.mock("@/components/recurring-payments", () => {
+     (
+       props: {
+         readonly status?: "ACTIVE" | "PAUSED" | "COMPLETED";
++        readonly initialValues: {
++          readonly startDate: Date;
++        };
+         readonly onSubmit: (values: {
+           readonly name: string;
+           readonly amount: string;
+@@ -85,7 +88,7 @@ jest.mock("@/components/recurring-payments", () => {
+         accountId: "account-1",
+         categoryId: "category-1",
+         frequency: "MONTHLY" as const,
+-        startDate: new Date("2026-06-01T00:00:00.000Z"),
++        startDate: props.initialValues.startDate,
+         endDate: mockFormEndDate,
+         reactivateAfterSaving: mockReactivateAfterSaving,
+         action: "NOTIFY" as const,
+@@ -435,7 +438,7 @@ describe("recurring payment header and destructive actions", () => {
+           currency: "EGP",
+           type: "EXPENSE",
+           frequency: "MONTHLY",
+-          startDate: new Date("2026-06-01T00:00:00.000Z"),
++          startDate: new Date("2026-07-01T00:00:00.000Z"),
+           endDate: null,
+           reactivateAfterSaving: false,
+           accountId: "account-1",
+diff --git a/apps/mobile/app/(private)/edit-recurring-payment.tsx b/apps/mobile/app/(private)/edit-recurring-payment.tsx
+index 7b3cd47..c4b8618 100644
+--- a/apps/mobile/app/(private)/edit-recurring-payment.tsx
++++ b/apps/mobile/app/(private)/edit-recurring-payment.tsx
+@@ -53,7 +53,7 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
+       accountId: payment.accountId,
+       categoryId: payment.categoryId,
+       frequency: payment.frequency,
+-      startDate: payment.startDate,
++      startDate: payment.nextDueDate,
+       endDate: payment.endDate ?? null,
+       reactivateAfterSaving: false,
+       action: payment.action,
+@@ -68,7 +68,7 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
+     payment?.frequency,
+     payment?.name,
+     payment?.notes,
+-    payment?.startDate,
++    payment?.nextDueDate,
+     payment?.endDate,
+     payment?.type,
+   ]);
+@@ -265,6 +265,7 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
+         allCategories={allCategories}
+         status={payment.status}
+         dueDate={payment.nextDueDate}
++        recurrenceAnchorDate={payment.startDate}
+         isSubmitting={isSubmitting}
+         submitLabel={t("save_changes")}
+         onSubmit={handleSubmit}
