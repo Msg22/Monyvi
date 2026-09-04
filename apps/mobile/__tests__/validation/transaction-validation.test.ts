@@ -1,4 +1,25 @@
+import type { CurrencyType, TransactionType } from "@monyvi/db";
 import { validateTransactionForm } from "@/validation/transaction-validation";
+
+type ValidateTransactionForm = (
+  type: TransactionType | "TRANSFER",
+  data:
+    | {
+        readonly amount: string;
+        readonly accountId: string | null;
+        readonly categoryId: string;
+      }
+    | {
+        readonly amount: string;
+        readonly fromAccountId: string | null;
+        readonly toAccountId: string | null;
+      },
+  messages?: Record<string, string>,
+  options?: { readonly currency?: CurrencyType }
+) => ReturnType<typeof validateTransactionForm>;
+
+const validateWithOptions =
+  validateTransactionForm as unknown as ValidateTransactionForm;
 
 describe("validateTransactionForm", () => {
   // ---------------------------------------------------------------------------
@@ -120,6 +141,109 @@ describe("validateTransactionForm", () => {
       expect(result.errors.categoryId).toBeDefined();
     });
 
+    it("uses the shared strict amount grammar", () => {
+      expect(
+        validateWithOptions(
+          "EXPENSE",
+          { ...validPayload, amount: "1,234.50" },
+          undefined,
+          { currency: "EGP" }
+        ).isValid
+      ).toBe(true);
+
+      for (const amount of [
+        "12,5",
+        "1,23",
+        "1,2345",
+        "1e3",
+        "+5",
+        "NaN",
+        "1.2.3",
+        "12abc",
+        "12.",
+      ]) {
+        const result = validateWithOptions(
+          "EXPENSE",
+          { ...validPayload, amount },
+          undefined,
+          { currency: "EGP" }
+        );
+
+        expect(result.isValid).toBe(false);
+        expect(result.errors.amount).toBe("Please enter a valid amount");
+      }
+    });
+
+    it("uses the selected account currency precision without rounding", () => {
+      expect(
+        validateWithOptions(
+          "EXPENSE",
+          { ...validPayload, amount: "12.34" },
+          undefined,
+          { currency: "EGP" }
+        ).isValid
+      ).toBe(true);
+      expect(
+        validateWithOptions(
+          "EXPENSE",
+          { ...validPayload, amount: "12.345" },
+          undefined,
+          { currency: "EGP" }
+        ).errors.amount
+      ).toBe("Amount must have at most 2 decimal places");
+      expect(
+        validateWithOptions(
+          "EXPENSE",
+          { ...validPayload, amount: "12.345" },
+          undefined,
+          { currency: "KWD" }
+        ).isValid
+      ).toBe(true);
+      expect(
+        validateWithOptions(
+          "EXPENSE",
+          { ...validPayload, amount: "12.3456" },
+          undefined,
+          { currency: "KWD" }
+        ).errors.amount
+      ).toBe("Amount must have at most 3 decimal places");
+      expect(
+        validateWithOptions(
+          "EXPENSE",
+          { ...validPayload, amount: "0.12345678" },
+          undefined,
+          { currency: "BTC" }
+        ).isValid
+      ).toBe(true);
+      expect(
+        validateWithOptions(
+          "EXPENSE",
+          { ...validPayload, amount: "0.123456789" },
+          undefined,
+          { currency: "BTC" }
+        ).errors.amount
+      ).toBe("Amount must have at most 8 decimal places");
+    });
+
+    it("accepts the exact transaction maximum and rejects values above it", () => {
+      expect(
+        validateWithOptions(
+          "EXPENSE",
+          { ...validPayload, amount: "1,000,000,000" },
+          undefined,
+          { currency: "EGP" }
+        ).isValid
+      ).toBe(true);
+      expect(
+        validateWithOptions(
+          "EXPENSE",
+          { ...validPayload, amount: "1000000000.01" },
+          undefined,
+          { currency: "EGP" }
+        ).errors.amount
+      ).toBe("Amount must be at most 1,000,000,000");
+    });
+
     it("should accept decimal amounts", () => {
       const result = validateTransactionForm("EXPENSE", {
         ...validPayload,
@@ -173,6 +297,18 @@ describe("validateTransactionForm", () => {
       });
       expect(result.isValid).toBe(false);
       expect(result.errors.amount).toBe("Amount must be greater than 0");
+    });
+
+    it("rejects comma-decimal input in transfers", () => {
+      const result = validateWithOptions(
+        "TRANSFER",
+        { ...validTransfer, amount: "12,5" },
+        undefined,
+        { currency: "EGP" }
+      );
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors.amount).toBe("Please enter a valid amount");
     });
 
     it("should fail when amount is not finite", () => {
