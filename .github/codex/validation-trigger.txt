@@ -1,1 +1,1 @@
-red-shared-amount-contract-a4d2251
+green-shared-amount-contract
