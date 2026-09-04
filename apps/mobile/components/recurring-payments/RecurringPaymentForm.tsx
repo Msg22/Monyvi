@@ -5,6 +5,7 @@ import {
   getFrequencyLabel,
 } from "@/components/modals/FrequencyPickerModal";
 import { RecurringPaymentEditActions } from "./RecurringPaymentEditActions";
+import { AmountField, TypeTabs } from "./RecurringPaymentFormFields";
 import { RecurringPaymentSummaryCard } from "./RecurringPaymentSummaryCard";
 import { Divider, ErrorText, FormRow } from "./RecurringPaymentFormRows";
 import { TextField } from "@/components/ui/TextField";
@@ -23,10 +24,8 @@ import type {
   TransactionType,
 } from "@monyvi/db";
 import {
-  formatAmountInput,
   isOnOrBeforeDay,
   MAX_TRANSACTION_AMOUNT,
-  parseAmountInput,
 } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
@@ -44,7 +43,6 @@ import {
   Platform,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -92,14 +90,6 @@ type FormErrors = Partial<
 >;
 type FormFieldName = keyof FormErrors;
 type RecurringPaymentFormField = keyof RecurringPaymentFormValues;
-const TYPE_OPTIONS: ReadonlyArray<{
-  readonly value: TransactionType;
-  readonly labelKey: "expense" | "income";
-  readonly icon: keyof typeof Ionicons.glyphMap;
-}> = [
-  { value: "EXPENSE", labelKey: "expense", icon: "receipt-outline" },
-  { value: "INCOME", labelKey: "income", icon: "cash-outline" },
-];
 const ACTION_OPTIONS: ReadonlyArray<{
   readonly value: RecurringAction;
   readonly labelKey: string;
@@ -745,65 +735,6 @@ export const RecurringPaymentForm = React.forwardRef<
   );
 });
 
-interface AmountFieldProps {
-  readonly fieldRef: React.RefObject<View | null>;
-  readonly label: string;
-  readonly value: string;
-  readonly currency: CurrencyType;
-  readonly error?: string;
-  readonly isDark: boolean;
-  readonly onFocus: () => void;
-  readonly onChangeText: (value: string) => void;
-}
-
-function AmountField({
-  fieldRef,
-  label,
-  value,
-  currency,
-  error,
-  isDark,
-  onFocus,
-  onChangeText,
-}: AmountFieldProps): React.JSX.Element {
-  return (
-    <View
-      ref={fieldRef}
-      testID="recurring-payment-amount-field"
-      className="mb-4 w-full"
-    >
-      <Text className="input-label">{label}</Text>
-      <View
-        className={`flex-row items-center rounded-2xl border bg-white dark:bg-slate-800 ${
-          error ? "border-red-500" : "border-slate-200 dark:border-slate-700"
-        }`}
-      >
-        <Text
-          testID="recurring-payment-amount-currency-prefix"
-          className="ps-4 text-base font-bold text-nileGreen-500"
-        >
-          {currency}
-        </Text>
-        <TextInput
-          testID="recurring-payment-amount-input"
-          value={formatAmountInput(value)}
-          onChangeText={(text) =>
-            onChangeText(parseAmountInput(text, value))
-          }
-          onFocus={onFocus}
-          placeholder="0.00"
-          placeholderTextColor={
-            isDark ? palette.slate[600] : palette.slate[400]
-          }
-          keyboardType="decimal-pad"
-          className="flex-1 p-4 ps-2 text-base font-semibold text-slate-900 dark:text-white"
-        />
-      </View>
-      {error ? <ErrorText>{error}</ErrorText> : null}
-    </View>
-  );
-}
-
 function getFrequencyTypeLabel(
   frequency: RecurringFrequency,
   type: TransactionType,
@@ -952,48 +883,4 @@ function toTitleCase(value: string): string {
       return lowerWord.charAt(0).toLocaleUpperCase() + lowerWord.slice(1);
     })
     .join(" ");
-}
-
-interface TypeTabsProps {
-  readonly value: TransactionType;
-  readonly onChange: (type: TransactionType) => void;
-}
-
-function TypeTabs({ value, onChange }: TypeTabsProps): React.JSX.Element {
-  const { t } = useTranslation("transactions");
-
-  return (
-    <View testID="recurring-payment-type-tabs" className="flex-row gap-3 mb-5">
-      {TYPE_OPTIONS.map((option) => {
-        const isSelected = value === option.value;
-
-        return (
-          <TouchableOpacity
-            key={option.value}
-            className={`flex-1 h-12 rounded-full flex-row items-center justify-center border ${
-              isSelected
-                ? "bg-nileGreen-500 border-nileGreen-500"
-                : "bg-slate-25 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-            }`}
-            onPress={() => onChange(option.value)}
-          >
-            <Ionicons
-              name={option.icon}
-              size={17}
-              color={isSelected ? "white" : palette.slate[500]}
-            />
-            <Text
-              className={`ms-2 text-sm font-bold ${
-                isSelected
-                  ? "text-white"
-                  : "text-text-secondary dark:text-text-secondary-dark"
-              }`}
-            >
-              {t(option.labelKey)}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
 }

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- This service suite intentionally shares one hoisted WatermelonDB mock graph. */
 const mockWrite = jest.fn();
 const mockGet = jest.fn();
 const mockCreateRecurringPayment = jest.fn();

@@ -1,7 +1,7 @@
 import type { CurrencyType } from "@monyvi/db";
 import { validateRecurringPaymentForm } from "@/validation/recurring-payment-validation";
 
-type ValidationResult = {
+interface ValidationResult {
   readonly isValid: boolean;
   readonly errors: Partial<
     Record<
@@ -14,7 +14,7 @@ type ValidationResult = {
       string
     >
   >;
-};
+}
 
 type ValidateRecurringPaymentForm = (
   data: {

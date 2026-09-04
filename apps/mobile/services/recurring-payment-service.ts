@@ -8,15 +8,15 @@ import {
 } from "@monyvi/logic";
 
 import { calculateNextDueDate } from "@/utils/dateHelpers";
-import { database } from "@monyvi/db";
-import type {
-  Account,
-  Category,
-  CurrencyType,
-  RecurringAction,
-  RecurringFrequency,
-  RecurringPayment,
-  TransactionType,
+import {
+  database,
+  type Account,
+  type Category,
+  type CurrencyType,
+  type RecurringAction,
+  type RecurringFrequency,
+  type RecurringPayment,
+  type TransactionType,
 } from "@monyvi/db";
 import { getCurrentUserDataScope } from "@/services/user-data-access";
 import {
