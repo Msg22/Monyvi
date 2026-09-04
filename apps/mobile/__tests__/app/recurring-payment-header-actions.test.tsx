@@ -58,6 +58,9 @@ jest.mock("@/components/recurring-payments", () => {
     (
       props: {
         readonly status?: "ACTIVE" | "PAUSED" | "COMPLETED";
+        readonly initialValues: {
+          readonly startDate: Date;
+        };
         readonly onSubmit: (values: {
           readonly name: string;
           readonly amount: string;
@@ -85,7 +88,7 @@ jest.mock("@/components/recurring-payments", () => {
         accountId: "account-1",
         categoryId: "category-1",
         frequency: "MONTHLY" as const,
-        startDate: new Date("2026-06-01T00:00:00.000Z"),
+        startDate: props.initialValues.startDate,
         endDate: mockFormEndDate,
         reactivateAfterSaving: mockReactivateAfterSaving,
         action: "NOTIFY" as const,
@@ -435,7 +438,7 @@ describe("recurring payment header and destructive actions", () => {
           currency: "EGP",
           type: "EXPENSE",
           frequency: "MONTHLY",
-          startDate: new Date("2026-06-01T00:00:00.000Z"),
+          startDate: new Date("2026-07-01T00:00:00.000Z"),
           endDate: null,
           reactivateAfterSaving: false,
           accountId: "account-1",

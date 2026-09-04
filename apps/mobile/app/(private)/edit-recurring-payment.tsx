@@ -53,7 +53,7 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
       accountId: payment.accountId,
       categoryId: payment.categoryId,
       frequency: payment.frequency,
-      startDate: payment.startDate,
+      startDate: payment.nextDueDate,
       endDate: payment.endDate ?? null,
       reactivateAfterSaving: false,
       action: payment.action,
@@ -68,7 +68,7 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
     payment?.frequency,
     payment?.name,
     payment?.notes,
-    payment?.startDate,
+    payment?.nextDueDate,
     payment?.endDate,
     payment?.type,
   ]);
@@ -265,6 +265,7 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
         allCategories={allCategories}
         status={payment.status}
         dueDate={payment.nextDueDate}
+        recurrenceAnchorDate={payment.startDate}
         isSubmitting={isSubmitting}
         submitLabel={t("save_changes")}
         onSubmit={handleSubmit}
