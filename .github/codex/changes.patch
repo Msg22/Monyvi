@@ -1,0 +1,175 @@
+# commit-message: feat: wire recurring validation into the form
+diff --git a/apps/mobile/components/recurring-payments/RecurringPaymentForm.tsx b/apps/mobile/components/recurring-payments/RecurringPaymentForm.tsx
+index ec8fcc8..bd1c45f 100644
+--- a/apps/mobile/components/recurring-payments/RecurringPaymentForm.tsx
++++ b/apps/mobile/components/recurring-payments/RecurringPaymentForm.tsx
+@@ -25,6 +25,7 @@ import type {
+ import {
+   formatAmountInput,
+   isOnOrBeforeDay,
++  MAX_TRANSACTION_AMOUNT,
+   parseAmountInput,
+ } from "@monyvi/logic";
+ import { Ionicons } from "@expo/vector-icons";
+@@ -83,7 +84,12 @@ interface RecurringPaymentFormProps {
+ export interface RecurringPaymentFormHandle {
+   submit: () => void;
+ }
+-type FormErrors = Partial<Record<"name" | "amount" | "accountId" | "categoryId" | "endDate", string>>;
++type FormErrors = Partial<
++  Record<
++    "name" | "amount" | "accountId" | "categoryId" | "startDate" | "endDate",
++    string
++  >
++>;
+ type FormFieldName = keyof FormErrors;
+ type RecurringPaymentFormField = keyof RecurringPaymentFormValues;
+ const TYPE_OPTIONS: ReadonlyArray<{
+@@ -116,6 +122,7 @@ const ERROR_FIELD_ORDER: readonly FormFieldName[] = [
+   "amount",
+   "accountId",
+   "categoryId",
++  "startDate",
+   "endDate",
+ ];
+ const FORM_VALUE_FIELDS: readonly RecurringPaymentFormField[] = [
+@@ -179,6 +186,7 @@ export const RecurringPaymentForm = React.forwardRef<
+   const amountFieldRef = getFieldRef("amount");
+   const accountFieldRef = getFieldRef("accountId");
+   const categoryFieldRef = getFieldRef("categoryId");
++  const startDateFieldRef = getFieldRef("startDate");
+   const endDateFieldRef = getFieldRef("endDate");
+   const initialValuesKey = useMemo(
+     () =>
+@@ -286,7 +294,11 @@ export const RecurringPaymentForm = React.forwardRef<
+       dirtyFieldsRef.current = new Set([...dirtyFieldsRef.current, field]);
+       setForm((prev) => ({ ...prev, [field]: value }));
+       if (field === "startDate") {
+-        setErrors((prev) => ({ ...prev, endDate: undefined }));
++        setErrors((prev) => ({
++          ...prev,
++          startDate: undefined,
++          endDate: undefined,
++        }));
+         return;
+       }
+       if (field in errors) {
+@@ -303,15 +315,33 @@ export const RecurringPaymentForm = React.forwardRef<
+   const handleSubmit = useCallback(async (): Promise<void> => {
+     if (isSubmitting || isSubmitInFlightRef.current) return;
+ 
+-    const result = validateRecurringPaymentForm({
+-      name: form.name.trim(),
+-      amount: form.amount,
+-      accountId: form.accountId,
+-      categoryId: form.categoryId,
+-      startDate: form.startDate,
+-      endDate: form.endDate ?? null,
+-      endDateErrorMessage: t("end_date_before_due"),
+-    });
++    const result = validateRecurringPaymentForm(
++      {
++        name: form.name.trim(),
++        amount: form.amount,
++        accountId: form.accountId,
++        categoryId: form.categoryId,
++        startDate: form.startDate,
++        endDate: form.endDate ?? null,
++      },
++      {
++        currency: selectedCurrency,
++        originalStartDate: mode === "edit" ? initialValues.startDate : null,
++        messages: {
++          invalidAmount: t("invalid_amount"),
++          positiveAmount: t("amount_must_be_positive"),
++          amountMaximum: t("amount_maximum_error", {
++            maximum: MAX_TRANSACTION_AMOUNT.toLocaleString("en-US"),
++          }),
++          amountPrecision: (precision) =>
++            t("amount_precision_error", { precision }),
++          invalidStartDate: t("invalid_due_payment_date"),
++          startDateRange: t("due_payment_date_range"),
++          invalidEndDate: t("invalid_end_date"),
++          endDateBeforeDue: t("end_date_before_due"),
++        },
++      }
++    );
+ 
+     if (!result.isValid) {
+       setErrors(result.errors);
+@@ -326,7 +356,16 @@ export const RecurringPaymentForm = React.forwardRef<
+     } finally {
+       isSubmitInFlightRef.current = false;
+     }
+-  }, [form, isSubmitting, onSubmit, scrollToFirstError]);
++  }, [
++    form,
++    initialValues.startDate,
++    isSubmitting,
++    mode,
++    onSubmit,
++    scrollToFirstError,
++    selectedCurrency,
++    t,
++  ]);
+ 
+   useImperativeHandle(
+     ref,
+@@ -478,20 +517,22 @@ export const RecurringPaymentForm = React.forwardRef<
+                 iconContainerClassName="bg-nileGreen-100 dark:bg-slate-700"
+               />
+               <Divider index={2} />
+-              <FormRow
+-                testID="recurring-payment-start-date-row"
+-                icon="calendar-outline"
+-                label={t("start_date")}
+-                value={formatDate(form.startDate, "MMM d, yyyy")}
+-                description={t("due_payment_hint")}
+-                onPress={() =>
+-                  setDatePickerField((current) =>
+-                    current === "startDate" ? null : "startDate"
+-                  )
+-                }
+-                iconColor={palette.nileGreen[500]}
+-                iconContainerClassName="bg-nileGreen-100 dark:bg-slate-700"
+-              />
++              <View ref={startDateFieldRef}>
++                <FormRow
++                  testID="recurring-payment-start-date-row"
++                  icon="calendar-outline"
++                  label={t("start_date")}
++                  value={formatDate(form.startDate, "MMM d, yyyy")}
++                  description={t("due_payment_hint")}
++                  onPress={() =>
++                    setDatePickerField((current) =>
++                      current === "startDate" ? null : "startDate"
++                    )
++                  }
++                  iconColor={palette.nileGreen[500]}
++                  iconContainerClassName="bg-nileGreen-100 dark:bg-slate-700"
++                />
++              </View>
+               <Divider index={3} />
+               <View ref={endDateFieldRef}>
+                 <FormRow
+@@ -522,6 +563,9 @@ export const RecurringPaymentForm = React.forwardRef<
+           {errors.categoryId ? (
+             <ErrorText>{errors.categoryId}</ErrorText>
+           ) : null}
++          {errors.startDate ? (
++            <ErrorText>{errors.startDate}</ErrorText>
++          ) : null}
+           {hasDuePaymentAfterEndDate ? (
+             <ErrorText>{t("end_date_before_due")}</ErrorText>
+           ) : errors.endDate ? (
+@@ -743,7 +787,9 @@ function AmountField({
+         <TextInput
+           testID="recurring-payment-amount-input"
+           value={formatAmountInput(value)}
+-          onChangeText={(text) => onChangeText(parseAmountInput(text))}
++          onChangeText={(text) =>
++            onChangeText(parseAmountInput(text, value))
++          }
+           onFocus={onFocus}
+           placeholder="0.00"
+           placeholderTextColor={
