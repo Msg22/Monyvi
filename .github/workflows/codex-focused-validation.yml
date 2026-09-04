@@ -34,7 +34,18 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      - name: Restore installed dependencies
+        id: dependencies-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: codex-node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install dependencies
+        if: steps.dependencies-cache.outputs.cache-hit != 'true'
         run: npm ci
         timeout-minutes: 20
 
