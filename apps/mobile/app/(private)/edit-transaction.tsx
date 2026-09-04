@@ -326,7 +326,17 @@ export default function EditTransaction(): React.ReactNode {
         accountId: selectedAccountId,
         categoryId: selectedCategoryId,
       },
-      undefined,
+      {
+        amountRequired: t("amount_required"),
+        invalidAmount: t("invalid_amount"),
+        amountMustBePositive: t("amount_must_be_positive"),
+        amountMaximum: (maximum) =>
+          t("amount_maximum_error", {
+            maximum: maximum.toLocaleString("en-US"),
+          }),
+        amountPrecision: (precision) =>
+          t("amount_precision_error", { precision }),
+      },
       { currency: selectedAccount?.currency }
     );
 

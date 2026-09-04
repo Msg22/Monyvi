@@ -167,6 +167,7 @@
   "please_select_an_account": "Please select an account",
   "add_more_details": "Add more details",
   "optional_details": "Optional details",
+  "amount_required": "Amount is required",
   "invalid_amount": "Please enter a valid amount",
   "amount_must_be_positive": "Amount must be greater than 0",
   "amount_maximum_error": "Amount must be at most {{maximum}}",
