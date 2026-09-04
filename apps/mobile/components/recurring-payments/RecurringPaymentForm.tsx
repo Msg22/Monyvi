@@ -12,7 +12,7 @@ import { TextField } from "@/components/ui/TextField";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useFormScroll } from "@/hooks/useFormScroll";
-import { calculateNextDueDate, formatDate } from "@/utils/dateHelpers";
+import { formatDate } from "@/utils/dateHelpers";
 import { validateRecurringPaymentForm } from "@/validation/recurring-payment-validation";
 import type {
   Account,
@@ -24,7 +24,9 @@ import type {
   TransactionType,
 } from "@monyvi/db";
 import {
+  getNextRecurringOccurrenceAfter,
   isOnOrBeforeDay,
+  isSameLocalCalendarDay,
   MAX_TRANSACTION_AMOUNT,
 } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
@@ -75,6 +77,7 @@ interface RecurringPaymentFormProps {
   readonly submitLabel: string;
   readonly status?: RecurringStatus;
   readonly dueDate?: Date;
+  readonly recurrenceAnchorDate?: Date;
   readonly onSubmit: (values: RecurringPaymentFormValues) => SubmitResult;
   readonly onPauseToggle?: () => Promise<void>;
   readonly onDelete?: () => Promise<void>;
@@ -144,6 +147,7 @@ export const RecurringPaymentForm = React.forwardRef<
     submitLabel,
     status = "ACTIVE",
     dueDate,
+    recurrenceAnchorDate,
     onSubmit,
     onPauseToggle,
     onDelete,
@@ -229,12 +233,23 @@ export const RecurringPaymentForm = React.forwardRef<
       categories.find((category) => category.id === form.categoryId) ?? null,
     [categories, form.categoryId]
   );
+  const didDuePaymentChange = !isSameLocalCalendarDay(
+    initialValues.startDate,
+    form.startDate
+  );
+  const didFrequencyChange = initialValues.frequency !== form.frequency;
+  const effectiveRecurrenceAnchorDate = didDuePaymentChange
+    ? form.startDate
+    : didFrequencyChange
+      ? (dueDate ?? form.startDate)
+      : (recurrenceAnchorDate ?? initialValues.startDate);
   const hasScheduleChanges =
-    initialValues.startDate.getTime() !== form.startDate.getTime() ||
-    initialValues.frequency !== form.frequency ||
-    initialValues.endDate?.getTime() !== form.endDate?.getTime();
+    didDuePaymentChange ||
+    didFrequencyChange ||
+    !areSameOptionalLocalCalendarDays(initialValues.endDate, form.endDate);
   const displayDueDate = getDisplayDueDate({
     dueDate,
+    recurrenceAnchorDate: effectiveRecurrenceAnchorDate,
     initialValues,
     form,
     hasScheduleChanges,
@@ -243,11 +258,18 @@ export const RecurringPaymentForm = React.forwardRef<
   const startDateMinimumDate = getStartDateMinimumDate(mode, form.startDate);
   const hasNoFurtherEligibleRecurrence = hasNoFurtherEligiblePayment(
     form.startDate,
+    effectiveRecurrenceAnchorDate,
     form.frequency,
     form.endDate
   );
-  const didDuePaymentChange = initialValues.startDate.getTime() !== form.startDate.getTime();
-  const reactivationDueDate = didDuePaymentChange ? form.startDate : getReactivationDueDate(dueDate, initialValues.endDate, form.frequency);
+  const reactivationDueDate = didDuePaymentChange
+    ? form.startDate
+    : getReactivationDueDate(
+        dueDate,
+        effectiveRecurrenceAnchorDate,
+        initialValues.endDate,
+        form.frequency
+      );
   const isReactivationAvailable =
     reactivationDueDate !== null &&
     (form.endDate === null ||
@@ -748,12 +770,14 @@ function getFrequencyTypeLabel(
 
 function getDisplayDueDate({
   dueDate,
+  recurrenceAnchorDate,
   initialValues,
   form,
   hasScheduleChanges,
   status,
 }: {
   readonly dueDate?: Date;
+  readonly recurrenceAnchorDate: Date;
   readonly initialValues: RecurringPaymentFormValues;
   readonly form: RecurringPaymentFormValues;
   readonly hasScheduleChanges: boolean;
@@ -778,8 +802,10 @@ function getDisplayDueDate({
     return dueDate;
   }
 
-  const didStartDateChange =
-    initialValues.startDate.getTime() !== form.startDate.getTime();
+  const didStartDateChange = !isSameLocalCalendarDay(
+    initialValues.startDate,
+    form.startDate
+  );
   const didFrequencyChange = initialValues.frequency !== form.frequency;
   const didRelaxCompletedEndDate =
     dueDate !== undefined &&
@@ -792,7 +818,11 @@ function getDisplayDueDate({
     didRelaxCompletedEndDate &&
     isOnOrBeforeDay(dueDate, initialValues.endDate)
   ) {
-    return calculateNextDueDate(dueDate, form.frequency);
+    return getNextRecurringOccurrenceAfter({
+      startDate: recurrenceAnchorDate,
+      currentOccurrence: dueDate,
+      frequency: form.frequency,
+    });
   }
   if (
     dueDate &&
@@ -804,7 +834,11 @@ function getDisplayDueDate({
       !isOnOrBeforeDay(dueDate, initialValues.endDate)
     )
   ) {
-    return calculateNextDueDate(dueDate, form.frequency);
+    return getNextRecurringOccurrenceAfter({
+      startDate: recurrenceAnchorDate,
+      currentOccurrence: dueDate,
+      frequency: form.frequency,
+    });
   }
 
   if (dueDate && status === "COMPLETED") {
@@ -821,27 +855,50 @@ function didRelaxEndDate(
   return nextEndDate === null || !isOnOrBeforeDay(nextEndDate, initialEndDate);
 }
 
+function areSameOptionalLocalCalendarDays(
+  firstDate: Date | null,
+  secondDate: Date | null
+): boolean {
+  if (firstDate === null || secondDate === null) {
+    return firstDate === secondDate;
+  }
+
+  return isSameLocalCalendarDay(firstDate, secondDate);
+}
+
 function hasNoFurtherEligiblePayment(
   duePayment: Date,
+  recurrenceAnchorDate: Date,
   frequency: RecurringFrequency,
   endDate: Date | null
 ): boolean {
-  return (
-    endDate !== null &&
-    isOnOrBeforeDay(duePayment, endDate) &&
-    !isOnOrBeforeDay(calculateNextDueDate(duePayment, frequency), endDate)
-  );
+  if (endDate === null || !isOnOrBeforeDay(duePayment, endDate)) {
+    return false;
+  }
+
+  const nextDueDate = getNextRecurringOccurrenceAfter({
+    startDate: recurrenceAnchorDate,
+    currentOccurrence: duePayment,
+    frequency,
+  });
+
+  return !isOnOrBeforeDay(nextDueDate, endDate);
 }
 
 function getReactivationDueDate(
   dueDate: Date | undefined,
+  recurrenceAnchorDate: Date,
   initialEndDate: Date | null,
   frequency: RecurringFrequency
 ): Date | null {
   if (!dueDate) return null;
 
   return initialEndDate !== null && isOnOrBeforeDay(dueDate, initialEndDate)
-    ? calculateNextDueDate(dueDate, frequency)
+    ? getNextRecurringOccurrenceAfter({
+        startDate: recurrenceAnchorDate,
+        currentOccurrence: dueDate,
+        frequency,
+      })
     : dueDate;
 }
 
