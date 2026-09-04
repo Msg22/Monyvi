@@ -1,0 +1,51 @@
+name: Codex Focused Validation
+
+on:
+  push:
+    branches:
+      - codex/103-recurring-payment-validation
+    paths:
+      - .github/codex/validation-trigger.txt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-focused-validation-103
+  cancel-in-progress: true
+
+jobs:
+  focused-validation:
+    name: Focused tests and type checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SENTRYCLI_SKIP_DOWNLOAD: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        timeout-minutes: 20
+
+      - name: Test shared logic
+        run: npm test -w @monyvi/logic -- --runInBand amount-helpers currency date-boundary
+
+      - name: Test recurring and transaction paths
+        run: npm test -w @monyvi/mobile -- --runInBand transaction-validation recurring-payment-validation recurring-payment-service create-recurring-payment
+
+      - name: Typecheck shared logic
+        run: npm run typecheck -w @monyvi/logic
+
+      - name: Typecheck mobile
+        run: npm run typecheck -w @monyvi/mobile
