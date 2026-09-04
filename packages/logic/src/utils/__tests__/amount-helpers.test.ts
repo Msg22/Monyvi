@@ -151,6 +151,17 @@ describe("amount helpers", () => {
         })
       ).toEqual({ success: false, reason: "exceeds-maximum" });
     });
+
+    it("prioritizes the maximum error when amount and precision are both invalid", () => {
+      const parseStrictAmountInput = getStrictAmountParser();
+
+      expect(
+        parseStrictAmountInput("1000000000.001", {
+          maxAmount: AmountHelpers.MAX_TRANSACTION_AMOUNT,
+          maxFractionDigits: 2,
+        })
+      ).toEqual({ success: false, reason: "exceeds-maximum" });
+    });
   });
 
   describe("controlled amount input changes", () => {
