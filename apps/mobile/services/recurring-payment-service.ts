@@ -1,5 +1,6 @@
 import {
   getFirstRecurringOccurrenceOnOrAfter,
+  getNextRecurringOccurrenceAfter,
   getRecurringPaymentReactivationDueDate,
   isOnOrBeforeDay,
   isRecurringStartDateAllowed,
@@ -8,7 +9,6 @@ import {
   isValidDate,
 } from "@monyvi/logic";
 
-import { calculateNextDueDate } from "@/utils/dateHelpers";
 import {
   database,
   type Account,
@@ -124,7 +124,7 @@ function assertEndDateAllowsDuePayment(
   }
 }
 
-function resolveCreateStartDate(
+function resolveCreateNextDueDate(
   data: RecurringPaymentData,
   referenceDate: Date
 ): Date {
@@ -186,9 +186,9 @@ export async function createRecurringPayment(
   assertValidRecurringPaymentDateShape(data);
 
   const referenceDate = new Date();
-  const startDate = resolveCreateStartDate(data, referenceDate);
-  assertStartDateAllowed(startDate, referenceDate);
-  assertEndDateAllowsDuePayment(startDate, data.endDate);
+  const nextDueDate = resolveCreateNextDueDate(data, referenceDate);
+  assertStartDateAllowed(nextDueDate, referenceDate);
+  assertEndDateAllowsDuePayment(nextDueDate, data.endDate);
 
   const scope = await getCurrentUserDataScope();
   await resolveRecurringPaymentReferences(
@@ -211,9 +211,9 @@ export async function createRecurringPayment(
       rec.accountId = data.accountId;
       rec.categoryId = data.categoryId;
       rec.frequency = data.frequency;
-      rec.startDate = startDate;
+      rec.startDate = data.startDate;
       rec.endDate = data.endDate ?? undefined;
-      rec.nextDueDate = startDate;
+      rec.nextDueDate = nextDueDate;
       rec.action = data.action;
       rec.status = "ACTIVE";
       rec.deleted = false;
@@ -234,9 +234,25 @@ export async function updateRecurringPayment(
     database.get<RecurringPayment>("recurring_payments");
   const payment = await scope.findOwned(recurringCollection, paymentId);
 
+  const dataMatchesStoredAnchor = isSameLocalCalendarDay(
+    payment.startDate,
+    data.startDate
+  );
+  const dataMatchesCurrentDueDate = isSameLocalCalendarDay(
+    payment.nextDueDate,
+    data.startDate
+  );
+  const originalEditableDate = dataMatchesStoredAnchor
+    ? payment.startDate
+    : payment.nextDueDate;
+  const requestedDueDate =
+    dataMatchesStoredAnchor && !dataMatchesCurrentDueDate
+      ? payment.nextDueDate
+      : data.startDate;
+
   const referenceDate = new Date();
-  assertStartDateAllowed(data.startDate, referenceDate, payment.startDate);
-  assertEndDateAllowsDuePayment(data.startDate, data.endDate);
+  assertStartDateAllowed(data.startDate, referenceDate, originalEditableDate);
+  assertEndDateAllowsDuePayment(requestedDueDate, data.endDate);
   await resolveRecurringPaymentReferences(
     scope,
     data.accountId,
@@ -261,22 +277,38 @@ export async function updateRecurringPayment(
         previousEndDate !== undefined &&
         previousEndDate !== null &&
         !isOnOrBeforeDay(nextEndDate, previousEndDate));
-    const didStartDateChange = !isSameLocalCalendarDay(
-      payment.startDate,
-      data.startDate
-    );
+    const didDuePaymentChange =
+      !dataMatchesStoredAnchor && !dataMatchesCurrentDueDate;
     const didFrequencyChange = payment.frequency !== data.frequency;
     const shouldRetainFinalPaidOccurrence =
       wasCompletedAtPreviousBoundary &&
       !didRelaxEndDate &&
       data.reactivateAfterSaving !== true;
+    const recurrenceAnchorDate = didDuePaymentChange
+      ? data.startDate
+      : didFrequencyChange
+        ? payment.nextDueDate
+        : dataMatchesStoredAnchor
+          ? data.startDate
+          : payment.startDate;
     let nextDueDate = payment.nextDueDate;
-    if (didStartDateChange) {
+    if (didDuePaymentChange) {
       nextDueDate = data.startDate;
-    } else if (wasCompletedAtPreviousBoundary && didRelaxEndDate) {
-      nextDueDate = calculateNextDueDate(payment.nextDueDate, data.frequency);
+    } else if (
+      wasCompletedAtPreviousBoundary &&
+      (didRelaxEndDate || data.reactivateAfterSaving === true)
+    ) {
+      nextDueDate = getNextRecurringOccurrenceAfter({
+        startDate: recurrenceAnchorDate,
+        currentOccurrence: payment.nextDueDate,
+        frequency: data.frequency,
+      });
     } else if (didFrequencyChange) {
-      nextDueDate = calculateNextDueDate(payment.nextDueDate, data.frequency);
+      nextDueDate = getNextRecurringOccurrenceAfter({
+        startDate: recurrenceAnchorDate,
+        currentOccurrence: payment.nextDueDate,
+        frequency: data.frequency,
+      });
     }
     const nextDueDateIsEligible = isEligibleDueDate(nextDueDate, nextEndDate);
     if (
@@ -296,7 +328,7 @@ export async function updateRecurringPayment(
       record.accountId = data.accountId;
       record.categoryId = data.categoryId;
       record.frequency = data.frequency;
-      record.startDate = data.startDate;
+      record.startDate = recurrenceAnchorDate;
       record.endDate = nextEndDate ?? undefined;
       if (!shouldRetainFinalPaidOccurrence) {
         record.nextDueDate = nextDueDate;
@@ -400,7 +432,11 @@ export async function updateRecurringPaymentNextDueDate(
   await database.write(async () => {
     const payment = await scope.findOwned(recurringCollection, paymentId);
     await payment.update((record) => {
-      record.nextDueDate = calculateNextDueDate(currentDueDate, frequency);
+      record.nextDueDate = getNextRecurringOccurrenceAfter({
+        startDate: payment.startDate,
+        currentOccurrence: currentDueDate,
+        frequency,
+      });
     });
   });
 }
@@ -460,10 +496,11 @@ export async function submitRecurringPayment(params: {
     const paymentSnapshot = captureCachedModelSnapshot(persistedPayment);
     try {
       const scheduleUpdate = persistedPayment.prepareUpdate((record) => {
-        const nextDueDate = calculateNextDueDate(
-          persistedPayment.nextDueDate,
-          persistedPayment.frequency
-        );
+        const nextDueDate = getNextRecurringOccurrenceAfter({
+          startDate: persistedPayment.startDate,
+          currentOccurrence: persistedPayment.nextDueDate,
+          frequency: persistedPayment.frequency,
+        });
         const hasReachedFinalEligibleOccurrence =
           persistedPayment.endDate !== undefined &&
           persistedPayment.endDate !== null &&
