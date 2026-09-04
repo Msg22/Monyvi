@@ -13,10 +13,14 @@ import { useRecurringPayment } from "@/hooks/useRecurringPayment";
 import {
   deleteRecurringPayment,
   pauseRecurringPayment,
-  RECURRING_PAYMENT_SERVICE_ERROR_CODES,
   resumeRecurringPayment,
   updateRecurringPayment,
 } from "@/services/recurring-payment-service";
+import {
+  getRecurringPaymentErrorMessage,
+  parseRecurringPaymentSubmissionAmount,
+  type RecurringPaymentOperation,
+} from "@/utils/recurring-payment-submission";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -89,11 +93,24 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
       return false;
     }
 
+    const amount = parseRecurringPaymentSubmissionAmount(
+      values.amount,
+      selectedAccount.currency
+    );
+    if (amount === null) {
+      showToast({
+        type: "error",
+        title: t("failed_to_update_payment"),
+        message: t("invalid_amount"),
+      });
+      return false;
+    }
+
     setIsSubmitting(true);
     try {
       await updateRecurringPayment(payment.id, {
         name: values.name.trim(),
-        amount: Number.parseFloat(values.amount),
+        amount,
         currency: selectedAccount.currency,
         type: values.type,
         frequency: values.frequency,
@@ -115,7 +132,12 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
       showToast({
         type: "error",
         title: t("failed_to_update_payment"),
-        message: getRecurringPaymentErrorMessage(error, t, tCommon),
+        message: getRecurringPaymentErrorMessage({
+          error,
+          operation: "update",
+          t,
+          tCommon,
+        }),
       });
       return false;
     } finally {
@@ -128,9 +150,12 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
 
     setIsPauseResumeVisible(false);
 
-    try {
-      const isResuming = payment.status === "PAUSED";
+    const isResuming = payment.status === "PAUSED";
+    const operation: RecurringPaymentOperation = isResuming
+      ? "resume"
+      : "pause";
 
+    try {
       if (isResuming) {
         await resumeRecurringPayment(payment.id);
       } else {
@@ -152,7 +177,12 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
       showToast({
         type: "error",
         title: t("failed_to_update_payment"),
-        message: getRecurringPaymentErrorMessage(error, t, tCommon),
+        message: getRecurringPaymentErrorMessage({
+          error,
+          operation,
+          t,
+          tCommon,
+        }),
       });
     }
   };
@@ -172,7 +202,12 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
       showToast({
         type: "error",
         title: t("failed_to_delete_payment"),
-        message: getRecurringPaymentErrorMessage(error, t, tCommon),
+        message: getRecurringPaymentErrorMessage({
+          error,
+          operation: "delete",
+          t,
+          tCommon,
+        }),
       });
     }
   };
@@ -280,22 +315,4 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
       />
     </View>
   );
-}
-
-function getRecurringPaymentErrorMessage(
-  error: unknown,
-  t: (key: string) => string,
-  tCommon: (key: string) => string
-): string {
-  const message = error instanceof Error ? error.message : undefined;
-
-  if (message === RECURRING_PAYMENT_SERVICE_ERROR_CODES.ACCOUNT_UNAVAILABLE) {
-    return t("recurring_payment_account_unavailable");
-  }
-
-  if (message === RECURRING_PAYMENT_SERVICE_ERROR_CODES.CATEGORY_UNAVAILABLE) {
-    return t("recurring_payment_category_unavailable");
-  }
-
-  return tCommon("error_generic");
 }
