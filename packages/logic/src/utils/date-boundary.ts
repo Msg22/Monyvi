@@ -12,6 +12,12 @@ export interface FirstRecurringOccurrenceOptions {
   readonly referenceDate?: Date;
 }
 
+export interface NextRecurringOccurrenceOptions {
+  readonly startDate: Date;
+  readonly currentOccurrence: Date;
+  readonly frequency: string;
+}
+
 /** Returns whether a Date contains a finite timestamp. */
 export function isValidDate(date: Date): boolean {
   return Number.isFinite(date.getTime());
@@ -126,6 +132,33 @@ export function getFirstRecurringOccurrenceOnOrAfter({
 }
 
 /**
+ * Returns the first occurrence strictly after the current local calendar day
+ * while retaining the original schedule anchor. This prevents a monthly or
+ * yearly series from drifting after a shortened month.
+ */
+export function getNextRecurringOccurrenceAfter({
+  startDate,
+  currentOccurrence,
+  frequency,
+}: NextRecurringOccurrenceOptions): Date {
+  assertValidDate(startDate, "start date");
+  assertValidDate(currentOccurrence, "current occurrence");
+
+  if (!isOnOrBeforeDay(startDate, currentOccurrence)) {
+    return new Date(startDate);
+  }
+
+  const nextReferenceDate = new Date(currentOccurrence);
+  nextReferenceDate.setDate(nextReferenceDate.getDate() + 1);
+
+  return getFirstRecurringOccurrenceOnOrAfter({
+    startDate,
+    frequency,
+    referenceDate: nextReferenceDate,
+  });
+}
+
+/**
  * Returns whether a date falls on or before another date in local calendar days.
  */
 export function isOnOrBeforeDay(date: Date, boundary: Date): boolean {
@@ -168,10 +201,12 @@ export function isInCurrentLocalMonth(
 }
 
 export function getRecurringPaymentReactivationDueDate({
+  startDate,
   nextDueDate,
   frequency,
   endDate,
 }: {
+  readonly startDate?: Date;
   readonly nextDueDate: Date;
   readonly frequency: string;
   readonly endDate?: Date | null;
@@ -181,7 +216,13 @@ export function getRecurringPaymentReactivationDueDate({
     endDate !== null &&
     isOnOrBeforeDay(nextDueDate, endDate)
   ) {
-    return calculateNextDueDate(nextDueDate, frequency);
+    return startDate === undefined
+      ? calculateNextDueDate(nextDueDate, frequency)
+      : getNextRecurringOccurrenceAfter({
+          startDate,
+          currentOccurrence: nextDueDate,
+          frequency,
+        });
   }
 
   return nextDueDate;
