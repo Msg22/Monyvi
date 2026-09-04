@@ -339,6 +339,30 @@ describe("recurring-payment-service", () => {
       expect(payment.startDate).toEqual(unchangedLegacyDate);
     });
 
+    it("keeps the advanced next due date when the start date stays on the same local day", async () => {
+      const legacyStartDate = new Date("2025-01-10T08:00:00.000Z");
+      const unchangedLegacyDate = new Date("2025-01-10T20:00:00.000Z");
+      const advancedNextDueDate = new Date("2026-07-10T08:00:00.000Z");
+      const payment = createRecurringRecord({
+        startDate: legacyStartDate,
+        nextDueDate: advancedNextDueDate,
+      });
+      mockFindOwned.mockImplementation(
+        (_collection: MockCollection, id: string): Promise<unknown> =>
+          id === "account-1"
+            ? Promise.resolve({ id, userId: "user-1", currency: "EGP" })
+            : Promise.resolve(payment)
+      );
+
+      await updateRecurringPayment("payment-1", {
+        ...validCreateData,
+        startDate: unchangedLegacyDate,
+      });
+
+      expect(payment.startDate).toEqual(unchangedLegacyDate);
+      expect(payment.nextDueDate).toEqual(advancedNextDueDate);
+    });
+
     it("rejects changing a legacy start day to a different out-of-range date before writing", async () => {
       const payment = createRecurringRecord({
         startDate: new Date("2025-01-10T08:00:00.000Z"),

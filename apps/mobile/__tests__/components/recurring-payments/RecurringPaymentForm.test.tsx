@@ -221,6 +221,15 @@ function renderForm(
 }
 
 describe("RecurringPaymentForm", () => {
+  beforeAll(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-06-01T12:00:00.000Z"));
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockScrollTo.mockClear();

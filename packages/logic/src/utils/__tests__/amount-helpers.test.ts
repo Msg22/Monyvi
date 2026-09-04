@@ -140,6 +140,17 @@ describe("amount helpers", () => {
         parseStrictAmountInput("0.123456789", { maxFractionDigits: 8 })
       ).toEqual({ success: false, reason: "exceeds-precision" });
     });
+
+    it("rejects a canonical decimal above the maximum before number conversion", () => {
+      const parseStrictAmountInput = getStrictAmountParser();
+
+      expect(
+        parseStrictAmountInput("1000000000.00000001", {
+          maxAmount: AmountHelpers.MAX_TRANSACTION_AMOUNT,
+          maxFractionDigits: 8,
+        })
+      ).toEqual({ success: false, reason: "exceeds-maximum" });
+    });
   });
 
   describe("controlled amount input changes", () => {

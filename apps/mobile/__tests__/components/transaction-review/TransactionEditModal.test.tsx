@@ -2,6 +2,7 @@ import { fireEvent, render, within } from "@testing-library/react-native";
 
 import { TransactionEditModal } from "@/components/transaction-review/edit-modal/TransactionEditModal";
 
+const mockSetAmount = jest.fn();
 const mockSetIsAccountPickerOpen = jest.fn();
 const mockSetIsCategoryPickerOpen = jest.fn();
 const mockSetIsCurrencyPickerOpen = jest.fn();
@@ -67,7 +68,7 @@ jest.mock("@/hooks/useTransactionEditState", () => ({
       ...mockStateOverrides,
     },
     setters: {
-      setAmount: jest.fn(),
+      setAmount: mockSetAmount,
       setNote: jest.fn(),
       setCounterparty: jest.fn(),
       setTxType: jest.fn(),
@@ -233,6 +234,18 @@ describe("TransactionEditModal SMS workspace", () => {
     ).toBeTruthy();
   });
 
+  it("preserves edits from a formatted SMS amount", () => {
+    mockStateOverrides = { amount: "1234" };
+
+    const view = render(
+      <TransactionEditModal {...baseProps} sourceVariant="sms" />
+    );
+
+    fireEvent.changeText(view.getByDisplayValue("1,234"), "1,23");
+
+    expect(mockSetAmount).toHaveBeenCalledWith("123");
+  });
+
   it("renders the resolved ATM destination creation mode", () => {
     mockStateOverrides = {
       formConfig: {
@@ -257,6 +270,7 @@ describe("TransactionEditModal SMS workspace", () => {
 
 describe("TransactionEditModal existing voice workspace", () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     mockStateOverrides = {};
   });
 
@@ -274,5 +288,21 @@ describe("TransactionEditModal existing voice workspace", () => {
     expect(view.getByTestId("legacy-account-selector")).toBeTruthy();
     expect(view.queryByTestId("sms-edit-fields")).toBeNull();
     expect(view.getByPlaceholderText("note_edit_placeholder")).toBeTruthy();
+  });
+
+  it("preserves edits from a formatted amount", () => {
+    mockStateOverrides = { amount: "1234" };
+    const voiceTransaction = {
+      ...transaction,
+      source: "VOICE",
+      note: "Weekly groceries",
+    } as const;
+    const view = render(
+      <TransactionEditModal {...baseProps} transaction={voiceTransaction} />
+    );
+
+    fireEvent.changeText(view.getByDisplayValue("1,234"), "1,23");
+
+    expect(mockSetAmount).toHaveBeenCalledWith("123");
   });
 });

@@ -225,6 +225,23 @@ describe("validateTransactionForm", () => {
       ).toBe("Amount must have at most 8 decimal places");
     });
 
+    it("uses localized precision copy when provided", () => {
+      const messages = {
+        amountPrecision: (precision: number): string =>
+          `localized precision ${precision}`,
+      } as unknown as Parameters<typeof validateTransactionForm>[2];
+
+      const result = validateTransactionForm(
+        "EXPENSE",
+        { ...validPayload, amount: "12.345" },
+        messages,
+        { currency: "EGP" }
+      );
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors.amount).toBe("localized precision 2");
+    });
+
     it("accepts the exact transaction maximum and rejects values above it", () => {
       expect(
         validateWithOptions(
