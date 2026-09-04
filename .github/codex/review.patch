@@ -1,0 +1,246 @@
+# commit-message: test: cover remaining PR review regressions
+
+diff --git a/apps/mobile/__tests__/components/recurring-payments/RecurringPaymentForm.test.tsx b/apps/mobile/__tests__/components/recurring-payments/RecurringPaymentForm.test.tsx
+index 46770fe..cca9e53 100644
+--- a/apps/mobile/__tests__/components/recurring-payments/RecurringPaymentForm.test.tsx
++++ b/apps/mobile/__tests__/components/recurring-payments/RecurringPaymentForm.test.tsx
+@@ -50,22 +50,32 @@ jest.mock("@react-native-community/datetimepicker", () => ({
+   __esModule: true,
+   default: ({
+     onChange,
++    value,
+   }: {
+     readonly onChange: (event: { readonly type: "set" }, date: Date) => void;
++    readonly value: Date;
+   }): React.JSX.Element => {
+     const ReactNative =
+       jest.requireActual<typeof import("react-native")>("react-native");
++    const sameDayDifferentTime = new Date(value);
++    sameDayDifferentTime.setHours(12, 0, 0, 0);
+ 
+     return (
+-      <ReactNative.Pressable
+-        testID="set-recurring-payment-date-july-15"
+-        onPress={() =>
+-          onChange(
+-            { type: "set" },
+-            new Date("2026-07-15T00:00:00.000Z")
+-          )
+-        }
+-      />
++      <>
++        <ReactNative.Pressable
++          testID="set-recurring-payment-date-july-15"
++          onPress={() =>
++            onChange(
++              { type: "set" },
++              new Date("2026-07-15T00:00:00.000Z")
++            )
++          }
++        />
++        <ReactNative.Pressable
++          testID="set-recurring-payment-date-same-day-different-time"
++          onPress={() => onChange({ type: "set" }, sameDayDifferentTime)}
++        />
++      </>
+     );
+   },
+ }));
+@@ -348,6 +358,56 @@ describe("RecurringPaymentForm", () => {
+     expect(screen.getByTestId("recurring-payment-summary-due-value")).toHaveTextContent("Jul 8, 2026");
+   });
+ 
++  it("treats a same-day Due payment time edit as unchanged in the summary", () => {
++    renderForm({
++      mode: "edit",
++      status: "ACTIVE",
++      dueDate: new Date("2026-07-01T00:00:00.000Z"),
++      initialValues: {
++        ...initialValues,
++        startDate: new Date("2026-06-01T08:00:00.000Z"),
++      },
++    });
++
++    fireEvent.press(screen.getByTestId("recurring-payment-start-date-row"));
++    fireEvent.press(
++      screen.getByTestId(
++        "set-recurring-payment-date-same-day-different-time"
++      )
++    );
++
++    expect(
++      screen.getByTestId("recurring-payment-summary-due-value")
++    ).toHaveTextContent("Jul 1, 2026");
++  });
++
++  it("does not enable reactivation for a same-day Due payment time edit", () => {
++    renderForm({
++      mode: "edit",
++      status: "COMPLETED",
++      dueDate: new Date("2026-07-01T00:00:00.000Z"),
++      initialValues: {
++        ...initialValues,
++        startDate: new Date("2026-06-01T08:00:00.000Z"),
++        endDate: new Date("2026-07-01T00:00:00.000Z"),
++      },
++    });
++
++    fireEvent.press(screen.getByTestId("recurring-payment-start-date-row"));
++    fireEvent.press(
++      screen.getByTestId(
++        "set-recurring-payment-date-same-day-different-time"
++      )
++    );
++
++    expect(
++      screen.getByTestId("recurring-payment-reactivate-after-saving")
++    ).toHaveProp(
++      "accessibilityState",
++      expect.objectContaining({ disabled: true })
++    );
++  });
++
+   it("keeps the final paid date in the summary when frequency changes on a completed bounded payment", () => {
+     renderForm({
+       mode: "edit",
+@@ -961,6 +1021,22 @@ describe("RecurringPaymentForm", () => {
+     ).toHaveTextContent("-1,234.56 EGP");
+   });
+ 
++  it.each(["1e3", "12abc"])(
++    "does not partially parse invalid summary amount %s",
++    (amount) => {
++      renderForm({
++        initialValues: {
++          ...initialValues,
++          amount,
++        },
++      });
++
++      expect(
++        screen.getByTestId("recurring-payment-summary-amount-value")
++      ).toHaveTextContent("0 EGP");
++    }
++  );
++
+   it("uses shared currency formatting for prefixed currencies in the summary", () => {
+     renderForm({
+       accounts: [
+diff --git a/apps/mobile/__tests__/services/recurring-payment-service.test.ts b/apps/mobile/__tests__/services/recurring-payment-service.test.ts
+index 1641b3c..d42c97d 100644
+--- a/apps/mobile/__tests__/services/recurring-payment-service.test.ts
++++ b/apps/mobile/__tests__/services/recurring-payment-service.test.ts
+@@ -406,7 +406,7 @@ describe("recurring-payment-service", () => {
+       });
+ 
+       expect(result).toMatchObject({
+-        startDate: new Date("2026-09-05T08:00:00.000Z"),
++        startDate: new Date("2026-08-01T08:00:00.000Z"),
+         nextDueDate: new Date("2026-09-05T08:00:00.000Z"),
+         status: "ACTIVE",
+       });
+@@ -969,6 +969,25 @@ describe("recurring-payment-service", () => {
+       expect(payment.nextDueDate).toEqual(new Date("2026-07-01T00:00:00.000Z"));
+     });
+ 
++    it("advances a shortened-month occurrence from the original monthly anchor", async () => {
++      const payment = createRecurringRecord({
++        frequency: "MONTHLY",
++        startDate: new Date("2026-01-31T09:00:00.000Z"),
++        nextDueDate: new Date("2026-02-28T09:00:00.000Z"),
++      });
++      mockFindOwned.mockResolvedValue(payment);
++
++      await submitRecurringPayment({
++        payment: payment as never,
++        accountId: "account-1",
++        amount: 250,
++      });
++
++      expect(payment.nextDueDate).toEqual(
++        new Date("2026-03-31T09:00:00.000Z")
++      );
++    });
++
+     it("accepts a final due payment on End date when times differ", async () => {
+       const payment = createRecurringRecord({
+         nextDueDate: new Date("2026-07-01T15:00:00.000Z"),
+diff --git a/packages/logic/src/utils/__tests__/amount-helpers.test.ts b/packages/logic/src/utils/__tests__/amount-helpers.test.ts
+index 5c174d5..07b11b3 100644
+--- a/packages/logic/src/utils/__tests__/amount-helpers.test.ts
++++ b/packages/logic/src/utils/__tests__/amount-helpers.test.ts
+@@ -151,6 +151,17 @@ describe("amount helpers", () => {
+         })
+       ).toEqual({ success: false, reason: "exceeds-maximum" });
+     });
++
++    it("prioritizes the maximum error when amount and precision are both invalid", () => {
++      const parseStrictAmountInput = getStrictAmountParser();
++
++      expect(
++        parseStrictAmountInput("1000000000.001", {
++          maxAmount: AmountHelpers.MAX_TRANSACTION_AMOUNT,
++          maxFractionDigits: 2,
++        })
++      ).toEqual({ success: false, reason: "exceeds-maximum" });
++    });
+   });
+ 
+   describe("controlled amount input changes", () => {
+diff --git a/packages/logic/src/utils/__tests__/date-boundary.test.ts b/packages/logic/src/utils/__tests__/date-boundary.test.ts
+index b703006..a20d48d 100644
+--- a/packages/logic/src/utils/__tests__/date-boundary.test.ts
++++ b/packages/logic/src/utils/__tests__/date-boundary.test.ts
+@@ -284,3 +284,53 @@ describe("first outstanding recurring occurrence", () => {
+     ).toThrow("Unsupported recurring payment frequency");
+   });
+ });
++
++type GetNextRecurringOccurrenceAfter = (options: {
++  readonly startDate: Date;
++  readonly currentOccurrence: Date;
++  readonly frequency: string;
++}) => Date;
++
++function getNextRecurringOccurrenceContract(): GetNextRecurringOccurrenceAfter {
++  const candidate = Reflect.get(
++    DateBoundary,
++    "getNextRecurringOccurrenceAfter"
++  );
++
++  expect(typeof candidate).toBe("function");
++  return candidate as GetNextRecurringOccurrenceAfter;
++}
++
++describe("next anchored recurring occurrence", () => {
++  it("restores the original monthly day after a shortened month", () => {
++    const getNextOccurrence = getNextRecurringOccurrenceContract();
++
++    expect(
++      getNextOccurrence({
++        startDate: new Date(2026, 0, 31, 9, 0, 0),
++        currentOccurrence: new Date(2026, 1, 28, 9, 0, 0),
++        frequency: "MONTHLY",
++      })
++    ).toEqual(new Date(2026, 2, 31, 9, 0, 0));
++    expect(
++      getNextOccurrence({
++        startDate: new Date(2026, 0, 30, 9, 0, 0),
++        currentOccurrence: new Date(2026, 1, 28, 9, 0, 0),
++        frequency: "MONTHLY",
++      })
++    ).toEqual(new Date(2026, 2, 30, 9, 0, 0));
++  });
++
++  it("restores a leap-day yearly anchor when the target year supports it", () => {
++    const getNextOccurrence = getNextRecurringOccurrenceContract();
++
++    expect(
++      getNextOccurrence({
++        startDate: new Date(2024, 1, 29, 10, 0, 0),
++        currentOccurrence: new Date(2027, 1, 28, 10, 0, 0),
++        frequency: "YEARLY",
++      })
++    ).toEqual(new Date(2028, 1, 29, 10, 0, 0));
++  });
++});
