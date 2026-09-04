@@ -6,6 +6,7 @@ on:
       - codex/103-recurring-payment-validation
     paths:
       - .github/codex/review.patch
+      - .github/workflows/codex-apply-review-patch.yml
 
 permissions:
   contents: write
@@ -38,6 +39,7 @@ jobs:
           fi
 
           tail -n +2 "$patch_file" > /tmp/codex-review.patch
+          printf '\n' >> /tmp/codex-review.patch
           git apply --check /tmp/codex-review.patch
           git apply /tmp/codex-review.patch
           rm "$patch_file"
