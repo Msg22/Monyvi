@@ -183,7 +183,9 @@ jest.mock("@/components/ui/Toast", () => ({
 
 jest.mock("@/utils/logger", () => ({
   logger: {
-    error: mockLoggerError,
+    error: (...args: readonly unknown[]): void => {
+      mockLoggerError(...args);
+    },
   },
 }));
 
