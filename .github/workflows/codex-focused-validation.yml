@@ -53,10 +53,13 @@ jobs:
         run: npm test -w @monyvi/logic -- --runInBand amount-helpers currency date-boundary
 
       - name: Test recurring and transaction paths
+        if: always()
         run: npm test -w @monyvi/mobile -- --runInBand transaction-validation recurring-payment-validation recurring-payment-service create-recurring-payment
 
       - name: Typecheck shared logic
+        if: always()
         run: npm run typecheck -w @monyvi/logic
 
       - name: Typecheck mobile
+        if: always()
         run: npm run typecheck -w @monyvi/mobile
