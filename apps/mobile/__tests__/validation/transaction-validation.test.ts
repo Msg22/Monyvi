@@ -1,5 +1,8 @@
 import type { CurrencyType, TransactionType } from "@monyvi/db";
-import { validateTransactionForm } from "@/validation/transaction-validation";
+import {
+  validateTransactionForm,
+  type TransactionValidationMessages,
+} from "@/validation/transaction-validation";
 
 type ValidateTransactionForm = (
   type: TransactionType | "TRANSFER",
@@ -14,7 +17,7 @@ type ValidateTransactionForm = (
         readonly fromAccountId: string | null;
         readonly toAccountId: string | null;
       },
-  messages?: Record<string, string>,
+  messages?: Partial<TransactionValidationMessages>,
   options?: { readonly currency?: CurrencyType }
 ) => ReturnType<typeof validateTransactionForm>;
 
@@ -226,10 +229,10 @@ describe("validateTransactionForm", () => {
     });
 
     it("uses localized precision copy when provided", () => {
-      const messages = {
+      const messages: Partial<TransactionValidationMessages> = {
         amountPrecision: (precision: number): string =>
           `localized precision ${precision}`,
-      } as unknown as Parameters<typeof validateTransactionForm>[2];
+      };
 
       const result = validateTransactionForm(
         "EXPENSE",

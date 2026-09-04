@@ -24,6 +24,11 @@ export interface TransferFormData {
 }
 
 export interface TransactionValidationMessages {
+  readonly amountRequired: string;
+  readonly invalidAmount: string;
+  readonly amountMustBePositive: string;
+  readonly amountMaximum: (maximum: number) => string;
+  readonly amountPrecision: (precision: number) => string;
   readonly accountRequired: string;
   readonly sourceAccountRequired: string;
   readonly destinationAccountRequired: string;
@@ -34,16 +39,17 @@ export interface TransactionValidationOptions {
 }
 
 const defaultValidationMessages: TransactionValidationMessages = {
+  amountRequired: "Amount is required",
+  invalidAmount: "Please enter a valid amount",
+  amountMustBePositive: "Amount must be greater than 0",
+  amountMaximum: (maximum) =>
+    `Amount must be at most ${maximum.toLocaleString("en-US")}`,
+  amountPrecision: (precision) =>
+    `Amount must have at most ${precision} decimal places`,
   accountRequired: "Account is required",
   sourceAccountRequired: "Source account is required",
   destinationAccountRequired: "Destination account is required",
 };
-
-const TRANSACTION_AMOUNT_LIMIT_MESSAGE = `Amount must be at most ${MAX_TRANSACTION_AMOUNT.toLocaleString(
-  "en-US"
-)}`;
-const INVALID_AMOUNT_MESSAGE = "Please enter a valid amount";
-const POSITIVE_AMOUNT_MESSAGE = "Amount must be greater than 0";
 
 function requiredIdSchema(message: string): z.ZodType<string | null> {
   return z
@@ -54,25 +60,27 @@ function requiredIdSchema(message: string): z.ZodType<string | null> {
 
 function getAmountValidationMessage(
   reason: StrictAmountParseFailureReason,
-  maxFractionDigits: number | undefined
+  maxFractionDigits: number | undefined,
+  messages: TransactionValidationMessages
 ): string {
   switch (reason) {
     case "required":
-      return "Amount is required";
+      return messages.amountRequired;
     case "not-positive":
-      return POSITIVE_AMOUNT_MESSAGE;
+      return messages.amountMustBePositive;
     case "exceeds-maximum":
-      return TRANSACTION_AMOUNT_LIMIT_MESSAGE;
+      return messages.amountMaximum(MAX_TRANSACTION_AMOUNT);
     case "exceeds-precision":
-      return `Amount must have at most ${maxFractionDigits ?? 0} decimal places`;
+      return messages.amountPrecision(maxFractionDigits ?? 0);
     case "invalid-format":
     default:
-      return INVALID_AMOUNT_MESSAGE;
+      return messages.invalidAmount;
   }
 }
 
 function createAmountSchema(
-  options: TransactionValidationOptions
+  options: TransactionValidationOptions,
+  messages: TransactionValidationMessages
 ): z.ZodType<string> {
   const maxFractionDigits = options.currency
     ? getCurrencyPrecision(options.currency)
@@ -87,7 +95,11 @@ function createAmountSchema(
 
     context.addIssue({
       code: "custom",
-      message: getAmountValidationMessage(result.reason, maxFractionDigits),
+      message: getAmountValidationMessage(
+        result.reason,
+        maxFractionDigits,
+        messages
+      ),
     });
   });
 }
@@ -100,7 +112,7 @@ function createBaseTransactionSchema(
   options: TransactionValidationOptions
 ): z.ZodType<TransactionFormData> {
   return z.object({
-    amount: createAmountSchema(options),
+    amount: createAmountSchema(options, messages),
     accountId: requiredIdSchema(messages.accountRequired),
     categoryId: z.string().min(1, "Category is required"),
   });
@@ -115,7 +127,7 @@ function createTransferSchema(
 ): z.ZodType<TransferFormData> {
   return z
     .object({
-      amount: createAmountSchema(options),
+      amount: createAmountSchema(options, messages),
       fromAccountId: requiredIdSchema(messages.sourceAccountRequired),
       toAccountId: requiredIdSchema(messages.destinationAccountRequired),
     })
@@ -143,7 +155,7 @@ export type TransactionValidationErrors = Partial<
  *
  * @param type - The current transaction type/mode
  * @param data - The form data to validate
- * @param messages - Optional localized required-account messages
+ * @param messages - Optional localized validation messages
  * @param options - Currency-aware amount validation options
  * @returns Object with `isValid` boolean and `errors` record
  */
