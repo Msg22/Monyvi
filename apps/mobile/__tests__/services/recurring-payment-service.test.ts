@@ -406,7 +406,7 @@ describe("recurring-payment-service", () => {
       });
 
       expect(result).toMatchObject({
-        startDate: new Date("2026-09-05T08:00:00.000Z"),
+        startDate: new Date("2026-08-01T08:00:00.000Z"),
         nextDueDate: new Date("2026-09-05T08:00:00.000Z"),
         status: "ACTIVE",
       });
@@ -967,6 +967,25 @@ describe("recurring-payment-service", () => {
 
       expect(payment.status).toBe("COMPLETED");
       expect(payment.nextDueDate).toEqual(new Date("2026-07-01T00:00:00.000Z"));
+    });
+
+    it("advances a shortened-month occurrence from the original monthly anchor", async () => {
+      const payment = createRecurringRecord({
+        frequency: "MONTHLY",
+        startDate: new Date("2026-01-31T09:00:00.000Z"),
+        nextDueDate: new Date("2026-02-28T09:00:00.000Z"),
+      });
+      mockFindOwned.mockResolvedValue(payment);
+
+      await submitRecurringPayment({
+        payment: payment as never,
+        accountId: "account-1",
+        amount: 250,
+      });
+
+      expect(payment.nextDueDate).toEqual(
+        new Date("2026-03-31T09:00:00.000Z")
+      );
     });
 
     it("accepts a final due payment on End date when times differ", async () => {
