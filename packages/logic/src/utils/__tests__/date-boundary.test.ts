@@ -284,3 +284,53 @@ describe("first outstanding recurring occurrence", () => {
     ).toThrow("Unsupported recurring payment frequency");
   });
 });
+
+type GetNextRecurringOccurrenceAfter = (options: {
+  readonly startDate: Date;
+  readonly currentOccurrence: Date;
+  readonly frequency: string;
+}) => Date;
+
+function getNextRecurringOccurrenceContract(): GetNextRecurringOccurrenceAfter {
+  const candidate = Reflect.get(
+    DateBoundary,
+    "getNextRecurringOccurrenceAfter"
+  );
+
+  expect(typeof candidate).toBe("function");
+  return candidate as GetNextRecurringOccurrenceAfter;
+}
+
+describe("next anchored recurring occurrence", () => {
+  it("restores the original monthly day after a shortened month", () => {
+    const getNextOccurrence = getNextRecurringOccurrenceContract();
+
+    expect(
+      getNextOccurrence({
+        startDate: new Date(2026, 0, 31, 9, 0, 0),
+        currentOccurrence: new Date(2026, 1, 28, 9, 0, 0),
+        frequency: "MONTHLY",
+      })
+    ).toEqual(new Date(2026, 2, 31, 9, 0, 0));
+    expect(
+      getNextOccurrence({
+        startDate: new Date(2026, 0, 30, 9, 0, 0),
+        currentOccurrence: new Date(2026, 1, 28, 9, 0, 0),
+        frequency: "MONTHLY",
+      })
+    ).toEqual(new Date(2026, 2, 30, 9, 0, 0));
+  });
+
+  it("restores a leap-day yearly anchor when the target year supports it", () => {
+    const getNextOccurrence = getNextRecurringOccurrenceContract();
+
+    expect(
+      getNextOccurrence({
+        startDate: new Date(2024, 1, 29, 10, 0, 0),
+        currentOccurrence: new Date(2027, 1, 28, 10, 0, 0),
+        frequency: "YEARLY",
+      })
+    ).toEqual(new Date(2028, 1, 29, 10, 0, 0));
+  });
+});
+
