@@ -1,0 +1,49 @@
+name: Codex Apply Patch
+
+on:
+  push:
+    branches:
+      - codex/103-recurring-payment-validation
+    paths:
+      - .github/codex/changes.patch
+
+permissions:
+  contents: write
+
+concurrency:
+  group: codex-apply-patch-103
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Apply prepared patch
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: codex/103-recurring-payment-validation
+
+      - name: Apply and commit patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          patch_file=".github/codex/changes.patch"
+          commit_message="$(sed -n '1s/^# commit-message: //p' "$patch_file")"
+          if [[ -z "$commit_message" ]]; then
+            echo "Missing '# commit-message: ...' header" >&2
+            exit 1
+          fi
+
+          tail -n +2 "$patch_file" > /tmp/codex-changes.patch
+          git apply --check /tmp/codex-changes.patch
+          git apply /tmp/codex-changes.patch
+          rm "$patch_file"
+
+          git config user.name "OpenAI Codex"
+          git config user.email "codex@openai.com"
+          git add -A
+          git commit -m "$commit_message"
+          git push origin HEAD:codex/103-recurring-payment-validation
