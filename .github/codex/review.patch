@@ -1,0 +1,46 @@
+# commit-message: fix: normalize invalid summary display
+
+diff --git a/apps/mobile/__tests__/app/recurring-payment-header-actions.test.tsx b/apps/mobile/__tests__/app/recurring-payment-header-actions.test.tsx
+index 3b87c88..c62eb65 100644
+--- a/apps/mobile/__tests__/app/recurring-payment-header-actions.test.tsx
++++ b/apps/mobile/__tests__/app/recurring-payment-header-actions.test.tsx
+@@ -58,6 +58,7 @@ jest.mock("@/components/recurring-payments", () => {
+     (
+       props: {
+         readonly status?: "ACTIVE" | "PAUSED" | "COMPLETED";
++        readonly recurrenceAnchorDate?: Date;
+         readonly initialValues: {
+           readonly startDate: Date;
+         };
+@@ -88,7 +89,9 @@ jest.mock("@/components/recurring-payments", () => {
+         accountId: "account-1",
+         categoryId: "category-1",
+         frequency: "MONTHLY" as const,
+-        startDate: props.initialValues.startDate,
++        startDate: props.recurrenceAnchorDate
++          ? props.initialValues.startDate
++          : new Date("2026-06-01T00:00:00.000Z"),
+         endDate: mockFormEndDate,
+         reactivateAfterSaving: mockReactivateAfterSaving,
+         action: "NOTIFY" as const,
+diff --git a/apps/mobile/components/recurring-payments/RecurringPaymentSummaryCard.tsx b/apps/mobile/components/recurring-payments/RecurringPaymentSummaryCard.tsx
+index 13ca54e..782b0ed 100644
+--- a/apps/mobile/components/recurring-payments/RecurringPaymentSummaryCard.tsx
++++ b/apps/mobile/components/recurring-payments/RecurringPaymentSummaryCard.tsx
+@@ -46,6 +46,7 @@ export function RecurringPaymentSummaryCard({
+     amount: displayAmount,
+     currency,
+   });
++  const amountSign = displayAmount === 0 ? "" : isIncome ? "+" : "-";
+   const iconConfig = category ? getCategoryIconConfig(category) : null;
+   const statusClasses = getStatusPillClasses(statusKind);
+ 
+@@ -108,7 +109,7 @@ export function RecurringPaymentSummaryCard({
+               isIncome ? "text-nileGreen-500" : "text-red-500"
+             }`}
+           >
+-            {isIncome ? "+" : "-"}
++            {amountSign}
+             {formattedAmount}
+           </Text>
+         </View>
