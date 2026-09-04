@@ -1,1 +1,1 @@
-red-safe-recurring-submission-exact
+green-safe-recurring-submission
