@@ -24,7 +24,7 @@ diff --git a/packages/logic/src/utils/__tests__/amount-helpers.test.ts b/package
 index d887491..0000000 100644
 --- a/packages/logic/src/utils/__tests__/amount-helpers.test.ts
 +++ b/packages/logic/src/utils/__tests__/amount-helpers.test.ts
-@@ -139,6 +139,17 @@ describe("amount helpers", () => {
+@@ -139,7 +139,18 @@ describe("amount helpers", () => {
        expect(
          parseStrictAmountInput("0.123456789", { maxFractionDigits: 8 })
        ).toEqual({ success: false, reason: "exceeds-precision" });
@@ -64,7 +64,7 @@ index b152f4c..0000000 100644
        setNote: jest.fn(),
        setCounterparty: jest.fn(),
        setTxType: jest.fn(),
-@@ -225,6 +226,18 @@ describe("TransactionEditModal SMS workspace", () => {
+@@ -225,6 +226,19 @@ describe("TransactionEditModal SMS workspace", () => {
      ).toBeTruthy();
    });
  
@@ -83,13 +83,13 @@ index b152f4c..0000000 100644
    it("renders the resolved ATM destination creation mode", () => {
      mockStateOverrides = {
        formConfig: {
-@@ -260,6 +273,7 @@ describe("TransactionEditModal existing voice workspace", () => {
+@@ -260,4 +274,5 @@ describe("TransactionEditModal existing voice workspace", () => {
    beforeEach(() => {
 +    jest.clearAllMocks();
      mockStateOverrides = {};
    });
  
-@@ -282,4 +296,22 @@ describe("TransactionEditModal existing voice workspace", () => {
+@@ -282,4 +297,20 @@ describe("TransactionEditModal existing voice workspace", () => {
      expect(view.queryByTestId("sms-edit-fields")).toBeNull();
      expect(view.getByPlaceholderText("note_edit_placeholder")).toBeTruthy();
    });
@@ -114,7 +114,7 @@ diff --git a/apps/mobile/__tests__/validation/transaction-validation.test.ts b/a
 index 1f8e437..0000000 100644
 --- a/apps/mobile/__tests__/validation/transaction-validation.test.ts
 +++ b/apps/mobile/__tests__/validation/transaction-validation.test.ts
-@@ -222,6 +222,24 @@ describe("validateTransactionForm", () => {
+@@ -222,6 +222,23 @@ describe("validateTransactionForm", () => {
          ).errors.amount
        ).toBe("Amount must have at most 8 decimal places");
      });
@@ -143,7 +143,7 @@ diff --git a/apps/mobile/__tests__/services/recurring-payment-service.test.ts b/
 index c1b1a25..0000000 100644
 --- a/apps/mobile/__tests__/services/recurring-payment-service.test.ts
 +++ b/apps/mobile/__tests__/services/recurring-payment-service.test.ts
-@@ -340,6 +340,38 @@ describe("recurring-payment-service", () => {
+@@ -340,6 +340,30 @@ describe("recurring-payment-service", () => {
        expect(mockWrite).toHaveBeenCalledTimes(1);
        expect(payment.startDate).toEqual(unchangedLegacyDate);
      });
