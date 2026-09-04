@@ -1,3 +1,7 @@
+import type { CurrencyType } from "@monyvi/db";
+import Decimal from "decimal.js";
+import { getCurrencyPrecision } from "./currency";
+
 /**
  * Formats a raw numeric string with commas for thousands separators,
  * preserving existing decimal components.
@@ -227,4 +231,26 @@ export function isValidTransactionAmount(amount: number): boolean {
   return (
     Number.isFinite(amount) && amount > 0 && amount <= MAX_TRANSACTION_AMOUNT
   );
+}
+
+/**
+ * Validates a numeric amount against the shared transaction maximum and the
+ * selected currency's configured decimal precision.
+ */
+export function isValidCurrencyAmount(
+  amount: number,
+  currency: CurrencyType
+): boolean {
+  if (!isValidTransactionAmount(amount)) {
+    return false;
+  }
+
+  try {
+    return (
+      new Decimal(amount.toString()).decimalPlaces() <=
+      getCurrencyPrecision(currency)
+    );
+  } catch {
+    return false;
+  }
 }

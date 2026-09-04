@@ -6,6 +6,12 @@ export interface RecurringStartDateValidationOptions {
   readonly originalStartDate?: Date | null;
 }
 
+export interface FirstRecurringOccurrenceOptions {
+  readonly startDate: Date;
+  readonly frequency: string;
+  readonly referenceDate?: Date;
+}
+
 /** Returns whether a Date contains a finite timestamp. */
 export function isValidDate(date: Date): boolean {
   return Number.isFinite(date.getTime());
@@ -82,6 +88,44 @@ export function isRecurringStartDateAllowed({
 }
 
 /**
+ * Returns the first occurrence after an already recorded start date whose local
+ * calendar day is on or after the supplied reference date. Monthly, quarterly,
+ * and yearly occurrences stay anchored to the original day instead of drifting
+ * after a shorter month.
+ */
+export function getFirstRecurringOccurrenceOnOrAfter({
+  startDate,
+  frequency,
+  referenceDate = new Date(),
+}: FirstRecurringOccurrenceOptions): Date {
+  assertValidDate(startDate, "start date");
+  assertValidDate(referenceDate, "reference date");
+
+  let occurrenceIndex = 1;
+  let occurrence = getAnchoredRecurringOccurrence(
+    startDate,
+    frequency,
+    occurrenceIndex
+  );
+
+  while (!isOnOrBeforeDay(referenceDate, occurrence)) {
+    const previousTimestamp = occurrence.getTime();
+    occurrenceIndex += 1;
+    occurrence = getAnchoredRecurringOccurrence(
+      startDate,
+      frequency,
+      occurrenceIndex
+    );
+
+    if (occurrence.getTime() <= previousTimestamp) {
+      throw new Error("Recurring payment occurrence did not advance");
+    }
+  }
+
+  return occurrence;
+}
+
+/**
  * Returns whether a date falls on or before another date in local calendar days.
  */
 export function isOnOrBeforeDay(date: Date, boundary: Date): boolean {
@@ -141,6 +185,31 @@ export function getRecurringPaymentReactivationDueDate({
   }
 
   return nextDueDate;
+}
+
+function getAnchoredRecurringOccurrence(
+  startDate: Date,
+  frequency: string,
+  occurrenceIndex: number
+): Date {
+  const occurrence = new Date(startDate);
+
+  switch (frequency) {
+    case "DAILY":
+      occurrence.setDate(occurrence.getDate() + occurrenceIndex);
+      return occurrence;
+    case "WEEKLY":
+      occurrence.setDate(occurrence.getDate() + occurrenceIndex * 7);
+      return occurrence;
+    case "MONTHLY":
+      return addMonthsClamped(startDate, occurrenceIndex);
+    case "QUARTERLY":
+      return addMonthsClamped(startDate, occurrenceIndex * 3);
+    case "YEARLY":
+      return addMonthsClamped(startDate, occurrenceIndex * 12);
+    default:
+      throw new Error("Unsupported recurring payment frequency");
+  }
 }
 
 function calculateNextDueDate(currentDueDate: Date, frequency: string): Date {
