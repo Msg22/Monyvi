@@ -1,0 +1,101 @@
+# commit-message: feat: add recurring start-date boundaries
+diff --git a/packages/logic/src/utils/date-boundary.ts b/packages/logic/src/utils/date-boundary.ts
+index 43204d1..b28d74c 100644
+--- a/packages/logic/src/utils/date-boundary.ts
++++ b/packages/logic/src/utils/date-boundary.ts
+@@ -1,5 +1,86 @@
+ const MS_PER_DAY = 1000 * 60 * 60 * 24;
+ 
++export interface RecurringStartDateValidationOptions {
++  readonly startDate: Date;
++  readonly referenceDate?: Date;
++  readonly originalStartDate?: Date | null;
++}
++
++/** Returns whether a Date contains a finite timestamp. */
++export function isValidDate(date: Date): boolean {
++  return Number.isFinite(date.getTime());
++}
++
++/** Returns whether two dates identify the same local calendar day. */
++export function isSameLocalCalendarDay(
++  firstDate: Date,
++  secondDate: Date
++): boolean {
++  return (
++    isValidDate(firstDate) &&
++    isValidDate(secondDate) &&
++    firstDate.getFullYear() === secondDate.getFullYear() &&
++    firstDate.getMonth() === secondDate.getMonth() &&
++    firstDate.getDate() === secondDate.getDate()
++  );
++}
++
++/**
++ * Returns the inclusive upper boundary for a newly selected recurring start
++ * date: the same local calendar date one year after the reference date.
++ * Leap-day references clamp to the final valid day of the target month.
++ */
++export function getRecurringStartDateMaximum(
++  referenceDate: Date = new Date()
++): Date {
++  assertValidDate(referenceDate, "reference date");
++
++  const maximumDate = new Date(referenceDate);
++  const referenceDay = maximumDate.getDate();
++  const referenceMonth = maximumDate.getMonth();
++
++  maximumDate.setDate(1);
++  maximumDate.setFullYear(maximumDate.getFullYear() + 1);
++  maximumDate.setMonth(referenceMonth);
++
++  const lastDayOfTargetMonth = new Date(
++    maximumDate.getFullYear(),
++    referenceMonth + 1,
++    0
++  ).getDate();
++  maximumDate.setDate(Math.min(referenceDay, lastDayOfTargetMonth));
++
++  return maximumDate;
++}
++
++/**
++ * Returns whether a recurring-payment start date satisfies the current
++ * inclusive local-calendar range. An existing legacy date outside the range is
++ * allowed only while its local calendar day remains unchanged during editing.
++ */
++export function isRecurringStartDateAllowed({
++  startDate,
++  referenceDate = new Date(),
++  originalStartDate = null,
++}: RecurringStartDateValidationOptions): boolean {
++  if (!isValidDate(startDate) || !isValidDate(referenceDate)) {
++    return false;
++  }
++
++  if (
++    originalStartDate !== null &&
++    isSameLocalCalendarDay(startDate, originalStartDate)
++  ) {
++    return true;
++  }
++
++  const maximumDate = getRecurringStartDateMaximum(referenceDate);
++  return (
++    isOnOrBeforeDay(referenceDate, startDate) &&
++    isOnOrBeforeDay(startDate, maximumDate)
++  );
++}
++
+ /**
+  * Returns whether a date falls on or before another date in local calendar days.
+  */
+@@ -100,7 +181,7 @@ function addMonthsClamped(date: Date, months: number): Date {
+ }
+ 
+ function assertValidDate(date: Date, label: string): void {
+-  if (Number.isNaN(date.getTime())) {
++  if (!isValidDate(date)) {
+     throw new Error(`Invalid recurring payment ${label}`);
+   }
+ }
