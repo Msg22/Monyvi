@@ -1,0 +1,31 @@
+# commit-message: test: align recurring service fixtures with date rules
+diff --git a/apps/mobile/__tests__/services/recurring-payment-service.test.ts b/apps/mobile/__tests__/services/recurring-payment-service.test.ts
+--- a/apps/mobile/__tests__/services/recurring-payment-service.test.ts
++++ b/apps/mobile/__tests__/services/recurring-payment-service.test.ts
+@@ -754,7 +754,7 @@ describe("recurring-payment-service", () => {
+         accountId: "account-1",
+         categoryId: "category-1",
+         frequency: "WEEKLY",
+-        startDate: new Date("2026-01-01T00:00:00.000Z"),
++        startDate: new Date("2026-06-01T00:00:00.000Z"),
+         action: "AUTO_CREATE",
+         notes: undefined,
+       })
+@@ -781,7 +781,7 @@ describe("recurring-payment-service", () => {
+         accountId: "account-1",
+         categoryId: "category-1",
+         frequency: "WEEKLY",
+-        startDate: new Date("2026-01-01T00:00:00.000Z"),
++        startDate: new Date("2026-06-01T00:00:00.000Z"),
+         action: "AUTO_CREATE",
+         notes: undefined,
+       })
+@@ -816,7 +816,7 @@ describe("recurring-payment-service", () => {
+         accountId: "account-1",
+         categoryId: "category-1",
+         frequency: "WEEKLY",
+-        startDate: new Date("2026-01-01T00:00:00.000Z"),
++        startDate: new Date("2026-06-01T00:00:00.000Z"),
+         action: "AUTO_CREATE",
+         notes: undefined,
+       })
