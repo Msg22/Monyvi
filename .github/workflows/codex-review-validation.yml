@@ -1,0 +1,55 @@
+name: Codex Review Validation
+
+on:
+  push:
+    branches:
+      - codex/103-recurring-payment-validation
+    paths:
+      - .github/codex/review-validation-trigger.txt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-review-validation-103
+  cancel-in-progress: true
+
+jobs:
+  review-validation:
+    name: Review regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SENTRYCLI_SKIP_DOWNLOAD: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        timeout-minutes: 20
+
+      - name: Run shared logic review regressions
+        if: always()
+        run: npm test -w @monyvi/logic -- --runInBand amount-helpers date-boundary
+
+      - name: Run mobile review regressions
+        if: always()
+        run: npm test -w @monyvi/mobile -- --runInBand RecurringPaymentForm.test recurring-payment-service.test recurring-payment-header-actions.test
+
+      - name: Typecheck shared logic
+        if: always()
+        run: npm run typecheck -w @monyvi/logic
+
+      - name: Typecheck mobile
+        if: always()
+        run: npm run typecheck -w @monyvi/mobile
