@@ -96,19 +96,19 @@ export function parseStrictAmountInput(
   const canonical = normalized.replace(/,/g, "");
   const fractionDigits = getFractionDigits(canonical);
 
-  if (
-    options.maxFractionDigits !== undefined &&
-    fractionDigits > options.maxFractionDigits
-  ) {
-    return { success: false, reason: "exceeds-precision" };
-  }
-
   const decimalAmount = new Decimal(canonical);
   if (
     options.maxAmount !== undefined &&
     decimalAmount.greaterThan(options.maxAmount)
   ) {
     return { success: false, reason: "exceeds-maximum" };
+  }
+
+  if (
+    options.maxFractionDigits !== undefined &&
+    fractionDigits > options.maxFractionDigits
+  ) {
+    return { success: false, reason: "exceeds-precision" };
   }
 
   const amount = decimalAmount.toNumber();
