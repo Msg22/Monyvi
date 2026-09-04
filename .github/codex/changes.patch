@@ -1,0 +1,176 @@
+# commit-message: test: cover PR review regressions
+
+diff --git a/apps/mobile/__tests__/components/recurring-payments/RecurringPaymentForm.test.tsx b/apps/mobile/__tests__/components/recurring-payments/RecurringPaymentForm.test.tsx
+index 0f447d5..0000000 100644
+--- a/apps/mobile/__tests__/components/recurring-payments/RecurringPaymentForm.test.tsx
++++ b/apps/mobile/__tests__/components/recurring-payments/RecurringPaymentForm.test.tsx
+@@ -223,6 +223,15 @@ function renderForm(
+ }
+ 
+ describe("RecurringPaymentForm", () => {
++  beforeAll(() => {
++    jest.useFakeTimers();
++    jest.setSystemTime(new Date("2026-06-01T12:00:00.000Z"));
++  });
++
++  afterAll(() => {
++    jest.useRealTimers();
++  });
++
+   beforeEach(() => {
+     jest.clearAllMocks();
+     mockScrollTo.mockClear();
+diff --git a/packages/logic/src/utils/__tests__/amount-helpers.test.ts b/packages/logic/src/utils/__tests__/amount-helpers.test.ts
+index d887491..0000000 100644
+--- a/packages/logic/src/utils/__tests__/amount-helpers.test.ts
++++ b/packages/logic/src/utils/__tests__/amount-helpers.test.ts
+@@ -139,6 +139,17 @@ describe("amount helpers", () => {
+       expect(
+         parseStrictAmountInput("0.123456789", { maxFractionDigits: 8 })
+       ).toEqual({ success: false, reason: "exceeds-precision" });
+     });
++
++    it("rejects a canonical decimal above the maximum before number conversion", () => {
++      const parseStrictAmountInput = getStrictAmountParser();
++
++      expect(
++        parseStrictAmountInput("1000000000.00000001", {
++          maxAmount: AmountHelpers.MAX_TRANSACTION_AMOUNT,
++          maxFractionDigits: 8,
++        })
++      ).toEqual({ success: false, reason: "exceeds-maximum" });
++    });
+   });
+ 
+   describe("controlled amount input changes", () => {
+diff --git a/apps/mobile/__tests__/components/transaction-review/TransactionEditModal.test.tsx b/apps/mobile/__tests__/components/transaction-review/TransactionEditModal.test.tsx
+index b152f4c..0000000 100644
+--- a/apps/mobile/__tests__/components/transaction-review/TransactionEditModal.test.tsx
++++ b/apps/mobile/__tests__/components/transaction-review/TransactionEditModal.test.tsx
+@@ -2,6 +2,7 @@ import { fireEvent, render, within } from "@testing-library/react-native";
+ 
+ import { TransactionEditModal } from "@/components/transaction-review/edit-modal/TransactionEditModal";
+ 
++const mockSetAmount = jest.fn();
+ const mockSetIsAccountPickerOpen = jest.fn();
+ const mockSetIsCategoryPickerOpen = jest.fn();
+ const mockSetIsCurrencyPickerOpen = jest.fn();
+@@ -64,7 +65,7 @@ jest.mock("@/hooks/useTransactionEditState", () => ({
+       ...mockStateOverrides,
+     },
+     setters: {
+-      setAmount: jest.fn(),
++      setAmount: mockSetAmount,
+       setNote: jest.fn(),
+       setCounterparty: jest.fn(),
+       setTxType: jest.fn(),
+@@ -225,6 +226,18 @@ describe("TransactionEditModal SMS workspace", () => {
+     ).toBeTruthy();
+   });
+ 
++  it("preserves edits from a formatted SMS amount", () => {
++    mockStateOverrides = { amount: "1234" };
++
++    const view = render(
++      <TransactionEditModal {...baseProps} sourceVariant="sms" />
++    );
++
++    fireEvent.changeText(view.getByDisplayValue("1,234"), "1,23");
++
++    expect(mockSetAmount).toHaveBeenCalledWith("123");
++  });
++
+   it("renders the resolved ATM destination creation mode", () => {
+     mockStateOverrides = {
+       formConfig: {
+@@ -260,6 +273,7 @@ describe("TransactionEditModal existing voice workspace", () => {
+   beforeEach(() => {
++    jest.clearAllMocks();
+     mockStateOverrides = {};
+   });
+ 
+@@ -282,4 +296,22 @@ describe("TransactionEditModal existing voice workspace", () => {
+     expect(view.queryByTestId("sms-edit-fields")).toBeNull();
+     expect(view.getByPlaceholderText("note_edit_placeholder")).toBeTruthy();
+   });
++
++  it("preserves edits from a formatted amount", () => {
++    mockStateOverrides = { amount: "1234" };
++    const voiceTransaction = {
++      ...transaction,
++      source: "VOICE",
++      note: "Weekly groceries",
++    } as const;
++    const view = render(
++      <TransactionEditModal {...baseProps} transaction={voiceTransaction} />
++    );
++
++    fireEvent.changeText(view.getByDisplayValue("1,234"), "1,23");
++
++    expect(mockSetAmount).toHaveBeenCalledWith("123");
++  });
+ });
+diff --git a/apps/mobile/__tests__/validation/transaction-validation.test.ts b/apps/mobile/__tests__/validation/transaction-validation.test.ts
+index 1f8e437..0000000 100644
+--- a/apps/mobile/__tests__/validation/transaction-validation.test.ts
++++ b/apps/mobile/__tests__/validation/transaction-validation.test.ts
+@@ -222,6 +222,24 @@ describe("validateTransactionForm", () => {
+         ).errors.amount
+       ).toBe("Amount must have at most 8 decimal places");
+     });
++
++    it("uses localized precision copy when provided", () => {
++      const messages = {
++        amountPrecision: (precision: number): string =>
++          `localized precision ${precision}`,
++      } as unknown as Parameters<typeof validateTransactionForm>[2];
++
++      const result = validateTransactionForm(
++        "EXPENSE",
++        { ...validPayload, amount: "12.345" },
++        messages,
++        { currency: "EGP" }
++      );
++
++      expect(result.isValid).toBe(false);
++      expect(result.errors.amount).toBe("localized precision 2");
++    });
+ 
+     it("accepts the exact transaction maximum and rejects values above it", () => {
+       expect(
+         validateWithOptions(
+diff --git a/apps/mobile/__tests__/services/recurring-payment-service.test.ts b/apps/mobile/__tests__/services/recurring-payment-service.test.ts
+index c1b1a25..0000000 100644
+--- a/apps/mobile/__tests__/services/recurring-payment-service.test.ts
++++ b/apps/mobile/__tests__/services/recurring-payment-service.test.ts
+@@ -340,6 +340,38 @@ describe("recurring-payment-service", () => {
+       expect(mockWrite).toHaveBeenCalledTimes(1);
+       expect(payment.startDate).toEqual(unchangedLegacyDate);
+     });
++
++    it("keeps the advanced next due date when the start date stays on the same local day", async () => {
++      const legacyStartDate = new Date("2025-01-10T08:00:00.000Z");
++      const unchangedLegacyDate = new Date("2025-01-10T20:00:00.000Z");
++      const advancedNextDueDate = new Date("2026-07-10T08:00:00.000Z");
++      const payment = createRecurringRecord({
++        startDate: legacyStartDate,
++        nextDueDate: advancedNextDueDate,
++      });
++      mockFindOwned.mockImplementation(
++        (_collection: MockCollection, id: string): Promise<unknown> =>
++          id === "account-1"
++            ? Promise.resolve({ id, userId: "user-1", currency: "EGP" })
++            : Promise.resolve(payment)
++      );
++
++      await updateRecurringPayment("payment-1", {
++        ...validCreateData,
++        startDate: unchangedLegacyDate,
++      });
++
++      expect(payment.startDate).toEqual(unchangedLegacyDate);
++      expect(payment.nextDueDate).toEqual(advancedNextDueDate);
++    });
+ 
+     it("rejects changing a legacy start day to a different out-of-range date before writing", async () => {
+       const payment = createRecurringRecord({
