@@ -319,11 +319,16 @@ export default function EditTransaction(): React.ReactNode {
     }
 
     // --- Branch: Regular Transaction Update ---
-    const { isValid, errors } = validateTransactionForm(type, {
-      amount,
-      accountId: selectedAccountId,
-      categoryId: selectedCategoryId,
-    });
+    const { isValid, errors } = validateTransactionForm(
+      type,
+      {
+        amount,
+        accountId: selectedAccountId,
+        categoryId: selectedCategoryId,
+      },
+      undefined,
+      { currency: selectedAccount?.currency }
+    );
 
     if (!isValid) {
       setFormErrors(errors);
