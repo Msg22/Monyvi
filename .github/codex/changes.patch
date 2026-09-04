@@ -1,9 +1,7 @@
 # commit-message: test: preserve the recurring logger mock
-diff --git a/apps/mobile/__tests__/app/recurring-payment-header-actions.test.tsx b/apps/mobile/__tests__/app/recurring-payment-header-actions.test.tsx
-index 5e23018..51a8cda 100644
 --- a/apps/mobile/__tests__/app/recurring-payment-header-actions.test.tsx
 +++ b/apps/mobile/__tests__/app/recurring-payment-header-actions.test.tsx
-@@ -183,7 +183,9 @@ jest.mock("@/components/ui/Toast", () => ({
+@@ -183,7 +183,9 @@
  
  jest.mock("@/utils/logger", () => ({
    logger: {
@@ -13,3 +11,4 @@ index 5e23018..51a8cda 100644
 +    },
    },
  }));
+ 
