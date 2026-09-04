@@ -58,6 +58,7 @@ jest.mock("@/components/recurring-payments", () => {
     (
       props: {
         readonly status?: "ACTIVE" | "PAUSED" | "COMPLETED";
+        readonly recurrenceAnchorDate?: Date;
         readonly initialValues: {
           readonly startDate: Date;
         };
@@ -88,7 +89,9 @@ jest.mock("@/components/recurring-payments", () => {
         accountId: "account-1",
         categoryId: "category-1",
         frequency: "MONTHLY" as const,
-        startDate: props.initialValues.startDate,
+        startDate: props.recurrenceAnchorDate
+          ? props.initialValues.startDate
+          : new Date("2026-06-01T00:00:00.000Z"),
         endDate: mockFormEndDate,
         reactivateAfterSaving: mockReactivateAfterSaving,
         action: "NOTIFY" as const,

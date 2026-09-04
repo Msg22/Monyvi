@@ -46,6 +46,7 @@ export function RecurringPaymentSummaryCard({
     amount: displayAmount,
     currency,
   });
+  const amountSign = displayAmount === 0 ? "" : isIncome ? "+" : "-";
   const iconConfig = category ? getCategoryIconConfig(category) : null;
   const statusClasses = getStatusPillClasses(statusKind);
 
@@ -108,7 +109,7 @@ export function RecurringPaymentSummaryCard({
               isIncome ? "text-nileGreen-500" : "text-red-500"
             }`}
           >
-            {isIncome ? "+" : "-"}
+            {amountSign}
             {formattedAmount}
           </Text>
         </View>
