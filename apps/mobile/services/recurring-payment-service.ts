@@ -3,6 +3,7 @@ import {
   getRecurringPaymentReactivationDueDate,
   isOnOrBeforeDay,
   isRecurringStartDateAllowed,
+  isSameLocalCalendarDay,
   isValidCurrencyAmount,
   isValidDate,
 } from "@monyvi/logic";
@@ -260,8 +261,10 @@ export async function updateRecurringPayment(
         previousEndDate !== undefined &&
         previousEndDate !== null &&
         !isOnOrBeforeDay(nextEndDate, previousEndDate));
-    const didStartDateChange =
-      payment.startDate.getTime() !== data.startDate.getTime();
+    const didStartDateChange = !isSameLocalCalendarDay(
+      payment.startDate,
+      data.startDate
+    );
     const didFrequencyChange = payment.frequency !== data.frequency;
     const shouldRetainFinalPaidOccurrence =
       wasCompletedAtPreviousBoundary &&

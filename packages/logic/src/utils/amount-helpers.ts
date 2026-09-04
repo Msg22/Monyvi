@@ -103,15 +103,20 @@ export function parseStrictAmountInput(
     return { success: false, reason: "exceeds-precision" };
   }
 
-  const amount = Number(canonical);
+  const decimalAmount = new Decimal(canonical);
+  if (
+    options.maxAmount !== undefined &&
+    decimalAmount.greaterThan(options.maxAmount)
+  ) {
+    return { success: false, reason: "exceeds-maximum" };
+  }
+
+  const amount = decimalAmount.toNumber();
   if (!Number.isFinite(amount)) {
     return { success: false, reason: "invalid-format" };
   }
   if (amount <= 0) {
     return { success: false, reason: "not-positive" };
-  }
-  if (options.maxAmount !== undefined && amount > options.maxAmount) {
-    return { success: false, reason: "exceeds-maximum" };
   }
 
   return {
