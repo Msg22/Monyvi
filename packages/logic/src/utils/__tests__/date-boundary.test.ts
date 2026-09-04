@@ -203,3 +203,84 @@ describe("recurring start-date boundary", () => {
     ).toBe(false);
   });
 });
+
+type GetFirstRecurringOccurrenceOnOrAfter = (options: {
+  readonly startDate: Date;
+  readonly frequency: string;
+  readonly referenceDate?: Date;
+}) => Date;
+
+function getFirstRecurringOccurrenceContract(): GetFirstRecurringOccurrenceOnOrAfter {
+  const candidate = Reflect.get(
+    DateBoundary,
+    "getFirstRecurringOccurrenceOnOrAfter"
+  );
+
+  expect(typeof candidate).toBe("function");
+  return candidate as GetFirstRecurringOccurrenceOnOrAfter;
+}
+
+describe("first outstanding recurring occurrence", () => {
+  it("starts after the recorded occurrence and advances until the local reference day", () => {
+    const getFirstOccurrence = getFirstRecurringOccurrenceContract();
+    const referenceDate = new Date(2026, 8, 4, 12, 0, 0);
+
+    expect(
+      getFirstOccurrence({
+        startDate: new Date(2026, 8, 4, 8, 0, 0),
+        frequency: "DAILY",
+        referenceDate,
+      })
+    ).toEqual(new Date(2026, 8, 5, 8, 0, 0));
+    expect(
+      getFirstOccurrence({
+        startDate: new Date(2026, 7, 1, 8, 0, 0),
+        frequency: "WEEKLY",
+        referenceDate,
+      })
+    ).toEqual(new Date(2026, 8, 5, 8, 0, 0));
+  });
+
+  it("keeps monthly occurrences aligned to the original month-end day", () => {
+    const getFirstOccurrence = getFirstRecurringOccurrenceContract();
+
+    expect(
+      getFirstOccurrence({
+        startDate: new Date(2026, 0, 31, 9, 0, 0),
+        frequency: "MONTHLY",
+        referenceDate: new Date(2026, 2, 1, 12, 0, 0),
+      })
+    ).toEqual(new Date(2026, 2, 31, 9, 0, 0));
+  });
+
+  it("clamps leap-day yearly occurrences without losing the original anchor", () => {
+    const getFirstOccurrence = getFirstRecurringOccurrenceContract();
+
+    expect(
+      getFirstOccurrence({
+        startDate: new Date(2024, 1, 29, 10, 0, 0),
+        frequency: "YEARLY",
+        referenceDate: new Date(2026, 0, 1, 12, 0, 0),
+      })
+    ).toEqual(new Date(2026, 1, 28, 10, 0, 0));
+  });
+
+  it("rejects invalid dates and unsupported frequencies", () => {
+    const getFirstOccurrence = getFirstRecurringOccurrenceContract();
+
+    expect(() =>
+      getFirstOccurrence({
+        startDate: new Date(Number.NaN),
+        frequency: "MONTHLY",
+        referenceDate: new Date(2026, 8, 4),
+      })
+    ).toThrow("Invalid recurring payment start date");
+    expect(() =>
+      getFirstOccurrence({
+        startDate: new Date(2026, 8, 4),
+        frequency: "FORTNIGHTLY",
+        referenceDate: new Date(2026, 8, 4),
+      })
+    ).toThrow("Unsupported recurring payment frequency");
+  });
+});

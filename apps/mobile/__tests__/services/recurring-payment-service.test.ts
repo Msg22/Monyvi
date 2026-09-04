@@ -161,7 +161,16 @@ const { database: mockDatabase } = jest.requireMock<{
 }>("@monyvi/db");
 
 describe("recurring-payment-service", () => {
+  beforeAll(() => {
+    jest.useFakeTimers();
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   beforeEach(() => {
+    jest.setSystemTime(new Date("2026-06-01T12:00:00.000Z"));
     jest.clearAllMocks();
     mockWrite.mockImplementation(
       async (callback: () => Promise<unknown>): Promise<unknown> => callback()
@@ -208,6 +217,198 @@ describe("recurring-payment-service", () => {
       userId: "user-1",
       findOwned: mockFindOwned,
       findAccessibleCategory: mockFindAccessibleCategory,
+    });
+  });
+
+  describe("create and update boundary validation", () => {
+    const validCreateData = {
+      name: "Netflix",
+      amount: 250,
+      currency: "EGP",
+      type: "EXPENSE",
+      accountId: "account-1",
+      categoryId: "category-1",
+      frequency: "MONTHLY",
+      startDate: new Date("2026-06-01T00:00:00.000Z"),
+      action: "NOTIFY",
+    } as const;
+
+    it.each([
+      -250,
+      0,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      1_000_000_000.01,
+      12.345,
+    ])("rejects invalid create amount %p before resolving scope or writing", async (amount) => {
+      await expect(
+        createRecurringPayment({ ...validCreateData, amount })
+      ).rejects.toThrow(
+        RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_AMOUNT
+      );
+
+      expect(mockGetCurrentUserDataScope).not.toHaveBeenCalled();
+      expect(mockWrite).not.toHaveBeenCalled();
+    });
+
+    it("accepts the inclusive maximum and the two-, three-, and eight-decimal currency contract", async () => {
+      await expect(
+        createRecurringPayment({
+          ...validCreateData,
+          amount: 1_000_000_000,
+        })
+      ).resolves.toBeDefined();
+      await expect(
+        createRecurringPayment({
+          ...validCreateData,
+          amount: 12.345,
+          currency: "KWD",
+        })
+      ).resolves.toBeDefined();
+      await expect(
+        createRecurringPayment({
+          ...validCreateData,
+          amount: 0.12345678,
+          currency: "BTC",
+        })
+      ).resolves.toBeDefined();
+
+      expect(mockWrite).toHaveBeenCalledTimes(3);
+    });
+
+    it.each([
+      new Date(Number.NaN),
+      new Date("2026-05-31T23:59:59.000Z"),
+      new Date("2027-06-02T00:00:00.000Z"),
+    ])("rejects invalid or out-of-range create date %p before writing", async (startDate) => {
+      await expect(
+        createRecurringPayment({ ...validCreateData, startDate })
+      ).rejects.toThrow(
+        RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_START_DATE
+      );
+
+      expect(mockGetCurrentUserDataScope).not.toHaveBeenCalled();
+      expect(mockWrite).not.toHaveBeenCalled();
+    });
+
+    it("rejects an invalid End date before writing", async () => {
+      await expect(
+        createRecurringPayment({
+          ...validCreateData,
+          endDate: new Date(Number.NaN),
+        })
+      ).rejects.toThrow(
+        RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_END_DATE
+      );
+
+      expect(mockWrite).not.toHaveBeenCalled();
+    });
+
+    it("rejects an invalid update amount before resolving scope or writing", async () => {
+      await expect(
+        updateRecurringPayment("payment-1", {
+          ...validCreateData,
+          amount: -250,
+        })
+      ).rejects.toThrow(
+        RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_AMOUNT
+      );
+
+      expect(mockGetCurrentUserDataScope).not.toHaveBeenCalled();
+      expect(mockWrite).not.toHaveBeenCalled();
+    });
+
+    it("allows an unchanged legacy start day during update", async () => {
+      const legacyStartDate = new Date("2025-01-10T08:00:00.000Z");
+      const unchangedLegacyDate = new Date("2025-01-10T20:00:00.000Z");
+      const payment = createRecurringRecord({ startDate: legacyStartDate });
+      mockFindOwned.mockImplementation(
+        (_collection: MockCollection, id: string): Promise<unknown> =>
+          id === "account-1"
+            ? Promise.resolve({ id, userId: "user-1", currency: "EGP" })
+            : Promise.resolve(payment)
+      );
+
+      await updateRecurringPayment("payment-1", {
+        ...validCreateData,
+        startDate: unchangedLegacyDate,
+      });
+
+      expect(mockWrite).toHaveBeenCalledTimes(1);
+      expect(payment.startDate).toEqual(unchangedLegacyDate);
+    });
+
+    it("rejects changing a legacy start day to a different out-of-range date before writing", async () => {
+      const payment = createRecurringRecord({
+        startDate: new Date("2025-01-10T08:00:00.000Z"),
+      });
+      mockFindOwned.mockImplementation(
+        (_collection: MockCollection, id: string): Promise<unknown> =>
+          id === "account-1"
+            ? Promise.resolve({ id, userId: "user-1", currency: "EGP" })
+            : Promise.resolve(payment)
+      );
+
+      await expect(
+        updateRecurringPayment("payment-1", {
+          ...validCreateData,
+          startDate: new Date("2025-01-11T08:00:00.000Z"),
+        })
+      ).rejects.toThrow(
+        RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_START_DATE
+      );
+
+      expect(mockWrite).not.toHaveBeenCalled();
+      expect(payment.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("historical transaction recurring templates", () => {
+    it("starts the template at the first frequency-aligned occurrence on or after today", async () => {
+      jest.setSystemTime(new Date("2026-09-04T12:00:00.000Z"));
+
+      const result = await createRecurringPayment({
+        name: "Historical weekly payment",
+        amount: 250,
+        currency: "EGP",
+        type: "EXPENSE",
+        accountId: "account-1",
+        categoryId: "category-1",
+        frequency: "WEEKLY",
+        startDate: new Date("2026-08-01T08:00:00.000Z"),
+        initialOccurrenceRecorded: true,
+        action: "NOTIFY",
+      });
+
+      expect(result).toMatchObject({
+        startDate: new Date("2026-09-05T08:00:00.000Z"),
+        nextDueDate: new Date("2026-09-05T08:00:00.000Z"),
+        status: "ACTIVE",
+      });
+    });
+
+    it("rejects a historical template when no aligned occurrence remains before End date", async () => {
+      jest.setSystemTime(new Date("2026-09-04T12:00:00.000Z"));
+
+      await expect(
+        createRecurringPayment({
+          name: "Ended historical payment",
+          amount: 250,
+          currency: "EGP",
+          type: "EXPENSE",
+          accountId: "account-1",
+          categoryId: "category-1",
+          frequency: "WEEKLY",
+          startDate: new Date("2026-08-01T08:00:00.000Z"),
+          endDate: new Date("2026-09-04T23:59:59.000Z"),
+          initialOccurrenceRecorded: true,
+          action: "NOTIFY",
+        })
+      ).rejects.toThrow(
+        RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_SCHEDULE
+      );
+
+      expect(mockWrite).not.toHaveBeenCalled();
     });
   });
 

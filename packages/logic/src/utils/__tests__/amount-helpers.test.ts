@@ -45,6 +45,29 @@ function getStrictAmountParser(): StrictAmountParser {
   return candidate as StrictAmountParser;
 }
 
+describe("currency-aware numeric amount validation", () => {
+  it("enforces the shared maximum and the existing currency precision contract", () => {
+    const candidate = Reflect.get(AmountHelpers, "isValidCurrencyAmount");
+    expect(typeof candidate).toBe("function");
+    const isValidCurrencyAmount = candidate as (
+      amount: number,
+      currency: import("@monyvi/db").CurrencyType
+    ) => boolean;
+
+    expect(isValidCurrencyAmount(1_000_000_000, "EGP")).toBe(true);
+    expect(isValidCurrencyAmount(1_000_000_000.01, "EGP")).toBe(false);
+    expect(isValidCurrencyAmount(12.34, "EGP")).toBe(true);
+    expect(isValidCurrencyAmount(12.345, "EGP")).toBe(false);
+    expect(isValidCurrencyAmount(12.345, "KWD")).toBe(true);
+    expect(isValidCurrencyAmount(12.3456, "KWD")).toBe(false);
+    expect(isValidCurrencyAmount(0.12345678, "BTC")).toBe(true);
+    expect(isValidCurrencyAmount(0.123456789, "BTC")).toBe(false);
+    expect(isValidCurrencyAmount(0, "EGP")).toBe(false);
+    expect(isValidCurrencyAmount(-1, "EGP")).toBe(false);
+    expect(isValidCurrencyAmount(Number.POSITIVE_INFINITY, "EGP")).toBe(false);
+  });
+});
+
 describe("amount helpers", () => {
   describe("strict shared amount grammar", () => {
     it.each([
