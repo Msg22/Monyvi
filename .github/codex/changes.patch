@@ -1,10 +1,10 @@
 # commit-message: test: cover PR review regressions
 
 diff --git a/apps/mobile/__tests__/components/recurring-payments/RecurringPaymentForm.test.tsx b/apps/mobile/__tests__/components/recurring-payments/RecurringPaymentForm.test.tsx
-index 0f447d5..0000000 100644
+index 0f447d5..46770fe 100644
 --- a/apps/mobile/__tests__/components/recurring-payments/RecurringPaymentForm.test.tsx
 +++ b/apps/mobile/__tests__/components/recurring-payments/RecurringPaymentForm.test.tsx
-@@ -223,6 +223,15 @@ function renderForm(
+@@ -221,6 +221,15 @@ function renderForm(
  }
  
  describe("RecurringPaymentForm", () => {
@@ -20,31 +20,8 @@ index 0f447d5..0000000 100644
    beforeEach(() => {
      jest.clearAllMocks();
      mockScrollTo.mockClear();
-diff --git a/packages/logic/src/utils/__tests__/amount-helpers.test.ts b/packages/logic/src/utils/__tests__/amount-helpers.test.ts
-index d887491..0000000 100644
---- a/packages/logic/src/utils/__tests__/amount-helpers.test.ts
-+++ b/packages/logic/src/utils/__tests__/amount-helpers.test.ts
-@@ -139,7 +139,18 @@ describe("amount helpers", () => {
-       expect(
-         parseStrictAmountInput("0.123456789", { maxFractionDigits: 8 })
-       ).toEqual({ success: false, reason: "exceeds-precision" });
-     });
-+
-+    it("rejects a canonical decimal above the maximum before number conversion", () => {
-+      const parseStrictAmountInput = getStrictAmountParser();
-+
-+      expect(
-+        parseStrictAmountInput("1000000000.00000001", {
-+          maxAmount: AmountHelpers.MAX_TRANSACTION_AMOUNT,
-+          maxFractionDigits: 8,
-+        })
-+      ).toEqual({ success: false, reason: "exceeds-maximum" });
-+    });
-   });
- 
-   describe("controlled amount input changes", () => {
 diff --git a/apps/mobile/__tests__/components/transaction-review/TransactionEditModal.test.tsx b/apps/mobile/__tests__/components/transaction-review/TransactionEditModal.test.tsx
-index b152f4c..0000000 100644
+index b152f4c..3d437ff 100644
 --- a/apps/mobile/__tests__/components/transaction-review/TransactionEditModal.test.tsx
 +++ b/apps/mobile/__tests__/components/transaction-review/TransactionEditModal.test.tsx
 @@ -2,6 +2,7 @@ import { fireEvent, render, within } from "@testing-library/react-native";
@@ -55,7 +32,7 @@ index b152f4c..0000000 100644
  const mockSetIsAccountPickerOpen = jest.fn();
  const mockSetIsCategoryPickerOpen = jest.fn();
  const mockSetIsCurrencyPickerOpen = jest.fn();
-@@ -64,7 +65,7 @@ jest.mock("@/hooks/useTransactionEditState", () => ({
+@@ -67,7 +68,7 @@ jest.mock("@/hooks/useTransactionEditState", () => ({
        ...mockStateOverrides,
      },
      setters: {
@@ -64,7 +41,7 @@ index b152f4c..0000000 100644
        setNote: jest.fn(),
        setCounterparty: jest.fn(),
        setTxType: jest.fn(),
-@@ -225,6 +226,19 @@ describe("TransactionEditModal SMS workspace", () => {
+@@ -233,6 +234,18 @@ describe("TransactionEditModal SMS workspace", () => {
      ).toBeTruthy();
    });
  
@@ -83,13 +60,15 @@ index b152f4c..0000000 100644
    it("renders the resolved ATM destination creation mode", () => {
      mockStateOverrides = {
        formConfig: {
-@@ -260,4 +274,5 @@ describe("TransactionEditModal existing voice workspace", () => {
+@@ -257,6 +270,7 @@ describe("TransactionEditModal SMS workspace", () => {
+ 
+ describe("TransactionEditModal existing voice workspace", () => {
    beforeEach(() => {
 +    jest.clearAllMocks();
      mockStateOverrides = {};
    });
  
-@@ -282,4 +297,20 @@ describe("TransactionEditModal existing voice workspace", () => {
+@@ -275,4 +289,20 @@ describe("TransactionEditModal existing voice workspace", () => {
      expect(view.queryByTestId("sms-edit-fields")).toBeNull();
      expect(view.getByPlaceholderText("note_edit_placeholder")).toBeTruthy();
    });
@@ -110,44 +89,14 @@ index b152f4c..0000000 100644
 +    expect(mockSetAmount).toHaveBeenCalledWith("123");
 +  });
  });
-diff --git a/apps/mobile/__tests__/validation/transaction-validation.test.ts b/apps/mobile/__tests__/validation/transaction-validation.test.ts
-index 1f8e437..0000000 100644
---- a/apps/mobile/__tests__/validation/transaction-validation.test.ts
-+++ b/apps/mobile/__tests__/validation/transaction-validation.test.ts
-@@ -222,6 +222,23 @@ describe("validateTransactionForm", () => {
-         ).errors.amount
-       ).toBe("Amount must have at most 8 decimal places");
-     });
-+
-+    it("uses localized precision copy when provided", () => {
-+      const messages = {
-+        amountPrecision: (precision: number): string =>
-+          `localized precision ${precision}`,
-+      } as unknown as Parameters<typeof validateTransactionForm>[2];
-+
-+      const result = validateTransactionForm(
-+        "EXPENSE",
-+        { ...validPayload, amount: "12.345" },
-+        messages,
-+        { currency: "EGP" }
-+      );
-+
-+      expect(result.isValid).toBe(false);
-+      expect(result.errors.amount).toBe("localized precision 2");
-+    });
- 
-     it("accepts the exact transaction maximum and rejects values above it", () => {
-       expect(
-         validateWithOptions(
 diff --git a/apps/mobile/__tests__/services/recurring-payment-service.test.ts b/apps/mobile/__tests__/services/recurring-payment-service.test.ts
-index c1b1a25..0000000 100644
+index c1b1a25..1641b3c 100644
 --- a/apps/mobile/__tests__/services/recurring-payment-service.test.ts
 +++ b/apps/mobile/__tests__/services/recurring-payment-service.test.ts
-@@ -340,6 +340,30 @@ describe("recurring-payment-service", () => {
-       expect(mockWrite).toHaveBeenCalledTimes(1);
+@@ -339,6 +339,30 @@ describe("recurring-payment-service", () => {
        expect(payment.startDate).toEqual(unchangedLegacyDate);
      });
-+
+ 
 +    it("keeps the advanced next due date when the start date stays on the same local day", async () => {
 +      const legacyStartDate = new Date("2025-01-10T08:00:00.000Z");
 +      const unchangedLegacyDate = new Date("2025-01-10T20:00:00.000Z");
@@ -171,6 +120,57 @@ index c1b1a25..0000000 100644
 +      expect(payment.startDate).toEqual(unchangedLegacyDate);
 +      expect(payment.nextDueDate).toEqual(advancedNextDueDate);
 +    });
- 
++
      it("rejects changing a legacy start day to a different out-of-range date before writing", async () => {
        const payment = createRecurringRecord({
+         startDate: new Date("2025-01-10T08:00:00.000Z"),
+diff --git a/apps/mobile/__tests__/validation/transaction-validation.test.ts b/apps/mobile/__tests__/validation/transaction-validation.test.ts
+index 1f8e437..237cf32 100644
+--- a/apps/mobile/__tests__/validation/transaction-validation.test.ts
++++ b/apps/mobile/__tests__/validation/transaction-validation.test.ts
+@@ -225,6 +225,23 @@ describe("validateTransactionForm", () => {
+       ).toBe("Amount must have at most 8 decimal places");
+     });
+ 
++    it("uses localized precision copy when provided", () => {
++      const messages = {
++        amountPrecision: (precision: number): string =>
++          `localized precision ${precision}`,
++      } as unknown as Parameters<typeof validateTransactionForm>[2];
++
++      const result = validateTransactionForm(
++        "EXPENSE",
++        { ...validPayload, amount: "12.345" },
++        messages,
++        { currency: "EGP" }
++      );
++
++      expect(result.isValid).toBe(false);
++      expect(result.errors.amount).toBe("localized precision 2");
++    });
++
+     it("accepts the exact transaction maximum and rejects values above it", () => {
+       expect(
+         validateWithOptions(
+diff --git a/packages/logic/src/utils/__tests__/amount-helpers.test.ts b/packages/logic/src/utils/__tests__/amount-helpers.test.ts
+index d887491..5c174d5 100644
+--- a/packages/logic/src/utils/__tests__/amount-helpers.test.ts
++++ b/packages/logic/src/utils/__tests__/amount-helpers.test.ts
+@@ -140,6 +140,17 @@ describe("amount helpers", () => {
+         parseStrictAmountInput("0.123456789", { maxFractionDigits: 8 })
+       ).toEqual({ success: false, reason: "exceeds-precision" });
+     });
++
++    it("rejects a canonical decimal above the maximum before number conversion", () => {
++      const parseStrictAmountInput = getStrictAmountParser();
++
++      expect(
++        parseStrictAmountInput("1000000000.00000001", {
++          maxAmount: AmountHelpers.MAX_TRANSACTION_AMOUNT,
++          maxFractionDigits: 8,
++        })
++      ).toEqual({ success: false, reason: "exceeds-maximum" });
++    });
+   });
+ 
+   describe("controlled amount input changes", () => {
