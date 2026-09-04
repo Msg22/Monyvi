@@ -54,7 +54,7 @@ jobs:
 
       - name: Test recurring and transaction paths
         if: always()
-        run: npm test -w @monyvi/mobile -- --runInBand transaction-validation recurring-payment-validation recurring-payment-service create-recurring-payment
+        run: npm test -w @monyvi/mobile -- --runInBand transaction-validation recurring-payment-validation recurring-payment-service create-recurring-payment recurring-payment-header-actions
 
       - name: Typecheck shared logic
         if: always()
