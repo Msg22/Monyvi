@@ -676,7 +676,7 @@ describe("recurring-payment-service", () => {
       endDate: new Date("2026-07-01T00:00:00.000Z"),
       nextDueDate: new Date("2026-08-01T00:00:00.000Z"),
     });
-    mockFindOwned.mockImplementation((_collection: MockCollection, id: string): Promise<unknown> => id === "account-1" ? Promise.resolve({ id, userId: "user-1" }) : Promise.resolve(payment));
+    mockFindOwned.mockImplementation((_collection: MockCollection, id: string): Promise<unknown> => id === "account-1" ? Promise.resolve({ id, userId: "user-1", currency: "EGP" }) : Promise.resolve(payment));
 
     await updateRecurringPayment("payment-1", { name: "Netflix", amount: 250, currency: "EGP", type: "EXPENSE", accountId: "account-1", categoryId: "category-1", frequency: "MONTHLY", startDate: payment.startDate, endDate: null, action: "NOTIFY" });
 
@@ -691,7 +691,7 @@ describe("recurring-payment-service", () => {
       endDate: finalPaidDate,
       nextDueDate: finalPaidDate,
     });
-    mockFindOwned.mockImplementation((_collection: MockCollection, id: string): Promise<unknown> => id === "account-1" ? Promise.resolve({ id, userId: "user-1" }) : Promise.resolve(payment));
+    mockFindOwned.mockImplementation((_collection: MockCollection, id: string): Promise<unknown> => id === "account-1" ? Promise.resolve({ id, userId: "user-1", currency: "EGP" }) : Promise.resolve(payment));
 
     await updateRecurringPayment("payment-1", {
       name: "Netflix",
