@@ -11,15 +11,20 @@ Sync Impact Report
   - .specify/templates/spec-template.md ✅ compatible; no update required.
   - .specify/templates/tasks-template.md ✅ compatible; no update required.
   - .specify/templates/commands/*.md ✅ directory absent; no files to update.
+- Agent guidance reviewed:
+  - .agent/workflows/sprint-issue.md ✅ updated with the approved mockup fidelity
+    and rendered-comparison gate.
+  - .agent/rules/ecc-coding-style.md ✅ updated with approved mockup fidelity
+    requirements.
+  - .agent/rules/specify-rules.md ✅ updated with binding-context and visual
+    evidence requirements for feature delivery.
+  - .agent/rules/ecc-patterns.md ✅ compatible; no update required.
+  - AGENTS.md remains separately authorized and is not changed by this amendment.
 - Follow-up TODOs:
   - TODO(PACKAGE_BOUNDARY_REPAIR): remove remaining allowlisted package-boundary
     debt tracked by architecture audit issues.
   - TODO(UI_DEBT_AUDIT): replace remaining content-loading ActivityIndicator
     usage, raw console calls, and unjustified raw hex/style exceptions.
-  - Agent guidance sync: `.agent/rules/ecc-coding-style.md`,
-    `.agent/rules/ecc-patterns.md`, and `.agent/rules/specify-rules.md` are
-    synchronized with this amendment in this PR. Any future `AGENTS.md` change
-    remains separately authorized and must not duplicate or weaken these rules.
   - TODO(SECURITY_HARDENING): issue #240 owns app lock, MFA or step-up,
     session/device management, sign-in notifications, and SecureStore logout.
   - TODO(APP_WIDE_DECIMAL_AUDIT): issue #241 owns audit and staged migration of

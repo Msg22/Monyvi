@@ -57,6 +57,25 @@ For new or changed authoritative financial calculations:
 - Use precision 50 and `ROUND_HALF_EVEN`; round only at the approved display or
   posting boundary.
 
+## Approved Mockup Fidelity
+
+For UI work governed by an approved scoped mockup:
+
+- Match the approved composition pixel-perfect at its declared UI viewport or
+  component context.
+- Treat presentation-only device hardware, frame, outer canvas, browser chrome,
+  export padding, and background outside the UI surface as non-binding unless
+  the handoff explicitly marks them binding.
+- Use gradients when the design system or approved mockup uses them; gradients
+  are allowed, not globally mandatory.
+- Preserve composition, hierarchy, semantics, and material styling across
+  compact-phone, ordinary-phone, tablet, landscape, dark-mode, RTL/Arabic,
+  accessibility-label, and enlarged-text variants. Reflow only to keep content
+  usable and readable.
+- Do not mark visual work complete without rendered side-by-side or overlay
+  screenshot evidence against the approved reference at the declared context.
+  Report functional status and visual fidelity status separately.
+
 ## Code Quality Checklist
 
 Before marking work complete:
