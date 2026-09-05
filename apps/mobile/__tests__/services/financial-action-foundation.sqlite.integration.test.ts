@@ -8,6 +8,8 @@ import {
   type Sha256Provider,
 } from "../../../../packages/logic/src/financial-actions";
 
+import { LEGACY_FINANCIAL_ACTION_TEST_REGISTRY } from "./financial-action-foundation-test-registry";
+
 interface TestDatabaseModule {
   readonly database: Database;
   readonly __adapter: SQLiteAdapter;
@@ -166,6 +168,7 @@ function createRepository(
       }
       return Promise.resolve();
     },
+    registry: LEGACY_FINANCIAL_ACTION_TEST_REGISTRY,
   });
 }
 
@@ -219,7 +222,8 @@ describe("financial action foundation SQLite persistence", () => {
     const actionEnvelope = envelope();
     const payload = await hashFinancialActionEnvelope(
       actionEnvelope,
-      sha256Provider
+      sha256Provider,
+      LEGACY_FINANCIAL_ACTION_TEST_REGISTRY
     );
     await repository.createFinancialActionGroup({
       envelope: actionEnvelope,
@@ -288,7 +292,8 @@ describe("financial action foundation SQLite persistence", () => {
     const foreignEnvelope = envelope(FOREIGN_USER_ID);
     const foreignPayload = await hashFinancialActionEnvelope(
       foreignEnvelope,
-      sha256Provider
+      sha256Provider,
+      LEGACY_FINANCIAL_ACTION_TEST_REGISTRY
     );
     await database.write(async (): Promise<void> => {
       await database

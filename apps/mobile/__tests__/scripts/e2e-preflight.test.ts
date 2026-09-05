@@ -1,13 +1,72 @@
 interface E2ePreflightModule {
+  applyE2eFixtureRuntimeSettings(
+    env: Readonly<Record<string, string | undefined>>,
+    dependencies: {
+      clearLocalState: () => void;
+      forceStop: () => void;
+      runAdb: (args: readonly string[]) => void;
+      setConnectivity?: (isOffline: boolean) => void;
+      seedTheme: (
+        theme: string,
+        refreshFailureProfileName?: string | null
+      ) => void;
+    }
+  ): void;
   appendAndroidPlatform(url: string): string;
   buildDevClientUrl(url: string): string;
   buildDevMenuPreferencesXml(): string;
   buildIntroSeenFlagSql(): string;
+  buildE2eRuntimeStorageSql(
+    theme: string,
+    refreshFailureProfileName?: string | null
+  ): string;
+  buildE2eRefreshFailureInspectionSql(profileName: string): string;
+  inspectE2eRefreshFailureState(
+    profileName: string,
+    dependencies?: { runSql: (sql: string) => string }
+  ): "absent" | "armed" | "consumed";
+  buildMetalsLocalFixtureCleanupSql(userId: string): string;
+  buildMetalsLocalObservationCleanupSql(): string;
   currentFocusShowsDevLauncherError(currentFocus: string): boolean;
   currentFocusShowsDevMenu(currentFocus: string): boolean;
   currentFocusShowsLauncher(currentFocus: string): boolean;
   didDumpUiHierarchy(dumpOutput: string): boolean;
   getHttpClientNameForUrl(url: string): "http" | "https";
+  resolveE2eFixtureRuntimeSettings(
+    env?: Readonly<Record<string, string | undefined>>
+  ): {
+    locale: string;
+    cacheState?: string;
+    connectivityState?: string;
+    persistenceState: string;
+    rateState: string;
+    refreshFailureMode?: string | null;
+    theme: string;
+    textScale: number;
+  } | null;
+  assertMetalsFixtureBuildSupported(
+    env?: Readonly<Record<string, string | undefined>>
+  ): void;
+  relaunchE2eFixtureIfRequired(
+    settings: {
+      locale: string;
+      cacheState?: string;
+      connectivityState?: string;
+      persistenceState: string;
+      rateState: string;
+      refreshFailureMode?: string | null;
+      theme: string;
+      textScale: number;
+    } | null,
+    dependencies: {
+      forceStop: () => void;
+      startApp: () => void;
+      setConnectivity?: (isOffline: boolean) => void;
+      materializeInvalidRate?: () => void;
+      waitForReady: () => void;
+      waitForSync: () => void;
+    }
+  ): void;
   getMaestroDeviceArgs(
     env?: Readonly<Record<string, string | undefined>>
   ): readonly string[];
@@ -221,6 +280,393 @@ describe("e2e-preflight", () => {
     expect(sql).toContain("'@monyvi/intro-seen'");
     expect(sql).toContain("'true'");
     expect(sql).toContain("insert or replace");
+  });
+
+  it("applies Metals locale, theme, and text scale through executable runtime boundaries", () => {
+    const runtimeSettings = preflight.resolveE2eFixtureRuntimeSettings({
+      E2E_METALS_PROFILE: "metals-stale-restart-ar-dark",
+    });
+    expect(runtimeSettings).toEqual({
+      locale: "ar",
+      cacheState: "seeded",
+      connectivityState: "online",
+      persistenceState: "restart",
+      rateState: "stale",
+      refreshFailureMode: null,
+      theme: "dark",
+      textScale: 2,
+    });
+    expect(preflight.buildE2eRuntimeStorageSql("dark")).toContain(
+      "'monyvi_theme_mode', 'dark'"
+    );
+    const refreshFailureSql = preflight.buildE2eRuntimeStorageSql(
+      "light",
+      "metals-refresh-failure-cached-local-en-light"
+    );
+    expect(refreshFailureSql).toContain(
+      "@monyvi/e2e/live-rates-refresh-failure/%"
+    );
+    expect(refreshFailureSql).toContain(
+      "@monyvi/e2e/live-rates-refresh-failure/metals-refresh-failure-cached-local-en-light"
+    );
+    expect(refreshFailureSql).toContain("'armed'");
+
+    const clearLocalState = jest.fn();
+    const forceStop = jest.fn();
+    const runAdb = jest.fn();
+    const seedTheme = jest.fn();
+    const setConnectivity = jest.fn();
+    preflight.applyE2eFixtureRuntimeSettings(
+      { E2E_METALS_PROFILE: "metals-stale-restart-ar-dark" },
+      { clearLocalState, forceStop, runAdb, seedTheme, setConnectivity }
+    );
+
+    expect(forceStop).toHaveBeenCalledTimes(1);
+    expect(setConnectivity).toHaveBeenCalledWith(false);
+    expect(clearLocalState).toHaveBeenCalledTimes(1);
+    expect(runAdb).toHaveBeenCalledWith([
+      "shell",
+      "settings",
+      "put",
+      "system",
+      "font_scale",
+      "2",
+    ]);
+    expect(seedTheme).toHaveBeenCalledWith("dark", null);
+  });
+
+  it("materializes and clears the one-shot refresh marker with the selected profile", () => {
+    const seedTheme = jest.fn();
+
+    preflight.applyE2eFixtureRuntimeSettings(
+      {
+        E2E_METALS_PROFILE: "metals-refresh-failure-cached-local-en-light",
+      },
+      {
+        clearLocalState: jest.fn(),
+        forceStop: jest.fn(),
+        runAdb: jest.fn(),
+        setConnectivity: jest.fn(),
+        seedTheme,
+      }
+    );
+
+    expect(seedTheme).toHaveBeenCalledWith(
+      "light",
+      "metals-refresh-failure-cached-local-en-light"
+    );
+
+    seedTheme.mockClear();
+    preflight.applyE2eFixtureRuntimeSettings(
+      { E2E_METALS_PROFILE: "metals-fresh-local-en-light" },
+      {
+        clearLocalState: jest.fn(),
+        forceStop: jest.fn(),
+        runAdb: jest.fn(),
+        setConnectivity: jest.fn(),
+        seedTheme,
+      }
+    );
+    expect(seedTheme).toHaveBeenCalledWith("light", null);
+  });
+
+  it("inspects armed, consumed, and reset refresh-marker state", () => {
+    const profileName = "metals-refresh-failure-cached-local-en-light";
+    const sql = preflight.buildE2eRefreshFailureInspectionSql(profileName);
+    expect(sql).toContain(
+      `@monyvi/e2e/live-rates-refresh-failure/${profileName}`
+    );
+
+    for (const state of ["armed", "consumed", "absent"] as const) {
+      expect(
+        preflight.inspectE2eRefreshFailureState(profileName, {
+          runSql: () => state,
+        })
+      ).toBe(state);
+    }
+    expect(() =>
+      preflight.inspectE2eRefreshFailureState(profileName, {
+        runSql: () => "unexpected",
+      })
+    ).toThrow("Failed to inspect the live-rates refresh fixture marker");
+  });
+
+  it("resets Android font scale for a non-Metals preflight", () => {
+    const clearLocalState = jest.fn();
+    const forceStop = jest.fn();
+    const runAdb = jest.fn();
+    const seedTheme = jest.fn();
+    const setConnectivity = jest.fn();
+
+    preflight.applyE2eFixtureRuntimeSettings(
+      {},
+      { clearLocalState, forceStop, runAdb, seedTheme, setConnectivity }
+    );
+
+    expect(runAdb).toHaveBeenCalledWith([
+      "shell",
+      "settings",
+      "put",
+      "system",
+      "font_scale",
+      "1",
+    ]);
+    expect(setConnectivity).toHaveBeenCalledWith(false);
+    expect(forceStop).not.toHaveBeenCalled();
+    expect(clearLocalState).not.toHaveBeenCalled();
+    expect(seedTheme).not.toHaveBeenCalled();
+  });
+
+  it("leaves shared non-Metals fixture profiles on the default preflight path", () => {
+    const env = { E2E_FIXTURE_PROFILE: "dashboard-full" };
+    expect(preflight.resolveE2eFixtureRuntimeSettings(env)).toBeNull();
+
+    const clearLocalState = jest.fn();
+    const forceStop = jest.fn();
+    const runAdb = jest.fn();
+    const seedTheme = jest.fn();
+    const setConnectivity = jest.fn();
+    preflight.applyE2eFixtureRuntimeSettings(env, {
+      clearLocalState,
+      forceStop,
+      runAdb,
+      seedTheme,
+      setConnectivity,
+    });
+
+    expect(runAdb).toHaveBeenCalledWith([
+      "shell",
+      "settings",
+      "put",
+      "system",
+      "font_scale",
+      "1",
+    ]);
+    expect(setConnectivity).toHaveBeenCalledWith(false);
+    expect(forceStop).not.toHaveBeenCalled();
+    expect(clearLocalState).not.toHaveBeenCalled();
+    expect(seedTheme).not.toHaveBeenCalled();
+  });
+
+  it("clears the pull-only observation cache before a Metals profile launch", () => {
+    expect(preflight.buildMetalsLocalObservationCleanupSql()).toBe(
+      'delete from "market_rate_observations" where "source" like \'e2e_fixture:%\';'
+    );
+  });
+
+  it("clears only deterministic Metals fixture holdings, accounts, and dependent rows in FK-safe order", () => {
+    const userId = "11111111-1111-4111-8111-111111111111";
+    const { buildSeedIds } = jest.requireActual(
+      "../../scripts/seed-fixtures/seed-engine"
+    ) as {
+      buildSeedIds: (
+        userId: string,
+        seedScope: string
+      ) => {
+        accounts: Record<string, string>;
+        accountSmsSenders: Record<string, string>;
+        bankDetails: Record<string, string>;
+        transactions: Record<string, string>;
+        transfers: Record<string, string>;
+      };
+    };
+    const ids = buildSeedIds(userId, "e2e-metals-fresh-local-en-light");
+    const sql = preflight.buildMetalsLocalFixtureCleanupSql(userId);
+
+    expect(sql).toContain(ids.transactions.expense);
+    expect(sql).toContain(ids.transfers.atm);
+    expect(sql).toContain(ids.accountSmsSenders.nbe);
+    expect(sql).toContain(ids.bankDetails.nbe);
+    expect(sql).toContain(ids.accounts.cash);
+    expect(sql).not.toContain("user-account-that-must-survive");
+    const holdingStateDelete = sql.indexOf(
+      'delete from "metal_holding_states"'
+    );
+    const assetMetalDelete = sql.indexOf('delete from "asset_metals"');
+    const assetDelete = sql.indexOf('delete from "assets"');
+    expect(holdingStateDelete).toBeGreaterThanOrEqual(0);
+    expect(assetMetalDelete).toBeGreaterThan(holdingStateDelete);
+    expect(assetDelete).toBeGreaterThan(assetMetalDelete);
+    const holdingStateStatement = sql
+      .split("\n")
+      .find((line) => line.startsWith('delete from "metal_holding_states"'));
+    const assetStatement = sql
+      .split("\n")
+      .find((line) => line.startsWith('delete from "assets"'));
+    expect(holdingStateStatement?.match(/[0-9a-f]{8}-[0-9a-f-]{27}/g)).toEqual(
+      assetStatement?.match(/[0-9a-f]{8}-[0-9a-f-]{27}/g)
+    );
+    for (const table of ["metal_holding_states", "asset_metals", "assets"]) {
+      const statement = sql
+        .split("\n")
+        .find((line) => line.startsWith(`delete from "${table}"`));
+      expect(statement?.match(/[0-9a-f]{8}-[0-9a-f-]{27}/g)).toHaveLength(8);
+      expect(statement).toContain('where "id" in (');
+    }
+    expect(sql.indexOf('delete from "transactions"')).toBeLessThan(
+      sql.indexOf('delete from "accounts"')
+    );
+    expect(sql.indexOf('delete from "transfers"')).toBeLessThan(
+      sql.indexOf('delete from "accounts"')
+    );
+    expect(sql).toContain(
+      'delete from "market_rate_observations" where "source" like \'e2e_fixture:%\';'
+    );
+    const marketRateStatement = sql
+      .split("\n")
+      .find((line) => line.startsWith('delete from "market_rates"'));
+    expect(
+      marketRateStatement?.match(/[0-9a-f]{8}-[0-9a-f-]{27}/g)
+    ).toHaveLength(8);
+  });
+
+  it("fails fast before attempting a Metals profile in a release build", () => {
+    const releaseEnv = {
+      E2E_METALS_PROFILE: "metals-fresh-local-en-light",
+      E2E_RELEASE_BUILD: "1",
+    };
+    expect(() =>
+      preflight.assertMetalsFixtureBuildSupported(releaseEnv)
+    ).toThrow(
+      "Metals E2E profiles are not supported in release builds until authenticated cleanup and readiness are available."
+    );
+    const clearLocalState = jest.fn();
+    const forceStop = jest.fn();
+    const setConnectivity = jest.fn();
+    expect(() =>
+      preflight.applyE2eFixtureRuntimeSettings(releaseEnv, {
+        clearLocalState,
+        forceStop,
+        runAdb: jest.fn(),
+        setConnectivity,
+        seedTheme: jest.fn(),
+      })
+    ).toThrow(
+      "Metals E2E profiles are not supported in release builds until authenticated cleanup and readiness are available."
+    );
+    expect(forceStop).not.toHaveBeenCalled();
+    expect(clearLocalState).not.toHaveBeenCalled();
+    expect(setConnectivity).not.toHaveBeenCalled();
+
+    expect(() =>
+      preflight.assertMetalsFixtureBuildSupported({ E2E_RELEASE_BUILD: "1" })
+    ).not.toThrow();
+    expect(() =>
+      preflight.assertMetalsFixtureBuildSupported({
+        E2E_FIXTURE_PROFILE: "some-other-profile",
+        E2E_RELEASE_BUILD: "1",
+      })
+    ).not.toThrow();
+  });
+
+  it("waits for the seeded projection and relaunches restart profiles without clearing the database", () => {
+    const events: string[] = [];
+    preflight.relaunchE2eFixtureIfRequired(
+      {
+        locale: "ar",
+        persistenceState: "restart",
+        rateState: "stale",
+        theme: "dark",
+        textScale: 2,
+      },
+      {
+        waitForSync: () => events.push("sync"),
+        forceStop: () => events.push("stop"),
+        startApp: () => events.push("start"),
+        waitForReady: () => events.push("ready"),
+      }
+    );
+
+    expect(events).toEqual(["sync", "stop", "start", "ready"]);
+  });
+
+  it("waits for every non-missing Metals rate before handing off to Maestro", () => {
+    const freshEvents: string[] = [];
+    preflight.relaunchE2eFixtureIfRequired(
+      {
+        locale: "en",
+        persistenceState: "local",
+        rateState: "fresh",
+        theme: "light",
+        textScale: 1,
+      },
+      {
+        waitForSync: () => freshEvents.push("sync"),
+        forceStop: () => freshEvents.push("stop"),
+        startApp: () => freshEvents.push("start"),
+        waitForReady: () => freshEvents.push("ready"),
+      }
+    );
+    expect(freshEvents).toEqual(["sync"]);
+
+    const missingEvents: string[] = [];
+    preflight.relaunchE2eFixtureIfRequired(
+      {
+        locale: "ar",
+        persistenceState: "local",
+        rateState: "missing",
+        theme: "light",
+        textScale: 2,
+      },
+      {
+        waitForSync: () => missingEvents.push("sync"),
+        forceStop: () => missingEvents.push("stop"),
+        startApp: () => missingEvents.push("start"),
+        waitForReady: () => missingEvents.push("ready"),
+      }
+    );
+    expect(missingEvents).toEqual([]);
+
+    const invalidEvents: string[] = [];
+    preflight.relaunchE2eFixtureIfRequired(
+      {
+        locale: "en",
+        persistenceState: "local",
+        rateState: "invalid",
+        theme: "light",
+        textScale: 1,
+      },
+      {
+        waitForSync: () => invalidEvents.push("sync"),
+        materializeInvalidRate: () => invalidEvents.push("invalidate"),
+        forceStop: () => invalidEvents.push("stop"),
+        startApp: () => invalidEvents.push("start"),
+        waitForReady: () => invalidEvents.push("ready"),
+      }
+    );
+    expect(invalidEvents).toEqual([
+      "sync",
+      "invalidate",
+      "stop",
+      "start",
+      "ready",
+    ]);
+  });
+
+  it("seeds an offline-cached profile online before relaunching the same database offline", () => {
+    const events: string[] = [];
+
+    preflight.relaunchE2eFixtureIfRequired(
+      {
+        locale: "en",
+        cacheState: "seeded",
+        connectivityState: "offline_after_cache",
+        persistenceState: "local",
+        rateState: "fresh",
+        theme: "light",
+        textScale: 1,
+      },
+      {
+        waitForSync: () => events.push("sync"),
+        forceStop: () => events.push("stop"),
+        setConnectivity: (isOffline) =>
+          events.push(isOffline ? "offline" : "online"),
+        startApp: () => events.push("start"),
+        waitForReady: () => events.push("ready"),
+      }
+    );
+
+    expect(events).toEqual(["sync", "stop", "offline", "start", "ready"]);
   });
 
   it("detects Android devices without a sqlite3 shell binary", () => {

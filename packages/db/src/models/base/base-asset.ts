@@ -23,6 +23,7 @@ export abstract class BaseAsset extends Model {
     transactions: { type: "has_many", foreignKey: "linked_asset_id" },
   };
 
+  @field("acquisition_action_id") acquisitionActionId!: string | null;
   @readonly @date("created_at") createdAt!: Date;
   @field("currency") currency!: CurrencyType;
   @field("deleted") deleted!: boolean;
@@ -30,6 +31,8 @@ export abstract class BaseAsset extends Model {
   @field("name") name!: string;
   @field("notes") notes?: string;
   @date("purchase_date") purchaseDate!: Date;
+  @field("purchase_currency") purchaseCurrency!: string | null;
+  @field("purchase_price_decimal") purchasePriceDecimal!: string | null;
   @field("purchase_price") purchasePrice!: number;
   @field("type") type!: AssetType;
   @date("updated_at") updatedAt!: Date;

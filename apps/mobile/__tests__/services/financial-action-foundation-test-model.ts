@@ -1,5 +1,10 @@
 import type { Model } from "@nozbe/watermelondb";
 
+import type {
+  FinancialActionLinkedOperationCachedOwnershipInput,
+  FinancialActionLinkedOperationPreparedOwnershipInput,
+} from "../../services/financial-action-foundation-repository";
+
 export interface MockFinancialActionRecord {
   table?: string;
   _isEditing: boolean;
@@ -23,4 +28,26 @@ export interface MockFinancialActionRecord {
   prepareUpdate: (
     updater: (record: MockFinancialActionRecord) => void
   ) => MockFinancialActionRecord;
+}
+
+export function assertDirectCachedLinkedOperationOwnership(
+  input: FinancialActionLinkedOperationCachedOwnershipInput
+): Promise<void> {
+  input.cachedPreimages.forEach((snapshot) => {
+    if ((snapshot.raw as { user_id?: string }).user_id !== input.userId) {
+      throw new Error("ownership_failed");
+    }
+  });
+  return Promise.resolve();
+}
+
+export function assertDirectPreparedLinkedOperationOwnership(
+  input: FinancialActionLinkedOperationPreparedOwnershipInput
+): Promise<void> {
+  input.preparedPostimages.forEach((snapshot) => {
+    if ((snapshot.raw as { user_id?: string }).user_id !== input.userId) {
+      throw new Error("ownership_failed");
+    }
+  });
+  return Promise.resolve();
 }

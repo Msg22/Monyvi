@@ -2,6 +2,8 @@ import type { Database } from "@nozbe/watermelondb";
 
 const mockSynchronize = jest.fn();
 const mockGetCurrentUserId = jest.fn();
+const mockFrom = jest.fn();
+const mockRpc = jest.fn();
 
 jest.mock("@monyvi/db", () => ({ schema: { tables: {} } }));
 
@@ -13,7 +15,10 @@ jest.mock("@nozbe/watermelondb/sync", () => ({
 jest.mock("@/services/supabase", () => ({
   getCurrentUserId: (): Promise<string | null> =>
     mockGetCurrentUserId() as Promise<string | null>,
-  supabase: { from: jest.fn() },
+  supabase: {
+    from: (table: string): unknown => mockFrom(table),
+    rpc: (name: string, args: unknown): unknown => mockRpc(name, args),
+  },
 }));
 
 jest.mock("@/utils/logger", () => ({
@@ -46,9 +51,59 @@ const database = {
   },
 } as unknown as Database;
 
+interface EmptySelectChain {
+  readonly select: jest.Mock<EmptySelectChain>;
+  readonly eq: jest.Mock<EmptySelectChain>;
+  readonly gt: jest.Mock<EmptySelectChain>;
+  readonly lte: jest.Mock<EmptySelectChain>;
+  readonly limit: jest.Mock<EmptySelectChain>;
+  readonly or: jest.Mock<EmptySelectChain>;
+  readonly order: jest.Mock<EmptySelectChain>;
+  readonly then: (
+    resolve: (value: {
+      readonly data: readonly [];
+      readonly error: null;
+    }) => unknown,
+    reject?: (reason: unknown) => unknown
+  ) => Promise<unknown>;
+}
+
 describe("sync auth scope lifecycle", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetCurrentUserId.mockReset();
+    mockRpc.mockResolvedValue({
+      data: {
+        hasMore: false,
+        nextCursor: null,
+        rows: [],
+        upperWatermark: "2026-05-18T08:05:00.000Z",
+      },
+      error: null,
+    });
+    mockFrom.mockImplementation(() => {
+      const chain: EmptySelectChain = {
+        select: jest.fn((): EmptySelectChain => chain),
+        eq: jest.fn((): EmptySelectChain => chain),
+        gt: jest.fn((): EmptySelectChain => chain),
+        lte: jest.fn((): EmptySelectChain => chain),
+        limit: jest.fn((): EmptySelectChain => chain),
+        or: jest.fn((): EmptySelectChain => chain),
+        order: jest.fn((): EmptySelectChain => chain),
+        then: (
+          resolve: (value: {
+            readonly data: readonly [];
+            readonly error: null;
+          }) => unknown,
+          reject?: (reason: unknown) => unknown
+        ) =>
+          Promise.resolve({ data: [], error: null } as const).then(
+            resolve,
+            reject
+          ),
+      };
+      return chain;
+    });
   });
 
   it.each([

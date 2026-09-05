@@ -15,6 +15,159 @@ import {
   schemaMigrations,
 } from "@nozbe/watermelondb/Schema/migrations";
 
+const APPROVED_METALS_FIAT_SQL = `
+  'EGP', 'SAR', 'AED', 'KWD', 'QAR', 'BHD', 'OMR', 'JOD', 'IQD',
+  'LYD', 'TND', 'MAD', 'DZD', 'USD', 'EUR', 'GBP', 'JPY', 'CHF',
+  'CNY', 'INR', 'KRW', 'KPW', 'SGD', 'HKD', 'MYR', 'AUD', 'NZD',
+  'CAD', 'SEK', 'NOK', 'DKK', 'ISK', 'TRY', 'RUB', 'ZAR'
+`;
+
+const LOCAL_GOLD_PURITY_CODE_SQL = `case
+  when "purity_fraction" = 0.9999 then 'gold-9999'
+  when "purity_fraction" = 0.999 then 'gold-999'
+  when "purity_fraction" = 0.995 then 'gold-995'
+  when "purity_fraction" = 0.97916 then 'gold-97916'
+  when "purity_fraction" in ((22.0 / 24.0), 0.9167) then 'gold-9167'
+  when "purity_fraction" = 0.875 then 'gold-875'
+  when "purity_fraction" = 0.75 then 'gold-750'
+  when "purity_fraction" in ((14.0 / 24.0), 0.5833, 0.58333) then 'gold-58333'
+  when "purity_fraction" = 0.5 then 'gold-500'
+  when "purity_fraction" = 0.375 then 'gold-375'
+  else null end`;
+
+const LOCAL_GOLD_PURITY_FACTOR_SQL = `case
+  when "purity_fraction" = 0.9999 then '0.9999'
+  when "purity_fraction" = 0.999 then '0.999'
+  when "purity_fraction" = 0.995 then '0.995'
+  when "purity_fraction" = 0.97916 then '0.97916'
+  when "purity_fraction" in ((22.0 / 24.0), 0.9167) then '0.9167'
+  when "purity_fraction" = 0.875 then '0.875'
+  when "purity_fraction" = 0.75 then '0.75'
+  when "purity_fraction" in ((14.0 / 24.0), 0.5833, 0.58333) then '0.58333'
+  when "purity_fraction" = 0.5 then '0.5'
+  when "purity_fraction" = 0.375 then '0.375'
+  else null end`;
+
+const LOCAL_SILVER_PURITY_CODE_SQL = `case
+  when "purity_fraction" = 0.9999 then 'silver-9999'
+  when "purity_fraction" = 0.999 then 'silver-999'
+  when "purity_fraction" = 0.925 then 'silver-925'
+  when "purity_fraction" = 0.9 then 'silver-900'
+  when "purity_fraction" = 0.8 then 'silver-800'
+  when "purity_fraction" = 0.6 then 'silver-600'
+  else null end`;
+
+const LOCAL_SILVER_PURITY_FACTOR_SQL = `case
+  when "purity_fraction" = 0.9999 then '0.9999'
+  when "purity_fraction" = 0.999 then '0.999'
+  when "purity_fraction" = 0.925 then '0.925'
+  when "purity_fraction" = 0.9 then '0.9'
+  when "purity_fraction" = 0.8 then '0.8'
+  when "purity_fraction" = 0.6 then '0.6'
+  else null end`;
+
+const LOCAL_PURITY_CODE_SQL = `case
+  when "metal_type" = 'GOLD' then ${LOCAL_GOLD_PURITY_CODE_SQL}
+  when "metal_type" = 'SILVER' then ${LOCAL_SILVER_PURITY_CODE_SQL}
+  else null end`;
+
+const LOCAL_PURITY_FACTOR_SQL = `case
+  when "metal_type" = 'GOLD' then ${LOCAL_GOLD_PURITY_FACTOR_SQL}
+  when "metal_type" = 'SILVER' then ${LOCAL_SILVER_PURITY_FACTOR_SQL}
+  else null end`;
+
+export const METALS_V27_BACKFILL_SQL = `
+update "assets"
+set "purchase_price_decimal" = case
+      when "purchase_price_decimal" is null
+        and "purchase_price" > 0
+        and lower(cast("purchase_price" as text)) not like '%e%'
+        and (
+          instr(cast("purchase_price" as text), '.') = 0
+          or length(rtrim(
+            substr(
+              cast("purchase_price" as text),
+              instr(cast("purchase_price" as text), '.') + 1
+            ),
+            '0'
+          )) <= 2
+        )
+        then cast("purchase_price" as text)
+      else "purchase_price_decimal"
+    end,
+    "purchase_currency" = case
+      when "purchase_currency" is null
+        and "currency" in (${APPROVED_METALS_FIAT_SQL})
+        then "currency"
+      else "purchase_currency"
+    end
+where "id" in (
+  select "asset_id"
+  from "asset_metals"
+  where "metal_type" in ('GOLD', 'SILVER')
+);
+
+update "asset_metals"
+set "weight_grams_decimal" = case
+      when "weight_grams_decimal" is null
+        and "weight_grams" > 0
+        and lower(cast("weight_grams" as text)) not like '%e%'
+        and (
+          instr(cast("weight_grams" as text), '.') = 0
+          or length(rtrim(
+            substr(
+              cast("weight_grams" as text),
+              instr(cast("weight_grams" as text), '.') + 1
+            ),
+            '0'
+          )) <= 3
+        )
+        then cast("weight_grams" as text)
+      else "weight_grams_decimal"
+    end,
+    "purity_code" = case
+      when "purity_code" is null
+        and "purity_factor_decimal" is null
+        and "purity_catalog_version" is null
+        then ${LOCAL_PURITY_CODE_SQL}
+      else "purity_code"
+    end,
+    "purity_factor_decimal" = case
+      when "purity_code" is null
+        and "purity_factor_decimal" is null
+        and "purity_catalog_version" is null
+        then ${LOCAL_PURITY_FACTOR_SQL}
+      else "purity_factor_decimal"
+    end,
+    "purity_catalog_version" = case
+      when "purity_code" is null
+        and "purity_factor_decimal" is null
+        and "purity_catalog_version" is null
+        and (${LOCAL_PURITY_CODE_SQL}) is not null
+        then '1'
+      else "purity_catalog_version"
+    end
+where "metal_type" in ('GOLD', 'SILVER');
+
+insert into "metal_holding_states" (
+  "id", "user_id", "holding_id", "status", "financial_revision",
+  "effective_event_id", "effective_action_id", "is_visible",
+  "reconciliation_state", "created_at", "updated_at", "deleted",
+  "_status", "_changed"
+)
+select
+  "assets"."id",
+  "assets"."user_id", "assets"."id", 'active', '0', null, null, 1,
+  'accepted', "assets"."created_at", "assets"."updated_at", "assets"."deleted",
+  'synced', ''
+from "assets"
+join "asset_metals" on "asset_metals"."asset_id" = "assets"."id"
+where "asset_metals"."metal_type" in ('GOLD', 'SILVER')
+  and not exists (
+    select 1 from "metal_holding_states"
+    where "metal_holding_states"."holding_id" = "assets"."id"
+  );`;
+
 export const migrations = schemaMigrations({
   migrations: [
     {
@@ -504,6 +657,147 @@ end;`
         }),
         unsafeExecuteSql(
           'create unique index if not exists "financial_action_groups_user_action_unique" on "financial_action_groups" ("user_id", "action_id");'
+        ),
+      ],
+    },
+    {
+      toVersion: 27,
+      steps: [
+        addColumns({
+          table: "assets",
+          columns: [
+            {
+              name: "purchase_price_decimal",
+              type: "string",
+              isOptional: true,
+            },
+            { name: "purchase_currency", type: "string", isOptional: true },
+            {
+              name: "acquisition_action_id",
+              type: "string",
+              isOptional: true,
+              isIndexed: true,
+            },
+          ],
+        }),
+        addColumns({
+          table: "asset_metals",
+          columns: [
+            { name: "weight_grams_decimal", type: "string", isOptional: true },
+            { name: "purity_code", type: "string", isOptional: true },
+            { name: "purity_factor_decimal", type: "string", isOptional: true },
+            {
+              name: "purity_catalog_version",
+              type: "string",
+              isOptional: true,
+            },
+          ],
+        }),
+        createTable({
+          name: "metal_holding_states",
+          columns: [
+            { name: "user_id", type: "string", isIndexed: true },
+            { name: "holding_id", type: "string", isIndexed: true },
+            { name: "status", type: "string" },
+            { name: "financial_revision", type: "string" },
+            { name: "effective_event_id", type: "string", isOptional: true },
+            { name: "effective_action_id", type: "string", isOptional: true },
+            { name: "is_visible", type: "boolean" },
+            { name: "reconciliation_state", type: "string" },
+            { name: "created_at", type: "number" },
+            { name: "updated_at", type: "number" },
+            { name: "deleted", type: "boolean" },
+          ],
+        }),
+        unsafeExecuteSql(METALS_V27_BACKFILL_SQL),
+        createTable({
+          name: "metal_action_evidence",
+          columns: [
+            { name: "user_id", type: "string", isIndexed: true },
+            { name: "action_id", type: "string", isIndexed: true },
+            { name: "holding_id", type: "string", isIndexed: true },
+            { name: "kind", type: "string" },
+            {
+              name: "expected_holding_revision",
+              type: "string",
+              isOptional: true,
+            },
+            {
+              name: "canonical_holding_revision",
+              type: "string",
+              isOptional: true,
+            },
+            { name: "domain_payload_json", type: "string" },
+            { name: "created_at", type: "number" },
+            { name: "updated_at", type: "number" },
+            { name: "deleted", type: "boolean" },
+          ],
+        }),
+        createTable({
+          name: "metal_lifecycle_events",
+          columns: [
+            { name: "user_id", type: "string", isIndexed: true },
+            { name: "holding_id", type: "string", isIndexed: true },
+            { name: "action_id", type: "string", isIndexed: true },
+            { name: "kind", type: "string" },
+            { name: "occurred_at", type: "number" },
+            { name: "payload_json", type: "string" },
+            { name: "predecessor_event_id", type: "string", isOptional: true },
+            { name: "reverses_event_id", type: "string", isOptional: true },
+            { name: "is_effective", type: "boolean" },
+            { name: "is_history_visible", type: "boolean" },
+            { name: "created_at", type: "number" },
+            { name: "updated_at", type: "number" },
+            { name: "deleted", type: "boolean" },
+          ],
+        }),
+        createTable({
+          name: "metal_rate_references",
+          columns: [
+            { name: "user_id", type: "string", isIndexed: true },
+            { name: "holding_id", type: "string", isIndexed: true },
+            { name: "action_id", type: "string", isIndexed: true },
+            { name: "role", type: "string" },
+            { name: "kind", type: "string" },
+            { name: "instrument_code", type: "string", isIndexed: true },
+            { name: "value_decimal", type: "string" },
+            { name: "unit", type: "string" },
+            { name: "orientation", type: "string" },
+            { name: "provider_observed_at", type: "number", isOptional: true },
+            { name: "source", type: "string", isOptional: true },
+            { name: "quality", type: "string" },
+            { name: "captured_freshness", type: "string" },
+            { name: "captured_at", type: "number" },
+            { name: "created_at", type: "number" },
+            { name: "updated_at", type: "number" },
+            { name: "deleted", type: "boolean" },
+          ],
+        }),
+        createTable({
+          name: "market_rate_observations",
+          columns: [
+            { name: "batch_id", type: "string", isIndexed: true },
+            { name: "instrument_code", type: "string", isIndexed: true },
+            { name: "value_decimal", type: "string" },
+            { name: "unit", type: "string" },
+            { name: "orientation", type: "string" },
+            { name: "provider_observed_at", type: "number", isOptional: true },
+            { name: "source", type: "string", isOptional: true },
+            { name: "quality", type: "string" },
+            { name: "created_at", type: "number" },
+          ],
+        }),
+        unsafeExecuteSql(
+          'create unique index if not exists "metal_holding_states_holding_unique" on "metal_holding_states" ("holding_id");'
+        ),
+        unsafeExecuteSql(
+          'create unique index if not exists "metal_action_evidence_user_action_unique" on "metal_action_evidence" ("user_id", "action_id");'
+        ),
+        unsafeExecuteSql(
+          'create unique index if not exists "metal_lifecycle_events_user_action_unique" on "metal_lifecycle_events" ("user_id", "action_id");'
+        ),
+        unsafeExecuteSql(
+          'create unique index if not exists "metal_rate_references_user_action_role_unique" on "metal_rate_references" ("user_id", "action_id", "role");'
         ),
       ],
     },

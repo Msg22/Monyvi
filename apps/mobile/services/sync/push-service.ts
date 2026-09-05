@@ -11,6 +11,7 @@ import { logger } from "@/utils/logger";
 import { getCurrentUserId, supabase } from "../supabase";
 import {
   DEDICATED_SYNC_TABLES,
+  PULL_ONLY_SHARED_TABLES,
   SYNCABLE_TABLES,
   type SyncableTable,
 } from "./config";
@@ -19,6 +20,7 @@ import {
   assertPushRecordBelongsToCurrentUser,
   fetchOwnedParentIds,
   isSharedSystemCategoryPushRecord,
+  stripMetalActionFragments,
 } from "./ownership-guards";
 import { getChildTableConfig, isWritableTable } from "./table-predicates";
 import { transformToSupabase } from "./transforms";
@@ -136,6 +138,9 @@ export async function pushChanges(
     if (!SYNCABLE_TABLES.includes(tableName as SyncableTable)) {
       continue;
     }
+    if (PULL_ONLY_SHARED_TABLES.has(tableName)) {
+      continue;
+    }
     const tableChanges = rawTableChanges as SyncTableChangeSet;
 
     if (!isWritableTable(table)) {
@@ -187,7 +192,12 @@ export async function pushChanges(
             childConfig,
             isDeletedRecord(record) ? deleteParentIds : activeParentIds
           );
-          return transformToSupabase(table, record, userId, isChildTable);
+          return transformToSupabase(
+            table,
+            stripMetalActionFragments(table, record),
+            userId,
+            isChildTable
+          );
         });
 
         const { error } = await getSupabaseWriteTable(table).upsert(
@@ -244,4 +254,12 @@ export async function pushChanges(
   return dedicatedRejectedIds
     ? { experimentalRejectedIds: dedicatedRejectedIds }
     : undefined;
+}
+
+export async function runMetalPushStrategy(input: {
+  readonly push: () => Promise<void>;
+  readonly markSynced: () => Promise<void> | void;
+}): Promise<void> {
+  await input.push();
+  await input.markSynced();
 }
