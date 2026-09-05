@@ -52,6 +52,7 @@ const translations: Readonly<Record<string, string>> = {
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
+    i18n: { resolvedLanguage: "en" },
     t: (key: string, values?: Readonly<Record<string, string>>): string => {
       const template = translations[key] ?? key;
       return Object.entries(values ?? {}).reduce(
@@ -63,6 +64,10 @@ jest.mock("react-i18next", () => ({
   }),
 }));
 
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 }),
+}));
+
 jest.mock("@/components/ui/Skeleton", () => ({
   Skeleton: () => null,
 }));
@@ -72,7 +77,9 @@ function detail(
 ): MetalDetailReadModel {
   return {
     attribution: null,
+    currentValueCurrency: "EGP",
     currentValueDecimal: "162317.87",
+    currentValueObservedAt: new Date("2026-08-25T10:30:00.000Z"),
     id: "holding-gold-coin",
     isActiveOwnership: true,
     isFinancialActionLocked: false,
@@ -159,7 +166,7 @@ describe("US3 holding experience", () => {
     expect(screen.getByText("Gold · 24K · 999 · Coin")).toBeTruthy();
     expect(screen.getByLabelText("Gold Coin illustration")).toBeTruthy();
     expect(screen.getByText("EGP 162,317.87")).toBeTruthy();
-    expect(screen.getByText("+EGP 11,039.67 since purchase")).toBeTruthy();
+    expect(screen.getByText("+ EGP 11,039.67 since purchase")).toBeTruthy();
     expect(screen.getByText("Sell holding")).toBeTruthy();
     fireEvent.press(screen.getByText("Sell holding"));
     expect(onAction).toHaveBeenCalledWith("sell");

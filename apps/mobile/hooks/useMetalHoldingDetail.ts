@@ -2,6 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useMarketRates } from "@/hooks/useMarketRates";
+import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
+import { useDatabase } from "@/providers/DatabaseProvider";
+import {
+  observeLiveRatesTrust,
+  type LiveRatesTrustReadModel,
+} from "@/services/live-rates-trust-read-model-service";
 import {
   readMetalDetailReadModel,
   type MetalDetailReadModel,
@@ -15,22 +21,50 @@ interface UseMetalHoldingDetailResult {
   readonly retry: () => void;
 }
 
+function createEmptyTrustReadModel(): LiveRatesTrustReadModel {
+  return {
+    gold: { state: "missing", ageMs: null, providerObservedAt: null },
+    silver: { state: "missing", ageMs: null, providerObservedAt: null },
+    currencies: new Map(),
+  };
+}
+
 export function useMetalHoldingDetail(
   holdingId: string | undefined
 ): UseMetalHoldingDetailResult {
+  const database = useDatabase();
   const { userId, isResolvingUser } = useCurrentUser();
   const { isConnected } = useMarketRates();
+  const { preferredCurrency, isLoading: isCurrencyLoading } =
+    usePreferredCurrency();
   const [model, setModel] = useState<MetalDetailReadModel | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [retryIndex, setRetryIndex] = useState(0);
+  const [currentRates, setCurrentRates] = useState<LiveRatesTrustReadModel>(
+    createEmptyTrustReadModel
+  );
+  const [isRatesLoading, setIsRatesLoading] = useState(true);
   const retry = useCallback(
     (): void => setRetryIndex((value) => value + 1),
     []
   );
   useEffect(() => {
+    const subscription = observeLiveRatesTrust(database).subscribe({
+      next: (rates): void => {
+        setCurrentRates(rates);
+        setIsRatesLoading(false);
+      },
+      error: (): void => {
+        setCurrentRates(createEmptyTrustReadModel());
+        setIsRatesLoading(false);
+      },
+    });
+    return () => subscription.unsubscribe();
+  }, [database]);
+  useEffect(() => {
     let isCurrent = true;
-    if (isResolvingUser) {
+    if (isResolvingUser || isCurrencyLoading || isRatesLoading) {
       setIsLoading(true);
       return () => {
         isCurrent = false;
@@ -46,7 +80,12 @@ export function useMetalHoldingDetail(
     }
     setIsLoading(true);
     setError(null);
-    void readMetalDetailReadModel({ holdingId, userId })
+    void readMetalDetailReadModel({
+      currentRates,
+      holdingId,
+      preferredCurrency,
+      userId,
+    })
       .then((next) => {
         if (isCurrent) setModel(next);
       })
@@ -64,6 +103,15 @@ export function useMetalHoldingDetail(
     return () => {
       isCurrent = false;
     };
-  }, [holdingId, isResolvingUser, retryIndex, userId]);
+  }, [
+    currentRates,
+    holdingId,
+    isCurrencyLoading,
+    isRatesLoading,
+    isResolvingUser,
+    preferredCurrency,
+    retryIndex,
+    userId,
+  ]);
   return { error, isLoading, isOffline: !isConnected, model, retry };
 }

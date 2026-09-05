@@ -2,6 +2,7 @@ import {
   database,
   type Asset,
   type AssetMetal,
+  type CurrencyType,
   type MetalActionEvidence,
   type MetalHoldingState,
   type MetalLifecycleEvent,
@@ -30,6 +31,7 @@ import {
   type CurrentUserDataScope,
   USER_DATA_ACCESS_ERROR_CODES,
 } from "@/services/user-data-access";
+import type { LiveRatesTrustReadModel } from "@/services/live-rates-trust-read-model-service";
 
 export const METAL_DETAIL_PAGE_SIZE = 50;
 const MAX_METAL_DETAIL_PAGE_SIZE = 100;
@@ -53,6 +55,8 @@ export interface MetalDetailMetalInput {
 }
 
 export interface MetalDetailHoldingStateInput {
+  readonly effectiveActionId?: string | null;
+  readonly effectiveEventId?: string | null;
   readonly holdingId: string;
   readonly isVisible: boolean;
   readonly reconciliationState: string;
@@ -74,9 +78,11 @@ export interface MetalDetailLifecycleEventInput {
 
 export interface BuildMetalDetailReadModelInput {
   readonly asset: MetalDetailAssetInput;
+  readonly currentRates?: LiveRatesTrustReadModel;
   readonly holdingState: MetalDetailHoldingStateInput;
   readonly lifecycleEvents: readonly MetalDetailLifecycleEventInput[];
   readonly metal: MetalDetailMetalInput;
+  readonly preferredCurrency?: CurrencyType;
   readonly rateReferences: readonly unknown[];
   readonly userId: string;
 }
@@ -102,7 +108,9 @@ export type MetalDetailRenderKey =
 
 export interface MetalDetailReadModel {
   readonly attribution: MetalDetailAttribution | null;
+  readonly currentValueCurrency?: CurrencyType | null;
   readonly currentValueDecimal: string | null;
+  readonly currentValueObservedAt?: Date | null;
   readonly id: string;
   readonly isActiveOwnership: boolean;
   readonly isFinancialActionLocked: boolean;
@@ -127,8 +135,10 @@ export interface MetalDetailReadModel {
 }
 
 export interface ReadMetalDetailReadModelOptions {
+  readonly currentRates?: LiveRatesTrustReadModel;
   readonly holdingId: string;
   readonly pageSize?: number;
+  readonly preferredCurrency?: CurrencyType;
   readonly userId: string;
 }
 
@@ -191,9 +201,11 @@ export async function readMetalDetailReadModel(
 
   return buildMetalDetailReadModel({
     asset: toDetailAssetInput(asset),
+    currentRates: options.currentRates,
     holdingState: toDetailHoldingStateInput(holdingState),
     lifecycleEvents: shapeMetalDetailLifecycleEvents(events, evidence),
     metal: toDetailMetalInput(metal, metalType),
+    preferredCurrency: options.preferredCurrency,
     rateReferences: rateReferences.map(toRateReferenceInput),
     userId: scope.userId,
   });
@@ -321,16 +333,20 @@ export function buildMetalDetailReadModel(
   );
   const projection = reduced.projection;
   if (
-    projection === null ||
-    !projection.isVisible ||
+    (projection === null && !isMigrationBackfilledActiveHolding(input)) ||
+    (projection !== null && !projection.isVisible) ||
     !input.holdingState.isVisible
   ) {
     return null;
   }
 
   const unavailableExactFacts = getUnavailableExactFacts(input);
-  const active = projection.status === "active";
+  const status = projection?.status ?? "active";
+  const active = status === "active";
   const references = input.rateReferences;
+  const legacyCurrentValue = isMigrationBackfilledActiveHolding(input)
+    ? buildLegacyCurrentValue(input, unavailableExactFacts)
+    : null;
   const attribution = active
     ? buildActiveAttribution(input, unavailableExactFacts, references)
     : null;
@@ -338,9 +354,13 @@ export function buildMetalDetailReadModel(
 
   return Object.freeze({
     attribution,
+    currentValueCurrency: legacyCurrentValue?.currency ?? null,
     currentValueDecimal: active
-      ? buildCurrentValue(input, unavailableExactFacts, references)
+      ? (buildCurrentValue(input, unavailableExactFacts, references) ??
+        legacyCurrentValue?.valueDecimal ??
+        null)
       : null,
+    currentValueObservedAt: legacyCurrentValue?.observedAt ?? null,
     id: input.asset.id,
     isActiveOwnership: active,
     isFinancialActionLocked:
@@ -356,8 +376,11 @@ export function buildMetalDetailReadModel(
     purityFactorDecimal: input.metal.purityFactorDecimal,
     requiresCompleteMaterialCorrection: unavailableExactFacts.length > 0,
     renderKey: toRenderKey(input.metal.metalType, itemForm),
-    status: projection.status,
-    timeline: buildTimeline(reduced.acceptedEvents, input.lifecycleEvents),
+    status,
+    timeline:
+      projection === null
+        ? []
+        : buildTimeline(reduced.acceptedEvents, input.lifecycleEvents),
     totalGainDecimal:
       attribution?.breakdown.available === true
         ? attribution.totalGainDecimal
@@ -373,6 +396,83 @@ function isOwnedDetailInput(input: BuildMetalDetailReadModelInput): boolean {
     input.holdingState.userId === input.userId &&
     input.holdingState.holdingId === input.asset.id
   );
+}
+
+function isMigrationBackfilledActiveHolding(
+  input: BuildMetalDetailReadModelInput
+): boolean {
+  return (
+    input.lifecycleEvents.length === 0 &&
+    input.holdingState.effectiveActionId === null &&
+    input.holdingState.effectiveEventId === null &&
+    input.holdingState.status === "active"
+  );
+}
+
+function buildLegacyCurrentValue(
+  input: BuildMetalDetailReadModelInput,
+  unavailableExactFacts: MetalDetailReadModel["unavailableExactFacts"]
+): {
+  readonly currency: CurrencyType;
+  readonly observedAt: Date | null;
+  readonly valueDecimal: string;
+} | null {
+  if (
+    input.currentRates === undefined ||
+    input.preferredCurrency === undefined ||
+    !isSupportedMetalsIsoCurrencyCode(input.preferredCurrency) ||
+    unavailableExactFacts.includes("weight") ||
+    unavailableExactFacts.includes("purity")
+  ) {
+    return null;
+  }
+  const metalRate =
+    input.metal.metalType === "GOLD"
+      ? input.currentRates.gold
+      : input.currentRates.silver;
+  const currencyRate = input.currentRates.currencies.get(
+    input.preferredCurrency
+  );
+  if (
+    !hasTrustedCurrentRate(metalRate) ||
+    !hasTrustedCurrentRate(currencyRate)
+  ) {
+    return null;
+  }
+  const value = calculateMetalReferenceValue({
+    currencyUsdPerUnitDecimal: currencyRate.valueDecimal,
+    metalUsdPerPureGramDecimal: metalRate.valueDecimal,
+    purityFactorDecimal: input.metal.purityFactorDecimal ?? "0",
+    weightGramsDecimal: input.metal.weightGramsDecimal ?? "0",
+  });
+  if (!value.available) return null;
+  return {
+    currency: input.preferredCurrency,
+    observedAt: latestObservedAt(
+      metalRate.providerObservedAt,
+      currencyRate.providerObservedAt
+    ),
+    valueDecimal: value.valueDecimal,
+  };
+}
+
+function hasTrustedCurrentRate(
+  rate: LiveRatesTrustReadModel["gold"] | undefined
+): rate is LiveRatesTrustReadModel["gold"] & { readonly valueDecimal: string } {
+  return (
+    rate !== undefined &&
+    rate.state !== "invalid" &&
+    rate.state !== "missing" &&
+    typeof rate.valueDecimal === "string"
+  );
+}
+
+function latestObservedAt(
+  first: Date | null,
+  second: Date | null
+): Date | null {
+  if (first === null || second === null) return null;
+  return new Date(Math.max(first.getTime(), second.getTime()));
 }
 
 function toReducerEvent(event: MetalDetailLifecycleEventInput): LifecycleEvent {
@@ -640,6 +740,8 @@ function toDetailHoldingStateInput(
   state: MetalHoldingState
 ): MetalDetailHoldingStateInput {
   return {
+    effectiveActionId: state.effectiveActionId,
+    effectiveEventId: state.effectiveEventId,
     holdingId: state.holdingId,
     isVisible: state.isVisible,
     reconciliationState: state.reconciliationState,
