@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { Database, type Model } from "@nozbe/watermelondb";
+import { Database, Q, type Model } from "@nozbe/watermelondb";
 import SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 import {
   DEFAULT_FINANCIAL_ACTION_REGISTRY,
@@ -28,6 +28,7 @@ import {
   createMetalFinancialActionRepository,
   createWatermelonMetalFinancialActionRepositoryDependencies,
 } from "../../services/metal-financial-action-repository";
+import { commitMetalRpcOutcomeLocally } from "../../services/metal-reconciliation-service";
 
 jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown =>
   jest.requireActual(
@@ -399,6 +400,387 @@ describe("Metals financial action foundation", () => {
     expect(state?.financialRevision).toBe("1");
   });
 
+  it("binds correction and sale facts to the owned current projection", async () => {
+    const { database } = await createDatabase();
+    const service = createService(database);
+    await service.execute(commandInput("add", actionId(1), null, null));
+
+    const correction = commandInput("correct", actionId(2), "0", actionId(1));
+    await expect(
+      service.execute({
+        ...correction,
+        domainPayload: {
+          ...correction.domainPayload,
+          materialCorrection: {
+            ...(correction.domainPayload.materialCorrection as Record<
+              string,
+              unknown
+            >),
+            before: materialFacts("149999"),
+          },
+        },
+      })
+    ).rejects.toThrow("metal_action_projection_mismatch");
+
+    const sale = commandInput("sell", actionId(3), "0", actionId(1));
+    const usdRateSnapshots = (
+      sale.domainPayload.rateSnapshots as ReadonlyArray<Record<string, unknown>>
+    ).map((snapshot) =>
+      snapshot.kind === "currency"
+        ? { ...snapshot, instrumentCode: "currency:USD", valueDecimal: "1" }
+        : snapshot
+    );
+    await expect(
+      service.execute({
+        ...sale,
+        domainPayload: {
+          ...sale.domainPayload,
+          purchaseCurrency: "USD",
+          rateSnapshots: usdRateSnapshots,
+          saleCurrency: "USD",
+        },
+      })
+    ).rejects.toThrow("metal_action_projection_mismatch");
+    expect(await count(database, "financial_action_groups")).toBe(1);
+  });
+
+  it("rejects a disposal date before acquisition", async () => {
+    const { database } = await createDatabase();
+    const service = createService(database);
+    await service.execute(commandInput("add", actionId(1), null, null));
+    const disposal = commandInput("dispose", actionId(2), "0", actionId(1));
+
+    await expect(
+      service.execute({
+        ...disposal,
+        domainPayload: {
+          ...disposal.domainPayload,
+          disposalDate: "2026-08-29",
+        },
+      })
+    ).rejects.toThrow("metal_disposal_before_acquisition");
+  });
+
+  it("allows the first real action on a revision-zero migrated holding", async () => {
+    const { database } = await createDatabase();
+    await database.write(async (): Promise<void> => {
+      const asset = database.get<Asset>("assets").prepareCreate((row) => {
+        row._raw.id = HOLDING_ID;
+        row.deleted = false;
+        row.isLiquid = false;
+        row.name = "Legacy gold";
+        row.type = "METAL";
+        row.userId = USER_ID;
+        applyLegacyAssetFacts(row);
+      });
+      const metal = database
+        .get<AssetMetal>("asset_metals")
+        .prepareCreate((row) => {
+          row._raw.id = HOLDING_ID;
+          row.assetId = HOLDING_ID;
+          row.deleted = false;
+          row.itemForm = "JEWELRY";
+          row.metalType = "GOLD";
+          row.purityCatalogVersion = "1";
+          row.purityCode = "gold-9999";
+          row.purityFactorDecimal = "0.9999";
+          row.purityFraction = 0.9999;
+          row.weightGrams = 10.25;
+          row.weightGramsDecimal = "10.25";
+        });
+      const state = database
+        .get<MetalHoldingState>("metal_holding_states")
+        .prepareCreate((row) => {
+          row._raw.id = HOLDING_ID;
+          row.deleted = false;
+          row.effectiveActionId = null;
+          row.effectiveEventId = null;
+          row.financialRevision = "0";
+          row.holdingId = HOLDING_ID;
+          row.isVisible = true;
+          row.reconciliationState = "accepted";
+          row.status = "active";
+          row.userId = USER_ID;
+        });
+      await database.batch(asset, metal, state);
+    });
+
+    await expect(
+      createService(database).execute(
+        commandInput("dispose", actionId(8), "0", null)
+      )
+    ).resolves.toMatchObject({ kind: "committed" });
+  });
+
+  it("advances metadata clocks with a mixed material correction", async () => {
+    const { database } = await createDatabase();
+    const service = createService(database);
+    await service.execute(commandInput("add", actionId(1), null, null));
+    const correction = commandInput("correct", actionId(2), "0", actionId(1));
+    await service.execute({
+      ...correction,
+      domainPayload: {
+        ...correction.domainPayload,
+        metadataChange: {
+          before: { name: "Savings gold", notes: null },
+          after: { name: "Corrected gold", notes: "Receipt checked" },
+        },
+      },
+    });
+
+    const [state] = await database
+      .get<MetalHoldingState>("metal_holding_states")
+      .query()
+      .fetch();
+    expect(state).toMatchObject({
+      nameWrittenAt: Date.parse(correction.occurredAt),
+      nameWriterId: correction.actionId,
+      notesWrittenAt: Date.parse(correction.occurredAt),
+      notesWriterId: correction.actionId,
+    });
+  });
+
+  it("persists accepted reconciliation before acknowledgement and survives restart", async () => {
+    const { adapter, database } = await createDatabase();
+    const service = createService(database);
+    await service.execute(commandInput("add", actionId(1), null, null));
+
+    await expect(
+      commitMetalRpcOutcomeLocally(
+        database,
+        {
+          accountRevisions: [],
+          actionId: actionId(1),
+          effectiveEventId: actionId(1),
+          holdingRevision: "0",
+          payloadHashMatches: true,
+          serverAcceptedAt: "2026-08-31T10:16:00.123Z",
+          status: "accepted",
+          userId: USER_ID,
+        },
+        USER_ID
+      )
+    ).resolves.toBe("accepted");
+
+    const batchSpy = jest.spyOn(database, "batch");
+    await expect(
+      commitMetalRpcOutcomeLocally(
+        database,
+        {
+          accountRevisions: [],
+          actionId: actionId(1),
+          effectiveEventId: actionId(1),
+          holdingRevision: "0",
+          payloadHashMatches: true,
+          serverAcceptedAt: "2026-08-31T10:16:00.123Z",
+          status: "idempotent",
+          userId: USER_ID,
+        },
+        USER_ID
+      )
+    ).resolves.toBe("accepted");
+    expect(batchSpy).not.toHaveBeenCalled();
+
+    const reopened = new Database({
+      adapter: await adapter.testClone(),
+      modelClasses: MODEL_CLASSES,
+    });
+    const [root] = await reopened
+      .get<FinancialActionGroup>("financial_action_groups")
+      .query()
+      .fetch();
+    const [evidence] = await reopened
+      .get<MetalActionEvidence>("metal_action_evidence")
+      .query()
+      .fetch();
+    const [state] = await reopened
+      .get<MetalHoldingState>("metal_holding_states")
+      .query()
+      .fetch();
+    expect(root).toMatchObject({
+      serverOutcome: "accepted",
+      state: "accepted",
+    });
+    expect(root?.outcomeJson).toContain('"status":"accepted"');
+    expect(evidence?.canonicalHoldingRevision).toBe("0");
+    expect(state?.reconciliationState).toBe("accepted");
+  });
+
+  it("durably rolls back a rejected material correction and locks a stale projection", async () => {
+    const { database } = await createDatabase();
+    const service = createService(database);
+    await service.execute(commandInput("add", actionId(1), null, null));
+    await service.execute(
+      commandInput("correct", actionId(2), "0", actionId(1))
+    );
+
+    const rejectedOutcome = {
+      actionId: actionId(2),
+      code: "INVALID_LINK" as const,
+      payloadHashMatches: true,
+      status: "rejected" as const,
+      userId: USER_ID,
+    };
+    await expect(
+      commitMetalRpcOutcomeLocally(database, rejectedOutcome, USER_ID)
+    ).resolves.toBe("reconciled");
+    const [asset] = await database.get<Asset>("assets").query().fetch();
+    const [rejectedRoot] = await database
+      .get<FinancialActionGroup>("financial_action_groups")
+      .query(Q.where("action_id", actionId(2)))
+      .fetch();
+    const [restoredState] = await database
+      .get<MetalHoldingState>("metal_holding_states")
+      .query()
+      .fetch();
+    expect(asset?.purchasePriceDecimal).toBe("150000");
+    expect(rejectedRoot).toMatchObject({
+      rejectionCode: "INVALID_LINK",
+      serverOutcome: "rejected",
+      state: "reconciled",
+    });
+    expect(rejectedRoot?.outcomeJson).toContain('"status":"rejected"');
+    expect(restoredState).toMatchObject({
+      effectiveActionId: actionId(1),
+      financialRevision: "0",
+      isVisible: true,
+      reconciliationState: "reconciled",
+    });
+    const batchSpy = jest.spyOn(database, "batch");
+    await expect(
+      commitMetalRpcOutcomeLocally(database, rejectedOutcome, USER_ID)
+    ).resolves.toBe("reconciled");
+    expect(batchSpy).not.toHaveBeenCalled();
+
+    await service.execute(
+      commandInput("dispose", actionId(3), "0", actionId(1))
+    );
+    await expect(
+      commitMetalRpcOutcomeLocally(
+        database,
+        {
+          actionId: actionId(3),
+          canonicalAccounts: [],
+          canonicalHoldingActionId: actionId(2),
+          canonicalHoldingEvidenceHash: "a".repeat(64),
+          canonicalHoldingRevision: "1",
+          code: "HOLDING_REVISION_STALE",
+          payloadHashMatches: true,
+          staleAccountIds: [],
+          status: "stale",
+          userId: USER_ID,
+        },
+        USER_ID
+      )
+    ).resolves.toBe("incomplete");
+    const [staleRoot] = await database
+      .get<FinancialActionGroup>("financial_action_groups")
+      .query(Q.where("action_id", actionId(3)))
+      .fetch();
+    const [lockedState] = await database
+      .get<MetalHoldingState>("metal_holding_states")
+      .query()
+      .fetch();
+    expect(staleRoot).toMatchObject({
+      rejectionCode: "HOLDING_REVISION_STALE",
+      serverOutcome: "stale",
+      state: "reconciliation_incomplete",
+    });
+    expect(staleRoot?.outcomeJson).toContain('"status":"stale"');
+    expect(lockedState).toMatchObject({
+      isVisible: false,
+      reconciliationState: "reconciliation_incomplete",
+    });
+  });
+
+  it("reconciles sequential accepted actions without clobbering the latest local state", async () => {
+    const { database } = await createDatabase();
+    const service = createService(database);
+    await service.execute(commandInput("add", actionId(1), null, null));
+    await service.execute(
+      commandInput("correct", actionId(2), "0", actionId(1))
+    );
+
+    await commitMetalRpcOutcomeLocally(
+      database,
+      {
+        accountRevisions: [],
+        actionId: actionId(1),
+        effectiveEventId: actionId(1),
+        holdingRevision: "0",
+        payloadHashMatches: true,
+        serverAcceptedAt: "2026-08-31T10:16:00.123Z",
+        status: "accepted",
+        userId: USER_ID,
+      },
+      USER_ID
+    );
+    const [pendingLatestState] = await database
+      .get<MetalHoldingState>("metal_holding_states")
+      .query()
+      .fetch();
+    expect(pendingLatestState).toMatchObject({
+      effectiveActionId: actionId(2),
+      financialRevision: "1",
+      reconciliationState: "local_complete",
+    });
+
+    await commitMetalRpcOutcomeLocally(
+      database,
+      {
+        accountRevisions: [],
+        actionId: actionId(2),
+        effectiveEventId: actionId(2),
+        holdingRevision: "1",
+        payloadHashMatches: true,
+        serverAcceptedAt: "2026-08-31T10:16:01.123Z",
+        status: "accepted",
+        userId: USER_ID,
+      },
+      USER_ID
+    );
+    const [acceptedLatestState] = await database
+      .get<MetalHoldingState>("metal_holding_states")
+      .query()
+      .fetch();
+    expect(acceptedLatestState?.reconciliationState).toBe("accepted");
+  });
+
+  it("restores the terminal state when an optimistic Undo is rejected", async () => {
+    const { database } = await createDatabase();
+    const service = createService(database);
+    await service.execute(commandInput("add", actionId(1), null, null));
+    await service.execute(commandInput("sell", actionId(2), "0", actionId(1)));
+    await service.execute(
+      commandInput("undo", actionId(3), "1", actionId(2), actionId(2))
+    );
+
+    await expect(
+      commitMetalRpcOutcomeLocally(
+        database,
+        {
+          actionId: actionId(3),
+          code: "INVALID_STATE",
+          payloadHashMatches: true,
+          status: "rejected",
+          userId: USER_ID,
+        },
+        USER_ID
+      )
+    ).resolves.toBe("reconciled");
+    const [state] = await database
+      .get<MetalHoldingState>("metal_holding_states")
+      .query()
+      .fetch();
+    expect(state).toMatchObject({
+      effectiveActionId: actionId(2),
+      financialRevision: "1",
+      isVisible: true,
+      reconciliationState: "reconciled",
+      status: "sold",
+    });
+  });
+
   it("replays one action/hash, rejects payload mismatch, and skips linked writes", async () => {
     const { database } = await createDatabase();
     const service = createService(database);
@@ -467,3 +849,11 @@ describe("Metals financial action foundation", () => {
     );
   });
 });
+
+function applyLegacyAssetFacts(asset: Asset): void {
+  asset.currency = "EGP";
+  asset.purchaseCurrency = "EGP";
+  asset.purchaseDate = new Date("2026-08-30T00:00:00.000Z");
+  asset.purchasePrice = 150000;
+  asset.purchasePriceDecimal = "150000";
+}

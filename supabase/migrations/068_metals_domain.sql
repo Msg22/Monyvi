@@ -42,7 +42,7 @@ BEGIN
       ]::text[]
     OR jsonb_typeof(p_payload -> 'expectedHoldingRevision') IS DISTINCT FROM 'string'
     OR jsonb_typeof(p_payload -> 'holdingId') IS DISTINCT FROM 'string'
-    OR jsonb_typeof(p_payload -> 'predecessorEventId') IS DISTINCT FROM 'string'
+    OR jsonb_typeof(p_payload -> 'predecessorEventId') NOT IN ('string', 'null')
     OR jsonb_typeof(p_payload -> 'reversesEventId') IS DISTINCT FROM 'null'
     OR jsonb_typeof(p_payload -> 'disposalDate') IS DISTINCT FROM 'string'
     OR jsonb_typeof(p_payload -> 'reason') IS DISTINCT FROM 'string'
@@ -53,8 +53,15 @@ BEGIN
     )
     OR (p_payload ->> 'holdingId') !~
       '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-    OR (p_payload ->> 'predecessorEventId') !~
-      '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    OR (
+      jsonb_typeof(p_payload -> 'predecessorEventId') = 'string'
+      AND (p_payload ->> 'predecessorEventId') !~
+        '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    )
+    OR (
+      jsonb_typeof(p_payload -> 'predecessorEventId') = 'null'
+      AND p_payload ->> 'expectedHoldingRevision' <> '0'
+    )
     OR (p_payload ->> 'disposalDate') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
     OR to_char(to_date(p_payload ->> 'disposalDate', 'YYYY-MM-DD'), 'YYYY-MM-DD')
       <> p_payload ->> 'disposalDate'
@@ -166,6 +173,110 @@ BEGIN
       ('gold-375', '0.375'), ('silver-9999', '0.9999'), ('silver-999', '0.999'),
       ('silver-925', '0.925'), ('silver-900', '0.9'), ('silver-800', '0.8'),
       ('silver-600', '0.6')
+    )
+  THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload';
+  END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION private.financial_action_validate_metals_legacy_material_facts_v1(
+  p_facts jsonb
+)
+RETURNS void
+LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_currency text := p_facts ->> 'purchaseCurrency';
+  v_price text := p_facts ->> 'purchasePriceDecimal';
+  v_weight text := p_facts ->> 'weightGramsDecimal';
+  v_purity_code text := p_facts ->> 'purityCode';
+  v_purity_factor text := p_facts ->> 'purityFactorDecimal';
+  v_purity_null_count integer;
+  v_minor_units integer;
+BEGIN
+  IF jsonb_typeof(p_facts) IS DISTINCT FROM 'object'
+    OR (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(p_facts) AS key)
+      IS DISTINCT FROM ARRAY[
+        'physicalForm', 'purchaseCurrency', 'purchaseDate', 'purchasePriceDecimal',
+        'purityCatalogVersion', 'purityCode', 'purityFactorDecimal', 'weightGramsDecimal'
+      ]::text[]
+    OR jsonb_typeof(p_facts -> 'physicalForm') NOT IN ('string', 'null')
+    OR (
+      jsonb_typeof(p_facts -> 'physicalForm') = 'string'
+      AND p_facts ->> 'physicalForm' NOT IN ('COIN', 'BAR', 'JEWELRY')
+    )
+    OR jsonb_typeof(p_facts -> 'weightGramsDecimal') NOT IN ('string', 'null')
+    OR (
+      v_weight IS NOT NULL
+      AND (
+        v_weight !~ '^([1-9][0-9]*|(0|[1-9][0-9]*)\.[0-9]*[1-9])$'
+        OR length(replace(v_weight, '.', '')) > 50
+        OR length(split_part(v_weight, '.', 2)) > 3
+      )
+    )
+    OR jsonb_typeof(p_facts -> 'purchasePriceDecimal') NOT IN ('string', 'null')
+    OR (
+      v_price IS NOT NULL
+      AND (
+        v_price !~ '^([1-9][0-9]*|(0|[1-9][0-9]*)\.[0-9]*[1-9])$'
+        OR length(replace(v_price, '.', '')) > 50
+        OR length(split_part(v_price, '.', 2)) > 18
+      )
+    )
+    OR jsonb_typeof(p_facts -> 'purchaseCurrency') NOT IN ('string', 'null')
+    OR (
+      v_currency IS NOT NULL
+      AND v_currency NOT IN (
+        'EGP', 'SAR', 'AED', 'KWD', 'QAR', 'BHD', 'OMR', 'JOD', 'IQD',
+        'LYD', 'TND', 'MAD', 'DZD', 'USD', 'EUR', 'GBP', 'JPY', 'CHF',
+        'CNY', 'INR', 'KRW', 'KPW', 'SGD', 'HKD', 'MYR', 'AUD', 'NZD',
+        'CAD', 'SEK', 'NOK', 'DKK', 'ISK', 'TRY', 'RUB', 'ZAR'
+      )
+    )
+    OR jsonb_typeof(p_facts -> 'purchaseDate') IS DISTINCT FROM 'string'
+    OR (p_facts ->> 'purchaseDate') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+    OR to_char(to_date(p_facts ->> 'purchaseDate', 'YYYY-MM-DD'), 'YYYY-MM-DD')
+      <> p_facts ->> 'purchaseDate'
+  THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload';
+  END IF;
+
+  IF v_price IS NOT NULL AND v_currency IS NOT NULL THEN
+    v_minor_units := CASE
+      WHEN v_currency IN ('BHD', 'IQD', 'JOD', 'KWD', 'LYD', 'OMR', 'TND') THEN 3
+      WHEN v_currency IN ('ISK', 'JPY', 'KRW') THEN 0
+      ELSE 2
+    END;
+    IF length(split_part(v_price, '.', 2)) > v_minor_units THEN
+      RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload';
+    END IF;
+  END IF;
+
+  v_purity_null_count :=
+    (CASE WHEN p_facts -> 'purityCode' = 'null'::jsonb THEN 1 ELSE 0 END) +
+    (CASE WHEN p_facts -> 'purityFactorDecimal' = 'null'::jsonb THEN 1 ELSE 0 END) +
+    (CASE WHEN p_facts -> 'purityCatalogVersion' = 'null'::jsonb THEN 1 ELSE 0 END);
+  IF v_purity_null_count NOT IN (0, 3)
+    OR (
+      v_purity_null_count = 0
+      AND (
+        jsonb_typeof(p_facts -> 'purityCode') IS DISTINCT FROM 'string'
+        OR jsonb_typeof(p_facts -> 'purityFactorDecimal') IS DISTINCT FROM 'string'
+        OR p_facts ->> 'purityCatalogVersion' <> '1'
+        OR (v_purity_code, v_purity_factor) NOT IN (
+          ('gold-9999', '0.9999'), ('gold-999', '0.999'), ('gold-995', '0.995'),
+          ('gold-97916', '0.97916'), ('gold-9167', '0.9167'), ('gold-875', '0.875'),
+          ('gold-750', '0.75'), ('gold-58333', '0.58333'), ('gold-500', '0.5'),
+          ('gold-375', '0.375'), ('silver-9999', '0.9999'), ('silver-999', '0.999'),
+          ('silver-925', '0.925'), ('silver-900', '0.9'), ('silver-800', '0.8'),
+          ('silver-600', '0.6')
+        )
+      )
     )
   THEN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload';
@@ -351,7 +462,11 @@ BEGIN
     ];
     IF (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(v_payload) AS key)
         IS DISTINCT FROM v_keys
-      OR jsonb_typeof(v_payload -> 'predecessorEventId') IS DISTINCT FROM 'string'
+      OR jsonb_typeof(v_payload -> 'predecessorEventId') NOT IN ('string', 'null')
+      OR (
+        jsonb_typeof(v_payload -> 'predecessorEventId') = 'null'
+        AND v_payload ->> 'expectedHoldingRevision' <> '0'
+      )
       OR v_payload -> 'reversesEventId' IS DISTINCT FROM 'null'::jsonb
       OR (
         v_payload -> 'materialCorrection' = 'null'::jsonb
@@ -389,7 +504,7 @@ BEGIN
       THEN
         RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload';
       END IF;
-      PERFORM private.financial_action_validate_metals_material_facts_v1(
+      PERFORM private.financial_action_validate_metals_legacy_material_facts_v1(
         v_material_correction -> 'before'
       );
       v_after_facts := v_material_correction -> 'after';
@@ -398,8 +513,9 @@ BEGIN
         WHEN v_after_facts ->> 'purityCode' LIKE 'gold-%' THEN 'GOLD'
         ELSE 'SILVER'
       END;
-      IF (v_material_correction #>> '{before,purityCode}' LIKE 'gold-%')
-        IS DISTINCT FROM (v_material_metal = 'GOLD')
+      IF v_material_correction #>> '{before,purityCode}' IS NOT NULL
+        AND (v_material_correction #>> '{before,purityCode}' LIKE 'gold-%')
+          IS DISTINCT FROM (v_material_metal = 'GOLD')
       THEN
         RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload';
       END IF;
@@ -418,7 +534,19 @@ BEGIN
     ];
     IF (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(v_payload) AS key)
         IS DISTINCT FROM v_keys
-      OR jsonb_typeof(v_payload -> 'predecessorEventId') IS DISTINCT FROM 'string'
+      OR (
+        v_kind = 'undo'
+        AND jsonb_typeof(v_payload -> 'predecessorEventId') IS DISTINCT FROM 'string'
+      )
+      OR (
+        v_kind = 'delete'
+        AND jsonb_typeof(v_payload -> 'predecessorEventId') NOT IN ('string', 'null')
+      )
+      OR (
+        v_kind = 'delete'
+        AND jsonb_typeof(v_payload -> 'predecessorEventId') = 'null'
+        AND v_payload ->> 'expectedHoldingRevision' <> '0'
+      )
       OR (v_kind = 'delete' AND v_payload -> 'reversesEventId' IS DISTINCT FROM 'null'::jsonb)
       OR (v_kind = 'undo' AND jsonb_typeof(v_payload -> 'reversesEventId') IS DISTINCT FROM 'string')
     THEN
@@ -547,9 +675,16 @@ BEGIN
         'payloadVersion', 'metals.sell/v2'
       )
     ) IS NULL
-    OR jsonb_typeof(p_payload -> 'predecessorEventId') IS DISTINCT FROM 'string'
-    OR (p_payload ->> 'predecessorEventId') !~
-      '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    OR jsonb_typeof(p_payload -> 'predecessorEventId') NOT IN ('string', 'null')
+    OR (
+      jsonb_typeof(p_payload -> 'predecessorEventId') = 'string'
+      AND (p_payload ->> 'predecessorEventId') !~
+        '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    )
+    OR (
+      jsonb_typeof(p_payload -> 'predecessorEventId') = 'null'
+      AND p_payload ->> 'expectedHoldingRevision' <> '0'
+    )
     OR jsonb_typeof(p_payload -> 'reversesEventId') IS DISTINCT FROM 'null'
     OR jsonb_typeof(p_payload -> 'metalType') IS DISTINCT FROM 'string'
     OR p_payload ->> 'metalType' NOT IN ('GOLD', 'SILVER')
@@ -962,6 +1097,14 @@ SET search_path = ''
 AS $$
 BEGIN
   IF current_user = 'authenticated'
+    AND TG_OP = 'INSERT'
+    AND NEW.type = 'METAL'
+  THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '22023',
+      MESSAGE = 'metal_action_rpc_required';
+  END IF;
+  IF current_user = 'authenticated'
     AND TG_OP = 'UPDATE'
     AND (NEW.name IS DISTINCT FROM OLD.name OR NEW.notes IS DISTINCT FROM OLD.notes)
     AND EXISTS (
@@ -1003,6 +1146,11 @@ LANGUAGE plpgsql
 SET search_path = ''
 AS $$
 BEGIN
+  IF current_user = 'authenticated' AND TG_OP = 'INSERT' THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '22023',
+      MESSAGE = 'metal_action_rpc_required';
+  END IF;
   IF current_user = 'authenticated' AND (
     (TG_OP = 'INSERT' AND (
       NEW.weight_grams_decimal IS NOT NULL
@@ -1433,7 +1581,65 @@ AS $$
             'holdingId', p_state.holding_id,
             'isVisible', p_state.is_visible,
             'status', p_state.status,
-            'userId', p_state.user_id
+            'userId', p_state.user_id,
+            'actionEvidenceFingerprint', (
+              SELECT encode(
+                extensions.digest(
+                  convert_to(
+                    private.financial_action_encode_jsonb_v1(
+                      jsonb_build_object(
+                        'actionId', evidence.action_id,
+                        'canonicalHoldingRevision', evidence.canonical_holding_revision::text,
+                        'domainPayload', evidence.domain_payload_json,
+                        'expectedHoldingRevision', evidence.expected_holding_revision::text,
+                        'holdingId', evidence.holding_id,
+                        'kind', evidence.kind,
+                        'userId', evidence.user_id
+                      )
+                    ),
+                    'UTF8'
+                  ),
+                  'sha256'
+                ),
+                'hex'
+              )
+              FROM public.metal_action_evidence AS evidence
+              WHERE evidence.user_id = p_state.user_id
+                AND evidence.holding_id = p_state.holding_id
+                AND evidence.action_id = p_state.effective_action_id
+            ),
+            'eventFingerprint', (
+              SELECT encode(
+                extensions.digest(
+                  convert_to(
+                    private.financial_action_encode_jsonb_v1(
+                      jsonb_build_object(
+                        'actionId', event.action_id,
+                        'holdingId', event.holding_id,
+                        'id', event.id,
+                        'isHistoryVisible', event.is_history_visible,
+                        'kind', event.kind,
+                        'occurredAt', to_char(
+                          event.occurred_at AT TIME ZONE 'UTC',
+                          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+                        ),
+                        'payload', event.payload_json,
+                        'predecessorEventId', event.predecessor_event_id,
+                        'reversesEventId', event.reverses_event_id,
+                        'userId', event.user_id
+                      )
+                    ),
+                    'UTF8'
+                  ),
+                  'sha256'
+                ),
+                'hex'
+              )
+              FROM public.metal_lifecycle_events AS event
+              WHERE event.user_id = p_state.user_id
+                AND event.holding_id = p_state.holding_id
+                AND event.id = p_state.effective_event_id
+            )
           )
         ),
         'UTF8'
@@ -1465,6 +1671,8 @@ DECLARE
   v_next_revision bigint;
   v_existing public.financial_action_groups%ROWTYPE;
   v_state public.metal_holding_states%ROWTYPE;
+  v_asset public.assets%ROWTYPE;
+  v_metal public.asset_metals%ROWTYPE;
   v_outcome jsonb;
   v_outcome_text text;
   v_now timestamptz := statement_timestamp();
@@ -1582,6 +1790,17 @@ BEGIN
         'status', 'rejected', 'actionId', v_action_id, 'code', 'NOT_OWNED'
       );
     END IF;
+    SELECT * INTO v_asset
+    FROM public.assets
+    WHERE id = v_holding_id AND user_id = v_owner;
+    SELECT * INTO v_metal
+    FROM public.asset_metals
+    WHERE asset_id = v_holding_id;
+    IF v_asset.id IS NULL OR v_metal.id IS NULL THEN
+      RETURN jsonb_build_object(
+        'status', 'rejected', 'actionId', v_action_id, 'code', 'INVALID_LINK'
+      );
+    END IF;
     IF v_state.financial_revision <> v_expected THEN
       RETURN jsonb_build_object(
         'status', 'stale', 'actionId', v_action_id,
@@ -1595,6 +1814,45 @@ BEGIN
     IF v_expected = 9223372036854775807 THEN
       RETURN jsonb_build_object(
         'status', 'rejected', 'actionId', v_action_id, 'code', 'REVISION_EXHAUSTED'
+      );
+    END IF;
+    IF (
+      v_kind = 'correct'
+      AND v_payload -> 'materialCorrection' <> 'null'::jsonb
+      AND (
+        v_payload #> '{materialCorrection,before}' IS DISTINCT FROM
+          jsonb_build_object(
+            'physicalForm', v_metal.item_form,
+            'purchaseCurrency', v_asset.purchase_currency,
+            'purchaseDate', to_char(v_asset.purchase_date, 'YYYY-MM-DD'),
+            'purchasePriceDecimal', v_asset.purchase_price_decimal::text,
+            'purityCatalogVersion', v_metal.purity_catalog_version,
+            'purityCode', v_metal.purity_code,
+            'purityFactorDecimal', v_metal.purity_factor_decimal::text,
+            'weightGramsDecimal', v_metal.weight_grams_decimal::text
+          )
+        OR (
+          (v_payload #>> '{materialCorrection,after,purityCode}' LIKE 'gold-%')
+          IS DISTINCT FROM (v_metal.metal_type = 'GOLD')
+        )
+      )
+    ) OR (
+      v_kind = 'correct'
+      AND v_payload -> 'metadataChange' <> 'null'::jsonb
+      AND v_payload #> '{metadataChange,before}' IS DISTINCT FROM
+        jsonb_build_object('name', v_asset.name, 'notes', v_asset.notes)
+    ) OR (
+      v_kind = 'sell'
+      AND (
+        v_payload ->> 'metalType' IS DISTINCT FROM v_metal.metal_type::text
+        OR v_payload ->> 'purchaseCurrency' IS DISTINCT FROM v_asset.purchase_currency
+      )
+    ) OR (
+      v_kind = 'dispose'
+      AND (v_payload ->> 'disposalDate')::date < v_asset.purchase_date
+    ) THEN
+      RETURN jsonb_build_object(
+        'status', 'rejected', 'actionId', v_action_id, 'code', 'INVALID_LINK'
       );
     END IF;
     IF v_state.effective_event_id::text IS DISTINCT FROM v_payload ->> 'predecessorEventId'
@@ -1615,7 +1873,7 @@ BEGIN
     id, action_id, user_id, domain, kind, domain_reference_id,
     payload_json, payload_hash, account_guards_json, state, deleted
   ) VALUES (
-    v_action_id, v_action_id, v_owner, 'metals', v_kind, v_holding_id,
+    extensions.gen_random_uuid(), v_action_id, v_owner, 'metals', v_kind, v_holding_id,
     v_canonical, p_payload_hash, '[]'::jsonb, 'sync_pending', false
   );
   INSERT INTO public.metal_action_evidence (
@@ -1711,6 +1969,38 @@ BEGIN
       effective_event_id = v_action_id,
       effective_action_id = v_action_id,
       is_visible = v_kind <> 'delete',
+      name_written_at = CASE
+        WHEN v_kind = 'correct'
+          AND v_payload -> 'metadataChange' <> 'null'::jsonb
+          AND v_payload #>> '{metadataChange,before,name}'
+            IS DISTINCT FROM v_payload #>> '{metadataChange,after,name}'
+          THEN floor(extract(epoch FROM (v_envelope ->> 'occurredAt')::timestamptz) * 1000)::bigint
+        ELSE name_written_at
+      END,
+      name_writer_id = CASE
+        WHEN v_kind = 'correct'
+          AND v_payload -> 'metadataChange' <> 'null'::jsonb
+          AND v_payload #>> '{metadataChange,before,name}'
+            IS DISTINCT FROM v_payload #>> '{metadataChange,after,name}'
+          THEN v_action_id
+        ELSE name_writer_id
+      END,
+      notes_written_at = CASE
+        WHEN v_kind = 'correct'
+          AND v_payload -> 'metadataChange' <> 'null'::jsonb
+          AND v_payload #> '{metadataChange,before,notes}'
+            IS DISTINCT FROM v_payload #> '{metadataChange,after,notes}'
+          THEN floor(extract(epoch FROM (v_envelope ->> 'occurredAt')::timestamptz) * 1000)::bigint
+        ELSE notes_written_at
+      END,
+      notes_writer_id = CASE
+        WHEN v_kind = 'correct'
+          AND v_payload -> 'metadataChange' <> 'null'::jsonb
+          AND v_payload #> '{metadataChange,before,notes}'
+            IS DISTINCT FROM v_payload #> '{metadataChange,after,notes}'
+          THEN v_action_id
+        ELSE notes_writer_id
+      END,
       reconciliation_state = 'accepted'
     WHERE holding_id = v_holding_id AND user_id = v_owner;
   END IF;

@@ -62,11 +62,9 @@ export async function syncDatabase(
       return;
     }
 
-    const persistedSyncOwner = await database.adapter.getLocal(
-      SYNC_OWNER_LOCAL_KEY
-    );
-    const shouldForceFullSync =
-      forceFullSync || persistedSyncOwner !== userId;
+    const persistedSyncOwner =
+      await database.adapter.getLocal(SYNC_OWNER_LOCAL_KEY);
+    const shouldForceFullSync = forceFullSync || persistedSyncOwner !== userId;
 
     if (shouldForceFullSync) {
       logger.info("sync.forceFullSyncRequested");
@@ -80,7 +78,7 @@ export async function syncDatabase(
             const effectiveLastPulledAt = shouldForceFullSync
               ? null
               : lastPulledAt;
-            return pullChanges(effectiveLastPulledAt ?? null, userId);
+            return pullChanges(effectiveLastPulledAt ?? null, userId, database);
           },
           pushChanges: ({ changes, lastPulledAt }) =>
             pushChanges(database, { changes, lastPulledAt }, userId),

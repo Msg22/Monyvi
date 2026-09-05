@@ -1,4 +1,22 @@
-import { assertCanonicalMetalRevision } from "./metal-financial-action-adapter";
+import { Q, type Database, type Model } from "@nozbe/watermelondb";
+import type {
+  Asset,
+  AssetMetal,
+  FinancialActionGroup,
+  MetalActionEvidence,
+  MetalHoldingState,
+  MetalLifecycleEvent,
+} from "@monyvi/db";
+
+import {
+  assertCanonicalMetalRevision,
+  incrementCanonicalMetalRevision,
+} from "./metal-financial-action-adapter";
+import { findOwnedById, queryChildrenOfOwnedParent } from "./user-data-access";
+import {
+  captureCachedModelSnapshot,
+  restoreCachedModelSnapshot,
+} from "./watermelon-cache-snapshot";
 
 export interface CanonicalAccountEvidence {
   readonly accountId: string;
@@ -18,10 +36,10 @@ export type MetalRpcOutcome = MetalOutcomeTransportEvidence &
         readonly status: "accepted" | "idempotent";
         readonly actionId: string;
         readonly holdingRevision: string;
-        readonly accountRevisions: readonly {
+        readonly accountRevisions: ReadonlyArray<{
           readonly accountId: string;
           readonly revision: string;
-        }[];
+        }>;
         readonly effectiveEventId: string;
         readonly serverAcceptedAt: string;
       }
@@ -50,6 +68,17 @@ export type MetalRpcOutcome = MetalOutcomeTransportEvidence &
       }
   );
 
+type AcceptedMetalRpcOutcome = Extract<
+  MetalRpcOutcome,
+  { readonly status: "accepted" | "idempotent" }
+>;
+
+function isAcceptedMetalRpcOutcome(
+  outcome: MetalRpcOutcome
+): outcome is AcceptedMetalRpcOutcome {
+  return outcome.status === "accepted" || outcome.status === "idempotent";
+}
+
 export type MetalReconciliationClassification =
   | "accepted"
   | "stale_ready"
@@ -75,9 +104,10 @@ function isCanonicalAccountEvidence(
   return (
     values.length > 0 &&
     new Set(accountIds).size === accountIds.length &&
-    accountIds.every(
-      (value, index) => index === 0 || accountIds[index - 1]! < value
-    ) &&
+    accountIds.every((value, index) => {
+      const previous = accountIds[index - 1];
+      return index === 0 || (previous !== undefined && previous < value);
+    }) &&
     values.every(
       (value) =>
         hasCanonicalRevision(value.canonicalRevision) &&
@@ -193,4 +223,347 @@ export function createMetalReconciliationService(
     );
   }
   return Object.freeze({ reconcile });
+}
+
+type RpcOutcomeCommitResult = "accepted" | "reconciled" | "incomplete";
+
+async function findOwnedByActionId<T extends Model & { actionId: string }>(
+  database: Database,
+  table: string,
+  actionId: string,
+  userId: string
+): Promise<T | null> {
+  const rows = await database
+    .get<T>(table)
+    .query(Q.where("action_id", actionId), Q.where("user_id", userId))
+    .fetch();
+  return rows[0] ?? null;
+}
+
+function outcomeJson(outcome: MetalRpcOutcome): string {
+  const {
+    payloadHashMatches: _payloadHashMatches,
+    userId: _userId,
+    ...value
+  } = outcome;
+  return JSON.stringify(value);
+}
+
+function restoreCorrectionAsset(
+  asset: Asset,
+  payload: Readonly<Record<string, unknown>>
+): void {
+  const correction = payload.materialCorrection as Readonly<
+    Record<string, unknown>
+  > | null;
+  const metadata = payload.metadataChange as Readonly<
+    Record<string, unknown>
+  > | null;
+  const before = correction?.before as
+    | Readonly<Record<string, unknown>>
+    | undefined;
+  const metadataBefore = metadata?.before as
+    | Readonly<Record<string, unknown>>
+    | undefined;
+  if (before) {
+    if (typeof before.purchaseCurrency === "string") {
+      asset.currency = before.purchaseCurrency as Asset["currency"];
+    }
+    asset.purchaseCurrency = before.purchaseCurrency as string | null;
+    asset.purchaseDate = new Date(
+      `${String(before.purchaseDate)}T00:00:00.000Z`
+    );
+    if (typeof before.purchasePriceDecimal === "string") {
+      asset.purchasePrice = Number(before.purchasePriceDecimal);
+    }
+    asset.purchasePriceDecimal = before.purchasePriceDecimal as string | null;
+  }
+  if (metadataBefore) {
+    asset.name = metadataBefore.name as string;
+    asset.notes = (metadataBefore.notes as string | null) ?? undefined;
+  }
+}
+
+function restoreCorrectionMetal(
+  metal: AssetMetal,
+  payload: Readonly<Record<string, unknown>>
+): void {
+  const correction = payload.materialCorrection as Readonly<
+    Record<string, unknown>
+  > | null;
+  const before = correction?.before as
+    | Readonly<Record<string, unknown>>
+    | undefined;
+  if (!before) return;
+  metal.itemForm = (before.physicalForm as string | null) ?? undefined;
+  metal.purityCatalogVersion = before.purityCatalogVersion as string | null;
+  metal.purityCode = before.purityCode as string | null;
+  metal.purityFactorDecimal = before.purityFactorDecimal as string | null;
+  if (typeof before.purityFactorDecimal === "string") {
+    metal.purityFraction = Number(before.purityFactorDecimal);
+  }
+  if (typeof before.weightGramsDecimal === "string") {
+    metal.weightGrams = Number(before.weightGramsDecimal);
+  }
+  metal.weightGramsDecimal = before.weightGramsDecimal as string | null;
+}
+
+async function commitAcceptedOutcome(
+  database: Database,
+  outcome: Extract<MetalRpcOutcome, { status: "accepted" | "idempotent" }>,
+  userId: string
+): Promise<RpcOutcomeCommitResult> {
+  assertCanonicalMetalRevision(outcome.holdingRevision);
+  const [root, evidence] = await Promise.all([
+    findOwnedByActionId<FinancialActionGroup>(
+      database,
+      "financial_action_groups",
+      outcome.actionId,
+      userId
+    ),
+    findOwnedByActionId<MetalActionEvidence>(
+      database,
+      "metal_action_evidence",
+      outcome.actionId,
+      userId
+    ),
+  ]);
+  if (!root || !evidence) throw new Error("incomplete_metal_action_group");
+  const states = await database
+    .get<MetalHoldingState>("metal_holding_states")
+    .query(
+      Q.where("holding_id", root.domainReferenceId),
+      Q.where("user_id", userId)
+    )
+    .fetch();
+  const state = states[0];
+  const expectedCanonicalRevision =
+    evidence.expectedHoldingRevision === null
+      ? "0"
+      : incrementCanonicalMetalRevision(evidence.expectedHoldingRevision);
+  if (
+    !state ||
+    outcome.effectiveEventId !== outcome.actionId ||
+    outcome.holdingRevision !== expectedCanonicalRevision
+  ) {
+    throw new Error("invalid_accepted_metal_outcome");
+  }
+  const isCurrentAction = state.effectiveActionId === outcome.actionId;
+  if (
+    root.state === "accepted" &&
+    evidence.canonicalHoldingRevision === outcome.holdingRevision &&
+    (!isCurrentAction || state.reconciliationState === "accepted")
+  ) {
+    return "accepted";
+  }
+  const updatedModels = isCurrentAction
+    ? [root, evidence, state]
+    : [root, evidence];
+  const snapshots = updatedModels.map(captureCachedModelSnapshot);
+  try {
+    const now = new Date();
+    const operations: Model[] = [
+      root.prepareUpdate((row) => {
+        row.state = "accepted";
+        row.serverOutcome = outcome.status;
+        row.outcomeJson = outcomeJson(outcome);
+        row.rejectionCode = null;
+        row.updatedAt = now;
+      }),
+      evidence.prepareUpdate((row) => {
+        row.canonicalHoldingRevision = outcome.holdingRevision;
+        row.updatedAt = now;
+      }),
+    ];
+    if (isCurrentAction) {
+      operations.push(
+        state.prepareUpdate((row) => {
+          row.reconciliationState = "accepted";
+          row.updatedAt = now;
+        })
+      );
+    }
+    await database.batch(...operations);
+    return "accepted";
+  } catch (error) {
+    snapshots.forEach(restoreCachedModelSnapshot);
+    throw error;
+  }
+}
+
+async function commitNonAcceptedOutcome(
+  database: Database,
+  outcome: Extract<MetalRpcOutcome, { status: "stale" | "rejected" }>,
+  userId: string
+): Promise<RpcOutcomeCommitResult> {
+  const [root, evidence, event] = await Promise.all([
+    findOwnedByActionId<FinancialActionGroup>(
+      database,
+      "financial_action_groups",
+      outcome.actionId,
+      userId
+    ),
+    findOwnedByActionId<MetalActionEvidence>(
+      database,
+      "metal_action_evidence",
+      outcome.actionId,
+      userId
+    ),
+    findOwnedByActionId<MetalLifecycleEvent>(
+      database,
+      "metal_lifecycle_events",
+      outcome.actionId,
+      userId
+    ),
+  ]);
+  if (!root || !evidence || !event)
+    throw new Error("incomplete_metal_action_group");
+  const envelope = JSON.parse(root.payloadJson) as {
+    readonly kind: string;
+    readonly payload: Readonly<Record<string, unknown>>;
+  };
+  const states = await database
+    .get<MetalHoldingState>("metal_holding_states")
+    .query(
+      Q.where("holding_id", root.domainReferenceId),
+      Q.where("user_id", userId)
+    )
+    .fetch();
+  const state = states[0];
+  if (!state) throw new Error("incomplete_metal_action_group");
+  const serializedOutcome = outcomeJson(outcome);
+  if (
+    root.serverOutcome === outcome.status &&
+    root.outcomeJson === serializedOutcome &&
+    root.rejectionCode === outcome.code &&
+    (root.state === "reconciled" || root.state === "reconciliation_incomplete")
+  ) {
+    return root.state === "reconciled" ? "reconciled" : "incomplete";
+  }
+  const isCurrentAction = state.effectiveActionId === outcome.actionId;
+  const reversedEvent =
+    outcome.status === "rejected" &&
+    envelope.kind === "undo" &&
+    typeof envelope.payload.reversesEventId === "string"
+      ? await findOwnedByActionId<MetalLifecycleEvent>(
+          database,
+          "metal_lifecycle_events",
+          envelope.payload.reversesEventId,
+          userId
+        )
+      : null;
+  const canRestorePrior =
+    outcome.status === "rejected" &&
+    isCurrentAction &&
+    envelope.kind !== "add" &&
+    (envelope.kind !== "correct" || envelope.payload.metadataChange === null) &&
+    (envelope.kind !== "undo" ||
+      reversedEvent?.kind === "sell" ||
+      reversedEvent?.kind === "dispose");
+  let asset: Asset | null = null;
+  let metal: AssetMetal | null = null;
+  if (canRestorePrior && envelope.kind === "correct") {
+    asset = await findOwnedById(
+      database.get<Asset>("assets"),
+      root.domainReferenceId,
+      userId
+    );
+    const metals = await queryChildrenOfOwnedParent(
+      database.get<AssetMetal>("asset_metals"),
+      asset,
+      userId,
+      "asset_id"
+    ).fetch();
+    metal = metals[0] ?? null;
+    if (!metal) throw new Error("incomplete_metal_action_group");
+  }
+  const models = [
+    root,
+    evidence,
+    event,
+    ...(isCurrentAction ? [state] : []),
+    asset,
+    metal,
+  ].filter((model) => model !== null);
+  const snapshots = models.map(captureCachedModelSnapshot);
+  try {
+    const now = new Date();
+    const operations: Model[] = [
+      root.prepareUpdate((row) => {
+        row.state = canRestorePrior
+          ? "reconciled"
+          : "reconciliation_incomplete";
+        row.serverOutcome = outcome.status;
+        row.outcomeJson = serializedOutcome;
+        row.rejectionCode = outcome.code;
+        row.updatedAt = now;
+      }),
+      event.prepareUpdate((row) => {
+        row.isEffective = false;
+        row.updatedAt = now;
+      }),
+    ];
+    if (isCurrentAction) {
+      operations.push(
+        state.prepareUpdate((row) => {
+          if (canRestorePrior) {
+            row.effectiveActionId = envelope.payload.predecessorEventId as
+              | string
+              | null;
+            row.effectiveEventId = envelope.payload.predecessorEventId as
+              | string
+              | null;
+            row.financialRevision = envelope.payload
+              .expectedHoldingRevision as string;
+            row.isVisible = true;
+            row.status =
+              envelope.kind === "undo" && reversedEvent?.kind === "sell"
+                ? "sold"
+                : envelope.kind === "undo" && reversedEvent?.kind === "dispose"
+                  ? "disposed"
+                  : "active";
+          } else {
+            row.isVisible = false;
+          }
+          row.reconciliationState = canRestorePrior
+            ? "reconciled"
+            : "reconciliation_incomplete";
+          row.updatedAt = now;
+        })
+      );
+    }
+    if (asset && metal) {
+      operations.push(
+        asset.prepareUpdate((row) => {
+          restoreCorrectionAsset(row, envelope.payload);
+          row.updatedAt = now;
+        }),
+        metal.prepareUpdate((row) => {
+          restoreCorrectionMetal(row, envelope.payload);
+          row.updatedAt = now;
+        })
+      );
+    }
+    await database.batch(...operations);
+    return canRestorePrior ? "reconciled" : "incomplete";
+  } catch (error) {
+    snapshots.forEach(restoreCachedModelSnapshot);
+    throw error;
+  }
+}
+
+export async function commitMetalRpcOutcomeLocally(
+  database: Database,
+  outcome: MetalRpcOutcome,
+  expectedUserId: string
+): Promise<RpcOutcomeCommitResult> {
+  if (outcome.userId !== expectedUserId || !outcome.payloadHashMatches) {
+    throw new Error("invalid_metal_rpc_outcome");
+  }
+  return database.write(() => {
+    if (isAcceptedMetalRpcOutcome(outcome)) {
+      return commitAcceptedOutcome(database, outcome, expectedUserId);
+    }
+    return commitNonAcceptedOutcome(database, outcome, expectedUserId);
+  });
 }

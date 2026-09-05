@@ -232,6 +232,84 @@ function applyMetalFacts(metal: AssetMetal, facts: Payload, now: Date): void {
   metal.weightGramsDecimal = facts.weightGramsDecimal as string;
 }
 
+function currentMaterialFacts(asset: Asset, metal: AssetMetal): Payload {
+  return {
+    physicalForm: metal.itemForm,
+    purchaseCurrency: asset.purchaseCurrency,
+    purchaseDate: asset.purchaseDate.toISOString().slice(0, 10),
+    purchasePriceDecimal: asset.purchasePriceDecimal,
+    purityCatalogVersion: metal.purityCatalogVersion,
+    purityCode: metal.purityCode,
+    purityFactorDecimal: metal.purityFactorDecimal,
+    weightGramsDecimal: metal.weightGramsDecimal,
+  };
+}
+
+function hasMatchingMaterialFacts(
+  candidate: Payload,
+  current: Payload
+): boolean {
+  return (
+    candidate.physicalForm === current.physicalForm &&
+    candidate.purchaseCurrency === current.purchaseCurrency &&
+    candidate.purchaseDate === current.purchaseDate &&
+    candidate.purchasePriceDecimal === current.purchasePriceDecimal &&
+    candidate.purityCatalogVersion === current.purityCatalogVersion &&
+    candidate.purityCode === current.purityCode &&
+    candidate.purityFactorDecimal === current.purityFactorDecimal &&
+    candidate.weightGramsDecimal === current.weightGramsDecimal
+  );
+}
+
+function assertPayloadMatchesProjection(
+  envelope: FinancialActionEnvelopeV1,
+  payload: Payload,
+  asset: Asset,
+  metal: AssetMetal
+): void {
+  if (envelope.kind === "correct") {
+    const correction =
+      payload.materialCorrection === null
+        ? null
+        : asObject(payload.materialCorrection);
+    const metadataChange =
+      payload.metadataChange === null ? null : asObject(payload.metadataChange);
+    if (
+      (correction &&
+        !hasMatchingMaterialFacts(
+          asObject(correction.before),
+          currentMaterialFacts(asset, metal)
+        )) ||
+      (metadataChange &&
+        JSON.stringify(asObject(metadataChange.before)) !==
+          JSON.stringify({ name: asset.name, notes: asset.notes ?? null }))
+    ) {
+      throw new Error("metal_action_projection_mismatch");
+    }
+    const after = correction ? asObject(correction.after) : null;
+    if (
+      after &&
+      (after.purityCode as string).startsWith("gold-") !==
+        (metal.metalType === "GOLD")
+    ) {
+      throw new Error("metal_action_projection_mismatch");
+    }
+  }
+  if (
+    envelope.kind === "sell" &&
+    (payload.metalType !== metal.metalType ||
+      payload.purchaseCurrency !== asset.purchaseCurrency)
+  ) {
+    throw new Error("metal_action_projection_mismatch");
+  }
+  if (
+    envelope.kind === "dispose" &&
+    String(payload.disposalDate) < asset.purchaseDate.toISOString().slice(0, 10)
+  ) {
+    throw new Error("metal_disposal_before_acquisition");
+  }
+}
+
 function prepareAddPlan(
   dependencies: MetalFinancialActionRepositoryDependencies,
   envelope: FinancialActionEnvelopeV1
@@ -301,7 +379,14 @@ function assertCurrentActionState(
   if (state.financialRevision !== payload.expectedHoldingRevision) {
     throw new Error("metal_holding_revision_stale");
   }
-  if (state.effectiveEventId !== payload.predecessorEventId) {
+  const isLegacyRoot =
+    state.financialRevision === "0" &&
+    state.effectiveEventId === null &&
+    state.effectiveActionId === null;
+  if (
+    state.reconciliationState === "reconciliation_incomplete" ||
+    (state.effectiveEventId !== payload.predecessorEventId && !isLegacyRoot)
+  ) {
     throw new Error("metal_holding_predecessor_stale");
   }
   if (envelope.kind === "undo") {
@@ -342,6 +427,7 @@ async function prepareExistingPlan(
   }
   assertCurrentActionState(state, envelope);
   const payload = asObject(envelope.payload);
+  assertPayloadMatchesProjection(envelope, payload, asset, metal);
   const now = new Date();
   const existingOperations: FinancialActionLinkedExistingOperation[] = [
     {
@@ -362,6 +448,20 @@ async function prepareExistingPlan(
             : envelope.kind === "dispose"
               ? "disposed"
               : "active";
+        if (envelope.kind === "correct" && payload.metadataChange !== null) {
+          const metadataChange = asObject(payload.metadataChange);
+          const before = asObject(metadataChange.before);
+          const after = asObject(metadataChange.after);
+          const writtenAt = Date.parse(envelope.occurredAt);
+          if (before.name !== after.name) {
+            row.nameWrittenAt = writtenAt;
+            row.nameWriterId = envelope.actionId;
+          }
+          if (before.notes !== after.notes) {
+            row.notesWrittenAt = writtenAt;
+            row.notesWriterId = envelope.actionId;
+          }
+        }
         row.updatedAt = now;
       },
     },

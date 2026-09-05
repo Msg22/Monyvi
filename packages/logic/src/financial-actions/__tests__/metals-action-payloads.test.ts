@@ -379,6 +379,49 @@ describe("approved Metals financial action payload registry", () => {
     ).not.toThrow();
   });
 
+  it("accepts nullable legacy before facts only for a complete correction replacement", async () => {
+    const correct = payloadFor("correct", "metals.correct/v1");
+    const legacyBefore = {
+      physicalForm: null,
+      purchaseCurrency: null,
+      purchaseDate: "2026-08-30",
+      purchasePriceDecimal: null,
+      purityCatalogVersion: null,
+      purityCode: null,
+      purityFactorDecimal: null,
+      weightGramsDecimal: null,
+    };
+    const payload = {
+      ...correct,
+      expectedHoldingRevision: "0",
+      predecessorEventId: null,
+      materialCorrection: {
+        ...(correct.materialCorrection as Record<string, unknown>),
+        before: legacyBefore,
+      },
+    };
+
+    expect(() =>
+      definition("correct", "metals.correct/v1").validatePayload(
+        payload,
+        VALIDATION_INPUT
+      )
+    ).not.toThrow();
+
+    const canonical = await hashFinancialActionEnvelope(
+      { ...envelope("correct", "metals.correct/v1"), payload },
+      {
+        digestUtf8: (value: string): Promise<string> =>
+          Promise.resolve(createHash("sha256").update(value).digest("hex")),
+      },
+      DEFAULT_FINANCIAL_ACTION_REGISTRY,
+      VALIDATION_INPUT
+    );
+    expect(canonical.canonicalText).toContain(
+      '"before":{"physicalForm":null,"purchaseCurrency":null'
+    );
+  });
+
   it("accepts only the six stable Dispose reason codes", () => {
     const dispose = payloadFor("dispose", "metals.dispose/v1");
     const approvedReasons = [

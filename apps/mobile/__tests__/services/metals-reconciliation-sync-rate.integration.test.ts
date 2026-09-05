@@ -370,6 +370,49 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
     ).toThrow("invalid_metal_metadata_patch");
   });
 
+  it("rejects noncanonical writers and oversized UTF-8 metadata locally", () => {
+    const current = {
+      holdingId: HOLDING_ID,
+      userId: USER_ID,
+      name: { value: "Gold", writtenAt: 1, writerId: ACTION_ID },
+      notes: { value: null, writtenAt: 1, writerId: ACTION_ID },
+    };
+    expect(() =>
+      applyMetalMetadataPatch(
+        current,
+        {
+          holdingId: HOLDING_ID,
+          userId: USER_ID,
+          fields: {
+            name: {
+              value: "Gold",
+              writtenAt: 2,
+              writerId: ACTION_ID.toUpperCase(),
+            },
+          },
+        },
+        USER_ID
+      )
+    ).toThrow("invalid_metal_metadata_patch");
+    expect(() =>
+      applyMetalMetadataPatch(
+        current,
+        {
+          holdingId: HOLDING_ID,
+          userId: USER_ID,
+          fields: {
+            name: {
+              value: "é".repeat(129),
+              writtenAt: 2,
+              writerId: HOLDING_ACTION_ID,
+            },
+          },
+        },
+        USER_ID
+      )
+    ).toThrow("invalid_metal_metadata_patch");
+  });
+
   it("persists first-write clocks atomically on terminal holdings and replays after restart", async () => {
     const { adapter, database } = await createMetadataDatabase();
     const patch = {
@@ -537,8 +580,14 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
       });
     const payloadJson = JSON.stringify({
       actionId: ACTION_ID,
+      domainReferenceId: HOLDING_ID,
       kind: "add",
-      payload: { expectedHoldingRevision: null },
+      payload: {
+        expectedHoldingRevision: null,
+        holdingId: HOLDING_ID,
+        rateSnapshots: [],
+      },
+      userId: USER_ID,
     });
 
     await expect(
@@ -558,12 +607,28 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
             deleted: [],
           },
           metal_action_evidence: {
-            created: [{ id: ACTION_ID, action_id: ACTION_ID }],
+            created: [
+              {
+                id: ACTION_ID,
+                action_id: ACTION_ID,
+                holding_id: HOLDING_ID,
+                kind: "add",
+                user_id: USER_ID,
+              },
+            ],
             updated: [],
             deleted: [],
           },
           metal_lifecycle_events: {
-            created: [{ id: ACTION_ID, action_id: ACTION_ID }],
+            created: [
+              {
+                id: ACTION_ID,
+                action_id: ACTION_ID,
+                holding_id: HOLDING_ID,
+                kind: "add",
+                user_id: USER_ID,
+              },
+            ],
             updated: [],
             deleted: [],
           },
@@ -572,9 +637,11 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
             updated: [
               {
                 id: HOLDING_ID,
+                holding_id: HOLDING_ID,
                 effective_action_id: ACTION_ID,
                 name_written_at: 1_788_229_200_000,
                 name_writer_id: "018f0c7a-1234-7abc-8def-000000000020",
+                user_id: USER_ID,
               },
             ],
             deleted: [],
@@ -605,6 +672,39 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
         },
       },
     });
+  });
+
+  it("rejects an incomplete captured action group before calling the RPC", async () => {
+    const rpc = jest.fn();
+    const payloadJson = JSON.stringify({
+      actionId: ACTION_ID,
+      domainReferenceId: HOLDING_ID,
+      kind: "dispose",
+      payload: { expectedHoldingRevision: "0", holdingId: HOLDING_ID },
+      userId: USER_ID,
+    });
+    await expect(
+      pushMetalDedicatedChanges(
+        {
+          financial_action_groups: {
+            created: [
+              {
+                id: "local-root",
+                action_id: ACTION_ID,
+                user_id: USER_ID,
+                payload_json: payloadJson,
+                payload_hash: HASH,
+              },
+            ],
+            updated: [],
+            deleted: [],
+          },
+        },
+        USER_ID,
+        rpc
+      )
+    ).resolves.toEqual({ acknowledgeAllDedicatedRows: false });
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it("acknowledges a metadata-only Metals patch after the dedicated RPC accepts it", async () => {

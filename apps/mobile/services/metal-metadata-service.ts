@@ -1,5 +1,10 @@
 import { Q, type Database } from "@nozbe/watermelondb";
 import { Asset, MetalHoldingState } from "@monyvi/db";
+import {
+  getFinancialActionUtf8ByteLength,
+  MAX_ACTION_NAME_UTF8_BYTES,
+  MAX_ACTION_NOTES_UTF8_BYTES,
+} from "@monyvi/logic";
 
 import {
   captureCachedModelSnapshot,
@@ -30,7 +35,7 @@ export interface MetalMetadataPatch {
 
 function isValidClock(value: MetalMetadataValue<unknown>): boolean {
   const uuidPattern =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
   return (
     Number.isSafeInteger(value.writtenAt) &&
     value.writtenAt >= 0 &&
@@ -68,10 +73,17 @@ export function applyMetalMetadataPatch(
   const name = patch.fields.name;
   const notes = patch.fields.notes;
   if (
-    (name && (!isValidClock(name) || name.value.trim().length === 0)) ||
+    (name &&
+      (!isValidClock(name) ||
+        name.value.trim().length === 0 ||
+        getFinancialActionUtf8ByteLength(name.value) >
+          MAX_ACTION_NAME_UTF8_BYTES)) ||
     (notes &&
       (!isValidClock(notes) ||
-        (notes.value !== null && typeof notes.value !== "string")))
+        (notes.value !== null &&
+          (typeof notes.value !== "string" ||
+            getFinancialActionUtf8ByteLength(notes.value) >
+              MAX_ACTION_NOTES_UTF8_BYTES))))
   ) {
     throw new Error("invalid_metal_metadata_patch");
   }
