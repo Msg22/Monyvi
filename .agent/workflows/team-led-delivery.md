@@ -238,8 +238,8 @@ Auto-triggering team-led workflow never grants third-party disclosure.
 
 Before any OpenCode write dispatch, confirm the exact
 provider/model/runtime/tool/permission-profile combination is currently
-write-eligible and not under incident revocation. A new task or worktree does not
-reset configuration-wide revocation.
+write-eligible and not under incident revocation. A new task or worktree does
+not reset configuration-wide revocation.
 
 External lanes do not consume native subagent slots. They still consume lead
 review and integration capacity. Cap concurrency by ready independent work with
@@ -495,10 +495,10 @@ unnecessary logs, or private data.
 
 At every terminal OpenCode task outcome—accepted, rejected, cancelled, failed,
 timed-out, or security-aborted—always tear down the model session, injected
-credentials, and live loopback OpenCode server. These runtime resources are never
-reusable. For a security-aborted task, retain only sanitized incident evidence
-needed for incident review and requalification. For other terminal outcomes,
-only non-sensitive resources such as the isolated worktree, adapter
+credentials, and live loopback OpenCode server. These runtime resources are
+never reusable. For a security-aborted task, retain only sanitized incident
+evidence needed for incident review and requalification. For other terminal
+outcomes, only non-sensitive resources such as the isolated worktree, adapter
 configuration, and sanitized task metadata may remain reusable, with a recorded
 owner, expiration, and mandatory cleanup deadline.
 

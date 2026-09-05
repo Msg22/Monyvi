@@ -113,8 +113,8 @@ the compromised provider/model/runtime/tool/permission-profile combination
 across all tasks, preserve only sanitized incident evidence, rotate affected
 credentials through the approved process, and require incident review and
 requalification before that configuration can write again. Starting a new task
-must not bypass the revocation. A user-authorized canary waiver cannot waive this
-response.
+must not bypass the revocation. A user-authorized canary waiver cannot waive
+this response.
 
 ## Ownership And Git Safety
 

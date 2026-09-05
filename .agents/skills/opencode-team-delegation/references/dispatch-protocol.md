@@ -199,8 +199,8 @@ For each attempted benchmark, record factual accuracy, source traceability,
 scope compliance, forbidden-action compliance, completeness, rework, elapsed
 time, and token/cost when available. A security or unauthorized-scope failure is
 an incident and triggers the configuration-wide revocation rule above. A
-task-capability failure, unsupported modality, or timeout is capability evidence,
-not automatic permanent disqualification from unrelated work.
+task-capability failure, unsupported modality, or timeout is capability
+evidence, not automatic permanent disqualification from unrelated work.
 
 Before assignment, map every material task capability to positive evidence from
 the exact configuration. A missing negative result is not positive evidence.

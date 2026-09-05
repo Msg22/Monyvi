@@ -157,9 +157,9 @@ Completion requires:
 
 At every terminal task outcome—accepted, rejected, cancelled, failed, timed-out,
 or security-aborted—always terminate the model session, injected credentials,
-and live loopback OpenCode server. These runtime resources are never retained for
-reuse. For a security-aborted task, retain only the sanitized incident evidence
-needed for incident review and requalification. For other terminal outcomes,
-only non-sensitive resources such as the isolated worktree, adapter
+and live loopback OpenCode server. These runtime resources are never retained
+for reuse. For a security-aborted task, retain only the sanitized incident
+evidence needed for incident review and requalification. For other terminal
+outcomes, only non-sensitive resources such as the isolated worktree, adapter
 configuration, and sanitized task metadata may remain reusable, and only with a
 recorded owner, expiration, and mandatory cleanup deadline.
