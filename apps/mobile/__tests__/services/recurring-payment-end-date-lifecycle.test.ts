@@ -127,10 +127,19 @@ describe("recurring payment End date lifecycle", () => {
     });
   }
 
-  it("completes paused series with no eligible future occurrence", async () => {
+  it("rejects a paused series whose current Due payment is after End date", async () => {
     const payment = createPayment({ status: "PAUSED", nextDueDate: new Date("2026-08-01T00:00:00.000Z") });
-    await update(payment, new Date("2026-06-01T00:00:00.000Z"), new Date("2026-07-01T00:00:00.000Z"));
-    expect(payment.status).toBe("COMPLETED");
+
+    await expect(
+      update(
+        payment,
+        new Date("2026-06-01T00:00:00.000Z"),
+        new Date("2026-07-01T00:00:00.000Z")
+      )
+    ).rejects.toThrow(RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_SCHEDULE);
+
+    expect(payment.status).toBe("PAUSED");
+    expect(mockWrite).not.toHaveBeenCalled();
   });
 
   it("keeps a boundary-completed series completed after clearing End date and changing Due payment", async () => {
