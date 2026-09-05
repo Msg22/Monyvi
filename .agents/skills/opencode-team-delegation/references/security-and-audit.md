@@ -59,6 +59,11 @@ proof of support. Capability evidence is bound to the exact
 provider/model/runtime/tool/profile combination and must be rechecked when a
 material dimension changes.
 
+Before any write dispatch, confirm the exact
+provider/model/runtime/tool/permission-profile combination is currently
+write-eligible and not under incident revocation. A new task, session, or
+worktree cannot bypass configuration-wide revocation.
+
 The recommended default is to independently qualify the exact bounded-write
 profile in a disposable synthetic checkout. The canary should prove one
 legitimate in-scope edit succeeds and probes for outside-scope write, shell,
@@ -104,10 +109,12 @@ artifacts, or unredacted logs in prompts, attachments, session titles, model
 context, or ledger. Use synthetic fixtures and minimum source excerpts.
 
 If sensitive data is exposed, abort immediately. Revoke write eligibility for
-the exact model/task/profile, preserve only sanitized incident evidence, rotate
-affected credentials through the approved process, and require incident review
-and requalification before that lane can write again. A user-authorized canary
-waiver cannot waive this response.
+the compromised provider/model/runtime/tool/permission-profile combination
+across all tasks, preserve only sanitized incident evidence, rotate affected
+credentials through the approved process, and require incident review and
+requalification before that configuration can write again. Starting a new task
+must not bypass the revocation. A user-authorized canary waiver cannot waive this
+response.
 
 ## Ownership And Git Safety
 
@@ -148,8 +155,10 @@ bounded corrections in the same session when recoverable.
 
 Sensitive-data exposure, unauthorized scope access/write, or another security
 boundary breach immediately aborts the session and revokes write eligibility for
-the exact model/task/profile pending incident review and requalification. This
-revocation is non-waivable, including when the user waived the canary.
+the compromised provider/model/runtime/tool/permission-profile combination
+across all tasks pending incident review and requalification. This revocation is
+non-waivable, including when the user waived the canary, and a new task cannot
+bypass it.
 
 For ordinary rule drift or a materially wrong but safe direction, correct
 explicitly and allow up to three materially identical rule failures on that
@@ -167,18 +176,21 @@ migration implementation by an external model requires an independent
 appropriate specialist before acceptance. External implementation does not grant
 decision authority.
 
-## Post-Task Teardown And Reuse
+## Terminal Task Teardown And Reuse
 
-After every accepted task, always tear down:
+At every terminal task outcome—accepted, rejected, cancelled, failed, timed-out,
+or security-aborted—always tear down:
 
 - the model session;
 - injected credentials; and
-- the live OpenCode server.
+- the live loopback OpenCode server.
 
-These resources are never retained as a reusable lane. Only non-sensitive
-resources such as an isolated worktree, adapter configuration, and sanitized
-task metadata may remain reusable. Record the owner, expiration, and mandatory
-cleanup deadline for every retained reusable resource.
+These runtime resources are never retained as a reusable lane. For a
+security-aborted task, retain only sanitized incident evidence needed for
+incident review and requalification. For other terminal outcomes, only
+non-sensitive resources such as an isolated worktree, adapter configuration, and
+sanitized task metadata may remain reusable. Record the owner, expiration, and
+mandatory cleanup deadline for every retained reusable resource.
 
 ## Sanitized Ledger
 
@@ -190,8 +202,8 @@ Keep only operational metadata needed for traceability:
 - user opt-in record, approved provider, purpose, data-sharing boundary, and
   authorization expiry or review deadline;
 - permission-profile identifier, canary status or recorded user-authorized
-  waiver, eligibility status, timestamps, checkpoint acceptances, corrections,
-  and terminal status;
+  waiver, configuration-wide eligibility status, timestamps, checkpoint
+  acceptances, corrections, and terminal status;
 - verification commands and summarized results;
 - changed-path list, disposition, retry/rule-failure count, final result, and
   risk notes.
@@ -204,10 +216,11 @@ source control unless project explicitly adopts a sanitized tracked format.
 
 ## Stop Conditions
 
-Immediately abort and revoke the exact model/task/profile write eligibility
+Immediately abort and revoke write eligibility for the compromised
+provider/model/runtime/tool/permission-profile combination across all tasks
 pending incident review and requalification on sensitive-data exposure,
 unauthorized scope access/write, or another security boundary breach. The user
-cannot waive this response.
+cannot waive this response, and a new task cannot bypass the revocation.
 
 Also stop for stale base, ownership conflict, overlapping artifact/file
 ownership, unenforceable security boundary, or unverifiable result. For ordinary
