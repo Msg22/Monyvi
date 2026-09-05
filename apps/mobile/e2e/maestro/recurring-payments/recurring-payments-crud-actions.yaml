@@ -112,6 +112,12 @@ appId: com.monyvi.app
     id: "recurring-payment-end-date-row-action"
 - assertNotVisible: "Clear"
 
+- scrollUntilVisible:
+    element:
+      id: "recurring-payment-amount-input"
+    direction: UP
+    centerElement: true
+    timeout: 30000
 - tapOn:
     id: "recurring-payment-amount-input"
 - eraseText: 12
