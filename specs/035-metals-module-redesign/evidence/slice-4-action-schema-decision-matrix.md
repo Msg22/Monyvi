@@ -2,12 +2,11 @@
 
 ## Status
 
-This is a blocking decision inventory, not an approved payload registry. The
-current Feature 035 authorities require six exact, immutable action schemas but
-do not define their complete field sets. No implementation may infer the missing
-fields below. The production Metals registry is therefore intentionally empty,
-and every attempted Metals action fails closed with
-`metal_action_schema_not_approved`.
+Superseded on 2026-09-05. This file is retained only as historical decision
+context; none of its blocking or empty-registry statements are current. The
+newer approved registry contract, PR #254 task note, and the production DEFAULT
+registry authorize the exact Add, Correct, Sell v2, Dispose, Delete, and Undo
+schemas. The table below must not be used to reopen those settled decisions.
 
 ## Grounded common contract
 

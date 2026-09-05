@@ -1,6 +1,6 @@
 begin;
 
-select plan(69);
+select plan(113);
 
 select has_table('public', 'metal_holding_states', 'holding projection exists');
 select has_table('public', 'metal_action_evidence', 'action evidence exists');
@@ -14,6 +14,53 @@ select col_type_is(
   'financial_revision',
   'bigint',
   'remote holding revisions use bigint'
+);
+select columns_are(
+  'public',
+  'metal_holding_states',
+  array[
+    'id', 'user_id', 'holding_id', 'status', 'financial_revision',
+    'effective_event_id', 'effective_action_id', 'is_visible',
+    'name_written_at', 'name_writer_id', 'notes_written_at', 'notes_writer_id',
+    'reconciliation_state', 'created_at', 'updated_at', 'deleted'
+  ],
+  'holding state persists only financial projection and per-field metadata clocks'
+);
+select col_is_null('public', 'metal_holding_states', 'name_written_at', 'name clock baseline is nullable');
+select col_is_null('public', 'metal_holding_states', 'name_writer_id', 'name writer baseline is nullable');
+select col_is_null('public', 'metal_holding_states', 'notes_written_at', 'notes clock baseline is nullable');
+select col_is_null('public', 'metal_holding_states', 'notes_writer_id', 'notes writer baseline is nullable');
+select has_function(
+  'private', 'financial_action_validate_metals_dispose_payload_v1', array['jsonb'],
+  'Dispose payload validator is registered server-side'
+);
+select lives_ok(
+  $$do $body$
+    declare v_reason text;
+    begin
+      foreach v_reason in array array[
+        'lost_or_stolen', 'destroyed_or_damaged', 'given_away', 'donated',
+        'other_write_off', 'other_external_transfer'
+      ] loop
+        perform private.financial_action_validate_metals_dispose_payload_v1(
+          jsonb_build_object(
+            'disposalDate', '2026-08-31', 'expectedHoldingRevision', '0',
+            'holdingId', '018f0c7a-1234-7abc-8def-000000000004', 'notes', null,
+            'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000006',
+            'reason', v_reason, 'reversesEventId', null
+          )
+        );
+      end loop;
+    end
+  $body$;$$,
+  'all six Dispose reasons match the TypeScript registry'
+);
+select throws_ok(
+  $$select private.financial_action_validate_metals_dispose_payload_v1(
+    '{"disposalDate":"2026-08-31","expectedHoldingRevision":"0","holdingId":"018f0c7a-1234-7abc-8def-000000000004","notes":null,"predecessorEventId":"018f0c7a-1234-7abc-8def-000000000006","reason":"gift","reversesEventId":null}'::jsonb
+  )$$,
+  '22023', 'financial_action_invalid_payload',
+  'free-text Dispose reasons fail closed in PostgreSQL'
 );
 select col_type_is(
   'public',
@@ -118,6 +165,12 @@ select is(
   ),
   false,
   'authenticated clients cannot call the private binding helper'
+);
+select lives_ok(
+  $$select private.financial_action_validate_metals_legacy_material_facts_v1(
+    '{"physicalForm":null,"purchaseCurrency":null,"purchaseDate":"2026-08-30","purchasePriceDecimal":null,"purityCatalogVersion":null,"purityCode":null,"purityFactorDecimal":null,"weightGramsDecimal":null}'::jsonb
+  )$$,
+  'PostgreSQL accepts the same nullable legacy correction before facts as TypeScript'
 );
 
 select col_is_null(
@@ -431,12 +484,14 @@ select throws_ok(
 
 select throws_ok(
   $$insert into public.metal_holding_states (
-      id, user_id, holding_id, status, financial_revision, effective_action_id
+      id, user_id, holding_id, status, financial_revision,
+      effective_action_id, effective_event_id
     ) values (
       '018f0c7a-1234-7abc-8def-000000000014',
       '018f0c7a-1234-7abc-8def-000000000003',
       '018f0c7a-1234-7abc-8def-000000000014', 'sold', 1,
-      '018f0c7a-1234-7abc-8def-000000000001'
+      '018f0c7a-1234-7abc-8def-000000000001',
+      '018f0c7a-1234-7abc-8def-000000000006'
     )$$,
   '23503', null,
   'holding state effective action must bind to the same holding evidence'
@@ -678,17 +733,510 @@ select throws_ok(
   '22023', 'metal_action_rpc_required',
   'authenticated direct metal exact-field update is denied'
 );
-select lives_ok(
+select throws_ok(
   $$update public.assets
     set name = 'Metadata update'
     where id = '018f0c7a-1234-7abc-8def-000000000004'$$,
-  'ordinary metadata remains writable'
+  '22023', 'metal_metadata_rpc_required',
+  'Metals metadata cannot bypass per-field clocks'
 );
 select throws_ok(
   $$delete from public.assets
     where id = '018f0c7a-1234-7abc-8def-000000000004'$$,
   '23503', null,
   'asset delete cannot cascade immutable Metals evidence'
+);
+select throws_ok(
+  $$insert into public.assets (
+      id, user_id, name, type, is_liquid, purchase_price, purchase_date,
+      currency, deleted
+    ) values (
+      '018f0c7a-1234-7abc-8def-0000000000aa',
+      '018f0c7a-1234-7abc-8def-000000000003', 'Legacy bypass', 'METAL',
+      false, 100, '2026-08-30', 'EGP', false
+    )$$,
+  '22023', 'metal_action_rpc_required',
+  'authenticated legacy clients cannot create orphan Metal assets'
+);
+reset role;
+
+create or replace function pg_temp.apply_metal_test_action(
+  p_action_id uuid,
+  p_kind text,
+  p_payload_version text,
+  p_payload jsonb,
+  p_holding_id uuid default '018f0c7a-1234-7abc-8def-000000000034'
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_payload_json text;
+begin
+  v_payload_json := private.financial_action_encode_jsonb_v1(
+    jsonb_build_object(
+      'accountGuards', '[]'::jsonb,
+      'actionId', p_action_id,
+      'domain', 'metals',
+      'domainReferenceId', p_holding_id,
+      'envelopeVersion', 'monyvi.financial-action/v1',
+      'kind', p_kind,
+      'occurredAt', '2026-08-31T10:15:30.123Z',
+      'payload', p_payload,
+      'payloadVersion', p_payload_version,
+      'userId', '018f0c7a-1234-7abc-8def-000000000003'
+    )
+  );
+  return public.apply_metal_action_v1(
+    v_payload_json,
+    encode(extensions.digest(convert_to(v_payload_json, 'UTF8'), 'sha256'), 'hex')
+  );
+end;
+$function$;
+grant execute on function pg_temp.apply_metal_test_action(uuid, text, text, jsonb, uuid)
+  to authenticated;
+
+savepoint legacy_revision_zero;
+insert into public.assets (
+  id, user_id, name, type, is_liquid, purchase_price, purchase_date, currency,
+  purchase_price_decimal, purchase_currency, deleted
+) values (
+  '018f0c7a-1234-7abc-8def-0000000000ab',
+  '018f0c7a-1234-7abc-8def-000000000003', 'Legacy Gold', 'METAL', false,
+  150000, '2026-08-30', 'EGP', 150000, 'EGP', false
+);
+insert into public.asset_metals (
+  id, asset_id, metal_type, weight_grams, purity_fraction, item_form,
+  weight_grams_decimal, purity_code, purity_factor_decimal,
+  purity_catalog_version, deleted
+) values (
+  '018f0c7a-1234-7abc-8def-0000000000ab',
+  '018f0c7a-1234-7abc-8def-0000000000ab', 'GOLD', 10.25, 0.9999,
+  'JEWELRY', 10.25, 'gold-9999', 0.9999, '1', false
+);
+insert into public.metal_holding_states (
+  id, user_id, holding_id, status, financial_revision, effective_event_id,
+  effective_action_id, is_visible, reconciliation_state, deleted
+) values (
+  '018f0c7a-1234-7abc-8def-0000000000ab',
+  '018f0c7a-1234-7abc-8def-000000000003',
+  '018f0c7a-1234-7abc-8def-0000000000ab', 'active', 0, null, null, true,
+  'accepted', false
+);
+set local role authenticated;
+select is(
+  pg_temp.apply_metal_test_action(
+    '018f0c7a-1234-7abc-8def-000000000030', 'dispose', 'metals.dispose/v1',
+    jsonb_build_object(
+      'disposalDate', '2026-08-31', 'expectedHoldingRevision', '0',
+      'holdingId', '018f0c7a-1234-7abc-8def-0000000000ab', 'notes', null,
+      'predecessorEventId', null, 'reason', 'donated', 'reversesEventId', null
+    ),
+    '018f0c7a-1234-7abc-8def-0000000000ab'
+  ) ->> 'status',
+  'accepted', 'revision-zero legacy holding accepts its first real action without a fabricated predecessor'
+);
+reset role;
+rollback to savepoint legacy_revision_zero;
+release savepoint legacy_revision_zero;
+
+select throws_ok(
+  $$select private.financial_action_validate_metals_payload_v1(
+    jsonb_build_object(
+      'accountGuards', '[]'::jsonb, 'domain', 'metals',
+      'domainReferenceId', '018f0c7a-1234-7abc-8def-000000000034',
+      'kind', 'add', 'payloadVersion', 'metals.add/v1',
+      'payload', jsonb_build_object(
+        'expectedHoldingRevision', null,
+        'holdingId', '018f0c7a-1234-7abc-8def-000000000034',
+        'materialFacts', jsonb_build_object(
+          'physicalForm', 'JEWELRY', 'purchaseCurrency', 'EGP',
+          'purchaseDate', '2026-08-30', 'purchasePriceDecimal', '150000',
+          'purityCatalogVersion', '1', 'purityCode', 'gold-9999',
+          'purityFactorDecimal', '0.9999', 'weightGramsDecimal', '01'
+        ),
+        'metadata', jsonb_build_object('name', 'Invalid', 'notes', null),
+        'metalType', 'GOLD', 'predecessorEventId', null,
+        'rateSnapshots', '[]'::jsonb, 'reversesEventId', null
+      )
+    )
+  )$$,
+  '22023', 'financial_action_invalid_payload',
+  'Add rejects non-canonical material decimals before RPC writes'
+);
+
+select throws_ok(
+  $$select private.financial_action_validate_metals_payload_v1(
+    jsonb_build_object(
+      'accountGuards', '[]'::jsonb, 'domain', 'metals',
+      'domainReferenceId', '018f0c7a-1234-7abc-8def-000000000034',
+      'kind', 'add', 'payloadVersion', 'metals.add/v1',
+      'payload', jsonb_build_object(
+        'expectedHoldingRevision', null,
+        'holdingId', '018f0c7a-1234-7abc-8def-000000000034',
+        'materialFacts', jsonb_build_object(
+          'physicalForm', 'JEWELRY', 'purchaseCurrency', 'EGP',
+          'purchaseDate', '2026-08-30', 'purchasePriceDecimal', '150000',
+          'purityCatalogVersion', '1', 'purityCode', 'gold-9999',
+          'purityFactorDecimal', '0.9999', 'weightGramsDecimal', '10.25'
+        ),
+        'metadata', jsonb_build_object('name', 'Invalid', 'notes', null),
+        'metalType', 'GOLD', 'predecessorEventId', null,
+        'rateSnapshots', jsonb_build_array('{}'::jsonb), 'reversesEventId', null
+      )
+    )
+  )$$,
+  '22023', 'financial_action_invalid_payload',
+  'Add rejects an incomplete acquisition rate-reference set'
+);
+
+select throws_ok(
+  $$select private.financial_action_validate_metals_payload_v1(
+    jsonb_build_object(
+      'accountGuards', '[]'::jsonb, 'domain', 'metals',
+      'domainReferenceId', '018f0c7a-1234-7abc-8def-000000000034',
+      'kind', 'correct', 'payloadVersion', 'metals.correct/v1',
+      'payload', jsonb_build_object(
+        'expectedHoldingRevision', '0',
+        'holdingId', '018f0c7a-1234-7abc-8def-000000000034',
+        'materialCorrection', null,
+        'metadataChange', jsonb_build_object(
+          'before', jsonb_build_object('name', 'Same', 'notes', null),
+          'after', jsonb_build_object('name', 'Same', 'notes', null)
+        ),
+        'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000031',
+        'reversesEventId', null
+      )
+    )
+  )$$,
+  '22023', 'financial_action_invalid_payload',
+  'Correct rejects a metadata no-op before RPC writes'
+);
+
+savepoint full_rpc_matrix;
+set local role authenticated;
+select is(
+  pg_temp.apply_metal_test_action(
+    '018f0c7a-1234-7abc-8def-000000000031', 'add', 'metals.add/v1',
+    jsonb_build_object(
+      'expectedHoldingRevision', null,
+      'holdingId', '018f0c7a-1234-7abc-8def-000000000034',
+      'materialFacts', jsonb_build_object(
+        'physicalForm', 'JEWELRY', 'purchaseCurrency', 'EGP',
+        'purchaseDate', '2026-08-30', 'purchasePriceDecimal', '150000',
+        'purityCatalogVersion', '1', 'purityCode', 'gold-9999',
+        'purityFactorDecimal', '0.9999', 'weightGramsDecimal', '10.25'
+      ),
+      'metadata', jsonb_build_object('name', 'RPC Gold', 'notes', null),
+      'metalType', 'GOLD', 'predecessorEventId', null,
+      'rateSnapshots', '[]'::jsonb, 'reversesEventId', null
+    )
+  ) ->> 'status',
+  'accepted', 'Add begins the full no-credit RPC action matrix'
+);
+select is(
+  pg_temp.apply_metal_test_action(
+    '018f0c7a-1234-7abc-8def-000000000032', 'correct', 'metals.correct/v1',
+    jsonb_build_object(
+      'expectedHoldingRevision', '0',
+      'holdingId', '018f0c7a-1234-7abc-8def-000000000034',
+      'materialCorrection', null,
+      'metadataChange', jsonb_build_object(
+          'before', jsonb_build_object('name', 'RPC Gold', 'notes', null),
+        'after', jsonb_build_object('name', 'Corrected RPC Gold', 'notes', null)
+      ),
+      'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000031',
+      'reversesEventId', null
+    )
+  ) ->> 'status',
+  'accepted', 'Correct RPC advances the same no-credit holding CAS'
+);
+select is(
+  (select name_written_at::text || ':' || name_writer_id::text
+    from public.metal_holding_states
+    where holding_id = '018f0c7a-1234-7abc-8def-000000000034'),
+  '1788171330123:018f0c7a-1234-7abc-8def-000000000032',
+  'mixed correction advances the matching metadata clock atomically'
+);
+select is(
+  pg_temp.apply_metal_test_action(
+    '018f0c7a-1234-7abc-8def-00000000002a', 'correct', 'metals.correct/v1',
+    jsonb_build_object(
+      'expectedHoldingRevision', '1',
+      'holdingId', '018f0c7a-1234-7abc-8def-000000000034',
+      'materialCorrection', null,
+      'metadataChange', jsonb_build_object(
+        'before', jsonb_build_object('name', 'Fabricated', 'notes', null),
+        'after', jsonb_build_object('name', 'Wrong', 'notes', null)
+      ),
+      'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000032',
+      'reversesEventId', null
+    )
+  ) ->> 'code',
+  'INVALID_LINK', 'Correct RPC rejects fabricated before facts'
+);
+select is(
+  pg_temp.apply_metal_test_action(
+    '018f0c7a-1234-7abc-8def-00000000002b', 'dispose', 'metals.dispose/v1',
+    jsonb_build_object(
+      'disposalDate', '2026-08-29', 'expectedHoldingRevision', '1',
+      'holdingId', '018f0c7a-1234-7abc-8def-000000000034', 'notes', null,
+      'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000032',
+      'reason', 'donated', 'reversesEventId', null
+    )
+  ) ->> 'code',
+  'INVALID_LINK', 'Dispose RPC rejects a date before acquisition'
+);
+select is(
+  pg_temp.apply_metal_test_action(
+    '018f0c7a-1234-7abc-8def-000000000033', 'dispose', 'metals.dispose/v1',
+    jsonb_build_object(
+      'disposalDate', '2026-08-31', 'expectedHoldingRevision', '1',
+      'holdingId', '018f0c7a-1234-7abc-8def-000000000034', 'notes', null,
+      'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000032',
+      'reason', 'donated', 'reversesEventId', null
+    )
+  ) ->> 'status',
+  'accepted', 'Dispose RPC advances the same no-credit holding CAS'
+);
+select is(
+  pg_temp.apply_metal_test_action(
+    '018f0c7a-1234-7abc-8def-000000000035', 'undo', 'metals.undo/v1',
+    jsonb_build_object(
+      'expectedHoldingRevision', '2',
+      'holdingId', '018f0c7a-1234-7abc-8def-000000000034',
+      'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000033',
+      'reversesEventId', '018f0c7a-1234-7abc-8def-000000000033'
+    )
+  ) ->> 'status',
+  'accepted', 'Undo RPC restores a disposed holding'
+);
+select is(
+  pg_temp.apply_metal_test_action(
+    '018f0c7a-1234-7abc-8def-00000000002c', 'sell', 'metals.sell/v2',
+    jsonb_build_object(
+      'expectedHoldingRevision', '3', 'feeMinorUnits', '0',
+      'grossProceedsMinorUnits', '100',
+      'holdingId', '018f0c7a-1234-7abc-8def-000000000034',
+      'metalType', 'GOLD', 'netProceedsMinorUnits', '100', 'notes', null,
+      'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000035',
+      'purchaseCurrency', 'USD', 'rateSnapshots', '[]'::jsonb,
+      'reversesEventId', null, 'saleCurrency', 'EGP', 'saleDate', '2026-08-31'
+    )
+  ) ->> 'code',
+  'INVALID_LINK', 'Sell RPC binds metal type and purchase currency to the holding'
+);
+select is(
+  pg_temp.apply_metal_test_action(
+    '018f0c7a-1234-7abc-8def-000000000036', 'sell', 'metals.sell/v2',
+    jsonb_build_object(
+      'expectedHoldingRevision', '3', 'feeMinorUnits', '0',
+      'grossProceedsMinorUnits', '100',
+      'holdingId', '018f0c7a-1234-7abc-8def-000000000034',
+      'metalType', 'GOLD', 'netProceedsMinorUnits', '100', 'notes', null,
+      'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000035',
+      'purchaseCurrency', 'EGP', 'rateSnapshots', '[]'::jsonb,
+      'reversesEventId', null, 'saleCurrency', 'EGP', 'saleDate', '2026-08-31'
+    )
+  ) ->> 'status',
+  'accepted', 'Sell-without-credit RPC advances the same no-credit holding CAS'
+);
+select is(
+  pg_temp.apply_metal_test_action(
+    '018f0c7a-1234-7abc-8def-000000000037', 'undo', 'metals.undo/v1',
+    jsonb_build_object(
+      'expectedHoldingRevision', '4',
+      'holdingId', '018f0c7a-1234-7abc-8def-000000000034',
+      'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000036',
+      'reversesEventId', '018f0c7a-1234-7abc-8def-000000000036'
+    )
+  ) ->> 'status',
+  'accepted', 'Undo RPC restores a sold holding'
+);
+select is(
+  pg_temp.apply_metal_test_action(
+    '018f0c7a-1234-7abc-8def-000000000038', 'delete', 'metals.delete/v1',
+    jsonb_build_object(
+      'expectedHoldingRevision', '5',
+      'holdingId', '018f0c7a-1234-7abc-8def-000000000034',
+      'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000037',
+      'reversesEventId', null
+    )
+  ) ->> 'status',
+  'accepted', 'Delete RPC advances the same no-credit holding CAS'
+);
+select is(
+  (select financial_revision::text from public.metal_holding_states
+    where holding_id = '018f0c7a-1234-7abc-8def-000000000034'),
+  '6', 'all six no-credit action kinds share one monotonic holding revision'
+);
+select is(
+  (select count(*)::text from public.metal_action_evidence
+    where holding_id = '018f0c7a-1234-7abc-8def-000000000034'),
+  '7', 'each accepted action has exactly one owner evidence row'
+);
+select is(
+  (select count(*)::text from public.metal_lifecycle_events
+    where holding_id = '018f0c7a-1234-7abc-8def-000000000034'),
+  '7', 'each accepted action has exactly one lifecycle event'
+);
+select is(
+  pg_temp.apply_metal_test_action(
+    '018f0c7a-1234-7abc-8def-000000000039', 'delete', 'metals.delete/v1',
+    jsonb_build_object(
+      'expectedHoldingRevision', '5',
+      'holdingId', '018f0c7a-1234-7abc-8def-000000000034',
+      'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000038',
+      'reversesEventId', null
+    )
+  ) ->> 'status',
+  'stale', 'a second action at the same expected revision loses the CAS'
+);
+select is(
+  (select count(*)::text from public.financial_action_groups
+    where action_id = '018f0c7a-1234-7abc-8def-000000000039'),
+  '0', 'a stale loser leaves no partial remote action root'
+);
+select isnt(
+  (select id from public.financial_action_groups
+    where action_id = '018f0c7a-1234-7abc-8def-000000000031'),
+  '018f0c7a-1234-7abc-8def-000000000031'::uuid,
+  'remote root persistence identity remains independent from action identity'
+);
+reset role;
+select is(
+  (select length(private.metal_holding_evidence_hash_v1(state))
+    from public.metal_holding_states as state
+    where holding_id = '018f0c7a-1234-7abc-8def-000000000034'),
+  64,
+  'canonical holding evidence hash includes the accepted immutable chain'
+);
+set local role authenticated;
+select throws_ok(
+  $$select pg_temp.apply_metal_test_action(
+    '018f0c7a-1234-7abc-8def-00000000003a', 'correct', 'metals.correct/v1',
+    jsonb_build_object(
+      'expectedHoldingRevision', '6',
+      'holdingId', '018f0c7a-1234-7abc-8def-000000000034',
+      'materialCorrection', null, 'metadataChange', null,
+      'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000038',
+      'reversesEventId', null
+    )
+  )$$,
+  '22023', 'financial_action_invalid_payload',
+  'Correct RPC rejects an action with no material or metadata change'
+);
+reset role;
+rollback to savepoint full_rpc_matrix;
+release savepoint full_rpc_matrix;
+
+select has_function(
+  'public', 'apply_metal_action_v1', array['text', 'text'],
+  'dedicated no-credit Metals action CAS RPC exists'
+);
+select has_function(
+  'public', 'apply_metal_metadata_patch_v1', array['uuid', 'jsonb'],
+  'dedicated partial-LWW Metals metadata RPC exists'
+);
+
+create temporary table pg_temp.metal_add_rpc as
+with envelope as (
+  select private.financial_action_encode_jsonb_v1(
+    jsonb_build_object(
+      'accountGuards', '[]'::jsonb,
+      'actionId', '018f0c7a-1234-7abc-8def-000000000031',
+      'domain', 'metals',
+      'domainReferenceId', '018f0c7a-1234-7abc-8def-000000000034',
+      'envelopeVersion', 'monyvi.financial-action/v1',
+      'kind', 'add',
+      'occurredAt', '2026-08-31T10:15:30.123Z',
+      'payload', jsonb_build_object(
+        'expectedHoldingRevision', null,
+        'holdingId', '018f0c7a-1234-7abc-8def-000000000034',
+        'materialFacts', jsonb_build_object(
+          'physicalForm', 'JEWELRY', 'purchaseCurrency', 'EGP',
+          'purchaseDate', '2026-08-30', 'purchasePriceDecimal', '150000',
+          'purityCatalogVersion', '1', 'purityCode', 'gold-9999',
+          'purityFactorDecimal', '0.9999', 'weightGramsDecimal', '10.25'
+        ),
+        'metalType', 'GOLD',
+        'metadata', jsonb_build_object('name', 'RPC Gold', 'notes', null),
+        'predecessorEventId', null,
+        'rateSnapshots', '[]'::jsonb,
+        'reversesEventId', null
+      ),
+      'payloadVersion', 'metals.add/v1',
+      'userId', '018f0c7a-1234-7abc-8def-000000000003'
+    )
+  ) as payload_json
+), input as (
+  select payload_json,
+    encode(extensions.digest(convert_to(payload_json, 'UTF8'), 'sha256'), 'hex') as payload_hash
+  from envelope
+)
+select payload_json, payload_hash, null::jsonb as outcome
+from input;
+grant select, update on pg_temp.metal_add_rpc to authenticated;
+
+set local role authenticated;
+update pg_temp.metal_add_rpc
+set outcome =
+  public.apply_metal_action_v1(
+    payload_json,
+    payload_hash
+  );
+
+select is(
+  (select outcome ->> 'status' from pg_temp.metal_add_rpc), 'accepted',
+  'Add RPC accepts one complete canonical no-credit group'
+);
+select is(
+  (select financial_revision::text from public.metal_holding_states
+    where holding_id = '018f0c7a-1234-7abc-8def-000000000034'),
+  '0', 'Add RPC establishes revision zero'
+);
+select is(
+  (select count(*)::text from public.metal_action_evidence
+    where holding_id = '018f0c7a-1234-7abc-8def-000000000034'),
+  '1', 'Add RPC writes one owner evidence row'
+);
+select is(
+  (select count(*)::text from public.metal_lifecycle_events
+    where holding_id = '018f0c7a-1234-7abc-8def-000000000034'),
+  '1', 'Add RPC writes one lifecycle event'
+);
+select is(
+  (select public.apply_metal_action_v1(payload_json, payload_hash) ->> 'status'
+    from pg_temp.metal_add_rpc),
+  'idempotent', 'same action ID/hash replays without duplicate writes'
+);
+select is(
+  (select public.apply_metal_action_v1(payload_json, repeat('f', 64)) ->> 'code'
+    from pg_temp.metal_add_rpc),
+  'PAYLOAD_HASH_MISMATCH', 'same action ID with a different hash is terminal'
+);
+select is(
+  public.apply_metal_metadata_patch_v1(
+    '018f0c7a-1234-7abc-8def-000000000034',
+    '{"fields":{"name":{"value":"Remote rename","writtenAt":1788229200000,"writerId":"018f0c7a-1234-7abc-8def-000000000040"}}}'::jsonb
+  ) ->> 'status',
+  'applied', 'first metadata write wins the null baseline'
+);
+select is(
+  public.apply_metal_metadata_patch_v1(
+    '018f0c7a-1234-7abc-8def-000000000034',
+    '{"fields":{"name":{"value":"Remote rename","writtenAt":1788229200000,"writerId":"018f0c7a-1234-7abc-8def-000000000040"}}}'::jsonb
+  ) ->> 'status',
+  'idempotent', 'metadata retry reuses the stable writer tuple'
+);
+select is(
+  (select financial_revision::text || ':' || effective_action_id::text
+    from public.metal_holding_states
+    where holding_id = '018f0c7a-1234-7abc-8def-000000000034'),
+  '0:018f0c7a-1234-7abc-8def-000000000031',
+  'metadata merge does not change financial revision or action identity'
 );
 reset role;
 

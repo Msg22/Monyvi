@@ -9,7 +9,7 @@ import { appSchema, tableSchema } from "@nozbe/watermelondb";
 import { SMS_REVIEW_DRAFT_TABLES } from "./local-schema/sms-review-draft-schema";
 
 export const schema = appSchema({
-  version: 27,
+  version: 28,
   tables: [
     tableSchema({
       name: "account_sms_senders",
@@ -58,25 +58,30 @@ export const schema = appSchema({
         { name: "purity_factor_decimal", type: "string", isOptional: true },
         { name: "purity_fraction", type: "number" },
         { name: "updated_at", type: "number" },
-        { name: "weight_grams_decimal", type: "string", isOptional: true },
         { name: "weight_grams", type: "number" },
+        { name: "weight_grams_decimal", type: "string", isOptional: true },
       ],
     }),
 
     tableSchema({
       name: "assets",
       columns: [
-        { name: "acquisition_action_id", type: "string", isOptional: true, isIndexed: true },
+        {
+          name: "acquisition_action_id",
+          type: "string",
+          isOptional: true,
+          isIndexed: true,
+        },
         { name: "created_at", type: "number" },
         { name: "currency", type: "string" },
         { name: "deleted", type: "boolean" },
         { name: "is_liquid", type: "boolean" },
         { name: "name", type: "string" },
         { name: "notes", type: "string", isOptional: true },
-        { name: "purchase_date", type: "number" },
         { name: "purchase_currency", type: "string", isOptional: true },
-        { name: "purchase_price_decimal", type: "string", isOptional: true },
+        { name: "purchase_date", type: "number" },
         { name: "purchase_price", type: "number" },
+        { name: "purchase_price_decimal", type: "string", isOptional: true },
         { name: "type", type: "string" },
         { name: "updated_at", type: "number" },
         { name: "user_id", type: "string", isIndexed: true },
@@ -227,89 +232,6 @@ export const schema = appSchema({
     }),
 
     tableSchema({
-      name: "metal_action_evidence",
-      unsafeSql: (sql: string): string =>
-        `${sql}create unique index if not exists "metal_action_evidence_user_action_unique" on "metal_action_evidence" ("user_id", "action_id");`,
-      columns: [
-        { name: "action_id", type: "string", isIndexed: true },
-        { name: "canonical_holding_revision", type: "string", isOptional: true },
-        { name: "created_at", type: "number" },
-        { name: "deleted", type: "boolean" },
-        { name: "domain_payload_json", type: "string" },
-        { name: "expected_holding_revision", type: "string", isOptional: true },
-        { name: "holding_id", type: "string", isIndexed: true },
-        { name: "kind", type: "string" },
-        { name: "updated_at", type: "number" },
-        { name: "user_id", type: "string", isIndexed: true },
-      ],
-    }),
-
-    tableSchema({
-      name: "metal_holding_states",
-      unsafeSql: (sql: string): string =>
-        `${sql}create unique index if not exists "metal_holding_states_holding_unique" on "metal_holding_states" ("holding_id");`,
-      columns: [
-        { name: "created_at", type: "number" },
-        { name: "deleted", type: "boolean" },
-        { name: "effective_action_id", type: "string", isOptional: true },
-        { name: "effective_event_id", type: "string", isOptional: true },
-        { name: "financial_revision", type: "string" },
-        { name: "holding_id", type: "string", isIndexed: true },
-        { name: "is_visible", type: "boolean" },
-        { name: "reconciliation_state", type: "string" },
-        { name: "status", type: "string" },
-        { name: "updated_at", type: "number" },
-        { name: "user_id", type: "string", isIndexed: true },
-      ],
-    }),
-
-    tableSchema({
-      name: "metal_lifecycle_events",
-      unsafeSql: (sql: string): string =>
-        `${sql}create unique index if not exists "metal_lifecycle_events_user_action_unique" on "metal_lifecycle_events" ("user_id", "action_id");`,
-      columns: [
-        { name: "action_id", type: "string", isIndexed: true },
-        { name: "created_at", type: "number" },
-        { name: "deleted", type: "boolean" },
-        { name: "holding_id", type: "string", isIndexed: true },
-        { name: "is_effective", type: "boolean" },
-        { name: "is_history_visible", type: "boolean" },
-        { name: "kind", type: "string" },
-        { name: "occurred_at", type: "number" },
-        { name: "payload_json", type: "string" },
-        { name: "predecessor_event_id", type: "string", isOptional: true },
-        { name: "reverses_event_id", type: "string", isOptional: true },
-        { name: "updated_at", type: "number" },
-        { name: "user_id", type: "string", isIndexed: true },
-      ],
-    }),
-
-    tableSchema({
-      name: "metal_rate_references",
-      unsafeSql: (sql: string): string =>
-        `${sql}create unique index if not exists "metal_rate_references_user_action_role_unique" on "metal_rate_references" ("user_id", "action_id", "role");`,
-      columns: [
-        { name: "action_id", type: "string", isIndexed: true },
-        { name: "captured_at", type: "number" },
-        { name: "captured_freshness", type: "string" },
-        { name: "created_at", type: "number" },
-        { name: "deleted", type: "boolean" },
-        { name: "holding_id", type: "string", isIndexed: true },
-        { name: "instrument_code", type: "string", isIndexed: true },
-        { name: "kind", type: "string" },
-        { name: "orientation", type: "string" },
-        { name: "provider_observed_at", type: "number", isOptional: true },
-        { name: "quality", type: "string" },
-        { name: "role", type: "string" },
-        { name: "source", type: "string", isOptional: true },
-        { name: "unit", type: "string" },
-        { name: "updated_at", type: "number" },
-        { name: "user_id", type: "string", isIndexed: true },
-        { name: "value_decimal", type: "string" },
-      ],
-    }),
-
-    tableSchema({
       name: "market_rate_observations",
       columns: [
         { name: "batch_id", type: "string", isIndexed: true },
@@ -370,6 +292,125 @@ export const schema = appSchema({
         { name: "try_usd", type: "number" },
         { name: "updated_at", type: "number" },
         { name: "zar_usd", type: "number" },
+      ],
+    }),
+
+    tableSchema({
+      name: "metal_action_evidence",
+      unsafeSql: (sql: string): string =>
+        `${sql}create unique index if not exists "metal_action_evidence_user_action_unique" on "metal_action_evidence" ("user_id", "action_id");`,
+      columns: [
+        { name: "action_id", type: "string", isIndexed: true },
+        {
+          name: "canonical_holding_revision",
+          type: "string",
+          isOptional: true,
+        },
+        { name: "created_at", type: "number" },
+        { name: "deleted", type: "boolean" },
+        { name: "domain_payload_json", type: "string" },
+        { name: "expected_holding_revision", type: "string", isOptional: true },
+        { name: "holding_id", type: "string", isIndexed: true },
+        { name: "kind", type: "string" },
+        { name: "updated_at", type: "number" },
+        { name: "user_id", type: "string", isIndexed: true },
+      ],
+    }),
+
+    tableSchema({
+      name: "metal_holding_states",
+      unsafeSql: (sql: string): string =>
+        `${sql}create unique index if not exists "metal_holding_states_holding_unique" on "metal_holding_states" ("holding_id");`,
+      columns: [
+        { name: "created_at", type: "number" },
+        { name: "deleted", type: "boolean" },
+        {
+          name: "effective_action_id",
+          type: "string",
+          isOptional: true,
+          isIndexed: true,
+        },
+        {
+          name: "effective_event_id",
+          type: "string",
+          isOptional: true,
+          isIndexed: true,
+        },
+        { name: "financial_revision", type: "string" },
+        { name: "holding_id", type: "string", isIndexed: true },
+        { name: "is_visible", type: "boolean" },
+        {
+          name: "name_writer_id",
+          type: "string",
+          isOptional: true,
+        },
+        { name: "name_written_at", type: "number", isOptional: true },
+        {
+          name: "notes_writer_id",
+          type: "string",
+          isOptional: true,
+        },
+        { name: "notes_written_at", type: "number", isOptional: true },
+        { name: "reconciliation_state", type: "string" },
+        { name: "status", type: "string" },
+        { name: "updated_at", type: "number" },
+        { name: "user_id", type: "string", isIndexed: true },
+      ],
+    }),
+
+    tableSchema({
+      name: "metal_lifecycle_events",
+      unsafeSql: (sql: string): string =>
+        `${sql}create unique index if not exists "metal_lifecycle_events_user_action_unique" on "metal_lifecycle_events" ("user_id", "action_id");`,
+      columns: [
+        { name: "action_id", type: "string", isIndexed: true },
+        { name: "created_at", type: "number" },
+        { name: "deleted", type: "boolean" },
+        { name: "holding_id", type: "string", isIndexed: true },
+        { name: "is_effective", type: "boolean" },
+        { name: "is_history_visible", type: "boolean" },
+        { name: "kind", type: "string" },
+        { name: "occurred_at", type: "number" },
+        { name: "payload_json", type: "string" },
+        {
+          name: "predecessor_event_id",
+          type: "string",
+          isOptional: true,
+          isIndexed: true,
+        },
+        {
+          name: "reverses_event_id",
+          type: "string",
+          isOptional: true,
+          isIndexed: true,
+        },
+        { name: "updated_at", type: "number" },
+        { name: "user_id", type: "string", isIndexed: true },
+      ],
+    }),
+
+    tableSchema({
+      name: "metal_rate_references",
+      unsafeSql: (sql: string): string =>
+        `${sql}create unique index if not exists "metal_rate_references_user_action_role_unique" on "metal_rate_references" ("user_id", "action_id", "role");`,
+      columns: [
+        { name: "action_id", type: "string", isIndexed: true },
+        { name: "captured_at", type: "number" },
+        { name: "captured_freshness", type: "string" },
+        { name: "created_at", type: "number" },
+        { name: "deleted", type: "boolean" },
+        { name: "holding_id", type: "string", isIndexed: true },
+        { name: "instrument_code", type: "string", isIndexed: true },
+        { name: "kind", type: "string" },
+        { name: "orientation", type: "string" },
+        { name: "provider_observed_at", type: "number", isOptional: true },
+        { name: "quality", type: "string" },
+        { name: "role", type: "string" },
+        { name: "source", type: "string", isOptional: true },
+        { name: "unit", type: "string" },
+        { name: "updated_at", type: "number" },
+        { name: "user_id", type: "string", isIndexed: true },
+        { name: "value_decimal", type: "string" },
       ],
     }),
 

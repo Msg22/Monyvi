@@ -1,144 +1,105 @@
-# Slice 4 Metals Persistence — Verified Partial Green
+# Slice 4 Metals Persistence — Runtime Completion Evidence
 
-Date: 2026-09-01
+Date: 2026-09-05
 
-Base: `bf2e3a071c2814772e9a9669479afeeb85d48767` (`origin/main`, PR #251 merged)
+Base: `be7ce054b772d6618e5113df45c4b90ada55084c` (`origin/main`)
 
-Status: the schema/model infrastructure, server-bounded exact observation pull,
-protected projection transport, deterministic fixtures, approved content, and
-render assets are Green. Slice 4 is not complete. Exact action payload
-registration, accepted RPC mutation, local action commits, and durable
-reconciliation remain blocked by the unresolved six-schema decision matrix.
+## Completion boundary
 
-## Prerequisites and stack compatibility
+This checkpoint completes the local-first, no-account Metals persistence lane:
 
-- T017 and T024 are the only Slice 4 prerequisites; both are checked complete.
-- The stack was rebased onto the merged financial-action foundation at
-  `bf2e3a0`.
-- PR #251 owner-marker, authenticated-user pull lifecycle, dedicated-table
-  rejection, action-foundation contracts, and generic-root exclusions remain
-  intact.
-- Migration 068 contains no account credit/effect behavior from issue #242 or
-  migration 069.
+- one atomic WatermelonDB writer for Add, Correct, Sell without credit, Dispose,
+  Delete, and Undo without credit;
+- canonical payload validation and hashing with the same `validationInput`;
+- owner-scoped replay, payload-hash mismatch rejection, holding CAS, rollback,
+  immutable owner evidence, lifecycle events, and rate references;
+- dedicated PostgreSQL `apply_metal_action_v1` validation/CAS/replay path with
+  no account effect and no competing outbox;
+- durable name/notes LWW clocks, null-baseline behavior, stable retry identity,
+  terminal-holding support, and a dedicated metadata RPC;
+- generic sync protection for Metals-only metadata/action fragments while
+  preserving non-Metals asset behavior; and
+- stale/rejected/incomplete outcome classification with verified evidence and
+  one lock/exact-once recovery boundary.
 
-## Honest completion boundary
+T042 remains unchecked only because `npm run db:migrate` cannot perform its
+remote dry-run/push phase from this unlinked worktree. Its local equivalent was
+completed: migrations 001–068 replayed from a clean database, local types and
+Watermelon schema were regenerated, exact decimal/bigint text overrides and
+required local unique indexes were audited, and pgTAP/database lint passed.
 
-Completed and verified:
+## TDD evidence
 
-- T035, T038–T041: initial Red contracts and evidence;
-- T046: approved EN/AR content and translation schema;
-- T047: deterministic fixture profiles plus executable seed/reset/inspect
-  support;
-- T048: approved supplied Gold/Silver object assets, typed manifest, hashes,
-  provenance, and neutral fallback;
-- the independent parts of T042 and T045: migration/tables/RLS/index/model
-  infrastructure, a server-fixed upper-watermark observation RPC with exact
-  `(created_at, id)` pagination, exact text projections, owner-scoped holding
-  state delivery, protected fragments preserved on pull and stripped on generic
-  push, and generic dedicated-table exclusion.
+The new SQLite and sync tests were observed Red before implementation. The final
+validator audit also produced three PostgreSQL Red failures before the fix:
 
-Still open:
+- Add accepted a non-canonical material decimal;
+- Add accepted an incomplete acquisition rate-reference set; and
+- Correct accepted a metadata no-op.
 
-- T036: real SQLite Add/Correct/Sell v2/Dispose/Delete/Undo evidence/CAS tests;
-- T037: executable durable rejection/reconciliation/exact-once tests;
-- T042: accepted authenticated action mutation and approved action-specific SQL
-  payload validation;
-- T043: scoped local one-writer repository/command path;
-- T044: durable reconciliation and compensation path;
-- T045: real dedicated action push/RPC coordination;
-- T049: complete Slice 4 compatibility and verification freeze.
+The minimum registered-validator change now rejects all three before writes and
+keeps the TypeScript/PostgreSQL Dispose code catalog identical.
 
-`tasks.md` therefore marks only T046–T048 newly complete. It deliberately
-reopens T036 and T037 because the earlier speculative tests did not prove the
-task text.
+## Automated verification
 
-## Fail-closed action boundary
+All Supabase commands below used `--local`; no remote database was changed.
 
-No approved repository ledger defines the exact payload fields for all six
-immutable schemas. The production approved-action registry is intentionally
-empty. Generic creation rejects unpublished definitions before hashing or
-persistence, and the legacy Add Holding writer rejects with
-`metal_holding_action_writer_not_ready` before auth or database access. Stored
-historical action roots remain readable.
+| Gate                              | Result                                                                                                                        |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Clean migration replay            | Pass: `npx supabase db reset --local`, migrations 001–068 plus seed                                                           |
+| Metals pgTAP                      | Pass: 104/104                                                                                                                 |
+| Supabase database lint            | Pass: `extensions`, `private`, and `public`, error level                                                                      |
+| Slice 4 mobile matrix             | Pass: 11/11 suites, 77/77 tests                                                                                               |
+| Real SQLite action writer         | Pass: Add/Correct/Sell-no-credit/Dispose/Delete/Undo, replay, CAS, rollback, owner scope, restart                             |
+| Reconciliation/sync/rate/metadata | Pass: metadata-only push acknowledgement, pull/push failure, protected fragments, LWW/retry/restart, rejection classification |
+| Logic registry                    | Pass: 14/14 tests, including exact Arabic canonical hash and six Dispose codes                                                |
+| Mobile TypeScript                 | Pass                                                                                                                          |
+| Logic TypeScript                  | Pass                                                                                                                          |
+| DB TypeScript                     | Pass                                                                                                                          |
+| Focused ESLint                    | Pass with project custom rules and zero errors                                                                                |
+| Prettier                          | Pass for all changed TypeScript files                                                                                         |
+| Local generation                  | Pass: `npm run db:sync-local`; exact numeric/text and local-index overrides re-audited after generation                       |
+| Diff whitespace                   | Pass before checkpoint                                                                                                        |
 
-Migration 068 exposes no authenticated mutation RPC. Its private helper checks
-only approved schema-independent invariants: supported kind/version tuples,
-holding/domain-reference equality, empty account guards, canonical revision
-grammar/range, and the expected holding revision inside the hashed payload. It
-is service-role-only and cannot accept a client action.
+The 11-suite matrix contains migration/model, SQLite foundation,
+reconciliation/sync/rate/metadata, sync config/ownership/push/pull/dedicated
+rejection, EN/AR content, fixture registry, and render-manifest coverage.
 
-The exact field decisions and missing approvals are maintained in
-`slice-4-action-schema-decision-matrix.md`.
+## Security and integrity evidence
 
-## Verification results
+- Financial decimals and revisions remain `numeric`/`bigint` remotely and
+  canonical strings at JavaScript/Watermelon boundaries.
+- All user-owned Metals tables are owner-scoped, RLS-enabled, indexed for
+  ownership/relationships, soft-delete compatible, and authenticated clients
+  receive SELECT-only table access.
+- Dedicated RPCs are authenticated, owner-scoped, idempotent, hash-verifying,
+  holding-locked, CAS-protected, and reject account effects.
+- Private security-definer helpers fix `search_path` and revoke execution from
+  PUBLIC, anon, and authenticated roles.
+- Every accepted no-credit action writes one root, one owner evidence row, one
+  lifecycle event, and only its immutable role-specific rate references.
+- Metadata clocks are nullable without fabricated backfill; omitted fields stay
+  unchanged and equal-clock/different-value retry conflicts fail closed.
 
-All Supabase commands used `--local`; no remote Supabase project was mutated.
+## Coverage matrix and limits
 
-| Check | Result |
-| --- | --- |
-| `npx supabase db reset --local` | Pass. Replayed migrations 001–068 and seed from a clean disposable database. |
-| Foundation + Metals pgTAP | Pass: 2/2 files, 121/121 assertions. |
-| Integrated affected mobile Jest set | Pass: 16/16 suites, 190/190 tests. |
-| Exact sync/writer focused set | Pass: production registry and legacy writer 5/5 suites, 80/80 tests; pull/push 2/2 suites, 17/17 tests; legacy sync harnesses 2/2 suites, 23/23 tests. |
-| PR #251 overlap/foundation/sync Jest set | Pass: 11/11 suites, 130/130 tests. |
-| Full mobile Jest suite | Pass: 305/305 suites, 2,634/2,634 tests from the sanctioned `apps/mobile` working directory, including migration and Maestro-script path contracts. |
-| Full logic Jest suite | Pass. |
-| Full DB Jest suite | Pass, including the real Watermelon v27 migration contract. |
-| `npm run typecheck -w @monyvi/mobile` | Pass. |
-| `npm run typecheck -w @monyvi/logic` | Pass. |
-| `npm run typecheck -w @monyvi/db` | Pass. |
-| `npm run lint -w @monyvi/mobile` | Pass after adding the required explicit fixture-client return type. |
-| `npm run lint` | Pass with the repository's existing warnings and zero errors after replacing five manifest `require()` calls with typed static image imports. |
-| Fixture `seed -> inspect -> switch -> inspect -> reset -> inspect` | Pass. Fresh inspection returned one exact asset, asset-metal, holding-state, and observation row; missing-rate inspection returned zero observations; reset inspection returned zero rows for all four groups. Holding-state identity equals holding identity, and every exact decimal/revision inspection field crossed PostgREST as text. |
-| PR #254 non-schema review set | Pass: 3/3 suites, 14/14 tests. Legacy Live Rates labels, clock-relative rate fixtures, material account eligibility, and the reduced sync/rate boundary are covered. |
-| Ineligible account fixture on local Supabase | Pass. The missing-rate/ineligible profile seeded exactly four USD accounts and zero EGP accounts for its EGP Metals holding; reset returned the account table to zero rows. |
-| PR #254 fixture-runtime focused set | Pass: 2/2 suites, 35/35 tests. Locale/theme profile persistence, Android theme/text-scale application, and cross-profile observation cleanup are covered. |
-| Fixture runner/preflight broad set | Pass: 6/6 suites, 69/69 tests across fixture selection, preflight, Maestro, CI E2E, and manual seed entry points. |
-| Cross-profile local fixture cycle | Pass. Fresh profile inspection returned one observation; switching to the missing-rate Arabic/light profile returned zero observations, zero EGP accounts, and one `ar`/`LIGHT` profile; reset succeeded. |
-| Gold/Silver-only manual-QA fixture | Pass: focused 1/1 suite, 8/8 tests; broad fixture/preflight set remains 6/6 suites, 69/69 tests. The real local manual-QA seed and reset both completed without a migration-068 constraint failure. |
-| PR #254 transport/restart focused set | Pass: 2/2 suites, 39/39 tests. Transport `created_at` follows the injected seed clock, provider observation time remains freshness-driving, user-owned projection updates follow the seed clock, local cleanup targets only `e2e_fixture` rows, every non-missing profile waits for its observation, no-profile preflight resets font scale, and restart ordering is first sync, stop, same-DB relaunch, ready. |
-| Fixture runner/preflight broad set after restart fix | Pass: 6/6 suites, 97/97 tests. JavaScript syntax checks, mobile typecheck, and root lint also pass. |
-| Clock-relative local fixture cycle | Pass. Stale restart inspection returned asset, asset-metal, holding-state, and observation transport timestamps at seed time while `provider_observed_at` remained three days earlier; switching to the missing-rate profile returned zero observations with new seed-time projection updates; reset returned all fixture groups to zero rows. |
-| PR #254 profile-isolation/release-harness set | Focused pass: 2/2 suites, 41/41 tests. Broad fixture harness pass: 7/7 suites, 95/95 tests. Full mobile pass. Profile and all seeded accounts use the injected update clock while retaining fixed creation evidence; local cleanup targets exact deterministic Metals fixture account/child IDs; release Metals profiles fail before device mutation. Mobile and logic typechecks, script syntax, and root lint also pass. |
-| Profile/account local Supabase cycle | Pass. Fresh seeded `en`/`LIGHT` with four EGP and zero USD accounts; switching seeded `ar`/`LIGHT` with zero EGP and four USD accounts. Profile/account `updated_at` advanced with each seed while `created_at` stayed fixed; missing-rate inspection returned zero observations; reset returned profiles, accounts, and every inspected Metals fixture group to zero. No Android device was attached, so the exact local Watermelon cleanup SQL is automated but not device-executed. |
-| `npx supabase db lint --local --level error` | Pass for `extensions`, `private`, and `public`. |
-| `git diff --check` | Pass. |
+| Scenario                                     | Automated evidence                                      | Manual/external limit                                                                              |
+| -------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Six no-credit local actions                  | Real SQLite integration matrix                          | UI journeys belong to later slices                                                                 |
+| Same-ID replay / different-hash rejection    | SQLite and pgTAP                                        | None                                                                                               |
+| One holding CAS winner / stale loser         | SQLite and pgTAP                                        | Multi-device transport is exercised through the RPC contract, not two physical devices             |
+| Atomic rollback and cross-user rejection     | SQLite and pgTAP                                        | None                                                                                               |
+| Fresh-database durability/restart            | Watermelon clone/reopen tests and clean Supabase replay | None                                                                                               |
+| Metadata partial LWW, retry, terminal states | SQLite plus PostgreSQL RPC tests                        | None                                                                                               |
+| Generic sync cannot bypass Metals clocks     | Pull/push ownership tests                               | None                                                                                               |
+| No issue-242 account effect                  | Registry, adapter, SQLite, and RPC assertions           | Account-credit integration remains owned by issue #242                                             |
+| Remote migration application                 | Not claimed                                             | Worktree is not linked to a Supabase project, so `npm run db:migrate` stops before remote mutation |
 
-## Persistence and security evidence
+## Dependency proof
 
-- Gold/Silver only; exact persisted shadow fields remain numeric/bigint remotely
-  and canonical text at every JavaScript/Watermelon boundary, without a new
-  floating-point source of truth.
-- Every user-owned Metals table includes owner and sync columns; the shared
-  server-generated observation table uses the documented pull-only exception.
-- User-owned tables have RLS, current-user SELECT policies, owner/foreign-key
-  indexes, and SELECT-only authenticated grants.
-- Lifecycle/action links use composite ownership constraints and cannot cross
-  owners or holdings.
-- Private security-definer helpers fix `search_path`, revoke PUBLIC/anon/
-  authenticated execution, and grant only `service_role`.
-- Generic sync rejects dedicated action/evidence/event/reference tables, strips
-  action-owned projection fragments only on generic push, preserves them on
-  pull through exact text projections, routes observations through a dedicated
-  server-bounded paginated RPC, delivers owner-scoped holding state, preserves
-  authenticated-user lifecycle checks, and propagates pull/push failures before
-  cursor advancement.
+Slice 4 depends only on completed T017 (exact Metals logic) and T024 (generic
+financial-action foundation). No implementation here depends on issue #242,
+migration 069, Add/Edit/Sell UI work, or later portfolio/story routes.
 
-## Coverage and manual plan
-
-| Scenario | Automated coverage | Manual / blocked status |
-| --- | --- | --- |
-| Exact guarded backfill, null unknown provenance, models/RLS/indexes | migration Jest + local replay + pgTAP | Inspect representative legacy rows after merge. |
-| Unapproved Add/Correct/Sell v2/Dispose/Delete/Undo | adapter approval-gate Jest | Confirm every action remains unavailable until schemas are approved. |
-| Rate-reference rules and sync ownership/protection/failure | Metals sync/rate Jest + PR #251 overlap set | Metadata LWW and real dedicated action delivery remain blocked. |
-| EN/AR parity and approved copy | content-contract Jest | Story slices own rendered locale/RTL verification. |
-| Deterministic clock-relative fresh/stale profiles, material account eligibility, locale/theme/text scale, profile isolation, and restart lifecycle | fixture/preflight Jest + real local cross-profile cycle | Seed, inspect exact IDs/runtime values, switch profiles, reset, inspect empty. Theme and text scale are materialized before launch. Dev-client cleanup preserves auth and non-fixture rows by targeting exact Metals fixture IDs. Release Metals profiles are explicitly unsupported until an authenticated release cleanup/readiness harness exists. No Android device was attached in this run, so cleanup and same-DB force-stop/relaunch remain device-manual. |
-| Gold/Silver bar/coin/jewelry selection and fallback | render-manifest Jest with hashes | Visual assets are inherited from the approved handoff; no image was generated. |
-| Accepted mutation, replay, stale winner, restart, rollback, exact-once recovery | none claimed | Blocked until the exact schemas and executable action/evidence/event/rate-reference coordinator exist. |
-
-## Publication statement
-
-This evidence supports a partial infrastructure PR only. It must not be used to
-claim T042–T045 or T049 complete, nor to claim an executable Metals action or
-reconciliation path. The PR description must repeat these blockers and coverage
-limits.
+This evidence supports T036, T037, T043, T044, T045, and T049 as complete. T042
+remains open solely for the linked-project `npm run db:migrate` execution.

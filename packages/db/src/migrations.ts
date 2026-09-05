@@ -801,5 +801,19 @@ end;`
         ),
       ],
     },
+    {
+      toVersion: 28,
+      steps: [
+        addColumns({
+          table: "metal_holding_states",
+          columns: [
+            { name: "name_written_at", type: "number", isOptional: true },
+            { name: "name_writer_id", type: "string", isOptional: true },
+            { name: "notes_written_at", type: "number", isOptional: true },
+            { name: "notes_writer_id", type: "string", isOptional: true },
+          ],
+        }),
+      ],
+    },
   ],
 });
