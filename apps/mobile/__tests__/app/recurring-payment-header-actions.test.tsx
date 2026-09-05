@@ -61,6 +61,7 @@ jest.mock("@/components/recurring-payments", () => {
         readonly recurrenceAnchorDate?: Date;
         readonly initialValues: {
           readonly startDate: Date;
+          readonly expectedNextDueDate?: Date;
         };
         readonly onSubmit: (values: {
           readonly name: string;
@@ -92,6 +93,7 @@ jest.mock("@/components/recurring-payments", () => {
         startDate: props.recurrenceAnchorDate
           ? props.initialValues.startDate
           : new Date("2026-06-01T00:00:00.000Z"),
+        expectedNextDueDate: props.initialValues.expectedNextDueDate,
         endDate: mockFormEndDate,
         reactivateAfterSaving: mockReactivateAfterSaving,
         action: "NOTIFY" as const,
@@ -276,6 +278,8 @@ jest.mock("@/services/recurring-payment-service", () => ({
     INVALID_START_DATE: "RECURRING_PAYMENT_INVALID_START_DATE",
     INVALID_END_DATE: "RECURRING_PAYMENT_INVALID_END_DATE",
     INVALID_SCHEDULE: "RECURRING_PAYMENT_INVALID_SCHEDULE",
+    CURRENCY_MISMATCH: "RECURRING_PAYMENT_CURRENCY_MISMATCH",
+    STALE_SCHEDULE: "RECURRING_PAYMENT_STALE_SCHEDULE",
     REACTIVATION_UNAVAILABLE: "RECURRING_PAYMENT_REACTIVATION_UNAVAILABLE",
   },
 }));
@@ -442,6 +446,7 @@ describe("recurring payment header and destructive actions", () => {
           type: "EXPENSE",
           frequency: "MONTHLY",
           startDate: new Date("2026-07-01T00:00:00.000Z"),
+          expectedNextDueDate: new Date("2026-07-01T00:00:00.000Z"),
           endDate: null,
           reactivateAfterSaving: false,
           accountId: "account-1",
