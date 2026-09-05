@@ -24,7 +24,7 @@ export function MetalHoldingRender({
           metal: t(entry.metalLabelKey),
         })
       : t(entry.accessibilityLabelKey);
-  const dimensionClassName = size === "detail" ? "h-36 w-36" : "h-20 w-20";
+  const dimensionClassName = size === "detail" ? "h-44 w-44" : "h-20 w-20";
 
   if (entry.kind === "neutral") {
     return (

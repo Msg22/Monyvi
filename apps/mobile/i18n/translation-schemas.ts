@@ -79,6 +79,15 @@ export const metalsTranslationSchema = NamespaceSchema.and(
       objectAccessibility: z.string(),
       neutralFallback: z.string(),
     }),
+    detail: z
+      .object({
+        follow_value: z.string(),
+        calculation_disclosure: z.string(),
+        paid: z.string(),
+        timeline_current_value: z.string(),
+        fact_accessibility: z.string(),
+      })
+      .passthrough(),
   })
 );
 

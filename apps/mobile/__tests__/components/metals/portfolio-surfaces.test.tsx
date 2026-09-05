@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
+import { I18nManager } from "react-native";
 
 import type { CurrencyType } from "@monyvi/db";
 import type { WealthBreakdownReadModel } from "@/services/net-worth-read-model-service";
@@ -18,8 +19,13 @@ const mockTranslations: Record<string, string> = {
   "wealth_breakdown.metals": "Metals",
   "wealth_breakdown.gold": "Gold",
   "wealth_breakdown.silver": "Silver",
-  "wealth_breakdown.of_net_worth": "{{amount}} · {{share}} of net worth",
-  "wealth_breakdown.of_metals": "{{amount}} · {{share}} of Metals",
+  "wealth_breakdown.of_net_worth": "{{share}} of net worth",
+  "wealth_breakdown.of_metals": "{{share}} of Metals",
+  "wealth_breakdown.net_worth": "Net worth",
+  "wealth_breakdown.inside_metals": "Inside metals",
+  "wealth_breakdown.metals_summary":
+    "Amounts in {{currency}} · share of {{metals}}",
+  "wealth_breakdown.tile_accessibility": "{{label}}. {{amount}}. {{share}}",
   "portfolio.filter.all": "All",
   "portfolio.filter.gold": "Gold",
   "portfolio.filter.silver": "Silver",
@@ -32,6 +38,23 @@ const mockTranslations: Record<string, string> = {
   "portfolio.error": "We couldn’t load your metals. Try again.",
   "portfolio.retry": "Try again",
   "portfolio.bought": "{{weight}} · Bought {{date}}",
+  "portfolio.active_portfolio": "Active portfolio",
+  "portfolio.active_portfolio_value": "Active portfolio value",
+  "portfolio.active_holdings": "active holdings",
+  "portfolio.since_purchase_label": "since purchase",
+  "portfolio.holdings": "Holdings",
+  "portfolio.view_all": "View all",
+  "portfolio.bought_on": "Bought {{date}}",
+  "portfolio.today": "today",
+  "portfolio.rates_updated": "Rates updated {{when}}",
+  "portfolio.realized_profit_from_sold_metals":
+    "realized profit from sold metals",
+  "portfolio.realized_loss_from_sold_metals": "realized loss from sold metals",
+  "portfolio.realized_result_from_sold_metals":
+    "realized result from sold metals",
+  "portfolio.realized_profit": "Realized profit",
+  "portfolio.realized_loss": "Realized loss",
+  "portfolio.realized_result": "Realized result",
   start_tracking_metals: "Start tracking your metals",
   empty_metals_description:
     "Add your gold and silver holdings to keep their value in one place.",
@@ -57,6 +80,7 @@ const mockTranslations: Record<string, string> = {
   "render.neutralFallback": "Metal holding illustration unavailable",
   "status.active": "Active",
   "status.sold": "Sold",
+  "status.disposed": "Disposed",
   "rate.missing": "Rates: current rate unavailable",
   "rate.stale": "Rates: rate is older than 24 hours",
   error_generic: "Something went wrong. Please try again.",
@@ -81,12 +105,31 @@ const arabicTranslations: Record<string, string> = {
   "portfolio.total_accessibility":
     "قيمة محفظة المعادن {{amount}}. الحالة: {{status}}.",
   "portfolio.current_rate": "سعر حديث",
+  "portfolio.active_portfolio": "المحفظة النشطة",
+  "portfolio.active_portfolio_value": "قيمة المحفظة النشطة",
+  "portfolio.active_holdings": "مقتنيات نشطة",
+  "portfolio.since_purchase_label": "منذ الشراء",
+  "portfolio.holdings": "المقتنيات",
+  "portfolio.view_all": "عرض الكل",
+  "portfolio.bought_on": "تم الشراء {{date}}",
+  "portfolio.today": "اليوم",
+  "portfolio.rates_updated": "تم تحديث الأسعار {{when}}",
+  "portfolio.realized_profit_from_sold_metals":
+    "أرباح محققة من المعادن المباعة",
+  "portfolio.realized_loss_from_sold_metals": "خسائر محققة من المعادن المباعة",
+  "portfolio.realized_result_from_sold_metals":
+    "نتيجة محققة من المعادن المباعة",
+  "portfolio.realized_profit": "ربح محقق",
+  "portfolio.realized_loss": "خسارة محققة",
+  "portfolio.realized_result": "نتيجة محققة",
   "portfolio.since_purchase": "{{signedAmount}} منذ الشراء",
   "portfolio.filter_accessibility":
     "عامل التصفية {{filterName}}، {{selectedState}}، {{count}} حيازة.",
   "portfolio.selected": "محدد",
   "portfolio.not_selected": "غير محدد",
   "status.active": "نشطة",
+  "status.sold": "مباعة",
+  "status.disposed": "تم التخلّص منها",
   "metal.gold": "ذهب",
   "form.coin": "عملة",
   "rate.missing": "أسعار السوق: السعر الحالي غير متاح",
@@ -108,9 +151,16 @@ jest.mock("react-i18next", () => ({
   }),
 }));
 
-jest.mock("@expo/vector-icons", () => ({
-  Ionicons: (): null => null,
-}));
+jest.mock("@expo/vector-icons", () => {
+  const React = jest.requireActual<typeof import("react")>("react");
+  const { View } =
+    jest.requireActual<typeof import("react-native")>("react-native");
+
+  return {
+    Ionicons: ({ name }: { readonly name: string }): React.JSX.Element =>
+      React.createElement(View, { testID: `icon-${name}` }),
+  };
+});
 
 jest.mock("@/context/ThemeContext", () => ({
   useTheme: (): { readonly isDark: boolean } => ({ isDark: false }),
@@ -185,6 +235,8 @@ function renderPortfolio(
       portfolio={{ ...portfolio, holdings: portfolio.activeHoldings }}
       selectedFilter="ALL"
       onFilterChange={jest.fn()}
+      onHistoryPress={jest.fn()}
+      onHoldingPress={jest.fn()}
       onRetry={jest.fn()}
       {...overrides}
     />
@@ -219,7 +271,7 @@ describe("US1 portfolio surfaces", () => {
 
     expect(screen.getByText("Where your money is")).toBeTruthy();
     expect(screen.getByText("Accounts")).toBeTruthy();
-    expect(screen.getAllByText("Metals")).toHaveLength(2);
+    expect(screen.getAllByText("Metals")).toHaveLength(1);
     expect(screen.getByText("Gold")).toBeTruthy();
     expect(screen.getByText("Silver")).toBeTruthy();
     expect(screen.getByLabelText(/Accounts.*85.4/)).toBeTruthy();
@@ -268,6 +320,50 @@ describe("US1 portfolio surfaces", () => {
     expect(onFilterChange).toHaveBeenCalledWith("GOLD");
   });
 
+  it("hides allocation until both Gold and Silver have positive owned value", () => {
+    renderPortfolio();
+
+    expect(screen.queryByTestId("metal-portfolio-allocation")).toBeNull();
+    expect(
+      screen.queryByTestId("metal-portfolio-allocation-legend")
+    ).toBeNull();
+  });
+
+  it("fills the proportional allocation bar and preserves All tab corners", () => {
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        activeHoldings: [
+          ...portfolio.activeHoldings,
+          {
+            ...portfolio.activeHoldings[0],
+            id: "silver-bar",
+            metalType: "SILVER",
+            name: "Silver bar",
+            currentValueDecimal: "40579.47",
+          },
+        ],
+        activeTotalDecimal: "202897.34",
+        allocation: { gold: "80", silver: "20" },
+        holdings: portfolio.activeHoldings,
+      },
+    });
+
+    expect(screen.getByTestId("metal-portfolio-allocation")).toBeTruthy();
+    expect(screen.getByTestId("metal-portfolio-allocation-gold")).toHaveStyle({
+      width: "80%",
+    });
+    expect(screen.getByTestId("metal-portfolio-allocation-silver")).toHaveStyle(
+      {
+        width: "20%",
+      }
+    );
+    expect(screen.getByTestId("metal-portfolio-filter-border-ALL")).toHaveProp(
+      "className",
+      expect.stringContaining("rounded-l-")
+    );
+  });
+
   it("omits purchase date, retains recorded facts, and speaks unavailable value truthfully", () => {
     renderPortfolio({
       portfolio: {
@@ -307,7 +403,7 @@ describe("US1 portfolio surfaces", () => {
     mockActiveTranslations = arabicTranslations;
     renderPortfolio();
 
-    expect(screen.getByText("قيمة محفظة المعادن")).toBeTruthy();
+    expect(screen.getByText("المحفظة النشطة")).toBeTruthy();
     expect(screen.getByText(/تم الشراء/)).toBeTruthy();
     expect(screen.getByLabelText(/عامل التصفية الكل/)).toBeTruthy();
   });
@@ -316,6 +412,7 @@ describe("US1 portfolio surfaces", () => {
     renderPortfolio({
       portfolio: {
         ...portfolio,
+        holdings: portfolio.activeHoldings,
         recentHistory: [
           {
             ...portfolio.activeHoldings[0],
@@ -329,7 +426,109 @@ describe("US1 portfolio surfaces", () => {
     });
 
     expect(screen.getByText("History")).toBeTruthy();
-    expect(screen.getByText("Sold coin")).toBeTruthy();
+    expect(screen.getByText(/Sold coin/)).toBeTruthy();
+  });
+
+  it("speaks tile amounts and shares for screen readers", () => {
+    render(
+      <WealthBreakdownSection
+        currency={currency}
+        isLoading={false}
+        breakdown={breakdown}
+        onAccountsPress={jest.fn()}
+        onMetalsPress={jest.fn()}
+      />
+    );
+
+    expect(
+      screen.getByLabelText(
+        /Accounts\. 1,062,237\.75 EGP\. 85\.4% of net worth/
+      )
+    ).toBeTruthy();
+  });
+
+  it("uses loss language for negative realized P/L in summary and History", () => {
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        soldResultDecimal: "-1250",
+        recentHistory: [
+          {
+            ...portfolio.activeHoldings[0],
+            id: "sold-loss",
+            name: "Sold at a loss",
+            soldResultDecimal: "-1250",
+            status: "sold",
+          },
+        ],
+      },
+    });
+
+    expect(screen.getByText("realized loss from sold metals")).toBeTruthy();
+    expect(screen.getByText(/Realized loss/)).toBeTruthy();
+    expect(screen.queryByText("Net proceeds")).toBeNull();
+  });
+
+  it("opens active and recent holdings while keeping disposed History free of realized P/L", () => {
+    const onHoldingPress = jest.fn();
+    const onHistoryPress = jest.fn();
+    renderPortfolio({
+      onHoldingPress,
+      onHistoryPress,
+      portfolio: {
+        ...portfolio,
+        holdings: portfolio.activeHoldings,
+        recentHistory: [
+          {
+            ...portfolio.activeHoldings[0],
+            id: "disposed-ring",
+            name: "Gifted ring",
+            soldResultDecimal: null,
+            status: "disposed",
+          },
+        ],
+      },
+    });
+
+    fireEvent.press(screen.getByTestId("metal-portfolio-holding-gold-coin"));
+    expect(onHoldingPress).toHaveBeenCalledWith("gold-coin");
+
+    fireEvent.press(screen.getByTestId("metal-portfolio-view-all"));
+    expect(onHistoryPress).toHaveBeenCalledTimes(1);
+
+    fireEvent.press(
+      screen.getByTestId("metal-portfolio-history-disposed-ring")
+    );
+    expect(onHoldingPress).toHaveBeenCalledWith("disposed-ring");
+    expect(screen.getByText(/Disposed.*Gifted ring/)).toBeTruthy();
+    expect(screen.queryByText("Realized result")).toBeNull();
+  });
+
+  it("mirrors forward chevrons in RTL", () => {
+    const originalIsRTL = I18nManager.isRTL;
+    Object.defineProperty(I18nManager, "isRTL", {
+      configurable: true,
+      value: true,
+    });
+
+    try {
+      renderPortfolio({
+        portfolio: {
+          ...portfolio,
+          recentHistory: [
+            { ...portfolio.activeHoldings[0], id: "sold-gold", status: "sold" },
+          ],
+        },
+      });
+
+      expect(screen.getAllByTestId("icon-chevron-back")).toHaveLength(2);
+      expect(screen.queryByTestId("icon-chevron-forward")).toBeNull();
+    } finally {
+      Object.defineProperty(I18nManager, "isRTL", {
+        configurable: true,
+        value: originalIsRTL,
+      });
+    }
   });
 
   it("distinguishes portfolio-empty, filter-empty, stale, offline, and observer-error states", () => {
@@ -354,7 +553,9 @@ describe("US1 portfolio surfaces", () => {
       isOffline: true,
     });
     expect(screen.getByText("No Silver holdings yet")).toBeTruthy();
-    expect(screen.getByText("Rates: rate is older than 24 hours")).toBeTruthy();
+    expect(
+      screen.getByLabelText(/Rates: rate is older than 24 hours/)
+    ).toBeTruthy();
     expect(screen.getByText("Offline mode")).toBeTruthy();
 
     const onRetry = jest.fn();

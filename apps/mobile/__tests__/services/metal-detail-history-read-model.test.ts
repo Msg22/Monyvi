@@ -315,6 +315,74 @@ describe("metal detail and History read models", () => {
     expect(model?.timeline.map((item) => item.id)).toEqual(["created"]);
   });
 
+  it("opens a migration-backed legacy Active holding without inventing a lifecycle event", () => {
+    const model = buildMetalDetailReadModel(
+      detailInput({
+        holdingState: {
+          ...detailInput().holdingState,
+          effectiveActionId: null,
+          effectiveEventId: null,
+        },
+        lifecycleEvents: [],
+      })
+    );
+
+    expect(model).toMatchObject({
+      id: "holding-1",
+      isActiveOwnership: true,
+      status: "active",
+    });
+    expect(model?.timeline).toEqual([]);
+  });
+
+  it("keeps trusted current valuation for a migration-backed active holding", () => {
+    const model = buildMetalDetailReadModel(
+      detailInput({
+        currentRates: {
+          currencies: new Map([
+            [
+              "EGP",
+              {
+                ageMs: 1_000,
+                providerObservedAt: new Date("2026-08-20T10:00:00.000Z"),
+                state: "fresh",
+                valueDecimal: "0.02",
+              },
+            ],
+          ]),
+          gold: {
+            ageMs: 1_000,
+            providerObservedAt: new Date("2026-08-20T10:00:00.000Z"),
+            state: "fresh",
+            valueDecimal: "75.17476",
+          },
+          silver: {
+            ageMs: 1_000,
+            providerObservedAt: new Date("2026-08-20T10:00:00.000Z"),
+            state: "fresh",
+            valueDecimal: "0.95",
+          },
+        },
+        holdingState: {
+          ...detailInput().holdingState,
+          effectiveActionId: null,
+          effectiveEventId: null,
+        },
+        lifecycleEvents: [],
+        preferredCurrency: "EGP",
+        rateReferences: [],
+      })
+    );
+
+    expect(model).toMatchObject({
+      currentValueCurrency: "EGP",
+      currentValueDecimal: "37587.38",
+      currentValueObservedAt: new Date("2026-08-20T10:00:00.000Z"),
+      totalGainDecimal: null,
+      unavailableExactFacts: [],
+    });
+  });
+
   it("keeps a reversed terminal event in detail chronology but restores active ownership", () => {
     const sold = event({
       id: "sold",

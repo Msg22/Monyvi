@@ -61,6 +61,11 @@ describe("Metals EN/AR content contract", () => {
       "reconciliation.incomplete",
       "reconciliation.automatic",
       "render.neutralFallback",
+      "detail.follow_value",
+      "detail.calculation_disclosure",
+      "detail.paid",
+      "detail.timeline_current_value",
+      "detail.fact_accessibility",
     ]) {
       expect(enFlat[key]).toEqual(expect.any(String));
       expect(arFlat[key]).toEqual(expect.any(String));
@@ -118,8 +123,9 @@ describe("Metals EN/AR content contract", () => {
       "rate",
       "reconciliation",
       "render",
+      "detail",
     ]) {
-      expect(schema).toContain(`${key}: z.object`);
+      expect(schema).toMatch(new RegExp(`${key}:\\s*z\\s*\\.object`));
     }
   });
 });

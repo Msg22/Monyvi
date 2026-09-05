@@ -10,7 +10,10 @@
 | US3-06 Bounded user scope | `metal-detail-history-read-model.test.ts`: authenticated current-user mismatch rejection, approved helper conditions, child-parent ownership, and bounded page take | UI deferred to T068/T069/T072-T074 |
 
 The evidence file records the required Red result before production service code is
-added. No Maestro flow is claimed until an approved translated route/action contract
-and fixture harness exist. T068 component Green covers Active/Sold/Disposed/restored,
-loading/unavailable/offline/error/retry, manifest fallback, descriptor actions, and
-History filter/navigation accessibility. T069/T074 remain open: Metro/device run unavailable.
+added. Current Slice 5/6 integration reran the detail component, fidelity,
+read-model, i18n, and fixture suites: 6 suites, 48 tests Green. No Maestro flow
+is claimed until an approved translated route/action contract and fixture harness
+exist. T068 component Green covers Active/Sold/Disposed/restored,
+loading/unavailable/offline/error/retry, manifest fallback, descriptor actions,
+compact/ordinary layout, valuation timestamp, and History filter/navigation
+accessibility. T069/T074 remain open: Metro/device run unavailable.

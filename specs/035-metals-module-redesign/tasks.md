@@ -203,7 +203,7 @@ This topology controls ownership, dependency stacks, and future review size. Aft
 
 - [x] T066 [US3] Define detail/history manual scenarios and FR/SC mappings in `specs/035-metals-module-redesign/manual-tests/us3-detail-history.md` and `specs/035-metals-module-redesign/coverage/us3.md`
 - [x] T067 [P] [US3] Write failing scoped detail/history read-model tests for effective state, attribution, tied-time ordering, reversed events, missing facts, bounded queries, and user isolation in `apps/mobile/__tests__/services/metal-detail-history-read-model.test.ts`
-- [ ] T068 [P] [US3] Write failing active/sold/disposed/restored detail, History filters, Skeleton/empty/error/offline, imagery/text identity, action descriptor, RTL/theme/reflow/a11y tests in `apps/mobile/__tests__/components/metals/holding-experience.test.tsx`
+- [x] T068 [P] [US3] Write failing active/sold/disposed/restored detail, History filters, Skeleton/empty/error/offline, imagery/text identity, action descriptor, RTL/theme/reflow/a11y tests in `apps/mobile/__tests__/components/metals/holding-experience.test.tsx`
 - [ ] T069 [P] [US3] Create failing detail-to-History/filter/terminal-detail Maestro coverage in `apps/mobile/e2e/maestro/metals/holding-detail-history.yaml`
 - [ ] T070 [US3] Run T067–T069 and record intended Red failures in `specs/035-metals-module-redesign/evidence/us3-red.md`
 
