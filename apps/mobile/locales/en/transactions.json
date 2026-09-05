@@ -312,6 +312,7 @@
   "account_not_found": "Account not found",
   "recurring_payment_account_unavailable": "This account is no longer available. Please choose another account.",
   "recurring_payment_category_unavailable": "This category is no longer available. Please choose another category.",
+  "recurring_payment_stale_schedule": "This payment changed while you were editing. Review the latest details and try again.",
   "cancel": "Cancel",
   "save_partial": "Saved {{saved}} of {{failed}} transactions. Errors: {{errors}}",
   "saved_from_sms": "{{count}} transaction(s) saved from SMS",

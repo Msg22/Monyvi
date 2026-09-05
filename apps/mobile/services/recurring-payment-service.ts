@@ -7,6 +7,7 @@ import {
   isSameLocalCalendarDay,
   isValidCurrencyAmount,
   isValidDate,
+  isValidTransactionAmount,
 } from "@monyvi/logic";
 
 import {
@@ -47,6 +48,7 @@ export interface RecurringPaymentData {
 
 export interface UpdateRecurringPaymentData extends RecurringPaymentData {
   readonly reactivateAfterSaving?: boolean;
+  readonly expectedNextDueDate?: Date;
 }
 
 export const RECURRING_PAYMENT_SERVICE_ERROR_CODES = {
@@ -58,6 +60,8 @@ export const RECURRING_PAYMENT_SERVICE_ERROR_CODES = {
   INVALID_START_DATE: "RECURRING_PAYMENT_INVALID_START_DATE",
   INVALID_END_DATE: "RECURRING_PAYMENT_INVALID_END_DATE",
   INVALID_SCHEDULE: "RECURRING_PAYMENT_INVALID_SCHEDULE",
+  CURRENCY_MISMATCH: "RECURRING_PAYMENT_CURRENCY_MISMATCH",
+  STALE_SCHEDULE: "RECURRING_PAYMENT_STALE_SCHEDULE",
 } as const;
 
 type CurrentUserDataScope = Awaited<
@@ -75,11 +79,27 @@ function isEligibleDueDate(
   );
 }
 
-function assertValidRecurringPaymentAmount(
-  data: Pick<RecurringPaymentData, "amount" | "currency">
-): void {
-  if (!isValidCurrencyAmount(data.amount, data.currency)) {
+function assertValidRecurringPaymentAmountValue(amount: number): void {
+  if (!isValidTransactionAmount(amount)) {
     throw new Error(RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_AMOUNT);
+  }
+}
+
+function assertValidRecurringPaymentAmountPrecision(
+  amount: number,
+  currency: CurrencyType
+): void {
+  if (!isValidCurrencyAmount(amount, currency)) {
+    throw new Error(RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_AMOUNT);
+  }
+}
+
+function assertCurrencyMatchesAccount(
+  currency: CurrencyType,
+  account: Account
+): void {
+  if (account.currency !== currency) {
+    throw new Error(RECURRING_PAYMENT_SERVICE_ERROR_CODES.CURRENCY_MISMATCH);
   }
 }
 
@@ -148,7 +168,7 @@ async function resolveRecurringPaymentReferences(
   accountId: string,
   categoryId: string,
   paymentType: TransactionType
-): Promise<void> {
+): Promise<Account> {
   let account: Account;
   try {
     account = await scope.findOwned(
@@ -174,6 +194,8 @@ async function resolveRecurringPaymentReferences(
   if (category.deleted || category.type !== paymentType) {
     throw new Error(RECURRING_PAYMENT_SERVICE_ERROR_CODES.CATEGORY_UNAVAILABLE);
   }
+
+  return account;
 }
 
 /**
@@ -182,7 +204,7 @@ async function resolveRecurringPaymentReferences(
 export async function createRecurringPayment(
   data: RecurringPaymentData
 ): Promise<RecurringPayment> {
-  assertValidRecurringPaymentAmount(data);
+  assertValidRecurringPaymentAmountValue(data.amount);
   assertValidRecurringPaymentDateShape(data);
 
   const referenceDate = new Date();
@@ -191,12 +213,14 @@ export async function createRecurringPayment(
   assertEndDateAllowsDuePayment(nextDueDate, data.endDate);
 
   const scope = await getCurrentUserDataScope();
-  await resolveRecurringPaymentReferences(
+  const account = await resolveRecurringPaymentReferences(
     scope,
     data.accountId,
     data.categoryId,
     data.type
   );
+  assertCurrencyMatchesAccount(data.currency, account);
+  assertValidRecurringPaymentAmountPrecision(data.amount, account.currency);
 
   const recurringCollection =
     database.get<RecurringPayment>("recurring_payments");
@@ -226,13 +250,21 @@ export async function updateRecurringPayment(
   paymentId: string,
   data: UpdateRecurringPaymentData
 ): Promise<void> {
-  assertValidRecurringPaymentAmount(data);
+  assertValidRecurringPaymentAmountValue(data.amount);
   assertValidRecurringPaymentDateShape(data);
 
   const scope = await getCurrentUserDataScope();
   const recurringCollection =
     database.get<RecurringPayment>("recurring_payments");
   const payment = await scope.findOwned(recurringCollection, paymentId);
+
+  if (
+    data.expectedNextDueDate !== undefined &&
+    (!isValidDate(data.expectedNextDueDate) ||
+      !isSameLocalCalendarDay(payment.nextDueDate, data.expectedNextDueDate))
+  ) {
+    throw new Error(RECURRING_PAYMENT_SERVICE_ERROR_CODES.STALE_SCHEDULE);
+  }
 
   const dataMatchesStoredAnchor = isSameLocalCalendarDay(
     payment.startDate,
@@ -253,12 +285,14 @@ export async function updateRecurringPayment(
   const referenceDate = new Date();
   assertStartDateAllowed(data.startDate, referenceDate, originalEditableDate);
   assertEndDateAllowsDuePayment(requestedDueDate, data.endDate);
-  await resolveRecurringPaymentReferences(
+  const account = await resolveRecurringPaymentReferences(
     scope,
     data.accountId,
     data.categoryId,
     data.type
   );
+  assertCurrencyMatchesAccount(data.currency, account);
+  assertValidRecurringPaymentAmountPrecision(data.amount, account.currency);
 
   await database.write(async () => {
     const previousEndDate = payment.endDate;

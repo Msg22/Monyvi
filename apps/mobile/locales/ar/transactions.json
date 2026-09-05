@@ -323,6 +323,7 @@
   "account_not_found": "لم يتم العثور على الحساب",
   "recurring_payment_account_unavailable": "هذا الحساب لم يعد متاحًا. اختر حسابًا آخر.",
   "recurring_payment_category_unavailable": "هذه الفئة لم تعد متاحة. اختر فئة أخرى.",
+  "recurring_payment_stale_schedule": "تم تحديث هذه الدفعة أثناء التعديل. راجع أحدث التفاصيل وحاول مرة أخرى.",
   "cancel": "إلغاء",
   "save_partial": "تم حفظ {{saved}} من {{failed}} معاملات. الأخطاء: {{errors}}",
   "saved_from_sms": "تم حفظ {{count}} معاملة من الرسائل",

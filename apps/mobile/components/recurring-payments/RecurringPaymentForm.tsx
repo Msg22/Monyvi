@@ -58,6 +58,7 @@ export interface RecurringPaymentFormValues {
   readonly categoryId: string | null;
   readonly frequency: RecurringFrequency;
   readonly startDate: Date;
+  readonly expectedNextDueDate?: Date;
   readonly endDate: Date | null;
   readonly reactivateAfterSaving: boolean;
   readonly action: RecurringAction;
@@ -126,6 +127,7 @@ const FORM_VALUE_FIELDS: readonly RecurringPaymentFormField[] = [
   "categoryId",
   "frequency",
   "startDate",
+  "expectedNextDueDate",
   "endDate",
   "reactivateAfterSaving",
   "action",
@@ -192,6 +194,7 @@ export const RecurringPaymentForm = React.forwardRef<
         initialValues.categoryId ?? "",
         initialValues.frequency,
         initialValues.startDate.getTime(),
+        initialValues.expectedNextDueDate?.getTime() ?? "",
         initialValues.endDate?.getTime() ?? "",
         initialValues.reactivateAfterSaving,
         initialValues.action,
@@ -206,6 +209,7 @@ export const RecurringPaymentForm = React.forwardRef<
       initialValues.name,
       initialValues.notes,
       initialValues.startDate,
+      initialValues.expectedNextDueDate,
       initialValues.endDate,
       initialValues.reactivateAfterSaving,
       initialValues.type,
@@ -304,6 +308,9 @@ export const RecurringPaymentForm = React.forwardRef<
       value: RecurringPaymentFormValues[K]
     ): void => {
       dirtyFieldsRef.current = new Set([...dirtyFieldsRef.current, field]);
+      if (field === "startDate") {
+        dirtyFieldsRef.current.add("expectedNextDueDate");
+      }
       setForm((prev) => ({ ...prev, [field]: value }));
       if (field === "startDate") {
         setErrors((prev) => ({

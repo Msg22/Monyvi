@@ -240,7 +240,6 @@ describe("recurring-payment-service", () => {
       Number.NaN,
       Number.POSITIVE_INFINITY,
       1_000_000_000.01,
-      12.345,
     ])("rejects invalid create amount %p before resolving scope or writing", async (amount) => {
       await expect(
         createRecurringPayment({ ...validCreateData, amount })
@@ -259,6 +258,11 @@ describe("recurring-payment-service", () => {
           amount: 1_000_000_000,
         })
       ).resolves.toBeDefined();
+      mockFindOwned.mockResolvedValueOnce({
+        id: "account-1",
+        userId: "user-1",
+        currency: "KWD",
+      });
       await expect(
         createRecurringPayment({
           ...validCreateData,
@@ -266,6 +270,11 @@ describe("recurring-payment-service", () => {
           currency: "KWD",
         })
       ).resolves.toBeDefined();
+      mockFindOwned.mockResolvedValueOnce({
+        id: "account-1",
+        userId: "user-1",
+        currency: "BTC",
+      });
       await expect(
         createRecurringPayment({
           ...validCreateData,
@@ -275,6 +284,20 @@ describe("recurring-payment-service", () => {
       ).resolves.toBeDefined();
 
       expect(mockWrite).toHaveBeenCalledTimes(3);
+    });
+
+    it("validates decimal precision against the resolved account currency", async () => {
+      await expect(
+        createRecurringPayment({
+          ...validCreateData,
+          amount: 12.345,
+        })
+      ).rejects.toThrow(
+        RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_AMOUNT
+      );
+
+      expect(mockGetCurrentUserDataScope).toHaveBeenCalledTimes(1);
+      expect(mockWrite).not.toHaveBeenCalled();
     });
 
     it("rejects a recurring currency that does not match the owned account", async () => {

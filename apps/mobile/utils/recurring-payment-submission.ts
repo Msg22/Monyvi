@@ -63,6 +63,10 @@ export function getRecurringPaymentErrorMessage({
       return t("invalid_end_date");
     case RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_SCHEDULE:
       return t("end_date_before_due");
+    case RECURRING_PAYMENT_SERVICE_ERROR_CODES.CURRENCY_MISMATCH:
+      return t("account_currency_mismatch");
+    case RECURRING_PAYMENT_SERVICE_ERROR_CODES.STALE_SCHEDULE:
+      return t("recurring_payment_stale_schedule");
     case RECURRING_PAYMENT_SERVICE_ERROR_CODES.REACTIVATION_UNAVAILABLE:
       return t("reactivate_payment_unavailable");
     default:
