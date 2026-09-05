@@ -1,0 +1,54 @@
+appId: com.monyvi.app
+---
+# T096 Red contract. The runner must provide one active whole Gold holding with
+# exact acquisition evidence and fresh terminal rates. The fixture registry is
+# intentionally outside Slice 8A ownership, so no successful execution is
+# claimed until the integration owner wires E2E_FIXTURE_PROFILE=metals-sell-en-light.
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://metals/holding-e2e-gold/sell
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-sell-screen
+    timeout: 30000
+
+# Whole-holding-only, live preview, and account credit unavailable in V1.
+- assertVisible:
+    id: metal-holding-sell-whole-holding
+- assertNotVisible:
+    id: metal-holding-sell-quantity-field
+- assertVisible:
+    id: metal-holding-sell-account-credit
+- tapOn:
+    id: metal-holding-sell-gross-field
+- eraseText: 10
+- inputText: "170000"
+- tapOn:
+    id: metal-holding-sell-fee-field
+- inputText: "500"
+- assertVisible: "EGP 169,500.00"
+- assertVisible: "+ EGP 18,221.80 profit"
+- assertVisible: "No account balance or income entry will be created."
+
+# Direct local submit: no review or second confirmation surface.
+- assertNotVisible:
+    id: metal-holding-sell-confirmation
+- doubleTapOn:
+    id: metal-holding-sell-submit
+    delay: 25
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-screen
+    timeout: 30000
+- assertVisible: Sold
+
+# Offline persistence survives process restart and remains auditable in History.
+- stopApp
+- launchApp:
+    clearState: false
+- openLink: monyvi://metals/history
+- extendedWaitUntil:
+    visible:
+      id: metal-history-screen
+    timeout: 30000
+- assertVisible: Wedding coin
+- assertVisible: Sold
