@@ -34,15 +34,26 @@ function pathToBlockListPattern(filePath) {
   return new RegExp(`${pattern}(?:[/\\\\].*)?$`);
 }
 
+function replaceWorkspaceDependencyRoot(folder) {
+  return folder === workspaceNodeModules ? realWorkspaceNodeModules : folder;
+}
+
+function ensureUniquePath(paths, requiredPath) {
+  return [...new Set([...paths.map(replaceWorkspaceDependencyRoot), requiredPath])];
+}
+
 const config = getSentryExpoConfig(projectRoot);
 
-config.watchFolders = config.watchFolders.map((folder) =>
-  folder === workspaceNodeModules ? realWorkspaceNodeModules : folder
+config.watchFolders = ensureUniquePath(
+  config.watchFolders ?? [],
+  realWorkspaceNodeModules
 );
-config.resolver.nodeModulesPaths = config.resolver.nodeModulesPaths.map(
-  (folder) =>
-    folder === workspaceNodeModules ? realWorkspaceNodeModules : folder
+config.resolver.nodeModulesPaths = ensureUniquePath(
+  config.resolver.nodeModulesPaths ?? [path.resolve(projectRoot, "node_modules")],
+  realWorkspaceNodeModules
 );
+config.resolver.unstable_enableSymlinks = true;
+config.resolver.unstable_enablePackageExports = true;
 
 config.resolver.blockList = [
   ...(Array.isArray(config.resolver.blockList)
