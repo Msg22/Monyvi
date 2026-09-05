@@ -1,0 +1,101 @@
+appId: com.monyvi.app
+---
+# T123 Red contract. The runner-owned profile must provide two current-user
+# terminal holdings with no account effects:
+#
+# - holding-e2e-sold-uncredited: current terminal event is an uncredited Sale.
+# - holding-e2e-disposed: current terminal event is a Dispose.
+# - The local command harness holds completion briefly after confirmation so
+#   pending-state assertions are deterministic.
+#
+# Run once with the offline English/light profile and once with the offline
+# Arabic/dark profile. This lane does not modify the shared fixture registry.
+- runFlow: ../helpers/setup.yaml
+
+# Restore an uncredited sale. The original Sale remains visible as reversed and
+# there is no account, balance, income, or credited-proceeds consequence.
+- openLink: monyvi://metals/holding-e2e-sold-uncredited/restore
+- extendedWaitUntil:
+    visible:
+      id: restore-holding-screen
+    timeout: 30000
+- assertVisible:
+    id: restore-holding-dialog
+- assertVisible:
+    id: restore-holding-terminal-sale
+- assertVisible:
+    id: restore-consequence-active
+- assertVisible:
+    id: restore-consequence-history
+- assertVisible:
+    id: restore-consequence-sale-result
+- assertNotVisible:
+    id: restore-holding-account-consequence
+- assertVisible:
+    id: restore-holding-confirm
+- tapOn:
+    id: restore-holding-reviewed
+- tapOn:
+    id: restore-holding-confirm
+- assertVisible:
+    id: restore-holding-pending
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-screen
+    timeout: 30000
+- assertVisible:
+    id: metal-holding-status-active
+- assertVisible:
+    id: metal-history-event-sale-reversed
+- assertVisible:
+    id: metal-history-event-reversal
+- assertNotVisible:
+    id: metal-holding-realized-sale-result
+
+# Offline restart keeps the same holding Active and keeps both immutable events.
+- stopApp
+- launchApp:
+    clearState: false
+- openLink: monyvi://metals/holding-e2e-sold-uncredited
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-screen
+    timeout: 30000
+- assertVisible:
+    id: metal-holding-status-active
+- assertVisible:
+    id: metal-history-event-sale-reversed
+- assertVisible:
+    id: metal-history-event-reversal
+
+# Restore a disposal. The treatment stops affecting current results while the
+# original Dispose remains permanent History marked as reversed.
+- openLink: monyvi://metals/holding-e2e-disposed/restore
+- extendedWaitUntil:
+    visible:
+      id: restore-holding-screen
+    timeout: 30000
+- assertVisible:
+    id: restore-holding-terminal-dispose
+- assertVisible:
+    id: restore-consequence-active
+- assertVisible:
+    id: restore-consequence-history
+- assertVisible:
+    id: restore-consequence-disposal-treatment
+- assertNotVisible:
+    id: restore-holding-account-consequence
+- tapOn:
+    id: restore-holding-reviewed
+- tapOn:
+    id: restore-holding-confirm
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-screen
+    timeout: 30000
+- assertVisible:
+    id: metal-holding-status-active
+- assertVisible:
+    id: metal-history-event-dispose-reversed
+- assertVisible:
+    id: metal-history-event-reversal
