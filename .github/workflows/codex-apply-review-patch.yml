@@ -32,6 +32,11 @@ jobs:
         run: |
           set -euo pipefail
           patch_file=".github/codex/review.patch"
+          if [[ ! -f "$patch_file" ]]; then
+            echo "No prepared review patch; nothing to apply."
+            exit 0
+          fi
+
           commit_message="$(sed -n '1s/^# commit-message: //p' "$patch_file")"
           if [[ -z "$commit_message" ]]; then
             echo "Missing '# commit-message: ...' header" >&2
