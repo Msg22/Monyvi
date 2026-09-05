@@ -1,0 +1,51 @@
+appId: com.monyvi.app
+---
+# T115 Red contract. The runner must provide an effective Active Gold holding
+# with exact identity/purity/value facts and retained creation/correction
+# evidence. Shared fixture registration is outside the US7 lane, so execution
+# is blocked until the integration owner wires a deterministic Delete profile.
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://metals/holding-e2e-gold/delete
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-delete-sheet
+    timeout: 30000
+
+# Approved Screen 14 is one focused confirmation, not Sell, No Longer, or Undo.
+- assertVisible: "Delete holding?"
+- assertVisible: "E2E Gold Bar"
+- assertVisible: "Gold · 24K · 999 · Bar"
+- assertVisible: "10 g"
+- assertVisible:
+    id: metal-holding-delete-current-value
+- assertVisible:
+    id: metal-holding-delete-consequence
+
+# Duplicate input can produce only one local grouped Delete action.
+- doubleTapOn:
+    id: metal-holding-delete-confirm
+    delay: 25
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-screen
+    timeout: 30000
+- assertNotVisible: "E2E Gold Bar"
+
+# Offline local state and hidden audit survive restart without normal History.
+- stopApp
+- launchApp:
+    clearState: false
+- openLink: monyvi://metals
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-screen
+    timeout: 30000
+- assertNotVisible: "E2E Gold Bar"
+- openLink: monyvi://metals/history
+- extendedWaitUntil:
+    visible:
+      id: metal-history-screen
+    timeout: 30000
+- assertNotVisible: "E2E Gold Bar"
+# A separate integration-owned terminal fixture must prove Sold and Disposed
+# details expose Undo recovery and no Delete action.
