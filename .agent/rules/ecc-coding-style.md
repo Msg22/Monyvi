@@ -73,8 +73,9 @@ For UI work governed by an approved scoped mockup:
   accessibility-label, and enlarged-text variants. Reflow only to keep content
   usable and readable.
 - Do not mark visual work complete without rendered side-by-side or overlay
-  screenshot evidence against the approved reference at the declared context.
-  Report functional status and visual fidelity status separately.
+  screenshot evidence against the approved reference at the declared context,
+  plus rendered evidence for every in-scope variant listed above. Report
+  functional status and visual fidelity status separately.
 
 ## Code Quality Checklist
 

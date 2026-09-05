@@ -204,11 +204,13 @@ the reviewed work not approvable.
 
 ### 2.5 Mockups Compliance
 
-Locate `specs/<branch-name>/mockups/`.
-
-If the folder does not exist, write `No mockups found - N/A`. If it exists, load
-every mockup image and compare each one against the corresponding component or
-screen implementation.
+Start from the selected feature folder. Follow mockup or handoff paths declared
+by its spec, plan, tasks, and README files, then recursively search that feature
+folder for mockup assets, including nested paths such as `design/mockups/`. Only
+write `No mockups found - N/A` after both the declared-path check and recursive
+search find no approved mockup assets. Load every discovered approved mockup
+image and compare it against the corresponding component or screen
+implementation.
 
 Establish the approved mockup's declared UI viewport or component context before
 comparison. Treat presentation-only device hardware, frame, outer canvas,
@@ -365,6 +367,21 @@ or N/A with reason>
 ## Automated Comments
 
 <Accept/Defer/Reject list, or N/A>
+
+## Functional Readiness
+
+READY or NOT READY, with supporting test and behavior evidence.
+
+## Visual Fidelity
+
+COMPLETE, INCOMPLETE, or N/A, with the declared binding UI context and reason.
+
+## Visual Evidence
+
+- Approved reference: <path or N/A>
+- Baseline rendered comparison: <side-by-side or overlay evidence path, or N/A>
+- Scoped variants: <responsive, dark-mode, RTL/Arabic, and enlarged-text
+  evidence paths, or N/A with reason>
 
 ## Approval Verdict
 

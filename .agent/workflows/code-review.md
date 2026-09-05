@@ -337,9 +337,14 @@ matches the approved mockups**.
 
 - Identify the current branch name
 - Locate the corresponding spec folder: `specs/<branch-name>/`
-- Inside the spec folder, locate: `mockups/`
-- **Load ALL mockup images** inside this folder
-- If no `mockups/` folder exists, explicitly state: "No mockups found — N/A"
+- Follow mockup or handoff paths declared by the selected spec, plan, tasks, and
+  README files
+- Recursively search the selected feature folder for mockup assets, including
+  nested paths such as `design/mockups/`
+- **Load ALL approved mockup images** found through declared paths and recursive
+  search
+- Only when neither search finds approved mockup assets, explicitly state: "No
+  mockups found — N/A"
 
 ---
 
@@ -556,6 +561,23 @@ Avoid duplicate fixes.
 - ⚠️ Improvement:
   - 📄 Reference: (rule or principle if applicable)
   - 💡 Suggestion
+
+#### Functional Readiness
+
+- Status: READY / NOT READY
+- Evidence: tests and behavior evidence supporting this status
+
+#### Visual Fidelity
+
+- Status: COMPLETE / INCOMPLETE / N/A
+- Binding UI context: declared viewport or component context, or N/A
+
+#### Visual Evidence
+
+- Approved reference: path, or N/A
+- Baseline rendered comparison: side-by-side or overlay evidence path, or N/A
+- Scoped variants: responsive, dark-mode, RTL/Arabic, and enlarged-text evidence
+  paths, or N/A with reason
 
 ---
 

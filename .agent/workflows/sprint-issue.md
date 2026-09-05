@@ -86,7 +86,9 @@ the declared UI viewport or component context, ignore presentation-only
 hardware/frame/canvas unless explicitly marked binding, preserve composition
 across responsive, RTL, dark, and enlarged-text variants, and report functional
 status separately from visual fidelity. Visual completion requires rendered
-side-by-side or overlay screenshot evidence against the approved reference.
+side-by-side or overlay screenshot evidence against the approved reference at
+the declared UI context, plus rendered evidence for every in-scope responsive,
+RTL, dark, and enlarged-text variant.
 
 ## 4. Branch Base Selection
 
