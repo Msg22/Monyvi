@@ -30,13 +30,17 @@ Before every dispatch:
    `bai/glm-5.3-flash` lacks image input through this OpenCode path, so
    image-dependent work must route elsewhere until that capability is
    requalified.
-9. For bounded writes, confirm either the recommended canary evidence or a
-   recorded user-authorized canary waiver for the exact model/task/profile. A
-   waiver is valid only with the isolated exclusive worktree, non-overlapping
-   artifact ownership, deny-by-default profile, sensitive-data exclusions,
-   forbidden-action controls, mentoring pause gates, independent complete
-   diff/tests, and immediate boundary-breach rules defined below and in
-   `security-and-audit.md`.
+9. For a write task, confirm the exact
+   provider/model/runtime/tool/permission-profile combination is currently
+   write-eligible and not under configuration-wide incident revocation. A new
+   task, session, or worktree cannot bypass a revoked configuration.
+10. For bounded writes, confirm either the recommended canary evidence or a
+    recorded user-authorized canary waiver for the exact model/task/profile. A
+    waiver is valid only with the isolated exclusive worktree, non-overlapping
+    artifact ownership, deny-by-default profile, sensitive-data exclusions,
+    forbidden-action controls, mentoring pause gates, independent complete
+    diff/tests, and immediate boundary-breach rules defined below and in
+    `security-and-audit.md`.
 
 Do not dispatch if any required check is unknown. Availability must be rechecked
 after runtime restart, authentication change, model change, or worktree/base
@@ -58,6 +62,7 @@ Protected paths/actions:
 External-provider opt-in and data-sharing boundary:
 Read-only or bounded-write mode and permission-profile ID:
 Positive evidence for every material task capability:
+Configuration-wide write-eligibility status:
 Canary evidence or recorded user-authorized waiver:
 Source of truth and required context:
 Acceptance criteria:
@@ -95,8 +100,8 @@ for the exact model/task/profile and restate these non-waivable safeguards:
   evidence where applicable, plus any task-required interim diff/risk gate;
 - independent trusted-native complete diff inspection and required tests before
   acceptance;
-- immediate abort and eligibility revocation on unauthorized access/write,
-  sensitive-data exposure, or another security boundary breach.
+- immediate abort and configuration-wide eligibility revocation on unauthorized
+  access/write, sensitive-data exposure, or another security boundary breach.
 
 ## Session Lifecycle
 
@@ -120,10 +125,12 @@ Use official server/SDK APIs rather than screen automation:
 8. Inspect verification evidence and the final complete diff before acceptance.
 9. On sensitive-data exposure, unauthorized scope access/write, or another
    security boundary breach, abort immediately and revoke write eligibility for
-   the exact model/task/profile pending incident review and requalification.
-   This rule is non-waivable, including when the user waived the canary.
+   the compromised provider/model/runtime/tool/permission-profile combination
+   across all tasks pending incident review and requalification. A new task must
+   not bypass the revocation, and this rule is non-waivable, including when the
+   user waived the canary.
 10. Retrieve only sanitized operational evidence and partial artifacts needed
-    for safe inspection before cleanup or reassignment.
+    for safe inspection before terminal teardown or reassignment.
 
 A silence or polling timeout is unknown, not completion or failure. Recheck the
 same session before deciding. Never create a replacement session solely because
@@ -160,8 +167,10 @@ owner handles authorized Git work.
   when the lane remains safe and recoverable.
 - Sensitive-data exposure, unauthorized scope access/write, or another security
   boundary breach immediately aborts the lane and revokes write eligibility for
-  the exact model/task/profile pending incident review and requalification. A
-  user-authorized canary waiver cannot waive this rule.
+  the compromised provider/model/runtime/tool/permission-profile combination
+  across all tasks pending incident review and requalification. Starting a new
+  task cannot bypass the revocation, and a user-authorized canary waiver cannot
+  waive this rule.
 - For ordinary explicit rule drift, allow correction and continuation until the
   same model/task lane reaches three materially identical rule failures. Then
   mark that lane failed, inspect partial work, and reassign.
@@ -189,9 +198,9 @@ shapes include:
 For each attempted benchmark, record factual accuracy, source traceability,
 scope compliance, forbidden-action compliance, completeness, rework, elapsed
 time, and token/cost when available. A security or unauthorized-scope failure is
-an incident and triggers the revocation rule above. A task-capability failure,
-unsupported modality, or timeout is capability evidence, not automatic permanent
-disqualification from unrelated work.
+an incident and triggers the configuration-wide revocation rule above. A
+task-capability failure, unsupported modality, or timeout is capability evidence,
+not automatic permanent disqualification from unrelated work.
 
 Before assignment, map every material task capability to positive evidence from
 the exact configuration. A missing negative result is not positive evidence.
@@ -226,18 +235,22 @@ safeguard in the Task Packet section and `security-and-audit.md`. A material
 permission-profile expansion requires a fresh canary or a new explicit waiver
 covering the expanded profile. When a valid waiver and safeguards are recorded,
 real writes may begin without the disposable canary; absence of the canary alone
-must not block the lane. No waiver can override incident revocation,
-requalification, positive capability evidence, or independent verification.
+must not block the lane. No waiver can override configuration-wide incident
+revocation, requalification, positive capability evidence, or independent
+verification.
 
-## Accepted-Task Teardown
+## Terminal Task Teardown
 
-After every accepted task, always terminate and tear down:
+At every terminal task outcome—accepted, rejected, cancelled, failed, timed-out,
+or security-aborted—always terminate and tear down:
 
 - the model session;
 - injected credentials; and
-- the live OpenCode server.
+- the live loopback OpenCode server.
 
-These resources never remain for a reusable lane. Only non-sensitive resources
-such as the isolated worktree, adapter configuration, and sanitized task
-metadata may remain reusable. Record an owner, expiration, and mandatory cleanup
-deadline for every retained reusable resource.
+These runtime resources never remain for a reusable lane. For a security-aborted
+task, retain only sanitized incident evidence needed for incident review and
+requalification. For other terminal outcomes, only non-sensitive resources such
+as the isolated worktree, adapter configuration, and sanitized task metadata may
+remain reusable. Record an owner, expiration, and mandatory cleanup deadline for
+every retained reusable resource.
