@@ -36,9 +36,10 @@ Bounded write with recommended canary or explicit waiver:
 
 - give one worker exclusive responsibility for one complete task in one isolated
   worktree/branch;
-- allow edits required by that assigned task inside the isolated worktree rather
-  than relying on brittle per-file micromanagement; define explicit protected
-  paths and reject edits outside the worktree or task responsibility;
+- preserve non-overlapping artifact/file ownership across concurrent writers;
+  one writer owns each artifact per wave, and any overlap stops the lane;
+- allow cohesive edits required by that task within its exclusively owned
+  artifacts rather than relying on brittle per-file micromanagement;
 - explicitly deny `.git` metadata, secrets, external directories, dependency
   installation, destructive actions, releases, deployments, and unauthorized
   Git/remote operations;
@@ -52,6 +53,12 @@ Bounded write with recommended canary or explicit waiver:
 - require lead response for any unlisted permission request; never remember a
   broader permission for convenience.
 
+Every real-write assignment must have positive evidence for every material
+capability it will use. The absence of a recorded unsupported capability is not
+proof of support. Capability evidence is bound to the exact
+provider/model/runtime/tool/profile combination and must be rechecked when a
+material dimension changes.
+
 The recommended default is to independently qualify the exact bounded-write
 profile in a disposable synthetic checkout. The canary should prove one
 legitimate in-scope edit succeeds and probes for outside-scope write, shell,
@@ -63,25 +70,26 @@ waiver must be recorded before dispatch and does not waive any other control. A
 waived real-write lane requires all of the following:
 
 - one isolated worktree/branch with one exclusive task owner;
+- non-overlapping artifact/file ownership, with one writer per artifact per
+  wave;
 - the explicit deny-by-default permission profile described above;
-- no secrets, private financial records, bank/SMS payloads, personal identifiers,
-  authentication artifacts, or other private user data in model context;
+- no secrets, private financial records, bank/SMS payloads, personal
+  identifiers, authentication artifacts, or other private user data in model
+  context;
 - no dependency installation, Git/remote mutation, destructive action, release,
   or deployment capability;
-- the normal persistent-session mentoring checkpoints for plan/assumptions,
-  failing-test evidence where applicable, interim diff/risk, verification, and
-  final diff;
+- the required lead-accepted pause gates for plan/assumptions and failing Red
+  evidence where applicable, plus any task-required interim diff/risk gate;
 - independent trusted-native inspection of the complete diff and execution of
   the required tests/verification before any result is accepted;
 - immediate abort on any unauthorized access/write, sensitive-data exposure,
-  destructive intent/action, ownership conflict, or other boundary breach.
+  ownership conflict, destructive intent/action, or other security boundary
+  breach.
 
 When the recorded waiver and all safeguards above are present, lack of a canary
 alone is not a stop condition. A material permission-profile expansion requires
 a fresh canary or a new explicit user-authorized waiver for that expanded
-profile. Read-only benchmark results remain capability evidence; lack of one
-capability such as image input does not invalidate unrelated source-only
-capability.
+profile. A waiver can never waive incident revocation or requalification.
 
 If runtime cannot enforce declared filesystem, environment, command, and network
 boundaries, require a real OS/container sandbox that does or abort external
@@ -95,17 +103,21 @@ financial records, bank/SMS payloads, personal identifiers, authentication
 artifacts, or unredacted logs in prompts, attachments, session titles, model
 context, or ledger. Use synthetic fixtures and minimum source excerpts.
 
-Stop and treat session as exposed if sensitive data appears. Abort, preserve
-only sanitized incident evidence, rotate affected credential through approved
-process, and do not reuse session.
+If sensitive data is exposed, abort immediately. Revoke write eligibility for
+the exact model/task/profile, preserve only sanitized incident evidence, rotate
+affected credentials through the approved process, and require incident review
+and requalification before that lane can write again. A user-authorized canary
+waiver cannot waive this response.
 
 ## Ownership And Git Safety
 
-- One complete task/session/worktree/owner with exclusive write responsibility.
+- One complete task/session/worktree/owner has exclusive write responsibility.
+- One writer owns each artifact/file per wave across all concurrent lanes.
+  Stop and report any ownership overlap before further edits.
 - Record base SHA before dispatch and verify it before accepting output.
 - Define task/worktree scope plus protected/forbidden paths. Permit cohesive
-  in-scope edits that the task genuinely needs; stop on another owner's scope.
-- No overlapping writer. Stop on unexpected dirty state or changed base.
+  in-scope edits only within artifacts exclusively owned by that worker.
+- Stop on unexpected dirty state or changed base.
 - Do not expose a linked worktree's `.git` pointer or shared Git directory to
   the external runtime. A trusted native pre/postflight owns base, status, and
   diff commands through a narrowly scoped Git wrapper; alternatively use a
@@ -117,51 +129,90 @@ process, and do not reuse session.
 - Inspect untracked files, ignored outputs when relevant, and the full diff
   before accepting any result.
 
-## Mentoring, Failure, And Timeout Safety
+## Mentoring, Pause Gates, Failure, And Timeout Safety
 
-Use persistent-session checkpoints for plan/assumptions, failing-test evidence
-where applicable, interim diff/risk, verification, and final diff. Observe
-status and diffs; do not request or retain hidden chain-of-thought. Send bounded
-corrections in the same session when recoverable.
+Persistent-session checkpoints are control gates, not asynchronous status
+reports:
 
-Abort immediately for secrets/private-data exposure, destructive intent or
-action, or unauthorized boundary crossing. For ordinary rule drift or a
-materially wrong but safe direction, correct explicitly and allow up to three
-materially identical rule failures on that model/task lane before stopping and
-reassigning. A failed task does not permanently disqualify the model from an
-unrelated capability.
+1. The worker pauses after plan/assumptions. The lead must explicitly accept
+   that checkpoint before implementation edits begin.
+2. Where TDD or debugging applies, the worker pauses after failing-test or
+   reproduction evidence. The lead must explicitly accept it before production
+   implementation begins.
+3. When the task brief requires an interim diff/risk checkpoint, the worker
+   pauses there and waits for explicit lead acceptance before continuing.
+4. Verification and final-diff checkpoints remain required before acceptance.
+
+Observe status and diffs; do not request or retain hidden chain-of-thought. Send
+bounded corrections in the same session when recoverable.
+
+Sensitive-data exposure, unauthorized scope access/write, or another security
+boundary breach immediately aborts the session and revokes write eligibility for
+the exact model/task/profile pending incident review and requalification. This
+revocation is non-waivable, including when the user waived the canary.
+
+For ordinary rule drift or a materially wrong but safe direction, correct
+explicitly and allow up to three materially identical rule failures on that
+model/task lane before stopping and reassigning. A failed task does not
+permanently disqualify the model from an unrelated capability.
 
 Timeouts guide task sizing, checkpoint frequency, and timeout budget. A timeout
 or silent polling interval alone is not a security failure or permanent model
 disqualification; recheck the same session and continue there when recoverable.
 
+## Independent High-Risk Verification
+
+Approved financial, schema, sync, security, architecture, authentication/RLS, or
+migration implementation by an external model requires an independent
+appropriate specialist before acceptance. External implementation does not grant
+decision authority.
+
+## Post-Task Teardown And Reuse
+
+After every accepted task, always tear down:
+
+- the model session;
+- injected credentials; and
+- the live OpenCode server.
+
+These resources are never retained as a reusable lane. Only non-sensitive
+resources such as an isolated worktree, adapter configuration, and sanitized
+task metadata may remain reusable. Record the owner, expiration, and mandatory
+cleanup deadline for every retained reusable resource.
+
 ## Sanitized Ledger
 
 Keep only operational metadata needed for traceability:
 
-- task, owner, exact provider/model, session, worktree/branch, base SHA, task
-  scope, and protected paths;
+- task, owner, exact provider/model, worktree/branch, base SHA, task scope,
+  artifact/file ownership, and protected paths;
+- positive material-capability evidence;
 - user opt-in record, approved provider, purpose, data-sharing boundary, and
   authorization expiry or review deadline;
 - permission-profile identifier, canary status or recorded user-authorized
-  waiver, timestamps, checkpoint outcomes, corrections, and terminal status;
+  waiver, eligibility status, timestamps, checkpoint acceptances, corrections,
+  and terminal status;
 - verification commands and summarized results;
 - changed-path list, disposition, retry/rule-failure count, final result, and
   risk notes.
 
 Do not retain full prompts, hidden/model reasoning, raw unnecessary tool
 transcripts, credentials, user data, source snapshots, or unnecessary diffs. Set
-explicit short retention for session logs and delete them after acceptance or
-incident window. Store no ledger entry in product data or source control unless
-project explicitly adopts a sanitized tracked format.
+explicit short retention for sanitized operational logs and delete them after
+the acceptance or incident window. Store no ledger entry in product data or
+source control unless project explicitly adopts a sanitized tracked format.
 
 ## Stop Conditions
 
-Immediately abort and escalate on sensitive-data exposure, destructive intent or
-action, unauthorized boundary crossing, or any breach of a recorded canary
-waiver safeguard. Also stop for stale base, ownership conflict, unenforceable
-security boundary, or unverifiable result. For ordinary recoverable drift, use
-the explicit same-session correction and three-identical-rule-failures policy
-above rather than weakening controls or cold-starting a new session simply to
-finish faster. Absence of a canary by itself is not a stop condition when the
-user-authorized waiver and required safeguards are recorded.
+Immediately abort and revoke the exact model/task/profile write eligibility
+pending incident review and requalification on sensitive-data exposure,
+unauthorized scope access/write, or another security boundary breach. The user
+cannot waive this response.
+
+Also stop for stale base, ownership conflict, overlapping artifact/file
+ownership, unenforceable security boundary, or unverifiable result. For ordinary
+recoverable drift, use the explicit same-session correction and
+three-identical-rule-failures policy above rather than weakening controls or
+cold-starting a new session simply to finish faster. Absence of a canary by
+itself is not a stop condition when the user-authorized waiver and required
+safeguards are recorded.

@@ -113,13 +113,17 @@ Before forming team:
 For parallel implementation:
 
 - read-only workers may share checkout;
-- concurrent writers use distinct sibling worktrees/branches with declared base,
-  dependency, and exclusive task ownership;
+- concurrent writers use distinct sibling worktrees/branches with declared
+  base, dependency, exclusive task ownership, and non-overlapping artifact/file
+  ownership;
+- one writer owns each artifact/file per wave, including shared indexes,
+  schemas, migrations, translations, specs, and generated outputs;
+- stop the affected lanes immediately if artifact/file ownership overlaps;
 - link main `node_modules` in secondary worktrees; never install another tree;
 - assign one external writer one complete task and one isolated worktree/branch;
-  avoid fragile per-file micromanagement when the task requires cohesive edits;
-- one worker owns shared indexes, schemas, migrations, translations, specs, and
-  generated outputs per wave;
+  avoid fragile per-file micromanagement inside that worker's exclusively owned
+  artifact set, but never use this flexibility to permit concurrent writers on
+  the same artifact;
 - each PR is an independently mergeable slice, not automatically one per agent.
 
 ## 5. Form The Team
@@ -204,17 +208,20 @@ Track the target over meaningful execution work rather than file count or number
 of dispatches.
 
 Do not statically confine GLM or Qwen to narrow task categories. Route
-adaptively, give each model varied task shapes over time, and update capability
-evidence from actual results. Clear unsupported capability may exclude a task;
-for example, current qualification shows `bai/glm-5.3-flash` lacks image input
-through this OpenCode path, so do not assign it work that requires seeing an
-image unless that capability is later requalified. Unsupported visual input
-must not block unrelated source, test, documentation, or implementation work.
+adaptively and update capability evidence from actual results. Every assignment
+requires **positive capability evidence** for each material capability the task
+will use. The absence of a recorded unsupported capability is not evidence of
+support. Clear unsupported capability excludes tasks that require it; current
+qualification shows `bai/glm-5.3-flash` lacks image input through this OpenCode
+path, so image-dependent work must route elsewhere until that capability is
+requalified. Unsupported visual input must not block unrelated source, test,
+documentation, or implementation work.
 
 External models may implement already-approved financial, schema, sync,
-security, or migration work when the task contract contains the authoritative
-decision and an independent appropriate specialist verifies the result. They
-must never invent, choose, approve, or silently change those decisions.
+security, architecture, authentication/RLS, or migration work when the task
+contract contains the authoritative decision and an independent appropriate
+specialist verifies the result. They must never invent, choose, approve, or
+silently change those decisions.
 
 Normal ChatGPT may own complex remote coding, tests, documentation, GitHub
 issues, branches, and PRs when explicit user authorization covers the mutation,
@@ -224,21 +231,25 @@ independently verifies the result, and retains merge control. Never ask Normal
 ChatGPT to review or change local work that has not been pushed.
 
 Before first dispatch to each external provider/model pool in a task, obtain
-explicit user opt-in and record the approved data-sharing boundary. Authorization
-may cover later bounded dispatches only while provider, model pool, data class,
-and purpose remain inside that recorded boundary. Auto-triggering team-led
-workflow never grants third-party disclosure.
+explicit user opt-in and record the approved data-sharing boundary.
+Authorization may cover later bounded dispatches only while provider, model
+pool, data class, and purpose remain inside that recorded boundary.
+Auto-triggering team-led workflow never grants third-party disclosure.
 
 External lanes do not consume native subagent slots. They still consume lead
 review and integration capacity. Cap concurrency by ready independent work with
 safe ownership, not available runtimes. One external worker owns one complete
 task, one persistent session or thread, and one exclusive isolated
-worktree/branch responsibility. Define task/worktree scope and protected paths;
-do not force a brittle per-file allowlist when cohesive in-scope edits are
-required. Lead retains control of integration and merges under Section 2.
-OpenCode never commits, pushes, opens or merges PRs, or performs other Git/GitHub
-mutations; a trusted native integration owner performs authorized Git work.
-Normal ChatGPT may perform explicitly authorized remote GitHub mutations.
+worktree/branch responsibility. Artifact/file ownership across concurrent
+writers remains non-overlapping, with one writer per artifact per wave. Define
+task/worktree scope and protected paths; do not force a brittle per-file
+allowlist inside the artifact set the worker exclusively owns. Stop on ownership
+overlap.
+
+Lead retains control of integration and merges under Section 2. OpenCode never
+commits, pushes, opens or merges PRs, or performs other Git/GitHub mutations; a
+trusted native integration owner performs authorized Git work. Normal ChatGPT
+may perform explicitly authorized remote GitHub mutations.
 
 When OpenCode is selected, load
 [`$opencode-team-delegation`](../../.agents/skills/opencode-team-delegation/SKILL.md)
@@ -249,29 +260,37 @@ separately reviewed and approved; they are not workflow dependencies.
 ### External Worker Checkpoints And Learning
 
 Mentor external workers through persistent-session checkpoints rather than
-restarting on every miss. Request and inspect, as applicable:
+restarting on every miss. These are pause gates when specified below, not merely
+asynchronous status reports:
 
-1. plan, assumptions, and intended scope before edits;
-2. failing-test or reproduction evidence where TDD/debugging applies;
-3. interim diff and risk checkpoint before the task grows difficult to unwind;
-4. verification evidence;
-5. final full diff and completion report.
+1. The worker pauses after plan/assumptions and intended scope. The lead must
+   explicitly accept this checkpoint before implementation edits begin.
+2. Where TDD or debugging applies, the worker presents failing-test or
+   reproduction evidence, pauses, and waits for explicit lead acceptance before
+   production implementation begins.
+3. When the task brief requires an interim diff/risk checkpoint, the worker
+   pauses there and waits for explicit lead acceptance before continuing.
+4. Verification evidence is inspected before acceptance.
+5. The final full diff and completion report are inspected before acceptance.
 
 Observe structured status, messages, tool results, and diffs. Do not claim
-access to or request hidden chain-of-thought. Interrupt only for scope drift,
-unsafe action, ownership conflict, or materially wrong direction. Send bounded
-corrections in the same session/thread so the worker can incorporate them and
-capability evidence reflects learning rather than repeated cold starts.
+access to or request hidden chain-of-thought. Send bounded corrections in the
+same session/thread when the lane remains safe and recoverable.
 
-Abort immediately for secrets/private-data exposure, destructive intent or
-action, or unauthorized boundary crossing. For ordinary rule drift or a
-materially wrong but safe direction, correct explicitly and continue the same
-session when recoverable. After three materially identical rule failures on the
-same model/task lane, mark that lane failed and reassign. One failed task does
-not permanently disqualify a model from unrelated capability. Timeouts guide
-task size, checkpoint frequency, and timeout budget; they do not alone
-permanently disqualify a model, and a recoverable timed-out observation should
-continue in the same session after status is rechecked.
+Sensitive-data exposure, unauthorized scope access/write, or another security
+boundary breach immediately aborts the lane and revokes write eligibility for
+the exact model/task/profile pending incident review and requalification. A
+user-authorized canary waiver cannot waive or override this rule.
+
+For ordinary rule drift or a materially wrong but safe direction, correct
+explicitly and continue the same session when recoverable. After three
+materially identical rule failures on the same model/task lane, mark that lane
+failed and reassign. One failed task does not permanently disqualify a model
+from unrelated capability.
+
+Timeouts guide task size, checkpoint frequency, and timeout budget; they do not
+alone permanently disqualify a model. A recoverable timed-out observation
+should continue in the same session after status is rechecked.
 
 ## 7. Ownership Brief And Context
 
@@ -280,21 +299,27 @@ Every task brief states:
 - persona, objective, and reason;
 - complete task/worktree responsibility, source of truth, and protected or
   forbidden paths/actions;
+- exclusive artifact/file ownership for the wave and any shared-artifact owner;
 - inputs, dependencies, and applicable workflows;
+- positive evidence for every material capability used by the task;
 - acceptance criteria, evidence, and verification;
 - external-provider data-sharing boundary when applicable;
+- explicit checkpoint pause gates;
 - escalation/stop conditions and expected completion report.
 
 For write work include:
 
 > You are not alone in the codebase. Own the complete assigned task inside your
-> isolated worktree/branch. Make whatever cohesive in-scope edits are genuinely
-> required, but do not cross protected paths or another owner's responsibility,
-> revert others' work, or broaden the task. Stop and report ownership overlap.
+> isolated worktree/branch and only the artifacts assigned to you for this wave.
+> Make whatever cohesive in-scope edits those exclusively owned artifacts
+> genuinely require, but do not cross protected paths, another owner's
+> responsibility, or another writer's artifact/file ownership. Stop and report
+> any ownership overlap.
 
-One task/worktree has one write owner at a time; reviewers stay read-only.
-Briefs must be self-contained. Use smallest inherited context that preserves
-correctness:
+One task/worktree has one write owner at a time, and one writer owns each
+artifact/file per wave. Reviewers stay read-only. Complete-task ownership never
+permits overlapping concurrent edits to the same artifact. Briefs must be
+self-contained. Use smallest inherited context that preserves correctness:
 
 - `fork_turns: "none"` for isolated deterministic inventory/check work when
   brief contains all required context;
@@ -314,8 +339,9 @@ Native slot capacity is not the execution target because external lanes do not
 consume native subagent slots. Fill only ready ownership-safe work, use external
 lanes aggressively enough to pursue the Section 6 allocation target, and keep
 independent review capacity for high-risk work. Multiple writers are allowed
-only when task/worktree ownership, state, and merge dependencies are genuinely
-independent.
+only when task/worktree ownership, artifact/file ownership, state, and merge
+dependencies are genuinely independent. One writer owns each artifact per wave;
+stop affected lanes immediately when overlap is discovered.
 
 Reuse a completed worker through follow-up when context and skills fit the next
 task. Continue a recoverable external task in its same persistent session. Spawn
@@ -415,6 +441,12 @@ Then implement minimum green change and refactor while green. QA owns
 plan/coverage audit; implementer owns production code; lead verifies red/green
 evidence only.
 
+For external workers, the Section 6 pause gates also apply: plan/assumptions
+must receive explicit lead acceptance before implementation edits, and
+applicable Red/reproduction evidence must receive explicit lead acceptance
+before production implementation. A task-required interim diff/risk checkpoint
+also requires explicit lead acceptance before work continues.
+
 ### Review Gate
 
 Implementation owner cannot self-approve high-risk work. Review in order:
@@ -431,6 +463,10 @@ duplicates and returns fixes to owner. Product/business/schema/sync findings
 return to user gate. Deferred valid work becomes deduplicated follow-up issue
 only when GitHub mutation is authorized.
 
+External implementation of approved financial, schema, sync, security,
+architecture, authentication/RLS, or migration work requires an independent
+appropriate specialist before acceptance.
+
 ### Handoff Gate
 
 Focused tests, affected Nx targets, lint/type checks, integration tests, honest
@@ -443,15 +479,28 @@ Lead updates user at kickoff, wave transition, blocker, review, and completion.
 During active tool work, update at least every 60 seconds. Workers report
 milestones, not command narration.
 
-For external workers, record provider/model/session or thread, immutable base,
-worktree/branch, task scope, checkpoints, corrections, final result, and
-independent verification. Retain operational evidence only; never retain hidden
-reasoning, secrets, raw unnecessary logs, or private data.
+For external workers, record provider/model, immutable base, worktree/branch,
+task scope, artifact/file ownership, positive material-capability evidence,
+checkpoint acceptances, corrections, final result, independent verification,
+permission-profile eligibility state, and any canary or waiver status. Retain
+operational evidence only; never retain hidden reasoning, secrets, raw
+unnecessary logs, or private data.
+
+After every accepted OpenCode task, always tear down the model session, injected
+credentials, and live OpenCode server. These are never reusable-lane resources.
+Only non-sensitive resources such as the isolated worktree, adapter
+configuration, and sanitized task metadata may remain reusable, with a recorded
+owner, expiration, and mandatory cleanup deadline.
 
 Worker report includes result, changed files/artifacts, tests and evidence,
 assumptions, blockers, overlap/integration risks, and recommended next ready
 task. At each wave end, lead checks evidence, ownership, tests, dependencies,
 and ledgers before assigning more work.
+
+Sensitive-data exposure, unauthorized scope access/write, or another security
+boundary breach immediately aborts the affected external lane and revokes write
+eligibility for the exact model/task/profile pending incident review and
+requalification. User waiver cannot waive this rule.
 
 Pause affected lane for source conflict, material unresolved decision, missing
 gate, ownership overlap, incomplete dependency, unsafe worktree, unexplained

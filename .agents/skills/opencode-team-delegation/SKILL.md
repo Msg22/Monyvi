@@ -25,25 +25,29 @@ unavailable, stop that lane; do not silently substitute another model.
 Do not statically confine either model to narrow categories. Route adaptively,
 let each model attempt varied source, test, documentation, review, and
 implementation work, including substantial tasks when its demonstrated
-capability and the task contract support them, and update capability evidence
-from actual results. A clear unsupported capability excludes only tasks that
-need that capability. Current qualification shows `bai/glm-5.3-flash` lacks
-image input through this OpenCode path, so do not assign it image-dependent
-visual comparison until that capability is requalified; this does not block its
-unrelated source work.
+capability and the task contract support them.
+
+Every assigned task requires **positive capability evidence** for each material
+capability it will use, such as source reading, repository editing, test
+execution, image input, or a required tool surface. The absence of a recorded
+unsupported capability is not evidence that the model supports it. Update
+capability evidence from actual results. Current qualification shows
+`bai/glm-5.3-flash` lacks image input through this OpenCode path, so do not
+assign it image-dependent visual comparison until that capability is
+requalified; this does not block unrelated source work.
 
 External models may implement already-approved financial, schema, sync,
-security, authentication/RLS, or migration work when the task packet contains
-the authoritative decision and an independent appropriate specialist verifies
-the result. They must never invent, choose, approve, or silently alter those
-decisions.
+security, architecture, authentication/RLS, or migration work when the task
+packet contains the authoritative decision and an independent appropriate
+specialist verifies the result. They must never invent, choose, approve, or
+silently alter those decisions.
 
 Read-only qualification produces **capability evidence**, not an all-or-nothing
 model certification. Use representative read-only benchmarks to learn what the
-exact model/runtime/tool/profile combination can reliably do, record unsupported
-capabilities, and route future tasks accordingly. One failed benchmark does not
-permanently disqualify unrelated capabilities, and inability to consume images
-must not block source-only work.
+exact model/runtime/tool/profile combination can reliably do, record supported
+and unsupported capabilities, and route future tasks accordingly. One failed
+benchmark does not permanently disqualify unrelated capabilities, and inability
+to consume images must not block source-only work.
 
 The bounded-write canary is the recommended default before real OpenCode writes:
 independently qualify the exact permission profile in a disposable synthetic
@@ -53,15 +57,20 @@ destructive action probes are denied.
 
 The user may explicitly waive that canary for a specific model/task/profile.
 Record the user-authorized exception before dispatch. A waiver does not weaken
-the remaining controls: use one isolated exclusive task/worktree, an explicit
-deny-by-default profile, no secrets or private financial data, no dependency
-installs, Git/remote mutations, destructive actions, releases, or deployments,
-the normal mentoring checkpoints, and independent trusted-native inspection of
-the complete diff plus required tests/verification before acceptance. Abort
-immediately on any boundary breach. When that exception and those safeguards are
-recorded, lack of a canary alone must not block the authorized real write. Every
-real result still requires independent Monyvi verification; model confidence is
-not evidence.
+the remaining controls: use one isolated exclusive task/worktree,
+non-overlapping artifact ownership, an explicit deny-by-default profile, no
+secrets or private financial data, no dependency installs, Git/remote mutations,
+destructive actions, releases, or deployments, the required mentoring pause
+gates, and independent trusted-native inspection of the complete diff plus
+required tests/verification before acceptance.
+
+Sensitive-data exposure, unauthorized scope access/write, or another security
+boundary breach immediately aborts the lane and revokes write eligibility for
+that exact model/task/profile pending incident review and requalification. A
+user waiver cannot waive or override this revocation rule. When the canary
+exception and all safeguards are recorded, lack of a canary alone must not
+block the authorized real write. Every real result still requires independent
+Monyvi verification; model confidence is not evidence.
 
 ## Prepare And Dispatch
 
@@ -72,32 +81,39 @@ starting, monitoring, following up, cancelling, or accepting a session.
 Required dispatch contract:
 
 1. Verify OpenCode runtime, authentication, exact model, loopback server health,
-   explicit permission profile, relevant capability evidence, and current
-   user-approved data-sharing boundary.
-2. Allocate one complete task/session/worktree/owner with immutable base SHA and
-   exclusive worktree/branch responsibility. Define task/worktree scope and
-   protected paths; avoid brittle per-file micromanagement when cohesive in-scope
-   edits are genuinely required.
+   explicit permission profile, positive evidence for every material capability,
+   and the current user-approved data-sharing boundary.
+2. Allocate one complete task/session/worktree/owner with immutable base SHA,
+   exclusive worktree/branch responsibility, and non-overlapping artifact/file
+   ownership. One writer owns each artifact per wave. Stop on ownership overlap.
+   Avoid brittle per-file micromanagement inside the artifact set that this
+   worker exclusively owns.
 3. Send a self-contained brief containing source of truth, acceptance criteria,
-   forbidden actions, verification expectations, checkpoint plan, timeout
-   budget, and stop conditions.
-4. Mentor through the same persistent session: inspect plan/assumptions,
-   failing-test evidence where applicable, interim diff/risk, verification, and
-   final diff checkpoints. Send bounded corrections in that same session when
-   recoverable.
-5. Observe structured status/events and diffs. Do not claim access to hidden
-   chain-of-thought. Interrupt immediately only for unsafe action, ownership
-   conflict, unauthorized boundary crossing, or materially wrong direction.
-6. Abort immediately for secrets/private-data exposure, destructive intent or
-   action, or unauthorized boundary crossing. Otherwise correct explicit rule
-   drift and allow up to three materially identical rule failures before marking
-   that model/task lane failed and reassigning.
-7. Inspect complete diff and partial work before accepting or reassigning.
-   Reject stale-base or out-of-scope changes; never land unverified output.
-8. Trusted native owner runs project gates and performs authorized integration,
-   commits, pushes, and PR mutations. Lead coordinates and independently
-   verifies. Escalate any unapproved decision through the applicable user and
-   authoritative-documentation gate; never resolve it inside the external lane.
+   forbidden actions, verification expectations, explicit checkpoint gates,
+   timeout budget, and stop conditions.
+4. Require the worker to pause after its plan/assumptions checkpoint. The lead
+   must review and explicitly accept it before implementation edits begin.
+5. Where TDD or debugging applies, require failing-test or reproduction evidence
+   and another explicit lead acceptance before production implementation begins.
+6. When the task brief requires an interim diff/risk checkpoint, require the
+   worker to pause there and wait for explicit lead acceptance before
+   continuing.
+7. Observe structured status/events and diffs. Do not claim access to hidden
+   chain-of-thought. Send bounded corrections in the same session when the lane
+   remains safe and recoverable.
+8. On secrets/private-data exposure, unauthorized scope access/write, or another
+   security boundary breach, abort immediately and revoke write eligibility for
+   the exact model/task/profile pending incident review and requalification.
+   Otherwise, correct ordinary rule drift and allow up to three materially
+   identical rule failures before marking that model/task lane failed and
+   reassigning.
+9. Inspect the complete diff and partial work before accepting or reassigning.
+   Reject stale-base, ownership-overlap, or out-of-scope changes; never land
+   unverified output.
+10. Trusted native owner runs project gates and performs authorized integration,
+    commits, pushes, and PR mutations. Lead coordinates and independently
+    verifies. Escalate any unapproved decision through the applicable user and
+    authoritative-documentation gate; never resolve it inside the external lane.
 
 Timeouts guide task size, checkpoint frequency, and timeout budget; they do not
 alone permanently disqualify a model. Treat an observation timeout as unknown,
@@ -118,20 +134,26 @@ responses, cancellation, and diff inspection directly.
 
 ## Completion Evidence
 
-Record task ID, exact provider/model identifier, session ID, worktree/branch,
-base SHA, complete task scope, protected paths, permission profile, canary status
-or recorded user-authorized waiver, start/end state, checkpoint outcomes,
-corrections, verification commands/results, changed paths, diff disposition,
-retry/rule-failure count, final result, and remaining risks. Completion requires:
+Record task ID, exact provider/model identifier, positive capability evidence,
+session ID, worktree/branch, base SHA, complete task scope, artifact/file
+ownership, protected paths, permission profile, canary status or recorded
+user-authorized waiver, checkpoint acceptances, corrections, verification
+commands/results, changed paths, diff disposition, retry/rule-failure count,
+final result, and remaining risks.
 
-- no forbidden or out-of-scope action;
-- current base and exclusive ownership still valid;
+Completion requires:
+
+- no forbidden, out-of-scope, or overlapping artifact/file change;
+- current base, exclusive worktree ownership, and artifact ownership still
+  valid;
 - expected artifact and structured result present;
 - independent gates pass at required scope;
 - sanitized bounded-retention ledger updated without hidden reasoning, secrets,
   raw unnecessary logs, or private data;
-- server, session artifacts, injected credentials, permission profile, and
-  isolated checkout are torn down; a reusable lane may instead record a short
-  expiration, owner, and mandatory teardown deadline while authorization and
-  data-sharing scope remain valid;
 - lead accepts or rejects every changed path and retains merge control.
+
+After every accepted task, always tear down the model session, injected
+credentials, and live OpenCode server. These are never reusable-lane resources.
+Only non-sensitive resources such as the isolated worktree, adapter
+configuration, and sanitized task metadata may remain for reuse, and only with a
+recorded owner, expiration, and mandatory cleanup deadline.
