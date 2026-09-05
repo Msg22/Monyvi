@@ -15,7 +15,8 @@
 
 - `metals-edit.test.tsx`: 5/5 Green for shared order, locked Metal, direct Save, metadata/material state, physical-form-only copy, terminal immutability, RTL/reflow, pending lock, focus, and bottom inset.
 - `edit-metal-holding-preview-service.test.ts`: 4/4 Green for metadata separation, affected-only material comparison, restored deltas, physical-form-only consequences, and terminal policy.
-- The Edit SQLite command suite currently reaches the merged payload registry but is blocked before writes because the shared foundation drops the supplied Cairo validation date while revalidating the envelope. A dedicated upstream owner is fixing that shared contract; no current SQLite Green is claimed.
+- The Edit SQLite command suite is 5/5 Green against the real WatermelonDB test schema after the merged foundation validation-context fix.
 - Add/Edit UI regression: 12/12 Green. Preview, validation, rate provenance, and EN/AR resource contracts are Green on the Slice 7 stack.
-- Mobile TypeScript and full mobile ESLint with project rules: Green on base `99b9065`.
+- Full focused Add/Edit aggregate: 12 suites, 63/63 Green. Mobile TypeScript and full mobile ESLint with project rules are Green on base `be7ce054`.
+- Runtime route-to-command activation still depends on unfinished Slice 4 coordinator T043. T092 remains open with Maestro/device verification pending.
 - Maestro/native device execution remains pending under the active physical-device QA lock. T092 stays open; no native, visual, timing, or assistive-technology result is claimed.
