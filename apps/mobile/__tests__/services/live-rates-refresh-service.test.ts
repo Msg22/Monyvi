@@ -32,14 +32,28 @@ import { refreshLiveMarketRates } from "@/services/live-rates-refresh-service";
 
 interface TestDatabase {
   readonly database: Database;
+  readonly fetch: jest.Mock;
+  readonly get: jest.Mock;
+  readonly query: jest.Mock;
   readonly write: jest.Mock;
 }
 
-function createDatabase(): TestDatabase {
+function createDatabase(
+  observations: readonly { id: string; createdAt: Date }[] = []
+): TestDatabase {
   const write = jest.fn(async (action: () => Promise<void>): Promise<void> => {
     await action();
   });
-  return { database: { write } as unknown as Database, write };
+  const fetch = jest.fn(() => Promise.resolve(observations));
+  const query = jest.fn(() => ({ fetch }));
+  const get = jest.fn(() => ({ query }));
+  return {
+    database: { get, write } as unknown as Database,
+    fetch,
+    get,
+    query,
+    write,
+  };
 }
 
 describe("refreshLiveMarketRates", () => {
@@ -101,6 +115,25 @@ describe("refreshLiveMarketRates", () => {
     );
   });
 
+  it("continues observation pagination after the latest local tuple", async () => {
+    const { database, fetch, get, query } = createDatabase([
+      {
+        id: "018f0c7a-1234-7abc-8def-000000000010",
+        createdAt: new Date("2030-01-02T03:04:05.000Z"),
+      },
+    ]);
+
+    await refreshLiveMarketRates(database);
+
+    expect(get).toHaveBeenCalledWith("market_rate_observations");
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(mockPullMarketRateObservations).toHaveBeenCalledWith({
+      createdAt: "2030-01-02T03:04:05.000Z",
+      id: "018f0c7a-1234-7abc-8def-000000000010",
+    });
+  });
+
   it.each([
     ["snapshot request", mockPullMarketRates],
     ["observation request", mockPullMarketRateObservations],
@@ -117,15 +150,7 @@ describe("refreshLiveMarketRates", () => {
 
   it("rejects an atomic local write failure without deleting cached rows", async () => {
     const cachedRowIds = ["cached-rate", "cached-observation"];
-    const write = jest.fn(
-      async (action: () => Promise<void>): Promise<void> => {
-        await action();
-      }
-    );
-    const database = {
-      write,
-      cachedRowIds,
-    } as unknown as Database;
+    const { database, write } = createDatabase();
     mockApplyRemoteChanges.mockRejectedValueOnce(
       new Error("local write failed")
     );
@@ -140,8 +165,7 @@ describe("refreshLiveMarketRates", () => {
   it("consumes a namespaced development fixture failure once before remote reads", async () => {
     markerValues.set(fixtureMarkerKey, "armed");
     const cachedRowIds = ["cached-rate", "cached-observation"];
-    const write = jest.fn();
-    const database = { cachedRowIds, write } as unknown as Database;
+    const { database, write } = createDatabase();
 
     await expect(refreshLiveMarketRates(database)).rejects.toThrow(
       "e2e_live_rates_refresh_failure_once"

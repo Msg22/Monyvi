@@ -62,6 +62,7 @@ interface E2ePreflightModule {
       forceStop: () => void;
       startApp: () => void;
       setConnectivity?: (isOffline: boolean) => void;
+      materializeInvalidRate?: () => void;
       waitForReady: () => void;
       waitForSync: () => void;
     }
@@ -449,7 +450,7 @@ describe("e2e-preflight", () => {
 
   it("clears the pull-only observation cache before a Metals profile launch", () => {
     expect(preflight.buildMetalsLocalObservationCleanupSql()).toBe(
-      'delete from "market_rate_observations" where "source" = \'e2e_fixture\';'
+      'delete from "market_rate_observations" where "source" like \'e2e_fixture:%\';'
     );
   });
 
@@ -509,7 +510,7 @@ describe("e2e-preflight", () => {
       sql.indexOf('delete from "accounts"')
     );
     expect(sql).toContain(
-      'delete from "market_rate_observations" where "source" = \'e2e_fixture\';'
+      'delete from "market_rate_observations" where "source" like \'e2e_fixture:%\';'
     );
     const marketRateStatement = sql
       .split("\n")
@@ -615,6 +616,31 @@ describe("e2e-preflight", () => {
       }
     );
     expect(missingEvents).toEqual([]);
+
+    const invalidEvents: string[] = [];
+    preflight.relaunchE2eFixtureIfRequired(
+      {
+        locale: "en",
+        persistenceState: "local",
+        rateState: "invalid",
+        theme: "light",
+        textScale: 1,
+      },
+      {
+        waitForSync: () => invalidEvents.push("sync"),
+        materializeInvalidRate: () => invalidEvents.push("invalidate"),
+        forceStop: () => invalidEvents.push("stop"),
+        startApp: () => invalidEvents.push("start"),
+        waitForReady: () => invalidEvents.push("ready"),
+      }
+    );
+    expect(invalidEvents).toEqual([
+      "sync",
+      "invalidate",
+      "stop",
+      "start",
+      "ready",
+    ]);
   });
 
   it("seeds an offline-cached profile online before relaunching the same database offline", () => {

@@ -230,7 +230,8 @@ describe("Metals deterministic E2E fixture registry", () => {
       expect.arrayContaining([
         expect.objectContaining({
           instrument_code: "metal:GOLD",
-          quality: "invalid",
+          quality: "valid",
+          source: "e2e_fixture:metals-invalid",
         }),
         expect.objectContaining({
           instrument_code: "metal:SILVER",

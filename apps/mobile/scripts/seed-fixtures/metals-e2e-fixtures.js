@@ -150,11 +150,8 @@ function buildMetalsRows(scenario) {
             unit: rate.unit,
             orientation: rate.orientation,
             provider_observed_at: providerObservedAt,
-            source: "e2e_fixture",
-            quality:
-              scenario.rateState === "invalid" && rate.label === "gold"
-                ? "invalid"
-                : "valid",
+            source: `e2e_fixture:${seedScope}`,
+            quality: "valid",
             created_at: currentTimestamp,
           })),
     };

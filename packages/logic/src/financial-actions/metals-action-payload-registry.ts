@@ -3,6 +3,8 @@ import type {
   FinancialActionValidationInput,
   RegisteredActionPayload,
 } from "./action-registry";
+import { resolveMetalsCurrencyMinorUnits } from "../metals/currency-minor-units";
+import type { CurrencyInstrumentCode } from "../metals/rate-reference";
 
 export interface MetalsSellPayloadV1 extends RegisteredActionPayload {
   readonly feeMinorUnits: string;
@@ -143,6 +145,19 @@ function isDate(value: unknown): value is string {
   );
 }
 
+function isCompatibleWithCurrencyMinorUnits(
+  value: string,
+  currency: string
+): boolean {
+  const decimalPlaces = resolveMetalsCurrencyMinorUnits(
+    `currency:${currency}` as CurrencyInstrumentCode
+  );
+  return (
+    decimalPlaces !== null &&
+    (value.split(".")[1]?.length ?? 0) <= decimalPlaces
+  );
+}
+
 export function createMetalsActionPayloadRegistry(
   dependencies: Dependencies
 ): MetalsActionPayloadRegistry {
@@ -247,6 +262,10 @@ export function createMetalsActionPayloadRegistry(
       ) ||
       typeof value.purchaseCurrency !== "string" ||
       !APPROVED_CURRENCIES.has(value.purchaseCurrency) ||
+      !isCompatibleWithCurrencyMinorUnits(
+        value.purchasePriceDecimal,
+        value.purchaseCurrency
+      ) ||
       !validDate(value.purchaseDate, input)
     )
       fail();
@@ -278,7 +297,8 @@ export function createMetalsActionPayloadRegistry(
     rawValue: unknown,
     roles: readonly string[],
     metalType: "GOLD" | "SILVER",
-    currency: string
+    purchaseCurrency: string,
+    proceedsCurrency = purchaseCurrency
   ): readonly RegisteredActionPayload[] => {
     if (!Array.isArray(rawValue)) fail();
     const value = rawValue as RawPayloadValue[];
@@ -335,6 +355,10 @@ export function createMetalsActionPayloadRegistry(
         fail();
       const metalRole =
         raw.role === "acquisition_metal" || raw.role === "terminal_metal";
+      const expectedCurrency =
+        raw.role === "terminal_proceeds_currency"
+          ? proceedsCurrency
+          : purchaseCurrency;
       const currencyCode = raw.instrumentCode.slice("currency:".length);
       if (
         (raw.kind === "metal") !== metalRole ||
@@ -343,7 +367,7 @@ export function createMetalsActionPayloadRegistry(
             raw.unit !== "usd_per_pure_gram" ||
             raw.orientation !== "quote_per_base")) ||
         (raw.kind === "currency" &&
-          (raw.instrumentCode !== `currency:${currency}` ||
+          (raw.instrumentCode !== `currency:${expectedCurrency}` ||
             !APPROVED_CURRENCIES.has(currencyCode) ||
             !(
               (raw.unit === "usd_per_currency_unit" &&
@@ -581,6 +605,7 @@ export function createMetalsActionPayloadRegistry(
       "netProceedsMinorUnits",
       "notes",
       "predecessorEventId",
+      "purchaseCurrency",
       "rateSnapshots",
       "reversesEventId",
       "saleCurrency",
@@ -593,6 +618,8 @@ export function createMetalsActionPayloadRegistry(
       (value.metalType !== "GOLD" && value.metalType !== "SILVER") ||
       typeof value.saleCurrency !== "string" ||
       !APPROVED_CURRENCIES.has(value.saleCurrency) ||
+      typeof value.purchaseCurrency !== "string" ||
+      !APPROVED_CURRENCIES.has(value.purchaseCurrency) ||
       !boundedText(value.notes, MAX_NOTES_UTF8_BYTES, true) ||
       typeof value.grossProceedsMinorUnits !== "string" ||
       typeof value.feeMinorUnits !== "string" ||
@@ -609,7 +636,7 @@ export function createMetalsActionPayloadRegistry(
     const gross = BigInt(value.grossProceedsMinorUnits);
     const fee = BigInt(value.feeMinorUnits);
     const net = BigInt(value.netProceedsMinorUnits);
-    if (fee > gross || net !== gross - fee) fail();
+    if (gross === 0n || fee > gross || net !== gross - fee) fail();
     return {
       holdingId: value.holdingId,
       expectedHoldingRevision: value.expectedHoldingRevision,
@@ -617,6 +644,7 @@ export function createMetalsActionPayloadRegistry(
       reversesEventId: null,
       metalType: value.metalType,
       saleDate: value.saleDate,
+      purchaseCurrency: value.purchaseCurrency,
       saleCurrency: value.saleCurrency,
       grossProceedsMinorUnits: value.grossProceedsMinorUnits,
       feeMinorUnits: value.feeMinorUnits,
@@ -630,6 +658,7 @@ export function createMetalsActionPayloadRegistry(
           "terminal_proceeds_currency",
         ],
         value.metalType as "GOLD" | "SILVER",
+        value.purchaseCurrency,
         value.saleCurrency
       ),
     };

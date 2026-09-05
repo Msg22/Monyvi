@@ -58,7 +58,10 @@ function acquisitionSnapshots(): ReadonlyArray<Record<string, string | null>> {
   ];
 }
 
-function terminalSnapshots(): ReadonlyArray<Record<string, string | null>> {
+function terminalSnapshots(
+  purchaseCurrency = "EGP",
+  proceedsCurrency = "EGP"
+): ReadonlyArray<Record<string, string | null>> {
   return [
     {
       referenceId: IDS.terminalMetal,
@@ -78,8 +81,8 @@ function terminalSnapshots(): ReadonlyArray<Record<string, string | null>> {
       referenceId: IDS.terminalPurchaseCurrency,
       role: "terminal_purchase_currency",
       kind: "currency",
-      instrumentCode: "currency:EGP",
-      valueDecimal: "0.02",
+      instrumentCode: `currency:${purchaseCurrency}`,
+      valueDecimal: purchaseCurrency === "USD" ? "1" : "0.02",
       unit: "usd_per_currency_unit",
       orientation: "quote_per_base",
       providerObservedAt: "2026-08-31T10:15:30.123Z",
@@ -92,8 +95,8 @@ function terminalSnapshots(): ReadonlyArray<Record<string, string | null>> {
       referenceId: IDS.terminalProceedsCurrency,
       role: "terminal_proceeds_currency",
       kind: "currency",
-      instrumentCode: "currency:EGP",
-      valueDecimal: "0.02",
+      instrumentCode: `currency:${proceedsCurrency}`,
+      valueDecimal: proceedsCurrency === "USD" ? "1" : "0.02",
       unit: "usd_per_currency_unit",
       orientation: "quote_per_base",
       providerObservedAt: "2026-08-31T10:15:30.123Z",
@@ -159,6 +162,7 @@ function payloadFor(
         reversesEventId: null,
         metalType: "GOLD",
         saleDate: "2026-08-31",
+        purchaseCurrency: "EGP",
         saleCurrency: "EGP",
         grossProceedsMinorUnits: "16500000",
         feeMinorUnits: "80000",
@@ -293,6 +297,12 @@ describe("approved Metals financial action payload registry", () => {
       { ...add, expectedHoldingRevision: "0" },
       { ...sell, expectedHoldingRevision: "01" },
       { ...sell, grossProceedsMinorUnits: "16500000.0" },
+      {
+        ...sell,
+        grossProceedsMinorUnits: "0",
+        feeMinorUnits: "0",
+        netProceedsMinorUnits: "0",
+      },
       { ...sell, feeMinorUnits: "16500001" },
       { ...sell, netProceedsMinorUnits: "16420001" },
       { ...add, metalType: "PLATINUM" },
@@ -303,6 +313,10 @@ describe("approved Metals financial action payload registry", () => {
       {
         ...add,
         materialFacts: { ...materialFacts(), purchaseCurrency: "BTC" },
+      },
+      {
+        ...add,
+        materialFacts: { ...materialFacts(), purchasePriceDecimal: "1.001" },
       },
       {
         ...add,
@@ -324,6 +338,42 @@ describe("approved Metals financial action payload registry", () => {
     expect(() =>
       definition("sell", "metals.sell/v2").validatePayload(
         sell,
+        VALIDATION_INPUT
+      )
+    ).not.toThrow();
+
+    const kwdAdd = {
+      ...add,
+      materialFacts: {
+        ...materialFacts(),
+        purchaseCurrency: "KWD",
+        purchasePriceDecimal: "1.001",
+      },
+      rateSnapshots: acquisitionSnapshots().map((snapshot) =>
+        snapshot.kind === "currency"
+          ? { ...snapshot, instrumentCode: "currency:KWD" }
+          : snapshot
+      ),
+    };
+    expect(() =>
+      definition("add", "metals.add/v1").validatePayload(
+        kwdAdd,
+        VALIDATION_INPUT
+      )
+    ).not.toThrow();
+  });
+
+  it("validates terminal purchase and proceeds currencies independently", () => {
+    const crossCurrencySale = {
+      ...payloadFor("sell", "metals.sell/v2"),
+      purchaseCurrency: "EGP",
+      saleCurrency: "USD",
+      rateSnapshots: terminalSnapshots("EGP", "USD"),
+    };
+
+    expect(() =>
+      definition("sell", "metals.sell/v2").validatePayload(
+        crossCurrencySale,
         VALIDATION_INPUT
       )
     ).not.toThrow();

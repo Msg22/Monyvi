@@ -372,7 +372,17 @@ function inspectE2eRefreshFailureState(profileName, dependencies = {}) {
 }
 
 function buildMetalsLocalObservationCleanupSql() {
-  return `delete from "${metalsObservationTableName}" where "source" = 'e2e_fixture';`;
+  return `delete from "${metalsObservationTableName}" where "source" like 'e2e_fixture:%';`;
+}
+
+function materializeInvalidMetalsObservation() {
+  const source = "e2e_fixture:e2e-metals-invalid-local-en-light";
+  const output = runE2eWatermelonSql(
+    `update "${metalsObservationTableName}" set "quality" = 'invalid' where "source" = '${source}' and "instrument_code" = 'metal:GOLD';`
+  );
+  if (output) {
+    throw new Error(`Failed to materialize the invalid Metals rate: ${output}`);
+  }
 }
 
 function buildIdDeleteStatement(table, ids) {
@@ -698,6 +708,11 @@ function relaunchE2eFixtureIfRequired(settings, dependencies = {}) {
 
   const waitForSync = dependencies.waitForSync ?? waitForE2eMetalsObservation;
   waitForSync();
+  if (settings.rateState === "invalid") {
+    const materializeInvalidRate =
+      dependencies.materializeInvalidRate ?? materializeInvalidMetalsObservation;
+    materializeInvalidRate();
+  }
 
   const forceStop = dependencies.forceStop ?? forceStopApp;
   const startApp = dependencies.startApp ?? startAppWithoutChangingPermissions;
@@ -715,7 +730,12 @@ function relaunchE2eFixtureIfRequired(settings, dependencies = {}) {
     return;
   }
 
-  if (settings.persistenceState !== "restart") return;
+  if (
+    settings.persistenceState !== "restart" &&
+    settings.rateState !== "invalid"
+  ) {
+    return;
+  }
 
   forceStop();
   startApp();

@@ -118,6 +118,7 @@ SET search_path = ''
 AS $$
 DECLARE
   v_snapshot jsonb;
+  v_purchase_currency text;
   v_sale_currency text;
   v_metal_type text;
 BEGIN
@@ -126,7 +127,7 @@ BEGIN
       IS DISTINCT FROM ARRAY[
         'expectedHoldingRevision', 'feeMinorUnits', 'grossProceedsMinorUnits',
         'holdingId', 'metalType', 'netProceedsMinorUnits', 'notes',
-        'predecessorEventId', 'rateSnapshots', 'reversesEventId',
+        'predecessorEventId', 'purchaseCurrency', 'rateSnapshots', 'reversesEventId',
         'saleCurrency', 'saleDate'
       ]::text[]
     OR private.metal_action_expected_revision_v1(
@@ -152,6 +153,13 @@ BEGIN
       'CNY', 'INR', 'KRW', 'KPW', 'SGD', 'HKD', 'MYR', 'AUD', 'NZD',
       'CAD', 'SEK', 'NOK', 'DKK', 'ISK', 'TRY', 'RUB', 'ZAR'
     )
+    OR jsonb_typeof(p_payload -> 'purchaseCurrency') IS DISTINCT FROM 'string'
+    OR p_payload ->> 'purchaseCurrency' NOT IN (
+      'EGP', 'SAR', 'AED', 'KWD', 'QAR', 'BHD', 'OMR', 'JOD', 'IQD',
+      'LYD', 'TND', 'MAD', 'DZD', 'USD', 'EUR', 'GBP', 'JPY', 'CHF',
+      'CNY', 'INR', 'KRW', 'KPW', 'SGD', 'HKD', 'MYR', 'AUD', 'NZD',
+      'CAD', 'SEK', 'NOK', 'DKK', 'ISK', 'TRY', 'RUB', 'ZAR'
+    )
     OR jsonb_typeof(p_payload -> 'saleDate') IS DISTINCT FROM 'string'
     OR (p_payload ->> 'saleDate') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
     OR to_char(to_date(p_payload ->> 'saleDate', 'YYYY-MM-DD'), 'YYYY-MM-DD')
@@ -161,7 +169,7 @@ BEGIN
     OR jsonb_typeof(p_payload -> 'grossProceedsMinorUnits') IS DISTINCT FROM 'string'
     OR jsonb_typeof(p_payload -> 'feeMinorUnits') IS DISTINCT FROM 'string'
     OR jsonb_typeof(p_payload -> 'netProceedsMinorUnits') IS DISTINCT FROM 'string'
-    OR (p_payload ->> 'grossProceedsMinorUnits') !~ '^(0|[1-9][0-9]*)$'
+    OR (p_payload ->> 'grossProceedsMinorUnits') !~ '^[1-9][0-9]*$'
     OR (p_payload ->> 'feeMinorUnits') !~ '^(0|[1-9][0-9]*)$'
     OR (p_payload ->> 'netProceedsMinorUnits') !~ '^(0|[1-9][0-9]*)$'
     OR length(p_payload ->> 'grossProceedsMinorUnits') > 50
@@ -182,6 +190,7 @@ BEGIN
     RETURN;
   END IF;
 
+  v_purchase_currency := p_payload ->> 'purchaseCurrency';
   v_sale_currency := p_payload ->> 'saleCurrency';
   v_metal_type := p_payload ->> 'metalType';
   IF (
@@ -272,9 +281,25 @@ BEGIN
         )
       )
       OR (
-        v_snapshot ->> 'role' IN (
-          'terminal_purchase_currency', 'terminal_proceeds_currency'
+        v_snapshot ->> 'role' = 'terminal_purchase_currency'
+        AND (
+          v_snapshot ->> 'kind' <> 'currency'
+          OR v_snapshot ->> 'instrumentCode' <> 'currency:' || v_purchase_currency
+          OR NOT (
+            (v_snapshot ->> 'unit' = 'usd_per_currency_unit'
+              AND v_snapshot ->> 'orientation' = 'quote_per_base')
+            OR
+            (v_snapshot ->> 'unit' = 'currency_units_per_usd'
+              AND v_snapshot ->> 'orientation' = 'base_per_quote')
+          )
+          OR (
+            v_snapshot ->> 'instrumentCode' = 'currency:USD'
+            AND v_snapshot ->> 'valueDecimal' <> '1'
+          )
         )
+      )
+      OR (
+        v_snapshot ->> 'role' = 'terminal_proceeds_currency'
         AND (
           v_snapshot ->> 'kind' <> 'currency'
           OR v_snapshot ->> 'instrumentCode' <> 'currency:' || v_sale_currency
@@ -731,6 +756,35 @@ ALTER TABLE public.assets
   FOREIGN KEY (user_id, acquisition_action_id, id)
   REFERENCES public.metal_action_evidence (user_id, action_id, holding_id);
 
+CREATE OR REPLACE FUNCTION private.guard_asset_acquisition_action_kind_v1()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF NEW.acquisition_action_id IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.metal_action_evidence AS evidence
+      WHERE evidence.user_id = NEW.user_id
+        AND evidence.action_id = NEW.acquisition_action_id
+        AND evidence.holding_id = NEW.id
+        AND evidence.kind IN ('add', 'correct')
+    )
+  THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '22023',
+      MESSAGE = 'metal_acquisition_action_kind_mismatch';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER assets_guard_acquisition_action_kind
+BEFORE INSERT OR UPDATE OF acquisition_action_id ON public.assets
+FOR EACH ROW EXECUTE FUNCTION private.guard_asset_acquisition_action_kind_v1();
+
 ALTER TABLE public.metal_holding_states
   ADD CONSTRAINT metal_holding_states_effective_action_fk
   FOREIGN KEY (user_id, effective_action_id, holding_id)
@@ -766,6 +820,36 @@ CREATE TABLE public.metal_lifecycle_events (
     REFERENCES public.metal_lifecycle_events (user_id, holding_id, id)
     DEFERRABLE INITIALLY DEFERRED
 );
+
+CREATE OR REPLACE FUNCTION private.guard_immutable_metal_lifecycle_event_v1()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF TG_OP = 'DELETE'
+    OR NEW.id IS DISTINCT FROM OLD.id
+    OR NEW.user_id IS DISTINCT FROM OLD.user_id
+    OR NEW.holding_id IS DISTINCT FROM OLD.holding_id
+    OR NEW.action_id IS DISTINCT FROM OLD.action_id
+    OR NEW.kind IS DISTINCT FROM OLD.kind
+    OR NEW.occurred_at IS DISTINCT FROM OLD.occurred_at
+    OR NEW.payload_json IS DISTINCT FROM OLD.payload_json
+    OR NEW.predecessor_event_id IS DISTINCT FROM OLD.predecessor_event_id
+    OR NEW.reverses_event_id IS DISTINCT FROM OLD.reverses_event_id
+    OR NEW.created_at IS DISTINCT FROM OLD.created_at
+  THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '22023',
+      MESSAGE = 'metal_lifecycle_event_immutable';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER metal_lifecycle_events_guard_immutable
+BEFORE UPDATE OR DELETE ON public.metal_lifecycle_events
+FOR EACH ROW EXECUTE FUNCTION private.guard_immutable_metal_lifecycle_event_v1();
 
 ALTER TABLE public.metal_holding_states
   ADD CONSTRAINT metal_holding_states_effective_event_fk
@@ -1142,6 +1226,10 @@ REVOKE ALL ON FUNCTION private.guard_asset_metal_action_fields_v1()
 REVOKE ALL ON FUNCTION private.guard_asset_metal_detail_action_fields_v1()
   FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.guard_metal_evidence_root_v1()
+  FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION private.guard_asset_acquisition_action_kind_v1()
+  FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION private.guard_immutable_metal_lifecycle_event_v1()
   FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.metal_revision_from_text_v1(text)
   FROM PUBLIC, anon, authenticated;

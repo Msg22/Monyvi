@@ -36,7 +36,7 @@ const METAL_HOLDING_STATE_PAGE_SIZE = 500;
 const METAL_OBSERVATION_RPC = "pull_metal_observations_page_v1";
 const UUID_MAX = "ffffffff-ffff-ffff-ffff-ffffffffffff";
 
-interface MetalObservationCursor {
+export interface MetalObservationCursor {
   readonly createdAt: string;
   readonly id: string;
 }
@@ -325,13 +325,12 @@ export async function pullMarketRates(
 }
 
 export async function pullMarketRateObservations(
-  lastSyncDate: string | null
+  start: string | MetalObservationCursor | null
 ): Promise<MetalObservationPullResult> {
   const rows: MetalObservationRpcRow[] = [];
   let upperWatermark: string | null = null;
-  let cursor: MetalObservationCursor | null = lastSyncDate
-    ? { createdAt: lastSyncDate, id: UUID_MAX }
-    : null;
+  let cursor: MetalObservationCursor | null =
+    typeof start === "string" ? { createdAt: start, id: UUID_MAX } : start;
   const seenCursors = new Set<string>();
   let shouldPullNextPage = true;
 

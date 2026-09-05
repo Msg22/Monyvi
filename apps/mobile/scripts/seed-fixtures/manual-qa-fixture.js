@@ -5,6 +5,7 @@ const MANUAL_QA_SEED_FIXTURE = {
   includeLocalMarketRate: false,
   preserveExistingRows: true,
   restoreAccountBalancesAfterLedgerSeed: true,
+  buildCompatibilityCleanupRows: buildManualQaCompatibilityCleanupRows,
   accountNames: {
     cash: "Cash Wallet",
     bank: "NBE Salary Account",
@@ -24,6 +25,29 @@ const MANUAL_QA_SEED_FIXTURE = {
   },
   buildExtraRows: buildManualQaExtraRows,
 };
+
+function buildManualQaCompatibilityCleanupRows({
+  deterministicUuid,
+  seedScope,
+  userId,
+}) {
+  return {
+    assetMetals: [
+      {
+        id: deterministicUuid(
+          seedScope,
+          userId,
+          "asset-metal:platinum-bar"
+        ),
+      },
+    ],
+    assets: [
+      {
+        id: deterministicUuid(seedScope, userId, "asset:platinum-bar"),
+      },
+    ],
+  };
+}
 
 function buildManualQaExtraRows({
   categoryIds,
@@ -369,8 +393,11 @@ function buildManualQaExtraRows({
         name: "21k Gold Chain",
         type: "METAL",
         purchase_price: 18500,
+        purchase_price_decimal: "18500",
         purchase_date: dateFromToday(-90),
         currency: "EGP",
+        purchase_currency: "EGP",
+        acquisition_action_id: null,
         is_liquid: true,
         notes: "Jewelry purchase for metal asset QA",
         deleted: false,
@@ -383,8 +410,11 @@ function buildManualQaExtraRows({
         name: "Silver Coin Stack",
         type: "METAL",
         purchase_price: 7800,
+        purchase_price_decimal: "7800",
         purchase_date: dateFromToday(-45),
         currency: "EGP",
+        purchase_currency: "EGP",
+        acquisition_action_id: null,
         is_liquid: true,
         notes: "Small silver holding",
         deleted: false,
@@ -397,8 +427,11 @@ function buildManualQaExtraRows({
         name: "Gold Test Bar",
         type: "METAL",
         purchase_price: 12500,
+        purchase_price_decimal: "12500",
         purchase_date: dateFromToday(-20),
         currency: "USD",
+        purchase_currency: "USD",
+        acquisition_action_id: null,
         is_liquid: true,
         notes: "Foreign-currency precious metal",
         deleted: false,
@@ -440,7 +473,11 @@ function buildManualQaExtraRows({
         asset_id: seedIds.assets.goldChain,
         metal_type: "GOLD",
         weight_grams: 24.5,
+        weight_grams_decimal: "24.5",
         purity_fraction: 0.875,
+        purity_code: "gold-875",
+        purity_factor_decimal: "0.875",
+        purity_catalog_version: "1",
         item_form: "Jewelry",
         deleted: false,
         created_at: fixedNow,
@@ -451,7 +488,11 @@ function buildManualQaExtraRows({
         asset_id: seedIds.assets.silverCoins,
         metal_type: "SILVER",
         weight_grams: 250,
+        weight_grams_decimal: "250",
         purity_fraction: 0.999,
+        purity_code: "silver-999",
+        purity_factor_decimal: "0.999",
+        purity_catalog_version: "1",
         item_form: "Coins",
         deleted: false,
         created_at: fixedNow,
@@ -462,13 +503,35 @@ function buildManualQaExtraRows({
         asset_id: seedIds.assets.goldBar,
         metal_type: "GOLD",
         weight_grams: 10,
+        weight_grams_decimal: "10",
         purity_fraction: 0.999,
+        purity_code: "gold-999",
+        purity_factor_decimal: "0.999",
+        purity_catalog_version: "1",
         item_form: "Bar",
         deleted: false,
         created_at: fixedNow,
         updated_at: currentTimestamp,
       },
     ],
+    metalHoldingStates: [
+      seedIds.assets.goldChain,
+      seedIds.assets.silverCoins,
+      seedIds.assets.goldBar,
+    ].map((holdingId) => ({
+      id: holdingId,
+      user_id: userId,
+      holding_id: holdingId,
+      status: "active",
+      financial_revision: "0",
+      effective_event_id: null,
+      effective_action_id: null,
+      is_visible: true,
+      reconciliation_state: "accepted",
+      deleted: false,
+      created_at: fixedNow,
+      updated_at: currentTimestamp,
+    })),
     debts: [
       {
         id: seedIds.debts.activeLent,

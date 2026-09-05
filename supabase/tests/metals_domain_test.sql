@@ -1,6 +1,6 @@
 begin;
 
-select plan(64);
+select plan(69);
 
 select has_table('public', 'metal_holding_states', 'holding projection exists');
 select has_table('public', 'metal_action_evidence', 'action evidence exists');
@@ -254,6 +254,7 @@ as $$
       'netProceedsMinorUnits', '10000',
       'notes', 'fixture',
       'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000099',
+      'purchaseCurrency', p_sale_currency,
       'rateSnapshots', '[]'::jsonb,
       'reversesEventId', null,
       'saleCurrency', p_sale_currency,
@@ -263,6 +264,24 @@ as $$
     'userId', '018f0c7a-1234-7abc-8def-000000000003'
   )
 $$;
+
+select throws_ok(
+  $$select private.financial_action_validate_metals_sell_payload_v2(
+      jsonb_set(
+        jsonb_set(
+          pg_temp.metal_root_envelope(
+            '018f0c7a-1234-7abc-8def-000000000001',
+            '018f0c7a-1234-7abc-8def-000000000004',
+            'GOLD', 'EGP'
+          ) -> 'payload',
+          '{grossProceedsMinorUnits}', '"0"'::jsonb
+        ),
+        '{netProceedsMinorUnits}', '"0"'::jsonb
+      )
+    )$$,
+  '22023', 'financial_action_invalid_payload',
+  'Sell rejects zero gross proceeds'
+);
 
 with roots(action_id, holding_id, metal_type, sale_currency) as (
   values
@@ -357,6 +376,34 @@ insert into public.metal_lifecycle_events (
   '018f0c7a-1234-7abc-8def-000000000003',
   '018f0c7a-1234-7abc-8def-000000000004',
   '018f0c7a-1234-7abc-8def-000000000001', 'sell', now(), '{}'
+);
+
+select lives_ok(
+  $$update public.metal_lifecycle_events
+    set is_effective = false
+    where id = '018f0c7a-1234-7abc-8def-000000000006'$$,
+  'reconciliation may change lifecycle effectiveness metadata'
+);
+select throws_ok(
+  $$update public.metal_lifecycle_events
+    set payload_json = '{"rewritten":true}'::jsonb
+    where id = '018f0c7a-1234-7abc-8def-000000000006'$$,
+  '22023', 'metal_lifecycle_event_immutable',
+  'lifecycle payload evidence cannot be rewritten'
+);
+select throws_ok(
+  $$delete from public.metal_lifecycle_events
+    where id = '018f0c7a-1234-7abc-8def-000000000006'$$,
+  '22023', 'metal_lifecycle_event_immutable',
+  'lifecycle evidence cannot be hard deleted'
+);
+
+select throws_ok(
+  $$update public.assets
+    set acquisition_action_id = '018f0c7a-1234-7abc-8def-000000000001'
+    where id = '018f0c7a-1234-7abc-8def-000000000004'$$,
+  '22023', 'metal_acquisition_action_kind_mismatch',
+  'acquisition projection cannot reference a Sell action'
 );
 insert into public.metal_lifecycle_events (
   id, user_id, holding_id, action_id, kind, occurred_at, payload_json

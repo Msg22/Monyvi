@@ -751,6 +751,9 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
   const cleanupRows = fixture.buildCleanupRows
     ? fixture.buildCleanupRows(fixtureContext)
     : {};
+  const compatibilityCleanupRows = fixture.buildCompatibilityCleanupRows
+    ? fixture.buildCompatibilityCleanupRows(fixtureContext)
+    : {};
   const expandedAccounts = extraRows.accounts ?? [];
   const expandedBankDetails = extraRows.bankDetails ?? [];
   const assets = extraRows.assets ?? [];
@@ -907,6 +910,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
     ],
     assets,
     assetMetals,
+    compatibilityCleanupRows,
     metalHoldingStates,
     marketRateObservations,
     marketRateObservationCleanupRows,
@@ -986,6 +990,17 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
     ),
   };
   const rows = buildSeedRows(userId, seedIds, fixture);
+
+  await deleteRowsByIds(
+    client,
+    "asset_metals",
+    rows.compatibilityCleanupRows.assetMetals ?? []
+  );
+  await deleteRowsByIds(
+    client,
+    "assets",
+    rows.compatibilityCleanupRows.assets ?? []
+  );
 
   if (!fixture.preserveExistingRows) {
     await deleteRowsByIds(
