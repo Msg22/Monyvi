@@ -3,9 +3,16 @@ import React from "react";
 
 let mockTabBarHeight = 114;
 
-jest.mock("@react-navigation/bottom-tabs", () => ({
-  useBottomTabBarHeight: (): number => mockTabBarHeight,
-}));
+jest.mock("@react-navigation/bottom-tabs", () => {
+  const actual = jest.requireActual<
+    typeof import("@react-navigation/bottom-tabs")
+  >("@react-navigation/bottom-tabs");
+
+  return {
+    ...actual,
+    useBottomTabBarHeight: (): number => mockTabBarHeight,
+  };
+});
 
 jest.mock("react-i18next", () => ({
   useTranslation: (): { readonly t: (key: string) => string } => ({
