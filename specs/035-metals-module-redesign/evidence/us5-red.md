@@ -12,7 +12,7 @@ confirmation; pending lock; accessible responsive layout; and offline restart.
 ## Executed
 
 ```text
-npm test -w @monyvi/mobile -- --runInBand --runTestsByPath __tests__/services/sell-metal-holding-command-service.integration.test.ts __tests__/components/metals/sell-metal-holding-screen.test.tsx __tests__/hooks/useSellMetalHolding.test.ts
+npm test -w @monyvi/mobile -- --runInBand --runTestsByPath __tests__/services/sell-metal-holding-command-service.integration.test.ts __tests__/app/metals-sell.test.tsx __tests__/hooks/useSellMetalHolding.test.ts
 ```
 
 Result: 3 suites failed, 25 tests failed, 0 harness parse/config failures.
@@ -38,3 +38,9 @@ command contract and do not activate or bypass the production adapter.
 The Maestro flow is an authored Red contract only. Its deterministic Sell
 fixture profile and production route integration remain explicit dependencies,
 so no device execution is claimed.
+
+## Stable-base replay
+
+The Red checkpoint was rebased conflict-free onto stable Slice 7 checkpoint
+`a190d8f`. The same command then reproduced the intended 3-suite, 25-test Red
+result with failures limited to the four absent Sell production modules.

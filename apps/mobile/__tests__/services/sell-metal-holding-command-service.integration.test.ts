@@ -131,6 +131,7 @@ interface SellPreviewModule {
 interface TestDatabaseModule {
   readonly database: Database;
   readonly __adapter: SQLiteAdapter;
+  readonly __modelClasses: ReadonlyArray<typeof Model>;
 }
 
 const IDS = {
@@ -216,11 +217,15 @@ jest.mock("@monyvi/db", () => {
   return {
     database: new WatermelonDatabase({ adapter, modelClasses }),
     __adapter: adapter,
+    __modelClasses: modelClasses,
   };
 });
 
-const { database, __adapter: adapter } =
-  jest.requireMock<TestDatabaseModule>("@monyvi/db");
+const {
+  database,
+  __adapter: adapter,
+  __modelClasses: modelClasses,
+} = jest.requireMock<TestDatabaseModule>("@monyvi/db");
 const sha256Provider: Sha256Provider = {
   digestUtf8: (value: string): Promise<string> =>
     Promise.resolve(createHash("sha256").update(value, "utf8").digest("hex")),
@@ -322,20 +327,33 @@ function createEnvelope(
   );
 }
 
-function createService(): SellMetalHoldingCommandService {
+function createService(
+  db: Database = database
+): SellMetalHoldingCommandService {
   const repository = createFinancialActionFoundationRepository({
-    database,
+    database: db,
     getCurrentUserDataScope: (): Promise<FinancialActionUserDataScope> =>
       Promise.resolve(mockScopeValue()),
     assertExpectedCurrentUser: (): Promise<void> => Promise.resolve(),
     registry: DEFAULT_FINANCIAL_ACTION_REGISTRY,
   });
   return loadCommandModule().createSellMetalHoldingCommandService({
-    database,
+    database: db,
     commitFinancialActionGroupLocally:
       repository.commitFinancialActionGroupLocally,
     createEnvelope,
     hashProvider: sha256Provider,
+  });
+}
+
+async function openFreshDatabase(): Promise<Database> {
+  const clonedAdapter = await adapter.testClone();
+  const { Database: WatermelonDatabase } = jest.requireActual<
+    typeof import("@nozbe/watermelondb")
+  >("@nozbe/watermelondb");
+  return new WatermelonDatabase({
+    adapter: clonedAdapter,
+    modelClasses: [...modelClasses],
   });
 }
 
@@ -634,6 +652,38 @@ describe("Sell metal holding command SQLite atomicity", () => {
         .fetch()
     )[0];
     expect(state.status).toBe("sold");
+  });
+
+  it("survives database re-instantiation with the sold state, immutable History, and unchanged account", async (): Promise<void> => {
+    await seedHolding();
+    await createService().sell(command());
+
+    const reopened = await openFreshDatabase();
+    const [state] = await reopened
+      .get<MetalHoldingState>("metal_holding_states")
+      .query()
+      .fetch();
+    const events = await reopened
+      .get<MetalLifecycleEvent>("metal_lifecycle_events")
+      .query()
+      .fetch();
+    const account = await reopened.get<Account>("accounts").find(IDS.account);
+    expect(state).toMatchObject({
+      status: "sold",
+      effectiveActionId: IDS.saleAction,
+      effectiveEventId: IDS.saleEvent,
+      reconciliationState: "sync_pending",
+    });
+    expect(events).toHaveLength(2);
+    expect(events.find((event) => event.id === IDS.saleEvent)).toMatchObject({
+      kind: "sold",
+      isEffective: true,
+      isHistoryVisible: true,
+    });
+    expect(account.balance).toBe(2500);
+    expect(
+      await reopened.get<Model>("transactions").query().fetch()
+    ).toHaveLength(0);
   });
 
   it.each(["sold", "disposed"] as const)(

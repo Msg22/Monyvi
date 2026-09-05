@@ -1,6 +1,44 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 
+jest.mock("@/components/navigation/PageHeader", () => {
+  const { Pressable, Text, View } =
+    jest.requireActual<typeof import("react-native")>("react-native");
+  return {
+    PageHeader: ({
+      title,
+      showBackButton,
+      onBack,
+      backAccessibilityLabel,
+    }: {
+      readonly title: string;
+      readonly showBackButton?: boolean;
+      readonly onBack?: () => void;
+      readonly backAccessibilityLabel?: string;
+    }) => (
+      <View>
+        <Text>{title}</Text>
+        {showBackButton ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={backAccessibilityLabel}
+            testID="header-back"
+            onPress={onBack}
+          />
+        ) : null}
+      </View>
+    ),
+  };
+});
+
+jest.mock("@/context/ThemeContext", () => ({
+  useTheme: () => ({ isDark: false }),
+}));
+
+jest.mock("@/hooks/useModalBottomInset", () => ({
+  useModalBottomInset: () => 0,
+}));
+
 interface SellMetalHoldingValues {
   readonly saleDate: string;
   readonly grossProceedsDecimal: string;
@@ -78,6 +116,18 @@ interface SellMetalHoldingScreenModule {
   readonly SellMetalHoldingScreen: React.ComponentType<SellMetalHoldingScreenProps>;
 }
 
+interface SellActionModule {
+  readonly createSellHoldingActionDescriptor: (holdingId: string) => {
+    readonly id: "sell";
+    readonly labelKey: "actions.sell";
+    readonly tone: "primary";
+    readonly href: {
+      readonly pathname: "/(private)/metals/[holdingId]/sell";
+      readonly params: { readonly holdingId: string };
+    };
+  };
+}
+
 const copy: SellMetalHoldingScreenCopy = {
   title: "Sell holding",
   back: "Back",
@@ -119,7 +169,13 @@ const values: SellMetalHoldingValues = {
 
 function loadScreen(): SellMetalHoldingScreenModule {
   return jest.requireActual<SellMetalHoldingScreenModule>(
-    "../../../components/metals/SellMetalHoldingScreen"
+    "../../components/metals/SellMetalHoldingScreen"
+  );
+}
+
+function loadAction(): SellActionModule {
+  return jest.requireActual<SellActionModule>(
+    "../../components/metals/holding-actions/sell-action"
   );
 }
 
@@ -206,7 +262,7 @@ describe("SellMetalHoldingScreen approved direct-sale experience", () => {
     expect(screen.queryByTestId("metal-holding-sell-confirmation")).toBeNull();
   });
 
-  it("exposes field errors, rate acknowledgment, retry, and pending lock accessibly", () => {
+  it("exposes field errors, rate acknowledgment, and retry accessibly", () => {
     const props = renderScreen({
       preview: {
         netProceedsLabel: null,
@@ -217,24 +273,33 @@ describe("SellMetalHoldingScreen approved direct-sale experience", () => {
         requiresRateAcknowledgment: true,
         canSubmit: false,
       },
-      isSubmitting: true,
       submitError: "The sale was not recorded. Try again.",
     });
 
-    expect(
-      screen.getByTestId("metal-holding-sell-gross-field-error")
-    ).toHaveTextContent("Enter an amount greater than 0.");
+    expect(screen.getByText("Enter an amount greater than 0.")).toHaveProp(
+      "accessibilityRole",
+      "alert"
+    );
     expect(screen.getByText(copy.rateWarning)).toBeTruthy();
     fireEvent.press(
       screen.getByRole("checkbox", { name: copy.acknowledgeRateRisk })
     );
     expect(props.onAcknowledgeRateRisk).toHaveBeenCalledTimes(1);
     expect(
-      screen.getByRole("button", { name: copy.recordingSale })
+      screen.getByRole("button", { name: copy.recordSale })
     ).toBeDisabled();
-    expect(screen.getByRole("button", { name: copy.back })).toBeDisabled();
     fireEvent.press(screen.getByRole("button", { name: copy.retry }));
     expect(props.onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("locks inputs and dismissal while the direct local commit is pending", () => {
+    renderScreen({ isSubmitting: true });
+
+    expect(
+      screen.getByRole("button", { name: copy.recordingSale })
+    ).toBeDisabled();
+    expect(screen.queryByRole("button", { name: copy.back })).toBeNull();
+    expect(screen.getByLabelText(copy.grossProceeds)).toBeDisabled();
   });
 
   it.each([
@@ -249,10 +314,9 @@ describe("SellMetalHoldingScreen approved direct-sale experience", () => {
         "className",
         expect.stringContaining(expectedLayout)
       );
-      expect(screen.getByTestId("metal-holding-sell-content")).toHaveProp(
-        "dir",
-        isRtl ? "rtl" : "ltr"
-      );
+      expect(screen.getByTestId("metal-holding-sell-content")).toHaveStyle({
+        direction: isRtl ? "rtl" : "ltr",
+      });
     }
   );
 
@@ -261,5 +325,28 @@ describe("SellMetalHoldingScreen approved direct-sale experience", () => {
     expect(screen.getByTestId("metal-holding-sell-actions")).toHaveStyle({
       paddingBottom: 54,
     });
+  });
+});
+
+describe("Sell holding isolated action descriptor", () => {
+  it("targets only the holding-scoped Sell route with the existing label key", () => {
+    const descriptor =
+      loadAction().createSellHoldingActionDescriptor("holding-gold-coin");
+    expect(descriptor).toEqual({
+      id: "sell",
+      labelKey: "actions.sell",
+      tone: "primary",
+      href: {
+        pathname: "/(private)/metals/[holdingId]/sell",
+        params: { holdingId: "holding-gold-coin" },
+      },
+    });
+    expect(Object.isFrozen(descriptor)).toBe(true);
+  });
+
+  it("rejects a missing holding identity at the route boundary", () => {
+    expect(() => loadAction().createSellHoldingActionDescriptor(" ")).toThrow(
+      "metal_holding_id_required"
+    );
   });
 });
