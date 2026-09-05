@@ -1,0 +1,62 @@
+name: Codex Merge Main 103
+
+on:
+  push:
+    branches:
+      - codex/103-recurring-payment-validation
+    paths:
+      - .github/workflows/codex-merge-main-103.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: codex-merge-main-103
+  cancel-in-progress: false
+
+jobs:
+  merge-main:
+    name: Merge current main
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: codex/103-recurring-payment-validation
+
+      - name: Merge main and resolve the verified Metro overlap
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "OpenAI Codex"
+          git config user.email "codex@openai.com"
+          git fetch origin main
+
+          set +e
+          git merge --no-ff --no-commit origin/main
+          merge_status=$?
+          set -e
+
+          if [[ $merge_status -ne 0 ]]; then
+            mapfile -t conflicts < <(git diff --name-only --diff-filter=U)
+            if [[ ${#conflicts[@]} -ne 1 || "${conflicts[0]}" != "apps/mobile/metro.config.js" ]]; then
+              printf 'Unexpected merge conflicts:\n'
+              printf '%s\n' "${conflicts[@]}"
+              exit 1
+            fi
+            git checkout origin/main -- apps/mobile/metro.config.js
+            git add apps/mobile/metro.config.js
+          fi
+
+          if [[ -n "$(git diff --name-only --diff-filter=U)" ]]; then
+            echo "Unresolved merge conflicts remain" >&2
+            git diff --name-only --diff-filter=U
+            exit 1
+          fi
+
+          rm .github/workflows/codex-merge-main-103.yml
+          git add -A
+          git commit -m "merge: sync main into recurring validation"
+          git push origin HEAD:codex/103-recurring-payment-validation
