@@ -1,0 +1,89 @@
+# commit-message: fix: enforce recurring edit concurrency and account currency
+--- a/apps/mobile/services/recurring-payment-service.ts
++++ b/apps/mobile/services/recurring-payment-service.ts
+@@ -44,6 +44,7 @@
+ 
+ export interface UpdateRecurringPaymentData extends RecurringPaymentData {
+   readonly reactivateAfterSaving?: boolean;
++  readonly expectedNextDueDate?: Date;
+ }
+ 
+ export const RECURRING_PAYMENT_SERVICE_ERROR_CODES = {
+@@ -57,6 +58,8 @@
+   INVALID_START_DATE: "RECURRING_PAYMENT_INVALID_START_DATE",
+   INVALID_END_DATE: "RECURRING_PAYMENT_INVALID_END_DATE",
+   INVALID_SCHEDULE: "RECURRING_PAYMENT_INVALID_SCHEDULE",
++  CURRENCY_MISMATCH: "RECURRING_PAYMENT_CURRENCY_MISMATCH",
++  STALE_SCHEDULE: "RECURRING_PAYMENT_STALE_SCHEDULE",
+ } as const;
+@@ -80,6 +83,15 @@
+   }
+ }
+ 
++function assertCurrencyMatchesAccount(
++  currency: CurrencyType,
++  account: Account
++): void {
++  if (account.currency !== currency) {
++    throw new Error(RECURRING_PAYMENT_SERVICE_ERROR_CODES.CURRENCY_MISMATCH);
++  }
++}
++
+ function assertValidRecurringPaymentDateShape(
+   data: Pick<RecurringPaymentData, "startDate" | "endDate">
+ ): void {
+@@ -147,7 +159,7 @@
+   accountId: string,
+   categoryId: string,
+   paymentType: TransactionType
+-): Promise<void> {
++): Promise<Account> {
+   let account: Account;
+@@ -178,6 +190,8 @@
+   if (category.deleted || category.type !== paymentType) {
+     throw new Error(RECURRING_PAYMENT_SERVICE_ERROR_CODES.CATEGORY_UNAVAILABLE);
+   }
++
++  return account;
+ }
+@@ -199,12 +213,13 @@
+   assertEndDateAllowsDuePayment(nextDueDate, data.endDate);
+ 
+   const scope = await getCurrentUserDataScope();
+-  await resolveRecurringPaymentReferences(
++  const account = await resolveRecurringPaymentReferences(
+     scope,
+     data.accountId,
+     data.categoryId,
+     data.type
+   );
++  assertCurrencyMatchesAccount(data.currency, account);
+ 
+   const recurringCollection =
+@@ -235,6 +250,14 @@
+     database.get<RecurringPayment>("recurring_payments");
+   const payment = await scope.findOwned(recurringCollection, paymentId);
+ 
++  if (
++    data.expectedNextDueDate !== undefined &&
++    (!isValidDate(data.expectedNextDueDate) ||
++      !isSameLocalCalendarDay(payment.nextDueDate, data.expectedNextDueDate))
++  ) {
++    throw new Error(RECURRING_PAYMENT_SERVICE_ERROR_CODES.STALE_SCHEDULE);
++  }
++
+   const dataMatchesStoredAnchor = isSameLocalCalendarDay(
+@@ -255,12 +278,13 @@
+   const referenceDate = new Date();
+   assertStartDateAllowed(data.startDate, referenceDate, originalEditableDate);
+   assertEndDateAllowsDuePayment(requestedDueDate, data.endDate);
+-  await resolveRecurringPaymentReferences(
++  const account = await resolveRecurringPaymentReferences(
+     scope,
+     data.accountId,
+     data.categoryId,
+     data.type
+   );
++  assertCurrencyMatchesAccount(data.currency, account);
+ 
+   await database.write(async () => {
