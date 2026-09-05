@@ -3,10 +3,14 @@ import { createHash } from "node:crypto";
 import type { Database, Model } from "@nozbe/watermelondb";
 import type SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 import {
+  DEFAULT_FINANCIAL_ACTION_REGISTRY,
   hashFinancialActionEnvelope,
   type FinancialActionEnvelopeV1,
+  type FinancialActionRegistry,
   type Sha256Provider,
 } from "../../../../packages/logic/src/financial-actions";
+
+import { LEGACY_FINANCIAL_ACTION_TEST_REGISTRY } from "./financial-action-foundation-test-registry";
 
 interface TestDatabaseModule {
   readonly database: Database;
@@ -121,6 +125,68 @@ function envelope(userId = USER_ID): FinancialActionEnvelopeV1 {
   };
 }
 
+function datedAddEnvelope(): FinancialActionEnvelopeV1 {
+  return {
+    actionId: ACTION_ID,
+    domain: "metals",
+    domainReferenceId: "018f0c7a-1234-7abc-8def-000000000004",
+    envelopeVersion: "monyvi.financial-action/v1",
+    accountGuards: [],
+    kind: "add",
+    occurredAt: "2026-08-31T10:15:30.123Z",
+    payload: {
+      holdingId: "018f0c7a-1234-7abc-8def-000000000004",
+      expectedHoldingRevision: null,
+      predecessorEventId: null,
+      reversesEventId: null,
+      metalType: "GOLD",
+      metadata: { name: "Savings gold", notes: null },
+      materialFacts: {
+        physicalForm: "JEWELRY",
+        weightGramsDecimal: "10.25",
+        purityCode: "gold-9999",
+        purityFactorDecimal: "0.9999",
+        purityCatalogVersion: "1",
+        purchasePriceDecimal: "150000",
+        purchaseCurrency: "EGP",
+        purchaseDate: "2026-09-01",
+      },
+      rateSnapshots: [
+        {
+          referenceId: "018f0c7a-1234-7abc-8def-000000000006",
+          role: "acquisition_metal",
+          kind: "metal",
+          instrumentCode: "metal:GOLD",
+          valueDecimal: "3510.5",
+          unit: "usd_per_pure_gram",
+          orientation: "quote_per_base",
+          providerObservedAt: "2026-08-31T10:15:30.123Z",
+          source: "provider-a",
+          quality: "valid",
+          capturedFreshness: "fresh",
+          capturedAt: "2026-08-31T10:16:00.123Z",
+        },
+        {
+          referenceId: "018f0c7a-1234-7abc-8def-000000000007",
+          role: "acquisition_purchase_currency",
+          kind: "currency",
+          instrumentCode: "currency:EGP",
+          valueDecimal: "0.02",
+          unit: "usd_per_currency_unit",
+          orientation: "quote_per_base",
+          providerObservedAt: "2026-08-31T10:15:30.123Z",
+          source: "provider-a",
+          quality: "valid",
+          capturedFreshness: "fresh",
+          capturedAt: "2026-08-31T10:16:00.123Z",
+        },
+      ],
+    },
+    payloadVersion: "metals.add/v1",
+    userId: USER_ID,
+  };
+}
+
 async function openFreshDatabase(): Promise<Database> {
   const clonedAdapter = await adapter.testClone();
   const { Database: WatermelonDatabase } = jest.requireActual<
@@ -137,7 +203,8 @@ async function fetchAll(db: Database): Promise<FinancialActionGroup[]> {
 }
 
 function createRepository(
-  db: Database
+  db: Database,
+  registry: FinancialActionRegistry = LEGACY_FINANCIAL_ACTION_TEST_REGISTRY
 ): ReturnType<typeof createFinancialActionFoundationRepository> {
   return createFinancialActionFoundationRepository({
     database: db,
@@ -166,6 +233,7 @@ function createRepository(
       }
       return Promise.resolve();
     },
+    registry,
   });
 }
 
@@ -199,6 +267,35 @@ describe("financial action foundation SQLite persistence", () => {
     expect(await fetchAll(await openFreshDatabase())).toHaveLength(1);
   });
 
+  it("persists a date-sensitive action with one validation input for canonicalization and hashing", async () => {
+    const repository = createRepository(
+      database,
+      DEFAULT_FINANCIAL_ACTION_REGISTRY
+    );
+    const actionEnvelope = datedAddEnvelope();
+    const validationInput = { cairoTodayDate: "2026-09-01" } as const;
+    const input = {
+      envelope: actionEnvelope,
+      hashProvider: sha256Provider,
+      validationInput,
+    };
+    const expectedPayload = await hashFinancialActionEnvelope(
+      actionEnvelope,
+      sha256Provider,
+      DEFAULT_FINANCIAL_ACTION_REGISTRY,
+      validationInput
+    );
+
+    const result = await repository.createFinancialActionGroup(input);
+
+    expect(result).toMatchObject({ kind: "created" });
+    expect(result.record).toMatchObject({
+      payloadHash: expectedPayload.payloadHash,
+      payloadJson: expectedPayload.canonicalText,
+    });
+    expect(await fetchAll(await openFreshDatabase())).toHaveLength(1);
+  });
+
   it("rolls back a failed writer without leaving a durable row", async () => {
     const repository = createRepository(database);
     jest
@@ -219,7 +316,8 @@ describe("financial action foundation SQLite persistence", () => {
     const actionEnvelope = envelope();
     const payload = await hashFinancialActionEnvelope(
       actionEnvelope,
-      sha256Provider
+      sha256Provider,
+      LEGACY_FINANCIAL_ACTION_TEST_REGISTRY
     );
     await repository.createFinancialActionGroup({
       envelope: actionEnvelope,
@@ -288,7 +386,8 @@ describe("financial action foundation SQLite persistence", () => {
     const foreignEnvelope = envelope(FOREIGN_USER_ID);
     const foreignPayload = await hashFinancialActionEnvelope(
       foreignEnvelope,
-      sha256Provider
+      sha256Provider,
+      LEGACY_FINANCIAL_ACTION_TEST_REGISTRY
     );
     await database.write(async (): Promise<void> => {
       await database

@@ -4,6 +4,20 @@ import { createForeignLocalChangeError } from "./errors";
 import type { SyncableTable } from "./config";
 import type { ChildParentTableName, ChildTableConfig } from "./types";
 
+export const METALS_ACTION_FRAGMENT_COLUMNS = {
+  assets: [
+    "purchase_price_decimal",
+    "purchase_currency",
+    "acquisition_action_id",
+  ],
+  asset_metals: [
+    "weight_grams_decimal",
+    "purity_code",
+    "purity_factor_decimal",
+    "purity_catalog_version",
+  ],
+} as const;
+
 const UUID_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -62,5 +76,24 @@ export function isSharedSystemCategoryPushRecord(
     UUID_ID_PATTERN.test(payload.id) &&
     payload.is_system === true &&
     (payload.user_id === null || payload.user_id === undefined)
+  );
+}
+
+export function stripMetalActionFragments(
+  table: SyncableTable,
+  record: Record<string, unknown>
+): Record<string, unknown> {
+  const protectedColumns =
+    METALS_ACTION_FRAGMENT_COLUMNS[
+      table as keyof typeof METALS_ACTION_FRAGMENT_COLUMNS
+    ];
+  if (!protectedColumns) {
+    return { ...record };
+  }
+
+  return Object.fromEntries(
+    Object.entries(record).filter(
+      ([column]) => !(protectedColumns as readonly string[]).includes(column)
+    )
   );
 }

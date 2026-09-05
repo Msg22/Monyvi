@@ -10,7 +10,9 @@ import {
   hashFinancialActionEnvelope,
   type FinancialActionEnvelopeV1,
   type FinancialActionHashResult,
+  type FinancialActionRegistry,
   type FinancialActionState,
+  type FinancialActionValidationInput,
   type Sha256Provider,
 } from "../../../packages/logic/src/financial-actions";
 import {
@@ -39,6 +41,7 @@ import {
   cloneWatermelonRaw,
   watermelonRawRecordsMatch,
 } from "./watermelon-raw-integrity";
+import { APPROVED_FINANCIAL_ACTION_REGISTRY } from "./financial-action-approved-registry";
 
 export const FINANCIAL_ACTION_FOUNDATION_ERROR_CODES = {
   AUTH_SCOPE_CHANGED: "financial_action_auth_scope_changed",
@@ -50,6 +53,7 @@ export const FINANCIAL_ACTION_FOUNDATION_ERROR_CODES = {
 export interface CreateFinancialActionGroupInput {
   readonly envelope: FinancialActionEnvelopeV1;
   readonly hashProvider: Sha256Provider;
+  readonly validationInput?: FinancialActionValidationInput;
 }
 
 export type CreateFinancialActionGroupResult =
@@ -156,6 +160,7 @@ export interface FinancialActionFoundationRepositoryDependencies {
   readonly database: Database;
   readonly getCurrentUserDataScope: () => Promise<FinancialActionUserDataScope>;
   readonly assertExpectedCurrentUser: (expectedUserId: string) => Promise<void>;
+  readonly registry: FinancialActionRegistry;
 }
 
 export interface FinancialActionFoundationRepository {
@@ -227,12 +232,18 @@ export function createFinancialActionFoundationRepository(
   async function prepareActionContext(
     input: CreateFinancialActionGroupInput
   ): Promise<PreparedFinancialActionContext> {
-    const envelope = canonicalizeFinancialActionEnvelope(input.envelope);
+    const envelope = canonicalizeFinancialActionEnvelope(
+      input.envelope,
+      dependencies.registry,
+      input.validationInput
+    );
     const scope = await dependencies.getCurrentUserDataScope();
     assertInputUser(scope, envelope.userId);
     const payload = await hashFinancialActionEnvelope(
       envelope,
-      input.hashProvider
+      input.hashProvider,
+      dependencies.registry,
+      input.validationInput
     );
     return { envelope, payload, scope };
   }
@@ -884,6 +895,7 @@ const productionRepository = createFinancialActionFoundationRepository({
   database: productionDatabase,
   getCurrentUserDataScope: getProductionCurrentUserDataScope,
   assertExpectedCurrentUser: assertProductionCurrentUser,
+  registry: APPROVED_FINANCIAL_ACTION_REGISTRY,
 });
 
 export const createFinancialActionGroup =

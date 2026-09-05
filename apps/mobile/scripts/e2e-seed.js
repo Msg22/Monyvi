@@ -5,10 +5,15 @@ const {
   RESET_TABLE_DELETE_ORDER,
   createLocalSupabaseJwt,
   getSeedConfig,
+  inspectFixtureData: inspectFixtureDataWithFixture,
   resetFixtureData: resetFixtureDataWithFixture,
   seedFixtureData: seedFixtureDataWithFixture,
 } = require("./seed-fixtures/seed-engine");
-const { E2E_SEED_FIXTURE, getE2eFixture } = require("./seed-fixtures/e2e-fixture");
+const {
+  E2E_BUDGET_FIXTURES,
+  E2E_SEED_FIXTURE,
+  getE2eFixture,
+} = require("./seed-fixtures/e2e-fixture");
 
 const E2E_TABLE_DELETE_ORDER = RESET_TABLE_DELETE_ORDER;
 
@@ -17,7 +22,17 @@ function getE2eSeedConfig(env = process.env, options = {}) {
 }
 
 function getE2eFixtureForEnv(env = process.env) {
-  return getE2eFixture(env.E2E_BUDGET_PROFILE);
+  const sharedProfile = env.E2E_FIXTURE_PROFILE ?? env.E2E_METALS_PROFILE;
+  if (sharedProfile) return getE2eFixture(sharedProfile);
+  if (!env.E2E_BUDGET_PROFILE) return getE2eFixture();
+
+  const budgetFixture = E2E_BUDGET_FIXTURES[env.E2E_BUDGET_PROFILE];
+  if (!budgetFixture) {
+    throw new Error(
+      `Unknown E2E budget profile: ${env.E2E_BUDGET_PROFILE}`
+    );
+  }
+  return budgetFixture;
 }
 
 async function seedE2eData(client, config, fixture = getE2eFixtureForEnv()) {
@@ -26,6 +41,10 @@ async function seedE2eData(client, config, fixture = getE2eFixtureForEnv()) {
 
 async function resetE2eData(client, config, fixture = getE2eFixtureForEnv()) {
   return resetFixtureData(client, config, fixture);
+}
+
+async function inspectE2eData(client, config, fixture = getE2eFixtureForEnv()) {
+  return inspectFixtureDataWithFixture(client, config, fixture);
 }
 
 async function seedFixtureData(client, config, fixture = E2E_SEED_FIXTURE) {
@@ -43,8 +62,14 @@ async function main() {
   });
 
   const action = process.argv[2] ?? "seed";
-  if (action !== "seed" && action !== "reset") {
+  if (action !== "seed" && action !== "reset" && action !== "inspect") {
     throw new Error(`Unknown e2e seed action: ${action}`);
+  }
+
+  if (action === "inspect") {
+    const result = await inspectE2eData(client, config);
+    console.log(JSON.stringify(result, null, 2));
+    return;
   }
 
   if (action === "reset") {
@@ -74,6 +99,7 @@ module.exports = {
   createLocalSupabaseJwt,
   getE2eSeedConfig,
   getE2eFixture: getE2eFixtureForEnv,
+  inspectE2eData,
   resetE2eData,
   resetFixtureData,
   seedE2eData,

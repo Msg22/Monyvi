@@ -3,6 +3,7 @@ import {
   MAX_CANONICAL_ACTION_UTF8_BYTES,
   getFinancialActionUtf8ByteLength,
   type FinancialActionRegistry,
+  type FinancialActionValidationInput,
   type RegisteredActionPayload,
 } from "./action-registry";
 
@@ -285,7 +286,8 @@ function isStrictUtcMillisecondTimestamp(value: unknown): value is string {
 
 export function canonicalizeFinancialActionEnvelope(
   value: unknown,
-  registry: FinancialActionRegistry = DEFAULT_FINANCIAL_ACTION_REGISTRY
+  registry: FinancialActionRegistry = DEFAULT_FINANCIAL_ACTION_REGISTRY,
+  validationInput?: FinancialActionValidationInput
 ): FinancialActionEnvelopeV1 {
   inspectRuntimeValue(value);
   if (!isPlainObject(value) || !hasExactKeys(value, ENVELOPE_KEYS)) {
@@ -310,7 +312,7 @@ export function canonicalizeFinancialActionEnvelope(
   }
   const payload = registry
     .resolve(value.domain, value.kind, value.payloadVersion)
-    .validatePayload(value.payload);
+    .validatePayload(value.payload, validationInput);
   inspectRuntimeValue(payload);
   if (containsNumber(payload)) {
     fail(FINANCIAL_ACTION_ERROR_CODES.UNSUPPORTED_VALUE);
@@ -378,9 +380,7 @@ function serializeCanonicalValue(value: CanonicalJsonValue): string {
     .map(
       (key) =>
         `${escapeJsonString(key)}:${serializeCanonicalValue(
-          (value as Readonly<Record<string, CanonicalJsonValue>>)[
-            key
-          ] as CanonicalJsonValue
+          (value as Readonly<Record<string, CanonicalJsonValue>>)[key]
         )}`
     )
     .join(",")}}`;
@@ -388,9 +388,14 @@ function serializeCanonicalValue(value: CanonicalJsonValue): string {
 
 export function serializeFinancialActionEnvelope(
   value: unknown,
-  registry: FinancialActionRegistry = DEFAULT_FINANCIAL_ACTION_REGISTRY
+  registry: FinancialActionRegistry = DEFAULT_FINANCIAL_ACTION_REGISTRY,
+  validationInput?: FinancialActionValidationInput
 ): string {
-  const envelope = canonicalizeFinancialActionEnvelope(value, registry);
+  const envelope = canonicalizeFinancialActionEnvelope(
+    value,
+    registry,
+    validationInput
+  );
   const canonicalText = serializeCanonicalValue(
     envelope as unknown as CanonicalJsonValue
   );
@@ -472,7 +477,8 @@ function assertNoDuplicateJsonKeys(rawText: string): void {
 
 export function parseFinancialActionEnvelopeJson(
   rawText: string,
-  registry: FinancialActionRegistry = DEFAULT_FINANCIAL_ACTION_REGISTRY
+  registry: FinancialActionRegistry = DEFAULT_FINANCIAL_ACTION_REGISTRY,
+  validationInput?: FinancialActionValidationInput
 ): FinancialActionEnvelopeV1 {
   if (
     getFinancialActionUtf8ByteLength(rawText) > MAX_CANONICAL_ACTION_UTF8_BYTES
@@ -486,15 +492,20 @@ export function parseFinancialActionEnvelopeJson(
     fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_JSON);
   }
   assertNoDuplicateJsonKeys(rawText);
-  return canonicalizeFinancialActionEnvelope(parsed, registry);
+  return canonicalizeFinancialActionEnvelope(parsed, registry, validationInput);
 }
 
 export async function hashFinancialActionEnvelope(
   value: unknown,
   provider: Sha256Provider,
-  registry: FinancialActionRegistry = DEFAULT_FINANCIAL_ACTION_REGISTRY
+  registry: FinancialActionRegistry = DEFAULT_FINANCIAL_ACTION_REGISTRY,
+  validationInput?: FinancialActionValidationInput
 ): Promise<FinancialActionHashResult> {
-  const canonicalText = serializeFinancialActionEnvelope(value, registry);
+  const canonicalText = serializeFinancialActionEnvelope(
+    value,
+    registry,
+    validationInput
+  );
   const payloadHash = await provider.digestUtf8(canonicalText);
   if (!SHA256_PATTERN.test(payloadHash)) {
     fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_HASH);

@@ -7,31 +7,6 @@ export type Json =
   | Json[];
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never;
-    };
-    Views: {
-      [_ in never]: never;
-    };
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json;
-          operationName?: string;
-          query?: string;
-          variables?: Json;
-        };
-        Returns: Json;
-      };
-    };
-    Enums: {
-      [_ in never]: never;
-    };
-    CompositeTypes: {
-      [_ in never]: never;
-    };
-  };
   public: {
     Tables: {
       account_sms_senders: {
@@ -125,9 +100,13 @@ export type Database = {
           id: string;
           item_form: string | null;
           metal_type: Database["public"]["Enums"]["metal_type"];
+          purity_catalog_version: string | null;
+          purity_code: string | null;
+          purity_factor_decimal: string | null;
           purity_fraction: number;
           updated_at: string;
           weight_grams: number;
+          weight_grams_decimal: string | null;
         };
         Insert: {
           asset_id: string;
@@ -136,9 +115,13 @@ export type Database = {
           id?: string;
           item_form?: string | null;
           metal_type: Database["public"]["Enums"]["metal_type"];
+          purity_catalog_version?: string | null;
+          purity_code?: string | null;
+          purity_factor_decimal?: string | null;
           purity_fraction?: number;
           updated_at?: string;
           weight_grams: number;
+          weight_grams_decimal?: string | null;
         };
         Update: {
           asset_id?: string;
@@ -147,9 +130,13 @@ export type Database = {
           id?: string;
           item_form?: string | null;
           metal_type?: Database["public"]["Enums"]["metal_type"];
+          purity_catalog_version?: string | null;
+          purity_code?: string | null;
+          purity_factor_decimal?: string | null;
           purity_fraction?: number;
           updated_at?: string;
           weight_grams?: number;
+          weight_grams_decimal?: string | null;
         };
         Relationships: [
           {
@@ -163,6 +150,7 @@ export type Database = {
       };
       assets: {
         Row: {
+          acquisition_action_id: string | null;
           created_at: string;
           currency: Database["public"]["Enums"]["currency_type"];
           deleted: boolean;
@@ -170,13 +158,16 @@ export type Database = {
           is_liquid: boolean;
           name: string;
           notes: string | null;
+          purchase_currency: string | null;
           purchase_date: string;
           purchase_price: number;
+          purchase_price_decimal: string | null;
           type: Database["public"]["Enums"]["asset_type"];
           updated_at: string;
           user_id: string;
         };
         Insert: {
+          acquisition_action_id?: string | null;
           created_at?: string;
           currency?: Database["public"]["Enums"]["currency_type"];
           deleted?: boolean;
@@ -184,13 +175,16 @@ export type Database = {
           is_liquid?: boolean;
           name: string;
           notes?: string | null;
+          purchase_currency?: string | null;
           purchase_date: string;
           purchase_price: number;
+          purchase_price_decimal?: string | null;
           type: Database["public"]["Enums"]["asset_type"];
           updated_at?: string;
           user_id: string;
         };
         Update: {
+          acquisition_action_id?: string | null;
           created_at?: string;
           currency?: Database["public"]["Enums"]["currency_type"];
           deleted?: boolean;
@@ -198,13 +192,23 @@ export type Database = {
           is_liquid?: boolean;
           name?: string;
           notes?: string | null;
+          purchase_currency?: string | null;
           purchase_date?: string;
           purchase_price?: number;
+          purchase_price_decimal?: string | null;
           type?: Database["public"]["Enums"]["asset_type"];
           updated_at?: string;
           user_id?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "assets_acquisition_action_holding_fk";
+            columns: ["user_id", "acquisition_action_id", "id"];
+            isOneToOne: false;
+            referencedRelation: "metal_action_evidence";
+            referencedColumns: ["user_id", "action_id", "holding_id"];
+          },
+        ];
       };
       bank_details: {
         Row: {
@@ -589,6 +593,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      market_rate_observations: {
+        Row: {
+          batch_id: string;
+          created_at: string;
+          id: string;
+          instrument_code: string;
+          orientation: string;
+          provider_observed_at: string | null;
+          quality: string;
+          source: string | null;
+          unit: string;
+          value_decimal: string;
+        };
+        Insert: {
+          batch_id: string;
+          created_at?: string;
+          id?: string;
+          instrument_code: string;
+          orientation: string;
+          provider_observed_at?: string | null;
+          quality: string;
+          source?: string | null;
+          unit: string;
+          value_decimal: string;
+        };
+        Update: {
+          batch_id?: string;
+          created_at?: string;
+          id?: string;
+          instrument_code?: string;
+          orientation?: string;
+          provider_observed_at?: string | null;
+          quality?: string;
+          source?: string | null;
+          unit?: string;
+          value_decimal?: string;
+        };
+        Relationships: [];
+      };
       market_rates: {
         Row: {
           aed_usd: number;
@@ -729,6 +772,288 @@ export type Database = {
           zar_usd?: number;
         };
         Relationships: [];
+      };
+      metal_action_evidence: {
+        Row: {
+          action_id: string;
+          canonical_holding_revision: string | null;
+          created_at: string;
+          deleted: boolean;
+          domain_payload_json: Json;
+          expected_holding_revision: string | null;
+          holding_id: string;
+          id: string;
+          kind: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          action_id: string;
+          canonical_holding_revision?: string | null;
+          created_at?: string;
+          deleted?: boolean;
+          domain_payload_json: Json;
+          expected_holding_revision?: string | null;
+          holding_id: string;
+          id?: string;
+          kind: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          action_id?: string;
+          canonical_holding_revision?: string | null;
+          created_at?: string;
+          deleted?: boolean;
+          domain_payload_json?: Json;
+          expected_holding_revision?: string | null;
+          holding_id?: string;
+          id?: string;
+          kind?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "metal_action_evidence_user_id_action_id_holding_id_fkey";
+            columns: ["user_id", "action_id", "holding_id"];
+            isOneToOne: true;
+            referencedRelation: "financial_action_groups";
+            referencedColumns: ["user_id", "action_id", "domain_reference_id"];
+          },
+          {
+            foreignKeyName: "metal_action_evidence_user_id_holding_id_fkey";
+            columns: ["user_id", "holding_id"];
+            isOneToOne: false;
+            referencedRelation: "assets";
+            referencedColumns: ["user_id", "id"];
+          },
+        ];
+      };
+      metal_holding_states: {
+        Row: {
+          created_at: string;
+          deleted: boolean;
+          effective_action_id: string | null;
+          effective_event_id: string | null;
+          financial_revision: string;
+          holding_id: string;
+          id: string;
+          is_visible: boolean;
+          reconciliation_state: string;
+          status: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          deleted?: boolean;
+          effective_action_id?: string | null;
+          effective_event_id?: string | null;
+          financial_revision?: string;
+          holding_id: string;
+          id: string;
+          is_visible?: boolean;
+          reconciliation_state?: string;
+          status: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          deleted?: boolean;
+          effective_action_id?: string | null;
+          effective_event_id?: string | null;
+          financial_revision?: string;
+          holding_id?: string;
+          id?: string;
+          is_visible?: boolean;
+          reconciliation_state?: string;
+          status?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "metal_holding_states_effective_event_fk";
+            columns: ["effective_event_id"];
+            isOneToOne: false;
+            referencedRelation: "metal_lifecycle_events";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "metal_holding_states_effective_action_fk";
+            columns: ["user_id", "effective_action_id", "holding_id"];
+            isOneToOne: false;
+            referencedRelation: "metal_action_evidence";
+            referencedColumns: ["user_id", "action_id", "holding_id"];
+          },
+          {
+            foreignKeyName: "metal_holding_states_user_id_holding_id_fkey";
+            columns: ["user_id", "holding_id"];
+            isOneToOne: false;
+            referencedRelation: "assets";
+            referencedColumns: ["user_id", "id"];
+          },
+        ];
+      };
+      metal_lifecycle_events: {
+        Row: {
+          action_id: string;
+          created_at: string;
+          deleted: boolean;
+          holding_id: string;
+          id: string;
+          is_effective: boolean;
+          is_history_visible: boolean;
+          kind: string;
+          occurred_at: string;
+          payload_json: Json;
+          predecessor_event_id: string | null;
+          reverses_event_id: string | null;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          action_id: string;
+          created_at?: string;
+          deleted?: boolean;
+          holding_id: string;
+          id?: string;
+          is_effective?: boolean;
+          is_history_visible?: boolean;
+          kind: string;
+          occurred_at: string;
+          payload_json: Json;
+          predecessor_event_id?: string | null;
+          reverses_event_id?: string | null;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          action_id?: string;
+          created_at?: string;
+          deleted?: boolean;
+          holding_id?: string;
+          id?: string;
+          is_effective?: boolean;
+          is_history_visible?: boolean;
+          kind?: string;
+          occurred_at?: string;
+          payload_json?: Json;
+          predecessor_event_id?: string | null;
+          reverses_event_id?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "metal_lifecycle_events_predecessor_event_id_fkey";
+            columns: ["predecessor_event_id"];
+            isOneToOne: false;
+            referencedRelation: "metal_lifecycle_events";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "metal_lifecycle_events_reverses_event_id_fkey";
+            columns: ["reverses_event_id"];
+            isOneToOne: false;
+            referencedRelation: "metal_lifecycle_events";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "metal_lifecycle_events_user_id_action_id_holding_id_fkey";
+            columns: ["user_id", "action_id", "holding_id"];
+            isOneToOne: true;
+            referencedRelation: "metal_action_evidence";
+            referencedColumns: ["user_id", "action_id", "holding_id"];
+          },
+          {
+            foreignKeyName: "metal_lifecycle_events_user_id_holding_id_fkey";
+            columns: ["user_id", "holding_id"];
+            isOneToOne: false;
+            referencedRelation: "assets";
+            referencedColumns: ["user_id", "id"];
+          },
+        ];
+      };
+      metal_rate_references: {
+        Row: {
+          action_id: string;
+          captured_at: string;
+          captured_freshness: string;
+          created_at: string;
+          deleted: boolean;
+          holding_id: string;
+          id: string;
+          instrument_code: string;
+          kind: string;
+          orientation: string;
+          provider_observed_at: string | null;
+          quality: string;
+          role: string;
+          source: string | null;
+          unit: string;
+          updated_at: string;
+          user_id: string;
+          value_decimal: string;
+        };
+        Insert: {
+          action_id: string;
+          captured_at: string;
+          captured_freshness: string;
+          created_at?: string;
+          deleted?: boolean;
+          holding_id: string;
+          id?: string;
+          instrument_code: string;
+          kind: string;
+          orientation: string;
+          provider_observed_at?: string | null;
+          quality: string;
+          role: string;
+          source?: string | null;
+          unit: string;
+          updated_at?: string;
+          user_id: string;
+          value_decimal: string;
+        };
+        Update: {
+          action_id?: string;
+          captured_at?: string;
+          captured_freshness?: string;
+          created_at?: string;
+          deleted?: boolean;
+          holding_id?: string;
+          id?: string;
+          instrument_code?: string;
+          kind?: string;
+          orientation?: string;
+          provider_observed_at?: string | null;
+          quality?: string;
+          role?: string;
+          source?: string | null;
+          unit?: string;
+          updated_at?: string;
+          user_id?: string;
+          value_decimal?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "metal_rate_references_user_id_action_id_holding_id_fkey";
+            columns: ["user_id", "action_id", "holding_id"];
+            isOneToOne: false;
+            referencedRelation: "metal_action_evidence";
+            referencedColumns: ["user_id", "action_id", "holding_id"];
+          },
+          {
+            foreignKeyName: "metal_rate_references_user_id_holding_id_fkey";
+            columns: ["user_id", "holding_id"];
+            isOneToOne: false;
+            referencedRelation: "assets";
+            referencedColumns: ["user_id", "id"];
+          },
+        ];
       };
       profiles: {
         Row: {
@@ -1268,6 +1593,15 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      pull_metal_observations_page_v1: {
+        Args: {
+          p_after_created_at?: string | null;
+          p_after_id?: string | null;
+          p_limit?: number;
+          p_upper_watermark?: string | null;
+        };
+        Returns: Json;
+      };
       recalculate_account_balance: {
         Args: { account_id_param: string };
         Returns: number;
@@ -1599,9 +1933,6 @@ export type CompositeTypes<
     : never;
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       account_type: ["CASH", "BANK", "DIGITAL_WALLET"],

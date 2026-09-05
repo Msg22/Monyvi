@@ -90,6 +90,8 @@ temp/
 !.agents/skills/offline-financial-systems/**
 !.agents/skills/integration-maintenance/
 !.agents/skills/integration-maintenance/**
+!.agents/skills/opencode-team-delegation/
+!.agents/skills/opencode-team-delegation/**
 !.agents/skills/source-command-code-review/
 !.agents/skills/source-command-code-review/**
 !.agents/skills/team-led-delivery/

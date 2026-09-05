@@ -44,6 +44,41 @@ export const PluralKeysSchema = pluralKeysAllowAdditional;
  */
 const NamespaceSchema = z.record(z.string(), z.unknown());
 
+export const metalsTranslationSchema = NamespaceSchema.and(
+  z.object({
+    metal: z.object({
+      gold: z.string(),
+      silver: z.string(),
+      unknown: z.string(),
+    }),
+    form: z.object({
+      bar: z.string(),
+      coin: z.string(),
+      jewelry: z.string(),
+      unknown: z.string(),
+    }),
+    status: z.object({
+      active: z.string(),
+      sold: z.string(),
+      disposed: z.string(),
+    }),
+    rate: z.object({
+      fresh: z.string(),
+      stale: z.string(),
+      unknown: z.string(),
+      missing: z.string(),
+    }),
+    reconciliation: z.object({
+      incomplete: z.string(),
+      automatic: z.string(),
+    }),
+    render: z.object({
+      objectAccessibility: z.string(),
+      neutralFallback: z.string(),
+    }),
+  })
+);
+
 function assertStringOrObjectDictionary(
   language: "en" | "ar",
   namespace: string,
@@ -284,6 +319,15 @@ function validateNamespace(
     );
   }
   const dict = parsed.data;
+
+  if (namespace === "metals") {
+    const metalsResult = metalsTranslationSchema.safeParse(json);
+    if (!metalsResult.success) {
+      throw new Error(
+        `[i18n] ${language}/${namespace}: invalid Metals content contract — ${metalsResult.error.message}`
+      );
+    }
+  }
 
   assertStringOrObjectDictionary(language, namespace, dict);
 

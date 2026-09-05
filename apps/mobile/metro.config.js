@@ -39,7 +39,9 @@ function replaceWorkspaceDependencyRoot(folder) {
 }
 
 function ensureUniquePath(paths, requiredPath) {
-  return [...new Set([...paths.map(replaceWorkspaceDependencyRoot), requiredPath])];
+  return [
+    ...new Set([...paths.map(replaceWorkspaceDependencyRoot), requiredPath]),
+  ];
 }
 
 const config = getSentryExpoConfig(projectRoot);
@@ -49,7 +51,9 @@ config.watchFolders = ensureUniquePath(
   realWorkspaceNodeModules
 );
 config.resolver.nodeModulesPaths = ensureUniquePath(
-  config.resolver.nodeModulesPaths ?? [path.resolve(projectRoot, "node_modules")],
+  config.resolver.nodeModulesPaths ?? [
+    path.resolve(projectRoot, "node_modules"),
+  ],
   realWorkspaceNodeModules
 );
 config.resolver.unstable_enableSymlinks = true;

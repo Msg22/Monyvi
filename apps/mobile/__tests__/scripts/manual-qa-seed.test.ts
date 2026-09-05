@@ -198,6 +198,7 @@ describe("manual-qa-seed script helpers", () => {
     const transactionRows: unknown[] = [];
     const transferRows: unknown[] = [];
     const marketRateRows: unknown[] = [];
+    const metalHoldingStateRows: unknown[] = [];
 
     await seedManualQaData(
       createMockClient(operations, {
@@ -209,6 +210,7 @@ describe("manual-qa-seed script helpers", () => {
         categoryRows,
         debtRows,
         marketRateRows,
+        metalHoldingStateRows,
         profileRows,
         existingProfileIds: {
           "user-manual-qa": "existing-profile-id",
@@ -227,9 +229,12 @@ describe("manual-qa-seed script helpers", () => {
     );
 
     expect(operations).toContain("upsert:profiles:user-manual-qa");
-    expect(
-      operations.filter((operation) => operation.startsWith("delete:"))
-    ).toEqual([]);
+    const compatibilityDeletes = operations.filter((operation) =>
+      operation.startsWith("delete:")
+    );
+    expect(compatibilityDeletes).toHaveLength(2);
+    expect(compatibilityDeletes[0]).toMatch(/^delete:asset_metals:id:/);
+    expect(compatibilityDeletes[1]).toMatch(/^delete:assets:id:/);
     expect(categoryRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -351,7 +356,18 @@ describe("manual-qa-seed script helpers", () => {
     ).toBe(false);
     expect(assetRows).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: "21k Gold Chain", type: "METAL" }),
+        expect.objectContaining({
+          name: "21k Gold Chain",
+          type: "METAL",
+          purchase_price_decimal: "18500",
+          purchase_currency: "EGP",
+        }),
+        expect.objectContaining({
+          name: "Gold Test Bar",
+          type: "METAL",
+          purchase_price_decimal: "12500",
+          purchase_currency: "USD",
+        }),
         expect.objectContaining({
           name: "Apartment Down Payment",
           type: "REAL_ESTATE",
@@ -366,12 +382,48 @@ describe("manual-qa-seed script helpers", () => {
     expectRowsStampedForIncrementalPull(assetRows);
     expect(assetMetalRows).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ metal_type: "GOLD", item_form: "Jewelry" }),
-        expect.objectContaining({ metal_type: "SILVER", item_form: "Coins" }),
-        expect.objectContaining({ metal_type: "PLATINUM", item_form: "Bar" }),
+        expect.objectContaining({
+          metal_type: "GOLD",
+          item_form: "Jewelry",
+          weight_grams_decimal: "24.5",
+          purity_code: "gold-875",
+          purity_factor_decimal: "0.875",
+          purity_catalog_version: "1",
+        }),
+        expect.objectContaining({
+          metal_type: "SILVER",
+          item_form: "Coins",
+          weight_grams_decimal: "250",
+          purity_code: "silver-999",
+          purity_factor_decimal: "0.999",
+          purity_catalog_version: "1",
+        }),
+        expect.objectContaining({
+          metal_type: "GOLD",
+          item_form: "Bar",
+          weight_grams_decimal: "10",
+          purity_code: "gold-999",
+          purity_factor_decimal: "0.999",
+          purity_catalog_version: "1",
+        }),
+      ])
+    );
+    expect(assetMetalRows).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ metal_type: "PLATINUM" }),
       ])
     );
     expectRowsStampedForIncrementalPull(assetMetalRows);
+    expect(metalHoldingStateRows).toHaveLength(3);
+    expect(metalHoldingStateRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          status: "active",
+          financial_revision: "0",
+          reconciliation_state: "accepted",
+        }),
+      ])
+    );
     expect(budgetRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -700,6 +752,7 @@ interface MockClientOptions {
   readonly categoryRows?: unknown[];
   readonly debtRows?: unknown[];
   readonly marketRateRows?: unknown[];
+  readonly metalHoldingStateRows?: unknown[];
   readonly profileRows?: unknown[];
   readonly recurringPaymentRows?: unknown[];
   readonly transactionRows?: unknown[];
@@ -756,6 +809,10 @@ function createMockClient(
           operations.push(`delete:${table}:${column}:${value}`);
           return Promise.resolve({ error: null });
         },
+        in: (column: string, values: readonly string[]) => {
+          operations.push(`delete:${table}:${column}:${values.join(",")}`);
+          return Promise.resolve({ error: null });
+        },
       }),
       upsert: (rows: unknown[] | { user_id?: string; id?: string }) => {
         const marker = Array.isArray(rows)
@@ -782,6 +839,9 @@ function createMockClient(
         }
         if (table === "market_rates") {
           options.marketRateRows?.push(rows);
+        }
+        if (table === "metal_holding_states" && Array.isArray(rows)) {
+          options.metalHoldingStateRows?.push(...rows);
         }
         if (table === "profiles") {
           options.profileRows?.push(rows);
