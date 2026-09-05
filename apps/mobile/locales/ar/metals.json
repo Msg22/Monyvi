@@ -148,7 +148,7 @@
     "calculation_disclosure": "تم احتسابها من أسعار السوق الحالية.",
     "paid": "تم الدفع",
     "timeline_current_value": "القيمة الحالية في هذه المرحلة",
-    "fact_accessibility": "{{label}}: {{value}}",
+    "fact_accessibility": "{{label}} هو {{value}}",
     "since_purchase": "{{amount}} منذ الشراء",
     "holding_story": "قصة المقتنى",
     "physical_facts": "الحقائق المادية",
