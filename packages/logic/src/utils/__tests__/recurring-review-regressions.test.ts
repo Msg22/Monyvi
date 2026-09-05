@@ -13,7 +13,10 @@ describe("recurring review regressions", () => {
   });
 
   it("formats persisted small amounts without scientific notation", () => {
-    const candidate = Reflect.get(AmountHelpers, "formatStoredAmountInput");
+    const candidate: unknown = Reflect.get(
+      AmountHelpers,
+      "formatStoredAmountInput"
+    );
 
     expect(typeof candidate).toBe("function");
     const formatStoredAmountInput = candidate as (amount: number) => string;
