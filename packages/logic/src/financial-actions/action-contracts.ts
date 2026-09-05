@@ -2,8 +2,8 @@ import {
   DEFAULT_FINANCIAL_ACTION_REGISTRY,
   MAX_CANONICAL_ACTION_UTF8_BYTES,
   getFinancialActionUtf8ByteLength,
-  type FinancialActionValidationInput,
   type FinancialActionRegistry,
+  type FinancialActionValidationInput,
   type RegisteredActionPayload,
 } from "./action-registry";
 

@@ -134,11 +134,13 @@ This topology controls ownership, dependency stacks, and future review size. Aft
 > PR #254 integration verification (2026-09-01): migration 068, persisted
 > models, exact text projections, server-bounded observation pull, generic
 > protected-field guards, deterministic fixtures, content, and render assets are
-> verified Green. T042–T045 and T049 remain unchecked because the approved
-> Add/Correct/Sell v2/Dispose/Delete/Undo payload registry and the executable
-> action/evidence/event/rate-reference coordinator do not yet exist. Legacy Add
-> therefore remains fail-closed, and no offline/restart pending-action support is
-> claimed.
+> verified Green. The approved Add/Correct/Sell v2/Dispose/Delete/Undo payload
+> registry now exists and migration 001–068 replay plus focused pgTAP pass
+> locally. T042 remains unchecked because its linked-project `db:migrate`
+> workflow was not run; T043–T045 and T049 remain unchecked because the
+> executable action/evidence/event/rate-reference coordinator and full
+> offline/restart verification do not yet exist. Legacy Add therefore remains
+> fail-closed, and no pending-action support is claimed.
 
 - [ ] T042 Create `supabase/migrations/068_metals_domain.sql` with nullable legacy-unavailable exact fields, exact guarded backfill, states/events/role-unique references/observations, nullable current acquisition-action linkage with no invented legacy action, RLS, constraints, indexes, action-ID links, required unique `(user_id, action_id)` on `metal_action_evidence` for exactly one owner-scoped evidence row per action, and required unique `(user_id, action_id)` on `metal_lifecycle_events` for exactly one lifecycle event per owner/action; store/validate every holding revision as a canonical unsigned-integer string bounded to PostgreSQL signed-bigint max at local/RPC boundaries and `bigint` remotely; enforce expected holding revision only on Metals event/evidence for owner-scoped CAS that rejects account effects; run `npm run db:migrate` and update only Metals schema/migrations/generated types/persisted-field models/registrations under `packages/db/src/`
 - [ ] T043 Implement scoped one-writer Metals evidence and expected-holding-revision persistence/CAS on linked event/evidence while adapting only generic identity/hash/state/outcome interfaces and decoding canonical outcomes in `apps/mobile/services/metal-financial-action-repository.ts`, `apps/mobile/services/metal-holding-command-service.ts`, and `apps/mobile/services/metal-financial-action-adapter.ts`

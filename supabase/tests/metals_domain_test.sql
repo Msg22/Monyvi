@@ -1,6 +1,6 @@
 begin;
 
-select plan(55);
+select plan(64);
 
 select has_table('public', 'metal_holding_states', 'holding projection exists');
 select has_table('public', 'metal_action_evidence', 'action evidence exists');
@@ -158,6 +158,26 @@ insert into public.assets (
     'Holding B', 'METAL', false, 200, '2026-08-31', 'USD', 200, 'USD', now(), now(), false
   );
 
+insert into public.assets (
+  id, user_id, name, type, is_liquid, purchase_price, purchase_date, currency,
+  purchase_price_decimal, purchase_currency, created_at, updated_at, deleted
+) values (
+  '018f0c7a-1234-7abc-8def-000000000024',
+  '018f0c7a-1234-7abc-8def-000000000003',
+  'Future timestamp probe', 'METAL', false, 10, '2026-08-31', 'EGP',
+  10, 'EGP', now(), '2099-01-01T00:00:00Z', false
+);
+select cmp_ok(
+  (
+    select updated_at
+    from public.assets
+    where id = '018f0c7a-1234-7abc-8def-000000000024'
+  ),
+  '<=',
+  statement_timestamp(),
+  'generic sync inserts cannot retain a future client updated_at'
+);
+
 insert into public.asset_metals (
   id, asset_id, metal_type, weight_grams, purity_fraction,
   weight_grams_decimal, purity_code, purity_factor_decimal, purity_catalog_version,
@@ -209,7 +229,9 @@ select throws_ok(
 
 create or replace function pg_temp.metal_root_envelope(
   p_action_id text,
-  p_holding_id text
+  p_holding_id text,
+  p_metal_type text,
+  p_sale_currency text
 )
 returns jsonb
 language sql
@@ -224,29 +246,34 @@ as $$
     'kind', 'sell',
     'occurredAt', '2026-08-31T10:15:30.123Z',
     'payload', jsonb_build_object(
+      'expectedHoldingRevision', '0',
       'feeMinorUnits', '0',
-      'grossProceedsDecimal', '100',
+      'grossProceedsMinorUnits', '10000',
       'holdingId', p_holding_id,
-      'includeAccountCredit', false,
+      'metalType', p_metal_type,
       'netProceedsMinorUnits', '10000',
       'notes', 'fixture',
-      'rateReferenceIds', '[]'::jsonb
+      'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000099',
+      'rateSnapshots', '[]'::jsonb,
+      'reversesEventId', null,
+      'saleCurrency', p_sale_currency,
+      'saleDate', '2026-08-31'
     ),
-    'payloadVersion', 'metals.sell/v1',
+    'payloadVersion', 'metals.sell/v2',
     'userId', '018f0c7a-1234-7abc-8def-000000000003'
   )
 $$;
 
-with roots(action_id, holding_id) as (
+with roots(action_id, holding_id, metal_type, sale_currency) as (
   values
-    ('018f0c7a-1234-7abc-8def-000000000001', '018f0c7a-1234-7abc-8def-000000000004'),
-    ('018f0c7a-1234-7abc-8def-000000000011', '018f0c7a-1234-7abc-8def-000000000014')
+    ('018f0c7a-1234-7abc-8def-000000000001', '018f0c7a-1234-7abc-8def-000000000004', 'GOLD', 'EGP'),
+    ('018f0c7a-1234-7abc-8def-000000000011', '018f0c7a-1234-7abc-8def-000000000014', 'SILVER', 'USD')
 ), payloads as (
   select
     action_id::uuid,
     holding_id::uuid,
     private.financial_action_encode_jsonb_v1(
-      pg_temp.metal_root_envelope(action_id, holding_id)
+      pg_temp.metal_root_envelope(action_id, holding_id, metal_type, sale_currency)
     ) as payload_json
   from roots
 )
@@ -261,6 +288,18 @@ select
   encode(extensions.digest(convert_to(payload_json, 'UTF8'), 'sha256'), 'hex'),
   '[]'::jsonb, 'pending_local', false
 from payloads;
+
+select throws_ok(
+  $$insert into public.metal_action_evidence (
+      user_id, action_id, holding_id, kind, expected_holding_revision, domain_payload_json
+    ) values (
+      '018f0c7a-1234-7abc-8def-000000000003',
+      '018f0c7a-1234-7abc-8def-000000000001',
+      '018f0c7a-1234-7abc-8def-000000000004', 'sell', 1, '{}'
+    )$$,
+  '22023', 'metal_action_root_binding_mismatch',
+  'evidence revision must match the canonical action root'
+);
 
 select throws_ok(
   $$insert into public.metal_action_evidence (
@@ -293,6 +332,18 @@ select throws_ok(
       user_id, holding_id, action_id, kind, occurred_at, payload_json
     ) values (
       '018f0c7a-1234-7abc-8def-000000000003',
+      '018f0c7a-1234-7abc-8def-000000000004',
+      '018f0c7a-1234-7abc-8def-000000000001', 'dispose', now(), '{}'
+    )$$,
+  '23503', null,
+  'lifecycle kind must match its action evidence'
+);
+
+select throws_ok(
+  $$insert into public.metal_lifecycle_events (
+      user_id, holding_id, action_id, kind, occurred_at, payload_json
+    ) values (
+      '018f0c7a-1234-7abc-8def-000000000003',
       '018f0c7a-1234-7abc-8def-000000000014',
       '018f0c7a-1234-7abc-8def-000000000001', 'sell', now(), '{}'
     )$$,
@@ -306,6 +357,14 @@ insert into public.metal_lifecycle_events (
   '018f0c7a-1234-7abc-8def-000000000003',
   '018f0c7a-1234-7abc-8def-000000000004',
   '018f0c7a-1234-7abc-8def-000000000001', 'sell', now(), '{}'
+);
+insert into public.metal_lifecycle_events (
+  id, user_id, holding_id, action_id, kind, occurred_at, payload_json
+) values (
+  '018f0c7a-1234-7abc-8def-000000000016',
+  '018f0c7a-1234-7abc-8def-000000000003',
+  '018f0c7a-1234-7abc-8def-000000000014',
+  '018f0c7a-1234-7abc-8def-000000000011', 'sell', now(), '{}'
 );
 
 select throws_ok(
@@ -349,6 +408,21 @@ select throws_ok(
   'revision zero cannot claim action provenance'
 );
 
+select throws_ok(
+  $$insert into public.metal_holding_states (
+      id, user_id, holding_id, status, financial_revision,
+      effective_action_id, effective_event_id
+    ) values (
+      '018f0c7a-1234-7abc-8def-000000000014',
+      '018f0c7a-1234-7abc-8def-000000000003',
+      '018f0c7a-1234-7abc-8def-000000000014', 'sold', 1,
+      '018f0c7a-1234-7abc-8def-000000000011',
+      '018f0c7a-1234-7abc-8def-000000000006'
+    )$$,
+  '23503', null,
+  'effective action and event provenance must identify the same lifecycle row'
+);
+
 insert into public.metal_holding_states (
   id, user_id, holding_id, status, financial_revision
 ) values
@@ -375,6 +449,69 @@ select lives_ok(
       'usd_per_currency_unit', 'quote_per_base', null, 'valid', 'unknown', now()
     )$$,
   'null source remains truthful for a valid rate reference'
+);
+select throws_ok(
+  $$insert into public.metal_rate_references (
+      user_id, holding_id, action_id, role, kind, instrument_code, value_decimal,
+      unit, orientation, source, quality, captured_freshness,
+      provider_observed_at, captured_at
+    ) values (
+      '018f0c7a-1234-7abc-8def-000000000003',
+      '018f0c7a-1234-7abc-8def-000000000014',
+      '018f0c7a-1234-7abc-8def-000000000011',
+      'current_purchase_currency', 'currency', 'currency:USD', 1,
+      'usd_per_currency_unit', 'quote_per_base', 'fixture', 'valid', 'fresh',
+      null, now()
+    )$$,
+  '23514', null,
+  'freshness cannot be fresh without a provider observation time'
+);
+select lives_ok(
+  $$insert into public.metal_rate_references (
+      user_id, holding_id, action_id, role, kind, instrument_code, value_decimal,
+      unit, orientation, source, quality, captured_freshness,
+      provider_observed_at, captured_at
+    ) values (
+      '018f0c7a-1234-7abc-8def-000000000003',
+      '018f0c7a-1234-7abc-8def-000000000014',
+      '018f0c7a-1234-7abc-8def-000000000011',
+      'current_purchase_currency', 'currency', 'currency:USD', 1,
+      'usd_per_currency_unit', 'quote_per_base', 'fixture', 'valid', 'fresh',
+      '2026-08-30T00:00:00Z', '2026-08-31T00:00:00Z'
+    )$$,
+  'exactly 24-hour-old provider evidence remains fresh'
+);
+select lives_ok(
+  $$insert into public.metal_rate_references (
+      user_id, holding_id, action_id, role, kind, instrument_code, value_decimal,
+      unit, orientation, source, quality, captured_freshness,
+      provider_observed_at, captured_at
+    ) values (
+      '018f0c7a-1234-7abc-8def-000000000003',
+      '018f0c7a-1234-7abc-8def-000000000014',
+      '018f0c7a-1234-7abc-8def-000000000011',
+      'terminal_purchase_currency', 'currency', 'currency:USD', 1,
+      'usd_per_currency_unit', 'quote_per_base', 'fixture', 'valid', 'unknown',
+      '2026-09-01T00:00:00Z', '2026-08-31T00:00:00Z'
+    )$$,
+  'future provider timestamps preserve unknown freshness'
+);
+select throws_ok(
+  $$update public.metal_rate_references
+    set value_decimal = 2
+    where user_id = '018f0c7a-1234-7abc-8def-000000000003'
+      and action_id = '018f0c7a-1234-7abc-8def-000000000011'
+      and role = 'current_purchase_currency'$$,
+  '22023', 'metal_rate_reference_immutable',
+  'consumed rate evidence cannot be updated'
+);
+select throws_ok(
+  $$delete from public.metal_rate_references
+    where user_id = '018f0c7a-1234-7abc-8def-000000000003'
+      and action_id = '018f0c7a-1234-7abc-8def-000000000011'
+      and role = 'current_purchase_currency'$$,
+  '22023', 'metal_rate_reference_immutable',
+  'consumed rate evidence cannot be deleted'
 );
 select throws_ok(
   $$insert into public.metal_rate_references (

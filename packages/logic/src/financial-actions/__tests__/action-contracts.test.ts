@@ -21,7 +21,7 @@ import {
   MAX_CANONICAL_ACTION_UTF8_BYTES,
   MAX_CANONICAL_DECIMAL_SCALE,
   MAX_CANONICAL_FINANCIAL_DIGITS,
-  MetalsSellPayloadV1,
+  type MetalsSellPayloadV1,
   validateMetalsSellPayloadV1,
   type RegisteredActionPayload,
 } from "../action-registry";

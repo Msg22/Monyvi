@@ -106,6 +106,287 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION private.financial_action_validate_metals_sell_payload_v2(
+  p_payload jsonb
+)
+RETURNS void
+LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_snapshot jsonb;
+  v_sale_currency text;
+  v_metal_type text;
+BEGIN
+  IF jsonb_typeof(p_payload) IS DISTINCT FROM 'object'
+    OR (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(p_payload) AS key)
+      IS DISTINCT FROM ARRAY[
+        'expectedHoldingRevision', 'feeMinorUnits', 'grossProceedsMinorUnits',
+        'holdingId', 'metalType', 'netProceedsMinorUnits', 'notes',
+        'predecessorEventId', 'rateSnapshots', 'reversesEventId',
+        'saleCurrency', 'saleDate'
+      ]::text[]
+    OR private.metal_action_expected_revision_v1(
+      jsonb_build_object(
+        'accountGuards', '[]'::jsonb,
+        'domain', 'metals',
+        'domainReferenceId', p_payload ->> 'holdingId',
+        'kind', 'sell',
+        'payload', p_payload,
+        'payloadVersion', 'metals.sell/v2'
+      )
+    ) IS NULL
+    OR jsonb_typeof(p_payload -> 'predecessorEventId') IS DISTINCT FROM 'string'
+    OR (p_payload ->> 'predecessorEventId') !~
+      '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    OR jsonb_typeof(p_payload -> 'reversesEventId') IS DISTINCT FROM 'null'
+    OR jsonb_typeof(p_payload -> 'metalType') IS DISTINCT FROM 'string'
+    OR p_payload ->> 'metalType' NOT IN ('GOLD', 'SILVER')
+    OR jsonb_typeof(p_payload -> 'saleCurrency') IS DISTINCT FROM 'string'
+    OR p_payload ->> 'saleCurrency' NOT IN (
+      'EGP', 'SAR', 'AED', 'KWD', 'QAR', 'BHD', 'OMR', 'JOD', 'IQD',
+      'LYD', 'TND', 'MAD', 'DZD', 'USD', 'EUR', 'GBP', 'JPY', 'CHF',
+      'CNY', 'INR', 'KRW', 'KPW', 'SGD', 'HKD', 'MYR', 'AUD', 'NZD',
+      'CAD', 'SEK', 'NOK', 'DKK', 'ISK', 'TRY', 'RUB', 'ZAR'
+    )
+    OR jsonb_typeof(p_payload -> 'saleDate') IS DISTINCT FROM 'string'
+    OR (p_payload ->> 'saleDate') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+    OR to_char(to_date(p_payload ->> 'saleDate', 'YYYY-MM-DD'), 'YYYY-MM-DD')
+      <> p_payload ->> 'saleDate'
+    OR jsonb_typeof(p_payload -> 'notes') NOT IN ('string', 'null')
+    OR octet_length(p_payload ->> 'notes') > 4096
+    OR jsonb_typeof(p_payload -> 'grossProceedsMinorUnits') IS DISTINCT FROM 'string'
+    OR jsonb_typeof(p_payload -> 'feeMinorUnits') IS DISTINCT FROM 'string'
+    OR jsonb_typeof(p_payload -> 'netProceedsMinorUnits') IS DISTINCT FROM 'string'
+    OR (p_payload ->> 'grossProceedsMinorUnits') !~ '^(0|[1-9][0-9]*)$'
+    OR (p_payload ->> 'feeMinorUnits') !~ '^(0|[1-9][0-9]*)$'
+    OR (p_payload ->> 'netProceedsMinorUnits') !~ '^(0|[1-9][0-9]*)$'
+    OR length(p_payload ->> 'grossProceedsMinorUnits') > 50
+    OR length(p_payload ->> 'feeMinorUnits') > 50
+    OR length(p_payload ->> 'netProceedsMinorUnits') > 50
+    OR (p_payload ->> 'feeMinorUnits')::numeric >
+      (p_payload ->> 'grossProceedsMinorUnits')::numeric
+    OR (p_payload ->> 'netProceedsMinorUnits')::numeric <>
+      (p_payload ->> 'grossProceedsMinorUnits')::numeric -
+      (p_payload ->> 'feeMinorUnits')::numeric
+    OR jsonb_typeof(p_payload -> 'rateSnapshots') IS DISTINCT FROM 'array'
+    OR jsonb_array_length(p_payload -> 'rateSnapshots') NOT IN (0, 3)
+  THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload';
+  END IF;
+
+  IF jsonb_array_length(p_payload -> 'rateSnapshots') = 0 THEN
+    RETURN;
+  END IF;
+
+  v_sale_currency := p_payload ->> 'saleCurrency';
+  v_metal_type := p_payload ->> 'metalType';
+  IF (
+    SELECT array_agg(snapshot ->> 'role' ORDER BY snapshot ->> 'role')
+    FROM jsonb_array_elements(p_payload -> 'rateSnapshots') AS item(snapshot)
+  ) IS DISTINCT FROM ARRAY[
+    'terminal_metal', 'terminal_proceeds_currency', 'terminal_purchase_currency'
+  ]::text[] THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload';
+  END IF;
+
+  FOR v_snapshot IN
+    SELECT item.snapshot
+    FROM jsonb_array_elements(p_payload -> 'rateSnapshots') AS item(snapshot)
+  LOOP
+    IF jsonb_typeof(v_snapshot) IS DISTINCT FROM 'object'
+      OR (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(v_snapshot) AS key)
+        IS DISTINCT FROM ARRAY[
+          'capturedAt', 'capturedFreshness', 'instrumentCode', 'kind',
+          'orientation', 'providerObservedAt', 'quality', 'referenceId',
+          'role', 'source', 'unit', 'valueDecimal'
+        ]::text[]
+      OR jsonb_typeof(v_snapshot -> 'referenceId') IS DISTINCT FROM 'string'
+      OR (v_snapshot ->> 'referenceId') !~
+        '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      OR jsonb_typeof(v_snapshot -> 'valueDecimal') IS DISTINCT FROM 'string'
+      OR (v_snapshot ->> 'valueDecimal') !~
+        '^([1-9][0-9]*|(0|[1-9][0-9]*)\.[0-9]*[1-9])$'
+      OR length(replace(v_snapshot ->> 'valueDecimal', '.', '')) > 50
+      OR length(split_part(v_snapshot ->> 'valueDecimal', '.', 2)) > 18
+      OR jsonb_typeof(v_snapshot -> 'quality') IS DISTINCT FROM 'string'
+      OR v_snapshot ->> 'quality' <> 'valid'
+      OR jsonb_typeof(v_snapshot -> 'capturedFreshness') IS DISTINCT FROM 'string'
+      OR v_snapshot ->> 'capturedFreshness' NOT IN ('fresh', 'stale', 'unknown')
+      OR jsonb_typeof(v_snapshot -> 'capturedAt') IS DISTINCT FROM 'string'
+      OR (v_snapshot ->> 'capturedAt') !~
+        '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$'
+      OR (
+        jsonb_typeof(v_snapshot -> 'providerObservedAt') IS DISTINCT FROM 'null'
+        AND (
+          jsonb_typeof(v_snapshot -> 'providerObservedAt') IS DISTINCT FROM 'string'
+          OR (v_snapshot ->> 'providerObservedAt') !~
+            '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$'
+        )
+      )
+      OR (
+        jsonb_typeof(v_snapshot -> 'source') IS DISTINCT FROM 'null'
+        AND (
+          jsonb_typeof(v_snapshot -> 'source') IS DISTINCT FROM 'string'
+          OR length(btrim(v_snapshot ->> 'source')) = 0
+        )
+      )
+      OR (
+        jsonb_typeof(v_snapshot -> 'providerObservedAt') = 'null'
+        AND v_snapshot ->> 'capturedFreshness' <> 'unknown'
+      )
+      OR (
+        jsonb_typeof(v_snapshot -> 'providerObservedAt') = 'string'
+        AND (
+          (
+            (v_snapshot ->> 'providerObservedAt')::timestamptz >
+              (v_snapshot ->> 'capturedAt')::timestamptz
+            AND v_snapshot ->> 'capturedFreshness' <> 'unknown'
+          )
+          OR (
+            (v_snapshot ->> 'providerObservedAt')::timestamptz <=
+              (v_snapshot ->> 'capturedAt')::timestamptz
+            AND (v_snapshot ->> 'capturedAt')::timestamptz -
+              (v_snapshot ->> 'providerObservedAt')::timestamptz <= interval '24 hours'
+            AND v_snapshot ->> 'capturedFreshness' <> 'fresh'
+          )
+          OR (
+            (v_snapshot ->> 'providerObservedAt')::timestamptz <=
+              (v_snapshot ->> 'capturedAt')::timestamptz
+            AND (v_snapshot ->> 'capturedAt')::timestamptz -
+              (v_snapshot ->> 'providerObservedAt')::timestamptz > interval '24 hours'
+            AND v_snapshot ->> 'capturedFreshness' <> 'stale'
+          )
+        )
+      )
+      OR (
+        v_snapshot ->> 'role' = 'terminal_metal'
+        AND (
+          v_snapshot ->> 'kind' <> 'metal'
+          OR v_snapshot ->> 'instrumentCode' <> 'metal:' || v_metal_type
+          OR v_snapshot ->> 'unit' <> 'usd_per_pure_gram'
+          OR v_snapshot ->> 'orientation' <> 'quote_per_base'
+        )
+      )
+      OR (
+        v_snapshot ->> 'role' IN (
+          'terminal_purchase_currency', 'terminal_proceeds_currency'
+        )
+        AND (
+          v_snapshot ->> 'kind' <> 'currency'
+          OR v_snapshot ->> 'instrumentCode' <> 'currency:' || v_sale_currency
+          OR NOT (
+            (v_snapshot ->> 'unit' = 'usd_per_currency_unit'
+              AND v_snapshot ->> 'orientation' = 'quote_per_base')
+            OR
+            (v_snapshot ->> 'unit' = 'currency_units_per_usd'
+              AND v_snapshot ->> 'orientation' = 'base_per_quote')
+          )
+          OR (
+            v_snapshot ->> 'instrumentCode' = 'currency:USD'
+            AND v_snapshot ->> 'valueDecimal' <> '1'
+          )
+        )
+      )
+    THEN
+      RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload';
+    END IF;
+  END LOOP;
+
+  IF (
+    SELECT count(DISTINCT snapshot ->> 'referenceId')
+    FROM jsonb_array_elements(p_payload -> 'rateSnapshots') AS item(snapshot)
+  ) <> 3 THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload';
+  END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION private.financial_action_validate_registered_payload_v1(
+  p_value jsonb
+)
+RETURNS void
+LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  IF p_value ->> 'domain' = 'metals'
+    AND p_value ->> 'kind' = 'sell'
+    AND p_value ->> 'payloadVersion' = 'metals.sell/v2'
+  THEN
+    PERFORM private.financial_action_validate_metals_sell_payload_v2(p_value -> 'payload');
+    RETURN;
+  END IF;
+  IF p_value ->> 'domain' = 'metals'
+    AND p_value ->> 'kind' = 'sell'
+    AND p_value ->> 'payloadVersion' = 'metals.sell/v1'
+  THEN
+    PERFORM private.financial_action_validate_metals_sell_payload_v1(p_value -> 'payload');
+    RETURN;
+  END IF;
+  RAISE EXCEPTION USING
+    ERRCODE = '22023',
+    MESSAGE = 'financial_action_unknown_definition';
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION private.set_server_insert_updated_at_v1()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  NEW.updated_at := statement_timestamp();
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER account_sms_senders_set_server_insert_updated_at
+BEFORE INSERT ON public.account_sms_senders
+FOR EACH ROW EXECUTE FUNCTION private.set_server_insert_updated_at_v1();
+CREATE TRIGGER accounts_set_server_insert_updated_at
+BEFORE INSERT ON public.accounts
+FOR EACH ROW EXECUTE FUNCTION private.set_server_insert_updated_at_v1();
+CREATE TRIGGER asset_metals_set_server_insert_updated_at
+BEFORE INSERT ON public.asset_metals
+FOR EACH ROW EXECUTE FUNCTION private.set_server_insert_updated_at_v1();
+CREATE TRIGGER assets_set_server_insert_updated_at
+BEFORE INSERT ON public.assets
+FOR EACH ROW EXECUTE FUNCTION private.set_server_insert_updated_at_v1();
+CREATE TRIGGER bank_details_set_server_insert_updated_at
+BEFORE INSERT ON public.bank_details
+FOR EACH ROW EXECUTE FUNCTION private.set_server_insert_updated_at_v1();
+CREATE TRIGGER budgets_set_server_insert_updated_at
+BEFORE INSERT ON public.budgets
+FOR EACH ROW EXECUTE FUNCTION private.set_server_insert_updated_at_v1();
+CREATE TRIGGER categories_set_server_insert_updated_at
+BEFORE INSERT ON public.categories
+FOR EACH ROW EXECUTE FUNCTION private.set_server_insert_updated_at_v1();
+CREATE TRIGGER debts_set_server_insert_updated_at
+BEFORE INSERT ON public.debts
+FOR EACH ROW EXECUTE FUNCTION private.set_server_insert_updated_at_v1();
+CREATE TRIGGER profiles_set_server_insert_updated_at
+BEFORE INSERT ON public.profiles
+FOR EACH ROW EXECUTE FUNCTION private.set_server_insert_updated_at_v1();
+CREATE TRIGGER recurring_payments_set_server_insert_updated_at
+BEFORE INSERT ON public.recurring_payments
+FOR EACH ROW EXECUTE FUNCTION private.set_server_insert_updated_at_v1();
+CREATE TRIGGER transactions_set_server_insert_updated_at
+BEFORE INSERT ON public.transactions
+FOR EACH ROW EXECUTE FUNCTION private.set_server_insert_updated_at_v1();
+CREATE TRIGGER transfers_set_server_insert_updated_at
+BEFORE INSERT ON public.transfers
+FOR EACH ROW EXECUTE FUNCTION private.set_server_insert_updated_at_v1();
+CREATE TRIGGER user_category_settings_set_server_insert_updated_at
+BEFORE INSERT ON public.user_category_settings
+FOR EACH ROW EXECUTE FUNCTION private.set_server_insert_updated_at_v1();
+
 ALTER TABLE public.assets
   ADD COLUMN purchase_price_decimal numeric,
   ADD COLUMN purchase_currency text,
@@ -376,8 +657,9 @@ CREATE TABLE public.metal_holding_states (
   FOREIGN KEY (user_id, holding_id)
     REFERENCES public.assets (user_id, id) ON DELETE RESTRICT,
   CHECK (id = holding_id),
-  CHECK (
-    (financial_revision = 0) = (effective_action_id IS NULL)
+  CONSTRAINT metal_holding_states_provenance_pair_check CHECK (
+    (financial_revision = 0) =
+      (effective_action_id IS NULL AND effective_event_id IS NULL)
   )
 );
 
@@ -401,6 +683,7 @@ CREATE TABLE public.metal_action_evidence (
   deleted boolean NOT NULL DEFAULT false,
   UNIQUE (user_id, action_id),
   UNIQUE (user_id, action_id, holding_id),
+  UNIQUE (user_id, action_id, holding_id, kind),
   FOREIGN KEY (user_id, action_id, holding_id)
     REFERENCES public.financial_action_groups (
       user_id, action_id, domain_reference_id
@@ -427,6 +710,9 @@ BEGIN
       AND action_root.action_id = NEW.action_id
       AND action_root.domain = 'metals'
       AND action_root.kind = NEW.kind
+      AND private.metal_action_expected_revision_v1(
+        action_root.payload_json::jsonb
+      ) IS NOT DISTINCT FROM NEW.expected_holding_revision
   ) THEN
     RAISE EXCEPTION USING
       ERRCODE = '22023',
@@ -467,8 +753,9 @@ CREATE TABLE public.metal_lifecycle_events (
   deleted boolean NOT NULL DEFAULT false,
   UNIQUE (user_id, action_id),
   UNIQUE (user_id, holding_id, id),
-  FOREIGN KEY (user_id, action_id, holding_id)
-    REFERENCES public.metal_action_evidence (user_id, action_id, holding_id)
+  UNIQUE (user_id, holding_id, action_id, id),
+  FOREIGN KEY (user_id, action_id, holding_id, kind)
+    REFERENCES public.metal_action_evidence (user_id, action_id, holding_id, kind)
     ON DELETE RESTRICT,
   FOREIGN KEY (user_id, holding_id)
     REFERENCES public.assets (user_id, id) ON DELETE RESTRICT,
@@ -485,6 +772,11 @@ ALTER TABLE public.metal_holding_states
   FOREIGN KEY (user_id, holding_id, effective_event_id)
   REFERENCES public.metal_lifecycle_events (user_id, holding_id, id)
   DEFERRABLE INITIALLY DEFERRED;
+
+ALTER TABLE public.metal_holding_states
+  ADD CONSTRAINT metal_holding_states_effective_provenance_fk
+  FOREIGN KEY (user_id, holding_id, effective_action_id, effective_event_id)
+  REFERENCES public.metal_lifecycle_events (user_id, holding_id, action_id, id);
 
 CREATE TABLE public.metal_rate_references (
   id uuid PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
@@ -519,6 +811,27 @@ CREATE TABLE public.metal_rate_references (
   FOREIGN KEY (user_id, holding_id)
     REFERENCES public.assets (user_id, id) ON DELETE RESTRICT,
   CHECK (source IS NULL OR length(btrim(source)) > 0),
+  CHECK (
+    (
+      captured_freshness = 'unknown'
+      AND (
+        provider_observed_at IS NULL
+        OR provider_observed_at > captured_at
+      )
+    )
+    OR (
+      captured_freshness = 'fresh'
+      AND provider_observed_at IS NOT NULL
+      AND provider_observed_at <= captured_at
+      AND captured_at - provider_observed_at <= interval '24 hours'
+    )
+    OR (
+      captured_freshness = 'stale'
+      AND provider_observed_at IS NOT NULL
+      AND provider_observed_at <= captured_at
+      AND captured_at - provider_observed_at > interval '24 hours'
+    )
+  ),
   CHECK (instrument_code <> 'currency:USD' OR value_decimal = 1),
   CHECK (
     (
@@ -554,6 +867,22 @@ CREATE TABLE public.metal_rate_references (
     )
   )
 );
+
+CREATE OR REPLACE FUNCTION private.guard_immutable_metal_rate_reference_v1()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  RAISE EXCEPTION USING
+    ERRCODE = '22023',
+    MESSAGE = 'metal_rate_reference_immutable';
+END;
+$$;
+
+CREATE TRIGGER metal_rate_references_guard_immutable
+BEFORE UPDATE OR DELETE ON public.metal_rate_references
+FOR EACH ROW EXECUTE FUNCTION private.guard_immutable_metal_rate_reference_v1();
 
 CREATE TABLE public.market_rate_observations (
   id uuid PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
@@ -821,3 +1150,11 @@ REVOKE ALL ON FUNCTION private.metal_action_expected_revision_v1(jsonb)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION private.metal_action_expected_revision_v1(jsonb)
   TO service_role;
+REVOKE ALL ON FUNCTION private.financial_action_validate_metals_sell_payload_v2(jsonb)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION private.financial_action_validate_metals_sell_payload_v2(jsonb)
+  TO service_role;
+REVOKE ALL ON FUNCTION private.set_server_insert_updated_at_v1()
+  FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION private.guard_immutable_metal_rate_reference_v1()
+  FROM PUBLIC, anon, authenticated;

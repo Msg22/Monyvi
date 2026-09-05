@@ -169,6 +169,28 @@ export function createMetalsActionPayloadRegistry(
     /^(?:0|[1-9][0-9]*)$/.test(value) &&
     (value.length < 19 ||
       (value.length === 19 && value <= "9223372036854775807"));
+  const hasExpectedFreshness = (
+    providerObservedAt: unknown,
+    capturedAt: unknown,
+    capturedFreshness: unknown
+  ): boolean => {
+    if (
+      !isUtcMillisecond(capturedAt) ||
+      (providerObservedAt !== null && !isUtcMillisecond(providerObservedAt))
+    ) {
+      return false;
+    }
+    const capturedTime = Date.parse(capturedAt);
+    const providerTime =
+      providerObservedAt === null ? null : Date.parse(providerObservedAt);
+    const expectedFreshness =
+      providerTime === null || providerTime > capturedTime
+        ? "unknown"
+        : capturedTime - providerTime > 86_400_000
+          ? "stale"
+          : "fresh";
+    return capturedFreshness === expectedFreshness;
+  };
   const requireObject = (value: unknown): RawPayload => {
     if (!isPlainObject(value)) fail();
     return value as RawPayload;
@@ -303,10 +325,12 @@ export function createMetalsActionPayloadRegistry(
         (raw.source !== null &&
           (typeof raw.source !== "string" || raw.source.trim().length === 0)) ||
         raw.quality !== "valid" ||
-        (raw.capturedFreshness !== "fresh" &&
-          raw.capturedFreshness !== "stale" &&
-          raw.capturedFreshness !== "unknown") ||
-        !isUtcMillisecond(raw.capturedAt)
+        !isUtcMillisecond(raw.capturedAt) ||
+        !hasExpectedFreshness(
+          raw.providerObservedAt,
+          raw.capturedAt,
+          raw.capturedFreshness
+        )
       )
         fail();
       const metalRole =

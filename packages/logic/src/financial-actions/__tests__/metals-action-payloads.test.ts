@@ -349,6 +349,31 @@ describe("approved Metals financial action payload registry", () => {
         VALIDATION_INPUT
       )
     ).toThrow(FINANCIAL_ACTION_ERROR_CODES.INVALID_PAYLOAD);
+
+    const invalidFreshnessSnapshots = [
+      { providerObservedAt: null, capturedFreshness: "fresh" },
+      {
+        providerObservedAt: "2026-09-01T10:16:00.124Z",
+        capturedFreshness: "fresh",
+      },
+      {
+        providerObservedAt: "2026-08-30T10:15:59.999Z",
+        capturedFreshness: "fresh",
+      },
+    ];
+    invalidFreshnessSnapshots.forEach((replacement) => {
+      expect(() =>
+        definition("sell", "metals.sell/v2").validatePayload(
+          {
+            ...payloadFor("sell", "metals.sell/v2"),
+            rateSnapshots: terminalSnapshots().map((snapshot, index) =>
+              index === 0 ? { ...snapshot, ...replacement } : snapshot
+            ),
+          },
+          VALIDATION_INPUT
+        )
+      ).toThrow(FINANCIAL_ACTION_ERROR_CODES.INVALID_PAYLOAD);
+    });
   });
 
   it("allows Silver while keeping material corrections and terminal snapshots type-consistent", () => {
