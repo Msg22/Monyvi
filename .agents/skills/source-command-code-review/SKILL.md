@@ -60,13 +60,13 @@ Source-of-truth rules:
 - Spec folder only: treat the spec folder as the source of truth for feature
   requirements.
 - Linked issue only: treat the linked issue as the source of truth for feature
-  requirements and business logic during the review, subject to the
-  constitution and `docs/business/business-decisions.md`.
+  requirements and business logic during the review, subject to the constitution
+  and `docs/business/business-decisions.md`.
 - Both spec folder and linked issue: treat both artifacts together as the source
   of truth. The implementation must satisfy every requirement in both.
 
-If both a spec folder and linked issue exist, compare them before reviewing code.
-Report any gap, contradiction, missing acceptance criterion, or mismatched
+If both a spec folder and linked issue exist, compare them before reviewing
+code. Report any gap, contradiction, missing acceptance criterion, or mismatched
 business rule between them as a review finding. Do not approve until the gap is
 resolved or explicitly accepted by Mohamed.
 
@@ -210,6 +210,23 @@ If the folder does not exist, write `No mockups found - N/A`. If it exists, load
 every mockup image and compare each one against the corresponding component or
 screen implementation.
 
+Establish the approved mockup's declared UI viewport or component context before
+comparison. Treat presentation-only device hardware, frame, outer canvas,
+browser chrome, export padding, and background outside the UI surface as
+non-binding unless the handoff explicitly marks them binding.
+
+Source and component inspection alone cannot prove visual completion. Inspect
+rendered app screenshots and require:
+
+- side-by-side or overlay evidence against the approved reference at the
+  declared UI context;
+- rendered evidence for every in-scope responsive, dark-mode, RTL/Arabic, and
+  enlarged-text variant; and
+- separate functional-readiness and visual-fidelity statuses.
+
+If required evidence is absent, mark visual fidelity unverified and the reviewed
+work not approvable.
+
 For each mockup, validate all seven categories:
 
 1. Layout and structure.
@@ -236,10 +253,14 @@ Corresponds to: <component or screen>
 | Components and UI     | PASS/FAIL | ...   |
 | States                | PASS/FAIL | ...   |
 | Interactions          | PASS/FAIL | ...   |
+| Binding UI Context    | PASS/FAIL | ...   |
+| Rendered Comparison   | PASS/FAIL | ...   |
+| Scoped Variants       | PASS/FAIL | ...   |
 ```
 
-Mockup deviations make the reviewed work not approvable. Fix UI changes to match
-mockups without inventing new design decisions.
+Mockup deviations or missing required rendered evidence make the reviewed work
+not approvable. Fix UI changes to match mockups without inventing new design
+decisions.
 
 ### 2.6 General Best Practices
 
@@ -370,7 +391,8 @@ Keep fixes surgical. Do not refactor unrelated code. Preserve user changes you
 did not make.
 
 Verify with focused tests and checks that would have caught the original issues.
-For UI fixes, use the best available visual validation path.
+For approved-mockup UI fixes, capture the required side-by-side or overlay and
+scoped-variant rendered evidence at the declared UI context.
 
 ## 5. Create Fix Pull Request
 
@@ -403,7 +425,10 @@ The reviewed work is not approvable if any of these remain:
 - Broken monorepo boundaries.
 - Missing migrations or database inconsistencies.
 - Mockup deviations.
+- Missing required mockup comparison or scoped-variant rendered evidence.
 
 Success means the code fully matches the constitution, `.agent/rules/*.md`, the
 selected spec folder, the linked issue when present, and any approved mockups,
-with no missing functionality or architectural violations.
+with no missing functionality or architectural violations. Approved-mockup UI
+must also have the required rendered evidence, with functional readiness and
+visual fidelity reported separately.

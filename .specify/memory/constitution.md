@@ -14,11 +14,15 @@ Sync Impact Report
 - Agent guidance reviewed:
   - .agent/workflows/sprint-issue.md ✅ updated with the approved mockup fidelity
     and rendered-comparison gate.
+  - .agent/workflows/code-review.md ✅ updated to require rendered comparison
+    evidence before visual approval.
   - .agent/rules/ecc-coding-style.md ✅ updated with approved mockup fidelity
     requirements.
   - .agent/rules/specify-rules.md ✅ updated with binding-context and visual
     evidence requirements for feature delivery.
   - .agent/rules/ecc-patterns.md ✅ compatible; no update required.
+  - .agents/skills/source-command-code-review/SKILL.md ✅ updated to enforce and
+    report the visual evidence gate.
   - AGENTS.md remains separately authorized and is not changed by this amendment.
 - Follow-up TODOs:
   - TODO(PACKAGE_BOUNDARY_REPAIR): remove remaining allowlisted package-boundary

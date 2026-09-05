@@ -350,6 +350,16 @@ For **EACH** mockup image, the agent MUST:
 - Identify which component/screen it corresponds to
 - Read the component code
 - Compare the implementation against the mockup **structurally and visually**
+- Identify the declared binding UI viewport or component context
+- Ignore presentation-only device hardware, frame, outer canvas, browser chrome,
+  export padding, and background outside the UI surface unless explicitly marked
+  binding
+- Inspect rendered app screenshots; source inspection alone cannot prove visual
+  completion
+- Require side-by-side or overlay rendered evidence at the declared UI context
+- Require rendered evidence for every in-scope responsive, dark-mode,
+  RTL/Arabic, and enlarged-text variant
+- Report functional readiness and visual fidelity separately
 
 #### Validate ALL 7 (produce a finding for EACH):
 
@@ -411,6 +421,9 @@ Corresponds to: <component/screen name>
 | Components & UI | ✅/❌ | ... |
 | States | ✅/❌ | ... |
 | Interactions | ✅/❌ | ... |
+| Binding UI Context | ✅/❌ | ... |
+| Rendered Comparison | ✅/❌ | ... |
+| Scoped Variants | ✅/❌ | ... |
 ```
 
 Violations:
@@ -428,7 +441,8 @@ Violations:
 
 #### 🚨 Blocking Rule
 
-- If implementation does NOT match mockups: → PR is **NOT APPROVABLE**
+- If implementation does NOT match mockups, or required rendered comparison or
+  scoped-variant evidence is missing: → PR is **NOT APPROVABLE**
 
 ---
 
@@ -447,7 +461,11 @@ When creating the Fix PR:
 
 - Implementation visually matches mockups with **no noticeable differences**
 - All mockup screens are fully implemented
-- UI is ready for pixel-perfect validation
+- Side-by-side or overlay rendered evidence proves the match at the declared UI
+  context
+- Every in-scope responsive, dark-mode, RTL/Arabic, and enlarged-text variant
+  has rendered evidence
+- Functional readiness and visual fidelity are reported separately
 
 ---
 
@@ -595,6 +613,7 @@ The PR is **NOT APPROVABLE** if ANY of the following exist:
 - Broken monorepo boundaries
 - Missing migrations or DB inconsistencies
 - **Mockup deviations** (UI does not match approved designs)
+- Missing required mockup comparison or scoped-variant rendered evidence
 
 ---
 
@@ -611,3 +630,5 @@ The PR is **NOT APPROVABLE** if ANY of the following exist:
 - No architectural violations
 - Clean, maintainable, production-ready code
 - **UI pixel-perfect match with mockups**
+- Required rendered comparison and scoped-variant evidence is complete
+- Functional readiness and visual fidelity are reported separately
