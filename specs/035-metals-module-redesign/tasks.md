@@ -224,10 +224,10 @@ This topology controls ownership, dependency stacks, and future review size. Aft
 
 #### Red
 
-- [ ] T075 [US2] Define Add manual/timed scenarios and FR/SC mappings in `specs/035-metals-module-redesign/manual-tests/us2-add-holding.md` and `specs/035-metals-module-redesign/coverage/us2.md`
-- [ ] T076 [P] [US2] Write failing locale parsing, required fields, precision/range/date, Gold/Silver-only, unusual acknowledgment, exact preview, `24K · 999`, and unavailable-rate tests in `apps/mobile/__tests__/validation/metal-holding-form-validation.test.ts`
-- [ ] T077 [P] [US2] Write failing SQLite Add atomicity, stable action, duplicate, rollback, restart, ownership, and sync-pending tests in `apps/mobile/__tests__/services/add-metal-holding-command-service.integration.test.ts`
-- [ ] T078 [P] [US2] Write failing full-form order, live preview, dirty exit, safe area, error focus, pending lock, EN/AR/RTL/theme/breakpoint/200%-text tests in `apps/mobile/__tests__/app/metals-add.test.tsx`
+- [x] T075 [US2] Define Add manual/timed scenarios and FR/SC mappings in `specs/035-metals-module-redesign/manual-tests/us2-add-holding.md` and `specs/035-metals-module-redesign/coverage/us2.md`
+- [x] T076 [P] [US2] Write failing locale parsing, required fields, precision/range/date, Gold/Silver-only, unusual acknowledgment, exact preview, `24K · 999`, and unavailable-rate tests in `apps/mobile/__tests__/validation/metal-holding-form-validation.test.ts`
+- [x] T077 [P] [US2] Write failing SQLite Add atomicity, stable action, duplicate, rollback, restart, ownership, and sync-pending tests in `apps/mobile/__tests__/services/add-metal-holding-command-service.integration.test.ts`
+- [x] T078 [P] [US2] Write failing full-form order, live preview, dirty exit, safe area, error focus, pending lock, EN/AR/RTL/theme/breakpoint/200%-text tests in `apps/mobile/__tests__/app/metals-add.test.tsx`
 - [ ] T079 [P] [US2] Create failing Gold/Silver/offline-restart/validation Maestro coverage in `apps/mobile/e2e/maestro/metals/add-holding.yaml`
 - [ ] T080 [US2] Run T076–T079 and record intended Red failures in `specs/035-metals-module-redesign/evidence/us2-red.md`
 
