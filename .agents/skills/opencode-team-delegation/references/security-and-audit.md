@@ -4,13 +4,18 @@ Read before every OpenCode dispatch mode.
 
 ## Server And Credentials
 
-- Bind server to `127.0.0.1`; disable network discovery and unnecessary CORS.
-- Prefer a short-lived server. Every server must set Basic Auth through runtime
-  secret injection unless an OS/container network namespace prevents access by
-  unrelated processes; never store password in repository, brief, or log.
+- Bind every server to `127.0.0.1`; disable network discovery and unnecessary
+  CORS.
+- Prefer one short-lived dedicated loopback server per task, with its own server
+  identifier, task-scoped Basic Auth credential, and task-scoped provider/session
+  credentials. Never store credentials in repository, brief, or log.
+- A shared loopback server is allowed only when the lead records why it is needed,
+  its server ID, every active task/session using it, and which credentials are
+  task-scoped versus server-global. Do not put a task-exclusive secret in a
+  server-global environment.
 - Keep provider credentials in OpenCode credential storage or approved secret
   manager. Never add them to project configuration or environment files.
-- Pass minimal environment allowlist required for model/provider and task.
+- Pass the minimal environment allowlist required for model/provider and task.
   Prevent inherited shell, cloud, GitHub, Supabase, signing, release, and
   production credentials unless separately required and authorized.
 
@@ -38,8 +43,12 @@ Bounded write with recommended canary or explicit waiver:
   worktree/branch;
 - preserve non-overlapping artifact/file ownership across concurrent writers;
   one writer owns each artifact per wave, and any overlap stops the lane;
-- allow cohesive edits required by that task within its exclusively owned
-  artifacts rather than relying on brittle per-file micromanagement;
+- derive a concrete workspace-relative writable allowlist from that exclusive
+  artifact set. Use exact files and the minimum owned directory prefixes needed
+  for cohesive edits or new in-scope files; never grant arbitrary repository-root
+  writes;
+- enforce the writable allowlist in the permission profile. Any attempted or
+  actual write outside it is a security boundary breach;
 - explicitly deny `.git` metadata, secrets, external directories, dependency
   installation, destructive actions, releases, deployments, and unauthorized
   Git/remote operations;
@@ -53,16 +62,29 @@ Bounded write with recommended canary or explicit waiver:
 - require lead response for any unlisted permission request; never remember a
   broader permission for convenience.
 
-Every real-write assignment must have positive evidence for every material
-capability it will use. The absence of a recorded unsupported capability is not
-proof of support. Capability evidence is bound to the exact
-provider/model/runtime/tool/profile combination and must be rechecked when a
-material dimension changes.
+## Immutable Identity And Capability Evidence
 
-Before any write dispatch, confirm the exact
-provider/model/runtime/tool/permission-profile combination is currently
-write-eligible and not under incident revocation. A new task, session, or
-worktree cannot bypass configuration-wide revocation.
+Before every dispatch, record the exact provider, provider-prefixed model ID,
+**immutable provider model revision/build**, OpenCode/runtime version, exact tool
+surface/version set, permission-profile identifier or hash, and environment
+boundary relevant to the task. A moving display alias is not sufficient model
+identity. If the immutable revision/build cannot be established, do not reuse
+prior capability evidence or a canary waiver for write work.
+
+Every real-write assignment must have positive evidence for every material
+capability it will use. Capability evidence is bound to the immutable model
+revision/build plus every runtime/tool/permission/environment dimension material
+to that capability. The absence of a recorded unsupported capability is not
+proof of support. When the immutable model revision/build changes, invalidate all
+capability evidence for the prior revision. When another bound dimension
+changes, invalidate every affected capability record and requalify it before use.
+
+Negative capability evidence is revision-bound too. A known unsupported
+capability from one revision must not be generalized to a different revision;
+the new revision remains unqualified for that capability until it has positive
+evidence.
+
+## Canary And Waiver Binding
 
 The recommended default is to independently qualify the exact bounded-write
 profile in a disposable synthetic checkout. The canary should prove one
@@ -70,14 +92,29 @@ legitimate in-scope edit succeeds and probes for outside-scope write, shell,
 network, secret access, Git/remote mutation, dependency installation, and
 destructive action are denied.
 
-The user may explicitly waive the canary for a specific model/task/profile. The
-waiver must be recorded before dispatch and does not waive any other control. A
-waived real-write lane requires all of the following:
+The user may explicitly waive the canary. A waiver is valid only for the **exact
+task** and the recorded full enforcement configuration:
+
+- provider and provider-prefixed model ID;
+- immutable provider model revision/build;
+- OpenCode/runtime version;
+- exact tool surface/version set;
+- permission-profile identifier or hash;
+- environment/sandbox and network boundary; and
+- derived writable-allowlist fingerprint.
+
+Any enforcement-relevant change invalidates the waiver before another write.
+Changing task ID, model revision/build, runtime, tool surface, permission profile,
+sandbox/network boundary, or writable allowlist requires a fresh explicit user
+waiver or a canary for the changed configuration.
+
+A waived real-write lane still requires:
 
 - one isolated worktree/branch with one exclusive task owner;
 - non-overlapping artifact/file ownership, with one writer per artifact per
   wave;
-- the explicit deny-by-default permission profile described above;
+- the concrete enforced writable allowlist described above;
+- explicit deny-by-default permissions;
 - no secrets, private financial records, bank/SMS payloads, personal
   identifiers, authentication artifacts, or other private user data in model
   context;
@@ -86,35 +123,68 @@ waived real-write lane requires all of the following:
 - the required lead-accepted pause gates for plan/assumptions and failing Red
   evidence where applicable, plus any task-required interim diff/risk gate;
 - independent trusted-native inspection of the complete diff and execution of
-  the required tests/verification before any result is accepted;
-- immediate abort on any unauthorized access/write, sensitive-data exposure,
-  ownership conflict, destructive intent/action, or other security boundary
-  breach.
+  required tests/verification before any result is accepted; and
+- immediate abort and incident quarantine on unauthorized access/write,
+  sensitive-data exposure, or another security boundary breach.
 
-When the recorded waiver and all safeguards above are present, lack of a canary
-alone is not a stop condition. A material permission-profile expansion requires
-a fresh canary or a new explicit user-authorized waiver for that expanded
-profile. A waiver can never waive incident revocation or requalification.
+When the recorded waiver and all safeguards are present, lack of a canary alone
+is not a stop condition. A waiver can never waive incident quarantine,
+requalification, positive evidence for unrelated material capabilities, or
+independent verification.
+
+### Provisional First-Write Evidence
+
+A user-authorized waiver remains usable when **repository-edit capability is the
+only material capability lacking prior positive evidence**. In that case, permit
+one provisional first-write checkpoint under these additional controls:
+
+1. Every other material capability required from the external worker already has
+   positive evidence for the immutable configuration.
+2. The worker may make one small representative edit only inside the derived
+   writable allowlist.
+3. The worker then pauses before any additional edit.
+4. The trusted native owner verifies changed paths, permission enforcement, and
+   the complete provisional diff.
+5. Only an accepted checkpoint becomes positive repository-edit capability
+   evidence for that immutable configuration and allows the same task/session to
+   continue.
+
+A failed provisional checkpoint is not capability evidence. An out-of-allowlist
+attempt, unauthorized access, or other security breach immediately triggers the
+quarantine rules below. The provisional first-write path never supplies evidence
+for unrelated capabilities such as test execution, image input, or network/tool
+use.
 
 If runtime cannot enforce declared filesystem, environment, command, and network
 boundaries, require a real OS/container sandbox that does or abort external
 lane. An isolated worktree and post-run diff are evidence controls, not a
 sandbox, and never justify dispatch with unenforced boundaries.
 
-## Sensitive Data
+## Sensitive Data And Incident Quarantine
 
 Never include secrets, access tokens, environment values, production or private
 financial records, bank/SMS payloads, personal identifiers, authentication
 artifacts, or unredacted logs in prompts, attachments, session titles, model
 context, or ledger. Use synthetic fixtures and minimum source excerpts.
 
-If sensitive data is exposed, abort immediately. Revoke write eligibility for
-the compromised provider/model/runtime/tool/permission-profile combination
-across all tasks, preserve only sanitized incident evidence, rotate affected
-credentials through the approved process, and require incident review and
-requalification before that configuration can write again. Starting a new task
-must not bypass the revocation. A user-authorized canary waiver cannot waive
-this response.
+On sensitive-data exposure, unauthorized scope access/write, or another security
+boundary breach:
+
+1. Abort the implicated session immediately.
+2. Quarantine the implicated **provider + immutable model revision/build +
+   OpenCode/runtime + tool combination** across read and write modes and **all
+   permission profiles**.
+3. Prevent a new task, session, worktree, or permission profile from bypassing
+   quarantine.
+4. Preserve only sanitized incident evidence and rotate affected credentials
+   through the approved process.
+5. Restore eligibility only after incident review and requalification succeed.
+
+Incident review may narrow quarantine to a permission-profile-local cause only
+when evidence proves that the breach was confined to that profile and the
+intended restored configuration has passed requalification. Until then, the
+broader provider/model-revision/runtime/tool combination remains quarantined.
+User authorization or canary waiver cannot override quarantine.
 
 ## Ownership And Git Safety
 
@@ -122,8 +192,11 @@ this response.
 - One writer owns each artifact/file per wave across all concurrent lanes. Stop
   and report any ownership overlap before further edits.
 - Record base SHA before dispatch and verify it before accepting output.
-- Define task/worktree scope plus protected/forbidden paths. Permit cohesive
-  in-scope edits only within artifacts exclusively owned by that worker.
+- Derive the writable file/directory allowlist from the exclusively owned
+  artifact set before dispatch and record its fingerprint with the task.
+- Permit cohesive in-scope edits only inside that enforced writable allowlist.
+  Expanding the allowlist is an enforcement-relevant profile change and requires
+  the applicable waiver/canary revalidation before more writes.
 - Stop on unexpected dirty state or changed base.
 - Do not expose a linked worktree's `.git` pointer or shared Git directory to
   the external runtime. A trusted native pre/postflight owns base, status, and
@@ -146,19 +219,15 @@ reports:
 2. Where TDD or debugging applies, the worker pauses after failing-test or
    reproduction evidence. The lead must explicitly accept it before production
    implementation begins.
-3. When the task brief requires an interim diff/risk checkpoint, the worker
+3. When a provisional first-write checkpoint is required, the worker pauses
+   immediately after the first representative allowlisted edit for trusted-native
+   acceptance before any additional edit.
+4. When the task brief requires an interim diff/risk checkpoint, the worker
    pauses there and waits for explicit lead acceptance before continuing.
-4. Verification and final-diff checkpoints remain required before acceptance.
+5. Verification and final-diff checkpoints remain required before acceptance.
 
 Observe status and diffs; do not request or retain hidden chain-of-thought. Send
 bounded corrections in the same session when recoverable.
-
-Sensitive-data exposure, unauthorized scope access/write, or another security
-boundary breach immediately aborts the session and revokes write eligibility for
-the compromised provider/model/runtime/tool/permission-profile combination
-across all tasks pending incident review and requalification. This revocation is
-non-waivable, including when the user waived the canary, and a new task cannot
-bypass it.
 
 For ordinary rule drift or a materially wrong but safe direction, correct
 explicitly and allow up to three materially identical rule failures on that
@@ -176,17 +245,25 @@ migration implementation by an external model requires an independent
 appropriate specialist before acceptance. External implementation does not grant
 decision authority.
 
-## Terminal Task Teardown And Reuse
+## Terminal Task Teardown And Shared Servers
 
 At every terminal task outcome—accepted, rejected, cancelled, failed, timed-out,
-or security-aborted—always tear down:
+or security-aborted—terminate that task's model session and task-scoped injected
+credentials immediately.
 
-- the model session;
-- injected credentials; and
-- the live loopback OpenCode server.
+For server teardown:
 
-These runtime resources are never retained as a reusable lane. For a
-security-aborted task, retain only sanitized incident evidence needed for
+- **Dedicated per-task server:** terminate it immediately with the terminal task.
+- **Intentionally shared server:** remove the terminal task's session and
+  task-scoped credentials immediately, update the active-session registry, and
+  keep the server only while another recorded active task/session still needs it.
+  Terminate the shared server as soon as the last active session becomes
+  terminal.
+- **Server/runtime implicated in a security incident:** abort every affected
+  session and terminate the shared server immediately rather than waiting for the
+  normal shared-server drain rule.
+
+For a security-aborted task, retain only sanitized incident evidence needed for
 incident review and requalification. For other terminal outcomes, only
 non-sensitive resources such as an isolated worktree, adapter configuration, and
 sanitized task metadata may remain reusable. Record the owner, expiration, and
@@ -196,14 +273,18 @@ mandatory cleanup deadline for every retained reusable resource.
 
 Keep only operational metadata needed for traceability:
 
-- task, owner, exact provider/model, worktree/branch, base SHA, task scope,
-  artifact/file ownership, and protected paths;
-- positive material-capability evidence;
+- task, owner, provider/model ID, immutable model revision/build,
+  OpenCode/runtime version, tool surface/version set, server ID/mode,
+  worktree/branch, base SHA, task scope, artifact/file ownership, derived
+  writable allowlist/fingerprint, and protected paths;
+- positive material-capability evidence and the exact immutable identity/bound
+  dimensions that evidence applies to;
 - user opt-in record, approved provider, purpose, data-sharing boundary, and
   authorization expiry or review deadline;
-- permission-profile identifier, canary status or recorded user-authorized
-  waiver, configuration-wide eligibility status, timestamps, checkpoint
-  acceptances, corrections, and terminal status;
+- permission-profile identifier/hash, canary status or fully bound
+  user-authorized waiver, provisional first-write status when used, quarantine
+  and eligibility status, timestamps, checkpoint acceptances, corrections, and
+  terminal status;
 - verification commands and summarized results;
 - changed-path list, disposition, retry/rule-failure count, final result, and
   risk notes.
@@ -216,16 +297,14 @@ source control unless project explicitly adopts a sanitized tracked format.
 
 ## Stop Conditions
 
-Immediately abort and revoke write eligibility for the compromised
-provider/model/runtime/tool/permission-profile combination across all tasks
-pending incident review and requalification on sensitive-data exposure,
-unauthorized scope access/write, or another security boundary breach. The user
-cannot waive this response, and a new task cannot bypass the revocation.
+Immediately abort and apply the cross-profile quarantine above on sensitive-data
+exposure, unauthorized scope access/write, an out-of-allowlist write attempt, or
+another security boundary breach. The user cannot waive this response.
 
 Also stop for stale base, ownership conflict, overlapping artifact/file
-ownership, unenforceable security boundary, or unverifiable result. For ordinary
-recoverable drift, use the explicit same-session correction and
-three-identical-rule-failures policy above rather than weakening controls or
-cold-starting a new session simply to finish faster. Absence of a canary by
-itself is not a stop condition when the user-authorized waiver and required
-safeguards are recorded.
+ownership, unenforceable security boundary, invalidated waiver/evidence, or
+unverifiable result. For ordinary recoverable drift, use the explicit same-session
+correction and three-identical-rule-failures policy above rather than weakening
+controls or cold-starting a new session simply to finish faster. Absence of a
+canary by itself is not a stop condition when the fully bound user-authorized
+waiver and required safeguards are recorded.
