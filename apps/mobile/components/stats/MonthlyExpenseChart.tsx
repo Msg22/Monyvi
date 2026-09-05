@@ -3,10 +3,10 @@
  * Grouped bar chart showing income vs expenses over the last N months.
  */
 
-import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useMonthlyChartData } from "@/hooks/useAnalytics";
+import type { CurrencyType } from "@monyvi/db";
 import { formatCurrency } from "@monyvi/logic";
 import React, { useState } from "react";
 import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
@@ -19,15 +19,20 @@ import { useTranslation } from "react-i18next";
 
 type PeriodFilter = "6m" | "12m";
 
+interface MonthlyExpenseChartProps {
+  readonly currency: CurrencyType;
+}
+
 const PERIOD_OPTIONS: readonly PeriodFilter[] = ["6m", "12m"];
 
 // =============================================================================
 // Component
 // =============================================================================
 
-export function MonthlyExpenseChart(): React.JSX.Element {
+export function MonthlyExpenseChart({
+  currency,
+}: MonthlyExpenseChartProps): React.JSX.Element {
   const { isDark } = useTheme();
-  const { preferredCurrency } = usePreferredCurrency();
   const { t } = useTranslation("common");
   const [period, setPeriod] = useState<PeriodFilter>("6m");
   const months = period === "6m" ? 6 : 12;
@@ -35,12 +40,14 @@ export function MonthlyExpenseChart(): React.JSX.Element {
   const { data: expenseData, isLoading: expenseLoading } = useMonthlyChartData(
     months,
     undefined,
-    "EXPENSE"
+    "EXPENSE",
+    currency
   );
   const { data: incomeData, isLoading: incomeLoading } = useMonthlyChartData(
     months,
     undefined,
-    "INCOME"
+    "INCOME",
+    currency
   );
 
   const isLoading = expenseLoading || incomeLoading;
@@ -155,7 +162,7 @@ export function MonthlyExpenseChart(): React.JSX.Element {
           <Text className="text-sm font-bold text-nileGreen-500 mt-0.5">
             {formatCurrency({
               amount: totalIncome,
-              currency: preferredCurrency,
+              currency,
             })}
           </Text>
         </View>
@@ -166,7 +173,7 @@ export function MonthlyExpenseChart(): React.JSX.Element {
           <Text className="text-sm font-bold text-red-500 dark:text-red-400 mt-0.5">
             {formatCurrency({
               amount: totalExpenses,
-              currency: preferredCurrency,
+              currency,
             })}
           </Text>
         </View>
@@ -179,7 +186,7 @@ export function MonthlyExpenseChart(): React.JSX.Element {
           >
             {formatCurrency({
               amount: netSavings,
-              currency: preferredCurrency,
+              currency,
             })}
           </Text>
         </View>
