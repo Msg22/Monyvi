@@ -1,9 +1,10 @@
 import {
+  DEFAULT_FINANCIAL_ACTION_REGISTRY,
+  canonicalizeFinancialActionEnvelope,
   type FinancialActionEnvelopeV1,
   type FinancialActionRegistry,
+  type FinancialActionValidationInput,
 } from "@monyvi/logic";
-
-import { APPROVED_FINANCIAL_ACTION_REGISTRY } from "./financial-action-approved-registry";
 
 export const METAL_ACTION_KINDS = [
   "add",
@@ -24,6 +25,7 @@ export interface CreateMetalFinancialActionEnvelopeInput {
   readonly expectedHoldingRevision: string | null;
   readonly occurredAt: string;
   readonly domainPayload: Readonly<Record<string, unknown>>;
+  readonly validationInput?: FinancialActionValidationInput;
 }
 
 const MAX_REVISION = "9223372036854775807";
@@ -47,7 +49,17 @@ export function incrementCanonicalMetalRevision(value: string): string {
 }
 
 export const METAL_FINANCIAL_ACTION_REGISTRY: FinancialActionRegistry =
-  APPROVED_FINANCIAL_ACTION_REGISTRY;
+  DEFAULT_FINANCIAL_ACTION_REGISTRY;
+
+const METAL_ACTION_PAYLOAD_VERSIONS: Readonly<Record<MetalActionKind, string>> =
+  Object.freeze({
+    add: "metals.add/v1",
+    correct: "metals.correct/v1",
+    sell: "metals.sell/v2",
+    dispose: "metals.dispose/v1",
+    delete: "metals.delete/v1",
+    undo: "metals.undo/v1",
+  });
 
 export function createMetalFinancialActionEnvelope(
   input: CreateMetalFinancialActionEnvelopeInput
@@ -61,5 +73,28 @@ export function createMetalFinancialActionEnvelope(
   } else {
     assertCanonicalMetalRevision(input.expectedHoldingRevision);
   }
-  throw new Error("metal_action_schema_not_approved");
+
+  const envelope = canonicalizeFinancialActionEnvelope(
+    {
+      accountGuards: [],
+      actionId: input.actionId,
+      domain: "metals",
+      domainReferenceId: input.holdingId,
+      envelopeVersion: "monyvi.financial-action/v1",
+      kind: input.kind,
+      occurredAt: input.occurredAt,
+      payload: input.domainPayload,
+      payloadVersion: METAL_ACTION_PAYLOAD_VERSIONS[input.kind],
+      userId: input.userId,
+    },
+    METAL_FINANCIAL_ACTION_REGISTRY,
+    input.validationInput
+  );
+  if (
+    envelope.payload.holdingId !== input.holdingId ||
+    envelope.payload.expectedHoldingRevision !== input.expectedHoldingRevision
+  ) {
+    throw new Error("invalid_metal_action_binding");
+  }
+  return envelope;
 }

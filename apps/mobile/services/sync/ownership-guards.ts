@@ -6,6 +6,8 @@ import type { ChildParentTableName, ChildTableConfig } from "./types";
 
 export const METALS_ACTION_FRAGMENT_COLUMNS = {
   assets: [
+    "name",
+    "notes",
     "purchase_price_decimal",
     "purchase_currency",
     "acquisition_action_id",
@@ -83,13 +85,19 @@ export function stripMetalActionFragments(
   table: SyncableTable,
   record: Record<string, unknown>
 ): Record<string, unknown> {
-  const protectedColumns =
+  const configuredColumns =
     METALS_ACTION_FRAGMENT_COLUMNS[
       table as keyof typeof METALS_ACTION_FRAGMENT_COLUMNS
     ];
-  if (!protectedColumns) {
+  if (!configuredColumns) {
     return { ...record };
   }
+  const protectedColumns =
+    table === "assets" && record.type !== "METAL"
+      ? configuredColumns.filter(
+          (column) => column !== "name" && column !== "notes"
+        )
+      : configuredColumns;
 
   return Object.fromEntries(
     Object.entries(record).filter(

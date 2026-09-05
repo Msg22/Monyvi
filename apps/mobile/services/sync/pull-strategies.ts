@@ -66,6 +66,57 @@ interface PulledRow extends Record<string, unknown> {
   readonly id: string;
 }
 
+export function protectMetalMetadataPullFragments(
+  assetChanges: SyncTableChangeSet,
+  holdingStateChanges: SyncTableChangeSet
+): SyncTableChangeSet {
+  const holdingCreates =
+    holdingStateChanges.created as unknown as readonly Record<
+      string,
+      unknown
+    >[];
+  const holdingUpdates =
+    holdingStateChanges.updated as unknown as readonly Record<
+      string,
+      unknown
+    >[];
+  const clockCoupledHoldingIds = new Set(
+    [...holdingCreates, ...holdingUpdates]
+      .map((record) =>
+        typeof record.holding_id === "string" ? record.holding_id : record.id
+      )
+      .filter((id): id is string => typeof id === "string")
+  );
+  const protectRecord = (
+    record: Record<string, unknown>
+  ): Record<string, unknown> => {
+    if (
+      record.type !== "METAL" ||
+      clockCoupledHoldingIds.has(String(record.id))
+    ) {
+      return { ...record };
+    }
+    const protectedRecord = { ...record };
+    delete protectedRecord.name;
+    delete protectedRecord.notes;
+    return protectedRecord;
+  };
+
+  const assetCreates = assetChanges.created as unknown as readonly Record<
+    string,
+    unknown
+  >[];
+  const assetUpdates = assetChanges.updated as unknown as readonly Record<
+    string,
+    unknown
+  >[];
+  return {
+    created: assetCreates.map(protectRecord),
+    updated: assetUpdates.map(protectRecord),
+    deleted: (assetChanges.deleted as unknown as readonly string[]).slice(),
+  };
+}
+
 function isPulledRow(value: unknown): value is PulledRow {
   return (
     typeof value === "object" &&
@@ -694,6 +745,12 @@ export async function pullChanges(
     lastSyncDate,
     upperWatermark
   );
+  if (changes.assets) {
+    changes.assets = protectMetalMetadataPullFragments(
+      changes.assets,
+      changes.metal_holding_states
+    );
+  }
 
   await assertExpectedPullUser(expectedUserId);
 

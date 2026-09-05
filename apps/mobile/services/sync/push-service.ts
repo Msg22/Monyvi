@@ -31,6 +31,231 @@ export const GENERIC_SYNC_ERROR_CODES = {
   INVALID_CHANGE_ID: "sync_invalid_change_id",
 } as const;
 
+const METAL_ACTION_RPC = "apply_metal_action_v1";
+const METAL_METADATA_RPC = "apply_metal_metadata_patch_v1";
+
+interface MetalRpcResult {
+  readonly data: unknown;
+  readonly error: unknown;
+}
+
+export type MetalSyncRpc = (
+  name: string,
+  args: Readonly<Record<string, unknown>>
+) => Promise<MetalRpcResult>;
+
+export interface MetalDedicatedPushResult {
+  readonly acknowledgeAllDedicatedRows: boolean;
+}
+
+function changedRecords(
+  changes: SyncPushArgs["changes"],
+  table: string
+): readonly Record<string, unknown>[] {
+  const changeSet = (
+    changes as unknown as Record<string, SyncTableChangeSet | undefined>
+  )[table];
+  return changeSet ? [...changeSet.created, ...changeSet.updated] : [];
+}
+
+function hasDedicatedDeletes(changes: SyncPushArgs["changes"]): boolean {
+  return [...DEDICATED_SYNC_TABLES].some((table) => {
+    const changeSet = (
+      changes as unknown as Record<string, SyncTableChangeSet | undefined>
+    )[table];
+    return (changeSet?.deleted.length ?? 0) > 0;
+  });
+}
+
+function hasDedicatedRows(changes: SyncPushArgs["changes"]): boolean {
+  return [...DEDICATED_SYNC_TABLES].some((table) => {
+    const changeSet = (
+      changes as unknown as Record<string, SyncTableChangeSet | undefined>
+    )[table];
+    return changeSet
+      ? changeSet.created.length +
+          changeSet.updated.length +
+          changeSet.deleted.length >
+          0
+      : false;
+  });
+}
+
+function expectedRevisionOrder(root: Record<string, unknown>): bigint {
+  try {
+    const envelope = JSON.parse(String(root.payload_json)) as {
+      readonly payload?: { readonly expectedHoldingRevision?: unknown };
+    };
+    const revision = envelope.payload?.expectedHoldingRevision;
+    if (revision === null) return -1n;
+    return typeof revision === "string"
+      ? BigInt(revision)
+      : 9223372036854775808n;
+  } catch {
+    return 9223372036854775808n;
+  }
+}
+
+function asRpcObject(value: unknown): Readonly<Record<string, unknown>> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Readonly<Record<string, unknown>>)
+    : null;
+}
+
+function defaultMetalRpc(
+  name: string,
+  args: Readonly<Record<string, unknown>>
+): Promise<MetalRpcResult> {
+  const client = supabase as unknown as {
+    readonly rpc: MetalSyncRpc;
+  };
+  return client.rpc(name, args);
+}
+
+function metalMetadataField(
+  state: Record<string, unknown>,
+  asset: Record<string, unknown>,
+  field: "name" | "notes"
+): Readonly<Record<string, unknown>> | null | false {
+  const writtenAt = state[`${field}_written_at`];
+  const writerId = state[`${field}_writer_id`];
+  if (writtenAt === null || writtenAt === undefined) {
+    return writerId === null || writerId === undefined ? null : false;
+  }
+  const value = asset[field];
+  if (
+    typeof writtenAt !== "number" ||
+    !Number.isSafeInteger(writtenAt) ||
+    typeof writerId !== "string" ||
+    (field === "name"
+      ? typeof value !== "string"
+      : value !== null && typeof value !== "string")
+  ) {
+    return false;
+  }
+  return { value, writtenAt, writerId };
+}
+
+export async function pushMetalDedicatedChanges(
+  changes: SyncPushArgs["changes"],
+  userId: string,
+  rpc: MetalSyncRpc = defaultMetalRpc
+): Promise<MetalDedicatedPushResult> {
+  if (!hasDedicatedRows(changes)) {
+    return { acknowledgeAllDedicatedRows: true };
+  }
+  if (hasDedicatedDeletes(changes)) {
+    return { acknowledgeAllDedicatedRows: false };
+  }
+
+  const roots = [...changedRecords(changes, "financial_action_groups")].sort(
+    (left: Record<string, unknown>, right: Record<string, unknown>) => {
+      const leftRevision = expectedRevisionOrder(left);
+      const rightRevision = expectedRevisionOrder(right);
+      return leftRevision === rightRevision
+        ? 0
+        : leftRevision < rightRevision
+          ? -1
+          : 1;
+    }
+  );
+  const acceptedActionIds = new Set<string>();
+  for (const root of roots) {
+    if (
+      root.user_id !== userId ||
+      typeof root.action_id !== "string" ||
+      typeof root.payload_json !== "string" ||
+      typeof root.payload_hash !== "string"
+    ) {
+      return { acknowledgeAllDedicatedRows: false };
+    }
+    const { data, error } = await rpc(METAL_ACTION_RPC, {
+      p_payload_hash: root.payload_hash,
+      p_payload_json: root.payload_json,
+    });
+    if (error) throw new Error("metal_action_rpc_failed");
+    const outcome = asRpcObject(data);
+    if (
+      !outcome ||
+      (outcome.status !== "accepted" && outcome.status !== "idempotent") ||
+      outcome.actionId !== root.action_id
+    ) {
+      return { acknowledgeAllDedicatedRows: false };
+    }
+    acceptedActionIds.add(root.action_id);
+  }
+
+  const assets = new Map(
+    changedRecords(changes, "assets").map((record) => [
+      String(record.id),
+      record,
+    ])
+  );
+  const metadataHoldingIds = new Set<string>();
+  const states = changedRecords(changes, "metal_holding_states");
+  for (const state of states) {
+    const holdingId =
+      typeof state.holding_id === "string"
+        ? state.holding_id
+        : String(state.id);
+    const asset = assets.get(holdingId);
+    const name = asset ? metalMetadataField(state, asset, "name") : null;
+    const notes = asset ? metalMetadataField(state, asset, "notes") : null;
+    if (name === false || notes === false) {
+      return { acknowledgeAllDedicatedRows: false };
+    }
+    const fields = {
+      ...(name ? { name } : {}),
+      ...(notes ? { notes } : {}),
+    };
+    if (Object.keys(fields).length === 0) continue;
+    const { data, error } = await rpc(METAL_METADATA_RPC, {
+      p_holding_id: holdingId,
+      p_patch: { fields },
+    });
+    if (error) throw new Error("metal_metadata_rpc_failed");
+    const outcome = asRpcObject(data);
+    if (
+      !outcome ||
+      !["applied", "idempotent", "ignored"].includes(String(outcome.status)) ||
+      outcome.holdingId !== holdingId
+    ) {
+      return { acknowledgeAllDedicatedRows: false };
+    }
+    metadataHoldingIds.add(holdingId);
+  }
+
+  const linkedTables = [
+    "metal_action_evidence",
+    "metal_lifecycle_events",
+    "metal_rate_references",
+  ];
+  const hasUnacceptedLinkedRow = linkedTables.some((table) =>
+    changedRecords(changes, table).some(
+      (record) =>
+        typeof record.action_id !== "string" ||
+        !acceptedActionIds.has(record.action_id)
+    )
+  );
+  const hasUnacceptedState = states.some((state) => {
+    const holdingId =
+      typeof state.holding_id === "string"
+        ? state.holding_id
+        : String(state.id);
+    return (
+      !metadataHoldingIds.has(holdingId) &&
+      (typeof state.effective_action_id !== "string" ||
+        !acceptedActionIds.has(state.effective_action_id))
+    );
+  });
+  return {
+    acknowledgeAllDedicatedRows:
+      (roots.length > 0 || metadataHoldingIds.size > 0) &&
+      !hasUnacceptedLinkedRow &&
+      !hasUnacceptedState,
+  };
+}
+
 async function assertExpectedPushUser(
   expectedUserId?: string
 ): Promise<string> {
@@ -127,8 +352,14 @@ export async function pushChanges(
   pushArgs: SyncPushArgs,
   expectedUserId?: string
 ): Promise<SyncPushResult | undefined | void> {
-  const dedicatedRejectedIds = collectDedicatedRejectedIds(pushArgs.changes);
   const userId = await assertExpectedPushUser(expectedUserId);
+  const dedicatedPush = await pushMetalDedicatedChanges(
+    pushArgs.changes,
+    userId
+  );
+  const dedicatedRejectedIds = dedicatedPush.acknowledgeAllDedicatedRows
+    ? undefined
+    : collectDedicatedRejectedIds(pushArgs.changes);
 
   const { changes } = pushArgs;
   for (const [tableName, rawTableChanges] of Object.entries(changes).sort(

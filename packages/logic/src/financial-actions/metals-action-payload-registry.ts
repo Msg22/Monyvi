@@ -30,6 +30,15 @@ interface RawPayloadObject {
 type RawPayloadValue = string & RawPayloadObject & readonly RawPayloadValue[];
 type RawPayload = Record<string, RawPayloadValue>;
 
+const METAL_DISPOSAL_REASON_CODES = new Set([
+  "lost_or_stolen",
+  "destroyed_or_damaged",
+  "given_away",
+  "donated",
+  "other_write_off",
+  "other_external_transfer",
+]);
+
 export interface MetalsActionPayloadRegistry {
   readonly definitions: readonly FinancialActionDefinition[];
   readonly maxNameUtf8Bytes: number;
@@ -682,8 +691,8 @@ export function createMetalsActionPayloadRegistry(
     validateLinks(value, false, false);
     if (
       !validDate(value.disposalDate, input) ||
-      !boundedText(value.reason, MAX_REASON_UTF8_BYTES) ||
-      (value.reason as string).trim().length === 0 ||
+      typeof value.reason !== "string" ||
+      !METAL_DISPOSAL_REASON_CODES.has(value.reason) ||
       !boundedText(value.notes, MAX_NOTES_UTF8_BYTES, true)
     )
       fail();

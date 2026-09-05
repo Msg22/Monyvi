@@ -177,7 +177,7 @@ function payloadFor(
         predecessorEventId: IDS.predecessor,
         reversesEventId: null,
         disposalDate: "2026-08-31",
-        reason: "lost",
+        reason: "lost_or_stolen",
         notes: "reported missing",
       };
     case "delete/metals.delete/v1":
@@ -377,6 +377,35 @@ describe("approved Metals financial action payload registry", () => {
         VALIDATION_INPUT
       )
     ).not.toThrow();
+  });
+
+  it("accepts only the six stable Dispose reason codes", () => {
+    const dispose = payloadFor("dispose", "metals.dispose/v1");
+    const approvedReasons = [
+      "lost_or_stolen",
+      "destroyed_or_damaged",
+      "given_away",
+      "donated",
+      "other_write_off",
+      "other_external_transfer",
+    ] as const;
+
+    for (const reason of approvedReasons) {
+      expect(() =>
+        definition("dispose", "metals.dispose/v1").validatePayload(
+          { ...dispose, reason },
+          VALIDATION_INPUT
+        )
+      ).not.toThrow();
+    }
+    for (const reason of ["lost", "gift", "other", ""] as const) {
+      expect(() =>
+        definition("dispose", "metals.dispose/v1").validatePayload(
+          { ...dispose, reason },
+          VALIDATION_INPUT
+        )
+      ).toThrow(FINANCIAL_ACTION_ERROR_CODES.INVALID_PAYLOAD);
+    }
   });
 
   it("requires complete role-specific immutable rate snapshots when a rate is supplied", () => {
