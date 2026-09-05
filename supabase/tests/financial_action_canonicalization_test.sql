@@ -141,7 +141,7 @@ select has_function(
 );
 
 select throws_ok(
-  $$select private.financial_action_validate_registered_payload_v1('{"domain":"metals","kind":"dispose","payload":{},"payloadVersion":"metals.dispose/v1"}'::jsonb)$$,
+  $$select private.financial_action_validate_registered_payload_v1('{"domain":"metals","kind":"dispose","payload":{},"payloadVersion":"metals.dispose/unknown"}'::jsonb)$$,
   '22023',
   'financial_action_unknown_definition',
   'unknown action tuples fail closed'
