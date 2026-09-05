@@ -18,7 +18,10 @@ import type {
   MetalLifecycleEvent,
   MetalRateReference,
 } from "@monyvi/db";
-import { createFinancialActionFoundationRepository } from "../../services/financial-action-foundation-repository";
+import {
+  createFinancialActionFoundationRepository,
+  type FinancialActionUserDataScope,
+} from "../../services/financial-action-foundation-repository";
 
 interface TestDatabaseModule {
   readonly database: Database;
@@ -30,9 +33,7 @@ interface AddMetalHoldingCommandModule {
   readonly createAddMetalHoldingCommandService: (
     dependencies: AddMetalHoldingCommandDependencies
   ) => {
-    readonly add: (
-      input: AddMetalHoldingCommandInput
-    ) => Promise<{
+    readonly add: (input: AddMetalHoldingCommandInput) => Promise<{
       readonly kind: "committed" | "replay";
       readonly holdingId: string;
     }>;
@@ -310,16 +311,14 @@ function createEnvelope(
   );
 }
 
-function userScope() {
+function userScope(): Promise<FinancialActionUserDataScope> {
   const { Q } = jest.requireActual<typeof import("@nozbe/watermelondb")>(
     "@nozbe/watermelondb"
   );
-  return Promise.resolve({
+  return Promise.resolve<FinancialActionUserDataScope>({
     userId: mockCurrentUserId,
-    queryOwned: (
-      collection: { query: (...clauses: unknown[]) => unknown },
-      ...clauses: unknown[]
-    ) => collection.query(Q.where("user_id", mockCurrentUserId), ...clauses),
+    queryOwned: (collection, ...clauses) =>
+      collection.query(Q.where("user_id", mockCurrentUserId), ...clauses),
     assertOwned: <T extends { userId: string }>(record: T): T => {
       if (record.userId !== mockCurrentUserId)
         throw new Error("ownership_failed");
