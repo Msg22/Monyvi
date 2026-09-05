@@ -47,7 +47,10 @@ The screen type will be specified when invoking this workflow.
 ## 2. Design System & Colors (Mandatory)
 
 - Use **only** the colors defined in `@colors.ts`.
-- Do **not** introduce new colors, gradients, or shades.
+- Do **not** introduce new colors or shades.
+- Use gradients when the design system or an approved design direction uses
+  them. Do not invent an unapproved gradient, and do not remove an approved
+  gradient merely because it is a gradient.
 - Apply colors consistently for:
   - Primary actions
   - Secondary actions

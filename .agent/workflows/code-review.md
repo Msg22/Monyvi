@@ -322,14 +322,19 @@ The agent MUST ensure consistency across:
 
 ### 🎨 2.5 Mockups Compliance (MANDATORY — DO NOT SKIP UNDER ANY CIRCUMSTANCES)
 
-> [!CAUTION] **THIS SECTION WAS PREVIOUSLY SKIPPED. THIS IS UNACCEPTABLE. The
-> agent MUST load ALL mockup images, compare them against the implementation,
-> and produce DETAILED findings. If the `mockups/` folder exists, EVERY mockup
-> MUST be analyzed. "I loaded the mockups" without producing findings is a
-> FAILURE.**
+Always include this section in the review report. First determine whether the
+target diff changes visual UI governed by an approved scoped mockup. If it does
+not, report `N/A — no governed visual UI change`, skip the per-mockup evidence
+steps below, and do not block the PR merely because the feature folder contains
+mockup assets.
 
-The agent MUST validate that the implementation **visually and structurally
-matches the approved mockups**.
+> [!CAUTION] **THIS SECTION WAS PREVIOUSLY SKIPPED. THIS IS UNACCEPTABLE. The
+> agent MUST load ALL approved mockup images that govern changed visual UI,
+> compare them against the implementation, and produce DETAILED findings. "I
+> loaded the mockups" without producing findings is a FAILURE.**
+
+When applicable, the agent MUST validate that the changed implementation
+**visually and structurally matches the approved mockups**.
 
 ---
 
@@ -364,6 +369,9 @@ For **EACH** mockup image, the agent MUST:
 - Require side-by-side or overlay rendered evidence at the declared UI context
 - Require rendered evidence for every in-scope responsive, dark-mode,
   RTL/Arabic, and enlarged-text variant
+- Require separate accessibility-tree, screen-reader, or automated accessibility
+  evidence for labels and semantics; screenshots alone do not prove
+  accessibility labels
 - Report functional readiness and visual fidelity separately
 
 #### Validate ALL 7 (produce a finding for EACH):
@@ -429,6 +437,7 @@ Corresponds to: <component/screen name>
 | Binding UI Context | ✅/❌ | ... |
 | Rendered Comparison | ✅/❌ | ... |
 | Scoped Variants | ✅/❌ | ... |
+| Accessibility Evidence | ✅/❌ | ... |
 ```
 
 Violations:
@@ -446,8 +455,9 @@ Violations:
 
 #### 🚨 Blocking Rule
 
-- If implementation does NOT match mockups, or required rendered comparison or
-  scoped-variant evidence is missing: → PR is **NOT APPROVABLE**
+- For governed visual UI changes, if implementation does NOT match mockups, or
+  required rendered comparison or scoped-variant evidence is missing: → PR is
+  **NOT APPROVABLE**
 
 ---
 
@@ -470,6 +480,7 @@ When creating the Fix PR:
   context
 - Every in-scope responsive, dark-mode, RTL/Arabic, and enlarged-text variant
   has rendered evidence
+- Accessibility labels and semantics have separate accessibility evidence
 - Functional readiness and visual fidelity are reported separately
 
 ---
@@ -578,6 +589,8 @@ Avoid duplicate fixes.
 - Baseline rendered comparison: side-by-side or overlay evidence path, or N/A
 - Scoped variants: responsive, dark-mode, RTL/Arabic, and enlarged-text evidence
   paths, or N/A with reason
+- Accessibility: accessibility-tree, screen-reader, or automated accessibility
+  evidence, or N/A with reason
 
 ---
 
@@ -635,7 +648,8 @@ The PR is **NOT APPROVABLE** if ANY of the following exist:
 - Broken monorepo boundaries
 - Missing migrations or DB inconsistencies
 - **Mockup deviations** (UI does not match approved designs)
-- Missing required mockup comparison or scoped-variant rendered evidence
+- Missing required mockup comparison or scoped-variant rendered evidence for a
+  governed visual UI change
 
 ---
 
@@ -646,11 +660,12 @@ The PR is **NOT APPROVABLE** if ANY of the following exist:
   - `.agent/rules/*.md`
   - `specs/<branch-name>/*` when present
   - Linked GitHub issue when present
-  - `specs/<branch-name>/mockups/*` when present
+  - approved mockups that govern changed visual UI, when present
 
 - No missing features
 - No architectural violations
 - Clean, maintainable, production-ready code
-- **UI pixel-perfect match with mockups**
-- Required rendered comparison and scoped-variant evidence is complete
+- **Changed governed UI matches approved mockups pixel-perfect**
+- Required rendered comparison, scoped-variant, and accessibility evidence is
+  complete for changed governed UI
 - Functional readiness and visual fidelity are reported separately

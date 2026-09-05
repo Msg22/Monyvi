@@ -14,15 +14,22 @@ Sync Impact Report
 - Agent guidance reviewed:
   - .agent/workflows/sprint-issue.md ✅ updated with approved mockup fidelity,
     baseline comparison, and scoped-variant evidence gates.
-  - .agent/workflows/code-review.md ✅ updated to discover nested mockups and
-    require rendered evidence plus separate readiness/fidelity reporting.
+  - .agent/workflows/code-review.md ✅ updated to discover nested mockups,
+    scope the evidence gate to changed governed UI, require separate
+    accessibility evidence, and report readiness/fidelity separately.
+  - .agent/workflows/style-audit.md ✅ updated to discover declared and nested
+    mockups, bind comparison context, and require rendered/accessibility
+    evidence plus separate readiness/fidelity reporting.
+  - .agent/workflows/mockup-implementation.md ✅ updated to preserve gradients
+    used by the design system or an approved design direction without inventing
+    unapproved gradients.
   - .agent/rules/ecc-coding-style.md ✅ updated with approved mockup fidelity and
-    scoped-variant evidence requirements.
+    separate visual-variant and accessibility evidence requirements.
   - .agent/rules/specify-rules.md ✅ updated with binding-context and visual
     evidence requirements for feature delivery.
   - .agent/rules/ecc-patterns.md ✅ compatible; no update required.
   - .agents/skills/source-command-code-review/SKILL.md ✅ updated to discover
-    nested mockups and enforce and report the visual evidence gate.
+    nested mockups and scope and report the visual/accessibility evidence gate.
   - AGENTS.md remains separately authorized and is not changed by this amendment.
 - Follow-up TODOs:
   - TODO(PACKAGE_BOUNDARY_REPAIR): remove remaining allowlisted package-boundary

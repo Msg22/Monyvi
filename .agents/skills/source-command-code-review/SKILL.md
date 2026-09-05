@@ -204,6 +204,12 @@ the reviewed work not approvable.
 
 ### 2.5 Mockups Compliance
 
+Always include this section in the review report. First determine whether the
+target diff changes visual UI governed by an approved scoped mockup. If it does
+not, report `N/A - no governed visual UI change`, skip the per-mockup evidence
+steps below, and do not block the PR merely because the feature folder contains
+mockup assets.
+
 Start from the selected feature folder. Follow mockup or handoff paths declared
 by its spec, plan, tasks, and README files, then recursively search that feature
 folder for mockup assets, including nested paths such as `design/mockups/`. Only
@@ -224,10 +230,13 @@ rendered app screenshots and require:
   declared UI context;
 - rendered evidence for every in-scope responsive, dark-mode, RTL/Arabic, and
   enlarged-text variant; and
+- separate accessibility-tree, screen-reader, or automated accessibility
+  evidence for labels and semantics, because screenshots alone do not prove
+  accessibility labels; and
 - separate functional-readiness and visual-fidelity statuses.
 
-If required evidence is absent, mark visual fidelity unverified and the reviewed
-work not approvable.
+For a governed visual UI change, if required evidence is absent, mark visual
+fidelity unverified and the reviewed work not approvable.
 
 For each mockup, validate all seven categories:
 
@@ -246,23 +255,24 @@ Use this table for every mockup:
 
 Corresponds to: <component or screen>
 
-| Check                 | Status    | Notes |
-| --------------------- | --------- | ----- |
-| Layout and Structure  | PASS/FAIL | ...   |
-| Spacing and Alignment | PASS/FAIL | ...   |
-| Typography            | PASS/FAIL | ...   |
-| Colors and Theming    | PASS/FAIL | ...   |
-| Components and UI     | PASS/FAIL | ...   |
-| States                | PASS/FAIL | ...   |
-| Interactions          | PASS/FAIL | ...   |
-| Binding UI Context    | PASS/FAIL | ...   |
-| Rendered Comparison   | PASS/FAIL | ...   |
-| Scoped Variants       | PASS/FAIL | ...   |
+| Check                  | Status    | Notes |
+| ---------------------- | --------- | ----- |
+| Layout and Structure   | PASS/FAIL | ...   |
+| Spacing and Alignment  | PASS/FAIL | ...   |
+| Typography             | PASS/FAIL | ...   |
+| Colors and Theming     | PASS/FAIL | ...   |
+| Components and UI      | PASS/FAIL | ...   |
+| States                 | PASS/FAIL | ...   |
+| Interactions           | PASS/FAIL | ...   |
+| Binding UI Context     | PASS/FAIL | ...   |
+| Rendered Comparison    | PASS/FAIL | ...   |
+| Scoped Variants        | PASS/FAIL | ...   |
+| Accessibility Evidence | PASS/FAIL | ...   |
 ```
 
-Mockup deviations or missing required rendered evidence make the reviewed work
-not approvable. Fix UI changes to match mockups without inventing new design
-decisions.
+For governed visual UI changes, mockup deviations or missing required rendered
+evidence make the reviewed work not approvable. Fix UI changes to match mockups
+without inventing new design decisions.
 
 ### 2.6 General Best Practices
 
@@ -382,6 +392,8 @@ COMPLETE, INCOMPLETE, or N/A, with the declared binding UI context and reason.
 - Baseline rendered comparison: <side-by-side or overlay evidence path, or N/A>
 - Scoped variants: <responsive, dark-mode, RTL/Arabic, and enlarged-text
   evidence paths, or N/A with reason>
+- Accessibility: <accessibility-tree, screen-reader, or automated accessibility
+  evidence, or N/A with reason>
 
 ## Approval Verdict
 
@@ -442,10 +454,11 @@ The reviewed work is not approvable if any of these remain:
 - Broken monorepo boundaries.
 - Missing migrations or database inconsistencies.
 - Mockup deviations.
-- Missing required mockup comparison or scoped-variant rendered evidence.
+- Missing required mockup comparison or scoped-variant rendered evidence for a
+  governed visual UI change.
 
 Success means the code fully matches the constitution, `.agent/rules/*.md`, the
 selected spec folder, the linked issue when present, and any approved mockups,
-with no missing functionality or architectural violations. Approved-mockup UI
-must also have the required rendered evidence, with functional readiness and
-visual fidelity reported separately.
+with no missing functionality or architectural violations. Changed UI governed
+by an approved mockup must also have the required rendered and accessibility
+evidence, with functional readiness and visual fidelity reported separately.
