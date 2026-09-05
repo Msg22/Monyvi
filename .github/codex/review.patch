@@ -1,7 +1,7 @@
 # commit-message: test: cover PR follow-up regressions
 --- a/apps/mobile/__tests__/services/recurring-payment-service.test.ts
 +++ b/apps/mobile/__tests__/services/recurring-payment-service.test.ts
-@@ -1,4 +1,18 @@
+@@ -277,4 +277,18 @@
        expect(mockWrite).toHaveBeenCalledTimes(3);
      });
  
@@ -20,9 +20,7 @@
 +    });
 +
      it.each([
---- a/apps/mobile/__tests__/services/recurring-payment-service.test.ts
-+++ b/apps/mobile/__tests__/services/recurring-payment-service.test.ts
-@@ -2,4 +2,33 @@
+@@ -363,4 +377,33 @@
        expect(payment.nextDueDate).toEqual(advancedNextDueDate);
      });
  
@@ -58,23 +56,19 @@
      it("rejects changing a legacy start day to a different out-of-range date before writing", async () => {
 --- a/apps/mobile/__tests__/config/metro-config.test.ts
 +++ b/apps/mobile/__tests__/config/metro-config.test.ts
-@@ -1,2 +1,4 @@
+@@ -9,2 +9,4 @@
      readonly disableHierarchicalLookup?: boolean;
 +    readonly unstable_enableSymlinks?: boolean;
 +    readonly unstable_enablePackageExports?: boolean;
      readonly blockList?: readonly RegExp[];
---- a/apps/mobile/__tests__/config/metro-config.test.ts
-+++ b/apps/mobile/__tests__/config/metro-config.test.ts
-@@ -1,4 +1,5 @@
+@@ -26,4 +28,5 @@
  function loadMetroConfig(
    realNodeModulesRoot: string = workspaceNodeModules,
 -  hasWorkspaceNodeModules: boolean = true
 +  hasWorkspaceNodeModules: boolean = true,
 +  sentryIncludesWorkspaceNodeModules: boolean = true
  ): MetroConfigShape {
---- a/apps/mobile/__tests__/config/metro-config.test.ts
-+++ b/apps/mobile/__tests__/config/metro-config.test.ts
-@@ -1,16 +1,12 @@
+@@ -40,16 +43,12 @@
 -      watchFolders: [
 -        workspaceNodeModules,
 -        projectRoot,
@@ -96,10 +90,7 @@
 +          : [path.resolve(projectRoot, "node_modules")],
          disableHierarchicalLookup: false,
          blockList: [],
-       },
---- a/apps/mobile/__tests__/config/metro-config.test.ts
-+++ b/apps/mobile/__tests__/config/metro-config.test.ts
-@@ -1 +1,14 @@
+@@ -135,1 +134,14 @@
 +  it("adds the real linked dependency root even when Sentry omits the junction", () => {
 +    const mainNodeModules = path.resolve(
 +      workspaceRoot,
