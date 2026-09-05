@@ -42,9 +42,17 @@ jobs:
         if: always()
         run: npm test -w @monyvi/logic -- --runInBand amount-helpers date-boundary
 
-      - name: Run mobile review regressions
+      - name: Run recurring review regressions
         if: always()
-        run: npm test -w @monyvi/mobile -- --runInBand RecurringPaymentForm.test recurring-payment-service.test recurring-payment-header-actions.test
+        run: npm test -w @monyvi/mobile -- --runInBand RecurringPaymentForm.test recurring-payment-service.test recurring-payment-end-date-lifecycle.test recurring-payment-header-actions.test
+
+      - name: Run Metro review regression
+        if: always()
+        run: npm test -w @monyvi/mobile -- --runInBand metro-config.test
+
+      - name: Check translations
+        if: always()
+        run: npm run i18n:check -w @monyvi/mobile
 
       - name: Typecheck shared logic
         if: always()
