@@ -236,6 +236,11 @@ Authorization may cover later bounded dispatches only while provider, model
 pool, data class, and purpose remain inside that recorded boundary.
 Auto-triggering team-led workflow never grants third-party disclosure.
 
+Before any OpenCode write dispatch, confirm the exact
+provider/model/runtime/tool/permission-profile combination is currently
+write-eligible and not under incident revocation. A new task or worktree does not
+reset configuration-wide revocation.
+
 External lanes do not consume native subagent slots. They still consume lead
 review and integration capacity. Cap concurrency by ready independent work with
 safe ownership, not available runtimes. One external worker owns one complete
@@ -279,8 +284,10 @@ same session/thread when the lane remains safe and recoverable.
 
 Sensitive-data exposure, unauthorized scope access/write, or another security
 boundary breach immediately aborts the lane and revokes write eligibility for
-the exact model/task/profile pending incident review and requalification. A
-user-authorized canary waiver cannot waive or override this rule.
+the compromised provider/model/runtime/tool/permission-profile combination
+across all tasks pending incident review and requalification. Starting another
+task must not bypass this revocation. A user-authorized canary waiver cannot
+waive or override this rule.
 
 For ordinary rule drift or a materially wrong but safe direction, correct
 explicitly and continue the same session when recoverable. After three
@@ -486,9 +493,12 @@ permission-profile eligibility state, and any canary or waiver status. Retain
 operational evidence only; never retain hidden reasoning, secrets, raw
 unnecessary logs, or private data.
 
-After every accepted OpenCode task, always tear down the model session, injected
-credentials, and live OpenCode server. These are never reusable-lane resources.
-Only non-sensitive resources such as the isolated worktree, adapter
+At every terminal OpenCode task outcome—accepted, rejected, cancelled, failed,
+timed-out, or security-aborted—always tear down the model session, injected
+credentials, and live loopback OpenCode server. These runtime resources are never
+reusable. For a security-aborted task, retain only sanitized incident evidence
+needed for incident review and requalification. For other terminal outcomes,
+only non-sensitive resources such as the isolated worktree, adapter
 configuration, and sanitized task metadata may remain reusable, with a recorded
 owner, expiration, and mandatory cleanup deadline.
 
@@ -499,8 +509,9 @@ and ledgers before assigning more work.
 
 Sensitive-data exposure, unauthorized scope access/write, or another security
 boundary breach immediately aborts the affected external lane and revokes write
-eligibility for the exact model/task/profile pending incident review and
-requalification. User waiver cannot waive this rule.
+eligibility for the compromised provider/model/runtime/tool/permission-profile
+combination across all tasks pending incident review and requalification. A new
+task must not bypass this revocation, and user waiver cannot waive this rule.
 
 Pause affected lane for source conflict, material unresolved decision, missing
 gate, ownership overlap, incomplete dependency, unsafe worktree, unexplained
