@@ -7,12 +7,13 @@ Read before every OpenCode dispatch mode.
 - Bind every server to `127.0.0.1`; disable network discovery and unnecessary
   CORS.
 - Prefer one short-lived dedicated loopback server per task, with its own server
-  identifier, task-scoped Basic Auth credential, and task-scoped provider/session
-  credentials. Never store credentials in repository, brief, or log.
-- A shared loopback server is allowed only when the lead records why it is needed,
-  its server ID, every active task/session using it, and which credentials are
-  task-scoped versus server-global. Do not put a task-exclusive secret in a
-  server-global environment.
+  identifier, task-scoped Basic Auth credential, and task-scoped
+  provider/session credentials. Never store credentials in repository, brief, or
+  log.
+- A shared loopback server is allowed only when the lead records why it is
+  needed, its server ID, every active task/session using it, and which
+  credentials are task-scoped versus server-global. Do not put a task-exclusive
+  secret in a server-global environment.
 - Keep provider credentials in OpenCode credential storage or approved secret
   manager. Never add them to project configuration or environment files.
 - Pass the minimal environment allowlist required for model/provider and task.
@@ -45,8 +46,8 @@ Bounded write with recommended canary or explicit waiver:
   one writer owns each artifact per wave, and any overlap stops the lane;
 - derive a concrete workspace-relative writable allowlist from that exclusive
   artifact set. Use exact files and the minimum owned directory prefixes needed
-  for cohesive edits or new in-scope files; never grant arbitrary repository-root
-  writes;
+  for cohesive edits or new in-scope files; never grant arbitrary
+  repository-root writes;
 - enforce the writable allowlist in the permission profile. Any attempted or
   actual write outside it is a security boundary breach;
 - explicitly deny `.git` metadata, secrets, external directories, dependency
@@ -65,8 +66,8 @@ Bounded write with recommended canary or explicit waiver:
 ## Immutable Identity And Capability Evidence
 
 Before every dispatch, record the exact provider, provider-prefixed model ID,
-**immutable provider model revision/build**, OpenCode/runtime version, exact tool
-surface/version set, permission-profile identifier or hash, and environment
+**immutable provider model revision/build**, OpenCode/runtime version, exact
+tool surface/version set, permission-profile identifier or hash, and environment
 boundary relevant to the task. A moving display alias is not sufficient model
 identity. If the immutable revision/build cannot be established, do not reuse
 prior capability evidence or a canary waiver for write work.
@@ -75,9 +76,10 @@ Every real-write assignment must have positive evidence for every material
 capability it will use. Capability evidence is bound to the immutable model
 revision/build plus every runtime/tool/permission/environment dimension material
 to that capability. The absence of a recorded unsupported capability is not
-proof of support. When the immutable model revision/build changes, invalidate all
-capability evidence for the prior revision. When another bound dimension
-changes, invalidate every affected capability record and requalify it before use.
+proof of support. When the immutable model revision/build changes, invalidate
+all capability evidence for the prior revision. When another bound dimension
+changes, invalidate every affected capability record and requalify it before
+use.
 
 Negative capability evidence is revision-bound too. A known unsupported
 capability from one revision must not be generalized to a different revision;
@@ -104,9 +106,9 @@ task** and the recorded full enforcement configuration:
 - derived writable-allowlist fingerprint.
 
 Any enforcement-relevant change invalidates the waiver before another write.
-Changing task ID, model revision/build, runtime, tool surface, permission profile,
-sandbox/network boundary, or writable allowlist requires a fresh explicit user
-waiver or a canary for the changed configuration.
+Changing task ID, model revision/build, runtime, tool surface, permission
+profile, sandbox/network boundary, or writable allowlist requires a fresh
+explicit user waiver or a canary for the changed configuration.
 
 A waived real-write lane still requires:
 
@@ -220,8 +222,8 @@ reports:
    reproduction evidence. The lead must explicitly accept it before production
    implementation begins.
 3. When a provisional first-write checkpoint is required, the worker pauses
-   immediately after the first representative allowlisted edit for trusted-native
-   acceptance before any additional edit.
+   immediately after the first representative allowlisted edit for
+   trusted-native acceptance before any additional edit.
 4. When the task brief requires an interim diff/risk checkpoint, the worker
    pauses there and waits for explicit lead acceptance before continuing.
 5. Verification and final-diff checkpoints remain required before acceptance.
@@ -253,15 +255,16 @@ credentials immediately.
 
 For server teardown:
 
-- **Dedicated per-task server:** terminate it immediately with the terminal task.
+- **Dedicated per-task server:** terminate it immediately with the terminal
+  task.
 - **Intentionally shared server:** remove the terminal task's session and
   task-scoped credentials immediately, update the active-session registry, and
-  keep the server only while another recorded active task/session still needs it.
-  Terminate the shared server as soon as the last active session becomes
+  keep the server only while another recorded active task/session still needs
+  it. Terminate the shared server as soon as the last active session becomes
   terminal.
 - **Server/runtime implicated in a security incident:** abort every affected
-  session and terminate the shared server immediately rather than waiting for the
-  normal shared-server drain rule.
+  session and terminate the shared server immediately rather than waiting for
+  the normal shared-server drain rule.
 
 For a security-aborted task, retain only sanitized incident evidence needed for
 incident review and requalification. For other terminal outcomes, only
@@ -303,8 +306,8 @@ another security boundary breach. The user cannot waive this response.
 
 Also stop for stale base, ownership conflict, overlapping artifact/file
 ownership, unenforceable security boundary, invalidated waiver/evidence, or
-unverifiable result. For ordinary recoverable drift, use the explicit same-session
-correction and three-identical-rule-failures policy above rather than weakening
-controls or cold-starting a new session simply to finish faster. Absence of a
-canary by itself is not a stop condition when the fully bound user-authorized
-waiver and required safeguards are recorded.
+unverifiable result. For ordinary recoverable drift, use the explicit
+same-session correction and three-identical-rule-failures policy above rather
+than weakening controls or cold-starting a new session simply to finish faster.
+Absence of a canary by itself is not a stop condition when the fully bound
+user-authorized waiver and required safeguards are recorded.

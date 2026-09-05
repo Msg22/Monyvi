@@ -369,16 +369,17 @@ For write work include:
 
 > You are not alone in the codebase. Own the complete assigned task inside your
 > isolated worktree/branch and only the artifacts assigned to you for this wave.
-> Make whatever cohesive in-scope edits those exclusively owned artifacts and the
-> derived writable allowlist genuinely permit, but do not cross protected paths,
-> another owner's responsibility, another writer's artifact/file ownership, or
-> the writable boundary. Stop and report any overlap or out-of-boundary need.
+> Make whatever cohesive in-scope edits those exclusively owned artifacts and
+> the derived writable allowlist genuinely permit, but do not cross protected
+> paths, another owner's responsibility, another writer's artifact/file
+> ownership, or the writable boundary. Stop and report any overlap or
+> out-of-boundary need.
 
 One task/worktree has one write owner at a time, and one writer owns each
 artifact/file per wave. Reviewers stay read-only. Complete-task ownership never
-permits overlapping concurrent edits to the same artifact or unbounded repository
-writes. Briefs must be self-contained. Use smallest inherited context that
-preserves correctness:
+permits overlapping concurrent edits to the same artifact or unbounded
+repository writes. Briefs must be self-contained. Use smallest inherited context
+that preserves correctness:
 
 - `fork_turns: "none"` for isolated deterministic inventory/check work when
   brief contains all required context;

@@ -63,12 +63,12 @@ network, secret access, Git/remote mutation, dependency installation, and
 destructive action probes are denied.
 
 The user may explicitly waive that canary. The waiver must be recorded for the
-**exact task** and the full enforcement configuration: provider, provider-prefixed
-model ID, immutable model revision/build, OpenCode/runtime version, exact tool
-surface/version set, permission-profile identifier or hash, environment/sandbox
-boundary, and writable-allowlist fingerprint. Any enforcement-relevant change
-invalidates that waiver before another write; obtain a fresh explicit waiver or
-run the canary for the changed configuration.
+**exact task** and the full enforcement configuration: provider,
+provider-prefixed model ID, immutable model revision/build, OpenCode/runtime
+version, exact tool surface/version set, permission-profile identifier or hash,
+environment/sandbox boundary, and writable-allowlist fingerprint. Any
+enforcement-relevant change invalidates that waiver before another write; obtain
+a fresh explicit waiver or run the canary for the changed configuration.
 
 A waiver does not weaken the remaining controls: use one isolated exclusive
 task/worktree, non-overlapping artifact ownership, a concrete writable path or
@@ -171,13 +171,14 @@ responses, cancellation, and diff inspection directly.
 ## Completion Evidence
 
 Record task ID, provider/model ID, immutable model revision/build,
-OpenCode/runtime version, tool surface/version set, positive capability evidence,
-session ID, server ID/mode, worktree/branch, base SHA, complete task scope,
-artifact/file ownership, derived writable allowlist, protected paths, permission
-profile, canary status or fully bound user-authorized waiver, provisional
-first-write result when used, checkpoint acceptances, corrections, verification
-commands/results, changed paths, diff disposition, retry/rule-failure count,
-quarantine/eligibility state, final result, and remaining risks.
+OpenCode/runtime version, tool surface/version set, positive capability
+evidence, session ID, server ID/mode, worktree/branch, base SHA, complete task
+scope, artifact/file ownership, derived writable allowlist, protected paths,
+permission profile, canary status or fully bound user-authorized waiver,
+provisional first-write result when used, checkpoint acceptances, corrections,
+verification commands/results, changed paths, diff disposition,
+retry/rule-failure count, quarantine/eligibility state, final result, and
+remaining risks.
 
 Completion requires:
 

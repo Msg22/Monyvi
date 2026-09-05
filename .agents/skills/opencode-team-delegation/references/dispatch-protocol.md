@@ -10,11 +10,11 @@ Before every dispatch:
 1. Confirm OpenCode CLI/server version and authentication without exposing
    credentials.
 2. Query current model inventory and record the exact provider-prefixed model ID
-   **and immutable provider model revision/build**. A moving display alias is not
-   sufficient identity. If immutable revision/build cannot be established, do not
-   reuse capability evidence or a canary waiver for write work.
-3. Prefer a dedicated loopback server for this task, bound to `127.0.0.1`, with a
-   recorded server ID and task-scoped credentials. If a shared server is
+   **and immutable provider model revision/build**. A moving display alias is
+   not sufficient identity. If immutable revision/build cannot be established,
+   do not reuse capability evidence or a canary waiver for write work.
+3. Prefer a dedicated loopback server for this task, bound to `127.0.0.1`, with
+   a recorded server ID and task-scoped credentials. If a shared server is
    necessary, record its server ID, the reason, active-session registry, and
    which credentials are task-scoped versus server-global.
 4. Load the explicit deny-by-default permission profile and record its stable
@@ -34,8 +34,8 @@ Before every dispatch:
    revision/build and every runtime/tool/permission/environment dimension
    material to that capability. Missing negative evidence is not positive
    evidence.
-9. Confirm the implicated provider/model revision/runtime/tool combination is not
-   under incident quarantine across any mode/profile. A new task, session,
+9. Confirm the implicated provider/model revision/runtime/tool combination is
+   not under incident quarantine across any mode/profile. A new task, session,
    worktree, or permission profile cannot bypass quarantine.
 10. For bounded writes, confirm either canary evidence for the exact enforcement
     configuration or a recorded user-authorized waiver bound to the **exact
@@ -94,12 +94,13 @@ context.
 
 For write work, assign one complete task and one exclusive isolated
 worktree/branch while preserving non-overlapping artifact/file ownership. One
-writer owns each artifact per wave. The trusted native owner derives the writable
-allowlist from that exclusive artifact set before dispatch. Use exact files and
-minimum owned directory prefixes that permit cohesive in-boundary edits or new
-files; never use "no per-file micromanagement" to allow writes outside that
-concrete boundary. Expanding the writable allowlist is an enforcement-relevant
-change that invalidates the existing waiver until reauthorized or canaried.
+writer owns each artifact per wave. The trusted native owner derives the
+writable allowlist from that exclusive artifact set before dispatch. Use exact
+files and minimum owned directory prefixes that permit cohesive in-boundary
+edits or new files; never use "no per-file micromanagement" to allow writes
+outside that concrete boundary. Expanding the writable allowlist is an
+enforcement-relevant change that invalidates the existing waiver until
+reauthorized or canaried.
 
 For a user-authorized canary waiver, the task packet must record the exact task
 and every enforcement identity field listed above. A waiver for another task,
@@ -155,9 +156,10 @@ Use official server/SDK APIs rather than screen automation:
 9. Inspect verification evidence and the final complete diff before acceptance.
 10. On sensitive-data exposure, unauthorized scope access/write, an
     out-of-allowlist write attempt, or another security boundary breach, abort
-    immediately and quarantine the implicated provider/model revision/runtime/tool
-    combination across read/write modes and all permission profiles pending
-    incident review and requalification. A new task/profile cannot bypass this.
+    immediately and quarantine the implicated provider/model
+    revision/runtime/tool combination across read/write modes and all permission
+    profiles pending incident review and requalification. A new task/profile
+    cannot bypass this.
 11. Retrieve only sanitized operational evidence and partial artifacts needed
     for safe inspection before terminal teardown or reassignment.
 
@@ -250,8 +252,8 @@ If runtime, tool surface, permission profile, or environment boundary changes,
 invalidate and requalify every capability whose support could be affected.
 
 Negative capability evidence is revision-bound as well. A known unsupported
-capability from an older revision must not be assumed for a new revision; the new
-revision is simply unqualified until evidence is collected.
+capability from an older revision must not be assumed for a new revision; the
+new revision is simply unqualified until evidence is collected.
 
 ## Bounded-Write Canary Default, Waiver, And First Write
 
@@ -276,8 +278,8 @@ permission-profile identifier/hash, sandbox/network boundary, and writable
 allowlist fingerprint. Any enforcement-relevant change invalidates the waiver.
 
 When repository-edit capability alone lacks prior positive evidence, the
-provisional first-write checkpoint defined above is the only waiver-based path to
-bootstrap that evidence. All unrelated material capabilities still require
+provisional first-write checkpoint defined above is the only waiver-based path
+to bootstrap that evidence. All unrelated material capabilities still require
 positive evidence before dispatch. A successful accepted provisional checkpoint
 becomes edit-capability evidence only for the exact immutable configuration that
 produced it.
@@ -294,11 +296,13 @@ credentials immediately.
 
 Then apply server teardown by mode:
 
-- **Dedicated per-task server:** terminate it immediately with the terminal task.
-- **Intentionally shared server:** remove the terminal session and its task-scoped
-  credentials immediately, update the active-session registry, and keep the
-  server only while another recorded active task/session still needs it. Shut the
-  shared server as soon as the final active session becomes terminal.
+- **Dedicated per-task server:** terminate it immediately with the terminal
+  task.
+- **Intentionally shared server:** remove the terminal session and its
+  task-scoped credentials immediately, update the active-session registry, and
+  keep the server only while another recorded active task/session still needs
+  it. Shut the shared server as soon as the final active session becomes
+  terminal.
 - **Shared server/runtime implicated in a security incident:** abort every
   affected active session and terminate the shared server immediately instead of
   waiting for the normal drain rule.
