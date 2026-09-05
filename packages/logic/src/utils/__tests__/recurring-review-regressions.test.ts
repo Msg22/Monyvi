@@ -1,6 +1,7 @@
 import * as AmountHelpers from "../amount-helpers";
 import { getNextRecurringOccurrenceAfter } from "../date-boundary";
 
+// Focused regressions for the latest PR review findings.
 describe("recurring review regressions", () => {
   it("rejects a valid decimal when JavaScript number conversion changes its meaning", () => {
     expect(
