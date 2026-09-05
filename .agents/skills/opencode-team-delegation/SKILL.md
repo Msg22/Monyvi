@@ -45,13 +45,23 @@ capabilities, and route future tasks accordingly. One failed benchmark does not
 permanently disqualify unrelated capabilities, and inability to consume images
 must not block source-only work.
 
-Before any real write, the exact bounded-write permission profile still requires
-independent qualification in a disposable synthetic checkout. Prove an in-scope
-canary edit succeeds and probes for outside-scope write, shell, network, secret
-access, Git/remote mutation, dependency installation, and destructive action are
-denied. Any material permission-profile change requires that canary qualification
-to be repeated before real writes. Every real result still requires independent
-Monyvi verification; model confidence is not evidence.
+The bounded-write canary is the recommended default before real OpenCode writes:
+independently qualify the exact permission profile in a disposable synthetic
+checkout, proving an in-scope edit succeeds while outside-scope write, shell,
+network, secret access, Git/remote mutation, dependency installation, and
+destructive action probes are denied.
+
+The user may explicitly waive that canary for a specific model/task/profile.
+Record the user-authorized exception before dispatch. A waiver does not weaken
+the remaining controls: use one isolated exclusive task/worktree, an explicit
+deny-by-default profile, no secrets or private financial data, no dependency
+installs, Git/remote mutations, destructive actions, releases, or deployments,
+the normal mentoring checkpoints, and independent trusted-native inspection of
+the complete diff plus required tests/verification before acceptance. Abort
+immediately on any boundary breach. When that exception and those safeguards are
+recorded, lack of a canary alone must not block the authorized real write. Every
+real result still requires independent Monyvi verification; model confidence is
+not evidence.
 
 ## Prepare And Dispatch
 
@@ -109,10 +119,10 @@ responses, cancellation, and diff inspection directly.
 ## Completion Evidence
 
 Record task ID, exact provider/model identifier, session ID, worktree/branch,
-base SHA, complete task scope, protected paths, permission profile, start/end
-state, checkpoint outcomes, corrections, verification commands/results, changed
-paths, diff disposition, retry/rule-failure count, final result, and remaining
-risks. Completion requires:
+base SHA, complete task scope, protected paths, permission profile, canary status
+or recorded user-authorized waiver, start/end state, checkpoint outcomes,
+corrections, verification commands/results, changed paths, diff disposition,
+retry/rule-failure count, final result, and remaining risks. Completion requires:
 
 - no forbidden or out-of-scope action;
 - current base and exclusive ownership still valid;

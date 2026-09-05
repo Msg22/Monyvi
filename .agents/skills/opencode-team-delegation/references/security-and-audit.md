@@ -32,7 +32,7 @@ Read-only capability qualification:
   necessary, use a separate trusted lane or allow only exact domains/URLs and
   sanitized queries recorded in the task packet; never permit general egress.
 
-Bounded write after canary qualification:
+Bounded write with recommended canary or explicit waiver:
 
 - give one worker exclusive responsibility for one complete task in one isolated
   worktree/branch;
@@ -44,21 +44,44 @@ Bounded write after canary qualification:
   Git/remote operations;
 - deny general shell and network access. If a narrowly named non-mutating
   verification capability is separately exposed, authorize only that capability
-  after it is included in the canary profile; otherwise the trusted native owner
-  runs verification;
+  under the reviewed profile; otherwise the trusted native owner runs
+  verification;
 - deny external directories except read-only traversal of a resolved, verified
   main-workspace `node_modules` target required by Monyvi worktree junction;
   deny edits and shell mutations against that target;
 - require lead response for any unlisted permission request; never remember a
   broader permission for convenience.
 
-Before any real write, independently qualify the exact bounded-write profile in
-a disposable synthetic checkout. The canary must prove one legitimate in-scope
-edit succeeds and probes for outside-scope write, shell, network, secret access,
-Git/remote mutation, dependency installation, and destructive action are denied.
-A material profile change requires repeating this canary before real writes.
-Read-only benchmark results remain capability evidence; lack of one capability
-such as image input does not invalidate unrelated source-only capability.
+The recommended default is to independently qualify the exact bounded-write
+profile in a disposable synthetic checkout. The canary should prove one
+legitimate in-scope edit succeeds and probes for outside-scope write, shell,
+network, secret access, Git/remote mutation, dependency installation, and
+destructive action are denied.
+
+The user may explicitly waive the canary for a specific model/task/profile. The
+waiver must be recorded before dispatch and does not waive any other control. A
+waived real-write lane requires all of the following:
+
+- one isolated worktree/branch with one exclusive task owner;
+- the explicit deny-by-default permission profile described above;
+- no secrets, private financial records, bank/SMS payloads, personal identifiers,
+  authentication artifacts, or other private user data in model context;
+- no dependency installation, Git/remote mutation, destructive action, release,
+  or deployment capability;
+- the normal persistent-session mentoring checkpoints for plan/assumptions,
+  failing-test evidence where applicable, interim diff/risk, verification, and
+  final diff;
+- independent trusted-native inspection of the complete diff and execution of
+  the required tests/verification before any result is accepted;
+- immediate abort on any unauthorized access/write, sensitive-data exposure,
+  destructive intent/action, ownership conflict, or other boundary breach.
+
+When the recorded waiver and all safeguards above are present, lack of a canary
+alone is not a stop condition. A material permission-profile expansion requires
+a fresh canary or a new explicit user-authorized waiver for that expanded
+profile. Read-only benchmark results remain capability evidence; lack of one
+capability such as image input does not invalidate unrelated source-only
+capability.
 
 If runtime cannot enforce declared filesystem, environment, command, and network
 boundaries, require a real OS/container sandbox that does or abort external
@@ -120,8 +143,8 @@ Keep only operational metadata needed for traceability:
   scope, and protected paths;
 - user opt-in record, approved provider, purpose, data-sharing boundary, and
   authorization expiry or review deadline;
-- permission-profile identifier, timestamps, checkpoint outcomes, corrections,
-  and terminal status;
+- permission-profile identifier, canary status or recorded user-authorized
+  waiver, timestamps, checkpoint outcomes, corrections, and terminal status;
 - verification commands and summarized results;
 - changed-path list, disposition, retry/rule-failure count, final result, and
   risk notes.
@@ -135,8 +158,10 @@ project explicitly adopts a sanitized tracked format.
 ## Stop Conditions
 
 Immediately abort and escalate on sensitive-data exposure, destructive intent or
-action, or unauthorized boundary crossing. Also stop for stale base, ownership
-conflict, unenforceable security boundary, or unverifiable result. For ordinary
-recoverable drift, use the explicit same-session correction and three-identical-
-rule-failures policy above rather than weakening controls or cold-starting a new
-session simply to finish faster.
+action, unauthorized boundary crossing, or any breach of a recorded canary
+waiver safeguard. Also stop for stale base, ownership conflict, unenforceable
+security boundary, or unverifiable result. For ordinary recoverable drift, use
+the explicit same-session correction and three-identical-rule-failures policy
+above rather than weakening controls or cold-starting a new session simply to
+finish faster. Absence of a canary by itself is not a stop condition when the
+user-authorized waiver and required safeguards are recorded.

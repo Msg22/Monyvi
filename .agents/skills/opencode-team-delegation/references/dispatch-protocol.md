@@ -26,10 +26,17 @@ Before every dispatch:
    exact model/path. Current qualification records that `bai/glm-5.3-flash`
    lacks image input through this OpenCode path; image-dependent work must route
    elsewhere until that capability is requalified.
+8. For bounded writes, confirm either the recommended canary evidence or a
+   recorded user-authorized canary waiver for the exact model/task/profile. A
+   waiver is valid only with the isolated exclusive worktree, deny-by-default
+   profile, sensitive-data exclusions, forbidden-action controls, mentoring
+   checkpoints, independent complete diff/tests, and immediate boundary-breach
+   stop rules defined below and in `security-and-audit.md`.
 
 Do not dispatch if any required check is unknown. Availability must be rechecked
 after runtime restart, authentication change, model change, or worktree/base
-change.
+change. When a valid waiver is recorded, lack of canary evidence alone is not an
+unknown or blocking check.
 
 ## Task Packet
 
@@ -43,6 +50,7 @@ Immutable base SHA and target integration branch/PR:
 Complete task/worktree responsibility and protected paths/actions:
 External-provider opt-in and data-sharing boundary:
 Read-only or bounded-write mode and permission-profile ID:
+Canary evidence or recorded user-authorized waiver:
 Source of truth and required context:
 Acceptance criteria:
 Checkpoint plan:
@@ -60,6 +68,22 @@ responsibility. Avoid fragile per-file micromanagement when the task genuinely
 needs cohesive in-scope edits; use protected/forbidden boundaries to keep scope
 safe.
 
+For a user-authorized canary waiver, the task packet must record the exception
+for the exact model/task/profile and restate these non-waivable safeguards:
+
+- one isolated worktree/branch and one exclusive task owner;
+- explicit deny-by-default permissions;
+- no secrets, private financial records, bank/SMS payloads, personal identifiers,
+  authentication artifacts, or other private user data in model context;
+- no dependency installation, Git/remote mutation, destructive action, release,
+  or deployment capability;
+- normal mentoring checkpoints for plan/assumptions, failing-test evidence where
+  applicable, interim diff/risk, verification, and final diff;
+- independent trusted-native complete diff inspection and required tests before
+  acceptance;
+- immediate abort on unauthorized access/write, sensitive-data exposure,
+  destructive intent/action, ownership conflict, or any other boundary breach.
+
 ## Session Lifecycle
 
 Use official server/SDK APIs rather than screen automation:
@@ -76,8 +100,8 @@ Use official server/SDK APIs rather than screen automation:
    scope, and ownership remain valid so the worker can incorporate feedback.
 7. Inspect verification evidence and the final complete diff before acceptance.
 8. Abort immediately for sensitive-data exposure, destructive intent/action, or
-   unauthorized boundary crossing. Also abort for ownership conflict or unsafe
-   permission escalation.
+   unauthorized boundary crossing. Also abort for ownership conflict, unsafe
+   permission escalation, or breach of a recorded canary-waiver safeguard.
 9. Retrieve messages, session diff, file status, and partial artifacts before
    cleanup or reassignment.
 
@@ -115,7 +139,8 @@ owner handles authorized Git work.
   materially wrong direction; send the correction in the same persistent
   session when the lane remains safe and recoverable.
 - Abort immediately for secrets/private-data exposure, destructive intent or
-  action, or unauthorized boundary crossing.
+  action, unauthorized boundary crossing, or breach of a recorded canary-waiver
+  safeguard.
 - For ordinary explicit rule drift, allow correction and continuation until the
   same model/task lane reaches three materially identical rule failures. Then
   mark that lane failed, inspect partial work, and reassign.
@@ -153,11 +178,11 @@ available tools, read-only permission profile, and environment-boundary policy
 with each result. If one of these dimensions changes, requalify the capabilities
 material to the next task rather than assuming old evidence still applies.
 
-## Bounded-Write Canary Gate
+## Bounded-Write Canary Default And Waiver
 
-No OpenCode model may perform a real write until the **exact bounded-write
-permission profile** has been independently reviewed and qualified in a
-disposable synthetic checkout. The canary must prove:
+The recommended default is to independently review and qualify the exact
+bounded-write permission profile in a disposable synthetic checkout. The canary
+should prove:
 
 - one legitimate edit inside the assigned synthetic task/worktree scope
   succeeds;
@@ -170,9 +195,15 @@ disposable synthetic checkout. The canary must prove:
 - dependency installation is denied;
 - destructive action is denied.
 
-Only after that canary may the exact profile perform real bounded writes in an
-isolated worktree. A material permission-profile change requires repeating the
-canary. Model/runtime/tool changes require rechecking relevant capability
-evidence and the canary whenever they can change the enforced write boundary;
-they do not automatically require every unrelated read-only benchmark to be
-repeated.
+After that canary, the exact profile may perform real bounded writes in an
+isolated worktree. A material permission-profile change should normally repeat
+the canary when the changed boundary could affect enforcement.
+
+The user may instead explicitly waive the canary for a specific
+model/task/profile. Record that exception before dispatch and apply every waiver
+safeguard in the Task Packet section and `security-and-audit.md`. A material
+permission-profile expansion requires a fresh canary or a new explicit waiver
+covering the expanded profile. When a valid waiver and safeguards are recorded,
+real writes may begin without the disposable canary; absence of the canary alone
+must not block the lane. Model/runtime/tool changes still require rechecking
+relevant capability evidence and any controls affected by the changed runtime.
