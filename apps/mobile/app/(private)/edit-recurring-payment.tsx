@@ -21,6 +21,7 @@ import {
   parseRecurringPaymentSubmissionAmount,
   type RecurringPaymentOperation,
 } from "@/utils/recurring-payment-submission";
+import { formatStoredAmountInput } from "@monyvi/logic";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -48,7 +49,7 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
 
     return {
       name: payment.name,
-      amount: String(payment.amount),
+      amount: formatStoredAmountInput(payment.amount),
       type: payment.type,
       accountId: payment.accountId,
       categoryId: payment.categoryId,
