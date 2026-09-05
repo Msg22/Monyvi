@@ -74,17 +74,23 @@ Lead is coordination-only:
 1. establish source of truth, scope, risks, and gates;
 2. form smallest complete roster and dependency graph;
 3. assign bounded ownership and acceptance criteria;
-4. monitor, resolve overlaps, and reassign ready work;
+4. monitor, mentor, resolve overlaps, and reassign ready work;
 5. review evidence and specialist findings;
 6. coordinate integration, verification, and handoff.
 
 Lead does not implement feature code, tests, specs, copy, mockups, migrations,
 review fixes, or conflict patches. Workers own repository edits. Lead may do
-read-only inspection and maintain conversation plan, task state, ledgers, and
-final synthesis. If no worker slot exists, pause rather than implement.
+read-only inspection, maintain conversation plan, task state, ledgers, and final
+synthesis, and perform trusted Git integration for OpenCode output when that Git
+mutation is explicitly authorized. If no eligible worker lane exists, pause
+rather than implement.
 
-Assign integration conflicts to relevant worker. Commits, pushes, PRs, merges,
-and issue mutations remain subject to Section 2.
+Assign implementation conflicts to the relevant worker. Lead retains the task
+graph, product/business/security/architecture decisions, independent
+verification, cross-lane conflict integration, final PR review, and merge
+authority. Commits, pushes, PRs, merges, and issue mutations remain subject to
+Section 2; OpenCode Git integration is performed by the lead or another trusted
+native integration owner, never by OpenCode itself.
 
 ## 4. Preflight
 
@@ -108,8 +114,10 @@ For parallel implementation:
 
 - read-only workers may share checkout;
 - concurrent writers use distinct sibling worktrees/branches with declared base,
-  dependency, and non-overlapping ownership;
+  dependency, and exclusive task ownership;
 - link main `node_modules` in secondary worktrees; never install another tree;
+- assign one external writer one complete task and one isolated worktree/branch;
+  avoid fragile per-file micromanagement when the task requires cohesive edits;
 - one worker owns shared indexes, schemas, migrations, translations, specs, and
   generated outputs per wave;
 - each PR is an independently mergeable slice, not automatically one per agent.
@@ -174,73 +182,119 @@ when user explicitly requests one.
 
 ### Execution Pools
 
-Select execution pool by required context, risk, capability, and cost. Verify
-that runtime, authentication, model, tools, and required permissions are
-available before dispatch; a configured name does not prove availability.
+The approved execution pools are:
 
-| Pool                     | Best fit                                                                                     | Context and ownership boundary                                                 |
-| ------------------------ | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Native Codex subagent    | Local implementation, tests, specialist review, and unpublished worktree state               | Instructional ownership; narrow fork/worktree when actual separation is needed |
-| Normal ChatGPT           | Heavy reasoning and bounded GitHub analysis, issues, branches, or PRs                        | Remote repository state only; cannot inspect unpublished local or staged files |
-| OpenCode `glm-5.3-flash` | Bounded visual inspection, test work, and mechanical implementation                          | One isolated task/session/worktree/path allowlist                              |
-| OpenCode `qwen3.8-flash` | Inventory, documentation, localization audit, test enumeration, and low-risk mechanical work | One isolated task/session/worktree/path allowlist                              |
+- Native Codex subagents;
+- Normal ChatGPT;
+- OpenCode `bai/glm-5.3-flash`;
+- OpenCode `bai/qwen3.8-flash`.
 
-Use lowest-cost pool, model, and effort that safely covers ambiguity and blast
-radius. For OpenCode, verify current provider-prefixed model identifier rather
-than inferring it from display name. Neither OpenCode model may autonomously own
-financial rules, authentication, RLS, synchronization contracts, migrations,
-security decisions, or architecture decisions. Route those to trusted native
-specialists and required approval gates.
+Select the worker by required context, demonstrated capability, risk, cost, and
+current availability. Verify runtime, authentication, exact model identifier,
+tools, and required permissions before dispatch; a configured name does not
+prove availability.
+
+Target **at least 80% of eligible execution workload** across Normal ChatGPT,
+`bai/glm-5.3-flash`, and `bai/qwen3.8-flash` combined. Eligible workload
+includes substantial and large tasks when the worker has the required context,
+tools, permissions, and capability evidence. This is an allocation target, not
+a delegation mandate: never route final authority, unpublished-local-dependent
+work, or a task a worker demonstrably cannot perform merely to hit the target.
+Track the target over meaningful execution work rather than file count or number
+of dispatches.
+
+Do not statically confine GLM or Qwen to narrow task categories. Route
+adaptively, give each model varied task shapes over time, and update capability
+evidence from actual results. Clear unsupported capability may exclude a task;
+for example, current qualification shows `bai/glm-5.3-flash` lacks image input
+through this OpenCode path, so do not assign it work that requires seeing an
+image unless that capability is later requalified. Unsupported visual input
+must not block unrelated source, test, documentation, or implementation work.
+
+External models may implement already-approved financial, schema, sync,
+security, or migration work when the task contract contains the authoritative
+decision and an independent appropriate specialist verifies the result. They
+must never invent, choose, approve, or silently change those decisions.
+
+Normal ChatGPT may own complex remote coding, tests, documentation, GitHub
+issues, branches, and PRs when explicit user authorization covers the mutation,
+the immutable remote base and complete context are supplied, and the task has no
+unpublished local dependency. Lead monitors through the task/thread and PR diff,
+independently verifies the result, and retains merge control. Never ask Normal
+ChatGPT to review or change local work that has not been pushed.
 
 Before first dispatch to each external provider/model pool in a task, obtain
-explicit user opt-in and record approved data-sharing boundary. Authorization
+explicit user opt-in and record the approved data-sharing boundary. Authorization
 may cover later bounded dispatches only while provider, model pool, data class,
 and purpose remain inside that recorded boundary. Auto-triggering team-led
 workflow never grants third-party disclosure.
 
-Normal ChatGPT may create issues, branches, or PRs only when its current
-connector/runtime proves that capability and Section 2 authorizes the mutation.
-Reuse one persistent chat for related follow-ups. Every dispatch states
-repository, immutable base SHA, target branch or PR, source-of-truth links,
-scope, forbidden actions, and expected evidence. Never ask it to review or
-change local work that has not been pushed.
-
 External lanes do not consume native subagent slots. They still consume lead
-review and integration capacity. Cap total concurrency by ready independent work
-with safe ownership, not available runtimes. Use one task, session, worktree,
-owner, and non-overlapping path allowlist per external lane. Lead retains
-control of integration and merges under Section 2. OpenCode never performs Git
-or GitHub mutations; trusted native workers perform them. Normal ChatGPT may
-perform only the explicitly authorized remote mutations in the preceding
-paragraph, after which the lead independently inspects its remote diff and
-retains merge control. Sensitive decisions always return through the applicable
-user or authoritative-documentation approval gate and cannot be delegated.
+review and integration capacity. Cap concurrency by ready independent work with
+safe ownership, not available runtimes. One external worker owns one complete
+task, one persistent session or thread, and one exclusive isolated
+worktree/branch responsibility. Define task/worktree scope and protected paths;
+do not force a brittle per-file allowlist when cohesive in-scope edits are
+required. Lead retains control of integration and merges under Section 2.
+OpenCode never commits, pushes, opens or merges PRs, or performs other Git/GitHub
+mutations; a trusted native integration owner performs authorized Git work.
+Normal ChatGPT may perform explicitly authorized remote GitHub mutations.
 
 When OpenCode is selected, load
 [`$opencode-team-delegation`](../../.agents/skills/opencode-team-delegation/SKILL.md)
-and follow its pilot, security, dispatch, monitoring, and evidence contract.
-Treat third-party delegation packages as references only unless separately
-reviewed and approved; they are not workflow dependencies.
+and follow its qualification, security, dispatch, monitoring, and evidence
+contract. Treat third-party delegation packages as references only unless
+separately reviewed and approved; they are not workflow dependencies.
+
+### External Worker Checkpoints And Learning
+
+Mentor external workers through persistent-session checkpoints rather than
+restarting on every miss. Request and inspect, as applicable:
+
+1. plan, assumptions, and intended scope before edits;
+2. failing-test or reproduction evidence where TDD/debugging applies;
+3. interim diff and risk checkpoint before the task grows difficult to unwind;
+4. verification evidence;
+5. final full diff and completion report.
+
+Observe structured status, messages, tool results, and diffs. Do not claim
+access to or request hidden chain-of-thought. Interrupt only for scope drift,
+unsafe action, ownership conflict, or materially wrong direction. Send bounded
+corrections in the same session/thread so the worker can incorporate them and
+capability evidence reflects learning rather than repeated cold starts.
+
+Abort immediately for secrets/private-data exposure, destructive intent or
+action, or unauthorized boundary crossing. For ordinary rule drift or a
+materially wrong but safe direction, correct explicitly and continue the same
+session when recoverable. After three materially identical rule failures on the
+same model/task lane, mark that lane failed and reassign. One failed task does
+not permanently disqualify a model from unrelated capability. Timeouts guide
+task size, checkpoint frequency, and timeout budget; they do not alone
+permanently disqualify a model, and a recoverable timed-out observation should
+continue in the same session after status is rechecked.
 
 ## 7. Ownership Brief And Context
 
 Every task brief states:
 
 - persona, objective, and reason;
-- exact deliverable and file/decision ownership;
-- source of truth, inputs, dependencies, and applicable workflows;
+- complete task/worktree responsibility, source of truth, and protected or
+  forbidden paths/actions;
+- inputs, dependencies, and applicable workflows;
 - acceptance criteria, evidence, and verification;
-- exclusions, unauthorized actions, escalation/stop conditions;
-- expected completion report.
+- external-provider data-sharing boundary when applicable;
+- escalation/stop conditions and expected completion report.
 
 For write work include:
 
-> You are not alone in the codebase. Own only assigned files/responsibility. Do
-> not revert others' edits. Re-read shared files before editing and adapt to
-> concurrent changes. Stop and report ownership overlap.
+> You are not alone in the codebase. Own the complete assigned task inside your
+> isolated worktree/branch. Make whatever cohesive in-scope edits are genuinely
+> required, but do not cross protected paths or another owner's responsibility,
+> revert others' work, or broaden the task. Stop and report ownership overlap.
 
-One artifact has one write owner per wave; reviewers stay read-only. Briefs must
-be self-contained. Use smallest inherited context that preserves correctness:
+One task/worktree has one write owner at a time; reviewers stay read-only.
+Briefs must be self-contained. Use smallest inherited context that preserves
+correctness:
 
 - `fork_turns: "none"` for isolated deterministic inventory/check work when
   brief contains all required context;
@@ -256,15 +310,18 @@ free worker capacity = maximum concurrency - currently active agents
 new assignments = min(free worker capacity, ready independent items, ownership-safe items)
 ```
 
-With four slots and only lead active, maximum is three workers. This is
-capacity, not target. Default large discovery uses three read-only lanes.
-Default implementation uses two isolated write lanes plus one read-only
-QA/review lane. Use three writers only when files, commands, state, and merge
-dependencies are fully independent.
+Native slot capacity is not the execution target because external lanes do not
+consume native subagent slots. Fill only ready ownership-safe work, use external
+lanes aggressively enough to pursue the Section 6 allocation target, and keep
+independent review capacity for high-risk work. Multiple writers are allowed
+only when task/worktree ownership, state, and merge dependencies are genuinely
+independent.
 
-Reuse completed worker through follow-up when context and skills fit next task.
-Spawn replacement only for material role change; retire finished worker when
-slot needed. Never start downstream work merely because slot is free.
+Reuse a completed worker through follow-up when context and skills fit the next
+task. Continue a recoverable external task in its same persistent session. Spawn
+replacement only for material role change or failed lane; retire finished native
+worker when slot is needed. Never start downstream work merely because capacity
+is free.
 
 Dependency waves:
 
@@ -385,6 +442,11 @@ clear blocker. Never claim unrun validation.
 Lead updates user at kickoff, wave transition, blocker, review, and completion.
 During active tool work, update at least every 60 seconds. Workers report
 milestones, not command narration.
+
+For external workers, record provider/model/session or thread, immutable base,
+worktree/branch, task scope, checkpoints, corrections, final result, and
+independent verification. Retain operational evidence only; never retain hidden
+reasoning, secrets, raw unnecessary logs, or private data.
 
 Worker report includes result, changed files/artifacts, tests and evidence,
 assumptions, blockers, overlap/integration risks, and recommended next ready
