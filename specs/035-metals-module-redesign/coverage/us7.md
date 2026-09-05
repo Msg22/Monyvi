@@ -8,23 +8,30 @@ integration-owned.
 
 | Scenario | Requirement / criterion | Service integration | UI/hook | E2E | Status |
 | --- | --- | --- | --- | --- | --- |
-| Effective Active-only grouped Delete | FR-037–040, FR-087, SC-003–004 | Red authored | Red authored | Authored, blocked | Red |
-| Hidden non-effective audit and no reappearance | FR-037, FR-040, FR-079, SC-007, SC-030 | Red authored | Consequence copy | Authored restart path | Red |
-| Zero sale/disposal/proceeds/P&L/write-off/transfer/account effect | FR-037, FR-091, SC-023 | Red authored | Destructive semantics | Authored visible proof | Red |
-| Sold/Disposed/non-effective rejection | FR-038, FR-087 | Red authored | Descriptor boundary | Authored terminal path | Red |
-| Replay, hash mismatch, duplicate lock | FR-076–077, FR-080, SC-015 | Red authored | Red authored | Double-tap authored | Red |
-| Atomic rollback and retry | FR-039, FR-078, FR-089–090 | Red authored | Red authored | Authored | Red |
-| User scope and offline/restart persistence | FR-060–064, SC-003 | Red authored | Offline copy | Authored | Red |
-| Approved focused Screen 14 facts and copy | FR-092, FR-102 | N/A | Red authored | Authored | Red |
-| Safe area, RTL/theme, compact/ordinary/tablet/200% reflow | FR-065–071, SC-010–013 | N/A | Red authored | Manual device proof | Red; device gate open |
+| Effective Active-only grouped Delete | FR-037–040, FR-087, SC-003–004 | SQLite Green | Hook/sheet Green | Authored, blocked | Isolated Green |
+| Hidden non-effective audit and no reappearance | FR-037, FR-040, FR-079, SC-007, SC-030 | SQLite Green | Consequence Green | Authored restart path | Isolated Green |
+| Zero sale/disposal/proceeds/P&L/write-off/transfer/account effect | FR-037, FR-091, SC-023 | SQLite Green | Destructive semantics Green | Authored visible proof | Isolated Green |
+| Sold/Disposed/non-effective rejection | FR-038, FR-087 | SQLite Green | Descriptor boundary Green | Authored terminal path | Isolated Green; runtime open |
+| Replay, hash mismatch, duplicate lock | FR-076–077, FR-080, SC-015 | SQLite Green | Hook/sheet Green | Double-tap authored | Isolated Green |
+| Atomic rollback and retry | FR-039, FR-078, FR-089–090 | SQLite Green | Hook/sheet Green | Authored | Isolated Green |
+| User scope and offline/restart persistence | FR-060–064, SC-003 | SQLite Green | Offline copy Green | Authored | Isolated Green; runtime open |
+| Approved focused Screen 14 facts and copy | FR-092, FR-102 | N/A | Sheet Green | Authored | Isolated Green; device gate open |
+| Safe area, RTL/theme, compact/ordinary/tablet/200% reflow | FR-065–071, SC-010–013 | N/A | Contract Green | Manual device proof | Isolated Green; device gate open |
 
 ## Activation and verification status
 
-- T112 is authored from the approved spec, business decisions, command/read
-  contracts, and Screen 14 content contract.
-- T113–T115 are intended Red artifacts until their owned production modules
-  exist.
+- T112–T114, T117, and the hook/sheet/descriptor subset of T118 are Green within
+  the Delete-owned injected boundary: 2 suites and 23 tests pass.
+- T115 is authored but not run. It cannot execute honestly without a live route,
+  deterministic Delete fixtures, and shared integration.
+- T118 remains partial because the Expo route is intentionally absent while the
+  shared adapter is fail-closed and shared approved copy is not runtime-wired.
+- T119 remains partial pending Maestro, device fidelity, real assistive
+  technology, and shared integration gates.
 - The Maestro flow is authored but cannot run honestly without a live route,
   shared approved copy, shared adapter activation, and deterministic Delete
   fixtures.
-- No live route, shared registration, or device completion is claimed here.
+- The isolated command uses the approved `metals.delete/v1` payload only through
+  an injected envelope creator. No shared adapter, registry, locale, fixture,
+  barrel, detail route, schema, sync, Sell, Dispose, or Undo file changed.
+- No live route, shared registration, device, or E2E completion is claimed.

@@ -7,8 +7,6 @@ import {
   waitFor,
 } from "@testing-library/react-native";
 import React from "react";
-import { AccessibilityInfo } from "react-native";
-import * as ReactNative from "react-native";
 
 interface DeleteMetalHoldingSheetCopy {
   readonly title: string;
@@ -43,6 +41,7 @@ interface DeleteMetalHoldingSheetProps {
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
   readonly onRetry: () => void;
+  readonly onFocusRequest?: (target: "heading" | "recovery") => void;
 }
 
 interface DeleteMetalHoldingSheetModule {
@@ -216,14 +215,11 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
   });
 
   it("requests initial focus for the confirmation heading and isolates the background", async () => {
-    const focus = jest
-      .spyOn(AccessibilityInfo, "setAccessibilityFocus")
-      .mockImplementation((): void => undefined);
-    jest.spyOn(ReactNative, "findNodeHandle").mockReturnValue(41);
+    const focus = jest.fn();
 
-    renderSheet();
+    renderSheet({ onFocusRequest: focus });
 
-    await waitFor(() => expect(focus).toHaveBeenCalledWith(41));
+    await waitFor(() => expect(focus).toHaveBeenCalledWith("heading"));
     expect(screen.getByTestId("metal-holding-delete-backdrop")).toHaveProp(
       "accessible",
       false
@@ -244,13 +240,17 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
   });
 
   it("locks confirm, cancel, backdrop, and duplicate input while the local action is pending", () => {
-    const props = renderSheet({ isSubmitting: true });
+    const props = renderSheet({
+      isSubmitting: true,
+      submitError: "The holding was not deleted. Try again.",
+    });
 
     expect(screen.getByRole("button", { name: copy.pending })).toHaveProp(
       "accessibilityState",
       { disabled: true, busy: true }
     );
     expect(screen.getByRole("button", { name: copy.cancel })).toBeDisabled();
+    expect(screen.getByRole("button", { name: copy.retry })).toBeDisabled();
     fireEvent.press(screen.getByRole("button", { name: copy.pending }));
     fireEvent.press(screen.getByRole("button", { name: copy.cancel }));
     fireEvent.press(screen.getByTestId("metal-holding-delete-backdrop"));
@@ -259,15 +259,10 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
   });
 
   it("preserves exact facts on failure, exposes retry, and moves focus to recovery", async () => {
-    const focus = jest
-      .spyOn(AccessibilityInfo, "setAccessibilityFocus")
-      .mockImplementation((): void => undefined);
-    jest
-      .spyOn(ReactNative, "findNodeHandle")
-      .mockReturnValueOnce(41)
-      .mockReturnValue(42);
+    const focus = jest.fn();
     const props = renderSheet({
       submitError: "The holding was not deleted. Try again.",
+      onFocusRequest: focus,
     });
 
     expect(screen.getByText("Wedding coin")).toBeTruthy();
@@ -277,7 +272,7 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
     ).toHaveProp("accessibilityRole", "alert");
     fireEvent.press(screen.getByRole("button", { name: copy.retry }));
     expect(props.onRetry).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(focus).toHaveBeenLastCalledWith(42));
+    await waitFor(() => expect(focus).toHaveBeenLastCalledWith("recovery"));
   });
 
   it.each([
@@ -307,7 +302,10 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
     expect(screen.getByTestId("metal-holding-delete-actions")).toHaveStyle({
       paddingBottom: 54,
     });
-    expect(screen.getByTestId("metal-holding-delete-confirm")).toHaveProp(
+    expect(
+      screen.getByTestId("metal-holding-delete-confirm-target")
+    ).toHaveProp("className", expect.stringContaining("min-h-11"));
+    expect(screen.getByTestId("metal-holding-delete-cancel-target")).toHaveProp(
       "className",
       expect.stringContaining("min-h-11")
     );
