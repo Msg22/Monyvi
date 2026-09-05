@@ -10,10 +10,16 @@ designs against the actual implementation styles (Tailwind classes, inline
 styles, colors, typography, spacing, borders, layout, icons). The output is a
 structured **Style Audit Report** identifying all gaps and mismatches.
 
-> [!CAUTION] **EVERY SECTION IS MANDATORY. The agent MUST execute EVERY step. If
-> a mockup has no deviations, the agent MUST explicitly state "✅ No deviations
-> found." Skipping or summarizing without property-level evidence is a CRITICAL
-> FAILURE.**
+First determine whether the target diff changes visual UI governed by an
+approved scoped mockup. If it does not, report the style audit and visual
+fidelity as `N/A — no governed visual UI change`, skip the per-mockup steps
+below, and do not block the change merely because the feature folder contains
+mockups.
+
+> [!CAUTION] **EVERY APPLICABLE SECTION IS MANDATORY. The agent MUST execute
+> EVERY applicable step. If a governing mockup has no deviations, the agent MUST
+> explicitly state "✅ No deviations found." Skipping or summarizing without
+> property-level evidence is a CRITICAL FAILURE.**
 
 ---
 
@@ -32,8 +38,14 @@ Before analyzing ANY component, load the following:
 ### 1.2 Identify Mockups
 
 - Locate the spec folder matching the branch name under `specs/`
-- **LIST** all files in `specs/<branch-name>/mockups/`
-- **LOAD** every mockup image (use `view_file` on each `.png`/`.jpg`)
+- Follow mockup or handoff paths declared by the selected spec, plan, tasks, and
+  README files
+- **RECURSIVELY LIST** mockup assets in the selected feature folder, including
+  nested paths such as `design/mockups/`
+- **LOAD** every approved mockup image found through declared paths and the
+  recursive search
+- Record the declared binding UI viewport or component context for each approved
+  mockup
 - Create a numbered mapping: `Mockup N → <filename> → <short description>`
 
 ### 1.3 Identify Changed Components
@@ -42,6 +54,8 @@ Before analyzing ANY component, load the following:
 - Filter to only **UI files**: `.tsx` components, screen files, and any shared
   UI utilities
 - **READ** every changed UI file in full
+- Map only changed visual UI governed by each approved mockup. Unchanged or
+  non-visual files do not activate the rendered-evidence gate.
 
 ---
 
@@ -108,7 +122,21 @@ Write the report to the artifact directory as `style-audit.md` with:
 
 1. **Color Reference** — dark mode palette used in the project
 2. **Per-Mockup Sections** — each with comparison tables and a verdict
-3. **Summary Table** — all findings grouped by severity
+3. **Rendered Visual Evidence** — a side-by-side or overlay comparison at the
+   declared binding UI context, plus every in-scope compact-phone,
+   ordinary-phone, tablet, landscape, dark-mode, RTL/Arabic, and enlarged-text
+   visual variant
+4. **Accessibility Evidence** — accessibility-tree inspection, screen-reader
+   validation, or automated accessibility results for labels and semantics;
+   screenshots alone do not prove accessibility labels
+5. **Functional Readiness** — `READY` or `NOT READY`, with test evidence
+6. **Visual Fidelity** — `COMPLETE`, `INCOMPLETE`, or `N/A`, with the binding
+   context and evidence paths or the reason it does not apply
+7. **Summary Table** — all findings grouped by severity
+
+Source and component inspection alone cannot prove visual completion. For a
+changed visual UI governed by an approved mockup, missing baseline or in-scope
+variant rendered evidence makes visual fidelity `INCOMPLETE`.
 
 ### 4.2 Severity Classification
 

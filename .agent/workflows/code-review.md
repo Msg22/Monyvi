@@ -322,14 +322,19 @@ The agent MUST ensure consistency across:
 
 ### 🎨 2.5 Mockups Compliance (MANDATORY — DO NOT SKIP UNDER ANY CIRCUMSTANCES)
 
-> [!CAUTION] **THIS SECTION WAS PREVIOUSLY SKIPPED. THIS IS UNACCEPTABLE. The
-> agent MUST load ALL mockup images, compare them against the implementation,
-> and produce DETAILED findings. If the `mockups/` folder exists, EVERY mockup
-> MUST be analyzed. "I loaded the mockups" without producing findings is a
-> FAILURE.**
+Always include this section in the review report. First determine whether the
+target diff changes visual UI governed by an approved scoped mockup. If it does
+not, report `N/A — no governed visual UI change`, skip the per-mockup evidence
+steps below, and do not block the PR merely because the feature folder contains
+mockup assets.
 
-The agent MUST validate that the implementation **visually and structurally
-matches the approved mockups**.
+> [!CAUTION] **THIS SECTION WAS PREVIOUSLY SKIPPED. THIS IS UNACCEPTABLE. The
+> agent MUST load ALL approved mockup images that govern changed visual UI,
+> compare them against the implementation, and produce DETAILED findings. "I
+> loaded the mockups" without producing findings is a FAILURE.**
+
+When applicable, the agent MUST validate that the changed implementation
+**visually and structurally matches the approved mockups**.
 
 ---
 
@@ -337,9 +342,14 @@ matches the approved mockups**.
 
 - Identify the current branch name
 - Locate the corresponding spec folder: `specs/<branch-name>/`
-- Inside the spec folder, locate: `mockups/`
-- **Load ALL mockup images** inside this folder
-- If no `mockups/` folder exists, explicitly state: "No mockups found — N/A"
+- Follow mockup or handoff paths declared by the selected spec, plan, tasks, and
+  README files
+- Recursively search the selected feature folder for mockup assets, including
+  nested paths such as `design/mockups/`
+- **Load ALL approved mockup images** found through declared paths and recursive
+  search
+- Only when neither search finds approved mockup assets, explicitly state: "No
+  mockups found — N/A"
 
 ---
 
@@ -350,6 +360,19 @@ For **EACH** mockup image, the agent MUST:
 - Identify which component/screen it corresponds to
 - Read the component code
 - Compare the implementation against the mockup **structurally and visually**
+- Identify the declared binding UI viewport or component context
+- Ignore presentation-only device hardware, frame, outer canvas, browser chrome,
+  export padding, and background outside the UI surface unless explicitly marked
+  binding
+- Inspect rendered app screenshots; source inspection alone cannot prove visual
+  completion
+- Require side-by-side or overlay rendered evidence at the declared UI context
+- Require rendered evidence for every in-scope responsive, dark-mode,
+  RTL/Arabic, and enlarged-text variant
+- Require separate accessibility-tree, screen-reader, or automated accessibility
+  evidence for labels and semantics; screenshots alone do not prove
+  accessibility labels
+- Report functional readiness and visual fidelity separately
 
 #### Validate ALL 7 (produce a finding for EACH):
 
@@ -411,6 +434,10 @@ Corresponds to: <component/screen name>
 | Components & UI | ✅/❌ | ... |
 | States | ✅/❌ | ... |
 | Interactions | ✅/❌ | ... |
+| Binding UI Context | ✅/❌ | ... |
+| Rendered Comparison | ✅/❌ | ... |
+| Scoped Variants | ✅/❌ | ... |
+| Accessibility Evidence | ✅/❌ | ... |
 ```
 
 Violations:
@@ -428,7 +455,9 @@ Violations:
 
 #### 🚨 Blocking Rule
 
-- If implementation does NOT match mockups: → PR is **NOT APPROVABLE**
+- For governed visual UI changes, if implementation does NOT match mockups, or
+  required rendered comparison or scoped-variant evidence is missing: → PR is
+  **NOT APPROVABLE**
 
 ---
 
@@ -447,7 +476,12 @@ When creating the Fix PR:
 
 - Implementation visually matches mockups with **no noticeable differences**
 - All mockup screens are fully implemented
-- UI is ready for pixel-perfect validation
+- Side-by-side or overlay rendered evidence proves the match at the declared UI
+  context
+- Every in-scope responsive, dark-mode, RTL/Arabic, and enlarged-text variant
+  has rendered evidence
+- Accessibility labels and semantics have separate accessibility evidence
+- Functional readiness and visual fidelity are reported separately
 
 ---
 
@@ -539,6 +573,25 @@ Avoid duplicate fixes.
   - 📄 Reference: (rule or principle if applicable)
   - 💡 Suggestion
 
+#### Functional Readiness
+
+- Status: READY / NOT READY
+- Evidence: tests and behavior evidence supporting this status
+
+#### Visual Fidelity
+
+- Status: COMPLETE / INCOMPLETE / N/A
+- Binding UI context: declared viewport or component context, or N/A
+
+#### Visual Evidence
+
+- Approved reference: path, or N/A
+- Baseline rendered comparison: side-by-side or overlay evidence path, or N/A
+- Scoped variants: responsive, dark-mode, RTL/Arabic, and enlarged-text evidence
+  paths, or N/A with reason
+- Accessibility: accessibility-tree, screen-reader, or automated accessibility
+  evidence, or N/A with reason
+
 ---
 
 ## 4. Implement Fixes (MANDATORY)
@@ -595,6 +648,8 @@ The PR is **NOT APPROVABLE** if ANY of the following exist:
 - Broken monorepo boundaries
 - Missing migrations or DB inconsistencies
 - **Mockup deviations** (UI does not match approved designs)
+- Missing required mockup comparison or scoped-variant rendered evidence for a
+  governed visual UI change
 
 ---
 
@@ -605,9 +660,12 @@ The PR is **NOT APPROVABLE** if ANY of the following exist:
   - `.agent/rules/*.md`
   - `specs/<branch-name>/*` when present
   - Linked GitHub issue when present
-  - `specs/<branch-name>/mockups/*` when present
+  - approved mockups that govern changed visual UI, when present
 
 - No missing features
 - No architectural violations
 - Clean, maintainable, production-ready code
-- **UI pixel-perfect match with mockups**
+- **Changed governed UI matches approved mockups pixel-perfect**
+- Required rendered comparison, scoped-variant, and accessibility evidence is
+  complete for changed governed UI
+- Functional readiness and visual fidelity are reported separately
