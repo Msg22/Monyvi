@@ -277,6 +277,20 @@ describe("recurring-payment-service", () => {
       expect(mockWrite).toHaveBeenCalledTimes(3);
     });
 
+    it("rejects a recurring currency that does not match the owned account", async () => {
+      await expect(
+        createRecurringPayment({
+          ...validCreateData,
+          amount: 12.345,
+          currency: "KWD",
+        })
+      ).rejects.toThrow(
+        RECURRING_PAYMENT_SERVICE_ERROR_CODES.CURRENCY_MISMATCH
+      );
+
+      expect(mockWrite).not.toHaveBeenCalled();
+    });
+
     it.each([
       new Date(Number.NaN),
       new Date("2026-05-31T23:59:59.000Z"),
@@ -361,6 +375,35 @@ describe("recurring-payment-service", () => {
 
       expect(payment.startDate).toEqual(unchangedLegacyDate);
       expect(payment.nextDueDate).toEqual(advancedNextDueDate);
+    });
+
+    it("rejects a stale expected Due payment instead of rewinding the schedule", async () => {
+      const payment = createRecurringRecord({
+        startDate: new Date("2026-06-01T08:00:00.000Z"),
+        nextDueDate: new Date("2026-08-01T08:00:00.000Z"),
+      });
+      mockFindOwned.mockImplementation(
+        (_collection: MockCollection, id: string): Promise<unknown> =>
+          id === "account-1"
+            ? Promise.resolve({ id, userId: "user-1", currency: "EGP" })
+            : Promise.resolve(payment)
+      );
+
+      await expect(
+        updateRecurringPayment("payment-1", {
+          ...validCreateData,
+          startDate: new Date("2026-07-01T08:00:00.000Z"),
+          expectedNextDueDate: new Date("2026-07-01T08:00:00.000Z"),
+        })
+      ).rejects.toThrow(
+        RECURRING_PAYMENT_SERVICE_ERROR_CODES.STALE_SCHEDULE
+      );
+
+      expect(payment.nextDueDate).toEqual(
+        new Date("2026-08-01T08:00:00.000Z")
+      );
+      expect(mockWrite).not.toHaveBeenCalled();
+      expect(payment.update).not.toHaveBeenCalled();
     });
 
     it("rejects changing a legacy start day to a different out-of-range date before writing", async () => {
