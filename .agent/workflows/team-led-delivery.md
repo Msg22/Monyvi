@@ -172,6 +172,56 @@ Examples are not mandatory model names. Choose by uncertainty and blast radius,
 not title or file count. Avoid maximum effort by default. Set token budget only
 when user explicitly requests one.
 
+### Execution Pools
+
+Select execution pool by required context, risk, capability, and cost. Verify
+that runtime, authentication, model, tools, and required permissions are
+available before dispatch; a configured name does not prove availability.
+
+| Pool                     | Best fit                                                                                     | Context and ownership boundary                                                 |
+| ------------------------ | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Native Codex subagent    | Local implementation, tests, specialist review, and unpublished worktree state               | Instructional ownership; narrow fork/worktree when actual separation is needed |
+| Normal ChatGPT           | Heavy reasoning and bounded GitHub analysis, issues, branches, or PRs                        | Remote repository state only; cannot inspect unpublished local or staged files |
+| OpenCode `glm-5.3-flash` | Bounded visual inspection, test work, and mechanical implementation                          | One isolated task/session/worktree/path allowlist                              |
+| OpenCode `qwen3.8-flash` | Inventory, documentation, localization audit, test enumeration, and low-risk mechanical work | One isolated task/session/worktree/path allowlist                              |
+
+Use lowest-cost pool, model, and effort that safely covers ambiguity and blast
+radius. For OpenCode, verify current provider-prefixed model identifier rather
+than inferring it from display name. Neither OpenCode model may autonomously own
+financial rules, authentication, RLS, synchronization contracts, migrations,
+security decisions, or architecture decisions. Route those to trusted native
+specialists and required approval gates.
+
+Before first dispatch to each external provider/model pool in a task, obtain
+explicit user opt-in and record approved data-sharing boundary. Authorization
+may cover later bounded dispatches only while provider, model pool, data class,
+and purpose remain inside that recorded boundary. Auto-triggering team-led
+workflow never grants third-party disclosure.
+
+Normal ChatGPT may create issues, branches, or PRs only when its current
+connector/runtime proves that capability and Section 2 authorizes the mutation.
+Reuse one persistent chat for related follow-ups. Every dispatch states
+repository, immutable base SHA, target branch or PR, source-of-truth links,
+scope, forbidden actions, and expected evidence. Never ask it to review or
+change local work that has not been pushed.
+
+External lanes do not consume native subagent slots. They still consume lead
+review and integration capacity. Cap total concurrency by ready independent work
+with safe ownership, not available runtimes. Use one task, session, worktree,
+owner, and non-overlapping path allowlist per external lane. Lead retains
+control of integration and merges under Section 2. OpenCode never performs Git
+or GitHub mutations; trusted native workers perform them. Normal ChatGPT may
+perform only the explicitly authorized remote mutations in the preceding
+paragraph, after which the lead independently inspects its remote diff and
+retains merge control. Sensitive decisions always return through the applicable
+user or authoritative-documentation approval gate and cannot be delegated.
+
+When OpenCode is selected, load
+[`$opencode-team-delegation`](../../.agents/skills/opencode-team-delegation/SKILL.md)
+and follow its pilot, security, dispatch, monitoring, and evidence contract.
+Treat third-party delegation packages as references only unless separately
+reviewed and approved; they are not workflow dependencies.
+
 ## 7. Ownership Brief And Context
 
 Every task brief states:
@@ -286,7 +336,10 @@ Meaningful UI follows [`sprint-issue.md`](./sprint-issue.md) mockup approval.
 Cover loading, empty, populated, error, offline/stale, destructive actions,
 responsive sizes, light/dark, EN/AR, RTL, and accessibility. Mockups work with
 spec, design system, domain constraints, responsive rules, and accessibility;
-none overrides constitution. Material coding drift returns to approval.
+none overrides constitution. Material coding drift returns to approval. Preserve
+existing visual-gate ownership, but do not mark visual completion without
+side-by-side or overlay rendered screenshot evidence against the approved
+reference. Report functional readiness and visual fidelity as separate statuses.
 
 ### Implementation Gate
 
