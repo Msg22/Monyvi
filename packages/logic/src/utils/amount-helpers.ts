@@ -59,6 +59,19 @@ export function formatAmountInput(
   return parts.join(".");
 }
 
+/**
+ * Converts a trusted persisted numeric amount to plain decimal input text.
+ * Persisted numbers can stringify in exponent notation (for example BTC
+ * `1e-8`), which is intentionally invalid for raw user-entered amount text.
+ */
+export function formatStoredAmountInput(amount: number): string {
+  if (!Number.isFinite(amount)) {
+    return "";
+  }
+
+  return new Decimal(amount.toString()).toFixed();
+}
+
 function getFractionDigits(value: string): number {
   const decimalIndex = value.indexOf(".");
   return decimalIndex === -1 ? 0 : value.length - decimalIndex - 1;
@@ -115,6 +128,14 @@ export function parseStrictAmountInput(
   if (!Number.isFinite(amount)) {
     return { success: false, reason: "invalid-format" };
   }
+
+  // The application persists amounts as JavaScript numbers. Reject a decimal
+  // that would change meaning during Decimal -> number conversion rather than
+  // silently rounding it to a different valid amount.
+  if (!new Decimal(amount.toString()).equals(decimalAmount)) {
+    return { success: false, reason: "invalid-format" };
+  }
+
   if (amount <= 0) {
     return { success: false, reason: "not-positive" };
   }
