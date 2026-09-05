@@ -67,6 +67,9 @@ export const metalsTranslationSchema = NamespaceSchema.and(
       stale: z.string(),
       unknown: z.string(),
       missing: z.string(),
+      invalid: z.string(),
+      refresh_failed_with_cache: z.string(),
+      retry_refresh: z.string(),
     }),
     reconciliation: z.object({
       incomplete: z.string(),
@@ -76,6 +79,15 @@ export const metalsTranslationSchema = NamespaceSchema.and(
       objectAccessibility: z.string(),
       neutralFallback: z.string(),
     }),
+    detail: z
+      .object({
+        follow_value: z.string(),
+        calculation_disclosure: z.string(),
+        paid: z.string(),
+        timeline_current_value: z.string(),
+        fact_accessibility: z.string(),
+      })
+      .passthrough(),
   })
 );
 

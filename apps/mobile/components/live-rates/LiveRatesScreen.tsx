@@ -1,29 +1,7 @@
-/**
- * Live Rates Screen
- *
- * Main orchestrator component for the Live Rates feature.
- * Composes all presentational sub-components and wires them to
- * the `useLiveRatesScreen` hook for data.
- *
- * Layout (per approved mockup):
- * 1. LiveRatesHeader — back arrow + title + connection indicator
- * 2. GoldHeroCard — 24K price + 21K/18K chips + trend
- * 3. MetalCard × 2 — Silver + Platinum side-by-side
- * 4. CurrencySection — section header + search + list
- * 5. LiveRatesFooter — "Updated X min ago"
- *
- * Architecture & Design Rationale:
- * - Pattern: Container/Presenter (screen orchestrator)
- * - Why: Clean separation — hook handles data, screen handles layout.
- * - SOLID: SRP — only composes layout. OCP — new sections added without modifying existing ones.
- *
- * @module LiveRatesScreen
- */
-
 import { palette } from "@/constants/colors";
 import { useLiveRatesScreen } from "@/hooks/useLiveRatesScreen";
 import React from "react";
-import { RefreshControl, ScrollView, View } from "react-native";
+import { RefreshControl, ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { CurrencySection } from "./CurrencySection";
@@ -34,9 +12,85 @@ import { LiveRatesHeader } from "./LiveRatesHeader";
 import { LiveRatesScreenSkeleton } from "./LiveRatesScreenSkeleton";
 import { MetalCard } from "./MetalCard";
 
-// =============================================================================
-// Component
-// =============================================================================
+interface LiveRatesTrustSummaryProps {
+  readonly gold: LiveRatesTrustDisplay;
+  readonly silver: LiveRatesTrustDisplay;
+  readonly currencies: LiveRatesTrustDisplay;
+  readonly isConnected: boolean;
+  readonly refreshError:
+    | "cached_refresh_failed"
+    | "initial_refresh_failed"
+    | null;
+  readonly onRetryRefresh: () => void;
+}
+
+interface LiveRatesTrustDisplay {
+  readonly state: "fresh" | "stale" | "unknown" | "missing" | "invalid";
+  readonly dateTime: string | null;
+}
+
+function LiveRatesTrustSummary({
+  gold,
+  silver,
+  currencies,
+  isConnected,
+  refreshError,
+  onRetryRefresh,
+}: LiveRatesTrustSummaryProps): React.JSX.Element {
+  const { t } = useTranslation("metals");
+  const { t: tCommon } = useTranslation("common");
+
+  return (
+    <View className="mt-3" accessibilityLiveRegion="polite">
+      {!isConnected && (
+        <Text className="mb-2 text-xs font-medium text-text-secondary dark:text-text-secondary">
+          {t("offline_mode")}
+        </Text>
+      )}
+      {refreshError === "cached_refresh_failed" && (
+        <View className="mb-2">
+          <Text className="text-xs font-medium text-text-secondary dark:text-text-secondary">
+            {t("rate.refresh_failed_with_cache")}
+          </Text>
+          <Text
+            accessibilityRole="button"
+            accessibilityLabel={t("rate.retry_refresh")}
+            className="mt-1 min-h-11 text-sm font-semibold text-nileGreen-600 dark:text-nileGreen-400"
+            onPress={onRetryRefresh}
+          >
+            {t("rate.retry_refresh")}
+          </Text>
+        </View>
+      )}
+      <View className="flex-row flex-wrap gap-2">
+        <Text
+          testID="live-rates-trust-gold"
+          className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-text-secondary dark:bg-slate-800 dark:text-text-secondary"
+          accessibilityLabel={`${t("gold")}: ${getRateCopy(t, gold)}`}
+        >
+          {t("gold")} · {getRateCopy(t, gold)}
+        </Text>
+        <Text
+          testID="live-rates-trust-silver"
+          className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-text-secondary dark:bg-slate-800 dark:text-text-secondary"
+          accessibilityLabel={`${t("silver")}: ${getRateCopy(t, silver)}`}
+        >
+          {t("silver")} · {getRateCopy(t, silver)}
+        </Text>
+        <Text
+          testID="live-rates-trust-currencies"
+          className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-text-secondary dark:bg-slate-800 dark:text-text-secondary"
+          accessibilityLabel={`${tCommon("currencies")}: ${getRateCopy(
+            t,
+            currencies
+          )}`}
+        >
+          {tCommon("currencies")} · {getRateCopy(t, currencies)}
+        </Text>
+      </View>
+    </View>
+  );
+}
 
 export function LiveRatesScreen(): React.JSX.Element {
   const { t } = useTranslation("metals");
@@ -45,22 +99,19 @@ export function LiveRatesScreen(): React.JSX.Element {
     isConnected,
     isStale,
     hasData,
-
     metals,
-
     currencies,
     isExpanded,
     onToggleExpand,
     showSeeAll,
     preferredCurrencyLabel,
-
     searchQuery,
     onSearchChange,
-
     lastUpdatedText,
-
     isRefreshing,
+    refreshError,
     onRefresh,
+    rateTrust,
   } = useLiveRatesScreen();
 
   const refreshControl = (
@@ -92,9 +143,7 @@ export function LiveRatesScreen(): React.JSX.Element {
           contentContainerStyle={{ paddingBottom: 16 }}
           refreshControl={refreshControl}
         >
-          {/* Metals Section */}
           <View className="px-5 pt-2">
-            {/* Gold Hero Card */}
             <GoldHeroCard
               price24k={metals.price24k}
               price21k={metals.price21k}
@@ -103,8 +152,7 @@ export function LiveRatesScreen(): React.JSX.Element {
               currencySymbol={metals.currencySymbol}
             />
 
-            {/* Silver + Platinum side-by-side */}
-            <View className="flex-row mt-3" style={{ gap: 12 }}>
+            <View className="flex-row mt-3">
               <MetalCard
                 metalName={t("silver")}
                 price={metals.silverPrice}
@@ -112,17 +160,18 @@ export function LiveRatesScreen(): React.JSX.Element {
                 borderColor={palette.silver[500]}
                 currencySymbol={metals.currencySymbol}
               />
-              <MetalCard
-                metalName={t("platinum")}
-                price={metals.platinumPrice}
-                trendPercent={metals.platinumTrendPercent}
-                borderColor={palette.slate[400]}
-                currencySymbol={metals.currencySymbol}
-              />
             </View>
+
+            <LiveRatesTrustSummary
+              gold={rateTrust.gold}
+              silver={rateTrust.silver}
+              currencies={rateTrust.currencies}
+              isConnected={isConnected}
+              refreshError={refreshError}
+              onRetryRefresh={onRefresh}
+            />
           </View>
 
-          {/* Currency Section */}
           <CurrencySection
             currencies={currencies}
             searchQuery={searchQuery}
@@ -133,10 +182,21 @@ export function LiveRatesScreen(): React.JSX.Element {
             showSeeAll={showSeeAll}
           />
 
-          {/* Footer */}
           <LiveRatesFooter lastUpdatedText={lastUpdatedText} />
         </ScrollView>
       )}
     </View>
   );
+}
+
+function getRateCopy(
+  t: (
+    key: string,
+    options?: Readonly<{ readonly dateTime?: string }>
+  ) => string,
+  rate: LiveRatesTrustDisplay
+): string {
+  return rate.state === "fresh"
+    ? t("rate.fresh", { dateTime: rate.dateTime ?? "" })
+    : t(`rate.${rate.state}`);
 }

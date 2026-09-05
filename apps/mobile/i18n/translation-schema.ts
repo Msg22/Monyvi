@@ -809,6 +809,15 @@ interface MetalsTranslations {
   readonly error_save_failed: string;
   readonly add_to_savings: string;
   readonly holding: PluralKeys;
+  readonly rate: {
+    readonly fresh: string;
+    readonly stale: string;
+    readonly unknown: string;
+    readonly missing: string;
+    readonly invalid: string;
+    readonly refresh_failed_with_cache: string;
+    readonly retry_refresh: string;
+  };
 }
 
 /** Root translation resources type */

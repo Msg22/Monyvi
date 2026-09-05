@@ -1,20 +1,12 @@
-/**
- * Live Rates Screen Hook
- *
- * Container hook (Custom Hook as Container) that encapsulates all state derivation
- * for the Live Rates screen. Composes `useMarketRates` for raw data and
- * `usePreferredCurrency` for the display currency.
- *
- * Architecture & Design Rationale:
- * - Pattern: Container Hook (Custom Hook as Container)
- * - Why: Separates derived state and side effects from presentation.
- *   All state derivation is in one place, testable without rendering.
- * - SOLID: SRP — hook only manages state derivation.
- *   Open/Closed — new derived values can be added without modifying components.
- *
- * @module useLiveRatesScreen
- */
-
+import { useDatabase } from "@/providers/DatabaseProvider";
+import { refreshLiveMarketRates } from "@/services/live-rates-refresh-service";
+import {
+  observeLiveRatesTrust,
+  summarizeLiveRatesTrust,
+  type LiveRatesTrustReadModel,
+  type LiveRatesTrustState,
+} from "@/services/live-rates-trust-read-model-service";
+import { logger } from "@/utils/logger";
 import { formatTimeAgo } from "@/utils/dateHelpers";
 import type { CurrencyType } from "@monyvi/db";
 import {
@@ -28,17 +20,14 @@ import {
   getMetalPrice,
 } from "@monyvi/logic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import { useMarketRates } from "./useMarketRates";
 import { usePreferredCurrency } from "./usePreferredCurrency";
 
-// =============================================================================
-// Constants
-// =============================================================================
-
 const DEFAULT_CURRENCY_COUNT = 10;
-const TIMESTAMP_REFRESH_INTERVAL_MS = 60_000;
-const GOLD_21K_PURITY = 21 / 24; // 0.875
-const GOLD_18K_PURITY = 18 / 24; // 0.75
+const RATE_STATUS_REFRESH_INTERVAL_MS = 60_000;
+const GOLD_21K_PURITY = 21 / 24;
+const GOLD_18K_PURITY = 18 / 24;
 
 const DEFAULT_CURRENCIES: readonly CurrencyType[] = [
   "EGP",
@@ -53,10 +42,6 @@ const DEFAULT_CURRENCIES: readonly CurrencyType[] = [
   "OMR",
 ] as const;
 
-// =============================================================================
-// Types
-// =============================================================================
-
 interface MetalDisplayData {
   readonly price24k: string;
   readonly price21k: string;
@@ -64,8 +49,6 @@ interface MetalDisplayData {
   readonly goldTrendPercent: number;
   readonly silverPrice: string;
   readonly silverTrendPercent: number;
-  readonly platinumPrice: string;
-  readonly platinumTrendPercent: number;
   readonly currencySymbol: string;
 }
 
@@ -77,88 +60,93 @@ interface CurrencyDisplayItem {
   readonly changePercent: number;
 }
 
+interface LiveRatesTrustDisplay {
+  readonly gold: LiveRatesTrustDisplayValue;
+  readonly silver: LiveRatesTrustDisplayValue;
+  readonly currencies: LiveRatesTrustDisplayValue;
+}
+
+interface LiveRatesTrustDisplayValue {
+  readonly state: LiveRatesTrustState;
+  readonly dateTime: string | null;
+}
+
+type LiveRatesRefreshError = "cached_refresh_failed" | "initial_refresh_failed";
+
 interface UseLiveRatesScreenResult {
-  // Loading & connectivity
   readonly isLoading: boolean;
   readonly isConnected: boolean;
   readonly isStale: boolean;
   readonly hasData: boolean;
-
-  // Metal data
   readonly metals: MetalDisplayData;
-
-  // Currency data
   readonly currencies: readonly CurrencyDisplayItem[];
   readonly isExpanded: boolean;
   readonly onToggleExpand: () => void;
   readonly showSeeAll: boolean;
   readonly preferredCurrencyLabel: string;
-
-  // Search
   readonly searchQuery: string;
   readonly onSearchChange: (query: string) => void;
-
-  // Footer
   readonly lastUpdatedText: string;
-
-  // Pull-to-refresh
   readonly isRefreshing: boolean;
+  readonly refreshError: LiveRatesRefreshError | null;
   readonly onRefresh: () => void;
+  readonly rateTrust: LiveRatesTrustDisplay;
 }
 
-// =============================================================================
-// Hook
-// =============================================================================
+function createInitialTrustReadModel(): LiveRatesTrustReadModel {
+  return {
+    gold: { state: "missing", ageMs: null, providerObservedAt: null },
+    silver: { state: "missing", ageMs: null, providerObservedAt: null },
+    currencies: new Map(),
+  };
+}
 
 export function useLiveRatesScreen(): UseLiveRatesScreenResult {
-  const {
-    latestRates,
-    previousDayRate,
-    isLoading,
-    isConnected,
-    lastUpdated,
-    isStale,
-  } = useMarketRates();
+  const database = useDatabase();
+  const { latestRates, previousDayRate, isLoading, isConnected, lastUpdated } =
+    useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
-
-  // UI state
   const [isExpanded, setIsExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [lastUpdatedText, setLastUpdatedText] = useState("");
+  const [trustRefreshRevision, setTrustRefreshRevision] = useState(0);
+  const [trustReadModel, setTrustReadModel] = useState<LiveRatesTrustReadModel>(
+    createInitialTrustReadModel
+  );
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // ---------------------------------------------------------------------------
-  // Timestamp auto-refresh (60s)
-  // ---------------------------------------------------------------------------
+  const [refreshError, setRefreshError] =
+    useState<LiveRatesRefreshError | null>(null);
+  const isRefreshInProgressRef = useRef(false);
 
   const updateTimestamp = useCallback((): void => {
     if (lastUpdated) {
       setLastUpdatedText(`Updated ${formatTimeAgo(lastUpdated)}`);
-    } else {
-      setLastUpdatedText("");
+      return;
     }
+    setLastUpdatedText("");
   }, [lastUpdated]);
 
   useEffect(() => {
     updateTimestamp();
+    const timer = setInterval(() => {
+      updateTimestamp();
+      setTrustRefreshRevision((revision) => revision + 1);
+    }, RATE_STATUS_REFRESH_INTERVAL_MS);
 
-    timerRef.current = setInterval(
-      updateTimestamp,
-      TIMESTAMP_REFRESH_INTERVAL_MS
-    );
-
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
+    return () => clearInterval(timer);
   }, [updateTimestamp]);
 
-  // ---------------------------------------------------------------------------
-  // Metal data derivation
-  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const observation = observeLiveRatesTrust(database);
+    const subscription = observation.subscribe({
+      next: setTrustReadModel,
+      error: (error: unknown): void => {
+        logger.error("liveRatesTrust.observe.failed", error);
+      },
+    });
+
+    return () => subscription.unsubscribe();
+  }, [database, trustRefreshRevision]);
 
   const currencySymbol = useMemo((): string => {
     return CURRENCY_INFO_MAP[preferredCurrency]?.symbol ?? preferredCurrency;
@@ -173,13 +161,10 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
         goldTrendPercent: 0,
         silverPrice: "—",
         silverTrendPercent: 0,
-        platinumPrice: "—",
-        platinumTrendPercent: 0,
         currencySymbol,
       };
     }
 
-    // Gold
     const gold24k = getMetalPrice("GOLD", latestRates, preferredCurrency);
     const gold21k = getGoldPurityPrice(
       GOLD_21K_PURITY,
@@ -191,122 +176,112 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
       latestRates,
       preferredCurrency
     );
-    const prevGold24k = previousDayRate
+    const previousGold24k = previousDayRate
       ? getMetalPrice("GOLD", previousDayRate, preferredCurrency)
       : null;
-
-    // Silver
     const silver = getMetalPrice("SILVER", latestRates, preferredCurrency);
-    const prevSilver = previousDayRate
+    const previousSilver = previousDayRate
       ? getMetalPrice("SILVER", previousDayRate, preferredCurrency)
-      : null;
-
-    // Platinum
-    const platinum = getMetalPrice("PLATINUM", latestRates, preferredCurrency);
-    const prevPlatinum = previousDayRate
-      ? getMetalPrice("PLATINUM", previousDayRate, preferredCurrency)
       : null;
 
     return {
       price24k: formatRate(gold24k),
       price21k: formatRate(gold21k),
       price18k: formatRate(gold18k),
-      goldTrendPercent: calculateTrendPercent(gold24k, prevGold24k),
+      goldTrendPercent: calculateTrendPercent(gold24k, previousGold24k),
       silverPrice: formatRate(silver),
-      silverTrendPercent: calculateTrendPercent(silver, prevSilver),
-      platinumPrice: formatRate(platinum),
-      platinumTrendPercent: calculateTrendPercent(platinum, prevPlatinum),
+      silverTrendPercent: calculateTrendPercent(silver, previousSilver),
       currencySymbol,
     };
   }, [latestRates, previousDayRate, preferredCurrency, currencySymbol]);
 
-  // ---------------------------------------------------------------------------
-  // Currency data derivation
-  // ---------------------------------------------------------------------------
-
   const allCurrencies = useMemo((): readonly CurrencyDisplayItem[] => {
     if (!latestRates) return [];
 
-    // Build display items for all supported currencies, filtering out preferred
     return SUPPORTED_CURRENCIES.filter(
-      (c: CurrencyInfo) => c.code !== preferredCurrency
-    ).map((info: CurrencyInfo): CurrencyDisplayItem => {
+      (currency: CurrencyInfo) => currency.code !== preferredCurrency
+    ).map((currency: CurrencyInfo): CurrencyDisplayItem => {
       const rate = convertCurrency(
         1,
-        info.code,
+        currency.code,
         preferredCurrency,
         latestRates
       );
-      const prevRate = previousDayRate
-        ? convertCurrency(1, info.code, preferredCurrency, previousDayRate)
+      const previousRate = previousDayRate
+        ? convertCurrency(1, currency.code, preferredCurrency, previousDayRate)
         : null;
 
       return {
-        code: info.code,
-        name: info.name,
-        flag: info.flag,
+        code: currency.code,
+        name: currency.name,
+        flag: currency.flag,
         rate: `${formatRate(rate)} ${currencySymbol}`,
-        changePercent: calculateTrendPercent(rate, prevRate),
+        changePercent: calculateTrendPercent(rate, previousRate),
       };
     });
   }, [latestRates, previousDayRate, preferredCurrency, currencySymbol]);
 
-  // Sort: show DEFAULT_CURRENCIES first, then rest alphabetically
   const sortedCurrencies = useMemo((): readonly CurrencyDisplayItem[] => {
-    const defaultSet = new Set(DEFAULT_CURRENCIES);
-    const defaults = allCurrencies.filter((c) => defaultSet.has(c.code));
-    const rest = allCurrencies.filter((c) => !defaultSet.has(c.code));
-
-    // Sort defaults by their order in DEFAULT_CURRENCIES
-    defaults.sort(
-      (a, b) =>
-        DEFAULT_CURRENCIES.indexOf(a.code) - DEFAULT_CURRENCIES.indexOf(b.code)
+    const defaultCurrencies = allCurrencies.filter((currency) =>
+      DEFAULT_CURRENCIES.includes(currency.code)
     );
-    // Sort rest alphabetically by code
-    rest.sort((a, b) => a.code.localeCompare(b.code));
+    const otherCurrencies = allCurrencies.filter(
+      (currency) => !DEFAULT_CURRENCIES.includes(currency.code)
+    );
 
-    return [...defaults, ...rest];
+    defaultCurrencies.sort(
+      (first, second) =>
+        DEFAULT_CURRENCIES.indexOf(first.code) -
+        DEFAULT_CURRENCIES.indexOf(second.code)
+    );
+    otherCurrencies.sort((first, second) =>
+      first.code.localeCompare(second.code)
+    );
+
+    return [...defaultCurrencies, ...otherCurrencies];
   }, [allCurrencies]);
 
-  // Apply search filter
   const filteredCurrencies = useMemo((): readonly CurrencyDisplayItem[] => {
     if (!searchQuery.trim()) return sortedCurrencies;
 
     const query = searchQuery.trim().toLowerCase();
     return sortedCurrencies.filter(
-      (c) =>
-        c.code.toLowerCase().includes(query) ||
-        c.name.toLowerCase().includes(query)
+      (currency) =>
+        currency.code.toLowerCase().includes(query) ||
+        currency.name.toLowerCase().includes(query)
     );
-  }, [sortedCurrencies, searchQuery]);
+  }, [searchQuery, sortedCurrencies]);
 
-  // Apply expansion limit
   const visibleCurrencies = useMemo((): readonly CurrencyDisplayItem[] => {
-    if (searchQuery.trim()) {
-      // When searching, show all filtered results (no slicing)
-      return filteredCurrencies;
-    }
-    if (isExpanded) return filteredCurrencies;
+    if (searchQuery.trim() || isExpanded) return filteredCurrencies;
     return filteredCurrencies.slice(0, DEFAULT_CURRENCY_COUNT);
   }, [filteredCurrencies, isExpanded, searchQuery]);
 
-  // Hide "See all" when search is active with no results, or when already expanded
   const showSeeAll = useMemo((): boolean => {
-    if (searchQuery.trim()) return false;
-    if (isExpanded) return false;
-    return filteredCurrencies.length > DEFAULT_CURRENCY_COUNT;
-  }, [searchQuery, isExpanded, filteredCurrencies.length]);
+    return (
+      !searchQuery.trim() &&
+      !isExpanded &&
+      filteredCurrencies.length > DEFAULT_CURRENCY_COUNT
+    );
+  }, [filteredCurrencies.length, isExpanded, searchQuery]);
 
   const preferredCurrencyLabel = useMemo((): string => {
     return CURRENCY_INFO_MAP[preferredCurrency]?.code ?? preferredCurrency;
   }, [preferredCurrency]);
 
-  // ---------------------------------------------------------------------------
-  // Actions
-  // ---------------------------------------------------------------------------
+  const rateTrust = useMemo<LiveRatesTrustDisplay>(() => {
+    return {
+      gold: toTrustDisplayValue(trustReadModel.gold),
+      silver: toTrustDisplayValue(trustReadModel.silver),
+      currencies: toTrustDisplayValue(
+        summarizeLiveRatesTrust(trustReadModel.currencies.values()),
+        null
+      ),
+    };
+  }, [trustReadModel]);
 
   const onToggleExpand = useCallback((): void => {
-    setIsExpanded((prev) => !prev);
+    setIsExpanded((expanded) => !expanded);
   }, []);
 
   const onSearchChange = useCallback((query: string): void => {
@@ -314,39 +289,67 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   }, []);
 
   const onRefresh = useCallback((): void => {
-    setIsRefreshing(true);
-    // The useMarketRates hook handles syncing via realtime subscription.
-    // Pull-to-refresh simulates a visual feedback then resets.
-    setTimeout(() => {
-      setIsRefreshing(false);
-      updateTimestamp();
-    }, 1000);
-  }, [updateTimestamp]);
+    if (isRefreshInProgressRef.current) {
+      return;
+    }
 
-  // ---------------------------------------------------------------------------
-  // Return
-  // ---------------------------------------------------------------------------
+    isRefreshInProgressRef.current = true;
+    setIsRefreshing(true);
+    setRefreshError(null);
+
+    void (async (): Promise<void> => {
+      try {
+        await refreshLiveMarketRates(database);
+      } catch (error: unknown) {
+        logger.error("liveRates.refresh.failed", error);
+        setRefreshError(
+          latestRates ? "cached_refresh_failed" : "initial_refresh_failed"
+        );
+      } finally {
+        isRefreshInProgressRef.current = false;
+        setIsRefreshing(false);
+        setTrustRefreshRevision((revision) => revision + 1);
+      }
+    })();
+  }, [database, latestRates]);
 
   return {
     isLoading,
     isConnected,
-    isStale,
+    isStale: Object.values(rateTrust).some(({ state }) => state !== "fresh"),
     hasData: latestRates !== null,
-
     metals,
-
     currencies: visibleCurrencies,
     isExpanded,
     onToggleExpand,
     showSeeAll,
     preferredCurrencyLabel,
-
     searchQuery,
     onSearchChange,
-
     lastUpdatedText,
-
     isRefreshing,
+    refreshError,
     onRefresh,
+    rateTrust,
+  };
+}
+
+function toTrustDisplayValue(
+  value:
+    | {
+        readonly state: LiveRatesTrustState;
+        readonly providerObservedAt: Date | null;
+      }
+    | LiveRatesTrustState,
+  providerObservedAt?: Date | null
+): LiveRatesTrustDisplayValue {
+  const state = typeof value === "string" ? value : value.state;
+  const date =
+    typeof value === "string"
+      ? (providerObservedAt ?? null)
+      : value.providerObservedAt;
+  return {
+    state,
+    dateTime: date?.toLocaleString() ?? null,
   };
 }

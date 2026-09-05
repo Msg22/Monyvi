@@ -161,17 +161,17 @@ This topology controls ownership, dependency stacks, and future review size. Aft
 
 #### Red
 
-- [ ] T050 [US1] Define US1 manual scenarios, SC-001 moderated conditions, and FR/SC mappings in `specs/035-metals-module-redesign/manual-tests/us1-connected-portfolio.md` and `specs/035-metals-module-redesign/coverage/us1.md`
-- [ ] T051 [P] [US1] Write failing net-worth contribution, exact share, no-double-count, sale-proceeds, missing-rate, snapshot-immutability, and bounded-query tests in `apps/mobile/__tests__/services/net-worth-read-model-service.metals.test.ts`
-- [ ] T052 [P] [US1] Write failing All/Gold/Silver, active totals, sold result, allocation, recent History, unavailable values, user-scope, and list-state tests in `apps/mobile/__tests__/services/metal-portfolio-read-model-service.test.ts`
-- [ ] T053 [P] [US1] Write failing Home Concept C and My Metals Skeleton/empty/filter-empty/offline/stale/error/RTL/theme/compact/ordinary/200%-text/a11y tests in `apps/mobile/__tests__/components/metals/portfolio-surfaces.test.tsx`
+- [x] T050 [US1] Define US1 manual scenarios, SC-001 moderated conditions, and FR/SC mappings in `specs/035-metals-module-redesign/manual-tests/us1-connected-portfolio.md` and `specs/035-metals-module-redesign/coverage/us1.md`
+- [x] T051 [P] [US1] Write failing net-worth contribution, exact share, no-double-count, sale-proceeds, missing-rate, snapshot-immutability, and bounded-query tests in `apps/mobile/__tests__/services/net-worth-read-model-service.metals.test.ts`
+- [x] T052 [P] [US1] Write failing All/Gold/Silver, active totals, sold result, allocation, recent History, unavailable values, user-scope, and list-state tests in `apps/mobile/__tests__/services/metal-portfolio-read-model-service.test.ts`
+- [X] T053 [P] [US1] Write failing Home Concept C and My Metals Skeleton/empty/filter-empty/offline/stale/error/RTL/theme/compact/ordinary/200%-text/a11y tests in `apps/mobile/__tests__/components/metals/portfolio-surfaces.test.tsx`
 - [ ] T054 [P] [US1] Create failing Home-to-Metals/filter/rates-separation Maestro coverage in `apps/mobile/e2e/maestro/metals/home-and-portfolio.yaml`
 - [ ] T055 [US1] Run T051–T054 and record intended Red failures in `specs/035-metals-module-redesign/evidence/us1-red.md`
 
 #### Green, refactor, verify
 
-- [ ] T056 [US1] Implement scoped bounded net-worth and portfolio read models in `apps/mobile/services/net-worth-read-model-service.ts` and `apps/mobile/services/metal-portfolio-read-model-service.ts`
-- [ ] T057 [US1] Implement cancellation-safe portfolio facade, approved Concept C, My Metals states/list, and owned Home/tab integration in `apps/mobile/hooks/useMetalPortfolio.ts`, `apps/mobile/components/dashboard/WealthBreakdownSection.tsx`, `apps/mobile/components/metals/MetalPortfolioScreen.tsx`, `apps/mobile/app/(private)/(tabs)/index.tsx`, and `apps/mobile/app/(private)/(tabs)/metals.tsx`
+- [x] T056 [US1] Implement scoped bounded net-worth and portfolio read models in `apps/mobile/services/net-worth-read-model-service.ts` and `apps/mobile/services/metal-portfolio-read-model-service.ts`
+- [X] T057 [US1] Implement cancellation-safe portfolio facade, approved Concept C, My Metals states/list, and owned Home/tab integration in `apps/mobile/hooks/useMetalPortfolio.ts`, `apps/mobile/components/dashboard/WealthBreakdownSection.tsx`, `apps/mobile/components/metals/MetalPortfolioScreen.tsx`, `apps/mobile/app/(private)/(tabs)/index.tsx`, and `apps/mobile/app/(private)/(tabs)/metals.tsx`
 - [ ] T058 [US1] Run US1 suites and Maestro, refactor while green, and record automated/manual evidence only in `specs/035-metals-module-redesign/coverage/us1.md`
 
 ### User Story 9 — Keep Trust When Rates or Historical Data Are Incomplete (Priority: P1)
@@ -180,15 +180,15 @@ This topology controls ownership, dependency stacks, and future review size. Aft
 
 #### Red
 
-- [ ] T059 [US9] Define rate-trust manual scenarios and FR/SC mappings in `specs/035-metals-module-redesign/manual-tests/us9-rate-trust.md` and `specs/035-metals-module-redesign/coverage/us9.md`
+- [x] T059 [US9] Define rate-trust manual scenarios and FR/SC mappings in `specs/035-metals-module-redesign/manual-tests/us9-rate-trust.md` and `specs/035-metals-module-redesign/coverage/us9.md`
 - [ ] T060 [P] [US9] Write failing observation-time, independent metal/FX status, invalid/unknown timestamp, stale threshold, acknowledgment, provenance, and historical/current separation tests in `packages/logic/src/metals/__tests__/rate-reference-contract.test.ts`
-- [ ] T061 [P] [US9] Write failing retained-layout Gold/Silver/currency scope, real refresh, cached failure, offline, Skeleton, focus, RTL/theme/reflow tests in `apps/mobile/__tests__/components/live-rates/LiveRatesScreen.metals-v1.test.tsx`
+- [x] T061 [P] [US9] Write failing retained-layout Gold/Silver/currency scope, real refresh, cached failure, offline, Skeleton, focus, RTL/theme/reflow tests in `apps/mobile/__tests__/components/live-rates/LiveRatesScreen.metals-v1.test.tsx`
 - [ ] T062 [P] [US9] Create failing fresh-to-stale/offline-cache/refresh-failure/missing-rate Maestro coverage in `apps/mobile/e2e/maestro/metals/live-rates-trust.yaml`
 - [ ] T063 [US9] Run T060–T062 and record intended Red failures in `specs/035-metals-module-redesign/evidence/us9-red.md`
 
 #### Green, refactor, verify
 
-- [ ] T064 [US9] Implement provider-derived refresh/trust state through stable persistence APIs in `apps/mobile/hooks/useLiveRatesScreen.ts` and `apps/mobile/services/live-rates-trust-read-model-service.ts`
+- [x] T064 [US9] Implement provider-derived refresh/trust state through stable persistence APIs in `apps/mobile/hooks/useLiveRatesScreen.ts` and `apps/mobile/services/live-rates-trust-read-model-service.ts`
 - [ ] T065 [US9] Preserve existing `/live-rates` composition while limiting content to Gold/Silver/currency and rendering truthful states in `apps/mobile/components/live-rates/LiveRatesScreen.tsx`, then run US9 tests/Maestro and record evidence in `specs/035-metals-module-redesign/coverage/us9.md`
 
 ---
@@ -201,17 +201,17 @@ This topology controls ownership, dependency stacks, and future review size. Aft
 
 #### Red
 
-- [ ] T066 [US3] Define detail/history manual scenarios and FR/SC mappings in `specs/035-metals-module-redesign/manual-tests/us3-detail-history.md` and `specs/035-metals-module-redesign/coverage/us3.md`
-- [ ] T067 [P] [US3] Write failing scoped detail/history read-model tests for effective state, attribution, tied-time ordering, reversed events, missing facts, bounded queries, and user isolation in `apps/mobile/__tests__/services/metal-detail-history-read-model.test.ts`
-- [ ] T068 [P] [US3] Write failing active/sold/disposed/restored detail, History filters, Skeleton/empty/error/offline, imagery/text identity, action descriptor, RTL/theme/reflow/a11y tests in `apps/mobile/__tests__/components/metals/holding-experience.test.tsx`
+- [x] T066 [US3] Define detail/history manual scenarios and FR/SC mappings in `specs/035-metals-module-redesign/manual-tests/us3-detail-history.md` and `specs/035-metals-module-redesign/coverage/us3.md`
+- [x] T067 [P] [US3] Write failing scoped detail/history read-model tests for effective state, attribution, tied-time ordering, reversed events, missing facts, bounded queries, and user isolation in `apps/mobile/__tests__/services/metal-detail-history-read-model.test.ts`
+- [x] T068 [P] [US3] Write failing active/sold/disposed/restored detail, History filters, Skeleton/empty/error/offline, imagery/text identity, action descriptor, RTL/theme/reflow/a11y tests in `apps/mobile/__tests__/components/metals/holding-experience.test.tsx`
 - [ ] T069 [P] [US3] Create failing detail-to-History/filter/terminal-detail Maestro coverage in `apps/mobile/e2e/maestro/metals/holding-detail-history.yaml`
 - [ ] T070 [US3] Run T067–T069 and record intended Red failures in `specs/035-metals-module-redesign/evidence/us3-red.md`
 
 #### Green, refactor, verify
 
-- [ ] T071 [US3] Implement bounded scoped detail and History read models plus cancellation-safe facades in `apps/mobile/services/metal-detail-read-model-service.ts`, `apps/mobile/services/metal-history-read-model-service.ts`, `apps/mobile/hooks/useMetalHoldingDetail.ts`, and `apps/mobile/hooks/useMetalHistory.ts`
-- [ ] T072 [US3] Implement shaped-prop `MetalHoldingRender` against the T048 typed manifest/neutral fallback plus detail/history/timeline components and isolated action registry in `apps/mobile/components/metals/MetalHoldingRender.tsx`, `apps/mobile/components/metals/MetalHoldingDetailScreen.tsx`, `apps/mobile/components/metals/MetalHistoryScreen.tsx`, and `apps/mobile/components/metals/holding-actions/registry.ts`
-- [ ] T073 [US3] Integrate the isolated History route in `apps/mobile/app/(private)/metals/history.tsx`
+- [x] T071 [US3] Implement bounded scoped detail and History read models plus cancellation-safe facades in `apps/mobile/services/metal-detail-read-model-service.ts`, `apps/mobile/services/metal-history-read-model-service.ts`, `apps/mobile/hooks/useMetalHoldingDetail.ts`, and `apps/mobile/hooks/useMetalHistory.ts`
+- [x] T072 [US3] Implement shaped-prop `MetalHoldingRender` against the T048 typed manifest/neutral fallback plus detail/history/timeline components and isolated action registry in `apps/mobile/components/metals/MetalHoldingRender.tsx`, `apps/mobile/components/metals/MetalHoldingDetailScreen.tsx`, `apps/mobile/components/metals/MetalHistoryScreen.tsx`, and `apps/mobile/components/metals/holding-actions/registry.ts`
+- [x] T073 [US3] Integrate the isolated History route in `apps/mobile/app/(private)/metals/history.tsx`
 - [ ] T074 [US3] Run US3 suites and Maestro, refactor while green, and record evidence in `specs/035-metals-module-redesign/coverage/us3.md`
 
 ---

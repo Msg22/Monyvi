@@ -80,7 +80,13 @@ about hierarchy or interaction, stop and use the mockup approval gate. A direct
 request from Mohamed for a mockup always overrides this exception.
 
 After mockup approval, implement the approved direction. If coding reveals a
-meaningful design change, stop and ask for approval again before continuing.
+meaningful design change, stop and ask for approval again before continuing. The
+approved mockup is binding under the constitution's Premium UI principle: match
+the declared UI viewport or component context, ignore presentation-only
+hardware/frame/canvas unless explicitly marked binding, preserve composition
+across responsive, RTL, dark, and enlarged-text variants, and report functional
+status separately from visual fidelity. Visual completion requires rendered
+side-by-side or overlay screenshot evidence against the approved reference.
 
 ## 4. Branch Base Selection
 

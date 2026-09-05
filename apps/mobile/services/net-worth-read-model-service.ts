@@ -14,6 +14,9 @@ import {
   calculateTotalAssets,
   convertCurrency,
   getSameDayLastMonth,
+  parseCanonicalDecimal,
+  roundDecimal,
+  serializeDecimal,
 } from "@monyvi/logic";
 
 import {
@@ -38,6 +41,40 @@ export interface NetWorthReadModel {
   readonly totalNetWorthUsd: number;
   readonly totalAccounts: number;
   readonly totalAssets: number;
+}
+
+export interface WealthBreakdownHolding {
+  readonly currentValueDecimal: string | null;
+  readonly isEffective: boolean;
+  readonly isVisible: boolean;
+  readonly metalType: "GOLD" | "SILVER";
+  readonly status: "active" | "sold" | "disposed";
+}
+
+export interface BuildWealthBreakdownReadModelInput {
+  readonly accountsValueDecimal: string;
+  readonly currency: CurrencyType;
+  readonly holdings: readonly WealthBreakdownHolding[];
+}
+
+export interface WealthBreakdownAmount {
+  readonly amountDecimal: string | null;
+  readonly shareOfNetWorth: string | null;
+}
+
+export interface WealthBreakdownMetalAmount {
+  readonly amountDecimal: string | null;
+  readonly holdingCount: number;
+  readonly shareOfMetals: string | null;
+}
+
+export interface WealthBreakdownReadModel {
+  readonly accounts: WealthBreakdownAmount;
+  readonly metals: WealthBreakdownAmount & {
+    readonly gold: WealthBreakdownMetalAmount;
+    readonly silver: WealthBreakdownMetalAmount;
+  };
+  readonly totalNetWorthDecimal: string | null;
 }
 
 export function observeNetWorthAccounts(userId: string): Query<Account> {
@@ -124,6 +161,48 @@ export function buildNetWorthReadModel(
   };
 }
 
+export function buildWealthBreakdownReadModel(
+  input: BuildWealthBreakdownReadModelInput
+): WealthBreakdownReadModel {
+  const activeHoldings = input.holdings.filter(isEffectiveVisibleActiveHolding);
+  const goldHoldings = activeHoldings.filter(
+    (holding) => holding.metalType === "GOLD"
+  );
+  const silverHoldings = activeHoldings.filter(
+    (holding) => holding.metalType === "SILVER"
+  );
+  const accountsValue = parseAvailableDecimal(input.accountsValueDecimal);
+  const goldValue = sumAvailableDecimals(goldHoldings);
+  const silverValue = sumAvailableDecimals(silverHoldings);
+  const metalsValue = sumAvailableDecimalStrings([goldValue, silverValue]);
+  const totalNetWorth = sumAvailableDecimalStrings([
+    accountsValue,
+    metalsValue,
+  ]);
+
+  return {
+    accounts: {
+      amountDecimal: accountsValue,
+      shareOfNetWorth: calculateDisplayedShare(accountsValue, totalNetWorth),
+    },
+    metals: {
+      amountDecimal: metalsValue,
+      shareOfNetWorth: calculateDisplayedShare(metalsValue, totalNetWorth),
+      gold: {
+        amountDecimal: goldValue,
+        holdingCount: goldHoldings.length,
+        shareOfMetals: calculateDisplayedShare(goldValue, metalsValue),
+      },
+      silver: {
+        amountDecimal: silverValue,
+        holdingCount: silverHoldings.length,
+        shareOfMetals: calculateDisplayedShare(silverValue, metalsValue),
+      },
+    },
+    totalNetWorthDecimal: totalNetWorth,
+  };
+}
+
 export function buildMonthlyPercentageChange(
   snapshots: readonly DailySnapshotNetWorth[]
 ): number | null {
@@ -166,4 +245,63 @@ function findClosestSnapshot(
   }
 
   return closest;
+}
+
+function isEffectiveVisibleActiveHolding(
+  holding: WealthBreakdownHolding
+): boolean {
+  return (
+    holding.isEffective && holding.isVisible && holding.status === "active"
+  );
+}
+
+function sumAvailableDecimals(
+  holdings: readonly WealthBreakdownHolding[]
+): string | null {
+  return sumAvailableDecimalStrings(
+    holdings.map((holding) => holding.currentValueDecimal)
+  );
+}
+
+function sumAvailableDecimalStrings(
+  values: readonly (string | null)[]
+): string | null {
+  let total = parseCanonicalDecimal("0");
+
+  for (const value of values) {
+    const decimal = value === null ? null : parseAvailableDecimal(value);
+    if (decimal === null) {
+      return null;
+    }
+    total = total.plus(decimal);
+  }
+
+  return serializeDecimal(total);
+}
+
+function parseAvailableDecimal(value: string): string | null {
+  try {
+    return serializeDecimal(parseCanonicalDecimal(value));
+  } catch {
+    return null;
+  }
+}
+
+function calculateDisplayedShare(
+  amountDecimal: string | null,
+  totalDecimal: string | null
+): string | null {
+  if (amountDecimal === null || totalDecimal === null) {
+    return null;
+  }
+
+  const total = parseCanonicalDecimal(totalDecimal);
+  if (total.isZero()) {
+    return "0";
+  }
+
+  const share = parseCanonicalDecimal(amountDecimal)
+    .times("100")
+    .dividedBy(total);
+  return serializeDecimal(parseCanonicalDecimal(roundDecimal(share, 1)));
 }

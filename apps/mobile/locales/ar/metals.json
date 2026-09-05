@@ -14,6 +14,50 @@
   "total_value": "إجمالي القيمة",
   "holdings": "المقتنيات",
   "my_metals": "معادني",
+  "wealth_breakdown": {
+    "title": "أين أموالك",
+    "accounts": "الحسابات",
+    "metals": "المعادن",
+    "gold": "ذهب",
+    "silver": "فضة",
+    "of_net_worth": "{{share}} من صافي الثروة",
+    "of_metals": "{{share}} من المعادن",
+    "net_worth": "صافي الثروة",
+    "inside_metals": "داخل المعادن",
+    "metals_summary": "المبالغ بـ {{currency}} · النسبة من {{metals}}",
+    "tile_accessibility": "{{label}}. المبلغ {{amount}}. {{share}}"
+  },
+  "portfolio": {
+    "total": "قيمة محفظة المعادن",
+    "total_accessibility": "قيمة محفظة المعادن {{amount}}. الحالة: {{status}}.",
+    "current_rate": "سعر حديث",
+    "since_purchase": "{{signedAmount}} منذ الشراء",
+    "current_value_unavailable": "القيمة الحالية غير متاحة. {{reason}}. بيانات الحيازة ما زالت متاحة.",
+    "filter": { "all": "الكل", "gold": "ذهب", "silver": "فضة" },
+    "filter_accessibility": "عامل التصفية {{filterName}}، {{selectedState}}، {{count}} حيازة.",
+    "selected": "محدد",
+    "not_selected": "غير محدد",
+    "filter_empty": "لا توجد حيازات {{filter}} بعد",
+    "recent_history": "السجل",
+    "bought": "{{weight}} · تم الشراء {{date}}",
+    "active_portfolio": "المحفظة النشطة",
+    "active_portfolio_value": "قيمة المحفظة النشطة",
+    "active_holdings_one": "مقتنى نشط واحد",
+    "active_holdings_other": "مقتنيات نشطة",
+    "since_purchase_label": "منذ الشراء",
+    "realized_profit_from_sold_metals": "أرباح محققة من المعادن المباعة",
+    "realized_loss_from_sold_metals": "خسائر محققة من المعادن المباعة",
+    "realized_result_from_sold_metals": "نتيجة محققة من المعادن المباعة",
+    "realized_profit": "ربح محقق",
+    "realized_loss": "خسارة محققة",
+    "realized_result": "نتيجة محققة",
+    "holdings": "المقتنيات",
+    "view_all": "عرض الكل",
+    "bought_on": "تم الشراء {{date}}",
+    "today": "اليوم",
+    "rates_updated": "تم تحديث الأسعار {{when}}"
+  },
+  "add_holding": "إضافة مقتنى",
   "add_gold": "إضافة ذهب",
   "add_silver": "إضافة فضة",
   "no_gold_holdings": "لا توجد مقتنيات ذهب بعد",
@@ -66,13 +110,25 @@
   "karat_label": "عيار {{karat}}",
   "price_gram_with_symbol": "{{currencySymbol}} {{price}}/غرام",
   "metal": { "gold": "ذهب", "silver": "فضة", "unknown": "معدن" },
-  "form": { "bar": "سبيكة", "coin": "عملة", "jewelry": "مجوهرات", "unknown": "شكل آخر" },
-  "status": { "active": "نشطة", "sold": "مباعة", "disposed": "تم التخلّص منها" },
+  "form": {
+    "bar": "سبيكة",
+    "coin": "عملة",
+    "jewelry": "مجوهرات",
+    "unknown": "شكل آخر"
+  },
+  "status": {
+    "active": "نشطة",
+    "sold": "مباعة",
+    "disposed": "تم التخلّص منها"
+  },
   "rate": {
-    "fresh": "حديث",
-    "stale": "قديم",
-    "unknown": "حداثة السعر غير معروفة",
-    "missing": "السعر غير متوفر"
+    "fresh": "الأسعار المباشرة: سعر حديث. تم تحديث الأسعار في {{dateTime}}",
+    "stale": "أسعار السوق: مرّ أكثر من 24 ساعة على السعر",
+    "unknown": "أسعار السوق: عمر السعر غير معروف",
+    "missing": "أسعار السوق: السعر الحالي غير متاح",
+    "invalid": "أسعار السوق: لا يمكن استخدام هذا السعر",
+    "refresh_failed_with_cache": "أسعار السوق: تعذر التحديث. نعرض آخر سعر متاح.",
+    "retry_refresh": "أعد محاولة التحديث"
   },
   "reconciliation": {
     "incomplete": "لا يزال التحقق من التغييرات جاريًا. تظل آخر حالة مكتملة فعّالة.",
@@ -81,5 +137,55 @@
   "render": {
     "objectAccessibility": "رسم توضيحي لـ {{metal}} على شكل {{form}}",
     "neutralFallback": "الرسم التوضيحي لمقتنى المعدن غير متوفر"
+  },
+  "detail": {
+    "title": "تفاصيل المقتنى",
+    "sold_title": "مقتنى مباع",
+    "disposed_title": "مقتنى تم التخلّص منه",
+    "current_value": "القيمة الحالية",
+    "current_value_unavailable": "القيمة الحالية غير متاحة",
+    "follow_value": "تابع القيمة",
+    "calculation_disclosure": "تم احتسابها من أسعار السوق الحالية.",
+    "paid": "تم الدفع",
+    "timeline_current_value": "القيمة الحالية في هذه المرحلة",
+    "fact_accessibility": "{{label}} هو {{value}}",
+    "since_purchase": "{{amount}} منذ الشراء",
+    "holding_story": "قصة المقتنى",
+    "physical_facts": "الحقائق المادية",
+    "acquired": "تم الاقتناء",
+    "value_unavailable": "القيمة غير متاحة",
+    "retry": "حاول مرة أخرى",
+    "offline": "وضع عدم الاتصال",
+    "history": "السجل",
+    "view_all": "عرض الكل",
+    "restored": "تمت الاستعادة كنشط",
+    "not_found": "لم يتم العثور على المقتنى",
+    "load_error": "تعذر تحميل هذا المقتنى."
+  },
+  "history": {
+    "title": "السجل",
+    "subtitle": "المبيعات والمقتنيات التي لم تعد بحوزتك.",
+    "all": "الكل",
+    "sold": "مباع",
+    "disposed": "تم التخلّص منه",
+    "empty": "لا توجد مقتنيات هنا بعد",
+    "offline": "وضع عدم الاتصال",
+    "retry": "حاول مرة أخرى"
+  },
+  "actions": {
+    "sell": "بيع المقتنى",
+    "edit": "تعديل التفاصيل",
+    "dispose": "لم يعد بحوزتي",
+    "delete": "حذف المقتنى",
+    "undo_sale": "التراجع عن البيع",
+    "undo_disposal": "التراجع عن التخلّص"
+  },
+  "timeline": {
+    "add": "تمت الإضافة",
+    "correct": "تم تحديث التفاصيل",
+    "sell": "تم البيع",
+    "dispose": "لم يعد بحوزتي",
+    "delete": "تم الحذف",
+    "undo": "تمت الاستعادة"
   }
 }
