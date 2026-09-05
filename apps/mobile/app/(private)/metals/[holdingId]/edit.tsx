@@ -21,7 +21,6 @@ import {
   type MetalHoldingFormCopy,
   type MetalHoldingFormEditState,
 } from "@/components/metals/MetalHoldingForm";
-import { useTheme } from "@/context/ThemeContext";
 import { useEditMetalHolding } from "@/hooks/useEditMetalHolding";
 import { useMetalAddPreviewRates } from "@/hooks/useAddMetalHolding";
 
@@ -33,7 +32,6 @@ const SAFE_RANGE = {
 export default function EditMetalHoldingRoute(): React.JSX.Element {
   const { holdingId } = useLocalSearchParams<{ holdingId?: string }>();
   const { t, i18n } = useTranslation("metals");
-  const { isDark } = useTheme();
   const { width, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { getPreviewRates } = useMetalAddPreviewRates();
@@ -70,9 +68,6 @@ export default function EditMetalHoldingRoute(): React.JSX.Element {
         isFinancial: field !== "physicalForm",
       })),
       correctionReason: form.correctionReason,
-      consequenceAcknowledged: form.consequenceAcknowledged,
-      requiresConsequenceAcknowledgment:
-        form.comparison.hasFinancialConsequences,
     }),
     [form, t]
   );
@@ -94,7 +89,6 @@ export default function EditMetalHoldingRoute(): React.JSX.Element {
         editState={editState}
         locale={locale}
         isRtl={I18nManager.isRTL}
-        colorScheme={isDark ? "dark" : "light"}
         width={width}
         fontScale={fontScale}
         bottomInset={insets.bottom}
@@ -113,7 +107,6 @@ export default function EditMetalHoldingRoute(): React.JSX.Element {
         unusualValueAcknowledged={form.unusualValueAcknowledged}
         onAcknowledgeUnusualValue={form.acknowledgeUnusualValue}
         onCorrectionReasonChange={form.setCorrectionReason}
-        onAcknowledgeConsequences={form.acknowledgeConsequences}
         onChange={form.updateField}
         onSubmit={submit}
         onRequestExit={requestExit}
@@ -205,18 +198,18 @@ function createCopy(
   return {
     title: t("add_new_holding"),
     back: t("add.back"),
-    name: t("name"),
-    namePlaceholder: t("name_placeholder"),
+    name: t("add.holding_name"),
+    namePlaceholder: t("add.holding_name_placeholder"),
     metal: t("add.metal"),
     gold: t("gold"),
     silver: t("silver"),
-    weight: t("weight_grams"),
+    weight: t("add.weight"),
     purity: t("purity"),
     purchasePrice: t("add.total_purchase_price"),
     purchasePriceHint: t("add.purchase_price_hint"),
     purchaseCurrency: t("add.purchase_currency"),
     purchaseDate: t("purchase_date"),
-    physicalForm: t("form_optional"),
+    physicalForm: t("add.physical_form"),
     coin: t("form_coin"),
     bar: t("form_bar"),
     jewelry: t("form_jewelry"),
@@ -234,6 +227,11 @@ function createCopy(
     rateStale: t("add.rate_stale"),
     rateUnknown: t("add.rate_unknown"),
     rateUnavailable: t("add.rate_unavailable"),
+    pure: t("add.pure"),
+    perPureGram: t("add.per_pure_gram"),
+    estimatedGainSincePurchase: t("add.estimated_gain_since_purchase"),
+    estimatedLossSincePurchase: t("add.estimated_loss_since_purchase"),
+    ratesUpdated: t("add.rates_updated"),
     editTitle: t("edit.title"),
     editSubmit: t("edit.submit"),
     editSubmitting: t("edit.submitting"),
@@ -243,7 +241,8 @@ function createCopy(
     current: t("edit.current"),
     correctionHistory: t("edit.history_note"),
     noFinancialChange: t("edit.current_value_stays"),
-    acknowledgeConsequences: t("edit.acknowledge_consequences"),
+    lockedMetalHint: t("edit.locked_metal_hint"),
+    cancel: t("edit.cancel"),
   };
 }
 function toCurrentFacts(

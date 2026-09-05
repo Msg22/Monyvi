@@ -11,6 +11,7 @@ import type {
   MetalHoldingFormValues,
 } from "@/components/metals/MetalHoldingForm";
 import {
+  calculateMetalHoldingPreviewDetails,
   calculateMetalHoldingPreviewValuation,
   type MetalHoldingPreviewRates,
 } from "@/services/metal-holding-preview-service";
@@ -50,7 +51,6 @@ export interface UseEditMetalHoldingResult {
   readonly purityOptions: ReadonlyArray<DropdownItem<string>>;
   readonly validationErrors: Readonly<Record<string, string>>;
   readonly correctionReason: string;
-  readonly consequenceAcknowledged: boolean;
   readonly unusualValueAcknowledged: boolean;
   readonly requiresUnusualValueAcknowledgment: boolean;
   readonly comparison: ReturnType<typeof compareMetalHoldingEdit>;
@@ -64,7 +64,6 @@ export interface UseEditMetalHoldingResult {
     value: string | null
   ) => void;
   readonly setCorrectionReason: (value: string) => void;
-  readonly acknowledgeConsequences: () => void;
   readonly acknowledgeUnusualValue: () => void;
   readonly submit: () => Promise<boolean>;
   readonly retry: () => void;
@@ -109,7 +108,6 @@ export function useEditMetalHolding(
     Readonly<Record<string, string>>
   >({});
   const [correctionReason, setCorrectionReason] = useState("");
-  const [consequenceAcknowledged, setConsequenceAcknowledged] = useState(false);
   const [unusualValueAcknowledged, setUnusualValueAcknowledged] =
     useState(false);
   const idsRef = useRef<EditMetalHoldingRequestIds | null>(null);
@@ -202,6 +200,14 @@ export function useEditMetalHolding(
     const purity = getSupportedMetalPurities(normalized.metal).find(
       (entry) => entry.code === normalized.purity.code
     );
+    const valuation = calculateMetalHoldingPreviewValuation(normalized, rates);
+    const currencyMinorUnits = isSupportedMetalsIsoCurrencyCode(
+      normalized.purchaseCurrency
+    )
+      ? (resolveMetalsCurrencyMinorUnits(
+          `currency:${normalized.purchaseCurrency}`
+        ) ?? 2)
+      : 2;
     return {
       metal: normalized.metal,
       purityCode: normalized.purity.code,
@@ -211,8 +217,16 @@ export function useEditMetalHolding(
       name: normalized.name,
       weightGramsDecimal: normalized.weightGramsDecimal,
       displayCurrency: normalized.purchaseCurrency,
-      valuation: calculateMetalHoldingPreviewValuation(normalized, rates),
+      valuation,
       rateFreshness: rates.rateFreshness,
+      metalUsdPerPureGramDecimal: rates.metalUsdPerPureGramDecimal,
+      rateSources: rates.rateSources,
+      providerObservedAt: rates.providerObservedAt,
+      ...calculateMetalHoldingPreviewDetails(
+        normalized,
+        valuation,
+        currencyMinorUnits
+      ),
     };
   }, [input, validation.normalized, values]);
   const purityOptions = useMemo(
@@ -233,7 +247,6 @@ export function useEditMetalHolding(
       idsRef.current = null;
       setSubmitError(null);
       setValidationErrors({});
-      setConsequenceAcknowledged(false);
       setUnusualValueAcknowledged(false);
       setValues((current) =>
         field === "physicalForm"
@@ -263,8 +276,6 @@ export function useEditMetalHolding(
     if (!values.name.trim()) errors.name = "required";
     if (comparison.hasMaterialChanges && !correctionReason.trim())
       errors.correctionReason = "required";
-    if (comparison.hasFinancialConsequences && !consequenceAcknowledged)
-      errors.consequenceAcknowledged = "required";
     const normalizedCurrent = result.normalized
       ? toFacts(result.normalized)
       : currentFacts;
@@ -307,8 +318,6 @@ export function useEditMetalHolding(
     }
   }, [
     comparison.hasMaterialChanges,
-    comparison.hasFinancialConsequences,
-    consequenceAcknowledged,
     correctionReason,
     currentFacts,
     input,
@@ -326,7 +335,6 @@ export function useEditMetalHolding(
     purityOptions,
     validationErrors,
     correctionReason,
-    consequenceAcknowledged,
     unusualValueAcknowledged,
     requiresUnusualValueAcknowledgment:
       validation.requiresUnusualValueAcknowledgment,
@@ -338,7 +346,6 @@ export function useEditMetalHolding(
     submitError,
     updateField,
     setCorrectionReason,
-    acknowledgeConsequences: () => setConsequenceAcknowledged(true),
     acknowledgeUnusualValue: () => setUnusualValueAcknowledged(true),
     submit,
     retry: () => setReloadKey((value) => value + 1),

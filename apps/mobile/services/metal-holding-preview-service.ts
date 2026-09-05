@@ -1,4 +1,9 @@
-import { calculateMetalReferenceValue, roundDecimal } from "@monyvi/logic";
+import {
+  calculateMetalReferenceValue,
+  compareDecimal,
+  parseCanonicalDecimal,
+  roundDecimal,
+} from "@monyvi/logic";
 
 import type { NormalizedMetalHoldingFormData } from "../validation/metal-holding-form-validation";
 
@@ -26,6 +31,14 @@ export interface MetalHoldingPreviewRates {
   readonly egpUsdPerUnitDecimal?: string | null;
   readonly currencyMinorUnits: number;
   readonly rateFreshness?: "fresh" | "stale" | "unknown" | "unavailable";
+  readonly rateSources?: readonly string[];
+  readonly providerObservedAt?: Date | null;
+}
+
+export interface MetalHoldingPreviewDetails {
+  readonly resultSincePurchaseDecimal: string | null;
+  readonly resultDirection: "positive" | "negative" | "zero" | "unavailable";
+  readonly purityPercentDecimal: string;
 }
 
 export function calculateMetalHoldingPreviewValuation(
@@ -54,5 +67,37 @@ export function calculateMetalHoldingPreviewValuation(
       valuation.valueDecimal,
       rates.currencyMinorUnits
     ),
+  };
+}
+
+export function calculateMetalHoldingPreviewDetails(
+  holding: NormalizedMetalHoldingFormData,
+  valuation: MetalHoldingPreviewValuation,
+  currencyMinorUnits: number
+): MetalHoldingPreviewDetails {
+  const purityPercentDecimal = roundDecimal(
+    parseCanonicalDecimal(holding.purity.factorDecimal).times("100"),
+    1
+  );
+  if (!valuation.available) {
+    return {
+      resultSincePurchaseDecimal: null,
+      resultDirection: "unavailable",
+      purityPercentDecimal,
+    };
+  }
+
+  const resultSincePurchaseDecimal = roundDecimal(
+    parseCanonicalDecimal(valuation.valueDecimal).minus(
+      holding.purchasePriceDecimal
+    ),
+    currencyMinorUnits
+  );
+  const comparison = compareDecimal(resultSincePurchaseDecimal, "0");
+  return {
+    resultSincePurchaseDecimal,
+    resultDirection:
+      comparison > 0 ? "positive" : comparison < 0 ? "negative" : "zero",
+    purityPercentDecimal,
   };
 }

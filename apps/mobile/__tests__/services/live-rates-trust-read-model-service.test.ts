@@ -45,6 +45,8 @@ describe("live-rates trust read model", () => {
 
     expect(readModel.gold.state).toBe("fresh");
     expect(readModel.gold.valueDecimal).toBe("100.25");
+    expect(readModel.gold.source).toBe("test-provider");
+    expect(readModel.gold.providerObservedAt).toEqual(new Date(NOW_MS - 1_000));
     expect(readModel.silver.state).toBe("stale");
     expect(readModel.currencies.get("EGP")?.state).toBe("unknown");
   });

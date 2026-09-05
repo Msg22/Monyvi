@@ -1,6 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 
+jest.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string): string => key,
+    i18n: { language: "en", dir: (): "ltr" => "ltr" },
+  }),
+}));
+
 jest.mock("@/components/navigation/PageHeader", () => {
   const { Pressable, Text, View } = jest.requireActual(
     "react-native"
@@ -34,7 +41,6 @@ interface EditMetalHoldingFormProps {
   readonly mode: "edit";
   readonly locale: "en" | "ar";
   readonly isRtl: boolean;
-  readonly colorScheme: "light" | "dark";
   readonly width: number;
   readonly fontScale: number;
   readonly bottomInset: number;
@@ -73,7 +79,6 @@ interface EditMetalHoldingFormProps {
       readonly isFinancial: boolean;
     }[];
     readonly correctionReason: string;
-    readonly consequenceAcknowledged: boolean;
     readonly requiresConsequenceAcknowledgment?: boolean;
   };
   readonly isSubmitting?: boolean;
@@ -126,7 +131,6 @@ function renderEdit(
     mode: "edit",
     locale: "en",
     isRtl: false,
-    colorScheme: "light",
     width: 390,
     fontScale: 1,
     bottomInset: 34,
@@ -136,7 +140,6 @@ function renderEdit(
     editState: {
       affectedChanges: [],
       correctionReason: "",
-      consequenceAcknowledged: false,
     },
     onChange: jest.fn(),
     onSubmit: jest.fn(),
@@ -195,7 +198,6 @@ function materialOverride(
     editState: {
       affectedChanges: [{ field, label, before, after, isFinancial }],
       correctionReason: "Corrected details",
-      consequenceAcknowledged: true,
     },
   };
 }
@@ -222,7 +224,20 @@ describe("Edit metal holding form", () => {
       "accessibilityState",
       expect.objectContaining({ disabled: true })
     );
+    expect(screen.getByTestId("metal-holding-metal-locked")).toBeOnTheScreen();
+    expect(
+      screen.getByTestId("metal-holding-metal-locked-guidance")
+    ).toBeOnTheScreen();
+    expect(screen.getByText("Gold")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:text-text-primary-dark")
+    );
     expect(screen.getAllByText("24K · 999").length).toBeGreaterThan(0);
+    expect(screen.getByDisplayValue("14 Mar 2024")).toBeOnTheScreen();
+    fireEvent.press(screen.getByTestId("metal-holding-purchase-date-field"));
+    expect(
+      screen.getByTestId("metal-holding-purchase-date-picker")
+    ).toBeOnTheScreen();
     expect(screen.getByTestId("metal-holding-submit")).toHaveTextContent(
       "Save changes"
     );
@@ -248,12 +263,20 @@ describe("Edit metal holding form", () => {
         "11.125"
       )
     );
-    expect(screen.getByText("Previous: 10.125")).toBeOnTheScreen();
-    expect(screen.getByText("Current: 11.125")).toBeOnTheScreen();
+    const weightSection = screen.getByTestId(
+      "metal-holding-weight-purity-section"
+    );
+    expect(weightSection).toBeOnTheScreen();
+    expect(screen.getAllByText("Previous: 10.125")).toHaveLength(1);
+    expect(screen.getByDisplayValue("11.125")).toBeOnTheScreen();
     expect(
       screen.getByTestId("metal-holding-correction-reason")
     ).toBeOnTheScreen();
     expect(screen.getByText("Weight: 10.125 → 11.125")).toBeOnTheScreen();
+    expect(screen.queryByTestId("metal-holding-live-preview")).toBeNull();
+    expect(
+      screen.queryByTestId("metal-holding-consequence-acknowledgment")
+    ).toBeNull();
     expect(
       screen.queryByTestId("metal-holding-purchase-date-previous")
     ).toBeNull();
@@ -304,7 +327,6 @@ describe("Edit metal holding form", () => {
       validationErrors: { name: "required" },
       locale: "ar",
       isRtl: true,
-      colorScheme: "dark",
       width: 320,
       fontScale: 2,
     });
@@ -326,7 +348,7 @@ describe("Edit metal holding form", () => {
       screen.queryByTestId("metal-holding-weight-purity-stacked")
     ).toBeNull();
     fireEvent.press(screen.getByTestId("header-back"));
-    expect(props.onRequestExit).toHaveBeenCalledTimes(1);
+    expect(props.onRequestExit).not.toHaveBeenCalled();
     fireEvent.press(screen.getByTestId("metal-holding-submit"));
     expect(props.onSubmit).not.toHaveBeenCalled();
   });

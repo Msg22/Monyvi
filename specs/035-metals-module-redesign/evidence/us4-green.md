@@ -1,26 +1,34 @@
 # US4 Edit Green Evidence
 
-Status: deterministic code gate Green on 2026-09-01; device/Maestro gate pending.
+Status: deterministic UI/service gate Green on 2026-09-05; SQLite and
+device/Maestro gates pending.
 
 ## Commands and results
 
 ```text
 npm run typecheck -w @monyvi/mobile
-PASS
+PASS on Slice 7 base `99b9065`
 
-node node_modules/jest/bin/jest.js --config apps/mobile/jest.config.js --runInBand --testPathPattern='metals-add.test.tsx|metals-edit.test.tsx|edit-metal-holding-preview-service.test.ts|edit-metal-holding-command-service.integration.test.ts|metals-content-contract.test.ts' --no-coverage --watchman=false --silent
-Test Suites: 5 passed, 5 total
-Tests:       27 passed, 27 total
+npx jest --config apps/mobile/jest.config.js --runInBand --no-coverage --watchman=false --silent <Add/Edit UI, preview, validation, rate-provenance, and locale suites>
+The Add/Edit UI suites pass 12/12. The exact preview, validation, live-rate
+provenance, and EN/AR resource suites also pass in the focused Slice 7 run.
 
 node node_modules/eslint/bin/eslint.js <US4 changed TypeScript files> --rulesdir scripts/eslint-rules --quiet
-PASS
+PASS on Slice 7 base `99b9065`
 
 git diff --check
 PASS
 ```
 
-The focused SQLite suite uses the real WatermelonDB schema and proves one local atomic correction group updates the current projection, increments the canonical holding revision, deactivates the predecessor event, and appends immutable evidence/History. Metadata-only edits bypass the financial-action stream. Same-action replay is idempotent and a changed payload with the same action ID fails closed.
+The focused SQLite suite is not Green on the current integrated stack. It is
+blocked before writes because the shared financial-action foundation revalidates
+Add/Correct payloads without forwarding their Cairo date validation context. A
+dedicated upstream foundation fix is in progress. T092 remains unchecked and
+this document makes no current atomic-write claim.
 
 ## Pending
 
-The checked-in Maestro journey was authored during Red. It was not executed in this lane because the physical-device QA lock prohibits Metro/native/device work. T092 remains unchecked until Maestro plus required manual responsive/accessibility checks have real evidence.
+The checked-in Maestro journey was authored during Red. It was not executed in
+this lane because the physical-device QA lock prohibits Metro/native/device
+work. T092 remains unchecked until Maestro plus required manual
+responsive/accessibility checks have real evidence.

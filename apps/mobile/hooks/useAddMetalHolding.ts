@@ -15,6 +15,7 @@ import type {
   AddMetalHoldingRequestIds,
 } from "@/services/add-metal-holding-facade-service";
 import {
+  calculateMetalHoldingPreviewDetails,
   calculateMetalHoldingPreviewValuation,
   type MetalHoldingPreviewRates,
 } from "@/services/metal-holding-preview-service";
@@ -219,6 +220,15 @@ export function useAddMetalHoldingForm(
     if (!validation.normalized) return fallbackPreview(values);
     const normalized = validation.normalized;
     const previewRates = input.previewRates(normalized);
+    const valuation = calculateMetalHoldingPreviewValuation(
+      normalized,
+      previewRates
+    );
+    const details = calculateMetalHoldingPreviewDetails(
+      normalized,
+      valuation,
+      previewRates.currencyMinorUnits
+    );
     return {
       metal: normalized.metal,
       purityCode: normalized.purity.code,
@@ -231,11 +241,12 @@ export function useAddMetalHoldingForm(
       name: normalized.name,
       weightGramsDecimal: normalized.weightGramsDecimal,
       displayCurrency: normalized.purchaseCurrency,
-      valuation: calculateMetalHoldingPreviewValuation(
-        normalized,
-        previewRates
-      ),
+      valuation,
       rateFreshness: previewRates.rateFreshness,
+      metalUsdPerPureGramDecimal: previewRates.metalUsdPerPureGramDecimal,
+      rateSources: previewRates.rateSources,
+      providerObservedAt: previewRates.providerObservedAt,
+      ...details,
     };
   }, [input, validation.normalized, values]);
   const purityOptions = useMemo(
@@ -340,6 +351,7 @@ function missingTrustReadModel(): LiveRatesTrustReadModel {
   const missing = (): LiveRatesTrustValue => ({
     state: "missing",
     ageMs: null,
+    source: null,
     providerObservedAt: null,
     valueDecimal: null,
   });
@@ -397,11 +409,49 @@ export function useMetalAddPreviewRates(): UseMetalAddPreviewRatesResult {
         egpUsdPerUnitDecimal: availableRateValue(egpRate),
         currencyMinorUnits: currencyMinorUnits ?? 2,
         rateFreshness: combineRateFreshness([metalRate, currencyRate, egpRate]),
+        rateSources: uniqueSources([metalRate, currencyRate]),
+        providerObservedAt: oldestProviderObservation([
+          metalRate,
+          currencyRate,
+        ]),
       };
     },
     [rates]
   );
   return { getPreviewRates };
+}
+
+function uniqueSources(
+  values: ReadonlyArray<LiveRatesTrustValue | undefined>
+): readonly string[] {
+  return Array.from(
+    new Set(
+      values.flatMap((value) =>
+        value?.source && availableRateValue(value) !== null
+          ? [value.source]
+          : []
+      )
+    )
+  );
+}
+
+function oldestProviderObservation(
+  values: ReadonlyArray<LiveRatesTrustValue | undefined>
+): Date | null {
+  if (
+    values.some(
+      (value) =>
+        !value ||
+        availableRateValue(value) === null ||
+        value.providerObservedAt === null
+    )
+  ) {
+    return null;
+  }
+  const timestamps = values.map((value) =>
+    value!.providerObservedAt!.getTime()
+  );
+  return new Date(Math.min(...timestamps));
 }
 
 function combineRateFreshness(

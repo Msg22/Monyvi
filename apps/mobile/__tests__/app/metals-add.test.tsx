@@ -1,6 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import React from "react";
 
+jest.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string): string => key,
+    i18n: { language: "en", dir: (): "ltr" => "ltr" },
+  }),
+}));
+
 jest.mock("@/components/navigation/PageHeader", () => {
   const { TouchableOpacity } =
     jest.requireActual<typeof import("react-native")>("react-native");
@@ -83,7 +90,6 @@ interface MetalHoldingFormModule {
 interface MetalHoldingFormProps {
   readonly locale: "en" | "ar";
   readonly isRtl: boolean;
-  readonly colorScheme: "light" | "dark";
   readonly width: number;
   readonly fontScale: number;
   readonly bottomInset: number;
@@ -102,6 +108,15 @@ interface MetalHoldingPreview {
   readonly purityLabel: string;
   readonly purityFactorDecimal: string;
   readonly physicalForm: "COIN" | "BAR" | "JEWELRY" | null;
+  readonly name?: string;
+  readonly weightGramsDecimal?: string;
+  readonly displayCurrency?: string;
+  readonly metalUsdPerPureGramDecimal?: string | null;
+  readonly rateSources?: readonly string[];
+  readonly providerObservedAt?: Date | null;
+  readonly resultSincePurchaseDecimal?: string | null;
+  readonly resultDirection?: "positive" | "negative" | "zero" | "unavailable";
+  readonly purityPercentDecimal?: string;
   readonly valuation:
     | { readonly available: true; readonly valueDecimal: string }
     | { readonly available: false; readonly reason: "missing_rate" };
@@ -124,7 +139,16 @@ const goldPreview: MetalHoldingPreview = {
   purityLabel: "24K · 999",
   purityFactorDecimal: "0.999",
   physicalForm: "COIN",
-  valuation: { available: true, valueDecimal: "47231.25" },
+  name: "Savings coin",
+  weightGramsDecimal: "10",
+  displayCurrency: "EGP",
+  metalUsdPerPureGramDecimal: "104.51",
+  rateSources: ["Monyvi market provider"],
+  providerObservedAt: new Date("2026-08-26T10:30:00.000Z"),
+  resultSincePurchaseDecimal: "4350.32",
+  resultDirection: "positive",
+  purityPercentDecimal: "99.9",
+  valuation: { available: true, valueDecimal: "52150.32" },
 };
 
 const silverPreview: MetalHoldingPreview = {
@@ -142,7 +166,6 @@ function renderForm(
   const props: MetalHoldingFormProps = {
     locale: "en",
     isRtl: false,
-    colorScheme: "light",
     width: 390,
     fontScale: 1,
     bottomInset: 34,
@@ -191,10 +214,16 @@ describe("Add metal holding form", () => {
       "accessibilityRole",
       "none"
     );
+    expect(
+      screen.getByTestId("metal-holding-weight-field-trailing-adornment")
+    ).toHaveTextContent("g");
+    expect(
+      screen.getByTestId("metal-holding-physical-form-radio-COIN")
+    ).toBeOnTheScreen();
   });
 
   it("stacks the dense Weight/Purity controls at compact width and 200% text while retaining accessible field labels", () => {
-    renderForm({ width: 320, fontScale: 2, colorScheme: "dark" });
+    renderForm({ width: 320, fontScale: 2 });
 
     expect(
       screen.getByTestId("metal-holding-weight-purity-stacked")
@@ -219,9 +248,24 @@ describe("Add metal holding form", () => {
       "gold-999"
     );
     expect(screen.getAllByText("24K · 999").length).toBeGreaterThan(0);
+    expect(screen.getByText("Gold · Coin")).toBeOnTheScreen();
+    expect(screen.getByText("10 g · 24K · 999")).toBeOnTheScreen();
+    expect(screen.getByText("EGP 52,150.32")).toBeOnTheScreen();
+    expect(screen.getByText("+ EGP 4,350.32")).toBeOnTheScreen();
+    expect(screen.getByText("24K · 999 · 99.9% pure")).toBeOnTheScreen();
+    expect(
+      screen.getByText("Gold · USD 104.51 per pure gram")
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByText(/Monyvi market provider · Rates updated/)
+    ).toBeOnTheScreen();
     expect(screen.getByTestId("metal-holding-item-render")).toHaveProp(
       "metal",
       "GOLD"
+    );
+    expect(screen.getByText("24K · 999 · 99.9% pure")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:text-text-secondary-dark")
     );
     expect(screen.queryByTestId("metal-holding-review-screen")).toBeNull();
   });
@@ -258,7 +302,7 @@ describe("Add metal holding form", () => {
       true
     );
     fireEvent.press(screen.getByTestId("header-back"));
-    expect(props.onRequestExit).toHaveBeenCalledTimes(1);
+    expect(props.onRequestExit).not.toHaveBeenCalled();
     fireEvent.press(screen.getByTestId("metal-holding-submit"));
     fireEvent.press(screen.getByTestId("metal-holding-submit"));
     expect(props.onSubmit).not.toHaveBeenCalled();
@@ -266,6 +310,16 @@ describe("Add metal holding form", () => {
       "accessibilityState",
       expect.objectContaining({ disabled: true, busy: true })
     );
+    expect(screen.getByTestId("metal-holding-name-field")).toHaveProp(
+      "editable",
+      false
+    );
+    expect(
+      screen.getByTestId("metal-holding-physical-form-option-COIN")
+    ).toBeDisabled();
+    expect(
+      screen.getByTestId("metal-holding-purchase-date-field")
+    ).toBeDisabled();
   });
 
   it("uses Skeleton while form content is loading and passes Arabic RTL state through without numeric-layout regressions", () => {
@@ -273,7 +327,6 @@ describe("Add metal holding form", () => {
       isLoading: true,
       locale: "ar",
       isRtl: true,
-      colorScheme: "dark",
       width: 390,
       fontScale: 2,
     });

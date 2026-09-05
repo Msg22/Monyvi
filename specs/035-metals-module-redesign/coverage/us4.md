@@ -11,11 +11,11 @@
 | US4-M07 | CAS/replay/restart | n/a | deferred deterministic conflict fixture | multi-device sync |
 | US4-M08 | n/a | RTL/theme/compact/200%/safe-area | deferred profile | native assistive tech/layout matrix |
 
-## Green checkpoint — 2026-09-01
+## Deterministic checkpoint — 2026-09-05
 
 - `metals-edit.test.tsx`: 5/5 Green for shared order, locked Metal, direct Save, metadata/material state, physical-form-only copy, terminal immutability, RTL/reflow, pending lock, focus, and bottom inset.
 - `edit-metal-holding-preview-service.test.ts`: 4/4 Green for metadata separation, affected-only material comparison, restored deltas, physical-form-only consequences, and terminal policy.
-- `edit-metal-holding-command-service.integration.test.ts`: 5/5 Green against SQLite for atomic projections/evidence/History/revision, predecessor deactivation, metadata LWW, required reason, replay/hash mismatch, and terminal immutability.
-- Add regression plus metals i18n contract: 13/13 Green. Combined focused gate: 5 suites, 27 tests.
-- Mobile TypeScript and changed-file ESLint with project rules: Green. Full mobile lint reaches one unrelated pre-existing unused import in `metal-financial-action-foundation.integration.test.ts`; no US4 lint finding remains.
+- The Edit SQLite command suite currently reaches the merged payload registry but is blocked before writes because the shared foundation drops the supplied Cairo validation date while revalidating the envelope. A dedicated upstream owner is fixing that shared contract; no current SQLite Green is claimed.
+- Add/Edit UI regression: 12/12 Green. Preview, validation, rate provenance, and EN/AR resource contracts are Green on the Slice 7 stack.
+- Mobile TypeScript and full mobile ESLint with project rules: Green on base `99b9065`.
 - Maestro/native device execution remains pending under the active physical-device QA lock. T092 stays open; no native, visual, timing, or assistive-technology result is claimed.

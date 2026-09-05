@@ -21,7 +21,6 @@ import {
   MetalHoldingForm,
   type MetalHoldingFormCopy,
 } from "@/components/metals/MetalHoldingForm";
-import { useTheme } from "@/context/ThemeContext";
 import {
   useAddMetalHoldingForm,
   useMetalAddPreviewRates,
@@ -36,7 +35,6 @@ const SAFE_RANGE = {
 
 export default function AddMetalHoldingRoute(): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
-  const { isDark } = useTheme();
   const { width, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { preferredCurrency, isLoading } = usePreferredCurrency();
@@ -95,7 +93,6 @@ export default function AddMetalHoldingRoute(): React.JSX.Element {
       <MetalHoldingForm
         locale={locale}
         isRtl={I18nManager.isRTL}
-        colorScheme={isDark ? "dark" : "light"}
         width={width}
         fontScale={fontScale}
         bottomInset={insets.bottom}
@@ -205,20 +202,20 @@ function createCopy(
   t: ReturnType<typeof useTranslation<"metals">>["t"]
 ): MetalHoldingFormCopy {
   return {
-    title: t("add_new_holding"),
+    title: t("add.submit"),
     back: t("add.back"),
-    name: t("name"),
-    namePlaceholder: t("name_placeholder"),
+    name: t("add.holding_name"),
+    namePlaceholder: t("add.holding_name_placeholder"),
     metal: t("add.metal"),
     gold: t("gold"),
     silver: t("silver"),
-    weight: t("weight_grams"),
+    weight: t("add.weight"),
     purity: t("purity"),
     purchasePrice: t("add.total_purchase_price"),
     purchasePriceHint: t("add.purchase_price_hint"),
     purchaseCurrency: t("add.purchase_currency"),
     purchaseDate: t("purchase_date"),
-    physicalForm: t("form_optional"),
+    physicalForm: t("add.physical_form"),
     coin: t("form_coin"),
     bar: t("form_bar"),
     jewelry: t("form_jewelry"),
@@ -236,6 +233,11 @@ function createCopy(
     rateStale: t("add.rate_stale"),
     rateUnknown: t("add.rate_unknown"),
     rateUnavailable: t("add.rate_unavailable"),
+    pure: t("add.pure"),
+    perPureGram: t("add.per_pure_gram"),
+    estimatedGainSincePurchase: t("add.estimated_gain_since_purchase"),
+    estimatedLossSincePurchase: t("add.estimated_loss_since_purchase"),
+    ratesUpdated: t("add.rates_updated"),
   };
 }
 

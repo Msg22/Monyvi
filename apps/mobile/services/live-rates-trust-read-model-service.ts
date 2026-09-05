@@ -45,6 +45,7 @@ export type LiveRatesTrustState = RateTrustResult["state"] | "invalid";
 export interface LiveRatesTrustValue {
   readonly state: LiveRatesTrustState;
   readonly ageMs: number | null;
+  readonly source: string | null;
   readonly providerObservedAt: Date | null;
   readonly valueDecimal?: string | null;
 }
@@ -187,6 +188,7 @@ function classifyObservationTrust(
     return {
       state: "missing",
       ageMs: null,
+      source: null,
       providerObservedAt: null,
       valueDecimal: null,
     };
@@ -197,6 +199,7 @@ function classifyObservationTrust(
     return {
       state: "invalid",
       ageMs: null,
+      source: observation.source,
       providerObservedAt: observation.providerObservedAt,
       valueDecimal: null,
     };
@@ -214,6 +217,7 @@ function classifyObservationTrust(
 
   return {
     ...result,
+    source: observation.source,
     providerObservedAt: observation.providerObservedAt,
     valueDecimal: normalizedValueDecimal,
   };

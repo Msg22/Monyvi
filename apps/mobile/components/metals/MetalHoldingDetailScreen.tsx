@@ -25,6 +25,7 @@ import type {
 
 interface MetalHoldingDetailScreenProps {
   readonly actions: readonly HoldingActionDescriptor[];
+  readonly enabledActions?: readonly HoldingActionId[];
   readonly error: Error | null;
   readonly isLoading: boolean;
   readonly isOffline: boolean;
@@ -78,6 +79,7 @@ export function MetalHoldingDetailScreen(
         <ActionRegion
           actions={props.actions}
           bottomInset={insets.bottom}
+          enabledActions={props.enabledActions}
           onAction={props.onAction}
         />
       }
@@ -494,10 +496,12 @@ function HistoryEvent({
 function ActionRegion({
   actions,
   bottomInset,
+  enabledActions,
   onAction,
 }: {
   readonly actions: readonly HoldingActionDescriptor[];
   readonly bottomInset: number;
+  readonly enabledActions?: readonly HoldingActionId[];
   readonly onAction?: (action: HoldingActionId) => void;
 }): React.JSX.Element {
   return (
@@ -506,9 +510,19 @@ function ActionRegion({
       className="mt-5 gap-3 border-t border-slate-200 bg-background px-5 pt-4 dark:border-slate-800 dark:bg-background-dark"
       style={{ paddingBottom: bottomInset + 16 }}
     >
-      {actions.map((action) => (
-        <ActionButton key={action.id} action={action} onAction={onAction} />
-      ))}
+      {actions.map((action) => {
+        const isEnabled =
+          onAction !== undefined &&
+          (enabledActions === undefined || enabledActions.includes(action.id));
+
+        return (
+          <ActionButton
+            key={action.id}
+            action={action}
+            onAction={isEnabled ? onAction : undefined}
+          />
+        );
+      })}
     </View>
   );
 }

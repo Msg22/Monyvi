@@ -19,6 +19,7 @@ export default function MetalHoldingDetailRoute(): React.JSX.Element {
         actions={
           detail.model === null ? [] : getHoldingActionDescriptors(detail.model)
         }
+        enabledActions={["edit"]}
         {...detail}
         onRetry={detail.retry}
         onViewHistory={() => router.push("/metals/history")}

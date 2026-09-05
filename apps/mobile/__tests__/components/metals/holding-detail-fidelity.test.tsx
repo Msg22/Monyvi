@@ -207,6 +207,38 @@ describe("approved active holding-detail fidelity", () => {
     expect(onAction).toHaveBeenNthCalledWith(4, "delete");
   });
 
+  it("enables only the actions that the route can actually complete", () => {
+    const model = activeDetail();
+    const onAction = jest.fn();
+
+    render(
+      <MetalHoldingDetailScreen
+        actions={getHoldingActionDescriptors(model)}
+        enabledActions={["edit"]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={model}
+        onAction={onAction}
+        onRetry={jest.fn()}
+        onViewHistory={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("metal-holding-action-edit")).toBeEnabled();
+    expect(screen.getByTestId("metal-holding-action-sell")).toBeDisabled();
+    expect(screen.getByTestId("metal-holding-action-dispose")).toBeDisabled();
+    expect(screen.getByTestId("metal-holding-action-delete")).toBeDisabled();
+
+    fireEvent.press(screen.getByTestId("metal-holding-action-sell"));
+    fireEvent.press(screen.getByTestId("metal-holding-action-dispose"));
+    fireEvent.press(screen.getByTestId("metal-holding-action-delete"));
+    fireEvent.press(screen.getByTestId("metal-holding-action-edit"));
+
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(onAction).toHaveBeenCalledWith("edit");
+  });
+
   it("keeps text legible in dark mode and uses a loss color for negative performance", () => {
     const model = activeDetail({ totalGainDecimal: "-11039.67" });
 

@@ -66,6 +66,15 @@ describe("Metals EN/AR content contract", () => {
       "detail.paid",
       "detail.timeline_current_value",
       "detail.fact_accessibility",
+      "add.holding_name",
+      "add.holding_name_placeholder",
+      "add.weight",
+      "add.physical_form",
+      "add.validation.future_date",
+      "edit.title",
+      "edit.locked_metal_hint",
+      "edit.cancel",
+      "edit.fields.physicalForm",
     ]) {
       expect(enFlat[key]).toEqual(expect.any(String));
       expect(arFlat[key]).toEqual(expect.any(String));
@@ -124,6 +133,8 @@ describe("Metals EN/AR content contract", () => {
       "reconciliation",
       "render",
       "detail",
+      "add",
+      "edit",
     ]) {
       expect(schema).toMatch(new RegExp(`${key}:\\s*z\\s*\\.object`));
     }
