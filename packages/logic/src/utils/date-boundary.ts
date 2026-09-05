@@ -243,6 +243,9 @@ function getAnchoredRecurringOccurrence(
       occurrence.setDate(occurrence.getDate() + occurrenceIndex * 7);
       return occurrence;
     case "MONTHLY":
+    case "CUSTOM":
+      // Preserve the legacy recurring-date fallback. CUSTOM schedules were
+      // advanced monthly before anchored recurrence calculations were added.
       return addMonthsClamped(startDate, occurrenceIndex);
     case "QUARTERLY":
       return addMonthsClamped(startDate, occurrenceIndex * 3);
