@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 
 import {
-  DEFAULT_FINANCIAL_ACTION_REGISTRY,
   FINANCIAL_ACTION_ERROR_CODES,
   type FinancialActionEnvelopeV1,
   type Sha256Provider,
@@ -13,6 +12,7 @@ import {
   assertDirectPreparedLinkedOperationOwnership,
   type MockFinancialActionRecord as MockRecord,
 } from "./financial-action-foundation-test-model";
+import { LEGACY_FINANCIAL_ACTION_TEST_REGISTRY } from "./financial-action-foundation-test-registry";
 
 const mockRecords: MockRecord[] = [];
 let mockCurrentUserId = "018f0c7a-1234-7abc-8def-000000000003";
@@ -154,7 +154,7 @@ const testRepository = createFinancialActionFoundationRepository({
   assertExpectedCurrentUser: jest.requireMock<
     typeof import("../../services/user-data-access")
   >("../../services/user-data-access").assertExpectedCurrentUser,
-  registry: DEFAULT_FINANCIAL_ACTION_REGISTRY,
+  registry: LEGACY_FINANCIAL_ACTION_TEST_REGISTRY,
 });
 const {
   commitFinancialActionGroupLocally,

@@ -324,32 +324,35 @@ describe("Metals deterministic E2E fixture registry", () => {
         expect.objectContaining({
           table: "metal_holding_states",
           operation: "select",
-          selection: expect.stringContaining(
-            "financial_revision:financial_revision::text"
-          ),
         }),
         expect.objectContaining({
           table: "market_rate_observations",
           operation: "select",
-          selection: expect.stringContaining(
-            "value_decimal:value_decimal::text"
-          ),
         }),
         expect.objectContaining({
           table: "assets",
           operation: "select",
-          selection: expect.stringContaining(
-            "purchase_price_decimal:purchase_price_decimal::text"
-          ),
         }),
         expect.objectContaining({
           table: "asset_metals",
           operation: "select",
-          selection: expect.stringContaining(
-            "weight_grams_decimal:weight_grams_decimal::text"
-          ),
         }),
       ])
+    );
+    const selectionsByTable = new Map(
+      records.map(({ table, selection }) => [table, selection])
+    );
+    expect(selectionsByTable.get("metal_holding_states")).toContain(
+      "financial_revision:financial_revision::text"
+    );
+    expect(selectionsByTable.get("market_rate_observations")).toContain(
+      "value_decimal:value_decimal::text"
+    );
+    expect(selectionsByTable.get("assets")).toContain(
+      "purchase_price_decimal:purchase_price_decimal::text"
+    );
+    expect(selectionsByTable.get("asset_metals")).toContain(
+      "weight_grams_decimal:weight_grams_decimal::text"
     );
 
     records.length = 0;

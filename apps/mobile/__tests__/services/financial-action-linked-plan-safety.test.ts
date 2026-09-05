@@ -23,9 +23,10 @@ import {
   type FinancialActionUserDataScope,
 } from "../../services/financial-action-foundation-repository";
 import {
-  DEFAULT_FINANCIAL_ACTION_REGISTRY,
   type FinancialActionEnvelopeV1,
 } from "../../../../packages/logic/src/financial-actions";
+
+import { LEGACY_FINANCIAL_ACTION_TEST_REGISTRY } from "./financial-action-foundation-test-registry";
 
 interface FakeRaw {
   _status?: string;
@@ -204,7 +205,7 @@ function createRepository(): FinancialActionFoundationRepository {
     getCurrentUserDataScope: (): Promise<FinancialActionUserDataScope> =>
       Promise.resolve(scope),
     assertExpectedCurrentUser: (): Promise<void> => Promise.resolve(),
-    registry: DEFAULT_FINANCIAL_ACTION_REGISTRY,
+    registry: LEGACY_FINANCIAL_ACTION_TEST_REGISTRY,
   });
 }
 
