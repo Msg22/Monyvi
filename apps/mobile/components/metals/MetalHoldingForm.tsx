@@ -88,9 +88,37 @@ export interface MetalHoldingFormCopy {
   readonly rateStale: string;
   readonly rateUnknown: string;
   readonly rateUnavailable: string;
+  readonly correctionReason?: string;
+  readonly whatWillChange?: string;
+  readonly previous?: string;
+  readonly current?: string;
+  readonly correctionHistory?: string;
+  readonly noFinancialChange?: string;
+  readonly acknowledgeConsequences?: string;
+  readonly editTitle?: string;
+  readonly editSubmit?: string;
+  readonly editSubmitting?: string;
+}
+
+export interface MetalHoldingEditChange {
+  readonly field: string;
+  readonly label: string;
+  readonly before: string;
+  readonly after: string;
+  readonly isFinancial: boolean;
+}
+
+export interface MetalHoldingFormEditState {
+  readonly affectedChanges: readonly MetalHoldingEditChange[];
+  readonly correctionReason: string;
+  readonly consequenceAcknowledged: boolean;
+  readonly requiresConsequenceAcknowledgment?: boolean;
 }
 
 export interface MetalHoldingFormProps {
+  readonly mode?: "add" | "edit";
+  readonly holdingStatus?: "active" | "sold" | "disposed";
+  readonly editState?: MetalHoldingFormEditState;
   readonly locale: "en" | "ar";
   readonly isRtl: boolean;
   readonly colorScheme: "light" | "dark";
@@ -115,6 +143,8 @@ export interface MetalHoldingFormProps {
   readonly onSubmit: () => void;
   readonly onRequestExit: () => void;
   readonly onAcknowledgeUnusualValue?: () => void;
+  readonly onCorrectionReasonChange?: (value: string) => void;
+  readonly onAcknowledgeConsequences?: () => void;
 }
 
 const DEFAULT_VALUES: MetalHoldingFormValues = {
@@ -192,6 +222,9 @@ const FOCUSABLE_ERROR_ORDER = [
 ] as const;
 
 export function MetalHoldingForm({
+  mode = "add",
+  holdingStatus = "active",
+  editState,
   locale,
   isRtl,
   width,
@@ -212,6 +245,8 @@ export function MetalHoldingForm({
   onSubmit,
   onRequestExit,
   onAcknowledgeUnusualValue,
+  onCorrectionReasonChange,
+  onAcknowledgeConsequences,
 }: MetalHoldingFormProps): React.JSX.Element {
   const [isPurityOpen, setIsPurityOpen] = useState(false);
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false);
@@ -231,6 +266,16 @@ export function MetalHoldingForm({
     writingDirection: isRtl ? "rtl" : "ltr",
   };
   const submitAreaMetadata: { readonly bottomInset: number } = { bottomInset };
+  const isTerminalEdit = mode === "edit" && holdingStatus !== "active";
+  const hasMaterialChanges = Boolean(editState?.affectedChanges.length);
+  const title =
+    mode === "edit" ? (copy.editTitle ?? "Edit holding") : copy.title;
+  const submitLabel =
+    mode === "edit" ? (copy.editSubmit ?? "Save changes") : copy.submit;
+  const submittingLabel =
+    mode === "edit"
+      ? (copy.editSubmitting ?? "Saving changes")
+      : copy.submitting;
 
   return (
     <KeyboardAvoidingView
@@ -240,8 +285,15 @@ export function MetalHoldingForm({
       accessibilityLanguage={locale}
       {...formMetadata}
     >
+      <View
+        testID={
+          mode === "edit"
+            ? "metal-holding-edit-screen"
+            : "metal-holding-add-form"
+        }
+      />
       <PageHeader
-        title={copy.title}
+        title={title}
         showDrawer={false}
         showBackButton
         onBack={onRequestExit}
@@ -270,103 +322,118 @@ export function MetalHoldingForm({
             maxLength={100}
           />
 
-          <MetalSelector copy={copy} value={values.metal} onChange={onChange} />
+          <MetalSelector
+            copy={copy}
+            value={values.metal}
+            onChange={onChange}
+            isDisabled={mode === "edit"}
+          />
 
-          <View
-            testID={
-              shouldStackDenseFields
-                ? "metal-holding-weight-purity-stacked"
-                : "metal-holding-weight-purity-row"
-            }
-            accessibilityRole="none"
-            className={shouldStackDenseFields ? "gap-5" : "flex-row gap-3"}
-          >
-            <TextField
-              testID="metal-holding-weight-field"
-              containerClassName="flex-1"
-              label={copy.weight}
-              accessibilityLabel={copy.weight}
-              value={values.weightGrams}
-              onChangeText={(value) => onChange("weightGrams", value)}
-              error={validationErrors.weightGrams}
-              autoFocus={firstError === "metal-holding-weight-field"}
-              keyboardType="decimal-pad"
-              inputMode="decimal"
-            />
+          {!isTerminalEdit ? (
             <View
-              className="flex-1"
-              accessible
-              accessibilityLabel={copy.purity}
+              testID={
+                shouldStackDenseFields
+                  ? "metal-holding-weight-purity-stacked"
+                  : "metal-holding-weight-purity-row"
+              }
+              accessibilityRole="none"
+              className={shouldStackDenseFields ? "gap-5" : "flex-row gap-3"}
             >
+              <TextField
+                testID="metal-holding-weight-field"
+                containerClassName="flex-1"
+                label={copy.weight}
+                accessibilityLabel={copy.weight}
+                value={values.weightGrams}
+                onChangeText={(value) => onChange("weightGrams", value)}
+                error={validationErrors.weightGrams}
+                autoFocus={firstError === "metal-holding-weight-field"}
+                keyboardType="decimal-pad"
+                inputMode="decimal"
+              />
+              <View
+                className="flex-1"
+                accessible
+                accessibilityLabel={copy.purity}
+              >
+                <Dropdown
+                  label={copy.purity}
+                  items={purityOptions}
+                  value={values.purityCode}
+                  onChange={(value) => {
+                    setIsPurityOpen(false);
+                    onChange("purityCode", value);
+                  }}
+                  isOpen={isPurityOpen}
+                  onToggle={() => setIsPurityOpen((open) => !open)}
+                />
+              </View>
+            </View>
+          ) : null}
+
+          {!isTerminalEdit ? (
+            <View>
+              <TextField
+                testID="metal-holding-purchase-price-field"
+                label={copy.purchasePrice}
+                value={values.purchasePrice}
+                onChangeText={(value) => onChange("purchasePrice", value)}
+                error={validationErrors.purchasePrice}
+                autoFocus={firstError === "metal-holding-purchase-price-field"}
+                keyboardType="decimal-pad"
+                inputMode="decimal"
+              />
+              <Text className="mt-1 text-xs text-text-muted">
+                {copy.purchasePriceHint}
+              </Text>
+            </View>
+          ) : null}
+
+          {!isTerminalEdit ? (
+            <View testID="metal-holding-purchase-currency-field">
               <Dropdown
-                label={copy.purity}
-                items={purityOptions}
-                value={values.purityCode}
+                label={copy.purchaseCurrency}
+                items={currencyOptions}
+                value={values.purchaseCurrency}
                 onChange={(value) => {
-                  setIsPurityOpen(false);
-                  onChange("purityCode", value);
+                  setIsCurrencyOpen(false);
+                  onChange("purchaseCurrency", value);
                 }}
-                isOpen={isPurityOpen}
-                onToggle={() => setIsPurityOpen((open) => !open)}
+                isOpen={isCurrencyOpen}
+                onToggle={() => setIsCurrencyOpen((open) => !open)}
               />
             </View>
-          </View>
+          ) : null}
 
-          <View>
+          {!isTerminalEdit ? (
             <TextField
-              testID="metal-holding-purchase-price-field"
-              label={copy.purchasePrice}
-              value={values.purchasePrice}
-              onChangeText={(value) => onChange("purchasePrice", value)}
-              error={validationErrors.purchasePrice}
-              autoFocus={firstError === "metal-holding-purchase-price-field"}
-              keyboardType="decimal-pad"
-              inputMode="decimal"
+              testID="metal-holding-purchase-date-field"
+              label={copy.purchaseDate}
+              value={values.purchaseDate}
+              onChangeText={(value) => onChange("purchaseDate", value)}
+              error={validationErrors.purchaseDate}
+              autoFocus={firstError === "metal-holding-purchase-date-field"}
+              placeholder="YYYY-MM-DD"
+              autoCapitalize="none"
+              trailingAdornment={
+                <Ionicons
+                  name="calendar-outline"
+                  size={20}
+                  color={palette.slate[500]}
+                />
+              }
             />
-            <Text className="mt-1 text-xs text-text-muted">
-              {copy.purchasePriceHint}
-            </Text>
-          </View>
+          ) : null}
 
-          <View testID="metal-holding-purchase-currency-field">
-            <Dropdown
-              label={copy.purchaseCurrency}
-              items={currencyOptions}
-              value={values.purchaseCurrency}
-              onChange={(value) => {
-                setIsCurrencyOpen(false);
-                onChange("purchaseCurrency", value);
-              }}
-              isOpen={isCurrencyOpen}
-              onToggle={() => setIsCurrencyOpen((open) => !open)}
+          {!isTerminalEdit ? (
+            <PhysicalFormSelector
+              copy={copy}
+              value={values.physicalForm}
+              metal={values.metal}
+              isStacked={shouldStackDenseFields}
+              onChange={onChange}
             />
-          </View>
-
-          <TextField
-            testID="metal-holding-purchase-date-field"
-            label={copy.purchaseDate}
-            value={values.purchaseDate}
-            onChangeText={(value) => onChange("purchaseDate", value)}
-            error={validationErrors.purchaseDate}
-            autoFocus={firstError === "metal-holding-purchase-date-field"}
-            placeholder="YYYY-MM-DD"
-            autoCapitalize="none"
-            trailingAdornment={
-              <Ionicons
-                name="calendar-outline"
-                size={20}
-                color={palette.slate[500]}
-              />
-            }
-          />
-
-          <PhysicalFormSelector
-            copy={copy}
-            value={values.physicalForm}
-            metal={values.metal}
-            isStacked={shouldStackDenseFields}
-            onChange={onChange}
-          />
+          ) : null}
 
           <TextField
             testID="metal-holding-notes-field"
@@ -377,6 +444,20 @@ export function MetalHoldingForm({
             multiline
             maxLength={500}
           />
+
+          {mode === "edit" && hasMaterialChanges && editState ? (
+            <CorrectionState
+              copy={copy}
+              state={editState}
+              currentValue={
+                preview.valuation.available
+                  ? preview.valuation.valueDecimal
+                  : null
+              }
+              onReasonChange={onCorrectionReasonChange}
+              onAcknowledge={onAcknowledgeConsequences}
+            />
+          ) : null}
 
           <LivePreview
             copy={copy}
@@ -437,7 +518,7 @@ export function MetalHoldingForm({
         <TouchableOpacity
           testID="metal-holding-submit"
           accessibilityRole="button"
-          accessibilityLabel={isSubmitting ? copy.submitting : copy.submit}
+          accessibilityLabel={isSubmitting ? submittingLabel : submitLabel}
           accessibilityState={{ disabled: isSubmitting, busy: isSubmitting }}
           disabled={isSubmitting}
           onPress={submit}
@@ -445,11 +526,90 @@ export function MetalHoldingForm({
           style={isSubmitting ? { opacity: 0.55 } : undefined}
         >
           <Text className="text-base font-bold text-slate-25 dark:text-slate-950">
-            {isSubmitting ? copy.submitting : copy.submit}
+            {isSubmitting ? submittingLabel : submitLabel}
           </Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
+  );
+}
+
+function CorrectionState({
+  copy,
+  state,
+  currentValue,
+  onReasonChange,
+  onAcknowledge,
+}: {
+  readonly copy: MetalHoldingFormCopy;
+  readonly state: MetalHoldingFormEditState;
+  readonly currentValue: string | null;
+  readonly onReasonChange?: (value: string) => void;
+  readonly onAcknowledge?: () => void;
+}): React.JSX.Element {
+  const hasFinancialChange = state.affectedChanges.some(
+    (change) => change.isFinancial
+  );
+  return (
+    <View className="gap-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950">
+      {state.affectedChanges.map((change) => (
+        <View key={change.field} className="gap-1">
+          <Text className="text-sm font-semibold text-text-primary">
+            {change.label}
+          </Text>
+          <Text
+            testID={`metal-holding-${change.field === "weight" ? "weight" : change.field}-previous`}
+            className="text-xs text-text-muted"
+          >
+            {`${copy.previous ?? "Previous"}: ${change.before}`}
+          </Text>
+          <Text
+            testID={`metal-holding-${change.field === "weight" ? "weight" : change.field}-current`}
+            className="text-sm text-text-primary"
+          >
+            {`${copy.current ?? "Current"}: ${change.after}`}
+          </Text>
+        </View>
+      ))}
+      <TextField
+        testID="metal-holding-correction-reason"
+        label={copy.correctionReason ?? "Why are you changing this?"}
+        value={state.correctionReason}
+        onChangeText={onReasonChange}
+        multiline
+      />
+      <View testID="metal-holding-what-will-change" className="gap-2">
+        <Text className="text-sm font-semibold text-text-primary">
+          {copy.whatWillChange ?? "What will change"}
+        </Text>
+        {state.affectedChanges.map((change) => (
+          <Text key={change.field} className="text-sm text-text-secondary">
+            {`${change.label}: ${change.before} → ${change.after}`}
+          </Text>
+        ))}
+        {!hasFinancialChange && currentValue ? (
+          <Text className="text-sm text-text-secondary">
+            {`${copy.noFinancialChange ?? "Current value stays"} ${currentValue}`}
+          </Text>
+        ) : null}
+        <Text className="text-sm text-text-secondary">
+          {copy.correctionHistory ?? "This correction will appear in History"}
+        </Text>
+      </View>
+      {state.requiresConsequenceAcknowledgment !== false &&
+      !state.consequenceAcknowledged ? (
+        <TouchableOpacity
+          accessibilityRole="button"
+          testID="metal-holding-consequence-acknowledgment"
+          onPress={onAcknowledge}
+          className="min-h-11 items-center justify-center rounded-xl border border-amber-700 px-4"
+        >
+          <Text className="font-semibold text-amber-900 dark:text-amber-100">
+            {copy.acknowledgeConsequences ?? "I understand these changes"}
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
   );
 }
 
@@ -479,13 +639,18 @@ function MetalSelector({
   copy,
   value,
   onChange,
+  isDisabled,
 }: {
   readonly copy: MetalHoldingFormCopy;
   readonly value: "GOLD" | "SILVER";
   readonly onChange: MetalHoldingFormProps["onChange"];
+  readonly isDisabled: boolean;
 }): React.JSX.Element {
   return (
-    <View testID="metal-holding-metal-field">
+    <View
+      testID="metal-holding-metal-field"
+      accessibilityState={{ disabled: isDisabled }}
+    >
       <Text className="mb-2 text-sm font-semibold text-text-secondary">
         {copy.metal}
       </Text>
@@ -498,6 +663,7 @@ function MetalSelector({
               testID={`metal-holding-metal-option-${metal}`}
               accessibilityRole="radio"
               accessibilityState={{ checked: isSelected }}
+              disabled={isDisabled}
               onPress={() => onChange("metal", metal)}
               className={`min-h-12 flex-1 flex-row items-center justify-center gap-2 ${
                 isSelected
