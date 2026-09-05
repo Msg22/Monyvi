@@ -66,11 +66,12 @@ required tests/verification before acceptance.
 
 Sensitive-data exposure, unauthorized scope access/write, or another security
 boundary breach immediately aborts the lane and revokes write eligibility for
-that exact model/task/profile pending incident review and requalification. A
-user waiver cannot waive or override this revocation rule. When the canary
-exception and all safeguards are recorded, lack of a canary alone must not block
-the authorized real write. Every real result still requires independent Monyvi
-verification; model confidence is not evidence.
+the compromised provider/model/runtime/tool/permission-profile combination
+across all tasks pending incident review and requalification. Starting a new
+task must not bypass that revocation. A user waiver cannot waive or override
+this rule. When the canary exception and all safeguards are recorded, lack of a
+canary alone must not block the authorized real write. Every real result still
+requires independent Monyvi verification; model confidence is not evidence.
 
 ## Prepare And Dispatch
 
@@ -82,7 +83,9 @@ Required dispatch contract:
 
 1. Verify OpenCode runtime, authentication, exact model, loopback server health,
    explicit permission profile, positive evidence for every material capability,
-   and the current user-approved data-sharing boundary.
+   and the current user-approved data-sharing boundary. Confirm the exact
+   provider/model/runtime/tool/permission-profile combination is currently
+   write-eligible and not under incident revocation before any write dispatch.
 2. Allocate one complete task/session/worktree/owner with immutable base SHA,
    exclusive worktree/branch responsibility, and non-overlapping artifact/file
    ownership. One writer owns each artifact per wave. Stop on ownership overlap.
@@ -103,10 +106,10 @@ Required dispatch contract:
    remains safe and recoverable.
 8. On secrets/private-data exposure, unauthorized scope access/write, or another
    security boundary breach, abort immediately and revoke write eligibility for
-   the exact model/task/profile pending incident review and requalification.
-   Otherwise, correct ordinary rule drift and allow up to three materially
-   identical rule failures before marking that model/task lane failed and
-   reassigning.
+   the compromised provider/model/runtime/tool/permission-profile combination
+   across all tasks pending incident review and requalification. Otherwise,
+   correct ordinary rule drift and allow up to three materially identical rule
+   failures before marking that model/task lane failed and reassigning.
 9. Inspect the complete diff and partial work before accepting or reassigning.
    Reject stale-base, ownership-overlap, or out-of-scope changes; never land
    unverified output.
@@ -152,8 +155,11 @@ Completion requires:
   raw unnecessary logs, or private data;
 - lead accepts or rejects every changed path and retains merge control.
 
-After every accepted task, always tear down the model session, injected
-credentials, and live OpenCode server. These are never reusable-lane resources.
-Only non-sensitive resources such as the isolated worktree, adapter
-configuration, and sanitized task metadata may remain for reuse, and only with a
+At every terminal task outcome—accepted, rejected, cancelled, failed, timed-out,
+or security-aborted—always terminate the model session, injected credentials,
+and live loopback OpenCode server. These runtime resources are never retained for
+reuse. For a security-aborted task, retain only the sanitized incident evidence
+needed for incident review and requalification. For other terminal outcomes,
+only non-sensitive resources such as the isolated worktree, adapter
+configuration, and sanitized task metadata may remain reusable, and only with a
 recorded owner, expiration, and mandatory cleanup deadline.
