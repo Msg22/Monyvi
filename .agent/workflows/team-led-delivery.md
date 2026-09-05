@@ -74,17 +74,23 @@ Lead is coordination-only:
 1. establish source of truth, scope, risks, and gates;
 2. form smallest complete roster and dependency graph;
 3. assign bounded ownership and acceptance criteria;
-4. monitor, resolve overlaps, and reassign ready work;
+4. monitor, mentor, resolve overlaps, and reassign ready work;
 5. review evidence and specialist findings;
 6. coordinate integration, verification, and handoff.
 
 Lead does not implement feature code, tests, specs, copy, mockups, migrations,
 review fixes, or conflict patches. Workers own repository edits. Lead may do
-read-only inspection and maintain conversation plan, task state, ledgers, and
-final synthesis. If no worker slot exists, pause rather than implement.
+read-only inspection, maintain conversation plan, task state, ledgers, and final
+synthesis, and perform trusted Git integration for OpenCode output when that Git
+mutation is explicitly authorized. If no eligible worker lane exists, pause
+rather than implement.
 
-Assign integration conflicts to relevant worker. Commits, pushes, PRs, merges,
-and issue mutations remain subject to Section 2.
+Assign implementation conflicts to the relevant worker. Lead retains the task
+graph, product/business/security/architecture decisions, independent
+verification, cross-lane conflict integration, final PR review, and merge
+authority. Commits, pushes, PRs, merges, and issue mutations remain subject to
+Section 2; OpenCode Git integration is performed by the lead or another trusted
+native integration owner, never by OpenCode itself.
 
 ## 4. Preflight
 
@@ -108,10 +114,20 @@ For parallel implementation:
 
 - read-only workers may share checkout;
 - concurrent writers use distinct sibling worktrees/branches with declared base,
-  dependency, and non-overlapping ownership;
+  dependency, exclusive task ownership, and non-overlapping artifact/file
+  ownership;
+- one writer owns each artifact/file per wave, including shared indexes,
+  schemas, migrations, translations, specs, and generated outputs;
+- stop the affected lanes immediately if artifact/file ownership overlaps;
+- for every external writer, derive a concrete workspace-relative writable
+  file/directory allowlist from the assigned exclusive artifact set. Use exact
+  files and minimum owned directory prefixes needed for cohesive in-boundary
+  edits or new files; never grant arbitrary repository-root writes;
 - link main `node_modules` in secondary worktrees; never install another tree;
-- one worker owns shared indexes, schemas, migrations, translations, specs, and
-  generated outputs per wave;
+- assign one external writer one complete task and one isolated worktree/branch;
+  avoid fragile per-file micromanagement inside that worker's exclusively owned
+  artifact set, but never use this flexibility to permit concurrent writers on
+  the same artifact or writes outside the enforced allowlist;
 - each PR is an independently mergeable slice, not automatically one per agent.
 
 ## 5. Form The Team
@@ -174,73 +190,196 @@ when user explicitly requests one.
 
 ### Execution Pools
 
-Select execution pool by required context, risk, capability, and cost. Verify
-that runtime, authentication, model, tools, and required permissions are
-available before dispatch; a configured name does not prove availability.
+The approved execution pools are:
 
-| Pool                     | Best fit                                                                                     | Context and ownership boundary                                                 |
-| ------------------------ | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Native Codex subagent    | Local implementation, tests, specialist review, and unpublished worktree state               | Instructional ownership; narrow fork/worktree when actual separation is needed |
-| Normal ChatGPT           | Heavy reasoning and bounded GitHub analysis, issues, branches, or PRs                        | Remote repository state only; cannot inspect unpublished local or staged files |
-| OpenCode `glm-5.3-flash` | Bounded visual inspection, test work, and mechanical implementation                          | One isolated task/session/worktree/path allowlist                              |
-| OpenCode `qwen3.8-flash` | Inventory, documentation, localization audit, test enumeration, and low-risk mechanical work | One isolated task/session/worktree/path allowlist                              |
+- Native Codex subagents;
+- Normal ChatGPT;
+- OpenCode `bai/glm-5.3-flash`;
+- OpenCode `bai/qwen3.8-flash`.
 
-Use lowest-cost pool, model, and effort that safely covers ambiguity and blast
-radius. For OpenCode, verify current provider-prefixed model identifier rather
-than inferring it from display name. Neither OpenCode model may autonomously own
-financial rules, authentication, RLS, synchronization contracts, migrations,
-security decisions, or architecture decisions. Route those to trusted native
-specialists and required approval gates.
+Select the worker by required context, demonstrated capability, risk, cost, and
+current availability. Verify runtime, authentication, exact model identifier,
+tools, and required permissions before dispatch; a configured name does not
+prove availability.
+
+Target **at least 80% of eligible execution workload** across Normal ChatGPT,
+`bai/glm-5.3-flash`, and `bai/qwen3.8-flash` combined. Eligible workload
+includes substantial and large tasks when the worker has the required context,
+tools, permissions, and capability evidence. This is an allocation target, not a
+delegation mandate: never route final authority, unpublished-local-dependent
+work, or a task a worker demonstrably cannot perform merely to hit the target.
+Track the target over meaningful execution work rather than file count or number
+of dispatches.
+
+Do not statically confine GLM or Qwen to narrow task categories. Route
+adaptively and update capability evidence from actual results. Every assignment
+requires **positive capability evidence** for each material capability the task
+will use. Capability evidence is bound to the exact provider-prefixed model ID,
+**immutable provider model revision/build**, OpenCode/runtime version, tool
+surface/version set, and every permission/environment dimension material to that
+capability. A moving display alias is not sufficient identity, and the absence
+of a recorded unsupported capability is not evidence of support.
+
+If the immutable model revision/build changes, invalidate all capability
+evidence for the prior revision. If another bound runtime/tool/permission or
+environment dimension changes, invalidate every capability record that could be
+affected. Negative evidence is revision-bound too. The recorded GLM image-input
+limitation applies only to the immutable revision/build that produced it; until
+the active revision has positive image-input evidence, do not assign
+image-dependent work.
+
+External models may implement already-approved financial, schema, sync,
+security, architecture, authentication/RLS, or migration work when the task
+contract contains the authoritative decision and an independent appropriate
+specialist verifies the result. They must never invent, choose, approve, or
+silently change those decisions.
+
+Normal ChatGPT may own complex remote coding, tests, documentation, GitHub
+issues, branches, and PRs when explicit user authorization covers the mutation,
+the immutable remote base and complete context are supplied, and the task has no
+unpublished local dependency. Lead monitors through the task/thread and PR diff,
+independently verifies the result, and retains merge control. Never ask Normal
+ChatGPT to review or change local work that has not been pushed.
 
 Before first dispatch to each external provider/model pool in a task, obtain
-explicit user opt-in and record approved data-sharing boundary. Authorization
-may cover later bounded dispatches only while provider, model pool, data class,
-and purpose remain inside that recorded boundary. Auto-triggering team-led
-workflow never grants third-party disclosure.
+explicit user opt-in and record the approved data-sharing boundary.
+Authorization may cover later bounded dispatches only while provider, model
+pool, data class, and purpose remain inside that recorded boundary.
+Auto-triggering team-led workflow never grants third-party disclosure.
 
-Normal ChatGPT may create issues, branches, or PRs only when its current
-connector/runtime proves that capability and Section 2 authorizes the mutation.
-Reuse one persistent chat for related follow-ups. Every dispatch states
-repository, immutable base SHA, target branch or PR, source-of-truth links,
-scope, forbidden actions, and expected evidence. Never ask it to review or
-change local work that has not been pushed.
+Before any OpenCode dispatch, record the provider/model ID, immutable model
+revision/build, OpenCode/runtime, and tool surface/version set. Refuse dispatch
+when the implicated provider/model revision/runtime/tool combination is under
+incident quarantine. Security quarantine initially applies across read and write
+modes and all permission profiles; a new task/profile cannot bypass it. Restore
+eligibility only after incident review and requalification. Incident review may
+narrow quarantine to a permission-profile-local cause only when evidence proves
+that narrower cause and the intended restored configuration has passed
+requalification.
+
+The disposable bounded-write canary remains the recommended default. When the
+user explicitly waives it, bind the waiver to the **exact task** plus provider,
+model ID, immutable model revision/build, OpenCode/runtime version, exact tool
+surface/version set, permission-profile identifier/hash, sandbox/network
+boundary, and writable-allowlist fingerprint. Any enforcement-relevant change
+invalidates the waiver and requires a fresh waiver or canary before more writes.
+
+A canary-waived first real write is still possible when repository-edit
+capability is the only material capability lacking positive evidence. All other
+material capabilities must already be proven. Treat the first mutation as a
+provisional checkpoint: allow one small representative edit inside the derived
+writable allowlist, pause immediately, and have the trusted native owner inspect
+paths, permission enforcement, and diff. Only an accepted checkpoint becomes
+positive edit-capability evidence for that immutable configuration and permits
+the same task/session to continue. It does not supply evidence for unrelated
+capabilities.
 
 External lanes do not consume native subagent slots. They still consume lead
-review and integration capacity. Cap total concurrency by ready independent work
-with safe ownership, not available runtimes. Use one task, session, worktree,
-owner, and non-overlapping path allowlist per external lane. Lead retains
-control of integration and merges under Section 2. OpenCode never performs Git
-or GitHub mutations; trusted native workers perform them. Normal ChatGPT may
-perform only the explicitly authorized remote mutations in the preceding
-paragraph, after which the lead independently inspects its remote diff and
-retains merge control. Sensitive decisions always return through the applicable
-user or authoritative-documentation approval gate and cannot be delegated.
+review and integration capacity. Cap concurrency by ready independent work with
+safe ownership, not available runtimes. One external worker owns one complete
+task, one persistent session or thread, and one exclusive isolated
+worktree/branch responsibility. Artifact/file ownership across concurrent
+writers remains non-overlapping, with one writer per artifact per wave. Enforce
+the concrete writable allowlist derived from those exclusive artifacts; do not
+force brittle per-file micromanagement inside that boundary, but do not permit
+arbitrary repository writes. Stop on ownership or writable-boundary overlap.
+
+Prefer a dedicated loopback OpenCode server per task with task-scoped
+credentials. If a shared loopback server is necessary, record its server ID and
+active task/session registry. Terminal teardown must remove the terminal task's
+session and task-scoped credentials immediately without stopping a server still
+needed by another recorded active session. Shut a shared server after its final
+active session terminates. If the shared server/runtime is implicated in a
+security incident, abort affected sessions and stop it immediately.
+
+Lead retains control of integration and merges under Section 2. OpenCode never
+commits, pushes, opens or merges PRs, or performs other Git/GitHub mutations; a
+trusted native integration owner performs authorized Git work. Normal ChatGPT
+may perform explicitly authorized remote GitHub mutations.
 
 When OpenCode is selected, load
 [`$opencode-team-delegation`](../../.agents/skills/opencode-team-delegation/SKILL.md)
-and follow its pilot, security, dispatch, monitoring, and evidence contract.
-Treat third-party delegation packages as references only unless separately
-reviewed and approved; they are not workflow dependencies.
+and follow its qualification, security, dispatch, monitoring, and evidence
+contract. Treat third-party delegation packages as references only unless
+separately reviewed and approved; they are not workflow dependencies.
+
+### External Worker Checkpoints And Learning
+
+Mentor external workers through persistent-session checkpoints rather than
+restarting on every miss. These are pause gates when specified below, not merely
+asynchronous status reports:
+
+1. The worker pauses after plan/assumptions and intended scope. The lead must
+   explicitly accept this checkpoint before implementation edits begin.
+2. Where TDD or debugging applies, the worker presents failing-test or
+   reproduction evidence, pauses, and waits for explicit lead acceptance before
+   production implementation begins.
+3. When a provisional first-write checkpoint is required, the worker pauses
+   immediately after its one representative allowlisted edit. The trusted native
+   owner must accept the changed paths, permission enforcement, and diff before
+   any additional edit.
+4. When the task brief requires an interim diff/risk checkpoint, the worker
+   pauses there and waits for explicit lead acceptance before continuing.
+5. Verification evidence is inspected before acceptance.
+6. The final full diff and completion report are inspected before acceptance.
+
+Observe structured status, messages, tool results, and diffs. Do not claim
+access to or request hidden chain-of-thought. Send bounded corrections in the
+same session/thread when the lane remains safe and recoverable.
+
+Sensitive-data exposure, unauthorized scope access/write, an out-of-allowlist
+write attempt, or another security boundary breach immediately aborts the lane
+and triggers the cross-profile quarantine above. User-authorized canary waiver
+cannot waive or override quarantine.
+
+For ordinary rule drift or a materially wrong but safe direction, correct
+explicitly and continue the same session when recoverable. After three
+materially identical rule failures on the same model/task lane, mark that lane
+failed and reassign. One ordinary failed task does not permanently disqualify a
+model from unrelated capability; incident quarantine is the explicit exception.
+
+Timeouts guide task size, checkpoint frequency, and timeout budget; they do not
+alone permanently disqualify a model. A recoverable timed-out observation should
+continue in the same session after status is rechecked.
 
 ## 7. Ownership Brief And Context
 
 Every task brief states:
 
 - persona, objective, and reason;
-- exact deliverable and file/decision ownership;
-- source of truth, inputs, dependencies, and applicable workflows;
+- complete task/worktree responsibility, source of truth, and protected or
+  forbidden paths/actions;
+- exclusive artifact/file ownership for the wave and any shared-artifact owner;
+- concrete writable file/directory allowlist and fingerprint derived from those
+  artifacts;
+- provider/model ID, immutable model revision/build, OpenCode/runtime version,
+  exact tool surface/version set, and permission-profile identifier/hash when an
+  OpenCode lane is used;
+- inputs, dependencies, and applicable workflows;
+- positive evidence for every material capability used by the task, plus any
+  provisional first-write status;
+- exact canary/waiver identity and invalidation conditions when applicable;
+- loopback server ID and dedicated/shared mode when applicable;
 - acceptance criteria, evidence, and verification;
-- exclusions, unauthorized actions, escalation/stop conditions;
-- expected completion report.
+- external-provider data-sharing boundary when applicable;
+- explicit checkpoint pause gates;
+- escalation/stop conditions and expected completion report.
 
 For write work include:
 
-> You are not alone in the codebase. Own only assigned files/responsibility. Do
-> not revert others' edits. Re-read shared files before editing and adapt to
-> concurrent changes. Stop and report ownership overlap.
+> You are not alone in the codebase. Own the complete assigned task inside your
+> isolated worktree/branch and only the artifacts assigned to you for this wave.
+> Make whatever cohesive in-scope edits those exclusively owned artifacts and
+> the derived writable allowlist genuinely permit, but do not cross protected
+> paths, another owner's responsibility, another writer's artifact/file
+> ownership, or the writable boundary. Stop and report any overlap or
+> out-of-boundary need.
 
-One artifact has one write owner per wave; reviewers stay read-only. Briefs must
-be self-contained. Use smallest inherited context that preserves correctness:
+One task/worktree has one write owner at a time, and one writer owns each
+artifact/file per wave. Reviewers stay read-only. Complete-task ownership never
+permits overlapping concurrent edits to the same artifact or unbounded
+repository writes. Briefs must be self-contained. Use smallest inherited context
+that preserves correctness:
 
 - `fork_turns: "none"` for isolated deterministic inventory/check work when
   brief contains all required context;
@@ -256,15 +395,19 @@ free worker capacity = maximum concurrency - currently active agents
 new assignments = min(free worker capacity, ready independent items, ownership-safe items)
 ```
 
-With four slots and only lead active, maximum is three workers. This is
-capacity, not target. Default large discovery uses three read-only lanes.
-Default implementation uses two isolated write lanes plus one read-only
-QA/review lane. Use three writers only when files, commands, state, and merge
-dependencies are fully independent.
+Native slot capacity is not the execution target because external lanes do not
+consume native subagent slots. Fill only ready ownership-safe work, use external
+lanes aggressively enough to pursue the Section 6 allocation target, and keep
+independent review capacity for high-risk work. Multiple writers are allowed
+only when task/worktree ownership, artifact/file ownership, writable boundaries,
+state, and merge dependencies are genuinely independent. One writer owns each
+artifact per wave; stop affected lanes immediately when overlap is discovered.
 
-Reuse completed worker through follow-up when context and skills fit next task.
-Spawn replacement only for material role change; retire finished worker when
-slot needed. Never start downstream work merely because slot is free.
+Reuse a completed worker through follow-up when context and skills fit the next
+task. Continue a recoverable external task in its same persistent session. Spawn
+replacement only for material role change or failed lane; retire finished native
+worker when slot is needed. Never start downstream work merely because capacity
+is free.
 
 Dependency waves:
 
@@ -358,6 +501,13 @@ Then implement minimum green change and refactor while green. QA owns
 plan/coverage audit; implementer owns production code; lead verifies red/green
 evidence only.
 
+For external workers, the Section 6 pause gates also apply: plan/assumptions
+must receive explicit lead acceptance before implementation edits, applicable
+Red/reproduction evidence must receive explicit lead acceptance before
+production implementation, a required provisional first-write checkpoint must be
+accepted before additional edits, and a task-required interim diff/risk
+checkpoint requires explicit lead acceptance before work continues.
+
 ### Review Gate
 
 Implementation owner cannot self-approve high-risk work. Review in order:
@@ -374,6 +524,10 @@ duplicates and returns fixes to owner. Product/business/schema/sync findings
 return to user gate. Deferred valid work becomes deduplicated follow-up issue
 only when GitHub mutation is authorized.
 
+External implementation of approved financial, schema, sync, security,
+architecture, authentication/RLS, or migration work requires an independent
+appropriate specialist before acceptance.
+
 ### Handoff Gate
 
 Focused tests, affected Nx targets, lint/type checks, integration tests, honest
@@ -386,16 +540,53 @@ Lead updates user at kickoff, wave transition, blocker, review, and completion.
 During active tool work, update at least every 60 seconds. Workers report
 milestones, not command narration.
 
+For OpenCode workers, record provider/model ID, immutable model revision/build,
+OpenCode/runtime version, exact tool surface/version set, immutable base,
+worktree/branch, task scope, artifact/file ownership, derived writable allowlist
+and fingerprint, positive material-capability evidence, provisional first-write
+status when used, exact canary/waiver binding, loopback server ID/mode,
+checkpoint acceptances, corrections, final result, independent verification,
+quarantine/eligibility state, and terminal status. Retain operational evidence
+only; never retain hidden reasoning, secrets, raw unnecessary logs, or private
+data.
+
+At every terminal OpenCode task outcome—accepted, rejected, cancelled, failed,
+timed-out, or security-aborted—terminate that task's model session and
+**task-scoped** injected credentials immediately. For a dedicated per-task
+loopback server, terminate the server immediately too. For an intentionally
+shared server, remove the terminal task/session and its credentials immediately,
+update the active-session registry, and keep the server only while another
+recorded active task/session still needs it; shut it down after the final active
+session terminates. If the shared server/runtime is implicated in a security
+incident, abort every affected session and terminate that server immediately.
+
+For a security-aborted task, retain only sanitized incident evidence needed for
+incident review and requalification. For other terminal outcomes, only
+non-sensitive resources such as the isolated worktree, adapter configuration,
+and sanitized task metadata may remain reusable, with a recorded owner,
+expiration, and mandatory cleanup deadline.
+
 Worker report includes result, changed files/artifacts, tests and evidence,
 assumptions, blockers, overlap/integration risks, and recommended next ready
 task. At each wave end, lead checks evidence, ownership, tests, dependencies,
 and ledgers before assigning more work.
 
+Sensitive-data exposure, unauthorized scope access/write, an out-of-allowlist
+write attempt, or another security boundary breach immediately aborts the
+affected OpenCode lane and quarantines the implicated provider/model
+revision/runtime/tool combination across read/write modes and all permission
+profiles pending incident review and requalification. A new task, session,
+worktree, or profile cannot bypass quarantine. Incident review may narrow the
+quarantine only after proving a profile-local cause and successful
+requalification for the intended restored configuration. User waiver cannot
+waive quarantine.
+
 Pause affected lane for source conflict, material unresolved decision, missing
-gate, ownership overlap, incomplete dependency, unsafe worktree, unexplained
-test failure, design drift, missing environment, or any action outside Section 2
-authorization. Continue safe independent lanes. Mark blocked only after
-exhausting safe in-scope evidence and alternatives.
+gate, ownership overlap, invalidated waiver/evidence, writable-boundary change,
+incomplete dependency, unsafe worktree, unexplained test failure, design drift,
+missing environment, or any action outside Section 2 authorization. Continue
+safe independent lanes. Mark blocked only after exhausting safe in-scope
+evidence and alternatives.
 
 Lead declares completion only when requested outcome matches source of truth,
 atomic ledger items have dispositions, reviews have no blockers, validation is
