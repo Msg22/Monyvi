@@ -289,8 +289,26 @@ describe("US3 holding experience", () => {
       />
     );
 
+    expect(screen.queryByText("History")).toBeNull();
+    expect(
+      screen.getByText("Sales and holdings no longer in your possession.")
+    ).toBeTruthy();
+    expect(screen.getByText("Gold · 21K · 875 · Jewelry")).toBeTruthy();
+    expect(screen.getByText("22 Aug 2026")).toBeTruthy();
+    expect(screen.getByText("21K bracelet")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:text-text-primary-dark")
+    );
+    expect(screen.getByTestId("metal-history-item-sold")).toHaveProp(
+      "className",
+      expect.not.stringContaining("rounded-2xl")
+    );
+    expect(screen.getByTestId("metal-history-item-sold")).toHaveProp(
+      "className",
+      expect.stringContaining("border-b")
+    );
     expect(screen.getByText("Silver keepsake")).toBeTruthy();
-    fireEvent.press(screen.getByLabelText("Sold filter"));
+    fireEvent.press(screen.getByLabelText("Sold"));
     expect(onFilterChange).toHaveBeenCalledWith("sold");
     fireEvent.press(screen.getByText("21K bracelet"));
     expect(onOpenHolding).toHaveBeenCalledWith("sold-bracelet");
