@@ -15,6 +15,9 @@ const metroIgnoredPaths = [
   path.resolve(projectRoot, ".gradle"),
   path.resolve(projectRoot, "build"),
   path.resolve(projectRoot, ".kotlin"),
+  ...(realWorkspaceNodeModules === workspaceNodeModules
+    ? []
+    : [workspaceNodeModules]),
 ];
 
 function escapeRegExp(value) {
@@ -31,18 +34,28 @@ function pathToBlockListPattern(filePath) {
   return new RegExp(`${pattern}(?:[/\\\\].*)?$`);
 }
 
+function replaceWorkspaceDependencyRoot(folder) {
+  return folder === workspaceNodeModules ? realWorkspaceNodeModules : folder;
+}
+
+function ensureUniquePath(paths, requiredPath) {
+  return [
+    ...new Set([...paths.map(replaceWorkspaceDependencyRoot), requiredPath]),
+  ];
+}
+
 const config = getSentryExpoConfig(projectRoot);
 
-// 1. Explicitly APPEND the real path instead of relying on .map()
-config.watchFolders = [...config.watchFolders, realWorkspaceNodeModules];
-
-// 2. Ensure Metro explicitly checks both the local and real workspace node_modules
-config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, "node_modules"),
-  realWorkspaceNodeModules,
-];
-
-// 3. Explicitly enable symlink support (crucial for junctions)
+config.watchFolders = ensureUniquePath(
+  config.watchFolders ?? [],
+  realWorkspaceNodeModules
+);
+config.resolver.nodeModulesPaths = ensureUniquePath(
+  config.resolver.nodeModulesPaths ?? [
+    path.resolve(projectRoot, "node_modules"),
+  ],
+  realWorkspaceNodeModules
+);
 config.resolver.unstable_enableSymlinks = true;
 config.resolver.unstable_enablePackageExports = true;
 
