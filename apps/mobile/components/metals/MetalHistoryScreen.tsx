@@ -109,10 +109,7 @@ function HistoryRow({
       className="flex-row items-center gap-3 border-b border-slate-200 py-4 dark:border-slate-800"
       onPress={onPress}
     >
-      <MetalHoldingRender
-        itemForm={item.itemForm}
-        metalType={item.metalType}
-      />
+      <MetalHoldingRender itemForm={item.itemForm} metalType={item.metalType} />
       <View className="min-w-0 flex-1">
         <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
           {statusLabel}
