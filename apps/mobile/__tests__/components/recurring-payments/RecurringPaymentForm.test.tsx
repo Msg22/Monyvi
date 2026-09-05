@@ -50,22 +50,32 @@ jest.mock("@react-native-community/datetimepicker", () => ({
   __esModule: true,
   default: ({
     onChange,
+    value,
   }: {
     readonly onChange: (event: { readonly type: "set" }, date: Date) => void;
+    readonly value: Date;
   }): React.JSX.Element => {
     const ReactNative =
       jest.requireActual<typeof import("react-native")>("react-native");
+    const sameDayDifferentTime = new Date(value);
+    sameDayDifferentTime.setHours(12, 0, 0, 0);
 
     return (
-      <ReactNative.Pressable
-        testID="set-recurring-payment-date-july-15"
-        onPress={() =>
-          onChange(
-            { type: "set" },
-            new Date("2026-07-15T00:00:00.000Z")
-          )
-        }
-      />
+      <>
+        <ReactNative.Pressable
+          testID="set-recurring-payment-date-july-15"
+          onPress={() =>
+            onChange(
+              { type: "set" },
+              new Date("2026-07-15T00:00:00.000Z")
+            )
+          }
+        />
+        <ReactNative.Pressable
+          testID="set-recurring-payment-date-same-day-different-time"
+          onPress={() => onChange({ type: "set" }, sameDayDifferentTime)}
+        />
+      </>
     );
   },
 }));
@@ -221,6 +231,15 @@ function renderForm(
 }
 
 describe("RecurringPaymentForm", () => {
+  beforeAll(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-06-01T12:00:00.000Z"));
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockScrollTo.mockClear();
@@ -337,6 +356,56 @@ describe("RecurringPaymentForm", () => {
     fireEvent.press(screen.getByTestId("select-weekly-frequency"));
 
     expect(screen.getByTestId("recurring-payment-summary-due-value")).toHaveTextContent("Jul 8, 2026");
+  });
+
+  it("treats a same-day Due payment time edit as unchanged in the summary", () => {
+    renderForm({
+      mode: "edit",
+      status: "ACTIVE",
+      dueDate: new Date("2026-07-01T00:00:00.000Z"),
+      initialValues: {
+        ...initialValues,
+        startDate: new Date("2026-06-01T08:00:00.000Z"),
+      },
+    });
+
+    fireEvent.press(screen.getByTestId("recurring-payment-start-date-row"));
+    fireEvent.press(
+      screen.getByTestId(
+        "set-recurring-payment-date-same-day-different-time"
+      )
+    );
+
+    expect(
+      screen.getByTestId("recurring-payment-summary-due-value")
+    ).toHaveTextContent("Jul 1, 2026");
+  });
+
+  it("does not enable reactivation for a same-day Due payment time edit", () => {
+    renderForm({
+      mode: "edit",
+      status: "COMPLETED",
+      dueDate: new Date("2026-07-01T00:00:00.000Z"),
+      initialValues: {
+        ...initialValues,
+        startDate: new Date("2026-06-01T08:00:00.000Z"),
+        endDate: new Date("2026-07-01T00:00:00.000Z"),
+      },
+    });
+
+    fireEvent.press(screen.getByTestId("recurring-payment-start-date-row"));
+    fireEvent.press(
+      screen.getByTestId(
+        "set-recurring-payment-date-same-day-different-time"
+      )
+    );
+
+    expect(
+      screen.getByTestId("recurring-payment-reactivate-after-saving")
+    ).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: true })
+    );
   });
 
   it("keeps the final paid date in the summary when frequency changes on a completed bounded payment", () => {
@@ -951,6 +1020,22 @@ describe("RecurringPaymentForm", () => {
       screen.getByTestId("recurring-payment-summary-amount-value")
     ).toHaveTextContent("-1,234.56 EGP");
   });
+
+  it.each(["1e3", "12abc"])(
+    "does not partially parse invalid summary amount %s",
+    (amount) => {
+      renderForm({
+        initialValues: {
+          ...initialValues,
+          amount,
+        },
+      });
+
+      expect(
+        screen.getByTestId("recurring-payment-summary-amount-value")
+      ).toHaveTextContent("0 EGP");
+    }
+  );
 
   it("uses shared currency formatting for prefixed currencies in the summary", () => {
     renderForm({

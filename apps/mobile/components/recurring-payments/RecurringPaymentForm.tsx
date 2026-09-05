@@ -5,13 +5,14 @@ import {
   getFrequencyLabel,
 } from "@/components/modals/FrequencyPickerModal";
 import { RecurringPaymentEditActions } from "./RecurringPaymentEditActions";
+import { AmountField, TypeTabs } from "./RecurringPaymentFormFields";
 import { RecurringPaymentSummaryCard } from "./RecurringPaymentSummaryCard";
 import { Divider, ErrorText, FormRow } from "./RecurringPaymentFormRows";
 import { TextField } from "@/components/ui/TextField";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useFormScroll } from "@/hooks/useFormScroll";
-import { calculateNextDueDate, formatDate } from "@/utils/dateHelpers";
+import { formatDate } from "@/utils/dateHelpers";
 import { validateRecurringPaymentForm } from "@/validation/recurring-payment-validation";
 import type {
   Account,
@@ -23,9 +24,10 @@ import type {
   TransactionType,
 } from "@monyvi/db";
 import {
-  formatAmountInput,
+  getNextRecurringOccurrenceAfter,
   isOnOrBeforeDay,
-  parseAmountInput,
+  isSameLocalCalendarDay,
+  MAX_TRANSACTION_AMOUNT,
 } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
@@ -43,7 +45,6 @@ import {
   Platform,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -57,6 +58,7 @@ export interface RecurringPaymentFormValues {
   readonly categoryId: string | null;
   readonly frequency: RecurringFrequency;
   readonly startDate: Date;
+  readonly expectedNextDueDate?: Date;
   readonly endDate: Date | null;
   readonly reactivateAfterSaving: boolean;
   readonly action: RecurringAction;
@@ -76,6 +78,7 @@ interface RecurringPaymentFormProps {
   readonly submitLabel: string;
   readonly status?: RecurringStatus;
   readonly dueDate?: Date;
+  readonly recurrenceAnchorDate?: Date;
   readonly onSubmit: (values: RecurringPaymentFormValues) => SubmitResult;
   readonly onPauseToggle?: () => Promise<void>;
   readonly onDelete?: () => Promise<void>;
@@ -83,17 +86,14 @@ interface RecurringPaymentFormProps {
 export interface RecurringPaymentFormHandle {
   submit: () => void;
 }
-type FormErrors = Partial<Record<"name" | "amount" | "accountId" | "categoryId" | "endDate", string>>;
+type FormErrors = Partial<
+  Record<
+    "name" | "amount" | "accountId" | "categoryId" | "startDate" | "endDate",
+    string
+  >
+>;
 type FormFieldName = keyof FormErrors;
 type RecurringPaymentFormField = keyof RecurringPaymentFormValues;
-const TYPE_OPTIONS: ReadonlyArray<{
-  readonly value: TransactionType;
-  readonly labelKey: "expense" | "income";
-  readonly icon: keyof typeof Ionicons.glyphMap;
-}> = [
-  { value: "EXPENSE", labelKey: "expense", icon: "receipt-outline" },
-  { value: "INCOME", labelKey: "income", icon: "cash-outline" },
-];
 const ACTION_OPTIONS: ReadonlyArray<{
   readonly value: RecurringAction;
   readonly labelKey: string;
@@ -116,6 +116,7 @@ const ERROR_FIELD_ORDER: readonly FormFieldName[] = [
   "amount",
   "accountId",
   "categoryId",
+  "startDate",
   "endDate",
 ];
 const FORM_VALUE_FIELDS: readonly RecurringPaymentFormField[] = [
@@ -126,6 +127,7 @@ const FORM_VALUE_FIELDS: readonly RecurringPaymentFormField[] = [
   "categoryId",
   "frequency",
   "startDate",
+  "expectedNextDueDate",
   "endDate",
   "reactivateAfterSaving",
   "action",
@@ -147,6 +149,7 @@ export const RecurringPaymentForm = React.forwardRef<
     submitLabel,
     status = "ACTIVE",
     dueDate,
+    recurrenceAnchorDate,
     onSubmit,
     onPauseToggle,
     onDelete,
@@ -179,6 +182,7 @@ export const RecurringPaymentForm = React.forwardRef<
   const amountFieldRef = getFieldRef("amount");
   const accountFieldRef = getFieldRef("accountId");
   const categoryFieldRef = getFieldRef("categoryId");
+  const startDateFieldRef = getFieldRef("startDate");
   const endDateFieldRef = getFieldRef("endDate");
   const initialValuesKey = useMemo(
     () =>
@@ -190,6 +194,7 @@ export const RecurringPaymentForm = React.forwardRef<
         initialValues.categoryId ?? "",
         initialValues.frequency,
         initialValues.startDate.getTime(),
+        initialValues.expectedNextDueDate?.getTime() ?? "",
         initialValues.endDate?.getTime() ?? "",
         initialValues.reactivateAfterSaving,
         initialValues.action,
@@ -204,6 +209,7 @@ export const RecurringPaymentForm = React.forwardRef<
       initialValues.name,
       initialValues.notes,
       initialValues.startDate,
+      initialValues.expectedNextDueDate,
       initialValues.endDate,
       initialValues.reactivateAfterSaving,
       initialValues.type,
@@ -231,12 +237,23 @@ export const RecurringPaymentForm = React.forwardRef<
       categories.find((category) => category.id === form.categoryId) ?? null,
     [categories, form.categoryId]
   );
+  const didDuePaymentChange = !isSameLocalCalendarDay(
+    initialValues.startDate,
+    form.startDate
+  );
+  const didFrequencyChange = initialValues.frequency !== form.frequency;
+  const effectiveRecurrenceAnchorDate = didDuePaymentChange
+    ? form.startDate
+    : didFrequencyChange
+      ? (dueDate ?? form.startDate)
+      : (recurrenceAnchorDate ?? initialValues.startDate);
   const hasScheduleChanges =
-    initialValues.startDate.getTime() !== form.startDate.getTime() ||
-    initialValues.frequency !== form.frequency ||
-    initialValues.endDate?.getTime() !== form.endDate?.getTime();
+    didDuePaymentChange ||
+    didFrequencyChange ||
+    !areSameOptionalLocalCalendarDays(initialValues.endDate, form.endDate);
   const displayDueDate = getDisplayDueDate({
     dueDate,
+    recurrenceAnchorDate: effectiveRecurrenceAnchorDate,
     initialValues,
     form,
     hasScheduleChanges,
@@ -245,11 +262,18 @@ export const RecurringPaymentForm = React.forwardRef<
   const startDateMinimumDate = getStartDateMinimumDate(mode, form.startDate);
   const hasNoFurtherEligibleRecurrence = hasNoFurtherEligiblePayment(
     form.startDate,
+    effectiveRecurrenceAnchorDate,
     form.frequency,
     form.endDate
   );
-  const didDuePaymentChange = initialValues.startDate.getTime() !== form.startDate.getTime();
-  const reactivationDueDate = didDuePaymentChange ? form.startDate : getReactivationDueDate(dueDate, initialValues.endDate, form.frequency);
+  const reactivationDueDate = didDuePaymentChange
+    ? form.startDate
+    : getReactivationDueDate(
+        dueDate,
+        effectiveRecurrenceAnchorDate,
+        initialValues.endDate,
+        form.frequency
+      );
   const isReactivationAvailable =
     reactivationDueDate !== null &&
     (form.endDate === null ||
@@ -284,9 +308,16 @@ export const RecurringPaymentForm = React.forwardRef<
       value: RecurringPaymentFormValues[K]
     ): void => {
       dirtyFieldsRef.current = new Set([...dirtyFieldsRef.current, field]);
+      if (field === "startDate") {
+        dirtyFieldsRef.current.add("expectedNextDueDate");
+      }
       setForm((prev) => ({ ...prev, [field]: value }));
       if (field === "startDate") {
-        setErrors((prev) => ({ ...prev, endDate: undefined }));
+        setErrors((prev) => ({
+          ...prev,
+          startDate: undefined,
+          endDate: undefined,
+        }));
         return;
       }
       if (field in errors) {
@@ -303,15 +334,33 @@ export const RecurringPaymentForm = React.forwardRef<
   const handleSubmit = useCallback(async (): Promise<void> => {
     if (isSubmitting || isSubmitInFlightRef.current) return;
 
-    const result = validateRecurringPaymentForm({
-      name: form.name.trim(),
-      amount: form.amount,
-      accountId: form.accountId,
-      categoryId: form.categoryId,
-      startDate: form.startDate,
-      endDate: form.endDate ?? null,
-      endDateErrorMessage: t("end_date_before_due"),
-    });
+    const result = validateRecurringPaymentForm(
+      {
+        name: form.name.trim(),
+        amount: form.amount,
+        accountId: form.accountId,
+        categoryId: form.categoryId,
+        startDate: form.startDate,
+        endDate: form.endDate ?? null,
+      },
+      {
+        currency: selectedCurrency,
+        originalStartDate: mode === "edit" ? initialValues.startDate : null,
+        messages: {
+          invalidAmount: t("invalid_amount"),
+          positiveAmount: t("amount_must_be_positive"),
+          amountMaximum: t("amount_maximum_error", {
+            maximum: MAX_TRANSACTION_AMOUNT.toLocaleString("en-US"),
+          }),
+          amountPrecision: (precision) =>
+            t("amount_precision_error", { precision }),
+          invalidStartDate: t("invalid_due_payment_date"),
+          startDateRange: t("due_payment_date_range"),
+          invalidEndDate: t("invalid_end_date"),
+          endDateBeforeDue: t("end_date_before_due"),
+        },
+      }
+    );
 
     if (!result.isValid) {
       setErrors(result.errors);
@@ -326,7 +375,16 @@ export const RecurringPaymentForm = React.forwardRef<
     } finally {
       isSubmitInFlightRef.current = false;
     }
-  }, [form, isSubmitting, onSubmit, scrollToFirstError]);
+  }, [
+    form,
+    initialValues.startDate,
+    isSubmitting,
+    mode,
+    onSubmit,
+    scrollToFirstError,
+    selectedCurrency,
+    t,
+  ]);
 
   useImperativeHandle(
     ref,
@@ -478,20 +536,22 @@ export const RecurringPaymentForm = React.forwardRef<
                 iconContainerClassName="bg-nileGreen-100 dark:bg-slate-700"
               />
               <Divider index={2} />
-              <FormRow
-                testID="recurring-payment-start-date-row"
-                icon="calendar-outline"
-                label={t("start_date")}
-                value={formatDate(form.startDate, "MMM d, yyyy")}
-                description={t("due_payment_hint")}
-                onPress={() =>
-                  setDatePickerField((current) =>
-                    current === "startDate" ? null : "startDate"
-                  )
-                }
-                iconColor={palette.nileGreen[500]}
-                iconContainerClassName="bg-nileGreen-100 dark:bg-slate-700"
-              />
+              <View ref={startDateFieldRef}>
+                <FormRow
+                  testID="recurring-payment-start-date-row"
+                  icon="calendar-outline"
+                  label={t("start_date")}
+                  value={formatDate(form.startDate, "MMM d, yyyy")}
+                  description={t("due_payment_hint")}
+                  onPress={() =>
+                    setDatePickerField((current) =>
+                      current === "startDate" ? null : "startDate"
+                    )
+                  }
+                  iconColor={palette.nileGreen[500]}
+                  iconContainerClassName="bg-nileGreen-100 dark:bg-slate-700"
+                />
+              </View>
               <Divider index={3} />
               <View ref={endDateFieldRef}>
                 <FormRow
@@ -521,6 +581,9 @@ export const RecurringPaymentForm = React.forwardRef<
           {errors.accountId ? <ErrorText>{errors.accountId}</ErrorText> : null}
           {errors.categoryId ? (
             <ErrorText>{errors.categoryId}</ErrorText>
+          ) : null}
+          {errors.startDate ? (
+            <ErrorText>{errors.startDate}</ErrorText>
           ) : null}
           {hasDuePaymentAfterEndDate ? (
             <ErrorText>{t("end_date_before_due")}</ErrorText>
@@ -701,63 +764,6 @@ export const RecurringPaymentForm = React.forwardRef<
   );
 });
 
-interface AmountFieldProps {
-  readonly fieldRef: React.RefObject<View | null>;
-  readonly label: string;
-  readonly value: string;
-  readonly currency: CurrencyType;
-  readonly error?: string;
-  readonly isDark: boolean;
-  readonly onFocus: () => void;
-  readonly onChangeText: (value: string) => void;
-}
-
-function AmountField({
-  fieldRef,
-  label,
-  value,
-  currency,
-  error,
-  isDark,
-  onFocus,
-  onChangeText,
-}: AmountFieldProps): React.JSX.Element {
-  return (
-    <View
-      ref={fieldRef}
-      testID="recurring-payment-amount-field"
-      className="mb-4 w-full"
-    >
-      <Text className="input-label">{label}</Text>
-      <View
-        className={`flex-row items-center rounded-2xl border bg-white dark:bg-slate-800 ${
-          error ? "border-red-500" : "border-slate-200 dark:border-slate-700"
-        }`}
-      >
-        <Text
-          testID="recurring-payment-amount-currency-prefix"
-          className="ps-4 text-base font-bold text-nileGreen-500"
-        >
-          {currency}
-        </Text>
-        <TextInput
-          testID="recurring-payment-amount-input"
-          value={formatAmountInput(value)}
-          onChangeText={(text) => onChangeText(parseAmountInput(text))}
-          onFocus={onFocus}
-          placeholder="0.00"
-          placeholderTextColor={
-            isDark ? palette.slate[600] : palette.slate[400]
-          }
-          keyboardType="decimal-pad"
-          className="flex-1 p-4 ps-2 text-base font-semibold text-slate-900 dark:text-white"
-        />
-      </View>
-      {error ? <ErrorText>{error}</ErrorText> : null}
-    </View>
-  );
-}
-
 function getFrequencyTypeLabel(
   frequency: RecurringFrequency,
   type: TransactionType,
@@ -771,12 +777,14 @@ function getFrequencyTypeLabel(
 
 function getDisplayDueDate({
   dueDate,
+  recurrenceAnchorDate,
   initialValues,
   form,
   hasScheduleChanges,
   status,
 }: {
   readonly dueDate?: Date;
+  readonly recurrenceAnchorDate: Date;
   readonly initialValues: RecurringPaymentFormValues;
   readonly form: RecurringPaymentFormValues;
   readonly hasScheduleChanges: boolean;
@@ -801,8 +809,10 @@ function getDisplayDueDate({
     return dueDate;
   }
 
-  const didStartDateChange =
-    initialValues.startDate.getTime() !== form.startDate.getTime();
+  const didStartDateChange = !isSameLocalCalendarDay(
+    initialValues.startDate,
+    form.startDate
+  );
   const didFrequencyChange = initialValues.frequency !== form.frequency;
   const didRelaxCompletedEndDate =
     dueDate !== undefined &&
@@ -815,7 +825,11 @@ function getDisplayDueDate({
     didRelaxCompletedEndDate &&
     isOnOrBeforeDay(dueDate, initialValues.endDate)
   ) {
-    return calculateNextDueDate(dueDate, form.frequency);
+    return getNextRecurringOccurrenceAfter({
+      startDate: recurrenceAnchorDate,
+      currentOccurrence: dueDate,
+      frequency: form.frequency,
+    });
   }
   if (
     dueDate &&
@@ -827,7 +841,11 @@ function getDisplayDueDate({
       !isOnOrBeforeDay(dueDate, initialValues.endDate)
     )
   ) {
-    return calculateNextDueDate(dueDate, form.frequency);
+    return getNextRecurringOccurrenceAfter({
+      startDate: recurrenceAnchorDate,
+      currentOccurrence: dueDate,
+      frequency: form.frequency,
+    });
   }
 
   if (dueDate && status === "COMPLETED") {
@@ -844,27 +862,50 @@ function didRelaxEndDate(
   return nextEndDate === null || !isOnOrBeforeDay(nextEndDate, initialEndDate);
 }
 
+function areSameOptionalLocalCalendarDays(
+  firstDate: Date | null,
+  secondDate: Date | null
+): boolean {
+  if (firstDate === null || secondDate === null) {
+    return firstDate === secondDate;
+  }
+
+  return isSameLocalCalendarDay(firstDate, secondDate);
+}
+
 function hasNoFurtherEligiblePayment(
   duePayment: Date,
+  recurrenceAnchorDate: Date,
   frequency: RecurringFrequency,
   endDate: Date | null
 ): boolean {
-  return (
-    endDate !== null &&
-    isOnOrBeforeDay(duePayment, endDate) &&
-    !isOnOrBeforeDay(calculateNextDueDate(duePayment, frequency), endDate)
-  );
+  if (endDate === null || !isOnOrBeforeDay(duePayment, endDate)) {
+    return false;
+  }
+
+  const nextDueDate = getNextRecurringOccurrenceAfter({
+    startDate: recurrenceAnchorDate,
+    currentOccurrence: duePayment,
+    frequency,
+  });
+
+  return !isOnOrBeforeDay(nextDueDate, endDate);
 }
 
 function getReactivationDueDate(
   dueDate: Date | undefined,
+  recurrenceAnchorDate: Date,
   initialEndDate: Date | null,
   frequency: RecurringFrequency
 ): Date | null {
   if (!dueDate) return null;
 
   return initialEndDate !== null && isOnOrBeforeDay(dueDate, initialEndDate)
-    ? calculateNextDueDate(dueDate, frequency)
+    ? getNextRecurringOccurrenceAfter({
+        startDate: recurrenceAnchorDate,
+        currentOccurrence: dueDate,
+        frequency,
+      })
     : dueDate;
 }
 
@@ -906,48 +947,4 @@ function toTitleCase(value: string): string {
       return lowerWord.charAt(0).toLocaleUpperCase() + lowerWord.slice(1);
     })
     .join(" ");
-}
-
-interface TypeTabsProps {
-  readonly value: TransactionType;
-  readonly onChange: (type: TransactionType) => void;
-}
-
-function TypeTabs({ value, onChange }: TypeTabsProps): React.JSX.Element {
-  const { t } = useTranslation("transactions");
-
-  return (
-    <View testID="recurring-payment-type-tabs" className="flex-row gap-3 mb-5">
-      {TYPE_OPTIONS.map((option) => {
-        const isSelected = value === option.value;
-
-        return (
-          <TouchableOpacity
-            key={option.value}
-            className={`flex-1 h-12 rounded-full flex-row items-center justify-center border ${
-              isSelected
-                ? "bg-nileGreen-500 border-nileGreen-500"
-                : "bg-slate-25 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-            }`}
-            onPress={() => onChange(option.value)}
-          >
-            <Ionicons
-              name={option.icon}
-              size={17}
-              color={isSelected ? "white" : palette.slate[500]}
-            />
-            <Text
-              className={`ms-2 text-sm font-bold ${
-                isSelected
-                  ? "text-white"
-                  : "text-text-secondary dark:text-text-secondary-dark"
-              }`}
-            >
-              {t(option.labelKey)}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
 }

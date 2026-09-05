@@ -399,11 +399,25 @@ export default function AddTransaction(): React.ReactNode {
             categoryId: selectedCategoryId,
           };
 
-    const { isValid, errors } = validateTransactionForm(type, formData, {
-      accountRequired: t("please_select_an_account"),
-      sourceAccountRequired: t("please_select_source_account"),
-      destinationAccountRequired: t("please_select_destination_account"),
-    });
+    const { isValid, errors } = validateTransactionForm(
+      type,
+      formData,
+      {
+        amountRequired: t("amount_required"),
+        invalidAmount: t("invalid_amount"),
+        amountMustBePositive: t("amount_must_be_positive"),
+        amountMaximum: (maximum) =>
+          t("amount_maximum_error", {
+            maximum: maximum.toLocaleString("en-US"),
+          }),
+        amountPrecision: (precision) =>
+          t("amount_precision_error", { precision }),
+        accountRequired: t("please_select_an_account"),
+        sourceAccountRequired: t("please_select_source_account"),
+        destinationAccountRequired: t("please_select_destination_account"),
+      },
+      { currency: selectedAccount?.currency }
+    );
     if (!isValid) {
       setFormErrors(errors);
       return;

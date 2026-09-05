@@ -1,6 +1,6 @@
 # Monyvi Business Decisions
 
-**Status:** Active product source of truth **Last updated:** 2026-08-31
+**Status:** Active product source of truth **Last updated:** 2026-09-04
 **Scope:** Business and product rules confirmed by the current codebase and
 implementation history.
 
@@ -176,6 +176,34 @@ not in the profile row:
   auth.
 
 ## 4. Financial Domains
+
+### Financial Amount Entry
+
+Business rules:
+
+- Free-form financial amount inputs use one shared grammar owned by
+  `@monyvi/logic`; individual screens may keep different visual controls while
+  consuming the same parser, input-change resolver, precision rules, and
+  formatting behavior.
+- `.` is the only decimal separator. Commas are accepted only as correctly
+  grouped three-digit thousands separators, such as `1,234.50`, and are removed
+  from canonical form state. Comma-decimal input such as `12,5` is invalid and
+  must never be reinterpreted as `125`.
+- Scientific notation, signs, words, non-finite values, malformed grouping,
+  multiple decimal points, and partially parsed trailing content are invalid. A
+  pasted invalid value must be rejected or preserved for correction; it must not
+  be silently repaired into a different amount.
+- Controlled inputs may preserve safe intermediate typing states such as `12.`.
+  Submission still requires a complete positive finite amount.
+- Domain limits and precision are applied after grammar validation. Transactions
+  and recurring payments share the inclusive `MAX_TRANSACTION_AMOUNT` limit of
+  `1,000,000,000` in the selected account currency, without FX conversion.
+- Currency precision follows the centralized contract: two fractional digits by
+  default, three for KWD/BHD/OMR, and eight for BTC. Excess precision is rejected
+  rather than rounded.
+- The recurring-payment and transaction paths are the first consumers of this
+  contract. Existing amount-entry surfaces migrate through focused follow-up work
+  rather than duplicating or weakening the grammar.
 
 ### Accounts
 
@@ -396,6 +424,25 @@ Business rules:
 - A Due payment after End date is invalid. A schedule with one eligible Due payment
   and no later eligible recurrence is valid and explains that no further payments
   will be due.
+- A newly created recurring payment accepts a Due payment from today through
+  the same local-calendar date one year ahead, inclusive. Calendar-day comparison
+  is authoritative; elapsed milliseconds, time of day, DST, and leap-year
+  boundaries must not change eligibility.
+- Editing may preserve an existing past Due payment or a legacy Due payment more
+  than one year ahead only while that local-calendar date remains unchanged. A
+  newly selected edit date must satisfy the current create range, and one invalid
+  historical date cannot be changed to another invalid historical date.
+- Recurring create and update services independently reject invalid amounts,
+  excess currency precision, non-finite values, invalid dates, and out-of-range
+  newly selected dates before any database write. Persistence never repairs an
+  invalid amount with `Math.abs` or silently rounds it.
+- When a historical transaction is saved and marked recurring, the transaction
+  keeps its historical date. The recurring template starts at the first
+  frequency-aligned occurrence on or after today, so no historical template Due
+  payment is created.
+- Unexpected recurring-payment failures are logged with the original error and
+  shown to the user through generic localized copy; internal error messages are
+  never placed directly in a toast.
 
 ### Debts
 

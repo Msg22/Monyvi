@@ -1,7 +1,9 @@
-import { TransactionType } from "@monyvi/db";
+import type { CurrencyType, TransactionType } from "@monyvi/db";
 import {
+  getCurrencyPrecision,
   MAX_TRANSACTION_AMOUNT,
-  parsePositiveFiniteAmountInput,
+  parseStrictAmountInput,
+  type StrictAmountParseFailureReason,
 } from "@monyvi/logic";
 import { z } from "zod";
 
@@ -22,22 +24,32 @@ export interface TransferFormData {
 }
 
 export interface TransactionValidationMessages {
+  readonly amountRequired: string;
+  readonly invalidAmount: string;
+  readonly amountMustBePositive: string;
+  readonly amountMaximum: (maximum: number) => string;
+  readonly amountPrecision: (precision: number) => string;
   readonly accountRequired: string;
   readonly sourceAccountRequired: string;
   readonly destinationAccountRequired: string;
 }
 
+export interface TransactionValidationOptions {
+  readonly currency?: CurrencyType;
+}
+
 const defaultValidationMessages: TransactionValidationMessages = {
+  amountRequired: "Amount is required",
+  invalidAmount: "Please enter a valid amount",
+  amountMustBePositive: "Amount must be greater than 0",
+  amountMaximum: (maximum) =>
+    `Amount must be at most ${maximum.toLocaleString("en-US")}`,
+  amountPrecision: (precision) =>
+    `Amount must have at most ${precision} decimal places`,
   accountRequired: "Account is required",
   sourceAccountRequired: "Source account is required",
   destinationAccountRequired: "Destination account is required",
 };
-
-const TRANSACTION_AMOUNT_LIMIT_MESSAGE = `Amount must be at most ${MAX_TRANSACTION_AMOUNT.toLocaleString(
-  "en-US"
-)}`;
-const INVALID_AMOUNT_MESSAGE = "Please enter a valid amount";
-const FINITE_AMOUNT_INPUT_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)$/;
 
 function requiredIdSchema(message: string): z.ZodType<string | null> {
   return z
@@ -46,49 +58,61 @@ function requiredIdSchema(message: string): z.ZodType<string | null> {
     .refine((value) => value !== null && value.length > 0, message);
 }
 
-function parseFiniteAmountInput(value: string): number | null {
-  const normalized = value.trim().replace(/,/g, "");
-  if (!FINITE_AMOUNT_INPUT_PATTERN.test(normalized)) {
-    return null;
+function getAmountValidationMessage(
+  reason: StrictAmountParseFailureReason,
+  maxFractionDigits: number | undefined,
+  messages: TransactionValidationMessages
+): string {
+  switch (reason) {
+    case "required":
+      return messages.amountRequired;
+    case "not-positive":
+      return messages.amountMustBePositive;
+    case "exceeds-maximum":
+      return messages.amountMaximum(MAX_TRANSACTION_AMOUNT);
+    case "exceeds-precision":
+      return messages.amountPrecision(maxFractionDigits ?? 0);
+    case "invalid-format":
+    default:
+      return messages.invalidAmount;
   }
-
-  const amount = Number(normalized);
-  return Number.isFinite(amount) ? amount : null;
 }
 
-function isFiniteAmountInput(value: string): boolean {
-  return parseFiniteAmountInput(value) !== null;
-}
+function createAmountSchema(
+  options: TransactionValidationOptions,
+  messages: TransactionValidationMessages
+): z.ZodType<string> {
+  const maxFractionDigits = options.currency
+    ? getCurrencyPrecision(options.currency)
+    : undefined;
 
-function isPositiveAmountInput(value: string): boolean {
-  const amount = parseFiniteAmountInput(value);
-  return amount === null || amount > 0;
-}
+  return z.string().superRefine((value, context) => {
+    const result = parseStrictAmountInput(value, {
+      maxAmount: MAX_TRANSACTION_AMOUNT,
+      maxFractionDigits,
+    });
+    if (result.success) return;
 
-function isWithinTransactionAmountLimit(value: string): boolean {
-  const amount = parsePositiveFiniteAmountInput(value);
-  return amount === null || amount <= MAX_TRANSACTION_AMOUNT;
+    context.addIssue({
+      code: "custom",
+      message: getAmountValidationMessage(
+        result.reason,
+        maxFractionDigits,
+        messages
+      ),
+    });
+  });
 }
 
 /**
  * Zod schema for expense/income transaction form validation.
  */
 function createBaseTransactionSchema(
-  messages: TransactionValidationMessages
+  messages: TransactionValidationMessages,
+  options: TransactionValidationOptions
 ): z.ZodType<TransactionFormData> {
   return z.object({
-    amount: z
-      .string()
-      .min(1, "Amount is required")
-      .refine((val) => isFiniteAmountInput(val), INVALID_AMOUNT_MESSAGE)
-      .refine(
-        (val) => isPositiveAmountInput(val),
-        "Amount must be greater than 0"
-      )
-      .refine(
-        (val) => isWithinTransactionAmountLimit(val),
-        TRANSACTION_AMOUNT_LIMIT_MESSAGE
-      ),
+    amount: createAmountSchema(options, messages),
     accountId: requiredIdSchema(messages.accountRequired),
     categoryId: z.string().min(1, "Category is required"),
   });
@@ -98,22 +122,12 @@ function createBaseTransactionSchema(
  * Zod schema for transfer form validation.
  */
 function createTransferSchema(
-  messages: TransactionValidationMessages
+  messages: TransactionValidationMessages,
+  options: TransactionValidationOptions
 ): z.ZodType<TransferFormData> {
   return z
     .object({
-      amount: z
-        .string()
-        .min(1, "Amount is required")
-        .refine((val) => isFiniteAmountInput(val), INVALID_AMOUNT_MESSAGE)
-        .refine(
-          (val) => isPositiveAmountInput(val),
-          "Amount must be greater than 0"
-        )
-        .refine(
-          (val) => isWithinTransactionAmountLimit(val),
-          TRANSACTION_AMOUNT_LIMIT_MESSAGE
-        ),
+      amount: createAmountSchema(options, messages),
       fromAccountId: requiredIdSchema(messages.sourceAccountRequired),
       toAccountId: requiredIdSchema(messages.destinationAccountRequired),
     })
@@ -141,18 +155,21 @@ export type TransactionValidationErrors = Partial<
  *
  * @param type - The current transaction type/mode
  * @param data - The form data to validate
+ * @param messages - Optional localized validation messages
+ * @param options - Currency-aware amount validation options
  * @returns Object with `isValid` boolean and `errors` record
  */
 export function validateTransactionForm(
   type: TransactionType | "TRANSFER",
   data: TransactionFormData | TransferFormData,
-  messages: Partial<TransactionValidationMessages> = {}
+  messages: Partial<TransactionValidationMessages> = {},
+  options: TransactionValidationOptions = {}
 ): { isValid: boolean; errors: TransactionValidationErrors } {
   const validationMessages = { ...defaultValidationMessages, ...messages };
   const schema =
     type === "TRANSFER"
-      ? createTransferSchema(validationMessages)
-      : createBaseTransactionSchema(validationMessages);
+      ? createTransferSchema(validationMessages, options)
+      : createBaseTransactionSchema(validationMessages, options);
   const result = schema.safeParse(data);
 
   if (result.success) {

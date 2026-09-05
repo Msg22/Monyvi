@@ -550,11 +550,26 @@ export function useTransactionEditState({
       }
     }
 
-    const { isValid, errors } = validateTransactionForm(txType, {
-      amount,
-      accountId: resolvedAccountId,
-      categoryId: selectedCategoryId,
-    });
+    const { isValid, errors } = validateTransactionForm(
+      txType,
+      {
+        amount,
+        accountId: resolvedAccountId,
+        categoryId: selectedCategoryId,
+      },
+      {
+        amountRequired: t("amount_required"),
+        invalidAmount: t("invalid_amount"),
+        amountMustBePositive: t("amount_must_be_positive"),
+        amountMaximum: (maximum) =>
+          t("amount_maximum_error", {
+            maximum: maximum.toLocaleString("en-US"),
+          }),
+        amountPrecision: (precision) =>
+          t("amount_precision_error", { precision }),
+      },
+      { currency: selectedAccountCurrency }
+    );
 
     const requiresToAccount = formConfig.showToAccount;
     const isToAccountValid =
