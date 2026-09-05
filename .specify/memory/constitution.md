@@ -1,14 +1,9 @@
 <!--
 Sync Impact Report
-- Version change: 1.5.0 → 1.6.0
+- Version change: 1.6.0 -> 1.7.0
 - Modified principles:
-  - I. Offline-First Data Architecture: scoped LWW to ordinary independent
-    metadata; added atomic local action groups and server CAS for grouped
-    lifecycle or balance-changing actions; clarified root and child sync columns.
-  - VIII. Authenticated User Scope & Sync Correctness: made inherited ownership
-    strict, retained multi-device access, and added rejected-action reconciliation.
-  - Technology Constraints: limited Metals V1 to Gold and Silver and established
-    the shared Decimal.js financial arithmetic contract.
+  - V. Premium UI with Consistent Theming: clarified approved mockup binding,
+    responsive variants, gradient use, and visual-completion evidence.
 - Added sections: None.
 - Removed sections: None.
 - Templates reviewed:
@@ -56,8 +51,8 @@ device. Every read and write operation MUST happen locally first.
   idempotent. Client timestamps and Last Write Wins MUST NOT choose between
   competing grouped financial actions.
 - Every user-owned root syncable table MUST include `created_at`, `updated_at`,
-  `deleted`, and `user_id`. A user-owned child MAY omit `user_id` only under
-  the strict inherited-ownership contract in Principle VIII.
+  `deleted`, and `user_id`. A user-owned child MAY omit `user_id` only under the
+  strict inherited-ownership contract in Principle VIII.
 - Server-generated read-only pull-only tables MAY omit `updated_at` and
   `deleted`. A globally shared server-generated table MAY also omit `user_id`.
   These tables MUST use approved specialized pull behavior. Current examples:
@@ -146,12 +141,33 @@ The app MUST deliver a premium, polished visual experience using NativeWind
   `apps/mobile/constants/colors.ts`. Never hardcode hex values in JSX.
 - **Animations**: Use `react-native-reanimated` and
   `react-native-gesture-handler` for smooth micro-interactions.
-- **No basic MVPs**: Every screen MUST feel premium — vibrant gradients, subtle
-  animations, modern typography, and intentional spacing.
+- **No basic MVPs**: Every screen MUST feel premium through intentional
+  hierarchy, typography, spacing, motion, color, and state handling. Gradients
+  are allowed when the design system or approved mockup uses them; they are not
+  globally mandatory.
 - **Schema-driven UI**: All data-driven screens MUST strictly match the existing
   database schema (`@monyvi/db` models). Do NOT invent, rename, remove, or infer
   fields. Labels, data types, and required/optional states MUST reflect the
   schema exactly.
+- **Approved mockup binding**: Once Mohamed approves a scoped mockup, product UI
+  MUST match the approved composition pixel-perfect at the mockup's declared UI
+  viewport or component context. Presentation-only phone hardware, device frame,
+  outer canvas, browser chrome, export padding, and background outside the UI
+  surface are non-binding unless the handoff explicitly says otherwise. Handoff
+  documentation MUST record exact screen-specific spacing, sizing, color,
+  typography, state, and viewport facts that are known. Do not invent missing
+  values; flag missing metadata before implementation when it affects fidelity.
+- **Responsive visual fidelity**: Compact-phone, ordinary-phone, tablet,
+  landscape, dark mode, RTL/Arabic, accessibility labels, and enlarged-text
+  variants MUST preserve the approved composition, hierarchy, semantics, and
+  material styling. Reflow is allowed only to keep content usable and readable.
+  A material deviation from the approved mockup requires renewed approval before
+  completion.
+- **Visual completion evidence**: A UI change that used a mockup cannot be
+  marked visually complete until the implementation has side-by-side or overlay
+  rendered screenshot evidence against the approved reference at the declared UI
+  context, plus responsive/dark/RTL/enlarged-text evidence for every variant in
+  scope. Report functional status and visual fidelity status separately.
 
 ### VI. Monorepo Package Boundaries
 
@@ -283,7 +299,8 @@ MUST round only at the approved presentation or posting boundary.
 
 Metals is the first adopter. Existing authoritative `number` calculations are
 migration debt tracked by issue #241, not precedent. This amendment requires
-staged reuse for new or changed financial calculations, not a big-bang migration.
+staged reuse for new or changed financial calculations, not a big-bang
+migration.
 
 ## Development Workflow
 
@@ -369,4 +386,4 @@ staged reuse for new or changed financial calculations, not a big-bang migration
   `/speckit.plan`, `/speckit.tasks`, `/speckit.implement`) MUST reference this
   constitution and verify compliance before producing output.
 
-**Version**: 1.6.0 | **Ratified**: 2026-02-14 | **Last Amended**: 2026-08-30
+**Version**: 1.7.0 | **Ratified**: 2026-02-14 | **Last Amended**: 2026-09-04
