@@ -16,11 +16,11 @@ OpenCode, implement an adapter, or expand permission.
 
 ## Route Work
 
-The approved OpenCode models are `bai/glm-5.3-flash` and
-`bai/qwen3.8-flash`. Verify the exact provider-prefixed identifier with the
-current OpenCode model inventory before every dispatch after a model/runtime
-change. If the requested model, authentication, or required tools are
-unavailable, stop that lane; do not silently substitute another model.
+The approved OpenCode models are `bai/glm-5.3-flash` and `bai/qwen3.8-flash`.
+Verify the exact provider-prefixed identifier with the current OpenCode model
+inventory before every dispatch after a model/runtime change. If the requested
+model, authentication, or required tools are unavailable, stop that lane; do not
+silently substitute another model.
 
 Do not statically confine either model to narrow categories. Route adaptively,
 let each model attempt varied source, test, documentation, review, and
@@ -68,9 +68,9 @@ Sensitive-data exposure, unauthorized scope access/write, or another security
 boundary breach immediately aborts the lane and revokes write eligibility for
 that exact model/task/profile pending incident review and requalification. A
 user waiver cannot waive or override this revocation rule. When the canary
-exception and all safeguards are recorded, lack of a canary alone must not
-block the authorized real write. Every real result still requires independent
-Monyvi verification; model confidence is not evidence.
+exception and all safeguards are recorded, lack of a canary alone must not block
+the authorized real write. Every real result still requires independent Monyvi
+verification; model confidence is not evidence.
 
 ## Prepare And Dispatch
 

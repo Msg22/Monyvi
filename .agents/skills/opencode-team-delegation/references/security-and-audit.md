@@ -112,8 +112,8 @@ waiver cannot waive this response.
 ## Ownership And Git Safety
 
 - One complete task/session/worktree/owner has exclusive write responsibility.
-- One writer owns each artifact/file per wave across all concurrent lanes.
-  Stop and report any ownership overlap before further edits.
+- One writer owns each artifact/file per wave across all concurrent lanes. Stop
+  and report any ownership overlap before further edits.
 - Record base SHA before dispatch and verify it before accepting output.
 - Define task/worktree scope plus protected/forbidden paths. Permit cohesive
   in-scope edits only within artifacts exclusively owned by that worker.

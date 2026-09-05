@@ -113,8 +113,8 @@ Before forming team:
 For parallel implementation:
 
 - read-only workers may share checkout;
-- concurrent writers use distinct sibling worktrees/branches with declared
-  base, dependency, exclusive task ownership, and non-overlapping artifact/file
+- concurrent writers use distinct sibling worktrees/branches with declared base,
+  dependency, exclusive task ownership, and non-overlapping artifact/file
   ownership;
 - one writer owns each artifact/file per wave, including shared indexes,
   schemas, migrations, translations, specs, and generated outputs;
@@ -201,8 +201,8 @@ prove availability.
 Target **at least 80% of eligible execution workload** across Normal ChatGPT,
 `bai/glm-5.3-flash`, and `bai/qwen3.8-flash` combined. Eligible workload
 includes substantial and large tasks when the worker has the required context,
-tools, permissions, and capability evidence. This is an allocation target, not
-a delegation mandate: never route final authority, unpublished-local-dependent
+tools, permissions, and capability evidence. This is an allocation target, not a
+delegation mandate: never route final authority, unpublished-local-dependent
 work, or a task a worker demonstrably cannot perform merely to hit the target.
 Track the target over meaningful execution work rather than file count or number
 of dispatches.
@@ -289,8 +289,8 @@ failed and reassign. One failed task does not permanently disqualify a model
 from unrelated capability.
 
 Timeouts guide task size, checkpoint frequency, and timeout budget; they do not
-alone permanently disqualify a model. A recoverable timed-out observation
-should continue in the same session after status is rechecked.
+alone permanently disqualify a model. A recoverable timed-out observation should
+continue in the same session after status is rechecked.
 
 ## 7. Ownership Brief And Context
 

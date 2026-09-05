@@ -156,8 +156,8 @@ owner handles authorized Git work.
 ## Correction, Failure, Incident, And Timeout Rules
 
 - Interrupt immediately for scope drift, unsafe action, ownership conflict, or a
-  materially wrong direction. Send the correction in the same persistent
-  session when the lane remains safe and recoverable.
+  materially wrong direction. Send the correction in the same persistent session
+  when the lane remains safe and recoverable.
 - Sensitive-data exposure, unauthorized scope access/write, or another security
   boundary breach immediately aborts the lane and revokes write eligibility for
   the exact model/task/profile pending incident review and requalification. A
@@ -182,8 +182,8 @@ shapes include:
 1. focused code inventory;
 2. EN/AR localization audit;
 3. deterministic test-scenario enumeration;
-4. approved-reference comparison when the runtime actually supports the
-   required reference modality;
+4. approved-reference comparison when the runtime actually supports the required
+   reference modality;
 5. bounded documentation or code-review task.
 
 For each attempted benchmark, record factual accuracy, source traceability,
