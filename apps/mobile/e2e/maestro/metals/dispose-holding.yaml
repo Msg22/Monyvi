@@ -1,0 +1,87 @@
+appId: com.monyvi.app
+---
+# T107 runner contract. The harness must provide holding-e2e-gold as an active,
+# current-user-owned holding and select the offline cached profile before launch.
+# The flow itself uses only user-visible controls and process restart signals.
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://metals/holding-e2e-gold/dispose
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-dispose-screen
+    timeout: 30000
+
+# Required reason and the exact five-category catalog.
+- assertVisible:
+    id: dispose-category-lost_or_stolen
+- assertVisible:
+    id: dispose-category-destroyed_or_damaged
+- assertVisible:
+    id: dispose-category-given_away
+- assertVisible:
+    id: dispose-category-donated
+- assertVisible:
+    id: dispose-category-other
+- tapOn:
+    id: dispose-submit
+- assertVisible:
+    id: dispose-category-error
+
+# Other alone is insufficient; its explicit meaning drives the live summary.
+- tapOn:
+    id: dispose-category-other
+- assertVisible:
+    id: dispose-treatment-group
+- tapOn:
+    id: dispose-submit
+- assertVisible:
+    id: dispose-treatment-error
+- tapOn:
+    id: dispose-treatment-write_off
+- assertVisible:
+    id: dispose-summary-write_off
+- assertVisible:
+    id: dispose-summary-no-sale-money-account
+- assertVisible:
+    id: dispose-summary-no-sale-profit-loss
+
+# Known categories auto-map and never ask for a second classification.
+- tapOn:
+    id: dispose-category-donated
+- assertNotVisible:
+    id: dispose-treatment-group
+- assertVisible:
+    id: dispose-summary-external_transfer
+- tapOn:
+    id: dispose-category-lost_or_stolen
+- assertVisible:
+    id: dispose-summary-write_off
+- assertNotVisible:
+    id: metal-holding-review-screen
+
+# Direct local-first completion succeeds under the runner-owned offline profile.
+- tapOn:
+    id: dispose-submit
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-detail-screen
+    timeout: 30000
+- assertVisible:
+    id: metal-holding-status-disposed
+- assertVisible:
+    id: metal-holding-history-dispose
+- assertNotVisible:
+    id: metal-holding-sale-proceeds
+- assertNotVisible:
+    id: metal-holding-realized-sale-profit-loss
+
+# Local terminal state and immutable history survive a process restart offline.
+- stopApp
+- launchApp:
+    clearState: false
+- openLink: monyvi://metals/holding-e2e-gold
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-status-disposed
+    timeout: 30000
+- assertVisible:
+    id: metal-holding-history-dispose
