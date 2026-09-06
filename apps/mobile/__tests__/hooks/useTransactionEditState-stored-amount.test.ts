@@ -29,7 +29,7 @@ function createBtcTransaction(): ReviewableTransaction {
     originLabel: "Exchange",
     source: "SMS",
     deduplicationHash: "btc-fingerprint-1",
-    reviewStatus: "ready",
+    reviewStatus: "needs_review",
     reviewReasons: [],
   };
 }
