@@ -39,6 +39,11 @@ You **MUST** consider the user input before proceeding (if not empty).
      `<mockup-basename>.binding.md` sidecar defined by
      `.agent/workflows/mockup-implementation.md` so task generation knows the
      declared binding context, scoped variants, and fidelity-affecting unknowns.
+     If an approved reference predates the sidecar rule and the sidecar is
+     missing, follow that workflow's **Legacy Approved Mockup Metadata
+     Migration** procedure. If task-generation scope cannot create the sidecar,
+     generate a prerequisite metadata-migration task and block governed UI
+     implementation until it is completed; never infer the missing facts.
    - Note: Not all projects have all documents. Generate tasks based on what's
      available.
 
@@ -55,6 +60,8 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Generate tasks organized by user story (see Task Generation Rules below)
    - Generate required rendered visual-evidence tasks for every mockup-backed UI
      story as defined below
+   - Generate separate accessibility-evidence tasks when a governed story
+     requires accessibility labels or semantics
    - Generate dependency graph showing user story completion order
    - Create parallel execution examples per user story
    - Validate task completeness (each user story has all needed tasks,
@@ -67,8 +74,9 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Phase 2: Foundational tasks (blocking prerequisites for all user stories)
    - Phase 3+: One phase per user story (in priority order from spec.md)
    - Each phase includes: story goal, independent test criteria, tests (if
-     requested), implementation tasks, and required mockup-evidence tasks when
-     that story changes UI governed by an approved mockup
+     requested), implementation tasks, required mockup visual-evidence tasks when
+     that story changes UI governed by an approved mockup, and separate
+     accessibility-evidence tasks when governed labels/semantics are in scope
    - Final Phase: Polish & cross-cutting concerns
    - All tasks must follow the strict checklist format (see Task Generation
      Rules below)
@@ -92,6 +100,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Parallel opportunities identified
    - Independent test criteria for each story
    - Mockup-backed UI stories and their required visual-evidence tasks
+   - Governed stories requiring separate accessibility-evidence tasks
    - Suggested MVP scope (typically just User Story 1)
    - Format validation: Confirm ALL tasks follow the checklist format (checkbox,
      ID, labels, file paths)
@@ -115,12 +124,12 @@ whether automated tests were requested. The constitution's **Visual completion
 evidence** principle and `.agent/workflows/sprint-issue.md` are authoritative for
 the evidence gate.
 
-For each mockup-backed UI story, the required evidence task set MUST:
+For each mockup-backed UI story, the required visual-evidence task set MUST:
 
 - depend on the governed UI implementation being complete;
 - capture a rendered baseline side-by-side or overlay comparison against the
   approved reference at its declared viewport/component context;
-- capture rendered evidence for every responsive, dark, RTL/Arabic, and
+- capture rendered evidence for every responsive, theme, RTL/Arabic, and
   enlarged-text variant that the binding sidecar or story scope requires;
 - record references to the evidence and report **functional status** separately
   from **visual fidelity status**; and
@@ -128,10 +137,21 @@ For each mockup-backed UI story, the required evidence task set MUST:
   blocker stated explicitly rather than treating source inspection as visual
   proof.
 
-The generated checklist description MUST name the concrete governed UI file path
-or paths and the feature `tasks.md` path where evidence references/status will be
-recorded. Do not invent a new product behavior or reinterpret presentation-only
-mockup framing while writing the evidence task.
+When the governed mockup/story requires accessibility labels or semantics,
+generate a **separate accessibility-evidence task**. That task MUST:
+
+- depend on the governed UI implementation being complete;
+- inspect the relevant accessibility tree and use screen-reader verification or
+  an appropriate automated accessibility check where available;
+- record the exact evidence/reference and the accessibility-evidence status;
+- remain incomplete when required accessibility behavior cannot be verified; and
+- never treat screenshots or visual comparison as proof of accessibility labels,
+  roles, names, states, relationships, or screen-reader behavior.
+
+The generated checklist descriptions MUST name the concrete governed UI file
+path or paths and the feature `tasks.md` path where evidence references/status
+will be recorded. Do not invent a new product behavior or reinterpret
+presentation-only mockup framing while writing the evidence tasks.
 
 ### Checklist Format (REQUIRED)
 
@@ -179,6 +199,8 @@ Every task MUST strictly follow this format:
      - If tests requested: Tests specific to that story
      - If approved mockups govern changed UI: required rendered visual-evidence
        task(s) after the corresponding UI implementation
+     - If governed accessibility labels/semantics are in scope: separate
+       accessibility-evidence task(s) after the corresponding UI implementation
    - Mark story dependencies (most stories should be independent)
 
 2. **From Contracts**:
@@ -203,6 +225,7 @@ Every task MUST strictly follow this format:
   stories)
 - **Phase 3+**: User Stories in priority order (P1, P2, P3...)
   - Within each story: Tests (if requested) → Models → Services → Endpoints →
-    Integration → required mockup visual evidence when applicable
+    Integration → required mockup visual evidence → required accessibility
+    evidence when applicable
   - Each phase should be a complete, independently testable increment
 - **Final Phase**: Polish & Cross-Cutting Concerns

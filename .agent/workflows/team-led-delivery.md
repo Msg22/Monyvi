@@ -227,28 +227,47 @@ authority. A trusted-native worker may still verify or integrate externally
 owned work without becoming that task's implementation owner. All external
 output requires independent verification, and the lead retains merge authority.
 
-Before every Normal ChatGPT execution dispatch, record a complete mandatory
-remote-readiness packet containing:
+Before every Normal ChatGPT execution dispatch, classify the remote-readiness
+packet as **existing-PR work** or **pre-PR branch creation**.
 
-- exact repository and PR number;
-- base branch;
-- head branch and immutable full head SHA;
+Both packet forms MUST record:
+
+- exact repository;
 - authoritative spec, approved mockup, business-decision, and workflow paths;
-- ownership/non-overlap boundary and confirmation that the target branch has no
-  active writer;
+- ownership/non-overlap boundary;
 - acceptance criteria and explicit non-goals;
-- required checks and relevant review-thread IDs;
+- required checks and relevant review-thread IDs when they already exist;
 - explicitly authorized remote mutations; and
 - expected completion report.
 
-Do not dispatch while any required packet field is unknown, the recorded head
-SHA no longer matches the remote branch, or another writer is active on the
-target branch. Never dispatch Normal ChatGPT to a branch with an active writer.
+For **existing-PR work**, the packet additionally requires:
+
+- exact PR number and base branch;
+- head branch and immutable full head SHA; and
+- confirmation that the target head branch has no active writer.
+
+For **pre-PR branch creation**, the packet instead requires:
+
+- immutable base branch and full base SHA;
+- intended new branch name; and
+- confirmation that the intended branch ownership boundary has no competing
+  writer.
+
+A PR number or head SHA is not required before the new branch exists. Once the
+branch is created, refresh the packet with the actual head branch and immutable
+full head SHA before further branch mutations. Once a PR is opened, add the
+exact PR number and base branch and re-read the immutable head SHA before any
+follow-up PR work.
+
+Do not dispatch while any field required for the selected topology is unknown,
+the recorded immutable base/head SHA no longer matches remote state, or a
+competing writer owns the target. Never dispatch Normal ChatGPT to an existing
+branch with an active writer.
 
 If required context exists only locally, a trusted local owner must safely
 publish the minimum required context to the authorized remote source before
-ChatGPT dispatch, then refresh the packet and immutable head SHA. If the context
-cannot be safely published, use an eligible local executor instead.
+ChatGPT dispatch, then refresh the applicable immutable base or head SHA. If the
+context cannot be safely published, use an eligible local executor instead.
 
 Provide ChatGPT only the packet and published authoritative context needed for
 the task. Its result remains subject to the same independent verification and

@@ -278,6 +278,39 @@ Use the constitution's **Approved mockup binding** principle as the authority fo
 what is binding. Direct implementation workflows MUST consume this sidecar
 rather than treating the entire exported image as product UI.
 
+#### 9.5.1 Legacy Approved Mockup Metadata Migration
+
+Approved references created before the binding-sidecar rule remain valid when
+their approval can be evidenced. A missing sidecar on such a reference is a
+metadata-migration requirement, not a reason to discard or replace the approved
+mockup.
+
+Before implementation of a legacy approved reference:
+
+1. Verify that the image was actually approved using existing evidence such as
+   the canonical spec/design handoff, recorded user approval, or the PR/review
+   artifact that established the approved reference. Do not infer approval from
+   filename or location alone.
+2. Create the matching `<mockup-basename>.binding.md` sidecar in the same
+   directory **before implementation**. Mark it as `Legacy metadata migration:
+   yes` and list the exact evidence sources used.
+3. Populate only binding facts supported by the approved reference, recorded
+   approval/handoff, authoritative design/spec documentation, or design-system
+   facts that applied to that approval. The constitution's default rule that
+   presentation-only hardware/frame/canvas/chrome/export padding is non-binding
+   applies unless the approved handoff explicitly says otherwise.
+4. Record every unresolved required binding fact as `UNKNOWN`, including the
+   viewport/component context, spacing, sizing, color/theme, typography, or
+   visible state when it is not evidenced. Classify each unknown as
+   fidelity-affecting or non-fidelity-affecting.
+5. If any fidelity-affecting unknown remains, pause and obtain clarification
+   before UI implementation, then update the sidecar with the approved answer.
+   If none remains, the evidence-based migrated sidecar is the valid handoff for
+   implementation and review.
+6. Do not alter the approved legacy image to make metadata fit, manufacture
+   measurements from uncalibrated export framing, or create speculative sidecars
+   outside the currently authorized task.
+
 ---
 
 ### 9.6 Purpose
