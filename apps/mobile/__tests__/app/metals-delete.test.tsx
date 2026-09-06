@@ -6,7 +6,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react-native";
-import React from "react";
+import React, { StrictMode } from "react";
 
 interface DeleteMetalHoldingSheetCopy {
   readonly title: string;
@@ -90,7 +90,7 @@ interface DeleteActionModule {
 }
 
 const copy: DeleteMetalHoldingSheetCopy = {
-  title: "Delete holding?",
+  title: "Delete holding",
   consequence:
     "Only delete a holding added by mistake. It will be removed from your portfolio and History. Sell and No Longer are separate actions.",
   currentValue: "Current value",
@@ -353,6 +353,27 @@ describe("useDeleteMetalHolding", () => {
     expect(execute.mock.calls[1][0].ids).toEqual(execute.mock.calls[0][0].ids);
     expect(input.createId).toHaveBeenCalledTimes(3);
     await waitFor(() => expect(result.current.submitError).toBeNull());
+  });
+
+  it("reports failure and resets pending state after a StrictMode remount", async () => {
+    const execute = jest
+      .fn<Promise<void>, [DeleteCommand]>()
+      .mockRejectedValueOnce(new Error("local_write_failed"));
+    const { result } = renderHook(
+      () =>
+        loadHook().useDeleteMetalHolding({
+          createCommand: (ids) => ({ ids }),
+          execute,
+          createId: jest.fn(() => "strict-delete-id"),
+        }),
+      { wrapper: StrictMode }
+    );
+
+    await act(async () => {
+      await expect(result.current.submit()).resolves.toBe(false);
+    });
+    expect(result.current.submitError).toBe("local_write_failed");
+    expect(result.current.isSubmitting).toBe(false);
   });
 });
 

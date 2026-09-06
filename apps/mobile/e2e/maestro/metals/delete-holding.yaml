@@ -12,7 +12,7 @@ appId: com.monyvi.app
     timeout: 30000
 
 # Approved Screen 14 is one focused confirmation, not Sell, No Longer, or Undo.
-- assertVisible: "Delete holding?"
+- assertVisible: "Delete holding"
 - assertVisible: "E2E Gold Bar"
 - assertVisible: "Gold · 24K · 999 · Bar"
 - assertVisible: "10 g"
