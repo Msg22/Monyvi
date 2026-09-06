@@ -350,6 +350,19 @@ When applicable, the agent MUST validate that the changed implementation
   search
 - Only when neither search finds approved mockup assets, explicitly state: "No
   mockups found — N/A"
+- For every approved mockup that governs changed visual UI, load its matching
+  `<mockup-basename>.binding.md` sidecar from
+  `.agent/workflows/mockup-implementation.md`.
+- Before using the sidecar's viewport/component context or continuing governed
+  visual review, verify it records `Binding metadata approval: APPROVED` and the
+  explicit approval evidence/reference required by that workflow.
+- If an approved reference predates the sidecar rule, complete the workflow's
+  **Legacy Approved Mockup Metadata Migration** and explicit sidecar approval
+  before using reconstructed metadata for review.
+- A missing sidecar, a sidecar still marked `PENDING`, a missing approval
+  reference, or a sidecar materially changed after approval is non-authoritative.
+  Mark the binding context unverified and the governed UI **NOT APPROVABLE**;
+  never infer binding facts from the image/export.
 
 ---
 
@@ -360,7 +373,8 @@ For **EACH** mockup image, the agent MUST:
 - Identify which component/screen it corresponds to
 - Read the component code
 - Compare the implementation against the mockup **structurally and visually**
-- Identify the declared binding UI viewport or component context
+- Use only the explicitly approved binding sidecar to identify the declared
+  binding UI viewport or component context
 - Ignore presentation-only device hardware, frame, outer canvas, browser chrome,
   export padding, and background outside the UI surface unless explicitly marked
   binding
@@ -455,9 +469,9 @@ Violations:
 
 #### 🚨 Blocking Rule
 
-- For governed visual UI changes, if implementation does NOT match mockups, or
-  required rendered comparison or scoped-variant evidence is missing: → PR is
-  **NOT APPROVABLE**
+- For governed visual UI changes, if the authoritative approved binding sidecar
+  is missing/invalid, implementation does NOT match mockups, or required rendered
+  comparison or scoped-variant evidence is missing: → PR is **NOT APPROVABLE**
 
 ---
 
@@ -468,12 +482,14 @@ When creating the Fix PR:
 - Update the UI to match the mockups **pixel-perfect**
 - Do NOT introduce new design decisions
 - Do NOT "improve" the design unless explicitly instructed
-- Treat mockups as the **single source of truth for UI**
+- Treat the approved mockup image plus its explicitly approved binding sidecar as
+  the **single source of truth for governed UI**
 
 ---
 
 #### ✅ Success Criteria
 
+- Approved binding sidecar is verified current and authoritative
 - Implementation visually matches mockups with **no noticeable differences**
 - All mockup screens are fully implemented
 - Side-by-side or overlay rendered evidence proves the match at the declared UI
