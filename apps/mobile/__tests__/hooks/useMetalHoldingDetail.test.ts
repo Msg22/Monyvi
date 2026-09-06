@@ -25,6 +25,7 @@ const mockUnsubscribe = jest.fn<void, []>();
 const mockTrustRefresh = jest.fn<void, []>();
 const mockAppStateRemove = jest.fn<void, []>();
 const mockLocalSubscribers: Array<() => void> = [];
+const mockTrustObservers: MockTrustObserver[] = [];
 let mockTrustObserver: MockTrustObserver | null = null;
 let mockAppStateListener: ((state: string) => void) | null = null;
 let mockUserId: string | null = "user-1";
@@ -99,6 +100,7 @@ jest.mock("@/services/live-rates-trust-read-model-service", () => ({
     refresh: mockTrustRefresh,
     subscribe: (observer: MockTrustObserver): MockSubscription => {
       mockTrustObserver = observer;
+      mockTrustObservers.push(observer);
       return { unsubscribe: mockUnsubscribe };
     },
   }),
@@ -171,6 +173,7 @@ describe("useMetalHoldingDetail", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockLocalSubscribers.splice(0);
+    mockTrustObservers.splice(0);
     mockTrustObserver = null;
     mockAppStateListener = null;
     mockUserId = "user-1";
@@ -375,5 +378,33 @@ describe("useMetalHoldingDetail", () => {
     await waitFor(() => expect(result.current.error).toBe(rateError));
     expect(mockReadMetalDetailReadModel).not.toHaveBeenCalled();
     expect(result.current.model).toBeNull();
+  });
+
+  it("re-subscribes to rate trust after retry and recovers from an observer failure", async () => {
+    const rateError = new Error("Local rates unavailable");
+    const model = { holdingId: "holding-1" };
+    mockReadMetalDetailReadModel.mockResolvedValue(model);
+    const { result } = renderHook(() => useMetalHoldingDetail("holding-1"));
+    const failedObserver = mockTrustObserver;
+
+    act(() => {
+      failedObserver?.error(rateError);
+    });
+    await waitFor(() => expect(result.current.error).toBe(rateError));
+
+    act(() => {
+      result.current.retry();
+    });
+
+    await waitFor(() => expect(mockTrustObservers).toHaveLength(2));
+    const recoveryObserver = mockTrustObserver;
+    expect(recoveryObserver).not.toBe(failedObserver);
+
+    act(() => {
+      recoveryObserver?.next(initialRates);
+    });
+
+    await waitFor(() => expect(result.current.error).toBeNull());
+    await waitFor(() => expect(result.current.model).toBe(model));
   });
 });

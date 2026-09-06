@@ -93,6 +93,7 @@ export function useMetalHoldingDetail(
   useEffect(() => {
     const observation = observeLiveRatesTrust(database);
     trustObservationRef.current = observation;
+    setIsRatesLoading(true);
     const subscription = observation.subscribe({
       next: (rates): void => {
         setCurrentRates(rates);
@@ -110,7 +111,7 @@ export function useMetalHoldingDetail(
       }
       subscription.unsubscribe();
     };
-  }, [database]);
+  }, [database, retryIndex]);
 
   useEffect(() => {
     const timer = setInterval(
