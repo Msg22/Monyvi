@@ -50,9 +50,11 @@ const translations: Readonly<Record<string, string>> = {
   "render.neutralFallback": "Metal holding illustration unavailable",
 };
 
+let mockResolvedLanguage = "en";
+
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
-    i18n: { resolvedLanguage: "en" },
+    i18n: { resolvedLanguage: mockResolvedLanguage },
     t: (key: string, values?: Readonly<Record<string, string>>): string => {
       const template = translations[key] ?? key;
       return Object.entries(values ?? {}).reduce(
@@ -289,11 +291,50 @@ describe("US3 holding experience", () => {
       />
     );
 
+    expect(screen.queryByText("History")).toBeNull();
+    expect(
+      screen.getByText("Sales and holdings no longer in your possession.")
+    ).toBeTruthy();
+    expect(screen.getByText("Gold · 21K · 875 · Jewelry")).toBeTruthy();
+    expect(screen.getByText("22 Aug 2026")).toBeTruthy();
+    expect(screen.getByText("21K bracelet")).toHaveProp(
+      "className",
+      expect.stringContaining("dark:text-text-primary-dark")
+    );
+    expect(screen.getByTestId("metal-history-item-sold")).toHaveProp(
+      "className",
+      expect.stringContaining("rounded-2xl")
+    );
+    expect(screen.getByTestId("metal-history-item-sold")).toHaveProp(
+      "className",
+      expect.stringContaining("border")
+    );
+    expect(screen.getByTestId("metal-history-root")).toHaveProp(
+      "contentContainerClassName",
+      expect.stringContaining("gap-3")
+    );
     expect(screen.getByText("Silver keepsake")).toBeTruthy();
-    fireEvent.press(screen.getByLabelText("Sold filter"));
+    fireEvent.press(screen.getByLabelText("Sold"));
     expect(onFilterChange).toHaveBeenCalledWith("sold");
     fireEvent.press(screen.getByText("21K bracelet"));
     expect(onOpenHolding).toHaveBeenCalledWith("sold-bracelet");
     expect(screen.getByLabelText("Gold Jewelry illustration")).toBeTruthy();
+  });
+
+  it("keeps Western digits in localized Arabic History dates", () => {
+    mockResolvedLanguage = "ar";
+    render(
+      <MetalHistoryScreen
+        history={history()}
+        isLoading={false}
+        error={null}
+        isOffline={false}
+        onFilterChange={jest.fn()}
+        onOpenHolding={jest.fn()}
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("22 أغسطس 2026")).toBeTruthy();
   });
 });
