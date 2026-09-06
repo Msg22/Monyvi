@@ -84,8 +84,9 @@ describe("recurring-payment stale writer protection", () => {
       action: "NOTIFY",
       status: "ACTIVE",
       deleted: false,
-      update: jest.fn(async (builder) => {
+      update: jest.fn((builder) => {
         builder(payment);
+        return Promise.resolve();
       }),
     };
 
@@ -118,7 +119,7 @@ describe("recurring-payment stale writer protection", () => {
     });
 
     mockWrite.mockImplementation(
-      async (callback: () => Promise<unknown>): Promise<unknown> => {
+      (callback: () => Promise<unknown>): Promise<unknown> => {
         // Simulate background sync advancing the schedule after the initial
         // stale check/reference reads but before the write transaction runs.
         payment.nextDueDate = new Date("2026-08-01T08:00:00.000Z");
