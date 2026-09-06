@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
 import React from "react";
-import { Text as MockText, TouchableOpacity } from "react-native";
+import {
+  Text as MockText,
+  TouchableOpacity as MockTouchableOpacity,
+} from "react-native";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import type { Budget, Category } from "@monyvi/db";
 
@@ -58,9 +61,9 @@ jest.mock("@/components/modals/CategorySelectorModal", () => ({
     readonly onSelect: (id: string) => void;
   }): React.JSX.Element | null =>
     visible ? (
-      <TouchableOpacity testID="pick-food" onPress={() => onSelect("food")}>
+      <MockTouchableOpacity testID="pick-food" onPress={() => onSelect("food")}>
         <MockText>pick_food</MockText>
-      </TouchableOpacity>
+      </MockTouchableOpacity>
     ) : null,
 }));
 
@@ -92,9 +95,13 @@ jest.mock("@/components/modals/ConfirmationModal", () => ({
       <>
         <MockText>{title}</MockText>
         <MockText>{message}</MockText>
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel={confirmLabel} onPress={onConfirm}>
+        <MockTouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={confirmLabel}
+          onPress={onConfirm}
+        >
           <MockText>{confirmLabel}</MockText>
-        </TouchableOpacity>
+        </MockTouchableOpacity>
       </>
     ) : null,
 }));
