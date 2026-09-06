@@ -1,10 +1,19 @@
-import { FlatList, Pressable, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import {
+  FlatList,
+  I18nManager,
+  Pressable,
+  Text,
+  useColorScheme,
+  View,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { resolvePuritySelection } from "@monyvi/logic";
 
 import { MetalHoldingRender } from "@/components/metals/MetalHoldingRender";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { palette } from "@/constants/colors";
 import type {
   MetalHistoryCounts,
   MetalHistoryFilter,
@@ -99,6 +108,7 @@ function HistoryRow({
   readonly onPress: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation("metals");
+  const colorScheme = useColorScheme();
   const metalLabel = t(
     item.metalType === "GOLD" ? "metal.gold" : "metal.silver"
   );
@@ -116,7 +126,7 @@ function HistoryRow({
       accessible
       accessibilityLabel={`${statusLabel}. ${item.name}. ${metadata}. ${dateLabel}`}
       accessibilityRole="button"
-      className="flex-row items-center gap-3 border-b border-slate-200 py-4 dark:border-slate-800"
+      className="mb-3 flex-row items-center gap-3 rounded-2xl border border-slate-200 bg-surface p-4 dark:border-slate-700 dark:bg-slate-900"
       onPress={onPress}
     >
       <MetalHoldingRender itemForm={item.itemForm} metalType={item.metalType} />
@@ -134,6 +144,13 @@ function HistoryRow({
           {dateLabel}
         </Text>
       </View>
+      <Ionicons
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+        color={colorScheme === "dark" ? palette.slate[300] : palette.slate[500]}
+        name={I18nManager.isRTL ? "chevron-back" : "chevron-forward"}
+        size={20}
+      />
     </Pressable>
   );
 }

@@ -316,11 +316,11 @@ describe("US3 holding experience", () => {
     );
     expect(screen.getByTestId("metal-history-item-sold")).toHaveProp(
       "className",
-      expect.not.stringContaining("rounded-2xl")
+      expect.stringContaining("rounded-2xl")
     );
     expect(screen.getByTestId("metal-history-item-sold")).toHaveProp(
       "className",
-      expect.stringContaining("border-b")
+      expect.stringContaining("border")
     );
     expect(screen.getByTestId("metal-history-root")).toHaveProp(
       "contentContainerClassName",

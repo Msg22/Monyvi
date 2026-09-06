@@ -17,7 +17,7 @@ export default function MetalHoldingDetailRoute(): React.JSX.Element {
       <PageHeader
         showBackButton
         showDrawer={false}
-        title={detail.model?.name ?? t("detail.title")}
+        title={t("detail.title")}
       />
       <MetalHoldingDetailScreen
         actions={[]}

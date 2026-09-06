@@ -32,6 +32,7 @@ const translations: Readonly<Record<string, string>> = {
   "detail.calculation_disclosure": "How this value was calculated",
   "detail.current_value": "Current value",
   "detail.current_value_unavailable": "Current value unavailable",
+  "detail.current_value_rate_unavailable": "A current market rate is unavailable. Your holding details are still saved here.",
   "detail.fact_accessibility": "{{label}}: {{value}}",
   "detail.follow_value": "Follow the value",
   "detail.history": "History",
@@ -50,6 +51,7 @@ const translations: Readonly<Record<string, string>> = {
   "metal.silver": "Silver",
   "portfolio.rates_updated": "Rates updated {{when}}",
   "rate.stale": "Rates may be outdated",
+  "rate.missing": "Rates: current rate unavailable",
   purity_gold_999: "24K · 999",
   "render.objectAccessibility": "{{metal}} {{form}} illustration",
   "status.active": "Active",
@@ -278,6 +280,37 @@ describe("approved active holding-detail fidelity", () => {
     expect(screen.getByText("EGP 162,317.87")).toBeTruthy();
     expect(screen.getByText("Rates may be outdated")).toBeTruthy();
     expect(screen.getByText("Source: provider-cache")).toBeTruthy();
+  });
+
+  it("explains a missing current rate without hiding the holding's saved facts", () => {
+    render(
+      <MetalHoldingDetailScreen
+        actions={[]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={activeDetail({
+          currentValueDecimal: null,
+          currentValueRateStatus: {
+            ageMs: null,
+            providerObservedAt: null,
+            quality: "missing",
+            source: null,
+            state: "missing",
+          },
+          totalGainDecimal: null,
+        })}
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("Current value unavailable")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "A current market rate is unavailable. Your holding details are still saved here."
+      )
+    ).toBeTruthy();
+    expect(screen.getByText("Physical facts")).toBeTruthy();
   });
 
   it("keeps text legible in dark mode and uses a loss color for negative performance", () => {

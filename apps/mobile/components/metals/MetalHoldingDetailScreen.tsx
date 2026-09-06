@@ -4,6 +4,7 @@ import {
   FlatList,
   Pressable,
   Text,
+  useColorScheme,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -313,10 +314,20 @@ function ValueSummary({
   const { t, i18n } = useTranslation("metals");
   const locale = resolveLocale(i18n.resolvedLanguage);
   if (model.currentValueDecimal === null) {
+    const isRateUnavailable =
+      model.currentValueRateStatus?.state === "missing" ||
+      model.currentValueRateStatus?.state === "invalid";
     return (
-      <Text className="border-t border-slate-200 pt-6 text-base text-text-secondary dark:border-slate-800 dark:text-text-secondary-dark">
-        {t("detail.current_value_unavailable")}
-      </Text>
+      <View className="gap-2 border-t border-slate-200 pt-6 dark:border-slate-800">
+        <Text className="text-base font-medium text-text-primary dark:text-text-primary-dark">
+          {t("detail.current_value_unavailable")}
+        </Text>
+        {isRateUnavailable ? (
+          <Text className="text-sm leading-5 text-text-secondary dark:text-text-secondary-dark">
+            {t("detail.current_value_rate_unavailable")}
+          </Text>
+        ) : null}
+      </View>
     );
   }
 
@@ -457,6 +468,9 @@ function CalculationDisclosure({
   readonly onPress: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation("metals");
+  const colorScheme = useColorScheme();
+  const iconColor =
+    colorScheme === "dark" ? palette.slate[300] : palette.slate[500];
   return (
     <Pressable
       accessibilityRole="button"
@@ -467,7 +481,7 @@ function CalculationDisclosure({
       <Ionicons
         name="information-circle-outline"
         size={24}
-        color={palette.slate[500]}
+        color={iconColor}
       />
       <Text className="min-w-0 flex-1 text-base text-text-primary dark:text-text-primary-dark">
         {t("detail.calculation_disclosure")}
@@ -475,7 +489,7 @@ function CalculationDisclosure({
       <Ionicons
         name={expanded ? "chevron-up" : "chevron-down"}
         size={22}
-        color={palette.slate[500]}
+        color={iconColor}
       />
     </Pressable>
   );
@@ -606,6 +620,9 @@ function FactRow({
   readonly value: string;
 }): React.JSX.Element {
   const { t } = useTranslation("metals");
+  const colorScheme = useColorScheme();
+  const iconColor =
+    colorScheme === "dark" ? palette.nileGreen[400] : palette.nileGreen[700];
   return (
     <View
       accessible
@@ -613,7 +630,7 @@ function FactRow({
       className="flex-row items-center gap-3"
     >
       <View className="h-9 w-9 items-center justify-center rounded-full bg-nileGreen-50 dark:bg-slate-800">
-        <Ionicons name={icon} size={20} color={palette.nileGreen[700]} />
+        <Ionicons name={icon} size={20} color={iconColor} />
       </View>
       <Text className="text-base text-text-primary dark:text-text-primary-dark">
         {value}
