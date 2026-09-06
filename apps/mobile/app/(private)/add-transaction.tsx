@@ -285,19 +285,29 @@ export default function AddTransaction(): React.ReactNode {
       throw new Error(t("please_select_an_account"));
     }
 
-    const recurring = await createRecurringPayment({
-      name: recurringName,
-      amount,
-      currency,
-      type,
-      accountId: selectedAccountId,
-      categoryId: selectedCategoryId,
-      frequency: recurringFrequency,
-      startDate: date,
-      initialOccurrenceRecorded: true,
-      action: recurringAutoCreate ? "AUTO_CREATE" : "NOTIFY",
-    });
-    return recurring.id;
+    try {
+      const recurring = await createRecurringPayment({
+        name: recurringName,
+        amount,
+        currency,
+        type,
+        accountId: selectedAccountId,
+        categoryId: selectedCategoryId,
+        frequency: recurringFrequency,
+        startDate: date,
+        initialOccurrenceRecorded: true,
+        action: recurringAutoCreate ? "AUTO_CREATE" : "NOTIFY",
+      });
+      return recurring.id;
+    } catch (error: unknown) {
+      if (getRecurringPaymentErrorMessage(error, t) === null) {
+        logger.error("Recurring payment operation failed", error, {
+          operation: "create",
+          source: "add-transaction",
+        });
+      }
+      throw error;
+    }
   };
 
   const validateAndCreateTransfer = async (amount: number): Promise<void> => {
