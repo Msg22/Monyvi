@@ -71,6 +71,8 @@ const LEGACY_MUTATION_OWNER_BY_SYMBOL: Readonly<Record<string, string>> = {
     "transaction.create",
   "apps/mobile/services/transaction-financial-action-service.ts#buildPlan":
     "transaction.create",
+  "apps/mobile/services/recurring-payment-financial-action-service.ts#buildPlan":
+    "recurring.pay-now",
   "apps/mobile/services/transaction-service.ts#updateTransaction":
     "transaction.update",
   "apps/mobile/services/transaction-service.ts#deleteTransaction":
@@ -201,7 +203,7 @@ describe("issue #242 account-balance writer completeness guard", () => {
 
     expect(unknown).toEqual([]);
     expect(new Set(Object.values(LEGACY_MUTATION_OWNER_BY_SYMBOL))).toEqual(
-      new Set(LOCAL_WRITER_IDS)
+      new Set([...LOCAL_WRITER_IDS, "recurring.pay-now"])
     );
   });
 
@@ -218,9 +220,9 @@ describe("issue #242 account-balance writer completeness guard", () => {
       expect(registeredIds).toContain(writerId);
     });
     expect(statuses).toHaveLength(REQUIRED_REGISTRY_IDS.length);
-    expect(statuses.every((status) => status === "guarded" || status === "blocked")).toBe(
-      true
-    );
+    expect(
+      statuses.every((status) => status === "guarded" || status === "blocked")
+    ).toBe(true);
   });
 
   it("keeps effect-free Cash account creation at the revision-zero boundary", () => {

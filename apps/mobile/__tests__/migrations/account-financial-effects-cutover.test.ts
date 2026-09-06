@@ -167,4 +167,29 @@ describe("069 account financial-effects cutover", () => {
       /revoke\s+all[\s\S]*account_financial_action_cutover_quarantine/i
     );
   });
+
+  it("registers the account revision and effect evidence in the local database", () => {
+    const schema = source("packages/db/src/schema.ts");
+    const migrations = source("packages/db/src/migrations.ts");
+    const database = source("packages/db/src/database.ts");
+    const barrel = source("packages/db/src/index.ts");
+    const generatedTypes = source("packages/db/src/supabase-types.ts");
+
+    expect(schema).toMatch(/version:\s*29/);
+    expect(schema).toMatch(
+      /name:\s*["']accounts["'][\s\S]*name:\s*["']financial_revision["']/
+    );
+    expect(schema).toMatch(
+      /name:\s*["']account_financial_effects["'][\s\S]*name:\s*["']accepted_account_revision["']/
+    );
+    expect(migrations).toMatch(/toVersion:\s*29/);
+    expect(migrations).toContain('table: "accounts"');
+    expect(migrations).toContain('name: "account_financial_effects"');
+    expect(database).toContain("AccountFinancialEffect");
+    expect(barrel).toContain(
+      'export { AccountFinancialEffect } from "./models/AccountFinancialEffect"'
+    );
+    expect(generatedTypes).toContain("account_financial_effects:");
+    expect(generatedTypes).toContain("financial_revision: number;");
+  });
 });

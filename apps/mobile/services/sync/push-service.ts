@@ -402,6 +402,8 @@ export async function pushMetalDedicatedChanges(
       !hasUnacceptedLinkedRow &&
       !hasUnacceptedState,
   };
+}
+
 const ACCOUNT_FINANCIAL_ACTION_RPC = "apply_account_financial_action_v1";
 let productionFinancialActionPushCoordinator:
   | FinancialActionPushCoordinator
@@ -569,9 +571,7 @@ async function resolveAccountActionAcknowledgements(
   );
   if (
     decisionByActionId.size !== bundles.length ||
-    bundles.some(
-      (bundle) => !decisionByActionId.has(bundle.candidate.actionId)
-    )
+    bundles.some((bundle) => !decisionByActionId.has(bundle.candidate.actionId))
   ) {
     throw new Error(GENERIC_SYNC_ERROR_CODES.INVALID_ACTION_PUSH_OUTCOME);
   }

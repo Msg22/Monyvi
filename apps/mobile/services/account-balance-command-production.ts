@@ -1,7 +1,6 @@
-import { database } from "@monyvi/db";
+import { AccountFinancialEffect, database } from "@monyvi/db";
 import * as Crypto from "expo-crypto";
 
-import { AccountFinancialEffect } from "../../../packages/db/src/models/AccountFinancialEffect";
 import { createAccountBalanceCommandService } from "./account-balance-command-service";
 import { commitFinancialActionGroupLocally } from "./financial-action-foundation-repository";
 

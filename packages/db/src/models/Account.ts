@@ -1,9 +1,6 @@
 import { BaseAccount } from "./base/base-account";
-import { field } from "@nozbe/watermelondb/decorators";
 
 export class Account extends BaseAccount {
-  @field("financial_revision") financialRevision!: string;
-
   get isBank(): boolean {
     return this.type === "BANK";
   }

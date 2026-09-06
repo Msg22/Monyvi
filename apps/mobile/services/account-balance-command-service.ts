@@ -1,5 +1,7 @@
 import type { Model } from "@nozbe/watermelondb";
+import type { CurrencyType } from "@monyvi/db";
 import {
+  CURRENCY_INFO_MAP,
   CURRENCY_PRECISION,
   DEFAULT_PRECISION,
   canonicalizeFinancialActionEnvelope,
@@ -28,7 +30,7 @@ interface AccountEffectInput {
   readonly accountId: string;
   readonly actionId: string;
   readonly amountMinorUnits: string;
-  readonly currency: string;
+  readonly currency: CurrencyType;
   readonly domain: string;
   readonly kind: string;
   readonly userId: string;
@@ -37,7 +39,7 @@ interface AccountEffectInput {
 interface AccountBalanceEffect {
   readonly accountId: string;
   readonly amountMinorUnits: string;
-  readonly currency: string;
+  readonly currency: CurrencyType;
 }
 
 export interface AccountBalanceCommandDependencies {
@@ -63,7 +65,7 @@ export interface AccountBalanceCommandService {
 interface AccountExpectation {
   readonly accountId: string;
   readonly amountMinorUnits: string;
-  readonly currency: string;
+  readonly currency: CurrencyType;
   readonly expectedRevision: string;
   readonly nextRevision: string;
 }
@@ -87,11 +89,12 @@ function readBalance(raw: Model["_raw"]): number {
   return value;
 }
 
-function currencyPlaces(currency: string): number {
-  return (
-    CURRENCY_PRECISION[currency as keyof typeof CURRENCY_PRECISION] ??
-    DEFAULT_PRECISION
-  );
+function currencyPlaces(currency: CurrencyType): number {
+  return CURRENCY_PRECISION[currency] ?? DEFAULT_PRECISION;
+}
+
+function isCurrencyType(value: string): value is CurrencyType {
+  return Object.prototype.hasOwnProperty.call(CURRENCY_INFO_MAP, value);
 }
 
 function expectedBalance(
@@ -129,7 +132,8 @@ function readEffects(
     if (
       typeof record.accountId !== "string" ||
       typeof record.amountMinorUnits !== "string" ||
-      typeof record.currency !== "string"
+      typeof record.currency !== "string" ||
+      !isCurrencyType(record.currency)
     )
       fail(ACCOUNT_BALANCE_COMMAND_ERROR_CODES.INVALID_PLAN);
     return {

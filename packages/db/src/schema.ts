@@ -9,8 +9,35 @@ import { appSchema, tableSchema } from "@nozbe/watermelondb";
 import { SMS_REVIEW_DRAFT_TABLES } from "./local-schema/sms-review-draft-schema";
 
 export const schema = appSchema({
-  version: 28,
+  version: 29,
   tables: [
+    tableSchema({
+      name: "account_financial_effects",
+      unsafeSql: (sql: string): string =>
+        `${sql}create unique index if not exists "account_financial_effects_user_action_account_kind_unique" on "account_financial_effects" ("user_id", "action_id", "account_id", "kind");create unique index if not exists "account_financial_effects_reversal_once_unique" on "account_financial_effects" ("user_id", "reverses_effect_id") where "reverses_effect_id" is not null;`,
+      columns: [
+        { name: "accepted_account_revision", type: "string" },
+        { name: "account_id", type: "string", isIndexed: true },
+        { name: "action_id", type: "string", isIndexed: true },
+        { name: "amount_minor_units", type: "string" },
+        { name: "compensated_at", type: "number", isOptional: true },
+        { name: "created_at", type: "number" },
+        { name: "currency", type: "string" },
+        { name: "deleted", type: "boolean" },
+        { name: "domain", type: "string" },
+        { name: "is_effective", type: "boolean" },
+        { name: "kind", type: "string" },
+        {
+          name: "reverses_effect_id",
+          type: "string",
+          isOptional: true,
+          isIndexed: true,
+        },
+        { name: "updated_at", type: "number" },
+        { name: "user_id", type: "string", isIndexed: true },
+      ],
+    }),
+
     tableSchema({
       name: "account_sms_senders",
       columns: [
@@ -30,6 +57,7 @@ export const schema = appSchema({
         { name: "created_at", type: "number" },
         { name: "currency", type: "string" },
         { name: "deleted", type: "boolean" },
+        { name: "financial_revision", type: "string" },
         {
           name: "institution_id",
           type: "string",

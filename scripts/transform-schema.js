@@ -76,13 +76,56 @@ const TABLE_TO_CLASS = {
 // existing generated models while allowing repository code to clear sync state
 // without casts or direct `_raw` writes.
 const EXPLICIT_NULL_MODEL_FIELDS = new Set([
+  "account_financial_effects.compensated_at",
+  "account_financial_effects.reverses_effect_id",
+  "asset_metals.purity_catalog_version",
+  "asset_metals.purity_code",
+  "asset_metals.purity_factor_decimal",
+  "asset_metals.weight_grams_decimal",
+  "assets.acquisition_action_id",
+  "assets.purchase_currency",
+  "assets.purchase_price_decimal",
   "financial_action_groups.outcome_json",
   "financial_action_groups.rejection_code",
   "financial_action_groups.server_outcome",
 ]);
 
 // Fields that should be indexed
-const INDEXED_FIELDS = ["user_id", "sms_fingerprint"];
+const INDEXED_FIELDS = ["instrument_code", "user_id", "sms_fingerprint"];
+
+const NON_INDEXED_ID_FIELDS = new Set([
+  "metal_holding_states.name_writer_id",
+  "metal_holding_states.notes_writer_id",
+]);
+
+const EXACT_TEXT_MODEL_FIELDS = new Set([
+  "account_financial_effects.accepted_account_revision",
+  "account_financial_effects.amount_minor_units",
+  "accounts.financial_revision",
+  "asset_metals.purity_factor_decimal",
+  "asset_metals.weight_grams_decimal",
+  "assets.purchase_price_decimal",
+  "market_rate_observations.value_decimal",
+  "metal_action_evidence.canonical_holding_revision",
+  "metal_action_evidence.expected_holding_revision",
+  "metal_holding_states.financial_revision",
+  "metal_rate_references.value_decimal",
+]);
+
+const UNSAFE_SQL_BY_TABLE = {
+  account_financial_effects:
+    'create unique index if not exists "account_financial_effects_user_action_account_kind_unique" on "account_financial_effects" ("user_id", "action_id", "account_id", "kind");create unique index if not exists "account_financial_effects_reversal_once_unique" on "account_financial_effects" ("user_id", "reverses_effect_id") where "reverses_effect_id" is not null;',
+  financial_action_groups:
+    'create unique index if not exists "financial_action_groups_user_action_unique" on "financial_action_groups" ("user_id", "action_id");',
+  metal_action_evidence:
+    'create unique index if not exists "metal_action_evidence_user_action_unique" on "metal_action_evidence" ("user_id", "action_id");',
+  metal_holding_states:
+    'create unique index if not exists "metal_holding_states_holding_unique" on "metal_holding_states" ("holding_id");',
+  metal_lifecycle_events:
+    'create unique index if not exists "metal_lifecycle_events_user_action_unique" on "metal_lifecycle_events" ("user_id", "action_id");',
+  metal_rate_references:
+    'create unique index if not exists "metal_rate_references_user_action_role_unique" on "metal_rate_references" ("user_id", "action_id", "role");',
+};
 
 // Fields that are timestamps (stored as number in WatermelonDB)
 const TIMESTAMP_FIELDS = [
@@ -97,6 +140,10 @@ const TIMESTAMP_FIELDS = [
   "period_start",
   "period_end",
   "snapshot_date",
+  "provider_observed_at",
+  "occurred_at",
+  "captured_at",
+  "compensated_at",
 ];
 
 // Fields that are readonly
@@ -223,7 +270,7 @@ function parseSupabaseTypes(content) {
       columns.push({
         name: colName,
         rawType: colType,
-        ...parseColumnType(colType, colName, enums),
+        ...parseColumnType(colType, colName, tableName, enums),
       });
     }
 
@@ -256,7 +303,7 @@ function parseSupabaseTypes(content) {
 /**
  * Parse a column type from Supabase types to WatermelonDB type
  */
-function parseColumnType(rawType, columnName, enums) {
+function parseColumnType(rawType, columnName, tableName, enums) {
   // JSON columns are stored as TEXT in WatermelonDB and may legitimately
   // hold an empty string between migration and the first server sync,
   // even when the upstream Supabase column is `NOT NULL DEFAULT '{}'`.
@@ -296,13 +343,17 @@ function parseColumnType(rawType, columnName, enums) {
   const isJsonField = cleanType === "Json" && JSON_FIELDS.includes(columnName);
 
   // Check if it should be indexed
+  const fieldKey = `${tableName}.${columnName}`;
   const isIndexed =
-    INDEXED_FIELDS.includes(columnName) || columnName.endsWith("_id");
+    !NON_INDEXED_ID_FIELDS.has(fieldKey) &&
+    (INDEXED_FIELDS.includes(columnName) || columnName.endsWith("_id"));
 
   // Check if it's a timestamp
   const isTimestamp = TIMESTAMP_FIELDS.includes(columnName);
   if (isTimestamp) {
     wmType = "number";
+  } else if (EXACT_TEXT_MODEL_FIELDS.has(fieldKey)) {
+    wmType = "string";
   }
 
   return {
@@ -334,12 +385,12 @@ function generateSchema(tables) {
         })
         .join(",\n");
 
-      const unsafeSql =
-        tableName === "financial_action_groups"
-          ? `
+      const unsafeSqlBody = UNSAFE_SQL_BY_TABLE[tableName];
+      const unsafeSql = unsafeSqlBody
+        ? `
       unsafeSql: (sql: string): string =>
-        \`\${sql}create unique index if not exists "financial_action_groups_user_action_unique" on "financial_action_groups" ("user_id", "action_id");\`,`
-          : "";
+        \`\${sql}${unsafeSqlBody}\`,`
+        : "";
 
       return `    tableSchema({
       name: "${tableName}",${unsafeSql}
