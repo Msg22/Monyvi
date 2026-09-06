@@ -198,9 +198,11 @@ export function createFinancialActionPushCoordinator(
           });
           continue;
         }
-        await dependencies.markFinancialActionGroupSyncPending(
-          candidate.actionId
-        );
+        if (candidate.state !== "sync_pending") {
+          await dependencies.markFinancialActionGroupSyncPending(
+            candidate.actionId
+          );
+        }
         let rawOutcome: unknown;
         try {
           rawOutcome = await dependencies.invokeAccountFinancialActionRpc({

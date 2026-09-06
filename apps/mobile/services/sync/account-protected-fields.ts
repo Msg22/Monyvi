@@ -21,33 +21,66 @@ function readChangeId(value: unknown): string | null {
   return typeof value.id === "string" && value.id.length > 0 ? value.id : null;
 }
 
-function protectedRefsFromRoot(record: unknown): ReadonlyArray<{
-  readonly id: string;
-  readonly table: string;
-}> {
-  if (!isObject(record) || typeof record.payload_json !== "string") return [];
+interface AccountBalanceEnvelope {
+  readonly accountGuards: readonly Readonly<Record<string, unknown>>[];
+  readonly payload: Readonly<Record<string, unknown>>;
+}
+
+function readAccountBalanceEnvelope(record: unknown): AccountBalanceEnvelope | null {
+  if (!isObject(record) || typeof record.payload_json !== "string") return null;
   let envelope: unknown;
   try {
     envelope = JSON.parse(record.payload_json);
   } catch {
-    return [];
+    return null;
   }
   if (
     !isObject(envelope) ||
     envelope.payloadVersion !== "account.balance-effects/v1" ||
-    !isObject(envelope.payload) ||
-    !isObject(envelope.payload.domainMutation) ||
-    !Array.isArray(envelope.payload.domainMutation.records)
+    !isObject(envelope.payload)
   )
-    return [];
-  return envelope.payload.domainMutation.records.flatMap((candidate) => {
-    if (!isObject(candidate) || !isObject(candidate.after)) return [];
-    const table = ENTITY_TABLES[candidate.entity as keyof typeof ENTITY_TABLES];
-    const id = candidate.after.id;
-    return typeof table === "string" && typeof id === "string"
-      ? [{ id, table }]
-      : [];
+    return null;
+  return {
+    accountGuards: Array.isArray(envelope.accountGuards)
+      ? envelope.accountGuards.filter(isObject)
+      : [],
+    payload: envelope.payload,
+  };
+}
+
+function protectedRefsFromRoot(record: unknown): ReadonlyArray<{
+  readonly id: string;
+  readonly table: string;
+}> {
+  const envelope = readAccountBalanceEnvelope(record);
+  if (!envelope) return [];
+  const refs: Array<{ readonly id: string; readonly table: string }> = [];
+  const domainMutation = envelope.payload.domainMutation;
+  if (isObject(domainMutation) && Array.isArray(domainMutation.records)) {
+    domainMutation.records.forEach((candidate) => {
+      if (!isObject(candidate)) return;
+      const table = ENTITY_TABLES[candidate.entity as keyof typeof ENTITY_TABLES];
+      const recordId = readChangeId(candidate.after) ?? readChangeId(candidate.before);
+      if (typeof table === "string" && recordId) refs.push({ id: recordId, table });
+    });
+  }
+  const accountEffects = envelope.payload.accountEffects;
+  if (Array.isArray(accountEffects)) {
+    accountEffects.forEach((candidate) => {
+      if (!isObject(candidate)) return;
+      const accountId = candidate.accountId;
+      if (typeof accountId === "string" && accountId.length > 0) {
+        refs.push({ id: accountId, table: "accounts" });
+      }
+    });
+  }
+  envelope.accountGuards.forEach((guard) => {
+    const accountId = guard.accountId;
+    if (typeof accountId === "string" && accountId.length > 0) {
+      refs.push({ id: accountId, table: "accounts" });
+    }
   });
+  return refs;
 }
 
 export interface AccountFinancialActionPushBundle {
@@ -101,6 +134,102 @@ function groupRowIds(
   return Object.freeze(Object.fromEntries([...grouped.entries()].sort()));
 }
 
+function readGuardRevisions(
+  record: unknown
+): ReadonlyMap<string, string> {
+  const envelope = readAccountBalanceEnvelope(record);
+  const revisions = new Map<string, string>();
+  if (!envelope) return revisions;
+  envelope.accountGuards.forEach((guard) => {
+    const accountId = guard.accountId;
+    const expectedRevision = guard.expectedRevision;
+    if (
+      typeof accountId === "string" &&
+      accountId.length > 0 &&
+      typeof expectedRevision === "string" &&
+      /^\d+$/.test(expectedRevision)
+    ) {
+      revisions.set(accountId, expectedRevision);
+    }
+  });
+  return revisions;
+}
+
+function compareRevision(left: string, right: string): number {
+  const normalizedLeft = left.replace(/^0+(?=\d)/, "");
+  const normalizedRight = right.replace(/^0+(?=\d)/, "");
+  if (normalizedLeft.length !== normalizedRight.length) {
+    return normalizedLeft.length < normalizedRight.length ? -1 : 1;
+  }
+  return normalizedLeft.localeCompare(normalizedRight);
+}
+
+function orderBundlesByAccountRevision(
+  bundles: readonly AccountFinancialActionPushBundle[],
+  revisionsByAction: ReadonlyMap<string, ReadonlyMap<string, string>>
+): readonly AccountFinancialActionPushBundle[] {
+  if (bundles.length < 2) return bundles;
+  const edges = bundles.map(() => new Set<number>());
+  const indegrees = bundles.map(() => 0);
+
+  for (let leftIndex = 0; leftIndex < bundles.length; leftIndex += 1) {
+    for (
+      let rightIndex = leftIndex + 1;
+      rightIndex < bundles.length;
+      rightIndex += 1
+    ) {
+      const leftRevisions =
+        revisionsByAction.get(bundles[leftIndex].candidate.actionId) ?? new Map();
+      const rightRevisions =
+        revisionsByAction.get(bundles[rightIndex].candidate.actionId) ?? new Map();
+      leftRevisions.forEach((leftRevision, accountId) => {
+        const rightRevision = rightRevisions.get(accountId);
+        if (rightRevision === undefined) return;
+        const comparison = compareRevision(leftRevision, rightRevision);
+        if (comparison === 0) return;
+        const from = comparison < 0 ? leftIndex : rightIndex;
+        const to = comparison < 0 ? rightIndex : leftIndex;
+        if (!edges[from].has(to)) {
+          edges[from].add(to);
+          indegrees[to] += 1;
+        }
+      });
+    }
+  }
+
+  const byActionId = (left: number, right: number): number =>
+    bundles[left].candidate.actionId.localeCompare(
+      bundles[right].candidate.actionId
+    );
+  const ready = indegrees
+    .map((indegree, index) => (indegree === 0 ? index : -1))
+    .filter((index) => index >= 0)
+    .sort(byActionId);
+  const orderedIndexes: number[] = [];
+  while (ready.length > 0) {
+    const current = ready.shift();
+    if (current === undefined) break;
+    orderedIndexes.push(current);
+    edges[current].forEach((next) => {
+      indegrees[next] -= 1;
+      if (indegrees[next] === 0) {
+        ready.push(next);
+        ready.sort(byActionId);
+      }
+    });
+  }
+  if (orderedIndexes.length < bundles.length) {
+    const emitted = new Set(orderedIndexes);
+    orderedIndexes.push(
+      ...bundles
+        .map((_bundle, index) => index)
+        .filter((index) => !emitted.has(index))
+        .sort(byActionId)
+    );
+  }
+  return Object.freeze(orderedIndexes.map((index) => bundles[index]));
+}
+
 export function collectAccountFinancialActionPushBundles(
   changes: SyncPushArgs["changes"]
 ): readonly AccountFinancialActionPushBundle[] {
@@ -111,7 +240,8 @@ export function collectAccountFinancialActionPushBundles(
   ).financial_action_groups;
   if (!roots) return [];
   const effectIdsByAction = collectEffectIdsByAction(changes);
-  return [...roots.created, ...roots.updated].flatMap((candidate) => {
+  const revisionsByAction = new Map<string, ReadonlyMap<string, string>>();
+  const bundles = [...roots.created, ...roots.updated].flatMap((candidate) => {
     if (!isObject(candidate)) return [];
     const refs = protectedRefsFromRoot(candidate);
     const actionId = readNonEmptyString(candidate, "action_id");
@@ -123,6 +253,7 @@ export function collectAccountFinancialActionPushBundles(
       return [];
     }
     if (refs.length === 0) return [];
+    revisionsByAction.set(actionId, readGuardRevisions(candidate));
     return [
       Object.freeze({
         candidate: Object.freeze({
@@ -139,6 +270,7 @@ export function collectAccountFinancialActionPushBundles(
       }),
     ];
   });
+  return orderBundlesByAccountRevision(bundles, revisionsByAction);
 }
 
 export function collectProtectedFinancialActionRowIds(
