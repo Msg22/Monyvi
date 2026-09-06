@@ -50,9 +50,10 @@ const RESET_TABLE_DELETE_ORDER = [
   "budgets",
   "debts",
   "metal_rate_references",
+  "metal_holding_states",
   "metal_lifecycle_events",
   "metal_action_evidence",
-  "metal_holding_states",
+  "financial_action_groups",
   "assets",
   "daily_snapshot_assets",
   "daily_snapshot_balance",
@@ -609,6 +610,53 @@ const FIXTURE_INSPECTION_SELECTS = Object.freeze({
     "purity_factor_decimal:purity_factor_decimal::text",
     "purity_catalog_version",
   ].join(","),
+  financial_action_groups: [
+    "id",
+    "action_id",
+    "user_id",
+    "domain",
+    "kind",
+    "domain_reference_id",
+    "payload_json",
+    "payload_hash",
+    "account_guards_json",
+    "state",
+    "server_outcome",
+    "outcome_json",
+    "rejection_code",
+    "created_at",
+    "updated_at",
+    "deleted",
+  ].join(","),
+  metal_action_evidence: [
+    "id",
+    "user_id",
+    "action_id",
+    "holding_id",
+    "kind",
+    "expected_holding_revision:expected_holding_revision::text",
+    "canonical_holding_revision:canonical_holding_revision::text",
+    "domain_payload_json",
+    "created_at",
+    "updated_at",
+    "deleted",
+  ].join(","),
+  metal_lifecycle_events: [
+    "id",
+    "user_id",
+    "holding_id",
+    "action_id",
+    "kind",
+    "occurred_at",
+    "payload_json",
+    "predecessor_event_id",
+    "reverses_event_id",
+    "is_effective",
+    "is_history_visible",
+    "created_at",
+    "updated_at",
+    "deleted",
+  ].join(","),
   metal_holding_states: [
     "id",
     "user_id",
@@ -758,6 +806,9 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
   const expandedBankDetails = extraRows.bankDetails ?? [];
   const assets = extraRows.assets ?? [];
   const assetMetals = extraRows.assetMetals ?? [];
+  const financialActionGroups = extraRows.financialActionGroups ?? [];
+  const metalActionEvidence = extraRows.metalActionEvidence ?? [];
+  const metalLifecycleEvents = extraRows.metalLifecycleEvents ?? [];
   const metalHoldingStates = extraRows.metalHoldingStates ?? [];
   const marketRateObservations = extraRows.marketRateObservations ?? [];
   const marketRates = extraRows.marketRates ?? [];
@@ -911,6 +962,9 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
     assets,
     assetMetals,
     compatibilityCleanupRows,
+    financialActionGroups,
+    metalActionEvidence,
+    metalLifecycleEvents,
     metalHoldingStates,
     marketRateObservations,
     marketRateObservationCleanupRows,
@@ -1030,6 +1084,24 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
   });
   await upsertRowsIfAny(
     client,
+    "financial_action_groups",
+    rows.financialActionGroups,
+    { onConflict: "id" }
+  );
+  await upsertRowsIfAny(
+    client,
+    "metal_action_evidence",
+    rows.metalActionEvidence,
+    { onConflict: "id" }
+  );
+  await upsertRowsIfAny(
+    client,
+    "metal_lifecycle_events",
+    rows.metalLifecycleEvents,
+    { onConflict: "id" }
+  );
+  await upsertRowsIfAny(
+    client,
     "metal_holding_states",
     rows.metalHoldingStates,
     { onConflict: "id" }
@@ -1102,6 +1174,9 @@ async function inspectFixtureData(client, config, fixtureOverrides = {}) {
     ["market_rates", rows.marketRates],
     ["assets", rows.assets],
     ["asset_metals", rows.assetMetals],
+    ["financial_action_groups", rows.financialActionGroups],
+    ["metal_action_evidence", rows.metalActionEvidence],
+    ["metal_lifecycle_events", rows.metalLifecycleEvents],
     ["metal_holding_states", rows.metalHoldingStates],
     ["market_rate_observations", rows.marketRateObservations],
   ]) {
