@@ -9,6 +9,16 @@ function sha256(value) {
   return `sha256:${crypto.createHash("sha256").update(value).digest("hex")}`;
 }
 
+function buildBindingApprovalRevision(imageRevision, bindingRevision) {
+  return sha256(
+    Buffer.from(
+      `approved-reference-image-revision=${imageRevision}\n` +
+        `binding-metadata-revision=${bindingRevision}\n`,
+      "utf8"
+    )
+  );
+}
+
 function readField(markdown, label) {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = markdown.match(new RegExp(`^- ${escaped}:\\s*(.+?)\\s*$`, "m"));
@@ -28,7 +38,10 @@ function extractBindingFacts(markdown) {
 
   const factsStart = start + heading.length;
   const nextHeading = markdown.indexOf("\n## ", factsStart);
-  return markdown.slice(factsStart, nextHeading === -1 ? markdown.length : nextHeading + 1);
+  return markdown.slice(
+    factsStart,
+    nextHeading === -1 ? markdown.length : nextHeading + 1
+  );
 }
 
 function verifyMockupBinding(sidecarPath) {
@@ -43,6 +56,7 @@ function verifyMockupBinding(sidecarPath) {
       errors: [`unable to read binding sidecar: ${error.message}`],
       currentImageRevision: null,
       currentBindingMetadataRevision: null,
+      currentBindingApprovalRevision: null,
     };
   }
 
@@ -57,6 +71,14 @@ function verifyMockupBinding(sidecarPath) {
     markdown,
     "Approved binding metadata revision"
   );
+  const declaredBindingApprovalRevision = readField(
+    markdown,
+    "Binding approval revision"
+  );
+  const approvedBindingApprovalRevision = readField(
+    markdown,
+    "Approved binding approval revision"
+  );
   const approvalEvidence = readField(
     markdown,
     "Binding metadata approval evidence/reference"
@@ -66,8 +88,12 @@ function verifyMockupBinding(sidecarPath) {
     errors.push("approved reference image is required");
   }
 
-  if (!approvedImageRevision || !SHA256_PATTERN.test(approvedImageRevision)) {
-    errors.push("approved reference image revision is required as sha256:<64 lowercase hex>");
+  const hasValidImageRevision =
+    approvedImageRevision !== null && SHA256_PATTERN.test(approvedImageRevision);
+  if (!hasValidImageRevision) {
+    errors.push(
+      "approved reference image revision is required as sha256:<64 lowercase hex>"
+    );
   }
 
   let currentImageRevision = null;
@@ -76,8 +102,7 @@ function verifyMockupBinding(sidecarPath) {
     try {
       currentImageRevision = sha256(fs.readFileSync(imagePath));
       if (
-        approvedImageRevision &&
-        SHA256_PATTERN.test(approvedImageRevision) &&
+        hasValidImageRevision &&
         currentImageRevision !== approvedImageRevision
       ) {
         errors.push(
@@ -90,20 +115,45 @@ function verifyMockupBinding(sidecarPath) {
   }
 
   let currentBindingMetadataRevision = null;
+  const hasValidDeclaredBindingRevision =
+    declaredBindingRevision !== null && SHA256_PATTERN.test(declaredBindingRevision);
   try {
     currentBindingMetadataRevision = sha256(
       Buffer.from(extractBindingFacts(markdown), "utf8")
     );
-    if (
-      !declaredBindingRevision ||
-      !SHA256_PATTERN.test(declaredBindingRevision)
-    ) {
-      errors.push("binding metadata revision is required as sha256:<64 lowercase hex>");
+    if (!hasValidDeclaredBindingRevision) {
+      errors.push(
+        "binding metadata revision is required as sha256:<64 lowercase hex>"
+      );
     } else if (declaredBindingRevision !== currentBindingMetadataRevision) {
       errors.push("binding metadata revision does not match current binding facts");
     }
   } catch (error) {
     errors.push(error.message);
+  }
+
+  let currentBindingApprovalRevision = null;
+  if (hasValidImageRevision && hasValidDeclaredBindingRevision) {
+    currentBindingApprovalRevision = buildBindingApprovalRevision(
+      approvedImageRevision,
+      declaredBindingRevision
+    );
+  }
+
+  if (
+    !declaredBindingApprovalRevision ||
+    !SHA256_PATTERN.test(declaredBindingApprovalRevision)
+  ) {
+    errors.push(
+      "binding approval revision is required as sha256:<64 lowercase hex>"
+    );
+  } else if (
+    currentBindingApprovalRevision !== null &&
+    declaredBindingApprovalRevision !== currentBindingApprovalRevision
+  ) {
+    errors.push(
+      "binding approval revision does not match the current image and binding metadata"
+    );
   }
 
   if (approvalStatus !== "APPROVED") {
@@ -120,8 +170,26 @@ function verifyMockupBinding(sidecarPath) {
     );
   }
 
+  if (
+    !approvedBindingApprovalRevision ||
+    approvedBindingApprovalRevision === PENDING ||
+    approvedBindingApprovalRevision !== declaredBindingApprovalRevision
+  ) {
+    errors.push(
+      "approved binding approval revision must equal binding approval revision"
+    );
+  }
+
   if (!approvalEvidence || approvalEvidence === PENDING) {
     errors.push("binding metadata approval evidence/reference is required");
+  } else if (
+    approvedBindingApprovalRevision &&
+    approvedBindingApprovalRevision !== PENDING &&
+    !approvalEvidence.includes(approvedBindingApprovalRevision)
+  ) {
+    errors.push(
+      "approval evidence/reference must identify the approved binding approval revision"
+    );
   }
 
   return {
@@ -129,12 +197,15 @@ function verifyMockupBinding(sidecarPath) {
     errors,
     currentImageRevision,
     currentBindingMetadataRevision,
+    currentBindingApprovalRevision,
   };
 }
 
 function runCli(sidecarPaths) {
   if (sidecarPaths.length === 0) {
-    console.error("Usage: node scripts/verify-mockup-binding.js <sidecar.binding.md> [...]");
+    console.error(
+      "Usage: node scripts/verify-mockup-binding.js <sidecar.binding.md> [...]"
+    );
     return 2;
   }
 
