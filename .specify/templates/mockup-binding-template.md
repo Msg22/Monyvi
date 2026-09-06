@@ -5,10 +5,18 @@
 - Binding metadata approval: PENDING
 - Binding metadata revision: PENDING
 - Approved binding metadata revision: PENDING
+- Binding approval revision: PENDING
+- Approved binding approval revision: PENDING
 - Binding metadata approval evidence/reference: PENDING
 - Legacy metadata migration: no
 
-`Approved reference image revision` MUST be `sha256:<64 lowercase hex>` computed from the exact approved image bytes. The sidecar is authoritative only when `node scripts/verify-mockup-binding.js <this-sidecar>` passes. If the image bytes change for any reason, approval is invalid even when the filename is unchanged; reset all approval fields to `PENDING`, recompute the image revision and binding-facts revision, and obtain renewed explicit approval for the image plus binding metadata together.
+`Approved reference image revision` MUST be `sha256:<64 lowercase hex>` computed from the exact approved image bytes. `Binding metadata revision` MUST be the SHA-256 of the exact UTF-8/LF bytes beneath `## Binding Facts` through the next level-two heading or EOF. `Binding approval revision` MUST be SHA-256 over these exact UTF-8/LF bytes:
+
+```text
+approved-reference-image-revision=<Approved reference image revision>\nbinding-metadata-revision=<Binding metadata revision>\n
+```
+
+The sidecar is authoritative only when `node scripts/verify-mockup-binding.js <this-sidecar>` passes, `Binding metadata approval: APPROVED`, both approved revision fields equal their current revisions, and the approval evidence/reference identifies `Approved binding approval revision`. If either the image bytes or any `## Binding Facts` byte changes, approval is invalid even when the filename is unchanged; reset approval status, both approved revision fields, and approval evidence to `PENDING`, recompute the affected image/metadata revision plus `Binding approval revision`, and obtain renewed explicit approval for the combined image-and-metadata authority tuple.
 
 ## Binding Facts
 
