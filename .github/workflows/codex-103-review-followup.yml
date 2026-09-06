@@ -9,9 +9,9 @@ permissions:
   contents: read
 
 jobs:
-  focused:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       SENTRYCLI_SKIP_DOWNLOAD: "1"
     steps:
@@ -25,6 +25,13 @@ jobs:
         run: npm test -w @monyvi/logic -- --runInBand amount-review-followup
       - name: Recurring localization regressions
         run: npm test -w @monyvi/mobile -- --runInBand recurring-payment-review-followup
+      - name: Full logic tests
+        run: npm test -w @monyvi/logic -- --runInBand
+      - name: Full mobile tests
+        run: npm test -w @monyvi/mobile -- --runInBand
       - name: Typecheck
-        if: always()
         run: npm run typecheck -w @monyvi/logic && npm run typecheck -w @monyvi/mobile
+      - name: Lint mobile
+        run: npm run lint -w @monyvi/mobile
+      - name: i18n coverage
+        run: npm run i18n:check -w @monyvi/mobile
