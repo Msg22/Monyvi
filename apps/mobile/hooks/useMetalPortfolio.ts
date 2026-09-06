@@ -133,17 +133,24 @@ export function useMetalPortfolio(
     return runUserScopedEffect({
       userId,
       isResolvingUser,
-      onResolving: () => resetAssets(setAssets, setIsAssetsLoading),
+      onResolving: () => {
+        assetsRef.current = [];
+        resetAssets(setAssets, setIsAssetsLoading);
+      },
       onSignedOut: () => {
+        assetsRef.current = [];
         setAssets([]);
         setIsAssetsLoading(false);
       },
       onAuthenticated: (currentUserId) => {
+        assetsRef.current = [];
+        setAssets([]);
         setIsAssetsLoading(true);
         const subscription = observePortfolioAssets(currentUserId)
           .observe()
           .subscribe({
             next: (result): void => {
+              assetsRef.current = result;
               setAssets(result);
               setIsAssetsLoading(false);
             },
@@ -153,6 +160,7 @@ export function useMetalPortfolio(
                 reason,
                 setError
               );
+              assetsRef.current = [];
               setAssets([]);
               setIsAssetsLoading(false);
             },
@@ -422,6 +430,7 @@ function subscribeForCurrentUser<T>({
       setLoading(false);
     },
     onAuthenticated: (currentUserId) => {
+      onResolving();
       setLoading(true);
       const subscription = onAuthenticated(currentUserId).subscribe({
         next: (result): void => {
