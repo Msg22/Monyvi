@@ -1,14 +1,8 @@
 /**
  * BudgetForm Component
  *
- * Shared form for creating and editing budgets.
- * Handles name, type toggle, category picker, amount, period selector,
- * custom date range (conditional), alert threshold slider, and validation.
- *
- * Architecture & Design Rationale:
- * - Pattern: Smart Form Component (Composition)
- * - Why: Reused by create-budget.tsx in both create and edit mode.
- * - SOLID: SRP — manages form state and validation only.
+ * Shared form for creating, editing, and renewing budgets.
+ * Keeps persistence semantics intact while presenting the approved premium flow.
  *
  * @module BudgetForm
  */
@@ -16,6 +10,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   Text,
   TextInput,
@@ -28,6 +24,7 @@ import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useCategories } from "@/hooks/useCategories";
 import { CategorySelectorModal } from "@/components/modals/CategorySelectorModal";
+import { ConfirmationModal } from "@/components/modals/ConfirmationModal";
 import { CurrencyPicker } from "@/components/currency/CurrencyPicker";
 import { AlertThresholdSlider } from "./AlertThresholdSlider";
 import type { Budget, BudgetPeriod } from "@monyvi/db";
@@ -50,14 +47,8 @@ import {
   type BudgetFormInitialValues,
 } from "./budget-renewal-form-values";
 
-// =============================================================================
-// Types
-// =============================================================================
-
 interface BudgetFormProps {
-  /** Existing budget for edit mode (undefined = create mode) */
   readonly existingBudget?: Budget;
-  /** Historical source used only to prefill a new budget. */
   readonly renewalSource?: Budget;
 }
 
@@ -71,10 +62,6 @@ interface FormErrors {
   general?: string;
 }
 
-// =============================================================================
-// Constants
-// =============================================================================
-
 const PERIOD_LABELS: Record<BudgetPeriod, string> = {
   WEEKLY: "weekly",
   MONTHLY: "monthly",
@@ -82,18 +69,20 @@ const PERIOD_LABELS: Record<BudgetPeriod, string> = {
 };
 
 const PERIOD_KEYS: BudgetPeriod[] = ["WEEKLY", "MONTHLY", "CUSTOM"];
-
 const DEFAULT_THRESHOLD = 80;
 
-// =============================================================================
-// Component
-// =============================================================================
+function formatAmount(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 2,
+  }).format(value);
+}
 
 export function BudgetForm({
   existingBudget,
   renewalSource,
 }: BudgetFormProps): React.JSX.Element {
   const isEditMode = !!existingBudget;
+  const isRenewalMode = !!renewalSource && !isEditMode;
   const { isDark } = useTheme();
   const { t } = useTranslation("budgets");
   const {
@@ -111,7 +100,6 @@ export function BudgetForm({
   const { preferredCurrency, isLoading: isPreferredCurrencyLoading } =
     usePreferredCurrency();
 
-  // ── Form state ──
   const [form, setForm] = useState<FormState>(() => {
     if (renewalSource) {
       return buildBudgetRenewalFormValues(
@@ -145,10 +133,20 @@ export function BudgetForm({
   const [hasUserSelectedCurrency, setHasUserSelectedCurrency] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  const [showRenewalConfirmation, setShowRenewalConfirmation] = useState(false);
 
   const selectedCategory = form.categoryId
     ? categoryMap.get(form.categoryId)
     : null;
+  const persistedCategoryDisplayName =
+    form.categoryId && existingBudget?.categoryId === form.categoryId
+      ? existingBudget.categoryDisplayName
+      : form.categoryId && renewalSource?.categoryId === form.categoryId
+        ? renewalSource.categoryDisplayName
+        : undefined;
+  const categoryDisplayName =
+    selectedCategory?.displayName ?? persistedCategoryDisplayName;
+
   const isWaitingForCreateCurrency =
     !isEditMode &&
     isPreferredCurrencyLoading &&
@@ -196,12 +194,10 @@ export function BudgetForm({
     renewalSource,
   ]);
 
-  // ── Field updaters ──
   const updateField = useCallback(
     <K extends keyof FormState>(key: K, value: FormState[K]): void => {
       setForm((prev) => ({ ...prev, [key]: value }));
 
-      // Map form keys to their corresponding FormErrors keys
       const errorKeyMap: Partial<Record<keyof FormState, keyof FormErrors>> = {
         categoryId: "category",
         periodStart: "period",
@@ -218,14 +214,23 @@ export function BudgetForm({
     []
   );
 
-  // ── Auto-clear category when switching to Global ──
-  useEffect(() => {
-    if (form.type === "GLOBAL") {
-      setForm((prev) => ({ ...prev, categoryId: null }));
-    }
-  }, [form.type]);
+  const handleScopeChange = useCallback(
+    (type: FormState["type"]): void => {
+      if (isEditMode) return;
+      setForm((current) => ({
+        ...current,
+        type,
+        categoryId: type === "GLOBAL" ? null : current.categoryId,
+      }));
+      setErrors((current) => ({
+        ...current,
+        category: undefined,
+        general: undefined,
+      }));
+    },
+    [isEditMode]
+  );
 
-  // ── Validation ──
   const validate = useCallback((): boolean => {
     const newErrors: FormErrors = {};
 
@@ -245,506 +250,688 @@ export function BudgetForm({
       }
     }
 
-    if (form.period === "CUSTOM") {
-      if (form.periodEnd.getTime() <= form.periodStart.getTime()) {
-        newErrors.period = t("validation_date_order");
-      }
+    if (
+      form.period === "CUSTOM" &&
+      form.periodEnd.getTime() <= form.periodStart.getTime()
+    ) {
+      newErrors.period = t("validation_date_order");
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }, [areCategoriesLoading, categoryError, form, t]);
 
-  // ── Submit ──
-  const handleSubmit = useCallback(async (): Promise<void> => {
-    if (isWaitingForCreateCurrency) return;
-    if (!validate()) return;
+  const persistBudget = useCallback(
+    async (amount: number, currency: string | null): Promise<void> => {
+      setIsSubmitting(true);
+      try {
+        if (isEditMode && existingBudget) {
+          const input: UpdateBudgetInput = {
+            name: form.name.trim(),
+            amount,
+            period: form.period,
+            alertThreshold: form.alertThreshold,
+            ...(form.period === "CUSTOM" && {
+              periodStart: form.periodStart,
+              periodEnd: form.periodEnd,
+            }),
+            ...(form.type === "CATEGORY" && {
+              categoryId: form.categoryId ?? undefined,
+            }),
+          };
 
-    const currency = form.currency;
+          await updateBudget(existingBudget.id, input);
+          showToast({
+            type: "success",
+            title: t("budget_updated"),
+            message: t("budget_updated_message"),
+          });
+        } else {
+          if (!currency) {
+            setErrors({ general: t("validation_currency_required") });
+            return;
+          }
+
+          const input: CreateBudgetInput = {
+            name: form.name.trim(),
+            type: form.type,
+            categoryId:
+              form.type === "CATEGORY"
+                ? (form.categoryId ?? undefined)
+                : undefined,
+            amount,
+            currency,
+            period: form.period,
+            alertThreshold: form.alertThreshold,
+            ...(form.period === "CUSTOM" && {
+              periodStart: form.periodStart,
+              periodEnd: form.periodEnd,
+            }),
+          };
+
+          await createBudget(input);
+          showToast({
+            type: "success",
+            title: t("budget_created"),
+            message: t("budget_created_message"),
+          });
+        }
+
+        router.back();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : t("save_failed");
+        setErrors({ general: message });
+      } finally {
+        setIsSubmitting(false);
+      }
+    }, [existingBudget, form, isEditMode, showToast, t]
+  );
+
+  const handleSubmit = useCallback(async (): Promise<void> => {
+    if (isWaitingForCreateCurrency || !validate()) return;
+
     const amount = parsePositiveMoneyAmount(form.amount);
     if (amount === null) return;
 
-    setIsSubmitting(true);
-    try {
-      if (isEditMode && existingBudget) {
-        // Edit mode
-        const input: UpdateBudgetInput = {
-          name: form.name.trim(),
-          amount,
-          period: form.period,
-          alertThreshold: form.alertThreshold,
-          ...(form.period === "CUSTOM" && {
-            periodStart: form.periodStart,
-            periodEnd: form.periodEnd,
-          }),
-          ...(form.type === "CATEGORY" && {
-            categoryId: form.categoryId ?? undefined,
-          }),
-        };
-
-        await updateBudget(existingBudget.id, input);
-        showToast({
-          type: "success",
-          title: t("budget_updated"),
-          message: t("budget_updated_message"),
-        });
-      } else {
-        if (!currency) {
-          setErrors({ general: t("validation_currency_required") });
-          return;
-        }
-        const input: CreateBudgetInput = {
-          name: form.name.trim(),
-          type: form.type,
-          categoryId:
-            form.type === "CATEGORY"
-              ? (form.categoryId ?? undefined)
-              : undefined,
-          amount,
-          currency,
-          period: form.period,
-          alertThreshold: form.alertThreshold,
-          ...(form.period === "CUSTOM" && {
-            periodStart: form.periodStart,
-            periodEnd: form.periodEnd,
-          }),
-        };
-
-        await createBudget(input);
-        showToast({
-          type: "success",
-          title: t("budget_created"),
-          message: t("budget_created_message"),
-        });
-      }
-
-      router.back();
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Something went wrong";
-      setErrors({ general: message });
-    } finally {
-      setIsSubmitting(false);
+    if (!isEditMode && !form.currency) {
+      setErrors({ general: t("validation_currency_required") });
+      return;
     }
+
+    if (isRenewalMode) {
+      setShowRenewalConfirmation(true);
+      return;
+    }
+
+    await persistBudget(amount, form.currency);
   }, [
-    validate,
+    form.amount,
+    form.currency,
     isEditMode,
-    existingBudget,
-    form,
+    isRenewalMode,
     isWaitingForCreateCurrency,
-    renewalSource,
-    showToast,
+    persistBudget,
     t,
+    validate,
   ]);
 
+  const handleConfirmRenewal = useCallback(async (): Promise<void> => {
+    if (!validate()) {
+      setShowRenewalConfirmation(false);
+      return;
+    }
+
+    const amount = parsePositiveMoneyAmount(form.amount);
+    if (amount === null || !form.currency) {
+      setShowRenewalConfirmation(false);
+      return;
+    }
+
+    setShowRenewalConfirmation(false);
+    await persistBudget(amount, form.currency);
+  }, [form.amount, form.currency, persistBudget, validate]);
+
+  const previewAmountNumber = parsePositiveMoneyAmount(form.amount) ?? 0;
+  const previewAlertAmount =
+    previewAmountNumber * (form.alertThreshold / 100);
+  const previewPeriodLabel = t(PERIOD_LABELS[form.period]);
+  const previewDate = formatDate(form.periodStart, "MMM d, yyyy");
+  const previewSecondaryDate =
+    form.period === "CUSTOM"
+      ? formatDate(form.periodEnd, "MMM d, yyyy")
+      : previewDate;
+  const previewIdentity =
+    form.type === "GLOBAL"
+      ? t("global_type")
+      : (categoryDisplayName ?? t("category_type"));
+  const isSubmitDisabled =
+    isSubmitting ||
+    (form.type === "CATEGORY" && areCategoriesLoading) ||
+    isWaitingForCreateCurrency;
+
+  const selectedScopeClasses =
+    "border-nileGreen-500 bg-nileGreen-50 dark:bg-nileGreen-900/20";
+  const idleScopeClasses =
+    "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800";
+
   return (
-    <ScrollView
-      className="flex-1 px-5"
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingBottom: 40 }}
-    >
-      {/* ─── S-09: Field order: Type → Name → Category → Amount → Period → Alert ─── */}
-
-      {/* General Error */}
-      {errors.general ? (
-        <View className="bg-red-50 dark:bg-red-900/20 p-3 rounded-xl mb-4">
-          <Text className="text-red-600 dark:text-red-400 text-sm font-medium">
-            {errors.general}
-          </Text>
-        </View>
-      ) : null}
-
-      {/* Budget Type (hidden in edit mode) — S-08: icon-bearing cards */}
-      {!isEditMode && (
-        <View className="mb-5">
-          <Text className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold mb-2">
-            {t("budget_type")}
-          </Text>
-          <View className="flex-row gap-3">
-            <TouchableOpacity
-              onPress={() => updateField("type", "CATEGORY")}
-              accessibilityRole="button"
-              accessibilityLabel={t("accessibility_category_budget_type")}
-              accessibilityState={{ selected: form.type === "CATEGORY" }}
-              className={`flex-1 rounded-2xl items-center justify-center border bg-white dark:bg-slate-800 ${
-                form.type === "CATEGORY"
-                  ? ""
-                  : "border-slate-200 dark:border-slate-700"
-              }`}
-              style={[
-                { height: 80 },
-                form.type === "CATEGORY"
-                  ? { borderColor: palette.nileGreen[500], borderWidth: 2 }
-                  : undefined,
-              ]}
-            >
-              <Ionicons
-                name="grid-outline"
-                size={24}
-                color={
-                  form.type === "CATEGORY"
-                    ? palette.nileGreen[500]
-                    : isDark
-                      ? palette.slate[400]
-                      : palette.slate[500]
-                }
-              />
-              <Text
-                className={`text-sm font-bold mt-2 ${
-                  form.type === "CATEGORY"
-                    ? ""
-                    : "text-slate-600 dark:text-slate-300"
-                }`}
-                style={
-                  form.type === "CATEGORY"
-                    ? { color: palette.nileGreen[500] }
-                    : undefined
-                }
-              >
-                {t("category_type")}
+    <>
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          className="flex-1 px-5"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 28, paddingTop: 8 }}
+        >
+          {errors.general ? (
+            <View className="mb-4 rounded-xl bg-red-50 p-3 dark:bg-red-900/20">
+              <Text className="text-sm font-medium text-red-600 dark:text-red-400">
+                {errors.general}
               </Text>
-            </TouchableOpacity>
+            </View>
+          ) : null}
+
+          <Text className="mb-3 mt-2 text-base font-semibold text-slate-500 dark:text-slate-400">
+            1. {t("budget_scope")}
+          </Text>
+
+          <View testID="budget-scope-selector" className="mb-7 flex-row gap-3">
             <TouchableOpacity
-              onPress={() => updateField("type", "GLOBAL")}
-              accessibilityRole="button"
+              testID="budget-scope-global"
+              onPress={() => handleScopeChange("GLOBAL")}
+              disabled={isEditMode}
+              accessibilityRole="radio"
               accessibilityLabel={t("accessibility_global_budget_type")}
-              accessibilityState={{ selected: form.type === "GLOBAL" }}
-              className={`flex-1 rounded-2xl items-center justify-center border bg-white dark:bg-slate-800 ${
+              accessibilityState={{
+                checked: form.type === "GLOBAL",
+                disabled: isEditMode,
+              }}
+              activeOpacity={0.82}
+              className={`relative flex-1 rounded-2xl border p-4 ${
                 form.type === "GLOBAL"
-                  ? ""
-                  : "border-slate-200 dark:border-slate-700"
+                  ? selectedScopeClasses
+                  : idleScopeClasses
               }`}
-              style={[
-                { height: 80 },
-                form.type === "GLOBAL"
-                  ? { borderColor: palette.nileGreen[500], borderWidth: 2 }
-                  : undefined,
-              ]}
             >
-              <Ionicons
-                name="earth-outline"
-                size={24}
-                color={
-                  form.type === "GLOBAL"
-                    ? palette.nileGreen[500]
-                    : isDark
-                      ? palette.slate[400]
-                      : palette.slate[500]
-                }
-              />
-              <Text
-                className={`text-sm font-bold mt-2 ${
-                  form.type === "GLOBAL"
-                    ? ""
-                    : "text-slate-600 dark:text-slate-300"
-                }`}
-                style={
-                  form.type === "GLOBAL"
-                    ? { color: palette.nileGreen[500] }
-                    : undefined
-                }
-              >
+              <View className="mb-3 h-11 w-11 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-900/50">
+                <Ionicons
+                  name="earth-outline"
+                  size={24}
+                  color={palette.nileGreen[500]}
+                />
+              </View>
+              <Text className="text-base font-bold text-slate-900 dark:text-white">
                 {t("global_type")}
               </Text>
+              <Text className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                {t("scope_global_description")}
+              </Text>
+              {form.type === "GLOBAL" ? (
+                <View className="absolute end-3 top-3 h-7 w-7 items-center justify-center rounded-full bg-nileGreen-500">
+                  <Ionicons name="checkmark" size={18} color="white" />
+                </View>
+              ) : null}
             </TouchableOpacity>
-          </View>
-        </View>
-      )}
 
-      {/* Budget Name */}
-      <View className="mb-5">
-        <Text className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold mb-2">
-          {t("budget_name")}
-        </Text>
-        <TextInput
-          value={form.name}
-          onChangeText={(v) => updateField("name", v)}
-          placeholder={t("budget_name_placeholder")}
-          placeholderTextColor={
-            isDark ? palette.slate[600] : palette.slate[400]
-          }
-          className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-base text-slate-800 dark:text-white font-medium"
-        />
-        {errors.name ? (
-          <Text className="text-red-500 text-xs font-medium mt-1">
-            {errors.name}
-          </Text>
-        ) : null}
-      </View>
-
-      {/* Category Picker (only for CATEGORY type) */}
-      {form.type === "CATEGORY" && (
-        <View className="mb-5">
-          <Text className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold mb-2">
-            {t("category_type")}
-          </Text>
-          {categoryError ? (
-            <View
-              testID="budget-category-load-error"
-              className="rounded-2xl border border-red-300 bg-red-50 p-4 dark:border-red-700 dark:bg-red-900/20"
-            >
-              <Text className="text-sm text-red-600 dark:text-red-300">
-                {t("category_load_error")}
-              </Text>
-              <TouchableOpacity
-                className="mt-2 min-h-11 self-start justify-center"
-                accessibilityRole="button"
-                accessibilityLabel={t("retry")}
-                onPress={retryCategories}
-              >
-                <Text className="font-semibold text-nileGreen-600 dark:text-nileGreen-300">
-                  {t("retry")}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
             <TouchableOpacity
-              onPress={() => setIsCategoryModalOpen(true)}
-              activeOpacity={0.7}
-              className="flex-row items-center bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700"
-            >
-              <Ionicons
-                name="grid-outline"
-                size={18}
-                color={isDark ? palette.slate[400] : palette.slate[500]}
-              />
-              <Text
-                numberOfLines={1}
-                className="flex-1 ms-3 text-base font-medium text-slate-800 dark:text-white"
-              >
-                {selectedCategory?.displayName ?? t("select_a_category")}
-              </Text>
-              <Ionicons
-                name="chevron-down"
-                size={16}
-                color={isDark ? palette.slate[500] : palette.slate[400]}
-              />
-            </TouchableOpacity>
-          )}
-          {errors.category ? (
-            <Text className="text-red-500 text-xs font-medium mt-1">
-              {errors.category}
-            </Text>
-          ) : null}
-        </View>
-      )}
-
-      {/* Amount */}
-      <View className="mb-5">
-        <Text className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold mb-2">
-          {t("budget_limit")}
-        </Text>
-        <View className="flex-row items-center bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
-          {isEditMode ? (
-            <View testID="budget-currency-read-only" className="px-4 py-4">
-              <Text className="text-base font-bold text-nileGreen-500">
-                {form.currency ?? "—"}
-              </Text>
-            </View>
-          ) : (
-            <TouchableOpacity
-              testID="budget-currency-selector"
-              onPress={() => setIsCurrencyPickerOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel={t("select_budget_currency")}
-              className="flex-row items-center gap-1 border-e border-slate-200 px-4 py-4 dark:border-slate-700"
-            >
-              <Text className="text-base font-bold text-nileGreen-500">
-                {form.currency ?? preferredCurrency}
-              </Text>
-              <Ionicons
-                name="chevron-down"
-                size={16}
-                color={isDark ? palette.slate[400] : palette.slate[500]}
-              />
-            </TouchableOpacity>
-          )}
-          <TextInput
-            value={form.amount}
-            onChangeText={(v) => updateField("amount", v)}
-            placeholder="0.00"
-            placeholderTextColor={
-              isDark ? palette.slate[600] : palette.slate[400]
-            }
-            keyboardType="decimal-pad"
-            className="flex-1 p-4 text-base text-slate-800 dark:text-white font-medium"
-          />
-        </View>
-        {errors.amount ? (
-          <Text className="text-red-500 text-xs font-medium mt-1">
-            {errors.amount}
-          </Text>
-        ) : null}
-        {!isEditMode ? (
-          <View className="mt-2 flex-row items-center gap-2 rounded-xl bg-nileGreen-50 p-3 dark:bg-nileGreen-900/20">
-            <Ionicons
-              name="information-circle-outline"
-              size={18}
-              color={palette.nileGreen[500]}
-            />
-            <Text className="flex-1 text-xs text-nileGreen-700 dark:text-nileGreen-400">
-              {t("budget_currency_immutable_info")}
-            </Text>
-          </View>
-        ) : null}
-      </View>
-
-      {/* Period */}
-      <View className="mb-5">
-        <Text className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold mb-2">
-          {t("period")}
-        </Text>
-        <View className="flex-row gap-2">
-          {PERIOD_KEYS.map((key) => (
-            <TouchableOpacity
-              key={key}
-              onPress={() => updateField("period", key)}
-              className={`flex-1 py-3 rounded-2xl items-center ${
-                form.period === key ? "" : "bg-slate-100 dark:bg-slate-800"
+              testID="budget-scope-category"
+              onPress={() => handleScopeChange("CATEGORY")}
+              disabled={isEditMode}
+              accessibilityRole="radio"
+              accessibilityLabel={t("accessibility_category_budget_type")}
+              accessibilityState={{
+                checked: form.type === "CATEGORY",
+                disabled: isEditMode,
+              }}
+              activeOpacity={0.82}
+              className={`relative flex-1 rounded-2xl border p-4 ${
+                form.type === "CATEGORY"
+                  ? selectedScopeClasses
+                  : idleScopeClasses
               }`}
-              style={
-                form.period === key
-                  ? { backgroundColor: palette.nileGreen[500] }
-                  : undefined
-              }
             >
-              <Text
-                className={`text-sm font-bold ${
-                  form.period === key
-                    ? "text-white"
-                    : "text-slate-600 dark:text-slate-300"
-                }`}
-              >
-                {t(PERIOD_LABELS[key])}
+              <View className="mb-3 h-11 w-11 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-900/50">
+                <Ionicons
+                  name="restaurant-outline"
+                  size={24}
+                  color={palette.nileGreen[500]}
+                />
+              </View>
+              <Text className="text-base font-bold text-slate-900 dark:text-white">
+                {t("category_type")}
               </Text>
+              <Text className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                {t("scope_category_description")}
+              </Text>
+              {form.type === "CATEGORY" ? (
+                <View className="absolute end-3 top-3 h-7 w-7 items-center justify-center rounded-full bg-nileGreen-500">
+                  <Ionicons name="checkmark" size={18} color="white" />
+                </View>
+              ) : null}
             </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+          </View>
 
-      {/* Custom date range */}
-      {form.period === "CUSTOM" && (
-        <View className="mb-5">
-          <View className="flex-row gap-3">
-            <View className="flex-1">
-              <Text className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold mb-2">
-                {t("start_date")}
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowStartPicker(true)}
-                className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700"
-              >
-                <Text className="text-sm font-medium text-slate-800 dark:text-white">
-                  {formatDate(form.periodStart, "MMM d, yyyy")}
-                </Text>
-              </TouchableOpacity>
+          <Text className="mb-3 text-base font-semibold text-slate-500 dark:text-slate-400">
+            2. {t("budget_details")}
+          </Text>
+
+          <View className="mb-3 flex-row items-center rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+            <View className="me-3 h-11 w-11 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-900/50">
+              <Ionicons
+                name="document-text-outline"
+                size={22}
+                color={palette.nileGreen[500]}
+              />
             </View>
             <View className="flex-1">
-              <Text className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold mb-2">
-                {t("end_date")}
+              <Text className="text-xs text-slate-500 dark:text-slate-400">
+                {t("budget_name")}
               </Text>
-              <TouchableOpacity
-                onPress={() => setShowEndPicker(true)}
-                className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700"
-              >
-                <Text className="text-sm font-medium text-slate-800 dark:text-white">
-                  {formatDate(form.periodEnd, "MMM d, yyyy")}
-                </Text>
-              </TouchableOpacity>
+              <TextInput
+                value={form.name}
+                onChangeText={(value) => updateField("name", value)}
+                placeholder={t("budget_name_placeholder")}
+                placeholderTextColor={
+                  isDark ? palette.slate[600] : palette.slate[400]
+                }
+                className="mt-0.5 p-0 text-base font-medium text-slate-900 dark:text-white"
+              />
             </View>
           </View>
-          {errors.period ? (
-            <Text className="text-red-500 text-xs font-medium mt-1">
-              {errors.period}
+          {errors.name ? (
+            <Text className="mb-3 text-xs font-medium text-red-500">
+              {errors.name}
             </Text>
           ) : null}
 
-          {showStartPicker && (
-            <DateTimePicker
-              value={form.periodStart}
-              mode="date"
-              display="default"
-              onChange={(_, date) => {
-                setShowStartPicker(false);
-                if (date) updateField("periodStart", date);
-              }}
-            />
-          )}
-          {showEndPicker && (
-            <DateTimePicker
-              value={form.periodEnd}
-              mode="date"
-              display="default"
-              minimumDate={form.periodStart}
-              onChange={(_, date) => {
-                setShowEndPicker(false);
-                if (date) updateField("periodEnd", date);
-              }}
-            />
-          )}
-        </View>
-      )}
+          {form.type === "CATEGORY" ? (
+            <View className="mb-3">
+              {categoryError ? (
+                <View
+                  testID="budget-category-load-error"
+                  className="rounded-2xl border border-red-300 bg-red-50 p-4 dark:border-red-700 dark:bg-red-900/20"
+                >
+                  <Text className="text-sm text-red-600 dark:text-red-300">
+                    {t("category_load_error")}
+                  </Text>
+                  <TouchableOpacity
+                    className="mt-2 min-h-11 self-start justify-center"
+                    accessibilityRole="button"
+                    accessibilityLabel={t("retry")}
+                    onPress={retryCategories}
+                  >
+                    <Text className="font-semibold text-nileGreen-600 dark:text-nileGreen-300">
+                      {t("retry")}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => setIsCategoryModalOpen(true)}
+                  activeOpacity={0.82}
+                  className="flex-row items-center rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800"
+                >
+                  <View className="me-3 h-11 w-11 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-900/50">
+                    <Ionicons
+                      name="restaurant-outline"
+                      size={22}
+                      color={palette.nileGreen[500]}
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-xs text-slate-500 dark:text-slate-400">
+                      {t("category_type")}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      className={`mt-0.5 text-base font-medium ${
+                        categoryDisplayName
+                          ? "text-slate-900 dark:text-white"
+                          : "text-slate-400"
+                      }`}
+                    >
+                      {categoryDisplayName ?? t("select_a_category")}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name="chevron-down"
+                    size={20}
+                    color={isDark ? palette.slate[400] : palette.slate[500]}
+                  />
+                </TouchableOpacity>
+              )}
+              {errors.category ? (
+                <Text className="mt-1 text-xs font-medium text-red-500">
+                  {errors.category}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
 
-      {/* Alert Threshold */}
-      <View className="mb-8">
-        <Text className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold mb-2">
-          {t("alert_when_spending_reaches")}
-        </Text>
-        <AlertThresholdSlider
-          value={form.alertThreshold}
-          onValueChange={(v) => updateField("alertThreshold", v)}
-        />
-      </View>
+          <View className="mb-3 flex-row items-center rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+            <View className="me-3 h-11 w-11 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-900/50">
+              <Ionicons
+                name="wallet-outline"
+                size={22}
+                color={palette.nileGreen[500]}
+              />
+            </View>
+            <View className="flex-1">
+              <Text className="text-xs text-slate-500 dark:text-slate-400">
+                {t("budget_limit")}
+              </Text>
+              <View className="mt-0.5 flex-row items-center">
+                {isEditMode ? (
+                  <View testID="budget-currency-read-only" className="me-2">
+                    <Text className="text-base font-bold text-nileGreen-500">
+                      {form.currency ?? "—"}
+                    </Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    testID="budget-currency-selector"
+                    className="me-2 flex-row items-center"
+                    onPress={() => setIsCurrencyPickerOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("select_budget_currency")}
+                  >
+                    <Text className="text-base font-bold text-nileGreen-500">
+                      {form.currency ?? preferredCurrency}
+                    </Text>
+                    <Ionicons
+                      name="chevron-down"
+                      size={15}
+                      color={isDark ? palette.slate[400] : palette.slate[500]}
+                    />
+                  </TouchableOpacity>
+                )}
+                <TextInput
+                  value={form.amount}
+                  onChangeText={(value) => updateField("amount", value)}
+                  placeholder="0.00"
+                  placeholderTextColor={
+                    isDark ? palette.slate[600] : palette.slate[400]
+                  }
+                  keyboardType="decimal-pad"
+                  className="flex-1 p-0 text-base font-semibold text-slate-900 dark:text-white"
+                />
+              </View>
+            </View>
+          </View>
+          {errors.amount ? (
+            <Text className="mb-3 text-xs font-medium text-red-500">
+              {errors.amount}
+            </Text>
+          ) : null}
 
-      {/* Submit Button */}
-      <TouchableOpacity
-        testID="budget-form-submit"
-        onPress={() => void handleSubmit()}
-        accessibilityRole="button"
-        accessibilityLabel={isEditMode ? t("save_changes") : t("create_budget")}
-        disabled={
-          isSubmitting ||
-          (form.type === "CATEGORY" && areCategoriesLoading) ||
-          isWaitingForCreateCurrency
-        }
-        accessibilityState={{
-          disabled:
-            isSubmitting ||
-            (form.type === "CATEGORY" && areCategoriesLoading) ||
-            isWaitingForCreateCurrency,
-        }}
-        activeOpacity={0.85}
-        className="rounded-2xl py-4 items-center"
-        style={{ backgroundColor: palette.nileGreen[500] }}
-      >
-        {isSubmitting ? (
-          <ActivityIndicator color="white" />
-        ) : (
-          <Text className="text-base font-bold text-white">
-            {isEditMode ? t("save_changes") : t("create_budget")}
+          {!isEditMode ? (
+            <View className="mb-3 flex-row items-center gap-2 rounded-xl bg-nileGreen-50 p-3 dark:bg-nileGreen-900/20">
+              <Ionicons
+                name="information-circle-outline"
+                size={18}
+                color={palette.nileGreen[500]}
+              />
+              <Text className="flex-1 text-xs text-nileGreen-700 dark:text-nileGreen-400">
+                {t("budget_currency_immutable_info")}
+              </Text>
+            </View>
+          ) : null}
+
+          <View className="mb-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+            <Text className="mb-3 text-sm font-medium text-slate-600 dark:text-slate-300">
+              {t("period")}
+            </Text>
+            <View className="flex-row rounded-xl bg-slate-100 p-1 dark:bg-slate-900">
+              {PERIOD_KEYS.map((key) => {
+                const selected = form.period === key;
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    onPress={() => updateField("period", key)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selected }}
+                    className={`flex-1 items-center rounded-lg py-2.5 ${
+                      selected ? "bg-nileGreen-500" : "bg-transparent"
+                    }`}
+                  >
+                    <Text
+                      className={`text-sm font-bold ${
+                        selected
+                          ? "text-white"
+                          : "text-slate-600 dark:text-slate-300"
+                      }`}
+                    >
+                      {t(PERIOD_LABELS[key])}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {form.period === "CUSTOM" ? (
+            <View className="mb-3">
+              <View className="flex-row gap-3">
+                <View className="flex-1">
+                  <Text className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+                    {t("start_date")}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowStartPicker(true)}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800"
+                  >
+                    <Text className="text-sm font-medium text-slate-900 dark:text-white">
+                      {formatDate(form.periodStart, "MMM d, yyyy")}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <View className="flex-1">
+                  <Text className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+                    {t("end_date")}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowEndPicker(true)}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800"
+                  >
+                    <Text className="text-sm font-medium text-slate-900 dark:text-white">
+                      {formatDate(form.periodEnd, "MMM d, yyyy")}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              {errors.period ? (
+                <Text className="mt-1 text-xs font-medium text-red-500">
+                  {errors.period}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          <View className="mb-7 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+            <Text className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+              {t("alert_threshold")}
+            </Text>
+            <AlertThresholdSlider
+              value={form.alertThreshold}
+              onValueChange={(value) => updateField("alertThreshold", value)}
+            />
+            <Text className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              {t("warn_me_when_spent", {
+                amount: `${form.currency ?? ""} ${formatAmount(previewAlertAmount)}`,
+              })}
+            </Text>
+          </View>
+
+          <Text className="mb-3 text-base font-semibold text-slate-500 dark:text-slate-400">
+            3. {t("preview")}
           </Text>
-        )}
-      </TouchableOpacity>
 
-      {/* Category Modal */}
+          <View
+            testID="budget-live-preview"
+            className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
+          >
+            <View className="flex-row items-stretch px-4 py-4">
+              <View className="me-3 h-12 w-12 items-center justify-center rounded-xl bg-nileGreen-100 dark:bg-nileGreen-900/50">
+                <Ionicons
+                  name="calendar-outline"
+                  size={24}
+                  color={palette.nileGreen[500]}
+                />
+              </View>
+              <View className="flex-1 border-e border-slate-200 pe-3 dark:border-slate-700">
+                <Text className="text-xs text-slate-500 dark:text-slate-400">
+                  {t("period")}
+                </Text>
+                <Text className="mt-0.5 font-bold text-nileGreen-500">
+                  {previewPeriodLabel}
+                </Text>
+                <Text className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {form.period === "CUSTOM"
+                    ? `${t("preview_ends_on")} ${previewSecondaryDate}`
+                    : `${t("preview_resets_on")} ${previewSecondaryDate}`}
+                </Text>
+              </View>
+              <View className="flex-1 ps-4">
+                <Text className="text-xs text-slate-500 dark:text-slate-400">
+                  {form.type === "GLOBAL" ? t("budget_type") : t("category_type")}
+                </Text>
+                <Text className="mt-0.5 font-bold text-nileGreen-500">
+                  {previewIdentity}
+                </Text>
+                <Text className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {form.name.trim() || t("budget_name_placeholder")}
+                </Text>
+              </View>
+            </View>
+
+            <View className="flex-row border-t border-slate-200 px-3 py-4 dark:border-slate-700">
+              <View className="flex-1 items-center border-e border-slate-200 px-1 dark:border-slate-700">
+                <Text className="text-center text-xs text-slate-500 dark:text-slate-400">
+                  {t("preview_budget_limit")}
+                </Text>
+                <Text className="mt-1 text-center text-sm font-bold text-nileGreen-500">
+                  {form.currency ?? ""} {form.amount || "0.00"}
+                </Text>
+              </View>
+              <View className="flex-1 items-center border-e border-slate-200 px-1 dark:border-slate-700">
+                <Text className="text-center text-xs text-slate-500 dark:text-slate-400">
+                  {t("preview_alert_at")} {form.alertThreshold}%
+                </Text>
+                <Text className="mt-1 text-center text-sm font-bold text-nileGreen-500">
+                  {form.currency ?? ""} {formatAmount(previewAlertAmount)}
+                </Text>
+              </View>
+              <View className="flex-1 items-center px-1">
+                <Text className="text-center text-xs text-slate-500 dark:text-slate-400">
+                  {t("preview_starts")}
+                </Text>
+                <Text className="mt-1 text-center text-sm font-bold text-nileGreen-500">
+                  {previewDate}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+
+        <View className="border-t border-slate-200 bg-white px-5 pb-4 pt-3 dark:border-slate-800 dark:bg-slate-950">
+          <TouchableOpacity
+            testID="budget-form-submit"
+            onPress={() => void handleSubmit()}
+            accessibilityRole="button"
+            accessibilityLabel={
+              isEditMode
+                ? t("save_changes")
+                : isRenewalMode
+                  ? t("renew_budget")
+                  : t("create_budget")
+            }
+            disabled={isSubmitDisabled}
+            accessibilityState={{ disabled: isSubmitDisabled }}
+            activeOpacity={0.85}
+            className="items-center rounded-2xl bg-nileGreen-500 py-4"
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <View className="flex-row items-center gap-2">
+                <Ionicons
+                  name={
+                    isEditMode
+                      ? "checkmark-circle-outline"
+                      : isRenewalMode
+                        ? "refresh-outline"
+                        : "add-circle-outline"
+                  }
+                  size={22}
+                  color="white"
+                />
+                <Text className="text-base font-bold text-white">
+                  {isEditMode
+                    ? t("save_changes")
+                    : isRenewalMode
+                      ? t("renew_budget")
+                      : t("create_budget")}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            testID="budget-form-cancel"
+            className="mt-2 items-center py-2"
+            onPress={() => router.back()}
+            disabled={isSubmitting}
+            accessibilityRole="button"
+            accessibilityLabel={t("cancel")}
+          >
+            <Text className="font-bold text-nileGreen-500">{t("cancel")}</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+
       <CategorySelectorModal
         visible={isCategoryModalOpen}
         rootCategories={expenseCategories}
         selectedId={form.categoryId}
         type="EXPENSE"
-        onSelect={(id) => updateField("categoryId", id)}
+        onSelect={(id) => {
+          updateField("categoryId", id);
+          setIsCategoryModalOpen(false);
+        }}
         onClose={() => setIsCategoryModalOpen(false)}
       />
+
       <CurrencyPicker
         visible={isCurrencyPickerOpen}
         selectedCurrency={form.currency ?? preferredCurrency}
         onSelect={(currency) => {
           setHasUserSelectedCurrency(true);
           updateField("currency", currency);
+          setIsCurrencyPickerOpen(false);
         }}
         onClose={() => setIsCurrencyPickerOpen(false)}
       />
-    </ScrollView>
+
+      <ConfirmationModal
+        visible={showRenewalConfirmation}
+        title={t("confirm_budget_renewal_title")}
+        message={t("confirm_budget_renewal_message")}
+        confirmLabel={t("confirm_budget_renewal_action")}
+        cancelLabel={t("cancel")}
+        onConfirm={() => void handleConfirmRenewal()}
+        onCancel={() => setShowRenewalConfirmation(false)}
+        variant="success"
+        icon="refresh-outline"
+        isConfirming={isSubmitting}
+      />
+
+      {showStartPicker ? (
+        <DateTimePicker
+          value={form.periodStart}
+          mode="date"
+          display="default"
+          onChange={(_, date) => {
+            setShowStartPicker(false);
+            if (date) updateField("periodStart", date);
+          }}
+        />
+      ) : null}
+
+      {showEndPicker ? (
+        <DateTimePicker
+          value={form.periodEnd}
+          mode="date"
+          display="default"
+          minimumDate={form.periodStart}
+          onChange={(_, date) => {
+            setShowEndPicker(false);
+            if (date) updateField("periodEnd", date);
+          }}
+        />
+      ) : null}
+    </>
   );
 }
