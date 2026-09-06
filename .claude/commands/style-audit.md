@@ -5,6 +5,16 @@ description:
 
 # 🎨 Style Audit Workflow
 
+## Approved Mockup Binding Gate
+
+When this workflow consumes an approved mockup or sidecar, run
+`node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` before using
+binding facts, rendered evidence, or approval status. Require exit status zero:
+current image bytes, exact UTF-8/LF Binding Facts bytes, both approved
+revisions, and approval evidence for the approved combined
+`Binding approval revision` must all verify. A failed verifier blocks governed
+UI work; follow `.agent/workflows/mockup-implementation.md` to renew approval.
+
 This workflow produces a property-by-property comparison of approved mockup
 designs against the actual implementation styles (Tailwind classes, inline
 styles, colors, typography, spacing, borders, layout, icons). The output is a

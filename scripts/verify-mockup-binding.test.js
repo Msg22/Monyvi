@@ -269,6 +269,13 @@ test("rejects malformed UTF-8 instead of hashing decoded replacement text", () =
 test("requires every mandatory mockup workflow to invoke the binding verifier", () => {
   const repositoryRoot = path.resolve(__dirname, "..");
   const mandatoryConsumers = [
+    ".agent/workflows/sprint-issue.md",
+    ".agent/workflows/speckit.implement.md",
+    ".agent/workflows/code-review.md",
+    ".agent/workflows/style-audit.md",
+    ".claude/commands/speckit.implement.md",
+    ".claude/commands/code-review.md",
+    ".claude/commands/style-audit.md",
     ".agent/workflows/applying-mockups.md",
     ".agent/workflows/mockup-implementation.md",
     ".claude/commands/applying-mockups.md",
