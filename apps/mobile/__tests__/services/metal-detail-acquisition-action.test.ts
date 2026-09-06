@@ -4,7 +4,6 @@ jest.mock("@/services/user-data-access", () => ({
   queryOwned: jest.fn(),
 }));
 
-import type { Asset } from "@monyvi/db";
 import {
   buildMetalDetailReadModel,
   type BuildMetalDetailReadModelInput,
@@ -129,7 +128,7 @@ describe("metal detail acquisition-action binding", () => {
       purchaseDate: null,
       purchasePriceDecimal: "1000",
       userId: "user-1",
-    } as Asset);
+    });
 
     expect(shaped.acquisitionActionId).toBe("action-add");
   });

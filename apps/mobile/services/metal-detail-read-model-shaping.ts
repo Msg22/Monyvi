@@ -1,5 +1,4 @@
 import type {
-  Asset,
   AssetMetal,
   MetalActionEvidence,
   MetalHoldingState,
@@ -20,6 +19,16 @@ import type {
   MetalDetailRenderKey,
   MetalDetailTimelineItem,
 } from "@/services/metal-detail-read-model-service";
+
+export interface MetalDetailAssetRecord {
+  readonly acquisitionActionId: string | null;
+  readonly id: string;
+  readonly name: string;
+  readonly purchaseCurrency: string | null;
+  readonly purchaseDate: Date | null;
+  readonly purchasePriceDecimal: string | null;
+  readonly userId: string;
+}
 
 export function buildTimeline(
   acceptedEvents: readonly LifecycleEvent[],
@@ -43,7 +52,9 @@ export function buildTimeline(
   );
 }
 
-export function toDetailAssetInput(asset: Asset): MetalDetailAssetInput {
+export function toDetailAssetInput(
+  asset: MetalDetailAssetRecord
+): MetalDetailAssetInput {
   return {
     acquisitionActionId: asset.acquisitionActionId,
     id: asset.id,
