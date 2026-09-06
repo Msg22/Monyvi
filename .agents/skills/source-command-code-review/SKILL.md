@@ -233,24 +233,23 @@ transition, or variant facts:
    require exit status 0.
 2. Confirm the sidecar records `Binding metadata approval: APPROVED` and the
    explicit approval evidence/reference required by that workflow.
-3. Recompute its current binding-facts fingerprint, verify
-   `Approved binding metadata revision` equals `Binding metadata revision`, and
-   verify the approval evidence/reference identifies that revision.
-4. Recompute SHA-256 over the exact current reference image bytes and verify it
-   exactly equals `Approved reference image revision`; filename equality is not
-   image identity.
-5. Verify the approval evidence/reference identifies the same approved-image
-   revision as well as the binding-metadata revision.
+3. Confirm `Approved binding metadata revision` equals
+   `Binding metadata revision` and `Approved binding approval revision` equals
+   `Binding approval revision`.
+4. Confirm the approval evidence/reference identifies the approved combined
+   `Approved binding approval revision`. The verifier already authenticates the
+   exact current image bytes and exact original Binding Facts bytes; do not
+   require the evidence text to repeat the component digests individually.
 
 If an approved reference predates the sidecar rule, complete the workflow's
 **Legacy Approved Mockup Metadata Migration** and explicit sidecar approval
 before using reconstructed metadata for review. A missing sidecar, failed
 verifier, missing/malformed approved image revision, current-image digest
-mismatch, failed metadata revision check, sidecar still marked `PENDING`, missing
-approval reference, or sidecar/image materially changed after approval is
-non-authoritative: mark the binding context unverified and the changed governed
-UI not approvable rather than inferring binding facts or image identity from the
-filename/export.
+mismatch, failed metadata or combined revision check, sidecar still marked
+`PENDING`, missing approval reference, or sidecar/image materially changed after
+approval is non-authoritative: mark the binding context unverified and the
+changed governed UI not approvable rather than inferring binding facts or image
+identity from the filename/export.
 
 Establish the selected mockup's declared UI viewport or component context only
 from its authoritative approved sidecar. Treat presentation-only device
