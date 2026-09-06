@@ -130,6 +130,7 @@ function detailInput(
 ): BuildMetalDetailReadModelInput {
   return {
     asset: {
+      acquisitionActionId: "action-add",
       id: "holding-1",
       name: "Gold coin",
       purchaseCurrency: "USD",
@@ -204,6 +205,7 @@ function historyHolding(
 ): MetalHistoryHoldingInput {
   return {
     asset: {
+      acquisitionActionId: null,
       id,
       name: `${id} holding`,
       purchaseCurrency: null,
@@ -503,6 +505,7 @@ describe("metal detail and History read models", () => {
     const model = buildMetalDetailReadModel(
       detailInput({
         asset: {
+          acquisitionActionId: null,
           id: "holding-1",
           name: "Legacy",
           purchaseCurrency: "USD",

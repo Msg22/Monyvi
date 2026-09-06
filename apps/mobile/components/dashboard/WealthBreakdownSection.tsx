@@ -1,12 +1,14 @@
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
+import { shouldUseCompactLayout } from "@/constants/ui";
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
+import { formatCanonicalDecimalForDisplay } from "@monyvi/logic";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useMemo } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
+import { resolveLocale } from "@/components/metals/portfolio-presentation";
 import type { WealthBreakdownReadModel } from "@/services/net-worth-read-model-service";
 
 interface WealthBreakdownSectionProps {
@@ -23,6 +25,7 @@ interface WealthTileProps {
   readonly amountDecimal: string | null;
   readonly currency: CurrencyType;
   readonly label: string;
+  readonly locale: string;
   readonly onPress: () => void;
   readonly shareLabel: string;
   readonly lightGradientColors: readonly [string, string, string];
@@ -46,11 +49,14 @@ export function WealthBreakdownSection({
   onAccountsPress,
   onMetalsPress,
 }: WealthBreakdownSectionProps): React.JSX.Element {
-  const { t } = useTranslation("metals");
+  const { t, i18n } = useTranslation("metals");
+  const { fontScale, width } = useWindowDimensions();
+  const primaryTilesClass = getWealthTilesLayoutClass(width, fontScale);
+  const locale = resolveLocale(i18n?.resolvedLanguage);
   const amount = useMemo(
     (): ((value: string | null) => string) => (value) =>
-      formatDecimalCurrency(value, currency),
-    [currency]
+      formatDecimalCurrency(value, currency, locale),
+    [currency, locale]
   );
 
   if (isLoading) {
@@ -72,9 +78,9 @@ export function WealthBreakdownSection({
     currency,
     metals: metalsLabel,
   });
-  const hasPositiveMetalsTotal = hasPositiveDecimal(
-    breakdown.metals.amountDecimal
-  );
+  const hasOwnedMetals =
+    breakdown.metals.gold.holdingCount > 0 ||
+    breakdown.metals.silver.holdingCount > 0;
 
   return (
     <View
@@ -101,7 +107,10 @@ export function WealthBreakdownSection({
         </View>
       </View>
 
-      <View className="mt-3 flex-row gap-2.5">
+      <View
+        testID="wealth-breakdown-primary-tiles"
+        className={`mt-3 gap-2.5 ${primaryTilesClass}`}
+      >
         <WealthTile
           accentClassName="bg-nileGreen-500"
           amountDecimal={breakdown.accounts.amountDecimal}
@@ -114,6 +123,7 @@ export function WealthBreakdownSection({
           })}
           currency={currency}
           label={t("wealth_breakdown.accounts")}
+          locale={locale}
           onPress={onAccountsPress}
           shareLabel={t("wealth_breakdown.of_net_worth", {
             share: formatShare(breakdown.accounts.shareOfNetWorth),
@@ -134,6 +144,7 @@ export function WealthBreakdownSection({
           })}
           currency={currency}
           label={metalsLabel}
+          locale={locale}
           onPress={onMetalsPress}
           shareLabel={t("wealth_breakdown.of_net_worth", {
             share: formatShare(breakdown.metals.shareOfNetWorth),
@@ -144,7 +155,7 @@ export function WealthBreakdownSection({
         />
       </View>
 
-      {hasPositiveMetalsTotal && (
+      {hasOwnedMetals && (
         <View className="mt-4">
           <View className="flex-row items-end justify-between gap-3">
             <Text className="text-[13px] font-bold text-text-primary dark:text-text-primary-dark">
@@ -195,6 +206,7 @@ function WealthTile({
   amountDecimal,
   currency,
   label,
+  locale,
   onPress,
   shareLabel,
   lightGradientColors,
@@ -240,7 +252,7 @@ function WealthTile({
           numberOfLines={1}
           className="mt-2 text-[15px] font-bold text-text-primary dark:text-text-primary-dark"
         >
-          {formatDecimalCurrency(amountDecimal, currency)}
+          {formatDecimalCurrency(amountDecimal, currency, locale)}
         </Text>
         <Text
           numberOfLines={1}
@@ -316,25 +328,31 @@ const METALS_DARK_GRADIENT = [
   `${palette.gold[800]}00`,
 ] as const;
 
-function hasPositiveDecimal(value: string | null): boolean {
-  const amount = value === null ? Number.NaN : Number(value);
-  return Number.isFinite(amount) && amount > 0;
-}
-
 function formatDecimalCurrency(
   value: string | null,
-  currency: CurrencyType
+  currency: CurrencyType,
+  locale: string
 ): string {
-  const amount = value === null ? Number.NaN : Number(value);
-  if (!Number.isFinite(amount)) return "—";
-  return formatCurrency({
-    amount,
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
+  if (value === null) return "—";
+  try {
+    const amount = formatCanonicalDecimalForDisplay(value, {
+      locale,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    });
+    return `${amount} ${currency}`;
+  } catch {
+    return "—";
+  }
 }
 
 function formatShare(value: string | null): string {
   return value === null ? "—" : `${value}%`;
+}
+
+export function getWealthTilesLayoutClass(
+  width: number,
+  fontScale: number
+): "flex-col" | "flex-row" {
+  return shouldUseCompactLayout(width, fontScale) ? "flex-col" : "flex-row";
 }

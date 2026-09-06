@@ -54,6 +54,7 @@ import {
 } from "@/services/metal-detail-read-model-shaping";
 
 export interface MetalDetailAssetInput {
+  readonly acquisitionActionId: string | null;
   readonly id: string;
   readonly name: string;
   readonly purchaseCurrency: string | null;
@@ -382,7 +383,7 @@ export function buildMetalDetailReadModel(
   const status = projection?.status ?? "active";
   const active = status === "active";
   const references = input.rateReferences;
-  const effectiveActionId = input.holdingState.effectiveActionId ?? null;
+  const acquisitionActionId = input.asset.acquisitionActionId;
   const currentValue = active
     ? buildCurrentObservationValue(input, unavailableExactFacts)
     : null;
@@ -391,7 +392,7 @@ export function buildMetalDetailReadModel(
         input,
         unavailableExactFacts,
         references,
-        effectiveActionId
+        acquisitionActionId
       )
     : null;
   const itemForm = normalizePhysicalForm(input.metal.itemForm);
@@ -720,7 +721,7 @@ function buildActiveAttribution(
   input: BuildMetalDetailReadModelInput,
   unavailableExactFacts: MetalDetailReadModel["unavailableExactFacts"],
   references: readonly unknown[],
-  effectiveActionId: string | null
+  acquisitionActionId: string | null
 ):
   | (MetalDetailAttribution & { readonly totalGainDecimal: string | null })
   | null {
@@ -742,12 +743,12 @@ function buildActiveAttribution(
   const metalInstrumentCode = toMetalInstrumentCode(input.metal.metalType);
   const result = calculateUnrealizedAttribution({
     acquisitionCurrencyRate: findReference(references, {
-      actionId: effectiveActionId,
+      actionId: acquisitionActionId,
       role: "acquisition_purchase_currency",
       instrumentCode: currencyInstrumentCode,
     }),
     acquisitionMetalRate: findReference(references, {
-      actionId: effectiveActionId,
+      actionId: acquisitionActionId,
       role: "acquisition_metal",
       instrumentCode: metalInstrumentCode,
     }),

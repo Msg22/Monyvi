@@ -10,7 +10,10 @@ import type {
   MetalPortfolioReadModel,
   MetalPortfolioFilter,
 } from "@/services/metal-portfolio-read-model-service";
-import { WealthBreakdownSection } from "@/components/dashboard/WealthBreakdownSection";
+import {
+  getWealthTilesLayoutClass,
+  WealthBreakdownSection,
+} from "@/components/dashboard/WealthBreakdownSection";
 import { MetalPortfolioScreen } from "@/components/metals/MetalPortfolioScreen";
 
 const mockTranslations: Record<string, string> = {
@@ -26,6 +29,7 @@ const mockTranslations: Record<string, string> = {
   "wealth_breakdown.metals_summary":
     "Amounts in {{currency}} · share of {{metals}}",
   "wealth_breakdown.tile_accessibility": "{{label}}. {{amount}}. {{share}}",
+  holding: "{{count}} holdings",
   "portfolio.filter.all": "All",
   "portfolio.filter.gold": "Gold",
   "portfolio.filter.silver": "Silver",
@@ -282,6 +286,68 @@ describe("US1 portfolio surfaces", () => {
     fireEvent.press(screen.getByTestId("wealth-breakdown-metals"));
     expect(onAccountsPress).toHaveBeenCalledTimes(1);
     expect(onMetalsPress).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves exact canonical decimals in the Home breakdown", () => {
+    const exactValue = "9007199254740993.245";
+    render(
+      <WealthBreakdownSection
+        currency={currency}
+        isLoading={false}
+        breakdown={{
+          ...breakdown,
+          accounts: { ...breakdown.accounts, amountDecimal: exactValue },
+          totalNetWorthDecimal: exactValue,
+        }}
+        onAccountsPress={jest.fn()}
+        onMetalsPress={jest.fn()}
+      />
+    );
+
+    expect(screen.getAllByText("9,007,199,254,740,993.24 EGP")).toHaveLength(2);
+    expect(screen.queryByText(/9,007,199,254,740,992/)).toBeNull();
+  });
+
+  it.each([
+    [390, 1, "flex-row"],
+    [320, 1, "flex-col"],
+    [390, 1.5, "flex-col"],
+  ])(
+    "uses responsive Home tile layout at width %s and font scale %s",
+    (width, fontScale, expectedClass) =>
+      expect(getWealthTilesLayoutClass(width, fontScale)).toBe(expectedClass)
+  );
+
+  it("keeps owned-metal counts visible when valuation rates are unavailable", () => {
+    render(
+      <WealthBreakdownSection
+        currency={currency}
+        isLoading={false}
+        breakdown={{
+          ...breakdown,
+          metals: {
+            ...breakdown.metals,
+            amountDecimal: null,
+            gold: {
+              amountDecimal: null,
+              holdingCount: 2,
+              shareOfMetals: null,
+            },
+            silver: {
+              amountDecimal: null,
+              holdingCount: 1,
+              shareOfMetals: null,
+            },
+          },
+        }}
+        onAccountsPress={jest.fn()}
+        onMetalsPress={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("Inside metals")).toBeTruthy();
+    expect(screen.getByText(/2 holdings/)).toBeTruthy();
+    expect(screen.getByText(/1 holdings/)).toBeTruthy();
   });
 
   it("keeps Concept C and My Metals skeletons semantically visible while local reads settle", () => {

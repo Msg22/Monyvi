@@ -45,6 +45,7 @@ export function buildTimeline(
 
 export function toDetailAssetInput(asset: Asset): MetalDetailAssetInput {
   return {
+    acquisitionActionId: asset.acquisitionActionId,
     id: asset.id,
     name: asset.name,
     purchaseCurrency: asset.purchaseCurrency,

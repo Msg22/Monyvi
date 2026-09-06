@@ -15,6 +15,7 @@ function soldHolding(index: number): MetalHistoryHoldingInput {
   const createdEventId = `created-${index}`;
   return {
     asset: {
+      acquisitionActionId: null,
       id,
       name: `${id} holding`,
       purchaseCurrency: null,
