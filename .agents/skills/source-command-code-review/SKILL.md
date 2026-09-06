@@ -143,7 +143,7 @@ implemented format and cite the issue reference.
 
 Check for missing functionality, incomplete tasks, deviations from the plan, and
 changes under the wrong spec folder. Also check for code paths that implement
-behavior not requested by either the spec folder or the linked issue.
+behavior not requested by either the spec folder or linked issue.
 
 If any task, issue requirement, acceptance criterion, or clarified business rule
 is not implemented and not explicitly justified, the reviewed work is not
@@ -226,18 +226,31 @@ For every selected governed mockup, load its matching
 `<mockup-basename>.binding.md` sidecar defined by
 `.agent/workflows/mockup-implementation.md`. Before using viewport, component,
 non-binding-region, spacing, sizing, color, typography, state, interaction,
-transition, or variant facts, verify that the sidecar records
-`Binding metadata approval: APPROVED` and the explicit approval
-evidence/reference required by that workflow. Recompute its current fingerprint,
-verify `Approved binding metadata revision` equals `Binding metadata revision`,
-and verify the approval evidence/reference identifies that same revision. If an
-approved reference predates the sidecar rule, complete the workflow's **Legacy
-Approved Mockup Metadata Migration** and explicit sidecar approval before using
-reconstructed metadata for review. A missing sidecar, failed revision check,
-sidecar still marked `PENDING`, missing approval reference, or sidecar
-materially changed after approval is non-authoritative: mark the binding context
-unverified and the changed governed UI not approvable rather than inferring
-binding facts from the image or export.
+transition, or variant facts:
+
+1. Run
+   `node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` and
+   require exit status 0.
+2. Confirm the sidecar records `Binding metadata approval: APPROVED` and the
+   explicit approval evidence/reference required by that workflow.
+3. Recompute its current binding-facts fingerprint, verify
+   `Approved binding metadata revision` equals `Binding metadata revision`, and
+   verify the approval evidence/reference identifies that revision.
+4. Recompute SHA-256 over the exact current reference image bytes and verify it
+   exactly equals `Approved reference image revision`; filename equality is not
+   image identity.
+5. Verify the approval evidence/reference identifies the same approved-image
+   revision as well as the binding-metadata revision.
+
+If an approved reference predates the sidecar rule, complete the workflow's
+**Legacy Approved Mockup Metadata Migration** and explicit sidecar approval
+before using reconstructed metadata for review. A missing sidecar, failed
+verifier, missing/malformed approved image revision, current-image digest
+mismatch, failed metadata revision check, sidecar still marked `PENDING`, missing
+approval reference, or sidecar/image materially changed after approval is
+non-authoritative: mark the binding context unverified and the changed governed
+UI not approvable rather than inferring binding facts or image identity from the
+filename/export.
 
 Establish the selected mockup's declared UI viewport or component context only
 from its authoritative approved sidecar. Treat presentation-only device
@@ -287,16 +300,18 @@ Corresponds to: <component or screen>
 | Components and UI      | PASS/FAIL | ...   |
 | States                 | PASS/FAIL | ...   |
 | Interactions           | PASS/FAIL | ...   |
+| Approved Image Binding | PASS/FAIL | exact SHA-256 verifier result |
 | Binding UI Context     | PASS/FAIL | ...   |
 | Rendered Comparison    | PASS/FAIL | ...   |
 | Scoped Variants        | PASS/FAIL | ...   |
 | Accessibility Evidence | PASS/FAIL | ...   |
 ```
 
-For changed governed visual UI, a missing/invalid authoritative sidecar, mockup
-deviation, or missing required rendered evidence makes the reviewed work not
-approvable. Fix UI changes to match the approved mockup plus its authoritative
-binding sidecar without inventing new design decisions.
+For changed governed visual UI, a missing/invalid authoritative sidecar, failed
+image-content binding, mockup deviation, or missing required rendered evidence
+makes the reviewed work not approvable. Fix UI changes to match the exact
+approved image bytes plus its authoritative binding sidecar without inventing
+new design decisions.
 
 ### 2.6 General Best Practices
 
@@ -478,14 +493,17 @@ The reviewed work is not approvable if any of these remain:
 - Broken monorepo boundaries.
 - Missing migrations or database inconsistencies.
 - Missing or invalid authoritative binding sidecar for changed governed UI.
+- Missing, malformed, or stale approved-image content binding for changed
+  governed UI.
 - Mockup deviations for changed governed UI.
 - Missing required mockup comparison or scoped-variant rendered evidence for a
   governed visual UI change.
 
 Success means the code fully matches the constitution, `.agent/rules/*.md`, the
-selected spec folder, the linked issue when present, and the approved mockups
-that actually govern changed visual UI, with no missing functionality or
-architectural violations. Changed UI governed by an approved mockup must also
-have an authoritative approved binding sidecar plus the required rendered and
+selected spec folder, the linked issue when present, and the exact immutable
+approved mockup image content that actually governs changed visual UI, with no
+missing functionality or architectural violations. Changed UI governed by an
+approved mockup must also have an authoritative approved binding sidecar whose
+image and metadata revisions both verify, plus the required rendered and
 accessibility evidence, with functional readiness and visual fidelity reported
 separately.
