@@ -4,6 +4,7 @@ import {
   render,
   renderHook,
   screen,
+  within,
   waitFor,
 } from "@testing-library/react-native";
 import React, { StrictMode } from "react";
@@ -56,6 +57,7 @@ interface DeleteRequestIds {
 
 interface DeleteCommand {
   readonly ids: DeleteRequestIds;
+  readonly expectedFinancialRevision: string;
 }
 
 interface UseDeleteMetalHoldingInput {
@@ -173,7 +175,7 @@ function renderDeleteHook(
 } {
   let id = 0;
   const input: UseDeleteMetalHoldingInput = {
-    createCommand: jest.fn((ids) => ({ ids })),
+    createCommand: jest.fn((ids) => ({ ids, expectedFinancialRevision: "1" })),
     execute: jest.fn(() => Promise.resolve()),
     createId: jest.fn(() => `delete-id-${++id}`),
     ...overrides,
@@ -310,6 +312,29 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
       expect.stringContaining("min-h-11")
     );
   });
+
+  it("bounds and scrolls confirmation content while keeping safe-area actions outside the scroll region", () => {
+    renderSheet({
+      width: 320,
+      fontScale: 2,
+      bottomInset: 34,
+      submitError: "The holding was not deleted. Try again.",
+    });
+
+    expect(screen.getByTestId("metal-holding-delete-panel")).toHaveProp(
+      "className",
+      expect.stringContaining("max-h-[90%]")
+    );
+    expect(screen.getByTestId("metal-holding-delete-scroll")).toBeTruthy();
+    expect(
+      within(screen.getByTestId("metal-holding-delete-scroll")).queryByTestId(
+        "metal-holding-delete-actions"
+      )
+    ).toBeNull();
+    expect(screen.getByTestId("metal-holding-delete-actions")).toHaveStyle({
+      paddingBottom: 54,
+    });
+  });
 });
 
 describe("useDeleteMetalHolding", () => {
@@ -335,24 +360,57 @@ describe("useDeleteMetalHolding", () => {
     expect(result.current.isSubmitting).toBe(false);
   });
 
-  it("preserves action identity and error state for an idempotent retry", async () => {
+  it("preserves the complete original command and error state for an idempotent retry", async () => {
+    let expectedFinancialRevision = "1";
     const execute = jest
       .fn<Promise<void>, [DeleteCommand]>()
       .mockRejectedValueOnce(new Error("local_write_failed"))
       .mockResolvedValueOnce(undefined);
-    const { result, input } = renderDeleteHook({ execute });
+    const createCommand = jest.fn(
+      (ids: DeleteRequestIds): DeleteCommand => ({
+        ids,
+        expectedFinancialRevision,
+      })
+    );
+    const { result, input } = renderDeleteHook({ execute, createCommand });
 
     await act(async () => {
       await expect(result.current.submit()).resolves.toBe(false);
     });
     expect(result.current.submitError).toBe("local_write_failed");
+    expectedFinancialRevision = "2";
     await act(async () => {
       await expect(result.current.retry()).resolves.toBe(true);
     });
     expect(execute).toHaveBeenCalledTimes(2);
-    expect(execute.mock.calls[1][0].ids).toEqual(execute.mock.calls[0][0].ids);
+    expect(execute.mock.calls[1][0]).toBe(execute.mock.calls[0][0]);
+    expect(execute.mock.calls[1][0].expectedFinancialRevision).toBe("1");
+    expect(createCommand).toHaveBeenCalledTimes(1);
     expect(input.createId).toHaveBeenCalledTimes(3);
     await waitFor(() => expect(result.current.submitError).toBeNull());
+  });
+
+  it("reports command-construction failure and always releases the submission lock", async () => {
+    const createCommand = jest
+      .fn<DeleteCommand, [DeleteRequestIds]>()
+      .mockImplementationOnce(() => {
+        throw new Error("metal_delete_command_stale");
+      })
+      .mockImplementation((ids) => ({ ids, expectedFinancialRevision: "1" }));
+    const execute = jest.fn(() => Promise.resolve());
+    const { result } = renderDeleteHook({ createCommand, execute });
+
+    await act(async () => {
+      await expect(result.current.submit()).resolves.toBe(false);
+    });
+    expect(result.current.submitError).toBe("metal_delete_command_stale");
+    expect(result.current.isSubmitting).toBe(false);
+    expect(execute).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await expect(result.current.retry()).resolves.toBe(true);
+    });
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it("reports failure and resets pending state after a StrictMode remount", async () => {
@@ -362,7 +420,7 @@ describe("useDeleteMetalHolding", () => {
     const { result } = renderHook(
       () =>
         loadHook().useDeleteMetalHolding({
-          createCommand: (ids) => ({ ids }),
+          createCommand: (ids) => ({ ids, expectedFinancialRevision: "1" }),
           execute,
           createId: jest.fn(() => "strict-delete-id"),
         }),

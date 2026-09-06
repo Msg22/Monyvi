@@ -50,8 +50,8 @@ evidence.
 
 ## Maestro status
 
-`apps/mobile/e2e/maestro/metals/delete-holding.yaml` is authored as a Red
-contract for Delete, offline restart, no-reappearance, and terminal prohibition.
-It is not runnable truthfully until integration owners provide the live route,
-shared approved copy, active/terminal fixture profiles, and T043 adapter
-activation. No device or E2E completion is claimed.
+`apps/mobile/e2e/maestro/metals/delete-holding.yaml` contains only the partial
+Active/restart Red sequence. Offline establishment and terminal-state assertions
+are missing and blocked until integration owners provide the live route, shared
+approved copy, offline harness control, Active/terminal fixture profiles, and
+T043 adapter activation. No device or E2E completion is claimed.
