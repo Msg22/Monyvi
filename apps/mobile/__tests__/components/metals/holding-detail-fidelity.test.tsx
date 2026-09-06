@@ -38,7 +38,6 @@ const translations: Readonly<Record<string, string>> = {
   "detail.offline": "Offline mode",
   "detail.paid": "{{amount}} paid",
   "detail.physical_facts": "Physical facts",
-  "detail.rate_updated": "Rates updated {{date}}",
   "detail.restored": "Restored to Active",
   "detail.since_purchase": "{{amount}} since purchase",
   "detail.timeline_current_value": "Current value",
@@ -49,6 +48,7 @@ const translations: Readonly<Record<string, string>> = {
   "metal.gold": "Gold",
   "metal.silver": "Silver",
   "portfolio.rates_updated": "Rates updated {{when}}",
+  "purity_gold_999": "24K · 999",
   "render.objectAccessibility": "{{metal}} {{form}} illustration",
   "status.active": "Active",
   "timeline.add": "Added",
@@ -106,6 +106,7 @@ function activeDetail(
     purityCatalogVersion: "1",
     purityCode: "gold-999",
     purityFactorDecimal: "0.999",
+    reconciliationState: "accepted",
     renderKey: "gold:coin",
     requiresCompleteMaterialCorrection: false,
     status: "active",
@@ -146,7 +147,6 @@ describe("approved active holding-detail fidelity", () => {
         model={model}
         onAction={jest.fn()}
         onRetry={jest.fn()}
-        onViewHistory={jest.fn()}
       />
     );
 
@@ -184,7 +184,6 @@ describe("approved active holding-detail fidelity", () => {
         model={model}
         onAction={onAction}
         onRetry={jest.fn()}
-        onViewHistory={jest.fn()}
       />
     );
 
@@ -219,7 +218,6 @@ describe("approved active holding-detail fidelity", () => {
         model={model}
         onAction={jest.fn()}
         onRetry={jest.fn()}
-        onViewHistory={jest.fn()}
       />
     );
 
@@ -243,7 +241,6 @@ describe("approved active holding-detail fidelity", () => {
       model,
       onAction: jest.fn(),
       onRetry: jest.fn(),
-      onViewHistory: jest.fn(),
     } as const;
     const { rerender } = render(<MetalHoldingDetailScreen {...props} />);
 

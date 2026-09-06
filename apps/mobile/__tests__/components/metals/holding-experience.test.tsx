@@ -28,7 +28,9 @@ const translations: Readonly<Record<string, string>> = {
   "history.all": "All",
   "history.sold": "Sold",
   "history.disposed": "Disposed",
+  "history.filter_accessibility": "{{label}}, {{count}} results",
   "history.empty": "No holdings here yet",
+  "history.load_error": "We couldn't load History. Try again.",
   "history.offline": "Offline mode",
   "history.retry": "Try again",
   "actions.sell": "Sell holding",
@@ -46,6 +48,9 @@ const translations: Readonly<Record<string, string>> = {
   "form.bar": "Bar",
   "form.jewelry": "Jewelry",
   "form.unknown": "Other form",
+  "purity_gold_875": "21K · 875",
+  "purity_gold_999": "24K · 999",
+  "purity_silver_999": "999",
   "render.objectAccessibility": "{{metal}} {{form}} illustration",
   "render.neutralFallback": "Metal holding illustration unavailable",
 };
@@ -55,11 +60,11 @@ let mockResolvedLanguage = "en";
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
     i18n: { resolvedLanguage: mockResolvedLanguage },
-    t: (key: string, values?: Readonly<Record<string, string>>): string => {
+    t: (key: string, values?: Readonly<Record<string, string | number>>): string => {
       const template = translations[key] ?? key;
       return Object.entries(values ?? {}).reduce(
         (value, [name, replacement]) =>
-          value.replace(`{{${name}}}`, replacement),
+          value.replace(`{{${name}}}`, String(replacement)),
         template
       );
     },
@@ -94,6 +99,7 @@ function detail(
     purityCatalogVersion: "1",
     purityCode: "gold-999",
     purityFactorDecimal: "0.999",
+    reconciliationState: "accepted",
     renderKey: "gold:coin",
     requiresCompleteMaterialCorrection: false,
     status: "active",
@@ -115,6 +121,7 @@ function history(
   overrides: Partial<MetalHistoryReadModel> = {}
 ): MetalHistoryReadModel {
   return {
+    counts: { all: 2, disposed: 1, sold: 1 },
     filter: "all",
     items: [
       {
@@ -160,7 +167,6 @@ describe("US3 holding experience", () => {
         actions={getHoldingActionDescriptors(model)}
         onAction={onAction}
         onRetry={jest.fn()}
-        onViewHistory={jest.fn()}
       />
     );
 
@@ -190,7 +196,6 @@ describe("US3 holding experience", () => {
         actions={getHoldingActionDescriptors(sold)}
         onAction={jest.fn()}
         onRetry={jest.fn()}
-        onViewHistory={jest.fn()}
       />
     );
     expect(screen.getByText("Sold holding")).toBeTruthy();
@@ -212,7 +217,6 @@ describe("US3 holding experience", () => {
         actions={getHoldingActionDescriptors(disposed)}
         onAction={jest.fn()}
         onRetry={jest.fn()}
-        onViewHistory={jest.fn()}
       />
     );
     expect(screen.getByText("Disposed holding")).toBeTruthy();
@@ -236,7 +240,6 @@ describe("US3 holding experience", () => {
         actions={getHoldingActionDescriptors(restored)}
         onAction={jest.fn()}
         onRetry={jest.fn()}
-        onViewHistory={jest.fn()}
       />
     );
     expect(screen.getByText("Restored to Active")).toBeTruthy();
@@ -253,7 +256,6 @@ describe("US3 holding experience", () => {
         actions={[]}
         onAction={jest.fn()}
         onRetry={onRetry}
-        onViewHistory={jest.fn()}
       />
     );
     expect(screen.getByTestId("metal-holding-detail-loading")).toBeTruthy();
@@ -267,7 +269,6 @@ describe("US3 holding experience", () => {
         actions={[]}
         onAction={jest.fn()}
         onRetry={onRetry}
-        onViewHistory={jest.fn()}
       />
     );
     expect(screen.getByText("Current value unavailable")).toBeTruthy();
@@ -303,25 +304,25 @@ describe("US3 holding experience", () => {
     );
     expect(screen.getByTestId("metal-history-item-sold")).toHaveProp(
       "className",
-      expect.stringContaining("rounded-2xl")
+      expect.not.stringContaining("rounded-2xl")
     );
     expect(screen.getByTestId("metal-history-item-sold")).toHaveProp(
       "className",
-      expect.stringContaining("border")
+      expect.stringContaining("border-b")
     );
     expect(screen.getByTestId("metal-history-root")).toHaveProp(
       "contentContainerClassName",
-      expect.stringContaining("gap-3")
+      expect.not.stringContaining("gap-3")
     );
     expect(screen.getByText("Silver keepsake")).toBeTruthy();
-    fireEvent.press(screen.getByLabelText("Sold"));
+    fireEvent.press(screen.getByLabelText("Sold, 1 results"));
     expect(onFilterChange).toHaveBeenCalledWith("sold");
     fireEvent.press(screen.getByText("21K bracelet"));
     expect(onOpenHolding).toHaveBeenCalledWith("sold-bracelet");
     expect(screen.getByLabelText("Gold Jewelry illustration")).toBeTruthy();
   });
 
-  it("keeps Western digits in localized Arabic History dates", () => {
+  it("uses localized Arabic digits in History dates", () => {
     mockResolvedLanguage = "ar";
     render(
       <MetalHistoryScreen
@@ -335,6 +336,6 @@ describe("US3 holding experience", () => {
       />
     );
 
-    expect(screen.getByText("22 أغسطس 2026")).toBeTruthy();
+    expect(screen.getByText("٢٢ أغسطس ٢٠٢٦")).toBeTruthy();
   });
 });
