@@ -8,11 +8,11 @@ describe("issue #284 Metals fixture observation readiness", () => {
       "utf8"
     );
 
-    expect(preflightSource).toContain(
-      `where \\"source\\" like 'e2e_fixture:%';`
+    expect(preflightSource).toMatch(
+      /where \\"source\\" like 'e2e_fixture:%';/
     );
-    expect(preflightSource).not.toContain(
-      `where \\"source\\" = 'e2e_fixture';`
+    expect(preflightSource).not.toMatch(
+      /where \\"source\\" = 'e2e_fixture';/
     );
   });
 });
