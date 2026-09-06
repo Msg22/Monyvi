@@ -14,34 +14,37 @@ interface UseStatsCurrencyFilterResult {
   readonly selectCurrency: (currency: CurrencyType) => void;
   readonly isLoading: boolean;
   readonly error: Error | null;
+  readonly retry: () => void;
 }
 
 export function useStatsCurrencyFilter(
-  preferredCurrency: CurrencyType
+  preferredCurrency: CurrencyType,
+  isPreferredCurrencyLoading: boolean = false
 ): UseStatsCurrencyFilterResult {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [requestedCurrency, setRequestedCurrency] =
-    useState<CurrencyType>(preferredCurrency);
-  const [isLoading, setIsLoading] = useState(true);
+    useState<CurrencyType | null>(null);
+  const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [retryVersion, setRetryVersion] = useState(0);
   const { userId, isResolvingUser } = useCurrentUser();
 
   useEffect(() => {
     if (isResolvingUser) {
       setTransactions([]);
       setError(null);
-      setIsLoading(true);
+      setIsDiscoveryLoading(true);
       return;
     }
 
     if (!userId) {
       setTransactions([]);
       setError(null);
-      setIsLoading(false);
+      setIsDiscoveryLoading(false);
       return;
     }
 
-    setIsLoading(true);
+    setIsDiscoveryLoading(true);
     setError(null);
 
     const subscription = observeStatsCurrencyTransactions({ userId })
@@ -49,18 +52,18 @@ export function useStatsCurrencyFilter(
       .subscribe({
         next: (result) => {
           setTransactions(result);
-          setIsLoading(false);
+          setIsDiscoveryLoading(false);
         },
         error: (err: unknown) => {
           logger.error("stats.currencyOptions.observe.failed", err);
           setTransactions([]);
           setError(err instanceof Error ? err : new Error(String(err)));
-          setIsLoading(false);
+          setIsDiscoveryLoading(false);
         },
       });
 
     return () => subscription.unsubscribe();
-  }, [userId, isResolvingUser]);
+  }, [userId, isResolvingUser, retryVersion]);
 
   const availableCurrencies = useMemo(
     () => buildStatsCurrencies(transactions, preferredCurrency),
@@ -70,16 +73,23 @@ export function useStatsCurrencyFilter(
   const selectedCurrency = useMemo(
     () =>
       resolveSelectedCurrency(
-        requestedCurrency,
+        isPreferredCurrencyLoading ? null : requestedCurrency,
         availableCurrencies,
         preferredCurrency
       ),
-    [requestedCurrency, availableCurrencies, preferredCurrency]
+    [
+      requestedCurrency,
+      availableCurrencies,
+      preferredCurrency,
+      isPreferredCurrencyLoading,
+    ]
   );
 
   useEffect(() => {
-    setRequestedCurrency(selectedCurrency);
-  }, [selectedCurrency]);
+    if (!isPreferredCurrencyLoading) {
+      setRequestedCurrency(selectedCurrency);
+    }
+  }, [isPreferredCurrencyLoading, selectedCurrency]);
 
   const selectCurrency = useCallback(
     (currency: CurrencyType): void => {
@@ -90,17 +100,22 @@ export function useStatsCurrencyFilter(
     [availableCurrencies]
   );
 
+  const retry = useCallback((): void => {
+    setRetryVersion((current) => current + 1);
+  }, []);
+
   return {
     availableCurrencies,
     selectedCurrency,
     selectCurrency,
-    isLoading,
+    isLoading: isDiscoveryLoading || isPreferredCurrencyLoading,
     error,
+    retry,
   };
 }
 
 function resolveSelectedCurrency(
-  requestedCurrency: CurrencyType,
+  requestedCurrency: CurrencyType | null,
   availableCurrencies: readonly CurrencyType[],
   preferredCurrency: CurrencyType
 ): CurrencyType {
@@ -108,8 +123,15 @@ function resolveSelectedCurrency(
     return preferredCurrency;
   }
 
-  if (availableCurrencies.includes(requestedCurrency)) {
+  if (
+    requestedCurrency !== null &&
+    availableCurrencies.includes(requestedCurrency)
+  ) {
     return requestedCurrency;
+  }
+
+  if (availableCurrencies.includes(preferredCurrency)) {
+    return preferredCurrency;
   }
 
   return availableCurrencies[0] ?? preferredCurrency;
