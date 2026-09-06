@@ -1,6 +1,7 @@
 <!--
 Sync Impact Report
 - Version change: 1.6.0 -> 1.7.0
+- Amendment date: 2026-09-05
 - Modified principles:
   - V. Premium UI with Consistent Theming: clarified approved mockup binding,
     responsive variants, gradient use, and visual-completion evidence.
@@ -21,8 +22,14 @@ Sync Impact Report
     mockups, bind comparison context, and require rendered/accessibility
     evidence plus separate readiness/fidelity reporting.
   - .agent/workflows/mockup-implementation.md ✅ updated to preserve gradients
-    used by the design system or an approved design direction without inventing
-    unapproved gradients.
+    used by the design system or an approved design direction and persist
+    approved binding-context sidecars with known facts and explicit unknowns.
+  - .agent/workflows/applying-mockups.md ✅ updated to apply only the binding UI
+    surface and exclude presentation-only framing unless explicitly binding.
+  - .agent/workflows/speckit.tasks.md ✅ updated to generate required rendered
+    baseline and scoped-variant evidence tasks for mockup-backed UI.
+  - .agent/workflows/speckit.implement.md ✅ updated to block visual completion
+    until required rendered baseline/scoped-variant evidence is complete.
   - .agent/rules/ecc-coding-style.md ✅ updated with approved mockup fidelity and
     separate visual-variant and accessibility evidence requirements.
   - .agent/rules/specify-rules.md ✅ updated with binding-context and visual
@@ -402,4 +409,4 @@ migration.
   `/speckit.plan`, `/speckit.tasks`, `/speckit.implement`) MUST reference this
   constitution and verify compliance before producing output.
 
-**Version**: 1.7.0 | **Ratified**: 2026-02-14 | **Last Amended**: 2026-09-04
+**Version**: 1.7.0 | **Ratified**: 2026-02-14 | **Last Amended**: 2026-09-05

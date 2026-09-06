@@ -243,12 +243,50 @@ mockup-1-v2.png mockup-2-v2.png
 
 ---
 
-### 9.5 Purpose
+### 9.5 Persist Approved Binding Context
 
-- These images become the **single source of truth for UI implementation**
+The approved image and its binding metadata together form the implementation
+handoff required by the constitution. For every approved image, create a matching
+sidecar named `<mockup-basename>.binding.md` in the same `mockups/` directory.
+
+Each sidecar MUST record:
+
+- the approved reference image filename;
+- the binding product surface: route/screen, component, sheet, modal, or other
+  scoped UI region;
+- the declared comparison context: exact viewport dimensions when the reference
+  binds a viewport, or exact component bounds/context when it binds a component;
+- any presentation-only framing that is explicitly **non-binding**, including
+  phone hardware, device frame, outer canvas, browser chrome, export padding, or
+  background outside the UI surface;
+- all known screen-specific **spacing** facts;
+- all known **sizing** facts;
+- all known **color/theme** facts;
+- all known **typography** facts;
+- all known **state** facts represented by the reference, including selected,
+  loading, empty, error, disabled, or other visible state where applicable; and
+- any scoped responsive, dark, RTL/Arabic, or enlarged-text variants already
+  approved or explicitly required for validation.
+
+For every required fact that is not known, write `UNKNOWN` rather than inferring
+its value. Identify whether each unknown affects visual fidelity. A
+fidelity-affecting unknown MUST be surfaced for clarification before
+implementation starts; do not silently convert image pixels, export framing, or
+assumptions into product rules.
+
+Use the constitution's **Approved mockup binding** principle as the authority for
+what is binding. Direct implementation workflows MUST consume this sidecar
+rather than treating the entire exported image as product UI.
+
+---
+
+### 9.6 Purpose
+
+- The approved image plus its binding sidecar become the **single source of truth
+  for UI implementation**
 - They MUST be used by:
-  - Developers → for pixel-perfect implementation
-  - Review agents → for visual validation against code
+  - Developers → for pixel-perfect implementation at the declared binding context
+  - Review agents → for visual validation against code and rendered evidence
 
 ---
 
