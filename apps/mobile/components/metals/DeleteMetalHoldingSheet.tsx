@@ -346,7 +346,7 @@ function DeleteActions({
         }}
         disabled={props.isSubmitting}
         onPress={props.onConfirm}
-        className="min-h-11 items-center justify-center rounded-2xl bg-red-600 px-4 dark:bg-red-500"
+        className="min-h-11 items-center justify-center rounded-2xl bg-red-600 px-4 dark:bg-red-600"
       >
         <View
           testID="metal-holding-delete-confirm-target"

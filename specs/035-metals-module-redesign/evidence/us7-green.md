@@ -25,16 +25,24 @@ Branch/base: `codex/035-metals-delete` / stable Slice 7 checkpoint `a190d8f`
 - Review follow-up Red: 2 suites ran; 10 tests failed and 22 passed. Failures
   reproduced lifecycle-kind, revision-zero, generated-ID, unsuccessful-replay,
   bounded-scroll, complete-command retry, and command-construction cleanup gaps.
-- Jest: 2 suites passed, 32 tests passed, including lifecycle-kind,
-  predecessor-less revision-zero, malformed/duplicate generated-ID, unsuccessful
-  replay, command-construction cleanup, complete-command retry, bounded-scroll,
-  and StrictMode cases.
-- Scoped ESLint: passed for the two tests and four production modules.
-- Prettier: passed for every US7-owned source, test, Maestro, manual, coverage,
-  and evidence file.
-- `git diff --check`: passed.
-- Mobile TypeScript: no US7-owned diagnostic. The full workspace command remains
-  blocked only by unrelated PR #271 trust-value/`validationInput` diagnostics.
+- Last full isolated Jest run before the later review-only follow-ups: 2 suites
+  passed, 32 tests passed at the verified `8d6bece` checkpoint, including
+  lifecycle-kind, predecessor-less revision-zero, malformed/duplicate generated-ID,
+  unsuccessful replay, command-construction cleanup, complete-command retry,
+  bounded-scroll, and StrictMode cases.
+- Current review follow-ups add source-contract coverage for reconciled action
+  roots and for the dark destructive button token. In this remote session, a
+  focused source probe reproduced the contrast failure with `dark:bg-red-500`
+  and passed with `dark:bg-red-600` before the production edit. The repository
+  Jest runner is not available in this chat environment, and GitHub exposes no
+  Actions workflow/status for the current PR head, so the historical 32-test run
+  is not extrapolated to the latest commits.
+- The last full scoped ESLint, Prettier, and `git diff --check` run at the
+  verified `8d6bece` checkpoint passed. No later full workspace-run claim is
+  made from this remote session.
+- Mobile TypeScript: no US7-owned diagnostic at the last full run. The workspace
+  command remained blocked only by unrelated existing live-rates and Add/Edit
+  facade diagnostics.
 
 ## Financial and persistence evidence
 
