@@ -7,6 +7,7 @@ import type {
   MetalHoldingState,
   MetalLifecycleEvent,
 } from "@monyvi/db";
+import { SUPPORTED_CURRENCIES } from "@monyvi/logic";
 
 import {
   assertCanonicalMetalRevision,
@@ -23,6 +24,41 @@ export interface CanonicalAccountEvidence {
   readonly canonicalRevision: string;
   readonly canonicalActionId: string | null;
   readonly canonicalEvidenceHash: string;
+}
+
+export interface CanonicalMetalHolding {
+  readonly holdingId: string;
+  readonly asset: {
+    readonly acquisitionActionId: string | null;
+    readonly currency: string;
+    readonly name: string;
+    readonly notes: string | null;
+    readonly purchaseCurrency: string | null;
+    readonly purchaseDate: string;
+    readonly purchasePrice: number;
+    readonly purchasePriceDecimal: string | null;
+  };
+  readonly metal: {
+    readonly metalType: string;
+    readonly physicalForm: string | null;
+    readonly purityCatalogVersion: string | null;
+    readonly purityCode: string | null;
+    readonly purityFactorDecimal: string | null;
+    readonly purityFraction: number;
+    readonly weightGrams: number;
+    readonly weightGramsDecimal: string | null;
+  };
+  readonly state: {
+    readonly effectiveActionId: string;
+    readonly effectiveEventId: string;
+    readonly financialRevision: string;
+    readonly isVisible: boolean;
+    readonly nameWrittenAt: number | null;
+    readonly nameWriterId: string | null;
+    readonly notesWrittenAt: number | null;
+    readonly notesWriterId: string | null;
+    readonly status: "active" | "sold" | "disposed";
+  };
 }
 
 interface MetalOutcomeTransportEvidence {
@@ -50,6 +86,7 @@ export type MetalRpcOutcome = MetalOutcomeTransportEvidence &
         readonly canonicalHoldingRevision: string;
         readonly canonicalHoldingActionId: string | null;
         readonly canonicalHoldingEvidenceHash: string;
+        readonly canonicalHolding: CanonicalMetalHolding;
         readonly canonicalAccounts: readonly CanonicalAccountEvidence[];
         readonly staleAccountIds: readonly string[];
       }
@@ -119,6 +156,70 @@ function isCanonicalAccountEvidence(
   );
 }
 
+function isCanonicalHolding(
+  value: CanonicalMetalHolding | null | undefined,
+  revision: string,
+  actionId: string | null
+): boolean {
+  const clockPairIsValid = (
+    writtenAt: number | null,
+    writerId: string | null
+  ): boolean =>
+    (writtenAt === null && writerId === null) ||
+    (Number.isSafeInteger(writtenAt) &&
+      Number(writtenAt) >= 0 &&
+      typeof writerId === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+        writerId
+      ));
+  if (!value?.asset || !value.metal || !value.state) return false;
+  const { asset, metal, state } = value;
+  const isSupportedCurrency = SUPPORTED_CURRENCIES.some(
+    ({ code }) => code !== "BTC" && code === asset.currency
+  );
+  const nullableExactValueIsValid = (candidate: unknown): boolean =>
+    candidate === null ||
+    (typeof candidate === "string" &&
+      /^([1-9][0-9]*|(0|[1-9][0-9]*)\.[0-9]*[1-9])$/.test(candidate));
+  return (
+    typeof value.holdingId === "string" &&
+    value.holdingId.length > 0 &&
+    state.financialRevision === revision &&
+    state.effectiveActionId === actionId &&
+    typeof state.effectiveEventId === "string" &&
+    state.effectiveEventId.length > 0 &&
+    (asset.acquisitionActionId === null ||
+      typeof asset.acquisitionActionId === "string") &&
+    isSupportedCurrency &&
+    typeof asset.name === "string" &&
+    asset.name.length > 0 &&
+    (asset.notes === null || typeof asset.notes === "string") &&
+    /^\d{4}-\d{2}-\d{2}$/.test(asset.purchaseDate) &&
+    Number.isFinite(asset.purchasePrice) &&
+    asset.purchasePrice > 0 &&
+    (asset.purchaseCurrency === null ||
+      asset.purchaseCurrency === asset.currency) &&
+    nullableExactValueIsValid(asset.purchasePriceDecimal) &&
+    (metal.metalType === "GOLD" || metal.metalType === "SILVER") &&
+    (metal.physicalForm === null ||
+      ["COIN", "BAR", "JEWELRY"].includes(metal.physicalForm)) &&
+    Number.isFinite(metal.purityFraction) &&
+    metal.purityFraction > 0 &&
+    metal.purityFraction <= 1 &&
+    Number.isFinite(metal.weightGrams) &&
+    metal.weightGrams > 0 &&
+    nullableExactValueIsValid(metal.purityFactorDecimal) &&
+    nullableExactValueIsValid(metal.weightGramsDecimal) &&
+    (metal.purityCode === null || typeof metal.purityCode === "string") &&
+    (metal.purityCatalogVersion === null ||
+      typeof metal.purityCatalogVersion === "string") &&
+    typeof state.isVisible === "boolean" &&
+    ["active", "sold", "disposed"].includes(state.status) &&
+    clockPairIsValid(state.nameWrittenAt, state.nameWriterId) &&
+    clockPairIsValid(state.notesWrittenAt, state.notesWriterId)
+  );
+}
+
 export function classifyMetalServerOutcome(
   outcome: MetalRpcOutcome,
   expectedUserId: string
@@ -146,6 +247,11 @@ export function classifyMetalServerOutcome(
   if (outcome.code === "HOLDING_REVISION_STALE") {
     return outcome.canonicalHoldingRevision !== "0" &&
       outcome.canonicalHoldingActionId !== null &&
+      isCanonicalHolding(
+        outcome.canonicalHolding,
+        outcome.canonicalHoldingRevision,
+        outcome.canonicalHoldingActionId
+      ) &&
       outcome.canonicalAccounts.length === 0 &&
       outcome.staleAccountIds.length === 0
       ? "stale_ready"
@@ -282,6 +388,68 @@ function restoreCorrectionAsset(
     asset.name = metadataBefore.name as string;
     asset.notes = (metadataBefore.notes as string | null) ?? undefined;
   }
+}
+
+function parseLocalDate(value: string): Date {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
+}
+
+async function findPriorAcquisitionActionId(
+  database: Database,
+  event: MetalLifecycleEvent,
+  userId: string,
+  holdingId: string
+): Promise<string> {
+  let predecessorId = event.predecessorEventId;
+  const visited = new Set<string>();
+  while (predecessorId !== null && !visited.has(predecessorId)) {
+    visited.add(predecessorId);
+    const predecessor = await findOwnedByActionId<MetalLifecycleEvent>(
+      database,
+      "metal_lifecycle_events",
+      predecessorId,
+      userId
+    );
+    if (!predecessor || predecessor.holdingId !== holdingId) break;
+    if (predecessor.kind === "add" || predecessor.kind === "correct") {
+      return predecessor.actionId;
+    }
+    predecessorId = predecessor.predecessorEventId;
+  }
+  throw new Error("incomplete_metal_action_group");
+}
+
+function installCanonicalAsset(
+  asset: Asset,
+  canonical: CanonicalMetalHolding,
+  now: Date
+): void {
+  asset.acquisitionActionId = canonical.asset.acquisitionActionId;
+  asset.currency = canonical.asset.currency as Asset["currency"];
+  asset.name = canonical.asset.name;
+  asset.notes = canonical.asset.notes ?? undefined;
+  asset.purchaseCurrency = canonical.asset.purchaseCurrency;
+  asset.purchaseDate = parseLocalDate(canonical.asset.purchaseDate);
+  asset.purchasePrice = canonical.asset.purchasePrice;
+  asset.purchasePriceDecimal = canonical.asset.purchasePriceDecimal;
+  asset.updatedAt = now;
+}
+
+function installCanonicalMetal(
+  metal: AssetMetal,
+  canonical: CanonicalMetalHolding,
+  now: Date
+): void {
+  metal.itemForm = canonical.metal.physicalForm ?? undefined;
+  metal.metalType = canonical.metal.metalType as AssetMetal["metalType"];
+  metal.purityCatalogVersion = canonical.metal.purityCatalogVersion;
+  metal.purityCode = canonical.metal.purityCode;
+  metal.purityFactorDecimal = canonical.metal.purityFactorDecimal;
+  metal.purityFraction = canonical.metal.purityFraction;
+  metal.weightGrams = canonical.metal.weightGrams;
+  metal.weightGramsDecimal = canonical.metal.weightGramsDecimal;
+  metal.updatedAt = now;
 }
 
 function restoreCorrectionMetal(
@@ -460,9 +628,15 @@ async function commitNonAcceptedOutcome(
     (envelope.kind !== "undo" ||
       reversedEvent?.kind === "sell" ||
       reversedEvent?.kind === "dispose");
+  const canInstallStale =
+    outcome.status === "stale" &&
+    outcome.code === "HOLDING_REVISION_STALE" &&
+    isCurrentAction &&
+    classifyMetalServerOutcome(outcome, userId) === "stale_ready" &&
+    outcome.canonicalHolding.holdingId === root.domainReferenceId;
   let asset: Asset | null = null;
   let metal: AssetMetal | null = null;
-  if (canRestorePrior && envelope.kind === "correct") {
+  if ((canRestorePrior && envelope.kind === "correct") || canInstallStale) {
     asset = await findOwnedById(
       database.get<Asset>("assets"),
       root.domainReferenceId,
@@ -477,6 +651,16 @@ async function commitNonAcceptedOutcome(
     metal = metals[0] ?? null;
     if (!metal) throw new Error("incomplete_metal_action_group");
   }
+  const priorAcquisitionActionId =
+    canRestorePrior && envelope.kind === "correct"
+      ? await findPriorAcquisitionActionId(
+          database,
+          event,
+          userId,
+          root.domainReferenceId
+        )
+      : null;
+  const isReconciled = canRestorePrior || canInstallStale;
   const models = [
     root,
     evidence,
@@ -490,9 +674,7 @@ async function commitNonAcceptedOutcome(
     const now = new Date();
     const operations: Model[] = [
       root.prepareUpdate((row) => {
-        row.state = canRestorePrior
-          ? "reconciled"
-          : "reconciliation_incomplete";
+        row.state = isReconciled ? "reconciled" : "reconciliation_incomplete";
         row.serverOutcome = outcome.status;
         row.outcomeJson = serializedOutcome;
         row.rejectionCode = outcome.code;
@@ -502,11 +684,28 @@ async function commitNonAcceptedOutcome(
         row.isEffective = false;
         row.updatedAt = now;
       }),
+      evidence.prepareUpdate((row) => {
+        if (canInstallStale && outcome.status === "stale") {
+          row.canonicalHoldingRevision = outcome.canonicalHoldingRevision;
+        }
+        row.updatedAt = now;
+      }),
     ];
     if (isCurrentAction) {
       operations.push(
         state.prepareUpdate((row) => {
-          if (canRestorePrior) {
+          if (canInstallStale && outcome.status === "stale") {
+            const canonical = outcome.canonicalHolding.state;
+            row.effectiveActionId = canonical.effectiveActionId;
+            row.effectiveEventId = canonical.effectiveEventId;
+            row.financialRevision = canonical.financialRevision;
+            row.isVisible = canonical.isVisible;
+            row.nameWrittenAt = canonical.nameWrittenAt;
+            row.nameWriterId = canonical.nameWriterId;
+            row.notesWrittenAt = canonical.notesWrittenAt;
+            row.notesWriterId = canonical.notesWriterId;
+            row.status = canonical.status;
+          } else if (canRestorePrior) {
             row.effectiveActionId = envelope.payload.predecessorEventId as
               | string
               | null;
@@ -525,7 +724,7 @@ async function commitNonAcceptedOutcome(
           } else {
             row.isVisible = false;
           }
-          row.reconciliationState = canRestorePrior
+          row.reconciliationState = isReconciled
             ? "reconciled"
             : "reconciliation_incomplete";
           row.updatedAt = now;
@@ -535,17 +734,26 @@ async function commitNonAcceptedOutcome(
     if (asset && metal) {
       operations.push(
         asset.prepareUpdate((row) => {
-          restoreCorrectionAsset(row, envelope.payload);
-          row.updatedAt = now;
+          if (canInstallStale && outcome.status === "stale") {
+            installCanonicalAsset(row, outcome.canonicalHolding, now);
+          } else {
+            restoreCorrectionAsset(row, envelope.payload);
+            row.acquisitionActionId = priorAcquisitionActionId;
+            row.updatedAt = now;
+          }
         }),
         metal.prepareUpdate((row) => {
-          restoreCorrectionMetal(row, envelope.payload);
-          row.updatedAt = now;
+          if (canInstallStale && outcome.status === "stale") {
+            installCanonicalMetal(row, outcome.canonicalHolding, now);
+          } else {
+            restoreCorrectionMetal(row, envelope.payload);
+            row.updatedAt = now;
+          }
         })
       );
     }
     await database.batch(...operations);
-    return canRestorePrior ? "reconciled" : "incomplete";
+    return isReconciled ? "reconciled" : "incomplete";
   } catch (error) {
     snapshots.forEach(restoreCachedModelSnapshot);
     throw error;

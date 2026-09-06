@@ -130,6 +130,7 @@ jobs:
         run:
           npx supabase test db --local
           supabase/tests/financial_action_canonicalization_test.sql
+          supabase/tests/metals_issue285_reconciliation_test.sql
   android-build:
     name: Android Build Verification
     runs-on: ubuntu-latest

@@ -27,6 +27,7 @@ import { createMetalHoldingCommandService } from "../../services/metal-holding-c
 import {
   createMetalFinancialActionRepository,
   createWatermelonMetalFinancialActionRepositoryDependencies,
+  formatMetalLocalCalendarDate,
 } from "../../services/metal-financial-action-repository";
 import { commitMetalRpcOutcomeLocally } from "../../services/metal-reconciliation-service";
 
@@ -634,6 +635,7 @@ describe("Metals financial action foundation", () => {
       .query()
       .fetch();
     expect(asset?.purchasePriceDecimal).toBe("150000");
+    expect(asset?.acquisitionActionId).toBe(actionId(1));
     expect(rejectedRoot).toMatchObject({
       rejectionCode: "INVALID_LINK",
       serverOutcome: "rejected",
@@ -661,9 +663,43 @@ describe("Metals financial action foundation", () => {
         {
           actionId: actionId(3),
           canonicalAccounts: [],
-          canonicalHoldingActionId: actionId(2),
+          canonicalHoldingActionId: actionId(4),
           canonicalHoldingEvidenceHash: "a".repeat(64),
           canonicalHoldingRevision: "1",
+          canonicalHolding: {
+            asset: {
+              acquisitionActionId: actionId(4),
+              currency: "EGP",
+              name: "Canonical gold",
+              notes: "Installed from server",
+              purchaseCurrency: "EGP",
+              purchaseDate: "2026-08-30",
+              purchasePrice: 152000,
+              purchasePriceDecimal: "152000",
+            },
+            holdingId: HOLDING_ID,
+            metal: {
+              metalType: "GOLD",
+              physicalForm: "COIN",
+              purityCatalogVersion: "1",
+              purityCode: "gold-9999",
+              purityFactorDecimal: "0.9999",
+              purityFraction: 0.9999,
+              weightGrams: 11,
+              weightGramsDecimal: "11",
+            },
+            state: {
+              effectiveActionId: actionId(4),
+              effectiveEventId: actionId(4),
+              financialRevision: "1",
+              isVisible: true,
+              nameWriterId: null,
+              nameWrittenAt: null,
+              notesWriterId: null,
+              notesWrittenAt: null,
+              status: "active",
+            },
+          },
           code: "HOLDING_REVISION_STALE",
           payloadHashMatches: true,
           staleAccountIds: [],
@@ -672,10 +708,18 @@ describe("Metals financial action foundation", () => {
         },
         USER_ID
       )
-    ).resolves.toBe("incomplete");
+    ).resolves.toBe("reconciled");
     const [staleRoot] = await database
       .get<FinancialActionGroup>("financial_action_groups")
       .query(Q.where("action_id", actionId(3)))
+      .fetch();
+    const [canonicalAsset] = await database
+      .get<Asset>("assets")
+      .query()
+      .fetch();
+    const [canonicalMetal] = await database
+      .get<AssetMetal>("asset_metals")
+      .query()
       .fetch();
     const [lockedState] = await database
       .get<MetalHoldingState>("metal_holding_states")
@@ -684,13 +728,50 @@ describe("Metals financial action foundation", () => {
     expect(staleRoot).toMatchObject({
       rejectionCode: "HOLDING_REVISION_STALE",
       serverOutcome: "stale",
-      state: "reconciliation_incomplete",
+      state: "reconciled",
     });
     expect(staleRoot?.outcomeJson).toContain('"status":"stale"');
     expect(lockedState).toMatchObject({
-      isVisible: false,
-      reconciliationState: "reconciliation_incomplete",
+      effectiveActionId: actionId(4),
+      financialRevision: "1",
+      isVisible: true,
+      reconciliationState: "reconciled",
     });
+    expect(canonicalAsset).toMatchObject({
+      acquisitionActionId: actionId(4),
+      name: "Canonical gold",
+      purchasePriceDecimal: "152000",
+    });
+    expect(canonicalMetal).toMatchObject({
+      itemForm: "COIN",
+      weightGramsDecimal: "11",
+    });
+  });
+
+  it("rejects a sale before the acquisition local-calendar date", async () => {
+    const { database } = await createDatabase();
+    const service = createService(database);
+    const add = commandInput("add", actionId(1), null, null);
+    await service.execute({
+      ...add,
+      domainPayload: {
+        ...add.domainPayload,
+        materialFacts: { ...materialFacts(), purchaseDate: "2026-09-01" },
+      },
+    });
+
+    await expect(
+      service.execute(commandInput("sell", actionId(2), "0", actionId(1)))
+    ).rejects.toThrow("metal_sale_before_acquisition");
+  });
+
+  it("formats persisted purchase dates from local calendar components", () => {
+    const date = new Date("2026-07-31T22:00:00.000Z");
+    jest.spyOn(date, "getFullYear").mockReturnValue(2026);
+    jest.spyOn(date, "getMonth").mockReturnValue(7);
+    jest.spyOn(date, "getDate").mockReturnValue(1);
+
+    expect(formatMetalLocalCalendarDate(date)).toBe("2026-08-01");
   });
 
   it("reconciles sequential accepted actions without clobbering the latest local state", async () => {

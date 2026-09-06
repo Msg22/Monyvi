@@ -10,11 +10,21 @@ import {
   captureCachedModelSnapshot,
   restoreCachedModelSnapshot,
 } from "./watermelon-cache-snapshot";
+import { findOwnedById } from "./user-data-access";
 
-interface MetalMetadataValue<TValue> {
+export interface MetalMetadataValue<TValue> {
   readonly value: TValue;
   readonly writtenAt: number;
   readonly writerId: string;
+}
+
+export interface MetalMetadataRpcOutcome {
+  readonly status: "applied" | "idempotent" | "ignored";
+  readonly holdingId: string;
+  readonly canonicalMetadata: {
+    readonly name: MetalMetadataValue<string> | null;
+    readonly notes: MetalMetadataValue<string | null> | null;
+  };
 }
 
 export interface MetalMetadataState {
@@ -54,6 +64,17 @@ function shouldReplace<TValue>(
   );
 }
 
+function hasTupleConflict<TValue>(
+  current: MetalMetadataValue<TValue>,
+  candidate: MetalMetadataValue<TValue>
+): boolean {
+  return (
+    current.writtenAt === candidate.writtenAt &&
+    current.writerId === candidate.writerId &&
+    current.value !== candidate.value
+  );
+}
+
 export function applyMetalMetadataPatch(
   current: MetalMetadataState,
   patch: MetalMetadataPatch,
@@ -72,6 +93,12 @@ export function applyMetalMetadataPatch(
   }
   const name = patch.fields.name;
   const notes = patch.fields.notes;
+  if (
+    (name && hasTupleConflict(current.name, name)) ||
+    (notes && hasTupleConflict(current.notes, notes))
+  ) {
+    throw new Error("metal_metadata_tuple_conflict");
+  }
   if (
     (name &&
       (!isValidClock(name) ||
@@ -186,6 +213,16 @@ export function createMetalMetadataService(
             patch.fields.notes
           )
         : "ignore";
+      if (
+        (patch.fields.name &&
+          nameDecision === "same" &&
+          asset.name !== patch.fields.name.value) ||
+        (patch.fields.notes &&
+          notesDecision === "same" &&
+          (asset.notes ?? null) !== patch.fields.notes.value)
+      ) {
+        throw new Error("metal_metadata_tuple_conflict");
+      }
       const hasApply = nameDecision === "apply" || notesDecision === "apply";
       if (!hasApply) {
         const isReplay =
@@ -234,4 +271,68 @@ export function createMetalMetadataService(
   }
 
   return Object.freeze({ applyPatch });
+}
+
+export async function commitCanonicalMetalMetadataLocally(
+  database: Database,
+  outcome: MetalMetadataRpcOutcome,
+  userId: string
+): Promise<void> {
+  const [asset, state] = await Promise.all([
+    findOwnedById(database.get<Asset>("assets"), outcome.holdingId, userId),
+    findOwnedById(
+      database.get<MetalHoldingState>("metal_holding_states"),
+      outcome.holdingId,
+      userId
+    ),
+  ]);
+  if (!asset || asset.type !== "METAL" || !state) {
+    throw new Error("metal_holding_not_owned");
+  }
+  const canonical = outcome.canonicalMetadata;
+  if (
+    (canonical.name &&
+      (!isValidClock(canonical.name) ||
+        typeof canonical.name.value !== "string" ||
+        canonical.name.value.trim().length === 0 ||
+        getFinancialActionUtf8ByteLength(canonical.name.value) >
+          MAX_ACTION_NAME_UTF8_BYTES)) ||
+    (canonical.notes &&
+      (!isValidClock(canonical.notes) ||
+        (canonical.notes.value !== null &&
+          (typeof canonical.notes.value !== "string" ||
+            getFinancialActionUtf8ByteLength(canonical.notes.value) >
+              MAX_ACTION_NOTES_UTF8_BYTES))))
+  ) {
+    throw new Error("invalid_canonical_metal_metadata");
+  }
+
+  const snapshots = [
+    captureCachedModelSnapshot(asset),
+    captureCachedModelSnapshot(state),
+  ];
+  try {
+    const now = new Date();
+    await database.batch(
+      asset.prepareUpdate((row) => {
+        if (canonical.name) row.name = canonical.name.value;
+        if (canonical.notes) row.notes = canonical.notes.value ?? undefined;
+        row.updatedAt = now;
+      }),
+      state.prepareUpdate((row) => {
+        if (canonical.name) {
+          row.nameWrittenAt = canonical.name.writtenAt;
+          row.nameWriterId = canonical.name.writerId;
+        }
+        if (canonical.notes) {
+          row.notesWrittenAt = canonical.notes.writtenAt;
+          row.notesWriterId = canonical.notes.writerId;
+        }
+        row.updatedAt = now;
+      })
+    );
+  } catch (error) {
+    snapshots.forEach(restoreCachedModelSnapshot);
+    throw error;
+  }
 }

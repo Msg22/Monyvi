@@ -4,6 +4,11 @@ import {
   stripMetalActionFragments,
 } from "../../services/sync/ownership-guards";
 
+jest.mock("../../services/supabase", () => ({
+  getCurrentUserId: jest.fn(),
+  supabase: {},
+}));
+
 const USER_ID = "018f0c7a-1234-7abc-8def-000000000003";
 const WRITER_ID = "018f0c7a-1234-7abc-8def-000000000011";
 
