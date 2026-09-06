@@ -36,11 +36,7 @@ function buildManualQaCompatibilityCleanupRows({
   return {
     assetMetals: [
       {
-        id: deterministicUuid(
-          seedScope,
-          userId,
-          "asset-metal:platinum-bar"
-        ),
+        id: deterministicUuid(seedScope, userId, "asset-metal:platinum-bar"),
       },
     ],
     assets: [
@@ -165,6 +161,10 @@ function buildManualQaExtraRows({
     userId,
     "financial-action-group:qa-given-away-silver-bar"
   );
+  const soldPurchaseDate = dateFromReference(fixedNow, -60);
+  const soldSaleDate = dateFromReference(fixedNow, -10);
+  const disposedPurchaseDate = dateFromReference(fixedNow, -50);
+  const disposedDisposalDate = dateFromReference(fixedNow, -5);
   const soldPayload = {
     expectedHoldingRevision: "0",
     feeMinorUnits: "50000",
@@ -178,10 +178,10 @@ function buildManualQaExtraRows({
     rateSnapshots: [],
     reversesEventId: null,
     saleCurrency: "EGP",
-    saleDate: dateFromToday(-10),
+    saleDate: soldSaleDate,
   };
   const disposedPayload = {
-    disposalDate: dateFromToday(-5),
+    disposalDate: disposedDisposalDate,
     expectedHoldingRevision: "0",
     holdingId: disposedHoldingId,
     notes: "Manual QA given-away disposal fixture",
@@ -531,7 +531,7 @@ function buildManualQaExtraRows({
         type: "METAL",
         purchase_price: 30000,
         purchase_price_decimal: "30000",
-        purchase_date: dateFromToday(-60),
+        purchase_date: soldPurchaseDate,
         currency: "EGP",
         purchase_currency: "EGP",
         acquisition_action_id: null,
@@ -548,7 +548,7 @@ function buildManualQaExtraRows({
         type: "METAL",
         purchase_price: 4500,
         purchase_price_decimal: "4500",
-        purchase_date: dateFromToday(-50),
+        purchase_date: disposedPurchaseDate,
         currency: "EGP",
         purchase_currency: "EGP",
         acquisition_action_id: null,
@@ -669,6 +669,7 @@ function buildManualQaExtraRows({
         actionId: soldActionId,
         currentTimestamp,
         envelope: soldEnvelope,
+        fixedNow,
         groupId: soldGroupId,
         holdingId: soldHoldingId,
         kind: "sell",
@@ -678,6 +679,7 @@ function buildManualQaExtraRows({
         actionId: disposedActionId,
         currentTimestamp,
         envelope: disposedEnvelope,
+        fixedNow,
         groupId: disposedGroupId,
         holdingId: disposedHoldingId,
         kind: "dispose",
@@ -688,6 +690,7 @@ function buildManualQaExtraRows({
       createMetalActionEvidence({
         actionId: soldActionId,
         currentTimestamp,
+        fixedNow,
         holdingId: soldHoldingId,
         kind: "sell",
         payload: soldPayload,
@@ -696,6 +699,7 @@ function buildManualQaExtraRows({
       createMetalActionEvidence({
         actionId: disposedActionId,
         currentTimestamp,
+        fixedNow,
         holdingId: disposedHoldingId,
         kind: "dispose",
         payload: disposedPayload,
@@ -706,6 +710,7 @@ function buildManualQaExtraRows({
       createMetalLifecycleEvent({
         actionId: soldActionId,
         currentTimestamp,
+        fixedNow,
         holdingId: soldHoldingId,
         kind: "sell",
         occurredAt: soldOccurredAt,
@@ -715,6 +720,7 @@ function buildManualQaExtraRows({
       createMetalLifecycleEvent({
         actionId: disposedActionId,
         currentTimestamp,
+        fixedNow,
         holdingId: disposedHoldingId,
         kind: "dispose",
         occurredAt: disposedOccurredAt,
@@ -1531,6 +1537,7 @@ function createFinancialActionGroup({
   actionId,
   currentTimestamp,
   envelope,
+  fixedNow,
   groupId,
   holdingId,
   kind,
@@ -1551,7 +1558,7 @@ function createFinancialActionGroup({
     outcome_json: null,
     rejection_code: null,
     deleted: false,
-    created_at: currentTimestamp,
+    created_at: fixedNow,
     updated_at: currentTimestamp,
   };
 }
@@ -1559,6 +1566,7 @@ function createFinancialActionGroup({
 function createMetalActionEvidence({
   actionId,
   currentTimestamp,
+  fixedNow,
   holdingId,
   kind,
   payload,
@@ -1574,7 +1582,7 @@ function createMetalActionEvidence({
     canonical_holding_revision: "1",
     domain_payload_json: payload,
     deleted: false,
-    created_at: currentTimestamp,
+    created_at: fixedNow,
     updated_at: currentTimestamp,
   };
 }
@@ -1582,6 +1590,7 @@ function createMetalActionEvidence({
 function createMetalLifecycleEvent({
   actionId,
   currentTimestamp,
+  fixedNow,
   holdingId,
   kind,
   occurredAt,
@@ -1601,9 +1610,15 @@ function createMetalLifecycleEvent({
     is_effective: true,
     is_history_visible: true,
     deleted: false,
-    created_at: currentTimestamp,
+    created_at: fixedNow,
     updated_at: currentTimestamp,
   };
+}
+
+function dateFromReference(reference, daysOffset) {
+  const date = new Date(reference);
+  date.setUTCDate(date.getUTCDate() + daysOffset);
+  return date.toISOString().slice(0, 10);
 }
 
 function createTerminalHoldingState({

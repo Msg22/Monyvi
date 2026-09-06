@@ -1,32 +1,28 @@
 import { createHash } from "node:crypto";
 
-const {
-  buildSeedIds,
-  inspectFixtureData,
-  resetFixtureData,
-  seedFixtureData,
-} = jest.requireActual<{
-  readonly buildSeedIds: (userId: string, seedScope: string) => Record<string, any>;
-  readonly inspectFixtureData: (
-    client: unknown,
-    config: Record<string, unknown>,
-    fixture: Record<string, unknown>
-  ) => Promise<Record<string, any>>;
-  readonly resetFixtureData: (
-    client: unknown,
-    config: Record<string, unknown>,
-    fixture: Record<string, unknown>
-  ) => Promise<unknown>;
-  readonly seedFixtureData: (
-    client: unknown,
-    config: Record<string, unknown>,
-    fixture: Record<string, unknown>
-  ) => Promise<unknown>;
-}>("../../scripts/seed-fixtures/seed-engine");
-const {
-  MANUAL_QA_SEED_FIXTURE,
-  buildManualQaExtraRows,
-} = jest.requireActual<{
+const { buildSeedIds, inspectFixtureData, resetFixtureData, seedFixtureData } =
+  jest.requireActual<{
+    readonly buildSeedIds: (
+      userId: string,
+      seedScope: string
+    ) => Record<string, any>;
+    readonly inspectFixtureData: (
+      client: unknown,
+      config: Record<string, unknown>,
+      fixture: Record<string, unknown>
+    ) => Promise<Record<string, any>>;
+    readonly resetFixtureData: (
+      client: unknown,
+      config: Record<string, unknown>,
+      fixture: Record<string, unknown>
+    ) => Promise<unknown>;
+    readonly seedFixtureData: (
+      client: unknown,
+      config: Record<string, unknown>,
+      fixture: Record<string, unknown>
+    ) => Promise<unknown>;
+  }>("../../scripts/seed-fixtures/seed-engine");
+const { MANUAL_QA_SEED_FIXTURE, buildManualQaExtraRows } = jest.requireActual<{
   readonly MANUAL_QA_SEED_FIXTURE: Record<string, unknown>;
   readonly buildManualQaExtraRows: (
     context: Record<string, any>
@@ -36,6 +32,18 @@ const {
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const SEED_SCOPE = "manual-qa";
 const FIXED_NOW = "2026-01-15T12:00:00.000Z";
+const IMMUTABLE_LIFECYCLE_FIELDS = [
+  "id",
+  "user_id",
+  "holding_id",
+  "action_id",
+  "kind",
+  "occurred_at",
+  "payload_json",
+  "predecessor_event_id",
+  "reverses_event_id",
+  "created_at",
+] as const;
 
 function deterministicUuid(scope: string, userId: string, key: string): string {
   const hex = createHash("sha256")
@@ -86,7 +94,10 @@ describe("manual QA Metals lifecycle fixture", () => {
   it("preserves active holdings and adds deterministic sold/disposed History rows", () => {
     const first = buildRows();
     const second = buildRows();
-    const states = first.metalHoldingStates as readonly Record<string, unknown>[];
+    const states = first.metalHoldingStates as readonly Record<
+      string,
+      unknown
+    >[];
 
     expect(states.filter((row) => row.status === "active")).toHaveLength(3);
     expect(states.filter((row) => row.status === "sold")).toHaveLength(1);
@@ -107,17 +118,22 @@ describe("manual QA Metals lifecycle fixture", () => {
 
   it("keeps terminal ownership and action/event provenance internally consistent", () => {
     const rows = buildRows();
-    const states = (rows.metalHoldingStates as readonly Record<string, any>[]).filter(
-      (row) => row.status === "sold" || row.status === "disposed"
-    );
+    const states = (
+      rows.metalHoldingStates as readonly Record<string, any>[]
+    ).filter((row) => row.status === "sold" || row.status === "disposed");
     const events = rows.metalLifecycleEvents as readonly Record<string, any>[];
-    const actions = rows.financialActionGroups as readonly Record<string, any>[];
+    const actions = rows.financialActionGroups as readonly Record<
+      string,
+      any
+    >[];
     const evidence = rows.metalActionEvidence as readonly Record<string, any>[];
 
     for (const state of states) {
       expect(state.user_id).toBe(USER_ID);
       expect(state.financial_revision).toBe("1");
-      const event = events.find((candidate) => candidate.id === state.effective_event_id);
+      const event = events.find(
+        (candidate) => candidate.id === state.effective_event_id
+      );
       expect(event).toMatchObject({
         user_id: USER_ID,
         holding_id: state.holding_id,
@@ -154,12 +170,12 @@ describe("manual QA Metals lifecycle fixture", () => {
 
   it("seeds a whole-holding sale without any account-credit contract", () => {
     const rows = buildRows();
-    const soldEvent = (rows.metalLifecycleEvents as readonly Record<string, any>[]).find(
-      (event) => event.kind === "sell"
-    );
-    const soldAction = (rows.financialActionGroups as readonly Record<string, any>[]).find(
-      (action) => action.kind === "sell"
-    );
+    const soldEvent = (
+      rows.metalLifecycleEvents as readonly Record<string, any>[]
+    ).find((event) => event.kind === "sell");
+    const soldAction = (
+      rows.financialActionGroups as readonly Record<string, any>[]
+    ).find((action) => action.kind === "sell");
     expect(soldEvent).toBeDefined();
     expect(soldAction?.account_guards_json).toEqual([]);
     const payload = asJsonObject(soldEvent?.payload_json);
@@ -173,9 +189,9 @@ describe("manual QA Metals lifecycle fixture", () => {
 
   it("uses an approved disposal category and never seeds sale proceeds or realized P/L for disposal", () => {
     const rows = buildRows();
-    const disposedEvent = (rows.metalLifecycleEvents as readonly Record<string, any>[]).find(
-      (event) => event.kind === "dispose"
-    );
+    const disposedEvent = (
+      rows.metalLifecycleEvents as readonly Record<string, any>[]
+    ).find((event) => event.kind === "dispose");
     expect(disposedEvent).toBeDefined();
     const payload = asJsonObject(disposedEvent?.payload_json);
     expect([
@@ -227,16 +243,98 @@ describe("manual QA Metals lifecycle fixture", () => {
     expect(inspection.tables.financial_action_groups).toMatchObject({
       expected: 2,
     });
-    expect(inspection.tables.metal_action_evidence).toMatchObject({ expected: 2 });
-    expect(inspection.tables.metal_lifecycle_events).toMatchObject({ expected: 2 });
+    expect(inspection.tables.metal_action_evidence).toMatchObject({
+      expected: 2,
+    });
+    expect(inspection.tables.metal_lifecycle_events).toMatchObject({
+      expected: 2,
+    });
+
+    client.tables.get("assets")?.set("unrelated-asset", {
+      id: "unrelated-asset",
+      user_id: "unrelated-user",
+      deleted: false,
+    });
+    client.tables.get("financial_action_groups")?.set("unrelated-action-root", {
+      id: "unrelated-action-root",
+      user_id: "unrelated-user",
+      deleted: false,
+    });
 
     await resetFixtureData(client, config, fixture);
-    expect(rowsFor(client, "financial_action_groups")).toHaveLength(0);
-    expect(rowsFor(client, "metal_action_evidence")).toHaveLength(0);
-    expect(rowsFor(client, "metal_lifecycle_events")).toHaveLength(0);
-    expect(rowsFor(client, "metal_holding_states")).toHaveLength(0);
+    expect(
+      rowsFor(client, "financial_action_groups").filter(
+        (row) => row.user_id === USER_ID && !row.deleted
+      )
+    ).toHaveLength(2);
+    expect(
+      rowsFor(client, "metal_action_evidence").filter((row) => !row.deleted)
+    ).toHaveLength(0);
+    expect(rowsFor(client, "metal_lifecycle_events")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          deleted: true,
+          is_effective: false,
+          is_history_visible: false,
+        }),
+      ])
+    );
+    expect(
+      rowsFor(client, "metal_holding_states").filter((row) => !row.deleted)
+    ).toHaveLength(0);
+    expect(rowsFor(client, "assets")).toContainEqual(
+      expect.objectContaining({ id: "unrelated-asset", deleted: false })
+    );
+    expect(rowsFor(client, "financial_action_groups")).toContainEqual(
+      expect.objectContaining({ id: "unrelated-action-root", deleted: false })
+    );
+
+    await seedFixtureData(client, config, fixture);
+    expect(
+      rowsFor(client, "metal_lifecycle_events").filter(
+        (row) => row.is_effective && row.is_history_visible && !row.deleted
+      )
+    ).toHaveLength(2);
+    expect(
+      rowsFor(client, "metal_holding_states").filter((row) => !row.deleted)
+    ).toHaveLength(5);
+  });
+
+  it("keeps immutable lifecycle facts stable when reseeded on another day", async () => {
+    jest.useFakeTimers();
+    try {
+      const client = createMemoryClient();
+      const config = { mode: "local", userId: USER_ID };
+      const fixture = {
+        ...MANUAL_QA_SEED_FIXTURE,
+        restoreAccountBalancesAfterLedgerSeed: false,
+      };
+      jest.setSystemTime(new Date("2026-01-15T12:00:00.000Z"));
+      await seedFixtureData(client, config, fixture);
+      const firstEvents = rowsFor(client, "metal_lifecycle_events").map(
+        immutableLifecycleFacts
+      );
+
+      jest.setSystemTime(new Date("2026-01-16T12:00:00.000Z"));
+      await expect(seedFixtureData(client, config, fixture)).resolves.toEqual({
+        userId: USER_ID,
+      });
+      expect(
+        rowsFor(client, "metal_lifecycle_events").map(immutableLifecycleFacts)
+      ).toEqual(firstEvents);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
+
+function immutableLifecycleFacts(
+  row: Readonly<Record<string, unknown>>
+): Readonly<Record<string, unknown>> {
+  return Object.fromEntries(
+    IMMUTABLE_LIFECYCLE_FIELDS.map((field) => [field, row[field]])
+  );
+}
 
 function createMemoryClient(): {
   readonly tables: Map<string, Map<string, Record<string, any>>>;
@@ -272,12 +370,28 @@ function createMemoryClient(): {
     }),
     delete: () => ({
       eq: async (column: string, value: unknown) => {
+        if (
+          table === "metal_lifecycle_events" &&
+          Array.from(tableRows(table).values()).some(
+            (row) => row[column] === value
+          )
+        ) {
+          return { error: { message: "metal_lifecycle_event_immutable" } };
+        }
         for (const [id, row] of tableRows(table)) {
           if (row[column] === value) tableRows(table).delete(id);
         }
         return { error: null };
       },
       in: async (column: string, values: readonly unknown[]) => {
+        if (
+          table === "metal_lifecycle_events" &&
+          Array.from(tableRows(table).values()).some((row) =>
+            values.includes(row[column])
+          )
+        ) {
+          return { error: { message: "metal_lifecycle_event_immutable" } };
+        }
         for (const [id, row] of tableRows(table)) {
           if (values.includes(row[column])) tableRows(table).delete(id);
         }
@@ -285,10 +399,28 @@ function createMemoryClient(): {
       },
     }),
     upsert: async (
-      input: Record<string, any> | readonly Record<string, any>[]
+      input: Record<string, any> | readonly Record<string, any>[],
+      options: Readonly<{ ignoreDuplicates?: boolean }> = {}
     ) => {
       const rows = Array.isArray(input) ? input : [input];
       for (const row of rows) {
+        const existing = tableRows(table).get(String(row.id));
+        if (existing && options.ignoreDuplicates) continue;
+        const existingLifecycle = existing as
+          | Readonly<Record<string, unknown>>
+          | undefined;
+        const nextLifecycle = row as Readonly<Record<string, unknown>>;
+        if (
+          table === "metal_lifecycle_events" &&
+          existingLifecycle &&
+          IMMUTABLE_LIFECYCLE_FIELDS.some(
+            (field) =>
+              JSON.stringify(existingLifecycle[field]) !==
+              JSON.stringify(nextLifecycle[field])
+          )
+        ) {
+          return { error: { message: "metal_lifecycle_event_immutable" } };
+        }
         tableRows(table).set(String(row.id), { ...row });
       }
       return { error: null };
@@ -301,12 +433,26 @@ function createMemoryClient(): {
           return chain;
         },
         then: (
-          resolve: (value: { error: null }) => unknown,
+          resolve: (value: {
+            error: Readonly<{ message: string }> | null;
+          }) => unknown,
           reject: (reason?: unknown) => unknown
         ) => {
           try {
             for (const [id, row] of tableRows(table)) {
               if (filters.every(([column, value]) => row[column] === value)) {
+                if (
+                  table === "financial_action_groups" &&
+                  patch.deleted === true
+                ) {
+                  return Promise.resolve(
+                    resolve({
+                      error: {
+                        message: "financial_action_root_delete_forbidden",
+                      },
+                    })
+                  );
+                }
                 tableRows(table).set(id, { ...row, ...patch });
               }
             }

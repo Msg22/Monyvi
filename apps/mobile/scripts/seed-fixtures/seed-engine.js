@@ -577,6 +577,94 @@ async function deleteRowsByIds(client, table, rows) {
   );
 }
 
+async function updateRowsByIds(client, table, rows, createPatch) {
+  await Promise.all(
+    rows.map(async (row) => {
+      await assertNoError(
+        await client.from(table).update(createPatch(row)).eq("id", row.id),
+        `update ${table}`
+      );
+    })
+  );
+}
+
+async function reviveImmutableMetalLifecycleRows(client, rows) {
+  await updateRowsByIds(
+    client,
+    "financial_action_groups",
+    rows.financialActionGroups,
+    (row) => ({ deleted: false, updated_at: row.updated_at })
+  );
+  await updateRowsByIds(
+    client,
+    "metal_action_evidence",
+    rows.metalActionEvidence,
+    (row) => ({ deleted: false, updated_at: row.updated_at })
+  );
+  await updateRowsByIds(
+    client,
+    "metal_lifecycle_events",
+    rows.metalLifecycleEvents,
+    (row) => ({
+      deleted: false,
+      is_effective: row.is_effective,
+      is_history_visible: row.is_history_visible,
+      updated_at: row.updated_at,
+    })
+  );
+}
+
+async function tombstoneImmutableMetalLifecycleRows(client, rows) {
+  const lifecycleHoldingIds = new Set(
+    rows.metalLifecycleEvents.map((row) => row.holding_id)
+  );
+  const terminalStates = rows.metalHoldingStates.filter((row) =>
+    lifecycleHoldingIds.has(row.holding_id)
+  );
+  const terminalAssets = rows.assets.filter((row) =>
+    lifecycleHoldingIds.has(row.id)
+  );
+  const terminalAssetMetals = rows.assetMetals.filter((row) =>
+    lifecycleHoldingIds.has(row.asset_id)
+  );
+
+  await updateRowsByIds(
+    client,
+    "metal_holding_states",
+    terminalStates,
+    (row) => ({
+      deleted: true,
+      is_visible: false,
+      updated_at: row.updated_at,
+    })
+  );
+  await updateRowsByIds(
+    client,
+    "metal_lifecycle_events",
+    rows.metalLifecycleEvents,
+    (row) => ({
+      deleted: true,
+      is_effective: false,
+      is_history_visible: false,
+      updated_at: row.updated_at,
+    })
+  );
+  for (const [table, tableRows] of [
+    ["metal_action_evidence", rows.metalActionEvidence],
+    ["asset_metals", terminalAssetMetals],
+    ["assets", terminalAssets],
+  ]) {
+    await updateRowsByIds(client, table, tableRows, (row) => ({
+      deleted: true,
+      updated_at: row.updated_at,
+    }));
+  }
+
+  return {
+    lifecycleHoldingIds,
+  };
+}
+
 const FIXTURE_INSPECTION_SELECTS = Object.freeze({
   assets: [
     "id",
@@ -1082,23 +1170,24 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
   await upsertRowsIfAny(client, "asset_metals", rows.assetMetals, {
     onConflict: "id",
   });
+  await reviveImmutableMetalLifecycleRows(client, rows);
   await upsertRowsIfAny(
     client,
     "financial_action_groups",
     rows.financialActionGroups,
-    { onConflict: "id" }
+    { ignoreDuplicates: true, onConflict: "id" }
   );
   await upsertRowsIfAny(
     client,
     "metal_action_evidence",
     rows.metalActionEvidence,
-    { onConflict: "id" }
+    { ignoreDuplicates: true, onConflict: "id" }
   );
   await upsertRowsIfAny(
     client,
     "metal_lifecycle_events",
     rows.metalLifecycleEvents,
-    { onConflict: "id" }
+    { ignoreDuplicates: true, onConflict: "id" }
   );
   await upsertRowsIfAny(
     client,
@@ -1147,6 +1236,10 @@ async function resetFixtureData(client, config, fixtureOverrides = {}) {
     config.userId ?? (await ensureSeedUser(client, config, fixture));
   const seedIds = buildSeedIds(userId, fixture.seedScope);
   const rows = buildSeedRows(userId, seedIds, fixture);
+  const hasImmutableMetalLifecycleRows = rows.metalLifecycleEvents.length > 0;
+  const terminalCleanup = hasImmutableMetalLifecycleRows
+    ? await tombstoneImmutableMetalLifecycleRows(client, rows)
+    : { lifecycleHoldingIds: new Set() };
 
   await deleteRowsByIds(
     client,
@@ -1156,6 +1249,34 @@ async function resetFixtureData(client, config, fixtureOverrides = {}) {
   await deleteRowsByIds(client, "market_rates", rows.marketRateCleanupRows);
 
   for (const table of RESET_TABLE_DELETE_ORDER) {
+    if (hasImmutableMetalLifecycleRows && table === "metal_holding_states") {
+      await deleteRowsByIds(
+        client,
+        table,
+        rows.metalHoldingStates.filter(
+          (row) => !terminalCleanup.lifecycleHoldingIds.has(row.holding_id)
+        )
+      );
+      continue;
+    }
+    if (hasImmutableMetalLifecycleRows && table === "assets") {
+      await deleteRowsByIds(
+        client,
+        table,
+        rows.assets.filter(
+          (row) => !terminalCleanup.lifecycleHoldingIds.has(row.id)
+        )
+      );
+      continue;
+    }
+    if (
+      hasImmutableMetalLifecycleRows &&
+      (table === "metal_lifecycle_events" ||
+        table === "metal_action_evidence" ||
+        table === "financial_action_groups")
+    ) {
+      continue;
+    }
     await deleteScopedRows(client, table, userId, seedIds);
   }
 
