@@ -22,8 +22,8 @@ export const DISPOSE_METAL_HOLDING_COPY_KEYS = Object.freeze({
   intro: "dispose.intro",
   reasonLabel: "dispose.reasonLabel",
   categories: Object.freeze({
-    lost_or_stolen: "dispose.categories.lostOrStolen",
-    destroyed_or_damaged: "dispose.categories.destroyedOrDamaged",
+    lost_stolen: "dispose.categories.lostOrStolen",
+    destroyed_damaged: "dispose.categories.destroyedOrDamaged",
     given_away: "dispose.categories.givenAway",
     donated: "dispose.categories.donated",
     other: "dispose.categories.other",
@@ -107,8 +107,8 @@ export interface DisposeMetalHoldingScreenProps {
 }
 
 const CATEGORIES: readonly DisposeCategory[] = [
-  "lost_or_stolen",
-  "destroyed_or_damaged",
+  "lost_stolen",
+  "destroyed_damaged",
   "given_away",
   "donated",
   "other",
@@ -130,7 +130,7 @@ function treatmentFor(
   category: DisposeCategory | null,
   otherTreatment: DisposeTreatment | null
 ): DisposeTreatment | null {
-  if (category === "lost_or_stolen" || category === "destroyed_or_damaged")
+  if (category === "lost_stolen" || category === "destroyed_damaged")
     return "write_off";
   if (category === "given_away" || category === "donated")
     return "external_transfer";
@@ -279,6 +279,8 @@ export function DisposeMetalHoldingScreen({
           </View>
         ) : (
           <ScrollView
+            testID="dispose-scroll-content"
+            className="min-h-0 flex-1"
             keyboardShouldPersistTaps="handled"
             contentContainerClassName="gap-6 px-5 py-5"
           >

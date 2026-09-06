@@ -20,16 +20,16 @@ import type {
 import { incrementCanonicalMetalRevision } from "./metal-financial-action-adapter";
 
 export const DISPOSE_CATEGORIES = [
-  "lost_or_stolen",
-  "destroyed_or_damaged",
+  "lost_stolen",
+  "destroyed_damaged",
   "given_away",
   "donated",
   "other",
 ] as const;
 export const DISPOSE_TREATMENTS = ["write_off", "external_transfer"] as const;
 export const DISPOSE_REASONS = [
-  "lost_or_stolen",
-  "destroyed_or_damaged",
+  "lost_stolen",
+  "destroyed_damaged",
   "given_away",
   "donated",
   "other_write_off",
@@ -40,11 +40,14 @@ export type DisposeCategory = (typeof DISPOSE_CATEGORIES)[number];
 export type DisposeTreatment = (typeof DISPOSE_TREATMENTS)[number];
 export type DisposeReason = (typeof DISPOSE_REASONS)[number];
 
+const DISPOSE_CATEGORY_SET = new Set<string>(DISPOSE_CATEGORIES);
+const DISPOSE_TREATMENT_SET = new Set<string>(DISPOSE_TREATMENTS);
+
 export interface DisposeMetalHoldingCommandInput {
   readonly actionId: string;
   readonly actionEvidenceId: string;
   readonly lifecycleEventId: string;
-  readonly predecessorEventId: string;
+  readonly predecessorEventId: string | null;
   readonly holdingId: string;
   readonly userId: string;
   readonly occurredAt: string;
@@ -72,10 +75,14 @@ export interface DisposeMetalHoldingCommandDependencies {
 }
 
 export interface DisposeMetalHoldingCommandService {
-  readonly dispose: (input: DisposeMetalHoldingCommandInput) => Promise<{
-    readonly kind: "committed" | "replay";
-    readonly holdingId: string;
-  }>;
+  readonly dispose: (
+    input: DisposeMetalHoldingCommandInput
+  ) => Promise<DisposeMetalHoldingCommandResult>;
+}
+
+export interface DisposeMetalHoldingCommandResult {
+  readonly kind: "committed" | "replay";
+  readonly holdingId: string;
 }
 
 export interface DisposeMetalHoldingConsequences {
@@ -94,7 +101,36 @@ export interface DisposeMetalHoldingConsequences {
 interface Projection {
   readonly asset: Asset;
   readonly state: MetalHoldingState;
-  readonly predecessor: MetalLifecycleEvent;
+  readonly predecessor: MetalLifecycleEvent | null;
+  readonly timeline: readonly MetalLifecycleEvent[];
+}
+
+const EFFECTIVE_RECONCILIATION_STATES = new Set([
+  "local_complete",
+  "sync_pending",
+  "sync_failed",
+  "accepted",
+  "reconciled",
+]);
+
+const SUCCESSFUL_REPLAY_STATES = new Set([
+  "local_complete",
+  "sync_pending",
+  "sync_failed",
+  "accepted",
+]);
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function assertStableLocalIds(input: DisposeMetalHoldingCommandInput): void {
+  const ids = [input.actionEvidenceId, input.lifecycleEventId];
+  if (
+    ids.some((id) => !UUID_PATTERN.test(id)) ||
+    new Set(ids).size !== ids.length
+  ) {
+    throw new Error("metal_dispose_invalid_local_id");
+  }
 }
 
 export function resolveDisposeReason(
@@ -102,6 +138,11 @@ export function resolveDisposeReason(
   otherTreatment: DisposeTreatment | null
 ): DisposeReason {
   if (category === null) throw new Error("dispose_category_required");
+  if (!DISPOSE_CATEGORY_SET.has(category))
+    throw new Error("dispose_category_invalid");
+  if (otherTreatment !== null && !DISPOSE_TREATMENT_SET.has(otherTreatment)) {
+    throw new Error("dispose_treatment_invalid");
+  }
   if (category === "other") {
     if (otherTreatment === null)
       throw new Error("dispose_other_treatment_required");
@@ -118,8 +159,8 @@ export function shapeDisposeMetalHoldingConsequences(
   reason: DisposeReason
 ): DisposeMetalHoldingConsequences {
   const treatment: DisposeTreatment =
-    reason === "lost_or_stolen" ||
-    reason === "destroyed_or_damaged" ||
+    reason === "lost_stolen" ||
+    reason === "destroyed_damaged" ||
     reason === "other_write_off"
       ? "write_off"
       : "external_transfer";
@@ -163,7 +204,21 @@ async function loadProjection(
   const scope = await dependencies.getCurrentUserDataScope();
   if (scope.userId !== input.userId)
     throw new Error("financial_action_auth_scope_changed");
-  const [assets, states, predecessors] = await Promise.all([
+  const predecessorPromise =
+    input.predecessorEventId === null
+      ? Promise.resolve([] as MetalLifecycleEvent[])
+      : scope
+          .queryOwned(
+            dependencies.database.get<MetalLifecycleEvent>(
+              "metal_lifecycle_events"
+            ),
+            Q.where("id", input.predecessorEventId),
+            Q.where("holding_id", input.holdingId),
+            Q.where("deleted", false),
+            Q.take(1)
+          )
+          .fetch();
+  const [assets, states, predecessors, timeline] = await Promise.all([
     scope
       .queryOwned(
         dependencies.database.get<Asset>("assets"),
@@ -180,24 +235,28 @@ async function loadProjection(
         Q.take(1)
       )
       .fetch(),
+    predecessorPromise,
     scope
       .queryOwned(
         dependencies.database.get<MetalLifecycleEvent>(
           "metal_lifecycle_events"
         ),
-        Q.where("id", input.predecessorEventId),
         Q.where("holding_id", input.holdingId),
-        Q.where("deleted", false),
-        Q.take(1)
+        Q.where("deleted", false)
       )
       .fetch(),
   ]);
-  if (!assets[0] || !states[0] || !predecessors[0])
+  if (
+    !assets[0] ||
+    !states[0] ||
+    (input.predecessorEventId !== null && !predecessors[0])
+  )
     throw new Error("metal_holding_not_found");
   return {
     asset: scope.assertOwned(assets[0]),
     state: scope.assertOwned(states[0]),
-    predecessor: scope.assertOwned(predecessors[0]),
+    predecessor: predecessors[0] ? scope.assertOwned(predecessors[0]) : null,
+    timeline: timeline.map((event) => scope.assertOwned(event)),
   };
 }
 
@@ -210,11 +269,45 @@ function assertProjection(
   if (projection.state.status !== "active")
     throw new Error("metal_holding_not_active");
   if (
-    projection.state.financialRevision !== input.expectedFinancialRevision ||
+    !projection.state.isVisible ||
+    !EFFECTIVE_RECONCILIATION_STATES.has(projection.state.reconciliationState)
+  ) {
+    throw new Error("metal_dispose_effective_active_holding_required");
+  }
+  if (projection.state.financialRevision !== input.expectedFinancialRevision) {
+    throw new Error("holding_revision_conflict");
+  }
+  const isMigratedRevisionZero =
+    input.expectedFinancialRevision === "0" &&
+    input.predecessorEventId === null &&
+    projection.state.effectiveActionId === null &&
+    projection.state.effectiveEventId === null &&
+    projection.predecessor === null &&
+    projection.timeline.length === 0;
+  if (isMigratedRevisionZero) return;
+  if (
+    projection.predecessor === null ||
+    !projection.predecessor.isEffective ||
+    !projection.predecessor.isHistoryVisible
+  ) {
+    throw new Error("metal_dispose_effective_active_holding_required");
+  }
+  if (
     projection.state.effectiveEventId !== input.predecessorEventId ||
-    !projection.predecessor.isEffective
+    projection.state.effectiveActionId !== projection.predecessor.actionId
   ) {
     throw new Error("holding_revision_conflict");
+  }
+}
+
+function assertSuccessfulReplay(
+  result: CommitFinancialActionGroupLocallyResult
+): void {
+  if (
+    result.kind === "replay" &&
+    !SUCCESSFUL_REPLAY_STATES.has(result.record.state)
+  ) {
+    throw new Error("metal_dispose_replay_requires_recovery");
   }
 }
 
@@ -326,7 +419,10 @@ export function createDisposeMetalHoldingCommandService(
   dependencies: DisposeMetalHoldingCommandDependencies
 ): DisposeMetalHoldingCommandService {
   return Object.freeze({
-    dispose: async (input: DisposeMetalHoldingCommandInput) => {
+    dispose: async (
+      input: DisposeMetalHoldingCommandInput
+    ): Promise<DisposeMetalHoldingCommandResult> => {
+      assertStableLocalIds(input);
       const reason = resolveDisposeReason(input.category, input.otherTreatment);
       const envelope = dependencies.createEnvelope(
         input,
@@ -341,7 +437,11 @@ export function createDisposeMetalHoldingCommandService(
           return preparePlan(dependencies, input, envelope, projection);
         },
       });
-      return { kind: result.kind, holdingId: input.holdingId };
+      assertSuccessfulReplay(result);
+      return {
+        kind: result.kind === "replay" ? "replay" : "committed",
+        holdingId: input.holdingId,
+      };
     },
   });
 }
