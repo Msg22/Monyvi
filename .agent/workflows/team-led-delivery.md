@@ -35,6 +35,11 @@ Compose relevant workflows:
 - GitHub sprint issue: use [`sprint-issue.md`](./sprint-issue.md) for live
   validation, approval gates, branch-base selection, TDD, PR, and manual QA.
   Worktree/junction rules remain in `AGENTS.md`.
+- PR comment follow-up: use
+  [`pr-comment-followup.md`](./pr-comment-followup.md) for thread discovery,
+  classification, fix/reply/resolve behavior, and completion reporting. Keep
+  that review behavior canonical there; Normal ChatGPT handoffs reference the
+  workflow instead of copying its rules.
 - Module discovery: use `$source-command-module-audit`; keep it report-only
   unless implementation is explicitly authorized.
 - Spec-driven work: Speckit owns canonical spec, plan, and tasks. Lifecycle is
@@ -227,67 +232,88 @@ authority. A trusted-native worker may still verify or integrate externally
 owned work without becoming that task's implementation owner. All external
 output requires independent verification, and the lead retains merge authority.
 
-Before every Normal ChatGPT execution dispatch, classify the remote-readiness
-packet as **existing-PR work**, **existing-branch-without-PR work**, or **pre-PR
-branch creation**.
+##### Remote Context References And Volatile Handoff Facts
 
-All packet forms MUST record:
+For Normal ChatGPT, authoritative remote repository context must be referenced,
+not copied into every handoff. Reference the exact repository target plus the
+applicable remote workflow/rule/spec/business-decision paths and PR/issue context
+that the worker must read. For PR-comment follow-ups, reference
+[`pr-comment-followup.md`](./pr-comment-followup.md); its thread classification,
+fix/reply/resolve order, safety rules, and completion report remain canonical
+there.
 
-- exact repository;
-- authoritative spec, approved mockup, business-decision, and workflow paths;
-- ownership/non-overlap boundary;
-- acceptance criteria and explicit non-goals;
-- required checks and relevant review-thread IDs when they already exist;
-- explicitly authorized remote mutations; and
-- expected completion report.
+The handoff adds only facts that are unavailable or unsafe to infer from remote
+state:
 
-For **existing-PR work**, the packet additionally requires:
+- exact expected immutable head/base SHA when required by the selected topology;
+- current writer ownership and conflict state for mutable refs involved;
+- local-only evidence that cannot safely be published remotely;
+- explicitly authorized mutations;
+- task-specific exceptions to the referenced remote rules; and
+- task-specific stop conditions.
 
-- exact PR number and base branch;
-- head branch and immutable full remote head SHA; and
-- confirmation that the target head branch has no active writer.
+Do not restate remote workflow, rule, spec, business-decision, issue, or PR text
+merely to make the prompt self-contained. Restate a remote rule only when it is
+missing, stale, contradictory, or insufficient for the task, and identify that
+reason explicitly. If required local-only context can be safely published,
+publish only the minimum necessary context to the authorized remote source and
+then reference it; otherwise use an eligible local executor.
 
-For **existing-branch-without-PR work**, the packet additionally requires:
+##### Remote Task Topologies
 
-- the exact existing remote branch name;
-- its immutable full current remote head SHA;
-- the intended base/integration branch; and
-- confirmation that the existing branch has no active writer.
+Classify each Normal ChatGPT dispatch as **existing-PR work**,
+**existing-branch-without-PR work**, **pre-PR branch creation**, or a
+**non-branch remote task**.
 
-For **pre-PR branch creation**, the packet instead requires:
+Every handoff references the exact repository and relevant remote target
+(PR/issue/ref) plus the authoritative remote paths needed for execution. The
+volatile additions above are supplied only when applicable to that topology.
 
-- immutable base branch and full base SHA;
+For **existing-PR work**, add:
+
+- exact expected immutable full remote PR head SHA; and
+- current head-branch ownership/conflict state.
+
+The PR number, base/head branch names, review threads, source paths, acceptance
+criteria, checks, and completion-report rules should be read from the referenced
+remote PR and canonical repository sources instead of copied into the handoff,
+unless one of the explicit restatement exceptions above applies.
+
+For **existing-branch-without-PR work**, add:
+
+- the immutable full current remote head SHA of the referenced branch;
+- current branch ownership/conflict state; and
+- the explicitly authorized branch mutations.
+
+For **pre-PR branch creation**, add:
+
+- immutable full base SHA;
 - intended new branch name;
-- confirmation that the intended branch name is **absent remotely immediately
-  before dispatch**; and
-- confirmation that the intended branch ownership boundary has no competing
-  writer.
+- confirmation that the intended branch name is absent remotely immediately
+  before dispatch;
+- intended branch ownership/conflict state; and
+- the explicitly authorized branch/PR mutations.
 
 Never use the pre-PR branch-creation topology when the intended remote ref
 already exists. If the branch exists, use the existing-branch-without-PR packet
-and pin its immutable full remote head SHA before any mutation. A PR number or
-head SHA is not required only while the branch truly does not yet exist. Once a
-new branch is created, refresh into the existing-branch-without-PR topology with
-the actual full remote head SHA before further branch mutations. Once a PR is
-opened, switch to existing-PR work, add the exact PR number/base branch, and
-re-read the immutable head SHA before any follow-up PR work.
+and pin its immutable full remote head SHA before any mutation. Once a new branch
+is created, refresh into the existing-branch-without-PR topology before further
+branch mutations. Once a PR is opened, switch to existing-PR work and refresh the
+expected immutable PR head SHA.
 
-Do not dispatch while any field required for the selected topology is unknown,
-the recorded immutable base/head SHA no longer matches remote state, the
-branch-existence condition no longer matches the selected topology, or a
-competing writer owns the target. Never dispatch Normal ChatGPT to an existing
-branch with an active writer.
+For a **non-branch remote task** such as a read-only remote audit or issue-only
+mutation, do not invent branch-creation or branch-ownership fields. Reference the
+remote issue/PR/repository context that is actually in scope. If repository or PR
+content is part of the decision, add the expected immutable full SHA for the
+mutable ref whose state must remain stable; if no mutable repository ref matters,
+no branch SHA is required. Explicitly authorize any issue/comment mutation, or
+state that the task is read-only. A non-branch task must not mutate a branch
+unless it is reclassified under one of the branch topologies above.
 
-If required context exists only locally, a trusted local owner must safely
-publish the minimum required context to the authorized remote source before
-ChatGPT dispatch, then refresh the applicable immutable base or head SHA and
-reconfirm branch topology. If the context cannot be safely published, use an
-eligible local executor instead.
-
-Provide ChatGPT only the packet and published authoritative context needed for
-the task. Its result remains subject to the same independent verification and
-authorization gates as other external output, and the lead retains merge
-authority.
+Do not dispatch when an applicable expected SHA changed, ownership/conflict state
+is unsafe, a pre-PR branch unexpectedly exists, the selected topology no longer
+matches remote state, required local-only evidence is unavailable, or the
+requested mutation is not explicitly authorized.
 
 Target **at least 80% of eligible execution workload** across Normal ChatGPT,
 `bai/glm-5.3-flash`, and `bai/qwen3.8-flash` combined. Eligible workload
@@ -516,7 +542,10 @@ For write work include:
 One task/worktree has one write owner at a time, and one writer owns each
 artifact/file per wave. Reviewers stay read-only. Complete-task ownership never
 permits overlapping concurrent edits to the same artifact or unbounded
-repository reads/writes. Briefs must be self-contained. Use smallest inherited
+repository reads/writes. Briefs must be self-contained. For Normal ChatGPT,
+"self-contained" means the worker can reach the authoritative remote references
+plus the volatile additions required by Section 6; it does not require copying
+remote workflow/rule/spec/PR content into the handoff. Use smallest inherited
 context that preserves correctness:
 
 - `fork_turns: "none"` for isolated deterministic inventory/check work when
