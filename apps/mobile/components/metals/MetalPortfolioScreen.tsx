@@ -44,8 +44,6 @@ interface MetalPortfolioScreenProps {
 interface MetalHoldingRowProps {
   readonly currency: CurrencyType;
   readonly holding: MetalPortfolioHoldingInput;
-  readonly isFirst: boolean;
-  readonly isLast: boolean;
   readonly onPress: () => void;
 }
 
@@ -88,15 +86,14 @@ export function MetalPortfolioScreen({
         testID="metal-portfolio-list"
         data={portfolio.holdings}
         keyExtractor={(holding): string => holding.id}
-        renderItem={({ item, index }): React.JSX.Element => (
+        renderItem={({ item }): React.JSX.Element => (
           <MetalHoldingRow
             currency={currency}
             holding={item}
-            isFirst={index === 0}
-            isLast={index === portfolio.holdings.length - 1}
             onPress={(): void => onHoldingPress(item.id)}
           />
         )}
+        ItemSeparatorComponent={HoldingSeparator}
         contentContainerClassName="px-5 pt-2"
         contentContainerStyle={{
           paddingBottom: getTabContentBottomClearance(bottomInset),
@@ -516,11 +513,13 @@ function EmptyPortfolioContent({
   );
 }
 
+function HoldingSeparator(): React.JSX.Element {
+  return <View testID="metal-portfolio-holding-separator" className="h-3" />;
+}
+
 function MetalHoldingRow({
   currency,
   holding,
-  isFirst,
-  isLast,
   onPress,
 }: MetalHoldingRowProps): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
@@ -579,9 +578,7 @@ function MetalHoldingRow({
       accessibilityRole="button"
       onPress={onPress}
       testID={`metal-portfolio-holding-${holding.id}`}
-      className={`flex-row items-start gap-2 border-x border-slate-200 bg-surface px-3 py-3.5 dark:border-slate-800 dark:bg-slate-900 ${
-        isFirst ? "rounded-t-2xl border-t" : ""
-      } ${isLast ? "rounded-b-2xl border-b" : "border-b"}`}
+      className="flex-row items-start gap-2 rounded-2xl border border-slate-200 bg-surface px-3 py-3.5 dark:border-slate-800 dark:bg-slate-900"
     >
       <HoldingImage form={form} metal={metal} presentation={presentation} />
       <View className="min-w-0 flex-1">

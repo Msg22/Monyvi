@@ -480,6 +480,43 @@ describe("US1 portfolio surfaces", () => {
     ).toHaveProp("className", expect.stringContaining("w-[104px]"));
   });
 
+  it("renders active holdings as individually bordered cards with list spacing", () => {
+    const holdings = [
+      portfolio.activeHoldings[0],
+      {
+        ...portfolio.activeHoldings[0],
+        id: "gold-bar",
+        name: "Gold bar",
+        physicalForm: "bar",
+      },
+      {
+        ...portfolio.activeHoldings[0],
+        id: "silver-coin",
+        name: "Silver coin",
+        metalType: "SILVER" as const,
+      },
+    ];
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        activeHoldings: holdings,
+        holdings,
+      },
+    });
+
+    for (const holding of holdings) {
+      expect(
+        screen.getByTestId(`metal-portfolio-holding-${holding.id}`)
+      ).toHaveProp(
+        "className",
+        expect.stringContaining("rounded-2xl border border-slate-200")
+      );
+    }
+    expect(
+      screen.getAllByTestId("metal-portfolio-holding-separator")
+    ).toHaveLength(2);
+  });
+
   it("uses short visible unavailable copy in holding rows", () => {
     renderPortfolio({
       portfolio: {
