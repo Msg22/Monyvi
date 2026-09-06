@@ -7,6 +7,7 @@ import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useDatabase } from "@/providers/DatabaseProvider";
 import {
   observeLiveRatesTrust,
+  type LiveRatesTrustObservationStream,
   type LiveRatesTrustReadModel,
 } from "@/services/live-rates-trust-read-model-service";
 import {
@@ -19,6 +20,9 @@ import {
 } from "@/services/metal-detail-read-model-service";
 import { observeMetalDetailActionEvidence } from "@/services/metal-action-evidence-observer-service";
 import { syncDatabase } from "@/services/sync";
+import { AppState } from "react-native";
+
+const RATE_STATUS_REFRESH_INTERVAL_MS = 60_000;
 
 interface UseMetalHoldingDetailResult {
   readonly error: Error | null;
@@ -36,6 +40,17 @@ function createEmptyTrustReadModel(): LiveRatesTrustReadModel {
   };
 }
 
+function createDetailIdentity(
+  userId: string | null,
+  holdingId: string | undefined
+): string {
+  return `${userId ?? "signed-out"}:${holdingId ?? "missing"}`;
+}
+
+function toError(cause: unknown, fallbackMessage: string): Error {
+  return cause instanceof Error ? cause : new Error(fallbackMessage);
+}
+
 export function useMetalHoldingDetail(
   holdingId: string | undefined
 ): UseMetalHoldingDetailResult {
@@ -45,37 +60,76 @@ export function useMetalHoldingDetail(
   const { isConnected } = useMarketRates();
   const { preferredCurrency, isLoading: isCurrencyLoading } =
     usePreferredCurrency();
+  const detailIdentity = createDetailIdentity(userId, holdingId);
   const [model, setModel] = useState<MetalDetailReadModel | null>(null);
-  const [error, setError] = useState<Error | null>(null);
+  const [readError, setReadError] = useState<Error | null>(null);
+  const [ratesError, setRatesError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [retryIndex, setRetryIndex] = useState(0);
   const [localRevision, setLocalRevision] = useState(0);
   const hasLoadedOnceRef = useRef(false);
+  const detailIdentityRef = useRef(detailIdentity);
+  const modelIdentityRef = useRef<string | null>(null);
+  const trustObservationRef = useRef<LiveRatesTrustObservationStream | null>(
+    null
+  );
   const [currentRates, setCurrentRates] = useState<LiveRatesTrustReadModel>(
     createEmptyTrustReadModel
   );
   const [isRatesLoading, setIsRatesLoading] = useState(true);
+  if (detailIdentityRef.current !== detailIdentity) {
+    detailIdentityRef.current = detailIdentity;
+    modelIdentityRef.current = null;
+    hasLoadedOnceRef.current = false;
+  }
+
   const retry = useCallback((): void => {
     setRetryIndex((value) => value + 1);
     void syncDatabase(database).catch((cause: unknown) => {
-      setError(
-        cause instanceof Error ? cause : new Error("Holding sync unavailable")
-      );
+      setReadError(toError(cause, "Holding sync unavailable"));
     });
   }, [database]);
 
   useEffect(() => {
-    const subscription = observeLiveRatesTrust(database).subscribe({
+    const observation = observeLiveRatesTrust(database);
+    trustObservationRef.current = observation;
+    const subscription = observation.subscribe({
       next: (rates): void => {
         setCurrentRates(rates);
+        setRatesError(null);
         setIsRatesLoading(false);
       },
-      error: (): void => {
+      error: (cause: unknown): void => {
+        setRatesError(toError(cause, "Holding rates unavailable"));
         setIsRatesLoading(false);
       },
     });
-    return () => subscription.unsubscribe();
+    return () => {
+      if (trustObservationRef.current === observation) {
+        trustObservationRef.current = null;
+      }
+      subscription.unsubscribe();
+    };
   }, [database]);
+
+  useEffect(() => {
+    const timer = setInterval(
+      () => trustObservationRef.current?.refresh(),
+      RATE_STATUS_REFRESH_INTERVAL_MS
+    );
+    const appStateSubscription = AppState.addEventListener(
+      "change",
+      (state) => {
+        if (state === "active") {
+          trustObservationRef.current?.refresh();
+        }
+      }
+    );
+    return () => {
+      clearInterval(timer);
+      appStateSubscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (
@@ -110,8 +164,9 @@ export function useMetalHoldingDetail(
     let isCurrent = true;
     if (isResolvingUser) {
       hasLoadedOnceRef.current = false;
+      modelIdentityRef.current = null;
       setModel(null);
-      setError(null);
+      setReadError(null);
       setIsLoading(isFocused);
       return () => {
         isCurrent = false;
@@ -125,8 +180,16 @@ export function useMetalHoldingDetail(
     }
     if (userId === null || holdingId === undefined) {
       hasLoadedOnceRef.current = false;
+      modelIdentityRef.current = null;
       setModel(null);
-      setError(null);
+      setReadError(null);
+      setIsLoading(false);
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    if (ratesError !== null) {
       setIsLoading(false);
       return () => {
         isCurrent = false;
@@ -134,7 +197,7 @@ export function useMetalHoldingDetail(
     }
 
     setIsLoading(!hasLoadedOnceRef.current);
-    setError(null);
+    setReadError(null);
     void readMetalDetailReadModel({
       currentRates,
       holdingId,
@@ -142,19 +205,17 @@ export function useMetalHoldingDetail(
       userId,
     })
       .then((next) => {
-        if (isCurrent) {
+        if (isCurrent && detailIdentityRef.current === detailIdentity) {
           hasLoadedOnceRef.current = true;
+          modelIdentityRef.current = detailIdentity;
           setModel(next);
         }
       })
       .catch((cause: unknown) => {
-        if (isCurrent) {
+        if (isCurrent && detailIdentityRef.current === detailIdentity) {
+          modelIdentityRef.current = null;
           setModel(null);
-          setError(
-            cause instanceof Error
-              ? cause
-              : new Error("Holding detail unavailable")
-          );
+          setReadError(toError(cause, "Holding detail unavailable"));
         }
       })
       .finally(() => {
@@ -165,6 +226,7 @@ export function useMetalHoldingDetail(
     };
   }, [
     currentRates,
+    detailIdentity,
     holdingId,
     isCurrencyLoading,
     isFocused,
@@ -172,9 +234,16 @@ export function useMetalHoldingDetail(
     isResolvingUser,
     localRevision,
     preferredCurrency,
+    ratesError,
     retryIndex,
     userId,
   ]);
 
-  return { error, isLoading, isOffline: !isConnected, model, retry };
+  return {
+    error: ratesError ?? readError,
+    isLoading,
+    isOffline: !isConnected,
+    model: modelIdentityRef.current === detailIdentity ? model : null,
+    retry,
+  };
 }

@@ -9,6 +9,11 @@ interface MockTrustObserver {
   readonly error: (cause: unknown) => void;
 }
 
+interface MockTrustObservation {
+  readonly refresh: jest.Mock<void, []>;
+  readonly subscribe: (observer: MockTrustObserver) => MockSubscription;
+}
+
 interface MockLocalQuery {
   readonly observe: () => {
     readonly subscribe: (next: () => void) => MockSubscription;
@@ -17,8 +22,12 @@ interface MockLocalQuery {
 
 const mockDatabase = { id: "database" };
 const mockUnsubscribe = jest.fn<void, []>();
+const mockTrustRefresh = jest.fn<void, []>();
+const mockAppStateRemove = jest.fn<void, []>();
 const mockLocalSubscribers: Array<() => void> = [];
 let mockTrustObserver: MockTrustObserver | null = null;
+let mockAppStateListener: ((state: string) => void) | null = null;
+let mockUserId: string | null = "user-1";
 
 const mockCreateLocalQuery = jest.fn<MockLocalQuery, []>(() => ({
   observe: () => ({
@@ -58,10 +67,10 @@ jest.mock("@react-navigation/native", () => ({
 jest.mock("@/hooks/useCurrentUser", () => ({
   useCurrentUser: (): {
     readonly isResolvingUser: boolean;
-    readonly userId: string;
+    readonly userId: string | null;
   } => ({
     isResolvingUser: false,
-    userId: "user-1",
+    userId: mockUserId,
   }),
 }));
 
@@ -86,15 +95,32 @@ jest.mock("@/providers/DatabaseProvider", () => ({
 }));
 
 jest.mock("@/services/live-rates-trust-read-model-service", () => ({
-  observeLiveRatesTrust: (): {
-    readonly subscribe: (observer: MockTrustObserver) => MockSubscription;
-  } => ({
+  observeLiveRatesTrust: (): MockTrustObservation => ({
+    refresh: mockTrustRefresh,
     subscribe: (observer: MockTrustObserver): MockSubscription => {
       mockTrustObserver = observer;
       return { unsubscribe: mockUnsubscribe };
     },
   }),
 }));
+
+jest.mock("react-native", () => {
+  const mockReactNative =
+    jest.createMockFromModule<typeof import("react-native")>("react-native");
+  return {
+    ...mockReactNative,
+    AppState: {
+      ...mockReactNative.AppState,
+      addEventListener: (
+        _event: string,
+        listener: (state: string) => void
+      ): { readonly remove: jest.Mock<void, []> } => {
+        mockAppStateListener = listener;
+        return { remove: mockAppStateRemove };
+      },
+    },
+  };
+});
 
 jest.mock("@/services/metal-action-evidence-observer-service", () => ({
   observeMetalDetailActionEvidence: (...args: [string, string]) =>
@@ -146,6 +172,12 @@ describe("useMetalHoldingDetail", () => {
     jest.clearAllMocks();
     mockLocalSubscribers.splice(0);
     mockTrustObserver = null;
+    mockAppStateListener = null;
+    mockUserId = "user-1";
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it("re-reads the holding when any lifecycle dependency changes", async () => {
@@ -243,5 +275,105 @@ describe("useMetalHoldingDetail", () => {
         userId: "user-1",
       })
     );
+  });
+
+  it("clears an old model before a replacement holding finishes loading", async () => {
+    let resolveReplacement: ((value: unknown) => void) | null = null;
+    const firstModel = { holdingId: "holding-1" };
+    const replacementModel = { holdingId: "holding-2" };
+    mockReadMetalDetailReadModel
+      .mockResolvedValueOnce(firstModel)
+      .mockImplementationOnce(
+        () =>
+          new Promise<unknown>((resolve) => {
+            resolveReplacement = resolve;
+          })
+      );
+    const { result, rerender } = renderHook(
+      ({ holdingId }: { readonly holdingId: string }) =>
+        useMetalHoldingDetail(holdingId),
+      { initialProps: { holdingId: "holding-1" } }
+    );
+
+    act(() => {
+      mockTrustObserver?.next(initialRates);
+    });
+    await waitFor(() => expect(result.current.model).toBe(firstModel));
+
+    rerender({ holdingId: "holding-2" });
+
+    expect(result.current.model).toBeNull();
+
+    act(() => {
+      resolveReplacement?.(replacementModel);
+    });
+    await waitFor(() => expect(result.current.model).toBe(replacementModel));
+  });
+
+  it("clears an old model before a replacement user finishes loading", async () => {
+    let resolveReplacement: ((value: unknown) => void) | null = null;
+    const firstModel = { holdingId: "holding-1", userId: "user-1" };
+    const replacementModel = { holdingId: "holding-1", userId: "user-2" };
+    mockReadMetalDetailReadModel
+      .mockResolvedValueOnce(firstModel)
+      .mockImplementationOnce(
+        () =>
+          new Promise<unknown>((resolve) => {
+            resolveReplacement = resolve;
+          })
+      );
+    const { result, rerender } = renderHook(() =>
+      useMetalHoldingDetail("holding-1")
+    );
+
+    act(() => {
+      mockTrustObserver?.next(initialRates);
+    });
+    await waitFor(() => expect(result.current.model).toBe(firstModel));
+
+    mockUserId = "user-2";
+    rerender({});
+
+    expect(result.current.model).toBeNull();
+
+    act(() => {
+      resolveReplacement?.(replacementModel);
+    });
+    await waitFor(() => expect(result.current.model).toBe(replacementModel));
+  });
+
+  it("refreshes rate trust when the app returns to foreground", () => {
+    renderHook(() => useMetalHoldingDetail("holding-1"));
+
+    act(() => {
+      mockAppStateListener?.("active");
+    });
+
+    expect(mockTrustRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("reclassifies rate trust at the bounded freshness deadline", () => {
+    jest.useFakeTimers();
+    renderHook(() => useMetalHoldingDetail("holding-1"));
+
+    act(() => {
+      jest.advanceTimersByTime(60_000);
+    });
+
+    expect(mockTrustRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces rate observer failure without reading synthetic missing rates", async () => {
+    const rateError = new Error("Local rates unavailable");
+    mockReadMetalDetailReadModel.mockResolvedValue({ holdingId: "holding-1" });
+    const { result } = renderHook(() => useMetalHoldingDetail("holding-1"));
+
+    act(() => {
+      mockTrustObserver?.error(rateError);
+    });
+
+    await waitFor(() => expect(result.current.error).toBe(rateError));
+    expect(mockReadMetalDetailReadModel).not.toHaveBeenCalled();
+    expect(result.current.model).toBeNull();
   });
 });
