@@ -1,0 +1,30 @@
+name: Codex 103 Review Follow-up
+
+on:
+  push:
+    branches:
+      - codex/103-review-followup-2
+
+permissions:
+  contents: read
+
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SENTRYCLI_SKIP_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Shared amount regressions
+        run: npm test -w @monyvi/logic -- --runInBand amount-review-followup
+      - name: Recurring localization regressions
+        run: npm test -w @monyvi/mobile -- --runInBand recurring-payment-review-followup
+      - name: Typecheck
+        if: always()
+        run: npm run typecheck -w @monyvi/logic && npm run typecheck -w @monyvi/mobile
