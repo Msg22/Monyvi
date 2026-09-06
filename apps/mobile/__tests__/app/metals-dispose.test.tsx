@@ -8,6 +8,7 @@ import {
   within,
 } from "@testing-library/react-native";
 import React from "react";
+import { AccessibilityInfo } from "react-native";
 
 jest.mock("@/components/navigation/PageHeader", () => {
   const { Pressable, Text, View } = jest.requireActual(
@@ -79,6 +80,7 @@ interface DisposeScreenProps {
   readonly bottomInset: number;
   readonly category: Category | null;
   readonly otherTreatment: Treatment | null;
+  readonly treatment: Treatment | null;
   readonly disposalDate: string;
   readonly notes: string;
   readonly isLoading?: boolean;
@@ -107,6 +109,7 @@ interface HookHolding {
   readonly status: "active" | "sold" | "disposed";
   readonly expectedFinancialRevision: string;
   readonly predecessorEventId: string;
+  readonly purchaseDate: string;
 }
 
 interface HookDependencies {
@@ -120,6 +123,7 @@ interface DisposeHookResult {
   readonly model: HookHolding | null;
   readonly category: Category | null;
   readonly otherTreatment: Treatment | null;
+  readonly treatment: Treatment | null;
   readonly disposalDate: string;
   readonly notes: string;
   readonly isLoading: boolean;
@@ -188,6 +192,7 @@ const holding: HookHolding = {
   status: "active",
   expectedFinancialRevision: "0",
   predecessorEventId: "event-1",
+  purchaseDate: "2024-03-14",
 };
 
 function loadScreen(): DisposeScreenModule {
@@ -215,6 +220,7 @@ function renderScreen(
     bottomInset: 34,
     category: null,
     otherTreatment: null,
+    treatment: null,
     disposalDate: "2026-09-05",
     notes: "",
     onCategoryChange: jest.fn(),
@@ -280,7 +286,11 @@ describe("Dispose metal holding direct form", () => {
   ] as const)(
     "shows exact affected-only live consequences for %s",
     (category, treatmentSummary): void => {
-      renderScreen({ category });
+      const treatment =
+        treatmentSummary === "writeOffSummary"
+          ? "write_off"
+          : "external_transfer";
+      renderScreen({ category, treatment });
       expect(screen.getByTestId("dispose-live-summary")).toHaveProp(
         "consequenceOrder",
         [
@@ -352,7 +362,10 @@ describe("Dispose metal holding direct form", () => {
     ).toBeNull();
   });
 
-  it("focuses the first invalid group and announces recoverable submit errors", (): void => {
+  it("focuses the validation summary and then the first invalid group", async (): Promise<void> => {
+    const focus = jest
+      .spyOn(AccessibilityInfo, "setAccessibilityFocus")
+      .mockImplementation((): void => undefined);
     const props = renderScreen({
       category: "other",
       validationErrors: {
@@ -361,12 +374,16 @@ describe("Dispose metal holding direct form", () => {
       },
       submitError: "The change was not recorded. Try again.",
     });
-    expect(screen.getByTestId("dispose-category-group")).toHaveProp(
-      "autoFocus",
-      true
+    expect(screen.getByTestId("dispose-validation-summary")).toHaveProp(
+      "accessibilityRole",
+      "alert"
     );
     expect(screen.getByTestId("dispose-category-group")).toHaveProp(
       "aria-invalid",
+      true
+    );
+    expect(screen.getByTestId("dispose-category-group")).toHaveProp(
+      "accessible",
       true
     );
     expect(screen.getByTestId("dispose-submit-error")).toHaveProp(
@@ -375,6 +392,17 @@ describe("Dispose metal holding direct form", () => {
     );
     fireEvent.press(screen.getByTestId("dispose-retry"));
     expect(props.onRetry).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(focus).toHaveBeenCalledTimes(2));
+    focus.mockRestore();
+  });
+
+  it("renders the shaped treatment prop without reclassifying the category", (): void => {
+    renderScreen({
+      category: "lost_stolen",
+      treatment: "external_transfer",
+    });
+    expect(screen.getByText(copy.externalTransferSummary)).toBeOnTheScreen();
+    expect(screen.queryByText(copy.writeOffSummary)).toBeNull();
   });
 
   it("uses Skeleton for loading", (): void => {
@@ -417,7 +445,7 @@ describe("Dispose metal holding direct form", () => {
   );
 
   it("includes light/dark NativeWind classes and a complete translation-key inventory", (): void => {
-    renderScreen({ category: "donated" });
+    renderScreen({ category: "donated", treatment: "external_transfer" });
     expect(screen.getByTestId("metal-holding-dispose-screen")).toHaveProp(
       "className",
       expect.stringContaining("dark:bg-slate-950")
@@ -477,6 +505,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
       "dispose_other_treatment_required"
     );
     act((): void => result.current.setOtherTreatment("write_off"));
+    expect(result.current.treatment).toBe("write_off");
     await act(async (): Promise<void> => {
       await expect(result.current.submit()).resolves.toBe(true);
     });
@@ -599,6 +628,30 @@ describe("useDisposeMetalHolding lifecycle", () => {
     });
     expect(result.current.validationErrors.disposalDate).toBe(
       "dispose_date_invalid"
+    );
+    expect(dependencies.disposeHolding).not.toHaveBeenCalled();
+  });
+
+  it("rejects a disposal date before the holding acquisition date", async (): Promise<void> => {
+    const dependencies = createDependencies();
+    const { result } = renderHook(() =>
+      loadHook().useDisposeMetalHolding({
+        holdingId: holding.holdingId,
+        today: "2026-09-05",
+        createId: jest.fn(() => "stable-id"),
+        dependencies,
+      })
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    act((): void => {
+      result.current.setCategory("donated");
+      result.current.setDisposalDate("2024-03-13");
+    });
+    await act(async (): Promise<void> => {
+      await expect(result.current.submit()).resolves.toBe(false);
+    });
+    expect(result.current.validationErrors.disposalDate).toBe(
+      "dispose_date_before_acquisition"
     );
     expect(dependencies.disposeHolding).not.toHaveBeenCalled();
   });

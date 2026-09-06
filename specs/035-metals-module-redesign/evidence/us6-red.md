@@ -66,3 +66,14 @@ the legacy `lost_or_stolen` ID was accepted.
 
 These are product-code Red signals. The earlier Maestro preflight failure is
 environment evidence only and remains excluded from Green claims.
+
+## Late-review correction Red — 2026-09-06
+
+Five late review findings were encoded before production changes. The mobile run
+failed `7` tests with `42` passing, and the production-registry run failed `1`
+test with `13` passing. The failures proved that a date before acquisition was
+accepted at both form and command boundaries, validation focus was not moved,
+the screen reclassified treatment, the default registry rejected the legitimate
+revision-zero/null-predecessor case, and the command extended a structurally
+conflicted timeline. These were deterministic product-code Red signals; no
+device or Maestro result is inferred from them.
