@@ -91,6 +91,42 @@ function rowsFor(
   return Array.from(client.tables.get(table)?.values() ?? []);
 }
 
+interface ManualQaAssetRow {
+  readonly acquisition_action_id: string;
+  readonly id: string;
+  readonly type: string;
+}
+
+interface ManualQaMetalRow {
+  readonly item_form: string;
+}
+
+interface ManualQaLifecycleEventRow {
+  readonly action_id: string;
+  readonly holding_id: string;
+  readonly id: string;
+  readonly kind: "add" | "dispose" | "sell";
+  readonly occurred_at: string;
+  readonly payload_json: unknown;
+  readonly predecessor_event_id: string | null;
+  readonly reverses_event_id: string | null;
+}
+
+interface ManualQaLifecycleRows {
+  readonly assetMetals: readonly ManualQaMetalRow[];
+  readonly assets: readonly ManualQaAssetRow[];
+  readonly metalActionEvidence: readonly Readonly<Record<string, unknown>>[];
+  readonly metalLifecycleEvents: readonly ManualQaLifecycleEventRow[];
+}
+
+const REDUCER_KIND_BY_FIXTURE_KIND: Readonly<
+  Record<ManualQaLifecycleEventRow["kind"], LifecycleKind>
+> = Object.freeze({
+  add: "created",
+  dispose: "disposed",
+  sell: "sold",
+});
+
 describe("manual QA Metals lifecycle fixture", () => {
   it("preserves active holdings and adds deterministic sold/disposed History rows", () => {
     const first = buildRows();
@@ -120,11 +156,11 @@ describe("manual QA Metals lifecycle fixture", () => {
   });
 
   it("seeds canonical physical forms and a complete acquisition chain for every holding", () => {
-    const rows = buildRows();
-    const assets = rows.assets as readonly Record<string, any>[];
-    const metals = rows.assetMetals as readonly Record<string, any>[];
-    const events = rows.metalLifecycleEvents as readonly Record<string, any>[];
-    const evidence = rows.metalActionEvidence as readonly Record<string, any>[];
+    const rows = buildRows() as unknown as ManualQaLifecycleRows;
+    const assets = rows.assets;
+    const metals = rows.assetMetals;
+    const events = rows.metalLifecycleEvents;
+    const evidence = rows.metalActionEvidence;
 
     expect(metals.map((metal) => metal.item_form)).toEqual([
       "jewelry",
@@ -189,17 +225,11 @@ describe("manual QA Metals lifecycle fixture", () => {
             canonicalCasStatus: "accepted" as const,
             evidenceState: "effective" as const,
             fingerprint: `${event.action_id}:${event.kind}`,
-            id: event.id as string,
-            kind: (
-              {
-                add: "created",
-                dispose: "disposed",
-                sell: "sold",
-              } as const
-            )[event.kind as "add" | "dispose" | "sell"] as LifecycleKind,
-            occurredAt: Date.parse(event.occurred_at as string),
-            predecessorEventId: event.predecessor_event_id as string | null,
-            reversesEventId: event.reverses_event_id as string | null,
+            id: event.id,
+            kind: REDUCER_KIND_BY_FIXTURE_KIND[event.kind],
+            occurredAt: Date.parse(event.occurred_at),
+            predecessorEventId: event.predecessor_event_id,
+            reversesEventId: event.reverses_event_id,
           }))
       );
       expect(reduced.rejectedEvents).toEqual([]);
