@@ -38,6 +38,10 @@ const mockObserveMetalDetailHoldingState = jest.fn<
 const mockObserveMetalDetailEvents = jest.fn<MockLocalQuery, [string, string]>(
   () => mockCreateLocalQuery()
 );
+const mockObserveMetalDetailActionEvidence = jest.fn<
+  MockLocalQuery,
+  [string, string]
+>(() => mockCreateLocalQuery());
 const mockObserveMetalDetailRateReferences = jest.fn<
   MockLocalQuery,
   [string, string]
@@ -90,6 +94,11 @@ jest.mock("@/services/live-rates-trust-read-model-service", () => ({
       return { unsubscribe: mockUnsubscribe };
     },
   }),
+}));
+
+jest.mock("@/services/metal-action-evidence-observer-service", () => ({
+  observeMetalDetailActionEvidence: (...args: [string, string]) =>
+    mockObserveMetalDetailActionEvidence(...args),
 }));
 
 jest.mock("@/services/metal-detail-read-model-service", () => ({
@@ -161,14 +170,18 @@ describe("useMetalHoldingDetail", () => {
       "user-1",
       "holding-1"
     );
+    expect(mockObserveMetalDetailActionEvidence).toHaveBeenCalledWith(
+      "user-1",
+      "holding-1"
+    );
     expect(mockObserveMetalDetailRateReferences).toHaveBeenCalledWith(
       "user-1",
       "holding-1"
     );
-    expect(mockLocalSubscribers).toHaveLength(4);
+    expect(mockLocalSubscribers).toHaveLength(5);
 
     act(() => {
-      mockLocalSubscribers[2]?.();
+      mockLocalSubscribers[3]?.();
     });
     await waitFor(() =>
       expect(mockReadMetalDetailReadModel).toHaveBeenCalledTimes(2)

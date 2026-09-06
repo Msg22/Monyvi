@@ -17,6 +17,7 @@ import {
   readMetalDetailReadModel,
   type MetalDetailReadModel,
 } from "@/services/metal-detail-read-model-service";
+import { observeMetalDetailActionEvidence } from "@/services/metal-action-evidence-observer-service";
 import { syncDatabase } from "@/services/sync";
 
 interface UseMetalHoldingDetailResult {
@@ -94,6 +95,9 @@ export function useMetalHoldingDetail(
         .observe()
         .subscribe(onChange),
       observeMetalDetailEvents(userId, holdingId).observe().subscribe(onChange),
+      observeMetalDetailActionEvidence(userId, holdingId)
+        .observe()
+        .subscribe(onChange),
       observeMetalDetailRateReferences(userId, holdingId)
         .observe()
         .subscribe(onChange),

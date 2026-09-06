@@ -11,6 +11,7 @@ import {
   type MetalHistoryFilter,
   type MetalHistoryReadModel,
 } from "@/services/metal-history-read-model-service";
+import { observeMetalHistoryActionEvidence } from "@/services/metal-action-evidence-observer-service";
 import type { MetalHoldingState } from "@monyvi/db";
 
 interface UseMetalHistoryResult {
@@ -81,19 +82,27 @@ export function useMetalHistory(): UseMetalHistoryResult {
 
   useEffect(() => {
     if (!isFocused || isResolvingUser || userId === null) return;
-    const query = observeMetalHistoryEvents({
+    const observerInput = {
       holdings: observedStates.map((state) => ({
         id: state.holdingId,
         userId: state.userId,
       })),
       userId,
-    });
-    if (query === null) return;
-    const subscription = query.observe().subscribe({
+    };
+    const eventsQuery = observeMetalHistoryEvents(observerInput);
+    const evidenceQuery = observeMetalHistoryActionEvidence(observerInput);
+    const eventsSubscription = eventsQuery?.observe().subscribe({
       next: (): void => setLocalRevision((value) => value + 1),
       error: (): void => setLocalRevision((value) => value + 1),
     });
-    return () => subscription.unsubscribe();
+    const evidenceSubscription = evidenceQuery?.observe().subscribe({
+      next: (): void => setLocalRevision((value) => value + 1),
+      error: (): void => setLocalRevision((value) => value + 1),
+    });
+    return () => {
+      eventsSubscription?.unsubscribe();
+      evidenceSubscription?.unsubscribe();
+    };
   }, [isFocused, isResolvingUser, observedStates, userId]);
 
   useEffect(() => {
