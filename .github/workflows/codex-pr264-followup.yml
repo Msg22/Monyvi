@@ -1,0 +1,45 @@
+name: Codex PR 264 Follow-up
+
+on:
+  push:
+    branches:
+      - codex/103-recurring-payment-validation
+    paths:
+      - .github/codex/pr264-followup.patch
+
+permissions:
+  contents: write
+
+concurrency:
+  group: codex-pr264-followup
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: codex/103-recurring-payment-validation
+
+      - name: Apply prepared review patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          patch_file=".github/codex/pr264-followup.patch"
+          if [[ ! -f "$patch_file" ]]; then
+            echo "Patch already consumed; nothing to do."
+            exit 0
+          fi
+
+          git apply --check "$patch_file"
+          git apply "$patch_file"
+          rm "$patch_file"
+
+          git config user.name "OpenAI Codex"
+          git config user.email "codex@openai.com"
+          git add -A
+          git commit -m "fix: address recurring review follow-up"
+          git push origin HEAD:codex/103-recurring-payment-validation
