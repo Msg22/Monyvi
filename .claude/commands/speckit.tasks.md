@@ -33,6 +33,19 @@ You **MUST** consider the user input before proceeding (if not empty).
      stories with priorities)
    - **Optional**: data-model.md (entities), contracts/ (API endpoints),
      research.md (decisions), quickstart.md (test scenarios)
+   - **If mockup-backed UI is in scope**: locate every approved reference
+     through paths declared by the selected spec/design artifacts and, when
+     necessary, recursively within FEATURE_DIR. Load each matching
+     `<mockup-basename>.binding.md` sidecar defined by
+     `.agent/workflows/mockup-implementation.md`. Before consuming any sidecar
+     facts, run
+     `node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` and
+     require exit status 0. A missing sidecar, verifier failure, stale image or
+     metadata digest, stale approved combined revision, missing approval
+     evidence, or non-approved state is a blocking prerequisite. If an approved
+     reference predates the sidecar rule and the sidecar is missing, follow the
+     workflow's **Legacy Approved Mockup Metadata Migration** procedure; never
+     infer missing binding facts.
    - Note: Not all projects have all documents. Generate tasks based on what's
      available.
 
@@ -43,6 +56,9 @@ You **MUST** consider the user input before proceeding (if not empty).
    - If data-model.md exists: Extract entities and map to user stories
    - If contracts/ exists: Map endpoints to user stories
    - If research.md exists: Extract decisions for setup tasks
+   - For mockup-backed UI, map each verified approved reference and binding
+     sidecar to the story it governs; verifier failure is a blocker, not a value
+     to infer in task text.
    - Generate tasks organized by user story (see Task Generation Rules below)
    - Generate dependency graph showing user story completion order
    - Create parallel execution examples per user story

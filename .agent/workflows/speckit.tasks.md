@@ -39,14 +39,16 @@ You **MUST** consider the user input before proceeding (if not empty).
      `<mockup-basename>.binding.md` sidecar defined by
      `.agent/workflows/mockup-implementation.md` so task generation knows the
      declared binding context, interactions/transitions, scoped variants, and
-     fidelity-affecting unknowns. Generate a blocking prerequisite when its
-     current fingerprint is invalid, its approved revision does not match its
-     current revision, or its approval evidence does not identify that revision.
-     If an approved reference predates the sidecar rule and the sidecar is
-     missing, follow that workflow's **Legacy Approved Mockup Metadata
-     Migration** procedure. If task-generation scope cannot create the sidecar,
-     generate a prerequisite metadata-migration task and block governed UI
-     implementation until it is completed; never infer the missing facts.
+     fidelity-affecting unknowns. Before consuming any sidecar facts, run
+     `node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` and
+     require exit status 0. A missing sidecar, verifier failure, stale image or
+     metadata digest, stale approved combined revision, missing approval
+     evidence, or non-approved state is a blocking prerequisite. If an approved
+     reference predates the sidecar rule and the sidecar is missing, follow that
+     workflow's **Legacy Approved Mockup Metadata Migration** procedure. If
+     task-generation scope cannot create the sidecar, generate a prerequisite
+     metadata-migration task and block governed UI implementation until it is
+     completed; never infer the missing facts.
    - Note: Not all projects have all documents. Generate tasks based on what's
      available.
 
@@ -59,8 +61,8 @@ You **MUST** consider the user input before proceeding (if not empty).
    - If research.md exists: Extract decisions for setup tasks
    - For mockup-backed UI, map each approved reference and binding sidecar to
      the user story/UI implementation it governs. A fidelity-affecting `UNKNOWN`
-     or failed approval-revision check is a pre-implementation blocker, not a
-     value to infer in the task text.
+     or verifier failure is a pre-implementation blocker, not a value to infer
+     in the task text.
    - Generate tasks organized by user story (see Task Generation Rules below)
    - Generate required rendered visual-evidence tasks for every mockup-backed UI
      story as defined below
