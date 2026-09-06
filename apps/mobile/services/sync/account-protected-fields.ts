@@ -22,7 +22,7 @@ function readChangeId(value: unknown): string | null {
 }
 
 interface AccountBalanceEnvelope {
-  readonly accountGuards: readonly Readonly<Record<string, unknown>>[];
+  readonly accountGuards: ReadonlyArray<Readonly<Record<string, unknown>>>;
   readonly payload: Readonly<Record<string, unknown>>;
 }
 
@@ -134,9 +134,7 @@ function groupRowIds(
   return Object.freeze(Object.fromEntries([...grouped.entries()].sort()));
 }
 
-function readGuardRevisions(
-  record: unknown
-): ReadonlyMap<string, string> {
+function readGuardRevisions(record: unknown): ReadonlyMap<string, string> {
   const envelope = readAccountBalanceEnvelope(record);
   const revisions = new Map<string, string>();
   if (!envelope) return revisions;
@@ -179,9 +177,11 @@ function orderBundlesByAccountRevision(
       rightIndex += 1
     ) {
       const leftRevisions =
-        revisionsByAction.get(bundles[leftIndex].candidate.actionId) ?? new Map();
+        revisionsByAction.get(bundles[leftIndex].candidate.actionId) ??
+        new Map<string, string>();
       const rightRevisions =
-        revisionsByAction.get(bundles[rightIndex].candidate.actionId) ?? new Map();
+        revisionsByAction.get(bundles[rightIndex].candidate.actionId) ??
+        new Map<string, string>();
       leftRevisions.forEach((leftRevision, accountId) => {
         const rightRevision = rightRevisions.get(accountId);
         if (rightRevision === undefined) return;
