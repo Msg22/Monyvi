@@ -1,5 +1,6 @@
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
+import { getTabContentBottomClearance } from "@/constants/ui";
 import type { CurrencyType } from "@monyvi/db";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
@@ -84,6 +85,7 @@ export function MetalPortfolioScreen({
       className="flex-1 bg-background dark:bg-background-dark"
     >
       <FlatList
+        testID="metal-portfolio-list"
         data={portfolio.holdings}
         keyExtractor={(holding): string => holding.id}
         renderItem={({ item, index }): React.JSX.Element => (
@@ -96,7 +98,9 @@ export function MetalPortfolioScreen({
           />
         )}
         contentContainerClassName="px-5 pt-2"
-        contentContainerStyle={{ paddingBottom: bottomInset + 24 }}
+        contentContainerStyle={{
+          paddingBottom: getTabContentBottomClearance(bottomInset),
+        }}
         ListHeaderComponent={
           <PortfolioHeader
             currency={currency}
@@ -575,20 +579,24 @@ function MetalHoldingRow({
       accessibilityRole="button"
       onPress={onPress}
       testID={`metal-portfolio-holding-${holding.id}`}
-      className={`flex-row items-center border-x border-slate-200 bg-surface px-3 py-3 dark:border-slate-800 dark:bg-slate-900 ${
+      className={`flex-row items-start gap-2 border-x border-slate-200 bg-surface px-3 py-3.5 dark:border-slate-800 dark:bg-slate-900 ${
         isFirst ? "rounded-t-2xl border-t" : ""
       } ${isLast ? "rounded-b-2xl border-b" : "border-b"}`}
     >
       <HoldingImage form={form} metal={metal} presentation={presentation} />
-      <View className="min-w-0 flex-1 px-3">
+      <View className="min-w-0 flex-1">
         <Text
-          numberOfLines={1}
-          className="text-base font-medium text-text-primary dark:text-text-primary-dark"
+          testID={`metal-portfolio-holding-name-${holding.id}`}
+          numberOfLines={2}
+          className="text-base font-medium leading-5 text-text-primary dark:text-text-primary-dark"
         >
           {holding.name}
         </Text>
         <View className="mt-1 flex-row flex-wrap items-center">
-          <Text className="text-xs text-text-secondary dark:text-text-secondary-dark">
+          <Text
+            numberOfLines={2}
+            className="text-xs text-text-secondary dark:text-text-secondary-dark"
+          >
             {metadata}
             {metadata.length > 0 ? " · " : ""}
           </Text>
@@ -597,12 +605,18 @@ function MetalHoldingRow({
           </Text>
         </View>
         {purchaseDetail === null ? null : (
-          <Text className="mt-1 text-xs text-text-secondary dark:text-text-secondary-dark">
+          <Text
+            numberOfLines={2}
+            className="mt-1 text-xs text-text-secondary dark:text-text-secondary-dark"
+          >
             {purchaseDetail}
           </Text>
         )}
       </View>
-      <View className="max-w-[132px] items-end">
+      <View
+        testID={`metal-portfolio-holding-value-${holding.id}`}
+        className="w-[104px] shrink-0 items-end self-center"
+      >
         <Text
           numberOfLines={1}
           adjustsFontSizeToFit
@@ -612,11 +626,12 @@ function MetalHoldingRow({
           {currentValueLabel}
         </Text>
         {holding.currentPerformanceDecimal === null ? (
-          <Text className="mt-2 text-right text-[11px] text-text-secondary dark:text-text-secondary-dark">
+          <Text
+            numberOfLines={2}
+            className="mt-1 text-right text-[11px] text-text-secondary dark:text-text-secondary-dark"
+          >
             {holding.currentValueDecimal === null
-              ? t("portfolio.current_value_unavailable", {
-                  reason: t("rate.missing"),
-                })
+              ? t("portfolio.value_unavailable_short")
               : t(
                   holding.performanceUnavailableReason === "rate_reference"
                     ? "portfolio.performance_unavailable_rate_reference"
@@ -646,11 +661,13 @@ function MetalHoldingRow({
           </>
         )}
       </View>
-      <Ionicons
-        name={getForwardChevronName()}
-        size={20}
-        color={palette.slate[500]}
-      />
+      <View className="shrink-0 self-center">
+        <Ionicons
+          name={getForwardChevronName()}
+          size={20}
+          color={palette.slate[500]}
+        />
+      </View>
     </Pressable>
   );
 }
@@ -675,7 +692,7 @@ function HoldingImage({
         })}
         source={presentation.render.source}
         resizeMode="contain"
-        className="h-20 w-20"
+        className="h-16 w-16"
       />
     );
   }
@@ -683,7 +700,7 @@ function HoldingImage({
     <View
       accessible
       accessibilityLabel={t(presentation.render.accessibilityLabelKey)}
-      className="h-20 w-20 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800"
+      className="h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800"
     >
       <Text className="text-xs font-semibold text-text-secondary dark:text-text-secondary-dark">
         {metal}

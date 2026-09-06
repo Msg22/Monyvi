@@ -18,7 +18,7 @@ import { StarryBackground } from "@/components/ui/StarryBackground";
 import { useToast } from "@/components/ui/Toast";
 import { palette } from "@/constants/colors";
 import type { InstitutionLogo } from "@/constants/egyptian-institution-assets";
-import { TAB_BAR_HEIGHT } from "@/constants/ui";
+import { getTabContentBottomClearance } from "@/constants/ui";
 import { usePayNowOverlay } from "@/context/PayNowOverlayContext";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useMarketRates } from "@/hooks/useMarketRates";
@@ -35,14 +35,12 @@ import { resolveAccountInstitutionPresentation } from "@/utils/account-instituti
 import { logger } from "@/utils/logger";
 import type { CurrencyType } from "@monyvi/db";
 import { CURRENCY_INFO_MAP } from "@monyvi/logic";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useRouter } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { RefreshControl, ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
-const SCROLL_CONTENT_STYLE = {
-  paddingBottom: TAB_BAR_HEIGHT + 20,
-} as const;
 const REFRESH_TINT_COLOR = palette.nileGreen[500];
 const REFRESH_COLORS: string[] = [REFRESH_TINT_COLOR];
 
@@ -59,6 +57,7 @@ export default function DashboardScreen(): React.JSX.Element {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const cashAccountRef = useRef<View>(null);
   const scrollViewRef = useRef<ScrollView>(null);
+  const tabBarHeight = useBottomTabBarHeight();
   const isDbReady = useDatabaseReady();
   const { t } = useTranslation("common");
   const { profile } = useProfile();
@@ -96,6 +95,10 @@ export default function DashboardScreen(): React.JSX.Element {
     isLoading: isCurrencyLoading,
   } = usePreferredCurrency();
   const currencyInfo = CURRENCY_INFO_MAP[preferredCurrency];
+  const scrollContentStyle = useMemo(
+    () => ({ paddingBottom: getTabContentBottomClearance(tabBarHeight) }),
+    [tabBarHeight]
+  );
 
   const router = useRouter();
   const { shouldShowPrompt, dismissPrompt } = useSmsSync();
@@ -178,7 +181,7 @@ export default function DashboardScreen(): React.JSX.Element {
     <StarryBackground>
       <ScrollView
         ref={scrollViewRef}
-        contentContainerStyle={SCROLL_CONTENT_STYLE}
+        contentContainerStyle={scrollContentStyle}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl

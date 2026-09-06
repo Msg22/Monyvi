@@ -35,6 +35,7 @@ const mockTranslations: Record<string, string> = {
   "portfolio.filter.silver": "Silver",
   "portfolio.current_value_unavailable":
     "Current value unavailable. {{reason}}. Holding facts are still available.",
+  "portfolio.value_unavailable_short": "Value unavailable",
   "portfolio.empty": "Start tracking your metals",
   "portfolio.filter_empty": "No {{filter}} holdings yet",
   "portfolio.rate_stale": "Rates: rate is older than 24 hours",
@@ -464,6 +465,53 @@ describe("US1 portfolio surfaces", () => {
     );
   });
 
+  it("keeps ordinary-phone holding cards readable above floating tab controls", () => {
+    renderPortfolio({ bottomInset: 114 });
+
+    expect(screen.getByTestId("metal-portfolio-list")).toHaveProp(
+      "contentContainerStyle",
+      expect.objectContaining({ paddingBottom: 194 })
+    );
+    expect(
+      screen.getByTestId("metal-portfolio-holding-name-gold-coin")
+    ).toHaveProp("numberOfLines", 2);
+    expect(
+      screen.getByTestId("metal-portfolio-holding-value-gold-coin")
+    ).toHaveProp("className", expect.stringContaining("w-[104px]"));
+  });
+
+  it("uses short visible unavailable copy in holding rows", () => {
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        activeHoldings: [
+          {
+            ...portfolio.activeHoldings[0],
+            currentValueDecimal: null,
+            currentPerformanceDecimal: null,
+          },
+        ],
+        activeTotalDecimal: null,
+        currentPerformanceDecimal: null,
+        holdings: [
+          {
+            ...portfolio.activeHoldings[0],
+            currentValueDecimal: null,
+            currentPerformanceDecimal: null,
+          },
+        ],
+        rateStatus: { state: "missing", ageMs: null },
+      },
+    });
+
+    expect(screen.getByText("Value unavailable")).toBeTruthy();
+    expect(
+      screen.getByLabelText(
+        /Current value unavailable.*current rate unavailable/
+      )
+    ).toBeTruthy();
+  });
+
   it("omits purchase date, retains recorded facts, and speaks unavailable value truthfully", () => {
     renderPortfolio({
       portfolio: {
@@ -493,7 +541,8 @@ describe("US1 portfolio surfaces", () => {
     });
 
     expect(screen.queryByText(/Bought/)).toBeNull();
-    expect(screen.getAllByText(/Current value unavailable/)).toHaveLength(2);
+    expect(screen.getAllByText(/Current value unavailable/)).toHaveLength(1);
+    expect(screen.getByText("Value unavailable")).toBeTruthy();
     expect(
       screen.getByLabelText("Metal holding illustration unavailable")
     ).toBeTruthy();
