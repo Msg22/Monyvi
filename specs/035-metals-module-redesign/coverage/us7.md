@@ -21,7 +21,8 @@ integration-owned.
 ## Activation and verification status
 
 - T112–T114, T117, and the hook/sheet/descriptor subset of T118 are Green within
-  the Delete-owned injected boundary: 2 suites and 23 tests pass.
+  the Delete-owned injected boundary: 2 suites and 24 tests pass, including the
+  StrictMode failure-reporting case.
 - T115 is authored but not run. It cannot execute honestly without a live route,
   deterministic Delete fixtures, and shared integration.
 - T118 remains partial because the Expo route is intentionally absent while the

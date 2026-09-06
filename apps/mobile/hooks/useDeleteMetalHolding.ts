@@ -34,12 +34,12 @@ export function useDeleteMetalHolding(
   const idsRef = useRef<DeleteMetalHoldingRequestIds | null>(null);
   const isMountedRef = useRef(true);
 
-  useEffect(
-    () => (): void => {
+  useEffect((): (() => void) => {
+    isMountedRef.current = true;
+    return (): void => {
       isMountedRef.current = false;
-    },
-    []
-  );
+    };
+  }, []);
 
   const submit = useCallback(async (): Promise<boolean> => {
     if (inFlightRef.current) return false;
