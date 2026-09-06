@@ -347,6 +347,7 @@ export const RecurringPaymentForm = React.forwardRef<
         currency: selectedCurrency,
         originalStartDate: mode === "edit" ? initialValues.startDate : null,
         messages: {
+          amountRequired: t("amount_required"),
           invalidAmount: t("invalid_amount"),
           positiveAmount: t("amount_must_be_positive"),
           amountMaximum: t("amount_maximum_error", {
