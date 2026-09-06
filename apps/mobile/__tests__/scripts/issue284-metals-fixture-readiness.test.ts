@@ -9,10 +9,10 @@ describe("issue #284 Metals fixture observation readiness", () => {
     );
 
     expect(preflightSource).toMatch(
-      /where \\"source\\" like 'e2e_fixture:%';/
+      /where "source" like 'e2e_fixture:%';/
     );
     expect(preflightSource).not.toMatch(
-      /where \\"source\\" = 'e2e_fixture';/
+      /where "source" = 'e2e_fixture';/
     );
   });
 });
