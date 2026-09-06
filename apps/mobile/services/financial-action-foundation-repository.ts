@@ -12,6 +12,7 @@ import {
   type FinancialActionHashResult,
   type FinancialActionRegistry,
   type FinancialActionState,
+  type FinancialActionValidationInput,
   type Sha256Provider,
 } from "../../../packages/logic/src/financial-actions";
 import {
@@ -52,6 +53,7 @@ export const FINANCIAL_ACTION_FOUNDATION_ERROR_CODES = {
 export interface CreateFinancialActionGroupInput {
   readonly envelope: FinancialActionEnvelopeV1;
   readonly hashProvider: Sha256Provider;
+  readonly validationInput?: FinancialActionValidationInput;
 }
 
 export type CreateFinancialActionGroupResult =
@@ -232,14 +234,16 @@ export function createFinancialActionFoundationRepository(
   ): Promise<PreparedFinancialActionContext> {
     const envelope = canonicalizeFinancialActionEnvelope(
       input.envelope,
-      dependencies.registry
+      dependencies.registry,
+      input.validationInput
     );
     const scope = await dependencies.getCurrentUserDataScope();
     assertInputUser(scope, envelope.userId);
     const payload = await hashFinancialActionEnvelope(
       envelope,
       input.hashProvider,
-      dependencies.registry
+      dependencies.registry,
+      input.validationInput
     );
     return { envelope, payload, scope };
   }

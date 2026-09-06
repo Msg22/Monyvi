@@ -27,6 +27,7 @@ interface LiveRatesTrustSummaryProps {
 interface LiveRatesTrustDisplay {
   readonly state: "fresh" | "stale" | "unknown" | "missing" | "invalid";
   readonly dateTime: string | null;
+  readonly ageText: string | null;
 }
 
 function LiveRatesTrustSummary({
@@ -218,7 +219,11 @@ function getRateCopy(
   ) => string,
   rate: LiveRatesTrustDisplay
 ): string {
-  return rate.state === "fresh"
-    ? t("rate.fresh", { dateTime: rate.dateTime ?? "" })
-    : t(`rate.${rate.state}`);
+  if (rate.state === "fresh") {
+    return t("rate.fresh", { dateTime: rate.dateTime ?? "" });
+  }
+  if (rate.state === "stale" && rate.ageText !== null) {
+    return `${t("rate.stale")} · ${rate.ageText}`;
+  }
+  return t(`rate.${rate.state}`);
 }
