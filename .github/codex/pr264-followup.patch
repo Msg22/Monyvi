@@ -1,0 +1,111 @@
+diff --git a/apps/mobile/services/recurring-payment-service.ts b/apps/mobile/services/recurring-payment-service.ts
+index e34e512..3e14a92 100644
+--- a/apps/mobile/services/recurring-payment-service.ts
++++ b/apps/mobile/services/recurring-payment-service.ts
+@@ -92,6 +92,20 @@ function assertCurrencyMatchesAccount(
+   }
+ }
+ 
++function assertExpectedNextDueDate(
++  payment: Pick<RecurringPayment, "nextDueDate">,
++  expectedNextDueDate: Date | undefined
++): void {
++  if (
++    expectedNextDueDate !== undefined &&
++    (!isValidDate(expectedNextDueDate) ||
++      !isSameLocalCalendarDay(payment.nextDueDate, expectedNextDueDate))
++  ) {
++    throw new Error(RECURRING_PAYMENT_SERVICE_ERROR_CODES.STALE_SCHEDULE);
++  }
++}
++
+ function assertValidRecurringPaymentDateShape(
+   data: Pick<RecurringPaymentData, "startDate" | "endDate">
+ ): void {
+@@ -249,14 +263,7 @@ export async function updateRecurringPayment(
+     database.get<RecurringPayment>("recurring_payments");
+   const payment = await scope.findOwned(recurringCollection, paymentId);
+ 
+-  if (
+-    data.expectedNextDueDate !== undefined &&
+-    (!isValidDate(data.expectedNextDueDate) ||
+-      !isSameLocalCalendarDay(payment.nextDueDate, data.expectedNextDueDate))
+-  ) {
+-    throw new Error(RECURRING_PAYMENT_SERVICE_ERROR_CODES.STALE_SCHEDULE);
+-  }
++  assertExpectedNextDueDate(payment, data.expectedNextDueDate);
+ 
+   const dataMatchesStoredAnchor = isSameLocalCalendarDay(
+     payment.startDate,
+@@ -286,6 +293,9 @@ export async function updateRecurringPayment(
+   assertValidRecurringPaymentAmountPrecision(data.amount, account.currency);
+ 
+   await database.write(async () => {
++    const currentPayment = await scope.findOwned(recurringCollection, paymentId);
++    assertExpectedNextDueDate(currentPayment, data.expectedNextDueDate);
++
+     const previousEndDate = payment.endDate;
+     const nextEndDate = data.endDate ?? null;
+     const previousStatus = payment.status;
+@@ -347,7 +357,7 @@ export async function updateRecurringPayment(
+         RECURRING_PAYMENT_SERVICE_ERROR_CODES.REACTIVATION_UNAVAILABLE
+       );
+     }
+-    await payment.update((record) => {
++    await currentPayment.update((record) => {
+       record.name = data.name;
+       record.amount = data.amount;
+       record.currency = data.currency;
+diff --git a/apps/mobile/app/(private)/edit-transaction.tsx b/apps/mobile/app/(private)/edit-transaction.tsx
+index 8608855..a9a4892 100644
+--- a/apps/mobile/app/(private)/edit-transaction.tsx
++++ b/apps/mobile/app/(private)/edit-transaction.tsx
+@@ -40,6 +40,7 @@ import {
+   calculateEditedTransactionBalanceProjection,
+   evaluateAmountExpression,
+   formatAmountInput,
++  formatStoredAmountInput,
+ } from "@monyvi/logic";
+ import * as Haptics from "expo-haptics";
+ import { useLocalSearchParams, useRouter } from "expo-router";
+@@ -179,7 +180,7 @@ export default function EditTransaction(): React.ReactNode {
+   useEffect(() => {
+     if (!transaction || isInitialized) return;
+ 
+-    const amountStr = transaction.amount.toString();
++    const amountStr = formatStoredAmountInput(transaction.amount);
+     setAmount(amountStr);
+     setTypeRaw(transaction.type);
+     setSelectedAccountId(transaction.accountId);
+diff --git a/apps/mobile/hooks/useTransactionEditState.ts b/apps/mobile/hooks/useTransactionEditState.ts
+index d0fc899..e1a7c12 100644
+--- a/apps/mobile/hooks/useTransactionEditState.ts
++++ b/apps/mobile/hooks/useTransactionEditState.ts
+@@ -15,6 +15,7 @@ import {
+ } from "@/validation/transaction-validation";
+ import type { Category, CurrencyType, TransactionType } from "@monyvi/db";
+ import {
++  formatStoredAmountInput,
+   parseAmountInput,
+   type ParsedSmsTransaction,
+   type ReviewableTransaction,
+@@ -145,7 +146,9 @@ export function useTransactionEditState({
+   };
+ 
+   // Local editable state
+-  const [amount, setAmount] = useState(transaction.amount.toString());
++  const [amount, setAmount] = useState(
++    formatStoredAmountInput(transaction.amount)
++  );
+   const [note, setNote] = useState(readTransactionNote(transaction));
+ 
+   const [counterparty, setCounterparty] = useState(
+@@ -306,7 +309,7 @@ export function useTransactionEditState({
+     if (initializedForIdentityRef.current === transactionIdentity) return;
+     initializedForIdentityRef.current = transactionIdentity;
+ 
+-    setAmount(transaction.amount.toString());
++    setAmount(formatStoredAmountInput(transaction.amount));
+     setNewAccountCurrency(transaction.currency);
+     setNote(readTransactionNote(transaction));
+     setCounterparty(transaction.counterparty || "");
