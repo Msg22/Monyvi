@@ -258,6 +258,29 @@ describe("approved Metals financial action payload registry", () => {
     ).toEqual(payloadFor(kind, payloadVersion));
   });
 
+  it("accepts a predecessor-less revision-zero Dispose payload only", () => {
+    const dispose = payloadFor("dispose", "metals.dispose/v1");
+    expect(
+      definition("dispose", "metals.dispose/v1").validatePayload(
+        {
+          ...dispose,
+          expectedHoldingRevision: "0",
+          predecessorEventId: null,
+        },
+        VALIDATION_INPUT
+      )
+    ).toMatchObject({
+      expectedHoldingRevision: "0",
+      predecessorEventId: null,
+    });
+    expect(() =>
+      definition("dispose", "metals.dispose/v1").validatePayload(
+        { ...dispose, predecessorEventId: null },
+        VALIDATION_INPUT
+      )
+    ).toThrow("financial_action_invalid_payload");
+  });
+
   it("rejects unknown tuples and every unapproved payload key", () => {
     expect(() =>
       DEFAULT_FINANCIAL_ACTION_REGISTRY.resolve(

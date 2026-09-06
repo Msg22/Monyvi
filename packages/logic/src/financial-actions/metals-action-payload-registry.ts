@@ -394,7 +394,8 @@ export function createMetalsActionPayloadRegistry(
   const validateLinks = (
     value: Readonly<Record<string, unknown>>,
     add: boolean,
-    undo: boolean
+    undo: boolean,
+    allowRevisionZeroWithoutPredecessor = false
   ): void => {
     const predecessor =
       typeof value.predecessorEventId === "string" &&
@@ -402,6 +403,10 @@ export function createMetalsActionPayloadRegistry(
     const reversal =
       typeof value.reversesEventId === "string" &&
       UUID_PATTERN.test(value.reversesEventId);
+    const isRevisionZeroWithoutPredecessor =
+      allowRevisionZeroWithoutPredecessor &&
+      value.expectedHoldingRevision === "0" &&
+      value.predecessorEventId === null;
     if (
       typeof value.holdingId !== "string" ||
       !UUID_PATTERN.test(value.holdingId) ||
@@ -410,7 +415,8 @@ export function createMetalsActionPayloadRegistry(
         : !validRevision(value.expectedHoldingRevision)) ||
       (add
         ? value.predecessorEventId !== null || value.reversesEventId !== null
-        : !predecessor || (undo ? !reversal : value.reversesEventId !== null))
+        : (!predecessor && !isRevisionZeroWithoutPredecessor) ||
+          (undo ? !reversal : value.reversesEventId !== null))
     )
       fail();
   };
@@ -679,7 +685,7 @@ export function createMetalsActionPayloadRegistry(
       "reversesEventId",
     ];
     if (!isPlainObject(value) || !hasExactKeys(value, keys)) fail();
-    validateLinks(value, false, false);
+    validateLinks(value, false, false, true);
     if (
       !validDate(value.disposalDate, input) ||
       !boundedText(value.reason, MAX_REASON_UTF8_BYTES) ||

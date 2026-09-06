@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type {
-  DisposeCategory,
-  DisposeMetalHoldingCommandInput,
-  DisposeTreatment,
+import {
+  resolveDisposeTreatment,
+  type DisposeCategory,
+  type DisposeMetalHoldingCommandInput,
+  type DisposeTreatment,
 } from "@/services/dispose-metal-holding-command-service";
 
 export interface DisposableMetalHoldingReadModel {
@@ -13,6 +14,7 @@ export interface DisposableMetalHoldingReadModel {
   readonly status: "active" | "sold" | "disposed";
   readonly expectedFinancialRevision: string;
   readonly predecessorEventId: string | null;
+  readonly purchaseDate: string;
 }
 
 export interface DisposeMetalHoldingFacadeDependencies {
@@ -35,6 +37,7 @@ export interface UseDisposeMetalHoldingResult {
   readonly model: DisposableMetalHoldingReadModel | null;
   readonly category: DisposeCategory | null;
   readonly otherTreatment: DisposeTreatment | null;
+  readonly treatment: DisposeTreatment | null;
   readonly disposalDate: string;
   readonly notes: string;
   readonly isLoading: boolean;
@@ -61,7 +64,8 @@ function validate(
   category: DisposeCategory | null,
   otherTreatment: DisposeTreatment | null,
   disposalDate: string,
-  today: string
+  today: string,
+  purchaseDate: string | null
 ): Readonly<Record<string, string>> {
   const errors: Record<string, string> = {};
   if (category === null) errors.category = "dispose_category_required";
@@ -69,6 +73,8 @@ function validate(
     errors.treatment = "dispose_other_treatment_required";
   if (!isCalendarDate(disposalDate) || disposalDate > today) {
     errors.disposalDate = "dispose_date_invalid";
+  } else if (purchaseDate !== null && disposalDate < purchaseDate) {
+    errors.disposalDate = "dispose_date_before_acquisition";
   }
   return Object.freeze(errors);
 }
@@ -186,6 +192,10 @@ export function useDisposeMetalHolding(
       notes.length > 0,
     [category, disposalDate, input.today, notes.length, otherTreatment]
   );
+  const treatment = useMemo(
+    () => resolveDisposeTreatment(category, otherTreatment),
+    [category, otherTreatment]
+  );
 
   const submit = useCallback(async (): Promise<boolean> => {
     if (isInFlightRef.current) return false;
@@ -193,7 +203,8 @@ export function useDisposeMetalHolding(
       category,
       otherTreatment,
       disposalDate,
-      input.today
+      input.today,
+      model?.purchaseDate ?? null
     );
     setValidationErrors(errors);
     if (Object.keys(errors).length > 0 || !model) return false;
@@ -242,6 +253,7 @@ export function useDisposeMetalHolding(
     model,
     category,
     otherTreatment,
+    treatment,
     disposalDate,
     notes,
     isLoading,

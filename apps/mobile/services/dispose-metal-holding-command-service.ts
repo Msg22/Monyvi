@@ -1,14 +1,16 @@
 import { Q, type Database, type Model } from "@nozbe/watermelondb";
 import type {
   Asset,
+  FinancialActionGroup,
   MetalActionEvidence,
   MetalHoldingState,
   MetalLifecycleEvent,
 } from "@monyvi/db";
-import type {
-  FinancialActionEnvelopeV1,
-  RegisteredActionPayload,
-  Sha256Provider,
+import {
+  reduceMetalLifecycle,
+  type FinancialActionEnvelopeV1,
+  type RegisteredActionPayload,
+  type Sha256Provider,
 } from "@monyvi/logic";
 
 import type {
@@ -99,6 +101,7 @@ export interface DisposeMetalHoldingConsequences {
 }
 
 interface Projection {
+  readonly actionRoots: readonly FinancialActionGroup[];
   readonly asset: Asset;
   readonly state: MetalHoldingState;
   readonly predecessor: MetalLifecycleEvent | null;
@@ -118,6 +121,18 @@ const SUCCESSFUL_REPLAY_STATES = new Set([
   "sync_pending",
   "sync_failed",
   "accepted",
+]);
+
+const BLOCKING_LIFECYCLE_REJECTIONS = new Set([
+  "duplicate_event_id_conflict",
+  "incomplete_evidence",
+  "missing_predecessor",
+  "predecessor_not_accepted",
+  "predecessor_not_current",
+  "cycle_detected",
+  "invalid_transition",
+  "invalid_reversal_target",
+  "conflicting_effective_successors",
 ]);
 
 const UUID_PATTERN =
@@ -153,6 +168,17 @@ export function resolveDisposeReason(
   if (otherTreatment !== null)
     throw new Error("dispose_known_category_treatment_forbidden");
   return category;
+}
+
+export function resolveDisposeTreatment(
+  category: DisposeCategory | null,
+  otherTreatment: DisposeTreatment | null
+): DisposeTreatment | null {
+  if (category === "lost_stolen" || category === "destroyed_damaged")
+    return "write_off";
+  if (category === "given_away" || category === "donated")
+    return "external_transfer";
+  return category === "other" ? otherTreatment : null;
 }
 
 export function shapeDisposeMetalHoldingConsequences(
@@ -218,34 +244,45 @@ async function loadProjection(
             Q.take(1)
           )
           .fetch();
-  const [assets, states, predecessors, timeline] = await Promise.all([
-    scope
-      .queryOwned(
-        dependencies.database.get<Asset>("assets"),
-        Q.where("id", input.holdingId),
-        Q.where("deleted", false),
-        Q.take(1)
-      )
-      .fetch(),
-    scope
-      .queryOwned(
-        dependencies.database.get<MetalHoldingState>("metal_holding_states"),
-        Q.where("holding_id", input.holdingId),
-        Q.where("deleted", false),
-        Q.take(1)
-      )
-      .fetch(),
-    predecessorPromise,
-    scope
-      .queryOwned(
-        dependencies.database.get<MetalLifecycleEvent>(
-          "metal_lifecycle_events"
-        ),
-        Q.where("holding_id", input.holdingId),
-        Q.where("deleted", false)
-      )
-      .fetch(),
-  ]);
+  const [assets, states, predecessors, timeline, actionRoots] =
+    await Promise.all([
+      scope
+        .queryOwned(
+          dependencies.database.get<Asset>("assets"),
+          Q.where("id", input.holdingId),
+          Q.where("deleted", false),
+          Q.take(1)
+        )
+        .fetch(),
+      scope
+        .queryOwned(
+          dependencies.database.get<MetalHoldingState>("metal_holding_states"),
+          Q.where("holding_id", input.holdingId),
+          Q.where("deleted", false),
+          Q.take(1)
+        )
+        .fetch(),
+      predecessorPromise,
+      scope
+        .queryOwned(
+          dependencies.database.get<MetalLifecycleEvent>(
+            "metal_lifecycle_events"
+          ),
+          Q.where("holding_id", input.holdingId),
+          Q.where("deleted", false)
+        )
+        .fetch(),
+      scope
+        .queryOwned(
+          dependencies.database.get<FinancialActionGroup>(
+            "financial_action_groups"
+          ),
+          Q.where("domain", "metals"),
+          Q.where("domain_reference_id", input.holdingId),
+          Q.where("deleted", false)
+        )
+        .fetch(),
+    ]);
   if (
     !assets[0] ||
     !states[0] ||
@@ -253,6 +290,7 @@ async function loadProjection(
   )
     throw new Error("metal_holding_not_found");
   return {
+    actionRoots: actionRoots.map((root) => scope.assertOwned(root)),
     asset: scope.assertOwned(assets[0]),
     state: scope.assertOwned(states[0]),
     predecessor: predecessors[0] ? scope.assertOwned(predecessors[0]) : null,
@@ -277,6 +315,12 @@ function assertProjection(
   if (projection.state.financialRevision !== input.expectedFinancialRevision) {
     throw new Error("holding_revision_conflict");
   }
+  if (
+    input.disposalDate <
+    projection.asset.purchaseDate.toISOString().slice(0, 10)
+  ) {
+    throw new Error("metal_dispose_date_before_acquisition");
+  }
   const isMigratedRevisionZero =
     input.expectedFinancialRevision === "0" &&
     input.predecessorEventId === null &&
@@ -285,6 +329,11 @@ function assertProjection(
     projection.predecessor === null &&
     projection.timeline.length === 0;
   if (isMigratedRevisionZero) return;
+  const reduced = reduceMetalLifecycle(
+    projection.timeline.map((event) =>
+      toReducerEvent(event, projection.actionRoots)
+    )
+  );
   if (
     projection.predecessor === null ||
     !projection.predecessor.isEffective ||
@@ -298,6 +347,66 @@ function assertProjection(
   ) {
     throw new Error("holding_revision_conflict");
   }
+  if (
+    reduced.projection?.effectiveEventId !== input.predecessorEventId ||
+    reduced.rejectedEvents.some(({ reasonCode }) =>
+      BLOCKING_LIFECYCLE_REJECTIONS.has(reasonCode)
+    )
+  ) {
+    throw new Error("metal_dispose_lifecycle_conflict");
+  }
+}
+
+function toReducerEvent(
+  event: MetalLifecycleEvent,
+  actionRoots: readonly FinancialActionGroup[]
+): Readonly<Record<string, unknown>> {
+  const actionRoot = actionRoots.find(
+    (candidate) =>
+      candidate.actionId === event.actionId &&
+      toReducerKind(candidate.kind) === toReducerKind(event.kind)
+  );
+  const canonicalCasStatus = actionRoot
+    ? EFFECTIVE_RECONCILIATION_STATES.has(actionRoot.state)
+      ? "accepted"
+      : actionRoot.state === "rejected_compensating"
+        ? "rejected"
+        : "unknown"
+    : "unknown";
+  return {
+    canonicalCasStatus,
+    evidenceState: !actionRoot
+      ? "incomplete"
+      : event.isEffective
+        ? event.isHistoryVisible
+          ? "effective"
+          : "incomplete"
+        : "ineffective",
+    fingerprint: event.payloadJson,
+    id: event.id,
+    kind: toReducerKind(event.kind),
+    occurredAt: event.occurredAt.getTime(),
+    predecessorEventId: event.predecessorEventId,
+    reversesEventId: event.reversesEventId,
+  };
+}
+
+function toReducerKind(kind: string): string {
+  const kinds: Readonly<Record<string, string>> = {
+    add: "created",
+    correct: "corrected",
+    created: "created",
+    corrected: "corrected",
+    delete: "deleted",
+    deleted: "deleted",
+    dispose: "disposed",
+    disposed: "disposed",
+    sell: "sold",
+    sold: "sold",
+    undo: "reversed",
+    reversed: "reversed",
+  };
+  return kinds[kind] ?? kind;
 }
 
 function assertSuccessfulReplay(

@@ -13,10 +13,8 @@ import type {
 import {
   DEFAULT_FINANCIAL_ACTION_REGISTRY,
   canonicalizeFinancialActionEnvelope,
-  createFinancialActionRegistry,
   type FinancialActionEnvelopeV1,
   type FinancialActionRegistry,
-  type RegisteredActionPayload,
   type Sha256Provider,
 } from "@monyvi/logic";
 
@@ -60,6 +58,8 @@ const IDS = {
   disposeAction: "018f0c7a-1234-7abc-8def-000000000010",
   disposeEvidence: "018f0c7a-1234-7abc-8def-000000000011",
   disposeEvent: "018f0c7a-1234-7abc-8def-000000000012",
+  conflictingDisposeEventA: "018f0c7a-1234-7abc-8def-000000000013",
+  conflictingDisposeEventB: "018f0c7a-1234-7abc-8def-000000000014",
 } as const;
 
 jest.mock("../../services/user-data-access", () => ({
@@ -214,6 +214,7 @@ async function seedHolding(
     readonly predecessorIsEffective?: boolean;
     readonly predecessorIsHistoryVisible?: boolean;
     readonly reconciliationState?: string;
+    readonly rootState?: string;
   } = {}
 ): Promise<void> {
   const isMigratedRevisionZero = options.isMigratedRevisionZero ?? false;
@@ -268,6 +269,25 @@ async function seedHolding(
       });
     if (!isMigratedRevisionZero) {
       await database
+        .get<FinancialActionGroup>("financial_action_groups")
+        .create((record): void => {
+          record._raw.id = IDS.createdAction;
+          record.accountGuardsJson = "[]";
+          record.actionId = IDS.createdAction;
+          record.deleted = false;
+          record.domain = "metals";
+          record.domainReferenceId = IDS.holding;
+          record.kind = "add";
+          record.outcomeJson = null;
+          record.payloadHash = "a".repeat(64);
+          record.payloadJson = "{}";
+          record.rejectionCode = null;
+          record.serverOutcome = null;
+          record.state = options.rootState ?? "accepted";
+          record.updatedAt = new Date("2026-09-04T10:00:00.000Z");
+          record.userId = IDS.user;
+        });
+      await database
         .get<MetalLifecycleEvent>("metal_lifecycle_events")
         .create((record): void => {
           record._raw.id = IDS.createdEvent;
@@ -286,42 +306,6 @@ async function seedHolding(
         });
     }
   });
-}
-
-function createRevisionZeroDisposeTestRegistry(): FinancialActionRegistry {
-  return createFinancialActionRegistry(
-    DEFAULT_FINANCIAL_ACTION_REGISTRY.definitions.map((definition) =>
-      definition.domain === "metals" &&
-      definition.kind === "dispose" &&
-      definition.payloadVersion === "metals.dispose/v1"
-        ? {
-            ...definition,
-            validatePayload: (
-              value,
-              validationInput
-            ): RegisteredActionPayload => {
-              if (
-                typeof value === "object" &&
-                value !== null &&
-                Object.keys(value).sort().join(",") ===
-                  "disposalDate,expectedHoldingRevision,holdingId,notes,predecessorEventId,reason,reversesEventId" &&
-                "holdingId" in value &&
-                value.holdingId === IDS.holding &&
-                "expectedHoldingRevision" in value &&
-                value.expectedHoldingRevision === "0" &&
-                "predecessorEventId" in value &&
-                value.predecessorEventId === null &&
-                "reversesEventId" in value &&
-                value.reversesEventId === null
-              ) {
-                return Object.freeze({ ...value }) as RegisteredActionPayload;
-              }
-              return definition.validatePayload(value, validationInput);
-            },
-          }
-        : definition
-    )
-  );
 }
 
 describe("Dispose metal holding category and consequence contract", () => {
@@ -498,9 +482,7 @@ describe("Dispose metal holding command SQLite lifecycle", () => {
     await seedHolding("active", { isMigratedRevisionZero: true });
 
     await expect(
-      createService({
-        registry: createRevisionZeroDisposeTestRegistry(),
-      }).dispose(
+      createService().dispose(
         command({
           predecessorEventId: null,
           expectedFinancialRevision: "0",
@@ -623,6 +605,52 @@ describe("Dispose metal holding command SQLite lifecycle", () => {
     await expect(
       createService().dispose(command({ disposalDate: "2026-09-06" }))
     ).rejects.toThrow("financial_action_invalid_payload");
+  });
+
+  it("rejects a disposal date before the holding acquisition date", async (): Promise<void> => {
+    await seedHolding();
+    await expect(
+      createService().dispose(command({ disposalDate: "2024-03-13" }))
+    ).rejects.toThrow("metal_dispose_date_before_acquisition");
+  });
+
+  it("rejects a structurally conflicted lifecycle instead of extending its last safe head", async (): Promise<void> => {
+    await seedHolding();
+    await database.write(async (): Promise<void> => {
+      for (const [id, reason] of [
+        [IDS.conflictingDisposeEventA, "lost_stolen"],
+        [IDS.conflictingDisposeEventB, "donated"],
+      ] as const) {
+        await database
+          .get<MetalLifecycleEvent>("metal_lifecycle_events")
+          .create((record): void => {
+            record._raw.id = id;
+            record.actionId = id;
+            record.deleted = false;
+            record.holdingId = IDS.holding;
+            record.isEffective = true;
+            record.isHistoryVisible = true;
+            record.kind = "dispose";
+            record.occurredAt = new Date("2026-09-04T11:00:00.000Z");
+            record.payloadJson = JSON.stringify({ reason });
+            record.predecessorEventId = IDS.createdEvent;
+            record.reversesEventId = null;
+            record.updatedAt = new Date("2026-09-04T11:00:00.000Z");
+            record.userId = IDS.user;
+          });
+      }
+    });
+
+    await expect(createService().dispose(command())).rejects.toThrow(
+      "metal_dispose_lifecycle_conflict"
+    );
+  });
+
+  it("rejects a timeline whose current event belongs to a rejected action root", async (): Promise<void> => {
+    await seedHolding("active", { rootState: "rejected_compensating" });
+    await expect(createService().dispose(command())).rejects.toThrow(
+      "metal_dispose_lifecycle_conflict"
+    );
   });
 
   it("rejects an auth scope change before reading the holding", async (): Promise<void> => {

@@ -1,9 +1,12 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
+  AccessibilityInfo,
+  findNodeHandle,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Text,
+  type TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -90,6 +93,7 @@ export interface DisposeMetalHoldingScreenProps {
   readonly bottomInset: number;
   readonly category: DisposeCategory | null;
   readonly otherTreatment: DisposeTreatment | null;
+  readonly treatment: DisposeTreatment | null;
   readonly disposalDate: string;
   readonly notes: string;
   readonly isLoading?: boolean;
@@ -125,17 +129,6 @@ const CONSEQUENCE_ORDER = [
   "sale-profit-loss",
   "history",
 ] as const;
-
-function treatmentFor(
-  category: DisposeCategory | null,
-  otherTreatment: DisposeTreatment | null
-): DisposeTreatment | null {
-  if (category === "lost_stolen" || category === "destroyed_damaged")
-    return "write_off";
-  if (category === "given_away" || category === "donated")
-    return "external_transfer";
-  return category === "other" ? otherTreatment : null;
-}
 
 function ChoiceButton(props: {
   readonly id: string;
@@ -202,6 +195,7 @@ export function DisposeMetalHoldingScreen({
   bottomInset,
   category,
   otherTreatment,
+  treatment,
   disposalDate,
   notes,
   isLoading = false,
@@ -218,8 +212,11 @@ export function DisposeMetalHoldingScreen({
   onRetry,
 }: DisposeMetalHoldingScreenProps): React.JSX.Element {
   const isStacked = shouldUseCompactLayout(width, fontScale);
-  const treatment = treatmentFor(category, otherTreatment);
   const hasSummary = category !== null && treatment !== null;
+  const validationSummaryRef = useRef<View>(null);
+  const categoryGroupRef = useRef<View>(null);
+  const treatmentGroupRef = useRef<View>(null);
+  const dateFieldRef = useRef<TextInput>(null);
   const submit = useCallback((): void => {
     if (!isSubmitting) onSubmit();
   }, [isSubmitting, onSubmit]);
@@ -234,10 +231,38 @@ export function DisposeMetalHoldingScreen({
   );
   const categoryMetadata = {
     layoutMode: isStacked ? ("stacked" as const) : ("two-column" as const),
-    autoFocus: Boolean(validationErrors.category),
   };
   const submitAreaMetadata = { bottomInset };
   const summaryMetadata = { consequenceOrder: CONSEQUENCE_ORDER };
+  const validationMessages = useMemo(
+    () =>
+      [
+        validationErrors.category ? copy.categoryRequired : null,
+        validationErrors.treatment ? copy.treatmentRequired : null,
+        validationErrors.disposalDate ? copy.dateRequired : null,
+      ].filter((message): message is string => message !== null),
+    [copy, validationErrors]
+  );
+
+  useEffect(() => {
+    if (validationMessages.length === 0) return undefined;
+    const summaryHandle = findNodeHandle(validationSummaryRef.current);
+    if (summaryHandle !== null) {
+      AccessibilityInfo.setAccessibilityFocus(summaryHandle);
+    }
+    const frame = requestAnimationFrame((): void => {
+      const firstInvalidTarget = validationErrors.category
+        ? categoryGroupRef.current
+        : validationErrors.treatment
+          ? treatmentGroupRef.current
+          : dateFieldRef.current;
+      const targetHandle = findNodeHandle(firstInvalidTarget);
+      if (targetHandle !== null) {
+        AccessibilityInfo.setAccessibilityFocus(targetHandle);
+      }
+    });
+    return (): void => cancelAnimationFrame(frame);
+  }, [validationErrors, validationMessages.length]);
 
   return (
     <KeyboardAvoidingView
@@ -288,12 +313,29 @@ export function DisposeMetalHoldingScreen({
               {copy.intro}
             </Text>
 
+            {validationMessages.length > 0 ? (
+              <View
+                ref={validationSummaryRef}
+                testID="dispose-validation-summary"
+                accessible
+                accessibilityRole="alert"
+                accessibilityLabel={validationMessages.join(" ")}
+                className="rounded-2xl border border-red-600 p-3 dark:border-red-400"
+              >
+                <Text className="text-sm text-red-700 dark:text-red-300">
+                  {validationMessages.join(" ")}
+                </Text>
+              </View>
+            ) : null}
+
             <View className="gap-3">
               <Text className="text-sm font-semibold text-text-primary dark:text-text-primary-dark">
                 {copy.reasonLabel}
               </Text>
               <View
+                ref={categoryGroupRef}
                 testID="dispose-category-group"
+                accessible
                 accessibilityRole="radiogroup"
                 aria-invalid={Boolean(validationErrors.category)}
                 className="flex-row flex-wrap justify-between gap-y-3"
@@ -327,7 +369,12 @@ export function DisposeMetalHoldingScreen({
                 <Text className="text-sm font-semibold text-text-primary dark:text-text-primary-dark">
                   {copy.otherTreatmentLabel}
                 </Text>
-                <View accessibilityRole="radiogroup" className="gap-3">
+                <View
+                  ref={treatmentGroupRef}
+                  accessible
+                  accessibilityRole="radiogroup"
+                  className="gap-3"
+                >
                   {TREATMENTS.map((value) => (
                     <ChoiceButton
                       key={value}
@@ -353,6 +400,7 @@ export function DisposeMetalHoldingScreen({
             ) : null}
 
             <TextField
+              inputRef={dateFieldRef}
               testID="dispose-date-field"
               label={copy.dateLabel}
               value={disposalDate}
