@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/consistent-type-assertions */
+/* eslint-disable @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
 import React from "react";
 import { Text as MockText, TouchableOpacity } from "react-native";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
