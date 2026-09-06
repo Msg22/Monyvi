@@ -25,35 +25,51 @@ function readField(markdown, label) {
   return match ? match[1] : null;
 }
 
-function extractBindingFacts(markdown) {
-  if (markdown.includes("\r")) {
+function extractBindingFactsBytes(sidecarBytes) {
+  if (sidecarBytes.includes(0x0d)) {
     throw new Error("binding sidecar must use UTF-8/LF line endings");
   }
 
-  const heading = "## Binding Facts\n";
-  const start = markdown.indexOf(heading);
+  const heading = Buffer.from("## Binding Facts\n", "utf8");
+  const start = sidecarBytes.indexOf(heading);
   if (start === -1) {
     throw new Error("## Binding Facts heading is required");
   }
 
   const factsStart = start + heading.length;
-  const nextHeading = markdown.indexOf("\n## ", factsStart);
-  return markdown.slice(
+  const nextHeading = sidecarBytes.indexOf(
+    Buffer.from("\n## ", "utf8"),
+    factsStart
+  );
+  return sidecarBytes.subarray(
     factsStart,
-    nextHeading === -1 ? markdown.length : nextHeading + 1
+    nextHeading === -1 ? sidecarBytes.length : nextHeading + 1
   );
 }
 
 function verifyMockupBinding(sidecarPath) {
   const errors = [];
+  let sidecarBytes;
   let markdown;
 
   try {
-    markdown = fs.readFileSync(sidecarPath, "utf8");
+    sidecarBytes = fs.readFileSync(sidecarPath);
   } catch (error) {
     return {
       isAuthoritative: false,
       errors: [`unable to read binding sidecar: ${error.message}`],
+      currentImageRevision: null,
+      currentBindingMetadataRevision: null,
+      currentBindingApprovalRevision: null,
+    };
+  }
+
+  try {
+    markdown = new TextDecoder("utf-8", { fatal: true }).decode(sidecarBytes);
+  } catch {
+    return {
+      isAuthoritative: false,
+      errors: ["binding sidecar must be valid UTF-8"],
       currentImageRevision: null,
       currentBindingMetadataRevision: null,
       currentBindingApprovalRevision: null,
@@ -66,7 +82,10 @@ function verifyMockupBinding(sidecarPath) {
     "Approved reference image revision"
   );
   const approvalStatus = readField(markdown, "Binding metadata approval");
-  const declaredBindingRevision = readField(markdown, "Binding metadata revision");
+  const declaredBindingRevision = readField(
+    markdown,
+    "Binding metadata revision"
+  );
   const approvedBindingRevision = readField(
     markdown,
     "Approved binding metadata revision"
@@ -89,7 +108,8 @@ function verifyMockupBinding(sidecarPath) {
   }
 
   const hasValidImageRevision =
-    approvedImageRevision !== null && SHA256_PATTERN.test(approvedImageRevision);
+    approvedImageRevision !== null &&
+    SHA256_PATTERN.test(approvedImageRevision);
   if (!hasValidImageRevision) {
     errors.push(
       "approved reference image revision is required as sha256:<64 lowercase hex>"
@@ -116,17 +136,20 @@ function verifyMockupBinding(sidecarPath) {
 
   let currentBindingMetadataRevision = null;
   const hasValidDeclaredBindingRevision =
-    declaredBindingRevision !== null && SHA256_PATTERN.test(declaredBindingRevision);
+    declaredBindingRevision !== null &&
+    SHA256_PATTERN.test(declaredBindingRevision);
   try {
     currentBindingMetadataRevision = sha256(
-      Buffer.from(extractBindingFacts(markdown), "utf8")
+      extractBindingFactsBytes(sidecarBytes)
     );
     if (!hasValidDeclaredBindingRevision) {
       errors.push(
         "binding metadata revision is required as sha256:<64 lowercase hex>"
       );
     } else if (declaredBindingRevision !== currentBindingMetadataRevision) {
-      errors.push("binding metadata revision does not match current binding facts");
+      errors.push(
+        "binding metadata revision does not match current binding facts"
+      );
     }
   } catch (error) {
     errors.push(error.message);

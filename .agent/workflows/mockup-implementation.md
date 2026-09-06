@@ -262,8 +262,13 @@ Each sidecar MUST record:
   through the next level-two heading or end of file;
 - `Approved binding metadata revision: PENDING` until explicit approval binds
   the approval record to the current binding metadata revision;
+- `Binding approval revision: sha256:<64 lowercase hex characters>`, computed
+  from the exact approved-image revision and binding-metadata revision inputs in
+  `.specify/templates/mockup-binding-template.md`;
+- `Approved binding approval revision: PENDING` until explicit approval binds
+  the approval record to the current combined approval revision; and
 - `Binding metadata approval evidence/reference: PENDING` until that approval is
-  recorded for the same binding-metadata revision and approved-image revision;
+  recorded for the same combined approval revision.
 - the binding product surface: route/screen, component, sheet, modal, or other
   scoped UI region;
 - the declared comparison context: exact viewport dimensions when the reference
@@ -285,15 +290,16 @@ Each sidecar MUST record:
   approved or explicitly required for validation.
 
 Keep every normative binding fact under one `## Binding Facts` heading. Approval
-status, image revision, binding-metadata revision fields, approval evidence, and
-optional superseded approval history stay outside that section so the metadata
-fingerprint is not self-referential. Recompute `Binding metadata revision`
-whenever the exact binding-facts bytes change. A sidecar is authoritative only
-when its current fingerprint is valid, `Binding metadata approval: APPROVED`,
-`Approved binding metadata revision` exactly equals `Binding metadata revision`,
-the approval evidence/reference identifies both that binding-metadata revision
-and the recorded approved-image revision, and the SHA-256 of the current image
-bytes exactly equals `Approved reference image revision`.
+status, image revision, binding-metadata revision, combined binding-approval
+revision, approval evidence, and optional superseded approval history stay
+outside that section so the metadata fingerprint is not self-referential.
+Recompute `Binding metadata revision` from the exact original UTF-8/LF Binding
+Facts bytes whenever those bytes change, then recompute
+`Binding approval revision`. A sidecar is authoritative only when its current
+fingerprints are valid, `Binding metadata approval: APPROVED`, both approved
+revision fields equal their current revisions, approval evidence/reference
+identifies the approved combined binding-approval revision, and the SHA-256 of
+current image bytes exactly equals `Approved reference image revision`.
 
 Before treating a sidecar as authoritative, run:
 
@@ -310,31 +316,28 @@ assumptions into product rules.
 
 After the sidecar is complete enough to review, present the approved image and
 its completed sidecar **together** for explicit user approval of the image
-revision and binding metadata. The earlier image approval does not automatically
-approve viewport, component-bounds, non-binding-region, spacing, sizing, color,
-typography, state, interaction, transition, or variant facts recorded later by
-the agent.
+revision, binding metadata, and computed combined approval revision. Earlier
+image approval does not automatically approve later binding facts.
 
 Only after that explicit approval may the sidecar be changed to
-`Binding metadata approval: APPROVED`, copy the current fingerprint into
-`Approved binding metadata revision`, and record approval evidence/reference
-that identifies both the binding-metadata revision and
-`Approved reference image revision`. Until then, the sidecar is a draft and
-MUST NOT be treated as authoritative by implementation or review workflows. Run
-the verifier after recording approval; a failing verifier leaves the sidecar
-non-authoritative.
+`Binding metadata approval: APPROVED`, copy the current metadata fingerprint
+into `Approved binding metadata revision`, copy the computed combined
+fingerprint into `Approved binding approval revision`, and record approval
+evidence/reference that identifies that approved combined revision. Until then,
+the sidecar is a draft and MUST NOT be treated as authoritative by
+implementation or review workflows. Run the verifier after recording approval; a
+failing verifier leaves the sidecar non-authoritative.
 
 Before any later edit to `## Binding Facts` **or any change to the reference
 image bytes**, reset `Binding metadata approval: PENDING`,
-`Approved binding metadata revision: PENDING`, and
-`Binding metadata approval evidence/reference: PENDING`. When image bytes
-change, recompute `Approved reference image revision` from the replacement bytes
-before renewed approval. Previous approval evidence and the prior image revision
-may remain only in a clearly superseded history section. After a binding-facts
-edit, recompute `Binding metadata revision`; after either kind of change, obtain
-renewed explicit approval for the current image revision plus metadata revision.
-Changing any byte in either authority input counts as a material change for
-approval purposes; administrative history outside `## Binding Facts` does not.
+`Approved binding metadata revision: PENDING`,
+`Approved binding approval revision: PENDING`, and
+`Binding metadata approval evidence/reference: PENDING`. Recompute the affected
+image or metadata revision and always recompute `Binding approval revision`
+before renewed approval. Previous approval evidence and prior revisions may
+remain only in a clearly superseded history section. Changing any byte in either
+authority input counts as a material approval change; administrative history
+outside `## Binding Facts` does not.
 
 Use the constitution's **Approved mockup binding** principle as the authority
 for what is binding. Direct implementation and review workflows MUST consume
@@ -354,15 +357,15 @@ Before implementation of a legacy approved reference:
 1. Verify that the image was actually approved using existing evidence such as
    the canonical spec/design handoff, recorded user approval, or the PR/review
    artifact that established the approved reference. Do not infer approval from
-   filename or location alone. Compute the exact image-byte SHA-256 and reconcile
-   it with any existing canonical integrity table or approval record.
+   filename or location alone. Compute the exact image-byte SHA-256 and
+   reconcile it with any existing canonical integrity table or approval record.
 2. Create the matching `<mockup-basename>.binding.md` sidecar in the same
    directory **before implementation**, starting from the canonical template.
    Mark it as `Legacy metadata migration: yes`, record
    `Approved reference image revision: sha256:<64 lowercase hex>` for the exact
-   evidenced image bytes, set `Binding metadata approval: PENDING`, set both
-   revision-approval fields to `PENDING`, and list the exact evidence sources
-   used.
+   evidenced image bytes, set approval status and both approved revision fields
+   to `PENDING`, compute `Binding approval revision`, and list exact evidence
+   sources.
 3. Populate only binding facts supported by the approved reference, recorded
    approval/handoff, authoritative design/spec documentation, or design-system
    facts that applied to that approval. The constitution's default rule that
@@ -376,13 +379,12 @@ Before implementation of a legacy approved reference:
 5. If any fidelity-affecting unknown remains, pause and obtain clarification
    before UI implementation, then update the sidecar with the approved answer.
 6. Present the approved legacy image and completed migrated sidecar together for
-   explicit user approval of the exact image revision and binding metadata.
-   Legacy image approval does not implicitly approve newly reconstructed
-   metadata. Only after explicit approval may the sidecar be marked
-   `Binding metadata approval: APPROVED`, with its valid current fingerprint
-   copied to `Approved binding metadata revision` and approval evidence that
-   identifies both that revision and `Approved reference image revision`. Run
-   the verifier before treating the sidecar as authoritative.
+   explicit approval of the exact image, metadata, and combined approval
+   revisions. Legacy image approval does not implicitly approve reconstructed
+   metadata. Only after explicit approval may the sidecar be marked `APPROVED`,
+   with both current revisions copied into their approved fields and approval
+   evidence identifying the approved combined revision. Run the verifier before
+   treating the sidecar as authoritative.
 7. Do not alter the approved legacy image to make metadata fit, manufacture
    measurements from uncalibrated export framing, or create speculative sidecars
    outside the currently authorized task.
@@ -406,10 +408,10 @@ Before implementation of a legacy approved reference:
 - Do NOT store unapproved designs
 - Do NOT treat a sidecar with `Binding metadata approval: PENDING` as
   authoritative
-- Do NOT treat a sidecar as authoritative when its current binding-facts
-  fingerprint is invalid, its approved metadata revision differs from its
-  current revision, its approval evidence/reference does not identify both the
-  metadata and image revisions, or the current image SHA-256 differs from
+- Do NOT treat a sidecar as authoritative when its current metadata or combined
+  revision is invalid, either approved revision differs from its current
+  revision, approval evidence/reference does not identify the approved combined
+  revision, or current image bytes differ from
   `Approved reference image revision`
 - Run `node scripts/verify-mockup-binding.js <sidecar>` before implementation or
   review consumes an approved sidecar

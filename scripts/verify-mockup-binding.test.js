@@ -21,7 +21,10 @@ function approvalRevision(imageRevision, bindingRevision) {
   );
 }
 
-function writeApprovedFixture(root, imageBytes = Buffer.from("approved-image")) {
+function writeApprovedFixture(
+  root,
+  imageBytes = Buffer.from("approved-image")
+) {
   const imagePath = path.join(root, "approved.png");
   const sidecarPath = path.join(root, "approved.binding.md");
   const bindingFacts = [
@@ -66,7 +69,8 @@ function writeApprovedFixture(root, imageBytes = Buffer.from("approved-image")) 
 
 test("accepts an approved sidecar only when the image, metadata, and approval revision all match", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "monyvi-mockup-binding-"));
-  const { sidecarPath, imageRevision, authorityRevision } = writeApprovedFixture(root);
+  const { sidecarPath, imageRevision, authorityRevision } =
+    writeApprovedFixture(root);
 
   const result = verifyMockupBinding(sidecarPath);
 
@@ -121,7 +125,10 @@ test("rejects an approved sidecar that omits the immutable image revision", () =
   const result = verifyMockupBinding(sidecarPath);
 
   assert.equal(result.isAuthoritative, false);
-  assert.match(result.errors.join("\n"), /approved reference image revision is required/i);
+  assert.match(
+    result.errors.join("\n"),
+    /approved reference image revision is required/i
+  );
 });
 
 test("rejects stale binding-facts fingerprints independently of image identity", () => {
@@ -135,7 +142,10 @@ test("rejects stale binding-facts fingerprints independently of image identity",
   const result = verifyMockupBinding(sidecarPath);
 
   assert.equal(result.isAuthoritative, false);
-  assert.match(result.errors.join("\n"), /binding metadata revision does not match current binding facts/i);
+  assert.match(
+    result.errors.join("\n"),
+    /binding metadata revision does not match current binding facts/i
+  );
 });
 
 test("rejects byte-only binding-facts changes", () => {
@@ -149,7 +159,10 @@ test("rejects byte-only binding-facts changes", () => {
   const result = verifyMockupBinding(sidecarPath);
 
   assert.equal(result.isAuthoritative, false);
-  assert.match(result.errors.join("\n"), /binding metadata revision does not match current binding facts/i);
+  assert.match(
+    result.errors.join("\n"),
+    /binding metadata revision does not match current binding facts/i
+  );
 });
 
 test("rejects a sidecar whose approval status is pending", () => {
@@ -157,13 +170,19 @@ test("rejects a sidecar whose approval status is pending", () => {
   const { sidecarPath } = writeApprovedFixture(root);
   const sidecar = fs
     .readFileSync(sidecarPath, "utf8")
-    .replace("Binding metadata approval: APPROVED", "Binding metadata approval: PENDING");
+    .replace(
+      "Binding metadata approval: APPROVED",
+      "Binding metadata approval: PENDING"
+    );
   fs.writeFileSync(sidecarPath, sidecar, "utf8");
 
   const result = verifyMockupBinding(sidecarPath);
 
   assert.equal(result.isAuthoritative, false);
-  assert.match(result.errors.join("\n"), /binding metadata approval must be APPROVED/i);
+  assert.match(
+    result.errors.join("\n"),
+    /binding metadata approval must be APPROVED/i
+  );
 });
 
 test("rejects a sidecar whose approved metadata revision is stale", () => {
@@ -172,7 +191,10 @@ test("rejects a sidecar whose approved metadata revision is stale", () => {
   const staleRevision = `sha256:${"0".repeat(64)}`;
   const sidecar = fs
     .readFileSync(sidecarPath, "utf8")
-    .replace(`Approved binding metadata revision: ${bindingRevision}`, `Approved binding metadata revision: ${staleRevision}`);
+    .replace(
+      `Approved binding metadata revision: ${bindingRevision}`,
+      `Approved binding metadata revision: ${staleRevision}`
+    );
   fs.writeFileSync(sidecarPath, sidecar, "utf8");
 
   const result = verifyMockupBinding(sidecarPath);
@@ -202,5 +224,83 @@ test("rejects approval evidence that does not identify the approved binding revi
   assert.match(
     result.errors.join("\n"),
     /approval evidence\/reference must identify the approved binding approval revision/i
+  );
+});
+
+test("rejects a sidecar whose approved combined revision is stale", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "monyvi-mockup-binding-"));
+  const { sidecarPath, authorityRevision } = writeApprovedFixture(root);
+  const staleAuthorityRevision = `sha256:${"a".repeat(64)}`;
+  const sidecar = fs
+    .readFileSync(sidecarPath, "utf8")
+    .replace(
+      `Approved binding approval revision: ${authorityRevision}`,
+      `Approved binding approval revision: ${staleAuthorityRevision}`
+    );
+  fs.writeFileSync(sidecarPath, sidecar, "utf8");
+
+  const result = verifyMockupBinding(sidecarPath);
+
+  assert.equal(result.isAuthoritative, false);
+  assert.match(
+    result.errors.join("\n"),
+    /approved binding approval revision must equal binding approval revision/i
+  );
+});
+
+test("rejects malformed UTF-8 instead of hashing decoded replacement text", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "monyvi-mockup-binding-"));
+  const { sidecarPath } = writeApprovedFixture(root);
+  const sidecarBytes = fs.readFileSync(sidecarPath);
+  fs.writeFileSync(
+    sidecarPath,
+    Buffer.concat([sidecarBytes, Buffer.from([0xc3, 0x28])])
+  );
+
+  const result = verifyMockupBinding(sidecarPath);
+
+  assert.equal(result.isAuthoritative, false);
+  assert.match(
+    result.errors.join("\n"),
+    /binding sidecar must be valid UTF-8/i
+  );
+});
+
+test("requires every mandatory mockup workflow to invoke the binding verifier", () => {
+  const repositoryRoot = path.resolve(__dirname, "..");
+  const mandatoryConsumers = [
+    ".agent/workflows/applying-mockups.md",
+    ".agent/workflows/mockup-implementation.md",
+    ".claude/commands/applying-mockups.md",
+    ".claude/commands/mockup-implementation.md",
+    ".agents/skills/source-command-code-review/SKILL.md",
+  ];
+
+  for (const consumerPath of mandatoryConsumers) {
+    const consumer = fs.readFileSync(
+      path.join(repositoryRoot, consumerPath),
+      "utf8"
+    );
+    assert.match(
+      consumer,
+      /node scripts\/verify-mockup-binding\.js <[^>]+>/,
+      `${consumerPath} must invoke the mockup binding verifier`
+    );
+  }
+});
+
+test("requires approval workflows to record and evidence the combined approval revision", () => {
+  const workflowPath = path.resolve(
+    __dirname,
+    "..",
+    ".agent/workflows/mockup-implementation.md"
+  );
+  const workflow = fs.readFileSync(workflowPath, "utf8");
+
+  assert.match(workflow, /Binding approval revision/);
+  assert.match(workflow, /Approved binding approval revision/);
+  assert.match(
+    workflow,
+    /approval evidence\/reference[\s\S]*approved combined/i
   );
 });
