@@ -50,9 +50,10 @@ const RESET_TABLE_DELETE_ORDER = [
   "budgets",
   "debts",
   "metal_rate_references",
+  "metal_holding_states",
   "metal_lifecycle_events",
   "metal_action_evidence",
-  "metal_holding_states",
+  "financial_action_groups",
   "assets",
   "daily_snapshot_assets",
   "daily_snapshot_balance",
@@ -576,6 +577,94 @@ async function deleteRowsByIds(client, table, rows) {
   );
 }
 
+async function updateRowsByIds(client, table, rows, createPatch) {
+  await Promise.all(
+    rows.map(async (row) => {
+      await assertNoError(
+        await client.from(table).update(createPatch(row)).eq("id", row.id),
+        `update ${table}`
+      );
+    })
+  );
+}
+
+async function reviveImmutableMetalLifecycleRows(client, rows) {
+  await updateRowsByIds(
+    client,
+    "financial_action_groups",
+    rows.financialActionGroups,
+    (row) => ({ deleted: false, updated_at: row.updated_at })
+  );
+  await updateRowsByIds(
+    client,
+    "metal_action_evidence",
+    rows.metalActionEvidence,
+    (row) => ({ deleted: false, updated_at: row.updated_at })
+  );
+  await updateRowsByIds(
+    client,
+    "metal_lifecycle_events",
+    rows.metalLifecycleEvents,
+    (row) => ({
+      deleted: false,
+      is_effective: row.is_effective,
+      is_history_visible: row.is_history_visible,
+      updated_at: row.updated_at,
+    })
+  );
+}
+
+async function tombstoneImmutableMetalLifecycleRows(client, rows) {
+  const lifecycleHoldingIds = new Set(
+    rows.metalLifecycleEvents.map((row) => row.holding_id)
+  );
+  const terminalStates = rows.metalHoldingStates.filter((row) =>
+    lifecycleHoldingIds.has(row.holding_id)
+  );
+  const terminalAssets = rows.assets.filter((row) =>
+    lifecycleHoldingIds.has(row.id)
+  );
+  const terminalAssetMetals = rows.assetMetals.filter((row) =>
+    lifecycleHoldingIds.has(row.asset_id)
+  );
+
+  await updateRowsByIds(
+    client,
+    "metal_holding_states",
+    terminalStates,
+    (row) => ({
+      deleted: true,
+      is_visible: false,
+      updated_at: row.updated_at,
+    })
+  );
+  await updateRowsByIds(
+    client,
+    "metal_lifecycle_events",
+    rows.metalLifecycleEvents,
+    (row) => ({
+      deleted: true,
+      is_effective: false,
+      is_history_visible: false,
+      updated_at: row.updated_at,
+    })
+  );
+  for (const [table, tableRows] of [
+    ["metal_action_evidence", rows.metalActionEvidence],
+    ["asset_metals", terminalAssetMetals],
+    ["assets", terminalAssets],
+  ]) {
+    await updateRowsByIds(client, table, tableRows, (row) => ({
+      deleted: true,
+      updated_at: row.updated_at,
+    }));
+  }
+
+  return {
+    lifecycleHoldingIds,
+  };
+}
+
 const FIXTURE_INSPECTION_SELECTS = Object.freeze({
   assets: [
     "id",
@@ -608,6 +697,53 @@ const FIXTURE_INSPECTION_SELECTS = Object.freeze({
     "purity_code",
     "purity_factor_decimal:purity_factor_decimal::text",
     "purity_catalog_version",
+  ].join(","),
+  financial_action_groups: [
+    "id",
+    "action_id",
+    "user_id",
+    "domain",
+    "kind",
+    "domain_reference_id",
+    "payload_json",
+    "payload_hash",
+    "account_guards_json",
+    "state",
+    "server_outcome",
+    "outcome_json",
+    "rejection_code",
+    "created_at",
+    "updated_at",
+    "deleted",
+  ].join(","),
+  metal_action_evidence: [
+    "id",
+    "user_id",
+    "action_id",
+    "holding_id",
+    "kind",
+    "expected_holding_revision:expected_holding_revision::text",
+    "canonical_holding_revision:canonical_holding_revision::text",
+    "domain_payload_json",
+    "created_at",
+    "updated_at",
+    "deleted",
+  ].join(","),
+  metal_lifecycle_events: [
+    "id",
+    "user_id",
+    "holding_id",
+    "action_id",
+    "kind",
+    "occurred_at",
+    "payload_json",
+    "predecessor_event_id",
+    "reverses_event_id",
+    "is_effective",
+    "is_history_visible",
+    "created_at",
+    "updated_at",
+    "deleted",
   ].join(","),
   metal_holding_states: [
     "id",
@@ -758,6 +894,9 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
   const expandedBankDetails = extraRows.bankDetails ?? [];
   const assets = extraRows.assets ?? [];
   const assetMetals = extraRows.assetMetals ?? [];
+  const financialActionGroups = extraRows.financialActionGroups ?? [];
+  const metalActionEvidence = extraRows.metalActionEvidence ?? [];
+  const metalLifecycleEvents = extraRows.metalLifecycleEvents ?? [];
   const metalHoldingStates = extraRows.metalHoldingStates ?? [];
   const marketRateObservations = extraRows.marketRateObservations ?? [];
   const marketRates = extraRows.marketRates ?? [];
@@ -911,6 +1050,9 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
     assets,
     assetMetals,
     compatibilityCleanupRows,
+    financialActionGroups,
+    metalActionEvidence,
+    metalLifecycleEvents,
     metalHoldingStates,
     marketRateObservations,
     marketRateObservationCleanupRows,
@@ -1028,6 +1170,25 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
   await upsertRowsIfAny(client, "asset_metals", rows.assetMetals, {
     onConflict: "id",
   });
+  await reviveImmutableMetalLifecycleRows(client, rows);
+  await upsertRowsIfAny(
+    client,
+    "financial_action_groups",
+    rows.financialActionGroups,
+    { ignoreDuplicates: true, onConflict: "id" }
+  );
+  await upsertRowsIfAny(
+    client,
+    "metal_action_evidence",
+    rows.metalActionEvidence,
+    { ignoreDuplicates: true, onConflict: "id" }
+  );
+  await upsertRowsIfAny(
+    client,
+    "metal_lifecycle_events",
+    rows.metalLifecycleEvents,
+    { ignoreDuplicates: true, onConflict: "id" }
+  );
   await upsertRowsIfAny(
     client,
     "metal_holding_states",
@@ -1075,6 +1236,10 @@ async function resetFixtureData(client, config, fixtureOverrides = {}) {
     config.userId ?? (await ensureSeedUser(client, config, fixture));
   const seedIds = buildSeedIds(userId, fixture.seedScope);
   const rows = buildSeedRows(userId, seedIds, fixture);
+  const hasImmutableMetalLifecycleRows = rows.metalLifecycleEvents.length > 0;
+  const terminalCleanup = hasImmutableMetalLifecycleRows
+    ? await tombstoneImmutableMetalLifecycleRows(client, rows)
+    : { lifecycleHoldingIds: new Set() };
 
   await deleteRowsByIds(
     client,
@@ -1084,6 +1249,34 @@ async function resetFixtureData(client, config, fixtureOverrides = {}) {
   await deleteRowsByIds(client, "market_rates", rows.marketRateCleanupRows);
 
   for (const table of RESET_TABLE_DELETE_ORDER) {
+    if (hasImmutableMetalLifecycleRows && table === "metal_holding_states") {
+      await deleteRowsByIds(
+        client,
+        table,
+        rows.metalHoldingStates.filter(
+          (row) => !terminalCleanup.lifecycleHoldingIds.has(row.holding_id)
+        )
+      );
+      continue;
+    }
+    if (hasImmutableMetalLifecycleRows && table === "assets") {
+      await deleteRowsByIds(
+        client,
+        table,
+        rows.assets.filter(
+          (row) => !terminalCleanup.lifecycleHoldingIds.has(row.id)
+        )
+      );
+      continue;
+    }
+    if (
+      hasImmutableMetalLifecycleRows &&
+      (table === "metal_lifecycle_events" ||
+        table === "metal_action_evidence" ||
+        table === "financial_action_groups")
+    ) {
+      continue;
+    }
     await deleteScopedRows(client, table, userId, seedIds);
   }
 
@@ -1102,6 +1295,9 @@ async function inspectFixtureData(client, config, fixtureOverrides = {}) {
     ["market_rates", rows.marketRates],
     ["assets", rows.assets],
     ["asset_metals", rows.assetMetals],
+    ["financial_action_groups", rows.financialActionGroups],
+    ["metal_action_evidence", rows.metalActionEvidence],
+    ["metal_lifecycle_events", rows.metalLifecycleEvents],
     ["metal_holding_states", rows.metalHoldingStates],
     ["market_rate_observations", rows.marketRateObservations],
   ]) {
