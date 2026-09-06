@@ -1,0 +1,53 @@
+appId: com.monyvi.app
+---
+# T115 partial Red contract. Shared integration must provide an effective Active
+# Gold holding, live route, and retained creation/correction evidence before this
+# sequence can run. Offline and terminal-state proof remain explicitly missing:
+# the shared harness has no Delete offline profile/connectivity control or
+# deterministic Sold/Disposed fixture available to this isolated lane.
+- runFlow: ../helpers/setup.yaml
+- openLink: monyvi://metals/holding-e2e-gold/delete
+- extendedWaitUntil:
+    visible:
+      id: metal-holding-delete-sheet
+    timeout: 30000
+
+# Approved Screen 14 is one focused confirmation, not Sell, No Longer, or Undo.
+- assertVisible: "Delete holding"
+- assertVisible: "E2E Gold Bar"
+- assertVisible: "Gold · 24K · 999 · Bar"
+- assertVisible: "10 g"
+- assertVisible:
+    id: metal-holding-delete-current-value
+- assertVisible:
+    id: metal-holding-delete-consequence
+
+# Duplicate input can produce only one local grouped Delete action.
+- doubleTapOn:
+    id: metal-holding-delete-confirm
+    delay: 25
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-screen
+    timeout: 30000
+- assertNotVisible: "E2E Gold Bar"
+
+# Restart persistence sequence only. This does not prove offline behavior until
+# shared integration establishes and verifies an offline profile before Delete.
+- stopApp
+- launchApp:
+    clearState: false
+- openLink: monyvi://metals
+- extendedWaitUntil:
+    visible:
+      id: metal-portfolio-screen
+    timeout: 30000
+- assertNotVisible: "E2E Gold Bar"
+- openLink: monyvi://metals/history
+- extendedWaitUntil:
+    visible:
+      id: metal-history-screen
+    timeout: 30000
+- assertNotVisible: "E2E Gold Bar"
+# MISSING/BLOCKED: deterministic Sold and Disposed fixtures plus their live
+# detail routes must assert Undo recovery and absence of Delete after integration.
