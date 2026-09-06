@@ -103,6 +103,19 @@ function assertCurrencyMatchesAccount(
   }
 }
 
+function assertExpectedNextDueDate(
+  payment: Pick<RecurringPayment, "nextDueDate">,
+  expectedNextDueDate: Date | undefined
+): void {
+  if (
+    expectedNextDueDate !== undefined &&
+    (!isValidDate(expectedNextDueDate) ||
+      !isSameLocalCalendarDay(payment.nextDueDate, expectedNextDueDate))
+  ) {
+    throw new Error(RECURRING_PAYMENT_SERVICE_ERROR_CODES.STALE_SCHEDULE);
+  }
+}
+
 function assertValidRecurringPaymentDateShape(
   data: Pick<RecurringPaymentData, "startDate" | "endDate">
 ): void {
@@ -258,13 +271,7 @@ export async function updateRecurringPayment(
     database.get<RecurringPayment>("recurring_payments");
   const payment = await scope.findOwned(recurringCollection, paymentId);
 
-  if (
-    data.expectedNextDueDate !== undefined &&
-    (!isValidDate(data.expectedNextDueDate) ||
-      !isSameLocalCalendarDay(payment.nextDueDate, data.expectedNextDueDate))
-  ) {
-    throw new Error(RECURRING_PAYMENT_SERVICE_ERROR_CODES.STALE_SCHEDULE);
-  }
+  assertExpectedNextDueDate(payment, data.expectedNextDueDate);
 
   const dataMatchesStoredAnchor = isSameLocalCalendarDay(
     payment.startDate,
@@ -295,6 +302,9 @@ export async function updateRecurringPayment(
   assertValidRecurringPaymentAmountPrecision(data.amount, account.currency);
 
   await database.write(async () => {
+    const currentPayment = await scope.findOwned(recurringCollection, paymentId);
+    assertExpectedNextDueDate(currentPayment, data.expectedNextDueDate);
+
     const previousEndDate = payment.endDate;
     const nextEndDate = data.endDate ?? null;
     const previousStatus = payment.status;
@@ -354,7 +364,7 @@ export async function updateRecurringPayment(
         RECURRING_PAYMENT_SERVICE_ERROR_CODES.REACTIVATION_UNAVAILABLE
       );
     }
-    await payment.update((record) => {
+    await currentPayment.update((record) => {
       record.name = data.name;
       record.amount = data.amount;
       record.currency = data.currency;

@@ -18,6 +18,7 @@ import {
 } from "@/validation/transaction-validation";
 import type { Category, CurrencyType, TransactionType } from "@monyvi/db";
 import {
+  formatStoredAmountInput,
   parseAmountInput,
   type ParsedSmsTransaction,
   type ReviewableTransaction,
@@ -148,7 +149,9 @@ export function useTransactionEditState({
   };
 
   // Local editable state
-  const [amount, setAmount] = useState(transaction.amount.toString());
+  const [amount, setAmount] = useState(
+    formatStoredAmountInput(transaction.amount)
+  );
   const [note, setNote] = useState(readTransactionNote(transaction));
 
   const [counterparty, setCounterparty] = useState(
@@ -311,7 +314,7 @@ export function useTransactionEditState({
     if (initializedForIdentityRef.current === transactionIdentity) return;
     initializedForIdentityRef.current = transactionIdentity;
 
-    setAmount(transaction.amount.toString());
+    setAmount(formatStoredAmountInput(transaction.amount));
     setNewAccountCurrency(transaction.currency);
     setNote(readTransactionNote(transaction));
     setCounterparty(transaction.counterparty || "");

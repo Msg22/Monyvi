@@ -42,6 +42,7 @@ import {
   calculateEditedTransactionBalanceProjection,
   evaluateAmountExpression,
   formatAmountInput,
+  formatStoredAmountInput,
 } from "@monyvi/logic";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -179,7 +180,7 @@ export default function EditTransaction(): React.ReactNode {
   useEffect(() => {
     if (!transaction || isInitialized) return;
 
-    const amountStr = transaction.amount.toString();
+    const amountStr = formatStoredAmountInput(transaction.amount);
     setAmount(amountStr);
     setTypeRaw(transaction.type);
     setSelectedAccountId(transaction.accountId);
