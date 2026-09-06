@@ -65,16 +65,19 @@ You **MUST** consider the user input before proceeding (if not empty).
      `.agent/workflows/mockup-implementation.md`. Before any governed production
      implementation begins, verify that the sidecar records
      `Binding metadata approval: APPROVED` and the explicit approval
-     evidence/reference required by that workflow. A missing sidecar, a sidecar
-     still marked `PENDING`, a missing approval reference, or a sidecar materially
-     changed after approval is not authoritative and MUST block governed UI
-     implementation until explicit approval is restored. If an approved
-     reference predates the sidecar rule and has no sidecar, follow that
-     workflow's **Legacy Approved Mockup Metadata Migration** procedure or require
-     its generated prerequisite task to complete; the migrated sidecar must also
-     reach explicit `APPROVED` status before implementation. Treat
-     fidelity-affecting `UNKNOWN` metadata as a pre-implementation blocker rather
-     than guessing.
+     evidence/reference required by that workflow. Recompute its current
+     fingerprint, verify `Approved binding metadata revision` equals
+     `Binding metadata revision`, and verify the approval evidence/reference
+     identifies that same revision. A missing sidecar, failed revision check,
+     sidecar still marked `PENDING`, missing approval reference, or sidecar
+     materially changed after approval is not authoritative and MUST block
+     governed UI implementation until explicit approval is restored. If an
+     approved reference predates the sidecar rule and has no sidecar, follow
+     that workflow's **Legacy Approved Mockup Metadata Migration** procedure or
+     require its generated prerequisite task to complete; the migrated sidecar
+     must also reach explicit `APPROVED` status before implementation. Treat
+     fidelity-affecting `UNKNOWN` metadata as a pre-implementation blocker
+     rather than guessing.
 
 4. **Project Setup Verification**:
    - **REQUIRED**: Create/verify ignore files based on actual project setup:
@@ -179,9 +182,11 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Validate that tests pass and coverage meets requirements
    - Confirm the implementation follows the technical plan
    - For any changed UI governed by an approved mockup, re-verify that its
-     binding sidecar is still authoritative: `Binding metadata approval: APPROVED`
-     is present with its explicit approval evidence/reference, and no material
-     binding fact changed after that approval. If this check fails, keep the
+     binding sidecar is still authoritative:
+     `Binding metadata approval: APPROVED` is present with its explicit approval
+     evidence/reference, its recomputed current fingerprint is valid,
+     `Approved binding metadata revision` equals `Binding metadata revision`,
+     and the evidence identifies that revision. If this check fails, keep the
      governed UI blocked rather than accepting evidence against stale or
      unapproved metadata.
    - For any changed UI governed by an approved mockup, verify the required

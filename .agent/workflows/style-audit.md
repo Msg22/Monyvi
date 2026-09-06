@@ -40,23 +40,10 @@ Before analyzing ANY component, load the following:
 - Locate the spec folder matching the branch name under `specs/`
 - Follow mockup or handoff paths declared by the selected spec, plan, tasks, and
   README files
-- **RECURSIVELY LIST** mockup assets in the selected feature folder, including
-  nested paths such as `design/mockups/`
-- **LOAD** every approved mockup image found through declared paths and the
-  recursive search
-- **LOAD** the matching binding sidecar for each approved mockup and verify it
-  records `Binding metadata approval: APPROVED` plus the explicit approval
-  evidence/reference required by `.agent/workflows/mockup-implementation.md`.
-  A missing, pending, or materially changed/unapproved sidecar is not
-  authoritative for property comparison; follow the legacy metadata
-  migration/approval path when applicable before treating reconstructed metadata
-  as binding.
-- Record the declared **binding product surface** and UI viewport or component
-  context for each approved mockup.
-- Record every sidecar region marked **non-binding**, including phone hardware,
-  device frame, outer canvas, browser chrome, export padding, and background
-  outside the product UI surface.
-- Create a numbered mapping: `Mockup N → <filename> → <short description>`
+- **RECURSIVELY DISCOVER** candidate mockup assets in the selected feature
+  folder, including nested paths such as `design/mockups/`
+- Defer image loading and per-mockup processing until Section 1.3 maps
+  candidates to changed governed visual UI.
 
 ### 1.3 Identify Changed Components
 
@@ -64,28 +51,51 @@ Before analyzing ANY component, load the following:
 - Filter to only **UI files**: `.tsx` components, screen files, and any shared
   UI utilities
 - **READ** every changed UI file in full
-- Map only changed visual UI governed by each approved mockup. Unchanged or
-  non-visual files do not activate the rendered-evidence gate.
+- Load candidate sidecar metadata, but not candidate images. Before using a
+  sidecar to include or exclude a reference, verify it records
+  `Binding metadata approval: APPROVED`, has a valid recomputed current
+  fingerprint, has matching current and approved revisions, and has approval
+  evidence that identifies that revision.
+- Use declared traceability and only authoritative candidate sidecars to map
+  references that govern changed visual UI. A candidate linked by declared
+  traceability to changed UI but missing an authoritative sidecar remains a
+  blocker; do not silently exclude it. Exclude references for unrelated or
+  unchanged surfaces before any per-mockup loop; non-visual files do not
+  activate the rendered-evidence gate.
+- **LOAD** only mapped approved mockup images and their matching binding
+  sidecars. A sidecar that fails any approval or revision check is
+  non-authoritative; follow the legacy migration/approval path when applicable
+  before treating reconstructed metadata as binding.
+- Record the declared **binding product surface**, UI viewport or component
+  context, and every sidecar region marked **non-binding** for each mapped
+  reference.
+- Create a numbered mapping only for audit targets:
+  `Mockup N → <filename> → <changed governed UI>`.
+- When no candidate assets exist, report `No mockups found — N/A`. When
+  candidates exist but none map to changed governed visual UI, report
+  `N/A — no governed visual UI change` and skip every per-mockup loop.
 
 ---
 
 ## 2. Property-Level Comparison (MANDATORY — PER MOCKUP)
 
-For **each mockup**, the agent MUST compare the following visual properties
-against the corresponding component(s). Present findings in a markdown table.
+For **each loaded mockup mapped to changed governed visual UI**, the agent MUST
+compare the following visual properties against the corresponding component(s).
+Present findings in a markdown table.
 
 **Scope rule:** perform every property comparison only inside the approved
 sidecar's **binding product surface**. Presentation-only regions explicitly
 marked non-binding are outside the audit target and MUST NOT produce a mismatch
-because product code omits or differs from them. Crop/mentally mask those regions
-before comparing properties; never turn phone hardware, device frame, outer
-canvas, browser chrome, export padding, or outside background into product UI
-requirements unless the explicitly approved sidecar marks that region binding.
+because product code omits or differs from them. Crop/mentally mask those
+regions before comparing properties; never turn phone hardware, device frame,
+outer canvas, browser chrome, export padding, or outside background into product
+UI requirements unless the explicitly approved sidecar marks that region
+binding.
 
 ### 2.1 Properties to Compare
 
-For each UI element visible **inside the binding product surface** of the mockup,
-check:
+For each UI element visible **inside the binding product surface** of the
+mockup, check:
 
 | Property Category   | Specific Checks                                                                                                                                         |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |

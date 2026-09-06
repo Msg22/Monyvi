@@ -14,8 +14,8 @@ Before every dispatch:
    provider exposes one. A moving display alias is not sufficient identity for
    ordinary production work, bounded writes, reusable capability evidence, or a
    canary waiver. If no immutable revision/build is exposed but the provider
-   supplies a stable provider-prefixed alias, the only permitted no-build mode is
-   the **alias-only non-reusable read-only qualification** defined by the
+   supplies a stable provider-prefixed alias, the only permitted no-build mode
+   is the **alias-only non-reusable read-only qualification** defined by the
    canonical OpenCode skill. Record that identity mode explicitly; it cannot be
    used for writes or evidence reuse.
 3. Prefer a dedicated loopback server for this task, bound to `127.0.0.1`, with

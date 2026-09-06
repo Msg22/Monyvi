@@ -77,8 +77,8 @@ Before every dispatch, record the exact provider, provider-prefixed model ID,
 OpenCode/runtime version, exact tool surface/version set, permission-profile
 identifier or hash, and environment boundary relevant to the task. Record the
 **immutable provider model revision/build** whenever the provider exposes one. A
-moving display alias is not sufficient identity for ordinary production,
-bounded writes, reusable capability evidence, or canary/waiver binding.
+moving display alias is not sufficient identity for ordinary production, bounded
+writes, reusable capability evidence, or canary/waiver binding.
 
 If a provider exposes a stable provider-prefixed alias but no immutable
 revision/build, the only allowed no-build identity mode is the canonical skill's
@@ -92,8 +92,8 @@ under immutable identity. All bounded writes still require immutable
 revision/build identity.
 
 Ordinary production dispatch requires immutable model identity and positive
-evidence for every material capability it will use. Capability evidence is
-bound to the immutable model revision/build plus every
+evidence for every material capability it will use. Capability evidence is bound
+to the immutable model revision/build plus every
 runtime/tool/permission/environment dimension material to that capability. The
 absence of a recorded unsupported capability is not proof of support. When the
 immutable model revision/build changes, invalidate all capability evidence for
@@ -253,8 +253,8 @@ unexpected unauthorized scope/write, or another security boundary breach:
    OpenCode/runtime + tool combination** across read and write modes and **all
    permission profiles**. If the incident occurred during alias-only
    qualification and the build is unknown, quarantine the **provider + stable
-   provider-prefixed alias + OpenCode/runtime + tool combination** conservatively
-   instead.
+   provider-prefixed alias + OpenCode/runtime + tool combination**
+   conservatively instead.
 3. Prevent a new task, session, worktree, or permission profile from bypassing
    quarantine.
 4. Preserve only sanitized incident evidence and rotate affected credentials
@@ -368,9 +368,9 @@ mandatory cleanup deadline for every retained reusable resource.
 Keep only operational metadata needed for traceability:
 
 - task, owner, provider/model ID, **identity mode**, immutable model
-  revision/build when available/required, OpenCode/runtime version,
-  tool surface/version set, server ID/mode, worktree/branch, base SHA, task
-  scope, artifact/file ownership, derived readable-source allowlist/fingerprint,
+  revision/build when available/required, OpenCode/runtime version, tool
+  surface/version set, server ID/mode, worktree/branch, base SHA, task scope,
+  artifact/file ownership, derived readable-source allowlist/fingerprint,
   derived writable allowlist/fingerprint, and protected paths;
 - positive material-capability evidence and the exact immutable identity/bound
   dimensions that evidence applies to;

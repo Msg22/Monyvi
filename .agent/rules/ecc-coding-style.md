@@ -68,6 +68,9 @@ For UI work governed by an approved scoped mockup:
   the handoff explicitly marks them binding.
 - Use gradients when the design system or approved mockup uses them; gradients
   are allowed, not globally mandatory.
+- Use only a binding sidecar whose valid current content revision matches its
+  explicitly approved revision and same-revision approval evidence. Any binding
+  fact edit resets approval to `PENDING` until the changed revision is approved.
 - Preserve composition, hierarchy, semantics, and material styling across
   compact-phone, ordinary-phone, tablet, landscape, dark-mode, RTL/Arabic, and
   enlarged-text variants. Reflow only to keep content usable and readable.

@@ -79,15 +79,17 @@ beyond these boundaries, has multiple credible designs, or creates uncertainty
 about hierarchy or interaction, stop and use the mockup approval gate. A direct
 request from Mohamed for a mockup always overrides this exception.
 
-After mockup approval, require the matching
-`<mockup-basename>.binding.md` handoff from
-`.agent/workflows/mockup-implementation.md` before implementation begins. The
-sidecar must record `Binding metadata approval: APPROVED` plus the explicit
-approval evidence/reference. For an approved legacy mockup without a sidecar,
-complete that workflow's legacy metadata migration and explicit sidecar approval
-first. A fidelity-affecting `UNKNOWN`, missing approval record, pending sidecar,
-or materially changed/unapproved binding fact blocks implementation rather than
-being inferred.
+After mockup approval, require the matching `<mockup-basename>.binding.md`
+handoff from `.agent/workflows/mockup-implementation.md` before implementation
+begins. The sidecar must record `Binding metadata approval: APPROVED` plus the
+explicit approval evidence/reference. Recompute its current fingerprint and
+verify that `Approved binding metadata revision` equals
+`Binding metadata revision` and that the approval evidence identifies that same
+revision. For an approved legacy mockup without a sidecar, complete that
+workflow's legacy metadata migration and explicit sidecar approval first. A
+fidelity-affecting `UNKNOWN`, failed revision check, missing approval record,
+pending sidecar, or materially changed/unapproved binding fact blocks
+implementation rather than being inferred.
 
 Implement the approved direction through `.agent/workflows/applying-mockups.md`.
 If coding reveals a meaningful design change, stop and ask for approval again
@@ -105,8 +107,8 @@ completion also requires separate accessibility-tree, screen-reader, or
 appropriate automated accessibility proof. Screenshot evidence does not verify
 accessibility labels, roles, names, states, relationships, or screen-reader
 behavior. Report **accessibility evidence status** separately from functional
-status and visual fidelity, and keep handoff blocked while required accessibility
-proof is missing.
+status and visual fidelity, and keep handoff blocked while required
+accessibility proof is missing.
 
 ## 4. Branch Base Selection
 

@@ -36,11 +36,13 @@ conventions
   constraints before proposing work. Record finalized business rules in
   `docs/business/business-decisions.md` before implementation.
 - For approved-mockup UI work, record the declared binding viewport or component
-  context and every known spacing, sizing, color, typography, and state fact.
-  Treat presentation-only frames, outer canvas, browser chrome, and export
-  padding as non-binding; do not invent missing metadata. Require rendered
-  comparison evidence and every in-scope responsive, dark, RTL, and
-  enlarged-text variant before declaring visual completion.
+  context and every known spacing, sizing, color, typography, state,
+  interaction, and transition fact. Bind explicit sidecar approval to an
+  immutable content revision and reset changed binding facts to `PENDING` until
+  renewed approval. Treat presentation-only frames, outer canvas, browser
+  chrome, and export padding as non-binding; do not invent missing metadata.
+  Require rendered comparison evidence and every in-scope responsive, dark, RTL,
+  and enlarged-text variant before declaring visual completion.
 - For multi-owner delivery, assign exclusive file ownership, document dependency
   bases and no-overlap controls, and keep Red tests separate from their Green
   implementation window.

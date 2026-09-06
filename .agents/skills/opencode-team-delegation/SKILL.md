@@ -243,14 +243,14 @@ responses, cancellation, and diff inspection directly.
 Record task ID, provider/model ID, **identity mode**, immutable model
 revision/build when available/required, OpenCode/runtime version, tool
 surface/version set, positive capability evidence, qualification-dispatch
-evidence or explicitly non-reusable alias-only observation when used, session ID,
-server ID/mode, worktree/branch, base SHA, complete task scope, artifact/file
-ownership, derived readable-source allowlist/fingerprint, derived writable
-allowlist/fingerprint, protected paths, permission profile, canary status or
-fully bound user-authorized waiver, provisional first-write result when used,
-checkpoint acceptances, corrections, verification commands/results, changed
-paths, diff disposition, retry/rule-failure count, quarantine/eligibility state,
-final result, and remaining risks.
+evidence or explicitly non-reusable alias-only observation when used, session
+ID, server ID/mode, worktree/branch, base SHA, complete task scope,
+artifact/file ownership, derived readable-source allowlist/fingerprint, derived
+writable allowlist/fingerprint, protected paths, permission profile, canary
+status or fully bound user-authorized waiver, provisional first-write result
+when used, checkpoint acceptances, corrections, verification commands/results,
+changed paths, diff disposition, retry/rule-failure count,
+quarantine/eligibility state, final result, and remaining risks.
 
 Completion requires:
 

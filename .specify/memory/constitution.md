@@ -178,8 +178,11 @@ The app MUST deliver a premium, polished visual experience using NativeWind
   outer canvas, browser chrome, export padding, and background outside the UI
   surface are non-binding unless the handoff explicitly says otherwise. Handoff
   documentation MUST record exact screen-specific spacing, sizing, color,
-  typography, state, and viewport facts that are known. Do not invent missing
-  values; flag missing metadata before implementation when it affects fidelity.
+  typography, state, interaction, transition, and viewport facts that are known.
+  Do not invent missing values; flag missing metadata before implementation when
+  it affects fidelity. Binding-metadata approval MUST identify an immutable
+  content revision. Any later binding-fact change invalidates that approval
+  until the changed revision receives renewed explicit approval.
 - **Responsive visual fidelity**: Compact-phone, ordinary-phone, tablet,
   landscape, dark mode, RTL/Arabic, accessibility labels, and enlarged-text
   variants MUST preserve the approved composition, hierarchy, semantics, and

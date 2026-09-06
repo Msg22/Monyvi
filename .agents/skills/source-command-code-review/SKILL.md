@@ -225,16 +225,19 @@ or component that establishes each selected mockup's applicability.
 For every selected governed mockup, load its matching
 `<mockup-basename>.binding.md` sidecar defined by
 `.agent/workflows/mockup-implementation.md`. Before using viewport, component,
-non-binding-region, spacing, sizing, color, typography, state, or variant facts,
-verify that the sidecar records `Binding metadata approval: APPROVED` and the
-explicit approval evidence/reference required by that workflow. If an approved
-reference predates the sidecar rule, complete the workflow's **Legacy Approved
-Mockup Metadata Migration** and explicit sidecar approval before using
-reconstructed metadata for review. A missing sidecar, a sidecar still marked
-`PENDING`, a missing approval reference, or a sidecar materially changed after
-approval is non-authoritative: mark the binding context unverified and the
-changed governed UI not approvable rather than inferring binding facts from the
-image or export.
+non-binding-region, spacing, sizing, color, typography, state, interaction,
+transition, or variant facts, verify that the sidecar records
+`Binding metadata approval: APPROVED` and the explicit approval
+evidence/reference required by that workflow. Recompute its current fingerprint,
+verify `Approved binding metadata revision` equals `Binding metadata revision`,
+and verify the approval evidence/reference identifies that same revision. If an
+approved reference predates the sidecar rule, complete the workflow's **Legacy
+Approved Mockup Metadata Migration** and explicit sidecar approval before using
+reconstructed metadata for review. A missing sidecar, failed revision check,
+sidecar still marked `PENDING`, missing approval reference, or sidecar
+materially changed after approval is non-authoritative: mark the binding context
+unverified and the changed governed UI not approvable rather than inferring
+binding facts from the image or export.
 
 Establish the selected mockup's declared UI viewport or component context only
 from its authoritative approved sidecar. Treat presentation-only device

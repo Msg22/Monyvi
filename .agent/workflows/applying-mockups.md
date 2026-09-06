@@ -13,9 +13,11 @@ mockup binding** principle is authoritative.
 
 The sidecar MUST record `Binding metadata approval: APPROVED` together with the
 explicit approval evidence/reference required by
-`.agent/workflows/mockup-implementation.md`. A sidecar that is missing that
-approval record, is still `PENDING`, or was materially changed after approval is
-not authoritative and MUST NOT drive implementation until explicitly approved.
+`.agent/workflows/mockup-implementation.md`. Its current fingerprint MUST be
+valid, `Approved binding metadata revision` MUST equal
+`Binding metadata revision`, and the approval evidence/reference MUST identify
+that same revision. A sidecar that fails any approval or revision check is not
+authoritative and MUST NOT drive implementation until explicitly approved.
 
 If an approved reference predates the binding-sidecar rule and has no sidecar,
 first follow the **Legacy Approved Mockup Metadata Migration** procedure in
@@ -30,8 +32,8 @@ fidelity-affecting `UNKNOWN`, pause for clarification before implementation.
 - Presentation-only phone hardware, device frame, outer canvas, browser chrome,
   export padding, and background outside the UI surface are **not product UI**
   unless the binding sidecar explicitly marks them as binding.
-- Use the sidecar's known spacing, sizing, color/theme, typography, and state
-  facts as implementation facts.
+- Use the sidecar's known spacing, sizing, color/theme, typography, state,
+  interaction, and transition facts as implementation facts.
 - Do not infer product rules from export framing or unrecorded pixel
   measurements.
 - If a non-legacy binding sidecar is missing, its binding context is ambiguous,
@@ -54,10 +56,17 @@ fidelity-affecting `UNKNOWN`, pause for clarification before implementation.
 
 ## 🚫 Constraints
 
-- **Do not deviate** from the binding UI surface in any way.
+- **Do not deviate** from the binding UI surface at the declared reference
+  context.
 - Do not reproduce explicitly non-binding framing as application UI.
-- Do not introduce:
-  - Alternative layouts
+- At other supported contexts, preserve the approved composition, hierarchy,
+  semantics, and material styling. Controlled reflow, including stacking or
+  spacing changes, is allowed only when measured space or text scale requires it
+  to keep content usable and readable. Follow the centralized responsive
+  breakpoints and validation contract in `AGENTS.md`.
+- Do not introduce at the declared reference context, or as an unrequired design
+  change elsewhere:
+  - Alternative layouts or reflow
   - Different spacing or alignment
   - New styles, colors, or components
   - Assumptions or “improvements”
