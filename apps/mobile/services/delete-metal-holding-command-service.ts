@@ -5,11 +5,14 @@ import type {
   MetalActionEvidence,
   MetalHoldingState,
   MetalLifecycleEvent,
+  FinancialActionGroup,
 } from "@monyvi/db";
-import type {
-  FinancialActionEnvelopeV1,
-  RegisteredActionPayload,
-  Sha256Provider,
+import {
+  reduceMetalLifecycle,
+  type FinancialActionEnvelopeV1,
+  type LifecycleEvent,
+  type RegisteredActionPayload,
+  type Sha256Provider,
 } from "@monyvi/logic";
 
 import type {
@@ -60,6 +63,7 @@ interface DeleteProjection {
   readonly state: MetalHoldingState;
   readonly predecessor: MetalLifecycleEvent | null;
   readonly timeline: readonly MetalLifecycleEvent[];
+  readonly actionGroups: readonly FinancialActionGroup[];
 }
 
 const EFFECTIVE_RECONCILIATION_STATES = new Set([
@@ -123,34 +127,43 @@ async function loadProjection(
           input.predecessorEventId,
           input.userId
         );
-  const [metals, states, predecessor, timeline] = await Promise.all([
-    queryChildrenOfOwnedParent(
-      database.get<AssetMetal>("asset_metals"),
-      asset,
-      input.userId,
-      "asset_id",
-      Q.where("deleted", false),
-      Q.take(1)
-    ).fetch(),
-    database
-      .get<MetalHoldingState>("metal_holding_states")
-      .query(
-        Q.where("holding_id", input.holdingId),
-        Q.where("user_id", input.userId),
+  const [metals, states, predecessor, timeline, actionGroups] =
+    await Promise.all([
+      queryChildrenOfOwnedParent(
+        database.get<AssetMetal>("asset_metals"),
+        asset,
+        input.userId,
+        "asset_id",
         Q.where("deleted", false),
         Q.take(1)
-      )
-      .fetch(),
-    predecessorPromise,
-    database
-      .get<MetalLifecycleEvent>("metal_lifecycle_events")
-      .query(
-        Q.where("holding_id", input.holdingId),
-        Q.where("user_id", input.userId),
-        Q.where("deleted", false)
-      )
-      .fetch(),
-  ]);
+      ).fetch(),
+      database
+        .get<MetalHoldingState>("metal_holding_states")
+        .query(
+          Q.where("holding_id", input.holdingId),
+          Q.where("user_id", input.userId),
+          Q.where("deleted", false),
+          Q.take(1)
+        )
+        .fetch(),
+      predecessorPromise,
+      database
+        .get<MetalLifecycleEvent>("metal_lifecycle_events")
+        .query(
+          Q.where("holding_id", input.holdingId),
+          Q.where("user_id", input.userId),
+          Q.where("deleted", false)
+        )
+        .fetch(),
+      database
+        .get<FinancialActionGroup>("financial_action_groups")
+        .query(
+          Q.where("domain_reference_id", input.holdingId),
+          Q.where("user_id", input.userId),
+          Q.where("deleted", false)
+        )
+        .fetch(),
+    ]);
   if (
     !metals[0] ||
     !states[0] ||
@@ -165,6 +178,7 @@ async function loadProjection(
     state: states[0],
     predecessor,
     timeline,
+    actionGroups,
   };
 }
 
@@ -172,7 +186,7 @@ function assertEffectiveActiveProjection(
   input: DeleteMetalHoldingCommandInput,
   projection: DeleteProjection
 ): void {
-  const { state, predecessor, timeline } = projection;
+  const { actionGroups, state, predecessor, timeline } = projection;
   if (
     state.status !== "active" ||
     !state.isVisible ||
@@ -194,13 +208,76 @@ function assertEffectiveActiveProjection(
   if (
     predecessor === null ||
     !predecessor.isEffective ||
-    !predecessor.isHistoryVisible
+    !predecessor.isHistoryVisible ||
+    state.effectiveEventId !== input.predecessorEventId
   ) {
     throw new Error("metal_delete_effective_active_holding_required");
   }
-  if (state.effectiveEventId !== input.predecessorEventId) {
-    throw new Error("holding_revision_conflict");
+
+  const lifecycleEvents = timeline.map((event) =>
+    toLifecycleEvent(event, actionGroups)
+  );
+  if (lifecycleEvents.some((event) => event === null)) {
+    throw new Error("metal_delete_effective_active_holding_required");
   }
+  const reduced = reduceMetalLifecycle(lifecycleEvents);
+  if (
+    reduced.projection?.status !== "active" ||
+    !reduced.projection.isVisible ||
+    reduced.projection.effectiveEventId !== input.predecessorEventId
+  ) {
+    throw new Error("metal_delete_effective_active_holding_required");
+  }
+}
+
+function toLifecycleEvent(
+  event: MetalLifecycleEvent,
+  actionGroups: readonly FinancialActionGroup[]
+): LifecycleEvent | null {
+  const action = actionGroups.find(
+    (candidate) => candidate.actionId === event.actionId
+  );
+  const kind = toLifecycleKind(event.kind);
+  if (kind === null) return null;
+
+  return {
+    canonicalCasStatus: event.isEffective ? "accepted" : "unknown",
+    evidenceState:
+      action === undefined || isRejectedAction(action)
+        ? "ineffective"
+        : "effective",
+    fingerprint: event.payloadJson,
+    id: event.id,
+    kind,
+    occurredAt: event.occurredAt.getTime(),
+    predecessorEventId: event.predecessorEventId,
+    reversesEventId: event.reversesEventId,
+  };
+}
+
+function toLifecycleKind(kind: string): LifecycleEvent["kind"] | null {
+  const lifecycleKinds: Readonly<Record<string, LifecycleEvent["kind"]>> = {
+    add: "created",
+    created: "created",
+    correct: "corrected",
+    corrected: "corrected",
+    delete: "deleted",
+    deleted: "deleted",
+    dispose: "disposed",
+    disposed: "disposed",
+    sell: "sold",
+    sold: "sold",
+    undo: "reversed",
+    reversed: "reversed",
+  };
+  return lifecycleKinds[kind] ?? null;
+}
+
+function isRejectedAction(action: FinancialActionGroup): boolean {
+  return (
+    action.state === "rejected_compensating" ||
+    action.state === "reconciliation_incomplete"
+  );
 }
 
 function assertSuccessfulReplay(

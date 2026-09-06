@@ -47,23 +47,19 @@ export function useDeleteMetalHolding(
     inFlightRef.current = true;
     setIsSubmitting(true);
     setSubmitError(null);
-    idsRef.current ??= {
-      actionId: input.createId(),
-      actionEvidenceId: input.createId(),
-      lifecycleEventId: input.createId(),
-    };
     try {
+      idsRef.current ??= {
+        actionId: input.createId(),
+        actionEvidenceId: input.createId(),
+        lifecycleEventId: input.createId(),
+      };
       commandRef.current ??= input.createCommand(idsRef.current);
       await input.execute(commandRef.current);
       idsRef.current = null;
       commandRef.current = null;
       return true;
-    } catch (caught: unknown) {
-      if (isMountedRef.current) {
-        setSubmitError(
-          caught instanceof Error ? caught.message : "metal_delete_failed"
-        );
-      }
+    } catch {
+      if (isMountedRef.current) setSubmitError("metal_delete_failed");
       return false;
     } finally {
       inFlightRef.current = false;

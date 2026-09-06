@@ -19,6 +19,7 @@ interface DeleteMetalHoldingSheetCopy {
   readonly cancel: string;
   readonly retry: string;
   readonly offline: string;
+  readonly failure: string;
   readonly accessibilityLabel: string;
 }
 
@@ -35,6 +36,8 @@ interface DeleteMetalHoldingSheetProps {
   readonly width: number;
   readonly fontScale: number;
   readonly bottomInset: number;
+  readonly leftInset: number;
+  readonly rightInset: number;
   readonly isRtl: boolean;
   readonly isOffline: boolean;
   readonly isSubmitting: boolean;
@@ -102,6 +105,7 @@ const copy: DeleteMetalHoldingSheetCopy = {
   cancel: "Cancel",
   retry: "Try again",
   offline: "Saved locally first",
+  failure: "We couldn\u0027t delete this holding. Try again.",
   accessibilityLabel: "Delete holding Wedding coin",
 };
 
@@ -139,6 +143,8 @@ function renderSheet(
     width: 390,
     fontScale: 1,
     bottomInset: 24,
+    leftInset: 0,
+    rightInset: 0,
     isRtl: false,
     isOffline: true,
     isSubmitting: false,
@@ -201,19 +207,39 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
       "testID",
       "metal-holding-delete-consequence"
     );
-    expect(screen.getByText("Wedding coin")).toBeTruthy();
-    expect(screen.getByText("Gold · 24K · 999 · Coin")).toBeTruthy();
-    expect(screen.getByText("31.125 g")).toBeTruthy();
-    expect(screen.getByText("EGP 162,317.87")).toHaveProp(
-      "testID",
-      "metal-holding-delete-current-value"
-    );
-    expect(screen.getByText("+ EGP 11,039.67 since purchase")).toBeTruthy();
+    expect(
+      screen.getByText("Wedding coin", { includeHiddenElements: true })
+    ).toBeTruthy();
+    expect(
+      screen.getByText("Gold · 24K · 999 · Coin", {
+        includeHiddenElements: true,
+      })
+    ).toBeTruthy();
+    expect(
+      screen.getByText("31.125 g", { includeHiddenElements: true })
+    ).toBeTruthy();
+    expect(
+      screen.getByText("EGP 162,317.87", { includeHiddenElements: true })
+    ).toHaveProp("testID", "metal-holding-delete-current-value");
+    expect(
+      screen.getByText("+ EGP 11,039.67 since purchase", {
+        includeHiddenElements: true,
+      })
+    ).toBeTruthy();
     expect(screen.getByText(copy.offline)).toBeTruthy();
     expect(
       screen.getByRole("button", { name: copy.accessibilityLabel })
     ).toBeTruthy();
     expect(screen.queryByText("Undo deletion")).toBeNull();
+    expect(
+      screen.getByTestId("metal-holding-delete-holding-summary")
+    ).toHaveProp(
+      "accessibilityLabel",
+      "Wedding coin. Gold · 24K · 999 · Coin. 31.125 g. Current value: EGP 162,317.87. Since purchase: + EGP 11,039.67 since purchase"
+    );
+    expect(
+      screen.getByTestId("metal-holding-delete-holding-summary")
+    ).toHaveProp("importantForAccessibility", "yes");
   });
 
   it("requests initial focus for the confirmation heading and isolates the background", async () => {
@@ -260,18 +286,18 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
     expect(props.onCancel).not.toHaveBeenCalled();
   });
 
-  it("preserves exact facts on failure, exposes retry, and moves focus to recovery", async () => {
+  it("renders localized recovery copy instead of an internal command error", async () => {
     const focus = jest.fn();
     const props = renderSheet({
-      submitError: "The holding was not deleted. Try again.",
+      submitError: "holding_revision_conflict",
       onFocusRequest: focus,
     });
 
-    expect(screen.getByText("Wedding coin")).toBeTruthy();
-    expect(screen.getByText("EGP 162,317.87")).toBeTruthy();
-    expect(
-      screen.getByText("The holding was not deleted. Try again.")
-    ).toHaveProp("accessibilityRole", "alert");
+    expect(screen.getByText(copy.failure)).toHaveProp(
+      "accessibilityRole",
+      "alert"
+    );
+    expect(screen.queryByText("holding_revision_conflict")).toBeNull();
     fireEvent.press(screen.getByRole("button", { name: copy.retry }));
     expect(props.onRetry).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(focus).toHaveBeenLastCalledWith("recovery"));
@@ -285,22 +311,27 @@ describe("DeleteMetalHoldingSheet approved focused confirmation", () => {
     "uses the shared responsive rule at %ipx/%sx RTL=%s",
     (width, fontScale, isRtl, expectedLayout) => {
       renderSheet({ width, fontScale, isRtl });
-      expect(screen.getByTestId("metal-holding-delete-facts")).toHaveProp(
-        "className",
-        expectedLayout
-      );
+      expect(
+        screen.getByTestId("metal-holding-delete-facts", {
+          includeHiddenElements: true,
+        })
+      ).toHaveProp("className", expectedLayout);
       expect(screen.getByTestId("metal-holding-delete-content")).toHaveStyle({
         direction: isRtl ? "rtl" : "ltr",
       });
     }
   );
 
-  it("uses theme variants, 44px actions, and adds the device bottom inset", () => {
-    renderSheet({ bottomInset: 34 });
+  it("uses theme variants, 44px actions, and every device safe-area inset", () => {
+    renderSheet({ bottomInset: 34, leftInset: 24, rightInset: 12 });
     expect(screen.getByTestId("metal-holding-delete-panel")).toHaveProp(
       "className",
       expect.stringContaining("dark:bg-slate-900")
     );
+    expect(screen.getByTestId("metal-holding-delete-panel")).toHaveStyle({
+      paddingLeft: 44,
+      paddingRight: 32,
+    });
     expect(screen.getByTestId("metal-holding-delete-actions")).toHaveStyle({
       paddingBottom: 54,
     });
@@ -377,7 +408,7 @@ describe("useDeleteMetalHolding", () => {
     await act(async () => {
       await expect(result.current.submit()).resolves.toBe(false);
     });
-    expect(result.current.submitError).toBe("local_write_failed");
+    expect(result.current.submitError).toBe("metal_delete_failed");
     expectedFinancialRevision = "2";
     await act(async () => {
       await expect(result.current.retry()).resolves.toBe(true);
@@ -403,7 +434,30 @@ describe("useDeleteMetalHolding", () => {
     await act(async () => {
       await expect(result.current.submit()).resolves.toBe(false);
     });
-    expect(result.current.submitError).toBe("metal_delete_command_stale");
+    expect(result.current.submitError).toBe("metal_delete_failed");
+    expect(result.current.isSubmitting).toBe(false);
+    expect(execute).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await expect(result.current.retry()).resolves.toBe(true);
+    });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases the submission lock when request ID generation fails", async () => {
+    const createId = jest
+      .fn<string, []>()
+      .mockImplementationOnce(() => {
+        throw new Error("randomness_unavailable");
+      })
+      .mockReturnValue("stable-delete-id");
+    const execute = jest.fn(() => Promise.resolve());
+    const { result } = renderDeleteHook({ createId, execute });
+
+    await act(async () => {
+      await expect(result.current.submit()).resolves.toBe(false);
+    });
+    expect(result.current.submitError).toBe("metal_delete_failed");
     expect(result.current.isSubmitting).toBe(false);
     expect(execute).not.toHaveBeenCalled();
 
@@ -430,7 +484,7 @@ describe("useDeleteMetalHolding", () => {
     await act(async () => {
       await expect(result.current.submit()).resolves.toBe(false);
     });
-    expect(result.current.submitError).toBe("local_write_failed");
+    expect(result.current.submitError).toBe("metal_delete_failed");
     expect(result.current.isSubmitting).toBe(false);
   });
 });
