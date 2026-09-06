@@ -5,6 +5,7 @@ import {
   renderHook,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react-native";
 import React from "react";
 
@@ -34,8 +35,8 @@ jest.mock("@/context/ThemeContext", () => ({
 }));
 
 type Category =
-  | "lost_or_stolen"
-  | "destroyed_or_damaged"
+  | "lost_stolen"
+  | "destroyed_damaged"
   | "given_away"
   | "donated"
   | "other";
@@ -149,8 +150,8 @@ const copy: DisposeCopy = {
   intro: "Use this when you no longer own the holding and did not sell it.",
   reasonLabel: "Reason",
   categoryLabels: {
-    lost_or_stolen: "Lost or stolen",
-    destroyed_or_damaged: "Destroyed or damaged",
+    lost_stolen: "Lost or stolen",
+    destroyed_damaged: "Destroyed or damaged",
     given_away: "Given away",
     donated: "Donated",
     other: "Other",
@@ -245,7 +246,7 @@ describe("Dispose metal holding direct form", () => {
     }
     expect(
       screen.getAllByTestId(
-        /^dispose-category-(lost_or_stolen|destroyed_or_damaged|given_away|donated|other)$/
+        /^dispose-category-(lost_stolen|destroyed_damaged|given_away|donated|other)$/
       )
     ).toHaveLength(5);
     expect(screen.getByText("Optional")).toBeOnTheScreen();
@@ -272,8 +273,8 @@ describe("Dispose metal holding direct form", () => {
   });
 
   it.each([
-    ["lost_or_stolen", "writeOffSummary"],
-    ["destroyed_or_damaged", "writeOffSummary"],
+    ["lost_stolen", "writeOffSummary"],
+    ["destroyed_damaged", "writeOffSummary"],
     ["given_away", "externalTransferSummary"],
     ["donated", "externalTransferSummary"],
   ] as const)(
@@ -319,11 +320,36 @@ describe("Dispose metal holding direct form", () => {
       "bottomInset",
       48
     );
+    expect(screen.getByTestId("dispose-submit-area")).toHaveStyle({
+      paddingBottom: 60,
+    });
     expect(screen.getByTestId("dispose-date-field")).toHaveProp(
       "editable",
       false
     );
     expect(screen.getByTestId("dispose-category-donated")).toBeDisabled();
+  });
+
+  it("keeps long form content scrollable while actions remain outside the scroll region", (): void => {
+    renderScreen({
+      category: "other",
+      otherTreatment: "external_transfer",
+      fontScale: 2,
+      width: 320,
+    });
+    expect(screen.getByTestId("dispose-scroll-content")).toHaveProp(
+      "keyboardShouldPersistTaps",
+      "handled"
+    );
+    expect(screen.getByTestId("dispose-scroll-content")).toHaveProp(
+      "className",
+      expect.stringContaining("min-h-0 flex-1")
+    );
+    expect(
+      within(screen.getByTestId("dispose-scroll-content")).queryByTestId(
+        "dispose-submit"
+      )
+    ).toBeNull();
   });
 
   it("focuses the first invalid group and announces recoverable submit errors", (): void => {
@@ -404,8 +430,8 @@ describe("Dispose metal holding direct form", () => {
       title: "dispose.title",
       intro: "dispose.intro",
       categories: {
-        lost_or_stolen: "dispose.categories.lostOrStolen",
-        destroyed_or_damaged: "dispose.categories.destroyedOrDamaged",
+        lost_stolen: "dispose.categories.lostOrStolen",
+        destroyed_damaged: "dispose.categories.destroyedOrDamaged",
         given_away: "dispose.categories.givenAway",
         donated: "dispose.categories.donated",
         other: "dispose.categories.other",
@@ -463,7 +489,7 @@ describe("useDisposeMetalHolding lifecycle", () => {
     );
   });
 
-  it("coalesces double submit, preserves facts on error, and retries the same stable action ids", async (): Promise<void> => {
+  it("blocks double submit, preserves facts on error, and retries the complete original command", async (): Promise<void> => {
     let rejectFirst: ((reason: Error) => void) | null = null;
     const firstAttempt = new Promise((_resolve, reject): void => {
       rejectFirst = reject;
@@ -514,12 +540,34 @@ describe("useDisposeMetalHolding lifecycle", () => {
       await expect(result.current.submit()).resolves.toBe(true);
     });
     expect(disposeHolding).toHaveBeenCalledTimes(2);
-    expect(disposeHolding.mock.calls[1][0]).toMatchObject({
-      actionId: firstRequest.actionId,
-      actionEvidenceId: firstRequest.actionEvidenceId,
-      lifecycleEventId: firstRequest.lifecycleEventId,
-    });
+    expect(disposeHolding.mock.calls[1][0]).toBe(firstRequest);
     expect(createId).toHaveBeenCalledTimes(3);
+  });
+
+  it("contains ID generation failures and releases the pending lock", async (): Promise<void> => {
+    const dependencies = createDependencies();
+    const createId = jest.fn(() => {
+      throw new Error("secure_random_unavailable");
+    });
+    const { result } = renderHook(() =>
+      loadHook().useDisposeMetalHolding({
+        holdingId: holding.holdingId,
+        today: "2026-09-05",
+        createId,
+        dependencies,
+      })
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    act((): void => result.current.setCategory("donated"));
+
+    await act(async (): Promise<void> => {
+      await expect(result.current.submit()).resolves.toBe(false);
+    });
+    expect(result.current).toMatchObject({
+      isSubmitting: false,
+      submitError: "secure_random_unavailable",
+    });
+    expect(dependencies.disposeHolding).not.toHaveBeenCalled();
   });
 
   it("reports invalid dates and reloads after a recoverable load failure", async (): Promise<void> => {

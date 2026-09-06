@@ -4,6 +4,8 @@ import type SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 import type {
   Asset,
   AssetMetal,
+  AssetType,
+  FinancialActionGroup,
   MetalActionEvidence,
   MetalHoldingState,
   MetalLifecycleEvent,
@@ -11,12 +13,16 @@ import type {
 import {
   DEFAULT_FINANCIAL_ACTION_REGISTRY,
   canonicalizeFinancialActionEnvelope,
+  createFinancialActionRegistry,
   type FinancialActionEnvelopeV1,
+  type FinancialActionRegistry,
+  type RegisteredActionPayload,
   type Sha256Provider,
 } from "@monyvi/logic";
 
 import {
   createFinancialActionFoundationRepository,
+  type CommitFinancialActionGroupLocallyInput,
   type FinancialActionUserDataScope,
 } from "../../services/financial-action-foundation-repository";
 import type {
@@ -123,7 +129,7 @@ function command(
     cairoTodayDate: "2026-09-05",
     expectedFinancialRevision: "0",
     disposalDate: "2026-09-05",
-    category: "lost_or_stolen",
+    category: "lost_stolen",
     otherTreatment: null,
     notes: null,
     ...overrides,
@@ -148,7 +154,8 @@ function createEnvelope(
   input: DisposeMetalHoldingCommandInput,
   payload: Parameters<
     DisposeMetalHoldingCommandDependencies["createEnvelope"]
-  >[1]
+  >[1],
+  registry: FinancialActionRegistry = DEFAULT_FINANCIAL_ACTION_REGISTRY
 ): FinancialActionEnvelopeV1 {
   return canonicalizeFinancialActionEnvelope(
     {
@@ -163,7 +170,7 @@ function createEnvelope(
       userId: input.userId,
       payload,
     },
-    DEFAULT_FINANCIAL_ACTION_REGISTRY,
+    registry,
     { cairoTodayDate: input.cairoTodayDate }
   );
 }
@@ -172,9 +179,11 @@ function createService(
   options: {
     readonly userId?: string;
     readonly commit?: DisposeMetalHoldingCommandDependencies["commitFinancialActionGroupLocally"];
+    readonly registry?: FinancialActionRegistry;
   } = {}
 ): DisposeMetalHoldingCommandService {
   const userId = options.userId ?? IDS.user;
+  const registry = options.registry ?? DEFAULT_FINANCIAL_ACTION_REGISTRY;
   const repository = createFinancialActionFoundationRepository({
     database,
     getCurrentUserDataScope: () => scope(userId),
@@ -182,21 +191,32 @@ function createService(
       expectedUserId === userId
         ? Promise.resolve()
         : Promise.reject(new Error("auth_scope_changed")),
-    registry: DEFAULT_FINANCIAL_ACTION_REGISTRY,
+    registry,
   });
   return loadService().createDisposeMetalHoldingCommandService({
     database,
     getCurrentUserDataScope: () => scope(userId),
     commitFinancialActionGroupLocally:
       options.commit ?? repository.commitFinancialActionGroupLocally,
-    createEnvelope,
+    createEnvelope: (input, payload) =>
+      createEnvelope(input, payload, registry),
     hashProvider: sha256Provider,
   });
 }
 
 async function seedHolding(
-  status: "active" | "sold" | "disposed" = "active"
+  status: "active" | "sold" | "disposed" = "active",
+  options: {
+    readonly assetType?: AssetType;
+    readonly effectiveActionId?: string | null;
+    readonly isMigratedRevisionZero?: boolean;
+    readonly isVisible?: boolean;
+    readonly predecessorIsEffective?: boolean;
+    readonly predecessorIsHistoryVisible?: boolean;
+    readonly reconciliationState?: string;
+  } = {}
 ): Promise<void> {
+  const isMigratedRevisionZero = options.isMigratedRevisionZero ?? false;
   await database.write(async (): Promise<void> => {
     await database.get<Asset>("assets").create((record): void => {
       record._raw.id = IDS.holding;
@@ -210,7 +230,7 @@ async function seedHolding(
       record.purchaseDate = new Date("2024-03-14T00:00:00.000Z");
       record.purchasePrice = 47800;
       record.purchasePriceDecimal = "47800";
-      record.type = "METAL";
+      record.type = options.assetType ?? "METAL";
       record.updatedAt = new Date("2026-09-04T10:00:00.000Z");
       record.userId = IDS.user;
     });
@@ -232,40 +252,82 @@ async function seedHolding(
       .create((record): void => {
         record._raw.id = IDS.state;
         record.deleted = false;
-        record.effectiveActionId = IDS.createdAction;
-        record.effectiveEventId = IDS.createdEvent;
+        record.effectiveActionId =
+          options.effectiveActionId ??
+          (isMigratedRevisionZero ? null : IDS.createdAction);
+        record.effectiveEventId = isMigratedRevisionZero
+          ? null
+          : IDS.createdEvent;
         record.financialRevision = "0";
         record.holdingId = IDS.holding;
-        record.isVisible = true;
-        record.reconciliationState = "complete";
+        record.isVisible = options.isVisible ?? true;
+        record.reconciliationState = options.reconciliationState ?? "accepted";
         record.status = status;
         record.updatedAt = new Date("2026-09-04T10:00:00.000Z");
         record.userId = IDS.user;
       });
-    await database
-      .get<MetalLifecycleEvent>("metal_lifecycle_events")
-      .create((record): void => {
-        record._raw.id = IDS.createdEvent;
-        record.actionId = IDS.createdAction;
-        record.deleted = false;
-        record.holdingId = IDS.holding;
-        record.isEffective = true;
-        record.isHistoryVisible = true;
-        record.kind = "created";
-        record.occurredAt = new Date("2024-03-14T00:00:00.000Z");
-        record.payloadJson = "{}";
-        record.predecessorEventId = null;
-        record.reversesEventId = null;
-        record.updatedAt = new Date("2026-09-04T10:00:00.000Z");
-        record.userId = IDS.user;
-      });
+    if (!isMigratedRevisionZero) {
+      await database
+        .get<MetalLifecycleEvent>("metal_lifecycle_events")
+        .create((record): void => {
+          record._raw.id = IDS.createdEvent;
+          record.actionId = IDS.createdAction;
+          record.deleted = false;
+          record.holdingId = IDS.holding;
+          record.isEffective = options.predecessorIsEffective ?? true;
+          record.isHistoryVisible = options.predecessorIsHistoryVisible ?? true;
+          record.kind = "created";
+          record.occurredAt = new Date("2024-03-14T00:00:00.000Z");
+          record.payloadJson = "{}";
+          record.predecessorEventId = null;
+          record.reversesEventId = null;
+          record.updatedAt = new Date("2026-09-04T10:00:00.000Z");
+          record.userId = IDS.user;
+        });
+    }
   });
+}
+
+function createRevisionZeroDisposeTestRegistry(): FinancialActionRegistry {
+  return createFinancialActionRegistry(
+    DEFAULT_FINANCIAL_ACTION_REGISTRY.definitions.map((definition) =>
+      definition.domain === "metals" &&
+      definition.kind === "dispose" &&
+      definition.payloadVersion === "metals.dispose/v1"
+        ? {
+            ...definition,
+            validatePayload: (
+              value,
+              validationInput
+            ): RegisteredActionPayload => {
+              if (
+                typeof value === "object" &&
+                value !== null &&
+                Object.keys(value).sort().join(",") ===
+                  "disposalDate,expectedHoldingRevision,holdingId,notes,predecessorEventId,reason,reversesEventId" &&
+                "holdingId" in value &&
+                value.holdingId === IDS.holding &&
+                "expectedHoldingRevision" in value &&
+                value.expectedHoldingRevision === "0" &&
+                "predecessorEventId" in value &&
+                value.predecessorEventId === null &&
+                "reversesEventId" in value &&
+                value.reversesEventId === null
+              ) {
+                return Object.freeze({ ...value }) as RegisteredActionPayload;
+              }
+              return definition.validatePayload(value, validationInput);
+            },
+          }
+        : definition
+    )
+  );
 }
 
 describe("Dispose metal holding category and consequence contract", () => {
   it.each([
-    ["lost_or_stolen", null, "lost_or_stolen", "write_off"],
-    ["destroyed_or_damaged", null, "destroyed_or_damaged", "write_off"],
+    ["lost_stolen", null, "lost_stolen", "write_off"],
+    ["destroyed_damaged", null, "destroyed_damaged", "write_off"],
     ["given_away", null, "given_away", "external_transfer"],
     ["donated", null, "donated", "external_transfer"],
     ["other", "write_off", "other_write_off", "write_off"],
@@ -302,8 +364,20 @@ describe("Dispose metal holding category and consequence contract", () => {
       "dispose_other_treatment_required"
     );
     expect(() =>
-      service.resolveDisposeReason("lost_or_stolen", "write_off")
+      service.resolveDisposeReason("lost_stolen", "write_off")
     ).toThrow("dispose_known_category_treatment_forbidden");
+    expect(() =>
+      service.resolveDisposeReason(
+        "lost_or_stolen" as DisposeMetalHoldingCommandInput["category"],
+        null
+      )
+    ).toThrow("dispose_category_invalid");
+    expect(() =>
+      service.resolveDisposeReason(
+        "other",
+        "unknown" as DisposeMetalHoldingCommandInput["otherTreatment"]
+      )
+    ).toThrow("dispose_treatment_invalid");
   });
 });
 
@@ -354,7 +428,7 @@ describe("Dispose metal holding command SQLite lifecycle", () => {
       predecessorEventId: IDS.createdEvent,
       reversesEventId: null,
       disposalDate: "2026-09-05",
-      reason: "lost_or_stolen",
+      reason: "lost_stolen",
       notes: null,
     };
     expect(JSON.parse(evidence[0].domainPayloadJson)).toEqual(payload);
@@ -420,6 +494,106 @@ describe("Dispose metal holding command SQLite lifecycle", () => {
     });
   });
 
+  it("disposes a predecessor-less revision-zero migrated holding without fabricating earlier history", async (): Promise<void> => {
+    await seedHolding("active", { isMigratedRevisionZero: true });
+
+    await expect(
+      createService({
+        registry: createRevisionZeroDisposeTestRegistry(),
+      }).dispose(
+        command({
+          predecessorEventId: null,
+          expectedFinancialRevision: "0",
+          category: "donated",
+        })
+      )
+    ).resolves.toEqual({ kind: "committed", holdingId: IDS.holding });
+
+    const state = await database
+      .get<MetalHoldingState>("metal_holding_states")
+      .find(IDS.state);
+    expect(state).toMatchObject({
+      status: "disposed",
+      financialRevision: "1",
+      effectiveActionId: IDS.disposeAction,
+      effectiveEventId: IDS.disposeEvent,
+    });
+    const history = await database
+      .get<MetalLifecycleEvent>("metal_lifecycle_events")
+      .query()
+      .fetch();
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      kind: "dispose",
+      predecessorEventId: null,
+      isEffective: true,
+      isHistoryVisible: true,
+    });
+  });
+
+  it.each([
+    { isVisible: false, reconciliationState: "accepted" },
+    { isVisible: true, reconciliationState: "reconciliation_incomplete" },
+    { isVisible: true, reconciliationState: "pending_local" },
+  ])(
+    "rejects a non-effective Active projection: %o",
+    async (projection): Promise<void> => {
+      await seedHolding("active", projection);
+      await expect(createService().dispose(command())).rejects.toThrow(
+        "metal_dispose_effective_active_holding_required"
+      );
+      expect(
+        await database.get<Model>("metal_action_evidence").query().fetch()
+      ).toHaveLength(0);
+    }
+  );
+
+  it("validates generated evidence IDs before attempting the local commit", async (): Promise<void> => {
+    const commit = jest.fn<
+      ReturnType<
+        DisposeMetalHoldingCommandDependencies["commitFinancialActionGroupLocally"]
+      >,
+      Parameters<
+        DisposeMetalHoldingCommandDependencies["commitFinancialActionGroupLocally"]
+      >
+    >();
+    await expect(
+      createService({ commit }).dispose(
+        command({ actionEvidenceId: "not-a-uuid" })
+      )
+    ).rejects.toThrow("metal_dispose_invalid_local_id");
+    await expect(
+      createService({ commit }).dispose(
+        command({ lifecycleEventId: IDS.disposeEvidence })
+      )
+    ).rejects.toThrow("metal_dispose_invalid_local_id");
+    expect(commit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "rejected_compensating",
+    "reconciled",
+    "reconciliation_incomplete",
+  ] as const)(
+    "does not report an unsuccessful %s root as a successful replay",
+    async (state): Promise<void> => {
+      const record = database
+        .get<FinancialActionGroup>("financial_action_groups")
+        .prepareCreate((group): void => {
+          group.state = state;
+        });
+      const commit = jest.fn(() =>
+        Promise.resolve({
+          kind: "replay" as const,
+          record,
+        })
+      );
+      await expect(
+        createService({ commit }).dispose(command())
+      ).rejects.toThrow("metal_dispose_replay_requires_recovery");
+    }
+  );
+
   it.each(["sold", "disposed"] as const)(
     "rejects %s holdings because Dispose is active-only",
     async (status): Promise<void> => {
@@ -449,6 +623,76 @@ describe("Dispose metal holding command SQLite lifecycle", () => {
     await expect(
       createService().dispose(command({ disposalDate: "2026-09-06" }))
     ).rejects.toThrow("financial_action_invalid_payload");
+  });
+
+  it("rejects an auth scope change before reading the holding", async (): Promise<void> => {
+    await seedHolding();
+    const commit = async (
+      commitInput: CommitFinancialActionGroupLocallyInput
+    ): Promise<never> => {
+      await commitInput.prepareLinkedOperationPlan();
+      throw new Error("unexpected_commit");
+    };
+    await expect(
+      createService({ userId: IDS.foreignUser, commit }).dispose(command())
+    ).rejects.toThrow("financial_action_auth_scope_changed");
+  });
+
+  it("rejects non-metal assets and ineffective predecessor projections", async (): Promise<void> => {
+    await seedHolding("active", { assetType: "CRYPTO" });
+    await expect(createService().dispose(command())).rejects.toThrow(
+      "metal_holding_not_found"
+    );
+
+    await database.write(
+      async (): Promise<void> => database.unsafeResetDatabase()
+    );
+    await seedHolding("active", { predecessorIsEffective: false });
+    await expect(createService().dispose(command())).rejects.toThrow(
+      "metal_dispose_effective_active_holding_required"
+    );
+
+    await database.write(
+      async (): Promise<void> => database.unsafeResetDatabase()
+    );
+    await seedHolding("active", { predecessorIsHistoryVisible: false });
+    await expect(createService().dispose(command())).rejects.toThrow(
+      "metal_dispose_effective_active_holding_required"
+    );
+  });
+
+  it("rejects a state pointer that disagrees with its predecessor event", async (): Promise<void> => {
+    await seedHolding("active", { effectiveActionId: IDS.disposeAction });
+    await expect(createService().dispose(command())).rejects.toThrow(
+      "holding_revision_conflict"
+    );
+  });
+
+  it("rejects cached rows that escape the holding ownership boundary", async (): Promise<void> => {
+    await seedHolding();
+    const commit = async (
+      commitInput: CommitFinancialActionGroupLocallyInput
+    ): Promise<never> => {
+      const plan = await commitInput.prepareLinkedOperationPlan();
+      const stateOperation = plan.existingOperations[0];
+      if (!stateOperation) throw new Error("missing_state_operation");
+      await plan.assertCachedOwnership({
+        userId: IDS.user,
+        cachedPreimages: [
+          {
+            id: IDS.state,
+            kind: "update",
+            table: "unexpected_table",
+            raw: stateOperation.model._raw,
+          },
+        ],
+      });
+      throw new Error("unexpected_commit");
+    };
+
+    await expect(createService({ commit }).dispose(command())).rejects.toThrow(
+      "metal_dispose_ownership_failed"
+    );
   });
 
   it("replays the same action across a recreated service and rejects changed payload reuse", async (): Promise<void> => {

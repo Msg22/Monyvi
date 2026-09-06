@@ -12,7 +12,7 @@ export interface DisposableMetalHoldingReadModel {
   readonly userId: string;
   readonly status: "active" | "sold" | "disposed";
   readonly expectedFinancialRevision: string;
-  readonly predecessorEventId: string;
+  readonly predecessorEventId: string | null;
 }
 
 export interface DisposeMetalHoldingFacadeDependencies {
@@ -106,7 +106,8 @@ export function useDisposeMetalHolding(
     Readonly<Record<string, string>>
   >({});
   const idsRef = useRef<StableRequestIds | null>(null);
-  const inFlightPromiseRef = useRef<Promise<boolean> | null>(null);
+  const commandRef = useRef<DisposeMetalHoldingCommandInput | null>(null);
+  const isInFlightRef = useRef(false);
   const isMountedRef = useRef(true);
 
   useEffect(() => {
@@ -139,7 +140,10 @@ export function useDisposeMetalHolding(
   }, [input.dependencies, input.holdingId, reloadKey]);
 
   const invalidateIntent = useCallback((): void => {
-    if (inFlightPromiseRef.current === null) idsRef.current = null;
+    if (!isInFlightRef.current) {
+      idsRef.current = null;
+      commandRef.current = null;
+    }
     setSubmitError(null);
     setValidationErrors({});
   }, []);
@@ -183,8 +187,8 @@ export function useDisposeMetalHolding(
     [category, disposalDate, input.today, notes.length, otherTreatment]
   );
 
-  const submit = useCallback((): Promise<boolean> => {
-    if (inFlightPromiseRef.current) return inFlightPromiseRef.current;
+  const submit = useCallback(async (): Promise<boolean> => {
+    if (isInFlightRef.current) return false;
     const errors = validate(
       category,
       otherTreatment,
@@ -192,20 +196,18 @@ export function useDisposeMetalHolding(
       input.today
     );
     setValidationErrors(errors);
-    if (Object.keys(errors).length > 0 || !model) return Promise.resolve(false);
-    if (!idsRef.current) {
-      idsRef.current = {
+    if (Object.keys(errors).length > 0 || !model) return false;
+    isInFlightRef.current = true;
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      idsRef.current ??= {
         actionId: input.createId(),
         actionEvidenceId: input.createId(),
         lifecycleEventId: input.createId(),
       };
-    }
-    const ids = idsRef.current;
-    setIsSubmitting(true);
-    setSubmitError(null);
-    const request = input.dependencies
-      .disposeHolding({
-        ...ids,
+      commandRef.current ??= {
+        ...idsRef.current,
         predecessorEventId: model.predecessorEventId,
         holdingId: model.holdingId,
         userId: model.userId,
@@ -216,19 +218,19 @@ export function useDisposeMetalHolding(
         category,
         otherTreatment,
         notes: notes.trim().length === 0 ? null : notes,
-      })
-      .then((): boolean => true)
-      .catch((caught: unknown): boolean => {
-        if (isMountedRef.current)
-          setSubmitError(toErrorCode(caught, "metal_holding_dispose_failed"));
-        return false;
-      })
-      .finally((): void => {
-        if (isMountedRef.current) setIsSubmitting(false);
-        inFlightPromiseRef.current = null;
-      });
-    inFlightPromiseRef.current = request;
-    return request;
+      };
+      await input.dependencies.disposeHolding(commandRef.current);
+      idsRef.current = null;
+      commandRef.current = null;
+      return true;
+    } catch (caught: unknown) {
+      if (isMountedRef.current)
+        setSubmitError(toErrorCode(caught, "metal_holding_dispose_failed"));
+      return false;
+    } finally {
+      isInFlightRef.current = false;
+      if (isMountedRef.current) setIsSubmitting(false);
+    }
   }, [category, disposalDate, input, model, notes, otherTreatment]);
 
   const retryLoad = useCallback(

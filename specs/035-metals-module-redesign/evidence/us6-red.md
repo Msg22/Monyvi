@@ -36,14 +36,33 @@ npm run e2e:flow:local -w @monyvi/mobile -- e2e/maestro/metals/dispose-holding.y
 
 Result: runner preflight failed before app launch because
 `device 'emulator-5554' not found`. This is not a product-code Red signal, so no
-device behavior is claimed. The flow remains an authored user-visible contract
-for category validation, conditional Other treatment, affected-only summaries,
-direct local completion, Disposed history, no sale metrics, and offline restart.
+device behavior is claimed. Later review also confirmed that this branch has no
+shared Dispose route or runner-controlled current-user/offline fixture. The
+speculative flow was therefore removed; its category, summary, local completion,
+history, and restart scenarios remain in the manual coverage matrix until an
+honest integration harness exists.
 
 ## Shared integration boundary
 
-Tests inject the approved registry canonicalizer. The production financial
-action adapter remains fail-closed with `metal_action_schema_not_approved` until
-shared T043 is integrated. Translation resources and the runner fixture profile
-also remain owned by their dedicated integration owners; this slice neither
-bypasses nor modifies them.
+The shared default registry now includes `metals.dispose/v1`, but its payload
+validator requires a predecessor event. The approved migration contract permits
+an Active revision-zero holding with no predecessor, so deterministic tests use
+a test-only registry variant for that case. Updating the shared registry,
+translation resources, route, and runner fixture remains owned by their
+integration owners; this slice neither bypasses nor modifies them.
+
+## Review-correction Red — 2026-09-06
+
+The consolidated review tests were written before changing production code. The
+first focused run reached the existing implementation and failed as intended:
+`2` suites failed, `17` tests failed, `24` passed (`41` total).
+
+The failures proved the exact review gaps: legacy category IDs, missing
+revision-zero handling, acceptance of hidden/recovery projections, unchecked
+generated evidence IDs, successful results for unsuccessful replay roots,
+reconstructed retry commands, escaped ID-construction errors, and unbounded
+confirmation content. A narrow runtime-contract test also failed `1/1` because
+the legacy `lost_or_stolen` ID was accepted.
+
+These are product-code Red signals. The earlier Maestro preflight failure is
+environment evidence only and remains excluded from Green claims.
