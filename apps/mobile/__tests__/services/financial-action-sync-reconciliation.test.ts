@@ -3,6 +3,7 @@ import {
   FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES,
   type FinancialActionReconciliationBundle,
 } from "../../services/financial-action-reconciliation-service";
+import { parseFinancialActionEnvelopeJson } from "@monyvi/logic";
 import {
   createFinancialActionPushCoordinator,
   createFinancialActionSyncService,
@@ -11,6 +12,10 @@ import {
 const ACTION_ID = "10000000-0000-4000-8000-000000000001";
 const USER_ID = "20000000-0000-4000-8000-000000000002";
 const ACCOUNT_ID = "30000000-0000-4000-8000-000000000003";
+const DRAFT_ID = "50000000-0000-4000-8000-000000000005";
+const QUEUE_ID = "60000000-0000-4000-8000-000000000006";
+const TRANSACTION_ID = "70000000-0000-4000-8000-000000000007";
+const SNAPSHOT_HASH = "a".repeat(64);
 
 function actionRecord(): {
   readonly payloadHash: string;
@@ -47,10 +52,94 @@ function rejectedBundle(
         reversesEffectId: null,
       },
     ],
+    domain: "transactions",
+    localSmsReviewDraftSnapshot: null,
+    payloadJson: "{}",
     state: "rejected_compensating",
     userId: USER_ID,
     ...overrides,
   };
+}
+
+function localSmsSnapshot(): Readonly<Record<string, string | boolean | null>> {
+  return {
+    createdAt: "2026-08-31T11:00:00.000Z",
+    id: DRAFT_ID,
+    parsedAt: "2026-08-31T11:55:00.000Z",
+    payloadJson: '{"amount":25,"currency":"EGP"}',
+    payloadVersion: "1",
+    position: "0",
+    queueId: QUEUE_ID,
+    selectionOverride: true,
+    smsFingerprint: "sms-fingerprint-1",
+    updatedAt: "2026-08-31T12:00:00.000Z",
+    userId: USER_ID,
+  };
+}
+
+function smsPayloadJson(snapshotHash = SNAPSHOT_HASH): string {
+  return JSON.stringify({
+    accountGuards: [{ accountId: ACCOUNT_ID, expectedRevision: "7" }],
+    actionId: ACTION_ID,
+    domain: "sms",
+    domainReferenceId: DRAFT_ID,
+    envelopeVersion: "monyvi.financial-action/v1",
+    kind: "review_confirm",
+    occurredAt: "2026-09-01T12:00:00.000Z",
+    payload: {
+      accountEffects: [
+        {
+          accountId: ACCOUNT_ID,
+          amountMinorUnits: "2500",
+          currency: "EGP",
+        },
+      ],
+      domainMutation: {
+        records: [
+          {
+            after: {
+              id: DRAFT_ID,
+              queueId: QUEUE_ID,
+              smsFingerprint: "sms-fingerprint-1",
+              snapshotHash,
+            },
+            entity: "sms_review_draft_item",
+            expectedUpdatedAt: "2026-08-31T12:00:00.000Z",
+            mode: "delete",
+          },
+          {
+            after: {
+              accountId: ACCOUNT_ID,
+              amountMinorUnits: "2500",
+              categoryId: "80000000-0000-4000-8000-000000000008",
+              counterparty: null,
+              createdAt: "2026-09-01T12:00:00.000Z",
+              currency: "EGP",
+              date: "2026-09-01",
+              deleted: false,
+              id: TRANSACTION_ID,
+              isDraft: false,
+              linkedAssetId: null,
+              linkedDebtId: null,
+              linkedRecurringId: null,
+              note: null,
+              smsFingerprint: "sms-fingerprint-1",
+              source: "SMS",
+              type: "INCOME",
+            },
+            entity: "transaction",
+            expectedUpdatedAt: null,
+            mode: "create",
+          },
+        ],
+      },
+      domainRecordRefs: [DRAFT_ID, TRANSACTION_ID],
+      operationCode: "sms.review-durable",
+      schemaVersion: "account.balance-effects/v1",
+    },
+    payloadVersion: "account.balance-effects/v1",
+    userId: USER_ID,
+  });
 }
 
 describe("dedicated financial action sync", () => {
@@ -127,19 +216,19 @@ describe("dedicated financial action sync", () => {
     });
 
     const result = await coordinator.coordinatePush([
-        {
-          actionId: ACTION_ID,
-          payloadHash: "a".repeat(64),
-          payloadJson: '{"accepted":true}',
-          state: "local_complete",
-        },
-        {
-          actionId: "10000000-0000-4000-8000-000000000009",
-          payloadHash: "b".repeat(64),
-          payloadJson: '{"stale":true}',
-          state: "sync_failed",
-        },
-      ]);
+      {
+        actionId: ACTION_ID,
+        payloadHash: "a".repeat(64),
+        payloadJson: '{"accepted":true}',
+        state: "local_complete",
+      },
+      {
+        actionId: "10000000-0000-4000-8000-000000000009",
+        payloadHash: "b".repeat(64),
+        payloadJson: '{"stale":true}',
+        state: "sync_failed",
+      },
+    ]);
     expect(
       result.decisions.map((decision) => ({
         actionId: decision.actionId,
@@ -148,20 +237,19 @@ describe("dedicated financial action sync", () => {
         status: decision.outcome?.status ?? null,
       }))
     ).toEqual([
-        {
-          actionId: ACTION_ID,
-          code: null,
-          disposition: "acknowledge",
-          status: "accepted",
-        },
-        {
-          actionId: "10000000-0000-4000-8000-000000000009",
-          code: "ACCOUNT_REVISION_STALE",
-          disposition: "reject",
-          status: "stale",
-        },
-      ]
-    );
+      {
+        actionId: ACTION_ID,
+        code: null,
+        disposition: "acknowledge",
+        status: "accepted",
+      },
+      {
+        actionId: "10000000-0000-4000-8000-000000000009",
+        code: "ACCOUNT_REVISION_STALE",
+        disposition: "reject",
+        status: "stale",
+      },
+    ]);
     expect(markPending).toHaveBeenCalledTimes(2);
     expect(recordOutcome).toHaveBeenCalledTimes(2);
   });
@@ -203,6 +291,9 @@ describe("financial action reconciliation", () => {
     const service = createFinancialActionReconciliationService({
       loadReconciliationBundle: () => Promise.resolve(rejectedBundle()),
       commitCompensationAtomically: commit,
+      hashProvider: {
+        digestUtf8: () => Promise.resolve(SNAPSHOT_HASH),
+      },
     });
 
     await expect(service.reconcileRejectedAction(ACTION_ID)).resolves.toBe(
@@ -228,8 +319,120 @@ describe("financial action reconciliation", () => {
         },
       ],
       userId: USER_ID,
+      smsReviewDraftRestore: null,
     });
   });
+
+  it("restores the exact local SMS draft in the same compensation commit", async () => {
+    const commit = jest.fn(() => Promise.resolve());
+    const hashProvider = {
+      digestUtf8: jest.fn(() => Promise.resolve(SNAPSHOT_HASH)),
+    };
+    const service = createFinancialActionReconciliationService({
+      commitCompensationAtomically: commit,
+      hashProvider,
+      loadReconciliationBundle: () =>
+        Promise.resolve(
+          rejectedBundle({
+            domain: "sms",
+            payloadJson: smsPayloadJson(),
+            localSmsReviewDraftSnapshot: localSmsSnapshot(),
+          })
+        ),
+    });
+
+    expect(() =>
+      parseFinancialActionEnvelopeJson(smsPayloadJson())
+    ).not.toThrow();
+
+    await expect(service.reconcileRejectedAction(ACTION_ID)).resolves.toBe(
+      "reconciled"
+    );
+    expect(hashProvider.digestUtf8).toHaveBeenCalledWith(
+      JSON.stringify({
+        createdAt: "2026-08-31T11:00:00.000Z",
+        id: DRAFT_ID,
+        parsedAt: "2026-08-31T11:55:00.000Z",
+        payloadJson: '{"amount":25,"currency":"EGP"}',
+        payloadVersion: "1",
+        position: "0",
+        queueId: QUEUE_ID,
+        selectionOverride: true,
+        smsFingerprint: "sms-fingerprint-1",
+        updatedAt: "2026-08-31T12:00:00.000Z",
+        userId: USER_ID,
+      })
+    );
+    expect(commit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        smsReviewDraftRestore: {
+          createdAt: "2026-08-31T11:00:00.000Z",
+          draftId: DRAFT_ID,
+          parsedAt: "2026-08-31T11:55:00.000Z",
+          payloadJson: '{"amount":25,"currency":"EGP"}',
+          payloadVersion: 1,
+          position: 0,
+          queueId: QUEUE_ID,
+          selectionOverride: true,
+          smsFingerprint: "sms-fingerprint-1",
+          updatedAt: "2026-08-31T12:00:00.000Z",
+        },
+      })
+    );
+  });
+
+  it("fails closed when the immutable SMS draft snapshot hash differs", async () => {
+    const commit = jest.fn(() => Promise.resolve());
+    const service = createFinancialActionReconciliationService({
+      commitCompensationAtomically: commit,
+      hashProvider: {
+        digestUtf8: () => Promise.resolve("b".repeat(64)),
+      },
+      loadReconciliationBundle: () =>
+        Promise.resolve(
+          rejectedBundle({
+            domain: "sms",
+            payloadJson: smsPayloadJson(),
+            localSmsReviewDraftSnapshot: localSmsSnapshot(),
+          })
+        ),
+    });
+
+    await expect(service.reconcileRejectedAction(ACTION_ID)).rejects.toThrow(
+      FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE
+    );
+    expect(commit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    null,
+    { ...localSmsSnapshot(), userId: ACCOUNT_ID },
+    { ...localSmsSnapshot(), id: ACCOUNT_ID },
+    { ...localSmsSnapshot(), queueId: ACCOUNT_ID },
+    { ...localSmsSnapshot(), smsFingerprint: "different-message" },
+    { ...localSmsSnapshot(), position: "9007199254740992" },
+  ])(
+    "refuses missing, foreign or mismatched local draft recovery data %#",
+    async (snapshot) => {
+      const commit = jest.fn(() => Promise.resolve());
+      const service = createFinancialActionReconciliationService({
+        commitCompensationAtomically: commit,
+        hashProvider: { digestUtf8: () => Promise.resolve(SNAPSHOT_HASH) },
+        loadReconciliationBundle: () =>
+          Promise.resolve(
+            rejectedBundle({
+              domain: "sms",
+              payloadJson: smsPayloadJson(),
+              localSmsReviewDraftSnapshot: snapshot,
+            })
+          ),
+      });
+      await expect(service.reconcileRejectedAction(ACTION_ID)).rejects.toThrow(
+        FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE
+      );
+      expect(commit).not.toHaveBeenCalled();
+    }
+  );
 
   it("replays only fully compensated evidence", async () => {
     const commit = jest.fn(() => Promise.resolve());
@@ -245,6 +448,9 @@ describe("financial action reconciliation", () => {
           })
         ),
       commitCompensationAtomically: commit,
+      hashProvider: {
+        digestUtf8: () => Promise.resolve(SNAPSHOT_HASH),
+      },
     });
 
     await expect(service.reconcileRejectedAction(ACTION_ID)).resolves.toBe(
@@ -265,6 +471,9 @@ describe("financial action reconciliation", () => {
           })
         ),
       commitCompensationAtomically: () => Promise.resolve(),
+      hashProvider: {
+        digestUtf8: () => Promise.resolve(SNAPSHOT_HASH),
+      },
     });
 
     await expect(service.reconcileRejectedAction(ACTION_ID)).rejects.toThrow(

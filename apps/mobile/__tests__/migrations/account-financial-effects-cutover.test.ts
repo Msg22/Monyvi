@@ -8,7 +8,7 @@ function source(relativePath: string): string {
   return readFileSync(resolve(ROOT, relativePath), "utf8");
 }
 
-describe("069 account financial-effects preparatory cutover", () => {
+describe("069 account financial-effects cutover", () => {
   it("adds a revision-zero bigint boundary without fabricating history", () => {
     const sql = source(MIGRATION_PATH);
 
@@ -17,7 +17,7 @@ describe("069 account financial-effects preparatory cutover", () => {
     );
     expect(sql).toMatch(/financial_revision[\s\S]*9223372036854775807/i);
     expect(sql).not.toMatch(
-      /insert\s+into\s+public\.(?:financial_action_groups|account_financial_effects)[\s\S]*select[\s\S]*from\s+public\.accounts/i
+      /insert\s+into\s+public\.(?:financial_action_groups|account_financial_effects)[^;]*select[^;]*from\s+public\.accounts/i
     );
   });
 
@@ -33,6 +33,9 @@ describe("069 account financial-effects preparatory cutover", () => {
     expect(sql).toMatch(/compensated_at\s+timestamptz/i);
     expect(sql).toMatch(/deleted\s+boolean\s+not\s+null\s+default\s+false/i);
     expect(sql).toMatch(
+      /account_financial_effect_domain[\s\S]*domain\s+in\s*\(\s*'accounts'\s*,\s*'metals'\s*,\s*'transactions'/i
+    );
+    expect(sql).toMatch(
       /foreign\s+key\s*\(\s*user_id\s*,\s*action_id\s*\)[\s\S]*references\s+public\.financial_action_groups\s*\(\s*user_id\s*,\s*action_id\s*\)/i
     );
     expect(sql).toMatch(
@@ -43,13 +46,19 @@ describe("069 account financial-effects preparatory cutover", () => {
   it("enforces canonical sorted account guards and one effect per guard", () => {
     const sql = source(MIGRATION_PATH);
 
-    expect(sql).toContain("DROP CONSTRAINT financial_action_groups_foundation_guards_empty");
+    expect(sql).toContain(
+      "DROP CONSTRAINT financial_action_groups_foundation_guards_empty"
+    );
     expect(sql).toContain("financial_action_validate_account_guards_v1");
     expect(sql).toContain("financial_action_account_effects_match_guards_v1");
-    expect(sql).toMatch(/constraint\s+trigger[\s\S]*deferrable\s+initially\s+deferred/i);
+    expect(sql).toMatch(
+      /constraint\s+trigger[\s\S]*deferrable\s+initially\s+deferred/i
+    );
     expect(sql).toContain("financial_action_account_guards_invalid");
     expect(sql).toContain("financial_action_account_effects_mismatch");
-    expect(sql).toMatch(/effect\.currency\s+is\s+distinct\s+from\s+account\.currency/i);
+    expect(sql).toMatch(
+      /effect\.currency\s+is\s+distinct\s+from\s+account\.currency/i
+    );
     expect(sql).toMatch(/effect\.domain\s+is\s+distinct\s+from\s+v_domain/i);
   });
 
@@ -94,23 +103,68 @@ describe("069 account financial-effects preparatory cutover", () => {
     expect(sql).not.toMatch(/grant\s+all/i);
   });
 
-  it("keeps unapproved clients fail-closed without registering action payloads", () => {
+  it("registers only the approved exact account-effects payload and explicit writer tuples", () => {
     const sql = source(MIGRATION_PATH);
 
-    expect(sql).not.toMatch(/financial_action_validate_(?:transaction|transfer)_payload/i);
-    expect(sql).not.toMatch(/payload_version\s*=\s*'(?:transactions|transfers)\./i);
-    expect(sql).not.toMatch(/create\s+or\s+replace\s+function\s+public\.apply_financial_action/i);
-  });
-
-  it("activates an accepted owner-CAS mutation only after a versioned payload contract is approved", () => {
-    throw new Error(
-      "BLOCKED_RED: accepted CAS/RPC activation requires an approved versioned action payload contract"
+    expect(sql).toContain(
+      "financial_action_validate_account_balance_effects_payload_v1"
+    );
+    expect(sql).toContain("account.balance-effects/v1");
+    expect(sql).toContain("financial_action_account_operation_registered_v1");
+    expect(sql).toMatch(/transactions[\s\S]*transaction\.create/);
+    expect(sql).toMatch(/transfers[\s\S]*transfer\.create/);
+    expect(sql).not.toMatch(
+      /payload_version\s*=\s*'account\.balance-effects\/v[02-9]'/i
     );
   });
 
+  it("activates one authenticated owner-scoped CAS RPC with durable ordered outcomes", () => {
+    const sql = source(MIGRATION_PATH);
+
+    expect(sql).toMatch(
+      /create\s+or\s+replace\s+function\s+public\.apply_account_financial_action_v1\s*\(\s*p_payload_json\s+text\s*,\s*p_payload_hash\s+text\s*\)/i
+    );
+    expect(sql).toContain("PAYLOAD_HASH_MISMATCH");
+    expect(sql).toContain("ACCOUNT_REVISION_STALE");
+    expect(sql).toContain("INVALID_REVISION");
+    expect(sql).toContain("REVISION_EXHAUSTED");
+    expect(sql).toMatch(
+      /order\s+by\s+account\.id(?:::text)?\s+collate\s+"C"[\s\S]*for\s+update/i
+    );
+    expect(sql).toMatch(
+      /grant\s+execute[\s\S]*apply_account_financial_action_v1[\s\S]*authenticated/i
+    );
+  });
+
+  it("commits each whitelisted domain mutation with its account effects in the same RPC", () => {
+    const sql = source(MIGRATION_PATH);
+
+    expect(sql).toMatch(
+      /'accountEffects'\s*,\s*'domainMutation'\s*,\s*'domainRecordRefs'\s*,\s*'operationCode'\s*,\s*'schemaVersion'/i
+    );
+    expect(sql).toContain("financial_action_validate_domain_mutation_v1");
+    expect(sql).toContain("financial_action_dispatch_domain_mutation_v1");
+    expect(sql).toContain("financial_action_apply_account_mutation_v1");
+    expect(sql).toContain("financial_action_apply_transaction_mutation_v1");
+    expect(sql).toContain("financial_action_apply_transfer_mutation_v1");
+    expect(sql).toContain("financial_action_expected_account_effects_v1");
+    expect(sql).toMatch(
+      /v_expected_effects\s+is\s+distinct\s+from[\s\S]*accountEffects/i
+    );
+    expect(sql).toContain("financial_action_domain_revision_stale");
+    expect(sql).toMatch(
+      /perform\s+private\.financial_action_dispatch_domain_mutation_v1[\s\S]*update\s+public\.accounts/i
+    );
+    expect(sql).not.toMatch(/execute\s+format\s*\(/i);
+  });
+
   it("drains or quarantines every legacy protected-field sync row before cutover", () => {
-    throw new Error(
-      "BLOCKED_RED: T032 writer routing and legacy drain/migrate/quarantine are not implemented"
+    const sql = source(MIGRATION_PATH);
+
+    expect(sql).toContain("account_financial_action_cutover_quarantine");
+    expect(sql).toContain("legacy_protected_field_write");
+    expect(sql).toMatch(
+      /revoke\s+all[\s\S]*account_financial_action_cutover_quarantine/i
     );
   });
 });

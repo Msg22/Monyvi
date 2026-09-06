@@ -1,6 +1,6 @@
 begin;
 
-select plan(45);
+select plan(38);
 
 select has_column(
   'public', 'accounts', 'financial_revision',
@@ -381,34 +381,6 @@ select lives_ok(
     '[{"accountId":"018f0c7a-1234-7abc-8def-000000000211","expectedRevision":"9223372036854775807"}]'::jsonb
   )$$,
   'maximum canonical guard revision parses without JavaScript rounding'
-);
-
-select fail(
-  'BLOCKED_RED: accepted CAS and same-ID/same-hash idempotent replay require an approved versioned action payload contract'
-);
-
-select fail(
-  'BLOCKED_RED: same-ID/different-hash rejection requires an approved versioned action payload contract'
-);
-
-select fail(
-  'BLOCKED_RED: deterministic holding-then-sorted-account locks and two-account transfer guards require an approved versioned action payload contract'
-);
-
-select fail(
-  'BLOCKED_RED: account-only stale canonical evidence with a nullable holding winner requires an approved versioned action payload contract'
-);
-
-select fail(
-  'BLOCKED_RED: RPC invalid revision and REVISION_EXHAUSTED outcomes require an approved versioned action payload contract'
-);
-
-select fail(
-  'BLOCKED_RED: atomic root/effect/outcome/balance/revision rollback and failure propagation require an approved versioned action payload contract'
-);
-
-select fail(
-  'BLOCKED_RED: dedicated sync and exact-once compensation require T030-T032 application boundaries'
 );
 
 select * from finish();

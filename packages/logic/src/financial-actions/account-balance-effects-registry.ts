@@ -70,23 +70,12 @@ const TRANSFER_AFTER_KEYS = [
   "smsFingerprint",
   "toAccountId",
 ] as const;
-const RECURRING_SCHEDULE_AFTER_KEYS = [
-  "id",
-  "nextDueDate",
-  "status",
-] as const;
+const RECURRING_SCHEDULE_AFTER_KEYS = ["id", "nextDueDate", "status"] as const;
 const SMS_REVIEW_DRAFT_CLEANUP_AFTER_KEYS = [
-  "createdAt",
   "id",
-  "parsedAt",
-  "payloadJson",
-  "payloadVersion",
-  "position",
   "queueId",
-  "selectionOverride",
   "smsFingerprint",
   "snapshotHash",
-  "updatedAt",
 ] as const;
 
 type RawObject = Readonly<Record<string, unknown>>;
@@ -238,14 +227,6 @@ function isSignedMinorUnits(
   );
 }
 
-function isUnsignedIntegerString(value: unknown): value is string {
-  return (
-    typeof value === "string" &&
-    /^(?:0|[1-9][0-9]*)$/.test(value) &&
-    BigInt(value) <= MAX_SIGNED_BIGINT
-  );
-}
-
 function assertSortedUnique(
   values: readonly string[],
   invalidPayloadCode: string
@@ -295,7 +276,7 @@ function validateTransactionAfter(
     !isUuid(value.accountId) ||
     !isUuid(value.categoryId) ||
     !isSignedMinorUnits(value.amountMinorUnits) ||
-    (value.amountMinorUnits).startsWith("-") ||
+    value.amountMinorUnits.startsWith("-") ||
     typeof value.currency !== "string" ||
     !/^[A-Z]{3}$/.test(value.currency) ||
     !["EXPENSE", "INCOME"].includes(value.type as string) ||
@@ -325,11 +306,11 @@ function validateTransferAfter(
     !isUuid(value.toAccountId) ||
     value.fromAccountId === value.toAccountId ||
     !isSignedMinorUnits(value.amountMinorUnits) ||
-    (value.amountMinorUnits).startsWith("-") ||
+    value.amountMinorUnits.startsWith("-") ||
     !(
       value.convertedAmountMinorUnits === null ||
       (isSignedMinorUnits(value.convertedAmountMinorUnits) &&
-        !(value.convertedAmountMinorUnits).startsWith("-"))
+        !value.convertedAmountMinorUnits.startsWith("-"))
     ) ||
     !(
       value.exchangeRate === null ||
@@ -370,16 +351,6 @@ function validateSmsReviewDraftCleanupAfter(
     !isUuid(value.queueId) ||
     typeof value.smsFingerprint !== "string" ||
     value.smsFingerprint.length === 0 ||
-    typeof value.payloadJson !== "string" ||
-    !isUnsignedIntegerString(value.payloadVersion) ||
-    !isUnsignedIntegerString(value.position) ||
-    !(
-      value.selectionOverride === null ||
-      typeof value.selectionOverride === "boolean"
-    ) ||
-    !isTimestamp(value.parsedAt) ||
-    !isTimestamp(value.createdAt) ||
-    !isTimestamp(value.updatedAt) ||
     typeof value.snapshotHash !== "string" ||
     !/^[0-9a-f]{64}$/.test(value.snapshotHash)
   )
@@ -440,8 +411,7 @@ function assertOperationShape(
     (operationCode === "recurring.pay-now" &&
       shapes.join(",") === "recurring_payment:update,transaction:create") ||
     (operationCode === "sms.review-durable" &&
-      shapes.join(",") ===
-        "sms_review_draft_item:delete,transaction:create");
+      shapes.join(",") === "sms_review_draft_item:delete,transaction:create");
   if (!valid) fail(invalidPayloadCode);
 }
 
@@ -528,9 +498,7 @@ function validatePayload(
         "sms_review_draft_item",
         "transaction",
         "transfer",
-      ].includes(
-        rawRecord.entity as string
-      ) ||
+      ].includes(rawRecord.entity as string) ||
       !["create", "update", "delete"].includes(rawRecord.mode as string) ||
       !isObject(rawRecord.after)
     )

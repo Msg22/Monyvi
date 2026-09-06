@@ -108,18 +108,11 @@ describe("account.balance-effects/v1 composite writer variants", () => {
           records: [
             {
               after: {
-                createdAt: "2026-08-01T12:00:00.000Z",
                 id: ROOT_RECORD_ID,
-                parsedAt: "2026-08-31T11:55:00.000Z",
-                payloadJson: "{\"amount\":\"125\",\"currency\":\"EGP\"}",
-                payloadVersion: "1",
-                position: "0",
                 queueId: QUEUE_ID,
-                selectionOverride: true,
                 smsFingerprint: "sms-fingerprint-1",
                 snapshotHash:
                   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                updatedAt: "2026-08-31T12:00:00.000Z",
               },
               entity: "sms_review_draft_item",
               expectedUpdatedAt: "2026-08-31T12:00:00.000Z",
@@ -146,5 +139,33 @@ describe("account.balance-effects/v1 composite writer variants", () => {
     };
 
     expect(canonicalizeFinancialActionEnvelope(value)).toEqual(value);
+    const descriptor = value.payload.domainMutation.records[0];
+    for (const forbiddenKey of [
+      "payloadJson",
+      "originalSms",
+      "position",
+      "selectionOverride",
+    ]) {
+      expect(() =>
+        canonicalizeFinancialActionEnvelope({
+          ...value,
+          payload: {
+            ...value.payload,
+            domainMutation: {
+              records: [
+                {
+                  ...descriptor,
+                  after: {
+                    ...descriptor.after,
+                    [forbiddenKey]: "private review data",
+                  },
+                },
+                value.payload.domainMutation.records[1],
+              ],
+            },
+          },
+        })
+      ).toThrow();
+    }
   });
 });
