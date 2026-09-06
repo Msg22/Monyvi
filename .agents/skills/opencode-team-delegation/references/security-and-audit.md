@@ -50,8 +50,8 @@ Bounded write with recommended canary or explicit waiver:
   read/search access to unrelated repository files;
 - derive a concrete workspace-relative writable allowlist from the exclusive
   artifact set. Use exact files and the minimum owned directory prefixes needed
-  for cohesive edits or new in-scope files; never grant arbitrary repository-root
-  writes;
+  for cohesive edits or new in-scope files; never grant arbitrary
+  repository-root writes;
 - require the writable allowlist to be contained within the readable-source
   boundary and enforce both boundaries in the permission profile;
 - any unexpected attempted or actual read outside the readable-source boundary,
@@ -74,8 +74,8 @@ Bounded write with recommended canary or explicit waiver:
 ## Immutable Identity And Capability Evidence
 
 Before every dispatch, record the exact provider, provider-prefixed model ID,
-**immutable provider model revision/build**, OpenCode/runtime version, exact tool
-surface/version set, permission-profile identifier or hash, and environment
+**immutable provider model revision/build**, OpenCode/runtime version, exact
+tool surface/version set, permission-profile identifier or hash, and environment
 boundary relevant to the task. A moving display alias is not sufficient model
 identity. If the immutable revision/build cannot be established, do not reuse
 prior capability evidence or a canary waiver for write work.
@@ -201,12 +201,12 @@ itself**:
 4. only after that edit checkpoint is accepted may the test run to produce Red;
 5. a trusted-native runner executes the Red check unless the external worker
    already has positive test-execution capability evidence; and
-6. the lead reviews and explicitly accepts the Red evidence before any production
-   implementation edit.
+6. the lead reviews and explicitly accepts the Red evidence before any
+   production implementation edit.
 
-For a non-TDD task, the worker may make one small representative edit only inside
-the writable allowlist and then pauses for the same trusted-native edit/boundary
-review.
+For a non-TDD task, the worker may make one small representative edit only
+inside the writable allowlist and then pauses for the same trusted-native
+edit/boundary review.
 
 Only an accepted provisional edit checkpoint becomes positive repository-edit
 capability evidence for that immutable configuration and allows the same
@@ -256,9 +256,9 @@ User authorization or canary waiver cannot override quarantine.
 - One writer owns each artifact/file per wave across all concurrent lanes. Stop
   and report any ownership overlap before further edits.
 - Record base SHA before dispatch and verify it before accepting output.
-- Derive the readable-source allowlist from the user-approved source/data-sharing
-  boundary before dispatch and record its fingerprint with the task, or use a
-  sanitized checkout containing only approved sources.
+- Derive the readable-source allowlist from the user-approved
+  source/data-sharing boundary before dispatch and record its fingerprint with
+  the task, or use a sanitized checkout containing only approved sources.
 - Derive the writable file/directory allowlist from the exclusively owned
   artifact set before dispatch, record its fingerprint, and require it to be a
   subset of the readable boundary.
@@ -291,8 +291,9 @@ reports:
 3. The Red result is then reviewed and explicitly accepted before any production
    implementation edit. For a non-provisional TDD/debugging task, the normal Red
    evidence gate occurs before production implementation.
-4. For a provisional non-TDD task, the worker pauses after its one representative
-   allowlisted edit for trusted-native acceptance before any additional edit.
+4. For a provisional non-TDD task, the worker pauses after its one
+   representative allowlisted edit for trusted-native acceptance before any
+   additional edit.
 5. When the task brief requires an interim diff/risk checkpoint, the worker
    pauses there and waits for explicit lead acceptance before continuing.
 6. Verification and final-diff checkpoints remain required before acceptance.
@@ -373,9 +374,9 @@ source control unless project explicitly adopts a sanitized tracked format.
 
 Immediately abort and apply the cross-profile quarantine above on unexpected
 sensitive-data exposure, unexpected unauthorized readable-source access,
-unexpected unauthorized scope/write, an unexpectedly successful synthetic
-canary denial probe, or another security boundary breach. The user cannot waive
-this response.
+unexpected unauthorized scope/write, an unexpectedly successful synthetic canary
+denial probe, or another security boundary breach. The user cannot waive this
+response.
 
 A correctly denied predeclared synthetic canary probe is a qualification event,
 not a stop/quarantine event.

@@ -216,8 +216,8 @@ of dispatches.
 
 Do not statically confine GLM or Qwen to narrow task categories. Route
 adaptively and update capability evidence from actual results. Ordinary
-production assignments require **positive capability evidence** for each material
-capability the task will use. Capability evidence is bound to the exact
+production assignments require **positive capability evidence** for each
+material capability the task will use. Capability evidence is bound to the exact
 provider-prefixed model ID, **immutable provider model revision/build**,
 OpenCode/runtime version, tool surface/version set, and every
 permission/environment dimension material to that capability. A moving display
@@ -279,9 +279,9 @@ unexpectedly succeeds, produces an unauthorized side effect, touches real data
 outside the procedure, or the worker attempts a boundary crossing that was not
 part of the authorized canary.
 
-When the user explicitly waives the canary, bind the waiver to the **exact task**
-plus provider, model ID, immutable model revision/build, OpenCode/runtime version,
-exact tool surface/version set, permission-profile identifier/hash,
+When the user explicitly waives the canary, bind the waiver to the **exact
+task** plus provider, model ID, immutable model revision/build, OpenCode/runtime
+version, exact tool surface/version set, permission-profile identifier/hash,
 sandbox/network boundary, readable-source-allowlist fingerprint, and
 writable-allowlist fingerprint. Any enforcement-relevant change invalidates the
 waiver and requires a fresh waiver or canary before more writes.
@@ -291,9 +291,9 @@ capability is the only material capability lacking positive evidence. All other
 material external-worker capabilities must already be proven. For a TDD task,
 make the **failing test itself** the provisional representative edit: after
 plan/assumptions approval, allow only that test edit inside the writable
-allowlist, pause immediately, and have the trusted native owner inspect the path,
-readable/writable enforcement, permission behavior, and diff. Only after the
-provisional edit checkpoint is accepted may the test run to produce Red. A
+allowlist, pause immediately, and have the trusted native owner inspect the
+path, readable/writable enforcement, permission behavior, and diff. Only after
+the provisional edit checkpoint is accepted may the test run to produce Red. A
 trusted-native runner executes Red unless the external worker already has
 positive test-execution capability evidence. The Red result then receives
 explicit lead acceptance before any production implementation edit. For a
@@ -366,8 +366,8 @@ Unexpected sensitive-data exposure, unauthorized readable-source access,
 unauthorized scope/write, an unexpectedly successful synthetic canary denial
 probe, or another security boundary breach immediately aborts the lane and
 triggers the cross-profile quarantine above. A correctly denied predeclared
-synthetic canary probe is qualification evidence and does not trigger quarantine.
-User-authorized canary waiver cannot waive or override quarantine.
+synthetic canary probe is qualification evidence and does not trigger
+quarantine. User-authorized canary waiver cannot waive or override quarantine.
 
 For ordinary rule drift or a materially wrong but safe direction, correct
 explicitly and continue the same session when recoverable. After three
@@ -544,12 +544,12 @@ plan/coverage audit; implementer owns production code; lead verifies red/green
 evidence only.
 
 For an external worker that already has edit capability evidence, the normal
-Section 6 Red gate applies before production implementation. For a
-canary-waived **provisional first-time writer** on a TDD task, the failing test is
-the provisional representative edit: approve that test edit and boundary
-enforcement first, then run/review and explicitly accept Red, and only then allow
-production implementation. A task-required interim diff/risk checkpoint also
-requires explicit lead acceptance before work continues.
+Section 6 Red gate applies before production implementation. For a canary-waived
+**provisional first-time writer** on a TDD task, the failing test is the
+provisional representative edit: approve that test edit and boundary enforcement
+first, then run/review and explicitly accept Red, and only then allow production
+implementation. A task-required interim diff/risk checkpoint also requires
+explicit lead acceptance before work continues.
 
 ### Review Gate
 
@@ -619,21 +619,21 @@ and ledgers before assigning more work.
 Unexpected sensitive-data exposure, unauthorized readable-source access,
 unauthorized scope/write, an unexpectedly successful synthetic canary denial
 probe, or another security boundary breach immediately aborts the affected
-OpenCode lane and quarantines the implicated provider/model revision/runtime/tool
-combination across read/write modes and all permission profiles pending incident
-review and requalification. A correctly denied predeclared synthetic canary
-probe is qualification evidence and does not trigger quarantine. A new task,
-session, worktree, or profile cannot bypass quarantine. Incident review may
-narrow the quarantine only after proving a profile-local cause and successful
-requalification for the intended restored configuration. User waiver cannot
-waive quarantine.
+OpenCode lane and quarantines the implicated provider/model
+revision/runtime/tool combination across read/write modes and all permission
+profiles pending incident review and requalification. A correctly denied
+predeclared synthetic canary probe is qualification evidence and does not
+trigger quarantine. A new task, session, worktree, or profile cannot bypass
+quarantine. Incident review may narrow the quarantine only after proving a
+profile-local cause and successful requalification for the intended restored
+configuration. User waiver cannot waive quarantine.
 
 Pause affected lane for source conflict, material unresolved decision, missing
 gate, ownership overlap, invalidated waiver/evidence, readable/writable-boundary
 change, incomplete dependency, unsafe worktree, unexplained test failure, design
 drift, missing environment, or any action outside Section 2 authorization.
-Continue safe independent lanes. Mark blocked only after exhausting safe in-scope
-evidence and alternatives.
+Continue safe independent lanes. Mark blocked only after exhausting safe
+in-scope evidence and alternatives.
 
 Lead declares completion only when requested outcome matches source of truth,
 atomic ledger items have dispositions, reviews have no blockers, validation is

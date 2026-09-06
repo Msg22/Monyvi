@@ -87,18 +87,18 @@ provider-prefixed model ID, immutable model revision/build, OpenCode/runtime
 version, exact tool surface/version set, permission-profile identifier or hash,
 environment/sandbox boundary, readable-source-allowlist fingerprint, and
 writable-allowlist fingerprint. Any enforcement-relevant change invalidates that
-waiver before another write; obtain a fresh explicit waiver or run the canary for
-the changed configuration.
+waiver before another write; obtain a fresh explicit waiver or run the canary
+for the changed configuration.
 
 A waiver does not weaken the remaining controls: use one isolated exclusive
 task/worktree, non-overlapping artifact ownership, an enforced readable-source
 allowlist derived from the user-approved data-sharing boundary or a sanitized
 checkout, a concrete writable path or directory allowlist derived from the owned
-artifacts and contained within the readable boundary, an explicit deny-by-default
-profile, no secrets or private financial data, no dependency installs,
-Git/remote mutations, destructive actions, releases, or deployments, the
-required mentoring pause gates, and independent trusted-native inspection of the
-complete diff plus required tests/verification before acceptance.
+artifacts and contained within the readable boundary, an explicit
+deny-by-default profile, no secrets or private financial data, no dependency
+installs, Git/remote mutations, destructive actions, releases, or deployments,
+the required mentoring pause gates, and independent trusted-native inspection of
+the complete diff plus required tests/verification before acceptance.
 
 If repository-edit capability is the only material capability that lacks prior
 positive evidence, a user-authorized waiver may bootstrap it through a
@@ -110,9 +110,9 @@ trusted native owner first verifies the changed path, readable/writable-boundary
 enforcement, permission behavior, and provisional diff. Only after that edit
 checkpoint is accepted does the test run to produce Red evidence; the Red result
 is then reviewed and explicitly accepted before any production implementation
-edit. A trusted-native runner executes Red unless the external worker already has
-positive test-execution capability evidence. For a non-TDD task, the worker may
-make one small representative allowlisted edit and pause under the same edit
+edit. A trusted-native runner executes Red unless the external worker already
+has positive test-execution capability evidence. For a non-TDD task, the worker
+may make one small representative allowlisted edit and pause under the same edit
 review gate.
 
 Only an accepted provisional edit checkpoint becomes positive repository-edit
@@ -127,9 +127,9 @@ quarantines the implicated provider/model revision/runtime/tool combination
 across read and write modes and all permission profiles. A new task, session,
 worktree, or permission profile must not bypass quarantine. Restore eligibility
 only after incident review and requalification. Incident review may narrow
-quarantine to a profile-local cause only when evidence proves that narrower cause
-and requalification for the intended configuration succeeds. User or canary
-waiver cannot override quarantine.
+quarantine to a profile-local cause only when evidence proves that narrower
+cause and requalification for the intended configuration succeeds. User or
+canary waiver cannot override quarantine.
 
 ## Prepare And Dispatch
 
@@ -148,13 +148,13 @@ Required dispatch contract:
 2. Allocate one complete task/session/worktree/owner with immutable base SHA,
    exclusive worktree/branch responsibility, and non-overlapping artifact/file
    ownership. One writer owns each artifact per wave. Stop on ownership overlap.
-3. Derive and enforce a concrete workspace-relative **readable-source allowlist**
-   from the user-approved data-sharing/source boundary, or use a sanitized
-   checkout containing only approved sources. Derive the writable file/directory
-   allowlist from the assigned exclusive artifact set and require it to be a
-   subset of the readable boundary. Cohesive edits and new files are allowed only
-   inside those owned writable boundaries; never use unbounded repository-root
-   read or write grants.
+3. Derive and enforce a concrete workspace-relative **readable-source
+   allowlist** from the user-approved data-sharing/source boundary, or use a
+   sanitized checkout containing only approved sources. Derive the writable
+   file/directory allowlist from the assigned exclusive artifact set and require
+   it to be a subset of the readable boundary. Cohesive edits and new files are
+   allowed only inside those owned writable boundaries; never use unbounded
+   repository-root read or write grants.
 4. Prefer one dedicated loopback OpenCode server per task with task-scoped
    credentials. If a shared server is necessary, record its server ID and active
    session registry and follow the shared-server teardown rules below.
@@ -163,7 +163,8 @@ Required dispatch contract:
    readable/writable allowlists, qualification mode when applicable, explicit
    checkpoint gates, timeout budget, and stop conditions.
 6. Require the worker to pause after its plan/assumptions checkpoint. The lead
-   must review and explicitly accept it before any non-qualification work begins.
+   must review and explicitly accept it before any non-qualification work
+   begins.
 7. For a qualification dispatch, run only the named benchmark under the
    qualification sandbox, record the result, and stop that qualification task.
    Do not silently transition it into production implementation.
@@ -171,11 +172,12 @@ Required dispatch contract:
    provisional representative edit, pause for trusted-native edit/boundary
    acceptance, then run and review Red and require explicit lead acceptance
    before production implementation.
-9. For a non-provisional TDD/debugging task, require failing-test or reproduction
-   evidence and explicit lead acceptance before production implementation.
+9. For a non-provisional TDD/debugging task, require failing-test or
+   reproduction evidence and explicit lead acceptance before production
+   implementation.
 10. For a provisional non-TDD task, permit one small allowlisted edit, then
-    require an immediate pause and trusted-native diff and boundary review before
-    any further edit.
+    require an immediate pause and trusted-native diff and boundary review
+    before any further edit.
 11. When the task brief requires an interim diff/risk checkpoint, require the
     worker to pause there and wait for explicit lead acceptance before
     continuing.
@@ -183,10 +185,10 @@ Required dispatch contract:
     chain-of-thought. Send bounded corrections in the same session when the lane
     remains safe and recoverable.
 13. On an unexpected security/sensitive-data/readable-source/scope breach, abort
-    immediately and apply the cross-profile quarantine above. A correctly denied,
-    predeclared synthetic canary probe is not an incident. Otherwise, correct
-    ordinary rule drift and allow up to three materially identical rule failures
-    before marking that model/task lane failed and reassigning.
+    immediately and apply the cross-profile quarantine above. A correctly
+    denied, predeclared synthetic canary probe is not an incident. Otherwise,
+    correct ordinary rule drift and allow up to three materially identical rule
+    failures before marking that model/task lane failed and reassigning.
 14. Inspect the complete diff and partial work before accepting or reassigning.
     Reject stale-base, ownership-overlap, out-of-readable-boundary,
     out-of-writable-allowlist, or out-of-scope changes; never land unverified
@@ -216,8 +218,8 @@ responses, cancellation, and diff inspection directly.
 ## Completion Evidence
 
 Record task ID, provider/model ID, immutable model revision/build,
-OpenCode/runtime version, tool surface/version set, positive capability evidence,
-qualification-dispatch evidence when used, session ID, server ID/mode,
+OpenCode/runtime version, tool surface/version set, positive capability
+evidence, qualification-dispatch evidence when used, session ID, server ID/mode,
 worktree/branch, base SHA, complete task scope, artifact/file ownership, derived
 readable-source allowlist/fingerprint, derived writable allowlist/fingerprint,
 protected paths, permission profile, canary status or fully bound

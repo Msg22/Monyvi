@@ -24,19 +24,20 @@ Before every dispatch:
    or its known baseline is recorded, the base SHA matches the brief, and the
    complete task/worktree responsibility has no competing owner.
 6. Confirm one writer owns every artifact/file in the task for this wave. Derive
-   a concrete workspace-relative readable-source allowlist from the user-approved
-   source/data-sharing boundary, or use a sanitized checkout containing only
-   approved sources. Derive the writable file/directory allowlist from the
-   exclusive artifacts, require it to be contained within the readable boundary,
-   record both fingerprints, and enforce both boundaries in the permission
-   profile. Never grant arbitrary repository-root read or write access.
+   a concrete workspace-relative readable-source allowlist from the
+   user-approved source/data-sharing boundary, or use a sanitized checkout
+   containing only approved sources. Derive the writable file/directory
+   allowlist from the exclusive artifacts, require it to be contained within the
+   readable boundary, record both fingerprints, and enforce both boundaries in
+   the permission profile. Never grant arbitrary repository-root read or write
+   access.
 7. Confirm explicit user opt-in covers provider/model pool, purpose, and the
    exact data-sharing boundary for this task.
 8. For an **ordinary production dispatch**, identify every material capability
-   the task will use and verify positive capability evidence for each one against
-   the immutable provider/model revision/build and every runtime/tool/permission/
-   environment dimension material to that capability. Missing negative evidence
-   is not positive evidence.
+   the task will use and verify positive capability evidence for each one
+   against the immutable provider/model revision/build and every
+   runtime/tool/permission/environment dimension material to that capability.
+   Missing negative evidence is not positive evidence.
 9. For a **qualification dispatch**, record the single capability under
    qualification and the sandboxed qualification procedure. The dispatch may
    omit prior positive evidence only for that capability. Every other material
@@ -55,9 +56,10 @@ Before every dispatch:
     writable-allowlist fingerprint. Any enforcement-relevant change invalidates
     that waiver.
 12. If repository-edit capability is the only material capability lacking prior
-    positive evidence and the exact waiver is valid, mark the production task for
-    the provisional first-write checkpoint below. All other material capabilities
-    used by the external worker must already have positive evidence.
+    positive evidence and the exact waiver is valid, mark the production task
+    for the provisional first-write checkpoint below. All other material
+    capabilities used by the external worker must already have positive
+    evidence.
 
 Do not dispatch if any required check is unknown, except that a valid
 qualification dispatch may intentionally lack evidence for the one capability it
@@ -165,14 +167,15 @@ Use official server/SDK APIs rather than screen automation:
 2. Send the task asynchronously only as a transport mechanism. Asynchronous
    reporting does not satisfy a checkpoint pause gate.
 3. The worker pauses after its plan/assumptions checkpoint. The lead reviews it
-   and must explicitly accept it before non-qualification production work begins.
+   and must explicitly accept it before non-qualification production work
+   begins.
 4. If this is a qualification dispatch, execute only the named benchmark inside
    its qualification sandbox, record the result, and terminate the qualification
    task. Do not continue into production implementation.
-5. If a canary-waived provisional TDD task is used, the worker authors **only the
-   minimal failing test** as the one provisional representative edit inside the
-   writable allowlist, then pauses before running it or making another edit. The
-   trusted native owner verifies changed paths, readable/writable-boundary
+5. If a canary-waived provisional TDD task is used, the worker authors **only
+   the minimal failing test** as the one provisional representative edit inside
+   the writable allowlist, then pauses before running it or making another edit.
+   The trusted native owner verifies changed paths, readable/writable-boundary
    enforcement, permission behavior, and the provisional diff. Only after that
    edit checkpoint is accepted may the test run to produce Red. A trusted-native
    runner executes the Red check unless the external worker already has positive
@@ -190,14 +193,14 @@ Use official server/SDK APIs rather than screen automation:
 9. Observe event stream, session status, messages, tool results, and diffs. Do
    not claim access to, request, or retain hidden chain-of-thought.
 10. Send clarifications and bounded corrections to the same session while base,
-    scope, ownership, waiver/evidence validity, readable/writable boundaries, and
-    quarantine status remain valid.
+    scope, ownership, waiver/evidence validity, readable/writable boundaries,
+    and quarantine status remain valid.
 11. Inspect verification evidence and the final complete diff before acceptance.
 12. On unexpected sensitive-data exposure, unauthorized readable-source access,
     unauthorized scope/write, an unexpectedly successful canary denial probe, or
     another security boundary breach, abort immediately and quarantine the
-    implicated provider/model revision/runtime/tool combination across read/write
-    modes and all permission profiles pending incident review and
+    implicated provider/model revision/runtime/tool combination across
+    read/write modes and all permission profiles pending incident review and
     requalification. A new task/profile cannot bypass this.
 13. A correctly denied predeclared synthetic canary probe is a qualification
     event, not an incident. It must be recorded as part of the authorized canary
@@ -251,9 +254,9 @@ owner handles authorized Git work.
   the implicated provider/model revision/runtime/tool combination across
   read/write modes and all permission profiles.
 - A correctly denied predeclared synthetic canary probe is expected
-  qualification evidence and does **not** trigger quarantine. A probe outside the
-  authorized canary procedure, or any probe that unexpectedly succeeds or causes
-  a side effect, is an incident.
+  qualification evidence and does **not** trigger quarantine. A probe outside
+  the authorized canary procedure, or any probe that unexpectedly succeeds or
+  causes a side effect, is an incident.
 - A new task, session, worktree, or permission profile cannot bypass quarantine.
   User-authorized canary waiver cannot waive quarantine.
 - Restore eligibility only after incident review and requalification succeed.
@@ -328,12 +331,13 @@ should prove:
 - dependency installation is denied; and
 - destructive action is denied.
 
-The deliberate denial probes above are qualification events when they target only
-synthetic fixtures, are declared in the canary packet before execution, and are
-denied before any unauthorized mutation, disclosure, or other side effect. They
-do not trigger incident quarantine merely because the denied attempt occurred.
-Quarantine is required for unexpected success, side effects, real-data exposure,
-or any boundary attempt outside the declared synthetic canary procedure.
+The deliberate denial probes above are qualification events when they target
+only synthetic fixtures, are declared in the canary packet before execution, and
+are denied before any unauthorized mutation, disclosure, or other side effect.
+They do not trigger incident quarantine merely because the denied attempt
+occurred. Quarantine is required for unexpected success, side effects, real-data
+exposure, or any boundary attempt outside the declared synthetic canary
+procedure.
 
 The user may instead explicitly waive the canary for one exact task and one full
 enforcement configuration. The waiver record must include provider/model ID,
