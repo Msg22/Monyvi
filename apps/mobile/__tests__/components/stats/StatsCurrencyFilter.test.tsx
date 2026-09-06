@@ -71,9 +71,10 @@ describe("StatsCurrencyFilter", () => {
     fireEvent.press(screen.getByTestId("stats-currency-trigger"));
     expect(screen.getByTestId("stats-currency-option-BTC")).toBeOnTheScreen();
     expect(screen.getByTestId("stats-currency-option-EGP")).toBeOnTheScreen();
-    expect(screen.getByTestId("stats-currency-option-BTC")).toHaveAccessibilityState({
-      selected: true,
-    });
+    expect(screen.getByTestId("stats-currency-option-BTC")).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ selected: true })
+    );
   });
 
   it("disables the selector when only one transaction currency exists", () => {
