@@ -23,6 +23,146 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION private.financial_action_validate_registered_payload_v1(
+  p_value jsonb
+)
+RETURNS void
+LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_payload jsonb;
+  v_kind text;
+  v_version text;
+  v_facts jsonb;
+  v_metadata jsonb;
+  v_snapshot jsonb;
+  v_gross numeric;
+  v_fee numeric;
+  v_net numeric;
+BEGIN
+  IF p_value ->> 'domain' IS DISTINCT FROM 'metals' THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_unknown_definition';
+  END IF;
+  v_kind := p_value ->> 'kind';
+  v_version := p_value ->> 'payloadVersion';
+  v_payload := p_value -> 'payload';
+  PERFORM private.metal_action_expected_revision_v1(p_value);
+  IF jsonb_typeof(v_payload) IS DISTINCT FROM 'object' THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload';
+  END IF;
+
+  IF v_kind = 'add' AND v_version = 'metals.add/v1' THEN
+    IF (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(v_payload) AS key)
+      IS DISTINCT FROM ARRAY['expectedHoldingRevision','holdingId','materialFacts','metalType','metadata','predecessorEventId','rateSnapshots','reversesEventId']::text[]
+      OR v_payload ->> 'metalType' NOT IN ('GOLD', 'SILVER')
+      OR v_payload -> 'predecessorEventId' IS DISTINCT FROM 'null'::jsonb
+      OR v_payload -> 'reversesEventId' IS DISTINCT FROM 'null'::jsonb
+    THEN RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload'; END IF;
+    v_metadata := v_payload -> 'metadata'; v_facts := v_payload -> 'materialFacts'; v_snapshot := v_payload -> 'rateSnapshots';
+  ELSIF v_kind = 'correct' AND v_version = 'metals.correct/v1' THEN
+    IF (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(v_payload) AS key)
+      IS DISTINCT FROM ARRAY['expectedHoldingRevision','holdingId','materialCorrection','metadataChange','predecessorEventId','reversesEventId']::text[]
+      OR v_payload -> 'reversesEventId' IS DISTINCT FROM 'null'::jsonb
+      OR (v_payload -> 'metadataChange' IS DISTINCT FROM 'null'::jsonb AND jsonb_typeof(v_payload -> 'metadataChange') IS DISTINCT FROM 'object')
+      OR (v_payload -> 'materialCorrection' IS DISTINCT FROM 'null'::jsonb AND jsonb_typeof(v_payload -> 'materialCorrection') IS DISTINCT FROM 'object')
+      OR (v_payload -> 'metadataChange' IS DISTINCT FROM 'null'::jsonb AND v_payload -> 'materialCorrection' IS DISTINCT FROM 'null'::jsonb)
+    THEN RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload'; END IF;
+    IF v_payload -> 'metadataChange' IS DISTINCT FROM 'null'::jsonb THEN
+      IF (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(v_payload -> 'metadataChange') AS key) IS DISTINCT FROM ARRAY['after','before']::text[]
+        OR v_payload -> 'metadataChange' -> 'before' = v_payload -> 'metadataChange' -> 'after'
+      THEN RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload'; END IF;
+      v_metadata := v_payload -> 'metadataChange' -> 'after';
+    ELSE
+      IF (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(v_payload -> 'materialCorrection') AS key) IS DISTINCT FROM ARRAY['after','before','rateSnapshots','reason']::text[]
+        OR jsonb_typeof(v_payload -> 'materialCorrection' -> 'reason') IS DISTINCT FROM 'string'
+        OR length(btrim(v_payload -> 'materialCorrection' ->> 'reason')) = 0 OR octet_length(v_payload -> 'materialCorrection' ->> 'reason') > 1024
+        OR v_payload -> 'materialCorrection' -> 'before' = v_payload -> 'materialCorrection' -> 'after'
+      THEN RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload'; END IF;
+      v_facts := v_payload -> 'materialCorrection' -> 'after'; v_snapshot := v_payload -> 'materialCorrection' -> 'rateSnapshots';
+    END IF;
+  ELSIF v_kind = 'sell' AND v_version = 'metals.sell/v2' THEN
+    IF (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(v_payload) AS key)
+      IS DISTINCT FROM ARRAY['expectedHoldingRevision','feeMinorUnits','grossProceedsMinorUnits','holdingId','metalType','netProceedsMinorUnits','notes','predecessorEventId','rateSnapshots','reversesEventId','saleCurrency','saleDate']::text[]
+      OR v_payload ->> 'metalType' NOT IN ('GOLD','SILVER') OR jsonb_typeof(v_payload -> 'saleCurrency') IS DISTINCT FROM 'string'
+      OR v_payload ->> 'saleCurrency' NOT IN ('EGP','SAR','AED','KWD','QAR','BHD','OMR','JOD','IQD','LYD','TND','MAD','DZD','USD','EUR','GBP','JPY','CHF','CNY','INR','KRW','KPW','SGD','HKD','MYR','AUD','NZD','CAD','SEK','NOK','DKK','ISK','TRY','RUB','ZAR')
+      OR jsonb_typeof(v_payload -> 'saleDate') IS DISTINCT FROM 'string' OR v_payload ->> 'saleDate' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+      OR v_payload -> 'reversesEventId' IS DISTINCT FROM 'null'::jsonb OR jsonb_typeof(v_payload -> 'notes') NOT IN ('string','null')
+      OR (jsonb_typeof(v_payload -> 'notes') = 'string' AND octet_length(v_payload ->> 'notes') > 4096)
+      OR v_payload ->> 'grossProceedsMinorUnits' !~ '^(0|[1-9][0-9]*)$' OR v_payload ->> 'feeMinorUnits' !~ '^(0|[1-9][0-9]*)$' OR v_payload ->> 'netProceedsMinorUnits' !~ '^(0|[1-9][0-9]*)$'
+      OR length(v_payload ->> 'grossProceedsMinorUnits') > 50 OR length(v_payload ->> 'feeMinorUnits') > 50 OR length(v_payload ->> 'netProceedsMinorUnits') > 50
+    THEN RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload'; END IF;
+    v_gross := (v_payload ->> 'grossProceedsMinorUnits')::numeric; v_fee := (v_payload ->> 'feeMinorUnits')::numeric; v_net := (v_payload ->> 'netProceedsMinorUnits')::numeric;
+    IF v_fee > v_gross OR v_net <> v_gross - v_fee THEN RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload'; END IF;
+    v_snapshot := v_payload -> 'rateSnapshots';
+  ELSIF v_kind = 'dispose' AND v_version = 'metals.dispose/v1' THEN
+    IF (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(v_payload) AS key)
+      IS DISTINCT FROM ARRAY['disposalDate','expectedHoldingRevision','holdingId','notes','predecessorEventId','reason','reversesEventId']::text[]
+      OR jsonb_typeof(v_payload -> 'disposalDate') IS DISTINCT FROM 'string' OR v_payload ->> 'disposalDate' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+      OR jsonb_typeof(v_payload -> 'reason') IS DISTINCT FROM 'string' OR length(btrim(v_payload ->> 'reason')) = 0 OR octet_length(v_payload ->> 'reason') > 1024
+      OR jsonb_typeof(v_payload -> 'notes') NOT IN ('string','null') OR (jsonb_typeof(v_payload -> 'notes') = 'string' AND octet_length(v_payload ->> 'notes') > 4096)
+      OR v_payload -> 'reversesEventId' IS DISTINCT FROM 'null'::jsonb
+    THEN RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload'; END IF;
+  ELSIF (v_kind = 'delete' AND v_version = 'metals.delete/v1') OR (v_kind = 'undo' AND v_version = 'metals.undo/v1') THEN
+    IF (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(v_payload) AS key) IS DISTINCT FROM ARRAY['expectedHoldingRevision','holdingId','predecessorEventId','reversesEventId']::text[]
+      OR (v_kind = 'delete' AND v_payload -> 'reversesEventId' IS DISTINCT FROM 'null'::jsonb)
+      OR (v_kind = 'undo' AND jsonb_typeof(v_payload -> 'reversesEventId') IS DISTINCT FROM 'string')
+    THEN RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload'; END IF;
+  ELSE RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_unknown_definition';
+  END IF;
+
+  IF jsonb_typeof(v_payload -> 'predecessorEventId') IS DISTINCT FROM 'string' OR v_payload ->> 'predecessorEventId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload'; END IF;
+  IF v_metadata IS NOT NULL AND (jsonb_typeof(v_metadata) IS DISTINCT FROM 'object'
+    OR (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(v_metadata) AS key) IS DISTINCT FROM ARRAY['name','notes']::text[]
+    OR jsonb_typeof(v_metadata -> 'name') IS DISTINCT FROM 'string' OR length(btrim(v_metadata ->> 'name')) = 0 OR octet_length(v_metadata ->> 'name') > 256
+    OR jsonb_typeof(v_metadata -> 'notes') NOT IN ('string','null') OR (jsonb_typeof(v_metadata -> 'notes') = 'string' AND octet_length(v_metadata ->> 'notes') > 4096)) THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload'; END IF;
+  IF v_facts IS NOT NULL AND (jsonb_typeof(v_facts) IS DISTINCT FROM 'object'
+    OR (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(v_facts) AS key) IS DISTINCT FROM ARRAY['physicalForm','purchaseCurrency','purchaseDate','purchasePriceDecimal','purityCatalogVersion','purityCode','purityFactorDecimal','weightGramsDecimal']::text[]
+    OR jsonb_typeof(v_facts -> 'physicalForm') NOT IN ('string','null') OR (jsonb_typeof(v_facts -> 'physicalForm') = 'string' AND v_facts ->> 'physicalForm' NOT IN ('COIN','BAR','JEWELRY'))
+    OR jsonb_typeof(v_facts -> 'purchaseCurrency') IS DISTINCT FROM 'string' OR v_facts ->> 'purchaseCurrency' NOT IN ('EGP','SAR','AED','KWD','QAR','BHD','OMR','JOD','IQD','LYD','TND','MAD','DZD','USD','EUR','GBP','JPY','CHF','CNY','INR','KRW','KPW','SGD','HKD','MYR','AUD','NZD','CAD','SEK','NOK','DKK','ISK','TRY','RUB','ZAR')
+    OR jsonb_typeof(v_facts -> 'purchaseDate') IS DISTINCT FROM 'string' OR v_facts ->> 'purchaseDate' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+    OR v_facts ->> 'purityCatalogVersion' <> '1' OR v_facts ->> 'weightGramsDecimal' !~ '^([1-9][0-9]*|(0|[1-9][0-9]*)\.[0-9]*[1-9])$' OR v_facts ->> 'purchasePriceDecimal' !~ '^([1-9][0-9]*|(0|[1-9][0-9]*)\.[0-9]*[1-9])$'
+    OR length(replace(v_facts ->> 'weightGramsDecimal','.','')) > 50 OR length(split_part(v_facts ->> 'weightGramsDecimal','.',2)) > 3 OR length(replace(v_facts ->> 'purchasePriceDecimal','.','')) > 50 OR length(split_part(v_facts ->> 'purchasePriceDecimal','.',2)) > 18
+    OR NOT EXISTS (SELECT 1 FROM (VALUES ('gold-9999','0.9999'),('gold-999','0.999'),('gold-995','0.995'),('gold-97916','0.97916'),('gold-9167','0.9167'),('gold-875','0.875'),('gold-750','0.75'),('gold-58333','0.58333'),('gold-500','0.5'),('gold-375','0.375'),('silver-9999','0.9999'),('silver-999','0.999'),('silver-925','0.925'),('silver-900','0.9'),('silver-800','0.8'),('silver-600','0.6')) AS purity(code,factor) WHERE purity.code = v_facts ->> 'purityCode' AND purity.factor = v_facts ->> 'purityFactorDecimal')) THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload'; END IF;
+  IF v_snapshot IS NOT NULL AND (jsonb_typeof(v_snapshot) IS DISTINCT FROM 'array' OR jsonb_array_length(v_snapshot) NOT IN (0, CASE WHEN v_kind = 'sell' THEN 3 ELSE 2 END)) THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload'; END IF;
+  IF v_snapshot IS NOT NULL AND jsonb_array_length(v_snapshot) > 0 AND EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_snapshot) AS snapshot(value)
+    WHERE jsonb_typeof(snapshot.value) IS DISTINCT FROM 'object'
+      OR (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(snapshot.value) AS key) IS DISTINCT FROM ARRAY['capturedAt','capturedFreshness','instrumentCode','kind','orientation','providerObservedAt','quality','referenceId','role','source','unit','valueDecimal']::text[]
+      OR jsonb_typeof(snapshot.value -> 'referenceId') IS DISTINCT FROM 'string' OR snapshot.value ->> 'referenceId' !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      OR snapshot.value ->> 'role' NOT IN ('acquisition_metal','acquisition_purchase_currency','terminal_metal','terminal_purchase_currency','terminal_proceeds_currency')
+      OR snapshot.value ->> 'kind' NOT IN ('metal','currency') OR jsonb_typeof(snapshot.value -> 'instrumentCode') IS DISTINCT FROM 'string'
+      OR snapshot.value ->> 'valueDecimal' !~ '^([1-9][0-9]*|(0|[1-9][0-9]*)\.[0-9]*[1-9])$'
+      OR snapshot.value ->> 'unit' NOT IN ('usd_per_pure_gram','usd_per_currency_unit','currency_units_per_usd')
+      OR snapshot.value ->> 'orientation' NOT IN ('quote_per_base','base_per_quote')
+      OR jsonb_typeof(snapshot.value -> 'providerObservedAt') NOT IN ('string','null')
+      OR (jsonb_typeof(snapshot.value -> 'providerObservedAt') = 'string' AND snapshot.value ->> 'providerObservedAt' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$')
+      OR jsonb_typeof(snapshot.value -> 'source') NOT IN ('string','null')
+      OR snapshot.value ->> 'quality' <> 'valid' OR snapshot.value ->> 'capturedFreshness' NOT IN ('fresh','stale','unknown')
+      OR jsonb_typeof(snapshot.value -> 'capturedAt') IS DISTINCT FROM 'string' OR snapshot.value ->> 'capturedAt' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$'
+  ) THEN RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload'; END IF;
+  IF v_snapshot IS NOT NULL AND jsonb_array_length(v_snapshot) > 0 AND (
+    SELECT array_agg(role ORDER BY role)
+    FROM (
+      SELECT snapshot.value ->> 'role' AS role
+      FROM jsonb_array_elements(v_snapshot) AS snapshot(value)
+    ) AS roles
+  ) IS DISTINCT FROM CASE WHEN v_kind = 'sell'
+    THEN ARRAY['terminal_metal','terminal_proceeds_currency','terminal_purchase_currency']::text[]
+    ELSE ARRAY['acquisition_metal','acquisition_purchase_currency']::text[]
+  END THEN
+    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_payload';
+  END IF;
+END;
+$$;
+
 -- Payload schemas remain action-specific and registry-owned. This helper freezes only
 -- the approved holding-CAS binding shared by every future exact Metals definition.
 CREATE OR REPLACE FUNCTION private.metal_action_expected_revision_v1(
@@ -431,6 +571,8 @@ BEGIN
       AND action_root.action_id = NEW.action_id
       AND action_root.domain = 'metals'
       AND action_root.kind = NEW.kind
+      AND NEW.expected_holding_revision IS NOT DISTINCT FROM
+        private.metal_action_expected_revision_v1(action_root.payload_json::jsonb)
   ) THEN
     RAISE EXCEPTION USING
       ERRCODE = '22023',

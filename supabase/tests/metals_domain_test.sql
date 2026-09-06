@@ -1,6 +1,6 @@
 begin;
 
-select plan(69);
+select plan(77);
 
 select has_table('public', 'metal_holding_states', 'holding projection exists');
 select has_table('public', 'metal_action_evidence', 'action evidence exists');
@@ -120,6 +120,68 @@ select is(
   'authenticated clients cannot call the private binding helper'
 );
 
+create or replace function pg_temp.metal_contract_envelope(p_kind text)
+returns jsonb
+language sql
+immutable
+as $$
+  select jsonb_build_object(
+    'accountGuards', '[]'::jsonb,
+    'actionId', '018f0c7a-1234-7abc-8def-000000000001',
+    'domain', 'metals',
+    'domainReferenceId', '018f0c7a-1234-7abc-8def-000000000004',
+    'envelopeVersion', 'monyvi.financial-action/v1',
+    'kind', p_kind,
+    'occurredAt', '2026-08-31T10:15:30.123Z',
+    'payloadVersion', case p_kind
+      when 'add' then 'metals.add/v1'
+      when 'correct' then 'metals.correct/v1'
+      when 'sell' then 'metals.sell/v2'
+      when 'dispose' then 'metals.dispose/v1'
+      when 'delete' then 'metals.delete/v1'
+      when 'undo' then 'metals.undo/v1'
+    end,
+    'payload', case p_kind
+      when 'add' then jsonb_build_object(
+        'expectedHoldingRevision', null, 'holdingId', '018f0c7a-1234-7abc-8def-000000000004',
+        'materialFacts', jsonb_build_object('physicalForm','COIN','purchaseCurrency','EGP','purchaseDate','2026-08-30','purchasePriceDecimal','30000','purityCatalogVersion','1','purityCode','gold-999','purityFactorDecimal','0.999','weightGramsDecimal','10.5'),
+        'metalType','GOLD','metadata',jsonb_build_object('name','Gold coin','notes','ذهب'),
+        'predecessorEventId',null,'rateSnapshots','[]'::jsonb,'reversesEventId',null
+      )
+      when 'correct' then jsonb_build_object(
+        'expectedHoldingRevision','0','holdingId','018f0c7a-1234-7abc-8def-000000000004','materialCorrection',null,
+        'metadataChange',jsonb_build_object('before',jsonb_build_object('name','Gold coin','notes','ذهب'),'after',jsonb_build_object('name','Gold coin corrected','notes','ذهب')),
+        'predecessorEventId','018f0c7a-1234-7abc-8def-000000000005','reversesEventId',null
+      )
+      when 'sell' then jsonb_build_object(
+        'expectedHoldingRevision','0','feeMinorUnits','80000','grossProceedsMinorUnits','3550000','holdingId','018f0c7a-1234-7abc-8def-000000000004',
+        'metalType','GOLD','netProceedsMinorUnits','3470000','notes','ذهب','predecessorEventId','018f0c7a-1234-7abc-8def-000000000005',
+        'rateSnapshots','[]'::jsonb,'reversesEventId',null,'saleCurrency','EGP','saleDate','2026-08-31'
+      )
+      when 'dispose' then jsonb_build_object(
+        'disposalDate','2026-08-31','expectedHoldingRevision','0','holdingId','018f0c7a-1234-7abc-8def-000000000004','notes',null,
+        'predecessorEventId','018f0c7a-1234-7abc-8def-000000000005','reason','Gifted to family','reversesEventId',null
+      )
+      when 'delete' then jsonb_build_object(
+        'expectedHoldingRevision','0','holdingId','018f0c7a-1234-7abc-8def-000000000004','predecessorEventId','018f0c7a-1234-7abc-8def-000000000005','reversesEventId',null
+      )
+      when 'undo' then jsonb_build_object(
+        'expectedHoldingRevision','0','holdingId','018f0c7a-1234-7abc-8def-000000000004','predecessorEventId','018f0c7a-1234-7abc-8def-000000000005','reversesEventId','018f0c7a-1234-7abc-8def-000000000006'
+      )
+    end,
+    'userId', '018f0c7a-1234-7abc-8def-000000000003'
+  )
+$$;
+
+select lives_ok($$select private.financial_action_validate_registered_payload_v1(pg_temp.metal_contract_envelope('add'))$$, 'Add v1 exact payload is registered');
+select lives_ok($$select private.financial_action_validate_registered_payload_v1(pg_temp.metal_contract_envelope('correct'))$$, 'Correct v1 exact payload is registered');
+select lives_ok($$select private.financial_action_validate_registered_payload_v1(pg_temp.metal_contract_envelope('sell'))$$, 'Sell v2 exact payload is registered');
+select lives_ok($$select private.financial_action_validate_registered_payload_v1(pg_temp.metal_contract_envelope('dispose'))$$, 'Dispose v1 exact payload is registered');
+select lives_ok($$select private.financial_action_validate_registered_payload_v1(pg_temp.metal_contract_envelope('delete'))$$, 'Delete v1 exact payload is registered');
+select lives_ok($$select private.financial_action_validate_registered_payload_v1(pg_temp.metal_contract_envelope('undo'))$$, 'Undo v1 exact payload is registered');
+select throws_ok($$select private.financial_action_validate_registered_payload_v1(jsonb_set(pg_temp.metal_contract_envelope('sell'), '{payloadVersion}', '"metals.sell/v1"'::jsonb))$$, '22023', 'metal_action_unknown_definition', 'Sell v1 remains fail-closed');
+select throws_ok($$select private.financial_action_validate_registered_payload_v1(jsonb_set(pg_temp.metal_contract_envelope('sell'), '{payload,netProceedsMinorUnits}', '"1"'::jsonb))$$, '22023', 'financial_action_invalid_payload', 'Sell arithmetic is exact');
+
 select col_is_null(
   'public',
   'metal_rate_references',
@@ -225,14 +287,19 @@ as $$
     'occurredAt', '2026-08-31T10:15:30.123Z',
     'payload', jsonb_build_object(
       'feeMinorUnits', '0',
-      'grossProceedsDecimal', '100',
+      'grossProceedsMinorUnits', '10000',
       'holdingId', p_holding_id,
-      'includeAccountCredit', false,
+      'metalType', 'GOLD',
       'netProceedsMinorUnits', '10000',
       'notes', 'fixture',
-      'rateReferenceIds', '[]'::jsonb
+      'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000099',
+      'rateSnapshots', '[]'::jsonb,
+      'reversesEventId', null,
+      'saleCurrency', 'EGP',
+      'saleDate', '2026-08-31',
+      'expectedHoldingRevision', '0'
     ),
-    'payloadVersion', 'metals.sell/v1',
+    'payloadVersion', 'metals.sell/v2',
     'userId', '018f0c7a-1234-7abc-8def-000000000003'
   )
 $$;
