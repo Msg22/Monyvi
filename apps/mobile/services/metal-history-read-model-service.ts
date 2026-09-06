@@ -133,18 +133,30 @@ export async function readMetalHistoryReadModel(
   );
   if (orderedStates.length === 0) return emptyHistory(options.filter);
 
-  const assets = await readHistoryAssets(scope, orderedStates);
+  const counts = countTerminalStates(orderedStates);
+  const filteredStates = orderedStates.filter(
+    (state) => options.filter === "all" || state.status === options.filter
+  );
+  const pageStates = filteredStates.slice(0, pageSize);
+  if (pageStates.length === 0) return emptyHistory(options.filter, counts);
+
+  const assets = await readHistoryAssets(scope, pageStates);
   if (assets.length === 0) return emptyHistory(options.filter);
   const dependencies = await readHistoryDependencies(
     scope,
     assets,
-    orderedStates
+    pageStates
   );
-  return buildMetalHistoryReadModel({
+  const page = buildMetalHistoryReadModel({
     filter: options.filter,
-    holdings: shapeReadHistoryHoldings(assets, orderedStates, dependencies),
-    pageSize,
+    holdings: shapeReadHistoryHoldings(assets, pageStates, dependencies),
     userId: scope.userId,
+  });
+  return Object.freeze({
+    counts: Object.freeze({ ...counts }),
+    filter: options.filter,
+    hasMore: filteredStates.length > pageStates.length,
+    items: page.items,
   });
 }
 
@@ -440,6 +452,16 @@ function isReportableReconciliationState(value: string): boolean {
 function countItems(items: readonly MetalHistoryItem[]): MetalHistoryCounts {
   const sold = items.filter((item) => item.status === "sold").length;
   const disposed = items.filter((item) => item.status === "disposed").length;
+  return { all: sold + disposed, disposed, sold };
+}
+
+function countTerminalStates(
+  states: readonly MetalHoldingState[]
+): MetalHistoryCounts {
+  const sold = states.filter((state) => state.status === "sold").length;
+  const disposed = states.filter(
+    (state) => state.status === "disposed"
+  ).length;
   return { all: sold + disposed, disposed, sold };
 }
 
