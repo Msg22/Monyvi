@@ -214,17 +214,36 @@ Start from the selected feature folder. Follow mockup or handoff paths declared
 by its spec, plan, tasks, and README files, then recursively search that feature
 folder for mockup assets, including nested paths such as `design/mockups/`. Only
 write `No mockups found - N/A` after both the declared-path check and recursive
-search find no approved mockup assets. Load every discovered approved mockup
-image and compare it against the corresponding component or screen
-implementation.
+search find no approved mockup assets.
 
-Establish the approved mockup's declared UI viewport or component context before
-comparison. Treat presentation-only device hardware, frame, outer canvas,
-browser chrome, export padding, and background outside the UI surface as
-non-binding unless the handoff explicitly marks them binding.
+From the discovered approved references, select only the mockup or mockups that
+actually govern visual UI changed by the target diff. Do not compare unrelated
+mockups, unchanged governed screens, or pre-existing surfaces merely because
+those references are present in the feature folder. Record the changed UI path
+or component that establishes each selected mockup's applicability.
+
+For every selected governed mockup, load its matching
+`<mockup-basename>.binding.md` sidecar defined by
+`.agent/workflows/mockup-implementation.md`. Before using viewport, component,
+non-binding-region, spacing, sizing, color, typography, state, or variant facts,
+verify that the sidecar records `Binding metadata approval: APPROVED` and the
+explicit approval evidence/reference required by that workflow. If an approved
+reference predates the sidecar rule, complete the workflow's **Legacy Approved
+Mockup Metadata Migration** and explicit sidecar approval before using
+reconstructed metadata for review. A missing sidecar, a sidecar still marked
+`PENDING`, a missing approval reference, or a sidecar materially changed after
+approval is non-authoritative: mark the binding context unverified and the
+changed governed UI not approvable rather than inferring binding facts from the
+image or export.
+
+Establish the selected mockup's declared UI viewport or component context only
+from its authoritative approved sidecar. Treat presentation-only device
+hardware, frame, outer canvas, browser chrome, export padding, and background
+outside the UI surface as non-binding unless that sidecar explicitly marks them
+binding.
 
 Source and component inspection alone cannot prove visual completion. Inspect
-rendered app screenshots and require:
+rendered app screenshots and require, for each selected governed mockup:
 
 - side-by-side or overlay evidence against the approved reference at the
   declared UI context;
@@ -235,10 +254,11 @@ rendered app screenshots and require:
   accessibility labels; and
 - separate functional-readiness and visual-fidelity statuses.
 
-For a governed visual UI change, if required evidence is absent, mark visual
-fidelity unverified and the reviewed work not approvable.
+For a governed visual UI change, if the authoritative sidecar or required
+evidence is absent, mark visual fidelity unverified and the reviewed work not
+approvable.
 
-For each mockup, validate all seven categories:
+For each selected governed mockup, validate all seven categories:
 
 1. Layout and structure.
 2. Spacing and alignment.
@@ -248,7 +268,7 @@ For each mockup, validate all seven categories:
 6. States.
 7. Interactions.
 
-Use this table for every mockup:
+Use this table for every selected governed mockup:
 
 ```markdown
 #### Mockup: <filename>
@@ -270,9 +290,10 @@ Corresponds to: <component or screen>
 | Accessibility Evidence | PASS/FAIL | ...   |
 ```
 
-For governed visual UI changes, mockup deviations or missing required rendered
-evidence make the reviewed work not approvable. Fix UI changes to match mockups
-without inventing new design decisions.
+For changed governed visual UI, a missing/invalid authoritative sidecar, mockup
+deviation, or missing required rendered evidence makes the reviewed work not
+approvable. Fix UI changes to match the approved mockup plus its authoritative
+binding sidecar without inventing new design decisions.
 
 ### 2.6 General Best Practices
 
@@ -453,12 +474,15 @@ The reviewed work is not approvable if any of these remain:
 - Incorrect architecture or layering.
 - Broken monorepo boundaries.
 - Missing migrations or database inconsistencies.
-- Mockup deviations.
+- Missing or invalid authoritative binding sidecar for changed governed UI.
+- Mockup deviations for changed governed UI.
 - Missing required mockup comparison or scoped-variant rendered evidence for a
   governed visual UI change.
 
 Success means the code fully matches the constitution, `.agent/rules/*.md`, the
-selected spec folder, the linked issue when present, and any approved mockups,
-with no missing functionality or architectural violations. Changed UI governed
-by an approved mockup must also have the required rendered and accessibility
-evidence, with functional readiness and visual fidelity reported separately.
+selected spec folder, the linked issue when present, and the approved mockups
+that actually govern changed visual UI, with no missing functionality or
+architectural violations. Changed UI governed by an approved mockup must also
+have an authoritative approved binding sidecar plus the required rendered and
+accessibility evidence, with functional readiness and visual fidelity reported
+separately.

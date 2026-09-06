@@ -307,13 +307,25 @@ remote issue/PR/repository context that is actually in scope. If repository or P
 content is part of the decision, add the expected immutable full SHA for the
 mutable ref whose state must remain stable; if no mutable repository ref matters,
 no branch SHA is required. Explicitly authorize any issue/comment mutation, or
-state that the task is read-only. A non-branch task must not mutate a branch
-unless it is reclassified under one of the branch topologies above.
+state that the task is read-only.
 
-Do not dispatch when an applicable expected SHA changed, ownership/conflict state
-is unsafe, a pre-PR branch unexpectedly exists, the selected topology no longer
-matches remote state, required local-only evidence is unavailable, or the
-requested mutation is not explicitly authorized.
+For any issue mutation, the handoff must also reserve each target issue to one
+exclusive remote writer for that mutation wave and record its current
+ownership/conflict state. Immediately before the first mutation to each reserved
+issue, re-fetch the issue and compare the mutation-relevant fields against the
+state used to plan the write. Use an available conditional/revision guard when
+the connector exposes one; otherwise treat any intervening material change as a
+conflict that requires reconciliation before mutation. Do not let a stale body,
+label, assignee, milestone, state, or other fetched issue field silently
+overwrite newer remote state.
+
+A non-branch task must not mutate a branch unless it is reclassified under one of
+the branch topologies above. Do not dispatch or mutate when issue-target
+ownership is not exclusive, the immediate issue-state refresh reveals an
+unreconciled intervening change, an applicable expected SHA changed,
+ownership/conflict state is unsafe, a pre-PR branch unexpectedly exists, the
+selected topology no longer matches remote state, required local-only evidence
+is unavailable, or the requested mutation is not explicitly authorized.
 
 Target **at least 80% of eligible execution workload** across Normal ChatGPT,
 `bai/glm-5.3-flash`, and `bai/qwen3.8-flash` combined. Eligible workload
