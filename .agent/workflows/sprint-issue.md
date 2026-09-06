@@ -4,6 +4,16 @@ This workflow applies when working GitHub sprint issues for Monyvi. GitHub
 issues may be AI-generated and not yet reviewed by Mohamed, so issue text is an
 input to verify, not an automatic product decision.
 
+## Approved Mockup Binding Gate
+
+When this workflow consumes an approved mockup or sidecar, run
+`node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` before using
+binding facts, rendered evidence, or approval status. Require exit status zero:
+current image bytes, exact UTF-8/LF Binding Facts bytes, both approved
+revisions, and approval evidence for the approved combined
+`Binding approval revision` must all verify. A failed verifier blocks governed
+UI work; follow `.agent/workflows/mockup-implementation.md` to renew approval.
+
 ## 1. Pick And Verify The Issue
 
 1. Pick the next issue by priority and sprint order unless Mohamed gives a
