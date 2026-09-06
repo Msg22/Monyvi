@@ -12,13 +12,32 @@ import {
 
 const ACCOUNT_ID = "018f0c7a-1234-7abc-8def-000000000211";
 const TRANSACTION_ID = "018f0c7a-1234-7abc-8def-000000001301";
+const RECURRING_ID = "018f0c7a-1234-7abc-8def-000000001401";
 
 function payloadJson(input: {
   readonly accountId: string;
   readonly actionId: string;
   readonly expectedRevision: string;
+  readonly recurringId?: string;
   readonly transactionId: string;
 }): string {
+  const records: Array<Readonly<Record<string, unknown>>> = [
+    {
+      after: { id: input.transactionId },
+      entity: "transaction",
+      expectedUpdatedAt: null,
+      mode: "create",
+    },
+  ];
+  if (input.recurringId) {
+    records.push({
+      after: { id: input.recurringId },
+      before: { id: input.recurringId },
+      entity: "recurring_payment",
+      expectedUpdatedAt: "2026-09-06T11:00:00.000Z",
+      mode: "update",
+    });
+  }
   return JSON.stringify({
     accountGuards: [
       {
@@ -40,18 +59,14 @@ function payloadJson(input: {
           currency: "EGP",
         },
       ],
-      domainMutation: {
-        records: [
-          {
-            after: { id: input.transactionId },
-            entity: "transaction",
-            expectedUpdatedAt: null,
-            mode: "create",
-          },
-        ],
-      },
-      domainRecordRefs: [input.transactionId],
-      operationCode: "transaction.create",
+      domainMutation: { records },
+      domainRecordRefs: records.map((record) => {
+        const after = record.after as Readonly<Record<string, unknown>>;
+        return String(after.id);
+      }),
+      operationCode: input.recurringId
+        ? "recurring.pay-now"
+        : "transaction.create",
       schemaVersion: "account.balance-effects/v1",
     },
     payloadVersion: "account.balance-effects/v1",
@@ -62,6 +77,8 @@ function payloadJson(input: {
 function rootRecord(input: {
   readonly actionId: string;
   readonly expectedRevision: string;
+  readonly recurringId?: string;
+  readonly state?: string;
   readonly transactionId: string;
 }): Readonly<Record<string, unknown>> {
   return {
@@ -72,15 +89,16 @@ function rootRecord(input: {
       accountId: ACCOUNT_ID,
       actionId: input.actionId,
       expectedRevision: input.expectedRevision,
+      recurringId: input.recurringId,
       transactionId: input.transactionId,
     }),
-    state: "local_pending",
+    state: input.state ?? "local_pending",
   };
 }
 
 function changes(input: {
-  readonly createdRoots?: readonly Readonly<Record<string, unknown>>[];
-  readonly updatedRoots?: readonly Readonly<Record<string, unknown>>[];
+  readonly createdRoots?: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  readonly updatedRoots?: ReadonlyArray<Readonly<Record<string, unknown>>>;
 }): SyncPushArgs["changes"] {
   return {
     account_financial_effects: { created: [], deleted: [], updated: [] },
@@ -109,6 +127,23 @@ describe("issue #242 foundation review regressions", () => {
     ]);
     expect(readRejectedIdsForTable(protectedIds, "transactions")).toEqual([
       TRANSACTION_ID,
+    ]);
+  });
+
+  it("protects recurring schedule updates with recurring Pay Now", () => {
+    const root = rootRecord({
+      actionId: "018f0c7a-1234-7abc-8def-000000000304",
+      expectedRevision: "0",
+      recurringId: RECURRING_ID,
+      transactionId: TRANSACTION_ID,
+    });
+
+    const protectedIds = collectProtectedFinancialActionRowIds(
+      changes({ createdRoots: [root] })
+    );
+
+    expect(readRejectedIdsForTable(protectedIds, "recurring_payments")).toEqual([
+      RECURRING_ID,
     ]);
   });
 
@@ -164,6 +199,40 @@ describe("issue #242 foundation review regressions", () => {
         actionId: candidate.actionId,
         disposition: "acknowledge",
       }),
+    ]);
+  });
+
+  it("acknowledges reconciled groups without resubmitting or changing terminal state", async () => {
+    const markPending = jest.fn().mockResolvedValue(undefined);
+    const invokeRpc = jest.fn().mockResolvedValue({
+      actionId: "018f0c7a-1234-7abc-8def-000000000305",
+      status: "accepted",
+    });
+    const candidate: FinancialActionPushCandidate = {
+      actionId: "018f0c7a-1234-7abc-8def-000000000305",
+      payloadHash: "c".repeat(64),
+      payloadJson: "{}",
+      state: "reconciled",
+    };
+    const coordinator = createFinancialActionPushCoordinator({
+      invokeAccountFinancialActionRpc: invokeRpc,
+      markFinancialActionGroupSyncFailed: jest.fn().mockResolvedValue(undefined),
+      markFinancialActionGroupSyncPending: markPending,
+      recordFinancialActionGroupServerOutcome: jest
+        .fn()
+        .mockResolvedValue(undefined),
+    });
+
+    const result = await coordinator.coordinatePush([candidate]);
+
+    expect(markPending).not.toHaveBeenCalled();
+    expect(invokeRpc).not.toHaveBeenCalled();
+    expect(result.decisions).toEqual([
+      {
+        actionId: candidate.actionId,
+        disposition: "acknowledge",
+        outcome: null,
+      },
     ]);
   });
 });
