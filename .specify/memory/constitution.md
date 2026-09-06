@@ -1,6 +1,7 @@
 <!--
 Sync Impact Report
 - Version change: 1.6.0 -> 1.7.0
+- Amendment date: 2026-09-05
 - Modified principles:
   - V. Premium UI with Consistent Theming: clarified approved mockup binding,
     responsive variants, gradient use, and visual-completion evidence.
@@ -11,7 +12,41 @@ Sync Impact Report
   - .specify/templates/spec-template.md ✅ compatible; no update required.
   - .specify/templates/tasks-template.md ✅ compatible; no update required.
   - .specify/templates/commands/*.md ✅ directory absent; no files to update.
-- Follow-up TODOs: None.
+- Agent guidance reviewed:
+  - .agent/workflows/sprint-issue.md ✅ updated with approved mockup fidelity,
+    baseline comparison, and scoped-variant evidence gates.
+  - .agent/workflows/code-review.md ✅ updated to discover nested mockups,
+    scope the evidence gate to changed governed UI, require separate
+    accessibility evidence, and report readiness/fidelity separately.
+  - .agent/workflows/style-audit.md ✅ updated to discover declared and nested
+    mockups, bind comparison context, and require rendered/accessibility
+    evidence plus separate readiness/fidelity reporting.
+  - .agent/workflows/mockup-implementation.md ✅ updated to preserve gradients
+    used by the design system or an approved design direction and persist
+    approved binding-context sidecars with known facts and explicit unknowns.
+  - .agent/workflows/applying-mockups.md ✅ updated to apply only the binding UI
+    surface and exclude presentation-only framing unless explicitly binding.
+  - .agent/workflows/speckit.tasks.md ✅ updated to generate required rendered
+    baseline and scoped-variant evidence tasks for mockup-backed UI.
+  - .agent/workflows/speckit.implement.md ✅ updated to block visual completion
+    until required rendered baseline/scoped-variant evidence is complete.
+  - .agent/rules/ecc-coding-style.md ✅ updated with approved mockup fidelity and
+    separate visual-variant and accessibility evidence requirements.
+  - .agent/rules/specify-rules.md ✅ updated with binding-context and visual
+    evidence requirements for feature delivery.
+  - .agent/rules/ecc-patterns.md ✅ compatible; no update required.
+  - .agents/skills/source-command-code-review/SKILL.md ✅ updated to discover
+    nested mockups and scope and report the visual/accessibility evidence gate.
+  - AGENTS.md remains separately authorized and is not changed by this amendment.
+- Follow-up TODOs:
+  - TODO(PACKAGE_BOUNDARY_REPAIR): remove remaining allowlisted package-boundary
+    debt tracked by architecture audit issues.
+  - TODO(UI_DEBT_AUDIT): replace remaining content-loading ActivityIndicator
+    usage, raw console calls, and unjustified raw hex/style exceptions.
+  - TODO(SECURITY_HARDENING): issue #240 owns app lock, MFA or step-up,
+    session/device management, sign-in notifications, and SecureStore logout.
+  - TODO(APP_WIDE_DECIMAL_AUDIT): issue #241 owns audit and staged migration of
+    existing financial calculations; Metals is the first adopter.
 -->
 
 # Monyvi Constitution
@@ -143,8 +178,11 @@ The app MUST deliver a premium, polished visual experience using NativeWind
   outer canvas, browser chrome, export padding, and background outside the UI
   surface are non-binding unless the handoff explicitly says otherwise. Handoff
   documentation MUST record exact screen-specific spacing, sizing, color,
-  typography, state, and viewport facts that are known. Do not invent missing
-  values; flag missing metadata before implementation when it affects fidelity.
+  typography, state, interaction, transition, and viewport facts that are known.
+  Do not invent missing values; flag missing metadata before implementation when
+  it affects fidelity. Binding-metadata approval MUST identify an immutable
+  content revision. Any later binding-fact change invalidates that approval
+  until the changed revision receives renewed explicit approval.
 - **Responsive visual fidelity**: Compact-phone, ordinary-phone, tablet,
   landscape, dark mode, RTL/Arabic, accessibility labels, and enlarged-text
   variants MUST preserve the approved composition, hierarchy, semantics, and
@@ -374,4 +412,4 @@ migration.
   `/speckit.plan`, `/speckit.tasks`, `/speckit.implement`) MUST reference this
   constitution and verify compliance before producing output.
 
-**Version**: 1.7.0 | **Ratified**: 2026-02-14 | **Last Amended**: 2026-09-04
+**Version**: 1.7.0 | **Ratified**: 2026-02-14 | **Last Amended**: 2026-09-05

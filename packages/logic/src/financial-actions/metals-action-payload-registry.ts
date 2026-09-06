@@ -30,6 +30,15 @@ interface RawPayloadObject {
 type RawPayloadValue = string & RawPayloadObject & readonly RawPayloadValue[];
 type RawPayload = Record<string, RawPayloadValue>;
 
+const METAL_DISPOSAL_REASON_CODES = new Set([
+  "lost_or_stolen",
+  "destroyed_or_damaged",
+  "given_away",
+  "donated",
+  "other_write_off",
+  "other_external_transfer",
+]);
+
 export interface MetalsActionPayloadRegistry {
   readonly definitions: readonly FinancialActionDefinition[];
   readonly maxNameUtf8Bytes: number;
@@ -293,6 +302,89 @@ export function createMetalsActionPayloadRegistry(
     };
   };
 
+  const validateLegacyFacts = (
+    raw: unknown,
+    input?: FinancialActionValidationInput
+  ): RegisteredActionPayload => {
+    const value = requireObject(raw);
+    const keys = [
+      "physicalForm",
+      "purchaseCurrency",
+      "purchaseDate",
+      "purchasePriceDecimal",
+      "purityCatalogVersion",
+      "purityCode",
+      "purityFactorDecimal",
+      "weightGramsDecimal",
+    ];
+    if (!isPlainObject(value) || !hasExactKeys(value, keys)) fail();
+    if (keys.every((key) => value[key] !== null)) {
+      return validateFacts(value, input);
+    }
+    const validWeight =
+      value.weightGramsDecimal === null ||
+      (typeof value.weightGramsDecimal === "string" &&
+        dependencies.isCanonicalPositiveFinancialDecimal(
+          value.weightGramsDecimal
+        ) &&
+        (value.weightGramsDecimal.split(".")[1]?.length ?? 0) <= 3);
+    const validPrice =
+      value.purchasePriceDecimal === null ||
+      (typeof value.purchasePriceDecimal === "string" &&
+        dependencies.isCanonicalPositiveFinancialDecimal(
+          value.purchasePriceDecimal
+        ));
+    const validCurrency =
+      value.purchaseCurrency === null ||
+      (typeof value.purchaseCurrency === "string" &&
+        APPROVED_CURRENCIES.has(value.purchaseCurrency));
+    const purityValues = [
+      value.purityCatalogVersion,
+      value.purityCode,
+      value.purityFactorDecimal,
+    ];
+    const hasUnavailablePurity = purityValues.every((part) => part === null);
+    const hasCompletePurity = purityValues.every((part) => part !== null);
+    if (
+      (value.physicalForm !== "COIN" &&
+        value.physicalForm !== "BAR" &&
+        value.physicalForm !== "JEWELRY" &&
+        value.physicalForm !== null) ||
+      !validWeight ||
+      !validPrice ||
+      !validCurrency ||
+      !validDate(value.purchaseDate, input) ||
+      (value.purchasePriceDecimal !== null &&
+        value.purchaseCurrency !== null &&
+        !isCompatibleWithCurrencyMinorUnits(
+          value.purchasePriceDecimal,
+          value.purchaseCurrency
+        )) ||
+      (!hasUnavailablePurity && !hasCompletePurity)
+    )
+      fail();
+    if (hasCompletePurity) {
+      const purityCode = value.purityCode as string;
+      const metalType = purityCode.startsWith("gold-") ? "GOLD" : "SILVER";
+      if (
+        value.purityCatalogVersion !== "1" ||
+        PURITY_CATALOG[metalType][purityCode as never] !==
+          value.purityFactorDecimal
+      )
+        fail();
+    }
+    return {
+      physicalForm: value.physicalForm,
+      weightGramsDecimal: value.weightGramsDecimal,
+      purityCode: value.purityCode,
+      purityFactorDecimal: value.purityFactorDecimal,
+      purityCatalogVersion: value.purityCatalogVersion,
+      purchasePriceDecimal: value.purchasePriceDecimal,
+      purchaseCurrency: value.purchaseCurrency,
+      purchaseDate: value.purchaseDate,
+    };
+  };
+
   const validateSnapshots = (
     rawValue: unknown,
     roles: readonly string[],
@@ -402,6 +494,12 @@ export function createMetalsActionPayloadRegistry(
     const reversal =
       typeof value.reversesEventId === "string" &&
       UUID_PATTERN.test(value.reversesEventId);
+    const legacyRoot =
+      !add &&
+      !undo &&
+      value.expectedHoldingRevision === "0" &&
+      value.predecessorEventId === null &&
+      value.reversesEventId === null;
     if (
       typeof value.holdingId !== "string" ||
       !UUID_PATTERN.test(value.holdingId) ||
@@ -410,7 +508,8 @@ export function createMetalsActionPayloadRegistry(
         : !validRevision(value.expectedHoldingRevision)) ||
       (add
         ? value.predecessorEventId !== null || value.reversesEventId !== null
-        : !predecessor || (undo ? !reversal : value.reversesEventId !== null))
+        : (!predecessor && !legacyRoot) ||
+          (undo ? !reversal : value.reversesEventId !== null))
     )
       fail();
   };
@@ -549,15 +648,16 @@ export function createMetalsActionPayloadRegistry(
               ])
             )
               fail();
-            const before = validateFacts(
+            const before = validateLegacyFacts(
               value.materialCorrection.before,
               input
             );
             const after = validateFacts(value.materialCorrection.after, input);
             if (
               JSON.stringify(before) === JSON.stringify(after) ||
-              (before.purityCode as string).startsWith("gold-") !==
-                (after.purityCode as string).startsWith("gold-") ||
+              (typeof before.purityCode === "string" &&
+                before.purityCode.startsWith("gold-") !==
+                  (after.purityCode as string).startsWith("gold-")) ||
               !boundedText(
                 value.materialCorrection.reason,
                 MAX_REASON_UTF8_BYTES
@@ -682,8 +782,8 @@ export function createMetalsActionPayloadRegistry(
     validateLinks(value, false, false);
     if (
       !validDate(value.disposalDate, input) ||
-      !boundedText(value.reason, MAX_REASON_UTF8_BYTES) ||
-      (value.reason as string).trim().length === 0 ||
+      typeof value.reason !== "string" ||
+      !METAL_DISPOSAL_REASON_CODES.has(value.reason) ||
       !boundedText(value.notes, MAX_NOTES_UTF8_BYTES, true)
     )
       fail();

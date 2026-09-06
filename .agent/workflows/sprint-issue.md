@@ -79,14 +79,36 @@ beyond these boundaries, has multiple credible designs, or creates uncertainty
 about hierarchy or interaction, stop and use the mockup approval gate. A direct
 request from Mohamed for a mockup always overrides this exception.
 
-After mockup approval, implement the approved direction. If coding reveals a
-meaningful design change, stop and ask for approval again before continuing. The
-approved mockup is binding under the constitution's Premium UI principle: match
-the declared UI viewport or component context, ignore presentation-only
-hardware/frame/canvas unless explicitly marked binding, preserve composition
-across responsive, RTL, dark, and enlarged-text variants, and report functional
-status separately from visual fidelity. Visual completion requires rendered
-side-by-side or overlay screenshot evidence against the approved reference.
+After mockup approval, require the matching `<mockup-basename>.binding.md`
+handoff from `.agent/workflows/mockup-implementation.md` before implementation
+begins. The sidecar must record `Binding metadata approval: APPROVED` plus the
+explicit approval evidence/reference. Recompute its current fingerprint and
+verify that `Approved binding metadata revision` equals
+`Binding metadata revision` and that the approval evidence identifies that same
+revision. For an approved legacy mockup without a sidecar, complete that
+workflow's legacy metadata migration and explicit sidecar approval first. A
+fidelity-affecting `UNKNOWN`, failed revision check, missing approval record,
+pending sidecar, or materially changed/unapproved binding fact blocks
+implementation rather than being inferred.
+
+Implement the approved direction through `.agent/workflows/applying-mockups.md`.
+If coding reveals a meaningful design change, stop and ask for approval again
+before continuing. The approved mockup handoff is binding under the
+constitution's Premium UI principle: match the declared UI viewport or component
+context, ignore presentation-only hardware/frame/canvas unless explicitly marked
+binding, preserve composition across responsive, RTL, dark, and enlarged-text
+variants, and report functional status separately from visual fidelity. Visual
+completion requires rendered side-by-side or overlay screenshot evidence against
+the approved reference at the declared UI context, plus rendered evidence for
+every in-scope responsive, RTL, dark, and enlarged-text variant.
+
+When the governed mockup or story requires accessibility labels or semantics,
+completion also requires separate accessibility-tree, screen-reader, or
+appropriate automated accessibility proof. Screenshot evidence does not verify
+accessibility labels, roles, names, states, relationships, or screen-reader
+behavior. Report **accessibility evidence status** separately from functional
+status and visual fidelity, and keep handoff blocked while required
+accessibility proof is missing.
 
 ## 4. Branch Base Selection
 
