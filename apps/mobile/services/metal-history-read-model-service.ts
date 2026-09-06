@@ -25,7 +25,6 @@ import {
 } from "@/services/metal-detail-read-model-service";
 
 export const METAL_HISTORY_PAGE_SIZE = 50;
-const MAX_METAL_HISTORY_PAGE_SIZE = 100;
 
 export type MetalHistoryFilter = "all" | "sold" | "disposed";
 
@@ -43,9 +42,9 @@ export interface MetalHistoryHoldingInput {
 }
 
 export interface BuildMetalHistoryReadModelInput {
-  readonly counts?: MetalHistoryCounts;
   readonly filter: MetalHistoryFilter;
   readonly holdings: readonly MetalHistoryHoldingInput[];
+  readonly pageSize?: number;
   readonly userId: string;
 }
 
@@ -65,6 +64,7 @@ export interface MetalHistoryItem {
 export interface MetalHistoryReadModel {
   readonly counts: MetalHistoryCounts;
   readonly filter: MetalHistoryFilter;
+  readonly hasMore: boolean;
   readonly items: readonly MetalHistoryItem[];
 }
 
@@ -85,8 +85,7 @@ export interface ReadMetalHistoryReadModelOptions {
 
 export function observeMetalHistoryHoldingStates(
   userId: string,
-  filter: MetalHistoryFilter,
-  pageSize: number = METAL_HISTORY_PAGE_SIZE
+  filter: MetalHistoryFilter
 ): Query<MetalHoldingState> {
   const statusCondition =
     filter === "all"
@@ -98,8 +97,7 @@ export function observeMetalHistoryHoldingStates(
     Q.where("deleted", false),
     Q.where("is_visible", true),
     statusCondition,
-    Q.sortBy("updated_at", Q.desc),
-    Q.take(toBoundedPageSize(pageSize) + 1)
+    Q.sortBy("updated_at", Q.desc)
   );
 }
 
@@ -127,24 +125,25 @@ export async function readMetalHistoryReadModel(
     options.pageSize ?? METAL_HISTORY_PAGE_SIZE
   );
   const terminalStates = await readReportableTerminalStates(scope);
-  const counts = countTerminalStates(terminalStates);
-  if (terminalStates.length === 0) return emptyHistory(options.filter, counts);
+  if (terminalStates.length === 0) return emptyHistory(options.filter);
 
-  const pagedStates = await pageTerminalStatesByEffectiveEventTime(
+  const orderedStates = await orderTerminalStatesByEffectiveEventTime(
     scope,
-    terminalStates,
-    options.filter,
-    pageSize
+    terminalStates
   );
-  if (pagedStates.length === 0) return emptyHistory(options.filter, counts);
+  if (orderedStates.length === 0) return emptyHistory(options.filter);
 
-  const assets = await readHistoryAssets(scope, pagedStates);
-  if (assets.length === 0) return emptyHistory(options.filter, counts);
-  const dependencies = await readHistoryDependencies(scope, assets, pagedStates);
+  const assets = await readHistoryAssets(scope, orderedStates);
+  if (assets.length === 0) return emptyHistory(options.filter);
+  const dependencies = await readHistoryDependencies(
+    scope,
+    assets,
+    orderedStates
+  );
   return buildMetalHistoryReadModel({
-    counts,
     filter: options.filter,
-    holdings: shapeReadHistoryHoldings(assets, pagedStates, dependencies),
+    holdings: shapeReadHistoryHoldings(assets, orderedStates, dependencies),
+    pageSize,
     userId: scope.userId,
   });
 }
@@ -170,18 +169,13 @@ async function readReportableTerminalStates(
   );
 }
 
-async function pageTerminalStatesByEffectiveEventTime(
+async function orderTerminalStatesByEffectiveEventTime(
   scope: CurrentUserDataScope,
-  states: readonly MetalHoldingState[],
-  filter: MetalHistoryFilter,
-  pageSize: number
+  states: readonly MetalHoldingState[]
 ): Promise<readonly MetalHoldingState[]> {
-  const filteredStates = states.filter(
-    (state) => filter === "all" || state.status === filter
-  );
-  if (filteredStates.length === 0) return [];
+  if (states.length === 0) return [];
 
-  const eventIds = filteredStates
+  const eventIds = states
     .map((state) => state.effectiveEventId)
     .filter((id): id is string => id !== null);
   const events = await scope
@@ -194,7 +188,7 @@ async function pageTerminalStatesByEffectiveEventTime(
     .fetch();
   const eventsById = new Map(events.map((event) => [event.id, event] as const));
 
-  return filteredStates
+  return states
     .filter((state) => {
       const event = state.effectiveEventId
         ? eventsById.get(state.effectiveEventId)
@@ -214,8 +208,7 @@ async function pageTerminalStatesByEffectiveEventTime(
       return timeDifference !== 0
         ? timeDifference
         : left.holdingId.localeCompare(right.holdingId);
-    })
-    .slice(0, pageSize);
+    });
 }
 
 async function readHistoryAssets(
@@ -320,6 +313,7 @@ function emptyHistory(
   return Object.freeze({
     counts: Object.freeze({ ...counts }),
     filter,
+    hasMore: false,
     items: Object.freeze([]),
   });
 }
@@ -340,13 +334,18 @@ export function buildMetalHistoryReadModel(
     .map((holding) => toHistoryItem(holding, input.userId))
     .filter((item): item is MetalHistoryItem => item !== null)
     .sort(compareHistoryItems);
-  const counts = input.counts ?? countItems(allItems);
-  const items = allItems.filter(
+  const counts = countItems(allItems);
+  const filteredItems = allItems.filter(
     (item) => input.filter === "all" || item.status === input.filter
   );
+  const pageSize =
+    input.pageSize === undefined ? null : toBoundedPageSize(input.pageSize);
+  const items =
+    pageSize === null ? filteredItems : filteredItems.slice(0, pageSize);
   return Object.freeze({
     counts: Object.freeze({ ...counts }),
     filter: input.filter,
+    hasMore: pageSize !== null && filteredItems.length > pageSize,
     items: Object.freeze(items),
   });
 }
@@ -437,14 +436,6 @@ function isReportableReconciliationState(value: string): boolean {
   );
 }
 
-function countTerminalStates(
-  states: readonly MetalHoldingState[]
-): MetalHistoryCounts {
-  const sold = states.filter((state) => state.status === "sold").length;
-  const disposed = states.filter((state) => state.status === "disposed").length;
-  return { all: sold + disposed, disposed, sold };
-}
-
 function countItems(items: readonly MetalHistoryItem[]): MetalHistoryCounts {
   const sold = items.filter((item) => item.status === "sold").length;
   const disposed = items.filter((item) => item.status === "disposed").length;
@@ -479,5 +470,5 @@ function compareHistoryItems(
 function toBoundedPageSize(pageSize: number): number {
   if (!Number.isSafeInteger(pageSize) || pageSize < 1)
     return METAL_HISTORY_PAGE_SIZE;
-  return Math.min(pageSize, MAX_METAL_HISTORY_PAGE_SIZE);
+  return pageSize;
 }

@@ -12,11 +12,13 @@ import {
   calculateMetalReferenceValue,
   calculatePureGrams,
   calculateUnrealizedAttribution,
+  hasCanonicalDecimalPrecision,
   isSupportedMetalsIsoCurrencyCode,
   parseCanonicalDecimal,
   reduceMetalLifecycle,
   resolveMetalsCurrencyMinorUnits,
   resolvePuritySelection,
+  roundDecimal,
   serializeDecimal,
   validateAndNormalizeRateReference,
   type CurrencyInstrumentCode,
@@ -32,7 +34,12 @@ import {
   type CurrentUserDataScope,
   USER_DATA_ACCESS_ERROR_CODES,
 } from "@/services/user-data-access";
-import type { LiveRatesTrustReadModel } from "@/services/live-rates-trust-read-model-service";
+import {
+  summarizeLiveRatesTrust,
+  type LiveRatesTrustReadModel,
+  type LiveRatesTrustState,
+  type LiveRatesTrustValue,
+} from "@/services/live-rates-trust-read-model-service";
 import {
   buildTimeline,
   copyValidDate,
@@ -45,9 +52,6 @@ import {
   toRateReferenceInput,
   toRenderKey,
 } from "@/services/metal-detail-read-model-shaping";
-
-export const METAL_DETAIL_PAGE_SIZE = 50;
-const MAX_METAL_DETAIL_PAGE_SIZE = 100;
 
 export interface MetalDetailAssetInput {
   readonly id: string;
@@ -114,6 +118,15 @@ export interface MetalDetailAttribution {
   readonly currencyGainDecimal: string | null;
   readonly metalGainDecimal: string | null;
   readonly premiumAndCostsDecimal: string | null;
+  readonly roundingDifferenceDecimal: string | null;
+}
+
+export interface MetalDetailRateStatus {
+  readonly ageMs: number | null;
+  readonly providerObservedAt: Date | null;
+  readonly quality: string | null;
+  readonly source: string | null;
+  readonly state: LiveRatesTrustState;
 }
 
 export type MetalDetailPhysicalForm = "bar" | "coin" | "jewelry";
@@ -125,6 +138,7 @@ export interface MetalDetailReadModel {
   readonly currentValueCurrency?: CurrencyType | null;
   readonly currentValueDecimal: string | null;
   readonly currentValueObservedAt?: Date | null;
+  readonly currentValueRateStatus: MetalDetailRateStatus | null;
   readonly id: string;
   readonly isActiveOwnership: boolean;
   readonly isFinancialActionLocked: boolean;
@@ -152,7 +166,6 @@ export interface MetalDetailReadModel {
 export interface ReadMetalDetailReadModelOptions {
   readonly currentRates?: LiveRatesTrustReadModel;
   readonly holdingId: string;
-  readonly pageSize?: number;
   readonly preferredCurrency?: CurrencyType;
   readonly userId: string;
 }
@@ -181,31 +194,39 @@ export function observeMetalDetailHolding(
 
 export function observeMetalDetailEvents(
   userId: string,
-  holdingId: string,
-  pageSize: number = METAL_DETAIL_PAGE_SIZE
+  holdingId: string
 ): Query<MetalLifecycleEvent> {
   return queryOwned(
     database.get<MetalLifecycleEvent>("metal_lifecycle_events"),
     userId,
     Q.where("holding_id", holdingId),
     Q.where("deleted", false),
-    Q.sortBy("occurred_at", Q.desc),
-    Q.take(toBoundedPageSize(pageSize) + 1)
+    Q.sortBy("occurred_at", Q.desc)
+  );
+}
+
+export function observeMetalDetailHoldingState(
+  userId: string,
+  holdingId: string
+): Query<MetalHoldingState> {
+  return queryOwned(
+    database.get<MetalHoldingState>("metal_holding_states"),
+    userId,
+    Q.where("holding_id", holdingId),
+    Q.where("deleted", false)
   );
 }
 
 export function observeMetalDetailRateReferences(
   userId: string,
-  holdingId: string,
-  pageSize: number = METAL_DETAIL_PAGE_SIZE
+  holdingId: string
 ): Query<MetalRateReference> {
   return queryOwned(
     database.get<MetalRateReference>("metal_rate_references"),
     userId,
     Q.where("holding_id", holdingId),
     Q.where("deleted", false),
-    Q.sortBy("captured_at", Q.desc),
-    Q.take(toBoundedPageSize(pageSize) + 1)
+    Q.sortBy("captured_at", Q.desc)
   );
 }
 
@@ -214,12 +235,9 @@ export async function readMetalDetailReadModel(
 ): Promise<MetalDetailReadModel | null> {
   const scope = await getCurrentUserDataScope();
   assertRequestedUser(scope.userId, options.userId);
-  const pageSize = toBoundedPageSize(
-    options.pageSize ?? METAL_DETAIL_PAGE_SIZE
-  );
   const asset = await readOwnedDetailAsset(scope, options.holdingId);
   if (asset === null) return null;
-  const dependencies = await readDetailDependencies(scope, asset, pageSize);
+  const dependencies = await readDetailDependencies(scope, asset);
   if (dependencies === null) return null;
   const { evidence, events, holdingState, metal, metalType, rateReferences } =
     dependencies;
@@ -263,8 +281,7 @@ interface MetalDetailDependencies {
 
 async function readDetailDependencies(
   scope: CurrentUserDataScope,
-  asset: Asset,
-  pageSize: number
+  asset: Asset
 ): Promise<MetalDetailDependencies | null> {
   const [metals, holdingStates, evidenceAndEvents] = await Promise.all([
     scope
@@ -284,7 +301,7 @@ async function readDetailDependencies(
         Q.take(2)
       )
       .fetch(),
-    readDetailEvidenceAndEvents(scope, asset.id, pageSize),
+    readDetailEvidenceAndEvents(scope, asset.id),
   ]);
   if (metals.length !== 1 || holdingStates.length !== 1) return null;
   const metal = metals[0];
@@ -299,8 +316,7 @@ async function readDetailDependencies(
 
 async function readDetailEvidenceAndEvents(
   scope: CurrentUserDataScope,
-  holdingId: string,
-  pageSize: number
+  holdingId: string
 ): Promise<
   Pick<MetalDetailDependencies, "evidence" | "events" | "rateReferences">
 > {
@@ -310,16 +326,14 @@ async function readDetailEvidenceAndEvents(
         database.get<MetalLifecycleEvent>("metal_lifecycle_events"),
         Q.where("holding_id", holdingId),
         Q.where("deleted", false),
-        Q.sortBy("occurred_at", Q.desc),
-        Q.take(pageSize + 1)
+        Q.sortBy("occurred_at", Q.desc)
       )
       .fetch(),
     scope
       .queryOwned(
         database.get<MetalActionEvidence>("metal_action_evidence"),
         Q.where("holding_id", holdingId),
-        Q.where("deleted", false),
-        Q.take(pageSize + 1)
+        Q.where("deleted", false)
       )
       .fetch(),
     scope
@@ -327,8 +341,7 @@ async function readDetailEvidenceAndEvents(
         database.get<MetalRateReference>("metal_rate_references"),
         Q.where("holding_id", holdingId),
         Q.where("deleted", false),
-        Q.sortBy("captured_at", Q.desc),
-        Q.take(pageSize + 1)
+        Q.sortBy("captured_at", Q.desc)
       )
       .fetch(),
   ]);
@@ -370,16 +383,8 @@ export function buildMetalDetailReadModel(
   const active = status === "active";
   const references = input.rateReferences;
   const effectiveActionId = input.holdingState.effectiveActionId ?? null;
-  const legacyCurrentValue = isMigrationBackfilledActiveHolding(input)
-    ? buildLegacyCurrentValue(input, unavailableExactFacts)
-    : null;
-  const lifecycleCurrentValue = active
-    ? buildCurrentValue(
-        input,
-        unavailableExactFacts,
-        references,
-        effectiveActionId
-      )
+  const currentValue = active
+    ? buildCurrentObservationValue(input, unavailableExactFacts)
     : null;
   const attribution = active
     ? buildActiveAttribution(
@@ -390,14 +395,12 @@ export function buildMetalDetailReadModel(
       )
     : null;
   const itemForm = normalizePhysicalForm(input.metal.itemForm);
-  const currentValue = lifecycleCurrentValue ?? legacyCurrentValue;
-
   return Object.freeze({
     attribution,
     currentValueCurrency: currentValue?.currency ?? null,
     currentValueDecimal: currentValue?.valueDecimal ?? null,
-    currentValueObservedAt:
-      lifecycleCurrentValue?.observedAt ?? legacyCurrentValue?.observedAt ?? null,
+    currentValueObservedAt: currentValue?.observedAt ?? null,
+    currentValueRateStatus: active ? buildCurrentRateStatus(input) : null,
     id: input.asset.id,
     isActiveOwnership: active,
     isFinancialActionLocked:
@@ -444,7 +447,7 @@ function isMigrationBackfilledActiveHolding(
   );
 }
 
-function buildLegacyCurrentValue(
+function buildCurrentObservationValue(
   input: BuildMetalDetailReadModelInput,
   unavailableExactFacts: MetalDetailReadModel["unavailableExactFacts"]
 ): DetailCurrentValue | null {
@@ -479,12 +482,63 @@ function buildLegacyCurrentValue(
   if (!value.available) return null;
   return {
     currency: input.preferredCurrency,
-    observedAt: conservativeObservedAt(
-      metalRate.providerObservedAt,
-      currencyRate.providerObservedAt
-    ),
+    observedAt: resolveCurrentValueObservedAt(input),
     valueDecimal: value.valueDecimal,
   };
+}
+
+function buildCurrentRateStatus(
+  input: BuildMetalDetailReadModelInput
+): MetalDetailRateStatus {
+  const rates = getCurrentValueRates(input);
+  const values = rates === null ? [] : [rates.metal, rates.currency];
+  const providerObservedAt =
+    rates === null
+      ? null
+      : conservativeObservedAt(
+          rates.metal.providerObservedAt,
+          rates.currency.providerObservedAt
+        );
+  const sources = new Set(
+    values
+      .map((value) => value.source ?? null)
+      .filter((source): source is string => source !== null)
+  );
+  const qualities = new Set(
+    values
+      .map((value) => value.quality ?? null)
+      .filter((quality): quality is string => quality !== null)
+  );
+  return {
+    ageMs: values.reduce(
+      (maximum, value) =>
+        value.ageMs === null ? maximum : Math.max(maximum ?? 0, value.ageMs),
+      null as number | null
+    ),
+    providerObservedAt,
+    quality: qualities.size === 1 ? Array.from(qualities)[0] : null,
+    source: sources.size === 1 ? Array.from(sources)[0] : null,
+    state: summarizeLiveRatesTrust(values),
+  };
+}
+
+function getCurrentValueRates(input: BuildMetalDetailReadModelInput): {
+  readonly currency: LiveRatesTrustValue;
+  readonly metal: LiveRatesTrustValue;
+} | null {
+  if (
+    input.currentRates === undefined ||
+    input.preferredCurrency === undefined ||
+    !isSupportedMetalsIsoCurrencyCode(input.preferredCurrency)
+  ) {
+    return null;
+  }
+  const metal =
+    input.metal.metalType === "GOLD"
+      ? input.currentRates.gold
+      : input.currentRates.silver;
+  const currency = input.currentRates.currencies.get(input.preferredCurrency);
+  return currency === undefined ? null : { currency, metal };
 }
 
 function hasTrustedCurrentRate(
@@ -539,10 +593,15 @@ function getUnavailableExactFacts(
   input: BuildMetalDetailReadModelInput
 ): MetalDetailReadModel["unavailableExactFacts"] {
   const unavailable: Array<"weight" | "purity" | "purchase_cost"> = [];
-  if (!isPositiveDecimal(input.metal.weightGramsDecimal))
+  if (!isValidWeight(input.metal.weightGramsDecimal))
     unavailable.push("weight");
   if (!hasCompletePurityTuple(input.metal)) unavailable.push("purity");
-  if (!isPositiveDecimal(input.asset.purchasePriceDecimal))
+  if (
+    !isValidPurchaseCost(
+      input.asset.purchasePriceDecimal,
+      input.asset.purchaseCurrency
+    )
+  )
     unavailable.push("purchase_cost");
   return Object.freeze(unavailable);
 }
@@ -571,97 +630,73 @@ function isPositiveDecimal(value: string | null): boolean {
   }
 }
 
-function buildCurrentValue(
-  input: BuildMetalDetailReadModelInput,
-  unavailableExactFacts: MetalDetailReadModel["unavailableExactFacts"],
-  references: readonly unknown[],
-  effectiveActionId: string | null
-): DetailCurrentValue | null {
-  if (
-    unavailableExactFacts.includes("weight") ||
-    unavailableExactFacts.includes("purity")
-  ) {
-    return null;
-  }
-  const purchaseCurrencyInstrumentCode = toCurrencyInstrumentCode(
-    input.asset.purchaseCurrency
+function isValidWeight(value: string | null): boolean {
+  return (
+    value !== null &&
+    hasCanonicalDecimalPrecision(value) &&
+    hasAtMostDecimalPlaces(value, 3) &&
+    isPositiveDecimal(value)
   );
-  if (purchaseCurrencyInstrumentCode === null) return null;
-  const metalReference = findReference(references, {
-    actionId: effectiveActionId,
-    role: "current_metal",
-    instrumentCode: toMetalInstrumentCode(input.metal.metalType),
-  });
-  const purchaseCurrencyReference = findReference(references, {
-    actionId: effectiveActionId,
-    role: "current_purchase_currency",
-    instrumentCode: purchaseCurrencyInstrumentCode,
-  });
-  if (metalReference === null || purchaseCurrencyReference === null) return null;
+}
 
-  const result = calculateMetalReferenceValue({
-    currencyUsdPerUnitDecimal:
-      purchaseCurrencyReference.normalizedUsdPerBaseDecimal,
-    metalUsdPerPureGramDecimal: metalReference.normalizedUsdPerBaseDecimal,
-    purityFactorDecimal: input.metal.purityFactorDecimal ?? "0",
-    weightGramsDecimal: input.metal.weightGramsDecimal ?? "0",
-  });
-  if (!result.available) return null;
-  const converted = convertDetailValueForDisplay(
-    result.valueDecimal,
-    input,
-    references,
-    effectiveActionId,
-    purchaseCurrencyReference
+function isValidPurchaseCost(
+  value: string | null,
+  currency: string | null
+): boolean {
+  const instrumentCode = toCurrencyInstrumentCode(currency);
+  if (
+    value === null ||
+    instrumentCode === null ||
+    !hasCanonicalDecimalPrecision(value)
+  ) {
+    return false;
+  }
+  const decimalPlaces = resolveMetalsCurrencyMinorUnits(instrumentCode);
+  return (
+    decimalPlaces !== null &&
+    hasAtMostDecimalPlaces(value, decimalPlaces) &&
+    isPositiveDecimal(value)
   );
-  if (converted === null) return null;
-  return {
-    currency: converted.currency,
-    observedAt: resolveCurrentValueObservedAt(
-      input,
-      references,
-      effectiveActionId
-    ),
-    valueDecimal: converted.valueDecimal,
-  };
+}
+
+function hasAtMostDecimalPlaces(value: string, maximum: number): boolean {
+  const fractional = value.split(".")[1];
+  return fractional === undefined || fractional.length <= maximum;
 }
 
 function convertDetailValueForDisplay(
   valueDecimal: string,
-  input: BuildMetalDetailReadModelInput,
-  references: readonly unknown[],
-  effectiveActionId: string | null,
-  purchaseCurrencyReference?: NormalizedRateReference
+  input: BuildMetalDetailReadModelInput
 ): { readonly currency: CurrencyType; readonly valueDecimal: string } | null {
   const purchaseCurrency = input.asset.purchaseCurrency;
-  if (!isSupportedMetalsIsoCurrencyCode(purchaseCurrency ?? "")) return null;
+  if (
+    purchaseCurrency === null ||
+    !isSupportedMetalsIsoCurrencyCode(purchaseCurrency)
+  ) {
+    return null;
+  }
   const preferredCurrency = input.preferredCurrency ?? purchaseCurrency;
   if (!isSupportedMetalsIsoCurrencyCode(preferredCurrency)) return null;
   if (preferredCurrency === purchaseCurrency) {
     return { currency: preferredCurrency, valueDecimal };
   }
 
-  const purchaseReference =
-    purchaseCurrencyReference ??
-    findReference(references, {
-      actionId: effectiveActionId,
-      role: "current_purchase_currency",
-      instrumentCode: `currency:${purchaseCurrency}` as CurrencyInstrumentCode,
-    });
-  const preferredReference = findReference(references, {
-    actionId: effectiveActionId,
-    role: "display_preferred_currency",
-    instrumentCode: `currency:${preferredCurrency}` as CurrencyInstrumentCode,
-  });
-  if (purchaseReference === null || preferredReference === null) return null;
+  const purchaseRate = input.currentRates?.currencies.get(purchaseCurrency);
+  const preferredRate = input.currentRates?.currencies.get(preferredCurrency);
+  if (
+    !hasTrustedCurrentRate(purchaseRate) ||
+    !hasTrustedCurrentRate(preferredRate)
+  ) {
+    return null;
+  }
 
   try {
     return {
       currency: preferredCurrency,
       valueDecimal: serializeDecimal(
         parseCanonicalDecimal(valueDecimal)
-          .times(purchaseReference.normalizedUsdPerBaseDecimal)
-          .dividedBy(preferredReference.normalizedUsdPerBaseDecimal)
+          .times(purchaseRate.valueDecimal)
+          .dividedBy(preferredRate.valueDecimal)
       ),
     };
   } catch {
@@ -670,53 +705,15 @@ function convertDetailValueForDisplay(
 }
 
 function resolveCurrentValueObservedAt(
-  input: BuildMetalDetailReadModelInput,
-  references: readonly unknown[],
-  effectiveActionId: string | null
+  input: BuildMetalDetailReadModelInput
 ): Date | null {
-  const purchaseCurrency = input.asset.purchaseCurrency;
-  if (!isSupportedMetalsIsoCurrencyCode(purchaseCurrency ?? "")) return null;
-  const expectations: DetailRateExpectation[] = [
-    {
-      actionId: effectiveActionId,
-      role: "current_metal",
-      instrumentCode: toMetalInstrumentCode(input.metal.metalType),
-    },
-    {
-      actionId: effectiveActionId,
-      role: "current_purchase_currency",
-      instrumentCode: `currency:${purchaseCurrency}` as CurrencyInstrumentCode,
-    },
-  ];
-  const preferredCurrency = input.preferredCurrency;
-  if (
-    preferredCurrency !== undefined &&
-    preferredCurrency !== purchaseCurrency &&
-    isSupportedMetalsIsoCurrencyCode(preferredCurrency)
-  ) {
-    expectations.push({
-      actionId: effectiveActionId,
-      role: "display_preferred_currency",
-      instrumentCode: `currency:${preferredCurrency}` as CurrencyInstrumentCode,
-    });
-  }
-  const observedTimes = expectations.map((expectation) =>
-    findProviderObservedAt(references, expectation)
-  );
-  if (observedTimes.some((value) => value === null)) return null;
-  return new Date(Math.min(...(observedTimes as number[])));
-}
-
-function findProviderObservedAt(
-  references: readonly unknown[],
-  expectation: DetailRateExpectation
-): number | null {
-  const candidates = references.filter((candidate) =>
-    isRateCandidate(candidate, expectation)
-  );
-  if (candidates.length !== 1) return null;
-  const value = candidates[0].providerObservedAt;
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+  const rates = getCurrentValueRates(input);
+  return rates === null
+    ? null
+    : conservativeObservedAt(
+        rates.metal.providerObservedAt,
+        rates.currency.providerObservedAt
+      );
 }
 
 function buildActiveAttribution(
@@ -727,10 +724,11 @@ function buildActiveAttribution(
 ):
   | (MetalDetailAttribution & { readonly totalGainDecimal: string | null })
   | null {
-  const currencyInstrumentCode = toCurrencyInstrumentCode(
-    input.asset.purchaseCurrency
-  );
+  const purchaseCurrency = input.asset.purchaseCurrency;
+  const currencyInstrumentCode = toCurrencyInstrumentCode(purchaseCurrency);
   if (
+    purchaseCurrency === null ||
+    !isSupportedMetalsIsoCurrencyCode(purchaseCurrency) ||
     currencyInstrumentCode === null ||
     unavailableExactFacts.includes("weight") ||
     unavailableExactFacts.includes("purity")
@@ -758,24 +756,25 @@ function buildActiveAttribution(
     purchaseCurrencyDecimalPlaces: decimalPlaces,
     purchaseCurrencyInstrumentCode: currencyInstrumentCode,
     pureGramsDecimal,
-    valuationCurrencyRate: findReference(references, {
-      actionId: effectiveActionId,
-      role: "current_purchase_currency",
-      instrumentCode: currencyInstrumentCode,
-    }),
-    valuationMetalRate: findReference(references, {
-      actionId: effectiveActionId,
-      role: "current_metal",
-      instrumentCode: metalInstrumentCode,
-    }),
+    valuationCurrencyRate: buildCurrentReference(
+      input.currentRates?.currencies.get(purchaseCurrency),
+      {
+        role: "current_purchase_currency",
+        instrumentCode: currencyInstrumentCode,
+      }
+    ),
+    valuationMetalRate: buildCurrentReference(
+      input.metal.metalType === "GOLD"
+        ? input.currentRates?.gold
+        : input.currentRates?.silver,
+      { role: "current_metal", instrumentCode: metalInstrumentCode }
+    ),
   });
   if (!result.available) return null;
 
   const total = convertDetailValueForDisplay(
     result.value.combinedDecimal,
-    input,
-    references,
-    effectiveActionId
+    input
   );
   if (total === null) return null;
   if (!result.value.breakdown.available) {
@@ -784,6 +783,7 @@ function buildActiveAttribution(
       currencyGainDecimal: null,
       metalGainDecimal: null,
       premiumAndCostsDecimal: null,
+      roundingDifferenceDecimal: null,
       totalGainDecimal: total.valueDecimal,
     };
   }
@@ -791,21 +791,15 @@ function buildActiveAttribution(
   const components = result.value.breakdown.value.components;
   const currencyGain = convertDetailValueForDisplay(
     components.currencyMovementDecimal,
-    input,
-    references,
-    effectiveActionId
+    input
   );
   const metalGain = convertDetailValueForDisplay(
     components.metalMovementDecimal,
-    input,
-    references,
-    effectiveActionId
+    input
   );
   const premium = convertDetailValueForDisplay(
     components.purchaseCostDecimal,
-    input,
-    references,
-    effectiveActionId
+    input
   );
   if (currencyGain === null || metalGain === null || premium === null) {
     return {
@@ -813,6 +807,7 @@ function buildActiveAttribution(
       currencyGainDecimal: null,
       metalGainDecimal: null,
       premiumAndCostsDecimal: null,
+      roundingDifferenceDecimal: null,
       totalGainDecimal: total.valueDecimal,
     };
   }
@@ -821,8 +816,74 @@ function buildActiveAttribution(
     currencyGainDecimal: currencyGain.valueDecimal,
     metalGainDecimal: metalGain.valueDecimal,
     premiumAndCostsDecimal: premium.valueDecimal,
+    roundingDifferenceDecimal: calculateRoundingDifference(
+      total.valueDecimal,
+      [currencyGain.valueDecimal, metalGain.valueDecimal, premium.valueDecimal],
+      total.currency
+    ),
     totalGainDecimal: total.valueDecimal,
   };
+}
+
+function buildCurrentReference(
+  value: LiveRatesTrustValue | undefined,
+  expectation: RateReferenceExpectation
+): NormalizedRateReference | null {
+  if (
+    !hasTrustedCurrentRate(value) ||
+    value.capturedAt === undefined ||
+    value.capturedAt === null ||
+    value.quality !== "valid" ||
+    value.source === undefined ||
+    value.providerObservedAt === null
+  ) {
+    return null;
+  }
+  const isMetal = expectation.instrumentCode.startsWith("metal:");
+  const normalized = validateAndNormalizeRateReference(
+    {
+      capturedAt: value.capturedAt.getTime(),
+      capturedFreshness:
+        value.state === "fresh" || value.state === "stale"
+          ? value.state
+          : "unknown",
+      instrumentCode: expectation.instrumentCode,
+      kind: isMetal ? "metal" : "currency",
+      orientation: "quote_per_base",
+      providerObservedAt: value.providerObservedAt.getTime(),
+      quality: value.quality,
+      role: expectation.role,
+      source: value.source,
+      unit: isMetal ? "usd_per_pure_gram" : "usd_per_currency_unit",
+      valueDecimal: value.valueDecimal,
+    },
+    expectation
+  );
+  return normalized.available ? normalized.value : null;
+}
+
+function calculateRoundingDifference(
+  total: string,
+  components: readonly string[],
+  currency: CurrencyType
+): string | null {
+  if (!isSupportedMetalsIsoCurrencyCode(currency)) return null;
+  const decimalPlaces = resolveMetalsCurrencyMinorUnits(`currency:${currency}`);
+  if (decimalPlaces === null) return null;
+  try {
+    const roundedTotal = parseCanonicalDecimal(
+      roundDecimal(total, decimalPlaces)
+    );
+    const roundedComponents = components.reduce(
+      (sum, value) =>
+        sum.plus(parseCanonicalDecimal(roundDecimal(value, decimalPlaces))),
+      parseCanonicalDecimal("0")
+    );
+    const difference = roundedTotal.minus(roundedComponents);
+    return difference.isZero() ? null : serializeDecimal(difference);
+  } catch {
+    return null;
+  }
 }
 
 function toPureGramsDecimal(
@@ -888,10 +949,4 @@ function assertRequestedUser(
   if (actualUserId !== requestedUserId) {
     throw new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
   }
-}
-
-function toBoundedPageSize(pageSize: number): number {
-  if (!Number.isSafeInteger(pageSize) || pageSize < 1)
-    return METAL_DETAIL_PAGE_SIZE;
-  return Math.min(pageSize, MAX_METAL_DETAIL_PAGE_SIZE);
 }

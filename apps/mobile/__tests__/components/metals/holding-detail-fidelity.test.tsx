@@ -39,6 +39,7 @@ const translations: Readonly<Record<string, string>> = {
   "detail.paid": "{{amount}} paid",
   "detail.physical_facts": "Physical facts",
   "detail.restored": "Restored to Active",
+  "detail.rate_source": "Source: {{source}}",
   "detail.since_purchase": "{{amount}} since purchase",
   "detail.timeline_current_value": "Current value",
   "form.bar": "Bar",
@@ -48,11 +49,13 @@ const translations: Readonly<Record<string, string>> = {
   "metal.gold": "Gold",
   "metal.silver": "Silver",
   "portfolio.rates_updated": "Rates updated {{when}}",
-  "purity_gold_999": "24K · 999",
+  "rate.stale": "Rates may be outdated",
+  purity_gold_999: "24K · 999",
   "render.objectAccessibility": "{{metal}} {{form}} illustration",
   "status.active": "Active",
   "timeline.add": "Added",
   "timeline.correct": "Details updated",
+  weight_unit: "g",
 };
 
 jest.mock("react-i18next", () => ({
@@ -94,6 +97,13 @@ function activeDetail(
     currentValueCurrency: "EGP",
     currentValueDecimal: "162317.87",
     currentValueObservedAt: new Date(2026, 7, 25, 10, 30),
+    currentValueRateStatus: {
+      ageMs: 1_000,
+      providerObservedAt: new Date(2026, 7, 25, 10, 30),
+      quality: "valid",
+      source: "fixture",
+      state: "fresh",
+    },
     id: "holding-gold-coin",
     isActiveOwnership: true,
     isFinancialActionLocked: false,
@@ -161,14 +171,35 @@ describe("approved active holding-detail fidelity", () => {
     expect(screen.getByText("+ EGP 11,039.67 since purchase")).toBeTruthy();
     expect(screen.getByText("Follow the value")).toBeTruthy();
     expect(screen.getByText("EGP 151,278.20 paid")).toBeTruthy();
-    expect(
-      screen.getByText("Rates updated 25 Aug 2026, 10:30 AM")
-    ).toBeTruthy();
+    expect(screen.getByText("Rates updated 25 Aug 2026, 10:30")).toBeTruthy();
     expect(screen.getByText("Physical facts")).toBeTruthy();
     expect(screen.getByText("31.125 g")).toBeTruthy();
     expect(screen.getByText("Coin")).toBeTruthy();
     expect(screen.getByText("History")).toBeTruthy();
     expect(screen.getByText(/Details updated/)).toBeTruthy();
+  });
+
+  it("formats canonical amounts exactly before localized display", () => {
+    render(
+      <MetalHoldingDetailScreen
+        actions={[]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={activeDetail({
+          currentValueDecimal: "9007199254740993.245",
+          purchasePriceDecimal: "9007199254740993.245",
+          totalGainDecimal: "9007199254740993.255",
+        })}
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("EGP 9,007,199,254,740,993.24")).toBeTruthy();
+    expect(
+      screen.getByText("+ EGP 9,007,199,254,740,993.26 since purchase")
+    ).toBeTruthy();
+    expect(screen.getByText("EGP 9,007,199,254,740,993.24 paid")).toBeTruthy();
   });
 
   it("preserves action callbacks, safe-area spacing, and the approved action hierarchy", () => {
@@ -204,6 +235,49 @@ describe("approved active holding-detail fidelity", () => {
     expect(onAction).toHaveBeenNthCalledWith(2, "edit");
     expect(onAction).toHaveBeenNthCalledWith(3, "dispose");
     expect(onAction).toHaveBeenNthCalledWith(4, "delete");
+  });
+
+  it("keeps the bottom safe area when a terminal holding has no actions", () => {
+    render(
+      <MetalHoldingDetailScreen
+        actions={[]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={activeDetail({ isActiveOwnership: false, status: "sold" })}
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("metal-holding-detail-root")).toHaveProp(
+      "contentContainerStyle",
+      { paddingBottom: 40 }
+    );
+  });
+
+  it("shows stale current-rate provenance without hiding the calculable value", () => {
+    render(
+      <MetalHoldingDetailScreen
+        actions={getHoldingActionDescriptors(activeDetail())}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={activeDetail({
+          currentValueRateStatus: {
+            ageMs: 90_000_000,
+            providerObservedAt: new Date(2026, 7, 24, 10, 30),
+            quality: "valid",
+            source: "provider-cache",
+            state: "stale",
+          },
+        })}
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(screen.getByText("EGP 162,317.87")).toBeTruthy();
+    expect(screen.getByText("Rates may be outdated")).toBeTruthy();
+    expect(screen.getByText("Source: provider-cache")).toBeTruthy();
   });
 
   it("keeps text legible in dark mode and uses a loss color for negative performance", () => {

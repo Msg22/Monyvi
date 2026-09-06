@@ -17,6 +17,9 @@ const MOCK_RATE_COPY: Readonly<
     "rate.refresh_failed_with_cache":
       "Rates: couldn’t refresh. Showing the last available rate.",
     "rate.retry_refresh": "Retry refresh",
+    "rate.short_stale": "Older than 24h",
+    "rate.source": "Source: {{source}}",
+    "rate.quality": "Quality: {{quality}}",
   },
   ar: {
     "rate.fresh":
@@ -28,15 +31,21 @@ const MOCK_RATE_COPY: Readonly<
     "rate.refresh_failed_with_cache":
       "أسعار السوق: تعذر التحديث. نعرض آخر سعر متاح.",
     "rate.retry_refresh": "أعد محاولة التحديث",
+    "rate.short_stale": "أقدم من 24 ساعة",
+    "rate.source": "المصدر: {{source}}",
+    "rate.quality": "الجودة: {{quality}}",
   },
 };
 
 function mockTranslate(
   key: string,
-  options?: Readonly<{ readonly dateTime?: string }>
+  options?: Readonly<Record<string, string>>
 ): string {
   const template = MOCK_RATE_COPY[mockLocale][key] ?? key;
-  return template.replace("{{dateTime}}", options?.dateTime ?? "{{dateTime}}");
+  return Object.entries(options ?? {}).reduce(
+    (copy, [name, value]) => copy.replace(`{{${name}}}`, value),
+    template
+  );
 }
 
 jest.mock("@/hooks/useLiveRatesScreen", () => ({
@@ -68,7 +77,7 @@ jest.mock("react-i18next", () => ({
   useTranslation: (): {
     readonly t: (
       key: string,
-      options?: Readonly<{ readonly dateTime?: string }>
+      options?: Readonly<Record<string, string>>
     ) => string;
   } => ({
     t: mockTranslate,
@@ -103,6 +112,11 @@ function screenState(
         flag: "🇺🇸",
         rate: "50 E£",
         changePercent: 0,
+        trust: {
+          quality: "valid",
+          source: "provider-cache",
+          state: "stale",
+        },
       },
     ],
     isExpanded: false,
@@ -147,6 +161,11 @@ describe("LiveRatesScreen Metals V1 trust presentation", () => {
     ).toBeOnTheScreen();
     expect(
       screen.getByText("currencies · Rates: rate age is unknown")
+    ).toBeOnTheScreen();
+    expect(
+      screen.getByText(
+        "US Dollar · Older than 24h · Source: provider-cache · Quality: valid"
+      )
     ).toBeOnTheScreen();
   });
 

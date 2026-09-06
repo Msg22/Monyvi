@@ -100,6 +100,25 @@ describe("net-worth metals contribution read model", () => {
     });
   });
 
+  it("derives the Home USD equivalent from the same lifecycle-aware total", () => {
+    const model = buildWealthBreakdownReadModel({
+      accountsValueDecimal: "1000",
+      currency: "EGP" as CurrencyType,
+      holdings: [
+        buildHolding({ currentValueDecimal: "500" }),
+        buildHolding({
+          id: "sold",
+          currentValueDecimal: "9000",
+          status: "sold",
+        }),
+      ],
+      preferredCurrencyUsdPerUnitDecimal: "0.02",
+    });
+
+    expect(model.totalNetWorthDecimal).toBe("1500");
+    expect(model.totalNetWorthUsdDecimal).toBe("30");
+  });
+
   it("keeps owned holding counts and known account value while returning null for every aggregate that needs a missing rate", () => {
     expect(
       buildWealthBreakdownReadModel({

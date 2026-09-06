@@ -18,6 +18,7 @@ import {
 import {
   observeLiveRatesTrust,
   summarizeLiveRatesTrust,
+  type LiveRatesTrustObservationStream,
   type LiveRatesTrustReadModel,
   type LiveRatesTrustState,
 } from "@/services/live-rates-trust-read-model-service";
@@ -91,7 +92,9 @@ export function useMetalPortfolio(
   const [isRatesLoading, setIsRatesLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [trustRefreshRevision, setTrustRefreshRevision] = useState(0);
+  const trustObservationRef = useRef<LiveRatesTrustObservationStream | null>(
+    null
+  );
 
   const onFilterChange = useCallback((filter: MetalPortfolioFilter): void => {
     setSelectedFilter(filter);
@@ -115,14 +118,17 @@ export function useMetalPortfolio(
 
   useEffect(() => {
     const timer = setInterval(
-      () => setTrustRefreshRevision((revision) => revision + 1),
+      () => trustObservationRef.current?.refresh(),
       RATE_STATUS_REFRESH_INTERVAL_MS
     );
-    const appStateSubscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") {
-        setTrustRefreshRevision((revision) => revision + 1);
+    const appStateSubscription = AppState.addEventListener(
+      "change",
+      (state) => {
+        if (state === "active") {
+          trustObservationRef.current?.refresh();
+        }
       }
-    });
+    );
     return () => {
       clearInterval(timer);
       appStateSubscription.remove();
@@ -160,8 +166,6 @@ export function useMetalPortfolio(
                 reason,
                 setError
               );
-              assetsRef.current = [];
-              setAssets([]);
               setIsAssetsLoading(false);
             },
           });
@@ -214,7 +218,6 @@ export function useMetalPortfolio(
               reason,
               setError
             );
-            setAssetMetals([]);
             setIsAssetMetalsLoading(false);
           },
         });
@@ -243,26 +246,50 @@ export function useMetalPortfolio(
   }, [isResolvingUser, refreshKey, userId]);
 
   useEffect(() => {
-    return subscribeForCurrentUser({
-      isResolvingUser,
-      onAuthenticated: (currentUserId) =>
-        observePortfolioRecentHistory(currentUserId).observe(),
-      onError: (reason) =>
-        recordObserverError(
-          "metalPortfolio.history.observe.failed",
-          reason,
-          setError
-        ),
-      onNext: setLifecycleEvents,
-      onSignedOut: () => setLifecycleEvents([]),
-      onResolving: () => setLifecycleEvents([]),
-      setLoading: setIsHistoryLoading,
+    return runUserScopedEffect({
       userId,
+      isResolvingUser,
+      onResolving: () => {
+        setLifecycleEvents([]);
+        setIsHistoryLoading(true);
+      },
+      onSignedOut: () => {
+        setLifecycleEvents([]);
+        setIsHistoryLoading(false);
+      },
+      onAuthenticated: (currentUserId) => {
+        const query = observePortfolioRecentHistory({
+          holdingStates,
+          userId: currentUserId,
+        });
+        if (query === null) {
+          setLifecycleEvents([]);
+          setIsHistoryLoading(false);
+          return;
+        }
+        setIsHistoryLoading(true);
+        const subscription = query.observe().subscribe({
+          next: (result): void => {
+            setLifecycleEvents(result);
+            setIsHistoryLoading(false);
+          },
+          error: (reason: unknown): void => {
+            recordObserverError(
+              "metalPortfolio.history.observe.failed",
+              reason,
+              setError
+            );
+            setIsHistoryLoading(false);
+          },
+        });
+        return () => subscription.unsubscribe();
+      },
     });
-  }, [isResolvingUser, refreshKey, userId]);
+  }, [holdingStates, isResolvingUser, refreshKey, userId]);
 
   useEffect(() => {
     const observation = observeLiveRatesTrust(database);
+    trustObservationRef.current = observation;
     setIsRatesLoading(true);
     const subscription = observation.subscribe({
       next: (result): void => {
@@ -278,8 +305,13 @@ export function useMetalPortfolio(
         setIsRatesLoading(false);
       },
     });
-    return () => subscription.unsubscribe();
-  }, [database, refreshKey, trustRefreshRevision]);
+    return () => {
+      if (trustObservationRef.current === observation) {
+        trustObservationRef.current = null;
+      }
+      subscription.unsubscribe();
+    };
+  }, [database, refreshKey]);
 
   const portfolio = useMemo((): MetalPortfolioReadModel | null => {
     if (
@@ -290,7 +322,8 @@ export function useMetalPortfolio(
       isHoldingStatesLoading ||
       isHistoryLoading ||
       isRatesLoading ||
-      isCurrencyLoading
+      isCurrencyLoading ||
+      error !== null
     ) {
       return null;
     }
@@ -315,13 +348,30 @@ export function useMetalPortfolio(
           .map((holding) => holding.metalType)
       )
     ) as ActiveMetalType[];
+    const activePurchaseCurrencies = Array.from(
+      new Set(
+        holdings
+          .filter(
+            (holding) =>
+              holding.isEffective &&
+              holding.isVisible &&
+              holding.status === "active" &&
+              holding.purchasePriceDecimal !== null &&
+              holding.purchaseCurrency !== null
+          )
+          .flatMap((holding) =>
+            holding.purchaseCurrency === null ? [] : [holding.purchaseCurrency]
+          )
+      )
+    );
     return buildMetalPortfolioReadModel({
       filter: selectedFilter,
       holdings,
       rateStatus: getPortfolioRateStatus(
         currentRates,
         preferredCurrency,
-        activeMetalTypes
+        activeMetalTypes,
+        activePurchaseCurrencies
       ),
       userId,
     });
@@ -329,6 +379,7 @@ export function useMetalPortfolio(
     assetMetals,
     assets,
     currentRates,
+    error,
     holdingStates,
     isAssetMetalsLoading,
     isAssetsLoading,
@@ -355,8 +406,11 @@ export function useMetalPortfolio(
       accountsValueDecimal: input.accountsValueDecimal,
       currency: preferredCurrency,
       holdings: portfolio.activeHoldings,
+      preferredCurrencyUsdPerUnitDecimal:
+        getTrustedRateDecimal(currentRates.currencies.get(preferredCurrency)) ??
+        (preferredCurrency === "USD" ? "1" : null),
     });
-  }, [input.accountsValueDecimal, portfolio, preferredCurrency]);
+  }, [currentRates, input.accountsValueDecimal, portfolio, preferredCurrency]);
 
   return {
     error,
@@ -375,6 +429,17 @@ export function useMetalPortfolio(
     selectedFilter,
     wealthBreakdown,
   };
+}
+
+function getTrustedRateDecimal(
+  value: LiveRatesTrustReadModel["gold"] | undefined
+): string | null {
+  return value !== undefined &&
+    value.state !== "missing" &&
+    value.state !== "invalid" &&
+    typeof value.valueDecimal === "string"
+    ? value.valueDecimal
+    : null;
 }
 
 function resetAssets(
@@ -450,7 +515,8 @@ function subscribeForCurrentUser<T>({
 function getPortfolioRateStatus(
   currentRates: LiveRatesTrustReadModel,
   preferredCurrency: string,
-  activeMetalTypes: readonly ActiveMetalType[]
+  activeMetalTypes: readonly ActiveMetalType[],
+  activePurchaseCurrencies: readonly string[]
 ): PortfolioRateStatus {
   const values = [
     ...activeMetalTypes.map((metalType) =>
@@ -461,6 +527,16 @@ function getPortfolioRateStatus(
       ageMs: null,
       providerObservedAt: null,
     },
+    ...activePurchaseCurrencies
+      .filter((currency) => currency !== preferredCurrency)
+      .map(
+        (currency) =>
+          currentRates.currencies.get(currency as never) ?? {
+            state: "missing" as const,
+            ageMs: null,
+            providerObservedAt: null,
+          }
+      ),
   ];
   const state = summarizeLiveRatesTrust(values);
   return {

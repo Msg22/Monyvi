@@ -1,5 +1,5 @@
 import { useIsFocused } from "@react-navigation/native";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useMarketRates } from "@/hooks/useMarketRates";
@@ -10,9 +10,14 @@ import {
   type LiveRatesTrustReadModel,
 } from "@/services/live-rates-trust-read-model-service";
 import {
+  observeMetalDetailEvents,
+  observeMetalDetailHolding,
+  observeMetalDetailHoldingState,
+  observeMetalDetailRateReferences,
   readMetalDetailReadModel,
   type MetalDetailReadModel,
 } from "@/services/metal-detail-read-model-service";
+import { syncDatabase } from "@/services/sync";
 
 interface UseMetalHoldingDetailResult {
   readonly error: Error | null;
@@ -43,14 +48,20 @@ export function useMetalHoldingDetail(
   const [error, setError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [retryIndex, setRetryIndex] = useState(0);
+  const [localRevision, setLocalRevision] = useState(0);
+  const hasLoadedOnceRef = useRef(false);
   const [currentRates, setCurrentRates] = useState<LiveRatesTrustReadModel>(
     createEmptyTrustReadModel
   );
   const [isRatesLoading, setIsRatesLoading] = useState(true);
-  const retry = useCallback(
-    (): void => setRetryIndex((value) => value + 1),
-    []
-  );
+  const retry = useCallback((): void => {
+    setRetryIndex((value) => value + 1);
+    void syncDatabase(database).catch((cause: unknown) => {
+      setError(
+        cause instanceof Error ? cause : new Error("Holding sync unavailable")
+      );
+    });
+  }, [database]);
 
   useEffect(() => {
     const subscription = observeLiveRatesTrust(database).subscribe({
@@ -66,8 +77,35 @@ export function useMetalHoldingDetail(
   }, [database]);
 
   useEffect(() => {
+    if (
+      !isFocused ||
+      isResolvingUser ||
+      userId === null ||
+      holdingId === undefined
+    ) {
+      return;
+    }
+    const onChange = (): void => setLocalRevision((value) => value + 1);
+    const subscriptions = [
+      observeMetalDetailHolding(userId, holdingId)
+        .observe()
+        .subscribe(onChange),
+      observeMetalDetailHoldingState(userId, holdingId)
+        .observe()
+        .subscribe(onChange),
+      observeMetalDetailEvents(userId, holdingId).observe().subscribe(onChange),
+      observeMetalDetailRateReferences(userId, holdingId)
+        .observe()
+        .subscribe(onChange),
+    ];
+    return () =>
+      subscriptions.forEach((subscription) => subscription.unsubscribe());
+  }, [holdingId, isFocused, isResolvingUser, userId]);
+
+  useEffect(() => {
     let isCurrent = true;
     if (isResolvingUser) {
+      hasLoadedOnceRef.current = false;
       setModel(null);
       setError(null);
       setIsLoading(isFocused);
@@ -82,6 +120,7 @@ export function useMetalHoldingDetail(
       };
     }
     if (userId === null || holdingId === undefined) {
+      hasLoadedOnceRef.current = false;
       setModel(null);
       setError(null);
       setIsLoading(false);
@@ -90,8 +129,7 @@ export function useMetalHoldingDetail(
       };
     }
 
-    setModel(null);
-    setIsLoading(true);
+    setIsLoading(!hasLoadedOnceRef.current);
     setError(null);
     void readMetalDetailReadModel({
       currentRates,
@@ -100,7 +138,10 @@ export function useMetalHoldingDetail(
       userId,
     })
       .then((next) => {
-        if (isCurrent) setModel(next);
+        if (isCurrent) {
+          hasLoadedOnceRef.current = true;
+          setModel(next);
+        }
       })
       .catch((cause: unknown) => {
         if (isCurrent) {
@@ -125,6 +166,7 @@ export function useMetalHoldingDetail(
     isFocused,
     isRatesLoading,
     isResolvingUser,
+    localRevision,
     preferredCurrency,
     retryIndex,
     userId,

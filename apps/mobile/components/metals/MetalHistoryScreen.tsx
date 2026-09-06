@@ -1,5 +1,6 @@
 import { FlatList, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { resolvePuritySelection } from "@monyvi/logic";
 
 import { MetalHoldingRender } from "@/components/metals/MetalHoldingRender";
@@ -16,6 +17,7 @@ interface MetalHistoryScreenProps {
   readonly history: MetalHistoryReadModel;
   readonly isLoading: boolean;
   readonly isOffline: boolean;
+  readonly loadMore: () => void;
   readonly onFilterChange: (filter: MetalHistoryFilter) => void;
   readonly onOpenHolding: (holdingId: string) => void;
   readonly onRetry: () => void;
@@ -25,6 +27,7 @@ export function MetalHistoryScreen(
   props: MetalHistoryScreenProps
 ): React.JSX.Element {
   const { i18n, t } = useTranslation("metals");
+  const insets = useSafeAreaInsets();
   const locale = resolveLocale(i18n.resolvedLanguage);
 
   if (props.isLoading) {
@@ -45,7 +48,10 @@ export function MetalHistoryScreen(
       className="flex-1 bg-background dark:bg-background-dark"
       data={props.history.items}
       keyExtractor={(item) => item.holdingId}
-      contentContainerClassName="px-5 pb-10 pt-2"
+      contentContainerClassName="px-5 pt-2"
+      contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+      onEndReached={props.history.hasMore ? props.loadMore : undefined}
+      onEndReachedThreshold={0.4}
       ListHeaderComponent={
         <View className="pb-2">
           <Text className="text-base text-text-secondary dark:text-text-secondary-dark">
@@ -218,7 +224,7 @@ function resolvePurityLabel(
 }
 
 function resolveLocale(language: string | undefined): string {
-  return language?.startsWith("ar") ? "ar-EG" : "en-GB";
+  return language?.startsWith("ar") ? "ar-EG-u-nu-latn" : "en-GB";
 }
 
 function formatHistoryDate(date: Date, locale: string): string {

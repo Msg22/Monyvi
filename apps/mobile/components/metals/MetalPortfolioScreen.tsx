@@ -1,7 +1,6 @@
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
 import type { CurrencyType } from "@monyvi/db";
-import { formatCurrency } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import {
@@ -19,7 +18,13 @@ import type {
   MetalPortfolioHoldingInput,
   MetalPortfolioReadModel,
 } from "@/services/metal-portfolio-read-model-service";
-import { getMetalHoldingPresentation } from "./portfolio-presentation";
+import {
+  formatCodeAmount,
+  formatPurchaseDetail,
+  formatShortDate,
+  getMetalHoldingPresentation,
+  resolveLocale,
+} from "./portfolio-presentation";
 
 interface MetalPortfolioScreenProps {
   readonly bottomInset?: number;
@@ -200,7 +205,8 @@ function PortfolioSummary({
   readonly currency: CurrencyType;
   readonly portfolio: MetalPortfolioReadModel;
 }): React.JSX.Element {
-  const { t } = useTranslation("metals");
+  const { t, i18n } = useTranslation("metals");
+  const locale = resolveLocale(i18n?.resolvedLanguage);
   const holdingCount = portfolio.activeHoldings.length;
   const performanceValue = parseOptionalNumber(
     portfolio.currentPerformanceDecimal
@@ -214,7 +220,11 @@ function PortfolioSummary({
     <View
       accessible
       accessibilityLabel={t("portfolio.total_accessibility", {
-        amount: formatCodeAmount(portfolio.activeTotalDecimal, currency),
+        amount: formatCodeAmount(
+          portfolio.activeTotalDecimal,
+          currency,
+          locale
+        ),
         status:
           portfolio.rateStatus.state === "fresh"
             ? t("portfolio.current_rate")
@@ -233,7 +243,7 @@ function PortfolioSummary({
             minimumFontScale={0.72}
             className="text-[36px] font-medium leading-[44px] text-text-primary dark:text-text-primary-dark"
           >
-            {formatCodeAmount(portfolio.activeTotalDecimal, currency)}
+            {formatCodeAmount(portfolio.activeTotalDecimal, currency, locale)}
           </Text>
           <Text className="mt-1 text-base text-text-secondary dark:text-text-secondary-dark">
             {t("portfolio.active_portfolio_value")}
@@ -251,7 +261,12 @@ function PortfolioSummary({
           {portfolio.currentPerformanceDecimal === null ? (
             <Text className="mt-3 text-sm text-text-secondary dark:text-text-secondary-dark">
               {performanceUnavailable
-                ? t("portfolio.performance_unavailable")
+                ? t(
+                    portfolio.currentPerformanceUnavailableReason ===
+                      "rate_reference"
+                      ? "portfolio.performance_unavailable_rate_reference"
+                      : "portfolio.performance_unavailable"
+                  )
                 : t("portfolio.current_value_unavailable", {
                     reason: t(`rate.${portfolio.rateStatus.state}`),
                   })}
@@ -267,6 +282,7 @@ function PortfolioSummary({
                 {formatCodeAmount(
                   portfolio.currentPerformanceDecimal,
                   currency,
+                  locale,
                   true
                 )}
               </Text>
@@ -280,7 +296,7 @@ function PortfolioSummary({
       {realizedProfitLoss === null ? null : (
         <View className="mt-7 flex-row flex-wrap items-baseline gap-x-2 gap-y-1">
           <Text className="text-base font-medium text-text-primary dark:text-text-primary-dark">
-            {formatCodeAmount(realizedProfitLoss, currency)}
+            {formatCodeAmount(realizedProfitLoss, currency, locale)}
           </Text>
           <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
             {t(getRealizedProfitLossLabelKey(realizedProfitLoss, "summary"))}
@@ -363,7 +379,7 @@ function RateStatus({
 }: {
   readonly portfolio: MetalPortfolioReadModel;
 }): React.JSX.Element {
-  const { t } = useTranslation("metals");
+  const { t, i18n } = useTranslation("metals");
   return (
     <View className="mt-7 flex-row items-center gap-2">
       <Ionicons name="time-outline" size={20} color={palette.nileGreen[600]} />
@@ -371,6 +387,7 @@ function RateStatus({
         {formatRateUpdatedLabel(
           portfolio.rateStatus.ageMs,
           portfolio.rateStatus.state,
+          resolveLocale(i18n?.resolvedLanguage),
           t
         )}
       </Text>
@@ -502,7 +519,8 @@ function MetalHoldingRow({
   isLast,
   onPress,
 }: MetalHoldingRowProps): React.JSX.Element {
-  const { t } = useTranslation("metals");
+  const { t, i18n } = useTranslation("metals");
+  const locale = resolveLocale(i18n?.resolvedLanguage);
   const presentation = getMetalHoldingPresentation(holding);
   const metal = t(presentation.metalKey);
   const form = t(presentation.formKey);
@@ -513,21 +531,30 @@ function MetalHoldingRow({
   const metadata = [metal, purityLabel, form]
     .filter((value): value is string => value !== null)
     .join(" · ");
-  const purchaseDetail = formatPurchaseDetail(holding, t);
+  const purchaseDetail = formatPurchaseDetail(holding, locale, t);
   const performanceValue = parseOptionalNumber(
     holding.currentPerformanceDecimal
   );
-  const currentValueLabel = formatCodeAmount(holding.currentValueDecimal, currency);
+  const currentValueLabel = formatCodeAmount(
+    holding.currentValueDecimal,
+    currency,
+    locale
+  );
   const performanceLabel =
     holding.currentPerformanceDecimal === null
       ? holding.currentValueDecimal === null
         ? t("portfolio.current_value_unavailable", {
             reason: t("rate.missing"),
           })
-        : t("portfolio.performance_unavailable")
+        : t(
+            holding.performanceUnavailableReason === "rate_reference"
+              ? "portfolio.performance_unavailable_rate_reference"
+              : "portfolio.performance_unavailable"
+          )
       : `${formatCodeAmount(
           holding.currentPerformanceDecimal,
           currency,
+          locale,
           true
         )} ${t("portfolio.since_purchase_label")}`;
   const holdingAccessibilityLabel = [
@@ -590,7 +617,11 @@ function MetalHoldingRow({
               ? t("portfolio.current_value_unavailable", {
                   reason: t("rate.missing"),
                 })
-              : t("portfolio.performance_unavailable")}
+              : t(
+                  holding.performanceUnavailableReason === "rate_reference"
+                    ? "portfolio.performance_unavailable_rate_reference"
+                    : "portfolio.performance_unavailable"
+                )}
           </Text>
         ) : (
           <>
@@ -605,6 +636,7 @@ function MetalHoldingRow({
               {formatCodeAmount(
                 holding.currentPerformanceDecimal,
                 currency,
+                locale,
                 true
               )}
             </Text>
@@ -671,7 +703,8 @@ function RecentHistory({
   readonly onHistoryPress: () => void;
   readonly onHoldingPress: (holdingId: string) => void;
 }): React.JSX.Element {
-  const { t } = useTranslation("metals");
+  const { t, i18n } = useTranslation("metals");
+  const locale = resolveLocale(i18n?.resolvedLanguage);
   return (
     <View className="mt-5 border-t border-slate-200 pb-2 pt-4 dark:border-slate-800">
       <View className="flex-row items-center justify-between">
@@ -723,7 +756,7 @@ function RecentHistory({
                 {t(`status.${holding.status}`)} · {holding.name}
               </Text>
               <Text className="mt-1 text-xs text-text-secondary dark:text-text-secondary-dark">
-                {formatShortDate(holding.occurredAt)}
+                {formatShortDate(holding.occurredAt, locale)}
               </Text>
             </View>
             <View className="max-w-[180px] flex-row items-center gap-2">
@@ -742,7 +775,11 @@ function RecentHistory({
                   )}{" "}
                   ·{" "}
                   <Text className="font-medium text-text-primary dark:text-text-primary-dark">
-                    {formatCodeAmount(holding.soldResultDecimal, currency)}
+                    {formatCodeAmount(
+                      holding.soldResultDecimal,
+                      currency,
+                      locale
+                    )}
                   </Text>
                 </Text>
               ) : null}
@@ -788,32 +825,10 @@ function ErrorState({
   );
 }
 
-function formatPurchaseDetail(
-  holding: MetalPortfolioHoldingInput,
-  t: (key: string, values?: Record<string, string>) => string
-): string | null {
-  const weight =
-    holding.weightGramsDecimal === null
-      ? null
-      : `${holding.weightGramsDecimal} g`;
-  if (weight === null) return null;
-  if (holding.purchaseDate === null) return weight;
-  return `${weight} · ${t("portfolio.bought_on", {
-    date: formatShortDate(holding.purchaseDate),
-  })}`;
-}
-
-function formatShortDate(date: Date): string {
-  return date.toLocaleDateString(undefined, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 function formatRateUpdatedLabel(
   ageMs: number | null,
   state: MetalPortfolioReadModel["rateStatus"]["state"],
+  locale: string,
   t: (key: string, values?: Record<string, string>) => string
 ): string {
   const stateLabel = t(`rate.${state}`);
@@ -821,7 +836,7 @@ function formatRateUpdatedLabel(
 
   const updatedAt = new Date(Date.now() - Math.max(0, ageMs));
   const now = new Date();
-  const time = updatedAt.toLocaleTimeString(undefined, {
+  const time = updatedAt.toLocaleTimeString(locale, {
     hour: "numeric",
     minute: "2-digit",
   });
@@ -831,7 +846,7 @@ function formatRateUpdatedLabel(
     updatedAt.getDate() === now.getDate();
   const when = sameDay
     ? `${t("portfolio.today")}, ${time}`
-    : `${formatShortDate(updatedAt)}, ${time}`;
+    : `${formatShortDate(updatedAt, locale)}, ${time}`;
   const updatedLabel = t("portfolio.rates_updated", { when });
   return state !== "fresh" ? `${stateLabel} · ${updatedLabel}` : updatedLabel;
 }
@@ -859,42 +874,6 @@ function getRealizedProfitLossLabelKey(
     return `portfolio.realized_loss${suffix}`;
   }
   return `portfolio.realized_result${suffix}`;
-}
-
-function formatCodeAmount(
-  value: string | null,
-  currency: CurrencyType,
-  signed = false
-): string {
-  const numericValue = value === null ? Number.NaN : Number(value);
-  if (!Number.isFinite(numericValue)) return "—";
-  const absoluteFormatted = formatCurrency({
-    amount: Math.abs(numericValue),
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  const numericPart = stripCurrencyDecoration(absoluteFormatted, currency);
-  const sign = signed
-    ? numericValue > 0
-      ? "+ "
-      : numericValue < 0
-        ? "- "
-        : ""
-    : numericValue < 0
-      ? "- "
-      : "";
-  return `${sign}${currency} ${numericPart}`;
-}
-
-function stripCurrencyDecoration(
-  formatted: string,
-  currency: CurrencyType
-): string {
-  const withoutCode = formatted
-    .replace(new RegExp(`^${currency}\\s*`), "")
-    .replace(new RegExp(`\\s*${currency}$`), "");
-  return withoutCode.replace(/^[^\d]+/, "");
 }
 
 function parseShare(value: string | null): number {

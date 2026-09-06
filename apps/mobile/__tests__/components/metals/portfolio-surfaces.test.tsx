@@ -75,6 +75,7 @@ const mockTranslations: Record<string, string> = {
   "metal.gold": "Gold",
   "metal.silver": "Silver",
   "form.coin": "Coin",
+  purity_gold_999: "24K · 999",
   "form.unknown": "Other form",
   "render.objectAccessibility": "{{metal}} {{form}} illustration",
   "render.neutralFallback": "Metal holding illustration unavailable",
@@ -327,6 +328,39 @@ describe("US1 portfolio surfaces", () => {
     expect(
       screen.queryByTestId("metal-portfolio-allocation-legend")
     ).toBeNull();
+  });
+
+  it("formats canonical portfolio amounts without binary-number rounding", () => {
+    const exactValue = "9007199254740993.245";
+    const exactGain = "9007199254740993.255";
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        activeHoldings: [
+          {
+            ...portfolio.activeHoldings[0],
+            currentPerformanceDecimal: exactGain,
+            currentValueDecimal: exactValue,
+          },
+        ],
+        activeTotalDecimal: exactValue,
+        currentPerformanceDecimal: exactGain,
+        holdings: [
+          {
+            ...portfolio.activeHoldings[0],
+            currentPerformanceDecimal: exactGain,
+            currentValueDecimal: exactValue,
+          },
+        ],
+      },
+    });
+
+    expect(
+      screen.getAllByText("EGP 9,007,199,254,740,993.24")
+    ).not.toHaveLength(0);
+    expect(
+      screen.getAllByText("+ EGP 9,007,199,254,740,993.26")
+    ).not.toHaveLength(0);
   });
 
   it("fills the proportional allocation bar and preserves All tab corners", () => {

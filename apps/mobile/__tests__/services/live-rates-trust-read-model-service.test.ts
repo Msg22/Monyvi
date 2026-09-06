@@ -1,8 +1,10 @@
 import {
   buildLiveRatesTrustReadModel,
+  observeLiveRatesTrust,
   summarizeLiveRatesTrust,
   type LiveRatesTrustObservation,
 } from "@/services/live-rates-trust-read-model-service";
+import type { Database } from "@nozbe/watermelondb";
 
 const NOW_MS = Date.parse("2026-09-01T12:00:00.000Z");
 const DAY_MS = 86_400_000;
@@ -45,6 +47,10 @@ describe("live-rates trust read model", () => {
 
     expect(readModel.gold.state).toBe("fresh");
     expect(readModel.gold.valueDecimal).toBe("100.25");
+    expect(readModel.gold).toMatchObject({
+      quality: "valid",
+      source: "test-provider",
+    });
     expect(readModel.silver.state).toBe("stale");
     expect(readModel.currencies.get("EGP")?.state).toBe("unknown");
   });
@@ -124,5 +130,39 @@ describe("live-rates trust read model", () => {
 
   it("marks an empty summary missing until local observations arrive", () => {
     expect(summarizeLiveRatesTrust([])).toBe("missing");
+  });
+
+  it("waits for every initial instrument query before publishing and reclassifies without rebuilding observers", () => {
+    const emissions: Array<(rows: readonly never[]) => void> = [];
+    const unsubscribe = jest.fn();
+    const database = {
+      get: () => ({
+        query: () => ({
+          observe: () => ({
+            subscribe: ({
+              next,
+            }: {
+              readonly next: (rows: readonly never[]) => void;
+            }) => {
+              emissions.push(next);
+              return { unsubscribe };
+            },
+          }),
+        }),
+      }),
+    } as unknown as Database;
+    const next = jest.fn();
+    const stream = observeLiveRatesTrust(database, () => NOW_MS);
+    const subscription = stream.subscribe({ next });
+
+    emissions.slice(0, -1).forEach((emit) => emit([]));
+    expect(next).not.toHaveBeenCalled();
+    emissions.at(-1)?.([]);
+    expect(next).toHaveBeenCalledTimes(1);
+
+    stream.refresh();
+    expect(next).toHaveBeenCalledTimes(2);
+    subscription.unsubscribe();
+    expect(unsubscribe).toHaveBeenCalledTimes(emissions.length);
   });
 });

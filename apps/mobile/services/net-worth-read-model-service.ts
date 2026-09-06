@@ -55,6 +55,7 @@ export interface BuildWealthBreakdownReadModelInput {
   readonly accountsValueDecimal: string;
   readonly currency: CurrencyType;
   readonly holdings: readonly WealthBreakdownHolding[];
+  readonly preferredCurrencyUsdPerUnitDecimal?: string | null;
 }
 
 export interface WealthBreakdownAmount {
@@ -75,6 +76,7 @@ export interface WealthBreakdownReadModel {
     readonly silver: WealthBreakdownMetalAmount;
   };
   readonly totalNetWorthDecimal: string | null;
+  readonly totalNetWorthUsdDecimal?: string | null;
 }
 
 export function observeNetWorthAccounts(userId: string): Query<Account> {
@@ -200,7 +202,29 @@ export function buildWealthBreakdownReadModel(
       },
     },
     totalNetWorthDecimal: totalNetWorth,
+    ...(input.preferredCurrencyUsdPerUnitDecimal === undefined
+      ? {}
+      : {
+          totalNetWorthUsdDecimal: multiplyAvailableDecimals(
+            totalNetWorth,
+            input.preferredCurrencyUsdPerUnitDecimal
+          ),
+        }),
   };
+}
+
+function multiplyAvailableDecimals(
+  first: string | null,
+  second: string | null
+): string | null {
+  if (first === null || second === null) return null;
+  try {
+    return serializeDecimal(
+      parseCanonicalDecimal(first).times(parseCanonicalDecimal(second))
+    );
+  } catch {
+    return null;
+  }
 }
 
 export function buildMonthlyPercentageChange(

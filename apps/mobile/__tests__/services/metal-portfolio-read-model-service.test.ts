@@ -30,6 +30,7 @@ jest.mock("@monyvi/db", () => ({
 jest.mock("@nozbe/watermelondb", () => ({
   Q: {
     desc: "desc",
+    oneOf: (values: readonly unknown[]): unknown => ({ oneOf: values }),
     sortBy: (column: string, value: unknown): QueryCondition => ({
       kind: "sortBy",
       column,
@@ -247,14 +248,27 @@ describe("metal portfolio read model", () => {
     });
   });
 
-  it("builds user-scoped bounded queries for metal assets, holding states, and recent History", () => {
+  it("builds user-scoped queries and observes only effective events referenced by current holding states", () => {
     expect(observePortfolioAssets("user-1")).toBe(mockAssetsQuery);
     expect(observePortfolioHoldingStates("user-1")).toBe(
       mockHoldingStatesQuery
     );
-    expect(observePortfolioRecentHistory("user-1")).toBe(
-      mockLifecycleEventsQuery
-    );
+    expect(
+      observePortfolioRecentHistory({
+        holdingStates: [
+          {
+            deleted: false,
+            effectiveEventId: "event-current",
+            holdingId: "holding-1",
+            isVisible: true,
+            reconciliationState: "accepted",
+            status: "active",
+            userId: "user-1",
+          },
+        ],
+        userId: "user-1",
+      })
+    ).toBe(mockLifecycleEventsQuery);
 
     expect(mockQueryOwned).toHaveBeenCalledWith(
       mockAssetsCollection,
@@ -270,11 +284,10 @@ describe("metal portfolio read model", () => {
     expect(mockQueryOwned).toHaveBeenCalledWith(
       mockLifecycleEventsCollection,
       "user-1",
+      { kind: "where", column: "id", value: { oneOf: ["event-current"] } },
       { kind: "where", column: "deleted", value: false },
       { kind: "where", column: "is_effective", value: true },
-      { kind: "where", column: "is_history_visible", value: true },
-      { kind: "sortBy", column: "occurred_at", value: "desc" },
-      { kind: "take", value: 3 }
+      { kind: "sortBy", column: "occurred_at", value: "desc" }
     );
   });
 
@@ -397,6 +410,7 @@ describe("metal portfolio read model", () => {
       weightGramsDecimal: "10",
       currentValueDecimal: "25000",
       currentPerformanceDecimal: "5000",
+      performanceUnavailableReason: null,
     });
     expect(holding?.purchaseDate?.toISOString()).toBe(
       "2024-01-01T00:00:00.000Z"
@@ -447,6 +461,7 @@ describe("metal portfolio read model", () => {
       purchasePriceDecimal: null,
       currentValueDecimal: "25000",
       currentPerformanceDecimal: null,
+      performanceUnavailableReason: "purchase_cost",
     });
   });
 
@@ -546,6 +561,7 @@ describe("metal portfolio read model", () => {
     expect(holding).toMatchObject({
       currentValueDecimal: "25000",
       currentPerformanceDecimal: null,
+      performanceUnavailableReason: "rate_reference",
     });
   });
 

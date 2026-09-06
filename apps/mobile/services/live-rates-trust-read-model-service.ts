@@ -45,7 +45,10 @@ export type LiveRatesTrustState = RateTrustResult["state"] | "invalid";
 export interface LiveRatesTrustValue {
   readonly state: LiveRatesTrustState;
   readonly ageMs: number | null;
+  readonly capturedAt?: Date | null;
   readonly providerObservedAt: Date | null;
+  readonly quality?: string | null;
+  readonly source?: string | null;
   readonly valueDecimal?: string | null;
 }
 
@@ -67,6 +70,7 @@ export interface LiveRatesTrustSubscription {
 }
 
 export interface LiveRatesTrustObservationStream {
+  refresh(): void;
   subscribe(observer: LiveRatesTrustObserver): LiveRatesTrustSubscription;
 }
 
@@ -112,10 +116,27 @@ export function observeLiveRatesTrust(
   const collection = database.get<MarketRateObservation>(
     "market_rate_observations"
   );
+  const refreshers = new Set<() => void>();
 
   return {
+    refresh(): void {
+      for (const refresh of refreshers) refresh();
+    },
     subscribe(observer: LiveRatesTrustObserver): LiveRatesTrustSubscription {
       const latestByInstrument = new Map<string, MarketRateObservation>();
+      const initializedInstruments = new Set<string>();
+      const emit = (): void => {
+        if (initializedInstruments.size !== V1_RATE_INSTRUMENT_CODES.length) {
+          return;
+        }
+        observer.next(
+          buildLiveRatesTrustReadModel(
+            Array.from(latestByInstrument.values()),
+            getNowMs()
+          )
+        );
+      };
+      refreshers.add(emit);
       const subscriptions = V1_RATE_INSTRUMENT_CODES.map((instrumentCode) => {
         const query = collection.query(
           Q.where("instrument_code", instrumentCode),
@@ -130,18 +151,15 @@ export function observeLiveRatesTrust(
             } else {
               latestByInstrument.set(instrumentCode, latest);
             }
-            observer.next(
-              buildLiveRatesTrustReadModel(
-                Array.from(latestByInstrument.values()),
-                getNowMs()
-              )
-            );
+            initializedInstruments.add(instrumentCode);
+            emit();
           },
           error: (error: unknown): void => observer.error?.(error),
         });
       });
       return {
         unsubscribe: (): void => {
+          refreshers.delete(emit);
           for (const subscription of subscriptions) subscription.unsubscribe();
         },
       };
@@ -203,7 +221,10 @@ function classifyObservationTrust(
     return {
       state: "missing",
       ageMs: null,
+      capturedAt: null,
       providerObservedAt: null,
+      quality: null,
+      source: null,
       valueDecimal: null,
     };
   }
@@ -213,7 +234,10 @@ function classifyObservationTrust(
     return {
       state: "invalid",
       ageMs: null,
+      capturedAt: copyValidDate(observation.createdAt),
       providerObservedAt: observation.providerObservedAt,
+      quality: observation.quality,
+      source: observation.source,
       valueDecimal: null,
     };
   }
@@ -230,9 +254,16 @@ function classifyObservationTrust(
 
   return {
     ...result,
+    capturedAt: copyValidDate(observation.createdAt),
     providerObservedAt: observation.providerObservedAt,
+    quality: observation.quality,
+    source: observation.source,
     valueDecimal: normalizedValueDecimal,
   };
+}
+
+function copyValidDate(value: Date): Date | null {
+  return Number.isFinite(value.getTime()) ? new Date(value.getTime()) : null;
 }
 
 function normalizeObservationValue(

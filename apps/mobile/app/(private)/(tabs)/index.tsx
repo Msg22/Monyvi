@@ -83,6 +83,12 @@ export default function DashboardScreen(): React.JSX.Element {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
   }, [wealthBreakdown]);
+  const lifecycleAwareNetWorthUsd = useMemo((): number | null => {
+    const value = wealthBreakdown?.totalNetWorthUsdDecimal;
+    if (value === null || value === undefined) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }, [wealthBreakdown]);
   const { monthlyPercentageChange } = useMonthlyPercentageChange();
   const {
     preferredCurrency,
@@ -208,7 +214,7 @@ export default function DashboardScreen(): React.JSX.Element {
           <SectionErrorBoundary name={t("section_net_worth")}>
             <TotalNetWorthCard
               totalNetWorth={lifecycleAwareNetWorth}
-              totalNetWorthUsd={null}
+              totalNetWorthUsd={lifecycleAwareNetWorthUsd}
               preferredCurrency={preferredCurrency}
               monthlyPercentageChange={
                 lifecycleAwareNetWorth === null ? null : monthlyPercentageChange

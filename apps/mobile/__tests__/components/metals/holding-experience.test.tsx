@@ -48,9 +48,9 @@ const translations: Readonly<Record<string, string>> = {
   "form.bar": "Bar",
   "form.jewelry": "Jewelry",
   "form.unknown": "Other form",
-  "purity_gold_875": "21K · 875",
-  "purity_gold_999": "24K · 999",
-  "purity_silver_999": "999",
+  purity_gold_875: "21K · 875",
+  purity_gold_999: "24K · 999",
+  purity_silver_999: "999",
   "render.objectAccessibility": "{{metal}} {{form}} illustration",
   "render.neutralFallback": "Metal holding illustration unavailable",
 };
@@ -60,7 +60,10 @@ let mockResolvedLanguage = "en";
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
     i18n: { resolvedLanguage: mockResolvedLanguage },
-    t: (key: string, values?: Readonly<Record<string, string | number>>): string => {
+    t: (
+      key: string,
+      values?: Readonly<Record<string, string | number>>
+    ): string => {
       const template = translations[key] ?? key;
       return Object.entries(values ?? {}).reduce(
         (value, [name, replacement]) =>
@@ -87,6 +90,13 @@ function detail(
     currentValueCurrency: "EGP",
     currentValueDecimal: "162317.87",
     currentValueObservedAt: new Date("2026-08-25T10:30:00.000Z"),
+    currentValueRateStatus: {
+      ageMs: 1_000,
+      providerObservedAt: new Date("2026-08-25T10:30:00.000Z"),
+      quality: "valid",
+      source: "fixture",
+      state: "fresh",
+    },
     id: "holding-gold-coin",
     isActiveOwnership: true,
     isFinancialActionLocked: false,
@@ -123,6 +133,7 @@ function history(
   return {
     counts: { all: 2, disposed: 1, sold: 1 },
     filter: "all",
+    hasMore: false,
     items: [
       {
         holdingId: "sold-bracelet",
@@ -286,6 +297,7 @@ describe("US3 holding experience", () => {
         isLoading={false}
         error={null}
         isOffline={false}
+        loadMore={jest.fn()}
         onFilterChange={onFilterChange}
         onOpenHolding={onOpenHolding}
         onRetry={jest.fn()}
@@ -330,12 +342,13 @@ describe("US3 holding experience", () => {
         isLoading={false}
         error={null}
         isOffline={false}
+        loadMore={jest.fn()}
         onFilterChange={jest.fn()}
         onOpenHolding={jest.fn()}
         onRetry={jest.fn()}
       />
     );
 
-    expect(screen.getByText("٢٢ أغسطس ٢٠٢٦")).toBeTruthy();
+    expect(screen.getByText("22 أغسطس 2026")).toBeTruthy();
   });
 });

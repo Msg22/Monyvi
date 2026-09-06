@@ -48,6 +48,10 @@ export interface MetalPortfolioHoldingInput {
   readonly name: string;
   readonly occurredAt: Date;
   readonly physicalForm: string | null;
+  readonly performanceUnavailableReason?:
+    | "purchase_cost"
+    | "rate_reference"
+    | null;
   readonly purchaseCurrency: MetalsIsoCurrencyCode | null;
   readonly purchaseDate: Date | null;
   readonly purchasePriceDecimal: string | null;
@@ -132,6 +136,10 @@ export interface MetalPortfolioReadModel {
   readonly activeTotalDecimal: string | null;
   readonly allocation: MetalPortfolioAllocation;
   readonly currentPerformanceDecimal: string | null;
+  readonly currentPerformanceUnavailableReason?:
+    | "purchase_cost"
+    | "rate_reference"
+    | null;
   readonly filter: MetalPortfolioFilter;
   readonly hasTerminalHistory: boolean;
   readonly holdings: readonly MetalPortfolioHoldingInput[];
@@ -143,6 +151,11 @@ export interface MetalPortfolioReadModel {
 
 export interface ObservePortfolioAssetMetalsInput {
   readonly assets: readonly Asset[];
+  readonly userId: string;
+}
+
+export interface ObservePortfolioRecentHistoryInput {
+  readonly holdingStates: readonly MetalPortfolioHoldingStateSnapshot[];
   readonly userId: string;
 }
 
@@ -182,14 +195,28 @@ export function observePortfolioHoldingStates(
 }
 
 export function observePortfolioRecentHistory(
-  userId: string
-): Query<MetalLifecycleEvent> {
+  input: ObservePortfolioRecentHistoryInput
+): Query<MetalLifecycleEvent> | null {
+  const effectiveEventIds = Array.from(
+    new Set(
+      input.holdingStates
+        .filter(
+          (state) =>
+            state.userId === input.userId &&
+            !state.deleted &&
+            state.effectiveEventId !== null
+        )
+        .map((state) => state.effectiveEventId)
+        .filter((id): id is string => id !== null)
+    )
+  ).sort();
+  if (effectiveEventIds.length === 0) return null;
   return queryOwned(
     database.get<MetalLifecycleEvent>("metal_lifecycle_events"),
-    userId,
+    input.userId,
+    Q.where("id", Q.oneOf(effectiveEventIds)),
     Q.where("deleted", false),
     Q.where("is_effective", true),
-    Q.where("is_history_visible", true),
     Q.sortBy("occurred_at", Q.desc)
   );
 }
@@ -258,6 +285,7 @@ export function shapeMetalPortfolioHoldings(
         name: asset.name,
         occurredAt: event ? new Date(event.occurredAt.getTime()) : createdAt,
         physicalForm: normalizeOptionalText(metal.itemForm),
+        performanceUnavailableReason: values.performanceUnavailableReason,
         purchaseCurrency: exactFacts.purchaseCurrency,
         purchaseDate: copyValidDate(asset.purchaseDate),
         purchasePriceDecimal: exactFacts.purchasePriceDecimal,
@@ -321,6 +349,8 @@ export function buildMetalPortfolioReadModel(
       activeHoldings.map((holding) => holding.currentPerformanceDecimal),
       "0"
     ),
+    currentPerformanceUnavailableReason:
+      resolvePortfolioPerformanceUnavailableReason(activeHoldings),
     filter: input.filter,
     hasTerminalHistory: terminalHoldings.length > 0,
     holdings: selectedHoldings,
@@ -379,7 +409,10 @@ function sortByOccurredAtDescending(
   left: MetalPortfolioHoldingInput,
   right: MetalPortfolioHoldingInput
 ): number {
-  return right.occurredAt.getTime() - left.occurredAt.getTime();
+  const timeDifference = right.occurredAt.getTime() - left.occurredAt.getTime();
+  return timeDifference !== 0
+    ? timeDifference
+    : left.id.localeCompare(right.id);
 }
 
 function selectHoldings(
@@ -416,6 +449,10 @@ interface ExactHoldingFacts {
 interface HoldingCardValues {
   readonly currentPerformanceDecimal: string | null;
   readonly currentValueDecimal: string | null;
+  readonly performanceUnavailableReason:
+    | "purchase_cost"
+    | "rate_reference"
+    | null;
 }
 
 function normalizeExactHoldingFacts(
@@ -542,16 +579,18 @@ function calculateHoldingCardValues(input: {
     return unavailableHoldingCardValues();
   }
 
+  const performance = calculateCurrentPerformance({
+    currentRates: input.currentRates,
+    currentValueDecimal: currentValue.valueDecimal,
+    preferredCurrency: input.preferredCurrency,
+    preferredRateDecimal: preferredRate,
+    purchaseCurrency: input.facts.purchaseCurrency,
+    purchasePriceDecimal: input.facts.purchasePriceDecimal,
+  });
   return {
     currentValueDecimal: currentValue.valueDecimal,
-    currentPerformanceDecimal: calculateCurrentPerformance({
-      currentRates: input.currentRates,
-      currentValueDecimal: currentValue.valueDecimal,
-      preferredCurrency: input.preferredCurrency,
-      preferredRateDecimal: preferredRate,
-      purchaseCurrency: input.facts.purchaseCurrency,
-      purchasePriceDecimal: input.facts.purchasePriceDecimal,
-    }),
+    currentPerformanceDecimal: performance.valueDecimal,
+    performanceUnavailableReason: performance.reason,
   };
 }
 
@@ -562,9 +601,12 @@ function calculateCurrentPerformance(input: {
   readonly preferredRateDecimal: string;
   readonly purchaseCurrency: MetalsIsoCurrencyCode | null;
   readonly purchasePriceDecimal: string | null;
-}): string | null {
+}): {
+  readonly reason: "purchase_cost" | "rate_reference" | null;
+  readonly valueDecimal: string | null;
+} {
   if (input.purchaseCurrency === null || input.purchasePriceDecimal === null) {
-    return null;
+    return { reason: "purchase_cost", valueDecimal: null };
   }
   const purchaseRate =
     input.purchaseCurrency === input.preferredCurrency
@@ -573,7 +615,7 @@ function calculateCurrentPerformance(input: {
           input.currentRates.currencies.get(input.purchaseCurrency)
         );
   if (purchaseRate === null) {
-    return null;
+    return { reason: "rate_reference", valueDecimal: null };
   }
   try {
     const purchaseCostInPreferredCurrency = parseCanonicalDecimal(
@@ -581,13 +623,16 @@ function calculateCurrentPerformance(input: {
     )
       .times(purchaseRate)
       .dividedBy(input.preferredRateDecimal);
-    return serializeDecimal(
-      parseCanonicalDecimal(input.currentValueDecimal).minus(
-        purchaseCostInPreferredCurrency
-      )
-    );
+    return {
+      reason: null,
+      valueDecimal: serializeDecimal(
+        parseCanonicalDecimal(input.currentValueDecimal).minus(
+          purchaseCostInPreferredCurrency
+        )
+      ),
+    };
   } catch {
-    return null;
+    return { reason: "rate_reference", valueDecimal: null };
   }
 }
 
@@ -603,7 +648,27 @@ function readAvailableRate(
 }
 
 function unavailableHoldingCardValues(): HoldingCardValues {
-  return { currentPerformanceDecimal: null, currentValueDecimal: null };
+  return {
+    currentPerformanceDecimal: null,
+    currentValueDecimal: null,
+    performanceUnavailableReason: null,
+  };
+}
+
+function resolvePortfolioPerformanceUnavailableReason(
+  holdings: readonly MetalPortfolioHoldingInput[]
+): "purchase_cost" | "rate_reference" | null {
+  const unavailable = holdings.filter(
+    (holding) =>
+      holding.currentValueDecimal !== null &&
+      holding.currentPerformanceDecimal === null
+  );
+  if (unavailable.length === 0) return null;
+  return unavailable.some(
+    (holding) => holding.performanceUnavailableReason === "rate_reference"
+  )
+    ? "rate_reference"
+    : "purchase_cost";
 }
 
 function normalizeOptionalText(

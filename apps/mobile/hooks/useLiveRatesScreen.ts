@@ -3,6 +3,7 @@ import { refreshLiveMarketRates } from "@/services/live-rates-refresh-service";
 import {
   observeLiveRatesTrust,
   summarizeLiveRatesTrust,
+  type LiveRatesTrustObservationStream,
   type LiveRatesTrustReadModel,
   type LiveRatesTrustState,
   type LiveRatesTrustValue,
@@ -61,6 +62,7 @@ interface CurrencyDisplayItem {
   readonly flag: string;
   readonly rate: string;
   readonly changePercent: number;
+  readonly trust: LiveRatesTrustDisplayValue;
 }
 
 interface LiveRatesTrustDisplay {
@@ -73,6 +75,8 @@ interface LiveRatesTrustDisplayValue {
   readonly state: LiveRatesTrustState;
   readonly dateTime: string | null;
   readonly ageText: string | null;
+  readonly quality: string | null;
+  readonly source: string | null;
 }
 
 type LiveRatesRefreshError = "cached_refresh_failed" | "initial_refresh_failed";
@@ -115,7 +119,6 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   const [isExpanded, setIsExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [lastUpdatedText, setLastUpdatedText] = useState("");
-  const [trustRefreshRevision, setTrustRefreshRevision] = useState(0);
   const [trustReadModel, setTrustReadModel] = useState<LiveRatesTrustReadModel>(
     createInitialTrustReadModel
   );
@@ -123,6 +126,10 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   const [refreshError, setRefreshError] =
     useState<LiveRatesRefreshError | null>(null);
   const isRefreshInProgressRef = useRef(false);
+  const latestCapturedAtRef = useRef<number | null>(null);
+  const trustObservationRef = useRef<LiveRatesTrustObservationStream | null>(
+    null
+  );
 
   const updateTimestamp = useCallback((): void => {
     if (lastUpdated) {
@@ -136,7 +143,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
     updateTimestamp();
     const timer = setInterval(() => {
       updateTimestamp();
-      setTrustRefreshRevision((revision) => revision + 1);
+      trustObservationRef.current?.refresh();
     }, RATE_STATUS_REFRESH_INTERVAL_MS);
 
     return () => clearInterval(timer);
@@ -144,15 +151,32 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
 
   useEffect(() => {
     const observation = observeLiveRatesTrust(database);
+    trustObservationRef.current = observation;
     const subscription = observation.subscribe({
-      next: setTrustReadModel,
+      next: (next): void => {
+        const capturedAt = getLatestCapturedAt(next);
+        if (
+          capturedAt !== null &&
+          latestCapturedAtRef.current !== null &&
+          capturedAt > latestCapturedAtRef.current
+        ) {
+          setRefreshError(null);
+        }
+        latestCapturedAtRef.current = capturedAt;
+        setTrustReadModel(next);
+      },
       error: (error: unknown): void => {
         logger.error("liveRatesTrust.observe.failed", error);
       },
     });
 
-    return () => subscription.unsubscribe();
-  }, [database, trustRefreshRevision]);
+    return () => {
+      if (trustObservationRef.current === observation) {
+        trustObservationRef.current = null;
+      }
+      subscription.unsubscribe();
+    };
+  }, [database]);
 
   const currencySymbol = useMemo((): string => {
     return CURRENCY_INFO_MAP[preferredCurrency]?.symbol ?? preferredCurrency;
@@ -225,9 +249,24 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
         flag: currency.flag,
         rate: `${formatRate(rate)} ${currencySymbol}`,
         changePercent: calculateTrendPercent(rate, previousRate),
+        trust: toCombinedTrustDisplay(
+          [
+            trustReadModel.currencies.get(currency.code) ?? missingTrustValue(),
+            trustReadModel.currencies.get(preferredCurrency) ??
+              missingTrustValue(),
+          ],
+          locale
+        ),
       };
     });
-  }, [latestRates, previousDayRate, preferredCurrency, currencySymbol]);
+  }, [
+    currencySymbol,
+    latestRates,
+    locale,
+    preferredCurrency,
+    previousDayRate,
+    trustReadModel,
+  ]);
 
   const sortedCurrencies = useMemo((): readonly CurrencyDisplayItem[] => {
     const defaultCurrencies = allCurrencies.filter((currency) =>
@@ -280,7 +319,12 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   const rateTrust = useMemo<LiveRatesTrustDisplay>(() => {
     const currencyTrustValues = Array.from(trustReadModel.currencies.values());
     return {
-      gold: toTrustDisplayValue(trustReadModel.gold, undefined, undefined, locale),
+      gold: toTrustDisplayValue(
+        trustReadModel.gold,
+        undefined,
+        undefined,
+        locale
+      ),
       silver: toTrustDisplayValue(
         trustReadModel.silver,
         undefined,
@@ -322,7 +366,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
       } finally {
         isRefreshInProgressRef.current = false;
         setIsRefreshing(false);
-        setTrustRefreshRevision((revision) => revision + 1);
+        trustObservationRef.current?.refresh();
       }
     })();
   }, [database, latestRates]);
@@ -348,12 +392,24 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   };
 }
 
+function getLatestCapturedAt(model: LiveRatesTrustReadModel): number | null {
+  const values = [model.gold, model.silver, ...model.currencies.values()];
+  const capturedTimes = values
+    .map((value) => value.capturedAt?.getTime() ?? null)
+    .filter(
+      (value): value is number => value !== null && Number.isFinite(value)
+    );
+  return capturedTimes.length === 0 ? null : Math.max(...capturedTimes);
+}
+
 function getConservativeObservedAt(
   values: readonly LiveRatesTrustValue[]
 ): Date | null {
   const observedTimes = values
     .map((value) => value.providerObservedAt?.getTime() ?? null)
-    .filter((value): value is number => value !== null && Number.isFinite(value));
+    .filter(
+      (value): value is number => value !== null && Number.isFinite(value)
+    );
   if (observedTimes.length === 0) return null;
   return new Date(Math.min(...observedTimes));
 }
@@ -363,7 +419,9 @@ function getConservativeAgeMs(
 ): number | null {
   const ages = values
     .map((value) => value.ageMs)
-    .filter((value): value is number => value !== null && Number.isFinite(value));
+    .filter(
+      (value): value is number => value !== null && Number.isFinite(value)
+    );
   return ages.length === 0 ? null : Math.max(...ages);
 }
 
@@ -373,6 +431,8 @@ function toTrustDisplayValue(
         readonly state: LiveRatesTrustState;
         readonly providerObservedAt: Date | null;
         readonly ageMs: number | null;
+        readonly quality?: string | null;
+        readonly source?: string | null;
       }
     | LiveRatesTrustState,
   providerObservedAt: Date | null | undefined,
@@ -384,12 +444,47 @@ function toTrustDisplayValue(
     typeof value === "string"
       ? (providerObservedAt ?? null)
       : value.providerObservedAt;
-  const resolvedAgeMs = typeof value === "string" ? (ageMs ?? null) : value.ageMs;
+  const resolvedAgeMs =
+    typeof value === "string" ? (ageMs ?? null) : value.ageMs;
   return {
     state,
     dateTime: date?.toLocaleString(locale) ?? null,
     ageText: formatRateAge(resolvedAgeMs, locale),
+    quality: typeof value === "string" ? null : (value.quality ?? null),
+    source: typeof value === "string" ? null : (value.source ?? null),
   };
+}
+
+function toCombinedTrustDisplay(
+  values: readonly LiveRatesTrustValue[],
+  locale: string
+): LiveRatesTrustDisplayValue {
+  const sources = uniquePresentValues(values.map((value) => value.source));
+  const qualities = uniquePresentValues(values.map((value) => value.quality));
+  return {
+    ...toTrustDisplayValue(
+      summarizeLiveRatesTrust(values),
+      getConservativeObservedAt(values),
+      getConservativeAgeMs(values),
+      locale
+    ),
+    quality: qualities.length === 1 ? qualities[0] : null,
+    source: sources.length === 1 ? sources[0] : null,
+  };
+}
+
+function uniquePresentValues(
+  values: readonly (string | null | undefined)[]
+): readonly string[] {
+  return Array.from(
+    new Set(
+      values.filter((value): value is string => typeof value === "string")
+    )
+  );
+}
+
+function missingTrustValue(): LiveRatesTrustValue {
+  return { ageMs: null, providerObservedAt: null, state: "missing" };
 }
 
 function formatRateAge(ageMs: number | null, locale: string): string | null {
@@ -409,5 +504,5 @@ function formatRateAge(ageMs: number | null, locale: string): string | null {
 }
 
 function resolveLiveRatesLocale(language: string | undefined): string {
-  return language?.toLowerCase().startsWith("ar") ? "ar-EG" : "en-GB";
+  return language?.toLowerCase().startsWith("ar") ? "ar-EG-u-nu-latn" : "en-GB";
 }

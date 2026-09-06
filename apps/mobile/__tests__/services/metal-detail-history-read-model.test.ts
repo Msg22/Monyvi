@@ -103,9 +103,14 @@ function event(overrides: Partial<EventInput> = {}): EventInput {
   };
 }
 
-function rate(role: string, valueDecimal: string): Record<string, unknown> {
+function rate(
+  role: string,
+  valueDecimal: string,
+  actionId: string = "action-add"
+): Record<string, unknown> {
   const isMetal = role.includes("metal");
   return {
+    actionId,
     capturedAt: 1_000,
     capturedFreshness: "fresh",
     instrumentCode: isMetal ? "metal:GOLD" : "currency:USD",
@@ -133,6 +138,8 @@ function detailInput(
       userId: "user-1",
     },
     holdingState: {
+      effectiveActionId: "action-add",
+      effectiveEventId: "created",
       holdingId: "holding-1",
       isVisible: true,
       reconciliationState: "accepted",
@@ -140,12 +147,42 @@ function detailInput(
       userId: "user-1",
     },
     lifecycleEvents: [event()],
+    currentRates: {
+      currencies: new Map([
+        [
+          "USD",
+          {
+            ageMs: 1_000,
+            capturedAt: new Date("2026-08-25T10:00:01.000Z"),
+            providerObservedAt: new Date("2026-08-25T10:00:00.000Z"),
+            quality: "valid",
+            source: "fixture",
+            state: "fresh" as const,
+            valueDecimal: "1",
+          },
+        ],
+      ]),
+      gold: {
+        ageMs: 1_000,
+        capturedAt: new Date("2026-08-25T10:00:01.000Z"),
+        providerObservedAt: new Date("2026-08-25T10:00:00.000Z"),
+        quality: "valid",
+        source: "fixture",
+        state: "fresh" as const,
+        valueDecimal: "12",
+      },
+      silver: {
+        ageMs: null,
+        providerObservedAt: null,
+        state: "missing" as const,
+      },
+    },
     metal: {
       itemForm: "coin",
       metalType: "GOLD",
       purityCatalogVersion: "1",
       purityCode: "gold-9999",
-      purityFactorDecimal: "1",
+      purityFactorDecimal: "0.9999",
       weightGramsDecimal: "10",
     },
     rateReferences: [
@@ -154,6 +191,7 @@ function detailInput(
       rate("current_metal", "12"),
       rate("current_purchase_currency", "1"),
     ],
+    preferredCurrency: "USD",
     userId: "user-1",
     ...overrides,
   };
@@ -267,8 +305,8 @@ describe("metal detail and History read models", () => {
 
   it("creates bounded user-scoped detail and History queries", () => {
     observeMetalDetailHolding("user-1", "holding-1");
-    observeMetalDetailEvents("user-1", "holding-1", 25);
-    observeMetalDetailRateReferences("user-1", "holding-1", 25);
+    observeMetalDetailEvents("user-1", "holding-1");
+    observeMetalDetailRateReferences("user-1", "holding-1");
     observeMetalHistoryHoldingStates("user-1", "sold");
     observeMetalHistoryEvents({
       holdings: [{ id: "holding-1", userId: "user-1" }],
@@ -287,8 +325,7 @@ describe("metal detail and History read models", () => {
       "user-1",
       { column: "holding_id", kind: "where", value: "holding-1" },
       { column: "deleted", kind: "where", value: false },
-      { column: "occurred_at", kind: "sortBy", value: "desc" },
-      { kind: "take", value: 26 }
+      { column: "occurred_at", kind: "sortBy", value: "desc" }
     );
     expect(mockQueryChildren).toHaveBeenCalledWith(
       mockLifecycleEventsCollection,
@@ -297,8 +334,7 @@ describe("metal detail and History read models", () => {
       "holding_id",
       { column: "deleted", kind: "where", value: false },
       { column: "is_history_visible", kind: "where", value: true },
-      { column: "occurred_at", kind: "sortBy", value: "desc" },
-      { kind: "take", value: 26 }
+      { column: "occurred_at", kind: "sortBy", value: "desc" }
     );
   });
 
@@ -306,13 +342,67 @@ describe("metal detail and History read models", () => {
     const model = buildMetalDetailReadModel(detailInput());
 
     expect(model).toMatchObject({
-      currentValueDecimal: "120",
+      currentValueDecimal: "119.988",
       isActiveOwnership: true,
       status: "active",
-      totalGainDecimal: "-880",
+      totalGainDecimal: "-880.012",
     });
     expect(model?.attribution?.breakdown.available).toBe(true);
     expect(model?.timeline.map((item) => item.id)).toEqual(["created"]);
+  });
+
+  it("revalues an active holding from current observations instead of immutable action references", () => {
+    const input = detailInput();
+    const model = buildMetalDetailReadModel({
+      ...input,
+      currentRates: {
+        ...input.currentRates!,
+        gold: {
+          ...input.currentRates!.gold,
+          state: "stale",
+          valueDecimal: "20",
+        },
+      },
+      rateReferences: input.rateReferences.map((reference) => ({
+        ...(reference as Readonly<Record<string, unknown>>),
+        valueDecimal:
+          (reference as Readonly<Record<string, unknown>>).role ===
+          "current_metal"
+            ? "999"
+            : (reference as Readonly<Record<string, unknown>>).valueDecimal,
+      })),
+    });
+
+    expect(model).toMatchObject({
+      currentValueDecimal: "199.98",
+      currentValueRateStatus: {
+        source: "fixture",
+        state: "stale",
+      },
+      totalGainDecimal: "-800.02",
+    });
+  });
+
+  it("rejects over-precision persisted exact facts", () => {
+    const input = detailInput();
+    const model = buildMetalDetailReadModel({
+      ...input,
+      asset: {
+        ...input.asset,
+        purchasePriceDecimal: "1000.001",
+      },
+      metal: {
+        ...input.metal,
+        weightGramsDecimal: "10.0001",
+      },
+    });
+
+    expect(model).toMatchObject({
+      currentValueDecimal: null,
+      requiresCompleteMaterialCorrection: true,
+      totalGainDecimal: null,
+      unavailableExactFacts: ["weight", "purchase_cost"],
+    });
   });
 
   it("opens a migration-backed legacy Active holding without inventing a lifecycle event", () => {
@@ -376,7 +466,7 @@ describe("metal detail and History read models", () => {
 
     expect(model).toMatchObject({
       currentValueCurrency: "EGP",
-      currentValueDecimal: "37587.38",
+      currentValueDecimal: "37583.621262",
       currentValueObservedAt: new Date("2026-08-20T10:00:00.000Z"),
       totalGainDecimal: null,
       unavailableExactFacts: [],
@@ -519,6 +609,8 @@ describe("metal detail and History read models", () => {
       assets: [
         {
           deleted: false,
+          effectiveActionId: "gold-sell",
+          effectiveEventId: "gold-sold",
           id: "holding-1",
           name: "Gold coin",
           purchaseCurrency: "USD",
@@ -634,6 +726,8 @@ describe("metal detail and History read models", () => {
       metal_holding_states: [
         {
           deleted: false,
+          effectiveActionId: "gold-sell",
+          effectiveEventId: "gold-sold",
           holdingId: "sold-gold",
           isVisible: true,
           reconciliationState: "accepted",
@@ -642,6 +736,8 @@ describe("metal detail and History read models", () => {
         },
         {
           deleted: false,
+          effectiveActionId: "silver-dispose",
+          effectiveEventId: "silver-disposed",
           holdingId: "disposed-silver",
           isVisible: true,
           reconciliationState: "accepted",
@@ -733,13 +829,23 @@ describe("metal detail and History read models", () => {
         status: "disposed",
       }),
     ]);
+    expect(model.hasMore).toBe(false);
+    const firstPage = await readMetalHistoryReadModel({
+      filter: "all",
+      pageSize: 1,
+      userId: "user-1",
+    });
+    expect(firstPage.items).toHaveLength(1);
+    expect(firstPage.hasMore).toBe(true);
     expect(mockScopeQueryOwned).toHaveBeenCalledWith(
       mockHoldingStatesCollection,
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-      expect.anything()
+      { column: "deleted", kind: "where", value: false },
+      { column: "is_visible", kind: "where", value: true },
+      {
+        column: "status",
+        kind: "where",
+        value: { oneOf: ["sold", "disposed"] },
+      }
     );
   });
 
@@ -788,13 +894,20 @@ describe("metal detail and History read models", () => {
     ).resolves.toBeNull();
     await expect(
       readMetalHistoryReadModel({ filter: "all", userId: "user-1" })
-    ).resolves.toEqual({ filter: "all", items: [] });
+    ).resolves.toEqual({
+      counts: { all: 0, disposed: 0, sold: 0 },
+      filter: "all",
+      hasMore: false,
+      items: [],
+    });
 
     mockOwnedRows = {
       assets: [],
       metal_holding_states: [
         {
           deleted: false,
+          effectiveActionId: null,
+          effectiveEventId: null,
           holdingId: "missing-parent",
           isVisible: true,
           reconciliationState: "accepted",
@@ -805,6 +918,11 @@ describe("metal detail and History read models", () => {
     };
     await expect(
       readMetalHistoryReadModel({ filter: "all", userId: "user-1" })
-    ).resolves.toEqual({ filter: "all", items: [] });
+    ).resolves.toEqual({
+      counts: { all: 0, disposed: 0, sold: 0 },
+      filter: "all",
+      hasMore: false,
+      items: [],
+    });
   });
 });

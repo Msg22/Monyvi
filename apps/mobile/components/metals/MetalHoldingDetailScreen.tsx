@@ -9,7 +9,12 @@ import {
 } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { resolvePuritySelection } from "@monyvi/logic";
+import {
+  formatCanonicalDecimalForDisplay,
+  parseCanonicalDecimal,
+  resolvePuritySelection,
+  serializeDecimal,
+} from "@monyvi/logic";
 
 import { MetalHoldingRender } from "@/components/metals/MetalHoldingRender";
 import type {
@@ -47,7 +52,9 @@ export function MetalHoldingDetailScreen(
   }
 
   const model = props.model;
-  const visibleHistory = showAllHistory ? model.timeline : model.timeline.slice(0, 2);
+  const visibleHistory = showAllHistory
+    ? model.timeline
+    : model.timeline.slice(0, 2);
 
   return (
     <FlatList
@@ -57,6 +64,11 @@ export function MetalHoldingDetailScreen(
       keyExtractor={(item): string => item.id}
       showsVerticalScrollIndicator={false}
       contentContainerClassName="pt-1"
+      contentContainerStyle={
+        props.actions.length === 0
+          ? { paddingBottom: insets.bottom + 16 }
+          : undefined
+      }
       ListHeaderComponent={
         <DetailHeader
           error={props.error}
@@ -240,7 +252,11 @@ function ReconciliationStatus({
   );
 }
 
-function IdentityHero({ model }: { readonly model: MetalDetailReadModel }): React.JSX.Element {
+function IdentityHero({
+  model,
+}: {
+  readonly model: MetalDetailReadModel;
+}): React.JSX.Element {
   const { t } = useTranslation("metals");
   const { width, fontScale } = useWindowDimensions();
   const isCompact = shouldUseCompactLayout(width, fontScale);
@@ -289,7 +305,11 @@ function IdentityHero({ model }: { readonly model: MetalDetailReadModel }): Reac
   );
 }
 
-function ValueSummary({ model }: { readonly model: MetalDetailReadModel }): React.JSX.Element {
+function ValueSummary({
+  model,
+}: {
+  readonly model: MetalDetailReadModel;
+}): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
   const locale = resolveLocale(i18n.resolvedLanguage);
   if (model.currentValueDecimal === null) {
@@ -300,7 +320,8 @@ function ValueSummary({ model }: { readonly model: MetalDetailReadModel }): Reac
     );
   }
 
-  const currency = model.currentValueCurrency ?? model.purchaseCurrency ?? "EGP";
+  const currency =
+    model.currentValueCurrency ?? model.purchaseCurrency ?? "EGP";
   const gainValue = parseAmount(model.totalGainDecimal);
   return (
     <View className="border-t border-slate-200 pt-6 dark:border-slate-800">
@@ -326,10 +347,15 @@ function ValueSummary({ model }: { readonly model: MetalDetailReadModel }): Reac
   );
 }
 
-function ValueJourney({ model }: { readonly model: MetalDetailReadModel }): React.JSX.Element | null {
+function ValueJourney({
+  model,
+}: {
+  readonly model: MetalDetailReadModel;
+}): React.JSX.Element | null {
   const { t, i18n } = useTranslation("metals");
   const locale = resolveLocale(i18n.resolvedLanguage);
-  const currency = model.currentValueCurrency ?? model.purchaseCurrency ?? "EGP";
+  const currency =
+    model.currentValueCurrency ?? model.purchaseCurrency ?? "EGP";
   const currentValueObservedAt = model.currentValueObservedAt ?? null;
   const hasAcquisition =
     model.purchaseDate !== null || model.purchasePriceDecimal !== null;
@@ -352,7 +378,9 @@ function ValueJourney({ model }: { readonly model: MetalDetailReadModel }): Reac
           {hasAcquisition ? (
             <View className="z-10 h-4 w-4 rounded-full bg-nileGreen-700 dark:bg-nileGreen-400" />
           ) : null}
-          {hasAcquisition && hasCurrentValue ? <View className="flex-1" /> : null}
+          {hasAcquisition && hasCurrentValue ? (
+            <View className="flex-1" />
+          ) : null}
           {hasCurrentValue ? (
             <View className="z-10 h-4 w-4 rounded-full border-4 border-nileGreen-50 bg-nileGreen-700 dark:border-slate-800 dark:bg-nileGreen-400" />
           ) : null}
@@ -397,6 +425,21 @@ function ValueJourney({ model }: { readonly model: MetalDetailReadModel }): Reac
                     })}
                   </Text>
                 </>
+              )}
+              {model.currentValueRateStatus?.state === "fresh" ? null : (
+                <Text className="mt-1 text-sm font-medium text-amber-700 dark:text-amber-400">
+                  {t(
+                    `rate.${model.currentValueRateStatus?.state ?? "unknown"}`
+                  )}
+                </Text>
+              )}
+              {model.currentValueRateStatus?.source === null ||
+              model.currentValueRateStatus?.source === undefined ? null : (
+                <Text className="mt-1 text-sm text-text-muted dark:text-text-muted-dark">
+                  {t("detail.rate_source", {
+                    source: model.currentValueRateStatus.source,
+                  })}
+                </Text>
               )}
             </View>
           ) : null}
@@ -445,7 +488,8 @@ function CalculationBreakdown({
 }): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
   const locale = resolveLocale(i18n.resolvedLanguage);
-  const currency = model.currentValueCurrency ?? model.purchaseCurrency ?? "EGP";
+  const currency =
+    model.currentValueCurrency ?? model.purchaseCurrency ?? "EGP";
   const attribution = model.attribution;
   if (attribution === null) return <View />;
 
@@ -465,6 +509,11 @@ function CalculationBreakdown({
         currency={currency}
         locale={locale}
       />
+      {attribution.roundingDifferenceDecimal === null ? null : (
+        <Text className="mt-1 text-xs text-text-muted dark:text-text-muted-dark">
+          {t("detail.display_rounding")}
+        </Text>
+      )}
       <CalculationRow
         label={t("detail.currency_movement")}
         value={attribution.currencyGainDecimal}
@@ -504,8 +553,13 @@ function CalculationRow({
   );
 }
 
-function PhysicalFacts({ model }: { readonly model: MetalDetailReadModel }): React.JSX.Element {
-  const { t } = useTranslation("metals");
+function PhysicalFacts({
+  model,
+}: {
+  readonly model: MetalDetailReadModel;
+}): React.JSX.Element {
+  const { t, i18n } = useTranslation("metals");
+  const locale = resolveLocale(i18n.resolvedLanguage);
   const formLabel = t(
     model.itemForm === null ? "form.unknown" : `form.${model.itemForm}`
   );
@@ -524,7 +578,7 @@ function PhysicalFacts({ model }: { readonly model: MetalDetailReadModel }): Rea
           value={
             model.weightGramsDecimal === null
               ? t("detail.value_unavailable")
-              : `${model.weightGramsDecimal} g`
+              : formatWeight(model.weightGramsDecimal, locale, t("weight_unit"))
           }
         />
         <FactRow
@@ -690,7 +744,11 @@ function EmptyDetail({
   );
 }
 
-function Retry({ onRetry }: { readonly onRetry: () => void }): React.JSX.Element {
+function Retry({
+  onRetry,
+}: {
+  readonly onRetry: () => void;
+}): React.JSX.Element {
   const { t } = useTranslation("metals");
   return (
     <Pressable
@@ -709,9 +767,13 @@ function resolveDetailPurityLabel(
   model: MetalDetailReadModel,
   t: (key: string) => string
 ): string {
-  if (model.purityCatalogVersion !== "1" || model.purityCode === null) return "—";
+  if (model.purityCatalogVersion !== "1" || model.purityCode === null)
+    return "—";
   const purity = resolvePuritySelection(model.metalType, model.purityCode);
-  if (!purity.available || purity.entry.factorDecimal !== model.purityFactorDecimal) {
+  if (
+    !purity.available ||
+    purity.entry.factorDecimal !== model.purityFactorDecimal
+  ) {
     return "—";
   }
   return t(purity.entry.labelKey);
@@ -725,26 +787,34 @@ function physicalFormIcon(
   return "ellipse-outline";
 }
 
-function displayAmount(value: string, currency: string, locale: string): string {
-  const amount = Number(value);
-  if (!Number.isFinite(amount)) return "—";
-  return `${currency} ${amount.toLocaleString(locale, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
-function signedAmount(
+function displayAmount(
   value: string,
   currency: string,
   locale: string
 ): string {
-  const amount = Number(value);
-  return `${amount >= 0 ? "+" : "-"} ${displayAmount(
-    String(Math.abs(amount)),
-    currency,
-    locale
-  )}`;
+  try {
+    return `${currency} ${formatCanonicalDecimalForDisplay(value, {
+      locale,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  } catch {
+    return "—";
+  }
+}
+
+function signedAmount(value: string, currency: string, locale: string): string {
+  try {
+    const amount = parseCanonicalDecimal(value);
+    const sign = amount.greaterThan("0") || amount.isZero() ? "+" : "-";
+    return `${sign} ${displayAmount(
+      serializeDecimal(amount.absoluteValue()),
+      currency,
+      locale
+    )}`;
+  } catch {
+    return "—";
+  }
 }
 
 function parseAmount(value: string | null): number | null {
@@ -763,7 +833,18 @@ function getGainTextClass(value: number | null): string {
 }
 
 function resolveLocale(language: string | undefined): string {
-  return language?.startsWith("ar") ? "ar-EG" : "en-GB";
+  return language?.startsWith("ar") ? "ar-EG-u-nu-latn" : "en-GB";
+}
+
+function formatWeight(value: string, locale: string, unit: string): string {
+  try {
+    return `${formatCanonicalDecimalForDisplay(value, {
+      locale,
+      maximumFractionDigits: 3,
+    })} ${unit}`;
+  } catch {
+    return "—";
+  }
 }
 
 function formatShortDate(date: Date, locale: string): string {

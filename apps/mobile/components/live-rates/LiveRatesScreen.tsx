@@ -1,7 +1,13 @@
 import { palette } from "@/constants/colors";
 import { useLiveRatesScreen } from "@/hooks/useLiveRatesScreen";
 import React from "react";
-import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { CurrencySection } from "./CurrencySection";
@@ -28,6 +34,8 @@ interface LiveRatesTrustDisplay {
   readonly state: "fresh" | "stale" | "unknown" | "missing" | "invalid";
   readonly dateTime: string | null;
   readonly ageText: string | null;
+  readonly quality?: string | null;
+  readonly source?: string | null;
 }
 
 function LiveRatesTrustSummary({
@@ -213,17 +221,22 @@ export function LiveRatesScreen(): React.JSX.Element {
 }
 
 function getRateCopy(
-  t: (
-    key: string,
-    options?: Readonly<{ readonly dateTime?: string }>
-  ) => string,
+  t: (key: string, options?: Readonly<Record<string, string>>) => string,
   rate: LiveRatesTrustDisplay
 ): string {
+  const provenance = [
+    rate.source ? t("rate.source", { source: rate.source }) : null,
+    rate.quality ? t("rate.quality", { quality: rate.quality }) : null,
+  ]
+    .filter((value): value is string => value !== null)
+    .join(" · ");
+  const withProvenance = (copy: string): string =>
+    provenance.length === 0 ? copy : `${copy} · ${provenance}`;
   if (rate.state === "fresh") {
-    return t("rate.fresh", { dateTime: rate.dateTime ?? "" });
+    return withProvenance(t("rate.fresh", { dateTime: rate.dateTime ?? "" }));
   }
-  if (rate.state === "stale" && rate.ageText !== null) {
-    return `${t("rate.stale")} · ${rate.ageText}`;
+  if (rate.state === "stale" && typeof rate.ageText === "string") {
+    return withProvenance(`${t("rate.stale")} · ${rate.ageText}`);
   }
-  return t(`rate.${rate.state}`);
+  return withProvenance(t(`rate.${rate.state}`));
 }

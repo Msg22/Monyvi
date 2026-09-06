@@ -52,15 +52,17 @@ describe("PR #271 validated Metals review regressions", () => {
 
   it("preserves rate-reference action identity and scopes detail references to the effective action", () => {
     const value = source("services/metal-detail-read-model-service.ts");
+    const shaping = source("services/metal-detail-read-model-shaping.ts");
     expect(value).toContain("effectiveActionId");
-    expect(value).toContain("actionId: reference.actionId");
+    expect(shaping).toContain("actionId: reference.actionId");
     expect(value).toContain("expectation.actionId");
   });
 
   it("converts lifecycle-backed detail values to the preferred currency", () => {
     const value = source("services/metal-detail-read-model-service.ts");
     expect(value).toContain("convertDetailValueForDisplay");
-    expect(value).toContain("display_preferred_currency");
+    expect(value).toContain("times(purchaseRate.valueDecimal)");
+    expect(value).toContain("dividedBy(preferredRate.valueDecimal)");
   });
 
   it("keeps combined gain when only detailed attribution is unavailable", () => {
@@ -94,9 +96,10 @@ describe("PR #271 validated Metals review regressions", () => {
   });
 
   it("distinguishes unavailable performance from unavailable current value", () => {
-    expect(source("components/metals/MetalPortfolioScreen.tsx")).toContain(
-      't("portfolio.performance_unavailable")'
-    );
+    const value = source("components/metals/MetalPortfolioScreen.tsx");
+    expect(value).toContain("performanceUnavailableReason");
+    expect(value).toContain("portfolio.performance_unavailable_rate_reference");
+    expect(value).toContain("portfolio.performance_unavailable");
   });
 
   it("refetches detail and History when their routes regain focus", () => {
@@ -124,7 +127,7 @@ describe("PR #271 validated Metals review regressions", () => {
   it("reclassifies cached portfolio trust over time and retains last valid rates on observer errors", () => {
     const value = source("hooks/useMetalPortfolio.ts");
     expect(value).toContain("RATE_STATUS_REFRESH_INTERVAL_MS");
-    expect(value).toContain("trustRefreshRevision");
+    expect(value).toContain("trustObservationRef.current?.refresh()");
     expect(value).not.toMatch(
       /error:[\s\S]{0,300}setCurrentRates\(createEmptyTrustReadModel\(\)\)/
     );
@@ -196,7 +199,9 @@ describe("PR #271 validated Metals review regressions", () => {
 
   it("keeps stale or missing rate warnings when a timestamp is available", () => {
     const value = source("components/metals/MetalPortfolioScreen.tsx");
-    const formatter = value.slice(value.indexOf("function formatRateUpdatedLabel"));
+    const formatter = value.slice(
+      value.indexOf("function formatRateUpdatedLabel")
+    );
     expect(formatter).toContain('state !== "fresh"');
     expect(formatter).toContain("t(`rate.${state}`)");
   });
@@ -211,7 +216,7 @@ describe("PR #271 validated Metals review regressions", () => {
 
   it("pages History by effective event time, excludes incomplete reconciliation, and exposes counts", () => {
     const value = source("services/metal-history-read-model-service.ts");
-    expect(value).toContain("pageTerminalStatesByEffectiveEventTime");
+    expect(value).toContain("orderTerminalStatesByEffectiveEventTime");
     expect(value).toContain("isReportableReconciliationState");
     expect(value).toContain("counts");
     expect(value).toContain("occurredAt");
