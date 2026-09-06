@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react-native";
 import React from "react";
 
 const mockBack = jest.fn();
+let mockAmountDisplayValue = "";
 let mockTransactionByIdResult: {
   readonly transaction: Record<string, unknown> | null;
   readonly isLoading: boolean;
@@ -91,7 +92,10 @@ jest.mock("@/components/navigation/PageHeader", () => ({
 }));
 
 jest.mock("@/components/add-transaction/AmountDisplay", () => ({
-  AmountDisplay: (): React.JSX.Element => mockView("amount-display"),
+  AmountDisplay: ({ amount }: { readonly amount: string }): React.JSX.Element => {
+    mockAmountDisplayValue = amount;
+    return mockView("amount-display");
+  },
 }));
 
 jest.mock("@/components/add-transaction/CalculatorKeypad", () => ({
@@ -132,6 +136,7 @@ import EditTransaction from "@/app/(private)/edit-transaction";
 
 describe("EditTransaction dark theme styling", () => {
   beforeEach(() => {
+    mockAmountDisplayValue = "";
     mockAccounts = [
       {
         id: "account-1",
@@ -197,6 +202,36 @@ describe("EditTransaction dark theme styling", () => {
       "className",
       expect.stringContaining("bg-background dark:bg-background-dark")
     );
+  });
+
+  it("initializes a stored small BTC amount as canonical decimal input", async () => {
+    mockAccounts = [
+      {
+        id: "account-1",
+        name: "BTC",
+        type: "BANK",
+        balance: 1,
+        currency: "BTC",
+      },
+    ];
+    mockTransactionByIdResult = {
+      transaction: {
+        id: "tx-1",
+        amount: 0.00000001,
+        type: "EXPENSE",
+        categoryId: "cat-food",
+        accountId: "account-1",
+        counterparty: undefined,
+        note: undefined,
+        date: new Date("2026-05-01T12:00:00.000Z"),
+      },
+      isLoading: false,
+    };
+
+    render(<EditTransaction />);
+
+    await screen.findByTestId("edit-transaction-screen");
+    expect(mockAmountDisplayValue).toBe("0.00000001");
   });
 
   it("does not show a balance warning for an unchanged expense already reflected in the account balance", async () => {
