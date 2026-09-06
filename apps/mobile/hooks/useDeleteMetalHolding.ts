@@ -32,6 +32,7 @@ export function useDeleteMetalHolding(
   const [submitError, setSubmitError] = useState<string | null>(null);
   const inFlightRef = useRef(false);
   const idsRef = useRef<DeleteMetalHoldingRequestIds | null>(null);
+  const commandRef = useRef<DeleteMetalHoldingHookCommand | null>(null);
   const isMountedRef = useRef(true);
 
   useEffect((): (() => void) => {
@@ -51,10 +52,11 @@ export function useDeleteMetalHolding(
       actionEvidenceId: input.createId(),
       lifecycleEventId: input.createId(),
     };
-    const command = input.createCommand(idsRef.current);
     try {
-      await input.execute(command);
+      commandRef.current ??= input.createCommand(idsRef.current);
+      await input.execute(commandRef.current);
       idsRef.current = null;
+      commandRef.current = null;
       return true;
     } catch (caught: unknown) {
       if (isMountedRef.current) {

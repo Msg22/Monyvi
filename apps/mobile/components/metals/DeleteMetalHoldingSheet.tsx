@@ -4,6 +4,7 @@ import {
   AccessibilityInfo,
   findNodeHandle,
   Modal,
+  ScrollView,
   Text,
   TouchableOpacity,
   View,
@@ -131,62 +132,69 @@ function DeletePanel({
   return (
     <View
       testID="metal-holding-delete-panel"
-      className="rounded-t-3xl bg-slate-25 px-5 pt-3 dark:bg-slate-900"
+      className="max-h-[90%] overflow-hidden rounded-t-3xl bg-slate-25 px-5 pt-3 dark:bg-slate-900"
     >
-      <View
-        testID="metal-holding-delete-content"
-        className="gap-4"
-        style={directionStyle}
+      <ScrollView
+        testID="metal-holding-delete-scroll"
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        className="shrink"
       >
         <View
-          accessible={false}
-          className="h-1 w-10 self-center rounded-full bg-slate-300 dark:bg-slate-600"
-        />
-        <View className="items-center gap-2">
-          <View className="h-14 w-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-950">
-            <Ionicons
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-              name="trash-outline"
-              size={28}
-              color={palette.red[600]}
-            />
-          </View>
-          <Text
-            ref={headingRef}
-            accessibilityRole="header"
-            accessibilityLabel={props.copy.title}
-            className="text-center text-xl font-bold text-text-primary dark:text-text-primary-dark"
-          >
-            {props.copy.title}
-          </Text>
-        </View>
-        <HoldingFacts
-          holding={props.holding}
-          copy={props.copy}
-          className={factsClassName}
-        />
-        <Text
-          testID="metal-holding-delete-consequence"
-          className="text-center text-sm leading-5 text-text-secondary dark:text-text-secondary-dark"
+          testID="metal-holding-delete-content"
+          className="gap-4"
+          style={directionStyle}
         >
-          {props.copy.consequence}
-        </Text>
-        {props.submitError ? (
-          <DeleteError
-            message={props.submitError}
-            copy={props.copy}
-            recoveryRef={recoveryRef}
-            isDisabled={props.isSubmitting}
-            onRetry={props.onRetry}
+          <View
+            accessible={false}
+            className="h-1 w-10 self-center rounded-full bg-slate-300 dark:bg-slate-600"
           />
-        ) : null}
-        {props.isOffline ? (
-          <Text className="text-center text-xs text-text-muted dark:text-text-muted-dark">
-            {props.copy.offline}
+          <View className="items-center gap-2">
+            <View className="h-14 w-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-950">
+              <Ionicons
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                name="trash-outline"
+                size={28}
+                color={palette.red[600]}
+              />
+            </View>
+            <Text
+              ref={headingRef}
+              accessibilityRole="header"
+              accessibilityLabel={props.copy.title}
+              className="text-center text-xl font-bold text-text-primary dark:text-text-primary-dark"
+            >
+              {props.copy.title}
+            </Text>
+          </View>
+          <HoldingFacts
+            holding={props.holding}
+            copy={props.copy}
+            className={factsClassName}
+          />
+          <Text
+            testID="metal-holding-delete-consequence"
+            className="text-center text-sm leading-5 text-text-secondary dark:text-text-secondary-dark"
+          >
+            {props.copy.consequence}
           </Text>
-        ) : null}
-      </View>
+          {props.submitError ? (
+            <DeleteError
+              message={props.submitError}
+              copy={props.copy}
+              recoveryRef={recoveryRef}
+              isDisabled={props.isSubmitting}
+              onRetry={props.onRetry}
+            />
+          ) : null}
+          {props.isOffline ? (
+            <Text className="text-center text-xs text-text-muted dark:text-text-muted-dark">
+              {props.copy.offline}
+            </Text>
+          ) : null}
+        </View>
+      </ScrollView>
       <DeleteActions props={props} />
     </View>
   );

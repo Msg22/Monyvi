@@ -26,7 +26,7 @@ export interface DeleteMetalHoldingCommandInput {
   readonly actionId: string;
   readonly actionEvidenceId: string;
   readonly lifecycleEventId: string;
-  readonly predecessorEventId: string;
+  readonly predecessorEventId: string | null;
   readonly holdingId: string;
   readonly userId: string;
   readonly occurredAt: string;
@@ -58,7 +58,7 @@ interface DeleteProjection {
   readonly asset: Asset;
   readonly metal: AssetMetal;
   readonly state: MetalHoldingState;
-  readonly predecessor: MetalLifecycleEvent;
+  readonly predecessor: MetalLifecycleEvent | null;
   readonly timeline: readonly MetalLifecycleEvent[];
 }
 
@@ -69,6 +69,26 @@ const EFFECTIVE_RECONCILIATION_STATES = new Set([
   "accepted",
   "reconciled",
 ]);
+
+const SUCCESSFUL_REPLAY_STATES = new Set([
+  "local_complete",
+  "sync_pending",
+  "sync_failed",
+  "accepted",
+]);
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function assertStableLocalIds(input: DeleteMetalHoldingCommandInput): void {
+  const ids = [input.actionEvidenceId, input.lifecycleEventId];
+  if (
+    ids.some((id) => !UUID_PATTERN.test(id)) ||
+    new Set(ids).size !== ids.length
+  ) {
+    throw new Error("metal_delete_invalid_local_id");
+  }
+}
 
 function setPreparedId(model: Model, id: string): void {
   model._raw.id = id;
@@ -95,6 +115,14 @@ async function loadProjection(
     input.userId
   );
   if (asset.deleted) throw new Error("metal_holding_not_found");
+  const predecessorPromise =
+    input.predecessorEventId === null
+      ? Promise.resolve(null)
+      : findOwnedById(
+          database.get<MetalLifecycleEvent>("metal_lifecycle_events"),
+          input.predecessorEventId,
+          input.userId
+        );
   const [metals, states, predecessor, timeline] = await Promise.all([
     queryChildrenOfOwnedParent(
       database.get<AssetMetal>("asset_metals"),
@@ -113,11 +141,7 @@ async function loadProjection(
         Q.take(1)
       )
       .fetch(),
-    findOwnedById(
-      database.get<MetalLifecycleEvent>("metal_lifecycle_events"),
-      input.predecessorEventId,
-      input.userId
-    ),
+    predecessorPromise,
     database
       .get<MetalLifecycleEvent>("metal_lifecycle_events")
       .query(
@@ -130,9 +154,8 @@ async function loadProjection(
   if (
     !metals[0] ||
     !states[0] ||
-    predecessor.deleted ||
-    predecessor.holdingId !== input.holdingId ||
-    timeline.length === 0
+    (predecessor !== null &&
+      (predecessor.deleted || predecessor.holdingId !== input.holdingId))
   ) {
     throw new Error("metal_holding_not_found");
   }
@@ -149,30 +172,54 @@ function assertEffectiveActiveProjection(
   input: DeleteMetalHoldingCommandInput,
   projection: DeleteProjection
 ): void {
-  const { state, predecessor } = projection;
+  const { state, predecessor, timeline } = projection;
   if (
     state.status !== "active" ||
     !state.isVisible ||
-    !EFFECTIVE_RECONCILIATION_STATES.has(state.reconciliationState) ||
+    !EFFECTIVE_RECONCILIATION_STATES.has(state.reconciliationState)
+  ) {
+    throw new Error("metal_delete_effective_active_holding_required");
+  }
+  if (state.financialRevision !== input.expectedFinancialRevision) {
+    throw new Error("holding_revision_conflict");
+  }
+  const isRevisionZeroLegacyProjection =
+    input.expectedFinancialRevision === "0" &&
+    input.predecessorEventId === null &&
+    state.effectiveActionId === null &&
+    state.effectiveEventId === null &&
+    predecessor === null &&
+    timeline.length === 0;
+  if (isRevisionZeroLegacyProjection) return;
+  if (
+    predecessor === null ||
     !predecessor.isEffective ||
     !predecessor.isHistoryVisible
   ) {
     throw new Error("metal_delete_effective_active_holding_required");
   }
-  if (
-    state.financialRevision !== input.expectedFinancialRevision ||
-    state.effectiveEventId !== input.predecessorEventId
-  ) {
+  if (state.effectiveEventId !== input.predecessorEventId) {
     throw new Error("holding_revision_conflict");
+  }
+}
+
+function assertSuccessfulReplay(
+  result: CommitFinancialActionGroupLocallyResult
+): void {
+  if (
+    result.kind === "replay" &&
+    !SUCCESSFUL_REPLAY_STATES.has(result.record.state)
+  ) {
+    throw new Error("metal_delete_replay_requires_recovery");
   }
 }
 
 function assertOwnedRows(
   userId: string,
-  rows: readonly (
+  rows: ReadonlyArray<
     | FinancialActionLinkedOperationPreimage
     | FinancialActionLinkedOperationPostimage
-  )[]
+  >
 ): Promise<void> {
   if (rows.some((row) => ownerIdFromRaw(row.raw) !== userId)) {
     return Promise.reject(new Error("ownership_failed"));
@@ -219,7 +266,7 @@ function prepareDeletePlan(
       record.holdingId = input.holdingId;
       record.isEffective = false;
       record.isHistoryVisible = false;
-      record.kind = "deleted";
+      record.kind = "delete";
       record.occurredAt = occurredAt;
       record.payloadJson = payloadJson;
       record.predecessorEventId = input.predecessorEventId;
@@ -268,6 +315,7 @@ export function createDeleteMetalHoldingCommandService(
     delete: async (
       input
     ): Promise<{ readonly kind: "committed" | "replay" }> => {
+      assertStableLocalIds(input);
       const payload = payloadFor(input);
       const envelope = dependencies.createEnvelope(input, payload);
       const projection = await loadProjection(dependencies.database, input);
@@ -285,6 +333,7 @@ export function createDeleteMetalHoldingCommandService(
             )
           ),
       });
+      assertSuccessfulReplay(result);
       return { kind: result.kind === "replay" ? "replay" : "committed" };
     },
   };

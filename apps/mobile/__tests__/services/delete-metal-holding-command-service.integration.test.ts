@@ -13,7 +13,9 @@ import type {
 import {
   DEFAULT_FINANCIAL_ACTION_REGISTRY,
   canonicalizeFinancialActionEnvelope,
+  createFinancialActionRegistry,
   type FinancialActionEnvelopeV1,
+  type FinancialActionRegistry,
   type RegisteredActionPayload,
   type Sha256Provider,
 } from "@monyvi/logic";
@@ -27,7 +29,7 @@ interface DeleteMetalHoldingCommandInput {
   readonly actionId: string;
   readonly actionEvidenceId: string;
   readonly lifecycleEventId: string;
-  readonly predecessorEventId: string;
+  readonly predecessorEventId: string | null;
   readonly holdingId: string;
   readonly userId: string;
   readonly occurredAt: string;
@@ -199,7 +201,8 @@ function command(
 
 function createEnvelope(
   input: DeleteMetalHoldingCommandInput,
-  payload: RegisteredActionPayload
+  payload: RegisteredActionPayload,
+  registry: FinancialActionRegistry = DEFAULT_FINANCIAL_ACTION_REGISTRY
 ): FinancialActionEnvelopeV1 {
   return canonicalizeFinancialActionEnvelope(
     {
@@ -214,28 +217,71 @@ function createEnvelope(
       userId: input.userId,
       payload,
     },
-    DEFAULT_FINANCIAL_ACTION_REGISTRY,
+    registry,
     { cairoTodayDate: input.cairoTodayDate }
   );
 }
 
 function createService(
-  db: Database = database
+  db: Database = database,
+  registry: FinancialActionRegistry = DEFAULT_FINANCIAL_ACTION_REGISTRY
 ): DeleteMetalHoldingCommandService {
   const repository = createFinancialActionFoundationRepository({
     database: db,
     getCurrentUserDataScope: (): Promise<FinancialActionUserDataScope> =>
       Promise.resolve(mockScopeValue()),
     assertExpectedCurrentUser: (): Promise<void> => Promise.resolve(),
-    registry: DEFAULT_FINANCIAL_ACTION_REGISTRY,
+    registry,
   });
   return loadCommandModule().createDeleteMetalHoldingCommandService({
     database: db,
     commitFinancialActionGroupLocally:
       repository.commitFinancialActionGroupLocally,
-    createEnvelope,
+    createEnvelope: (input, payload) =>
+      createEnvelope(input, payload, registry),
     hashProvider: sha256Provider,
   });
+}
+
+function createRevisionZeroDeleteTestRegistry(): FinancialActionRegistry {
+  return createFinancialActionRegistry(
+    DEFAULT_FINANCIAL_ACTION_REGISTRY.definitions.map((definition) =>
+      definition.domain === "metals" &&
+      definition.kind === "delete" &&
+      definition.payloadVersion === "metals.delete/v1"
+        ? {
+            ...definition,
+            validatePayload: (
+              value,
+              validationInput
+            ): RegisteredActionPayload => {
+              if (
+                typeof value === "object" &&
+                value !== null &&
+                Object.keys(value).sort().join(",") ===
+                  "expectedHoldingRevision,holdingId,predecessorEventId,reversesEventId" &&
+                "holdingId" in value &&
+                value.holdingId === IDS.holding &&
+                "expectedHoldingRevision" in value &&
+                value.expectedHoldingRevision === "0" &&
+                "predecessorEventId" in value &&
+                value.predecessorEventId === null &&
+                "reversesEventId" in value &&
+                value.reversesEventId === null
+              ) {
+                return Object.freeze({
+                  expectedHoldingRevision: "0",
+                  holdingId: IDS.holding,
+                  predecessorEventId: null,
+                  reversesEventId: null,
+                });
+              }
+              return definition.validatePayload(value, validationInput);
+            },
+          }
+        : definition
+    )
+  );
 }
 
 async function openFreshDatabase(): Promise<Database> {
@@ -312,7 +358,8 @@ async function seedActionRoot(
 }
 
 async function seedHolding(
-  status: "active" | "sold" | "disposed" = "active"
+  status: "active" | "sold" | "disposed" = "active",
+  isRevisionZeroLegacy = false
 ): Promise<void> {
   await database.write(async (): Promise<void> => {
     await database.get<Account>("accounts").create((record): void => {
@@ -328,7 +375,9 @@ async function seedHolding(
     });
     await database.get<Asset>("assets").create((record): void => {
       record._raw.id = IDS.holding;
-      record.acquisitionActionId = IDS.createdAction;
+      record.acquisitionActionId = isRevisionZeroLegacy
+        ? null
+        : IDS.createdAction;
       record.currency = "EGP";
       record.deleted = false;
       record.isLiquid = true;
@@ -355,34 +404,40 @@ async function seedHolding(
       record.weightGrams = 31.125;
       record.weightGramsDecimal = "31.125";
     });
-    await seedActionRoot(
-      IDS.createdAction,
-      IDS.createdEvidence,
-      IDS.createdEvent,
-      "add",
-      "created",
-      null,
-      "0",
-      false
-    );
-    await seedActionRoot(
-      IDS.correctionAction,
-      IDS.correctionEvidence,
-      IDS.correctionEvent,
-      "correct",
-      "corrected",
-      IDS.createdEvent,
-      "1",
-      true
-    );
+    if (!isRevisionZeroLegacy) {
+      await seedActionRoot(
+        IDS.createdAction,
+        IDS.createdEvidence,
+        IDS.createdEvent,
+        "add",
+        "created",
+        null,
+        "0",
+        false
+      );
+      await seedActionRoot(
+        IDS.correctionAction,
+        IDS.correctionEvidence,
+        IDS.correctionEvent,
+        "correct",
+        "corrected",
+        IDS.createdEvent,
+        "1",
+        true
+      );
+    }
     await database
       .get<MetalHoldingState>("metal_holding_states")
       .create((record): void => {
         record._raw.id = IDS.state;
         record.deleted = false;
-        record.effectiveActionId = IDS.correctionAction;
-        record.effectiveEventId = IDS.correctionEvent;
-        record.financialRevision = "1";
+        record.effectiveActionId = isRevisionZeroLegacy
+          ? null
+          : IDS.correctionAction;
+        record.effectiveEventId = isRevisionZeroLegacy
+          ? null
+          : IDS.correctionEvent;
+        record.financialRevision = isRevisionZeroLegacy ? "0" : "1";
         record.holdingId = IDS.holding;
         record.isVisible = true;
         record.reconciliationState = "local_complete";
@@ -439,7 +494,7 @@ describe("Delete metal holding command SQLite atomicity", () => {
     expect(events.every((event) => !event.isHistoryVisible)).toBe(true);
     expect(events.find((event) => event.id === IDS.deleteEvent)).toMatchObject({
       actionId: IDS.deleteAction,
-      kind: "deleted",
+      kind: "delete",
       predecessorEventId: IDS.correctionEvent,
       reversesEventId: null,
     });
@@ -477,6 +532,63 @@ describe("Delete metal holding command SQLite atomicity", () => {
       reversesEventId: null,
     });
   });
+
+  it("deletes a predecessor-less revision-zero migrated Active holding without fabricating prior lifecycle evidence", async (): Promise<void> => {
+    await seedHolding("active", true);
+
+    await expect(
+      createService(database, createRevisionZeroDeleteTestRegistry()).delete(
+        command({
+          predecessorEventId: null,
+          expectedFinancialRevision: "0",
+        })
+      )
+    ).resolves.toEqual({ kind: "committed" });
+
+    const state = await database
+      .get<MetalHoldingState>("metal_holding_states")
+      .find(IDS.state);
+    expect(state).toMatchObject({
+      financialRevision: "1",
+      effectiveActionId: IDS.deleteAction,
+      effectiveEventId: IDS.deleteEvent,
+      isVisible: false,
+    });
+    const events = await database
+      .get<MetalLifecycleEvent>("metal_lifecycle_events")
+      .query()
+      .fetch();
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      kind: "delete",
+      predecessorEventId: null,
+      isEffective: false,
+      isHistoryVisible: false,
+    });
+  });
+
+  it.each(["bad-id", IDS.deleteEvidence] as const)(
+    "rejects malformed or duplicate generated persistence IDs before the local commit: %s",
+    async (lifecycleEventId): Promise<void> => {
+      await seedHolding();
+
+      await expect(
+        createService().delete(command({ lifecycleEventId }))
+      ).rejects.toThrow("metal_delete_invalid_local_id");
+      expect(
+        await database
+          .get<FinancialActionGroup>("financial_action_groups")
+          .query()
+          .fetch()
+      ).toHaveLength(2);
+      expect(
+        await database
+          .get<MetalActionEvidence>("metal_action_evidence")
+          .query()
+          .fetch()
+      ).toHaveLength(2);
+    }
+  );
 
   it("creates zero sale, disposal, proceeds, P/L, write-off, transfer, rate, transaction, or account effect", async (): Promise<void> => {
     await seedHolding();
@@ -626,6 +738,37 @@ describe("Delete metal holding command SQLite atomicity", () => {
         .fetch()
     ).toHaveLength(3);
   });
+
+  it.each([
+    "rejected_compensating",
+    "reconciliation_incomplete",
+    "reconciled",
+  ] as const)(
+    "does not report an unsuccessful %s action root as a successful replay",
+    async (rootState): Promise<void> => {
+      await seedHolding();
+      await createService().delete(command());
+      await database.write(async (): Promise<void> => {
+        const [root] = await database
+          .get<FinancialActionGroup>("financial_action_groups")
+          .query(Q.where("action_id", IDS.deleteAction))
+          .fetch();
+        await root.update((record): void => {
+          record.state = rootState;
+        });
+      });
+
+      await expect(createService().delete(command())).rejects.toThrow(
+        "metal_delete_replay_requires_recovery"
+      );
+      expect(
+        await database
+          .get<MetalLifecycleEvent>("metal_lifecycle_events")
+          .query()
+          .fetch()
+      ).toHaveLength(3);
+    }
+  );
 
   it("rolls back every local projection and permits an idempotent retry after a batch failure", async (): Promise<void> => {
     await seedHolding();

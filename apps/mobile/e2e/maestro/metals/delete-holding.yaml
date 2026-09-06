@@ -1,9 +1,10 @@
 appId: com.monyvi.app
 ---
-# T115 Red contract. The runner must provide an effective Active Gold holding
-# with exact identity/purity/value facts and retained creation/correction
-# evidence. Shared fixture registration is outside the US7 lane, so execution
-# is blocked until the integration owner wires a deterministic Delete profile.
+# T115 partial Red contract. Shared integration must provide an effective Active
+# Gold holding, live route, and retained creation/correction evidence before this
+# sequence can run. Offline and terminal-state proof remain explicitly missing:
+# the shared harness has no Delete offline profile/connectivity control or
+# deterministic Sold/Disposed fixture available to this isolated lane.
 - runFlow: ../helpers/setup.yaml
 - openLink: monyvi://metals/holding-e2e-gold/delete
 - extendedWaitUntil:
@@ -31,7 +32,8 @@ appId: com.monyvi.app
     timeout: 30000
 - assertNotVisible: "E2E Gold Bar"
 
-# Offline local state and hidden audit survive restart without normal History.
+# Restart persistence sequence only. This does not prove offline behavior until
+# shared integration establishes and verifies an offline profile before Delete.
 - stopApp
 - launchApp:
     clearState: false
@@ -47,5 +49,5 @@ appId: com.monyvi.app
       id: metal-history-screen
     timeout: 30000
 - assertNotVisible: "E2E Gold Bar"
-# A separate integration-owned terminal fixture must prove Sold and Disposed
-# details expose Undo recovery and no Delete action.
+# MISSING/BLOCKED: deterministic Sold and Disposed fixtures plus their live
+# detail routes must assert Undo recovery and absence of Delete after integration.
