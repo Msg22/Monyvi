@@ -43,7 +43,7 @@ export function MetalHistoryScreen(
       className="flex-1 bg-background dark:bg-background-dark"
       data={props.history.items}
       keyExtractor={(item) => item.holdingId}
-      contentContainerClassName="px-5 pb-10 pt-2"
+      contentContainerClassName="gap-3 px-5 pb-10 pt-2"
       ListHeaderComponent={
         <View className="pb-2">
           <Text className="text-base text-text-secondary dark:text-text-secondary-dark">
@@ -106,7 +106,7 @@ function HistoryRow({
       accessible
       accessibilityLabel={`${statusLabel}. ${item.name}. ${metadata}. ${dateLabel}`}
       accessibilityRole="button"
-      className="flex-row items-center gap-3 border-b border-slate-200 py-4 dark:border-slate-800"
+      className="flex-row items-center gap-3 rounded-2xl border border-border p-4 dark:border-border-dark"
       onPress={onPress}
     >
       <MetalHoldingRender itemForm={item.itemForm} metalType={item.metalType} />
@@ -197,7 +197,7 @@ function Retry({
 }
 
 function resolveLocale(language: string | undefined): string {
-  return language?.startsWith("ar") ? "ar-EG" : "en-GB";
+  return language?.startsWith("ar") ? "ar-EG-u-nu-latn" : "en-GB";
 }
 
 function formatHistoryDate(date: Date, locale: string): string {
