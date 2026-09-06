@@ -12,9 +12,17 @@ describe("Stats currency screen contract", () => {
     expect(source).toContain("useStatsCurrencyFilter");
     expect(source).toContain("<StatsCurrencyFilter");
     expect(source).toContain("selectedCurrency={selectedCurrency}");
-    expect(source).toContain("<QuickStats currency={selectedCurrency}");
-    expect(source).toContain("<MonthlyExpenseChart currency={selectedCurrency}");
-    expect(source).toContain("<CategoryDrilldownCard currency={selectedCurrency}");
+    expect(source).toMatch(/<QuickStats[\s\S]*?currency=\{selectedCurrency\}/);
+    expect(source).toMatch(/<MonthlyExpenseChart[\s\S]*?currency=\{selectedCurrency\}/);
+    expect(source).toMatch(/<CategoryDrilldownCard[\s\S]*?currency=\{selectedCurrency\}/);
+  });
+
+  it("uses the shared Skeleton during currency discovery", () => {
+    const source = read("../../app/(private)/(tabs)/stats.tsx");
+
+    expect(source).toContain('import { Skeleton } from "@/components/ui/Skeleton"');
+    expect(source).toContain('testID="stats-currency-loading"');
+    expect(source).toContain("<Skeleton");
   });
 
   it("keeps the Stats currency local instead of changing the global preference", () => {
