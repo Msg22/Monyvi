@@ -61,8 +61,8 @@ describe("PR #271 validated Metals review regressions", () => {
   it("converts lifecycle-backed detail values to the preferred currency", () => {
     const value = source("services/metal-detail-read-model-service.ts");
     expect(value).toContain("convertDetailValueForDisplay");
-    expect(value).toContain("times(purchaseRate.valueDecimal)");
-    expect(value).toContain("dividedBy(preferredRate.valueDecimal)");
+    expect(value).toContain("times(purchaseRateDecimal)");
+    expect(value).toContain("dividedBy(preferredRateDecimal)");
   });
 
   it("keeps combined gain when only detailed attribution is unavailable", () => {
