@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import {
   FlatList,
-  I18nManager,
   Pressable,
   Text,
   useWindowDimensions,
