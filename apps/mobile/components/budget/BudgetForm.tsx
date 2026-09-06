@@ -138,14 +138,7 @@ export function BudgetForm({
   const selectedCategory = form.categoryId
     ? categoryMap.get(form.categoryId)
     : null;
-  const persistedCategoryDisplayName =
-    form.categoryId && existingBudget?.categoryId === form.categoryId
-      ? existingBudget.categoryDisplayName
-      : form.categoryId && renewalSource?.categoryId === form.categoryId
-        ? renewalSource.categoryDisplayName
-        : undefined;
-  const categoryDisplayName =
-    selectedCategory?.displayName ?? persistedCategoryDisplayName;
+  const categoryDisplayName = selectedCategory?.displayName;
 
   const isWaitingForCreateCurrency =
     !isEditMode &&
@@ -262,7 +255,10 @@ export function BudgetForm({
   }, [areCategoriesLoading, categoryError, form, t]);
 
   const persistBudget = useCallback(
-    async (amount: number, currency: string | null): Promise<void> => {
+    async (
+      amount: number,
+      currency: FormState["currency"]
+    ): Promise<void> => {
       setIsSubmitting(true);
       try {
         if (isEditMode && existingBudget) {
