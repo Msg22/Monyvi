@@ -7,6 +7,7 @@ import {
 import {
   collectAccountFinancialActionPushBundles,
   collectProtectedFinancialActionRowIds,
+  readRejectedIdsForTable,
 } from "@/services/sync/account-protected-fields";
 
 const ACCOUNT_ID = "018f0c7a-1234-7abc-8def-000000000211";
@@ -103,8 +104,12 @@ describe("issue #242 foundation review regressions", () => {
       changes({ createdRoots: [root] })
     );
 
-    expect(protectedIds?.accounts).toEqual([ACCOUNT_ID]);
-    expect(protectedIds?.transactions).toEqual([TRANSACTION_ID]);
+    expect(readRejectedIdsForTable(protectedIds, "accounts")).toEqual([
+      ACCOUNT_ID,
+    ]);
+    expect(readRejectedIdsForTable(protectedIds, "transactions")).toEqual([
+      TRANSACTION_ID,
+    ]);
   });
 
   it("orders guarded push candidates by account revision instead of Watermelon created/updated buckets", () => {
