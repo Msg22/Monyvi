@@ -21,6 +21,10 @@ jest.mock("@monyvi/logic", () => ({
   ],
 }));
 
+jest.mock("@/context/LocaleContext", () => ({
+  useLocale: (): { readonly language: string } => ({ language: "en" }),
+}));
+
 jest.mock("react-i18next", () => ({
   useTranslation: (): { readonly t: (key: string) => string } => ({
     t: (key: string): string => key,
@@ -52,6 +56,24 @@ describe("StatsCurrencyFilter", () => {
     fireEvent.press(screen.getByTestId("stats-currency-option-USD"));
     expect(onSelectCurrency).toHaveBeenCalledWith("USD");
     expect(screen.queryByTestId("stats-currency-menu")).toBeNull();
+  });
+
+  it("keeps valid transaction currencies that are missing from the fiat catalog", () => {
+    render(
+      <StatsCurrencyFilter
+        availableCurrencies={["BTC", "EGP"]}
+        selectedCurrency="BTC"
+        onSelectCurrency={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId("stats-currency-trigger")).not.toBeDisabled();
+    fireEvent.press(screen.getByTestId("stats-currency-trigger"));
+    expect(screen.getByTestId("stats-currency-option-BTC")).toBeOnTheScreen();
+    expect(screen.getByTestId("stats-currency-option-EGP")).toBeOnTheScreen();
+    expect(screen.getByTestId("stats-currency-option-BTC")).toHaveAccessibilityState({
+      selected: true,
+    });
   });
 
   it("disables the selector when only one transaction currency exists", () => {

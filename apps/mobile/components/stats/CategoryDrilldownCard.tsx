@@ -277,6 +277,7 @@ export function CategoryDrilldownCard({
                 category={cat}
                 onPress={() => handleDrillDown(cat)}
                 hasChildren={cat.childrenIds.length > 0}
+                currency={currency}
               />
             ))}
           </View>
