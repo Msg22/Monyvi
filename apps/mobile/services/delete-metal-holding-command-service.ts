@@ -276,7 +276,8 @@ function toLifecycleKind(kind: string): LifecycleEvent["kind"] | null {
 function isRejectedAction(action: FinancialActionGroup): boolean {
   return (
     action.state === "rejected_compensating" ||
-    action.state === "reconciliation_incomplete"
+    action.state === "reconciliation_incomplete" ||
+    action.state === "reconciled"
   );
 }
 
