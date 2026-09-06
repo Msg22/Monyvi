@@ -6,6 +6,7 @@ import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { palette } from "@/constants/colors";
+import { useLocale } from "@/context/LocaleContext";
 
 interface StatsCurrencyFilterProps {
   readonly availableCurrencies: readonly CurrencyType[];
@@ -19,6 +20,7 @@ export function StatsCurrencyFilter({
   onSelectCurrency,
 }: StatsCurrencyFilterProps): React.JSX.Element | null {
   const { t } = useTranslation("common");
+  const { language } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
 
   const items = useMemo(
@@ -84,11 +86,15 @@ export function StatsCurrencyFilter({
           <ScrollView className="max-h-72" showsVerticalScrollIndicator={false}>
             {items.map((item) => {
               const isSelected = item.code === selectedCurrency;
+              const localizedName = getLocalizedCurrencyName(item, language);
 
               return (
                 <TouchableOpacity
                   key={item.code}
                   testID={`stats-currency-option-${item.code}`}
+                  accessibilityRole="radio"
+                  accessibilityLabel={`${item.code}, ${localizedName}`}
+                  accessibilityState={{ selected: isSelected }}
                   activeOpacity={0.7}
                   onPress={() => {
                     onSelectCurrency(item.code);
@@ -115,7 +121,7 @@ export function StatsCurrencyFilter({
                       numberOfLines={1}
                       className="text-xs text-slate-500 dark:text-slate-400"
                     >
-                      {item.name}
+                      {localizedName}
                     </Text>
                   </View>
                   <Text className="ms-3 text-sm text-text-secondary dark:text-text-secondary-dark">
@@ -142,8 +148,44 @@ export function StatsCurrencyFilter({
 function getCurrencyItems(
   availableCurrencies: readonly CurrencyType[]
 ): CurrencyInfo[] {
-  const availableSet = new Set(availableCurrencies);
-  return SORTED_SUPPORTED_CURRENCIES.filter((currency) =>
-    availableSet.has(currency.code)
+  const metadataByCode = new Map(
+    SORTED_SUPPORTED_CURRENCIES.map((currency) => [currency.code, currency])
   );
+
+  return availableCurrencies.map((code) => {
+    const metadata = metadataByCode.get(code);
+    if (metadata) return metadata;
+
+    return {
+      code,
+      name: code,
+      symbol: code === "BTC" ? "₿" : code,
+      flag: code === "BTC" ? "₿" : "💱",
+    };
+  });
+}
+
+function getLocalizedCurrencyName(
+  item: CurrencyInfo,
+  language: string
+): string {
+  try {
+    const currencyPart = new Intl.NumberFormat(language, {
+      style: "currency",
+      currency: item.code,
+      currencyDisplay: "name",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })
+      .formatToParts(0)
+      .find((part) => part.type === "currency")?.value;
+
+    if (currencyPart && currencyPart !== item.code) {
+      return currencyPart;
+    }
+  } catch {
+    // Fall through to a language-neutral code when Intl lacks metadata.
+  }
+
+  return language.startsWith("en") ? item.name : item.code;
 }
