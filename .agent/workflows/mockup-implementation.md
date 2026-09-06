@@ -47,7 +47,10 @@ The screen type will be specified when invoking this workflow.
 ## 2. Design System & Colors (Mandatory)
 
 - Use **only** the colors defined in `@colors.ts`.
-- Do **not** introduce new colors, gradients, or shades.
+- Do **not** introduce new colors or shades.
+- Use gradients when the design system or an approved design direction uses
+  them. Do not invent an unapproved gradient, and do not remove an approved
+  gradient merely because it is a gradient.
 - Apply colors consistently for:
   - Primary actions
   - Secondary actions
@@ -240,12 +243,139 @@ mockup-1-v2.png mockup-2-v2.png
 
 ---
 
-### 9.5 Purpose
+### 9.5 Persist Approved Binding Context
 
-- These images become the **single source of truth for UI implementation**
+The approved image and its binding metadata together form the implementation
+handoff required by the constitution. For every approved image, create a
+matching sidecar named `<mockup-basename>.binding.md` in the same `mockups/`
+directory.
+
+Each sidecar MUST record:
+
+- the approved reference image filename;
+- `Binding metadata approval: PENDING` until the completed sidecar receives
+  explicit user approval;
+- `Binding metadata revision: sha256:<64 lowercase hex characters>`, computed
+  from the exact UTF-8/LF bytes beneath the sidecar's `## Binding Facts` heading
+  through the next level-two heading or end of file;
+- `Approved binding metadata revision: PENDING` until explicit approval binds
+  the approval record to the current binding metadata revision;
+- `Binding metadata approval evidence/reference: PENDING` until that approval is
+  recorded for the same revision;
+- the binding product surface: route/screen, component, sheet, modal, or other
+  scoped UI region;
+- the declared comparison context: exact viewport dimensions when the reference
+  binds a viewport, or exact component bounds/context when it binds a component;
+- any presentation-only framing that is explicitly **non-binding**, including
+  phone hardware, device frame, outer canvas, browser chrome, export padding, or
+  background outside the UI surface;
+- all known screen-specific **spacing** facts;
+- all known **sizing** facts;
+- all known **color/theme** facts;
+- all known **typography** facts;
+- all known **state** facts represented by the reference, including selected,
+  loading, empty, error, disabled, or other visible state where applicable;
+- all known **interaction** behavior, including tap, gesture, focus, scrolling,
+  navigation, dismissal, and disabled-action behavior where applicable;
+- all known **transition** behavior, including entry, exit, state-change, and
+  motion behavior where applicable; and
+- any scoped responsive, dark, RTL/Arabic, or enlarged-text variants already
+  approved or explicitly required for validation.
+
+Keep every normative binding fact under one `## Binding Facts` heading. Approval
+status, revision fields, approval evidence, and optional superseded approval
+history stay outside that section so the content fingerprint is not
+self-referential. Recompute `Binding metadata revision` whenever the exact
+binding-facts bytes change. A sidecar is authoritative only when its current
+fingerprint is valid, `Binding metadata approval: APPROVED`,
+`Approved binding metadata revision` exactly equals `Binding metadata revision`,
+and the approval evidence/reference identifies that same revision.
+
+For every required fact that is not known, write `UNKNOWN` rather than inferring
+its value. Identify whether each unknown affects visual fidelity. A
+fidelity-affecting unknown MUST be surfaced for clarification before
+implementation starts; do not silently convert image pixels, export framing, or
+assumptions into product rules.
+
+After the sidecar is complete enough to review, present the approved image and
+its completed sidecar **together** for explicit user approval of the binding
+metadata. The earlier image approval does not automatically approve viewport,
+component-bounds, non-binding-region, spacing, sizing, color, typography, state,
+interaction, transition, or variant facts recorded later by the agent.
+
+Only after that explicit approval may the sidecar be changed to
+`Binding metadata approval: APPROVED`, copy the current fingerprint into
+`Approved binding metadata revision`, and record approval evidence/reference
+that identifies the same revision. Until then, the sidecar is a draft and MUST
+NOT be treated as authoritative by implementation or review workflows.
+
+Before any later edit to `## Binding Facts`, reset
+`Binding metadata approval: PENDING`,
+`Approved binding metadata revision: PENDING`, and
+`Binding metadata approval evidence/reference: PENDING`. Previous approval
+evidence may remain only in a clearly superseded history section. After the
+edit, recompute `Binding metadata revision` and obtain renewed explicit
+approval. Changing any byte in the normative binding-facts section counts as a
+material change for approval purposes; administrative history outside that
+section does not.
+
+Use the constitution's **Approved mockup binding** principle as the authority
+for what is binding. Direct implementation and review workflows MUST consume
+only an explicitly approved sidecar rather than treating the entire exported
+image or an unapproved metadata draft as product UI authority.
+
+#### 9.5.1 Legacy Approved Mockup Metadata Migration
+
+Approved references created before the binding-sidecar rule remain valid when
+their approval can be evidenced. A missing sidecar on such a reference is a
+metadata-migration requirement, not a reason to discard or replace the approved
+mockup.
+
+Before implementation of a legacy approved reference:
+
+1. Verify that the image was actually approved using existing evidence such as
+   the canonical spec/design handoff, recorded user approval, or the PR/review
+   artifact that established the approved reference. Do not infer approval from
+   filename or location alone.
+2. Create the matching `<mockup-basename>.binding.md` sidecar in the same
+   directory **before implementation**. Mark it as
+   `Legacy metadata migration: yes`, set `Binding metadata approval: PENDING`,
+   set both revision-approval fields to `PENDING`, and list the exact evidence
+   sources used.
+3. Populate only binding facts supported by the approved reference, recorded
+   approval/handoff, authoritative design/spec documentation, or design-system
+   facts that applied to that approval. The constitution's default rule that
+   presentation-only hardware/frame/canvas/chrome/export padding is non-binding
+   applies unless the approved handoff explicitly says otherwise.
+4. Record every unresolved required binding fact as `UNKNOWN`, including the
+   viewport/component context, spacing, sizing, color/theme, typography, or
+   visible state, interaction behavior, or transition behavior when it is not
+   evidenced. Classify each unknown as fidelity-affecting or
+   non-fidelity-affecting.
+5. If any fidelity-affecting unknown remains, pause and obtain clarification
+   before UI implementation, then update the sidecar with the approved answer.
+6. Present the approved legacy image and completed migrated sidecar together for
+   explicit user approval of the binding metadata. Legacy image approval does
+   not implicitly approve newly reconstructed metadata. Only after explicit
+   approval may the sidecar be marked `Binding metadata approval: APPROVED`,
+   with its valid current fingerprint copied to
+   `Approved binding metadata revision` and same-revision approval
+   evidence/reference recorded, and become the valid handoff for implementation
+   and review.
+7. Do not alter the approved legacy image to make metadata fit, manufacture
+   measurements from uncalibrated export framing, or create speculative sidecars
+   outside the currently authorized task.
+
+---
+
+### 9.6 Purpose
+
+- The approved image plus its **explicitly approved** binding sidecar become the
+  **single source of truth for UI implementation**
 - They MUST be used by:
-  - Developers → for pixel-perfect implementation
-  - Review agents → for visual validation against code
+  - Developers → for pixel-perfect implementation at the declared binding
+    context
+  - Review agents → for visual validation against code and rendered evidence
 
 ---
 
@@ -253,6 +383,11 @@ mockup-1-v2.png mockup-2-v2.png
 
 - Do NOT overwrite existing mockups unless explicitly instructed
 - Do NOT store unapproved designs
+- Do NOT treat a sidecar with `Binding metadata approval: PENDING` as
+  authoritative
+- Do NOT treat a sidecar as authoritative when its current fingerprint is
+  invalid, its approved revision differs from its current revision, or its
+  approval evidence/reference does not identify that revision
 - Ensure stored images match **exactly what was approved**
 - Maintain consistent naming and structure across all features
 

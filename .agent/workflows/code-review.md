@@ -322,14 +322,19 @@ The agent MUST ensure consistency across:
 
 ### 🎨 2.5 Mockups Compliance (MANDATORY — DO NOT SKIP UNDER ANY CIRCUMSTANCES)
 
-> [!CAUTION] **THIS SECTION WAS PREVIOUSLY SKIPPED. THIS IS UNACCEPTABLE. The
-> agent MUST load ALL mockup images, compare them against the implementation,
-> and produce DETAILED findings. If the `mockups/` folder exists, EVERY mockup
-> MUST be analyzed. "I loaded the mockups" without producing findings is a
-> FAILURE.**
+Always include this section in the review report. First determine whether the
+target diff changes visual UI governed by an approved scoped mockup. If it does
+not, report `N/A — no governed visual UI change`, skip the per-mockup evidence
+steps below, and do not block the PR merely because the feature folder contains
+mockup assets.
 
-The agent MUST validate that the implementation **visually and structurally
-matches the approved mockups**.
+> [!CAUTION] **THIS SECTION WAS PREVIOUSLY SKIPPED. THIS IS UNACCEPTABLE. The
+> agent MUST load ALL approved mockup images that govern changed visual UI,
+> compare them against the implementation, and produce DETAILED findings. "I
+> loaded the mockups" without producing findings is a FAILURE.**
+
+When applicable, the agent MUST validate that the changed implementation
+**visually and structurally matches the approved mockups**.
 
 ---
 
@@ -337,19 +342,63 @@ matches the approved mockups**.
 
 - Identify the current branch name
 - Locate the corresponding spec folder: `specs/<branch-name>/`
-- Inside the spec folder, locate: `mockups/`
-- **Load ALL mockup images** inside this folder
-- If no `mockups/` folder exists, explicitly state: "No mockups found — N/A"
+- Follow mockup or handoff paths declared by the selected spec, plan, tasks, and
+  README files
+- Recursively discover candidate mockup assets in the selected feature folder,
+  including nested paths such as `design/mockups/`
+- Identify changed visual UI files and surfaces from the target diff.
+- Load candidate sidecar metadata, but not candidate images. Before using a
+  sidecar to include or exclude a reference, verify it records
+  `Binding metadata approval: APPROVED`, has a valid recomputed current
+  fingerprint, has matching current and approved revisions, and has approval
+  evidence that identifies that revision.
+- Use declared traceability and only authoritative candidate sidecars to map
+  references to changed governed surfaces before loading images or entering any
+  per-mockup loop. A candidate linked by declared traceability to changed UI but
+  missing an authoritative sidecar remains a blocker; do not silently exclude
+  it.
+- Exclude references for unrelated or unchanged surfaces. They remain governed
+  for their own future changes but are not review targets for this diff.
+- **Load only the approved mockup images mapped to changed governed visual UI**
+  and their matching `<mockup-basename>.binding.md` sidecars from
+  `.agent/workflows/mockup-implementation.md`.
+- When no candidate assets exist, state `No mockups found — N/A`. When
+  candidates exist but none map to changed governed visual UI, state
+  `N/A — no governed visual UI change` and skip every per-mockup loop.
+- Before using the mapped sidecar's viewport/component context or continuing
+  governed visual review, confirm its approval evidence/reference satisfies the
+  same-revision requirements in `.agent/workflows/mockup-implementation.md`.
+- If an approved reference predates the sidecar rule, complete the workflow's
+  **Legacy Approved Mockup Metadata Migration** and explicit sidecar approval
+  before using reconstructed metadata for review.
+- A missing sidecar, a sidecar still marked `PENDING`, a missing approval
+  reference, or a sidecar materially changed after approval is
+  non-authoritative. Mark the binding context unverified and the governed UI
+  **NOT APPROVABLE**; never infer binding facts from the image/export.
 
 ---
 
 #### 🔍 2.5.2 Compare Implementation vs Mockups
 
-For **EACH** mockup image, the agent MUST:
+For **EACH loaded mockup mapped to changed governed visual UI**, the agent MUST:
 
 - Identify which component/screen it corresponds to
 - Read the component code
 - Compare the implementation against the mockup **structurally and visually**
+- Use only the explicitly approved binding sidecar to identify the declared
+  binding UI viewport or component context
+- Ignore presentation-only device hardware, frame, outer canvas, browser chrome,
+  export padding, and background outside the UI surface unless explicitly marked
+  binding
+- Inspect rendered app screenshots; source inspection alone cannot prove visual
+  completion
+- Require side-by-side or overlay rendered evidence at the declared UI context
+- Require rendered evidence for every in-scope responsive, dark-mode,
+  RTL/Arabic, and enlarged-text variant
+- Require separate accessibility-tree, screen-reader, or automated accessibility
+  evidence for labels and semantics; screenshots alone do not prove
+  accessibility labels
+- Report functional readiness and visual fidelity separately
 
 #### Validate ALL 7 (produce a finding for EACH):
 
@@ -396,7 +445,7 @@ The agent MUST identify:
 
 #### 📌 Output Format (MANDATORY — USE THIS EXACT FORMAT)
 
-For EACH mockup:
+For EACH loaded mockup mapped to changed governed visual UI:
 
 ```
 #### Mockup: <filename>
@@ -411,6 +460,10 @@ Corresponds to: <component/screen name>
 | Components & UI | ✅/❌ | ... |
 | States | ✅/❌ | ... |
 | Interactions | ✅/❌ | ... |
+| Binding UI Context | ✅/❌ | ... |
+| Rendered Comparison | ✅/❌ | ... |
+| Scoped Variants | ✅/❌ | ... |
+| Accessibility Evidence | ✅/❌ | ... |
 ```
 
 Violations:
@@ -428,7 +481,10 @@ Violations:
 
 #### 🚨 Blocking Rule
 
-- If implementation does NOT match mockups: → PR is **NOT APPROVABLE**
+- For governed visual UI changes, if the authoritative approved binding sidecar
+  is missing/invalid, implementation does NOT match mockups, or required
+  rendered comparison or scoped-variant evidence is missing: → PR is **NOT
+  APPROVABLE**
 
 ---
 
@@ -439,15 +495,22 @@ When creating the Fix PR:
 - Update the UI to match the mockups **pixel-perfect**
 - Do NOT introduce new design decisions
 - Do NOT "improve" the design unless explicitly instructed
-- Treat mockups as the **single source of truth for UI**
+- Treat the approved mockup image plus its explicitly approved binding sidecar
+  as the **single source of truth for governed UI**
 
 ---
 
 #### ✅ Success Criteria
 
+- Approved binding sidecar is verified current and authoritative
 - Implementation visually matches mockups with **no noticeable differences**
 - All mockup screens are fully implemented
-- UI is ready for pixel-perfect validation
+- Side-by-side or overlay rendered evidence proves the match at the declared UI
+  context
+- Every in-scope responsive, dark-mode, RTL/Arabic, and enlarged-text variant
+  has rendered evidence
+- Accessibility labels and semantics have separate accessibility evidence
+- Functional readiness and visual fidelity are reported separately
 
 ---
 
@@ -539,6 +602,25 @@ Avoid duplicate fixes.
   - 📄 Reference: (rule or principle if applicable)
   - 💡 Suggestion
 
+#### Functional Readiness
+
+- Status: READY / NOT READY
+- Evidence: tests and behavior evidence supporting this status
+
+#### Visual Fidelity
+
+- Status: COMPLETE / INCOMPLETE / N/A
+- Binding UI context: declared viewport or component context, or N/A
+
+#### Visual Evidence
+
+- Approved reference: path, or N/A
+- Baseline rendered comparison: side-by-side or overlay evidence path, or N/A
+- Scoped variants: responsive, dark-mode, RTL/Arabic, and enlarged-text evidence
+  paths, or N/A with reason
+- Accessibility: accessibility-tree, screen-reader, or automated accessibility
+  evidence, or N/A with reason
+
 ---
 
 ## 4. Implement Fixes (MANDATORY)
@@ -595,6 +677,8 @@ The PR is **NOT APPROVABLE** if ANY of the following exist:
 - Broken monorepo boundaries
 - Missing migrations or DB inconsistencies
 - **Mockup deviations** (UI does not match approved designs)
+- Missing required mockup comparison or scoped-variant rendered evidence for a
+  governed visual UI change
 
 ---
 
@@ -605,9 +689,12 @@ The PR is **NOT APPROVABLE** if ANY of the following exist:
   - `.agent/rules/*.md`
   - `specs/<branch-name>/*` when present
   - Linked GitHub issue when present
-  - `specs/<branch-name>/mockups/*` when present
+  - approved mockups that govern changed visual UI, when present
 
 - No missing features
 - No architectural violations
 - Clean, maintainable, production-ready code
-- **UI pixel-perfect match with mockups**
+- **Changed governed UI matches approved mockups pixel-perfect**
+- Required rendered comparison, scoped-variant, and accessibility evidence is
+  complete for changed governed UI
+- Functional readiness and visual fidelity are reported separately
