@@ -24,6 +24,7 @@ export interface DeleteMetalHoldingSheetCopy {
   readonly cancel: string;
   readonly retry: string;
   readonly offline: string;
+  readonly failure: string;
   readonly accessibilityLabel: string;
 }
 
@@ -40,6 +41,8 @@ export interface DeleteMetalHoldingSheetProps {
   readonly width: number;
   readonly fontScale: number;
   readonly bottomInset: number;
+  readonly leftInset: number;
+  readonly rightInset: number;
   readonly isRtl: boolean;
   readonly isOffline: boolean;
   readonly isSubmitting: boolean;
@@ -132,7 +135,11 @@ function DeletePanel({
   return (
     <View
       testID="metal-holding-delete-panel"
-      className="max-h-[90%] overflow-hidden rounded-t-3xl bg-slate-25 px-5 pt-3 dark:bg-slate-900"
+      className="max-h-[90%] overflow-hidden rounded-t-3xl bg-slate-25 pt-3 dark:bg-slate-900"
+      style={{
+        paddingLeft: props.leftInset + 20,
+        paddingRight: props.rightInset + 20,
+      }}
     >
       <ScrollView
         testID="metal-holding-delete-scroll"
@@ -181,7 +188,7 @@ function DeletePanel({
           </Text>
           {props.submitError ? (
             <DeleteError
-              message={props.submitError}
+              message={props.copy.failure}
               copy={props.copy}
               recoveryRef={recoveryRef}
               isDisabled={props.isSubmitting}
@@ -207,28 +214,47 @@ function HoldingFacts({
 }: Pick<DeleteMetalHoldingSheetProps, "holding" | "copy"> & {
   readonly className: string;
 }): React.JSX.Element {
+  const accessibilityLabel = [
+    holding.name,
+    holding.description,
+    holding.weightLabel,
+    `${copy.currentValue}: ${holding.currentValueLabel}`,
+    `${copy.performance}: ${holding.performanceLabel}`,
+  ].join(". ");
+
   return (
-    <View className="gap-3 rounded-2xl border border-red-100 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950">
-      <View className="flex-row items-center justify-between gap-3">
-        <View className="flex-1">
-          <Text className="text-base font-bold text-text-primary dark:text-text-primary-dark">
-            {holding.name}
-          </Text>
-          <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
-            {holding.description}
+    <View
+      accessible
+      accessibilityLabel={accessibilityLabel}
+      importantForAccessibility="yes"
+      testID="metal-holding-delete-holding-summary"
+      className="gap-3 rounded-2xl border border-red-100 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950"
+    >
+      <View importantForAccessibility="no-hide-descendants">
+        <View className="flex-row items-center justify-between gap-3">
+          <View className="flex-1">
+            <Text className="text-base font-bold text-text-primary dark:text-text-primary-dark">
+              {holding.name}
+            </Text>
+            <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
+              {holding.description}
+            </Text>
+          </View>
+          <Text className="text-sm font-semibold text-text-primary dark:text-text-primary-dark">
+            {holding.weightLabel}
           </Text>
         </View>
-        <Text className="text-sm font-semibold text-text-primary dark:text-text-primary-dark">
-          {holding.weightLabel}
-        </Text>
-      </View>
-      <View testID="metal-holding-delete-facts" className={className}>
-        <ValueFact
-          label={copy.currentValue}
-          value={holding.currentValueLabel}
-          testID="metal-holding-delete-current-value"
-        />
-        <ValueFact label={copy.performance} value={holding.performanceLabel} />
+        <View testID="metal-holding-delete-facts" className={className}>
+          <ValueFact
+            label={copy.currentValue}
+            value={holding.currentValueLabel}
+            testID="metal-holding-delete-current-value"
+          />
+          <ValueFact
+            label={copy.performance}
+            value={holding.performanceLabel}
+          />
+        </View>
       </View>
     </View>
   );

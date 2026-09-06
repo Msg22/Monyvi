@@ -716,6 +716,29 @@ describe("Delete metal holding command SQLite atomicity", () => {
     }
   );
 
+  it("rejects a structurally invalid lifecycle head even when persisted flags claim it is effective", async (): Promise<void> => {
+    await seedHolding();
+    await database.write(async (): Promise<void> => {
+      await (
+        await database
+          .get<MetalLifecycleEvent>("metal_lifecycle_events")
+          .find(IDS.correctionEvent)
+      ).update((record): void => {
+        record.predecessorEventId = "missing-predecessor";
+      });
+    });
+
+    await expect(createService().delete(command())).rejects.toThrow(
+      "metal_delete_effective_active_holding_required"
+    );
+    expect(
+      await database
+        .get<FinancialActionGroup>("financial_action_groups")
+        .query()
+        .fetch()
+    ).toHaveLength(2);
+  });
+
   it("replays exactly once after service recreation and rejects a hash mismatch", async (): Promise<void> => {
     await seedHolding();
     await createService().delete(command());
