@@ -1,3 +1,4 @@
+import { useIsFocused } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
 
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -17,12 +18,20 @@ interface UseMetalHistoryResult {
   readonly retry: () => void;
   readonly setFilter: (filter: MetalHistoryFilter) => void;
 }
+
+const EMPTY_COUNTS = Object.freeze({ all: 0, sold: 0, disposed: 0 });
 const EMPTY_HISTORY: MetalHistoryReadModel = Object.freeze({
+  counts: EMPTY_COUNTS,
   filter: "all",
   items: Object.freeze([]),
 });
 
+function emptyHistory(filter: MetalHistoryFilter): MetalHistoryReadModel {
+  return { counts: EMPTY_COUNTS, filter, items: [] };
+}
+
 export function useMetalHistory(): UseMetalHistoryResult {
+  const isFocused = useIsFocused();
   const { userId, isResolvingUser } = useCurrentUser();
   const { isConnected } = useMarketRates();
   const [filter, setFilter] = useState<MetalHistoryFilter>("all");
@@ -34,22 +43,33 @@ export function useMetalHistory(): UseMetalHistoryResult {
     (): void => setRetryIndex((value) => value + 1),
     []
   );
+
   useEffect(() => {
     let isCurrent = true;
     if (isResolvingUser) {
-      setIsLoading(true);
+      setHistory(emptyHistory(filter));
+      setError(null);
+      setIsLoading(isFocused);
+      return () => {
+        isCurrent = false;
+      };
+    }
+    if (!isFocused) {
+      setIsLoading(false);
       return () => {
         isCurrent = false;
       };
     }
     if (userId === null) {
-      setHistory({ filter, items: [] });
+      setHistory(emptyHistory(filter));
       setError(null);
       setIsLoading(false);
       return () => {
         isCurrent = false;
       };
     }
+
+    setHistory(emptyHistory(filter));
     setIsLoading(true);
     setError(null);
     void readMetalHistoryReadModel({ filter, userId })
@@ -57,10 +77,12 @@ export function useMetalHistory(): UseMetalHistoryResult {
         if (isCurrent) setHistory(next);
       })
       .catch((cause: unknown) => {
-        if (isCurrent)
+        if (isCurrent) {
+          setHistory(emptyHistory(filter));
           setError(
             cause instanceof Error ? cause : new Error("History unavailable")
           );
+        }
       })
       .finally(() => {
         if (isCurrent) setIsLoading(false);
@@ -68,7 +90,8 @@ export function useMetalHistory(): UseMetalHistoryResult {
     return () => {
       isCurrent = false;
     };
-  }, [filter, isResolvingUser, retryIndex, userId]);
+  }, [filter, isFocused, isResolvingUser, retryIndex, userId]);
+
   return {
     error,
     filter,

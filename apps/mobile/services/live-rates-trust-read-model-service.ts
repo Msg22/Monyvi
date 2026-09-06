@@ -109,22 +109,42 @@ export function observeLiveRatesTrust(
   database: Database,
   getNowMs: () => number = Date.now
 ): LiveRatesTrustObservationStream {
-  const query = database
-    .get<MarketRateObservation>("market_rate_observations")
-    .query(
-      Q.where("instrument_code", Q.oneOf(V1_RATE_INSTRUMENT_CODES)),
-      Q.sortBy("created_at", Q.desc)
-    );
+  const collection = database.get<MarketRateObservation>(
+    "market_rate_observations"
+  );
 
   return {
     subscribe(observer: LiveRatesTrustObserver): LiveRatesTrustSubscription {
-      const subscription = query.observe().subscribe({
-        next: (observations): void => {
-          observer.next(buildLiveRatesTrustReadModel(observations, getNowMs()));
-        },
-        error: (error: unknown): void => observer.error?.(error),
+      const latestByInstrument = new Map<string, MarketRateObservation>();
+      const subscriptions = V1_RATE_INSTRUMENT_CODES.map((instrumentCode) => {
+        const query = collection.query(
+          Q.where("instrument_code", instrumentCode),
+          Q.sortBy("created_at", Q.desc),
+          Q.take(1)
+        );
+        return query.observe().subscribe({
+          next: (observations): void => {
+            const latest = observations[0];
+            if (latest === undefined) {
+              latestByInstrument.delete(instrumentCode);
+            } else {
+              latestByInstrument.set(instrumentCode, latest);
+            }
+            observer.next(
+              buildLiveRatesTrustReadModel(
+                Array.from(latestByInstrument.values()),
+                getNowMs()
+              )
+            );
+          },
+          error: (error: unknown): void => observer.error?.(error),
+        });
       });
-      return { unsubscribe: (): void => subscription.unsubscribe() };
+      return {
+        unsubscribe: (): void => {
+          for (const subscription of subscriptions) subscription.unsubscribe();
+        },
+      };
     },
   };
 }
@@ -151,12 +171,8 @@ function isNewerObservation(
   const candidateCapturedAt = candidate.createdAt.getTime();
   const currentCapturedAt = current.createdAt.getTime();
 
-  if (!Number.isFinite(candidateCapturedAt)) {
-    return true;
-  }
-  if (!Number.isFinite(currentCapturedAt)) {
-    return false;
-  }
+  if (!Number.isFinite(candidateCapturedAt)) return true;
+  if (!Number.isFinite(currentCapturedAt)) return false;
   return candidateCapturedAt > currentCapturedAt;
 }
 
@@ -223,9 +239,7 @@ function normalizeObservationValue(
   observation: LiveRatesTrustObservation
 ): string | null {
   const expectation = getRateExpectation(observation.instrumentCode);
-  if (expectation === null) {
-    return null;
-  }
+  if (expectation === null) return null;
 
   const kind = observation.instrumentCode.startsWith("metal:")
     ? "metal"

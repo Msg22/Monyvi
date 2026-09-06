@@ -32,6 +32,7 @@ interface WealthTileProps {
 
 interface MetalAmountProps {
   readonly amount: string;
+  readonly countLabel: string;
   readonly dotClassName: string;
   readonly hasDivider?: boolean;
   readonly label: string;
@@ -74,18 +75,11 @@ export function WealthBreakdownSection({
   const hasPositiveMetalsTotal = hasPositiveDecimal(
     breakdown.metals.amountDecimal
   );
-  const hasPositiveGold = hasPositiveDecimal(
-    breakdown.metals.gold.amountDecimal
-  );
-  const hasPositiveSilver = hasPositiveDecimal(
-    breakdown.metals.silver.amountDecimal
-  );
-  const hasAnyPositiveMetal = hasPositiveGold || hasPositiveSilver;
 
   return (
     <View
       testID="wealth-breakdown-root"
-      className="my-4 overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-700 bg-surface px-4 pb-4 pt-4  dark:bg-slate-900"
+      className="my-4 overflow-hidden rounded-3xl border border-slate-200 bg-surface px-4 pb-4 pt-4 dark:border-slate-700 dark:bg-slate-900"
     >
       <View className="flex-row items-start justify-between gap-3">
         <Text
@@ -150,7 +144,7 @@ export function WealthBreakdownSection({
         />
       </View>
 
-      {hasPositiveMetalsTotal && hasAnyPositiveMetal && (
+      {hasPositiveMetalsTotal && (
         <View className="mt-4">
           <View className="flex-row items-end justify-between gap-3">
             <Text className="text-[13px] font-bold text-text-primary dark:text-text-primary-dark">
@@ -165,27 +159,29 @@ export function WealthBreakdownSection({
           </View>
 
           <View className="mt-1.5 min-h-14 flex-row overflow-hidden rounded-2xl bg-slate-100 dark:bg-slate-800/50">
-            {hasPositiveGold && (
-              <MetalAmount
-                amount={amount(breakdown.metals.gold.amountDecimal)}
-                dotClassName="bg-gold-400"
-                hasDivider={hasPositiveSilver}
-                label={t("wealth_breakdown.gold")}
-                share={t("wealth_breakdown.of_metals", {
-                  share: formatShare(breakdown.metals.gold.shareOfMetals),
-                })}
-              />
-            )}
-            {hasPositiveSilver && (
-              <MetalAmount
-                amount={amount(breakdown.metals.silver.amountDecimal)}
-                dotClassName="bg-silver-500"
-                label={t("wealth_breakdown.silver")}
-                share={t("wealth_breakdown.of_metals", {
-                  share: formatShare(breakdown.metals.silver.shareOfMetals),
-                })}
-              />
-            )}
+            <MetalAmount
+              amount={amount(breakdown.metals.gold.amountDecimal)}
+              countLabel={t("holding", {
+                count: breakdown.metals.gold.holdingCount,
+              })}
+              dotClassName="bg-gold-400"
+              hasDivider
+              label={t("wealth_breakdown.gold")}
+              share={t("wealth_breakdown.of_metals", {
+                share: formatShare(breakdown.metals.gold.shareOfMetals),
+              })}
+            />
+            <MetalAmount
+              amount={amount(breakdown.metals.silver.amountDecimal)}
+              countLabel={t("holding", {
+                count: breakdown.metals.silver.holdingCount,
+              })}
+              dotClassName="bg-silver-500"
+              label={t("wealth_breakdown.silver")}
+              share={t("wealth_breakdown.of_metals", {
+                share: formatShare(breakdown.metals.silver.shareOfMetals),
+              })}
+            />
           </View>
         </View>
       )}
@@ -259,6 +255,7 @@ function WealthTile({
 
 function MetalAmount({
   amount,
+  countLabel,
   dotClassName,
   hasDivider = false,
   label,
@@ -289,7 +286,7 @@ function MetalAmount({
         numberOfLines={1}
         className="text-[9px] text-text-secondary dark:text-text-secondary-dark"
       >
-        {share}
+        {share} · {countLabel}
       </Text>
     </View>
   );
@@ -301,8 +298,6 @@ const ACCOUNT_LIGHT_GRADIENT = [
   palette.nileGreen[50],
 ] as const;
 
-// These translucent stops blend over slate-900 to reproduce the mockup's
-// subtle teal surface instead of a bright green-to-navy sweep.
 const ACCOUNT_DARK_GRADIENT = [
   `${palette.nileGreen[800]}99`,
   `${palette.nileGreen[800]}8C`,
@@ -315,8 +310,6 @@ const METALS_LIGHT_GRADIENT = [
   `${palette.gold[100]}66`,
 ] as const;
 
-// The approved dark mockup uses a restrained bronze tint that fades into
-// slate rather than a saturated orange band.
 const METALS_DARK_GRADIENT = [
   `${palette.gold[600]}38`,
   `${palette.gold[600]}29`,
@@ -333,9 +326,7 @@ function formatDecimalCurrency(
   currency: CurrencyType
 ): string {
   const amount = value === null ? Number.NaN : Number(value);
-  if (!Number.isFinite(amount)) {
-    return "—";
-  }
+  if (!Number.isFinite(amount)) return "—";
   return formatCurrency({
     amount,
     currency,

@@ -5,6 +5,7 @@ import {
   summarizeLiveRatesTrust,
   type LiveRatesTrustReadModel,
   type LiveRatesTrustState,
+  type LiveRatesTrustValue,
 } from "@/services/live-rates-trust-read-model-service";
 import { logger } from "@/utils/logger";
 import { formatTimeAgo } from "@/utils/dateHelpers";
@@ -18,6 +19,7 @@ import {
   formatRate,
   getGoldPurityPrice,
   getMetalPrice,
+  isSupportedMetalsIsoCurrencyCode,
 } from "@monyvi/logic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -199,7 +201,9 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
     if (!latestRates) return [];
 
     return SUPPORTED_CURRENCIES.filter(
-      (currency: CurrencyInfo) => currency.code !== preferredCurrency
+      (currency: CurrencyInfo) =>
+        currency.code !== preferredCurrency &&
+        isSupportedMetalsIsoCurrencyCode(currency.code)
     ).map((currency: CurrencyInfo): CurrencyDisplayItem => {
       const rate = convertCurrency(
         1,
@@ -270,12 +274,13 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   }, [preferredCurrency]);
 
   const rateTrust = useMemo<LiveRatesTrustDisplay>(() => {
+    const currencyTrustValues = Array.from(trustReadModel.currencies.values());
     return {
       gold: toTrustDisplayValue(trustReadModel.gold),
       silver: toTrustDisplayValue(trustReadModel.silver),
       currencies: toTrustDisplayValue(
-        summarizeLiveRatesTrust(trustReadModel.currencies.values()),
-        null
+        summarizeLiveRatesTrust(currencyTrustValues),
+        getConservativeObservedAt(currencyTrustValues)
       ),
     };
   }, [trustReadModel]);
@@ -289,9 +294,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   }, []);
 
   const onRefresh = useCallback((): void => {
-    if (isRefreshInProgressRef.current) {
-      return;
-    }
+    if (isRefreshInProgressRef.current) return;
 
     isRefreshInProgressRef.current = true;
     setIsRefreshing(true);
@@ -332,6 +335,16 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
     onRefresh,
     rateTrust,
   };
+}
+
+function getConservativeObservedAt(
+  values: readonly LiveRatesTrustValue[]
+): Date | null {
+  const observedTimes = values
+    .map((value) => value.providerObservedAt?.getTime() ?? null)
+    .filter((value): value is number => value !== null && Number.isFinite(value));
+  if (observedTimes.length === 0) return null;
+  return new Date(Math.min(...observedTimes));
 }
 
 function toTrustDisplayValue(

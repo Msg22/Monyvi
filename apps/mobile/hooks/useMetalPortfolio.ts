@@ -1,3 +1,4 @@
+import { useIsFocused } from "@react-navigation/native";
 import { useDatabase } from "@/providers/DatabaseProvider";
 import {
   buildWealthBreakdownReadModel,
@@ -28,10 +29,15 @@ import type {
   MetalLifecycleEvent,
 } from "@monyvi/db";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppState } from "react-native";
 
 import { useMarketRates } from "./useMarketRates";
 import { usePreferredCurrency } from "./usePreferredCurrency";
 import { runUserScopedEffect, useCurrentUser } from "./useCurrentUser";
+
+const RATE_STATUS_REFRESH_INTERVAL_MS = 60_000;
+
+type ActiveMetalType = "GOLD" | "SILVER";
 
 interface UseMetalPortfolioResult {
   readonly error: Error | null;
@@ -58,6 +64,8 @@ export function useMetalPortfolio(
   } = {}
 ): UseMetalPortfolioResult {
   const database = useDatabase();
+  const isFocused = useIsFocused();
+  const wasFocusedRef = useRef(isFocused);
   const { userId, isResolvingUser } = useCurrentUser();
   const { preferredCurrency, isLoading: isCurrencyLoading } =
     usePreferredCurrency();
@@ -83,6 +91,7 @@ export function useMetalPortfolio(
   const [isRatesLoading, setIsRatesLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [trustRefreshRevision, setTrustRefreshRevision] = useState(0);
 
   const onFilterChange = useCallback((filter: MetalPortfolioFilter): void => {
     setSelectedFilter(filter);
@@ -94,8 +103,31 @@ export function useMetalPortfolio(
   }, []);
 
   useEffect(() => {
+    if (isFocused && !wasFocusedRef.current) {
+      setSelectedFilter("ALL");
+    }
+    wasFocusedRef.current = isFocused;
+  }, [isFocused]);
+
+  useEffect(() => {
     assetsRef.current = assets;
   }, [assets]);
+
+  useEffect(() => {
+    const timer = setInterval(
+      () => setTrustRefreshRevision((revision) => revision + 1),
+      RATE_STATUS_REFRESH_INTERVAL_MS
+    );
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        setTrustRefreshRevision((revision) => revision + 1);
+      }
+    });
+    return () => {
+      clearInterval(timer);
+      appStateSubscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     return runUserScopedEffect({
@@ -148,8 +180,9 @@ export function useMetalPortfolio(
         setIsAssetMetalsLoading(false);
       },
       onAuthenticated: (currentUserId) => {
+        const assetIds = new Set(assetIdsKey.split(",").filter(Boolean));
         const currentAssets = assetsRef.current.filter((asset) =>
-          assetIdsKey.split(",").includes(asset.id)
+          assetIds.has(asset.id)
         );
         const query = observePortfolioAssetMetals({
           assets: currentAssets,
@@ -234,12 +267,11 @@ export function useMetalPortfolio(
           reason,
           setError
         );
-        setCurrentRates(createEmptyTrustReadModel());
         setIsRatesLoading(false);
       },
     });
     return () => subscription.unsubscribe();
-  }, [database, refreshKey]);
+  }, [database, refreshKey, trustRefreshRevision]);
 
   const portfolio = useMemo((): MetalPortfolioReadModel | null => {
     if (
@@ -263,10 +295,26 @@ export function useMetalPortfolio(
       preferredCurrency,
       userId,
     });
+    const activeMetalTypes = Array.from(
+      new Set(
+        holdings
+          .filter(
+            (holding) =>
+              holding.isEffective &&
+              holding.isVisible &&
+              holding.status === "active"
+          )
+          .map((holding) => holding.metalType)
+      )
+    ) as ActiveMetalType[];
     return buildMetalPortfolioReadModel({
       filter: selectedFilter,
       holdings,
-      rateStatus: getPortfolioRateStatus(currentRates, preferredCurrency),
+      rateStatus: getPortfolioRateStatus(
+        currentRates,
+        preferredCurrency,
+        activeMetalTypes
+      ),
       userId,
     });
   }, [
@@ -288,11 +336,15 @@ export function useMetalPortfolio(
   ]);
 
   const wealthBreakdown = useMemo((): WealthBreakdownReadModel | null => {
-    if (portfolio === null || input.accountsValueDecimal === undefined) {
+    if (
+      portfolio === null ||
+      input.accountsValueDecimal === undefined ||
+      input.accountsValueDecimal === null
+    ) {
       return null;
     }
     return buildWealthBreakdownReadModel({
-      accountsValueDecimal: input.accountsValueDecimal ?? "0",
+      accountsValueDecimal: input.accountsValueDecimal,
       currency: preferredCurrency,
       holdings: portfolio.activeHoldings,
     });
@@ -388,11 +440,13 @@ function subscribeForCurrentUser<T>({
 
 function getPortfolioRateStatus(
   currentRates: LiveRatesTrustReadModel,
-  preferredCurrency: string
+  preferredCurrency: string,
+  activeMetalTypes: readonly ActiveMetalType[]
 ): PortfolioRateStatus {
   const values = [
-    currentRates.gold,
-    currentRates.silver,
+    ...activeMetalTypes.map((metalType) =>
+      metalType === "GOLD" ? currentRates.gold : currentRates.silver
+    ),
     currentRates.currencies.get(preferredCurrency as never) ?? {
       state: "missing" as const,
       ageMs: null,

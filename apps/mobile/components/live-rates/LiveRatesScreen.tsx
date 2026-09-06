@@ -1,7 +1,7 @@
 import { palette } from "@/constants/colors";
 import { useLiveRatesScreen } from "@/hooks/useLiveRatesScreen";
 import React from "react";
-import { RefreshControl, ScrollView, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { CurrencySection } from "./CurrencySection";
@@ -43,43 +43,45 @@ function LiveRatesTrustSummary({
   return (
     <View className="mt-3" accessibilityLiveRegion="polite">
       {!isConnected && (
-        <Text className="mb-2 text-xs font-medium text-text-secondary dark:text-text-secondary">
+        <Text className="mb-2 text-xs font-medium text-text-secondary dark:text-text-secondary-dark">
           {t("offline_mode")}
         </Text>
       )}
       {refreshError === "cached_refresh_failed" && (
         <View className="mb-2">
-          <Text className="text-xs font-medium text-text-secondary dark:text-text-secondary">
+          <Text className="text-xs font-medium text-text-secondary dark:text-text-secondary-dark">
             {t("rate.refresh_failed_with_cache")}
           </Text>
-          <Text
+          <Pressable
             accessibilityRole="button"
             accessibilityLabel={t("rate.retry_refresh")}
-            className="mt-1 min-h-11 text-sm font-semibold text-nileGreen-600 dark:text-nileGreen-400"
+            className="mt-1 min-h-11 justify-center"
             onPress={onRetryRefresh}
           >
-            {t("rate.retry_refresh")}
-          </Text>
+            <Text className="text-sm font-semibold text-nileGreen-600 dark:text-nileGreen-400">
+              {t("rate.retry_refresh")}
+            </Text>
+          </Pressable>
         </View>
       )}
       <View className="flex-row flex-wrap gap-2">
         <Text
           testID="live-rates-trust-gold"
-          className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-text-secondary dark:bg-slate-800 dark:text-text-secondary"
+          className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-text-secondary dark:bg-slate-800 dark:text-text-secondary-dark"
           accessibilityLabel={`${t("gold")}: ${getRateCopy(t, gold)}`}
         >
           {t("gold")} · {getRateCopy(t, gold)}
         </Text>
         <Text
           testID="live-rates-trust-silver"
-          className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-text-secondary dark:bg-slate-800 dark:text-text-secondary"
+          className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-text-secondary dark:bg-slate-800 dark:text-text-secondary-dark"
           accessibilityLabel={`${t("silver")}: ${getRateCopy(t, silver)}`}
         >
           {t("silver")} · {getRateCopy(t, silver)}
         </Text>
         <Text
           testID="live-rates-trust-currencies"
-          className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-text-secondary dark:bg-slate-800 dark:text-text-secondary"
+          className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-text-secondary dark:bg-slate-800 dark:text-text-secondary-dark"
           accessibilityLabel={`${tCommon("currencies")}: ${getRateCopy(
             t,
             currencies
@@ -135,6 +137,26 @@ export function LiveRatesScreen(): React.JSX.Element {
           contentContainerStyle={{ flexGrow: 1 }}
           refreshControl={refreshControl}
         >
+          {refreshError === "initial_refresh_failed" ? (
+            <View
+              accessibilityLiveRegion="polite"
+              className="mx-5 mt-4 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/30"
+            >
+              <Text className="text-sm text-red-700 dark:text-red-400">
+                {t("rate.initial_refresh_failed")}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("rate.retry_refresh")}
+                className="mt-2 min-h-11 justify-center"
+                onPress={onRefresh}
+              >
+                <Text className="font-semibold text-nileGreen-700 dark:text-nileGreen-400">
+                  {t("rate.retry_refresh")}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
           <LiveRatesEmptyState />
         </ScrollView>
       ) : (

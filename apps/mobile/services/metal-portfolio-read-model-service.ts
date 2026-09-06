@@ -190,8 +190,7 @@ export function observePortfolioRecentHistory(
     Q.where("deleted", false),
     Q.where("is_effective", true),
     Q.where("is_history_visible", true),
-    Q.sortBy("occurred_at", Q.desc),
-    Q.take(RECENT_HISTORY_LIMIT)
+    Q.sortBy("occurred_at", Q.desc)
   );
 }
 

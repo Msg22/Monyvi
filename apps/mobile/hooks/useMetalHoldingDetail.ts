@@ -1,3 +1,4 @@
+import { useIsFocused } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
 
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -33,6 +34,7 @@ export function useMetalHoldingDetail(
   holdingId: string | undefined
 ): UseMetalHoldingDetailResult {
   const database = useDatabase();
+  const isFocused = useIsFocused();
   const { userId, isResolvingUser } = useCurrentUser();
   const { isConnected } = useMarketRates();
   const { preferredCurrency, isLoading: isCurrencyLoading } =
@@ -49,6 +51,7 @@ export function useMetalHoldingDetail(
     (): void => setRetryIndex((value) => value + 1),
     []
   );
+
   useEffect(() => {
     const subscription = observeLiveRatesTrust(database).subscribe({
       next: (rates): void => {
@@ -56,16 +59,24 @@ export function useMetalHoldingDetail(
         setIsRatesLoading(false);
       },
       error: (): void => {
-        setCurrentRates(createEmptyTrustReadModel());
         setIsRatesLoading(false);
       },
     });
     return () => subscription.unsubscribe();
   }, [database]);
+
   useEffect(() => {
     let isCurrent = true;
-    if (isResolvingUser || isCurrencyLoading || isRatesLoading) {
-      setIsLoading(true);
+    if (isResolvingUser) {
+      setModel(null);
+      setError(null);
+      setIsLoading(isFocused);
+      return () => {
+        isCurrent = false;
+      };
+    }
+    if (!isFocused || isCurrencyLoading || isRatesLoading) {
+      setIsLoading(isFocused);
       return () => {
         isCurrent = false;
       };
@@ -78,6 +89,8 @@ export function useMetalHoldingDetail(
         isCurrent = false;
       };
     }
+
+    setModel(null);
     setIsLoading(true);
     setError(null);
     void readMetalDetailReadModel({
@@ -90,12 +103,14 @@ export function useMetalHoldingDetail(
         if (isCurrent) setModel(next);
       })
       .catch((cause: unknown) => {
-        if (isCurrent)
+        if (isCurrent) {
+          setModel(null);
           setError(
             cause instanceof Error
               ? cause
               : new Error("Holding detail unavailable")
           );
+        }
       })
       .finally(() => {
         if (isCurrent) setIsLoading(false);
@@ -107,11 +122,13 @@ export function useMetalHoldingDetail(
     currentRates,
     holdingId,
     isCurrencyLoading,
+    isFocused,
     isRatesLoading,
     isResolvingUser,
     preferredCurrency,
     retryIndex,
     userId,
   ]);
+
   return { error, isLoading, isOffline: !isConnected, model, retry };
 }

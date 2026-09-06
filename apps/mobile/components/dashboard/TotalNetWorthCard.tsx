@@ -19,18 +19,6 @@ interface Props {
 
 const { width } = Dimensions.get("window");
 
-/**
- * Renders a styled "Total Net Worth" card showing the primary balance (formatted in the preferred currency), an optional USD equivalent, and an optional monthly percentage change badge.
- *
- * Displays a loading spinner in place of the primary amount when `isLoading` is true. Shows the USD approximation only when `preferredCurrency` is not `"USD"`. Shows a colored arrow badge with the monthly percentage change when `monthlyPercentageChange` is provided.
- *
- * @param totalNetWorth - Primary net worth amount to display; treated as zero when falsy.
- * @param totalNetWorthUsd - USD equivalent used for the secondary approximate display.
- * @param preferredCurrency - Currency to format and display the primary amount in.
- * @param monthlyPercentageChange - Monthly percentage change displayed as a formatted badge (e.g., "+1.2%"); negative values produce a downward/red badge.
- * @param isLoading - When true, replaces the primary amount with a loading indicator.
- * @returns The JSX element for the Total Net Worth card.
- */
 function TotalNetWorthCardComponent({
   totalNetWorth,
   totalNetWorthUsd,
@@ -44,33 +32,24 @@ function TotalNetWorthCardComponent({
     return <TotalNetWorthSkeleton />;
   }
 
-  // Determine arrow icon and color based on percentage change
   const isPositive =
     monthlyPercentageChange !== null && monthlyPercentageChange >= 0;
   const arrowIcon = isPositive ? "arrow-up" : "arrow-down";
   const arrowColor = isPositive ? palette.nileGreen[400] : palette.red[400];
   const arrowRotation = isPositive ? "40deg" : "-40deg";
   const isPreferredCurrencyUSD = preferredCurrency === "USD";
-
-  // Format percentage for display
   const monthlyPercentageChangeFormatted =
     monthlyPercentageChange !== null
       ? `${monthlyPercentageChange >= 0 ? "+" : ""}${monthlyPercentageChange.toFixed(1)}%`
       : null;
-
-  // Glow dimensions
   const glowWidth = width;
   const glowHeight = 60;
 
   return (
     <View className="relative my-4 items-center justify-center">
-      {/* Bottom Glow */}
       <View
         className="absolute bottom-[-35px] items-center z-[-1]"
-        style={{
-          width: glowWidth,
-          height: glowHeight,
-        }}
+        style={{ width: glowWidth, height: glowHeight }}
       >
         <Svg height="100%" width="100%">
           <Defs>
@@ -106,7 +85,6 @@ function TotalNetWorthCardComponent({
         end={{ x: 1, y: 1 }}
         className="relative min-h-[180px] w-full items-center overflow-hidden rounded-2xl border border-white/10 p-6 shadow-lg"
       >
-        {/* Geometric Background Pattern */}
         <View className="absolute bottom-0 start-0 end-0 top-0 overflow-hidden rounded-[24px]">
           <View className="absolute -bottom-20 -end-10 h-64 w-64 rotate-45 transform bg-white/5" />
           <View className="absolute bottom-10 -end-4 h-32 w-32 rotate-12 transform bg-white/5" />
@@ -114,33 +92,31 @@ function TotalNetWorthCardComponent({
         </View>
 
         <View className="z-10 items-center gap-1">
-          {/* Label */}
           <Text className="text-sm font-medium tracking-wide text-slate-300 opacity-90">
             {t("total_net_worth")}
           </Text>
-          {/* Main Amount */}
           <Text
             className="mt-1 text-[42px] font-extrabold tracking-tight text-white text-center"
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.6}
           >
-            {formatCurrency({
-              amount: totalNetWorth ?? 0,
-              currency: preferredCurrency,
-            })}
+            {totalNetWorth === null
+              ? "—"
+              : formatCurrency({
+                  amount: totalNetWorth,
+                  currency: preferredCurrency,
+                })}
           </Text>
-          {/* Secondary Amount (USD) */}
-          {!isPreferredCurrencyUSD && (
+          {!isPreferredCurrencyUSD && totalNetWorthUsd !== null && (
             <Text className="text-base font-medium text-slate-100 opacity-80">
               ≈
               {formatCurrency({
-                amount: totalNetWorthUsd ?? 0,
+                amount: totalNetWorthUsd,
                 currency: "USD",
               })}
             </Text>
           )}
-          {/* Monthly Percentage Change */}
           {monthlyPercentageChangeFormatted && (
             <View className="mt-2 flex-row items-center gap-1 rounded-full bg-white/10 px-3 py-1">
               <Ionicons

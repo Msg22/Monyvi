@@ -1,9 +1,11 @@
 import { FlatList, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
+import { resolvePuritySelection } from "@monyvi/logic";
 
 import { MetalHoldingRender } from "@/components/metals/MetalHoldingRender";
 import { Skeleton } from "@/components/ui/Skeleton";
 import type {
+  MetalHistoryCounts,
   MetalHistoryFilter,
   MetalHistoryItem,
   MetalHistoryReadModel,
@@ -43,7 +45,7 @@ export function MetalHistoryScreen(
       className="flex-1 bg-background dark:bg-background-dark"
       data={props.history.items}
       keyExtractor={(item) => item.holdingId}
-      contentContainerClassName="gap-3 px-5 pb-10 pt-2"
+      contentContainerClassName="px-5 pb-10 pt-2"
       ListHeaderComponent={
         <View className="pb-2">
           <Text className="text-base text-text-secondary dark:text-text-secondary-dark">
@@ -56,6 +58,7 @@ export function MetalHistoryScreen(
           ) : null}
           <View className="mt-5">
             <FilterBar
+              counts={props.history.counts}
               filter={props.history.filter}
               onFilterChange={props.onFilterChange}
             />
@@ -72,7 +75,7 @@ export function MetalHistoryScreen(
       )}
       ListEmptyComponent={
         <Text className="py-12 text-center text-base text-text-secondary dark:text-text-secondary-dark">
-          {t("history.empty")}
+          {props.error !== null ? t("history.load_error") : t("history.empty")}
         </Text>
       }
       showsVerticalScrollIndicator={false}
@@ -96,7 +99,8 @@ function HistoryRow({
   const formLabel = t(
     item.itemForm === null ? "form.unknown" : `form.${item.itemForm}`
   );
-  const metadata = `${metalLabel} · ${purityLabel(item.purityCode)} · ${formLabel}`;
+  const purityLabel = resolvePurityLabel(item, t);
+  const metadata = [metalLabel, purityLabel, formLabel].join(" · ");
   const dateLabel = formatHistoryDate(item.occurredAt, locale);
   const statusLabel = t(`status.${item.status}`);
 
@@ -106,7 +110,7 @@ function HistoryRow({
       accessible
       accessibilityLabel={`${statusLabel}. ${item.name}. ${metadata}. ${dateLabel}`}
       accessibilityRole="button"
-      className="flex-row items-center gap-3 rounded-2xl border border-border p-4 dark:border-border-dark"
+      className="flex-row items-center gap-3 border-b border-slate-200 py-4 dark:border-slate-800"
       onPress={onPress}
     >
       <MetalHoldingRender itemForm={item.itemForm} metalType={item.metalType} />
@@ -129,9 +133,11 @@ function HistoryRow({
 }
 
 function FilterBar({
+  counts,
   filter,
   onFilterChange,
 }: {
+  readonly counts: MetalHistoryCounts;
   readonly filter: MetalHistoryFilter;
   readonly onFilterChange: (filter: MetalHistoryFilter) => void;
 }): React.JSX.Element {
@@ -146,12 +152,17 @@ function FilterBar({
       {filters.map((item, index) => {
         const isSelected = filter === item;
         const hasDivider = index < filters.length - 1;
+        const count = counts[item];
+        const label = t(`history.${item}`);
 
         return (
           <Pressable
             key={item}
             testID={`metal-history-filter-${item}`}
-            accessibilityLabel={t(`history.${item}`)}
+            accessibilityLabel={t("history.filter_accessibility", {
+              count,
+              label,
+            })}
             accessibilityRole="tab"
             accessibilityState={{ selected: isSelected }}
             className={`min-h-11 flex-1 items-center justify-center ${
@@ -168,7 +179,7 @@ function FilterBar({
                   : "text-text-secondary dark:text-text-secondary-dark"
               }
             >
-              {t(`history.${item}`)}
+              {label} {count}
             </Text>
           </Pressable>
         );
@@ -196,8 +207,18 @@ function Retry({
   );
 }
 
+function resolvePurityLabel(
+  item: MetalHistoryItem,
+  t: (key: string) => string
+): string {
+  if (item.purityCatalogVersion !== "1" || item.purityCode === null) return "—";
+  const purity = resolvePuritySelection(item.metalType, item.purityCode);
+  if (!purity.available) return "—";
+  return t(purity.entry.labelKey);
+}
+
 function resolveLocale(language: string | undefined): string {
-  return language?.startsWith("ar") ? "ar-EG-u-nu-latn" : "en-GB";
+  return language?.startsWith("ar") ? "ar-EG" : "en-GB";
 }
 
 function formatHistoryDate(date: Date, locale: string): string {
@@ -206,10 +227,4 @@ function formatHistoryDate(date: Date, locale: string): string {
     month: "short",
     year: "numeric",
   });
-}
-
-function purityLabel(code: string | null): string {
-  if (code === "gold-875") return "21K · 875";
-  if (code === "gold-999") return "24K · 999";
-  return code?.replace(/^(gold|silver)-/, "").toUpperCase() ?? "—";
 }

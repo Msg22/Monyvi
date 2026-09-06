@@ -29,6 +29,12 @@ const MAX_METAL_HISTORY_PAGE_SIZE = 100;
 
 export type MetalHistoryFilter = "all" | "sold" | "disposed";
 
+export interface MetalHistoryCounts {
+  readonly all: number;
+  readonly disposed: number;
+  readonly sold: number;
+}
+
 export interface MetalHistoryHoldingInput {
   readonly asset: MetalDetailAssetInput;
   readonly holdingState: MetalDetailHoldingStateInput;
@@ -37,6 +43,7 @@ export interface MetalHistoryHoldingInput {
 }
 
 export interface BuildMetalHistoryReadModelInput {
+  readonly counts?: MetalHistoryCounts;
   readonly filter: MetalHistoryFilter;
   readonly holdings: readonly MetalHistoryHoldingInput[];
   readonly userId: string;
@@ -56,6 +63,7 @@ export interface MetalHistoryItem {
 }
 
 export interface MetalHistoryReadModel {
+  readonly counts: MetalHistoryCounts;
   readonly filter: MetalHistoryFilter;
   readonly items: readonly MetalHistoryItem[];
 }
@@ -106,8 +114,7 @@ export function observeMetalHistoryEvents(
     "holding_id",
     Q.where("deleted", false),
     Q.where("is_history_visible", true),
-    Q.sortBy("occurred_at", Q.desc),
-    Q.take(toBoundedPageSize(input.pageSize ?? METAL_HISTORY_PAGE_SIZE) + 1)
+    Q.sortBy("occurred_at", Q.desc)
   );
 }
 
@@ -119,55 +126,101 @@ export async function readMetalHistoryReadModel(
   const pageSize = toBoundedPageSize(
     options.pageSize ?? METAL_HISTORY_PAGE_SIZE
   );
-  const terminalStates = await readTerminalStates(scope, options, pageSize);
-  if (terminalStates.length === 0) return emptyHistory(options.filter);
-  const assets = await readHistoryAssets(scope, terminalStates, pageSize);
-  if (assets.length === 0) return emptyHistory(options.filter);
-  const dependencies = await readHistoryDependencies(
+  const terminalStates = await readReportableTerminalStates(scope);
+  const counts = countTerminalStates(terminalStates);
+  if (terminalStates.length === 0) return emptyHistory(options.filter, counts);
+
+  const pagedStates = await pageTerminalStatesByEffectiveEventTime(
     scope,
-    assets,
     terminalStates,
+    options.filter,
     pageSize
   );
+  if (pagedStates.length === 0) return emptyHistory(options.filter, counts);
+
+  const assets = await readHistoryAssets(scope, pagedStates);
+  if (assets.length === 0) return emptyHistory(options.filter, counts);
+  const dependencies = await readHistoryDependencies(scope, assets, pagedStates);
   return buildMetalHistoryReadModel({
+    counts,
     filter: options.filter,
-    holdings: shapeReadHistoryHoldings(assets, terminalStates, dependencies),
+    holdings: shapeReadHistoryHoldings(assets, pagedStates, dependencies),
     userId: scope.userId,
   });
 }
 
-async function readTerminalStates(
-  scope: CurrentUserDataScope,
-  options: ReadMetalHistoryReadModelOptions,
-  pageSize: number
+async function readReportableTerminalStates(
+  scope: CurrentUserDataScope
 ): Promise<readonly MetalHoldingState[]> {
-  const statusCondition =
-    options.filter === "all"
-      ? Q.where("status", Q.oneOf(["sold", "disposed"]))
-      : Q.where("status", options.filter);
   const states = await scope
     .queryOwned(
       database.get<MetalHoldingState>("metal_holding_states"),
       Q.where("deleted", false),
       Q.where("is_visible", true),
-      statusCondition,
-      Q.sortBy("updated_at", Q.desc),
-      Q.take(pageSize + 1)
+      Q.where("status", Q.oneOf(["sold", "disposed"]))
     )
     .fetch();
   return states.filter(
     (state) =>
       state.userId === scope.userId &&
       state.isVisible &&
-      (state.status === "sold" || state.status === "disposed") &&
-      (options.filter === "all" || state.status === options.filter)
+      isTerminalStatus(state.status) &&
+      isReportableReconciliationState(state.reconciliationState) &&
+      state.effectiveEventId !== null
   );
+}
+
+async function pageTerminalStatesByEffectiveEventTime(
+  scope: CurrentUserDataScope,
+  states: readonly MetalHoldingState[],
+  filter: MetalHistoryFilter,
+  pageSize: number
+): Promise<readonly MetalHoldingState[]> {
+  const filteredStates = states.filter(
+    (state) => filter === "all" || state.status === filter
+  );
+  if (filteredStates.length === 0) return [];
+
+  const eventIds = filteredStates
+    .map((state) => state.effectiveEventId)
+    .filter((id): id is string => id !== null);
+  const events = await scope
+    .queryOwned(
+      database.get<MetalLifecycleEvent>("metal_lifecycle_events"),
+      Q.where("id", Q.oneOf(eventIds)),
+      Q.where("deleted", false),
+      Q.where("is_effective", true)
+    )
+    .fetch();
+  const eventsById = new Map(events.map((event) => [event.id, event] as const));
+
+  return filteredStates
+    .filter((state) => {
+      const event = state.effectiveEventId
+        ? eventsById.get(state.effectiveEventId)
+        : undefined;
+      return (
+        event !== undefined &&
+        event.holdingId === state.holdingId &&
+        Number.isFinite(event.occurredAt.getTime())
+      );
+    })
+    .sort((left, right) => {
+      const leftEvent = eventsById.get(left.effectiveEventId as string);
+      const rightEvent = eventsById.get(right.effectiveEventId as string);
+      const timeDifference =
+        (rightEvent?.occurredAt.getTime() ?? 0) -
+        (leftEvent?.occurredAt.getTime() ?? 0);
+      return timeDifference !== 0
+        ? timeDifference
+        : left.holdingId.localeCompare(right.holdingId);
+    })
+    .slice(0, pageSize);
 }
 
 async function readHistoryAssets(
   scope: CurrentUserDataScope,
-  terminalStates: readonly MetalHoldingState[],
-  pageSize: number
+  terminalStates: readonly MetalHoldingState[]
 ): Promise<readonly Asset[]> {
   const holdingIds = terminalStates.map((state) => state.holdingId);
   return scope
@@ -175,8 +228,7 @@ async function readHistoryAssets(
       database.get<Asset>("assets"),
       Q.where("id", Q.oneOf(holdingIds)),
       Q.where("type", "METAL"),
-      Q.where("deleted", false),
-      Q.take(pageSize + 1)
+      Q.where("deleted", false)
     )
     .fetch();
 }
@@ -190,8 +242,7 @@ interface HistoryDependencies {
 async function readHistoryDependencies(
   scope: CurrentUserDataScope,
   assets: readonly Asset[],
-  terminalStates: readonly MetalHoldingState[],
-  pageSize: number
+  terminalStates: readonly MetalHoldingState[]
 ): Promise<HistoryDependencies> {
   const holdingIds = terminalStates.map((state) => state.holdingId);
   const [metals, events, evidence] = await Promise.all([
@@ -200,8 +251,7 @@ async function readHistoryDependencies(
         database.get<AssetMetal>("asset_metals"),
         assets,
         "asset_id",
-        Q.where("deleted", false),
-        Q.take(pageSize + 1)
+        Q.where("deleted", false)
       )
       .fetch(),
     scope
@@ -210,16 +260,14 @@ async function readHistoryDependencies(
         Q.where("holding_id", Q.oneOf(holdingIds)),
         Q.where("deleted", false),
         Q.where("is_history_visible", true),
-        Q.sortBy("occurred_at", Q.desc),
-        Q.take(pageSize + 1)
+        Q.sortBy("occurred_at", Q.desc)
       )
       .fetch(),
     scope
       .queryOwned(
         database.get<MetalActionEvidence>("metal_action_evidence"),
         Q.where("holding_id", Q.oneOf(holdingIds)),
-        Q.where("deleted", false),
-        Q.take(pageSize + 1)
+        Q.where("deleted", false)
       )
       .fetch(),
   ]);
@@ -265,8 +313,12 @@ function shapeReadHistoryHoldings(
   });
 }
 
-function emptyHistory(filter: MetalHistoryFilter): MetalHistoryReadModel {
+function emptyHistory(
+  filter: MetalHistoryFilter,
+  counts: MetalHistoryCounts = { all: 0, sold: 0, disposed: 0 }
+): MetalHistoryReadModel {
   return Object.freeze({
+    counts: Object.freeze({ ...counts }),
     filter,
     items: Object.freeze([]),
   });
@@ -275,18 +327,28 @@ function emptyHistory(filter: MetalHistoryFilter): MetalHistoryReadModel {
 export function buildMetalHistoryReadModel(
   input: BuildMetalHistoryReadModelInput
 ): MetalHistoryReadModel {
-  const items = input.holdings
+  const allItems = input.holdings
     .filter(
       (holding) =>
         holding.asset.userId === input.userId &&
         holding.holdingState.userId === input.userId &&
-        holding.holdingState.holdingId === holding.asset.id
+        holding.holdingState.holdingId === holding.asset.id &&
+        isReportableReconciliationState(
+          holding.holdingState.reconciliationState
+        )
     )
     .map((holding) => toHistoryItem(holding, input.userId))
     .filter((item): item is MetalHistoryItem => item !== null)
-    .filter((item) => input.filter === "all" || item.status === input.filter)
     .sort(compareHistoryItems);
-  return Object.freeze({ filter: input.filter, items: Object.freeze(items) });
+  const counts = input.counts ?? countItems(allItems);
+  const items = allItems.filter(
+    (item) => input.filter === "all" || item.status === input.filter
+  );
+  return Object.freeze({
+    counts: Object.freeze({ ...counts }),
+    filter: input.filter,
+    items: Object.freeze(items),
+  });
 }
 
 function toHistoryItem(
@@ -347,6 +409,8 @@ function toDetailHoldingStateInput(
   state: MetalHoldingState
 ): MetalDetailHoldingStateInput {
   return {
+    effectiveActionId: state.effectiveActionId,
+    effectiveEventId: state.effectiveEventId,
     holdingId: state.holdingId,
     isVisible: state.isVisible,
     reconciliationState: state.reconciliationState,
@@ -357,6 +421,34 @@ function toDetailHoldingStateInput(
 
 function isSupportedMetalType(value: string): value is "GOLD" | "SILVER" {
   return value === "GOLD" || value === "SILVER";
+}
+
+function isTerminalStatus(value: string): value is "sold" | "disposed" {
+  return value === "sold" || value === "disposed";
+}
+
+function isReportableReconciliationState(value: string): boolean {
+  return (
+    value === "local_complete" ||
+    value === "sync_pending" ||
+    value === "sync_failed" ||
+    value === "accepted" ||
+    value === "reconciled"
+  );
+}
+
+function countTerminalStates(
+  states: readonly MetalHoldingState[]
+): MetalHistoryCounts {
+  const sold = states.filter((state) => state.status === "sold").length;
+  const disposed = states.filter((state) => state.status === "disposed").length;
+  return { all: sold + disposed, disposed, sold };
+}
+
+function countItems(items: readonly MetalHistoryItem[]): MetalHistoryCounts {
+  const sold = items.filter((item) => item.status === "sold").length;
+  const disposed = items.filter((item) => item.status === "disposed").length;
+  return { all: sold + disposed, disposed, sold };
 }
 
 function copyValidDate(value: Date | null): Date | null {
