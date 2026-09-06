@@ -211,8 +211,9 @@ Apply this preference to execution ownership after authorization, capability,
 and safety checks. It does not replace independent review, trusted-native
 verification, integration, or merge control:
 
-1. **Normal ChatGPT first** when the complete task can be executed from published
-   remote state and every requested remote mutation is explicitly authorized.
+1. **Normal ChatGPT first** when the complete task can be executed from
+   published remote state and every requested remote mutation is explicitly
+   authorized.
 2. **Approved OpenCode GLM/Qwen lanes next** for eligible isolated local
    execution under the OpenCode controls in this workflow and its supporting
    skill.
@@ -222,9 +223,9 @@ verification, integration, or merge control:
 
 This ordering governs the preferred execution owner. It does not override
 capability evidence, ownership safety, the allocation target below, or final
-authority. A trusted-native worker may still verify or integrate externally owned
-work without becoming that task's implementation owner. All external output
-requires independent verification, and the lead retains merge authority.
+authority. A trusted-native worker may still verify or integrate externally
+owned work without becoming that task's implementation owner. All external
+output requires independent verification, and the lead retains merge authority.
 
 Before every Normal ChatGPT execution dispatch, record a complete mandatory
 remote-readiness packet containing:
