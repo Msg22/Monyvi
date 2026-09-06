@@ -205,6 +205,55 @@ current availability. Verify runtime, authentication, exact model identifier,
 tools, and required permissions before dispatch; a configured name does not
 prove availability.
 
+#### Executor Preference And ChatGPT Remote Readiness
+
+Apply this preference to execution ownership after authorization, capability,
+and safety checks. It does not replace independent review, trusted-native
+verification, integration, or merge control:
+
+1. **Normal ChatGPT first** when the complete task can be executed from published
+   remote state and every requested remote mutation is explicitly authorized.
+2. **Approved OpenCode GLM/Qwen lanes next** for eligible isolated local
+   execution under the OpenCode controls in this workflow and its supporting
+   skill.
+3. **Native Codex subagents only when required** by unpublished local state,
+   device/runtime access, trusted-native verification, integration, or merge
+   control.
+
+This ordering governs the preferred execution owner. It does not override
+capability evidence, ownership safety, the allocation target below, or final
+authority. A trusted-native worker may still verify or integrate externally owned
+work without becoming that task's implementation owner. All external output
+requires independent verification, and the lead retains merge authority.
+
+Before every Normal ChatGPT execution dispatch, record a complete mandatory
+remote-readiness packet containing:
+
+- exact repository and PR number;
+- base branch;
+- head branch and immutable full head SHA;
+- authoritative spec, approved mockup, business-decision, and workflow paths;
+- ownership/non-overlap boundary and confirmation that the target branch has no
+  active writer;
+- acceptance criteria and explicit non-goals;
+- required checks and relevant review-thread IDs;
+- explicitly authorized remote mutations; and
+- expected completion report.
+
+Do not dispatch while any required packet field is unknown, the recorded head
+SHA no longer matches the remote branch, or another writer is active on the
+target branch. Never dispatch Normal ChatGPT to a branch with an active writer.
+
+If required context exists only locally, a trusted local owner must safely
+publish the minimum required context to the authorized remote source before
+ChatGPT dispatch, then refresh the packet and immutable head SHA. If the context
+cannot be safely published, use an eligible local executor instead.
+
+Provide ChatGPT only the packet and published authoritative context needed for
+the task. Its result remains subject to the same independent verification and
+authorization gates as other external output, and the lead retains merge
+authority.
+
 Target **at least 80% of eligible execution workload** across Normal ChatGPT,
 `bai/glm-5.3-flash`, and `bai/qwen3.8-flash` combined. Eligible workload
 includes substantial and large tasks when the worker has the required context,
