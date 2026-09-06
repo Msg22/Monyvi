@@ -119,15 +119,18 @@ For parallel implementation:
 - one writer owns each artifact/file per wave, including shared indexes,
   schemas, migrations, translations, specs, and generated outputs;
 - stop the affected lanes immediately if artifact/file ownership overlaps;
-- for every external writer, derive a concrete workspace-relative writable
-  file/directory allowlist from the assigned exclusive artifact set. Use exact
-  files and minimum owned directory prefixes needed for cohesive in-boundary
-  edits or new files; never grant arbitrary repository-root writes;
+- for every external writer, derive an enforced readable-source allowlist from
+  the user-approved source/data-sharing boundary or use a sanitized checkout;
+- derive a concrete workspace-relative writable file/directory allowlist from
+  the assigned exclusive artifact set. Use exact files and minimum owned
+  directory prefixes needed for cohesive in-boundary edits or new files; require
+  this writable boundary to be contained within the readable-source boundary and
+  never grant arbitrary repository-root read or write access;
 - link main `node_modules` in secondary worktrees; never install another tree;
 - assign one external writer one complete task and one isolated worktree/branch;
   avoid fragile per-file micromanagement inside that worker's exclusively owned
   artifact set, but never use this flexibility to permit concurrent writers on
-  the same artifact or writes outside the enforced allowlist;
+  the same artifact or reads/writes outside the enforced boundaries;
 - each PR is an independently mergeable slice, not automatically one per agent.
 
 ## 5. Form The Team
@@ -212,13 +215,23 @@ Track the target over meaningful execution work rather than file count or number
 of dispatches.
 
 Do not statically confine GLM or Qwen to narrow task categories. Route
-adaptively and update capability evidence from actual results. Every assignment
-requires **positive capability evidence** for each material capability the task
-will use. Capability evidence is bound to the exact provider-prefixed model ID,
-**immutable provider model revision/build**, OpenCode/runtime version, tool
-surface/version set, and every permission/environment dimension material to that
-capability. A moving display alias is not sufficient identity, and the absence
-of a recorded unsupported capability is not evidence of support.
+adaptively and update capability evidence from actual results. Ordinary
+production assignments require **positive capability evidence** for each material
+capability the task will use. Capability evidence is bound to the exact
+provider-prefixed model ID, **immutable provider model revision/build**,
+OpenCode/runtime version, tool surface/version set, and every
+permission/environment dimension material to that capability. A moving display
+alias is not sufficient identity, and the absence of a recorded unsupported
+capability is not evidence of support.
+
+A tightly sandboxed **qualification dispatch** is the only exception to that
+ordinary evidence gate. It may omit prior positive evidence only for one named
+capability that the dispatch is explicitly designed to qualify. Every other
+external-worker capability used by the benchmark must already have positive
+evidence or be removed from the external path. Qualification dispatches use only
+synthetic/sanitized fixtures or an enforced user-approved readable-source
+boundary, deny unrelated capabilities, do no production implementation, and
+terminate after recording qualification evidence.
 
 If the immutable model revision/build changes, invalidate all capability
 evidence for the prior revision. If another bound runtime/tool/permission or
@@ -257,22 +270,37 @@ narrow quarantine to a permission-profile-local cause only when evidence proves
 that narrower cause and the intended restored configuration has passed
 requalification.
 
-The disposable bounded-write canary remains the recommended default. When the
-user explicitly waives it, bind the waiver to the **exact task** plus provider,
-model ID, immutable model revision/build, OpenCode/runtime version, exact tool
-surface/version set, permission-profile identifier/hash, sandbox/network
-boundary, and writable-allowlist fingerprint. Any enforcement-relevant change
-invalidates the waiver and requires a fresh waiver or canary before more writes.
+The disposable bounded-write canary remains the recommended default. A
+predeclared denial probe inside the isolated synthetic canary is expected
+qualification evidence when the synthetic target and expected denial are
+recorded in advance and enforcement blocks the action before any unauthorized
+mutation, disclosure, or side effect. Quarantine applies only if the probe
+unexpectedly succeeds, produces an unauthorized side effect, touches real data
+outside the procedure, or the worker attempts a boundary crossing that was not
+part of the authorized canary.
+
+When the user explicitly waives the canary, bind the waiver to the **exact task**
+plus provider, model ID, immutable model revision/build, OpenCode/runtime version,
+exact tool surface/version set, permission-profile identifier/hash,
+sandbox/network boundary, readable-source-allowlist fingerprint, and
+writable-allowlist fingerprint. Any enforcement-relevant change invalidates the
+waiver and requires a fresh waiver or canary before more writes.
 
 A canary-waived first real write is still possible when repository-edit
 capability is the only material capability lacking positive evidence. All other
-material capabilities must already be proven. Treat the first mutation as a
-provisional checkpoint: allow one small representative edit inside the derived
-writable allowlist, pause immediately, and have the trusted native owner inspect
-paths, permission enforcement, and diff. Only an accepted checkpoint becomes
-positive edit-capability evidence for that immutable configuration and permits
-the same task/session to continue. It does not supply evidence for unrelated
-capabilities.
+material external-worker capabilities must already be proven. For a TDD task,
+make the **failing test itself** the provisional representative edit: after
+plan/assumptions approval, allow only that test edit inside the writable
+allowlist, pause immediately, and have the trusted native owner inspect the path,
+readable/writable enforcement, permission behavior, and diff. Only after the
+provisional edit checkpoint is accepted may the test run to produce Red. A
+trusted-native runner executes Red unless the external worker already has
+positive test-execution capability evidence. The Red result then receives
+explicit lead acceptance before any production implementation edit. For a
+non-TDD task, use one small representative allowlisted edit and the same
+provisional edit/boundary acceptance. An accepted provisional checkpoint becomes
+positive edit-capability evidence only for that immutable configuration and does
+not supply evidence for unrelated capabilities.
 
 External lanes do not consume native subagent slots. They still consume lead
 review and integration capacity. Cap concurrency by ready independent work with
@@ -280,9 +308,10 @@ safe ownership, not available runtimes. One external worker owns one complete
 task, one persistent session or thread, and one exclusive isolated
 worktree/branch responsibility. Artifact/file ownership across concurrent
 writers remains non-overlapping, with one writer per artifact per wave. Enforce
-the concrete writable allowlist derived from those exclusive artifacts; do not
-force brittle per-file micromanagement inside that boundary, but do not permit
-arbitrary repository writes. Stop on ownership or writable-boundary overlap.
+the readable-source boundary derived from user opt-in and the concrete writable
+allowlist derived from exclusive artifacts; do not force brittle per-file
+micromanagement inside that boundary, but do not permit arbitrary repository
+reads or writes. Stop on ownership or boundary overlap.
 
 Prefer a dedicated loopback OpenCode server per task with task-scoped
 credentials. If a shared loopback server is necessary, record its server ID and
@@ -310,27 +339,35 @@ restarting on every miss. These are pause gates when specified below, not merely
 asynchronous status reports:
 
 1. The worker pauses after plan/assumptions and intended scope. The lead must
-   explicitly accept this checkpoint before implementation edits begin.
-2. Where TDD or debugging applies, the worker presents failing-test or
-   reproduction evidence, pauses, and waits for explicit lead acceptance before
-   production implementation begins.
-3. When a provisional first-write checkpoint is required, the worker pauses
-   immediately after its one representative allowlisted edit. The trusted native
-   owner must accept the changed paths, permission enforcement, and diff before
-   any additional edit.
-4. When the task brief requires an interim diff/risk checkpoint, the worker
+   explicitly accept this checkpoint before non-qualification production work
+   begins.
+2. A qualification dispatch runs only its named benchmark and stops after
+   recording evidence; it never silently transitions to production work.
+3. For a canary-waived provisional TDD task, the worker writes only the failing
+   test as the provisional representative edit and pauses. The trusted native
+   owner must accept the edit and readable/writable-boundary enforcement before
+   the test is run for Red evidence.
+4. The Red result is then reviewed and explicitly accepted before production
+   implementation. A non-provisional TDD/debugging task follows the normal Red
+   gate before production implementation.
+5. For a provisional non-TDD task, the worker pauses immediately after its one
+   representative allowlisted edit for trusted-native edit/boundary acceptance
+   before any additional edit.
+6. When the task brief requires an interim diff/risk checkpoint, the worker
    pauses there and waits for explicit lead acceptance before continuing.
-5. Verification evidence is inspected before acceptance.
-6. The final full diff and completion report are inspected before acceptance.
+7. Verification evidence is inspected before acceptance.
+8. The final full diff and completion report are inspected before acceptance.
 
 Observe structured status, messages, tool results, and diffs. Do not claim
 access to or request hidden chain-of-thought. Send bounded corrections in the
 same session/thread when the lane remains safe and recoverable.
 
-Sensitive-data exposure, unauthorized scope access/write, an out-of-allowlist
-write attempt, or another security boundary breach immediately aborts the lane
-and triggers the cross-profile quarantine above. User-authorized canary waiver
-cannot waive or override quarantine.
+Unexpected sensitive-data exposure, unauthorized readable-source access,
+unauthorized scope/write, an unexpectedly successful synthetic canary denial
+probe, or another security boundary breach immediately aborts the lane and
+triggers the cross-profile quarantine above. A correctly denied predeclared
+synthetic canary probe is qualification evidence and does not trigger quarantine.
+User-authorized canary waiver cannot waive or override quarantine.
 
 For ordinary rule drift or a materially wrong but safe direction, correct
 explicitly and continue the same session when recoverable. After three
@@ -347,17 +384,21 @@ continue in the same session after status is rechecked.
 Every task brief states:
 
 - persona, objective, and reason;
+- dispatch mode: ordinary production or qualification, with the qualification
+  target capability when applicable;
 - complete task/worktree responsibility, source of truth, and protected or
   forbidden paths/actions;
 - exclusive artifact/file ownership for the wave and any shared-artifact owner;
-- concrete writable file/directory allowlist and fingerprint derived from those
-  artifacts;
+- concrete readable-source allowlist/fingerprint derived from user-approved
+  source/data-sharing scope, or sanitized-checkout identity;
+- concrete writable file/directory allowlist/fingerprint derived from owned
+  artifacts and contained within the readable boundary;
 - provider/model ID, immutable model revision/build, OpenCode/runtime version,
   exact tool surface/version set, and permission-profile identifier/hash when an
   OpenCode lane is used;
 - inputs, dependencies, and applicable workflows;
-- positive evidence for every material capability used by the task, plus any
-  provisional first-write status;
+- positive evidence for every material capability used by an ordinary task, plus
+  qualification/provisional evidence status where applicable;
 - exact canary/waiver identity and invalidation conditions when applicable;
 - loopback server ID and dedicated/shared mode when applicable;
 - acceptance criteria, evidence, and verification;
@@ -369,17 +410,17 @@ For write work include:
 
 > You are not alone in the codebase. Own the complete assigned task inside your
 > isolated worktree/branch and only the artifacts assigned to you for this wave.
-> Make whatever cohesive in-scope edits those exclusively owned artifacts and
-> the derived writable allowlist genuinely permit, but do not cross protected
-> paths, another owner's responsibility, another writer's artifact/file
-> ownership, or the writable boundary. Stop and report any overlap or
-> out-of-boundary need.
+> Read/search only sources inside the approved readable-source boundary. Make
+> whatever cohesive in-scope edits the exclusively owned artifacts and derived
+> writable allowlist genuinely permit, but do not cross protected paths, another
+> owner's responsibility, another writer's artifact/file ownership, or either
+> enforced boundary. Stop and report any overlap or out-of-boundary need.
 
 One task/worktree has one write owner at a time, and one writer owns each
 artifact/file per wave. Reviewers stay read-only. Complete-task ownership never
 permits overlapping concurrent edits to the same artifact or unbounded
-repository writes. Briefs must be self-contained. Use smallest inherited context
-that preserves correctness:
+repository reads/writes. Briefs must be self-contained. Use smallest inherited
+context that preserves correctness:
 
 - `fork_turns: "none"` for isolated deterministic inventory/check work when
   brief contains all required context;
@@ -399,9 +440,10 @@ Native slot capacity is not the execution target because external lanes do not
 consume native subagent slots. Fill only ready ownership-safe work, use external
 lanes aggressively enough to pursue the Section 6 allocation target, and keep
 independent review capacity for high-risk work. Multiple writers are allowed
-only when task/worktree ownership, artifact/file ownership, writable boundaries,
-state, and merge dependencies are genuinely independent. One writer owns each
-artifact per wave; stop affected lanes immediately when overlap is discovered.
+only when task/worktree ownership, artifact/file ownership, readable/writable
+boundaries, state, and merge dependencies are genuinely independent. One writer
+owns each artifact per wave; stop affected lanes immediately when overlap is
+discovered.
 
 Reuse a completed worker through follow-up when context and skills fit the next
 task. Continue a recoverable external task in its same persistent session. Spawn
@@ -501,12 +543,13 @@ Then implement minimum green change and refactor while green. QA owns
 plan/coverage audit; implementer owns production code; lead verifies red/green
 evidence only.
 
-For external workers, the Section 6 pause gates also apply: plan/assumptions
-must receive explicit lead acceptance before implementation edits, applicable
-Red/reproduction evidence must receive explicit lead acceptance before
-production implementation, a required provisional first-write checkpoint must be
-accepted before additional edits, and a task-required interim diff/risk
-checkpoint requires explicit lead acceptance before work continues.
+For an external worker that already has edit capability evidence, the normal
+Section 6 Red gate applies before production implementation. For a
+canary-waived **provisional first-time writer** on a TDD task, the failing test is
+the provisional representative edit: approve that test edit and boundary
+enforcement first, then run/review and explicitly accept Red, and only then allow
+production implementation. A task-required interim diff/risk checkpoint also
+requires explicit lead acceptance before work continues.
 
 ### Review Gate
 
@@ -542,10 +585,12 @@ milestones, not command narration.
 
 For OpenCode workers, record provider/model ID, immutable model revision/build,
 OpenCode/runtime version, exact tool surface/version set, immutable base,
-worktree/branch, task scope, artifact/file ownership, derived writable allowlist
-and fingerprint, positive material-capability evidence, provisional first-write
-status when used, exact canary/waiver binding, loopback server ID/mode,
-checkpoint acceptances, corrections, final result, independent verification,
+worktree/branch, task scope, artifact/file ownership, derived readable-source
+allowlist/fingerprint or sanitized-checkout identity, derived writable
+allowlist/fingerprint, positive material-capability evidence,
+qualification-dispatch target/outcome when used, provisional first-write status
+when used, exact canary/waiver binding, loopback server ID/mode, checkpoint
+acceptances, corrections, final result, independent verification,
 quarantine/eligibility state, and terminal status. Retain operational evidence
 only; never retain hidden reasoning, secrets, raw unnecessary logs, or private
 data.
@@ -571,21 +616,23 @@ assumptions, blockers, overlap/integration risks, and recommended next ready
 task. At each wave end, lead checks evidence, ownership, tests, dependencies,
 and ledgers before assigning more work.
 
-Sensitive-data exposure, unauthorized scope access/write, an out-of-allowlist
-write attempt, or another security boundary breach immediately aborts the
-affected OpenCode lane and quarantines the implicated provider/model
-revision/runtime/tool combination across read/write modes and all permission
-profiles pending incident review and requalification. A new task, session,
-worktree, or profile cannot bypass quarantine. Incident review may narrow the
-quarantine only after proving a profile-local cause and successful
+Unexpected sensitive-data exposure, unauthorized readable-source access,
+unauthorized scope/write, an unexpectedly successful synthetic canary denial
+probe, or another security boundary breach immediately aborts the affected
+OpenCode lane and quarantines the implicated provider/model revision/runtime/tool
+combination across read/write modes and all permission profiles pending incident
+review and requalification. A correctly denied predeclared synthetic canary
+probe is qualification evidence and does not trigger quarantine. A new task,
+session, worktree, or profile cannot bypass quarantine. Incident review may
+narrow the quarantine only after proving a profile-local cause and successful
 requalification for the intended restored configuration. User waiver cannot
 waive quarantine.
 
 Pause affected lane for source conflict, material unresolved decision, missing
-gate, ownership overlap, invalidated waiver/evidence, writable-boundary change,
-incomplete dependency, unsafe worktree, unexplained test failure, design drift,
-missing environment, or any action outside Section 2 authorization. Continue
-safe independent lanes. Mark blocked only after exhausting safe in-scope
+gate, ownership overlap, invalidated waiver/evidence, readable/writable-boundary
+change, incomplete dependency, unsafe worktree, unexplained test failure, design
+drift, missing environment, or any action outside Section 2 authorization.
+Continue safe independent lanes. Mark blocked only after exhausting safe in-scope
 evidence and alternatives.
 
 Lead declares completion only when requested outcome matches source of truth,
