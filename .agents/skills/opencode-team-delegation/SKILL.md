@@ -17,12 +17,25 @@ OpenCode, implement an adapter, or expand permission.
 ## Route Work
 
 The approved OpenCode models are `bai/glm-5.3-flash` and `bai/qwen3.8-flash`.
-Before dispatch, record both the exact provider-prefixed model ID and the
-immutable provider model revision/build exposed for that invocation. A display
-name or moving alias is not sufficient identity. If the provider/runtime cannot
-identify an immutable revision/build, do not reuse capability evidence or a
-canary waiver for write work; route the write lane elsewhere until immutable
-identity is available.
+Before dispatch, record the exact provider-prefixed model ID and the immutable
+provider model revision/build exposed for that invocation whenever the provider
+makes one available. A moving display alias is not sufficient identity for
+ordinary production work, bounded writes, reusable capability evidence, or a
+canary waiver.
+
+If the provider exposes a stable provider-prefixed model alias but no immutable
+revision/build, the only permitted fallback is an **alias-only non-reusable
+read-only qualification**. Record that identity mode plus the stable
+provider-prefixed alias and the exact OpenCode/runtime, tool surface, permission
+profile, and environment dimensions used by the benchmark. The qualification
+must be tightly sandboxed, deny edits, perform no production work, terminate
+after the named read-only benchmark, and mark its result **non-reusable**. It
+cannot become positive or negative capability evidence for an ordinary
+production dispatch, satisfy write eligibility, bind or reuse a canary waiver,
+bootstrap a provisional first write, or authorize a later dispatch. Re-run any
+capability that needs reusable evidence after an immutable revision/build is
+available. Route every write lane elsewhere until immutable identity is
+available.
 
 Do not statically confine either model to narrow categories. Route adaptively,
 let each model attempt varied source, test, documentation, review, and
@@ -48,7 +61,9 @@ worker. Qualification dispatches use only synthetic/sanitized fixtures or an
 enforced user-approved readable-source allowlist, never product implementation
 work or unrelated repository/user data. Read-only qualification denies edits;
 write-capability qualification uses the disposable synthetic canary unless the
-user-authorized provisional first-write path below applies.
+user-authorized provisional first-write path below applies. The alias-only
+fallback above is narrower: it may exercise only a read-only qualification and
+its result is observational and non-reusable rather than capability evidence.
 
 The recorded GLM image-input limitation is evidence only for the immutable
 revision/build and path that produced it. Do not generalize it to a different
@@ -62,11 +77,13 @@ packet contains the authoritative decision and an independent appropriate
 specialist verifies the result. They must never invent, choose, approve, or
 silently alter those decisions.
 
-Read-only qualification produces **capability evidence**, not an all-or-nothing
-model certification. Use representative read-only benchmarks to learn what the
-exact immutable configuration can reliably do, record supported and unsupported
-capabilities, and route future tasks accordingly. One failed benchmark does not
-permanently disqualify unrelated capabilities.
+Under immutable model identity, read-only qualification produces **capability
+evidence**, not an all-or-nothing model certification. Use representative
+read-only benchmarks to learn what the exact immutable configuration can
+reliably do, record supported and unsupported capabilities, and route future
+tasks accordingly. One failed benchmark does not permanently disqualify
+unrelated capabilities. An alias-only non-reusable qualification never populates
+that reusable evidence set.
 
 The bounded-write canary is the recommended default before real OpenCode writes:
 independently qualify the exact permission profile in a disposable synthetic
@@ -129,7 +146,10 @@ worktree, or permission profile must not bypass quarantine. Restore eligibility
 only after incident review and requalification. Incident review may narrow
 quarantine to a profile-local cause only when evidence proves that narrower
 cause and requalification for the intended configuration succeeds. User or
-canary waiver cannot override quarantine.
+canary waiver cannot override quarantine. If an incident occurs during an
+alias-only qualification, the immutable build is unknown, so quarantine the
+provider + stable provider-prefixed alias + runtime/tool combination
+conservatively until incident review establishes a safe narrower identity.
 
 ## Prepare And Dispatch
 
@@ -139,12 +159,15 @@ starting, monitoring, following up, cancelling, or accepting a session.
 
 Required dispatch contract:
 
-1. Verify OpenCode/runtime identity, authentication, exact provider/model,
-   immutable model revision/build, tool surface/version set, permission profile,
-   current user-approved data-sharing boundary, and quarantine status. For an
-   ordinary production dispatch, also verify positive evidence for every
-   material external-worker capability. For a qualification dispatch, record the
-   single capability under qualification and the tightly sandboxed exception.
+1. Verify OpenCode/runtime identity, authentication, exact provider/model, tool
+   surface/version set, permission profile, current user-approved data-sharing
+   boundary, and quarantine status. Record immutable model revision/build for
+   every ordinary production task, bounded write, or reusable qualification. The
+   only no-build exception is the explicit alias-only non-reusable read-only
+   qualification defined above. For an ordinary production dispatch, also verify
+   positive evidence for every material external-worker capability. For a
+   qualification dispatch, record the single capability under qualification and
+   the tightly sandboxed exception.
 2. Allocate one complete task/session/worktree/owner with immutable base SHA,
    exclusive worktree/branch responsibility, and non-overlapping artifact/file
    ownership. One writer owns each artifact per wave. Stop on ownership overlap.
@@ -217,16 +240,17 @@ responses, cancellation, and diff inspection directly.
 
 ## Completion Evidence
 
-Record task ID, provider/model ID, immutable model revision/build,
-OpenCode/runtime version, tool surface/version set, positive capability
-evidence, qualification-dispatch evidence when used, session ID, server ID/mode,
-worktree/branch, base SHA, complete task scope, artifact/file ownership, derived
-readable-source allowlist/fingerprint, derived writable allowlist/fingerprint,
-protected paths, permission profile, canary status or fully bound
-user-authorized waiver, provisional first-write result when used, checkpoint
-acceptances, corrections, verification commands/results, changed paths, diff
-disposition, retry/rule-failure count, quarantine/eligibility state, final
-result, and remaining risks.
+Record task ID, provider/model ID, **identity mode**, immutable model
+revision/build when available/required, OpenCode/runtime version, tool
+surface/version set, positive capability evidence, qualification-dispatch
+evidence or explicitly non-reusable alias-only observation when used, session ID,
+server ID/mode, worktree/branch, base SHA, complete task scope, artifact/file
+ownership, derived readable-source allowlist/fingerprint, derived writable
+allowlist/fingerprint, protected paths, permission profile, canary status or
+fully bound user-authorized waiver, provisional first-write result when used,
+checkpoint acceptances, corrections, verification commands/results, changed
+paths, diff disposition, retry/rule-failure count, quarantine/eligibility state,
+final result, and remaining risks.
 
 Completion requires:
 

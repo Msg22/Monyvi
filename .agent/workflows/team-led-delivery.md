@@ -228,9 +228,10 @@ owned work without becoming that task's implementation owner. All external
 output requires independent verification, and the lead retains merge authority.
 
 Before every Normal ChatGPT execution dispatch, classify the remote-readiness
-packet as **existing-PR work** or **pre-PR branch creation**.
+packet as **existing-PR work**, **existing-branch-without-PR work**, or **pre-PR
+branch creation**.
 
-Both packet forms MUST record:
+All packet forms MUST record:
 
 - exact repository;
 - authoritative spec, approved mockup, business-decision, and workflow paths;
@@ -243,31 +244,45 @@ Both packet forms MUST record:
 For **existing-PR work**, the packet additionally requires:
 
 - exact PR number and base branch;
-- head branch and immutable full head SHA; and
+- head branch and immutable full remote head SHA; and
 - confirmation that the target head branch has no active writer.
+
+For **existing-branch-without-PR work**, the packet additionally requires:
+
+- the exact existing remote branch name;
+- its immutable full current remote head SHA;
+- the intended base/integration branch; and
+- confirmation that the existing branch has no active writer.
 
 For **pre-PR branch creation**, the packet instead requires:
 
 - immutable base branch and full base SHA;
-- intended new branch name; and
+- intended new branch name;
+- confirmation that the intended branch name is **absent remotely immediately
+  before dispatch**; and
 - confirmation that the intended branch ownership boundary has no competing
   writer.
 
-A PR number or head SHA is not required before the new branch exists. Once the
-branch is created, refresh the packet with the actual head branch and immutable
-full head SHA before further branch mutations. Once a PR is opened, add the
-exact PR number and base branch and re-read the immutable head SHA before any
-follow-up PR work.
+Never use the pre-PR branch-creation topology when the intended remote ref
+already exists. If the branch exists, use the existing-branch-without-PR packet
+and pin its immutable full remote head SHA before any mutation. A PR number or
+head SHA is not required only while the branch truly does not yet exist. Once a
+new branch is created, refresh into the existing-branch-without-PR topology with
+the actual full remote head SHA before further branch mutations. Once a PR is
+opened, switch to existing-PR work, add the exact PR number/base branch, and
+re-read the immutable head SHA before any follow-up PR work.
 
 Do not dispatch while any field required for the selected topology is unknown,
-the recorded immutable base/head SHA no longer matches remote state, or a
+the recorded immutable base/head SHA no longer matches remote state, the
+branch-existence condition no longer matches the selected topology, or a
 competing writer owns the target. Never dispatch Normal ChatGPT to an existing
 branch with an active writer.
 
 If required context exists only locally, a trusted local owner must safely
 publish the minimum required context to the authorized remote source before
-ChatGPT dispatch, then refresh the applicable immutable base or head SHA. If the
-context cannot be safely published, use an eligible local executor instead.
+ChatGPT dispatch, then refresh the applicable immutable base or head SHA and
+reconfirm branch topology. If the context cannot be safely published, use an
+eligible local executor instead.
 
 Provide ChatGPT only the packet and published authoritative context needed for
 the task. Its result remains subject to the same independent verification and
@@ -302,6 +317,15 @@ synthetic/sanitized fixtures or an enforced user-approved readable-source
 boundary, deny unrelated capabilities, do no production implementation, and
 terminate after recording qualification evidence.
 
+If an OpenCode provider exposes a stable provider-prefixed model alias but no
+immutable revision/build, only the canonical
+[`$opencode-team-delegation`](../../.agents/skills/opencode-team-delegation/SKILL.md)
+**alias-only non-reusable read-only qualification** may proceed. It cannot
+produce reusable capability evidence, authorize ordinary production or any
+write, bind a canary/waiver, or bootstrap provisional first write. Every bounded
+write and every reusable evidence record still requires immutable model
+revision/build identity.
+
 If the immutable model revision/build changes, invalidate all capability
 evidence for the prior revision. If another bound runtime/tool/permission or
 environment dimension changes, invalidate every capability record that could be
@@ -329,14 +353,17 @@ Authorization may cover later bounded dispatches only while provider, model
 pool, data class, and purpose remain inside that recorded boundary.
 Auto-triggering team-led workflow never grants third-party disclosure.
 
-Before any OpenCode dispatch, record the provider/model ID, immutable model
-revision/build, OpenCode/runtime, and tool surface/version set. Refuse dispatch
-when the implicated provider/model revision/runtime/tool combination is under
-incident quarantine. Security quarantine initially applies across read and write
-modes and all permission profiles; a new task/profile cannot bypass it. Restore
-eligibility only after incident review and requalification. Incident review may
-narrow quarantine to a permission-profile-local cause only when evidence proves
-that narrower cause and the intended restored configuration has passed
+Before any OpenCode dispatch, record the provider/model ID, **identity mode**,
+OpenCode/runtime, and tool surface/version set. Record immutable model
+revision/build for ordinary production, reusable qualification evidence, and all
+bounded writes. The only no-build exception is the alias-only non-reusable
+read-only qualification defined by the OpenCode skill. Refuse dispatch when the
+implicated identity/runtime/tool combination is under incident quarantine.
+Security quarantine initially applies across read and write modes and all
+permission profiles; a new task/profile cannot bypass it. Restore eligibility
+only after incident review and requalification. Incident review may narrow
+quarantine to a permission-profile-local cause only when evidence proves that
+narrower cause and the intended restored configuration has passed
 requalification.
 
 The disposable bounded-write canary remains the recommended default. A
@@ -353,7 +380,8 @@ task** plus provider, model ID, immutable model revision/build, OpenCode/runtime
 version, exact tool surface/version set, permission-profile identifier/hash,
 sandbox/network boundary, readable-source-allowlist fingerprint, and
 writable-allowlist fingerprint. Any enforcement-relevant change invalidates the
-waiver and requires a fresh waiver or canary before more writes.
+waiver and requires a fresh waiver or canary before more writes. Alias-only
+identity can never bind a write waiver.
 
 A canary-waived first real write is still possible when repository-edit
 capability is the only material capability lacking positive evidence. All other
@@ -462,9 +490,9 @@ Every task brief states:
   source/data-sharing scope, or sanitized-checkout identity;
 - concrete writable file/directory allowlist/fingerprint derived from owned
   artifacts and contained within the readable boundary;
-- provider/model ID, immutable model revision/build, OpenCode/runtime version,
-  exact tool surface/version set, and permission-profile identifier/hash when an
-  OpenCode lane is used;
+- provider/model ID, **identity mode**, immutable model revision/build when
+  available/required, OpenCode/runtime version, exact tool surface/version set,
+  and permission-profile identifier/hash when an OpenCode lane is used;
 - inputs, dependencies, and applicable workflows;
 - positive evidence for every material capability used by an ordinary task, plus
   qualification/provisional evidence status where applicable;
@@ -652,12 +680,13 @@ Lead updates user at kickoff, wave transition, blocker, review, and completion.
 During active tool work, update at least every 60 seconds. Workers report
 milestones, not command narration.
 
-For OpenCode workers, record provider/model ID, immutable model revision/build,
-OpenCode/runtime version, exact tool surface/version set, immutable base,
-worktree/branch, task scope, artifact/file ownership, derived readable-source
-allowlist/fingerprint or sanitized-checkout identity, derived writable
-allowlist/fingerprint, positive material-capability evidence,
-qualification-dispatch target/outcome when used, provisional first-write status
+For OpenCode workers, record provider/model ID, **identity mode**, immutable
+model revision/build when available/required, OpenCode/runtime version, exact
+tool surface/version set, immutable base, worktree/branch, task scope,
+artifact/file ownership, derived readable-source allowlist/fingerprint or
+sanitized-checkout identity, derived writable allowlist/fingerprint, positive
+material-capability evidence, qualification-dispatch target/outcome when used or
+explicitly non-reusable alias-only observation, provisional first-write status
 when used, exact canary/waiver binding, loopback server ID/mode, checkpoint
 acceptances, corrections, final result, independent verification,
 quarantine/eligibility state, and terminal status. Retain operational evidence
@@ -690,7 +719,9 @@ unauthorized scope/write, an unexpectedly successful synthetic canary denial
 probe, or another security boundary breach immediately aborts the affected
 OpenCode lane and quarantines the implicated provider/model
 revision/runtime/tool combination across read/write modes and all permission
-profiles pending incident review and requalification. A correctly denied
+profiles pending incident review and requalification. If the incident occurred
+in alias-only qualification and the build is unknown, quarantine the provider +
+stable alias + runtime/tool combination conservatively. A correctly denied
 predeclared synthetic canary probe is qualification evidence and does not
 trigger quarantine. A new task, session, worktree, or profile cannot bypass
 quarantine. Incident review may narrow the quarantine only after proving a

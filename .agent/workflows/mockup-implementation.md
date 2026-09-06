@@ -253,6 +253,8 @@ directory.
 Each sidecar MUST record:
 
 - the approved reference image filename;
+- `Binding metadata approval: PENDING` until the completed sidecar receives
+  explicit user approval;
 - the binding product surface: route/screen, component, sheet, modal, or other
   scoped UI region;
 - the declared comparison context: exact viewport dimensions when the reference
@@ -275,9 +277,23 @@ fidelity-affecting unknown MUST be surfaced for clarification before
 implementation starts; do not silently convert image pixels, export framing, or
 assumptions into product rules.
 
+After the sidecar is complete enough to review, present the approved image and
+its completed sidecar **together** for explicit user approval of the binding
+metadata. The earlier image approval does not automatically approve viewport,
+component-bounds, non-binding-region, spacing, sizing, color, typography, state,
+or variant facts recorded later by the agent.
+
+Only after that explicit approval may the sidecar be changed to
+`Binding metadata approval: APPROVED` and record the approval evidence/reference.
+Until then, the sidecar is a draft and MUST NOT be treated as authoritative by
+implementation or review workflows. Any later material change to a binding fact
+requires renewed explicit approval before the sidecar becomes authoritative
+again.
+
 Use the constitution's **Approved mockup binding** principle as the authority
-for what is binding. Direct implementation workflows MUST consume this sidecar
-rather than treating the entire exported image as product UI.
+for what is binding. Direct implementation and review workflows MUST consume
+only an explicitly approved sidecar rather than treating the entire exported
+image or an unapproved metadata draft as product UI authority.
 
 #### 9.5.1 Legacy Approved Mockup Metadata Migration
 
@@ -294,7 +310,9 @@ Before implementation of a legacy approved reference:
    filename or location alone.
 2. Create the matching `<mockup-basename>.binding.md` sidecar in the same
    directory **before implementation**. Mark it as
-   `Legacy metadata migration: yes` and list the exact evidence sources used.
+   `Legacy metadata migration: yes`, set
+   `Binding metadata approval: PENDING`, and list the exact evidence sources
+   used.
 3. Populate only binding facts supported by the approved reference, recorded
    approval/handoff, authoritative design/spec documentation, or design-system
    facts that applied to that approval. The constitution's default rule that
@@ -306,9 +324,13 @@ Before implementation of a legacy approved reference:
    fidelity-affecting or non-fidelity-affecting.
 5. If any fidelity-affecting unknown remains, pause and obtain clarification
    before UI implementation, then update the sidecar with the approved answer.
-   If none remains, the evidence-based migrated sidecar is the valid handoff for
-   implementation and review.
-6. Do not alter the approved legacy image to make metadata fit, manufacture
+6. Present the approved legacy image and completed migrated sidecar together for
+   explicit user approval of the binding metadata. Legacy image approval does
+   not implicitly approve newly reconstructed metadata. Only after explicit
+   approval may the sidecar be marked
+   `Binding metadata approval: APPROVED`, with the approval evidence/reference
+   recorded, and become the valid handoff for implementation and review.
+7. Do not alter the approved legacy image to make metadata fit, manufacture
    measurements from uncalibrated export framing, or create speculative sidecars
    outside the currently authorized task.
 
@@ -316,8 +338,8 @@ Before implementation of a legacy approved reference:
 
 ### 9.6 Purpose
 
-- The approved image plus its binding sidecar become the **single source of
-  truth for UI implementation**
+- The approved image plus its **explicitly approved** binding sidecar become the
+  **single source of truth for UI implementation**
 - They MUST be used by:
   - Developers → for pixel-perfect implementation at the declared binding
     context
@@ -329,6 +351,8 @@ Before implementation of a legacy approved reference:
 
 - Do NOT overwrite existing mockups unless explicitly instructed
 - Do NOT store unapproved designs
+- Do NOT treat a sidecar with `Binding metadata approval: PENDING` as
+  authoritative
 - Ensure stored images match **exactly what was approved**
 - Maintain consistent naming and structure across all features
 

@@ -9,10 +9,15 @@ Before every dispatch:
 
 1. Confirm OpenCode CLI/server version and authentication without exposing
    credentials.
-2. Query current model inventory and record the exact provider-prefixed model ID
-   **and immutable provider model revision/build**. A moving display alias is
-   not sufficient identity. If immutable revision/build cannot be established,
-   do not reuse capability evidence or a canary waiver for write work.
+2. Query current model inventory and record the exact provider-prefixed model
+   ID. Record the **immutable provider model revision/build** whenever the
+   provider exposes one. A moving display alias is not sufficient identity for
+   ordinary production work, bounded writes, reusable capability evidence, or a
+   canary waiver. If no immutable revision/build is exposed but the provider
+   supplies a stable provider-prefixed alias, the only permitted no-build mode is
+   the **alias-only non-reusable read-only qualification** defined by the
+   canonical OpenCode skill. Record that identity mode explicitly; it cannot be
+   used for writes or evidence reuse.
 3. Prefer a dedicated loopback server for this task, bound to `127.0.0.1`, with
    a recorded server ID and task-scoped credentials. If a shared server is
    necessary, record its server ID, the reason, active-session registry, and
@@ -33,9 +38,10 @@ Before every dispatch:
    access.
 7. Confirm explicit user opt-in covers provider/model pool, purpose, and the
    exact data-sharing boundary for this task.
-8. For an **ordinary production dispatch**, identify every material capability
-   the task will use and verify positive capability evidence for each one
-   against the immutable provider/model revision/build and every
+8. For an **ordinary production dispatch**, require immutable provider model
+   revision/build identity, identify every material capability the task will
+   use, and verify positive capability evidence for each one against the
+   immutable provider/model revision/build and every
    runtime/tool/permission/environment dimension material to that capability.
    Missing negative evidence is not positive evidence.
 9. For a **qualification dispatch**, record the single capability under
@@ -44,26 +50,41 @@ Before every dispatch:
    capability used by the qualification must already have positive evidence or
    be supplied by a trusted-native owner. Qualification uses only
    synthetic/sanitized fixtures or the enforced user-approved readable-source
-   allowlist and must not perform production implementation.
-10. Confirm the implicated provider/model revision/runtime/tool combination is
-    not under incident quarantine across any mode/profile. A new task, session,
+   allowlist and must not perform production implementation. Reusable
+   qualification evidence requires immutable model identity. Without an
+   immutable build ID, only alias-only non-reusable **read-only** qualification
+   is permitted; its result is observational and cannot populate the reusable
+   evidence ledger.
+10. Confirm the implicated identity is not under incident quarantine across any
+    mode/profile. For immutable identity, use the provider/model
+    revision/runtime/tool key. For alias-only qualification, conservatively use
+    provider + stable provider-prefixed alias + runtime/tool until incident
+    review can establish a safe narrower identity. A new task, session,
     worktree, or permission profile cannot bypass quarantine.
-11. For bounded writes, confirm either canary evidence for the exact enforcement
-    configuration or a recorded user-authorized waiver bound to the **exact
-    task** plus provider, model ID, immutable revision/build, OpenCode/runtime,
-    exact tool surface/version set, permission-profile identifier/hash,
-    sandbox/network boundary, readable-source-allowlist fingerprint, and
-    writable-allowlist fingerprint. Any enforcement-relevant change invalidates
-    that waiver.
+11. For bounded writes, require immutable provider model revision/build identity
+    and confirm either canary evidence for the exact enforcement configuration
+    or a recorded user-authorized waiver bound to the **exact task** plus
+    provider, model ID, immutable revision/build, OpenCode/runtime, exact tool
+    surface/version set, permission-profile identifier/hash, sandbox/network
+    boundary, readable-source-allowlist fingerprint, and writable-allowlist
+    fingerprint. Any enforcement-relevant change invalidates that waiver.
 12. If repository-edit capability is the only material capability lacking prior
     positive evidence and the exact waiver is valid, mark the production task
     for the provisional first-write checkpoint below. All other material
     capabilities used by the external worker must already have positive
     evidence.
 
-Do not dispatch if any required check is unknown, except that a valid
-qualification dispatch may intentionally lack evidence for the one capability it
-is designed to qualify. Recheck identity, evidence, waiver binding, quarantine,
+Do not dispatch if any required check is unknown, except that:
+
+- a valid qualification dispatch may intentionally lack prior positive evidence
+  for the one capability it is designed to qualify; and
+- an alias-only non-reusable read-only qualification may intentionally lack only
+  the immutable provider revision/build when a stable provider-prefixed alias is
+  known and every other qualification/security field is established.
+
+The alias-only exception never applies to ordinary production, bounded writes,
+canary/waiver binding, provisional first write, or reusable positive/negative
+capability evidence. Recheck identity, evidence, waiver binding, quarantine,
 ownership, readable sources, and writable boundaries after any relevant
 configuration change. Lack of canary evidence alone is not a blocker when the
 fully bound waiver and all safeguards are valid.
@@ -76,11 +97,12 @@ Each task packet contains:
 Task ID and owner:
 Dispatch mode: ordinary production | qualification
 Qualification target capability, if any:
+Identity mode: immutable | alias-only non-reusable read-only qualification
 Objective and why this model is eligible:
 Repository and isolated worktree/branch:
 Immutable base SHA and target integration branch/PR:
 Provider and provider-prefixed model ID:
-Immutable provider model revision/build:
+Immutable provider model revision/build, or explicit N/A for allowed alias-only mode:
 OpenCode/runtime version:
 Exact tool surface/version set:
 Permission-profile identifier/hash:
@@ -94,6 +116,7 @@ Protected paths/actions:
 External-provider opt-in and data-sharing boundary:
 Positive evidence for every material task capability:
 Qualification-dispatch exception/evidence plan, if any:
+Alias-only observation is non-reusable? yes/no/not-applicable:
 Incident-quarantine status:
 Canary evidence or exact fully bound user-authorized waiver:
 Provisional first-write required? yes/no:
@@ -129,13 +152,15 @@ checkout or enforced readable-source boundary, deny unrelated capabilities, and
 terminate after recording the benchmark result. Read-only qualification denies
 edits. Write-capability qualification uses the isolated synthetic canary unless
 the user-authorized provisional first-write path applies to an actual production
-task.
+task. When immutable model identity is unavailable, the alias-only exception may
+run only the read-only form and its result must be recorded as **non-reusable
+observation**, not capability evidence.
 
 For a user-authorized canary waiver, the task packet must record the exact task
 and every enforcement identity field listed above. A waiver for another task,
 model revision/build, runtime, tool set, permission profile, sandbox/network
 boundary, readable-source boundary, or writable allowlist is not valid for this
-dispatch.
+dispatch. Alias-only identity can never bind a canary waiver.
 
 The waiver preserves these non-waivable safeguards:
 
@@ -171,7 +196,9 @@ Use official server/SDK APIs rather than screen automation:
    begins.
 4. If this is a qualification dispatch, execute only the named benchmark inside
    its qualification sandbox, record the result, and terminate the qualification
-   task. Do not continue into production implementation.
+   task. Do not continue into production implementation. In alias-only mode,
+   label the result non-reusable and do not promote it into the capability
+   evidence ledger.
 5. If a canary-waived provisional TDD task is used, the worker authors **only
    the minimal failing test** as the one provisional representative edit inside
    the writable allowlist, then pauses before running it or making another edit.
@@ -201,7 +228,9 @@ Use official server/SDK APIs rather than screen automation:
     another security boundary breach, abort immediately and quarantine the
     implicated provider/model revision/runtime/tool combination across
     read/write modes and all permission profiles pending incident review and
-    requalification. A new task/profile cannot bypass this.
+    requalification. For alias-only qualification, use the conservative
+    provider + alias + runtime/tool quarantine key because the build is unknown.
+    A new task/profile cannot bypass this.
 13. A correctly denied predeclared synthetic canary probe is a qualification
     event, not an incident. It must be recorded as part of the authorized canary
     procedure and must produce no unauthorized mutation, disclosure, or side
@@ -252,7 +281,9 @@ owner handles authorized Git work.
   unauthorized scope/write, an unexpectedly successful canary denial probe, or
   another security boundary breach immediately aborts the lane and quarantines
   the implicated provider/model revision/runtime/tool combination across
-  read/write modes and all permission profiles.
+  read/write modes and all permission profiles. For an alias-only qualification,
+  quarantine the provider + stable alias + runtime/tool combination until
+  incident review can establish a safe narrower identity.
 - A correctly denied predeclared synthetic canary probe is expected
   qualification evidence and does **not** trigger quarantine. A probe outside
   the authorized canary procedure, or any probe that unexpectedly succeeds or
@@ -278,13 +309,23 @@ owner handles authorized Git work.
 
 ## Capability Qualification
 
-Qualification dispatches record evidence about individual capabilities of the
-exact immutable provider/model revision/build plus the OpenCode/runtime,
-tool-surface, permission, and environment dimensions material to the capability.
-The qualification-dispatch exception permits missing prior positive evidence
-only for the single capability being tested; every other external-worker
-capability used by the benchmark must already be evidenced or removed from the
-external path.
+Reusable qualification evidence records individual capabilities of the exact
+immutable provider/model revision/build plus the OpenCode/runtime, tool-surface,
+permission, and environment dimensions material to the capability. The
+qualification-dispatch exception permits missing prior positive evidence only
+for the single capability being tested; every other external-worker capability
+used by the benchmark must already be evidenced or removed from the external
+path.
+
+If the provider exposes a stable provider-prefixed alias but no immutable
+revision/build, a tightly sandboxed **alias-only non-reusable read-only
+qualification** may still run. It must deny edits and all unneeded capabilities,
+use only synthetic/sanitized fixtures or the approved readable-source boundary,
+and terminate after the benchmark. Record its factual outcome only as a
+non-reusable observation. It cannot satisfy positive or negative capability
+evidence for ordinary production, bounded writes, canary/waiver binding,
+provisional first write, or any later dispatch. Once immutable identity becomes
+available, repeat the relevant benchmark before evidence can be reused.
 
 Representative benchmark shapes include:
 
@@ -299,8 +340,9 @@ For each attempted benchmark, record factual accuracy, source traceability,
 scope compliance, forbidden-action compliance, completeness, rework, elapsed
 time, and token/cost when available. A security or unauthorized-scope failure is
 an incident and triggers quarantine. A task-capability failure, unsupported
-modality, or timeout is capability evidence, not automatic permanent
-disqualification from unrelated work.
+modality, or timeout is capability evidence only when immutable identity makes
+that evidence reusable; under alias-only mode it remains a non-reusable
+observation.
 
 Before ordinary production assignment, map every material task capability to
 positive evidence bound to the active immutable revision/build and relevant
@@ -344,7 +386,8 @@ enforcement configuration. The waiver record must include provider/model ID,
 immutable revision/build, OpenCode/runtime, exact tool surface/version set,
 permission-profile identifier/hash, sandbox/network boundary,
 readable-source-allowlist fingerprint, and writable-allowlist fingerprint. Any
-enforcement-relevant change invalidates the waiver.
+enforcement-relevant change invalidates the waiver. Alias-only identity is never
+sufficient for a waiver or a bounded write.
 
 When repository-edit capability alone lacks prior positive evidence, the
 provisional first-write checkpoint defined above is the only waiver-based path

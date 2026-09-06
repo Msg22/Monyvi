@@ -74,20 +74,31 @@ Bounded write with recommended canary or explicit waiver:
 ## Immutable Identity And Capability Evidence
 
 Before every dispatch, record the exact provider, provider-prefixed model ID,
-**immutable provider model revision/build**, OpenCode/runtime version, exact
-tool surface/version set, permission-profile identifier or hash, and environment
-boundary relevant to the task. A moving display alias is not sufficient model
-identity. If the immutable revision/build cannot be established, do not reuse
-prior capability evidence or a canary waiver for write work.
+OpenCode/runtime version, exact tool surface/version set, permission-profile
+identifier or hash, and environment boundary relevant to the task. Record the
+**immutable provider model revision/build** whenever the provider exposes one. A
+moving display alias is not sufficient identity for ordinary production,
+bounded writes, reusable capability evidence, or canary/waiver binding.
 
-Ordinary production dispatch requires positive evidence for every material
-capability it will use. Capability evidence is bound to the immutable model
-revision/build plus every runtime/tool/permission/environment dimension material
-to that capability. The absence of a recorded unsupported capability is not
-proof of support. When the immutable model revision/build changes, invalidate
-all capability evidence for the prior revision. When another bound dimension
-changes, invalidate every affected capability record and requalify it before
-use.
+If a provider exposes a stable provider-prefixed alias but no immutable
+revision/build, the only allowed no-build identity mode is the canonical skill's
+**alias-only non-reusable read-only qualification**. It must use the read-only
+permission profile above, deny edits, perform no production work, and terminate
+after the named benchmark. Its result is observational only and MUST NOT be
+reused as positive or negative capability evidence, satisfy write eligibility,
+bind or reuse a canary waiver, bootstrap provisional first write, or authorize a
+later dispatch. Any capability that needs reusable evidence must be requalified
+under immutable identity. All bounded writes still require immutable
+revision/build identity.
+
+Ordinary production dispatch requires immutable model identity and positive
+evidence for every material capability it will use. Capability evidence is
+bound to the immutable model revision/build plus every
+runtime/tool/permission/environment dimension material to that capability. The
+absence of a recorded unsupported capability is not proof of support. When the
+immutable model revision/build changes, invalidate all capability evidence for
+the prior revision. When another bound dimension changes, invalidate every
+affected capability record and requalify it before use.
 
 Negative capability evidence is revision-bound too. A known unsupported
 capability from one revision must not be generalized to a different revision;
@@ -103,7 +114,10 @@ production task and cannot be used to bypass ordinary capability gates.
 Qualification dispatches must:
 
 1. identify the exact immutable provider/model revision/runtime/tool/profile
-   configuration and the one capability under qualification;
+   configuration and the one capability under qualification, except that the
+   explicitly marked alias-only non-reusable read-only mode may omit only the
+   immutable revision/build while recording the stable provider-prefixed alias
+   and all other material dimensions;
 2. use only synthetic/sanitized fixtures or an enforced user-approved
    readable-source allowlist; never expose unrelated repository/user data;
 3. deny every capability not required by the benchmark unless that capability
@@ -114,8 +128,11 @@ Qualification dispatches must:
 6. terminate after recording the qualification result rather than continuing
    into production work.
 
-A successful qualification creates evidence only for the capability actually
-exercised and the exact immutable configuration that produced it.
+A successful qualification creates reusable capability evidence only when it is
+bound to the exact immutable configuration that produced it. An alias-only
+read-only qualification produces a **non-reusable observation** only; repeat the
+benchmark after immutable identity becomes available before using the result for
+ordinary production or any evidence-dependent routing decision.
 
 ## Canary And Waiver Binding
 
@@ -156,7 +173,7 @@ Any enforcement-relevant change invalidates the waiver before another write.
 Changing task ID, model revision/build, runtime, tool surface, permission
 profile, sandbox/network boundary, readable-source allowlist, or writable
 allowlist requires a fresh explicit user waiver or a canary for the changed
-configuration.
+configuration. Alias-only identity can never bind a waiver or bounded write.
 
 A waived real-write lane still requires:
 
@@ -234,7 +251,10 @@ unexpected unauthorized scope/write, or another security boundary breach:
 1. Abort the implicated session immediately.
 2. Quarantine the implicated **provider + immutable model revision/build +
    OpenCode/runtime + tool combination** across read and write modes and **all
-   permission profiles**.
+   permission profiles**. If the incident occurred during alias-only
+   qualification and the build is unknown, quarantine the **provider + stable
+   provider-prefixed alias + OpenCode/runtime + tool combination** conservatively
+   instead.
 3. Prevent a new task, session, worktree, or permission profile from bypassing
    quarantine.
 4. Preserve only sanitized incident evidence and rotate affected credentials
@@ -247,7 +267,8 @@ rules above is not an incident and does not trigger quarantine.
 Incident review may narrow quarantine to a permission-profile-local cause only
 when evidence proves that the breach was confined to that profile and the
 intended restored configuration has passed requalification. Until then, the
-broader provider/model-revision/runtime/tool combination remains quarantined.
+broader provider/model-revision/runtime/tool combination—or conservative
+provider/alias/runtime/tool key when the build is unknown—remains quarantined.
 User authorization or canary waiver cannot override quarantine.
 
 ## Ownership And Git Safety
@@ -346,14 +367,15 @@ mandatory cleanup deadline for every retained reusable resource.
 
 Keep only operational metadata needed for traceability:
 
-- task, owner, provider/model ID, immutable model revision/build,
-  OpenCode/runtime version, tool surface/version set, server ID/mode,
-  worktree/branch, base SHA, task scope, artifact/file ownership, derived
-  readable-source allowlist/fingerprint, derived writable allowlist/fingerprint,
-  and protected paths;
+- task, owner, provider/model ID, **identity mode**, immutable model
+  revision/build when available/required, OpenCode/runtime version,
+  tool surface/version set, server ID/mode, worktree/branch, base SHA, task
+  scope, artifact/file ownership, derived readable-source allowlist/fingerprint,
+  derived writable allowlist/fingerprint, and protected paths;
 - positive material-capability evidence and the exact immutable identity/bound
   dimensions that evidence applies to;
-- qualification-dispatch target capability and outcome when used;
+- qualification-dispatch target capability and outcome when used, explicitly
+  marking alias-only observations non-reusable;
 - user opt-in record, approved provider, purpose, data-sharing boundary, and
   authorization expiry or review deadline;
 - permission-profile identifier/hash, canary status or fully bound

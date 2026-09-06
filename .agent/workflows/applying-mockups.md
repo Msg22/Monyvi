@@ -11,11 +11,18 @@ Before implementation, load the approved reference image and its matching
 `.agent/workflows/mockup-implementation.md`. The constitution's **Approved
 mockup binding** principle is authoritative.
 
+The sidecar MUST record `Binding metadata approval: APPROVED` together with the
+explicit approval evidence/reference required by
+`.agent/workflows/mockup-implementation.md`. A sidecar that is missing that
+approval record, is still `PENDING`, or was materially changed after approval is
+not authoritative and MUST NOT drive implementation until explicitly approved.
+
 If an approved reference predates the binding-sidecar rule and has no sidecar,
 first follow the **Legacy Approved Mockup Metadata Migration** procedure in
 `.agent/workflows/mockup-implementation.md`. Missing metadata alone does not
 invalidate a previously approved legacy reference, but implementation MUST NOT
-begin until the evidence-based sidecar exists. If migration leaves a
+begin until the evidence-based sidecar exists **and its reconstructed binding
+metadata has received explicit approval**. If migration leaves a
 fidelity-affecting `UNKNOWN`, pause for clarification before implementation.
 
 - Implement the **binding product UI surface** at the declared viewport or
@@ -28,8 +35,8 @@ fidelity-affecting `UNKNOWN`, pause for clarification before implementation.
 - Do not infer product rules from export framing or unrecorded pixel
   measurements.
 - If a non-legacy binding sidecar is missing, its binding context is ambiguous,
-  or a fidelity-affecting required fact remains `UNKNOWN`, pause before
-  implementation and obtain clarification.
+  its approval record is missing/invalid, or a fidelity-affecting required fact
+  remains `UNKNOWN`, pause before implementation and obtain clarification.
 
 ## Requirements
 
@@ -62,8 +69,8 @@ fidelity-affecting `UNKNOWN`, pause for clarification before implementation.
 ## ❓ Clarifications & Blockers
 
 - If you encounter:
-  - Missing binding metadata that cannot be resolved through the legacy
-    migration path
+  - Missing or unapproved binding metadata that cannot be resolved through the
+    legacy migration/approval path
   - Missing details
   - Conflicting designs
   - Technical limitations

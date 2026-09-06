@@ -44,8 +44,18 @@ Before analyzing ANY component, load the following:
   nested paths such as `design/mockups/`
 - **LOAD** every approved mockup image found through declared paths and the
   recursive search
-- Record the declared binding UI viewport or component context for each approved
-  mockup
+- **LOAD** the matching binding sidecar for each approved mockup and verify it
+  records `Binding metadata approval: APPROVED` plus the explicit approval
+  evidence/reference required by `.agent/workflows/mockup-implementation.md`.
+  A missing, pending, or materially changed/unapproved sidecar is not
+  authoritative for property comparison; follow the legacy metadata
+  migration/approval path when applicable before treating reconstructed metadata
+  as binding.
+- Record the declared **binding product surface** and UI viewport or component
+  context for each approved mockup.
+- Record every sidecar region marked **non-binding**, including phone hardware,
+  device frame, outer canvas, browser chrome, export padding, and background
+  outside the product UI surface.
 - Create a numbered mapping: `Mockup N → <filename> → <short description>`
 
 ### 1.3 Identify Changed Components
@@ -64,9 +74,18 @@ Before analyzing ANY component, load the following:
 For **each mockup**, the agent MUST compare the following visual properties
 against the corresponding component(s). Present findings in a markdown table.
 
+**Scope rule:** perform every property comparison only inside the approved
+sidecar's **binding product surface**. Presentation-only regions explicitly
+marked non-binding are outside the audit target and MUST NOT produce a mismatch
+because product code omits or differs from them. Crop/mentally mask those regions
+before comparing properties; never turn phone hardware, device frame, outer
+canvas, browser chrome, export padding, or outside background into product UI
+requirements unless the explicitly approved sidecar marks that region binding.
+
 ### 2.1 Properties to Compare
 
-For each UI element visible in the mockup, check:
+For each UI element visible **inside the binding product surface** of the mockup,
+check:
 
 | Property Category   | Specific Checks                                                                                                                                         |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -107,10 +126,19 @@ For each mockup, produce a table per UI section:
 
 ## 3. Missing Elements Check (MANDATORY)
 
-For each mockup, the agent MUST also list:
+For each mockup, the agent MUST list missing/extra UI **only within the governed
+binding product surface**:
 
-- **Elements in mockup but NOT in code** (completely missing UI)
-- **Elements in code but NOT in mockup** (extra/unapproved UI)
+- **Elements inside the binding product surface but NOT in code** (completely
+  missing product UI)
+- **Elements in the governed code surface but NOT in the binding product
+  surface** (extra/unapproved product UI)
+
+Do **not** report presentation-only phone hardware, device frame, outer canvas,
+browser chrome, export padding, or any other sidecar-declared non-binding region
+as missing product UI. Likewise, do not compare unrelated code outside the
+mockup's governed binding surface merely because it is visible on the same route
+or exists in the same component tree.
 
 ---
 
@@ -121,7 +149,9 @@ For each mockup, the agent MUST also list:
 Write the report to the artifact directory as `style-audit.md` with:
 
 1. **Color Reference** — dark mode palette used in the project
-2. **Per-Mockup Sections** — each with comparison tables and a verdict
+2. **Per-Mockup Sections** — each with comparison tables and a verdict scoped to
+   the approved binding product surface; list excluded non-binding framing for
+   traceability
 3. **Rendered Visual Evidence** — a side-by-side or overlay comparison at the
    declared binding UI context, plus every in-scope compact-phone,
    ordinary-phone, tablet, landscape, dark-mode, RTL/Arabic, and enlarged-text
