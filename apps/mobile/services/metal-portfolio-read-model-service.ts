@@ -563,8 +563,9 @@ function calculateHoldingCardValues(input: {
       ? input.currentRates.gold
       : input.currentRates.silver
   );
-  const preferredRate = readAvailableRate(
-    input.currentRates.currencies.get(input.preferredCurrency)
+  const preferredRate = readCurrentCurrencyRate(
+    input.currentRates,
+    input.preferredCurrency
   );
   if (metalRate === null || preferredRate === null) {
     return unavailableHoldingCardValues();
@@ -611,9 +612,7 @@ function calculateCurrentPerformance(input: {
   const purchaseRate =
     input.purchaseCurrency === input.preferredCurrency
       ? input.preferredRateDecimal
-      : readAvailableRate(
-          input.currentRates.currencies.get(input.purchaseCurrency)
-        );
+      : readCurrentCurrencyRate(input.currentRates, input.purchaseCurrency);
   if (purchaseRate === null) {
     return { reason: "rate_reference", valueDecimal: null };
   }
@@ -645,6 +644,15 @@ function readAvailableRate(
     typeof rate.valueDecimal === "string"
     ? rate.valueDecimal
     : null;
+}
+
+function readCurrentCurrencyRate(
+  currentRates: LiveRatesTrustReadModel,
+  currency: MetalsIsoCurrencyCode
+): string | null {
+  return currency === "USD"
+    ? "1"
+    : readAvailableRate(currentRates.currencies.get(currency));
 }
 
 function unavailableHoldingCardValues(): HoldingCardValues {

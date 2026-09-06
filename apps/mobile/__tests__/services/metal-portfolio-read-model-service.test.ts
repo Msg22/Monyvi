@@ -541,7 +541,45 @@ describe("metal portfolio read model", () => {
     });
   });
 
-  it("keeps current value but fails performance closed when purchase FX is unavailable", () => {
+  it("uses exact USD identity for holding values and portfolio aggregates without a USD observation", () => {
+    const input = shapeInput();
+    const currencies = new Map(input.currentRates.currencies);
+    currencies.delete("USD");
+
+    const [holding] = shapeMetalPortfolioHoldings({
+      ...input,
+      preferredCurrency: "USD",
+      assets: [
+        {
+          ...input.assets[0],
+          purchaseCurrency: "USD",
+          purchasePriceDecimal: "400",
+        },
+      ],
+      currentRates: { ...input.currentRates, currencies },
+    });
+
+    expect(holding).toBeDefined();
+    expect(holding).toMatchObject({
+      currentValueDecimal: "500",
+      currentPerformanceDecimal: "100",
+      performanceUnavailableReason: null,
+    });
+
+    const portfolio = buildMetalPortfolioReadModel({
+      filter: "ALL",
+      holdings: holding === undefined ? [] : [holding],
+      rateStatus: { ageMs: 1_000, state: "fresh" },
+      userId: "user-1",
+    });
+
+    expect(portfolio).toMatchObject({
+      activeTotalDecimal: "500",
+      currentPerformanceDecimal: "100",
+    });
+  });
+
+  it("uses exact USD identity for cross-currency purchase performance without a USD observation", () => {
     const input = shapeInput();
     const currencies = new Map(input.currentRates.currencies);
     currencies.delete("USD");
@@ -556,6 +594,27 @@ describe("metal portfolio read model", () => {
         },
       ],
       currentRates: { ...input.currentRates, currencies },
+    });
+
+    expect(holding).toMatchObject({
+      currentPerformanceDecimal: "5000",
+      currentValueDecimal: "25000",
+      performanceUnavailableReason: null,
+    });
+  });
+
+  it("keeps current value but fails performance closed when non-USD purchase FX is unavailable", () => {
+    const input = shapeInput();
+
+    const [holding] = shapeMetalPortfolioHoldings({
+      ...input,
+      assets: [
+        {
+          ...input.assets[0],
+          purchaseCurrency: "AED",
+          purchasePriceDecimal: "400",
+        },
+      ],
     });
 
     expect(holding).toMatchObject({

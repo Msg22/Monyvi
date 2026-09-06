@@ -465,17 +465,14 @@ function buildCurrentObservationValue(
     input.metal.metalType === "GOLD"
       ? input.currentRates.gold
       : input.currentRates.silver;
-  const currencyRate = input.currentRates.currencies.get(
+  const currencyRateDecimal = readCurrentCurrencyRateDecimal(
+    input.currentRates,
     input.preferredCurrency
   );
-  if (
-    !hasTrustedCurrentRate(metalRate) ||
-    !hasTrustedCurrentRate(currencyRate)
-  ) {
+  if (!hasTrustedCurrentRate(metalRate) || currencyRateDecimal === null)
     return null;
-  }
   const value = calculateMetalReferenceValue({
-    currencyUsdPerUnitDecimal: currencyRate.valueDecimal,
+    currencyUsdPerUnitDecimal: currencyRateDecimal,
     metalUsdPerPureGramDecimal: metalRate.valueDecimal,
     purityFactorDecimal: input.metal.purityFactorDecimal ?? "0",
     weightGramsDecimal: input.metal.weightGramsDecimal ?? "0",
@@ -491,15 +488,7 @@ function buildCurrentObservationValue(
 function buildCurrentRateStatus(
   input: BuildMetalDetailReadModelInput
 ): MetalDetailRateStatus {
-  const rates = getCurrentValueRates(input);
-  const values = rates === null ? [] : [rates.metal, rates.currency];
-  const providerObservedAt =
-    rates === null
-      ? null
-      : conservativeObservedAt(
-          rates.metal.providerObservedAt,
-          rates.currency.providerObservedAt
-        );
+  const values = getCurrentValueRates(input);
   const sources = new Set(
     values
       .map((value) => value.source ?? null)
@@ -516,30 +505,30 @@ function buildCurrentRateStatus(
         value.ageMs === null ? maximum : Math.max(maximum ?? 0, value.ageMs),
       null as number | null
     ),
-    providerObservedAt,
+    providerObservedAt: conservativeObservedAt(values),
     quality: qualities.size === 1 ? Array.from(qualities)[0] : null,
     source: sources.size === 1 ? Array.from(sources)[0] : null,
     state: summarizeLiveRatesTrust(values),
   };
 }
 
-function getCurrentValueRates(input: BuildMetalDetailReadModelInput): {
-  readonly currency: LiveRatesTrustValue;
-  readonly metal: LiveRatesTrustValue;
-} | null {
+function getCurrentValueRates(
+  input: BuildMetalDetailReadModelInput
+): readonly LiveRatesTrustValue[] {
   if (
     input.currentRates === undefined ||
     input.preferredCurrency === undefined ||
     !isSupportedMetalsIsoCurrencyCode(input.preferredCurrency)
   ) {
-    return null;
+    return [];
   }
   const metal =
     input.metal.metalType === "GOLD"
       ? input.currentRates.gold
       : input.currentRates.silver;
+  if (input.preferredCurrency === "USD") return [metal];
   const currency = input.currentRates.currencies.get(input.preferredCurrency);
-  return currency === undefined ? null : { currency, metal };
+  return currency === undefined ? [] : [metal, currency];
 }
 
 function hasTrustedCurrentRate(
@@ -554,11 +543,14 @@ function hasTrustedCurrentRate(
 }
 
 function conservativeObservedAt(
-  first: Date | null,
-  second: Date | null
+  rates: readonly LiveRatesTrustValue[]
 ): Date | null {
-  if (first === null || second === null) return null;
-  return new Date(Math.min(first.getTime(), second.getTime()));
+  const timestamps = rates.flatMap((rate) =>
+    rate.providerObservedAt === null ? [] : [rate.providerObservedAt.getTime()]
+  );
+  return timestamps.length > 0 && timestamps.length === rates.length
+    ? new Date(Math.min(...timestamps))
+    : null;
 }
 
 function toReducerEvent(event: MetalDetailLifecycleEventInput): LifecycleEvent {
@@ -682,22 +674,24 @@ function convertDetailValueForDisplay(
     return { currency: preferredCurrency, valueDecimal };
   }
 
-  const purchaseRate = input.currentRates?.currencies.get(purchaseCurrency);
-  const preferredRate = input.currentRates?.currencies.get(preferredCurrency);
-  if (
-    !hasTrustedCurrentRate(purchaseRate) ||
-    !hasTrustedCurrentRate(preferredRate)
-  ) {
+  const purchaseRateDecimal = readCurrentCurrencyRateDecimal(
+    input.currentRates,
+    purchaseCurrency
+  );
+  const preferredRateDecimal = readCurrentCurrencyRateDecimal(
+    input.currentRates,
+    preferredCurrency
+  );
+  if (purchaseRateDecimal === null || preferredRateDecimal === null)
     return null;
-  }
 
   try {
     return {
       currency: preferredCurrency,
       valueDecimal: serializeDecimal(
         parseCanonicalDecimal(valueDecimal)
-          .times(purchaseRate.valueDecimal)
-          .dividedBy(preferredRate.valueDecimal)
+          .times(purchaseRateDecimal)
+          .dividedBy(preferredRateDecimal)
       ),
     };
   } catch {
@@ -708,13 +702,7 @@ function convertDetailValueForDisplay(
 function resolveCurrentValueObservedAt(
   input: BuildMetalDetailReadModelInput
 ): Date | null {
-  const rates = getCurrentValueRates(input);
-  return rates === null
-    ? null
-    : conservativeObservedAt(
-        rates.metal.providerObservedAt,
-        rates.currency.providerObservedAt
-      );
+  return conservativeObservedAt(getCurrentValueRates(input));
 }
 
 function buildActiveAttribution(
@@ -835,8 +823,7 @@ function buildCurrentReference(
     value.capturedAt === undefined ||
     value.capturedAt === null ||
     value.quality !== "valid" ||
-    value.source === undefined ||
-    value.providerObservedAt === null
+    typeof value.source !== "string"
   ) {
     return null;
   }
@@ -844,14 +831,10 @@ function buildCurrentReference(
   const normalized = validateAndNormalizeRateReference(
     {
       capturedAt: value.capturedAt.getTime(),
-      capturedFreshness:
-        value.state === "fresh" || value.state === "stale"
-          ? value.state
-          : "unknown",
       instrumentCode: expectation.instrumentCode,
       kind: isMetal ? "metal" : "currency",
       orientation: "quote_per_base",
-      providerObservedAt: value.providerObservedAt.getTime(),
+      providerObservedAt: value.providerObservedAt?.getTime() ?? null,
       quality: value.quality,
       role: expectation.role,
       source: value.source,
@@ -861,6 +844,15 @@ function buildCurrentReference(
     expectation
   );
   return normalized.available ? normalized.value : null;
+}
+
+function readCurrentCurrencyRateDecimal(
+  currentRates: LiveRatesTrustReadModel | undefined,
+  currency: CurrencyType
+): string | null {
+  if (currency === "USD") return "1";
+  const rate = currentRates?.currencies.get(currency);
+  return hasTrustedCurrentRate(rate) ? rate.valueDecimal : null;
 }
 
 function calculateRoundingDifference(

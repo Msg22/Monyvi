@@ -119,6 +119,107 @@ describe("metal detail acquisition-action binding", () => {
     });
   });
 
+  it("uses exact USD identity for current detail value without fabricating a USD observation", () => {
+    const input = detailInput();
+    const model = buildMetalDetailReadModel({
+      ...input,
+      currentRates: {
+        ...input.currentRates!,
+        currencies: new Map(),
+      },
+    });
+
+    expect(model).toMatchObject({
+      attribution: null,
+      currentValueDecimal: "119.988",
+      currentValueObservedAt: new Date("2026-08-25T10:00:00.000Z"),
+      currentValueRateStatus: {
+        ageMs: 1_000,
+        providerObservedAt: new Date("2026-08-25T10:00:00.000Z"),
+        quality: "valid",
+        source: "fixture",
+        state: "fresh",
+      },
+      totalGainDecimal: null,
+    });
+  });
+
+  it("uses exact USD identity when converting detail attribution for display", () => {
+    const input = detailInput();
+    const currentRates = input.currentRates!;
+    const egpRate = {
+      ...currentRates.currencies.get("USD")!,
+      valueDecimal: "0.02",
+    };
+    const rateReferences = input.rateReferences.map((reference) => {
+      const value = reference as Readonly<Record<string, unknown>>;
+      return value.role === "acquisition_purchase_currency"
+        ? { ...value, instrumentCode: "currency:EGP", valueDecimal: "0.02" }
+        : value;
+    });
+    const model = buildMetalDetailReadModel({
+      ...input,
+      asset: {
+        ...input.asset,
+        purchaseCurrency: "EGP",
+        purchasePriceDecimal: "50000",
+      },
+      currentRates: {
+        ...currentRates,
+        currencies: new Map([["EGP", egpRate]]),
+      },
+      rateReferences,
+    });
+
+    expect(model).toMatchObject({
+      currentValueCurrency: "USD",
+      currentValueDecimal: "119.988",
+      totalGainDecimal: "-880.012",
+    });
+    expect(model?.attribution?.breakdown.available).toBe(true);
+  });
+
+  it("keeps unknown-freshness current references usable when provider time is unavailable", () => {
+    const input = detailInput();
+    const currentRates = input.currentRates!;
+    const currencyRate = currentRates.currencies.get("USD")!;
+    const model = buildMetalDetailReadModel({
+      ...input,
+      currentRates: {
+        ...currentRates,
+        currencies: new Map([
+          [
+            "USD",
+            {
+              ...currencyRate,
+              ageMs: null,
+              providerObservedAt: null,
+              state: "unknown" as const,
+            },
+          ],
+        ]),
+        gold: {
+          ...currentRates.gold,
+          ageMs: null,
+          providerObservedAt: null,
+          state: "unknown",
+        },
+      },
+    });
+
+    expect(model).toMatchObject({
+      currentValueDecimal: "119.988",
+      currentValueObservedAt: null,
+      currentValueRateStatus: {
+        ageMs: null,
+        providerObservedAt: null,
+        state: "unknown",
+      },
+      totalGainDecimal: "-880.012",
+    });
+    expect(model?.attribution?.breakdown.available).toBe(true);
+  });
+
   it("carries the persisted acquisition action into the detail input", () => {
     const shaped = toDetailAssetInput({
       acquisitionActionId: "action-add",
