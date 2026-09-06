@@ -141,7 +141,7 @@ export async function readMetalHistoryReadModel(
   if (pageStates.length === 0) return emptyHistory(options.filter, counts);
 
   const assets = await readHistoryAssets(scope, pageStates);
-  if (assets.length === 0) return emptyHistory(options.filter);
+  if (assets.length === 0) return emptyHistory(options.filter, counts);
   const dependencies = await readHistoryDependencies(
     scope,
     assets,

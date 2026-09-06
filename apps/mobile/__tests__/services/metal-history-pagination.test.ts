@@ -12,6 +12,7 @@ const mockEventsCollection = { table: "metal_lifecycle_events" };
 const mockGetCurrentUserDataScope = jest.fn();
 const mockScopeQueryChildren = jest.fn();
 const mockScopeQueryOwned = jest.fn();
+let mockRowsByTable: Readonly<Record<string, readonly unknown[]>> = {};
 
 jest.mock("@monyvi/db", () => ({
   database: {
@@ -152,15 +153,15 @@ describe("metal History pagination", () => {
 
     mockScopeQueryOwned.mockImplementation(
       (collection: { readonly table: string }): unknown => {
-        const rowsByTable: Readonly<Record<string, readonly unknown[]>> = {
-          assets,
-          metal_action_evidence: evidence,
-          metal_holding_states: states,
-          metal_lifecycle_events: events,
-        };
-        return fetchedRows(rowsByTable[collection.table] ?? []);
+        return fetchedRows(mockRowsByTable[collection.table] ?? []);
       }
     );
+    mockRowsByTable = {
+      assets,
+      metal_action_evidence: evidence,
+      metal_holding_states: states,
+      metal_lifecycle_events: events,
+    };
     mockScopeQueryChildren.mockImplementation((): unknown =>
       fetchedRows([
         {
@@ -213,5 +214,22 @@ describe("metal History pagination", () => {
       { column: "holding_id", kind: "where", value: { oneOf: ["sold-latest"] } },
       { column: "deleted", kind: "where", value: false }
     );
+  });
+
+  it("keeps global counts when the selected page asset is unavailable", async () => {
+    mockRowsByTable = { ...mockRowsByTable, assets: [] };
+
+    await expect(
+      readMetalHistoryReadModel({
+        filter: "sold",
+        pageSize: 1,
+        userId: "user-1",
+      })
+    ).resolves.toEqual({
+      counts: { all: 3, disposed: 1, sold: 2 },
+      filter: "sold",
+      hasMore: false,
+      items: [],
+    });
   });
 });
