@@ -246,8 +246,9 @@ mockup-1-v2.png mockup-2-v2.png
 ### 9.5 Persist Approved Binding Context
 
 The approved image and its binding metadata together form the implementation
-handoff required by the constitution. For every approved image, create a matching
-sidecar named `<mockup-basename>.binding.md` in the same `mockups/` directory.
+handoff required by the constitution. For every approved image, create a
+matching sidecar named `<mockup-basename>.binding.md` in the same `mockups/`
+directory.
 
 Each sidecar MUST record:
 
@@ -274,8 +275,8 @@ fidelity-affecting unknown MUST be surfaced for clarification before
 implementation starts; do not silently convert image pixels, export framing, or
 assumptions into product rules.
 
-Use the constitution's **Approved mockup binding** principle as the authority for
-what is binding. Direct implementation workflows MUST consume this sidecar
+Use the constitution's **Approved mockup binding** principle as the authority
+for what is binding. Direct implementation workflows MUST consume this sidecar
 rather than treating the entire exported image as product UI.
 
 #### 9.5.1 Legacy Approved Mockup Metadata Migration
@@ -292,8 +293,8 @@ Before implementation of a legacy approved reference:
    artifact that established the approved reference. Do not infer approval from
    filename or location alone.
 2. Create the matching `<mockup-basename>.binding.md` sidecar in the same
-   directory **before implementation**. Mark it as `Legacy metadata migration:
-   yes` and list the exact evidence sources used.
+   directory **before implementation**. Mark it as
+   `Legacy metadata migration: yes` and list the exact evidence sources used.
 3. Populate only binding facts supported by the approved reference, recorded
    approval/handoff, authoritative design/spec documentation, or design-system
    facts that applied to that approval. The constitution's default rule that
@@ -315,10 +316,11 @@ Before implementation of a legacy approved reference:
 
 ### 9.6 Purpose
 
-- The approved image plus its binding sidecar become the **single source of truth
-  for UI implementation**
+- The approved image plus its binding sidecar become the **single source of
+  truth for UI implementation**
 - They MUST be used by:
-  - Developers → for pixel-perfect implementation at the declared binding context
+  - Developers → for pixel-perfect implementation at the declared binding
+    context
   - Review agents → for visual validation against code and rendered evidence
 
 ---

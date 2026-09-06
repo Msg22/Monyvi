@@ -33,9 +33,9 @@ You **MUST** consider the user input before proceeding (if not empty).
      stories with priorities)
    - **Optional**: data-model.md (entities), contracts/ (API endpoints),
      research.md (decisions), quickstart.md (test scenarios)
-   - **If mockup-backed UI is in scope**: locate every approved reference through
-     paths declared by the selected spec/design artifacts and, when necessary,
-     recursively within FEATURE_DIR. Load each matching
+   - **If mockup-backed UI is in scope**: locate every approved reference
+     through paths declared by the selected spec/design artifacts and, when
+     necessary, recursively within FEATURE_DIR. Load each matching
      `<mockup-basename>.binding.md` sidecar defined by
      `.agent/workflows/mockup-implementation.md` so task generation knows the
      declared binding context, scoped variants, and fidelity-affecting unknowns.
@@ -54,9 +54,9 @@ You **MUST** consider the user input before proceeding (if not empty).
    - If data-model.md exists: Extract entities and map to user stories
    - If contracts/ exists: Map endpoints to user stories
    - If research.md exists: Extract decisions for setup tasks
-   - For mockup-backed UI, map each approved reference and binding sidecar to the
-     user story/UI implementation it governs. A fidelity-affecting `UNKNOWN` is a
-     pre-implementation blocker, not a value to infer in the task text.
+   - For mockup-backed UI, map each approved reference and binding sidecar to
+     the user story/UI implementation it governs. A fidelity-affecting `UNKNOWN`
+     is a pre-implementation blocker, not a value to infer in the task text.
    - Generate tasks organized by user story (see Task Generation Rules below)
    - Generate required rendered visual-evidence tasks for every mockup-backed UI
      story as defined below
@@ -74,8 +74,8 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Phase 2: Foundational tasks (blocking prerequisites for all user stories)
    - Phase 3+: One phase per user story (in priority order from spec.md)
    - Each phase includes: story goal, independent test criteria, tests (if
-     requested), implementation tasks, required mockup visual-evidence tasks when
-     that story changes UI governed by an approved mockup, and separate
+     requested), implementation tasks, required mockup visual-evidence tasks
+     when that story changes UI governed by an approved mockup, and separate
      accessibility-evidence tasks when governed labels/semantics are in scope
    - Final Phase: Polish & cross-cutting concerns
    - All tasks must follow the strict checklist format (see Task Generation
@@ -118,11 +118,11 @@ implementation and testing.
 **Tests are OPTIONAL**: Only generate test tasks if explicitly requested in the
 feature specification or if user requests TDD approach.
 
-**Mockup evidence is NOT optional testing**: When a user story changes UI governed
-by an approved mockup, generate required visual-evidence task(s) regardless of
-whether automated tests were requested. The constitution's **Visual completion
-evidence** principle and `.agent/workflows/sprint-issue.md` are authoritative for
-the evidence gate.
+**Mockup evidence is NOT optional testing**: When a user story changes UI
+governed by an approved mockup, generate required visual-evidence task(s)
+regardless of whether automated tests were requested. The constitution's
+**Visual completion evidence** principle and `.agent/workflows/sprint-issue.md`
+are authoritative for the evidence gate.
 
 For each mockup-backed UI story, the required visual-evidence task set MUST:
 

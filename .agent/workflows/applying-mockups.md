@@ -8,8 +8,8 @@ description: apply mockups guidelines
 
 Before implementation, load the approved reference image and its matching
 `<mockup-basename>.binding.md` sidecar produced by
-`.agent/workflows/mockup-implementation.md`. The constitution's **Approved mockup
-binding** principle is authoritative.
+`.agent/workflows/mockup-implementation.md`. The constitution's **Approved
+mockup binding** principle is authoritative.
 
 If an approved reference predates the binding-sidecar rule and has no sidecar,
 first follow the **Legacy Approved Mockup Metadata Migration** procedure in
@@ -25,14 +25,16 @@ fidelity-affecting `UNKNOWN`, pause for clarification before implementation.
   unless the binding sidecar explicitly marks them as binding.
 - Use the sidecar's known spacing, sizing, color/theme, typography, and state
   facts as implementation facts.
-- Do not infer product rules from export framing or unrecorded pixel measurements.
+- Do not infer product rules from export framing or unrecorded pixel
+  measurements.
 - If a non-legacy binding sidecar is missing, its binding context is ambiguous,
   or a fidelity-affecting required fact remains `UNKNOWN`, pause before
   implementation and obtain clarification.
 
 ## Requirements
 
-- Implement the binding UI **exactly as defined by the approved mockup handoff**.
+- Implement the binding UI **exactly as defined by the approved mockup
+  handoff**.
 - The final result must be **pixel-perfect** at the declared binding context,
   matching the mockup in:
   - Layout and spacing
@@ -60,8 +62,8 @@ fidelity-affecting `UNKNOWN`, pause for clarification before implementation.
 ## ❓ Clarifications & Blockers
 
 - If you encounter:
-  - Missing binding metadata that cannot be resolved through the legacy migration
-    path
+  - Missing binding metadata that cannot be resolved through the legacy
+    migration path
   - Missing details
   - Conflicting designs
   - Technical limitations
@@ -76,12 +78,12 @@ Before declaring visual completion for the governed UI:
 
 - Capture a rendered baseline side-by-side or overlay comparison against the
   approved reference at its declared viewport/component context.
-- Capture rendered evidence for every responsive context, theme state, RTL/Arabic
-  state, and enlarged-text variant that is in scope under the binding sidecar or
-  feature requirements. This includes compact/ordinary phone, tablet, or
-  orientation variants when those contexts are in scope.
-- Record the evidence references and report **functional status** separately from
-  **visual fidelity status**. A functionally complete change may still be
+- Capture rendered evidence for every responsive context, theme state,
+  RTL/Arabic state, and enlarged-text variant that is in scope under the binding
+  sidecar or feature requirements. This includes compact/ordinary phone, tablet,
+  or orientation variants when those contexts are in scope.
+- Record the evidence references and report **functional status** separately
+  from **visual fidelity status**. A functionally complete change may still be
   visually incomplete.
 - If the governed UI requires accessibility labels or semantics, collect the
   separate accessibility-tree, screen-reader, or automated accessibility proof
