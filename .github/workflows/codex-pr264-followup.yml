@@ -5,7 +5,7 @@ on:
     branches:
       - codex/103-recurring-payment-validation
     paths:
-      - .github/codex/pr264-followup.patch
+      - .github/codex/pr264-followup.py
 
 permissions:
   contents: write
@@ -24,19 +24,19 @@ jobs:
           fetch-depth: 0
           ref: codex/103-recurring-payment-validation
 
-      - name: Apply prepared review patch
+      - name: Apply prepared review changes
         shell: bash
         run: |
           set -euo pipefail
-          patch_file=".github/codex/pr264-followup.patch"
-          if [[ ! -f "$patch_file" ]]; then
-            echo "Patch already consumed; nothing to do."
+          script_file=".github/codex/pr264-followup.py"
+          if [[ ! -f "$script_file" ]]; then
+            echo "Follow-up script already consumed; nothing to do."
             exit 0
           fi
 
-          git apply --check "$patch_file"
-          git apply "$patch_file"
-          rm "$patch_file"
+          python "$script_file"
+          rm "$script_file"
+          rm -f .github/codex/pr264-followup.patch
 
           git config user.name "OpenAI Codex"
           git config user.email "codex@openai.com"
