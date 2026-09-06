@@ -1,6 +1,6 @@
 # US7 Delete Isolated Green Evidence
 
-Date: 2026-09-05
+Date: 2026-09-06
 
 Branch/base: `codex/035-metals-delete` / stable Slice 7 checkpoint `a190d8f`
 
@@ -21,15 +21,14 @@ Branch/base: `codex/035-metals-delete` / stable Slice 7 checkpoint `a190d8f`
 
 ## Focused verification
 
-- Jest: 2 suites passed, 23 tests passed.
+- Jest: 2 suites passed, 24 tests passed, including the StrictMode remount
+  failure-reporting case.
 - Scoped ESLint: passed for the two tests and four production modules.
 - Prettier: passed for every US7-owned source, test, Maestro, manual, coverage,
   and evidence file.
 - `git diff --check`: passed.
-- Mobile TypeScript: no US7-owned diagnostic. The workspace command remains
-  blocked by pre-existing Slice 7 diagnostics: missing `source` fields in live
-  rate trust fixtures/fallbacks and the existing Add/Edit facade
-  `validationInput` mismatch against the fail-closed adapter input type.
+- Mobile TypeScript: no US7-owned diagnostic. The full workspace command remains
+  blocked only by unrelated PR #271 trust-value/`validationInput` diagnostics.
 
 ## Financial and persistence evidence
 
