@@ -25,6 +25,11 @@ interface UseMetalHistoryResult {
   readonly setFilter: (filter: MetalHistoryFilter) => void;
 }
 
+interface HistoryModelState {
+  readonly history: MetalHistoryReadModel;
+  readonly userId: string | null;
+}
+
 const EMPTY_COUNTS = Object.freeze({ all: 0, sold: 0, disposed: 0 });
 const EMPTY_HISTORY: MetalHistoryReadModel = Object.freeze({
   counts: EMPTY_COUNTS,
@@ -42,7 +47,10 @@ export function useMetalHistory(): UseMetalHistoryResult {
   const { userId, isResolvingUser } = useCurrentUser();
   const { isConnected } = useMarketRates();
   const [filter, setFilter] = useState<MetalHistoryFilter>("all");
-  const [history, setHistory] = useState<MetalHistoryReadModel>(EMPTY_HISTORY);
+  const [historyState, setHistoryState] = useState<HistoryModelState>({
+    history: EMPTY_HISTORY,
+    userId: null,
+  });
   const [error, setError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [retryIndex, setRetryIndex] = useState(0);
@@ -108,7 +116,7 @@ export function useMetalHistory(): UseMetalHistoryResult {
   useEffect(() => {
     let isCurrent = true;
     if (isResolvingUser) {
-      setHistory(emptyHistory(filter));
+      setHistoryState({ history: emptyHistory(filter), userId: null });
       setError(null);
       setIsLoading(isFocused);
       return () => {
@@ -122,7 +130,7 @@ export function useMetalHistory(): UseMetalHistoryResult {
       };
     }
     if (userId === null) {
-      setHistory(emptyHistory(filter));
+      setHistoryState({ history: emptyHistory(filter), userId: null });
       setError(null);
       setIsLoading(false);
       return () => {
@@ -130,16 +138,16 @@ export function useMetalHistory(): UseMetalHistoryResult {
       };
     }
 
-    setHistory(emptyHistory(filter));
+    setHistoryState({ history: emptyHistory(filter), userId });
     setIsLoading(true);
     setError(null);
     void readMetalHistoryReadModel({ filter, pageSize, userId })
       .then((next) => {
-        if (isCurrent) setHistory(next);
+        if (isCurrent) setHistoryState({ history: next, userId });
       })
       .catch((cause: unknown) => {
         if (isCurrent) {
-          setHistory(emptyHistory(filter));
+          setHistoryState({ history: emptyHistory(filter), userId });
           setError(
             cause instanceof Error ? cause : new Error("History unavailable")
           );
@@ -161,11 +169,19 @@ export function useMetalHistory(): UseMetalHistoryResult {
     userId,
   ]);
 
+  const hasCurrentUserHistory =
+    !isResolvingUser &&
+    userId !== null &&
+    historyState.userId === userId;
+  const isAwaitingCurrentUserHistory =
+    isFocused &&
+    (isResolvingUser || (userId !== null && !hasCurrentUserHistory));
+
   return {
-    error,
+    error: hasCurrentUserHistory ? error : null,
     filter,
-    history,
-    isLoading,
+    history: hasCurrentUserHistory ? historyState.history : emptyHistory(filter),
+    isLoading: isLoading || isAwaitingCurrentUserHistory,
     isOffline: !isConnected,
     loadMore,
     retry,

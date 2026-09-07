@@ -234,9 +234,17 @@ function resolvePurityLabel(
   item: MetalHistoryItem,
   t: (key: string) => string
 ): string {
-  if (item.purityCatalogVersion !== "1" || item.purityCode === null) return "—";
+  if (
+    item.purityCatalogVersion !== "1" ||
+    item.purityCode === null ||
+    item.purityFactorDecimal === null
+  ) {
+    return "—";
+  }
   const purity = resolvePuritySelection(item.metalType, item.purityCode);
-  if (!purity.available) return "—";
+  if (!purity.available || purity.entry.factorDecimal !== item.purityFactorDecimal) {
+    return "—";
+  }
   return t(purity.entry.labelKey);
 }
 
