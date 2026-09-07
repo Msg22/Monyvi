@@ -14,6 +14,7 @@ function observation(
   overrides: Partial<LiveRatesTrustObservation> = {}
 ): LiveRatesTrustObservation {
   return {
+    id: `${instrumentCode}-default`,
     instrumentCode,
     valueDecimal: "100.25",
     unit: instrumentCode.startsWith("metal:")
@@ -72,6 +73,24 @@ describe("live-rates trust read model", () => {
 
     expect(readModel.gold).toMatchObject({ state: "stale", ageMs: DAY_MS + 1 });
     expect(readModel.silver).toMatchObject({ state: "unknown", ageMs: null });
+  });
+
+  it("breaks equal created-at observations by immutable id", () => {
+    const readModel = buildLiveRatesTrustReadModel(
+      [
+        observation("metal:GOLD", {
+          id: "gold-observation-a",
+          valueDecimal: "100.25",
+        }),
+        observation("metal:GOLD", {
+          id: "gold-observation-b",
+          valueDecimal: "101.75",
+        }),
+      ],
+      NOW_MS
+    );
+
+    expect(readModel.gold.valueDecimal).toBe("101.75");
   });
 
   it.each([

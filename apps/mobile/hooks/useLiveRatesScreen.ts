@@ -122,11 +122,16 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   const [trustReadModel, setTrustReadModel] = useState<LiveRatesTrustReadModel>(
     createInitialTrustReadModel
   );
+  const [isTrustLoading, setIsTrustLoading] = useState(true);
+  const [trustObservationError, setTrustObservationError] =
+    useState<LiveRatesRefreshError | null>(null);
+  const [trustRetryIndex, setTrustRetryIndex] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] =
     useState<LiveRatesRefreshError | null>(null);
   const isRefreshInProgressRef = useRef(false);
   const latestCapturedAtRef = useRef<number | null>(null);
+  const latestRatesRef = useRef(latestRates);
   const trustObservationRef = useRef<LiveRatesTrustObservationStream | null>(
     null
   );
@@ -138,6 +143,10 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
     }
     setLastUpdatedText("");
   }, [lastUpdated]);
+
+  useEffect(() => {
+    latestRatesRef.current = latestRates;
+  }, [latestRates]);
 
   useEffect(() => {
     updateTimestamp();
@@ -152,6 +161,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   useEffect(() => {
     const observation = observeLiveRatesTrust(database);
     trustObservationRef.current = observation;
+    setIsTrustLoading(true);
     const subscription = observation.subscribe({
       next: (next): void => {
         const capturedAt = getLatestCapturedAt(next);
@@ -163,10 +173,18 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
           setRefreshError(null);
         }
         latestCapturedAtRef.current = capturedAt;
+        setTrustObservationError(null);
         setTrustReadModel(next);
+        setIsTrustLoading(false);
       },
       error: (error: unknown): void => {
         logger.error("liveRatesTrust.observe.failed", error);
+        setTrustObservationError(
+          latestRatesRef.current
+            ? "cached_refresh_failed"
+            : "initial_refresh_failed"
+        );
+        setIsTrustLoading(false);
       },
     });
 
@@ -176,7 +194,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
       }
       subscription.unsubscribe();
     };
-  }, [database]);
+  }, [database, trustRetryIndex]);
 
   const currencySymbol = useMemo((): string => {
     return CURRENCY_INFO_MAP[preferredCurrency]?.symbol ?? preferredCurrency;
@@ -351,6 +369,9 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   const onRefresh = useCallback((): void => {
     if (isRefreshInProgressRef.current) return;
 
+    if (trustObservationError !== null) {
+      setTrustRetryIndex((value) => value + 1);
+    }
     isRefreshInProgressRef.current = true;
     setIsRefreshing(true);
     setRefreshError(null);
@@ -369,13 +390,13 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
         trustObservationRef.current?.refresh();
       }
     })();
-  }, [database, latestRates]);
+  }, [database, latestRates, trustObservationError]);
 
   return {
-    isLoading,
+    isLoading: isLoading || isTrustLoading,
     isConnected,
     isStale: Object.values(rateTrust).some(({ state }) => state !== "fresh"),
-    hasData: latestRates !== null,
+    hasData: latestRates !== null && !isTrustLoading,
     metals,
     currencies: visibleCurrencies,
     isExpanded,
@@ -386,7 +407,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
     onSearchChange,
     lastUpdatedText,
     isRefreshing,
-    refreshError,
+    refreshError: trustObservationError ?? refreshError,
     onRefresh,
     rateTrust,
   };

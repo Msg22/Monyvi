@@ -24,6 +24,7 @@ const V1_RATE_INSTRUMENT_CODES = [
 ];
 
 export interface LiveRatesTrustObservation {
+  readonly id: string;
   readonly instrumentCode: string;
   readonly orientation: string;
   readonly source: string | null;
@@ -141,6 +142,7 @@ export function observeLiveRatesTrust(
         const query = collection.query(
           Q.where("instrument_code", instrumentCode),
           Q.sortBy("created_at", Q.desc),
+          Q.sortBy("id", Q.desc),
           Q.take(1)
         );
         return query.observe().subscribe({
@@ -189,6 +191,9 @@ function isNewerObservation(
   const candidateCapturedAt = candidate.createdAt.getTime();
   const currentCapturedAt = current.createdAt.getTime();
 
+  if (candidateCapturedAt === currentCapturedAt) {
+    return candidate.id.localeCompare(current.id) > 0;
+  }
   if (!Number.isFinite(candidateCapturedAt)) return true;
   if (!Number.isFinite(currentCapturedAt)) return false;
   return candidateCapturedAt > currentCapturedAt;
