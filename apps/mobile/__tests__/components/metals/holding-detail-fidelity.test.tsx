@@ -32,7 +32,8 @@ const translations: Readonly<Record<string, string>> = {
   "detail.calculation_disclosure": "How this value was calculated",
   "detail.current_value": "Current value",
   "detail.current_value_unavailable": "Current value unavailable",
-  "detail.current_value_rate_unavailable": "A current market rate is unavailable. Your holding details are still saved here.",
+  "detail.current_value_rate_unavailable":
+    "A current market rate is unavailable. Your holding details are still saved here.",
   "detail.fact_accessibility": "{{label}}: {{value}}",
   "detail.follow_value": "Follow the value",
   "detail.history": "History",
@@ -337,6 +338,27 @@ describe("approved active holding-detail fidelity", () => {
       expect.stringContaining("text-red-600")
     );
   });
+
+  it.each(["0.004", "-0.004"])(
+    "renders a sub-cent gain %s as neutral display zero",
+    (totalGainDecimal) => {
+      render(
+        <MetalHoldingDetailScreen
+          actions={[]}
+          error={null}
+          isLoading={false}
+          isOffline={false}
+          model={activeDetail({ totalGainDecimal })}
+          onRetry={jest.fn()}
+        />
+      );
+
+      expect(screen.getByText("EGP 0.00 since purchase")).toHaveProp(
+        "className",
+        expect.stringContaining("text-text-secondary")
+      );
+    }
+  );
 
   it("keeps the ordinary hero row and reflows only for compact or enlarged-text layouts", () => {
     const model = activeDetail();

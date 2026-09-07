@@ -16,15 +16,22 @@ interface MockTrustObservation {
 
 interface MockLocalQuery {
   readonly observe: () => {
-    readonly subscribe: (next: () => void) => MockSubscription;
+    readonly subscribe: (
+      observer: MockLocalObserver | (() => void)
+    ) => MockSubscription;
   };
+}
+
+interface MockLocalObserver {
+  readonly next: () => void;
+  readonly error: (cause: unknown) => void;
 }
 
 const mockDatabase = { id: "database" };
 const mockUnsubscribe = jest.fn<void, []>();
 const mockTrustRefresh = jest.fn<void, []>();
 const mockAppStateRemove = jest.fn<void, []>();
-const mockLocalSubscribers: Array<() => void> = [];
+const mockLocalObservers: MockLocalObserver[] = [];
 const mockTrustObservers: MockTrustObserver[] = [];
 let mockTrustObserver: MockTrustObserver | null = null;
 let mockAppStateListener: ((state: string) => void) | null = null;
@@ -32,8 +39,14 @@ let mockUserId: string | null = "user-1";
 
 const mockCreateLocalQuery = jest.fn<MockLocalQuery, []>(() => ({
   observe: () => ({
-    subscribe: (next: () => void): MockSubscription => {
-      mockLocalSubscribers.push(next);
+    subscribe: (
+      observer: MockLocalObserver | (() => void)
+    ): MockSubscription => {
+      mockLocalObservers.push(
+        typeof observer === "function"
+          ? { error: jest.fn<void, [unknown]>(), next: observer }
+          : observer
+      );
       return { unsubscribe: mockUnsubscribe };
     },
   }),
@@ -172,7 +185,7 @@ const initialRates = {
 describe("useMetalHoldingDetail", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockLocalSubscribers.splice(0);
+    mockLocalObservers.splice(0);
     mockTrustObservers.splice(0);
     mockTrustObserver = null;
     mockAppStateListener = null;
@@ -213,16 +226,59 @@ describe("useMetalHoldingDetail", () => {
       "user-1",
       "holding-1"
     );
-    expect(mockLocalSubscribers).toHaveLength(5);
+    expect(mockLocalObservers).toHaveLength(5);
 
     act(() => {
-      mockLocalSubscribers[3]?.();
+      mockLocalObservers[3]?.next();
     });
     await waitFor(() =>
       expect(mockReadMetalDetailReadModel).toHaveBeenCalledTimes(2)
     );
     expect(result.current.model).toBe(model);
   });
+
+  it.each([
+    ["holding", 0],
+    ["holding state", 1],
+    ["lifecycle event", 2],
+    ["action evidence", 3],
+    ["rate reference", 4],
+  ] as const)(
+    "invalidates stale detail and recovers after a %s subscription error",
+    async (_dependency, observerIndex) => {
+      const observationError = new Error("Local holding observation failed");
+      const model = { holdingId: "holding-1" };
+      mockReadMetalDetailReadModel.mockResolvedValue(model);
+      const { result } = renderHook(() => useMetalHoldingDetail("holding-1"));
+
+      act(() => {
+        mockTrustObserver?.next(initialRates);
+      });
+      await waitFor(() => expect(result.current.model).toBe(model));
+
+      act(() => {
+        mockLocalObservers[observerIndex]?.error(observationError);
+      });
+
+      await waitFor(() => expect(result.current.error).toBe(observationError));
+      expect(result.current.model).toBeNull();
+
+      act(() => {
+        result.current.retry();
+      });
+
+      await waitFor(() => expect(mockLocalObservers).toHaveLength(10));
+      await waitFor(() => expect(mockTrustObservers).toHaveLength(2));
+      act(() => {
+        mockTrustObserver?.next(initialRates);
+      });
+      await waitFor(() => expect(result.current.error).toBeNull());
+      await waitFor(() =>
+        expect(mockReadMetalDetailReadModel).toHaveBeenCalledTimes(2)
+      );
+      await waitFor(() => expect(result.current.model).toBe(model));
+    }
+  );
 
   it("uses retry to start a real sync and re-read the local model", async () => {
     mockReadMetalDetailReadModel.mockResolvedValue({ holdingId: "holding-1" });

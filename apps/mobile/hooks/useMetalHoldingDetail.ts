@@ -62,6 +62,7 @@ export function useMetalHoldingDetail(
     usePreferredCurrency();
   const detailIdentity = createDetailIdentity(userId, holdingId);
   const [model, setModel] = useState<MetalDetailReadModel | null>(null);
+  const [observationError, setObservationError] = useState<Error | null>(null);
   const [readError, setReadError] = useState<Error | null>(null);
   const [ratesError, setRatesError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -142,24 +143,34 @@ export function useMetalHoldingDetail(
       return;
     }
     const onChange = (): void => setLocalRevision((value) => value + 1);
+    const onObservationError = (cause: unknown): void => {
+      hasLoadedOnceRef.current = false;
+      modelIdentityRef.current = null;
+      setModel(null);
+      setObservationError(toError(cause, "Holding detail updates unavailable"));
+      setIsLoading(false);
+    };
+    setObservationError(null);
     const subscriptions = [
       observeMetalDetailHolding(userId, holdingId)
         .observe()
-        .subscribe(onChange),
+        .subscribe({ error: onObservationError, next: onChange }),
       observeMetalDetailHoldingState(userId, holdingId)
         .observe()
-        .subscribe(onChange),
-      observeMetalDetailEvents(userId, holdingId).observe().subscribe(onChange),
+        .subscribe({ error: onObservationError, next: onChange }),
+      observeMetalDetailEvents(userId, holdingId)
+        .observe()
+        .subscribe({ error: onObservationError, next: onChange }),
       observeMetalDetailActionEvidence(userId, holdingId)
         .observe()
-        .subscribe(onChange),
+        .subscribe({ error: onObservationError, next: onChange }),
       observeMetalDetailRateReferences(userId, holdingId)
         .observe()
-        .subscribe(onChange),
+        .subscribe({ error: onObservationError, next: onChange }),
     ];
     return () =>
       subscriptions.forEach((subscription) => subscription.unsubscribe());
-  }, [holdingId, isFocused, isResolvingUser, userId]);
+  }, [holdingId, isFocused, isResolvingUser, retryIndex, userId]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -190,7 +201,7 @@ export function useMetalHoldingDetail(
       };
     }
 
-    if (ratesError !== null) {
+    if (observationError !== null || ratesError !== null) {
       setIsLoading(false);
       return () => {
         isCurrent = false;
@@ -234,6 +245,7 @@ export function useMetalHoldingDetail(
     isRatesLoading,
     isResolvingUser,
     localRevision,
+    observationError,
     preferredCurrency,
     ratesError,
     retryIndex,
@@ -241,7 +253,7 @@ export function useMetalHoldingDetail(
   ]);
 
   return {
-    error: ratesError ?? readError,
+    error: observationError ?? ratesError ?? readError,
     isLoading,
     isOffline: !isConnected,
     model: modelIdentityRef.current === detailIdentity ? model : null,

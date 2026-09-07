@@ -12,12 +12,14 @@ import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   formatCanonicalDecimalForDisplay,
-  parseCanonicalDecimal,
   resolvePuritySelection,
-  serializeDecimal,
 } from "@monyvi/logic";
 
 import { MetalHoldingRender } from "@/components/metals/MetalHoldingRender";
+import {
+  getCurrencyDisplaySign,
+  type CurrencyDisplaySign,
+} from "@/components/metals/portfolio-presentation";
 import type {
   HoldingActionDescriptor,
   HoldingActionId,
@@ -333,7 +335,10 @@ function ValueSummary({
 
   const currency =
     model.currentValueCurrency ?? model.purchaseCurrency ?? "EGP";
-  const gainValue = parseAmount(model.totalGainDecimal);
+  const gainSign =
+    model.totalGainDecimal === null
+      ? null
+      : getCurrencyDisplaySign(model.totalGainDecimal);
   return (
     <View className="border-t border-slate-200 pt-6 dark:border-slate-800">
       <Text className="text-base text-text-secondary dark:text-text-secondary-dark">
@@ -348,7 +353,7 @@ function ValueSummary({
         {displayAmount(model.currentValueDecimal, currency, locale)}
       </Text>
       {model.totalGainDecimal === null ? null : (
-        <Text className={`mt-1 text-base ${getGainTextClass(gainValue)}`}>
+        <Text className={`mt-1 text-base ${getGainTextClass(gainSign)}`}>
           {t("detail.since_purchase", {
             amount: signedAmount(model.totalGainDecimal, currency, locale),
           })}
@@ -478,11 +483,7 @@ function CalculationDisclosure({
       className="mt-5 min-h-14 flex-row items-center gap-3 rounded-xl border border-slate-300 px-4 dark:border-slate-700"
       onPress={onPress}
     >
-      <Ionicons
-        name="information-circle-outline"
-        size={24}
-        color={iconColor}
-      />
+      <Ionicons name="information-circle-outline" size={24} color={iconColor} />
       <Text className="min-w-0 flex-1 text-base text-text-primary dark:text-text-primary-dark">
         {t("detail.calculation_disclosure")}
       </Text>
@@ -821,30 +822,18 @@ function displayAmount(
 }
 
 function signedAmount(value: string, currency: string, locale: string): string {
-  try {
-    const amount = parseCanonicalDecimal(value);
-    const sign = amount.greaterThan("0") || amount.isZero() ? "+" : "-";
-    return `${sign} ${displayAmount(
-      serializeDecimal(amount.absoluteValue()),
-      currency,
-      locale
-    )}`;
-  } catch {
-    return "—";
-  }
+  const sign = getCurrencyDisplaySign(value);
+  if (sign === null) return "—";
+  const prefix = sign === "positive" ? "+ " : sign === "negative" ? "- " : "";
+  const unsignedValue = value.startsWith("-") ? value.slice(1) : value;
+  return `${prefix}${displayAmount(unsignedValue, currency, locale)}`;
 }
 
-function parseAmount(value: string | null): number | null {
-  if (value === null) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function getGainTextClass(value: number | null): string {
-  if (value === null || value === 0) {
+function getGainTextClass(value: CurrencyDisplaySign | null): string {
+  if (value === null || value === "zero") {
     return "text-text-secondary dark:text-text-secondary-dark";
   }
-  return value > 0
+  return value === "positive"
     ? "text-nileGreen-700 dark:text-nileGreen-400"
     : "text-red-600 dark:text-red-500";
 }

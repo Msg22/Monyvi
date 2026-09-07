@@ -5,8 +5,13 @@ import {
   formatCanonicalDecimalForDisplay,
   parseCanonicalDecimal,
   resolvePuritySelection,
+  roundDecimal,
   serializeDecimal,
 } from "@monyvi/logic";
+
+const CURRENCY_DISPLAY_DECIMAL_PLACES = 2;
+
+export type CurrencyDisplaySign = "negative" | "positive" | "zero";
 
 export interface MetalHoldingPresentation {
   readonly formKey: "form.bar" | "form.coin" | "form.jewelry" | "form.unknown";
@@ -72,29 +77,52 @@ export function formatCodeAmount(
 ): string {
   if (value === null) return "—";
   try {
-    const amount = parseCanonicalDecimal(value);
-    const isNegative = !amount.isZero() && !amount.greaterThan("0");
+    const amount = parseCanonicalDecimal(
+      roundDecimal(value, CURRENCY_DISPLAY_DECIMAL_PLACES)
+    );
+    const amountSign = getExactAmountSign(amount);
     const sign = signed
-      ? amount.greaterThan("0")
+      ? amountSign === "positive"
         ? "+ "
-        : isNegative
+        : amountSign === "negative"
           ? "- "
           : ""
-      : isNegative
+      : amountSign === "negative"
         ? "- "
         : "";
     const numericPart = formatCanonicalDecimalForDisplay(
       serializeDecimal(amount.absoluteValue()),
       {
         locale,
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: CURRENCY_DISPLAY_DECIMAL_PLACES,
+        maximumFractionDigits: CURRENCY_DISPLAY_DECIMAL_PLACES,
       }
     );
     return `${sign}${currency} ${numericPart}`;
   } catch {
     return "—";
   }
+}
+
+export function getCurrencyDisplaySign(
+  value: string
+): CurrencyDisplaySign | null {
+  try {
+    return getExactAmountSign(
+      parseCanonicalDecimal(
+        roundDecimal(value, CURRENCY_DISPLAY_DECIMAL_PLACES)
+      )
+    );
+  } catch {
+    return null;
+  }
+}
+
+function getExactAmountSign(
+  value: ReturnType<typeof parseCanonicalDecimal>
+): CurrencyDisplaySign {
+  if (value.isZero()) return "zero";
+  return value.greaterThan("0") ? "positive" : "negative";
 }
 
 function normalizeForm(
