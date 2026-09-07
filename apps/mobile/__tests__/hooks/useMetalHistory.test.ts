@@ -1,5 +1,10 @@
-import { act, render, renderHook, waitFor } from "@testing-library/react-native";
-import React from "react";
+import {
+  act,
+  render,
+  renderHook,
+  waitFor,
+} from "@testing-library/react-native";
+import { createElement, Fragment } from "react";
 
 interface MockSubscription {
   readonly unsubscribe: jest.Mock<void, []>;
@@ -151,9 +156,9 @@ describe("useMetalHistory", () => {
     const observedResults: Array<ReturnType<typeof useMetalHistory>> = [];
     function HistoryHarness(): React.JSX.Element {
       observedResults.push(useMetalHistory());
-      return React.createElement(React.Fragment);
+      return createElement(Fragment);
     }
-    const view = render(React.createElement(HistoryHarness));
+    const view = render(createElement(HistoryHarness));
 
     await waitFor(() =>
       expect(observedResults.at(-1)?.history.items).toEqual(firstHistory.items)
@@ -162,7 +167,7 @@ describe("useMetalHistory", () => {
     const renderCountBeforeIdentityChange = observedResults.length;
     mockCurrentUser = { isResolvingUser: false, userId: "user-2" };
     mockReadMetalHistoryReadModel.mockReturnValueOnce(new Promise(() => {}));
-    view.rerender(React.createElement(HistoryHarness));
+    view.rerender(createElement(HistoryHarness));
 
     const identityChangeResults = observedResults.slice(
       renderCountBeforeIdentityChange

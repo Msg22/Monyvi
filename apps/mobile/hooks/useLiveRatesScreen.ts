@@ -495,7 +495,7 @@ function toCombinedTrustDisplay(
 }
 
 function uniquePresentValues(
-  values: readonly (string | null | undefined)[]
+  values: ReadonlyArray<string | null | undefined>
 ): readonly string[] {
   return Array.from(
     new Set(

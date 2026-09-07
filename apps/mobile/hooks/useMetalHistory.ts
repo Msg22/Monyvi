@@ -170,9 +170,7 @@ export function useMetalHistory(): UseMetalHistoryResult {
   ]);
 
   const hasCurrentUserHistory =
-    !isResolvingUser &&
-    userId !== null &&
-    historyState.userId === userId;
+    !isResolvingUser && userId !== null && historyState.userId === userId;
   const isAwaitingCurrentUserHistory =
     isFocused &&
     (isResolvingUser || (userId !== null && !hasCurrentUserHistory));
@@ -180,7 +178,9 @@ export function useMetalHistory(): UseMetalHistoryResult {
   return {
     error: hasCurrentUserHistory ? error : null,
     filter,
-    history: hasCurrentUserHistory ? historyState.history : emptyHistory(filter),
+    history: hasCurrentUserHistory
+      ? historyState.history
+      : emptyHistory(filter),
     isLoading: isLoading || isAwaitingCurrentUserHistory,
     isOffline: !isConnected,
     loadMore,

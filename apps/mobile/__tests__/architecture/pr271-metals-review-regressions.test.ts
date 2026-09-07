@@ -113,9 +113,11 @@ describe("PR #271 validated Metals review regressions", () => {
     expect(detail).toMatch(/setModel\(null\);[\s\S]*readMetalDetailReadModel/);
     expect(detail).toMatch(/catch[\s\S]*setModel\(null\)/);
     expect(history).toMatch(
-      /setHistory\(emptyHistory\(filter\)\);[\s\S]*readMetalHistoryReadModel/
+      /setHistoryState\(\{ history: emptyHistory\(filter\), userId \}\);[\s\S]*readMetalHistoryReadModel/
     );
-    expect(history).toMatch(/catch[\s\S]*setHistory\(emptyHistory\(filter\)\)/);
+    expect(history).toMatch(
+      /catch[\s\S]*setHistoryState\(\{ history: emptyHistory\(filter\), userId \}\)/
+    );
   });
 
   it("derives portfolio trust from the currency and only active metals owned", () => {

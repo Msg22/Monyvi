@@ -5,7 +5,6 @@ import {
   isSupportedMetalsIsoCurrencyCode,
   validateAndNormalizeRateReference,
   type CurrencyInstrumentCode,
-  type MetalInstrumentCode,
   type RateReferenceExpectation,
   type RateTrustResult,
 } from "@monyvi/logic";
@@ -306,7 +305,7 @@ function getRateExpectation(
 ): RateReferenceExpectation | null {
   if (instrumentCode === "metal:GOLD" || instrumentCode === "metal:SILVER") {
     return {
-      instrumentCode: instrumentCode as MetalInstrumentCode,
+      instrumentCode,
       role: "current_metal",
     };
   }

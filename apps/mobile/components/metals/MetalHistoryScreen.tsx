@@ -242,7 +242,10 @@ function resolvePurityLabel(
     return "—";
   }
   const purity = resolvePuritySelection(item.metalType, item.purityCode);
-  if (!purity.available || purity.entry.factorDecimal !== item.purityFactorDecimal) {
+  if (
+    !purity.available ||
+    purity.entry.factorDecimal !== item.purityFactorDecimal
+  ) {
     return "—";
   }
   return t(purity.entry.labelKey);

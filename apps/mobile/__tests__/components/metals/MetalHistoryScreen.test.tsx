@@ -7,7 +7,10 @@ import type { MetalHistoryReadModel } from "@/services/metal-history-read-model-
 jest.mock("react-i18next", () => ({
   useTranslation: (): {
     readonly i18n: { readonly resolvedLanguage: string };
-    readonly t: (key: string, values?: Record<string, string | number>) => string;
+    readonly t: (
+      key: string,
+      values?: Record<string, string | number>
+    ) => string;
   } => ({
     i18n: { resolvedLanguage: "en" },
     t: (key: string, values?: Record<string, string | number>): string => {
@@ -27,8 +30,7 @@ jest.mock("react-i18next", () => ({
         "status.sold": "Sold",
       };
       return Object.entries(values ?? {}).reduce(
-        (result, [name, value]) =>
-          result.replace(`{{${name}}}`, String(value)),
+        (result, [name, value]) => result.replace(`{{${name}}}`, String(value)),
         translations[key] ?? key
       );
     },
@@ -37,9 +39,8 @@ jest.mock("react-i18next", () => ({
 
 jest.mock("@expo/vector-icons", () => {
   const MockReact = jest.requireActual<typeof import("react")>("react");
-  const { View } = jest.requireActual<typeof import("react-native")>(
-    "react-native"
-  );
+  const { View } =
+    jest.requireActual<typeof import("react-native")>("react-native");
   return {
     Ionicons: (): React.JSX.Element =>
       MockReact.createElement(View, { testID: "history-icon" }),
@@ -48,9 +49,8 @@ jest.mock("@expo/vector-icons", () => {
 
 jest.mock("@/components/metals/MetalHoldingRender", () => {
   const MockReact = jest.requireActual<typeof import("react")>("react");
-  const { View } = jest.requireActual<typeof import("react-native")>(
-    "react-native"
-  );
+  const { View } =
+    jest.requireActual<typeof import("react-native")>("react-native");
   return {
     MetalHoldingRender: (): React.JSX.Element =>
       MockReact.createElement(View, { testID: "history-render" }),
