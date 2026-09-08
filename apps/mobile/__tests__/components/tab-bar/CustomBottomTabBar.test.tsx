@@ -28,7 +28,7 @@ jest.mock("@/context/LocaleContext", () => ({
 }));
 
 jest.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({ t: (key: string) => `translated:${key}` }),
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
@@ -36,7 +36,11 @@ jest.mock("react-native-safe-area-context", () => ({
 }));
 
 jest.mock("@/components/tab-bar/TabIcon", () => ({
-  TabIcon: () => null,
+  TabIcon: ({ label }: { readonly label: string }) => {
+    const { Text: MockText } =
+      jest.requireActual<typeof import("react-native")>("react-native");
+    return <MockText testID="tab-icon-label">{label}</MockText>;
+  },
 }));
 
 import { CustomBottomTabBar } from "@/components/tab-bar/CustomBottomTabBar";
@@ -45,8 +49,13 @@ const tabBarProps = {
   state: {
     index: 0,
     key: "tabs",
-    routeNames: ["index"],
-    routes: [{ key: "index-key", name: "index" }],
+    routeNames: ["index", "accounts", "transactions", "metals"],
+    routes: [
+      { key: "index-key", name: "index" },
+      { key: "accounts-key", name: "accounts" },
+      { key: "transactions-key", name: "transactions" },
+      { key: "metals-key", name: "metals" },
+    ],
     stale: false,
     type: "tab",
     history: [],
@@ -77,5 +86,20 @@ describe("CustomBottomTabBar", () => {
     });
 
     expect(mockSetTabBarHeight).toHaveBeenCalledWith(114);
+  });
+
+  it("uses translated labels for tab text and accessibility labels", () => {
+    render(
+      <BottomTabBarHeightCallbackContext.Provider value={mockSetTabBarHeight}>
+        <CustomBottomTabBar {...tabBarProps} />
+      </BottomTabBarHeightCallbackContext.Provider>
+    );
+
+    for (const key of ["home", "accounts", "transactions", "metals"]) {
+      expect(screen.getAllByLabelText(`translated:${key}`).length).toBe(2);
+      expect(screen.getAllByText(`translated:${key}`).length).toBe(2);
+    }
+    expect(screen.queryByText("Home")).toBeNull();
+    expect(screen.queryByText("Metals")).toBeNull();
   });
 });

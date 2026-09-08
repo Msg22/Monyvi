@@ -32,6 +32,15 @@ let latestVoiceFlowOptions:
     }
   | undefined;
 
+const mockScreenOptions = new Map<
+  string,
+  { readonly title?: string } | undefined
+>();
+
+jest.mock("react-i18next", () => ({
+  useTranslation: () => ({ t: (key: string) => `translated:${key}` }),
+}));
+
 jest.mock("expo-router", () => {
   function Tabs({
     children,
@@ -48,7 +57,14 @@ jest.mock("expo-router", () => {
     );
   }
 
-  Tabs.Screen = function Screen(): null {
+  Tabs.Screen = function Screen({
+    name,
+    options,
+  }: {
+    readonly name: string;
+    readonly options?: { readonly title?: string };
+  }): null {
+    mockScreenOptions.set(name, options);
     return null;
   };
 
@@ -204,6 +220,7 @@ import TabLayout from "@/app/(private)/(tabs)/_layout";
 describe("TabLayout AI consent", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockScreenOptions.clear();
     focusCallback = null;
     mockIsAiConsented = false;
     mockIsAiConsentLoading = false;
@@ -287,5 +304,20 @@ describe("TabLayout AI consent", () => {
       canAutoStart: true,
     });
     expect(mockSetParams).toHaveBeenCalledWith({ retry: undefined });
+  });
+
+  it("uses translated titles for tab screen options", () => {
+    render(<TabLayout />);
+
+    expect(mockScreenOptions.get("index")?.title).toBe("translated:home");
+    expect(mockScreenOptions.get("accounts")?.title).toBe(
+      "translated:accounts"
+    );
+    expect(mockScreenOptions.get("transactions")?.title).toBe(
+      "translated:transactions"
+    );
+    expect(mockScreenOptions.get("metals")?.title).toBe(
+      "translated:metals"
+    );
   });
 });
