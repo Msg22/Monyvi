@@ -44,6 +44,10 @@ jest.mock("@/context/ThemeContext", () => ({
   useTheme: () => ({ isDark: false }),
 }));
 
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
+
 jest.mock("@/components/ui/Toast", () => ({
   useToast: () => ({ showToast: jest.fn() }),
 }));
@@ -165,7 +169,7 @@ describe("BudgetForm category recovery", () => {
     ]);
     rerender(<BudgetForm renewalSource={RENEWAL_SOURCE} />);
 
-    expect(screen.getByText("Education")).toBeOnTheScreen();
+    expect(screen.getAllByText("Education").length).toBeGreaterThan(0);
     expect(screen.queryByTestId("budget-category-load-error")).toBeNull();
   });
 

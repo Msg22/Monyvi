@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useCategories } from "@/hooks/useCategories";
@@ -40,7 +41,10 @@ import { useCategoryLookup } from "@/context/CategoriesContext";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { formatDate } from "@/utils/dateHelpers";
-import { parsePositiveMoneyAmount } from "@monyvi/logic";
+import {
+  getCurrentPeriodBounds,
+  parsePositiveMoneyAmount,
+} from "@monyvi/logic";
 import {
   buildBudgetRenewalFormValues,
   resolveRenewalCategoryId,
@@ -85,6 +89,7 @@ export function BudgetForm({
   const isRenewalMode = !!renewalSource && !isEditMode;
   const { isDark } = useTheme();
   const { t } = useTranslation("budgets");
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const {
     expenseCategories,
     isLoading: areCategoriesLoading,
@@ -371,11 +376,20 @@ export function BudgetForm({
   const previewAlertAmount =
     previewAmountNumber * (form.alertThreshold / 100);
   const previewPeriodLabel = t(PERIOD_LABELS[form.period]);
-  const previewDate = formatDate(form.periodStart, "MMM d, yyyy");
-  const previewSecondaryDate =
+  const previewPeriodBounds = getCurrentPeriodBounds(
+    form.period,
+    form.period === "CUSTOM" ? form.periodStart : undefined,
+    form.period === "CUSTOM" ? form.periodEnd : undefined
+  );
+  const previewResetOrEndDate =
     form.period === "CUSTOM"
-      ? formatDate(form.periodEnd, "MMM d, yyyy")
-      : previewDate;
+      ? previewPeriodBounds.end
+      : new Date(previewPeriodBounds.end.getTime() + 1);
+  const previewDate = formatDate(previewPeriodBounds.start, "MMM d, yyyy");
+  const previewSecondaryDate = formatDate(
+    previewResetOrEndDate,
+    "MMM d, yyyy"
+  );
   const previewIdentity =
     form.type === "GLOBAL"
       ? t("global_type")
@@ -385,10 +399,21 @@ export function BudgetForm({
     (form.type === "CATEGORY" && areCategoriesLoading) ||
     isWaitingForCreateCurrency;
 
-  const selectedScopeClasses =
-    "border-nileGreen-500 bg-nileGreen-50 dark:bg-nileGreen-900/20";
+  const selectedScopeClasses = "border-nileGreen-500";
   const idleScopeClasses =
     "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800";
+  const selectedScopeStyle = useMemo(
+    () => ({
+      backgroundColor: isDark
+        ? `${palette.nileGreen[500]}33`
+        : palette.nileGreen[50],
+    }),
+    [isDark]
+  );
+  const actionFooterStyle = useMemo(
+    () => ({ paddingBottom: bottomInset + 16 }),
+    [bottomInset]
+  );
 
   return (
     <>
@@ -426,6 +451,9 @@ export function BudgetForm({
                 disabled: isEditMode,
               }}
               activeOpacity={0.82}
+              style={
+                form.type === "GLOBAL" ? selectedScopeStyle : undefined
+              }
               className={`relative flex-1 rounded-2xl border p-4 ${
                 form.type === "GLOBAL"
                   ? selectedScopeClasses
@@ -463,6 +491,9 @@ export function BudgetForm({
                 disabled: isEditMode,
               }}
               activeOpacity={0.82}
+              style={
+                form.type === "CATEGORY" ? selectedScopeStyle : undefined
+              }
               className={`relative flex-1 rounded-2xl border p-4 ${
                 form.type === "CATEGORY"
                   ? selectedScopeClasses
@@ -666,6 +697,7 @@ export function BudgetForm({
                 return (
                   <TouchableOpacity
                     key={key}
+                    testID={`budget-period-${key.toLowerCase()}`}
                     onPress={() => updateField("period", key)}
                     accessibilityRole="radio"
                     accessibilityState={{ checked: selected }}
@@ -812,7 +844,11 @@ export function BudgetForm({
           </View>
         </ScrollView>
 
-        <View className="border-t border-slate-200 bg-white px-5 pb-4 pt-3 dark:border-slate-800 dark:bg-slate-950">
+        <View
+          testID="budget-form-actions"
+          style={actionFooterStyle}
+          className="border-t border-slate-200 bg-white px-5 pt-3 dark:border-slate-800 dark:bg-slate-950"
+        >
           <TouchableOpacity
             testID="budget-form-submit"
             onPress={() => void handleSubmit()}
