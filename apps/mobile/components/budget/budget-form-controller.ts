@@ -61,6 +61,90 @@ const DEFAULT_THRESHOLD = 80;
 
 type SetForm = Dispatch<SetStateAction<BudgetFormState>>;
 type SetErrors = Dispatch<SetStateAction<BudgetFormErrors>>;
+type UpdateBudgetFormField = <K extends keyof BudgetFormState>(
+  key: K,
+  value: BudgetFormState[K]
+) => void;
+
+interface FormMutators {
+  readonly updateField: UpdateBudgetFormField;
+  readonly handleScopeChange: (type: BudgetFormState["type"]) => void;
+}
+
+interface BudgetFormResources {
+  readonly expenseCategories: ReturnType<
+    typeof useCategories
+  >["expenseCategories"];
+  readonly areCategoriesLoading: boolean;
+  readonly categoryError: ReturnType<typeof useCategories>["error"];
+  readonly retryCategories: ReturnType<typeof useCategories>["retry"];
+  readonly categoryMap: ReturnType<typeof useCategoryLookup>;
+  readonly accessibleCategoryIds: ReadonlySet<string>;
+  readonly preferredCurrency: CurrencyType;
+  readonly isPreferredCurrencyLoading: boolean;
+}
+
+interface BudgetFormCoreState {
+  readonly form: BudgetFormState;
+  readonly setForm: SetForm;
+  readonly errors: BudgetFormErrors;
+  readonly setErrors: SetErrors;
+  readonly hasUserSelectedCurrency: boolean;
+  readonly setHasUserSelectedCurrency: Dispatch<SetStateAction<boolean>>;
+  readonly isEditMode: boolean;
+  readonly isRenewalMode: boolean;
+}
+
+type BudgetFormModel = BudgetFormResources &
+  BudgetFormCoreState &
+  FormMutators & {
+    readonly categoryDisplayName: string | undefined;
+    readonly isWaitingForCreateCurrency: boolean;
+  };
+
+type PersistBudget = (
+  amount: number,
+  currency: BudgetFormState["currency"]
+) => Promise<void>;
+
+interface BudgetSubmitHandlers {
+  readonly handleSubmit: () => Promise<void>;
+  readonly handleConfirmRenewal: () => Promise<void>;
+}
+
+interface BudgetPreview {
+  readonly alertAmount: number;
+  readonly startDate: string;
+  readonly secondaryDate: string;
+}
+
+interface BudgetOverlayState {
+  readonly isCategoryModalOpen: boolean;
+  readonly isCurrencyPickerOpen: boolean;
+  readonly showStartPicker: boolean;
+  readonly showEndPicker: boolean;
+  readonly openCategoryModal: () => void;
+  readonly closeCategoryModal: () => void;
+  readonly openCurrencyPicker: () => void;
+  readonly closeCurrencyPicker: () => void;
+  readonly openStartPicker: () => void;
+  readonly closeStartPicker: () => void;
+  readonly openEndPicker: () => void;
+  readonly closeEndPicker: () => void;
+  readonly selectCategory: (id: string) => void;
+  readonly selectCurrency: (currency: CurrencyType) => void;
+}
+
+export type BudgetFormController = BudgetFormModel &
+  BudgetOverlayState &
+  BudgetSubmitHandlers & {
+    readonly preview: BudgetPreview;
+    readonly isSubmitting: boolean;
+    readonly isSubmitDisabled: boolean;
+    readonly showRenewalConfirmation: boolean;
+    readonly cancelRenewalConfirmation: () => void;
+    readonly cancelForm: () => void;
+  };
 
 function buildInitialState(
   existingBudget: Budget | undefined,
@@ -153,7 +237,7 @@ function useFormMutators(
   isEditMode: boolean,
   setForm: SetForm,
   setErrors: SetErrors
-) {
+): FormMutators {
   const updateField = useCallback(
     <K extends keyof BudgetFormState>(
       key: K,
@@ -197,7 +281,7 @@ function useFormMutators(
   return { updateField, handleScopeChange };
 }
 
-function useBudgetFormResources() {
+function useBudgetFormResources(): BudgetFormResources {
   const {
     expenseCategories,
     isLoading: areCategoriesLoading,
@@ -226,8 +310,8 @@ function useBudgetFormResources() {
 
 function useBudgetFormCoreState(
   props: BudgetFormProps,
-  resources: ReturnType<typeof useBudgetFormResources>
-) {
+  resources: BudgetFormResources
+): BudgetFormCoreState {
   const isEditMode = !!props.existingBudget;
   const isRenewalMode = !!props.renewalSource && !isEditMode;
   const categoriesReady =
@@ -272,7 +356,7 @@ function useBudgetFormCoreState(
   };
 }
 
-function useBudgetFormModel(props: BudgetFormProps) {
+function useBudgetFormModel(props: BudgetFormProps): BudgetFormModel {
   const resources = useBudgetFormResources();
   const core = useBudgetFormCoreState(props, resources);
   const mutators = useFormMutators(
@@ -375,7 +459,7 @@ function useBudgetPersistence(
   isEditMode: boolean,
   setErrors: SetErrors,
   setIsSubmitting: Dispatch<SetStateAction<boolean>>
-) {
+): PersistBudget {
   const { showToast } = useToast();
   const { t } = useTranslation("budgets");
 
@@ -416,14 +500,11 @@ function useBudgetPersistence(
 }
 
 function useBudgetSubmitHandlers(
-  model: ReturnType<typeof useBudgetFormModel>,
+  model: BudgetFormModel,
   validate: () => boolean,
-  persistBudget: (
-    amount: number,
-    currency: BudgetFormState["currency"]
-  ) => Promise<void>,
+  persistBudget: PersistBudget,
   setShowRenewalConfirmation: Dispatch<SetStateAction<boolean>>
-) {
+): BudgetSubmitHandlers {
   const { t } = useTranslation("budgets");
 
   const handleSubmit = useCallback(async (): Promise<void> => {
@@ -464,7 +545,7 @@ function useBudgetSubmitHandlers(
   return { handleSubmit, handleConfirmRenewal };
 }
 
-function useBudgetPreview(form: BudgetFormState) {
+function useBudgetPreview(form: BudgetFormState): BudgetPreview {
   return useMemo(() => {
     const amount = parsePositiveMoneyAmount(form.amount) ?? 0;
     const alertAmount = amount * (form.alertThreshold / 100);
@@ -492,23 +573,23 @@ function useBudgetPreview(form: BudgetFormState) {
 }
 
 function useBudgetOverlayState(
-  updateField: ReturnType<typeof useFormMutators>["updateField"],
+  updateField: UpdateBudgetFormField,
   setHasUserSelectedCurrency: Dispatch<SetStateAction<boolean>>
-) {
+): BudgetOverlayState {
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isCurrencyPickerOpen, setIsCurrencyPickerOpen] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
 
   const selectCategory = useCallback(
-    (id: string) => {
+    (id: string): void => {
       updateField("categoryId", id);
       setIsCategoryModalOpen(false);
     },
     [updateField]
   );
   const selectCurrency = useCallback(
-    (currency: CurrencyType) => {
+    (currency: CurrencyType): void => {
       setHasUserSelectedCurrency(true);
       updateField("currency", currency);
       setIsCurrencyPickerOpen(false);
@@ -534,7 +615,9 @@ function useBudgetOverlayState(
   };
 }
 
-export function useBudgetFormController(props: BudgetFormProps) {
+export function useBudgetFormController(
+  props: BudgetFormProps
+): BudgetFormController {
   const model = useBudgetFormModel(props);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showRenewalConfirmation, setShowRenewalConfirmation] = useState(false);
@@ -579,5 +662,3 @@ export function useBudgetFormController(props: BudgetFormProps) {
     cancelForm: () => router.back(),
   };
 }
-
-export type BudgetFormController = ReturnType<typeof useBudgetFormController>;
