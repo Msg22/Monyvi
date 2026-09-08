@@ -1,5 +1,5 @@
 import { useIsFocused } from "@react-navigation/native";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useMarketRates } from "@/hooks/useMarketRates";
@@ -59,6 +59,11 @@ export function useMetalHistory(): UseMetalHistoryResult {
   const [observedStates, setObservedStates] = useState<
     readonly MetalHoldingState[]
   >([]);
+  const lastLoadedRef = useRef<{
+    filter: MetalHistoryFilter;
+    itemCount: number;
+    userId: string | null;
+  }>({ filter: "all", itemCount: 0, userId: null });
   const retry = useCallback(
     (): void => setRetryIndex((value) => value + 1),
     []
@@ -83,10 +88,14 @@ export function useMetalHistory(): UseMetalHistoryResult {
           setObservedStates(states);
           setLocalRevision((value) => value + 1);
         },
-        error: (): void => setLocalRevision((value) => value + 1),
+        error: (reason: unknown): void => {
+          setError(
+            reason instanceof Error ? reason : new Error("History unavailable")
+          );
+        },
       });
     return () => subscription.unsubscribe();
-  }, [isFocused, isResolvingUser, userId]);
+  }, [isFocused, isResolvingUser, retryIndex, userId]);
 
   useEffect(() => {
     if (!isFocused || isResolvingUser || userId === null) return;
@@ -99,19 +108,24 @@ export function useMetalHistory(): UseMetalHistoryResult {
     };
     const eventsQuery = observeMetalHistoryEvents(observerInput);
     const evidenceQuery = observeMetalHistoryActionEvidence(observerInput);
+    const onObserverError = (reason: unknown): void => {
+      setError(
+        reason instanceof Error ? reason : new Error("History unavailable")
+      );
+    };
     const eventsSubscription = eventsQuery?.observe().subscribe({
       next: (): void => setLocalRevision((value) => value + 1),
-      error: (): void => setLocalRevision((value) => value + 1),
+      error: onObserverError,
     });
     const evidenceSubscription = evidenceQuery?.observe().subscribe({
       next: (): void => setLocalRevision((value) => value + 1),
-      error: (): void => setLocalRevision((value) => value + 1),
+      error: onObserverError,
     });
     return () => {
       eventsSubscription?.unsubscribe();
       evidenceSubscription?.unsubscribe();
     };
-  }, [isFocused, isResolvingUser, observedStates, userId]);
+  }, [isFocused, isResolvingUser, observedStates, retryIndex, userId]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -138,16 +152,30 @@ export function useMetalHistory(): UseMetalHistoryResult {
       };
     }
 
-    setHistoryState({ history: emptyHistory(filter), userId });
-    setIsLoading(true);
+    const isSameVisitWithData =
+      lastLoadedRef.current.userId === userId &&
+      lastLoadedRef.current.filter === filter &&
+      lastLoadedRef.current.itemCount > 0;
+    if (!isSameVisitWithData) {
+      setHistoryState({ history: emptyHistory(filter), userId });
+      setIsLoading(true);
+    }
     setError(null);
     void readMetalHistoryReadModel({ filter, pageSize, userId })
       .then((next) => {
-        if (isCurrent) setHistoryState({ history: next, userId });
+        if (isCurrent) {
+          setHistoryState({ history: next, userId });
+          lastLoadedRef.current = {
+            filter,
+            itemCount: next.items.length,
+            userId,
+          };
+        }
       })
       .catch((cause: unknown) => {
         if (isCurrent) {
           setHistoryState({ history: emptyHistory(filter), userId });
+          lastLoadedRef.current = { filter, itemCount: 0, userId };
           setError(
             cause instanceof Error ? cause : new Error("History unavailable")
           );

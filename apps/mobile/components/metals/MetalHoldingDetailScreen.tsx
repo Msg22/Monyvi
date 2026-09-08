@@ -18,6 +18,7 @@ import {
 import { MetalHoldingRender } from "@/components/metals/MetalHoldingRender";
 import {
   getCurrencyDisplaySign,
+  resolveCurrencyDisplayDecimalPlaces,
   type CurrencyDisplaySign,
 } from "@/components/metals/portfolio-presentation";
 import type {
@@ -338,7 +339,7 @@ function ValueSummary({
   const gainSign =
     model.totalGainDecimal === null
       ? null
-      : getCurrencyDisplaySign(model.totalGainDecimal);
+      : getCurrencyDisplaySign(model.totalGainDecimal, currency);
   return (
     <View className="border-t border-slate-200 pt-6 dark:border-slate-800">
       <Text className="text-base text-text-secondary dark:text-text-secondary-dark">
@@ -811,18 +812,23 @@ function displayAmount(
   locale: string
 ): string {
   try {
+    const decimalPlaces = resolveCurrencyDisplayDecimalPlaces(currency);
     return `${currency} ${formatCanonicalDecimalForDisplay(value, {
       locale,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: decimalPlaces,
+      maximumFractionDigits: decimalPlaces,
     })}`;
   } catch {
     return "—";
   }
 }
 
-function signedAmount(value: string, currency: string, locale: string): string {
-  const sign = getCurrencyDisplaySign(value);
+function signedAmount(
+  value: string,
+  currency: string,
+  locale: string
+): string {
+  const sign = getCurrencyDisplaySign(value, currency);
   if (sign === null) return "—";
   const prefix = sign === "positive" ? "+ " : sign === "negative" ? "- " : "";
   const unsignedValue = value.startsWith("-") ? value.slice(1) : value;

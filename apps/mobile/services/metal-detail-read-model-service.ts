@@ -556,7 +556,12 @@ function conservativeObservedAt(
 function toReducerEvent(event: MetalDetailLifecycleEventInput): LifecycleEvent {
   return {
     canonicalCasStatus: event.actionState ?? "unknown",
-    evidenceState: event.isEffective === false ? "ineffective" : "effective",
+    evidenceState:
+      event.isEffective === false
+        ? "ineffective"
+        : event.actionState === "unknown"
+          ? "incomplete"
+          : "effective",
     fingerprint: event.payloadJson ?? event.id,
     id: event.id,
     kind: toLifecycleKind(event.kind),

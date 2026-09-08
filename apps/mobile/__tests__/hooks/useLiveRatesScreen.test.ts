@@ -146,4 +146,28 @@ describe("useLiveRatesScreen", () => {
     await waitFor(() => expect(result.current.refreshError).toBeNull());
     expect(result.current.rateTrust.gold.state).toBe("fresh");
   });
+
+  it("reports sub-hour rate ages with minute granularity", async () => {
+    const { result } = renderHook(() => useLiveRatesScreen());
+
+    act(() => {
+      mockTrustObservers[0]?.next({
+        currencies: new Map(),
+        gold: {
+          ageMs: 120_000,
+          providerObservedAt: new Date("2026-09-07T00:00:00.000Z"),
+          state: "fresh",
+        },
+        silver: {
+          ageMs: 120_000,
+          providerObservedAt: new Date("2026-09-07T00:00:00.000Z"),
+          state: "fresh",
+        },
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.rateTrust.gold.ageText).toBe("2 minutes ago")
+    );
+  });
 });

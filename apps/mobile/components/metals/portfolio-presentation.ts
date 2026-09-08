@@ -2,14 +2,16 @@ import { getMetalRenderEntry } from "@/assets/images/metals/manifest";
 import type { MetalPortfolioHoldingInput } from "@/services/metal-portfolio-read-model-service";
 import type { CurrencyType } from "@monyvi/db";
 import {
+  CURRENCY_PRECISION,
+  DEFAULT_PRECISION,
   formatCanonicalDecimalForDisplay,
+  isSupportedMetalsIsoCurrencyCode,
   parseCanonicalDecimal,
+  resolveMetalsCurrencyMinorUnits,
   resolvePuritySelection,
   roundDecimal,
   serializeDecimal,
 } from "@monyvi/logic";
-
-const CURRENCY_DISPLAY_DECIMAL_PLACES = 2;
 
 export type CurrencyDisplaySign = "negative" | "positive" | "zero";
 
@@ -18,6 +20,18 @@ export interface MetalHoldingPresentation {
   readonly metalKey: "metal.gold" | "metal.silver";
   readonly purityLabelKey: string | null;
   readonly render: ReturnType<typeof getMetalRenderEntry>;
+}
+
+export function resolveCurrencyDisplayDecimalPlaces(
+  currency: string
+): number {
+  if (isSupportedMetalsIsoCurrencyCode(currency)) {
+    return (
+      resolveMetalsCurrencyMinorUnits(`currency:${currency}`) ??
+      DEFAULT_PRECISION
+    );
+  }
+  return CURRENCY_PRECISION[currency as CurrencyType] ?? DEFAULT_PRECISION;
 }
 
 export function getMetalHoldingPresentation(
@@ -29,14 +43,20 @@ export function getMetalHoldingPresentation(
     form ?? "unknown"
   );
   const purity =
-    holding.purityCatalogVersion === "1" && holding.purityCode !== null
+    holding.purityCatalogVersion === "1" &&
+    holding.purityCode !== null &&
+    holding.purityFactorDecimal !== null
       ? resolvePuritySelection(holding.metalType, holding.purityCode)
       : null;
 
   return {
     formKey: render.formLabelKey,
     metalKey: holding.metalType === "GOLD" ? "metal.gold" : "metal.silver",
-    purityLabelKey: purity?.available === true ? purity.entry.labelKey : null,
+    purityLabelKey:
+      purity?.available === true &&
+      purity.entry.factorDecimal === holding.purityFactorDecimal
+        ? purity.entry.labelKey
+        : null,
     render,
   };
 }
@@ -77,8 +97,9 @@ export function formatCodeAmount(
 ): string {
   if (value === null) return "—";
   try {
+    const decimalPlaces = resolveCurrencyDisplayDecimalPlaces(currency);
     const amount = parseCanonicalDecimal(
-      roundDecimal(value, CURRENCY_DISPLAY_DECIMAL_PLACES)
+      roundDecimal(value, decimalPlaces)
     );
     const amountSign = getExactAmountSign(amount);
     const sign = signed
@@ -94,8 +115,8 @@ export function formatCodeAmount(
       serializeDecimal(amount.absoluteValue()),
       {
         locale,
-        minimumFractionDigits: CURRENCY_DISPLAY_DECIMAL_PLACES,
-        maximumFractionDigits: CURRENCY_DISPLAY_DECIMAL_PLACES,
+        minimumFractionDigits: decimalPlaces,
+        maximumFractionDigits: decimalPlaces,
       }
     );
     return `${sign}${currency} ${numericPart}`;
@@ -105,12 +126,13 @@ export function formatCodeAmount(
 }
 
 export function getCurrencyDisplaySign(
-  value: string
+  value: string,
+  currency: string
 ): CurrencyDisplaySign | null {
   try {
     return getExactAmountSign(
       parseCanonicalDecimal(
-        roundDecimal(value, CURRENCY_DISPLAY_DECIMAL_PLACES)
+        roundDecimal(value, resolveCurrencyDisplayDecimalPlaces(currency))
       )
     );
   } catch {

@@ -38,6 +38,30 @@ import { runUserScopedEffect, useCurrentUser } from "./useCurrentUser";
 
 const RATE_STATUS_REFRESH_INTERVAL_MS = 60_000;
 
+const PORTFOLIO_ASSET_OBSERVED_COLUMNS = [
+  "name",
+  "purchase_date",
+  "purchase_price_decimal",
+  "purchase_currency",
+] as const;
+
+const PORTFOLIO_ASSET_METAL_OBSERVED_COLUMNS = [
+  "metal_type",
+  "item_form",
+  "purity_catalog_version",
+  "purity_code",
+  "purity_factor_decimal",
+  "weight_grams_decimal",
+] as const;
+
+const PORTFOLIO_HOLDING_STATE_OBSERVED_COLUMNS = [
+  "status",
+  "effective_action_id",
+  "effective_event_id",
+  "is_visible",
+  "reconciliation_state",
+] as const;
+
 type ActiveMetalType = "GOLD" | "SILVER";
 
 interface UseMetalPortfolioResult {
@@ -153,7 +177,7 @@ export function useMetalPortfolio(
         setAssets([]);
         setIsAssetsLoading(true);
         const subscription = observePortfolioAssets(currentUserId)
-          .observe()
+          .observeWithColumns([...PORTFOLIO_ASSET_OBSERVED_COLUMNS])
           .subscribe({
             next: (result): void => {
               assetsRef.current = result;
@@ -207,20 +231,22 @@ export function useMetalPortfolio(
         }
         setAssetMetals([]);
         setIsAssetMetalsLoading(true);
-        const subscription = query.observe().subscribe({
-          next: (result): void => {
-            setAssetMetals(result);
-            setIsAssetMetalsLoading(false);
-          },
-          error: (reason: unknown): void => {
-            recordObserverError(
-              "metalPortfolio.assetMetals.observe.failed",
-              reason,
-              setError
-            );
-            setIsAssetMetalsLoading(false);
-          },
-        });
+        const subscription = query
+          .observeWithColumns([...PORTFOLIO_ASSET_METAL_OBSERVED_COLUMNS])
+          .subscribe({
+            next: (result): void => {
+              setAssetMetals(result);
+              setIsAssetMetalsLoading(false);
+            },
+            error: (reason: unknown): void => {
+              recordObserverError(
+                "metalPortfolio.assetMetals.observe.failed",
+                reason,
+                setError
+              );
+              setIsAssetMetalsLoading(false);
+            },
+          });
         return () => subscription.unsubscribe();
       },
     });
@@ -230,7 +256,9 @@ export function useMetalPortfolio(
     return subscribeForCurrentUser({
       isResolvingUser,
       onAuthenticated: (currentUserId) =>
-        observePortfolioHoldingStates(currentUserId).observe(),
+        observePortfolioHoldingStates(currentUserId).observeWithColumns([
+          ...PORTFOLIO_HOLDING_STATE_OBSERVED_COLUMNS,
+        ]),
       onError: (reason) =>
         recordObserverError(
           "metalPortfolio.holdingStates.observe.failed",

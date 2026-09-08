@@ -55,6 +55,10 @@ jest.mock("@nozbe/watermelondb", () => ({
 }));
 
 jest.mock("@/services/user-data-access", () => ({
+  USER_DATA_ACCESS_ERROR_CODES: {
+    AUTH_SCOPE_CHANGED: "AUTH_SCOPE_CHANGED",
+    USER_REQUIRED: "USER_REQUIRED",
+  },
   getCurrentUserDataScope: (...args: readonly unknown[]): unknown =>
     mockGetCurrentUserDataScope(...args),
   queryChildrenOfOwnedParents: (...args: readonly unknown[]): unknown =>

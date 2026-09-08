@@ -196,6 +196,7 @@ describe("LiveRatesScreen Metals V1 trust presentation", () => {
 
     render(<LiveRatesScreen />);
 
+    expect(screen.getByTestId("live-rates-skeleton")).toBeOnTheScreen();
     expect(screen.queryByText("gold_label")).toBeNull();
     expect(screen.queryByText("rates_unavailable")).toBeNull();
   });

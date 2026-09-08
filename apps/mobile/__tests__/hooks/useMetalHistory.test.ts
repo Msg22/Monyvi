@@ -145,6 +145,56 @@ describe("useMetalHistory", () => {
     );
   });
 
+  it("surfaces holding-state observer failures and resubscribes on retry", async () => {
+    const { result } = renderHook(() => useMetalHistory());
+    await waitFor(() =>
+      expect(mockReadMetalHistoryReadModel).toHaveBeenCalledTimes(1)
+    );
+    const subscriptionsBefore =
+      mockObserveMetalHistoryHoldingStates.mock.calls.length;
+
+    act(() => {
+      mockStateObserver?.error(new Error("state observer failed"));
+    });
+    await waitFor(() =>
+      expect(result.current.error?.message).toBe("state observer failed")
+    );
+
+    act(() => {
+      result.current.retry();
+    });
+    await waitFor(() =>
+      expect(mockObserveMetalHistoryHoldingStates.mock.calls.length).toBe(
+        subscriptionsBefore + 1
+      )
+    );
+  });
+
+  it("preserves loaded items and skips the skeleton during a background refetch", async () => {
+    const loaded = {
+      counts: { all: 1, sold: 1, disposed: 0 },
+      filter: "all",
+      hasMore: false,
+      items: [{ holdingId: "h1" }],
+    };
+    mockReadMetalHistoryReadModel.mockResolvedValueOnce(loaded);
+    const { result } = renderHook(() => useMetalHistory());
+    await waitFor(() =>
+      expect(result.current.history.items).toEqual(loaded.items)
+    );
+
+    mockReadMetalHistoryReadModel.mockReturnValueOnce(new Promise(() => {}));
+    act(() => {
+      mockEventObserver?.next([]);
+    });
+    await waitFor(() =>
+      expect(mockReadMetalHistoryReadModel).toHaveBeenCalledTimes(2)
+    );
+
+    expect(result.current.history.items).toEqual(loaded.items);
+    expect(result.current.isLoading).toBe(false);
+  });
+
   it("does not expose a settled previous user's History during a direct identity change", async () => {
     const firstHistory = {
       counts: { all: 1, sold: 1, disposed: 0 },

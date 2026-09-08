@@ -5,15 +5,44 @@ function source(path: string): string {
   return readFileSync(resolve(__dirname, "../..", path), "utf8");
 }
 
+function sliceBetween(
+  value: string,
+  startMarker: string,
+  endMarker: string | null
+): string {
+  const start = value.indexOf(startMarker);
+  expect(start).toBeGreaterThanOrEqual(0);
+  if (endMarker === null) {
+    return value.slice(start);
+  }
+  const end = value.indexOf(endMarker);
+  expect(end).toBeGreaterThan(start);
+  return value.slice(start, end);
+}
+
 describe("PR #271 validated Metals review regressions", () => {
   it("does not truncate lifecycle evidence needed to resolve portfolio ownership", () => {
     const value = source("services/metal-portfolio-read-model-service.ts");
-    const queryBody = value.slice(
-      value.indexOf("export function observePortfolioRecentHistory"),
-      value.indexOf("export function shapeMetalPortfolioHoldings")
+    const queryBody = sliceBetween(
+      value,
+      "export function observePortfolioRecentHistory",
+      "export function shapeMetalPortfolioHoldings"
     );
     expect(queryBody).not.toContain("Q.take(RECENT_HISTORY_LIMIT)");
     expect(value).toContain(".slice(0, RECENT_HISTORY_LIMIT)");
+  });
+
+  it("observes portfolio columns that can change in place", () => {
+    const value = source("hooks/useMetalPortfolio.ts");
+    expect(value).toMatch(
+      /observePortfolioHoldingStates\(currentUserId\)\.observeWithColumns\(\[\s*\.\.\.PORTFOLIO_HOLDING_STATE_OBSERVED_COLUMNS,/
+    );
+    expect(value).toMatch(
+      /observePortfolioAssets\(currentUserId\)\s*\.observeWithColumns\(\[\.\.\.PORTFOLIO_ASSET_OBSERVED_COLUMNS\]\)/
+    );
+    expect(value).toMatch(
+      /query\s*\.observeWithColumns\(\[\.\.\.PORTFOLIO_ASSET_METAL_OBSERVED_COLUMNS\]\)/
+    );
   });
 
   it("uses the lifecycle-aware wealth projection for the Home headline total", () => {
@@ -38,14 +67,16 @@ describe("PR #271 validated Metals review regressions", () => {
 
   it("pages History holdings without globally truncating lifecycle chains", () => {
     const value = source("services/metal-history-read-model-service.ts");
-    const observer = value.slice(
-      value.indexOf("export function observeMetalHistoryEvents"),
-      value.indexOf("export async function readMetalHistoryReadModel")
+    const observer = sliceBetween(
+      value,
+      "export function observeMetalHistoryEvents",
+      "export async function readMetalHistoryReadModel"
     );
     expect(observer).not.toContain("Q.take(");
-    const dependencies = value.slice(
-      value.indexOf("async function readHistoryDependencies"),
-      value.indexOf("function shapeReadHistoryHoldings")
+    const dependencies = sliceBetween(
+      value,
+      "async function readHistoryDependencies",
+      "function shapeReadHistoryHoldings"
     );
     expect(dependencies).not.toMatch(/metal_lifecycle_events[\s\S]*Q\.take\(/);
   });
@@ -188,7 +219,7 @@ describe("PR #271 validated Metals review regressions", () => {
 
   it("formats detail money with the resolved app locale", () => {
     const value = source("components/metals/MetalHoldingDetailScreen.tsx");
-    const displayAmount = value.slice(value.indexOf("function displayAmount"));
+    const displayAmount = sliceBetween(value, "function displayAmount", null);
     expect(displayAmount).not.toContain('toLocaleString("en-US"');
     expect(displayAmount).toContain("locale");
   });
@@ -201,8 +232,10 @@ describe("PR #271 validated Metals review regressions", () => {
 
   it("keeps stale or missing rate warnings when a timestamp is available", () => {
     const value = source("components/metals/MetalPortfolioScreen.tsx");
-    const formatter = value.slice(
-      value.indexOf("function formatRateUpdatedLabel")
+    const formatter = sliceBetween(
+      value,
+      "function formatRateUpdatedLabel",
+      null
     );
     expect(formatter).toContain('state !== "fresh"');
     expect(formatter).toContain("t(`rate.${state}`)");

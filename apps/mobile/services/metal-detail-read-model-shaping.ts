@@ -99,6 +99,8 @@ export function toDetailLifecycleEventInput(
   evidence: readonly MetalActionEvidence[]
 ): MetalDetailLifecycleEventInput | null {
   if (!isSupportedLifecycleKind(event.kind)) return null;
+  const occurredAt = copyValidDate(event.occurredAt);
+  if (occurredAt === null) return null;
   const hasBoundEvidence = evidence.some(
     (candidate) =>
       candidate.actionId === event.actionId &&
@@ -118,7 +120,7 @@ export function toDetailLifecycleEventInput(
     isEffective: event.isEffective,
     isHistoryVisible: event.isHistoryVisible,
     kind: event.kind,
-    occurredAt: copyValidDate(event.occurredAt) ?? new Date(Number.NaN),
+    occurredAt,
     payloadJson: event.payloadJson,
     predecessorEventId: event.predecessorEventId,
     reversesEventId: event.reversesEventId,

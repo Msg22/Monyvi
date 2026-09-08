@@ -218,26 +218,26 @@ function PortfolioSummary({
     portfolio.activeTotalDecimal !== null;
 
   return (
-    <View
-      accessible
-      accessibilityLabel={t("portfolio.total_accessibility", {
-        amount: formatCodeAmount(
-          portfolio.activeTotalDecimal,
-          currency,
-          locale
-        ),
-        status:
-          portfolio.rateStatus.state === "fresh"
-            ? t("portfolio.current_rate")
-            : t(`rate.${portfolio.rateStatus.state}`),
-      })}
-      className="pt-3"
-    >
+    <View className="pt-3">
       <Text className="text-base font-medium text-nileGreen-700 dark:text-nileGreen-400">
         {t("portfolio.active_portfolio")}
       </Text>
       <View className="mt-4 flex-row items-start justify-between gap-5">
-        <View className="min-w-0 flex-1">
+        <View
+          accessible
+          accessibilityLabel={t("portfolio.total_accessibility", {
+            amount: formatCodeAmount(
+              portfolio.activeTotalDecimal,
+              currency,
+              locale
+            ),
+            status:
+              portfolio.rateStatus.state === "fresh"
+                ? t("portfolio.current_rate")
+                : t(`rate.${portfolio.rateStatus.state}`),
+          })}
+          className="min-w-0 flex-1"
+        >
           <Text
             numberOfLines={1}
             adjustsFontSizeToFit
