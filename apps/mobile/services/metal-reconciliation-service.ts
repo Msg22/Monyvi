@@ -181,6 +181,16 @@ function isCanonicalHolding(
     candidate === null ||
     (typeof candidate === "string" &&
       /^([1-9][0-9]*|(0|[1-9][0-9]*)\.[0-9]*[1-9])$/.test(candidate));
+  const isRealLocalCalendarDate = (candidate: string): boolean => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(candidate)) return false;
+    const [year, month, day] = candidate.split("-").map(Number);
+    const parsed = new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
+    return (
+      parsed.getFullYear() === year &&
+      parsed.getMonth() === (month ?? 0) - 1 &&
+      parsed.getDate() === day
+    );
+  };
   return (
     typeof value.holdingId === "string" &&
     value.holdingId.length > 0 &&
@@ -194,7 +204,7 @@ function isCanonicalHolding(
     typeof asset.name === "string" &&
     asset.name.length > 0 &&
     (asset.notes === null || typeof asset.notes === "string") &&
-    /^\d{4}-\d{2}-\d{2}$/.test(asset.purchaseDate) &&
+    isRealLocalCalendarDate(asset.purchaseDate) &&
     Number.isFinite(asset.purchasePrice) &&
     (asset.purchaseCurrency === null ||
       asset.purchaseCurrency === asset.currency) &&

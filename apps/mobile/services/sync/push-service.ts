@@ -377,7 +377,14 @@ export async function pushMetalDedicatedChanges(
     if (!outcome || !commitMetadataOutcome) {
       return { acknowledgeAllDedicatedRows: false };
     }
-    await commitMetadataOutcome(outcome);
+    try {
+      await commitMetadataOutcome(outcome);
+    } catch (error) {
+      logger.error("sync.push.metal.metadata.commit.failed", error, {
+        holdingId,
+      });
+      return { acknowledgeAllDedicatedRows: false };
+    }
     metadataHoldingIds.add(holdingId);
   }
 

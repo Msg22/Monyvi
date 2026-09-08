@@ -765,6 +765,25 @@ describe("Metals financial action foundation", () => {
     ).rejects.toThrow("metal_sale_before_acquisition");
   });
 
+  it("rejects malformed or impossible purchase dates at the payload boundary before any write", async () => {
+    for (const purchaseDate of ["2026-aa-01", "not-a-date-x", "2026-02-31"]) {
+      const { database } = await createDatabase();
+      const service = createService(database);
+      const add = commandInput("add", actionId(1), null, null);
+
+      await expect(
+        service.execute({
+          ...add,
+          domainPayload: {
+            ...add.domainPayload,
+            materialFacts: { ...materialFacts(), purchaseDate },
+          },
+        })
+      ).rejects.toThrow("financial_action_invalid_payload");
+      await expect(count(database, "assets")).resolves.toBe(0);
+    }
+  });
+
   it("formats persisted purchase dates from local calendar components", () => {
     const date = new Date("2026-07-31T22:00:00.000Z");
     jest.spyOn(date, "getFullYear").mockReturnValue(2026);

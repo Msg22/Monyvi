@@ -6,6 +6,7 @@ import {
   commitCanonicalMetalMetadataLocally,
   createMetalMetadataService,
 } from "../../services/metal-metadata-service";
+import { pushMetalDedicatedChanges } from "../../services/sync/push-service";
 import {
   createMetalMetadataFixtureDatabase,
   type MetalMetadataFixtureDatabase,
@@ -122,5 +123,51 @@ describe("commitCanonicalMetalMetadataLocally clock guard", () => {
     expect(state?.nameWrittenAt).toBe(30);
     expect(asset?.notes).toBe("Canonical note");
     expect(state?.notesWrittenAt).toBe(5);
+  });
+
+  it("leaves dedicated rows unacknowledged when the local metadata commit fails", async () => {
+    const rpc = jest.fn().mockResolvedValueOnce({
+      data: {
+        status: "applied",
+        holdingId: HOLDING_ID,
+        canonicalMetadata: {
+          name: { value: "Canonical", writtenAt: 10, writerId: WRITER_ID },
+          notes: null,
+        },
+      },
+      error: null,
+    });
+
+    await expect(
+      pushMetalDedicatedChanges(
+        {
+          metal_holding_states: {
+            created: [],
+            updated: [
+              {
+                id: HOLDING_ID,
+                holding_id: HOLDING_ID,
+                effective_action_id: ACTION_ID,
+                name_written_at: 5,
+                name_writer_id: WRITER_ID,
+              },
+            ],
+            deleted: [],
+          },
+          assets: {
+            created: [],
+            updated: [
+              { id: HOLDING_ID, type: "METAL", name: "Renamed mid-flight" },
+            ],
+            deleted: [],
+          },
+        },
+        USER_ID,
+        rpc,
+        undefined,
+        jest.fn(() => Promise.reject(new Error("metal_holding_not_owned")))
+      )
+    ).resolves.toEqual({ acknowledgeAllDedicatedRows: false });
+    expect(rpc).toHaveBeenCalledTimes(1);
   });
 });

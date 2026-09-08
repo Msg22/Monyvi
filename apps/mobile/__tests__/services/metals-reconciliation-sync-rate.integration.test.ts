@@ -178,6 +178,15 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
         code: "ACCOUNT_REVISION_STALE",
         canonicalHoldingActionId: HOLDING_ACTION_ID,
       }),
+      staleOutcome({
+        canonicalHolding: {
+          ...staleOutcome().canonicalHolding,
+          asset: {
+            ...staleOutcome().canonicalHolding.asset,
+            purchaseDate: "2026-02-31",
+          },
+        },
+      }),
     ];
     for (const outcome of malformed) {
       expect(classifyMetalServerOutcome(outcome, USER_ID)).toBe(
