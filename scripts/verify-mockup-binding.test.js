@@ -281,6 +281,42 @@ test("rejects omitted required Binding Facts keys", () => {
   assert.match(result.errors.join("\n"), /required Binding Facts key.*State facts/i);
 });
 
+test("rejects a duplicated required Binding Facts key inside an otherwise valid section", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "monyvi-mockup-binding-"));
+  const duplicated = `${completeBindingFacts()}- State facts: UNKNOWN\n`;
+  const { sidecarPath } = writeApprovedFixture(root, Buffer.from("approved-image"), duplicated);
+
+  const result = verifyMockupBinding(sidecarPath);
+
+  assert.equal(result.isAuthoritative, false);
+  assert.match(result.errors.join("\n"), /required Binding Facts key must occur exactly once: State facts/i);
+});
+
+test("rejects an empty required fact value instead of consuming the next line", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "monyvi-mockup-binding-"));
+  const emptyValueFacts = completeBindingFacts({ "Binding product surface": "" });
+  const { sidecarPath } = writeApprovedFixture(root, Buffer.from("approved-image"), emptyValueFacts);
+
+  const result = verifyMockupBinding(sidecarPath);
+
+  assert.equal(result.isAuthoritative, false);
+  assert.match(result.errors.join("\n"), /required Binding Facts key must have a non-empty value: Binding product surface/i);
+});
+
+test("rejects Markdown-equivalent duplicate Binding Facts headings", () => {
+  const headingVariants = ["## Binding Facts \n", "## Binding Facts  \n", "## Binding Facts ##\n", "   ## Binding Facts\n"];
+  for (const heading of headingVariants) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "monyvi-mockup-binding-"));
+    const { sidecarPath } = writeApprovedFixture(root);
+    fs.appendFileSync(sidecarPath, `${heading}- Binding product surface: injected\n`, "utf8");
+
+    const result = verifyMockupBinding(sidecarPath);
+
+    assert.equal(result.isAuthoritative, false, `expected rejection for heading variant ${JSON.stringify(heading)}`);
+    assert.match(result.errors.join("\n"), /exactly one ## Binding Facts heading/i, `expected duplicate-heading rejection for variant ${JSON.stringify(heading)}`);
+  }
+});
+
 test("requires every mandatory mockup workflow to invoke the binding verifier", () => {
   const repositoryRoot = path.resolve(__dirname, "..");
   const mandatoryConsumers = [
@@ -308,9 +344,16 @@ test("requires every mandatory mockup workflow to invoke the binding verifier", 
 
 test("requires review evidence checks to use the approved combined revision contract", () => {
   const repositoryRoot = path.resolve(__dirname, "..");
-  const reviewSkill = fs.readFileSync(path.join(repositoryRoot, ".agents/skills/source-command-code-review/SKILL.md"), "utf8");
-  assert.match(reviewSkill, /approval evidence\/reference[\s\S]{0,300}approved combined/i);
-  assert.doesNotMatch(reviewSkill, /approval evidence\/reference identifies the same approved-image[\s\S]{0,200}binding-metadata revision/i);
+  const combinedConsumers = [
+    ".agents/skills/source-command-code-review/SKILL.md",
+    ".agent/workflows/sprint-issue.md",
+    ".agent/workflows/speckit.implement.md",
+  ];
+  for (const consumerPath of combinedConsumers) {
+    const consumer = fs.readFileSync(path.join(repositoryRoot, consumerPath), "utf8");
+    assert.match(consumer, /approval evidence\/reference[\s\S]{0,300}approved combined/i, `${consumerPath} must require approval evidence against the approved combined revision`);
+    assert.doesNotMatch(consumer, /evidence(?:\/reference)?\s+identifies that (?:same\s+)?revision/i, `${consumerPath} must not bind approval evidence to the metadata revision alone`);
+  }
 });
 
 test("pins binding sidecars to LF line endings at repository level", () => {

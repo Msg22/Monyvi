@@ -4,7 +4,8 @@ const path = require("node:path");
 
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const PENDING = "PENDING";
-const BINDING_FACTS_HEADING = Buffer.from("## Binding Facts\n", "utf8");
+const LEVEL_TWO_HEADING = /^ {0,3}##(?![^ \t])/;
+const BINDING_FACTS_HEADING_TEXT = "Binding Facts";
 const REQUIRED_BINDING_FACTS = [
   "Binding product surface",
   "Declared comparison context",
@@ -39,20 +40,23 @@ function buildBindingApprovalRevision(imageRevision, bindingRevision) {
 
 function readField(markdown, label) {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = markdown.match(new RegExp(`^- ${escaped}:\\s*(.+?)\\s*$`, "m"));
+  const match = markdown.match(new RegExp(`^- ${escaped}:[ \\t]*(.+?)[ \\t]*$`, "m"));
   return match ? match[1] : null;
 }
 
-function countOccurrences(buffer, needle) {
-  let count = 0;
+function bindingFactsHeadingText(line) {
+  return line.replace(/^ {0,3}##[ \t]*/, "").replace(/[ \t]+#+[ \t]*$/, "").trim();
+}
+
+function splitLinesWithOffsets(buffer) {
+  const lines = buffer.toString("utf8").split("\n");
+  const offsets = [];
   let offset = 0;
-  while (offset <= buffer.length - needle.length) {
-    const found = buffer.indexOf(needle, offset);
-    if (found === -1) break;
-    count += 1;
-    offset = found + needle.length;
+  for (const line of lines) {
+    offsets.push(offset);
+    offset += Buffer.byteLength(line, "utf8") + 1;
   }
-  return count;
+  return { lines, offsets };
 }
 
 function extractBindingFactsBytes(sidecarBytes) {
@@ -60,18 +64,26 @@ function extractBindingFactsBytes(sidecarBytes) {
     throw new Error("binding sidecar must use UTF-8/LF line endings");
   }
 
-  const headingCount = countOccurrences(sidecarBytes, BINDING_FACTS_HEADING);
-  if (headingCount !== 1) {
+  const { lines, offsets } = splitLinesWithOffsets(sidecarBytes);
+  const headingIndexes = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    if (LEVEL_TWO_HEADING.test(lines[index])) {
+      headingIndexes.push(index);
+    }
+  }
+
+  const factsHeadings = headingIndexes.filter(
+    (index) => bindingFactsHeadingText(lines[index]) === BINDING_FACTS_HEADING_TEXT
+  );
+  if (factsHeadings.length !== 1) {
     throw new Error("binding sidecar must contain exactly one ## Binding Facts heading");
   }
 
-  const start = sidecarBytes.indexOf(BINDING_FACTS_HEADING);
-  const factsStart = start + BINDING_FACTS_HEADING.length;
-  const nextHeading = sidecarBytes.indexOf(Buffer.from("\n## ", "utf8"), factsStart);
-  return sidecarBytes.subarray(
-    factsStart,
-    nextHeading === -1 ? sidecarBytes.length : nextHeading + 1
-  );
+  const factsHeading = factsHeadings[0];
+  const factsStart = offsets[factsHeading] + Buffer.byteLength(lines[factsHeading], "utf8") + 1;
+  const nextHeading = headingIndexes.find((index) => index > factsHeading);
+  const factsEnd = nextHeading === undefined ? sidecarBytes.length : offsets[nextHeading];
+  return sidecarBytes.subarray(factsStart, factsEnd);
 }
 
 function validateBindingFacts(bindingFactsMarkdown) {
@@ -80,7 +92,7 @@ function validateBindingFacts(bindingFactsMarkdown) {
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const matches = [
       ...bindingFactsMarkdown.matchAll(
-        new RegExp(`^- ${escaped}:\\s*(.*?)\\s*$`, "gm")
+        new RegExp(`^- ${escaped}:[ \\t]*(.*?)[ \\t]*$`, "gm")
       ),
     ];
 
