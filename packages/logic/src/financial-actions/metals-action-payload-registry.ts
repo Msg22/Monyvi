@@ -47,6 +47,11 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const UTC_MILLISECOND_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const CALENDAR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const METAL_INSTRUMENT_CODES = new Set(["metal:GOLD", "metal:SILVER"]);
+const TERMINAL_DISPOSAL_SNAPSHOT_ROLES = Object.freeze([
+  "terminal_metal",
+  "terminal_purchase_currency",
+] as const);
 const APPROVED_CURRENCIES = new Set([
   "EGP",
   "SAR",
@@ -296,9 +301,9 @@ export function createMetalsActionPayloadRegistry(
   const validateSnapshots = (
     rawValue: unknown,
     roles: readonly string[],
-    metalType: "GOLD" | "SILVER",
-    purchaseCurrency: string,
-    proceedsCurrency = purchaseCurrency
+    metalType: "GOLD" | "SILVER" | null,
+    purchaseCurrency: string | null,
+    proceedsCurrency: string | null = purchaseCurrency
   ): readonly RegisteredActionPayload[] => {
     if (!Array.isArray(rawValue)) fail();
     const value = rawValue as RawPayloadValue[];
@@ -363,11 +368,15 @@ export function createMetalsActionPayloadRegistry(
       if (
         (raw.kind === "metal") !== metalRole ||
         (raw.kind === "metal" &&
-          (raw.instrumentCode !== `metal:${metalType}` ||
+          ((metalType === null
+            ? !METAL_INSTRUMENT_CODES.has(raw.instrumentCode)
+            : raw.instrumentCode !== `metal:${metalType}`) ||
             raw.unit !== "usd_per_pure_gram" ||
             raw.orientation !== "quote_per_base")) ||
         (raw.kind === "currency" &&
-          (raw.instrumentCode !== `currency:${expectedCurrency}` ||
+          (raw.instrumentCode !== `currency:${currencyCode}` ||
+            (expectedCurrency !== null &&
+              raw.instrumentCode !== `currency:${expectedCurrency}`) ||
             !APPROVED_CURRENCIES.has(currencyCode) ||
             !(
               (raw.unit === "usd_per_currency_unit" &&
@@ -681,6 +690,7 @@ export function createMetalsActionPayloadRegistry(
       "holdingId",
       "notes",
       "predecessorEventId",
+      "rateSnapshots",
       "reason",
       "reversesEventId",
     ];
@@ -701,6 +711,12 @@ export function createMetalsActionPayloadRegistry(
       disposalDate: value.disposalDate,
       reason: value.reason,
       notes: value.notes,
+      rateSnapshots: validateSnapshots(
+        value.rateSnapshots,
+        TERMINAL_DISPOSAL_SNAPSHOT_ROLES,
+        null,
+        null
+      ),
     };
   };
 

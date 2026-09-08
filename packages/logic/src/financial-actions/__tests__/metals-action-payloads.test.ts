@@ -60,10 +60,15 @@ function acquisitionSnapshots(): ReadonlyArray<Record<string, string | null>> {
 
 function terminalSnapshots(
   purchaseCurrency = "EGP",
-  proceedsCurrency = "EGP"
+  proceedsCurrency = "EGP",
+  roles: readonly string[] = [
+    "terminal_metal",
+    "terminal_purchase_currency",
+    "terminal_proceeds_currency",
+  ]
 ): ReadonlyArray<Record<string, string | null>> {
-  return [
-    {
+  const byRole: Record<string, Record<string, string | null>> = {
+    terminal_metal: {
       referenceId: IDS.terminalMetal,
       role: "terminal_metal",
       kind: "metal",
@@ -77,7 +82,7 @@ function terminalSnapshots(
       capturedFreshness: "fresh",
       capturedAt: "2026-08-31T10:16:00.123Z",
     },
-    {
+    terminal_purchase_currency: {
       referenceId: IDS.terminalPurchaseCurrency,
       role: "terminal_purchase_currency",
       kind: "currency",
@@ -91,7 +96,7 @@ function terminalSnapshots(
       capturedFreshness: "fresh",
       capturedAt: "2026-08-31T10:16:00.123Z",
     },
-    {
+    terminal_proceeds_currency: {
       referenceId: IDS.terminalProceedsCurrency,
       role: "terminal_proceeds_currency",
       kind: "currency",
@@ -105,7 +110,8 @@ function terminalSnapshots(
       capturedFreshness: "fresh",
       capturedAt: "2026-08-31T10:16:00.123Z",
     },
-  ];
+  };
+  return roles.map((role) => byRole[role]);
 }
 
 function materialFacts(): Record<string, string | null> {
@@ -179,6 +185,7 @@ function payloadFor(
         disposalDate: "2026-08-31",
         reason: "lost",
         notes: "reported missing",
+        rateSnapshots: [],
       };
     case "delete/metals.delete/v1":
       return {
@@ -276,6 +283,81 @@ describe("approved Metals financial action payload registry", () => {
     expect(() =>
       definition("dispose", "metals.dispose/v1").validatePayload(
         { ...dispose, predecessorEventId: null },
+        VALIDATION_INPUT
+      )
+    ).toThrow("financial_action_invalid_payload");
+  });
+
+  it("accepts the exact terminal disposal rate snapshot pair", () => {
+    const snapshots = terminalSnapshots("EGP", "EGP", [
+      "terminal_metal",
+      "terminal_purchase_currency",
+    ]);
+    const dispose = payloadFor("dispose", "metals.dispose/v1");
+    expect(
+      definition("dispose", "metals.dispose/v1").validatePayload(
+        { ...dispose, rateSnapshots: snapshots },
+        VALIDATION_INPUT
+      )
+    ).toMatchObject({ rateSnapshots: snapshots });
+  });
+
+  it.each([
+    [
+      "a single terminal reference",
+      terminalSnapshots("EGP", "EGP", ["terminal_metal"]),
+    ],
+    [
+      "a proceeds reference",
+      terminalSnapshots("EGP", "EGP", [
+        "terminal_metal",
+        "terminal_proceeds_currency",
+      ]),
+    ],
+    [
+      "a duplicated role",
+      [
+        ...terminalSnapshots("EGP", "EGP", [
+          "terminal_metal",
+          "terminal_purchase_currency",
+        ]),
+        ...terminalSnapshots("EGP", "EGP", ["terminal_metal"]),
+      ],
+    ],
+    [
+      "a metal-kind reference in the currency role",
+      terminalSnapshots("EGP", "EGP", [
+        "terminal_metal",
+        "terminal_purchase_currency",
+      ]).map((snapshot, index) =>
+        index === 1 ? { ...snapshot, kind: "metal" } : snapshot
+      ),
+    ],
+    [
+      "a mismatched unit and orientation pair",
+      terminalSnapshots("EGP", "EGP", [
+        "terminal_metal",
+        "terminal_purchase_currency",
+      ]).map((snapshot, index) =>
+        index === 1 ? { ...snapshot, orientation: "base_per_quote" } : snapshot
+      ),
+    ],
+    [
+      "a freshness claim that contradicts the provider observation",
+      terminalSnapshots("EGP", "EGP", [
+        "terminal_metal",
+        "terminal_purchase_currency",
+      ]).map((snapshot, index) =>
+        index === 0 ? { ...snapshot, capturedFreshness: "stale" } : snapshot
+      ),
+    ],
+  ])("rejects %s for terminal disposal", (_label, snapshots) => {
+    expect(() =>
+      definition("dispose", "metals.dispose/v1").validatePayload(
+        {
+          ...payloadFor("dispose", "metals.dispose/v1"),
+          rateSnapshots: snapshots,
+        },
         VALIDATION_INPUT
       )
     ).toThrow("financial_action_invalid_payload");

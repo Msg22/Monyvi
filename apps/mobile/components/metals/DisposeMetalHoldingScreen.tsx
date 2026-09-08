@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  type Ref,
+} from "react";
 import {
   AccessibilityInfo,
   findNodeHandle,
@@ -17,6 +23,7 @@ import { TextField } from "@/components/ui/TextField";
 import { shouldUseCompactLayout } from "@/constants/ui";
 import type {
   DisposeCategory,
+  DisposeRateRole,
   DisposeTreatment,
 } from "@/services/dispose-metal-holding-command-service";
 
@@ -46,6 +53,18 @@ export const DISPOSE_METAL_HOLDING_COPY_KEYS = Object.freeze({
   historySummary: "dispose.historySummary",
   noSaleMoneyOrAccountSummary: "dispose.noSaleMoneyOrAccountSummary",
   noSaleProfitLossSummary: "dispose.noSaleProfitLossSummary",
+  rateEvidenceTitle: "dispose.rateEvidenceTitle",
+  rateRoles: Object.freeze({
+    terminal_metal: "dispose.rateRoles.terminalMetal",
+    terminal_purchase_currency: "dispose.rateRoles.terminalPurchaseCurrency",
+  }),
+  rateFreshness: Object.freeze({
+    fresh: "dispose.rateFreshness.fresh",
+    stale: "dispose.rateFreshness.stale",
+    unknown: "dispose.rateFreshness.unknown",
+  }),
+  rateAcknowledgment: "dispose.rateAcknowledgment",
+  rateAcknowledgmentRequired: "dispose.rateAcknowledgmentRequired",
   submitLabel: "dispose.submitLabel",
   pendingLabel: "dispose.pendingLabel",
   cancelLabel: "dispose.cancelLabel",
@@ -54,7 +73,35 @@ export const DISPOSE_METAL_HOLDING_COPY_KEYS = Object.freeze({
   categoryRequired: "dispose.categoryRequired",
   treatmentRequired: "dispose.treatmentRequired",
   dateRequired: "dispose.dateRequired",
+  dateInvalid: "dispose.dateInvalid",
+  dateBeforeAcquisition: "dispose.dateBeforeAcquisition",
+  submitFailed: "dispose.submitFailed",
+  submitErrors: Object.freeze({
+    metal_holding_not_found: "dispose.submitErrors.holdingNotFound",
+    metal_holding_not_active: "dispose.submitErrors.holdingNotActive",
+    holding_revision_conflict: "dispose.submitErrors.revisionConflict",
+    financial_action_auth_scope_changed:
+      "dispose.submitErrors.authScopeChanged",
+    metal_dispose_effective_active_holding_required:
+      "dispose.submitErrors.notEffectiveHolding",
+    metal_dispose_lifecycle_conflict: "dispose.submitErrors.lifecycleConflict",
+    metal_dispose_date_before_acquisition:
+      "dispose.submitErrors.dateBeforeAcquisition",
+    metal_dispose_replay_requires_recovery:
+      "dispose.submitErrors.recoveryRequired",
+  }),
 });
+
+export const DISPOSE_SUBMISSION_ERROR_CODES = Object.freeze([
+  "metal_holding_not_found",
+  "metal_holding_not_active",
+  "holding_revision_conflict",
+  "financial_action_auth_scope_changed",
+  "metal_dispose_effective_active_holding_required",
+  "metal_dispose_lifecycle_conflict",
+  "metal_dispose_date_before_acquisition",
+  "metal_dispose_replay_requires_recovery",
+] as const);
 
 export interface DisposeMetalHoldingCopy {
   readonly title: string;
@@ -73,6 +120,13 @@ export interface DisposeMetalHoldingCopy {
   readonly historySummary: string;
   readonly noSaleMoneyOrAccountSummary: string;
   readonly noSaleProfitLossSummary: string;
+  readonly rateEvidenceTitle: string;
+  readonly rateRoles: Readonly<Record<DisposeRateRole, string>>;
+  readonly rateFreshness: Readonly<
+    Record<"fresh" | "stale" | "unknown", string>
+  >;
+  readonly rateAcknowledgment: string;
+  readonly rateAcknowledgmentRequired: string;
   readonly submitLabel: string;
   readonly pendingLabel: string;
   readonly cancelLabel: string;
@@ -81,6 +135,18 @@ export interface DisposeMetalHoldingCopy {
   readonly categoryRequired: string;
   readonly treatmentRequired: string;
   readonly dateRequired: string;
+  readonly dateInvalid: string;
+  readonly dateBeforeAcquisition: string;
+  readonly submitFailed: string;
+  readonly submitErrorMessages: Readonly<Record<string, string>>;
+}
+
+export interface DisposeRateEvidenceDisplay {
+  readonly role: DisposeRateRole;
+  readonly valueLabel: string;
+  readonly freshness: "fresh" | "stale" | "unknown";
+  readonly sourceLabel: string;
+  readonly observedLabel: string;
 }
 
 export interface DisposeMetalHoldingScreenProps {
@@ -96,6 +162,9 @@ export interface DisposeMetalHoldingScreenProps {
   readonly treatment: DisposeTreatment | null;
   readonly disposalDate: string;
   readonly notes: string;
+  readonly rateEvidence?: readonly DisposeRateEvidenceDisplay[];
+  readonly requiresRateAcknowledgment?: boolean;
+  readonly rateAcknowledged?: boolean;
   readonly isLoading?: boolean;
   readonly isSubmitting?: boolean;
   readonly loadError?: string | null;
@@ -105,6 +174,7 @@ export interface DisposeMetalHoldingScreenProps {
   readonly onOtherTreatmentChange: (treatment: DisposeTreatment) => void;
   readonly onDateChange: (value: string) => void;
   readonly onNotesChange: (value: string) => void;
+  readonly onRateAcknowledgmentChange?: (acknowledged: boolean) => void;
   readonly onSubmit: () => void;
   readonly onRequestExit: () => void;
   readonly onRetry: () => void;
@@ -130,12 +200,28 @@ const CONSEQUENCE_ORDER = [
   "history",
 ] as const;
 
+type ChoiceButtonHandle = React.ComponentRef<typeof TouchableOpacity>;
+
+function dateValidationMessage(
+  code: string | undefined,
+  copy: DisposeMetalHoldingCopy
+): string {
+  if (code === "dispose_date_before_acquisition") {
+    return copy.dateBeforeAcquisition;
+  }
+  if (code === "dispose_date_invalid") {
+    return copy.dateInvalid;
+  }
+  return copy.dateRequired;
+}
+
 function ChoiceButton(props: {
   readonly id: string;
   readonly label: string;
   readonly isSelected: boolean;
   readonly isDisabled: boolean;
   readonly isStacked: boolean;
+  readonly buttonRef?: Ref<ChoiceButtonHandle>;
   readonly onPress: () => void;
 }): React.JSX.Element {
   const className = props.isStacked
@@ -143,6 +229,7 @@ function ChoiceButton(props: {
     : "min-h-12 w-[48%] justify-center rounded-2xl border border-slate-300 bg-slate-25 px-4 py-3 dark:border-slate-700 dark:bg-slate-900";
   return (
     <TouchableOpacity
+      ref={props.buttonRef}
       testID={props.id}
       accessibilityRole="radio"
       accessibilityState={{
@@ -198,6 +285,9 @@ export function DisposeMetalHoldingScreen({
   treatment,
   disposalDate,
   notes,
+  rateEvidence = [],
+  requiresRateAcknowledgment = false,
+  rateAcknowledged = false,
   isLoading = false,
   isSubmitting = false,
   loadError = null,
@@ -207,6 +297,7 @@ export function DisposeMetalHoldingScreen({
   onOtherTreatmentChange,
   onDateChange,
   onNotesChange,
+  onRateAcknowledgmentChange,
   onSubmit,
   onRequestExit,
   onRetry,
@@ -214,9 +305,10 @@ export function DisposeMetalHoldingScreen({
   const isStacked = shouldUseCompactLayout(width, fontScale);
   const hasSummary = category !== null && treatment !== null;
   const validationSummaryRef = useRef<View>(null);
-  const categoryGroupRef = useRef<View>(null);
-  const treatmentGroupRef = useRef<View>(null);
+  const firstCategoryRef = useRef<ChoiceButtonHandle>(null);
+  const firstTreatmentRef = useRef<ChoiceButtonHandle>(null);
   const dateFieldRef = useRef<TextInput>(null);
+  const submitErrorRef = useRef<View>(null);
   const submit = useCallback((): void => {
     if (!isSubmitting) onSubmit();
   }, [isSubmitting, onSubmit]);
@@ -234,12 +326,20 @@ export function DisposeMetalHoldingScreen({
   };
   const submitAreaMetadata = { bottomInset };
   const summaryMetadata = { consequenceOrder: CONSEQUENCE_ORDER };
+  const submitErrorMessage = submitError
+    ? (copy.submitErrorMessages[submitError] ?? copy.submitFailed)
+    : null;
   const validationMessages = useMemo(
     () =>
       [
         validationErrors.category ? copy.categoryRequired : null,
         validationErrors.treatment ? copy.treatmentRequired : null,
-        validationErrors.disposalDate ? copy.dateRequired : null,
+        validationErrors.disposalDate
+          ? dateValidationMessage(validationErrors.disposalDate, copy)
+          : null,
+        validationErrors.rateAcknowledgment
+          ? copy.rateAcknowledgmentRequired
+          : null,
       ].filter((message): message is string => message !== null),
     [copy, validationErrors]
   );
@@ -252,10 +352,12 @@ export function DisposeMetalHoldingScreen({
     }
     const frame = requestAnimationFrame((): void => {
       const firstInvalidTarget = validationErrors.category
-        ? categoryGroupRef.current
+        ? firstCategoryRef.current
         : validationErrors.treatment
-          ? treatmentGroupRef.current
-          : dateFieldRef.current;
+          ? firstTreatmentRef.current
+          : validationErrors.rateAcknowledgment
+            ? null
+            : dateFieldRef.current;
       const targetHandle = findNodeHandle(firstInvalidTarget);
       if (targetHandle !== null) {
         AccessibilityInfo.setAccessibilityFocus(targetHandle);
@@ -263,6 +365,17 @@ export function DisposeMetalHoldingScreen({
     });
     return (): void => cancelAnimationFrame(frame);
   }, [validationErrors, validationMessages.length]);
+
+  useEffect(() => {
+    if (!submitError) return undefined;
+    const frame = requestAnimationFrame((): void => {
+      const handle = findNodeHandle(submitErrorRef.current);
+      if (handle !== null) {
+        AccessibilityInfo.setAccessibilityFocus(handle);
+      }
+    });
+    return (): void => cancelAnimationFrame(frame);
+  }, [submitError]);
 
   return (
     <KeyboardAvoidingView
@@ -333,15 +446,13 @@ export function DisposeMetalHoldingScreen({
                 {copy.reasonLabel}
               </Text>
               <View
-                ref={categoryGroupRef}
                 testID="dispose-category-group"
-                accessible
                 accessibilityRole="radiogroup"
                 aria-invalid={Boolean(validationErrors.category)}
                 className="flex-row flex-wrap justify-between gap-y-3"
                 {...categoryMetadata}
               >
-                {CATEGORIES.map((value) => (
+                {CATEGORIES.map((value, index) => (
                   <ChoiceButton
                     key={value}
                     id={`dispose-category-${value}`}
@@ -349,6 +460,7 @@ export function DisposeMetalHoldingScreen({
                     isSelected={category === value}
                     isDisabled={isSubmitting}
                     isStacked={isStacked || value === "other"}
+                    buttonRef={index === 0 ? firstCategoryRef : undefined}
                     onPress={() => onCategoryChange(value)}
                   />
                 ))}
@@ -369,13 +481,8 @@ export function DisposeMetalHoldingScreen({
                 <Text className="text-sm font-semibold text-text-primary dark:text-text-primary-dark">
                   {copy.otherTreatmentLabel}
                 </Text>
-                <View
-                  ref={treatmentGroupRef}
-                  accessible
-                  accessibilityRole="radiogroup"
-                  className="gap-3"
-                >
-                  {TREATMENTS.map((value) => (
+                <View accessibilityRole="radiogroup" className="gap-3">
+                  {TREATMENTS.map((value, index) => (
                     <ChoiceButton
                       key={value}
                       id={`dispose-treatment-${value}`}
@@ -383,6 +490,7 @@ export function DisposeMetalHoldingScreen({
                       isSelected={otherTreatment === value}
                       isDisabled={isSubmitting}
                       isStacked
+                      buttonRef={index === 0 ? firstTreatmentRef : undefined}
                       onPress={() => onOtherTreatmentChange(value)}
                     />
                   ))}
@@ -408,7 +516,9 @@ export function DisposeMetalHoldingScreen({
               editable={!isSubmitting}
               aria-invalid={Boolean(validationErrors.disposalDate)}
               error={
-                validationErrors.disposalDate ? copy.dateRequired : undefined
+                validationErrors.disposalDate
+                  ? dateValidationMessage(validationErrors.disposalDate, copy)
+                  : undefined
               }
             />
             <View className="gap-1">
@@ -424,6 +534,65 @@ export function DisposeMetalHoldingScreen({
                 {copy.notesOptional}
               </Text>
             </View>
+
+            {rateEvidence.length > 0 ? (
+              <View
+                testID="dispose-rate-evidence"
+                className="gap-2 rounded-2xl border border-nileGreen-200 bg-nileGreen-50 p-4 dark:border-nileGreen-800 dark:bg-slate-900"
+              >
+                <Text className="text-base font-bold text-nileGreen-900 dark:text-nileGreen-300">
+                  {copy.rateEvidenceTitle}
+                </Text>
+                {rateEvidence.map((reference) => (
+                  <View
+                    key={reference.role}
+                    testID={`dispose-rate-evidence-${reference.role}`}
+                    accessibilityRole="summary"
+                    className="gap-1"
+                  >
+                    <Text className="text-sm font-semibold text-text-primary dark:text-text-primary-dark">
+                      {copy.rateRoles[reference.role]}: {reference.valueLabel}
+                    </Text>
+                    <Text
+                      testID={`dispose-rate-freshness-${reference.role}`}
+                      className="text-xs text-text-secondary dark:text-text-secondary-dark"
+                    >
+                      {copy.rateFreshness[reference.freshness]} ·{" "}
+                      {reference.sourceLabel} · {reference.observedLabel}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {requiresRateAcknowledgment ? (
+              <TouchableOpacity
+                testID="dispose-rate-acknowledgment"
+                accessibilityRole="checkbox"
+                accessibilityState={{
+                  checked: rateAcknowledged,
+                  disabled: isSubmitting,
+                }}
+                disabled={isSubmitting}
+                onPress={(): void =>
+                  onRateAcknowledgmentChange?.(!rateAcknowledged)
+                }
+                className="min-h-12 flex-row items-center gap-3 rounded-2xl border border-slate-300 px-4 dark:border-slate-700"
+              >
+                <Text className="text-sm font-medium text-text-primary dark:text-text-primary-dark">
+                  {copy.rateAcknowledgment}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+            {validationErrors.rateAcknowledgment ? (
+              <Text
+                testID="dispose-rate-acknowledgment-error"
+                accessibilityRole="alert"
+                className="text-sm text-red-600 dark:text-red-400"
+              >
+                {copy.rateAcknowledgmentRequired}
+              </Text>
+            ) : null}
 
             {hasSummary ? (
               <View
@@ -467,15 +636,16 @@ export function DisposeMetalHoldingScreen({
               </View>
             ) : null}
 
-            {submitError ? (
+            {submitErrorMessage ? (
               <View className="gap-3">
                 <Text
+                  ref={submitErrorRef}
                   testID="dispose-submit-error"
                   accessibilityRole="alert"
                   accessibilityLiveRegion="assertive"
                   className="text-sm text-red-600 dark:text-red-400"
                 >
-                  {submitError}
+                  {submitErrorMessage}
                 </Text>
                 <TouchableOpacity
                   testID="dispose-retry"

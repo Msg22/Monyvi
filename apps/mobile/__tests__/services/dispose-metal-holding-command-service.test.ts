@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+﻿import { createHash } from "node:crypto";
 import { Q, type Database, type Model } from "@nozbe/watermelondb";
 import type SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 import type {
@@ -21,7 +21,6 @@ import {
 import {
   createFinancialActionFoundationRepository,
   type CommitFinancialActionGroupLocallyInput,
-  type FinancialActionUserDataScope,
 } from "../../services/financial-action-foundation-repository";
 import type {
   DisposeMetalHoldingCommandDependencies,
@@ -60,6 +59,8 @@ const IDS = {
   disposeEvent: "018f0c7a-1234-7abc-8def-000000000012",
   conflictingDisposeEventA: "018f0c7a-1234-7abc-8def-000000000013",
   conflictingDisposeEventB: "018f0c7a-1234-7abc-8def-000000000014",
+  deleteAction: "018f0c7a-1234-7abc-8def-000000000015",
+  deleteEvent: "018f0c7a-1234-7abc-8def-000000000016",
 } as const;
 
 jest.mock("../../services/user-data-access", () => ({
@@ -132,13 +133,15 @@ function command(
     category: "lost_stolen",
     otherTreatment: null,
     notes: null,
+    rateSnapshots: [],
     ...overrides,
   };
 }
+type DisposeServiceScope = Awaited<
+  ReturnType<DisposeMetalHoldingCommandDependencies["getCurrentUserDataScope"]>
+>;
 
-function scope(
-  userId: string = IDS.user
-): Promise<FinancialActionUserDataScope> {
+function scope(userId: string = IDS.user): Promise<DisposeServiceScope> {
   return Promise.resolve({
     userId,
     queryOwned: (collection, ...clauses) =>
@@ -147,6 +150,12 @@ function scope(
       if (record.userId !== userId) throw new Error("ownership_failed");
       return record;
     },
+    queryChildrenOfOwnedParent: (
+      collection,
+      parentRecord,
+      foreignKey,
+      ...clauses
+    ) => collection.query(Q.where(foreignKey, parentRecord.id), ...clauses),
   });
 }
 
@@ -414,6 +423,7 @@ describe("Dispose metal holding command SQLite lifecycle", () => {
       disposalDate: "2026-09-05",
       reason: "lost_stolen",
       notes: null,
+      rateSnapshots: [],
     };
     expect(JSON.parse(evidence[0].domainPayloadJson)).toEqual(payload);
     const history = await database
@@ -464,7 +474,7 @@ describe("Dispose metal holding command SQLite lifecycle", () => {
       command({
         category: "other",
         otherTreatment: "external_transfer",
-        notes: "هدية 🎁",
+        notes: "Ù‡Ø¯ÙŠØ© ðŸŽ",
       })
     );
     expect(observedEnvelopes).toHaveLength(1);
@@ -473,7 +483,7 @@ describe("Dispose metal holding command SQLite lifecycle", () => {
       kind: "dispose",
       payload: {
         reason: "other_external_transfer",
-        notes: "هدية 🎁",
+        notes: "Ù‡Ø¯ÙŠØ© ðŸŽ",
       },
     });
   });
@@ -773,6 +783,54 @@ describe("Dispose metal holding command SQLite lifecycle", () => {
     batch.mockRestore();
     await expect(createService().dispose(command())).resolves.toMatchObject({
       kind: "committed",
+    });
+  });
+
+  it("disposes a holding restored by a reconciled Delete compensation", async (): Promise<void> => {
+    await seedHolding();
+    await database.write(async (): Promise<void> => {
+      await database
+        .get<FinancialActionGroup>("financial_action_groups")
+        .create((record): void => {
+          record._raw.id = IDS.deleteAction;
+          record.accountGuardsJson = "[]";
+          record.actionId = IDS.deleteAction;
+          record.deleted = false;
+          record.domain = "metals";
+          record.domainReferenceId = IDS.holding;
+          record.kind = "delete";
+          record.outcomeJson =
+            '{"outcome":"rejected","rejectionCode":"stale_revision"}';
+          record.payloadHash = "b".repeat(64);
+          record.payloadJson = "{}";
+          record.rejectionCode = "stale_revision";
+          record.serverOutcome = "stale";
+          record.state = "reconciled";
+          record.updatedAt = new Date("2026-09-04T11:00:00.000Z");
+          record.userId = IDS.user;
+        });
+      await database
+        .get<MetalLifecycleEvent>("metal_lifecycle_events")
+        .create((record): void => {
+          record._raw.id = IDS.deleteEvent;
+          record.actionId = IDS.deleteAction;
+          record.deleted = false;
+          record.holdingId = IDS.holding;
+          record.isEffective = false;
+          record.isHistoryVisible = false;
+          record.kind = "delete";
+          record.occurredAt = new Date("2026-09-04T11:00:00.000Z");
+          record.payloadJson = "{}";
+          record.predecessorEventId = IDS.createdEvent;
+          record.reversesEventId = null;
+          record.updatedAt = new Date("2026-09-04T11:00:00.000Z");
+          record.userId = IDS.user;
+        });
+    });
+
+    await expect(createService().dispose(command())).resolves.toEqual({
+      kind: "committed",
+      holdingId: IDS.holding,
     });
   });
 });
