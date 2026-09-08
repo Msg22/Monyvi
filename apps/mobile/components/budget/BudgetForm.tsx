@@ -75,8 +75,8 @@ const PERIOD_LABELS: Record<BudgetPeriod, string> = {
 const PERIOD_KEYS: BudgetPeriod[] = ["WEEKLY", "MONTHLY", "CUSTOM"];
 const DEFAULT_THRESHOLD = 80;
 
-function formatAmount(value: number): string {
-  return new Intl.NumberFormat("en-US", {
+function formatAmount(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
     maximumFractionDigits: 2,
   }).format(value);
 }
@@ -88,7 +88,7 @@ export function BudgetForm({
   const isEditMode = !!existingBudget;
   const isRenewalMode = !!renewalSource && !isEditMode;
   const { isDark } = useTheme();
-  const { t } = useTranslation("budgets");
+  const { t, i18n } = useTranslation("budgets");
   const { bottom: bottomInset } = useSafeAreaInsets();
   const {
     expenseCategories,
@@ -247,7 +247,6 @@ export function BudgetForm({
         newErrors.category = t("validation_category_required");
       }
     }
-
     if (
       form.period === "CUSTOM" &&
       form.periodEnd.getTime() <= form.periodStart.getTime()
@@ -768,7 +767,10 @@ export function BudgetForm({
             />
             <Text className="mt-2 text-sm text-slate-500 dark:text-slate-400">
               {t("warn_me_when_spent", {
-                amount: `${form.currency ?? ""} ${formatAmount(previewAlertAmount)}`,
+                amount: `${form.currency ?? ""} ${formatAmount(
+                  previewAlertAmount,
+                  i18n.language
+                )}`,
               })}
             </Text>
           </View>
@@ -829,7 +831,8 @@ export function BudgetForm({
                   {t("preview_alert_at")} {form.alertThreshold}%
                 </Text>
                 <Text className="mt-1 text-center text-sm font-bold text-nileGreen-500">
-                  {form.currency ?? ""} {formatAmount(previewAlertAmount)}
+                  {form.currency ?? ""}{" "}
+                  {formatAmount(previewAlertAmount, i18n.language)}
                 </Text>
               </View>
               <View className="flex-1 items-center px-1">

@@ -130,7 +130,10 @@ jest.mock("@/components/modals/ConfirmationModal", () => ({
 jest.mock("@react-native-community/datetimepicker", () => () => null);
 
 jest.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string): string => key }),
+  useTranslation: () => ({
+    t: (key: string): string => key,
+    i18n: { language: "en" },
+  }),
 }));
 
 jest.mock("@/utils/dateHelpers", () => ({
