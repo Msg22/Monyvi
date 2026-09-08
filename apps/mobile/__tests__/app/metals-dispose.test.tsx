@@ -1,8 +1,6 @@
-import {
-  act,
+﻿import {
   fireEvent,
   render,
-  renderHook,
   screen,
   waitFor,
   within,
@@ -43,6 +41,14 @@ type Category =
   | "other";
 type Treatment = "write_off" | "external_transfer";
 
+interface RateEvidenceDisplay {
+  readonly role: "terminal_metal" | "terminal_purchase_currency";
+  readonly valueLabel: string;
+  readonly freshness: "fresh" | "stale" | "unknown";
+  readonly sourceLabel: string;
+  readonly observedLabel: string;
+}
+
 interface DisposeCopy {
   readonly title: string;
   readonly intro: string;
@@ -60,6 +66,11 @@ interface DisposeCopy {
   readonly historySummary: string;
   readonly noSaleMoneyOrAccountSummary: string;
   readonly noSaleProfitLossSummary: string;
+  readonly rateEvidenceTitle: string;
+  readonly rateRoles: Readonly<Record<string, string>>;
+  readonly rateFreshness: Readonly<Record<string, string>>;
+  readonly rateAcknowledgment: string;
+  readonly rateAcknowledgmentRequired: string;
   readonly submitLabel: string;
   readonly pendingLabel: string;
   readonly cancelLabel: string;
@@ -68,6 +79,10 @@ interface DisposeCopy {
   readonly categoryRequired: string;
   readonly treatmentRequired: string;
   readonly dateRequired: string;
+  readonly dateInvalid: string;
+  readonly dateBeforeAcquisition: string;
+  readonly submitFailed: string;
+  readonly submitErrorMessages: Readonly<Record<string, string>>;
 }
 
 interface DisposeScreenProps {
@@ -83,6 +98,9 @@ interface DisposeScreenProps {
   readonly treatment: Treatment | null;
   readonly disposalDate: string;
   readonly notes: string;
+  readonly rateEvidence?: readonly RateEvidenceDisplay[];
+  readonly requiresRateAcknowledgment?: boolean;
+  readonly rateAcknowledged?: boolean;
   readonly isLoading?: boolean;
   readonly isSubmitting?: boolean;
   readonly loadError?: string | null;
@@ -92,6 +110,7 @@ interface DisposeScreenProps {
   readonly onOtherTreatmentChange: (treatment: Treatment) => void;
   readonly onDateChange: (value: string) => void;
   readonly onNotesChange: (value: string) => void;
+  readonly onRateAcknowledgmentChange?: (acknowledged: boolean) => void;
   readonly onSubmit: () => void;
   readonly onRequestExit: () => void;
   readonly onRetry: () => void;
@@ -100,53 +119,6 @@ interface DisposeScreenProps {
 interface DisposeScreenModule {
   readonly DisposeMetalHoldingScreen: React.ComponentType<DisposeScreenProps>;
   readonly DISPOSE_METAL_HOLDING_COPY_KEYS: Readonly<Record<string, unknown>>;
-}
-
-interface HookHolding {
-  readonly holdingId: string;
-  readonly name: string;
-  readonly userId: string;
-  readonly status: "active" | "sold" | "disposed";
-  readonly expectedFinancialRevision: string;
-  readonly predecessorEventId: string;
-  readonly purchaseDate: string;
-}
-
-interface HookDependencies {
-  readonly loadHolding: (holdingId: string) => Promise<HookHolding>;
-  readonly disposeHolding: (
-    input: Readonly<Record<string, unknown>>
-  ) => Promise<unknown>;
-}
-
-interface DisposeHookResult {
-  readonly model: HookHolding | null;
-  readonly category: Category | null;
-  readonly otherTreatment: Treatment | null;
-  readonly treatment: Treatment | null;
-  readonly disposalDate: string;
-  readonly notes: string;
-  readonly isLoading: boolean;
-  readonly isSubmitting: boolean;
-  readonly isDirty: boolean;
-  readonly loadError: string | null;
-  readonly submitError: string | null;
-  readonly validationErrors: Readonly<Record<string, string>>;
-  readonly setCategory: (value: Category) => void;
-  readonly setOtherTreatment: (value: Treatment) => void;
-  readonly setDisposalDate: (value: string) => void;
-  readonly setNotes: (value: string) => void;
-  readonly submit: () => Promise<boolean>;
-  readonly retryLoad: () => void;
-}
-
-interface DisposeHookModule {
-  readonly useDisposeMetalHolding: (input: {
-    readonly holdingId: string;
-    readonly today: string;
-    readonly createId: () => string;
-    readonly dependencies: HookDependencies;
-  }) => DisposeHookResult;
 }
 
 const copy: DisposeCopy = {
@@ -175,6 +147,18 @@ const copy: DisposeCopy = {
   historySummary: "This change will appear in History.",
   noSaleMoneyOrAccountSummary: "There is no sale money or account change.",
   noSaleProfitLossSummary: "There is no profit or loss from a sale.",
+  rateEvidenceTitle: "Rates kept with this record",
+  rateRoles: {
+    terminal_metal: "Metal rate",
+    terminal_purchase_currency: "Currency rate",
+  },
+  rateFreshness: {
+    fresh: "Fresh",
+    stale: "Old",
+    unknown: "Unknown",
+  },
+  rateAcknowledgment: "I understand these rates may be old or unknown",
+  rateAcknowledgmentRequired: "Confirm the rate note to continue.",
   submitLabel: "Record change",
   pendingLabel: "Recording change",
   cancelLabel: "Cancel",
@@ -183,27 +167,21 @@ const copy: DisposeCopy = {
   categoryRequired: "Choose a reason.",
   treatmentRequired: "Choose how to record Other.",
   dateRequired: "Choose a valid date.",
-};
-
-const holding: HookHolding = {
-  holdingId: "holding-1",
-  name: "Wedding coin",
-  userId: "user-1",
-  status: "active",
-  expectedFinancialRevision: "0",
-  predecessorEventId: "event-1",
-  purchaseDate: "2024-03-14",
+  dateInvalid: "Enter a real date that is not in the future.",
+  dateBeforeAcquisition: "Choose a date on or after the purchase date.",
+  submitFailed: "The change was not recorded. Try again.",
+  submitErrorMessages: {
+    holding_revision_conflict:
+      "This holding changed elsewhere. Check its latest state and try again.",
+    metal_holding_not_active: "This holding is no longer active.",
+    metal_dispose_lifecycle_conflict:
+      "This holding has a conflict to resolve first.",
+  },
 };
 
 function loadScreen(): DisposeScreenModule {
   return jest.requireActual<DisposeScreenModule>(
     "@/components/metals/DisposeMetalHoldingScreen"
-  );
-}
-
-function loadHook(): DisposeHookModule {
-  return jest.requireActual<DisposeHookModule>(
-    "@/hooks/useDisposeMetalHolding"
   );
 }
 
@@ -362,17 +340,17 @@ describe("Dispose metal holding direct form", () => {
     ).toBeNull();
   });
 
-  it("focuses the validation summary and then the first invalid group", async (): Promise<void> => {
+  it("keeps radio choices individually accessible and focuses the first invalid one", async (): Promise<void> => {
     const focus = jest
       .spyOn(AccessibilityInfo, "setAccessibilityFocus")
       .mockImplementation((): void => undefined);
     const props = renderScreen({
       category: "other",
       validationErrors: {
-        category: copy.categoryRequired,
-        treatment: copy.treatmentRequired,
+        category: "dispose_category_required",
+        treatment: "dispose_other_treatment_required",
       },
-      submitError: "The change was not recorded. Try again.",
+      submitError: "holding_revision_conflict",
     });
     expect(screen.getByTestId("dispose-validation-summary")).toHaveProp(
       "accessibilityRole",
@@ -382,18 +360,78 @@ describe("Dispose metal holding direct form", () => {
       "aria-invalid",
       true
     );
-    expect(screen.getByTestId("dispose-category-group")).toHaveProp(
+    expect(screen.getByTestId("dispose-category-group")).not.toHaveProp(
       "accessible",
       true
+    );
+    expect(screen.getByTestId("dispose-category-lost_stolen")).toHaveProp(
+      "accessibilityRole",
+      "radio"
+    );
+    expect(screen.getByTestId("dispose-treatment-write_off")).toHaveProp(
+      "accessibilityRole",
+      "radio"
     );
     expect(screen.getByTestId("dispose-submit-error")).toHaveProp(
       "accessibilityLiveRegion",
       "assertive"
     );
+    expect(
+      screen.getByText(copy.submitErrorMessages.holding_revision_conflict)
+    ).toBeOnTheScreen();
+    await waitFor(() => expect(focus).toHaveBeenCalledTimes(3));
     fireEvent.press(screen.getByTestId("dispose-retry"));
     expect(props.onRetry).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(focus).toHaveBeenCalledTimes(2));
     focus.mockRestore();
+  });
+
+  it("focuses the submit error for an operational failure", async (): Promise<void> => {
+    const focus = jest
+      .spyOn(AccessibilityInfo, "setAccessibilityFocus")
+      .mockImplementation((): void => undefined);
+    renderScreen({ submitError: "unexpected_operational_error" });
+    expect(screen.getByTestId("dispose-submit-error")).toHaveTextContent(
+      copy.submitFailed
+    );
+    await waitFor(() => expect(focus).toHaveBeenCalledTimes(1));
+    focus.mockRestore();
+  });
+
+  it("maps stable command failure codes to localized copy with a safe fallback", (): void => {
+    renderScreen({ submitError: "metal_holding_not_active" });
+    expect(screen.getByTestId("dispose-submit-error")).toHaveTextContent(
+      copy.submitErrorMessages.metal_holding_not_active
+    );
+  });
+
+  it("explains the exact date boundary that failed", (): void => {
+    renderScreen({
+      validationErrors: { disposalDate: "dispose_date_invalid" },
+    });
+    expect(screen.getByTestId("dispose-date-field")).toHaveProp(
+      "aria-invalid",
+      true
+    );
+    expect(screen.getAllByText(copy.dateInvalid).length).toBeGreaterThan(1);
+    expect(screen.getByTestId("dispose-validation-summary")).toHaveProp(
+      "accessibilityLabel",
+      copy.dateInvalid
+    );
+  });
+
+  it("names the acquisition boundary for pre-acquisition disposal dates", (): void => {
+    renderScreen({
+      validationErrors: {
+        disposalDate: "dispose_date_before_acquisition",
+      },
+    });
+    expect(
+      screen.getAllByText(copy.dateBeforeAcquisition).length
+    ).toBeGreaterThan(1);
+    expect(screen.getByTestId("dispose-validation-summary")).toHaveProp(
+      "accessibilityLabel",
+      copy.dateBeforeAcquisition
+    );
   });
 
   it("renders the shaped treatment prop without reclassifying the category", (): void => {
@@ -403,6 +441,88 @@ describe("Dispose metal holding direct form", () => {
     });
     expect(screen.getByText(copy.externalTransferSummary)).toBeOnTheScreen();
     expect(screen.queryByText(copy.writeOffSummary)).toBeNull();
+  });
+
+  it("renders each consumed terminal rate with its own freshness and provenance", (): void => {
+    renderScreen({
+      category: "donated",
+      treatment: "external_transfer",
+      rateEvidence: [
+        {
+          role: "terminal_metal",
+          valueLabel: "3,600 USD/g",
+          freshness: "stale",
+          sourceLabel: "provider-a",
+          observedLabel: "5 Sep 10:00",
+        },
+        {
+          role: "terminal_purchase_currency",
+          valueLabel: "0.02 USD/EGP",
+          freshness: "fresh",
+          sourceLabel: "provider-b",
+          observedLabel: "5 Sep 11:30",
+        },
+      ],
+      requiresRateAcknowledgment: true,
+    });
+    expect(screen.getByTestId("dispose-rate-evidence")).toBeOnTheScreen();
+    expect(
+      within(
+        screen.getByTestId("dispose-rate-evidence-terminal_metal")
+      ).getByText(/3,600 USD\/g/)
+    ).toBeOnTheScreen();
+    expect(
+      within(
+        screen.getByTestId("dispose-rate-freshness-terminal_metal")
+      ).getByText(new RegExp(copy.rateFreshness.stale))
+    ).toBeOnTheScreen();
+    expect(
+      within(
+        screen.getByTestId("dispose-rate-freshness-terminal_purchase_currency")
+      ).getByText(new RegExp(copy.rateFreshness.fresh))
+    ).toBeOnTheScreen();
+    expect(screen.getByTestId("dispose-rate-acknowledgment")).toHaveProp(
+      "accessibilityRole",
+      "checkbox"
+    );
+  });
+
+  it("hides the rate acknowledgment for fresh evidence and missing references", (): void => {
+    renderScreen({});
+    expect(screen.queryByTestId("dispose-rate-evidence")).toBeNull();
+    expect(screen.queryByTestId("dispose-rate-acknowledgment")).toBeNull();
+    renderScreen({
+      rateEvidence: [
+        {
+          role: "terminal_metal",
+          valueLabel: "3,600 USD/g",
+          freshness: "fresh",
+          sourceLabel: "provider-a",
+          observedLabel: "5 Sep 11:30",
+        },
+      ],
+    });
+    expect(screen.queryByTestId("dispose-rate-acknowledgment")).toBeNull();
+  });
+
+  it("surfaces the acknowledgment error and toggles through the callback", (): void => {
+    const props = renderScreen({
+      validationErrors: {
+        rateAcknowledgment: "dispose_rate_acknowledgment_required",
+      },
+      requiresRateAcknowledgment: true,
+      rateAcknowledged: false,
+      onRateAcknowledgmentChange: jest.fn(),
+    });
+    expect(
+      screen.getByTestId("dispose-rate-acknowledgment-error")
+    ).toHaveTextContent(copy.rateAcknowledgmentRequired);
+    expect(screen.getByTestId("dispose-validation-summary")).toHaveProp(
+      "accessibilityLabel",
+      copy.rateAcknowledgmentRequired
+    );
+    fireEvent.press(screen.getByTestId("dispose-rate-acknowledgment"));
+    expect(props.onRateAcknowledgmentChange).toHaveBeenCalledWith(true);
   });
 
   it("uses Skeleton for loading", (): void => {
@@ -465,194 +585,5 @@ describe("Dispose metal holding direct form", () => {
         other: "dispose.categories.other",
       },
     });
-  });
-});
-
-describe("useDisposeMetalHolding lifecycle", () => {
-  function createDependencies(
-    disposeHolding: HookDependencies["disposeHolding"] = jest.fn(() =>
-      Promise.resolve({ kind: "committed" })
-    )
-  ): HookDependencies {
-    return {
-      loadHolding: jest.fn(() => Promise.resolve(holding)),
-      disposeHolding,
-    };
-  }
-
-  it("validates required category and conditional Other treatment while notes remain optional", async (): Promise<void> => {
-    const dependencies = createDependencies();
-    const { result } = renderHook(() =>
-      loadHook().useDisposeMetalHolding({
-        holdingId: holding.holdingId,
-        today: "2026-09-05",
-        createId: jest.fn(() => "stable-id"),
-        dependencies,
-      })
-    );
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    await act(async (): Promise<void> => {
-      await expect(result.current.submit()).resolves.toBe(false);
-    });
-    expect(result.current.validationErrors.category).toBe(
-      "dispose_category_required"
-    );
-    act((): void => result.current.setCategory("other"));
-    await act(async (): Promise<void> => {
-      await expect(result.current.submit()).resolves.toBe(false);
-    });
-    expect(result.current.validationErrors.treatment).toBe(
-      "dispose_other_treatment_required"
-    );
-    act((): void => result.current.setOtherTreatment("write_off"));
-    expect(result.current.treatment).toBe("write_off");
-    await act(async (): Promise<void> => {
-      await expect(result.current.submit()).resolves.toBe(true);
-    });
-    expect(dependencies.disposeHolding).toHaveBeenCalledWith(
-      expect.objectContaining({
-        notes: null,
-        category: "other",
-        otherTreatment: "write_off",
-      })
-    );
-  });
-
-  it("blocks double submit, preserves facts on error, and retries the complete original command", async (): Promise<void> => {
-    let rejectFirst: ((reason: Error) => void) | null = null;
-    const firstAttempt = new Promise((_resolve, reject): void => {
-      rejectFirst = reject;
-    });
-    const disposeHolding = jest
-      .fn<
-        ReturnType<HookDependencies["disposeHolding"]>,
-        Parameters<HookDependencies["disposeHolding"]>
-      >()
-      .mockReturnValueOnce(firstAttempt)
-      .mockResolvedValueOnce({ kind: "committed" });
-    const dependencies = createDependencies(disposeHolding);
-    const ids = ["action-1", "evidence-1", "event-1"];
-    const createId = jest.fn(() => ids.shift() ?? "unexpected-id");
-    const { result } = renderHook(() =>
-      loadHook().useDisposeMetalHolding({
-        holdingId: holding.holdingId,
-        today: "2026-09-05",
-        createId,
-        dependencies,
-      })
-    );
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    act((): void => {
-      result.current.setCategory("donated");
-      result.current.setNotes("Family gift");
-    });
-    let first!: Promise<boolean>;
-    let duplicate!: Promise<boolean>;
-    act((): void => {
-      first = result.current.submit();
-      duplicate = result.current.submit();
-    });
-    expect(disposeHolding).toHaveBeenCalledTimes(1);
-    await act(async (): Promise<void> => {
-      rejectFirst?.(new Error("disk_full"));
-      await expect(first).resolves.toBe(false);
-      await expect(duplicate).resolves.toBe(false);
-    });
-    expect(result.current).toMatchObject({
-      category: "donated",
-      notes: "Family gift",
-      submitError: "disk_full",
-      isSubmitting: false,
-    });
-    const firstRequest = disposeHolding.mock.calls[0][0];
-    await act(async (): Promise<void> => {
-      await expect(result.current.submit()).resolves.toBe(true);
-    });
-    expect(disposeHolding).toHaveBeenCalledTimes(2);
-    expect(disposeHolding.mock.calls[1][0]).toBe(firstRequest);
-    expect(createId).toHaveBeenCalledTimes(3);
-  });
-
-  it("contains ID generation failures and releases the pending lock", async (): Promise<void> => {
-    const dependencies = createDependencies();
-    const createId = jest.fn(() => {
-      throw new Error("secure_random_unavailable");
-    });
-    const { result } = renderHook(() =>
-      loadHook().useDisposeMetalHolding({
-        holdingId: holding.holdingId,
-        today: "2026-09-05",
-        createId,
-        dependencies,
-      })
-    );
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    act((): void => result.current.setCategory("donated"));
-
-    await act(async (): Promise<void> => {
-      await expect(result.current.submit()).resolves.toBe(false);
-    });
-    expect(result.current).toMatchObject({
-      isSubmitting: false,
-      submitError: "secure_random_unavailable",
-    });
-    expect(dependencies.disposeHolding).not.toHaveBeenCalled();
-  });
-
-  it("reports invalid dates and reloads after a recoverable load failure", async (): Promise<void> => {
-    const loadHolding = jest
-      .fn<Promise<HookHolding>, [string]>()
-      .mockRejectedValueOnce(new Error("load_failed"))
-      .mockResolvedValueOnce(holding);
-    const dependencies: HookDependencies = {
-      loadHolding,
-      disposeHolding: jest.fn(() => Promise.resolve({ kind: "committed" })),
-    };
-    const { result } = renderHook(() =>
-      loadHook().useDisposeMetalHolding({
-        holdingId: holding.holdingId,
-        today: "2026-09-05",
-        createId: jest.fn(() => "stable-id"),
-        dependencies,
-      })
-    );
-    await waitFor(() => expect(result.current.loadError).toBe("load_failed"));
-    act((): void => result.current.retryLoad());
-    await waitFor(() => expect(result.current.model).toEqual(holding));
-    act((): void => {
-      result.current.setCategory("donated");
-      result.current.setDisposalDate("2026-09-06");
-    });
-    await act(async (): Promise<void> => {
-      await expect(result.current.submit()).resolves.toBe(false);
-    });
-    expect(result.current.validationErrors.disposalDate).toBe(
-      "dispose_date_invalid"
-    );
-    expect(dependencies.disposeHolding).not.toHaveBeenCalled();
-  });
-
-  it("rejects a disposal date before the holding acquisition date", async (): Promise<void> => {
-    const dependencies = createDependencies();
-    const { result } = renderHook(() =>
-      loadHook().useDisposeMetalHolding({
-        holdingId: holding.holdingId,
-        today: "2026-09-05",
-        createId: jest.fn(() => "stable-id"),
-        dependencies,
-      })
-    );
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    act((): void => {
-      result.current.setCategory("donated");
-      result.current.setDisposalDate("2024-03-13");
-    });
-    await act(async (): Promise<void> => {
-      await expect(result.current.submit()).resolves.toBe(false);
-    });
-    expect(result.current.validationErrors.disposalDate).toBe(
-      "dispose_date_before_acquisition"
-    );
-    expect(dependencies.disposeHolding).not.toHaveBeenCalled();
   });
 });

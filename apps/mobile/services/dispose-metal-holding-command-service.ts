@@ -1,10 +1,12 @@
 import { Q, type Database, type Model } from "@nozbe/watermelondb";
 import type {
   Asset,
+  AssetMetal,
   FinancialActionGroup,
   MetalActionEvidence,
   MetalHoldingState,
   MetalLifecycleEvent,
+  MetalRateReference,
 } from "@monyvi/db";
 import {
   reduceMetalLifecycle,
@@ -19,7 +21,11 @@ import type {
   FinancialActionLinkedOperationPlan,
   FinancialActionUserDataScope,
 } from "./financial-action-foundation-repository";
+import type { CurrentUserDataScope } from "./user-data-access";
 import { incrementCanonicalMetalRevision } from "./metal-financial-action-adapter";
+
+type DisposeUserDataScope = FinancialActionUserDataScope &
+  Pick<CurrentUserDataScope, "queryChildrenOfOwnedParent">;
 
 export const DISPOSE_CATEGORIES = [
   "lost_stolen",
@@ -42,6 +48,32 @@ export type DisposeCategory = (typeof DISPOSE_CATEGORIES)[number];
 export type DisposeTreatment = (typeof DISPOSE_TREATMENTS)[number];
 export type DisposeReason = (typeof DISPOSE_REASONS)[number];
 
+export const DISPOSE_RATE_ROLES = [
+  "terminal_metal",
+  "terminal_purchase_currency",
+] as const;
+export type DisposeRateRole = (typeof DISPOSE_RATE_ROLES)[number];
+
+export interface DisposeRateSnapshot {
+  readonly referenceId: string;
+  readonly role: DisposeRateRole;
+  readonly kind: "metal" | "currency";
+  readonly instrumentCode: string;
+  readonly valueDecimal: string;
+  readonly unit:
+    | "usd_per_pure_gram"
+    | "usd_per_currency_unit"
+    | "currency_units_per_usd";
+  readonly orientation: "quote_per_base" | "base_per_quote";
+  readonly providerObservedAt: string | null;
+  readonly source: string | null;
+  readonly quality: "valid";
+  readonly capturedFreshness: "fresh" | "stale" | "unknown";
+  readonly capturedAt: string;
+}
+
+export type DisposeRateSnapshotDraft = Omit<DisposeRateSnapshot, "referenceId">;
+
 const DISPOSE_CATEGORY_SET = new Set<string>(DISPOSE_CATEGORIES);
 const DISPOSE_TREATMENT_SET = new Set<string>(DISPOSE_TREATMENTS);
 
@@ -59,6 +91,7 @@ export interface DisposeMetalHoldingCommandInput {
   readonly category: DisposeCategory | null;
   readonly otherTreatment: DisposeTreatment | null;
   readonly notes: string | null;
+  readonly rateSnapshots: readonly DisposeRateSnapshot[];
 }
 
 type Commit = (
@@ -67,7 +100,7 @@ type Commit = (
 
 export interface DisposeMetalHoldingCommandDependencies {
   readonly database: Database;
-  readonly getCurrentUserDataScope: () => Promise<FinancialActionUserDataScope>;
+  readonly getCurrentUserDataScope: () => Promise<DisposeUserDataScope>;
   readonly commitFinancialActionGroupLocally: Commit;
   readonly createEnvelope: (
     input: DisposeMetalHoldingCommandInput,
@@ -103,16 +136,29 @@ export interface DisposeMetalHoldingConsequences {
 interface Projection {
   readonly actionRoots: readonly FinancialActionGroup[];
   readonly asset: Asset;
+  readonly metal: AssetMetal | null;
   readonly state: MetalHoldingState;
   readonly predecessor: MetalLifecycleEvent | null;
   readonly timeline: readonly MetalLifecycleEvent[];
 }
 
-const EFFECTIVE_RECONCILIATION_STATES = new Set([
+const EFFECTIVE_HOLDING_RECONCILIATION_STATES = new Set([
   "local_complete",
   "sync_pending",
   "sync_failed",
   "accepted",
+  "reconciled",
+]);
+
+const ACCEPTED_ACTION_ROOT_STATES = new Set([
+  "local_complete",
+  "sync_pending",
+  "sync_failed",
+  "accepted",
+]);
+
+const REJECTED_ACTION_ROOT_STATES = new Set([
+  "rejected_compensating",
   "reconciled",
 ]);
 
@@ -139,7 +185,11 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function assertStableLocalIds(input: DisposeMetalHoldingCommandInput): void {
-  const ids = [input.actionEvidenceId, input.lifecycleEventId];
+  const ids = [
+    input.actionEvidenceId,
+    input.lifecycleEventId,
+    ...input.rateSnapshots.map((snapshot) => snapshot.referenceId),
+  ];
   if (
     ids.some((id) => !UUID_PATTERN.test(id)) ||
     new Set(ids).size !== ids.length
@@ -220,6 +270,9 @@ function payloadFor(
     disposalDate: input.disposalDate,
     reason,
     notes: input.notes,
+    rateSnapshots: input.rateSnapshots.map(
+      (snapshot) => snapshot as unknown as RegisteredActionPayload
+    ),
   } as unknown as RegisteredActionPayload;
 }
 
@@ -289,13 +342,51 @@ async function loadProjection(
     (input.predecessorEventId !== null && !predecessors[0])
   )
     throw new Error("metal_holding_not_found");
+  const asset = scope.assertOwned(assets[0]);
+  const metals = await scope
+    .queryChildrenOfOwnedParent(
+      dependencies.database.get<AssetMetal>("asset_metals"),
+      asset,
+      "asset_id",
+      Q.where("deleted", false),
+      Q.take(1)
+    )
+    .fetch();
   return {
     actionRoots: actionRoots.map((root) => scope.assertOwned(root)),
-    asset: scope.assertOwned(assets[0]),
+    asset,
+    metal: metals[0] ?? null,
     state: scope.assertOwned(states[0]),
     predecessor: predecessors[0] ? scope.assertOwned(predecessors[0]) : null,
     timeline: timeline.map((event) => scope.assertOwned(event)),
   };
+}
+
+function assertRateSnapshotContext(
+  projection: Projection,
+  input: DisposeMetalHoldingCommandInput
+): void {
+  if (input.rateSnapshots.length === 0) return;
+  const metal = projection.metal;
+  if (!metal) throw new Error("metal_holding_not_found");
+  const byRole = new Map<DisposeRateRole, DisposeRateSnapshot>();
+  for (const snapshot of input.rateSnapshots) {
+    if (
+      !DISPOSE_RATE_ROLES.includes(snapshot.role) ||
+      byRole.has(snapshot.role) ||
+      (snapshot.kind === "metal" &&
+        snapshot.instrumentCode !== `metal:${metal.metalType}`) ||
+      (snapshot.kind === "currency" &&
+        snapshot.instrumentCode !==
+          `currency:${projection.asset.purchaseCurrency}`)
+    ) {
+      throw new Error("metal_dispose_rate_context_invalid");
+    }
+    byRole.set(snapshot.role, snapshot);
+  }
+  if (byRole.size !== DISPOSE_RATE_ROLES.length) {
+    throw new Error("metal_dispose_rate_context_invalid");
+  }
 }
 
 function assertProjection(
@@ -304,11 +395,14 @@ function assertProjection(
 ): void {
   if (projection.asset.type !== "METAL")
     throw new Error("metal_holding_not_found");
+  assertRateSnapshotContext(projection, input);
   if (projection.state.status !== "active")
     throw new Error("metal_holding_not_active");
   if (
     !projection.state.isVisible ||
-    !EFFECTIVE_RECONCILIATION_STATES.has(projection.state.reconciliationState)
+    !EFFECTIVE_HOLDING_RECONCILIATION_STATES.has(
+      projection.state.reconciliationState
+    )
   ) {
     throw new Error("metal_dispose_effective_active_holding_required");
   }
@@ -367,9 +461,9 @@ function toReducerEvent(
       toReducerKind(candidate.kind) === toReducerKind(event.kind)
   );
   const canonicalCasStatus = actionRoot
-    ? EFFECTIVE_RECONCILIATION_STATES.has(actionRoot.state)
+    ? ACCEPTED_ACTION_ROOT_STATES.has(actionRoot.state)
       ? "accepted"
-      : actionRoot.state === "rejected_compensating"
+      : REJECTED_ACTION_ROOT_STATES.has(actionRoot.state)
         ? "rejected"
         : "unknown"
     : "unknown";
@@ -436,6 +530,7 @@ function assertOwnedRows(
     "metal_action_evidence",
     "metal_holding_states",
     "metal_lifecycle_events",
+    "metal_rate_references",
   ]);
   for (const row of rows) {
     const raw = row.raw as unknown as Readonly<Record<string, unknown>>;
@@ -492,8 +587,33 @@ function preparePlan(
       record.updatedAt = occurredAt;
       record.userId = input.userId;
     });
+  const rateReferences = input.rateSnapshots.map((snapshot) =>
+    dependencies.database
+      .get<MetalRateReference>("metal_rate_references")
+      .prepareCreate((record): void => {
+        setPreparedId(record, snapshot.referenceId);
+        record.actionId = input.actionId;
+        record.capturedAt = new Date(snapshot.capturedAt);
+        record.capturedFreshness = snapshot.capturedFreshness;
+        record.deleted = false;
+        record.holdingId = input.holdingId;
+        record.instrumentCode = snapshot.instrumentCode;
+        record.kind = snapshot.kind;
+        record.orientation = snapshot.orientation;
+        record.providerObservedAt = snapshot.providerObservedAt
+          ? new Date(snapshot.providerObservedAt)
+          : null;
+        record.quality = snapshot.quality;
+        record.role = snapshot.role;
+        record.source = snapshot.source;
+        record.unit = snapshot.unit;
+        record.updatedAt = occurredAt;
+        record.userId = input.userId;
+        record.valueDecimal = snapshot.valueDecimal;
+      })
+  );
   const plan: FinancialActionLinkedOperationPlan = {
-    preparedCreates: [evidence, event],
+    preparedCreates: [evidence, event, ...rateReferences],
     existingOperations: [
       {
         kind: "update",
