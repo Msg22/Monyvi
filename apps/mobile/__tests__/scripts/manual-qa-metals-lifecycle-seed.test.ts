@@ -127,7 +127,40 @@ const REDUCER_KIND_BY_FIXTURE_KIND: Readonly<
   sell: "sold",
 });
 
+function isRecursivelyKeySorted(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return value.every(isRecursivelyKeySorted);
+  }
+  if (value && typeof value === "object") {
+    const keys = Object.keys(value);
+    const sorted = [...keys].sort((a, b) =>
+      Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"))
+    );
+    return (
+      keys.every((key, index) => key === sorted[index]) &&
+      Object.values(value).every(isRecursivelyKeySorted)
+    );
+  }
+  return true;
+}
+
 describe("manual QA Metals lifecycle fixture", () => {
+  it("serializes every action envelope in DB-canonical key order", () => {
+    const groups = buildRows().financialActionGroups as readonly Record<
+      string,
+      any
+    >[];
+    expect(groups.length).toBeGreaterThan(0);
+    for (const group of groups) {
+      expect(isRecursivelyKeySorted(JSON.parse(group.payload_json))).toBe(
+        true
+      );
+      expect(group.payload_hash).toBe(
+        createHash("sha256").update(String(group.payload_json)).digest("hex")
+      );
+    }
+  });
+
   it("preserves active holdings and adds deterministic sold/disposed History rows", () => {
     const first = buildRows();
     const second = buildRows();
@@ -407,6 +440,20 @@ describe("manual QA Metals lifecycle fixture", () => {
     expect(rowsFor(client, "metal_holding_states")).toHaveLength(5);
     expect(rowsFor(client, "market_rate_observations")).toHaveLength(4);
     expect(
+      rowsFor(client, "assets").filter((row) => row.type === "METAL")
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ acquisition_action_id: expect.any(String) }),
+      ])
+    );
+    expect(
+      rowsFor(client, "assets").every(
+        (row) =>
+          row.type !== "METAL" ||
+          typeof row.acquisition_action_id === "string"
+      )
+    ).toBe(true);
+    expect(
       rowsFor(client, "metal_lifecycle_events").every(
         (row) => row.user_id === USER_ID
       )
@@ -509,6 +556,27 @@ function immutableLifecycleFacts(
   );
 }
 
+function metalAcquisitionKindMismatch(
+  tableRows: (table: string) => Map<string, Record<string, any>>,
+  candidate: Readonly<Record<string, any>>
+): Readonly<{ message: string }> | null {
+  if (candidate.acquisition_action_id == null) {
+    return null;
+  }
+  const hasEvidence = Array.from(
+    tableRows("metal_action_evidence").values()
+  ).some(
+    (evidence) =>
+      evidence.user_id === candidate.user_id &&
+      evidence.action_id === candidate.acquisition_action_id &&
+      evidence.holding_id === candidate.id &&
+      (evidence.kind === "add" || evidence.kind === "correct")
+  );
+  return hasEvidence
+    ? null
+    : { message: "metal_acquisition_action_kind_mismatch" };
+}
+
 function createMemoryClient(): {
   readonly tables: Map<string, Map<string, Record<string, any>>>;
   readonly from: (table: string) => Record<string, any>;
@@ -579,6 +647,12 @@ function createMemoryClient(): {
       for (const row of rows) {
         const existing = tableRows(table).get(String(row.id));
         if (existing && options.ignoreDuplicates) continue;
+        if (table === "assets") {
+          const mismatch = metalAcquisitionKindMismatch(tableRows, row);
+          if (mismatch) {
+            return { error: mismatch };
+          }
+        }
         const existingLifecycle = existing as
           | Readonly<Record<string, unknown>>
           | undefined;
@@ -614,6 +688,18 @@ function createMemoryClient(): {
           try {
             for (const [id, row] of tableRows(table)) {
               if (filters.every(([column, value]) => row[column] === value)) {
+                if (
+                  table === "assets" &&
+                  "acquisition_action_id" in patch
+                ) {
+                  const mismatch = metalAcquisitionKindMismatch(tableRows, {
+                    ...row,
+                    ...patch,
+                  });
+                  if (mismatch) {
+                    return Promise.resolve(resolve({ error: mismatch }));
+                  }
+                }
                 if (
                   table === "financial_action_groups" &&
                   patch.deleted === true

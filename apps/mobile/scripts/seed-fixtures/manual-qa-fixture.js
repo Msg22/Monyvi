@@ -1804,6 +1804,22 @@ function createManualQaMarketRateObservations({
   }));
 }
 
+function canonicalizeJsonKeys(value) {
+  if (Array.isArray(value)) {
+    return value.map(canonicalizeJsonKeys);
+  }
+  if (value && typeof value === "object") {
+    const sorted = {};
+    for (const key of Object.keys(value).sort((a, b) =>
+      Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"))
+    )) {
+      sorted[key] = canonicalizeJsonKeys(value[key]);
+    }
+    return sorted;
+  }
+  return value;
+}
+
 function createMetalActionEnvelope({
   actionId,
   holdingId,
@@ -1813,18 +1829,20 @@ function createMetalActionEnvelope({
   payloadVersion,
   userId,
 }) {
-  return JSON.stringify({
-    accountGuards: [],
-    actionId,
-    domain: "metals",
-    domainReferenceId: holdingId,
-    envelopeVersion: "monyvi.financial-action/v1",
-    kind,
-    occurredAt,
-    payload,
-    payloadVersion,
-    userId,
-  });
+  return JSON.stringify(
+    canonicalizeJsonKeys({
+      accountGuards: [],
+      actionId,
+      domain: "metals",
+      domainReferenceId: holdingId,
+      envelopeVersion: "monyvi.financial-action/v1",
+      kind,
+      occurredAt,
+      payload,
+      payloadVersion,
+      userId,
+    })
+  );
 }
 
 function createFinancialActionGroup({

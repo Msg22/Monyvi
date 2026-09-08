@@ -70,7 +70,7 @@
     "db:sync-local": "npm run db:watermelon-migrate -- --latest && npm run db:types:local && npm run db:format-types && npm run db:transform",
     "db:pull": "npx supabase db pull",
     "db:push": "npx supabase db push",
-    "db:reset": "npx supabase db reset",
+    "db:reset": "npx supabase db reset && node scripts/restart-local-kong.js",
     "db:migrations": "npx supabase migration list",
     "supabase:runtime:setup-local": "node scripts/setup-local-supabase-runtime.js",
     "supabase:market-rates:import-local": "node scripts/import-market-rates-to-local.js",

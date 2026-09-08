@@ -565,6 +565,15 @@ async function upsertRowsIfAny(client, table, rows, options) {
   await upsertRows(client, table, rows, options);
 }
 
+async function linkMetalAcquisitionActions(client, assets) {
+  await updateRowsByIds(
+    client,
+    "assets",
+    assets.filter((row) => row.acquisition_action_id != null),
+    (row) => ({ acquisition_action_id: row.acquisition_action_id })
+  );
+}
+
 async function deleteRowsByIds(client, table, rows) {
   const ids = rows.map((row) => row.id);
   if (ids.length === 0) {
@@ -1166,7 +1175,12 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
   await upsertRows(client, "account_sms_senders", rows.accountSmsSenders, {
     onConflict: "id",
   });
-  await upsertRowsIfAny(client, "assets", rows.assets, { onConflict: "id" });
+  await upsertRowsIfAny(
+    client,
+    "assets",
+    rows.assets.map((row) => ({ ...row, acquisition_action_id: null })),
+    { onConflict: "id" }
+  );
   await upsertRowsIfAny(client, "asset_metals", rows.assetMetals, {
     onConflict: "id",
   });
@@ -1183,6 +1197,7 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
     rows.metalActionEvidence,
     { ignoreDuplicates: true, onConflict: "id" }
   );
+  await linkMetalAcquisitionActions(client, rows.assets);
   await upsertRowsIfAny(
     client,
     "metal_lifecycle_events",
