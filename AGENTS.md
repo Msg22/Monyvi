@@ -374,6 +374,10 @@ chore, perf, ci.
 
 - For GitHub sprint issue branches, follow the branch base selection rules in
   `.agent/workflows/sprint-issue.md`.
+- OpenCode implementation handoff is opt-in only. When Mohamed explicitly asks
+  Codex to plan and then delegate approved implementation to Qwen or GLM, follow
+  `.agent/workflows/opencode-implementation-handoff.md`. Do not auto-trigger it,
+  and do not perform a Codex PR review unless Mohamed separately requests one.
 
 ## Pull Request Review Comments
 
@@ -690,11 +694,20 @@ Strong success criteria let you loop independently. Weak criteria ("make it
 work") require constant clarification.
 
 ## Active Technologies
-- TypeScript strict mode; React Native Expo mobile app + Expo Router, React Native, NativeWind v4, WatermelonDB, Zod, DateTimePicker, i18next (386-recurring-end-date)
-- Existing WatermelonDB and synced recurring-payments record; existing optional end-date column (386-recurring-end-date)
-- Existing synced recurring-payment end-date field in WatermelonDB (386-recurring-end-date)
-- TypeScript 5.9 strict; React 19.2; React Native 0.83.6 + Expo 55, Expo Router 55, WatermelonDB 0.28, Supabase JS 2.106, Decimal.js (035-metals-module-redesign)
-- WatermelonDB/SQLite local source of truth; Supabase PostgreSQL with exact numeric, grouped CAS RPC, and immutable Metals evidence (035-metals-module-redesign)
+
+- TypeScript strict mode; React Native Expo mobile app + Expo Router, React
+  Native, NativeWind v4, WatermelonDB, Zod, DateTimePicker, i18next
+  (386-recurring-end-date)
+- Existing WatermelonDB and synced recurring-payments record; existing optional
+  end-date column (386-recurring-end-date)
+- Existing synced recurring-payment end-date field in WatermelonDB
+  (386-recurring-end-date)
+- TypeScript 5.9 strict; React 19.2; React Native 0.83.6 + Expo 55, Expo Router
+  55, WatermelonDB 0.28, Supabase JS 2.106, Decimal.js
+  (035-metals-module-redesign)
+- WatermelonDB/SQLite local source of truth; Supabase PostgreSQL with exact
+  numeric, grouped CAS RPC, and immutable Metals evidence
+  (035-metals-module-redesign)
 
 - TypeScript 5.9 strict mode, React 19.2, React Native + Expo Router, React
   Navigation, NativeWind v4, (034-budget-detail-redesign)
