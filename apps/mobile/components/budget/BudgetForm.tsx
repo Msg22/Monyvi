@@ -76,9 +76,7 @@ const PERIOD_KEYS: BudgetPeriod[] = ["WEEKLY", "MONTHLY", "CUSTOM"];
 const DEFAULT_THRESHOLD = 80;
 
 function formatAmount(value: number, locale: string): string {
-  return new Intl.NumberFormat(locale, {
-    maximumFractionDigits: 2,
-  }).format(value);
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value);
 }
 
 export function BudgetForm({
@@ -767,10 +765,7 @@ export function BudgetForm({
             />
             <Text className="mt-2 text-sm text-slate-500 dark:text-slate-400">
               {t("warn_me_when_spent", {
-                amount: `${form.currency ?? ""} ${formatAmount(
-                  previewAlertAmount,
-                  i18n.language
-                )}`,
+                amount: `${form.currency ?? ""} ${formatAmount(previewAlertAmount, i18n.language)}`,
               })}
             </Text>
           </View>
@@ -831,8 +826,7 @@ export function BudgetForm({
                   {t("preview_alert_at")} {form.alertThreshold}%
                 </Text>
                 <Text className="mt-1 text-center text-sm font-bold text-nileGreen-500">
-                  {form.currency ?? ""}{" "}
-                  {formatAmount(previewAlertAmount, i18n.language)}
+                  {form.currency ?? ""} {formatAmount(previewAlertAmount, i18n.language)}
                 </Text>
               </View>
               <View className="flex-1 items-center px-1">
