@@ -1,0 +1,676 @@
+import { Q, type Database, type Model } from "@nozbe/watermelondb";
+import type {
+  Asset,
+  AssetMetal,
+  FinancialActionGroup,
+  MetalActionEvidence,
+  MetalHoldingState,
+  MetalLifecycleEvent,
+  MetalRateReference,
+} from "@monyvi/db";
+import {
+  reduceMetalLifecycle,
+  type FinancialActionEnvelopeV1,
+  type RegisteredActionPayload,
+  type Sha256Provider,
+} from "@monyvi/logic";
+
+import type {
+  CommitFinancialActionGroupLocallyInput,
+  CommitFinancialActionGroupLocallyResult,
+  FinancialActionLinkedOperationPlan,
+  FinancialActionUserDataScope,
+} from "./financial-action-foundation-repository";
+import type { CurrentUserDataScope } from "./user-data-access";
+import { incrementCanonicalMetalRevision } from "./metal-financial-action-adapter";
+
+type DisposeUserDataScope = FinancialActionUserDataScope &
+  Pick<CurrentUserDataScope, "queryChildrenOfOwnedParent">;
+
+export const DISPOSE_CATEGORIES = [
+  "lost_stolen",
+  "destroyed_damaged",
+  "given_away",
+  "donated",
+  "other",
+] as const;
+export const DISPOSE_TREATMENTS = ["write_off", "external_transfer"] as const;
+export const DISPOSE_REASONS = [
+  "lost_stolen",
+  "destroyed_damaged",
+  "given_away",
+  "donated",
+  "other_write_off",
+  "other_external_transfer",
+] as const;
+
+export type DisposeCategory = (typeof DISPOSE_CATEGORIES)[number];
+export type DisposeTreatment = (typeof DISPOSE_TREATMENTS)[number];
+export type DisposeReason = (typeof DISPOSE_REASONS)[number];
+
+export const DISPOSE_RATE_ROLES = [
+  "terminal_metal",
+  "terminal_purchase_currency",
+] as const;
+export type DisposeRateRole = (typeof DISPOSE_RATE_ROLES)[number];
+
+export interface DisposeRateSnapshot {
+  readonly referenceId: string;
+  readonly role: DisposeRateRole;
+  readonly kind: "metal" | "currency";
+  readonly instrumentCode: string;
+  readonly valueDecimal: string;
+  readonly unit:
+    | "usd_per_pure_gram"
+    | "usd_per_currency_unit"
+    | "currency_units_per_usd";
+  readonly orientation: "quote_per_base" | "base_per_quote";
+  readonly providerObservedAt: string | null;
+  readonly source: string | null;
+  readonly quality: "valid";
+  readonly capturedFreshness: "fresh" | "stale" | "unknown";
+  readonly capturedAt: string;
+}
+
+export type DisposeRateSnapshotDraft = Omit<DisposeRateSnapshot, "referenceId">;
+
+const DISPOSE_CATEGORY_SET = new Set<string>(DISPOSE_CATEGORIES);
+const DISPOSE_TREATMENT_SET = new Set<string>(DISPOSE_TREATMENTS);
+
+export interface DisposeMetalHoldingCommandInput {
+  readonly actionId: string;
+  readonly actionEvidenceId: string;
+  readonly lifecycleEventId: string;
+  readonly predecessorEventId: string | null;
+  readonly holdingId: string;
+  readonly userId: string;
+  readonly occurredAt: string;
+  readonly cairoTodayDate: string;
+  readonly expectedFinancialRevision: string;
+  readonly disposalDate: string;
+  readonly category: DisposeCategory | null;
+  readonly otherTreatment: DisposeTreatment | null;
+  readonly notes: string | null;
+  readonly rateSnapshots: readonly DisposeRateSnapshot[];
+}
+
+type Commit = (
+  input: CommitFinancialActionGroupLocallyInput
+) => Promise<CommitFinancialActionGroupLocallyResult>;
+
+export interface DisposeMetalHoldingCommandDependencies {
+  readonly database: Database;
+  readonly getCurrentUserDataScope: () => Promise<DisposeUserDataScope>;
+  readonly commitFinancialActionGroupLocally: Commit;
+  readonly createEnvelope: (
+    input: DisposeMetalHoldingCommandInput,
+    payload: RegisteredActionPayload
+  ) => FinancialActionEnvelopeV1;
+  readonly hashProvider: Sha256Provider;
+}
+
+export interface DisposeMetalHoldingCommandService {
+  readonly dispose: (
+    input: DisposeMetalHoldingCommandInput
+  ) => Promise<DisposeMetalHoldingCommandResult>;
+}
+
+export interface DisposeMetalHoldingCommandResult {
+  readonly kind: "committed" | "replay";
+  readonly holdingId: string;
+}
+
+export interface DisposeMetalHoldingConsequences {
+  readonly category: DisposeCategory;
+  readonly treatment: DisposeTreatment;
+  readonly removesActiveOwnership: true;
+  readonly preservesHistory: true;
+  readonly hasSaleMoney: false;
+  readonly hasAccountEffect: false;
+  readonly hasOrdinaryIncome: false;
+  readonly hasRealizedSaleProfitLoss: false;
+  readonly recordsCostBasisWriteOff: boolean;
+  readonly recordsExternalTransfer: boolean;
+}
+
+interface Projection {
+  readonly actionRoots: readonly FinancialActionGroup[];
+  readonly asset: Asset;
+  readonly metal: AssetMetal | null;
+  readonly state: MetalHoldingState;
+  readonly predecessor: MetalLifecycleEvent | null;
+  readonly timeline: readonly MetalLifecycleEvent[];
+}
+
+const EFFECTIVE_HOLDING_RECONCILIATION_STATES = new Set([
+  "local_complete",
+  "sync_pending",
+  "sync_failed",
+  "accepted",
+  "reconciled",
+]);
+
+const ACCEPTED_ACTION_ROOT_STATES = new Set([
+  "local_complete",
+  "sync_pending",
+  "sync_failed",
+  "accepted",
+]);
+
+const REJECTED_ACTION_ROOT_STATES = new Set([
+  "rejected_compensating",
+  "reconciled",
+]);
+
+const SUCCESSFUL_REPLAY_STATES = new Set([
+  "local_complete",
+  "sync_pending",
+  "sync_failed",
+  "accepted",
+]);
+
+const BLOCKING_LIFECYCLE_REJECTIONS = new Set([
+  "duplicate_event_id_conflict",
+  "incomplete_evidence",
+  "missing_predecessor",
+  "predecessor_not_accepted",
+  "predecessor_not_current",
+  "cycle_detected",
+  "invalid_transition",
+  "invalid_reversal_target",
+  "conflicting_effective_successors",
+]);
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function assertStableLocalIds(input: DisposeMetalHoldingCommandInput): void {
+  const ids = [
+    input.actionEvidenceId,
+    input.lifecycleEventId,
+    ...input.rateSnapshots.map((snapshot) => snapshot.referenceId),
+  ];
+  if (
+    ids.some((id) => !UUID_PATTERN.test(id)) ||
+    new Set(ids).size !== ids.length
+  ) {
+    throw new Error("metal_dispose_invalid_local_id");
+  }
+}
+
+export function resolveDisposeReason(
+  category: DisposeCategory | null,
+  otherTreatment: DisposeTreatment | null
+): DisposeReason {
+  if (category === null) throw new Error("dispose_category_required");
+  if (!DISPOSE_CATEGORY_SET.has(category))
+    throw new Error("dispose_category_invalid");
+  if (otherTreatment !== null && !DISPOSE_TREATMENT_SET.has(otherTreatment)) {
+    throw new Error("dispose_treatment_invalid");
+  }
+  if (category === "other") {
+    if (otherTreatment === null)
+      throw new Error("dispose_other_treatment_required");
+    return otherTreatment === "write_off"
+      ? "other_write_off"
+      : "other_external_transfer";
+  }
+  if (otherTreatment !== null)
+    throw new Error("dispose_known_category_treatment_forbidden");
+  return category;
+}
+
+export function resolveDisposeTreatment(
+  category: DisposeCategory | null,
+  otherTreatment: DisposeTreatment | null
+): DisposeTreatment | null {
+  if (category === "lost_stolen" || category === "destroyed_damaged")
+    return "write_off";
+  if (category === "given_away" || category === "donated")
+    return "external_transfer";
+  return category === "other" ? otherTreatment : null;
+}
+
+export function shapeDisposeMetalHoldingConsequences(
+  reason: DisposeReason
+): DisposeMetalHoldingConsequences {
+  const treatment: DisposeTreatment =
+    reason === "lost_stolen" ||
+    reason === "destroyed_damaged" ||
+    reason === "other_write_off"
+      ? "write_off"
+      : "external_transfer";
+  const category: DisposeCategory =
+    reason === "other_write_off" || reason === "other_external_transfer"
+      ? "other"
+      : reason;
+  return Object.freeze({
+    category,
+    treatment,
+    removesActiveOwnership: true,
+    preservesHistory: true,
+    hasSaleMoney: false,
+    hasAccountEffect: false,
+    hasOrdinaryIncome: false,
+    hasRealizedSaleProfitLoss: false,
+    recordsCostBasisWriteOff: treatment === "write_off",
+    recordsExternalTransfer: treatment === "external_transfer",
+  });
+}
+
+function payloadFor(
+  input: DisposeMetalHoldingCommandInput,
+  reason: DisposeReason
+): RegisteredActionPayload {
+  return {
+    holdingId: input.holdingId,
+    expectedHoldingRevision: input.expectedFinancialRevision,
+    predecessorEventId: input.predecessorEventId,
+    reversesEventId: null,
+    disposalDate: input.disposalDate,
+    reason,
+    notes: input.notes,
+    rateSnapshots: input.rateSnapshots.map(
+      (snapshot) => snapshot as unknown as RegisteredActionPayload
+    ),
+  } as unknown as RegisteredActionPayload;
+}
+
+async function loadProjection(
+  dependencies: DisposeMetalHoldingCommandDependencies,
+  input: DisposeMetalHoldingCommandInput
+): Promise<Projection> {
+  const scope = await dependencies.getCurrentUserDataScope();
+  if (scope.userId !== input.userId)
+    throw new Error("financial_action_auth_scope_changed");
+  const predecessorPromise =
+    input.predecessorEventId === null
+      ? Promise.resolve([] as MetalLifecycleEvent[])
+      : scope
+          .queryOwned(
+            dependencies.database.get<MetalLifecycleEvent>(
+              "metal_lifecycle_events"
+            ),
+            Q.where("id", input.predecessorEventId),
+            Q.where("holding_id", input.holdingId),
+            Q.where("deleted", false),
+            Q.take(1)
+          )
+          .fetch();
+  const [assets, states, predecessors, timeline, actionRoots] =
+    await Promise.all([
+      scope
+        .queryOwned(
+          dependencies.database.get<Asset>("assets"),
+          Q.where("id", input.holdingId),
+          Q.where("deleted", false),
+          Q.take(1)
+        )
+        .fetch(),
+      scope
+        .queryOwned(
+          dependencies.database.get<MetalHoldingState>("metal_holding_states"),
+          Q.where("holding_id", input.holdingId),
+          Q.where("deleted", false),
+          Q.take(1)
+        )
+        .fetch(),
+      predecessorPromise,
+      scope
+        .queryOwned(
+          dependencies.database.get<MetalLifecycleEvent>(
+            "metal_lifecycle_events"
+          ),
+          Q.where("holding_id", input.holdingId),
+          Q.where("deleted", false)
+        )
+        .fetch(),
+      scope
+        .queryOwned(
+          dependencies.database.get<FinancialActionGroup>(
+            "financial_action_groups"
+          ),
+          Q.where("domain", "metals"),
+          Q.where("domain_reference_id", input.holdingId),
+          Q.where("deleted", false)
+        )
+        .fetch(),
+    ]);
+  if (
+    !assets[0] ||
+    !states[0] ||
+    (input.predecessorEventId !== null && !predecessors[0])
+  )
+    throw new Error("metal_holding_not_found");
+  const asset = scope.assertOwned(assets[0]);
+  const metals = await scope
+    .queryChildrenOfOwnedParent(
+      dependencies.database.get<AssetMetal>("asset_metals"),
+      asset,
+      "asset_id",
+      Q.where("deleted", false),
+      Q.take(1)
+    )
+    .fetch();
+  return {
+    actionRoots: actionRoots.map((root) => scope.assertOwned(root)),
+    asset,
+    metal: metals[0] ?? null,
+    state: scope.assertOwned(states[0]),
+    predecessor: predecessors[0] ? scope.assertOwned(predecessors[0]) : null,
+    timeline: timeline.map((event) => scope.assertOwned(event)),
+  };
+}
+
+function assertRateSnapshotContext(
+  projection: Projection,
+  input: DisposeMetalHoldingCommandInput
+): void {
+  if (input.rateSnapshots.length === 0) return;
+  const metal = projection.metal;
+  if (!metal) throw new Error("metal_holding_not_found");
+  const byRole = new Map<DisposeRateRole, DisposeRateSnapshot>();
+  for (const snapshot of input.rateSnapshots) {
+    if (
+      !DISPOSE_RATE_ROLES.includes(snapshot.role) ||
+      byRole.has(snapshot.role) ||
+      (snapshot.kind === "metal" &&
+        snapshot.instrumentCode !== `metal:${metal.metalType}`) ||
+      (snapshot.kind === "currency" &&
+        snapshot.instrumentCode !==
+          `currency:${projection.asset.purchaseCurrency}`)
+    ) {
+      throw new Error("metal_dispose_rate_context_invalid");
+    }
+    byRole.set(snapshot.role, snapshot);
+  }
+  if (byRole.size !== DISPOSE_RATE_ROLES.length) {
+    throw new Error("metal_dispose_rate_context_invalid");
+  }
+}
+
+function assertProjection(
+  projection: Projection,
+  input: DisposeMetalHoldingCommandInput
+): void {
+  if (projection.asset.type !== "METAL")
+    throw new Error("metal_holding_not_found");
+  assertRateSnapshotContext(projection, input);
+  if (projection.state.status !== "active")
+    throw new Error("metal_holding_not_active");
+  if (
+    !projection.state.isVisible ||
+    !EFFECTIVE_HOLDING_RECONCILIATION_STATES.has(
+      projection.state.reconciliationState
+    )
+  ) {
+    throw new Error("metal_dispose_effective_active_holding_required");
+  }
+  if (projection.state.financialRevision !== input.expectedFinancialRevision) {
+    throw new Error("holding_revision_conflict");
+  }
+  if (
+    input.disposalDate <
+    projection.asset.purchaseDate.toISOString().slice(0, 10)
+  ) {
+    throw new Error("metal_dispose_date_before_acquisition");
+  }
+  const isMigratedRevisionZero =
+    input.expectedFinancialRevision === "0" &&
+    input.predecessorEventId === null &&
+    projection.state.effectiveActionId === null &&
+    projection.state.effectiveEventId === null &&
+    projection.predecessor === null &&
+    projection.timeline.length === 0;
+  if (isMigratedRevisionZero) return;
+  const reduced = reduceMetalLifecycle(
+    projection.timeline.map((event) =>
+      toReducerEvent(event, projection.actionRoots)
+    )
+  );
+  if (
+    projection.predecessor === null ||
+    !projection.predecessor.isEffective ||
+    !projection.predecessor.isHistoryVisible
+  ) {
+    throw new Error("metal_dispose_effective_active_holding_required");
+  }
+  if (
+    projection.state.effectiveEventId !== input.predecessorEventId ||
+    projection.state.effectiveActionId !== projection.predecessor.actionId
+  ) {
+    throw new Error("holding_revision_conflict");
+  }
+  if (
+    reduced.projection?.effectiveEventId !== input.predecessorEventId ||
+    reduced.rejectedEvents.some(({ reasonCode }) =>
+      BLOCKING_LIFECYCLE_REJECTIONS.has(reasonCode)
+    )
+  ) {
+    throw new Error("metal_dispose_lifecycle_conflict");
+  }
+}
+
+function toReducerEvent(
+  event: MetalLifecycleEvent,
+  actionRoots: readonly FinancialActionGroup[]
+): Readonly<Record<string, unknown>> {
+  const actionRoot = actionRoots.find(
+    (candidate) =>
+      candidate.actionId === event.actionId &&
+      toReducerKind(candidate.kind) === toReducerKind(event.kind)
+  );
+  const canonicalCasStatus = actionRoot
+    ? ACCEPTED_ACTION_ROOT_STATES.has(actionRoot.state)
+      ? "accepted"
+      : REJECTED_ACTION_ROOT_STATES.has(actionRoot.state)
+        ? "rejected"
+        : "unknown"
+    : "unknown";
+  return {
+    canonicalCasStatus,
+    evidenceState: !actionRoot
+      ? "incomplete"
+      : event.isEffective
+        ? event.isHistoryVisible
+          ? "effective"
+          : "incomplete"
+        : "ineffective",
+    fingerprint: event.payloadJson,
+    id: event.id,
+    kind: toReducerKind(event.kind),
+    occurredAt: event.occurredAt.getTime(),
+    predecessorEventId: event.predecessorEventId,
+    reversesEventId: event.reversesEventId,
+  };
+}
+
+function toReducerKind(kind: string): string {
+  const kinds: Readonly<Record<string, string>> = {
+    add: "created",
+    correct: "corrected",
+    created: "created",
+    corrected: "corrected",
+    delete: "deleted",
+    deleted: "deleted",
+    dispose: "disposed",
+    disposed: "disposed",
+    sell: "sold",
+    sold: "sold",
+    undo: "reversed",
+    reversed: "reversed",
+  };
+  return kinds[kind] ?? kind;
+}
+
+function assertSuccessfulReplay(
+  result: CommitFinancialActionGroupLocallyResult
+): void {
+  if (
+    result.kind === "replay" &&
+    !SUCCESSFUL_REPLAY_STATES.has(result.record.state)
+  ) {
+    throw new Error("metal_dispose_replay_requires_recovery");
+  }
+}
+
+function setPreparedId(model: Model, id: string): void {
+  model._raw.id = id;
+}
+
+function assertOwnedRows(
+  userId: string,
+  holdingId: string,
+  rows: readonly {
+    readonly table: string;
+    readonly raw: Readonly<Model["_raw"]>;
+  }[]
+): void {
+  const allowedTables = new Set([
+    "metal_action_evidence",
+    "metal_holding_states",
+    "metal_lifecycle_events",
+    "metal_rate_references",
+  ]);
+  for (const row of rows) {
+    const raw = row.raw as unknown as Readonly<Record<string, unknown>>;
+    if (
+      !allowedTables.has(row.table) ||
+      raw["user_id"] !== userId ||
+      raw["holding_id"] !== holdingId
+    ) {
+      throw new Error("metal_dispose_ownership_failed");
+    }
+  }
+}
+
+function preparePlan(
+  dependencies: DisposeMetalHoldingCommandDependencies,
+  input: DisposeMetalHoldingCommandInput,
+  envelope: FinancialActionEnvelopeV1,
+  projection: Projection
+): FinancialActionLinkedOperationPlan {
+  assertProjection(projection, input);
+  const occurredAt = new Date(input.occurredAt);
+  const nextRevision = incrementCanonicalMetalRevision(
+    input.expectedFinancialRevision
+  );
+  const payloadJson = JSON.stringify(envelope.payload);
+  const evidence = dependencies.database
+    .get<MetalActionEvidence>("metal_action_evidence")
+    .prepareCreate((record): void => {
+      setPreparedId(record, input.actionEvidenceId);
+      record.actionId = input.actionId;
+      record.canonicalHoldingRevision = nextRevision;
+      record.deleted = false;
+      record.domainPayloadJson = payloadJson;
+      record.expectedHoldingRevision = input.expectedFinancialRevision;
+      record.holdingId = input.holdingId;
+      record.kind = "dispose";
+      record.updatedAt = occurredAt;
+      record.userId = input.userId;
+    });
+  const event = dependencies.database
+    .get<MetalLifecycleEvent>("metal_lifecycle_events")
+    .prepareCreate((record): void => {
+      setPreparedId(record, input.lifecycleEventId);
+      record.actionId = input.actionId;
+      record.deleted = false;
+      record.holdingId = input.holdingId;
+      record.isEffective = true;
+      record.isHistoryVisible = true;
+      record.kind = "dispose";
+      record.occurredAt = occurredAt;
+      record.payloadJson = payloadJson;
+      record.predecessorEventId = input.predecessorEventId;
+      record.reversesEventId = null;
+      record.updatedAt = occurredAt;
+      record.userId = input.userId;
+    });
+  const rateReferences = input.rateSnapshots.map((snapshot) =>
+    dependencies.database
+      .get<MetalRateReference>("metal_rate_references")
+      .prepareCreate((record): void => {
+        setPreparedId(record, snapshot.referenceId);
+        record.actionId = input.actionId;
+        record.capturedAt = new Date(snapshot.capturedAt);
+        record.capturedFreshness = snapshot.capturedFreshness;
+        record.deleted = false;
+        record.holdingId = input.holdingId;
+        record.instrumentCode = snapshot.instrumentCode;
+        record.kind = snapshot.kind;
+        record.orientation = snapshot.orientation;
+        record.providerObservedAt = snapshot.providerObservedAt
+          ? new Date(snapshot.providerObservedAt)
+          : null;
+        record.quality = snapshot.quality;
+        record.role = snapshot.role;
+        record.source = snapshot.source;
+        record.unit = snapshot.unit;
+        record.updatedAt = occurredAt;
+        record.userId = input.userId;
+        record.valueDecimal = snapshot.valueDecimal;
+      })
+  );
+  const plan: FinancialActionLinkedOperationPlan = {
+    preparedCreates: [evidence, event, ...rateReferences],
+    existingOperations: [
+      {
+        kind: "update",
+        model: projection.state,
+        update: (model): void => {
+          const state = model as MetalHoldingState;
+          state.effectiveActionId = input.actionId;
+          state.effectiveEventId = input.lifecycleEventId;
+          state.financialRevision = nextRevision;
+          state.reconciliationState = "sync_pending";
+          state.status = "disposed";
+          state.updatedAt = occurredAt;
+        },
+      },
+    ],
+    assertCachedOwnership: ({ userId, cachedPreimages }): Promise<void> => {
+      assertOwnedRows(userId, input.holdingId, cachedPreimages);
+      return Promise.resolve();
+    },
+    assertPreparedOwnership: ({
+      userId,
+      preparedPostimages,
+    }): Promise<void> => {
+      assertOwnedRows(userId, input.holdingId, preparedPostimages);
+      return Promise.resolve();
+    },
+  };
+  return plan;
+}
+
+export function createDisposeMetalHoldingCommandService(
+  dependencies: DisposeMetalHoldingCommandDependencies
+): DisposeMetalHoldingCommandService {
+  return Object.freeze({
+    dispose: async (
+      input: DisposeMetalHoldingCommandInput
+    ): Promise<DisposeMetalHoldingCommandResult> => {
+      assertStableLocalIds(input);
+      const reason = resolveDisposeReason(input.category, input.otherTreatment);
+      const envelope = dependencies.createEnvelope(
+        input,
+        payloadFor(input, reason)
+      );
+      const result = await dependencies.commitFinancialActionGroupLocally({
+        envelope,
+        hashProvider: dependencies.hashProvider,
+        validationInput: { cairoTodayDate: input.cairoTodayDate },
+        prepareLinkedOperationPlan: async () => {
+          const projection = await loadProjection(dependencies, input);
+          return preparePlan(dependencies, input, envelope, projection);
+        },
+      });
+      assertSuccessfulReplay(result);
+      return {
+        kind: result.kind === "replay" ? "replay" : "committed",
+        holdingId: input.holdingId,
+      };
+    },
+  });
+}
