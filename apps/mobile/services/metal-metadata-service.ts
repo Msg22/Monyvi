@@ -307,6 +307,18 @@ export async function commitCanonicalMetalMetadataLocally(
     throw new Error("invalid_canonical_metal_metadata");
   }
 
+  const nameWins =
+    canonical.name !== null &&
+    compareClock(state.nameWrittenAt, state.nameWriterId, canonical.name) !==
+      "ignore";
+  const notesWins =
+    canonical.notes !== null &&
+    compareClock(state.notesWrittenAt, state.notesWriterId, canonical.notes) !==
+      "ignore";
+  if (!nameWins && !notesWins) {
+    return;
+  }
+
   const snapshots = [
     captureCachedModelSnapshot(asset),
     captureCachedModelSnapshot(state),
@@ -315,16 +327,17 @@ export async function commitCanonicalMetalMetadataLocally(
     const now = new Date();
     await database.batch(
       asset.prepareUpdate((row) => {
-        if (canonical.name) row.name = canonical.name.value;
-        if (canonical.notes) row.notes = canonical.notes.value ?? undefined;
+        if (nameWins && canonical.name) row.name = canonical.name.value;
+        if (notesWins && canonical.notes)
+          row.notes = canonical.notes.value ?? undefined;
         row.updatedAt = now;
       }),
       state.prepareUpdate((row) => {
-        if (canonical.name) {
+        if (nameWins && canonical.name) {
           row.nameWrittenAt = canonical.name.writtenAt;
           row.nameWriterId = canonical.name.writerId;
         }
-        if (canonical.notes) {
+        if (notesWins && canonical.notes) {
           row.notesWrittenAt = canonical.notes.writtenAt;
           row.notesWriterId = canonical.notes.writerId;
         }

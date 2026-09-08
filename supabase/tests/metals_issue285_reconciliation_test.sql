@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(14);
+SELECT plan(18);
 
 SELECT has_function(
   'public', 'apply_metal_action_v1', ARRAY['text', 'text'],
@@ -107,14 +107,37 @@ SELECT is(
   'baseline Add succeeds through the hardened wrapper'
 );
 
-SELECT throws_ok(
-  $$SELECT public.apply_metal_action_v1(
-    '{"kind":"sell","payload":{"holdingId":"018f0c7a-1234-7abc-8def-000000000286","saleDate":"2026-08-29"}}',
-    repeat('0', 64)
-  )$$,
-  '22023',
-  'metal_sale_before_acquisition',
-  'sale date before acquisition is rejected before any server mutation'
+CREATE TEMPORARY TABLE pg_temp.issue285_sale AS
+SELECT pg_temp.issue285_action(
+  '018f0c7a-1234-7abc-8def-000000000290',
+  'sell',
+  'metals.sell/v1',
+  jsonb_build_object(
+    'expectedHoldingRevision', '1',
+    'holdingId', '018f0c7a-1234-7abc-8def-000000000286',
+    'saleDate', '2026-08-29',
+    'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000287',
+    'reversesEventId', null
+  )
+) AS outcome;
+SELECT is(
+  (SELECT outcome ->> 'status' FROM pg_temp.issue285_sale),
+  'rejected',
+  'a queued sale before acquisition returns a structured rejection'
+);
+SELECT is(
+  (SELECT outcome ->> 'code' FROM pg_temp.issue285_sale),
+  'INVALID_LINK',
+  'the invalid queued sale uses the existing invalid-link outcome contract'
+);
+SELECT is(
+  (
+    SELECT state.status || ':' || state.financial_revision::text
+    FROM public.metal_holding_states AS state
+    WHERE state.holding_id = '018f0c7a-1234-7abc-8def-000000000286'
+  ),
+  'active:0',
+  'the rejected sale makes no server mutation'
 );
 
 CREATE TEMPORARY TABLE pg_temp.issue285_stale AS
@@ -160,6 +183,22 @@ SELECT throws_ok(
   '22023',
   'metal_action_rpc_required',
   'generic authenticated writes cannot change item_form'
+);
+SELECT throws_ok(
+  $$UPDATE public.assets
+    SET type = 'CRYPTO', purchase_price = 1, purchase_date = '2020-01-01'
+    WHERE id = '018f0c7a-1234-7abc-8def-000000000286'$$,
+  '22023',
+  'metal_action_rpc_required',
+  'authenticated writes cannot escape metal field guards by changing type'
+);
+SELECT throws_ok(
+  $$UPDATE public.assets
+    SET type = 'REAL_ESTATE'
+    WHERE id = '018f0c7a-1234-7abc-8def-000000000286'$$,
+  '22023',
+  'metal_action_rpc_required',
+  'authenticated writes cannot change an established metal type'
 );
 
 CREATE TEMPORARY TABLE pg_temp.issue285_metadata AS

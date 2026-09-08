@@ -196,7 +196,6 @@ function isCanonicalHolding(
     (asset.notes === null || typeof asset.notes === "string") &&
     /^\d{4}-\d{2}-\d{2}$/.test(asset.purchaseDate) &&
     Number.isFinite(asset.purchasePrice) &&
-    asset.purchasePrice > 0 &&
     (asset.purchaseCurrency === null ||
       asset.purchaseCurrency === asset.currency) &&
     nullableExactValueIsValid(asset.purchasePriceDecimal) &&
@@ -204,10 +203,9 @@ function isCanonicalHolding(
     (metal.physicalForm === null ||
       ["COIN", "BAR", "JEWELRY"].includes(metal.physicalForm)) &&
     Number.isFinite(metal.purityFraction) &&
-    metal.purityFraction > 0 &&
+    metal.purityFraction >= 0 &&
     metal.purityFraction <= 1 &&
     Number.isFinite(metal.weightGrams) &&
-    metal.weightGrams > 0 &&
     nullableExactValueIsValid(metal.purityFactorDecimal) &&
     nullableExactValueIsValid(metal.weightGramsDecimal) &&
     (metal.purityCode === null || typeof metal.purityCode === "string") &&

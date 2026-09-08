@@ -305,6 +305,7 @@ describe("pushChanges", () => {
             {
               id: "asset-1",
               user_id: "current-user",
+              type: "METAL",
               name: "Gold holding",
               purchase_price_decimal: "100000.125",
               purchase_currency: "EGP",
@@ -327,7 +328,7 @@ describe("pushChanges", () => {
         {
           id: "asset-1",
           user_id: "current-user",
-          name: "Gold holding",
+          type: "METAL",
           deleted: false,
         },
       ],

@@ -92,6 +92,9 @@ export function stripMetalActionFragments(
   table: SyncableTable,
   record: Record<string, unknown>
 ): Record<string, unknown> {
+  if (table === "assets" && record.type !== "METAL") {
+    return { ...record };
+  }
   const configuredColumns =
     METALS_ACTION_FRAGMENT_COLUMNS[
       table as keyof typeof METALS_ACTION_FRAGMENT_COLUMNS
@@ -99,16 +102,10 @@ export function stripMetalActionFragments(
   if (!configuredColumns) {
     return { ...record };
   }
-  const protectedColumns =
-    table === "assets" && record.type !== "METAL"
-      ? configuredColumns.filter(
-          (column) => column !== "name" && column !== "notes"
-        )
-      : configuredColumns;
 
   return Object.fromEntries(
     Object.entries(record).filter(
-      ([column]) => !(protectedColumns as readonly string[]).includes(column)
+      ([column]) => !(configuredColumns as readonly string[]).includes(column)
     )
   );
 }

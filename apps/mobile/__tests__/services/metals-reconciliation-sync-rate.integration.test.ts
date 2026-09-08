@@ -1,11 +1,10 @@
 import {
   classifyMetalServerOutcome,
   createMetalReconciliationService,
+  type CanonicalMetalHolding,
   type MetalRpcOutcome,
 } from "../../services/metal-reconciliation-service";
 import { Database, type Model } from "@nozbe/watermelondb";
-import SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
-import { schema } from "../../../../packages/db/src/schema";
 import { Asset } from "../../../../packages/db/src/models/Asset";
 import { MetalHoldingState } from "../../../../packages/db/src/models/MetalHoldingState";
 import {
@@ -16,6 +15,10 @@ import {
   applyMetalMetadataPatch,
   createMetalMetadataService,
 } from "../../services/metal-metadata-service";
+import {
+  createMetalMetadataFixtureDatabase,
+  type MetalMetadataFixtureDatabase,
+} from "./metal-metadata-test-database";
 
 jest.mock("@monyvi/db", (): unknown => {
   const schemaModule: unknown = jest.requireActual(
@@ -55,56 +58,12 @@ jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown =>
   )
 );
 
-async function createMetadataDatabase(): Promise<{
-  readonly adapter: SQLiteAdapter;
-  readonly database: Database;
-}> {
-  const adapter = new SQLiteAdapter({ schema });
-  await adapter.initializingPromise;
-  const database = new Database({
-    adapter,
-    modelClasses: [Asset, MetalHoldingState] as Array<typeof Model>,
+const createMetadataDatabase = (): Promise<MetalMetadataFixtureDatabase> =>
+  createMetalMetadataFixtureDatabase({
+    userId: USER_ID,
+    acquisitionActionId: ACTION_ID,
+    holdingId: HOLDING_ID,
   });
-  await database.write(async (): Promise<void> => {
-    const asset = database.get<Asset>("assets").prepareCreate((row) => {
-      row._raw.id = HOLDING_ID;
-      row.acquisitionActionId = ACTION_ID;
-      row.currency = "EGP";
-      row.deleted = false;
-      row.isLiquid = false;
-      row.name = "Baseline";
-      row.notes = "Baseline note";
-      row.purchaseCurrency = "EGP";
-      row.purchaseDate = new Date("2026-08-01T00:00:00.000Z");
-      row.purchasePrice = 100;
-      row.purchasePriceDecimal = "100";
-      row.type = "METAL";
-      row.updatedAt = new Date();
-      row.userId = USER_ID;
-    });
-    const state = database
-      .get<MetalHoldingState>("metal_holding_states")
-      .prepareCreate((row) => {
-        row._raw.id = HOLDING_ID;
-        row.deleted = false;
-        row.effectiveActionId = ACTION_ID;
-        row.effectiveEventId = ACTION_ID;
-        row.financialRevision = "4";
-        row.holdingId = HOLDING_ID;
-        row.isVisible = true;
-        row.nameWrittenAt = null;
-        row.nameWriterId = null;
-        row.notesWrittenAt = null;
-        row.notesWriterId = null;
-        row.reconciliationState = "accepted";
-        row.status = "sold";
-        row.updatedAt = new Date();
-        row.userId = USER_ID;
-      });
-    await database.batch(asset, state);
-  });
-  return { adapter, database };
-}
 
 type StaleMetalRpcOutcome = Extract<
   MetalRpcOutcome,
@@ -225,6 +184,58 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
         "reconciliation_incomplete"
       );
     }
+  });
+
+  it("accepts a preserved legacy holding winner with null exact facts", () => {
+    const base = staleOutcome().canonicalHolding;
+    const legacyWinner: CanonicalMetalHolding = {
+      ...base,
+      asset: { ...base.asset, purchasePrice: 0, purchasePriceDecimal: null },
+      metal: {
+        ...base.metal,
+        purityCatalogVersion: null,
+        purityCode: null,
+        purityFactorDecimal: null,
+        purityFraction: 0,
+        weightGrams: 0,
+        weightGramsDecimal: null,
+      },
+    };
+
+    expect(
+      classifyMetalServerOutcome(
+        staleOutcome({ canonicalHolding: legacyWinner }),
+        USER_ID
+      )
+    ).toBe("stale_ready");
+    expect(
+      classifyMetalServerOutcome(
+        staleOutcome({
+          canonicalHolding: {
+            ...legacyWinner,
+            asset: {
+              ...legacyWinner.asset,
+              purchasePriceDecimal: "0",
+            },
+          },
+        }),
+        USER_ID
+      )
+    ).toBe("reconciliation_incomplete");
+    expect(
+      classifyMetalServerOutcome(
+        staleOutcome({
+          canonicalHolding: {
+            ...legacyWinner,
+            asset: {
+              ...legacyWinner.asset,
+              purchasePrice: Number.NaN,
+            },
+          },
+        }),
+        USER_ID
+      )
+    ).toBe("reconciliation_incomplete");
   });
 
   it("uses one lock and one durable atomic recovery across retry/restart", async () => {
@@ -436,7 +447,7 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
           userId: USER_ID,
           fields: {
             name: {
-              value: "é".repeat(129),
+              value: "Ã©".repeat(129),
               writtenAt: 2,
               writerId: HOLDING_ACTION_ID,
             },

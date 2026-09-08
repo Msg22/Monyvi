@@ -36,6 +36,23 @@ describe("issue #285 Metals reconciliation regressions", () => {
     ).toEqual({ id: "holding-1" });
   });
 
+  it("keeps every field pushable for non-metal assets", () => {
+    const record = {
+      id: "home-1",
+      type: "REAL_ESTATE",
+      name: "Home",
+      notes: "generic note",
+      purchase_price: 250000,
+      purchase_date: "2026-01-05",
+      currency: "EGP",
+      purchase_price_decimal: null,
+      purchase_currency: null,
+      acquisition_action_id: null,
+    };
+
+    expect(stripMetalActionFragments("assets", record)).toEqual(record);
+  });
+
   it("rejects an equal-clock metadata value conflict atomically", () => {
     const current = {
       holdingId: "holding-1",

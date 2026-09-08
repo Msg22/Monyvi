@@ -25,9 +25,8 @@ BEGIN
     RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'metal_metadata_rpc_required';
   END IF;
   IF current_user = 'authenticated'
-    AND NEW.type = 'METAL'
     AND (
-      (TG_OP = 'INSERT' AND (
+      (TG_OP = 'INSERT' AND NEW.type = 'METAL' AND (
         NEW.purchase_price IS NOT NULL
         OR NEW.purchase_date IS NOT NULL
         OR NEW.currency IS NOT NULL
@@ -35,8 +34,9 @@ BEGIN
         OR NEW.purchase_currency IS NOT NULL
         OR NEW.acquisition_action_id IS NOT NULL
       ))
-      OR (TG_OP = 'UPDATE' AND (
-        NEW.purchase_price IS DISTINCT FROM OLD.purchase_price
+      OR (TG_OP = 'UPDATE' AND (NEW.type = 'METAL' OR OLD.type = 'METAL') AND (
+        NEW.type IS DISTINCT FROM OLD.type
+        OR NEW.purchase_price IS DISTINCT FROM OLD.purchase_price
         OR NEW.purchase_date IS DISTINCT FROM OLD.purchase_date
         OR NEW.currency IS DISTINCT FROM OLD.currency
         OR NEW.purchase_price_decimal IS DISTINCT FROM OLD.purchase_price_decimal
@@ -156,12 +156,14 @@ AS $$
 DECLARE
   v_owner uuid := (SELECT auth.uid());
   v_envelope jsonb;
+  v_action_id uuid;
   v_holding_id uuid;
   v_outcome jsonb;
 BEGIN
   BEGIN
     v_envelope := p_payload_json::jsonb;
     v_holding_id := (v_envelope #>> '{payload,holdingId}')::uuid;
+    v_action_id := (v_envelope ->> 'actionId')::uuid;
   EXCEPTION WHEN OTHERS THEN
     RETURN private.apply_metal_action_v1_pre_285(p_payload_json, p_payload_hash);
   END;
@@ -176,7 +178,11 @@ BEGIN
         AND (v_envelope #>> '{payload,saleDate}')::date < asset.purchase_date::date
     )
   THEN
-    RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'metal_sale_before_acquisition';
+    RETURN jsonb_build_object(
+      'status', 'rejected',
+      'actionId', v_action_id,
+      'code', 'INVALID_LINK'
+    );
   END IF;
 
   v_outcome := private.apply_metal_action_v1_pre_285(
