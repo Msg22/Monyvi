@@ -20,7 +20,7 @@ import type {
   MetalPortfolioHoldingInput,
   MetalPortfolioReadModel,
 } from "@/services/metal-portfolio-read-model-service";
-import { formatPortfolioRateUpdated } from "./portfolio-rate-presentation";
+import { formatPortfolioRateUpdatedParts } from "./portfolio-rate-presentation";
 import {
   formatCodeAmount,
   formatPurchaseDetail,
@@ -49,6 +49,7 @@ interface MetalPortfolioScreenProps {
 interface MetalHoldingRowProps {
   readonly currency: CurrencyType;
   readonly holding: MetalPortfolioHoldingInput;
+  readonly isRateCurrencyReady: boolean;
   readonly onPress: () => void;
 }
 
@@ -98,6 +99,7 @@ export function MetalPortfolioScreen({
           <MetalHoldingRow
             currency={currency}
             holding={item}
+            isRateCurrencyReady={sectionReadiness.rateCurrency}
             onPress={(): void => onHoldingPress(item.id)}
           />
         )}
@@ -461,9 +463,12 @@ function RateStatus({
   readonly providerObservedAt: Date | null;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
+  const parts = formatPortfolioRateUpdatedParts(
+    providerObservedAt,
+    i18n?.resolvedLanguage
+  );
   const label =
-    formatPortfolioRateUpdated(providerObservedAt, i18n?.resolvedLanguage) ??
-    t("rate.missing");
+    parts === null ? t("rate.missing") : t("portfolio.rates_updated", parts);
   return (
     <View className="mt-7 flex-row items-start gap-2">
       <Ionicons name="time-outline" size={20} color={palette.nileGreen[600]} />
@@ -601,6 +606,7 @@ function HoldingSeparator(): React.JSX.Element {
 function MetalHoldingRow({
   currency,
   holding,
+  isRateCurrencyReady,
   onPress,
 }: MetalHoldingRowProps): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
@@ -646,8 +652,8 @@ function MetalHoldingRow({
     metadata,
     t("status.active"),
     purchaseDetail,
-    currentValueLabel,
-    performanceLabel,
+    isRateCurrencyReady ? currentValueLabel : null,
+    isRateCurrencyReady ? performanceLabel : null,
   ]
     .filter((value): value is string => Boolean(value))
     .join(". ");
@@ -691,54 +697,64 @@ function MetalHoldingRow({
           </Text>
         )}
       </View>
-      <View
-        testID={`metal-portfolio-holding-value-${holding.id}`}
-        className="w-[104px] shrink-0 items-end self-center"
-      >
-        <Text
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.8}
-          className="text-sm font-semibold text-text-primary dark:text-text-primary-dark"
+      {isRateCurrencyReady ? (
+        <View
+          testID={`metal-portfolio-holding-value-${holding.id}`}
+          className="w-[104px] shrink-0 items-end self-center"
         >
-          {currentValueLabel}
-        </Text>
-        {holding.currentPerformanceDecimal === null ? (
           <Text
-            numberOfLines={2}
-            className="mt-1 text-right text-[11px] text-text-secondary dark:text-text-secondary-dark"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+            className="text-sm font-semibold text-text-primary dark:text-text-primary-dark"
           >
-            {holding.currentValueDecimal === null
-              ? t("portfolio.value_unavailable_short")
-              : t(
-                  holding.performanceUnavailableReason === "rate_reference"
-                    ? "portfolio.performance_unavailable_rate_reference"
-                    : "portfolio.performance_unavailable"
-                )}
+            {currentValueLabel}
           </Text>
-        ) : (
-          <>
+          {holding.currentPerformanceDecimal === null ? (
             <Text
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.8}
-              className={`mt-2 text-xs font-medium ${getPerformanceTextClass(
-                performanceValue
-              )}`}
+              numberOfLines={2}
+              className="mt-1 text-right text-[11px] text-text-secondary dark:text-text-secondary-dark"
             >
-              {formatCodeAmount(
-                holding.currentPerformanceDecimal,
-                currency,
-                locale,
-                true
-              )}
+              {holding.currentValueDecimal === null
+                ? t("portfolio.value_unavailable_short")
+                : t(
+                    holding.performanceUnavailableReason === "rate_reference"
+                      ? "portfolio.performance_unavailable_rate_reference"
+                      : "portfolio.performance_unavailable"
+                  )}
             </Text>
-            <Text className="mt-1 text-[11px] text-text-secondary dark:text-text-secondary-dark">
-              {t("portfolio.since_purchase_label")}
-            </Text>
-          </>
-        )}
-      </View>
+          ) : (
+            <>
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                className={`mt-2 text-xs font-medium ${getPerformanceTextClass(
+                  performanceValue
+                )}`}
+              >
+                {formatCodeAmount(
+                  holding.currentPerformanceDecimal,
+                  currency,
+                  locale,
+                  true
+                )}
+              </Text>
+              <Text className="mt-1 text-[11px] text-text-secondary dark:text-text-secondary-dark">
+                {t("portfolio.since_purchase_label")}
+              </Text>
+            </>
+          )}
+        </View>
+      ) : (
+        <View
+          testID={`metal-portfolio-holding-value-pending-${holding.id}`}
+          className="w-[104px] shrink-0 items-end gap-2 self-center"
+        >
+          <Skeleton width="100%" height={18} borderRadius={8} />
+          <Skeleton width="70%" height={14} borderRadius={7} />
+        </View>
+      )}
       <View className="shrink-0 self-center">
         <Ionicons
           name={getForwardChevronName()}
