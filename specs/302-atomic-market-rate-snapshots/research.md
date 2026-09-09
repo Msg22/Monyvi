@@ -179,8 +179,8 @@ The shared parser/handler source runs under two resolvers during the issue #302 
 
 **Decision**:
 
-- root `package.json` declares exact devDependencies `lossless-json: "4.3.1"` and `zod: "4.3.6"` and the resulting `package-lock.json` is committed;
-- `supabase/functions/fetch-metal-rates/deno.json` maps bare `lossless-json` to `npm:lossless-json@4.3.1` and bare `zod` to `npm:zod@4.3.6`;
+- root `package.json` declares exact devDependencies `lossless-json: "4.3.1"` and `zod: "4.4.3"` and the resulting `package-lock.json` is committed;
+- `supabase/functions/fetch-metal-rates/deno.json` maps bare `lossless-json` to `npm:lossless-json@4.3.1` and bare `zod` to `npm:zod@4.4.3`;
 - shared parser/handler source imports only those bare specifiers;
 - version parity is a release verification item.
 

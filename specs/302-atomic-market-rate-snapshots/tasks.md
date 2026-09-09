@@ -52,10 +52,10 @@ establish shared deterministic exact fixtures.
       fields, malformed timestamp strings, future timestamp strings, and
       provider status/shape failures. Before the first T006 execution, establish
       **test/runtime dependency scaffolding only**: add exact root
-      `devDependencies` `lossless-json: "4.3.1"` and `zod: "4.3.6"`, commit the
+      `devDependencies` `lossless-json: "4.3.1"` and `zod: "4.4.3"`, commit the
       resulting `package-lock.json`, and map the same bare specifiers in
       `supabase/functions/fetch-metal-rates/deno.json` to
-      `npm:lossless-json@4.3.1` and `npm:zod@4.3.6`. This setup changes
+      `npm:lossless-json@4.3.1` and `npm:zod@4.4.3`. This setup changes
       resolution metadata only; it must not implement producer behavior.
 
 **Checkpoint**: Business source of truth is committed first; every layer can
@@ -450,7 +450,7 @@ business documentation is already a Phase 1 gate.
       normalization, exact current helpers, 37-instrument/source contract, and
       no pre-RPC binary-number authority. Also record
       `npm pkg get devDependencies.lossless-json devDependencies.zod` and verify
-      it reports exact `4.3.1` / `4.3.6`; inspect
+      it reports exact `4.3.1` / `4.4.3`; inspect
       `supabase/functions/fetch-metal-rates/deno.json` and confirm its
       `lossless-json` / `zod` mappings are exact `npm:...` versions matching
       root metadata. Confirm the `Market Rate Edge Contract` CI step invokes the

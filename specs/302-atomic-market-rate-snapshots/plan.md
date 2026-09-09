@@ -22,7 +22,7 @@ No screen, navigation, supported-instrument scope, historical acquisition/termin
 ## Technical Context
 
 **Language/Version**: TypeScript 5.9.x on Node 22; TypeScript/Deno Edge Runtime; PostgreSQL SQL/PLpgSQL.  
-**Primary Dependencies**: Expo 55, React Native 0.83.6, React 19.2, WatermelonDB 0.28, `@supabase/supabase-js` 2.106 in mobile, exact `zod@4.3.6` + `lossless-json@4.3.1` declared at the root for Node/`tsx` test resolution and mapped to the same exact `npm:` versions in `supabase/functions/fetch-metal-rates/deno.json`, Decimal.js through existing `@monyvi/logic`, and root `tsx` for deterministic Node test execution.  
+**Primary Dependencies**: Expo 55, React Native 0.83.6, React 19.2, WatermelonDB 0.28, `@supabase/supabase-js` 2.106 in mobile, exact `zod@4.4.3` + `lossless-json@4.3.1` declared at the root for Node/`tsx` test resolution and mapped to the same exact `npm:` versions in `supabase/functions/fetch-metal-rates/deno.json`, Decimal.js through existing `@monyvi/logic`, and root `tsx` for deterministic Node test execution.  
 **Storage**: Supabase `market_rates` + `market_rate_observations`; WatermelonDB remains the device-side source of truth/offline cache. No new durable table/column is planned.  
 **Testing**: SQL regression tests; exact shared/Edge tests run by an explicit root script; logic Jest; mobile Jest/React Native Testing Library; architecture/source-contract tests; typecheck/lint; local Supabase verification.  
 **Target Platform**: Expo Android/iOS plus Supabase Edge Functions/Postgres.  
@@ -88,8 +88,8 @@ Provider metal/currency timestamps may differ. Missing, malformed, or future pro
 
 Dependency/runtime ownership is explicit before these tests execute:
 
-- root `package.json` owns exact devDependencies `lossless-json@4.3.1` and `zod@4.3.6` for Node/`tsx` execution, with the resulting `package-lock.json` committed;
-- `supabase/functions/fetch-metal-rates/deno.json` maps the same bare specifiers to exact `npm:lossless-json@4.3.1` and `npm:zod@4.3.6` for the Deno Edge runtime;
+- root `package.json` owns exact devDependencies `lossless-json@4.3.1` and `zod@4.4.3` for Node/`tsx` execution, with the resulting `package-lock.json` committed;
+- `supabase/functions/fetch-metal-rates/deno.json` maps the same bare specifiers to exact `npm:lossless-json@4.3.1` and `npm:zod@4.4.3` for the Deno Edge runtime;
 - shared parser/handler code imports only the bare `lossless-json` and `zod` specifiers so Node and Deno execute the same package identities/versions;
 - no test relies on workspace hoisting, and Node is never expected to consume the Deno import map.
 
@@ -101,7 +101,7 @@ Implementation boundary:
 4. obtain each JSON numeric token as lossless decimal/exponent text;
 5. normalize ordinary/scientific notation to the feature's plain decimal-string grammar with exact string/exponent manipulation only—never `Number`, `parseFloat`, or any binary-float intermediate;
 6. preserve all coefficient digits and trailing coefficient precision where representable in plain form; examples: `3.73874e-10 -> 0.000000000373874`, `1.2300e+2 -> 123.00`;
-7. validate the transformed exact-string provider shape with exact `zod@4.3.6`;
+7. validate the transformed exact-string provider shape with exact `zod@4.4.3`;
 8. generate one `snapshotId` + one capture/order timestamp;
 9. normalize provider timestamps: missing/malformed/future relative to the capture instant -> `null`; valid non-future provider timestamps preserved exactly/semantically;
 10. build exact root payload + exactly 37 exact observations;
@@ -271,7 +271,7 @@ Before the first Node/`tsx` execution of the Edge/shared tests, implementation m
 ```json
 // root package.json devDependencies
 "lossless-json": "4.3.1",
-"zod": "4.3.6"
+"zod": "4.4.3"
 ```
 
 and commit the generated `package-lock.json` update. The function-local Deno map must resolve the same bare imports to the same exact packages:
@@ -279,7 +279,7 @@ and commit the generated `package-lock.json` update. The function-local Deno map
 ```json
 // supabase/functions/fetch-metal-rates/deno.json imports
 "lossless-json": "npm:lossless-json@4.3.1",
-"zod": "npm:zod@4.3.6"
+"zod": "npm:zod@4.4.3"
 ```
 
 This is deliberate duplication of **resolution metadata**, not two dependency authorities: root npm metadata owns Node/`tsx` resolution; the Deno import map owns Edge resolution; the exact versions must match. The shared/handler source imports `lossless-json` and `zod` by those bare specifiers in both runtimes.

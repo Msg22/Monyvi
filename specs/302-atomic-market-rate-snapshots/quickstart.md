@@ -74,14 +74,14 @@ supabase/functions/fetch-metal-rates/deno.json
 Before first execution of the shared/handler tests, make dependency resolution deterministic for **both** runtimes. Root Node/`tsx` owns exact devDependencies and the root lockfile:
 
 ```bash
-npm install --save-dev --save-exact lossless-json@4.3.1 zod@4.3.6
+npm install --save-dev --save-exact lossless-json@4.3.1 zod@4.4.3
 ```
 
 This must result in root `package.json` entries equivalent to:
 
 ```json
 "lossless-json": "4.3.1",
-"zod": "4.3.6"
+"zod": "4.4.3"
 ```
 
 and a committed `package-lock.json` update.
@@ -94,7 +94,7 @@ The function-local Deno import map must resolve the same bare specifiers to the 
     "edge-runtime": "jsr:@supabase/functions-js/edge-runtime.d.ts",
     "@supabase/supabase-js": "npm:@supabase/supabase-js@^2.49.1",
     "lossless-json": "npm:lossless-json@4.3.1",
-    "zod": "npm:zod@4.3.6"
+    "zod": "npm:zod@4.4.3"
   }
 }
 ```
@@ -121,7 +121,7 @@ Required red cases:
 - source is non-empty `metals.dev`;
 - no authoritative `response.json()` round-trip precedes RPC payload creation.
 
-Read `response.text()`, parse with exact `lossless-json@4.3.1`, expand JSON scientific notation to equivalent plain decimal text through string/exponent manipulation only, then validate the transformed exact-string shape with exact `zod@4.3.6`.
+Read `response.text()`, parse with exact `lossless-json@4.3.1`, expand JSON scientific notation to equivalent plain decimal text through string/exponent manipulation only, then validate the transformed exact-string shape with exact `zod@4.4.3`.
 
 ## 4. Exact Edge test + CI gate
 
@@ -150,7 +150,7 @@ Before treating this gate as reproducible, also verify the root dependency metad
 npm pkg get devDependencies.lossless-json devDependencies.zod
 ```
 
-Expected root values are exact `4.3.1` and `4.3.6`; `supabase/functions/fetch-metal-rates/deno.json` must map those same bare imports to `npm:lossless-json@4.3.1` and `npm:zod@4.3.6`.
+Expected root values are exact `4.3.1` and `4.4.3`; `supabase/functions/fetch-metal-rates/deno.json` must map those same bare imports to `npm:lossless-json@4.3.1` and `npm:zod@4.4.3`.
 
 Do not describe Edge tests as “covered by CI” until the exact dependencies/lock, script, and CI step exist and the command has passed.
 
@@ -357,7 +357,7 @@ Verify `package-lock.json` is committed/current after the exact root dependency 
 
 | Scenario | Expected result |
 | --- | --- |
-| Node/Deno dependency parity | root exact `lossless-json@4.3.1` / `zod@4.3.6`, committed lockfile, and matching Deno `npm:` mappings |
+| Node/Deno dependency parity | root exact `lossless-json@4.3.1` / `zod@4.4.3`, committed lockfile, and matching Deno `npm:` mappings |
 | ordinary high-precision provider decimal | exact rate reaches RPC unchanged |
 | scientific-notation provider decimal | exact plain equivalent reaches RPC with no rounding |
 | missing provider time | normalized to null / Unknown |
@@ -390,7 +390,7 @@ No visual redesign is intended. Verify existing Home, Live Rates, My Metals, and
 Before issue completion:
 
 1. business-decisions update was committed before production implementation;
-2. root Node/`tsx` dependencies are exact `lossless-json@4.3.1` / `zod@4.3.6`, `package-lock.json` is committed, and Deno maps the same bare imports to the same exact `npm:` versions;
+2. root Node/`tsx` dependencies are exact `lossless-json@4.3.1` / `zod@4.4.3`, `package-lock.json` is committed, and Deno maps the same bare imports to the same exact `npm:` versions;
 3. provider parse is lossless/pinned and handles scientific notation exactly;
 4. missing/malformed/future provider time normalizes to null/Unknown;
 5. `PersistedObservation` contract is an explicit closed object;
