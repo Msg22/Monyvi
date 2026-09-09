@@ -1,6 +1,5 @@
 import { render, screen } from "@testing-library/react-native";
 import React from "react";
-import { Text, View } from "react-native";
 
 import MetalHoldingDetailRoute from "../../app/(private)/metals/[id]";
 
@@ -20,15 +19,25 @@ jest.mock("@/hooks/useMetalHoldingDetail", () => ({
   }),
 }));
 
-jest.mock("@/components/navigation/PageHeader", () => ({
-  PageHeader: ({ title }: { readonly title: string }) => (
-    <Text testID="detail-route-title">{title}</Text>
-  ),
-}));
+jest.mock("@/components/navigation/PageHeader", () => {
+  const React = jest.requireActual<typeof import("react")>("react");
+  const { Text } =
+    jest.requireActual<typeof import("react-native")>("react-native");
+  return {
+    PageHeader: ({ title }: { readonly title: string }) =>
+      React.createElement(Text, { testID: "detail-route-title" }, title),
+  };
+});
 
-jest.mock("@/components/metals/MetalHoldingDetailScreen", () => ({
-  MetalHoldingDetailScreen: () => <View testID="detail-screen" />,
-}));
+jest.mock("@/components/metals/MetalHoldingDetailScreen", () => {
+  const React = jest.requireActual<typeof import("react")>("react");
+  const { View } =
+    jest.requireActual<typeof import("react-native")>("react-native");
+  return {
+    MetalHoldingDetailScreen: () =>
+      React.createElement(View, { testID: "detail-screen" }),
+  };
+});
 
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({
