@@ -52,14 +52,12 @@ const mockTranslations: Record<string, string> = {
   "portfolio.bought_on": "Bought {{date}}",
   "portfolio.today": "today",
   "portfolio.rates_updated": "Rates updated {{when}}",
-  "portfolio.realized_profit_from_sold_metals":
-    "realized profit from sold metals",
-  "portfolio.realized_loss_from_sold_metals": "realized loss from sold metals",
-  "portfolio.realized_result_from_sold_metals":
-    "realized result from sold metals",
-  "portfolio.realized_profit": "Realized profit",
-  "portfolio.realized_loss": "Realized loss",
-  "portfolio.realized_result": "Realized result",
+  "portfolio.profit_from_sold_metals": "profit from sold metals",
+  "portfolio.loss_from_sold_metals": "loss from sold metals",
+  "portfolio.no_loss_from_sold_metals": "no profit or loss from sold metals",
+  "portfolio.profit_from_this_sale": "Profit from this sale",
+  "portfolio.loss_from_this_sale": "Loss from this sale",
+  "portfolio.no_loss_from_this_sale": "No profit or loss from this sale",
   start_tracking_metals: "Start tracking your metals",
   empty_metals_description:
     "Add your gold and silver holdings to keep their value in one place.",
@@ -120,14 +118,12 @@ const arabicTranslations: Record<string, string> = {
   "portfolio.bought_on": "تم الشراء {{date}}",
   "portfolio.today": "اليوم",
   "portfolio.rates_updated": "تم تحديث الأسعار {{when}}",
-  "portfolio.realized_profit_from_sold_metals":
-    "أرباح محققة من المعادن المباعة",
-  "portfolio.realized_loss_from_sold_metals": "خسائر محققة من المعادن المباعة",
-  "portfolio.realized_result_from_sold_metals":
-    "نتيجة محققة من المعادن المباعة",
-  "portfolio.realized_profit": "ربح محقق",
-  "portfolio.realized_loss": "خسارة محققة",
-  "portfolio.realized_result": "نتيجة محققة",
+  "portfolio.profit_from_sold_metals": "ربح من المعادن المباعة",
+  "portfolio.loss_from_sold_metals": "خسارة من المعادن المباعة",
+  "portfolio.no_loss_from_sold_metals": "لا ربح ولا خسارة من المعادن المباعة",
+  "portfolio.profit_from_this_sale": "ربح من هذا البيع",
+  "portfolio.loss_from_this_sale": "خسارة من هذا البيع",
+  "portfolio.no_loss_from_this_sale": "لا ربح ولا خسارة من هذا البيع",
   "portfolio.since_purchase": "{{signedAmount}} منذ الشراء",
   "portfolio.filter_accessibility":
     "عامل التصفية {{filterName}}، {{selectedState}}، {{count}} حيازة.",
@@ -158,13 +154,13 @@ jest.mock("react-i18next", () => ({
 }));
 
 jest.mock("@expo/vector-icons", () => {
-  const React = jest.requireActual<typeof import("react")>("react");
+  const { createElement } = jest.requireActual<typeof import("react")>("react");
   const { View } =
     jest.requireActual<typeof import("react-native")>("react-native");
 
   return {
     Ionicons: ({ name }: { readonly name: string }): React.JSX.Element =>
-      React.createElement(View, { testID: `icon-${name}` }),
+      createElement(View, { testID: `icon-${name}` }),
   };
 });
 
@@ -221,12 +217,14 @@ const portfolio: MetalPortfolioReadModel = {
   allocation: { gold: "100", silver: "0" },
   currentPerformanceDecimal: "11039.67",
   filter: "ALL",
+  hasSoldHoldings: false,
   hasTerminalHistory: false,
   holdings: [],
   listState: "POPULATED",
   rateStatus: { state: "fresh", ageMs: 1_000 },
   recentHistory: [],
   soldResultDecimal: null,
+  soldResultUnavailable: false,
 };
 
 function renderPortfolio(
@@ -633,10 +631,11 @@ describe("US1 portfolio surfaces", () => {
     ).toBeTruthy();
   });
 
-  it("uses loss language for negative realized P/L in summary and History", () => {
+  it("uses loss language for negative sold results in summary and History", () => {
     renderPortfolio({
       portfolio: {
         ...portfolio,
+        hasSoldHoldings: true,
         soldResultDecimal: "-1250",
         recentHistory: [
           {
@@ -650,9 +649,60 @@ describe("US1 portfolio surfaces", () => {
       },
     });
 
-    expect(screen.getByText("realized loss from sold metals")).toBeTruthy();
-    expect(screen.getByText(/Realized loss/)).toBeTruthy();
+    expect(screen.getByText("loss from sold metals")).toBeTruthy();
+    expect(screen.getByText(/Loss from this sale/)).toBeTruthy();
     expect(screen.queryByText("Net proceeds")).toBeNull();
+    expect(screen.queryByText(/realized/i)).toBeNull();
+  });
+
+  it("omits the sold result row without a dash when the result is unavailable", () => {
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        hasSoldHoldings: true,
+        soldResultUnavailable: true,
+        soldResultDecimal: null,
+        recentHistory: [
+          {
+            ...portfolio.activeHoldings[0],
+            id: "sold-unknown",
+            name: "Sold without trustworthy evidence",
+            soldResultDecimal: null,
+            status: "sold",
+          },
+        ],
+      },
+    });
+
+    expect(screen.getByText(/Sold without trustworthy evidence/)).toBeTruthy();
+    expect(screen.queryByText("—")).toBeNull();
+    expect(screen.queryByText(/realized/i)).toBeNull();
+    expect(screen.queryByText(/this sale/i)).toBeNull();
+  });
+
+  it("uses profit language and exact canonical amounts for a positive sold result", () => {
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        hasSoldHoldings: true,
+        soldResultDecimal: "5500",
+        recentHistory: [
+          {
+            ...portfolio.activeHoldings[0],
+            id: "sold-profit",
+            name: "QA Sold Gold Coin",
+            soldResultDecimal: "5500",
+            status: "sold",
+          },
+        ],
+      },
+    });
+
+    expect(screen.getAllByText("EGP 5,500.00").length).toBeGreaterThanOrEqual(
+      2
+    );
+    expect(screen.getByText("profit from sold metals")).toBeTruthy();
+    expect(screen.getByText(/Profit from this sale/)).toBeTruthy();
   });
 
   it("opens active and recent holdings while keeping disposed History free of realized P/L", () => {

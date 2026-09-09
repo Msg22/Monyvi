@@ -24,6 +24,7 @@ import {
   formatPurchaseDetail,
   formatShortDate,
   getMetalHoldingPresentation,
+  getSoldResultLabelKey,
   resolveLocale,
 } from "./portfolio-presentation";
 
@@ -300,7 +301,7 @@ function PortfolioSummary({
             {formatCodeAmount(realizedProfitLoss, currency, locale)}
           </Text>
           <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
-            {t(getRealizedProfitLossLabelKey(realizedProfitLoss, "summary"))}
+            {t(getSoldResultLabelKey(realizedProfitLoss, "summary"))}
           </Text>
         </View>
       )}
@@ -774,7 +775,7 @@ function RecentHistory({
               </Text>
             </View>
             <View className="max-w-[180px] flex-row items-center gap-2">
-              {isSold ? (
+              {isSold && holding.soldResultDecimal !== null ? (
                 <Text
                   numberOfLines={1}
                   adjustsFontSizeToFit
@@ -782,10 +783,7 @@ function RecentHistory({
                   className="text-right text-xs text-text-secondary dark:text-text-secondary-dark"
                 >
                   {t(
-                    getRealizedProfitLossLabelKey(
-                      holding.soldResultDecimal,
-                      "history"
-                    )
+                    getSoldResultLabelKey(holding.soldResultDecimal, "history")
                   )}{" "}
                   ·{" "}
                   <Text className="font-medium text-text-primary dark:text-text-primary-dark">
@@ -867,27 +865,6 @@ function formatRateUpdatedLabel(
 
 function getForwardChevronName(): "chevron-back" | "chevron-forward" {
   return I18nManager.isRTL ? "chevron-back" : "chevron-forward";
-}
-
-function getRealizedProfitLossLabelKey(
-  value: string | null,
-  context: "summary" | "history"
-):
-  | "portfolio.realized_loss"
-  | "portfolio.realized_loss_from_sold_metals"
-  | "portfolio.realized_profit"
-  | "portfolio.realized_profit_from_sold_metals"
-  | "portfolio.realized_result"
-  | "portfolio.realized_result_from_sold_metals" {
-  const parsedValue = parseOptionalNumber(value);
-  const suffix = context === "summary" ? "_from_sold_metals" : "";
-  if (parsedValue !== null && parsedValue > 0) {
-    return `portfolio.realized_profit${suffix}`;
-  }
-  if (parsedValue !== null && parsedValue < 0) {
-    return `portfolio.realized_loss${suffix}`;
-  }
-  return `portfolio.realized_result${suffix}`;
 }
 
 function parseShare(value: string | null): number {

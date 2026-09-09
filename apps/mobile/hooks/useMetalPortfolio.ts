@@ -9,7 +9,9 @@ import {
   observePortfolioAssetMetals,
   observePortfolioAssets,
   observePortfolioHoldingStates,
+  observePortfolioMetalSellGroups,
   observePortfolioRecentHistory,
+  observePortfolioSaleRateReferences,
   shapeMetalPortfolioHoldings,
   type MetalPortfolioFilter,
   type MetalPortfolioReadModel,
@@ -26,8 +28,10 @@ import { logger } from "@/utils/logger";
 import type {
   Asset,
   AssetMetal,
+  FinancialActionGroup,
   MetalHoldingState,
   MetalLifecycleEvent,
+  MetalRateReference,
 } from "@monyvi/db";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
@@ -43,6 +47,7 @@ const PORTFOLIO_ASSET_OBSERVED_COLUMNS = [
   "purchase_date",
   "purchase_price_decimal",
   "purchase_currency",
+  "acquisition_action_id",
 ] as const;
 
 const PORTFOLIO_ASSET_METAL_OBSERVED_COLUMNS = [
@@ -60,6 +65,24 @@ const PORTFOLIO_HOLDING_STATE_OBSERVED_COLUMNS = [
   "effective_event_id",
   "is_visible",
   "reconciliation_state",
+] as const;
+
+const PORTFOLIO_SELL_GROUP_OBSERVED_COLUMNS = [
+  "outcome_json",
+  "payload_json",
+  "rejection_code",
+  "server_outcome",
+  "state",
+] as const;
+
+const PORTFOLIO_SALE_RATE_REFERENCE_OBSERVED_COLUMNS = [
+  "captured_at",
+  "captured_freshness",
+  "instrument_code",
+  "provider_observed_at",
+  "quality",
+  "source",
+  "value_decimal",
 ] as const;
 
 type ActiveMetalType = "GOLD" | "SILVER";
@@ -106,6 +129,12 @@ export function useMetalPortfolio(
   const [lifecycleEvents, setLifecycleEvents] = useState<
     readonly MetalLifecycleEvent[]
   >([]);
+  const [metalSellGroups, setMetalSellGroups] = useState<
+    readonly FinancialActionGroup[]
+  >([]);
+  const [saleRateReferences, setSaleRateReferences] = useState<
+    readonly MetalRateReference[]
+  >([]);
   const [currentRates, setCurrentRates] = useState<LiveRatesTrustReadModel>(
     createEmptyTrustReadModel
   );
@@ -113,6 +142,8 @@ export function useMetalPortfolio(
   const [isAssetMetalsLoading, setIsAssetMetalsLoading] = useState(true);
   const [isHoldingStatesLoading, setIsHoldingStatesLoading] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [, setIsMetalSellGroupsLoading] = useState(true);
+  const [, setIsSaleRateReferencesLoading] = useState(true);
   const [isRatesLoading, setIsRatesLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -316,6 +347,48 @@ export function useMetalPortfolio(
   }, [holdingStates, isResolvingUser, refreshKey, userId]);
 
   useEffect(() => {
+    return subscribeForCurrentUser({
+      isResolvingUser,
+      onAuthenticated: (currentUserId) =>
+        observePortfolioMetalSellGroups(currentUserId).observeWithColumns([
+          ...PORTFOLIO_SELL_GROUP_OBSERVED_COLUMNS,
+        ]),
+      onError: (reason) =>
+        recordObserverError(
+          "metalPortfolio.metalSellGroups.observe.failed",
+          reason,
+          setError
+        ),
+      onNext: setMetalSellGroups,
+      onSignedOut: () => setMetalSellGroups([]),
+      onResolving: () => setMetalSellGroups([]),
+      setLoading: setIsMetalSellGroupsLoading,
+      userId,
+    });
+  }, [isResolvingUser, refreshKey, userId]);
+
+  useEffect(() => {
+    return subscribeForCurrentUser({
+      isResolvingUser,
+      onAuthenticated: (currentUserId) =>
+        observePortfolioSaleRateReferences(currentUserId).observeWithColumns([
+          ...PORTFOLIO_SALE_RATE_REFERENCE_OBSERVED_COLUMNS,
+        ]),
+      onError: (reason) =>
+        recordObserverError(
+          "metalPortfolio.saleRateReferences.observe.failed",
+          reason,
+          setError
+        ),
+      onNext: setSaleRateReferences,
+      onSignedOut: () => setSaleRateReferences([]),
+      onResolving: () => setSaleRateReferences([]),
+      setLoading: setIsSaleRateReferencesLoading,
+      userId,
+    });
+  }, [isResolvingUser, refreshKey, userId]);
+
+  useEffect(() => {
     const observation = observeLiveRatesTrust(database);
     trustObservationRef.current = observation;
     setIsRatesLoading(true);
@@ -356,12 +429,14 @@ export function useMetalPortfolio(
       return null;
     }
     const holdings = shapeMetalPortfolioHoldings({
+      actionGroups: metalSellGroups,
       assetMetals,
       assets,
       currentRates,
       holdingStates,
       lifecycleEvents,
       preferredCurrency,
+      rateReferences: saleRateReferences,
       userId,
     });
     const activeMetalTypes = Array.from(
@@ -417,7 +492,9 @@ export function useMetalPortfolio(
     isRatesLoading,
     isResolvingUser,
     lifecycleEvents,
+    metalSellGroups,
     preferredCurrency,
+    saleRateReferences,
     selectedFilter,
     userId,
   ]);

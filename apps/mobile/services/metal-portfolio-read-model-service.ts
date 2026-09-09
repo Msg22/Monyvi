@@ -3,8 +3,10 @@ import {
   type Asset,
   type AssetMetal,
   type CurrencyType,
+  type FinancialActionGroup,
   type MetalHoldingState,
   type MetalLifecycleEvent,
+  type MetalRateReference,
 } from "@monyvi/db";
 import {
   calculateMetalReferenceValue,
@@ -15,7 +17,6 @@ import {
   resolvePuritySelection,
   roundDecimal,
   serializeDecimal,
-  type CurrencyInstrumentCode,
   type MetalsIsoCurrencyCode,
 } from "@monyvi/logic";
 import { Q, type Query } from "@nozbe/watermelondb";
@@ -28,6 +29,14 @@ import type {
   LiveRatesTrustReadModel,
   LiveRatesTrustValue,
 } from "@/services/live-rates-trust-read-model-service";
+import {
+  shapeMetalRealizedSaleEvidence,
+  toMetalSellEventSnapshot,
+  type MetalRealizedSaleOutcome,
+  type MetalSellGroupSnapshot,
+  type MetalSellHoldingSnapshot,
+  type MetalSellRateReferenceSnapshot,
+} from "@/services/metal-realized-sale-read-model-service";
 
 const RECENT_HISTORY_LIMIT = 3;
 
@@ -58,6 +67,10 @@ export interface MetalPortfolioHoldingInput {
   readonly purityCatalogVersion: "1" | null;
   readonly purityCode: string | null;
   readonly purityFactorDecimal: string | null;
+  readonly soldEvidence?: MetalRealizedSaleOutcome | null;
+  readonly soldNetProceedsCurrency?: MetalsIsoCurrencyCode | null;
+  readonly soldNetProceedsDecimal?: string | null;
+  readonly soldResultCurrency?: MetalsIsoCurrencyCode | null;
   readonly soldResultDecimal: string | null;
   readonly status: "active" | "sold" | "disposed";
   readonly userId: string;
@@ -65,6 +78,7 @@ export interface MetalPortfolioHoldingInput {
 }
 
 export interface MetalPortfolioAssetSnapshot {
+  readonly acquisitionActionId?: string | null;
   readonly createdAt: Date;
   readonly id: string;
   readonly name: string;
@@ -96,21 +110,26 @@ export interface MetalPortfolioHoldingStateSnapshot {
 }
 
 export interface MetalPortfolioLifecycleEventSnapshot {
+  readonly actionId?: string;
   readonly deleted: boolean;
   readonly holdingId: string;
   readonly id: string;
   readonly isEffective: boolean;
+  readonly kind?: string;
   readonly occurredAt: Date;
+  readonly payloadJson?: string;
   readonly userId: string;
 }
 
 export interface ShapeMetalPortfolioHoldingsInput {
+  readonly actionGroups?: readonly MetalSellGroupSnapshot[];
   readonly assetMetals: readonly MetalPortfolioAssetMetalSnapshot[];
   readonly assets: readonly MetalPortfolioAssetSnapshot[];
   readonly currentRates: LiveRatesTrustReadModel;
   readonly holdingStates: readonly MetalPortfolioHoldingStateSnapshot[];
   readonly lifecycleEvents: readonly MetalPortfolioLifecycleEventSnapshot[];
   readonly preferredCurrency: CurrencyType;
+  readonly rateReferences?: readonly MetalSellRateReferenceSnapshot[];
   readonly userId: string;
 }
 
@@ -141,12 +160,14 @@ export interface MetalPortfolioReadModel {
     | "rate_reference"
     | null;
   readonly filter: MetalPortfolioFilter;
+  readonly hasSoldHoldings: boolean;
   readonly hasTerminalHistory: boolean;
   readonly holdings: readonly MetalPortfolioHoldingInput[];
   readonly listState: MetalPortfolioListState;
   readonly rateStatus: PortfolioRateStatus;
   readonly recentHistory: readonly MetalPortfolioHoldingInput[];
   readonly soldResultDecimal: string | null;
+  readonly soldResultUnavailable: boolean;
 }
 
 export interface ObservePortfolioAssetMetalsInput {
@@ -164,6 +185,28 @@ export function observePortfolioAssets(userId: string): Query<Asset> {
     database.get<Asset>("assets"),
     userId,
     Q.where("type", "METAL"),
+    Q.where("deleted", false)
+  );
+}
+
+export function observePortfolioMetalSellGroups(
+  userId: string
+): Query<FinancialActionGroup> {
+  return queryOwned(
+    database.get<FinancialActionGroup>("financial_action_groups"),
+    userId,
+    Q.where("domain", "metals"),
+    Q.where("kind", "sell"),
+    Q.where("deleted", false)
+  );
+}
+
+export function observePortfolioSaleRateReferences(
+  userId: string
+): Query<MetalRateReference> {
+  return queryOwned(
+    database.get<MetalRateReference>("metal_rate_references"),
+    userId,
     Q.where("deleted", false)
   );
 }
@@ -239,6 +282,25 @@ export function shapeMetalPortfolioHoldings(
       .filter((event) => event.userId === input.userId && !event.deleted)
       .map((event) => [event.id, event] as const)
   );
+  const groupsByActionId = new Map(
+    (input.actionGroups ?? [])
+      .filter((group) => group.userId === input.userId && !group.deleted)
+      .map((group) => [group.actionId, group] as const)
+  );
+  const rateReferencesByHoldingId = new Map<
+    string,
+    readonly MetalSellRateReferenceSnapshot[]
+  >();
+  for (const reference of input.rateReferences ?? []) {
+    if (reference.userId !== input.userId || reference.deleted) {
+      continue;
+    }
+    const existing = rateReferencesByHoldingId.get(reference.holdingId);
+    rateReferencesByHoldingId.set(
+      reference.holdingId,
+      existing === undefined ? [reference] : [...existing, reference]
+    );
+  }
 
   return input.assets.flatMap((asset) => {
     if (asset.userId !== input.userId) {
@@ -271,6 +333,51 @@ export function shapeMetalPortfolioHoldings(
       metalType: metal.metalType,
       preferredCurrency: input.preferredCurrency,
     });
+    const soldEvidence =
+      status === "sold"
+        ? shapeMetalRealizedSaleEvidence({
+            acquisitionReferences:
+              rateReferencesByHoldingId.get(asset.id) ?? [],
+            event: toMetalSellEventSnapshot(event),
+            group: toPortfolioSaleGroup(event, groupsByActionId),
+            holding: toPortfolioSaleHolding(
+              asset,
+              metal.metalType,
+              state,
+              exactFacts,
+              status
+            ),
+            userId: input.userId,
+          })
+        : null;
+    const soldValue =
+      soldEvidence !== null && soldEvidence.available
+        ? soldEvidence.value
+        : null;
+
+    const soldNetProceedsDecimal =
+      soldValue === null
+        ? null
+        : convertSoldAmountForPreferredDisplay({
+            amountCurrency: soldValue.proceedsCurrency,
+            amountDecimal: soldValue.netProceedsDecimal,
+            currentRates: input.currentRates,
+            preferredCurrency: input.preferredCurrency,
+          });
+    const soldResultDecimal =
+      soldValue === null
+        ? null
+        : convertSoldAmountForPreferredDisplay({
+            amountCurrency: soldValue.purchaseCurrency,
+            amountDecimal: soldValue.combinedDecimal,
+            currentRates: input.currentRates,
+            preferredCurrency: input.preferredCurrency,
+          });
+    const soldDisplayCurrency = isSupportedMetalsIsoCurrencyCode(
+      input.preferredCurrency
+    )
+      ? input.preferredCurrency
+      : null;
 
     return [
       {
@@ -292,7 +399,13 @@ export function shapeMetalPortfolioHoldings(
         purityCatalogVersion: exactFacts.purityCatalogVersion,
         purityCode: exactFacts.purityCode,
         purityFactorDecimal: exactFacts.purityFactorDecimal,
-        soldResultDecimal: null,
+        soldEvidence,
+        soldNetProceedsCurrency:
+          soldNetProceedsDecimal === null ? null : soldDisplayCurrency,
+        soldNetProceedsDecimal,
+        soldResultCurrency:
+          soldResultDecimal === null ? null : soldDisplayCurrency,
+        soldResultDecimal,
         status,
         userId: asset.userId,
         weightGramsDecimal: exactFacts.weightGramsDecimal,
@@ -337,6 +450,13 @@ export function buildMetalPortfolioReadModel(
   const soldHoldings = terminalHoldings.filter(
     (holding) => holding.status === "sold"
   );
+  const soldResultDecimal =
+    soldHoldings.length === 0
+      ? null
+      : sumAvailableDecimals(
+          soldHoldings.map((holding) => holding.soldResultDecimal),
+          null
+        );
 
   return {
     activeHoldings,
@@ -352,18 +472,15 @@ export function buildMetalPortfolioReadModel(
     currentPerformanceUnavailableReason:
       resolvePortfolioPerformanceUnavailableReason(activeHoldings),
     filter: input.filter,
+    hasSoldHoldings: soldHoldings.length > 0,
     hasTerminalHistory: terminalHoldings.length > 0,
     holdings: selectedHoldings,
     listState: determineListState(activeHoldings, selectedHoldings),
     rateStatus: { ...input.rateStatus },
     recentHistory: terminalHoldings.slice(0, RECENT_HISTORY_LIMIT),
-    soldResultDecimal:
-      soldHoldings.length === 0
-        ? null
-        : sumAvailableDecimals(
-            soldHoldings.map((holding) => holding.soldResultDecimal),
-            null
-          ),
+    soldResultDecimal,
+    soldResultUnavailable:
+      soldHoldings.length > 0 && soldResultDecimal === null,
   };
 }
 
@@ -435,6 +552,74 @@ function determineListState(
   }
 
   return selectedHoldings.length === 0 ? "FILTER_EMPTY" : "POPULATED";
+}
+
+function toPortfolioSaleGroup(
+  event: MetalPortfolioLifecycleEventSnapshot | undefined,
+  groupsByActionId: ReadonlyMap<string, MetalSellGroupSnapshot>
+): MetalSellGroupSnapshot | null {
+  const actionId = event?.actionId;
+  if (actionId === undefined) {
+    return null;
+  }
+  return groupsByActionId.get(actionId) ?? null;
+}
+
+function toPortfolioSaleHolding(
+  asset: MetalPortfolioAssetSnapshot,
+  metalType: "GOLD" | "SILVER",
+  state: MetalPortfolioHoldingStateSnapshot,
+  facts: ExactHoldingFacts,
+  status: "active" | "sold" | "disposed"
+): MetalSellHoldingSnapshot {
+  return {
+    acquisitionActionId: asset.acquisitionActionId ?? null,
+    effectiveEventId: state.effectiveEventId,
+    holdingId: asset.id,
+    isVisible: state.isVisible,
+    metalType,
+    purityFactorDecimal: facts.purityFactorDecimal,
+    purchaseCurrency: facts.purchaseCurrency,
+    purchasePriceDecimal: facts.purchasePriceDecimal,
+    reconciliationState: state.reconciliationState,
+    status,
+    userId: asset.userId,
+    weightGramsDecimal: facts.weightGramsDecimal,
+  };
+}
+
+function convertSoldAmountForPreferredDisplay(input: {
+  readonly amountCurrency: MetalsIsoCurrencyCode;
+  readonly amountDecimal: string;
+  readonly currentRates: LiveRatesTrustReadModel;
+  readonly preferredCurrency: CurrencyType;
+}): string | null {
+  if (!isSupportedMetalsIsoCurrencyCode(input.preferredCurrency)) {
+    return null;
+  }
+  if (input.preferredCurrency === input.amountCurrency) {
+    return serializeDecimal(parseCanonicalDecimal(input.amountDecimal));
+  }
+  const amountRate = readCurrentCurrencyRate(
+    input.currentRates,
+    input.amountCurrency
+  );
+  const preferredRate = readCurrentCurrencyRate(
+    input.currentRates,
+    input.preferredCurrency
+  );
+  if (amountRate === null || preferredRate === null) {
+    return null;
+  }
+  try {
+    return serializeDecimal(
+      parseCanonicalDecimal(input.amountDecimal)
+        .times(amountRate)
+        .dividedBy(preferredRate)
+    );
+  } catch {
+    return null;
+  }
 }
 
 interface ExactHoldingFacts {
@@ -531,9 +716,7 @@ function normalizePurchasePrice(
   ) {
     return null;
   }
-  const decimalPlaces = resolveMetalsCurrencyMinorUnits(
-    `currency:${currency}` as CurrencyInstrumentCode
-  );
+  const decimalPlaces = resolveMetalsCurrencyMinorUnits(`currency:${currency}`);
   if (decimalPlaces === null || !hasAtMostDecimalPlaces(value, decimalPlaces)) {
     return null;
   }
@@ -720,7 +903,7 @@ function hasAtMostDecimalPlaces(value: string, maximum: number): boolean {
 }
 
 function sumAvailableDecimals(
-  values: readonly (string | null)[],
+  values: ReadonlyArray<string | null>,
   emptyValue: string | null
 ): string | null {
   if (values.length === 0) {
