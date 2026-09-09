@@ -20,8 +20,13 @@ export function shapeMetalPortfolioHoldingFacts(
     if (!isActive || !isEventStillPending) return state;
 
     return {
-      ...state,
+      deleted: state.deleted,
       effectiveEventId: null,
+      holdingId: state.holdingId,
+      isVisible: state.isVisible,
+      reconciliationState: state.reconciliationState,
+      status: state.status,
+      userId: state.userId,
     };
   });
 
