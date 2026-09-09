@@ -1,0 +1,319 @@
+openapi: 3.1.0
+info:
+  title: Monyvi Atomic Market-Rate Snapshot Contracts
+  version: 1.0.0
+  description: >-
+    Planning contract for issue #302. It documents the existing fetch-metal-rates
+    function plus the two Postgres RPC boundaries required to persist and pull one
+    complete current market-rate snapshot. It does not add a new user-facing API.
+servers:
+  - url: https://{project}.supabase.co
+    variables:
+      project:
+        default: example
+paths:
+  /functions/v1/fetch-metal-rates:
+    post:
+      operationId: refreshMarketRateSnapshot
+      summary: Fetch one provider response and persist it as one atomic snapshot
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Snapshot persisted or idempotently replayed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshSuccess"
+        "500":
+          description: Provider, validation, or persistence failure. No partial snapshot is accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /rest/v1/rpc/persist_market_rate_snapshot_v1:
+    post:
+      operationId: persistMarketRateSnapshotV1
+      summary: Service-role-only transactional persistence boundary
+      description: >-
+        Validates one complete root plus exactly 37 required current observations,
+        then inserts them transactionally. Same-ID identical replay is idempotent;
+        same-ID conflicting replay is rejected.
+      security:
+        - serviceRole: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PersistSnapshotRequest"
+      responses:
+        "200":
+          description: Created or idempotently replayed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersistSnapshotResult"
+        "400":
+          description: Incomplete, invalid, mismatched, duplicated, or conflicting snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Caller is not the trusted producer role
+  /rest/v1/rpc/pull_market_rate_snapshots_page_v1:
+    post:
+      operationId: pullMarketRateSnapshotsPageV1
+      summary: Pull complete snapshot envelopes only
+      description: >-
+        Pages by root snapshot ordering and returns only roots that have an exact,
+        valid, bound V1 observation set. Legacy-unbound and incomplete candidates
+        are omitted rather than inferred/repaired.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PullSnapshotPageRequest"
+      responses:
+        "200":
+          description: Complete snapshot page under a fixed upper watermark
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PullSnapshotPageResponse"
+        "400":
+          description: Invalid cursor/page request
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    serviceRole:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Trusted Supabase service-role caller only.
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+    DecimalString:
+      type: string
+      pattern: "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)$"
+      description: Canonical exact decimal text; financial truth is not binary floating point.
+    PersistenceStatus:
+      type: string
+      enum: [created, replayed]
+    RefreshSuccess:
+      type: object
+      additionalProperties: false
+      required: [success, snapshotId, persistenceStatus, data]
+      properties:
+        success:
+          const: true
+        snapshotId:
+          $ref: "#/components/schemas/Uuid"
+        persistenceStatus:
+          $ref: "#/components/schemas/PersistenceStatus"
+        message:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+          description: >-
+            Existing fetch-metal-rates response data is preserved for compatibility;
+            it is informational and does not replace the persisted snapshot envelope.
+    ErrorResponse:
+      type: object
+      additionalProperties: true
+      required: [error]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          examples:
+            - snapshot_incomplete
+            - snapshot_conflict
+            - snapshot_value_mismatch
+            - snapshot_invalid_observation
+    PersistSnapshotRequest:
+      type: object
+      additionalProperties: false
+      required: [p_snapshot_id, p_captured_at, p_root, p_observations]
+      properties:
+        p_snapshot_id:
+          $ref: "#/components/schemas/Uuid"
+        p_captured_at:
+          type: string
+          format: date-time
+          description: Immutable producer capture/order time; never a freshness substitute.
+        p_root:
+          $ref: "#/components/schemas/MarketRateRoot"
+        p_observations:
+          type: array
+          minItems: 37
+          maxItems: 37
+          items:
+            $ref: "#/components/schemas/RateObservationInput"
+    PersistSnapshotResult:
+      type: object
+      additionalProperties: false
+      required: [snapshotId, status]
+      properties:
+        snapshotId:
+          $ref: "#/components/schemas/Uuid"
+        status:
+          $ref: "#/components/schemas/PersistenceStatus"
+    MarketRateRoot:
+      type: object
+      additionalProperties: false
+      required:
+        - goldUsdPerGram
+        - silverUsdPerGram
+        - platinumUsdPerGram
+        - palladiumUsdPerGram
+        - fiatUsdPerUnit
+        - providerMetalObservedAt
+        - providerCurrencyObservedAt
+      properties:
+        goldUsdPerGram:
+          $ref: "#/components/schemas/DecimalString"
+        silverUsdPerGram:
+          $ref: "#/components/schemas/DecimalString"
+        platinumUsdPerGram:
+          $ref: "#/components/schemas/DecimalString"
+        palladiumUsdPerGram:
+          $ref: "#/components/schemas/DecimalString"
+        fiatUsdPerUnit:
+          type: object
+          description: >-
+            Existing wide market-rate values keyed by stored currency code. This
+            includes BTC because the legacy wide row stores it, but BTC is not a
+            required V1 trust observation. USD is implicit identity 1 and therefore
+            may be absent from this map.
+          additionalProperties:
+            $ref: "#/components/schemas/DecimalString"
+        providerMetalObservedAt:
+          type: [string, "null"]
+          format: date-time
+        providerCurrencyObservedAt:
+          type: [string, "null"]
+          format: date-time
+    CurrentMarketInstrument:
+      type: string
+      pattern: "^(metal:(GOLD|SILVER)|currency:[A-Z]{3})$"
+      description: >-
+        Validation further restricts this to the exact V1 set: Gold, Silver, and
+        the 35 SUPPORTED_CURRENCIES codes. currency:BTC is not allowed.
+    RateObservationInput:
+      type: object
+      additionalProperties: false
+      required:
+        - instrumentCode
+        - valueDecimal
+        - unit
+        - orientation
+        - providerObservedAt
+        - source
+        - quality
+      properties:
+        instrumentCode:
+          $ref: "#/components/schemas/CurrentMarketInstrument"
+        valueDecimal:
+          $ref: "#/components/schemas/DecimalString"
+        unit:
+          type: string
+          enum: [usd_per_pure_gram, usd_per_currency_unit]
+        orientation:
+          const: quote_per_base
+        providerObservedAt:
+          type: [string, "null"]
+          format: date-time
+          description: Null means Unknown freshness; capture time must not be substituted.
+        source:
+          type: string
+          minLength: 1
+        quality:
+          const: valid
+    SnapshotEnvelope:
+      type: object
+      additionalProperties: false
+      required: [snapshotId, capturedAt, root, observations]
+      properties:
+        snapshotId:
+          $ref: "#/components/schemas/Uuid"
+        capturedAt:
+          type: string
+          format: date-time
+          description: Root ordering/capture time only.
+        root:
+          $ref: "#/components/schemas/MarketRateRoot"
+        observations:
+          type: array
+          minItems: 37
+          maxItems: 37
+          items:
+            allOf:
+              - $ref: "#/components/schemas/RateObservationInput"
+              - type: object
+                required: [id, batchId, capturedAt]
+                properties:
+                  id:
+                    $ref: "#/components/schemas/Uuid"
+                  batchId:
+                    $ref: "#/components/schemas/Uuid"
+                  capturedAt:
+                    type: string
+                    format: date-time
+    SnapshotCursor:
+      type: object
+      additionalProperties: false
+      required: [createdAt, id]
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        id:
+          $ref: "#/components/schemas/Uuid"
+    PullSnapshotPageRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        p_upper_watermark:
+          type: [string, "null"]
+          format: date-time
+          description: Fixed server watermark for a pull session; null asks the RPC to establish one.
+        p_cursor_created_at:
+          type: [string, "null"]
+          format: date-time
+        p_cursor_id:
+          anyOf:
+            - $ref: "#/components/schemas/Uuid"
+            - type: "null"
+        p_limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+    PullSnapshotPageResponse:
+      type: object
+      additionalProperties: false
+      required: [snapshots, upperWatermark, nextCursor]
+      properties:
+        snapshots:
+          type: array
+          items:
+            $ref: "#/components/schemas/SnapshotEnvelope"
+        upperWatermark:
+          type: string
+          format: date-time
+        nextCursor:
+          anyOf:
+            - $ref: "#/components/schemas/SnapshotCursor"
+            - type: "null"
