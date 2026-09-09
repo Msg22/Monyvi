@@ -1,3 +1,4 @@
+import { getHoldingDetailTitleKey } from "@/components/metals/holding-detail-presentation";
 import { MetalHoldingDetailScreen } from "@/components/metals/MetalHoldingDetailScreen";
 import { PageHeader } from "@/components/navigation/PageHeader";
 import { useMetalHoldingDetail } from "@/hooks/useMetalHoldingDetail";
@@ -17,7 +18,7 @@ export default function MetalHoldingDetailRoute(): React.JSX.Element {
       <PageHeader
         showBackButton
         showDrawer={false}
-        title={t("detail.title")}
+        title={t(getHoldingDetailTitleKey(detail.model?.status))}
       />
       <MetalHoldingDetailScreen
         actions={[]}
