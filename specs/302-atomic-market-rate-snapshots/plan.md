@@ -1,7 +1,7 @@
 # Implementation Plan: Atomic Market-Rate Snapshots
 
 **Branch**: `codex/issue302-atomic-market-rate-snapshots` | **Date**: 2026-09-09 | **Spec**: `specs/302-atomic-market-rate-snapshots/spec.md`  
-**Input**: Approved issue #302 specification after Clarify; revised after two Speckit Analyze passes.
+**Input**: Approved issue #302 specification after Clarify; revised after three Speckit Analyze passes.
 
 ## Summary
 
@@ -22,7 +22,7 @@ No screen, navigation, supported-instrument scope, historical acquisition/termin
 ## Technical Context
 
 **Language/Version**: TypeScript 5.9.x on Node 22; TypeScript/Deno Edge Runtime; PostgreSQL SQL/PLpgSQL.  
-**Primary Dependencies**: Expo 55, React Native 0.83.6, React 19.2, WatermelonDB 0.28, `@supabase/supabase-js` 2.106 in mobile, Zod 4.3, Decimal.js through existing `@monyvi/logic`, pinned `lossless-json@4.3.1` for `fetch-metal-rates`, and root `tsx` for deterministic Node test execution.  
+**Primary Dependencies**: Expo 55, React Native 0.83.6, React 19.2, WatermelonDB 0.28, `@supabase/supabase-js` 2.106 in mobile, exact `zod@4.3.6` + `lossless-json@4.3.1` declared at the root for Node/`tsx` test resolution and mapped to the same exact `npm:` versions in `supabase/functions/fetch-metal-rates/deno.json`, Decimal.js through existing `@monyvi/logic`, and root `tsx` for deterministic Node test execution.  
 **Storage**: Supabase `market_rates` + `market_rate_observations`; WatermelonDB remains the device-side source of truth/offline cache. No new durable table/column is planned.  
 **Testing**: SQL regression tests; exact shared/Edge tests run by an explicit root script; logic Jest; mobile Jest/React Native Testing Library; architecture/source-contract tests; typecheck/lint; local Supabase verification.  
 **Target Platform**: Expo Android/iOS plus Supabase Edge Functions/Postgres.  
@@ -86,15 +86,22 @@ Provider metal/currency timestamps may differ. Missing, malformed, or future pro
 
 `fetch-metal-rates` must not call `response.json()` for authoritative rate values.
 
+Dependency/runtime ownership is explicit before these tests execute:
+
+- root `package.json` owns exact devDependencies `lossless-json@4.3.1` and `zod@4.3.6` for Node/`tsx` execution, with the resulting `package-lock.json` committed;
+- `supabase/functions/fetch-metal-rates/deno.json` maps the same bare specifiers to exact `npm:lossless-json@4.3.1` and `npm:zod@4.3.6` for the Deno Edge runtime;
+- shared parser/handler code imports only the bare `lossless-json` and `zod` specifiers so Node and Deno execute the same package identities/versions;
+- no test relies on workspace hoisting, and Node is never expected to consume the Deno import map.
+
 Implementation boundary:
 
 1. fetch response;
 2. read `response.text()`;
-3. parse with function-local pinned `lossless-json@4.3.1` from `supabase/functions/fetch-metal-rates/deno.json`;
+3. parse with the exact `lossless-json@4.3.1` dependency resolved by the active runtime as specified above;
 4. obtain each JSON numeric token as lossless decimal/exponent text;
 5. normalize ordinary/scientific notation to the feature's plain decimal-string grammar with exact string/exponent manipulation only—never `Number`, `parseFloat`, or any binary-float intermediate;
 6. preserve all coefficient digits and trailing coefficient precision where representable in plain form; examples: `3.73874e-10 -> 0.000000000373874`, `1.2300e+2 -> 123.00`;
-7. validate the transformed exact-string provider shape with Zod;
+7. validate the transformed exact-string provider shape with exact `zod@4.3.6`;
 8. generate one `snapshotId` + one capture/order timestamp;
 9. normalize provider timestamps: missing/malformed/future relative to the capture instant -> `null`; valid non-future provider timestamps preserved exactly/semantically;
 10. build exact root payload + exactly 37 exact observations;
@@ -259,7 +266,25 @@ supabase/functions/_shared/market-rate-snapshot-contract.test.ts
 
 `index.ts` becomes the minimal `Deno.serve` wrapper over the extracted handler; handler behavior is testable without starting the Edge runtime.
 
-Implementation adds this root script to `package.json`:
+Before the first Node/`tsx` execution of the Edge/shared tests, implementation must establish deterministic dual-runtime package ownership:
+
+```json
+// root package.json devDependencies
+"lossless-json": "4.3.1",
+"zod": "4.3.6"
+```
+
+and commit the generated `package-lock.json` update. The function-local Deno map must resolve the same bare imports to the same exact packages:
+
+```json
+// supabase/functions/fetch-metal-rates/deno.json imports
+"lossless-json": "npm:lossless-json@4.3.1",
+"zod": "npm:zod@4.3.6"
+```
+
+This is deliberate duplication of **resolution metadata**, not two dependency authorities: root npm metadata owns Node/`tsx` resolution; the Deno import map owns Edge resolution; the exact versions must match. The shared/handler source imports `lossless-json` and `zod` by those bare specifiers in both runtimes.
+
+Implementation then adds this root script to `package.json`:
 
 ```json
 "test:market-rate-edge": "tsx --test supabase/functions/_shared/market-rate-snapshot-contract.test.ts supabase/functions/fetch-metal-rates/handler.test.ts"
@@ -271,7 +296,7 @@ and adds a `Market Rate Edge Contract` step to `.github/workflows/ci.yml`'s `qua
 npm run test:market-rate-edge
 ```
 
-This is a required issue #302 verification gate, not an assumption about pre-existing CI coverage.
+This is a required issue #302 verification gate, not an assumption about pre-existing CI coverage. Verification must confirm the root package/lock and Deno import map carry the matching exact versions before treating the Node/`tsx` gate as reproducible.
 
 ### 15. Observability/security
 
@@ -306,7 +331,8 @@ specs/302-atomic-market-rate-snapshots/
 
 ```text
 docs/business/business-decisions.md        # first implementation gate
-package.json                               # exact Edge test script
+package.json                               # exact Edge test deps + script
+package-lock.json                          # exact root dependency lock update
 .github/workflows/ci.yml                   # Market Rate Edge Contract step
 
 supabase/
@@ -316,7 +342,7 @@ supabase/
 │   │   ├── market-rate-snapshot-contract.ts
 │   │   └── market-rate-snapshot-contract.test.ts
 │   └── fetch-metal-rates/
-│       ├── deno.json
+│       ├── deno.json                       # matching exact Deno npm import mappings
 │       ├── handler.ts
 │       ├── handler.test.ts
 │       └── index.ts
@@ -433,7 +459,7 @@ SQL tests cover:
 
 ### Required Edge verification command
 
-The implementation must make this command executable and CI-enforced:
+The implementation must make this command executable and CI-enforced after exact npm/Deno dependency parity is established:
 
 ```bash
 npm run test:market-rate-edge
@@ -452,7 +478,7 @@ Regression-only: existing Home, Live Rates, My Metals, holding detail layouts/jo
 ## Rollout / Execution Sequence
 
 1. Complete and commit the business-decision documentation task. No production implementation before this.
-2. Write shared exact/lossless red tests, including exponent and provider-time normalization, and implement canonical exact contract.
+2. Establish exact dual-runtime dependency resolution for the Edge/shared test boundary, then write shared exact/lossless red tests and implement the canonical exact contract.
 3. Add exact handler test script/CI gate before treating Edge verification as available.
 4. Write SQL red tests; add migration/RPCs; regenerate DB contracts locally.
 5. Cut producer to lossless parse + atomic RPC.
@@ -469,4 +495,4 @@ The connected planning environment has no repository shell runner, so Speckit sc
 
 ## Complexity Tracking
 
-No constitution exception is accepted. The additional lossless JSON parser is a focused producer-boundary dependency required by FR-015; it is pinned and function-local. No new durable table, local selected-pointer table, or UI flow is introduced.
+No constitution exception is accepted. The additional lossless JSON parser is a focused producer-boundary dependency required by FR-015. Its runtime resolution is pinned twice only because the same source is executed by two package resolvers: root npm metadata/lock for Node/`tsx` tests and the function-local Deno import map for Edge execution; both must resolve the same exact package versions. No new durable table, local selected-pointer table, or UI flow is introduced.

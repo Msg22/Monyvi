@@ -2,7 +2,7 @@
 
 **Feature**: `302-atomic-market-rate-snapshots`  
 **Branch**: `codex/issue302-atomic-market-rate-snapshots`  
-**Revision**: Post-second-Analyze remediation
+**Revision**: Post-third-Analyze I1 remediation
 
 This is the implementation-time guide. None of the commands below were executed during planning because this connected environment has no repository shell runner.
 
@@ -47,7 +47,7 @@ docs/business/business-decisions.md
 AGENTS.md
 ```
 
-Use strict TDD: write the failing boundary test, run it and confirm the intended failure, then implement the smallest correct change.
+Use strict TDD: establish only the dependency/test-runner scaffolding needed for a test to execute, write the failing boundary test, run it and confirm the intended behavioral failure, then implement the smallest correct change.
 
 ## 3. Exact provider-ingestion boundary
 
@@ -71,6 +71,36 @@ supabase/functions/fetch-metal-rates/deno.json
 
 `index.ts` should become only the `Deno.serve` wrapper around the extracted handler so handler behavior is runnable in the root Node/tsx test gate.
 
+Before first execution of the shared/handler tests, make dependency resolution deterministic for **both** runtimes. Root Node/`tsx` owns exact devDependencies and the root lockfile:
+
+```bash
+npm install --save-dev --save-exact lossless-json@4.3.1 zod@4.3.6
+```
+
+This must result in root `package.json` entries equivalent to:
+
+```json
+"lossless-json": "4.3.1",
+"zod": "4.3.6"
+```
+
+and a committed `package-lock.json` update.
+
+The function-local Deno import map must resolve the same bare specifiers to the same exact versions:
+
+```json
+{
+  "imports": {
+    "edge-runtime": "jsr:@supabase/functions-js/edge-runtime.d.ts",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@^2.49.1",
+    "lossless-json": "npm:lossless-json@4.3.1",
+    "zod": "npm:zod@4.3.6"
+  }
+}
+```
+
+Shared parser/handler source must import `lossless-json` and `zod` by those bare specifiers. Do not rely on `@monyvi/mobile`'s Zod dependency being hoisted into root resolution, and do not expect Node/`tsx` to read `deno.json`. Conversely, do not make the Edge runtime depend on root Node resolution. The exact package versions must match across both resolver configurations.
+
 Required red cases:
 
 - provider token `0.10000000000000001` reaches the RPC payload unchanged;
@@ -91,11 +121,11 @@ Required red cases:
 - source is non-empty `metals.dev`;
 - no authoritative `response.json()` round-trip precedes RPC payload creation.
 
-Use pinned function-local `lossless-json@4.3.1`. Read `response.text()`, parse losslessly, expand JSON scientific notation to equivalent plain decimal text through string/exponent manipulation only, then Zod-validate the transformed exact-string shape.
+Read `response.text()`, parse with exact `lossless-json@4.3.1`, expand JSON scientific notation to equivalent plain decimal text through string/exponent manipulation only, then validate the transformed exact-string shape with exact `zod@4.3.6`.
 
 ## 4. Exact Edge test + CI gate
 
-Implementation must add this exact root `package.json` script:
+Implementation must add this exact root `package.json` script after the dependency scaffolding above exists and handler/shared tests are green:
 
 ```json
 "test:market-rate-edge": "tsx --test supabase/functions/_shared/market-rate-snapshot-contract.test.ts supabase/functions/fetch-metal-rates/handler.test.ts"
@@ -114,7 +144,15 @@ The exact local/CI verification command is therefore:
 npm run test:market-rate-edge
 ```
 
-Do not describe Edge tests as “covered by CI” until this script and CI step exist and the command has passed.
+Before treating this gate as reproducible, also verify the root dependency metadata and Deno import map agree:
+
+```bash
+npm pkg get devDependencies.lossless-json devDependencies.zod
+```
+
+Expected root values are exact `4.3.1` and `4.3.6`; `supabase/functions/fetch-metal-rates/deno.json` must map those same bare imports to `npm:lossless-json@4.3.1` and `npm:zod@4.3.6`.
+
+Do not describe Edge tests as “covered by CI” until the exact dependencies/lock, script, and CI step exist and the command has passed.
 
 ## 5. Database/RPC contract
 
@@ -287,6 +325,10 @@ Update local QA import tests/code so `scripts/import-market-rates-to-local.js` i
 Run focused tests first, then static/broader checks. Record exact commands/results in PR evidence.
 
 ```bash
+# Dependency parity for Node/tsx test runtime
+npm pkg get devDependencies.lossless-json devDependencies.zod
+# Inspect supabase/functions/fetch-metal-rates/deno.json and confirm matching exact npm: mappings.
+
 # Exact Edge/shared gate — must also be in CI
 npm run test:market-rate-edge
 
@@ -309,12 +351,13 @@ npm run lint
 npm run test:scripts
 ```
 
-Never claim a check passed without fresh output.
+Verify `package-lock.json` is committed/current after the exact root dependency installation. Never claim a check passed without fresh output.
 
 ## 13. Deterministic acceptance matrix
 
 | Scenario | Expected result |
 | --- | --- |
+| Node/Deno dependency parity | root exact `lossless-json@4.3.1` / `zod@4.3.6`, committed lockfile, and matching Deno `npm:` mappings |
 | ordinary high-precision provider decimal | exact rate reaches RPC unchanged |
 | scientific-notation provider decimal | exact plain equivalent reaches RPC with no rounding |
 | missing provider time | normalized to null / Unknown |
@@ -347,16 +390,17 @@ No visual redesign is intended. Verify existing Home, Live Rates, My Metals, and
 Before issue completion:
 
 1. business-decisions update was committed before production implementation;
-2. provider parse is lossless/pinned and handles scientific notation exactly;
-3. missing/malformed/future provider time normalizes to null/Unknown;
-4. `PersistedObservation` contract is an explicit closed object;
-5. `npm run test:market-rate-edge` exists and is enforced in CI;
-6. migration/RPC tests pass locally;
-7. generated types are committed;
-8. producer writes through atomic RPC only;
-9. pull returns exact complete envelopes only;
-10. all current consumers use exact selected observation values;
-11. no legacy inference/backfill or new retention policy was introduced;
-12. retention/corruption tests pass;
-13. focused tests, typecheck/lint, required CI are evidenced;
-14. manual-only gaps are named honestly.
+2. root Node/`tsx` dependencies are exact `lossless-json@4.3.1` / `zod@4.3.6`, `package-lock.json` is committed, and Deno maps the same bare imports to the same exact `npm:` versions;
+3. provider parse is lossless/pinned and handles scientific notation exactly;
+4. missing/malformed/future provider time normalizes to null/Unknown;
+5. `PersistedObservation` contract is an explicit closed object;
+6. `npm run test:market-rate-edge` exists and is enforced in CI;
+7. migration/RPC tests pass locally;
+8. generated types are committed;
+9. producer writes through atomic RPC only;
+10. pull returns exact complete envelopes only;
+11. all current consumers use exact selected observation values;
+12. no legacy inference/backfill or new retention policy was introduced;
+13. retention/corruption tests pass;
+14. focused tests, typecheck/lint, required CI are evidenced;
+15. manual-only gaps are named honestly.

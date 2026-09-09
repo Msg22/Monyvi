@@ -20,27 +20,27 @@
 - [ ] **T001** Update and commit `docs/business/business-decisions.md` **before any other code/test task** with finalized issue #302 rules: `market_rates.id` snapshot identity; `batch_id` binding; exactly 37 required observations; exact observation decimals as authoritative current financial truth; wide Watermelon root numbers as identity/order/history compatibility only; lossless ordinary/scientific provider decimal normalization; missing/malformed/future provider timestamps -> null/Unknown without capture substitution; atomic producer/pull/local apply; non-empty trusted producer source; fail-closed legacy cutover; retention/corruption no-cross-batch-repair rule; strict separation from acquisition/terminal references. No T002+ work begins until T001 is committed.
 - [ ] **T002** Create deterministic exact complete/partial/conflicting snapshot fixtures in `packages/logic/src/metals/__tests__/current-market-snapshot.fixtures.ts`, including Gold, Silver, all 35 supported fiat currencies, implicit USD=`1`, distinct metal/currency provider times, non-empty source, and canonical plain decimal strings.
 - [ ] **T003** [P] Create Watermelon-shaped fixtures in `apps/mobile/__tests__/fixtures/market-rate-snapshot.ts` for complete/incomplete/duplicate/cross-batch/source-invalid/older-newer candidates, removable required evidence, null/future provider time, and a deliberately divergent wide-root numeric compatibility value.
-- [ ] **T004** [P] Create raw Metals.Dev JSON-text fixtures in `supabase/functions/_shared/market-rate-snapshot-contract.test.ts` containing ordinary high-precision decimals, `0.10000000000000001`, scientific values including `3.73874e-10` and `1.2300e+2`, malformed/non-positive rates, valid timestamp strings, missing timestamp fields, malformed timestamp strings, future timestamp strings, and provider status/shape failures.
+- [ ] **T004** [P] Create raw Metals.Dev JSON-text fixtures in `supabase/functions/_shared/market-rate-snapshot-contract.test.ts` containing ordinary high-precision decimals, `0.10000000000000001`, scientific values including `3.73874e-10` and `1.2300e+2`, malformed/non-positive rates, valid timestamp strings, missing timestamp fields, malformed timestamp strings, future timestamp strings, and provider status/shape failures. Before the first T006 execution, establish **test/runtime dependency scaffolding only**: add exact root `devDependencies` `lossless-json: "4.3.1"` and `zod: "4.3.6"`, commit the resulting `package-lock.json`, and map the same bare specifiers in `supabase/functions/fetch-metal-rates/deno.json` to `npm:lossless-json@4.3.1` and `npm:zod@4.3.6`. This setup changes resolution metadata only; it must not implement producer behavior.
 
-**Checkpoint**: Business source of truth is committed first; every layer can express the same exact snapshot/failure cases.
+**Checkpoint**: Business source of truth is committed first; every layer can express the same exact snapshot/failure cases, and the Node/`tsx` red tests plus Deno runtime resolve the same exact parser/validator package versions.
 
 ---
 
 ## Phase 2: Foundational Exact Snapshot Contract
 
-**Purpose**: Lock exact-value, membership, identity, lossless-ingestion, notation-normalization, and provider-time rules before current selectors/producers are implemented.
+**Purpose**: Lock exact-value, membership, identity, lossless-ingestion, notation-normalization, provider-time, and dual-runtime package-resolution rules before current selectors/producers are implemented.
 
 ### Tests first
 
 - [ ] **T005** Add failing pure-logic tests in `packages/logic/src/metals/__tests__/current-market-snapshot.test.ts` for exact 37 membership, USD identity, BTC exclusion, positive canonical plain decimals, accepted units/orientations, null/blank/whitespace source rejection for trusted current snapshots, duplicate/missing/unexpected instruments, and exact current conversion/lookup using Decimal strings.
-- [ ] **T006** [P] Extend red tests in `supabase/functions/_shared/market-rate-snapshot-contract.test.ts` to prove: raw provider JSON is parsed losslessly; ordinary precision canaries are unchanged; `3.73874e-10` becomes exact plain `0.000000000373874`; `1.2300e+2` becomes `123.00`; normalization uses no authoritative `Number`/`parseFloat`; exactly 37 observations are emitted; source/quality/unit/orientation are correct; USD is exact `1`; BTC excluded; valid non-future timestamps preserved; missing/malformed/future timestamps normalize to `null`; capture/order time is never substituted; authoritative payload construction does not require `response.json()`.
+- [ ] **T006** [P] Extend red tests in `supabase/functions/_shared/market-rate-snapshot-contract.test.ts` to prove: raw provider JSON is parsed losslessly; ordinary precision canaries are unchanged; `3.73874e-10` becomes exact plain `0.000000000373874`; `1.2300e+2` becomes `123.00`; normalization uses no authoritative `Number`/`parseFloat`; exactly 37 observations are emitted; source/quality/unit/orientation are correct; USD is exact `1`; BTC excluded; valid non-future timestamps preserved; missing/malformed/future timestamps normalize to `null`; capture/order time is never substituted; authoritative payload construction does not require `response.json()`. The test imports shared dependencies through the same bare `lossless-json` / `zod` specifiers used by Deno, with T004's exact root dependency setup already present so failure is behavioral rather than module-resolution setup failure.
 - [ ] **T007** [P] Add a source/architecture regression in `apps/mobile/__tests__/architecture/current-market-snapshot-contract.test.ts` fixing these rules: one top-level snapshot ID materializes as `market_rates.id`; children bind by `batch_id`; current financial calculations use observation `value_decimal`/exact selected helpers rather than wide `MarketRate` numeric fields; root `created_at` cannot be current freshness. Also document/assert that the OpenAPI `PersistedObservation` is one explicit closed object rather than `allOf` extension of closed `RateObservationInput`.
 
 ### Implementation after red tests
 
 - [ ] **T008** Implement `packages/logic/src/metals/current-market-snapshot.ts` and exports in `packages/logic/src/metals/index.ts` / `packages/logic/src/index.ts` to satisfy T005: canonical current instrument set, strict trusted-source validation, exact observation normalization, and Decimal-based current metal/currency lookup/conversion helpers over plain exact-string interfaces.
-- [ ] **T009** Update `supabase/functions/fetch-metal-rates/deno.json` with pinned `lossless-json@4.3.1` and implement `supabase/functions/_shared/market-rate-snapshot-contract.ts` to satisfy T004/T006: parse response text losslessly; expand JSON scientific notation to equivalent plain decimal text by coefficient/exponent string manipulation with no rounding/binary-float intermediate; Zod-validate the transformed provider shape; normalize missing/malformed/future provider timestamps to `null` using the single capture instant only as a future-time comparison ceiling; build one exact logical root + 37 observations under supplied snapshot/capture identity.
-- [ ] **T010** Re-run T005–T007 after T008/T009 and keep the architecture/source contract red if implementation exposes a wide-root JS number as authoritative current financial truth, accepts the invalid composed persisted-observation schema, or substitutes non-provider time for freshness.
+- [ ] **T009** Implement `supabase/functions/_shared/market-rate-snapshot-contract.ts` using the exact dual-runtime dependencies already pinned in T004 to satisfy T004/T006: parse response text losslessly through bare `lossless-json`; expand JSON scientific notation to equivalent plain decimal text by coefficient/exponent string manipulation with no rounding/binary-float intermediate; Zod-validate through bare `zod`; normalize missing/malformed/future provider timestamps to `null` using the single capture instant only as a future-time comparison ceiling; build one exact logical root + 37 observations under supplied snapshot/capture identity. Do not introduce a second version range, URL import, or runtime-specific source import.
+- [ ] **T010** Re-run T005–T007 after T008/T009 and keep the architecture/source contract red if implementation exposes a wide-root JS number as authoritative current financial truth, accepts the invalid composed persisted-observation schema, substitutes non-provider time for freshness, or bypasses the approved exact bare dependency specifiers.
 
 **Checkpoint**: Exact current-rate contract and lossless provider adapter exist under tests before selector/database persistence implementation.
 
@@ -99,7 +99,7 @@
 
 ### Producer / pull / sync / realtime
 
-- [ ] **T034** [US2] Extract `supabase/functions/fetch-metal-rates/handler.ts`, make `supabase/functions/fetch-metal-rates/index.ts` the minimal `Deno.serve` wrapper, and refactor the handler to satisfy T026: `response.text()` -> lossless shared parser -> exact ordinary/scientific normalization -> provider-time valid/null normalization -> exact Zod envelope -> one `persist_market_rate_snapshot_v1` RPC. After T026 is green, add root `package.json` script `"test:market-rate-edge": "tsx --test supabase/functions/_shared/market-rate-snapshot-contract.test.ts supabase/functions/fetch-metal-rates/handler.test.ts"` and add `.github/workflows/ci.yml` quality step `Market Rate Edge Contract` running `npm run test:market-rate-edge`. Preserve response compatibility only after exact persistence; expose `snapshotId`/`persistenceStatus`; do not leak secrets.
+- [ ] **T034** [US2] Extract `supabase/functions/fetch-metal-rates/handler.ts`, make `supabase/functions/fetch-metal-rates/index.ts` the minimal `Deno.serve` wrapper, and refactor the handler to satisfy T026: `response.text()` -> bare `lossless-json` shared parser -> exact ordinary/scientific normalization -> provider-time valid/null normalization -> bare `zod` exact envelope -> one `persist_market_rate_snapshot_v1` RPC. Preserve the exact root/Deno dependency parity established in T004; do not rely on workspace hoisting or Deno import-map resolution from Node. After T026 is green, add root `package.json` script `"test:market-rate-edge": "tsx --test supabase/functions/_shared/market-rate-snapshot-contract.test.ts supabase/functions/fetch-metal-rates/handler.test.ts"` and add `.github/workflows/ci.yml` quality step `Market Rate Edge Contract` running `npm run test:market-rate-edge`. Preserve response compatibility only after exact persistence; expose `snapshotId`/`persistenceStatus`; do not leak secrets.
 - [ ] **T035** [US2] Replace independent current `pullMarketRates()` + `pullMarketRateObservations()` composition in `apps/mobile/services/sync/pull-strategies.ts` with `pull_market_rate_snapshots_page_v1` validation/transform. Normal app sync and manual refresh share this complete-envelope contract; retain wide-root reads only for explicit historical use.
 - [ ] **T036** [US2] Refactor `apps/mobile/services/live-rates-refresh-service.ts` so validated complete pages are committed in one Watermelon `database.write`/batch unit and snapshot cursor advances only after successful full-page apply; preserve cached A on failure.
 - [ ] **T037** [US2] Update `apps/mobile/providers/MarketRatesRealtimeProvider.tsx` to keep realtime as sync trigger only; remove any assumption a notified root is current before complete pull/local selection accepts it.
@@ -158,14 +158,14 @@
 
 - [ ] **T054** Reconcile `specs/302-atomic-market-rate-snapshots/quickstart.md` only if implementation-time file/command names changed; keep verification commands exact/reproducible.
 - [ ] **T055** Run local Supabase/migration verification including `supabase/tests/atomic_market_rate_snapshots_test.sql`; record exact command/output proving atomic persistence, source rejection, replay/conflict, pull filtering, permissions, and root-delete cascade.
-- [ ] **T056** Run **exactly** `npm run test:market-rate-edge` and focused `@monyvi/logic` tests. Record output proving lossless ordinary/scientific parsing, precision preservation, missing/malformed/future provider-time normalization, exact current helpers, 37-instrument/source contract, and no pre-RPC binary-number authority. Confirm the `Market Rate Edge Contract` CI step invokes the same root script.
+- [ ] **T056** Run **exactly** `npm run test:market-rate-edge` and focused `@monyvi/logic` tests. Record output proving lossless ordinary/scientific parsing, precision preservation, missing/malformed/future provider-time normalization, exact current helpers, 37-instrument/source contract, and no pre-RPC binary-number authority. Also record `npm pkg get devDependencies.lossless-json devDependencies.zod` and verify it reports exact `4.3.1` / `4.3.6`; inspect `supabase/functions/fetch-metal-rates/deno.json` and confirm its `lossless-json` / `zod` mappings are exact `npm:...` versions matching root metadata. Confirm the `Market Rate Edge Contract` CI step invokes the same root script.
 - [ ] **T057** Run focused `@monyvi/mobile` Jest suites for selector, pull, refresh, realtime, importer, `useMarketRates`, Live Rates, My Metals, holding detail, and net worth; include removed-evidence/no-cross-batch-repair and wide-root-divergence cases.
-- [ ] **T058** Run `npm run typecheck -w @monyvi/mobile`, `npm run lint -w @monyvi/mobile`, required repository lint/tests, DB generation/script checks, and `npm run test:market-rate-edge`; verify `.github/workflows/ci.yml` includes the matching `Market Rate Edge Contract` quality step. Fix only issue #302 failures.
+- [ ] **T058** Run `npm run typecheck -w @monyvi/mobile`, `npm run lint -w @monyvi/mobile`, required repository lint/tests, DB generation/script checks, and `npm run test:market-rate-edge`; verify `.github/workflows/ci.yml` includes the matching `Market Rate Edge Contract` quality step. Verify `package-lock.json` is committed/current for the exact root Edge dependencies and no root-vs-Deno package-version drift exists. Fix only issue #302 failures.
 - [ ] **T059** Re-run bypass searches for `observeLiveRatesTrust`, direct current `market_rates` / `market_rate_observations` selectors, `latestRates`, `isStale()`, `getAge()`, wide rate fields, and current `convertCurrency`/`getMetalPrice` calls; classify every remaining hit as exact-selected current, explicit historical/test/unrelated, or fix with architecture regression.
 - [ ] **T060** Perform regression-only manual QA on existing Home, Live Rates, My Metals, and holding detail in EN/AR and online/offline states; record manual evidence honestly and verify no new screen/navigation/layout was introduced.
-- [ ] **T061** Build PR evidence matrix mapping FR-001–FR-023, SC-001–SC-009, and every listed edge case—including ordinary/scientific exact-decimal ingestion, missing/malformed/future provider-time normalization, source rejection, persisted-observation schema contract, root-delete cascade, removed/corrupt local evidence, and no cross-batch repair—to deterministic automated evidence or explicit manual-only reason.
+- [ ] **T061** Build PR evidence matrix mapping FR-001–FR-023, SC-001–SC-009, and every listed edge case—including ordinary/scientific exact-decimal ingestion, missing/malformed/future provider-time normalization, exact Node/Deno dependency parity, source rejection, persisted-observation schema contract, root-delete cascade, removed/corrupt local evidence, and no cross-batch repair—to deterministic automated evidence or explicit manual-only reason.
 
-**Final Checkpoint**: Every authoritative current rate/valuation/trust path is one exact snapshot; producer-to-device failure/replay/offline/corruption behavior is deterministic; required checks are evidenced; no UI/product-scope expansion occurred.
+**Final Checkpoint**: Every authoritative current rate/valuation/trust path is one exact snapshot; producer-to-device failure/replay/offline/corruption behavior is deterministic; Edge/shared tests execute against explicitly owned matching Node/Deno dependency versions; required checks are evidenced; no UI/product-scope expansion occurred.
 
 ---
 
@@ -174,7 +174,7 @@
 ```text
 T001 business documentation gate
     ↓
-Phase 1 fixtures
+Phase 1 fixtures + dual-runtime test scaffolding
     ↓
 Phase 2 exact/lossless foundation
     ↓
@@ -200,11 +200,12 @@ Phase 7 verification/evidence
 ```
 
 - **T001 blocks every other code/test task.**
+- T004's exact root/Deno dependency metadata must exist before T006 is first executed; this is test/runtime scaffolding, not producer behavior.
 - T008 waits for red T005.
-- T009 waits for red T006.
+- T009 waits for T004 dependency scaffolding and red T006.
 - T016–T023 wait for US1 red tests T011–T015.
 - T031/T032 wait for SQL red T025.
-- T034 waits for shared red T006/T009 and handler red T026; it adds the root Edge script/CI step only after handler/shared tests are green.
+- T034 waits for shared red T006/T009 and handler red T026; it preserves the T004 dependency contract and adds the root Edge script/CI step only after handler/shared tests are green.
 - T035 waits for red T027 and server pull contract T032.
 - T036 waits for red T028 and pull adapter T035.
 - T037 waits for red T029.
@@ -214,12 +215,13 @@ Phase 7 verification/evidence
 
 ## Strict TDD Order
 
-1. Write listed failing test.
-2. Run it and prove failure is intended missing behavior, not fixture/setup failure.
-3. Implement minimum production change.
-4. Re-run focused tests to green.
-5. Refactor only while tests remain green.
-6. Commit coherent red/green batch before crossing another boundary.
+1. Complete prerequisite test/runtime resolution scaffolding when a test runner cannot otherwise resolve its declared dependencies; do not implement feature behavior in that setup step.
+2. Write listed failing test.
+3. Run it and prove failure is intended missing behavior, not fixture/module-resolution/setup failure.
+4. Implement minimum production change.
+5. Re-run focused tests to green.
+6. Refactor only while tests remain green.
+7. Commit coherent red/green batch before crossing another boundary.
 
 Detailed provider mapping/scientific/timestamp tests are T006 before shared producer implementation T009; exact handler tests are T026 before handler cutover T034.
 
@@ -228,7 +230,7 @@ Detailed provider mapping/scientific/timestamp tests are T006 before shared prod
 After T001:
 
 - T003/T004 can be prepared in parallel after T002 fixture semantics are clear.
-- T005/T006/T007 target separate test boundaries and can be prepared in parallel.
+- T005/T006/T007 target separate test boundaries and can be prepared in parallel after T004 dependency scaffolding exists for T006 execution.
 - US1 red tests T012–T015 can be prepared in parallel with T011.
 - US2 red tests T026–T030 can be prepared in parallel with SQL T025.
 - US3 red tests T040–T042 can be prepared in parallel with T039.
@@ -245,7 +247,7 @@ The normal “US1-only MVP” is not releasable. Minimum releasable trust slice 
 Prefer coherent TDD commits/batches:
 
 1. business-decision gate;
-2. exact/lossless red tests + foundational helpers;
+2. exact dual-runtime dependency/test scaffolding + lossless red tests + foundational helpers;
 3. SQL contract tests + migration;
 4. producer atomic persistence + Edge test/CI gate;
 5. complete pull/local apply;

@@ -2,9 +2,9 @@
 
 **Feature**: `302-atomic-market-rate-snapshots`  
 **Date**: 2026-09-09  
-**Revision**: Post-second-Analyze remediation
+**Revision**: Post-third-Analyze I1 remediation
 
-This research resolves implementation decisions deferred by the approved specification and incorporates findings from the first two Speckit Analyze passes. It does not change approved user/business requirements.
+This research resolves implementation decisions deferred by the approved specification and incorporates findings from the first three Speckit Analyze passes. It does not change approved user/business requirements.
 
 ## Decision 1: Reuse `market_rates.id` as the immutable snapshot identity
 
@@ -173,10 +173,27 @@ and a `Market Rate Edge Contract` step in `.github/workflows/ci.yml`'s `quality`
 
 This is a new issue #302 CI obligation; current CI is not assumed to run these tests already.
 
-## Decision 23: Verification is failure-first and cross-boundary
+## Decision 23: Node/tsx and Deno own matching exact dependency resolutions
 
-The matrix must include lossless ordinary/scientific provider decimals, missing/malformed/future timestamp normalization, source rejection, transactional persistence/replay/conflict, root-delete cascade, complete-envelope paging, local corruption/no-cross-batch repair, offline/restart reconstruction, exact current calculation inputs, and current/historical evidence separation.
+The shared parser/handler source runs under two resolvers during the issue #302 lifecycle: root Node/`tsx` for deterministic tests and Deno for the deployed Edge function. Neither resolver may implicitly depend on the other's configuration.
+
+**Decision**:
+
+- root `package.json` declares exact devDependencies `lossless-json: "4.3.1"` and `zod: "4.3.6"` and the resulting `package-lock.json` is committed;
+- `supabase/functions/fetch-metal-rates/deno.json` maps bare `lossless-json` to `npm:lossless-json@4.3.1` and bare `zod` to `npm:zod@4.3.6`;
+- shared parser/handler source imports only those bare specifiers;
+- version parity is a release verification item.
+
+**Rationale**: Node/`tsx` resolves npm metadata from the root package/lock and does not consume the function's Deno import map. Deno owns its function-local import map and should not depend on root Node module resolution. Matching exact versions make the same source deterministic in both environments while keeping runtime ownership explicit.
+
+The existing mobile workspace's `zod` dependency is not accepted as implicit root test ownership even if npm happens to hoist it. The issue #302 Edge test contract must remain reproducible without workspace-hoisting assumptions.
+
+**Rejected alternatives**: Deno-only dependency declaration with Node relying on the import map; Node relying on a hoisted workspace Zod; divergent version ranges between npm and Deno; URL/runtime-specific imports in the shared source.
+
+## Decision 24: Verification is failure-first and cross-boundary
+
+The matrix must include Node/Deno dependency parity, lossless ordinary/scientific provider decimals, missing/malformed/future timestamp normalization, source rejection, transactional persistence/replay/conflict, root-delete cascade, complete-envelope paging, local corruption/no-cross-batch repair, offline/restart reconstruction, exact current calculation inputs, and current/historical evidence separation.
 
 ## Environment limitation during research
 
-The connected planning environment has no repository shell runner, so Speckit helper scripts, Supabase CLI, SQL tests, Jest, lint, typecheck, `npm run test:market-rate-edge`, and CI were not executed during research. Repository files were inspected directly; implementation-time verification commands are recorded in `quickstart.md`.
+The connected planning environment has no repository shell runner, so Speckit helper scripts, Supabase CLI, SQL tests, Jest, lint, typecheck, dependency installation/checks, `npm run test:market-rate-edge`, and CI were not executed during research. Repository files were inspected directly; implementation-time verification commands are recorded in `quickstart.md`.
