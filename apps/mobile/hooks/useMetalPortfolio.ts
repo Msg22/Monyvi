@@ -36,6 +36,7 @@ import {
   resolveMetalPortfolioReadiness,
   type MetalPortfolioSectionReadiness,
 } from "./metal-portfolio-readiness";
+import { shapeMetalPortfolioHoldingFacts } from "./shape-metal-portfolio-holding-facts";
 import { useMarketRates } from "./useMarketRates";
 import { usePreferredCurrency } from "./usePreferredCurrency";
 import { runUserScopedEffect, useCurrentUser } from "./useCurrentUser";
@@ -419,9 +420,7 @@ export function useMetalPortfolio(
         historyDependencyKey,
         holdingStatesKey,
         holdingStatesReady:
-          userId !== null &&
-          holdingStatesSnapshotUserId === userId &&
-          historyDependencyKey === holdingStatesKey,
+          userId !== null && holdingStatesSnapshotUserId === userId,
         ratesReady: hasRatesSnapshot,
       }),
     [
@@ -437,12 +436,33 @@ export function useMetalPortfolio(
     ]
   );
 
-  const shapedHoldings = useMemo(() => {
-    if (
-      userId === null ||
-      isResolvingUser ||
-      !readiness.recentHistory
-    ) {
+  const portfolioShapedHoldings = useMemo(() => {
+    if (userId === null || isResolvingUser || !readiness.holdings) {
+      return null;
+    }
+    return shapeMetalPortfolioHoldingFacts({
+      assetMetals,
+      assets,
+      currentRates,
+      holdingStates,
+      lifecycleEvents,
+      preferredCurrency,
+      userId,
+    });
+  }, [
+    assetMetals,
+    assets,
+    currentRates,
+    holdingStates,
+    isResolvingUser,
+    lifecycleEvents,
+    preferredCurrency,
+    readiness.holdings,
+    userId,
+  ]);
+
+  const historyShapedHoldings = useMemo(() => {
+    if (userId === null || isResolvingUser || !readiness.recentHistory) {
       return null;
     }
     return shapeMetalPortfolioHoldings({
@@ -469,28 +489,27 @@ export function useMetalPortfolio(
   const recentHistory = useMemo<
     MetalPortfolioReadModel["recentHistory"] | null
   >(() => {
-    if (userId === null || shapedHoldings === null) return null;
+    if (userId === null || historyShapedHoldings === null) return null;
     return buildMetalPortfolioReadModel({
       filter: "ALL",
-      holdings: shapedHoldings,
+      holdings: historyShapedHoldings,
       rateStatus: { ageMs: null, state: "missing" },
       userId,
     }).recentHistory;
-  }, [shapedHoldings, userId]);
+  }, [historyShapedHoldings, userId]);
 
   const portfolio = useMemo((): MetalPortfolioReadModel | null => {
     if (
       userId === null ||
       isResolvingUser ||
-      !readiness.summary ||
       !readiness.holdings ||
-      shapedHoldings === null
+      portfolioShapedHoldings === null
     ) {
       return null;
     }
     const activeMetalTypes = Array.from(
       new Set(
-        shapedHoldings
+        portfolioShapedHoldings
           .filter(
             (holding) =>
               holding.isEffective &&
@@ -502,7 +521,7 @@ export function useMetalPortfolio(
     ) as ActiveMetalType[];
     const activePurchaseCurrencies = Array.from(
       new Set(
-        shapedHoldings
+        portfolioShapedHoldings
           .filter(
             (holding) =>
               holding.isEffective &&
@@ -518,7 +537,7 @@ export function useMetalPortfolio(
     );
     return buildMetalPortfolioReadModel({
       filter: selectedFilter,
-      holdings: shapedHoldings,
+      holdings: portfolioShapedHoldings,
       rateStatus: getPortfolioRateStatus(
         currentRates,
         preferredCurrency,
@@ -530,26 +549,28 @@ export function useMetalPortfolio(
   }, [
     currentRates,
     isResolvingUser,
+    portfolioShapedHoldings,
     preferredCurrency,
     readiness.holdings,
-    readiness.summary,
     selectedFilter,
-    shapedHoldings,
     userId,
   ]);
 
   const rateProviderObservedAt = useMemo(
     () =>
-      getPortfolioProviderObservedAt(
-        currentRates,
-        portfolio?.activeHoldings ?? [],
-        preferredCurrency
-      ),
-    [currentRates, portfolio, preferredCurrency]
+      readiness.rateCurrency
+        ? getPortfolioProviderObservedAt(
+            currentRates,
+            portfolio?.activeHoldings ?? [],
+            preferredCurrency
+          )
+        : null,
+    [currentRates, portfolio, preferredCurrency, readiness.rateCurrency]
   );
 
   const wealthBreakdown = useMemo((): WealthBreakdownReadModel | null => {
     if (
+      !readiness.summary ||
       portfolio === null ||
       input.accountsValueDecimal === undefined ||
       input.accountsValueDecimal === null
@@ -564,13 +585,28 @@ export function useMetalPortfolio(
         getTrustedRateDecimal(currentRates.currencies.get(preferredCurrency)) ??
         (preferredCurrency === "USD" ? "1" : null),
     });
-  }, [currentRates, input.accountsValueDecimal, portfolio, preferredCurrency]);
+  }, [
+    currentRates,
+    input.accountsValueDecimal,
+    portfolio,
+    preferredCurrency,
+    readiness.summary,
+  ]);
+
+  const isAnySubscriptionLoading =
+    isAssetsLoading ||
+    isAssetMetalsLoading ||
+    isHoldingStatesLoading ||
+    isHistoryLoading ||
+    isRatesLoading ||
+    isCurrencyLoading;
+  const hasAnyReadySection =
+    readiness.summary || readiness.holdings || readiness.recentHistory;
 
   return {
     error,
     isLoading:
-      isResolvingUser ||
-      (!readiness.summary && !readiness.holdings && !readiness.recentHistory),
+      isResolvingUser || (isAnySubscriptionLoading && !hasAnyReadySection),
     isOffline: !isConnected,
     onFilterChange,
     portfolio,
@@ -666,7 +702,10 @@ function getPortfolioProviderObservedAt(
   const activePurchaseCurrencies = Array.from(
     new Set(
       activeHoldings.flatMap((holding) =>
-        holding.purchaseCurrency === null ? [] : [holding.purchaseCurrency]
+        holding.purchasePriceDecimal !== null &&
+        holding.purchaseCurrency !== null
+          ? [holding.purchaseCurrency]
+          : []
       )
     )
   );
