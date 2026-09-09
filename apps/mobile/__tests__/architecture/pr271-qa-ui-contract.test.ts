@@ -26,6 +26,14 @@ describe("PR #271 QA UI contracts", () => {
     );
   });
 
+  it("shows holding facts while rate/currency values remain a Skeleton", () => {
+    expect(portfolioSource).toContain("isRateCurrencyReady");
+    expect(portfolioSource).toContain("metal-portfolio-holding-value-pending-");
+    expect(compact(portfolioSource)).toMatch(
+      /isRateCurrencyReady \? .*metal-portfolio-holding-value-/
+    );
+  });
+
   it("never renders raw rate-provider source identifiers in holding detail", () => {
     expect(detailSource).not.toContain('t("detail.rate_source"');
     expect(detailSource).not.toMatch(/currentValueRateStatus\??\.source/);
