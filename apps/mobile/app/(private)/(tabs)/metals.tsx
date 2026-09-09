@@ -21,6 +21,9 @@ export default function MyMetalsRoute(): React.JSX.Element {
     isOffline,
     onFilterChange,
     portfolio,
+    rateProviderObservedAt,
+    readiness,
+    recentHistory,
     refresh,
     selectedFilter,
   } = useMetalPortfolio();
@@ -63,6 +66,9 @@ export default function MyMetalsRoute(): React.JSX.Element {
         onHoldingPress={openHolding}
         onRetry={refresh}
         portfolio={portfolio}
+        rateProviderObservedAt={rateProviderObservedAt}
+        readiness={readiness}
+        recentHistory={recentHistory}
         selectedFilter={selectedFilter}
       />
       <AddHoldingModal
