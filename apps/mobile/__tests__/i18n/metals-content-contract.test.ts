@@ -72,10 +72,11 @@ describe("Metals EN/AR content contract", () => {
     }
   });
 
-  it("uses the canonical provider-time and retry wording without local-refresh substitutes", () => {
+  it("uses exact provider-observation time copy without a customer-facing age threshold", () => {
     expect(enFlat).toMatchObject({
-      "rate.fresh": "Live Rates: current rate. Rates updated {{dateTime}}",
-      "rate.stale": "Rates: rate is older than 24 hours",
+      "portfolio.rates_updated":
+        "Prices last updated {{date}} at {{time}}. They may have changed since then.",
+      "rate.stale": "Last available price",
       "rate.unknown": "Rates: rate age is unknown",
       "rate.missing": "Rates: current rate unavailable",
       "rate.invalid": "Rates: this rate can’t be used",
@@ -84,9 +85,9 @@ describe("Metals EN/AR content contract", () => {
       "rate.retry_refresh": "Retry refresh",
     });
     expect(arFlat).toMatchObject({
-      "rate.fresh":
-        "الأسعار المباشرة: سعر حديث. تم تحديث الأسعار في {{dateTime}}",
-      "rate.stale": "أسعار السوق: مرّ أكثر من 24 ساعة على السعر",
+      "portfolio.rates_updated":
+        "آخر تحديث للأسعار: {{date}}، {{time}}. قد تكون تغيّرت بعد ذلك.",
+      "rate.stale": "آخر سعر متاح",
       "rate.unknown": "أسعار السوق: عمر السعر غير معروف",
       "rate.missing": "أسعار السوق: السعر الحالي غير متاح",
       "rate.invalid": "أسعار السوق: لا يمكن استخدام هذا السعر",
@@ -94,6 +95,9 @@ describe("Metals EN/AR content contract", () => {
         "أسعار السوق: تعذر التحديث. نعرض آخر سعر متاح.",
       "rate.retry_refresh": "أعد محاولة التحديث",
     });
+    expect(`${Object.values(enFlat).join(" ")} ${Object.values(arFlat).join(" ")}`).not.toMatch(
+      /older than 24 hours|24h|24 ساعة/iu
+    );
   });
 
   it("retains the legacy Platinum label while Live Rates V1 excludes the card", () => {
