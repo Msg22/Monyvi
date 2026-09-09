@@ -1,3 +1,6 @@
+import arMetals from "../../locales/ar/metals.json";
+import enMetals from "../../locales/en/metals.json";
+
 function copyValidDate(value: Date | null): Date | null {
   if (value === null || !Number.isFinite(value.getTime())) return null;
   return new Date(value.getTime());
@@ -42,4 +45,18 @@ export function formatPortfolioRateUpdatedParts(
       ? localizedTime
       : normalizeEnglishDayPeriod(localizedTime),
   };
+}
+
+export function formatPortfolioRateUpdated(
+  providerObservedAt: Date | null,
+  language: string | undefined
+): string | null {
+  const parts = formatPortfolioRateUpdatedParts(providerObservedAt, language);
+  if (parts === null) return null;
+  const template = language?.startsWith("ar")
+    ? arMetals.portfolio.rates_updated
+    : enMetals.portfolio.rates_updated;
+  return template
+    .replace("{{date}}", parts.date)
+    .replace("{{time}}", parts.time);
 }
