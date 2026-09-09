@@ -4,10 +4,22 @@ import { Q } from "@nozbe/watermelondb";
 import { useEffect, useState } from "react";
 import { useDatabase } from "../providers/DatabaseProvider";
 import { useMarketRatesRealtime } from "../providers/MarketRatesRealtimeProvider";
+import {
+  observeSelectedMarketRateSnapshot,
+  type MarketRateSnapshotStream,
+  type SelectedMarketRateSnapshot,
+} from "../services/market-rate-snapshot-read-model-service";
+import { summarizeLiveRatesTrust } from "../services/live-rates-trust-read-model-service";
 import { logger } from "../utils/logger";
 
 interface UseMarketRatesResult {
+  readonly selectedSnapshot: SelectedMarketRateSnapshot | null;
+  /**
+   * Compatibility read path for legacy wide-root consumers (issue #241 debt).
+   * NEVER authoritative for current financial truth; the selected snapshot is.
+   */
   readonly latestRates: MarketRate | null;
+  /** Explicitly historical previous-day comparison row; never current trust. */
   readonly previousDayRate: MarketRate | null;
   readonly isLoading: boolean;
   readonly isConnected: boolean;
@@ -32,27 +44,66 @@ function getValidPreviousDayRate(
 }
 
 /**
+ * Conservative provider-observation time shared by every current display:
+ * the oldest provider timestamp in the selected snapshot. Root `created_at`,
+ * fetch, storage, sync, receipt, and restart times are never used here.
+ */
+function getSnapshotProviderTime(
+  snapshot: SelectedMarketRateSnapshot | null
+): Date | null {
+  if (!snapshot) {
+    return null;
+  }
+  const times = Array.from(snapshot.ratesByInstrument.values())
+    .map((rate) => rate.providerObservedAt?.getTime() ?? null)
+    .filter((time): time is number => time !== null);
+  return times.length === 0 ? null : new Date(Math.min(...times));
+}
+
+/**
  * Hook to get market rates from local WatermelonDB.
  *
- * Connection state (`isConnected`) is provided by the app-level
- * `MarketRatesRealtimeProvider`, so the realtime channel persists
- * across screen navigations without re-subscribing.
+ * The current financial truth is the single selected atomic snapshot rebuilt
+ * deterministically from cached roots + bound exact observations. Connection
+ * state (`isConnected`) is provided by the app-level
+ * `MarketRatesRealtimeProvider`.
  *
  * Single source of truth: WatermelonDB (synced from Supabase)
  */
 export function useMarketRates(): UseMarketRatesResult {
   const database = useDatabase();
   const { isConnected } = useMarketRatesRealtime();
+  const [selectedSnapshot, setSelectedSnapshot] =
+    useState<SelectedMarketRateSnapshot | null>(null);
+  const [isSnapshotLoading, setIsSnapshotLoading] = useState(true);
   const [observedLatestRates, setObservedLatestRates] = useState<
     readonly MarketRate[]
   >([]);
   const [previousDayRate, setPreviousDayRate] = useState<MarketRate | null>(
     null
   );
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLegacyLoading, setIsLegacyLoading] = useState(true);
   const latestRates = observedLatestRates.at(0) ?? null;
 
-  // Query latest market rate from local DB
+  useEffect(() => {
+    const stream: MarketRateSnapshotStream =
+      observeSelectedMarketRateSnapshot(database);
+    const subscription = stream.subscribe({
+      next: (snapshot): void => {
+        setSelectedSnapshot(snapshot);
+        setIsSnapshotLoading(false);
+      },
+      error: (error: unknown): void => {
+        logger.error("marketSnapshot.observe.failed", error);
+        setSelectedSnapshot(null);
+        setIsSnapshotLoading(false);
+      },
+    });
+    return () => subscription.unsubscribe();
+  }, [database]);
+
+  // Historical compatibility window: newest wide row is only a legacy
+  // conversion input (issue #241) and never current freshness.
   useEffect(() => {
     const subscription = database
       .get<MarketRate>("market_rates")
@@ -62,7 +113,7 @@ export function useMarketRates(): UseMarketRatesResult {
         // Watermelon mutates cached model instances in place. Preserve the
         // emitted result array so same-model updates still trigger a render.
         setObservedLatestRates(rates);
-        setIsLoading(false);
+        setIsLegacyLoading(false);
       });
 
     return () => subscription.unsubscribe();
@@ -94,12 +145,25 @@ export function useMarketRates(): UseMarketRatesResult {
     void fetchPreviousDay();
   }, [database, observedLatestRates]); // Re-fetch when the observed result changes
 
+  const trustValues = selectedSnapshot
+    ? [
+        selectedSnapshot.trust.gold,
+        selectedSnapshot.trust.silver,
+        ...selectedSnapshot.trust.currencies.values(),
+      ]
+    : [];
+  const summary = selectedSnapshot
+    ? summarizeLiveRatesTrust(trustValues)
+    : "missing";
+
   return {
+    selectedSnapshot,
     latestRates,
     previousDayRate,
-    isLoading,
+    isLoading: isSnapshotLoading || isLegacyLoading,
     isConnected,
-    lastUpdated: latestRates?.createdAt ?? null,
-    isStale: latestRates?.isStale() ?? false,
+    lastUpdated: getSnapshotProviderTime(selectedSnapshot),
+    isStale:
+      selectedSnapshot === null ? false : summary !== "fresh",
   };
 }

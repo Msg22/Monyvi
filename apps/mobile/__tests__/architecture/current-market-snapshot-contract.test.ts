@@ -4,7 +4,7 @@ import { join } from "node:path";
 import {
   buildMarketRateSnapshotEnvelope,
   buildPersistRpcPayload,
-} from "../../../../supabase/functions/_shared/market-rate-snapshot-contract.ts";
+} from "../../../../supabase/functions/_shared/market-rate-snapshot-contract";
 import { validateCurrentMarketSnapshot } from "@monyvi/logic";
 
 const ROOT = join(__dirname, "../../../..");
@@ -16,7 +16,6 @@ const SHARED_MODULE_PATH = join(
   ROOT,
   "supabase/functions/_shared/market-rate-snapshot-contract.ts"
 );
-
 const SNAPSHOT_ID = "11111111-1111-4111-8111-111111111111";
 const RAW_PROVIDER_SUCCESS = `{"status":"success","currency":"USD","unit":"g",
 "metals":{"gold":3738.74,"silver":43.73874,"platinum":1508.9,"palladium":1020.5},

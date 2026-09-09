@@ -45,11 +45,15 @@ export type CurrentMarketSnapshotValidation =
     }
   | { readonly available: false; readonly reasons: readonly string[] };
 
+export interface CurrentRateValueView {
+  readonly valueDecimal: string;
+}
+
 export interface ConvertCurrentAmountInput {
   readonly amountDecimal: string;
   readonly fromCurrency: MetalsIsoCurrencyCode;
   readonly toCurrency: MetalsIsoCurrencyCode;
-  readonly rates: ReadonlyMap<CurrentMarketInstrument, CurrentMarketRate>;
+  readonly rates: ReadonlyMap<string, CurrentRateValueView>;
 }
 
 const POSITIVE_PLAIN_DECIMAL = /^(?=.*[1-9])(?:0|[1-9]\d*)(?:\.\d+)?$/;
@@ -120,7 +124,7 @@ export function validateCurrentMarketSnapshot(
 }
 
 export function getMetalUsdPerPureGramDecimal(
-  rates: ReadonlyMap<CurrentMarketInstrument, CurrentMarketRate>,
+  rates: ReadonlyMap<string, CurrentRateValueView>,
   metal: "GOLD" | "SILVER"
 ): string | null {
   const instrument: MetalInstrumentCode = `metal:${metal}`;
@@ -128,7 +132,7 @@ export function getMetalUsdPerPureGramDecimal(
 }
 
 export function getCurrencyUsdPerUnitDecimal(
-  rates: ReadonlyMap<CurrentMarketInstrument, CurrentMarketRate>,
+  rates: ReadonlyMap<string, CurrentRateValueView>,
   currency: MetalsIsoCurrencyCode
 ): string | null {
   if (currency === "USD") {

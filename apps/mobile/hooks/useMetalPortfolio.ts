@@ -18,9 +18,12 @@ import {
   type PortfolioRateStatus,
 } from "@/services/metal-portfolio-read-model-service";
 import {
-  observeLiveRatesTrust,
+  observeSelectedMarketRateSnapshot,
+  type MarketRateSnapshotStream,
+  type SelectedMarketRateSnapshot,
+} from "@/services/market-rate-snapshot-read-model-service";
+import {
   summarizeLiveRatesTrust,
-  type LiveRatesTrustObservationStream,
   type LiveRatesTrustReadModel,
   type LiveRatesTrustState,
 } from "@/services/live-rates-trust-read-model-service";
@@ -138,6 +141,8 @@ export function useMetalPortfolio(
   const [currentRates, setCurrentRates] = useState<LiveRatesTrustReadModel>(
     createEmptyTrustReadModel
   );
+  const [selectedSnapshot, setSelectedSnapshot] =
+    useState<SelectedMarketRateSnapshot | null>(null);
   const [isAssetsLoading, setIsAssetsLoading] = useState(true);
   const [isAssetMetalsLoading, setIsAssetMetalsLoading] = useState(true);
   const [isHoldingStatesLoading, setIsHoldingStatesLoading] = useState(true);
@@ -147,7 +152,7 @@ export function useMetalPortfolio(
   const [isRatesLoading, setIsRatesLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const trustObservationRef = useRef<LiveRatesTrustObservationStream | null>(
+  const snapshotObservationRef = useRef<MarketRateSnapshotStream | null>(
     null
   );
 
@@ -173,14 +178,14 @@ export function useMetalPortfolio(
 
   useEffect(() => {
     const timer = setInterval(
-      () => trustObservationRef.current?.refresh(),
+      () => snapshotObservationRef.current?.refresh(),
       RATE_STATUS_REFRESH_INTERVAL_MS
     );
     const appStateSubscription = AppState.addEventListener(
       "change",
       (state) => {
         if (state === "active") {
-          trustObservationRef.current?.refresh();
+          snapshotObservationRef.current?.refresh();
         }
       }
     );
@@ -389,12 +394,13 @@ export function useMetalPortfolio(
   }, [isResolvingUser, refreshKey, userId]);
 
   useEffect(() => {
-    const observation = observeLiveRatesTrust(database);
-    trustObservationRef.current = observation;
+    const observation = observeSelectedMarketRateSnapshot(database);
+    snapshotObservationRef.current = observation;
     setIsRatesLoading(true);
     const subscription = observation.subscribe({
-      next: (result): void => {
-        setCurrentRates(result);
+      next: (snapshot): void => {
+        setSelectedSnapshot(snapshot);
+        setCurrentRates(snapshot ? snapshot.trust : createEmptyTrustReadModel());
         setIsRatesLoading(false);
       },
       error: (reason: unknown): void => {
@@ -407,8 +413,8 @@ export function useMetalPortfolio(
       },
     });
     return () => {
-      if (trustObservationRef.current === observation) {
-        trustObservationRef.current = null;
+      if (snapshotObservationRef.current === observation) {
+        snapshotObservationRef.current = null;
       }
       subscription.unsubscribe();
     };
@@ -433,6 +439,7 @@ export function useMetalPortfolio(
       assetMetals,
       assets,
       currentRates,
+      snapshotId: selectedSnapshot?.snapshotId ?? null,
       holdingStates,
       lifecycleEvents,
       preferredCurrency,

@@ -130,6 +130,7 @@ export interface ShapeMetalPortfolioHoldingsInput {
   readonly lifecycleEvents: readonly MetalPortfolioLifecycleEventSnapshot[];
   readonly preferredCurrency: CurrencyType;
   readonly rateReferences?: readonly MetalSellRateReferenceSnapshot[];
+  readonly snapshotId?: string | null;
   readonly userId: string;
 }
 

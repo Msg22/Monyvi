@@ -43,7 +43,7 @@ export function useNetWorth(): UseNetWorthResult {
   const [isAssetMetalsLoading, setIsAssetMetalsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const { latestRates, isLoading: isRatesLoading } = useMarketRates();
+  const { selectedSnapshot, isLoading: isRatesLoading } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { userId, isResolvingUser } = useCurrentUser();
 
@@ -197,13 +197,13 @@ export function useNetWorth(): UseNetWorthResult {
         : buildNetWorthReadModel({
             accounts,
             assetMetals,
-            latestRates,
+            currentSnapshot: selectedSnapshot,
             preferredCurrency,
           }),
     [
       accounts,
       assetMetals,
-      latestRates,
+      selectedSnapshot,
       preferredCurrency,
       isResolvingUser,
       isAccountsLoading,

@@ -5,19 +5,20 @@ import {
   DailySnapshotNetWorth,
   database,
   type CurrencyType,
-  type MarketRate,
 } from "@monyvi/db";
 import { Q, type Query } from "@nozbe/watermelondb";
 import {
-  calculateAccountsTotalBalance,
-  calculateNetWorth,
-  calculateTotalAssets,
-  convertCurrency,
+  convertCurrentAmountExact,
+  getMetalUsdPerPureGramDecimal,
   getSameDayLastMonth,
+  isSupportedMetalsIsoCurrencyCode,
   parseCanonicalDecimal,
   roundDecimal,
   serializeDecimal,
+  type MetalsIsoCurrencyCode,
 } from "@monyvi/logic";
+
+import type { SelectedMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
 
 import {
   queryChildrenOfOwnedParents,
@@ -32,7 +33,7 @@ export interface ObserveNetWorthAssetMetalsInput {
 export interface BuildNetWorthReadModelInput {
   readonly accounts: readonly Account[];
   readonly assetMetals: readonly AssetMetal[];
-  readonly latestRates: MarketRate | null;
+  readonly currentSnapshot: SelectedMarketRateSnapshot | null;
   readonly preferredCurrency: CurrencyType;
 }
 
@@ -124,42 +125,108 @@ export function observeNetWorthSnapshots(
 export function buildNetWorthReadModel(
   input: BuildNetWorthReadModelInput
 ): NetWorthReadModel | null {
-  if (!input.latestRates) {
+  const { currentSnapshot } = input;
+  if (!currentSnapshot) {
+    return null;
+  }
+  if (!isSupportedMetalsIsoCurrencyCode(input.preferredCurrency)) {
+    return null;
+  }
+  const preferredCurrency: MetalsIsoCurrencyCode = input.preferredCurrency;
+
+  const rates = currentSnapshot.ratesByInstrument;
+  let totalAccountsUsd = parseCanonicalDecimal("0");
+  for (const account of input.accounts) {
+    if (!isSupportedMetalsIsoCurrencyCode(account.currency)) {
+      return null;
+    }
+    const inUsd = convertCurrentAmountExact({
+      amountDecimal: String(account.balance),
+      fromCurrency: account.currency,
+      toCurrency: "USD",
+      rates,
+    });
+    if (!inUsd.available) {
+      return null;
+    }
+    totalAccountsUsd = totalAccountsUsd.plus(inUsd.value);
+  }
+
+  let totalAssetsUsd = parseCanonicalDecimal("0");
+  for (const metal of input.assetMetals) {
+    if (metal.metalType !== "GOLD" && metal.metalType !== "SILVER") {
+      return null;
+    }
+    const metalUsdPerGram = getMetalUsdPerPureGramDecimal(
+      rates,
+      metal.metalType
+    );
+    if (metalUsdPerGram === null) {
+      return null;
+    }
+    const weight =
+      metal.weightGramsDecimal ?? String(metal.weightGrams);
+    const purity =
+      metal.purityFactorDecimal ?? String(metal.purityFraction);
+    try {
+      totalAssetsUsd = totalAssetsUsd
+        .plus(
+          parseCanonicalDecimal(weight)
+            .times(purity)
+            .times(metalUsdPerGram)
+        );
+    } catch {
+      return null;
+    }
+  }
+
+  const totalAccountsUsdString = serializeDecimal(totalAccountsUsd);
+  const totalAssetsUsdString = serializeDecimal(totalAssetsUsd);
+  const totalNetWorthUsdString = serializeDecimal(
+    totalAccountsUsd.plus(totalAssetsUsd)
+  );
+
+  const preferredAccounts = convertCurrentAmountExact({
+    amountDecimal: totalAccountsUsdString,
+    fromCurrency: "USD",
+    toCurrency: preferredCurrency,
+    rates,
+  });
+  const preferredAssets = convertCurrentAmountExact({
+    amountDecimal: totalAssetsUsdString,
+    fromCurrency: "USD",
+    toCurrency: preferredCurrency,
+    rates,
+  });
+  const preferredNetWorth = convertCurrentAmountExact({
+    amountDecimal: totalNetWorthUsdString,
+    fromCurrency: "USD",
+    toCurrency: preferredCurrency,
+    rates,
+  });
+  if (
+    !preferredAccounts.available ||
+    !preferredAssets.available ||
+    !preferredNetWorth.available
+  ) {
     return null;
   }
 
-  const totalAccountsUsd = calculateAccountsTotalBalance(
-    [...input.accounts],
-    input.latestRates
-  );
-  const totalAssetsUsd = calculateTotalAssets(
-    [...input.assetMetals],
-    input.latestRates
-  );
-  const totalAccounts = convertCurrency(
-    totalAccountsUsd,
-    "USD",
-    input.preferredCurrency,
-    input.latestRates
-  );
-  const totalAssets = convertCurrency(
-    totalAssetsUsd,
-    "USD",
-    input.preferredCurrency,
-    input.latestRates
-  );
-  const preferredNetWorth = calculateNetWorth(totalAccounts, totalAssets);
+  const backToUsd = convertCurrentAmountExact({
+    amountDecimal: preferredNetWorth.value,
+    fromCurrency: preferredCurrency,
+    toCurrency: "USD",
+    rates,
+  });
+  if (!backToUsd.available) {
+    return null;
+  }
 
   return {
-    totalNetWorth: preferredNetWorth.totalNetWorth,
-    totalNetWorthUsd: convertCurrency(
-      preferredNetWorth.totalNetWorth,
-      input.preferredCurrency,
-      "USD",
-      input.latestRates
-    ),
-    totalAccounts: preferredNetWorth.totalAccounts,
-    totalAssets: preferredNetWorth.totalAssets,
+    totalNetWorth: Number(preferredNetWorth.value),
+    totalNetWorthUsd: Number(backToUsd.value),
+    totalAccounts: Number(preferredAccounts.value),
+    totalAssets: Number(preferredAssets.value),
   };
 }
 

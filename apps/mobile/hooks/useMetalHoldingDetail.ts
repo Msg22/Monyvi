@@ -5,11 +5,12 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useMarketRates } from "@/hooks/useMarketRates";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useDatabase } from "@/providers/DatabaseProvider";
+import type { LiveRatesTrustReadModel } from "@/services/live-rates-trust-read-model-service";
 import {
-  observeLiveRatesTrust,
-  type LiveRatesTrustObservationStream,
-  type LiveRatesTrustReadModel,
-} from "@/services/live-rates-trust-read-model-service";
+  observeSelectedMarketRateSnapshot,
+  type MarketRateSnapshotStream,
+  type SelectedMarketRateSnapshot,
+} from "@/services/market-rate-snapshot-read-model-service";
 import {
   observeMetalDetailEvents,
   observeMetalDetailHolding,
@@ -71,12 +72,14 @@ export function useMetalHoldingDetail(
   const hasLoadedOnceRef = useRef(false);
   const detailIdentityRef = useRef(detailIdentity);
   const modelIdentityRef = useRef<string | null>(null);
-  const trustObservationRef = useRef<LiveRatesTrustObservationStream | null>(
+  const snapshotObservationRef = useRef<MarketRateSnapshotStream | null>(
     null
   );
   const [currentRates, setCurrentRates] = useState<LiveRatesTrustReadModel>(
     createEmptyTrustReadModel
   );
+  const [selectedSnapshot, setSelectedSnapshot] =
+    useState<SelectedMarketRateSnapshot | null>(null);
   const [isRatesLoading, setIsRatesLoading] = useState(true);
   if (detailIdentityRef.current !== detailIdentity) {
     detailIdentityRef.current = detailIdentity;
@@ -92,12 +95,13 @@ export function useMetalHoldingDetail(
   }, [database]);
 
   useEffect(() => {
-    const observation = observeLiveRatesTrust(database);
-    trustObservationRef.current = observation;
+    const observation = observeSelectedMarketRateSnapshot(database);
+    snapshotObservationRef.current = observation;
     setIsRatesLoading(true);
     const subscription = observation.subscribe({
-      next: (rates): void => {
-        setCurrentRates(rates);
+      next: (snapshot): void => {
+        setSelectedSnapshot(snapshot);
+        setCurrentRates(snapshot ? snapshot.trust : createEmptyTrustReadModel());
         setRatesError(null);
         setIsRatesLoading(false);
       },
@@ -107,8 +111,8 @@ export function useMetalHoldingDetail(
       },
     });
     return () => {
-      if (trustObservationRef.current === observation) {
-        trustObservationRef.current = null;
+      if (snapshotObservationRef.current === observation) {
+        snapshotObservationRef.current = null;
       }
       subscription.unsubscribe();
     };
@@ -116,14 +120,14 @@ export function useMetalHoldingDetail(
 
   useEffect(() => {
     const timer = setInterval(
-      () => trustObservationRef.current?.refresh(),
+      () => snapshotObservationRef.current?.refresh(),
       RATE_STATUS_REFRESH_INTERVAL_MS
     );
     const appStateSubscription = AppState.addEventListener(
       "change",
       (state) => {
         if (state === "active") {
-          trustObservationRef.current?.refresh();
+          snapshotObservationRef.current?.refresh();
         }
       }
     );
@@ -213,6 +217,7 @@ export function useMetalHoldingDetail(
     void readMetalDetailReadModel({
       currentRates,
       holdingId,
+      snapshotId: selectedSnapshot?.snapshotId ?? null,
       preferredCurrency,
       userId,
     })
@@ -239,6 +244,7 @@ export function useMetalHoldingDetail(
   }, [
     currentRates,
     detailIdentity,
+    selectedSnapshot,
     holdingId,
     isCurrencyLoading,
     isFocused,
