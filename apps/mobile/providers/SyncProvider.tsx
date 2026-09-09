@@ -3,8 +3,7 @@
  * Provides sync status and functions to the app with smart sync intervals
  */
 
-import { database, type MarketRate, type Profile } from "@monyvi/db";
-import { assertValidMarketRateModel } from "@monyvi/logic";
+import { database, type Profile } from "@monyvi/db";
 import { Q } from "@nozbe/watermelondb";
 import {
   createContext,
@@ -19,20 +18,17 @@ import {
 } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { useAuth } from "../context/AuthContext";
+import { readSelectedMarketRateSnapshot } from "../services/market-rate-snapshot-read-model-service";
 import { isAuthenticated as checkIsAuthenticated } from "../services/supabase";
 import { syncDatabase } from "../services/sync";
 import { queryOwned } from "../services/user-data-access";
 import { logger } from "../utils/logger";
 import type { InitialSyncFailureReason } from "../utils/routing-decision";
 
-// Sync intervals in milliseconds
-const SYNC_INTERVAL_ACTIVE = 15 * 60 * 1000; // 15 minutes when app is active
-const SYNC_INTERVAL_BACKGROUND = 30 * 60 * 1000; // 30 minutes when backgrounded
-
-/** Timeout for the initial pull-sync before declaring failure (FR-006). */
+const SYNC_INTERVAL_ACTIVE = 15 * 60 * 1000;
+const SYNC_INTERVAL_BACKGROUND = 30 * 60 * 1000;
 const INITIAL_SYNC_TIMEOUT_MS = 20_000;
 
-/** State machine for the initial pull-sync that gates post-sign-in routing. */
 export type InitialSyncState = "in-progress" | "success" | "failed" | "timeout";
 
 type ShouldApplyState = () => boolean;
@@ -43,16 +39,12 @@ interface SyncContextValue {
   lastSyncedAt: Date | null;
   syncError: Error | null;
   sync: (forceFullSync?: boolean) => Promise<void>;
-  /** Resolved after the initial pull-sync completes or times out. */
   readonly initialSyncState: InitialSyncState;
-  /** Essential local data that still blocks safe startup after sync settles. */
   readonly initialSyncFailureReason: InitialSyncFailureReason;
-  /** Re-trigger the initial sync. Returns the new state when resolved. */
   readonly retryInitialSync: () => Promise<InitialSyncState>;
 }
 
 const SyncContext = createContext<SyncContextValue | null>(null);
-
 const shouldAlwaysApplyState = (): boolean => true;
 
 interface SyncProviderProps {
@@ -82,7 +74,6 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
       forceFullSync = false,
       shouldApplyState: ShouldApplyState = shouldAlwaysApplyState
     ): Promise<void> => {
-      // Check if authenticated before syncing
       const authenticated = await checkIsAuthenticated();
       if (!authenticated || !shouldApplyState()) {
         return;
@@ -92,7 +83,6 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
       setSyncError(null);
 
       try {
-        // Concurrency guard is handled inside syncDatabase (module-level lock in sync.ts)
         await syncDatabase(database, forceFullSync);
         if (!shouldApplyState()) {
           return;
@@ -114,10 +104,6 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
     []
   );
 
-  /**
-   * Runs the initial sync with a 20-second timeout race.
-   * Returns the final InitialSyncState.
-   */
   const runInitialSync = useCallback(
     async (
       failureReasonOnFailure: InitialSyncFailureReason,
@@ -143,8 +129,7 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
             return;
           }
 
-          const latestCachedMarketRate = await fetchLatestCachedMarketRate();
-          if (!isValidCachedMarketRate(latestCachedMarketRate)) {
+          if (!(await hasCompleteCachedMarketRateSnapshot())) {
             throw new Error("market-rates-unavailable-after-sync");
           }
         };
@@ -164,9 +149,6 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
             ? "timeout"
             : "failed";
       } finally {
-        // Always clear the timer — otherwise the losing branch of Promise.race
-        // leaks a pending timer that fires 20s later with an unhandled rejection
-        // on the detached Promise (fires after Android/iOS wake-ups too).
         if (timeoutHandle !== null) {
           clearTimeout(timeoutHandle);
         }
@@ -184,20 +166,12 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
     [sync]
   );
 
-  /** Re-trigger the initial sync from the retry screen. */
   const retryInitialSync = useCallback(async (): Promise<InitialSyncState> => {
     return runInitialSync(initialSyncFailureReasonRef.current);
   }, [runInitialSync]);
 
-  /**
-   * Set up the sync interval based on app state.
-   *
-   * The interval callback checks authentication via an async call
-   * to avoid closing over the potentially stale `isAuthenticated` prop.
-   */
   const setupSyncInterval = useCallback(
     (isActive: boolean) => {
-      // Clear existing interval
       if (syncIntervalRef.current) {
         clearInterval(syncIntervalRef.current);
       }
@@ -206,11 +180,7 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
         ? SYNC_INTERVAL_ACTIVE
         : SYNC_INTERVAL_BACKGROUND;
 
-      // TODO: Replace with structured logging (e.g., Sentry)
-
       syncIntervalRef.current = setInterval(() => {
-        // Use async auth check instead of closed-over isAuthenticated
-        // to avoid stale closure issues
         const runSync = async (): Promise<void> => {
           try {
             const authenticated = await checkIsAuthenticated();
@@ -218,36 +188,30 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
               await sync();
             }
           } catch {
-            // TODO: Replace with structured logging (e.g., Sentry)
+            // Regular interval retries recover transient sync failures.
           }
         };
         runSync().catch(() => {
-          // TODO: Replace with structured logging (e.g., Sentry)
+          // Avoid an unhandled interval rejection.
         });
       }, interval);
     },
     [sync]
   );
 
-  // Handle app state changes (foreground/background)
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus): void => {
       const wasBackground = appState.match(/inactive|background/);
       const isNowActive = nextAppState === "active";
 
-      // App came to foreground from background
       if (wasBackground && isNowActive) {
-        // TODO: Replace with structured logging (e.g., Sentry)
-        // Sync immediately when returning to foreground
         sync().catch(() => {
-          // TODO: Replace with structured logging (e.g., Sentry)
+          // The cached complete snapshot remains available on failure.
         });
         setupSyncInterval(true);
       }
 
-      // App went to background
       if (appState === "active" && nextAppState.match(/inactive|background/)) {
-        // TODO: Replace with structured logging (e.g., Sentry)
         setupSyncInterval(false);
       }
 
@@ -262,7 +226,6 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
     return () => subscription.remove();
   }, [appState, sync, setupSyncInterval]);
 
-  // Initial sync on mount + data cleared detection
   useEffect(() => {
     const bootRunId = bootRunIdRef.current + 1;
     bootRunIdRef.current = bootRunId;
@@ -272,7 +235,6 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
       isMounted && bootRunIdRef.current === bootRunId;
 
     const initialSync = async (): Promise<void> => {
-      // Check user is authenticated before syncing
       if (!isAuthenticated) {
         if (shouldContinue()) {
           initialSyncFailureReasonRef.current = null;
@@ -283,7 +245,6 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
         return;
       }
 
-      // Check if data was cleared (empty local DB but authenticated)
       const userId = bootUserId;
       if (!userId) {
         if (shouldContinue()) {
@@ -295,23 +256,19 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
       }
 
       const profilesCollection = database.get<Profile>("profiles");
-      const [currentUserProfileCount, latestCachedMarketRate] =
+      const [currentUserProfileCount, hasValidCachedMarketRate] =
         await Promise.all([
           queryOwned(
             profilesCollection,
             userId,
             Q.where("deleted", false)
           ).fetchCount(),
-          fetchLatestCachedMarketRate(),
+          hasCompleteCachedMarketRateSnapshot(),
         ]);
 
       if (!shouldContinue()) {
         return;
       }
-
-      const hasValidCachedMarketRate = isValidCachedMarketRate(
-        latestCachedMarketRate
-      );
 
       if (currentUserProfileCount === 0 || !hasValidCachedMarketRate) {
         setIsInitialSync(true);
@@ -323,9 +280,6 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
           setIsInitialSync(false);
         }
       } else {
-        // Current-user profile exists locally, so the route gate can decide
-        // offline. Mark the initial-sync gate as "success" immediately and
-        // refresh the rest of the user's data in the background.
         initialSyncFailureReasonRef.current = null;
         setInitialSyncFailureReason(null);
         setInitialSyncState("success");
@@ -333,8 +287,6 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
           if (!shouldContinue()) {
             return;
           }
-          // Background sync failure is non-fatal; regular sync-interval retries
-          // will recover. Log so it is diagnosable but don't flip the gate.
           logger.warn(
             "sync.backgroundRefreshOnBoot.failed",
             getSafeThrownLog(error)
@@ -342,7 +294,6 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
         });
       }
 
-      // Set up initial interval (app starts active)
       if (shouldContinue()) {
         setupSyncInterval(true);
       }
@@ -354,7 +305,6 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
       }
     });
 
-    // Cleanup interval on unmount
     return () => {
       isMounted = false;
       if (syncIntervalRef.current) {
@@ -389,9 +339,6 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
 }
 
-/**
- * Hook to access sync context
- */
 export function useSync(): SyncContextValue {
   const context = useContext(SyncContext);
   if (!context) {
@@ -423,25 +370,6 @@ function getSafeThrownLog(error: unknown): {
   };
 }
 
-function isValidCachedMarketRate(rate: MarketRate | undefined): boolean {
-  if (!rate) {
-    return false;
-  }
-
-  try {
-    assertValidMarketRateModel(rate);
-    return true;
-  } catch (error: unknown) {
-    logger.error("sync.cachedMarketRate.invalid", error);
-    return false;
-  }
-}
-
-async function fetchLatestCachedMarketRate(): Promise<MarketRate | undefined> {
-  const cachedMarketRates = await database
-    .get<MarketRate>("market_rates")
-    .query(Q.sortBy("created_at", Q.desc), Q.take(1))
-    .fetch();
-
-  return cachedMarketRates.at(0);
+async function hasCompleteCachedMarketRateSnapshot(): Promise<boolean> {
+  return (await readSelectedMarketRateSnapshot(database)) !== null;
 }

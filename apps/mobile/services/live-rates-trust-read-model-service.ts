@@ -1,5 +1,5 @@
 import type { CurrencyType } from "@monyvi/db";
-import type { RateTrustResult } from "@monyvi/logic";
+import type { CurrentMarketInstrument, RateTrustResult } from "@monyvi/logic";
 import { SUPPORTED_CURRENCIES } from "@monyvi/logic";
 
 import type { SelectedCurrentMarketRate } from "./market-rate-snapshot-read-model-service";
@@ -24,7 +24,10 @@ export interface LiveRatesTrustValue {
 
 export interface SelectedSnapshotTrustInput {
   readonly capturedAt: Date;
-  readonly ratesByInstrument: ReadonlyMap<string, SelectedCurrentMarketRate>;
+  readonly ratesByInstrument: ReadonlyMap<
+    CurrentMarketInstrument,
+    SelectedCurrentMarketRate
+  >;
 }
 
 const TRUST_SEVERITY: Readonly<Record<LiveRatesTrustState, number>> = {
