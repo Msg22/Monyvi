@@ -8,13 +8,18 @@ function resolveDateLocale(language: string | undefined): string {
 }
 
 function normalizeEnglishDayPeriod(value: string): string {
-  return value.replace(/\bam\b/iu, "AM").replace(/\bpm\b/iu, "PM");
+  return value.replace(/\bam\b/giu, "AM").replace(/\bpm\b/giu, "PM");
 }
 
-export function formatPortfolioRateUpdated(
+export interface PortfolioRateUpdatedParts {
+  readonly date: string;
+  readonly time: string;
+}
+
+export function formatPortfolioRateUpdatedParts(
   providerObservedAt: Date | null,
   language: string | undefined
-): string | null {
+): PortfolioRateUpdatedParts | null {
   const observedAt = copyValidDate(providerObservedAt);
   if (observedAt === null) return null;
 
@@ -30,11 +35,11 @@ export function formatPortfolioRateUpdated(
     hour12: true,
     minute: "2-digit",
   });
-  const time = isArabic
-    ? localizedTime
-    : normalizeEnglishDayPeriod(localizedTime);
 
-  return isArabic
-    ? `آخر تحديث للأسعار: ${date}، ${time}. قد تكون تغيّرت بعد ذلك.`
-    : `Prices last updated ${date} at ${time}. They may have changed since then.`;
+  return {
+    date,
+    time: isArabic
+      ? localizedTime
+      : normalizeEnglishDayPeriod(localizedTime),
+  };
 }
