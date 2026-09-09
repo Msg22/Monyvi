@@ -64,6 +64,10 @@ Dependency direction: `apps/ → packages/logic → packages/db`. **Never revers
 
 ## TypeScript & React Native
 
+- Read and follow **Canonical Types & End-to-End Type Safety** in `AGENTS.md`.
+  It applies project-wide, including backend code, tests, fixtures, and mocks:
+  reuse authoritative database/domain types, preserve them through every layer,
+  validate external inputs, handle unions exhaustively, and justify assertions.
 - Write concise, technical TypeScript with strict mode. Prefer interfaces over
   types. Avoid enums — use maps.
 - Use functional components with hooks. No class components.

@@ -67,10 +67,19 @@ After approval:
    required by `AGENTS.md`; never install a second dependency tree.
 2. Use the model Mohamed named. If no model was named, select Qwen or GLM based
    on current availability and task fit, and state the selection.
-3. Create one persistent OpenCode session bound to that worktree, branch, and
+3. Resolve the exact OpenCode model identifier with `opencode models`
+   immediately before launch; never infer or autocomplete the identifier. The
+   currently verified Qwen 3.8 Flash identifier is `bai/qwen3.8-flash`. If the
+   requested model is not listed or cannot be accessed, stop and report the
+   blocker instead of silently substituting another model.
+4. Create one persistent OpenCode session bound to that worktree, branch, and
    model. Prefer OpenCode's server/session interface with status polling over a
    single long-running CLI request.
-4. Give the model one concise, self-contained implementation message. Reference
+5. Confirm both that the persistent session exists and that the selected model
+   produces a first non-error response or event. Session creation alone does not
+   prove communication works. On a provider, authentication, access, or model
+   error, stop and report it; do not retry with a different model automatically.
+6. Give the model one concise, self-contained implementation message. Reference
    the approved plan artifact and source-of-truth files when they exist. If the
    approved plan lives only in the Codex conversation, include that plan
    directly in the message without copying unrelated conversation history.
