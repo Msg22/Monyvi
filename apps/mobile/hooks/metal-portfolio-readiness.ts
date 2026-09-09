@@ -27,7 +27,7 @@ export function resolveMetalPortfolioReadiness(
     holdingFactsReady && input.historyDependencyKey === input.holdingStatesKey;
 
   return Object.freeze({
-    holdings: holdingFactsReady && rateCurrency,
+    holdings: holdingFactsReady,
     rateCurrency,
     recentHistory,
     summary: holdingFactsReady && rateCurrency,
