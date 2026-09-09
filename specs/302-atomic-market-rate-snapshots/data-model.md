@@ -1,64 +1,67 @@
 # Data Model: Atomic Market-Rate Snapshots
 
 **Feature**: `302-atomic-market-rate-snapshots`  
-**Date**: 2026-09-09
+**Date**: 2026-09-09  
+**Revision**: Post-Analyze corrections
 
-The feature reuses the existing `market_rates` and `market_rate_observations` tables. No new durable table is required. The primary change is to make the existing UUID relationship authoritative for new current-market snapshots and to define a deterministic local selected-snapshot read model.
+Issue #302 reuses the existing `market_rates` and `market_rate_observations` tables. No new durable table is required. The key change is to make the existing UUID relationship authoritative for new current-market snapshots while making exact observation decimals—not JavaScript wide-row numbers—the source of current financial truth.
 
-## 1. Market-Rate Snapshot (existing `market_rates` root)
-
-### Purpose
-
-Represents one immutable producer refresh event containing the wide set of market values currently stored by Monyvi.
-
-### Authoritative identity
-
-- `id: uuid` — immutable snapshot ID and root primary key.
-
-### Relevant existing attributes
-
-- metal values such as `gold_usd_per_gram`, `silver_usd_per_gram`, `platinum_usd_per_gram`, `palladium_usd_per_gram`;
-- fiat values such as `egp_usd`, `eur_usd`, etc., including existing `btc_usd` but no `usd_usd` column;
-- `timestamp_metal` — provider's metal observation timestamp;
-- `timestamp_currency` — provider's currency observation timestamp;
-- `created_at` — immutable producer capture/order timestamp for this snapshot;
-- `updated_at` — database bookkeeping only, not financial freshness evidence.
-
-### New invariants
-
-1. For a **new trusted V1 snapshot**, the root ID is also the observation batch ID.
-2. Root values are immutable for a given ID. Same-ID replay with semantically different content is a conflict.
-3. `created_at` is selection ordering metadata only. It MUST NOT be used to classify financial freshness.
-4. The existing broad row shape is preserved; issue #302 does not remove platinum/palladium/BTC columns or expand those fields into supported UI scope.
-
-## 2. Rate Observation (existing `market_rate_observations` child)
+## 1. Persisted Market-Rate Snapshot Root (`market_rates`)
 
 ### Purpose
 
-Stores the exact trust evidence for one current rate input inside a snapshot.
+Represents one immutable producer refresh event and provides the durable snapshot identity plus producer ordering/history compatibility.
+
+### Identity
+
+- `id: uuid` — persisted snapshot ID and primary key.
+
+The service/wire contract carries this once as top-level `snapshotId`. `persist_market_rate_snapshot_v1` writes `snapshotId` into `market_rates.id`; the nested logical root payload does not carry a second independent ID.
 
 ### Existing attributes
 
-- `id: uuid` — observation row identity;
-- `batch_id: uuid` — snapshot/root identity;
-- `instrument_code: text` — canonical instrument key;
-- `value_decimal: numeric` — exact observed rate value;
-- `unit: text`;
-- `orientation: text`;
-- `provider_observed_at: timestamptz | null`;
-- `source: text | null`;
-- `quality: text`;
-- `created_at: timestamptz` — capture/order metadata used as local `capturedAt`, not provider freshness.
+- metal numeric columns such as `gold_usd_per_gram`, `silver_usd_per_gram`, `platinum_usd_per_gram`, `palladium_usd_per_gram`;
+- fiat numeric columns such as `egp_usd`, `eur_usd`, etc., plus legacy `btc_usd` and no `usd_usd`;
+- `timestamp_metal` and `timestamp_currency` provider timestamps;
+- `created_at` producer capture/order timestamp;
+- `updated_at` bookkeeping.
 
-### Relationship
+### Authority rules
 
-For new data:
+1. PostgreSQL root numerics are validated exactly against the RPC's decimal-string payload before insert/replay acceptance.
+2. `created_at` is immutable ordering metadata only, never freshness evidence.
+3. Same-ID semantically conflicting root/observation content is rejected.
+4. The wide root remains useful for historical/trend compatibility.
+5. **After synchronization to WatermelonDB, wide numeric root fields are not authoritative current financial inputs.** They pass through JavaScript/SQLite numeric representation and may not preserve supplied decimal lexemes.
+
+Current calculations therefore use the bound exact observation values described below.
+
+## 2. Rate Observation (`market_rate_observations`)
+
+### Purpose
+
+Stores one exact current rate plus the exact trust evidence that certifies it inside a snapshot.
+
+### Existing attributes
+
+- `id: uuid`
+- `batch_id: uuid`
+- `instrument_code: text`
+- `value_decimal: numeric` remotely / exact text in generated local model
+- `unit: text`
+- `orientation: text`
+- `provider_observed_at: timestamptz | null`
+- `source: text | null`
+- `quality: text`
+- `created_at: timestamptz` capture/order metadata
+
+### New relationship for future writes
 
 ```text
 market_rates.id 1 ─────── 37 market_rate_observations.batch_id
 ```
 
-Migration-level relationship:
+Migration relationship:
 
 ```sql
 FOREIGN KEY (batch_id)
@@ -67,228 +70,287 @@ ON DELETE CASCADE
 NOT VALID
 ```
 
-`NOT VALID` is a cutover mechanism: it enforces the relationship for future inserted/updated rows without asserting that all legacy rows are already provably bound.
+`NOT VALID` enforces future inserted/updated rows without claiming that legacy evidence is already correctly bound.
 
-### New V1 child-set invariant
+### V1 trusted child-set invariant
 
-A complete trusted snapshot contains **exactly 37** observations: exactly one for each required instrument.
+A complete trusted current snapshot has exactly 37 observations: exactly one each for Gold, Silver, and all 35 product-supported fiat currencies.
 
-#### Required metals
+#### Metals
 
-| Instrument | Unit | Orientation | Root value |
+| Instrument | Unit | Orientation | Producer source |
 | --- | --- | --- | --- |
-| `metal:GOLD` | `usd_per_pure_gram` | `quote_per_base` | `gold_usd_per_gram` |
-| `metal:SILVER` | `usd_per_pure_gram` | `quote_per_base` | `silver_usd_per_gram` |
+| `metal:GOLD` | `usd_per_pure_gram` | `quote_per_base` | `metals.dev` |
+| `metal:SILVER` | `usd_per_pure_gram` | `quote_per_base` | `metals.dev` |
 
-#### Required currencies
+#### Currencies
 
-For every code in the product's 35-currency `SUPPORTED_CURRENCIES` list:
+For every code in `SUPPORTED_CURRENCIES`:
 
 ```text
 currency:<CODE>
 ```
 
-Producer representation:
+Producer form:
 
 - unit: `usd_per_currency_unit`
 - orientation: `quote_per_base`
 - quality: `valid`
+- source: non-empty trimmed `metals.dev`
 
-For non-USD currencies, the canonical value equals the corresponding existing `<lowercase_code>_usd` root column. For USD, canonical value is exact `1` because the wide root has no `usd_usd` column.
+For non-USD currencies, the exact canonical value corresponds to the existing `<code>_usd` root numeric. `currency:USD` is exact decimal `1` because the wide root has no `usd_usd` column. BTC is not in the 37-observation Metals current contract.
 
-BTC is not in `SUPPORTED_CURRENCIES` for this Metals trust contract and therefore does not count toward the 37 observations, even though the wide root stores `btc_usd`.
+### Source rule
 
-### Provider time invariant
+A **new trusted issue #302 producer snapshot** requires non-empty trimmed source identity for every required observation. Null, empty, and whitespace-only source make the envelope ineligible. This does not rewrite or retroactively invalidate generic historical rate-reference records that legitimately have Unknown source.
 
-- Metal observations use the provider's metal timestamp.
-- Currency observations use the provider's currency timestamp.
-- `provider_observed_at = null` is allowed only as explicit Unknown freshness evidence.
-- `created_at`, root `created_at`, sync time, receipt time, and restart time can never substitute for `provider_observed_at`.
+### Provider time rule
 
-## 3. Snapshot Envelope (wire/service value object)
+- Gold/Silver use the provider's metal timestamp.
+- Fiat uses the provider's currency timestamp.
+- null/missing/unparseable/future provider time is represented/classified as Unknown according to the existing rate-trust rules.
+- capture/root/sync/receipt/restart time never substitutes for provider time.
+
+## 3. Lossless Provider Value Object
 
 ### Purpose
 
-The atomic unit returned by the new pull RPC and written to WatermelonDB.
+Represents the Metals.Dev response after raw JSON text has been parsed without converting rate tokens through JavaScript binary `number`.
+
+Conceptual shape:
+
+```ts
+interface LosslessMetalsDevRates {
+  readonly metals: Readonly<Record<string, string>>;
+  readonly currencies: Readonly<Record<string, string>>;
+  readonly metalObservedAt: string | null;
+  readonly currencyObservedAt: string | null;
+}
+```
+
+Rate strings are canonical positive decimal text derived directly from lossless JSON numeric tokens. Zod validates the transformed exact-string object before any persistence request is constructed.
+
+The implementation uses a pinned function-local lossless JSON dependency. Converting an authoritative provider rate to `number` before the RPC is forbidden.
+
+## 4. Snapshot Envelope (wire/service value object)
+
+### Purpose
+
+The atomic remote unit returned by the pull RPC and validated before Watermelon writes.
 
 ### Shape
 
 ```ts
 interface MarketRateSnapshotEnvelope {
   readonly snapshotId: string;
-  readonly root: MarketRateWireRow;
+  readonly capturedAt: string;
+  readonly root: MarketRateRootExact;
   readonly observations: readonly MarketRateObservationWireRow[];
+}
+
+interface MarketRateRootExact {
+  readonly goldUsdPerGram: string;
+  readonly silverUsdPerGram: string;
+  readonly platinumUsdPerGram: string;
+  readonly palladiumUsdPerGram: string;
+  readonly fiatUsdPerUnit: Readonly<Record<string, string>>;
+  readonly providerMetalObservedAt: string | null;
+  readonly providerCurrencyObservedAt: string | null;
 }
 ```
 
-### Validation rules
+### Identity rule
 
-- `snapshotId === root.id`;
+`MarketRateSnapshotEnvelope.snapshotId` is the only wire snapshot identity. When persisted, it is `market_rates.id`; every observation's `batchId` must equal it.
+
+There is deliberately no independent nested `root.id` field.
+
+### Envelope validation
+
+Before local persistence:
+
+- `snapshotId` is a UUID;
 - every observation has `batchId === snapshotId`;
-- exactly 37 required observations;
-- no duplicate or unexpected current instruments;
-- exact values are valid positive decimals;
-- units/orientations/quality satisfy existing rate-reference rules;
-- normalized observation value equals the corresponding root value/implicit USD identity;
-- root/provider timestamps follow the approved null/parseability rules;
-- conflicting duplicate content under the same `snapshotId` is invalid.
+- exactly 37 required observations exist;
+- no duplicate/unexpected required instruments exist;
+- exact values are positive canonical decimals;
+- quality/unit/orientation/source satisfy the current snapshot rules;
+- normalized exact observation values equal the corresponding exact root values / implicit USD identity;
+- provider timestamps preserve null/parseability semantics;
+- conflicting same-ID content is invalid.
 
-A wire envelope that fails any validation is not locally persisted/promoted as trusted current data.
+Only after this exact validation may the adapter convert wide root fields to compatibility `number`s needed by the existing local `market_rates` model. Observation `value_decimal` remains exact text.
 
-## 4. Selected Market Snapshot (derived local read model)
+## 5. Selected Market Snapshot (derived local read model)
 
 ### Purpose
 
-The single local source for **current** market value plus current trust evidence across all user-facing consumers.
+The single local source for **current** rate value + current trust evidence across every user-facing consumer.
 
 ### Persistence
 
-Not stored as a new table. It is deterministically derived from WatermelonDB root/child rows so it reconstructs after app restart and while offline.
+Not stored as a new pointer/table. It is reconstructed from Watermelon root identity/order rows plus their bound exact observations.
 
-### Proposed TypeScript shape
+### Proposed exported shape
 
 ```ts
 interface SelectedMarketRateSnapshot {
   readonly snapshotId: string;
-  readonly marketRate: MarketRate;
-  readonly observationsByInstrument: ReadonlyMap<
+  readonly capturedAt: Date;
+  readonly ratesByInstrument: ReadonlyMap<
     CurrentMarketInstrument,
-    CurrentMarketObservation
+    SelectedCurrentMarketRate
   >;
   readonly trust: LiveRatesTrustReadModel;
-  readonly capturedAt: Date;
+}
+
+interface SelectedCurrentMarketRate {
+  readonly instrumentCode: CurrentMarketInstrument;
+  readonly valueDecimal: string;
+  readonly normalizedUsdPerBaseDecimal: string;
+  readonly unit: "usd_per_pure_gram" | "usd_per_currency_unit";
+  readonly orientation: "quote_per_base";
+  readonly providerObservedAt: Date | null;
+  readonly source: string;
+  readonly quality: "valid";
+  readonly freshness: "fresh" | "stale" | "unknown";
 }
 ```
 
-`trust` is derived only from the observations inside `snapshotId`; it must not run an independent newest-observation query.
+The wide Watermelon `MarketRate` model is intentionally absent from the authoritative exported current-rate interface. A service may internally retain the root model for identity/order, but consumers do not receive its numeric rate columns as financial truth.
 
 ### Selection algorithm
 
 1. Observe/cache root candidates ordered by `(created_at DESC, id DESC)`.
-2. For each candidate, load only observations where `batch_id = root.id`.
-3. Validate the complete 37-observation envelope and root/value equivalence.
-4. Select the first complete valid candidate.
-5. If a newer candidate is partial/invalid/conflicting/legacy-unbound, ignore it and keep the prior valid candidate.
-6. If none is valid, current snapshot is `null` and rate-dependent outputs fail closed.
+2. For each root, load only observations with `batch_id = root.id`.
+3. Validate the exact 37-observation local contract, including source, units/orientations, value validity, and provider-time trust semantics.
+4. Select the newest complete valid candidate.
+5. If newer evidence is incomplete/invalid/duplicated/cross-batch, ignore it and keep the prior complete candidate.
+6. If selected evidence later becomes incomplete/corrupt, that candidate becomes ineligible; never borrow another batch's rows to repair it.
+7. If no complete candidate remains, selected current snapshot is `null`.
 
-### Selection state transitions
+Exact root/value equivalence is proven before local write at the pull boundary; after restart, current financial values come solely from the exact cached observation set, so a compatibility wide-root numeric discrepancy cannot silently change a current valuation.
 
-```text
-No Complete Snapshot
-        │
-        │ complete valid envelope arrives
-        ▼
-Selected(snapshot A)
-        │
-        ├── incomplete/invalid B arrives ──► remain A
-        ├── identical A replay ────────────► remain A
-        ├── older complete Z arrives ──────► remain A
-        └── newer complete valid B arrives ► Selected(snapshot B)
+## 6. Exact Current Calculation Input
+
+Current financial calculations and current displayed financial rates receive exact snapshot values, not `MarketRate` numbers.
+
+Conceptual pure interface:
+
+```ts
+interface CurrentMarketSnapshotRates {
+  readonly snapshotId: string;
+  readonly getRateDecimal: (
+    instrument: CurrentMarketInstrument
+  ) => string | null;
+}
 ```
 
-A selected snapshot is never repaired by borrowing child observations from another batch.
+`packages/logic/src/metals/current-market-snapshot.ts` provides Decimal-based helpers for:
 
-## 5. Historical Market Rate
+- Gold/Silver USD-per-pure-gram lookup;
+- currency USD-per-unit lookup;
+- exact current currency conversion;
+- exact current metal valuation/display input shaping.
 
-### Purpose
+No current valuation/conversion helper may reconstruct these values from Watermelon `MarketRate` numeric columns.
 
-Existing wide `market_rates` rows may still be used for historical/trend comparisons such as previous-day rates.
+## 7. Historical Market Rate
 
-### Constraint
+Existing `market_rates` rows may remain available for explicitly historical/trend queries such as previous-day comparison. Those historical rows:
 
-Historical trend rows are **not** current trust evidence. A legacy historical row may remain usable for an existing historical comparison without being certified as an atomic current snapshot.
+- are not current trust evidence;
+- do not certify current source/quality/provider time;
+- do not replace exact observation-based current valuation inputs.
 
-This preserves backward-compatible trend behavior while enforcing strict atomicity at the current-value/trust boundary.
-
-## 6. Current Consumer Dependency
-
-All current-rate user-facing consumers must depend on `SelectedMarketRateSnapshot` (directly or through a hook/service adapter):
+## 8. Consumer Dependency
 
 ```text
 WatermelonDB
-  market_rates + market_rate_observations
-             │
-             ▼
+  root identity/order + exact bound observations
+                     │
+                     ▼
 market-rate-snapshot-read-model-service
-             │
-    ┌────────┼─────────┬─────────────┐
-    ▼        ▼         ▼             ▼
-Live Rates  My Metals Holding Detail Home / Net Worth
+                     │
+                     ▼
+        exact SelectedMarketRateSnapshot
+        ┌────────────┼────────────┬─────────────┐
+        ▼            ▼            ▼             ▼
+   Live Rates    My Metals   Holding Detail  Home / Net Worth
 ```
 
-Historical acquisition/terminal `metal_rate_references` are a separate immutable domain and are never overwritten or replaced by this selected current snapshot.
+Historical acquisition/terminal `metal_rate_references` remain a separate immutable domain and are never rewritten from the selected current snapshot.
 
-## 7. Producer State Model
-
-A fetched provider response moves through these logical states inside one request:
+## 9. Producer State Model
 
 ```text
-Fetched
-  │
-  ▼
-ProviderValidated
-  │
-  ▼
-EnvelopeBuilt(snapshotId, capturedAt, root, 37 observations)
-  │
-  ▼
-RPCValidated
-  │
-  ├── new + valid ─────────────► PersistedComplete(created)
-  ├── same ID + same content ──► PersistedComplete(replayed)
-  └── invalid/conflicting ──────► Rejected (no partial write)
+Raw response text
+       │
+       ▼
+Lossless JSON parse
+       │
+       ▼
+Zod exact-string validation
+       │
+       ▼
+EnvelopeBuilt(snapshotId, capturedAt, exact root, 37 observations)
+       │
+       ▼
+RPC validation / transaction
+       │
+       ├── new + valid ─────────────► PersistedComplete(created)
+       ├── same ID + same content ──► PersistedComplete(replayed)
+       └── invalid/conflicting ──────► Rejected (no partial write)
 ```
 
-There is no durable `partial` producer state for new writes because root and children are committed in one database transaction.
+There is no durable partial state for new producer writes.
 
-## 8. Replay Semantics
+## 10. Replay Semantics
 
 ### Identical replay
 
-Same `snapshotId` + semantically identical immutable root/observation content:
+Same snapshot ID + semantically identical exact root/observation content:
 
-- no new root;
-- no new observation set;
-- no update to immutable values/provider timestamps;
+- no duplicate root;
+- no duplicate observation truth;
+- no provider/source/value mutation;
 - deterministic `replayed` result.
 
 ### Conflicting replay
 
-Same `snapshotId` + any different immutable value, provider timestamp, source, quality, unit/orientation, required instrument membership, or root mapping:
+Same snapshot ID + changed exact value, provider time, source, quality, unit/orientation, membership, or root mapping:
 
-- reject transaction;
-- leave existing snapshot unchanged;
-- emit deterministic conflict reason for observability.
+- reject the transaction;
+- preserve the accepted snapshot;
+- expose a deterministic reason code.
 
-Database bookkeeping fields that are not semantic market truth are excluded from the content comparison.
+Bookkeeping fields are excluded from semantic comparison.
 
-## 9. Legacy State
+## 11. Legacy State
 
-Legacy data can exist in one of these states:
+Legacy data may include root-only, child-only, partial, duplicate, source-less, or mismatched batches. None are newly certified by inference. They remain stored/historical as applicable but are ineligible for the issue #302 current selector unless they independently satisfy the complete provable binding contract.
 
-- root without matching batch observations;
-- observations whose `batch_id` has no root;
-- partial batch;
-- duplicate instrument rows within a batch;
-- value/evidence mismatch.
+## 12. Retention / Corruption Integrity
 
-All are classified as **Legacy Untrusted/Incomplete** for the new current selector. No migration rewrites them into a trusted snapshot by inference.
+Issue #302 adds no retention duration.
 
-## 10. Retention Integrity
+Required integrity behavior:
 
-Issue #302 does not add a retention duration. Integrity rules for any deletion are:
+- remote intentional root deletion cascades to bound observations;
+- local snapshot deletion/removal must be root+children atomic if a cleanup path is introduced;
+- missing required local evidence immediately makes that candidate ineligible;
+- a partial surviving candidate is never repaired from another batch;
+- if an earlier complete candidate remains, selection falls back to it;
+- otherwise the current snapshot becomes unavailable.
 
-- server root deletion cascades to its observations;
-- local deletion/pruning, if present, must remove root + bound observations in one writer;
-- the last complete locally selected snapshot cannot be removed unless a complete replacement is already available;
-- a surviving partial snapshot is never combined with another batch after retention.
+## 13. Generated Schema Impact
 
-## 11. Generated Schema Impact
+The SQL migration adds constraints/indexes/RPCs but no table columns.
 
-The planned SQL migration adds constraints, indexes, and RPCs but no new table columns. Expected generated effects:
+Expected generated effects:
 
 - `packages/db/src/supabase-types.ts`: new RPC signatures;
 - `packages/db/src/schema.ts`: no semantic table-column change expected;
 - `packages/db/src/migrations.ts`: no Watermelon schema version bump expected.
 
-The implementation must still run the repository's schema/type generation workflow and commit exactly what it produces rather than editing generated files manually.
+Generated files must be produced through repository scripts and reviewed, not manually edited to match this expectation.

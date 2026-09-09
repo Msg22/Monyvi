@@ -1,156 +1,243 @@
 # Implementation Plan: Atomic Market-Rate Snapshots
 
 **Branch**: `codex/issue302-atomic-market-rate-snapshots` | **Date**: 2026-09-09 | **Spec**: `specs/302-atomic-market-rate-snapshots/spec.md`  
-**Input**: Approved issue #302 specification after Clarify completed with no material ambiguities.
+**Input**: Approved issue #302 specification after Clarify; revised after the first Speckit Analyze pass.
 
 ## Summary
 
-Deliver one atomic current-market snapshot contract from the metals.dev producer through Supabase persistence, shared pull/sync, WatermelonDB selection, and every current-rate consumer. The implementation will reuse the existing `market_rates.id` UUID as the immutable snapshot identity and bind every matching `market_rate_observations` row with `batch_id = market_rates.id`.
+Deliver one atomic current-market snapshot guarantee from Metals.Dev ingestion through Supabase persistence, complete-envelope pull, WatermelonDB offline cache, deterministic selection, and every current-rate consumer.
 
-A refresh will build one complete snapshot envelope, validate it, and persist the wide `market_rates` row plus the exact observation set in one privileged Postgres function call. Mobile pull will stop fetching root values and trust observations as independent windows; instead it will pull complete snapshot envelopes and apply each page atomically to WatermelonDB. A single local selected-snapshot read model will then supply both current numeric values and their trust evidence to Live Rates, My Metals, holding detail, Home/net worth, and any other current-rate valuation consumer. Incomplete, invalid, legacy-unbound, duplicate-conflicting, or out-of-order candidates never replace the last complete valid selected snapshot.
+The persisted snapshot identity remains the existing `market_rates.id` UUID. The wire/service identity is carried once as top-level `snapshotId`; `persist_market_rate_snapshot_v1` materializes it as `market_rates.id`, and all 37 required `market_rate_observations` use `batch_id = snapshotId`.
 
-The plan intentionally adds no new screen, navigation, formula, supported instrument, or user interaction. Existing historical `market_rates` rows remain available for trend/history queries, while current trust selection becomes snapshot-bound.
+The exact-value authority is corrected explicitly: **current financial rates come from bound `market_rate_observations.value_decimal` exact decimals, not from the wide Watermelon `MarketRate` JavaScript-number fields**. The wide root remains the snapshot identity/order/history compatibility record and is checked against the exact observations while both are still represented exactly at the producer/Postgres/pull-envelope boundaries.
+
+The producer will read the provider response as raw text and use a pinned lossless JSON-number parser before Zod validation. No authoritative provider rate crosses a JavaScript `number` boundary before persistence. The mobile pull RPC returns exact-string root values + exact observations in one envelope; the adapter validates exact equivalence before converting wide root fields to legacy Watermelon numeric storage. All current consumers then use one exact selected-snapshot read model. Historical trend queries may continue using legacy wide rows as explicitly historical inputs.
+
+No screen, navigation, supported-instrument scope, historical acquisition/terminal evidence, or product formula is intentionally redesigned.
 
 ## Technical Context
 
-**Language/Version**: TypeScript 5.9.x on Node 22 for the monorepo; TypeScript/Deno Edge Runtime for Supabase functions; PostgreSQL SQL/PLpgSQL for migrations and RPCs.  
-**Primary Dependencies**: Expo 55, React Native 0.83.6, React 19.2, WatermelonDB 0.28, `@supabase/supabase-js` 2.106, Zod 4.3, existing `@monyvi/logic` exact-decimal/rate-reference utilities.  
-**Storage**: Supabase PostgreSQL (`market_rates`, `market_rate_observations`) as shared producer storage; WatermelonDB as the device-side source of truth/offline cache. No new persisted table is required.  
-**Testing**: SQL regression tests in `supabase/tests/`; Deno/shared Edge Function unit tests; Jest/React Native Testing Library for mobile services/hooks; package-level logic tests; repository lint/typecheck.  
-**Target Platform**: Expo React Native mobile app on Android/iOS plus Supabase Edge Functions/Postgres backend.  
-**Project Type**: Existing Nx/npm-workspace monorepo with mobile app, shared logic/db packages, and Supabase backend.  
-**Performance Goals**: Preserve current screen responsiveness: current-rate consumers resolve from local WatermelonDB without a foreground network dependency; one realtime notification triggers one normal sync path rather than per-screen refetches; complete-snapshot selection is bounded to recently cached candidates and does not scan unbounded history.  
-**Constraints**: Offline-first; exact decimal financial truth; provider observation time is the only freshness source; no value/evidence mixing; no inferred legacy bindings; local holdings remain visible when market inputs are unavailable; all DDL through numbered migrations; no direct remote DDL.  
-**Scale/Scope**: One current snapshot contains exactly 37 trust observations for the current Metals V1 contract: `metal:GOLD`, `metal:SILVER`, and 35 supported ISO fiat currencies (BTC excluded; USD included as exact identity `1`). The wide `market_rates` row continues to carry its existing broader fields (including legacy platinum/palladium/BTC fields) without expanding product scope.
+**Language/Version**: TypeScript 5.9.x on Node 22; TypeScript/Deno Edge Runtime; PostgreSQL SQL/PLpgSQL.  
+**Primary Dependencies**: Expo 55, React Native 0.83.6, React 19.2, WatermelonDB 0.28, `@supabase/supabase-js` 2.106 in mobile, Zod 4.3, Decimal.js through existing `@monyvi/logic`, and pinned `lossless-json@4.3.1` for the `fetch-metal-rates` Edge Function.  
+**Storage**: Supabase `market_rates` + `market_rate_observations`; WatermelonDB remains the device-side source of truth/offline cache. No new durable table/column is planned.  
+**Testing**: SQL regression tests; shared/Edge unit tests; logic Jest; mobile Jest/React Native Testing Library; architecture/source-contract tests; typecheck/lint; local Supabase verification.  
+**Target Platform**: Expo Android/iOS plus Supabase Edge Functions/Postgres.  
+**Performance**: Current screens resolve from local Watermelon state without foreground network dependency; realtime only triggers normal sync; selection scans bounded recent cached roots/children.  
+**Constraints**: offline-first; exact decimal financial truth; provider-time-only freshness; one snapshot identity; no cross-batch repair; no inferred legacy binding; holdings survive missing rates; all DDL through numbered local migrations; no direct remote DDL.  
+**Scale/Scope**: exactly 37 current trust observations: Gold, Silver, 35 supported fiat currencies. BTC is excluded from the trusted Metals current set; USD is exact identity `1`.
 
 ## Constitution Check
 
-### Pre-design gate
+### Pre-implementation gate
 
 | Principle | Result | Plan alignment |
 | --- | --- | --- |
-| I. Offline-First Architecture | PASS | Current selection remains local WatermelonDB state; refresh/sync is background and failure preserves cached complete state. |
-| II. Documented Business Logic | PASS | Implementation includes an explicit update to `docs/business/business-decisions.md` for the finalized atomic snapshot contract and cutover rules. |
-| III. Type Safety First | PASS | New TypeScript contracts use explicit types and Zod at external/network boundaries; no `any`; null provider time is modeled explicitly. |
-| IV. Service Layer Architecture | PASS | Snapshot selection/pull/write orchestration lives in services; hooks own subscription lifecycle; calculations remain in `packages/logic`; screens remain presentation-only. |
-| V. Accessibility / UI | PASS | No intentional UI redesign; existing accessible presentation is preserved. |
-| VI. Package Dependency Direction | PASS | `apps/mobile` may consume `packages/logic` and `packages/db`; shared packages do not import app code. |
-| VII. Local-First Schema Migrations | PASS | Postgres changes will be a numbered migration; generated Supabase types/local schema artifacts are refreshed through repo scripts. No direct MCP/dashboard DDL. |
-| VIII. Sync Architecture | PASS | Shared rate tables remain pull-only; snapshot page/cursor advances only after successful complete-page application; pull failures remain fatal to that sync attempt. |
+| I. Offline-First Architecture | PASS | Selection is reconstructed from WatermelonDB; provider/network failure preserves cached complete snapshots. |
+| II. Documented Business Logic | **GATED** | The first implementation task updates `docs/business/business-decisions.md`; **no production-code task may start until that task is committed**. |
+| III. Type Safety First | PASS | Explicit interfaces, Zod at provider/RPC boundaries, `unknown` for untrusted values, exact decimal strings for authoritative financial values. |
+| IV. Service Layer Architecture | PASS | Pure exact rate logic in `packages/logic`; DB joins/selectors in mobile services; hooks own lifecycle only. |
+| V. Accessibility / UI | PASS | No UI redesign. Existing presentation/accessibility remains regression scope. |
+| VI. Package Dependency Direction | PASS | App consumes logic/db; no reverse import added. |
+| VII. Local-First Schema Migrations | PASS | One numbered SQL migration; generated contracts refreshed through repo scripts; no MCP/dashboard DDL. |
+| VIII. Sync Correctness | PASS | Shared market data remains pull-only; complete envelope validated before local apply; cursor advances only after full successful page application. |
 
-No constitution exception is required.
+The Constitution II gate is intentionally explicit. Planning may finish with the gate pending, but implementation execution begins with the business-documentation task and cannot skip/reorder it.
 
 ### Post-design gate
 
-PASS. The selected design uses existing tables, one migration, one privileged persistence RPC, one complete-snapshot pull RPC, and a local Watermelon read model. It does not introduce a server-only source of truth, a component-side database query, reverse package dependency, direct remote schema mutation, or silent fallback from missing financial evidence.
+PASS subject to the Constitution II execution gate above. The design introduces no server-only user-facing source of truth, direct component DB query, reverse dependency, inferred missing financial evidence, or UI/product scope expansion.
 
 ## Architecture Decisions
 
-### 1. Immutable identity and binding
+### 1. One immutable identity
 
-- Canonical snapshot identity: existing `market_rates.id` UUID.
-- Every current-rate observation in the same producer refresh uses `market_rate_observations.batch_id = market_rates.id`.
-- New writes are validated as one envelope. A current value may only be certified by observations with the same snapshot ID.
-- Add a safe FK as `NOT VALID` so new/updated rows must reference a root without retroactively certifying or breaking deployment on legacy unbound rows.
-- Add a non-unique `(batch_id, instrument_code)` lookup index. Uniqueness/completeness for new snapshots is enforced by the persistence RPC and selection contract; legacy duplicates make that legacy batch ineligible rather than being deduplicated by inference.
+- Persisted identity: `market_rates.id` UUID.
+- Wire/service identity: top-level `snapshotId` only.
+- Persistence maps `snapshotId -> market_rates.id`.
+- Every required observation has `batch_id = snapshotId`.
+- The nested logical root payload has no independent ID.
+- Future-write FK: `market_rate_observations.batch_id -> market_rates.id ON DELETE CASCADE NOT VALID`.
+- Add non-unique `(batch_id, instrument_code)` index; new-write uniqueness/completeness is enforced by RPC + validators so legacy duplicates are not destructively rewritten.
 
-### 2. Exact required V1 observation set
+### 2. Exact required current set
 
-A complete selected snapshot requires exactly one observation for each of:
+Exactly one observation for:
 
 - `metal:GOLD`
 - `metal:SILVER`
-- all 35 codes exported by `SUPPORTED_CURRENCIES` as `currency:<CODE>`
+- `currency:<CODE>` for all 35 `SUPPORTED_CURRENCIES` entries
 
-That is 37 observations total. BTC is excluded from Metals current-rate references even though the wide market row currently stores `btc_usd`. USD is included as `currency:USD` and must normalize exactly to `1` even though the wide row has no `usd_usd` column.
+Producer form:
 
-Metal observations use `usd_per_pure_gram / quote_per_base`. Currency observations use the existing accepted direct/inverse currency contract and normalize to USD per currency unit. For producer-generated observations, persist the direct form `usd_per_currency_unit / quote_per_base` for consistency.
+- Metals: `usd_per_pure_gram / quote_per_base`.
+- Fiat: `usd_per_currency_unit / quote_per_base`.
+- `quality = valid`.
+- `source` must be non-empty after trim (`metals.dev` for this producer).
+- USD is exact `1`.
+- BTC is not a trusted current observation.
 
-The two metal observations use the provider's metal observation timestamp; currency observations use the provider's currency observation timestamp. The two timestamps may differ inside one snapshot. Missing/unparseable provider time is represented as null and yields Unknown freshness; it is never replaced by capture/fetch/sync time.
+Provider metal/currency timestamps may differ. Missing/unparseable/future provider time becomes Unknown; it is never repaired from capture/fetch/storage/sync/restart time.
 
-### 3. Atomic producer persistence
+### 3. Lossless producer ingestion
 
-Add `public.persist_market_rate_snapshot_v1(...)` in the numbered migration and call it with the service role from `supabase/functions/fetch-metal-rates/index.ts`.
+`fetch-metal-rates` must not call `response.json()` for authoritative rate values.
 
-The function will:
+Implementation boundary:
 
-1. accept one explicit snapshot UUID and capture timestamp plus the wide root payload and observation array;
-2. validate the exact 37-instrument observation set, no duplicates/unexpected instruments, positive exact numeric values, quality, units/orientations, and root-to-observation value equivalence;
-3. compare `currency:USD` against implicit exact identity `1`;
-4. insert the `market_rates` root and all 37 observations in the same database transaction;
-5. return `created` for a new complete snapshot;
-6. return `replayed` without mutation when the same snapshot ID already exists with semantically identical root/observation content;
-7. reject a same-ID conflicting replay with a deterministic conflict error and no partial mutation.
+1. fetch response;
+2. read `response.text()`;
+3. parse with function-local pinned `lossless-json@4.3.1` from `supabase/functions/fetch-metal-rates/deno.json`;
+4. convert lossless numeric tokens directly to canonical decimal text;
+5. validate the transformed exact-string provider shape with Zod;
+6. generate one `snapshotId` + one capture/order timestamp;
+7. build exact root payload + exactly 37 exact observations;
+8. call only `persist_market_rate_snapshot_v1` for authoritative persistence.
 
-`updated_at`/server bookkeeping is not part of immutable semantic content and must not be changed on identical replay. The function is not a general client write endpoint: revoke execution from PUBLIC/anon/authenticated and grant only to `service_role`.
+Tests must include a decimal such as `0.10000000000000001` and another long-precision rate and prove the RPC payload preserves the token exactly. A conversion to JS `number` is allowed only after authoritative validation/persistence for legacy informational response fields or compatibility storage.
 
-### 4. Producer adapter
+### 4. Atomic producer persistence
 
-Refactor `fetch-metal-rates` so one fetched metals.dev response is validated before persistence, then mapped into:
+Add service-role-only `public.persist_market_rate_snapshot_v1(...)`.
 
-- the existing wide `market_rates` representation;
-- exactly 37 current trust observations under one generated `crypto.randomUUID()` snapshot ID;
-- one immutable capture timestamp used for root ordering/observation capture metadata.
+The RPC receives:
 
-External provider payload validation must be schema-based (Zod) and must reject non-finite/non-positive required numeric values before the RPC. Existing response fields are preserved for compatibility; the success response additionally exposes `snapshotId` and `persistenceStatus` for deterministic verification/observability.
+- top-level snapshot UUID;
+- capture/order timestamp;
+- logical wide root payload where all rate fields are decimal strings;
+- exactly 37 observation objects with exact decimal strings.
 
-### 5. Complete-snapshot pull contract
+It validates transactionally:
 
-Add read RPC `public.pull_market_rate_snapshots_page_v1(...)` rather than composing `pullMarketRates()` and `pullMarketRateObservations()` independently.
+- exact required membership and count;
+- no duplicate/unexpected instruments;
+- positive canonical decimals;
+- exact USD identity;
+- allowed unit/orientation;
+- `quality = valid`;
+- non-empty trimmed source;
+- provider timestamp syntax/null semantics;
+- exact root-to-observation numeric equivalence using PostgreSQL numeric semantics;
+- same-ID identical replay versus conflict.
 
-The RPC pages by root snapshot ordering (`market_rates.created_at`, `market_rates.id`) under a fixed upper watermark and returns only envelopes for which the exact V1 observation set is present and bound to that root ID. Legacy/unbound/incomplete/duplicated batches are omitted. Response contains root data plus all bound observations and the next cursor/watermark.
+Then it inserts the wide root (casting decimal text to PostgreSQL `numeric`) plus all observations atomically. Identical replay returns `replayed` with no semantic mutation; conflict raises a deterministic error and commits nothing. Execution is revoked from PUBLIC/anon/authenticated and granted only to the trusted producer role.
 
-The mobile sync adapter validates each envelope before local writes. Cursor state is advanced only after the full response page is successfully written.
+### 5. Complete-snapshot pull RPC
 
-### 6. Atomic local application and selection
+Add `public.pull_market_rate_snapshots_page_v1(...)`.
 
-`refreshLiveMarketRates()` and the normal sync path use the same complete-snapshot pull adapter. A page is applied inside one WatermelonDB writer so a root and all child observations become locally visible together from the sync operation.
+It pages by `(market_rates.created_at, market_rates.id)` under a fixed upper watermark and returns **only complete eligible envelopes**. Each envelope contains:
 
-Add `apps/mobile/services/market-rate-snapshot-read-model-service.ts` as the only current-snapshot selector. It will:
+- `snapshotId`;
+- capture/order timestamp;
+- logical root rate values cast to exact text;
+- all 37 bound observations with exact `value_decimal` text and provenance.
 
-- observe local root candidates and bound observations;
-- order candidates by immutable producer capture/root ordering (`created_at DESC`, `id DESC`) for promotion ordering only;
-- validate the complete 37-observation contract and root/value equivalence;
-- choose the newest complete valid envelope;
-- ignore newer incomplete/invalid/legacy-unbound candidates and retain the previous complete selection;
-- expose one immutable read model containing the `MarketRate`, `snapshotId`, normalized observations/trust state, and per-input provider timestamps/freshness;
-- never combine observations from different batches to repair a candidate.
+Legacy/unbound/partial/duplicate/source-invalid candidates are omitted. The mobile adapter validates the exact envelope before writing anything locally. This replaces independent current root + observation network windows in both normal sync and manual refresh.
 
-`created_at` is never a freshness timestamp. It is only an immutable ordering/capture field. Provider timestamps remain the sole freshness authority.
+### 6. Exact local application boundary
 
-### 7. Consumer cutover
+The pull adapter validates exact root/observation equivalence while both are still exact strings. Only then does it transform:
 
-Refactor current consumers to subscribe to the selected snapshot instead of independently selecting values and trust observations:
+- root exact values -> existing Watermelon `market_rates` compatibility numeric fields;
+- observation exact values -> existing local exact `value_decimal` text.
 
-- `apps/mobile/hooks/useMarketRates.ts`: current `latestRates` comes from the selected snapshot; previous-day/trend history stays a separate historical query. Remove current freshness dependence on `MarketRate.createdAt`/`MarketRate.isStale()`.
-- `apps/mobile/services/live-rates-trust-read-model-service.ts`: stop independently querying latest observations; become a pure trust mapper/summary helper over one selected snapshot (or be subsumed by the new snapshot service).
-- `apps/mobile/hooks/useLiveRatesScreen.ts`: current displayed rates and trust metadata come from one selected snapshot; historical trend comparison remains read-only history.
-- `apps/mobile/hooks/useMetalPortfolio.ts`: all current metal/currency rates and status derive from one selected snapshot.
-- `apps/mobile/hooks/useMetalHoldingDetail.ts`: current valuation inputs use the same selected snapshot; immutable acquisition/terminal evidence remains separate.
-- `apps/mobile/hooks/useNetWorth.ts` and related Home/wealth read models: current asset/currency valuation receives one selected `MarketRate`/snapshot context and fails closed when unavailable.
-- `apps/mobile/providers/MarketRatesRealtimeProvider.tsx`: realtime remains only a trigger for the normal sync path; root insertion notification cannot directly promote a snapshot before complete local pull/validation.
+Root + observations are applied inside one Watermelon writer/page unit. The market snapshot cursor/watermark advances only after the complete page succeeds.
 
-Implementation must perform a final repository search for direct current `market_rates` queries, `observeLiveRatesTrust`, and current-rate valuation entry points so no current consumer bypass remains.
+Because the wide local root is a JS/SQLite compatibility representation, **its numeric rate fields are never authoritative current inputs after this point**.
 
-### 8. Failure, replay, ordering, and retention
+### 7. Selected current snapshot read model
 
-- Failed provider fetch or persistence: no new snapshot is created; current local selection remains unchanged.
-- Partial/invalid remote data: complete-snapshot pull omits it; local selection remains unchanged.
-- Identical same-ID persistence replay: no mutation and deterministic `replayed` result.
-- Identical pull/local replay: Watermelon upsert is idempotent.
-- Conflicting same-ID replay: server rejects; local validator also refuses conflicting duplicate content if encountered.
-- Older delayed delivery: immutable root capture ordering prevents it from displacing a newer selected snapshot solely due to receipt order.
-- Retention duration is not changed by issue #302. Do not add a new pruning policy. Any existing/future deletion that touches these records must delete a snapshot as a unit and must not remove the last complete local selected snapshot without a complete replacement. The FK uses cascade semantics for child cleanup when an eligible root is intentionally deleted.
+Add `apps/mobile/services/market-rate-snapshot-read-model-service.ts`.
 
-### 9. Legacy cutover
+The service internally observes root identity/order plus bound observations and exports an immutable object shaped around exact observation values:
 
-Do not backfill `batch_id` relationships by timestamp/value guessing. Existing `market_rates` and observations remain stored, but only rows with a provable shared ID and a complete valid 37-observation envelope are eligible for the new selector.
+```ts
+interface SelectedMarketRateSnapshot {
+  readonly snapshotId: string;
+  readonly capturedAt: Date;
+  readonly ratesByInstrument: ReadonlyMap<
+    CurrentMarketInstrument,
+    SelectedCurrentMarketRate
+  >;
+  readonly trust: LiveRatesTrustReadModel;
+}
+```
 
-The new FK is added `NOT VALID`: it enforces the relation for new/updated rows without asserting historical rows are valid. The pull RPC and local selector independently fail closed on legacy data. A later cleanup can validate/remove legacy rows after rollout evidence, but that is not required to make issue #302 correct.
+`SelectedCurrentMarketRate.valueDecimal` / `normalizedUsdPerBaseDecimal` are canonical decimal strings from the bound observation row. The exported current interface does not expose wide `MarketRate` numeric columns as financial truth.
 
-### 10. Observability and security
+Selection:
 
-Use structured, non-sensitive events around producer outcomes and mobile refresh selection:
+1. order root candidates by immutable `(created_at DESC,id DESC)`;
+2. load children only by exact `batch_id`;
+3. validate exact required set, binding, source, value, quality, unit/orientation, and provider-time semantics;
+4. select newest complete valid candidate;
+5. ignore newer invalid/incomplete/cross-batch candidates;
+6. if required evidence later disappears/corrupts, mark that snapshot ineligible and fall back to an earlier complete candidate or `null`;
+7. never borrow another batch's observation to repair a candidate.
+
+No selected-ID pointer is persisted; restart/offline reconstruction is deterministic from cached data.
+
+### 8. Exact current calculation helpers
+
+`packages/logic/src/metals/current-market-snapshot.ts` defines pure exact interfaces/helpers over canonical decimal strings and the existing Decimal primitive. It owns current:
+
+- metal USD-per-pure-gram lookup;
+- fiat USD-per-unit lookup;
+- exact current currency conversion;
+- current metal valuation rate input shaping;
+- exact current rate formatting inputs where financial values are displayed.
+
+No authoritative current calculation may first convert a snapshot rate to JS `number`.
+
+### 9. Consumer cutover
+
+Refactor current consumers so they consume `SelectedMarketRateSnapshot` / exact current helpers:
+
+- `useMarketRates.ts`: expose selected current snapshot/exact rates; keep previous-day wide `MarketRate` query explicitly historical. Do not use root `createdAt` as current freshness.
+- `live-rates-trust-read-model-service.ts`: pure mapper/summary over selected observations, no independent newest-observation query.
+- `useLiveRatesScreen.ts`: current displayed rate values + trust come from exact selected rates. Historical trend inputs may remain separate and non-certifying.
+- `useMetalPortfolio.ts`: current Gold/Silver/preferred/purchase-currency valuation inputs use exact selected rates.
+- `useMetalHoldingDetail.ts`: current valuation uses exact selected rates; acquisition/terminal immutable references stay separate.
+- `useNetWorth.ts` + net-worth read-model boundary: account currency and current metal valuation use exact snapshot inputs; missing rates fail closed rather than coercing to zero.
+- `MarketRatesRealtimeProvider.tsx`: insert notification triggers normal sync only.
+
+Perform a final source search for direct current `market_rates` numeric use, `observeLiveRatesTrust`, `latestRates`, `isStale()`/`getAge()`, and independent current observation queries. Every remaining hit must be historical/test/unrelated or fixed with regression coverage.
+
+### 10. Failure/replay/order
+
+- failed provider fetch/parse/RPC -> no new snapshot;
+- partial remote data -> pull omits candidate;
+- failed local page -> no cursor advancement and cached complete snapshot remains;
+- identical same-ID replay -> idempotent;
+- conflicting same-ID replay -> rejected without mutation;
+- delayed older complete snapshot -> cannot displace a newer complete selected snapshot solely by receipt time;
+- no complete snapshot -> dependent current value unavailable, holdings/recorded facts remain.
+
+### 11. Retention and local corruption integrity
+
+Issue #302 adds no retention duration or pruning job.
+
+Required evidence:
+
+- SQL test proves deleting an eligible root cascades all bound observations;
+- selector test removes one required observation from selected B and proves B becomes ineligible;
+- selector never repairs B from A's child rows;
+- if complete A remains, selection falls back to A;
+- if no complete snapshot remains, selected current rates become `null`/unavailable.
+
+Any future cleanup path must treat root+observations as one unit and must not leave a current value whose required evidence was removed.
+
+### 12. Legacy cutover
+
+Do not infer/backfill legacy binding by timestamp/value matching. The `NOT VALID` FK protects future writes without certifying history. Pull + local selection independently fail closed on legacy root-only, child-only, partial, duplicate, or source-less candidates.
+
+### 13. Local/manual QA importer
+
+`scripts/import-market-rates-to-local.js` currently imports only root rows. Update it to import only complete root + matching observation envelopes, preserving snapshot-unit integrity. Root-only import must never be presented as trusted current QA data.
+
+### 14. Observability/security
+
+Structured non-sensitive events:
 
 - `marketRates.snapshot.persist.created`
 - `marketRates.snapshot.persist.replayed`
@@ -159,11 +246,11 @@ Use structured, non-sensitive events around producer outcomes and mobile refresh
 - `marketRates.snapshot.selection.changed`
 - `marketRates.snapshot.selection.rejectedCandidate`
 
-Log snapshot IDs and reason codes, not API keys or unrelated user financial data. Persistence RPC execution is service-role only; pull remains read-only shared market data under existing app authentication/RLS conventions.
+Log snapshot IDs/reason codes only; never provider secrets or unrelated user finance data.
 
 ## Project Structure
 
-### Documentation for this feature
+### Feature docs
 
 ```text
 specs/302-atomic-market-rate-snapshots/
@@ -174,38 +261,41 @@ specs/302-atomic-market-rate-snapshots/
 ├── quickstart.md
 ├── contracts/
 │   └── market-rate-snapshots.openapi.yaml
-└── tasks.md                 # generated in the next workflow
+└── tasks.md
 ```
 
-### Source code affected by implementation
+### Expected source changes
 
 ```text
-supabase/
-├── migrations/
-│   └── 069_atomic_market_rate_snapshots.sql
-├── functions/
-│   ├── _shared/
-│   │   └── market-rate-snapshot-contract.ts
-│   └── fetch-metal-rates/
-│       └── index.ts
-└── tests/
-    └── atomic_market_rate_snapshots_test.sql
+docs/business/business-decisions.md        # first implementation gate
 
-packages/
-├── logic/src/metals/
-│   ├── current-market-snapshot.ts
-│   ├── index.ts
-│   └── __tests__/current-market-snapshot.test.ts
-└── db/src/
-    ├── supabase-types.ts             # regenerated for RPC signatures
-    ├── schema.ts                     # verify unchanged unless generator requires output
-    └── migrations.ts                 # verify unchanged unless generator requires output
+supabase/
+├── migrations/069_atomic_market_rate_snapshots.sql
+├── functions/
+│   ├── _shared/market-rate-snapshot-contract.ts
+│   └── fetch-metal-rates/
+│       ├── deno.json                      # pinned lossless-json dependency
+│       └── index.ts
+└── tests/atomic_market_rate_snapshots_test.sql
+
+packages/logic/src/metals/
+├── current-market-snapshot.ts
+├── index.ts
+└── __tests__/
+    ├── current-market-snapshot.fixtures.ts
+    └── current-market-snapshot.test.ts
+
+packages/db/src/
+├── supabase-types.ts                      # regenerated RPC signatures
+├── schema.ts                              # expected no semantic table change
+└── migrations.ts                          # expected no schema bump
 
 apps/mobile/
 ├── services/
 │   ├── market-rate-snapshot-read-model-service.ts
 │   ├── live-rates-refresh-service.ts
 │   ├── live-rates-trust-read-model-service.ts
+│   ├── net-worth-read-model-service.ts    # only current-rate boundary as needed
 │   └── sync/pull-strategies.ts
 ├── hooks/
 │   ├── useMarketRates.ts
@@ -213,85 +303,107 @@ apps/mobile/
 │   ├── useMetalPortfolio.ts
 │   ├── useMetalHoldingDetail.ts
 │   └── useNetWorth.ts
-├── providers/
-│   └── MarketRatesRealtimeProvider.tsx
+├── providers/MarketRatesRealtimeProvider.tsx
 └── __tests__/
+    ├── fixtures/market-rate-snapshot.ts
     ├── services/market-rate-snapshot-read-model-service.test.ts
     ├── services/live-rates-refresh-service.test.ts
     ├── services/live-rates-trust-read-model-service.test.ts
-    └── hooks/current-market-snapshot-consumers.test.tsx
+    ├── services/net-worth-read-model-current-rates.test.ts
+    ├── services/sync/pull-market-rate-snapshots.test.ts
+    ├── hooks/current-market-snapshot-consumers.test.tsx
+    └── architecture/current-market-snapshot-consumers.test.ts
 
-docs/business/business-decisions.md
+scripts/import-market-rates-to-local.js
+scripts/import-market-rates-to-local.test.js
 ```
 
-`apps/mobile/hooks/useAssetBreakdown.ts`, `apps/mobile/services/net-worth-read-model-service.ts`, and any additional files found by the mandatory consumer search are included only if they directly read/derive current market rates; the implementation must not broaden into unrelated net-worth redesign.
+Additional files are changed only if the mandatory bypass search proves they directly own current-rate selection/calculation.
 
 ## Test Strategy
 
-Tests are mandatory because FR-023/SC-009 explicitly require deterministic verification.
+Tests are mandatory (FR-023 / SC-009) and precede corresponding production changes.
+
+### Provider / exact-decimal boundary
+
+- raw JSON decimal `0.10000000000000001` survives to RPC payload unchanged;
+- another long-precision decimal survives unchanged;
+- authoritative path does not use `response.json()` or `Number(...)` before RPC payload construction;
+- malformed/non-positive required rate rejected;
+- provider timestamps preserved/null; no local substitute;
+- 37 observations, USD=1, BTC excluded, non-empty source.
 
 ### Database boundary
 
-`supabase/tests/atomic_market_rate_snapshots_test.sql` must cover:
+SQL tests cover:
 
-- complete 37-observation creation in one snapshot;
-- missing, duplicated, unexpected, invalid-quality, invalid-unit/orientation, non-positive, and root/value-mismatch rejection;
-- null provider timestamps accepted as Unknown-capable evidence without local replacement;
-- identical same-ID replay idempotency;
-- conflicting same-ID replay rejection with no mutation;
-- pull RPC returns complete envelopes only;
-- legacy/unbound/partial batches are omitted;
-- ordering/cursor behavior and no stale regression;
-- execution grants: persistence unavailable to anon/authenticated, available to service-role path.
+- complete 37-row creation;
+- missing/duplicate/unexpected instruments;
+- invalid quality/unit/orientation/non-positive values;
+- **null/empty/whitespace-only source rejection**;
+- exact root/value mismatch rejection;
+- null provider time accepted as Unknown-capable evidence;
+- identical replay;
+- conflicting replay rollback;
+- pull returns complete envelopes only;
+- legacy/unbound/partial/duplicate/source-invalid batches omitted;
+- paging/order/no stale regression;
+- service-role-only persistence permissions;
+- **root delete cascades bound observations**.
 
-### Shared logic / producer
+### Pull/local apply
 
-- Exact V1 instrument set is 37 and includes USD/excludes BTC.
-- metals.dev adapter produces one shared snapshot ID and correct provider timestamps/source/quality/unit/orientation.
-- malformed provider payload fails before persistence.
-- exact decimal strings/normalization remain canonical.
+- exact root text and observation text compared before local root number conversion;
+- malformed/cross-ID envelope rejected;
+- failed page leaves cursor unchanged;
+- root+children applied in one writer;
+- duplicate replay idempotent;
+- cached prior complete snapshot remains on failure.
 
-### Mobile local selection / sync
+### Local selector
 
-- root arrives without observations -> previous complete snapshot remains selected;
-- observations arrive without root -> cannot select;
-- complete bound envelope -> promotes exactly once;
-- multiple batches -> no cross-batch mixing;
-- invalid newest -> prior complete remains;
-- same-ID identical replay -> no second truth;
-- same-ID conflict -> rejected;
-- older delayed complete envelope -> no regression;
-- restart/offline reconstruction selects the same complete cached snapshot;
-- no complete snapshot -> dependent current values unavailable while holdings facts persist;
-- page apply/cursor failure does not advance state.
+- no complete -> null;
+- complete A -> A;
+- newer incomplete/invalid B -> A;
+- cross-batch rows never borrowed;
+- complete B -> B;
+- older delayed Z -> no regression;
+- null/future provider time -> Unknown;
+- missing/blank source -> ineligible;
+- remove required evidence from B -> B ineligible, fall back to A or null;
+- restart/offline rebuilds from cached exact observations;
+- wide root numeric divergence cannot alter current financial values because consumers use exact observation values.
 
 ### Consumer contract
 
-- Live Rates value/source/quality/provider time share one snapshot ID.
-- My Metals valuation/rate status share one snapshot ID.
-- Holding detail current valuation shares one snapshot ID while acquisition/terminal references remain immutable and separate.
-- Home/net-worth metal valuation uses the selected snapshot and returns unavailable rather than zero when required current rates are unavailable.
-- no current freshness display uses root `created_at`, fetch, sync, receipt, or restart time.
+- Live Rates current value + source/quality/provider time share one snapshot ID and exact value;
+- My Metals current valuation/rate status share exact selected snapshot inputs;
+- holding current valuation uses exact selected rates while historical references stay immutable;
+- net worth account/current-metal conversions use exact current snapshot inputs;
+- missing current inputs produce unavailable dependent outputs, not zero;
+- no current freshness uses root/fetch/sync/receipt/restart time.
 
-### Regression / manual
+### Manual regression
 
-No visual redesign is expected. Manual regression is limited to confirming existing Home, Live Rates, My Metals, and holding-detail layouts/journeys remain unchanged in EN/AR and online/offline states. Financial correctness/failure behavior should be automated wherever controllable.
+Regression-only: existing Home, Live Rates, My Metals, holding detail layouts/journeys in EN/AR and online/offline states. No visual redesign evidence gate is introduced because issue #302 is not mockup-backed UI work.
 
-## Rollout Sequence
+## Rollout / Execution Sequence
 
-1. Land migration/RPC contracts and database tests locally.
-2. Regenerate Supabase types; verify Watermelon schema has no new columns and therefore does not need a semantic local schema migration.
-3. Update Edge Function producer to write only complete atomic snapshots.
-4. Add complete-snapshot pull adapter and local read model while preserving legacy readers behind tests during transition.
-5. Cut all current-rate consumers to the selected snapshot service.
-6. Remove/deprecate independent latest-observation/current-root selection paths after repository search proves no bypass remains.
-7. Run full local database, logic, mobile Jest, mobile typecheck/lint, and targeted manual regression.
-8. Deploy migration before or together with the producer/consumer release so new atomic writes exist before clients rely on them. Do not validate historical FK or delete legacy data as part of initial rollout.
+1. **Complete and commit the business-decision documentation task. No production implementation before this.**
+2. Write shared exact/lossless red tests and implement canonical exact contract.
+3. Write SQL red tests; add migration/RPCs; regenerate DB contracts locally.
+4. Cut producer to lossless parse + atomic RPC.
+5. Implement complete-snapshot pull and atomic local apply.
+6. Implement selected exact snapshot service and current exact logic helpers.
+7. Cut all current consumers to exact selected rates.
+8. Add offline/fail-closed/retention-corruption hardening.
+9. Run full deterministic verification and regression-only manual QA.
+10. Deploy migration + producer + consumer contract as one issue #302 release guarantee; do not ship producer-only or consumer-only completion.
 
 ## Planning Environment Note
 
-The repository's `.specify/scripts/bash/setup-plan.sh` and agent-context update script could not be executed in this connected GitHub-only environment because no shell runner is available. This plan reproduces the required Speckit outputs directly under the approved feature directory and records implementation-time commands in `quickstart.md`; no command/test execution is claimed during Plan generation.
+The connected planning environment has no repository shell runner, so Speckit scripts, SQL tests, Jest, lint, typecheck, and dependency checks were not executed during planning. Implementation-time commands are listed in `quickstart.md`; no passing command claim is made here.
 
 ## Complexity Tracking
 
-No constitution violation or exceptional complexity is accepted. The design deliberately reuses the existing root/observation tables and introduces no new durable entity or UI flow.
+No constitution exception is accepted. The additional lossless JSON parser is a focused producer-boundary dependency required by FR-015; it is pinned and function-local. No new durable table, local selected-pointer table, or UI flow is introduced.
