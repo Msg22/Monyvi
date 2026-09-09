@@ -28,7 +28,7 @@ The service/wire contract carries this once as top-level `snapshotId`. `persist_
 
 ### Authority rules
 
-1. PostgreSQL root numerics are validated exactly against the RPC's plain-decimal-string payload before insert/replay acceptance.
+1. Migration 069 removes the legacy `numeric(15,4)` scale caps from root rate columns so PostgreSQL can retain the RPC's exact plain-decimal values; insert/replay acceptance validates those values exactly.
 2. `created_at` is immutable ordering metadata only, never freshness evidence.
 3. Same-ID semantically conflicting root/observation content is rejected.
 4. The wide root remains useful for historical/trend compatibility.

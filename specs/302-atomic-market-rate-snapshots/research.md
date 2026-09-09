@@ -32,6 +32,8 @@ For the selected current snapshot, `market_rate_observations.value_decimal` is a
 
 The wide `market_rates` row remains identity/order/history compatibility. After pull, Watermelon `MarketRate` numeric fields MUST NOT be authoritative current valuation/conversion inputs because they cross JavaScript/SQLite numeric representation.
 
+The existing PostgreSQL wide columns use legacy `numeric(15,4)` scale caps. Migration 069 widens those columns to unconstrained `numeric` so exact producer values are not rounded before replay or pull validation; it adds no columns and does not change the Watermelon field shape.
+
 ## Decision 5: Parse provider numeric tokens losslessly and normalize exponent notation exactly
 
 `fetch-metal-rates` reads `response.text()` and parses it with pinned `lossless-json@4.3.1`. Authoritative rate tokens never pass through `response.json()`, `Number`, or `parseFloat` before the exact persistence payload is built.

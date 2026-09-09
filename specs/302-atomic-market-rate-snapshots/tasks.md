@@ -236,7 +236,7 @@ evidence.
 
 ### Tests first
 
-- [ ] **T025** [US2] Create failing SQL coverage in
+- [x] **T025** [US2] Create failing SQL coverage in
       `supabase/tests/atomic_market_rate_snapshots_test.sql` for valid
       37-observation persistence; missing/duplicate/unexpected instruments;
       invalid quality/unit/orientation/non-positive decimal;
@@ -278,19 +278,21 @@ evidence.
 
 ### Database / generated contracts
 
-- [ ] **T031** [US2] Add
+- [x] **T031** [US2] Add
       `supabase/migrations/069_atomic_market_rate_snapshots.sql` persistence
-      half to satisfy T025: `NOT VALID` FK with `ON DELETE CASCADE`, safe lookup
+      half to satisfy T025: remove legacy four-decimal numeric scale caps that
+      would round exact provider values; add a `NOT VALID` FK with
+      `ON DELETE CASCADE`, safe lookup
       index, service-role-only `persist_market_rate_snapshot_v1`, exact-string
       input casting to PostgreSQL numeric, exact 37/root-equivalence/source
       validation, idempotent replay, conflict rejection, explicit
       grants/revokes. Do not infer legacy bindings.
-- [ ] **T032** [US2] Extend the same migration with
+- [x] **T032** [US2] Extend the same migration with
       `pull_market_rate_snapshots_page_v1` returning exact root decimal text +
       exact bound observations, fixed upper-watermark/root cursor paging, and
       fail-closed filtering for incomplete/duplicate/source-invalid/legacy
       envelopes; satisfy pull/cascade/order portions of T025.
-- [ ] **T033** [US2] Run repository DB generation workflow and commit generated
+- [x] **T033** [US2] Run repository DB generation workflow and commit generated
       RPC signatures in `packages/db/src/supabase-types.ts`; review
       `packages/db/src/schema.ts` / `packages/db/src/migrations.ts` and commit
       only legitimate generated changes because no table columns were added.

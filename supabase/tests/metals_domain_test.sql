@@ -1259,6 +1259,34 @@ select throws_ok(
   'observation page rejects an invalid limit'
 );
 
+delete from public.market_rate_observations;
+
+do $fixture$
+declare
+  v_numeric_columns text;
+  v_numeric_values text;
+begin
+  select
+    string_agg(quote_ident(attribute.attname), ', ' order by attribute.attnum),
+    string_agg('1', ', ' order by attribute.attnum)
+  into v_numeric_columns, v_numeric_values
+  from pg_attribute as attribute
+  join pg_type as data_type on data_type.oid = attribute.atttypid
+  where attribute.attrelid = 'public.market_rates'::regclass
+    and attribute.attnum > 0
+    and not attribute.attisdropped
+    and data_type.typname = 'numeric';
+
+  execute format(
+    'insert into public.market_rates (id, created_at, updated_at, %s, timestamp_metal, timestamp_currency) values ($1, $2, $2, %s, $2, $2)',
+    v_numeric_columns,
+    v_numeric_values
+  ) using
+    '018f0c7a-1234-7abc-8def-000000000020'::uuid,
+    '2020-01-01T00:00:00Z'::timestamptz;
+end;
+$fixture$;
+
 insert into public.market_rate_observations (
   id, batch_id, instrument_code, value_decimal, unit, orientation,
   provider_observed_at, source, quality, created_at
