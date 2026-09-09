@@ -19,7 +19,7 @@ describe("metal portfolio section readiness", () => {
     });
   });
 
-  it("keeps recent history independent from rate and currency readiness", () => {
+  it("keeps holdings and recent history independent from rate and currency readiness", () => {
     expect(
       resolveMetalPortfolioReadiness({
         assetMetalsDependencyKey: "holding-1",
@@ -32,7 +32,7 @@ describe("metal portfolio section readiness", () => {
         ratesReady: false,
       })
     ).toEqual({
-      holdings: false,
+      holdings: true,
       rateCurrency: false,
       recentHistory: true,
       summary: false,
