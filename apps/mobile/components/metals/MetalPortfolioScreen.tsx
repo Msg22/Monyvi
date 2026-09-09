@@ -1,6 +1,7 @@
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
 import { getTabContentBottomClearance } from "@/constants/ui";
+import type { MetalPortfolioSectionReadiness } from "@/hooks/metal-portfolio-readiness";
 import type { CurrencyType } from "@monyvi/db";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
@@ -19,6 +20,7 @@ import type {
   MetalPortfolioHoldingInput,
   MetalPortfolioReadModel,
 } from "@/services/metal-portfolio-read-model-service";
+import { formatPortfolioRateUpdated } from "./portfolio-rate-presentation";
 import {
   formatCodeAmount,
   formatPurchaseDetail,
@@ -38,6 +40,9 @@ interface MetalPortfolioScreenProps {
   readonly onHoldingPress: (holdingId: string) => void;
   readonly onRetry: () => void;
   readonly portfolio: MetalPortfolioReadModel | null;
+  readonly rateProviderObservedAt?: Date | null;
+  readonly readiness?: MetalPortfolioSectionReadiness;
+  readonly recentHistory?: MetalPortfolioReadModel["recentHistory"] | null;
   readonly selectedFilter: MetalPortfolioFilter;
 }
 
@@ -60,22 +65,25 @@ export function MetalPortfolioScreen({
   onHoldingPress,
   onRetry,
   portfolio,
+  rateProviderObservedAt = null,
+  readiness,
+  recentHistory,
   selectedFilter,
 }: MetalPortfolioScreenProps): React.JSX.Element {
   const { t: tCommon } = useTranslation("common");
-
-  if (isLoading) return <PortfolioSkeleton />;
-
-  if (portfolio === null) {
-    return (
-      <View
-        testID="metal-portfolio-root"
-        className="flex-1 bg-background dark:bg-background-dark"
-      >
-        <ErrorState error={error} onRetry={onRetry} t={tCommon} />
-      </View>
-    );
-  }
+  const sectionReadiness =
+    readiness ??
+    createLegacyReadiness({
+      isLoading,
+      portfolio,
+    });
+  const displayedHoldings =
+    sectionReadiness.holdings && portfolio !== null ? portfolio.holdings : [];
+  const displayedHistory =
+    recentHistory ??
+    (sectionReadiness.recentHistory && portfolio !== null
+      ? portfolio.recentHistory
+      : null);
 
   return (
     <View
@@ -84,7 +92,7 @@ export function MetalPortfolioScreen({
     >
       <FlatList
         testID="metal-portfolio-list"
-        data={portfolio.holdings}
+        data={displayedHoldings}
         keyExtractor={(holding): string => holding.id}
         renderItem={({ item }): React.JSX.Element => (
           <MetalHoldingRow
@@ -106,38 +114,71 @@ export function MetalPortfolioScreen({
             onFilterChange={onFilterChange}
             onRetry={onRetry}
             portfolio={portfolio}
+            rateProviderObservedAt={rateProviderObservedAt}
+            readiness={sectionReadiness}
             selectedFilter={selectedFilter}
           />
         }
         ListEmptyComponent={
-          <EmptyPortfolioContent
-            portfolio={portfolio}
-            selectedFilter={selectedFilter}
-          />
+          sectionReadiness.holdings ? (
+            portfolio === null ? null : (
+              <EmptyPortfolioContent
+                portfolio={portfolio}
+                selectedFilter={selectedFilter}
+              />
+            )
+          ) : (
+            <HoldingsSectionSkeleton />
+          )
         }
         ListFooterComponent={
-          portfolio.recentHistory.length === 0 ? null : (
-            <RecentHistory
-              currency={currency}
-              holdings={portfolio.recentHistory}
-              onHistoryPress={onHistoryPress}
-              onHoldingPress={onHoldingPress}
-            />
+          sectionReadiness.recentHistory ? (
+            displayedHistory === null || displayedHistory.length === 0 ? null : (
+              <RecentHistory
+                currency={currency}
+                holdings={displayedHistory}
+                onHistoryPress={onHistoryPress}
+                onHoldingPress={onHoldingPress}
+              />
+            )
+          ) : (
+            <RecentHistorySkeleton />
           )
         }
         showsVerticalScrollIndicator={false}
       />
+      {!sectionReadiness.summary &&
+      !sectionReadiness.holdings &&
+      !sectionReadiness.recentHistory &&
+      error !== null ? (
+        <View className="absolute inset-x-5 top-4">
+          <ErrorState error={error} onRetry={onRetry} t={tCommon} />
+        </View>
+      ) : null}
     </View>
   );
 }
 
-function PortfolioSkeleton(): React.JSX.Element {
+function createLegacyReadiness({
+  isLoading,
+  portfolio,
+}: {
+  readonly isLoading: boolean;
+  readonly portfolio: MetalPortfolioReadModel | null;
+}): MetalPortfolioSectionReadiness {
+  const ready = !isLoading && portfolio !== null;
+  return {
+    holdings: ready,
+    rateCurrency: ready,
+    recentHistory: ready,
+    summary: ready,
+  };
+}
+
+function SummarySkeleton(): React.JSX.Element {
   return (
-    <View
-      testID="metal-portfolio-skeleton"
-      className="flex-1 bg-background px-5 pt-4 dark:bg-background-dark"
-    >
-      <Skeleton width="62%" height={28} borderRadius={8} />
+    <View testID="metal-portfolio-summary-skeleton" className="pt-3">
+      <Skeleton width="58%" height={24} borderRadius={8} />
       <View className="mt-5 flex-row justify-between gap-5">
         <View className="flex-1 gap-3">
           <Skeleton width="100%" height={48} borderRadius={12} />
@@ -148,12 +189,35 @@ function PortfolioSkeleton(): React.JSX.Element {
           <Skeleton width="90%" height={18} borderRadius={8} />
         </View>
       </View>
-      <View className="mt-8 gap-4">
-        <Skeleton width="100%" height={14} borderRadius={7} />
-        <Skeleton width="100%" height={46} borderRadius={12} />
-        <Skeleton width="32%" height={28} borderRadius={8} />
-        <Skeleton width="100%" height={112} borderRadius={18} />
-        <Skeleton width="100%" height={112} borderRadius={18} />
+      <View className="mt-6 h-px bg-slate-200 dark:bg-slate-800" />
+      <View className="mt-6 gap-4">
+        <Skeleton width="100%" height={12} borderRadius={6} />
+        <Skeleton width="72%" height={20} borderRadius={8} />
+      </View>
+    </View>
+  );
+}
+
+function HoldingsSectionSkeleton(): React.JSX.Element {
+  return (
+    <View testID="metal-portfolio-holdings-skeleton" className="mt-6 gap-3">
+      <Skeleton width="30%" height={26} borderRadius={8} />
+      <Skeleton width="100%" height={112} borderRadius={18} />
+      <Skeleton width="100%" height={112} borderRadius={18} />
+    </View>
+  );
+}
+
+function RecentHistorySkeleton(): React.JSX.Element {
+  return (
+    <View
+      testID="metal-portfolio-history-skeleton"
+      className="mt-5 border-t border-slate-200 pb-2 pt-4 dark:border-slate-800"
+    >
+      <Skeleton width="28%" height={26} borderRadius={8} />
+      <View className="mt-4 gap-3">
+        <Skeleton width="100%" height={50} borderRadius={12} />
+        <Skeleton width="100%" height={50} borderRadius={12} />
       </View>
     </View>
   );
@@ -166,6 +230,8 @@ function PortfolioHeader({
   onFilterChange,
   onRetry,
   portfolio,
+  rateProviderObservedAt,
+  readiness,
   selectedFilter,
 }: {
   readonly currency: CurrencyType;
@@ -173,28 +239,43 @@ function PortfolioHeader({
   readonly isOffline: boolean;
   readonly onFilterChange: (filter: MetalPortfolioFilter) => void;
   readonly onRetry: () => void;
-  readonly portfolio: MetalPortfolioReadModel;
+  readonly portfolio: MetalPortfolioReadModel | null;
+  readonly rateProviderObservedAt: Date | null;
+  readonly readiness: MetalPortfolioSectionReadiness;
   readonly selectedFilter: MetalPortfolioFilter;
 }): React.JSX.Element {
   const { t } = useTranslation("metals");
   const { t: tCommon } = useTranslation("common");
   return (
     <>
-      <PortfolioSummary currency={currency} portfolio={portfolio} />
-      <FilterBar
-        activeHoldings={portfolio.activeHoldings}
-        selectedFilter={selectedFilter}
-        onFilterChange={onFilterChange}
-      />
+      {readiness.summary && portfolio !== null ? (
+        <PortfolioSummary
+          currency={currency}
+          portfolio={portfolio}
+          rateProviderObservedAt={rateProviderObservedAt}
+        />
+      ) : (
+        <SummarySkeleton />
+      )}
+      {readiness.holdings && portfolio !== null ? (
+        <>
+          <FilterBar
+            activeHoldings={portfolio.activeHoldings}
+            selectedFilter={selectedFilter}
+            onFilterChange={onFilterChange}
+          />
+          {portfolio.listState === "POPULATED" ? <HoldingsHeader /> : null}
+        </>
+      ) : null}
       {isOffline ? (
         <Text className="mt-3 text-xs text-text-secondary dark:text-text-secondary-dark">
           {t("offline_mode")}
         </Text>
       ) : null}
-      {error !== null ? (
+      {error !== null &&
+      (readiness.summary || readiness.holdings || readiness.recentHistory) ? (
         <ErrorState error={error} onRetry={onRetry} t={tCommon} />
       ) : null}
-      {portfolio.listState === "POPULATED" ? <HoldingsHeader /> : null}
     </>
   );
 }
@@ -202,9 +283,11 @@ function PortfolioHeader({
 function PortfolioSummary({
   currency,
   portfolio,
+  rateProviderObservedAt,
 }: {
   readonly currency: CurrencyType;
   readonly portfolio: MetalPortfolioReadModel;
+  readonly rateProviderObservedAt: Date | null;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
   const locale = resolveLocale(i18n?.resolvedLanguage);
@@ -231,10 +314,7 @@ function PortfolioSummary({
               currency,
               locale
             ),
-            status:
-              portfolio.rateStatus.state === "fresh"
-                ? t("portfolio.current_rate")
-                : t(`rate.${portfolio.rateStatus.state}`),
+            status: t("portfolio.current_rate"),
           })}
           className="min-w-0 flex-1"
         >
@@ -306,7 +386,7 @@ function PortfolioSummary({
       )}
       <View className="mt-6 h-px bg-slate-200 dark:bg-slate-800" />
       <AllocationBar allocation={portfolio.allocation} />
-      <RateStatus portfolio={portfolio} />
+      <RateStatus providerObservedAt={rateProviderObservedAt} />
     </View>
   );
 }
@@ -376,21 +456,22 @@ function AllocationLegend({
 }
 
 function RateStatus({
-  portfolio,
+  providerObservedAt,
 }: {
-  readonly portfolio: MetalPortfolioReadModel;
+  readonly providerObservedAt: Date | null;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
+  const label =
+    formatPortfolioRateUpdated(providerObservedAt, i18n?.resolvedLanguage) ??
+    t("rate.missing");
   return (
-    <View className="mt-7 flex-row items-center gap-2">
+    <View className="mt-7 flex-row items-start gap-2">
       <Ionicons name="time-outline" size={20} color={palette.nileGreen[600]} />
-      <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
-        {formatRateUpdatedLabel(
-          portfolio.rateStatus.ageMs,
-          portfolio.rateStatus.state,
-          resolveLocale(i18n?.resolvedLanguage),
-          t
-        )}
+      <Text
+        testID="metal-portfolio-rate-updated"
+        className="min-w-0 flex-1 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark"
+      >
+        {label}
       </Text>
     </View>
   );
@@ -837,32 +918,6 @@ function ErrorState({
       </Pressable>
     </View>
   );
-}
-
-function formatRateUpdatedLabel(
-  ageMs: number | null,
-  state: MetalPortfolioReadModel["rateStatus"]["state"],
-  locale: string,
-  t: (key: string, values?: Record<string, string>) => string
-): string {
-  const stateLabel = t(`rate.${state}`);
-  if (ageMs === null || !Number.isFinite(ageMs)) return stateLabel;
-
-  const updatedAt = new Date(Date.now() - Math.max(0, ageMs));
-  const now = new Date();
-  const time = updatedAt.toLocaleTimeString(locale, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  const sameDay =
-    updatedAt.getFullYear() === now.getFullYear() &&
-    updatedAt.getMonth() === now.getMonth() &&
-    updatedAt.getDate() === now.getDate();
-  const when = sameDay
-    ? `${t("portfolio.today")}, ${time}`
-    : `${formatShortDate(updatedAt, locale)}, ${time}`;
-  const updatedLabel = t("portfolio.rates_updated", { when });
-  return state !== "fresh" ? `${stateLabel} · ${updatedLabel}` : updatedLabel;
 }
 
 function getForwardChevronName(): "chevron-back" | "chevron-forward" {
