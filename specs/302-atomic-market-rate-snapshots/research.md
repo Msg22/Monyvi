@@ -2,9 +2,9 @@
 
 **Feature**: `302-atomic-market-rate-snapshots`  
 **Date**: 2026-09-09  
-**Revision**: Post-Analyze corrections
+**Revision**: Post-second-Analyze remediation
 
-This research resolves the implementation decisions intentionally deferred by the approved specification and incorporates the findings from the first Speckit Analyze pass. It does not change the approved user/business requirements.
+This research resolves implementation decisions deferred by the approved specification and incorporates findings from the first two Speckit Analyze passes. It does not change approved user/business requirements.
 
 ## Decision 1: Reuse `market_rates.id` as the immutable snapshot identity
 
@@ -12,183 +12,171 @@ This research resolves the implementation decisions intentionally deferred by th
 
 The wire contract carries the identity once as top-level `snapshotId`; the persistence RPC materializes that value into `market_rates.id` and requires every observation to bind to it. The nested logical root payload does not carry a second independent ID.
 
-**Rationale**:
-
-- `market_rates` already represents one producer refresh and already has a UUID key.
-- `market_rate_observations.batch_id` is already UUID-shaped.
-- One top-level identity avoids divergent `snapshotId` versus `root.id` values in service contracts.
-
 **Rejected alternatives**: a third durable snapshot table; provider timestamps as identity; local receipt/capture time as identity.
 
 ## Decision 2: Persist root + observations through one privileged Postgres RPC
 
 **Decision**: Add `persist_market_rate_snapshot_v1` and invoke it with `.rpc()` from `fetch-metal-rates`. The function owns validation, idempotency/conflict detection, and the multi-table transaction.
 
-**Rationale**: Supabase JavaScript calls do not provide a client-side multi-statement transaction wrapper that can make two independent inserts atomic. The database function is the durable all-or-nothing boundary.
-
-**References checked during planning**:
-
-- Supabase Database Functions documentation.
-- Supabase JavaScript `rpc()` documentation.
-- Supabase Edge Function dependency documentation.
+**Rationale**: The database function is the durable all-or-nothing boundary for the wide root and its evidence set. Sequential Edge client inserts can expose partial state.
 
 ## Decision 3: A complete V1 snapshot contains exactly 37 trust observations
 
-**Decision**: Require exactly one observation for:
+**Decision**: Require exactly one observation for Gold, Silver, and all 35 currencies exported by `SUPPORTED_CURRENCIES`, including `currency:USD` and excluding BTC.
 
-- `metal:GOLD`
-- `metal:SILVER`
-- all 35 currencies exported by `SUPPORTED_CURRENCIES`, including `currency:USD` and excluding BTC.
+The root mapping is Gold/Silver to USD-per-gram numeric columns, every supported non-USD fiat to its `<code>_usd` numeric column, and USD to implicit exact identity `1`. Platinum, palladium, BTC, and CNH remain compatibility/provider fields only.
 
-The root mapping is Gold/Silver to their USD-per-gram numeric columns, every supported non-USD fiat to its `<code>_usd` numeric column, and USD to implicit exact identity `1`.
+## Decision 4: Current financial truth comes from exact observation decimals
 
-Platinum, palladium, BTC, and CNH remain compatibility/provider fields only and are not current Metals V1 trust observations.
+For the selected current snapshot, `market_rate_observations.value_decimal` is authoritative. The selected-snapshot service exposes exact canonical decimal strings / normalized exact references to current calculations and current displayed financial rates.
 
-## Decision 4: Current financial truth comes from exact observation decimals, not wide-row JavaScript numbers
+The wide `market_rates` row remains identity/order/history compatibility. After pull, Watermelon `MarketRate` numeric fields MUST NOT be authoritative current valuation/conversion inputs because they cross JavaScript/SQLite numeric representation.
 
-**Decision**: For the selected **current** snapshot, `market_rate_observations.value_decimal` is the authoritative financial value. The selected-snapshot service exposes exact canonical decimal strings / normalized exact rate references to all current calculations and current displayed financial rates.
+## Decision 5: Parse provider numeric tokens losslessly and normalize exponent notation exactly
 
-The wide `market_rates` row remains necessary for:
+`fetch-metal-rates` reads `response.text()` and parses it with pinned `lossless-json@4.3.1`. Authoritative rate tokens never pass through `response.json()`, `Number`, or `parseFloat` before the exact persistence payload is built.
 
-- persisted snapshot identity and immutable ordering;
-- existing historical/trend compatibility;
-- server-side exact root-to-observation equivalence checks while both sides are PostgreSQL `numeric` / exact request strings.
+Metals.Dev may encode valid JSON rates using ordinary decimal or scientific notation. Therefore the provider adapter accepts the full JSON-number notation exposed by the lossless parser and converts each positive rate token to the feature's plain-decimal grammar with base-10 string/exponent manipulation only.
 
-After pull, Watermelon `MarketRate` numeric fields are compatibility/history data only. They MUST NOT be used as authoritative current valuation/conversion inputs because they cross a JavaScript/SQLite numeric boundary.
+Examples:
 
-**Rationale**:
+- `0.10000000000000001` -> `0.10000000000000001`
+- `3.73874e-10` -> `0.000000000373874`
+- `1.2300e+2` -> `123.00`
 
-- Current generated `market_rates` fields are JavaScript `number` values.
-- Current `market_rate_observations.value_decimal` is already exact text locally and PostgreSQL numeric remotely.
-- FR-015 requires supplied decimal precision to survive through the authoritative financial calculation boundary.
-- Reusing the exact child values removes the need to redesign the wide table or add duplicate exact columns.
+Normalization is exact: no rounding, no binary-float conversion, and all coefficient digits are retained. Trailing coefficient precision is retained when expanded into plain notation. The resulting string is then validated as a positive plain decimal and passed to the RPC.
 
-**Rejected alternative**: continue feeding `MarketRate` numbers into current valuation helpers and treat the observation rows as provenance only. That would preserve the original precision defect.
+**Rejected alternative**: reject scientific notation because the downstream contract wants plain decimals. That would reject valid provider JSON notation rather than normalizing it safely.
 
-## Decision 5: Parse the Metals.Dev response losslessly before any authoritative numeric conversion
+## Decision 6: Normalize missing/malformed/future provider times to Unknown at the producer boundary
 
-**Decision**: `fetch-metal-rates` reads `response.text()` and parses the JSON with a pinned lossless-number parser (`lossless-json@4.3.1`, declared in the function-local `deno.json`). Rate number tokens are converted directly to canonical decimal text without first becoming JavaScript `number` values.
+Provider observation timestamps are separate from the numeric precision contract.
 
-The transformed exact-string provider object is then validated with Zod and mapped into the RPC payload. The persistence RPC casts root decimal strings to PostgreSQL `numeric` and stores observation `value_decimal` exactly.
+For each provider timestamp:
 
-A JavaScript `number` conversion is permitted only after authoritative persistence/validation for legacy informational response fields or non-authoritative compatibility storage; it is never used to create the exact current financial truth.
+- valid parseable non-future timestamp -> preserve as provider observation time;
+- missing value -> `null`;
+- malformed/unparseable value -> `null`;
+- timestamp later than the immutable request capture/order instant -> `null`.
 
-**Rationale**:
+`null` is the persisted producer representation of Unknown freshness. The capture/order instant is used only as a comparison ceiling to identify future provider time; it is never substituted as observation time.
 
-- Metals.Dev documents its rates as JSON number tokens.
-- `response.json()` necessarily parses those tokens through JavaScript binary numbers.
-- Zod validation performed *after* `response.json()` cannot restore lexical precision already lost.
-- `lossless-json` is a focused zero-dependency package intended to preserve JSON numeric information, and Supabase Edge Functions support pinned npm dependencies.
+This keeps FR-009/FR-010 deterministic before the Postgres `timestamptz` boundary and prevents a malformed string from becoming a persistence-shape problem.
 
-**Required regression**: include a provider rate token such as `0.10000000000000001` (and another high-precision decimal) and prove the exact lexical value reaches the RPC request unchanged.
-
-## Decision 6: Preserve current rate semantics and provider-time-only freshness
+## Decision 7: Preserve current rate semantics and trusted source identity
 
 Producer observations use:
 
 - Metals: `usd_per_pure_gram / quote_per_base`.
 - Fiat: `usd_per_currency_unit / quote_per_base`.
 - `quality = valid`.
-- non-empty trimmed source identity (`metals.dev` for this producer).
+- non-empty trimmed source identity (`metals.dev`).
 - exact `currency:USD = 1`.
 
-Provider observation time may be null and then yields Unknown freshness. Missing/unparseable/future provider time is never repaired using capture, root creation, sync, receipt, or restart time.
+Null provider time yields Unknown freshness and does not make a valid rate value unavailable by itself.
 
-## Decision 7: Root `created_at` is immutable ordering metadata only
+## Decision 8: Root `created_at` is ordering metadata only
 
-Selection ordering uses `(market_rates.created_at DESC, market_rates.id DESC)`. Root `created_at` establishes producer ordering and protects against delayed older delivery; it never classifies financial freshness.
+Selection ordering uses `(market_rates.created_at DESC, market_rates.id DESC)`. Root `created_at` protects against delayed older delivery; it never classifies financial freshness.
 
-## Decision 8: Pull complete envelopes through one RPC
+## Decision 9: Pull complete envelopes through one RPC
 
-**Decision**: Add `pull_market_rate_snapshots_page_v1`, paging by root ordering under a fixed upper watermark and returning only provably complete, valid, bound envelopes.
+Add `pull_market_rate_snapshots_page_v1`, paging by root ordering under a fixed upper watermark and returning only provably complete, valid, bound envelopes.
 
-The response returns top-level `snapshotId`, exact-string logical root rate values, and all bound observations. The mobile adapter validates exact root/observation equivalence **before** converting wide values for Watermelon compatibility storage.
+The response returns top-level `snapshotId`, exact plain-decimal root values, and all bound observations. The mobile adapter validates root/observation equivalence before converting wide values for Watermelon compatibility storage.
 
-Legacy/unbound/incomplete/duplicate-source candidates are omitted rather than repaired.
+## Decision 10: PersistedObservation is one explicit closed wire object
 
-## Decision 9: One Watermelon selected-snapshot service owns current selection
+The OpenAPI `RateObservationInput` is a closed request object. A persisted pull row adds `id`, `batchId`, and `capturedAt`.
 
-**Decision**: Introduce `market-rate-snapshot-read-model-service.ts` as the only current selector.
+Do **not** model `PersistedObservation` as `allOf: [RateObservationInput, closed-extension]`, because `additionalProperties: false` in the base subschema rejects properties introduced only by the extension. Instead, define `PersistedObservation` explicitly as one closed object containing all ten fields.
 
-It derives selection from persisted Watermelon root identity/order plus the exact bound observation set. Its exported current-rate map is built from observation `value_decimal` strings and provider evidence; the wide `MarketRate` model is not exported as authoritative current-rate input.
+This makes the contract unambiguous to JSON Schema/OpenAPI validators and code generators.
 
-The service:
+## Decision 11: One Watermelon selected-snapshot service owns current selection
 
-- requires exactly 37 bound observations;
-- rejects missing/duplicate/unexpected instruments, invalid value/quality/unit/orientation/source, and invalid binding;
-- validates provider-time freshness without local substitution;
-- never borrows rows from another batch;
-- reconstructs after restart without a separately persisted selected pointer.
+`market-rate-snapshot-read-model-service.ts` is the only current selector. It derives selection from persisted root identity/order plus exact bound observations and exports current-rate values from observation `value_decimal` strings.
 
-Exact root/value equivalence is checked server-side and again at the pull-envelope boundary before the root is converted to Watermelon compatibility numbers. On-device restart selection therefore trusts the exact cached observation set, not the wide numeric root.
+The service requires exactly 37 rows, rejects invalid binding/value/quality/unit/orientation/source, validates freshness from provider time only, never borrows another batch's rows, and reconstructs after restart without a persisted selected pointer.
 
-## Decision 10: Current calculation helpers consume exact snapshot rates
+## Decision 12: Current calculation helpers consume exact snapshot rates
 
-`packages/logic/src/metals/current-market-snapshot.ts` owns pure exact-decimal access/conversion helpers over the selected observation map. Current Live Rates, Metals valuation, holding detail, account-currency conversion used by net worth, and other current-rate calculations consume these helpers or equivalent exact interfaces.
+`packages/logic/src/metals/current-market-snapshot.ts` owns pure exact-decimal access/conversion helpers over the selected observation map. Current Live Rates, Metals valuation, holding detail, current net-worth conversions, and other current calculations use these helpers or equivalent exact interfaces.
 
-Historical previous-day/trend queries may continue to read legacy `market_rates` rows as historical display inputs, but those rows never certify current trust and never replace exact current valuation inputs.
+Historical previous-day/trend queries may continue to read legacy `market_rates` rows as historical inputs only.
 
-## Decision 11: Legacy rows are never backfilled by inference
+## Decision 13: Legacy rows are never backfilled by inference
 
 Add the FK as `NOT VALID`; do not guess historical `batch_id` relationships or rewrite legacy evidence. Only a provable bound complete snapshot is eligible for new current selection.
 
-## Decision 12: New-write uniqueness is enforced without destructive legacy cleanup
+## Decision 14: New-write uniqueness is enforced without destructive legacy cleanup
 
-Use a non-unique `(batch_id, instrument_code)` lookup index. `persist_market_rate_snapshot_v1` requires exactly one row per required instrument, and pull/local selection rejects duplicates. A future audited cleanup may add a database unique constraint, but issue #302 does not deduplicate old evidence.
+Use a non-unique `(batch_id, instrument_code)` lookup index. `persist_market_rate_snapshot_v1` requires exactly one row per required instrument; pull/local selection rejects duplicates.
 
-## Decision 13: Source identity is required for a trusted producer snapshot
+## Decision 15: Source identity is required for a trusted producer snapshot
 
-The generic historical rate-reference model can represent Unknown source, but a newly trusted issue #302 current producer snapshot must have a non-empty trimmed source for every required observation. Null, empty, or whitespace-only source rejects the candidate at producer, RPC, pull-envelope, and local-selector validation boundaries.
+A newly trusted issue #302 current producer snapshot requires a non-empty trimmed source for every required observation. Null, empty, or whitespace-only source rejects the candidate at producer, RPC, pull-envelope, and local-selector boundaries.
 
-This is stricter only for the new trusted current snapshot envelope and implements FR-004's required source identity without rewriting historical evidence.
+## Decision 16: No new retention duration; integrity is tested explicitly
 
-## Decision 14: No new retention duration; integrity is tested explicitly
+Issue #302 introduces no pruning duration or cleanup job. The future-write FK uses `ON DELETE CASCADE`. Tests prove root deletion removes bound observations, removed local evidence invalidates the candidate, no cross-batch repair occurs, and selection falls back to an earlier complete candidate or `null`.
 
-Issue #302 introduces no pruning duration or cleanup job. The future-write FK uses `ON DELETE CASCADE`, and tests must prove root deletion removes bound observations.
-
-Local selector tests must also prove:
-
-- deleting/removing required evidence makes that snapshot ineligible;
-- a surviving partial snapshot cannot be repaired with another batch;
-- the previously selected complete candidate remains selected when still present;
-- if no complete candidate remains, current selection becomes unavailable rather than using partial data.
-
-## Decision 15: Realtime is a trigger, never a selector
+## Decision 17: Realtime is a trigger, never a selector
 
 The app-level realtime subscription may continue listening to `market_rates` inserts, but its callback only triggers the normal complete-snapshot sync. Notification receipt never promotes the notified root directly.
 
-## Decision 16: Local/manual QA imports complete snapshot units
+## Decision 18: Local/manual QA imports complete snapshot units
 
-The existing local importer currently copies only `market_rates`. It must import only complete root + matching observation envelopes under the same rules as production pull; otherwise QA would create roots that are intentionally untrusted under the new contract.
+The existing local importer must import only complete root + matching observation envelopes under the same rules as production pull; otherwise QA would create intentionally untrusted root-only data.
 
-## Decision 17: Security boundary
+## Decision 19: Security boundary
 
 - `persist_market_rate_snapshot_v1`: revoke PUBLIC/anon/authenticated; grant trusted producer/service role only.
 - `pull_market_rate_snapshots_page_v1`: read-only shared-market contract under existing app access conventions.
 - Logs may contain snapshot IDs/reason codes, never provider API keys or unrelated user financial data.
 
-## Decision 18: Schema generation impact
+## Decision 20: Schema generation impact
 
-Use `069_atomic_market_rate_snapshots.sql`. The migration adds functions, a future-write FK, and an index but no Watermelon table columns. Expected generated change is primarily RPC signatures in `packages/db/src/supabase-types.ts`; generated output must still be produced through repository scripts, never hand-forced.
+Use `069_atomic_market_rate_snapshots.sql`. The migration adds functions, a future-write FK, and an index but no Watermelon table columns. Expected generated change is primarily RPC signatures in `packages/db/src/supabase-types.ts`; generated output must still be produced through repository scripts.
 
-## Decision 19: Business documentation is a hard gate before code implementation
+## Decision 21: Business documentation is a hard gate before code implementation
 
-The finalized issue #302 business rules must be written into `docs/business/business-decisions.md` as the first implementation task. No production-code task may begin before that documentation commit exists. This satisfies Constitution II without treating late release documentation as sufficient.
+The finalized issue #302 business rules must be written into `docs/business/business-decisions.md` as the first implementation task. No production-code task may begin before that documentation commit exists.
 
-## Decision 20: Verification is failure-first and cross-boundary
+## Decision 22: Edge handler verification uses one exact test path and root command
 
-Tests precede each production boundary. The matrix must include:
+The producer HTTP logic is extracted to:
 
-- lossless provider decimal ingestion;
-- source null/empty/whitespace rejection;
-- transactional persistence/replay/conflict;
-- root-delete cascade;
-- complete-envelope paging and malformed-envelope rejection;
-- local missing/corrupt evidence and no cross-batch repair;
-- offline/restart reconstruction;
-- exact current calculation inputs across every consumer;
-- current/historical evidence separation.
+```text
+supabase/functions/fetch-metal-rates/handler.ts
+```
+
+with its exact handler-level test at:
+
+```text
+supabase/functions/fetch-metal-rates/handler.test.ts
+```
+
+The shared parser contract remains tested at:
+
+```text
+supabase/functions/_shared/market-rate-snapshot-contract.test.ts
+```
+
+Implementation adds the root package script:
+
+```text
+test:market-rate-edge = tsx --test supabase/functions/_shared/market-rate-snapshot-contract.test.ts supabase/functions/fetch-metal-rates/handler.test.ts
+```
+
+and a `Market Rate Edge Contract` step in `.github/workflows/ci.yml`'s `quality` job running `npm run test:market-rate-edge`.
+
+This is a new issue #302 CI obligation; current CI is not assumed to run these tests already.
+
+## Decision 23: Verification is failure-first and cross-boundary
+
+The matrix must include lossless ordinary/scientific provider decimals, missing/malformed/future timestamp normalization, source rejection, transactional persistence/replay/conflict, root-delete cascade, complete-envelope paging, local corruption/no-cross-batch repair, offline/restart reconstruction, exact current calculation inputs, and current/historical evidence separation.
 
 ## Environment limitation during research
 
-The connected planning environment has no repository shell runner, so Speckit helper scripts, Supabase CLI, SQL tests, Jest, lint, and typecheck were not executed during research. Repository files and current provider/Supabase documentation were inspected directly; implementation-time verification commands are recorded in `quickstart.md`.
+The connected planning environment has no repository shell runner, so Speckit helper scripts, Supabase CLI, SQL tests, Jest, lint, typecheck, `npm run test:market-rate-edge`, and CI were not executed during research. Repository files were inspected directly; implementation-time verification commands are recorded in `quickstart.md`.

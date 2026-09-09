@@ -1,12 +1,13 @@
 openapi: 3.1.0
 info:
   title: Monyvi Atomic Market-Rate Snapshot Contracts
-  version: 1.1.0
+  version: 1.2.0
   description: >-
-    Planning contract for issue #302 after Analyze corrections. The wire snapshot
+    Planning contract for issue #302 after Analyze remediation. The wire snapshot
     identity is carried once as top-level snapshotId; persistence materializes it
-    as market_rates.id. Exact current financial values are decimal strings and
-    remain exact through the producer/RPC/pull boundary.
+    as market_rates.id. Exact current financial values are plain decimal strings
+    and remain exact through the provider/RPC/pull boundary. Provider scientific
+    notation is normalized losslessly to plain decimal text before validation.
 servers:
   - url: https://{project}.supabase.co
     variables:
@@ -39,8 +40,8 @@ paths:
       description: >-
         p_snapshot_id is the sole incoming snapshot identity. The function writes
         it as market_rates.id and requires exactly 37 observations under the same
-        batch identity. Root and observation rate values are exact decimal text;
-        the function casts root values to PostgreSQL numeric only inside the
+        batch identity. Root and observation rate values are exact plain decimal
+        text; the function casts root values to PostgreSQL numeric only inside the
         transaction. Same-ID identical replay is idempotent; conflicting replay
         is rejected without mutation.
       security:
@@ -72,9 +73,9 @@ paths:
       summary: Pull complete exact snapshot envelopes only
       description: >-
         Pages by persisted root ordering and returns only roots with an exact,
-        valid, bound 37-observation set. The logical root rate fields are returned
-        as decimal strings so mobile can verify exact root/observation equivalence
-        before converting the wide root to compatibility numeric storage.
+        valid, bound 37-observation set. Logical root rate fields are returned as
+        plain decimal strings so mobile can verify exact root/observation
+        equivalence before converting the wide root to compatibility numeric storage.
       security:
         - bearerAuth: []
       requestBody:
@@ -111,8 +112,9 @@ components:
       type: string
       pattern: "^(?:0|[1-9]\\d*)(?:\\.\\d+)?$"
       description: >-
-        Canonical non-negative base-10 decimal text. Financial truth is never
-        represented by a JavaScript binary floating-point number at this boundary.
+        Canonical plain non-negative base-10 decimal text with no exponent.
+        Provider exponent notation is expanded losslessly before this boundary;
+        no JavaScript binary floating-point conversion is authoritative here.
     PositiveDecimalString:
       allOf:
         - $ref: "#/components/schemas/DecimalString"
@@ -196,7 +198,7 @@ components:
       additionalProperties: false
       description: >-
         Logical exact root payload. It deliberately has no id property; the enclosing
-        snapshotId is persisted as market_rates.id. All rates are exact decimal text.
+        snapshotId is persisted as market_rates.id. All rates are exact plain decimal text.
       required:
         - goldUsdPerGram
         - silverUsdPerGram
@@ -217,7 +219,7 @@ components:
         fiatUsdPerUnit:
           type: object
           description: >-
-            Existing stored non-USD currency/BTC values as exact decimal text.
+            Existing stored non-USD currency/BTC values as exact plain decimal text.
             BTC may remain present for wide-row compatibility but is not a required
             V1 trust observation. USD is implicit exact identity 1 and may be absent.
           additionalProperties:
@@ -227,11 +229,17 @@ components:
             - type: string
               format: date-time
             - type: "null"
+          description: >-
+            Null represents missing, malformed, or future provider time after producer
+            normalization and therefore yields Unknown freshness.
         providerCurrencyObservedAt:
           anyOf:
             - type: string
               format: date-time
             - type: "null"
+          description: >-
+            Null represents missing, malformed, or future provider time after producer
+            normalization and therefore yields Unknown freshness.
     CurrentMarketInstrument:
       type: string
       pattern: "^(metal:(GOLD|SILVER)|currency:[A-Z]{3})$"
@@ -264,53 +272,54 @@ components:
             - type: string
               format: date-time
             - type: "null"
-          description: Null means Unknown freshness; capture time is never substituted.
+          description: >-
+            Null means Unknown freshness. Missing, malformed, or future raw provider
+            timestamps are normalized to null; capture time is never substituted.
         source:
           $ref: "#/components/schemas/NonBlankSource"
         quality:
           const: valid
     PersistedObservation:
-      allOf:
-        - $ref: "#/components/schemas/RateObservationInput"
-        - type: object
-          additionalProperties: false
-          required:
-            - id
-            - batchId
-            - capturedAt
-            - instrumentCode
-            - valueDecimal
-            - unit
-            - orientation
-            - providerObservedAt
-            - source
-            - quality
-          properties:
-            id:
-              $ref: "#/components/schemas/Uuid"
-            batchId:
-              $ref: "#/components/schemas/Uuid"
-            capturedAt:
-              type: string
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - batchId
+        - capturedAt
+        - instrumentCode
+        - valueDecimal
+        - unit
+        - orientation
+        - providerObservedAt
+        - source
+        - quality
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        batchId:
+          $ref: "#/components/schemas/Uuid"
+        capturedAt:
+          type: string
+          format: date-time
+        instrumentCode:
+          $ref: "#/components/schemas/CurrentMarketInstrument"
+        valueDecimal:
+          $ref: "#/components/schemas/PositiveDecimalString"
+        unit:
+          type: string
+          enum: [usd_per_pure_gram, usd_per_currency_unit]
+        orientation:
+          const: quote_per_base
+        providerObservedAt:
+          anyOf:
+            - type: string
               format: date-time
-            instrumentCode:
-              $ref: "#/components/schemas/CurrentMarketInstrument"
-            valueDecimal:
-              $ref: "#/components/schemas/PositiveDecimalString"
-            unit:
-              type: string
-              enum: [usd_per_pure_gram, usd_per_currency_unit]
-            orientation:
-              const: quote_per_base
-            providerObservedAt:
-              anyOf:
-                - type: string
-                  format: date-time
-                - type: "null"
-            source:
-              $ref: "#/components/schemas/NonBlankSource"
-            quality:
-              const: valid
+            - type: "null"
+          description: Null is the persisted Unknown-freshness representation.
+        source:
+          $ref: "#/components/schemas/NonBlankSource"
+        quality:
+          const: valid
     SnapshotEnvelope:
       type: object
       additionalProperties: false

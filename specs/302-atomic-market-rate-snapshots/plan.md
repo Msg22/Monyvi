@@ -1,7 +1,7 @@
 # Implementation Plan: Atomic Market-Rate Snapshots
 
 **Branch**: `codex/issue302-atomic-market-rate-snapshots` | **Date**: 2026-09-09 | **Spec**: `specs/302-atomic-market-rate-snapshots/spec.md`  
-**Input**: Approved issue #302 specification after Clarify; revised after the first Speckit Analyze pass.
+**Input**: Approved issue #302 specification after Clarify; revised after two Speckit Analyze passes.
 
 ## Summary
 
@@ -9,18 +9,22 @@ Deliver one atomic current-market snapshot guarantee from Metals.Dev ingestion t
 
 The persisted snapshot identity remains the existing `market_rates.id` UUID. The wire/service identity is carried once as top-level `snapshotId`; `persist_market_rate_snapshot_v1` materializes it as `market_rates.id`, and all 37 required `market_rate_observations` use `batch_id = snapshotId`.
 
-The exact-value authority is corrected explicitly: **current financial rates come from bound `market_rate_observations.value_decimal` exact decimals, not from the wide Watermelon `MarketRate` JavaScript-number fields**. The wide root remains the snapshot identity/order/history compatibility record and is checked against the exact observations while both are still represented exactly at the producer/Postgres/pull-envelope boundaries.
+The exact-value authority is explicit: **current financial rates come from bound `market_rate_observations.value_decimal` exact decimals, not from the wide Watermelon `MarketRate` JavaScript-number fields**. The wide root remains the snapshot identity/order/history compatibility record and is checked against the exact observations while both are still represented exactly at the producer/Postgres/pull-envelope boundaries.
 
-The producer will read the provider response as raw text and use a pinned lossless JSON-number parser before Zod validation. No authoritative provider rate crosses a JavaScript `number` boundary before persistence. The mobile pull RPC returns exact-string root values + exact observations in one envelope; the adapter validates exact equivalence before converting wide root fields to legacy Watermelon numeric storage. All current consumers then use one exact selected-snapshot read model. Historical trend queries may continue using legacy wide rows as explicitly historical inputs.
+The producer reads provider response text and uses a pinned lossless JSON-number parser before Zod validation. Provider JSON numeric tokens may use ordinary or scientific notation. The adapter expands scientific notation into equivalent plain base-10 decimal text using string/decimal-exponent manipulation only, preserving all coefficient digits and never rounding or crossing a JavaScript `number` boundary. For example, `3.73874e-10` becomes `0.000000000373874` and `1.2300e+2` becomes `123.00`.
+
+Provider timestamps are normalized independently of financial values: valid non-future timestamps are preserved; missing, malformed, or future timestamps become `null`, which is the producer representation of Unknown freshness. The request capture/order timestamp may be used only as the comparison ceiling for detecting a future provider timestamp; it is never substituted as provider observation time.
+
+The mobile pull RPC returns exact-string root values plus exact observations in one envelope; the adapter validates exact equivalence before converting wide root fields to legacy Watermelon numeric storage. All current consumers then use one exact selected-snapshot read model. Historical trend queries may continue using legacy wide rows as explicitly historical inputs.
 
 No screen, navigation, supported-instrument scope, historical acquisition/terminal evidence, or product formula is intentionally redesigned.
 
 ## Technical Context
 
 **Language/Version**: TypeScript 5.9.x on Node 22; TypeScript/Deno Edge Runtime; PostgreSQL SQL/PLpgSQL.  
-**Primary Dependencies**: Expo 55, React Native 0.83.6, React 19.2, WatermelonDB 0.28, `@supabase/supabase-js` 2.106 in mobile, Zod 4.3, Decimal.js through existing `@monyvi/logic`, and pinned `lossless-json@4.3.1` for the `fetch-metal-rates` Edge Function.  
+**Primary Dependencies**: Expo 55, React Native 0.83.6, React 19.2, WatermelonDB 0.28, `@supabase/supabase-js` 2.106 in mobile, Zod 4.3, Decimal.js through existing `@monyvi/logic`, pinned `lossless-json@4.3.1` for `fetch-metal-rates`, and root `tsx` for deterministic Node test execution.  
 **Storage**: Supabase `market_rates` + `market_rate_observations`; WatermelonDB remains the device-side source of truth/offline cache. No new durable table/column is planned.  
-**Testing**: SQL regression tests; shared/Edge unit tests; logic Jest; mobile Jest/React Native Testing Library; architecture/source-contract tests; typecheck/lint; local Supabase verification.  
+**Testing**: SQL regression tests; exact shared/Edge tests run by an explicit root script; logic Jest; mobile Jest/React Native Testing Library; architecture/source-contract tests; typecheck/lint; local Supabase verification.  
 **Target Platform**: Expo Android/iOS plus Supabase Edge Functions/Postgres.  
 **Performance**: Current screens resolve from local Watermelon state without foreground network dependency; realtime only triggers normal sync; selection scans bounded recent cached roots/children.  
 **Constraints**: offline-first; exact decimal financial truth; provider-time-only freshness; one snapshot identity; no cross-batch repair; no inferred legacy binding; holdings survive missing rates; all DDL through numbered local migrations; no direct remote DDL.  
@@ -33,7 +37,7 @@ No screen, navigation, supported-instrument scope, historical acquisition/termin
 | Principle | Result | Plan alignment |
 | --- | --- | --- |
 | I. Offline-First Architecture | PASS | Selection is reconstructed from WatermelonDB; provider/network failure preserves cached complete snapshots. |
-| II. Documented Business Logic | **GATED** | The first implementation task updates `docs/business/business-decisions.md`; **no production-code task may start until that task is committed**. |
+| II. Documented Business Logic | **GATED** | The first implementation task updates `docs/business/business-decisions.md`; no production-code task may start until that task is committed. |
 | III. Type Safety First | PASS | Explicit interfaces, Zod at provider/RPC boundaries, `unknown` for untrusted values, exact decimal strings for authoritative financial values. |
 | IV. Service Layer Architecture | PASS | Pure exact rate logic in `packages/logic`; DB joins/selectors in mobile services; hooks own lifecycle only. |
 | V. Accessibility / UI | PASS | No UI redesign. Existing presentation/accessibility remains regression scope. |
@@ -41,7 +45,7 @@ No screen, navigation, supported-instrument scope, historical acquisition/termin
 | VII. Local-First Schema Migrations | PASS | One numbered SQL migration; generated contracts refreshed through repo scripts; no MCP/dashboard DDL. |
 | VIII. Sync Correctness | PASS | Shared market data remains pull-only; complete envelope validated before local apply; cursor advances only after full successful page application. |
 
-The Constitution II gate is intentionally explicit. Planning may finish with the gate pending, but implementation execution begins with the business-documentation task and cannot skip/reorder it.
+The Constitution II gate is intentional. Planning may finish with the gate pending, but implementation begins with the business-documentation task and cannot skip/reorder it.
 
 ### Post-design gate
 
@@ -76,9 +80,9 @@ Producer form:
 - USD is exact `1`.
 - BTC is not a trusted current observation.
 
-Provider metal/currency timestamps may differ. Missing/unparseable/future provider time becomes Unknown; it is never repaired from capture/fetch/storage/sync/restart time.
+Provider metal/currency timestamps may differ. Missing, malformed, or future provider timestamps are normalized to `null` and therefore Unknown freshness; no capture/fetch/storage/sync/restart time is substituted.
 
-### 3. Lossless producer ingestion
+### 3. Lossless producer ingestion and scientific-notation normalization
 
 `fetch-metal-rates` must not call `response.json()` for authoritative rate values.
 
@@ -87,13 +91,18 @@ Implementation boundary:
 1. fetch response;
 2. read `response.text()`;
 3. parse with function-local pinned `lossless-json@4.3.1` from `supabase/functions/fetch-metal-rates/deno.json`;
-4. convert lossless numeric tokens directly to canonical decimal text;
-5. validate the transformed exact-string provider shape with Zod;
-6. generate one `snapshotId` + one capture/order timestamp;
-7. build exact root payload + exactly 37 exact observations;
-8. call only `persist_market_rate_snapshot_v1` for authoritative persistence.
+4. obtain each JSON numeric token as lossless decimal/exponent text;
+5. normalize ordinary/scientific notation to the feature's plain decimal-string grammar with exact string/exponent manipulation only—never `Number`, `parseFloat`, or any binary-float intermediate;
+6. preserve all coefficient digits and trailing coefficient precision where representable in plain form; examples: `3.73874e-10 -> 0.000000000373874`, `1.2300e+2 -> 123.00`;
+7. validate the transformed exact-string provider shape with Zod;
+8. generate one `snapshotId` + one capture/order timestamp;
+9. normalize provider timestamps: missing/malformed/future relative to the capture instant -> `null`; valid non-future provider timestamps preserved exactly/semantically;
+10. build exact root payload + exactly 37 exact observations;
+11. call only `persist_market_rate_snapshot_v1` for authoritative persistence.
 
-Tests must include a decimal such as `0.10000000000000001` and another long-precision rate and prove the RPC payload preserves the token exactly. A conversion to JS `number` is allowed only after authoritative validation/persistence for legacy informational response fields or compatibility storage.
+Tests must include `0.10000000000000001`, another long-precision decimal, and exponent-form values including `3.73874e-10`. They must prove the RPC payload contains the exact equivalent plain decimal with no rounding. Timestamp tests must separately cover missing, malformed, valid, and future raw provider values and prove `null`/Unknown normalization without capture-time substitution.
+
+A conversion to JS `number` is allowed only after authoritative validation/persistence for legacy informational response fields or compatibility storage.
 
 ### 4. Atomic producer persistence
 
@@ -103,8 +112,8 @@ The RPC receives:
 
 - top-level snapshot UUID;
 - capture/order timestamp;
-- logical wide root payload where all rate fields are decimal strings;
-- exactly 37 observation objects with exact decimal strings.
+- logical wide root payload where all rate fields are plain decimal strings;
+- exactly 37 observation objects with exact plain decimal strings.
 
 It validates transactionally:
 
@@ -125,14 +134,16 @@ Then it inserts the wide root (casting decimal text to PostgreSQL `numeric`) plu
 
 Add `public.pull_market_rate_snapshots_page_v1(...)`.
 
-It pages by `(market_rates.created_at, market_rates.id)` under a fixed upper watermark and returns **only complete eligible envelopes**. Each envelope contains:
+It pages by `(market_rates.created_at, market_rates.id)` under a fixed upper watermark and returns only complete eligible envelopes. Each envelope contains:
 
 - `snapshotId`;
 - capture/order timestamp;
-- logical root rate values cast to exact text;
+- logical root rate values cast to exact plain text;
 - all 37 bound observations with exact `value_decimal` text and provenance.
 
 Legacy/unbound/partial/duplicate/source-invalid candidates are omitted. The mobile adapter validates the exact envelope before writing anything locally. This replaces independent current root + observation network windows in both normal sync and manual refresh.
+
+The OpenAPI `PersistedObservation` schema is a single explicit closed object. It must not extend a closed `RateObservationInput` using `allOf`, because `additionalProperties: false` in the base subschema would reject the persisted-only `id`, `batchId`, and `capturedAt` fields.
 
 ### 6. Exact local application boundary
 
@@ -143,7 +154,7 @@ The pull adapter validates exact root/observation equivalence while both are sti
 
 Root + observations are applied inside one Watermelon writer/page unit. The market snapshot cursor/watermark advances only after the complete page succeeds.
 
-Because the wide local root is a JS/SQLite compatibility representation, **its numeric rate fields are never authoritative current inputs after this point**.
+Because the wide local root is a JS/SQLite compatibility representation, its numeric rate fields are never authoritative current inputs after this point.
 
 ### 7. Selected current snapshot read model
 
@@ -235,7 +246,34 @@ Do not infer/backfill legacy binding by timestamp/value matching. The `NOT VALID
 
 `scripts/import-market-rates-to-local.js` currently imports only root rows. Update it to import only complete root + matching observation envelopes, preserving snapshot-unit integrity. Root-only import must never be presented as trusted current QA data.
 
-### 14. Observability/security
+### 14. Exact Edge test and CI gate
+
+Use one exact handler extraction/testing shape:
+
+```text
+supabase/functions/fetch-metal-rates/handler.ts
+supabase/functions/fetch-metal-rates/handler.test.ts
+supabase/functions/fetch-metal-rates/index.ts
+supabase/functions/_shared/market-rate-snapshot-contract.test.ts
+```
+
+`index.ts` becomes the minimal `Deno.serve` wrapper over the extracted handler; handler behavior is testable without starting the Edge runtime.
+
+Implementation adds this root script to `package.json`:
+
+```json
+"test:market-rate-edge": "tsx --test supabase/functions/_shared/market-rate-snapshot-contract.test.ts supabase/functions/fetch-metal-rates/handler.test.ts"
+```
+
+and adds a `Market Rate Edge Contract` step to `.github/workflows/ci.yml`'s `quality` job that runs:
+
+```bash
+npm run test:market-rate-edge
+```
+
+This is a required issue #302 verification gate, not an assumption about pre-existing CI coverage.
+
+### 15. Observability/security
 
 Structured non-sensitive events:
 
@@ -268,13 +306,19 @@ specs/302-atomic-market-rate-snapshots/
 
 ```text
 docs/business/business-decisions.md        # first implementation gate
+package.json                               # exact Edge test script
+.github/workflows/ci.yml                   # Market Rate Edge Contract step
 
 supabase/
 ├── migrations/069_atomic_market_rate_snapshots.sql
 ├── functions/
-│   ├── _shared/market-rate-snapshot-contract.ts
+│   ├── _shared/
+│   │   ├── market-rate-snapshot-contract.ts
+│   │   └── market-rate-snapshot-contract.test.ts
 │   └── fetch-metal-rates/
-│       ├── deno.json                      # pinned lossless-json dependency
+│       ├── deno.json
+│       ├── handler.ts
+│       ├── handler.test.ts
 │       └── index.ts
 └── tests/atomic_market_rate_snapshots_test.sql
 
@@ -286,16 +330,16 @@ packages/logic/src/metals/
     └── current-market-snapshot.test.ts
 
 packages/db/src/
-├── supabase-types.ts                      # regenerated RPC signatures
-├── schema.ts                              # expected no semantic table change
-└── migrations.ts                          # expected no schema bump
+├── supabase-types.ts
+├── schema.ts
+└── migrations.ts
 
 apps/mobile/
 ├── services/
 │   ├── market-rate-snapshot-read-model-service.ts
 │   ├── live-rates-refresh-service.ts
 │   ├── live-rates-trust-read-model-service.ts
-│   ├── net-worth-read-model-service.ts    # only current-rate boundary as needed
+│   ├── net-worth-read-model-service.ts
 │   └── sync/pull-strategies.ts
 ├── hooks/
 │   ├── useMarketRates.ts
@@ -328,9 +372,12 @@ Tests are mandatory (FR-023 / SC-009) and precede corresponding production chang
 
 - raw JSON decimal `0.10000000000000001` survives to RPC payload unchanged;
 - another long-precision decimal survives unchanged;
+- exponent input such as `3.73874e-10` becomes exact plain `0.000000000373874` with no rounding or binary-number conversion;
+- coefficient precision is preserved when exponent notation is expanded;
 - authoritative path does not use `response.json()` or `Number(...)` before RPC payload construction;
 - malformed/non-positive required rate rejected;
-- provider timestamps preserved/null; no local substitute;
+- valid provider timestamps preserved;
+- missing/malformed/future provider timestamps normalize to `null` and Unknown with no capture-time substitution;
 - 37 observations, USD=1, BTC excluded, non-empty source.
 
 ### Database boundary
@@ -340,7 +387,7 @@ SQL tests cover:
 - complete 37-row creation;
 - missing/duplicate/unexpected instruments;
 - invalid quality/unit/orientation/non-positive values;
-- **null/empty/whitespace-only source rejection**;
+- null/empty/whitespace-only source rejection;
 - exact root/value mismatch rejection;
 - null provider time accepted as Unknown-capable evidence;
 - identical replay;
@@ -349,12 +396,13 @@ SQL tests cover:
 - legacy/unbound/partial/duplicate/source-invalid batches omitted;
 - paging/order/no stale regression;
 - service-role-only persistence permissions;
-- **root delete cascades bound observations**.
+- root delete cascades bound observations.
 
 ### Pull/local apply
 
 - exact root text and observation text compared before local root number conversion;
 - malformed/cross-ID envelope rejected;
+- `PersistedObservation` wire schema validates its persisted fields as one closed object;
 - failed page leaves cursor unchanged;
 - root+children applied in one writer;
 - duplicate replay idempotent;
@@ -383,26 +431,41 @@ SQL tests cover:
 - missing current inputs produce unavailable dependent outputs, not zero;
 - no current freshness uses root/fetch/sync/receipt/restart time.
 
+### Required Edge verification command
+
+The implementation must make this command executable and CI-enforced:
+
+```bash
+npm run test:market-rate-edge
+```
+
+Its exact script body is:
+
+```text
+tsx --test supabase/functions/_shared/market-rate-snapshot-contract.test.ts supabase/functions/fetch-metal-rates/handler.test.ts
+```
+
 ### Manual regression
 
 Regression-only: existing Home, Live Rates, My Metals, holding detail layouts/journeys in EN/AR and online/offline states. No visual redesign evidence gate is introduced because issue #302 is not mockup-backed UI work.
 
 ## Rollout / Execution Sequence
 
-1. **Complete and commit the business-decision documentation task. No production implementation before this.**
-2. Write shared exact/lossless red tests and implement canonical exact contract.
-3. Write SQL red tests; add migration/RPCs; regenerate DB contracts locally.
-4. Cut producer to lossless parse + atomic RPC.
-5. Implement complete-snapshot pull and atomic local apply.
-6. Implement selected exact snapshot service and current exact logic helpers.
-7. Cut all current consumers to exact selected rates.
-8. Add offline/fail-closed/retention-corruption hardening.
-9. Run full deterministic verification and regression-only manual QA.
-10. Deploy migration + producer + consumer contract as one issue #302 release guarantee; do not ship producer-only or consumer-only completion.
+1. Complete and commit the business-decision documentation task. No production implementation before this.
+2. Write shared exact/lossless red tests, including exponent and provider-time normalization, and implement canonical exact contract.
+3. Add exact handler test script/CI gate before treating Edge verification as available.
+4. Write SQL red tests; add migration/RPCs; regenerate DB contracts locally.
+5. Cut producer to lossless parse + atomic RPC.
+6. Implement complete-snapshot pull and atomic local apply.
+7. Implement selected exact snapshot service and current exact logic helpers.
+8. Cut all current consumers to exact selected rates.
+9. Add offline/fail-closed/retention-corruption hardening.
+10. Run full deterministic verification and regression-only manual QA.
+11. Deploy migration + producer + consumer contract as one issue #302 release guarantee; do not ship producer-only or consumer-only completion.
 
 ## Planning Environment Note
 
-The connected planning environment has no repository shell runner, so Speckit scripts, SQL tests, Jest, lint, typecheck, and dependency checks were not executed during planning. Implementation-time commands are listed in `quickstart.md`; no passing command claim is made here.
+The connected planning environment has no repository shell runner, so Speckit scripts, SQL tests, Jest, lint, typecheck, dependency checks, and the planned Edge test command were not executed during planning. No passing command claim is made here.
 
 ## Complexity Tracking
 

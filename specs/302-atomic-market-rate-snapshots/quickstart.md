@@ -2,7 +2,7 @@
 
 **Feature**: `302-atomic-market-rate-snapshots`  
 **Branch**: `codex/issue302-atomic-market-rate-snapshots`  
-**Revision**: Post-Analyze corrections
+**Revision**: Post-second-Analyze remediation
 
 This is the implementation-time guide. None of the commands below were executed during planning because this connected environment has no repository shell runner.
 
@@ -20,6 +20,8 @@ Record the finalized issue #302 rules:
 - observations bind through `batch_id = market_rates.id`;
 - a complete current snapshot has exactly 37 observations;
 - current authoritative financial values are exact bound observation decimals, not Watermelon `MarketRate` numbers;
+- provider JSON decimal/scientific notation is normalized losslessly before persistence;
+- missing/malformed/future provider timestamps normalize to `null`/Unknown and are never replaced by capture time;
 - producer persistence, pull, and local application are atomic/fail-closed;
 - provider observation time is the only freshness authority;
 - trusted producer source identity is required;
@@ -49,38 +51,72 @@ Use strict TDD: write the failing boundary test, run it and confirm the intended
 
 ## 3. Exact provider-ingestion boundary
 
-The current Edge Function uses `response.json()`, which would parse provider rate tokens through JavaScript binary numbers. Issue #302 must replace that authoritative path.
+The current Edge Function uses `response.json()`, which would parse provider rate tokens through JavaScript binary numbers. Issue #302 replaces that authoritative path.
 
-Tests first in/around:
+Exact test files:
 
 ```text
 supabase/functions/_shared/market-rate-snapshot-contract.test.ts
+supabase/functions/fetch-metal-rates/handler.test.ts
 ```
 
-Required cases:
+Exact production extraction:
+
+```text
+supabase/functions/_shared/market-rate-snapshot-contract.ts
+supabase/functions/fetch-metal-rates/handler.ts
+supabase/functions/fetch-metal-rates/index.ts
+supabase/functions/fetch-metal-rates/deno.json
+```
+
+`index.ts` should become only the `Deno.serve` wrapper around the extracted handler so handler behavior is runnable in the root Node/tsx test gate.
+
+Required red cases:
 
 - provider token `0.10000000000000001` reaches the RPC payload unchanged;
 - another high-precision decimal reaches the RPC payload unchanged;
+- exponent token `3.73874e-10` reaches the RPC as exact plain `0.000000000373874`;
+- exponent token with retained coefficient precision such as `1.2300e+2` becomes `123.00`;
+- no authoritative rounding or `Number(...)` / `parseFloat(...)` conversion;
 - malformed/non-positive required rate rejected;
 - exactly 37 observations;
 - USD exact `1`, BTC excluded;
 - Gold/Silver use provider metal time;
 - fiat uses provider currency time;
-- null provider time remains null;
+- valid non-future provider time is preserved;
+- missing provider time becomes `null`;
+- malformed provider time becomes `null`;
+- future provider time relative to the one capture/order instant becomes `null`;
+- capture/order time is never substituted as provider time;
 - source is non-empty `metals.dev`;
-- no authoritative `Number(...)` / `response.json()` round-trip precedes RPC payload creation.
+- no authoritative `response.json()` round-trip precedes RPC payload creation.
 
-Update:
+Use pinned function-local `lossless-json@4.3.1`. Read `response.text()`, parse losslessly, expand JSON scientific notation to equivalent plain decimal text through string/exponent manipulation only, then Zod-validate the transformed exact-string shape.
 
-```text
-supabase/functions/fetch-metal-rates/deno.json
-supabase/functions/_shared/market-rate-snapshot-contract.ts
-supabase/functions/fetch-metal-rates/index.ts
+## 4. Exact Edge test + CI gate
+
+Implementation must add this exact root `package.json` script:
+
+```json
+"test:market-rate-edge": "tsx --test supabase/functions/_shared/market-rate-snapshot-contract.test.ts supabase/functions/fetch-metal-rates/handler.test.ts"
 ```
 
-Use a pinned function-local `lossless-json@4.3.1` dependency. Read `response.text()`, parse losslessly, convert numeric tokens directly to canonical decimal text, then validate the exact-string shape with Zod.
+and add a `Market Rate Edge Contract` step to `.github/workflows/ci.yml`'s `quality` job:
 
-## 4. Database/RPC contract
+```yaml
+- name: Market Rate Edge Contract
+  run: npm run test:market-rate-edge
+```
+
+The exact local/CI verification command is therefore:
+
+```bash
+npm run test:market-rate-edge
+```
+
+Do not describe Edge tests as “covered by CI” until this script and CI step exist and the command has passed.
+
+## 5. Database/RPC contract
 
 Create:
 
@@ -95,7 +131,7 @@ Migration responsibilities:
 - `(batch_id, instrument_code)` lookup index;
 - service-role-only `persist_market_rate_snapshot_v1`;
 - read-only `pull_market_rate_snapshots_page_v1`;
-- exact decimal-string request boundary;
+- exact plain-decimal-string request boundary;
 - explicit grants/revokes.
 
 SQL red-test matrix:
@@ -115,7 +151,21 @@ SQL red-test matrix:
 
 Do not apply DDL through remote MCP/dashboard. Use the repository local migration workflow.
 
-## 5. Regenerate database contracts
+## 6. OpenAPI contract sanity
+
+`PersistedObservation` in `contracts/market-rate-snapshots.openapi.yaml` is one explicit closed object containing:
+
+```text
+id, batchId, capturedAt,
+instrumentCode, valueDecimal, unit, orientation,
+providerObservedAt, source, quality
+```
+
+Do not implement it as `allOf` extending closed `RateObservationInput`; the base object's `additionalProperties: false` would make persisted-only fields invalid.
+
+All RPC/pull financial values use plain decimal text with no exponent. Scientific notation is normalized only at the external-provider parsing boundary before the contract is constructed.
+
+## 7. Regenerate database contracts
 
 After local migration/RPC tests:
 
@@ -127,11 +177,11 @@ npm run test:scripts
 Expected review result:
 
 - `packages/db/src/supabase-types.ts` gains RPC signatures;
-- no local table column was added, so `schema.ts`/`migrations.ts` should remain semantically table-shape equivalent unless generation legitimately changes metadata.
+- no local table column was added, so `schema.ts`/`migrations.ts` remain table-shape equivalent unless generation legitimately changes metadata.
 
 Review generated diffs; never hand-edit generated output to force the expectation.
 
-## 6. Complete-snapshot pull and local apply
+## 8. Complete-snapshot pull and local apply
 
 Tests first:
 
@@ -140,7 +190,7 @@ apps/mobile/__tests__/services/sync/pull-market-rate-snapshots.test.ts
 apps/mobile/__tests__/services/live-rates-refresh-service.test.ts
 ```
 
-The pull RPC must return exact root decimal text + exact observations. The mobile adapter must:
+The pull RPC returns exact root decimal text + exact observations. The mobile adapter must:
 
 1. validate one top-level `snapshotId`;
 2. require all observation `batchId`s to match it;
@@ -158,7 +208,7 @@ Failure/replay assertions:
 - cached complete A stays intact;
 - duplicate replay is idempotent.
 
-## 7. Exact selected snapshot service
+## 9. Exact selected snapshot service
 
 Tests first for:
 
@@ -182,9 +232,9 @@ Minimum cases:
 11. restart/offline reconstructs from exact cached observations;
 12. deliberately divergent wide-root numeric compatibility value cannot alter current financial output because current output uses observation `value_decimal`.
 
-The exported current selected snapshot must expose exact decimal strings / normalized exact rate references, not wide Watermelon `MarketRate` numeric columns as current financial truth.
+The exported selected snapshot exposes exact decimals / exact rate references, not wide Watermelon numeric columns as current financial truth.
 
-## 8. Cut over current calculations and consumers
+## 10. Cut over current calculations and consumers
 
 Known current consumers:
 
@@ -224,19 +274,22 @@ convertCurrency
 getMetalPrice
 ```
 
-Classify every hit as selected exact current use, historical/trend use, test/fixture, or unrelated. No authoritative current calculation may read wide `MarketRate` numeric fields directly.
+Classify every hit as selected exact current use, historical/trend use, test/fixture, or unrelated.
 
-## 9. Realtime and local QA import
+## 11. Realtime and local QA import
 
 Realtime root INSERT is a sync trigger only; it never promotes the notified root.
 
-Update local QA import tests/code so `scripts/import-market-rates-to-local.js` imports only complete root + bound observation snapshot units. A root-only import is intentionally untrusted and must not masquerade as current QA truth.
+Update local QA import tests/code so `scripts/import-market-rates-to-local.js` imports only complete root + bound observation snapshot units. A root-only import is intentionally untrusted.
 
-## 10. Automated verification
+## 12. Automated verification
 
 Run focused tests first, then static/broader checks. Record exact commands/results in PR evidence.
 
 ```bash
+# Exact Edge/shared gate — must also be in CI
+npm run test:market-rate-edge
+
 # Local Supabase / migration
 npm run db:reset
 # execute supabase/tests/atomic_market_rate_snapshots_test.sql using the repo's established SQL test mechanism
@@ -256,13 +309,17 @@ npm run lint
 npm run test:scripts
 ```
 
-Also run the Edge/shared tests using the repository's established Supabase/Deno test command and record the exact command. Never claim a check passed without fresh output.
+Never claim a check passed without fresh output.
 
-## 11. Deterministic acceptance matrix
+## 13. Deterministic acceptance matrix
 
 | Scenario | Expected result |
 | --- | --- |
-| lossless provider decimal | exact lexical rate reaches RPC unchanged |
+| ordinary high-precision provider decimal | exact rate reaches RPC unchanged |
+| scientific-notation provider decimal | exact plain equivalent reaches RPC with no rounding |
+| missing provider time | normalized to null / Unknown |
+| malformed provider time | normalized to null / Unknown |
+| future provider time | normalized to null / Unknown; capture time not substituted |
 | successful refresh | one complete new snapshot becomes current |
 | partial producer failure | no partial durable truth |
 | failed refresh with cached A | A remains current |
@@ -276,28 +333,30 @@ Also run the Edge/shared tests using the repository's established Supabase/Deno 
 | delayed older Z | no selection regression |
 | offline restart | cached exact selected snapshot reconstructs |
 | no selected snapshot | dependent financial output unavailable; holdings remain |
-| missing/future provider time | freshness Unknown; no local substitute |
 | wide root numeric divergence | cannot alter exact current financial result |
+| persisted observation schema | explicit closed object validates persisted-only fields |
 | cross-consumer read | exact current value + trust share one snapshot identity |
 | historical acquisition/terminal refs | unchanged and never rewritten from current snapshot |
 
-## 12. Manual regression
+## 14. Manual regression
 
 No visual redesign is intended. Verify existing Home, Live Rates, My Metals, and holding detail navigation/layout in EN/AR and online/offline states. Failed refresh must not blank/zero a valid cached snapshot. Manual checks do not replace atomicity/exactness tests.
 
-## 13. Rollout sanity
+## 15. Rollout sanity
 
 Before issue completion:
 
 1. business-decisions update was committed before production implementation;
-2. provider parse is lossless/pinned;
-3. migration/RPC tests pass locally;
-4. generated types are committed;
-5. producer writes through atomic RPC only;
-6. pull returns exact complete envelopes only;
-7. all current consumers use exact selected observation values;
-8. no legacy inference/backfill was introduced;
-9. no new retention policy was introduced;
-10. retention/corruption tests pass;
-11. focused tests, typecheck/lint, required CI are evidenced;
-12. manual-only gaps are named honestly.
+2. provider parse is lossless/pinned and handles scientific notation exactly;
+3. missing/malformed/future provider time normalizes to null/Unknown;
+4. `PersistedObservation` contract is an explicit closed object;
+5. `npm run test:market-rate-edge` exists and is enforced in CI;
+6. migration/RPC tests pass locally;
+7. generated types are committed;
+8. producer writes through atomic RPC only;
+9. pull returns exact complete envelopes only;
+10. all current consumers use exact selected observation values;
+11. no legacy inference/backfill or new retention policy was introduced;
+12. retention/corruption tests pass;
+13. focused tests, typecheck/lint, required CI are evidenced;
+14. manual-only gaps are named honestly.
