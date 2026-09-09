@@ -1,67 +1,36 @@
-import { createHash } from "node:crypto";
-
-const { buildSeedIds } = jest.requireActual<{
-  readonly buildSeedIds: (
+const {
+  buildManualQaMetalRateReferenceRows,
+  buildMetalRateReferenceRowsFromEvidence,
+} = jest.requireActual<{
+  readonly buildManualQaMetalRateReferenceRows: (
     userId: string,
-    seedScope: string
-  ) => Record<string, any>;
-}>("../../scripts/seed-fixtures/seed-engine");
-const { buildManualQaExtraRows } = jest.requireActual<{
-  readonly buildManualQaExtraRows: (
-    context: Record<string, any>
-  ) => Record<string, any>;
-}>("../../scripts/seed-fixtures/manual-qa-fixture");
+    seedScope?: string,
+    currentTimestamp?: string
+  ) => readonly Record<string, any>[];
+  readonly buildMetalRateReferenceRowsFromEvidence: (
+    evidenceRows: readonly Record<string, any>[],
+    currentTimestamp?: string
+  ) => readonly Record<string, any>[];
+}>("../../scripts/seed-fixtures/manual-qa-metal-rate-reference-seed");
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
-const SEED_SCOPE = "manual-qa";
-
-function deterministicUuid(scope: string, userId: string, key: string): string {
-  const hex = createHash("sha256")
-    .update(`${scope}:${userId}:${key}`)
-    .digest("hex")
-    .slice(0, 32);
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
-}
-
-function dateFromToday(offset: number): string {
-  const date = new Date("2026-01-15T00:00:00.000Z");
-  date.setUTCDate(date.getUTCDate() + offset);
-  return date.toISOString().slice(0, 10);
-}
-
-function buildRows(): Record<string, any> {
-  return buildManualQaExtraRows({
-    categoryIds: {
-      shopping: deterministicUuid(SEED_SCOPE, USER_ID, "category:shopping"),
-      income: deterministicUuid(SEED_SCOPE, USER_ID, "category:income"),
-      other: deterministicUuid(SEED_SCOPE, USER_ID, "category:other"),
-    },
-    currentTimestamp: "2026-01-15T12:00:01.000Z",
-    dateFromToday,
-    deterministicUuid,
-    fixedNow: "2026-01-15T12:00:00.000Z",
-    seedIds: buildSeedIds(USER_ID, SEED_SCOPE),
-    seedScope: SEED_SCOPE,
-    userId: USER_ID,
-  });
-}
+const NOW = "2026-09-09T04:30:00.000Z";
 
 describe("manual QA acquisition rate-reference seed", () => {
-  it("persists one metal and one purchase-currency acquisition reference per QA holding", () => {
-    const rows = buildRows();
-    const assets = (rows.assets as readonly Record<string, any>[]).filter(
-      (asset) => asset.type === "METAL"
+  it("materializes one metal and one purchase-currency reference per QA holding", () => {
+    const references = buildManualQaMetalRateReferenceRows(
+      USER_ID,
+      "manual-qa",
+      NOW
     );
-    const references = rows.metalRateReferences as readonly Record<string, any>[];
+    const holdingIds = new Set(references.map((reference) => reference.holding_id));
 
-    expect(assets).toHaveLength(5);
+    expect(holdingIds.size).toBe(5);
     expect(references).toHaveLength(10);
 
-    for (const asset of assets) {
+    for (const holdingId of holdingIds) {
       const acquisitionReferences = references.filter(
-        (reference) =>
-          reference.holding_id === asset.id &&
-          reference.action_id === asset.acquisition_action_id
+        (reference) => reference.holding_id === holdingId
       );
       expect(acquisitionReferences).toEqual(
         expect.arrayContaining([
@@ -78,12 +47,36 @@ describe("manual QA acquisition rate-reference seed", () => {
         ])
       );
       expect(acquisitionReferences).toHaveLength(2);
+      expect(
+        acquisitionReferences.every(
+          (reference) => reference.action_id === acquisitionReferences[0]?.action_id
+        )
+      ).toBe(true);
     }
   });
 
   it("keeps seeded reference identity deterministic", () => {
-    expect(buildRows().metalRateReferences).toEqual(
-      buildRows().metalRateReferences
-    );
+    expect(
+      buildManualQaMetalRateReferenceRows(USER_ID, "manual-qa", NOW)
+    ).toEqual(buildManualQaMetalRateReferenceRows(USER_ID, "manual-qa", NOW));
+  });
+
+  it("does not invent references when acquisition snapshots are absent", () => {
+    expect(
+      buildMetalRateReferenceRowsFromEvidence(
+        [
+          {
+            action_id: "action-without-rates",
+            created_at: NOW,
+            deleted: false,
+            domain_payload_json: { rateSnapshots: [] },
+            holding_id: "holding-without-rates",
+            kind: "add",
+            user_id: USER_ID,
+          },
+        ],
+        NOW
+      )
+    ).toEqual([]);
   });
 });
