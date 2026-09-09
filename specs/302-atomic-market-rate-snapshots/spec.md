@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/issue302-atomic-market-rate-snapshots`  
 **Created**: 2026-09-09  
-**Status**: Draft — pending Mohamed approval  
+**Status**: Approved — Specify approved by Mohamed on 2026-09-09; Clarify complete with no material ambiguities  
 **Input**: Issue #302 — deliver one complete market-rate snapshot guarantee from refresh ingestion through offline cache and every user-facing rate/valuation consumer, superseding issues #280 and #281.
 
 ## User Scenarios & Testing _(mandatory)_
