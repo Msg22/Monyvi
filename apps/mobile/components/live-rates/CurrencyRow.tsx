@@ -18,15 +18,7 @@ import React from "react";
 import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
-// =============================================================================
-// Constants
-// =============================================================================
-
 const ROW_HEIGHT = 48;
-
-// =============================================================================
-// Types
-// =============================================================================
 
 interface CurrencyRowProps {
   readonly flag: string;
@@ -41,10 +33,6 @@ interface CurrencyRowProps {
   };
 }
 
-// =============================================================================
-// Component
-// =============================================================================
-
 export function CurrencyRow({
   flag,
   code,
@@ -56,21 +44,13 @@ export function CurrencyRow({
   const { t } = useTranslation("metals");
   const roundedChange = Number(changePercent.toFixed(2));
   const isUp = roundedChange > 0;
-  const isFlat = roundedChange === 0;
-  const changeColor = isFlat
-    ? "text-slate-500 dark:text-slate-400"
-    : isUp
-      ? "text-nileGreen-500"
-      : "text-red-500";
-
+  const hasTrend = roundedChange !== 0;
+  const changeColor = isUp ? "text-nileGreen-500" : "text-red-500";
   const changeLabel = `${Math.abs(roundedChange).toFixed(2)}%`;
-
-  const trendIcon = isFlat ? null : isUp ? "arrow-drop-up" : "arrow-drop-down";
-  const trendIconColor = isFlat
-    ? palette.slate[400]
-    : isUp
-      ? palette.nileGreen[500]
-      : palette.red[500];
+  const trendIcon = isUp ? "arrow-drop-up" : "arrow-drop-down";
+  const trendIconColor = isUp
+    ? palette.nileGreen[500]
+    : palette.red[500];
   const trustLabel =
     trust === undefined
       ? null
@@ -91,10 +71,8 @@ export function CurrencyRow({
       className="flex-row items-center px-2 border-b border-slate-100 dark:border-slate-800"
       style={{ height: ROW_HEIGHT }}
     >
-      {/* Flag */}
       <Text className="text-lg me-2.5">{flag}</Text>
 
-      {/* Code + Name */}
       <View className="flex-1">
         <Text className="text-sm font-bold text-slate-800 dark:text-white">
           {code}
@@ -107,24 +85,23 @@ export function CurrencyRow({
         </Text>
       </View>
 
-      {/* Rate + Change */}
       <View className="items-end">
         <Text className="text-sm font-semibold text-slate-800 dark:text-white">
           {rate}
         </Text>
-        <View className="flex-row items-center">
-          {trendIcon && (
+        {hasTrend ? (
+          <View className="flex-row items-center">
             <MaterialIcons
               name={trendIcon}
               size={20}
               color={trendIconColor}
               style={{ marginEnd: -2, marginStart: -3 }}
             />
-          )}
-          <Text className={`text-[11px] font-medium ${changeColor}`}>
-            {changeLabel}
-          </Text>
-        </View>
+            <Text className={`text-[11px] font-medium ${changeColor}`}>
+              {changeLabel}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );
