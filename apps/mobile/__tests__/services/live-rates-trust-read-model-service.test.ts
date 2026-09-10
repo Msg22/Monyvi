@@ -4,11 +4,13 @@ import { join } from "node:path";
 import {
   buildTrustFromSelectedSnapshot,
   summarizeLiveRatesTrust,
-  type LiveRatesTrustState,
   type SelectedSnapshotTrustInput,
 } from "@/services/live-rates-trust-read-model-service";
 import type { SelectedCurrentMarketRate } from "@/services/market-rate-snapshot-read-model-service";
-import type { CurrentMarketInstrument } from "@monyvi/logic";
+import {
+  isCurrentMarketInstrumentCode,
+  type CurrentMarketInstrument,
+} from "@monyvi/logic";
 
 const NOW_MS = Date.parse("2026-09-09T11:00:00.000Z");
 const DAY_MS = 86_400_000;
@@ -28,7 +30,7 @@ function createTrustInput(
   >();
 
   for (const instrumentCode of Object.keys(rates)) {
-    if (!isCurrentMarketInstrument(instrumentCode)) {
+    if (!isCurrentMarketInstrumentCode(instrumentCode)) {
       throw new Error(`unexpected test instrument: ${instrumentCode}`);
     }
     const seed = rates[instrumentCode];
@@ -41,7 +43,7 @@ function createTrustInput(
         : seed.providerObservedAt;
     const ageMs =
       providerObservedAt === null ? null : NOW_MS - providerObservedAt.getTime();
-    const state: LiveRatesTrustState =
+    const freshness: SelectedCurrentMarketRate["freshness"] =
       providerObservedAt === null
         ? "unknown"
         : (ageMs ?? 0) > DAY_MS
@@ -60,7 +62,7 @@ function createTrustInput(
       providerObservedAt,
       source: seed.source ?? "metals.dev",
       quality: "valid",
-      freshness: state === "invalid" ? "unknown" : state,
+      freshness,
       ageMs,
     });
   }
@@ -71,14 +73,15 @@ function createTrustInput(
   };
 }
 
-function isCurrentMarketInstrument(
-  value: string
-): value is CurrentMarketInstrument {
-  return (
-    value === "metal:GOLD" ||
-    value === "metal:SILVER" ||
-    /^currency:[A-Z]{3}$/.test(value)
-  );
+function readModuleExport(moduleValue: unknown, name: string): unknown {
+  if (
+    typeof moduleValue !== "object" ||
+    moduleValue === null ||
+    !(name in moduleValue)
+  ) {
+    return undefined;
+  }
+  return moduleValue[name];
 }
 
 describe("buildTrustFromSelectedSnapshot", () => {
@@ -135,11 +138,13 @@ describe("buildTrustFromSelectedSnapshot", () => {
     expect(serviceText).not.toContain(".observe(");
     expect(serviceText).not.toContain("watermelondb");
 
-    const moduleExports = require(
+    const moduleExports: unknown = require(
       "@/services/live-rates-trust-read-model-service"
     );
-    expect(moduleExports.observeLiveRatesTrust).toBeUndefined();
-    expect(moduleExports.buildLiveRatesTrustReadModel).toBeUndefined();
+    expect(readModuleExport(moduleExports, "observeLiveRatesTrust")).toBeUndefined();
+    expect(
+      readModuleExport(moduleExports, "buildLiveRatesTrustReadModel")
+    ).toBeUndefined();
   });
 
   it("summarizes worst-case trust states", () => {
