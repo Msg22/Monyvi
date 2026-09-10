@@ -7,8 +7,12 @@ import {
   refreshLiveMarketRatesWithDependencies,
   type LiveMarketRateRefreshDependencies,
 } from "@/services/live-rates-refresh-service";
+import type {
+  MarketRateSnapshotCursor,
+  MarketRateSnapshotPullResult,
+} from "@/services/sync/market-rate-snapshot-pull";
 
-const CURSOR = {
+const CURSOR: MarketRateSnapshotCursor = {
   createdAt: "2030-01-02T03:04:05.000Z",
   id: "018f0c7a-1234-7abc-8def-000000000010",
 };
@@ -22,34 +26,47 @@ const OBSERVATION_CHANGES: SyncTableChangeSet = {
   updated: [{ id: "observation-2", value_decimal: "75.25" }],
   deleted: [],
 };
+const PULL_RESULT: MarketRateSnapshotPullResult = {
+  changes: {
+    market_rates: ROOT_CHANGES,
+    market_rate_observations: OBSERVATION_CHANGES,
+  },
+  upperWatermark: "2030-01-02T04:00:00.000Z",
+};
 
 interface RefreshHarness {
-  readonly applyChanges: jest.Mock<Promise<void>, [unknown]>;
+  readonly applyChanges: jest.Mock<
+    Promise<void>,
+    [MarketRateSnapshotPullResult["changes"]]
+  >;
   readonly consumeArmedFixtureMarker: jest.Mock<Promise<boolean>, []>;
   readonly dependencies: LiveMarketRateRefreshDependencies;
-  readonly pullSnapshots: jest.Mock<Promise<unknown>, [unknown]>;
-  readonly readLatestSnapshotCursor: jest.Mock<Promise<unknown>, []>;
+  readonly pullSnapshots: jest.Mock<
+    Promise<MarketRateSnapshotPullResult>,
+    [MarketRateSnapshotCursor | null]
+  >;
+  readonly readLatestSnapshotCursor: jest.Mock<
+    Promise<MarketRateSnapshotCursor | null>,
+    []
+  >;
 }
 
 function createHarness(): RefreshHarness {
   const consumeArmedFixtureMarker = jest.fn<Promise<boolean>, []>(() =>
     Promise.resolve(false)
   );
-  const readLatestSnapshotCursor = jest.fn<Promise<unknown>, []>(() =>
-    Promise.resolve(CURSOR)
-  );
-  const pullSnapshots = jest.fn<Promise<unknown>, [unknown]>(() =>
-    Promise.resolve({
-      changes: {
-        market_rates: ROOT_CHANGES,
-        market_rate_observations: OBSERVATION_CHANGES,
-      },
-      upperWatermark: "2030-01-02T04:00:00.000Z",
-    })
-  );
-  const applyChanges = jest.fn<Promise<void>, [unknown]>(() =>
-    Promise.resolve()
-  );
+  const readLatestSnapshotCursor = jest.fn<
+    Promise<MarketRateSnapshotCursor | null>,
+    []
+  >(() => Promise.resolve(CURSOR));
+  const pullSnapshots = jest.fn<
+    Promise<MarketRateSnapshotPullResult>,
+    [MarketRateSnapshotCursor | null]
+  >(() => Promise.resolve(PULL_RESULT));
+  const applyChanges = jest.fn<
+    Promise<void>,
+    [MarketRateSnapshotPullResult["changes"]]
+  >(() => Promise.resolve());
 
   return {
     applyChanges,
@@ -129,6 +146,6 @@ describe("refreshLiveMarketRatesWithDependencies", () => {
     expect(source).toContain("applyRemoteChanges");
     expect(source).not.toContain("pullMarketRates(");
     expect(source).not.toContain("pullMarketRateObservations(");
-    expect(source).not.toContain("market_rate_observations\").query");
+    expect(source).not.toContain('get<MarketRateObservation>("market_rate_observations")');
   });
 });
