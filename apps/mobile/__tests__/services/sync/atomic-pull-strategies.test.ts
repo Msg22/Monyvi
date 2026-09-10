@@ -134,10 +134,10 @@ describe("atomic pullChanges market-rate composition", () => {
     expectCompletedPullResult(result);
 
     expect(mockPullMarketRateSnapshots).toHaveBeenCalledWith(null);
-    expect(result.changes.market_rates).toBe(MARKET_ROOT_CHANGES);
-    expect(result.changes.market_rate_observations).toBe(
-      MARKET_OBSERVATION_CHANGES
-    );
+    expect(result.changes).toMatchObject({
+      market_rates: MARKET_ROOT_CHANGES,
+      market_rate_observations: MARKET_OBSERVATION_CHANGES,
+    });
     expect(mockPullCategories).toHaveBeenCalledWith(
       USER_ID,
       null,
