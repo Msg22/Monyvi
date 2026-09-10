@@ -394,7 +394,7 @@ function restoreCorrectionAsset(
   }
   if (metadataBefore) {
     asset.name = metadataBefore.name as string;
-    asset.notes = (metadataBefore.notes as string | null) ?? undefined;
+    asset.notes = metadataBefore.notes as string | null;
   }
 }
 
@@ -436,7 +436,7 @@ function installCanonicalAsset(
   asset.acquisitionActionId = canonical.asset.acquisitionActionId;
   asset.currency = canonical.asset.currency as Asset["currency"];
   asset.name = canonical.asset.name;
-  asset.notes = canonical.asset.notes ?? undefined;
+  asset.notes = canonical.asset.notes;
   asset.purchaseCurrency = canonical.asset.purchaseCurrency;
   asset.purchaseDate = parseLocalDate(canonical.asset.purchaseDate);
   asset.purchasePrice = canonical.asset.purchasePrice;

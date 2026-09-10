@@ -347,7 +347,7 @@ function prepareAddPlan(
       row.deleted = false;
       row.isLiquid = false;
       row.name = metadata.name as string;
-      row.notes = (metadata.notes as string | null) ?? undefined;
+      row.notes = metadata.notes as string | null;
       row.type = "METAL";
       row.userId = envelope.userId;
       applyAssetFacts(row, facts, envelope.actionId, now);
@@ -510,7 +510,7 @@ async function prepareExistingPlan(
           }
           if (metadataAfter) {
             row.name = metadataAfter.name as string;
-            row.notes = (metadataAfter.notes as string | null) ?? undefined;
+            row.notes = metadataAfter.notes as string | null;
             row.updatedAt = now;
           }
         },

@@ -456,7 +456,7 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
           userId: USER_ID,
           fields: {
             name: {
-              value: "Ã©".repeat(129),
+              value: "é".repeat(129),
               writtenAt: 2,
               writerId: HOLDING_ACTION_ID,
             },

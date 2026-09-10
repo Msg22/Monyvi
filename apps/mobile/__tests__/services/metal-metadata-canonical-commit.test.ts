@@ -125,6 +125,37 @@ describe("commitCanonicalMetalMetadataLocally clock guard", () => {
     expect(state?.notesWrittenAt).toBe(5);
   });
 
+  it("persists a winning canonical note clear as SQL null", async () => {
+    const { database } = await createMetadataDatabase();
+
+    await database.write(() =>
+      commitCanonicalMetalMetadataLocally(
+        database,
+        {
+          status: "applied",
+          holdingId: HOLDING_ID,
+          canonicalMetadata: {
+            name: null,
+            notes: {
+              value: null,
+              writtenAt: 5,
+              writerId: WRITER_ID,
+            },
+          },
+        },
+        USER_ID
+      )
+    );
+
+    const [asset] = await database.get<Asset>("assets").query().fetch();
+    const [state] = await database
+      .get<MetalHoldingState>("metal_holding_states")
+      .query()
+      .fetch();
+    expect(asset?.notes).toBeNull();
+    expect(state?.notesWrittenAt).toBe(5);
+  });
+
   it("leaves dedicated rows unacknowledged when the local metadata commit fails", async () => {
     const rpc = jest.fn().mockResolvedValueOnce({
       data: {

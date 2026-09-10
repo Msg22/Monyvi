@@ -246,7 +246,7 @@ export function createMetalMetadataService(
             row.name = patch.fields.name.value;
           }
           if (notesDecision === "apply" && patch.fields.notes) {
-            row.notes = patch.fields.notes.value ?? undefined;
+            row.notes = patch.fields.notes.value;
           }
           row.updatedAt = now;
         });
@@ -328,8 +328,7 @@ export async function commitCanonicalMetalMetadataLocally(
     await database.batch(
       asset.prepareUpdate((row) => {
         if (nameWins && canonical.name) row.name = canonical.name.value;
-        if (notesWins && canonical.notes)
-          row.notes = canonical.notes.value ?? undefined;
+        if (notesWins && canonical.notes) row.notes = canonical.notes.value;
         row.updatedAt = now;
       }),
       state.prepareUpdate((row) => {
