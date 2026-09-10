@@ -9,7 +9,7 @@ function source(relativePath: string): string {
 
 interface ForbiddenRule {
   readonly file: string;
-  readonly patterns: readonly (RegExp | string)[];
+  readonly patterns: ReadonlyArray<RegExp | string>;
   readonly why: string;
 }
 
@@ -27,18 +27,12 @@ const CURRENT_RATE_CONSUMERS: readonly ForbiddenRule[] = [
   },
   {
     file: "hooks/useMetalPortfolio.ts",
-    patterns: [
-      "observeLiveRatesTrust",
-      "observeSelectedMarketRateSnapshot",
-    ],
+    patterns: ["observeLiveRatesTrust", "observeSelectedMarketRateSnapshot"],
     why: "portfolio must consume the shared selected snapshot facade",
   },
   {
     file: "hooks/useMetalHoldingDetail.ts",
-    patterns: [
-      "observeLiveRatesTrust",
-      "observeSelectedMarketRateSnapshot",
-    ],
+    patterns: ["observeLiveRatesTrust", "observeSelectedMarketRateSnapshot"],
     why: "detail must consume the shared selected snapshot facade",
   },
   {
@@ -84,8 +78,96 @@ const CURRENT_RATE_CONSUMERS: readonly ForbiddenRule[] = [
   },
   {
     file: "providers/MarketRatesRealtimeProvider.tsx",
-    patterns: ["console.error", "selectMarketRateSnapshot", "applyRemoteChanges"],
+    patterns: [
+      "console.error",
+      "selectMarketRateSnapshot",
+      "applyRemoteChanges",
+    ],
     why: "realtime may trigger normal sync but cannot promote a root",
+  },
+  {
+    file: "components/dashboard/LiveRates.tsx",
+    patterns: ["latestRates"],
+    why: "dashboard current values must use exact selected snapshot rates",
+  },
+  {
+    file: "components/accounts/AccountCard.tsx",
+    patterns: ["latestRates", "convertCurrency("],
+    why: "account subtitles must use exact selected snapshot rates",
+  },
+  {
+    file: "hooks/useAccounts.ts",
+    patterns: [
+      "latestRates",
+      "convertCurrency(",
+      "calculateAccountsTotalBalance(",
+    ],
+    why: "account totals must use exact selected snapshot rates",
+  },
+  {
+    file: "hooks/usePeriodSummary.ts",
+    patterns: ["latestRates", "convertCurrency("],
+    why: "period totals must use exact selected snapshot rates",
+  },
+  {
+    file: "hooks/useRecurringPayments.ts",
+    patterns: ["latestRates", "convertCurrency("],
+    why: "recurring-payment totals must use exact selected snapshot rates",
+  },
+  {
+    file: "hooks/useTransactionsGrouping.ts",
+    patterns: ["latestRates"],
+    why: "transaction groups must use exact selected snapshot rates",
+  },
+  {
+    file: "hooks/useAssetBreakdown.ts",
+    patterns: ["latestRates", "calculateAssetBreakdown("],
+    why: "asset breakdown must use exact selected snapshot rates",
+  },
+  {
+    file: "services/transaction-list-read-model-service.ts",
+    patterns: ["latestRates", "convertCurrency("],
+    why: "transaction read models must use exact selected snapshot rates",
+  },
+  {
+    file: "services/recurring-payments-dashboard-read-model.ts",
+    patterns: ["latestRates", "convertCurrency("],
+    why: "recurring-payment sorting must use exact selected snapshot rates",
+  },
+  {
+    file: "app/(private)/add-transaction.tsx",
+    patterns: ["latestRates", "getCurrencyRate("],
+    why: "transfer previews must use exact selected snapshot rates",
+  },
+  {
+    file: "app/(private)/(tabs)/accounts.tsx",
+    patterns: ["latestRates"],
+    why: "account cards must receive the exact selected snapshot",
+  },
+  {
+    file: "app/(private)/(tabs)/index.tsx",
+    patterns: ["latestRates"],
+    why: "dashboard must receive the exact selected snapshot",
+  },
+  {
+    file: "app/(private)/recurring-payments.tsx",
+    patterns: ["latestRates"],
+    why: "recurring-payment sorting must receive the exact selected snapshot",
+  },
+  {
+    file: "hooks/useTransactionReviewState.ts",
+    patterns: ["latestRates"],
+    why: "transaction review must receive the exact selected snapshot",
+  },
+  {
+    file: "components/transaction-review/TransactionReview.tsx",
+    patterns: ["latestRates"],
+    why: "transaction review UI must receive the exact selected snapshot",
+  },
+  {
+    file: "components/transaction-review/edit-modal/TransactionEditModal.tsx",
+    patterns: ["latestRates"],
+    why: "transaction edit previews must receive the exact selected snapshot",
   },
 ];
 
@@ -132,9 +214,7 @@ describe("issue #302 current-rate consumer bypass guard", () => {
     const syncEntryPoint = source("services/sync.ts");
     const atomicPull = source("services/sync/atomic-pull-strategies.ts");
 
-    expect(syncEntryPoint).toContain(
-      'from "./sync/atomic-pull-strategies"'
-    );
+    expect(syncEntryPoint).toContain('from "./sync/atomic-pull-strategies"');
     expect(atomicPull).toContain("pullMarketRateSnapshots");
     expect(atomicPull).toContain("market_rate_observations");
   });

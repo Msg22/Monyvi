@@ -2,9 +2,8 @@
 
 **Input**: Approved `spec.md` plus revised `plan.md`, `research.md`,
 `data-model.md`, `contracts/market-rate-snapshots.openapi.yaml`, and
-`quickstart.md`.  
-**Tests**: Mandatory. FR-023 / SC-009 require deterministic acceptance coverage.
-Every production boundary has a preceding red-test task.
+`quickstart.md`. **Tests**: Mandatory. FR-023 / SC-009 require deterministic
+acceptance coverage. Every production boundary has a preceding red-test task.
 
 ## Format
 
@@ -282,11 +281,11 @@ evidence.
       `supabase/migrations/069_atomic_market_rate_snapshots.sql` persistence
       half to satisfy T025: remove legacy four-decimal numeric scale caps that
       would round exact provider values; add a `NOT VALID` FK with
-      `ON DELETE CASCADE`, safe lookup
-      index, service-role-only `persist_market_rate_snapshot_v1`, exact-string
-      input casting to PostgreSQL numeric, exact 37/root-equivalence/source
-      validation, idempotent replay, conflict rejection, explicit
-      grants/revokes. Do not infer legacy bindings.
+      `ON DELETE CASCADE`, safe lookup index, service-role-only
+      `persist_market_rate_snapshot_v1`, exact-string input casting to
+      PostgreSQL numeric, exact 37/root-equivalence/source validation,
+      idempotent replay, conflict rejection, explicit grants/revokes. Do not
+      infer legacy bindings.
 - [x] **T032** [US2] Extend the same migration with
       `pull_market_rate_snapshots_page_v1` returning exact root decimal text +
       exact bound observations, fixed upper-watermark/root cursor paging, and

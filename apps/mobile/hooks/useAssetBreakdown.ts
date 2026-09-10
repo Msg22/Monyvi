@@ -6,9 +6,9 @@
 import { Asset, AssetMetal, database } from "@monyvi/db";
 import {
   AssetBreakdownPercentage,
-  calculateAssetBreakdown,
   calculateAssetBreakdownPercentages,
 } from "@monyvi/logic";
+import { calculateSelectedCurrentAssetBreakdown } from "@/services/current-market-snapshot-calculations";
 import { Q } from "@nozbe/watermelondb";
 import { useEffect, useMemo, useState } from "react";
 import { logger } from "@/utils/logger";
@@ -30,7 +30,7 @@ interface UseAssetBreakdownResult {
  */
 export function useAssetBreakdown(): UseAssetBreakdownResult {
   const { accounts, isLoading: accountsLoading } = useAccounts();
-  const { latestRates, isLoading: ratesLoading } = useMarketRates();
+  const { selectedSnapshot, isLoading: ratesLoading } = useMarketRates();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assetMetals, setAssetMetals] = useState<AssetMetal[]>([]);
   const [metalsLoading, setMetalsLoading] = useState(true);
@@ -143,16 +143,23 @@ export function useAssetBreakdown(): UseAssetBreakdownResult {
   }, [assets, assetIdsKey, userId, isResolvingUser]);
 
   const breakdown = useMemo((): AssetBreakdownPercentage[] => {
-    if (!latestRates) {
-      return [];
-    }
-    const rawBreakdown = calculateAssetBreakdown(
-      accounts,
-      assetMetals,
-      latestRates
-    );
-    return calculateAssetBreakdownPercentages(rawBreakdown);
-  }, [accounts, assetMetals, latestRates]);
+    const rawBreakdown = calculateSelectedCurrentAssetBreakdown({
+      accounts: accounts.map((account) => ({
+        balance: account.balance,
+        currency: account.currency,
+        type: account.type,
+      })),
+      metals: assetMetals.map((metal) => ({
+        metalType: metal.metalType,
+        purityFactorDecimal: metal.purityFactorDecimal,
+        weightGramsDecimal: metal.weightGramsDecimal,
+      })),
+      currentSnapshot: selectedSnapshot,
+    });
+    return rawBreakdown === null
+      ? []
+      : calculateAssetBreakdownPercentages(rawBreakdown);
+  }, [accounts, assetMetals, selectedSnapshot]);
 
   const isLoading = accountsLoading || ratesLoading || metalsLoading;
 

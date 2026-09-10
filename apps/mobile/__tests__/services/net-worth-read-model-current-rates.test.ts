@@ -9,7 +9,10 @@ import {
   completeFixtureA,
   divergentWideRootFixtureA,
 } from "../fixtures/market-rate-snapshot";
-import { selectMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
+import {
+  selectMarketRateSnapshot,
+  type SelectedMarketRateSnapshot,
+} from "@/services/market-rate-snapshot-read-model-service";
 
 const NOW_MS = Date.parse("2026-09-09T11:00:00.000Z");
 
@@ -20,7 +23,7 @@ jest.mock("@monyvi/db", () => ({
         observe: () => ({
           subscribe: () => ({ unsubscribe: () => undefined }),
         }),
-        fetch: async () => [],
+        fetch: () => Promise.resolve([]),
       }),
     }),
   },
@@ -41,7 +44,7 @@ jest.mock("@/services/user-data-access", () => ({
 
 type SnapshotFixture = ReturnType<typeof completeFixtureA>;
 
-function snapshotFor(fixture: SnapshotFixture) {
+function snapshotFor(fixture: SnapshotFixture): SelectedMarketRateSnapshot {
   const selected = selectMarketRateSnapshot(
     fixture.roots,
     fixture.observations,
@@ -81,9 +84,7 @@ describe("net-worth current rates consume the exact selected snapshot", () => {
     });
 
     expect(result).not.toBeNull();
-    const expectedUsd = new Decimal("1000")
-      .times("0.0210523309")
-      .plus(100);
+    const expectedUsd = new Decimal("1000").times("0.0210523309").plus(100);
     expect(result?.totalNetWorthUsd).toBeCloseTo(Number(expectedUsd), 8);
   });
 

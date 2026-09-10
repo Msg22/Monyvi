@@ -2,8 +2,10 @@ import { palette } from "@/constants/colors";
 import type { InstitutionLogo } from "@/constants/egyptian-institution-assets";
 import { InstitutionLogoMark } from "@/components/institutions/InstitutionLogoMark";
 import { formatAccountBalance } from "@/utils/financial-display";
-import { Account, MarketRate } from "@monyvi/db";
-import { convertCurrency, formatCurrency } from "@monyvi/logic";
+import type { Account } from "@monyvi/db";
+import { formatCurrency } from "@monyvi/logic";
+import { convertSelectedCurrentAmount } from "@/services/current-market-snapshot-calculations";
+import type { SelectedMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useMemo } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
@@ -12,7 +14,7 @@ import { useTheme } from "@/context/ThemeContext";
 
 interface AccountCardProps {
   account: Account;
-  latestRates: MarketRate | null;
+  selectedSnapshot: SelectedMarketRateSnapshot | null;
   /**
    * Press handler. Receives the account id so list parents can pass a single
    * stable `useCallback` reference instead of creating a new closure per item.
@@ -33,16 +35,16 @@ interface AccountCardProps {
 /**
  * Render a tappable account summary card showing an icon, account name, contextual subtitle, and formatted balance.
  *
- * The subtitle shows an approximate USD value when the account currency is not USD and `latestRates` is provided; otherwise it shows a type-based label (e.g., "Bank Account", "Digital Wallet", "Physical money").
+ * The subtitle shows an approximate USD value when the account currency is not USD and `selectedSnapshot` is provided; otherwise it shows a type-based label (e.g., "Bank Account", "Digital Wallet", "Physical money").
  *
  * @param account - The account to display (provides name, type, currency, and balance).
- * @param latestRates - Market rates used to convert the account balance to USD for the approximate subtitle; may be null to disable conversion.
+ * @param selectedSnapshot - Market rates used to convert the account balance to USD for the approximate subtitle; may be null to disable conversion.
  * @param onPress - Optional press handler invoked when the card is tapped.
  * @returns A JSX element representing the account card.
  */
 export function AccountCard({
   account,
-  latestRates,
+  selectedSnapshot,
   onPress,
   displayName,
   providerLabel = null,
@@ -77,17 +79,19 @@ export function AccountCard({
     institutionLogo?.presentation?.cardAccentColor ??
     config.color;
   const subtitle = useMemo(() => {
-    if (account.currency !== "USD" && latestRates) {
-      const usdValue = convertCurrency(
-        account.balance,
-        account.currency,
-        "USD",
-        latestRates
-      );
-      return `≈ ${formatCurrency({
-        amount: usdValue,
-        currency: "USD",
-      })}`;
+    if (account.currency !== "USD" && selectedSnapshot) {
+      const usdValue = convertSelectedCurrentAmount({
+        amount: account.balance,
+        fromCurrency: account.currency,
+        toCurrency: "USD",
+        currentSnapshot: selectedSnapshot,
+      });
+      if (usdValue !== null) {
+        return `≈ ${formatCurrency({
+          amount: usdValue,
+          currency: "USD",
+        })}`;
+      }
     }
 
     switch (account.type) {
@@ -104,7 +108,7 @@ export function AccountCard({
     account.currency,
     account.balance,
     account.type,
-    latestRates,
+    selectedSnapshot,
     providerLabel,
     t,
   ]);

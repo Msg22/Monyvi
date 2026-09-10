@@ -27,8 +27,8 @@ const mockUseAuth = jest.fn<MockAuthState, []>(() => ({
   isAuthenticated: true,
 }));
 const mockSync = jest.fn<Promise<void>, []>(() => Promise.resolve());
-const mockRemoveChannel = jest.fn<Promise<string>, [MockRealtimeChannel]>(
-  () => Promise.resolve("ok")
+const mockRemoveChannel = jest.fn<Promise<string>, [MockRealtimeChannel]>(() =>
+  Promise.resolve("ok")
 );
 const mockChannel = jest.fn<MockRealtimeChannel, [string]>();
 const mockLoggerError = jest.fn<
@@ -78,12 +78,10 @@ function createChannel(topic: string): MockRealtimeChannel {
         return channel;
       }
     ),
-    subscribe: jest.fn(
-      (callback: SubscribeCallback): MockRealtimeChannel => {
-        callback("SUBSCRIBED");
-        return channel;
-      }
-    ),
+    subscribe: jest.fn((callback: SubscribeCallback): MockRealtimeChannel => {
+      callback("SUBSCRIBED");
+      return channel;
+    }),
   };
 
   return channel;
@@ -108,10 +106,12 @@ jest.mock("@/services/supabase", () => ({
 jest.mock("@/utils/logger", () => ({
   logger: {
     error: (
-      message: string,
-      error?: unknown,
-      context?: Record<string, unknown>
-    ): void => mockLoggerError(message, error, context),
+      ...args: [
+        message: string,
+        error?: unknown,
+        context?: Record<string, unknown>,
+      ]
+    ): void => mockLoggerError(...args),
   },
 }));
 

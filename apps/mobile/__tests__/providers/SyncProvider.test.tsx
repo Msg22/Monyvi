@@ -66,10 +66,11 @@ jest.mock("@/services/user-data-access", () => ({
 }));
 
 import { SyncProvider, useSync } from "../../providers/SyncProvider";
+import type { InitialSyncFailureReason } from "../../utils/routing-decision";
 
 interface SyncContextSnapshot {
   readonly initialSyncState: string;
-  readonly initialSyncFailureReason: null;
+  readonly initialSyncFailureReason: InitialSyncFailureReason;
   readonly retryInitialSync: () => Promise<string>;
 }
 
@@ -124,7 +125,9 @@ describe("SyncProvider initialSyncState", () => {
     });
     mockDbGet.mockImplementation((table: string) => {
       if (table !== "profiles") {
-        throw new Error(`authenticated startup queried unrelated table ${table}`);
+        throw new Error(
+          `authenticated startup queried unrelated table ${table}`
+        );
       }
       return { table };
     });
@@ -156,7 +159,7 @@ describe("SyncProvider initialSyncState", () => {
     mockFetchProfileCount.mockReturnValue(new Promise(() => undefined));
     mockSyncDatabase.mockReturnValue(new Promise(() => undefined));
     const capture = renderAndCapture();
-    lastUnmount = capture.unmount;
+    lastUnmount = () => capture.unmount();
 
     expect(capture.read().initialSyncState).toBe("in-progress");
   });
@@ -221,7 +224,7 @@ describe("SyncProvider initialSyncState", () => {
   it('transitions to "timeout" when required profile sync exceeds 20 seconds', async (): Promise<void> => {
     mockSyncDatabase.mockReturnValue(new Promise(() => undefined));
     const capture = renderAndCapture();
-    lastUnmount = capture.unmount;
+    lastUnmount = () => capture.unmount();
 
     await advancePastInitialSyncTimeout();
     await waitForInitialSyncState(capture, "timeout");
@@ -233,7 +236,7 @@ describe("SyncProvider initialSyncState", () => {
     mockFetchProfileCount.mockReturnValue(new Promise(() => undefined));
     mockSyncDatabase.mockReturnValue(new Promise(() => undefined));
     const capture = renderAndCapture();
-    lastUnmount = capture.unmount;
+    lastUnmount = () => capture.unmount();
 
     expect(typeof capture.read().retryInitialSync).toBe("function");
   });

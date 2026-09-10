@@ -1,5 +1,8 @@
 import type { Database } from "@nozbe/watermelondb";
-import type { SyncTableChangeSet } from "@nozbe/watermelondb/sync";
+import type {
+  SyncPullResult,
+  SyncTableChangeSet,
+} from "@nozbe/watermelondb/sync";
 
 import type {
   MarketRateSnapshotCursor,
@@ -38,11 +41,7 @@ jest.mock("@/services/supabase", () => ({
 }));
 
 jest.mock("@/services/sync/config", () => ({
-  SYNCABLE_TABLES: [
-    "market_rates",
-    "market_rate_observations",
-    "categories",
-  ],
+  SYNCABLE_TABLES: ["market_rates", "market_rate_observations", "categories"],
 }));
 
 jest.mock("@/services/sync/table-predicates", () => ({
@@ -52,16 +51,33 @@ jest.mock("@/services/sync/table-predicates", () => ({
 }));
 
 jest.mock("@/services/sync/market-rate-snapshot-pull", () => ({
-  pullMarketRateSnapshots: mockPullMarketRateSnapshots,
+  pullMarketRateSnapshots: (
+    ...args: Parameters<typeof mockPullMarketRateSnapshots>
+  ): ReturnType<typeof mockPullMarketRateSnapshots> =>
+    mockPullMarketRateSnapshots(...args),
 }));
 
 jest.mock("@/services/sync/pull-strategies", () => ({
-  pullCategories: mockPullCategories,
-  pullChildTable: mockPullChildTable,
-  pullMetalDedicatedTable: mockPullMetalDedicatedTable,
-  pullSnapshotTable: mockPullSnapshotTable,
-  pullUserTable: mockPullUserTable,
-  protectMetalMetadataPullFragments: mockProtectMetalMetadataPullFragments,
+  pullCategories: (
+    ...args: Parameters<typeof mockPullCategories>
+  ): ReturnType<typeof mockPullCategories> => mockPullCategories(...args),
+  pullChildTable: (
+    ...args: Parameters<typeof mockPullChildTable>
+  ): ReturnType<typeof mockPullChildTable> => mockPullChildTable(...args),
+  pullMetalDedicatedTable: (
+    ...args: Parameters<typeof mockPullMetalDedicatedTable>
+  ): ReturnType<typeof mockPullMetalDedicatedTable> =>
+    mockPullMetalDedicatedTable(...args),
+  pullSnapshotTable: (
+    ...args: Parameters<typeof mockPullSnapshotTable>
+  ): ReturnType<typeof mockPullSnapshotTable> => mockPullSnapshotTable(...args),
+  pullUserTable: (
+    ...args: Parameters<typeof mockPullUserTable>
+  ): ReturnType<typeof mockPullUserTable> => mockPullUserTable(...args),
+  protectMetalMetadataPullFragments: (
+    ...args: Parameters<typeof mockProtectMetalMetadataPullFragments>
+  ): ReturnType<typeof mockProtectMetalMetadataPullFragments> =>
+    mockProtectMetalMetadataPullFragments(...args),
 }));
 
 import { pullChanges } from "@/services/sync/atomic-pull-strategies";
@@ -78,6 +94,19 @@ const MARKET_OBSERVATION_CHANGES: SyncTableChangeSet = {
   updated: [{ id: "observation-1" }],
   deleted: [],
 };
+
+function expectCompletedPullResult(
+  value: SyncPullResult
+): asserts value is Extract<
+  SyncPullResult,
+  { readonly changes: unknown; readonly timestamp: number }
+> {
+  const isCompleted = "changes" in value && "timestamp" in value;
+  expect(isCompleted).toBe(true);
+  if (!isCompleted) {
+    throw new Error("Expected a completed pull result");
+  }
+}
 
 describe("atomic pullChanges market-rate composition", () => {
   beforeEach(() => {
@@ -102,6 +131,7 @@ describe("atomic pullChanges market-rate composition", () => {
 
   it("uses one complete-envelope market pull as the sync watermark authority", async () => {
     const result = await pullChanges(null, USER_ID);
+    expectCompletedPullResult(result);
 
     expect(mockPullMarketRateSnapshots).toHaveBeenCalledWith(null);
     expect(result.changes.market_rates).toBe(MARKET_ROOT_CHANGES);

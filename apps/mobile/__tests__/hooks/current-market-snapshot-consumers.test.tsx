@@ -1,7 +1,10 @@
-import { renderHook, waitFor } from "@testing-library/react-native";
+import { act, renderHook, waitFor } from "@testing-library/react-native";
 import { Decimal } from "decimal.js";
 
-import type { SelectedMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
+import {
+  selectMarketRateSnapshot,
+  type SelectedMarketRateSnapshot,
+} from "@/services/market-rate-snapshot-read-model-service";
 import {
   completeFixtureA,
   createRootA,
@@ -23,9 +26,9 @@ let mockEmitSnapshotOnSubscribe = true;
 const mockStreamRefresh = jest.fn<void, []>();
 
 jest.mock("@/services/market-rate-snapshot-read-model-service", () => {
-  const actual = jest.requireActual(
-    "@/services/market-rate-snapshot-read-model-service"
-  );
+  const actual = jest.requireActual<
+    typeof import("@/services/market-rate-snapshot-read-model-service")
+  >("@/services/market-rate-snapshot-read-model-service");
   return {
     ...actual,
     observeSelectedMarketRateSnapshot: () => ({
@@ -41,8 +44,8 @@ jest.mock("@/services/market-rate-snapshot-read-model-service", () => {
   };
 });
 
-jest.mock("@/providers/DatabaseProvider", () => ({
-  useDatabase: () => ({
+jest.mock("@/providers/DatabaseProvider", () => {
+  const database = {
     get: () => ({
       query: () => ({
         observe: () => ({
@@ -55,11 +58,13 @@ jest.mock("@/providers/DatabaseProvider", () => ({
             return { unsubscribe: jest.fn() };
           },
         }),
-        fetch: async () => [],
+        fetch: () => Promise.resolve([]),
       }),
     }),
-  }),
-}));
+  };
+
+  return { useDatabase: () => database };
+});
 
 jest.mock("@/providers/MarketRatesRealtimeProvider", () => ({
   useMarketRatesRealtime: () => ({ isConnected: true }),
@@ -100,7 +105,7 @@ jest.mock("react-i18next", () => ({
   useTranslation: () => ({ i18n: { resolvedLanguage: "en" } }),
 }));
 
-const netWorthInputs: Record<string, unknown>[] = [];
+const netWorthInputs: Array<Record<string, unknown>> = [];
 jest.mock("@/services/net-worth-read-model-service", () => ({
   observeNetWorthAccounts: () => mockCreateQuery([]),
   observeNetWorthAssets: () => mockCreateQuery([]),
@@ -114,32 +119,35 @@ jest.mock("@/services/net-worth-read-model-service", () => ({
   buildWealthBreakdownReadModel: () => null,
 }));
 
-function mockCreateQuery(rows: readonly unknown[]) {
+interface MockRowsObservable {
+  subscribe(input: { readonly next: (result: readonly unknown[]) => void }): {
+    readonly unsubscribe: jest.Mock<void, []>;
+  };
+}
+
+interface MockRowsQuery {
+  observe(): MockRowsObservable;
+  observeWithColumns(): MockRowsObservable;
+}
+
+function mockCreateQuery(rows: readonly unknown[]): MockRowsQuery {
   return {
     observe: () => ({
-      subscribe: ({
-        next,
-      }: {
-        next: (result: readonly unknown[]) => void;
-      }) => {
+      subscribe: ({ next }: { next: (result: readonly unknown[]) => void }) => {
         next(rows);
-        return { unsubscribe: jest.fn() };
+        return { unsubscribe: jest.fn<void, []>() };
       },
     }),
     observeWithColumns: () => ({
-      subscribe: ({
-        next,
-      }: {
-        next: (result: readonly unknown[]) => void;
-      }) => {
+      subscribe: ({ next }: { next: (result: readonly unknown[]) => void }) => {
         next(rows);
-        return { unsubscribe: jest.fn() };
+        return { unsubscribe: jest.fn<void, []>() };
       },
     }),
   };
 }
 
-const portfolioShapeInputs: Record<string, unknown>[] = [];
+const portfolioShapeInputs: Array<Record<string, unknown>> = [];
 jest.mock("@/services/metal-portfolio-read-model-service", () => ({
   observePortfolioAssets: () => mockCreateQuery([]),
   observePortfolioAssetMetals: () => mockCreateQuery([]),
@@ -158,7 +166,7 @@ jest.mock("@/services/metal-portfolio-read-model-service", () => ({
   },
 }));
 
-const detailReadInputs: Record<string, unknown>[] = [];
+const detailReadInputs: Array<Record<string, unknown>> = [];
 jest.mock("@/services/metal-action-evidence-observer-service", () => ({
   observeMetalDetailActionEvidence: () => mockCreateQuery([]),
 }));
@@ -167,9 +175,9 @@ jest.mock("@/services/metal-detail-read-model-service", () => ({
   observeMetalDetailEvents: () => mockCreateQuery([]),
   observeMetalDetailHoldingState: () => mockCreateQuery([]),
   observeMetalDetailRateReferences: () => mockCreateQuery([]),
-  readMetalDetailReadModel: async (input: Record<string, unknown>) => {
+  readMetalDetailReadModel: (input: Record<string, unknown>) => {
     detailReadInputs.push(input);
-    return null;
+    return Promise.resolve(null);
   },
 }));
 
@@ -186,7 +194,6 @@ import { useLiveRatesScreen } from "@/hooks/useLiveRatesScreen";
 import { useMetalHoldingDetail } from "@/hooks/useMetalHoldingDetail";
 import { useMetalPortfolio } from "@/hooks/useMetalPortfolio";
 import { useNetWorth } from "@/hooks/useNetWorth";
-import { selectMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
 
 function emitSnapshot(snapshot: SelectedMarketRateSnapshot | null): void {
   mockPendingSnapshot = snapshot;
@@ -211,7 +218,6 @@ function snapshotA(): SelectedMarketRateSnapshot {
 describe("issue #302 cross-consumer snapshot identity", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.setSystemTime(new Date(NOW_MS));
     mockSnapshotObservers.splice(0);
     mockPendingSnapshot = null;
     mockEmitSnapshotOnSubscribe = true;
@@ -242,9 +248,7 @@ describe("issue #302 cross-consumer snapshot identity", () => {
     expect(netWorthInput).not.toHaveProperty("latestRates");
 
     renderHook(() => useMetalPortfolio());
-    await waitFor(() =>
-      expect(portfolioShapeInputs.length).toBeGreaterThan(0)
-    );
+    await waitFor(() => expect(portfolioShapeInputs.length).toBeGreaterThan(0));
     const portfolioInput = portfolioShapeInputs.at(-1);
     expect(portfolioInput).toMatchObject({
       snapshotId: SNAPSHOT_A_ID,
@@ -292,7 +296,7 @@ describe("issue #302 cross-consumer snapshot identity", () => {
     if (!divergent) {
       throw new Error("fixture setup: divergent snapshot must select");
     }
-    emitSnapshot(divergent);
+    act(() => emitSnapshot(divergent));
 
     await waitFor(() => expect(result.current.hasData).toBe(true));
     expect(result.current.metals.price24k).toBe(expectedUsd);
@@ -309,27 +313,27 @@ describe("issue #302 cross-consumer snapshot identity", () => {
     ];
     const observations = fixture.observations.map((row) => ({
       ...row,
+      createdAt: new Date(NOW_MS),
       providerObservedAt: staleProvider,
     }));
     const selected = selectMarketRateSnapshot(roots, observations, NOW_MS);
+    if (!selected) {
+      throw new Error("fixture setup: stale-provider snapshot must select");
+    }
     emitSnapshot(selected);
 
     const { result } = renderHook(() => useMarketRates());
 
     await waitFor(() => expect(result.current.isCurrentLoading).toBe(false));
     expect(result.current.isStale).toBe(true);
-    expect(result.current.lastUpdated?.getTime()).toBe(
-      staleProvider.getTime()
-    );
+    expect(result.current.lastUpdated?.getTime()).toBe(staleProvider.getTime());
   });
 
   it("does not block recorded portfolio or detail facts while rates are pending", async () => {
     mockEmitSnapshotOnSubscribe = false;
 
     renderHook(() => useMetalPortfolio());
-    await waitFor(() =>
-      expect(portfolioShapeInputs.length).toBeGreaterThan(0)
-    );
+    await waitFor(() => expect(portfolioShapeInputs.length).toBeGreaterThan(0));
     expect(portfolioShapeInputs.at(-1)).toMatchObject({
       snapshotId: null,
       currentRates: {

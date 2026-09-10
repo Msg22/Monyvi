@@ -20,9 +20,9 @@ import {
   Transaction,
   Transfer,
   type CurrencyType,
-  type MarketRate,
 } from "@monyvi/db";
-import { convertCurrency } from "@monyvi/logic";
+import { convertSelectedCurrentAmount } from "@/services/current-market-snapshot-calculations";
+import type { SelectedMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
 import { Q, type Query } from "@nozbe/watermelondb";
 
 export type TransactionTypeFilter = "All" | "Income" | "Expense" | "Transfer";
@@ -106,7 +106,7 @@ export interface GetTransactionListReadModelInput {
 
 export interface BuildTransactionGroupsInput extends TransactionListReadModel {
   readonly totalNetWorth: number | null;
-  readonly latestRates: MarketRate | null;
+  readonly selectedSnapshot: SelectedMarketRateSnapshot | null;
   readonly preferredCurrency: CurrencyType;
   readonly period: GroupingPeriod;
   readonly searchQuery: string;
@@ -199,19 +199,25 @@ export async function getTransactionListReadModel(
 export function buildTransactionGroups(
   input: BuildTransactionGroupsInput
 ): GroupedTransaction[] {
-  const latestRates = input.latestRates;
-  if (input.totalNetWorth === null || latestRates === null) {
+  const selectedSnapshot = input.selectedSnapshot;
+  if (input.totalNetWorth === null || selectedSnapshot === null) {
     return [];
   }
 
-  const toPreferred = (amount: number, currency: CurrencyType): number =>
-    convertCurrency(amount, currency, input.preferredCurrency, latestRates);
+  const toPreferred = (amount: number, currency: CurrencyType): number | null =>
+    convertSelectedCurrentAmount({
+      amount,
+      fromCurrency: currency,
+      toCurrency: input.preferredCurrency,
+      currentSnapshot: selectedSnapshot,
+    });
   const getSignedAmount = (item: DisplayListItem): number => {
     if (item._type !== "transaction") {
       return 0;
     }
 
     const preferredAmount = toPreferred(item.amount, item.currency);
+    if (preferredAmount === null) return 0;
     if (item.isIncome) return preferredAmount;
     if (item.isExpense) return -preferredAmount;
     return 0;
@@ -223,6 +229,9 @@ export function buildTransactionGroups(
       transaction.amount,
       transaction.currency
     );
+    if (preferredAmount === null) {
+      return [];
+    }
     if (transaction.isIncome) anchorNetWorth -= preferredAmount;
     if (transaction.isExpense) anchorNetWorth += preferredAmount;
   }
@@ -241,7 +250,7 @@ export function buildTransactionGroups(
     return itemWithNetWorth;
   });
 
-  return groupDisplayItems(processedItems, input, latestRates);
+  return groupDisplayItems(processedItems, input, selectedSnapshot);
 }
 
 function transactionsCollection(): ReturnType<
@@ -543,7 +552,7 @@ function createTransferDisplayItem(
 function groupDisplayItems(
   items: readonly DisplayTransaction[],
   input: BuildTransactionGroupsInput,
-  latestRates: MarketRate
+  selectedSnapshot: SelectedMarketRateSnapshot
 ): GroupedTransaction[] {
   const groups: GroupedTransaction[] = [];
   let currentGroup: {
@@ -570,12 +579,15 @@ function groupDisplayItems(
 
     currentGroup.transactions.push(item);
     if (item._type === "transaction") {
-      const preferredAmount = convertCurrency(
-        item.amount,
-        item.currency,
-        input.preferredCurrency,
-        latestRates
-      );
+      const preferredAmount = convertSelectedCurrentAmount({
+        amount: item.amount,
+        fromCurrency: item.currency,
+        toCurrency: input.preferredCurrency,
+        currentSnapshot: selectedSnapshot,
+      });
+      if (preferredAmount === null) {
+        return [];
+      }
       if (item.isIncome) {
         currentGroup.groupTotalIncome += preferredAmount;
       } else if (item.isExpense) {

@@ -15,19 +15,15 @@ import {
 const NOW_MS = Date.parse("2026-09-09T11:00:00.000Z");
 
 class ResubscribeDataSource implements MarketRateSnapshotDataSource {
-  private rootsObserver:
-    | MarketRateSnapshotRowsObserver<readonly MarketRateRootCandidate[]>
-    | null = null;
-  private observationsObserver:
-    | MarketRateSnapshotRowsObserver<
-        readonly MarketRateObservationCandidate[]
-      >
-    | null = null;
+  private rootsObserver: MarketRateSnapshotRowsObserver<
+    readonly MarketRateRootCandidate[]
+  > | null = null;
+  private observationsObserver: MarketRateSnapshotRowsObserver<
+    readonly MarketRateObservationCandidate[]
+  > | null = null;
 
   observeRoots(
-    observer: MarketRateSnapshotRowsObserver<
-      readonly MarketRateRootCandidate[]
-    >
+    observer: MarketRateSnapshotRowsObserver<readonly MarketRateRootCandidate[]>
   ): MarketRateSnapshotSubscription {
     this.rootsObserver = observer;
     return {
@@ -55,14 +51,14 @@ class ResubscribeDataSource implements MarketRateSnapshotDataSource {
     };
   }
 
-  async fetchRoots(): Promise<readonly MarketRateRootCandidate[]> {
-    return [];
+  fetchRoots(): Promise<readonly MarketRateRootCandidate[]> {
+    return Promise.resolve([]);
   }
 
-  async fetchObservations(
+  fetchObservations(
     _batchIds: readonly string[]
   ): Promise<readonly MarketRateObservationCandidate[]> {
-    return [];
+    return Promise.resolve([]);
   }
 
   emitRoots(rows: readonly MarketRateRootCandidate[]): void {

@@ -19,8 +19,11 @@ const mockDatabaseGet = jest.fn((tableName: string): unknown => {
   if (tableName === "daily_snapshot_net_worth") return mockSnapshotsCollection;
   throw new Error(`Unexpected table: ${tableName}`);
 });
-const mockQueryOwned = jest.fn();
-const mockQueryChildrenOfOwnedParents = jest.fn();
+const mockQueryOwned = jest.fn<unknown, [unknown, string, QueryCondition]>();
+const mockQueryChildrenOfOwnedParents = jest.fn<
+  unknown,
+  [unknown, readonly unknown[], string, string, QueryCondition]
+>();
 
 interface QueryCondition {
   readonly kind: "where" | "sortBy";
@@ -51,8 +54,13 @@ jest.mock("@nozbe/watermelondb", () => ({
 }));
 
 jest.mock("@/services/user-data-access", () => ({
-  queryChildrenOfOwnedParents: mockQueryChildrenOfOwnedParents,
-  queryOwned: mockQueryOwned,
+  queryChildrenOfOwnedParents: (
+    ...args: Parameters<typeof mockQueryChildrenOfOwnedParents>
+  ): ReturnType<typeof mockQueryChildrenOfOwnedParents> =>
+    mockQueryChildrenOfOwnedParents(...args),
+  queryOwned: (
+    ...args: Parameters<typeof mockQueryOwned>
+  ): ReturnType<typeof mockQueryOwned> => mockQueryOwned(...args),
 }));
 
 import {

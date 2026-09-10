@@ -126,7 +126,7 @@ create or replace function private.market_rate_snapshot_timestamp_v1(
 )
 returns timestamptz
 language plpgsql
-immutable
+stable
 security definer
 set search_path = ''
 as $$

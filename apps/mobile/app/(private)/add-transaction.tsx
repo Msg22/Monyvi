@@ -27,6 +27,7 @@ import {
 } from "@/services/recurring-payment-service";
 import { createTransaction } from "@/services/transaction-service";
 import { createTransfer } from "@/services/transfer-service";
+import { getSelectedCurrentCurrencyRate } from "@/services/current-market-snapshot-calculations";
 import { resolveInitialTransactionAccountSelection } from "@/utils/account-selection";
 import { logger } from "@/utils/logger";
 import { useBudgetAlert } from "@/hooks/useBudgetAlert";
@@ -44,7 +45,6 @@ import type {
 import {
   evaluateAmountExpression,
   formatAmountInput,
-  getCurrencyRate,
   parsePositiveFiniteAmountInput,
 } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
@@ -105,7 +105,7 @@ export default function AddTransaction(): React.ReactNode {
     incomeCategories,
     isLoading: _categoriesLoading,
   } = useCategories();
-  const { latestRates } = useMarketRates();
+  const { selectedSnapshot } = useMarketRates();
   const { showToast } = useToast();
   const { preferredCurrency } = usePreferredCurrency();
 
@@ -264,17 +264,19 @@ export default function AddTransaction(): React.ReactNode {
     ) {
       const numAmount = calculateResult(amount);
       if (numAmount !== null && numAmount > 0) {
-        if (latestRates) {
-          const rate = getCurrencyRate(
-            latestRates,
-            selectedAccount.currency,
-            toAccount.currency
-          );
-          setTargetAmount((numAmount * rate).toFixed(2));
+        if (selectedSnapshot) {
+          const rate = getSelectedCurrentCurrencyRate({
+            fromCurrency: selectedAccount.currency,
+            toCurrency: toAccount.currency,
+            currentSnapshot: selectedSnapshot,
+          });
+          if (rate !== null) {
+            setTargetAmount((numAmount * rate).toFixed(2));
+          }
         }
       }
     }
-  }, [type, selectedAccount, toAccount, amount, latestRates]);
+  }, [type, selectedAccount, toAccount, amount, selectedSnapshot]);
 
   const createRecurring = async (
     amount: number,
@@ -595,13 +597,11 @@ export default function AddTransaction(): React.ReactNode {
                 toAccountError={formErrors.toAccountId}
                 exchangeRate={
                   selectedAccount && toAccount
-                    ? latestRates
-                      ? getCurrencyRate(
-                          latestRates,
-                          selectedAccount.currency,
-                          toAccount.currency
-                        )
-                      : undefined
+                    ? (getSelectedCurrentCurrencyRate({
+                        fromCurrency: selectedAccount.currency,
+                        toCurrency: toAccount.currency,
+                        currentSnapshot: selectedSnapshot,
+                      }) ?? undefined)
                     : undefined
                 }
                 isTargetAmountActive={activeAmountField === "targetAmount"}

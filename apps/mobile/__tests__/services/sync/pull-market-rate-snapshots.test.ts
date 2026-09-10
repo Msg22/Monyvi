@@ -1,5 +1,20 @@
 import type { SyncTableChangeSet } from "@nozbe/watermelondb/sync";
-import { SUPPORTED_CURRENCIES } from "@monyvi/logic";
+import {
+  isSupportedCurrentCurrencyInstrumentCode,
+  SUPPORTED_CURRENCIES,
+} from "@monyvi/logic";
+
+jest.mock("@monyvi/db", () => ({
+  schema: { tables: {} },
+}));
+
+jest.mock("@/services/supabase", () => ({
+  supabase: {
+    rpc: (): never => {
+      throw new Error("unexpected real Supabase RPC in injected-client test");
+    },
+  },
+}));
 
 import {
   pullMarketRateSnapshotsWithClient,
@@ -31,11 +46,10 @@ interface RpcPageOptions {
 }
 
 class FakeRpcClient implements MarketRateSnapshotRpcClient {
-  readonly requests: MarketRateSnapshotRpcRequest[] = [];
-
   constructor(private readonly responses: MarketRateSnapshotRpcResponse[]) {}
 
-  async pull(
+  readonly requests: MarketRateSnapshotRpcRequest[] = [];
+  pull(
     request: MarketRateSnapshotRpcRequest
   ): Promise<MarketRateSnapshotRpcResponse> {
     this.requests.push(request);
@@ -43,11 +57,13 @@ class FakeRpcClient implements MarketRateSnapshotRpcClient {
     if (!response) {
       throw new Error("test fixture exhausted RPC responses");
     }
-    return response;
+    return Promise.resolve(response);
   }
 }
 
-function successfulPage(options: RpcPageOptions = {}): MarketRateSnapshotRpcResponse {
+function successfulPage(
+  options: RpcPageOptions = {}
+): MarketRateSnapshotRpcResponse {
   const snapshotId = options.snapshotId ?? SNAPSHOT_A;
   const capturedAt = options.capturedAt ?? CAPTURED_A;
   const root = createRoot();
@@ -56,10 +72,9 @@ function successfulPage(options: RpcPageOptions = {}): MarketRateSnapshotRpcResp
     capturedAt,
     source: options.source ?? "metals.dev",
     goldObservationValue:
-      options.goldObservationValue ?? root.goldUsdPerGram,
+      options.goldObservationValue ?? requireString(root.goldUsdPerGram),
   }).filter(
-    (observation) =>
-      observation.instrumentCode !== options.omitInstrument
+    (observation) => observation.instrumentCode !== options.omitInstrument
   );
 
   return {
@@ -85,8 +100,7 @@ function createRoot(): Record<string, unknown> {
   };
   for (const { code } of SUPPORTED_CURRENCIES) {
     if (code !== "USD") {
-      fiatUsdPerUnit[code] =
-        code === "OMR" ? "0.10000000000000001" : "0.5";
+      fiatUsdPerUnit[code] = code === "OMR" ? "0.10000000000000001" : "0.5";
     }
   }
 
@@ -106,13 +120,12 @@ function createObservations(input: {
   readonly capturedAt: string;
   readonly source: string;
   readonly goldObservationValue: string;
-}): readonly Record<string, unknown>[] {
+}): ReadonlyArray<Record<string, unknown>> {
   const root = createRoot();
-  const instruments = [
-    "metal:GOLD",
-    "metal:SILVER",
-    ...SUPPORTED_CURRENCIES.map(({ code }) => `currency:${code}`),
-  ];
+  const currencyInstruments = SUPPORTED_CURRENCIES.map(
+    ({ code }) => `currency:${code}`
+  ).filter(isSupportedCurrentCurrencyInstrumentCode);
+  const instruments = ["metal:GOLD", "metal:SILVER", ...currencyInstruments];
 
   return instruments.map((instrumentCode, index) => {
     const isMetal = instrumentCode.startsWith("metal:");
@@ -136,9 +149,7 @@ function createObservations(input: {
       capturedAt: input.capturedAt,
       instrumentCode,
       valueDecimal,
-      unit: isMetal
-        ? "usd_per_pure_gram"
-        : "usd_per_currency_unit",
+      unit: isMetal ? "usd_per_pure_gram" : "usd_per_currency_unit",
       orientation: "quote_per_base",
       providerObservedAt: isMetal ? METAL_TIME : CURRENCY_TIME,
       source: input.source,
@@ -148,10 +159,14 @@ function createObservations(input: {
 }
 
 function requireRecord(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error("expected record");
   }
   return value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function requireString(value: unknown): string {
@@ -163,7 +178,7 @@ function requireString(value: unknown): string {
 
 function requireUpdatedRows(
   changes: SyncTableChangeSet
-): readonly Record<string, unknown>[] {
+): ReadonlyArray<Record<string, unknown>> {
   return changes.updated.map(requireRecord);
 }
 
@@ -194,9 +209,8 @@ describe("pullMarketRateSnapshotsWithClient", () => {
       gold_usd_per_gram: Number("3738.7400000000001"),
     });
     expect(
-      observations.find(
-        (row) => row.instrument_code === "currency:OMR"
-      )?.value_decimal
+      observations.find((row) => row.instrument_code === "currency:OMR")
+        ?.value_decimal
     ).toBe("0.10000000000000001");
   });
 
@@ -223,7 +237,10 @@ describe("pullMarketRateSnapshotsWithClient", () => {
   });
 
   it.each([
-    ["partial observation set", successfulPage({ omitInstrument: "currency:EGP" })],
+    [
+      "partial observation set",
+      successfulPage({ omitInstrument: "currency:EGP" }),
+    ],
     ["blank source", successfulPage({ source: "   " })],
     [
       "cross-snapshot child",
@@ -272,9 +289,9 @@ describe("pullMarketRateSnapshotsWithClient", () => {
     });
 
     expect(requireUpdatedRows(result.changes.market_rates)).toEqual([]);
-    expect(
-      requireUpdatedRows(result.changes.market_rate_observations)
-    ).toEqual([]);
+    expect(requireUpdatedRows(result.changes.market_rate_observations)).toEqual(
+      []
+    );
   });
 
   it("fails the whole pull when a later page fails instead of returning page one", async () => {

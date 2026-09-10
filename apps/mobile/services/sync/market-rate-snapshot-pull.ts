@@ -68,7 +68,7 @@ export interface MarketRateSnapshotRpcRequest {
 
 export interface MarketRateSnapshotRpcResponse {
   readonly data: unknown;
-  readonly error: unknown | null;
+  readonly error: unknown;
 }
 
 export interface MarketRateSnapshotRpcClient {
@@ -155,8 +155,8 @@ export async function pullMarketRateSnapshotsWithClient(
   client: MarketRateSnapshotRpcClient,
   start: MarketRateSnapshotCursor | null
 ): Promise<MarketRateSnapshotPullResult> {
-  const roots: Record<string, unknown>[] = [];
-  const observations: Record<string, unknown>[] = [];
+  const roots: Array<Record<string, unknown>> = [];
+  const observations: Array<Record<string, unknown>> = [];
   const seenSnapshotIds = new Set<string>();
   const seenCursorKeys = new Set<string>();
   let cursor = start;
@@ -182,10 +182,7 @@ export async function pullMarketRateSnapshotsWithClient(
     }
 
     const page = parsePage(response.data);
-    if (
-      upperWatermark !== null &&
-      page.upperWatermark !== upperWatermark
-    ) {
+    if (upperWatermark !== null && page.upperWatermark !== upperWatermark) {
       failInvalidPage();
     }
     upperWatermark = page.upperWatermark;
@@ -196,9 +193,7 @@ export async function pullMarketRateSnapshotsWithClient(
       }
       seenSnapshotIds.add(envelope.snapshotId);
       roots.push(toLocalRoot(envelope));
-      observations.push(
-        ...envelope.observations.map(toLocalObservation)
-      );
+      observations.push(...envelope.observations.map(toLocalObservation));
     }
 
     if (page.nextCursor === null) {
@@ -209,10 +204,7 @@ export async function pullMarketRateSnapshotsWithClient(
     if (
       !lastSnapshot ||
       page.nextCursor.id !== lastSnapshot.snapshotId ||
-      !timestampsEqual(
-        page.nextCursor.createdAt,
-        lastSnapshot.capturedAt
-      )
+      !timestampsEqual(page.nextCursor.createdAt, lastSnapshot.capturedAt)
     ) {
       failInvalidPage();
     }
@@ -313,9 +305,7 @@ function parseEnvelope(
       root,
       observation.instrumentCode
     );
-    const expectedProviderTime = observation.instrumentCode.startsWith(
-      "metal:"
-    )
+    const expectedProviderTime = observation.instrumentCode.startsWith("metal:")
       ? root.providerMetalObservedAt
       : root.providerCurrencyObservedAt;
     if (
@@ -338,10 +328,7 @@ function parseEnvelope(
   };
 }
 
-function parseRoot(
-  value: unknown,
-  capturedAt: string
-): ParsedMarketRateRoot {
+function parseRoot(value: unknown, capturedAt: string): ParsedMarketRateRoot {
   const record = requireExactRecord(value, ROOT_KEYS);
   const fiatRecord = requireRecord(record.fiatUsdPerUnit);
   assertExactKeys(fiatRecord, ROOT_FIAT_CODES);
@@ -354,12 +341,8 @@ function parseRoot(
   return {
     fiatUsdPerUnit,
     goldUsdPerGram: requirePositiveDecimal(record.goldUsdPerGram),
-    palladiumUsdPerGram: requirePositiveDecimal(
-      record.palladiumUsdPerGram
-    ),
-    platinumUsdPerGram: requirePositiveDecimal(
-      record.platinumUsdPerGram
-    ),
+    palladiumUsdPerGram: requirePositiveDecimal(record.palladiumUsdPerGram),
+    platinumUsdPerGram: requirePositiveDecimal(record.platinumUsdPerGram),
     providerCurrencyObservedAt: requireProviderTimestamp(
       record.providerCurrencyObservedAt,
       capturedAt
@@ -434,9 +417,7 @@ function toLocalRoot(
     gold_usd_per_gram: toCompatibilityNumber(root.goldUsdPerGram),
     silver_usd_per_gram: toCompatibilityNumber(root.silverUsdPerGram),
     platinum_usd_per_gram: toCompatibilityNumber(root.platinumUsdPerGram),
-    palladium_usd_per_gram: toCompatibilityNumber(
-      root.palladiumUsdPerGram
-    ),
+    palladium_usd_per_gram: toCompatibilityNumber(root.palladiumUsdPerGram),
     timestamp_metal: root.providerMetalObservedAt,
     timestamp_currency: root.providerCurrencyObservedAt,
   };
@@ -501,10 +482,14 @@ function requireExactRecord(
 }
 
 function requireRecord(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isRecord(value)) {
     failInvalidPage();
   }
   return value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function assertExactKeys(

@@ -1,10 +1,11 @@
 import { Q, type Database } from "@nozbe/watermelondb";
 import type { MarketRate, MarketRateObservation } from "@monyvi/db";
-import type {
-  CurrentMarketInstrument,
-  CurrentMarketRate,
+import {
+  classifyRateTrust,
+  validateCurrentMarketSnapshot,
+  type CurrentMarketInstrument,
+  type CurrentMarketRate,
 } from "@monyvi/logic";
-import { classifyRateTrust, validateCurrentMarketSnapshot } from "@monyvi/logic";
 
 import {
   buildTrustFromSelectedSnapshot,
@@ -68,9 +69,7 @@ export interface MarketRateSnapshotSubscription {
 
 export interface MarketRateSnapshotDataSource {
   observeRoots(
-    observer: MarketRateSnapshotRowsObserver<
-      readonly MarketRateRootCandidate[]
-    >
+    observer: MarketRateSnapshotRowsObserver<readonly MarketRateRootCandidate[]>
   ): MarketRateSnapshotSubscription;
   observeObservations(
     batchIds: readonly string[],
@@ -86,7 +85,9 @@ export interface MarketRateSnapshotDataSource {
 
 export interface MarketRateSnapshotStream {
   refresh(): void;
-  subscribe(observer: MarketRateSnapshotObserver): MarketRateSnapshotSubscription;
+  subscribe(
+    observer: MarketRateSnapshotObserver
+  ): MarketRateSnapshotSubscription;
 }
 
 export const MAX_SNAPSHOT_CANDIDATES = 30;
@@ -110,14 +111,11 @@ export function selectMarketRateSnapshot(
   const ordered = [...roots]
     .filter(
       (root) =>
-        !conflictedIds.has(root.id) &&
-        Number.isFinite(root.createdAt.getTime())
+        !conflictedIds.has(root.id) && Number.isFinite(root.createdAt.getTime())
     )
     .sort((left, right) => {
       const byCreated = right.createdAt.getTime() - left.createdAt.getTime();
-      return byCreated !== 0
-        ? byCreated
-        : right.id.localeCompare(left.id);
+      return byCreated !== 0 ? byCreated : right.id.localeCompare(left.id);
     });
 
   for (const root of ordered.slice(0, MAX_SNAPSHOT_CANDIDATES)) {
@@ -170,10 +168,7 @@ function evaluateCandidate(
     SelectedCurrentMarketRate
   >();
   for (const [instrumentCode, rate] of validation.rates) {
-    ratesByInstrument.set(
-      instrumentCode,
-      toSelectedRate(rate, root, nowMs)
-    );
+    ratesByInstrument.set(instrumentCode, toSelectedRate(rate, root, nowMs));
   }
 
   const snapshot: SelectedMarketRateSnapshot = {
@@ -314,6 +309,10 @@ export function createMarketRateSnapshotStream(
     observationsSubscription = null;
     rootSubscription?.unsubscribe();
     rootSubscription = null;
+    latestRoots = [];
+    latestObservations = [];
+    currentSnapshot = null;
+    hasPublished = false;
   };
 
   return {
@@ -322,7 +321,9 @@ export function createMarketRateSnapshotStream(
         publish();
       }
     },
-    subscribe(observer: MarketRateSnapshotObserver): MarketRateSnapshotSubscription {
+    subscribe(
+      observer: MarketRateSnapshotObserver
+    ): MarketRateSnapshotSubscription {
       observers.add(observer);
       if (hasPublished) {
         observer.next(currentSnapshot);
@@ -386,8 +387,9 @@ export function createWatermelonMarketRateSnapshotDataSource(
   database: Database
 ): MarketRateSnapshotDataSource {
   const roots = database.get<MarketRate>("market_rates");
-  const observations =
-    database.get<MarketRateObservation>("market_rate_observations");
+  const observations = database.get<MarketRateObservation>(
+    "market_rate_observations"
+  );
 
   const rootQuery = (): ReturnType<typeof roots.query> =>
     roots.query(

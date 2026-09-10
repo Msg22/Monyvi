@@ -1,5 +1,6 @@
-import type { CurrencyType, MarketRate, RecurringPayment } from "@monyvi/db";
-import { convertCurrency } from "@monyvi/logic";
+import type { CurrencyType, RecurringPayment } from "@monyvi/db";
+import { convertSelectedCurrentAmount } from "@/services/current-market-snapshot-calculations";
+import type { SelectedMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
 import { getRecurringPaymentDueGroupTitle } from "@/utils/recurring-payment-due-labels";
 
 export type SortOption =
@@ -16,7 +17,7 @@ export interface PaymentSection {
 
 interface SortPaymentsOptions {
   readonly preferredCurrency?: CurrencyType;
-  readonly latestRates?: MarketRate;
+  readonly selectedSnapshot?: SelectedMarketRateSnapshot;
 }
 
 export function sortPayments(
@@ -72,14 +73,16 @@ function getComparableAmount(
   payment: RecurringPayment,
   options: SortPaymentsOptions
 ): number {
-  if (!options.preferredCurrency || !options.latestRates) {
+  if (!options.preferredCurrency || !options.selectedSnapshot) {
     return payment.amount;
   }
 
-  return convertCurrency(
-    payment.amount,
-    payment.currency,
-    options.preferredCurrency,
-    options.latestRates
+  return (
+    convertSelectedCurrentAmount({
+      amount: payment.amount,
+      fromCurrency: payment.currency,
+      toCurrency: options.preferredCurrency,
+      currentSnapshot: options.selectedSnapshot,
+    }) ?? payment.amount
   );
 }

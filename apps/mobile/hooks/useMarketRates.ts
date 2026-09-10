@@ -14,11 +14,6 @@ import { logger } from "../utils/logger";
 
 export interface UseMarketRatesResult {
   readonly selectedSnapshot: SelectedMarketRateSnapshot | null;
-  /**
-   * Compatibility/history row only. It must never be used as authoritative
-   * current financial truth.
-   */
-  readonly latestRates: MarketRate | null;
   /** Explicitly historical previous-day comparison row. */
   readonly previousDayRate: MarketRate | null;
   /** Current complete-snapshot readiness only. */
@@ -63,9 +58,7 @@ function getSnapshotProviderTime(
 
   const observedTimes = Array.from(snapshot.ratesByInstrument.values())
     .map((rate) => rate.providerObservedAt?.getTime() ?? null)
-    .filter(
-      (time): time is number => time !== null && Number.isFinite(time)
-    );
+    .filter((time): time is number => time !== null && Number.isFinite(time));
 
   return observedTimes.length === 0
     ? null
@@ -198,7 +191,6 @@ export function useMarketRates(): UseMarketRatesResult {
 
   return {
     selectedSnapshot,
-    latestRates: getValidHistoricalRate(observedLatestRates.at(0)),
     previousDayRate,
     isLoading: isCurrentLoading,
     isCurrentLoading,
@@ -206,8 +198,7 @@ export function useMarketRates(): UseMarketRatesResult {
     currentError,
     isConnected,
     lastUpdated: getSnapshotProviderTime(selectedSnapshot),
-    isStale:
-      selectedSnapshot === null ? false : summary !== "fresh",
+    isStale: selectedSnapshot === null ? false : summary !== "fresh",
     refreshSelectedSnapshot,
   };
 }

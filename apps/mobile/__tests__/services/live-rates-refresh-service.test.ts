@@ -3,6 +3,20 @@ import { join } from "node:path";
 
 import type { SyncTableChangeSet } from "@nozbe/watermelondb/sync";
 
+jest.mock("@monyvi/db", () => ({
+  schema: { tables: {} },
+}));
+
+jest.mock("@/services/supabase", () => ({
+  supabase: {
+    rpc: (): never => {
+      throw new Error(
+        "unexpected real Supabase RPC in dependency-injected test"
+      );
+    },
+  },
+}));
+
 import {
   refreshLiveMarketRatesWithDependencies,
   type LiveMarketRateRefreshDependencies,
@@ -146,6 +160,8 @@ describe("refreshLiveMarketRatesWithDependencies", () => {
     expect(source).toContain("applyRemoteChanges");
     expect(source).not.toContain("pullMarketRates(");
     expect(source).not.toContain("pullMarketRateObservations(");
-    expect(source).not.toContain('get<MarketRateObservation>("market_rate_observations")');
+    expect(source).not.toContain(
+      'get<MarketRateObservation>("market_rate_observations")'
+    );
   });
 });

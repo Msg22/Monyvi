@@ -1,6 +1,10 @@
 import type { CurrencyType } from "@monyvi/db";
-import type { CurrentMarketInstrument, RateTrustResult } from "@monyvi/logic";
-import { SUPPORTED_CURRENCIES } from "@monyvi/logic";
+import {
+  isSupportedCurrentCurrencyInstrumentCode,
+  SUPPORTED_CURRENCIES,
+  type CurrentMarketInstrument,
+  type RateTrustResult,
+} from "@monyvi/logic";
 
 import type { SelectedCurrentMarketRate } from "./market-rate-snapshot-read-model-service";
 
@@ -53,13 +57,11 @@ export function buildTrustFromSelectedSnapshot(
 ): LiveRatesTrustReadModel {
   const currencies = new Map<CurrencyType, LiveRatesTrustValue>();
   for (const { code } of SUPPORTED_CURRENCIES) {
-    currencies.set(
-      code,
-      toTrustValue(
-        input.ratesByInstrument.get(`currency:${code}`),
-        input.capturedAt
-      )
-    );
+    const instrumentCode = `currency:${code}`;
+    const rate = isSupportedCurrentCurrencyInstrumentCode(instrumentCode)
+      ? input.ratesByInstrument.get(instrumentCode)
+      : undefined;
+    currencies.set(code, toTrustValue(rate, input.capturedAt));
   }
 
   return Object.freeze({

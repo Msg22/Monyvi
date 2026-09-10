@@ -17,9 +17,9 @@ import {
 } from "@monyvi/db";
 import {
   calculateCalendarDaysUntil,
-  convertCurrency,
   isInCurrentLocalMonth,
 } from "@monyvi/logic";
+import { convertSelectedCurrentAmount } from "@/services/current-market-snapshot-calculations";
 import { Q } from "@nozbe/watermelondb";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMarketRates } from "./useMarketRates";
@@ -145,7 +145,7 @@ export function useRecurringPayments(
   const [statusFilter, setStatusFilter] = useState<RecurringStatus>(
     status || "ACTIVE"
   );
-  const { latestRates, isLoading: isRatesLoading } = useMarketRates();
+  const { selectedSnapshot, isLoading: isRatesLoading } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { userId, isResolvingUser } = useCurrentUser();
 
@@ -233,17 +233,23 @@ export function useRecurringPayments(
   /** Convert a payment amount to the user's preferred currency. */
   const toPreferred = useCallback(
     (amount: number, currency: CurrencyType): number => {
-      if (!latestRates) {
+      const converted = convertSelectedCurrentAmount({
+        amount,
+        fromCurrency: currency,
+        toCurrency: preferredCurrency,
+        currentSnapshot: selectedSnapshot,
+      });
+      if (converted === null) {
         throw new Error("MARKET_RATES_NOT_READY");
       }
-      return convertCurrency(amount, currency, preferredCurrency, latestRates);
+      return converted;
     },
-    [latestRates, preferredCurrency]
+    [selectedSnapshot, preferredCurrency]
   );
 
   const { next7DaysTotal, totalDueThisMonth, totalIncomeThisMonth } =
     useMemo(() => {
-      if (!latestRates) {
+      if (!selectedSnapshot) {
         return {
           next7DaysTotal: 0,
           totalDueThisMonth: 0,
@@ -264,11 +270,11 @@ export function useRecurringPayments(
         totalDueThisMonth: dueThisMonth,
         totalIncomeThisMonth: incomeThisMonth,
       };
-    }, [allPayments, calendarRevision, latestRates, toPreferred]);
+    }, [allPayments, calendarRevision, selectedSnapshot, toPreferred]);
 
   /** Total due for filtered period, computed from the FULL matching set (not limit-truncated). */
   const totalDueFiltered = useMemo((): number => {
-    if (!latestRates) return 0;
+    if (!selectedSnapshot) return 0;
     if (!dateRange) return totalDueThisMonth;
     return matchingPayments
       .filter((p) => p.isExpense)
@@ -276,7 +282,7 @@ export function useRecurringPayments(
   }, [
     matchingPayments,
     dateRange,
-    latestRates,
+    selectedSnapshot,
     totalDueThisMonth,
     toPreferred,
   ]);

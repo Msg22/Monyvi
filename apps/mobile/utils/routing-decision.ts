@@ -12,7 +12,7 @@ export type InitialSyncState = "in-progress" | "success" | "failed" | "timeout";
  * No market-rate condition is essential authenticated startup data. The field
  * remains in the context shape for compatibility with the existing route gate.
  */
-export type InitialSyncFailureReason = null;
+export type InitialSyncFailureReason = "market-rates-unavailable" | null;
 
 export type RoutingOutcome = "loading" | "dashboard" | "onboarding" | "retry";
 

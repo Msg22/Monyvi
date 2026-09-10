@@ -24,8 +24,7 @@ function buildRoot() {
   const fiatUsdPerUnit = { BTC: "95000.5000000001" };
   for (const code of REQUIRED_FIAT_CODES) {
     if (code !== "USD") {
-      fiatUsdPerUnit[code] =
-        code === "OMR" ? "0.10000000000000001" : "0.5";
+      fiatUsdPerUnit[code] = code === "OMR" ? "0.10000000000000001" : "0.5";
     }
   }
   return {
@@ -51,9 +50,7 @@ function buildObservations({
     (instrumentCode) => instrumentCode !== omitInstrument
   ).map((instrumentCode, index) => {
     const isMetal = instrumentCode.startsWith("metal:");
-    const currency = isMetal
-      ? null
-      : instrumentCode.slice("currency:".length);
+    const currency = isMetal ? null : instrumentCode.slice("currency:".length);
     const valueDecimal =
       instrumentCode === "metal:GOLD"
         ? root.goldUsdPerGram
@@ -63,14 +60,12 @@ function buildObservations({
             ? "1"
             : root.fiatUsdPerUnit[currency];
     return {
-      id: `aaaaaaaa-aaaa-4aaa-8aaa-${String(index + 1).padStart(12, "0")}`,
+      id: `${snapshotId.slice(0, 8)}-aaaa-4aaa-8aaa-${String(index + 1).padStart(12, "0")}`,
       batchId,
       capturedAt,
       instrumentCode,
       valueDecimal,
-      unit: isMetal
-        ? "usd_per_pure_gram"
-        : "usd_per_currency_unit",
+      unit: isMetal ? "usd_per_pure_gram" : "usd_per_currency_unit",
       orientation: "quote_per_base",
       providerObservedAt: isMetal ? METAL_TIME : CURRENCY_TIME,
       source,
@@ -100,7 +95,11 @@ function buildEnvelope({
   };
 }
 
-function buildPage({ snapshots, nextCursor = null, upperWatermark = WATERMARK }) {
+function buildPage({
+  snapshots,
+  nextCursor = null,
+  upperWatermark = WATERMARK,
+}) {
   return { snapshots, nextCursor, upperWatermark };
 }
 
@@ -114,10 +113,7 @@ test("validateSnapshotPage accepts one complete bound root-plus-observation unit
   assert.equal(page.units.length, 1);
   assert.equal(page.units[0].root.id, SNAPSHOT_A);
   assert.equal(page.units[0].observations.length, 37);
-  assert.equal(
-    page.units[0].root.omr_usd,
-    "0.10000000000000001"
-  );
+  assert.equal(page.units[0].root.omr_usd, "0.10000000000000001");
   assert.equal(
     page.units[0].observations.find(
       (row) => row.instrument_code === "currency:OMR"

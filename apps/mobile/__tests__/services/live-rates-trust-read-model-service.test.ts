@@ -1,16 +1,17 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import {
-  buildTrustFromSelectedSnapshot,
-  summarizeLiveRatesTrust,
-  type SelectedSnapshotTrustInput,
-} from "@/services/live-rates-trust-read-model-service";
+import * as liveRatesTrustModule from "@/services/live-rates-trust-read-model-service";
 import type { SelectedCurrentMarketRate } from "@/services/market-rate-snapshot-read-model-service";
 import {
   isCurrentMarketInstrumentCode,
   type CurrentMarketInstrument,
 } from "@monyvi/logic";
+
+const { buildTrustFromSelectedSnapshot, summarizeLiveRatesTrust } =
+  liveRatesTrustModule;
+type SelectedSnapshotTrustInput =
+  liveRatesTrustModule.SelectedSnapshotTrustInput;
 
 const NOW_MS = Date.parse("2026-09-09T11:00:00.000Z");
 const DAY_MS = 86_400_000;
@@ -42,7 +43,9 @@ function createTrustInput(
         ? new Date(NOW_MS - 1_000)
         : seed.providerObservedAt;
     const ageMs =
-      providerObservedAt === null ? null : NOW_MS - providerObservedAt.getTime();
+      providerObservedAt === null
+        ? null
+        : NOW_MS - providerObservedAt.getTime();
     const freshness: SelectedCurrentMarketRate["freshness"] =
       providerObservedAt === null
         ? "unknown"
@@ -55,9 +58,7 @@ function createTrustInput(
       instrumentCode,
       valueDecimal: seed.valueDecimal ?? "100.25",
       normalizedUsdPerBaseDecimal: seed.valueDecimal ?? "100.25",
-      unit: isMetal
-        ? "usd_per_pure_gram"
-        : "usd_per_currency_unit",
+      unit: isMetal ? "usd_per_pure_gram" : "usd_per_currency_unit",
       orientation: "quote_per_base",
       providerObservedAt,
       source: seed.source ?? "metals.dev",
@@ -74,14 +75,10 @@ function createTrustInput(
 }
 
 function readModuleExport(moduleValue: unknown, name: string): unknown {
-  if (
-    typeof moduleValue !== "object" ||
-    moduleValue === null ||
-    !(name in moduleValue)
-  ) {
+  if (typeof moduleValue !== "object" || moduleValue === null) {
     return undefined;
   }
-  return moduleValue[name];
+  return Object.entries(moduleValue).find(([key]) => key === name)?.[1];
 }
 
 describe("buildTrustFromSelectedSnapshot", () => {
@@ -125,10 +122,7 @@ describe("buildTrustFromSelectedSnapshot", () => {
 
   it("never queries observations independently and never mixes another snapshot", () => {
     const serviceText = readFileSync(
-      join(
-        __dirname,
-        "../../services/live-rates-trust-read-model-service.ts"
-      ),
+      join(__dirname, "../../services/live-rates-trust-read-model-service.ts"),
       "utf8"
     );
 
@@ -138,10 +132,10 @@ describe("buildTrustFromSelectedSnapshot", () => {
     expect(serviceText).not.toContain(".observe(");
     expect(serviceText).not.toContain("watermelondb");
 
-    const moduleExports: unknown = require(
-      "@/services/live-rates-trust-read-model-service"
-    );
-    expect(readModuleExport(moduleExports, "observeLiveRatesTrust")).toBeUndefined();
+    const moduleExports: unknown = liveRatesTrustModule;
+    expect(
+      readModuleExport(moduleExports, "observeLiveRatesTrust")
+    ).toBeUndefined();
     expect(
       readModuleExport(moduleExports, "buildLiveRatesTrustReadModel")
     ).toBeUndefined();
