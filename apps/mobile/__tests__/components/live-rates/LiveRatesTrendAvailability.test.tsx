@@ -24,7 +24,7 @@ describe("Live Rates unavailable historical trends", () => {
         price24k="3,100"
         price21k="2,712"
         price18k="2,325"
-        trendPercent={null}
+        trendPercent={0}
         currencySymbol="E£"
       />
     );
@@ -37,7 +37,7 @@ describe("Live Rates unavailable historical trends", () => {
       <MetalCard
         metalName="Silver"
         price="40"
-        trendPercent={null}
+        trendPercent={0}
         borderColor="#ffffff"
         currencySymbol="E£"
       />
@@ -53,7 +53,7 @@ describe("Live Rates unavailable historical trends", () => {
         code="USD"
         name="US Dollar"
         rate="50 E£"
-        changePercent={null}
+        changePercent={0}
       />
     );
 
