@@ -1,9 +1,3 @@
-import type {
-  Account,
-  Asset,
-  AssetMetal,
-  DailySnapshotNetWorth,
-} from "@monyvi/db";
 import { Decimal } from "decimal.js";
 import { getSameDayLastMonth } from "@monyvi/logic";
 
@@ -57,9 +51,8 @@ jest.mock("@nozbe/watermelondb", () => ({
 }));
 
 jest.mock("@/services/user-data-access", () => ({
-  queryChildrenOfOwnedParents: (...args: readonly unknown[]): unknown =>
-    mockQueryChildrenOfOwnedParents(...args),
-  queryOwned: (...args: readonly unknown[]): unknown => mockQueryOwned(...args),
+  queryChildrenOfOwnedParents: mockQueryChildrenOfOwnedParents,
+  queryOwned: mockQueryOwned,
 }));
 
 import {
@@ -69,33 +62,40 @@ import {
   observeNetWorthAssetMetals,
   observeNetWorthAssets,
   observeNetWorthSnapshots,
+  type NetWorthAccountInput,
+  type NetWorthAssetMetalInput,
+  type NetWorthOwnedAssetInput,
+  type NetWorthSnapshotInput,
 } from "@/services/net-worth-read-model-service";
 
-function createAccount(balance: number, currency: "EGP" | "USD"): Account {
-  return { balance, currency } as unknown as Account;
+function createAccount(
+  balance: number,
+  currency: NetWorthAccountInput["currency"]
+): NetWorthAccountInput {
+  return { balance, currency };
 }
 
 function createAssetMetal(
   weightGramsDecimal: string,
   metalType: "GOLD" | "SILVER" = "GOLD"
-): AssetMetal {
+): NetWorthAssetMetalInput {
   return {
     metalType,
     purityFactorDecimal: "1",
     purityFraction: 1,
     weightGrams: Number(weightGramsDecimal),
     weightGramsDecimal,
-  } as unknown as AssetMetal;
+  };
 }
 
 function createSnapshot(
   date: string,
   totalNetWorth: number
-): DailySnapshotNetWorth {
+): NetWorthSnapshotInput {
   return {
     snapshotDate: new Date(date),
     totalNetWorth,
-  } as unknown as DailySnapshotNetWorth;
+  };
 }
 
 describe("net-worth-read-model-service", () => {
@@ -139,7 +139,10 @@ describe("net-worth-read-model-service", () => {
   });
 
   it("builds a child asset-metal query only when scoped assets exist", () => {
-    const asset = { id: "asset-1" } as unknown as Asset;
+    const asset: NetWorthOwnedAssetInput = {
+      id: "asset-1",
+      userId: "user-1",
+    };
 
     expect(
       observeNetWorthAssetMetals({ userId: "user-1", assets: [asset] })
@@ -158,9 +161,10 @@ describe("net-worth-read-model-service", () => {
   });
 
   it("builds preferred-currency and USD net-worth totals from the exact selected snapshot", () => {
+    const fixture = completeFixtureA();
     const snapshot = selectMarketRateSnapshot(
-      completeFixtureA().roots as never,
-      completeFixtureA().observations as never,
+      fixture.roots,
+      fixture.observations,
       Date.parse("2026-09-09T11:00:00.000Z")
     );
     if (!snapshot) {
