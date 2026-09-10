@@ -36,7 +36,7 @@ interface GoldHeroCardProps {
   readonly price24k: string;
   readonly price21k: string;
   readonly price18k: string;
-  readonly trendPercent: number;
+  readonly trendPercent: number | null;
   readonly currencySymbol: string;
 }
 
@@ -47,11 +47,29 @@ interface GoldHeroCardProps {
 function TrendBadge({
   trendPercent,
 }: {
-  readonly trendPercent: number;
+  readonly trendPercent: number | null;
 }): React.JSX.Element | null {
   const { t } = useTranslation("metals");
+  if (trendPercent === null || !Number.isFinite(trendPercent)) {
+    return null;
+  }
+
   const roundedTrend = Number(trendPercent.toFixed(1));
-  if (roundedTrend === 0) return null;
+  if (roundedTrend === 0) {
+    return (
+      <View className="flex-row items-center mt-0.5 ms-1">
+        <Text
+          style={{
+            color: palette.slate[400],
+            fontSize: 12,
+            fontWeight: "500",
+          }}
+        >
+          0.0%
+        </Text>
+      </View>
+    );
+  }
 
   const isUp = roundedTrend > 0;
   const color = isUp ? palette.nileGreen[400] : palette.red[400];

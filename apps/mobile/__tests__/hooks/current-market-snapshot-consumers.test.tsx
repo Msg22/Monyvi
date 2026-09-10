@@ -1,0 +1,355 @@
+import { act, renderHook, waitFor } from "@testing-library/react-native";
+import { Decimal } from "decimal.js";
+
+import {
+  selectMarketRateSnapshot,
+  type SelectedMarketRateSnapshot,
+} from "@/services/market-rate-snapshot-read-model-service";
+import {
+  completeFixtureA,
+  createRootA,
+  divergentWideRootFixtureA,
+  SNAPSHOT_A_ID,
+} from "../fixtures/market-rate-snapshot";
+import { formatRate } from "@monyvi/logic";
+
+const NOW_MS = Date.parse("2026-09-09T11:00:00.000Z");
+
+interface SnapshotObserver {
+  readonly next: (value: SelectedMarketRateSnapshot | null) => void;
+  readonly error?: (cause: unknown) => void;
+}
+
+const mockSnapshotObservers: SnapshotObserver[] = [];
+let mockPendingSnapshot: SelectedMarketRateSnapshot | null = null;
+let mockEmitSnapshotOnSubscribe = true;
+const mockStreamRefresh = jest.fn<void, []>();
+
+jest.mock("@/services/market-rate-snapshot-read-model-service", () => {
+  const actual = jest.requireActual<
+    typeof import("@/services/market-rate-snapshot-read-model-service")
+  >("@/services/market-rate-snapshot-read-model-service");
+  return {
+    ...actual,
+    observeSelectedMarketRateSnapshot: () => ({
+      refresh: mockStreamRefresh,
+      subscribe: (observer: SnapshotObserver) => {
+        mockSnapshotObservers.push(observer);
+        if (mockEmitSnapshotOnSubscribe) {
+          observer.next(mockPendingSnapshot);
+        }
+        return { unsubscribe: jest.fn() };
+      },
+    }),
+  };
+});
+
+jest.mock("@/providers/DatabaseProvider", () => {
+  const database = {
+    get: () => ({
+      query: () => ({
+        observe: () => ({
+          subscribe: ({
+            next,
+          }: {
+            next: (rows: readonly unknown[]) => void;
+          }) => {
+            next([]);
+            return { unsubscribe: jest.fn() };
+          },
+        }),
+        fetch: () => Promise.resolve([]),
+      }),
+    }),
+  };
+
+  return { useDatabase: () => database };
+});
+
+jest.mock("@/providers/MarketRatesRealtimeProvider", () => ({
+  useMarketRatesRealtime: () => ({ isConnected: true }),
+}));
+
+jest.mock("@/hooks/usePreferredCurrency", () => ({
+  usePreferredCurrency: () => ({
+    preferredCurrency: "EGP",
+    isLoading: false,
+  }),
+}));
+
+jest.mock("@/hooks/useCurrentUser", () => ({
+  useCurrentUser: () => ({
+    userId: "user-1",
+    isResolvingUser: false,
+    profile: null,
+  }),
+  runUserScopedEffect: (input: {
+    onAuthenticated: (userId: string) => (() => void) | void;
+  }) => input.onAuthenticated("user-1"),
+}));
+
+jest.mock("@/services/live-rates-refresh-service", () => ({
+  refreshLiveMarketRates: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock("@/utils/logger", () => ({
+  logger: {
+    debug: jest.fn(),
+    error: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+  },
+}));
+
+jest.mock("react-i18next", () => ({
+  useTranslation: () => ({ i18n: { resolvedLanguage: "en" } }),
+}));
+
+const netWorthInputs: Array<Record<string, unknown>> = [];
+jest.mock("@/services/net-worth-read-model-service", () => ({
+  observeNetWorthAccounts: () => mockCreateQuery([]),
+  observeNetWorthAssets: () => mockCreateQuery([]),
+  observeNetWorthAssetMetals: () => mockCreateQuery([]),
+  observeNetWorthSnapshots: () => mockCreateQuery([]),
+  buildNetWorthReadModel: (input: Record<string, unknown>) => {
+    netWorthInputs.push(input);
+    return null;
+  },
+  buildMonthlyPercentageChange: () => null,
+  buildWealthBreakdownReadModel: () => null,
+}));
+
+interface MockRowsObservable {
+  subscribe(input: { readonly next: (result: readonly unknown[]) => void }): {
+    readonly unsubscribe: jest.Mock<void, []>;
+  };
+}
+
+interface MockRowsQuery {
+  observe(): MockRowsObservable;
+  observeWithColumns(): MockRowsObservable;
+}
+
+function mockCreateQuery(rows: readonly unknown[]): MockRowsQuery {
+  return {
+    observe: () => ({
+      subscribe: ({ next }: { next: (result: readonly unknown[]) => void }) => {
+        next(rows);
+        return { unsubscribe: jest.fn<void, []>() };
+      },
+    }),
+    observeWithColumns: () => ({
+      subscribe: ({ next }: { next: (result: readonly unknown[]) => void }) => {
+        next(rows);
+        return { unsubscribe: jest.fn<void, []>() };
+      },
+    }),
+  };
+}
+
+const portfolioShapeInputs: Array<Record<string, unknown>> = [];
+jest.mock("@/services/metal-portfolio-read-model-service", () => ({
+  observePortfolioAssets: () => mockCreateQuery([]),
+  observePortfolioAssetMetals: () => mockCreateQuery([]),
+  observePortfolioHoldingStates: () => mockCreateQuery([]),
+  observePortfolioMetalSellGroups: () => mockCreateQuery([]),
+  observePortfolioRecentHistory: () => mockCreateQuery([]),
+  observePortfolioSaleRateReferences: () => mockCreateQuery([]),
+  selectPortfolioHoldings: (model: unknown) => model,
+  buildMetalPortfolioReadModel: (input: Record<string, unknown>) => ({
+    ...input,
+    activeHoldings: [],
+  }),
+  shapeMetalPortfolioHoldings: (input: Record<string, unknown>) => {
+    portfolioShapeInputs.push(input);
+    return [];
+  },
+}));
+
+const detailReadInputs: Array<Record<string, unknown>> = [];
+jest.mock("@/services/metal-action-evidence-observer-service", () => ({
+  observeMetalDetailActionEvidence: () => mockCreateQuery([]),
+}));
+jest.mock("@/services/metal-detail-read-model-service", () => ({
+  observeMetalDetailHolding: () => mockCreateQuery([]),
+  observeMetalDetailEvents: () => mockCreateQuery([]),
+  observeMetalDetailHoldingState: () => mockCreateQuery([]),
+  observeMetalDetailRateReferences: () => mockCreateQuery([]),
+  readMetalDetailReadModel: (input: Record<string, unknown>) => {
+    detailReadInputs.push(input);
+    return Promise.resolve(null);
+  },
+}));
+
+jest.mock("@/services/sync", () => ({
+  syncDatabase: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock("@react-navigation/native", () => ({
+  useIsFocused: () => true,
+}));
+
+import { useMarketRates } from "@/hooks/useMarketRates";
+import { useLiveRatesScreen } from "@/hooks/useLiveRatesScreen";
+import { useMetalHoldingDetail } from "@/hooks/useMetalHoldingDetail";
+import { useMetalPortfolio } from "@/hooks/useMetalPortfolio";
+import { useNetWorth } from "@/hooks/useNetWorth";
+
+function emitSnapshot(snapshot: SelectedMarketRateSnapshot | null): void {
+  mockPendingSnapshot = snapshot;
+  for (const observer of mockSnapshotObservers) {
+    observer.next(snapshot);
+  }
+}
+
+function snapshotA(): SelectedMarketRateSnapshot {
+  const fixture = completeFixtureA();
+  const selected = selectMarketRateSnapshot(
+    fixture.roots,
+    fixture.observations,
+    NOW_MS
+  );
+  if (!selected) {
+    throw new Error("fixture setup: snapshot A must be selectable");
+  }
+  return selected;
+}
+
+describe("issue #302 cross-consumer snapshot identity", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockSnapshotObservers.splice(0);
+    mockPendingSnapshot = null;
+    mockEmitSnapshotOnSubscribe = true;
+    netWorthInputs.splice(0);
+    portfolioShapeInputs.splice(0);
+    detailReadInputs.splice(0);
+  });
+
+  it("exposes one selected snapshot with exact observation decimals everywhere", async () => {
+    const snapshot = snapshotA();
+    emitSnapshot(snapshot);
+
+    const { result } = renderHook(() => useMarketRates());
+    await waitFor(() =>
+      expect(result.current.selectedSnapshot?.snapshotId).toBe(SNAPSHOT_A_ID)
+    );
+    expect(
+      result.current.selectedSnapshot?.ratesByInstrument.get("metal:GOLD")
+        ?.valueDecimal
+    ).toBe("3738.74000000");
+
+    renderHook(() => useNetWorth());
+    await waitFor(() => expect(netWorthInputs.length).toBeGreaterThan(0));
+    const netWorthInput = netWorthInputs.at(-1);
+    expect(netWorthInput).toMatchObject({
+      currentSnapshot: { snapshotId: SNAPSHOT_A_ID },
+    });
+    expect(netWorthInput).not.toHaveProperty("latestRates");
+
+    renderHook(() => useMetalPortfolio());
+    await waitFor(() => expect(portfolioShapeInputs.length).toBeGreaterThan(0));
+    const portfolioInput = portfolioShapeInputs.at(-1);
+    expect(portfolioInput).toMatchObject({
+      snapshotId: SNAPSHOT_A_ID,
+      currentRates: {
+        gold: { valueDecimal: "3738.74000000", state: "stale" },
+      },
+    });
+
+    renderHook(() => useMetalHoldingDetail("holding-1"));
+    await waitFor(() => expect(detailReadInputs.length).toBeGreaterThan(0));
+    const detailInput = detailReadInputs.at(-1);
+    expect(detailInput).toMatchObject({
+      snapshotId: SNAPSHOT_A_ID,
+      currentRates: {
+        gold: { valueDecimal: "3738.74000000" },
+      },
+    });
+  });
+
+  it("shows current rates and trust from the same snapshot and never mixes", async () => {
+    const snapshot = snapshotA();
+    emitSnapshot(snapshot);
+
+    const { result } = renderHook(() => useLiveRatesScreen());
+    await waitFor(() => expect(result.current.hasData).toBe(true));
+
+    const usdRow = result.current.currencies.find(
+      (currency) => currency.code === "USD"
+    );
+    const expectedUsd = formatRate(
+      Number(new Decimal("3738.74000000").div("0.0210523309"))
+    );
+    expect(usdRow?.trust.source).toBe("metals.dev");
+    expect(usdRow).toBeDefined();
+    expect(result.current.metals.price24k).toBe(expectedUsd);
+    expect(result.current.metals.goldTrendPercent).toBeNull();
+    expect(usdRow?.changePercent).toBeNull();
+
+    const fixture = divergentWideRootFixtureA();
+    const divergent = selectMarketRateSnapshot(
+      fixture.roots,
+      fixture.observations,
+      NOW_MS
+    );
+    if (!divergent) {
+      throw new Error("fixture setup: divergent snapshot must select");
+    }
+    act(() => emitSnapshot(divergent));
+
+    await waitFor(() => expect(result.current.hasData).toBe(true));
+    expect(result.current.metals.price24k).toBe(expectedUsd);
+  });
+
+  it("derives freshness from provider observation time only", async () => {
+    const fixture = completeFixtureA();
+    const staleProvider = new Date(NOW_MS - 25 * 3_600_000);
+    const roots = [
+      {
+        ...createRootA(),
+        createdAt: new Date(NOW_MS),
+      },
+    ];
+    const observations = fixture.observations.map((row) => ({
+      ...row,
+      createdAt: new Date(NOW_MS),
+      providerObservedAt: staleProvider,
+    }));
+    const selected = selectMarketRateSnapshot(roots, observations, NOW_MS);
+    if (!selected) {
+      throw new Error("fixture setup: stale-provider snapshot must select");
+    }
+    emitSnapshot(selected);
+
+    const { result } = renderHook(() => useMarketRates());
+
+    await waitFor(() => expect(result.current.isCurrentLoading).toBe(false));
+    expect(result.current.isStale).toBe(true);
+    expect(result.current.lastUpdated?.getTime()).toBe(staleProvider.getTime());
+  });
+
+  it("does not block recorded portfolio or detail facts while rates are pending", async () => {
+    mockEmitSnapshotOnSubscribe = false;
+
+    renderHook(() => useMetalPortfolio());
+    await waitFor(() => expect(portfolioShapeInputs.length).toBeGreaterThan(0));
+    expect(portfolioShapeInputs.at(-1)).toMatchObject({
+      snapshotId: null,
+      currentRates: {
+        gold: { state: "missing" },
+        silver: { state: "missing" },
+      },
+    });
+
+    renderHook(() => useMetalHoldingDetail("holding-1"));
+    await waitFor(() => expect(detailReadInputs.length).toBeGreaterThan(0));
+    expect(detailReadInputs.at(-1)).toMatchObject({
+      snapshotId: null,
+      currentRates: {
+        gold: { state: "missing" },
+        silver: { state: "missing" },
+      },
+    });
+  });
+});

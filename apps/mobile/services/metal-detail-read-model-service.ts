@@ -168,6 +168,7 @@ export interface ReadMetalDetailReadModelOptions {
   readonly currentRates?: LiveRatesTrustReadModel;
   readonly holdingId: string;
   readonly preferredCurrency?: CurrencyType;
+  readonly snapshotId?: string | null;
   readonly userId: string;
 }
 

@@ -18,9 +18,9 @@ import type { PendingAccount } from "@/services/pending-account-service";
 import type { AccountWithBankDetails } from "@/services/sms-account-matcher";
 import type { TransactionEdits } from "@/services/sms-edit-modal-service";
 import { formatToLocalDateString } from "@/utils/dateHelpers";
-import type { Category, MarketRate } from "@monyvi/db";
+import type { Category, CurrencyType } from "@monyvi/db";
 import {
-  formatConversionPreview,
+  formatCurrency,
   formatAmountInput,
   parseAmountInput,
   CURRENCY_INFO_MAP,
@@ -50,6 +50,11 @@ import {
   type UseTransactionEditStateReturn,
 } from "@/hooks/useTransactionEditState";
 import { useModalBottomInset } from "@/hooks/useModalBottomInset";
+import {
+  convertSelectedCurrentAmount,
+  getSelectedCurrentCurrencyRate,
+} from "@/services/current-market-snapshot-calculations";
+import type { SelectedMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
 
 export interface TransactionEditModalProps {
   /** Whether the modal is visible */
@@ -66,7 +71,7 @@ export interface TransactionEditModalProps {
   /** In-memory pending accounts created this session */
   readonly pendingAccounts: readonly PendingAccount[];
   /** Market rates for currency conversion (optional, from useMarketRates) */
-  readonly latestRates: MarketRate | null;
+  readonly selectedSnapshot: SelectedMarketRateSnapshot | null;
   /** Map of category IDs to categories */
   readonly categoryMap: ReadonlyMap<string, Category>;
   /** Expense categories for the category picker */
@@ -83,13 +88,72 @@ export interface TransactionEditModalProps {
   readonly onClose: () => void;
 }
 
+function formatSelectedSnapshotConversionPreview(
+  amount: number | string,
+  fromCurrency: CurrencyType,
+  toCurrency: CurrencyType,
+  currentSnapshot: SelectedMarketRateSnapshot | null
+): string {
+  if (currentSnapshot === null) return "Exchange rate unavailable";
+  const parsedAmount = typeof amount === "string" ? Number(amount) : amount;
+  const safeAmount = Number.isFinite(parsedAmount) ? parsedAmount : 0;
+  if (fromCurrency === toCurrency) {
+    return formatCurrency({
+      amount: safeAmount,
+      currency: toCurrency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  const converted = convertSelectedCurrentAmount({
+    amount: safeAmount,
+    fromCurrency,
+    toCurrency,
+    currentSnapshot,
+  });
+  const forwardRate = getSelectedCurrentCurrencyRate({
+    fromCurrency,
+    toCurrency,
+    currentSnapshot,
+  });
+  if (converted === null || forwardRate === null) {
+    return "Conversion unavailable";
+  }
+
+  const baseCurrency = forwardRate >= 1 ? fromCurrency : toCurrency;
+  const quoteCurrency = forwardRate >= 1 ? toCurrency : fromCurrency;
+  const displayRate =
+    forwardRate >= 1
+      ? forwardRate
+      : getSelectedCurrentCurrencyRate({
+          fromCurrency: toCurrency,
+          toCurrency: fromCurrency,
+          currentSnapshot,
+        });
+  if (displayRate === null) {
+    return "Conversion unavailable";
+  }
+  const formattedRate = new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: forwardRate >= 1 ? 2 : 4,
+    minimumFractionDigits: 2,
+  }).format(displayRate);
+
+  return `≈ ${formatCurrency({
+    amount: converted,
+    currency: toCurrency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} at rate 1 ${baseCurrency} = ${formattedRate} ${quoteCurrency}`;
+}
+
 export function TransactionEditModal(
   props: TransactionEditModalProps
 ): React.JSX.Element {
   const {
     visible,
     onClose,
-    latestRates,
+    selectedSnapshot,
     transaction,
     sourceVariant = "default",
   } = props;
@@ -200,7 +264,7 @@ export function TransactionEditModal(
                 state={state}
                 setters={setters}
                 accountHandlers={accountHandlers}
-                latestRates={latestRates}
+                selectedSnapshot={selectedSnapshot}
               />
             ) : (
               <>
@@ -290,11 +354,11 @@ export function TransactionEditModal(
                         color={palette.blue[500]}
                       />
                       <Text className="text-xs text-blue-400 font-medium ms-2 flex-shrink">
-                        {formatConversionPreview(
+                        {formatSelectedSnapshotConversionPreview(
                           state.amount,
                           transaction.currency,
                           state.selectedAccountCurrency,
-                          latestRates
+                          selectedSnapshot
                         )}
                       </Text>
                     </View>
@@ -542,7 +606,7 @@ interface SmsReviewEditFieldsProps {
   readonly state: UseTransactionEditStateReturn["state"];
   readonly setters: UseTransactionEditStateReturn["setters"];
   readonly accountHandlers: UseTransactionEditStateReturn["accountHandlers"];
-  readonly latestRates: MarketRate | null;
+  readonly selectedSnapshot: SelectedMarketRateSnapshot | null;
 }
 
 type SmsEditableField = "amount" | "merchant" | null;
@@ -551,7 +615,7 @@ function SmsReviewEditFields({
   state,
   setters,
   accountHandlers,
-  latestRates,
+  selectedSnapshot,
 }: SmsReviewEditFieldsProps): React.JSX.Element {
   const { t } = useTranslation("transactions");
   const [focusedField, setFocusedField] = useState<SmsEditableField>(null);
@@ -777,11 +841,11 @@ function SmsReviewEditFields({
             color={palette.blue[500]}
           />
           <Text className="ms-2 flex-1 text-xs font-medium text-blue-500">
-            {formatConversionPreview(
+            {formatSelectedSnapshotConversionPreview(
               state.amount,
               state.editedTransactionCurrency,
               state.selectedAccountCurrency,
-              latestRates
+              selectedSnapshot
             )}
           </Text>
         </View>

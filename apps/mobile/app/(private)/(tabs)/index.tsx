@@ -64,7 +64,7 @@ export default function DashboardScreen(): React.JSX.Element {
   const { sync } = useSync();
   const { accounts, isLoading: accountsLoading } = useAccounts();
   const {
-    latestRates,
+    selectedSnapshot,
     previousDayRate,
     isLoading: ratesLoading,
     lastUpdated,
@@ -236,7 +236,7 @@ export default function DashboardScreen(): React.JSX.Element {
           </SectionErrorBoundary>
           <SectionErrorBoundary name={t("section_live_rates")}>
             <LiveRates
-              latestRates={latestRates}
+              selectedSnapshot={selectedSnapshot}
               previousDayRate={previousDayRate}
               isLoading={ratesLoading}
               lastUpdated={lastUpdated}

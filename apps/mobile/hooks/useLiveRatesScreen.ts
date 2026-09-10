@@ -1,9 +1,7 @@
 import { useDatabase } from "@/providers/DatabaseProvider";
 import { refreshLiveMarketRates } from "@/services/live-rates-refresh-service";
 import {
-  observeLiveRatesTrust,
   summarizeLiveRatesTrust,
-  type LiveRatesTrustObservationStream,
   type LiveRatesTrustReadModel,
   type LiveRatesTrustState,
   type LiveRatesTrustValue,
@@ -13,14 +11,15 @@ import { formatTimeAgo } from "@/utils/dateHelpers";
 import type { CurrencyType } from "@monyvi/db";
 import {
   type CurrencyInfo,
+  type CurrentMarketInstrument,
   CURRENCY_INFO_MAP,
   SUPPORTED_CURRENCIES,
   calculateTrendPercent,
-  convertCurrency,
   formatRate,
-  getGoldPurityPrice,
-  getMetalPrice,
+  getCurrencyUsdValue,
   isSupportedMetalsIsoCurrencyCode,
+  parseCanonicalDecimal,
+  serializeDecimal,
 } from "@monyvi/logic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -30,8 +29,8 @@ import { usePreferredCurrency } from "./usePreferredCurrency";
 
 const DEFAULT_CURRENCY_COUNT = 10;
 const RATE_STATUS_REFRESH_INTERVAL_MS = 60_000;
-const GOLD_21K_PURITY = 21 / 24;
-const GOLD_18K_PURITY = 18 / 24;
+const GOLD_21K_PURITY_DECIMAL = "0.875";
+const GOLD_18K_PURITY_DECIMAL = "0.75";
 
 const DEFAULT_CURRENCIES: readonly CurrencyType[] = [
   "EGP",
@@ -50,9 +49,9 @@ interface MetalDisplayData {
   readonly price24k: string;
   readonly price21k: string;
   readonly price18k: string;
-  readonly goldTrendPercent: number;
+  readonly goldTrendPercent: number | null;
   readonly silverPrice: string;
-  readonly silverTrendPercent: number;
+  readonly silverTrendPercent: number | null;
   readonly currencySymbol: string;
 }
 
@@ -61,7 +60,7 @@ interface CurrencyDisplayItem {
   readonly name: string;
   readonly flag: string;
   readonly rate: string;
-  readonly changePercent: number;
+  readonly changePercent: number | null;
   readonly trust: LiveRatesTrustDisplayValue;
 }
 
@@ -101,7 +100,7 @@ interface UseLiveRatesScreenResult {
   readonly rateTrust: LiveRatesTrustDisplay;
 }
 
-function createInitialTrustReadModel(): LiveRatesTrustReadModel {
+function createEmptyTrustReadModel(): LiveRatesTrustReadModel {
   return {
     gold: { state: "missing", ageMs: null, providerObservedAt: null },
     silver: { state: "missing", ageMs: null, providerObservedAt: null },
@@ -113,164 +112,165 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   const database = useDatabase();
   const { i18n } = useTranslation();
   const locale = resolveLiveRatesLocale(i18n.resolvedLanguage);
-  const { latestRates, previousDayRate, isLoading, isConnected, lastUpdated } =
-    useMarketRates();
+  const {
+    selectedSnapshot,
+    previousDayRate,
+    isCurrentLoading,
+    currentError,
+    isConnected,
+    lastUpdated,
+    refreshSelectedSnapshot,
+  } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const [isExpanded, setIsExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [lastUpdatedText, setLastUpdatedText] = useState("");
-  const [trustReadModel, setTrustReadModel] = useState<LiveRatesTrustReadModel>(
-    createInitialTrustReadModel
-  );
-  const [isTrustLoading, setIsTrustLoading] = useState(true);
-  const [trustObservationError, setTrustObservationError] =
-    useState<LiveRatesRefreshError | null>(null);
-  const [trustRetryIndex, setTrustRetryIndex] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] =
     useState<LiveRatesRefreshError | null>(null);
   const isRefreshInProgressRef = useRef(false);
   const latestCapturedAtRef = useRef<number | null>(null);
-  const latestRatesRef = useRef(latestRates);
-  const trustObservationRef = useRef<LiveRatesTrustObservationStream | null>(
-    null
-  );
+  const snapshotAvailableRef = useRef(false);
 
   const updateTimestamp = useCallback((): void => {
-    if (lastUpdated) {
-      setLastUpdatedText(`Updated ${formatTimeAgo(lastUpdated)}`);
-      return;
-    }
-    setLastUpdatedText("");
+    setLastUpdatedText(
+      lastUpdated ? `Updated ${formatTimeAgo(lastUpdated)}` : ""
+    );
   }, [lastUpdated]);
 
   useEffect(() => {
-    latestRatesRef.current = latestRates;
-  }, [latestRates]);
+    const capturedAt = selectedSnapshot?.capturedAt.getTime() ?? null;
+    if (
+      capturedAt !== null &&
+      latestCapturedAtRef.current !== null &&
+      capturedAt > latestCapturedAtRef.current
+    ) {
+      setRefreshError(null);
+    }
+    latestCapturedAtRef.current = capturedAt;
+    snapshotAvailableRef.current = selectedSnapshot !== null;
+  }, [selectedSnapshot]);
 
   useEffect(() => {
     updateTimestamp();
     const timer = setInterval(() => {
       updateTimestamp();
-      trustObservationRef.current?.refresh();
+      refreshSelectedSnapshot();
     }, RATE_STATUS_REFRESH_INTERVAL_MS);
 
     return () => clearInterval(timer);
-  }, [updateTimestamp]);
-
-  useEffect(() => {
-    const observation = observeLiveRatesTrust(database);
-    trustObservationRef.current = observation;
-    setIsTrustLoading(true);
-    const subscription = observation.subscribe({
-      next: (next): void => {
-        const capturedAt = getLatestCapturedAt(next);
-        if (
-          capturedAt !== null &&
-          latestCapturedAtRef.current !== null &&
-          capturedAt > latestCapturedAtRef.current
-        ) {
-          setRefreshError(null);
-        }
-        latestCapturedAtRef.current = capturedAt;
-        setTrustObservationError(null);
-        setTrustReadModel(next);
-        setIsTrustLoading(false);
-      },
-      error: (error: unknown): void => {
-        logger.error("liveRatesTrust.observe.failed", error);
-        setTrustObservationError(
-          latestRatesRef.current
-            ? "cached_refresh_failed"
-            : "initial_refresh_failed"
-        );
-        setIsTrustLoading(false);
-      },
-    });
-
-    return () => {
-      if (trustObservationRef.current === observation) {
-        trustObservationRef.current = null;
-      }
-      subscription.unsubscribe();
-    };
-  }, [database, trustRetryIndex]);
+  }, [refreshSelectedSnapshot, updateTimestamp]);
 
   const currencySymbol = useMemo((): string => {
     return CURRENCY_INFO_MAP[preferredCurrency]?.symbol ?? preferredCurrency;
   }, [preferredCurrency]);
 
   const metals = useMemo((): MetalDisplayData => {
-    if (!latestRates) {
+    const preferredUsdPerUnit = preferredRateDecimal(
+      selectedSnapshot,
+      preferredCurrency
+    );
+    if (!selectedSnapshot || preferredUsdPerUnit === null) {
       return {
         price24k: "—",
         price21k: "—",
         price18k: "—",
-        goldTrendPercent: 0,
+        goldTrendPercent: null,
         silverPrice: "—",
-        silverTrendPercent: 0,
+        silverTrendPercent: null,
         currencySymbol,
       };
     }
 
-    const gold24k = getMetalPrice("GOLD", latestRates, preferredCurrency);
-    const gold21k = getGoldPurityPrice(
-      GOLD_21K_PURITY,
-      latestRates,
-      preferredCurrency
-    );
-    const gold18k = getGoldPurityPrice(
-      GOLD_18K_PURITY,
-      latestRates,
-      preferredCurrency
-    );
+    const goldRate = currentRateDecimal(selectedSnapshot, "metal:GOLD");
+    const silverRate = currentRateDecimal(selectedSnapshot, "metal:SILVER");
+    const gold24k =
+      goldRate === null
+        ? null
+        : displayNumber(divideExact(goldRate, preferredUsdPerUnit));
+    const gold21k =
+      goldRate === null
+        ? null
+        : displayNumber(
+            divideExact(
+              multiplyExact(goldRate, GOLD_21K_PURITY_DECIMAL),
+              preferredUsdPerUnit
+            )
+          );
+    const gold18k =
+      goldRate === null
+        ? null
+        : displayNumber(
+            divideExact(
+              multiplyExact(goldRate, GOLD_18K_PURITY_DECIMAL),
+              preferredUsdPerUnit
+            )
+          );
+    const silver =
+      silverRate === null
+        ? null
+        : displayNumber(divideExact(silverRate, preferredUsdPerUnit));
     const previousGold24k = previousDayRate
-      ? getMetalPrice("GOLD", previousDayRate, preferredCurrency)
+      ? getMetalPriceHistorical(previousDayRate, "GOLD", preferredCurrency)
       : null;
-    const silver = getMetalPrice("SILVER", latestRates, preferredCurrency);
     const previousSilver = previousDayRate
-      ? getMetalPrice("SILVER", previousDayRate, preferredCurrency)
+      ? getMetalPriceHistorical(previousDayRate, "SILVER", preferredCurrency)
       : null;
 
     return {
-      price24k: formatRate(gold24k),
-      price21k: formatRate(gold21k),
-      price18k: formatRate(gold18k),
-      goldTrendPercent: calculateTrendPercent(gold24k, previousGold24k),
-      silverPrice: formatRate(silver),
-      silverTrendPercent: calculateTrendPercent(silver, previousSilver),
+      price24k: gold24k === null ? "—" : formatRate(gold24k),
+      price21k: gold21k === null ? "—" : formatRate(gold21k),
+      price18k: gold18k === null ? "—" : formatRate(gold18k),
+      goldTrendPercent: calculateAvailableTrend(gold24k, previousGold24k),
+      silverPrice: silver === null ? "—" : formatRate(silver),
+      silverTrendPercent: calculateAvailableTrend(silver, previousSilver),
       currencySymbol,
     };
-  }, [latestRates, previousDayRate, preferredCurrency, currencySymbol]);
+  }, [selectedSnapshot, previousDayRate, preferredCurrency, currencySymbol]);
 
   const allCurrencies = useMemo((): readonly CurrencyDisplayItem[] => {
-    if (!latestRates) return [];
+    if (!selectedSnapshot) return [];
+
+    const preferredUsdPerUnit = preferredRateDecimal(
+      selectedSnapshot,
+      preferredCurrency
+    );
+    if (preferredUsdPerUnit === null) return [];
 
     return SUPPORTED_CURRENCIES.filter(
       (currency: CurrencyInfo) =>
         currency.code !== preferredCurrency &&
         isSupportedMetalsIsoCurrencyCode(currency.code)
     ).map((currency: CurrencyInfo): CurrencyDisplayItem => {
-      const rate = convertCurrency(
-        1,
-        currency.code,
-        preferredCurrency,
-        latestRates
-      );
+      if (!isSupportedMetalsIsoCurrencyCode(currency.code)) {
+        throw new Error(`Unsupported current currency: ${currency.code}`);
+      }
+      const instrumentCode: CurrentMarketInstrument =
+        `currency:${currency.code}`;
+      const fromUsd = currentRateDecimal(selectedSnapshot, instrumentCode);
+      const rate =
+        fromUsd === null
+          ? null
+          : displayNumber(divideExact(fromUsd, preferredUsdPerUnit));
       const previousRate = previousDayRate
-        ? convertCurrency(1, currency.code, preferredCurrency, previousDayRate)
+        ? getCurrencyUsdValue(previousDayRate, currency.code) /
+          getCurrencyUsdValue(previousDayRate, preferredCurrency)
         : null;
 
       return {
         code: currency.code,
         name: currency.name,
         flag: currency.flag,
-        rate: `${formatRate(rate)} ${currencySymbol}`,
-        changePercent: calculateTrendPercent(rate, previousRate),
+        rate:
+          rate === null
+            ? "—"
+            : `${formatRate(rate)} ${currencySymbol}`,
+        changePercent: calculateAvailableTrend(rate, previousRate),
         trust: toCombinedTrustDisplay(
           [
-            trustReadModel.currencies.get(currency.code) ?? missingTrustValue(),
-            trustReadModel.currencies.get(preferredCurrency) ??
+            selectedSnapshot.trust.currencies.get(currency.code) ??
+              missingTrustValue(),
+            selectedSnapshot.trust.currencies.get(preferredCurrency) ??
               missingTrustValue(),
           ],
           locale
@@ -279,11 +279,10 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
     });
   }, [
     currencySymbol,
-    latestRates,
     locale,
+    selectedSnapshot,
     preferredCurrency,
     previousDayRate,
-    trustReadModel,
   ]);
 
   const sortedCurrencies = useMemo((): readonly CurrencyDisplayItem[] => {
@@ -335,16 +334,19 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   }, [preferredCurrency]);
 
   const rateTrust = useMemo<LiveRatesTrustDisplay>(() => {
-    const currencyTrustValues = Array.from(trustReadModel.currencies.values());
+    const trust = selectedSnapshot
+      ? selectedSnapshot.trust
+      : createEmptyTrustReadModel();
+    const currencyTrustValues = Array.from(trust.currencies.values());
     return {
       gold: toTrustDisplayValue(
-        trustReadModel.gold,
+        trust.gold,
         undefined,
         undefined,
         locale
       ),
       silver: toTrustDisplayValue(
-        trustReadModel.silver,
+        trust.silver,
         undefined,
         undefined,
         locale
@@ -356,7 +358,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
         locale
       ),
     };
-  }, [locale, trustReadModel]);
+  }, [locale, selectedSnapshot]);
 
   const onToggleExpand = useCallback((): void => {
     setIsExpanded((expanded) => !expanded);
@@ -369,9 +371,6 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
   const onRefresh = useCallback((): void => {
     if (isRefreshInProgressRef.current) return;
 
-    if (trustObservationError !== null) {
-      setTrustRetryIndex((value) => value + 1);
-    }
     isRefreshInProgressRef.current = true;
     setIsRefreshing(true);
     setRefreshError(null);
@@ -382,21 +381,29 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
       } catch (error: unknown) {
         logger.error("liveRates.refresh.failed", error);
         setRefreshError(
-          latestRates ? "cached_refresh_failed" : "initial_refresh_failed"
+          snapshotAvailableRef.current
+            ? "cached_refresh_failed"
+            : "initial_refresh_failed"
         );
       } finally {
         isRefreshInProgressRef.current = false;
         setIsRefreshing(false);
-        trustObservationRef.current?.refresh();
+        refreshSelectedSnapshot();
       }
     })();
-  }, [database, latestRates, trustObservationError]);
+  }, [database, refreshSelectedSnapshot]);
+
+  const observationError: LiveRatesRefreshError | null = currentError
+    ? selectedSnapshot
+      ? "cached_refresh_failed"
+      : "initial_refresh_failed"
+    : null;
 
   return {
-    isLoading: isLoading || isTrustLoading,
+    isLoading: isCurrentLoading,
     isConnected,
     isStale: Object.values(rateTrust).some(({ state }) => state !== "fresh"),
-    hasData: latestRates !== null && !isTrustLoading,
+    hasData: selectedSnapshot !== null,
     metals,
     currencies: visibleCurrencies,
     isExpanded,
@@ -407,20 +414,28 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
     onSearchChange,
     lastUpdatedText,
     isRefreshing,
-    refreshError: trustObservationError ?? refreshError,
+    refreshError: observationError ?? refreshError,
     onRefresh,
     rateTrust,
   };
 }
 
-function getLatestCapturedAt(model: LiveRatesTrustReadModel): number | null {
-  const values = [model.gold, model.silver, ...model.currencies.values()];
-  const capturedTimes = values
-    .map((value) => value.capturedAt?.getTime() ?? null)
-    .filter(
-      (value): value is number => value !== null && Number.isFinite(value)
-    );
-  return capturedTimes.length === 0 ? null : Math.max(...capturedTimes);
+function calculateAvailableTrend(
+  currentValue: number | null,
+  previousValue: number | null
+): number | null {
+  if (
+    currentValue === null ||
+    previousValue === null ||
+    !Number.isFinite(currentValue) ||
+    !Number.isFinite(previousValue) ||
+    previousValue === 0
+  ) {
+    return null;
+  }
+
+  const trend = calculateTrendPercent(currentValue, previousValue);
+  return Number.isFinite(trend) ? trend : null;
 }
 
 function getConservativeObservedAt(
@@ -529,6 +544,52 @@ function formatRateAge(ageMs: number | null, locale: string): string | null {
     -Math.max(1, days),
     "day"
   );
+}
+
+function currentRateDecimal(
+  snapshot: ReturnType<typeof useMarketRates>["selectedSnapshot"],
+  instrumentCode: CurrentMarketInstrument
+): string | null {
+  return snapshot?.ratesByInstrument.get(instrumentCode)?.valueDecimal ?? null;
+}
+
+function preferredRateDecimal(
+  snapshot: ReturnType<typeof useMarketRates>["selectedSnapshot"],
+  preferredCurrency: CurrencyType
+): string | null {
+  if (!snapshot || !isSupportedMetalsIsoCurrencyCode(preferredCurrency)) {
+    return null;
+  }
+  if (preferredCurrency === "USD") {
+    return "1";
+  }
+  const instrumentCode: CurrentMarketInstrument =
+    `currency:${preferredCurrency}`;
+  return currentRateDecimal(snapshot, instrumentCode);
+}
+
+function multiplyExact(left: string, right: string): string {
+  return serializeDecimal(parseCanonicalDecimal(left).times(right));
+}
+
+function divideExact(numerator: string, denominator: string): string {
+  return serializeDecimal(parseCanonicalDecimal(numerator).dividedBy(denominator));
+}
+
+function displayNumber(exactDecimal: string): number {
+  return Number(exactDecimal);
+}
+
+function getMetalPriceHistorical(
+  previousDayRates: Parameters<typeof getCurrencyUsdValue>[0],
+  metal: "GOLD" | "SILVER",
+  preferredCurrency: CurrencyType
+): number {
+  const usdPerGram =
+    metal === "GOLD"
+      ? previousDayRates.goldUsdPerGram
+      : previousDayRates.silverUsdPerGram;
+  return usdPerGram / getCurrencyUsdValue(previousDayRates, preferredCurrency);
 }
 
 function resolveLiveRatesLocale(language: string | undefined): string {

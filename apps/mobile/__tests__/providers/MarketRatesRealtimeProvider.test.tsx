@@ -1,10 +1,22 @@
 import { act, render, waitFor } from "@testing-library/react-native";
 import React from "react";
 
+interface PostgresChangesFilter {
+  readonly event: string;
+  readonly schema: string;
+  readonly table: string;
+}
+
+type PostgresChangesCallback = (payload: unknown) => void;
+type SubscribeCallback = (status: string) => void;
+
 interface MockRealtimeChannel {
   readonly topic: string;
-  on: jest.Mock<MockRealtimeChannel>;
-  subscribe: jest.Mock<MockRealtimeChannel>;
+  on: jest.Mock<
+    MockRealtimeChannel,
+    [string, PostgresChangesFilter, PostgresChangesCallback]
+  >;
+  subscribe: jest.Mock<MockRealtimeChannel, [SubscribeCallback]>;
 }
 
 interface MockAuthState {
@@ -15,14 +27,15 @@ const mockUseAuth = jest.fn<MockAuthState, []>(() => ({
   isAuthenticated: true,
 }));
 const mockSync = jest.fn<Promise<void>, []>(() => Promise.resolve());
-const mockRemoveChannel = jest.fn<Promise<string>, [MockRealtimeChannel]>(
-  () => Promise.resolve("ok")
+const mockRemoveChannel = jest.fn<Promise<string>, [MockRealtimeChannel]>(() =>
+  Promise.resolve("ok")
 );
 const mockChannel = jest.fn<MockRealtimeChannel, [string]>();
 const mockLoggerError = jest.fn<
   void,
   [string, unknown?, Record<string, unknown>?]
 >();
+let latestInsertCallback: PostgresChangesCallback | null = null;
 
 interface Deferred<T> {
   readonly promise: Promise<T>;
@@ -49,8 +62,26 @@ function createDeferred<T>(): Deferred<T> {
 function createChannel(topic: string): MockRealtimeChannel {
   const channel: MockRealtimeChannel = {
     topic,
-    on: jest.fn((): MockRealtimeChannel => channel),
-    subscribe: jest.fn((): MockRealtimeChannel => channel),
+    on: jest.fn(
+      (
+        _event: string,
+        filter: PostgresChangesFilter,
+        callback: PostgresChangesCallback
+      ): MockRealtimeChannel => {
+        if (
+          filter.event === "INSERT" &&
+          filter.schema === "public" &&
+          filter.table === "market_rates"
+        ) {
+          latestInsertCallback = callback;
+        }
+        return channel;
+      }
+    ),
+    subscribe: jest.fn((callback: SubscribeCallback): MockRealtimeChannel => {
+      callback("SUBSCRIBED");
+      return channel;
+    }),
   };
 
   return channel;
@@ -75,10 +106,12 @@ jest.mock("@/services/supabase", () => ({
 jest.mock("@/utils/logger", () => ({
   logger: {
     error: (
-      message: string,
-      error?: unknown,
-      context?: Record<string, unknown>
-    ): void => mockLoggerError(message, error, context),
+      ...args: [
+        message: string,
+        error?: unknown,
+        context?: Record<string, unknown>,
+      ]
+    ): void => mockLoggerError(...args),
   },
 }));
 
@@ -93,9 +126,61 @@ import { MarketRatesRealtimeProvider } from "../../providers/MarketRatesRealtime
 describe("MarketRatesRealtimeProvider", () => {
   beforeEach((): void => {
     jest.clearAllMocks();
+    latestInsertCallback = null;
     mockUseAuth.mockReturnValue({ isAuthenticated: true });
+    mockSync.mockResolvedValue(undefined);
     mockRemoveChannel.mockResolvedValue("ok");
     mockChannel.mockImplementation((topic: string) => createChannel(topic));
+  });
+
+  it("treats a root insert only as a normal sync trigger", async (): Promise<void> => {
+    render(
+      <MarketRatesRealtimeProvider>
+        <></>
+      </MarketRatesRealtimeProvider>
+    );
+
+    await waitFor(() => {
+      expect(latestInsertCallback).not.toBeNull();
+    });
+
+    await act(async () => {
+      latestInsertCallback?.({
+        eventType: "INSERT",
+        new: { id: "untrusted-notification-root" },
+      });
+      await Promise.resolve();
+    });
+
+    expect(mockSync).toHaveBeenCalledTimes(1);
+    expect(mockSync).toHaveBeenCalledWith();
+  });
+
+  it("logs a failed sync without promoting the notified root", async (): Promise<void> => {
+    const syncError = new Error("complete snapshot pull failed");
+    mockSync.mockRejectedValueOnce(syncError);
+
+    render(
+      <MarketRatesRealtimeProvider>
+        <></>
+      </MarketRatesRealtimeProvider>
+    );
+
+    await waitFor(() => {
+      expect(latestInsertCallback).not.toBeNull();
+    });
+
+    await act(async () => {
+      latestInsertCallback?.({ new: { id: "partial-root" } });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockSync).toHaveBeenCalledTimes(1);
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      "marketRatesRealtime.sync.failed",
+      syncError
+    );
   });
 
   it("waits for the previous realtime channel to be removed before subscribing again", async (): Promise<void> => {

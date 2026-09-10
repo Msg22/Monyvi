@@ -4,7 +4,7 @@
  */
 
 import { Account, BankDetails, database } from "@monyvi/db";
-import { calculateAccountsTotalBalance, convertCurrency } from "@monyvi/logic";
+import { sumSelectedCurrentAmounts } from "@/services/current-market-snapshot-calculations";
 import { Q } from "@nozbe/watermelondb";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -76,7 +76,7 @@ export function useAccounts(): UseAccountsResult {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const { latestRates, isLoading: isRatesLoading } = useMarketRates();
+  const { selectedSnapshot, isLoading: isRatesLoading } = useMarketRates();
   const { preferredCurrency } = usePreferredCurrency();
   const { userId, isResolvingUser } = useCurrentUser();
 
@@ -126,11 +126,16 @@ export function useAccounts(): UseAccountsResult {
   }, [refreshKey, userId, isResolvingUser]);
 
   const totalAccountsBalance = useMemo(() => {
-    if (!latestRates) return 0;
-    const totalUsd = calculateAccountsTotalBalance(accounts, latestRates);
-    if (preferredCurrency === "USD") return totalUsd;
-    return convertCurrency(totalUsd, "USD", preferredCurrency, latestRates);
-  }, [accounts, latestRates, preferredCurrency]);
+    const total = sumSelectedCurrentAmounts({
+      entries: accounts.map((account) => ({
+        amount: account.balance,
+        currency: account.currency,
+      })),
+      toCurrency: preferredCurrency,
+      currentSnapshot: selectedSnapshot,
+    });
+    return total ?? 0;
+  }, [accounts, selectedSnapshot, preferredCurrency]);
 
   return {
     accounts,

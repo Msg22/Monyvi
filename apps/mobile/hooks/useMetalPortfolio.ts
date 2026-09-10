@@ -1,5 +1,4 @@
 import { useIsFocused } from "@react-navigation/native";
-import { useDatabase } from "@/providers/DatabaseProvider";
 import {
   buildWealthBreakdownReadModel,
   type WealthBreakdownReadModel,
@@ -18,21 +17,22 @@ import {
   type PortfolioRateStatus,
 } from "@/services/metal-portfolio-read-model-service";
 import {
-  observeLiveRatesTrust,
   summarizeLiveRatesTrust,
-  type LiveRatesTrustObservationStream,
   type LiveRatesTrustReadModel,
   type LiveRatesTrustState,
+  type LiveRatesTrustValue,
 } from "@/services/live-rates-trust-read-model-service";
 import { logger } from "@/utils/logger";
 import type {
   Asset,
   AssetMetal,
+  CurrencyType,
   FinancialActionGroup,
   MetalHoldingState,
   MetalLifecycleEvent,
   MetalRateReference,
 } from "@monyvi/db";
+import type { MetalsIsoCurrencyCode } from "@monyvi/logic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 
@@ -100,8 +100,8 @@ interface UseMetalPortfolioResult {
 
 function createEmptyTrustReadModel(): LiveRatesTrustReadModel {
   return {
-    gold: { state: "missing", ageMs: null, providerObservedAt: null },
-    silver: { state: "missing", ageMs: null, providerObservedAt: null },
+    gold: missingTrustValue(),
+    silver: missingTrustValue(),
     currencies: new Map(),
   };
 }
@@ -111,13 +111,20 @@ export function useMetalPortfolio(
     readonly accountsValueDecimal?: string | null;
   } = {}
 ): UseMetalPortfolioResult {
-  const database = useDatabase();
   const isFocused = useIsFocused();
   const wasFocusedRef = useRef(isFocused);
   const { userId, isResolvingUser } = useCurrentUser();
   const { preferredCurrency, isLoading: isCurrencyLoading } =
     usePreferredCurrency();
-  const { isConnected } = useMarketRates();
+  const {
+    isConnected,
+    refreshSelectedSnapshot,
+    selectedSnapshot,
+  } = useMarketRates();
+  const currentRates = useMemo<LiveRatesTrustReadModel>(
+    () => selectedSnapshot?.trust ?? createEmptyTrustReadModel(),
+    [selectedSnapshot]
+  );
   const [selectedFilter, setSelectedFilter] =
     useState<MetalPortfolioFilter>("ALL");
   const [assets, setAssets] = useState<readonly Asset[]>([]);
@@ -135,21 +142,14 @@ export function useMetalPortfolio(
   const [saleRateReferences, setSaleRateReferences] = useState<
     readonly MetalRateReference[]
   >([]);
-  const [currentRates, setCurrentRates] = useState<LiveRatesTrustReadModel>(
-    createEmptyTrustReadModel
-  );
   const [isAssetsLoading, setIsAssetsLoading] = useState(true);
   const [isAssetMetalsLoading, setIsAssetMetalsLoading] = useState(true);
   const [isHoldingStatesLoading, setIsHoldingStatesLoading] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
   const [, setIsMetalSellGroupsLoading] = useState(true);
   const [, setIsSaleRateReferencesLoading] = useState(true);
-  const [isRatesLoading, setIsRatesLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const trustObservationRef = useRef<LiveRatesTrustObservationStream | null>(
-    null
-  );
 
   const onFilterChange = useCallback((filter: MetalPortfolioFilter): void => {
     setSelectedFilter(filter);
@@ -157,8 +157,9 @@ export function useMetalPortfolio(
 
   const refresh = useCallback((): void => {
     setError(null);
+    refreshSelectedSnapshot();
     setRefreshKey((value) => value + 1);
-  }, []);
+  }, [refreshSelectedSnapshot]);
 
   useEffect(() => {
     if (isFocused && !wasFocusedRef.current) {
@@ -173,14 +174,14 @@ export function useMetalPortfolio(
 
   useEffect(() => {
     const timer = setInterval(
-      () => trustObservationRef.current?.refresh(),
+      refreshSelectedSnapshot,
       RATE_STATUS_REFRESH_INTERVAL_MS
     );
     const appStateSubscription = AppState.addEventListener(
       "change",
       (state) => {
         if (state === "active") {
-          trustObservationRef.current?.refresh();
+          refreshSelectedSnapshot();
         }
       }
     );
@@ -188,7 +189,7 @@ export function useMetalPortfolio(
       clearInterval(timer);
       appStateSubscription.remove();
     };
-  }, []);
+  }, [refreshSelectedSnapshot]);
 
   useEffect(() => {
     return runUserScopedEffect({
@@ -388,32 +389,6 @@ export function useMetalPortfolio(
     });
   }, [isResolvingUser, refreshKey, userId]);
 
-  useEffect(() => {
-    const observation = observeLiveRatesTrust(database);
-    trustObservationRef.current = observation;
-    setIsRatesLoading(true);
-    const subscription = observation.subscribe({
-      next: (result): void => {
-        setCurrentRates(result);
-        setIsRatesLoading(false);
-      },
-      error: (reason: unknown): void => {
-        recordObserverError(
-          "metalPortfolio.rates.observe.failed",
-          reason,
-          setError
-        );
-        setIsRatesLoading(false);
-      },
-    });
-    return () => {
-      if (trustObservationRef.current === observation) {
-        trustObservationRef.current = null;
-      }
-      subscription.unsubscribe();
-    };
-  }, [database, refreshKey]);
-
   const portfolio = useMemo((): MetalPortfolioReadModel | null => {
     if (
       userId === null ||
@@ -422,17 +397,18 @@ export function useMetalPortfolio(
       isAssetMetalsLoading ||
       isHoldingStatesLoading ||
       isHistoryLoading ||
-      isRatesLoading ||
       isCurrencyLoading ||
       error !== null
     ) {
       return null;
     }
+
     const holdings = shapeMetalPortfolioHoldings({
       actionGroups: metalSellGroups,
       assetMetals,
       assets,
       currentRates,
+      snapshotId: selectedSnapshot?.snapshotId ?? null,
       holdingStates,
       lifecycleEvents,
       preferredCurrency,
@@ -440,7 +416,7 @@ export function useMetalPortfolio(
       userId,
     });
     const activeMetalTypes = Array.from(
-      new Set(
+      new Set<ActiveMetalType>(
         holdings
           .filter(
             (holding) =>
@@ -450,9 +426,9 @@ export function useMetalPortfolio(
           )
           .map((holding) => holding.metalType)
       )
-    ) as ActiveMetalType[];
+    );
     const activePurchaseCurrencies = Array.from(
-      new Set(
+      new Set<MetalsIsoCurrencyCode>(
         holdings
           .filter(
             (holding) =>
@@ -467,6 +443,7 @@ export function useMetalPortfolio(
           )
       )
     );
+
     return buildMetalPortfolioReadModel({
       filter: selectedFilter,
       holdings,
@@ -489,13 +466,13 @@ export function useMetalPortfolio(
     isCurrencyLoading,
     isHistoryLoading,
     isHoldingStatesLoading,
-    isRatesLoading,
     isResolvingUser,
     lifecycleEvents,
     metalSellGroups,
     preferredCurrency,
     saleRateReferences,
     selectedFilter,
+    selectedSnapshot,
     userId,
   ]);
 
@@ -525,7 +502,6 @@ export function useMetalPortfolio(
       isAssetMetalsLoading ||
       isHoldingStatesLoading ||
       isHistoryLoading ||
-      isRatesLoading ||
       isCurrencyLoading,
     isOffline: !isConnected,
     onFilterChange,
@@ -619,38 +595,44 @@ function subscribeForCurrentUser<T>({
 
 function getPortfolioRateStatus(
   currentRates: LiveRatesTrustReadModel,
-  preferredCurrency: string,
+  preferredCurrency: CurrencyType,
   activeMetalTypes: readonly ActiveMetalType[],
-  activePurchaseCurrencies: readonly string[]
+  activePurchaseCurrencies: readonly MetalsIsoCurrencyCode[]
 ): PortfolioRateStatus {
-  const values = [
+  const values: LiveRatesTrustValue[] = [
     ...activeMetalTypes.map((metalType) =>
       metalType === "GOLD" ? currentRates.gold : currentRates.silver
     ),
-    currentRates.currencies.get(preferredCurrency as never) ?? {
-      state: "missing" as const,
-      ageMs: null,
-      providerObservedAt: null,
-    },
+    currentRates.currencies.get(preferredCurrency) ?? missingTrustValue(),
     ...activePurchaseCurrencies
       .filter((currency) => currency !== preferredCurrency)
       .map(
         (currency) =>
-          currentRates.currencies.get(currency as never) ?? {
-            state: "missing" as const,
-            ageMs: null,
-            providerObservedAt: null,
-          }
+          currentRates.currencies.get(currency) ?? missingTrustValue()
       ),
   ];
   const state = summarizeLiveRatesTrust(values);
   return {
-    ageMs: values.reduce(
-      (maximum, value) =>
-        value.ageMs === null ? maximum : Math.max(maximum ?? 0, value.ageMs),
-      null as number | null
-    ),
+    ageMs: maximumAge(values),
     state: toPortfolioRateState(state),
+  };
+}
+
+function maximumAge(values: readonly LiveRatesTrustValue[]): number | null {
+  let maximum: number | null = null;
+  for (const value of values) {
+    if (value.ageMs !== null) {
+      maximum = maximum === null ? value.ageMs : Math.max(maximum, value.ageMs);
+    }
+  }
+  return maximum;
+}
+
+function missingTrustValue(): LiveRatesTrustValue {
+  return {
+    state: "missing",
+    ageMs: null,
+    providerObservedAt: null,
   };
 }
 

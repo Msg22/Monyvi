@@ -681,6 +681,53 @@ Market rates are stored in `market_rates` as append-only USD-based references:
 - `market_rates_history` is not part of the current WatermelonDB schema and
   MUST NOT be referenced as the active app data source.
 
+#### Atomic Market-Rate Snapshots (Issue #302)
+
+Issue #302 makes one complete market-rate snapshot the indivisible trust unit
+from producer ingestion through offline display:
+
+- The persisted snapshot identity is the `market_rates.id` UUID. The service
+  wire contract carries this identity once as top-level `snapshotId`, and every
+  trust observation binds through `market_rate_observations.batch_id` equal to
+  that same identity.
+- A complete current snapshot contains exactly 37 trusted observations:
+  `metal:GOLD`, `metal:SILVER`, and `currency:<CODE>` for every one of the 35
+  supported fiat currencies. `currency:USD` is the exact identity `1`, and BTC
+  is not a trusted current observation.
+- Exact bound observation decimals (`market_rate_observations.value_decimal`)
+  are the authoritative current financial truth. The wide `market_rates` numeric
+  fields are identity/order/history compatibility records only and MUST NOT be
+  used as authoritative current valuation or conversion inputs.
+- Provider JSON rate tokens in ordinary or scientific notation are normalized
+  losslessly to plain exact decimal text before validation and persistence. No
+  binary floating-point conversion is authoritative on that path.
+- Missing, malformed, or future provider observation timestamps normalize to
+  `null`, which means Unknown freshness. Capture, fetch, storage, synchronization,
+  receipt, restart, and local clock time are never substituted as provider
+  observation time, and root `created_at` is ordering metadata only.
+- Producer persistence, complete-envelope pull, and local application are atomic
+  and fail closed. Only a complete, valid, exactly bound snapshot can persist,
+  sync, or become current. Replaying an identical snapshot is idempotent;
+  replaying the same identity with conflicting content is rejected without
+  mutation; delayed older deliveries never regress the selected snapshot.
+- Every displayed current rate and every trust fact describing it (source,
+  provider time, quality, freshness) come from one shared selected complete
+  snapshot across Home, Live Rates, My Metals, holding detail/valuation, and
+  net worth. A displayed value is never paired with evidence from another
+  snapshot, and current snapshot selection never rewrites immutable acquisition
+  or terminal rate references.
+- A trusted producer snapshot requires a non-empty trimmed source identity for
+  every required observation; null, empty, or whitespace-only source rejects the
+  candidate.
+- Legacy cached rate data without a provable matching immutable binding is never
+  newly certified by inference. When no complete valid snapshot exists,
+  dependent current values are unavailable rather than zero, while recorded
+  holdings and unrelated facts remain visible.
+- Retention and corruption integrity: removing any required evidence from a
+  snapshot makes it immediately ineligible, and it is never repaired with rows
+  from another batch. Deleting a root cascades its bound observations; any
+  future cleanup path treats root plus observations as one unit.
+
 ### Net Worth
 
 Net worth is calculated locally from WatermelonDB:

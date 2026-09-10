@@ -1,11 +1,8 @@
-import type {
-  Account,
-  Asset,
-  AssetMetal,
-  DailySnapshotNetWorth,
-  MarketRate,
-} from "@monyvi/db";
+import { Decimal } from "decimal.js";
 import { getSameDayLastMonth } from "@monyvi/logic";
+
+import { selectMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
+import { completeFixtureA } from "../fixtures/market-rate-snapshot";
 
 const mockAccountsCollection = { table: "accounts" };
 const mockAssetsCollection = { table: "assets" };
@@ -22,8 +19,11 @@ const mockDatabaseGet = jest.fn((tableName: string): unknown => {
   if (tableName === "daily_snapshot_net_worth") return mockSnapshotsCollection;
   throw new Error(`Unexpected table: ${tableName}`);
 });
-const mockQueryOwned = jest.fn();
-const mockQueryChildrenOfOwnedParents = jest.fn();
+const mockQueryOwned = jest.fn<unknown, [unknown, string, QueryCondition]>();
+const mockQueryChildrenOfOwnedParents = jest.fn<
+  unknown,
+  [unknown, readonly unknown[], string, string, QueryCondition]
+>();
 
 interface QueryCondition {
   readonly kind: "where" | "sortBy";
@@ -54,9 +54,13 @@ jest.mock("@nozbe/watermelondb", () => ({
 }));
 
 jest.mock("@/services/user-data-access", () => ({
-  queryChildrenOfOwnedParents: (...args: readonly unknown[]): unknown =>
+  queryChildrenOfOwnedParents: (
+    ...args: Parameters<typeof mockQueryChildrenOfOwnedParents>
+  ): ReturnType<typeof mockQueryChildrenOfOwnedParents> =>
     mockQueryChildrenOfOwnedParents(...args),
-  queryOwned: (...args: readonly unknown[]): unknown => mockQueryOwned(...args),
+  queryOwned: (
+    ...args: Parameters<typeof mockQueryOwned>
+  ): ReturnType<typeof mockQueryOwned> => mockQueryOwned(...args),
 }));
 
 import {
@@ -66,35 +70,40 @@ import {
   observeNetWorthAssetMetals,
   observeNetWorthAssets,
   observeNetWorthSnapshots,
+  type NetWorthAccountInput,
+  type NetWorthAssetMetalInput,
+  type NetWorthOwnedAssetInput,
+  type NetWorthSnapshotInput,
 } from "@/services/net-worth-read-model-service";
 
-function createAccount(balance: number, currency: "EGP" | "USD"): Account {
-  return { balance, currency } as unknown as Account;
+function createAccount(
+  balance: number,
+  currency: NetWorthAccountInput["currency"]
+): NetWorthAccountInput {
+  return { balance, currency };
 }
 
-function createAssetMetal(valueUsd: number): AssetMetal {
+function createAssetMetal(
+  weightGramsDecimal: string,
+  metalType: "GOLD" | "SILVER" = "GOLD"
+): NetWorthAssetMetalInput {
   return {
-    calculateValue: jest.fn(() => valueUsd),
-    metalType: "GOLD",
-  } as unknown as AssetMetal;
-}
-
-function createRates(): MarketRate {
-  const rates: Partial<MarketRate> = {
-    goldUsdPerGram: 1,
-    egpUsd: 0.02,
+    metalType,
+    purityFactorDecimal: "1",
+    purityFraction: 1,
+    weightGrams: Number(weightGramsDecimal),
+    weightGramsDecimal,
   };
-  return rates as MarketRate;
 }
 
 function createSnapshot(
   date: string,
   totalNetWorth: number
-): DailySnapshotNetWorth {
+): NetWorthSnapshotInput {
   return {
     snapshotDate: new Date(date),
     totalNetWorth,
-  } as unknown as DailySnapshotNetWorth;
+  };
 }
 
 describe("net-worth-read-model-service", () => {
@@ -138,7 +147,10 @@ describe("net-worth-read-model-service", () => {
   });
 
   it("builds a child asset-metal query only when scoped assets exist", () => {
-    const asset = { id: "asset-1" } as unknown as Asset;
+    const asset: NetWorthOwnedAssetInput = {
+      id: "asset-1",
+      userId: "user-1",
+    };
 
     expect(
       observeNetWorthAssetMetals({ userId: "user-1", assets: [asset] })
@@ -156,32 +168,50 @@ describe("net-worth-read-model-service", () => {
     );
   });
 
-  it("builds preferred-currency and USD net-worth totals from accounts and metals", () => {
-    const rates = createRates();
+  it("builds preferred-currency and USD net-worth totals from the exact selected snapshot", () => {
+    const fixture = completeFixtureA();
+    const snapshot = selectMarketRateSnapshot(
+      fixture.roots,
+      fixture.observations,
+      Date.parse("2026-09-09T11:00:00.000Z")
+    );
+    if (!snapshot) {
+      throw new Error("fixture setup: snapshot A must be selectable");
+    }
 
     const model = buildNetWorthReadModel({
       accounts: [createAccount(1000, "EGP"), createAccount(10, "USD")],
-      assetMetals: [createAssetMetal(20)],
-      latestRates: rates as unknown as Parameters<
-        typeof buildNetWorthReadModel
-      >[0]["latestRates"],
+      assetMetals: [createAssetMetal("10")],
+      currentSnapshot: snapshot,
       preferredCurrency: "EGP",
     });
 
-    expect(model).toMatchObject({
-      totalAccounts: 1500,
-      totalAssets: 1000,
-      totalNetWorth: 2500,
-      totalNetWorthUsd: 50,
-    });
+    const accountsUsd = new Decimal("1000").times("0.0210523309").plus(10);
+    const assetsUsd = new Decimal("10").times("3738.74000000").times("1");
+    const totalUsd = accountsUsd.plus(assetsUsd);
+
+    expect(model).not.toBeNull();
+    expect(model?.totalNetWorthUsd).toBeCloseTo(totalUsd.toNumber(), 6);
+    expect(model?.totalAccounts).toBeCloseTo(
+      accountsUsd.div("0.0210523309").toNumber(),
+      4
+    );
+    expect(model?.totalAssets).toBeCloseTo(
+      assetsUsd.div("0.0210523309").toNumber(),
+      4
+    );
+    expect(model?.totalNetWorth).toBeCloseTo(
+      totalUsd.div("0.0210523309").toNumber(),
+      4
+    );
   });
 
-  it("returns null when market rates are not ready", () => {
+  it("returns null when no complete snapshot is selected", () => {
     expect(
       buildNetWorthReadModel({
         accounts: [createAccount(1000, "EGP")],
         assetMetals: [],
-        latestRates: null,
+        currentSnapshot: null,
         preferredCurrency: "EGP",
       })
     ).toBeNull();

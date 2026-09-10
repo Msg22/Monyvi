@@ -149,7 +149,7 @@ const baseProps = {
   currentAccountId: "account-1",
   accounts: [],
   pendingAccounts: [],
-  latestRates: null,
+  selectedSnapshot: null,
   categoryMap: new Map(),
   expenseCategories: [],
   incomeCategories: [],
