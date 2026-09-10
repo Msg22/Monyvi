@@ -9,7 +9,7 @@ const CORS_HEADERS: Readonly<Record<string, string>> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
 export interface PersistSnapshotResult {
@@ -54,7 +54,7 @@ export function createFetchMetalRatesHandler(
       return new Response("ok", { status: 200, headers: CORS_HEADERS });
     }
 
-    if (request.method !== "GET") {
+    if (request.method !== "GET" && request.method !== "POST") {
       return jsonResponse(
         { success: false, code: "method_not_allowed" },
         405
