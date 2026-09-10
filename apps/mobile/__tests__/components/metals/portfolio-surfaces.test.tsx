@@ -805,4 +805,154 @@ describe("US1 portfolio surfaces", () => {
     );
     expect(screen.getByTestId("wealth-breakdown-root")).toBeTruthy();
   });
+
+  it("speaks the total as a current rate only when the trusted rate is fresh", () => {
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        holdings: portfolio.activeHoldings,
+        rateStatus: { state: "fresh", ageMs: 1_000 },
+      },
+      rateProviderObservedAt: new Date("2026-08-25T10:30:00.000Z"),
+    });
+
+    expect(
+      screen.getByLabelText("Metals portfolio value EGP 162,317.87. Current rate.")
+    ).toBeTruthy();
+  });
+
+  it("speaks last-updated info instead of a current rate for a stale trusted rate", () => {
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        holdings: portfolio.activeHoldings,
+        rateStatus: { state: "stale", ageMs: 90_000_000 },
+      },
+      rateProviderObservedAt: new Date("2026-08-24T10:30:00.000Z"),
+    });
+
+    expect(
+      screen.getByLabelText(/^Metals portfolio value/)
+    ).toBeTruthy();
+    expect(
+      screen.queryByLabelText(/Metals portfolio value .*Current rate\.$/)
+    ).toBeNull();
+    expect(screen.queryByLabelText(/Prices last updated/)).toBeTruthy();
+  });
+
+  it("speaks unavailable when the required rate evidence is missing", () => {
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        holdings: portfolio.activeHoldings,
+        activeTotalDecimal: null,
+        currentPerformanceDecimal: null,
+        rateStatus: { state: "missing", ageMs: null },
+      },
+      rateProviderObservedAt: null,
+    });
+
+    expect(
+      screen.getByLabelText(/Metals portfolio value .*current rate unavailable/)
+    ).toBeTruthy();
+    expect(
+      screen.queryByLabelText(/Metals portfolio value .*Current rate\.$/)
+    ).toBeNull();
+  });
+
+  it("wraps the last-updated sentence responsively instead of clamping one line", () => {
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        holdings: portfolio.activeHoldings,
+        rateStatus: { state: "stale", ageMs: 90_000_000 },
+      },
+      rateProviderObservedAt: new Date("2026-08-24T10:30:00.000Z"),
+    });
+
+    expect(screen.getByTestId("metal-portfolio-rate-updated")).toHaveProp(
+      "className",
+      expect.stringContaining("min-w-0 flex-1")
+    );
+    expect(screen.getByTestId("metal-portfolio-rate-updated")).toHaveProp(
+      "className",
+      expect.stringContaining("leading-")
+    );
+    expect(
+      screen.getByTestId("metal-portfolio-rate-updated")
+    ).not.toHaveProp("numberOfLines");
+  });
+
+  it("renders loaded holding values once rate/currency readiness settles and a skeleton while pending", () => {
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        holdings: portfolio.activeHoldings,
+      },
+      readiness: {
+        holdings: true,
+        rateCurrency: false,
+        recentHistory: true,
+        summary: false,
+      },
+    });
+    expect(
+      screen.getByTestId("metal-portfolio-holding-value-pending-gold-coin")
+    ).toBeTruthy();
+    expect(
+      screen.queryByTestId("metal-portfolio-holding-value-gold-coin")
+    ).toBeNull();
+
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        holdings: portfolio.activeHoldings,
+      },
+      readiness: {
+        holdings: true,
+        rateCurrency: true,
+        recentHistory: true,
+        summary: true,
+      },
+    });
+    expect(
+      screen.getByTestId("metal-portfolio-holding-value-gold-coin")
+    ).toBeTruthy();
+    expect(
+      screen.queryByTestId("metal-portfolio-holding-value-pending-gold-coin")
+    ).toBeNull();
+  });
+
+  it("omits the rate-status line entirely for a portfolio with no active holdings", () => {
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        activeHoldings: [],
+        holdings: [],
+        activeTotalDecimal: null,
+        currentPerformanceDecimal: null,
+        allocation: { gold: "0", silver: "0" },
+        listState: "PORTFOLIO_EMPTY",
+        rateStatus: { state: "missing", ageMs: null },
+      },
+      rateProviderObservedAt: null,
+    });
+
+    expect(screen.queryByTestId("metal-portfolio-rate-updated")).toBeNull();
+    expect(screen.queryByText(/Prices last updated/i)).toBeNull();
+  });
+
+  it("still shows the unavailable-rate line when a valued portfolio is missing its rate", () => {
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        holdings: portfolio.activeHoldings,
+        rateStatus: { state: "missing", ageMs: null },
+      },
+      rateProviderObservedAt: null,
+    });
+
+    expect(screen.getByTestId("metal-portfolio-rate-updated")).toBeTruthy();
+    expect(screen.getByText(/current rate unavailable/i)).toBeTruthy();
+  });
 });

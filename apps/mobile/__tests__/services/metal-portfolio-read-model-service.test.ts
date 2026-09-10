@@ -697,4 +697,58 @@ describe("metal portfolio read model", () => {
 
     expect(holdings.map((holding) => holding.id)).toEqual(["holding-1"]);
   });
+
+  describe("active holding lifecycle-event validation (fails closed)", () => {
+    const matchingEvent = shapeInput().lifecycleEvents[0];
+
+    function activeWithLifecycle(
+      lifecycleEvents: ShapeMetalPortfolioHoldingsInput["lifecycleEvents"]
+    ): ReturnType<typeof shapeMetalPortfolioHoldings>[number] {
+      const [holding] = shapeMetalPortfolioHoldings({
+        ...shapeInput(),
+        lifecycleEvents,
+      });
+      return holding;
+    }
+
+    it("treats an active holding as effective when its referenced event is present", () => {
+      expect(activeWithLifecycle([matchingEvent]).isEffective).toBe(true);
+    });
+
+    it("fails closed when the referenced lifecycle event is permanently absent", () => {
+      const holding = activeWithLifecycle([]);
+      expect(holding.status).toBe("active");
+      expect(holding.isEffective).toBe(false);
+    });
+
+    it("fails closed when the referenced lifecycle event is deleted", () => {
+      const holding = activeWithLifecycle([
+        { ...matchingEvent, deleted: true },
+      ]);
+      expect(holding.isEffective).toBe(false);
+    });
+
+    it("fails closed when the referenced lifecycle event belongs to another user", () => {
+      const holding = activeWithLifecycle([
+        { ...matchingEvent, userId: "user-2" },
+      ]);
+      expect(holding.isEffective).toBe(false);
+    });
+
+    it("fails closed when the referenced event identity is inconsistent with the holding", () => {
+      const holding = activeWithLifecycle([
+        { ...matchingEvent, holdingId: "some-other-holding" },
+      ]);
+      expect(holding.isEffective).toBe(false);
+    });
+
+    it("reveals a subscription-delayed active holding only once its matching event arrives", () => {
+      // The holding-states snapshot can stream before the lifecycle-events
+      // subscription emits the referenced event. The holding must not be
+      // forged effective while the event is absent, and must become effective
+      // only when its exact event is observed.
+      expect(activeWithLifecycle([]).isEffective).toBe(false);
+      expect(activeWithLifecycle([matchingEvent]).isEffective).toBe(true);
+    });
+  });
 });

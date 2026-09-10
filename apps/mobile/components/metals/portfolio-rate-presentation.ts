@@ -60,3 +60,39 @@ export function formatPortfolioRateUpdated(
     .replace("{{date}}", parts.date)
     .replace("{{time}}", parts.time);
 }
+
+export type PortfolioRateTrustState = "fresh" | "stale" | "unknown" | "missing";
+
+export interface PortfolioRateAccessibilityCopy {
+  readonly key: string;
+  readonly values?: Readonly<Record<string, string>>;
+}
+
+// Maps the trusted rate state to friendly, localized screen-reader copy so the
+// spoken portfolio total agrees with the visible rate line instead of always
+// claiming a "current rate". Fresh states announce a current rate; stale or
+// unknown states announce the last-updated information (falling back to a short
+// state label when there is no observation timestamp); a missing required rate
+// announces unavailable. No customer-facing age threshold is reintroduced.
+export function getPortfolioRateAccessibilityCopy(
+  state: PortfolioRateTrustState,
+  providerObservedAt: Date | null,
+  language: string | undefined
+): PortfolioRateAccessibilityCopy {
+  switch (state) {
+    case "fresh":
+      return { key: "portfolio.current_rate" };
+    case "stale":
+    case "unknown": {
+      const parts = formatPortfolioRateUpdatedParts(
+        providerObservedAt,
+        language
+      );
+      return parts
+        ? { key: "portfolio.rates_updated", values: { ...parts } }
+        : { key: `rate.${state}` };
+    }
+    case "missing":
+      return { key: "rate.missing" };
+  }
+}

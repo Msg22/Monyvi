@@ -49,7 +49,12 @@ const RESET_TABLE_DELETE_ORDER = [
   "recurring_payments",
   "budgets",
   "debts",
-  "metal_rate_references",
+  // `metal_rate_references` is protected by the
+  // `metal_rate_references_guard_immutable` trigger, so it must never be
+  // passed through the generic hard-delete cleanup. The manual QA seed inserts
+  // deterministic, id-scoped references with an ignore-duplicates upsert, so a
+  // reseed retains and reuses them instead of failing after tombstoning
+  // lifecycle rows. Ownership and historical evidence are preserved.
   "metal_holding_states",
   "metal_lifecycle_events",
   "metal_action_evidence",

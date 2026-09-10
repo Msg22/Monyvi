@@ -432,11 +432,6 @@ function ValueJourney({
               <Text className="text-base font-medium text-nileGreen-800 dark:text-nileGreen-400">
                 {t("detail.timeline_current_value")}
               </Text>
-              {currentValueObservedAt === null ? null : (
-                <Text className="mt-1 text-sm text-text-secondary dark:text-text-secondary-dark">
-                  {formatShortDate(currentValueObservedAt, locale)}
-                </Text>
-              )}
               {rateUpdatedLabel === null ? null : (
                 <Text className="mt-1 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark">
                   {rateUpdatedLabel}

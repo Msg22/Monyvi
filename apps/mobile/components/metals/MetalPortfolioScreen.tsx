@@ -20,7 +20,10 @@ import type {
   MetalPortfolioHoldingInput,
   MetalPortfolioReadModel,
 } from "@/services/metal-portfolio-read-model-service";
-import { formatPortfolioRateUpdatedParts } from "./portfolio-rate-presentation";
+import {
+  formatPortfolioRateUpdatedParts,
+  getPortfolioRateAccessibilityCopy,
+} from "./portfolio-rate-presentation";
 import {
   formatCodeAmount,
   formatPurchaseDetail,
@@ -301,6 +304,11 @@ function PortfolioSummary({
   const performanceUnavailable =
     portfolio.currentPerformanceDecimal === null &&
     portfolio.activeTotalDecimal !== null;
+  const rateAccessibilityCopy = getPortfolioRateAccessibilityCopy(
+    portfolio.rateStatus.state,
+    rateProviderObservedAt,
+    i18n?.resolvedLanguage
+  );
 
   return (
     <View className="pt-3">
@@ -316,7 +324,10 @@ function PortfolioSummary({
               currency,
               locale
             ),
-            status: t("portfolio.current_rate"),
+            status: t(
+              rateAccessibilityCopy.key,
+              rateAccessibilityCopy.values
+            ),
           })}
           className="min-w-0 flex-1"
         >
@@ -388,7 +399,9 @@ function PortfolioSummary({
       )}
       <View className="mt-6 h-px bg-slate-200 dark:bg-slate-800" />
       <AllocationBar allocation={portfolio.allocation} />
-      <RateStatus providerObservedAt={rateProviderObservedAt} />
+      {holdingCount === 0 ? null : (
+        <RateStatus providerObservedAt={rateProviderObservedAt} />
+      )}
     </View>
   );
 }
@@ -468,7 +481,9 @@ function RateStatus({
     i18n?.resolvedLanguage
   );
   const label =
-    parts === null ? t("rate.missing") : t("portfolio.rates_updated", parts);
+    parts === null
+      ? t("rate.missing")
+      : t("portfolio.rates_updated", { date: parts.date, time: parts.time });
   return (
     <View className="mt-7 flex-row items-start gap-2">
       <Ionicons name="time-outline" size={20} color={palette.nileGreen[600]} />

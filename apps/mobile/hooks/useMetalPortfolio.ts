@@ -36,7 +36,6 @@ import {
   resolveMetalPortfolioReadiness,
   type MetalPortfolioSectionReadiness,
 } from "./metal-portfolio-readiness";
-import { shapeMetalPortfolioHoldingFacts } from "./shape-metal-portfolio-holding-facts";
 import { useMarketRates } from "./useMarketRates";
 import { usePreferredCurrency } from "./usePreferredCurrency";
 import { runUserScopedEffect, useCurrentUser } from "./useCurrentUser";
@@ -73,6 +72,7 @@ interface UseMetalPortfolioResult {
   readonly error: Error | null;
   readonly isLoading: boolean;
   readonly isOffline: boolean;
+  readonly isSummaryLoading: boolean;
   readonly onFilterChange: (filter: MetalPortfolioFilter) => void;
   readonly portfolio: MetalPortfolioReadModel | null;
   readonly rateProviderObservedAt: Date | null;
@@ -440,7 +440,7 @@ export function useMetalPortfolio(
     if (userId === null || isResolvingUser || !readiness.holdings) {
       return null;
     }
-    return shapeMetalPortfolioHoldingFacts({
+    return shapeMetalPortfolioHoldings({
       assetMetals,
       assets,
       currentRates,
@@ -603,11 +603,24 @@ export function useMetalPortfolio(
   const hasAnyReadySection =
     readiness.summary || readiness.holdings || readiness.recentHistory;
 
+  // The My Metals screen renders each section from `readiness`, so its
+  // screen-level `isLoading` can settle as soon as any section is usable.
+  // Dashboard net-worth and wealth-breakdown consumers have the opposite
+  // requirement: they must keep their own skeletons until the wealth summary
+  // (holdings + lifecycle events + rates + preferred currency) is ready, and a
+  // pending rate or currency must never collapse the total into a dash. An
+  // observer error stops the loading state so the consumer shows its
+  // unavailable state instead of spinning forever.
+  const isSummaryLoading =
+    isResolvingUser ||
+    (userId !== null && error === null && !readiness.summary);
+
   return {
     error,
     isLoading:
       isResolvingUser || (isAnySubscriptionLoading && !hasAnyReadySection),
     isOffline: !isConnected,
+    isSummaryLoading,
     onFilterChange,
     portfolio,
     rateProviderObservedAt,

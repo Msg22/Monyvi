@@ -39,7 +39,11 @@ describe("metal portfolio section readiness", () => {
     });
   });
 
-  it("keeps rate/currency readiness independent from recent-history readiness", () => {
+  it("keeps rate/currency readiness independent from the lifecycle-events gate", () => {
+    // Rates and preferred currency are settled, but the lifecycle-events
+    // subscription has not emitted for the current holding-states key yet.
+    // rateCurrency stays independently ready while the lifecycle-backed
+    // sections remain pending.
     expect(
       resolveMetalPortfolioReadiness({
         assetMetalsDependencyKey: "holding-1",
@@ -52,9 +56,45 @@ describe("metal portfolio section readiness", () => {
         ratesReady: true,
       })
     ).toEqual({
-      holdings: true,
+      holdings: false,
       rateCurrency: true,
       recentHistory: false,
+      summary: false,
+    });
+  });
+
+  it("keeps holdings, summary, and history pending until the lifecycle events for the current states arrive", () => {
+    const pending = resolveMetalPortfolioReadiness({
+      assetMetalsDependencyKey: "holding-1",
+      assetIdsKey: "holding-1",
+      assetsReady: true,
+      currencyReady: true,
+      historyDependencyKey: "stale:revision",
+      holdingStatesKey: "holding-1:active",
+      holdingStatesReady: true,
+      ratesReady: true,
+    });
+    expect(pending).toEqual({
+      holdings: false,
+      rateCurrency: true,
+      recentHistory: false,
+      summary: false,
+    });
+
+    const settled = resolveMetalPortfolioReadiness({
+      assetMetalsDependencyKey: "holding-1",
+      assetIdsKey: "holding-1",
+      assetsReady: true,
+      currencyReady: true,
+      historyDependencyKey: "holding-1:active",
+      holdingStatesKey: "holding-1:active",
+      holdingStatesReady: true,
+      ratesReady: true,
+    });
+    expect(settled).toEqual({
+      holdings: true,
+      rateCurrency: true,
+      recentHistory: true,
       summary: true,
     });
   });

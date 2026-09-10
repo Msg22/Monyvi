@@ -428,6 +428,28 @@ describe("approved active holding-detail fidelity", () => {
     }
   );
 
+  it("renders the current-value observation once, without duplicating the date", () => {
+    render(
+      <MetalHoldingDetailScreen
+        actions={[]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={activeDetail()}
+        onRetry={jest.fn()}
+      />
+    );
+
+    // The full localized sentence already carries the date and time, so the
+    // same provider date must not also render as a standalone short-date line.
+    expect(
+      screen.getByText(
+        "Prices last updated 25 Aug 2026 at 10:30 AM. They may have changed since then."
+      )
+    ).toBeTruthy();
+    expect(screen.queryByText("25 Aug 2026")).toBeNull();
+  });
+
   it("keeps the ordinary hero row and reflows only for compact or enlarged-text layouts", () => {
     const model = activeDetail();
     const props = {
