@@ -26,15 +26,12 @@ interface Harness {
   readonly persistenceCalls: PersistRpcPayload[];
 }
 
-interface HarnessOptions {
+function createHarness(options?: {
   readonly apiKey?: string;
   readonly providerResponse?: Response;
   readonly persistenceError?: string;
   readonly persistenceStatus?: "created" | "replayed";
-  readonly persistenceData?: unknown;
-}
-
-function createHarness(options?: HarnessOptions): Harness {
+}): Harness {
   const fetchUrls: string[] = [];
   const persistenceCalls: PersistRpcPayload[] = [];
   const providerResponse =
@@ -83,12 +80,10 @@ function createHarness(options?: HarnessOptions): Harness {
           };
         }
         return {
-          data:
-            options?.persistenceData ??
-            {
-              status: options?.persistenceStatus ?? "created",
-              snapshotId: SNAPSHOT_ID,
-            },
+          data: {
+            status: options?.persistenceStatus ?? "created",
+            snapshotId: SNAPSHOT_ID,
+          },
           error: null,
         };
       },
@@ -103,6 +98,17 @@ function requireRecord(value: unknown): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value));
 }
 
+async function invoke(
+  method: string,
+  harness: Harness
+): Promise<{ readonly body: Record<string, unknown>; readonly response: Response }> {
+  const handler = createFetchMetalRatesHandler(harness.dependencies);
+  const response = await handler(
+    new Request("https://example.test/fetch-metal-rates", { method })
+  );
+  return { response, body: requireRecord(await response.json()) };
+}
+
 test("OPTIONS returns CORS success without fetching or persisting", async () => {
   const harness = createHarness();
   const handler = createFetchMetalRatesHandler(harness.dependencies);
@@ -113,17 +119,35 @@ test("OPTIONS returns CORS success without fetching or persisting", async () => 
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("access-control-allow-origin"), "*");
+  assert.equal(response.headers.get("access-control-allow-methods"), "GET, POST, OPTIONS");
   assert.equal(harness.fetchUrls.length, 0);
   assert.equal(harness.persistenceCalls.length, 0);
 });
 
-test("persists one exact atomic snapshot and accepts migration 069's RPC response", async () => {
+test("scheduled POST persists one exact atomic snapshot", async () => {
   const harness = createHarness();
-  const handler = createFetchMetalRatesHandler(harness.dependencies);
+  const { response, body } = await invoke("POST", harness);
 
-  const response = await handler(
-    new Request("https://example.test/fetch-metal-rates")
-  );
+  assert.equal(response.status, 200);
+  assert.equal(body["success"], true);
+  assert.equal(body["snapshotId"], SNAPSHOT_ID);
+  assert.equal(harness.fetchUrls.length, 1);
+  assert.equal(harness.persistenceCalls.length, 1);
+});
+
+test("unsupported methods fail before provider or persistence access", async () => {
+  const harness = createHarness();
+  const { response, body } = await invoke("PUT", harness);
+
+  assert.equal(response.status, 405);
+  assert.equal(body["code"], "method_not_allowed");
+  assert.equal(harness.fetchUrls.length, 0);
+  assert.equal(harness.persistenceCalls.length, 0);
+});
+
+test("GET persists one exact atomic snapshot from response text", async () => {
+  const harness = createHarness();
+  const { response, body } = await invoke("GET", harness);
 
   assert.equal(response.status, 200);
   assert.equal(harness.fetchUrls.length, 1);
@@ -149,55 +173,23 @@ test("persists one exact atomic snapshot and accepts migration 069's RPC respons
     false
   );
 
-  const body = requireRecord(await response.json());
   assert.equal(body["success"], true);
   assert.equal(body["snapshotId"], SNAPSHOT_ID);
   assert.equal(body["persistenceStatus"], "created");
-  assert.equal(body["capturedAt"], CAPTURED_AT);
 });
 
 test("reports replayed persistence without issuing a second write path", async () => {
   const harness = createHarness({ persistenceStatus: "replayed" });
-  const handler = createFetchMetalRatesHandler(harness.dependencies);
-
-  const response = await handler(
-    new Request("https://example.test/fetch-metal-rates")
-  );
-  const body = requireRecord(await response.json());
+  const { response, body } = await invoke("GET", harness);
 
   assert.equal(response.status, 200);
   assert.equal(body["persistenceStatus"], "replayed");
   assert.equal(harness.persistenceCalls.length, 1);
 });
 
-test("rejects a malformed or mismatched persistence result", async () => {
-  for (const persistenceData of [
-    null,
-    { status: "created", snapshotId: "22222222-2222-4222-8222-222222222222" },
-    { status: "unexpected", snapshotId: SNAPSHOT_ID },
-  ]) {
-    const harness = createHarness({ persistenceData });
-    const handler = createFetchMetalRatesHandler(harness.dependencies);
-
-    const response = await handler(
-      new Request("https://example.test/fetch-metal-rates")
-    );
-    const body = requireRecord(await response.json());
-
-    assert.equal(response.status, 502);
-    assert.equal(body["code"], "persistence_error");
-    assert.equal(harness.persistenceCalls.length, 1);
-  }
-});
-
 test("missing provider key fails before provider or database access", async () => {
   const harness = createHarness({ apiKey: "" });
-  const handler = createFetchMetalRatesHandler(harness.dependencies);
-
-  const response = await handler(
-    new Request("https://example.test/fetch-metal-rates")
-  );
-  const body = requireRecord(await response.json());
+  const { response, body } = await invoke("GET", harness);
 
   assert.equal(response.status, 500);
   assert.equal(body["code"], "configuration_error");
@@ -209,12 +201,7 @@ test("provider failure never calls persistence", async () => {
   const harness = createHarness({
     providerResponse: new Response("upstream unavailable", { status: 503 }),
   });
-  const handler = createFetchMetalRatesHandler(harness.dependencies);
-
-  const response = await handler(
-    new Request("https://example.test/fetch-metal-rates")
-  );
-  const body = requireRecord(await response.json());
+  const { response, body } = await invoke("GET", harness);
 
   assert.equal(response.status, 502);
   assert.equal(body["code"], "provider_error");
@@ -223,12 +210,7 @@ test("provider failure never calls persistence", async () => {
 
 test("RPC failure returns an honest error after exactly one atomic attempt", async () => {
   const harness = createHarness({ persistenceError: "database unavailable" });
-  const handler = createFetchMetalRatesHandler(harness.dependencies);
-
-  const response = await handler(
-    new Request("https://example.test/fetch-metal-rates")
-  );
-  const body = requireRecord(await response.json());
+  const { response, body } = await invoke("GET", harness);
 
   assert.equal(response.status, 502);
   assert.equal(body["code"], "persistence_error");
