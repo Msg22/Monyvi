@@ -27,13 +27,19 @@ const CURRENT_RATE_CONSUMERS: readonly ForbiddenRule[] = [
   },
   {
     file: "hooks/useMetalPortfolio.ts",
-    patterns: ["observeLiveRatesTrust"],
-    why: "portfolio current valuation must consume the selected snapshot",
+    patterns: [
+      "observeLiveRatesTrust",
+      "observeSelectedMarketRateSnapshot",
+    ],
+    why: "portfolio must consume the shared selected snapshot facade",
   },
   {
     file: "hooks/useMetalHoldingDetail.ts",
-    patterns: ["observeLiveRatesTrust"],
-    why: "detail current valuation must consume the selected snapshot",
+    patterns: [
+      "observeLiveRatesTrust",
+      "observeSelectedMarketRateSnapshot",
+    ],
+    why: "detail must consume the shared selected snapshot facade",
   },
   {
     file: "hooks/useNetWorth.ts",
@@ -42,44 +48,110 @@ const CURRENT_RATE_CONSUMERS: readonly ForbiddenRule[] = [
   },
   {
     file: "services/net-worth-read-model-service.ts",
-    patterns: [/convertCurrency\(/, /calculateAccountsTotalBalance\(/, /calculateTotalAssets\(/, /MarketRate\b/],
-    why: "net worth must use exact snapshot rate strings, not wide MarketRate numbers",
+    patterns: [
+      /convertCurrency\(/,
+      /calculateAccountsTotalBalance\(/,
+      /calculateTotalAssets\(/,
+      /MarketRate\b/,
+      /weightGramsDecimal\s*\?\?/,
+      /purityFactorDecimal\s*\?\?/,
+    ],
+    why: "net worth must use exact snapshot and exact holding inputs",
   },
   {
     file: "services/live-rates-trust-read-model-service.ts",
     patterns: ["observeLiveRatesTrust", ".observe(", ".query("],
-    why: "the trust service must be a pure mapper over one selected snapshot",
+    why: "the trust service must be a pure selected-snapshot mapper",
   },
   {
     file: "hooks/useMarketRates.ts",
     patterns: [/\.isStale\(\)/, /\.getAge\(\)/],
-    why: "current freshness must derive from snapshot provider observation time only",
+    why: "current freshness must derive from provider observation time only",
+  },
+  {
+    file: "services/live-rates-refresh-service.ts",
+    patterns: [
+      "pullMarketRates(",
+      "pullMarketRateObservations(",
+      'get<MarketRateObservation>("market_rate_observations")',
+    ],
+    why: "manual refresh must pull and apply a complete envelope only",
+  },
+  {
+    file: "services/sync/atomic-pull-strategies.ts",
+    patterns: ["pullMarketRates(", "pullMarketRateObservations("],
+    why: "normal sync must use the complete snapshot RPC",
+  },
+  {
+    file: "providers/MarketRatesRealtimeProvider.tsx",
+    patterns: ["console.error", "selectMarketRateSnapshot", "applyRemoteChanges"],
+    why: "realtime may trigger normal sync but cannot promote a root",
   },
 ];
+
+const NO_UNSAFE_DOUBLE_ASSERTION_FILES = [
+  "hooks/useLiveRatesScreen.ts",
+  "hooks/useMarketRates.ts",
+  "hooks/useMetalHoldingDetail.ts",
+  "hooks/useMetalPortfolio.ts",
+  "hooks/useNetWorth.ts",
+  "providers/MarketRatesRealtimeProvider.tsx",
+  "services/live-rates-refresh-service.ts",
+  "services/live-rates-trust-read-model-service.ts",
+  "services/market-rate-snapshot-read-model-service.ts",
+  "services/net-worth-read-model-service.ts",
+  "services/sync/atomic-pull-strategies.ts",
+  "services/sync/market-rate-snapshot-pull.ts",
+] as const;
 
 describe("issue #302 current-rate consumer bypass guard", () => {
   for (const rule of CURRENT_RATE_CONSUMERS) {
     it(`forbids independent current-rate selection in ${rule.file}`, () => {
       const text = source(rule.file);
       for (const pattern of rule.patterns) {
-        if (typeof pattern === "string") {
-          expect({ file: rule.file, found: pattern, hit: text.includes(pattern) }).toEqual({
-            file: rule.file,
-            found: pattern,
-            hit: false,
-          });
-        } else {
-          expect({
-            file: rule.file,
-            pattern: String(pattern),
-            hit: pattern.test(text),
-          }).toEqual({
-            file: rule.file,
-            pattern: String(pattern),
-            hit: false,
-          });
-        }
+        const hit =
+          typeof pattern === "string"
+            ? text.includes(pattern)
+            : pattern.test(text);
+        expect({
+          file: rule.file,
+          pattern: String(pattern),
+          reason: rule.why,
+          hit,
+        }).toEqual({
+          file: rule.file,
+          pattern: String(pattern),
+          reason: rule.why,
+          hit: false,
+        });
       }
     });
   }
+
+  it("routes the production sync entry point through the atomic pull orchestrator", () => {
+    const syncEntryPoint = source("services/sync.ts");
+    const atomicPull = source("services/sync/atomic-pull-strategies.ts");
+
+    expect(syncEntryPoint).toContain(
+      'from "./sync/atomic-pull-strategies"'
+    );
+    expect(atomicPull).toContain("pullMarketRateSnapshots");
+    expect(atomicPull).toContain("market_rate_observations");
+  });
+
+  it("uses one selected snapshot stream for all current React consumers", () => {
+    expect(source("hooks/useLiveRatesScreen.ts")).toContain("useMarketRates()");
+    expect(source("hooks/useMetalPortfolio.ts")).toContain("useMarketRates()");
+    expect(source("hooks/useMetalHoldingDetail.ts")).toContain(
+      "useMarketRates()"
+    );
+    expect(source("hooks/useNetWorth.ts")).toContain("useMarketRates()");
+  });
+
+  it.each(NO_UNSAFE_DOUBLE_ASSERTION_FILES)(
+    "contains no unsafe double assertion in %s",
+    (file) => {
+      expect(source(file)).not.toContain("as unknown as");
+    }
+  );
 });
