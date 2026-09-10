@@ -5,11 +5,10 @@ import {
   buildTrustFromSelectedSnapshot,
   summarizeLiveRatesTrust,
   type LiveRatesTrustState,
+  type SelectedSnapshotTrustInput,
 } from "@/services/live-rates-trust-read-model-service";
-import type {
-  SelectedCurrentMarketRate,
-  SelectedMarketRateSnapshot,
-} from "@/services/market-rate-snapshot-read-model-service";
+import type { SelectedCurrentMarketRate } from "@/services/market-rate-snapshot-read-model-service";
+import type { CurrentMarketInstrument } from "@monyvi/logic";
 
 const NOW_MS = Date.parse("2026-09-09T11:00:00.000Z");
 const DAY_MS = 86_400_000;
@@ -20,12 +19,22 @@ interface RateSeed {
   readonly source?: string;
 }
 
-function createSnapshot(
-  rates: Readonly<Record<string, RateSeed>>
-): SelectedMarketRateSnapshot {
-  const ratesByInstrument = new Map<string, SelectedCurrentMarketRate>();
+function createTrustInput(
+  rates: Readonly<Partial<Record<CurrentMarketInstrument, RateSeed>>>
+): SelectedSnapshotTrustInput {
+  const ratesByInstrument = new Map<
+    CurrentMarketInstrument,
+    SelectedCurrentMarketRate
+  >();
 
-  for (const [instrumentCode, seed] of Object.entries(rates)) {
+  for (const instrumentCode of Object.keys(rates)) {
+    if (!isCurrentMarketInstrument(instrumentCode)) {
+      throw new Error(`unexpected test instrument: ${instrumentCode}`);
+    }
+    const seed = rates[instrumentCode];
+    if (!seed) {
+      continue;
+    }
     const providerObservedAt =
       seed.providerObservedAt === undefined
         ? new Date(NOW_MS - 1_000)
@@ -38,35 +47,44 @@ function createSnapshot(
         : (ageMs ?? 0) > DAY_MS
           ? "stale"
           : "fresh";
+    const isMetal = instrumentCode.startsWith("metal:");
 
     ratesByInstrument.set(instrumentCode, {
       instrumentCode,
       valueDecimal: seed.valueDecimal ?? "100.25",
       normalizedUsdPerBaseDecimal: seed.valueDecimal ?? "100.25",
-      unit: instrumentCode.startsWith("metal:")
+      unit: isMetal
         ? "usd_per_pure_gram"
         : "usd_per_currency_unit",
       orientation: "quote_per_base",
       providerObservedAt,
       source: seed.source ?? "metals.dev",
       quality: "valid",
-      freshness: state,
+      freshness: state === "invalid" ? "unknown" : state,
       ageMs,
     });
   }
 
   return {
-    snapshotId: "snapshot-under-test",
     capturedAt: new Date(NOW_MS),
-    ratesByInstrument: ratesByInstrument as SelectedMarketRateSnapshot["ratesByInstrument"],
-    trust: { gold: undefined, silver: undefined, currencies: new Map() },
-  } as unknown as SelectedMarketRateSnapshot;
+    ratesByInstrument,
+  };
+}
+
+function isCurrentMarketInstrument(
+  value: string
+): value is CurrentMarketInstrument {
+  return (
+    value === "metal:GOLD" ||
+    value === "metal:SILVER" ||
+    /^currency:[A-Z]{3}$/.test(value)
+  );
 }
 
 describe("buildTrustFromSelectedSnapshot", () => {
   it("maps only the selected snapshot's exact values and trust evidence", () => {
     const trust = buildTrustFromSelectedSnapshot(
-      createSnapshot({
+      createTrustInput({
         "metal:GOLD": { valueDecimal: "3738.74000000" },
         "metal:SILVER": {
           valueDecimal: "43.73874000",
@@ -94,7 +112,7 @@ describe("buildTrustFromSelectedSnapshot", () => {
 
   it("keeps Unknown freshness when the selected snapshot has null provider time", () => {
     const trust = buildTrustFromSelectedSnapshot(
-      createSnapshot({ "metal:GOLD": { providerObservedAt: null } })
+      createTrustInput({ "metal:GOLD": { providerObservedAt: null } })
     );
 
     expect(trust.gold.state).toBe("unknown");
@@ -117,10 +135,9 @@ describe("buildTrustFromSelectedSnapshot", () => {
     expect(serviceText).not.toContain(".observe(");
     expect(serviceText).not.toContain("watermelondb");
 
-    const moduleExports = require("@/services/live-rates-trust-read-model-service") as Record<
-      string,
-      unknown
-    >;
+    const moduleExports = require(
+      "@/services/live-rates-trust-read-model-service"
+    );
     expect(moduleExports.observeLiveRatesTrust).toBeUndefined();
     expect(moduleExports.buildLiveRatesTrustReadModel).toBeUndefined();
   });
