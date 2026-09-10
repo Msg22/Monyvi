@@ -2,10 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import type { SyncPushArgs } from "@nozbe/watermelondb/sync";
-import {
-  validateAccountBalanceEffectsEnvelope,
-  type FinancialActionEnvelopeV1,
-} from "@monyvi/logic";
+import { canonicalizeFinancialActionEnvelope } from "@monyvi/logic";
 
 import {
   createFinancialActionReconciliationService,
@@ -42,7 +39,7 @@ function pushChanges(
   } as unknown as SyncPushArgs["changes"];
 }
 
-function validEnvelope(): FinancialActionEnvelopeV1 {
+function validEnvelope() {
   return {
     accountGuards: [{ accountId: ACCOUNT_ID, expectedRevision: "0" }],
     actionId: ACTION_ID,
@@ -249,38 +246,38 @@ describe("issue #242 recovery-wave client contracts", () => {
 
   it("rejects an extra domain reference that has no mutation record", () => {
     const envelope = validEnvelope();
-    const payload = envelope.payload as Readonly<Record<string, unknown>>;
-    const withExtraReference: FinancialActionEnvelopeV1 = {
-      ...envelope,
-      payload: {
-        ...payload,
-        domainRecordRefs: [
-          TRANSACTION_ID,
-          "70000000-0000-4000-8000-000000000008",
-        ],
-      },
-    };
 
-    expect(validateAccountBalanceEffectsEnvelope(withExtraReference)).toBe(
-      false
-    );
+    expect(() =>
+      canonicalizeFinancialActionEnvelope({
+        ...envelope,
+        payload: {
+          ...envelope.payload,
+          domainRecordRefs: [
+            TRANSACTION_ID,
+            "70000000-0000-4000-8000-000000000008",
+          ],
+        },
+      })
+    ).toThrow();
   });
 
   it("rejects excess currency precision at the field boundary", () => {
     const formData = {
       accountId: ACCOUNT_ID,
-      amount: 1.001,
+      amount: "1.001",
       categoryId: "80000000-0000-4000-8000-000000000008",
       currency: "EGP",
-      sourceAccountId: ACCOUNT_ID,
-      targetAccountId: null,
-      type: "EXPENSE" as const,
+    };
+    const messages = {
+      accountRequired: "Account is required",
+      amountPrecision: "Amount supports at most 2 decimal places",
+      destinationAccountRequired: "Destination account is required",
+      sourceAccountRequired: "Source account is required",
     };
 
-    expect(validateTransactionForm(formData)).toEqual({
-      code: "AMOUNT_PRECISION",
-      field: "amount",
-      valid: false,
+    expect(validateTransactionForm("EXPENSE", formData, messages)).toEqual({
+      errors: { amount: messages.amountPrecision },
+      isValid: false,
     });
   });
 
