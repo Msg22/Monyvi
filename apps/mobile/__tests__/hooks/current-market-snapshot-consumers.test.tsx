@@ -280,6 +280,8 @@ describe("issue #302 cross-consumer snapshot identity", () => {
     expect(usdRow?.trust.source).toBe("metals.dev");
     expect(usdRow).toBeDefined();
     expect(result.current.metals.price24k).toBe(expectedUsd);
+    expect(result.current.metals.goldTrendPercent).toBeNull();
+    expect(usdRow?.changePercent).toBeNull();
 
     const fixture = divergentWideRootFixtureA();
     const divergent = selectMarketRateSnapshot(
