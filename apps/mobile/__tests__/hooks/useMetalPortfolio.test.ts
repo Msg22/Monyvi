@@ -64,6 +64,7 @@ jest.mock("@/hooks/usePreferredCurrency", () => ({
 }));
 
 const mockWealthBreakdown = { totalNetWorthDecimal: "1000" };
+let mockActiveHoldings: readonly Record<string, unknown>[] = [];
 
 jest.mock("@/services/net-worth-read-model-service", () => ({
   buildWealthBreakdownReadModel: (): unknown => mockWealthBreakdown,
@@ -76,8 +77,8 @@ jest.mock("@/services/metal-portfolio-read-model-service", () => ({
   observePortfolioRecentHistory: (): null => null,
   shapeMetalPortfolioHoldings: (): readonly unknown[] => [],
   buildMetalPortfolioReadModel: (input: Record<string, unknown>): unknown => ({
-    activeHoldings: [],
-    holdings: [],
+    activeHoldings: mockActiveHoldings,
+    holdings: mockActiveHoldings,
     recentHistory: [],
     allocation: { gold: "0", silver: "0" },
     rateStatus: input.rateStatus,
@@ -101,6 +102,7 @@ import { useMetalPortfolio } from "@/hooks/useMetalPortfolio";
 describe("useMetalPortfolio summary loading signal", () => {
   beforeEach(() => {
     mockTrustObservers.length = 0;
+    mockActiveHoldings = [];
   });
 
   it("keeps the dashboard summary loading until rates settle while holdings are ready", async () => {
@@ -154,5 +156,93 @@ describe("useMetalPortfolio summary loading signal", () => {
     // section readiness derived from it.
     expect(result.current.readiness.summary).toBe(true);
     expect(result.current.isSummaryLoading).toBe(false);
+  });
+});
+
+describe("useMetalPortfolio conservative provider timestamp", () => {
+  beforeEach(() => {
+    mockTrustObservers.length = 0;
+  });
+
+  it("returns null when a consumed rate lacks a timestamp even though another has one", async () => {
+    mockActiveHoldings = [
+      {
+        metalType: "GOLD",
+        purchaseCurrency: null,
+        purchasePriceDecimal: null,
+        status: "active",
+        isVisible: true,
+        isEffective: true,
+      },
+    ];
+    const { result } = renderHook(() => useMetalPortfolio());
+    await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
+
+    act(() => {
+      mockTrustObservers[0]?.next({
+        gold: {
+          state: "fresh",
+          ageMs: 1_000,
+          providerObservedAt: new Date("2026-09-08T10:00:00.000Z"),
+          valueDecimal: "81.5",
+        },
+        silver: { state: "missing", ageMs: null, providerObservedAt: null },
+        currencies: new Map([
+          ["EGP", { state: "unknown", ageMs: null, providerObservedAt: null }],
+        ]),
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.readiness.rateCurrency).toBe(true)
+    );
+    // Gold has a timestamp but the preferred currency rate's age is unknown, so
+    // the aggregate cannot truthfully claim a single "last updated" time.
+    expect(result.current.rateProviderObservedAt).toBeNull();
+  });
+
+  it("returns the oldest timestamp when every consumed rate has one", async () => {
+    mockActiveHoldings = [
+      {
+        metalType: "GOLD",
+        purchaseCurrency: null,
+        purchasePriceDecimal: null,
+        status: "active",
+        isVisible: true,
+        isEffective: true,
+      },
+    ];
+    const { result } = renderHook(() => useMetalPortfolio());
+    await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
+
+    act(() => {
+      mockTrustObservers[0]?.next({
+        gold: {
+          state: "fresh",
+          ageMs: 1_000,
+          providerObservedAt: new Date("2026-09-08T10:00:00.000Z"),
+          valueDecimal: "81.5",
+        },
+        silver: { state: "missing", ageMs: null, providerObservedAt: null },
+        currencies: new Map([
+          [
+            "EGP",
+            {
+              state: "fresh",
+              ageMs: 2_000,
+              providerObservedAt: new Date("2026-09-08T09:00:00.000Z"),
+              valueDecimal: "0.02",
+            },
+          ],
+        ]),
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.readiness.rateCurrency).toBe(true)
+    );
+    expect(result.current.rateProviderObservedAt?.toISOString()).toBe(
+      "2026-09-08T09:00:00.000Z"
+    );
   });
 });

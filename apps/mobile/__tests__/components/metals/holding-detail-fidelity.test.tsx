@@ -87,7 +87,11 @@ jest.mock("react-i18next", () => ({
 }));
 
 jest.mock("@expo/vector-icons", () => {
-  const renderIcon = ({ testID }: { readonly testID?: string }): React.JSX.Element => {
+  const renderIcon = ({
+    testID,
+  }: {
+    readonly testID?: string;
+  }): React.JSX.Element => {
     const { View } = jest.requireActual(
       "react-native"
     ) as typeof import("react-native");
@@ -350,6 +354,28 @@ describe("approved active holding-detail fidelity", () => {
         "Breakdown unavailable. The total is based on your recorded details."
       )
     ).toBeTruthy();
+  });
+
+  it("hides the calculation disclosure when no since-purchase total is available", () => {
+    // A legacy holding can keep a current value while an invalid purchase
+    // price/currency leaves both the attribution and the combined total null.
+    // Showing the disclosure would promise "based on your recorded details"
+    // for a total that was never computed.
+    render(
+      <MetalHoldingDetailScreen
+        actions={[]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={activeDetail({
+          attribution: null,
+          totalGainDecimal: null,
+        })}
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByText("How this value was calculated")).toBeNull();
   });
 
   it("explains a missing current rate without hiding the holding's saved facts", () => {

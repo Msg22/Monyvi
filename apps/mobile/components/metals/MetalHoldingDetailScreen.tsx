@@ -157,7 +157,7 @@ function DetailHeader({
   const canExplainCalculation =
     model.isActiveOwnership &&
     model.currentValueDecimal !== null &&
-    model.purchasePriceDecimal !== null;
+    (model.attribution !== null || model.totalGainDecimal !== null);
 
   return (
     <View className="px-5">

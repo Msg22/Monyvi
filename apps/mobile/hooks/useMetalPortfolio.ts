@@ -734,16 +734,19 @@ function getPortfolioProviderObservedAt(
     activeMetalTypes,
     activePurchaseCurrencies
   );
-  return values.reduce<Date | null>((oldest, value) => {
-    const observedAt = value.providerObservedAt;
-    if (observedAt === null || !Number.isFinite(observedAt.getTime())) {
-      return oldest;
-    }
-    if (oldest === null || observedAt.getTime() < oldest.getTime()) {
-      return new Date(observedAt.getTime());
-    }
-    return oldest;
-  }, null);
+  // Mirror `conservativeObservedAt` in the detail read model: only report a
+  // single "last updated" time when every consumed rate has a valid provider
+  // timestamp. Otherwise the aggregate would claim an observation time that
+  // does not cover an unknown/missing input, contradicting the rate state.
+  const timestamps = values.flatMap((value) =>
+    value.providerObservedAt === null ||
+    !Number.isFinite(value.providerObservedAt.getTime())
+      ? []
+      : [value.providerObservedAt.getTime()]
+  );
+  return timestamps.length > 0 && timestamps.length === values.length
+    ? new Date(Math.min(...timestamps))
+    : null;
 }
 
 function toPortfolioRateState(
