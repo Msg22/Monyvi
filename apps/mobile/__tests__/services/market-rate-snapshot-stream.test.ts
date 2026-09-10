@@ -235,4 +235,31 @@ describe("atomic market-rate snapshot stream", () => {
 
     subscription.unsubscribe();
   });
+
+  it("reconstructs the same complete snapshot after a process-style restart", () => {
+    const source = new FakeSnapshotDataSource();
+    const beforeRestart = createMarketRateSnapshotStream(source, () => NOW_MS);
+    const first = jest.fn<void, [unknown]>();
+    const firstSubscription = beforeRestart.subscribe({ next: first });
+
+    source.emitRoots([createRootA()]);
+    source.emitObservations(createObservationsA());
+    expect(first).toHaveBeenLastCalledWith(
+      expect.objectContaining({ snapshotId: SNAPSHOT_A_ID })
+    );
+    firstSubscription.unsubscribe();
+
+    const afterRestart = createMarketRateSnapshotStream(source, () => NOW_MS);
+    const second = jest.fn<void, [unknown]>();
+    const secondSubscription = afterRestart.subscribe({ next: second });
+
+    expect(second).not.toHaveBeenCalled();
+    source.emitRoots([createRootA()]);
+    source.emitObservations(createObservationsA());
+    expect(second).toHaveBeenLastCalledWith(
+      expect.objectContaining({ snapshotId: SNAPSHOT_A_ID })
+    );
+
+    secondSubscription.unsubscribe();
+  });
 });
