@@ -138,6 +138,17 @@ function evaluateCandidate(
   children: readonly MarketRateObservationCandidate[],
   nowMs: number
 ): SelectedMarketRateSnapshot | null {
+  const capturedAtMs = root.createdAt.getTime();
+  if (
+    children.some(
+      (observation) =>
+        !Number.isFinite(observation.createdAt.getTime()) ||
+        observation.createdAt.getTime() !== capturedAtMs
+    )
+  ) {
+    return null;
+  }
+
   const validation = validateCurrentMarketSnapshot(
     children.map((observation) => ({
       instrumentCode: observation.instrumentCode,
@@ -167,7 +178,7 @@ function evaluateCandidate(
 
   const snapshot: SelectedMarketRateSnapshot = {
     snapshotId: root.id,
-    capturedAt: new Date(root.createdAt.getTime()),
+    capturedAt: new Date(capturedAtMs),
     ratesByInstrument,
     trust: buildTrustFromSelectedSnapshot({
       capturedAt: root.createdAt,
