@@ -1,6 +1,3 @@
-import arMetals from "../../locales/ar/metals.json";
-import enMetals from "../../locales/en/metals.json";
-
 function copyValidDate(value: Date | null): Date | null {
   if (value === null || !Number.isFinite(value.getTime())) return null;
   return new Date(value.getTime());
@@ -47,20 +44,6 @@ export function formatPortfolioRateUpdatedParts(
   };
 }
 
-export function formatPortfolioRateUpdated(
-  providerObservedAt: Date | null,
-  language: string | undefined
-): string | null {
-  const parts = formatPortfolioRateUpdatedParts(providerObservedAt, language);
-  if (parts === null) return null;
-  const template = language?.startsWith("ar")
-    ? arMetals.portfolio.rates_updated
-    : enMetals.portfolio.rates_updated;
-  return template
-    .replace("{{date}}", parts.date)
-    .replace("{{time}}", parts.time);
-}
-
 export type PortfolioRateTrustState = "fresh" | "stale" | "unknown" | "missing";
 
 export interface PortfolioRateAccessibilityCopy {
@@ -68,12 +51,13 @@ export interface PortfolioRateAccessibilityCopy {
   readonly values?: Readonly<Record<string, string>>;
 }
 
-// Maps the trusted rate state to friendly, localized screen-reader copy so the
-// spoken portfolio total agrees with the visible rate line instead of always
-// claiming a "current rate". Fresh states announce a current rate; stale or
-// unknown states announce the last-updated information (falling back to a short
+// Resolves the trusted rate state into friendly, localized copy. Both the
+// visible portfolio rate line and the spoken total use this single source so
+// they can never disagree. Fresh rates announce a current rate; stale or
+// unknown rates announce the last-updated information (falling back to a short
 // state label when there is no observation timestamp); a missing required rate
-// announces unavailable. No customer-facing age threshold is reintroduced.
+// announces unavailable even if a stale/invalid observation retained a
+// timestamp. No customer-facing age threshold is reintroduced.
 export function getPortfolioRateAccessibilityCopy(
   state: PortfolioRateTrustState,
   providerObservedAt: Date | null,

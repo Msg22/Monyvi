@@ -25,7 +25,7 @@ import {
   resolveCurrencyDisplayDecimalPlaces,
   type CurrencyDisplaySign,
 } from "@/components/metals/portfolio-presentation";
-import { formatPortfolioRateUpdated } from "@/components/metals/portfolio-rate-presentation";
+import { formatPortfolioRateUpdatedParts } from "@/components/metals/portfolio-rate-presentation";
 import type {
   HoldingActionDescriptor,
   HoldingActionId,
@@ -374,10 +374,17 @@ function ValueJourney({
   const hasAcquisition =
     model.purchaseDate !== null || model.purchasePriceDecimal !== null;
   const hasCurrentValue = model.currentValueDecimal !== null;
-  const rateUpdatedLabel = formatPortfolioRateUpdated(
+  const rateUpdatedParts = formatPortfolioRateUpdatedParts(
     currentValueObservedAt,
     i18n.resolvedLanguage
   );
+  const rateUpdatedLabel =
+    rateUpdatedParts === null
+      ? null
+      : t("portfolio.rates_updated", {
+          date: rateUpdatedParts.date,
+          time: rateUpdatedParts.time,
+        });
   if (!hasAcquisition && !hasCurrentValue) return null;
 
   return (

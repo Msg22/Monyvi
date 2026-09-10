@@ -5,14 +5,7 @@ import type { MetalPortfolioSectionReadiness } from "@/hooks/metal-portfolio-rea
 import type { CurrencyType } from "@monyvi/db";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import {
-  FlatList,
-  I18nManager,
-  Image,
-  Pressable,
-  Text,
-  View,
-} from "react-native";
+import { FlatList, Pressable, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 import type {
@@ -20,15 +13,19 @@ import type {
   MetalPortfolioHoldingInput,
   MetalPortfolioReadModel,
 } from "@/services/metal-portfolio-read-model-service";
+import { HoldingSeparator, MetalHoldingRow } from "./MetalPortfolioHoldingRow";
 import {
-  formatPortfolioRateUpdatedParts,
   getPortfolioRateAccessibilityCopy,
+  type PortfolioRateTrustState,
 } from "./portfolio-rate-presentation";
 import {
   formatCodeAmount,
-  formatPurchaseDetail,
   formatShortDate,
-  getMetalHoldingPresentation,
+  getForwardChevronName,
+  getPerformanceTextClass,
+  getRealizedProfitLossLabelKey,
+  parseOptionalNumber,
+  parseShare,
   resolveLocale,
 } from "./portfolio-presentation";
 
@@ -47,13 +44,6 @@ interface MetalPortfolioScreenProps {
   readonly readiness?: MetalPortfolioSectionReadiness;
   readonly recentHistory?: MetalPortfolioReadModel["recentHistory"] | null;
   readonly selectedFilter: MetalPortfolioFilter;
-}
-
-interface MetalHoldingRowProps {
-  readonly currency: CurrencyType;
-  readonly holding: MetalPortfolioHoldingInput;
-  readonly isRateCurrencyReady: boolean;
-  readonly onPress: () => void;
 }
 
 const FILTERS: readonly MetalPortfolioFilter[] = ["ALL", "GOLD", "SILVER"];
@@ -400,7 +390,10 @@ function PortfolioSummary({
       <View className="mt-6 h-px bg-slate-200 dark:bg-slate-800" />
       <AllocationBar allocation={portfolio.allocation} />
       {holdingCount === 0 ? null : (
-        <RateStatus providerObservedAt={rateProviderObservedAt} />
+        <RateStatus
+          providerObservedAt={rateProviderObservedAt}
+          state={portfolio.rateStatus.state}
+        />
       )}
     </View>
   );
@@ -472,18 +465,18 @@ function AllocationLegend({
 
 function RateStatus({
   providerObservedAt,
+  state,
 }: {
   readonly providerObservedAt: Date | null;
+  readonly state: PortfolioRateTrustState;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
-  const parts = formatPortfolioRateUpdatedParts(
+  const copy = getPortfolioRateAccessibilityCopy(
+    state,
     providerObservedAt,
     i18n?.resolvedLanguage
   );
-  const label =
-    parts === null
-      ? t("rate.missing")
-      : t("portfolio.rates_updated", { date: parts.date, time: parts.time });
+  const label = t(copy.key, copy.values);
   return (
     <View className="mt-7 flex-row items-start gap-2">
       <Ionicons name="time-outline" size={20} color={palette.nileGreen[600]} />
@@ -609,210 +602,6 @@ function EmptyPortfolioContent({
         {t("portfolio.filter_empty", {
           filter: t(`portfolio.filter.${selectedFilter.toLowerCase()}`),
         })}
-      </Text>
-    </View>
-  );
-}
-
-function HoldingSeparator(): React.JSX.Element {
-  return <View testID="metal-portfolio-holding-separator" className="h-3" />;
-}
-
-function MetalHoldingRow({
-  currency,
-  holding,
-  isRateCurrencyReady,
-  onPress,
-}: MetalHoldingRowProps): React.JSX.Element {
-  const { t, i18n } = useTranslation("metals");
-  const locale = resolveLocale(i18n?.resolvedLanguage);
-  const presentation = getMetalHoldingPresentation(holding);
-  const metal = t(presentation.metalKey);
-  const form = t(presentation.formKey);
-  const purityLabel =
-    presentation.purityLabelKey === null
-      ? null
-      : t(presentation.purityLabelKey);
-  const metadata = [metal, purityLabel, form]
-    .filter((value): value is string => value !== null)
-    .join(" · ");
-  const purchaseDetail = formatPurchaseDetail(holding, locale, t);
-  const performanceValue = parseOptionalNumber(
-    holding.currentPerformanceDecimal
-  );
-  const currentValueLabel = formatCodeAmount(
-    holding.currentValueDecimal,
-    currency,
-    locale
-  );
-  const performanceLabel =
-    holding.currentPerformanceDecimal === null
-      ? holding.currentValueDecimal === null
-        ? t("portfolio.current_value_unavailable", {
-            reason: t("rate.missing"),
-          })
-        : t(
-            holding.performanceUnavailableReason === "rate_reference"
-              ? "portfolio.performance_unavailable_rate_reference"
-              : "portfolio.performance_unavailable"
-          )
-      : `${formatCodeAmount(
-          holding.currentPerformanceDecimal,
-          currency,
-          locale,
-          true
-        )} ${t("portfolio.since_purchase_label")}`;
-  const holdingAccessibilityLabel = [
-    holding.name,
-    metadata,
-    t("status.active"),
-    purchaseDetail,
-    isRateCurrencyReady ? currentValueLabel : null,
-    isRateCurrencyReady ? performanceLabel : null,
-  ]
-    .filter((value): value is string => Boolean(value))
-    .join(". ");
-
-  return (
-    <Pressable
-      accessible
-      accessibilityLabel={holdingAccessibilityLabel}
-      accessibilityRole="button"
-      onPress={onPress}
-      testID={`metal-portfolio-holding-${holding.id}`}
-      className="flex-row items-start gap-2 rounded-2xl border border-slate-200 bg-surface px-3 py-3.5 dark:border-slate-800 dark:bg-slate-900"
-    >
-      <HoldingImage form={form} metal={metal} presentation={presentation} />
-      <View className="min-w-0 flex-1">
-        <Text
-          testID={`metal-portfolio-holding-name-${holding.id}`}
-          numberOfLines={2}
-          className="text-base font-medium leading-5 text-text-primary dark:text-text-primary-dark"
-        >
-          {holding.name}
-        </Text>
-        <View className="mt-1 flex-row flex-wrap items-center">
-          <Text
-            numberOfLines={2}
-            className="text-xs text-text-secondary dark:text-text-secondary-dark"
-          >
-            {metadata}
-            {metadata.length > 0 ? " · " : ""}
-          </Text>
-          <Text className="text-xs text-nileGreen-700 dark:text-nileGreen-400">
-            {t("status.active")}
-          </Text>
-        </View>
-        {purchaseDetail === null ? null : (
-          <Text
-            numberOfLines={2}
-            className="mt-1 text-xs text-text-secondary dark:text-text-secondary-dark"
-          >
-            {purchaseDetail}
-          </Text>
-        )}
-      </View>
-      {isRateCurrencyReady ? (
-        <View
-          testID={`metal-portfolio-holding-value-${holding.id}`}
-          className="w-[104px] shrink-0 items-end self-center"
-        >
-          <Text
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.8}
-            className="text-sm font-semibold text-text-primary dark:text-text-primary-dark"
-          >
-            {currentValueLabel}
-          </Text>
-          {holding.currentPerformanceDecimal === null ? (
-            <Text
-              numberOfLines={2}
-              className="mt-1 text-right text-[11px] text-text-secondary dark:text-text-secondary-dark"
-            >
-              {holding.currentValueDecimal === null
-                ? t("portfolio.value_unavailable_short")
-                : t(
-                    holding.performanceUnavailableReason === "rate_reference"
-                      ? "portfolio.performance_unavailable_rate_reference"
-                      : "portfolio.performance_unavailable"
-                  )}
-            </Text>
-          ) : (
-            <>
-              <Text
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.8}
-                className={`mt-2 text-xs font-medium ${getPerformanceTextClass(
-                  performanceValue
-                )}`}
-              >
-                {formatCodeAmount(
-                  holding.currentPerformanceDecimal,
-                  currency,
-                  locale,
-                  true
-                )}
-              </Text>
-              <Text className="mt-1 text-[11px] text-text-secondary dark:text-text-secondary-dark">
-                {t("portfolio.since_purchase_label")}
-              </Text>
-            </>
-          )}
-        </View>
-      ) : (
-        <View
-          testID={`metal-portfolio-holding-value-pending-${holding.id}`}
-          className="w-[104px] shrink-0 items-end gap-2 self-center"
-        >
-          <Skeleton width="100%" height={18} borderRadius={8} />
-          <Skeleton width="70%" height={14} borderRadius={7} />
-        </View>
-      )}
-      <View className="shrink-0 self-center">
-        <Ionicons
-          name={getForwardChevronName()}
-          size={20}
-          color={palette.slate[500]}
-        />
-      </View>
-    </Pressable>
-  );
-}
-
-function HoldingImage({
-  form,
-  metal,
-  presentation,
-}: {
-  readonly form: string;
-  readonly metal: string;
-  readonly presentation: ReturnType<typeof getMetalHoldingPresentation>;
-}): React.JSX.Element {
-  const { t } = useTranslation("metals");
-  if (presentation.render.kind === "object") {
-    return (
-      <Image
-        accessible
-        accessibilityLabel={t(presentation.render.accessibilityLabelKey, {
-          metal,
-          form,
-        })}
-        source={presentation.render.source}
-        resizeMode="contain"
-        className="h-16 w-16"
-      />
-    );
-  }
-  return (
-    <View
-      accessible
-      accessibilityLabel={t(presentation.render.accessibilityLabelKey)}
-      className="h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800"
-    >
-      <Text className="text-xs font-semibold text-text-secondary dark:text-text-secondary-dark">
-        {metal}
       </Text>
     </View>
   );
@@ -949,50 +738,4 @@ function ErrorState({
       </Pressable>
     </View>
   );
-}
-
-function getForwardChevronName(): "chevron-back" | "chevron-forward" {
-  return I18nManager.isRTL ? "chevron-back" : "chevron-forward";
-}
-
-function getRealizedProfitLossLabelKey(
-  value: string | null,
-  context: "summary" | "history"
-):
-  | "portfolio.realized_loss"
-  | "portfolio.realized_loss_from_sold_metals"
-  | "portfolio.realized_profit"
-  | "portfolio.realized_profit_from_sold_metals"
-  | "portfolio.realized_result"
-  | "portfolio.realized_result_from_sold_metals" {
-  const parsedValue = parseOptionalNumber(value);
-  const suffix = context === "summary" ? "_from_sold_metals" : "";
-  if (parsedValue !== null && parsedValue > 0) {
-    return `portfolio.realized_profit${suffix}`;
-  }
-  if (parsedValue !== null && parsedValue < 0) {
-    return `portfolio.realized_loss${suffix}`;
-  }
-  return `portfolio.realized_result${suffix}`;
-}
-
-function parseShare(value: string | null): number {
-  if (value === null) return 0;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-}
-
-function parseOptionalNumber(value: string | null): number | null {
-  if (value === null) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function getPerformanceTextClass(value: number | null): string {
-  if (value === null || value === 0) {
-    return "text-text-secondary dark:text-text-secondary-dark";
-  }
-  return value > 0
-    ? "text-nileGreen-700 dark:text-nileGreen-400"
-    : "text-red-600 dark:text-red-500";
 }

@@ -137,7 +137,7 @@ describe("PR #271 validated Metals review regressions", () => {
   });
 
   it("distinguishes unavailable performance from unavailable current value", () => {
-    const value = source("components/metals/MetalPortfolioScreen.tsx");
+    const value = source("components/metals/MetalPortfolioHoldingRow.tsx");
     expect(value).toContain("performanceUnavailableReason");
     expect(value).toContain("portfolio.performance_unavailable_rate_reference");
     expect(value).toContain("portfolio.performance_unavailable");
@@ -235,7 +235,7 @@ describe("PR #271 validated Metals review regressions", () => {
   });
 
   it("exposes shaped financial facts in holding-row accessibility", () => {
-    const value = source("components/metals/MetalPortfolioScreen.tsx");
+    const value = source("components/metals/MetalPortfolioHoldingRow.tsx");
     expect(value).not.toContain("accessibilityLabel={holding.name}");
     expect(value).toContain("holdingAccessibilityLabel");
   });

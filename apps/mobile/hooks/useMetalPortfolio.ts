@@ -129,7 +129,8 @@ export function useMetalPortfolio(
   const [currentRates, setCurrentRates] = useState<LiveRatesTrustReadModel>(
     createEmptyTrustReadModel
   );
-  const [hasRatesSnapshot, setHasRatesSnapshot] = useState(false);
+  const [hasRateObservationSettled, setHasRateObservationSettled] =
+    useState(false);
   const [isAssetsLoading, setIsAssetsLoading] = useState(true);
   const [isAssetMetalsLoading, setIsAssetMetalsLoading] = useState(true);
   const [isHoldingStatesLoading, setIsHoldingStatesLoading] = useState(true);
@@ -387,10 +388,11 @@ export function useMetalPortfolio(
     const observation = observeLiveRatesTrust(database);
     trustObservationRef.current = observation;
     setIsRatesLoading(true);
+    setHasRateObservationSettled(false);
     const subscription = observation.subscribe({
       next: (result): void => {
         setCurrentRates(result);
-        setHasRatesSnapshot(true);
+        setHasRateObservationSettled(true);
         setIsRatesLoading(false);
       },
       error: (reason: unknown): void => {
@@ -399,6 +401,10 @@ export function useMetalPortfolio(
           reason,
           setError
         );
+        // A definitively failed rate read must still settle readiness so the
+        // screen renders unavailable rate values instead of an indefinite
+        // skeleton; the last known trust state stays as-is.
+        setHasRateObservationSettled(true);
         setIsRatesLoading(false);
       },
     });
@@ -421,13 +427,13 @@ export function useMetalPortfolio(
         holdingStatesKey,
         holdingStatesReady:
           userId !== null && holdingStatesSnapshotUserId === userId,
-        ratesReady: hasRatesSnapshot,
+        ratesReady: hasRateObservationSettled,
       }),
     [
       assetIdsKey,
       assetMetalsDependencyKey,
       assetsSnapshotUserId,
-      hasRatesSnapshot,
+      hasRateObservationSettled,
       historyDependencyKey,
       holdingStatesKey,
       holdingStatesSnapshotUserId,

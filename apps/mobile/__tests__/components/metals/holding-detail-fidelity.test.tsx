@@ -41,6 +41,8 @@ const translations: Readonly<Record<string, string>> = {
     "Displayed amounts are rounded, so the parts may differ slightly from the total.",
   "detail.fact_accessibility": "{{label}}: {{value}}",
   "detail.follow_value": "Follow the value",
+  "portfolio.rates_updated":
+    "Prices last updated {{date}} at {{time}}. They may have changed since then.",
   "detail.history": "History",
   "detail.metal_movement": "Metal movement",
   "detail.offline": "Offline mode",

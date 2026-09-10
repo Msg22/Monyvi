@@ -860,6 +860,23 @@ describe("US1 portfolio surfaces", () => {
     ).toBeNull();
   });
 
+  it("renders the visible rate line as unavailable for a missing state even when a stale observation retained a timestamp", () => {
+    renderPortfolio({
+      portfolio: {
+        ...portfolio,
+        holdings: portfolio.activeHoldings,
+        rateStatus: { state: "missing", ageMs: null },
+      },
+      rateProviderObservedAt: new Date("2026-08-24T10:30:00.000Z"),
+    });
+
+    expect(screen.getByText(/current rate unavailable/i)).toBeTruthy();
+    expect(screen.queryByText(/Prices last updated/i)).toBeNull();
+    expect(
+      screen.getByLabelText(/Metals portfolio value .*current rate unavailable/)
+    ).toBeTruthy();
+  });
+
   it("wraps the last-updated sentence responsively instead of clamping one line", () => {
     renderPortfolio({
       portfolio: {

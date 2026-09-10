@@ -6,6 +6,7 @@ interface Observer {
 }
 
 const mockTrustObservers: Observer[] = [];
+const mockDatabase = { id: "database" };
 const mockEmptyTrustReadModel = {
   gold: { state: "missing", ageMs: null, providerObservedAt: null },
   silver: { state: "missing", ageMs: null, providerObservedAt: null },
@@ -39,7 +40,7 @@ jest.mock("@/context/AuthContext", () => ({
 }));
 
 jest.mock("@/providers/DatabaseProvider", () => ({
-  useDatabase: (): unknown => ({ id: "database" }),
+  useDatabase: (): unknown => mockDatabase,
 }));
 
 jest.mock("@/utils/logger", () => ({
@@ -135,18 +136,23 @@ describe("useMetalPortfolio summary loading signal", () => {
     expect(result.current.wealthBreakdown).toBe(mockWealthBreakdown);
   });
 
-  it("stops summary loading on an observer error instead of spinning forever", async () => {
+  it("settles readiness after an initial rate error so the screen shows unavailable values instead of an endless skeleton", async () => {
     const { result } = renderHook(() =>
       useMetalPortfolio({ accountsValueDecimal: "1000" })
     );
     await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
     expect(result.current.isSummaryLoading).toBe(true);
+    expect(result.current.readiness.summary).toBe(false);
 
     act(() => {
       mockTrustObservers[0]?.error(new Error("rate observer failed"));
     });
 
     await waitFor(() => expect(result.current.error).toBeInstanceOf(Error));
+    // The failed initial rate observation is a settled unavailable state, not a
+    // permanent loading state, for both the dashboard flag and the My Metals
+    // section readiness derived from it.
+    expect(result.current.readiness.summary).toBe(true);
     expect(result.current.isSummaryLoading).toBe(false);
   });
 });
