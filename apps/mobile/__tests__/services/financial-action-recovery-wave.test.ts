@@ -22,6 +22,12 @@ const ACCOUNT_ID = "30000000-0000-4000-8000-000000000003";
 const EFFECT_ID = "40000000-0000-4000-8000-000000000004";
 const TRANSACTION_ID = "70000000-0000-4000-8000-000000000007";
 
+interface TestFinancialActionEnvelope extends Readonly<Record<string, unknown>> {
+  readonly payload: Readonly<Record<string, unknown>> & {
+    readonly domainRecordRefs: readonly string[];
+  };
+}
+
 function source(relativePath: string): string {
   return readFileSync(resolve(ROOT, relativePath), "utf8");
 }
@@ -39,7 +45,7 @@ function pushChanges(
   } as unknown as SyncPushArgs["changes"];
 }
 
-function validEnvelope() {
+function validEnvelope(): TestFinancialActionEnvelope {
   return {
     accountGuards: [{ accountId: ACCOUNT_ID, expectedRevision: "0" }],
     actionId: ACTION_ID,
