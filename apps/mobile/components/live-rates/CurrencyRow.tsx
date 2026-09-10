@@ -25,12 +25,53 @@ interface CurrencyRowProps {
   readonly code: string;
   readonly name: string;
   readonly rate: string;
-  readonly changePercent: number;
+  readonly changePercent: number | null;
   readonly trust?: {
     readonly quality: string | null;
     readonly source: string | null;
     readonly state: "fresh" | "stale" | "unknown" | "missing" | "invalid";
   };
+}
+
+function CurrencyTrend({
+  changePercent,
+}: {
+  readonly changePercent: number | null;
+}): React.JSX.Element | null {
+  if (changePercent === null || !Number.isFinite(changePercent)) {
+    return null;
+  }
+
+  const roundedChange = Number(changePercent.toFixed(2));
+  const changeLabel = `${Math.abs(roundedChange).toFixed(2)}%`;
+  if (roundedChange === 0) {
+    return (
+      <Text className="text-[11px] font-medium text-slate-400">
+        {changeLabel}
+      </Text>
+    );
+  }
+
+  const isUp = roundedChange > 0;
+  const changeColor = isUp ? "text-nileGreen-500" : "text-red-500";
+  const trendIcon = isUp ? "arrow-drop-up" : "arrow-drop-down";
+  const trendIconColor = isUp
+    ? palette.nileGreen[500]
+    : palette.red[500];
+
+  return (
+    <View className="flex-row items-center">
+      <MaterialIcons
+        name={trendIcon}
+        size={20}
+        color={trendIconColor}
+        style={{ marginEnd: -2, marginStart: -3 }}
+      />
+      <Text className={`text-[11px] font-medium ${changeColor}`}>
+        {changeLabel}
+      </Text>
+    </View>
+  );
 }
 
 export function CurrencyRow({
@@ -42,15 +83,6 @@ export function CurrencyRow({
   trust,
 }: CurrencyRowProps): React.JSX.Element {
   const { t } = useTranslation("metals");
-  const roundedChange = Number(changePercent.toFixed(2));
-  const isUp = roundedChange > 0;
-  const hasTrend = roundedChange !== 0;
-  const changeColor = isUp ? "text-nileGreen-500" : "text-red-500";
-  const changeLabel = `${Math.abs(roundedChange).toFixed(2)}%`;
-  const trendIcon = isUp ? "arrow-drop-up" : "arrow-drop-down";
-  const trendIconColor = isUp
-    ? palette.nileGreen[500]
-    : palette.red[500];
   const trustLabel =
     trust === undefined
       ? null
@@ -89,19 +121,7 @@ export function CurrencyRow({
         <Text className="text-sm font-semibold text-slate-800 dark:text-white">
           {rate}
         </Text>
-        {hasTrend ? (
-          <View className="flex-row items-center">
-            <MaterialIcons
-              name={trendIcon}
-              size={20}
-              color={trendIconColor}
-              style={{ marginEnd: -2, marginStart: -3 }}
-            />
-            <Text className={`text-[11px] font-medium ${changeColor}`}>
-              {changeLabel}
-            </Text>
-          </View>
-        ) : null}
+        <CurrencyTrend changePercent={changePercent} />
       </View>
     </View>
   );
