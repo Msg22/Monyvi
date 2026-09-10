@@ -87,13 +87,22 @@ function buildEnvelope(
   });
 }
 
-test("parseLosslessJson preserves ordinary high-precision decimal tokens unchanged", () => {
-  const parsed = parseLosslessJson(
-    '{"value":0.10000000000000001,"other":1020.50000000000000001}'
-  ) as { value: unknown; other: unknown };
+function requireRecord(value: unknown): Record<string, unknown> {
+  assert.equal(typeof value, "object");
+  assert.notEqual(value, null);
+  assert.equal(Array.isArray(value), false);
+  return Object.fromEntries(Object.entries(value));
+}
 
-  assert.equal(String(parsed.value), "0.10000000000000001");
-  assert.equal(String(parsed.other), "1020.50000000000000001");
+test("parseLosslessJson preserves ordinary high-precision decimal tokens unchanged", () => {
+  const parsed = requireRecord(
+    parseLosslessJson(
+      '{"value":0.10000000000000001,"other":1020.50000000000000001}'
+    )
+  );
+
+  assert.equal(String(parsed["value"]), "0.10000000000000001");
+  assert.equal(String(parsed["other"]), "1020.50000000000000001");
 });
 
 test("normalizeDecimalToken expands scientific notation without rounding", () => {
@@ -170,6 +179,7 @@ test("envelope preserves exact precision canaries as plain decimals", () => {
   assert.equal(envelope.root.platinumUsdPerGram, "123.00");
   assert.equal(envelope.root.palladiumUsdPerGram, "1020.50000000000000001");
   assert.equal(envelope.root.fiatUsdPerUnit["KPW"], "0.000000000373874");
+  assert.equal(envelope.root.fiatUsdPerUnit["BTC"], "95000.5");
   assert.equal(byInstrument.get("currency:DZD")?.valueDecimal, "0.0073624976");
 });
 
@@ -201,8 +211,9 @@ test("root and bound observations agree exactly", () => {
   const gold = envelope.observations.find(
     ({ instrumentCode }) => instrumentCode === "metal:GOLD"
   );
-  assert.equal(gold?.valueDecimal, envelope.root.goldUsdPerGram);
-  assert.equal(gold?.batchId ?? envelope.snapshotId, envelope.snapshotId);
+  assert.ok(gold);
+  assert.equal(gold.valueDecimal, envelope.root.goldUsdPerGram);
+  assert.equal(gold.batchId, envelope.snapshotId);
 });
 
 test("persist RPC payload carries exact strings, one identity, and no nesting ID", () => {
@@ -258,15 +269,39 @@ test("future provider timestamps normalize to null", () => {
   assert.equal(envelope.root.providerMetalObservedAt, "2026-09-08T09:55:00Z");
 });
 
-test("provider status failure is rejected", async () => {
+test("provider status failure is rejected", () => {
   const raw = RAW_PROVIDER_SUCCESS.replace(
     '"status":"success"',
     '"status":"error"'
   );
-  await assertThrowsContract(
+  assertThrowsContract(
     () => buildEnvelope(raw),
     "invalid_provider_shape"
   );
+});
+
+test("provider base currency must be USD", () => {
+  const raw = RAW_PROVIDER_SUCCESS.replace(
+    '"currency":"USD"',
+    '"currency":"EUR"'
+  );
+  assertThrowsContract(
+    () => buildEnvelope(raw),
+    "invalid_provider_shape"
+  );
+});
+
+test("provider unit must be grams", () => {
+  const raw = RAW_PROVIDER_SUCCESS.replace('"unit":"g"', '"unit":"oz"');
+  assertThrowsContract(
+    () => buildEnvelope(raw),
+    "invalid_provider_shape"
+  );
+});
+
+test("missing BTC compatibility rate is rejected before persistence", () => {
+  const raw = withRawReplacements({ '"BTC":95000.5,': "" });
+  assertThrowsContract(() => buildEnvelope(raw), "snapshot_incomplete");
 });
 
 test("non-positive rate token is rejected", () => {
