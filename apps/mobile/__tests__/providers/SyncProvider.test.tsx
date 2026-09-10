@@ -1,16 +1,15 @@
 /**
  * @file SyncProvider.test.tsx
- * @description Unit tests for SyncProvider's initialSyncState and retryInitialSync.
+ * @description Tests the authenticated startup/profile sync gate. Market-rate
+ * availability is intentionally screen-level and must not block routing.
  */
 
 import { act, render, waitFor } from "@testing-library/react-native";
-import { MARKET_RATE_MODEL_VALUE_FIELDS } from "@monyvi/logic";
 import React from "react";
 
-const mockSyncDatabase = jest.fn();
-const mockCheckIsAuthenticated = jest.fn();
-const mockFetchProfileCount = jest.fn();
-const mockFetchMarketRates = jest.fn();
+const mockSyncDatabase = jest.fn<Promise<void>, [unknown, boolean?]>();
+const mockCheckIsAuthenticated = jest.fn<Promise<boolean>, []>();
+const mockFetchProfileCount = jest.fn<Promise<number>, []>();
 const mockDbGet = jest.fn();
 
 interface MockAuthState {
@@ -26,26 +25,14 @@ const mockWhere = jest.fn((column: string, value: unknown) => ({
   column,
   value,
 }));
-const mockSortBy = jest.fn((column: string, order: unknown) => ({
-  column,
-  order,
-}));
-const mockTake = jest.fn((count: number) => ({ count }));
-
-function createValidMarketRate(): Record<string, number> {
-  return Object.fromEntries(
-    MARKET_RATE_MODEL_VALUE_FIELDS.map((field) => [field, 1])
-  );
-}
 
 jest.mock("@/services/sync", () => ({
-  syncDatabase: (...args: unknown[]): Promise<unknown> =>
-    mockSyncDatabase(...args) as Promise<unknown>,
+  syncDatabase: (database: unknown, forceFullSync?: boolean): Promise<void> =>
+    mockSyncDatabase(database, forceFullSync),
 }));
 
 jest.mock("@/services/supabase", () => ({
-  isAuthenticated: (): Promise<boolean> =>
-    mockCheckIsAuthenticated() as Promise<boolean>,
+  isAuthenticated: (): Promise<boolean> => mockCheckIsAuthenticated(),
 }));
 
 jest.mock("@monyvi/db", () => ({
@@ -69,32 +56,35 @@ jest.mock("@nozbe/watermelondb", () => ({
   Q: {
     where: (column: string, value: unknown): unknown =>
       mockWhere(column, value),
-    sortBy: (column: string, order: unknown): unknown =>
-      mockSortBy(column, order),
-    take: (count: number): unknown => mockTake(count),
-    desc: "desc",
   },
+}));
+
+jest.mock("@/services/user-data-access", () => ({
+  queryOwned: (): {
+    readonly fetchCount: () => Promise<number>;
+  } => ({ fetchCount: mockFetchProfileCount }),
 }));
 
 import { SyncProvider, useSync } from "../../providers/SyncProvider";
 
 interface SyncContextSnapshot {
-  initialSyncState: string;
-  initialSyncFailureReason: string | null;
-  retryInitialSync: () => Promise<string>;
+  readonly initialSyncState: string;
+  readonly initialSyncFailureReason: null;
+  readonly retryInitialSync: () => Promise<string>;
 }
 
-function renderAndCapture(): {
-  result: React.MutableRefObject<SyncContextSnapshot>;
-  unmount: () => void;
-} {
-  const resultRef =
-    React.createRef() as React.MutableRefObject<SyncContextSnapshot>;
+interface CaptureResult {
+  read(): SyncContextSnapshot;
+  unmount(): void;
+}
+
+function renderAndCapture(): CaptureResult {
+  let current: SyncContextSnapshot | null = null;
 
   function CaptureComponent(): null {
     const { initialSyncState, initialSyncFailureReason, retryInitialSync } =
       useSync();
-    resultRef.current = {
+    current = {
       initialSyncState,
       initialSyncFailureReason,
       retryInitialSync,
@@ -103,14 +93,20 @@ function renderAndCapture(): {
   }
 
   const renderer = render(
-    React.createElement(
-      SyncProvider,
-      null,
-      React.createElement(CaptureComponent)
-    )
+    <SyncProvider>
+      <CaptureComponent />
+    </SyncProvider>
   );
 
-  return { result: resultRef, unmount: renderer.unmount };
+  return {
+    read(): SyncContextSnapshot {
+      if (current === null) {
+        throw new Error("sync context has not rendered");
+      }
+      return current;
+    },
+    unmount: renderer.unmount,
+  };
 }
 
 describe("SyncProvider initialSyncState", () => {
@@ -121,18 +117,17 @@ describe("SyncProvider initialSyncState", () => {
     jest.useFakeTimers();
     mockCheckIsAuthenticated.mockResolvedValue(true);
     mockFetchProfileCount.mockResolvedValue(0);
-    mockFetchMarketRates.mockResolvedValue([createValidMarketRate()]);
+    mockSyncDatabase.mockResolvedValue(undefined);
     mockUseAuth.mockReturnValue({
       isAuthenticated: true,
       user: { id: "current-user" },
     });
-    mockDbGet.mockImplementation((table: string) => ({
-      query: jest.fn(() =>
-        table === "market_rates"
-          ? { fetch: mockFetchMarketRates }
-          : { fetchCount: mockFetchProfileCount }
-      ),
-    }));
+    mockDbGet.mockImplementation((table: string) => {
+      if (table !== "profiles") {
+        throw new Error(`authenticated startup queried unrelated table ${table}`);
+      }
+      return { table };
+    });
   });
 
   afterEach((): void => {
@@ -149,117 +144,55 @@ describe("SyncProvider initialSyncState", () => {
   }
 
   async function waitForInitialSyncState(
-    result: React.MutableRefObject<SyncContextSnapshot>,
+    capture: CaptureResult,
     expectedState: string
   ): Promise<void> {
     await waitFor(() =>
-      expect(result.current?.initialSyncState).toBe(expectedState)
+      expect(capture.read().initialSyncState).toBe(expectedState)
     );
   }
 
   it('starts with initialSyncState "in-progress"', (): void => {
-    mockFetchProfileCount.mockReturnValue(new Promise(() => {}));
-    mockSyncDatabase.mockReturnValue(new Promise(() => {}));
-    const { result, unmount } = renderAndCapture();
-    lastUnmount = unmount;
-    expect(result.current.initialSyncState).toBe("in-progress");
+    mockFetchProfileCount.mockReturnValue(new Promise(() => undefined));
+    mockSyncDatabase.mockReturnValue(new Promise(() => undefined));
+    const capture = renderAndCapture();
+    lastUnmount = capture.unmount;
+
+    expect(capture.read().initialSyncState).toBe("in-progress");
   });
 
-  it('transitions to "success" when sync completes within timeout', async (): Promise<void> => {
-    mockSyncDatabase.mockResolvedValue(undefined);
-    const { result } = renderAndCapture();
+  it('transitions to "success" when the required profile sync completes', async (): Promise<void> => {
+    const capture = renderAndCapture();
 
-    await waitForInitialSyncState(result, "success");
+    await waitForInitialSyncState(capture, "success");
 
-    expect(result.current.initialSyncState).toBe("success");
+    expect(mockSyncDatabase).toHaveBeenCalledWith(expect.anything(), true);
+    expect(capture.read().initialSyncFailureReason).toBeNull();
   });
 
-  it("checks the current user's profile instead of accounts before trusting local startup data", async (): Promise<void> => {
+  it("checks only the current user's profile before trusting local startup data", async (): Promise<void> => {
     mockFetchProfileCount.mockResolvedValue(1);
-    mockSyncDatabase.mockResolvedValue(undefined);
-    const { result } = renderAndCapture();
+    const capture = renderAndCapture();
 
-    await waitForInitialSyncState(result, "success");
+    await waitForInitialSyncState(capture, "success");
 
+    expect(mockDbGet).toHaveBeenCalledTimes(1);
     expect(mockDbGet).toHaveBeenCalledWith("profiles");
-    expect(mockDbGet).toHaveBeenCalledWith("market_rates");
-    expect(mockWhere).toHaveBeenCalledWith("user_id", "current-user");
     expect(mockWhere).toHaveBeenCalledWith("deleted", false);
     expect(mockSyncDatabase).toHaveBeenCalledWith(expect.anything(), false);
-    expect(result.current.initialSyncState).toBe("success");
   });
 
-  it("forces the blocking startup sync when the profile exists but cached market rates are missing", async (): Promise<void> => {
+  it("does not block authenticated startup when no market snapshot is cached", async (): Promise<void> => {
     mockFetchProfileCount.mockResolvedValue(1);
-    mockFetchMarketRates
-      .mockResolvedValueOnce([])
-      .mockResolvedValue([createValidMarketRate()]);
-    mockSyncDatabase.mockResolvedValue(undefined);
-    const { result } = renderAndCapture();
+    mockSyncDatabase.mockRejectedValue(new Error("network unavailable"));
+    const capture = renderAndCapture();
 
-    await waitForInitialSyncState(result, "success");
+    await waitForInitialSyncState(capture, "success");
 
-    expect(mockSyncDatabase).toHaveBeenCalledWith(expect.anything(), true);
-    expect(result.current.initialSyncState).toBe("success");
-    expect(result.current.initialSyncFailureReason).toBeNull();
-  });
-
-  it("preserves a typed market-rate failure when required local rates are missing offline", async (): Promise<void> => {
-    mockFetchProfileCount.mockResolvedValue(1);
-    mockFetchMarketRates.mockResolvedValue([]);
-    mockSyncDatabase.mockRejectedValue(new Error("Network unavailable"));
-    const { result } = renderAndCapture();
-
-    await waitForInitialSyncState(result, "failed");
-
-    expect(result.current.initialSyncFailureReason).toBe(
-      "market-rates-unavailable"
-    );
-  });
-
-  it("allows offline startup when both the profile and a cached rate exist", async (): Promise<void> => {
-    mockFetchProfileCount.mockResolvedValue(1);
-    mockSyncDatabase.mockRejectedValue(new Error("Network unavailable"));
-    const { result } = renderAndCapture();
-
-    await waitForInitialSyncState(result, "success");
-
+    expect(mockDbGet).not.toHaveBeenCalledWith("market_rates");
+    expect(mockDbGet).not.toHaveBeenCalledWith("market_rate_observations");
     expect(mockSyncDatabase).toHaveBeenCalledWith(expect.anything(), false);
-    expect(result.current.initialSyncState).toBe("success");
-    expect(result.current.initialSyncFailureReason).toBeNull();
-  });
-
-  it("forces the blocking startup sync when the cached market rate is invalid", async (): Promise<void> => {
-    const validRate = createValidMarketRate();
-    mockFetchProfileCount.mockResolvedValue(1);
-    mockFetchMarketRates
-      .mockResolvedValueOnce([{ ...validRate, goldUsdPerGram: 0 }])
-      .mockResolvedValue([validRate]);
-    mockSyncDatabase.mockResolvedValue(undefined);
-    const { result } = renderAndCapture();
-
-    await waitForInitialSyncState(result, "success");
-
-    expect(mockSyncDatabase).toHaveBeenCalledWith(expect.anything(), true);
-  });
-
-  it("keeps startup blocked when recovery sync leaves the latest cached rate invalid", async (): Promise<void> => {
-    const invalidRate = {
-      ...createValidMarketRate(),
-      goldUsdPerGram: 0,
-    };
-    mockFetchProfileCount.mockResolvedValue(1);
-    mockFetchMarketRates.mockResolvedValue([invalidRate]);
-    mockSyncDatabase.mockResolvedValue(undefined);
-    const { result } = renderAndCapture();
-
-    await waitForInitialSyncState(result, "failed");
-
-    expect(mockSyncDatabase).toHaveBeenCalledWith(expect.anything(), true);
-    expect(mockFetchMarketRates).toHaveBeenCalledTimes(2);
-    expect(result.current.initialSyncFailureReason).toBe(
-      "market-rates-unavailable"
-    );
+    expect(capture.read().initialSyncFailureReason).toBeNull();
   });
 
   it('transitions to "failed" when auth is true but the user id is missing', async (): Promise<void> => {
@@ -267,62 +200,57 @@ describe("SyncProvider initialSyncState", () => {
       isAuthenticated: true,
       user: {},
     });
-    mockSyncDatabase.mockResolvedValue(undefined);
-    const { result } = renderAndCapture();
+    const capture = renderAndCapture();
 
-    await waitForInitialSyncState(result, "failed");
+    await waitForInitialSyncState(capture, "failed");
 
-    expect(mockDbGet).not.toHaveBeenCalledWith("profiles");
+    expect(mockDbGet).not.toHaveBeenCalled();
     expect(mockSyncDatabase).not.toHaveBeenCalled();
-    expect(result.current.initialSyncState).toBe("failed");
+    expect(capture.read().initialSyncFailureReason).toBeNull();
   });
 
-  it('transitions to "failed" when sync throws before timeout', async (): Promise<void> => {
-    mockSyncDatabase.mockRejectedValue(new Error("Network error"));
-    const { result } = renderAndCapture();
+  it('transitions to "failed" when required profile sync throws before timeout', async (): Promise<void> => {
+    mockSyncDatabase.mockRejectedValue(new Error("network error"));
+    const capture = renderAndCapture();
 
-    await waitForInitialSyncState(result, "failed");
+    await waitForInitialSyncState(capture, "failed");
 
-    expect(result.current.initialSyncState).toBe("failed");
+    expect(capture.read().initialSyncFailureReason).toBeNull();
   });
 
-  it('transitions to "timeout" when sync takes longer than 20 seconds', async (): Promise<void> => {
-    mockSyncDatabase.mockReturnValue(new Promise(() => {}));
-    const { result, unmount } = renderAndCapture();
-    lastUnmount = unmount;
+  it('transitions to "timeout" when required profile sync exceeds 20 seconds', async (): Promise<void> => {
+    mockSyncDatabase.mockReturnValue(new Promise(() => undefined));
+    const capture = renderAndCapture();
+    lastUnmount = capture.unmount;
 
     await advancePastInitialSyncTimeout();
-    await waitForInitialSyncState(result, "timeout");
+    await waitForInitialSyncState(capture, "timeout");
 
-    expect(result.current.initialSyncState).toBe("timeout");
+    expect(capture.read().initialSyncFailureReason).toBeNull();
   });
 
   it("provides retryInitialSync as a callable function", (): void => {
-    mockFetchProfileCount.mockReturnValue(new Promise(() => {}));
-    mockSyncDatabase.mockReturnValue(new Promise(() => {}));
-    const { result, unmount } = renderAndCapture();
-    lastUnmount = unmount;
-    expect(typeof result.current.retryInitialSync).toBe("function");
+    mockFetchProfileCount.mockReturnValue(new Promise(() => undefined));
+    mockSyncDatabase.mockReturnValue(new Promise(() => undefined));
+    const capture = renderAndCapture();
+    lastUnmount = capture.unmount;
+
+    expect(typeof capture.read().retryInitialSync).toBe("function");
   });
 
-  it("keeps the market-rate failure reason during retry and clears it after recovery", async (): Promise<void> => {
-    mockFetchProfileCount.mockResolvedValue(1);
-    mockFetchMarketRates.mockResolvedValue([]);
-    mockSyncDatabase.mockRejectedValueOnce(new Error("Network unavailable"));
-    const { result } = renderAndCapture();
+  it("retries a failed required profile sync without introducing a market-rate gate", async (): Promise<void> => {
+    mockSyncDatabase.mockRejectedValueOnce(new Error("network unavailable"));
+    const capture = renderAndCapture();
 
-    await waitForInitialSyncState(result, "failed");
-    expect(result.current.initialSyncFailureReason).toBe(
-      "market-rates-unavailable"
-    );
+    await waitForInitialSyncState(capture, "failed");
 
-    mockFetchMarketRates.mockResolvedValue([createValidMarketRate()]);
     mockSyncDatabase.mockResolvedValueOnce(undefined);
     await act(async () => {
-      await result.current.retryInitialSync();
+      await capture.read().retryInitialSync();
     });
 
-    await waitForInitialSyncState(result, "success");
-    expect(result.current.initialSyncFailureReason).toBeNull();
+    await waitForInitialSyncState(capture, "success");
+    expect(capture.read().initialSyncFailureReason).toBeNull();
+    expect(mockDbGet).not.toHaveBeenCalledWith("market_rates");
   });
 });
