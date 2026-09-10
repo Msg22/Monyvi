@@ -1,13 +1,31 @@
+import type { Database } from "@nozbe/watermelondb";
 import type { SyncTableChangeSet } from "@nozbe/watermelondb/sync";
 
+import type {
+  MarketRateSnapshotCursor,
+  MarketRateSnapshotPullResult,
+} from "@/services/sync/market-rate-snapshot-pull";
+
 const mockGetCurrentUserId = jest.fn<Promise<string | null>, []>();
-const mockPullMarketRateSnapshots = jest.fn();
-const mockPullCategories = jest.fn();
-const mockPullChildTable = jest.fn();
-const mockPullMetalDedicatedTable = jest.fn();
-const mockPullSnapshotTable = jest.fn();
-const mockPullUserTable = jest.fn();
-const mockProtectMetalMetadataPullFragments = jest.fn();
+const mockPullMarketRateSnapshots = jest.fn<
+  Promise<MarketRateSnapshotPullResult>,
+  [MarketRateSnapshotCursor | null]
+>();
+const mockPullCategories = jest.fn<
+  Promise<SyncTableChangeSet>,
+  [string, string | null, string]
+>();
+const mockPullChildTable = jest.fn<Promise<SyncTableChangeSet>, never[]>();
+const mockPullMetalDedicatedTable = jest.fn<
+  Promise<SyncTableChangeSet>,
+  [string, string, string | null, string, Database | undefined]
+>();
+const mockPullSnapshotTable = jest.fn<Promise<SyncTableChangeSet>, never[]>();
+const mockPullUserTable = jest.fn<Promise<SyncTableChangeSet>, never[]>();
+const mockProtectMetalMetadataPullFragments = jest.fn<
+  SyncTableChangeSet,
+  [SyncTableChangeSet, SyncTableChangeSet]
+>();
 
 const EMPTY_CHANGES: SyncTableChangeSet = {
   created: [],
@@ -27,24 +45,23 @@ jest.mock("@/services/sync/config", () => ({
   ],
 }));
 
+jest.mock("@/services/sync/table-predicates", () => ({
+  getChildTableConfig: (): undefined => undefined,
+  isServerOwnedUserTable: (): boolean => false,
+  isSnapshotTable: (): boolean => false,
+}));
+
 jest.mock("@/services/sync/market-rate-snapshot-pull", () => ({
-  pullMarketRateSnapshots: (...args: readonly unknown[]): unknown =>
-    mockPullMarketRateSnapshots(...args),
+  pullMarketRateSnapshots: mockPullMarketRateSnapshots,
 }));
 
 jest.mock("@/services/sync/pull-strategies", () => ({
-  pullCategories: (...args: readonly unknown[]): unknown =>
-    mockPullCategories(...args),
-  pullChildTable: (...args: readonly unknown[]): unknown =>
-    mockPullChildTable(...args),
-  pullMetalDedicatedTable: (...args: readonly unknown[]): unknown =>
-    mockPullMetalDedicatedTable(...args),
-  pullSnapshotTable: (...args: readonly unknown[]): unknown =>
-    mockPullSnapshotTable(...args),
-  pullUserTable: (...args: readonly unknown[]): unknown =>
-    mockPullUserTable(...args),
-  protectMetalMetadataPullFragments: (...args: readonly unknown[]): unknown =>
-    mockProtectMetalMetadataPullFragments(...args),
+  pullCategories: mockPullCategories,
+  pullChildTable: mockPullChildTable,
+  pullMetalDedicatedTable: mockPullMetalDedicatedTable,
+  pullSnapshotTable: mockPullSnapshotTable,
+  pullUserTable: mockPullUserTable,
+  protectMetalMetadataPullFragments: mockProtectMetalMetadataPullFragments,
 }));
 
 import { pullChanges } from "@/services/sync/atomic-pull-strategies";
@@ -79,7 +96,7 @@ describe("atomic pullChanges market-rate composition", () => {
     mockPullSnapshotTable.mockResolvedValue(EMPTY_CHANGES);
     mockPullUserTable.mockResolvedValue(EMPTY_CHANGES);
     mockProtectMetalMetadataPullFragments.mockImplementation(
-      (changes: SyncTableChangeSet) => changes
+      (changes: SyncTableChangeSet): SyncTableChangeSet => changes
     );
   });
 
