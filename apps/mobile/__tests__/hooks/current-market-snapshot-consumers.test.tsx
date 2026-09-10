@@ -1,9 +1,7 @@
 import { renderHook, waitFor } from "@testing-library/react-native";
 import { Decimal } from "decimal.js";
 
-import type {
-  SelectedMarketRateSnapshot,
-} from "@/services/market-rate-snapshot-read-model-service";
+import type { SelectedMarketRateSnapshot } from "@/services/market-rate-snapshot-read-model-service";
 import {
   completeFixtureA,
   createRootA,
@@ -21,6 +19,7 @@ interface SnapshotObserver {
 
 const mockSnapshotObservers: SnapshotObserver[] = [];
 let mockPendingSnapshot: SelectedMarketRateSnapshot | null = null;
+let mockEmitSnapshotOnSubscribe = true;
 const mockStreamRefresh = jest.fn<void, []>();
 
 jest.mock("@/services/market-rate-snapshot-read-model-service", () => {
@@ -33,7 +32,9 @@ jest.mock("@/services/market-rate-snapshot-read-model-service", () => {
       refresh: mockStreamRefresh,
       subscribe: (observer: SnapshotObserver) => {
         mockSnapshotObservers.push(observer);
-        observer.next(mockPendingSnapshot);
+        if (mockEmitSnapshotOnSubscribe) {
+          observer.next(mockPendingSnapshot);
+        }
         return { unsubscribe: jest.fn() };
       },
     }),
@@ -65,7 +66,10 @@ jest.mock("@/providers/MarketRatesRealtimeProvider", () => ({
 }));
 
 jest.mock("@/hooks/usePreferredCurrency", () => ({
-  usePreferredCurrency: () => ({ preferredCurrency: "EGP" }),
+  usePreferredCurrency: () => ({
+    preferredCurrency: "EGP",
+    isLoading: false,
+  }),
 }));
 
 jest.mock("@/hooks/useCurrentUser", () => ({
@@ -75,7 +79,7 @@ jest.mock("@/hooks/useCurrentUser", () => ({
     profile: null,
   }),
   runUserScopedEffect: (input: {
-    onAuthenticated: (userId: string) => () => void;
+    onAuthenticated: (userId: string) => (() => void) | void;
   }) => input.onAuthenticated("user-1"),
 }));
 
@@ -84,7 +88,12 @@ jest.mock("@/services/live-rates-refresh-service", () => ({
 }));
 
 jest.mock("@/utils/logger", () => ({
-  logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn() },
+  logger: {
+    debug: jest.fn(),
+    error: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+  },
 }));
 
 jest.mock("react-i18next", () => ({
@@ -139,10 +148,13 @@ jest.mock("@/services/metal-portfolio-read-model-service", () => ({
   observePortfolioRecentHistory: () => mockCreateQuery([]),
   observePortfolioSaleRateReferences: () => mockCreateQuery([]),
   selectPortfolioHoldings: (model: unknown) => model,
-  buildMetalPortfolioReadModel: (input: unknown) => input,
+  buildMetalPortfolioReadModel: (input: Record<string, unknown>) => ({
+    ...input,
+    activeHoldings: [],
+  }),
   shapeMetalPortfolioHoldings: (input: Record<string, unknown>) => {
     portfolioShapeInputs.push(input);
-    return null;
+    return [];
   },
 }));
 
@@ -186,8 +198,8 @@ function emitSnapshot(snapshot: SelectedMarketRateSnapshot | null): void {
 function snapshotA(): SelectedMarketRateSnapshot {
   const fixture = completeFixtureA();
   const selected = selectMarketRateSnapshot(
-    fixture.roots as never,
-    fixture.observations as never,
+    fixture.roots,
+    fixture.observations,
     NOW_MS
   );
   if (!selected) {
@@ -202,6 +214,7 @@ describe("issue #302 cross-consumer snapshot identity", () => {
     jest.setSystemTime(new Date(NOW_MS));
     mockSnapshotObservers.splice(0);
     mockPendingSnapshot = null;
+    mockEmitSnapshotOnSubscribe = true;
     netWorthInputs.splice(0);
     portfolioShapeInputs.splice(0);
     detailReadInputs.splice(0);
@@ -268,9 +281,10 @@ describe("issue #302 cross-consumer snapshot identity", () => {
     expect(usdRow).toBeDefined();
     expect(result.current.metals.price24k).toBe(expectedUsd);
 
+    const fixture = divergentWideRootFixtureA();
     const divergent = selectMarketRateSnapshot(
-      divergentWideRootFixtureA().roots as never,
-      divergentWideRootFixtureA().observations as never,
+      fixture.roots,
+      fixture.observations,
       NOW_MS
     );
     if (!divergent) {
@@ -289,26 +303,47 @@ describe("issue #302 cross-consumer snapshot identity", () => {
       {
         ...createRootA(),
         createdAt: new Date(NOW_MS),
-        providerObservedAt: staleProvider.toISOString(),
       },
     ];
     const observations = fixture.observations.map((row) => ({
       ...row,
       providerObservedAt: staleProvider,
     }));
-    const selected = selectMarketRateSnapshot(
-      roots as never,
-      observations as never,
-      NOW_MS
-    );
+    const selected = selectMarketRateSnapshot(roots, observations, NOW_MS);
     emitSnapshot(selected);
 
     const { result } = renderHook(() => useMarketRates());
 
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(result.current.isCurrentLoading).toBe(false));
     expect(result.current.isStale).toBe(true);
     expect(result.current.lastUpdated?.getTime()).toBe(
       staleProvider.getTime()
     );
+  });
+
+  it("does not block recorded portfolio or detail facts while rates are pending", async () => {
+    mockEmitSnapshotOnSubscribe = false;
+
+    renderHook(() => useMetalPortfolio());
+    await waitFor(() =>
+      expect(portfolioShapeInputs.length).toBeGreaterThan(0)
+    );
+    expect(portfolioShapeInputs.at(-1)).toMatchObject({
+      snapshotId: null,
+      currentRates: {
+        gold: { state: "missing" },
+        silver: { state: "missing" },
+      },
+    });
+
+    renderHook(() => useMetalHoldingDetail("holding-1"));
+    await waitFor(() => expect(detailReadInputs.length).toBeGreaterThan(0));
+    expect(detailReadInputs.at(-1)).toMatchObject({
+      snapshotId: null,
+      currentRates: {
+        gold: { state: "missing" },
+        silver: { state: "missing" },
+      },
+    });
   });
 });
