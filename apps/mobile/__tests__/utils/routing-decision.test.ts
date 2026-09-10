@@ -1,21 +1,17 @@
 /**
- * Unit tests for getRoutingDecision and buildRoutingDecisionLog.
- *
- * These are pure functions — no React, no WatermelonDB, no network.
- * The routing decision is the binary core of the onboarding gate:
- * dashboard-vs-onboarding. Per-step resume is handled inside onboarding.tsx
- * via the AsyncStorage cursor and is NOT tested here.
+ * Unit tests for the pure post-sign-in routing decision.
+ * Market-rate availability is deliberately absent: current rate-dependent
+ * values fail closed inside their screens and never gate authenticated startup.
  */
 
-import type { RoutingInputs, RoutingOutcome } from "@/utils/routing-decision";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+import {
+  getRoutingDecision,
+  type RoutingInputs,
+  type RoutingOutcome,
+} from "@/utils/routing-decision";
 
 type SyncState = RoutingInputs["syncState"];
 
-/** Build a complete RoutingInputs object with sensible defaults. */
 function makeInputs(overrides: Partial<RoutingInputs> = {}): RoutingInputs {
   return {
     syncState: "success",
@@ -25,143 +21,84 @@ function makeInputs(overrides: Partial<RoutingInputs> = {}): RoutingInputs {
   };
 }
 
-/** All four sync states exercised by the tests. */
-const ALL_SYNC_STATES: SyncState[] = [
+const ALL_SYNC_STATES: readonly SyncState[] = [
   "in-progress",
   "success",
   "failed",
   "timeout",
 ];
 
-const ALL_OUTCOMES: RoutingOutcome[] = [
+const ALL_OUTCOMES: readonly RoutingOutcome[] = [
   "loading",
   "dashboard",
   "onboarding",
   "retry",
 ];
 
-// ---------------------------------------------------------------------------
-
 describe("getRoutingDecision", () => {
-  let getRoutingDecision: (inputs: RoutingInputs) => RoutingOutcome;
-
-  beforeAll(() => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require("@/utils/routing-decision") as {
-      getRoutingDecision: (inputs: RoutingInputs) => RoutingOutcome;
-    };
-    getRoutingDecision = mod.getRoutingDecision;
-  });
-
-  // =========================================================================
-  // Sync-state gate (highest priority)
-  // =========================================================================
-
-  describe("sync state gating", () => {
-    it('returns "loading" when syncState is "in-progress"', () => {
-      expect(getRoutingDecision(makeInputs({ syncState: "in-progress" }))).toBe(
-        "loading"
-      );
-    });
-
-    describe("required startup data gating", () => {
-      it.each(["failed", "timeout"] as SyncState[])(
-        'returns "retry" when syncState is "%s" and onboardingCompleted=false',
-        (syncState) => {
-          expect(
-            getRoutingDecision(
-              makeInputs({ syncState, onboardingCompleted: false })
-            )
-          ).toBe("retry");
-        }
-      );
-
-      it("still renders the loading backdrop when sync is in-progress even if onboardingCompleted=true", () => {
-        expect(
-          getRoutingDecision(
-            makeInputs({ syncState: "in-progress", onboardingCompleted: true })
-          )
-        ).toBe("loading");
-      });
-
-      it("routes the already-onboarded user to dashboard when sync failed — WatermelonDB is authoritative offline (Constitution I; CR review on routing-decision.ts)", () => {
-        expect(
-          getRoutingDecision(
-            makeInputs({ syncState: "failed", onboardingCompleted: true })
-          )
-        ).toBe("dashboard");
-      });
-
-      it("routes the already-onboarded user to dashboard when sync timed out — same rationale, offline-first", () => {
-        expect(
-          getRoutingDecision(
-            makeInputs({ syncState: "timeout", onboardingCompleted: true })
-          )
-        ).toBe("dashboard");
-      });
-    });
-
-    it.each(["failed", "timeout"] as SyncState[])(
-      'returns "retry" for an onboarded user when required market rates remain unavailable after sync %s',
-      (syncState) => {
-        expect(
-          getRoutingDecision(
-            makeInputs({
-              syncState,
-              onboardingCompleted: true,
-              initialSyncFailureReason: "market-rates-unavailable",
-            })
-          )
-        ).toBe("retry");
-      }
+  it('returns "loading" while the initial profile sync is in progress', () => {
+    expect(getRoutingDecision(makeInputs({ syncState: "in-progress" }))).toBe(
+      "loading"
     );
   });
 
-  // =========================================================================
-  // Dashboard vs onboarding (sync=success path)
-  // =========================================================================
-
-  describe("sync=success path", () => {
-    it('returns "dashboard" when onboardingCompleted=true', () => {
+  it.each(["failed", "timeout"] as const)(
+    'returns "retry" when syncState is "%s" and onboarding is unresolved',
+    (syncState) => {
       expect(
         getRoutingDecision(
-          makeInputs({ syncState: "success", onboardingCompleted: true })
+          makeInputs({ syncState, onboardingCompleted: false })
+        )
+      ).toBe("retry");
+    }
+  );
+
+  it.each(["failed", "timeout"] as const)(
+    'keeps an onboarded user on the dashboard when background sync is "%s"',
+    (syncState) => {
+      expect(
+        getRoutingDecision(
+          makeInputs({ syncState, onboardingCompleted: true })
         )
       ).toBe("dashboard");
-    });
+    }
+  );
 
-    it('returns "onboarding" when onboardingCompleted=false', () => {
-      expect(
+  it('returns "dashboard" after successful startup for an onboarded user', () => {
+    expect(
+      getRoutingDecision(
+        makeInputs({ syncState: "success", onboardingCompleted: true })
+      )
+    ).toBe("dashboard");
+  });
+
+  it('returns "onboarding" after successful startup for a new user', () => {
+    expect(
+      getRoutingDecision(
+        makeInputs({ syncState: "success", onboardingCompleted: false })
+      )
+    ).toBe("onboarding");
+  });
+
+  it.each(ALL_SYNC_STATES)(
+    "returns a valid outcome for syncState=%s, onboardingCompleted=false",
+    (syncState) => {
+      expect(ALL_OUTCOMES).toContain(
         getRoutingDecision(
-          makeInputs({ syncState: "success", onboardingCompleted: false })
-        )
-      ).toBe("onboarding");
-    });
-  });
-
-  // =========================================================================
-  // Exhaustive: every sync-state × onboardingCompleted combination
-  // =========================================================================
-
-  describe("exhaustive sync-state combinations", () => {
-    it.each(ALL_SYNC_STATES)(
-      "returns a valid outcome for syncState=%s, onboardingCompleted=false",
-      (syncState) => {
-        const result = getRoutingDecision(
           makeInputs({ syncState, onboardingCompleted: false })
-        );
-        expect(ALL_OUTCOMES).toContain(result);
-      }
-    );
+        )
+      );
+    }
+  );
 
-    it.each(ALL_SYNC_STATES)(
-      "returns a valid outcome for syncState=%s, onboardingCompleted=true",
-      (syncState) => {
-        const result = getRoutingDecision(
+  it.each(ALL_SYNC_STATES)(
+    "returns a valid outcome for syncState=%s, onboardingCompleted=true",
+    (syncState) => {
+      expect(ALL_OUTCOMES).toContain(
+        getRoutingDecision(
           makeInputs({ syncState, onboardingCompleted: true })
-        );
-        expect(ALL_OUTCOMES).toContain(result);
-      }
-    );
-  });
+        )
+      );
+    }
+  );
 });
