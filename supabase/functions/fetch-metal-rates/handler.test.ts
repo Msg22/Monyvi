@@ -26,12 +26,15 @@ interface Harness {
   readonly persistenceCalls: PersistRpcPayload[];
 }
 
-function createHarness(options?: {
+interface HarnessOptions {
   readonly apiKey?: string;
   readonly providerResponse?: Response;
   readonly persistenceError?: string;
   readonly persistenceStatus?: "created" | "replayed";
-}): Harness {
+  readonly persistenceData?: unknown;
+}
+
+function createHarness(options?: HarnessOptions): Harness {
   const fetchUrls: string[] = [];
   const persistenceCalls: PersistRpcPayload[] = [];
   const providerResponse =
@@ -68,7 +71,10 @@ function createHarness(options?: {
       createSnapshotId(): string {
         return SNAPSHOT_ID;
       },
-      async persistSnapshot(payload) {
+      async persistSnapshot(payload): Promise<{
+        readonly data: unknown;
+        readonly error: { readonly message: string } | null;
+      }> {
         persistenceCalls.push(payload);
         if (options?.persistenceError) {
           return {
@@ -77,11 +83,12 @@ function createHarness(options?: {
           };
         }
         return {
-          data: {
-            status: options?.persistenceStatus ?? "created",
-            snapshotId: SNAPSHOT_ID,
-            capturedAt: CAPTURED_AT,
-          },
+          data:
+            options?.persistenceData ??
+            {
+              status: options?.persistenceStatus ?? "created",
+              snapshotId: SNAPSHOT_ID,
+            },
           error: null,
         };
       },
@@ -110,7 +117,7 @@ test("OPTIONS returns CORS success without fetching or persisting", async () => 
   assert.equal(harness.persistenceCalls.length, 0);
 });
 
-test("persists one exact atomic snapshot from response text", async () => {
+test("persists one exact atomic snapshot and accepts migration 069's RPC response", async () => {
   const harness = createHarness();
   const handler = createFetchMetalRatesHandler(harness.dependencies);
 
@@ -146,6 +153,7 @@ test("persists one exact atomic snapshot from response text", async () => {
   assert.equal(body["success"], true);
   assert.equal(body["snapshotId"], SNAPSHOT_ID);
   assert.equal(body["persistenceStatus"], "created");
+  assert.equal(body["capturedAt"], CAPTURED_AT);
 });
 
 test("reports replayed persistence without issuing a second write path", async () => {
@@ -160,6 +168,26 @@ test("reports replayed persistence without issuing a second write path", async (
   assert.equal(response.status, 200);
   assert.equal(body["persistenceStatus"], "replayed");
   assert.equal(harness.persistenceCalls.length, 1);
+});
+
+test("rejects a malformed or mismatched persistence result", async () => {
+  for (const persistenceData of [
+    null,
+    { status: "created", snapshotId: "22222222-2222-4222-8222-222222222222" },
+    { status: "unexpected", snapshotId: SNAPSHOT_ID },
+  ]) {
+    const harness = createHarness({ persistenceData });
+    const handler = createFetchMetalRatesHandler(harness.dependencies);
+
+    const response = await handler(
+      new Request("https://example.test/fetch-metal-rates")
+    );
+    const body = requireRecord(await response.json());
+
+    assert.equal(response.status, 502);
+    assert.equal(body["code"], "persistence_error");
+    assert.equal(harness.persistenceCalls.length, 1);
+  }
 });
 
 test("missing provider key fails before provider or database access", async () => {
