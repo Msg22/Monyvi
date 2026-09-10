@@ -49,6 +49,7 @@
     "test:sms-category-enrichment-contract": "tsx --test scripts/__tests__/sms-category-enrichment-contract.test.ts supabase/functions/_shared/sms-category-enrichment-handler.test.ts",
     "test:sms-parser-special-cases": "tsx --test scripts/__tests__/sms-parser-special-cases.test.ts",
     "test:sms-hard-exclusions": "tsx --test scripts/__tests__/sms-hard-exclusions.test.ts",
+    "test:market-rate-edge": "tsx --test supabase/functions/_shared/market-rate-snapshot-contract.test.ts supabase/functions/fetch-metal-rates/handler.test.ts",
     "qa-sms:privacy-check": "tsx scripts/check-qa-sms-pattern-privacy.ts",
     "qa-sms:import-candidates": "tsx scripts/import-qa-sms-candidate-bundle.ts",
     "qa-sms:ingest": "tsx scripts/ingest-qa-sms-candidate-bundle.ts",
