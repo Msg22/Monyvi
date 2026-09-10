@@ -1,7 +1,10 @@
-import type { Account, AssetMetal } from "@monyvi/db";
 import { Decimal } from "decimal.js";
 
-import { buildNetWorthReadModel } from "@/services/net-worth-read-model-service";
+import {
+  buildNetWorthReadModel,
+  type NetWorthAccountInput,
+  type NetWorthAssetMetalInput,
+} from "@/services/net-worth-read-model-service";
 import {
   completeFixtureA,
   divergentWideRootFixtureA,
@@ -14,7 +17,9 @@ jest.mock("@monyvi/db", () => ({
   database: {
     get: () => ({
       query: () => ({
-        observe: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) }),
+        observe: () => ({
+          subscribe: () => ({ unsubscribe: () => undefined }),
+        }),
         fetch: async () => [],
       }),
     }),
@@ -22,16 +27,24 @@ jest.mock("@monyvi/db", () => ({
 }));
 
 jest.mock("@/services/user-data-access", () => ({
-  queryChildrenOfOwnedParents: () => ({ observe: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) }) }),
-  queryOwned: () => ({ observe: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) }) }),
+  queryChildrenOfOwnedParents: () => ({
+    observe: () => ({
+      subscribe: () => ({ unsubscribe: () => undefined }),
+    }),
+  }),
+  queryOwned: () => ({
+    observe: () => ({
+      subscribe: () => ({ unsubscribe: () => undefined }),
+    }),
+  }),
 }));
 
 type SnapshotFixture = ReturnType<typeof completeFixtureA>;
 
 function snapshotFor(fixture: SnapshotFixture) {
   const selected = selectMarketRateSnapshot(
-    fixture.roots as never,
-    fixture.observations as never,
+    fixture.roots,
+    fixture.observations,
     NOW_MS
   );
   if (!selected) {
@@ -42,19 +55,19 @@ function snapshotFor(fixture: SnapshotFixture) {
 
 function account(
   balance: number,
-  currency: Account["currency"]
-): Account {
-  return { balance, currency } as unknown as Account;
+  currency: NetWorthAccountInput["currency"]
+): NetWorthAccountInput {
+  return { balance, currency };
 }
 
-function goldHolding(weightGramsDecimal: string): AssetMetal {
+function goldHolding(weightGramsDecimal: string): NetWorthAssetMetalInput {
   return {
     metalType: "GOLD",
     weightGrams: Number(weightGramsDecimal),
     weightGramsDecimal,
     purityFraction: 1,
     purityFactorDecimal: "1",
-  } as unknown as AssetMetal;
+  };
 }
 
 describe("net-worth current rates consume the exact selected snapshot", () => {
@@ -71,10 +84,7 @@ describe("net-worth current rates consume the exact selected snapshot", () => {
     const expectedUsd = new Decimal("1000")
       .times("0.0210523309")
       .plus(100);
-    expect(result?.totalNetWorthUsd).toBeCloseTo(
-      Number(expectedUsd),
-      8
-    );
+    expect(result?.totalNetWorthUsd).toBeCloseTo(Number(expectedUsd), 8);
   });
 
   it("values metal holdings from exact metal USD-per-gram decimals", () => {
@@ -109,7 +119,7 @@ describe("net-worth current rates consume the exact selected snapshot", () => {
     expect(divergent).toEqual(exact);
   });
 
-  it("returns unavailable (null) rather than zero when no snapshot is selected", () => {
+  it("returns unavailable rather than zero when no snapshot is selected", () => {
     expect(
       buildNetWorthReadModel({
         accounts: [account(1000, "EGP")],
@@ -131,6 +141,25 @@ describe("net-worth current rates consume the exact selected snapshot", () => {
     ).toBeNull();
   });
 
+  it("does not recover missing exact holding facts from legacy number fields", () => {
+    const missingExactFacts: NetWorthAssetMetalInput = {
+      metalType: "GOLD",
+      weightGrams: 2,
+      weightGramsDecimal: null,
+      purityFraction: 1,
+      purityFactorDecimal: null,
+    };
+
+    expect(
+      buildNetWorthReadModel({
+        accounts: [],
+        assetMetals: [missingExactFacts],
+        currentSnapshot: snapshotFor(completeFixtureA()),
+        preferredCurrency: "USD",
+      })
+    ).toBeNull();
+  });
+
   it("never consults MarketRate numeric fields for current conversion", () => {
     const result = buildNetWorthReadModel({
       accounts: [account(21.0523309, "USD")],
@@ -139,8 +168,9 @@ describe("net-worth current rates consume the exact selected snapshot", () => {
       preferredCurrency: "EGP",
     });
 
-    expect(
-      result?.totalAccounts ?? Number.NaN
-    ).toBeCloseTo(new Decimal("21.0523309").div("0.0210523309").toNumber(), 6);
+    expect(result?.totalAccounts ?? Number.NaN).toBeCloseTo(
+      new Decimal("21.0523309").div("0.0210523309").toNumber(),
+      6
+    );
   });
 });
