@@ -1,6 +1,6 @@
 /**
  * Sync Context and Provider
- * Provides sync status and functions to the app with smart sync intervals
+ * Provides sync status and functions to the app with smart sync intervals.
  */
 
 import { database, type Profile } from "@monyvi/db";
@@ -18,7 +18,6 @@ import {
 } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { useAuth } from "../context/AuthContext";
-import { readSelectedMarketRateSnapshot } from "../services/market-rate-snapshot-read-model-service";
 import { isAuthenticated as checkIsAuthenticated } from "../services/supabase";
 import { syncDatabase } from "../services/sync";
 import { queryOwned } from "../services/user-data-access";
@@ -106,10 +105,10 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
 
   const runInitialSync = useCallback(
     async (
-      failureReasonOnFailure: InitialSyncFailureReason,
+      _failureReasonOnFailure: InitialSyncFailureReason,
       shouldApplyState: ShouldApplyState = shouldAlwaysApplyState
     ): Promise<InitialSyncState> => {
-      initialSyncFailureReasonRef.current = failureReasonOnFailure;
+      initialSyncFailureReasonRef.current = null;
       if (shouldApplyState()) {
         setInitialSyncState("in-progress");
         setInitialSyncFailureReason(null);
@@ -119,23 +118,8 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
       let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
       try {
-        const syncAndValidateRequiredData = async (): Promise<void> => {
-          await sync(true, shouldApplyState);
-
-          if (
-            !shouldApplyState() ||
-            failureReasonOnFailure !== "market-rates-unavailable"
-          ) {
-            return;
-          }
-
-          if (!(await hasCompleteCachedMarketRateSnapshot())) {
-            throw new Error("market-rates-unavailable-after-sync");
-          }
-        };
-
         await Promise.race([
-          syncAndValidateRequiredData(),
+          sync(true, shouldApplyState),
           new Promise<never>((_resolve, reject) => {
             timeoutHandle = setTimeout(
               () => reject(new Error("initial-sync-timeout")),
@@ -156,10 +140,8 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
 
       if (shouldApplyState()) {
         setInitialSyncState(syncResult);
-        const settledFailureReason =
-          syncResult === "success" ? null : failureReasonOnFailure;
-        initialSyncFailureReasonRef.current = settledFailureReason;
-        setInitialSyncFailureReason(settledFailureReason);
+        initialSyncFailureReasonRef.current = null;
+        setInitialSyncFailureReason(null);
       }
       return syncResult;
     },
@@ -206,7 +188,7 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
 
       if (wasBackground && isNowActive) {
         sync().catch(() => {
-          // The cached complete snapshot remains available on failure.
+          // Existing local data remains authoritative on refresh failure.
         });
         setupSyncInterval(true);
       }
@@ -256,26 +238,19 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
       }
 
       const profilesCollection = database.get<Profile>("profiles");
-      const [currentUserProfileCount, hasValidCachedMarketRate] =
-        await Promise.all([
-          queryOwned(
-            profilesCollection,
-            userId,
-            Q.where("deleted", false)
-          ).fetchCount(),
-          hasCompleteCachedMarketRateSnapshot(),
-        ]);
+      const currentUserProfileCount = await queryOwned(
+        profilesCollection,
+        userId,
+        Q.where("deleted", false)
+      ).fetchCount();
 
       if (!shouldContinue()) {
         return;
       }
 
-      if (currentUserProfileCount === 0 || !hasValidCachedMarketRate) {
+      if (currentUserProfileCount === 0) {
         setIsInitialSync(true);
-        await runInitialSync(
-          hasValidCachedMarketRate ? null : "market-rates-unavailable",
-          shouldContinue
-        );
+        await runInitialSync(null, shouldContinue);
         if (shouldContinue()) {
           setIsInitialSync(false);
         }
@@ -301,6 +276,7 @@ export function SyncProvider({ children }: SyncProviderProps): JSX.Element {
 
     initialSync().catch(() => {
       if (shouldContinue()) {
+        setInitialSyncFailureReason(null);
         setInitialSyncState("failed");
       }
     });
@@ -368,8 +344,4 @@ function getSafeThrownLog(error: unknown): {
     message: "non-error thrown",
     type: typeof error,
   };
-}
-
-async function hasCompleteCachedMarketRateSnapshot(): Promise<boolean> {
-  return (await readSelectedMarketRateSnapshot(database)) !== null;
 }
