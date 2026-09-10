@@ -49,9 +49,9 @@ interface MetalDisplayData {
   readonly price24k: string;
   readonly price21k: string;
   readonly price18k: string;
-  readonly goldTrendPercent: number;
+  readonly goldTrendPercent: number | null;
   readonly silverPrice: string;
-  readonly silverTrendPercent: number;
+  readonly silverTrendPercent: number | null;
   readonly currencySymbol: string;
 }
 
@@ -60,7 +60,7 @@ interface CurrencyDisplayItem {
   readonly name: string;
   readonly flag: string;
   readonly rate: string;
-  readonly changePercent: number;
+  readonly changePercent: number | null;
   readonly trust: LiveRatesTrustDisplayValue;
 }
 
@@ -175,9 +175,9 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
         price24k: "—",
         price21k: "—",
         price18k: "—",
-        goldTrendPercent: 0,
+        goldTrendPercent: null,
         silverPrice: "—",
-        silverTrendPercent: 0,
+        silverTrendPercent: null,
         currencySymbol,
       };
     }
@@ -221,15 +221,9 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
       price24k: gold24k === null ? "—" : formatRate(gold24k),
       price21k: gold21k === null ? "—" : formatRate(gold21k),
       price18k: gold18k === null ? "—" : formatRate(gold18k),
-      goldTrendPercent:
-        gold24k === null
-          ? 0
-          : calculateTrendPercent(gold24k, previousGold24k),
+      goldTrendPercent: calculateAvailableTrend(gold24k, previousGold24k),
       silverPrice: silver === null ? "—" : formatRate(silver),
-      silverTrendPercent:
-        silver === null
-          ? 0
-          : calculateTrendPercent(silver, previousSilver),
+      silverTrendPercent: calculateAvailableTrend(silver, previousSilver),
       currencySymbol,
     };
   }, [selectedSnapshot, previousDayRate, preferredCurrency, currencySymbol]);
@@ -271,8 +265,7 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
           rate === null
             ? "—"
             : `${formatRate(rate)} ${currencySymbol}`,
-        changePercent:
-          rate === null ? 0 : calculateTrendPercent(rate, previousRate),
+        changePercent: calculateAvailableTrend(rate, previousRate),
         trust: toCombinedTrustDisplay(
           [
             selectedSnapshot.trust.currencies.get(currency.code) ??
@@ -425,6 +418,24 @@ export function useLiveRatesScreen(): UseLiveRatesScreenResult {
     onRefresh,
     rateTrust,
   };
+}
+
+function calculateAvailableTrend(
+  currentValue: number | null,
+  previousValue: number | null
+): number | null {
+  if (
+    currentValue === null ||
+    previousValue === null ||
+    !Number.isFinite(currentValue) ||
+    !Number.isFinite(previousValue) ||
+    previousValue === 0
+  ) {
+    return null;
+  }
+
+  const trend = calculateTrendPercent(currentValue, previousValue);
+  return Number.isFinite(trend) ? trend : null;
 }
 
 function getConservativeObservedAt(
