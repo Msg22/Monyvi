@@ -1,10 +1,10 @@
 import {
-  Account,
-  Asset,
-  AssetMetal,
-  DailySnapshotNetWorth,
   database,
+  type Account,
+  type Asset,
+  type AssetMetal,
   type CurrencyType,
+  type DailySnapshotNetWorth,
 } from "@monyvi/db";
 import { Q, type Query } from "@nozbe/watermelondb";
 import {
@@ -25,9 +25,14 @@ import {
   queryOwned,
 } from "@/services/user-data-access";
 
+export interface NetWorthOwnedAssetInput {
+  readonly id: string;
+  readonly userId: string;
+}
+
 export interface ObserveNetWorthAssetMetalsInput {
   readonly userId: string;
-  readonly assets: readonly Asset[];
+  readonly assets: readonly NetWorthOwnedAssetInput[];
 }
 
 export interface NetWorthAccountInput {
@@ -41,6 +46,11 @@ export interface NetWorthAssetMetalInput {
   readonly purityFraction?: number;
   readonly weightGrams?: number;
   readonly weightGramsDecimal: string | null;
+}
+
+export interface NetWorthSnapshotInput {
+  readonly snapshotDate: Date;
+  readonly totalNetWorth: number;
 }
 
 export interface BuildNetWorthReadModelInput {
@@ -307,7 +317,7 @@ function multiplyAvailableDecimals(
 }
 
 export function buildMonthlyPercentageChange(
-  snapshots: readonly DailySnapshotNetWorth[]
+  snapshots: readonly NetWorthSnapshotInput[]
 ): number | null {
   if (snapshots.length === 0) {
     return null;
@@ -332,10 +342,10 @@ export function buildMonthlyPercentageChange(
 }
 
 function findClosestSnapshot(
-  snapshots: readonly DailySnapshotNetWorth[],
+  snapshots: readonly NetWorthSnapshotInput[],
   targetDateMs: number
-): DailySnapshotNetWorth | null {
-  let closest: DailySnapshotNetWorth | null = null;
+): NetWorthSnapshotInput | null {
+  let closest: NetWorthSnapshotInput | null = null;
   let smallestDiff = Infinity;
 
   for (const snapshot of snapshots) {
