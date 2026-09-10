@@ -109,11 +109,6 @@ export const SUPPORTED_FIAT_CURRENCY_CODES: readonly string[] = [
 export const REQUIRED_INSTRUMENT_COUNT =
   2 + SUPPORTED_FIAT_CURRENCY_CODES.length;
 
-const REQUIRED_METALS = ["gold", "silver", "platinum", "palladium"] as const;
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const PLAIN_DECIMAL = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
 const POSITIVE_PLAIN_DECIMAL = /^(?=.*[1-9])(?:0|[1-9]\d*)(?:\.\d+)?$/;
 const EXPONENT_TOKEN = /^([+-]?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/;
 
@@ -238,7 +233,11 @@ export function buildMarketRateSnapshotEnvelope(
 
   const parsed = parseLosslessJson(input.rawResponseText);
   const document = requireRecord(parsed);
-  if (document["status"] !== "success") {
+  if (
+    document["status"] !== "success" ||
+    document["currency"] !== "USD" ||
+    document["unit"] !== "g"
+  ) {
     throw new MarketRateSnapshotContractError("invalid_provider_shape");
   }
 
@@ -308,18 +307,16 @@ function buildRoot(
     fiatUsdPerUnit[code] = extractPositiveRate(currencies[code], code);
   }
 
+  if (!("USD" in currencies) || !("BTC" in currencies)) {
+    throw new MarketRateSnapshotContractError("snapshot_incomplete");
+  }
+
   const usdToken = extractDecimalToken(currencies["USD"]);
   if (usdToken !== "1") {
     throw new MarketRateSnapshotContractError("invalid_rate");
   }
 
-  const btcToken =
-    "BTC" in currencies
-      ? extractPositiveRate(currencies["BTC"], "BTC")
-      : undefined;
-  if (btcToken !== undefined) {
-    fiatUsdPerUnit["BTC"] = btcToken;
-  }
+  fiatUsdPerUnit["BTC"] = extractPositiveRate(currencies["BTC"], "BTC");
 
   return Object.freeze({
     goldUsdPerGram: extractPositiveRate(metals["gold"], "gold"),
@@ -398,9 +395,6 @@ function extractPositiveRate(raw: unknown, label: string): string {
 function extractDecimalToken(raw: unknown): string {
   if (raw instanceof LosslessNumber) {
     return String(raw);
-  }
-  if (typeof raw === "string") {
-    throw new MarketRateSnapshotContractError("invalid_rate");
   }
   throw new MarketRateSnapshotContractError("invalid_rate");
 }
