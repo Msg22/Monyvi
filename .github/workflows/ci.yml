@@ -4,7 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main, codex/035-metals-module-redesign]
+    branches:
+      - main
+      - codex/035-metals-module-redesign
+      - codex/issue282-realized-metal-sale-results
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -79,6 +82,9 @@ jobs:
 
       - name: Test Logic Package
         run: npm test -w @monyvi/logic
+
+      - name: Market Rate Edge Contract
+        run: npm run test:market-rate-edge
 
       - name: Test Repository Scripts
         run: npm run test:scripts
