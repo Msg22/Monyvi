@@ -209,7 +209,11 @@ describe("US3 holding experience", () => {
         onRetry={jest.fn()}
       />
     );
-    expect(screen.getByText("Sold holding")).toBeTruthy();
+    // The terminal route title is owned by the route `PageHeader` (covered in
+    // metal-holding-detail-route + holding-detail-qa-presentation); the screen
+    // body itself renders only the status pill, never a duplicate title.
+    expect(screen.getByText("Sold")).toBeTruthy();
+    expect(screen.queryByText("Sold holding")).toBeNull();
     expect(screen.getByText("Undo sale")).toBeTruthy();
     expect(screen.queryByText("Current value")).toBeNull();
 
@@ -230,7 +234,8 @@ describe("US3 holding experience", () => {
         onRetry={jest.fn()}
       />
     );
-    expect(screen.getByText("Disposed holding")).toBeTruthy();
+    expect(screen.getByText("Disposed")).toBeTruthy();
+    expect(screen.queryByText("Disposed holding")).toBeNull();
     expect(screen.getByText("Undo disposal")).toBeTruthy();
 
     const restored = detail({

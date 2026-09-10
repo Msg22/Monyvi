@@ -6,6 +6,9 @@ const {
   seedFixtureData,
 } = require("./seed-fixtures/seed-engine");
 const { MANUAL_QA_SEED_FIXTURE } = require("./seed-fixtures/manual-qa-fixture");
+const {
+  seedManualQaMetalRateReferences,
+} = require("./seed-fixtures/manual-qa-metal-rate-reference-seed");
 
 const DEFAULT_MANUAL_QA_EMAIL = "manual-qa@monyvi.test";
 const DEFAULT_MANUAL_QA_PASSWORD = "123456";
@@ -43,6 +46,11 @@ async function seedManualQaData(client, config, options = {}) {
     config,
     MANUAL_QA_SEED_FIXTURE
   );
+  await seedManualQaMetalRateReferences(
+    client,
+    primaryResult.userId,
+    MANUAL_QA_SEED_FIXTURE.seedScope
+  );
   if (!options.includeAccountSwitchUser) {
     return primaryResult;
   }
@@ -57,6 +65,11 @@ async function seedManualQaData(client, config, options = {}) {
       userId: undefined,
     },
     ACCOUNT_SWITCH_QA_SEED_FIXTURE
+  );
+  await seedManualQaMetalRateReferences(
+    client,
+    secondaryResult.userId,
+    ACCOUNT_SWITCH_QA_SEED_FIXTURE.seedScope
   );
   return {
     ...primaryResult,

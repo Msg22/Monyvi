@@ -29,19 +29,27 @@ const translations: Readonly<Record<string, string>> = {
   "actions.edit": "Edit details",
   "actions.sell": "Sell holding",
   "detail.acquired": "Acquired",
+  "detail.calculation_breakdown_unavailable":
+    "Breakdown unavailable. The total is based on your recorded details.",
   "detail.calculation_disclosure": "How this value was calculated",
+  "detail.currency_movement": "Currency movement",
   "detail.current_value": "Current value",
   "detail.current_value_unavailable": "Current value unavailable",
   "detail.current_value_rate_unavailable":
     "A current market rate is unavailable. Your holding details are still saved here.",
+  "detail.display_rounding":
+    "Displayed amounts are rounded, so the parts may differ slightly from the total.",
   "detail.fact_accessibility": "{{label}}: {{value}}",
   "detail.follow_value": "Follow the value",
+  "portfolio.rates_updated":
+    "Prices last updated {{date}} at {{time}}. They may have changed since then.",
   "detail.history": "History",
+  "detail.metal_movement": "Metal movement",
   "detail.offline": "Offline mode",
   "detail.paid": "{{amount}} paid",
   "detail.physical_facts": "Physical facts",
+  "detail.purchase_premium_costs": "Purchase premium and costs",
   "detail.restored": "Restored to Active",
-  "detail.rate_source": "Source: {{source}}",
   "detail.since_purchase": "{{amount}} since purchase",
   "detail.timeline_current_value": "Current value",
   "form.bar": "Bar",
@@ -50,14 +58,17 @@ const translations: Readonly<Record<string, string>> = {
   "form.unknown": "Other form",
   "metal.gold": "Gold",
   "metal.silver": "Silver",
-  "portfolio.rates_updated": "Rates updated {{when}}",
-  "rate.stale": "Rates may be outdated",
   "rate.missing": "Rates: current rate unavailable",
   purity_gold_999: "24K · 999",
   "render.objectAccessibility": "{{metal}} {{form}} illustration",
   "status.active": "Active",
+  "status.sold": "Sold",
+  "status.disposed": "Disposed",
   "timeline.add": "Added",
   "timeline.correct": "Details updated",
+  weight: "Weight",
+  purity: "Purity",
+  form_optional: "Physical form (optional)",
   weight_unit: "g",
 };
 
@@ -75,14 +86,22 @@ jest.mock("react-i18next", () => ({
   }),
 }));
 
-jest.mock("@expo/vector-icons", () => ({
-  Ionicons: ({ testID }: { readonly testID?: string }): React.JSX.Element => {
+jest.mock("@expo/vector-icons", () => {
+  const renderIcon = ({
+    testID,
+  }: {
+    readonly testID?: string;
+  }): React.JSX.Element => {
     const { View } = jest.requireActual(
       "react-native"
     ) as typeof import("react-native");
     return <View testID={testID} />;
-  },
-}));
+  };
+  return {
+    Ionicons: renderIcon,
+    MaterialCommunityIcons: renderIcon,
+  };
+});
 
 jest.mock("@/components/ui/Skeleton", () => ({
   Skeleton: (): null => null,
@@ -148,7 +167,7 @@ describe("approved active holding-detail fidelity", () => {
     mockFontScale = 1;
   });
 
-  it("renders the approved open composition without the duplicate route title or ERP card", () => {
+  it("renders the approved open composition without a duplicate route title or ERP card", () => {
     const model = activeDetail();
 
     render(
@@ -174,7 +193,11 @@ describe("approved active holding-detail fidelity", () => {
     expect(screen.getByText("+ EGP 11,039.67 since purchase")).toBeTruthy();
     expect(screen.getByText("Follow the value")).toBeTruthy();
     expect(screen.getByText("EGP 151,278.20 paid")).toBeTruthy();
-    expect(screen.getByText("Rates updated 25 Aug 2026, 10:30")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Prices last updated 25 Aug 2026 at 10:30 AM. They may have changed since then."
+      )
+    ).toBeTruthy();
     expect(screen.getByText("Physical facts")).toBeTruthy();
     expect(screen.getByText("31.125 g")).toBeTruthy();
     expect(screen.getByText("Coin")).toBeTruthy();
@@ -258,7 +281,7 @@ describe("approved active holding-detail fidelity", () => {
     );
   });
 
-  it("shows stale current-rate provenance without hiding the calculable value", () => {
+  it("keeps calculable value while hiding stale warnings and raw provider identifiers", () => {
     render(
       <MetalHoldingDetailScreen
         actions={getHoldingActionDescriptors(activeDetail())}
@@ -279,8 +302,80 @@ describe("approved active holding-detail fidelity", () => {
     );
 
     expect(screen.getByText("EGP 162,317.87")).toBeTruthy();
-    expect(screen.getByText("Rates may be outdated")).toBeTruthy();
-    expect(screen.getByText("Source: provider-cache")).toBeTruthy();
+    expect(screen.queryByText(/outdated/i)).toBeNull();
+    expect(screen.queryByText(/provider-cache/)).toBeNull();
+  });
+
+  it("renders the calculation components when historical acquisition evidence exists", () => {
+    render(
+      <MetalHoldingDetailScreen
+        actions={[]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={activeDetail({
+          attribution: {
+            breakdown: { available: true },
+            currencyGainDecimal: "2000",
+            metalGainDecimal: "9000",
+            premiumAndCostsDecimal: "39.67",
+            roundingDifferenceDecimal: null,
+          },
+        })}
+        onRetry={jest.fn()}
+      />
+    );
+
+    fireEvent.press(screen.getByText("How this value was calculated"));
+    expect(screen.getByText("Metal movement")).toBeTruthy();
+    expect(screen.getByText("EGP 9,000.00")).toBeTruthy();
+    expect(screen.getByText("Currency movement")).toBeTruthy();
+    expect(screen.getByText("EGP 2,000.00")).toBeTruthy();
+    expect(screen.getByText("Purchase premium and costs")).toBeTruthy();
+    expect(screen.getByText("EGP 39.67")).toBeTruthy();
+    expect(screen.queryByText(/Breakdown unavailable/)).toBeNull();
+  });
+
+  it("renders the friendly fallback only when historical acquisition evidence is absent", () => {
+    render(
+      <MetalHoldingDetailScreen
+        actions={[]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={activeDetail({ attribution: null })}
+        onRetry={jest.fn()}
+      />
+    );
+
+    fireEvent.press(screen.getByText("How this value was calculated"));
+    expect(
+      screen.getByText(
+        "Breakdown unavailable. The total is based on your recorded details."
+      )
+    ).toBeTruthy();
+  });
+
+  it("hides the calculation disclosure when no since-purchase total is available", () => {
+    // A legacy holding can keep a current value while an invalid purchase
+    // price/currency leaves both the attribution and the combined total null.
+    // Showing the disclosure would promise "based on your recorded details"
+    // for a total that was never computed.
+    render(
+      <MetalHoldingDetailScreen
+        actions={[]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={activeDetail({
+          attribution: null,
+          totalGainDecimal: null,
+        })}
+        onRetry={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByText("How this value was calculated")).toBeNull();
   });
 
   it("explains a missing current rate without hiding the holding's saved facts", () => {
@@ -312,6 +407,7 @@ describe("approved active holding-detail fidelity", () => {
       )
     ).toBeTruthy();
     expect(screen.getByText("Physical facts")).toBeTruthy();
+    expect(screen.queryByText("How this value was calculated")).toBeNull();
   });
 
   it("keeps text legible in dark mode and uses a loss color for negative performance", () => {
@@ -359,6 +455,28 @@ describe("approved active holding-detail fidelity", () => {
       );
     }
   );
+
+  it("renders the current-value observation once, without duplicating the date", () => {
+    render(
+      <MetalHoldingDetailScreen
+        actions={[]}
+        error={null}
+        isLoading={false}
+        isOffline={false}
+        model={activeDetail()}
+        onRetry={jest.fn()}
+      />
+    );
+
+    // The full localized sentence already carries the date and time, so the
+    // same provider date must not also render as a standalone short-date line.
+    expect(
+      screen.getByText(
+        "Prices last updated 25 Aug 2026 at 10:30 AM. They may have changed since then."
+      )
+    ).toBeTruthy();
+    expect(screen.queryByText("25 Aug 2026")).toBeNull();
+  });
 
   it("keeps the ordinary hero row and reflows only for compact or enlarged-text layouts", () => {
     const model = activeDetail();
