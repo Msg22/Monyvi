@@ -30,9 +30,22 @@ export interface ObserveNetWorthAssetMetalsInput {
   readonly assets: readonly Asset[];
 }
 
+export interface NetWorthAccountInput {
+  readonly balance: number;
+  readonly currency: CurrencyType;
+}
+
+export interface NetWorthAssetMetalInput {
+  readonly metalType: string;
+  readonly purityFactorDecimal: string | null;
+  readonly purityFraction?: number;
+  readonly weightGrams?: number;
+  readonly weightGramsDecimal: string | null;
+}
+
 export interface BuildNetWorthReadModelInput {
-  readonly accounts: readonly Account[];
-  readonly assetMetals: readonly AssetMetal[];
+  readonly accounts: readonly NetWorthAccountInput[];
+  readonly assetMetals: readonly NetWorthAssetMetalInput[];
   readonly currentSnapshot: SelectedMarketRateSnapshot | null;
   readonly preferredCurrency: CurrencyType;
 }
@@ -161,20 +174,19 @@ export function buildNetWorthReadModel(
       rates,
       metal.metalType
     );
-    if (metalUsdPerGram === null) {
+    if (
+      metalUsdPerGram === null ||
+      metal.weightGramsDecimal === null ||
+      metal.purityFactorDecimal === null
+    ) {
       return null;
     }
-    const weight =
-      metal.weightGramsDecimal ?? String(metal.weightGrams);
-    const purity =
-      metal.purityFactorDecimal ?? String(metal.purityFraction);
     try {
-      totalAssetsUsd = totalAssetsUsd
-        .plus(
-          parseCanonicalDecimal(weight)
-            .times(purity)
-            .times(metalUsdPerGram)
-        );
+      totalAssetsUsd = totalAssetsUsd.plus(
+        parseCanonicalDecimal(metal.weightGramsDecimal)
+          .times(metal.purityFactorDecimal)
+          .times(metalUsdPerGram)
+      );
     } catch {
       return null;
     }
