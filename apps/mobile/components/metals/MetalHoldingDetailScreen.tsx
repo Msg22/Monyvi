@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useState } from "react";
 import {
   FlatList,
@@ -15,12 +15,17 @@ import {
   resolvePuritySelection,
 } from "@monyvi/logic";
 
+import {
+  getPhysicalFactIcon,
+  type PhysicalFactIcon,
+} from "@/components/metals/holding-detail-presentation";
 import { MetalHoldingRender } from "@/components/metals/MetalHoldingRender";
 import {
   getCurrencyDisplaySign,
   resolveCurrencyDisplayDecimalPlaces,
   type CurrencyDisplaySign,
 } from "@/components/metals/portfolio-presentation";
+import { formatPortfolioRateUpdatedParts } from "@/components/metals/portfolio-rate-presentation";
 import type {
   HoldingActionDescriptor,
   HoldingActionId,
@@ -149,21 +154,13 @@ function DetailHeader({
   const hasRestored =
     model.isActiveOwnership &&
     model.timeline.some((item) => item.kind === "undo");
+  const canExplainCalculation =
+    model.isActiveOwnership &&
+    model.currentValueDecimal !== null &&
+    (model.attribution !== null || model.totalGainDecimal !== null);
 
   return (
     <View className="px-5">
-      {model.status === "active" ? null : (
-        <Text
-          accessibilityRole="header"
-          className="mb-4 text-xl font-bold text-text-primary dark:text-text-primary-dark"
-        >
-          {t(
-            model.status === "sold"
-              ? "detail.sold_title"
-              : "detail.disposed_title"
-          )}
-        </Text>
-      )}
       <IdentityHero model={model} />
       {hasRestored ? (
         <Text className="mb-4 font-medium text-nileGreen-700 dark:text-nileGreen-400">
@@ -179,7 +176,7 @@ function DetailHeader({
       ) : null}
       {error === null ? null : <Retry onRetry={onRetry} />}
       {model.isActiveOwnership ? <ValueJourney model={model} /> : null}
-      {model.attribution === null ? null : (
+      {canExplainCalculation ? (
         <>
           <CalculationDisclosure
             expanded={showCalculation}
@@ -187,7 +184,7 @@ function DetailHeader({
           />
           {showCalculation ? <CalculationBreakdown model={model} /> : null}
         </>
-      )}
+      ) : null}
       <PhysicalFacts model={model} />
       <View className="mt-6 h-px bg-slate-200 dark:bg-slate-800" />
       <View className="mt-4 flex-row items-center justify-between">
@@ -301,7 +298,7 @@ function IdentityHero({
           <Text className={materialClassName}>{metalLabel}</Text>
           {` · ${purity} · ${formLabel}`}
         </Text>
-        <Text className="self-start rounded-full border border-nileGreen-700/25 bg-nileGreen-50 px-3 py-1.5 text-sm font-medium text-nileGreen-800 dark:border-nileGreen-400/40 dark:bg-nileGreen-900 dark:text-nileGreen-400">
+        <Text className="self-start rounded-full border border-nileGreen-700/25 bg-nileGreen-50 px-3 py-1.5 text-sm font-medium text-nileGreen-800 dark:border-nileGreen-400 dark:bg-nileGreen-900 dark:text-nileGreen-400">
           {t(`status.${model.status}`)}
         </Text>
       </View>
@@ -377,6 +374,17 @@ function ValueJourney({
   const hasAcquisition =
     model.purchaseDate !== null || model.purchasePriceDecimal !== null;
   const hasCurrentValue = model.currentValueDecimal !== null;
+  const rateUpdatedParts = formatPortfolioRateUpdatedParts(
+    currentValueObservedAt,
+    i18n.resolvedLanguage
+  );
+  const rateUpdatedLabel =
+    rateUpdatedParts === null
+      ? null
+      : t("portfolio.rates_updated", {
+          date: rateUpdatedParts.date,
+          time: rateUpdatedParts.time,
+        });
   if (!hasAcquisition && !hasCurrentValue) return null;
 
   return (
@@ -431,31 +439,9 @@ function ValueJourney({
               <Text className="text-base font-medium text-nileGreen-800 dark:text-nileGreen-400">
                 {t("detail.timeline_current_value")}
               </Text>
-              {currentValueObservedAt === null ? null : (
-                <>
-                  <Text className="mt-1 text-sm text-text-secondary dark:text-text-secondary-dark">
-                    {formatShortDate(currentValueObservedAt, locale)}
-                  </Text>
-                  <Text className="mt-1 text-sm text-text-secondary dark:text-text-secondary-dark">
-                    {t("portfolio.rates_updated", {
-                      when: formatTimestamp(currentValueObservedAt, locale),
-                    })}
-                  </Text>
-                </>
-              )}
-              {model.currentValueRateStatus?.state === "fresh" ? null : (
-                <Text className="mt-1 text-sm font-medium text-amber-700 dark:text-amber-400">
-                  {t(
-                    `rate.${model.currentValueRateStatus?.state ?? "unknown"}`
-                  )}
-                </Text>
-              )}
-              {model.currentValueRateStatus?.source === null ||
-              model.currentValueRateStatus?.source === undefined ? null : (
-                <Text className="mt-1 text-sm text-text-muted dark:text-text-muted-dark">
-                  {t("detail.rate_source", {
-                    source: model.currentValueRateStatus.source,
-                  })}
+              {rateUpdatedLabel === null ? null : (
+                <Text className="mt-1 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark">
+                  {rateUpdatedLabel}
                 </Text>
               )}
             </View>
@@ -507,11 +493,10 @@ function CalculationBreakdown({
   const currency =
     model.currentValueCurrency ?? model.purchaseCurrency ?? "EGP";
   const attribution = model.attribution;
-  if (attribution === null) return <View />;
 
-  if (!attribution.breakdown.available) {
+  if (attribution === null || !attribution.breakdown.available) {
     return (
-      <Text className="mt-3 text-sm text-text-secondary dark:text-text-secondary-dark">
+      <Text className="mt-3 text-sm leading-5 text-text-secondary dark:text-text-secondary-dark">
         {t("detail.calculation_breakdown_unavailable")}
       </Text>
     );
@@ -589,7 +574,7 @@ function PhysicalFacts({
       </Text>
       <View className="mt-3 gap-3">
         <FactRow
-          icon="bag-handle-outline"
+          icon={getPhysicalFactIcon("weight", model.itemForm)}
           label={t("weight")}
           value={
             model.weightGramsDecimal === null
@@ -598,12 +583,12 @@ function PhysicalFacts({
           }
         />
         <FactRow
-          icon="shield-checkmark-outline"
+          icon={getPhysicalFactIcon("purity", model.itemForm)}
           label={t("purity")}
           value={resolveDetailPurityLabel(model, t)}
         />
         <FactRow
-          icon={physicalFormIcon(model.itemForm)}
+          icon={getPhysicalFactIcon("form", model.itemForm)}
           label={t("form_optional")}
           value={formLabel}
         />
@@ -617,7 +602,7 @@ function FactRow({
   label,
   value,
 }: {
-  readonly icon: keyof typeof Ionicons.glyphMap;
+  readonly icon: PhysicalFactIcon;
   readonly label: string;
   readonly value: string;
 }): React.JSX.Element {
@@ -632,7 +617,21 @@ function FactRow({
       className="flex-row items-center gap-3"
     >
       <View className="h-9 w-9 items-center justify-center rounded-full bg-nileGreen-50 dark:bg-slate-800">
-        <Ionicons name={icon} size={20} color={iconColor} />
+        {icon.library === "MaterialCommunityIcons" ? (
+          <MaterialCommunityIcons
+            testID={`material-icon-${icon.name}`}
+            name={icon.name as keyof typeof MaterialCommunityIcons.glyphMap}
+            size={20}
+            color={iconColor}
+          />
+        ) : (
+          <Ionicons
+            testID={`ion-icon-${icon.name}`}
+            name={icon.name as keyof typeof Ionicons.glyphMap}
+            size={20}
+            color={iconColor}
+          />
+        )}
       </View>
       <Text className="text-base text-text-primary dark:text-text-primary-dark">
         {value}
@@ -798,14 +797,6 @@ function resolveDetailPurityLabel(
   return t(purity.entry.labelKey);
 }
 
-function physicalFormIcon(
-  form: MetalDetailReadModel["itemForm"]
-): keyof typeof Ionicons.glyphMap {
-  if (form === "bar") return "cube-outline";
-  if (form === "jewelry") return "diamond-outline";
-  return "ellipse-outline";
-}
-
 function displayAmount(
   value: string,
   currency: string,
@@ -865,12 +856,4 @@ function formatShortDate(date: Date, locale: string): string {
     month: "short",
     year: "numeric",
   });
-}
-
-function formatTimestamp(date: Date, locale: string): string {
-  const time = date.toLocaleTimeString(locale, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  return `${formatShortDate(date, locale)}, ${time}`;
 }

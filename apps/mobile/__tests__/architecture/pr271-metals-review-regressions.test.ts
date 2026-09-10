@@ -34,15 +34,25 @@ describe("PR #271 validated Metals review regressions", () => {
 
   it("observes portfolio columns that can change in place", () => {
     const value = source("hooks/useMetalPortfolio.ts");
-    expect(value).toMatch(
-      /observePortfolioHoldingStates\(currentUserId\)\.observeWithColumns\(\[\s*\.\.\.PORTFOLIO_HOLDING_STATE_OBSERVED_COLUMNS,/
-    );
-    expect(value).toMatch(
-      /observePortfolioAssets\(currentUserId\)\s*\.observeWithColumns\(\[\.\.\.PORTFOLIO_ASSET_OBSERVED_COLUMNS\]\)/
-    );
-    expect(value).toMatch(
-      /query\s*\.observeWithColumns\(\[\.\.\.PORTFOLIO_ASSET_METAL_OBSERVED_COLUMNS\]\)/
-    );
+    for (const columns of [
+      "PORTFOLIO_ASSET_OBSERVED_COLUMNS",
+      "PORTFOLIO_ASSET_METAL_OBSERVED_COLUMNS",
+      "PORTFOLIO_HOLDING_STATE_OBSERVED_COLUMNS",
+    ]) {
+      expect(value).toMatch(
+        new RegExp(`observeWithColumns\\(\\[\\s*\\.\\.\\.${columns}`)
+      );
+    }
+    // The mutable lifecycle/visibility columns must be observed so in-place
+    // WatermelonDB updates re-render the portfolio instead of leaving stale
+    // holding facts on screen.
+    const holdingColumns =
+      /PORTFOLIO_HOLDING_STATE_OBSERVED_COLUMNS = \[([\s\S]*?)\] as const/.exec(
+        value
+      )?.[1] ?? "";
+    expect(holdingColumns).toContain('"effective_event_id"');
+    expect(holdingColumns).toContain('"status"');
+    expect(holdingColumns).toContain('"is_visible"');
   });
 
   it("uses the lifecycle-aware wealth projection for the Home headline total", () => {
@@ -127,7 +137,7 @@ describe("PR #271 validated Metals review regressions", () => {
   });
 
   it("distinguishes unavailable performance from unavailable current value", () => {
-    const value = source("components/metals/MetalPortfolioScreen.tsx");
+    const value = source("components/metals/MetalPortfolioHoldingRow.tsx");
     expect(value).toContain("performanceUnavailableReason");
     expect(value).toContain("portfolio.performance_unavailable_rate_reference");
     expect(value).toContain("portfolio.performance_unavailable");
@@ -225,20 +235,28 @@ describe("PR #271 validated Metals review regressions", () => {
   });
 
   it("exposes shaped financial facts in holding-row accessibility", () => {
-    const value = source("components/metals/MetalPortfolioScreen.tsx");
+    const value = source("components/metals/MetalPortfolioHoldingRow.tsx");
     expect(value).not.toContain("accessibilityLabel={holding.name}");
     expect(value).toContain("holdingAccessibilityLabel");
   });
 
-  it("keeps stale or missing rate warnings when a timestamp is available", () => {
-    const value = source("components/metals/MetalPortfolioScreen.tsx");
-    const formatter = sliceBetween(
-      value,
-      "function formatRateUpdatedLabel",
-      null
+  it("derives the spoken rate state from the trusted rate status, never a fixed current-rate claim", () => {
+    const screen = source("components/metals/MetalPortfolioScreen.tsx");
+    const presentation = source(
+      "components/metals/portfolio-rate-presentation.ts"
     );
-    expect(formatter).toContain('state !== "fresh"');
-    expect(formatter).toContain("t(`rate.${state}`)");
+    // The last-updated sentence formatting is centralized in the shared
+    // presentation module rather than an inline screen-only formatter.
+    expect(presentation).toContain(
+      "export function formatPortfolioRateUpdatedParts"
+    );
+    // Finding #4: the total's accessibility status is resolved from the
+    // trusted rate state, and the previous always-"Current rate" literal is
+    // gone. The stale-rate customer-facing per-state warning is not restored.
+    expect(screen).toContain("getPortfolioRateAccessibilityCopy(");
+    expect(screen).toContain("portfolio.rateStatus.state");
+    expect(screen).not.toContain('status: t("portfolio.current_rate")');
+    expect(screen).not.toMatch(/t\(`rate\.\$\{state\}`\)/);
   });
 
   it("renders both Home metal rows and their holding counts", () => {

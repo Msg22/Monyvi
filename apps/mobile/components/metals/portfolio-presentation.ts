@@ -1,6 +1,7 @@
 import { getMetalRenderEntry } from "@/assets/images/metals/manifest";
 import type { MetalPortfolioHoldingInput } from "@/services/metal-portfolio-read-model-service";
 import type { CurrencyType } from "@monyvi/db";
+import { I18nManager } from "react-native";
 import {
   CURRENCY_PRECISION,
   DEFAULT_PRECISION,
@@ -196,4 +197,52 @@ function formatWeight(value: string, locale: string, unit: string): string {
   } catch {
     return "—";
   }
+}
+
+export function parseOptionalNumber(value: string | null): number | null {
+  if (value === null) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function parseShare(value: string | null): number {
+  if (value === null) return 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+export function getPerformanceTextClass(value: number | null): string {
+  if (value === null || value === 0) {
+    return "text-text-secondary dark:text-text-secondary-dark";
+  }
+  return value > 0
+    ? "text-nileGreen-700 dark:text-nileGreen-400"
+    : "text-red-600 dark:text-red-500";
+}
+
+export function getForwardChevronName(): "chevron-back" | "chevron-forward" {
+  return I18nManager.isRTL ? "chevron-back" : "chevron-forward";
+}
+
+export type RealizedProfitLossContext = "summary" | "history";
+
+export function getRealizedProfitLossLabelKey(
+  value: string | null,
+  context: RealizedProfitLossContext
+):
+  | "portfolio.realized_loss"
+  | "portfolio.realized_loss_from_sold_metals"
+  | "portfolio.realized_profit"
+  | "portfolio.realized_profit_from_sold_metals"
+  | "portfolio.realized_result"
+  | "portfolio.realized_result_from_sold_metals" {
+  const parsedValue = parseOptionalNumber(value);
+  const suffix = context === "summary" ? "_from_sold_metals" : "";
+  if (parsedValue !== null && parsedValue > 0) {
+    return `portfolio.realized_profit${suffix}`;
+  }
+  if (parsedValue !== null && parsedValue < 0) {
+    return `portfolio.realized_loss${suffix}`;
+  }
+  return `portfolio.realized_result${suffix}`;
 }

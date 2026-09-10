@@ -73,9 +73,11 @@ export default function DashboardScreen(): React.JSX.Element {
   const { transactions, isLoading: transactionsLoading } =
     useRecentTransactions(3);
   const { totalAccounts, isLoading: netWorthLoading } = useNetWorth();
-  const { wealthBreakdown, isLoading: isPortfolioLoading } = useMetalPortfolio({
-    accountsValueDecimal: totalAccounts === null ? null : String(totalAccounts),
-  });
+  const { wealthBreakdown, isSummaryLoading: isPortfolioSummaryLoading } =
+    useMetalPortfolio({
+      accountsValueDecimal:
+        totalAccounts === null ? null : String(totalAccounts),
+    });
   const lifecycleAwareNetWorth = useMemo((): number | null => {
     const value = wealthBreakdown?.totalNetWorthDecimal;
     if (value === null || value === undefined) return null;
@@ -222,13 +224,13 @@ export default function DashboardScreen(): React.JSX.Element {
               monthlyPercentageChange={
                 lifecycleAwareNetWorth === null ? null : monthlyPercentageChange
               }
-              isLoading={isLoading || isPortfolioLoading}
+              isLoading={isLoading || isPortfolioSummaryLoading}
             />
           </SectionErrorBoundary>
           <SectionErrorBoundary name={t("section_net_worth")}>
             <WealthBreakdownSection
               currency={preferredCurrency}
-              isLoading={netWorthLoading || isPortfolioLoading}
+              isLoading={netWorthLoading || isPortfolioSummaryLoading}
               breakdown={wealthBreakdown}
               onAccountsPress={() => router.push("/accounts")}
               onMetalsPress={() => router.push("/metals")}

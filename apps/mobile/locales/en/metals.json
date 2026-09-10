@@ -60,8 +60,8 @@
     "filter_empty": "No {{filter}} holdings yet",
     "recent_history": "History",
     "bought": "{{weight}} · Bought {{date}}",
-    "active_portfolio": "Active portfolio",
-    "active_portfolio_value": "Active portfolio value",
+    "active_portfolio": "Your gold and silver",
+    "active_portfolio_value": "Your gold and silver value",
     "active_holdings_one": "active holding",
     "active_holdings_other": "active holdings",
     "since_purchase_label": "since purchase",
@@ -75,7 +75,7 @@
     "view_all": "View all",
     "bought_on": "Bought {{date}}",
     "today": "today",
-    "rates_updated": "Rates updated {{when}}"
+    "rates_updated": "Prices last updated {{date}} at {{time}}. They may have changed since then."
   },
   "add_holding": "Add holding",
   "add_gold": "Add Gold",
@@ -139,7 +139,7 @@
   "status": { "active": "Active", "sold": "Sold", "disposed": "Disposed" },
   "rate": {
     "fresh": "Live Rates: current rate. Rates updated {{dateTime}}",
-    "stale": "Rates: rate is older than 24 hours",
+    "stale": "Last available price",
     "unknown": "Rates: rate age is unknown",
     "missing": "Rates: current rate unavailable",
     "invalid": "Rates: this rate can’t be used",
@@ -149,7 +149,7 @@
     "source": "Source: {{source}}",
     "quality": "Quality: {{quality}}",
     "short_fresh": "Current",
-    "short_stale": "Older than 24h",
+    "short_stale": "Last available",
     "short_unknown": "Age unknown",
     "short_missing": "Unavailable",
     "short_invalid": "Invalid"
@@ -174,7 +174,7 @@
     "current_value_rate_unavailable": "A current market rate is unavailable. Your holding details are still saved here.",
     "follow_value": "Follow the value",
     "calculation_disclosure": "How this value was calculated",
-    "calculation_breakdown_unavailable": "The combined since-purchase result is available, but its component breakdown is unavailable.",
+    "calculation_breakdown_unavailable": "Breakdown unavailable. The total is based on your recorded details.",
     "display_rounding": "Displayed amounts are rounded, so the parts may differ slightly from the total.",
     "rate_source": "Source: {{source}}",
     "metal_movement": "Metal movement",
