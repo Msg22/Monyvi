@@ -13,6 +13,8 @@ import {
   assertCanonicalMetalRevision,
   incrementCanonicalMetalRevision,
 } from "./metal-financial-action-adapter";
+import { parseMetalLocalCalendarDate } from "./metal-financial-action-repository";
+import { compareMetalMetadataClock } from "./metal-metadata-service";
 import { findOwnedById, queryChildrenOfOwnedParent } from "./user-data-access";
 import {
   captureCachedModelSnapshot,
@@ -384,9 +386,7 @@ function restoreCorrectionAsset(
       asset.currency = before.purchaseCurrency as Asset["currency"];
     }
     asset.purchaseCurrency = before.purchaseCurrency as string | null;
-    asset.purchaseDate = new Date(
-      `${String(before.purchaseDate)}T00:00:00.000Z`
-    );
+    asset.purchaseDate = parseMetalLocalCalendarDate(before.purchaseDate);
     if (typeof before.purchasePriceDecimal === "string") {
       asset.purchasePrice = Number(before.purchasePriceDecimal);
     }
@@ -398,9 +398,35 @@ function restoreCorrectionAsset(
   }
 }
 
-function parseLocalDate(value: string): Date {
-  const [year, month, day] = value.split("-").map(Number);
-  return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
+function isMaterialCorrectionEvent(event: MetalLifecycleEvent): boolean {
+  try {
+    const payload = JSON.parse(event.payloadJson) as unknown;
+    if (
+      typeof payload !== "object" ||
+      payload === null ||
+      Array.isArray(payload)
+    ) {
+      throw new Error("incomplete_metal_action_group");
+    }
+    const materialCorrection = (payload as Readonly<Record<string, unknown>>)
+      .materialCorrection;
+    if (materialCorrection === null) return false;
+    if (
+      typeof materialCorrection !== "object" ||
+      Array.isArray(materialCorrection)
+    ) {
+      throw new Error("incomplete_metal_action_group");
+    }
+    return true;
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "incomplete_metal_action_group"
+    ) {
+      throw error;
+    }
+    throw new Error("incomplete_metal_action_group");
+  }
 }
 
 async function findPriorAcquisitionActionId(
@@ -420,7 +446,10 @@ async function findPriorAcquisitionActionId(
       userId
     );
     if (!predecessor || predecessor.holdingId !== holdingId) break;
-    if (predecessor.kind === "add" || predecessor.kind === "correct") {
+    if (
+      predecessor.kind === "add" ||
+      (predecessor.kind === "correct" && isMaterialCorrectionEvent(predecessor))
+    ) {
       return predecessor.actionId;
     }
     predecessorId = predecessor.predecessorEventId;
@@ -428,17 +457,79 @@ async function findPriorAcquisitionActionId(
   throw new Error("incomplete_metal_action_group");
 }
 
+interface CanonicalMetadataInstallDecision {
+  readonly applyName: boolean;
+  readonly applyNotes: boolean;
+}
+
+function decideCanonicalMetadataInstall(
+  asset: Asset,
+  state: MetalHoldingState,
+  canonical: CanonicalMetalHolding
+): CanonicalMetadataInstallDecision {
+  const decideField = (
+    currentValue: string | null,
+    currentWrittenAt: number | null,
+    currentWriterId: string | null,
+    canonicalValue: string | null,
+    canonicalWrittenAt: number | null,
+    canonicalWriterId: string | null
+  ): boolean => {
+    if (canonicalWrittenAt === null && canonicalWriterId === null) {
+      return currentWrittenAt === null && currentWriterId === null;
+    }
+    if (canonicalWrittenAt === null || canonicalWriterId === null) {
+      throw new Error("incomplete_metal_action_group");
+    }
+    const decision = compareMetalMetadataClock(
+      currentWrittenAt,
+      currentWriterId,
+      {
+        value: canonicalValue,
+        writtenAt: canonicalWrittenAt,
+        writerId: canonicalWriterId,
+      }
+    );
+    if (decision === "same" && currentValue !== canonicalValue) {
+      throw new Error("metal_metadata_tuple_conflict");
+    }
+    return decision === "apply";
+  };
+
+  return {
+    applyName: decideField(
+      asset.name,
+      state.nameWrittenAt,
+      state.nameWriterId,
+      canonical.asset.name,
+      canonical.state.nameWrittenAt,
+      canonical.state.nameWriterId
+    ),
+    applyNotes: decideField(
+      asset.notes ?? null,
+      state.notesWrittenAt,
+      state.notesWriterId,
+      canonical.asset.notes,
+      canonical.state.notesWrittenAt,
+      canonical.state.notesWriterId
+    ),
+  };
+}
+
 function installCanonicalAsset(
   asset: Asset,
   canonical: CanonicalMetalHolding,
+  metadataDecision: CanonicalMetadataInstallDecision,
   now: Date
 ): void {
   asset.acquisitionActionId = canonical.asset.acquisitionActionId;
   asset.currency = canonical.asset.currency as Asset["currency"];
-  asset.name = canonical.asset.name;
-  asset.notes = canonical.asset.notes;
+  if (metadataDecision.applyName) asset.name = canonical.asset.name;
+  if (metadataDecision.applyNotes) asset.notes = canonical.asset.notes;
   asset.purchaseCurrency = canonical.asset.purchaseCurrency;
-  asset.purchaseDate = parseLocalDate(canonical.asset.purchaseDate);
+  asset.purchaseDate = parseMetalLocalCalendarDate(
+    canonical.asset.purchaseDate
+  );
   asset.purchasePrice = canonical.asset.purchasePrice;
   asset.purchasePriceDecimal = canonical.asset.purchasePriceDecimal;
   asset.updatedAt = now;
@@ -657,8 +748,12 @@ async function commitNonAcceptedOutcome(
       "asset_id"
     ).fetch();
     metal = metals[0] ?? null;
-    if (!metal) throw new Error("incomplete_metal_action_group");
+    if (!asset || !metal) throw new Error("incomplete_metal_action_group");
   }
+  const canonicalMetadataDecision =
+    canInstallStale && outcome.status === "stale" && asset
+      ? decideCanonicalMetadataInstall(asset, state, outcome.canonicalHolding)
+      : null;
   const priorAcquisitionActionId =
     canRestorePrior && envelope.kind === "correct"
       ? await findPriorAcquisitionActionId(
@@ -708,10 +803,14 @@ async function commitNonAcceptedOutcome(
             row.effectiveEventId = canonical.effectiveEventId;
             row.financialRevision = canonical.financialRevision;
             row.isVisible = canonical.isVisible;
-            row.nameWrittenAt = canonical.nameWrittenAt;
-            row.nameWriterId = canonical.nameWriterId;
-            row.notesWrittenAt = canonical.notesWrittenAt;
-            row.notesWriterId = canonical.notesWriterId;
+            if (canonicalMetadataDecision?.applyName) {
+              row.nameWrittenAt = canonical.nameWrittenAt;
+              row.nameWriterId = canonical.nameWriterId;
+            }
+            if (canonicalMetadataDecision?.applyNotes) {
+              row.notesWrittenAt = canonical.notesWrittenAt;
+              row.notesWriterId = canonical.notesWriterId;
+            }
             row.status = canonical.status;
           } else if (canRestorePrior) {
             row.effectiveActionId = envelope.payload.predecessorEventId as
@@ -743,7 +842,15 @@ async function commitNonAcceptedOutcome(
       operations.push(
         asset.prepareUpdate((row) => {
           if (canInstallStale && outcome.status === "stale") {
-            installCanonicalAsset(row, outcome.canonicalHolding, now);
+            if (!canonicalMetadataDecision) {
+              throw new Error("incomplete_metal_action_group");
+            }
+            installCanonicalAsset(
+              row,
+              outcome.canonicalHolding,
+              canonicalMetadataDecision,
+              now
+            );
           } else {
             restoreCorrectionAsset(row, envelope.payload);
             row.acquisitionActionId = priorAcquisitionActionId;

@@ -137,11 +137,13 @@ export interface MetalMetadataService {
   ) => Promise<{ readonly kind: "applied" | "ignored" | "replay" }>;
 }
 
-function compareClock(
+export type MetalMetadataClockDecision = "apply" | "ignore" | "same";
+
+export function compareMetalMetadataClock(
   currentWrittenAt: number | null,
   currentWriterId: string | null,
   candidate: MetalMetadataValue<unknown>
-): "apply" | "ignore" | "same" {
+): MetalMetadataClockDecision {
   if (currentWrittenAt === null || currentWriterId === null) return "apply";
   if (
     currentWrittenAt === candidate.writtenAt &&
@@ -200,14 +202,14 @@ export function createMetalMetadataService(
       }
 
       const nameDecision = patch.fields.name
-        ? compareClock(
+        ? compareMetalMetadataClock(
             state.nameWrittenAt,
             state.nameWriterId,
             patch.fields.name
           )
         : "ignore";
       const notesDecision = patch.fields.notes
-        ? compareClock(
+        ? compareMetalMetadataClock(
             state.notesWrittenAt,
             state.notesWriterId,
             patch.fields.notes
@@ -307,14 +309,32 @@ export async function commitCanonicalMetalMetadataLocally(
     throw new Error("invalid_canonical_metal_metadata");
   }
 
-  const nameWins =
-    canonical.name !== null &&
-    compareClock(state.nameWrittenAt, state.nameWriterId, canonical.name) !==
-      "ignore";
-  const notesWins =
-    canonical.notes !== null &&
-    compareClock(state.notesWrittenAt, state.notesWriterId, canonical.notes) !==
-      "ignore";
+  const nameDecision = canonical.name
+    ? compareMetalMetadataClock(
+        state.nameWrittenAt,
+        state.nameWriterId,
+        canonical.name
+      )
+    : "ignore";
+  const notesDecision = canonical.notes
+    ? compareMetalMetadataClock(
+        state.notesWrittenAt,
+        state.notesWriterId,
+        canonical.notes
+      )
+    : "ignore";
+  if (
+    (canonical.name &&
+      nameDecision === "same" &&
+      asset.name !== canonical.name.value) ||
+    (canonical.notes &&
+      notesDecision === "same" &&
+      (asset.notes ?? null) !== canonical.notes.value)
+  ) {
+    throw new Error("metal_metadata_tuple_conflict");
+  }
+  const nameWins = nameDecision === "apply";
+  const notesWins = notesDecision === "apply";
   if (!nameWins && !notesWins) {
     return;
   }

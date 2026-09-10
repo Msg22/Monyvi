@@ -1,12 +1,8 @@
-import { createHash } from "node:crypto";
-
 import { Database, Q, type Model } from "@nozbe/watermelondb";
 import SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 import {
   DEFAULT_FINANCIAL_ACTION_REGISTRY,
   hashFinancialActionEnvelope,
-  type FinancialActionValidationInput,
-  type Sha256Provider,
 } from "@monyvi/logic";
 import { schema } from "../../../../packages/db/src/schema";
 import { Asset } from "../../../../packages/db/src/models/Asset";
@@ -20,8 +16,6 @@ import {
   METAL_ACTION_KINDS,
   assertCanonicalMetalRevision,
   createMetalFinancialActionEnvelope,
-  type CreateMetalFinancialActionEnvelopeInput,
-  type MetalActionKind,
 } from "../../services/metal-financial-action-adapter";
 import { createMetalHoldingCommandService } from "../../services/metal-holding-command-service";
 import {
@@ -30,6 +24,17 @@ import {
   formatMetalLocalCalendarDate,
 } from "../../services/metal-financial-action-repository";
 import { commitMetalRpcOutcomeLocally } from "../../services/metal-reconciliation-service";
+import {
+  FOREIGN_USER_ID,
+  HOLDING_ID,
+  USER_ID,
+  VALIDATION_INPUT,
+  actionId,
+  commandInput,
+  materialFacts,
+  rateSnapshot,
+  sha256Provider,
+} from "./metal-financial-action-test-data";
 
 jest.mock("@nozbe/watermelondb/adapters/sqlite/makeDispatcher", (): unknown =>
   jest.requireActual(
@@ -41,12 +46,6 @@ jest.mock("../../services/supabase", () => ({
   supabase: {},
 }));
 
-const USER_ID = "018f0c7a-1234-7abc-8def-000000000003";
-const FOREIGN_USER_ID = "018f0c7a-1234-7abc-8def-000000000099";
-const HOLDING_ID = "018f0c7a-1234-7abc-8def-000000000004";
-const VALIDATION_INPUT: FinancialActionValidationInput = {
-  cairoTodayDate: "2026-09-01",
-};
 const MODEL_CLASSES: Array<typeof Model> = [
   Asset,
   AssetMetal,
@@ -56,159 +55,6 @@ const MODEL_CLASSES: Array<typeof Model> = [
   MetalLifecycleEvent,
   MetalRateReference,
 ];
-const sha256Provider: Sha256Provider = {
-  digestUtf8: (value: string): Promise<string> =>
-    Promise.resolve(createHash("sha256").update(value).digest("hex")),
-};
-
-function actionId(index: number): string {
-  return "018f0c7a-1234-7abc-8def-" + String(index).padStart(12, "0");
-}
-
-function materialFacts(
-  purchasePriceDecimal = "150000"
-): Record<string, unknown> {
-  return {
-    physicalForm: "JEWELRY",
-    purchaseCurrency: "EGP",
-    purchaseDate: "2026-08-30",
-    purchasePriceDecimal,
-    purityCatalogVersion: "1",
-    purityCode: "gold-9999",
-    purityFactorDecimal: "0.9999",
-    weightGramsDecimal: "10.25",
-  };
-}
-
-function rateSnapshot(
-  referenceId: string,
-  role:
-    | "acquisition_metal"
-    | "acquisition_purchase_currency"
-    | "terminal_metal"
-    | "terminal_purchase_currency"
-    | "terminal_proceeds_currency"
-): Record<string, unknown> {
-  const isMetal = role.endsWith("_metal");
-  return {
-    capturedAt: "2026-08-31T10:16:00.123Z",
-    capturedFreshness: "fresh",
-    instrumentCode: isMetal ? "metal:GOLD" : "currency:EGP",
-    kind: isMetal ? "metal" : "currency",
-    orientation: "quote_per_base",
-    providerObservedAt: "2026-08-31T10:15:30.123Z",
-    quality: "valid",
-    referenceId,
-    role,
-    source: "provider-a",
-    unit: isMetal ? "usd_per_pure_gram" : "usd_per_currency_unit",
-    valueDecimal: isMetal ? "3510.5" : "0.02",
-  };
-}
-
-function payloadFor(
-  kind: MetalActionKind,
-  expectedHoldingRevision: string | null,
-  predecessorEventId: string | null,
-  reversesEventId: string | null = null
-): Readonly<Record<string, unknown>> {
-  if (kind === "add") {
-    return {
-      expectedHoldingRevision: null,
-      holdingId: HOLDING_ID,
-      materialFacts: materialFacts(),
-      metalType: "GOLD",
-      metadata: { name: "Savings gold", notes: null },
-      predecessorEventId: null,
-      rateSnapshots: [
-        rateSnapshot(actionId(101), "acquisition_metal"),
-        rateSnapshot(actionId(102), "acquisition_purchase_currency"),
-      ],
-      reversesEventId: null,
-    };
-  }
-  if (kind === "correct") {
-    return {
-      expectedHoldingRevision,
-      holdingId: HOLDING_ID,
-      materialCorrection: {
-        after: materialFacts("151000"),
-        before: materialFacts(),
-        rateSnapshots: [
-          rateSnapshot(actionId(103), "acquisition_metal"),
-          rateSnapshot(actionId(104), "acquisition_purchase_currency"),
-        ],
-        reason: "Receipt correction",
-      },
-      metadataChange: null,
-      predecessorEventId,
-      reversesEventId: null,
-    };
-  }
-  if (kind === "sell") {
-    return {
-      expectedHoldingRevision,
-      feeMinorUnits: "80000",
-      grossProceedsMinorUnits: "16500000",
-      holdingId: HOLDING_ID,
-      metalType: "GOLD",
-      netProceedsMinorUnits: "16420000",
-      notes: null,
-      predecessorEventId,
-      purchaseCurrency: "EGP",
-      rateSnapshots: [
-        rateSnapshot(actionId(105), "terminal_metal"),
-        rateSnapshot(actionId(106), "terminal_purchase_currency"),
-        rateSnapshot(actionId(107), "terminal_proceeds_currency"),
-      ],
-      reversesEventId: null,
-      saleCurrency: "EGP",
-      saleDate: "2026-08-31",
-    };
-  }
-  if (kind === "dispose") {
-    return {
-      disposalDate: "2026-08-31",
-      expectedHoldingRevision,
-      holdingId: HOLDING_ID,
-      notes: null,
-      predecessorEventId,
-      reason: "given_away",
-      reversesEventId: null,
-    };
-  }
-  return {
-    expectedHoldingRevision,
-    holdingId: HOLDING_ID,
-    predecessorEventId,
-    reversesEventId: kind === "undo" ? reversesEventId : null,
-  };
-}
-
-function commandInput(
-  kind: MetalActionKind,
-  id: string,
-  expectedHoldingRevision: string | null,
-  predecessorEventId: string | null,
-  reversesEventId: string | null = null,
-  userId = USER_ID
-): CreateMetalFinancialActionEnvelopeInput {
-  return {
-    actionId: id,
-    userId,
-    holdingId: HOLDING_ID,
-    kind,
-    expectedHoldingRevision,
-    occurredAt: "2026-08-31T10:15:30.123Z",
-    domainPayload: payloadFor(
-      kind,
-      expectedHoldingRevision,
-      predecessorEventId,
-      reversesEventId
-    ),
-    validationInput: VALIDATION_INPUT,
-  };
-}
 
 async function createDatabase(): Promise<{
   readonly adapter: SQLiteAdapter;
@@ -657,6 +503,31 @@ describe("Metals financial action foundation", () => {
     await service.execute(
       commandInput("dispose", actionId(3), "0", actionId(1))
     );
+    const [locallyEditedAsset] = await database
+      .get<Asset>("assets")
+      .query()
+      .fetch();
+    const [locallyEditedState] = await database
+      .get<MetalHoldingState>("metal_holding_states")
+      .query()
+      .fetch();
+    await database.write(async (): Promise<void> => {
+      if (!locallyEditedAsset || !locallyEditedState) {
+        throw new Error("missing_metal_holding_fixture");
+      }
+      await database.batch(
+        locallyEditedAsset.prepareUpdate((row) => {
+          row.name = "Newer local name";
+          row.notes = "Newer local notes";
+        }),
+        locallyEditedState.prepareUpdate((row) => {
+          row.nameWrittenAt = 20;
+          row.nameWriterId = actionId(20);
+          row.notesWrittenAt = 20;
+          row.notesWriterId = actionId(20);
+        })
+      );
+    });
     await expect(
       commitMetalRpcOutcomeLocally(
         database,
@@ -737,15 +608,108 @@ describe("Metals financial action foundation", () => {
       isVisible: true,
       reconciliationState: "reconciled",
     });
-    expect(canonicalAsset).toMatchObject({
-      acquisitionActionId: actionId(4),
-      name: "Canonical gold",
-      purchasePriceDecimal: "152000",
+    expect(canonicalAsset?.acquisitionActionId).toBe(actionId(4));
+    expect(canonicalAsset?.name).toBe("Newer local name");
+    expect(canonicalAsset?.notes).toBe("Newer local notes");
+    expect(canonicalAsset?.purchasePriceDecimal).toBe("152000");
+    expect(lockedState).toMatchObject({
+      nameWrittenAt: 20,
+      nameWriterId: actionId(20),
+      notesWrittenAt: 20,
+      notesWriterId: actionId(20),
     });
     expect(canonicalMetal).toMatchObject({
       itemForm: "COIN",
       weightGramsDecimal: "11",
     });
+  });
+
+  it("restores acquisition provenance past metadata-only corrections", async () => {
+    const { database } = await createDatabase();
+    const service = createService(database);
+    await service.execute(commandInput("add", actionId(1), null, null));
+    await service.execute(
+      commandInput("correct", actionId(2), "0", actionId(1))
+    );
+
+    const metadataOnly = commandInput("correct", actionId(3), "1", actionId(2));
+    await service.execute({
+      ...metadataOnly,
+      domainPayload: {
+        ...metadataOnly.domainPayload,
+        materialCorrection: null,
+        metadataChange: {
+          before: { name: "Savings gold", notes: null },
+          after: { name: "Renamed gold", notes: null },
+        },
+      },
+    });
+    const rejectedCorrection = commandInput(
+      "correct",
+      actionId(4),
+      "2",
+      actionId(3)
+    );
+    await service.execute({
+      ...rejectedCorrection,
+      domainPayload: {
+        ...rejectedCorrection.domainPayload,
+        materialCorrection: {
+          after: materialFacts("152000"),
+          before: materialFacts("151000"),
+          rateSnapshots: [
+            rateSnapshot(actionId(113), "acquisition_metal"),
+            rateSnapshot(actionId(114), "acquisition_purchase_currency"),
+          ],
+          reason: "Receipt correction",
+        },
+      },
+    });
+
+    await expect(
+      commitMetalRpcOutcomeLocally(
+        database,
+        {
+          actionId: actionId(4),
+          code: "INVALID_LINK",
+          payloadHashMatches: true,
+          status: "rejected",
+          userId: USER_ID,
+        },
+        USER_ID
+      )
+    ).resolves.toBe("reconciled");
+
+    const [asset] = await database.get<Asset>("assets").query().fetch();
+    expect(asset?.acquisitionActionId).toBe(actionId(2));
+    expect(asset?.purchasePriceDecimal).toBe("151000");
+  });
+
+  it("restores rejected correction dates as local calendar dates", async () => {
+    const { database } = await createDatabase();
+    const service = createService(database);
+    await service.execute(commandInput("add", actionId(1), null, null));
+    await service.execute(
+      commandInput("correct", actionId(2), "0", actionId(1))
+    );
+
+    await commitMetalRpcOutcomeLocally(
+      database,
+      {
+        actionId: actionId(2),
+        code: "INVALID_LINK",
+        payloadHashMatches: true,
+        status: "rejected",
+        userId: USER_ID,
+      },
+      USER_ID
+    );
+
+    const [asset] = await database.get<Asset>("assets").query().fetch();
+    expect(asset?.purchaseDate.getTime()).toBe(new Date(2026, 7, 30).getTime());
+    expect(
+      formatMetalLocalCalendarDate(asset?.purchaseDate ?? new Date(0))
+    ).toBe("2026-08-30");
   });
 
   it("rejects a sale before the acquisition local-calendar date", async () => {

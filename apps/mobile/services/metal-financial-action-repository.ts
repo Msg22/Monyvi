@@ -61,7 +61,7 @@ export function formatMetalLocalCalendarDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function parseMetalLocalCalendarDate(value: unknown): Date {
+export function parseMetalLocalCalendarDate(value: unknown): Date {
   const [year, month, day] = String(value).split("-").map(Number);
   if (year === undefined || month === undefined || day === undefined) {
     throw new Error("invalid_metal_action_payload");

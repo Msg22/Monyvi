@@ -156,6 +156,40 @@ describe("commitCanonicalMetalMetadataLocally clock guard", () => {
     expect(state?.notesWrittenAt).toBe(5);
   });
 
+  it("rejects a canonical value that conflicts with the current clock tuple", async () => {
+    const { database } = await createMetadataDatabase();
+    await applyLocalNameEdit(database);
+
+    await expect(
+      database.write(() =>
+        commitCanonicalMetalMetadataLocally(
+          database,
+          {
+            status: "applied",
+            holdingId: HOLDING_ID,
+            canonicalMetadata: {
+              name: {
+                value: "Conflicting canonical value",
+                writtenAt: 20,
+                writerId: WRITER_ID,
+              },
+              notes: null,
+            },
+          },
+          USER_ID
+        )
+      )
+    ).rejects.toThrow("metal_metadata_tuple_conflict");
+
+    const [asset] = await database.get<Asset>("assets").query().fetch();
+    const [state] = await database
+      .get<MetalHoldingState>("metal_holding_states")
+      .query()
+      .fetch();
+    expect(asset?.name).toBe("Newer local edit");
+    expect(state?.nameWrittenAt).toBe(20);
+  });
+
   it("leaves dedicated rows unacknowledged when the local metadata commit fails", async () => {
     const rpc = jest.fn().mockResolvedValueOnce({
       data: {
