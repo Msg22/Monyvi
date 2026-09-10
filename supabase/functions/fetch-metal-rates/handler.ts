@@ -100,8 +100,7 @@ export function createFetchMetalRatesHandler(
 
       const persistenceStatus = readPersistenceStatus(
         persisted.data,
-        snapshotId,
-        capturedAt
+        snapshotId
       );
 
       return jsonResponse(
@@ -136,8 +135,7 @@ export function createFetchMetalRatesHandler(
 
 function readPersistenceStatus(
   data: unknown,
-  snapshotId: string,
-  capturedAt: string
+  snapshotId: string
 ): PersistenceStatus {
   if (!isRecord(data)) {
     throw new FetchMetalRatesHandlerError("persistence_error", 502);
@@ -145,11 +143,9 @@ function readPersistenceStatus(
 
   const status = data["status"];
   const persistedSnapshotId = data["snapshotId"];
-  const persistedCapturedAt = data["capturedAt"];
   if (
     (status !== "created" && status !== "replayed") ||
-    persistedSnapshotId !== snapshotId ||
-    persistedCapturedAt !== capturedAt
+    persistedSnapshotId !== snapshotId
   ) {
     throw new FetchMetalRatesHandlerError("persistence_error", 502);
   }
