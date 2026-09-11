@@ -185,7 +185,10 @@ test("source-command review uses an independent trust path when the verifier is 
 
   assert.match(skill, /If `scripts\/verify-mockup-binding\.js` is in the target diff/i);
   assert.match(skill, /trusted\s+base revision/i);
-  assert.match(skill, /independently\s+recompute[\s\S]{0,220}image[\s\S]{0,220}Binding Facts/i);
+  assert.match(
+    skill,
+    /independently\s+validate[\s\S]{0,1400}recompute[\s\S]{0,220}image[\s\S]{0,220}Binding Facts/i
+  );
 });
 
 test("source-command independent fallback validates the complete sidecar authority contract", () => {
@@ -199,7 +202,7 @@ test("source-command independent fallback validates the complete sidecar authori
   assert.ok(start >= 0 && end > start, "expected independent-verifier fallback section");
   const fallback = skill.slice(start, end);
 
-  assert.match(fallback, /complete sidecar authority contract/i);
+  assert.match(fallback, /complete\s+sidecar authority contract/i);
   assert.match(fallback, /valid UTF-8\/LF/i);
   assert.match(fallback, /exactly one .*Binding Facts heading/i);
   assert.match(
