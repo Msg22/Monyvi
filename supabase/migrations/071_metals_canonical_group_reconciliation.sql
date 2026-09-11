@@ -246,6 +246,58 @@ BEGIN
 END;
 $$;
 
+-- Financial actions and metadata patches both touch the holding-state and asset
+-- rows. Take the same holding-scoped advisory lock before either path enters its
+-- existing row-lock order so they cannot deadlock each other.
+CREATE OR REPLACE FUNCTION public.apply_metal_metadata_patch_v1(
+  p_holding_id uuid,
+  p_patch jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_owner uuid := (SELECT auth.uid());
+  v_outcome jsonb;
+  v_canonical jsonb;
+BEGIN
+  IF v_owner IS NULL THEN
+    RETURN private.apply_metal_metadata_patch_v1_pre_285(
+      p_holding_id,
+      p_patch
+    );
+  END IF;
+
+  PERFORM pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(v_owner::text || ':' || p_holding_id::text, 0)
+  );
+
+  v_outcome := private.apply_metal_metadata_patch_v1_pre_285(
+    p_holding_id,
+    p_patch
+  );
+  SELECT jsonb_build_object(
+    'name', CASE WHEN state.name_written_at IS NULL THEN NULL ELSE jsonb_build_object(
+      'value', asset.name,
+      'writtenAt', state.name_written_at,
+      'writerId', state.name_writer_id
+    ) END,
+    'notes', CASE WHEN state.notes_written_at IS NULL THEN NULL ELSE jsonb_build_object(
+      'value', asset.notes,
+      'writtenAt', state.notes_written_at,
+      'writerId', state.notes_writer_id
+    ) END
+  ) INTO v_canonical
+  FROM public.metal_holding_states AS state
+  JOIN public.assets AS asset
+    ON asset.id = state.holding_id AND asset.user_id = state.user_id
+  WHERE state.holding_id = p_holding_id AND state.user_id = v_owner;
+  RETURN v_outcome || jsonb_build_object('canonicalMetadata', v_canonical);
+END;
+$$;
+
 REVOKE ALL ON FUNCTION private.apply_metal_action_v1_pre_285_core(text, text)
   FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.apply_metal_action_v1_pre_285(text, text)
