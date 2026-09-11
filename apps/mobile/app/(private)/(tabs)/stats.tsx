@@ -100,10 +100,7 @@ export default function StatsScreen(): React.JSX.Element {
                 currency={selectedCurrency}
               />
               <MonthlyExpenseChart currency={selectedCurrency} />
-              <CategoryDrilldownCard
-                key={`category-drilldown-${selectedCurrency}`}
-                currency={selectedCurrency}
-              />
+              <CategoryDrilldownCard currency={selectedCurrency} />
             </>
           )}
         </View>
