@@ -7,6 +7,12 @@ import type {
 } from "@monyvi/db";
 import type { Sha256Provider } from "@monyvi/logic";
 
+import {
+  captureCachedModelSnapshot,
+  restoreCachedModelSnapshot,
+  type CachedModelSnapshot,
+} from "./watermelon-cache-snapshot";
+
 export interface CanonicalMetalHolding {
   readonly holdingId: string;
   readonly asset: {
@@ -126,6 +132,11 @@ export interface CanonicalMetalStaleOutcome {
   readonly canonicalHoldingEvidenceHash: string;
   readonly canonicalHoldingRevision: string;
   readonly canonicalHolding: CanonicalMetalHolding;
+}
+
+export interface CanonicalActionGroupInstallPlan {
+  readonly operations: readonly Model[];
+  readonly snapshots: readonly CachedModelSnapshot[];
 }
 
 const UUID_PATTERN =
@@ -291,7 +302,7 @@ export async function assertCanonicalActionGroup(
     nextCanonicalRevision(evidence.expectedHoldingRevision) !==
       evidence.canonicalHoldingRevision ||
     !event.isEffective ||
-    !event.isHistoryVisible ||
+    event.isHistoryVisible !== (event.kind !== "delete") ||
     rates.some(
       (rate) =>
         !UUID_PATTERN.test(rate.id) ||
@@ -506,7 +517,7 @@ export async function prepareCanonicalActionGroupInstall(
   database: Database,
   group: CanonicalMetalActionGroup,
   userId: string
-): Promise<readonly Model[]> {
+): Promise<CanonicalActionGroupInstallPlan> {
   const [existingRoot, existingEvidence, existingEvent, existingRates] =
     await Promise.all([
       findOwnedByActionId<FinancialActionGroup>(
@@ -535,137 +546,159 @@ export async function prepareCanonicalActionGroupInstall(
         )
         .fetch(),
     ]);
-  const operations: Model[] = [];
-  const now = new Date();
-  if (existingRoot) {
-    assertExistingCanonicalRoot(existingRoot, group.root);
-    operations.push(
-      existingRoot.prepareUpdate((row) => {
-        row.state = group.root.state;
-        row.serverOutcome = group.root.serverOutcome;
-        row.outcomeJson = group.root.outcomeJson;
-        row.rejectionCode = group.root.rejectionCode;
-        row.updatedAt = now;
-      })
-    );
-  } else {
-    operations.push(
-      database
-        .get<FinancialActionGroup>("financial_action_groups")
-        .prepareCreate((row) => {
-          setServerIdentity(row, group.root.id, group.root.createdAt);
-          row.accountGuardsJson = group.root.accountGuardsJson;
-          row.actionId = group.root.actionId;
-          row.deleted = false;
-          row.domain = group.root.domain;
-          row.domainReferenceId = group.root.domainReferenceId;
-          row.kind = group.root.kind;
-          row.outcomeJson = group.root.outcomeJson;
-          row.payloadHash = group.root.payloadHash;
-          row.payloadJson = group.root.payloadJson;
-          row.rejectionCode = group.root.rejectionCode;
-          row.serverOutcome = group.root.serverOutcome;
-          row.state = group.root.state;
-          row.updatedAt = new Date(group.root.updatedAt);
-          row.userId = group.root.userId;
-        })
-    );
-  }
-  if (existingEvidence) {
+
+  if (existingRoot) assertExistingCanonicalRoot(existingRoot, group.root);
+  if (existingEvidence)
     assertExistingCanonicalEvidence(existingEvidence, group.evidence);
-    operations.push(
-      existingEvidence.prepareUpdate((row) => {
-        row.canonicalHoldingRevision = group.evidence.canonicalHoldingRevision;
-        row.updatedAt = now;
-      })
-    );
-  } else {
-    operations.push(
-      database
-        .get<MetalActionEvidence>("metal_action_evidence")
-        .prepareCreate((row) => {
-          setServerIdentity(row, group.evidence.id, group.evidence.createdAt);
-          row.actionId = group.evidence.actionId;
-          row.canonicalHoldingRevision =
-            group.evidence.canonicalHoldingRevision;
-          row.deleted = false;
-          row.domainPayloadJson = group.evidence.domainPayloadJson;
-          row.expectedHoldingRevision = group.evidence.expectedHoldingRevision;
-          row.holdingId = group.evidence.holdingId;
-          row.kind = group.evidence.kind;
-          row.updatedAt = new Date(group.evidence.updatedAt);
-          row.userId = group.evidence.userId;
-        })
-    );
-  }
-  if (existingEvent) {
-    assertExistingCanonicalEvent(existingEvent, group.event);
-    operations.push(
-      existingEvent.prepareUpdate((row) => {
-        row.isEffective = group.event.isEffective;
-        row.isHistoryVisible = group.event.isHistoryVisible;
-        row.updatedAt = now;
-      })
-    );
-  } else {
-    operations.push(
-      database
-        .get<MetalLifecycleEvent>("metal_lifecycle_events")
-        .prepareCreate((row) => {
-          setServerIdentity(row, group.event.id, group.event.createdAt);
-          row.actionId = group.event.actionId;
-          row.deleted = false;
-          row.holdingId = group.event.holdingId;
-          row.isEffective = group.event.isEffective;
-          row.isHistoryVisible = group.event.isHistoryVisible;
-          row.kind = group.event.kind;
-          row.occurredAt = new Date(group.event.occurredAt);
-          row.payloadJson = group.event.payloadJson;
-          row.predecessorEventId = group.event.predecessorEventId;
-          row.reversesEventId = group.event.reversesEventId;
-          row.updatedAt = new Date(group.event.updatedAt);
-          row.userId = group.event.userId;
-        })
-    );
-  }
-  const existingRatesById = new Map(
-    existingRates.map((rate) => [rate.id, rate])
+  if (existingEvent) assertExistingCanonicalEvent(existingEvent, group.event);
+
+  const canonicalRatesById = new Map(
+    group.rates.map((rate) => [rate.id, rate] as const)
   );
   if (existingRates.length > group.rates.length) {
     throw new Error("incomplete_metal_action_group");
   }
-  for (const rate of group.rates) {
-    const existing = existingRatesById.get(rate.id);
-    if (existing) {
-      assertExistingCanonicalRate(existing, rate);
-      continue;
-    }
-    operations.push(
-      database
-        .get<MetalRateReference>("metal_rate_references")
-        .prepareCreate((row) => {
-          setServerIdentity(row, rate.id, rate.createdAt);
-          row.actionId = rate.actionId;
-          row.capturedAt = new Date(rate.capturedAt);
-          row.capturedFreshness = rate.capturedFreshness;
-          row.deleted = false;
-          row.holdingId = rate.holdingId;
-          row.instrumentCode = rate.instrumentCode;
-          row.kind = rate.kind;
-          row.orientation = rate.orientation;
-          row.providerObservedAt =
-            rate.providerObservedAt === null
-              ? null
-              : new Date(rate.providerObservedAt);
-          row.quality = rate.quality;
-          row.role = rate.role;
-          row.source = rate.source;
-          row.unit = rate.unit;
-          row.updatedAt = new Date(rate.updatedAt);
-          row.userId = rate.userId;
-          row.valueDecimal = rate.valueDecimal;
-        })
-    );
+  for (const existingRate of existingRates) {
+    const canonicalRate = canonicalRatesById.get(existingRate.id);
+    if (!canonicalRate) throw new Error("incomplete_metal_action_group");
+    assertExistingCanonicalRate(existingRate, canonicalRate);
   }
-  return operations;
+
+  const existingModels = [
+    existingRoot,
+    existingEvidence,
+    existingEvent,
+    ...existingRates,
+  ].filter((model): model is Model => model !== null);
+  const snapshots = existingModels.map(captureCachedModelSnapshot);
+  const operations: Model[] = [];
+  const now = new Date();
+
+  try {
+    if (existingRoot) {
+      operations.push(
+        existingRoot.prepareUpdate((row) => {
+          row.state = group.root.state;
+          row.serverOutcome = group.root.serverOutcome;
+          row.outcomeJson = group.root.outcomeJson;
+          row.rejectionCode = group.root.rejectionCode;
+          row.updatedAt = now;
+        })
+      );
+    } else {
+      operations.push(
+        database
+          .get<FinancialActionGroup>("financial_action_groups")
+          .prepareCreate((row) => {
+            setServerIdentity(row, group.root.id, group.root.createdAt);
+            row.accountGuardsJson = group.root.accountGuardsJson;
+            row.actionId = group.root.actionId;
+            row.deleted = false;
+            row.domain = group.root.domain;
+            row.domainReferenceId = group.root.domainReferenceId;
+            row.kind = group.root.kind;
+            row.outcomeJson = group.root.outcomeJson;
+            row.payloadHash = group.root.payloadHash;
+            row.payloadJson = group.root.payloadJson;
+            row.rejectionCode = group.root.rejectionCode;
+            row.serverOutcome = group.root.serverOutcome;
+            row.state = group.root.state;
+            row.updatedAt = new Date(group.root.updatedAt);
+            row.userId = group.root.userId;
+          })
+      );
+    }
+    if (existingEvidence) {
+      operations.push(
+        existingEvidence.prepareUpdate((row) => {
+          row.canonicalHoldingRevision = group.evidence.canonicalHoldingRevision;
+          row.updatedAt = now;
+        })
+      );
+    } else {
+      operations.push(
+        database
+          .get<MetalActionEvidence>("metal_action_evidence")
+          .prepareCreate((row) => {
+            setServerIdentity(row, group.evidence.id, group.evidence.createdAt);
+            row.actionId = group.evidence.actionId;
+            row.canonicalHoldingRevision =
+              group.evidence.canonicalHoldingRevision;
+            row.deleted = false;
+            row.domainPayloadJson = group.evidence.domainPayloadJson;
+            row.expectedHoldingRevision = group.evidence.expectedHoldingRevision;
+            row.holdingId = group.evidence.holdingId;
+            row.kind = group.evidence.kind;
+            row.updatedAt = new Date(group.evidence.updatedAt);
+            row.userId = group.evidence.userId;
+          })
+      );
+    }
+    if (existingEvent) {
+      operations.push(
+        existingEvent.prepareUpdate((row) => {
+          row.isEffective = group.event.isEffective;
+          row.isHistoryVisible = group.event.isHistoryVisible;
+          row.updatedAt = now;
+        })
+      );
+    } else {
+      operations.push(
+        database
+          .get<MetalLifecycleEvent>("metal_lifecycle_events")
+          .prepareCreate((row) => {
+            setServerIdentity(row, group.event.id, group.event.createdAt);
+            row.actionId = group.event.actionId;
+            row.deleted = false;
+            row.holdingId = group.event.holdingId;
+            row.isEffective = group.event.isEffective;
+            row.isHistoryVisible = group.event.isHistoryVisible;
+            row.kind = group.event.kind;
+            row.occurredAt = new Date(group.event.occurredAt);
+            row.payloadJson = group.event.payloadJson;
+            row.predecessorEventId = group.event.predecessorEventId;
+            row.reversesEventId = group.event.reversesEventId;
+            row.updatedAt = new Date(group.event.updatedAt);
+            row.userId = group.event.userId;
+          })
+      );
+    }
+
+    const existingRatesById = new Map(
+      existingRates.map((rate) => [rate.id, rate])
+    );
+    for (const rate of group.rates) {
+      if (existingRatesById.has(rate.id)) continue;
+      operations.push(
+        database
+          .get<MetalRateReference>("metal_rate_references")
+          .prepareCreate((row) => {
+            setServerIdentity(row, rate.id, rate.createdAt);
+            row.actionId = rate.actionId;
+            row.capturedAt = new Date(rate.capturedAt);
+            row.capturedFreshness = rate.capturedFreshness;
+            row.deleted = false;
+            row.holdingId = rate.holdingId;
+            row.instrumentCode = rate.instrumentCode;
+            row.kind = rate.kind;
+            row.orientation = rate.orientation;
+            row.providerObservedAt =
+              rate.providerObservedAt === null
+                ? null
+                : new Date(rate.providerObservedAt);
+            row.quality = rate.quality;
+            row.role = rate.role;
+            row.source = rate.source;
+            row.unit = rate.unit;
+            row.updatedAt = new Date(rate.updatedAt);
+            row.userId = rate.userId;
+            row.valueDecimal = rate.valueDecimal;
+          })
+      );
+    }
+    return { operations, snapshots };
+  } catch (error) {
+    snapshots.forEach(restoreCachedModelSnapshot);
+    throw error;
+  }
 }
