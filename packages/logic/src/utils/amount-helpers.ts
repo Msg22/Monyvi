@@ -117,6 +117,10 @@ export function parseStrictAmountInput(
     return { success: false, reason: "exceeds-maximum" };
   }
 
+  if (decimalAmount.lessThanOrEqualTo(0)) {
+    return { success: false, reason: "not-positive" };
+  }
+
   if (
     options.maxFractionDigits !== undefined &&
     fractionDigits > options.maxFractionDigits
@@ -134,10 +138,6 @@ export function parseStrictAmountInput(
   // silently rounding it to a different valid amount.
   if (!new Decimal(amount.toString()).equals(decimalAmount)) {
     return { success: false, reason: "invalid-format" };
-  }
-
-  if (amount <= 0) {
-    return { success: false, reason: "not-positive" };
   }
 
   return {
@@ -192,6 +192,14 @@ export function resolveAmountInputChange(
 
   if (INTERMEDIATE_GROUPED_AMOUNT_PATTERN.test(text)) {
     return { accepted: true, value: text.replace(/,/g, "") };
+  }
+
+  const previousIsValidIntermediate =
+    INTERMEDIATE_UNGROUPED_AMOUNT_PATTERN.test(previousValue) ||
+    INTERMEDIATE_GROUPED_AMOUNT_PATTERN.test(previousValue);
+
+  if (previousValue.length > 0 && !previousIsValidIntermediate) {
+    return { accepted: false, value: text };
   }
 
   const formattedPreviousValue = formatAmountInput(previousValue);

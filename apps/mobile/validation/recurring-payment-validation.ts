@@ -37,6 +37,7 @@ const recurringPaymentSchema = z.object({
 export type RecurringPaymentFormData = z.infer<typeof recurringPaymentSchema>;
 
 export interface RecurringPaymentValidationMessages {
+  readonly amountRequired: string;
   readonly invalidAmount: string;
   readonly positiveAmount: string;
   readonly amountMaximum: string;
@@ -64,6 +65,7 @@ export type RecurringPaymentValidationErrors = Partial<
 
 const DEFAULT_CURRENCY: CurrencyType = "EGP";
 const DEFAULT_MESSAGES: RecurringPaymentValidationMessages = {
+  amountRequired: "Amount is required",
   invalidAmount: "Please enter a valid amount",
   positiveAmount: "Amount must be greater than 0",
   amountMaximum: `Amount must be at most ${MAX_TRANSACTION_AMOUNT.toLocaleString(
@@ -84,7 +86,7 @@ function getAmountValidationMessage(
 ): string {
   switch (reason) {
     case "required":
-      return "Amount is required";
+      return messages.amountRequired;
     case "not-positive":
       return messages.positiveAmount;
     case "exceeds-maximum":
