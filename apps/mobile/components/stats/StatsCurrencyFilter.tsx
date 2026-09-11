@@ -2,7 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import type { CurrencyType } from "@monyvi/db";
 import { SORTED_SUPPORTED_CURRENCIES, type CurrencyInfo } from "@monyvi/logic";
 import React, { useMemo, useState } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import {
+  FlatList,
+  Text,
+  TouchableOpacity,
+  View,
+  type LayoutChangeEvent,
+  type ListRenderItemInfo,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { palette } from "@/constants/colors";
@@ -14,6 +21,13 @@ interface StatsCurrencyFilterProps {
   readonly onSelectCurrency: (currency: CurrencyType) => void;
 }
 
+interface StatsCurrencyOptionProps {
+  readonly item: CurrencyInfo;
+  readonly isSelected: boolean;
+  readonly language: string;
+  readonly onSelect: (currency: CurrencyType) => void;
+}
+
 export function StatsCurrencyFilter({
   availableCurrencies,
   selectedCurrency,
@@ -22,6 +36,7 @@ export function StatsCurrencyFilter({
   const { t } = useTranslation("common");
   const { language } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
+  const [filterRowHeight, setFilterRowHeight] = useState(0);
 
   const items = useMemo(
     () => getCurrencyItems(availableCurrencies),
@@ -34,9 +49,31 @@ export function StatsCurrencyFilter({
     return null;
   }
 
+  const handleSelect = (currency: CurrencyType): void => {
+    onSelectCurrency(currency);
+    setIsOpen(false);
+  };
+
+  const renderCurrencyItem = ({
+    item,
+  }: ListRenderItemInfo<CurrencyInfo>): React.JSX.Element => (
+    <StatsCurrencyOption
+      item={item}
+      isSelected={item.code === selectedCurrency}
+      language={language}
+      onSelect={handleSelect}
+    />
+  );
+
   return (
     <View className="relative z-20">
-      <View className="flex-row items-center justify-between gap-3">
+      <View
+        testID="stats-currency-filter-row"
+        onLayout={(event: LayoutChangeEvent): void => {
+          setFilterRowHeight(event.nativeEvent.layout.height);
+        }}
+        className="flex-row items-center justify-between gap-3"
+      >
         <View className="min-w-0 flex-1">
           <Text className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             {t("currency")}
@@ -80,68 +117,74 @@ export function StatsCurrencyFilter({
       {isOpen ? (
         <View
           testID="stats-currency-menu"
-          className="absolute end-0 top-12 z-30 min-w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
-          style={{ elevation: 8 }}
+          className="absolute end-0 z-30 min-w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
+          style={{ elevation: 8, top: filterRowHeight }}
         >
-          <ScrollView className="max-h-72" showsVerticalScrollIndicator={false}>
-            {items.map((item) => {
-              const isSelected = item.code === selectedCurrency;
-              const localizedName = getLocalizedCurrencyName(item, language);
-
-              return (
-                <TouchableOpacity
-                  key={item.code}
-                  testID={`stats-currency-option-${item.code}`}
-                  accessibilityRole="radio"
-                  accessibilityLabel={`${item.code}, ${localizedName}`}
-                  accessibilityState={{ selected: isSelected }}
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    onSelectCurrency(item.code);
-                    setIsOpen(false);
-                  }}
-                  className={`min-h-11 flex-row items-center px-4 py-2.5 ${
-                    isSelected
-                      ? "bg-nileGreen-50 dark:bg-nileGreen-900"
-                      : "bg-white dark:bg-slate-800"
-                  }`}
-                >
-                  <Text className="me-3 text-lg">{item.flag}</Text>
-                  <View className="min-w-0 flex-1">
-                    <Text
-                      className={`text-sm font-semibold ${
-                        isSelected
-                          ? "text-nileGreen-700 dark:text-nileGreen-400"
-                          : "text-text-primary dark:text-text-primary-dark"
-                      }`}
-                    >
-                      {item.code}
-                    </Text>
-                    <Text
-                      numberOfLines={1}
-                      className="text-xs text-slate-500 dark:text-slate-400"
-                    >
-                      {localizedName}
-                    </Text>
-                  </View>
-                  <Text className="ms-3 text-sm text-text-secondary dark:text-text-secondary-dark">
-                    {item.symbol}
-                  </Text>
-                  {isSelected ? (
-                    <Ionicons
-                      name="checkmark"
-                      size={18}
-                      color={palette.nileGreen[500]}
-                      style={{ marginStart: 8 }}
-                    />
-                  ) : null}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+          <FlatList
+            className="max-h-72"
+            data={items}
+            keyExtractor={(item): string => item.code}
+            renderItem={renderCurrencyItem}
+            showsVerticalScrollIndicator={false}
+          />
         </View>
       ) : null}
     </View>
+  );
+}
+
+function StatsCurrencyOption({
+  item,
+  isSelected,
+  language,
+  onSelect,
+}: StatsCurrencyOptionProps): React.JSX.Element {
+  const localizedName = getLocalizedCurrencyName(item, language);
+
+  return (
+    <TouchableOpacity
+      testID={`stats-currency-option-${item.code}`}
+      accessibilityRole="radio"
+      accessibilityLabel={`${item.code}, ${localizedName}`}
+      accessibilityState={{ selected: isSelected }}
+      activeOpacity={0.7}
+      onPress={() => onSelect(item.code)}
+      className={`min-h-11 flex-row items-center px-4 py-2.5 ${
+        isSelected
+          ? "bg-nileGreen-50 dark:bg-nileGreen-900"
+          : "bg-white dark:bg-slate-800"
+      }`}
+    >
+      <Text className="me-3 text-lg">{item.flag}</Text>
+      <View className="min-w-0 flex-1">
+        <Text
+          className={`text-sm font-semibold ${
+            isSelected
+              ? "text-nileGreen-700 dark:text-nileGreen-400"
+              : "text-text-primary dark:text-text-primary-dark"
+          }`}
+        >
+          {item.code}
+        </Text>
+        <Text
+          numberOfLines={1}
+          className="text-xs text-slate-500 dark:text-slate-400"
+        >
+          {localizedName}
+        </Text>
+      </View>
+      <Text className="ms-3 text-sm text-text-secondary dark:text-text-secondary-dark">
+        {item.symbol}
+      </Text>
+      {isSelected ? (
+        <Ionicons
+          name="checkmark"
+          size={18}
+          color={palette.nileGreen[500]}
+          style={{ marginStart: 8 }}
+        />
+      ) : null}
+    </TouchableOpacity>
   );
 }
 
