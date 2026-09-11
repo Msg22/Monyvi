@@ -569,8 +569,10 @@ export async function prepareCanonicalActionGroupInstall(
     existingEvidence,
     existingEvent,
     ...existingRates,
-  ].filter((model): model is Model => model !== null);
-  const snapshots = existingModels.map(captureCachedModelSnapshot);
+  ].filter((model) => model !== null);
+  const snapshots = existingModels.map((model) =>
+    captureCachedModelSnapshot(model as Model)
+  );
   const operations: Model[] = [];
   const now = new Date();
 
