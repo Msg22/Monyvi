@@ -281,13 +281,16 @@ export async function updateRecurringPayment(
     payment.nextDueDate,
     data.startDate
   );
-  const originalEditableDate = dataMatchesStoredAnchor
-    ? payment.startDate
+  const didDuePaymentChange =
+    data.expectedNextDueDate !== undefined
+      ? !isSameLocalCalendarDay(data.expectedNextDueDate, data.startDate)
+      : !dataMatchesStoredAnchor && !dataMatchesCurrentDueDate;
+  const originalEditableDate =
+    data.expectedNextDueDate ??
+    (dataMatchesStoredAnchor ? payment.startDate : payment.nextDueDate);
+  const requestedDueDate = didDuePaymentChange
+    ? data.startDate
     : payment.nextDueDate;
-  const requestedDueDate =
-    dataMatchesStoredAnchor && !dataMatchesCurrentDueDate
-      ? payment.nextDueDate
-      : data.startDate;
 
   const referenceDate = new Date();
   assertStartDateAllowed(data.startDate, referenceDate, originalEditableDate);
@@ -321,8 +324,6 @@ export async function updateRecurringPayment(
         previousEndDate !== undefined &&
         previousEndDate !== null &&
         !isOnOrBeforeDay(nextEndDate, previousEndDate));
-    const didDuePaymentChange =
-      !dataMatchesStoredAnchor && !dataMatchesCurrentDueDate;
     const didFrequencyChange = payment.frequency !== data.frequency;
     const shouldRetainFinalPaidOccurrence =
       wasCompletedAtPreviousBoundary &&
