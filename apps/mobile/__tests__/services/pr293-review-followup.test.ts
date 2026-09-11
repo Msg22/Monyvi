@@ -1,6 +1,15 @@
 import fs from "fs";
 import path from "path";
 
+jest.mock("@monyvi/db", () => ({
+  Asset: class {},
+  AssetMetal: class {},
+  MetalActionEvidence: class {},
+  MetalHoldingState: class {},
+  MetalLifecycleEvent: class {},
+  MetalRateReference: class {},
+}));
+
 import {
   assertCanonicalActionGroup,
   canonicalMetalJson,
