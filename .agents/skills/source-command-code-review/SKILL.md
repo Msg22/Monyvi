@@ -241,6 +241,14 @@ transition, or variant facts:
    exact current image bytes and exact original Binding Facts bytes; do not
    require the evidence text to repeat the component digests individually.
 
+If `scripts/verify-mockup-binding.js` is in the target diff, do not treat that
+target-branch verifier as independent authority. Run the verifier from a trusted
+base revision when it supports the same sidecar contract; otherwise independently
+recompute the approved image SHA-256 and exact original Binding Facts SHA-256
+from the reviewed bytes, rebuild the combined binding approval revision, and
+verify the approval evidence against it. A target-branch verifier result alone
+is insufficient in this case.
+
 If an approved reference predates the sidecar rule, complete the workflow's
 **Legacy Approved Mockup Metadata Migration** and explicit sidecar approval
 before using reconstructed metadata for review. A missing sidecar, failed
