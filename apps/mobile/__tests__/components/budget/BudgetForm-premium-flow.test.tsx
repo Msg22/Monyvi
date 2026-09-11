@@ -255,26 +255,32 @@ describe("BudgetForm premium flow", () => {
     render(<BudgetForm />);
 
     const selector = screen.getByTestId("budget-currency-selector");
-    expect(selector.props.className).toContain("min-h-11");
-    expect(selector.props.style).toBeUndefined();
+    expect(selector).toHaveProp(
+      "className",
+      "me-2 min-h-11 flex-row items-center"
+    );
+    expect(selector).not.toHaveProp("style");
   });
 
   it("uses palette tokens for white action icons", () => {
     render(<BudgetForm />);
 
-    expect(screen.getByTestId("icon-checkmark").props.accessibilityLabel).toBe(
+    expect(screen.getByTestId("icon-checkmark")).toHaveProp(
+      "accessibilityLabel",
       palette.slate[25]
     );
-    expect(
-      screen.getByTestId("icon-add-circle-outline").props.accessibilityLabel
-    ).toBe(palette.slate[25]);
+    expect(screen.getByTestId("icon-add-circle-outline")).toHaveProp(
+      "accessibilityLabel",
+      palette.slate[25]
+    );
   });
 
   it("keeps preview metrics in a row on an ordinary phone", () => {
     render(<BudgetForm />);
 
-    expect(screen.getByTestId("budget-preview-metrics").props.className).toContain(
-      "flex-row"
+    expect(screen.getByTestId("budget-preview-metrics")).toHaveProp(
+      "className",
+      "flex-row border-t border-slate-200 px-3 py-4 dark:border-slate-700"
     );
   });
 
@@ -288,8 +294,9 @@ describe("BudgetForm premium flow", () => {
 
     render(<BudgetForm />);
 
-    expect(screen.getByTestId("budget-preview-metrics").props.className).toContain(
-      "flex-col"
+    expect(screen.getByTestId("budget-preview-metrics")).toHaveProp(
+      "className",
+      "flex-col border-t border-slate-200 px-3 py-4 dark:border-slate-700"
     );
   });
 
