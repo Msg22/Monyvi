@@ -7,14 +7,23 @@ function read(relativePath: string): string {
 
 describe("Stats currency review regressions", () => {
   it("waits for preference/discovery state and suppresses stale aggregates per selected currency", () => {
-    const source = read("../../app/(private)/(tabs)/stats.tsx");
+    const screen = read("../../app/(private)/(tabs)/stats.tsx");
+    const drilldownHook = read(
+      "../../hooks/useCategoryDrilldownTransactions.ts"
+    );
 
-    expect(source).toContain("isLoading: isPreferredCurrencyLoading");
-    expect(source).toContain("isPreferredCurrencyLoading");
-    expect(source).toContain("error");
-    expect(source).toContain("retry");
-    expect(source).toContain("key={`quick-stats-${selectedCurrency}`}");
-    expect(source).toContain("key={`category-drilldown-${selectedCurrency}`}");
+    expect(screen).toContain("isLoading: isPreferredCurrencyLoading");
+    expect(screen).toContain("isPreferredCurrencyLoading");
+    expect(screen).toContain("error");
+    expect(screen).toContain("retry");
+    expect(screen).toContain("key={`quick-stats-${selectedCurrency}`}");
+    expect(screen).not.toContain(
+      "key={`category-drilldown-${selectedCurrency}`}"
+    );
+    expect(drilldownHook).toContain("activeScopeKey");
+    expect(drilldownHook).toContain(
+      "queryState.scopeKey === activeScopeKey"
+    );
   });
 
   it("preserves the selected chart period while refreshing chart data by currency", () => {
@@ -26,10 +35,21 @@ describe("Stats currency review regressions", () => {
     expect(chart).toContain("key={`${currency}-${period}`}");
   });
 
-  it("keeps every available transaction currency selectable and exposes radio state", () => {
+  it("uses Skeleton rather than ActivityIndicator while chart data reloads", () => {
+    const chart = read("../../components/stats/MonthlyExpenseChart.tsx");
+
+    expect(chart).toContain(
+      'import { Skeleton } from "@/components/ui/Skeleton"'
+    );
+    expect(chart).not.toContain("ActivityIndicator");
+  });
+
+  it("keeps every available transaction currency selectable in a virtualized list", () => {
     const source = read("../../components/stats/StatsCurrencyFilter.tsx");
 
-    expect(source).toContain("availableCurrencies.map");
+    expect(source).toContain("FlatList");
+    expect(source).not.toContain("ScrollView");
+    expect(source).not.toContain("items.map");
     expect(source).toContain('accessibilityRole="radio"');
     expect(source).toContain("selected: isSelected");
     expect(source).toContain("useLocale");
