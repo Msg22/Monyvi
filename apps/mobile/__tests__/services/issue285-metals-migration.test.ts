@@ -17,7 +17,7 @@ describe("issue #285 post-068 migration contract", () => {
     expect(sql).not.toContain("metal_sale_before_acquisition");
   });
 
-  it("uses migration 071 to validate before sale-date checks and return a complete winner group", () => {
+  it("uses migration 071 to replay accepted actions before sale-date checks and share the holding lock with metadata", () => {
     const migrationPath = path.resolve(
       __dirname,
       "../../../../supabase/migrations/071_metals_canonical_group_reconciliation.sql"
@@ -25,12 +25,31 @@ describe("issue #285 post-068 migration contract", () => {
     expect(fs.existsSync(migrationPath)).toBe(true);
     const sql = fs.readFileSync(migrationPath, "utf8");
     const hashIndex = sql.indexOf("extensions.digest");
-    const lockIndex = sql.indexOf("pg_advisory_xact_lock");
-    const saleDateIndex = sql.indexOf("saleDate", lockIndex);
+    const actionLockIndex = sql.indexOf("pg_advisory_xact_lock");
+    const replayIndex = sql.indexOf("SELECT * INTO v_existing", actionLockIndex);
+    const acceptedReplayIndex = sql.indexOf(
+      "v_existing.state = 'accepted'",
+      replayIndex
+    );
+    const saleDateIndex = sql.indexOf(
+      "IF v_envelope ->> 'kind' = 'sell'",
+      actionLockIndex
+    );
+    const metadataWrapperIndex = sql.indexOf(
+      "CREATE OR REPLACE FUNCTION public.apply_metal_metadata_patch_v1"
+    );
+    const metadataLockIndex = sql.indexOf(
+      "pg_advisory_xact_lock",
+      metadataWrapperIndex
+    );
     expect(sql).toContain("financial_action_canonical_json_v1");
     expect(hashIndex).toBeGreaterThan(0);
-    expect(lockIndex).toBeGreaterThan(hashIndex);
-    expect(saleDateIndex).toBeGreaterThan(lockIndex);
+    expect(actionLockIndex).toBeGreaterThan(hashIndex);
+    expect(replayIndex).toBeGreaterThan(actionLockIndex);
+    expect(acceptedReplayIndex).toBeGreaterThan(replayIndex);
+    expect(saleDateIndex).toBeGreaterThan(acceptedReplayIndex);
+    expect(metadataWrapperIndex).toBeGreaterThan(saleDateIndex);
+    expect(metadataLockIndex).toBeGreaterThan(metadataWrapperIndex);
     expect(sql).toContain("canonicalActionGroup");
     expect(sql).toContain("financial_action_groups");
     expect(sql).toContain("metal_action_evidence");
