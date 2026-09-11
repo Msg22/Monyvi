@@ -58,6 +58,25 @@ describe("StatsCurrencyFilter", () => {
     expect(screen.queryByTestId("stats-currency-menu")).toBeNull();
   });
 
+  it("positions the menu below the measured filter row height", () => {
+    render(
+      <StatsCurrencyFilter
+        availableCurrencies={["EGP", "USD"]}
+        selectedCurrency="EGP"
+        onSelectCurrency={jest.fn()}
+      />
+    );
+
+    fireEvent(screen.getByTestId("stats-currency-filter-row"), "layout", {
+      nativeEvent: {
+        layout: { x: 0, y: 0, width: 320, height: 72 },
+      },
+    });
+    fireEvent.press(screen.getByTestId("stats-currency-trigger"));
+
+    expect(screen.getByTestId("stats-currency-menu")).toHaveStyle({ top: 72 });
+  });
+
   it("keeps valid transaction currencies that are missing from the fiat catalog", () => {
     render(
       <StatsCurrencyFilter
