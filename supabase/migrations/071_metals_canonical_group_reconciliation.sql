@@ -1,6 +1,6 @@
 -- Issue #285: complete stale-winner reconciliation and validate sale dates only
--- after authentication, canonicalization, payload-hash verification, and the
--- holding-scoped transaction lock.
+-- after authentication, canonicalization, payload-hash verification, accepted
+-- replay handling, and the holding-scoped transaction lock.
 
 ALTER FUNCTION private.apply_metal_action_v1_pre_285(text, text)
   RENAME TO apply_metal_action_v1_pre_285_core;
@@ -21,6 +21,7 @@ DECLARE
   v_action_id uuid;
   v_holding_id uuid;
   v_purchase_date date;
+  v_existing public.financial_action_groups%ROWTYPE;
 BEGIN
   IF v_owner IS NULL THEN
     RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'metal_action_not_authenticated';
@@ -49,6 +50,26 @@ BEGIN
   PERFORM pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(v_owner::text || ':' || v_holding_id::text, 0)
   );
+
+  SELECT * INTO v_existing
+  FROM public.financial_action_groups
+  WHERE user_id = v_owner AND action_id = v_action_id
+  FOR UPDATE;
+  IF FOUND THEN
+    IF v_existing.payload_hash <> p_payload_hash
+      OR v_existing.payload_json <> v_canonical
+    THEN
+      RETURN jsonb_build_object(
+        'status', 'rejected', 'actionId', v_action_id, 'code', 'PAYLOAD_HASH_MISMATCH'
+      );
+    END IF;
+    IF v_existing.state = 'accepted' THEN
+      RETURN jsonb_set(v_existing.outcome_json::jsonb, '{status}', '"idempotent"'::jsonb);
+    END IF;
+    RETURN jsonb_build_object(
+      'status', 'rejected', 'actionId', v_action_id, 'code', 'INCOMPLETE_GROUP'
+    );
+  END IF;
 
   IF v_envelope ->> 'kind' = 'sell' THEN
     SELECT asset.purchase_date::date INTO v_purchase_date
