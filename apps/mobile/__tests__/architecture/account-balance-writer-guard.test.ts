@@ -90,6 +90,10 @@ const LEGACY_MUTATION_OWNER_BY_SYMBOL: Readonly<Record<string, string>> = {
     "transaction.batch-import",
 };
 
+const APPROVED_COMMAND_BOUNDARY_SYMBOLS = new Set([
+  "apps/mobile/services/core-account-financial-action-service.ts#buildPlan",
+]);
+
 interface FunctionStart {
   readonly index: number;
   readonly name: string;
@@ -198,7 +202,9 @@ describe("issue #242 account-balance writer completeness guard", () => {
   it("maps every current local balance assignment to one inventoried writer", () => {
     const discovered = findLocalBalanceMutationSymbols();
     const unknown = discovered.filter(
-      (symbol) => LEGACY_MUTATION_OWNER_BY_SYMBOL[symbol] === undefined
+      (symbol) =>
+        LEGACY_MUTATION_OWNER_BY_SYMBOL[symbol] === undefined &&
+        !APPROVED_COMMAND_BOUNDARY_SYMBOLS.has(symbol)
     );
 
     expect(unknown).toEqual([]);
@@ -237,6 +243,39 @@ describe("issue #242 account-balance writer completeness guard", () => {
     expect(registry).toContain(
       '{ writerId: "account.cash.create-within-writer", status: "guarded" }'
     );
+  });
+
+  it("marks only the completed Lane A transaction and transfer writers guarded", () => {
+    const registry = readText(
+      "apps/mobile/services/account-balance-writer-registry.ts"
+    );
+    [
+      "transaction.update",
+      "transaction.delete",
+      "transaction.convert-to-transfer",
+      "transaction.batch-delete",
+      "transfer.create",
+      "transfer.update",
+      "transfer.delete",
+      "transfer.convert-to-transaction",
+    ].forEach((writerId) => {
+      expect(registry).toContain(
+        `{ writerId: "${writerId}", status: "guarded" }`
+      );
+    });
+    [
+      "account.cash.prepare",
+      "account.cash.prepare-named",
+      "account.create",
+      "account.pending.prepare",
+      "account.edit-balance",
+      "transaction.batch-import",
+      "sms.live-atm",
+    ].forEach((writerId) => {
+      expect(registry).toContain(
+        `{ writerId: "${writerId}", status: "blocked" }`
+      );
+    });
   });
 
   it("keeps the no-active-debt path guarded by the assignment completeness scan", () => {

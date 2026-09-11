@@ -121,6 +121,13 @@ jest.mock("@/services/supabase", () => ({
   getCurrentUserId: jest.fn(() => Promise.resolve("test-user-id")),
 }));
 
+jest.mock("@/services/transfer-core-writer-production", () => ({
+  convertGuardedTransferToTransaction: jest.fn(),
+  createGuardedTransfer: jest.fn(),
+  deleteGuardedTransfer: jest.fn(),
+  updateGuardedTransfer: jest.fn(),
+}));
+
 // ---------------------------------------------------------------------------
 // Import module under test
 // ---------------------------------------------------------------------------
@@ -132,7 +139,16 @@ import {
   convertTransferToTransaction,
   INVALID_TRANSFER_AMOUNT_ERROR_CODE,
 } from "@/services/transfer-service";
-import { USER_DATA_ACCESS_ERROR_CODES } from "@/services/user-data-access";
+import {
+  getCurrentUserDataScope,
+  USER_DATA_ACCESS_ERROR_CODES,
+} from "@/services/user-data-access";
+import {
+  convertGuardedTransferToTransaction,
+  createGuardedTransfer,
+  deleteGuardedTransfer,
+  updateGuardedTransfer,
+} from "@/services/transfer-core-writer-production";
 
 // ---------------------------------------------------------------------------
 // Grab mock helpers (typed via MockDbApi interface)
@@ -183,6 +199,23 @@ function seedTransfer(
   return tf;
 }
 
+async function findOwnedMockRecord(
+  table: string,
+  id: string
+): Promise<MockModelRecord> {
+  const scope = await getCurrentUserDataScope();
+  return scope.findOwned(
+    mockDb.get(table) as never,
+    id
+  ) as unknown as Promise<MockModelRecord>;
+}
+
+function transferDeposit(record: MockModelRecord): number {
+  return (
+    (record.convertedAmount as number | undefined) ?? (record.amount as number)
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -194,6 +227,122 @@ describe("transfer-service", () => {
     mockDb.get.mockClear();
     mockDb.batch.mockClear();
     mockRewire();
+
+    jest.mocked(createGuardedTransfer).mockReset();
+    jest
+      .mocked(createGuardedTransfer)
+      .mockImplementation(async (input, expectedUserId) => {
+        const scope = await getCurrentUserDataScope();
+        if (expectedUserId !== undefined) {
+          const currentScope = await getCurrentUserDataScope();
+          if (currentScope.userId !== expectedUserId) {
+            throw new Error(USER_DATA_ACCESS_ERROR_CODES.AUTH_SCOPE_CHANGED);
+          }
+        }
+        await mockDb.write(async () => {
+          const from = (await scope.findOwned(
+            mockDb.get("accounts") as never,
+            input.fromAccountId
+          )) as unknown as MockModelRecord;
+          const to = (await scope.findOwned(
+            mockDb.get("accounts") as never,
+            input.toAccountId
+          )) as unknown as MockModelRecord;
+          from.balance = (from.balance as number) - input.amount;
+          to.balance =
+            (to.balance as number) + (input.convertedAmount ?? input.amount);
+        });
+      });
+    jest.mocked(updateGuardedTransfer).mockReset();
+    jest
+      .mocked(updateGuardedTransfer)
+      .mockImplementation(async (transferId, updates) => {
+        await mockDb.write(async () => {
+          const transfer = await findOwnedMockRecord("transfers", transferId);
+          const oldFrom = await findOwnedMockRecord(
+            "accounts",
+            transfer.fromAccountId as string
+          );
+          const oldTo = await findOwnedMockRecord(
+            "accounts",
+            transfer.toAccountId as string
+          );
+          const nextFromId =
+            (updates.fromAccountId as string | undefined) ??
+            (transfer.fromAccountId as string);
+          const nextToId =
+            (updates.toAccountId as string | undefined) ??
+            (transfer.toAccountId as string);
+          const nextFrom =
+            nextFromId === transfer.fromAccountId
+              ? oldFrom
+              : await findOwnedMockRecord("accounts", nextFromId);
+          const nextTo =
+            nextToId === transfer.toAccountId
+              ? oldTo
+              : await findOwnedMockRecord("accounts", nextToId);
+          oldFrom.balance =
+            (oldFrom.balance as number) + (transfer.amount as number);
+          oldTo.balance = (oldTo.balance as number) - transferDeposit(transfer);
+          const nextAmount =
+            (updates.amount as number | undefined) ??
+            (transfer.amount as number);
+          const nextDeposit =
+            (updates.convertedAmount as number | undefined) ??
+            (transfer.convertedAmount as number | undefined) ??
+            nextAmount;
+          nextFrom.balance = (nextFrom.balance as number) - nextAmount;
+          nextTo.balance = (nextTo.balance as number) + nextDeposit;
+          Object.assign(transfer, updates);
+        });
+      });
+    jest.mocked(deleteGuardedTransfer).mockReset();
+    jest
+      .mocked(deleteGuardedTransfer)
+      .mockImplementation(async (transferId) => {
+        await mockDb.write(async () => {
+          const transfer = await findOwnedMockRecord("transfers", transferId);
+          const from = await findOwnedMockRecord(
+            "accounts",
+            transfer.fromAccountId as string
+          );
+          const to = await findOwnedMockRecord(
+            "accounts",
+            transfer.toAccountId as string
+          );
+          from.balance = (from.balance as number) + (transfer.amount as number);
+          to.balance = (to.balance as number) - transferDeposit(transfer);
+          transfer.deleted = true;
+        });
+      });
+    jest.mocked(convertGuardedTransferToTransaction).mockReset();
+    jest
+      .mocked(convertGuardedTransferToTransaction)
+      .mockImplementation(async (input) => {
+        await mockDb.write(async () => {
+          const transfer = await findOwnedMockRecord(
+            "transfers",
+            input.transferId
+          );
+          const from = await findOwnedMockRecord(
+            "accounts",
+            transfer.fromAccountId as string
+          );
+          const to = await findOwnedMockRecord(
+            "accounts",
+            transfer.toAccountId as string
+          );
+          const target = await findOwnedMockRecord("accounts", input.accountId);
+          from.balance = (from.balance as number) + (transfer.amount as number);
+          to.balance = (to.balance as number) - transferDeposit(transfer);
+          const signed =
+            input.type === "EXPENSE"
+              ? -(transfer.amount as number)
+              : (transfer.amount as number);
+          target.balance = (target.balance as number) + signed;
+          transfer.deleted = true;
+        });
+      });
 
     const supabaseMock = jest.requireMock<{ getCurrentUserId: jest.Mock }>(
       "@/services/supabase"
@@ -220,6 +369,10 @@ describe("transfer-service", () => {
 
       expect(from.balance).toBe(800);
       expect(to.balance).toBe(700);
+      expect(createGuardedTransfer).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 200 }),
+        undefined
+      );
     });
 
     it("should use convertedAmount for to-account in multi-currency transfer", async () => {
@@ -403,6 +556,10 @@ describe("transfer-service", () => {
       // Apply:  from -300=700,  to +300=800
       expect(from.balance).toBe(700);
       expect(to.balance).toBe(800);
+      expect(updateGuardedTransfer).toHaveBeenCalledWith("tf-1", {
+        amount: 300,
+        convertedAmount: undefined,
+      });
     });
 
     it("should handle from-account swap", async () => {
@@ -529,6 +686,7 @@ describe("transfer-service", () => {
       expect(from.balance).toBe(1000);
       expect(to.balance).toBe(500);
       expect(tf.deleted).toBe(true);
+      expect(deleteGuardedTransfer).toHaveBeenCalledWith("tf-1");
     });
 
     it("should use convertedAmount for to-account reversion in multi-currency", async () => {
@@ -596,6 +754,12 @@ describe("transfer-service", () => {
       // EXPENSE on acc-from: 1000-200=800
       expect(from.balance).toBe(800);
       expect(to.balance).toBe(500);
+      expect(convertGuardedTransferToTransaction).toHaveBeenCalledWith({
+        accountId: "acc-from",
+        categoryId: "cat-food",
+        transferId: "tf-1",
+        type: "EXPENSE",
+      });
     });
 
     it("should apply INCOME balance effect on target account", async () => {
