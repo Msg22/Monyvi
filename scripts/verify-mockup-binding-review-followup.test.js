@@ -123,7 +123,7 @@ test("Claude task generation emits mandatory mockup visual and accessibility evi
   assert.match(workflow, /required rendered visual-evidence tasks/i);
   assert.match(workflow, /separate accessibility-evidence tasks/i);
   assert.match(workflow, /baseline side-by-side or overlay comparison/i);
-  assert.match(workflow, /responsive, dark-mode, RTL\/Arabic, and enlarged-text variant/i);
+  assert.match(workflow, /responsive, theme, RTL\/Arabic, and\s+enlarged-text variant/i);
 });
 
 test("source-command review uses an independent trust path when the verifier is in the diff", () => {
@@ -133,6 +133,6 @@ test("source-command review uses an independent trust path when the verifier is 
   );
 
   assert.match(skill, /If `scripts\/verify-mockup-binding\.js` is in the target diff/i);
-  assert.match(skill, /trusted base revision/i);
+  assert.match(skill, /trusted\s+base revision/i);
   assert.match(skill, /independently recompute[\s\S]{0,220}image[\s\S]{0,220}Binding Facts/i);
 });
