@@ -66,6 +66,10 @@ describe("recurring-payment stale writer protection", () => {
     jest.useRealTimers();
   });
 
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it("rechecks the expected due date inside the database writer before applying an edit", async () => {
     jest.setSystemTime(new Date("2026-06-01T12:00:00.000Z"));
 
@@ -146,5 +150,78 @@ describe("recurring-payment stale writer protection", () => {
       new Date("2026-08-01T08:00:00.000Z")
     );
     expect(payment.update).not.toHaveBeenCalled();
+  });
+
+  it("treats reselecting the stored anchor as a Due payment edit when the loaded due baseline has advanced", async () => {
+    jest.setSystemTime(new Date("2026-06-01T12:00:00.000Z"));
+
+    const storedAnchor = new Date("2026-06-01T08:00:00.000Z");
+    const loadedNextDueDate = new Date("2026-07-01T08:00:00.000Z");
+    const payment: MockRecurringPayment = {
+      id: "payment-1",
+      userId: "user-1",
+      name: "Subscription",
+      amount: 250,
+      currency: "EGP",
+      type: "EXPENSE",
+      accountId: "account-1",
+      categoryId: "category-1",
+      frequency: "MONTHLY",
+      startDate: storedAnchor,
+      nextDueDate: loadedNextDueDate,
+      action: "NOTIFY",
+      status: "ACTIVE",
+      deleted: false,
+      update: jest.fn((builder) => {
+        builder(payment);
+        return Promise.resolve();
+      }),
+    };
+
+    mockFindOwned.mockImplementation(
+      (collection: { readonly tableName: string }): Promise<unknown> => {
+        if (collection.tableName === "recurring_payments") {
+          return Promise.resolve(payment);
+        }
+        if (collection.tableName === "accounts") {
+          return Promise.resolve({
+            id: "account-1",
+            userId: "user-1",
+            currency: "EGP",
+            deleted: false,
+          });
+        }
+        return Promise.reject(new Error("unexpected collection"));
+      }
+    );
+    mockFindAccessibleCategory.mockResolvedValue({
+      id: "category-1",
+      userId: null,
+      type: "EXPENSE",
+      deleted: false,
+    });
+    mockGetCurrentUserDataScope.mockResolvedValue({
+      userId: "user-1",
+      findOwned: mockFindOwned,
+      findAccessibleCategory: mockFindAccessibleCategory,
+    });
+    mockWrite.mockImplementation(
+      async (callback: () => Promise<unknown>): Promise<unknown> => callback()
+    );
+
+    await updateRecurringPayment("payment-1", {
+      name: "Subscription",
+      amount: 250,
+      currency: "EGP",
+      type: "EXPENSE",
+      accountId: "account-1",
+      categoryId: "category-1",
+      frequency: "MONTHLY",
+      startDate: storedAnchor,
+      expectedNextDueDate: loadedNextDueDate,
+      action: "NOTIFY",
+    });
+
+    expect(payment.nextDueDate).toEqual(storedAnchor);
   });
 });
