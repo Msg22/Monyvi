@@ -11,33 +11,54 @@ interface UseCategoryDrilldownTransactionsResult {
   readonly error: Error | null;
 }
 
+interface DrilldownQueryState {
+  readonly scopeKey: string | null;
+  readonly transactions: readonly Transaction[];
+  readonly isLoading: boolean;
+  readonly error: Error | null;
+}
+
 export function useCategoryDrilldownTransactions(
   year: number,
   month: number,
   currency: CurrencyType
 ): UseCategoryDrilldownTransactionsResult {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
   const { userId, isResolvingUser } = useCurrentUser();
+  const activeScopeKey = buildScopeKey(userId, year, month, currency);
+  const [queryState, setQueryState] = useState<DrilldownQueryState>({
+    scopeKey: null,
+    transactions: [],
+    isLoading: true,
+    error: null,
+  });
 
   useEffect(() => {
     return runUserScopedEffect({
       userId,
       isResolvingUser,
       onResolving: () => {
-        setTransactions([]);
-        setError(null);
-        setIsLoading(true);
+        setQueryState({
+          scopeKey: activeScopeKey,
+          transactions: [],
+          isLoading: true,
+          error: null,
+        });
       },
       onSignedOut: () => {
-        setTransactions([]);
-        setError(null);
-        setIsLoading(false);
+        setQueryState({
+          scopeKey: activeScopeKey,
+          transactions: [],
+          isLoading: false,
+          error: null,
+        });
       },
       onAuthenticated: (currentUserId) => {
-        setIsLoading(true);
-        setError(null);
+        setQueryState({
+          scopeKey: activeScopeKey,
+          transactions: [],
+          isLoading: true,
+          error: null,
+        });
 
         const subscription = observeCategoryDrilldownTransactions({
           userId: currentUserId,
@@ -48,24 +69,53 @@ export function useCategoryDrilldownTransactions(
           .observe()
           .subscribe({
             next: (result) => {
-              setTransactions(result);
-              setIsLoading(false);
+              setQueryState({
+                scopeKey: activeScopeKey,
+                transactions: result,
+                isLoading: false,
+                error: null,
+              });
             },
             error: (err: unknown) => {
               logger.error(
                 "categoryDrilldown.transactions.observe.failed",
                 err
               );
-              setError(err instanceof Error ? err : new Error(String(err)));
-              setTransactions([]);
-              setIsLoading(false);
+              setQueryState({
+                scopeKey: activeScopeKey,
+                transactions: [],
+                isLoading: false,
+                error: err instanceof Error ? err : new Error(String(err)),
+              });
             },
           });
 
         return () => subscription.unsubscribe();
       },
     });
-  }, [year, month, currency, userId, isResolvingUser]);
+  }, [
+    year,
+    month,
+    currency,
+    userId,
+    isResolvingUser,
+    activeScopeKey,
+  ]);
 
-  return { transactions, isLoading, error };
+  const isCurrentScope = queryState.scopeKey === activeScopeKey;
+
+  return {
+    transactions: isCurrentScope ? queryState.transactions : [],
+    isLoading: isCurrentScope ? queryState.isLoading : true,
+    error: isCurrentScope ? queryState.error : null,
+  };
+}
+
+function buildScopeKey(
+  userId: string | null,
+  year: number,
+  month: number,
+  currency: CurrencyType
+): string {
+  return `${userId ?? "signed-out"}:${year}:${month}:${currency}`;
 }
