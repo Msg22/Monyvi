@@ -419,38 +419,34 @@ describe("current and realized Metals attribution", () => {
   );
 
   it.each([
-    [
-      "purchase_currency_at_sale_rate_unavailable",
-      {
-        purchaseCurrencyAtSaleRate: PURCHASE_AT_SALE_SAR_RATE,
-        proceedsCurrencyAtSaleRate: PROCEEDS_EGP_RATE,
-      },
-    ],
-    [
-      "proceeds_currency_at_sale_rate_unavailable",
-      {
-        purchaseCurrencyAtSaleRate: PURCHASE_AT_SALE_EGP_RATE,
-        proceedsCurrencyAtSaleRate: PROCEEDS_SAR_RATE,
-      },
-    ],
+    ["purchase_currency_at_sale_rate_unavailable", {
+      purchaseCurrencyAtSaleRate: PURCHASE_AT_SALE_SAR_RATE,
+      proceedsCurrencyAtSaleRate: PROCEEDS_EGP_RATE,
+    }],
+    ["proceeds_currency_at_sale_rate_unavailable", {
+      purchaseCurrencyAtSaleRate: PURCHASE_AT_SALE_EGP_RATE,
+      proceedsCurrencyAtSaleRate: PROCEEDS_SAR_RATE,
+    }],
   ] as const)(
-    "rejects a legacy terminal snapshot with explicit EGP context for %s",
-    (reason, mismatchedTerminalRates) => {
-      expect(
-        calculateRealizedAttribution({
-          ...SALE_CONTEXT,
-          pureGramsDecimal: "10",
-          purchaseCostDecimal: "35",
-          purchaseCurrencyDecimalPlaces: 2,
-          grossProceedsDecimal: "100",
-          feesDecimal: "5",
-          proceedsCurrencyDecimalPlaces: 2,
-          acquisitionMetalRate: null,
-          acquisitionCurrencyRate: null,
-          saleMetalRate: SALE_METAL_RATE,
-          ...mismatchedTerminalRates,
-        })
-      ).toEqual({ available: false, reason });
+    "keeps same-currency combined P/L available and excludes a mismatched %s snapshot (Option A #304)",
+    (_reason, mismatchedTerminalRates) => {
+      const result = calculateRealizedAttribution({
+        ...SALE_CONTEXT, pureGramsDecimal: "10", purchaseCostDecimal: "35",
+        purchaseCurrencyDecimalPlaces: 2, grossProceedsDecimal: "100",
+        feesDecimal: "5", proceedsCurrencyDecimalPlaces: 2,
+        acquisitionMetalRate: null, acquisitionCurrencyRate: null,
+        saleMetalRate: SALE_METAL_RATE, ...mismatchedTerminalRates,
+      });
+      // Same-currency combined P/L (gross - fees - cost) never consumes
+      // terminal FX, so a mismatched at-sale snapshot must stay out of the
+      // combined result and out of consumedRateReferences.
+      if (!result.available) {
+        throw new Error("expected available same-currency realized result");
+      }
+      expect(result.value.combinedDecimal).toBe("60");
+      expect(result.value.consumedRateReferences.every(
+        (r) => r.instrumentCode !== "currency:SAR"
+      )).toBe(true);
     }
   );
 

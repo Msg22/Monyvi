@@ -46,6 +46,18 @@ import { runUserScopedEffect, useCurrentUser } from "./useCurrentUser";
 
 const RATE_STATUS_REFRESH_INTERVAL_MS = 60_000;
 
+// Device-local calendar date in `YYYY-MM-DD`, used as the trusted "not in the
+// future" boundary for realized-sale validation. Recomputed as the local day
+// advances so a sale dated after a midnight rollover while this hook stays
+// mounted does not go stale; the pure logic/service layers still accept an
+// explicit override for deterministic tests.
+function currentCalendarDate(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
 const PORTFOLIO_ASSET_OBSERVED_COLUMNS = [
   "name",
   "purchase_date",
@@ -156,15 +168,12 @@ export function useMetalPortfolio(
     readonly MetalRateReference[]
   >([]);
   // Trusted device-local calendar date supplied to realized-sale validation so
-  // a sale can never be validated against its own future `saleDate`. Captured
-  // once per mount (a slightly stale boundary is stricter, never more
-  // permissive), and overridable at the service layer for deterministic tests.
-  const [latestAllowedCalendarDate] = useState<string>(() => {
-    const now = new Date();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const day = String(now.getDate()).padStart(2, "0");
-    return `${now.getFullYear()}-${month}-${day}`;
-  });
+  // a sale can never be validated against its own future `saleDate`. Refreshed
+  // when the device-local day rolls over (see the refresh interval/AppState
+  // effect below) so a long-lived mount does not strand a newly-allowed sale;
+  // overridable at the service layer for deterministic tests.
+  const [latestAllowedCalendarDate, setLatestAllowedCalendarDate] =
+    useState<string>(() => currentCalendarDate());
   const [currentRates, setCurrentRates] = useState<LiveRatesTrustReadModel>(
     createEmptyTrustReadModel
   );
@@ -205,8 +214,18 @@ export function useMetalPortfolio(
   }, [assets]);
 
   useEffect(() => {
+    const syncCalendarBoundary = (): void => {
+      const next = currentCalendarDate();
+      // Returning the previous value when the local day is unchanged avoids a
+      // needless re-render on every refresh tick.
+      setLatestAllowedCalendarDate((prev) => (prev === next ? prev : next));
+    };
+    syncCalendarBoundary();
     const timer = setInterval(
-      () => trustObservationRef.current?.refresh(),
+      () => {
+        trustObservationRef.current?.refresh();
+        syncCalendarBoundary();
+      },
       RATE_STATUS_REFRESH_INTERVAL_MS
     );
     const appStateSubscription = AppState.addEventListener(
@@ -214,6 +233,7 @@ export function useMetalPortfolio(
       (state) => {
         if (state === "active") {
           trustObservationRef.current?.refresh();
+          syncCalendarBoundary();
         }
       }
     );

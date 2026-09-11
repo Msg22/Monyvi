@@ -9,6 +9,7 @@ const mockTrustObservers: Observer[] = [];
 const mockSaleGroupObservers: Observer[] = [];
 const mockSaleRefObservers: Observer[] = [];
 const mockDatabase = { id: "database" };
+const mockShapeHoldingsInputs: Record<string, unknown>[] = [];
 const mockEmptyTrustReadModel = {
   gold: { state: "missing", ageMs: null, providerObservedAt: null },
   silver: { state: "missing", ageMs: null, providerObservedAt: null },
@@ -93,7 +94,10 @@ jest.mock("@/services/metal-portfolio-read-model-service", () => ({
     mockDeferredQuery(mockSaleGroupObservers),
   observePortfolioSaleRateReferences: (): unknown =>
     mockDeferredQuery(mockSaleRefObservers),
-  shapeMetalPortfolioHoldings: (): readonly unknown[] => [],
+  shapeMetalPortfolioHoldings: (input: Record<string, unknown>): readonly unknown[] => {
+    mockShapeHoldingsInputs.push(input);
+    return [];
+  },
   buildMetalPortfolioReadModel: (input: Record<string, unknown>): unknown => ({
     activeHoldings: mockActiveHoldings,
     holdings: mockActiveHoldings,
@@ -315,5 +319,47 @@ describe("useMetalPortfolio realized-sale readiness", () => {
       result.current.refresh();
     });
     expect(result.current.readiness.realizedSale).toBe(false);
+  });
+});
+
+describe("useMetalPortfolio calendar boundary rollover", () => {
+  afterEach(() => {
+    jest.useRealTimers();
+    mockTrustObservers.length = 0;
+    mockSaleGroupObservers.length = 0;
+    mockSaleRefObservers.length = 0;
+    mockShapeHoldingsInputs.length = 0;
+  });
+
+  function boundaryDates(): string[] {
+    return mockShapeHoldingsInputs.map(
+      (input) => String(input.latestAllowedCalendarDate)
+    );
+  }
+
+  it("refreshes the trusted boundary when the device-local day rolls over while mounted", () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(2026, 0, 15, 12, 0, 0));
+    mockShapeHoldingsInputs.length = 0;
+
+    const { result } = renderHook(() => useMetalPortfolio());
+    act(() => {
+      mockTrustObservers[0]?.next(mockEmptyTrustReadModel);
+    });
+
+    expect(result.current.readiness.holdings).toBe(true);
+    expect(boundaryDates()).toContain("2026-01-15");
+
+    // The clock advances past local midnight while the hook stays mounted; the
+    // next refresh tick must move the boundary so a same-day sale is not
+    // stranded as unavailable until remount.
+    jest.setSystemTime(new Date(2026, 0, 16, 0, 0, 30));
+    act(() => {
+      jest.advanceTimersByTime(60_000);
+    });
+
+    expect(boundaryDates()).toContain("2026-01-16");
+    // The refresh must only ever move the boundary forward to the real local day.
+    expect(boundaryDates()).not.toContain("2026-01-14");
   });
 });
