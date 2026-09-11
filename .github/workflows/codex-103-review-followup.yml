@@ -24,6 +24,7 @@ jobs:
       - name: Shared amount regressions
         run: npm test -w @monyvi/logic -- --runInBand amount-review-followup
       - name: Recurring localization regressions
+        if: ${{ !cancelled() }}
         run: npm test -w @monyvi/mobile -- --runInBand recurring-payment-review-followup
       - name: Full logic tests
         run: npm test -w @monyvi/logic -- --runInBand
