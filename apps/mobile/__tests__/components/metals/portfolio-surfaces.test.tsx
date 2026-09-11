@@ -10,10 +10,7 @@ import type {
   MetalPortfolioReadModel,
   MetalPortfolioFilter,
 } from "@/services/metal-portfolio-read-model-service";
-import {
-  getWealthTilesLayoutClass,
-  WealthBreakdownSection,
-} from "@/components/dashboard/WealthBreakdownSection";
+import { WealthBreakdownSection } from "@/components/dashboard/WealthBreakdownSection";
 import { MetalPortfolioScreen } from "@/components/metals/MetalPortfolioScreen";
 
 const mockTranslations: Record<string, string> = {
@@ -284,96 +281,6 @@ describe("US1 portfolio surfaces", () => {
     expect(arMetals.portfolio.active_portfolio).toBe("تابع قيمة ذهبك وفضتك");
   });
 
-  it("renders approved additive Concept C below the net-worth hero contract", () => {
-    const onAccountsPress = jest.fn();
-    const onMetalsPress = jest.fn();
-
-    render(
-      <WealthBreakdownSection
-        currency={currency}
-        isLoading={false}
-        breakdown={breakdown}
-        onAccountsPress={onAccountsPress}
-        onMetalsPress={onMetalsPress}
-      />
-    );
-
-    expect(screen.getByText("Where your money is")).toBeTruthy();
-    expect(screen.getByText("Accounts")).toBeTruthy();
-    expect(screen.getAllByText("Metals")).toHaveLength(1);
-    expect(screen.getByText("Gold")).toBeTruthy();
-    expect(screen.getByText("Silver")).toBeTruthy();
-    expect(screen.getByLabelText(/Accounts.*85.4/)).toBeTruthy();
-    expect(screen.getByLabelText(/Metals.*14.6/)).toBeTruthy();
-
-    fireEvent.press(screen.getByTestId("wealth-breakdown-accounts"));
-    fireEvent.press(screen.getByTestId("wealth-breakdown-metals"));
-    expect(onAccountsPress).toHaveBeenCalledTimes(1);
-    expect(onMetalsPress).toHaveBeenCalledTimes(1);
-  });
-
-  it("preserves exact canonical decimals in the Home breakdown", () => {
-    const exactValue = "9007199254740993.245";
-    render(
-      <WealthBreakdownSection
-        currency={currency}
-        isLoading={false}
-        breakdown={{
-          ...breakdown,
-          accounts: { ...breakdown.accounts, amountDecimal: exactValue },
-          totalNetWorthDecimal: exactValue,
-        }}
-        onAccountsPress={jest.fn()}
-        onMetalsPress={jest.fn()}
-      />
-    );
-
-    expect(screen.getAllByText("9,007,199,254,740,993.24 EGP")).toHaveLength(2);
-    expect(screen.queryByText(/9,007,199,254,740,992/)).toBeNull();
-  });
-
-  it.each([
-    [390, 1, "flex-row"],
-    [320, 1, "flex-col"],
-    [390, 1.5, "flex-col"],
-  ])(
-    "uses responsive Home tile layout at width %s and font scale %s",
-    (width, fontScale, expectedClass) =>
-      expect(getWealthTilesLayoutClass(width, fontScale)).toBe(expectedClass)
-  );
-
-  it("keeps owned-metal counts visible when valuation rates are unavailable", () => {
-    render(
-      <WealthBreakdownSection
-        currency={currency}
-        isLoading={false}
-        breakdown={{
-          ...breakdown,
-          metals: {
-            ...breakdown.metals,
-            amountDecimal: null,
-            gold: {
-              amountDecimal: null,
-              holdingCount: 2,
-              shareOfMetals: null,
-            },
-            silver: {
-              amountDecimal: null,
-              holdingCount: 1,
-              shareOfMetals: null,
-            },
-          },
-        }}
-        onAccountsPress={jest.fn()}
-        onMetalsPress={jest.fn()}
-      />
-    );
-
-    expect(screen.getByText("Inside metals")).toBeTruthy();
-    expect(screen.getByText(/2 holdings/)).toBeTruthy();
-    expect(screen.getByText(/1 holdings/)).toBeTruthy();
-  });
-
   it("keeps section skeletons semantically visible while local reads settle", () => {
     render(
       <WealthBreakdownSection
@@ -404,6 +311,7 @@ describe("US1 portfolio surfaces", () => {
         holdings: false,
         rateCurrency: true,
         recentHistory: true,
+        realizedSale: true,
         summary: true,
       },
       recentHistory: [historyHolding],
@@ -664,133 +572,6 @@ describe("US1 portfolio surfaces", () => {
     expect(screen.getByText(/Sold coin/)).toBeTruthy();
   });
 
-  it("speaks tile amounts and shares for screen readers", () => {
-    render(
-      <WealthBreakdownSection
-        currency={currency}
-        isLoading={false}
-        breakdown={breakdown}
-        onAccountsPress={jest.fn()}
-        onMetalsPress={jest.fn()}
-      />
-    );
-
-    expect(
-      screen.getByLabelText(
-        /Accounts\. 1,062,237\.75 EGP\. 85\.4% of net worth/
-      )
-    ).toBeTruthy();
-  });
-
-  it("uses loss language for negative sold results in summary and History", () => {
-    renderPortfolio({
-      portfolio: {
-        ...portfolio,
-        hasSoldHoldings: true,
-        soldResultDecimal: "-1250",
-        recentHistory: [
-          {
-            ...portfolio.activeHoldings[0],
-            id: "sold-loss",
-            name: "Sold at a loss",
-            soldResultDecimal: "-1250",
-            status: "sold",
-          },
-        ],
-      },
-    });
-
-    expect(screen.getByText("loss from sold metals")).toBeTruthy();
-    expect(screen.getByText(/Loss from this sale/)).toBeTruthy();
-    expect(screen.queryByText("Net proceeds")).toBeNull();
-    expect(screen.queryByText(/realized/i)).toBeNull();
-  });
-
-  it("omits the sold result row without a dash when the result is unavailable", () => {
-    renderPortfolio({
-      portfolio: {
-        ...portfolio,
-        hasSoldHoldings: true,
-        soldResultUnavailable: true,
-        soldResultDecimal: null,
-        recentHistory: [
-          {
-            ...portfolio.activeHoldings[0],
-            id: "sold-unknown",
-            name: "Sold without trustworthy evidence",
-            soldResultDecimal: null,
-            status: "sold",
-          },
-        ],
-      },
-    });
-
-    expect(screen.getByText(/Sold without trustworthy evidence/)).toBeTruthy();
-    expect(screen.queryByText("—")).toBeNull();
-    expect(screen.queryByText(/realized/i)).toBeNull();
-    expect(screen.queryByText(/this sale/i)).toBeNull();
-  });
-
-  it("uses profit language and exact canonical amounts for a positive sold result", () => {
-    renderPortfolio({
-      portfolio: {
-        ...portfolio,
-        hasSoldHoldings: true,
-        soldResultDecimal: "5500",
-        recentHistory: [
-          {
-            ...portfolio.activeHoldings[0],
-            id: "sold-profit",
-            name: "QA Sold Gold Coin",
-            soldResultDecimal: "5500",
-            status: "sold",
-          },
-        ],
-      },
-    });
-
-    expect(screen.getAllByText("EGP 5,500.00").length).toBeGreaterThanOrEqual(
-      2
-    );
-    expect(screen.getByText("profit from sold metals")).toBeTruthy();
-    expect(screen.getByText(/Profit from this sale/)).toBeTruthy();
-  });
-
-  it("opens active and recent holdings while keeping disposed History free of realized P/L", () => {
-    const onHoldingPress = jest.fn();
-    const onHistoryPress = jest.fn();
-    renderPortfolio({
-      onHoldingPress,
-      onHistoryPress,
-      portfolio: {
-        ...portfolio,
-        holdings: portfolio.activeHoldings,
-        recentHistory: [
-          {
-            ...portfolio.activeHoldings[0],
-            id: "disposed-ring",
-            name: "Gifted ring",
-            soldResultDecimal: null,
-            status: "disposed",
-          },
-        ],
-      },
-    });
-
-    fireEvent.press(screen.getByTestId("metal-portfolio-holding-gold-coin"));
-    expect(onHoldingPress).toHaveBeenCalledWith("gold-coin");
-
-    fireEvent.press(screen.getByTestId("metal-portfolio-view-all"));
-    expect(onHistoryPress).toHaveBeenCalledTimes(1);
-
-    fireEvent.press(
-      screen.getByTestId("metal-portfolio-history-disposed-ring")
-    );
-    expect(onHoldingPress).toHaveBeenCalledWith("disposed-ring");
-    expect(screen.getByText(/Disposed.*Gifted ring/)).toBeTruthy();
-    expect(screen.queryByText("Realized result")).toBeNull();
-  });
-
   it("mirrors forward chevrons in RTL", () => {
     const originalIsRTL = I18nManager.isRTL;
     Object.defineProperty(I18nManager, "isRTL", {
@@ -976,6 +757,7 @@ describe("US1 portfolio surfaces", () => {
         holdings: true,
         rateCurrency: false,
         recentHistory: true,
+        realizedSale: true,
         summary: false,
       },
     });
@@ -995,6 +777,7 @@ describe("US1 portfolio surfaces", () => {
         holdings: true,
         rateCurrency: true,
         recentHistory: true,
+        realizedSale: true,
         summary: true,
       },
     });

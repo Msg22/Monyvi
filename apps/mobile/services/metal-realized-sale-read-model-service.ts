@@ -212,6 +212,13 @@ export interface MetalRealizedSaleEvidenceInput {
   readonly event: MetalSellEventSnapshot | null;
   readonly group: MetalSellGroupSnapshot | null;
   readonly holding: MetalSellHoldingSnapshot;
+  /**
+   * Trusted upper bound for the sale's effective calendar date, supplied by the
+   * mobile service boundary (device-local today by default; injectable so tests
+   * and callers stay deterministic). Never derived from the payload's own
+   * `saleDate`, which would let a future sale date pass validation.
+   */
+  readonly latestAllowedCalendarDate?: string;
   readonly userId: string;
 }
 
@@ -275,7 +282,10 @@ export function shapeMetalRealizedSaleEvidence(
   if (amounts.kind === "inconsistent") {
     return { available: false, reason: "inconsistent_sale_proceeds" };
   }
-  if (parseSaleEnvelope(group.payloadJson) === null) {
+  if (
+    parseSaleEnvelope(group.payloadJson, input.latestAllowedCalendarDate) ===
+    null
+  ) {
     return { available: false, reason: "unsupported_sale_evidence" };
   }
   if (
@@ -471,7 +481,10 @@ function isFinancialActionServerOutcome(
   );
 }
 
-function parseSaleEnvelope(value: string): FinancialActionEnvelopeV1 | null {
+function parseSaleEnvelope(
+  value: string,
+  latestAllowedCalendarDate: string | undefined
+): FinancialActionEnvelopeV1 | null {
   const rawEnvelope = parseRecord(value);
   const rawPayload =
     rawEnvelope === null ? null : asRecord(rawEnvelope.payload);
@@ -480,13 +493,24 @@ function parseSaleEnvelope(value: string): FinancialActionEnvelopeV1 | null {
     return null;
   }
 
+  // The boundary is a trusted "not in the future" limit supplied by the
+  // service boundary (device-local today by default), never the payload's own
+  // `saleDate`, so a future sale date cannot trivially validate against itself.
+  const trustedBoundary = latestAllowedCalendarDate ?? currentCalendarDate();
   try {
     return parseFinancialActionEnvelopeJson(value, undefined, {
-      cairoTodayDate: saleDate,
+      latestAllowedCalendarDate: trustedBoundary,
     });
   } catch {
     return null;
   }
+}
+
+function currentCalendarDate(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
 }
 
 function parseRecord(value: string): ParsedRecord | null {

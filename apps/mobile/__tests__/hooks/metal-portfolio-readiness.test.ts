@@ -12,6 +12,7 @@ describe("metal portfolio section readiness", () => {
         holdingStatesKey: "holding-1:active",
         holdingStatesReady: true,
         ratesReady: true,
+        saleEvidenceReady: true,
       })
     ).toMatchObject({
       holdings: false,
@@ -30,11 +31,13 @@ describe("metal portfolio section readiness", () => {
         holdingStatesKey: "holding-1:active",
         holdingStatesReady: true,
         ratesReady: false,
+        saleEvidenceReady: true,
       })
     ).toEqual({
       holdings: true,
       rateCurrency: false,
       recentHistory: true,
+      realizedSale: true,
       summary: false,
     });
   });
@@ -54,11 +57,13 @@ describe("metal portfolio section readiness", () => {
         holdingStatesKey: "holding-1:active",
         holdingStatesReady: true,
         ratesReady: true,
+        saleEvidenceReady: true,
       })
     ).toEqual({
       holdings: false,
       rateCurrency: true,
       recentHistory: false,
+      realizedSale: false,
       summary: false,
     });
   });
@@ -73,11 +78,13 @@ describe("metal portfolio section readiness", () => {
       holdingStatesKey: "holding-1:active",
       holdingStatesReady: true,
       ratesReady: true,
+      saleEvidenceReady: true,
     });
     expect(pending).toEqual({
       holdings: false,
       rateCurrency: true,
       recentHistory: false,
+      realizedSale: false,
       summary: false,
     });
 
@@ -90,12 +97,49 @@ describe("metal portfolio section readiness", () => {
       holdingStatesKey: "holding-1:active",
       holdingStatesReady: true,
       ratesReady: true,
+      saleEvidenceReady: true,
     });
     expect(settled).toEqual({
       holdings: true,
       rateCurrency: true,
       recentHistory: true,
+      realizedSale: true,
       summary: true,
     });
+  });
+
+  it("keeps active holdings, summary, and history visible while realized-sale evidence is still pending", () => {
+    const pending = resolveMetalPortfolioReadiness({
+      assetMetalsDependencyKey: "holding-1",
+      assetIdsKey: "holding-1",
+      assetsReady: true,
+      currencyReady: true,
+      historyDependencyKey: "holding-1:active",
+      holdingStatesKey: "holding-1:active",
+      holdingStatesReady: true,
+      ratesReady: true,
+      saleEvidenceReady: false,
+    });
+    // Only the realized-sale section is held back; the rest is already usable.
+    expect(pending).toEqual({
+      holdings: true,
+      rateCurrency: true,
+      recentHistory: true,
+      realizedSale: false,
+      summary: true,
+    });
+
+    const ready = resolveMetalPortfolioReadiness({
+      assetMetalsDependencyKey: "holding-1",
+      assetIdsKey: "holding-1",
+      assetsReady: true,
+      currencyReady: true,
+      historyDependencyKey: "holding-1:active",
+      holdingStatesKey: "holding-1:active",
+      holdingStatesReady: true,
+      ratesReady: true,
+      saleEvidenceReady: true,
+    });
+    expect(ready.realizedSale).toBe(true);
   });
 });

@@ -25,7 +25,7 @@ export interface RegisteredActionPayload {
 }
 
 export interface FinancialActionValidationInput {
-  readonly cairoTodayDate?: string;
+  readonly latestAllowedCalendarDate?: string;
 }
 
 export interface FinancialActionDefinition {

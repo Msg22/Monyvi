@@ -38,7 +38,7 @@ const HOLDING_ID = "018f0c7a-1234-7abc-8def-000000000004";
 const ADD_ACTION_ID = "018f0c7a-1234-7abc-8def-000000000010";
 const SELL_ACTION_ID = "018f0c7a-1234-7abc-8def-000000000011";
 const VALIDATION_INPUT: FinancialActionValidationInput = {
-  cairoTodayDate: "2026-09-01",
+  latestAllowedCalendarDate: "2026-09-01",
 };
 const MODEL_CLASSES: Array<typeof Model> = [
   Asset,

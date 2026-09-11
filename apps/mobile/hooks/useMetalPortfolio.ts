@@ -155,6 +155,16 @@ export function useMetalPortfolio(
   const [saleRateReferences, setSaleRateReferences] = useState<
     readonly MetalRateReference[]
   >([]);
+  // Trusted device-local calendar date supplied to realized-sale validation so
+  // a sale can never be validated against its own future `saleDate`. Captured
+  // once per mount (a slightly stale boundary is stricter, never more
+  // permissive), and overridable at the service layer for deterministic tests.
+  const [latestAllowedCalendarDate] = useState<string>(() => {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${now.getFullYear()}-${month}-${day}`;
+  });
   const [currentRates, setCurrentRates] = useState<LiveRatesTrustReadModel>(
     createEmptyTrustReadModel
   );
@@ -164,8 +174,9 @@ export function useMetalPortfolio(
   const [isAssetMetalsLoading, setIsAssetMetalsLoading] = useState(true);
   const [isHoldingStatesLoading, setIsHoldingStatesLoading] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
-  const [, setIsMetalSellGroupsLoading] = useState(true);
-  const [, setIsSaleRateReferencesLoading] = useState(true);
+  const [isMetalSellGroupsLoading, setIsMetalSellGroupsLoading] = useState(true);
+  const [isSaleRateReferencesLoading, setIsSaleRateReferencesLoading] =
+    useState(true);
   const [isRatesLoading, setIsRatesLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -489,6 +500,9 @@ export function useMetalPortfolio(
     };
   }, [database, refreshKey]);
 
+  const saleEvidenceReady =
+    !isMetalSellGroupsLoading && !isSaleRateReferencesLoading;
+
   const readiness = useMemo(
     () =>
       resolveMetalPortfolioReadiness({
@@ -501,6 +515,7 @@ export function useMetalPortfolio(
         holdingStatesReady:
           userId !== null && holdingStatesSnapshotUserId === userId,
         ratesReady: hasRateObservationSettled,
+        saleEvidenceReady,
       }),
     [
       assetIdsKey,
@@ -511,6 +526,7 @@ export function useMetalPortfolio(
       holdingStatesKey,
       holdingStatesSnapshotUserId,
       isCurrencyLoading,
+      saleEvidenceReady,
       userId,
     ]
   );
@@ -525,6 +541,7 @@ export function useMetalPortfolio(
       assets,
       currentRates,
       holdingStates,
+      latestAllowedCalendarDate,
       lifecycleEvents,
       preferredCurrency,
       rateReferences: saleRateReferences,
@@ -536,6 +553,7 @@ export function useMetalPortfolio(
     currentRates,
     holdingStates,
     isResolvingUser,
+    latestAllowedCalendarDate,
     lifecycleEvents,
     metalSellGroups,
     preferredCurrency,
@@ -733,6 +751,59 @@ function recordObserverError(
 ): void {
   logger.error(event, reason);
   setError(reason instanceof Error ? reason : new Error(String(reason)));
+}
+
+function subscribeForCurrentUser<T>({
+  isResolvingUser,
+  onAuthenticated,
+  onError,
+  onNext,
+  onSignedOut,
+  onResolving,
+  setLoading,
+  userId,
+}: {
+  readonly isResolvingUser: boolean;
+  readonly onAuthenticated: (userId: string) => {
+    readonly subscribe: (observer: {
+      readonly error: (reason: unknown) => void;
+      readonly next: (value: readonly T[]) => void;
+    }) => { readonly unsubscribe: () => void };
+  };
+  readonly onError: (reason: unknown) => void;
+  readonly onNext: (value: readonly T[]) => void;
+  readonly onSignedOut: () => void;
+  readonly onResolving: () => void;
+  readonly setLoading: (value: boolean) => void;
+  readonly userId: string | null;
+}): void | (() => void) {
+  return runUserScopedEffect({
+    userId,
+    isResolvingUser,
+    onResolving: () => {
+      onResolving();
+      setLoading(true);
+    },
+    onSignedOut: () => {
+      onSignedOut();
+      setLoading(false);
+    },
+    onAuthenticated: (currentUserId) => {
+      onResolving();
+      setLoading(true);
+      const subscription = onAuthenticated(currentUserId).subscribe({
+        next: (result): void => {
+          onNext(result);
+          setLoading(false);
+        },
+        error: (reason: unknown): void => {
+          onError(reason);
+          setLoading(false);
+        },
+      });
+      return () => subscription.unsubscribe();
+    },
+  });
 }
 
 function getPortfolioRateValues(

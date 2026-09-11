@@ -209,7 +209,7 @@ describe("realized sale attribution availability", () => {
     });
   });
 
-  it("fails the combined result closed when exact pure grams are unavailable", () => {
+  it("keeps the combined realized result available when pure grams are missing and only marks the breakdown unavailable", () => {
     const result = calculateRealizedAttribution({
       ...SAME_CURRENCY_FACTS,
       pureGramsDecimal: null,
@@ -222,10 +222,18 @@ describe("realized sale attribution availability", () => {
       proceedsCurrencyAtSaleRate: null,
     });
 
-    expect(result).toEqual({
-      available: false,
-      reason: "pure_grams_unavailable",
+    expect(result).toMatchObject({
+      available: true,
+      value: {
+        combinedDecimal: "5500",
+        netProceedsDecimal: "35500",
+        breakdown: { available: false },
+      },
     });
+    if (!result.available || result.value.breakdown.available) {
+      throw new Error("expected breakdown to be unavailable");
+    }
+    expect(result.value.breakdown.reasons).toContain("pure_grams_unavailable");
   });
 
   it("keeps optional mismatched same-currency FX out of the combined result", () => {

@@ -255,14 +255,6 @@ export function calculateUnrealizedAttribution(
 export function calculateRealizedAttribution(
   input: RealizedAttributionInput
 ): Availability<RealizedAttribution, AttributionUnavailableReason> {
-  const pureGrams = readPositiveDecimal(
-    input.pureGramsDecimal,
-    "pure_grams_unavailable"
-  );
-  if (!pureGrams.available) {
-    return pureGrams;
-  }
-
   const purchaseCost = readPositiveDecimal(
     input.purchaseCostDecimal,
     "purchase_cost_unavailable"
@@ -379,7 +371,15 @@ export function calculateRealizedAttribution(
     "terminal_metal",
     input.metalInstrumentCode
   );
+  // Pure grams are only required for the component breakdown; the combined
+  // realized result (gross - fees - purchase cost) is computed above and stays
+  // available when weight/purity evidence is absent.
+  const pureGrams = readPositiveDecimal(
+    input.pureGramsDecimal,
+    "pure_grams_unavailable"
+  );
   const breakdownReasons = unavailableReasons([
+    pureGrams,
     acquisitionMetal,
     acquisitionCurrency,
     saleMetal,
@@ -403,6 +403,7 @@ export function calculateRealizedAttribution(
     };
   }
   if (
+    !pureGrams.available ||
     !acquisitionMetal.available ||
     !acquisitionCurrency.available ||
     !saleMetal.available ||

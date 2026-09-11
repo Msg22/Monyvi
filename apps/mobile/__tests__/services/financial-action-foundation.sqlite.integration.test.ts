@@ -273,7 +273,7 @@ describe("financial action foundation SQLite persistence", () => {
       DEFAULT_FINANCIAL_ACTION_REGISTRY
     );
     const actionEnvelope = datedAddEnvelope();
-    const validationInput = { cairoTodayDate: "2026-09-01" } as const;
+    const validationInput = { latestAllowedCalendarDate: "2026-09-01" } as const;
     const input = {
       envelope: actionEnvelope,
       hashProvider: sha256Provider,

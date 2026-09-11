@@ -22,9 +22,7 @@ import {
   formatCodeAmount,
   formatShortDate,
   getForwardChevronName,
-  getMetalHoldingPresentation,
   getPerformanceTextClass,
-  getRealizedProfitLossLabelKey,
   getSoldResultLabelKey,
   parseOptionalNumber,
   parseShare,
@@ -136,6 +134,7 @@ export function MetalPortfolioScreen({
                 holdings={displayedHistory}
                 onHistoryPress={onHistoryPress}
                 onHoldingPress={onHoldingPress}
+                realizedSaleReady={sectionReadiness.realizedSale}
               />
             )
           ) : (
@@ -168,6 +167,7 @@ function createLegacyReadiness({
     holdings: ready,
     rateCurrency: ready,
     recentHistory: ready,
+    realizedSale: ready,
     summary: ready,
   };
 }
@@ -250,6 +250,7 @@ function PortfolioHeader({
           currency={currency}
           portfolio={portfolio}
           rateProviderObservedAt={rateProviderObservedAt}
+          realizedSaleReady={readiness.realizedSale}
         />
       ) : (
         <SummarySkeleton />
@@ -281,10 +282,12 @@ function PortfolioSummary({
   currency,
   portfolio,
   rateProviderObservedAt,
+  realizedSaleReady,
 }: {
   readonly currency: CurrencyType;
   readonly portfolio: MetalPortfolioReadModel;
   readonly rateProviderObservedAt: Date | null;
+  readonly realizedSaleReady: boolean;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
   const locale = resolveLocale(i18n?.resolvedLanguage);
@@ -379,7 +382,15 @@ function PortfolioSummary({
           )}
         </View>
       </View>
-      {realizedProfitLoss === null ? null : (
+      {!realizedSaleReady ? (
+        <View
+          testID="metal-portfolio-realized-sale-skeleton"
+          className="mt-7 flex-row gap-2"
+        >
+          <Skeleton width={120} height={20} borderRadius={8} />
+          <Skeleton width="40%" height={16} borderRadius={8} />
+        </View>
+      ) : realizedProfitLoss === null ? null : (
         <View className="mt-7 flex-row flex-wrap items-baseline gap-x-2 gap-y-1">
           <Text className="text-base font-medium text-text-primary dark:text-text-primary-dark">
             {formatCodeAmount(realizedProfitLoss, currency, locale)}
@@ -614,11 +625,13 @@ function RecentHistory({
   holdings,
   onHistoryPress,
   onHoldingPress,
+  realizedSaleReady,
 }: {
   readonly currency: CurrencyType;
   readonly holdings: readonly MetalPortfolioHoldingInput[];
   readonly onHistoryPress: () => void;
   readonly onHoldingPress: (holdingId: string) => void;
+  readonly realizedSaleReady: boolean;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
   const locale = resolveLocale(i18n?.resolvedLanguage);
@@ -677,7 +690,14 @@ function RecentHistory({
               </Text>
             </View>
             <View className="max-w-[180px] flex-row items-center gap-2">
-              {isSold && holding.soldResultDecimal !== null ? (
+              {isSold && !realizedSaleReady ? (
+                <View
+                  testID={`metal-portfolio-history-result-pending-${holding.id}`}
+                  className="items-end"
+                >
+                  <Skeleton width={120} height={16} borderRadius={8} />
+                </View>
+              ) : isSold && holding.soldResultDecimal !== null ? (
                 <Text
                   numberOfLines={1}
                   adjustsFontSizeToFit
