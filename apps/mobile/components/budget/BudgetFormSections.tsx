@@ -495,9 +495,6 @@ function BudgetAlertField({
   )}`;
   return (
     <View className="mb-7 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-      <Text className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">
-        {t("alert_threshold")}
-      </Text>
       <AlertThresholdSlider
         value={controller.form.alertThreshold}
         onValueChange={(value) =>
