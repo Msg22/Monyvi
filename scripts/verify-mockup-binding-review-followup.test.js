@@ -136,7 +136,11 @@ test("counts Markdown-equivalent unordered list bullets as duplicate canonical f
   ]) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "monyvi-mockup-binding-"));
     const bindingFacts = `${completeBindingFacts()}${duplicate}\n`;
-    const sidecarPath = writeApprovedFixture(root, bindingFacts);
+    const sidecarPath = writeApprovedFixture(
+      root,
+      bindingFacts,
+      Buffer.from(`${bindingFacts}\n`, "utf8")
+    );
 
     const result = verifyMockupBinding(sidecarPath);
 
