@@ -203,6 +203,28 @@ describe("BudgetForm premium flow", () => {
     });
   });
 
+  it("preserves currency-specific precision in the alert preview", () => {
+    const kwdRenewalSource = {
+      ...RENEWAL_SOURCE,
+      amount: 1.01,
+      currency: "KWD",
+      alertThreshold: 65,
+    } as unknown as Budget;
+
+    render(<BudgetForm renewalSource={kwdRenewalSource} />);
+
+    const preview = screen.getByTestId("budget-live-preview");
+    expect(within(preview).getByText(/KWD 0\.657/)).toBeOnTheScreen();
+  });
+
+  it("keeps the currency selector at least 44 points high", () => {
+    render(<BudgetForm />);
+
+    expect(screen.getByTestId("budget-currency-selector")).toHaveStyle({
+      minHeight: 44,
+    });
+  });
+
   it("requires final confirmation before creating a valid custom renewal", async () => {
     mockCreateBudget.mockResolvedValue({ id: "renewed-budget" });
     render(<BudgetForm renewalSource={RENEWAL_SOURCE} />);
