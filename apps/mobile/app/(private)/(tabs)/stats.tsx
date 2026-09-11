@@ -99,10 +99,7 @@ export default function StatsScreen(): React.JSX.Element {
                 key={`quick-stats-${selectedCurrency}`}
                 currency={selectedCurrency}
               />
-              <MonthlyExpenseChart
-                key={`monthly-chart-${selectedCurrency}`}
-                currency={selectedCurrency}
-              />
+              <MonthlyExpenseChart currency={selectedCurrency} />
               <CategoryDrilldownCard
                 key={`category-drilldown-${selectedCurrency}`}
                 currency={selectedCurrency}
