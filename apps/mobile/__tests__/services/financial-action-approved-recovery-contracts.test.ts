@@ -184,8 +184,8 @@ function recurringEnvelope(): Readonly<Record<string, unknown>> {
 }
 
 function changes(input?: {
-  readonly accounts?: Record<string, unknown>[];
-  readonly roots?: Record<string, unknown>[];
+  readonly accounts?: Array<Record<string, unknown>>;
+  readonly roots?: Array<Record<string, unknown>>;
 }): SyncPushArgs["changes"] {
   return {
     account_financial_effects: { created: [], deleted: [], updated: [] },
@@ -419,13 +419,10 @@ describe("PR #278 approved financial-action recovery contracts", () => {
       ).coordinatePush([candidate]);
 
       expect(harness.reconcile).toHaveBeenCalledWith(ACTION_ID);
-      expect(result.decisions).toEqual([
-        {
-          actionId: ACTION_ID,
-          disposition: "recover",
-          outcome: expect.objectContaining({ status: "rejected" }),
-        },
-      ]);
+      expect(result.decisions).toHaveLength(1);
+      expect(result.decisions[0]?.actionId).toBe(ACTION_ID);
+      expect(result.decisions[0]?.disposition).toBe("recover");
+      expect(result.decisions[0]?.outcome?.status).toBe("rejected");
     });
   });
 
