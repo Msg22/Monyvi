@@ -161,7 +161,7 @@ function isCanonicalHolding(
   const nullableExactValueIsValid = (candidate: unknown): boolean =>
     candidate === null ||
     (typeof candidate === "string" &&
-      /^([1-9][0-9]*|(0|[1-9][0-9]*)\.[0-9]*[1-9])$/.test(candidate));
+      /^(?:[1-9][0-9]*(?:\.[0-9]+)?|0\.[0-9]*[1-9][0-9]*)$/.test(candidate));
   const isRealLocalCalendarDate = (candidate: string): boolean => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(candidate)) return false;
     const [year, month, day] = candidate.split("-").map(Number);
@@ -724,14 +724,14 @@ async function commitNonAcceptedOutcome(
         )
       : null;
   const isReconciled = canRestorePrior || canInstallStale;
-  const canonicalInstallOperations =
+  const canonicalInstallPlan =
     canInstallStale && canonicalActionGroup
       ? await prepareCanonicalActionGroupInstall(
           database,
           canonicalActionGroup,
           userId
         )
-      : [];
+      : { operations: [], snapshots: [] };
   if (canInstallStale && !canonicalActionGroup) {
     throw new Error("incomplete_metal_action_group");
   }
@@ -743,11 +743,14 @@ async function commitNonAcceptedOutcome(
     asset,
     metal,
   ].filter((model) => model !== null);
-  const snapshots = models.map(captureCachedModelSnapshot);
+  const snapshots = [
+    ...models.map(captureCachedModelSnapshot),
+    ...canonicalInstallPlan.snapshots,
+  ];
   try {
     const now = new Date();
     const operations: Model[] = [
-      ...canonicalInstallOperations,
+      ...canonicalInstallPlan.operations,
       root.prepareUpdate((row) => {
         row.state = isReconciled ? "reconciled" : "reconciliation_incomplete";
         row.serverOutcome = outcome.status;
