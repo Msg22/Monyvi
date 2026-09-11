@@ -49,10 +49,51 @@ function atxLevelTwoHeadingText(line) {
   return line.replace(/^ {0,3}##[ \t]*/, "").replace(/[ \t]+#+[ \t]*$/, "").trim();
 }
 
+function fencedCodeOpening(line) {
+  const match = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+  if (!match) {
+    return null;
+  }
+
+  const marker = match[1];
+  if (marker[0] === "`" && match[2].includes("`")) {
+    return null;
+  }
+
+  return {
+    character: marker[0],
+    length: marker.length,
+  };
+}
+
+function isFencedCodeClosing(line, fence) {
+  const match = line.match(/^ {0,3}(`+|~+)[ \t]*$/);
+  return Boolean(
+    match &&
+      match[1][0] === fence.character &&
+      match[1].length >= fence.length
+  );
+}
+
 function levelTwoHeadings(lines) {
   const headings = [];
+  let activeFence = null;
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
+
+    if (activeFence) {
+      if (isFencedCodeClosing(line, activeFence)) {
+        activeFence = null;
+      }
+      continue;
+    }
+
+    const openingFence = fencedCodeOpening(line);
+    if (openingFence) {
+      activeFence = openingFence;
+      continue;
+    }
+
     if (ATX_LEVEL_TWO_HEADING.test(line)) {
       headings.push({
         startIndex: index,
@@ -120,14 +161,40 @@ function withoutHtmlComments(markdown) {
   );
 }
 
+function withoutFencedCodeBlocks(markdown) {
+  const lines = markdown.split("\n");
+  let activeFence = null;
+
+  return lines
+    .map((line) => {
+      if (activeFence) {
+        if (isFencedCodeClosing(line, activeFence)) {
+          activeFence = null;
+        }
+        return " ".repeat(line.length);
+      }
+
+      const openingFence = fencedCodeOpening(line);
+      if (openingFence) {
+        activeFence = openingFence;
+        return " ".repeat(line.length);
+      }
+
+      return line;
+    })
+    .join("\n");
+}
+
 function validateBindingFacts(bindingFactsMarkdown) {
   const errors = [];
-  const visibleBindingFactsMarkdown = withoutHtmlComments(bindingFactsMarkdown);
+  const visibleBindingFactsMarkdown = withoutFencedCodeBlocks(
+    withoutHtmlComments(bindingFactsMarkdown)
+  );
   for (const label of REQUIRED_BINDING_FACTS) {
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const matches = [
       ...visibleBindingFactsMarkdown.matchAll(
-        new RegExp(`^- ${escaped}:[ \\t]*(.*?)[ \\t]*$`, "gm")
+        new RegExp(`^ {0,3}[-+*][ \\t]+${escaped}:[ \\t]*(.*?)[ \\t]*$`, "gm")
       ),
     ];
 
