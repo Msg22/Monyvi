@@ -134,5 +134,5 @@ test("source-command review uses an independent trust path when the verifier is 
 
   assert.match(skill, /If `scripts\/verify-mockup-binding\.js` is in the target diff/i);
   assert.match(skill, /trusted\s+base revision/i);
-  assert.match(skill, /independently recompute[\s\S]{0,220}image[\s\S]{0,220}Binding Facts/i);
+  assert.match(skill, /independently\s+recompute[\s\S]{0,220}image[\s\S]{0,220}Binding Facts/i);
 });
