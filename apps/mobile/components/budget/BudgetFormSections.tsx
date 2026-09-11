@@ -7,6 +7,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,6 +15,7 @@ import { CURRENCY_PRECISION, DEFAULT_PRECISION } from "@monyvi/logic";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { palette } from "@/constants/colors";
+import { shouldUseCompactLayout } from "@/constants/ui";
 import { useTheme } from "@/context/ThemeContext";
 import { formatDate } from "@/utils/dateHelpers";
 import { AlertThresholdSlider } from "./AlertThresholdSlider";
@@ -84,7 +86,7 @@ function ScopeCard(props: ScopeCardProps): React.JSX.Element {
       </Text>
       {props.selected ? (
         <View className="absolute end-3 top-3 h-7 w-7 items-center justify-center rounded-full bg-nileGreen-500">
-          <Ionicons name="checkmark" size={18} color="white" />
+          <Ionicons name="checkmark" size={18} color={palette.slate[25]} />
         </View>
       ) : null}
     </TouchableOpacity>
@@ -300,8 +302,7 @@ function BudgetCurrencyControl({
   return (
     <TouchableOpacity
       testID="budget-currency-selector"
-      className="me-2 flex-row items-center"
-      style={{ minHeight: 44 }}
+      className="me-2 min-h-11 flex-row items-center"
       onPress={controller.openCurrencyPicker}
       accessibilityRole="button"
       accessibilityLabel={t("select_budget_currency")}
@@ -581,22 +582,32 @@ function PreviewIdentityRow({
 function PreviewMetric({
   label,
   value,
+  compact,
   bordered = true,
 }: {
   readonly label: string;
   readonly value: string;
+  readonly compact: boolean;
   readonly bordered?: boolean;
 }): React.JSX.Element {
-  return (
-    <View
-      className={`flex-1 items-center px-1 ${
+  const containerClass = compact
+    ? `w-full items-start px-1 py-2 ${
+        bordered ? "border-b border-slate-200 dark:border-slate-700" : ""
+      }`
+    : `flex-1 items-center px-1 ${
         bordered ? "border-e border-slate-200 dark:border-slate-700" : ""
-      }`}
-    >
-      <Text className="text-center text-xs text-slate-500 dark:text-slate-400">
+      }`;
+  const textAlignmentClass = compact ? "text-start" : "text-center";
+  return (
+    <View className={containerClass}>
+      <Text
+        className={`${textAlignmentClass} text-xs text-slate-500 dark:text-slate-400`}
+      >
         {label}
       </Text>
-      <Text className="mt-1 text-center text-sm font-bold text-nileGreen-500">
+      <Text
+        className={`mt-1 ${textAlignmentClass} text-sm font-bold text-nileGreen-500`}
+      >
         {value}
       </Text>
     </View>
@@ -609,24 +620,32 @@ function PreviewMetrics({
   readonly controller: BudgetFormController;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation("budgets");
+  const { width, fontScale } = useWindowDimensions();
+  const compact = shouldUseCompactLayout(width, fontScale);
   const alertAmount = `${controller.form.currency ?? ""} ${formatAmount(
     controller.preview.alertAmount,
     controller.form.currency,
     i18n.language
   )}`;
   return (
-    <View className="flex-row border-t border-slate-200 px-3 py-4 dark:border-slate-700">
+    <View
+      testID="budget-preview-metrics"
+      className={`${compact ? "flex-col" : "flex-row"} border-t border-slate-200 px-3 py-4 dark:border-slate-700`}
+    >
       <PreviewMetric
         label={t("preview_budget_limit")}
         value={`${controller.form.currency ?? ""} ${controller.form.amount || "0.00"}`}
+        compact={compact}
       />
       <PreviewMetric
         label={`${t("preview_alert_at")} ${controller.form.alertThreshold}%`}
         value={alertAmount}
+        compact={compact}
       />
       <PreviewMetric
         label={t("preview_starts")}
         value={controller.preview.startDate}
+        compact={compact}
         bordered={false}
       />
     </View>
@@ -689,7 +708,11 @@ function BudgetPrimaryAction({
         <ActivityIndicator color="white" />
       ) : (
         <View className="flex-row items-center gap-2">
-          <Ionicons name={presentation.icon} size={22} color="white" />
+          <Ionicons
+            name={presentation.icon}
+            size={22}
+            color={palette.slate[25]}
+          />
           <Text className="text-base font-bold text-white">
             {t(presentation.labelKey)}
           </Text>
