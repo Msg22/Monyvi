@@ -12,14 +12,39 @@ import {
   within,
 } from "@testing-library/react-native";
 import type { Budget, Category } from "@monyvi/db";
+import { palette } from "@/constants/colors";
 
 let mockCategoryMap = new Map<string, Category>([
   ["food", { id: "food", displayName: "Food & Dining" } as unknown as Category],
 ]);
 const mockCreateBudget = jest.fn();
+let mockWindowDimensions = {
+  width: 390,
+  height: 844,
+  scale: 1,
+  fontScale: 1,
+};
+
+jest.mock("react-native", () => {
+  const actual = jest.requireActual("react-native");
+  return {
+    ...actual,
+    useWindowDimensions: () => mockWindowDimensions,
+  };
+});
 
 jest.mock("@expo/vector-icons", () => ({
-  Ionicons: ({ name }: { readonly name: string }) => <MockText>{name}</MockText>,
+  Ionicons: ({
+    name,
+    color,
+  }: {
+    readonly name: string;
+    readonly color?: string;
+  }) => (
+    <MockText testID={`icon-${name}`} accessibilityLabel={color}>
+      {name}
+    </MockText>
+  ),
 }));
 
 jest.mock("@/hooks/useCategories", () => ({
@@ -163,6 +188,12 @@ describe("BudgetForm premium flow", () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date("2026-09-06T12:00:00.000Z"));
     mockCreateBudget.mockReset();
+    mockWindowDimensions = {
+      width: 390,
+      height: 844,
+      scale: 1,
+      fontScale: 1,
+    };
     mockCategoryMap = new Map<string, Category>([
       ["food", { id: "food", displayName: "Food & Dining" } as unknown as Category],
     ]);
@@ -220,12 +251,46 @@ describe("BudgetForm premium flow", () => {
     expect(within(preview).getByText(/KWD 0\.657/)).toBeOnTheScreen();
   });
 
-  it("keeps the currency selector at least 44 points high", () => {
+  it("uses the NativeWind minimum touch-height utility for currency selection", () => {
     render(<BudgetForm />);
 
-    expect(screen.getByTestId("budget-currency-selector")).toHaveStyle({
-      minHeight: 44,
-    });
+    const selector = screen.getByTestId("budget-currency-selector");
+    expect(selector.props.className).toContain("min-h-11");
+    expect(selector.props.style).toBeUndefined();
+  });
+
+  it("uses palette tokens for white action icons", () => {
+    render(<BudgetForm />);
+
+    expect(screen.getByTestId("icon-checkmark").props.accessibilityLabel).toBe(
+      palette.slate[25]
+    );
+    expect(
+      screen.getByTestId("icon-add-circle-outline").props.accessibilityLabel
+    ).toBe(palette.slate[25]);
+  });
+
+  it("keeps preview metrics in a row on an ordinary phone", () => {
+    render(<BudgetForm />);
+
+    expect(screen.getByTestId("budget-preview-metrics").props.className).toContain(
+      "flex-row"
+    );
+  });
+
+  it("stacks preview metrics on a compact phone", () => {
+    mockWindowDimensions = {
+      width: 320,
+      height: 568,
+      scale: 1,
+      fontScale: 1,
+    };
+
+    render(<BudgetForm />);
+
+    expect(screen.getByTestId("budget-preview-metrics").props.className).toContain(
+      "flex-col"
+    );
   });
 
   it("renders a single alert threshold heading", () => {
