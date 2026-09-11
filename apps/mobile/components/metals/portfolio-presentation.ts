@@ -137,6 +137,39 @@ export function getCurrencyDisplaySign(
   }
 }
 
+export type SoldResultLabelKey =
+  | "portfolio.loss_from_sold_metals"
+  | "portfolio.loss_from_this_sale"
+  | "portfolio.no_loss_from_sold_metals"
+  | "portfolio.no_loss_from_this_sale"
+  | "portfolio.profit_from_sold_metals"
+  | "portfolio.profit_from_this_sale";
+
+export function getSoldResultLabelKey(
+  value: string,
+  context: "summary" | "history"
+): SoldResultLabelKey {
+  let sign: CurrencyDisplaySign = "zero";
+  try {
+    sign = getExactAmountSign(parseCanonicalDecimal(value));
+  } catch {
+    // Invalid display values stay neutral instead of implying a profit or loss.
+  }
+
+  if (context === "summary") {
+    return sign === "negative"
+      ? "portfolio.loss_from_sold_metals"
+      : sign === "positive"
+        ? "portfolio.profit_from_sold_metals"
+        : "portfolio.no_loss_from_sold_metals";
+  }
+  return sign === "negative"
+    ? "portfolio.loss_from_this_sale"
+    : sign === "positive"
+      ? "portfolio.profit_from_this_sale"
+      : "portfolio.no_loss_from_this_sale";
+}
+
 function getExactAmountSign(
   value: ReturnType<typeof parseCanonicalDecimal>
 ): CurrencyDisplaySign {

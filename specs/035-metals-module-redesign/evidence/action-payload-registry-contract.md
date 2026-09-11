@@ -41,8 +41,9 @@ with exactly millisecond precision, not an epoch value or an envelope v2.
 
 All field objects reject extra keys. Name, reason, and notes ceilings are 256,
 1,024, and 4,096 UTF-8 bytes. Acquisition, sale, and disposal dates are
-validated against the injected `cairoTodayDate`; the pure logic layer has no
-hidden clock.
+validated against the injected `latestAllowedCalendarDate` — a trusted
+not-in-the-future calendar boundary supplied by the caller; the pure logic layer
+has no hidden clock.
 
 ## Compatibility
 

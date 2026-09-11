@@ -23,7 +23,7 @@ import {
   formatShortDate,
   getForwardChevronName,
   getPerformanceTextClass,
-  getRealizedProfitLossLabelKey,
+  getSoldResultLabelKey,
   parseOptionalNumber,
   parseShare,
   resolveLocale,
@@ -134,6 +134,7 @@ export function MetalPortfolioScreen({
                 holdings={displayedHistory}
                 onHistoryPress={onHistoryPress}
                 onHoldingPress={onHoldingPress}
+                realizedSaleReady={sectionReadiness.realizedSale}
               />
             )
           ) : (
@@ -166,6 +167,7 @@ function createLegacyReadiness({
     holdings: ready,
     rateCurrency: ready,
     recentHistory: ready,
+    realizedSale: ready,
     summary: ready,
   };
 }
@@ -248,6 +250,7 @@ function PortfolioHeader({
           currency={currency}
           portfolio={portfolio}
           rateProviderObservedAt={rateProviderObservedAt}
+          realizedSaleReady={readiness.realizedSale}
         />
       ) : (
         <SummarySkeleton />
@@ -279,10 +282,12 @@ function PortfolioSummary({
   currency,
   portfolio,
   rateProviderObservedAt,
+  realizedSaleReady,
 }: {
   readonly currency: CurrencyType;
   readonly portfolio: MetalPortfolioReadModel;
   readonly rateProviderObservedAt: Date | null;
+  readonly realizedSaleReady: boolean;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
   const locale = resolveLocale(i18n?.resolvedLanguage);
@@ -377,13 +382,21 @@ function PortfolioSummary({
           )}
         </View>
       </View>
-      {realizedProfitLoss === null ? null : (
+      {!realizedSaleReady ? (
+        <View
+          testID="metal-portfolio-realized-sale-skeleton"
+          className="mt-7 flex-row gap-2"
+        >
+          <Skeleton width={120} height={20} borderRadius={8} />
+          <Skeleton width="40%" height={16} borderRadius={8} />
+        </View>
+      ) : realizedProfitLoss === null ? null : (
         <View className="mt-7 flex-row flex-wrap items-baseline gap-x-2 gap-y-1">
           <Text className="text-base font-medium text-text-primary dark:text-text-primary-dark">
             {formatCodeAmount(realizedProfitLoss, currency, locale)}
           </Text>
           <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
-            {t(getRealizedProfitLossLabelKey(realizedProfitLoss, "summary"))}
+            {t(getSoldResultLabelKey(realizedProfitLoss, "summary"))}
           </Text>
         </View>
       )}
@@ -612,11 +625,13 @@ function RecentHistory({
   holdings,
   onHistoryPress,
   onHoldingPress,
+  realizedSaleReady,
 }: {
   readonly currency: CurrencyType;
   readonly holdings: readonly MetalPortfolioHoldingInput[];
   readonly onHistoryPress: () => void;
   readonly onHoldingPress: (holdingId: string) => void;
+  readonly realizedSaleReady: boolean;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
   const locale = resolveLocale(i18n?.resolvedLanguage);
@@ -675,7 +690,14 @@ function RecentHistory({
               </Text>
             </View>
             <View className="max-w-[180px] flex-row items-center gap-2">
-              {isSold ? (
+              {isSold && !realizedSaleReady ? (
+                <View
+                  testID={`metal-portfolio-history-result-pending-${holding.id}`}
+                  className="items-end"
+                >
+                  <Skeleton width={120} height={16} borderRadius={8} />
+                </View>
+              ) : isSold && holding.soldResultDecimal !== null ? (
                 <Text
                   numberOfLines={1}
                   adjustsFontSizeToFit
@@ -683,10 +705,7 @@ function RecentHistory({
                   className="text-right text-xs text-text-secondary dark:text-text-secondary-dark"
                 >
                   {t(
-                    getRealizedProfitLossLabelKey(
-                      holding.soldResultDecimal,
-                      "history"
-                    )
+                    getSoldResultLabelKey(holding.soldResultDecimal, "history")
                   )}{" "}
                   ·{" "}
                   <Text className="font-medium text-text-primary dark:text-text-primary-dark">
@@ -739,3 +758,4 @@ function ErrorState({
     </View>
   );
 }
+

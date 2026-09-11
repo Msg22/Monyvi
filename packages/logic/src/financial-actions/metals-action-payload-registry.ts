@@ -186,8 +186,8 @@ export function createMetalsActionPayloadRegistry(
     input?: FinancialActionValidationInput
   ): boolean =>
     isDate(value) &&
-    isDate(input?.cairoTodayDate) &&
-    value <= input.cairoTodayDate;
+    isDate(input?.latestAllowedCalendarDate) &&
+    value <= input.latestAllowedCalendarDate;
   const validRevision = (value: unknown): value is string =>
     typeof value === "string" &&
     /^(?:0|[1-9][0-9]*)$/.test(value) &&

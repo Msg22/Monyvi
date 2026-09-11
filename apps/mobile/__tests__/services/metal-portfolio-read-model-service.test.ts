@@ -4,9 +4,13 @@ import { resolve } from "node:path";
 const mockAssetsCollection = { table: "assets" };
 const mockHoldingStatesCollection = { table: "metal_holding_states" };
 const mockLifecycleEventsCollection = { table: "metal_lifecycle_events" };
+const mockSellGroupsCollection = { table: "financial_action_groups" };
+const mockSaleRateReferencesCollection = { table: "metal_rate_references" };
 const mockAssetsQuery = { kind: "assets-query" };
 const mockHoldingStatesQuery = { kind: "holding-states-query" };
 const mockLifecycleEventsQuery = { kind: "lifecycle-events-query" };
+const mockSellGroupsQuery = { kind: "sell-groups-query" };
+const mockSaleRateReferencesQuery = { kind: "sale-rate-references-query" };
 const mockQueryOwned = jest.fn();
 
 interface QueryCondition {
@@ -22,6 +26,9 @@ jest.mock("@monyvi/db", () => ({
       if (table === "metal_holding_states") return mockHoldingStatesCollection;
       if (table === "metal_lifecycle_events")
         return mockLifecycleEventsCollection;
+      if (table === "financial_action_groups") return mockSellGroupsCollection;
+      if (table === "metal_rate_references")
+        return mockSaleRateReferencesCollection;
       throw new Error(`Unexpected table: ${table}`);
     },
   },
@@ -54,7 +61,9 @@ import {
   buildMetalPortfolioReadModel,
   observePortfolioAssets,
   observePortfolioHoldingStates,
+  observePortfolioMetalSellGroups,
   observePortfolioRecentHistory,
+  observePortfolioSaleRateReferences,
   selectPortfolioHoldings,
   shapeMetalPortfolioHoldings,
   type MetalPortfolioAssetSnapshot,
@@ -155,6 +164,7 @@ function buildRawAssetSnapshot(
   overrides: Partial<MetalPortfolioAssetSnapshot> = {}
 ): MetalPortfolioAssetSnapshot {
   return {
+    acquisitionActionId: null,
     id: "holding-1",
     userId: "user-1",
     name: "Exact gold",
@@ -168,10 +178,7 @@ function buildRawAssetSnapshot(
 
 function shapeInput(): ShapeMetalPortfolioHoldingsInput {
   return {
-    userId: "user-1",
-    preferredCurrency: "EGP" as const,
-    currentRates: buildCurrentRates(),
-    assets: [buildRawAssetSnapshot()],
+    actionGroups: [],
     assetMetals: [
       {
         assetId: "holding-1",
@@ -184,6 +191,8 @@ function shapeInput(): ShapeMetalPortfolioHoldingsInput {
         weightGramsDecimal: "10",
       },
     ],
+    assets: [buildRawAssetSnapshot()],
+    currentRates: buildCurrentRates(),
     holdingStates: [
       {
         deleted: false,
@@ -197,14 +206,20 @@ function shapeInput(): ShapeMetalPortfolioHoldingsInput {
     ],
     lifecycleEvents: [
       {
+        actionId: "add-action-1",
         deleted: false,
         holdingId: "holding-1",
         id: "event-1",
         isEffective: true,
+        kind: "add",
         occurredAt: new Date("2026-08-20T10:00:00.000Z"),
+        payloadJson: "{}",
         userId: "user-1",
       },
     ],
+    preferredCurrency: "EGP",
+    rateReferences: [],
+    userId: "user-1",
   };
 }
 
@@ -244,6 +259,10 @@ describe("metal portfolio read model", () => {
       if (collection === mockLifecycleEventsCollection) {
         return mockLifecycleEventsQuery;
       }
+      if (collection === mockSellGroupsCollection) return mockSellGroupsQuery;
+      if (collection === mockSaleRateReferencesCollection) {
+        return mockSaleRateReferencesQuery;
+      }
       throw new Error("Unexpected collection");
     });
   });
@@ -252,6 +271,10 @@ describe("metal portfolio read model", () => {
     expect(observePortfolioAssets("user-1")).toBe(mockAssetsQuery);
     expect(observePortfolioHoldingStates("user-1")).toBe(
       mockHoldingStatesQuery
+    );
+    expect(observePortfolioMetalSellGroups("user-1")).toBe(mockSellGroupsQuery);
+    expect(observePortfolioSaleRateReferences("user-1")).toBe(
+      mockSaleRateReferencesQuery
     );
     expect(
       observePortfolioRecentHistory({
@@ -278,6 +301,18 @@ describe("metal portfolio read model", () => {
     );
     expect(mockQueryOwned).toHaveBeenCalledWith(
       mockHoldingStatesCollection,
+      "user-1",
+      { kind: "where", column: "deleted", value: false }
+    );
+    expect(mockQueryOwned).toHaveBeenCalledWith(
+      mockSellGroupsCollection,
+      "user-1",
+      { kind: "where", column: "domain", value: "metals" },
+      { kind: "where", column: "kind", value: "sell" },
+      { kind: "where", column: "deleted", value: false }
+    );
+    expect(mockQueryOwned).toHaveBeenCalledWith(
+      mockSaleRateReferencesCollection,
       "user-1",
       { kind: "where", column: "deleted", value: false }
     );
@@ -338,6 +373,8 @@ describe("metal portfolio read model", () => {
       expect.objectContaining({ id: "gold-sold", status: "sold" }),
     ]);
     expect(model.soldResultDecimal).toBe("18221.8");
+    expect(model.hasSoldHoldings).toBe(true);
+    expect(model.soldResultUnavailable).toBe(false);
   });
 
   it("keeps active holdings visible but makes rate-dependent values unavailable when current rates are missing", () => {
@@ -411,6 +448,8 @@ describe("metal portfolio read model", () => {
       currentValueDecimal: "25000",
       currentPerformanceDecimal: "5000",
       performanceUnavailableReason: null,
+      soldEvidence: null,
+      soldResultDecimal: null,
     });
     expect(holding?.purchaseDate?.toISOString()).toBe(
       "2024-01-01T00:00:00.000Z"

@@ -9,7 +9,9 @@ import {
   observePortfolioAssetMetals,
   observePortfolioAssets,
   observePortfolioHoldingStates,
+  observePortfolioMetalSellGroups,
   observePortfolioRecentHistory,
+  observePortfolioSaleRateReferences,
   shapeMetalPortfolioHoldings,
   type MetalPortfolioFilter,
   type MetalPortfolioReadModel,
@@ -26,8 +28,10 @@ import { logger } from "@/utils/logger";
 import type {
   Asset,
   AssetMetal,
+  FinancialActionGroup,
   MetalHoldingState,
   MetalLifecycleEvent,
+  MetalRateReference,
 } from "@monyvi/db";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
@@ -42,11 +46,24 @@ import { runUserScopedEffect, useCurrentUser } from "./useCurrentUser";
 
 const RATE_STATUS_REFRESH_INTERVAL_MS = 60_000;
 
+// Device-local calendar date in `YYYY-MM-DD`, used as the trusted "not in the
+// future" boundary for realized-sale validation. Recomputed as the local day
+// advances so a sale dated after a midnight rollover while this hook stays
+// mounted does not go stale; the pure logic/service layers still accept an
+// explicit override for deterministic tests.
+function currentCalendarDate(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
 const PORTFOLIO_ASSET_OBSERVED_COLUMNS = [
   "name",
   "purchase_date",
   "purchase_price_decimal",
   "purchase_currency",
+  "acquisition_action_id",
 ] as const;
 
 const PORTFOLIO_ASSET_METAL_OBSERVED_COLUMNS = [
@@ -64,6 +81,24 @@ const PORTFOLIO_HOLDING_STATE_OBSERVED_COLUMNS = [
   "effective_event_id",
   "is_visible",
   "reconciliation_state",
+] as const;
+
+const PORTFOLIO_SELL_GROUP_OBSERVED_COLUMNS = [
+  "outcome_json",
+  "payload_json",
+  "rejection_code",
+  "server_outcome",
+  "state",
+] as const;
+
+const PORTFOLIO_SALE_RATE_REFERENCE_OBSERVED_COLUMNS = [
+  "captured_at",
+  "captured_freshness",
+  "instrument_code",
+  "provider_observed_at",
+  "quality",
+  "source",
+  "value_decimal",
 ] as const;
 
 type ActiveMetalType = "GOLD" | "SILVER";
@@ -126,6 +161,19 @@ export function useMetalPortfolio(
   const [historyDependencyKey, setHistoryDependencyKey] = useState<string | null>(
     null
   );
+  const [metalSellGroups, setMetalSellGroups] = useState<
+    readonly FinancialActionGroup[]
+  >([]);
+  const [saleRateReferences, setSaleRateReferences] = useState<
+    readonly MetalRateReference[]
+  >([]);
+  // Trusted device-local calendar date supplied to realized-sale validation so
+  // a sale can never be validated against its own future `saleDate`. Refreshed
+  // when the device-local day rolls over (see the refresh interval/AppState
+  // effect below) so a long-lived mount does not strand a newly-allowed sale;
+  // overridable at the service layer for deterministic tests.
+  const [latestAllowedCalendarDate, setLatestAllowedCalendarDate] =
+    useState<string>(() => currentCalendarDate());
   const [currentRates, setCurrentRates] = useState<LiveRatesTrustReadModel>(
     createEmptyTrustReadModel
   );
@@ -135,6 +183,9 @@ export function useMetalPortfolio(
   const [isAssetMetalsLoading, setIsAssetMetalsLoading] = useState(true);
   const [isHoldingStatesLoading, setIsHoldingStatesLoading] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [isMetalSellGroupsLoading, setIsMetalSellGroupsLoading] = useState(true);
+  const [isSaleRateReferencesLoading, setIsSaleRateReferencesLoading] =
+    useState(true);
   const [isRatesLoading, setIsRatesLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -163,8 +214,18 @@ export function useMetalPortfolio(
   }, [assets]);
 
   useEffect(() => {
+    const syncCalendarBoundary = (): void => {
+      const next = currentCalendarDate();
+      // Returning the previous value when the local day is unchanged avoids a
+      // needless re-render on every refresh tick.
+      setLatestAllowedCalendarDate((prev) => (prev === next ? prev : next));
+    };
+    syncCalendarBoundary();
     const timer = setInterval(
-      () => trustObservationRef.current?.refresh(),
+      () => {
+        trustObservationRef.current?.refresh();
+        syncCalendarBoundary();
+      },
       RATE_STATUS_REFRESH_INTERVAL_MS
     );
     const appStateSubscription = AppState.addEventListener(
@@ -172,6 +233,7 @@ export function useMetalPortfolio(
       (state) => {
         if (state === "active") {
           trustObservationRef.current?.refresh();
+          syncCalendarBoundary();
         }
       }
     );
@@ -385,6 +447,48 @@ export function useMetalPortfolio(
   }, [holdingStates, holdingStatesKey, isResolvingUser, refreshKey, userId]);
 
   useEffect(() => {
+    return subscribeForCurrentUser({
+      isResolvingUser,
+      onAuthenticated: (currentUserId) =>
+        observePortfolioMetalSellGroups(currentUserId).observeWithColumns([
+          ...PORTFOLIO_SELL_GROUP_OBSERVED_COLUMNS,
+        ]),
+      onError: (reason) =>
+        recordObserverError(
+          "metalPortfolio.metalSellGroups.observe.failed",
+          reason,
+          setError
+        ),
+      onNext: setMetalSellGroups,
+      onSignedOut: () => setMetalSellGroups([]),
+      onResolving: () => setMetalSellGroups([]),
+      setLoading: setIsMetalSellGroupsLoading,
+      userId,
+    });
+  }, [isResolvingUser, refreshKey, userId]);
+
+  useEffect(() => {
+    return subscribeForCurrentUser({
+      isResolvingUser,
+      onAuthenticated: (currentUserId) =>
+        observePortfolioSaleRateReferences(currentUserId).observeWithColumns([
+          ...PORTFOLIO_SALE_RATE_REFERENCE_OBSERVED_COLUMNS,
+        ]),
+      onError: (reason) =>
+        recordObserverError(
+          "metalPortfolio.saleRateReferences.observe.failed",
+          reason,
+          setError
+        ),
+      onNext: setSaleRateReferences,
+      onSignedOut: () => setSaleRateReferences([]),
+      onResolving: () => setSaleRateReferences([]),
+      setLoading: setIsSaleRateReferencesLoading,
+      userId,
+    });
+  }, [isResolvingUser, refreshKey, userId]);
+
+  useEffect(() => {
     const observation = observeLiveRatesTrust(database);
     trustObservationRef.current = observation;
     setIsRatesLoading(true);
@@ -416,6 +520,9 @@ export function useMetalPortfolio(
     };
   }, [database, refreshKey]);
 
+  const saleEvidenceReady =
+    !isMetalSellGroupsLoading && !isSaleRateReferencesLoading;
+
   const readiness = useMemo(
     () =>
       resolveMetalPortfolioReadiness({
@@ -428,6 +535,7 @@ export function useMetalPortfolio(
         holdingStatesReady:
           userId !== null && holdingStatesSnapshotUserId === userId,
         ratesReady: hasRateObservationSettled,
+        saleEvidenceReady,
       }),
     [
       assetIdsKey,
@@ -438,6 +546,7 @@ export function useMetalPortfolio(
       holdingStatesKey,
       holdingStatesSnapshotUserId,
       isCurrencyLoading,
+      saleEvidenceReady,
       userId,
     ]
   );
@@ -447,12 +556,15 @@ export function useMetalPortfolio(
       return null;
     }
     return shapeMetalPortfolioHoldings({
+      actionGroups: metalSellGroups,
       assetMetals,
       assets,
       currentRates,
       holdingStates,
+      latestAllowedCalendarDate,
       lifecycleEvents,
       preferredCurrency,
+      rateReferences: saleRateReferences,
       userId,
     });
   }, [
@@ -461,9 +573,12 @@ export function useMetalPortfolio(
     currentRates,
     holdingStates,
     isResolvingUser,
+    latestAllowedCalendarDate,
     lifecycleEvents,
+    metalSellGroups,
     preferredCurrency,
     readiness.holdings,
+    saleRateReferences,
     userId,
   ]);
 
@@ -656,6 +771,59 @@ function recordObserverError(
 ): void {
   logger.error(event, reason);
   setError(reason instanceof Error ? reason : new Error(String(reason)));
+}
+
+function subscribeForCurrentUser<T>({
+  isResolvingUser,
+  onAuthenticated,
+  onError,
+  onNext,
+  onSignedOut,
+  onResolving,
+  setLoading,
+  userId,
+}: {
+  readonly isResolvingUser: boolean;
+  readonly onAuthenticated: (userId: string) => {
+    readonly subscribe: (observer: {
+      readonly error: (reason: unknown) => void;
+      readonly next: (value: readonly T[]) => void;
+    }) => { readonly unsubscribe: () => void };
+  };
+  readonly onError: (reason: unknown) => void;
+  readonly onNext: (value: readonly T[]) => void;
+  readonly onSignedOut: () => void;
+  readonly onResolving: () => void;
+  readonly setLoading: (value: boolean) => void;
+  readonly userId: string | null;
+}): void | (() => void) {
+  return runUserScopedEffect({
+    userId,
+    isResolvingUser,
+    onResolving: () => {
+      onResolving();
+      setLoading(true);
+    },
+    onSignedOut: () => {
+      onSignedOut();
+      setLoading(false);
+    },
+    onAuthenticated: (currentUserId) => {
+      onResolving();
+      setLoading(true);
+      const subscription = onAuthenticated(currentUserId).subscribe({
+        next: (result): void => {
+          onNext(result);
+          setLoading(false);
+        },
+        error: (reason: unknown): void => {
+          onError(reason);
+          setLoading(false);
+        },
+      });
+      return () => subscription.unsubscribe();
+    },
+  });
 }
 
 function getPortfolioRateValues(
