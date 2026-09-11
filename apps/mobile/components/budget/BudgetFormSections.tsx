@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { CURRENCY_PRECISION, DEFAULT_PRECISION } from "@monyvi/logic";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { palette } from "@/constants/colors";
@@ -25,10 +26,15 @@ import {
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
-function formatAmount(value: number, locale: string): string {
-  return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(
-    value
-  );
+function formatAmount(
+  value: number,
+  currency: BudgetFormState["currency"],
+  locale: string
+): string {
+  const maximumFractionDigits = currency
+    ? (CURRENCY_PRECISION[currency] ?? DEFAULT_PRECISION)
+    : DEFAULT_PRECISION;
+  return new Intl.NumberFormat(locale, { maximumFractionDigits }).format(value);
 }
 
 interface ScopeCardProps {
@@ -295,6 +301,7 @@ function BudgetCurrencyControl({
     <TouchableOpacity
       testID="budget-currency-selector"
       className="me-2 flex-row items-center"
+      style={{ minHeight: 44 }}
       onPress={controller.openCurrencyPicker}
       accessibilityRole="button"
       accessibilityLabel={t("select_budget_currency")}
@@ -483,6 +490,7 @@ function BudgetAlertField({
   const { t, i18n } = useTranslation("budgets");
   const amount = `${controller.form.currency ?? ""} ${formatAmount(
     controller.preview.alertAmount,
+    controller.form.currency,
     i18n.language
   )}`;
   return (
@@ -606,6 +614,7 @@ function PreviewMetrics({
   const { t, i18n } = useTranslation("budgets");
   const alertAmount = `${controller.form.currency ?? ""} ${formatAmount(
     controller.preview.alertAmount,
+    controller.form.currency,
     i18n.language
   )}`;
   return (
