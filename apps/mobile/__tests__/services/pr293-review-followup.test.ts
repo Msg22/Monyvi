@@ -155,19 +155,19 @@ describe("PR #293 review follow-up regressions", () => {
     expect(classifyMetalServerOutcome(outcome, USER_ID)).toBe("stale_ready");
   });
 
-  it("preserves a pre-upgrade UTC-midnight calendar date west of UTC", () => {
-    const previousTimezone = process.env.TZ;
-    process.env.TZ = "America/New_York";
-    try {
-      expect(
-        formatMetalLocalCalendarDate(new Date("2026-08-01T00:00:00.000Z"))
-      ).toBe("2026-08-01");
-      expect(formatMetalLocalCalendarDate(new Date(2026, 7, 1))).toBe(
-        "2026-08-01"
-      );
-    } finally {
-      process.env.TZ = previousTimezone;
-    }
+  it("preserves a pre-upgrade UTC-midnight calendar date when local components are on the prior day", () => {
+    const legacyUtcMidnight = new Date("2026-08-01T00:00:00.000Z");
+    jest.spyOn(legacyUtcMidnight, "getFullYear").mockReturnValue(2026);
+    jest.spyOn(legacyUtcMidnight, "getMonth").mockReturnValue(6);
+    jest.spyOn(legacyUtcMidnight, "getDate").mockReturnValue(31);
+
+    expect(formatMetalLocalCalendarDate(legacyUtcMidnight)).toBe("2026-08-01");
+
+    const localMidnight = new Date("2026-08-01T04:00:00.000Z");
+    jest.spyOn(localMidnight, "getFullYear").mockReturnValue(2026);
+    jest.spyOn(localMidnight, "getMonth").mockReturnValue(7);
+    jest.spyOn(localMidnight, "getDate").mockReturnValue(1);
+    expect(formatMetalLocalCalendarDate(localMidnight)).toBe("2026-08-01");
   });
 
   it("accepts the approved hidden effective Delete event in a canonical winner group", async () => {
