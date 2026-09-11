@@ -3,13 +3,14 @@
  * Grouped bar chart showing income vs expenses over the last N months.
  */
 
+import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
 import { useTheme } from "@/context/ThemeContext";
 import { useMonthlyChartData } from "@/hooks/useAnalytics";
 import type { CurrencyType } from "@monyvi/db";
 import { formatCurrency } from "@monyvi/logic";
 import React, { useState } from "react";
-import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
 import { BarChart } from "react-native-gifted-charts";
 import { useTranslation } from "react-i18next";
 
@@ -135,8 +136,8 @@ function MonthlyExpenseChartData({
   return (
     <>
       {isLoading ? (
-        <View className="h-[200px] items-center justify-center">
-          <ActivityIndicator size="small" color={palette.nileGreen[500]} />
+        <View className="h-[200px] justify-center">
+          <Skeleton width="100%" height={160} borderRadius={12} />
         </View>
       ) : (
         <View className="overflow-hidden">
