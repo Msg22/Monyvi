@@ -23,6 +23,11 @@ interface MonthlyExpenseChartProps {
   readonly currency: CurrencyType;
 }
 
+interface MonthlyExpenseChartDataProps {
+  readonly currency: CurrencyType;
+  readonly period: PeriodFilter;
+}
+
 const PERIOD_OPTIONS: readonly PeriodFilter[] = ["6m", "12m"];
 
 // =============================================================================
@@ -32,56 +37,11 @@ const PERIOD_OPTIONS: readonly PeriodFilter[] = ["6m", "12m"];
 export function MonthlyExpenseChart({
   currency,
 }: MonthlyExpenseChartProps): React.JSX.Element {
-  const { isDark } = useTheme();
   const { t } = useTranslation("common");
   const [period, setPeriod] = useState<PeriodFilter>("6m");
-  const months = period === "6m" ? 6 : 12;
-
-  const { data: expenseData, isLoading: expenseLoading } = useMonthlyChartData(
-    months,
-    undefined,
-    "EXPENSE",
-    currency
-  );
-  const { data: incomeData, isLoading: incomeLoading } = useMonthlyChartData(
-    months,
-    undefined,
-    "INCOME",
-    currency
-  );
-
-  const isLoading = expenseLoading || incomeLoading;
-
-  // Transform data for grouped bar chart
-  const chartData: Array<{
-    value: number;
-    frontColor: string;
-    label?: string;
-  }> = [];
-
-  expenseData.forEach((expense, index) => {
-    const income = incomeData[index];
-    // Income bar
-    chartData.push({
-      value: income?.value ?? 0,
-      frontColor: palette.nileGreen[500],
-      label: expense.label.substring(0, 3),
-    });
-    // Expense bar
-    chartData.push({
-      value: expense.value,
-      frontColor: palette.red[400],
-    });
-  });
-
-  // Calculate totals
-  const totalExpenses = expenseData.reduce((sum, d) => sum + d.value, 0);
-  const totalIncome = incomeData.reduce((sum, d) => sum + d.value, 0);
-  const netSavings = totalIncome - totalExpenses;
 
   return (
     <View className="rounded-3xl border p-5 mb-5 bg-white/60 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700">
-      {/* Header */}
       <View className="flex-row items-center justify-between mb-4">
         <Text className="text-lg font-bold text-slate-800 dark:text-white">
           {t("monthly_overview")}
@@ -103,7 +63,6 @@ export function MonthlyExpenseChart({
         </View>
       </View>
 
-      {/* Legend */}
       <View className="flex-row gap-4 mb-3">
         <View className="flex-row items-center">
           <View className="w-3 h-3 rounded-sm me-1 bg-nileGreen-500" />
@@ -119,7 +78,62 @@ export function MonthlyExpenseChart({
         </View>
       </View>
 
-      {/* Chart */}
+      <MonthlyExpenseChartData
+        key={`${currency}-${period}`}
+        currency={currency}
+        period={period}
+      />
+    </View>
+  );
+}
+
+function MonthlyExpenseChartData({
+  currency,
+  period,
+}: MonthlyExpenseChartDataProps): React.JSX.Element {
+  const { isDark } = useTheme();
+  const { t } = useTranslation("common");
+  const months = period === "6m" ? 6 : 12;
+
+  const { data: expenseData, isLoading: expenseLoading } = useMonthlyChartData(
+    months,
+    undefined,
+    "EXPENSE",
+    currency
+  );
+  const { data: incomeData, isLoading: incomeLoading } = useMonthlyChartData(
+    months,
+    undefined,
+    "INCOME",
+    currency
+  );
+
+  const isLoading = expenseLoading || incomeLoading;
+  const chartData: Array<{
+    value: number;
+    frontColor: string;
+    label?: string;
+  }> = [];
+
+  expenseData.forEach((expense, index) => {
+    const income = incomeData[index];
+    chartData.push({
+      value: income?.value ?? 0,
+      frontColor: palette.nileGreen[500],
+      label: expense.label.substring(0, 3),
+    });
+    chartData.push({
+      value: expense.value,
+      frontColor: palette.red[400],
+    });
+  });
+
+  const totalExpenses = expenseData.reduce((sum, d) => sum + d.value, 0);
+  const totalIncome = incomeData.reduce((sum, d) => sum + d.value, 0);
+  const netSavings = totalIncome - totalExpenses;
+
+  return (
+    <>
       {isLoading ? (
         <View className="h-[200px] items-center justify-center">
           <ActivityIndicator size="small" color={palette.nileGreen[500]} />
@@ -153,17 +167,13 @@ export function MonthlyExpenseChart({
         </View>
       )}
 
-      {/* Summary Stats */}
       <View className="flex-row justify-between mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
         <View className="items-center flex-1">
           <Text className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium">
             {t("total_income")}
           </Text>
           <Text className="text-sm font-bold text-nileGreen-500 mt-0.5">
-            {formatCurrency({
-              amount: totalIncome,
-              currency,
-            })}
+            {formatCurrency({ amount: totalIncome, currency })}
           </Text>
         </View>
         <View className="items-center flex-1">
@@ -171,10 +181,7 @@ export function MonthlyExpenseChart({
             {t("total_expenses")}
           </Text>
           <Text className="text-sm font-bold text-red-500 dark:text-red-400 mt-0.5">
-            {formatCurrency({
-              amount: totalExpenses,
-              currency,
-            })}
+            {formatCurrency({ amount: totalExpenses, currency })}
           </Text>
         </View>
         <View className="items-center flex-1">
@@ -184,13 +191,10 @@ export function MonthlyExpenseChart({
           <Text
             className={`text-sm font-bold mt-0.5 ${netSavings >= 0 ? "text-nileGreen-500" : "text-red-400"}`}
           >
-            {formatCurrency({
-              amount: netSavings,
-              currency,
-            })}
+            {formatCurrency({ amount: netSavings, currency })}
           </Text>
         </View>
       </View>
-    </View>
+    </>
   );
 }
