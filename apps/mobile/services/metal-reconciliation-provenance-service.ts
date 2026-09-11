@@ -1,5 +1,5 @@
 import { Q, type Database } from "@nozbe/watermelondb";
-import type { MetalLifecycleEvent } from "@monyvi/db";
+import type { FinancialActionGroup, MetalLifecycleEvent } from "@monyvi/db";
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -52,6 +52,26 @@ function isRevisionZeroLegacyCorrection(event: MetalLifecycleEvent): boolean {
   }
 }
 
+async function hasAcceptedRoot(
+  database: Database,
+  event: MetalLifecycleEvent,
+  userId: string,
+  holdingId: string
+): Promise<boolean> {
+  const roots = await database
+    .get<FinancialActionGroup>("financial_action_groups")
+    .query(Q.where("action_id", event.actionId), Q.where("user_id", userId))
+    .fetch();
+  const root = roots[0] ?? null;
+  return (
+    root !== null &&
+    !root.deleted &&
+    root.domain === "metals" &&
+    root.domainReferenceId === holdingId &&
+    root.state === "accepted"
+  );
+}
+
 export async function findPriorAcquisitionActionId(
   database: Database,
   event: MetalLifecycleEvent,
@@ -71,9 +91,13 @@ export async function findPriorAcquisitionActionId(
       .fetch();
     const predecessor = predecessors[0] ?? null;
     if (!predecessor || predecessor.holdingId !== holdingId) break;
-    if (
+    const isAcquisitionEvent =
       predecessor.kind === "add" ||
-      (predecessor.kind === "correct" && isMaterialCorrectionEvent(predecessor))
+      (predecessor.kind === "correct" && isMaterialCorrectionEvent(predecessor));
+    if (
+      predecessor.isEffective &&
+      isAcquisitionEvent &&
+      (await hasAcceptedRoot(database, predecessor, userId, holdingId))
     ) {
       return predecessor.actionId;
     }
