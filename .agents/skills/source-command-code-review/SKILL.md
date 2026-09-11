@@ -243,11 +243,22 @@ transition, or variant facts:
 
 If `scripts/verify-mockup-binding.js` is in the target diff, do not treat that
 target-branch verifier as independent authority. Run the verifier from a trusted
-base revision when it supports the same sidecar contract; otherwise independently
-recompute the approved image SHA-256 and exact original Binding Facts SHA-256
-from the reviewed bytes, rebuild the combined binding approval revision, and
-verify the approval evidence against it. A target-branch verifier result alone
-is insufficient in this case.
+base revision only when that trusted implementation enforces the same complete
+sidecar authority contract. Otherwise, independently validate the complete
+sidecar authority contract from the reviewed bytes and the governing
+`.agent/workflows/mockup-implementation.md` contract. The independent fallback
+MUST, without relying on the target-branch verifier:
+
+- require valid UTF-8/LF input and locate exactly one real level-two `Binding Facts` heading using Markdown semantics, ignoring fenced/comment-only content when determining section boundaries;
+- require every canonical required Binding Facts key exactly once with a non-empty visible value, recognizing supported Markdown unordered-list markers and indentation and ignoring commented/fenced examples;
+- require all approval fields and SHA-256 revisions to be present and well formed, including `Binding metadata approval: APPROVED`;
+- recompute the current approved image SHA-256 and exact original Binding Facts SHA-256 from the reviewed bytes and require them to match the declared image and `Binding metadata revision`;
+- require `Approved binding metadata revision` to equal `Binding metadata revision`, rebuild the combined `Binding approval revision`, and require `Approved binding approval revision` to equal `Binding approval revision`; and
+- require the approval evidence/reference to identify the approved combined `Approved binding approval revision`.
+
+If any part of that independent validation cannot be performed, mark the binding
+context unverified and the changed governed UI not approvable. A target-branch
+verifier result alone is insufficient in this case.
 
 If an approved reference predates the sidecar rule, complete the workflow's
 **Legacy Approved Mockup Metadata Migration** and explicit sidecar approval
