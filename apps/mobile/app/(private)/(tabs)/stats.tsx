@@ -9,6 +9,7 @@ import { CategoryDrilldownCard } from "@/components/stats/CategoryDrilldownCard"
 import { MonthlyExpenseChart } from "@/components/stats/MonthlyExpenseChart";
 import { QuickStats } from "@/components/stats/QuickStats";
 import { StatsCurrencyFilter } from "@/components/stats/StatsCurrencyFilter";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useStatsCurrencyFilter } from "@/hooks/useStatsCurrencyFilter";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -59,10 +60,20 @@ export default function StatsScreen(): React.JSX.Element {
       >
         <View className="px-5 pt-4">
           {isLoading ? (
-            <View testID="stats-currency-loading" className="py-10 items-center">
-              <Text className="text-sm text-text-secondary dark:text-text-secondary-dark">
-                {t("loading")}
-              </Text>
+            <View testID="stats-currency-loading" className="py-4">
+              <Skeleton width="100%" height={112} borderRadius={24} />
+              <Skeleton
+                width="100%"
+                height={300}
+                borderRadius={24}
+                style={{ marginTop: 20 }}
+              />
+              <Skeleton
+                width="100%"
+                height={320}
+                borderRadius={16}
+                style={{ marginTop: 20 }}
+              />
             </View>
           ) : error ? (
             <View
