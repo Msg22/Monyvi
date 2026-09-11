@@ -44,7 +44,7 @@ describe("PR #271 review follow-up regressions", () => {
       "purity_factor_decimal",
       "weight_grams_decimal",
     ]) {
-      expect(hook).toContain(`\"${column}\"`);
+      expect(hook).toContain(`"${column}"`);
     }
   });
 
@@ -65,8 +65,8 @@ describe("PR #271 review follow-up regressions", () => {
     const route = source("apps/mobile/app/(private)/(tabs)/index.tsx");
     const card = source("apps/mobile/components/dashboard/TotalNetWorthCard.tsx");
     expect(route).not.toMatch(/const parsed = Number\(value\)/);
-    expect(card).toMatch(/netWorth:\s*number \| string \| null/);
-    expect(card).toMatch(/netWorthInUSD\??:\s*number \| string \| null/);
+    expect(card).toMatch(/totalNetWorth:\s*number \| string \| null/);
+    expect(card).toMatch(/totalNetWorthUsd:\s*number \| string \| null/);
     expect(card).toContain("formatCanonicalDecimalForDisplay");
   });
 
