@@ -42,10 +42,14 @@ function completeBindingFacts() {
   ].join("\n");
 }
 
-function writeApprovedFixture(root, bindingFacts = completeBindingFacts()) {
+function writeApprovedFixture(
+  root,
+  bindingFacts = completeBindingFacts(),
+  bindingRevisionBytes = Buffer.from(bindingFacts, "utf8")
+) {
   const imageBytes = Buffer.from("approved-image");
   const imageRevision = sha256(imageBytes);
-  const bindingRevision = sha256(Buffer.from(bindingFacts, "utf8"));
+  const bindingRevision = sha256(bindingRevisionBytes);
   const authorityRevision = approvalRevision(imageRevision, bindingRevision);
   const imagePath = path.join(root, "approved.png");
   const sidecarPath = path.join(root, "approved.binding.md");
@@ -103,6 +107,49 @@ test("does not count a canonical fact hidden inside an HTML comment", () => {
 
   assert.equal(result.isAuthoritative, false);
   assert.match(result.errors.join("\n"), /required Binding Facts key.*State facts/i);
+});
+
+test("does not treat setext-looking text inside a fenced code block as the next Binding Facts boundary", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "monyvi-mockup-binding-"));
+  const approvedPrefix = `${completeBindingFacts()}\`\`\`text\n`;
+  const bindingFacts = `${approvedPrefix}History\n---\n\`\`\`\n- Review note: changed after approval\n`;
+  const sidecarPath = writeApprovedFixture(
+    root,
+    bindingFacts,
+    Buffer.from(approvedPrefix, "utf8")
+  );
+
+  const result = verifyMockupBinding(sidecarPath);
+
+  assert.equal(result.isAuthoritative, false);
+  assert.match(
+    result.errors.join("\n"),
+    /binding metadata revision does not match current binding facts/i
+  );
+});
+
+test("counts Markdown-equivalent unordered list bullets as duplicate canonical facts", () => {
+  for (const duplicate of [
+    "* State facts: conflicting",
+    "+ State facts: conflicting",
+    "  * State facts: conflicting",
+  ]) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "monyvi-mockup-binding-"));
+    const bindingFacts = `${completeBindingFacts()}${duplicate}\n`;
+    const sidecarPath = writeApprovedFixture(root, bindingFacts);
+
+    const result = verifyMockupBinding(sidecarPath);
+
+    assert.equal(
+      result.isAuthoritative,
+      false,
+      `expected duplicate fact rejection for ${JSON.stringify(duplicate)}`
+    );
+    assert.match(
+      result.errors.join("\n"),
+      /required Binding Facts key must occur exactly once: State facts/i
+    );
+  }
 });
 
 test("Claude task generation blocks fidelity-affecting UNKNOWN values", () => {
