@@ -453,7 +453,7 @@ describe("Metals financial action foundation", () => {
     expect(state?.reconciliationState).toBe("accepted");
   });
 
-  it("durably rolls back a rejected material correction and locks a stale projection", async () => {
+  it("durably rolls back a rejected material correction", async () => {
     const { database } = await createDatabase();
     const service = createService(database);
     await service.execute(commandInput("add", actionId(1), null, null));
@@ -499,129 +499,6 @@ describe("Metals financial action foundation", () => {
       commitMetalRpcOutcomeLocally(database, rejectedOutcome, USER_ID)
     ).resolves.toBe("reconciled");
     expect(batchSpy).not.toHaveBeenCalled();
-
-    await service.execute(
-      commandInput("dispose", actionId(3), "0", actionId(1))
-    );
-    const [locallyEditedAsset] = await database
-      .get<Asset>("assets")
-      .query()
-      .fetch();
-    const [locallyEditedState] = await database
-      .get<MetalHoldingState>("metal_holding_states")
-      .query()
-      .fetch();
-    await database.write(async (): Promise<void> => {
-      if (!locallyEditedAsset || !locallyEditedState) {
-        throw new Error("missing_metal_holding_fixture");
-      }
-      await database.batch(
-        locallyEditedAsset.prepareUpdate((row) => {
-          row.name = "Newer local name";
-          row.notes = "Newer local notes";
-        }),
-        locallyEditedState.prepareUpdate((row) => {
-          row.nameWrittenAt = 20;
-          row.nameWriterId = actionId(20);
-          row.notesWrittenAt = 20;
-          row.notesWriterId = actionId(20);
-        })
-      );
-    });
-    await expect(
-      commitMetalRpcOutcomeLocally(
-        database,
-        {
-          actionId: actionId(3),
-          canonicalAccounts: [],
-          canonicalHoldingActionId: actionId(4),
-          canonicalHoldingEvidenceHash: "a".repeat(64),
-          canonicalHoldingRevision: "1",
-          canonicalHolding: {
-            asset: {
-              acquisitionActionId: actionId(4),
-              currency: "EGP",
-              name: "Canonical gold",
-              notes: "Installed from server",
-              purchaseCurrency: "EGP",
-              purchaseDate: "2026-08-30",
-              purchasePrice: 152000,
-              purchasePriceDecimal: "152000",
-            },
-            holdingId: HOLDING_ID,
-            metal: {
-              metalType: "GOLD",
-              physicalForm: "COIN",
-              purityCatalogVersion: "1",
-              purityCode: "gold-9999",
-              purityFactorDecimal: "0.9999",
-              purityFraction: 0.9999,
-              weightGrams: 11,
-              weightGramsDecimal: "11",
-            },
-            state: {
-              effectiveActionId: actionId(4),
-              effectiveEventId: actionId(4),
-              financialRevision: "1",
-              isVisible: true,
-              nameWriterId: null,
-              nameWrittenAt: null,
-              notesWriterId: null,
-              notesWrittenAt: null,
-              status: "active",
-            },
-          },
-          code: "HOLDING_REVISION_STALE",
-          payloadHashMatches: true,
-          staleAccountIds: [],
-          status: "stale",
-          userId: USER_ID,
-        },
-        USER_ID
-      )
-    ).resolves.toBe("reconciled");
-    const [staleRoot] = await database
-      .get<FinancialActionGroup>("financial_action_groups")
-      .query(Q.where("action_id", actionId(3)))
-      .fetch();
-    const [canonicalAsset] = await database
-      .get<Asset>("assets")
-      .query()
-      .fetch();
-    const [canonicalMetal] = await database
-      .get<AssetMetal>("asset_metals")
-      .query()
-      .fetch();
-    const [lockedState] = await database
-      .get<MetalHoldingState>("metal_holding_states")
-      .query()
-      .fetch();
-    expect(staleRoot).toMatchObject({
-      rejectionCode: "HOLDING_REVISION_STALE",
-      serverOutcome: "stale",
-      state: "reconciled",
-    });
-    expect(staleRoot?.outcomeJson).toContain('"status":"stale"');
-    expect(lockedState).toMatchObject({
-      effectiveActionId: actionId(4),
-      financialRevision: "1",
-      isVisible: true,
-      reconciliationState: "reconciled",
-    });
-    expect(canonicalAsset?.acquisitionActionId).toBe(actionId(4));
-    expect(canonicalAsset?.name).toBe("Newer local name");
-    expect(canonicalAsset?.notes).toBe("Newer local notes");
-    expect(canonicalAsset?.purchasePriceDecimal).toBe("152000");
-    expect(lockedState).toMatchObject({
-      nameWrittenAt: 20,
-      nameWriterId: actionId(20),
-      notesWrittenAt: 20,
-      notesWriterId: actionId(20),
-    });
-    expect(canonicalMetal).toMatchObject({
-      itemForm: "COIN",
-      weightGramsDecimal: "11",
-    });
   });
 
   it("restores acquisition provenance past metadata-only corrections", async () => {

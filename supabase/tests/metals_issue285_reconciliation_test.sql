@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(18);
+SELECT plan(25);
 
 SELECT has_function(
   'public', 'apply_metal_action_v1', ARRAY['text', 'text'],
@@ -18,6 +18,15 @@ SELECT is(
   ),
   false,
   'the pre-285 action implementation cannot bypass the public guard'
+);
+SELECT is(
+  has_function_privilege(
+    'authenticated',
+    'private.apply_metal_action_v1_pre_285_core(text,text)',
+    'EXECUTE'
+  ),
+  false,
+  'the wrapped core action implementation cannot bypass validation ordering'
 );
 
 INSERT INTO auth.users (id)
@@ -77,6 +86,42 @@ $function$;
 GRANT EXECUTE ON FUNCTION pg_temp.issue285_action(uuid, text, text, jsonb)
   TO authenticated;
 
+CREATE OR REPLACE FUNCTION pg_temp.issue285_action_with_hash(
+  p_action_id uuid,
+  p_kind text,
+  p_payload_version text,
+  p_payload jsonb,
+  p_payload_hash text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+DECLARE
+  v_payload_json text;
+BEGIN
+  v_payload_json := private.financial_action_encode_jsonb_v1(
+    jsonb_build_object(
+      'accountGuards', '[]'::jsonb,
+      'actionId', p_action_id,
+      'domain', 'metals',
+      'domainReferenceId', '018f0c7a-1234-7abc-8def-000000000286',
+      'envelopeVersion', 'monyvi.financial-action/v1',
+      'kind', p_kind,
+      'occurredAt', '2026-08-31T10:15:30.123Z',
+      'payload', p_payload,
+      'payloadVersion', p_payload_version,
+      'userId', '018f0c7a-1234-7abc-8def-000000000285'
+    )
+  );
+  RETURN public.apply_metal_action_v1(v_payload_json, p_payload_hash);
+END;
+$function$;
+GRANT EXECUTE ON FUNCTION pg_temp.issue285_action_with_hash(
+  uuid, text, text, jsonb, text
+) TO authenticated;
+
 SET LOCAL ROLE authenticated;
 SELECT is(
   pg_temp.issue285_action(
@@ -107,15 +152,56 @@ SELECT is(
   'baseline Add succeeds through the hardened wrapper'
 );
 
+CREATE TEMPORARY TABLE pg_temp.issue285_tampered_sale AS
+SELECT pg_temp.issue285_action_with_hash(
+  '018f0c7a-1234-7abc-8def-000000000291',
+  'sell',
+  'metals.sell/v2',
+  jsonb_build_object(
+    'expectedHoldingRevision', '1',
+    'feeMinorUnits', '0',
+    'grossProceedsMinorUnits', '100',
+    'holdingId', '018f0c7a-1234-7abc-8def-000000000286',
+    'metalType', 'GOLD',
+    'netProceedsMinorUnits', '100',
+    'notes', null,
+    'purchaseCurrency', 'EGP',
+    'rateSnapshots', '[]'::jsonb,
+    'saleDate', '2026-08-29',
+    'saleCurrency', 'EGP',
+    'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000287',
+    'reversesEventId', null
+  ),
+  repeat('0', 64)
+) AS outcome;
+SELECT is(
+  (SELECT outcome ->> 'status' FROM pg_temp.issue285_tampered_sale),
+  'rejected',
+  'a tampered sale is rejected before sale-date validation'
+);
+SELECT is(
+  (SELECT outcome ->> 'code' FROM pg_temp.issue285_tampered_sale),
+  'PAYLOAD_HASH_MISMATCH',
+  'payload-hash validation wins over the invalid sale-date response'
+);
+
 CREATE TEMPORARY TABLE pg_temp.issue285_sale AS
 SELECT pg_temp.issue285_action(
   '018f0c7a-1234-7abc-8def-000000000290',
   'sell',
-  'metals.sell/v1',
-  jsonb_build_object(
-    'expectedHoldingRevision', '1',
-    'holdingId', '018f0c7a-1234-7abc-8def-000000000286',
-    'saleDate', '2026-08-29',
+    'metals.sell/v2',
+    jsonb_build_object(
+      'expectedHoldingRevision', '1',
+      'feeMinorUnits', '0',
+      'grossProceedsMinorUnits', '100',
+      'holdingId', '018f0c7a-1234-7abc-8def-000000000286',
+      'metalType', 'GOLD',
+      'netProceedsMinorUnits', '100',
+      'notes', null,
+      'purchaseCurrency', 'EGP',
+      'rateSnapshots', '[]'::jsonb,
+      'saleDate', '2026-08-29',
+      'saleCurrency', 'EGP',
     'predecessorEventId', '018f0c7a-1234-7abc-8def-000000000287',
     'reversesEventId', null
   )
@@ -166,6 +252,26 @@ SELECT is(
   (SELECT outcome #>> '{canonicalHolding,state,effectiveActionId}' FROM pg_temp.issue285_stale),
   '018f0c7a-1234-7abc-8def-000000000287',
   'stale response identifies the canonical winning action'
+);
+SELECT is(
+  (SELECT outcome #>> '{canonicalActionGroup,root,actionId}' FROM pg_temp.issue285_stale),
+  '018f0c7a-1234-7abc-8def-000000000287',
+  'stale response carries the canonical winning root'
+);
+SELECT is(
+  (SELECT outcome #>> '{canonicalActionGroup,evidence,actionId}' FROM pg_temp.issue285_stale),
+  '018f0c7a-1234-7abc-8def-000000000287',
+  'stale response carries the canonical winning evidence'
+);
+SELECT is(
+  (SELECT outcome #>> '{canonicalActionGroup,event,id}' FROM pg_temp.issue285_stale),
+  '018f0c7a-1234-7abc-8def-000000000287',
+  'stale response carries the canonical effective event'
+);
+SELECT is(
+  jsonb_typeof((SELECT outcome #> '{canonicalActionGroup,rates}' FROM pg_temp.issue285_stale)),
+  'array',
+  'stale response carries the complete canonical rate-reference array'
 );
 
 SELECT throws_ok(

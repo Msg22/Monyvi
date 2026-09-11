@@ -7,60 +7,39 @@ import type {
   MetalHoldingState,
   MetalLifecycleEvent,
 } from "@monyvi/db";
-import { SUPPORTED_CURRENCIES } from "@monyvi/logic";
+import { SUPPORTED_CURRENCIES, type Sha256Provider } from "@monyvi/logic";
 
 import {
   assertCanonicalMetalRevision,
   incrementCanonicalMetalRevision,
 } from "./metal-financial-action-adapter";
+import {
+  assertCanonicalActionGroup,
+  canonicalMetalJson as canonicalJson,
+  isCanonicalMetalRecord as isRecord,
+  prepareCanonicalActionGroupInstall,
+  type CanonicalMetalActionGroup,
+  type CanonicalMetalHolding,
+} from "./metal-canonical-action-group-service";
 import { parseMetalLocalCalendarDate } from "./metal-financial-action-repository";
 import { compareMetalMetadataClock } from "./metal-metadata-service";
+import { findPriorAcquisitionActionId } from "./metal-reconciliation-provenance-service";
 import { findOwnedById, queryChildrenOfOwnedParent } from "./user-data-access";
 import {
   captureCachedModelSnapshot,
   restoreCachedModelSnapshot,
 } from "./watermelon-cache-snapshot";
 
+export type {
+  CanonicalMetalActionGroup,
+  CanonicalMetalHolding,
+} from "./metal-canonical-action-group-service";
+
 export interface CanonicalAccountEvidence {
   readonly accountId: string;
   readonly canonicalRevision: string;
   readonly canonicalActionId: string | null;
   readonly canonicalEvidenceHash: string;
-}
-
-export interface CanonicalMetalHolding {
-  readonly holdingId: string;
-  readonly asset: {
-    readonly acquisitionActionId: string | null;
-    readonly currency: string;
-    readonly name: string;
-    readonly notes: string | null;
-    readonly purchaseCurrency: string | null;
-    readonly purchaseDate: string;
-    readonly purchasePrice: number;
-    readonly purchasePriceDecimal: string | null;
-  };
-  readonly metal: {
-    readonly metalType: string;
-    readonly physicalForm: string | null;
-    readonly purityCatalogVersion: string | null;
-    readonly purityCode: string | null;
-    readonly purityFactorDecimal: string | null;
-    readonly purityFraction: number;
-    readonly weightGrams: number;
-    readonly weightGramsDecimal: string | null;
-  };
-  readonly state: {
-    readonly effectiveActionId: string;
-    readonly effectiveEventId: string;
-    readonly financialRevision: string;
-    readonly isVisible: boolean;
-    readonly nameWrittenAt: number | null;
-    readonly nameWriterId: string | null;
-    readonly notesWrittenAt: number | null;
-    readonly notesWriterId: string | null;
-    readonly status: "active" | "sold" | "disposed";
-  };
 }
 
 interface MetalOutcomeTransportEvidence {
@@ -89,6 +68,7 @@ export type MetalRpcOutcome = MetalOutcomeTransportEvidence &
         readonly canonicalHoldingActionId: string | null;
         readonly canonicalHoldingEvidenceHash: string;
         readonly canonicalHolding: CanonicalMetalHolding;
+        readonly canonicalActionGroup?: CanonicalMetalActionGroup;
         readonly canonicalAccounts: readonly CanonicalAccountEvidence[];
         readonly staleAccountIds: readonly string[];
       }
@@ -125,7 +105,6 @@ export type MetalReconciliationClassification =
   | "reconciliation_incomplete";
 
 const HASH_PATTERN = /^[0-9a-f]{64}$/;
-
 function hasCanonicalRevision(value: string): boolean {
   try {
     assertCanonicalMetalRevision(value);
@@ -398,65 +377,6 @@ function restoreCorrectionAsset(
   }
 }
 
-function isMaterialCorrectionEvent(event: MetalLifecycleEvent): boolean {
-  try {
-    const payload = JSON.parse(event.payloadJson) as unknown;
-    if (
-      typeof payload !== "object" ||
-      payload === null ||
-      Array.isArray(payload)
-    ) {
-      throw new Error("incomplete_metal_action_group");
-    }
-    const materialCorrection = (payload as Readonly<Record<string, unknown>>)
-      .materialCorrection;
-    if (materialCorrection === null) return false;
-    if (
-      typeof materialCorrection !== "object" ||
-      Array.isArray(materialCorrection)
-    ) {
-      throw new Error("incomplete_metal_action_group");
-    }
-    return true;
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === "incomplete_metal_action_group"
-    ) {
-      throw error;
-    }
-    throw new Error("incomplete_metal_action_group");
-  }
-}
-
-async function findPriorAcquisitionActionId(
-  database: Database,
-  event: MetalLifecycleEvent,
-  userId: string,
-  holdingId: string
-): Promise<string> {
-  let predecessorId = event.predecessorEventId;
-  const visited = new Set<string>();
-  while (predecessorId !== null && !visited.has(predecessorId)) {
-    visited.add(predecessorId);
-    const predecessor = await findOwnedByActionId<MetalLifecycleEvent>(
-      database,
-      "metal_lifecycle_events",
-      predecessorId,
-      userId
-    );
-    if (!predecessor || predecessor.holdingId !== holdingId) break;
-    if (
-      predecessor.kind === "add" ||
-      (predecessor.kind === "correct" && isMaterialCorrectionEvent(predecessor))
-    ) {
-      return predecessor.actionId;
-    }
-    predecessorId = predecessor.predecessorEventId;
-  }
-  throw new Error("incomplete_metal_action_group");
-}
-
 interface CanonicalMetadataInstallDecision {
   readonly applyName: boolean;
   readonly applyNotes: boolean;
@@ -658,10 +578,49 @@ async function commitAcceptedOutcome(
   }
 }
 
+function isSameTerminalOutcome(
+  root: FinancialActionGroup,
+  outcome: Extract<MetalRpcOutcome, { status: "stale" | "rejected" }>
+): boolean {
+  if (
+    root.state !== "reconciled" ||
+    root.serverOutcome !== outcome.status ||
+    root.rejectionCode !== outcome.code ||
+    root.outcomeJson === null
+  ) {
+    return false;
+  }
+  try {
+    const stored = JSON.parse(root.outcomeJson) as unknown;
+    if (
+      !isRecord(stored) ||
+      stored.actionId !== outcome.actionId ||
+      stored.status !== outcome.status ||
+      stored.code !== outcome.code
+    ) {
+      return false;
+    }
+    if (outcome.status === "rejected") return true;
+    return (
+      stored.canonicalHoldingRevision === outcome.canonicalHoldingRevision &&
+      stored.canonicalHoldingActionId === outcome.canonicalHoldingActionId &&
+      stored.canonicalHoldingEvidenceHash ===
+        outcome.canonicalHoldingEvidenceHash &&
+      canonicalJson(stored.canonicalAccounts) ===
+        canonicalJson(outcome.canonicalAccounts) &&
+      canonicalJson(stored.staleAccountIds) ===
+        canonicalJson(outcome.staleAccountIds)
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function commitNonAcceptedOutcome(
   database: Database,
   outcome: Extract<MetalRpcOutcome, { status: "stale" | "rejected" }>,
-  userId: string
+  userId: string,
+  canonicalActionGroup: CanonicalMetalActionGroup | null
 ): Promise<RpcOutcomeCommitResult> {
   const [root, evidence, event] = await Promise.all([
     findOwnedByActionId<FinancialActionGroup>(
@@ -699,13 +658,14 @@ async function commitNonAcceptedOutcome(
   const state = states[0];
   if (!state) throw new Error("incomplete_metal_action_group");
   const serializedOutcome = outcomeJson(outcome);
+  if (isSameTerminalOutcome(root, outcome)) return "reconciled";
   if (
     root.serverOutcome === outcome.status &&
     root.outcomeJson === serializedOutcome &&
     root.rejectionCode === outcome.code &&
-    (root.state === "reconciled" || root.state === "reconciliation_incomplete")
+    root.state === "reconciliation_incomplete"
   ) {
-    return root.state === "reconciled" ? "reconciled" : "incomplete";
+    return "incomplete";
   }
   const isCurrentAction = state.effectiveActionId === outcome.actionId;
   const reversedEvent =
@@ -764,6 +724,17 @@ async function commitNonAcceptedOutcome(
         )
       : null;
   const isReconciled = canRestorePrior || canInstallStale;
+  const canonicalInstallOperations =
+    canInstallStale && canonicalActionGroup
+      ? await prepareCanonicalActionGroupInstall(
+          database,
+          canonicalActionGroup,
+          userId
+        )
+      : [];
+  if (canInstallStale && !canonicalActionGroup) {
+    throw new Error("incomplete_metal_action_group");
+  }
   const models = [
     root,
     evidence,
@@ -776,6 +747,7 @@ async function commitNonAcceptedOutcome(
   try {
     const now = new Date();
     const operations: Model[] = [
+      ...canonicalInstallOperations,
       root.prepareUpdate((row) => {
         row.state = isReconciled ? "reconciled" : "reconciliation_incomplete";
         row.serverOutcome = outcome.status;
@@ -878,15 +850,32 @@ async function commitNonAcceptedOutcome(
 export async function commitMetalRpcOutcomeLocally(
   database: Database,
   outcome: MetalRpcOutcome,
-  expectedUserId: string
+  expectedUserId: string,
+  hashProvider?: Sha256Provider
 ): Promise<RpcOutcomeCommitResult> {
   if (outcome.userId !== expectedUserId || !outcome.payloadHashMatches) {
     throw new Error("invalid_metal_rpc_outcome");
   }
+  const canonicalActionGroup =
+    outcome.status === "stale" && outcome.code === "HOLDING_REVISION_STALE"
+      ? await assertCanonicalActionGroup(
+          outcome,
+          expectedUserId,
+          hashProvider ?? {
+            digestUtf8: (): Promise<string> =>
+              Promise.reject(new Error("incomplete_metal_action_group")),
+          }
+        )
+      : null;
   return database.write(() => {
     if (isAcceptedMetalRpcOutcome(outcome)) {
       return commitAcceptedOutcome(database, outcome, expectedUserId);
     }
-    return commitNonAcceptedOutcome(database, outcome, expectedUserId);
+    return commitNonAcceptedOutcome(
+      database,
+      outcome,
+      expectedUserId,
+      canonicalActionGroup
+    );
   });
 }

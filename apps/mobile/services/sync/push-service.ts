@@ -1,4 +1,5 @@
 import type { Database } from "@nozbe/watermelondb";
+import * as Crypto from "expo-crypto";
 import type {
   SyncPushArgs,
   SyncPushResult,
@@ -41,6 +42,10 @@ export const GENERIC_SYNC_ERROR_CODES = {
 
 const METAL_ACTION_RPC = "apply_metal_action_v1";
 const METAL_METADATA_RPC = "apply_metal_metadata_patch_v1";
+const metalOutcomeHashProvider = {
+  digestUtf8: (value: string): Promise<string> =>
+    Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value),
+};
 
 interface MetalRpcResult {
   readonly data: unknown;
@@ -519,7 +524,13 @@ export async function pushChanges(
     pushArgs.changes,
     userId,
     defaultMetalRpc,
-    (outcome) => commitMetalRpcOutcomeLocally(database, outcome, userId),
+    (outcome) =>
+      commitMetalRpcOutcomeLocally(
+        database,
+        outcome,
+        userId,
+        metalOutcomeHashProvider
+      ),
     (outcome) =>
       database.write(() =>
         commitCanonicalMetalMetadataLocally(database, outcome, userId)
