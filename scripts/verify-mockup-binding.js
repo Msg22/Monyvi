@@ -4,7 +4,8 @@ const path = require("node:path");
 
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const PENDING = "PENDING";
-const LEVEL_TWO_HEADING = /^ {0,3}##(?![^ \t])/;
+const ATX_LEVEL_TWO_HEADING = /^ {0,3}##(?![^ \t])/;
+const SETEXT_LEVEL_TWO_UNDERLINE = /^ {0,3}-+[ \t]*$/;
 const BINDING_FACTS_HEADING_TEXT = "Binding Facts";
 const REQUIRED_BINDING_FACTS = [
   "Binding product surface",
@@ -44,8 +45,38 @@ function readField(markdown, label) {
   return match ? match[1] : null;
 }
 
-function bindingFactsHeadingText(line) {
+function atxLevelTwoHeadingText(line) {
   return line.replace(/^ {0,3}##[ \t]*/, "").replace(/[ \t]+#+[ \t]*$/, "").trim();
+}
+
+function levelTwoHeadings(lines) {
+  const headings = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (ATX_LEVEL_TWO_HEADING.test(line)) {
+      headings.push({
+        startIndex: index,
+        endIndex: index,
+        text: atxLevelTwoHeadingText(line),
+      });
+      continue;
+    }
+
+    if (
+      index + 1 < lines.length &&
+      line.trim() &&
+      !/^ {4}/.test(line) &&
+      SETEXT_LEVEL_TWO_UNDERLINE.test(lines[index + 1])
+    ) {
+      headings.push({
+        startIndex: index,
+        endIndex: index + 1,
+        text: line.trim(),
+      });
+      index += 1;
+    }
+  }
+  return headings;
 }
 
 function splitLinesWithOffsets(buffer) {
@@ -65,33 +96,37 @@ function extractBindingFactsBytes(sidecarBytes) {
   }
 
   const { lines, offsets } = splitLinesWithOffsets(sidecarBytes);
-  const headingIndexes = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    if (LEVEL_TWO_HEADING.test(lines[index])) {
-      headingIndexes.push(index);
-    }
-  }
-
-  const factsHeadings = headingIndexes.filter(
-    (index) => bindingFactsHeadingText(lines[index]) === BINDING_FACTS_HEADING_TEXT
+  const headings = levelTwoHeadings(lines);
+  const factsHeadings = headings.filter(
+    (heading) => heading.text === BINDING_FACTS_HEADING_TEXT
   );
   if (factsHeadings.length !== 1) {
-    throw new Error("binding sidecar must contain exactly one ## Binding Facts heading");
+    throw new Error("binding sidecar must contain exactly one level-two Binding Facts heading");
   }
 
   const factsHeading = factsHeadings[0];
-  const factsStart = offsets[factsHeading] + Buffer.byteLength(lines[factsHeading], "utf8") + 1;
-  const nextHeading = headingIndexes.find((index) => index > factsHeading);
-  const factsEnd = nextHeading === undefined ? sidecarBytes.length : offsets[nextHeading];
+  const factsStart =
+    offsets[factsHeading.endIndex] +
+    Buffer.byteLength(lines[factsHeading.endIndex], "utf8") +
+    1;
+  const nextHeading = headings.find((heading) => heading.startIndex > factsHeading.endIndex);
+  const factsEnd = nextHeading === undefined ? sidecarBytes.length : offsets[nextHeading.startIndex];
   return sidecarBytes.subarray(factsStart, factsEnd);
+}
+
+function withoutHtmlComments(markdown) {
+  return markdown.replace(/<!--[\s\S]*?(?:-->|$)/g, (comment) =>
+    comment.replace(/[^\n]/g, " ")
+  );
 }
 
 function validateBindingFacts(bindingFactsMarkdown) {
   const errors = [];
+  const visibleBindingFactsMarkdown = withoutHtmlComments(bindingFactsMarkdown);
   for (const label of REQUIRED_BINDING_FACTS) {
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const matches = [
-      ...bindingFactsMarkdown.matchAll(
+      ...visibleBindingFactsMarkdown.matchAll(
         new RegExp(`^- ${escaped}:[ \\t]*(.*?)[ \\t]*$`, "gm")
       ),
     ];
