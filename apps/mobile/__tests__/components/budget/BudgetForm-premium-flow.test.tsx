@@ -89,12 +89,15 @@ jest.mock("@/components/budget/AlertThresholdSlider", () => ({
     readonly value: number;
     readonly onValueChange: (value: number) => void;
   }) => (
-    <MockTouchableOpacity
-      testID="mock-threshold"
-      onPress={() => onValueChange(65)}
-    >
-      <MockText>{value}</MockText>
-    </MockTouchableOpacity>
+    <>
+      <MockText>alert_threshold</MockText>
+      <MockTouchableOpacity
+        testID="mock-threshold"
+        onPress={() => onValueChange(65)}
+      >
+        <MockText>{value}</MockText>
+      </MockTouchableOpacity>
+    </>
   ),
 }));
 
@@ -223,6 +226,12 @@ describe("BudgetForm premium flow", () => {
     expect(screen.getByTestId("budget-currency-selector")).toHaveStyle({
       minHeight: 44,
     });
+  });
+
+  it("renders a single alert threshold heading", () => {
+    render(<BudgetForm />);
+
+    expect(screen.getAllByText("alert_threshold")).toHaveLength(1);
   });
 
   it("requires final confirmation before creating a valid custom renewal", async () => {
