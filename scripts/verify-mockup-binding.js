@@ -101,7 +101,7 @@ function extractBindingFactsBytes(sidecarBytes) {
     (heading) => heading.text === BINDING_FACTS_HEADING_TEXT
   );
   if (factsHeadings.length !== 1) {
-    throw new Error("binding sidecar must contain exactly one level-two Binding Facts heading");
+    throw new Error("binding sidecar must contain exactly one ## Binding Facts heading");
   }
 
   const factsHeading = factsHeadings[0];
