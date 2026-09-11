@@ -6,7 +6,7 @@ function read(relativePath: string): string {
 }
 
 describe("Stats currency review regressions", () => {
-  it("waits for preference/discovery state and remounts aggregates per selected currency", () => {
+  it("waits for preference/discovery state and suppresses stale aggregates per selected currency", () => {
     const source = read("../../app/(private)/(tabs)/stats.tsx");
 
     expect(source).toContain("isLoading: isPreferredCurrencyLoading");
@@ -14,8 +14,16 @@ describe("Stats currency review regressions", () => {
     expect(source).toContain("error");
     expect(source).toContain("retry");
     expect(source).toContain("key={`quick-stats-${selectedCurrency}`}");
-    expect(source).toContain("key={`monthly-chart-${selectedCurrency}`}");
     expect(source).toContain("key={`category-drilldown-${selectedCurrency}`}");
+  });
+
+  it("preserves the selected chart period while refreshing chart data by currency", () => {
+    const screen = read("../../app/(private)/(tabs)/stats.tsx");
+    const chart = read("../../components/stats/MonthlyExpenseChart.tsx");
+
+    expect(screen).not.toContain("key={`monthly-chart-${selectedCurrency}`}");
+    expect(chart).toContain('useState<PeriodFilter>("6m")');
+    expect(chart).toContain("key={`${currency}-${period}`}");
   });
 
   it("keeps every available transaction currency selectable and exposes radio state", () => {
