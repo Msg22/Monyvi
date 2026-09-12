@@ -4,7 +4,7 @@ import { shouldUseCompactLayout } from "@/constants/ui";
 import type { CurrencyType } from "@monyvi/db";
 import {
   formatCanonicalDecimalForDisplay,
-  resolveMetalsCurrencyMinorUnits,
+  resolveCurrencyDisplayMinorUnits,
 } from "@monyvi/logic";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useMemo } from "react";
@@ -337,10 +337,7 @@ function formatDecimalCurrency(
   locale: string
 ): string {
   if (value === null) return "—";
-  const maximumFractionDigits = resolveMetalsCurrencyMinorUnits(
-    `currency:${currency}`
-  );
-  if (maximumFractionDigits === null) return "—";
+  const maximumFractionDigits = resolveCurrencyDisplayMinorUnits(currency);
   try {
     const amount = formatCanonicalDecimalForDisplay(value, {
       locale,
