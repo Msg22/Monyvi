@@ -6,16 +6,23 @@ import type {
   MetalRateReference,
 } from "@monyvi/db";
 import {
+  hasCanonicalDecimalPrecision,
+  isSupportedMetalsIsoCurrencyCode,
   orderLifecycleEventsNewestFirst,
+  parseCanonicalDecimal,
+  resolveMetalsCurrencyMinorUnits,
+  resolvePuritySelection,
   type LifecycleEvent,
 } from "@monyvi/logic";
 
 import type {
+  BuildMetalDetailReadModelInput,
   MetalDetailAssetInput,
   MetalDetailHoldingStateInput,
   MetalDetailLifecycleEventInput,
   MetalDetailMetalInput,
   MetalDetailPhysicalForm,
+  MetalDetailReadModel,
   MetalDetailRenderKey,
   MetalDetailTimelineItem,
 } from "@/services/metal-detail-read-model-service";
@@ -50,6 +57,27 @@ export function buildTimeline(
         })
       )
   );
+}
+
+export function getUnavailableExactFacts(
+  input: BuildMetalDetailReadModelInput
+): MetalDetailReadModel["unavailableExactFacts"] {
+  const unavailable: Array<"weight" | "purity" | "purchase_cost"> = [];
+  if (!isValidWeight(input.metal.weightGramsDecimal)) {
+    unavailable.push("weight");
+  }
+  if (!hasCompletePurityTuple(input.metal)) {
+    unavailable.push("purity");
+  }
+  if (
+    !isValidPurchaseCost(
+      input.asset.purchasePriceDecimal,
+      input.asset.purchaseCurrency
+    )
+  ) {
+    unavailable.push("purchase_cost");
+  }
+  return Object.freeze(unavailable);
 }
 
 export function toDetailAssetInput(
@@ -176,6 +204,63 @@ export function copyValidDate(value: Date | null): Date | null {
   return value instanceof Date && Number.isFinite(value.getTime())
     ? new Date(value.getTime())
     : null;
+}
+
+function hasCompletePurityTuple(input: MetalDetailMetalInput): boolean {
+  if (
+    input.purityCatalogVersion !== "1" ||
+    input.purityCode === null ||
+    input.purityFactorDecimal === null
+  ) {
+    return false;
+  }
+  const resolution = resolvePuritySelection(input.metalType, input.purityCode);
+  return (
+    resolution.available &&
+    resolution.entry.factorDecimal === input.purityFactorDecimal
+  );
+}
+
+function isPositiveDecimal(value: string | null): boolean {
+  if (value === null) return false;
+  try {
+    return parseCanonicalDecimal(value).greaterThan("0");
+  } catch {
+    return false;
+  }
+}
+
+function isValidWeight(value: string | null): boolean {
+  return (
+    value !== null &&
+    hasCanonicalDecimalPrecision(value) &&
+    hasAtMostDecimalPlaces(value, 3) &&
+    isPositiveDecimal(value)
+  );
+}
+
+function isValidPurchaseCost(
+  value: string | null,
+  currency: string | null
+): boolean {
+  if (
+    value === null ||
+    !isSupportedMetalsIsoCurrencyCode(currency) ||
+    !hasCanonicalDecimalPrecision(value)
+  ) {
+    return false;
+  }
+  const decimalPlaces = resolveMetalsCurrencyMinorUnits(`currency:${currency}`);
+  return (
+    decimalPlaces !== null &&
+    hasAtMostDecimalPlaces(value, decimalPlaces) &&
+    isPositiveDecimal(value)
+  );
+}
+
+function hasAtMostDecimalPlaces(value: string, maximum: number): boolean {
+  const fractional = value.split(".")[1];
+  return fractional === undefined || fractional.length <= maximum;
 }
 
 function isSupportedLifecycleKind(
