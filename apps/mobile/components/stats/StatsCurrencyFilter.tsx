@@ -146,13 +146,13 @@ export function StatsCurrencyFilter({
         </TouchableOpacity>
       </View>
 
-      {isOpen && menuMaxHeight !== null ? (
+      {isOpen ? (
         <View
           testID="stats-currency-menu"
           className="absolute end-0 z-30 min-w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
           style={{
             elevation: 8,
-            maxHeight: menuMaxHeight,
+            maxHeight: menuMaxHeight ?? 0,
             top: filterRowHeight,
           }}
         >
