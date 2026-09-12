@@ -18,20 +18,11 @@ let mockCategoryMap = new Map<string, Category>([
   ["food", { id: "food", displayName: "Food & Dining" } as unknown as Category],
 ]);
 const mockCreateBudget = jest.fn();
-let mockWindowDimensions = {
-  width: 390,
-  height: 844,
-  scale: 1,
-  fontScale: 1,
-};
+const mockShouldUseCompactLayout = jest.fn(() => false);
 
-jest.mock("react-native", () => {
-  const actual = jest.requireActual("react-native");
-  return {
-    ...actual,
-    useWindowDimensions: () => mockWindowDimensions,
-  };
-});
+jest.mock("@/constants/ui", () => ({
+  shouldUseCompactLayout: () => mockShouldUseCompactLayout(),
+}));
 
 jest.mock("@expo/vector-icons", () => ({
   Ionicons: ({
@@ -188,12 +179,7 @@ describe("BudgetForm premium flow", () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date("2026-09-06T12:00:00.000Z"));
     mockCreateBudget.mockReset();
-    mockWindowDimensions = {
-      width: 390,
-      height: 844,
-      scale: 1,
-      fontScale: 1,
-    };
+    mockShouldUseCompactLayout.mockReturnValue(false);
     mockCategoryMap = new Map<string, Category>([
       ["food", { id: "food", displayName: "Food & Dining" } as unknown as Category],
     ]);
@@ -275,7 +261,7 @@ describe("BudgetForm premium flow", () => {
     );
   });
 
-  it("keeps preview metrics in a row on an ordinary phone", () => {
+  it("keeps preview metrics in a row on an ordinary layout", () => {
     render(<BudgetForm />);
 
     expect(screen.getByTestId("budget-preview-metrics")).toHaveProp(
@@ -284,13 +270,8 @@ describe("BudgetForm premium flow", () => {
     );
   });
 
-  it("stacks preview metrics on a compact phone", () => {
-    mockWindowDimensions = {
-      width: 320,
-      height: 568,
-      scale: 1,
-      fontScale: 1,
-    };
+  it("stacks preview metrics on a compact layout", () => {
+    mockShouldUseCompactLayout.mockReturnValue(true);
 
     render(<BudgetForm />);
 
