@@ -110,4 +110,60 @@ describe("PR #271 review follow-up regressions", () => {
     expect(value).toContain("live-rates-silver-layout-spacer");
     expect(value).toMatch(/flex-row mt-3[\s\S]*gap:\s*12/);
   });
+
+  it("identity-tags History observer state and watches mutable projection columns", () => {
+    const value = source("apps/mobile/hooks/useMetalHistory.ts");
+    expect(value).toContain("observedStatesUserId");
+    expect(value).toContain("observeWithColumns");
+    for (const column of [
+      "status",
+      "effective_action_id",
+      "effective_event_id",
+      "is_visible",
+      "reconciliation_state",
+    ]) {
+      expect(value).toContain(`"${column}"`);
+    }
+    expect(value).toMatch(/observedStatesUserId\s*!==\s*userId/);
+  });
+
+  it("requires effective action evidence before terminal portfolio projection", () => {
+    const service = source("apps/mobile/services/metal-portfolio-read-model-service.ts");
+    const hook = source("apps/mobile/hooks/useMetalPortfolio.ts");
+    expect(service).toContain("MetalActionEvidence");
+    expect(service).toContain("observePortfolioEffectiveActionEvidence");
+    expect(service).toContain("hasBoundEffectiveActionEvidence");
+    expect(hook).toContain("observePortfolioEffectiveActionEvidence");
+    expect(hook).toContain("actionEvidence");
+  });
+
+  it("formats Home breakdown amounts using the selected currency minor units", () => {
+    const value = source("apps/mobile/components/dashboard/WealthBreakdownSection.tsx");
+    expect(value).toContain("resolveMetalsCurrencyMinorUnits");
+    expect(value).not.toContain("maximumFractionDigits: 2");
+  });
+
+  it("uses plain-language sold-metal result copy", () => {
+    const en = JSON.parse(source("apps/mobile/locales/en/metals.json")) as Record<
+      string,
+      unknown
+    >;
+    const ar = JSON.parse(source("apps/mobile/locales/ar/metals.json")) as Record<
+      string,
+      unknown
+    >;
+    const enPortfolio = en.portfolio as Record<string, string>;
+    const arPortfolio = ar.portfolio as Record<string, string>;
+    for (const key of [
+      "realized_profit_from_sold_metals",
+      "realized_loss_from_sold_metals",
+      "realized_result_from_sold_metals",
+      "realized_profit",
+      "realized_loss",
+      "realized_result",
+    ]) {
+      expect(enPortfolio[key].toLowerCase()).not.toContain("realized");
+      expect(arPortfolio[key]).not.toMatch(/محقق/);
+    }
+  });
 });
