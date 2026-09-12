@@ -193,6 +193,14 @@ export function observeMetalDetailHolding(
   );
 }
 
+export function observeMetalDetailAssetMetal(
+  holdingId: string
+): Query<AssetMetal> {
+  return database
+    .get<AssetMetal>("asset_metals")
+    .query(Q.where("asset_id", holdingId), Q.where("deleted", false));
+}
+
 export function observeMetalDetailEvents(
   userId: string,
   holdingId: string
@@ -823,12 +831,27 @@ function buildCurrentReference(
   value: LiveRatesTrustValue | undefined,
   expectation: RateReferenceExpectation
 ): NormalizedRateReference | null {
+  if (expectation.instrumentCode === "currency:USD") {
+    return Object.freeze({
+      capturedAt: 0,
+      capturedFreshness: "unknown",
+      instrumentCode: "currency:USD",
+      kind: "currency",
+      normalizedUsdPerBaseDecimal: "1",
+      orientation: "quote_per_base",
+      providerObservedAt: null,
+      quality: "valid",
+      role: expectation.role,
+      source: null,
+      unit: "usd_per_currency_unit",
+      valueDecimal: "1",
+    });
+  }
   if (
     !hasTrustedCurrentRate(value) ||
     value.capturedAt === undefined ||
     value.capturedAt === null ||
-    value.quality !== "valid" ||
-    typeof value.source !== "string"
+    value.quality !== "valid"
   ) {
     return null;
   }
@@ -842,7 +865,7 @@ function buildCurrentReference(
       providerObservedAt: value.providerObservedAt?.getTime() ?? null,
       quality: value.quality,
       role: expectation.role,
-      source: value.source,
+      source: value.source ?? null,
       unit: isMetal ? "usd_per_pure_gram" : "usd_per_currency_unit",
       valueDecimal: value.valueDecimal,
     },

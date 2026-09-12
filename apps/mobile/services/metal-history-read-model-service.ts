@@ -127,36 +127,27 @@ export async function readMetalHistoryReadModel(
   const terminalStates = await readReportableTerminalStates(scope);
   if (terminalStates.length === 0) return emptyHistory(options.filter);
 
-  const orderedStates = await orderTerminalStatesByEffectiveEventTime(
-    scope,
-    terminalStates
-  );
-  if (orderedStates.length === 0) return emptyHistory(options.filter);
-
-  const counts = countTerminalStates(orderedStates);
-  const filteredStates = orderedStates.filter(
-    (state) => options.filter === "all" || state.status === options.filter
-  );
-  const pageStates = filteredStates.slice(0, pageSize);
-  if (pageStates.length === 0) return emptyHistory(options.filter, counts);
-
-  const assets = await readHistoryAssets(scope, pageStates);
-  if (assets.length === 0) return emptyHistory(options.filter, counts);
+  const assets = await readHistoryAssets(scope, terminalStates);
+  if (assets.length === 0) return emptyHistory(options.filter);
   const dependencies = await readHistoryDependencies(
     scope,
     assets,
-    pageStates
+    terminalStates
   );
-  const page = buildMetalHistoryReadModel({
-    filter: options.filter,
-    holdings: shapeReadHistoryHoldings(assets, pageStates, dependencies),
+  const validated = buildMetalHistoryReadModel({
+    filter: "all",
+    holdings: shapeReadHistoryHoldings(assets, terminalStates, dependencies),
     userId: scope.userId,
   });
+  const filteredItems = validated.items.filter(
+    (item) => options.filter === "all" || item.status === options.filter
+  );
+  const items = filteredItems.slice(0, pageSize);
   return Object.freeze({
-    counts: Object.freeze({ ...counts }),
+    counts: validated.counts,
     filter: options.filter,
-    hasMore: filteredStates.length > pageStates.length,
-    items: page.items,
+    hasMore: filteredItems.length > items.length,
+    items: Object.freeze(items),
   });
 }
 
@@ -179,48 +170,6 @@ async function readReportableTerminalStates(
       isReportableReconciliationState(state.reconciliationState) &&
       state.effectiveEventId !== null
   );
-}
-
-async function orderTerminalStatesByEffectiveEventTime(
-  scope: CurrentUserDataScope,
-  states: readonly MetalHoldingState[]
-): Promise<readonly MetalHoldingState[]> {
-  if (states.length === 0) return [];
-
-  const eventIds = states
-    .map((state) => state.effectiveEventId)
-    .filter((id): id is string => id !== null);
-  const events = await scope
-    .queryOwned(
-      database.get<MetalLifecycleEvent>("metal_lifecycle_events"),
-      Q.where("id", Q.oneOf(eventIds)),
-      Q.where("deleted", false),
-      Q.where("is_effective", true)
-    )
-    .fetch();
-  const eventsById = new Map(events.map((event) => [event.id, event] as const));
-
-  return states
-    .filter((state) => {
-      const event = state.effectiveEventId
-        ? eventsById.get(state.effectiveEventId)
-        : undefined;
-      return (
-        event !== undefined &&
-        event.holdingId === state.holdingId &&
-        Number.isFinite(event.occurredAt.getTime())
-      );
-    })
-    .sort((left, right) => {
-      const leftEvent = eventsById.get(left.effectiveEventId as string);
-      const rightEvent = eventsById.get(right.effectiveEventId as string);
-      const timeDifference =
-        (rightEvent?.occurredAt.getTime() ?? 0) -
-        (leftEvent?.occurredAt.getTime() ?? 0);
-      return timeDifference !== 0
-        ? timeDifference
-        : left.holdingId.localeCompare(right.holdingId);
-    });
 }
 
 async function readHistoryAssets(
@@ -452,16 +401,6 @@ function isReportableReconciliationState(value: string): boolean {
 function countItems(items: readonly MetalHistoryItem[]): MetalHistoryCounts {
   const sold = items.filter((item) => item.status === "sold").length;
   const disposed = items.filter((item) => item.status === "disposed").length;
-  return { all: sold + disposed, disposed, sold };
-}
-
-function countTerminalStates(
-  states: readonly MetalHoldingState[]
-): MetalHistoryCounts {
-  const sold = states.filter((state) => state.status === "sold").length;
-  const disposed = states.filter(
-    (state) => state.status === "disposed"
-  ).length;
   return { all: sold + disposed, disposed, sold };
 }
 
