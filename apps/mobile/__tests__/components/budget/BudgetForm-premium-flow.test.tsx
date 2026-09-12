@@ -18,7 +18,9 @@ import { palette } from "@/constants/colors";
 import type { CreateBudgetInput } from "@/services/budget-service";
 
 type CategoryLookupFixture = Pick<Category, "id" | "displayName">;
-type CreatedBudgetStub = { readonly id: string };
+interface CreatedBudgetStub {
+  readonly id: string;
+}
 
 function buildCategoryLookup(): Map<string, CategoryLookupFixture> {
   return new Map([
@@ -214,8 +216,7 @@ describe("BudgetForm premium flow", () => {
     render(<BudgetForm />);
 
     expect(screen.getByTestId("budget-scope-selector")).toBeOnTheScreen();
-    const preview = screen.getByTestId("budget-live-preview");
-    expect(preview).toBeOnTheScreen();
+    expect(screen.getByTestId("budget-live-preview")).toBeOnTheScreen();
 
     fireEvent.press(screen.getByTestId("budget-scope-global"));
     fireEvent.changeText(
@@ -226,15 +227,31 @@ describe("BudgetForm premium flow", () => {
     fireEvent.press(screen.getByTestId("budget-period-weekly"));
     fireEvent.press(screen.getByTestId("mock-threshold"));
 
-    expect(within(preview).getByText("global_type")).toBeOnTheScreen();
-    expect(within(preview).getByText("weekly")).toBeOnTheScreen();
-    expect(within(preview).getByText(/preview_alert_at 65%/)).toBeOnTheScreen();
-    expect(within(preview).getByText("EGP 5,000")).toBeOnTheScreen();
-    expect(within(preview).getByText(/EGP 3,250/)).toBeOnTheScreen();
     expect(
-      within(preview).getByText("preview_resets_on 2026-09-13")
+      within(screen.getByTestId("budget-live-preview")).getByText("global_type")
     ).toBeOnTheScreen();
-    expect(within(preview).getByText("2026-09-06")).toBeOnTheScreen();
+    expect(
+      within(screen.getByTestId("budget-live-preview")).getByText("weekly")
+    ).toBeOnTheScreen();
+    expect(
+      within(screen.getByTestId("budget-live-preview")).getByText(
+        /preview_alert_at 65%/
+      )
+    ).toBeOnTheScreen();
+    expect(
+      within(screen.getByTestId("budget-live-preview")).getByText("EGP 5,000")
+    ).toBeOnTheScreen();
+    expect(
+      within(screen.getByTestId("budget-live-preview")).getByText(/EGP 3,250/)
+    ).toBeOnTheScreen();
+    expect(
+      within(screen.getByTestId("budget-live-preview")).getByText(
+        "preview_resets_on 2026-09-13"
+      )
+    ).toBeOnTheScreen();
+    expect(
+      within(screen.getByTestId("budget-live-preview")).getByText("2026-09-06")
+    ).toBeOnTheScreen();
   });
 
   it("shows an unavailable preview instead of malformed non-empty amount text", () => {
@@ -242,10 +259,15 @@ describe("BudgetForm premium flow", () => {
 
     fireEvent.changeText(screen.getByPlaceholderText("0.00"), "1e3");
 
-    const preview = screen.getByTestId("budget-live-preview");
-    expect(within(preview).queryByText("EGP 1e3")).not.toBeOnTheScreen();
-    expect(within(preview).queryByText("EGP 0")).not.toBeOnTheScreen();
-    expect(within(preview).getAllByText("EGP —")).toHaveLength(2);
+    expect(
+      within(screen.getByTestId("budget-live-preview")).queryByText("EGP 1e3")
+    ).not.toBeOnTheScreen();
+    expect(
+      within(screen.getByTestId("budget-live-preview")).queryByText("EGP 0")
+    ).not.toBeOnTheScreen();
+    expect(
+      within(screen.getByTestId("budget-live-preview")).getAllByText("EGP —")
+    ).toHaveLength(2);
   });
 
   it("pads sticky actions above the bottom safe-area inset", () => {
@@ -266,8 +288,9 @@ describe("BudgetForm premium flow", () => {
 
     render(<BudgetForm renewalSource={kwdRenewalSource} />);
 
-    const preview = screen.getByTestId("budget-live-preview");
-    expect(within(preview).getByText(/KWD 0\.657/)).toBeOnTheScreen();
+    expect(
+      within(screen.getByTestId("budget-live-preview")).getByText(/KWD 0\.657/)
+    ).toBeOnTheScreen();
   });
 
   it("uses the NativeWind minimum touch-height utility for currency selection", () => {
