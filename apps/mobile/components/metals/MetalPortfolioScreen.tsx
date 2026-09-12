@@ -1,11 +1,20 @@
 import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
-import { getTabContentBottomClearance } from "@/constants/ui";
+import {
+  getTabContentBottomClearance,
+  shouldUseCompactLayout,
+} from "@/constants/ui";
 import type { MetalPortfolioSectionReadiness } from "@/hooks/metal-portfolio-readiness";
 import type { CurrencyType } from "@monyvi/db";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { FlatList, Pressable, Text, View } from "react-native";
+import {
+  FlatList,
+  Pressable,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 
 import type {
@@ -285,6 +294,8 @@ function PortfolioSummary({
   readonly rateProviderObservedAt: Date | null;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation("metals");
+  const { fontScale, width } = useWindowDimensions();
+  const isCompact = shouldUseCompactLayout(width, fontScale);
   const locale = resolveLocale(i18n?.resolvedLanguage);
   const holdingCount = portfolio.activeHoldings.length;
   const performanceValue = parseOptionalNumber(
@@ -305,7 +316,12 @@ function PortfolioSummary({
       <Text className="text-base font-medium text-nileGreen-700 dark:text-nileGreen-400">
         {t("portfolio.active_portfolio")}
       </Text>
-      <View className="mt-4 flex-row items-start justify-between gap-5">
+      <View
+        testID="metal-portfolio-summary-layout"
+        className={`mt-4 items-start gap-5 ${
+          isCompact ? "flex-col" : "flex-row justify-between"
+        }`}
+      >
         <View
           accessible
           accessibilityLabel={t("portfolio.total_accessibility", {
@@ -333,7 +349,7 @@ function PortfolioSummary({
             {t("portfolio.active_portfolio_value")}
           </Text>
         </View>
-        <View className="w-[156px] pt-1">
+        <View className={isCompact ? "w-full" : "w-[156px] pt-1"}>
           <View className="flex-row items-baseline gap-2">
             <Text className="text-[28px] font-medium text-text-primary dark:text-text-primary-dark">
               {holdingCount}

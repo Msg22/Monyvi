@@ -183,13 +183,17 @@ export function LiveRatesScreen(): React.JSX.Element {
               currencySymbol={metals.currencySymbol}
             />
 
-            <View className="flex-row mt-3">
+            <View className="flex-row mt-3" style={{ gap: 12 }}>
               <MetalCard
                 metalName={t("silver")}
                 price={metals.silverPrice}
                 trendPercent={metals.silverTrendPercent}
                 borderColor={palette.silver[500]}
                 currencySymbol={metals.currencySymbol}
+              />
+              <View
+                testID="live-rates-silver-layout-spacer"
+                className="flex-1"
               />
             </View>
 
