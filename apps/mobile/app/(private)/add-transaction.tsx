@@ -399,12 +399,20 @@ export default function AddTransaction(): React.ReactNode {
     // Clear previous errors
     setFormErrors({});
 
+    const evaluatedAmount = calculateResult(amount);
+    const amountForValidation =
+      evaluatedAmount === null ? amount : evaluatedAmount.toString();
+
     // Build form data for validation
     const formData =
       type === "TRANSFER"
-        ? { amount, fromAccountId: selectedAccountId, toAccountId }
+        ? {
+            amount: amountForValidation,
+            fromAccountId: selectedAccountId,
+            toAccountId,
+          }
         : {
-            amount,
+            amount: amountForValidation,
             accountId: selectedAccountId,
             categoryId: selectedCategoryId,
           };
@@ -433,7 +441,7 @@ export default function AddTransaction(): React.ReactNode {
       return;
     }
 
-    const finalAmount = calculateResult(amount);
+    const finalAmount = evaluatedAmount;
     if (finalAmount === null || finalAmount <= 0) {
       setFormErrors({ amount: t("invalid_amount") });
       return;
