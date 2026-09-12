@@ -221,11 +221,23 @@ describe("BudgetForm premium flow", () => {
     expect(within(preview).getByText("global_type")).toBeOnTheScreen();
     expect(within(preview).getByText("weekly")).toBeOnTheScreen();
     expect(within(preview).getByText(/preview_alert_at 65%/)).toBeOnTheScreen();
+    expect(within(preview).getByText("EGP 5,000")).toBeOnTheScreen();
     expect(within(preview).getByText(/EGP 3,250/)).toBeOnTheScreen();
     expect(
       within(preview).getByText("preview_resets_on 2026-09-13")
     ).toBeOnTheScreen();
     expect(within(preview).getByText("2026-09-06")).toBeOnTheScreen();
+  });
+
+  it("shows an unavailable preview instead of malformed non-empty amount text", () => {
+    render(<BudgetForm />);
+
+    fireEvent.changeText(screen.getByPlaceholderText("0.00"), "1e3");
+
+    const preview = screen.getByTestId("budget-live-preview");
+    expect(within(preview).queryByText("EGP 1e3")).not.toBeOnTheScreen();
+    expect(within(preview).queryByText("EGP 0")).not.toBeOnTheScreen();
+    expect(within(preview).getAllByText("EGP —")).toHaveLength(2);
   });
 
   it("pads sticky actions above the bottom safe-area inset", () => {
