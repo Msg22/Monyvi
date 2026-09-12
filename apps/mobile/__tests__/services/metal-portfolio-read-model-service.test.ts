@@ -378,6 +378,20 @@ describe("metal portfolio read model", () => {
     expect(model.hasTerminalHistory).toBe(false);
   });
 
+  it("does not report portfolio performance for an empty portfolio", () => {
+    const model = buildMetalPortfolioReadModel({
+      userId: "user-1",
+      filter: "ALL",
+      holdings: [],
+      rateStatus: { state: "fresh", ageMs: 1000 },
+    });
+
+    expect(model.listState).toBe("PORTFOLIO_EMPTY");
+    expect(model.activeTotalDecimal).toBe("0");
+    expect(model.currentPerformanceDecimal).toBeNull();
+    expect(model.currentPerformanceUnavailableReason).toBeNull();
+  });
+
   it("uses exact decimal arithmetic for active portfolio totals", () => {
     const model = buildMetalPortfolioReadModel({
       userId: "user-1",

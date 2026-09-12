@@ -419,10 +419,13 @@ export function buildMetalPortfolioReadModel(
       gold: calculateDisplayedShare(goldTotalDecimal, activeTotalDecimal),
       silver: calculateDisplayedShare(silverTotalDecimal, activeTotalDecimal),
     },
-    currentPerformanceDecimal: sumAvailableDecimals(
-      activeHoldings.map((holding) => holding.currentPerformanceDecimal),
-      "0"
-    ),
+    currentPerformanceDecimal:
+      activeHoldings.length === 0
+        ? null
+        : sumAvailableDecimals(
+            activeHoldings.map((holding) => holding.currentPerformanceDecimal),
+            "0"
+          ),
     currentPerformanceUnavailableReason:
       resolvePortfolioPerformanceUnavailableReason(activeHoldings),
     filter: input.filter,

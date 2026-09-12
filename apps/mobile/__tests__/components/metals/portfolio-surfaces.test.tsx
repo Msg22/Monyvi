@@ -762,6 +762,8 @@ describe("US1 portfolio surfaces", () => {
       },
     });
     expect(screen.getByText("Start tracking your metals")).toBeTruthy();
+    // An empty portfolio has no active purchase: no signed performance metric.
+    expect(screen.queryByText("since purchase")).toBeNull();
 
     renderPortfolio({
       portfolio: {
@@ -831,13 +833,13 @@ describe("US1 portfolio surfaces", () => {
       rateProviderObservedAt: new Date("2026-08-24T10:30:00.000Z"),
     });
 
+    // The trust status must live inside the single spoken total label.
     expect(
-      screen.getByLabelText(/^Metals portfolio value/)
+      screen.getByLabelText(/^Metals portfolio value .*Prices last updated/)
     ).toBeTruthy();
     expect(
-      screen.queryByLabelText(/Metals portfolio value .*Current rate\.$/)
+      screen.queryByLabelText(/^Metals portfolio value .*Current rate\.$/)
     ).toBeNull();
-    expect(screen.queryByLabelText(/Prices last updated/)).toBeTruthy();
   });
 
   it("speaks unavailable when the required rate evidence is missing", () => {

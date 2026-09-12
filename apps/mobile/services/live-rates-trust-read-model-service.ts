@@ -207,14 +207,31 @@ function buildCurrencyTrust(
   for (const currencyCode of V1_CURRENCY_CODES) {
     currencies.set(
       currencyCode,
-      classifyObservationTrust(
-        latestByInstrument.get(`currency:${currencyCode}`) ?? null,
-        nowMs
-      )
+      currencyCode === "USD"
+        ? usdIdentityTrustValue()
+        : classifyObservationTrust(
+            latestByInstrument.get(`currency:${currencyCode}`) ?? null,
+            nowMs
+          )
     );
   }
 
   return currencies;
+}
+
+// The approved rate-reference contract defines `currency:USD` as the exact
+// identity rate `1`; it is never a provider observation, so it must not be
+// classified as missing when summarizing currency trust.
+function usdIdentityTrustValue(): LiveRatesTrustValue {
+  return {
+    state: "fresh",
+    ageMs: null,
+    capturedAt: null,
+    providerObservedAt: null,
+    quality: "valid",
+    source: null,
+    valueDecimal: "1",
+  };
 }
 
 function classifyObservationTrust(

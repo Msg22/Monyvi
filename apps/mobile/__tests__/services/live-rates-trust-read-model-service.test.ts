@@ -151,6 +151,29 @@ describe("live-rates trust read model", () => {
     expect(summarizeLiveRatesTrust([])).toBe("missing");
   });
 
+  it("treats USD as the exact identity rate without a provider observation", () => {
+    const readModel = buildLiveRatesTrustReadModel(
+      [observation("currency:EGP")],
+      NOW_MS
+    );
+
+    expect(readModel.currencies.get("USD")).toEqual({
+      ageMs: null,
+      capturedAt: null,
+      providerObservedAt: null,
+      quality: "valid",
+      source: null,
+      state: "fresh",
+      valueDecimal: "1",
+    });
+    expect(
+      summarizeLiveRatesTrust([
+        readModel.currencies.get("USD")!,
+        readModel.currencies.get("EGP")!,
+      ])
+    ).toBe("fresh");
+  });
+
   it("waits for every initial instrument query before publishing and reclassifies without rebuilding observers", () => {
     const emissions: Array<(rows: readonly never[]) => void> = [];
     const unsubscribe = jest.fn();

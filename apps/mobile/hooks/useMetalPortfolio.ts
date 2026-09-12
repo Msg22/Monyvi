@@ -156,6 +156,16 @@ export function useMetalPortfolio(
     setRefreshKey((value) => value + 1);
   }, []);
 
+  const previousUserIdRef = useRef(userId);
+  useEffect(() => {
+    if (previousUserIdRef.current === userId) {
+      return;
+    }
+    previousUserIdRef.current = userId;
+    setError(null);
+    setRefreshKey((value) => value + 1);
+  }, [userId]);
+
   useEffect(() => {
     if (isFocused && !wasFocusedRef.current) {
       setSelectedFilter("ALL");

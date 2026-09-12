@@ -298,13 +298,7 @@ function PortfolioSummary({
   const isCompact = shouldUseCompactLayout(width, fontScale);
   const locale = resolveLocale(i18n?.resolvedLanguage);
   const holdingCount = portfolio.activeHoldings.length;
-  const performanceValue = parseOptionalNumber(
-    portfolio.currentPerformanceDecimal
-  );
   const realizedProfitLoss = portfolio.soldResultDecimal;
-  const performanceUnavailable =
-    portfolio.currentPerformanceDecimal === null &&
-    portfolio.activeTotalDecimal !== null;
   const rateAccessibilityCopy = getPortfolioRateAccessibilityCopy(
     portfolio.rateStatus.state,
     rateProviderObservedAt,
@@ -358,38 +352,12 @@ function PortfolioSummary({
               {t("portfolio.active_holdings", { count: holdingCount })}
             </Text>
           </View>
-          {portfolio.currentPerformanceDecimal === null ? (
-            <Text className="mt-3 text-sm text-text-secondary dark:text-text-secondary-dark">
-              {performanceUnavailable
-                ? t(
-                    portfolio.currentPerformanceUnavailableReason ===
-                      "rate_reference"
-                      ? "portfolio.performance_unavailable_rate_reference"
-                      : "portfolio.performance_unavailable"
-                  )
-                : t("portfolio.current_value_unavailable", {
-                    reason: t(`rate.${portfolio.rateStatus.state}`),
-                  })}
-            </Text>
-          ) : (
-            <>
-              <Text
-                numberOfLines={1}
-                className={`mt-3 text-sm font-medium ${getPerformanceTextClass(
-                  performanceValue
-                )}`}
-              >
-                {formatCodeAmount(
-                  portfolio.currentPerformanceDecimal,
-                  currency,
-                  locale,
-                  true
-                )}
-              </Text>
-              <Text className="mt-1 text-xs text-text-secondary dark:text-text-secondary-dark">
-                {t("portfolio.since_purchase_label")}
-              </Text>
-            </>
+          {holdingCount === 0 ? null : (
+            <PerformanceMetric
+              currency={currency}
+              locale={locale}
+              portfolio={portfolio}
+            />
           )}
         </View>
       </View>
@@ -412,6 +380,54 @@ function PortfolioSummary({
         />
       )}
     </View>
+  );
+}
+
+function PerformanceMetric({
+  currency,
+  locale,
+  portfolio,
+}: {
+  readonly currency: CurrencyType;
+  readonly locale: string;
+  readonly portfolio: MetalPortfolioReadModel;
+}): React.JSX.Element {
+  const { t } = useTranslation("metals");
+  if (portfolio.currentPerformanceDecimal === null) {
+    const performanceUnavailable = portfolio.activeTotalDecimal !== null;
+    return (
+      <Text className="mt-3 text-sm text-text-secondary dark:text-text-secondary-dark">
+        {performanceUnavailable
+          ? t(
+              portfolio.currentPerformanceUnavailableReason === "rate_reference"
+                ? "portfolio.performance_unavailable_rate_reference"
+                : "portfolio.performance_unavailable"
+            )
+          : t("portfolio.current_value_unavailable", {
+              reason: t(`rate.${portfolio.rateStatus.state}`),
+            })}
+      </Text>
+    );
+  }
+  return (
+    <>
+      <Text
+        numberOfLines={1}
+        className={`mt-3 text-sm font-medium ${getPerformanceTextClass(
+          parseOptionalNumber(portfolio.currentPerformanceDecimal)
+        )}`}
+      >
+        {formatCodeAmount(
+          portfolio.currentPerformanceDecimal,
+          currency,
+          locale,
+          true
+        )}
+      </Text>
+      <Text className="mt-1 text-xs text-text-secondary dark:text-text-secondary-dark">
+        {t("portfolio.since_purchase_label")}
+      </Text>
+    </>
   );
 }
 

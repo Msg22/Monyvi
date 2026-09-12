@@ -35,8 +35,10 @@ jest.mock("@react-navigation/native", () => ({
   useIsFocused: (): boolean => true,
 }));
 
+let mockAuthUserId = "user-1";
+
 jest.mock("@/context/AuthContext", () => ({
-  useAuth: () => ({ user: { id: "user-1" }, isLoading: false }),
+  useAuth: () => ({ user: { id: mockAuthUserId }, isLoading: false }),
 }));
 
 jest.mock("@/providers/DatabaseProvider", () => ({
@@ -102,6 +104,7 @@ import { useMetalPortfolio } from "@/hooks/useMetalPortfolio";
 
 describe("useMetalPortfolio summary loading signal", () => {
   beforeEach(() => {
+    mockAuthUserId = "user-1";
     mockTrustObservers.length = 0;
     mockActiveHoldings = [];
   });
@@ -157,6 +160,24 @@ describe("useMetalPortfolio summary loading signal", () => {
     // section readiness derived from it.
     expect(result.current.readiness.summary).toBe(true);
     expect(result.current.isSummaryLoading).toBe(false);
+  });
+
+  it("clears a previous account's observer error when the signed-in user changes", async () => {
+    const { result, rerender } = renderHook(() =>
+      useMetalPortfolio({ accountsValueDecimal: "1000" })
+    );
+    await waitFor(() => expect(result.current.readiness.holdings).toBe(true));
+
+    act(() => {
+      mockTrustObservers[0]?.error(new Error("user A rate observer failed"));
+    });
+    await waitFor(() => expect(result.current.error).toBeInstanceOf(Error));
+
+    mockAuthUserId = "user-2";
+    rerender(undefined);
+
+    // The new account must not inherit account A's generic failure/retry state.
+    expect(result.current.error).toBeNull();
   });
 });
 
