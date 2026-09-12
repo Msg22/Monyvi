@@ -13,10 +13,15 @@ import { useRecurringPayment } from "@/hooks/useRecurringPayment";
 import {
   deleteRecurringPayment,
   pauseRecurringPayment,
-  RECURRING_PAYMENT_SERVICE_ERROR_CODES,
   resumeRecurringPayment,
   updateRecurringPayment,
 } from "@/services/recurring-payment-service";
+import {
+  getRecurringPaymentErrorMessage,
+  parseRecurringPaymentSubmissionAmount,
+  type RecurringPaymentOperation,
+} from "@/utils/recurring-payment-submission";
+import { formatStoredAmountInput } from "@monyvi/logic";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -44,12 +49,13 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
 
     return {
       name: payment.name,
-      amount: String(payment.amount),
+      amount: formatStoredAmountInput(payment.amount),
       type: payment.type,
       accountId: payment.accountId,
       categoryId: payment.categoryId,
       frequency: payment.frequency,
-      startDate: payment.startDate,
+      startDate: payment.nextDueDate,
+      expectedNextDueDate: payment.nextDueDate,
       endDate: payment.endDate ?? null,
       reactivateAfterSaving: false,
       action: payment.action,
@@ -64,7 +70,7 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
     payment?.frequency,
     payment?.name,
     payment?.notes,
-    payment?.startDate,
+    payment?.nextDueDate,
     payment?.endDate,
     payment?.type,
   ]);
@@ -89,15 +95,29 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
       return false;
     }
 
+    const amount = parseRecurringPaymentSubmissionAmount(
+      values.amount,
+      selectedAccount.currency
+    );
+    if (amount === null) {
+      showToast({
+        type: "error",
+        title: t("failed_to_update_payment"),
+        message: t("invalid_amount"),
+      });
+      return false;
+    }
+
     setIsSubmitting(true);
     try {
       await updateRecurringPayment(payment.id, {
         name: values.name.trim(),
-        amount: Number.parseFloat(values.amount),
+        amount,
         currency: selectedAccount.currency,
         type: values.type,
         frequency: values.frequency,
         startDate: values.startDate,
+        expectedNextDueDate: values.expectedNextDueDate,
         endDate: values.endDate,
         accountId: values.accountId,
         categoryId: values.categoryId,
@@ -115,7 +135,12 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
       showToast({
         type: "error",
         title: t("failed_to_update_payment"),
-        message: getRecurringPaymentErrorMessage(error, t, tCommon),
+        message: getRecurringPaymentErrorMessage({
+          error,
+          operation: "update",
+          t,
+          tCommon,
+        }),
       });
       return false;
     } finally {
@@ -128,9 +153,12 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
 
     setIsPauseResumeVisible(false);
 
-    try {
-      const isResuming = payment.status === "PAUSED";
+    const isResuming = payment.status === "PAUSED";
+    const operation: RecurringPaymentOperation = isResuming
+      ? "resume"
+      : "pause";
 
+    try {
       if (isResuming) {
         await resumeRecurringPayment(payment.id);
       } else {
@@ -152,7 +180,12 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
       showToast({
         type: "error",
         title: t("failed_to_update_payment"),
-        message: getRecurringPaymentErrorMessage(error, t, tCommon),
+        message: getRecurringPaymentErrorMessage({
+          error,
+          operation,
+          t,
+          tCommon,
+        }),
       });
     }
   };
@@ -172,7 +205,12 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
       showToast({
         type: "error",
         title: t("failed_to_delete_payment"),
-        message: getRecurringPaymentErrorMessage(error, t, tCommon),
+        message: getRecurringPaymentErrorMessage({
+          error,
+          operation: "delete",
+          t,
+          tCommon,
+        }),
       });
     }
   };
@@ -230,6 +268,7 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
         allCategories={allCategories}
         status={payment.status}
         dueDate={payment.nextDueDate}
+        recurrenceAnchorDate={payment.startDate}
         isSubmitting={isSubmitting}
         submitLabel={t("save_changes")}
         onSubmit={handleSubmit}
@@ -280,22 +319,4 @@ export default function EditRecurringPaymentScreen(): React.JSX.Element {
       />
     </View>
   );
-}
-
-function getRecurringPaymentErrorMessage(
-  error: unknown,
-  t: (key: string) => string,
-  tCommon: (key: string) => string
-): string {
-  const message = error instanceof Error ? error.message : undefined;
-
-  if (message === RECURRING_PAYMENT_SERVICE_ERROR_CODES.ACCOUNT_UNAVAILABLE) {
-    return t("recurring_payment_account_unavailable");
-  }
-
-  if (message === RECURRING_PAYMENT_SERVICE_ERROR_CODES.CATEGORY_UNAVAILABLE) {
-    return t("recurring_payment_category_unavailable");
-  }
-
-  return tCommon("error_generic");
 }

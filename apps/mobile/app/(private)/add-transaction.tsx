@@ -285,19 +285,29 @@ export default function AddTransaction(): React.ReactNode {
       throw new Error(t("please_select_an_account"));
     }
 
-    const recurring = await createRecurringPayment({
-      name: recurringName,
-      amount,
-      currency,
-      type,
-      accountId: selectedAccountId,
-      categoryId: selectedCategoryId,
-      frequency: recurringFrequency,
-      startDate: date,
-      initialOccurrenceRecorded: true,
-      action: recurringAutoCreate ? "AUTO_CREATE" : "NOTIFY",
-    });
-    return recurring.id;
+    try {
+      const recurring = await createRecurringPayment({
+        name: recurringName,
+        amount,
+        currency,
+        type,
+        accountId: selectedAccountId,
+        categoryId: selectedCategoryId,
+        frequency: recurringFrequency,
+        startDate: date,
+        initialOccurrenceRecorded: true,
+        action: recurringAutoCreate ? "AUTO_CREATE" : "NOTIFY",
+      });
+      return recurring.id;
+    } catch (error: unknown) {
+      if (getRecurringPaymentErrorMessage(error, t) === null) {
+        logger.error("Recurring payment operation failed", error, {
+          operation: "create",
+          source: "add-transaction",
+        });
+      }
+      throw error;
+    }
   };
 
   const validateAndCreateTransfer = async (amount: number): Promise<void> => {
@@ -389,27 +399,49 @@ export default function AddTransaction(): React.ReactNode {
     // Clear previous errors
     setFormErrors({});
 
+    const evaluatedAmount = calculateResult(amount);
+    const amountForValidation =
+      evaluatedAmount === null ? amount : evaluatedAmount.toString();
+
     // Build form data for validation
     const formData =
       type === "TRANSFER"
-        ? { amount, fromAccountId: selectedAccountId, toAccountId }
+        ? {
+            amount: amountForValidation,
+            fromAccountId: selectedAccountId,
+            toAccountId,
+          }
         : {
-            amount,
+            amount: amountForValidation,
             accountId: selectedAccountId,
             categoryId: selectedCategoryId,
           };
 
-    const { isValid, errors } = validateTransactionForm(type, formData, {
-      accountRequired: t("please_select_an_account"),
-      sourceAccountRequired: t("please_select_source_account"),
-      destinationAccountRequired: t("please_select_destination_account"),
-    });
+    const { isValid, errors } = validateTransactionForm(
+      type,
+      formData,
+      {
+        amountRequired: t("amount_required"),
+        invalidAmount: t("invalid_amount"),
+        amountMustBePositive: t("amount_must_be_positive"),
+        amountMaximum: (maximum) =>
+          t("amount_maximum_error", {
+            maximum: maximum.toLocaleString("en-US"),
+          }),
+        amountPrecision: (precision) =>
+          t("amount_precision_error", { precision }),
+        accountRequired: t("please_select_an_account"),
+        sourceAccountRequired: t("please_select_source_account"),
+        destinationAccountRequired: t("please_select_destination_account"),
+      },
+      { currency: selectedAccount?.currency }
+    );
     if (!isValid) {
       setFormErrors(errors);
       return;
     }
 
-    const finalAmount = calculateResult(amount);
+    const finalAmount = evaluatedAmount;
     if (finalAmount === null || finalAmount <= 0) {
       setFormErrors({ amount: t("invalid_amount") });
       return;
@@ -875,6 +907,10 @@ function getRecurringPaymentErrorMessage(
 
   if (message === RECURRING_PAYMENT_SERVICE_ERROR_CODES.CATEGORY_UNAVAILABLE) {
     return t("recurring_payment_category_unavailable");
+  }
+
+  if (message === RECURRING_PAYMENT_SERVICE_ERROR_CODES.INVALID_START_DATE) {
+    return t("due_payment_date_range");
   }
 
   return null;

@@ -10,6 +10,7 @@
  * @module currency.test
  */
 
+import * as CurrencyUtils from "../currency";
 import {
   convertCurrency,
   formatCurrency,
@@ -39,6 +40,26 @@ const nanRates = createMockRates({ egpUsd: Number.NaN });
 
 /** A mock that returns Infinity for any cross-currency conversion */
 const infinityRates = createMockRates({ egpUsd: Number.POSITIVE_INFINITY });
+
+// =============================================================================
+// Currency precision contract
+// =============================================================================
+
+describe("getCurrencyPrecision", () => {
+  it("exposes the existing default, three-decimal, and BTC precision rules", () => {
+    const candidate = Reflect.get(CurrencyUtils, "getCurrencyPrecision");
+    expect(typeof candidate).toBe("function");
+    const getCurrencyPrecision = candidate as (
+      currency: import("@monyvi/db").CurrencyType
+    ) => number;
+
+    expect(getCurrencyPrecision("EGP")).toBe(2);
+    expect(getCurrencyPrecision("KWD")).toBe(3);
+    expect(getCurrencyPrecision("BHD")).toBe(3);
+    expect(getCurrencyPrecision("OMR")).toBe(3);
+    expect(getCurrencyPrecision("BTC")).toBe(8);
+  });
+});
 
 // =============================================================================
 // convertCurrency

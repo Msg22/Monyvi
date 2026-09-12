@@ -1,0 +1,135 @@
+# Recurring Payment Validation Implementation Plan
+
+> **For the implementation agent:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to execute this plan task by task. Follow `superpowers:test-driven-development` for every production change and `superpowers:verification-before-completion` before reporting completion.
+
+**Goal:** Implement the approved #103 contract for strict shared amount input, currency precision, recurring-payment date boundaries, service-layer validation, safe error handling, and future-aligned templates created from historical transactions.
+
+**Architecture:** Put the canonical amount grammar and local-calendar date predicates in `@monyvi/logic`. Keep React Native fields as presentation adapters over those pure functions. Validate again in `recurring-payment-service.ts` before any WatermelonDB write, and let the Add Transaction path obtain the corrected first outstanding occurrence through the recurring service rather than duplicating scheduling logic in the screen.
+
+**Tech stack:** TypeScript, Zod 4, React Native/Expo, WatermelonDB, Jest, React Native Testing Library, npm workspaces.
+
+**Source of truth:** GitHub issue #103 and `docs/business/business-decisions.md` as approved on 2026-09-04.
+
+---
+
+## Task 1: Record the approved business rules
+
+**Files:**
+- Modify: `docs/business/business-decisions.md`
+- Create: `docs/superpowers/plans/2026-09-04-recurring-payment-validation.md`
+
+**Steps:**
+1. Update the business-decisions timestamp.
+2. Add the project-wide amount-entry grammar: decimal point only, correctly grouped thousands commas, no scientific notation/signs/partial parsing, safe intermediate typing, domain-specific max and precision, and shared ownership in `@monyvi/logic`.
+3. Add recurring-specific rules for the inclusive today-to-one-calendar-year create range, unchanged legacy edit dates, service-boundary rejection, and future-aligned recurring templates from historical transactions.
+4. Review the diff for consistency with #103 and commit documentation before production code.
+
+## Task 2: Define the shared amount contract test-first
+
+**Files:**
+- Modify: `packages/logic/src/utils/__tests__/amount-helpers.test.ts`
+- Modify: `packages/logic/src/utils/__tests__/currency.test.ts`
+- Modify: `packages/logic/src/utils/amount-helpers.ts`
+- Modify: `packages/logic/src/utils/currency.ts`
+
+**RED steps:**
+1. Add tests proving strict parsing accepts `1234.50`, `.5`, `1,234.50`, and the exact global transaction maximum.
+2. Add tests proving it rejects `12,5`, malformed grouping, `1e3`, signs, words, `Infinity`, `NaN`, multiple decimals, trailing junk, zero, negatives, values above the maximum, and excess currency precision.
+3. Add input-change tests proving valid grouping becomes canonical ungrouped state, `12.` remains a safe intermediate state, and invalid pasted values are preserved/rejected rather than repaired into another amount.
+4. Add currency tests for the existing 2/3/8 precision contract.
+5. Run `npm test -w @monyvi/logic -- --runInBand amount-helpers currency` and verify the new tests fail for the intended missing API/behavior.
+
+**GREEN steps:**
+1. Add a discriminated strict amount parse result and parser in `amount-helpers.ts`.
+2. Add a safe input-change resolver and make the existing `parseAmountInput` adapter stop destructively stripping invalid characters.
+3. Add/export `getCurrencyPrecision` in `currency.ts` and use it for strict parsing/service assertions.
+4. Preserve existing budget-specific parsing until its separate migration issue.
+5. Re-run the focused logic tests and refactor only after green.
+
+## Task 3: Harden transaction and recurring form validation test-first
+
+**Files:**
+- Modify: `apps/mobile/__tests__/validation/transaction-validation.test.ts`
+- Modify: `apps/mobile/__tests__/validation/recurring-payment-validation.test.ts`
+- Modify: `apps/mobile/validation/transaction-validation.ts`
+- Modify: `apps/mobile/validation/recurring-payment-validation.ts`
+- Modify: `apps/mobile/components/recurring-payments/RecurringPaymentForm.tsx`
+
+**RED steps:**
+1. Add transaction-validator cases for valid grouping and rejection of comma decimals, malformed grouping, scientific notation, signs, and exact/over-limit boundaries.
+2. Add recurring-validator cases for 2/3/8 currency precision, exact/over-limit boundaries, invalid JavaScript dates, inclusive today and one-calendar-year boundaries, out-of-range dates, unchanged legacy edit dates, and changed legacy dates.
+3. Freeze or inject the reference date so tests are deterministic across time zones and leap years.
+4. Run `npm test -w @monyvi/mobile -- --runInBand transaction-validation recurring-payment-validation` and verify RED.
+
+**GREEN steps:**
+1. Replace transaction validation's local parser with the shared strict parser while preserving existing user-facing error priority for empty, invalid, non-positive, and over-limit values.
+2. Make recurring validation currency-aware and date-context-aware; include `startDate` in its error contract.
+3. Pass selected account currency, create/edit mode, and the original start date from `RecurringPaymentForm`.
+4. Keep UI formatting separate from canonical form state and ensure invalid pasted content is never converted to another amount.
+5. Re-run focused tests until green.
+
+## Task 4: Enforce recurring service boundaries and scheduling test-first
+
+**Files:**
+- Modify: `apps/mobile/__tests__/services/recurring-payment-service.test.ts`
+- Modify: `apps/mobile/services/recurring-payment-service.ts`
+- Modify: `packages/logic/src/utils/date-boundary.ts`
+- Modify or add: `packages/logic/src/utils/__tests__/date-boundary.test.ts`
+
+**RED steps:**
+1. Add pure date tests for valid-date detection, local-calendar inclusive range, leap-day clamping, and unchanged legacy-date allowance.
+2. Add service tests proving invalid amount/date input is rejected before `database.write` on create and update.
+3. Add service tests proving exact max and allowed 2/3/8 currency precision pass while excess precision fails.
+4. Add update tests proving unchanged past/far-future legacy dates pass and changing them to another invalid date fails.
+5. Add historical-transaction recurrence tests proving the first outstanding frequency-aligned occurrence is advanced repeatedly until it is on or after today.
+6. Run focused logic/mobile service tests and verify RED.
+
+**GREEN steps:**
+1. Add shared local-calendar helpers in `date-boundary.ts`.
+2. Add recurring service error codes and pure assertions for amount, currency precision, valid dates, and create/edit date context.
+3. Fetch the existing recurring record before entering `database.write` for update validation and ownership checks.
+4. Remove `Math.abs` persistence repair.
+5. Calculate the first outstanding occurrence from `startDate + frequency`, advancing with a monotonic/progress guard until it reaches today.
+6. Preserve existing end-date/completion/reactivation behavior.
+7. Re-run focused tests until green.
+
+## Task 5: Make route error handling safe test-first
+
+**Files:**
+- Add or modify: `apps/mobile/__tests__/app/create-recurring-payment.test.tsx`
+- Modify: `apps/mobile/app/(private)/create-recurring-payment.tsx`
+- Modify if covered by the same helper: `apps/mobile/app/(private)/edit-recurring-payment.tsx`
+
+**RED steps:**
+1. Add a screen/integration test where the service rejects with an unexpected internal message.
+2. Assert the original error is sent to `logger.error` and the toast receives `common:error_generic`, never the internal text.
+3. Add a recognized domain-error case if a translated message is preserved.
+4. Run the focused app test and verify RED.
+
+**GREEN steps:**
+1. Parse submitted amount through the strict shared parser rather than `parseFloat`.
+2. Map known domain error codes deliberately.
+3. Log unexpected errors with non-sensitive context and show the generic localized message.
+4. Apply the same unexpected-error safety to edit when the shared path is touched.
+5. Re-run the focused test until green.
+
+## Task 6: Verify, audit scope, and prepare review
+
+**Files:**
+- Modify: issue #103 / PR description
+- Remove: temporary Codex export/apply workflows after repository changes are pushed
+
+**Steps:**
+1. Run focused tests:
+   - `npm test -w @monyvi/logic -- --runInBand amount-helpers currency date-boundary`
+   - `npm test -w @monyvi/mobile -- --runInBand transaction-validation recurring-payment-validation recurring-payment-service create-recurring-payment`
+2. Run package checks:
+   - `npm run typecheck -w @monyvi/logic`
+   - `npm run typecheck -w @monyvi/mobile`
+   - `npm run lint -w @monyvi/mobile`
+3. Run the complete logic and mobile test suites if focused checks pass.
+4. Inspect `git diff --check`, changed-file scope, and every acceptance criterion in #103.
+5. Create a follow-up issue for migrating remaining amount-entry surfaces to the shared grammar; link it from #103.
+6. Remove temporary workspace-export/patch workflows from the branch.
+7. Create a draft or ready PR with root cause, implementation, product decisions, exact validation evidence, manual QA plan, and coverage matrix.
+8. Confirm GitHub CI results before requesting merge review.

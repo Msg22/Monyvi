@@ -8,9 +8,11 @@ import React from "react";
 
 let mockPaymentStatus: "ACTIVE" | "PAUSED" | "COMPLETED" = "ACTIVE";
 let mockFormEndDate: Date | null = null;
+let mockFormAmount = "250";
 let mockReactivateAfterSaving = false;
 let mockAccountsLoading = false;
 const mockShowToast = jest.fn();
+const mockLoggerError = jest.fn();
 
 jest.mock("expo-router", () => ({
   router: { back: jest.fn() },
@@ -56,6 +58,11 @@ jest.mock("@/components/recurring-payments", () => {
     (
       props: {
         readonly status?: "ACTIVE" | "PAUSED" | "COMPLETED";
+        readonly recurrenceAnchorDate?: Date;
+        readonly initialValues: {
+          readonly startDate: Date;
+          readonly expectedNextDueDate?: Date;
+        };
         readonly onSubmit: (values: {
           readonly name: string;
           readonly amount: string;
@@ -78,12 +85,15 @@ jest.mock("@/components/recurring-payments", () => {
         jest.requireActual<typeof import("react-native")>("react-native");
       const values = {
         name: "Netflix",
-        amount: "250",
+        amount: mockFormAmount,
         type: "EXPENSE" as const,
         accountId: "account-1",
         categoryId: "category-1",
         frequency: "MONTHLY" as const,
-        startDate: new Date("2026-06-01T00:00:00.000Z"),
+        startDate: props.recurrenceAnchorDate
+          ? props.initialValues.startDate
+          : new Date("2026-06-01T00:00:00.000Z"),
+        expectedNextDueDate: props.initialValues.expectedNextDueDate,
         endDate: mockFormEndDate,
         reactivateAfterSaving: mockReactivateAfterSaving,
         action: "NOTIFY" as const,
@@ -179,6 +189,14 @@ jest.mock("@/components/ui/Toast", () => ({
   }),
 }));
 
+jest.mock("@/utils/logger", () => ({
+  logger: {
+    error: (...args: readonly unknown[]): void => {
+      mockLoggerError(...args);
+    },
+  },
+}));
+
 jest.mock("@/hooks/useAccounts", () => ({
   useAccounts: (): {
     readonly isLoading: boolean;
@@ -256,6 +274,13 @@ jest.mock("@/services/recurring-payment-service", () => ({
   RECURRING_PAYMENT_SERVICE_ERROR_CODES: {
     ACCOUNT_UNAVAILABLE: "RECURRING_PAYMENT_ACCOUNT_UNAVAILABLE",
     CATEGORY_UNAVAILABLE: "RECURRING_PAYMENT_CATEGORY_UNAVAILABLE",
+    INVALID_AMOUNT: "RECURRING_PAYMENT_INVALID_AMOUNT",
+    INVALID_START_DATE: "RECURRING_PAYMENT_INVALID_START_DATE",
+    INVALID_END_DATE: "RECURRING_PAYMENT_INVALID_END_DATE",
+    INVALID_SCHEDULE: "RECURRING_PAYMENT_INVALID_SCHEDULE",
+    CURRENCY_MISMATCH: "RECURRING_PAYMENT_CURRENCY_MISMATCH",
+    STALE_SCHEDULE: "RECURRING_PAYMENT_STALE_SCHEDULE",
+    REACTIVATION_UNAVAILABLE: "RECURRING_PAYMENT_REACTIVATION_UNAVAILABLE",
   },
 }));
 
@@ -292,6 +317,7 @@ describe("recurring payment header and destructive actions", () => {
     jest.clearAllMocks();
     mockPaymentStatus = "ACTIVE";
     mockFormEndDate = null;
+    mockFormAmount = "250";
     mockReactivateAfterSaving = false;
     mockAccountsLoading = false;
   });
@@ -324,6 +350,56 @@ describe("recurring payment header and destructive actions", () => {
     });
   });
 
+  it("parses a grouped amount without partial parse semantics", async () => {
+    mockFormAmount = "1,234.50";
+    render(<CreateRecurringPaymentScreen />);
+
+    fireEvent.press(screen.getByTestId("header-save"));
+
+    await waitFor(() => {
+      expect(serviceMocks().createRecurringPayment).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 1234.5 })
+      );
+    });
+  });
+
+  it("rejects an invalid complete amount before calling the service", async () => {
+    mockFormAmount = "1e3";
+    render(<CreateRecurringPaymentScreen />);
+
+    fireEvent.press(screen.getByTestId("header-save"));
+
+    await waitFor(() => {
+      expect(mockShowToast).toHaveBeenCalledWith(
+        expect.objectContaining({ message: "invalid_amount" })
+      );
+    });
+    expect(serviceMocks().createRecurringPayment).not.toHaveBeenCalled();
+    expect(mockLoggerError).not.toHaveBeenCalled();
+  });
+
+  it("logs unexpected create failures and shows only generic localized copy", async () => {
+    const internalError = new Error("SQL constraint recurring_amount_check");
+    serviceMocks().createRecurringPayment.mockRejectedValueOnce(internalError);
+    render(<CreateRecurringPaymentScreen />);
+
+    fireEvent.press(screen.getByTestId("header-save"));
+
+    await waitFor(() => {
+      expect(mockLoggerError).toHaveBeenCalledWith(
+        "Recurring payment operation failed",
+        internalError,
+        { operation: "create" }
+      );
+      expect(mockShowToast).toHaveBeenCalledWith(
+        expect.objectContaining({ message: "error_generic" })
+      );
+    });
+    expect(mockShowToast).not.toHaveBeenCalledWith(
+      expect.objectContaining({ message: internalError.message })
+    );
+  });
+
   it("maps recurring create service codes to friendly toast messages", async () => {
     serviceMocks().createRecurringPayment.mockRejectedValueOnce(
       new Error("RECURRING_PAYMENT_CATEGORY_UNAVAILABLE")
@@ -339,6 +415,7 @@ describe("recurring payment header and destructive actions", () => {
         })
       );
     });
+    expect(mockLoggerError).not.toHaveBeenCalled();
   });
 
   it("maps a selected End date through creation", async () => {
@@ -368,7 +445,8 @@ describe("recurring payment header and destructive actions", () => {
           currency: "EGP",
           type: "EXPENSE",
           frequency: "MONTHLY",
-          startDate: new Date("2026-06-01T00:00:00.000Z"),
+          startDate: new Date("2026-07-01T00:00:00.000Z"),
+          expectedNextDueDate: new Date("2026-07-01T00:00:00.000Z"),
           endDate: null,
           reactivateAfterSaving: false,
           accountId: "account-1",
@@ -408,6 +486,25 @@ describe("recurring payment header and destructive actions", () => {
         expect.objectContaining({
           message: "recurring_payment_account_unavailable",
         })
+      );
+    });
+  });
+
+  it("logs unexpected edit failures and shows generic localized copy", async () => {
+    const internalError = new Error("OWNERSHIP_FAILED: payment-1");
+    serviceMocks().updateRecurringPayment.mockRejectedValueOnce(internalError);
+    render(<EditRecurringPaymentScreen />);
+
+    fireEvent.press(screen.getByTestId("header-save"));
+
+    await waitFor(() => {
+      expect(mockLoggerError).toHaveBeenCalledWith(
+        "Recurring payment operation failed",
+        internalError,
+        { operation: "update" }
+      );
+      expect(mockShowToast).toHaveBeenCalledWith(
+        expect.objectContaining({ message: "error_generic" })
       );
     });
   });
