@@ -4,7 +4,7 @@ import { CurrencyType } from "@monyvi/db";
 import {
   formatCanonicalDecimalForDisplay,
   formatCurrency,
-  resolveMetalsCurrencyMinorUnits,
+  resolveCurrencyDisplayMinorUnits,
 } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -141,8 +141,7 @@ function formatNetWorthAmount(
   if (typeof value === "number") {
     return formatCurrency({ amount: value, currency });
   }
-  const precision = resolveMetalsCurrencyMinorUnits(`currency:${currency}`);
-  if (precision === null) return "—";
+  const precision = resolveCurrencyDisplayMinorUnits(currency);
   try {
     const amount = formatCanonicalDecimalForDisplay(value, {
       locale,
