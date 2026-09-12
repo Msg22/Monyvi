@@ -323,7 +323,7 @@ export function shapeMetalPortfolioHoldings(
         currentValueDecimal: values.currentValueDecimal,
         id: asset.id,
         isEffective:
-          (status === "active" || hasValidEventLink) &&
+          hasValidEventLink &&
           isEffectiveReconciliationState(state.reconciliationState),
         isVisible: state.isVisible,
         metalType: metal.metalType,

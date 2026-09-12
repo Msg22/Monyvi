@@ -23,6 +23,7 @@ import {
   type MetalDetailMetalInput,
   type MetalDetailRenderKey,
 } from "@/services/metal-detail-read-model-service";
+import { hasBoundEffectiveActionEvidence } from "@/services/metal-portfolio-read-model-service";
 
 export const METAL_HISTORY_PAGE_SIZE = 50;
 
@@ -127,27 +128,38 @@ export async function readMetalHistoryReadModel(
   const terminalStates = await readReportableTerminalStates(scope);
   if (terminalStates.length === 0) return emptyHistory(options.filter);
 
-  const assets = await readHistoryAssets(scope, terminalStates);
-  if (assets.length === 0) return emptyHistory(options.filter);
+  const lifecycleValidatedStates = await orderTerminalStatesByEffectiveEventTime(
+    scope,
+    terminalStates
+  );
+  if (lifecycleValidatedStates.length === 0) {
+    return emptyHistory(options.filter);
+  }
+
+  const counts = countTerminalStates(lifecycleValidatedStates);
+  const filteredStates = lifecycleValidatedStates.filter(
+    (state) => options.filter === "all" || state.status === options.filter
+  );
+  const pageStates = filteredStates.slice(0, pageSize);
+  if (pageStates.length === 0) return emptyHistory(options.filter, counts);
+
+  const assets = await readHistoryAssets(scope, pageStates);
+  if (assets.length === 0) return emptyHistory(options.filter, counts);
   const dependencies = await readHistoryDependencies(
     scope,
     assets,
-    terminalStates
+    pageStates
   );
-  const validated = buildMetalHistoryReadModel({
-    filter: "all",
-    holdings: shapeReadHistoryHoldings(assets, terminalStates, dependencies),
+  const page = buildMetalHistoryReadModel({
+    filter: options.filter,
+    holdings: shapeReadHistoryHoldings(assets, pageStates, dependencies),
     userId: scope.userId,
   });
-  const filteredItems = validated.items.filter(
-    (item) => options.filter === "all" || item.status === options.filter
-  );
-  const items = filteredItems.slice(0, pageSize);
   return Object.freeze({
-    counts: validated.counts,
+    counts: Object.freeze({ ...counts }),
     filter: options.filter,
-    hasMore: filteredItems.length > items.length,
-    items: Object.freeze(items),
+    hasMore: filteredStates.length > pageStates.length,
+    items: page.items,
   });
 }
 
@@ -170,6 +182,64 @@ async function readReportableTerminalStates(
       isReportableReconciliationState(state.reconciliationState) &&
       state.effectiveEventId !== null
   );
+}
+
+async function orderTerminalStatesByEffectiveEventTime(
+  scope: CurrentUserDataScope,
+  states: readonly MetalHoldingState[]
+): Promise<readonly MetalHoldingState[]> {
+  if (states.length === 0) return [];
+
+  const eventIds = Array.from(
+    new Set(
+      states
+        .map((state) => state.effectiveEventId)
+        .filter((id): id is string => id !== null)
+    )
+  ).sort();
+  const holdingIds = Array.from(
+    new Set(states.map((state) => state.holdingId))
+  ).sort();
+  const [events, evidence] = await Promise.all([
+    scope
+      .queryOwned(
+        database.get<MetalLifecycleEvent>("metal_lifecycle_events"),
+        Q.where("id", Q.oneOf(eventIds)),
+        Q.where("deleted", false),
+        Q.where("is_effective", true)
+      )
+      .fetch(),
+    scope
+      .queryOwned(
+        database.get<MetalActionEvidence>("metal_action_evidence"),
+        Q.where("holding_id", Q.oneOf(holdingIds)),
+        Q.where("deleted", false)
+      )
+      .fetch(),
+  ]);
+  const eventsById = new Map(events.map((event) => [event.id, event] as const));
+
+  return states
+    .filter((state) => {
+      const event = state.effectiveEventId
+        ? eventsById.get(state.effectiveEventId)
+        : undefined;
+      return (
+        event !== undefined &&
+        Number.isFinite(event.occurredAt.getTime()) &&
+        hasBoundEffectiveActionEvidence(state, event, evidence)
+      );
+    })
+    .sort((left, right) => {
+      const leftEvent = eventsById.get(left.effectiveEventId as string);
+      const rightEvent = eventsById.get(right.effectiveEventId as string);
+      const timeDifference =
+        (rightEvent?.occurredAt.getTime() ?? 0) -
+        (leftEvent?.occurredAt.getTime() ?? 0);
+      return timeDifference !== 0
+        ? timeDifference
+        : left.holdingId.localeCompare(right.holdingId);
+    });
 }
 
 async function readHistoryAssets(
@@ -396,6 +466,16 @@ function isReportableReconciliationState(value: string): boolean {
     value === "accepted" ||
     value === "reconciled"
   );
+}
+
+function countTerminalStates(
+  states: readonly MetalHoldingState[]
+): MetalHistoryCounts {
+  const sold = states.filter((state) => state.status === "sold").length;
+  const disposed = states.filter(
+    (state) => state.status === "disposed"
+  ).length;
+  return { all: sold + disposed, disposed, sold };
 }
 
 function countItems(items: readonly MetalHistoryItem[]): MetalHistoryCounts {
