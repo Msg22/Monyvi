@@ -113,11 +113,6 @@ function assertStringOrObjectDictionary(
   }
 }
 
-/**
- * Required scalar (non-plural) keys per namespace. Keep this in sync with
- * `translation-schema.ts`. If any of these are missing in either locale,
- * `validateTranslationResources()` throws.
- */
 const REQUIRED_SCALAR_KEYS: Record<string, readonly string[]> = {
   "qa-sms-pattern-intake": [
     "development_badge",
@@ -167,7 +162,6 @@ const REQUIRED_SCALAR_KEYS: Record<string, readonly string[]> = {
     "error",
     "language_change_error_title",
     "language_change_failed",
-    // feature 026 — onboarding guide card
     "onboarding_step_bank_account",
     "onboarding_step_spending_budget",
     "new_badge",
@@ -190,14 +184,10 @@ const REQUIRED_SCALAR_KEYS: Record<string, readonly string[]> = {
     "reactivate_payment_unavailable",
   ],
   onboarding: [
-    // Pitch chrome
     "pitch_skip",
     "pitch_continue",
     "pitch_get_started",
     "pitch_back",
-    // Pitch slide 1 — Voice
-    // (eyebrow key removed 2026-04-26 per user direction — slides no longer
-    //  show the "01 · VOICE" / "02 · SMS" / "03 · LIVE MARKET" pre-title.)
     "pitch_slide_voice_headline",
     "pitch_slide_voice_subhead",
     "pitch_slide_voice_listening",
@@ -213,7 +203,6 @@ const REQUIRED_SCALAR_KEYS: Record<string, readonly string[]> = {
     "pitch_slide_voice_result_coffee_accessibility",
     "pitch_slide_voice_result_clothes_accessibility",
     "pitch_slide_voice_result_borrowed_accessibility",
-    // Pitch slide 2A — SMS (Android)
     "pitch_slide_sms_headline",
     "pitch_slide_sms_subhead",
     "pitch_slide_sms_bank_label",
@@ -223,7 +212,6 @@ const REQUIRED_SCALAR_KEYS: Record<string, readonly string[]> = {
     "pitch_slide_sms_account",
     "pitch_slide_sms_status_imported",
     "pitch_slide_sms_status_just_now",
-    // Pitch slide 2B — Offline (iOS)
     "pitch_slide_offline_headline",
     "pitch_slide_offline_subhead",
     "pitch_slide_offline_status_offline",
@@ -231,7 +219,6 @@ const REQUIRED_SCALAR_KEYS: Record<string, readonly string[]> = {
     "pitch_slide_offline_recently_added",
     "pitch_slide_offline_all_saved",
     "pitch_slide_offline_pending",
-    // Pitch slide 3 — Live market
     "pitch_slide_live_market_headline",
     "pitch_slide_live_market_subhead",
     "pitch_slide_live_market_net_worth_label",
@@ -239,16 +226,13 @@ const REQUIRED_SCALAR_KEYS: Record<string, readonly string[]> = {
     "pitch_slide_live_market_silver_label",
     "pitch_slide_live_market_usd_label",
     "pitch_slide_live_market_live_caption",
-    // Currency step
     "currency_step_title",
     "currency_step_subtitle",
     "currency_step_confirm",
     "currency_step_signout",
     "currency_step_error_generic",
-    // Setup guide step labels (voice + SMS only live here; bank/budget live in common)
     "onboarding_step_voice_transaction",
     "onboarding_step_auto_track_bank_sms",
-    // First-run tooltips
     "cash_account_tooltip_title",
     "cash_account_tooltip_body",
     "cash_account_tooltip_got_it",
@@ -280,11 +264,6 @@ const REQUIRED_SCALAR_KEYS: Record<string, readonly string[]> = {
   ],
 };
 
-/**
- * Plural base keys per namespace — every base must have `_one` and `_other`
- * in EN, and the full CLDR set (one/two/few/many/other; zero is optional)
- * in AR.
- */
 const PLURAL_BASES: Record<string, readonly string[]> = {
   "qa-sms-pattern-intake": [
     "selected_count",
@@ -310,15 +289,30 @@ const PLURAL_BASES: Record<string, readonly string[]> = {
   ],
   accounts: ["account_count"],
   budgets: ["budget_count", "days_remaining"],
-  metals: ["holding"],
+  metals: ["holding", "portfolio.active_holdings"],
 };
 
 const REQUIRED_AR_PLURAL_FORMS = ["_one", "_two", "_few", "_many", "_other"];
 const REQUIRED_EN_PLURAL_FORMS = ["_one", "_other"];
 
-/**
- * Validate a single namespace JSON for one language.
- */
+function readTranslationPath(
+  dict: Record<string, unknown>,
+  key: string
+): unknown {
+  let current: unknown = dict;
+  for (const segment of key.split(".")) {
+    if (
+      current === null ||
+      typeof current !== "object" ||
+      Array.isArray(current)
+    ) {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
 function validateNamespace(
   language: "en" | "ar",
   namespace: string,
@@ -356,7 +350,7 @@ function validateNamespace(
   for (const base of PLURAL_BASES[namespace] ?? []) {
     for (const suffix of requiredForms) {
       const k = `${base}${suffix}`;
-      if (typeof dict[k] !== "string") {
+      if (typeof readTranslationPath(dict, k) !== "string") {
         throw new Error(
           `[i18n] ${language}/${namespace}: missing plural form "${k}" (required for ${language})`
         );
@@ -365,10 +359,6 @@ function validateNamespace(
   }
 }
 
-/**
- * Validate the full resources object passed to i18next.init.
- * Throws on the first failure with a descriptive message.
- */
 export function validateTranslationResources(resources: {
   en: Record<string, unknown>;
   ar: Record<string, unknown>;
