@@ -21,6 +21,7 @@ import { useCategoryLookup } from "@/context/CategoriesContext";
 import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { formatDate } from "@/utils/dateHelpers";
 import {
+  calculateBudgetAlertAmount,
   getCurrentPeriodBounds,
   parsePositiveMoneyAmount,
 } from "@monyvi/logic";
@@ -548,7 +549,7 @@ function useBudgetSubmitHandlers(
 function useBudgetPreview(form: BudgetFormState): BudgetPreview {
   return useMemo(() => {
     const amount = parsePositiveMoneyAmount(form.amount) ?? 0;
-    const alertAmount = amount * (form.alertThreshold / 100);
+    const alertAmount = calculateBudgetAlertAmount(amount, form.alertThreshold);
     const bounds = getCurrentPeriodBounds(
       form.period,
       form.period === "CUSTOM" ? form.periodStart : undefined,
