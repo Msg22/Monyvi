@@ -9,10 +9,10 @@ import React, {
   useState,
 } from "react";
 import {
+  Dimensions,
   FlatList,
   Text,
   TouchableOpacity,
-  useWindowDimensions,
   View,
   type LayoutChangeEvent,
   type ListRenderItemInfo,
@@ -44,7 +44,6 @@ export function StatsCurrencyFilter({
 }: StatsCurrencyFilterProps): React.JSX.Element | null {
   const { t } = useTranslation("common");
   const { language } = useLocale();
-  const { height: windowHeight } = useWindowDimensions();
   const filterRowRef = useRef<View>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [filterRowHeight, setFilterRowHeight] = useState(0);
@@ -59,10 +58,11 @@ export function StatsCurrencyFilter({
 
   const measureMenuHeight = useCallback((): void => {
     filterRowRef.current?.measureInWindow((_x, y, _width, height) => {
+      const windowHeight = Dimensions.get("window").height;
       const remainingHeight = Math.max(windowHeight - (y + height), 0);
       setMenuMaxHeight(Math.min(MAX_MENU_HEIGHT, remainingHeight));
     });
-  }, [windowHeight]);
+  }, []);
 
   useEffect(() => {
     if (!isOpen) {
@@ -71,6 +71,9 @@ export function StatsCurrencyFilter({
     }
 
     measureMenuHeight();
+    const subscription = Dimensions.addEventListener("change", measureMenuHeight);
+
+    return () => subscription.remove();
   }, [filterRowHeight, isOpen, measureMenuHeight]);
 
   if (items.length === 0) {
