@@ -6,36 +6,29 @@
 
 import { type CategoryData } from "./types";
 import { palette } from "@/constants/colors";
-import { usePreferredCurrency } from "@/hooks/usePreferredCurrency";
 import { useTheme } from "@/context/ThemeContext";
 import { useLocale } from "@/context/LocaleContext";
+import type { CurrencyType } from "@monyvi/db";
 import { formatCurrency } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 
-// =============================================================================
-// Types
-// =============================================================================
-
 interface DrilldownCategoryItemProps {
   readonly category: CategoryData;
   readonly onPress: () => void;
   readonly hasChildren: boolean;
+  readonly currency: CurrencyType;
 }
-
-// =============================================================================
-// Component
-// =============================================================================
 
 export function DrilldownCategoryItem({
   category,
   onPress,
   hasChildren,
+  currency,
 }: DrilldownCategoryItemProps): React.JSX.Element {
   const { isDark } = useTheme();
   const { language } = useLocale();
-  const { preferredCurrency } = usePreferredCurrency();
 
   return (
     <TouchableOpacity
@@ -45,7 +38,7 @@ export function DrilldownCategoryItem({
       accessible
       accessibilityRole={hasChildren ? "button" : "text"}
       accessibilityLanguage={language}
-      accessibilityLabel={`${category.displayName}, ${formatCurrency({ amount: category.amount, currency: preferredCurrency })}, ${category.percentage.toFixed(1)}%`}
+      accessibilityLabel={`${category.displayName}, ${formatCurrency({ amount: category.amount, currency })}, ${category.percentage.toFixed(1)}%`}
       accessibilityHint={hasChildren ? "Tap to drill down" : undefined}
       accessibilityState={{ disabled: !hasChildren }}
     >
@@ -62,10 +55,7 @@ export function DrilldownCategoryItem({
         </Text>
       </View>
       <Text className="text-sm font-semibold me-2 text-slate-600 dark:text-slate-300">
-        {formatCurrency({
-          amount: category.amount,
-          currency: preferredCurrency,
-        })}
+        {formatCurrency({ amount: category.amount, currency })}
       </Text>
       <Text className="text-xs text-slate-400 dark:text-slate-500">
         {category.percentage.toFixed(1)}%

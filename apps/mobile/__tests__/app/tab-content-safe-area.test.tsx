@@ -61,6 +61,13 @@ jest.mock("@/hooks/useMetalHoldings", () => ({
 jest.mock("@/hooks/usePreferredCurrency", () => ({
   usePreferredCurrency: () => ({ preferredCurrency: "EGP" }),
 }));
+jest.mock("@/hooks/useStatsCurrencyFilter", () => ({
+  useStatsCurrencyFilter: () => ({
+    availableCurrencies: ["EGP"],
+    selectedCurrency: "EGP",
+    selectCurrency: jest.fn(),
+  }),
+}));
 
 import MetalsScreen from "@/app/(private)/(tabs)/metals";
 import StatsScreen from "@/app/(private)/(tabs)/stats";

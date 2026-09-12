@@ -4,7 +4,12 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import type { Category, Transaction, TransactionType } from "@monyvi/db";
+import type {
+  Category,
+  CurrencyType,
+  Transaction,
+  TransactionType,
+} from "@monyvi/db";
 import type {
   CategoryBreakdown,
   ChartDataPoint,
@@ -42,7 +47,8 @@ const MAX_PERIOD_CHECK_DELAY_MS = 24 * 60 * 60 * 1000;
 export function useMonthlyChartData(
   months: number = 12,
   accountIds?: string[],
-  type: TransactionType = "EXPENSE"
+  type: TransactionType = "EXPENSE",
+  currency?: CurrencyType
 ): UseAnalyticsResult<ChartDataPoint[]> {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,6 +83,7 @@ export function useMonthlyChartData(
       months,
       type,
       accountIds: selectedAccountIds,
+      ...(currency ? { currency } : {}),
     });
     const subscription = query.observe().subscribe({
       next: (result) => {
@@ -94,6 +101,7 @@ export function useMonthlyChartData(
   }, [
     months,
     type,
+    currency,
     accountIdsString,
     refreshKey,
     userId,
@@ -113,7 +121,8 @@ export function useMonthlyChartData(
 export function useCategoryBreakdown(
   year: number,
   month: number,
-  accountIds?: string[]
+  accountIds?: string[],
+  currency?: CurrencyType
 ): UseAnalyticsResult<CategoryBreakdown[]> {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -152,6 +161,7 @@ export function useCategoryBreakdown(
         year,
         month,
         accountIds: selectedAccountIds,
+        ...(currency ? { currency } : {}),
       });
 
     const transactionsSub = transactionsQuery.observe().subscribe({
@@ -181,6 +191,7 @@ export function useCategoryBreakdown(
   }, [
     year,
     month,
+    currency,
     accountIdsString,
     refreshKey,
     userId,
@@ -200,7 +211,8 @@ export function useComparison(
   type: "mom" | "yoy",
   year?: number,
   month?: number,
-  accountIds?: string[]
+  accountIds?: string[],
+  currency?: CurrencyType
 ): UseAnalyticsResult<ComparisonResult> {
   const [currentTransactions, setCurrentTransactions] = useState<Transaction[]>(
     []
@@ -244,6 +256,7 @@ export function useComparison(
       year: targetPeriod.year,
       month: targetPeriod.month,
       accountIds: selectedAccountIds,
+      ...(currency ? { currency } : {}),
     });
     const currentSub = currentQuery.observe().subscribe({
       next: (result) => setCurrentTransactions(result),
@@ -271,6 +284,7 @@ export function useComparison(
     };
   }, [
     type,
+    currency,
     targetPeriod.year,
     targetPeriod.month,
     accountIdsString,
@@ -291,7 +305,8 @@ export function useComparison(
 
 export function useMonthlySummaries(
   months: number = 12,
-  accountIds?: string[]
+  accountIds?: string[],
+  currency?: CurrencyType
 ): UseAnalyticsResult<MonthlySummary[]> {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -325,6 +340,7 @@ export function useMonthlySummaries(
       userId,
       months,
       accountIds: selectedAccountIds,
+      ...(currency ? { currency } : {}),
     });
     const subscription = query.observe().subscribe({
       next: (result) => {
@@ -341,6 +357,7 @@ export function useMonthlySummaries(
     return () => subscription.unsubscribe();
   }, [
     months,
+    currency,
     accountIdsString,
     refreshKey,
     userId,
