@@ -98,7 +98,7 @@ describe("AppDrawer direction", () => {
     { languageDirection: "LTR", isRTL: false, hiddenOffset: -320 },
     { languageDirection: "RTL", isRTL: true, hiddenOffset: 320 },
   ])(
-    "uses the $languageDirection edge and hidden offset across repeated motion",
+    "anchors at the $languageDirection start edge and mirrors repeated motion",
     ({ isRTL, hiddenOffset }) => {
       const { AppDrawer } = jest.requireActual<
         typeof import("@/components/navigation/AppDrawer")
@@ -122,23 +122,14 @@ describe("AppDrawer direction", () => {
         useNativeDriver: true,
       });
 
-      if (isRTL) {
-        expect(screen.getByTestId("app-drawer-panel")).toHaveStyle({
-          position: "absolute",
-          right: 0,
-        });
-        expect(screen.getByTestId("app-drawer-panel")).not.toHaveStyle({
-          left: 0,
-        });
-      } else {
-        expect(screen.getByTestId("app-drawer-panel")).toHaveStyle({
-          position: "absolute",
-          left: 0,
-        });
-        expect(screen.getByTestId("app-drawer-panel")).not.toHaveStyle({
-          right: 0,
-        });
-      }
+      expect(screen.getByTestId("app-drawer-panel")).toHaveStyle({
+        position: "absolute",
+        start: 0,
+      });
+      expect(screen.getByTestId("app-drawer-panel")).not.toHaveStyle({
+        left: 0,
+        right: 0,
+      });
       expect(screen.getByTestId("app-drawer-panel")).toHaveStyle({
         transform: [{ translateX: hiddenOffset }],
       });

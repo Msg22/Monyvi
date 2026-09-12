@@ -212,8 +212,7 @@ export function AppDrawer({
           testID="app-drawer-panel"
           style={{
             position: "absolute",
-            left: isRTL ? undefined : 0,
-            right: isRTL ? 0 : undefined,
+            start: 0,
             width: DRAWER_WIDTH,
             height: "100%",
             transform: [{ translateX: slideAnim }],
