@@ -18,7 +18,6 @@ import {
   type ListRenderItemInfo,
 } from "react-native";
 import { useTranslation } from "react-i18next";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { palette } from "@/constants/colors";
 import { useLocale } from "@/context/LocaleContext";
@@ -46,7 +45,6 @@ export function StatsCurrencyFilter({
   const { t } = useTranslation("common");
   const { language } = useLocale();
   const { height: windowHeight } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
   const filterRowRef = useRef<View>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [filterRowHeight, setFilterRowHeight] = useState(0);
@@ -61,13 +59,10 @@ export function StatsCurrencyFilter({
 
   const measureMenuHeight = useCallback((): void => {
     filterRowRef.current?.measureInWindow((_x, y, _width, height) => {
-      const remainingHeight = Math.max(
-        windowHeight - insets.bottom - (y + height),
-        0
-      );
+      const remainingHeight = Math.max(windowHeight - (y + height), 0);
       setMenuMaxHeight(Math.min(MAX_MENU_HEIGHT, remainingHeight));
     });
-  }, [insets.bottom, windowHeight]);
+  }, [windowHeight]);
 
   useEffect(() => {
     if (!isOpen) {
