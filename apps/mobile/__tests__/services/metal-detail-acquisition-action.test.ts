@@ -130,7 +130,11 @@ describe("metal detail acquisition-action binding", () => {
     });
 
     expect(model).toMatchObject({
-      attribution: null,
+      attribution: {
+        breakdown: { available: true },
+        currencyGainDecimal: "0",
+        totalGainDecimal: "-880.012",
+      },
       currentValueDecimal: "119.988",
       currentValueObservedAt: new Date("2026-08-25T10:00:00.000Z"),
       currentValueRateStatus: {
@@ -140,7 +144,7 @@ describe("metal detail acquisition-action binding", () => {
         source: "fixture",
         state: "fresh",
       },
-      totalGainDecimal: null,
+      totalGainDecimal: "-880.012",
     });
   });
 

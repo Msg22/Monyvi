@@ -20,6 +20,11 @@ interface MockLocalQuery {
       observer: MockLocalObserver | (() => void)
     ) => MockSubscription;
   };
+  readonly observeWithColumns: (_columns: readonly string[]) => {
+    readonly subscribe: (
+      observer: MockLocalObserver | (() => void)
+    ) => MockSubscription;
+  };
 }
 
 interface MockLocalObserver {
@@ -37,8 +42,8 @@ let mockTrustObserver: MockTrustObserver | null = null;
 let mockAppStateListener: ((state: string) => void) | null = null;
 let mockUserId: string | null = "user-1";
 
-const mockCreateLocalQuery = jest.fn<MockLocalQuery, []>(() => ({
-  observe: () => ({
+const mockCreateLocalQuery = jest.fn<MockLocalQuery, []>(() => {
+  const source = {
     subscribe: (
       observer: MockLocalObserver | (() => void)
     ): MockSubscription => {
@@ -49,11 +54,19 @@ const mockCreateLocalQuery = jest.fn<MockLocalQuery, []>(() => ({
       );
       return { unsubscribe: mockUnsubscribe };
     },
-  }),
-}));
+  };
+  return {
+    observe: () => source,
+    observeWithColumns: () => source,
+  };
+});
 const mockObserveMetalDetailHolding = jest.fn<MockLocalQuery, [string, string]>(
   () => mockCreateLocalQuery()
 );
+const mockObserveMetalDetailAssetMetal = jest.fn<
+  MockLocalQuery,
+  [string, readonly unknown[]]
+>(() => mockCreateLocalQuery());
 const mockObserveMetalDetailHoldingState = jest.fn<
   MockLocalQuery,
   [string, string]
@@ -143,6 +156,8 @@ jest.mock("@/services/metal-action-evidence-observer-service", () => ({
 }));
 
 jest.mock("@/services/metal-detail-read-model-service", () => ({
+  observeMetalDetailAssetMetal: (...args: [string, readonly unknown[]]) =>
+    mockObserveMetalDetailAssetMetal(...args),
   observeMetalDetailEvents: (...args: [string, string]) =>
     mockObserveMetalDetailEvents(...args),
   observeMetalDetailHolding: (...args: [string, string]) =>

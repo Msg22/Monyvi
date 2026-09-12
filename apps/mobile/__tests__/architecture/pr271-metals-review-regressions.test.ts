@@ -120,7 +120,7 @@ describe("PR #271 validated Metals review regressions", () => {
   });
 
   it("validates purity tuples against the canonical catalog", () => {
-    const value = source("services/metal-detail-read-model-service.ts");
+    const value = source("services/metal-detail-read-model-shaping.ts");
     expect(value).toContain("resolvePuritySelection");
     expect(value).toContain("entry.factorDecimal");
   });

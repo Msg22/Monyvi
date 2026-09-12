@@ -75,6 +75,7 @@ jest.mock("@/services/metal-portfolio-read-model-service", () => ({
   observePortfolioHoldingStates: (): unknown => mockImmediateQuery([]),
   observePortfolioAssetMetals: (): null => null,
   observePortfolioRecentHistory: (): null => null,
+  observePortfolioEffectiveActionEvidence: (): null => null,
   shapeMetalPortfolioHoldings: (): readonly unknown[] => [],
   buildMetalPortfolioReadModel: (input: Record<string, unknown>): unknown => ({
     activeHoldings: mockActiveHoldings,

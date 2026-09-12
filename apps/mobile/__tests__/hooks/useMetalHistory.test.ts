@@ -19,6 +19,9 @@ interface MockQuery<T = unknown> {
   readonly observe: () => {
     readonly subscribe: (observer: MockObserver<T>) => MockSubscription;
   };
+  readonly observeWithColumns: (_columns: readonly string[]) => {
+    readonly subscribe: (observer: MockObserver<T>) => MockSubscription;
+  };
 }
 
 const mockUnsubscribe = jest.fn<void, []>();
@@ -29,13 +32,15 @@ let mockEvidenceObserver: MockObserver | null = null;
 function queryWithObserver<T>(
   assign: (observer: MockObserver<T>) => void
 ): MockQuery<T> {
+  const source = {
+    subscribe: (observer: MockObserver<T>): MockSubscription => {
+      assign(observer);
+      return { unsubscribe: mockUnsubscribe };
+    },
+  };
   return {
-    observe: () => ({
-      subscribe: (observer: MockObserver<T>): MockSubscription => {
-        assign(observer);
-        return { unsubscribe: mockUnsubscribe };
-      },
-    }),
+    observe: () => source,
+    observeWithColumns: () => source,
   };
 }
 
@@ -178,17 +183,26 @@ describe("useMetalHistory", () => {
       items: [{ holdingId: "h1" }],
     };
     mockReadMetalHistoryReadModel.mockResolvedValueOnce(loaded);
+    mockReadMetalHistoryReadModel.mockResolvedValueOnce(loaded);
+    mockReadMetalHistoryReadModel.mockReturnValueOnce(new Promise(() => {}));
     const { result } = renderHook(() => useMetalHistory());
     await waitFor(() =>
       expect(result.current.history.items).toEqual(loaded.items)
     );
 
-    mockReadMetalHistoryReadModel.mockReturnValueOnce(new Promise(() => {}));
+    act(() => {
+      mockStateObserver?.next([{ holdingId: "holding-1", userId: "user-1" }]);
+    });
+    await waitFor(() =>
+      expect(mockReadMetalHistoryReadModel).toHaveBeenCalledTimes(2)
+    );
+    await waitFor(() => expect(mockEventObserver).not.toBeNull());
+
     act(() => {
       mockEventObserver?.next([]);
     });
     await waitFor(() =>
-      expect(mockReadMetalHistoryReadModel).toHaveBeenCalledTimes(2)
+      expect(mockReadMetalHistoryReadModel).toHaveBeenCalledTimes(3)
     );
 
     expect(result.current.history.items).toEqual(loaded.items);

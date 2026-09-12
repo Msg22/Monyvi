@@ -139,7 +139,7 @@ describe("PR #271 review follow-up regressions", () => {
 
   it("formats Home breakdown amounts using the selected currency minor units", () => {
     const value = source("apps/mobile/components/dashboard/WealthBreakdownSection.tsx");
-    expect(value).toContain("resolveMetalsCurrencyMinorUnits");
+    expect(value).toContain("resolveCurrencyDisplayMinorUnits");
     expect(value).not.toContain("maximumFractionDigits: 2");
   });
 
