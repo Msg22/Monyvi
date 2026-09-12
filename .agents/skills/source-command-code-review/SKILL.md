@@ -60,13 +60,13 @@ Source-of-truth rules:
 - Spec folder only: treat the spec folder as the source of truth for feature
   requirements.
 - Linked issue only: treat the linked issue as the source of truth for feature
-  requirements and business logic during the review, subject to the
-  constitution and `docs/business/business-decisions.md`.
+  requirements and business logic during the review, subject to the constitution
+  and `docs/business/business-decisions.md`.
 - Both spec folder and linked issue: treat both artifacts together as the source
   of truth. The implementation must satisfy every requirement in both.
 
-If both a spec folder and linked issue exist, compare them before reviewing code.
-Report any gap, contradiction, missing acceptance criterion, or mismatched
+If both a spec folder and linked issue exist, compare them before reviewing
+code. Report any gap, contradiction, missing acceptance criterion, or mismatched
 business rule between them as a review finding. Do not approve until the gap is
 resolved or explicitly accepted by Mohamed.
 
@@ -143,7 +143,7 @@ implemented format and cite the issue reference.
 
 Check for missing functionality, incomplete tasks, deviations from the plan, and
 changes under the wrong spec folder. Also check for code paths that implement
-behavior not requested by either the spec folder or the linked issue.
+behavior not requested by either the spec folder or linked issue.
 
 If any task, issue requirement, acceptance criterion, or clarified business rule
 is not implemented and not explicitly justified, the reviewed work is not
@@ -204,13 +204,95 @@ the reviewed work not approvable.
 
 ### 2.5 Mockups Compliance
 
-Locate `specs/<branch-name>/mockups/`.
+Always include this section in the review report. First determine whether the
+target diff changes visual UI governed by an approved scoped mockup. If it does
+not, report `N/A - no governed visual UI change`, skip the per-mockup evidence
+steps below, and do not block the PR merely because the feature folder contains
+mockup assets.
 
-If the folder does not exist, write `No mockups found - N/A`. If it exists, load
-every mockup image and compare each one against the corresponding component or
-screen implementation.
+Start from the selected feature folder. Follow mockup or handoff paths declared
+by its spec, plan, tasks, and README files, then recursively search that feature
+folder for mockup assets, including nested paths such as `design/mockups/`. Only
+write `No mockups found - N/A` after both the declared-path check and recursive
+search find no approved mockup assets.
 
-For each mockup, validate all seven categories:
+From the discovered approved references, select only the mockup or mockups that
+actually govern visual UI changed by the target diff. Do not compare unrelated
+mockups, unchanged governed screens, or pre-existing surfaces merely because
+those references are present in the feature folder. Record the changed UI path
+or component that establishes each selected mockup's applicability.
+
+For every selected governed mockup, load its matching
+`<mockup-basename>.binding.md` sidecar defined by
+`.agent/workflows/mockup-implementation.md`. Before using viewport, component,
+non-binding-region, spacing, sizing, color, typography, state, interaction,
+transition, or variant facts:
+
+1. Run
+   `node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` and
+   require exit status 0.
+2. Confirm the sidecar records `Binding metadata approval: APPROVED` and the
+   explicit approval evidence/reference required by that workflow.
+3. Confirm `Approved binding metadata revision` equals
+   `Binding metadata revision` and `Approved binding approval revision` equals
+   `Binding approval revision`.
+4. Confirm the approval evidence/reference identifies the approved combined
+   `Approved binding approval revision`. The verifier already authenticates the
+   exact current image bytes and exact original Binding Facts bytes; do not
+   require the evidence text to repeat the component digests individually.
+
+If `scripts/verify-mockup-binding.js` is in the target diff, do not treat that
+target-branch verifier as independent authority. Run the verifier from a trusted
+base revision only when that trusted implementation enforces the same complete
+sidecar authority contract. Otherwise, independently validate the complete
+sidecar authority contract from the reviewed bytes and the governing
+`.agent/workflows/mockup-implementation.md` contract. The independent fallback
+MUST, without relying on the target-branch verifier:
+
+- require valid UTF-8/LF input and locate exactly one real level-two `Binding Facts` heading using Markdown semantics, ignoring fenced/comment-only content when determining section boundaries;
+- require every canonical required Binding Facts key exactly once with a non-empty visible value, recognizing supported Markdown unordered-list markers and indentation and ignoring commented/fenced examples;
+- require all approval fields and SHA-256 revisions to be present and well formed, including `Binding metadata approval: APPROVED`;
+- recompute the current approved image SHA-256 and exact original Binding Facts SHA-256 from the reviewed bytes and require them to match the declared image and `Binding metadata revision`;
+- require `Approved binding metadata revision` to equal `Binding metadata revision`, rebuild the combined `Binding approval revision`, and require `Approved binding approval revision` to equal `Binding approval revision`; and
+- require the approval evidence/reference to identify the approved combined `Approved binding approval revision`.
+
+If any part of that independent validation cannot be performed, mark the binding
+context unverified and the changed governed UI not approvable. A target-branch
+verifier result alone is insufficient in this case.
+
+If an approved reference predates the sidecar rule, complete the workflow's
+**Legacy Approved Mockup Metadata Migration** and explicit sidecar approval
+before using reconstructed metadata for review. A missing sidecar, failed
+verifier, missing/malformed approved image revision, current-image digest
+mismatch, failed metadata or combined revision check, sidecar still marked
+`PENDING`, missing approval reference, or sidecar/image materially changed after
+approval is non-authoritative: mark the binding context unverified and the
+changed governed UI not approvable rather than inferring binding facts or image
+identity from the filename/export.
+
+Establish the selected mockup's declared UI viewport or component context only
+from its authoritative approved sidecar. Treat presentation-only device
+hardware, frame, outer canvas, browser chrome, export padding, and background
+outside the UI surface as non-binding unless that sidecar explicitly marks them
+binding.
+
+Source and component inspection alone cannot prove visual completion. Inspect
+rendered app screenshots and require, for each selected governed mockup:
+
+- side-by-side or overlay evidence against the approved reference at the
+  declared UI context;
+- rendered evidence for every in-scope responsive, dark-mode, RTL/Arabic, and
+  enlarged-text variant; and
+- separate accessibility-tree, screen-reader, or automated accessibility
+  evidence for labels and semantics, because screenshots alone do not prove
+  accessibility labels; and
+- separate functional-readiness and visual-fidelity statuses.
+
+For a governed visual UI change, if the authoritative sidecar or required
+evidence is absent, mark visual fidelity unverified and the reviewed work not
+approvable.
+
+For each selected governed mockup, validate all seven categories:
 
 1. Layout and structure.
 2. Spacing and alignment.
@@ -220,26 +302,34 @@ For each mockup, validate all seven categories:
 6. States.
 7. Interactions.
 
-Use this table for every mockup:
+Use this table for every selected governed mockup:
 
 ```markdown
 #### Mockup: <filename>
 
 Corresponds to: <component or screen>
 
-| Check                 | Status    | Notes |
-| --------------------- | --------- | ----- |
-| Layout and Structure  | PASS/FAIL | ...   |
-| Spacing and Alignment | PASS/FAIL | ...   |
-| Typography            | PASS/FAIL | ...   |
-| Colors and Theming    | PASS/FAIL | ...   |
-| Components and UI     | PASS/FAIL | ...   |
-| States                | PASS/FAIL | ...   |
-| Interactions          | PASS/FAIL | ...   |
+| Check                  | Status    | Notes |
+| ---------------------- | --------- | ----- |
+| Layout and Structure   | PASS/FAIL | ...   |
+| Spacing and Alignment  | PASS/FAIL | ...   |
+| Typography             | PASS/FAIL | ...   |
+| Colors and Theming     | PASS/FAIL | ...   |
+| Components and UI      | PASS/FAIL | ...   |
+| States                 | PASS/FAIL | ...   |
+| Interactions           | PASS/FAIL | ...   |
+| Approved Image Binding | PASS/FAIL | exact SHA-256 verifier result |
+| Binding UI Context     | PASS/FAIL | ...   |
+| Rendered Comparison    | PASS/FAIL | ...   |
+| Scoped Variants        | PASS/FAIL | ...   |
+| Accessibility Evidence | PASS/FAIL | ...   |
 ```
 
-Mockup deviations make the reviewed work not approvable. Fix UI changes to match
-mockups without inventing new design decisions.
+For changed governed visual UI, a missing/invalid authoritative sidecar, failed
+image-content binding, mockup deviation, or missing required rendered evidence
+makes the reviewed work not approvable. Fix UI changes to match the exact
+approved image bytes plus its authoritative binding sidecar without inventing
+new design decisions.
 
 ### 2.6 General Best Practices
 
@@ -345,6 +435,23 @@ or N/A with reason>
 
 <Accept/Defer/Reject list, or N/A>
 
+## Functional Readiness
+
+READY or NOT READY, with supporting test and behavior evidence.
+
+## Visual Fidelity
+
+COMPLETE, INCOMPLETE, or N/A, with the declared binding UI context and reason.
+
+## Visual Evidence
+
+- Approved reference: <path or N/A>
+- Baseline rendered comparison: <side-by-side or overlay evidence path, or N/A>
+- Scoped variants: <responsive, dark-mode, RTL/Arabic, and enlarged-text
+  evidence paths, or N/A with reason>
+- Accessibility: <accessibility-tree, screen-reader, or automated accessibility
+  evidence, or N/A with reason>
+
 ## Approval Verdict
 
 APPROVABLE or NOT APPROVABLE, with the blocking reasons.
@@ -370,7 +477,8 @@ Keep fixes surgical. Do not refactor unrelated code. Preserve user changes you
 did not make.
 
 Verify with focused tests and checks that would have caught the original issues.
-For UI fixes, use the best available visual validation path.
+For approved-mockup UI fixes, capture the required side-by-side or overlay and
+scoped-variant rendered evidence at the declared UI context.
 
 ## 5. Create Fix Pull Request
 
@@ -402,8 +510,18 @@ The reviewed work is not approvable if any of these remain:
 - Incorrect architecture or layering.
 - Broken monorepo boundaries.
 - Missing migrations or database inconsistencies.
-- Mockup deviations.
+- Missing or invalid authoritative binding sidecar for changed governed UI.
+- Missing, malformed, or stale approved-image content binding for changed
+  governed UI.
+- Mockup deviations for changed governed UI.
+- Missing required mockup comparison or scoped-variant rendered evidence for a
+  governed visual UI change.
 
 Success means the code fully matches the constitution, `.agent/rules/*.md`, the
-selected spec folder, the linked issue when present, and any approved mockups,
-with no missing functionality or architectural violations.
+selected spec folder, the linked issue when present, and the exact immutable
+approved mockup image content that actually governs changed visual UI, with no
+missing functionality or architectural violations. Changed UI governed by an
+approved mockup must also have an authoritative approved binding sidecar whose
+image and metadata revisions both verify, plus the required rendered and
+accessibility evidence, with functional readiness and visual fidelity reported
+separately.

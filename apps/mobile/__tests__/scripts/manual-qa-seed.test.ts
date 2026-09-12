@@ -363,10 +363,22 @@ describe("manual-qa-seed script helpers", () => {
           purchase_currency: "EGP",
         }),
         expect.objectContaining({
+          name: "Silver Coin Stack",
+          type: "METAL",
+        }),
+        expect.objectContaining({
           name: "Gold Test Bar",
           type: "METAL",
           purchase_price_decimal: "12500",
           purchase_currency: "USD",
+        }),
+        expect.objectContaining({
+          name: "QA Sold Gold Coin",
+          type: "METAL",
+        }),
+        expect.objectContaining({
+          name: "QA Given Away Silver Bar",
+          type: "METAL",
         }),
         expect.objectContaining({
           name: "Apartment Down Payment",
@@ -378,7 +390,7 @@ describe("manual-qa-seed script helpers", () => {
         }),
       ])
     );
-    expect(assetRows).toHaveLength(5);
+    expect(assetRows).toHaveLength(7);
     expectRowsStampedForIncrementalPull(assetRows);
     expect(assetMetalRows).toEqual(
       expect.arrayContaining([
@@ -414,12 +426,22 @@ describe("manual-qa-seed script helpers", () => {
       ])
     );
     expectRowsStampedForIncrementalPull(assetMetalRows);
-    expect(metalHoldingStateRows).toHaveLength(3);
+    expect(metalHoldingStateRows).toHaveLength(5);
     expect(metalHoldingStateRows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           status: "active",
           financial_revision: "0",
+          reconciliation_state: "accepted",
+        }),
+        expect.objectContaining({
+          status: "sold",
+          financial_revision: "1",
+          reconciliation_state: "accepted",
+        }),
+        expect.objectContaining({
+          status: "disposed",
+          financial_revision: "1",
           reconciliation_state: "accepted",
         }),
       ])

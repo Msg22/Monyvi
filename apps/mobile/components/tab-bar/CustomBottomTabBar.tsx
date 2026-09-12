@@ -55,14 +55,14 @@ const TAB_ICON_CONFIG: Record<string, IconConfig> = {
 };
 
 /**
- * Tab labels for display
- * Maps route names to their display labels
+ * Tab label i18n keys
+ * Maps route names to their translated label keys in the common namespace
  */
-const TAB_LABELS: Record<string, string> = {
-  index: "Home",
-  accounts: "Accounts",
-  transactions: "Transactions",
-  metals: "Metals",
+const TAB_LABEL_KEYS: Record<string, string> = {
+  index: "home",
+  accounts: "accounts",
+  transactions: "transactions",
+  metals: "metals",
 };
 
 /**
@@ -144,7 +144,7 @@ function CustomBottomTabBarComponent({
     const routeIndex = state.routes.findIndex((r) => r.name === routeName);
     const isFocused = state.index === routeIndex;
     const iconConfig = TAB_ICON_CONFIG[routeName];
-    const label = TAB_LABELS[routeName] || routeName;
+    const label = t(TAB_LABEL_KEYS[routeName] ?? routeName);
 
     const onPress = (): void => {
       const event = navigation.emit({

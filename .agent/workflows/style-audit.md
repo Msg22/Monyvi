@@ -5,15 +5,31 @@ description:
 
 # 🎨 Style Audit Workflow
 
+## Approved Mockup Binding Gate
+
+When this workflow consumes an approved mockup or sidecar, run
+`node scripts/verify-mockup-binding.js <path/to/mockup.binding.md>` before using
+binding facts, rendered evidence, or approval status. Require exit status zero:
+current image bytes, exact UTF-8/LF Binding Facts bytes, both approved
+revisions, and approval evidence for the approved combined
+`Binding approval revision` must all verify. A failed verifier blocks governed
+UI work; follow `.agent/workflows/mockup-implementation.md` to renew approval.
+
 This workflow produces a property-by-property comparison of approved mockup
 designs against the actual implementation styles (Tailwind classes, inline
 styles, colors, typography, spacing, borders, layout, icons). The output is a
 structured **Style Audit Report** identifying all gaps and mismatches.
 
-> [!CAUTION] **EVERY SECTION IS MANDATORY. The agent MUST execute EVERY step. If
-> a mockup has no deviations, the agent MUST explicitly state "✅ No deviations
-> found." Skipping or summarizing without property-level evidence is a CRITICAL
-> FAILURE.**
+First determine whether the target diff changes visual UI governed by an
+approved scoped mockup. If it does not, report the style audit and visual
+fidelity as `N/A — no governed visual UI change`, skip the per-mockup steps
+below, and do not block the change merely because the feature folder contains
+mockups.
+
+> [!CAUTION] **EVERY APPLICABLE SECTION IS MANDATORY. The agent MUST execute
+> EVERY applicable step. If a governing mockup has no deviations, the agent MUST
+> explicitly state "✅ No deviations found." Skipping or summarizing without
+> property-level evidence is a CRITICAL FAILURE.**
 
 ---
 
@@ -32,9 +48,12 @@ Before analyzing ANY component, load the following:
 ### 1.2 Identify Mockups
 
 - Locate the spec folder matching the branch name under `specs/`
-- **LIST** all files in `specs/<branch-name>/mockups/`
-- **LOAD** every mockup image (use `view_file` on each `.png`/`.jpg`)
-- Create a numbered mapping: `Mockup N → <filename> → <short description>`
+- Follow mockup or handoff paths declared by the selected spec, plan, tasks, and
+  README files
+- **RECURSIVELY DISCOVER** candidate mockup assets in the selected feature
+  folder, including nested paths such as `design/mockups/`
+- Defer image loading and per-mockup processing until Section 1.3 maps
+  candidates to changed governed visual UI.
 
 ### 1.3 Identify Changed Components
 
@@ -42,17 +61,51 @@ Before analyzing ANY component, load the following:
 - Filter to only **UI files**: `.tsx` components, screen files, and any shared
   UI utilities
 - **READ** every changed UI file in full
+- Load candidate sidecar metadata, but not candidate images. Before using a
+  sidecar to include or exclude a reference, verify it records
+  `Binding metadata approval: APPROVED`, has a valid recomputed current
+  fingerprint, has matching current and approved revisions, and has approval
+  evidence that identifies that revision.
+- Use declared traceability and only authoritative candidate sidecars to map
+  references that govern changed visual UI. A candidate linked by declared
+  traceability to changed UI but missing an authoritative sidecar remains a
+  blocker; do not silently exclude it. Exclude references for unrelated or
+  unchanged surfaces before any per-mockup loop; non-visual files do not
+  activate the rendered-evidence gate.
+- **LOAD** only mapped approved mockup images and their matching binding
+  sidecars. A sidecar that fails any approval or revision check is
+  non-authoritative; follow the legacy migration/approval path when applicable
+  before treating reconstructed metadata as binding.
+- Record the declared **binding product surface**, UI viewport or component
+  context, and every sidecar region marked **non-binding** for each mapped
+  reference.
+- Create a numbered mapping only for audit targets:
+  `Mockup N → <filename> → <changed governed UI>`.
+- When no candidate assets exist, report `No mockups found — N/A`. When
+  candidates exist but none map to changed governed visual UI, report
+  `N/A — no governed visual UI change` and skip every per-mockup loop.
 
 ---
 
 ## 2. Property-Level Comparison (MANDATORY — PER MOCKUP)
 
-For **each mockup**, the agent MUST compare the following visual properties
-against the corresponding component(s). Present findings in a markdown table.
+For **each loaded mockup mapped to changed governed visual UI**, the agent MUST
+compare the following visual properties against the corresponding component(s).
+Present findings in a markdown table.
+
+**Scope rule:** perform every property comparison only inside the approved
+sidecar's **binding product surface**. Presentation-only regions explicitly
+marked non-binding are outside the audit target and MUST NOT produce a mismatch
+because product code omits or differs from them. Crop/mentally mask those
+regions before comparing properties; never turn phone hardware, device frame,
+outer canvas, browser chrome, export padding, or outside background into product
+UI requirements unless the explicitly approved sidecar marks that region
+binding.
 
 ### 2.1 Properties to Compare
 
-For each UI element visible in the mockup, check:
+For each UI element visible **inside the binding product surface** of the
+mockup, check:
 
 | Property Category   | Specific Checks                                                                                                                                         |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -93,10 +146,19 @@ For each mockup, produce a table per UI section:
 
 ## 3. Missing Elements Check (MANDATORY)
 
-For each mockup, the agent MUST also list:
+For each mockup, the agent MUST list missing/extra UI **only within the governed
+binding product surface**:
 
-- **Elements in mockup but NOT in code** (completely missing UI)
-- **Elements in code but NOT in mockup** (extra/unapproved UI)
+- **Elements inside the binding product surface but NOT in code** (completely
+  missing product UI)
+- **Elements in the governed code surface but NOT in the binding product
+  surface** (extra/unapproved product UI)
+
+Do **not** report presentation-only phone hardware, device frame, outer canvas,
+browser chrome, export padding, or any other sidecar-declared non-binding region
+as missing product UI. Likewise, do not compare unrelated code outside the
+mockup's governed binding surface merely because it is visible on the same route
+or exists in the same component tree.
 
 ---
 
@@ -107,8 +169,24 @@ For each mockup, the agent MUST also list:
 Write the report to the artifact directory as `style-audit.md` with:
 
 1. **Color Reference** — dark mode palette used in the project
-2. **Per-Mockup Sections** — each with comparison tables and a verdict
-3. **Summary Table** — all findings grouped by severity
+2. **Per-Mockup Sections** — each with comparison tables and a verdict scoped to
+   the approved binding product surface; list excluded non-binding framing for
+   traceability
+3. **Rendered Visual Evidence** — a side-by-side or overlay comparison at the
+   declared binding UI context, plus every in-scope compact-phone,
+   ordinary-phone, tablet, landscape, dark-mode, RTL/Arabic, and enlarged-text
+   visual variant
+4. **Accessibility Evidence** — accessibility-tree inspection, screen-reader
+   validation, or automated accessibility results for labels and semantics;
+   screenshots alone do not prove accessibility labels
+5. **Functional Readiness** — `READY` or `NOT READY`, with test evidence
+6. **Visual Fidelity** — `COMPLETE`, `INCOMPLETE`, or `N/A`, with the binding
+   context and evidence paths or the reason it does not apply
+7. **Summary Table** — all findings grouped by severity
+
+Source and component inspection alone cannot prove visual completion. For a
+changed visual UI governed by an approved mockup, missing baseline or in-scope
+variant rendered evidence makes visual fidelity `INCOMPLETE`.
 
 ### 4.2 Severity Classification
 
