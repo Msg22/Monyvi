@@ -1,19 +1,29 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { CurrencyType } from "@monyvi/db";
 import { SORTED_SUPPORTED_CURRENCIES, type CurrencyInfo } from "@monyvi/logic";
-import React, { useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   FlatList,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
   type LayoutChangeEvent,
   type ListRenderItemInfo,
 } from "react-native";
 import { useTranslation } from "react-i18next";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { palette } from "@/constants/colors";
 import { useLocale } from "@/context/LocaleContext";
+
+const MAX_MENU_HEIGHT = 288;
 
 interface StatsCurrencyFilterProps {
   readonly availableCurrencies: readonly CurrencyType[];
@@ -35,8 +45,12 @@ export function StatsCurrencyFilter({
 }: StatsCurrencyFilterProps): React.JSX.Element | null {
   const { t } = useTranslation("common");
   const { language } = useLocale();
+  const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const filterRowRef = useRef<View>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [filterRowHeight, setFilterRowHeight] = useState(0);
+  const [menuMaxHeight, setMenuMaxHeight] = useState<number | null>(null);
 
   const items = useMemo(
     () => getCurrencyItems(availableCurrencies),
@@ -44,6 +58,25 @@ export function StatsCurrencyFilter({
   );
   const selectedItem = items.find((item) => item.code === selectedCurrency);
   const isDisabled = items.length <= 1;
+
+  const measureMenuHeight = useCallback((): void => {
+    filterRowRef.current?.measureInWindow((_x, y, _width, height) => {
+      const remainingHeight = Math.max(
+        windowHeight - insets.bottom - (y + height),
+        0
+      );
+      setMenuMaxHeight(Math.min(MAX_MENU_HEIGHT, remainingHeight));
+    });
+  }, [insets.bottom, windowHeight]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setMenuMaxHeight(null);
+      return;
+    }
+
+    measureMenuHeight();
+  }, [filterRowHeight, isOpen, measureMenuHeight]);
 
   if (items.length === 0) {
     return null;
@@ -68,6 +101,7 @@ export function StatsCurrencyFilter({
   return (
     <View className="relative z-20">
       <View
+        ref={filterRowRef}
         testID="stats-currency-filter-row"
         onLayout={(event: LayoutChangeEvent): void => {
           setFilterRowHeight(event.nativeEvent.layout.height);
@@ -114,14 +148,17 @@ export function StatsCurrencyFilter({
         </TouchableOpacity>
       </View>
 
-      {isOpen ? (
+      {isOpen && menuMaxHeight !== null ? (
         <View
           testID="stats-currency-menu"
           className="absolute end-0 z-30 min-w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800"
-          style={{ elevation: 8, top: filterRowHeight }}
+          style={{
+            elevation: 8,
+            maxHeight: menuMaxHeight,
+            top: filterRowHeight,
+          }}
         >
           <FlatList
-            className="max-h-72"
             data={items}
             keyExtractor={(item): string => item.code}
             renderItem={renderCurrencyItem}
