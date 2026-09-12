@@ -66,23 +66,24 @@ const USER_C = "user-c";
 const INITIAL_WATERMARK = 1_700_000_000_000;
 const NEXT_WATERMARK = 1_700_000_100_000;
 
-function createOwnerMarkerHarness(
-  initialOwner?: string
-): OwnerMarkerHarness {
+function createOwnerMarkerHarness(initialOwner?: string): OwnerMarkerHarness {
   let owner = initialOwner;
-  const getLocal = jest.fn((): Promise<string | undefined> =>
-    Promise.resolve(owner)
+  const getLocal = jest.fn(
+    (): Promise<string | undefined> => Promise.resolve(owner)
   );
-  const setLocal = jest.fn(
-    (_key: string, value: string): Promise<void> => {
-      owner = value;
-      return Promise.resolve();
-    }
-  );
+  const setLocal = jest.fn((_key: string, value: string): Promise<void> => {
+    owner = value;
+    return Promise.resolve();
+  });
   const database = {
     adapter: { getLocal, setLocal },
   } as unknown as Database;
-  return { database, getOwner: (): string | undefined => owner, getLocal, setLocal };
+  return {
+    database,
+    getOwner: (): string | undefined => owner,
+    getLocal,
+    setLocal,
+  };
 }
 
 function successfulPull(
@@ -138,7 +139,11 @@ describe("sync owner watermark lifecycle", () => {
 
     await expect(syncDatabase(harness.database)).resolves.toBeUndefined();
 
-    expect(mockPullChanges).toHaveBeenCalledWith(null, USER_B);
+    expect(mockPullChanges).toHaveBeenCalledWith(
+      null,
+      USER_B,
+      harness.database
+    );
     expect(harness.getOwner()).toBe(USER_B);
     expect(harness.setLocal).toHaveBeenCalledTimes(1);
   });
@@ -193,7 +198,11 @@ describe("sync owner watermark lifecycle", () => {
     await expect(syncDatabase(harness.database)).resolves.toBeUndefined();
 
     expect(appliedRows).toEqual([olderUserRow]);
-    expect(mockPullChanges).toHaveBeenCalledWith(null, USER_B);
+    expect(mockPullChanges).toHaveBeenCalledWith(
+      null,
+      USER_B,
+      harness.database
+    );
     expect(harness.getOwner()).toBe(USER_B);
   });
 
@@ -207,7 +216,11 @@ describe("sync owner watermark lifecycle", () => {
 
     await expect(syncDatabase(harness.database)).resolves.toBeUndefined();
 
-    expect(mockPullChanges).toHaveBeenCalledWith(INITIAL_WATERMARK, USER_B);
+    expect(mockPullChanges).toHaveBeenCalledWith(
+      INITIAL_WATERMARK,
+      USER_B,
+      harness.database
+    );
     expect(harness.getOwner()).toBe(USER_B);
   });
 
@@ -235,7 +248,11 @@ describe("sync owner watermark lifecycle", () => {
 
     await expect(syncDatabase(harness.database)).resolves.toBeUndefined();
 
-    expect(mockPullChanges).toHaveBeenLastCalledWith(null, USER_B);
+    expect(mockPullChanges).toHaveBeenLastCalledWith(
+      null,
+      USER_B,
+      harness.database
+    );
     expect(harness.getOwner()).toBe(USER_B);
   });
 
@@ -256,7 +273,11 @@ describe("sync owner watermark lifecycle", () => {
     );
     await expect(syncDatabase(harness.database)).resolves.toBeUndefined();
 
-    expect(mockPullChanges).toHaveBeenLastCalledWith(null, USER_B);
+    expect(mockPullChanges).toHaveBeenLastCalledWith(
+      null,
+      USER_B,
+      harness.database
+    );
     expect(harness.getOwner()).toBe(USER_B);
   });
 });

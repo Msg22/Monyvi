@@ -22,6 +22,10 @@ describe("068 Metals domain migration and persisted models", () => {
 
   it("adds exact compatibility-preserving fields and a guarded Gold/Silver-only backfill", () => {
     const sql = source(migrationPath);
+    const runtimeRpcStart = sql.indexOf(
+      "CREATE OR REPLACE FUNCTION public.apply_metal_action_v1"
+    );
+    const migrationBackfillSql = sql.slice(0, runtimeRpcStart);
 
     expect(sql).toMatch(/purchase_price_decimal\s+numeric/i);
     expect(sql).toMatch(/purchase_currency\s+text/i);
@@ -34,7 +38,10 @@ describe("068 Metals domain migration and persisted models", () => {
     expect(sql).toMatch(/purchase_price_decimal\s+is\s+null/i);
     expect(sql).toMatch(/weight_grams_decimal\s+is\s+null/i);
     expect(sql).not.toMatch(/Platinum|Palladium/i);
-    expect(sql).not.toMatch(/set\s+acquisition_action_id\s*=/i);
+    expect(runtimeRpcStart).toBeGreaterThan(0);
+    expect(migrationBackfillSql).not.toMatch(
+      /set\s+acquisition_action_id\s*=/i
+    );
     expect(sql).toContain("purchase_price");
     expect(sql).toContain("purity_fraction");
     expect(sql).toMatch(
@@ -146,14 +153,15 @@ describe("068 Metals domain migration and persisted models", () => {
     expect(sql).toMatch(/created_at[\s\S]*updated_at[\s\S]*deleted/i);
   });
 
-  it("registers schema version 27 and persisted-field-only models", () => {
+  it("registers schema version 28 and persisted-field-only models", () => {
     const schema = source("packages/db/src/schema.ts");
     const migrations = source("packages/db/src/migrations.ts");
     const database = source("packages/db/src/database.ts");
     const index = source("packages/db/src/index.ts");
 
-    expect(schema).toContain("version: 27");
+    expect(schema).toContain("version: 28");
     expect(migrations).toContain("toVersion: 27");
+    expect(migrations).toContain("toVersion: 28");
     expect(migrations.indexOf('name: "metal_holding_states"')).toBeLessThan(
       migrations.indexOf("unsafeExecuteSql(METALS_V27_BACKFILL_SQL)")
     );

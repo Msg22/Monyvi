@@ -32,7 +32,11 @@ jest.mock("@monyvi/db", () => ({
     tables: {
       market_rates: {},
       market_rate_observations: {},
+      financial_action_groups: {},
       metal_holding_states: {},
+      metal_action_evidence: {},
+      metal_lifecycle_events: {},
+      metal_rate_references: {},
       daily_snapshot_balance: {},
       categories: {},
       assets: {},
@@ -63,6 +67,7 @@ import {
   pullChanges,
   pullMarketRateObservations,
   pullMarketRates,
+  pullMetalDedicatedTable,
   pullMetalHoldingStates,
 } from "../../services/sync/pull-strategies";
 import { MARKET_RATE_VALUE_COLUMNS } from "@monyvi/logic";
@@ -154,50 +159,110 @@ beforeEach(() => {
   });
   mockFrom.mockImplementation((table: string) => {
     const result =
-      table === "assets"
+      table === "financial_action_groups"
         ? {
             data: [
               {
-                id: "asset-1",
+                id: "server-root-1",
+                action_id: "action-1",
+                user_id: "current-user",
+                account_guards_json_text: "[]",
+                outcome_json_text: null,
+                payload_json_text: '{"kind":"add"}',
                 deleted: false,
-                purchase_currency: "EGP",
-                purchase_price_decimal_text: "100000.125",
-                acquisition_action_id: "action-1",
+                updated_at: "2026-05-18T08:02:00.000Z",
               },
             ],
             error: null,
           }
-        : table === "asset_metals"
+        : table === "metal_action_evidence"
           ? {
               data: [
                 {
-                  id: "asset-metal-1",
-                  asset_id: "asset-1",
+                  id: "evidence-1",
+                  action_id: "action-1",
+                  user_id: "current-user",
+                  canonical_holding_revision_text: "0",
+                  domain_payload_json_text: '{"holdingId":"asset-1"}',
+                  expected_holding_revision_text: null,
                   deleted: false,
-                  weight_grams_decimal_text: "10.125",
-                  purity_factor_decimal_text: "0.999",
+                  updated_at: "2026-05-18T08:02:00.000Z",
                 },
               ],
               error: null,
             }
-          : table === "metal_holding_states"
+          : table === "metal_lifecycle_events"
             ? {
                 data: [
                   {
-                    id: "holding-state-1",
+                    id: "event-1",
+                    action_id: "action-1",
                     user_id: "current-user",
-                    holding_id: "asset-1",
-                    financial_revision_text: "9223372036854775807",
+                    payload_json_text: '{"holdingId":"asset-1"}',
                     deleted: false,
-                    created_at: "2026-05-18T08:01:00.000Z",
                     updated_at: "2026-05-18T08:02:00.000Z",
                   },
                 ],
                 error: null,
               }
-            : table === "market_rates"
-              ? { data: [VALID_MARKET_RATE], error: null }
-              : { data: [], error: null };
+            : table === "metal_rate_references"
+              ? {
+                  data: [
+                    {
+                      id: "rate-reference-1",
+                      action_id: "action-1",
+                      user_id: "current-user",
+                      value_decimal_text: "3510.500000000000000001",
+                      deleted: false,
+                      updated_at: "2026-05-18T08:02:00.000Z",
+                    },
+                  ],
+                  error: null,
+                }
+              : table === "assets"
+                ? {
+                    data: [
+                      {
+                        id: "asset-1",
+                        deleted: false,
+                        purchase_currency: "EGP",
+                        purchase_price_decimal_text: "100000.125",
+                        acquisition_action_id: "action-1",
+                      },
+                    ],
+                    error: null,
+                  }
+                : table === "asset_metals"
+                  ? {
+                      data: [
+                        {
+                          id: "asset-metal-1",
+                          asset_id: "asset-1",
+                          deleted: false,
+                          weight_grams_decimal_text: "10.125",
+                          purity_factor_decimal_text: "0.999",
+                        },
+                      ],
+                      error: null,
+                    }
+                  : table === "metal_holding_states"
+                    ? {
+                        data: [
+                          {
+                            id: "holding-state-1",
+                            user_id: "current-user",
+                            holding_id: "asset-1",
+                            financial_revision_text: "9223372036854775807",
+                            deleted: false,
+                            created_at: "2026-05-18T08:01:00.000Z",
+                            updated_at: "2026-05-18T08:02:00.000Z",
+                          },
+                        ],
+                        error: null,
+                      }
+                    : table === "market_rates"
+                      ? { data: [VALID_MARKET_RATE], error: null }
+                      : { data: [], error: null };
     const chain = makeSelectChain(result);
     const chains = tableChains.get(table) ?? [];
     chains.push(chain);
@@ -289,6 +354,21 @@ describe("pullChanges", () => {
         "financial_revision_text:financial_revision::text"
       )
     );
+    for (const table of [
+      "financial_action_groups",
+      "metal_action_evidence",
+      "metal_lifecycle_events",
+      "metal_rate_references",
+    ]) {
+      expect(getFirstChain(table).eq).toHaveBeenCalledWith(
+        "user_id",
+        "current-user"
+      );
+      expect(getFirstChain(table).lte).toHaveBeenCalledWith(
+        "updated_at",
+        "2026-05-18T08:05:00.000Z"
+      );
+    }
 
     const changes = result.changes as Record<
       string,
@@ -305,6 +385,22 @@ describe("pullChanges", () => {
     });
     expect(changes.metal_holding_states?.updated[0]).toMatchObject({
       financial_revision: "9223372036854775807",
+    });
+    expect(changes.financial_action_groups?.updated[0]).toMatchObject({
+      account_guards_json: "[]",
+      id: "server-root-1",
+      payload_json: '{"kind":"add"}',
+    });
+    expect(changes.metal_action_evidence?.updated[0]).toMatchObject({
+      canonical_holding_revision: "0",
+      domain_payload_json: '{"holdingId":"asset-1"}',
+      expected_holding_revision: null,
+    });
+    expect(changes.metal_lifecycle_events?.updated[0]).toMatchObject({
+      payload_json: '{"holdingId":"asset-1"}',
+    });
+    expect(changes.metal_rate_references?.updated[0]).toMatchObject({
+      value_decimal: "3510.500000000000000001",
     });
   });
 
@@ -507,5 +603,50 @@ describe("pullMetalHoldingStates", () => {
 
     expect(result.updated).toHaveLength(501);
     expect(mockFrom).toHaveBeenCalledTimes(2);
+  });
+
+  it("maps a server root to the optimistic local root by owner and action ID", async () => {
+    mockFrom.mockReturnValue(
+      makeSelectChain({
+        data: [
+          {
+            id: "server-root-1",
+            action_id: "action-1",
+            user_id: "current-user",
+            account_guards_json_text: "[]",
+            outcome_json_text: '{"status":"accepted"}',
+            payload_json_text: '{"kind":"add"}',
+            deleted: false,
+            updated_at: "2026-05-18T08:02:00.000Z",
+          },
+        ],
+        error: null,
+      })
+    );
+    const database = {
+      get: jest.fn(() => ({
+        query: jest.fn(() => ({
+          fetch: jest.fn(() =>
+            Promise.resolve([{ actionId: "action-1", id: "local-root-1" }])
+          ),
+        })),
+      })),
+    };
+
+    const result = await pullMetalDedicatedTable(
+      "financial_action_groups",
+      "current-user",
+      null,
+      "2026-05-18T08:05:00.000Z",
+      database as never
+    );
+
+    expect(result.updated).toEqual([
+      expect.objectContaining({
+        action_id: "action-1",
+        id: "local-root-1",
+        outcome_json: '{"status":"accepted"}',
+      }),
+    ]);
   });
 });

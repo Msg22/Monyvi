@@ -11,6 +11,10 @@ export class MetalHoldingState extends Model {
   @field("financial_revision") financialRevision!: string;
   @field("holding_id") holdingId!: string;
   @field("is_visible") isVisible!: boolean;
+  @field("name_written_at") nameWrittenAt!: number | null;
+  @field("name_writer_id") nameWriterId!: string | null;
+  @field("notes_written_at") notesWrittenAt!: number | null;
+  @field("notes_writer_id") notesWriterId!: string | null;
   @field("reconciliation_state") reconciliationState!: string;
   @field("status") status!: string;
   @date("updated_at") updatedAt!: Date;

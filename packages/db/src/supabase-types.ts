@@ -7,6 +7,31 @@ export type Json =
   | Json[];
 
 export type Database = {
+  graphql_public: {
+    Tables: {
+      [_ in never]: never;
+    };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json;
+          operationName?: string;
+          query?: string;
+          variables?: Json;
+        };
+        Returns: Json;
+      };
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
+    };
+  };
   public: {
     Tables: {
       account_sms_senders: {
@@ -840,6 +865,10 @@ export type Database = {
           holding_id: string;
           id: string;
           is_visible: boolean;
+          name_writer_id: string | null;
+          name_written_at: number | null;
+          notes_writer_id: string | null;
+          notes_written_at: number | null;
           reconciliation_state: string;
           status: string;
           updated_at: string;
@@ -854,6 +883,10 @@ export type Database = {
           holding_id: string;
           id: string;
           is_visible?: boolean;
+          name_writer_id?: string | null;
+          name_written_at?: number | null;
+          notes_writer_id?: string | null;
+          notes_written_at?: number | null;
           reconciliation_state?: string;
           status: string;
           updated_at?: string;
@@ -868,6 +901,10 @@ export type Database = {
           holding_id?: string;
           id?: string;
           is_visible?: boolean;
+          name_writer_id?: string | null;
+          name_written_at?: number | null;
+          notes_writer_id?: string | null;
+          notes_written_at?: number | null;
           reconciliation_state?: string;
           status?: string;
           updated_at?: string;
@@ -875,18 +912,30 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "metal_holding_states_effective_event_fk";
-            columns: ["effective_event_id"];
-            isOneToOne: false;
-            referencedRelation: "metal_lifecycle_events";
-            referencedColumns: ["id"];
-          },
-          {
             foreignKeyName: "metal_holding_states_effective_action_fk";
             columns: ["user_id", "effective_action_id", "holding_id"];
             isOneToOne: false;
             referencedRelation: "metal_action_evidence";
             referencedColumns: ["user_id", "action_id", "holding_id"];
+          },
+          {
+            foreignKeyName: "metal_holding_states_effective_event_fk";
+            columns: ["user_id", "holding_id", "effective_event_id"];
+            isOneToOne: false;
+            referencedRelation: "metal_lifecycle_events";
+            referencedColumns: ["user_id", "holding_id", "id"];
+          },
+          {
+            foreignKeyName: "metal_holding_states_effective_provenance_fk";
+            columns: [
+              "user_id",
+              "holding_id",
+              "effective_action_id",
+              "effective_event_id",
+            ];
+            isOneToOne: false;
+            referencedRelation: "metal_lifecycle_events";
+            referencedColumns: ["user_id", "holding_id", "action_id", "id"];
           },
           {
             foreignKeyName: "metal_holding_states_user_id_holding_id_fkey";
@@ -948,25 +997,11 @@ export type Database = {
         };
         Relationships: [
           {
-            foreignKeyName: "metal_lifecycle_events_predecessor_event_id_fkey";
-            columns: ["predecessor_event_id"];
+            foreignKeyName: "metal_lifecycle_events_user_id_action_id_holding_id_kind_fkey";
+            columns: ["user_id", "action_id", "holding_id", "kind"];
             isOneToOne: false;
-            referencedRelation: "metal_lifecycle_events";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "metal_lifecycle_events_reverses_event_id_fkey";
-            columns: ["reverses_event_id"];
-            isOneToOne: false;
-            referencedRelation: "metal_lifecycle_events";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "metal_lifecycle_events_user_id_action_id_holding_id_fkey";
-            columns: ["user_id", "action_id", "holding_id"];
-            isOneToOne: true;
             referencedRelation: "metal_action_evidence";
-            referencedColumns: ["user_id", "action_id", "holding_id"];
+            referencedColumns: ["user_id", "action_id", "holding_id", "kind"];
           },
           {
             foreignKeyName: "metal_lifecycle_events_user_id_holding_id_fkey";
@@ -974,6 +1009,20 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "assets";
             referencedColumns: ["user_id", "id"];
+          },
+          {
+            foreignKeyName: "metal_lifecycle_events_user_id_holding_id_predecessor_even_fkey";
+            columns: ["user_id", "holding_id", "predecessor_event_id"];
+            isOneToOne: false;
+            referencedRelation: "metal_lifecycle_events";
+            referencedColumns: ["user_id", "holding_id", "id"];
+          },
+          {
+            foreignKeyName: "metal_lifecycle_events_user_id_holding_id_reverses_event_i_fkey";
+            columns: ["user_id", "holding_id", "reverses_event_id"];
+            isOneToOne: false;
+            referencedRelation: "metal_lifecycle_events";
+            referencedColumns: ["user_id", "holding_id", "id"];
           },
         ];
       };
@@ -1593,6 +1642,14 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      apply_metal_action_v1: {
+        Args: { p_payload_hash: string; p_payload_json: string };
+        Returns: Json;
+      };
+      apply_metal_metadata_patch_v1: {
+        Args: { p_holding_id: string; p_patch: Json };
+        Returns: Json;
+      };
       pull_metal_observations_page_v1: {
         Args: {
           p_after_created_at?: string | null;
@@ -1933,6 +1990,9 @@ export type CompositeTypes<
     : never;
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       account_type: ["CASH", "BANK", "DIGITAL_WALLET"],

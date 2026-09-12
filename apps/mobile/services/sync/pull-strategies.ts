@@ -1,3 +1,4 @@
+import { Q, type Database, type Model } from "@nozbe/watermelondb";
 import type {
   SyncPullResult,
   SyncTableChangeSet,
@@ -66,6 +67,66 @@ interface PulledRow extends Record<string, unknown> {
   readonly id: string;
 }
 
+const METAL_DEDICATED_PULL_TABLES = [
+  "financial_action_groups",
+  "metal_action_evidence",
+  "metal_lifecycle_events",
+  "metal_rate_references",
+  "metal_holding_states",
+] as const;
+type MetalDedicatedPullTable = (typeof METAL_DEDICATED_PULL_TABLES)[number];
+
+interface FinancialActionRootModel extends Model {
+  readonly actionId: string;
+}
+
+export function protectMetalMetadataPullFragments(
+  assetChanges: SyncTableChangeSet,
+  holdingStateChanges: SyncTableChangeSet
+): SyncTableChangeSet {
+  const holdingCreates =
+    holdingStateChanges.created as unknown as ReadonlyArray<
+      Record<string, unknown>
+    >;
+  const holdingUpdates =
+    holdingStateChanges.updated as unknown as ReadonlyArray<
+      Record<string, unknown>
+    >;
+  const clockCoupledHoldingIds = new Set(
+    [...holdingCreates, ...holdingUpdates]
+      .map((record) =>
+        typeof record.holding_id === "string" ? record.holding_id : record.id
+      )
+      .filter((id): id is string => typeof id === "string")
+  );
+  const protectRecord = (
+    record: Record<string, unknown>
+  ): Record<string, unknown> => {
+    if (
+      record.type !== "METAL" ||
+      clockCoupledHoldingIds.has(String(record.id))
+    ) {
+      return { ...record };
+    }
+    const protectedRecord = { ...record };
+    delete protectedRecord.name;
+    delete protectedRecord.notes;
+    return protectedRecord;
+  };
+
+  const assetCreates = assetChanges.created as unknown as ReadonlyArray<
+    Record<string, unknown>
+  >;
+  const assetUpdates = assetChanges.updated as unknown as ReadonlyArray<
+    Record<string, unknown>
+  >;
+  return {
+    created: assetCreates.map(protectRecord),
+    updated: assetUpdates.map(protectRecord),
+    deleted: (assetChanges.deleted as unknown as readonly string[]).slice(),
+  };
+}
+
 function isPulledRow(value: unknown): value is PulledRow {
   return (
     typeof value === "object" &&
@@ -93,7 +154,13 @@ const EXACT_TEXT_SELECTS = {
   assets: "*,purchase_price_decimal_text:purchase_price_decimal::text",
   asset_metals:
     "*,weight_grams_decimal_text:weight_grams_decimal::text,purity_factor_decimal_text:purity_factor_decimal::text",
+  financial_action_groups:
+    "*,account_guards_json_text:account_guards_json::text,outcome_json_text:outcome_json::text,payload_json_text:payload_json::text",
+  metal_action_evidence:
+    "*,canonical_holding_revision_text:canonical_holding_revision::text,domain_payload_json_text:domain_payload_json::text,expected_holding_revision_text:expected_holding_revision::text",
   metal_holding_states: "*,financial_revision_text:financial_revision::text",
+  metal_lifecycle_events: "*,payload_json_text:payload_json::text",
+  metal_rate_references: "*,value_decimal_text:value_decimal::text",
 } as const;
 
 function failInvalidObservationPage(): never {
@@ -230,6 +297,73 @@ function validateCanonicalDecimal(value: string): void {
   parseCanonicalDecimal(value);
 }
 
+function validateSerializedJson(value: string): void {
+  JSON.parse(value);
+}
+
+function normalizeDedicatedPullRecord(
+  table: MetalDedicatedPullTable,
+  record: Record<string, unknown>
+): Record<string, unknown> {
+  if (table === "financial_action_groups") {
+    const accountGuards = normalizeExactTextColumn(
+      record,
+      "account_guards_json_text",
+      "account_guards_json",
+      validateSerializedJson
+    );
+    const outcome = normalizeExactTextColumn(
+      accountGuards,
+      "outcome_json_text",
+      "outcome_json",
+      validateSerializedJson
+    );
+    return normalizeExactTextColumn(
+      outcome,
+      "payload_json_text",
+      "payload_json",
+      validateSerializedJson
+    );
+  }
+  if (table === "metal_action_evidence") {
+    const canonicalRevision = normalizeExactTextColumn(
+      record,
+      "canonical_holding_revision_text",
+      "canonical_holding_revision",
+      assertCanonicalMetalRevision
+    );
+    const payload = normalizeExactTextColumn(
+      canonicalRevision,
+      "domain_payload_json_text",
+      "domain_payload_json",
+      validateSerializedJson
+    );
+    return normalizeExactTextColumn(
+      payload,
+      "expected_holding_revision_text",
+      "expected_holding_revision",
+      assertCanonicalMetalRevision
+    );
+  }
+  if (table === "metal_lifecycle_events") {
+    return normalizeExactTextColumn(
+      record,
+      "payload_json_text",
+      "payload_json",
+      validateSerializedJson
+    );
+  }
+  if (table === "metal_rate_references") {
+    return normalizeExactTextColumn(
+      record,
+      "value_decimal_text",
+      "value_decimal",
+      validateCanonicalDecimal
+    );
+  }
+  return normalizePulledExactText("metal_holding_states", record);
+}
+
 function normalizePulledExactText(
   table:
     | GenericUserOwnedPullTableName
@@ -271,9 +405,37 @@ function normalizePulledExactText(
 }
 
 function pullSelect(
-  table: GenericUserOwnedPullTableName | ChildTableName | "metal_holding_states"
+  table:
+    | GenericUserOwnedPullTableName
+    | ChildTableName
+    | MetalDedicatedPullTable
 ): string {
   return EXACT_TEXT_SELECTS[table as keyof typeof EXACT_TEXT_SELECTS] ?? "*";
+}
+
+async function remapFinancialActionRootIds(
+  records: readonly PulledRow[],
+  userId: string,
+  database?: Database
+): Promise<readonly PulledRow[]> {
+  if (!database || records.length === 0) return records;
+  const actionIds = records
+    .map((record) => record.action_id)
+    .filter((actionId): actionId is string => typeof actionId === "string");
+  if (actionIds.length !== records.length) {
+    throw new Error(SYNC_PULL_ERROR_CODES.INVALID_PULL_ROW);
+  }
+  const localRoots = await database
+    .get<FinancialActionRootModel>("financial_action_groups")
+    .query(Q.where("user_id", userId), Q.where("action_id", Q.oneOf(actionIds)))
+    .fetch();
+  const localIdsByAction = new Map(
+    localRoots.map((root) => [root.actionId, root.id])
+  );
+  return records.map((record) => ({
+    ...record,
+    id: localIdsByAction.get(record.action_id as string) ?? record.id,
+  }));
 }
 
 async function assertExpectedPullUser(expectedUserId: string): Promise<void> {
@@ -570,10 +732,12 @@ export async function pullCategories(
   };
 }
 
-export async function pullMetalHoldingStates(
+export async function pullMetalDedicatedTable(
+  table: MetalDedicatedPullTable,
   userId: string,
   lastSyncDate: string | null,
-  upperWatermark: string
+  upperWatermark: string,
+  database?: Database
 ): Promise<SyncTableChangeSet> {
   const records: PulledRow[] = [];
   let cursorUpdatedAt = lastSyncDate;
@@ -582,8 +746,8 @@ export async function pullMetalHoldingStates(
 
   while (shouldPullNextPage) {
     let query = supabase
-      .from("metal_holding_states")
-      .select(pullSelect("metal_holding_states"))
+      .from(table)
+      .select(pullSelect(table))
       .eq("user_id", userId);
     if (cursorUpdatedAt && cursorId) {
       query = query.or(
@@ -600,7 +764,7 @@ export async function pullMetalHoldingStates(
 
     const { data, error } = await query;
     if (error) {
-      throw createSyncTableError("pull", "metal_holding_states", error);
+      throw createSyncTableError("pull", table, error);
     }
     const page = requirePulledRows(data ?? []);
     records.push(...page);
@@ -617,23 +781,38 @@ export async function pullMetalHoldingStates(
 
   // PostgREST supports the exact-value `::text` projection above, but the
   // Supabase select-string type parser cannot infer rows containing casts.
-  const deleted = records
+  const remappedRecords =
+    table === "financial_action_groups"
+      ? await remapFinancialActionRootIds(records, userId, database)
+      : records;
+  const deleted = remappedRecords
     .filter((record) => record.deleted === true)
     .map((record) => record.id);
-  const updated = records
+  const updated = remappedRecords
     .filter((record) => record.deleted !== true)
     .map((record) =>
-      transformFromSupabase(
-        "metal_holding_states",
-        normalizePulledExactText("metal_holding_states", record)
-      )
+      transformFromSupabase(table, normalizeDedicatedPullRecord(table, record))
     );
   return { created: [], updated, deleted };
 }
 
+export async function pullMetalHoldingStates(
+  userId: string,
+  lastSyncDate: string | null,
+  upperWatermark: string
+): Promise<SyncTableChangeSet> {
+  return pullMetalDedicatedTable(
+    "metal_holding_states",
+    userId,
+    lastSyncDate,
+    upperWatermark
+  );
+}
+
 export async function pullChanges(
   lastPulledAt: number | null,
-  expectedUserId: string
+  expectedUserId: string,
+  database?: Database
 ): Promise<SyncPullResult> {
   await assertExpectedPullUser(expectedUserId);
 
@@ -689,11 +868,26 @@ export async function pullChanges(
       );
     }
   }
-  changes.metal_holding_states = await pullMetalHoldingStates(
-    expectedUserId,
-    lastSyncDate,
-    upperWatermark
-  );
+  let holdingStateChanges: SyncTableChangeSet | null = null;
+  for (const table of METAL_DEDICATED_PULL_TABLES) {
+    const dedicatedChanges = await pullMetalDedicatedTable(
+      table,
+      expectedUserId,
+      lastSyncDate,
+      upperWatermark,
+      database
+    );
+    changes[table] = dedicatedChanges;
+    if (table === "metal_holding_states") {
+      holdingStateChanges = dedicatedChanges;
+    }
+  }
+  if (changes.assets && holdingStateChanges) {
+    changes.assets = protectMetalMetadataPullFragments(
+      changes.assets,
+      holdingStateChanges
+    );
+  }
 
   await assertExpectedPullUser(expectedUserId);
 
