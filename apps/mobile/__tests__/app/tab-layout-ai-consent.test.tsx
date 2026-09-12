@@ -24,6 +24,7 @@ const mockGetAiProcessingConsentStatus = jest.fn<
 let mockIsAiConsented = false;
 let mockIsAiConsentLoading = false;
 let mockRetryParam: string | undefined;
+let mockLanguage: "en" | "ar" = "en";
 let latestVoiceFlowOptions:
   | {
       readonly autoStart: boolean;
@@ -37,8 +38,26 @@ const mockScreenOptions = new Map<
   { readonly title?: string } | undefined
 >();
 
+const mockTabTranslations = {
+  en: {
+    home: "Home",
+    accounts: "Accounts",
+    transactions: "Transactions",
+    metals: "Metals",
+  },
+  ar: {
+    home: "الرئيسية",
+    accounts: "الحسابات",
+    transactions: "المعاملات",
+    metals: "المعادن",
+  },
+} as const;
+
 jest.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => `translated:${key}` }),
+  useTranslation: () => ({
+    t: (key: keyof (typeof mockTabTranslations)["en"]) =>
+      mockTabTranslations[mockLanguage][key],
+  }),
 }));
 
 jest.mock("expo-router", () => {
@@ -225,6 +244,7 @@ describe("TabLayout AI consent", () => {
     mockIsAiConsented = false;
     mockIsAiConsentLoading = false;
     mockRetryParam = undefined;
+    mockLanguage = "en";
     latestVoiceFlowOptions = undefined;
     mockGrantConsent.mockResolvedValue();
     mockStartVoiceFlow.mockResolvedValue();
@@ -306,18 +326,21 @@ describe("TabLayout AI consent", () => {
     expect(mockSetParams).toHaveBeenCalledWith({ retry: undefined });
   });
 
-  it("uses translated titles for tab screen options", () => {
+  it("uses English and Arabic titles from the active translation state", () => {
+    const { unmount } = render(<TabLayout />);
+
+    expect(mockScreenOptions.get("index")?.title).toBe("Home");
+    expect(mockScreenOptions.get("accounts")?.title).toBe("Accounts");
+    expect(mockScreenOptions.get("transactions")?.title).toBe("Transactions");
+    expect(mockScreenOptions.get("metals")?.title).toBe("Metals");
+
+    unmount();
+    mockLanguage = "ar";
     render(<TabLayout />);
 
-    expect(mockScreenOptions.get("index")?.title).toBe("translated:home");
-    expect(mockScreenOptions.get("accounts")?.title).toBe(
-      "translated:accounts"
-    );
-    expect(mockScreenOptions.get("transactions")?.title).toBe(
-      "translated:transactions"
-    );
-    expect(mockScreenOptions.get("metals")?.title).toBe(
-      "translated:metals"
-    );
+    expect(mockScreenOptions.get("index")?.title).toBe("الرئيسية");
+    expect(mockScreenOptions.get("accounts")?.title).toBe("الحسابات");
+    expect(mockScreenOptions.get("transactions")?.title).toBe("المعاملات");
+    expect(mockScreenOptions.get("metals")?.title).toBe("المعادن");
   });
 });

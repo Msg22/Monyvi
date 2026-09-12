@@ -6,6 +6,26 @@ import {
 } from "@react-navigation/bottom-tabs";
 
 const mockSetTabBarHeight = jest.fn<void, [number]>();
+let mockLanguage: "en" | "ar" = "en";
+
+const mockCommonTranslations = {
+  en: {
+    home: "Home",
+    accounts: "Accounts",
+    transactions: "Transactions",
+    metals: "Metals",
+    voice_recording_label: "Voice input - record a transaction",
+    voice_recording_hint: "Tap to start voice recording for a transaction",
+  },
+  ar: {
+    home: "الرئيسية",
+    accounts: "الحسابات",
+    transactions: "المعاملات",
+    metals: "المعادن",
+    voice_recording_label: "إدخال صوتي - تسجيل معاملة",
+    voice_recording_hint: "اضغط لبدء التسجيل الصوتي لإضافة معاملة",
+  },
+} as const;
 
 jest.mock("expo-blur", () => ({
   BlurView: ({ children }: { readonly children: React.ReactNode }) => {
@@ -24,11 +44,14 @@ jest.mock("expo-linear-gradient", () => ({
 }));
 
 jest.mock("@/context/LocaleContext", () => ({
-  useLocale: () => ({ language: "en" }),
+  useLocale: () => ({ language: mockLanguage }),
 }));
 
 jest.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => `translated:${key}` }),
+  useTranslation: () => ({
+    t: (key: keyof (typeof mockCommonTranslations)["en"]) =>
+      mockCommonTranslations[mockLanguage][key],
+  }),
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
@@ -72,6 +95,7 @@ const tabBarProps = {
 describe("CustomBottomTabBar", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockLanguage = "en";
   });
 
   it("reports its measured height to tab screens", () => {
@@ -88,18 +112,42 @@ describe("CustomBottomTabBar", () => {
     expect(mockSetTabBarHeight).toHaveBeenCalledWith(114);
   });
 
-  it("uses translated labels for tab text and accessibility labels", () => {
+  it("uses English and Arabic tab text and accessibility metadata", () => {
+    const { unmount } = render(
+      <BottomTabBarHeightCallbackContext.Provider value={mockSetTabBarHeight}>
+        <CustomBottomTabBar {...tabBarProps} />
+      </BottomTabBarHeightCallbackContext.Provider>
+    );
+
+    for (const label of ["Home", "Accounts", "Transactions", "Metals"]) {
+      expect(screen.getAllByLabelText(label).length).toBe(2);
+      expect(screen.getAllByText(label).length).toBe(2);
+    }
+    for (const tab of screen.getAllByRole("tab")) {
+      expect(tab).toHaveProp("accessibilityLanguage", "en");
+    }
+    expect(
+      screen.getByLabelText("Voice input - record a transaction")
+    ).toHaveProp("accessibilityLanguage", "en");
+
+    unmount();
+    mockLanguage = "ar";
     render(
       <BottomTabBarHeightCallbackContext.Provider value={mockSetTabBarHeight}>
         <CustomBottomTabBar {...tabBarProps} />
       </BottomTabBarHeightCallbackContext.Provider>
     );
 
-    for (const key of ["home", "accounts", "transactions", "metals"]) {
-      expect(screen.getAllByLabelText(`translated:${key}`).length).toBe(2);
-      expect(screen.getAllByText(`translated:${key}`).length).toBe(2);
+    for (const label of ["الرئيسية", "الحسابات", "المعاملات", "المعادن"]) {
+      expect(screen.getAllByLabelText(label).length).toBe(2);
+      expect(screen.getAllByText(label).length).toBe(2);
     }
-    expect(screen.queryByText("Home")).toBeNull();
-    expect(screen.queryByText("Metals")).toBeNull();
+    for (const tab of screen.getAllByRole("tab")) {
+      expect(tab).toHaveProp("accessibilityLanguage", "ar");
+    }
+    expect(screen.getByLabelText("إدخال صوتي - تسجيل معاملة")).toHaveProp(
+      "accessibilityLanguage",
+      "ar"
+    );
   });
 });
