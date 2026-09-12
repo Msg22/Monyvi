@@ -266,6 +266,7 @@ async function preparePendingAccounts(
           record.providerDisplayName =
             pending.providerDisplayName?.trim() || undefined;
           record.balance = initialBalanceByDedupKey.get(dedupKey) ?? 0;
+          record.financialRevision = "0";
           record.isDefault = false;
           record.deleted = false;
         });

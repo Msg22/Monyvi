@@ -24,20 +24,42 @@ const syntheticDefinition: FinancialActionDefinition = {
 };
 
 describe("financial action definition registry", () => {
-  it("registers the six approved Metals action tuples by default", () => {
-    expect(
-      DEFAULT_FINANCIAL_ACTION_REGISTRY.definitions.map((definition) => [
+  it("registers only approved Metals and account-effect tuples by default", () => {
+    const tuples = DEFAULT_FINANCIAL_ACTION_REGISTRY.definitions.map(
+      (definition) => [
         definition.domain,
         definition.kind,
         definition.payloadVersion,
-      ])
-    ).toEqual([
+      ]
+    );
+
+    expect(tuples.slice(0, 6)).toEqual([
       ["metals", "add", "metals.add/v1"],
       ["metals", "correct", "metals.correct/v1"],
       ["metals", "sell", "metals.sell/v2"],
       ["metals", "dispose", "metals.dispose/v1"],
       ["metals", "delete", "metals.delete/v1"],
       ["metals", "undo", "metals.undo/v1"],
+    ]);
+    expect(tuples.slice(6)).toEqual([
+      ["accounts", "cash_create", "account.balance-effects/v1"],
+      ["accounts", "cash_prepare", "account.balance-effects/v1"],
+      ["accounts", "cash_prepare_named", "account.balance-effects/v1"],
+      ["accounts", "create", "account.balance-effects/v1"],
+      ["accounts", "pending_prepare", "account.balance-effects/v1"],
+      ["accounts", "edit_balance", "account.balance-effects/v1"],
+      ["transactions", "create", "account.balance-effects/v1"],
+      ["transactions", "update", "account.balance-effects/v1"],
+      ["transactions", "delete", "account.balance-effects/v1"],
+      ["transactions", "convert_to_transfer", "account.balance-effects/v1"],
+      ["transactions", "batch_delete", "account.balance-effects/v1"],
+      ["transactions", "batch_import", "account.balance-effects/v1"],
+      ["transfers", "create", "account.balance-effects/v1"],
+      ["transfers", "update", "account.balance-effects/v1"],
+      ["transfers", "delete", "account.balance-effects/v1"],
+      ["transfers", "convert_to_transaction", "account.balance-effects/v1"],
+      ["recurring_payments", "pay_now", "account.balance-effects/v1"],
+      ["sms", "review_confirm", "account.balance-effects/v1"],
     ]);
     expect(() =>
       DEFAULT_FINANCIAL_ACTION_REGISTRY.resolve(

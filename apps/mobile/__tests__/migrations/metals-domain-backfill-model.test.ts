@@ -10,14 +10,14 @@ function source(relativePath: string): string {
 describe("068 Metals domain migration and persisted models", () => {
   const migrationPath = "supabase/migrations/068_metals_domain.sql";
 
-  it("keeps the financial foundation before Metals and reserves 069", () => {
+  it("keeps the financial foundation before Metals and account effects after it", () => {
     expect(
       source("supabase/migrations/067_financial_action_foundation.sql")
     ).toContain("financial_action_groups");
     expect(() => source(migrationPath)).not.toThrow();
-    expect(() =>
+    expect(
       source("supabase/migrations/069_account_financial_effects.sql")
-    ).toThrow();
+    ).toContain("account_financial_effects");
   });
 
   it("adds exact compatibility-preserving fields and a guarded Gold/Silver-only backfill", () => {
@@ -153,15 +153,16 @@ describe("068 Metals domain migration and persisted models", () => {
     expect(sql).toMatch(/created_at[\s\S]*updated_at[\s\S]*deleted/i);
   });
 
-  it("registers schema version 28 and persisted-field-only models", () => {
+  it("keeps persisted Metals models after schema version 29", () => {
     const schema = source("packages/db/src/schema.ts");
     const migrations = source("packages/db/src/migrations.ts");
     const database = source("packages/db/src/database.ts");
     const index = source("packages/db/src/index.ts");
 
-    expect(schema).toContain("version: 28");
+    expect(schema).toContain("version: 29");
     expect(migrations).toContain("toVersion: 27");
     expect(migrations).toContain("toVersion: 28");
+    expect(migrations).toContain("toVersion: 29");
     expect(migrations.indexOf('name: "metal_holding_states"')).toBeLessThan(
       migrations.indexOf("unsafeExecuteSql(METALS_V27_BACKFILL_SQL)")
     );

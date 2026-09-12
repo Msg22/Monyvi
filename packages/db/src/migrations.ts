@@ -15,6 +15,9 @@ import {
   schemaMigrations,
 } from "@nozbe/watermelondb/Schema/migrations";
 
+export const ACCOUNT_FINANCIAL_EFFECTS_V29_BACKFILL_SQL =
+  "update accounts set financial_revision = '0' where financial_revision is null or financial_revision = ''; update recurring_payments set financial_revision = '0' where financial_revision is null or financial_revision = '';";
+
 const APPROVED_METALS_FIAT_SQL = `
   'EGP', 'SAR', 'AED', 'KWD', 'QAR', 'BHD', 'OMR', 'JOD', 'IQD',
   'LYD', 'TND', 'MAD', 'DZD', 'USD', 'EUR', 'GBP', 'JPY', 'CHF',
@@ -813,6 +816,49 @@ end;`
             { name: "notes_writer_id", type: "string", isOptional: true },
           ],
         }),
+      ],
+    },
+    {
+      toVersion: 29,
+      steps: [
+        addColumns({
+          table: "accounts",
+          columns: [{ name: "financial_revision", type: "string" }],
+        }),
+        addColumns({
+          table: "recurring_payments",
+          columns: [{ name: "financial_revision", type: "string" }],
+        }),
+        unsafeExecuteSql(
+          ACCOUNT_FINANCIAL_EFFECTS_V29_BACKFILL_SQL
+        ),
+        createTable({
+          name: "account_financial_effects",
+          columns: [
+            { name: "user_id", type: "string", isIndexed: true },
+            { name: "action_id", type: "string", isIndexed: true },
+            { name: "account_id", type: "string", isIndexed: true },
+            { name: "domain", type: "string" },
+            { name: "kind", type: "string" },
+            { name: "amount_minor_units", type: "string" },
+            { name: "currency", type: "string" },
+            { name: "accepted_account_revision", type: "string" },
+            {
+              name: "reverses_effect_id",
+              type: "string",
+              isOptional: true,
+              isIndexed: true,
+            },
+            { name: "is_effective", type: "boolean" },
+            { name: "compensated_at", type: "number", isOptional: true },
+            { name: "created_at", type: "number" },
+            { name: "updated_at", type: "number" },
+            { name: "deleted", type: "boolean" },
+          ],
+        }),
+        unsafeExecuteSql(
+          'create unique index if not exists "account_financial_effects_user_action_account_kind_unique" on "account_financial_effects" ("user_id", "action_id", "account_id", "kind"); create unique index if not exists "account_financial_effects_reversal_once_unique" on "account_financial_effects" ("user_id", "reverses_effect_id") where "reverses_effect_id" is not null;'
+        ),
       ],
     },
   ],

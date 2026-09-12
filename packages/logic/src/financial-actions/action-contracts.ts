@@ -4,6 +4,7 @@ import {
   getFinancialActionUtf8ByteLength,
   type FinancialActionRegistry,
   type FinancialActionValidationInput,
+  type CanonicalJsonValue,
   type RegisteredActionPayload,
 } from "./action-registry";
 
@@ -52,6 +53,7 @@ export interface FinancialActionAccountGuard {
   readonly expectedRevision: CanonicalUnsignedIntegerString;
 }
 export type FinancialActionDomain =
+  | "accounts"
   | "metals"
   | "transactions"
   | "transfers"
@@ -123,17 +125,8 @@ const STABLE_ERROR_CODE_PATTERN = /^[a-z][a-z0-9_]*$/;
 const UTC_MILLISECOND_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const CANONICAL_UNSIGNED_INTEGER_PATTERN = /^(?:0|[1-9][0-9]*)$/;
 
-type JsonPrimitive = string | boolean | null;
-interface CanonicalJsonObject {
-  readonly [key: string]: CanonicalJsonValue;
-}
-type CanonicalJsonArray = readonly CanonicalJsonValue[];
-type CanonicalJsonValue =
-  | JsonPrimitive
-  | CanonicalJsonArray
-  | CanonicalJsonObject;
-
 const APPROVED_DOMAINS: readonly FinancialActionDomain[] = [
+  "accounts",
   "metals",
   "transactions",
   "transfers",
@@ -284,6 +277,30 @@ function isStrictUtcMillisecondTimestamp(value: unknown): value is string {
   );
 }
 
+function validateAccountGuards(
+  value: readonly unknown[]
+): readonly FinancialActionAccountGuard[] {
+  let previousAccountId: string | null = null;
+  const guards = value.map((rawGuard) => {
+    if (
+      !isPlainObject(rawGuard) ||
+      !hasExactKeys(rawGuard, ["accountId", "expectedRevision"]) ||
+      !isCanonicalUuid(rawGuard.accountId) ||
+      (previousAccountId !== null && previousAccountId >= rawGuard.accountId)
+    ) {
+      fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
+    }
+    previousAccountId = rawGuard.accountId;
+    return Object.freeze({
+      accountId: rawGuard.accountId,
+      expectedRevision: parseCanonicalUnsignedIntegerString(
+        rawGuard.expectedRevision
+      ),
+    });
+  });
+  return Object.freeze(guards);
+}
+
 export function canonicalizeFinancialActionEnvelope(
   value: unknown,
   registry: FinancialActionRegistry = DEFAULT_FINANCIAL_ACTION_REGISTRY,
@@ -296,7 +313,6 @@ export function canonicalizeFinancialActionEnvelope(
   if (
     !isCanonicalUuid(value.actionId) ||
     !Array.isArray(value.accountGuards) ||
-    value.accountGuards.length !== 0 ||
     typeof value.domain !== "string" ||
     !APPROVED_DOMAINS.includes(value.domain as FinancialActionDomain) ||
     !isCanonicalUuid(value.domainReferenceId) ||
@@ -313,12 +329,48 @@ export function canonicalizeFinancialActionEnvelope(
   const payload = registry
     .resolve(value.domain, value.kind, value.payloadVersion)
     .validatePayload(value.payload, validationInput);
+  const accountGuards = validateAccountGuards(value.accountGuards);
+  if (value.payloadVersion === "account.balance-effects/v1") {
+    const accountEffects = payload.accountEffects;
+    const domainRecordRefs = payload.domainRecordRefs;
+    const operationCode = payload.operationCode;
+    const mutationRecords = (
+      payload.domainMutation as
+        | {
+            readonly records?: ReadonlyArray<{
+              readonly after?: Readonly<Record<string, CanonicalJsonValue>>;
+            }>;
+          }
+        | undefined
+    )?.records;
+    const requiresFirstRecordRoot =
+      operationCode === "recurring.pay-now" ||
+      operationCode === "sms.review-durable";
+    if (
+      accountGuards.length === 0 ||
+      !Array.isArray(accountEffects) ||
+      accountEffects.length !== accountGuards.length ||
+      accountEffects.some(
+        (effect, index) =>
+          !isPlainObject(effect) ||
+          effect.accountId !== accountGuards[index]?.accountId
+      ) ||
+      !Array.isArray(domainRecordRefs) ||
+      !domainRecordRefs.includes(value.domainReferenceId) ||
+      (requiresFirstRecordRoot &&
+        mutationRecords?.[0]?.after?.id !== value.domainReferenceId)
+    ) {
+      fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
+    }
+  } else if (accountGuards.length !== 0) {
+    fail(FINANCIAL_ACTION_ERROR_CODES.INVALID_ENVELOPE);
+  }
   inspectRuntimeValue(payload);
   if (containsNumber(payload)) {
     fail(FINANCIAL_ACTION_ERROR_CODES.UNSUPPORTED_VALUE);
   }
   return {
-    accountGuards: Object.freeze([]),
+    accountGuards,
     actionId: value.actionId,
     domain: value.domain as FinancialActionDomain,
     domainReferenceId: value.domainReferenceId,
@@ -368,18 +420,18 @@ function escapeJsonString(value: string): string {
   return `${result}"`;
 }
 
-function serializeCanonicalValue(value: CanonicalJsonValue): string {
+export function serializeCanonicalJsonValue(value: CanonicalJsonValue): string {
   if (value === null) return "null";
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "string") return escapeJsonString(value);
   if (Array.isArray(value)) {
-    return `[${value.map(serializeCanonicalValue).join(",")}]`;
+    return `[${value.map(serializeCanonicalJsonValue).join(",")}]`;
   }
   return `{${Object.keys(value)
     .sort()
     .map(
       (key) =>
-        `${escapeJsonString(key)}:${serializeCanonicalValue(
+        `${escapeJsonString(key)}:${serializeCanonicalJsonValue(
           (value as Readonly<Record<string, CanonicalJsonValue>>)[key]
         )}`
     )
@@ -396,7 +448,7 @@ export function serializeFinancialActionEnvelope(
     registry,
     validationInput
   );
-  const canonicalText = serializeCanonicalValue(
+  const canonicalText = serializeCanonicalJsonValue(
     envelope as unknown as CanonicalJsonValue
   );
   if (
@@ -542,7 +594,7 @@ function isCanonicalOutcomeJson(rawText: string): boolean {
     assertNoDuplicateJsonKeys(rawText);
     inspectRuntimeValue(parsed);
     if (containsNumber(parsed)) return false;
-    return serializeCanonicalValue(parsed as CanonicalJsonValue) === rawText;
+  return serializeCanonicalJsonValue(parsed as CanonicalJsonValue) === rawText;
   } catch {
     return false;
   }

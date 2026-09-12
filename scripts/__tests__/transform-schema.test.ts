@@ -110,10 +110,7 @@ export type Database = {
     parsed.tables
   );
 
-  assert.match(
-    financialActionModel,
-    /accountGuardsJson!: string;/
-  );
+  assert.match(financialActionModel, /accountGuardsJson!: string;/);
   assert.match(financialActionModel, /outcomeJson!: string \| null;/);
   assert.match(financialActionModel, /rejectionCode!: string \| null;/);
   assert.match(financialActionModel, /serverOutcome!: string \| null;/);
@@ -143,7 +140,10 @@ test("financial action nullable outcome generation is deterministic", () => {
       parsed.tables
     )
   );
-  assert.equal((generated.match(/!: (?:number|string) \| null;/g) ?? []).length, 3);
+  assert.equal(
+    (generated.match(/!: (?:number|string) \| null;/g) ?? []).length,
+    3
+  );
 });
 
 test("generated schema preserves owner-scoped financial action uniqueness", () => {
@@ -164,4 +164,38 @@ test("generated schema preserves owner-scoped financial action uniqueness", () =
       .length,
     1
   );
+});
+
+test("generates exact local account revisions, effects, and uniqueness", () => {
+  const parsed = transformSchema.parseSupabaseTypes(
+    readFileSync(
+      new URL("../../packages/db/src/supabase-types.ts", import.meta.url),
+      "utf8"
+    )
+  );
+  const generatedSchema = transformSchema.generateSchema(parsed.tables);
+  const generatedEffectModel = transformSchema.generateBaseModel(
+    "account_financial_effects",
+    parsed.tables.account_financial_effects.columns,
+    parsed.relationships ?? {},
+    parsed.tables
+  );
+  const generatedRecurringModel = transformSchema.generateBaseModel(
+    "recurring_payments",
+    parsed.tables.recurring_payments.columns,
+    parsed.relationships ?? {},
+    parsed.tables
+  );
+
+  assert.match(
+    generatedSchema,
+    /account_financial_effects_user_action_account_kind_unique/
+  );
+  assert.match(generatedSchema, /accepted_account_revision", type: "string"/);
+  assert.match(generatedSchema, /amount_minor_units", type: "string"/);
+  assert.match(generatedSchema, /financial_revision", type: "string"/);
+  assert.match(generatedEffectModel, /acceptedAccountRevision!: string;/);
+  assert.match(generatedEffectModel, /amountMinorUnits!: string;/);
+  assert.match(generatedEffectModel, /compensatedAt!: Date \| null;/);
+  assert.match(generatedRecurringModel, /financialRevision!: string;/);
 });
