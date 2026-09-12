@@ -3,13 +3,14 @@
  * Compact insights card showing average monthly spend and month-over-month change.
  */
 
+import { Skeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/constants/colors";
 import { useMonthlySummaries } from "@/hooks/useAnalytics";
 import type { CurrencyType } from "@monyvi/db";
 import { formatCurrency } from "@monyvi/logic";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 
 // =============================================================================
@@ -58,9 +59,7 @@ export function QuickStats({ currency }: QuickStatsProps): React.JSX.Element {
       </Text>
 
       {isLoading ? (
-        <View className="h-[80px] items-center justify-center">
-          <ActivityIndicator size="small" color={palette.nileGreen[500]} />
-        </View>
+        <Skeleton width="100%" height={80} borderRadius={16} />
       ) : (
         <View className="flex-row gap-3">
           {/* Average */}
