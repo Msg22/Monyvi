@@ -28,6 +28,12 @@ This skill routes orchestration only. Do not duplicate or replace
 database, security, E2E, or review instructions. Compose only workflows relevant
 to current task.
 
+When lead selects an OpenCode execution pool, load
+[`$opencode-team-delegation`](../opencode-team-delegation/SKILL.md) for its
+detailed security, pilot, session, and evidence procedure. Keep capability and
+ownership routing in authoritative workflow above; do not copy external-runtime
+mechanics into this entrypoint.
+
 When explicitly invoked for a small task, run scaling check and avoid a swarm.
 Delegate to one bounded worker if team-led handling remains requested. Lead
 stays coordination-only and does not implement repository changes.

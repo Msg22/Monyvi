@@ -21,11 +21,22 @@ appId: com.monyvi.app
 # Step 4: Verify edit screen opens
 - assertVisible: "Edit Transaction"
 
-# Step 5: Tap on amount area to modify — clear and retype
-# The amount field should be visible; tap a keypad number to change it
-- tapOn: "7"
-- tapOn: "7"
-- tapOn: "7"
+# Step 5: Collapse seeded optional details when needed, then edit via stable keypad IDs
+- runFlow:
+    when:
+      visible: "Hide Details"
+    commands:
+      - tapOn: "Hide Details"
+- extendedWaitUntil:
+    visible:
+      id: "calculator-key-7"
+    timeout: 30000
+- tapOn:
+    id: "calculator-key-7"
+- tapOn:
+    id: "calculator-key-7"
+- tapOn:
+    id: "calculator-key-7"
 
 # Step 6: Tap Save
 - tapOn:

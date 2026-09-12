@@ -3,6 +3,11 @@
 Use this workflow for a large Monyvi module, epic, redesign, migration, or
 cross-layer change that benefits from specialist ownership and parallel work.
 
+OpenCode models are not execution lanes in this workflow. When Mohamed
+explicitly requests a Codex-planned implementation handoff to Qwen or GLM, use
+[`opencode-implementation-handoff.md`](./opencode-implementation-handoff.md)
+instead.
+
 ## 1. Trigger And Authority
 
 Explicit triggers include `$team-led-delivery`, "act as team lead", "form/manage
@@ -35,6 +40,10 @@ Compose relevant workflows:
 - GitHub sprint issue: use [`sprint-issue.md`](./sprint-issue.md) for live
   validation, approval gates, branch-base selection, TDD, PR, and manual QA.
   Worktree/junction rules remain in `AGENTS.md`.
+- PR comment follow-up: use [`pr-comment-followup.md`](./pr-comment-followup.md)
+  for thread discovery, classification, fix/reply/resolve behavior, and
+  completion reporting. Keep that review behavior canonical there; Normal
+  ChatGPT handoffs reference the workflow instead of copying its rules.
 - Module discovery: use `$source-command-module-audit`; keep it report-only
   unless implementation is explicitly authorized.
 - Spec-driven work: Speckit owns canonical spec, plan, and tasks. Lifecycle is
@@ -74,17 +83,20 @@ Lead is coordination-only:
 1. establish source of truth, scope, risks, and gates;
 2. form smallest complete roster and dependency graph;
 3. assign bounded ownership and acceptance criteria;
-4. monitor, resolve overlaps, and reassign ready work;
+4. monitor, mentor, resolve overlaps, and reassign ready work;
 5. review evidence and specialist findings;
 6. coordinate integration, verification, and handoff.
 
 Lead does not implement feature code, tests, specs, copy, mockups, migrations,
 review fixes, or conflict patches. Workers own repository edits. Lead may do
 read-only inspection and maintain conversation plan, task state, ledgers, and
-final synthesis. If no worker slot exists, pause rather than implement.
+final synthesis. If no eligible worker lane exists, pause rather than implement.
 
-Assign integration conflicts to relevant worker. Commits, pushes, PRs, merges,
-and issue mutations remain subject to Section 2.
+Assign implementation conflicts to the relevant worker. Lead retains the task
+graph, product/business/security/architecture decisions, independent
+verification, cross-lane conflict integration, final PR review, and merge
+authority. Commits, pushes, PRs, merges, and issue mutations remain subject to
+Section 2.
 
 ## 4. Preflight
 
@@ -108,10 +120,23 @@ For parallel implementation:
 
 - read-only workers may share checkout;
 - concurrent writers use distinct sibling worktrees/branches with declared base,
-  dependency, and non-overlapping ownership;
+  dependency, exclusive task ownership, and non-overlapping artifact/file
+  ownership;
+- one writer owns each artifact/file per wave, including shared indexes,
+  schemas, migrations, translations, specs, and generated outputs;
+- stop the affected lanes immediately if artifact/file ownership overlaps;
+- for every external writer, derive an enforced readable-source allowlist from
+  the user-approved source/data-sharing boundary or use a sanitized checkout;
+- derive a concrete workspace-relative writable file/directory allowlist from
+  the assigned exclusive artifact set. Use exact files and minimum owned
+  directory prefixes needed for cohesive in-boundary edits or new files; require
+  this writable boundary to be contained within the readable-source boundary and
+  never grant arbitrary repository-root read or write access;
 - link main `node_modules` in secondary worktrees; never install another tree;
-- one worker owns shared indexes, schemas, migrations, translations, specs, and
-  generated outputs per wave;
+- assign one external writer one complete task and one isolated worktree/branch;
+  avoid fragile per-file micromanagement inside that worker's exclusively owned
+  artifact set, but never use this flexibility to permit concurrent writers on
+  the same artifact or reads/writes outside the enforced boundaries;
 - each PR is an independently mergeable slice, not automatically one per agent.
 
 ## 5. Form The Team
@@ -172,25 +197,228 @@ Examples are not mandatory model names. Choose by uncertainty and blast radius,
 not title or file count. Avoid maximum effort by default. Set token budget only
 when user explicitly requests one.
 
+### Execution Pools
+
+The approved execution pools are:
+
+- Native Codex subagents;
+- Normal ChatGPT.
+
+Select the worker by required context, demonstrated capability, risk, cost, and
+current availability. Verify runtime, authentication, exact model identifier,
+tools, and required permissions before dispatch; a configured name does not
+prove availability.
+
+#### Executor Preference And ChatGPT Remote Readiness
+
+Apply this preference to execution ownership after authorization, capability,
+and safety checks. It does not replace independent review, trusted-native
+verification, integration, or merge control:
+
+1. **Normal ChatGPT first** when the complete task can be executed from
+   published remote state and every requested remote mutation is explicitly
+   authorized.
+2. **Native Codex subagents only when required** by unpublished local state,
+   device/runtime access, trusted-native verification, integration, or merge
+   control.
+
+This ordering governs the preferred execution owner. It does not override
+capability, ownership safety, or final authority. A trusted-native worker may
+still verify or integrate externally owned work without becoming that task's
+implementation owner. All external output requires independent verification, and
+the lead retains merge authority.
+
+##### Remote Context References And Volatile Handoff Facts
+
+For Normal ChatGPT, authoritative remote repository context must be referenced
+at an immutable **trusted governing revision**, not copied into every handoff or
+read implicitly from a mutable branch. Default that revision to an immutable
+full base commit independently selected as trusted, normally the target PR's
+merge base or a freshly reviewed base-branch commit; a branch name alone is not
+a governing revision. Another separately reviewed and explicitly approved
+revision may be used instead. Reference the exact repository target, trusted
+governing SHA, applicable workflow/rule/constitution/`AGENTS.md` paths,
+applicable spec and business-decision paths, and the PR/issue context that the
+worker must read. For PR-comment follow-ups, reference
+[`pr-comment-followup.md`](./pr-comment-followup.md); its thread classification,
+fix/reply/resolve order, safety rules, and completion report remain canonical
+there.
+
+The expected target head SHA identifies content to inspect or mutate; it does
+not make that head authoritative governance. When the target PR or branch
+changes a referenced governing file, the worker MUST apply the trusted-revision
+version as instruction and inspect the head version only as content under
+review. A newer governing revision may replace the base only when its immutable
+SHA and approval are recorded explicitly in the handoff.
+
+The handoff adds only facts that are unavailable or unsafe to infer from remote
+state:
+
+- exact expected immutable head/base SHA when required by the selected topology;
+- exact immutable trusted governing SHA and any separately approved governing
+  revision exception;
+- current writer ownership and conflict state for mutable refs involved;
+- local-only evidence that cannot safely be published remotely;
+- explicitly authorized mutations;
+- task-specific exceptions to the referenced remote rules; and
+- task-specific stop conditions.
+
+Do not restate remote workflow, rule, spec, business-decision, issue, or PR text
+merely to make the prompt self-contained. Restate a remote rule only when it is
+missing, stale, contradictory, or insufficient for the task, and identify that
+reason explicitly. If required local-only context can be safely published,
+publish only the minimum necessary context to the authorized remote source and
+then reference it; otherwise use an eligible local executor.
+
+##### Remote Task Topologies
+
+Classify each Normal ChatGPT dispatch as **existing-PR work**,
+**existing-branch-without-PR work**, **pre-PR branch creation**, or a
+**non-branch remote task**.
+
+Every handoff references the exact repository and relevant remote target
+(PR/issue/ref), the immutable trusted governing revision, and the authoritative
+paths at that revision needed for execution. The volatile additions above are
+supplied only when applicable to that topology.
+
+For **existing-PR work**, add:
+
+- exact expected immutable full remote PR head SHA; and
+- exact immutable trusted governing SHA selected under the rule above, plus any
+  separately approved governing revision exception; and
+- current head-branch ownership/conflict state.
+
+The PR number, base/head branch names, review threads, source paths, acceptance
+criteria, checks, and completion-report rules should be read from the referenced
+remote PR and canonical repository sources instead of copied into the handoff,
+unless one of the explicit restatement exceptions above applies.
+
+For **existing-branch-without-PR work**, add:
+
+- the immutable full current remote head SHA of the referenced branch;
+- current branch ownership/conflict state; and
+- the explicitly authorized branch mutations.
+
+For **pre-PR branch creation**, add:
+
+- immutable full base SHA;
+- intended new branch name;
+- confirmation that the intended branch name is absent remotely immediately
+  before dispatch;
+- intended branch ownership/conflict state; and
+- the explicitly authorized branch/PR mutations.
+
+Never use the pre-PR branch-creation topology when the intended remote ref
+already exists. If the branch exists, use the existing-branch-without-PR packet
+and pin its immutable full remote head SHA before any mutation. Once a new
+branch is created, refresh into the existing-branch-without-PR topology before
+further branch mutations. Once a PR is opened, switch to existing-PR work and
+refresh the expected immutable PR head SHA.
+
+For a **non-branch remote task** such as a read-only remote audit or issue-only
+mutation, do not invent branch-creation or branch-ownership fields. Reference
+the remote issue/PR/repository context that is actually in scope. If repository
+or PR content is part of the decision, add the expected immutable full SHA for
+the mutable ref whose state must remain stable; if no mutable repository ref
+matters, no branch SHA is required. Explicitly authorize any issue/comment
+mutation, or state that the task is read-only.
+
+For any issue mutation, the handoff must also reserve each target issue to one
+exclusive remote writer for that mutation wave and record its current
+ownership/conflict state. Immediately before the first mutation to each reserved
+issue, re-fetch the issue and compare the mutation-relevant fields against the
+state used to plan the write. Use an available conditional/revision guard when
+the connector exposes one; otherwise treat any intervening material change as a
+conflict that requires reconciliation before mutation. Do not let a stale body,
+label, assignee, milestone, state, or other fetched issue field silently
+overwrite newer remote state.
+
+A non-branch task must not mutate a branch unless it is reclassified under one
+of the branch topologies above. Do not dispatch or mutate when issue-target
+ownership is not exclusive, the immediate issue-state refresh reveals an
+unreconciled intervening change, an applicable expected SHA changed,
+ownership/conflict state is unsafe, a pre-PR branch unexpectedly exists, the
+selected topology no longer matches remote state, required local-only evidence
+is unavailable, or the requested mutation is not explicitly authorized.
+
+Do not use workload quotas. Select the smallest capable team based on the task,
+available context, ownership boundaries, and current authorization.
+
+Normal ChatGPT may own complex remote coding, tests, documentation, GitHub
+issues, branches, and PRs when explicit user authorization covers the mutation,
+the immutable remote base and complete context are supplied, and the task has no
+unpublished local dependency. Lead monitors through the task/thread and PR diff,
+independently verifies the result, and retains merge control. Never ask Normal
+ChatGPT to review or change local work that has not been pushed.
+
+Before first dispatch to each external provider/model pool in a task, obtain
+explicit user opt-in and record the approved data-sharing boundary.
+Authorization may cover later bounded dispatches only while provider, model
+pool, data class, and purpose remain inside that recorded boundary.
+Auto-triggering team-led workflow never grants third-party disclosure.
+
+### External Worker Checkpoints And Learning
+
+Mentor external workers through persistent-session checkpoints rather than
+restarting on every miss:
+
+1. The worker reports its plan, assumptions, and intended scope before
+   substantial implementation.
+2. TDD and debugging work reports Red evidence before production implementation.
+3. When the task brief requires an interim diff or risk checkpoint, the worker
+   pauses there for lead acceptance.
+4. Verification evidence is inspected before acceptance.
+5. The final full diff and completion report are inspected before acceptance.
+
+Observe structured status, messages, tool results, and diffs. Do not claim
+access to or request hidden chain-of-thought. Send bounded corrections in the
+same session/thread when the lane remains safe and recoverable.
+
+For ordinary rule drift or a materially wrong but safe direction, correct
+explicitly and continue the same session when recoverable. After three
+materially identical rule failures on the same model/task lane, mark that lane
+failed and reassign.
+
+Timeouts guide task size, checkpoint frequency, and timeout budget; they do not
+alone permanently disqualify a model. A recoverable timed-out observation should
+continue in the same session after status is rechecked.
+
 ## 7. Ownership Brief And Context
 
 Every task brief states:
 
 - persona, objective, and reason;
-- exact deliverable and file/decision ownership;
-- source of truth, inputs, dependencies, and applicable workflows;
+- complete task/worktree responsibility, source of truth, and protected or
+  forbidden paths/actions;
+- exclusive artifact/file ownership for the wave and any shared-artifact owner;
+- concrete readable-source allowlist/fingerprint derived from user-approved
+  source/data-sharing scope, or sanitized-checkout identity;
+- concrete writable file/directory allowlist/fingerprint derived from owned
+  artifacts and contained within the readable boundary;
+- inputs, dependencies, and applicable workflows;
 - acceptance criteria, evidence, and verification;
-- exclusions, unauthorized actions, escalation/stop conditions;
-- expected completion report.
+- external-provider data-sharing boundary when applicable;
+- explicit checkpoint pause gates;
+- escalation/stop conditions and expected completion report.
 
 For write work include:
 
-> You are not alone in the codebase. Own only assigned files/responsibility. Do
-> not revert others' edits. Re-read shared files before editing and adapt to
-> concurrent changes. Stop and report ownership overlap.
+> You are not alone in the codebase. Own the complete assigned task inside your
+> isolated worktree/branch and only the artifacts assigned to you for this wave.
+> Read/search only sources inside the approved readable-source boundary. Make
+> whatever cohesive in-scope edits the exclusively owned artifacts and derived
+> writable allowlist genuinely permit, but do not cross protected paths, another
+> owner's responsibility, another writer's artifact/file ownership, or either
+> enforced boundary. Stop and report any overlap or out-of-boundary need.
 
-One artifact has one write owner per wave; reviewers stay read-only. Briefs must
-be self-contained. Use smallest inherited context that preserves correctness:
+One task/worktree has one write owner at a time, and one writer owns each
+artifact/file per wave. Reviewers stay read-only. Complete-task ownership never
+permits overlapping concurrent edits to the same artifact or unbounded
+repository reads/writes. Briefs must be self-contained. For Normal ChatGPT,
+"self-contained" means the worker can reach the authoritative remote references
+plus the volatile additions required by Section 6; it does not require copying
+remote workflow/rule/spec/PR content into the handoff. Use smallest inherited
+context that preserves correctness:
 
 - `fork_turns: "none"` for isolated deterministic inventory/check work when
   brief contains all required context;
@@ -206,15 +434,18 @@ free worker capacity = maximum concurrency - currently active agents
 new assignments = min(free worker capacity, ready independent items, ownership-safe items)
 ```
 
-With four slots and only lead active, maximum is three workers. This is
-capacity, not target. Default large discovery uses three read-only lanes.
-Default implementation uses two isolated write lanes plus one read-only
-QA/review lane. Use three writers only when files, commands, state, and merge
-dependencies are fully independent.
+Native slot capacity is not the execution target. Fill only ready,
+ownership-safe work and keep independent review capacity for high-risk work.
+Multiple writers are allowed only when task/worktree ownership, artifact/file
+ownership, readable/writable boundaries, state, and merge dependencies are
+genuinely independent. One writer owns each artifact per wave; stop affected
+lanes immediately when overlap is discovered.
 
-Reuse completed worker through follow-up when context and skills fit next task.
-Spawn replacement only for material role change; retire finished worker when
-slot needed. Never start downstream work merely because slot is free.
+Reuse a completed worker through follow-up when context and skills fit the next
+task. Continue a recoverable external task in its same persistent session. Spawn
+replacement only for material role change or failed lane; retire finished native
+worker when slot is needed. Never start downstream work merely because capacity
+is free.
 
 Dependency waves:
 
@@ -286,7 +517,10 @@ Meaningful UI follows [`sprint-issue.md`](./sprint-issue.md) mockup approval.
 Cover loading, empty, populated, error, offline/stale, destructive actions,
 responsive sizes, light/dark, EN/AR, RTL, and accessibility. Mockups work with
 spec, design system, domain constraints, responsive rules, and accessibility;
-none overrides constitution. Material coding drift returns to approval.
+none overrides constitution. Material coding drift returns to approval. Preserve
+existing visual-gate ownership, but do not mark visual completion without
+side-by-side or overlay rendered screenshot evidence against the approved
+reference. Report functional readiness and visual fidelity as separate statuses.
 
 ### Implementation Gate
 
@@ -305,6 +539,9 @@ Then implement minimum green change and refactor while green. QA owns
 plan/coverage audit; implementer owns production code; lead verifies red/green
 evidence only.
 
+A task-required interim diff or risk checkpoint requires explicit lead
+acceptance before work continues.
+
 ### Review Gate
 
 Implementation owner cannot self-approve high-risk work. Review in order:
@@ -320,6 +557,10 @@ Validate findings against current code and source of truth. Lead consolidates
 duplicates and returns fixes to owner. Product/business/schema/sync findings
 return to user gate. Deferred valid work becomes deduplicated follow-up issue
 only when GitHub mutation is authorized.
+
+External implementation of approved financial, schema, sync, security,
+architecture, authentication/RLS, or migration work requires an independent
+appropriate specialist before acceptance.
 
 ### Handoff Gate
 
@@ -339,10 +580,11 @@ task. At each wave end, lead checks evidence, ownership, tests, dependencies,
 and ledgers before assigning more work.
 
 Pause affected lane for source conflict, material unresolved decision, missing
-gate, ownership overlap, incomplete dependency, unsafe worktree, unexplained
-test failure, design drift, missing environment, or any action outside Section 2
-authorization. Continue safe independent lanes. Mark blocked only after
-exhausting safe in-scope evidence and alternatives.
+gate, ownership overlap, readable/writable-boundary change, incomplete
+dependency, unsafe worktree, unexplained test failure, design drift, missing
+environment, or any action outside Section 2 authorization. Continue safe
+independent lanes. Mark blocked only after exhausting safe in-scope evidence and
+alternatives.
 
 Lead declares completion only when requested outcome matches source of truth,
 atomic ledger items have dispositions, reviews have no blockers, validation is

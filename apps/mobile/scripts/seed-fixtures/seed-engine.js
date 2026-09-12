@@ -49,6 +49,11 @@ const RESET_TABLE_DELETE_ORDER = [
   "recurring_payments",
   "budgets",
   "debts",
+  "metal_rate_references",
+  "metal_holding_states",
+  "metal_lifecycle_events",
+  "metal_action_evidence",
+  "financial_action_groups",
   "assets",
   "daily_snapshot_assets",
   "daily_snapshot_balance",
@@ -107,17 +112,13 @@ function buildSeedIds(userId, seedScope = BASE_SEED_FIXTURE.seedScope) {
         "asset:apartment-down-payment"
       ),
       btcHolding: deterministicUuid(seedScope, userId, "asset:btc-holding"),
+      goldBar: deterministicUuid(seedScope, userId, "asset:gold-bar"),
       goldChain: deterministicUuid(seedScope, userId, "asset:gold-chain"),
-      platinumBar: deterministicUuid(seedScope, userId, "asset:platinum-bar"),
       silverCoins: deterministicUuid(seedScope, userId, "asset:silver-coins"),
     },
     assetMetals: {
+      goldBar: deterministicUuid(seedScope, userId, "asset-metal:gold-bar"),
       goldChain: deterministicUuid(seedScope, userId, "asset-metal:gold-chain"),
-      platinumBar: deterministicUuid(
-        seedScope,
-        userId,
-        "asset-metal:platinum-bar"
-      ),
       silverCoins: deterministicUuid(
         seedScope,
         userId,
@@ -564,6 +565,230 @@ async function upsertRowsIfAny(client, table, rows, options) {
   await upsertRows(client, table, rows, options);
 }
 
+async function deleteRowsByIds(client, table, rows) {
+  const ids = rows.map((row) => row.id);
+  if (ids.length === 0) {
+    return;
+  }
+
+  await assertNoError(
+    await client.from(table).delete().in("id", ids),
+    `delete ${table}`
+  );
+}
+
+async function updateRowsByIds(client, table, rows, createPatch) {
+  await Promise.all(
+    rows.map(async (row) => {
+      await assertNoError(
+        await client.from(table).update(createPatch(row)).eq("id", row.id),
+        `update ${table}`
+      );
+    })
+  );
+}
+
+async function reviveImmutableMetalLifecycleRows(client, rows) {
+  await updateRowsByIds(
+    client,
+    "financial_action_groups",
+    rows.financialActionGroups,
+    (row) => ({ deleted: false, updated_at: row.updated_at })
+  );
+  await updateRowsByIds(
+    client,
+    "metal_action_evidence",
+    rows.metalActionEvidence,
+    (row) => ({ deleted: false, updated_at: row.updated_at })
+  );
+  await updateRowsByIds(
+    client,
+    "metal_lifecycle_events",
+    rows.metalLifecycleEvents,
+    (row) => ({
+      deleted: false,
+      is_effective: row.is_effective,
+      is_history_visible: row.is_history_visible,
+      updated_at: row.updated_at,
+    })
+  );
+}
+
+async function tombstoneImmutableMetalLifecycleRows(client, rows) {
+  const lifecycleHoldingIds = new Set(
+    rows.metalLifecycleEvents.map((row) => row.holding_id)
+  );
+  const terminalStates = rows.metalHoldingStates.filter((row) =>
+    lifecycleHoldingIds.has(row.holding_id)
+  );
+  const terminalAssets = rows.assets.filter((row) =>
+    lifecycleHoldingIds.has(row.id)
+  );
+  const terminalAssetMetals = rows.assetMetals.filter((row) =>
+    lifecycleHoldingIds.has(row.asset_id)
+  );
+
+  await updateRowsByIds(
+    client,
+    "metal_holding_states",
+    terminalStates,
+    (row) => ({
+      deleted: true,
+      is_visible: false,
+      updated_at: row.updated_at,
+    })
+  );
+  await updateRowsByIds(
+    client,
+    "metal_lifecycle_events",
+    rows.metalLifecycleEvents,
+    (row) => ({
+      deleted: true,
+      is_effective: false,
+      is_history_visible: false,
+      updated_at: row.updated_at,
+    })
+  );
+  for (const [table, tableRows] of [
+    ["metal_action_evidence", rows.metalActionEvidence],
+    ["asset_metals", terminalAssetMetals],
+    ["assets", terminalAssets],
+  ]) {
+    await updateRowsByIds(client, table, tableRows, (row) => ({
+      deleted: true,
+      updated_at: row.updated_at,
+    }));
+  }
+
+  return {
+    lifecycleHoldingIds,
+  };
+}
+
+const FIXTURE_INSPECTION_SELECTS = Object.freeze({
+  assets: [
+    "id",
+    "user_id",
+    "name",
+    "type",
+    "is_liquid",
+    "purchase_price",
+    "purchase_date",
+    "currency",
+    "notes",
+    "created_at",
+    "updated_at",
+    "deleted",
+    "purchase_price_decimal:purchase_price_decimal::text",
+    "purchase_currency",
+    "acquisition_action_id",
+  ].join(","),
+  asset_metals: [
+    "id",
+    "asset_id",
+    "metal_type",
+    "weight_grams",
+    "item_form",
+    "created_at",
+    "purity_fraction",
+    "deleted",
+    "updated_at",
+    "weight_grams_decimal:weight_grams_decimal::text",
+    "purity_code",
+    "purity_factor_decimal:purity_factor_decimal::text",
+    "purity_catalog_version",
+  ].join(","),
+  financial_action_groups: [
+    "id",
+    "action_id",
+    "user_id",
+    "domain",
+    "kind",
+    "domain_reference_id",
+    "payload_json",
+    "payload_hash",
+    "account_guards_json",
+    "state",
+    "server_outcome",
+    "outcome_json",
+    "rejection_code",
+    "created_at",
+    "updated_at",
+    "deleted",
+  ].join(","),
+  metal_action_evidence: [
+    "id",
+    "user_id",
+    "action_id",
+    "holding_id",
+    "kind",
+    "expected_holding_revision:expected_holding_revision::text",
+    "canonical_holding_revision:canonical_holding_revision::text",
+    "domain_payload_json",
+    "created_at",
+    "updated_at",
+    "deleted",
+  ].join(","),
+  metal_lifecycle_events: [
+    "id",
+    "user_id",
+    "holding_id",
+    "action_id",
+    "kind",
+    "occurred_at",
+    "payload_json",
+    "predecessor_event_id",
+    "reverses_event_id",
+    "is_effective",
+    "is_history_visible",
+    "created_at",
+    "updated_at",
+    "deleted",
+  ].join(","),
+  metal_holding_states: [
+    "id",
+    "user_id",
+    "holding_id",
+    "status",
+    "financial_revision:financial_revision::text",
+    "effective_event_id",
+    "effective_action_id",
+    "is_visible",
+    "reconciliation_state",
+    "created_at",
+    "updated_at",
+    "deleted",
+  ].join(","),
+  market_rate_observations: [
+    "id",
+    "batch_id",
+    "instrument_code",
+    "value_decimal:value_decimal::text",
+    "unit",
+    "orientation",
+    "provider_observed_at",
+    "source",
+    "quality",
+    "created_at",
+  ].join(","),
+});
+
+async function selectRowsByIds(client, table, rows) {
+  const ids = rows.map((row) => row.id);
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const result = await assertNoError(
+    await client
+      .from(table)
+      .select(FIXTURE_INSPECTION_SELECTS[table] ?? "*")
+      .in("id", ids),
+    `inspect ${table}`
+  );
+  return result.data ?? [];
+}
+
 async function resolveSeedProfileId(client, userId, fallbackProfileId) {
   const result = await assertNoError(
     await client
@@ -591,25 +816,93 @@ async function restoreSeededAccountBalances(client, accountRows) {
   );
 }
 
+function buildMarketRateRow(currentTimestamp) {
+  return {
+    id: E2E_MARKET_RATE_ID,
+    aed_usd: 0.2723,
+    aud_usd: 0.66,
+    bhd_usd: 2.65,
+    btc_usd: 65000,
+    cad_usd: 0.74,
+    chf_usd: 1.1,
+    cny_usd: 0.14,
+    dkk_usd: 0.146,
+    dzd_usd: 0.0074,
+    egp_usd: 0.02,
+    eur_usd: 1.09,
+    gbp_usd: 1.27,
+    gold_usd_per_gram: 75,
+    hkd_usd: 0.128,
+    inr_usd: 0.012,
+    iqd_usd: 0.00076,
+    isk_usd: 0.0072,
+    jod_usd: 1.41,
+    jpy_usd: 0.0065,
+    kpw_usd: 0.0011,
+    krw_usd: 0.00073,
+    kwd_usd: 3.25,
+    lyd_usd: 0.21,
+    mad_usd: 0.1,
+    myr_usd: 0.21,
+    nok_usd: 0.094,
+    nzd_usd: 0.61,
+    omr_usd: 2.6,
+    palladium_usd_per_gram: 32,
+    platinum_usd_per_gram: 31,
+    qar_usd: 0.2747,
+    rub_usd: 0.011,
+    sar_usd: 0.2667,
+    sek_usd: 0.096,
+    sgd_usd: 0.74,
+    silver_usd_per_gram: 0.95,
+    timestamp_currency: currentTimestamp,
+    timestamp_metal: currentTimestamp,
+    tnd_usd: 0.32,
+    try_usd: 0.031,
+    updated_at: currentTimestamp,
+    zar_usd: 0.054,
+    created_at: currentTimestamp,
+  };
+}
+
 function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
   const currentTimestamp = new Date().toISOString();
   const currentDate = currentTimestamp.slice(0, 10);
+  const baseAccountCurrency = fixture.baseAccountCurrency ?? "EGP";
+  const marketRateTemplate = buildMarketRateRow(currentTimestamp);
+  const fixtureContext = {
+    categoryIds: CATEGORY_IDS,
+    currentTimestamp,
+    dateFromToday,
+    deterministicUuid,
+    fixedNow: FIXED_NOW,
+    marketRateTemplate,
+    seedIds,
+    seedScope: fixture.seedScope,
+    userId,
+  };
   const extraRows = fixture.buildExtraRows
-    ? fixture.buildExtraRows({
-        categoryIds: CATEGORY_IDS,
-        currentTimestamp,
-        dateFromToday,
-        deterministicUuid,
-        fixedNow: FIXED_NOW,
-        seedIds,
-        seedScope: fixture.seedScope,
-        userId,
-      })
+    ? fixture.buildExtraRows(fixtureContext)
+    : {};
+  const cleanupRows = fixture.buildCleanupRows
+    ? fixture.buildCleanupRows(fixtureContext)
+    : {};
+  const compatibilityCleanupRows = fixture.buildCompatibilityCleanupRows
+    ? fixture.buildCompatibilityCleanupRows(fixtureContext)
     : {};
   const expandedAccounts = extraRows.accounts ?? [];
   const expandedBankDetails = extraRows.bankDetails ?? [];
   const assets = extraRows.assets ?? [];
   const assetMetals = extraRows.assetMetals ?? [];
+  const financialActionGroups = extraRows.financialActionGroups ?? [];
+  const metalActionEvidence = extraRows.metalActionEvidence ?? [];
+  const metalLifecycleEvents = extraRows.metalLifecycleEvents ?? [];
+  const metalHoldingStates = extraRows.metalHoldingStates ?? [];
+  const marketRateObservations = extraRows.marketRateObservations ?? [];
+  const marketRates = extraRows.marketRates ?? [];
+  const marketRateObservationCleanupRows =
+    cleanupRows.marketRateObservations ?? marketRateObservations;
+  const marketRateCleanupRows = cleanupRows.marketRates ?? marketRates;
   const debts = extraRows.debts ?? [];
   const budgets = extraRows.budgets ?? [];
   const categories = extraRows.categories ?? [];
@@ -618,59 +911,16 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
   const expandedTransfers = extraRows.transfers ?? [];
 
   return {
-    marketRate: {
-      id: E2E_MARKET_RATE_ID,
-      aed_usd: 0.2723,
-      aud_usd: 0.66,
-      bhd_usd: 2.65,
-      btc_usd: 65000,
-      cad_usd: 0.74,
-      chf_usd: 1.1,
-      cny_usd: 0.14,
-      dkk_usd: 0.146,
-      dzd_usd: 0.0074,
-      egp_usd: 0.02,
-      eur_usd: 1.09,
-      gbp_usd: 1.27,
-      gold_usd_per_gram: 75,
-      hkd_usd: 0.128,
-      inr_usd: 0.012,
-      iqd_usd: 0.00076,
-      isk_usd: 0.0072,
-      jod_usd: 1.41,
-      jpy_usd: 0.0065,
-      kpw_usd: 0.0011,
-      krw_usd: 0.00073,
-      kwd_usd: 3.25,
-      lyd_usd: 0.21,
-      mad_usd: 0.1,
-      myr_usd: 0.21,
-      nok_usd: 0.094,
-      nzd_usd: 0.61,
-      omr_usd: 2.6,
-      palladium_usd_per_gram: 32,
-      platinum_usd_per_gram: 31,
-      qar_usd: 0.2747,
-      rub_usd: 0.011,
-      sar_usd: 0.2667,
-      sek_usd: 0.096,
-      sgd_usd: 0.74,
-      silver_usd_per_gram: 0.95,
-      timestamp_currency: currentTimestamp,
-      timestamp_metal: currentTimestamp,
-      tnd_usd: 0.32,
-      try_usd: 0.031,
-      updated_at: currentTimestamp,
-      zar_usd: 0.054,
-      created_at: currentTimestamp,
-    },
+    marketRate: marketRateTemplate,
+    marketRates,
+    marketRateCleanupRows,
     profile: {
       id: seedIds.profile,
       user_id: userId,
       display_name: fixture.userFullName,
       preferred_currency: "EGP",
-      preferred_language: "en",
-      theme: "SYSTEM",
+      preferred_language: fixture.locale ?? "en",
+      theme: fixture.theme?.toUpperCase() ?? "SYSTEM",
       sms_detection_enabled: false,
       ai_processing_consent: {
         version: AI_PROCESSING_CONSENT_VERSION,
@@ -688,7 +938,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
       },
       deleted: false,
       created_at: FIXED_NOW,
-      updated_at: FIXED_NOW,
+      updated_at: currentTimestamp,
     },
     accounts: [
       {
@@ -697,11 +947,11 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         name: fixture.accountNames.cash,
         type: "CASH",
         balance: 2500,
-        currency: "EGP",
+        currency: baseAccountCurrency,
         is_default: true,
         deleted: false,
         created_at: FIXED_NOW,
-        updated_at: FIXED_NOW,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.accounts.bank,
@@ -709,13 +959,13 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         name: fixture.accountNames.bank,
         type: "BANK",
         balance: 12430.55,
-        currency: "EGP",
+        currency: baseAccountCurrency,
         institution_id: "nbe",
         provider_display_name: "NBE",
         is_default: false,
         deleted: false,
         created_at: FIXED_NOW,
-        updated_at: FIXED_NOW,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.accounts.qnbBank,
@@ -723,13 +973,13 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         name: fixture.accountNames.qnbBank,
         type: "BANK",
         balance: 3200,
-        currency: "EGP",
+        currency: baseAccountCurrency,
         institution_id: "qnb-egypt",
         provider_display_name: "QNB",
         is_default: false,
         deleted: false,
         created_at: FIXED_NOW,
-        updated_at: FIXED_NOW,
+        updated_at: currentTimestamp,
       },
       {
         id: seedIds.accounts.wallet,
@@ -737,13 +987,13 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         name: fixture.accountNames.wallet,
         type: "DIGITAL_WALLET",
         balance: 950,
-        currency: "EGP",
+        currency: baseAccountCurrency,
         institution_id: "vodafone-cash",
         provider_display_name: "Vodafone Cash",
         is_default: false,
         deleted: false,
         created_at: FIXED_NOW,
-        updated_at: FIXED_NOW,
+        updated_at: currentTimestamp,
       },
       ...expandedAccounts,
     ],
@@ -799,6 +1049,13 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
     ],
     assets,
     assetMetals,
+    compatibilityCleanupRows,
+    financialActionGroups,
+    metalActionEvidence,
+    metalLifecycleEvents,
+    metalHoldingStates,
+    marketRateObservations,
+    marketRateObservationCleanupRows,
     budgets,
     categories,
     debts,
@@ -809,7 +1066,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         user_id: userId,
         account_id: seedIds.accounts.cash,
         amount: 125,
-        currency: "EGP",
+        currency: baseAccountCurrency,
         type: "EXPENSE",
         category_id: CATEGORY_IDS.shopping,
         counterparty: fixture.transactionCounterparties.expense,
@@ -826,7 +1083,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         user_id: userId,
         account_id: seedIds.accounts.bank,
         amount: 3000,
-        currency: "EGP",
+        currency: baseAccountCurrency,
         type: "INCOME",
         category_id: CATEGORY_IDS.income,
         counterparty: fixture.transactionCounterparties.income,
@@ -847,7 +1104,7 @@ function buildSeedRows(userId, seedIds, fixture = BASE_SEED_FIXTURE) {
         from_account_id: seedIds.accounts.bank,
         to_account_id: seedIds.accounts.cash,
         amount: 500,
-        currency: "EGP",
+        currency: baseAccountCurrency,
         exchange_rate: null,
         converted_amount: null,
         notes: fixture.transferNotes.atm,
@@ -876,7 +1133,24 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
   };
   const rows = buildSeedRows(userId, seedIds, fixture);
 
+  await deleteRowsByIds(
+    client,
+    "asset_metals",
+    rows.compatibilityCleanupRows.assetMetals ?? []
+  );
+  await deleteRowsByIds(
+    client,
+    "assets",
+    rows.compatibilityCleanupRows.assets ?? []
+  );
+
   if (!fixture.preserveExistingRows) {
+    await deleteRowsByIds(
+      client,
+      "market_rate_observations",
+      rows.marketRateObservationCleanupRows
+    );
+    await deleteRowsByIds(client, "market_rates", rows.marketRateCleanupRows);
     for (const table of SEED_TABLE_DELETE_ORDER) {
       await deleteScopedRows(client, table, userId, seedIds);
     }
@@ -896,6 +1170,40 @@ async function seedFixtureData(client, config, fixtureOverrides = {}) {
   await upsertRowsIfAny(client, "asset_metals", rows.assetMetals, {
     onConflict: "id",
   });
+  await reviveImmutableMetalLifecycleRows(client, rows);
+  await upsertRowsIfAny(
+    client,
+    "financial_action_groups",
+    rows.financialActionGroups,
+    { ignoreDuplicates: true, onConflict: "id" }
+  );
+  await upsertRowsIfAny(
+    client,
+    "metal_action_evidence",
+    rows.metalActionEvidence,
+    { ignoreDuplicates: true, onConflict: "id" }
+  );
+  await upsertRowsIfAny(
+    client,
+    "metal_lifecycle_events",
+    rows.metalLifecycleEvents,
+    { ignoreDuplicates: true, onConflict: "id" }
+  );
+  await upsertRowsIfAny(
+    client,
+    "metal_holding_states",
+    rows.metalHoldingStates,
+    { onConflict: "id" }
+  );
+  await upsertRowsIfAny(client, "market_rates", rows.marketRates, {
+    onConflict: "id",
+  });
+  await upsertRowsIfAny(
+    client,
+    "market_rate_observations",
+    rows.marketRateObservations,
+    { onConflict: "id" }
+  );
   await upsertRowsIfAny(client, "debts", rows.debts, { onConflict: "id" });
   await upsertRowsIfAny(client, "categories", rows.categories, {
     onConflict: "id",
@@ -927,20 +1235,94 @@ async function resetFixtureData(client, config, fixtureOverrides = {}) {
   const userId =
     config.userId ?? (await ensureSeedUser(client, config, fixture));
   const seedIds = buildSeedIds(userId, fixture.seedScope);
+  const rows = buildSeedRows(userId, seedIds, fixture);
+  const hasImmutableMetalLifecycleRows = rows.metalLifecycleEvents.length > 0;
+  const terminalCleanup = hasImmutableMetalLifecycleRows
+    ? await tombstoneImmutableMetalLifecycleRows(client, rows)
+    : { lifecycleHoldingIds: new Set() };
+
+  await deleteRowsByIds(
+    client,
+    "market_rate_observations",
+    rows.marketRateObservationCleanupRows
+  );
+  await deleteRowsByIds(client, "market_rates", rows.marketRateCleanupRows);
 
   for (const table of RESET_TABLE_DELETE_ORDER) {
+    if (hasImmutableMetalLifecycleRows && table === "metal_holding_states") {
+      await deleteRowsByIds(
+        client,
+        table,
+        rows.metalHoldingStates.filter(
+          (row) => !terminalCleanup.lifecycleHoldingIds.has(row.holding_id)
+        )
+      );
+      continue;
+    }
+    if (hasImmutableMetalLifecycleRows && table === "assets") {
+      await deleteRowsByIds(
+        client,
+        table,
+        rows.assets.filter(
+          (row) => !terminalCleanup.lifecycleHoldingIds.has(row.id)
+        )
+      );
+      continue;
+    }
+    if (
+      hasImmutableMetalLifecycleRows &&
+      (table === "metal_lifecycle_events" ||
+        table === "metal_action_evidence" ||
+        table === "financial_action_groups")
+    ) {
+      continue;
+    }
     await deleteScopedRows(client, table, userId, seedIds);
   }
 
   return { userId };
 }
 
+async function inspectFixtureData(client, config, fixtureOverrides = {}) {
+  const fixture = resolveSeedFixture(fixtureOverrides);
+  const userId =
+    config.userId ?? (await ensureSeedUser(client, config, fixture));
+  const seedIds = buildSeedIds(userId, fixture.seedScope);
+  const rows = buildSeedRows(userId, seedIds, fixture);
+  const inspectedTables = {};
+
+  for (const [table, expectedRows] of [
+    ["market_rates", rows.marketRates],
+    ["assets", rows.assets],
+    ["asset_metals", rows.assetMetals],
+    ["financial_action_groups", rows.financialActionGroups],
+    ["metal_action_evidence", rows.metalActionEvidence],
+    ["metal_lifecycle_events", rows.metalLifecycleEvents],
+    ["metal_holding_states", rows.metalHoldingStates],
+    ["market_rate_observations", rows.marketRateObservations],
+  ]) {
+    inspectedTables[table] = {
+      expected: expectedRows.length,
+      rows: await selectRowsByIds(client, table, expectedRows),
+    };
+  }
+
+  return {
+    userId,
+    seedScope: fixture.seedScope,
+    controls: fixture.controls ?? {},
+    tables: inspectedTables,
+  };
+}
+
 module.exports = {
   RESET_TABLE_DELETE_ORDER,
   SEED_TABLE_DELETE_ORDER,
   E2E_MARKET_RATE_ID,
+  buildSeedIds,
   createLocalSupabaseJwt,
   getSeedConfig,
+  inspectFixtureData,
   resetFixtureData,
   seedFixtureData,
 };

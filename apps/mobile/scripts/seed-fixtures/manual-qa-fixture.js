@@ -1,3 +1,5 @@
+const { createHash } = require("node:crypto");
+
 const MANUAL_QA_SEED_FIXTURE = {
   seedScope: "manual-qa",
   userFullName: "Monyvi Manual QA",
@@ -5,6 +7,7 @@ const MANUAL_QA_SEED_FIXTURE = {
   includeLocalMarketRate: false,
   preserveExistingRows: true,
   restoreAccountBalancesAfterLedgerSeed: true,
+  buildCompatibilityCleanupRows: buildManualQaCompatibilityCleanupRows,
   accountNames: {
     cash: "Cash Wallet",
     bank: "NBE Salary Account",
@@ -24,6 +27,25 @@ const MANUAL_QA_SEED_FIXTURE = {
   },
   buildExtraRows: buildManualQaExtraRows,
 };
+
+function buildManualQaCompatibilityCleanupRows({
+  deterministicUuid,
+  seedScope,
+  userId,
+}) {
+  return {
+    assetMetals: [
+      {
+        id: deterministicUuid(seedScope, userId, "asset-metal:platinum-bar"),
+      },
+    ],
+    assets: [
+      {
+        id: deterministicUuid(seedScope, userId, "asset:platinum-bar"),
+      },
+    ],
+  };
+}
 
 function buildManualQaExtraRows({
   categoryIds,
@@ -99,6 +121,94 @@ function buildManualQaExtraRows({
     dateFromToday(-20),
     dateFromToday(-18)
   );
+  const soldHoldingId = deterministicUuid(
+    seedScope,
+    userId,
+    "asset:qa-sold-gold-coin"
+  );
+  const soldMetalId = deterministicUuid(
+    seedScope,
+    userId,
+    "asset-metal:qa-sold-gold-coin"
+  );
+  const soldActionId = deterministicUuid(
+    seedScope,
+    userId,
+    "metal-action:qa-sold-gold-coin"
+  );
+  const soldGroupId = deterministicUuid(
+    seedScope,
+    userId,
+    "financial-action-group:qa-sold-gold-coin"
+  );
+  const disposedHoldingId = deterministicUuid(
+    seedScope,
+    userId,
+    "asset:qa-given-away-silver-bar"
+  );
+  const disposedMetalId = deterministicUuid(
+    seedScope,
+    userId,
+    "asset-metal:qa-given-away-silver-bar"
+  );
+  const disposedActionId = deterministicUuid(
+    seedScope,
+    userId,
+    "metal-action:qa-given-away-silver-bar"
+  );
+  const disposedGroupId = deterministicUuid(
+    seedScope,
+    userId,
+    "financial-action-group:qa-given-away-silver-bar"
+  );
+  const soldPurchaseDate = dateFromReference(fixedNow, -60);
+  const soldSaleDate = dateFromReference(fixedNow, -10);
+  const disposedPurchaseDate = dateFromReference(fixedNow, -50);
+  const disposedDisposalDate = dateFromReference(fixedNow, -5);
+  const soldPayload = {
+    expectedHoldingRevision: "0",
+    feeMinorUnits: "50000",
+    grossProceedsMinorUnits: "3600000",
+    holdingId: soldHoldingId,
+    metalType: "GOLD",
+    netProceedsMinorUnits: "3550000",
+    notes: "Manual QA whole-holding sale without account credit",
+    predecessorEventId: null,
+    purchaseCurrency: "EGP",
+    rateSnapshots: [],
+    reversesEventId: null,
+    saleCurrency: "EGP",
+    saleDate: soldSaleDate,
+  };
+  const disposedPayload = {
+    disposalDate: disposedDisposalDate,
+    expectedHoldingRevision: "0",
+    holdingId: disposedHoldingId,
+    notes: "Manual QA given-away disposal fixture",
+    predecessorEventId: null,
+    reason: "given_away",
+    reversesEventId: null,
+  };
+  const soldOccurredAt = `${soldPayload.saleDate}T12:00:00.000Z`;
+  const disposedOccurredAt = `${disposedPayload.disposalDate}T12:00:00.000Z`;
+  const soldEnvelope = createMetalActionEnvelope({
+    actionId: soldActionId,
+    holdingId: soldHoldingId,
+    kind: "sell",
+    occurredAt: soldOccurredAt,
+    payload: soldPayload,
+    payloadVersion: "metals.sell/v2",
+    userId,
+  });
+  const disposedEnvelope = createMetalActionEnvelope({
+    actionId: disposedActionId,
+    holdingId: disposedHoldingId,
+    kind: "dispose",
+    occurredAt: disposedOccurredAt,
+    payload: disposedPayload,
+    payloadVersion: "metals.dispose/v1",
+    userId,
+  });
 
   return {
     categories: [
@@ -369,8 +479,11 @@ function buildManualQaExtraRows({
         name: "21k Gold Chain",
         type: "METAL",
         purchase_price: 18500,
+        purchase_price_decimal: "18500",
         purchase_date: dateFromToday(-90),
         currency: "EGP",
+        purchase_currency: "EGP",
+        acquisition_action_id: null,
         is_liquid: true,
         notes: "Jewelry purchase for metal asset QA",
         deleted: false,
@@ -383,8 +496,11 @@ function buildManualQaExtraRows({
         name: "Silver Coin Stack",
         type: "METAL",
         purchase_price: 7800,
+        purchase_price_decimal: "7800",
         purchase_date: dateFromToday(-45),
         currency: "EGP",
+        purchase_currency: "EGP",
+        acquisition_action_id: null,
         is_liquid: true,
         notes: "Small silver holding",
         deleted: false,
@@ -392,15 +508,52 @@ function buildManualQaExtraRows({
         updated_at: currentTimestamp,
       },
       {
-        id: seedIds.assets.platinumBar,
+        id: seedIds.assets.goldBar,
         user_id: userId,
-        name: "Platinum Test Bar",
+        name: "Gold Test Bar",
         type: "METAL",
         purchase_price: 12500,
+        purchase_price_decimal: "12500",
         purchase_date: dateFromToday(-20),
         currency: "USD",
+        purchase_currency: "USD",
+        acquisition_action_id: null,
         is_liquid: true,
         notes: "Foreign-currency precious metal",
+        deleted: false,
+        created_at: fixedNow,
+        updated_at: currentTimestamp,
+      },
+      {
+        id: soldHoldingId,
+        user_id: userId,
+        name: "QA Sold Gold Coin",
+        type: "METAL",
+        purchase_price: 30000,
+        purchase_price_decimal: "30000",
+        purchase_date: soldPurchaseDate,
+        currency: "EGP",
+        purchase_currency: "EGP",
+        acquisition_action_id: null,
+        is_liquid: true,
+        notes: "Manual QA terminal sold holding",
+        deleted: false,
+        created_at: fixedNow,
+        updated_at: currentTimestamp,
+      },
+      {
+        id: disposedHoldingId,
+        user_id: userId,
+        name: "QA Given Away Silver Bar",
+        type: "METAL",
+        purchase_price: 4500,
+        purchase_price_decimal: "4500",
+        purchase_date: disposedPurchaseDate,
+        currency: "EGP",
+        purchase_currency: "EGP",
+        acquisition_action_id: null,
+        is_liquid: true,
+        notes: "Manual QA terminal disposed holding",
         deleted: false,
         created_at: fixedNow,
         updated_at: currentTimestamp,
@@ -440,7 +593,11 @@ function buildManualQaExtraRows({
         asset_id: seedIds.assets.goldChain,
         metal_type: "GOLD",
         weight_grams: 24.5,
+        weight_grams_decimal: "24.5",
         purity_fraction: 0.875,
+        purity_code: "gold-875",
+        purity_factor_decimal: "0.875",
+        purity_catalog_version: "1",
         item_form: "Jewelry",
         deleted: false,
         created_at: fixedNow,
@@ -451,23 +608,161 @@ function buildManualQaExtraRows({
         asset_id: seedIds.assets.silverCoins,
         metal_type: "SILVER",
         weight_grams: 250,
+        weight_grams_decimal: "250",
         purity_fraction: 0.999,
+        purity_code: "silver-999",
+        purity_factor_decimal: "0.999",
+        purity_catalog_version: "1",
         item_form: "Coins",
         deleted: false,
         created_at: fixedNow,
         updated_at: currentTimestamp,
       },
       {
-        id: seedIds.assetMetals.platinumBar,
-        asset_id: seedIds.assets.platinumBar,
-        metal_type: "PLATINUM",
+        id: seedIds.assetMetals.goldBar,
+        asset_id: seedIds.assets.goldBar,
+        metal_type: "GOLD",
         weight_grams: 10,
-        purity_fraction: 0.95,
+        weight_grams_decimal: "10",
+        purity_fraction: 0.999,
+        purity_code: "gold-999",
+        purity_factor_decimal: "0.999",
+        purity_catalog_version: "1",
         item_form: "Bar",
         deleted: false,
         created_at: fixedNow,
         updated_at: currentTimestamp,
       },
+      {
+        id: soldMetalId,
+        asset_id: soldHoldingId,
+        metal_type: "GOLD",
+        weight_grams: 15,
+        weight_grams_decimal: "15",
+        purity_fraction: 0.9999,
+        purity_code: "gold-9999",
+        purity_factor_decimal: "0.9999",
+        purity_catalog_version: "1",
+        item_form: "COIN",
+        deleted: false,
+        created_at: fixedNow,
+        updated_at: currentTimestamp,
+      },
+      {
+        id: disposedMetalId,
+        asset_id: disposedHoldingId,
+        metal_type: "SILVER",
+        weight_grams: 100,
+        weight_grams_decimal: "100",
+        purity_fraction: 0.999,
+        purity_code: "silver-999",
+        purity_factor_decimal: "0.999",
+        purity_catalog_version: "1",
+        item_form: "BAR",
+        deleted: false,
+        created_at: fixedNow,
+        updated_at: currentTimestamp,
+      },
+    ],
+    financialActionGroups: [
+      createFinancialActionGroup({
+        actionId: soldActionId,
+        currentTimestamp,
+        envelope: soldEnvelope,
+        fixedNow,
+        groupId: soldGroupId,
+        holdingId: soldHoldingId,
+        kind: "sell",
+        userId,
+      }),
+      createFinancialActionGroup({
+        actionId: disposedActionId,
+        currentTimestamp,
+        envelope: disposedEnvelope,
+        fixedNow,
+        groupId: disposedGroupId,
+        holdingId: disposedHoldingId,
+        kind: "dispose",
+        userId,
+      }),
+    ],
+    metalActionEvidence: [
+      createMetalActionEvidence({
+        actionId: soldActionId,
+        currentTimestamp,
+        fixedNow,
+        holdingId: soldHoldingId,
+        kind: "sell",
+        payload: soldPayload,
+        userId,
+      }),
+      createMetalActionEvidence({
+        actionId: disposedActionId,
+        currentTimestamp,
+        fixedNow,
+        holdingId: disposedHoldingId,
+        kind: "dispose",
+        payload: disposedPayload,
+        userId,
+      }),
+    ],
+    metalLifecycleEvents: [
+      createMetalLifecycleEvent({
+        actionId: soldActionId,
+        currentTimestamp,
+        fixedNow,
+        holdingId: soldHoldingId,
+        kind: "sell",
+        occurredAt: soldOccurredAt,
+        payload: soldPayload,
+        userId,
+      }),
+      createMetalLifecycleEvent({
+        actionId: disposedActionId,
+        currentTimestamp,
+        fixedNow,
+        holdingId: disposedHoldingId,
+        kind: "dispose",
+        occurredAt: disposedOccurredAt,
+        payload: disposedPayload,
+        userId,
+      }),
+    ],
+    metalHoldingStates: [
+      ...[
+        seedIds.assets.goldChain,
+        seedIds.assets.silverCoins,
+        seedIds.assets.goldBar,
+      ].map((holdingId) => ({
+        id: holdingId,
+        user_id: userId,
+        holding_id: holdingId,
+        status: "active",
+        financial_revision: "0",
+        effective_event_id: null,
+        effective_action_id: null,
+        is_visible: true,
+        reconciliation_state: "accepted",
+        deleted: false,
+        created_at: fixedNow,
+        updated_at: currentTimestamp,
+      })),
+      createTerminalHoldingState({
+        actionId: soldActionId,
+        currentTimestamp,
+        fixedNow,
+        holdingId: soldHoldingId,
+        status: "sold",
+        userId,
+      }),
+      createTerminalHoldingState({
+        actionId: disposedActionId,
+        currentTimestamp,
+        fixedNow,
+        holdingId: disposedHoldingId,
+        status: "disposed",
+        userId,
+      }),
     ],
     debts: [
       {
@@ -1212,6 +1507,141 @@ function buildManualQaExtraRows({
         updated_at: currentTimestamp,
       },
     ],
+  };
+}
+
+function createMetalActionEnvelope({
+  actionId,
+  holdingId,
+  kind,
+  occurredAt,
+  payload,
+  payloadVersion,
+  userId,
+}) {
+  return JSON.stringify({
+    accountGuards: [],
+    actionId,
+    domain: "metals",
+    domainReferenceId: holdingId,
+    envelopeVersion: "monyvi.financial-action/v1",
+    kind,
+    occurredAt,
+    payload,
+    payloadVersion,
+    userId,
+  });
+}
+
+function createFinancialActionGroup({
+  actionId,
+  currentTimestamp,
+  envelope,
+  fixedNow,
+  groupId,
+  holdingId,
+  kind,
+  userId,
+}) {
+  return {
+    id: groupId,
+    action_id: actionId,
+    user_id: userId,
+    domain: "metals",
+    kind,
+    domain_reference_id: holdingId,
+    payload_json: envelope,
+    payload_hash: createHash("sha256").update(envelope).digest("hex"),
+    account_guards_json: [],
+    state: "sync_pending",
+    server_outcome: null,
+    outcome_json: null,
+    rejection_code: null,
+    deleted: false,
+    created_at: fixedNow,
+    updated_at: currentTimestamp,
+  };
+}
+
+function createMetalActionEvidence({
+  actionId,
+  currentTimestamp,
+  fixedNow,
+  holdingId,
+  kind,
+  payload,
+  userId,
+}) {
+  return {
+    id: actionId,
+    user_id: userId,
+    action_id: actionId,
+    holding_id: holdingId,
+    kind,
+    expected_holding_revision: "0",
+    canonical_holding_revision: "1",
+    domain_payload_json: payload,
+    deleted: false,
+    created_at: fixedNow,
+    updated_at: currentTimestamp,
+  };
+}
+
+function createMetalLifecycleEvent({
+  actionId,
+  currentTimestamp,
+  fixedNow,
+  holdingId,
+  kind,
+  occurredAt,
+  payload,
+  userId,
+}) {
+  return {
+    id: actionId,
+    user_id: userId,
+    holding_id: holdingId,
+    action_id: actionId,
+    kind,
+    occurred_at: occurredAt,
+    payload_json: payload,
+    predecessor_event_id: null,
+    reverses_event_id: null,
+    is_effective: true,
+    is_history_visible: true,
+    deleted: false,
+    created_at: fixedNow,
+    updated_at: currentTimestamp,
+  };
+}
+
+function dateFromReference(reference, daysOffset) {
+  const date = new Date(reference);
+  date.setUTCDate(date.getUTCDate() + daysOffset);
+  return date.toISOString().slice(0, 10);
+}
+
+function createTerminalHoldingState({
+  actionId,
+  currentTimestamp,
+  fixedNow,
+  holdingId,
+  status,
+  userId,
+}) {
+  return {
+    id: holdingId,
+    user_id: userId,
+    holding_id: holdingId,
+    status,
+    financial_revision: "1",
+    effective_event_id: actionId,
+    effective_action_id: actionId,
+    is_visible: true,
+    reconciliation_state: "accepted",
+    deleted: false,
+    created_at: fixedNow,
+    updated_at: currentTimestamp,
   };
 }
 

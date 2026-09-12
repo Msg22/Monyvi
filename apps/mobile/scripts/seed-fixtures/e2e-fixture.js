@@ -1,3 +1,5 @@
+const { METALS_E2E_FIXTURES } = require("./metals-e2e-fixtures");
+
 const E2E_USER_FULL_NAME = "Monyvi E2E";
 
 const E2E_SEED_FIXTURE = {
@@ -572,9 +574,9 @@ const E2E_BUDGET_FIXTURES = {
 function getE2eFixture(profile) {
   if (!profile) return E2E_SEED_FIXTURE;
 
-  const fixture = E2E_BUDGET_FIXTURES[profile];
+  const fixture = METALS_E2E_FIXTURES[profile] ?? E2E_BUDGET_FIXTURES[profile];
   if (!fixture) {
-    throw new Error(`Unknown E2E budget profile: ${profile}`);
+    throw new Error(`Unknown E2E fixture profile: ${profile}`);
   }
 
   return fixture;
@@ -582,6 +584,7 @@ function getE2eFixture(profile) {
 
 module.exports = {
   E2E_BUDGET_FIXTURES,
+  METALS_E2E_FIXTURES,
   E2E_SEED_FIXTURE,
   E2E_USER_FULL_NAME,
   getE2eFixture,

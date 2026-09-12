@@ -22,6 +22,11 @@ import { DismissedSmsFingerprint } from "./models/DismissedSmsFingerprint";
 import { Debt } from "./models/Debt";
 import { FinancialActionGroup } from "./models/FinancialActionGroup";
 import { MarketRate } from "./models/MarketRate";
+import { MarketRateObservation } from "./models/MarketRateObservation";
+import { MetalActionEvidence } from "./models/MetalActionEvidence";
+import { MetalHoldingState } from "./models/MetalHoldingState";
+import { MetalLifecycleEvent } from "./models/MetalLifecycleEvent";
+import { MetalRateReference } from "./models/MetalRateReference";
 import { Profile } from "./models/Profile";
 import { RecurringPayment } from "./models/RecurringPayment";
 import { SmsAiNegativeOutcome } from "./models/SmsAiNegativeOutcome";
@@ -118,6 +123,10 @@ export const database = new Database({
     UserCategorySettings,
     Debt,
     FinancialActionGroup,
+    MetalActionEvidence,
+    MetalHoldingState,
+    MetalLifecycleEvent,
+    MetalRateReference,
     RecurringPayment,
     SmsAiNegativeOutcome,
     SmsReviewQueue,
@@ -127,6 +136,7 @@ export const database = new Database({
     Transfer,
     Budget,
     MarketRate,
+    MarketRateObservation,
     DailySnapshotAssets,
     DailySnapshotBalance,
     DailySnapshotNetWorth,

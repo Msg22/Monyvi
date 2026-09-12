@@ -1,8 +1,12 @@
 const { existsSync } = require("node:fs");
+const { createHash } = require("node:crypto");
 const http = require("node:http");
 const https = require("node:https");
 const { delimiter, join } = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { getE2eFixture } = require("./seed-fixtures/e2e-fixture");
+const { buildSeedIds } = require("./seed-fixtures/seed-engine");
+const { METALS_PROFILE_NAMES } = require("./seed-fixtures/metals-e2e-fixtures");
 
 const appId = process.env.E2E_APP_ID || "com.monyvi.app";
 const deviceId = resolveAndroidDeviceId(process.env);
@@ -24,6 +28,12 @@ const nativeRootLoopbackFallbackDelayMs = 15000;
 const devMenuPreferencesPath =
   "shared_prefs/expo.modules.devmenu.sharedpreferences.xml";
 const introSeenStorageKey = "@monyvi/intro-seen";
+const themeStorageKey = "monyvi_theme_mode";
+const liveRatesRefreshFailureMarkerPrefix =
+  "@monyvi/e2e/live-rates-refresh-failure/";
+const metalsObservationTableName = "market_rate_observations";
+const metalsObservationSyncTimeoutMs = 30000;
+const metalsObservationSyncPollMs = 500;
 const privateShellMarkers = [
   "fab-button",
   "search-input",
@@ -312,6 +322,281 @@ function buildIntroSeenFlagSql() {
   ].join("\n");
 }
 
+function buildE2eRuntimeStorageSql(theme, refreshFailureProfileName = null) {
+  const statements = [
+    "create table if not exists catalystLocalStorage (key TEXT PRIMARY KEY, value TEXT NOT NULL);",
+    `delete from catalystLocalStorage where key like ${sqlString(
+      `${liveRatesRefreshFailureMarkerPrefix}%`
+    )};`,
+    `insert or replace into catalystLocalStorage (key, value) values (${sqlString(
+      themeStorageKey
+    )}, ${sqlString(theme)});`,
+  ];
+  if (refreshFailureProfileName) {
+    statements.push(
+      `insert or replace into catalystLocalStorage (key, value) values (${sqlString(
+        `${liveRatesRefreshFailureMarkerPrefix}${refreshFailureProfileName}`
+      )}, 'armed');`
+    );
+  }
+  return statements.join("\n");
+}
+
+function buildE2eRefreshFailureInspectionSql(profileName) {
+  return `select coalesce((select value from catalystLocalStorage where key = ${sqlString(
+    `${liveRatesRefreshFailureMarkerPrefix}${profileName}`
+  )}), 'absent');`;
+}
+
+function runE2eAsyncStorageSql(sql) {
+  if (isReleaseBuild) {
+    throw new Error("Cannot inspect E2E AsyncStorage in a release build.");
+  }
+  return adb(["shell", "run-as", appId, "sqlite3", "databases/RKStorage"], {
+    allowFailure: true,
+    capture: true,
+    input: sql,
+  }).trim();
+}
+
+function inspectE2eRefreshFailureState(profileName, dependencies = {}) {
+  if (!METALS_PROFILE_NAMES.includes(profileName)) {
+    throw new Error(`Unknown Metals E2E profile: ${profileName}`);
+  }
+  const runSql = dependencies.runSql ?? runE2eAsyncStorageSql;
+  const state = runSql(buildE2eRefreshFailureInspectionSql(profileName)).trim();
+  if (["absent", "armed", "consumed"].includes(state)) return state;
+  throw new Error(
+    `Failed to inspect the live-rates refresh fixture marker: ${state}`
+  );
+}
+
+function buildMetalsLocalObservationCleanupSql() {
+  return `delete from "${metalsObservationTableName}" where "source" like 'e2e_fixture:%';`;
+}
+
+function materializeInvalidMetalsObservation() {
+  const source = "e2e_fixture:e2e-metals-invalid-local-en-light";
+  const output = runE2eWatermelonSql(
+    `update "${metalsObservationTableName}" set "quality" = 'invalid' where "source" = '${source}' and "instrument_code" = 'metal:GOLD';`
+  );
+  if (output) {
+    throw new Error(`Failed to materialize the invalid Metals rate: ${output}`);
+  }
+}
+
+function buildIdDeleteStatement(table, ids) {
+  const idList = ids.map(sqlString).join(", ");
+  return `delete from "${table}" where "id" in (${idList});`;
+}
+
+function buildDeterministicFixtureId(seedScope, namespace, label) {
+  const hex = createHash("sha256")
+    .update(`monyvi:${seedScope}:${namespace}:${label}`)
+    .digest("hex")
+    .slice(0, 32);
+  const chars = hex.split("");
+  chars[12] = "5";
+  chars[16] = ((Number.parseInt(chars[16], 16) & 0x3) | 0x8).toString(16);
+  const uuidHex = chars.join("");
+  return [
+    uuidHex.slice(0, 8),
+    uuidHex.slice(8, 12),
+    uuidHex.slice(12, 16),
+    uuidHex.slice(16, 20),
+    uuidHex.slice(20, 32),
+  ].join("-");
+}
+
+function buildMetalsLocalFixtureCleanupSql(userId) {
+  if (typeof userId !== "string" || userId.trim().length === 0) {
+    throw new Error(
+      "E2E_USER_ID is required to clear deterministic Metals fixture rows."
+    );
+  }
+
+  const fixtureIds = METALS_PROFILE_NAMES.map((profileName) =>
+    buildSeedIds(userId, `e2e-${profileName}`)
+  );
+  const metalsFixtureIds = METALS_PROFILE_NAMES.map((profileName) => {
+    const seedScope = `e2e-${profileName}`;
+    const asset = buildDeterministicFixtureId(
+      seedScope,
+      userId,
+      "metals:holding"
+    );
+    return {
+      asset,
+      assetMetal: buildDeterministicFixtureId(
+        seedScope,
+        userId,
+        "metals:details"
+      ),
+      holdingState: asset,
+      marketRate: buildDeterministicFixtureId(
+        seedScope,
+        userId,
+        "metals:market-rate"
+      ),
+    };
+  });
+  const collectIds = (key) =>
+    fixtureIds.flatMap((ids) => Object.values(ids[key]));
+
+  return [
+    buildIdDeleteStatement(
+      "metal_holding_states",
+      metalsFixtureIds.map(({ holdingState }) => holdingState)
+    ),
+    buildIdDeleteStatement(
+      "asset_metals",
+      metalsFixtureIds.map(({ assetMetal }) => assetMetal)
+    ),
+    buildIdDeleteStatement(
+      "assets",
+      metalsFixtureIds.map(({ asset }) => asset)
+    ),
+    buildIdDeleteStatement("transactions", collectIds("transactions")),
+    buildIdDeleteStatement("transfers", collectIds("transfers")),
+    buildIdDeleteStatement(
+      "recurring_payments",
+      collectIds("recurringPayments")
+    ),
+    buildIdDeleteStatement("debts", collectIds("debts")),
+    buildIdDeleteStatement(
+      "account_sms_senders",
+      collectIds("accountSmsSenders")
+    ),
+    buildIdDeleteStatement("bank_details", collectIds("bankDetails")),
+    buildIdDeleteStatement("accounts", collectIds("accounts")),
+    buildIdDeleteStatement(
+      "market_rates",
+      metalsFixtureIds.map(({ marketRate }) => marketRate)
+    ),
+    buildMetalsLocalObservationCleanupSql(),
+  ].join("\n");
+}
+
+function assertMetalsFixtureBuildSupported(env = process.env) {
+  const profileName = env.E2E_FIXTURE_PROFILE ?? env.E2E_METALS_PROFILE;
+  if (
+    !METALS_PROFILE_NAMES.includes(profileName) ||
+    env.E2E_RELEASE_BUILD !== "1"
+  ) {
+    return;
+  }
+
+  throw new Error(
+    "Metals E2E profiles are not supported in release builds until authenticated cleanup and readiness are available."
+  );
+}
+
+function runE2eWatermelonSql(sql) {
+  if (isReleaseBuild) {
+    throw new Error(
+      "Cannot inspect the E2E Watermelon database in a release build."
+    );
+  }
+
+  const output = adb(["shell", "run-as", appId, "sqlite3", "watermelon.db"], {
+    allowFailure: true,
+    capture: true,
+    input: sql,
+  }).trim();
+  if (isMissingDeviceSqliteError(output)) {
+    throw new Error(
+      "Cannot isolate the Metals E2E profile because this Android device does not expose sqlite3 through adb shell."
+    );
+  }
+  return output;
+}
+
+function hasE2eWatermelonTable(table) {
+  const output = runE2eWatermelonSql(
+    `select count(*) from sqlite_master where type = 'table' and name = ${sqlString(
+      table
+    )};`
+  );
+  if (output === "0") return false;
+  if (output === "1") return true;
+  throw new Error(`Failed to inspect the E2E Watermelon schema: ${output}`);
+}
+
+function clearE2eMetalsLocalState() {
+  if (!hasE2eWatermelonTable(metalsObservationTableName)) return;
+
+  const output = runE2eWatermelonSql(
+    buildMetalsLocalFixtureCleanupSql(process.env.E2E_USER_ID)
+  );
+  if (output) {
+    throw new Error(`Failed to clear the Metals E2E local cache: ${output}`);
+  }
+}
+
+function getE2eMetalsObservationCount() {
+  if (!hasE2eWatermelonTable(metalsObservationTableName)) return 0;
+  const output = runE2eWatermelonSql(
+    `select count(*) from "${metalsObservationTableName}" where "source" = 'e2e_fixture';`
+  );
+  const count = Number.parseInt(output, 10);
+  if (!Number.isFinite(count) || count < 0) {
+    throw new Error(`Failed to inspect the Metals E2E projection: ${output}`);
+  }
+  return count;
+}
+
+function waitForE2eMetalsObservation(
+  timeoutMs = metalsObservationSyncTimeoutMs
+) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt <= timeoutMs) {
+    if (getE2eMetalsObservationCount() > 0) return;
+    wait(metalsObservationSyncPollMs);
+  }
+  throw new Error("Timed out waiting for the Metals E2E projection to sync.");
+}
+
+function resolveE2eFixtureRuntimeSettings(env = process.env) {
+  const profileName = env.E2E_FIXTURE_PROFILE ?? env.E2E_METALS_PROFILE;
+  if (!profileName || !METALS_PROFILE_NAMES.includes(profileName)) return null;
+
+  const fixture = getE2eFixture(profileName);
+  const {
+    locale,
+    cacheState,
+    connectivityState,
+    persistenceState,
+    rateState,
+    refreshFailureMode,
+    theme,
+    textScale,
+  } = fixture;
+  const isValid =
+    (locale === "en" || locale === "ar") &&
+    ["seeded", "empty"].includes(cacheState) &&
+    ["online", "offline_after_cache"].includes(connectivityState) &&
+    (connectivityState !== "offline_after_cache" || cacheState === "seeded") &&
+    ["local", "restart", "conflict"].includes(persistenceState) &&
+    ["fresh", "stale", "unknown", "missing", "invalid"].includes(rateState) &&
+    (refreshFailureMode === null || refreshFailureMode === "once") &&
+    (theme === "light" || theme === "dark") &&
+    (textScale === 1 || textScale === 2);
+  if (!isValid) {
+    throw new Error(`Invalid E2E runtime settings for profile: ${profileName}`);
+  }
+
+  return {
+    locale,
+    cacheState,
+    connectivityState,
+    persistenceState,
+    rateState,
+    refreshFailureMode,
+    theme,
+    textScale,
+  };
+}
+
 function isMissingDeviceSqliteError(output) {
   return /exec failed for sqlite3|sqlite3: No such file or directory/i.test(
     output
@@ -348,6 +633,113 @@ function seedIntroSeenFlagForE2e() {
   console.warn(
     `Skipping E2E intro flag seed after adb sqlite3 output: ${output}`
   );
+}
+
+function seedE2eThemePreference(theme, refreshFailureProfileName = null) {
+  if (isReleaseBuild) return;
+
+  adb(["shell", "run-as", appId, "mkdir", "-p", "databases"], {
+    capture: true,
+    allowFailure: true,
+  });
+  const output = adb(
+    ["shell", "run-as", appId, "sqlite3", "databases/RKStorage"],
+    {
+      allowFailure: true,
+      capture: true,
+      input: buildE2eRuntimeStorageSql(theme, refreshFailureProfileName),
+    }
+  ).trim();
+
+  if (!output) return;
+  if (isMissingDeviceSqliteError(output)) {
+    throw new Error(
+      "Cannot materialize the E2E theme because this Android device does not expose sqlite3 through adb shell."
+    );
+  }
+  throw new Error(`Failed to materialize the E2E theme: ${output}`);
+}
+
+function setE2eNetworkOffline(isOffline) {
+  adb([
+    "shell",
+    "cmd",
+    "connectivity",
+    "airplane-mode",
+    isOffline ? "enable" : "disable",
+  ]);
+}
+
+function applyE2eFixtureRuntimeSettings(env = process.env, dependencies = {}) {
+  const settings = resolveE2eFixtureRuntimeSettings(env);
+  const runAdb = dependencies.runAdb ?? adb;
+  const setConnectivity = dependencies.setConnectivity ?? setE2eNetworkOffline;
+  if (settings) assertMetalsFixtureBuildSupported(env);
+  setConnectivity(false);
+  if (!settings) {
+    runAdb(["shell", "settings", "put", "system", "font_scale", "1"]);
+    return;
+  }
+
+  const clearLocalState =
+    dependencies.clearLocalState ?? clearE2eMetalsLocalState;
+  const forceStop = dependencies.forceStop ?? forceStopApp;
+  const seedTheme = dependencies.seedTheme ?? seedE2eThemePreference;
+  forceStop();
+  clearLocalState();
+  runAdb([
+    "shell",
+    "settings",
+    "put",
+    "system",
+    "font_scale",
+    String(settings.textScale),
+  ]);
+  seedTheme(
+    settings.theme,
+    settings.refreshFailureMode === "once"
+      ? (env.E2E_FIXTURE_PROFILE ?? env.E2E_METALS_PROFILE)
+      : null
+  );
+}
+
+function relaunchE2eFixtureIfRequired(settings, dependencies = {}) {
+  if (!settings || settings.rateState === "missing") return;
+
+  const waitForSync = dependencies.waitForSync ?? waitForE2eMetalsObservation;
+  waitForSync();
+  if (settings.rateState === "invalid") {
+    const materializeInvalidRate =
+      dependencies.materializeInvalidRate ?? materializeInvalidMetalsObservation;
+    materializeInvalidRate();
+  }
+
+  const forceStop = dependencies.forceStop ?? forceStopApp;
+  const startApp = dependencies.startApp ?? startAppWithoutChangingPermissions;
+  const waitForReady =
+    dependencies.waitForReady ??
+    (() => waitForProductUi(preflightAttemptTimeoutMs));
+
+  if (settings.connectivityState === "offline_after_cache") {
+    const setConnectivity =
+      dependencies.setConnectivity ?? setE2eNetworkOffline;
+    forceStop();
+    setConnectivity(true);
+    startApp();
+    waitForReady();
+    return;
+  }
+
+  if (
+    settings.persistenceState !== "restart" &&
+    settings.rateState !== "invalid"
+  ) {
+    return;
+  }
+
+  forceStop();
+  startApp();
+  waitForReady();
 }
 
 function disableExpoDevMenuFabForE2e() {
@@ -827,6 +1219,8 @@ function visibleTextShowsDevMenu(uiXml) {
 
 async function ensureE2eAppReady() {
   await ensureE2eMetroReady();
+  const runtimeSettings = resolveE2eFixtureRuntimeSettings();
+  applyE2eFixtureRuntimeSettings();
 
   let lastError = null;
   for (let attempt = 1; attempt <= preflightLaunchAttempts; attempt += 1) {
@@ -835,6 +1229,7 @@ async function ensureE2eAppReady() {
 
     try {
       waitForProductUi(preflightAttemptTimeoutMs);
+      relaunchE2eFixtureIfRequired(runtimeSettings);
       return;
     } catch (error) {
       lastError = error;
@@ -877,11 +1272,19 @@ module.exports = {
   currentFocusShowsLauncher,
   buildDevMenuPreferencesXml,
   buildIntroSeenFlagSql,
+  buildE2eRuntimeStorageSql,
+  buildE2eRefreshFailureInspectionSql,
+  buildMetalsLocalFixtureCleanupSql,
+  buildMetalsLocalObservationCleanupSql,
   buildDevClientUrl,
   didDumpUiHierarchy,
   disableExpoDevMenuFabForE2e,
   getHttpClientNameForUrl,
+  inspectE2eRefreshFailureState,
   getMaestroDeviceArgs,
+  resolveE2eFixtureRuntimeSettings,
+  assertMetalsFixtureBuildSupported,
+  relaunchE2eFixtureIfRequired,
   androidDeviceReconnectTimeoutMs,
   isAppReady,
   isMissingDeviceSqliteError,
@@ -899,6 +1302,8 @@ module.exports = {
   resolveMaestroBin,
   run,
   seedIntroSeenFlagForE2e,
+  setE2eNetworkOffline,
+  applyE2eFixtureRuntimeSettings,
   stabilizeAndroidDevice,
   startAppWithoutChangingPermissions,
   toLoopbackMetroUrl,
