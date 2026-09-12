@@ -9,6 +9,7 @@ import {
   calculateSpentPercentage,
   calculateRemaining,
   calculateDailyAverage,
+  calculateBudgetAlertAmount,
   getProgressStatus,
   computeSpendingMetrics,
   hasMatchingBudgetCurrency,
@@ -41,6 +42,16 @@ describe("calculateSpentPercentage", () => {
 
   it("handles fractional values", () => {
     expect(calculateSpentPercentage(33, 100)).toBe(33);
+  });
+});
+
+describe("calculateBudgetAlertAmount", () => {
+  it("calculates the budget amount at the configured alert threshold", () => {
+    expect(calculateBudgetAlertAmount(5000, 65)).toBe(3250);
+  });
+
+  it("preserves fractional financial precision", () => {
+    expect(calculateBudgetAlertAmount(1.01, 65)).toBeCloseTo(0.6565, 10);
   });
 });
 
