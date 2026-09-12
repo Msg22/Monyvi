@@ -4,6 +4,7 @@ import type { Database, Model } from "@nozbe/watermelondb";
 import type {
   FinancialActionEnvelopeV1,
   FinancialActionRegistry,
+  FinancialActionServerOutcome,
   FinancialActionValidationInput,
   Sha256Provider,
 } from "../../../packages/logic/src/financial-actions";
@@ -15,6 +16,17 @@ export const FINANCIAL_ACTION_FOUNDATION_ERROR_CODES = {
   NOT_FOUND: "financial_action_not_found",
   INVALID_INPUT: "financial_action_invalid_input",
 } as const;
+
+export function resolveFinancialActionServerOutcomeState(
+  serverOutcome: FinancialActionServerOutcome
+): "accepted" | "reconciliation_incomplete" | "rejected_compensating" {
+  if (serverOutcome === "accepted" || serverOutcome === "idempotent") {
+    return "accepted";
+  }
+  return serverOutcome === "stale"
+    ? "rejected_compensating"
+    : "reconciliation_incomplete";
+}
 
 export interface CreateFinancialActionGroupInput {
   readonly envelope: FinancialActionEnvelopeV1;

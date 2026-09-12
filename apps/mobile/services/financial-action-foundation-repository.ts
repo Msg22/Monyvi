@@ -51,6 +51,7 @@ import {
   type FinancialActionLinkedOperationPostimage,
   type FinancialActionLinkedOperationPreimage,
   type FinancialActionUserDataScope,
+  resolveFinancialActionServerOutcomeState,
 } from "./financial-action-foundation-contracts";
 
 export { FINANCIAL_ACTION_FOUNDATION_ERROR_CODES } from "./financial-action-foundation-contracts";
@@ -830,10 +831,7 @@ export function createFinancialActionFoundationRepository(
     ) {
       throw new Error(FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT);
     }
-    const nextState =
-      serverOutcome === "accepted" || serverOutcome === "idempotent"
-        ? "accepted"
-        : "rejected_compensating";
+    const nextState = resolveFinancialActionServerOutcomeState(serverOutcome);
     await updateFinancialActionGroup(actionId, (record) => {
       assertFinancialActionTransition(
         asFinancialActionState(record.state),

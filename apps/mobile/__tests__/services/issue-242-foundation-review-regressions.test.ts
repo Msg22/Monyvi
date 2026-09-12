@@ -4,6 +4,7 @@ import {
   createFinancialActionPushCoordinator,
   type FinancialActionPushCandidate,
 } from "@/services/financial-action-sync-service";
+import { resolveFinancialActionServerOutcomeState } from "@/services/financial-action-foundation-contracts";
 import {
   collectAccountFinancialActionPushBundles,
   collectProtectedFinancialActionRowIds,
@@ -107,10 +108,19 @@ function changes(input: {
       deleted: [],
       updated: [...(input.updatedRoots ?? [])],
     },
-  } as unknown as SyncPushArgs["changes"];
+  };
 }
 
 describe("issue #242 foundation review regressions", () => {
+  it("keeps evidence-free rejected outcomes reconciliation-incomplete", () => {
+    expect(resolveFinancialActionServerOutcomeState("rejected")).toBe(
+      "reconciliation_incomplete"
+    );
+    expect(resolveFinancialActionServerOutcomeState("stale")).toBe(
+      "rejected_compensating"
+    );
+  });
+
   it("protects every account referenced by an account effect from generic account sync", () => {
     const root = rootRecord({
       actionId: "018f0c7a-1234-7abc-8def-000000000301",
