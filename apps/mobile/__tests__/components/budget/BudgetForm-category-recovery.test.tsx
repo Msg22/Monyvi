@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/consistent-type-assertions */
 import React from "react";
-import { Text as MockText } from "react-native";
+import {
+  Text as MockText,
+  TouchableOpacity as MockTouchableOpacity,
+} from "react-native";
 import {
   fireEvent,
   render,
@@ -41,6 +44,10 @@ jest.mock("@/context/ThemeContext", () => ({
   useTheme: () => ({ isDark: false }),
 }));
 
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
+
 jest.mock("@/components/ui/Toast", () => ({
   useToast: () => ({ showToast: jest.fn() }),
 }));
@@ -63,6 +70,24 @@ jest.mock("@/services/budget-service", () => ({
 
 jest.mock("@/components/modals/CategorySelectorModal", () => ({
   CategorySelectorModal: (): null => null,
+}));
+
+jest.mock("@/components/modals/ConfirmationModal", () => ({
+  ConfirmationModal: ({
+    visible,
+    onConfirm,
+  }: {
+    readonly visible: boolean;
+    readonly onConfirm: () => void;
+  }): React.JSX.Element | null =>
+    visible ? (
+      <MockTouchableOpacity
+        testID="confirm-budget-renewal"
+        onPress={onConfirm}
+      >
+        <MockText>confirm_budget_renewal_action</MockText>
+      </MockTouchableOpacity>
+    ) : null,
 }));
 
 jest.mock("@/components/currency/CurrencyPicker", () => ({
@@ -90,7 +115,10 @@ jest.mock("@/components/budget/AlertThresholdSlider", () => ({
 jest.mock("@react-native-community/datetimepicker", () => () => null);
 
 jest.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string): string => key }),
+  useTranslation: () => ({
+    t: (key: string): string => key,
+    i18n: { language: "en" },
+  }),
 }));
 
 jest.mock("@/utils/dateHelpers", () => ({
@@ -144,7 +172,7 @@ describe("BudgetForm category recovery", () => {
     ]);
     rerender(<BudgetForm renewalSource={RENEWAL_SOURCE} />);
 
-    expect(screen.getByText("Education")).toBeOnTheScreen();
+    expect(screen.getAllByText("Education").length).toBeGreaterThan(0);
     expect(screen.queryByTestId("budget-category-load-error")).toBeNull();
   });
 
@@ -160,11 +188,11 @@ describe("BudgetForm category recovery", () => {
       "accessibilityState",
       { disabled: true }
     );
-    fireEvent.press(screen.getByRole("button", { name: "create_budget" }));
+    fireEvent.press(screen.getByRole("button", { name: "renew_budget" }));
     expect(mockedCreateBudgetService).not.toHaveBeenCalled();
   });
 
-  it("submits a renewal with the source currency", async () => {
+  it("confirms a renewal before submitting it with the source currency", async () => {
     mockCategoryError = null;
     mockAreCategoriesLoading = false;
     mockCategoryMap = new Map([
@@ -176,13 +204,16 @@ describe("BudgetForm category recovery", () => {
       "accessibilityState",
       { disabled: false }
     );
-    fireEvent.press(screen.getByRole("button", { name: "create_budget" }));
+    fireEvent.press(screen.getByRole("button", { name: "renew_budget" }));
 
     expect(screen.queryByText("validation_name_required")).toBeNull();
     expect(screen.queryByText("validation_amount_invalid")).toBeNull();
     expect(screen.queryByText("validation_category_required")).toBeNull();
     expect(screen.queryByText("category_load_error")).toBeNull();
     expect(screen.queryByText("validation_date_order")).toBeNull();
+    expect(mockedCreateBudgetService).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByTestId("confirm-budget-renewal"));
 
     await waitFor(() =>
       expect(mockedCreateBudgetService).toHaveBeenCalledWith(
@@ -196,7 +227,7 @@ describe("BudgetForm category recovery", () => {
     render(<BudgetForm />);
 
     fireEvent.press(
-      screen.getByRole("button", {
+      screen.getByRole("radio", {
         name: "accessibility_global_budget_type",
       })
     );
@@ -278,6 +309,7 @@ describe("BudgetForm category recovery", () => {
 
     mockPreferredCurrency = "EGP";
     rerender(<BudgetForm />);
+
     expect(screen.getByTestId("budget-currency-selector")).toHaveTextContent(
       /USD/
     );
@@ -288,7 +320,7 @@ describe("BudgetForm category recovery", () => {
     render(<BudgetForm />);
 
     fireEvent.press(
-      screen.getByRole("button", {
+      screen.getByRole("radio", {
         name: "accessibility_global_budget_type",
       })
     );
