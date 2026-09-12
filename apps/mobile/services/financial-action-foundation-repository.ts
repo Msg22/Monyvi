@@ -36,6 +36,7 @@ import {
   cloneWatermelonRaw,
   watermelonRawRecordsMatch,
 } from "./watermelon-raw-integrity";
+import { commitPreparedBatch } from "./watermelon-atomic-batch";
 import { APPROVED_FINANCIAL_ACTION_REGISTRY } from "./financial-action-approved-registry";
 import {
   FINANCIAL_ACTION_FOUNDATION_ERROR_CODES,
@@ -660,7 +661,10 @@ export function createFinancialActionFoundationRepository(
           FINANCIAL_ACTION_FOUNDATION_ERROR_CODES.INVALID_INPUT
         );
       }
-      await dependencies.database.batch(root.operation, ...linkedOperations);
+      await commitPreparedBatch(
+        [root.operation, ...linkedOperations],
+        dependencies.database
+      );
       hasCommitted = true;
       await reassertExpectedCurrentUser(context.scope.userId);
       return { kind: "committed", record: root.record };

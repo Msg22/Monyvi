@@ -43,6 +43,7 @@ export abstract class BaseRecurringPayment extends Model {
   @field("currency") currency!: CurrencyType;
   @field("deleted") deleted!: boolean;
   @date("end_date") endDate?: Date;
+  @field("financial_revision") financialRevision!: string;
   @field("frequency") frequency!: RecurringFrequency;
   @field("frequency_value") frequencyValue?: number;
   @field("linked_debt_id") linkedDebtId?: string;

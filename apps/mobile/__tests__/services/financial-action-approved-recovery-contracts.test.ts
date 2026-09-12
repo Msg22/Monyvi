@@ -434,7 +434,12 @@ describe("PR #278 approved financial-action recovery contracts", () => {
     const bundle = canonicalReconciliationBundle();
     const dependencies = {
       commitCompensationAtomically: legacyCompensation,
-      hashProvider: { digestUtf8: () => Promise.resolve(HASH) },
+      hashProvider: {
+        digestUtf8: jest
+          .fn()
+          .mockResolvedValueOnce(EFFECT_HASH)
+          .mockResolvedValueOnce(HASH),
+      },
       installCanonicalSnapshotAtomically,
       loadReconciliationBundle: () => Promise.resolve(bundle),
     };
@@ -458,6 +463,24 @@ describe("PR #278 approved financial-action recovery contracts", () => {
     );
   });
 
+  it("rejects canonical account evidence when either evidence hash fails verification", async () => {
+    const installCanonicalSnapshotAtomically = jest
+      .fn()
+      .mockResolvedValue(undefined);
+    const service = createFinancialActionReconciliationService({
+      commitCompensationAtomically: jest.fn().mockResolvedValue(undefined),
+      hashProvider: { digestUtf8: () => Promise.resolve("0".repeat(64)) },
+      installCanonicalSnapshotAtomically,
+      loadReconciliationBundle: () =>
+        Promise.resolve(canonicalReconciliationBundle()),
+    });
+
+    await expect(service.reconcileRejectedAction(ACTION_ID)).rejects.toThrow(
+      "financial_action_reconciliation_invalid_evidence"
+    );
+    expect(installCanonicalSnapshotAtomically).not.toHaveBeenCalled();
+  });
+
   describe("field-boundary precision", () => {
     const messages = {
       accountRequired: "Select an account",
@@ -469,7 +492,7 @@ describe("PR #278 approved financial-action recovery contracts", () => {
         accountId: ACCOUNT_ID,
         amount: "1.001",
         categoryId: "category-id",
-        currency: "EGP",
+        currency: "EGP" as const,
       };
       const result = validateTransactionForm("EXPENSE", formData, messages);
 
@@ -482,7 +505,7 @@ describe("PR #278 approved financial-action recovery contracts", () => {
         accountId: ACCOUNT_ID,
         amount: "0.00012345",
         categoryId: "category-id",
-        currency: "BTC",
+        currency: "BTC" as const,
       };
       const rejectedData = {
         ...acceptedData,
@@ -619,6 +642,13 @@ describe("PR #278 approved financial-action recovery contracts", () => {
       expect(`${push}\n${protectedFields}`).toMatch(
         /financial_action_blocked_writer|blocked_account_balance_writer/
       );
+    });
+
+    it("wires the production recovery service into account-action push", () => {
+      const push = source("apps/mobile/services/sync/push-service.ts");
+
+      expect(push).toContain("productionFinancialActionReconciliationService");
+      expect(push).toContain("reconcileFinancialActionGroup");
     });
 
     it("uses AST writer discovery instead of receiver-name regexes", () => {

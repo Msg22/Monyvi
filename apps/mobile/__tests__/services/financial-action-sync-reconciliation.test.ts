@@ -15,6 +15,7 @@ const ACCOUNT_ID = "30000000-0000-4000-8000-000000000003";
 const DRAFT_ID = "50000000-0000-4000-8000-000000000005";
 const QUEUE_ID = "60000000-0000-4000-8000-000000000006";
 const TRANSACTION_ID = "70000000-0000-4000-8000-000000000007";
+const EFFECT_ID = "40000000-0000-4000-8000-000000000004";
 const SNAPSHOT_HASH = "a".repeat(64);
 
 function actionRecord(): {
@@ -92,6 +93,7 @@ function smsPayloadJson(snapshotHash = SNAPSHOT_HASH): string {
           accountId: ACCOUNT_ID,
           amountMinorUnits: "2500",
           currency: "EGP",
+          effectId: EFFECT_ID,
         },
       ],
       domainMutation: {
@@ -246,7 +248,7 @@ describe("dedicated financial action sync", () => {
       {
         actionId: "10000000-0000-4000-8000-000000000009",
         code: "ACCOUNT_REVISION_STALE",
-        disposition: "reject",
+        disposition: "recover",
         status: "stale",
       },
     ]);

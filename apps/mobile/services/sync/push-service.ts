@@ -36,6 +36,7 @@ import {
   markFinancialActionGroupSyncPending,
   recordFinancialActionGroupServerOutcome,
 } from "../financial-action-foundation-repository";
+import { productionFinancialActionReconciliationService } from "../financial-action-reconciliation-production";
 import {
   assertPushRecordBelongsToCurrentUser,
   fetchOwnedParentIds,
@@ -276,7 +277,11 @@ export async function pushMetalDedicatedChanges(
     return { acknowledgeAllDedicatedRows: false };
   }
 
-  const roots = [...changedRecords(changes, "financial_action_groups")].sort(
+  const roots = [
+    ...changedRecords(changes, "financial_action_groups").filter(
+      (root) => root.domain === "metals"
+    ),
+  ].sort(
     (left: Record<string, unknown>, right: Record<string, unknown>) => {
       const leftRevision = expectedRevisionOrder(left);
       const rightRevision = expectedRevisionOrder(right);
@@ -444,6 +449,10 @@ function getProductionFinancialActionPushCoordinator(): FinancialActionPushCoord
       },
       markFinancialActionGroupSyncFailed,
       markFinancialActionGroupSyncPending,
+      reconcileFinancialActionGroup: (actionId) =>
+        productionFinancialActionReconciliationService.reconcileRejectedAction(
+          actionId
+        ),
       recordFinancialActionGroupServerOutcome,
     });
   return productionFinancialActionPushCoordinator;
@@ -577,8 +586,8 @@ async function resolveAccountActionAcknowledgements(
   }
   const rejectedBundles = bundles.filter(
     (bundle) =>
-      decisionByActionId.get(bundle.candidate.actionId)?.disposition ===
-      "reject"
+      decisionByActionId.get(bundle.candidate.actionId)?.disposition !==
+      "acknowledge"
   );
   return {
     handledIds: mergeBundleRowIds(bundles),

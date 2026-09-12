@@ -39,7 +39,7 @@ export const ACCOUNT_BALANCE_WRITER_REGISTRY = Object.freeze([
   { writerId: "sms.live-atm", status: "blocked" },
   { writerId: "debt.no-active-writer", status: "guarded" },
   { writerId: "sync.accounts.push-full-row", status: "guarded" },
-  { writerId: "sync.accounts.pull-full-row", status: "blocked" },
+  { writerId: "sync.accounts.pull-full-row", status: "guarded" },
   { writerId: "remote.accounts.authenticated-update", status: "blocked" },
   { writerId: "fixture.accounts.upsert", status: "blocked" },
   { writerId: "fixture.accounts.restore", status: "blocked" },

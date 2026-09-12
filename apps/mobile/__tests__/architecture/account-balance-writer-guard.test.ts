@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 const REPO_ROOT = path.resolve(__dirname, "../../../..");
 const REGISTRY_PATH = path.join(
@@ -73,6 +74,8 @@ const LEGACY_MUTATION_OWNER_BY_SYMBOL: Readonly<Record<string, string>> = {
     "transaction.create",
   "apps/mobile/services/recurring-payment-financial-action-service.ts#buildPlan":
     "recurring.pay-now",
+  "apps/mobile/services/financial-action-reconciliation-production.ts#installCanonicalSnapshotAtomically":
+    "sync.accounts.pull-full-row",
   "apps/mobile/services/transaction-service.ts#updateTransaction":
     "transaction.update",
   "apps/mobile/services/transaction-service.ts#deleteTransaction":
@@ -89,11 +92,6 @@ const LEGACY_MUTATION_OWNER_BY_SYMBOL: Readonly<Record<string, string>> = {
   "apps/mobile/services/batch-create-transactions.ts#prepareBatchCreateTransactions":
     "transaction.batch-import",
 };
-
-interface FunctionStart {
-  readonly index: number;
-  readonly name: string;
-}
 
 function readText(relativePath: string): string {
   return readFileSync(path.join(REPO_ROOT, relativePath), "utf8");
@@ -114,49 +112,39 @@ function listSourceFiles(directory: string): readonly string[] {
   });
 }
 
-function extractFunctionStarts(source: string): readonly FunctionStart[] {
-  const starts: FunctionStart[] = [];
-  const pattern =
-    /\b(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_]+)(?:\s*<[\s\S]*?>)?\s*\(/g;
-  let match: RegExpExecArray | null = pattern.exec(source);
-
-  while (match) {
-    starts.push({ index: match.index, name: match[1] ?? "<unknown>" });
-    match = pattern.exec(source);
-  }
-
-  return starts;
-}
-
-function findEnclosingFunctionName(
-  starts: readonly FunctionStart[],
-  mutationIndex: number
-): string {
-  let name = "<module>";
-
-  for (const start of starts) {
-    if (start.index > mutationIndex) break;
-    name = start.name;
-  }
-
-  return name;
-}
-
 function findLocalBalanceMutationSymbols(): readonly string[] {
   const mutationSymbols = new Set<string>();
-  const mutationPattern = /\b(?:acc|account|record|a)\.balance\s*[+\-*/]?=/g;
+  const assignmentOperators = new Set([
+    ts.SyntaxKind.EqualsToken,
+    ts.SyntaxKind.PlusEqualsToken,
+    ts.SyntaxKind.MinusEqualsToken,
+    ts.SyntaxKind.AsteriskEqualsToken,
+    ts.SyntaxKind.SlashEqualsToken,
+  ]);
 
   listSourceFiles("apps/mobile/services").forEach((relativePath) => {
     const source = readText(relativePath);
-    const starts = extractFunctionStarts(source);
-    let match: RegExpExecArray | null = mutationPattern.exec(source);
-
-    while (match) {
-      mutationSymbols.add(
-        `${relativePath}#${findEnclosingFunctionName(starts, match.index)}`
-      );
-      match = mutationPattern.exec(source);
-    }
+    const sourceFile = ts.createSourceFile(
+      relativePath,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      relativePath.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+    );
+    const visit = (node: ts.Node, owner = "<module>"): void => {
+      const nextOwner =
+        ts.isFunctionDeclaration(node) && node.name ? node.name.text : owner;
+      if (
+        ts.isBinaryExpression(node) &&
+        assignmentOperators.has(node.operatorToken.kind) &&
+        ts.isPropertyAccessExpression(node.left) &&
+        node.left.name.text === "balance"
+      ) {
+        mutationSymbols.add(`${relativePath}#${nextOwner}`);
+      }
+      node.forEachChild((child) => visit(child, nextOwner));
+    };
+    visit(sourceFile);
   });
 
   return [...mutationSymbols].sort();
@@ -203,7 +191,11 @@ describe("issue #242 account-balance writer completeness guard", () => {
 
     expect(unknown).toEqual([]);
     expect(new Set(Object.values(LEGACY_MUTATION_OWNER_BY_SYMBOL))).toEqual(
-      new Set([...LOCAL_WRITER_IDS, "recurring.pay-now"])
+      new Set([
+        ...LOCAL_WRITER_IDS,
+        "recurring.pay-now",
+        "sync.accounts.pull-full-row",
+      ])
     );
   });
 

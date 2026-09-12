@@ -50,18 +50,20 @@ describe("account.balance-effects/v1 composite writer variants", () => {
             accountId: ACCOUNT_ID,
             amountMinorUnits: "-12500",
             currency: "EGP",
+            effectId: TRANSACTION_ID,
           },
         ],
         domainMutation: {
           records: [
             {
               after: {
+                financialRevision: "8",
                 id: ROOT_RECORD_ID,
                 nextDueDate: "2026-10-01",
                 status: "ACTIVE",
               },
               entity: "recurring_payment",
-              expectedUpdatedAt: "2026-08-31T12:00:00.000Z",
+              expectedRevision: "7",
               mode: "update",
             },
             {
@@ -102,6 +104,7 @@ describe("account.balance-effects/v1 composite writer variants", () => {
             accountId: ACCOUNT_ID,
             amountMinorUnits: "-12500",
             currency: "EGP",
+            effectId: TRANSACTION_ID,
           },
         ],
         domainMutation: {

@@ -4,12 +4,32 @@ import type {
   SyncTableChangeSet,
 } from "@nozbe/watermelondb/sync";
 import type { FinancialActionPushCandidate } from "../financial-action-sync-service";
+import {
+  ACCOUNT_BALANCE_WRITER_REGISTRY,
+  requireGuardedAccountBalanceWriter,
+} from "../account-balance-writer-registry";
 
 const ENTITY_TABLES = {
   account: "accounts",
+  recurring_payment: "recurring_payments",
   transaction: "transactions",
   transfer: "transfers",
 } as const;
+
+const MALFORMED_ROOT_ERROR = "account_financial_action_malformed_root";
+const GENERIC_ACCOUNT_PUSH_WRITER_ID = "sync.accounts.push-full-row";
+
+function assertGenericAccountPushIsGuarded(): void {
+  const isRegistered = ACCOUNT_BALANCE_WRITER_REGISTRY.some(
+    ({ writerId }) => writerId === GENERIC_ACCOUNT_PUSH_WRITER_ID
+  );
+  if (!isRegistered) {
+    throw new Error(
+      `financial_action_blocked_writer:account_balance_writer_blocked:${GENERIC_ACCOUNT_PUSH_WRITER_ID}`
+    );
+  }
+  requireGuardedAccountBalanceWriter(GENERIC_ACCOUNT_PUSH_WRITER_ID);
+}
 
 function isObject(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -32,18 +52,15 @@ function readAccountBalanceEnvelope(record: unknown): AccountBalanceEnvelope | n
   try {
     envelope = JSON.parse(record.payload_json);
   } catch {
-    return null;
+    throw new Error(MALFORMED_ROOT_ERROR);
   }
-  if (
-    !isObject(envelope) ||
-    envelope.payloadVersion !== "account.balance-effects/v1" ||
-    !isObject(envelope.payload)
-  )
-    return null;
+  if (!isObject(envelope)) throw new Error(MALFORMED_ROOT_ERROR);
+  if (envelope.payloadVersion !== "account.balance-effects/v1") return null;
+  if (!isObject(envelope.payload) || !Array.isArray(envelope.accountGuards)) {
+    throw new Error(MALFORMED_ROOT_ERROR);
+  }
   return {
-    accountGuards: Array.isArray(envelope.accountGuards)
-      ? envelope.accountGuards.filter(isObject)
-      : [],
+    accountGuards: envelope.accountGuards.filter(isObject),
     payload: envelope.payload,
   };
 }
@@ -81,6 +98,33 @@ function protectedRefsFromRoot(record: unknown): ReadonlyArray<{
     }
   });
   return refs;
+}
+
+function collectFinanciallyDirtyAccountIds(
+  changes: SyncPushArgs["changes"]
+): readonly string[] {
+  const accounts = (
+    changes as unknown as Readonly<Record<string, SyncTableChangeSet | undefined>>
+  ).accounts;
+  if (!accounts) return [];
+  return [...accounts.created, ...accounts.updated].flatMap((candidate) => {
+    if (!isObject(candidate)) return [];
+    const id = readChangeId(candidate);
+    if (!id) return [];
+    const changed =
+      typeof candidate._changed === "string"
+        ? candidate._changed.split(",")
+        : [];
+    const hasProtectedValue =
+      Object.prototype.hasOwnProperty.call(candidate, "balance") ||
+      Object.prototype.hasOwnProperty.call(candidate, "financial_revision");
+    const hasProtectedChange =
+      changed.includes("balance") || changed.includes("financial_revision");
+    return hasProtectedValue &&
+      (candidate._status === "created" || hasProtectedChange)
+      ? [id]
+      : [];
+  });
 }
 
 export interface AccountFinancialActionPushBundle {
@@ -249,10 +293,14 @@ export function collectAccountFinancialActionPushBundles(
     const payloadJson = readNonEmptyString(candidate, "payload_json");
     const rootId = readNonEmptyString(candidate, "id");
     const state = readNonEmptyString(candidate, "state");
+    const envelope = readAccountBalanceEnvelope(candidate);
+    if (!envelope) return [];
     if (!actionId || !payloadHash || !payloadJson || !rootId || !state) {
-      return [];
+      throw new Error(MALFORMED_ROOT_ERROR);
     }
-    if (refs.length === 0) return [];
+    if (refs.length === 0 || envelope.accountGuards.length === 0) {
+      throw new Error(MALFORMED_ROOT_ERROR);
+    }
     revisionsByAction.set(actionId, readGuardRevisions(candidate));
     return [
       Object.freeze({
@@ -276,15 +324,15 @@ export function collectAccountFinancialActionPushBundles(
 export function collectProtectedFinancialActionRowIds(
   changes: SyncPushArgs["changes"]
 ): SyncRejectedIds | undefined {
+  assertGenericAccountPushIsGuarded();
   const roots = (
     changes as unknown as Readonly<
       Record<string, SyncTableChangeSet | undefined>
     >
   ).financial_action_groups;
-  if (!roots) return undefined;
-  const refs = [...roots.created, ...roots.updated].flatMap(
-    protectedRefsFromRoot
-  );
+  const refs = roots
+    ? [...roots.created, ...roots.updated].flatMap(protectedRefsFromRoot)
+    : [];
   const grouped = refs.reduce<Readonly<Record<string, readonly string[]>>>(
     (result, ref) => ({
       ...result,
@@ -292,10 +340,23 @@ export function collectProtectedFinancialActionRowIds(
     }),
     {}
   );
-  return Object.keys(grouped).length === 0
+  const dirtyAccountIds = collectFinanciallyDirtyAccountIds(changes);
+  const protectedGrouped =
+    dirtyAccountIds.length === 0
+      ? grouped
+      : {
+          ...grouped,
+          accounts: [
+            ...new Set([...(grouped.accounts ?? []), ...dirtyAccountIds]),
+          ],
+        };
+  return Object.keys(protectedGrouped).length === 0
     ? undefined
     : Object.fromEntries(
-        Object.entries(grouped).map(([table, ids]) => [table, [...ids]])
+        Object.entries(protectedGrouped).map(([table, ids]) => [
+          table,
+          [...ids],
+        ])
       );
 }
 

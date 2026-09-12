@@ -4,6 +4,7 @@ import {
   fromMinorUnits,
   parseCanonicalDecimal,
   parseFinancialActionEnvelopeJson,
+  serializeCanonicalJsonValue,
   serializeDecimal,
   type CanonicalJsonValue,
   type Sha256Provider,
@@ -36,6 +37,7 @@ export interface ReconciliationEffectSnapshot {
 export interface FinancialActionReconciliationBundle {
   readonly accounts: readonly ReconciliationAccountSnapshot[];
   readonly actionId: string;
+  readonly canonicalAccounts?: readonly CanonicalAccountSnapshot[];
   readonly domain: string;
   readonly effects: readonly ReconciliationEffectSnapshot[];
   /** Device-local recovery evidence; never serialize into the action outbox. */
@@ -44,6 +46,33 @@ export interface FinancialActionReconciliationBundle {
   > | null;
   readonly payloadJson: string;
   readonly state: string;
+  readonly userId: string;
+}
+
+export interface CanonicalEffectSnapshot {
+  readonly acceptedRevision: string;
+  readonly actionId: string;
+  readonly amountMinorUnits: string;
+  readonly effectEvidenceHash: string;
+  readonly effectId: string;
+  readonly kind: string;
+}
+
+export interface CanonicalAccountSnapshot {
+  readonly accountId: string;
+  readonly balanceMinorUnits: string;
+  readonly canonicalActionId: string | null;
+  readonly canonicalEvidenceHash: string;
+  readonly canonicalRevision: string;
+  readonly currency: string;
+  readonly effectChain: readonly CanonicalEffectSnapshot[];
+}
+
+export interface InstallCanonicalAccountSnapshotInput {
+  readonly actionId: string;
+  readonly canonicalAccounts: readonly CanonicalAccountSnapshot[];
+  readonly expectedAccounts: readonly ReconciliationAccountSnapshot[];
+  readonly losingEffects: readonly ReconciliationEffectSnapshot[];
   readonly userId: string;
 }
 
@@ -91,6 +120,9 @@ export interface FinancialActionReconciliationDependencies {
     actionId: string
   ) => Promise<FinancialActionReconciliationBundle>;
   readonly hashProvider: Sha256Provider;
+  readonly installCanonicalSnapshotAtomically?: (
+    input: InstallCanonicalAccountSnapshotInput
+  ) => Promise<void>;
 }
 
 export interface FinancialActionReconciliationService {
@@ -325,6 +357,129 @@ async function buildCompensation(
   };
 }
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+const MAX_SIGNED_BIGINT = 9223372036854775807n;
+
+function isCanonicalSignedBigint(value: string): boolean {
+  if (!/^-?(0|[1-9]\d*)$/.test(value)) return false;
+  const parsed = BigInt(value);
+  return parsed >= -MAX_SIGNED_BIGINT && parsed <= MAX_SIGNED_BIGINT;
+}
+
+function isCanonicalRevision(value: string): boolean {
+  if (!/^(0|[1-9]\d*)$/.test(value)) return false;
+  return BigInt(value) <= MAX_SIGNED_BIGINT;
+}
+
+function assertCanonicalAccounts(
+  bundle: FinancialActionReconciliationBundle
+): readonly CanonicalAccountSnapshot[] | null {
+  const canonicalAccounts = bundle.canonicalAccounts;
+  if (canonicalAccounts === undefined) return null;
+  const localAccounts = new Map(
+    bundle.accounts.map((account) => [account.accountId, account])
+  );
+  if (
+    canonicalAccounts.length === 0 ||
+    canonicalAccounts.length !== localAccounts.size ||
+    canonicalAccounts.some((canonical) => {
+      const local = localAccounts.get(canonical.accountId);
+      const effectIds = new Set(canonical.effectChain.map((effect) => effect.effectId));
+      const hasCanonicalHead = canonical.effectChain.some(
+        (effect) =>
+          effect.actionId === canonical.canonicalActionId &&
+          effect.acceptedRevision === canonical.canonicalRevision
+      );
+      return (
+        !local ||
+        local.currency !== canonical.currency ||
+        !UUID_PATTERN.test(canonical.accountId) ||
+        !isCanonicalRevision(canonical.canonicalRevision) ||
+        !isCanonicalSignedBigint(canonical.balanceMinorUnits) ||
+        !SHA256_PATTERN.test(canonical.canonicalEvidenceHash) ||
+        effectIds.size !== canonical.effectChain.length ||
+        canonical.effectChain.some(
+          (effect, index) => {
+            const previous = canonical.effectChain[index - 1];
+            const isOrdered =
+              !previous ||
+              BigInt(previous.acceptedRevision) < BigInt(effect.acceptedRevision) ||
+              (previous.acceptedRevision === effect.acceptedRevision &&
+                previous.actionId.localeCompare(effect.actionId) <= 0);
+            return (
+              !isCanonicalRevision(effect.acceptedRevision) ||
+              !UUID_PATTERN.test(effect.actionId) ||
+              !isCanonicalSignedBigint(effect.amountMinorUnits) ||
+              !SHA256_PATTERN.test(effect.effectEvidenceHash) ||
+              !UUID_PATTERN.test(effect.effectId) ||
+              effect.kind.length === 0 ||
+              !isOrdered
+            );
+          }
+        ) ||
+        (canonical.effectChain.length === 0
+          ? canonical.canonicalActionId !== null
+          : !canonical.canonicalActionId ||
+            !UUID_PATTERN.test(canonical.canonicalActionId) ||
+            !hasCanonicalHead)
+      );
+    })
+  ) {
+    fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
+  }
+  return canonicalAccounts;
+}
+
+async function verifyCanonicalAccounts(
+  bundle: FinancialActionReconciliationBundle,
+  hashProvider: Sha256Provider
+): Promise<readonly CanonicalAccountSnapshot[] | null> {
+  const canonicalAccounts = assertCanonicalAccounts(bundle);
+  if (!canonicalAccounts) return null;
+  for (const canonical of canonicalAccounts) {
+    for (const effect of canonical.effectChain) {
+      const effectBody: Readonly<Record<string, CanonicalJsonValue>> = {
+        acceptedRevision: effect.acceptedRevision,
+        actionId: effect.actionId,
+        amountMinorUnits: effect.amountMinorUnits,
+        effectId: effect.effectId,
+        kind: effect.kind,
+      };
+      const effectHash = await hashProvider.digestUtf8(
+        serializeCanonicalJsonValue(effectBody)
+      );
+      if (effectHash !== effect.effectEvidenceHash) {
+        fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
+      }
+    }
+    const accountBody: Readonly<Record<string, CanonicalJsonValue>> = {
+      accountId: canonical.accountId,
+      balanceMinorUnits: canonical.balanceMinorUnits,
+      canonicalActionId: canonical.canonicalActionId,
+      canonicalRevision: canonical.canonicalRevision,
+      currency: canonical.currency,
+      effectChain: canonical.effectChain.map((effect) => ({
+        acceptedRevision: effect.acceptedRevision,
+        actionId: effect.actionId,
+        amountMinorUnits: effect.amountMinorUnits,
+        effectEvidenceHash: effect.effectEvidenceHash,
+        effectId: effect.effectId,
+        kind: effect.kind,
+      })),
+      userId: bundle.userId,
+    };
+    const accountHash = await hashProvider.digestUtf8(
+      serializeCanonicalJsonValue(accountBody)
+    );
+    if (accountHash !== canonical.canonicalEvidenceHash) {
+      fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
+    }
+  }
+  return canonicalAccounts;
+}
+
 export function createFinancialActionReconciliationService(
   dependencies: FinancialActionReconciliationDependencies
 ): FinancialActionReconciliationService {
@@ -332,10 +487,28 @@ export function createFinancialActionReconciliationService(
     reconcileRejectedAction: async (
       actionId: string
     ): Promise<"reconciled" | "replay"> => {
-      const input = await buildCompensation(
-        await dependencies.loadReconciliationBundle(actionId),
+      const bundle = await dependencies.loadReconciliationBundle(actionId);
+      if (bundle.actionId !== actionId) {
+        fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INVALID_EVIDENCE);
+      }
+      const canonicalAccounts = await verifyCanonicalAccounts(
+        bundle,
         dependencies.hashProvider
       );
+      if (canonicalAccounts) {
+        if (!dependencies.installCanonicalSnapshotAtomically) {
+          fail(FINANCIAL_ACTION_RECONCILIATION_ERROR_CODES.INCOMPLETE);
+        }
+        await dependencies.installCanonicalSnapshotAtomically({
+          actionId,
+          canonicalAccounts,
+          expectedAccounts: bundle.accounts,
+          losingEffects: bundle.effects,
+          userId: bundle.userId,
+        });
+        return "reconciled";
+      }
+      const input = await buildCompensation(bundle, dependencies.hashProvider);
       if (!input) return "replay";
       await dependencies.commitCompensationAtomically(input);
       return "reconciled";

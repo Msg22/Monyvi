@@ -598,6 +598,7 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
               {
                 id: ACTION_ID,
                 action_id: ACTION_ID,
+                domain: "metals",
                 user_id: USER_ID,
                 payload_json: payloadJson,
                 payload_hash: HASH,
@@ -691,6 +692,7 @@ describe("Metals reconciliation, sync, rates, and metadata", () => {
               {
                 id: "local-root",
                 action_id: ACTION_ID,
+                domain: "metals",
                 user_id: USER_ID,
                 payload_json: payloadJson,
                 payload_hash: HASH,

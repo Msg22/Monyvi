@@ -3,6 +3,7 @@ import { Account, database, Transaction } from "@monyvi/db";
 import {
   productionAccountBalanceCommandService,
   productionFinancialActionHashProvider,
+  productionFinancialActionIdProvider,
 } from "./account-balance-command-production";
 import {
   createTransactionFinancialActionService,
@@ -16,6 +17,7 @@ import {
 const productionService = createTransactionFinancialActionService({
   accountsCollection: () => database.get<Account>("accounts"),
   assertExpectedCurrentUser,
+  createId: productionFinancialActionIdProvider.createId,
   executeAccountBalanceCommand: productionAccountBalanceCommandService.execute,
   getCurrentUserDataScope,
   hashProvider: productionFinancialActionHashProvider,

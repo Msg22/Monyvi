@@ -110,6 +110,7 @@ const EXACT_TEXT_MODEL_FIELDS = new Set([
   "metal_action_evidence.expected_holding_revision",
   "metal_holding_states.financial_revision",
   "metal_rate_references.value_decimal",
+  "recurring_payments.financial_revision",
 ]);
 
 const UNSAFE_SQL_BY_TABLE = {

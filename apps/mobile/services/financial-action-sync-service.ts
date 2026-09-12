@@ -48,7 +48,7 @@ export interface FinancialActionPushCandidate {
 
 export interface FinancialActionPushDecision {
   readonly actionId: string;
-  readonly disposition: "acknowledge" | "reject";
+  readonly disposition: "acknowledge" | "recover" | "reject";
   readonly outcome: ParsedOutcome | null;
 }
 
@@ -68,6 +68,9 @@ export interface FinancialActionPushCoordinatorDependencies
   readonly invokeAccountFinancialActionRpc: (
     input: FinancialActionRpcInput
   ) => Promise<unknown>;
+  readonly reconcileFinancialActionGroup?: (
+    actionId: string
+  ) => Promise<"incomplete" | "reconciled" | "replay">;
 }
 
 function fail(code: string): never {
@@ -190,10 +193,28 @@ export function createFinancialActionPushCoordinator(
           });
           continue;
         }
-        if (candidate.state === "rejected_compensating") {
+        if (candidate.state === "reconciled") {
           decisions.push({
             actionId: candidate.actionId,
-            disposition: "reject",
+            disposition: "acknowledge",
+            outcome: null,
+          });
+          continue;
+        }
+        if (
+          candidate.state === "rejected_compensating" ||
+          candidate.state === "reconciliation_incomplete"
+        ) {
+          const reconciliation =
+            await dependencies.reconcileFinancialActionGroup?.(
+              candidate.actionId
+            );
+          decisions.push({
+            actionId: candidate.actionId,
+            disposition:
+              reconciliation === "reconciled" || reconciliation === "replay"
+                ? "acknowledge"
+                : "recover",
             outcome: null,
           });
           continue;
@@ -223,12 +244,24 @@ export function createFinancialActionPushCoordinator(
           outcome.outcomeJson,
           outcome.code
         );
+        const needsReconciliation =
+          outcome.status === "stale" || outcome.status === "rejected";
+        const reconciliation = needsReconciliation
+          ? await dependencies.reconcileFinancialActionGroup?.(
+              candidate.actionId
+            )
+          : null;
         decisions.push({
           actionId: candidate.actionId,
           disposition:
-            outcome.status === "accepted" || outcome.status === "idempotent"
+            outcome.status === "accepted" ||
+            outcome.status === "idempotent" ||
+            reconciliation === "reconciled" ||
+            reconciliation === "replay"
               ? "acknowledge"
-              : "reject",
+              : needsReconciliation
+                ? "recover"
+                : "reject",
           outcome,
         });
       }

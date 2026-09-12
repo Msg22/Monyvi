@@ -266,6 +266,7 @@ describe("pushChanges", () => {
     const transactionId = "30000000-0000-4000-8000-000000000003";
     const effectId = "40000000-0000-4000-8000-000000000004";
     const payloadJson = JSON.stringify({
+      accountGuards: [{ accountId, expectedRevision: "0" }],
       payloadVersion: "account.balance-effects/v1",
       payload: {
         domainMutation: {
@@ -350,6 +351,7 @@ describe("pushChanges", () => {
     const accountId = "20000000-0000-4000-8000-000000000012";
     const effectId = "40000000-0000-4000-8000-000000000014";
     const payloadJson = JSON.stringify({
+      accountGuards: [{ accountId, expectedRevision: "0" }],
       payloadVersion: "account.balance-effects/v1",
       payload: {
         domainMutation: {
@@ -427,6 +429,7 @@ describe("pushChanges", () => {
               action_id: actionId,
               payload_hash: "a".repeat(64),
               payload_json: JSON.stringify({
+                accountGuards: [{ accountId, expectedRevision: "0" }],
                 payloadVersion: "account.balance-effects/v1",
                 payload: {
                   domainMutation: {

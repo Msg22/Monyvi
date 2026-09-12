@@ -1,4 +1,4 @@
-import type { Model } from "@nozbe/watermelondb";
+import type { Database, Model } from "@nozbe/watermelondb";
 import type { CollectionChangeSet } from "@nozbe/watermelondb/Collection";
 import type { TableName } from "@nozbe/watermelondb/Schema";
 import { database } from "@monyvi/db";
@@ -71,7 +71,8 @@ function notifyRecordSubscribers(record: Model, isDeleted: boolean): void {
 
 function publishCommittedChanges(
   changes: DatabaseChanges,
-  notificationDatabase: NotificationDatabaseAccess
+  notificationDatabase: NotificationDatabaseAccess,
+  targetDatabase: Database
 ): void {
   const affectedTables = new Set(changes.map(([table]) => table));
   for (const [tables, subscriber] of [
@@ -83,7 +84,7 @@ function publishCommittedChanges(
   }
 
   for (const [table, changeSet] of changes) {
-    const collection = database.get<Model>(table);
+    const collection = targetDatabase.get<Model>(table);
     for (const [subscriber] of [...collection._subscribers]) {
       runNotificationSafely(() => subscriber(changeSet));
     }
@@ -99,14 +100,15 @@ function publishCommittedChanges(
 
 function reconcileCommittedChanges(
   changes: DatabaseChanges,
-  notificationDatabase: NotificationDatabaseAccess
+  notificationDatabase: NotificationDatabaseAccess,
+  targetDatabase: Database
 ): void {
   for (const [table, changeSet] of changes) {
     runNotificationSafely(() => {
-      database.get<Model>(table)._applyChangesToCache(changeSet);
+      targetDatabase.get<Model>(table)._applyChangesToCache(changeSet);
     });
   }
-  publishCommittedChanges(changes, notificationDatabase);
+  publishCommittedChanges(changes, notificationDatabase, targetDatabase);
 }
 
 /**
@@ -116,10 +118,11 @@ function reconcileCommittedChanges(
  * exposed as retryable persistence failures.
  */
 export async function commitPreparedBatch(
-  operations: readonly Model[]
+  operations: readonly Model[],
+  targetDatabase: Database = database
 ): Promise<void> {
-  const adapter = database.adapter;
-  const notificationDatabase = database as typeof database &
+  const adapter = targetDatabase.adapter;
+  const notificationDatabase = targetDatabase as Database &
     NotificationDatabaseAccess;
   // Keep original method identities so shared WatermelonDB state is restored.
   // eslint-disable-next-line @typescript-eslint/unbound-method
@@ -138,15 +141,15 @@ export async function commitPreparedBatch(
   if (originalDatabaseNotify) {
     notificationDatabase._notify = (changes): void => {
       if ((notificationDatabase._pendingNotificationBatches ?? 0) > 0) {
-        originalDatabaseNotify.call(database, changes);
+        originalDatabaseNotify.call(targetDatabase, changes);
         return;
       }
-      publishCommittedChanges(changes, notificationDatabase);
+      publishCommittedChanges(changes, notificationDatabase, targetDatabase);
     };
   }
 
   try {
-    await database.batch([...operations]);
+    await targetDatabase.batch([...operations]);
   } catch (error) {
     if (!hasAdapterCommitted) {
       throw error;
@@ -157,7 +160,11 @@ export async function commitPreparedBatch(
       error
     );
     if (originalDatabaseNotify) {
-      reconcileCommittedChanges(preparedChanges, notificationDatabase);
+      reconcileCommittedChanges(
+        preparedChanges,
+        notificationDatabase,
+        targetDatabase
+      );
     }
   } finally {
     adapter.batch = originalAdapterBatch;

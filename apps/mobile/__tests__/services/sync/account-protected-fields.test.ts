@@ -12,6 +12,7 @@ const TRANSACTION_ID = "40000000-0000-4000-8000-000000000004";
 const ACTION_ID = "10000000-0000-4000-8000-000000000001";
 const EFFECT_ID = "50000000-0000-4000-8000-000000000005";
 const PAYLOAD_JSON = JSON.stringify({
+  accountGuards: [{ accountId: ACCOUNT_ID, expectedRevision: "0" }],
   payloadVersion: "account.balance-effects/v1",
   payload: {
     domainMutation: {

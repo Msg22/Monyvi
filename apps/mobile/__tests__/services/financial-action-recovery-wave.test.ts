@@ -226,24 +226,33 @@ describe("issue #242 recovery-wave client contracts", () => {
   });
 
   it("installs the verified canonical account snapshot without advancing the losing revision", async () => {
-    const commit = jest.fn().mockResolvedValue(undefined);
+    const commitCompensationAtomically = jest.fn().mockResolvedValue(undefined);
+    const installCanonicalSnapshotAtomically = jest
+      .fn()
+      .mockResolvedValue(undefined);
     const service = createFinancialActionReconciliationService({
-      commitCompensationAtomically: commit,
-      hashProvider: { digestUtf8: () => Promise.resolve("f".repeat(64)) },
+      commitCompensationAtomically,
+      hashProvider: {
+        digestUtf8: jest
+          .fn()
+          .mockResolvedValueOnce("e".repeat(64))
+          .mockResolvedValueOnce("d".repeat(64)),
+      },
+      installCanonicalSnapshotAtomically,
       loadReconciliationBundle: () => Promise.resolve(rejectedBundle()),
     });
 
     await expect(service.reconcileRejectedAction(ACTION_ID)).resolves.toBe(
       "reconciled"
     );
-    expect(commit).toHaveBeenCalledWith(
+    expect(commitCompensationAtomically).not.toHaveBeenCalled();
+    expect(installCanonicalSnapshotAtomically).toHaveBeenCalledWith(
       expect.objectContaining({
-        accountMutations: [
+        canonicalAccounts: [
           expect.objectContaining({
             accountId: ACCOUNT_ID,
-            expectedRevision: "8",
-            nextBalance: 110,
-            nextRevision: "8",
+            balanceMinorUnits: "11000",
+            canonicalRevision: "8",
           }),
         ],
       })
@@ -272,7 +281,7 @@ describe("issue #242 recovery-wave client contracts", () => {
       accountId: ACCOUNT_ID,
       amount: "1.001",
       categoryId: "80000000-0000-4000-8000-000000000008",
-      currency: "EGP",
+      currency: "EGP" as const,
     };
     const messages = {
       accountRequired: "Account is required",
@@ -305,10 +314,10 @@ describe("issue #242 recovery-wave client contracts", () => {
 
     expect(pullStrategies).toContain('"account_financial_effects"');
     expect(pullStrategies).toContain(
-      "financial_revision:financial_revision::text"
+      "financial_revision_text:financial_revision::text"
     );
     expect(pullStrategies).toContain(
-      "accepted_account_revision:accepted_account_revision::text"
+      "accepted_account_revision_text:accepted_account_revision::text"
     );
   });
 

@@ -180,6 +180,12 @@ test("generates exact local account revisions, effects, and uniqueness", () => {
     parsed.relationships ?? {},
     parsed.tables
   );
+  const generatedRecurringModel = transformSchema.generateBaseModel(
+    "recurring_payments",
+    parsed.tables.recurring_payments.columns,
+    parsed.relationships ?? {},
+    parsed.tables
+  );
 
   assert.match(
     generatedSchema,
@@ -191,4 +197,5 @@ test("generates exact local account revisions, effects, and uniqueness", () => {
   assert.match(generatedEffectModel, /acceptedAccountRevision!: string;/);
   assert.match(generatedEffectModel, /amountMinorUnits!: string;/);
   assert.match(generatedEffectModel, /compensatedAt!: Date \| null;/);
+  assert.match(generatedRecurringModel, /financialRevision!: string;/);
 });

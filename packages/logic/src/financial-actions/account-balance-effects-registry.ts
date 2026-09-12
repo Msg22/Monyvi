@@ -18,10 +18,16 @@ const PAYLOAD_KEYS = [
   "operationCode",
   "schemaVersion",
 ] as const;
-const MUTATION_RECORD_KEYS = [
+const TIMESTAMP_MUTATION_RECORD_KEYS = [
   "after",
   "entity",
   "expectedUpdatedAt",
+  "mode",
+] as const;
+const REVISION_MUTATION_RECORD_KEYS = [
+  "after",
+  "entity",
+  "expectedRevision",
   "mode",
 ] as const;
 const ACCOUNT_AFTER_KEYS = [
@@ -70,7 +76,12 @@ const TRANSFER_AFTER_KEYS = [
   "smsFingerprint",
   "toAccountId",
 ] as const;
-const RECURRING_SCHEDULE_AFTER_KEYS = ["id", "nextDueDate", "status"] as const;
+const RECURRING_SCHEDULE_AFTER_KEYS = [
+  "financialRevision",
+  "id",
+  "nextDueDate",
+  "status",
+] as const;
 const SMS_REVIEW_DRAFT_CLEANUP_AFTER_KEYS = [
   "id",
   "queueId",
@@ -86,6 +97,13 @@ type MutationEntity =
   | "transaction"
   | "transfer";
 type MutationMode = "create" | "update" | "delete";
+
+interface NormalizedMutationRecord {
+  readonly [key: string]: CanonicalJsonValue;
+  readonly after: Readonly<Record<string, CanonicalJsonValue>>;
+  readonly entity: MutationEntity;
+  readonly mode: MutationMode;
+}
 
 interface OperationDefinition {
   readonly domain: string;
@@ -335,6 +353,8 @@ function validateRecurringScheduleAfter(
   if (
     !hasExactKeys(value, RECURRING_SCHEDULE_AFTER_KEYS) ||
     !isUuid(value.id) ||
+    !isSignedMinorUnits(value.financialRevision, true) ||
+    value.financialRevision.startsWith("-") ||
     !isDate(value.nextDueDate) ||
     !["ACTIVE", "COMPLETED"].includes(value.status as string)
   )
@@ -470,8 +490,14 @@ function validatePayload(
   const effects = raw.accountEffects.map((rawEffect) => {
     if (
       !isObject(rawEffect) ||
-      !hasExactKeys(rawEffect, ["accountId", "amountMinorUnits", "currency"]) ||
+      !hasExactKeys(rawEffect, [
+        "accountId",
+        "amountMinorUnits",
+        "currency",
+        "effectId",
+      ]) ||
       !isUuid(rawEffect.accountId) ||
+      !isUuid(rawEffect.effectId) ||
       !isSignedMinorUnits(rawEffect.amountMinorUnits) ||
       typeof rawEffect.currency !== "string" ||
       !/^[A-Z]{3}$/.test(rawEffect.currency)
@@ -482,16 +508,17 @@ function validatePayload(
       accountId: rawEffect.accountId,
       amountMinorUnits: rawEffect.amountMinorUnits,
       currency: rawEffect.currency,
+      effectId: rawEffect.effectId,
     };
   });
   assertSortedUnique(effectAccountIds, invalidPayloadCode);
 
   const recordRefs: string[] = [];
   const sortKeys: string[] = [];
-  const records = raw.domainMutation.records.map((rawRecord) => {
+  const records = raw.domainMutation.records.map(
+    (rawRecord): NormalizedMutationRecord => {
     if (
       !isObject(rawRecord) ||
-      !hasExactKeys(rawRecord, MUTATION_RECORD_KEYS) ||
       ![
         "account",
         "recurring_payment",
@@ -505,11 +532,22 @@ function validatePayload(
       fail(invalidPayloadCode);
     const entity = rawRecord.entity as MutationEntity;
     const mode = rawRecord.mode as MutationMode;
-    if (
+    const usesRevision = entity === "recurring_payment";
+    if (usesRevision) {
+      if (
+        !hasExactKeys(rawRecord, REVISION_MUTATION_RECORD_KEYS) ||
+        mode === "create" ||
+        !isSignedMinorUnits(rawRecord.expectedRevision, true) ||
+        rawRecord.expectedRevision.startsWith("-")
+      )
+        fail(invalidPayloadCode);
+    } else if (
+      !hasExactKeys(rawRecord, TIMESTAMP_MUTATION_RECORD_KEYS) ||
       (mode === "create" && rawRecord.expectedUpdatedAt !== null) ||
       (mode !== "create" && !isTimestamp(rawRecord.expectedUpdatedAt))
-    )
+    ) {
       fail(invalidPayloadCode);
+    }
     if (entity === "account")
       validateAccountAfter(rawRecord.after, invalidPayloadCode);
     else if (entity === "recurring_payment")
@@ -521,18 +559,30 @@ function validatePayload(
     else validateTransferAfter(rawRecord.after, invalidPayloadCode);
     recordRefs.push(rawRecord.after.id as string);
     sortKeys.push(`${entity}:${String(rawRecord.after.id)}`);
-    return {
-      after: rawRecord.after as Record<string, CanonicalJsonValue>,
-      entity,
-      expectedUpdatedAt: rawRecord.expectedUpdatedAt as string | null,
-      mode,
-    };
-  });
+      const after = rawRecord.after as Record<string, CanonicalJsonValue>;
+      return usesRevision
+        ? {
+            after,
+            entity,
+            expectedRevision: rawRecord.expectedRevision as string,
+            mode,
+          }
+        : {
+            after,
+            entity,
+            expectedUpdatedAt: rawRecord.expectedUpdatedAt as string | null,
+            mode,
+          };
+    }
+  );
   sortKeys.forEach((key, index) => {
     if (index > 0 && sortKeys[index - 1] >= key) fail(invalidPayloadCode);
   });
   const sortedRecordRefs = [...recordRefs].sort();
-  if (sortedRecordRefs.some((ref, index) => refs[index] !== ref))
+  if (
+    sortedRecordRefs.length !== refs.length ||
+    sortedRecordRefs.some((ref, index) => refs[index] !== ref)
+  )
     fail(invalidPayloadCode);
   assertOperationShape(operationCode, records, invalidPayloadCode);
   assertCompositeLinks(operationCode, records, invalidPayloadCode);

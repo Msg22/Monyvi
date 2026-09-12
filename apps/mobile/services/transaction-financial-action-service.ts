@@ -59,6 +59,7 @@ export interface GuardedTransactionCreateData {
 export interface TransactionFinancialActionDependencies {
   readonly accountsCollection: () => Collection<Account>;
   readonly assertExpectedCurrentUser: (userId: string) => Promise<void>;
+  readonly createId: () => string;
   readonly executeAccountBalanceCommand: AccountBalanceCommandService["execute"];
   readonly getCurrentUserDataScope: () => Promise<CurrentUserDataScope>;
   readonly hashProvider: Sha256Provider;
@@ -241,9 +242,11 @@ export function getNextAccountBalance(
 export function prepareFinancialActionTransaction(
   collection: Collection<Transaction>,
   data: GuardedTransactionCreateData,
-  userId: string
+  userId: string,
+  transactionId: string
 ): Transaction {
   return collection.prepareCreate((record) => {
+    record._raw.id = transactionId;
     record.userId = userId;
     record.accountId = data.accountId;
     record.amount = data.amount;
@@ -313,6 +316,7 @@ function buildEnvelope(input: {
           accountId: input.account.id,
           amountMinorUnits: input.signedMinorUnits,
           currency: input.account.currency,
+          effectId: input.after.id,
         },
       ],
       domainMutation: {
@@ -393,7 +397,8 @@ export function createTransactionFinancialActionService(
       const transaction = prepareFinancialActionTransaction(
         dependencies.transactionsCollection(),
         data,
-        scope.userId
+        scope.userId,
+        dependencies.createId()
       );
       const after = buildTransactionAfter(transaction, amountMinorUnits);
       const signedMinorUnits =

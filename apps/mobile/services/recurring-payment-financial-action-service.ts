@@ -53,6 +53,7 @@ export interface RecurringPaymentFinancialActionDependencies {
     date: Date,
     frequency: string
   ) => Date;
+  readonly createId: () => string;
   readonly executeAccountBalanceCommand: AccountBalanceCommandService["execute"];
   readonly getCurrentUserDataScope: () => Promise<CurrentUserDataScope>;
   readonly hashProvider: Sha256Provider;
@@ -69,6 +70,7 @@ export interface RecurringPaymentFinancialActionService {
 
 interface RecurringPaymentAfter {
   readonly [key: string]: CanonicalJsonValue;
+  readonly financialRevision: string;
   readonly id: string;
   readonly nextDueDate: string;
   readonly status: RecurringStatus;
@@ -126,8 +128,12 @@ function buildScheduleResult(
   const status: RecurringStatus = isFinalOccurrence
     ? "COMPLETED"
     : "ACTIVE";
+  const financialRevision = (
+    BigInt(payment.financialRevision) + 1n
+  ).toString();
   return {
     after: {
+      financialRevision,
       id: payment.id,
       nextDueDate: formatFinancialActionLocalDate(nextDueDate),
       status,
@@ -145,6 +151,7 @@ function buildEnvelope(input: {
   readonly transaction: TransactionAfter;
   readonly userId: string;
 }): FinancialActionEnvelopeV1 {
+  const expectedFinancialRevision = input.payment.financialRevision;
   return {
     accountGuards: [
       {
@@ -166,6 +173,7 @@ function buildEnvelope(input: {
           accountId: input.account.id,
           amountMinorUnits: input.signedMinorUnits,
           currency: input.account.currency,
+          effectId: input.transaction.id,
         },
       ],
       domainMutation: {
@@ -173,7 +181,7 @@ function buildEnvelope(input: {
           {
             after: input.schedule,
             entity: "recurring_payment",
-            expectedUpdatedAt: input.payment.updatedAt.toISOString(),
+            expectedRevision: expectedFinancialRevision,
             mode: "update",
           },
           {
@@ -216,9 +224,13 @@ function assertRecurringScheduleMatches(
   raw: Readonly<Model["_raw"]>,
   expected: RecurringPaymentAfter
 ): void {
+  const rawNextDueDate = readRaw(raw, "next_due_date");
   if (
-    readRaw(raw, "next_due_date") !==
-      new Date(`${expected.nextDueDate}T00:00:00`).getTime() ||
+    typeof rawNextDueDate !== "number" ||
+    !Number.isFinite(rawNextDueDate) ||
+    formatFinancialActionLocalDate(new Date(rawNextDueDate)) !==
+      expected.nextDueDate ||
+    readRaw(raw, "financial_revision") !== expected.financialRevision ||
     readRaw(raw, "status") !== expected.status
   ) {
     fail(RECURRING_FINANCIAL_ACTION_ERROR_CODES.INVALID_PLAN);
@@ -281,6 +293,7 @@ function buildPlan(input: {
           const payment = model as RecurringPayment;
           payment.nextDueDate = input.schedule.nextDueDate;
           payment.status = input.schedule.status;
+          payment.financialRevision = input.schedule.after.financialRevision;
         },
       },
     ],
@@ -357,7 +370,8 @@ export function createRecurringPaymentFinancialActionService(
           source: "RECURRING",
           type: payment.type,
         },
-        scope.userId
+        scope.userId,
+        dependencies.createId()
       );
       const transactionAfter = buildTransactionAfter(
         transaction,

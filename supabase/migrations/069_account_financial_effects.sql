@@ -7,6 +7,27 @@ ALTER TABLE public.accounts
   ADD COLUMN financial_revision bigint NOT NULL DEFAULT 0;
 
 ALTER TABLE public.accounts
+  ALTER COLUMN balance TYPE numeric(20, 8) USING balance::numeric(20, 8);
+
+ALTER TABLE public.transactions
+  ALTER COLUMN amount TYPE numeric(20, 8) USING amount::numeric(20, 8);
+
+ALTER TABLE public.transfers
+  ALTER COLUMN amount TYPE numeric(20, 8) USING amount::numeric(20, 8),
+  ALTER COLUMN converted_amount TYPE numeric(20, 8)
+    USING converted_amount::numeric(20, 8);
+
+ALTER TABLE public.recurring_payments
+  ALTER COLUMN amount TYPE numeric(20, 8) USING amount::numeric(20, 8),
+  ADD COLUMN financial_revision bigint NOT NULL DEFAULT 0;
+
+ALTER TABLE public.recurring_payments
+  ADD CONSTRAINT recurring_payments_financial_revision_range CHECK (
+    financial_revision >= 0
+    AND financial_revision <= 9223372036854775807
+  );
+
+ALTER TABLE public.accounts
   ADD CONSTRAINT accounts_financial_revision_range CHECK (
     financial_revision >= 0
     AND financial_revision <= 9223372036854775807
@@ -222,14 +243,9 @@ BEGIN
     ORDER BY record.position
   LOOP
     IF jsonb_typeof(v_record) IS DISTINCT FROM 'object'
-      OR (
-        SELECT array_agg(key ORDER BY key)
-        FROM jsonb_object_keys(v_record) AS key
-      ) IS DISTINCT FROM ARRAY['after', 'entity', 'expectedUpdatedAt', 'mode']::text[]
       OR jsonb_typeof(v_record -> 'after') IS DISTINCT FROM 'object'
       OR jsonb_typeof(v_record -> 'entity') IS DISTINCT FROM 'string'
       OR jsonb_typeof(v_record -> 'mode') IS DISTINCT FROM 'string'
-      OR jsonb_typeof(v_record -> 'expectedUpdatedAt') NOT IN ('null', 'string')
     THEN
       RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_domain_mutation';
     END IF;
@@ -240,17 +256,39 @@ BEGIN
     v_id := v_after ->> 'id';
 
     IF v_id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-      OR (v_mode = 'create' AND jsonb_typeof(v_record -> 'expectedUpdatedAt') <> 'null')
-      OR (v_mode <> 'create' AND (
-        jsonb_typeof(v_record -> 'expectedUpdatedAt') <> 'string'
-        OR (v_record ->> 'expectedUpdatedAt') !~
-          '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$'
-      ))
       OR v_mode NOT IN ('create', 'update', 'delete')
       OR (v_previous_sort_key IS NOT NULL AND
         (v_previous_sort_key COLLATE "C") >= ((v_entity || ':' || v_id) COLLATE "C"))
     THEN
       RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_domain_mutation';
+    END IF;
+
+    IF v_entity = 'recurring_payment' THEN
+      IF (
+        SELECT array_agg(key ORDER BY key)
+        FROM jsonb_object_keys(v_record) AS key
+      ) IS DISTINCT FROM ARRAY['after', 'entity', 'expectedRevision', 'mode']::text[]
+        OR jsonb_typeof(v_record -> 'expectedRevision') <> 'string'
+      THEN
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_domain_mutation';
+      END IF;
+      PERFORM private.financial_action_account_revision_from_text_v1(
+        v_record ->> 'expectedRevision'
+      );
+    ELSE
+      IF (
+        SELECT array_agg(key ORDER BY key)
+        FROM jsonb_object_keys(v_record) AS key
+      ) IS DISTINCT FROM ARRAY['after', 'entity', 'expectedUpdatedAt', 'mode']::text[]
+        OR (v_mode = 'create' AND jsonb_typeof(v_record -> 'expectedUpdatedAt') <> 'null')
+        OR (v_mode <> 'create' AND (
+          jsonb_typeof(v_record -> 'expectedUpdatedAt') <> 'string'
+          OR (v_record ->> 'expectedUpdatedAt') !~
+            '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$'
+        ))
+      THEN
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'financial_action_invalid_domain_mutation';
+      END IF;
     END IF;
 
     IF v_entity = 'account' THEN
@@ -332,9 +370,15 @@ BEGIN
       IF (
         SELECT array_agg(key ORDER BY key)
         FROM jsonb_object_keys(v_after) AS key
-      ) IS DISTINCT FROM ARRAY['id', 'nextDueDate', 'status']::text[]
+      ) IS DISTINCT FROM ARRAY['financialRevision', 'id', 'nextDueDate', 'status']::text[]
         OR p_operation_code <> 'recurring.pay-now'
         OR v_mode <> 'update'
+        OR (v_after ->> 'financialRevision') !~ '^(0|[1-9][0-9]{0,18})$'
+        OR private.financial_action_account_revision_from_text_v1(
+          v_after ->> 'financialRevision'
+        ) IS DISTINCT FROM private.financial_action_account_revision_from_text_v1(
+          v_record ->> 'expectedRevision'
+        ) + 1
         OR (v_after ->> 'nextDueDate') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
         OR v_after ->> 'status' NOT IN ('ACTIVE', 'COMPLETED')
       THEN
@@ -1056,10 +1100,13 @@ BEGIN
   SET
     next_due_date = v_expected_due_date,
     status = v_expected_status,
+    financial_revision = payment.financial_revision + 1,
     updated_at = p_now
   WHERE payment.user_id = p_owner_id
     AND payment.id = v_payment.id
-    AND payment.updated_at = (p_record ->> 'expectedUpdatedAt')::timestamptz;
+    AND payment.financial_revision = private.financial_action_account_revision_from_text_v1(
+      p_record ->> 'expectedRevision'
+    );
   GET DIAGNOSTICS v_affected = ROW_COUNT;
   IF v_affected <> 1 THEN
     RAISE EXCEPTION USING ERRCODE = '40001', MESSAGE = 'financial_action_domain_revision_stale';
@@ -1209,10 +1256,11 @@ BEGIN
       OR (
         SELECT array_agg(key ORDER BY key)
         FROM jsonb_object_keys(v_effect) AS key
-      ) IS DISTINCT FROM ARRAY['accountId', 'amountMinorUnits', 'currency']::text[]
+      ) IS DISTINCT FROM ARRAY['accountId', 'amountMinorUnits', 'currency', 'effectId']::text[]
       OR jsonb_typeof(v_effect -> 'accountId') IS DISTINCT FROM 'string'
       OR jsonb_typeof(v_effect -> 'amountMinorUnits') IS DISTINCT FROM 'string'
       OR jsonb_typeof(v_effect -> 'currency') IS DISTINCT FROM 'string'
+      OR jsonb_typeof(v_effect -> 'effectId') IS DISTINCT FROM 'string'
     THEN
       RAISE EXCEPTION USING
         ERRCODE = '22023',
@@ -1222,6 +1270,8 @@ BEGIN
     v_account_id := v_effect ->> 'accountId';
     IF v_account_id !~
       '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      OR (v_effect ->> 'effectId') !~
+        '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
       OR (
         v_previous_account_id IS NOT NULL
         AND (v_previous_account_id COLLATE "C") >= (v_account_id COLLATE "C")
@@ -1258,6 +1308,25 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
+  IF p_value ->> 'domain' = 'metals'
+    AND p_value ->> 'kind' = 'sell'
+    AND p_value ->> 'payloadVersion' = 'metals.sell/v2'
+  THEN
+    PERFORM private.financial_action_validate_metals_sell_payload_v2(p_value -> 'payload');
+    RETURN;
+  END IF;
+  IF p_value ->> 'domain' = 'metals'
+    AND (p_value ->> 'kind', p_value ->> 'payloadVersion') IN (
+      ('add', 'metals.add/v1'),
+      ('correct', 'metals.correct/v1'),
+      ('dispose', 'metals.dispose/v1'),
+      ('delete', 'metals.delete/v1'),
+      ('undo', 'metals.undo/v1')
+    )
+  THEN
+    PERFORM private.financial_action_validate_metals_payload_v1(p_value);
+    RETURN;
+  END IF;
   IF p_value ->> 'domain' = 'metals'
     AND p_value ->> 'kind' = 'sell'
     AND p_value ->> 'payloadVersion' = 'metals.sell/v1'
@@ -1663,7 +1732,7 @@ AS $$
   END;
 $$;
 
-CREATE OR REPLACE FUNCTION private.account_financial_canonical_evidence_v1(
+CREATE OR REPLACE FUNCTION private.account_financial_canonical_snapshot_v1(
   p_user_id uuid,
   p_account_id uuid
 )
@@ -1708,6 +1777,25 @@ BEGIN
         'acceptedRevision', effect.accepted_account_revision::text,
         'actionId', effect.action_id::text,
         'amountMinorUnits', effect.amount_minor_units::text,
+        'effectEvidenceHash', encode(
+          extensions.digest(
+            convert_to(
+              private.financial_action_encode_jsonb_v1(
+                jsonb_build_object(
+                  'acceptedRevision', effect.accepted_account_revision::text,
+                  'actionId', effect.action_id::text,
+                  'amountMinorUnits', effect.amount_minor_units::text,
+                  'effectId', effect.id::text,
+                  'kind', effect.kind
+                )
+              ),
+              'UTF8'
+            ),
+            'sha256'
+          ),
+          'hex'
+        ),
+        'effectId', effect.id::text,
         'kind', effect.kind
       )
       ORDER BY effect.accepted_account_revision, effect.action_id::text COLLATE "C"
@@ -1732,6 +1820,7 @@ BEGIN
 
   RETURN jsonb_build_object(
     'accountId', v_account.id::text,
+    'balanceMinorUnits', v_balance_minor_units,
     'canonicalActionId', v_canonical_action_id,
     'canonicalEvidenceHash', encode(
       extensions.digest(
@@ -1740,7 +1829,45 @@ BEGIN
       ),
       'hex'
     ),
-    'canonicalRevision', v_account.financial_revision::text
+    'canonicalRevision', v_account.financial_revision::text,
+    'currency', v_account.currency::text,
+    'effectChain', v_effect_chain
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION private.financial_action_domain_conflict_outcome_v1(
+  p_action_id uuid,
+  p_sqlstate text,
+  p_message text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+IMMUTABLE
+STRICT
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_code text;
+BEGIN
+  v_code := CASE
+    WHEN p_message = 'financial_action_domain_revision_stale'
+      THEN 'DOMAIN_REVISION_STALE'
+    WHEN p_message IN (
+      'financial_action_link_not_owned',
+      'financial_action_domain_reference_invalid'
+    ) OR p_sqlstate IN ('23503', '42501')
+      THEN 'DOMAIN_REFERENCE_INVALID'
+    WHEN p_message = 'financial_action_domain_unique_conflict'
+      OR p_sqlstate = '23505'
+      THEN 'DOMAIN_UNIQUE_CONFLICT'
+    ELSE 'INCOMPLETE_GROUP'
+  END;
+  RETURN jsonb_build_object(
+    'actionId', p_action_id::text,
+    'code', v_code,
+    'status', 'rejected'
   );
 END;
 $$;
@@ -1845,15 +1972,20 @@ BEGIN
         'status', 'rejected'
       );
     END IF;
-    RETURN jsonb_set(
-      v_existing.outcome_json::jsonb,
-      '{status}',
-      '"idempotent"'::jsonb,
-      false
-    );
+    IF v_existing.server_outcome = 'accepted' THEN
+      RETURN jsonb_set(
+        v_existing.outcome_json::jsonb,
+        '{status}',
+        to_jsonb('idempotent'::text),
+        false
+      );
+    ELSE
+      RETURN v_existing.outcome_json::jsonb;
+    END IF;
   END IF;
 
   BEGIN
+    BEGIN
     v_expected_effects := private.financial_action_expected_account_effects_v1(
       v_owner_id,
       v_envelope -> 'payload' -> 'domainMutation'
@@ -1866,8 +1998,14 @@ BEGIN
         'status', 'rejected'
       );
   END;
-  IF v_expected_effects IS DISTINCT FROM
-    (v_envelope -> 'payload' -> 'accountEffects')
+  IF v_expected_effects IS DISTINCT FROM (
+    SELECT jsonb_agg(
+      effect.value - 'effectId'
+      ORDER BY (effect.value ->> 'accountId') COLLATE "C"
+    )
+    FROM jsonb_array_elements(v_envelope -> 'payload' -> 'accountEffects')
+      AS effect(value)
+  )
   THEN
     RETURN jsonb_build_object(
       'actionId', v_action_id::text,
@@ -1954,7 +2092,7 @@ BEGIN
         jsonb_build_array(v_account.id::text);
     END IF;
     v_canonical_accounts := v_canonical_accounts || jsonb_build_array(
-      private.account_financial_canonical_evidence_v1(v_owner_id, v_account.id)
+      private.account_financial_canonical_snapshot_v1(v_owner_id, v_account.id)
     );
   END LOOP;
 
@@ -1992,11 +2130,12 @@ BEGIN
     );
 
     INSERT INTO public.account_financial_effects (
-      user_id, action_id, account_id, domain, kind,
+      id, user_id, action_id, account_id, domain, kind,
       amount_minor_units, currency, accepted_account_revision,
       is_effective, compensated_at
     )
     SELECT
+      (effect.value ->> 'effectId')::uuid,
       v_owner_id,
       v_action_id,
       (effect.value ->> 'accountId')::uuid,
@@ -2095,10 +2234,11 @@ BEGIN
   );
 
   INSERT INTO public.account_financial_effects (
-    user_id, action_id, account_id, domain, kind,
+    id, user_id, action_id, account_id, domain, kind,
     amount_minor_units, currency, accepted_account_revision
   )
   SELECT
+    (effect.value ->> 'effectId')::uuid,
     v_owner_id,
     v_action_id,
     (effect.value ->> 'accountId')::uuid,
@@ -2116,7 +2256,78 @@ BEGIN
   JOIN jsonb_array_elements(v_envelope -> 'accountGuards') AS guard(value)
     ON guard.value ->> 'accountId' = effect.value ->> 'accountId';
 
-  RETURN v_outcome;
+    RETURN v_outcome;
+  EXCEPTION WHEN OTHERS THEN
+    CASE
+      WHEN SQLSTATE IN ('22023', '23503', '23505', '40001', '42501') THEN
+        v_canonical_accounts := '[]'::jsonb;
+        FOR v_guard IN
+          SELECT value
+          FROM jsonb_array_elements(v_envelope -> 'accountGuards')
+          ORDER BY value ->> 'accountId' COLLATE "C"
+        LOOP
+          v_canonical_accounts := v_canonical_accounts || jsonb_build_array(
+            private.account_financial_canonical_snapshot_v1(
+              v_owner_id,
+              (v_guard ->> 'accountId')::uuid
+            )
+          );
+        END LOOP;
+        v_outcome := private.financial_action_domain_conflict_outcome_v1(
+          v_action_id,
+          SQLSTATE,
+          SQLERRM
+        ) || jsonb_build_object('canonicalAccounts', v_canonical_accounts);
+        v_outcome_text := private.financial_action_encode_jsonb_v1(v_outcome);
+        INSERT INTO public.financial_action_groups (
+          action_id, user_id, domain, kind, domain_reference_id,
+          payload_json, payload_hash, account_guards_json, state,
+          server_outcome, outcome_json, rejection_code, deleted
+        ) VALUES (
+          v_action_id,
+          v_owner_id,
+          v_envelope ->> 'domain',
+          v_envelope ->> 'kind',
+          (v_envelope ->> 'domainReferenceId')::uuid,
+          p_payload_json,
+          p_payload_hash,
+          v_envelope -> 'accountGuards',
+          'reconciled',
+          'rejected',
+          v_outcome_text,
+          lower(v_outcome ->> 'code'),
+          false
+        );
+        INSERT INTO public.account_financial_effects (
+          id, user_id, action_id, account_id, domain, kind,
+          amount_minor_units, currency, accepted_account_revision,
+          is_effective, compensated_at
+        )
+        SELECT
+          (effect.value ->> 'effectId')::uuid,
+          v_owner_id,
+          v_action_id,
+          (effect.value ->> 'accountId')::uuid,
+          v_envelope ->> 'domain',
+          v_envelope -> 'payload' ->> 'operationCode',
+          private.financial_action_signed_minor_units_from_text_v1(
+            effect.value ->> 'amountMinorUnits'
+          ),
+          (effect.value ->> 'currency')::public.currency_type,
+          private.financial_action_account_revision_from_text_v1(
+            guard.value ->> 'expectedRevision'
+          ) + 1,
+          false,
+          v_now
+        FROM jsonb_array_elements(v_envelope -> 'payload' -> 'accountEffects')
+          AS effect(value)
+        JOIN jsonb_array_elements(v_envelope -> 'accountGuards') AS guard(value)
+          ON guard.value ->> 'accountId' = effect.value ->> 'accountId';
+        RETURN v_outcome;
+      ELSE
+        RAISE;
+    END CASE;
+  END;
 EXCEPTION WHEN OTHERS THEN
   RAISE;
 END;
@@ -2176,6 +2387,39 @@ CREATE TRIGGER accounts_protect_financial_columns
   FOR EACH ROW
   EXECUTE FUNCTION private.accounts_protect_financial_columns_v1();
 
+CREATE OR REPLACE FUNCTION private.recurring_payments_protect_financial_revision_v1()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF current_user NOT IN ('postgres', 'supabase_admin') THEN
+    IF TG_OP = 'INSERT'
+      AND NEW.financial_revision IS DISTINCT FROM 0::bigint
+    THEN
+      RAISE EXCEPTION USING
+        ERRCODE = '42501',
+        MESSAGE = 'recurring_payment_financial_action_rpc_required';
+    END IF;
+
+    IF TG_OP = 'UPDATE'
+      AND NEW.financial_revision IS DISTINCT FROM OLD.financial_revision
+    THEN
+      RAISE EXCEPTION USING
+        ERRCODE = '42501',
+        MESSAGE = 'recurring_payment_financial_action_rpc_required';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER recurring_payments_protect_financial_revision
+  BEFORE INSERT OR UPDATE ON public.recurring_payments
+  FOR EACH ROW
+  EXECUTE FUNCTION private.recurring_payments_protect_financial_revision_v1();
+
 REVOKE ALL ON FUNCTION public.recalculate_all_account_balances()
   FROM PUBLIC, anon, authenticated;
 
@@ -2206,6 +2450,8 @@ REVOKE ALL ON FUNCTION private.financial_action_check_effects_match_guards_v1()
 REVOKE ALL ON FUNCTION private.account_financial_effect_guard_immutable_v1()
   FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION private.accounts_protect_financial_columns_v1()
+  FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION private.recurring_payments_protect_financial_revision_v1()
   FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION private.financial_action_account_revision_from_text_v1(text)

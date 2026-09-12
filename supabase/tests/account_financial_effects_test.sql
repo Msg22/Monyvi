@@ -1,6 +1,6 @@
 begin;
 
-select plan(38);
+select plan(44);
 
 select has_column(
   'public', 'accounts', 'financial_revision',
@@ -20,6 +20,26 @@ select col_not_null(
 select col_default_is(
   'public', 'accounts', 'financial_revision', '0',
   'legacy accounts enter the cutover at revision zero'
+);
+
+select has_column(
+  'public', 'recurring_payments', 'financial_revision',
+  'recurring payments carry an authoritative financial revision'
+);
+
+select col_type_is(
+  'public', 'recurring_payments', 'financial_revision', 'bigint',
+  'recurring payment revisions use PostgreSQL bigint'
+);
+
+select col_not_null(
+  'public', 'recurring_payments', 'financial_revision',
+  'recurring payment revisions are never null'
+);
+
+select col_default_is(
+  'public', 'recurring_payments', 'financial_revision', '0',
+  'legacy recurring payments enter the cutover at revision zero'
 );
 
 select has_table(
@@ -62,6 +82,11 @@ select has_index(
 select has_trigger(
   'public', 'accounts', 'accounts_protect_financial_columns',
   'account balances and revisions have a fail-closed write guard'
+);
+
+select has_trigger(
+  'public', 'recurring_payments', 'recurring_payments_protect_financial_revision',
+  'recurring payment revisions have a fail-closed write guard'
 );
 
 select has_trigger(
@@ -152,6 +177,29 @@ insert into public.accounts (
     '018f0c7a-1234-7abc-8def-000000000202',
     'Foreign cash', 'CASH', 0, 'EGP', now(), now(), false
   );
+
+insert into public.categories (
+  id, user_id, system_name, display_name, icon, level, nature, type,
+  is_system, created_at, updated_at, deleted
+) values (
+  '018f0c7a-1234-7abc-8def-000000000213',
+  '018f0c7a-1234-7abc-8def-000000000201',
+  'recurring_revision_fixture', 'Recurring revision fixture', 'calendar', 1,
+  'NEED', 'EXPENSE', false, now(), now(), false
+);
+
+insert into public.recurring_payments (
+  id, user_id, name, amount, type, category_id, account_id, frequency,
+  start_date, next_due_date, action, status, created_at, updated_at, deleted
+) values (
+  '018f0c7a-1234-7abc-8def-000000000214',
+  '018f0c7a-1234-7abc-8def-000000000201',
+  'Revision fixture', 12.345, 'EXPENSE',
+  '018f0c7a-1234-7abc-8def-000000000213',
+  '018f0c7a-1234-7abc-8def-000000000211',
+  'MONTHLY', current_date, current_date, 'AUTO_CREATE', 'ACTIVE',
+  now(), now(), false
+);
 
 select is(
   (
@@ -301,6 +349,14 @@ select throws_ok(
     where id = '018f0c7a-1234-7abc-8def-000000000211'$$,
   '42501', 'account_financial_action_rpc_required',
   'mixed clients cannot overwrite authoritative revisions'
+);
+
+select throws_ok(
+  $$update public.recurring_payments
+    set financial_revision = 1
+    where id = '018f0c7a-1234-7abc-8def-000000000214'$$,
+  '42501', 'recurring_payment_financial_action_rpc_required',
+  'mixed clients cannot overwrite recurring payment revisions'
 );
 
 select lives_ok(

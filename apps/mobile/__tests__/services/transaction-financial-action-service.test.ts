@@ -190,6 +190,7 @@ function createHarness(input?: {
   const dependencies: TransactionFinancialActionDependencies = {
     accountsCollection: () => accountsCollection,
     assertExpectedCurrentUser: jest.fn(() => Promise.resolve()),
+    createId: () => TRANSACTION_ID,
     executeAccountBalanceCommand: execute,
     getCurrentUserDataScope: jest.fn(() => Promise.resolve(scope)),
     hashProvider: {
@@ -244,6 +245,7 @@ describe("transaction financial action service", () => {
             accountId: ACCOUNT_ID,
             amountMinorUnits: "-20000",
             currency: "EGP",
+            effectId: TRANSACTION_ID,
           },
         ],
         domainMutation: {
@@ -302,6 +304,7 @@ describe("transaction financial action service", () => {
         accountId: ACCOUNT_ID,
         amountMinorUnits: "20000",
         currency: "EGP",
+        effectId: TRANSACTION_ID,
       },
     ]);
   });

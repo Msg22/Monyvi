@@ -15,6 +15,9 @@ import {
   schemaMigrations,
 } from "@nozbe/watermelondb/Schema/migrations";
 
+export const ACCOUNT_FINANCIAL_EFFECTS_V29_BACKFILL_SQL =
+  "update accounts set financial_revision = '0' where financial_revision is null or financial_revision = ''; update recurring_payments set financial_revision = '0' where financial_revision is null or financial_revision = '';";
+
 const APPROVED_METALS_FIAT_SQL = `
   'EGP', 'SAR', 'AED', 'KWD', 'QAR', 'BHD', 'OMR', 'JOD', 'IQD',
   'LYD', 'TND', 'MAD', 'DZD', 'USD', 'EUR', 'GBP', 'JPY', 'CHF',
@@ -822,8 +825,12 @@ end;`
           table: "accounts",
           columns: [{ name: "financial_revision", type: "string" }],
         }),
+        addColumns({
+          table: "recurring_payments",
+          columns: [{ name: "financial_revision", type: "string" }],
+        }),
         unsafeExecuteSql(
-          'update "accounts" set "financial_revision" = \'0\' where "financial_revision" is null;'
+          ACCOUNT_FINANCIAL_EFFECTS_V29_BACKFILL_SQL
         ),
         createTable({
           name: "account_financial_effects",

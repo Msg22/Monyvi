@@ -78,6 +78,7 @@ function harness(input?: {
     deleted: input?.paymentDeleted ?? false,
     end_date: input?.endDate?.getTime() ?? null,
     frequency: "MONTHLY",
+    financial_revision: "7",
     next_due_date: new Date(2026, 8, 1).getTime(),
     status: input?.paymentStatus ?? "ACTIVE",
     type: input?.paymentType ?? "EXPENSE",
@@ -90,6 +91,7 @@ function harness(input?: {
     deleted: input?.paymentDeleted ?? false,
     endDate: input?.endDate,
     frequency: "MONTHLY",
+    financialRevision: "7",
     nextDueDate: new Date(2026, 8, 1),
     status: input?.paymentStatus ?? "ACTIVE",
     type: input?.paymentType ?? "EXPENSE",
@@ -191,6 +193,7 @@ function harness(input?: {
       }
       if (operation.model.table === "recurring_payments") {
         const updatedPayment = operation.model as RecurringPayment;
+        raw.financial_revision = updatedPayment.financialRevision;
         raw.next_due_date = updatedPayment.nextDueDate.getTime();
         raw.status = updatedPayment.status;
       }
@@ -227,6 +230,7 @@ function harness(input?: {
     accountsCollection: () => accountCollection,
     assertExpectedCurrentUser: jest.fn(() => Promise.resolve()),
     calculateNextDueDate: () => new Date(2026, 9, 1),
+    createId: () => TRANSACTION_ID,
     executeAccountBalanceCommand: execute,
     getCurrentUserDataScope: jest.fn(() => Promise.resolve(scope)),
     hashProvider: {
@@ -268,6 +272,7 @@ describe("recurring Pay Now financial action", () => {
             accountId: ACCOUNT_ID,
             amountMinorUnits: "-12500",
             currency: "EGP",
+            effectId: TRANSACTION_ID,
           },
         ],
         domainMutation: {
@@ -275,10 +280,12 @@ describe("recurring Pay Now financial action", () => {
             {
               after: {
                 id: PAYMENT_ID,
+                financialRevision: "8",
                 nextDueDate: "2026-10-01",
                 status: "ACTIVE",
               },
               entity: "recurring_payment",
+              expectedRevision: "7",
               mode: "update",
             },
             {
@@ -299,6 +306,7 @@ describe("recurring Pay Now financial action", () => {
     expect(context.account.financialRevision).toBe("8");
     expect(context.payment.nextDueDate).toEqual(new Date(2026, 9, 1));
     expect(context.payment.status).toBe("ACTIVE");
+    expect(context.payment.financialRevision).toBe("8");
   });
 
   it("completes a final occurrence without advancing beyond end date", async () => {
@@ -390,6 +398,7 @@ describe("recurring Pay Now financial action", () => {
         accountId: ACCOUNT_ID,
         amountMinorUnits: "12500",
         currency: "EGP",
+        effectId: TRANSACTION_ID,
       },
     ]);
     expect(context.account.balance).toBe(1125);

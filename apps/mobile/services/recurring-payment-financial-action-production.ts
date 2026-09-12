@@ -4,6 +4,7 @@ import { calculateNextDueDate } from "@/utils/dateHelpers";
 import {
   productionAccountBalanceCommandService,
   productionFinancialActionHashProvider,
+  productionFinancialActionIdProvider,
 } from "./account-balance-command-production";
 import {
   createRecurringPaymentFinancialActionService,
@@ -18,6 +19,7 @@ const productionService = createRecurringPaymentFinancialActionService({
   accountsCollection: () => database.get<Account>("accounts"),
   assertExpectedCurrentUser,
   calculateNextDueDate,
+  createId: productionFinancialActionIdProvider.createId,
   executeAccountBalanceCommand: productionAccountBalanceCommandService.execute,
   getCurrentUserDataScope,
   hashProvider: productionFinancialActionHashProvider,

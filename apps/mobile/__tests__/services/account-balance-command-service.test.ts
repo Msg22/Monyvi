@@ -14,6 +14,7 @@ import type {
 const USER_ID = "20000000-0000-4000-8000-000000000002";
 const ACTION_ID = "10000000-0000-4000-8000-000000000001";
 const ACCOUNT_ID = "30000000-0000-4000-8000-000000000003";
+const EFFECT_ID = "40000000-0000-4000-8000-000000000004";
 
 function model(
   table: string,
@@ -56,7 +57,12 @@ function envelope(): FinancialActionEnvelopeV1 {
     occurredAt: "2026-09-01T12:00:00.000Z",
     payload: {
       accountEffects: [
-        { accountId: ACCOUNT_ID, amountMinorUnits: "2500", currency: "EGP" },
+        {
+          accountId: ACCOUNT_ID,
+          amountMinorUnits: "2500",
+          currency: "EGP",
+          effectId: EFFECT_ID,
+        },
       ],
       domainMutation: {
         records: [
@@ -137,7 +143,7 @@ function createHarness(): {
     prepareEffectCreate: (input) =>
       model(
         "account_financial_effects",
-        "40000000-0000-4000-8000-000000000004",
+        input.effectId,
         {
           accepted_account_revision: input.acceptedAccountRevision,
           account_id: input.accountId,

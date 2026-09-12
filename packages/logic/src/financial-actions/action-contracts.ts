@@ -4,6 +4,7 @@ import {
   getFinancialActionUtf8ByteLength,
   type FinancialActionRegistry,
   type FinancialActionValidationInput,
+  type CanonicalJsonValue,
   type RegisteredActionPayload,
 } from "./action-registry";
 
@@ -123,16 +124,6 @@ const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const STABLE_ERROR_CODE_PATTERN = /^[a-z][a-z0-9_]*$/;
 const UTC_MILLISECOND_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const CANONICAL_UNSIGNED_INTEGER_PATTERN = /^(?:0|[1-9][0-9]*)$/;
-
-type JsonPrimitive = string | boolean | null;
-interface CanonicalJsonObject {
-  readonly [key: string]: CanonicalJsonValue;
-}
-type CanonicalJsonArray = readonly CanonicalJsonValue[];
-type CanonicalJsonValue =
-  | JsonPrimitive
-  | CanonicalJsonArray
-  | CanonicalJsonObject;
 
 const APPROVED_DOMAINS: readonly FinancialActionDomain[] = [
   "accounts",
@@ -429,18 +420,18 @@ function escapeJsonString(value: string): string {
   return `${result}"`;
 }
 
-function serializeCanonicalValue(value: CanonicalJsonValue): string {
+export function serializeCanonicalJsonValue(value: CanonicalJsonValue): string {
   if (value === null) return "null";
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "string") return escapeJsonString(value);
   if (Array.isArray(value)) {
-    return `[${value.map(serializeCanonicalValue).join(",")}]`;
+    return `[${value.map(serializeCanonicalJsonValue).join(",")}]`;
   }
   return `{${Object.keys(value)
     .sort()
     .map(
       (key) =>
-        `${escapeJsonString(key)}:${serializeCanonicalValue(
+        `${escapeJsonString(key)}:${serializeCanonicalJsonValue(
           (value as Readonly<Record<string, CanonicalJsonValue>>)[key]
         )}`
     )
@@ -457,7 +448,7 @@ export function serializeFinancialActionEnvelope(
     registry,
     validationInput
   );
-  const canonicalText = serializeCanonicalValue(
+  const canonicalText = serializeCanonicalJsonValue(
     envelope as unknown as CanonicalJsonValue
   );
   if (
@@ -603,7 +594,7 @@ function isCanonicalOutcomeJson(rawText: string): boolean {
     assertNoDuplicateJsonKeys(rawText);
     inspectRuntimeValue(parsed);
     if (containsNumber(parsed)) return false;
-    return serializeCanonicalValue(parsed as CanonicalJsonValue) === rawText;
+  return serializeCanonicalJsonValue(parsed as CanonicalJsonValue) === rawText;
   } catch {
     return false;
   }

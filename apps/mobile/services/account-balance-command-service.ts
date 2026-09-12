@@ -32,6 +32,7 @@ interface AccountEffectInput {
   readonly amountMinorUnits: string;
   readonly currency: CurrencyType;
   readonly domain: string;
+  readonly effectId: string;
   readonly kind: string;
   readonly userId: string;
 }
@@ -40,6 +41,7 @@ interface AccountBalanceEffect {
   readonly accountId: string;
   readonly amountMinorUnits: string;
   readonly currency: CurrencyType;
+  readonly effectId: string;
 }
 
 export interface AccountBalanceCommandDependencies {
@@ -66,6 +68,7 @@ interface AccountExpectation {
   readonly accountId: string;
   readonly amountMinorUnits: string;
   readonly currency: CurrencyType;
+  readonly effectId: string;
   readonly expectedRevision: string;
   readonly nextRevision: string;
 }
@@ -133,6 +136,7 @@ function readEffects(
       typeof record.accountId !== "string" ||
       typeof record.amountMinorUnits !== "string" ||
       typeof record.currency !== "string" ||
+      typeof record.effectId !== "string" ||
       !isCurrencyType(record.currency)
     )
       fail(ACCOUNT_BALANCE_COMMAND_ERROR_CODES.INVALID_PLAN);
@@ -140,6 +144,7 @@ function readEffects(
       accountId: record.accountId,
       amountMinorUnits: record.amountMinorUnits,
       currency: record.currency,
+      effectId: record.effectId,
     };
   });
 }
@@ -182,6 +187,7 @@ function verifyPreparedEffect(
   if (
     model.table !== "account_financial_effects" ||
     readString(raw, "account_id") !== expectation.accountId ||
+    model.id !== expectation.effectId ||
     readString(raw, "action_id") !== envelope.actionId ||
     readString(raw, "amount_minor_units") !== expectation.amountMinorUnits ||
     readString(raw, "currency") !== expectation.currency ||
@@ -289,6 +295,7 @@ function hardenPlan(
       amountMinorUnits: expectation.amountMinorUnits,
       currency: expectation.currency,
       domain: envelope.domain,
+      effectId: expectation.effectId,
       kind: readOperationCode(envelope),
       userId: envelope.userId,
     })

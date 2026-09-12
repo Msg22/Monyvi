@@ -367,17 +367,9 @@ export const schema = appSchema({
         { name: "financial_revision", type: "string" },
         { name: "holding_id", type: "string", isIndexed: true },
         { name: "is_visible", type: "boolean" },
-        {
-          name: "name_writer_id",
-          type: "string",
-          isOptional: true,
-        },
+        { name: "name_writer_id", type: "string", isOptional: true },
         { name: "name_written_at", type: "number", isOptional: true },
-        {
-          name: "notes_writer_id",
-          type: "string",
-          isOptional: true,
-        },
+        { name: "notes_writer_id", type: "string", isOptional: true },
         { name: "notes_written_at", type: "number", isOptional: true },
         { name: "reconciliation_state", type: "string" },
         { name: "status", type: "string" },
@@ -476,6 +468,7 @@ export const schema = appSchema({
         { name: "currency", type: "string" },
         { name: "deleted", type: "boolean" },
         { name: "end_date", type: "number", isOptional: true },
+        { name: "financial_revision", type: "string" },
         { name: "frequency", type: "string" },
         { name: "frequency_value", type: "number", isOptional: true },
         {

@@ -1256,6 +1256,7 @@ export type Database = {
           currency: Database["public"]["Enums"]["currency_type"];
           deleted: boolean;
           end_date: string | null;
+          financial_revision: number;
           frequency: Database["public"]["Enums"]["recurring_frequency"];
           frequency_value: number | null;
           id: string;
@@ -1278,6 +1279,7 @@ export type Database = {
           currency?: Database["public"]["Enums"]["currency_type"];
           deleted?: boolean;
           end_date?: string | null;
+          financial_revision?: number;
           frequency: Database["public"]["Enums"]["recurring_frequency"];
           frequency_value?: number | null;
           id?: string;
@@ -1300,6 +1302,7 @@ export type Database = {
           currency?: Database["public"]["Enums"]["currency_type"];
           deleted?: boolean;
           end_date?: string | null;
+          financial_revision?: number;
           frequency?: Database["public"]["Enums"]["recurring_frequency"];
           frequency_value?: number | null;
           id?: string;

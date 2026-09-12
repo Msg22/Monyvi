@@ -12,6 +12,10 @@ export const productionFinancialActionHashProvider = {
     ),
 };
 
+export const productionFinancialActionIdProvider = {
+  createId: (): string => Crypto.randomUUID(),
+};
+
 export const productionAccountBalanceCommandService =
   createAccountBalanceCommandService({
     foundationRepository: { commitFinancialActionGroupLocally },
@@ -19,6 +23,7 @@ export const productionAccountBalanceCommandService =
       database
         .get<AccountFinancialEffect>("account_financial_effects")
         .prepareCreate((record) => {
+          record._raw.id = input.effectId;
           record.acceptedAccountRevision = input.acceptedAccountRevision;
           record.accountId = input.accountId;
           record.actionId = input.actionId;
