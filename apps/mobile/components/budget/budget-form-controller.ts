@@ -29,11 +29,12 @@ import {
   buildBudgetRenewalFormValues,
   resolveRenewalCategoryId,
   type BudgetFormInitialValues,
+  type BudgetRenewalSource,
 } from "./budget-renewal-form-values";
 
 export interface BudgetFormProps {
   readonly existingBudget?: Budget;
-  readonly renewalSource?: Budget;
+  readonly renewalSource?: BudgetRenewalSource;
 }
 
 export type BudgetFormState = BudgetFormInitialValues;
@@ -114,7 +115,8 @@ interface BudgetSubmitHandlers {
 }
 
 interface BudgetPreview {
-  readonly alertAmount: number;
+  readonly amount: number | null;
+  readonly alertAmount: number | null;
   readonly startDate: string;
   readonly secondaryDate: string;
 }
@@ -149,7 +151,7 @@ export type BudgetFormController = BudgetFormModel &
 
 function buildInitialState(
   existingBudget: Budget | undefined,
-  renewalSource: Budget | undefined,
+  renewalSource: BudgetRenewalSource | undefined,
   preferredCurrency: CurrencyType,
   categoriesReady: boolean,
   accessibleCategoryIds: ReadonlySet<string>
@@ -178,7 +180,7 @@ function buildInitialState(
 }
 
 function useRenewalCategoryNormalization(
-  renewalSource: Budget | undefined,
+  renewalSource: BudgetRenewalSource | undefined,
   accessibleCategoryIds: ReadonlySet<string>,
   areCategoriesLoading: boolean,
   categoryError: unknown,
@@ -210,7 +212,7 @@ function usePreferredCurrencyHydration(
   isLoading: boolean,
   hasUserSelectedCurrency: boolean,
   preferredCurrency: CurrencyType,
-  renewalSource: Budget | undefined,
+  renewalSource: BudgetRenewalSource | undefined,
   setForm: SetForm
 ): void {
   useEffect(() => {
@@ -548,8 +550,11 @@ function useBudgetSubmitHandlers(
 
 function useBudgetPreview(form: BudgetFormState): BudgetPreview {
   return useMemo(() => {
-    const amount = parsePositiveMoneyAmount(form.amount) ?? 0;
-    const alertAmount = calculateBudgetAlertAmount(amount, form.alertThreshold);
+    const amount = parsePositiveMoneyAmount(form.amount);
+    const alertAmount =
+      amount === null
+        ? null
+        : calculateBudgetAlertAmount(amount, form.alertThreshold);
     const bounds = getCurrentPeriodBounds(
       form.period,
       form.period === "CUSTOM" ? form.periodStart : undefined,
@@ -560,6 +565,7 @@ function useBudgetPreview(form: BudgetFormState): BudgetPreview {
         ? bounds.end
         : new Date(bounds.end.getTime() + 1);
     return {
+      amount,
       alertAmount,
       startDate: formatDate(bounds.start, "MMM d, yyyy"),
       secondaryDate: formatDate(secondaryDate, "MMM d, yyyy"),

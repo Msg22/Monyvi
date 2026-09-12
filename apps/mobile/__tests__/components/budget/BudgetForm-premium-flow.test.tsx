@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-return */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import React from "react";
@@ -13,13 +12,25 @@ import {
   waitFor,
   within,
 } from "@testing-library/react-native";
-import type { Budget, Category } from "@monyvi/db";
+import type { Category } from "@monyvi/db";
+import type { BudgetRenewalSource } from "@/components/budget/budget-renewal-form-values";
 import { palette } from "@/constants/colors";
+import type { CreateBudgetInput } from "@/services/budget-service";
 
-let mockCategoryMap = new Map<string, Category>([
-  ["food", { id: "food", displayName: "Food & Dining" } as unknown as Category],
-]);
-const mockCreateBudget = jest.fn();
+type CategoryLookupFixture = Pick<Category, "id" | "displayName">;
+type CreatedBudgetStub = { readonly id: string };
+
+function buildCategoryLookup(): Map<string, CategoryLookupFixture> {
+  return new Map([
+    ["food", { id: "food", displayName: "Food & Dining" }],
+  ]);
+}
+
+let mockCategoryMap = buildCategoryLookup();
+const mockCreateBudget = jest.fn<
+  Promise<CreatedBudgetStub>,
+  [CreateBudgetInput]
+>();
 const mockShouldUseCompactLayout = jest.fn(() => false);
 
 jest.mock("@/constants/ui", () => {
@@ -82,7 +93,7 @@ jest.mock("expo-router", () => ({
 }));
 
 jest.mock("@/services/budget-service", () => ({
-  createBudget: (...args: unknown[]) => mockCreateBudget(...args),
+  createBudget: mockCreateBudget,
   updateBudget: jest.fn(),
 }));
 
@@ -174,8 +185,7 @@ const BUDGET_FORM_SECTIONS_SOURCE = readFileSync(
   "utf8"
 );
 
-const RENEWAL_SOURCE = {
-  id: "expired-budget",
+const RENEWAL_SOURCE: BudgetRenewalSource = {
   name: "Food budget",
   type: "CATEGORY",
   categoryId: "food",
@@ -185,7 +195,7 @@ const RENEWAL_SOURCE = {
   periodStart: new Date("2026-08-01T12:00:00.000Z"),
   periodEnd: new Date("2026-08-11T12:00:00.000Z"),
   alertThreshold: 80,
-} as unknown as Budget;
+};
 
 describe("BudgetForm premium flow", () => {
   beforeEach(() => {
@@ -193,9 +203,7 @@ describe("BudgetForm premium flow", () => {
     jest.setSystemTime(new Date("2026-09-06T12:00:00.000Z"));
     mockCreateBudget.mockReset();
     mockShouldUseCompactLayout.mockReturnValue(false);
-    mockCategoryMap = new Map<string, Category>([
-      ["food", { id: "food", displayName: "Food & Dining" } as unknown as Category],
-    ]);
+    mockCategoryMap = buildCategoryLookup();
   });
 
   afterEach(() => {
@@ -249,12 +257,12 @@ describe("BudgetForm premium flow", () => {
   });
 
   it("preserves currency-specific precision in the alert preview", () => {
-    const kwdRenewalSource = {
+    const kwdRenewalSource: BudgetRenewalSource = {
       ...RENEWAL_SOURCE,
       amount: 1.01,
       currency: "KWD",
       alertThreshold: 65,
-    } as unknown as Budget;
+    };
 
     render(<BudgetForm renewalSource={kwdRenewalSource} />);
 

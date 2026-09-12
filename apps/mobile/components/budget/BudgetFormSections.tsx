@@ -39,6 +39,16 @@ function formatAmount(
   return new Intl.NumberFormat(locale, { maximumFractionDigits }).format(value);
 }
 
+function formatPreviewAmount(
+  value: number | null,
+  currency: BudgetFormState["currency"],
+  locale: string
+): string {
+  const formattedValue =
+    value === null ? "—" : formatAmount(value, currency, locale);
+  return currency ? `${currency} ${formattedValue}` : formattedValue;
+}
+
 interface ScopeCardProps {
   readonly type: BudgetFormState["type"];
   readonly selected: boolean;
@@ -489,11 +499,11 @@ function BudgetAlertField({
   readonly controller: BudgetFormController;
 }): React.JSX.Element {
   const { t, i18n } = useTranslation("budgets");
-  const amount = `${controller.form.currency ?? ""} ${formatAmount(
+  const amount = formatPreviewAmount(
     controller.preview.alertAmount,
     controller.form.currency,
     i18n.language
-  )}`;
+  );
   return (
     <View className="mb-7 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
       <AlertThresholdSlider
@@ -622,11 +632,16 @@ function PreviewMetrics({
   const { t, i18n } = useTranslation("budgets");
   const { width, fontScale } = useWindowDimensions();
   const compact = shouldUseCompactLayout(width, fontScale);
-  const alertAmount = `${controller.form.currency ?? ""} ${formatAmount(
+  const limitAmount = formatPreviewAmount(
+    controller.preview.amount,
+    controller.form.currency,
+    i18n.language
+  );
+  const alertAmount = formatPreviewAmount(
     controller.preview.alertAmount,
     controller.form.currency,
     i18n.language
-  )}`;
+  );
   return (
     <View
       testID="budget-preview-metrics"
@@ -634,7 +649,7 @@ function PreviewMetrics({
     >
       <PreviewMetric
         label={t("preview_budget_limit")}
-        value={`${controller.form.currency ?? ""} ${controller.form.amount || "0.00"}`}
+        value={limitAmount}
         compact={compact}
       />
       <PreviewMetric
