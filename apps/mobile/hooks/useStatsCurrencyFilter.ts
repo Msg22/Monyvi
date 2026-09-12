@@ -48,7 +48,7 @@ export function useStatsCurrencyFilter(
     setError(null);
 
     const subscription = observeStatsCurrencyTransactions({ userId })
-      .observe()
+      .observeWithColumns(["currency"])
       .subscribe({
         next: (result) => {
           setTransactions(result);
