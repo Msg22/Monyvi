@@ -78,18 +78,9 @@ export default function DashboardScreen(): React.JSX.Element {
       accountsValueDecimal:
         totalAccounts === null ? null : String(totalAccounts),
     });
-  const lifecycleAwareNetWorth = useMemo((): number | null => {
-    const value = wealthBreakdown?.totalNetWorthDecimal;
-    if (value === null || value === undefined) return null;
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }, [wealthBreakdown]);
-  const lifecycleAwareNetWorthUsd = useMemo((): number | null => {
-    const value = wealthBreakdown?.totalNetWorthUsdDecimal;
-    if (value === null || value === undefined) return null;
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }, [wealthBreakdown]);
+  const lifecycleAwareNetWorth = wealthBreakdown?.totalNetWorthDecimal ?? null;
+  const lifecycleAwareNetWorthUsd =
+    wealthBreakdown?.totalNetWorthUsdDecimal ?? null;
   const { monthlyPercentageChange } = useMonthlyPercentageChange();
   const {
     preferredCurrency,
