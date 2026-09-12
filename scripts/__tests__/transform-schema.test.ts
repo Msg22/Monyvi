@@ -69,7 +69,7 @@ test("generated-file formatting uses the local Prettier binary and fails closed"
   );
 });
 
-test("generates explicit SQL-null fields only for the financial action capability", () => {
+test("generates explicit SQL-null fields only for approved model capabilities", () => {
   const parsed = transformSchema.parseSupabaseTypes(`
 export type Database = {
   public: {
@@ -86,6 +86,12 @@ export type Database = {
         Relationships: [];
       };
       ordinary_records: {
+        Row: { notes: string | null; };
+        Insert: {};
+        Update: {};
+        Relationships: [];
+      };
+      assets: {
         Row: { notes: string | null; };
         Insert: {};
         Update: {};
@@ -109,14 +115,18 @@ export type Database = {
     relationships,
     parsed.tables
   );
-
-  assert.match(
-    financialActionModel,
-    /accountGuardsJson!: string;/
+  const assetModel = transformSchema.generateBaseModel(
+    "assets",
+    parsed.tables.assets.columns,
+    relationships,
+    parsed.tables
   );
+
+  assert.match(financialActionModel, /accountGuardsJson!: string;/);
   assert.match(financialActionModel, /outcomeJson!: string \| null;/);
   assert.match(financialActionModel, /rejectionCode!: string \| null;/);
   assert.match(financialActionModel, /serverOutcome!: string \| null;/);
+  assert.match(assetModel, /notes!: string \| null;/);
   assert.match(ordinaryModel, /notes\?: string;/);
 });
 
@@ -143,7 +153,10 @@ test("financial action nullable outcome generation is deterministic", () => {
       parsed.tables
     )
   );
-  assert.equal((generated.match(/!: (?:number|string) \| null;/g) ?? []).length, 3);
+  assert.equal(
+    (generated.match(/!: (?:number|string) \| null;/g) ?? []).length,
+    3
+  );
 });
 
 test("generated schema preserves owner-scoped financial action uniqueness", () => {

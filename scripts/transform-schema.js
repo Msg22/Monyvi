@@ -76,6 +76,7 @@ const TABLE_TO_CLASS = {
 // existing generated models while allowing repository code to clear sync state
 // without casts or direct `_raw` writes.
 const EXPLICIT_NULL_MODEL_FIELDS = new Set([
+  "assets.notes",
   "financial_action_groups.outcome_json",
   "financial_action_groups.rejection_code",
   "financial_action_groups.server_outcome",

@@ -8,12 +8,19 @@ export const METALS_ACTION_FRAGMENT_COLUMNS = {
   assets: [
     "name",
     "notes",
+    "purchase_price",
+    "purchase_date",
+    "currency",
     "purchase_price_decimal",
     "purchase_currency",
     "acquisition_action_id",
   ],
   asset_metals: [
+    "metal_type",
+    "weight_grams",
     "weight_grams_decimal",
+    "purity_fraction",
+    "item_form",
     "purity_code",
     "purity_factor_decimal",
     "purity_catalog_version",
@@ -85,6 +92,9 @@ export function stripMetalActionFragments(
   table: SyncableTable,
   record: Record<string, unknown>
 ): Record<string, unknown> {
+  if (table === "assets" && record.type !== "METAL") {
+    return { ...record };
+  }
   const configuredColumns =
     METALS_ACTION_FRAGMENT_COLUMNS[
       table as keyof typeof METALS_ACTION_FRAGMENT_COLUMNS
@@ -92,16 +102,10 @@ export function stripMetalActionFragments(
   if (!configuredColumns) {
     return { ...record };
   }
-  const protectedColumns =
-    table === "assets" && record.type !== "METAL"
-      ? configuredColumns.filter(
-          (column) => column !== "name" && column !== "notes"
-        )
-      : configuredColumns;
 
   return Object.fromEntries(
     Object.entries(record).filter(
-      ([column]) => !(protectedColumns as readonly string[]).includes(column)
+      ([column]) => !(configuredColumns as readonly string[]).includes(column)
     )
   );
 }
