@@ -20,9 +20,15 @@ let mockCategoryMap = new Map<string, Category>([
 const mockCreateBudget = jest.fn();
 const mockShouldUseCompactLayout = jest.fn(() => false);
 
-jest.mock("@/constants/ui", () => ({
-  shouldUseCompactLayout: () => mockShouldUseCompactLayout(),
-}));
+jest.mock("@/constants/ui", () => {
+  const actual = jest.requireActual<typeof import("@/constants/ui")>(
+    "@/constants/ui"
+  );
+  return {
+    ...actual,
+    shouldUseCompactLayout: () => mockShouldUseCompactLayout(),
+  };
+});
 
 jest.mock("@expo/vector-icons", () => ({
   Ionicons: ({
@@ -241,11 +247,7 @@ describe("BudgetForm premium flow", () => {
     render(<BudgetForm />);
 
     const selector = screen.getByTestId("budget-currency-selector");
-    expect(selector).toHaveProp(
-      "className",
-      "me-2 min-h-11 flex-row items-center"
-    );
-    expect(selector).not.toHaveProp("style");
+    expect(selector).toHaveStyle({ minHeight: 44 });
   });
 
   it("uses palette tokens for white action icons", () => {
